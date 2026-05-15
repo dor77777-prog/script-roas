@@ -465,6 +465,15 @@ curl "https://graph.facebook.com/v20.0/act_AD_ACCOUNT_ID/insights?date_preset=ye
    - **Update** → **Save and Continue**.
 5. **Test users**: **Add Users** → הזן את כתובת הג'ימייל **שיש לה גישה לחשבון Google Ads
    של uzoshop**. **Save and Continue**.
+
+   > 🚨 **קריטי**: המייל חייב להיות **בדיוק** זה שאיתו תתחבר ב-OAuth Playground (3ג).
+   > אם תוסיף `dor@gmail.com` אבל תתחבר עם `dor2@gmail.com`, תקבל בשלב 3ג:
+   > *"שגיאה 403: access_denied / האפליקציה ROAS Tracker לא השלימה את תהליך האימות
+   > של Google."*
+   >
+   > **לבדוק איזה מייל**: גש ל-https://ads.google.com → אווטאר בפינה ימין → תראה
+   > את המייל המחובר. **זה המייל שצריך להוסיף ל-Test users.**
+
 6. **Summary** → **Back to Dashboard**.
 
 > 💡 ה-app יישאר ב-**Testing mode**. זה מספיק לשימוש פרטי. אין צורך להגיש ל-verification.
@@ -618,7 +627,19 @@ curl "https://graph.facebook.com/v20.0/act_AD_ACCOUNT_ID/insights?date_preset=ye
    - לחץ **Authorize APIs**.
 4. תיפתח חלונית של גוגל - **התחבר עם החשבון שמנהל את Google Ads של uzoshop**
    (אותו חשבון מ-3ב.1).
-5. אישור הרשאה לאפליקציה (ייתכן ויראה "App not verified" - לחץ Advanced → Go to ROAS Tracker).
+
+> 🚨 **אם תקבל "שגיאה 403: access_denied / האפליקציה ROAS Tracker לא השלימה
+> את תהליך האימות"** - זה אומר שהמייל שאתה מנסה להתחבר איתו **לא נמצא ברשימת
+> Test Users** של ה-OAuth consent screen.
+>
+> **תיקון**: גש ל-https://console.cloud.google.com → ודא שאתה בפרויקט
+> `roas-tracker-ga` → **APIs & Services → OAuth consent screen** →
+> גלול ל-**Test users** → **+ ADD USERS** → הוסף את **בדיוק** המייל שאתה
+> מנסה להתחבר איתו → **Save**. חזור לכאן ונסה שוב.
+>
+> כדי לבדוק איזה מייל - https://ads.google.com → אווטאר ימני → רואים את המייל.
+
+5. אישור הרשאה לאפליקציה (ייתכן ויראה "App not verified" - לחץ **Advanced → Go to ROAS Tracker (unsafe)** → **Allow**).
 6. **Step 2 - Exchange authorization code for tokens**: לחץ **Exchange authorization code for tokens**.
 7. בפאנל הימני יופיעו:
    - **Refresh token** ← **העתק ושמור** (מתחיל ב-`1//...`)
