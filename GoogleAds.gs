@@ -47,7 +47,7 @@ function getGoogleAdsSpend(storeId, dateStr) {
     micros += parseInt((r.metrics && r.metrics.costMicros) || 0, 10);
     if (r.customer && r.customer.currencyCode) currency = r.customer.currencyCode;
   }
-  const spend = micros / 1_000_000;
+  const spend = micros / 1000000;
   Logger.log(`GoogleAds ${storeId} ${dateStr}: spend=${spend} ${currency}`);
   return { spend, currency };
 }
