@@ -474,11 +474,20 @@ curl "https://graph.facebook.com/v20.0/act_AD_ACCOUNT_ID/insights?date_preset=ye
 2. **+ Create Credentials → OAuth client ID**.
 3. **Application type**: **Web application**.
 4. **Name**: `ROAS Tracker`.
-5. **Authorized redirect URIs**: לחץ **+ Add URI** → הדבק:
-   ```
-   https://developers.google.com/oauthplayground
-   ```
-   (זה ה-URI של ה-OAuth Playground שדרכו נשיג את ה-refresh token בשלב 3ג)
+5. בטופס יש **שני שדות שונים** - שים לב לאיזה אתה מדביק:
+
+   > 🚨 **טעות נפוצה:** אם תדביק `https://developers.google.com/oauthplayground`
+   > בשדה **Authorized JavaScript origins** תקבל שגיאה:
+   > *"Invalid Origin: URIs must not contain a path or end with '/'."*.
+   > זה כי השדה הזה דורש origin בלי path. **השאר את השדה הזה ריק.**
+
+   - **Authorized JavaScript origins**: **השאר ריק** ⛔ (לא רלוונטי לנו).
+   - **Authorized redirect URIs**: לחץ **+ Add URI** והדבק כאן:
+     ```
+     https://developers.google.com/oauthplayground
+     ```
+     (זה ה-URI של ה-OAuth Playground שדרכו נשיג את ה-refresh token בשלב 3ג.)
+
 6. **Create**.
 7. **חלון מקפיץ** מציג Client ID + Client secret. **שמור את שניהם** בטקסט זמני.
    (תמיד אפשר לחזור ל-Credentials ולראות אותם שוב.)
