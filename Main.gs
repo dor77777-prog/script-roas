@@ -64,6 +64,7 @@ function onOpen() {
       .addItem('התקן טריגר יומי (06:15)', 'installDailyTrigger')
       .addItem('הסר טריגר יומי', 'removeDailyTrigger')
       .addSeparator()
+      .addItem('בדוק הגדרות (verifyConfig)', 'showVerifyConfig_')
       .addItem('הוצא Shopify tokens (Client Credentials)', 'bootstrapAllShopifyTokens')
       .addItem('פתח גיליון הגדרות', 'showSpreadsheetUrl_')
       .addToUi();
@@ -93,4 +94,9 @@ function promptBackfill_() {
 function showSpreadsheetUrl_() {
   const ss = ensureSpreadsheet();
   SpreadsheetApp.getUi().alert(ss.getUrl());
+}
+
+function showVerifyConfig_() {
+  const msg = verifyConfig();
+  SpreadsheetApp.getUi().alert('Verify Config', msg, SpreadsheetApp.getUi().ButtonSet.OK);
 }

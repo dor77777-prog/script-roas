@@ -13,7 +13,14 @@
  */
 
 function getMetaSpend(storeId, dateStr) {
-  const token = getProp(`${storeId}.meta.accessToken`) || requireProp('meta.accessToken');
+  const token = getProp(`${storeId}.meta.accessToken`) || getProp('meta.accessToken');
+  if (!token) {
+    throw new Error(
+      `חסר טוקן Meta עבור ${storeId}. הגדר אחד מהבאים ב-Script Properties:\n` +
+      `  1. ${storeId}.meta.accessToken  (טוקן ספציפי לחנות זו)\n` +
+      `  2. meta.accessToken              (טוקן גלובלי לכל החנויות)`
+    );
+  }
   const adAccountId = requireProp(`${storeId}.meta.adAccountId`).replace(/^act_/, '');
 
   const timeRange = JSON.stringify({ since: dateStr, until: dateStr });
