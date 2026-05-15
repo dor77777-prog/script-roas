@@ -165,53 +165,180 @@ curl -H "X-Shopify-Access-Token: shpat_xxx" \
 
 ---
 
-## שלב 2 — Meta System User tokens
+## שלב 2 — Meta Marketing API + System User tokens
 
-> ⚠️ **System User token תקף רק לעסק (Business) אחד** — חשבונות פרסום שיושבים
-> בעסקים שונים דורשים System User נפרד בכל עסק, וטוקן נפרד.
+> ⚠️ **System User token תקף רק לעסק (Business Portfolio) אחד.**
+> חשבונות פרסום שיושבים בעסקים שונים דורשים System User נפרד בכל עסק,
+> וטוקן נפרד. ל-3 חנויות פרוסות על 2 עסקים → **2 tokens** סה"כ.
 >
-> אם 3 חשבונות הפרסום שלך מתחלקים בין 2 עסקים (אחד בעסק A, שניים בעסק B),
-> תייצר **2 tokens**: אחד מ-A, אחד מ-B. ה-token של B ישותף בין שתי החנויות
-> ששייכות אליו (זה תקין - אותו טוקן יכול לפנות לכמה ad accounts באותו עסק).
+> טוקן של System User לא פג. עומד בתנאי Meta כל עוד ה-System User לא נמחק
+> וה-Meta App לא נמחק/הושעה.
 
-### 2א. למיין מה יושב איפה
-לפני שמתחילים, רשום על נייר:
-- **עסק A** (שם:_______) — חשבון פרסום של ________________ → ad account ID: _______
-- **עסק B** (שם:_______) — חשבון פרסום של ________________ → ad account ID: _______
-- **עסק B** (אותו) — חשבון פרסום של ________________ → ad account ID: _______
+הזרימה הכוללת (חמישה תת-שלבים):
 
-(לדוגמה: אם uzoshop בעסק A, ו-zolplus+360usmile בעסק B — תייצר token A ל-uzoshop, ו-token B שתשתמש בו גם ל-zolplus וגם ל-360usmile.)
+```
+2א. למיין: איזה חשבון פרסום בכל עסק
+2ב. ליצור Meta App אחד (משותף לכל הטוקנים)
+2ג. לכל עסק - לחבר את ה-App ולמצוא ad account IDs
+2ד. לכל עסק - ליצור System User, לחבר assets, להוציא טוקן
+2ה. לשמור: מי הטוקן של מי
+```
 
-### 2ב. מצא Ad Account IDs
-1. https://business.facebook.com → בחר את העסק → **Business Settings → Accounts → Ad Accounts**.
-2. לכל ad account יש מספר בפורמט `act_123456789` או רק `123456789` ב-URL.
-3. שמור את ה-**מספר ללא** הקידומת `act_`.
-4. חזור על זה בכל עסק שיש לך.
+---
 
-### 2ג. צור Meta App (פעם אחת בלבד, משותף לכל הטוקנים)
-אם אין לך כבר Meta App:
-1. https://developers.facebook.com/apps → **Create App** → **Business** → תן שם `ROAS Tracker`.
-2. ב-Settings → Basic תמצא App ID + App Secret (לא צריך אותם פה, רק חשוב שה-app קיים).
-3. ה-App לא חייב להיות שייך לעסק ספציפי - הוא משותף.
+### 2א. מיפוי חנות → עסק → ad account
 
-### 2ד. בכל אחד מהעסקים, צור System User וטוקן
-**חזור על השלבים האלה בכל עסק שיש לך** (בדרך כלל 2 פעמים):
+מלא לעצמך טבלה לפני שמתחילים:
 
-1. https://business.facebook.com → בחר את העסק הנכון בחלק העליון השמאלי.
-2. **⚙️ Business Settings → Users → System Users**.
-3. **Add** → שם: `roas-tracker` → תפקיד **Admin** → **Create System User**.
-4. סמן את ה-System User שיצרת → **Add Assets**:
-   - בחר **Ad Accounts** → סמן את כל חשבונות הפרסום שבעסק הזה.
-   - הרשאה: **View Performance** (מספיק לקריאה).
-   - **Save Changes**.
-5. כעת **Generate New Token**:
-   - **App**: בחר את ה-Meta App מ-2ג.
-   - **Scopes**: סמן `ads_read` ו-`business_management`.
-   - **Token Expiration**: **Never** ✓
-   - **Generate Token** → **העתק מיד** ושמור בטקסט זמני (token A או token B בהתאם).
-6. עבור לעסק הבא וחזור על 1-5.
+| חנות | באיזה Business Portfolio | Ad Account ID |
+|------|--------------------------|---------------|
+| uzoshop | _____________ | _____________ |
+| zolplus | _____________ | _____________ |
+| 360usmile | _____________ | _____________ |
 
-בסוף יהיו לך 2 tokens (אחד לכל עסק).
+לדוגמה: אם uzoshop בעסק A ו-zolplus+360usmile בעסק B → tokenA ל-uzoshop, tokenB
+ל-zolplus ולגם 360usmile (אותו טוקן, שני חנויות).
+
+---
+
+### 2ב. ליצור Meta App אחד
+
+> אתה צריך Meta App אחד בסך הכל - הוא משמש כ"דלי" שבו מייצרים את הטוקנים.
+> אם כבר יש לך אפליקציה ב-Meta for Developers - אפשר להשתמש בה ולדלג על 2ב.
+
+1. גש ל-**https://developers.facebook.com/apps** והיכנס עם החשבון הראשי שלך.
+2. לחץ **Create App** למעלה ימין.
+3. **App details**:
+   - **App name**: `ROAS Tracker`
+   - **App contact email**: המייל שלך
+   - לחץ **Next**.
+4. **Use cases** ← המסך שאתה רואה כרגע. סמן את:
+   - ✅ **Measure ad performance data with Marketing API**
+     (זו השנייה מלמעלה - "Maximize ROI with ad performance data...").
+     זה מעניק את ההרשאה `ads_read` הנדרשת.
+   - לחץ **Next**.
+5. **Business**:
+   - תופיע אזהרה: "Connect a verified business portfolio to your app to get
+     access to third-party user and business data..."
+   - בחר **"I don't want to connect a business portfolio"** או **"Add later"**.
+   - **למה לדלג**: ה-verification וה-third-party data רלוונטיים רק אם רוצים
+     לקרוא נתונים מעסקים של אחרים. אצלנו קוראים רק מ-Ad Accounts שלנו, וה-app
+     יחובר לשני העסקים שלנו אחר כך דרך Business Settings → Apps → Add.
+   - **Next**.
+6. **Requirements**: קרא ואשר → **Next**.
+7. **Overview**: סקור → **Create app**.
+8. ייתכן ויבקש סיסמת facebook לאישור.
+9. לאחר היצירה, **App ID** ו-**App Secret** מופיעים ב-**App settings → Basic**.
+   - **לא צריך לעשות איתם כלום בינתיים** (הם רק כדי שהטוקן יידע איזה app זה).
+
+> 💡 ה-App יישאר ב-**Development mode**. זה תקין למה שאנחנו עושים - System User
+> tokens עובדים גם ב-Development mode עבור Marketing API. **לא צריך לעבור ל-Live.**
+
+---
+
+### 2ג. בכל עסק - לחבר את ה-App ולמצוא Ad Account IDs
+
+> ⚠️ חזור על כל הסעיף הזה **בכל אחד מ-2 העסקים** שלך.
+
+**2ג.1 — בחר את העסק הנכון**
+1. גש ל-**https://business.facebook.com**.
+2. בפינה הימנית העליונה יש Dropdown שמראה את שם העסק הפעיל - בחר את העסק הראשון.
+3. לחץ ⚙️ **Business settings** (פינה ימנית עליונה אחרי הבחירה).
+
+**2ג.2 — לחבר את ה-App לעסק**
+1. בסרגל השמאלי תחת **Accounts** → לחץ **Apps**.
+2. **Add → Connect an app ID** (או "Add app").
+3. הדבק את ה-**App ID** מ-2ב.
+4. אשר.
+5. ייתכן ותידרש להזין סיסמה.
+
+**2ג.3 — לרשום Ad Account IDs**
+1. סרגל שמאלי → **Accounts → Ad accounts**.
+2. לכל ad account שייך לעסק הזה רשום:
+   - שם החשבון (לוודא שזה החנות הנכונה)
+   - מספר ID (פורמט `1234567890` ללא הקידומת `act_`)
+   - ה-ID מופיע בכותרת של החשבון, או ב-URL בעת הקלקה עליו.
+
+---
+
+### 2ד. בכל עסק - ליצור System User ולהוציא טוקן
+
+> ⚠️ עדיין באותו עסק שבחרת ב-2ג. אחרי שתסיים פה, עבור לעסק הבא וחזור על 2ג + 2ד.
+
+**2ד.1 — צור System User**
+1. ב-Business settings → סרגל שמאלי → **Users → System users**.
+2. **Add** למעלה.
+3. במסך שנפתח:
+   - **System Username**: `roas-tracker`
+   - **System User Role**: **Admin** (גישה מלאה - נחוץ ליצירת טוקנים)
+   - **Create System User** → ייתכן ויבקש סיסמה לאישור.
+
+**2ד.2 — חבר Ad Accounts ל-System User**
+1. ה-System User שיצרת מופיע ברשימה. **לחץ עליו** (כניסה לפרטים).
+2. **Add Assets** (כפתור באמצע המסך).
+3. בחר **Ad accounts** מהרשימה משמאל.
+4. סמן את כל חשבונות הפרסום ששייכים לעסק הזה.
+5. בצד ימין, תחת **Partial access**, **חובה לסמן**:
+   - ✅ **View performance** (מספיק לקריאה - לא נחוצות הרשאות כתיבה)
+6. לחץ **Save changes**.
+
+**2ד.3 — חבר את ה-App ל-System User** (נחוץ ליצירת טוקנים)
+1. עדיין במסך פרטי ה-System User → **Add Assets** שוב.
+2. בחר **Apps** מהרשימה משמאל.
+3. סמן את `ROAS Tracker` (ה-App מ-2ב).
+4. הרשאות: סמן **Manage app**.
+5. **Save changes**.
+
+**2ד.4 — הוצא טוקן**
+1. במסך פרטי ה-System User, לחץ **Generate new token**.
+2. **App**: בחר `ROAS Tracker`.
+3. **Token expiration**: **Never** ✓ (חובה - אחרת הטוקן יפוג!)
+4. **Available scopes**: סמן:
+   - ✅ `ads_read`
+   - ✅ `business_management`
+5. **Generate token**.
+6. **⚠️ העתק את הטוקן מיד** ושמור בטקסט זמני. **הוא לא יוצג שוב.**
+   אם איבדת אותו - אפשר לייצר חדש (ישלול את הקודם).
+7. סמן בטקסט הזמני באיזה עסק זה (token של עסק A / token של עסק B).
+
+**2ד.5 — עבור לעסק הבא**
+חזור ל-2ג ו-2ד עם העסק השני.
+
+---
+
+### 2ה. מה לשמור בסוף
+
+עבור כל חנות, יש לך עכשיו:
+
+| חנות | Ad Account ID | טוקן | מקור |
+|------|---------------|------|------|
+| uzoshop | (משלב 2ג.3) | (משלב 2ד.4) | טוקן של העסק שלה |
+| zolplus | (משלב 2ג.3) | (משלב 2ד.4) | טוקן של העסק שלה |
+| 360usmile | (משלב 2ג.3) | (משלב 2ד.4) | טוקן של העסק שלה |
+
+(שתי חנויות באותו עסק = אותו טוקן יחזור פעמיים בעמודה.)
+
+ב-Script Properties (שלב 4) נגדיר לכל חנות:
+- `{storeId}.meta.adAccountId` = ה-ID של ה-ad account שלה
+- `{storeId}.meta.accessToken` = הטוקן של העסק שלה
+
+---
+
+### 2ו. בדיקת הטוקן (אופציונלי, מומלץ)
+
+לוודא שהטוקן עובד לפני שעוברים הלאה. ב-Apps Script editor, פתח Tools → "Script editor" ובאיזור ה-debug הרץ פקודה:
+
+```bash
+curl "https://graph.facebook.com/v20.0/me?access_token=YOUR_TOKEN"
+```
+תשובה תקינה: `{"name":"roas-tracker","id":"..."}`.
+
+```bash
+curl "https://graph.facebook.com/v20.0/act_AD_ACCOUNT_ID/insights?date_preset=yesterday&fields=spend&access_token=YOUR_TOKEN"
+```
+תשובה תקינה: `{"data":[{"spend":"123.45","date_start":"...","date_stop":"..."}],...}`.
+
+אם 401/400 - הטוקן/ה-ID לא נכונים, או שה-System User לא קיבל הרשאת View performance.
 
 ### 2ה. מה לשמור
 
