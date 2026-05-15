@@ -40,7 +40,10 @@ Shopify מציעה היום **שני מסלולים** ליצירת Custom App. �
 חזור על השלבים לכל אחת מ-3 החנויות. בסוף יהיו לך 3 זוגות (domain + token).
 
 **A1. כניסה למקום הנכון**
-1. היכנס לאדמין: `https://{store}.myshopify.com/admin`
+1. היכנס לאדמין של החנות:
+   - uzoshop: `https://uzo-d-s-2.myshopify.com/admin`
+   - zolplus: `https://2x1gqx-y0.myshopify.com/admin`
+   - 360usmile: `https://360usmile.myshopify.com/admin`
 2. **⚙️ Settings** → **Apps and sales channels** → **Develop apps**.
 3. אם רואים "Allow custom app development" → לחץ ואשר. פעם אחת לחנות.
 
@@ -96,7 +99,10 @@ release של גרסה, ואז שליפת הטוקן דרך **Client Credentials 
 
 **B3. התקנה על החנות**
 1. בסרגל הצדדי → **Installs**.
-2. **Install app** → בחר את החנות (`uzoshop.myshopify.com`).
+2. **Install app** → בחר את החנות המתאימה (לכל אפליקציה החנות שלה):
+   - לאפליקציה של uzoshop → בחר `uzo-d-s-2.myshopify.com`
+   - לאפליקציה של zolplus → בחר `2x1gqx-y0.myshopify.com`
+   - לאפליקציה של 360usmile → בחר `360usmile.myshopify.com`
 3. אשר את ההתקנה.
 
 **B4. שלוף Client ID ו-Client Secret**
@@ -110,13 +116,20 @@ release של גרסה, ואז שליפת הטוקן דרך **Client Credentials 
 המערכת כוללת פונקציה שמבצעת את ה-Client Credentials Grant API call ושומרת
 את הטוקן ב-Script Properties. אין צורך לכתוב curl ידני.
 
-1. ראשית הזן ב-Script Properties (שלב 4 בהמשך):
+1. ראשית הזן ב-Script Properties (שלב 4 בהמשך) - דוגמה מלאה לכל 3 החנויות:
    ```
-   uzoshop.shopify.domain        = uzoshop.myshopify.com
-   uzoshop.shopify.clientId      = <Client ID מ-B4>
-   uzoshop.shopify.clientSecret  = <Client Secret מ-B4>
+   uzoshop.shopify.domain         = uzo-d-s-2.myshopify.com
+   uzoshop.shopify.clientId       = <Client ID של אפליקציית uzoshop>
+   uzoshop.shopify.clientSecret   = <Client Secret של אפליקציית uzoshop>
+
+   zolplus.shopify.domain         = 2x1gqx-y0.myshopify.com
+   zolplus.shopify.clientId       = <Client ID של אפליקציית zolplus>
+   zolplus.shopify.clientSecret   = <Client Secret של אפליקציית zolplus>
+
+   usmile360.shopify.domain       = 360usmile.myshopify.com
+   usmile360.shopify.clientId     = <Client ID של אפליקציית 360usmile>
+   usmile360.shopify.clientSecret = <Client Secret של אפליקציית 360usmile>
    ```
-   (זהה ל-zolplus ו-usmile360)
 2. ב-Apps Script editor הרץ ידנית את הפונקציה `bootstrapAllShopifyTokens`.
 3. בלוגים תראה לכל חנות: `Shopify {storeId}: token saved (scope=...)`.
 4. ה-tokens נשמרו אוטומטית כ-`{storeId}.shopify.token` ב-Script Properties.
@@ -137,7 +150,7 @@ release של גרסה, ואז שליפת הטוקן דרך **Client Credentials 
 
 | מה | איפה למצוא | דוגמה |
 |----|------------|-------|
-| Domain | URL של האדמין | `uzoshop.myshopify.com` |
+| Domain | URL של האדמין | `uzo-d-s-2.myshopify.com` (uzoshop), `2x1gqx-y0.myshopify.com` (zolplus), `360usmile.myshopify.com` (usmile) |
 | Token (A) | Reveal token once | `shpat_a1b2c3d4...` |
 | Client ID (B) | Dev Dashboard → Settings | `1234abcd...` |
 | Client Secret (B) | Dev Dashboard → Settings → Reveal | `shpss_...` |
@@ -146,7 +159,7 @@ release של גרסה, ואז שליפת הטוקן דרך **Client Credentials 
 מהטרמינל אפשר לוודא שהטוקן עובד:
 ```bash
 curl -H "X-Shopify-Access-Token: shpat_xxx" \
-  "https://uzoshop.myshopify.com/admin/api/2024-10/shop.json"
+  "https://uzo-d-s-2.myshopify.com/admin/api/2024-10/shop.json"
 ```
 תשובה תקינה מחזירה JSON עם פרטי החנות. אם מקבל 401 — הטוקן או ה-domain שגויים.
 
@@ -223,7 +236,7 @@ curl -H "X-Shopify-Access-Token: shpat_xxx" \
 ### uzoshop
 | Key | Value | מתי |
 |-----|-------|-----|
-| `uzoshop.shopify.domain` | `uzoshop.myshopify.com` | תמיד |
+| `uzoshop.shopify.domain` | `uzo-d-s-2.myshopify.com` | תמיד |
 | `uzoshop.shopify.token` | `shpat_...` | מסלול A, או אוטו' אחרי `bootstrapAllShopifyTokens` במסלול B |
 | `uzoshop.shopify.clientId` | מ-Dev Dashboard | מסלול B בלבד |
 | `uzoshop.shopify.clientSecret` | מ-Dev Dashboard | מסלול B בלבד (אפשר למחוק אחרי bootstrap) |
@@ -233,7 +246,7 @@ curl -H "X-Shopify-Access-Token: shpat_xxx" \
 ### Zol Plus
 | Key | Value | מתי |
 |-----|-------|-----|
-| `zolplus.shopify.domain` | `your-zolplus.myshopify.com` | תמיד |
+| `zolplus.shopify.domain` | `2x1gqx-y0.myshopify.com` | תמיד |
 | `zolplus.shopify.token` | `shpat_...` | מסלול A, או אוטו' במסלול B |
 | `zolplus.shopify.clientId` | מ-Dev Dashboard | מסלול B בלבד |
 | `zolplus.shopify.clientSecret` | מ-Dev Dashboard | מסלול B בלבד |
@@ -242,7 +255,7 @@ curl -H "X-Shopify-Access-Token: shpat_xxx" \
 ### 360usmile
 | Key | Value | מתי |
 |-----|-------|-----|
-| `usmile360.shopify.domain` | `your-usmile.myshopify.com` | תמיד |
+| `usmile360.shopify.domain` | `360usmile.myshopify.com` | תמיד |
 | `usmile360.shopify.token` | `shpat_...` | מסלול A, או אוטו' במסלול B |
 | `usmile360.shopify.clientId` | מ-Dev Dashboard | מסלול B בלבד |
 | `usmile360.shopify.clientSecret` | מ-Dev Dashboard | מסלול B בלבד |
