@@ -302,11 +302,20 @@ curl -H "X-Shopify-Access-Token: shpat_xxx" \
 6. לחץ **Save changes**.
 
 **2ד.3 — חבר את ה-App ל-System User** (נחוץ ליצירת טוקנים)
+
+> 🚨 **שלב קריטי - דילוג עליו גורם לשגיאה "No permissions available" בייצור הטוקן.**
+
 1. עדיין במסך פרטי ה-System User → **Add Assets** שוב.
 2. בחר **Apps** מהרשימה משמאל.
 3. סמן את **ה-app של העסק הזה** (`ROAS Tracker A` בעסק הראשון, `ROAS Tracker B` בעסק השני).
-4. הרשאות: סמן **Manage app**.
+4. **תפקיד (חובה!)**: סמן ✅ **Manage app**.
+   - ⚠️ סימון "Test app" או "Develop app" בלבד **לא מספיק** - חייב Manage app.
 5. **Save changes**.
+6. וודא: במסך פרטי ה-System User, בטאב **Assigned assets**, ה-app אמור להופיע ברשימה.
+
+> 💡 אם בשלב 2ד.4 קיבלת **"No permissions available. Assign an app role to the
+> system user or select another app to continue"** - זה אומר שהשלב הזה (2ד.3)
+> לא הושלם או שסומן תפקיד לא מספיק. חזור הנה, סמן Manage app, ושמור.
 
 **2ד.4 — הוצא טוקן**
 1. במסך פרטי ה-System User, לחץ **Generate new token**.
