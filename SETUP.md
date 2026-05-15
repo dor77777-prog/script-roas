@@ -23,19 +23,73 @@
 
 ---
 
-## שלב 1 — Shopify Admin API tokens (×3)
+## שלב 1 — Shopify Admin API tokens (×3 חנויות)
 
-לכל אחת מ-3 החנויות (uzoshop, zolplus, 360usmile), צור Custom App:
+> ⚠️ **חשוב — לא להיכנס ל-Partner Dev Dashboard!**
+> אם פתחת את `dev.shopify.com` או `partners.shopify.com` ויצרת "App" עם
+> "Create version", App URL, Redirect URLs, וכו' — **זה המסלול הלא נכון**.
+> זה מיועד לבניית אפליקציה ציבורית ל-App Store ודורש שרת + OAuth.
+>
+> למעקב פרטי על החנויות שלך, צריך **Custom App בתוך כל חנות בנפרד**, מהאדמין
+> של החנות. זה מסלול בלי OAuke, בלי שרת — רק טוקן.
 
-1. בלוח הניהול של החנות: **Settings → Apps and sales channels → Develop apps**.
-2. **Allow custom app development** → **Create an app** → קרא לה `ROAS Tracker`.
-3. **Configure Admin API scopes** → סמן:
-   - `read_orders`
-   - `read_all_orders` (אופציונלי, נדרש להזמנות ישנות מ-60 יום)
-4. **Save** → **Install app** → **Reveal token once**.
-5. העתק את ה-Admin API access token (מתחיל ב-`shpat_`).
+חזור על השלבים הבאים **לכל אחת מ-3 החנויות** (uzoshop, zolplus, 360usmile).
+לכל חנות תקבל טוקן נפרד.
 
-רשום את ה-`*.myshopify.com` domain ואת ה-token.
+### 1א. כניסה למקום הנכון
+1. היכנס לאדמין של החנות: `https://{store}.myshopify.com/admin`
+   (לדוגמה: `https://uzoshop.myshopify.com/admin`)
+2. בתפריט התחתון של הסרגל השמאלי לחץ **⚙️ Settings**.
+3. בעמוד ההגדרות, בסרגל הצדדי בחר **Apps and sales channels**.
+4. בראש העמוד (לא בטאב "Apps" הראשי) לחץ על הקישור **Develop apps**.
+   - אם אתה רואה את הכפתור **"Allow custom app development"** — לחץ עליו
+     וגם על **"Allow custom app development"** במסך האישור. צריך לעשות זאת
+     פעם אחת לכל חנות.
+
+### 1ב. יצירת ה-Custom App
+1. לחץ על **Create an app** בפינה הימנית העליונה.
+2. App name: `ROAS Tracker`
+3. App developer: השאר את עצמך (ברירת מחדל).
+4. לחץ **Create app**.
+
+### 1ג. הגדרת Scopes (הרשאות API)
+1. בטאב **Configuration** (נפתח אוטומטית), במקטע **Admin API integration**, לחץ **Configure**.
+2. בשדה החיפוש למעלה הקלד `orders` ובחר:
+   - ✅ `read_orders` — קריאת הזמנות מ-60 הימים האחרונים
+   - ✅ `read_all_orders` — קריאת הזמנות ישנות (נדרש למילוי היסטורי)
+3. בשדה החיפוש הקלד `products` ובחר (אופציונלי, לעתיד):
+   - `read_products`
+4. ב-Webhook API version בחר את הגרסה האחרונה היציבה (`2024-10` או חדש יותר).
+5. גלול למטה ולחץ **Save**.
+
+> ⚠️ **לא להפעיל "Storefront API integration"** — אנחנו לא צריכים את זה,
+> וזה משתמש בטוקן אחר.
+
+### 1ד. התקנת האפליקציה וקבלת הטוקן
+1. גלול לראש העמוד וחזור לטאב **API credentials**.
+2. לחץ על הכפתור הירוק **Install app** בראש העמוד → אישור **Install**.
+3. אחרי ההתקנה, במקטע **Admin API access token** יופיע הכיתוב
+   **"Reveal token once"** — לחץ עליו.
+4. **שמור את הטוקן מיד** — הוא מוצג רק פעם אחת! פורמט: `shpat_xxxxxxxxxxxx...`.
+   אם איבדת אותו, אפשר ליצור טוקן חדש דרך **Revoke and regenerate**.
+
+### 1ה. מה לשמור לכל חנות
+
+| מה | איפה למצוא | דוגמה |
+|----|------------|-------|
+| Domain | URL של האדמין | `uzoshop.myshopify.com` |
+| Admin API token | מהמסך שזה עתה גילית | `shpat_a1b2c3d4...` |
+
+חזור על 1א-1ד עבור **zolplus** ו-**360usmile**. בסוף יהיו לך 3 זוגות
+(domain + token).
+
+### 1ו. בדיקה מהירה (אופציונלי)
+מהטרמינל אפשר לוודא שהטוקן עובד:
+```bash
+curl -H "X-Shopify-Access-Token: shpat_xxx" \
+  "https://uzoshop.myshopify.com/admin/api/2024-10/shop.json"
+```
+תשובה תקינה מחזירה JSON עם פרטי החנות. אם מקבל 401 — הטוקן או ה-domain שגויים.
 
 ---
 
