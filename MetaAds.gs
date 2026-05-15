@@ -2,14 +2,18 @@
  * MetaAds.gs - הוצאות פרסום מ-Meta Ads (פייסבוק/אינסטגרם).
  *
  * נדרש:
- *   - meta.accessToken                  (System User token עם הרשאת ads_read)
  *   - {storeId}.meta.adAccountId        (מספר Ad Account ללא הקידומת act_)
+ *   - meta.accessToken                  (System User token עם הרשאת ads_read)
+ *     או
+ *   - {storeId}.meta.accessToken        (System User token ספציפי לחנות זו -
+ *                                        משמש כשהחשבון בעסק (Business) נפרד.
+ *                                        אם מוגדר, גובר על meta.accessToken)
  *
  * ה-API מחזיר את ה-spend במטבע של חשבון הפרסום. עבור החנויות האלו - ILS.
  */
 
 function getMetaSpend(storeId, dateStr) {
-  const token = requireProp('meta.accessToken');
+  const token = getProp(`${storeId}.meta.accessToken`) || requireProp('meta.accessToken');
   const adAccountId = requireProp(`${storeId}.meta.adAccountId`).replace(/^act_/, '');
 
   const timeRange = JSON.stringify({ since: dateStr, until: dateStr });

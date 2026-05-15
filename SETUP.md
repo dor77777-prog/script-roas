@@ -165,18 +165,64 @@ curl -H "X-Shopify-Access-Token: shpat_xxx" \
 
 ---
 
-## שלב 2 — Meta System User token
+## שלב 2 — Meta System User tokens
 
-1. https://business.facebook.com → **Business Settings → Users → System Users**.
-2. **Add** → צור System User בשם `roas-tracker` עם תפקיד **Admin**.
-3. **Add Assets** → צרף את כל 3 חשבונות הפרסום עם הרשאת **View ads**.
-4. סמן את ה-System User → **Generate New Token**:
-   - בחר את ה-Meta App שלך (אם אין — צור ב-https://developers.facebook.com/apps תחת Business type)
-   - הרשאות נדרשות: `ads_read`, `business_management`
-   - **Token Expiration: Never** ✓
-5. העתק את ה-token (System User tokens לא פגים).
+> ⚠️ **System User token תקף רק לעסק (Business) אחד** — חשבונות פרסום שיושבים
+> בעסקים שונים דורשים System User נפרד בכל עסק, וטוקן נפרד.
+>
+> אם 3 חשבונות הפרסום שלך מתחלקים בין 2 עסקים (אחד בעסק A, שניים בעסק B),
+> תייצר **2 tokens**: אחד מ-A, אחד מ-B. ה-token של B ישותף בין שתי החנויות
+> ששייכות אליו (זה תקין - אותו טוקן יכול לפנות לכמה ad accounts באותו עסק).
 
-**מצא את ה-Ad Account IDs:** ב-Business Manager → Accounts → Ad Accounts. המספר ללא הקידומת `act_`.
+### 2א. למיין מה יושב איפה
+לפני שמתחילים, רשום על נייר:
+- **עסק A** (שם:_______) — חשבון פרסום של ________________ → ad account ID: _______
+- **עסק B** (שם:_______) — חשבון פרסום של ________________ → ad account ID: _______
+- **עסק B** (אותו) — חשבון פרסום של ________________ → ad account ID: _______
+
+(לדוגמה: אם uzoshop בעסק A, ו-zolplus+360usmile בעסק B — תייצר token A ל-uzoshop, ו-token B שתשתמש בו גם ל-zolplus וגם ל-360usmile.)
+
+### 2ב. מצא Ad Account IDs
+1. https://business.facebook.com → בחר את העסק → **Business Settings → Accounts → Ad Accounts**.
+2. לכל ad account יש מספר בפורמט `act_123456789` או רק `123456789` ב-URL.
+3. שמור את ה-**מספר ללא** הקידומת `act_`.
+4. חזור על זה בכל עסק שיש לך.
+
+### 2ג. צור Meta App (פעם אחת בלבד, משותף לכל הטוקנים)
+אם אין לך כבר Meta App:
+1. https://developers.facebook.com/apps → **Create App** → **Business** → תן שם `ROAS Tracker`.
+2. ב-Settings → Basic תמצא App ID + App Secret (לא צריך אותם פה, רק חשוב שה-app קיים).
+3. ה-App לא חייב להיות שייך לעסק ספציפי - הוא משותף.
+
+### 2ד. בכל אחד מהעסקים, צור System User וטוקן
+**חזור על השלבים האלה בכל עסק שיש לך** (בדרך כלל 2 פעמים):
+
+1. https://business.facebook.com → בחר את העסק הנכון בחלק העליון השמאלי.
+2. **⚙️ Business Settings → Users → System Users**.
+3. **Add** → שם: `roas-tracker` → תפקיד **Admin** → **Create System User**.
+4. סמן את ה-System User שיצרת → **Add Assets**:
+   - בחר **Ad Accounts** → סמן את כל חשבונות הפרסום שבעסק הזה.
+   - הרשאה: **View Performance** (מספיק לקריאה).
+   - **Save Changes**.
+5. כעת **Generate New Token**:
+   - **App**: בחר את ה-Meta App מ-2ג.
+   - **Scopes**: סמן `ads_read` ו-`business_management`.
+   - **Token Expiration**: **Never** ✓
+   - **Generate Token** → **העתק מיד** ושמור בטקסט זמני (token A או token B בהתאם).
+6. עבור לעסק הבא וחזור על 1-5.
+
+בסוף יהיו לך 2 tokens (אחד לכל עסק).
+
+### 2ה. מה לשמור
+
+| חנות | Ad Account ID | בעסק | Token לשימוש |
+|------|---------------|------|--------------|
+| uzoshop | (השלם) | A או B? | token של אותו עסק |
+| zolplus | (השלם) | A או B? | token של אותו עסק |
+| 360usmile | (השלם) | A או B? | token של אותו עסק |
+
+ב-Script Properties (שלב 4) נגדיר **token לפי חנות** במקום token גלובלי אחד.
+המפתחות יהיו `{storeId}.meta.accessToken` במקום `meta.accessToken`.
 
 ---
 
@@ -226,12 +272,17 @@ curl -H "X-Shopify-Access-Token: shpat_xxx" \
 ### כללי
 | Key | Value | חובה? |
 |-----|-------|-------|
-| `meta.accessToken` | System User token משלב 2 | ✓ |
+| `meta.accessToken` | System User token משלב 2 — *רק* אם כל חשבונות הפרסום באותו עסק | אם רלוונטי |
 | `googleads.developerToken` | Developer token משלב 3ב | ✓ |
 | `googleads.clientId` | OAuth Client ID משלב 3א | ✓ |
 | `googleads.clientSecret` | OAuth Client Secret משלב 3א | ✓ |
 | `googleads.refreshToken` | Refresh Token משלב 3ג | ✓ |
 | `googleads.loginCustomerId` | מספר MCC (ללא מקפים) | אם uzoshop תחת MCC |
+
+> 💡 **חשבונות פרסום בעסקים שונים?** במקום `meta.accessToken` הגלובלי, הגדר
+> `{storeId}.meta.accessToken` לכל חנות עם הטוקן של העסק שבו יושב חשבון
+> הפרסום שלה. ניתן לערבב: אפשר להגדיר `meta.accessToken` כברירת מחדל ולגבור
+> רק על חנויות חריגות עם `{storeId}.meta.accessToken`.
 
 ### uzoshop
 | Key | Value | מתי |
@@ -240,6 +291,7 @@ curl -H "X-Shopify-Access-Token: shpat_xxx" \
 | `uzoshop.shopify.token` | `shpat_...` | מסלול A, או אוטו' אחרי `bootstrapAllShopifyTokens` במסלול B |
 | `uzoshop.shopify.clientId` | מ-Dev Dashboard | מסלול B בלבד |
 | `uzoshop.shopify.clientSecret` | מ-Dev Dashboard | מסלול B בלבד (אפשר למחוק אחרי bootstrap) |
+| `uzoshop.meta.accessToken` | System User token של העסק שבו חשבון הפרסום של uzoshop | אם בעסק שונה |
 | `uzoshop.meta.adAccountId` | מספר ה-Ad Account (ללא `act_`) | תמיד |
 | `uzoshop.googleads.customerId` | מספר חשבון Google Ads (ללא מקפים) | תמיד |
 
@@ -250,6 +302,7 @@ curl -H "X-Shopify-Access-Token: shpat_xxx" \
 | `zolplus.shopify.token` | `shpat_...` | מסלול A, או אוטו' במסלול B |
 | `zolplus.shopify.clientId` | מ-Dev Dashboard | מסלול B בלבד |
 | `zolplus.shopify.clientSecret` | מ-Dev Dashboard | מסלול B בלבד |
+| `zolplus.meta.accessToken` | System User token של העסק של zolplus | אם בעסק שונה |
 | `zolplus.meta.adAccountId` | מספר ה-Ad Account | תמיד |
 
 ### 360usmile
@@ -259,6 +312,8 @@ curl -H "X-Shopify-Access-Token: shpat_xxx" \
 | `usmile360.shopify.token` | `shpat_...` | מסלול A, או אוטו' במסלול B |
 | `usmile360.shopify.clientId` | מ-Dev Dashboard | מסלול B בלבד |
 | `usmile360.shopify.clientSecret` | מ-Dev Dashboard | מסלול B בלבד |
+| `usmile360.meta.accessToken` | System User token של העסק של 360usmile | אם בעסק שונה |
+| `usmile360.meta.adAccountId` | מספר ה-Ad Account | תמיד |
 | `usmile360.meta.adAccountId` | מספר ה-Ad Account | תמיד |
 
 ---
