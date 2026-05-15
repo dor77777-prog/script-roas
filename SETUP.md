@@ -340,53 +340,138 @@ curl "https://graph.facebook.com/v20.0/act_AD_ACCOUNT_ID/insights?date_preset=ye
 
 אם 401/400 - הטוקן/ה-ID לא נכונים, או שה-System User לא קיבל הרשאת View performance.
 
-### 2ה. מה לשמור
-
-| חנות | Ad Account ID | בעסק | Token לשימוש |
-|------|---------------|------|--------------|
-| uzoshop | (השלם) | A או B? | token של אותו עסק |
-| zolplus | (השלם) | A או B? | token של אותו עסק |
-| 360usmile | (השלם) | A או B? | token של אותו עסק |
-
-ב-Script Properties (שלב 4) נגדיר **token לפי חנות** במקום token גלובלי אחד.
-המפתחות יהיו `{storeId}.meta.accessToken` במקום `meta.accessToken`.
-
 ---
 
 ## שלב 3 — Google Ads (רק ל-uzoshop)
 
-החלק הארוך ביותר. כולל אישור Developer Token (לרוב מאושר תוך יום-יומיים).
+> ⚠️ **רק אם uzoshop באמת מפרסם ב-Google Ads.** אם uzoshop לא מפרסם בגוגל,
+> אפשר לדלג על כל השלב הזה - הקוד יחזיר 0 הוצאה ל-Google Ads. (תצטרך לערוך
+> את `Config.gs` ולסמן `hasGoogleAds: false` ל-uzoshop.)
 
-### 3א. Google Cloud project + OAuth
-1. https://console.cloud.google.com → צור פרויקט חדש `roas-tracker-ga`.
-2. **APIs & Services → Library** → אפשר את **Google Ads API**.
-3. **OAuth consent screen**:
-   - User Type: **External**
-   - App name: `ROAS Tracker`
-   - Support email: שלך
-   - Scopes: הוסף `https://www.googleapis.com/auth/adwords`
-   - Test users: הוסף את כתובת הג'ימייל שלך
-4. **Credentials → Create Credentials → OAuth client ID**:
-   - Application type: **Web application**
-   - Authorized redirect URIs: `https://developers.google.com/oauthplayground`
-5. הורד את ה-Client ID וה-Client Secret.
+החלק הארוך ביותר. דורש 4 דברים:
+1. פרויקט Google Cloud + OAuth credentials (3א)
+2. Developer Token של Google Ads API (3ב) - **דורש אישור של 1-2 ימי עסקים**
+3. Refresh token דרך OAuth Playground (3ג)
+4. Customer ID של חשבון uzoshop ב-Google Ads (3ד)
 
-### 3ב. Developer Token
-1. https://ads.google.com → היכנס לחשבון ה-MCC (או חשבון רגיל).
-2. **Tools → API Center** → הגש בקשה ל-Developer Token.
-3. **Test access** מאושר תוך כמה שעות; **Basic access** תוך 1-2 ימי עסקים.
+---
+
+### 3א. Google Cloud project + OAuth Client
+
+> 💡 הפרויקט הזה נפרד מהפרויקט של Apps Script. ב-Google Cloud Console
+> ניצור OAuth credentials שדרכן נגיע ל-Google Ads API.
+
+**3א.1 — צור פרויקט**
+1. גש ל-**https://console.cloud.google.com**.
+2. בפינה השמאלית העליונה ליד "Google Cloud" - לחץ על שם הפרויקט הנוכחי.
+3. **New project** → Name: `roas-tracker-ga` → **Create**.
+4. המתן ~30 שניות, ואז ודא שהפרויקט הנכון בחור בפינה השמאלית העליונה.
+
+**3א.2 — אפשר את Google Ads API**
+1. בתפריט (☰ פינה ימנית עליונה) → **APIs & Services → Library**.
+2. בתיבת החיפוש: `Google Ads API` → לחץ עליו → **Enable**.
+
+**3א.3 — הגדר OAuth consent screen**
+1. **APIs & Services → OAuth consent screen**.
+2. **User Type**: **External** → **Create**.
+3. **App information**:
+   - **App name**: `ROAS Tracker`
+   - **User support email**: המייל שלך
+   - **Developer contact email**: המייל שלך
+   - דלג על שאר השדות (אופציונליים).
+   - **Save and Continue**.
+4. **Scopes**: **Add or Remove Scopes** → בחיפוש למעלה הקלד: `adwords`.
+   - סמן ✅ `https://www.googleapis.com/auth/adwords`
+   - **Update** → **Save and Continue**.
+5. **Test users**: **Add Users** → הזן את כתובת הג'ימייל **שיש לה גישה לחשבון Google Ads
+   של uzoshop**. **Save and Continue**.
+6. **Summary** → **Back to Dashboard**.
+
+> 💡 ה-app יישאר ב-**Testing mode**. זה מספיק לשימוש פרטי. אין צורך להגיש ל-verification.
+
+**3א.4 — צור OAuth Client ID**
+1. **APIs & Services → Credentials**.
+2. **+ Create Credentials → OAuth client ID**.
+3. **Application type**: **Web application**.
+4. **Name**: `ROAS Tracker`.
+5. **Authorized redirect URIs**: לחץ **+ Add URI** → הדבק:
+   ```
+   https://developers.google.com/oauthplayground
+   ```
+   (זה ה-URI של ה-OAuth Playground שדרכו נשיג את ה-refresh token בשלב 3ג)
+6. **Create**.
+7. **חלון מקפיץ** מציג Client ID + Client secret. **שמור את שניהם** בטקסט זמני.
+   (תמיד אפשר לחזור ל-Credentials ולראות אותם שוב.)
+
+---
+
+### 3ב. Developer Token ב-Google Ads
+
+> ⚠️ **זה השלב הארוך ביותר**. Test access מאושר תוך שעות; אפשר להתחיל עם זה.
+> Basic access דורש 1-2 ימי עסקים. **Test access מספיק לקריאה** של חשבונות שאתה מורשה
+> בהם, אז אפשר להתחיל לעבוד גם בלי Basic.
+
+**3ב.1 — היכנס לחשבון Google Ads הנכון**
+1. גש ל-**https://ads.google.com** והיכנס עם החשבון שמנהל את uzoshop.
+2. בפינה השמאלית העליונה ודא שאתה ב-**MCC account** (חשבון מנהל) אם יש לך כזה.
+   אם uzoshop ישירות תחת חשבון רגיל - השתמש בחשבון הזה.
+
+**3ב.2 — הגש בקשה ל-API Access**
+1. בסרגל העליון: **Tools** (כלים, פינה ימנית) → **Setup → API Center**.
+2. אם זו פעם ראשונה - יבקש "Apply for token":
+   - **Company name**: שם החברה שלך (יכול להיות "Personal")
+   - **Company website**: אתר/דומיין כלשהו (uzoshop.com למשל)
+   - **Business email**: המייל שלך
+   - **API usage**: בחר **"Internal data management"** או דומה
+   - **Tools you build with API**: בחר משהו רלוונטי
+   - **Save and continue**.
+3. תקבל **Test developer token** מיידית - שמור אותו (מתחיל באותיות/מספרים, ~22 תווים).
+
+> 💡 Test token עובד עם חשבונות **שיש לך גישה ישירה אליהם**. זה מספיק לנו.
+> אם תקבל שגיאת DEVELOPER_TOKEN_NOT_APPROVED - יכול להיות שצריך לחכות שעה-שעתיים.
+
+---
 
 ### 3ג. Refresh Token דרך OAuth Playground
-1. https://developers.google.com/oauthplayground
-2. בפינה ימין למעלה ⚙️ → סמן **Use your own OAuth credentials** → הדבק Client ID + Secret.
-3. בצד שמאל, ב-Step 1: בשדה ה-scope המותאם אישית הזן: `https://www.googleapis.com/auth/adwords`
-4. **Authorize APIs** → התחבר עם חשבון Google שיש לו גישה לחשבון Google Ads.
-5. **Step 2 → Exchange authorization code for tokens**.
-6. העתק את ה-**Refresh token**.
 
-### 3ד. Customer ID
-ב-Google Ads, מספר החשבון של uzoshop בפינה ימין למעלה (פורמט `XXX-XXX-XXXX`).
-- אם הוא תחת חשבון MCC: שמור גם את מספר ה-MCC כ-`login-customer-id`.
+> 💡 ה-refresh token הוא "הזיכרון" של Apps Script - הוא מאפשר ל-script לקבל
+> access tokens חדשים בלי שתצטרך להתחבר שוב לגוגל. הוא נשאר תקף לתמיד
+> כל עוד לא ביטלת את ההרשאה ולא שינית סיסמה.
+
+1. גש ל-**https://developers.google.com/oauthplayground**.
+2. בפינה הימנית העליונה: ⚙️ **OAuth 2.0 configuration** → סמן:
+   - ✅ **Use your own OAuth credentials**
+   - **OAuth Client ID**: הדבק את ה-Client ID משלב 3א.4
+   - **OAuth Client secret**: הדבק את ה-Client secret משלב 3א.4
+   - סגור את החלון.
+3. **Step 1 - Select & authorize APIs** (פאנל שמאלי):
+   - בתיבה התחתונה "Input your own scopes" הדבק:
+     ```
+     https://www.googleapis.com/auth/adwords
+     ```
+   - לחץ **Authorize APIs**.
+4. תיפתח חלונית של גוגל - **התחבר עם החשבון שמנהל את Google Ads של uzoshop**
+   (אותו חשבון מ-3ב.1).
+5. אישור הרשאה לאפליקציה (ייתכן ויראה "App not verified" - לחץ Advanced → Go to ROAS Tracker).
+6. **Step 2 - Exchange authorization code for tokens**: לחץ **Exchange authorization code for tokens**.
+7. בפאנל הימני יופיעו:
+   - **Refresh token** ← **העתק ושמור** (מתחיל ב-`1//...`)
+   - Access token (לא נחוץ - יתחדש אוטומטית מה-refresh token)
+
+---
+
+### 3ד. Customer ID של uzoshop ב-Google Ads
+
+1. ב-**https://ads.google.com** בחר את חשבון uzoshop.
+2. בפינה הימנית העליונה (ליד שם החשבון/המייל) - יש מספר בפורמט `XXX-XXX-XXXX`.
+3. **שמור את המספר ללא המקפים**. לדוגמה: `123-456-7890` → `1234567890`.
+
+**אם uzoshop תחת חשבון MCC (חשבון מנהל):**
+4. שמור גם את מספר ה-MCC (בפורמט זהה, גם הוא מופיע בפינה כשאתה בחשבון MCC).
+5. זה ייכנס ל-Script Property **`googleads.loginCustomerId`**.
+
+**אם uzoshop חשבון עצמאי:**
+- אין צורך ב-`loginCustomerId` (אפשר להשאיר ריק).
 
 ---
 
