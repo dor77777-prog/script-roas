@@ -508,20 +508,49 @@ curl "https://graph.facebook.com/v20.0/act_AD_ACCOUNT_ID/insights?date_preset=ye
 
 **3ב.0 — אם אין לך עדיין חשבון MCC, צור אחד**
 
-> דלג על השלב הזה אם uzoshop כבר מקושר ל-MCC קיים, או אם uzoshop **הוא בעצמו** MCC.
+> **סימן זיהוי**: אם בתוך מרכז ה-API ראית את ההודעה
+> *"מרכז ה-API זמין רק לחשבונות ניהול"* (או באנגלית: "API Center is only
+> available for manager accounts"), זה מה שצריך לעשות עכשיו.
+>
+> **מה זה MCC?** Manager / Client Center - חשבון "מעטפת" שמנהל את חשבון הפרסום
+> שלך. הוא לא מחליף את חשבון uzoshop - שניהם קיימים במקביל. ה-MCC נחוץ רק
+> כדי לקבל גישה ל-API.
+>
+> דלג על 3ב.0 רק אם uzoshop כבר מקושר ל-MCC קיים, או אם uzoshop **הוא בעצמו** MCC.
 
-1. גש ל-**https://ads.google.com/intl/iw/home/tools/manager-accounts/**
-2. לחץ **"צור חשבון מנהל"** (Create a manager account).
-3. **שם החשבון**: `Uzo MCC` (או כל שם תיאורי).
-4. **למה משמש החשבון**: בחר "ניהול חשבונות לעסק שלי" / "Manage your own accounts".
-5. **מדינה**: ישראל. **מטבע**: NIS/USD/CAD - לא משנה לקבלת token (זה מטבע ברירת מחדל לחיוב, וב-MCC לא מחייבים).
-6. **שמור והמשך**.
-7. **קשר את חשבון uzoshop ל-MCC**:
-   - ב-MCC החדש: סרגל ימני → **חשבונות → תת-חשבונות** (או "Sub-account settings").
-   - **כפתור +** למעלה → **"קשר חשבון קיים"** (Link existing account).
-   - הזן את ה-**Customer ID** של חשבון uzoshop (פורמט `XXX-XXX-XXXX`, מהפינה השמאלית העליונה כשאתה בחשבון uzoshop) → **שלח בקשה**.
-   - כעת היכנס לחשבון uzoshop (לא MCC) → בפעמון התראות תופיע בקשת הזמנה → **אשר**.
-   - חזור ל-MCC, ה-uzoshop יופיע כתת-חשבון.
+**יצירת ה-MCC:**
+1. פתח טאב חדש: **https://ads.google.com/intl/iw/home/tools/manager-accounts/**
+2. בעמוד שנפתח לחץ **"צור חשבון מנהל"** (Create a manager account) - כפתור בולט באמצע.
+3. בטופס:
+   - **שם חשבון הניהול**: `Uzo Manager`
+   - **למה ישמש החשבון**: ✅ **"נהל חשבונות עבור העסק שלי"** (Manage your own accounts).
+     ⚠️ **לא לבחור** "ניהול חשבונות עבור אחרים" - זה מסלול שונה לסוכנויות.
+   - **מטבע**: USD (לא משנה לקבלת token).
+   - **אזור זמן**: Asia/Jerusalem.
+   - **שם החברה**: אופציונלי, אפשר להשאיר ריק.
+   - סמן ✅ את הצהרת השימוש בנתונים.
+4. **שלח / Submit**.
+5. ה-MCC נוצר. רשום לעצמך את ה-**Customer ID של ה-MCC** (פינה שמאלית עליונה,
+   פורמט `XXX-XXX-XXXX`) - **זה יילך ל-`googleads.loginCustomerId`**.
+
+**קישור uzoshop ל-MCC:**
+1. אתה עכשיו בתוך ה-MCC החדש. בתפריט חפש:
+   - **חשבונות → תת-חשבונות** (Sub-accounts), **או**:
+   - **ניהול ביצועים → חשבונות**
+2. כפתור **+** כחול → **"קשר חשבון קיים"** (Link existing account).
+3. הזן את ה-**Customer ID של uzoshop** (פורמט `XXX-XXX-XXXX`) - תמצא אותו בפינה
+   השמאלית העליונה כשאתה בחשבון uzoshop **(לא ה-MCC!)**.
+4. **שלח בקשה**.
+
+**אישור ההזמנה מצד uzoshop:**
+1. צא מה-MCC. **היכנס שוב לחשבון uzoshop** (לא MCC) ב-https://ads.google.com.
+2. אייקון **🔔 פעמון** בפינה - יש שם הזמנה ("Manager invitation from Uzo Manager").
+3. לחץ → **אשר / Accept**.
+
+**חזרה ל-MCC:**
+1. חזור ל-https://ads.google.com → בסלקטור החשבונות בפינה השמאלית למעלה החלף ל-**Uzo Manager** (ה-MCC).
+2. ודא ש-uzoshop מופיע ברשימת תת-החשבונות.
+3. עכשיו תוכל להמשיך ל-3ב.1.
 
 ---
 
