@@ -496,28 +496,76 @@ curl "https://graph.facebook.com/v20.0/act_AD_ACCOUNT_ID/insights?date_preset=ye
 
 ### 3ב. Developer Token ב-Google Ads
 
-> ⚠️ **זה השלב הארוך ביותר**. Test access מאושר תוך שעות; אפשר להתחיל עם זה.
-> Basic access דורש 1-2 ימי עסקים. **Test access מספיק לקריאה** של חשבונות שאתה מורשה
-> בהם, אז אפשר להתחיל לעבוד גם בלי Basic.
+> ⚠️ **שינוי חשוב מ-2024**: גוגל דורשים **חשבון Manager (MCC)** לקבלת Developer Token.
+> חשבון Google Ads רגיל **לא יכול** להגיש בקשה ל-token. אם אין לך MCC - תצטרך
+> ליצור אחד ולקשר אליו את חשבון uzoshop. ראה 3ב.0 למטה.
 
-**3ב.1 — היכנס לחשבון Google Ads הנכון**
-1. גש ל-**https://ads.google.com** והיכנס עם החשבון שמנהל את uzoshop.
-2. בפינה השמאלית העליונה ודא שאתה ב-**MCC account** (חשבון מנהל) אם יש לך כזה.
-   אם uzoshop ישירות תחת חשבון רגיל - השתמש בחשבון הזה.
+> 💡 יש 3 רמות גישה: **Test access** (אוטומטי, עובד רק עם חשבונות שאתה ישירות מקושר אליהם),
+> **Basic access** (1-2 ימי עסקים, מגביל 15,000 קריאות/יום), **Standard access** (גישה מלאה).
+> **Test access מספיק למה שאנחנו עושים** - קריאת נתונים מחשבון אחד שאתה הבעלים שלו.
 
-**3ב.2 — הגש בקשה ל-API Access**
-1. בסרגל העליון: **Tools** (כלים, פינה ימנית) → **Setup → API Center**.
-2. אם זו פעם ראשונה - יבקש "Apply for token":
-   - **Company name**: שם החברה שלך (יכול להיות "Personal")
-   - **Company website**: אתר/דומיין כלשהו (uzoshop.com למשל)
-   - **Business email**: המייל שלך
-   - **API usage**: בחר **"Internal data management"** או דומה
-   - **Tools you build with API**: בחר משהו רלוונטי
-   - **Save and continue**.
-3. תקבל **Test developer token** מיידית - שמור אותו (מתחיל באותיות/מספרים, ~22 תווים).
+---
 
-> 💡 Test token עובד עם חשבונות **שיש לך גישה ישירה אליהם**. זה מספיק לנו.
-> אם תקבל שגיאת DEVELOPER_TOKEN_NOT_APPROVED - יכול להיות שצריך לחכות שעה-שעתיים.
+**3ב.0 — אם אין לך עדיין חשבון MCC, צור אחד**
+
+> דלג על השלב הזה אם uzoshop כבר מקושר ל-MCC קיים, או אם uzoshop **הוא בעצמו** MCC.
+
+1. גש ל-**https://ads.google.com/intl/iw/home/tools/manager-accounts/**
+2. לחץ **"צור חשבון מנהל"** (Create a manager account).
+3. **שם החשבון**: `Uzo MCC` (או כל שם תיאורי).
+4. **למה משמש החשבון**: בחר "ניהול חשבונות לעסק שלי" / "Manage your own accounts".
+5. **מדינה**: ישראל. **מטבע**: NIS/USD/CAD - לא משנה לקבלת token (זה מטבע ברירת מחדל לחיוב, וב-MCC לא מחייבים).
+6. **שמור והמשך**.
+7. **קשר את חשבון uzoshop ל-MCC**:
+   - ב-MCC החדש: סרגל ימני → **חשבונות → תת-חשבונות** (או "Sub-account settings").
+   - **כפתור +** למעלה → **"קשר חשבון קיים"** (Link existing account).
+   - הזן את ה-**Customer ID** של חשבון uzoshop (פורמט `XXX-XXX-XXXX`, מהפינה השמאלית העליונה כשאתה בחשבון uzoshop) → **שלח בקשה**.
+   - כעת היכנס לחשבון uzoshop (לא MCC) → בפעמון התראות תופיע בקשת הזמנה → **אשר**.
+   - חזור ל-MCC, ה-uzoshop יופיע כתת-חשבון.
+
+---
+
+**3ב.1 — מצא את ה-API Center**
+
+ב-UI החדש (2024+) ה-API Center הועבר. **הדרך הכי בטוחה** - קישור ישיר:
+
+1. ודא שאתה מחובר לחשבון ה-MCC ב-https://ads.google.com.
+2. פתח טאב חדש: **https://ads.google.com/aw/apicenter**
+3. אם נפתח דף "API Center" → מצוין, המשך ל-3ב.2.
+4. אם נכשל / מפנה אותך הצידה:
+   - אתה כנראה לא ב-MCC (חזור ל-3ב.0).
+   - או שעדיין לא קישרת חשבונות תחתיו.
+
+**איך למצוא בתפריט (אם הקישור הישיר לא עובד):**
+- **אצלך בעברית**: לחץ על אייקון **🔧 (מפתח ברגים)** או על הכפתור **כלים** למעלה.
+- בתפריט שמתפתח חפש את הקטגוריה **"ניהול"** (Admin) - שם תהיה האפשרות **"מרכז API"** (API Center).
+- **חשוב**: רק MCC accounts מציגים את "מרכז API" בתפריט. בחשבון רגיל זה לא יופיע.
+
+**3ב.2 — הגש בקשה ל-Developer Token**
+
+ב-API Center:
+1. אם זו פעם ראשונה - יבקש למלא טופס:
+   - **Company name**: שם החברה שלך (יכול להיות שלך פרטי).
+   - **Company website**: כל URL רלוונטי (אפשר `https://uzo-d-s-2.myshopify.com`).
+   - **Business email**: המייל שלך.
+   - **Country**: ישראל.
+   - **API usage description**: בחר/כתוב "Reading own ad account performance data for internal analytics dashboard" - או דומה.
+2. **Save / Apply**.
+3. תוך זמן קצר (לרוב מיידי, לפעמים עד שעה) יופיע **Test Developer Token** - מחרוזת באורך ~22 תווים.
+4. **העתק ושמור** - זה ייכנס ל-Script Property `googleads.developerToken`.
+
+> 💡 אם קיבלת **"DEVELOPER_TOKEN_NOT_APPROVED"** או **"Pending"**: חכה 30-60 דקות
+> ונסה רענן. רוב הבקשות מאושרות אוטומטית, ולרוב מי שמחכה הוא בגלל שעדיין לא חיבר חשבונות
+> תחת ה-MCC.
+
+> ⚠️ **טעות נפוצה**: אם אתה רואה את ההודעה "This account doesn't have API access available"
+> או שאין כפתור Apply בכלל - וודא שאתה בחשבון MCC עם **לפחות חשבון אחד מקושר תחתיו**
+> (כמו שעשינו ב-3ב.0).
+
+**אצלך אחר כך ב-Script Properties:**
+- `googleads.developerToken` = ה-token שקיבלת (~22 תווים)
+- `googleads.loginCustomerId` = מספר ה-MCC שיצרת (פורמט `XXXXXXXXXX` ללא מקפים)
+- `uzoshop.googleads.customerId` = מספר חשבון uzoshop (ללא מקפים, **לא** של ה-MCC)
 
 ---
 
