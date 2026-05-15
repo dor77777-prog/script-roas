@@ -340,46 +340,51 @@ curl -H "X-Shopify-Access-Token: shpat_xxx" \
 - **2 tokens** - אחד מעסק A, אחד מעסק B (אצלך זה token1 ו-token2).
 - **3 Ad Account IDs** - אחד לכל חנות. ה-ID הוא מספר ארוך, פורמט `1234567890`.
 
-#### דוגמה קונקרטית
+#### Ad Account IDs האמיתיים שלך
 
-נניח שאחרי שעברת על שלב 2ג ו-2ד יצאו לך הערכים הבאים (סתם דוגמה):
+| חנות | Ad Account ID |
+|------|---------------|
+| uzoshop | `26442930835313109` |
+| zolplus | `800776975668368` |
+| 360usmile | `981695850074160` |
+
+**עכשיו צריך לדעת אילו 2 מתוך 3 בעסק אחד והשלישית בעסק השני.** מה שאמרת:
+"יש לי חשבון מודעות אחד שיושב בביזנס אחד ו-2 אחרים שיושבים בביזנס אחר".
+אחרי שתעשה את שלבים 2ג-2ד תדע **באיזה עסק** כל חשבון יושב, וזה ייקבע איזה token משתמשים בכל חנות.
+
+#### דוגמה לזרימה (החלף את שמות העסקים והטוקנים לפי המצב האמיתי שלך)
+
+נניח אחרי 2ג-2ד יצא:
 
 ```
-עסק A — "Uzo Business":
-  Token A = EAABwzLixnjY...XYZ      ← הטוקן שיצרת ב-2ד.4 באותו עסק
+עסק A — שם העסק הראשון שלך:
+  Token A = EAABwzLixnjY...XYZ        ← מ-2ד.4 בעסק A
   Ad Accounts בעסק A:
-    - "Uzo Ads"     → Ad Account ID = 1111111111
+    - חנות X  → Ad Account ID = (אחד משלוש המספרים שלך)
 
-עסק B — "Affiliate Stores":
-  Token B = EAABxYzAB456...QQQ      ← הטוקן שיצרת ב-2ד.4 בעסק השני
+עסק B — שם העסק השני שלך:
+  Token B = EAABxYzAB456...QQQ        ← מ-2ד.4 בעסק B
   Ad Accounts בעסק B:
-    - "Zol Plus Ads"   → Ad Account ID = 2222222222
-    - "360usmile Ads"  → Ad Account ID = 3333333333
+    - חנות Y  → Ad Account ID = (השני)
+    - חנות Z  → Ad Account ID = (השלישי)
 ```
 
-עכשיו תמלא לעצמך טבלה - **לכל חנות**:
-
-| חנות | מה ה-Ad Account שלה | בעסק | באיזה token משתמשים | בפועל אצלך |
-|------|---------------------|------|---------------------|------------|
-| uzoshop | "Uzo Ads" | A | Token A | adAccountId=`1111111111`, accessToken=`EAABwzLixnjY...XYZ` |
-| zolplus | "Zol Plus Ads" | B | Token B | adAccountId=`2222222222`, accessToken=`EAABxYzAB456...QQQ` |
-| 360usmile | "360usmile Ads" | B | Token B | adAccountId=`3333333333`, accessToken=`EAABxYzAB456...QQQ` |
-
-**⚠️ שים לב:** ה-token של zolplus וה-token של 360usmile **זהים** - שניהם token B
-(כי שני החשבונות באותו עסק). זה נכון ומכוון - אותו token יודע לפנות לכמה ad accounts באותו עסק.
-
-#### בשלב 4 (Script Properties) זה ייכנס ככה (דוגמה לפי המספרים למעלה):
+לאחר מכן ה-Script Properties שלך ייראה ככה - **בהנחה ש-uzoshop בעסק A ו-zolplus+360usmile בעסק B**
+(אם החלוקה אצלך שונה, החליפו את שמות החנויות):
 
 ```
-uzoshop.meta.adAccountId    = 1111111111
-uzoshop.meta.accessToken    = EAABwzLixnjY...XYZ   ← token A
+uzoshop.meta.adAccountId    = 26442930835313109
+uzoshop.meta.accessToken    = EAABwzLixnjY...XYZ      ← token A
 
-zolplus.meta.adAccountId    = 2222222222
-zolplus.meta.accessToken    = EAABxYzAB456...QQQ   ← token B
+zolplus.meta.adAccountId    = 800776975668368
+zolplus.meta.accessToken    = EAABxYzAB456...QQQ      ← token B
 
-usmile360.meta.adAccountId  = 3333333333
-usmile360.meta.accessToken  = EAABxYzAB456...QQQ   ← token B (אותו)
+usmile360.meta.adAccountId  = 981695850074160
+usmile360.meta.accessToken  = EAABxYzAB456...QQQ      ← token B (אותו!)
 ```
+
+**⚠️ שים לב:** 2 החנויות שבאותו עסק חולקות את **אותו token** (יוצא פעמיים בעמודה). זה
+נכון ומכוון - אותו token יודע לפנות לכמה ad accounts באותו עסק. רק ה-adAccountId שונה ביניהן.
 
 #### איך תדע איזה Ad Account שייך לאיזה חנות
 
@@ -579,7 +584,7 @@ curl "https://graph.facebook.com/v20.0/act_AD_ACCOUNT_ID/insights?date_preset=ye
 | `uzoshop.shopify.clientId` | מ-Dev Dashboard | מסלול B בלבד |
 | `uzoshop.shopify.clientSecret` | מ-Dev Dashboard | מסלול B בלבד (אפשר למחוק אחרי bootstrap) |
 | `uzoshop.meta.accessToken` | System User token של העסק שבו חשבון הפרסום של uzoshop | אם בעסק שונה |
-| `uzoshop.meta.adAccountId` | מספר ה-Ad Account (ללא `act_`) | תמיד |
+| `uzoshop.meta.adAccountId` | `26442930835313109` | תמיד |
 | `uzoshop.googleads.customerId` | מספר חשבון Google Ads (ללא מקפים) | תמיד |
 
 ### Zol Plus
@@ -590,7 +595,7 @@ curl "https://graph.facebook.com/v20.0/act_AD_ACCOUNT_ID/insights?date_preset=ye
 | `zolplus.shopify.clientId` | מ-Dev Dashboard | מסלול B בלבד |
 | `zolplus.shopify.clientSecret` | מ-Dev Dashboard | מסלול B בלבד |
 | `zolplus.meta.accessToken` | System User token של העסק של zolplus | אם בעסק שונה |
-| `zolplus.meta.adAccountId` | מספר ה-Ad Account | תמיד |
+| `zolplus.meta.adAccountId` | `800776975668368` | תמיד |
 
 ### 360usmile
 | Key | Value | מתי |
@@ -600,8 +605,7 @@ curl "https://graph.facebook.com/v20.0/act_AD_ACCOUNT_ID/insights?date_preset=ye
 | `usmile360.shopify.clientId` | מ-Dev Dashboard | מסלול B בלבד |
 | `usmile360.shopify.clientSecret` | מ-Dev Dashboard | מסלול B בלבד |
 | `usmile360.meta.accessToken` | System User token של העסק של 360usmile | אם בעסק שונה |
-| `usmile360.meta.adAccountId` | מספר ה-Ad Account | תמיד |
-| `usmile360.meta.adAccountId` | מספר ה-Ad Account | תמיד |
+| `usmile360.meta.adAccountId` | `981695850074160` | תמיד |
 
 ---
 
