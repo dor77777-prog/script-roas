@@ -201,18 +201,26 @@ curl -H "X-Shopify-Access-Token: shpat_xxx" \
 
 ---
 
-### 2ב. ליצור Meta App אחד
+### 2ב. ליצור Meta App — אחד לכל עסק
 
-> אתה צריך Meta App אחד בסך הכל - הוא משמש כ"דלי" שבו מייצרים את הטוקנים.
-> אם כבר יש לך אפליקציה ב-Meta for Developers - אפשר להשתמש בה ולדלג על 2ב.
+> ⚠️ **חשוב: Meta app יכול להיות בבעלות של עסק אחד בלבד.** כשמוסיפים את ה-app
+> לעסק הראשון דרך Business Settings → Apps → Add, העסק הזה הופך לבעלים. כשמנסים
+> להוסיף את אותו app גם לעסק שני, Meta מציגה את ההודעה "this business portfolio
+> **will become the owner**" - כלומר זו בקשה להעברת בעלות, לא לשיתוף.
+>
+> **תוצאה מעשית**: אם יש לך 2 עסקים שונים, אתה צריך **2 Meta apps נפרדים**.
+> כל אפליקציה תיוחס לעסק שלה, ותשמש לייצור טוקנים של System User באותו עסק.
+
+**חזור על השלבים הבאים פעם אחת לכל עסק שלך** (בדרך כלל 2 פעמים).
 
 1. גש ל-**https://developers.facebook.com/apps** והיכנס עם החשבון הראשי שלך.
 2. לחץ **Create App** למעלה ימין.
 3. **App details**:
-   - **App name**: `ROAS Tracker`
+   - **App name**: `ROAS Tracker A` (לאפליקציה ראשונה) או `ROAS Tracker B` (לשנייה).
+     שמות שונים = יותר קל לזהות איזה app שייך לאיזה עסק.
    - **App contact email**: המייל שלך
    - לחץ **Next**.
-4. **Use cases** ← המסך שאתה רואה כרגע. סמן את:
+4. **Use cases**:
    - ✅ **Measure ad performance data with Marketing API**
      (זו השנייה מלמעלה - "Maximize ROI with ad performance data...").
      זה מעניק את ההרשאה `ads_read` הנדרשת.
@@ -221,18 +229,23 @@ curl -H "X-Shopify-Access-Token: shpat_xxx" \
    - תופיע אזהרה: "Connect a verified business portfolio to your app to get
      access to third-party user and business data..."
    - בחר **"I don't want to connect a business portfolio"** או **"Add later"**.
-   - **למה לדלג**: ה-verification וה-third-party data רלוונטיים רק אם רוצים
-     לקרוא נתונים מעסקים של אחרים. אצלנו קוראים רק מ-Ad Accounts שלנו, וה-app
-     יחובר לשני העסקים שלנו אחר כך דרך Business Settings → Apps → Add.
+   - **למה לדלג כאן ולחבר אחר כך ידנית**: בשלב 2ג נחבר את ה-app לעסק
+     הספציפי דרך Business Settings - שם זה עובד גם בלי verification.
    - **Next**.
 6. **Requirements**: קרא ואשר → **Next**.
 7. **Overview**: סקור → **Create app**.
 8. ייתכן ויבקש סיסמת facebook לאישור.
 9. לאחר היצירה, **App ID** ו-**App Secret** מופיעים ב-**App settings → Basic**.
-   - **לא צריך לעשות איתם כלום בינתיים** (הם רק כדי שהטוקן יידע איזה app זה).
+   - **שמור בטקסט זמני**: `App A ID = ...`, `App B ID = ...`.
 
 > 💡 ה-App יישאר ב-**Development mode**. זה תקין למה שאנחנו עושים - System User
 > tokens עובדים גם ב-Development mode עבור Marketing API. **לא צריך לעבור ל-Live.**
+
+חזור על 1-9 לאפליקציה השנייה אם יש לך 2 עסקים. בסוף יהיו לך 2 App IDs.
+
+> 🚨 **טעות נפוצה**: אם יצרת רק app אחד וניסית להוסיף אותו לעסק השני, קיבלת
+> את השגיאה "There was an unexpected technical issue". זה כי Meta מסרב להעביר
+> בעלות לעסק שני. הפתרון - **תייצר app שני** ותחבר אותו לעסק השני.
 
 ---
 
@@ -245,12 +258,18 @@ curl -H "X-Shopify-Access-Token: shpat_xxx" \
 2. בפינה הימנית העליונה יש Dropdown שמראה את שם העסק הפעיל - בחר את העסק הראשון.
 3. לחץ ⚙️ **Business settings** (פינה ימנית עליונה אחרי הבחירה).
 
-**2ג.2 — לחבר את ה-App לעסק**
+**2ג.2 — לחבר את ה-App של העסק הזה**
 1. בסרגל השמאלי תחת **Accounts** → לחץ **Apps**.
 2. **Add → Connect an app ID** (או "Add app").
-3. הדבק את ה-**App ID** מ-2ב.
+3. הדבק את ה-**App ID של ה-app שתואם לעסק הזה** מ-2ב:
+   - לעסק הראשון: השתמש ב-App ID של `ROAS Tracker A`.
+   - לעסק השני: השתמש ב-App ID של `ROAS Tracker B`.
 4. אשר.
 5. ייתכן ותידרש להזין סיסמה.
+
+> 💡 אם אתה רואה את השגיאה "There was an unexpected technical issue" - כנראה
+> שאתה מנסה להוסיף app שכבר בבעלות עסק אחר. צור app חדש (חזור ל-2ב) ונסה שוב
+> עם ה-App ID של ה-app החדש.
 
 **2ג.3 — לרשום Ad Account IDs**
 1. סרגל שמאלי → **Accounts → Ad accounts**.
@@ -285,13 +304,13 @@ curl -H "X-Shopify-Access-Token: shpat_xxx" \
 **2ד.3 — חבר את ה-App ל-System User** (נחוץ ליצירת טוקנים)
 1. עדיין במסך פרטי ה-System User → **Add Assets** שוב.
 2. בחר **Apps** מהרשימה משמאל.
-3. סמן את `ROAS Tracker` (ה-App מ-2ב).
+3. סמן את **ה-app של העסק הזה** (`ROAS Tracker A` בעסק הראשון, `ROAS Tracker B` בעסק השני).
 4. הרשאות: סמן **Manage app**.
 5. **Save changes**.
 
 **2ד.4 — הוצא טוקן**
 1. במסך פרטי ה-System User, לחץ **Generate new token**.
-2. **App**: בחר `ROAS Tracker`.
+2. **App**: בחר את ה-app של העסק הזה (`ROAS Tracker A` או `ROAS Tracker B`).
 3. **Token expiration**: **Never** ✓ (חובה - אחרת הטוקן יפוג!)
 4. **Available scopes**: סמן:
    - ✅ `ads_read`
