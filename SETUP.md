@@ -334,21 +334,68 @@ curl -H "X-Shopify-Access-Token: shpat_xxx" \
 
 ---
 
-### 2ה. מה לשמור בסוף
+### 2ה. מה לשמור בסוף - דוגמה מלאה
 
-עבור כל חנות, יש לך עכשיו:
+בסוף שלב 2 יש לך:
+- **2 tokens** - אחד מעסק A, אחד מעסק B (אצלך זה token1 ו-token2).
+- **3 Ad Account IDs** - אחד לכל חנות. ה-ID הוא מספר ארוך, פורמט `1234567890`.
 
-| חנות | Ad Account ID | טוקן | מקור |
-|------|---------------|------|------|
-| uzoshop | (משלב 2ג.3) | (משלב 2ד.4) | טוקן של העסק שלה |
-| zolplus | (משלב 2ג.3) | (משלב 2ד.4) | טוקן של העסק שלה |
-| 360usmile | (משלב 2ג.3) | (משלב 2ד.4) | טוקן של העסק שלה |
+#### דוגמה קונקרטית
 
-(שתי חנויות באותו עסק = אותו טוקן יחזור פעמיים בעמודה.)
+נניח שאחרי שעברת על שלב 2ג ו-2ד יצאו לך הערכים הבאים (סתם דוגמה):
 
-ב-Script Properties (שלב 4) נגדיר לכל חנות:
-- `{storeId}.meta.adAccountId` = ה-ID של ה-ad account שלה
-- `{storeId}.meta.accessToken` = הטוקן של העסק שלה
+```
+עסק A — "Uzo Business":
+  Token A = EAABwzLixnjY...XYZ      ← הטוקן שיצרת ב-2ד.4 באותו עסק
+  Ad Accounts בעסק A:
+    - "Uzo Ads"     → Ad Account ID = 1111111111
+
+עסק B — "Affiliate Stores":
+  Token B = EAABxYzAB456...QQQ      ← הטוקן שיצרת ב-2ד.4 בעסק השני
+  Ad Accounts בעסק B:
+    - "Zol Plus Ads"   → Ad Account ID = 2222222222
+    - "360usmile Ads"  → Ad Account ID = 3333333333
+```
+
+עכשיו תמלא לעצמך טבלה - **לכל חנות**:
+
+| חנות | מה ה-Ad Account שלה | בעסק | באיזה token משתמשים | בפועל אצלך |
+|------|---------------------|------|---------------------|------------|
+| uzoshop | "Uzo Ads" | A | Token A | adAccountId=`1111111111`, accessToken=`EAABwzLixnjY...XYZ` |
+| zolplus | "Zol Plus Ads" | B | Token B | adAccountId=`2222222222`, accessToken=`EAABxYzAB456...QQQ` |
+| 360usmile | "360usmile Ads" | B | Token B | adAccountId=`3333333333`, accessToken=`EAABxYzAB456...QQQ` |
+
+**⚠️ שים לב:** ה-token של zolplus וה-token של 360usmile **זהים** - שניהם token B
+(כי שני החשבונות באותו עסק). זה נכון ומכוון - אותו token יודע לפנות לכמה ad accounts באותו עסק.
+
+#### בשלב 4 (Script Properties) זה ייכנס ככה (דוגמה לפי המספרים למעלה):
+
+```
+uzoshop.meta.adAccountId    = 1111111111
+uzoshop.meta.accessToken    = EAABwzLixnjY...XYZ   ← token A
+
+zolplus.meta.adAccountId    = 2222222222
+zolplus.meta.accessToken    = EAABxYzAB456...QQQ   ← token B
+
+usmile360.meta.adAccountId  = 3333333333
+usmile360.meta.accessToken  = EAABxYzAB456...QQQ   ← token B (אותו)
+```
+
+#### איך תדע איזה Ad Account שייך לאיזה חנות
+
+ב-Business Settings → **Accounts → Ad accounts** של כל עסק, יש לכל חשבון:
+- **שם** (שמת בעצמך כשהקמת את חשבון הפרסום)
+- **ID** (המספר שצריך לרשום)
+
+**מה לעשות אם השמות לא ברורים:**
+- היכנס ל-https://adsmanager.facebook.com → תראה את כל חשבונות הפרסום שיש לך.
+- שם החשבון בדרך כלל קשור לעסק/מוצר (לדוגמה "Uzo - Shopify" או "Zol Plus Main").
+- ב-Ads Manager, החשבון הפעיל מוצג בפינה השמאלית העליונה - תוכל לעבור בין חשבונות
+  ולראות איזו חנות מקדמים בכל אחד (איזה pixel/page/קישורי checkout מופיעים בקמפיינים).
+
+**אם בכל זאת לא ברור:**
+פתח קמפיין פעיל בכל ad account → תראה איזה URL של חנות מקודם → זה ידאג לך
+שתדע שזה ה-ad account של החנות הנכונה.
 
 ---
 
