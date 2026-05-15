@@ -64,6 +64,7 @@ function onOpen() {
       .addItem('התקן טריגר יומי (06:15)', 'installDailyTrigger')
       .addItem('הסר טריגר יומי', 'removeDailyTrigger')
       .addSeparator()
+      .addItem('הוצא Shopify tokens (Client Credentials)', 'bootstrapAllShopifyTokens')
       .addItem('פתח גיליון הגדרות', 'showSpreadsheetUrl_')
       .addToUi();
   } catch (_) { /* not in spreadsheet context */ }

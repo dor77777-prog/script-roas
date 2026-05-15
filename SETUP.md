@@ -25,63 +25,122 @@
 
 ## שלב 1 — Shopify Admin API tokens (×3 חנויות)
 
-> ⚠️ **חשוב — לא להיכנס ל-Partner Dev Dashboard!**
-> אם פתחת את `dev.shopify.com` או `partners.shopify.com` ויצרת "App" עם
-> "Create version", App URL, Redirect URLs, וכו' — **זה המסלול הלא נכון**.
-> זה מיועד לבניית אפליקציה ציבורית ל-App Store ודורש שרת + OAuth.
->
-> למעקב פרטי על החנויות שלך, צריך **Custom App בתוך כל חנות בנפרד**, מהאדמין
-> של החנות. זה מסלול בלי OAuke, בלי שרת — רק טוקן.
+Shopify מציעה היום **שני מסלולים** ליצירת Custom App. החדש (Dev Dashboard) הוא
+החדיר בחנויות חדשות. שניהם מובילים לאותו טוקן `shpat_...` ששאר המערכת צורכת.
 
-חזור על השלבים הבאים **לכל אחת מ-3 החנויות** (uzoshop, zolplus, 360usmile).
-לכל חנות תקבל טוקן נפרד.
+> 💡 **איך תדע איזה מסלול אתה?**
+> ב-store admin → Settings → Apps and sales channels → Develop apps:
+> - אם רואים כפתור **"Build apps in Dev Dashboard"** או שמפנים אותך ל-`dev.shopify.com` → **מסלול B (חדש)** למטה
+> - אם רואים **"Create an app"** ישירות עם **"Reveal token once"** → **מסלול A (קלאסי)** למטה
 
-### 1א. כניסה למקום הנכון
-1. היכנס לאדמין של החנות: `https://{store}.myshopify.com/admin`
-   (לדוגמה: `https://uzoshop.myshopify.com/admin`)
-2. בתפריט התחתון של הסרגל השמאלי לחץ **⚙️ Settings**.
-3. בעמוד ההגדרות, בסרגל הצדדי בחר **Apps and sales channels**.
-4. בראש העמוד (לא בטאב "Apps" הראשי) לחץ על הקישור **Develop apps**.
-   - אם אתה רואה את הכפתור **"Allow custom app development"** — לחץ עליו
-     וגם על **"Allow custom app development"** במסך האישור. צריך לעשות זאת
-     פעם אחת לכל חנות.
+---
 
-### 1ב. יצירת ה-Custom App
-1. לחץ על **Create an app** בפינה הימנית העליונה.
-2. App name: `ROAS Tracker`
-3. App developer: השאר את עצמך (ברירת מחדל).
-4. לחץ **Create app**.
+### מסלול A (קלאסי) — Reveal token once
 
-### 1ג. הגדרת Scopes (הרשאות API)
-1. בטאב **Configuration** (נפתח אוטומטית), במקטע **Admin API integration**, לחץ **Configure**.
-2. בשדה החיפוש למעלה הקלד `orders` ובחר:
-   - ✅ `read_orders` — קריאת הזמנות מ-60 הימים האחרונים
-   - ✅ `read_all_orders` — קריאת הזמנות ישנות (נדרש למילוי היסטורי)
-3. בשדה החיפוש הקלד `products` ובחר (אופציונלי, לעתיד):
-   - `read_products`
-4. ב-Webhook API version בחר את הגרסה האחרונה היציבה (`2024-10` או חדש יותר).
-5. גלול למטה ולחץ **Save**.
+חזור על השלבים לכל אחת מ-3 החנויות. בסוף יהיו לך 3 זוגות (domain + token).
 
-> ⚠️ **לא להפעיל "Storefront API integration"** — אנחנו לא צריכים את זה,
-> וזה משתמש בטוקן אחר.
+**A1. כניסה למקום הנכון**
+1. היכנס לאדמין: `https://{store}.myshopify.com/admin`
+2. **⚙️ Settings** → **Apps and sales channels** → **Develop apps**.
+3. אם רואים "Allow custom app development" → לחץ ואשר. פעם אחת לחנות.
 
-### 1ד. התקנת האפליקציה וקבלת הטוקן
-1. גלול לראש העמוד וחזור לטאב **API credentials**.
-2. לחץ על הכפתור הירוק **Install app** בראש העמוד → אישור **Install**.
-3. אחרי ההתקנה, במקטע **Admin API access token** יופיע הכיתוב
-   **"Reveal token once"** — לחץ עליו.
-4. **שמור את הטוקן מיד** — הוא מוצג רק פעם אחת! פורמט: `shpat_xxxxxxxxxxxx...`.
-   אם איבדת אותו, אפשר ליצור טוקן חדש דרך **Revoke and regenerate**.
+**A2. יצירת האפליקציה**
+1. **Create an app** → App name: `ROAS Tracker` → **Create app**.
 
+**A3. Scopes**
+1. **Configuration** → **Admin API integration** → **Configure**.
+2. סמן: `read_orders`, `read_all_orders` (חיפוש "orders").
+3. אופציונלי: `read_products`.
+4. **Webhook API version**: `2024-10` או חדש יותר.
+5. **Save** למטה.
+
+**A4. התקנה + טוקן**
+1. חזור לטאב **API credentials**.
+2. **Install app** (כפתור ירוק למעלה) → **Install**.
+3. תחת **Admin API access token** → **Reveal token once** → **העתק מיד** (`shpat_...`).
+   הטוקן מוצג פעם אחת בלבד.
+
+קפוץ לסעיף [1ה](#1ה-מה-לשמור-לכל-חנות).
+
+---
+
+### מסלול B (חדש) — Dev Dashboard + Client Credentials
+
+ב-2025-2026 Shopify החלה להעביר חנויות חדשות למסלול חדש: יצירת האפליקציה ב-Dev Dashboard,
+release של גרסה, ואז שליפת הטוקן דרך **Client Credentials Grant API**. כפתור
+"Reveal token once" לא קיים כאן.
+
+**B1. יצירת האפליקציה ב-Dev Dashboard**
+1. בחנות: **Settings → Apps and sales channels → Develop apps**.
+2. אם רואים **"Build apps in Dev Dashboard"** — לחץ. (אחרת מגיעים ידנית ל-`https://dev.shopify.com/dashboard`.)
+3. **Create app** → שם: `ROAS Tracker`.
+
+**B2. הגדרת גרסה (Create version)**
+זה המסך שהראית. הזן/בחר:
+- **App name**: `ROAS Tracker`
+- **App URL**: `https://example.com` (לא נדרש בפועל - אבל השדה חובה)
+- **Embed app in Shopify admin**: ❌ **בטל סימון** (אנחנו לא בונים UI לאדמין)
+- **Preferences URL**: השאר ריק
+- **Webhooks API version**: הגרסה האחרונה (`2026-04` או דומה)
+- **Access → Scopes**: הקלד או הדבק:
+  ```
+  read_orders, read_all_orders
+  ```
+  (לחץ **Select scopes** אם נוח, או הקלד ידנית עם פסיקים)
+- **Optional scopes**: השאר ריק
+- **Use legacy install flow**: ❌ לא לסמן
+- **Redirect URLs**: השאר ריק (לא משתמשים ב-OAuth user flow)
+- **POS / App proxy**: השאר סגור
+
+עכשיו לחץ **Release** בפינה הימנית העליונה. ⚠️ **קריטי**: ה-scopes לא יחולו עד שתשחרר גרסה.
+
+**B3. התקנה על החנות**
+1. בסרגל הצדדי → **Installs**.
+2. **Install app** → בחר את החנות (`uzoshop.myshopify.com`).
+3. אשר את ההתקנה.
+
+**B4. שלוף Client ID ו-Client Secret**
+1. בסרגל הצדדי → **Settings**.
+2. במקטע **Client credentials** העתק את:
+   - **Client ID** (נראה כמו `1234abc...`)
+   - **Client Secret** (לחץ "Reveal" → העתק)
+3. שמור אותם לרגע — נשתמש בהם בשלב הבא להוצאת ה-`shpat_` token.
+
+**B5. הוצאת הטוקן (Apps Script עושה את זה אוטומטית)**
+המערכת כוללת פונקציה שמבצעת את ה-Client Credentials Grant API call ושומרת
+את הטוקן ב-Script Properties. אין צורך לכתוב curl ידני.
+
+1. ראשית הזן ב-Script Properties (שלב 4 בהמשך):
+   ```
+   uzoshop.shopify.domain        = uzoshop.myshopify.com
+   uzoshop.shopify.clientId      = <Client ID מ-B4>
+   uzoshop.shopify.clientSecret  = <Client Secret מ-B4>
+   ```
+   (זהה ל-zolplus ו-usmile360)
+2. ב-Apps Script editor הרץ ידנית את הפונקציה `bootstrapAllShopifyTokens`.
+3. בלוגים תראה לכל חנות: `Shopify {storeId}: token saved (scope=...)`.
+4. ה-tokens נשמרו אוטומטית כ-`{storeId}.shopify.token` ב-Script Properties.
+5. ניתן למחוק עכשיו את `*.clientSecret` מ-Script Properties (לא חובה).
+
+> 💡 הטוקן שמתקבל מ-Client Credentials Grant **לא פג**. צריך להוציא אותו
+> רק פעם אחת לכל חנות. אם אתה משנה scopes ב-Dev Dashboard, **חובה**:
+> (1) Release גרסה חדשה (2) Reinstall ה-app בחנות (3) להריץ שוב את הפונקציה.
+
+---
+
+<a id="1ה-מה-לשמור-לכל-חנות"></a>
 ### 1ה. מה לשמור לכל חנות
+
+**מסלול A (קלאסי):** domain + token
+**מסלול B (Dev Dashboard):** domain + clientId + clientSecret → אז הפונקציה
+תייצר ותשמור את הטוקן.
 
 | מה | איפה למצוא | דוגמה |
 |----|------------|-------|
 | Domain | URL של האדמין | `uzoshop.myshopify.com` |
-| Admin API token | מהמסך שזה עתה גילית | `shpat_a1b2c3d4...` |
-
-חזור על 1א-1ד עבור **zolplus** ו-**360usmile**. בסוף יהיו לך 3 זוגות
-(domain + token).
+| Token (A) | Reveal token once | `shpat_a1b2c3d4...` |
+| Client ID (B) | Dev Dashboard → Settings | `1234abcd...` |
+| Client Secret (B) | Dev Dashboard → Settings → Reveal | `shpss_...` |
 
 ### 1ו. בדיקה מהירה (אופציונלי)
 מהטרמינל אפשר לוודא שהטוקן עובד:
@@ -162,26 +221,32 @@ curl -H "X-Shopify-Access-Token: shpat_xxx" \
 | `googleads.loginCustomerId` | מספר MCC (ללא מקפים) | אם uzoshop תחת MCC |
 
 ### uzoshop
-| Key | Value |
-|-----|-------|
-| `uzoshop.shopify.domain` | `your-uzoshop.myshopify.com` |
-| `uzoshop.shopify.token` | `shpat_...` |
-| `uzoshop.meta.adAccountId` | מספר ה-Ad Account (ללא `act_`) |
-| `uzoshop.googleads.customerId` | מספר חשבון Google Ads (ללא מקפים) |
+| Key | Value | מתי |
+|-----|-------|-----|
+| `uzoshop.shopify.domain` | `uzoshop.myshopify.com` | תמיד |
+| `uzoshop.shopify.token` | `shpat_...` | מסלול A, או אוטו' אחרי `bootstrapAllShopifyTokens` במסלול B |
+| `uzoshop.shopify.clientId` | מ-Dev Dashboard | מסלול B בלבד |
+| `uzoshop.shopify.clientSecret` | מ-Dev Dashboard | מסלול B בלבד (אפשר למחוק אחרי bootstrap) |
+| `uzoshop.meta.adAccountId` | מספר ה-Ad Account (ללא `act_`) | תמיד |
+| `uzoshop.googleads.customerId` | מספר חשבון Google Ads (ללא מקפים) | תמיד |
 
 ### Zol Plus
-| Key | Value |
-|-----|-------|
-| `zolplus.shopify.domain` | `your-zolplus.myshopify.com` |
-| `zolplus.shopify.token` | `shpat_...` |
-| `zolplus.meta.adAccountId` | מספר ה-Ad Account |
+| Key | Value | מתי |
+|-----|-------|-----|
+| `zolplus.shopify.domain` | `your-zolplus.myshopify.com` | תמיד |
+| `zolplus.shopify.token` | `shpat_...` | מסלול A, או אוטו' במסלול B |
+| `zolplus.shopify.clientId` | מ-Dev Dashboard | מסלול B בלבד |
+| `zolplus.shopify.clientSecret` | מ-Dev Dashboard | מסלול B בלבד |
+| `zolplus.meta.adAccountId` | מספר ה-Ad Account | תמיד |
 
 ### 360usmile
-| Key | Value |
-|-----|-------|
-| `usmile360.shopify.domain` | `your-usmile.myshopify.com` |
-| `usmile360.shopify.token` | `shpat_...` |
-| `usmile360.meta.adAccountId` | מספר ה-Ad Account |
+| Key | Value | מתי |
+|-----|-------|-----|
+| `usmile360.shopify.domain` | `your-usmile.myshopify.com` | תמיד |
+| `usmile360.shopify.token` | `shpat_...` | מסלול A, או אוטו' במסלול B |
+| `usmile360.shopify.clientId` | מ-Dev Dashboard | מסלול B בלבד |
+| `usmile360.shopify.clientSecret` | מ-Dev Dashboard | מסלול B בלבד |
+| `usmile360.meta.adAccountId` | מספר ה-Ad Account | תמיד |
 
 ---
 
