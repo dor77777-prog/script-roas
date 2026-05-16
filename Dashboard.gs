@@ -1,41 +1,110 @@
 /**
- * Dashboard.gs - דשבורד אינטראקטיבי בתוך הגיליון.
+ * Dashboard.gs - דשבורד אינטראקטיבי ידידותי למשתמש לא טכני.
  *
- * מבנה:
- *   טאב "Dashboard" - מוצג למשתמש
- *     - כותרת
- *     - בורר תאריכים (מאז / עד) + בורר חנות (All / שם חנות)
- *     - 4 KPI cards: ROAS ממוצע, סך הכנסות, סך הוצאות, רווח גולמי
- *     - 2 גרפים: מגמת ROAS לאורך זמן + השוואה בין חנויות
- *     - טבלה יומית מסוננת
- *
- *   טאב מוסתר "_dashboard-helpers" - נתונים מבוסי PIVOT לגרפים.
+ * עקרונות UX:
+ *   - בורר תקופה קבוע (השבוע / החודש / חודש קודם / 30 יום / מותאם)
+ *   - שדות תאריך מתעדכנים אוטומטית כשמשנים את הבורר (onEdit)
+ *   - 4 KPI cards עם ערך גדול, תווית מילולית ("טוב", "מעולה"), ושינוי מהתקופה הקודמת
+ *   - תובנות אוטומטיות (חנות מובילה, חנות בסיכון, יום הכי טוב)
+ *   - גרף מרכזי + טבלת פירוט
  */
 
 const DASHBOARD_TAB = 'Dashboard';
 const DASHBOARD_HELPERS_TAB = '_dashboard-helpers';
 
-const DASHBOARD_COLORS = {
-  titleBg: '#1c4587',
-  titleFg: '#ffffff',
-  kpiLabelBg: '#cccccc',
-  kpiValueBg: '#f3f3f3',
-  sectionTitle: '#434343',
-  headerBg: '#d9d9d9',
+const PRESET_OPTIONS = [
+  'השבוע',
+  '7 ימים אחרונים',
+  'החודש הזה',
+  'חודש קודם',
+  '30 ימים אחרונים',
+  'מותאם אישית',
+];
+const DEFAULT_PRESET = 'החודש הזה';
+
+const DBC = {
+  // Color palette
+  primary: '#1c4587',
+  primaryFg: '#ffffff',
+  sectionBg: '#434343',
+  sectionFg: '#ffffff',
+  filterBg: '#fff2cc',
+  cardLabelBg: '#e8eaed',
+  cardValueBg: '#ffffff',
+  cardBorder: '#d9d9d9',
+  insightBg: '#fef7e0',
+  positiveBg: '#e6f4ea',
+  positiveFg: '#137333',
+  negativeBg: '#fce8e6',
+  negativeFg: '#c5221f',
+  neutralFg: '#5f6368',
 };
 
 /**
- * נקודת הכניסה הראשית - בונה (או בונה מחדש) את הדשבורד.
+ * נקודת כניסה - בונה (או מרענן) את הדשבורד.
  */
 function setupDashboard() {
   const ss = ensureSpreadsheet();
   buildHelpersTab_(ss);
   buildDashboardTab_(ss);
-  Logger.log('Dashboard ready: ' + ss.getUrl() + '#gid=' + ss.getSheetByName(DASHBOARD_TAB).getSheetId());
+  Logger.log('Dashboard ready');
+}
+
+/**
+ * Hook הנקרא מ-Main.gs onEdit - מעדכן תאריכים כשמשנים את הבורר.
+ */
+function dashboardOnEdit_(e) {
+  if (!e || !e.range) return;
+  const sheet = e.range.getSheet();
+  if (sheet.getName() !== DASHBOARD_TAB) return;
+  const cell = e.range.getA1Notation();
+  if (cell !== 'B3') return; // רק לבורר התקופה
+
+  const preset = e.value;
+  if (preset === 'מותאם אישית') return; // אל תיגע ב-B4/D4
+
+  const dates = computePresetDates_(preset);
+  if (!dates) return;
+  sheet.getRange('B4').setValue(dates.from);
+  sheet.getRange('D4').setValue(dates.to);
+}
+
+function computePresetDates_(preset) {
+  const now = new Date();
+  const fmt = (d) => Utilities.formatDate(d, TZ, 'yyyy-MM-dd');
+  const todayStr = fmt(now);
+
+  switch (preset) {
+    case 'השבוע': {
+      // ראשון של השבוע הנוכחי (יום ראשון = 0 ב-JS)
+      const day = now.getDay();
+      const sunday = new Date(now.getTime() - day * 86400000);
+      return { from: fmt(sunday), to: todayStr };
+    }
+    case '7 ימים אחרונים': {
+      const past = new Date(now.getTime() - 6 * 86400000);
+      return { from: fmt(past), to: todayStr };
+    }
+    case 'החודש הזה': {
+      const first = new Date(now.getFullYear(), now.getMonth(), 1);
+      return { from: fmt(first), to: todayStr };
+    }
+    case 'חודש קודם': {
+      const firstPrev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const lastPrev = new Date(now.getFullYear(), now.getMonth(), 0);
+      return { from: fmt(firstPrev), to: fmt(lastPrev) };
+    }
+    case '30 ימים אחרונים': {
+      const past = new Date(now.getTime() - 29 * 86400000);
+      return { from: fmt(past), to: todayStr };
+    }
+    default:
+      return null;
+  }
 }
 
 // ============================================================================
-// טאב Helpers - נתונים pivoted לגרפים
+// טאב Helpers - QUERY-ים שמייצרים את הנתונים לגרפים ולתובנות
 // ============================================================================
 
 function buildHelpersTab_(ss) {
@@ -47,36 +116,38 @@ function buildHelpersTab_(ss) {
   sh.setRightToLeft(false);
   sh.setHiddenGridlines(true);
 
-  // אזור 1: ROAS לפי תאריך וחנות (pivot)
-  sh.getRange('A1').setValue('ROAS by Date x Store')
-    .setFontWeight('bold').setFontSize(11);
+  const flat = `'${DAILY_FLAT_TAB}'`;
+  const dash = `'${DASHBOARD_TAB}'`;
+
+  // אזור 1 (A:L): ROAS לפי תאריך וחנות (לגרף קו)
+  sh.getRange('A1').setValue('ROAS by Date x Store').setFontWeight('bold');
   sh.getRange('A3').setFormula(
-    `=IFERROR(QUERY('${DAILY_FLAT_TAB}'!A:I, ` +
-    `"SELECT A, AVG(H) WHERE A is not null GROUP BY A PIVOT C ORDER BY A LABEL AVG(H) ''", 1), ` +
-    `"No data")`
+    `=IFERROR(QUERY(${flat}!A:I, ` +
+    `"SELECT A, AVG(H) WHERE A is not null GROUP BY A PIVOT C ORDER BY A LABEL AVG(H) ''", 1), "")`
   );
 
-  // אזור 2: סיכומים לחנות (לגרף עמודות)
-  sh.getRange('M1').setValue('Aggregates by Store')
-    .setFontWeight('bold').setFontSize(11);
-  sh.getRange('M3').setFormula(
-    `=IFERROR(QUERY('${DAILY_FLAT_TAB}'!A:I, ` +
-    `"SELECT C, SUM(G), SUM(F), AVG(H) WHERE A is not null ` +
-    `GROUP BY C LABEL SUM(G) 'Revenue', SUM(F) 'Spend', AVG(H) 'Avg ROAS'", 1), ` +
-    `"No data")`
+  // אזור 2 (N:Q): סיכומים לחנות בתקופה הנוכחית (לתובנות + גרפים)
+  sh.getRange('N1').setValue('Store Aggregates (current period)').setFontWeight('bold');
+  sh.getRange('N3').setFormula(
+    `=IFERROR(QUERY(${flat}!A:I, ` +
+    `"SELECT C, SUM(G), SUM(F), AVG(H) " +
+    `WHERE A >= date '"&TEXT(${dash}!$B$4,"yyyy-MM-dd")&"' " +
+    `AND A <= date '"&TEXT(${dash}!$D$4,"yyyy-MM-dd")&"' " +
+    `GROUP BY C ORDER BY AVG(H) DESC ` +
+    `LABEL SUM(G) 'Revenue', SUM(F) 'Spend', AVG(H) 'ROAS'", 1), "")`
   );
 
-  // אזור 3: סיכום יומי כללי (לגרף סה"כ ROAS)
-  sh.getRange('S1').setValue('Daily Totals (all stores)')
-    .setFontWeight('bold').setFontSize(11);
+  // אזור 3 (S:V): סיכום יומי כללי לתקופה (לתובנות יום הכי טוב/גרוע)
+  sh.getRange('S1').setValue('Daily Totals (current period)').setFontWeight('bold');
   sh.getRange('S3').setFormula(
-    `=IFERROR(QUERY('${DAILY_FLAT_TAB}'!A:I, ` +
-    `"SELECT A, SUM(G), SUM(F), SUM(G)/SUM(F) WHERE A is not null ` +
-    `GROUP BY A ORDER BY A LABEL SUM(G) 'Revenue', SUM(F) 'Spend', SUM(G)/SUM(F) 'ROAS'", 1), ` +
-    `"No data")`
+    `=IFERROR(QUERY(${flat}!A:I, ` +
+    `"SELECT A, SUM(G), SUM(F), SUM(G)/SUM(F) " +
+    `WHERE A >= date '"&TEXT(${dash}!$B$4,"yyyy-MM-dd")&"' " +
+    `AND A <= date '"&TEXT(${dash}!$D$4,"yyyy-MM-dd")&"' " +
+    `GROUP BY A ORDER BY SUM(G)/SUM(F) DESC ` +
+    `LABEL SUM(G) 'Revenue', SUM(F) 'Spend', SUM(G)/SUM(F) 'ROAS'", 1), "")`
   );
 
-  // הסתר את הטאב
   try { sh.hideSheet(); } catch (_) {}
 }
 
@@ -87,7 +158,6 @@ function buildHelpersTab_(ss) {
 function buildDashboardTab_(ss) {
   let sh = ss.getSheetByName(DASHBOARD_TAB);
   if (sh) {
-    // נקה תוכן וגרפים
     sh.clear();
     sh.clearConditionalFormatRules();
     const charts = sh.getCharts();
@@ -98,260 +168,399 @@ function buildDashboardTab_(ss) {
   sh.setRightToLeft(true);
   sh.setHiddenGridlines(true);
 
-  // מקם את הדשבורד אחרי הסיכום
+  // הצב את הדשבורד מיד אחרי הסיכום
   ss.setActiveSheet(sh);
   ss.moveActiveSheet(2);
 
-  // עיצוב רוחב עמודות
-  for (let c = 1; c <= 13; c++) {
-    sh.setColumnWidth(c, 95);
-  }
+  // רוחב עמודות אחיד
+  for (let c = 1; c <= 13; c++) sh.setColumnWidth(c, 100);
 
-  buildDashboardHeader_(sh);
-  buildDashboardFilters_(sh);
-  buildDashboardKpis_(sh);
-  buildDashboardCharts_(sh, ss);
-  buildDashboardTable_(sh);
+  buildHeader_(sh);
+  buildFilters_(sh);
+  buildKpis_(sh);
+  buildInsights_(sh);
+  buildChart_(sh, ss);
+  buildTable_(sh);
 }
 
-function buildDashboardHeader_(sh) {
+function buildHeader_(sh) {
   sh.getRange('A1:M1').merge()
-    .setValue('דשבורד ROAS — מעקב יומי לכל החנויות')
-    .setFontSize(20)
+    .setValue('דשבורד ROAS  •  מעקב יומי')
+    .setFontSize(22)
     .setFontWeight('bold')
-    .setBackground(DASHBOARD_COLORS.titleBg)
-    .setFontColor(DASHBOARD_COLORS.titleFg)
+    .setBackground(DBC.primary)
+    .setFontColor(DBC.primaryFg)
     .setHorizontalAlignment('center')
     .setVerticalAlignment('middle');
-  sh.setRowHeight(1, 50);
-  sh.setRowHeight(2, 15);
+  sh.setRowHeight(1, 55);
+  sh.setRowHeight(2, 12);
 }
 
-function buildDashboardFilters_(sh) {
-  // ברירות מחדל: תחילת החודש הנוכחי עד היום
-  const now = new Date();
-  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const firstStr = Utilities.formatDate(firstOfMonth, TZ, 'yyyy-MM-dd');
-  const todayStr = Utilities.formatDate(now, TZ, 'yyyy-MM-dd');
+function buildFilters_(sh) {
+  // שורה 3 - בורר תקופה ובורר חנות
+  sh.getRange('A3').setValue('📅 תקופה:').setFontWeight('bold').setHorizontalAlignment('left').setVerticalAlignment('middle');
 
-  sh.getRange('A3').setValue('מתאריך:').setFontWeight('bold').setHorizontalAlignment('left');
-  sh.getRange('B3').setValue(firstStr)
-    .setNumberFormat('yyyy-mm-dd')
-    .setBackground('#fff2cc')
-    .setHorizontalAlignment('center');
+  const presetRule = SpreadsheetApp.newDataValidation()
+    .requireValueInList(PRESET_OPTIONS, true)
+    .setAllowInvalid(false)
+    .build();
+  sh.getRange('B3:C3').merge()
+    .setValue(DEFAULT_PRESET)
+    .setDataValidation(presetRule)
+    .setBackground(DBC.filterBg)
+    .setFontWeight('bold')
+    .setFontSize(11)
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle');
 
-  sh.getRange('C3').setValue('עד תאריך:').setFontWeight('bold').setHorizontalAlignment('left');
-  sh.getRange('D3').setValue(todayStr)
-    .setNumberFormat('yyyy-mm-dd')
-    .setBackground('#fff2cc')
-    .setHorizontalAlignment('center');
+  sh.getRange('E3').setValue('🏪 חנות:').setFontWeight('bold').setHorizontalAlignment('left').setVerticalAlignment('middle');
 
-  sh.getRange('E3').setValue('חנות:').setFontWeight('bold').setHorizontalAlignment('left');
   const storeOptions = ['All', ...STORES.map(s => s.name)];
   const storeRule = SpreadsheetApp.newDataValidation()
     .requireValueInList(storeOptions, true)
     .setAllowInvalid(false)
     .build();
-  sh.getRange('F3').setDataValidation(storeRule).setValue('All')
-    .setBackground('#fff2cc')
+  sh.getRange('F3:G3').merge()
+    .setValue('All')
+    .setDataValidation(storeRule)
+    .setBackground(DBC.filterBg)
+    .setFontWeight('bold')
+    .setFontSize(11)
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle');
+
+  sh.getRange('I3:M3').merge()
+    .setFormula('="מציג " & ($D$4-$B$4+1) & " ימים  •  " & TEXT($B$4,"d/M/yyyy") & " — " & TEXT($D$4,"d/M/yyyy")')
+    .setFontStyle('italic')
+    .setFontColor(DBC.neutralFg)
+    .setHorizontalAlignment('right')
+    .setVerticalAlignment('middle');
+
+  sh.setRowHeight(3, 36);
+
+  // שורה 4 - שדות תאריך (מתעדכנים אוטומטית, או נערכים ידנית כש"מותאם אישית")
+  const now = new Date();
+  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  sh.getRange('A4').setValue('מתאריך:').setFontWeight('bold').setHorizontalAlignment('left');
+  sh.getRange('B4').setValue(Utilities.formatDate(firstOfMonth, TZ, 'yyyy-MM-dd'))
+    .setNumberFormat('yyyy-mm-dd')
+    .setBackground('#ffffff')
     .setHorizontalAlignment('center');
 
-  // אזור הסבר קטן
-  sh.getRange('H3:M3').merge()
-    .setValue('💡 שנה את התאריכים והחנות כדי לסנן — הכל מתעדכן אוטומטית')
+  sh.getRange('C4').setValue('עד תאריך:').setFontWeight('bold').setHorizontalAlignment('left');
+  sh.getRange('D4').setValue(Utilities.formatDate(now, TZ, 'yyyy-MM-dd'))
+    .setNumberFormat('yyyy-mm-dd')
+    .setBackground('#ffffff')
+    .setHorizontalAlignment('center');
+
+  sh.getRange('E4:M4').merge()
+    .setValue('💡 בחר בורר תקופה למעלה או הקלד תאריכים ידנית כש"מותאם אישית"')
     .setFontStyle('italic')
-    .setFontColor('#666666')
+    .setFontColor(DBC.neutralFg)
     .setHorizontalAlignment('right');
 
-  sh.setRowHeight(3, 30);
-  sh.setRowHeight(4, 15);
+  sh.setRowHeight(4, 28);
+  sh.setRowHeight(5, 15);
 }
 
-function buildDashboardKpis_(sh) {
-  const flatRef = `'${DAILY_FLAT_TAB}'`;
+function buildKpis_(sh) {
+  const flat = `'${DAILY_FLAT_TAB}'`;
 
-  // בנה את הקריטריון לתנאי "חנות = ?" (תומך ב-All)
-  const storeCriteriaFor = function(col) {
-    return `${flatRef}!${col}:${col}, IF($F$3="All", "*", $F$3)`;
-  };
-
-  const dateCriteria =
-    `${flatRef}!A:A, ">="&$B$3, ` +
-    `${flatRef}!A:A, "<="&$D$3, `;
+  // קריטריונים משותפים לכל ה-KPI
+  const storeFilter = `${flat}!C:C, IF($F$3="All","*",$F$3)`;
+  const curDate = `${flat}!A:A, ">="&$B$4, ${flat}!A:A, "<="&$D$4`;
+  // תקופה קודמת באותה לאורך
+  const prevDate = `${flat}!A:A, ">="&($B$4-($D$4-$B$4+1)), ${flat}!A:A, "<="&($B$4-1)`;
 
   const kpis = [
     {
-      labelRange: 'A5:C5',
-      valueRange: 'A6:C6',
+      labelRange: 'A6:C6',
+      valueRange: 'A7:C7',
+      verbalRange: 'A8:C8',
+      deltaRange: 'A9:C9',
       label: 'ROAS ממוצע',
-      formula: `=IFERROR(AVERAGEIFS(${flatRef}!H:H, ${dateCriteria}${storeCriteriaFor('C')}), 0)`,
+      formulaCur: `=IFERROR(AVERAGEIFS(${flat}!H:H, ${curDate}, ${storeFilter}), 0)`,
+      formulaPrev: `=IFERROR(AVERAGEIFS(${flat}!H:H, ${prevDate}, ${storeFilter}), 0)`,
       format: '0.00',
+      verbal: true,
     },
     {
-      labelRange: 'D5:F5',
-      valueRange: 'D6:F6',
-      label: 'סך הכנסות (CAD)',
-      formula: `=IFERROR(SUMIFS(${flatRef}!G:G, ${dateCriteria}${storeCriteriaFor('C')}), 0)`,
-      format: '"CAD"#,##0',
+      labelRange: 'D6:F6',
+      valueRange: 'D7:F7',
+      verbalRange: 'D8:F8',
+      deltaRange: 'D9:F9',
+      label: 'סך הכנסות',
+      formulaCur: `=IFERROR(SUMIFS(${flat}!G:G, ${curDate}, ${storeFilter}), 0)`,
+      formulaPrev: `=IFERROR(SUMIFS(${flat}!G:G, ${prevDate}, ${storeFilter}), 0)`,
+      format: '"CAD "#,##0',
+      verbal: false,
     },
     {
-      labelRange: 'G5:I5',
-      valueRange: 'G6:I6',
-      label: 'סך הוצאות (CAD)',
-      formula: `=IFERROR(SUMIFS(${flatRef}!F:F, ${dateCriteria}${storeCriteriaFor('C')}), 0)`,
-      format: '"CAD"#,##0',
+      labelRange: 'G6:I6',
+      valueRange: 'G7:I7',
+      verbalRange: 'G8:I8',
+      deltaRange: 'G9:I9',
+      label: 'סך הוצאות',
+      formulaCur: `=IFERROR(SUMIFS(${flat}!F:F, ${curDate}, ${storeFilter}), 0)`,
+      formulaPrev: `=IFERROR(SUMIFS(${flat}!F:F, ${prevDate}, ${storeFilter}), 0)`,
+      format: '"CAD "#,##0',
+      verbal: false,
     },
     {
-      labelRange: 'J5:M5',
-      valueRange: 'J6:M6',
-      label: 'רווח גולמי (CAD)',
-      formula: `=IFERROR(SUMIFS(${flatRef}!I:I, ${dateCriteria}${storeCriteriaFor('C')}), 0)`,
-      format: '"CAD"#,##0',
+      labelRange: 'J6:M6',
+      valueRange: 'J7:M7',
+      verbalRange: 'J8:M8',
+      deltaRange: 'J9:M9',
+      label: 'רווח גולמי',
+      formulaCur: `=IFERROR(SUMIFS(${flat}!I:I, ${curDate}, ${storeFilter}), 0)`,
+      formulaPrev: `=IFERROR(SUMIFS(${flat}!I:I, ${prevDate}, ${storeFilter}), 0)`,
+      format: '"CAD "#,##0',
+      verbal: false,
     },
   ];
 
-  for (const k of kpis) {
+  // הסתר עמודות "private" של הערך הקודם בטור N (לחישוב delta)
+  // נשתמש בעמודה N כ-helper לערכי "previous period" - מוסתרים מהמשתמש
+  for (let i = 0; i < kpis.length; i++) {
+    const k = kpis[i];
+    const prevCell = `N${6 + i}`; // N6=prev ROAS, N7=prev Revenue, N8=prev Spend, N9=prev Profit
+    sh.getRange(prevCell).setFormula(k.formulaPrev).setNumberFormat(k.format);
+
+    // תווית
     sh.getRange(k.labelRange).merge()
       .setValue(k.label)
       .setFontWeight('bold')
       .setFontSize(11)
-      .setBackground(DASHBOARD_COLORS.kpiLabelBg)
+      .setBackground(DBC.cardLabelBg)
       .setHorizontalAlignment('center')
       .setVerticalAlignment('middle');
+
+    // ערך גדול
     sh.getRange(k.valueRange).merge()
-      .setFormula(k.formula)
+      .setFormula(k.formulaCur)
       .setNumberFormat(k.format)
       .setFontWeight('bold')
-      .setFontSize(22)
-      .setBackground(DASHBOARD_COLORS.kpiValueBg)
+      .setFontSize(26)
+      .setBackground(DBC.cardValueBg)
+      .setHorizontalAlignment('center')
+      .setVerticalAlignment('middle');
+
+    // תווית מילולית (רק ל-ROAS)
+    if (k.verbal) {
+      sh.getRange(k.verbalRange).merge()
+        .setFormula(
+          `=IF(${k.valueRange.split(':')[0]}=0, "אין נתונים", ` +
+          `IF(${k.valueRange.split(':')[0]}<2, "דורש בחינה", ` +
+          `IF(${k.valueRange.split(':')[0]}<2.7, "סביר", ` +
+          `IF(${k.valueRange.split(':')[0]}<=3, "טוב", "מעולה"))))`
+        )
+        .setFontWeight('bold')
+        .setFontSize(12)
+        .setBackground(DBC.cardValueBg)
+        .setHorizontalAlignment('center')
+        .setVerticalAlignment('middle');
+    } else {
+      sh.getRange(k.verbalRange).merge()
+        .setValue('')
+        .setBackground(DBC.cardValueBg);
+    }
+
+    // שינוי מהתקופה הקודמת (delta)
+    const curCol = k.valueRange.split(':')[0]; // לדוגמה "A7"
+    const deltaFormula =
+      `=IF(${prevCell}=0, "ללא השוואה", ` +
+      `IF(${curCol}>${prevCell}, "▲ ", IF(${curCol}<${prevCell}, "▼ ", "● ")) & ` +
+      `TEXT(ABS((${curCol}-${prevCell})/${prevCell}), "0.0%") & " מהתקופה הקודמת")`;
+    sh.getRange(k.deltaRange).merge()
+      .setFormula(deltaFormula)
+      .setFontSize(11)
+      .setBackground(DBC.cardValueBg)
       .setHorizontalAlignment('center')
       .setVerticalAlignment('middle');
   }
 
-  sh.setRowHeight(5, 28);
-  sh.setRowHeight(6, 55);
-  sh.setRowHeight(7, 15);
+  // עיצוב עמודה N (העזר לערכים קודמים) - מוסתר ע"י כיווץ
+  sh.setColumnWidth(14, 1); // הסתר ויזואלית - רוחב 1 פיקסל
 
-  // צביעת ROAS card לפי הערך
-  const roasCardRange = sh.getRange('A6');
-  const existingRules = sh.getConditionalFormatRules();
-  const newRules = [
-    SpreadsheetApp.newConditionalFormatRule().whenNumberLessThan(2).setBackground(ROAS_COLORS.red).setRanges([roasCardRange]).build(),
-    SpreadsheetApp.newConditionalFormatRule().whenNumberBetween(2, 2.6999).setBackground(ROAS_COLORS.orange).setRanges([roasCardRange]).build(),
-    SpreadsheetApp.newConditionalFormatRule().whenNumberBetween(2.7, 3).setBackground(ROAS_COLORS.green).setRanges([roasCardRange]).build(),
-    SpreadsheetApp.newConditionalFormatRule().whenNumberGreaterThan(3).setBackground(ROAS_COLORS.blue).setRanges([roasCardRange]).build(),
-  ];
-  sh.setConditionalFormatRules([...existingRules, ...newRules]);
+  sh.setRowHeight(6, 28);
+  sh.setRowHeight(7, 50);
+  sh.setRowHeight(8, 24);
+  sh.setRowHeight(9, 26);
+  sh.setRowHeight(10, 15);
+
+  // עיצוב מותנה לתווית מילולית של ROAS (A8)
+  const verbalRoas = sh.getRange('A8');
+  const rules = sh.getConditionalFormatRules();
+  rules.push(SpreadsheetApp.newConditionalFormatRule()
+    .whenTextEqualTo('דורש בחינה')
+    .setBackground(ROAS_COLORS.red).setFontColor('#a50e0e').setBold(true)
+    .setRanges([verbalRoas]).build());
+  rules.push(SpreadsheetApp.newConditionalFormatRule()
+    .whenTextEqualTo('סביר')
+    .setBackground(ROAS_COLORS.orange).setFontColor('#b06000').setBold(true)
+    .setRanges([verbalRoas]).build());
+  rules.push(SpreadsheetApp.newConditionalFormatRule()
+    .whenTextEqualTo('טוב')
+    .setBackground(ROAS_COLORS.green).setFontColor('#137333').setBold(true)
+    .setRanges([verbalRoas]).build());
+  rules.push(SpreadsheetApp.newConditionalFormatRule()
+    .whenTextEqualTo('מעולה')
+    .setBackground(ROAS_COLORS.blue).setFontColor('#0b5394').setBold(true)
+    .setRanges([verbalRoas]).build());
+
+  // עיצוב מותנה ל-delta cells (חיובי=ירוק, שלילי=אדום)
+  const deltaCells = sh.getRange('A9:M9');
+  rules.push(SpreadsheetApp.newConditionalFormatRule()
+    .whenFormulaSatisfied('=ISNUMBER(SEARCH("▲", A9))')
+    .setBackground(DBC.positiveBg).setFontColor(DBC.positiveFg)
+    .setRanges([deltaCells]).build());
+  rules.push(SpreadsheetApp.newConditionalFormatRule()
+    .whenFormulaSatisfied('=ISNUMBER(SEARCH("▼", A9))')
+    .setBackground(DBC.negativeBg).setFontColor(DBC.negativeFg)
+    .setRanges([deltaCells]).build());
+
+  sh.setConditionalFormatRules(rules);
 }
 
-function buildDashboardCharts_(sh, ss) {
+function buildInsights_(sh) {
+  // כותרת הקטע
+  sh.getRange('A11:M11').merge()
+    .setValue('💡 תובנות מהירות')
+    .setFontWeight('bold')
+    .setFontSize(13)
+    .setBackground(DBC.sectionBg)
+    .setFontColor(DBC.sectionFg)
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle');
+  sh.setRowHeight(11, 30);
+
+  const helpers = `'${DASHBOARD_HELPERS_TAB}'`;
+
+  // תובנה 1: חנות מובילה (ROAS הכי גבוה)
+  sh.getRange('A12:M12').merge()
+    .setFormula(
+      `=IFERROR(` +
+      `"🏆  חנות מובילה לתקופה: " & INDEX(${helpers}!N:N, 4) & ` +
+      `"  •  ROAS " & TEXT(INDEX(${helpers}!Q:Q, 4), "0.00") & ` +
+      `"  •  הכנסות " & TEXT(INDEX(${helpers}!O:O, 4), "\"CAD \"#,##0"), ` +
+      `"אין נתונים לתקופה")`
+    )
+    .setBackground(DBC.insightBg)
+    .setFontSize(12)
+    .setFontWeight('bold')
+    .setHorizontalAlignment('right')
+    .setVerticalAlignment('middle');
+
+  // תובנה 2: חנות בסיכון (ROAS הכי נמוך)
+  sh.getRange('A13:M13').merge()
+    .setFormula(
+      `=IFERROR(` +
+      `"⚠️  דורש תשומת לב: " & INDEX(SORT(${helpers}!N4:Q10, 4, TRUE), 1, 1) & ` +
+      `"  •  ROAS " & TEXT(INDEX(SORT(${helpers}!N4:Q10, 4, TRUE), 1, 4), "0.00"), ` +
+      `"")`
+    )
+    .setBackground(DBC.insightBg)
+    .setFontSize(12)
+    .setFontWeight('bold')
+    .setHorizontalAlignment('right')
+    .setVerticalAlignment('middle');
+
+  // תובנה 3: היום הכי טוב בתקופה
+  sh.getRange('A14:M14').merge()
+    .setFormula(
+      `=IFERROR(` +
+      `"📅  היום הכי טוב בתקופה: " & TEXT(INDEX(${helpers}!S:S, 4), "d/M/yyyy") & ` +
+      `"  •  ROAS " & TEXT(INDEX(${helpers}!V:V, 4), "0.00") & ` +
+      `"  •  הכנסות " & TEXT(INDEX(${helpers}!T:T, 4), "\"CAD \"#,##0"), ` +
+      `"")`
+    )
+    .setBackground(DBC.insightBg)
+    .setFontSize(12)
+    .setFontWeight('bold')
+    .setHorizontalAlignment('right')
+    .setVerticalAlignment('middle');
+
+  sh.setRowHeight(12, 30);
+  sh.setRowHeight(13, 30);
+  sh.setRowHeight(14, 30);
+  sh.setRowHeight(15, 15);
+}
+
+function buildChart_(sh, ss) {
+  sh.getRange('A16:M16').merge()
+    .setValue('📈 מגמת ROAS לאורך זמן')
+    .setFontWeight('bold')
+    .setFontSize(13)
+    .setBackground(DBC.sectionBg)
+    .setFontColor(DBC.sectionFg)
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle');
+  sh.setRowHeight(16, 30);
+
   const helpers = ss.getSheetByName(DASHBOARD_HELPERS_TAB);
   if (!helpers) return;
 
-  // כותרת קטע
-  sh.getRange('A8:M8').merge()
-    .setValue('מגמת ROAS לאורך זמן (לפי חנות)')
-    .setFontWeight('bold')
-    .setFontSize(13)
-    .setBackground(DASHBOARD_COLORS.sectionTitle)
-    .setFontColor('#ffffff')
-    .setHorizontalAlignment('center');
-
-  // גרף קו - ROAS לאורך זמן (משתמש בpivot מ-helpers!A3:L500)
-  const lineChart = sh.newChart()
+  const chart = sh.newChart()
     .setChartType(Charts.ChartType.LINE)
     .addRange(helpers.getRange('A3:L500'))
-    .setPosition(9, 1, 0, 0)
+    .setPosition(17, 1, 0, 0)
     .setOption('title', '')
-    .setOption('legend', { position: 'top', alignment: 'center' })
-    .setOption('hAxis', { title: 'תאריך', format: 'yyyy-MM-dd' })
-    .setOption('vAxis', { title: 'ROAS', minValue: 0 })
-    .setOption('width', 1200)
-    .setOption('height', 340)
+    .setOption('legend', { position: 'top', alignment: 'center', textStyle: { fontSize: 12 } })
+    .setOption('hAxis', { title: '', format: 'd/M', slantedText: false })
+    .setOption('vAxis', { title: 'ROAS', minValue: 0, gridlines: { count: 5 } })
+    .setOption('width', 1280)
+    .setOption('height', 360)
     .setOption('curveType', 'function')
-    .setOption('pointSize', 4)
-    .setOption('lineWidth', 2)
+    .setOption('pointSize', 5)
+    .setOption('lineWidth', 2.5)
+    .setOption('backgroundColor', '#ffffff')
     .build();
-  sh.insertChart(lineChart);
-
-  // כותרת לגרף שני (אחרי הראשון)
-  sh.getRange('A28:M28').merge()
-    .setValue('השוואה בין חנויות — הכנסות, הוצאות, ROAS')
-    .setFontWeight('bold')
-    .setFontSize(13)
-    .setBackground(DASHBOARD_COLORS.sectionTitle)
-    .setFontColor('#ffffff')
-    .setHorizontalAlignment('center');
-
-  // גרף שילובי: עמודות הכנסות/הוצאות + קו ROAS
-  const comboChart = sh.newChart()
-    .setChartType(Charts.ChartType.COMBO)
-    .addRange(helpers.getRange('M3:P500'))
-    .setPosition(29, 1, 0, 0)
-    .setOption('title', '')
-    .setOption('legend', { position: 'top', alignment: 'center' })
-    .setOption('hAxis', { title: 'חנות' })
-    .setOption('series', {
-      0: { type: 'bars', targetAxisIndex: 0 },
-      1: { type: 'bars', targetAxisIndex: 0 },
-      2: { type: 'line', targetAxisIndex: 1, lineWidth: 3, pointSize: 6 },
-    })
-    .setOption('vAxes', {
-      0: { title: 'CAD' },
-      1: { title: 'ROAS', minValue: 0 },
-    })
-    .setOption('width', 1200)
-    .setOption('height', 340)
-    .build();
-  sh.insertChart(comboChart);
+  sh.insertChart(chart);
 }
 
-function buildDashboardTable_(sh) {
-  const flatRef = `'${DAILY_FLAT_TAB}'`;
+function buildTable_(sh) {
+  const flat = `'${DAILY_FLAT_TAB}'`;
 
-  sh.getRange('A48:M48').merge()
-    .setValue('פירוט יומי — לפי הסינון שבחרת')
+  sh.getRange('A37:M37').merge()
+    .setValue('📋 פירוט יומי')
     .setFontWeight('bold')
     .setFontSize(13)
-    .setBackground(DASHBOARD_COLORS.sectionTitle)
-    .setFontColor('#ffffff')
-    .setHorizontalAlignment('center');
+    .setBackground(DBC.sectionBg)
+    .setFontColor(DBC.sectionFg)
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle');
+  sh.setRowHeight(37, 30);
+  sh.setRowHeight(38, 10);
 
-  // QUERY מסונן לפי תאריכים וחנות
   const queryFormula =
-    `=IFERROR(QUERY(${flatRef}!A:I, ` +
+    `=IFERROR(QUERY(${flat}!A:I, ` +
     `"SELECT A, C, D, E, F, G, H, I ` +
     `WHERE A IS NOT NULL ` +
-    `AND A >= date '"&TEXT($B$3,"yyyy-MM-dd")&"' ` +
-    `AND A <= date '"&TEXT($D$3,"yyyy-MM-dd")&"' "` +
+    `AND A >= date '"&TEXT($B$4,"yyyy-MM-dd")&"' ` +
+    `AND A <= date '"&TEXT($D$4,"yyyy-MM-dd")&"' "` +
     `&IF($F$3<>"All", "AND C = '"&$F$3&"' ", "")` +
-    `&"ORDER BY A DESC LIMIT 200 ` +
-    `LABEL A 'תאריך', C 'חנות', D 'יצא פייסבוק', E 'יצא גוגל', F 'יצא סה""כ', ` +
-    `G 'נכנס', H 'ROAS', I 'רווח גולמי' ` +
-    `FORMAT A 'yyyy-mm-dd', D '#,##0.00', E '#,##0.00', F '#,##0.00', G '#,##0.00', H '0.00', I '#,##0.00'", 1), ` +
+    `&"ORDER BY A DESC LIMIT 100 ` +
+    `LABEL A 'תאריך', C 'חנות', D 'פייסבוק', E 'גוגל', F 'סה""כ הוצאה', ` +
+    `G 'הכנסה', H 'ROAS', I 'רווח גולמי' ` +
+    `FORMAT A 'd/M/yyyy', D '#,##0.00', E '#,##0.00', F '#,##0.00', ` +
+    `G '#,##0.00', H '0.00', I '#,##0.00'", 1), ` +
     `"אין נתונים בטווח שבחרת")`;
 
-  sh.getRange('A50').setFormula(queryFormula);
+  sh.getRange('A39').setFormula(queryFormula);
 
-  // עיצוב לכותרות הטבלה (השורה הראשונה של ה-QUERY)
-  // כיוון שזה QUERY דינמי, נחיל עיצוב על אזור גדול
-  sh.getRange('A50:M50')
+  // עיצוב שורת הכותרת של ה-QUERY
+  sh.getRange('A39:H39')
     .setFontWeight('bold')
-    .setBackground(DASHBOARD_COLORS.headerBg)
+    .setBackground(DBC.cardLabelBg)
     .setHorizontalAlignment('center');
 
-  // צביעת ROAS על עמודה G (העמודה השביעית, אחרי תאריך)
-  const roasCol = 'G';
-  const range = sh.getRange(`${roasCol}51:${roasCol}1000`);
-  const existing = sh.getConditionalFormatRules();
-  const newRules = [
-    SpreadsheetApp.newConditionalFormatRule().whenNumberLessThan(2).setBackground(ROAS_COLORS.red).setRanges([range]).build(),
-    SpreadsheetApp.newConditionalFormatRule().whenNumberBetween(2, 2.6999).setBackground(ROAS_COLORS.orange).setRanges([range]).build(),
-    SpreadsheetApp.newConditionalFormatRule().whenNumberBetween(2.7, 3).setBackground(ROAS_COLORS.green).setRanges([range]).build(),
-    SpreadsheetApp.newConditionalFormatRule().whenNumberGreaterThan(3).setBackground(ROAS_COLORS.blue).setRanges([range]).build(),
-  ];
-  sh.setConditionalFormatRules([...existing, ...newRules]);
-
-  // הקפא שורות (1=title, 3=filter, 5-6=KPIs, 50=table header)
-  sh.setFrozenRows(0); // לא נקפא כדי לאפשר גלילה רגילה
+  // צביעת ROAS על עמודה G (העמודה השביעית בפלט)
+  const roasRange = sh.getRange('G40:G500');
+  const rules = sh.getConditionalFormatRules();
+  rules.push(SpreadsheetApp.newConditionalFormatRule().whenNumberLessThan(2).setBackground(ROAS_COLORS.red).setRanges([roasRange]).build());
+  rules.push(SpreadsheetApp.newConditionalFormatRule().whenNumberBetween(2, 2.6999).setBackground(ROAS_COLORS.orange).setRanges([roasRange]).build());
+  rules.push(SpreadsheetApp.newConditionalFormatRule().whenNumberBetween(2.7, 3).setBackground(ROAS_COLORS.green).setRanges([roasRange]).build());
+  rules.push(SpreadsheetApp.newConditionalFormatRule().whenNumberGreaterThan(3).setBackground(ROAS_COLORS.blue).setRanges([roasRange]).build());
+  sh.setConditionalFormatRules(rules);
 }

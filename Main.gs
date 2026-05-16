@@ -64,6 +64,18 @@ function removeDailyTrigger() {
  * הצגת תפריט בתוך הגיליון (נטען כשפותחים את הגיליון).
  * עובד רק אם הגיליון נפתח אחרי שהפעלת setupCreateSheet ופתחת אותו לפחות פעם אחת.
  */
+/**
+ * Simple trigger - רץ בכל עריכה בגיליון.
+ * מנתב לטיפול הספציפי בדשבורד.
+ */
+function onEdit(e) {
+  try {
+    dashboardOnEdit_(e);
+  } catch (err) {
+    Logger.log('onEdit dispatch error: ' + (err && err.message ? err.message : err));
+  }
+}
+
 function onOpen() {
   try {
     SpreadsheetApp.getUi().createMenu('ROAS')
@@ -75,6 +87,10 @@ function onOpen() {
       .addItem('הסר טריגר יומי', 'removeDailyTrigger')
       .addSeparator()
       .addItem('בנה/רענן דשבורד', 'setupDashboard')
+      .addSeparator()
+      .addItem('הסתר טאבים עזריים', 'hideAuxiliaryTabs')
+      .addItem('הצג טאבים עזריים (debug)', 'showAuxiliaryTabs')
+      .addSeparator()
       .addItem('בדוק הגדרות (verifyConfig)', 'showVerifyConfig_')
       .addItem('הוצא Shopify tokens (Client Credentials)', 'bootstrapAllShopifyTokens')
       .addItem('פתח גיליון הגדרות', 'showSpreadsheetUrl_')

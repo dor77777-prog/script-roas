@@ -104,6 +104,8 @@ function ensureSpreadsheet() {
     if (!ss.getSheetByName(campTab)) {
       const sh = ss.insertSheet(campTab);
       ensureCampaignTabHeaders_(sh);
+      // טאבי קמפיינים מוסתרים מהמשתמש כברירת מחדל (נתונים מסביב מנותחים בדשבורד)
+      try { sh.hideSheet(); } catch (_) {}
     }
   }
 
@@ -401,6 +403,52 @@ function resetUsmile360Tab()  { resetTab('360usmile'); }
 function resetSummaryTab()    { resetTab(SUMMARY_TAB); }
 
 /**
+ * מסתיר את כל הטאבים העזריים (נתונים גולמיים, helpers).
+ * משאיר רק: סיכום, חנויות, Dashboard.
+ * שימושי אחרי עדכון מגרסה ישנה.
+ */
+function hideAuxiliaryTabs() {
+  const ss = ensureSpreadsheet();
+  const toHide = [
+    DAILY_FLAT_TAB,
+    DASHBOARD_HELPERS_TAB,
+    ...STORES.map(s => campaignTabName_(s.id)),
+  ];
+  let hidden = 0;
+  for (const name of toHide) {
+    const sh = ss.getSheetByName(name);
+    if (sh) {
+      try {
+        sh.hideSheet();
+        hidden++;
+      } catch (_) {}
+    }
+  }
+  Logger.log(`Hidden ${hidden} auxiliary tabs. Visible: סיכום, חנויות, Dashboard.`);
+}
+
+/** מציג שוב את כל הטאבים העזריים (אם תרצה לבדוק/לערוך). */
+function showAuxiliaryTabs() {
+  const ss = ensureSpreadsheet();
+  const toShow = [
+    DAILY_FLAT_TAB,
+    DASHBOARD_HELPERS_TAB,
+    ...STORES.map(s => campaignTabName_(s.id)),
+  ];
+  let shown = 0;
+  for (const name of toShow) {
+    const sh = ss.getSheetByName(name);
+    if (sh) {
+      try {
+        sh.showSheet();
+        shown++;
+      } catch (_) {}
+    }
+  }
+  Logger.log(`Shown ${shown} auxiliary tabs.`);
+}
+
+/**
  * מאתר כל שורת יום (תאריך YYYY-MM-DD בעמודה A) ומבטיח שיש בה את נוסחאות
  * "סה"כ" ו"ROAS" המתאימות לפריסת הטאב. לא מוחק ערכים קיימים בעמודות FB/GA/Revenue.
  *
@@ -687,9 +735,11 @@ const DAILY_FLAT_HEADERS = [
 
 function ensureDailyFlatTab_(ss) {
   let sh = ss.getSheetByName(DAILY_FLAT_TAB);
+  let justCreated = false;
   if (!sh) {
     sh = ss.insertSheet(DAILY_FLAT_TAB);
     sh.setRightToLeft(false);
+    justCreated = true;
   }
   if (sh.getLastRow() === 0) {
     sh.getRange(1, 1, 1, DAILY_FLAT_HEADERS.length).setValues([DAILY_FLAT_HEADERS])
@@ -707,6 +757,10 @@ function ensureDailyFlatTab_(ss) {
     sh.setColumnWidth(7, 110);  // Revenue
     sh.setColumnWidth(8, 70);   // ROAS
     sh.setColumnWidth(9, 110);  // Gross Profit
+  }
+  // הסתר את הטאב מהמשתמש - הוא משמש רק כמקור נתונים לדשבורד
+  if (justCreated) {
+    try { sh.hideSheet(); } catch (_) {}
   }
   return sh;
 }
