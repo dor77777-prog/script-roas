@@ -31,6 +31,7 @@ import {
   readOptimized,
   toggleOptimized,
 } from '@/lib/campaignOptimized';
+import { AdsDrawer } from './AdsDrawer';
 
 /**
  * Slide-in drawer that opens when the user clicks a campaign row in the
@@ -88,6 +89,15 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
       setSortDir('desc'); // first click on a new column → "largest first"
     }
   }
+
+  // Ad-set → ads drilldown (Meta only). Click on an ad-set row inside the
+  // drawer opens the AdsDrawer scoped to that ad-set.
+  const [adDrillSet, setAdDrillSet] = useState<{
+    storeId: string;
+    campaignId: string;
+    adSetId: string;
+    adSetName: string;
+  } | null>(null);
 
   // Optimization marks — shared with the main CampaignsTable via the same
   // localStorage key (lib/campaignOptimized), so a mark made in either place
@@ -434,13 +444,25 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
                       const markKey = `${a.storeId}::${a.platform}::${a.campaignId}::${a.id || ''}`;
                       const isOptimized = optimized.has(markKey);
                       const tight = a.spend > 0 && a.adSetBudgetCad && a.spend > a.adSetBudgetCad * 0.95;
+                      const canDrillToAds = a.platform === 'Meta' && a.id;
                       return (
                         <tr
                           key={a.id || a.name || i}
                           className={cn(
                             'border-t border-borderSubtle transition-opacity',
                             isOptimized && 'opacity-50 hover:opacity-100',
+                            canDrillToAds && 'cursor-pointer hover:bg-surfaceMuted/30',
                           )}
+                          onClick={() => {
+                            if (!canDrillToAds) return;
+                            setAdDrillSet({
+                              storeId: a.storeId,
+                              campaignId: a.campaignId,
+                              adSetId: a.id,
+                              adSetName: a.name,
+                            });
+                          }}
+                          title={canDrillToAds ? 'לחץ לראות את המודעות באד-סט' : undefined}
                         >
                           <td className="px-2 py-2 text-center w-[36px]">
                             <button
@@ -492,6 +514,28 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
           </div>
         </div>
       </aside>
+
+      {/* Nested ad-level drawer. Date range is derived from the rows the
+          campaign drawer already has — guaranteed to cover the same window. */}
+      {adDrillSet && (
+        <AdsDrawer
+          open
+          onClose={() => setAdDrillSet(null)}
+          storeId={adDrillSet.storeId}
+          campaignId={adDrillSet.campaignId}
+          adSetId={adDrillSet.adSetId}
+          adSetName={adDrillSet.adSetName}
+          rangeFrom={rows.reduce(
+            (min, r) => (r.date < min ? r.date : min),
+            rows[0]?.date ?? '',
+          )}
+          rangeTo={rows.reduce(
+            (max, r) => (r.date > max ? r.date : max),
+            rows[0]?.date ?? '',
+          )}
+          adAccounts={adAccounts}
+        />
+      )}
     </div>
   );
 }

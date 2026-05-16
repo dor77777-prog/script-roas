@@ -29,6 +29,7 @@ import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { DateRange } from '@/lib/types';
 import { roasLabel } from '@/lib/analytics';
 import { CampaignDrawer } from './CampaignDrawer';
+import { AdsDrawer } from './AdsDrawer';
 
 type Mode = 'campaign' | 'adset';
 type Platform = 'all' | 'Meta' | 'Google';
@@ -302,6 +303,13 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   // Drill-down drawer state — set when the user clicks a row.
   const [drillCampaignId, setDrillCampaignId] = useState<string | null>(null);
   const [drillPlatform, setDrillPlatform] = useState<string | null>(null);
+  // Ad-level drilldown: when set, opens the AdsDrawer scoped to one ad-set.
+  const [adDrill, setAdDrill] = useState<{
+    storeId: string;
+    campaignId: string;
+    adSetId: string;
+    adSetName: string;
+  } | null>(null);
   useEffect(() => { setLocalRange(range); }, [range.from, range.to]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const today = todayInIsrael();
@@ -737,15 +745,28 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                         isOptimized && 'opacity-50 hover:opacity-100',
                       )}
                       onClick={() => {
-                        // Only open the drawer in campaign mode (ad-set mode
-                        // already shows ad-set-level detail; opening a deeper
-                        // panel would just be the same view).
                         if (mode === 'campaign' && a.campaignId) {
+                          // Campaign click → ad-sets drawer.
                           setDrillCampaignId(a.campaignId);
                           setDrillPlatform(a.platform);
+                        } else if (mode === 'adset' && a.adSetId && a.platform === 'Meta') {
+                          // Ad-set click → drill deeper into individual ads.
+                          // Only Meta — Google ad-level isn't fetched yet.
+                          setAdDrill({
+                            storeId: a.storeId,
+                            campaignId: a.campaignId,
+                            adSetId: a.adSetId,
+                            adSetName: a.adSetName || a.campaignName,
+                          });
                         }
                       }}
-                      title={mode === 'campaign' ? 'לחץ לפרטים מלאים' : undefined}
+                      title={
+                        mode === 'campaign'
+                          ? 'לחץ לפרטים מלאים'
+                          : mode === 'adset' && a.platform === 'Meta'
+                          ? 'לחץ לראות את המודעות באד-סט'
+                          : undefined
+                      }
                     >
                       {/* Per-row optimization toggle. Clicking flips the mark
                           without bubbling into the row click (which would
@@ -914,6 +935,23 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
             r.date >= localRange.from && r.date <= localRange.to &&
             (localStore === 'All' || r.storeName === localStore),
           )}
+          adAccounts={adAccounts}
+        />
+      )}
+
+      {/* Ad-level drilldown. Opens when an ad-set row is clicked in
+          ad-set mode (Meta only). Uses a higher z-index than the
+          campaign drawer so it stacks correctly when both are open. */}
+      {adDrill && (
+        <AdsDrawer
+          open
+          onClose={() => setAdDrill(null)}
+          storeId={adDrill.storeId}
+          campaignId={adDrill.campaignId}
+          adSetId={adDrill.adSetId}
+          adSetName={adDrill.adSetName}
+          rangeFrom={localRange.from}
+          rangeTo={localRange.to}
           adAccounts={adAccounts}
         />
       )}

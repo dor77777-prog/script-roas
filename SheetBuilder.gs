@@ -1116,3 +1116,110 @@ function writeProductSalesForDay_(ss, dateStr, storeId, storeName, productRows) 
   sh.getRange(2, 8, combined.length, 1).setNumberFormat('#,##0').setHorizontalAlignment('center');   // Orders
   sh.getRange(2, 9, combined.length, 1).setNumberFormat('#,##0.00');                                  // Net Revenue
 }
+
+// ============================================================================
+// טאבי מודעות (ads) - drill-down נוסף מתחת ל-ad-sets. שורה לכל
+// (תאריך, חנות, קמפיין, ad-set, מודעה).
+// ============================================================================
+
+const ADS_HEADERS = [
+  'תאריך', 'פלטפורמה',
+  'מזהה קמפיין', 'שם קמפיין',
+  'מזהה אד-סט', 'שם אד-סט',
+  'מזהה מודעה', 'שם מודעה',
+  'יצא (CAD)', 'חשיפות', 'קליקים',
+  'המרות', 'ערך המרות (CAD)', 'ROAS'
+];
+
+function ensureAdsTabHeaders_(sheet) {
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, ADS_HEADERS.length)
+      .setValues([ADS_HEADERS])
+      .setFontWeight('bold')
+      .setBackground('#d9d9d9')
+      .setHorizontalAlignment('center');
+    sheet.setFrozenRows(1);
+    sheet.setColumnWidth(1, 95);    // Date
+    sheet.setColumnWidth(2, 80);    // Platform
+    sheet.setColumnWidth(3, 120);   // Campaign ID
+    sheet.setColumnWidth(4, 220);   // Campaign Name
+    sheet.setColumnWidth(5, 120);   // Ad Set ID
+    sheet.setColumnWidth(6, 220);   // Ad Set Name
+    sheet.setColumnWidth(7, 120);   // Ad ID
+    sheet.setColumnWidth(8, 260);   // Ad Name
+    sheet.setColumnWidth(9, 100);   // Spend
+    sheet.setColumnWidth(10, 90);   // Impressions
+    sheet.setColumnWidth(11, 70);   // Clicks
+    sheet.setColumnWidth(12, 70);   // Conversions
+    sheet.setColumnWidth(13, 110);  // Conv Value
+    sheet.setColumnWidth(14, 70);   // ROAS
+  }
+}
+
+/**
+ * כותב שורות מודעה לטאב הads של חנות ליום נתון.
+ * Idempotent — שורות קיימות לאותו תאריך נדרסות.
+ */
+function writeAdsRowsForDay(ss, storeId, dateStr, rows) {
+  const tabName = adsTabName_(storeId);
+  let sh = ss.getSheetByName(tabName);
+  if (!sh) {
+    sh = ss.insertSheet(tabName);
+    sh.setRightToLeft(true);
+    try { sh.hideSheet(); } catch (_) {}
+  }
+  ensureAdsTabHeaders_(sh);
+
+  const lastRow = sh.getLastRow();
+  let keptRows = [];
+  if (lastRow > 1) {
+    const allExisting = sh.getRange(2, 1, lastRow - 1, ADS_HEADERS.length).getValues();
+    keptRows = allExisting.filter(r => {
+      const v = r[0];
+      let key = null;
+      if (v instanceof Date && !isNaN(v.getTime())) {
+        key = Utilities.formatDate(v, TZ, 'yyyy-MM-dd');
+      } else if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
+        key = v;
+      }
+      return key !== dateStr && key !== null;
+    });
+  }
+
+  const newRowsArr = (rows || []).map(r => [
+    parseYMD_(r.date),
+    r.platform,
+    r.campaignId || '',
+    r.campaignName || '',
+    r.adSetId || '',
+    r.adSetName || '',
+    r.adId || '',
+    r.adName || '',
+    round2_(r.spendCad || 0),
+    parseInt(r.impressions || 0, 10),
+    parseInt(r.clicks || 0, 10),
+    round2_(r.conversions || 0),
+    round2_(r.conversionValueCad || 0),
+    '', // ROAS - formula
+  ]);
+
+  const combined = keptRows.concat(newRowsArr);
+
+  if (lastRow > 1) {
+    sh.getRange(2, 1, lastRow - 1, ADS_HEADERS.length).clearContent();
+  }
+  if (combined.length === 0) return;
+
+  sh.getRange(2, 1, combined.length, ADS_HEADERS.length).setValues(combined);
+  sh.getRange(2, 1, combined.length, 1).setNumberFormat('yyyy-mm-dd').setHorizontalAlignment('center');
+  sh.getRange(2, 9, combined.length, 1).setNumberFormat('#,##0.00');                   // Spend
+  sh.getRange(2, 10, combined.length, 2).setNumberFormat('#,##0');                      // Impressions, Clicks
+  sh.getRange(2, 12, combined.length, 2).setNumberFormat('#,##0.00');                   // Conversions, Conv Value
+  sh.getRange(2, 14, combined.length, 1).setNumberFormat('0.00').setHorizontalAlignment('center');
+
+  const formulas = combined.map((_, i) => {
+    const r = 2 + i;
+    return [`=IFERROR(M${r}/I${r}, "")`]; // ROAS = ConvValue (M) / Spend (I)
+  });
+  sh.getRange(2, 14, combined.length, 1).setFormulas(formulas);
+}

@@ -37,9 +37,10 @@ export function buildAdsManagerLink(opts: {
   storeId: string;
   campaignId: string;
   adSetId?: string;
+  adId?: string;
   accounts: AdAccountMap;
 }): string | null {
-  const { platform, storeId, campaignId, adSetId, accounts } = opts;
+  const { platform, storeId, campaignId, adSetId, adId, accounts } = opts;
   if (!campaignId) return null;
   const acct = accounts[storeId];
 
@@ -48,11 +49,15 @@ export function buildAdsManagerLink(opts: {
     const params = new URLSearchParams();
     if (metaId) params.set('act', metaId);
     params.set('selected_campaign_ids', campaignId);
-    if (adSetId) {
-      params.set('selected_adset_ids', adSetId);
+    if (adSetId) params.set('selected_adset_ids', adSetId);
+
+    // When we have an ad ID, route to the ads view drilled down to that
+    // specific ad. Without adId, stay on the ad-sets view (campaigns /
+    // ad-sets context).
+    if (adId) {
+      params.set('selected_ad_ids', adId);
+      return `https://business.facebook.com/adsmanager/manage/ads?${params.toString()}`;
     }
-    // adsets view drills one level deeper than the campaigns list — usually
-    // what the user wants when clicking through from a row.
     return `https://business.facebook.com/adsmanager/manage/adsets?${params.toString()}`;
   }
 
@@ -61,6 +66,10 @@ export function buildAdsManagerLink(opts: {
     const params = new URLSearchParams();
     if (customerId) params.set('__c', customerId);
     params.set('campaignId', campaignId);
+    if (adId) {
+      params.set('adId', adId);
+      return `https://ads.google.com/aw/ads?${params.toString()}`;
+    }
     if (adSetId) {
       params.set('adGroupId', adSetId);
       return `https://ads.google.com/aw/ads?${params.toString()}`;

@@ -223,3 +223,72 @@ function getMetaBudgets(storeId) {
   Logger.log(`Meta budgets ${storeId}: ${Object.keys(campaigns).length} campaigns / ${Object.keys(adSets).length} adsets · currency=${currency}`);
   return { currency, campaigns, adSets };
 }
+
+/**
+ * שולף את כל המודעות (ads) של חשבון המודעות ביום נתון, ברמת המודעה.
+ *
+ * זה ה-drilldown העמוק ביותר ב-Meta API. בניגוד ל-getMetaAdSetInsights
+ * (שמחזיר שורה לכל ad-set), הקריאה הזאת מחזירה שורה לכל ad בודד בתוך
+ * ה-ad-set, כך שה-dashboard יכול להציג איזה creative בתוך ה-ad-set
+ * מבצע טוב/רע ולתת focus לאופטימיזציה.
+ *
+ * הסתננות:
+ *   - מדלגים על ads שלא היו פעילים ביום (spend=0 וגם impressions=0) — מצמצם
+ *     מאות שורות שאין בהן מידע.
+ *
+ * Conversions:
+ *   - אותה לוגיקת extractMetaPurchases_ כמו ב-ad-set fetcher.
+ */
+function getMetaAdInsights(storeId, dateStr) {
+  const token = getProp(`${storeId}.meta.accessToken`) || getProp('meta.accessToken');
+  if (!token) {
+    throw new Error(`חסר טוקן Meta עבור ${storeId}.`);
+  }
+  const adAccountId = requireProp(`${storeId}.meta.adAccountId`).replace(/^act_/, '');
+
+  const timeRange = JSON.stringify({ since: dateStr, until: dateStr });
+  const fields = 'ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,' +
+                 'spend,impressions,clicks,actions,action_values,account_currency';
+  let url = `https://graph.facebook.com/${META_API_VERSION}/act_${adAccountId}/insights` +
+            `?fields=${fields}` +
+            `&time_range=${encodeURIComponent(timeRange)}` +
+            `&level=ad` +
+            `&limit=500` +
+            `&access_token=${encodeURIComponent(token)}`;
+
+  const out = [];
+  let safety = 0;
+  while (url && safety < 50) {
+    const res = fetchWithRetry_(url, { method: 'get', muteHttpExceptions: true });
+    const code = res.getResponseCode();
+    if (code !== 200) {
+      throw new Error(`Meta ads ${storeId} ${dateStr} failed (${code}): ${res.getContentText()}`);
+    }
+    const body = JSON.parse(res.getContentText());
+    const rows = (body && body.data) || [];
+    for (const r of rows) {
+      const spend = parseFloat(r.spend || 0);
+      const impressions = parseInt(r.impressions || 0, 10);
+      if (spend === 0 && impressions === 0) continue;
+      const conv = extractMetaPurchases_(r);
+      out.push({
+        campaignId: r.campaign_id || '',
+        campaignName: r.campaign_name || '',
+        adSetId: r.adset_id || '',
+        adSetName: r.adset_name || '',
+        adId: r.ad_id || '',
+        adName: r.ad_name || '',
+        spend: spend,
+        currency: r.account_currency || 'ILS',
+        impressions: impressions,
+        clicks: parseInt(r.clicks || 0, 10),
+        conversions: conv.count,
+        conversionValue: conv.value,
+      });
+    }
+    url = (body.paging && body.paging.next) || null;
+    safety++;
+  }
+  Logger.log(`Meta ads ${storeId} ${dateStr}: ${out.length} ads`);
+  return out;
+}

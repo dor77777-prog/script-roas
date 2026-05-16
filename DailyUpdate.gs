@@ -129,6 +129,14 @@ function updateStoreForDate_(ss, store, dateStr, year, month, day, ilsToCad) {
     Logger.log(`products-daily for ${store.name} ${dateStr} failed (non-fatal): ${e && e.message ? e.message : e}`);
   }
 
+  // טאב <store>-ads — drill-down מודעות מתחת ל-ad-sets. נכשל ברך כדי לא
+  // להפיל את הריצה היומית אם Meta מחזיר 5xx לעומס insights ברמת ad.
+  try {
+    updateAdDataForStoreDate_(ss, store, dateStr, ilsToCad);
+  } catch (e) {
+    Logger.log(`Ad-level data for ${store.name} ${dateStr} failed: ${e && e.message ? e.message : e}`);
+  }
+
   Logger.log(`${store.name} ${dateStr}: spent=${totalSpentCad.toFixed(2)} CAD (FB ${metaCad.toFixed(2)} + GA ${googleAdsCad.toFixed(2)}), revenue=${revenueCad.toFixed(2)} CAD`);
   return { spent: totalSpentCad, revenue: revenueCad };
 }
@@ -241,6 +249,49 @@ function updateCampaignDataForStoreDate_(ss, store, dateStr, ilsToCad) {
 
   writeCampaignRowsForDay(ss, store.id, dateStr, rows);
   Logger.log(`Campaign data ${store.name} ${dateStr}: wrote ${rows.length} rows`);
+}
+
+/**
+ * שולף ad-level insights מ-Meta ליום הזה ורושם לטאב <store>-ads.
+ * רק Meta — Google Ads לא נסרק ברמת מודעה במסגרת הזאת.
+ * מדלגים אם יש manual override (אין רזולוציה ידנית לרמת מודעה).
+ */
+function updateAdDataForStoreDate_(ss, store, dateStr, ilsToCad) {
+  // Skip Meta only — Google has no ad-level surface here yet.
+  const metaOverrideForDay = getManualSpendOverride_(store.id, 'Meta', dateStr);
+  if (metaOverrideForDay) {
+    Logger.log(`Meta ads ${store.name} ${dateStr}: SKIPPED (manual override active)`);
+    return;
+  }
+  let adRows;
+  try {
+    adRows = getMetaAdInsights(store.id, dateStr);
+  } catch (e) {
+    Logger.log(`Meta ads ${store.name} ${dateStr} fetch failed: ${e && e.message ? e.message : e}`);
+    return;
+  }
+  const rows = adRows.map(r => {
+    const fxToCad = r.currency === 'CAD' ? 1
+                  : r.currency === 'ILS' ? ilsToCad
+                  : getFxRate(r.currency, 'CAD', dateStr);
+    return {
+      date: dateStr,
+      platform: 'Meta',
+      campaignId: r.campaignId,
+      campaignName: r.campaignName,
+      adSetId: r.adSetId,
+      adSetName: r.adSetName,
+      adId: r.adId,
+      adName: r.adName,
+      spendCad: r.spend * fxToCad,
+      impressions: r.impressions,
+      clicks: r.clicks,
+      conversions: r.conversions,
+      conversionValueCad: r.conversionValue * fxToCad,
+    };
+  });
+  writeAdsRowsForDay(ss, store.id, dateStr, rows);
+  Logger.log(`Ads data ${store.name} ${dateStr}: wrote ${rows.length} rows`);
 }
 
 /**
