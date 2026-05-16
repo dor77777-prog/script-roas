@@ -141,9 +141,10 @@ export const METRIC_HELP: Record<string, MetricHelpContent> = {
   },
   netProfit: {
     name: 'רווח נטו',
-    whatIs: 'הרווח האמיתי אחרי כל ההוצאות — פרסום וגם COGS. זה המספר ש"באמת" נשאר.',
-    formula: 'Revenue − Ad Spend − COGS',
-    good: 'חיובי = חנות רווחית. שלילי = מפסידה כסף.',
+    whatIs: 'הרווח האמיתי שנותר אחרי כל ההוצאות הישירות והקבועות. זה המספר ש"באמת" נכנס לכיס בסוף התקופה.',
+    formula: 'Revenue − Ad Spend − COGS (25%) − Fees (6.5%) − Fixed',
+    good: 'חיובי = רווחי. שלילי = מפסידים. המרג\'ין הבריא לתחום: 8-15%.',
+    context: 'Fixed = Shopify + apps + email לכל חנות, מוצב יחסית לימים בטווח.',
   },
   ctr: {
     name: 'CTR',

@@ -31,6 +31,7 @@ import { InsightsBoard } from './InsightsBoard';
 import { GoalTracker } from './GoalTracker';
 import { AiReportButton } from './AiReportButton';
 import { HeroOverview } from './HeroOverview';
+import { PnLBreakdown } from './PnLBreakdown';
 import { CommandPalette } from './CommandPalette';
 import { TabNav, type TabDef } from './TabNav';
 import { SectionIntro } from './SectionIntro';
@@ -253,6 +254,9 @@ function HomeTab({
         formula="ROAS = הכנסות / סך הוצאות פרסום   •   רווח נטו = הכנסות − הוצאות − COGS (25%)"
       />
       <KpiCards current={filtered.curAgg} previous={filtered.prevAgg} series={filtered.cur} />
+
+      {/* ===== Full P&L breakdown — every cost line, true net profit ===== */}
+      <PnLBreakdown current={filtered.curAgg} storeNames={filtered.visibleStores} />
 
       {/* ===== Per-store cards ===== */}
       <SectionIntro

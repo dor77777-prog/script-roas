@@ -87,6 +87,11 @@ export function KpiCards({ current, previous, series }: Props) {
   const dProfit = deltaPct(current.grossProfit, previous.grossProfit);
   const dCogs   = deltaPct(current.cogs,        previous.cogs);
   const dNet    = deltaPct(current.netProfit,   previous.netProfit);
+  const dTrueNet = deltaPct(current.trueNetProfit, previous.trueNetProfit);
+  // Silence unused-variable warning when `dNet` (the legacy partial-net delta)
+  // isn't surfaced in any card. Keeping the computation in case we want a
+  // "before fixed costs" comparison later.
+  void dNet;
 
   // Pre-compute the per-day series for each metric once. useMemo because
   // dailyTotals walks the whole rows array per call.
@@ -174,12 +179,12 @@ export function KpiCards({ current, previous, series }: Props) {
       <KpiCard
         label="רווח נטו"
         help={METRIC_HELP.netProfit}
-        rawValue={current.netProfit}
+        rawValue={current.trueNetProfit}
         format={n => formatCurrency(n)}
         valuePrefix="CAD"
-        delta={dNet}
+        delta={dTrueNet}
         icon={<Wallet size={14} />}
-        accent={current.netProfit >= 0 ? 'pos' : 'neg'}
+        accent={current.trueNetProfit >= 0 ? 'pos' : 'neg'}
         spark={{ values: sparkData.netProfit }}
       />
     </div>

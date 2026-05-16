@@ -1,4 +1,5 @@
 import type { DailyRow, DateRange } from './types';
+import { TRANSACTION_FEES_RATE, prorateFixedCosts } from './costs';
 
 /**
  * הערכת עלות סחורה (COGS) — אחוז קבוע מההכנסה היומית.
@@ -14,9 +15,25 @@ export type Aggregate = {
   fbSpend: number;
   gaSpend: number;
   roas: number;
-  grossProfit: number;
-  cogs: number;
-  netProfit: number;
+  grossProfit: number;       // revenue − ad spend
+  cogs: number;              // 25% of revenue
+  netProfit: number;         // revenue − ad spend − cogs   ("legacy net")
+  /** Transaction processing fees (PayPal + currency conversion) — 6.5% of revenue. */
+  transactionFees: number;
+  /** Per-store monthly fixed costs (Shopify plan + apps + email) prorated to
+   *  the number of days in the aggregate. */
+  fixedCosts: number;
+  /** Distinct stores active in the period (used for prorating fixed costs). */
+  storeCount: number;
+  /** Span the aggregate covers, in calendar days. Used for the fixed-cost
+   *  proration math; 0 when the aggregate is empty. */
+  daysCovered: number;
+  /** revenue − ad spend − cogs − transaction fees − fixed costs.
+   *  This is the *real* take-home after every cost line — what's left in
+   *  the bank at the end of the period. */
+  trueNetProfit: number;
+  /** trueNetProfit / revenue. Useful as a margin chip. */
+  trueMargin: number;
   cogsCoverage: number; // 0..1 - share of rows that had COGS reported
   rowCount: number;
 };
@@ -35,6 +52,8 @@ export function filterRows(
 
 export function aggregate(rows: DailyRow[]): Aggregate {
   let revenue = 0, spend = 0, fbSpend = 0, gaSpend = 0, cogs = 0, cogsRows = 0;
+  const stores = new Set<string>();
+  const dates = new Set<string>();
   for (const r of rows) {
     revenue += r.revenue;
     spend += r.totalSpend;
@@ -42,8 +61,18 @@ export function aggregate(rows: DailyRow[]): Aggregate {
     gaSpend += r.gaSpend;
     cogs += r.cogs;
     if (r.hasCogs) cogsRows++;
+    stores.add(r.storeName);
+    dates.add(r.date);
   }
   const roas = spend > 0 ? revenue / spend : 0;
+  const transactionFees = revenue * TRANSACTION_FEES_RATE;
+  // Fixed costs (Shopify plan + apps + email) get prorated across the days
+  // the aggregate covers, applied to every store that was active. So a
+  // 16-day, 3-store view bills 16/30 of the monthly fixed costs × 3.
+  const storeNames = Array.from(stores);
+  const daysCovered = dates.size;
+  const fixedCosts = prorateFixedCosts(storeNames, daysCovered);
+  const trueNetProfit = revenue - spend - cogs - transactionFees - fixedCosts;
   return {
     revenue,
     spend,
@@ -53,6 +82,12 @@ export function aggregate(rows: DailyRow[]): Aggregate {
     grossProfit: revenue - spend,
     cogs,
     netProfit: revenue - spend - cogs,
+    transactionFees,
+    fixedCosts,
+    storeCount: storeNames.length,
+    daysCovered,
+    trueNetProfit,
+    trueMargin: revenue > 0 ? trueNetProfit / revenue : 0,
     cogsCoverage: rows.length > 0 ? cogsRows / rows.length : 0,
     rowCount: rows.length,
   };
