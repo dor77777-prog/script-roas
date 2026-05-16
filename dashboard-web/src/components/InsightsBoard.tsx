@@ -95,6 +95,8 @@ type Props = {
   data: DashboardData;
 };
 
+const BOARD_EXPANDED_KEY = 'roas-dashboard:insights-expanded';
+
 export function InsightsBoard({ data }: Props) {
   const { data: products, isLoading: pLoading } = useSWR<ProductsResponse | null>(
     '/api/products', fetcher,
@@ -109,10 +111,30 @@ export function InsightsBoard({ data }: Props) {
   // We hydrate after mount to avoid SSR/client mismatch.
   const [states, setStates] = useState<InsightStates>({});
   const [hydrated, setHydrated] = useState(false);
+  // Whole board collapsed/expanded — defaults to CLOSED so the home tab feels
+  // calm on first load. Expansion is persisted across sessions.
+  const [boardExpanded, setBoardExpanded] = useState(false);
   useEffect(() => {
     setStates(readInsightStates());
+    try {
+      const saved = window.localStorage.getItem(BOARD_EXPANDED_KEY);
+      if (saved === '1') setBoardExpanded(true);
+    } catch {
+      /* ignore */
+    }
     setHydrated(true);
   }, []);
+  function toggleBoard() {
+    setBoardExpanded(prev => {
+      const next = !prev;
+      try {
+        window.localStorage.setItem(BOARD_EXPANDED_KEY, next ? '1' : '0');
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }
 
   function markInsight(insight: Insight, kind: InsightStateKind) {
     setStates(prev => {
@@ -164,33 +186,82 @@ export function InsightsBoard({ data }: Props) {
 
   const [showHidden, setShowHidden] = useState(false);
 
+  // Severity counts for the collapsed header badges — show critical / warning /
+  // opportunity / positive even when the panel is closed, so the user has
+  // instant signal of "do I need to open this now?" without clicking.
+  const severityCounts = useMemo(() => {
+    return {
+      critical:    grouped.critical.length,
+      warning:     grouped.warning.length,
+      opportunity: grouped.opportunity.length,
+      positive:    grouped.positive.length,
+      info:        grouped.info.length,
+    };
+  }, [grouped]);
+
   return (
     <section className="rounded-2xl bg-surface border border-borderSubtle shadow-card overflow-hidden">
-      {/* Header */}
-      <header className="px-4 sm:px-5 py-3 sm:py-3.5 border-b border-borderSubtle bg-gradient-to-l from-primary/4 to-surface">
+      {/* Clickable header — toggles the whole board open/closed. */}
+      <button
+        type="button"
+        onClick={toggleBoard}
+        aria-expanded={boardExpanded}
+        className={cn(
+          'w-full text-start',
+          'px-4 sm:px-6 py-4 sm:py-5',
+          'border-b border-borderSubtle',
+          'bg-gradient-to-l from-primary/5 via-surface to-surface',
+          'hover:from-primary/8 hover:to-surfaceMuted/40 transition-colors',
+        )}
+      >
         <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10 text-primary shrink-0">
-              <Sparkles size={15} />
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary/10 text-primary shrink-0">
+              <Sparkles size={18} />
             </span>
-            <h2 className="text-sm sm:text-base font-semibold text-text-primary tracking-tight">
-              תובנות חכמות
-            </h2>
-            {totalCount > 0 && (
-              <span className="text-[10px] sm:text-xs text-text-muted">
-                ({totalCount}{totalCount === 1 ? ' תובנה' : ' תובנות'})
-              </span>
-            )}
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-xl font-bold text-text-primary tracking-tight leading-tight">
+                תובנות חכמות
+              </h2>
+              <div className="text-[11px] sm:text-xs text-text-muted mt-0.5 leading-tight">
+                {loading && (
+                  <span className="inline-flex items-center gap-1 mr-2">
+                    <RefreshCw size={11} className="animate-spin" />
+                    מנתח…
+                  </span>
+                )}
+                {totalCount > 0
+                  ? `${totalCount} ${totalCount === 1 ? 'תובנה פעילה' : 'תובנות פעילות'} · 14 ימים אחרונים`
+                  : hiddenCount > 0
+                  ? `${hiddenCount} תובנות מוסתרות זמינות בתחתית הלוח`
+                  : '14 ימים אחרונים · מתעדכן כל דקה'}
+              </div>
+            </div>
           </div>
-          <div className="text-[10px] sm:text-xs text-text-muted flex items-center gap-1.5">
-            {loading && <RefreshCw size={12} className="animate-spin" />}
-            <span>14 ימים אחרונים · מתעדכן כל דקה</span>
+
+          {/* Right side: severity badges + chevron */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <SeverityBadges counts={severityCounts} compact={!boardExpanded} />
+            <ChevronDown
+              size={20}
+              className={cn(
+                'text-text-muted transition-transform duration-DEFAULT',
+                boardExpanded && 'rotate-180',
+              )}
+              aria-hidden
+            />
           </div>
         </div>
-      </header>
+      </button>
 
-      {/* Empty state */}
-      {!loading && totalCount === 0 && hiddenCount === 0 && (
+      {/* Body — only rendered when expanded so collapsed cards stay lightweight */}
+      {!boardExpanded && hiddenCount === 0 && totalCount === 0 && !loading && (
+        <div className="px-4 sm:px-5 py-4 text-center text-[11px] sm:text-xs text-text-muted">
+          אין תובנות חדשות לרגע זה. לחץ על הכותרת לעוד פרטים.
+        </div>
+      )}
+
+      {boardExpanded && !loading && totalCount === 0 && hiddenCount === 0 && (
         <div className="px-4 sm:px-5 py-10 text-center text-text-muted">
           <Sparkles size={28} className="mx-auto mb-2 text-text-muted/60" />
           <div className="text-sm">אין תובנות חדשות לרגע זה.</div>
@@ -200,9 +271,9 @@ export function InsightsBoard({ data }: Props) {
         </div>
       )}
 
-      {/* Grouped insights */}
-      {totalCount > 0 && (
-        <div>
+      {/* Grouped insights — only when expanded */}
+      {boardExpanded && totalCount > 0 && (
+        <div className="animate-fade-in">
           {SEVERITY_ORDER.map(sev => {
             const list = grouped[sev];
             if (list.length === 0) return null;
@@ -220,14 +291,14 @@ export function InsightsBoard({ data }: Props) {
         </div>
       )}
 
-      {loading && totalCount === 0 && (
+      {boardExpanded && loading && totalCount === 0 && (
         <div className="px-4 py-8 text-center text-sm text-text-muted">
           מנתח נתונים…
         </div>
       )}
 
-      {/* Hidden / muted insights — collapsed by default, expandable */}
-      {hiddenCount > 0 && (
+      {/* Hidden / muted insights — only meaningful when the board is open */}
+      {boardExpanded && hiddenCount > 0 && (
         <div className="border-t border-borderSubtle bg-surfaceMuted/30">
           <button
             onClick={() => setShowHidden(v => !v)}
@@ -467,6 +538,48 @@ function InsightRow({
         </div>
       </div>
     </li>
+  );
+}
+
+/**
+ * Severity pills shown next to the board header. When the board is collapsed
+ * they double as the at-a-glance signal — "how urgent is whatever's inside?".
+ * In compact mode we only show severities that have a non-zero count.
+ */
+function SeverityBadges({
+  counts,
+  compact,
+}: {
+  counts: Record<Severity, number>;
+  compact: boolean;
+}) {
+  const items: Array<{ sev: Severity; count: number }> = SEVERITY_ORDER
+    .map(sev => ({ sev, count: counts[sev] }))
+    .filter(x => x.count > 0);
+
+  if (items.length === 0) return null;
+
+  return (
+    <div className="flex items-center gap-1 sm:gap-1.5">
+      {items.map(({ sev, count }) => {
+        const meta = SEVERITY_META[sev];
+        return (
+          <span
+            key={sev}
+            className={cn(
+              'inline-flex items-center gap-1 rounded-full',
+              compact ? 'px-1.5 py-0.5' : 'px-2 py-0.5',
+              'text-[10px] sm:text-[11px] font-bold tabular-nums',
+              meta.badge,
+            )}
+            title={`${meta.label}: ${count}`}
+          >
+            {!compact && <span className="opacity-90">{meta.icon}</span>}
+            <span>{count}</span>
+          </span>
+        );
+      })}
+    </div>
   );
 }
 
