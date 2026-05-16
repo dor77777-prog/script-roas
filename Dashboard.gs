@@ -130,9 +130,9 @@ function buildHelpersTab_(ss) {
   sh.getRange('N1').setValue('Store Aggregates (current period)').setFontWeight('bold');
   sh.getRange('N3').setFormula(
     `=IFERROR(QUERY(${flat}!A:I, ` +
-    `"SELECT C, SUM(G), SUM(F), AVG(H) " +
-    `WHERE A >= date '"&TEXT(${dash}!$B$4,"yyyy-MM-dd")&"' " +
-    `AND A <= date '"&TEXT(${dash}!$D$4,"yyyy-MM-dd")&"' " +
+    `"SELECT C, SUM(G), SUM(F), AVG(H) ` +
+    `WHERE A >= date '"&TEXT(${dash}!$B$4,"yyyy-MM-dd")&"' ` +
+    `AND A <= date '"&TEXT(${dash}!$D$4,"yyyy-MM-dd")&"' ` +
     `GROUP BY C ORDER BY AVG(H) DESC ` +
     `LABEL SUM(G) 'Revenue', SUM(F) 'Spend', AVG(H) 'ROAS'", 1), "")`
   );
@@ -141,9 +141,9 @@ function buildHelpersTab_(ss) {
   sh.getRange('S1').setValue('Daily Totals (current period)').setFontWeight('bold');
   sh.getRange('S3').setFormula(
     `=IFERROR(QUERY(${flat}!A:I, ` +
-    `"SELECT A, SUM(G), SUM(F), SUM(G)/SUM(F) " +
-    `WHERE A >= date '"&TEXT(${dash}!$B$4,"yyyy-MM-dd")&"' " +
-    `AND A <= date '"&TEXT(${dash}!$D$4,"yyyy-MM-dd")&"' " +
+    `"SELECT A, SUM(G), SUM(F), SUM(G)/SUM(F) ` +
+    `WHERE A >= date '"&TEXT(${dash}!$B$4,"yyyy-MM-dd")&"' ` +
+    `AND A <= date '"&TEXT(${dash}!$D$4,"yyyy-MM-dd")&"' ` +
     `GROUP BY A ORDER BY SUM(G)/SUM(F) DESC ` +
     `LABEL SUM(G) 'Revenue', SUM(F) 'Spend', SUM(G)/SUM(F) 'ROAS'", 1), "")`
   );
