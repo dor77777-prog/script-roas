@@ -15,9 +15,46 @@
  * למעט הזמנות test ו-voided. current_total_price כבר מנכה החזרים על ההזמנה.
  */
 
+/**
+ * Auto-bootstrap helpers. When a Shopify call returns 401 (expired or
+ * revoked token), we try to refresh the token via Client Credentials Grant
+ * and retry the call once. The user only sees a real failure if EITHER:
+ *   - the store has no clientId/clientSecret configured (can't bootstrap), OR
+ *   - the bootstrap itself fails (e.g. clientSecret was rotated too).
+ *
+ * Otherwise the daily run "self-heals" silently and writes a log line so
+ * ops can see what happened.
+ */
+function shopifyCanAutoBootstrap_(storeId) {
+  return !!(getProp(`${storeId}.shopify.clientId`) &&
+            getProp(`${storeId}.shopify.clientSecret`));
+}
+
+function tryAutoBootstrapShopify_(storeId) {
+  if (!shopifyCanAutoBootstrap_(storeId)) {
+    Logger.log(
+      `Shopify ${storeId}: got 401 but no clientId/clientSecret configured ` +
+      `— cannot auto-refresh. Run bootstrapAllShopifyTokens manually, or ` +
+      `regenerate the token in Shopify Admin → Apps → your custom app → ` +
+      `API credentials and put it in Script Properties under ` +
+      `'${storeId}.shopify.token'.`
+    );
+    return null;
+  }
+  try {
+    const newToken = bootstrapShopifyToken(storeId);
+    Logger.log(`Shopify ${storeId}: auto-bootstrapped after 401, retrying with fresh token.`);
+    return newToken;
+  } catch (e) {
+    Logger.log(`Shopify ${storeId}: auto-bootstrap failed: ${e && e.message ? e.message : e}`);
+    return null;
+  }
+}
+
 function getShopifyRevenue(storeId, dateStr) {
   const domain = requireProp(`${storeId}.shopify.domain`).replace(/^https?:\/\//, '').replace(/\/$/, '');
-  const token  = requireProp(`${storeId}.shopify.token`);
+  let token   = requireProp(`${storeId}.shopify.token`);
+  let bootstrapTried = false;
 
   const dayStart = `${dateStr}T00:00:00+03:00`;
   const dayEnd   = `${nextDayStr_(dateStr)}T00:00:00+03:00`;
@@ -43,6 +80,17 @@ function getShopifyRevenue(storeId, dateStr) {
       Utilities.sleep(2000);
       safety++;
       continue;
+    }
+    // 401 → try refreshing the token once and retry the same URL. Guarded by
+    // bootstrapTried so a permanently bad credential doesn't loop.
+    if (code === 401 && !bootstrapTried) {
+      bootstrapTried = true;
+      const fresh = tryAutoBootstrapShopify_(storeId);
+      if (fresh) {
+        token = fresh;
+        continue; // same `url`, fresh token
+      }
+      // No bootstrap path → fall through to throw with the original 401.
     }
     if (code !== 200) {
       throw new Error(`Shopify ${storeId} ${dateStr} failed (${code}): ${res.getContentText()}`);
@@ -86,7 +134,8 @@ function getShopifyRevenue(storeId, dateStr) {
  */
 function getShopifyProductSalesForDay(storeId, dateStr) {
   const domain = requireProp(`${storeId}.shopify.domain`).replace(/^https?:\/\//, '').replace(/\/$/, '');
-  const token = requireProp(`${storeId}.shopify.token`);
+  let token = requireProp(`${storeId}.shopify.token`);
+  let bootstrapTried = false;
 
   const dayStart = `${dateStr}T00:00:00+03:00`;
   const dayEnd = `${nextDayStr_(dateStr)}T00:00:00+03:00`;
@@ -110,6 +159,11 @@ function getShopifyProductSalesForDay(storeId, dateStr) {
     });
     const code = res.getResponseCode();
     if (code === 429) { Utilities.sleep(2000); safety++; continue; }
+    if (code === 401 && !bootstrapTried) {
+      bootstrapTried = true;
+      const fresh = tryAutoBootstrapShopify_(storeId);
+      if (fresh) { token = fresh; continue; }
+    }
     if (code !== 200) {
       throw new Error(`Shopify product sales ${storeId} ${dateStr} failed (${code}): ${res.getContentText()}`);
     }
@@ -260,7 +314,7 @@ function bootstrapAllShopifyTokens() {
  */
 function getShopifyPlan(storeId) {
   const domain = requireProp(`${storeId}.shopify.domain`).replace(/^https?:\/\//, '').replace(/\/$/, '');
-  const token = requireProp(`${storeId}.shopify.token`);
+  let token = requireProp(`${storeId}.shopify.token`);
 
   const url = `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`;
   const query = `{
@@ -274,21 +328,30 @@ function getShopifyPlan(storeId) {
     }
   }`;
 
-  const res = fetchWithRetry_(url, {
-    method: 'post',
-    contentType: 'application/json',
-    headers: {
-      'X-Shopify-Access-Token': token,
-      // Explicit Accept defends against rare cases (documented during
-      // Shopify status-page incidents) where the endpoint returns HTML or
-      // XML instead of JSON. With Accept set, JSON.parse failures fall into
-      // the non-JSON branch below rather than throwing past refreshAllStoreMeta
-      // and being silently logged as a generic exception.
-      'Accept': 'application/json',
-    },
-    payload: JSON.stringify({ query: query }),
-    muteHttpExceptions: true,
-  });
+  function doFetch() {
+    return fetchWithRetry_(url, {
+      method: 'post',
+      contentType: 'application/json',
+      headers: {
+        'X-Shopify-Access-Token': token,
+        // Explicit Accept defends against rare cases (documented during
+        // Shopify status-page incidents) where the endpoint returns HTML or
+        // XML instead of JSON. With Accept set, JSON.parse failures fall into
+        // the non-JSON branch below rather than throwing past refreshAllStoreMeta
+        // and being silently logged as a generic exception.
+        'Accept': 'application/json',
+      },
+      payload: JSON.stringify({ query: query }),
+      muteHttpExceptions: true,
+    });
+  }
+
+  let res = doFetch();
+  // 401 → auto-bootstrap and try once more.
+  if (res.getResponseCode() === 401) {
+    const fresh = tryAutoBootstrapShopify_(storeId);
+    if (fresh) { token = fresh; res = doFetch(); }
+  }
   const code = res.getResponseCode();
   const responseText = res.getContentText();
   if (code !== 200) {

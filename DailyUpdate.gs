@@ -428,15 +428,55 @@ function debugTodaySpend() {
   Logger.log('  Shopify: admin.shopify.com → Orders → Total sales היום');
 }
 
+/**
+ * Sends an email when the daily update finished with errors. Resolves the
+ * recipient in three layers (most specific wins):
+ *   1. Script Property `notification.email`  ← set this for production triggers
+ *   2. `Session.getEffectiveUser().getEmail()`  ← the script's owner (works in triggers)
+ *   3. `Session.getActiveUser().getEmail()`    ← the user invoking interactively
+ *
+ * The previous version used only option 3, which returns empty under
+ * time-based triggers (the script runs as the owner, not as an active user)
+ * — meaning silent failures even though the email logic was there.
+ *
+ * Subject is prefixed with the number of errors so the inbox shows urgency
+ * at a glance. Body includes the URL of the script so the user can jump to
+ * the logs without searching.
+ */
 function notifyError_(dateStr, message) {
   try {
-    const email = Session.getActiveUser().getEmail();
-    if (email) {
-      MailApp.sendEmail({
-        to: email,
-        subject: `ROAS Tracker - שגיאות בעדכון ${dateStr}`,
-        body: message,
-      });
+    const configured = getProp('notification.email');
+    const owner = (function () {
+      try { return Session.getEffectiveUser().getEmail(); } catch (_) { return ''; }
+    })();
+    const active = (function () {
+      try { return Session.getActiveUser().getEmail(); } catch (_) { return ''; }
+    })();
+    const email = configured || owner || active;
+    if (!email) {
+      Logger.log('notifyError_: no recipient resolved (set Script Property "notification.email").');
+      return;
     }
-  } catch (_) { /* silent */ }
+    const errorCount = (message.match(/^\[/gm) || []).length || 'יש';
+    const scriptUrl = (function () {
+      try { return `https://script.google.com/home/projects/${ScriptApp.getScriptId()}/edit`; }
+      catch (_) { return ''; }
+    })();
+    const body =
+      `${message}\n\n` +
+      `——————————\n` +
+      `דיווח אוטומטי מ-ROAS Tracker · ${dateStr}\n` +
+      (scriptUrl ? `Apps Script: ${scriptUrl}\n` : '') +
+      `\n` +
+      `אם המייל הזה מטריד, שנה את הנמען או כבה אותו:\n` +
+      `Script Properties → notification.email → רוקן את הערך כדי להפסיק לקבל.`;
+    MailApp.sendEmail({
+      to: email,
+      subject: `ROAS Tracker · ${errorCount} שגיאות בעדכון ${dateStr}`,
+      body,
+    });
+    Logger.log(`notifyError_: notification sent to ${email}`);
+  } catch (e) {
+    Logger.log(`notifyError_: failed to send (${e && e.message ? e.message : e})`);
+  }
 }

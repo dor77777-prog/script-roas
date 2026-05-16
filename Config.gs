@@ -155,6 +155,10 @@ function verifyConfig() {
   }
   const mcc = getProp('googleads.loginCustomerId');
   lines.push(`googleads.loginCustomerId       (אופציונלי): ${mcc ? '✓ ' + mcc : '— (לא ב-MCC)'}`);
+  // Error-notification recipient. Without it, time-based triggers send
+  // alerts to the script owner (or nowhere if Session is unavailable).
+  const notifyEmail = getProp('notification.email');
+  lines.push(`notification.email              (התראות שגיאה): ${notifyEmail ? '✓ ' + notifyEmail : '— (יפול ל-Session owner; מומלץ להגדיר)'}`);
 
   for (const store of STORES) {
     lines.push('');
@@ -175,6 +179,13 @@ function verifyConfig() {
     } else {
       lines.push(`  shopify.token         : ✗ חסר (וגם clientId/clientSecret חסרים)`);
       issues.push(`${store.id}.shopify.token (או clientId+clientSecret למצב B)`);
+    }
+    // Auto-bootstrap readiness — clientId/secret together mean the daily run
+    // can self-heal on 401 without manual intervention.
+    if (sClientId && sClientSecret) {
+      lines.push(`  shopify auto-refresh  : ✓ (clientId+clientSecret מוגדרים — 401 יחודש אוטומטית)`);
+    } else {
+      lines.push(`  shopify auto-refresh  : ✗ (חסר clientId/clientSecret → 401 יחייב הרצה ידנית של bootstrapAllShopifyTokens)`);
     }
 
     const mToken = getProp(`${store.id}.meta.accessToken`);
