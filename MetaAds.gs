@@ -155,18 +155,44 @@ function getMetaBudgets(storeId) {
   const adAccountId = requireProp(`${storeId}.meta.adAccountId`).replace(/^act_/, '');
 
   // ---- account currency (one shot) -----------------------------------------
+  // Default to ILS only as a last resort. Silent fallback to ILS is dangerous
+  // for USD/EUR accounts — the downstream FX conversion would multiply budgets
+  // by the ILS→CAD rate (~0.45) instead of USD→CAD (~1.35), under-reporting
+  // budgets by ~3x. Log loudly when the fallback fires so audits surface it.
+  // We also opportunistically pick `account_currency` off any campaign/ad-set
+  // row that exposes it (forward-compat: if Meta starts returning it on these
+  // endpoints, we prefer the real value over the ILS fallback). (#IN-03)
   let currency = 'ILS';
+  let currencyFromAccountFetch = false;
   try {
     const acctUrl = `https://graph.facebook.com/${META_API_VERSION}/act_${adAccountId}` +
                     `?fields=currency&access_token=${encodeURIComponent(token)}`;
     const acctRes = fetchWithRetry_(acctUrl, { method: 'get', muteHttpExceptions: true });
     if (acctRes.getResponseCode() === 200) {
       const acctBody = JSON.parse(acctRes.getContentText());
-      currency = acctBody.currency || 'ILS';
+      if (acctBody.currency) {
+        currency = acctBody.currency;
+        currencyFromAccountFetch = true;
+      } else {
+        Logger.log(
+          `WARNING: Meta account currency fetch ${storeId} returned 200 but no ` +
+          `currency field; defaulting to ILS. Budgets for non-ILS accounts will ` +
+          `be mis-converted (~3x off).`
+        );
+      }
+    } else {
+      Logger.log(
+        `WARNING: Meta account currency fetch ${storeId} failed ` +
+        `(${acctRes.getResponseCode()}: ${acctRes.getContentText().slice(0, 200)}); ` +
+        `defaulting to ILS. Budgets for non-ILS accounts will be mis-converted.`
+      );
     }
-  } catch (_) {
-    // Fall back to ILS — the budget will still get FX-converted later, so a
-    // wrong currency tag is conservative but not catastrophic.
+  } catch (e) {
+    Logger.log(
+      `WARNING: Meta account currency fetch ${storeId} threw: ` +
+      `${e && e.message ? e.message : e}; defaulting to ILS. ` +
+      `Budgets for non-ILS accounts will be mis-converted.`
+    );
   }
 
   function toMajor(rawStr) {
@@ -188,6 +214,13 @@ function getMetaBudgets(storeId) {
     }
     const body = JSON.parse(res.getContentText());
     for (const c of (body.data || [])) {
+      // If the account-fetch fell back to ILS and a row happens to carry
+      // `account_currency`, prefer the real value the first time we see one.
+      if (!currencyFromAccountFetch && c.account_currency) {
+        currency = c.account_currency;
+        currencyFromAccountFetch = true;
+        Logger.log(`Meta budgets ${storeId}: recovered currency=${currency} from campaign row.`);
+      }
       campaigns[c.id] = {
         dailyBudget: toMajor(c.daily_budget),
         lifetimeBudget: toMajor(c.lifetime_budget),
@@ -213,6 +246,12 @@ function getMetaBudgets(storeId) {
     }
     const body = JSON.parse(res.getContentText());
     for (const a of (body.data || [])) {
+      // Same forward-compat recovery as the campaigns loop above.
+      if (!currencyFromAccountFetch && a.account_currency) {
+        currency = a.account_currency;
+        currencyFromAccountFetch = true;
+        Logger.log(`Meta budgets ${storeId}: recovered currency=${currency} from ad-set row.`);
+      }
       adSets[a.id] = {
         dailyBudget: toMajor(a.daily_budget),
         lifetimeBudget: toMajor(a.lifetime_budget),
