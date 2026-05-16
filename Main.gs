@@ -12,7 +12,7 @@ function setupAll() {
   Logger.log('================================');
   Logger.log('Setup complete.');
   Logger.log('Spreadsheet URL: ' + ss.getUrl());
-  Logger.log('Daily trigger: every day at 06:00 Asia/Jerusalem');
+  Logger.log('Daily trigger: every day at 00:05 Asia/Jerusalem');
   Logger.log('================================');
   return ss.getUrl();
 }
@@ -30,12 +30,21 @@ function installDailyTrigger() {
   removeDailyTrigger();
   ScriptApp.newTrigger('runDailyUpdate')
     .timeBased()
-    .atHour(6)
-    .nearMinute(15)
+    .atHour(0)
+    .nearMinute(5)
     .everyDays(1)
     .inTimezone(TZ)
     .create();
-  Logger.log('Daily trigger installed: 06:15 Asia/Jerusalem');
+  Logger.log('Daily trigger installed: 00:05 Asia/Jerusalem');
+
+  // הרצה מיידית עבור היום הקודם, כדי לא לחכות עד 00:05 מחר.
+  // אם נכשל - הטריגר עדיין מתוזמן, רק לוג של השגיאה.
+  try {
+    Logger.log('Running daily update now for yesterday...');
+    runDailyUpdate();
+  } catch (e) {
+    Logger.log(`Immediate run failed: ${e && e.message ? e.message : e}. Scheduled trigger remains active.`);
+  }
 }
 
 function removeDailyTrigger() {
@@ -61,7 +70,7 @@ function onOpen() {
       .addItem('הרץ לתאריך מסוים…', 'promptRunForDate_')
       .addItem('מילוי היסטורי (טווח)…', 'promptBackfill_')
       .addSeparator()
-      .addItem('התקן טריגר יומי (06:15)', 'installDailyTrigger')
+      .addItem('התקן טריגר יומי (00:05) + הרצה מיידית', 'installDailyTrigger')
       .addItem('הסר טריגר יומי', 'removeDailyTrigger')
       .addSeparator()
       .addItem('בדוק הגדרות (verifyConfig)', 'showVerifyConfig_')

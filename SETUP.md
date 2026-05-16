@@ -725,7 +725,7 @@ curl "https://graph.facebook.com/v20.0/act_AD_ACCOUNT_ID/insights?date_preset=ye
 3. בלוגים (View → Logs / Executions) צפויה הודעה:
    ```
    Spreadsheet URL: https://docs.google.com/spreadsheets/d/...
-   Daily trigger: every day at 06:00 Asia/Jerusalem
+   Daily trigger: every day at 00:05 Asia/Jerusalem
    ```
 4. פתח את ה-URL → ודא שנוצרו 4 טאבים: `סיכום`, `uzoshop`, `Zol Plus`, `360usmile`.
 
@@ -763,7 +763,8 @@ backfillRange('2026-05-01', '2026-05-15')
 
 ## איך זה עובד יום-יום
 
-- כל יום ב-06:15 שעון ישראל, הטריגר מפעיל את `runDailyUpdate`.
+- כל יום ב-00:05 שעון ישראל, הטריגר מפעיל את `runDailyUpdate` עבור היום שזה עתה הסתיים.
+- בנוסף, כשמתקינים את הטריגר (`setupAll` או `installDailyTrigger` ידני), הוא רץ פעם אחת מיידית לתפוס את היום הקודם בלי להמתין עד חצות.
 - הפונקציה מחשבת מה "היום הקודם" לפי `Asia/Jerusalem`.
 - שולפת נתונים מכל ה-APIs, מבצעת המרת מטבע, וכותבת לגיליון.
 - אם חודש חדש מתחיל — הסקריפט מצרף בלוק חדש בסוף הטאב.
