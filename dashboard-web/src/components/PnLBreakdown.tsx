@@ -59,7 +59,9 @@ const SOURCE_COLOR: Record<CostSource, string> = {
 };
 
 export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo }: Props) {
-  const [open, setOpen] = useState(false);
+  // Default open: P&L is the "am I making money" question — too important to
+  // hide behind a click. User can still collapse if they want a quieter view.
+  const [open, setOpen] = useState(true);
 
   // Hydrate live billing data after mount + re-render when user adds entries
   // via BillingSettings (custom event from lib/billing).
@@ -110,69 +112,79 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo }: Props)
 
   const hasConfiguredFixed = activeForScope.length > 0 || oneTimeInScope.length > 0;
 
+  // Total costs displayed in the hero strip (everything between revenue and
+  // net profit). Used to size the relative bars side-by-side.
+  const totalCosts = current.spend + current.cogs + current.transactionFees + current.fixedCosts;
+  const maxAmount = Math.max(revenue, totalCosts, Math.abs(finalProfit), 1);
+
   return (
-    <section className="rounded-2xl bg-surface border border-borderSubtle shadow-card overflow-hidden">
-      {/* Clickable header */}
-      <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        aria-expanded={open}
-        className={cn(
-          'w-full text-start px-4 sm:px-6 py-3 sm:py-4',
-          'border-b border-borderSubtle',
-          'bg-gradient-to-l from-primary/4 to-surface',
-          'hover:from-primary/8 hover:to-surfaceMuted/40 transition-colors',
-        )}
+    <section className="rounded-2xl bg-surface border border-borderSubtle shadow-elevated overflow-hidden">
+      {/* Hero strip — always visible. Three big numbers side-by-side with
+          proportional bars so a glance answers "did I make money?" without
+          expanding anything. */}
+      <div
+        className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4 bg-gradient-to-br from-primary/[0.06] via-surface to-surface relative"
       >
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <span className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-primary/10 text-primary shrink-0">
-              <Receipt size={16} />
+        <div className="flex items-start justify-between gap-3 mb-4">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <span className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary text-white shrink-0 shadow-sm">
+              <Receipt size={17} />
             </span>
             <div className="min-w-0">
-              <h2 className="text-sm sm:text-base font-bold text-text-primary tracking-tight leading-tight">
-                P&amp;L מפורט
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-[0.12em] font-semibold text-text-muted">
+                Profit &amp; Loss
+              </div>
+              <h2 className="text-base sm:text-xl font-bold text-text-primary tracking-tight leading-tight">
+                כמה נשאר ביד?
               </h2>
-              <div className="text-[11px] sm:text-xs text-text-muted mt-0.5 leading-tight">
-                כל ההוצאות, שורה אחר שורה, עד הרווח הנקי האמיתי
-              </div>
             </div>
           </div>
-
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            <div className="text-end">
-              <div className="text-[10px] text-text-muted uppercase tracking-wide">
-                רווח נטו
-              </div>
-              <div
-                className={cn(
-                  'text-sm sm:text-base font-bold tabular-nums leading-tight',
-                  finalProfit >= 0 ? 'text-roas-green' : 'text-roas-red',
-                )}
-              >
-                <span className="text-[10px] text-text-muted font-medium ml-1">CAD</span>
-                {formatCurrency(finalProfit)}
-              </div>
-              {revenue > 0 && (
-                <div className="text-[10px] text-text-muted tabular-nums leading-tight">
-                  {(current.trueMargin * 100).toFixed(1)}% מרג&apos;ין
-                </div>
-              )}
-            </div>
-            <ChevronDown
-              size={18}
-              className={cn(
-                'text-text-muted transition-transform duration-DEFAULT',
-                open && 'rotate-180',
-              )}
-              aria-hidden
-            />
-          </div>
+          <button
+            type="button"
+            onClick={() => setOpen(v => !v)}
+            aria-expanded={open}
+            className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-medium text-text-secondary hover:text-text-primary px-2 py-1 rounded-md hover:bg-surfaceMuted transition-colors shrink-0"
+          >
+            {open ? 'הסתר פירוט' : 'הצג פירוט מלא'}
+            {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+          </button>
         </div>
-      </button>
+
+        <div className="grid grid-cols-3 gap-3 sm:gap-5">
+          <HeroStat
+            label="הכנסות"
+            amount={revenue}
+            barWidthPct={(revenue / maxAmount) * 100}
+            tone="positive"
+            sub={revenue > 0 ? '100% — בסיס החישוב' : 'אין הכנסות בטווח'}
+          />
+          <HeroStat
+            label="סך עלויות"
+            amount={totalCosts}
+            barWidthPct={(totalCosts / maxAmount) * 100}
+            tone="negative"
+            sub={
+              revenue > 0
+                ? `${((totalCosts / revenue) * 100).toFixed(1)}% מההכנסות`
+                : '—'
+            }
+          />
+          <HeroStat
+            label="רווח נטו"
+            amount={finalProfit}
+            barWidthPct={(Math.abs(finalProfit) / maxAmount) * 100}
+            tone={finalProfit >= 0 ? 'profit' : 'loss'}
+            sub={
+              revenue > 0
+                ? `${(current.trueMargin * 100).toFixed(1)}% מרג'ין`
+                : '—'
+            }
+          />
+        </div>
+      </div>
 
       {open && (
-        <div className="p-4 sm:p-5 animate-fade-in">
+        <div className="p-4 sm:p-5 border-t border-borderSubtle animate-fade-in">
           {!hasConfiguredFixed && (
             <div className="mb-4 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 flex items-start gap-2">
               <AlertCircle size={14} className="text-amber-700 shrink-0 mt-0.5" />
@@ -315,6 +327,58 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo }: Props)
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * One of the three big numbers in the hero strip. Each shows a label, the
+ * amount in CAD with tabular nums, a proportional bar (relative to the
+ * largest of the three so the eye can compare instantly), and a sub-line.
+ */
+function HeroStat({
+  label,
+  amount,
+  barWidthPct,
+  tone,
+  sub,
+}: {
+  label: string;
+  amount: number;
+  barWidthPct: number;
+  tone: 'positive' | 'negative' | 'profit' | 'loss';
+  sub?: string;
+}) {
+  const amountColor =
+    tone === 'positive' ? 'text-text-primary'
+    : tone === 'negative' ? 'text-text-primary'
+    : tone === 'profit' ? 'text-roas-green'
+    : 'text-roas-red';
+  const barColor =
+    tone === 'positive' ? 'bg-primary'
+    : tone === 'negative' ? 'bg-text-muted/55'
+    : tone === 'profit' ? 'bg-roas-green'
+    : 'bg-roas-red';
+  return (
+    <div className="space-y-1.5">
+      <div className="text-[10px] sm:text-[11px] uppercase tracking-[0.1em] font-semibold text-text-muted">
+        {label}
+      </div>
+      <div className={cn('text-xl sm:text-3xl font-bold tabular-nums leading-none', amountColor)}>
+        <span className="text-[10px] sm:text-xs text-text-muted font-medium ml-1.5 align-baseline">
+          CAD
+        </span>
+        {formatCurrency(amount)}
+      </div>
+      <div className="h-1.5 sm:h-2 rounded-full bg-text-muted/15 overflow-hidden">
+        <div
+          className={cn('h-full rounded-full transition-all duration-500 ease-out', barColor)}
+          style={{ width: `${Math.max(2, Math.min(100, barWidthPct))}%` }}
+        />
+      </div>
+      {sub && (
+        <div className="text-[10px] sm:text-[11px] text-text-muted tabular-nums">{sub}</div>
+      )}
+    </div>
   );
 }
 

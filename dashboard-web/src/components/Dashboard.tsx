@@ -14,6 +14,7 @@ import {
   Store,
   CalendarDays,
   Megaphone,
+  Receipt,
 } from 'lucide-react';
 import type { DashboardData, Filters as F } from '@/lib/types';
 import { computePresetRange, previousRange } from '@/lib/presets';
@@ -52,10 +53,11 @@ const fetcher = async (url: string) => {
 
 const initialPreset = 'this_month';
 
-type TabKey = 'home' | 'analysis' | 'campaigns' | 'products' | 'detail';
+type TabKey = 'home' | 'pnl' | 'analysis' | 'campaigns' | 'products' | 'detail';
 
 const TABS: TabDef<TabKey>[] = [
   { key: 'home',      label: 'בית',     icon: <Home size={16} /> },
+  { key: 'pnl',       label: 'P&L',     icon: <Receipt size={16} /> },
   { key: 'analysis',  label: 'ניתוח',    icon: <TrendingUp size={16} /> },
   { key: 'campaigns', label: 'קמפיינים', icon: <Megaphone size={16} /> },
   { key: 'products',  label: 'מוצרים',   icon: <Package size={16} /> },
@@ -178,6 +180,14 @@ export function Dashboard() {
                 aiReportSignal={aiReportSignal}
               />
             )}
+            {activeTab === 'pnl' && (
+              <PnLTab
+                data={data}
+                filtered={filtered}
+                filters={filters}
+                setFilters={setFilters}
+              />
+            )}
             {activeTab === 'analysis' && (
               <AnalysisTab data={data} filtered={filtered} filters={filters} setFilters={setFilters} />
             )}
@@ -267,7 +277,44 @@ function HomeTab({
       />
       <KpiCards current={filtered.curAgg} previous={filtered.prevAgg} series={filtered.cur} />
 
-      {/* ===== Full P&L breakdown — every cost line, true net profit ===== */}
+      {/* ===== Per-store cards ===== */}
+      <SectionIntro
+        icon={<Store size={18} />}
+        title="ביצועים לפי חנות"
+        description="כרטיס לכל חנות עם ה-ROAS, ההכנסות, ההוצאות, והרווח הגולמי לתקופה הנבחרת. החנות עם ROAS הכי גבוה מקבלת אייקון מובילה."
+      />
+      <PerStoreCards data={filtered.storeAggs} bare />
+    </div>
+  );
+}
+
+// ============================================================================
+// Tab: P&L — dedicated profit & loss surface. Pulled out of HomeTab to give
+// it room to breathe; the home tab is for "at a glance" while this one is
+// the "where did the money go?" deep dive.
+// ============================================================================
+function PnLTab({
+  data,
+  filtered,
+  filters,
+  setFilters,
+}: {
+  data: DashboardData;
+  filtered: FilteredView;
+  filters: F;
+  setFilters: (next: F) => void;
+}) {
+  return (
+    <div className="space-y-4 sm:space-y-5 animate-fade-in-up">
+      <SectionIntro
+        icon={<Receipt size={20} />}
+        title="הרווח שלך לתקופה"
+        description="כל ההכנסות פחות כל ההוצאות — ad spend, COGS (25%), עמלות עיבוד (6.5%), ועלויות חודשיות קבועות (מנויים + חד-פעמיים) — עד לרווח נטו אמיתי. שנה טווח או חנות וכל המספרים יתעדכנו."
+        formula="רווח נטו = הכנסות − Ad Spend − COGS − Transaction Fees − Fixed Costs"
+      />
+
+      <Filters filters={filters} stores={data.stores} onChange={setFilters} />
+
       <div className="space-y-3">
         <div className="flex justify-end">
           <BillingSettings storeNames={data.stores} />
@@ -279,14 +326,6 @@ function HomeTab({
           rangeTo={filters.range.to}
         />
       </div>
-
-      {/* ===== Per-store cards ===== */}
-      <SectionIntro
-        icon={<Store size={18} />}
-        title="ביצועים לפי חנות"
-        description="כרטיס לכל חנות עם ה-ROAS, ההכנסות, ההוצאות, והרווח הגולמי לתקופה הנבחרת. החנות עם ROAS הכי גבוה מקבלת אייקון מובילה."
-      />
-      <PerStoreCards data={filtered.storeAggs} bare />
     </div>
   );
 }

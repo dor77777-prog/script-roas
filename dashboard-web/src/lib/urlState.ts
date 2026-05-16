@@ -21,9 +21,9 @@
 import type { Filters, PresetKey, DateRange } from './types';
 import { computePresetRange } from './presets';
 
-export type TabKey = 'home' | 'analysis' | 'campaigns' | 'products' | 'detail';
+export type TabKey = 'home' | 'pnl' | 'analysis' | 'campaigns' | 'products' | 'detail';
 
-const TAB_VALUES = new Set<TabKey>(['home', 'analysis', 'campaigns', 'products', 'detail']);
+const TAB_VALUES = new Set<TabKey>(['home', 'pnl', 'analysis', 'campaigns', 'products', 'detail']);
 const PRESET_VALUES = new Set<PresetKey>([
   'yesterday', 'this_month', 'this_week',
   'last_7_days', 'last_month', 'last_30_days', 'custom',

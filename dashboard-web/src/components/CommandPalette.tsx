@@ -23,6 +23,7 @@ import {
   ExternalLink,
   Bot,
   Command as CmdIcon,
+  Receipt,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -51,7 +52,7 @@ import type { ProductsResponse } from '@/app/api/products/route';
  * users / touch users.
  */
 
-type TabKey = 'home' | 'analysis' | 'campaigns' | 'products' | 'detail';
+type TabKey = 'home' | 'pnl' | 'analysis' | 'campaigns' | 'products' | 'detail';
 
 const fetcher = (url: string) => fetch(url).then(r => (r.ok ? r.json() : null));
 
@@ -140,6 +141,7 @@ export function CommandPalette({
     // Navigation
     const tabs: Array<{ key: TabKey; label: string; icon: React.ReactNode; search: string }> = [
       { key: 'home',      label: 'מעבר ל-בית',     icon: <Home size={15} />,        search: 'בית home overview ראשי' },
+      { key: 'pnl',       label: 'מעבר ל-P&L',     icon: <Receipt size={15} />,     search: 'pnl רווח הוצאות profit loss' },
       { key: 'analysis',  label: 'מעבר ל-ניתוח',    icon: <TrendingUp size={15} />,  search: 'ניתוח analysis trends גרף' },
       { key: 'campaigns', label: 'מעבר ל-קמפיינים', icon: <Megaphone size={15} />,    search: 'קמפיינים campaigns ads מודעות' },
       { key: 'products',  label: 'מעבר ל-מוצרים',   icon: <Package size={15} />,     search: 'מוצרים products items' },
