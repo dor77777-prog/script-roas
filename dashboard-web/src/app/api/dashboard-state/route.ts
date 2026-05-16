@@ -5,6 +5,31 @@ import { fetchDashboardState, upsertDashboardStateKey } from '@/lib/sheets';
 // hard need to revalidate aggressively. We let the client poll us every ~30s.
 export const dynamic = 'force-dynamic';
 
+/**
+ * Translate raw Google API errors into Hebrew messages safe to render in the
+ * SyncIndicator popover. Raw messages embed the spreadsheet ID and service
+ * account email, neither of which a partner UI user needs to see. The full
+ * raw message is still logged server-side via console.error for ops.
+ */
+function userFacingError(message: string): string {
+  if (/permission|forbidden|403/i.test(message)) {
+    return 'הסנכרון נכשל: הרשאות אינן מספיקות. ודא ש-Service Account מוגדר כ-Editor על הגיליון.';
+  }
+  if (/not found|404|Unable to parse range/i.test(message)) {
+    return 'הסנכרון נכשל: הגיליון או הטאב לא נמצאו. בדוק את SPREADSHEET_ID.';
+  }
+  if (/quota|429|rate ?limit/i.test(message)) {
+    return 'הסנכרון נכשל: חרגנו ממכסת Google. נסה שוב בעוד דקה.';
+  }
+  if (/Missing GOOGLE_CLIENT_EMAIL|GOOGLE_PRIVATE_KEY|SPREADSHEET_ID/i.test(message)) {
+    return 'הסנכרון נכשל: משתני סביבה של Google חסרים בשרת.';
+  }
+  if (/ENOTFOUND|ECONNREFUSED|fetch failed|network/i.test(message)) {
+    return 'הסנכרון נכשל: שגיאת רשת. בדוק את החיבור לאינטרנט.';
+  }
+  return 'הסנכרון נכשל: שגיאה לא צפויה. בדוק את הלוגים בצד השרת.';
+}
+
 export async function GET() {
   try {
     const data = await fetchDashboardState();
@@ -20,8 +45,10 @@ export async function GET() {
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    // Log the raw message server-side so ops can see spreadsheet ID, service
+    // account email, etc. — but don't leak those to the client UI.
     console.error('dashboard-state GET failed:', message);
-    return NextResponse.json({ kv: {}, error: message }, { status: 200 });
+    return NextResponse.json({ kv: {}, error: userFacingError(message) }, { status: 200 });
   }
 }
 
@@ -36,6 +63,6 @@ export async function POST(req: Request) {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('dashboard-state POST failed:', message);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: userFacingError(message) }, { status: 500 });
   }
 }

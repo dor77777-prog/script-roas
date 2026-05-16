@@ -6,6 +6,19 @@ import { fetchStoreMeta } from '@/lib/sheets';
 export const revalidate = 3600;
 export const dynamic = 'force-dynamic';
 
+function userFacingError(message: string): string {
+  if (/permission|forbidden|403/i.test(message)) {
+    return 'טעינת store-meta נכשלה: הרשאות אינן מספיקות.';
+  }
+  if (/not found|404/i.test(message)) {
+    return 'טעינת store-meta נכשלה: הגיליון לא נמצא.';
+  }
+  if (/quota|429/i.test(message)) {
+    return 'טעינת store-meta נכשלה: חרגנו ממכסת Google.';
+  }
+  return 'טעינת store-meta נכשלה: שגיאה לא צפויה.';
+}
+
 export async function GET() {
   try {
     const rows = await fetchStoreMeta();
@@ -22,6 +35,8 @@ export async function GET() {
     console.error('store-meta fetch failed:', message);
     // Return empty rows on failure so the dashboard renders without the
     // auto-detect feature instead of breaking BillingSettings entirely.
-    return NextResponse.json({ rows: [], error: message }, { status: 200 });
+    // Sanitize the error message before sending — raw Google API messages
+    // leak the spreadsheet ID and service account email into the client.
+    return NextResponse.json({ rows: [], error: userFacingError(message) }, { status: 200 });
   }
 }
