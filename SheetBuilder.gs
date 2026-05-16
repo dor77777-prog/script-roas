@@ -871,8 +871,12 @@ function backfillFlatFromStoreTabs() {
 // Products-daily tab - one row per (date, store, product). LTR, hidden by default.
 // ============================================================================
 
+// NOTE: Orders is intentionally appended at the END (col H) rather than next
+// to Units. This keeps existing rows (from before Orders existed) compatible —
+// their Gross Revenue stays in col G and is read correctly.
 const PRODUCTS_DAILY_HEADERS = [
-  'Date', 'Store ID', 'Store', 'Product ID', 'Product Title', 'Units', 'Gross Revenue (CAD)'
+  'Date', 'Store ID', 'Store', 'Product ID', 'Product Title',
+  'Units', 'Gross Revenue (CAD)', 'Orders'
 ];
 
 function ensureProductsDailyTab_(ss) {
@@ -895,9 +899,10 @@ function ensureProductsDailyTab_(ss) {
     sh.setColumnWidth(2, 90);   // Store ID
     sh.setColumnWidth(3, 110);  // Store Name
     sh.setColumnWidth(4, 130);  // Product ID
-    sh.setColumnWidth(5, 320);  // Product Title
+    sh.setColumnWidth(5, 300);  // Product Title
     sh.setColumnWidth(6, 70);   // Units
     sh.setColumnWidth(7, 130);  // Gross Revenue
+    sh.setColumnWidth(8, 70);   // Orders
   }
   if (justCreated) {
     try { sh.hideSheet(); } catch (_) {}
@@ -939,6 +944,7 @@ function writeProductSalesForDay_(ss, dateStr, storeId, storeName, productRows) 
     p.productTitle || '',
     parseInt(p.units || 0, 10),
     round2_(p.revenueCad || 0),
+    parseInt(p.orders || 0, 10),
   ]);
 
   const combined = keptRows.concat(newRowsArr);
@@ -950,6 +956,7 @@ function writeProductSalesForDay_(ss, dateStr, storeId, storeName, productRows) 
 
   sh.getRange(2, 1, combined.length, PRODUCTS_DAILY_HEADERS.length).setValues(combined);
   sh.getRange(2, 1, combined.length, 1).setNumberFormat('yyyy-mm-dd').setHorizontalAlignment('center');
-  sh.getRange(2, 6, combined.length, 1).setNumberFormat('#,##0').setHorizontalAlignment('center');
-  sh.getRange(2, 7, combined.length, 1).setNumberFormat('#,##0.00');
+  sh.getRange(2, 6, combined.length, 1).setNumberFormat('#,##0').setHorizontalAlignment('center');   // Units
+  sh.getRange(2, 7, combined.length, 1).setNumberFormat('#,##0.00');                                  // Gross Revenue
+  sh.getRange(2, 8, combined.length, 1).setNumberFormat('#,##0').setHorizontalAlignment('center');   // Orders
 }

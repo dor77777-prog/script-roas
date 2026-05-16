@@ -5,11 +5,14 @@ import useSWR from 'swr';
 import {
   RefreshCw,
   AlertCircle,
+  Home,
   TrendingUp,
-  Store,
-  CalendarDays,
   Package,
   Table,
+  Radio,
+  Target,
+  Store,
+  CalendarDays,
 } from 'lucide-react';
 import type { DashboardData, Filters as F } from '@/lib/types';
 import { computePresetRange, previousRange } from '@/lib/presets';
@@ -22,7 +25,8 @@ import { MonthlyTables } from './MonthlyTables';
 import { DetailTable } from './DetailTable';
 import { TodayLive } from './TodayLive';
 import { ProductsTable } from './ProductsTable';
-import { CollapsibleSection } from './CollapsibleSection';
+import { TabNav, type TabDef } from './TabNav';
+import { SectionIntro } from './SectionIntro';
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -35,6 +39,15 @@ const fetcher = async (url: string) => {
 
 const initialPreset = 'yesterday';
 
+type TabKey = 'home' | 'analysis' | 'products' | 'detail';
+
+const TABS: TabDef<TabKey>[] = [
+  { key: 'home', label: 'בית', icon: <Home size={16} /> },
+  { key: 'analysis', label: 'ניתוח', icon: <TrendingUp size={16} /> },
+  { key: 'products', label: 'מוצרים', icon: <Package size={16} /> },
+  { key: 'detail', label: 'פירוט', icon: <Table size={16} /> },
+];
+
 export function Dashboard() {
   const { data, error, isLoading, mutate, isValidating } = useSWR<DashboardData>(
     '/api/data',
@@ -42,6 +55,7 @@ export function Dashboard() {
     { refreshInterval: 60_000, revalidateOnFocus: true },
   );
 
+  const [activeTab, setActiveTab] = useState<TabKey>('home');
   const [filters, setFilters] = useState<F>(() => ({
     preset: initialPreset,
     range: computePresetRange(initialPreset),
@@ -67,10 +81,12 @@ export function Dashboard() {
   return (
     <div dir="rtl" className="min-h-screen bg-background">
       <Header
-        lastUpdated={data?.lastUpdated}
         isRefreshing={isValidating}
         onRefresh={() => mutate()}
       />
+
+      {/* Tabs only render once data is in — keeps initial paint clean */}
+      {data && <TabNav tabs={TABS} active={activeTab} onChange={setActiveTab} />}
 
       <main className="max-w-7xl mx-auto px-3 sm:px-4 md:px-8 py-4 sm:py-6 md:py-8 space-y-4 sm:space-y-5">
         {error && (
@@ -91,67 +107,18 @@ export function Dashboard() {
 
         {data && filtered && (
           <>
-            {/* ===== Always visible: today's live snapshot ===== */}
-            <TodayLive rows={data.rows} fxIlsToCad={data.fxIlsToCad} />
-
-            {/* ===== Filters (compact, can hide preset palette on small screens) ===== */}
-            <Filters filters={filters} stores={data.stores} onChange={setFilters} />
-
-            {/* ===== Above the fold: KPIs + per-store breakdown ===== */}
-            <KpiCards current={filtered.curAgg} previous={filtered.prevAgg} />
-
-            <CollapsibleSection
-              title="ביצועים לפי חנות"
-              icon={<Store size={18} />}
-              defaultOpen
-              storageKey="store-breakdown"
-              subtitle={`${filtered.visibleStores.length} ${filtered.visibleStores.length === 1 ? 'חנות' : 'חנויות'} בטווח הנבחר`}
-            >
-              <PerStoreCards data={filtered.storeAggs} bare />
-            </CollapsibleSection>
-
-            {/* ===== Trend chart (open by default) ===== */}
-            <CollapsibleSection
-              title="מגמת ROAS לאורך זמן"
-              icon={<TrendingUp size={18} />}
-              defaultOpen
-              storageKey="roas-chart"
-              subtitle={`${filtered.series.length} ימים`}
-            >
-              <RoasChart data={filtered.series} stores={filtered.visibleStores} bare />
-            </CollapsibleSection>
-
-            {/* ===== Below the fold: collapsed by default ===== */}
-            <CollapsibleSection
-              title="מוצרים שנמכרו"
-              icon={<Package size={18} />}
-              storageKey="products"
-              subtitle="פירוט מכירות לפי מוצר — יומי / שבועי / חודשי / שנתי"
-            >
-              <ProductsTable
-                range={filters.range}
-                store={filters.store}
-                stores={data.stores}
-              />
-            </CollapsibleSection>
-
-            <CollapsibleSection
-              title="טבלאות חודשיות"
-              icon={<CalendarDays size={18} />}
-              storageKey="monthly"
-              subtitle="טבלה לכל חודש — לפי חנות או סיכום משולב"
-            >
-              <MonthlyTables rows={data.rows} stores={data.stores} bare />
-            </CollapsibleSection>
-
-            <CollapsibleSection
-              title="פירוט יומי"
-              icon={<Table size={18} />}
-              storageKey="detail"
-              subtitle="100 השורות האחרונות בטווח הנבחר"
-            >
-              <DetailTable rows={filtered.cur} bare />
-            </CollapsibleSection>
+            {activeTab === 'home' && (
+              <HomeTab data={data} filtered={filtered} filters={filters} setFilters={setFilters} />
+            )}
+            {activeTab === 'analysis' && (
+              <AnalysisTab data={data} filtered={filtered} filters={filters} setFilters={setFilters} />
+            )}
+            {activeTab === 'products' && (
+              <ProductsTab data={data} filters={filters} setFilters={setFilters} />
+            )}
+            {activeTab === 'detail' && (
+              <DetailTab filtered={filtered} filters={filters} setFilters={setFilters} stores={data.stores} />
+            )}
 
             <Footer lastUpdated={data.lastUpdated} />
           </>
@@ -161,12 +128,184 @@ export function Dashboard() {
   );
 }
 
+// ============================================================================
+// Tab: HOME — at-a-glance snapshot. No filters; this is the "what's
+// happening right now + this period" view.
+// ============================================================================
+function HomeTab({
+  data,
+  filtered,
+  filters,
+  setFilters,
+}: {
+  data: DashboardData;
+  filtered: NonNullable<ReturnType<typeof Dashboard> extends infer _ ? never : never> | {
+    curAgg: ReturnType<typeof aggregate>;
+    prevAgg: ReturnType<typeof aggregate>;
+    storeAggs: ReturnType<typeof aggregateByStore>;
+    series: ReturnType<typeof dailySeries>;
+    visibleStores: string[];
+    cur: DashboardData['rows'];
+  };
+  filters: F;
+  setFilters: (next: F) => void;
+}) {
+  return (
+    <div className="space-y-4 sm:space-y-5">
+      {/* ===== Live snapshot ===== */}
+      <SectionIntro
+        icon={<Radio size={20} />}
+        title="היום עד לרגע זה"
+        description="הכנסות Shopify בזמן אמת + הוצאות Meta/Google (עם פיגור של ~20 דק' מצד הפלטפורמה). מתעדכן אוטומטית כל 15 דקות עד חצות."
+      />
+      <TodayLive rows={data.rows} fxIlsToCad={data.fxIlsToCad} />
+
+      {/* ===== Filters (apply to KPI + per-store below) ===== */}
+      <SectionIntro
+        icon={<CalendarDays size={20} />}
+        title="טווח לבחירה"
+        description="הסינון שלמטה משפיע על כל הסיכומים בעמוד הזה ובלשונית 'ניתוח'. הלשונית 'מוצרים' משתמשת בסינון משלה."
+      />
+      <Filters filters={filters} stores={data.stores} onChange={setFilters} />
+
+      {/* ===== Summary KPIs ===== */}
+      <SectionIntro
+        icon={<Target size={20} />}
+        title="מדדים מסכמים לתקופה"
+        description="הסיכום של כל החנויות הנבחרות בטווח שבחרת. כל מספר מושווה לתקופה הקודמת באותו אורך."
+        formula="ROAS = הכנסות / סך הוצאות פרסום    •    רווח נטו = הכנסות − הוצאות − COGS (25%)"
+      />
+      <KpiCards current={filtered.curAgg} previous={filtered.prevAgg} />
+
+      {/* ===== Per-store cards ===== */}
+      <SectionIntro
+        icon={<Store size={20} />}
+        title="ביצועים לפי חנות"
+        description="כרטיס לכל חנות עם ה-ROAS, ההכנסות, ההוצאות, והרווח הגולמי לתקופה הנבחרת. החנות עם ROAS הכי גבוה מקבלת אייקון מובילה, החנות עם ROAS נמוך מ-2 מסומנת כדורשת בחינה."
+      />
+      <PerStoreCards data={filtered.storeAggs} bare />
+    </div>
+  );
+}
+
+// ============================================================================
+// Tab: ANALYSIS — trend chart + monthly breakdown tables.
+// ============================================================================
+function AnalysisTab({
+  data,
+  filtered,
+  filters,
+  setFilters,
+}: {
+  data: DashboardData;
+  filtered: {
+    series: ReturnType<typeof dailySeries>;
+    visibleStores: string[];
+  };
+  filters: F;
+  setFilters: (next: F) => void;
+}) {
+  return (
+    <div className="space-y-4 sm:space-y-5">
+      <SectionIntro
+        icon={<CalendarDays size={20} />}
+        title="טווח לניתוח"
+        description="הסינון מטה משפיע על גרף המגמה. הטבלאות החודשיות מציגות את כל החודשים בכל מקרה (לא מסונן)."
+      />
+      <Filters filters={filters} stores={data.stores} onChange={setFilters} />
+
+      <SectionIntro
+        icon={<TrendingUp size={20} />}
+        title="מגמת ROAS לאורך זמן"
+        description="קו לכל חנות. הקו האדום-מקווקו מציין את היעד הפנימי שלך — ROAS 3.0. רוצה לראות חנות אחת? סנן למעלה."
+      />
+      <div className="rounded-xl bg-surface border border-border shadow-card overflow-hidden">
+        <RoasChart data={filtered.series} stores={filtered.visibleStores} bare />
+      </div>
+
+      <SectionIntro
+        icon={<CalendarDays size={20} />}
+        title="טבלאות חודשיות"
+        description="טבלה לכל חודש עם שורה לכל יום. ROAS צבוע: אדום (<2), כתום (2-2.7), ירוק (2.7-3), כחול (>3). יום עם הוצאה אך ללא מכירה מסומן בשחור עם '0'."
+      />
+      <div className="rounded-xl bg-surface border border-border shadow-card overflow-hidden">
+        <MonthlyTables rows={data.rows} stores={data.stores} bare />
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Tab: PRODUCTS — products sold breakdown with its own scope.
+// ============================================================================
+function ProductsTab({
+  data,
+  filters,
+  setFilters,
+}: {
+  data: DashboardData;
+  filters: F;
+  setFilters: (next: F) => void;
+}) {
+  return (
+    <div className="space-y-4 sm:space-y-5">
+      <SectionIntro
+        icon={<Package size={20} />}
+        title="מוצרים שנמכרו"
+        description="כל פריט שנמכר בחנויות שלך, מקובץ לפי תקופה. אפשר לראות יום ספציפי, שבוע, חודש, חצי-שנה, או שנה. הסינון מימין משלים את הסינון הגלובלי — בחר חנות בודדת או יום בודד כדי להתמקד."
+        formula="הכנסה ברוטו = מחיר ליחידה × כמות   •   לפני הנחות והחזרים"
+      />
+
+      {/* Show global filter too so user knows what date range is active */}
+      <Filters filters={filters} stores={data.stores} onChange={setFilters} />
+
+      <div className="rounded-xl bg-surface border border-border shadow-card overflow-hidden">
+        <ProductsTable
+          range={filters.range}
+          store={filters.store}
+          stores={data.stores}
+        />
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Tab: DETAIL — raw daily log for power users.
+// ============================================================================
+function DetailTab({
+  filtered,
+  filters,
+  setFilters,
+  stores,
+}: {
+  filtered: { cur: DashboardData['rows'] };
+  filters: F;
+  setFilters: (next: F) => void;
+  stores: string[];
+}) {
+  return (
+    <div className="space-y-4 sm:space-y-5">
+      <SectionIntro
+        icon={<Table size={20} />}
+        title="פירוט יומי"
+        description="כל שורה בטבלה היא (יום × חנות) — הוצאות פייסבוק, גוגל, הכנסות, ROAS, ורווח. עד 100 שורות אחרונות בטווח הנבחר. ROAS שחור עם '0' = יום שהוצאת בו כסף אבל לא היו מכירות (כשל)."
+      />
+      <Filters filters={filters} stores={stores} onChange={setFilters} />
+      <div className="rounded-xl bg-surface border border-border shadow-card overflow-hidden">
+        <DetailTable rows={filtered.cur} bare />
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Header + Footer
+// ============================================================================
 function Header({
-  lastUpdated: _lastUpdated,
   isRefreshing,
   onRefresh,
 }: {
-  lastUpdated?: string;
   isRefreshing: boolean;
   onRefresh: () => void;
 }) {
@@ -176,7 +315,7 @@ function Header({
         <div className="min-w-0">
           <h1 className="text-base sm:text-xl md:text-2xl font-bold truncate">📊 דשבורד ROAS</h1>
           <p className="text-[10px] sm:text-xs text-blue-100/80 mt-0.5 hidden sm:block">
-            מעקב יומי לכל החנויות
+            מעקב הוצאות ↔ הכנסות לכל החנויות
           </p>
         </div>
         <button

@@ -9,6 +9,7 @@ import {
   Calendar,
   Radio,
   Store,
+  X,
 } from 'lucide-react';
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import type { ProductRow } from '@/lib/products';
@@ -103,6 +104,7 @@ type ProductAgg = {
   productId: string;
   productTitle: string;
   units: number;
+  orders: number;
   revenue: number;
   days: number;
 };
@@ -111,9 +113,11 @@ type BucketAgg = {
   key: string;
   label: string;
   totalUnits: number;
+  totalOrders: number;
   totalRevenue: number;
   products: ProductAgg[];
   isLive: boolean;
+  hasOrders: boolean; // false when no row in this bucket has orders data yet
 };
 
 function aggregate(
@@ -121,75 +125,106 @@ function aggregate(
   period: Period,
   store: string,
   range: DateRange,
+  specificDay: string | null,
 ): BucketAgg[] {
   const today = todayInIsrael();
   const liveBucketKey = bucketKey(today, period);
+  // When a specific day is pinned (day view only), it overrides the range
+  // entirely and produces a single bucket — no need to also keep the wider
+  // range buckets, they would just be noise.
+  const useSpecific = period === 'day' && specificDay;
 
   const filtered = rows.filter(r => {
-    if (r.date < range.from || r.date > range.to) return false;
+    if (useSpecific) {
+      if (r.date !== specificDay) return false;
+    } else {
+      if (r.date < range.from || r.date > range.to) return false;
+    }
     if (store !== 'All' && r.storeName !== store) return false;
     return true;
   });
 
-  const buckets = new Map<string, Map<string, ProductAgg & { dateSet: Set<string> }>>();
+  // For each bucket, also track whether *any* row contributed real orders data
+  // (vs. legacy rows where orders=0 because the column didn't exist yet).
+  const buckets = new Map<
+    string,
+    {
+      products: Map<string, ProductAgg & { dateSet: Set<string> }>;
+      hasOrders: boolean;
+    }
+  >();
 
   for (const r of filtered) {
     const bk = bucketKey(r.date, period);
-    if (!buckets.has(bk)) buckets.set(bk, new Map());
-    const productMap = buckets.get(bk)!;
+    if (!buckets.has(bk)) buckets.set(bk, { products: new Map(), hasOrders: false });
+    const bucket = buckets.get(bk)!;
+    if (r.orders > 0) bucket.hasOrders = true;
     const productKey = store === 'All' ? `${r.storeName}::${r.productId}` : r.productId;
     const display = store === 'All' ? `${r.productTitle}  ·  ${r.storeName}` : r.productTitle;
-    if (!productMap.has(productKey)) {
-      productMap.set(productKey, {
+    if (!bucket.products.has(productKey)) {
+      bucket.products.set(productKey, {
         productId: r.productId,
         productTitle: display,
         units: 0,
+        orders: 0,
         revenue: 0,
         days: 0,
         dateSet: new Set<string>(),
       });
     }
-    const p = productMap.get(productKey)!;
+    const p = bucket.products.get(productKey)!;
     p.units += r.units;
+    p.orders += r.orders;
     p.revenue += r.revenue;
     p.dateSet.add(r.date);
   }
 
   const out: BucketAgg[] = [];
-  for (const [key, productMap] of buckets) {
-    const products = Array.from(productMap.values())
+  for (const [key, bucket] of buckets) {
+    const products = Array.from(bucket.products.values())
       .map(p => ({
         productId: p.productId,
         productTitle: p.productTitle,
         units: p.units,
+        orders: p.orders,
         revenue: p.revenue,
         days: p.dateSet.size,
       }))
       .sort((a, b) => b.units - a.units);
     const totalUnits = products.reduce((s, p) => s + p.units, 0);
+    const totalOrders = products.reduce((s, p) => s + p.orders, 0);
     const totalRevenue = products.reduce((s, p) => s + p.revenue, 0);
     out.push({
       key,
       label: bucketLabel(key, period),
       totalUnits,
+      totalOrders,
       totalRevenue,
       products,
       isLive: key === liveBucketKey,
+      hasOrders: bucket.hasOrders,
     });
   }
 
   // Ensure today's bucket appears even with zero products (e.g. early morning,
   // or store hasn't had an order yet). User explicitly asked for the live row
   // to show "today as of now" even when empty.
-  const todayInRange = today >= range.from && today <= range.to;
+  // Skip this when the user pinned a specific day — they've narrowed to a
+  // single date and the live bucket would be misleading if that date isn't
+  // today.
+  const todayInRange = useSpecific
+    ? specificDay === today
+    : today >= range.from && today <= range.to;
   if (todayInRange && !out.some(b => b.key === liveBucketKey)) {
     out.push({
       key: liveBucketKey,
       label: bucketLabel(liveBucketKey, period),
       totalUnits: 0,
+      totalOrders: 0,
       totalRevenue: 0,
       products: [],
       isLive: true,
+      hasOrders: false,
     });
   }
 
@@ -224,6 +259,15 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
     setLocalStore(globalStore);
   }, [globalStore]);
 
+  // Optional pin to a specific date. Only meaningful in 'day' view — when set,
+  // every other date is filtered out and only that single day's bucket shows.
+  // Cleared automatically when the user switches away from 'day' view, so a
+  // pin made in day view doesn't quietly affect week/month/etc.
+  const [specificDay, setSpecificDay] = useState<string>('');
+  useEffect(() => {
+    if (period !== 'day') setSpecificDay('');
+  }, [period]);
+
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [nowLabel, setNowLabel] = useState(nowInIsrael());
   useEffect(() => {
@@ -233,8 +277,8 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
 
   const buckets = useMemo(() => {
     if (!data) return [];
-    return aggregate(data.rows, period, localStore, range);
-  }, [data, period, localStore, range]);
+    return aggregate(data.rows, period, localStore, range, specificDay || null);
+  }, [data, period, localStore, range, specificDay]);
 
   function toggle(key: string) {
     setExpanded(prev => {
@@ -293,8 +337,42 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
         </select>
       </div>
 
+      {/* Specific day picker — only meaningful in day view */}
+      {period === 'day' && (
+        <div className="flex items-center gap-2">
+          <Calendar size={14} className="text-text-muted shrink-0" />
+          <div className="relative">
+            <input
+              type="date"
+              value={specificDay}
+              onChange={e => setSpecificDay(e.target.value)}
+              placeholder="יום ספציפי"
+              className={cn(
+                'rounded-lg border bg-surface px-2.5 py-1.5 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30',
+                specificDay
+                  ? 'border-primary text-primary pl-7'
+                  : 'border-border text-text-secondary',
+              )}
+            />
+            {specificDay && (
+              <button
+                type="button"
+                onClick={() => setSpecificDay('')}
+                className="absolute left-1 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-surfaceMuted text-text-muted hover:text-text-primary transition-colors"
+                aria-label="נקה תאריך"
+                title="חזרה לכל הימים"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <span className="text-[10px] sm:text-xs text-text-muted tabular-nums sm:mr-auto">
-        {buckets.length} {period === 'day' ? 'ימים' : 'תקופות'}
+        {specificDay
+          ? `יום אחד: ${formatDate(specificDay)}`
+          : `${buckets.length} ${period === 'day' ? 'ימים' : 'תקופות'}`}
       </span>
     </div>
   );
@@ -367,13 +445,21 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                     )}
                   </div>
                   <div className="flex items-center gap-3 sm:gap-5 text-xs sm:text-sm tabular-nums">
+                    {bucket.hasOrders && (
+                      <div>
+                        <span className="text-text-muted text-[10px] sm:text-xs ml-1">הזמנות</span>
+                        <span className="font-semibold text-text-primary">
+                          {formatNumber(bucket.totalOrders, 0)}
+                        </span>
+                      </div>
+                    )}
                     <div>
                       <span className="text-text-muted text-[10px] sm:text-xs ml-1">יחידות</span>
                       <span className="font-semibold text-text-primary">
                         {formatNumber(bucket.totalUnits, 0)}
                       </span>
                     </div>
-                    <div>
+                    <div className="hidden sm:block">
                       <span className="text-text-muted text-[10px] sm:text-xs ml-1">הכנסה</span>
                       <span className="font-semibold text-text-primary">
                         CAD {formatCurrency(bucket.totalRevenue)}
@@ -397,10 +483,15 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                       <thead>
                         <tr className="text-text-secondary border-y border-border bg-surfaceMuted/40">
                           <th className="px-4 sm:px-5 py-2 text-start font-medium">מוצר</th>
-                          <th className="px-3 py-2 text-end font-medium w-[80px] sm:w-[110px]">
+                          {bucket.hasOrders && (
+                            <th className="px-3 py-2 text-end font-medium w-[70px] sm:w-[90px]">
+                              הזמנות
+                            </th>
+                          )}
+                          <th className="px-3 py-2 text-end font-medium w-[70px] sm:w-[100px]">
                             יחידות
                           </th>
-                          <th className="px-3 py-2 text-end font-medium w-[100px] sm:w-[140px]">
+                          <th className="px-3 py-2 text-end font-medium w-[90px] sm:w-[130px] hidden sm:table-cell">
                             הכנסה
                           </th>
                           <th className="px-3 sm:px-5 py-2 text-end font-medium w-[55px] sm:w-[70px] hidden md:table-cell">
@@ -411,6 +502,9 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                       <tbody>
                         {shown.map((p, i) => {
                           const pct = bucket.totalUnits > 0 ? p.units / bucket.totalUnits : 0;
+                          // Average units per order for this product, only meaningful when
+                          // orders > 0 (otherwise legacy row without orders data).
+                          const upo = p.orders > 0 ? p.units / p.orders : null;
                           return (
                             <tr
                               key={`${bucket.key}-${p.productId}-${i}`}
@@ -424,10 +518,25 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                                   <span className="truncate">{p.productTitle}</span>
                                 </div>
                               </td>
+                              {bucket.hasOrders && (
+                                <td className="px-3 py-2 text-end tabular-nums">
+                                  <span className="font-semibold text-text-primary">
+                                    {p.orders > 0 ? formatNumber(p.orders, 0) : '—'}
+                                  </span>
+                                  {upo !== null && upo > 1.05 && (
+                                    <span
+                                      className="block text-[9px] sm:text-[10px] text-text-muted leading-tight"
+                                      title={`ממוצע ${upo.toFixed(2)} יחידות להזמנה`}
+                                    >
+                                      ×{upo.toFixed(1)}
+                                    </span>
+                                  )}
+                                </td>
+                              )}
                               <td className="px-3 py-2 text-end font-semibold tabular-nums">
                                 {formatNumber(p.units, 0)}
                               </td>
-                              <td className="px-3 py-2 text-end tabular-nums">
+                              <td className="px-3 py-2 text-end tabular-nums hidden sm:table-cell">
                                 {formatCurrency(p.revenue)}
                               </td>
                               <td className="px-3 sm:px-5 py-2 text-end tabular-nums text-text-muted hidden md:table-cell">

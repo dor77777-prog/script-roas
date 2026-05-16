@@ -10,6 +10,10 @@ export type ProductRow = {
   productTitle: string;
   units: number;
   revenue: number;     // gross CAD
+  /** Distinct orders that contained this product. 0 for historical rows
+   *  written before the Orders column was added — the dashboard treats 0
+   *  as "unknown" and falls back to showing units only. */
+  orders: number;
 };
 
 function getAuth() {
@@ -67,7 +71,7 @@ export async function fetchProductsData(): Promise<ProductRow[]> {
   try {
     res = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `${PRODUCTS_TAB}!A2:G100000`,
+      range: `${PRODUCTS_TAB}!A2:H100000`,
       valueRenderOption: 'UNFORMATTED_VALUE',
       dateTimeRenderOption: 'FORMATTED_STRING',
     });
@@ -92,9 +96,10 @@ export async function fetchProductsData(): Promise<ProductRow[]> {
     const productTitle = String(row[4] ?? '').trim() || '—';
     const units = parseNumber(row[5]);
     const revenue = parseNumber(row[6]);
+    const orders = parseNumber(row[7]); // 0 for rows written before this column existed
     if (units <= 0 && revenue <= 0) continue;
 
-    out.push({ date: dateStr, storeId, storeName, productId, productTitle, units, revenue });
+    out.push({ date: dateStr, storeId, storeName, productId, productTitle, units, revenue, orders });
   }
   return out;
 }

@@ -68,7 +68,12 @@ function getShopifyRevenue(storeId, dateStr) {
 /**
  * שולף breakdown של מכירות לפי מוצר ליום נתון.
  * עובר על כל ההזמנות של היום, מקבץ line_items לפי product_id, ומחזיר
- * מערך אובייקטים: {productId, productTitle, units, revenueCad}.
+ * מערך אובייקטים: {productId, productTitle, units, revenueCad, orders}.
+ *
+ * units  = סך הכמות שנמכרה מכל המוצר (sum of quantity על פני כל line items)
+ * orders = מספר ההזמנות הייחודיות שהכילו את המוצר (order יכול להכיל
+ *          כמה מוצרים שונים, וגם כמה יחידות מאותו מוצר — ספירה כאן היא
+ *          per-order ולא per-line-item)
  *
  * משתמש באותו endpoint של getShopifyRevenue אבל מבקש את line_items.
  * Shopify מחזיר prices במטבע החנות (CAD בכל 3 החנויות) — אין צורך בהמרה.
@@ -90,7 +95,7 @@ function getShopifyProductSalesForDay(storeId, dateStr) {
             `&created_at_max=${encodeURIComponent(dayEnd)}` +
             `&fields=id,financial_status,test,line_items`;
 
-  // productId -> {productTitle, units, revenueGross}
+  // productId -> {productId, productTitle, units, revenueCad, orderIds: Set<id>}
   const byProduct = {};
   let safety = 0;
 
@@ -110,6 +115,7 @@ function getShopifyProductSalesForDay(storeId, dateStr) {
     for (const o of orders) {
       if (o.test) continue;
       if (o.financial_status === 'voided') continue;
+      const orderId = String(o.id || '');
       const items = o.line_items || [];
       for (const li of items) {
         const pid = String(li.product_id || ''); // could be empty for custom items
@@ -120,10 +126,19 @@ function getShopifyProductSalesForDay(storeId, dateStr) {
         const gross = qty * price;
 
         if (!byProduct[key]) {
-          byProduct[key] = { productId: pid, productTitle: title, units: 0, revenueCad: 0 };
+          byProduct[key] = {
+            productId: pid,
+            productTitle: title,
+            units: 0,
+            revenueCad: 0,
+            // Tracked as keys of a plain object since GAS V8 is fine with Sets
+            // but plain object lookups are cheaper here.
+            orderIds: {},
+          };
         }
         byProduct[key].units += qty;
         byProduct[key].revenueCad += gross;
+        if (orderId) byProduct[key].orderIds[orderId] = 1;
       }
     }
     const link = res.getHeaders()['Link'] || res.getHeaders()['link'] || '';
@@ -132,8 +147,18 @@ function getShopifyProductSalesForDay(storeId, dateStr) {
     safety++;
   }
 
-  const out = Object.values(byProduct).sort((a, b) => b.units - a.units);
-  Logger.log(`Shopify products ${storeId} ${dateStr}: ${out.length} distinct products, ${out.reduce((s, p) => s + p.units, 0)} units`);
+  const out = Object.values(byProduct)
+    .map(p => ({
+      productId: p.productId,
+      productTitle: p.productTitle,
+      units: p.units,
+      revenueCad: p.revenueCad,
+      orders: Object.keys(p.orderIds).length,
+    }))
+    .sort((a, b) => b.units - a.units);
+  const totalUnits = out.reduce((s, p) => s + p.units, 0);
+  const totalOrders = out.reduce((s, p) => s + p.orders, 0);
+  Logger.log(`Shopify products ${storeId} ${dateStr}: ${out.length} products, ${totalUnits} units across ${totalOrders} order-product pairs`);
   return out;
 }
 
