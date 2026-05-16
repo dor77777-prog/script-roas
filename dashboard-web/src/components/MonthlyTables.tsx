@@ -1,0 +1,302 @@
+'use client';
+
+import { useMemo, useState } from 'react';
+import { CalendarDays, ChevronDown, ChevronUp } from 'lucide-react';
+import type { DailyRow } from '@/lib/types';
+import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
+import { roasLabel } from '@/lib/analytics';
+
+const HE_MONTHS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+
+type Mode = 'per-store' | 'summary';
+
+type Props = {
+  rows: DailyRow[];
+  stores: string[];
+};
+
+const ROAS_BG: Record<string, string> = {
+  red: 'bg-roas-redBg',
+  orange: 'bg-roas-orangeBg',
+  green: 'bg-roas-greenBg',
+  blue: 'bg-roas-blueBg',
+  gray: '',
+};
+
+export function MonthlyTables({ rows, stores }: Props) {
+  const [mode, setMode] = useState<Mode>('per-store');
+  const [storeFilter, setStoreFilter] = useState<string>(stores[0] || 'All');
+
+  // Group all rows by year-month
+  const monthGroups = useMemo(() => {
+    const grouped = new Map<string, DailyRow[]>();
+    for (const r of rows) {
+      const ym = r.date.slice(0, 7);
+      if (!grouped.has(ym)) grouped.set(ym, []);
+      grouped.get(ym)!.push(r);
+    }
+    return Array.from(grouped.entries())
+      .map(([ym, rs]) => ({ ym, rows: rs }))
+      .sort((a, b) => b.ym.localeCompare(a.ym)); // newest first
+  }, [rows]);
+
+  if (!rows.length) return null;
+
+  return (
+    <section className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="flex items-center gap-2 text-base font-semibold text-text-primary">
+          <CalendarDays size={18} className="text-text-secondary" />
+          טבלאות חודשיות
+        </h2>
+        <div className="flex items-center gap-2">
+          <Tab active={mode === 'per-store'} onClick={() => setMode('per-store')}>
+            לפי חנות
+          </Tab>
+          <Tab active={mode === 'summary'} onClick={() => setMode('summary')}>
+            סיכום כללי
+          </Tab>
+        </div>
+      </div>
+
+      {mode === 'per-store' && (
+        <div className="flex items-center gap-2 -mt-2">
+          <span className="text-xs text-text-secondary">חנות:</span>
+          <select
+            value={storeFilter}
+            onChange={e => setStoreFilter(e.target.value)}
+            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-medium"
+          >
+            {stores.map(s => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      <div className="space-y-6">
+        {monthGroups.map(({ ym, rows: monthRows }) => {
+          if (mode === 'per-store') {
+            const storeRows = monthRows.filter(r => r.storeName === storeFilter);
+            if (!storeRows.length) return null;
+            return (
+              <MonthBlockPerStore key={ym} ym={ym} storeName={storeFilter} rows={storeRows} />
+            );
+          }
+          return <MonthBlockSummary key={ym} ym={ym} rows={monthRows} stores={stores} />;
+        })}
+      </div>
+    </section>
+  );
+}
+
+function Tab({
+  active,
+  children,
+  onClick,
+}: {
+  active: boolean;
+  children: React.ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+        active
+          ? 'bg-primary text-white shadow-sm'
+          : 'bg-surfaceMuted text-text-secondary hover:bg-border',
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
+function monthTitle(ym: string): string {
+  const [y, m] = ym.split('-').map(Number);
+  return `${HE_MONTHS[m - 1]} ${y}`;
+}
+
+function MonthBlockPerStore({
+  ym,
+  storeName,
+  rows,
+}: {
+  ym: string;
+  storeName: string;
+  rows: DailyRow[];
+}) {
+  const [open, setOpen] = useState(true);
+  // detect if store has GA (any row with gaSpend > 0)
+  const hasGa = rows.some(r => r.gaSpend > 0);
+
+  let totalFb = 0, totalGa = 0, totalSpend = 0, totalRev = 0;
+  for (const r of rows) {
+    totalFb += r.fbSpend;
+    totalGa += r.gaSpend;
+    totalSpend += r.totalSpend;
+    totalRev += r.revenue;
+  }
+  const totalRoas = totalSpend > 0 ? totalRev / totalSpend : 0;
+  const totalInfo = roasLabel(totalRoas);
+
+  // Fill in missing days of month with empty rows
+  const allDays = daysOfMonth(ym);
+  const byDate = new Map(rows.map(r => [r.date, r]));
+
+  return (
+    <div className="rounded-xl bg-surface border border-border shadow-card overflow-hidden">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-5 py-3 bg-slate-800 text-white"
+      >
+        <span className="font-semibold">
+          {monthTitle(ym)}  •  {storeName}
+        </span>
+        {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+      </button>
+      {open && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-surfaceMuted">
+              <tr className="text-text-secondary">
+                <th className="px-3 py-2 text-start font-medium">תאריך</th>
+                {hasGa && <th className="px-3 py-2 text-end font-medium">פייסבוק</th>}
+                {hasGa && <th className="px-3 py-2 text-end font-medium">גוגל</th>}
+                <th className="px-3 py-2 text-end font-medium">{hasGa ? 'יצא סה"כ' : 'יצא'}</th>
+                <th className="px-3 py-2 text-end font-medium">נכנס</th>
+                <th className="px-3 py-2 text-center font-medium">ROAS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allDays.map(d => {
+                const r = byDate.get(d);
+                const isEmpty = !r;
+                const info = r ? roasLabel(r.roas) : { tone: 'gray' };
+                return (
+                  <tr key={d} className={cn('border-t border-border', isEmpty && 'text-text-muted')}>
+                    <td className="px-3 py-1.5 tabular-nums">{formatDate(d)}</td>
+                    {hasGa && <td className="px-3 py-1.5 text-end tabular-nums">{r ? formatNumber(r.fbSpend) : ''}</td>}
+                    {hasGa && <td className="px-3 py-1.5 text-end tabular-nums">{r ? formatNumber(r.gaSpend) : ''}</td>}
+                    <td className="px-3 py-1.5 text-end tabular-nums">{r ? formatNumber(r.totalSpend) : ''}</td>
+                    <td className="px-3 py-1.5 text-end tabular-nums">{r ? formatNumber(r.revenue) : ''}</td>
+                    <td className={cn('px-3 py-1.5 text-center tabular-nums font-medium', ROAS_BG[info.tone])}>
+                      {r && r.roas > 0 ? formatNumber(r.roas) : ''}
+                    </td>
+                  </tr>
+                );
+              })}
+              <tr className="border-t-2 border-border bg-surfaceMuted font-semibold">
+                <td className="px-3 py-2">סך הכל</td>
+                {hasGa && <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalFb)}</td>}
+                {hasGa && <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalGa)}</td>}
+                <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalSpend)}</td>
+                <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalRev)}</td>
+                <td className={cn('px-3 py-2 text-center tabular-nums', ROAS_BG[totalInfo.tone])}>
+                  {formatNumber(totalRoas)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MonthBlockSummary({
+  ym,
+  rows,
+  stores,
+}: {
+  ym: string;
+  rows: DailyRow[];
+  stores: string[];
+}) {
+  const [open, setOpen] = useState(true);
+  const allDays = daysOfMonth(ym);
+
+  // Aggregate by date across all stores
+  const byDate = new Map<string, { spend: number; revenue: number }>();
+  for (const r of rows) {
+    if (!byDate.has(r.date)) byDate.set(r.date, { spend: 0, revenue: 0 });
+    const e = byDate.get(r.date)!;
+    e.spend += r.totalSpend;
+    e.revenue += r.revenue;
+  }
+
+  let totalSpend = 0, totalRev = 0;
+  for (const r of rows) {
+    totalSpend += r.totalSpend;
+    totalRev += r.revenue;
+  }
+  const totalRoas = totalSpend > 0 ? totalRev / totalSpend : 0;
+  const totalInfo = roasLabel(totalRoas);
+
+  return (
+    <div className="rounded-xl bg-surface border border-border shadow-card overflow-hidden">
+      <button
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center justify-between px-5 py-3 bg-slate-800 text-white"
+      >
+        <span className="font-semibold">
+          {monthTitle(ym)}  •  סיכום כל החנויות ({stores.length})
+        </span>
+        {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+      </button>
+      {open && (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-surfaceMuted">
+              <tr className="text-text-secondary">
+                <th className="px-3 py-2 text-start font-medium">תאריך</th>
+                <th className="px-3 py-2 text-end font-medium">יצא סה"כ</th>
+                <th className="px-3 py-2 text-end font-medium">נכנס סה"כ</th>
+                <th className="px-3 py-2 text-center font-medium">ROAS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allDays.map(d => {
+                const agg = byDate.get(d);
+                const roas = agg && agg.spend > 0 ? agg.revenue / agg.spend : 0;
+                const info = roasLabel(roas);
+                return (
+                  <tr key={d} className={cn('border-t border-border', !agg && 'text-text-muted')}>
+                    <td className="px-3 py-1.5 tabular-nums">{formatDate(d)}</td>
+                    <td className="px-3 py-1.5 text-end tabular-nums">{agg ? formatNumber(agg.spend) : ''}</td>
+                    <td className="px-3 py-1.5 text-end tabular-nums">{agg ? formatNumber(agg.revenue) : ''}</td>
+                    <td className={cn('px-3 py-1.5 text-center tabular-nums font-medium', ROAS_BG[info.tone])}>
+                      {roas > 0 ? formatNumber(roas) : ''}
+                    </td>
+                  </tr>
+                );
+              })}
+              <tr className="border-t-2 border-border bg-surfaceMuted font-semibold">
+                <td className="px-3 py-2">סך הכל</td>
+                <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalSpend)}</td>
+                <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalRev)}</td>
+                <td className={cn('px-3 py-2 text-center tabular-nums', ROAS_BG[totalInfo.tone])}>
+                  {formatNumber(totalRoas)}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function daysOfMonth(ym: string): string[] {
+  const [y, m] = ym.split('-').map(Number);
+  const last = new Date(y, m, 0).getDate();
+  const out: string[] = [];
+  for (let d = 1; d <= last; d++) {
+    out.push(`${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+  }
+  return out;
+}

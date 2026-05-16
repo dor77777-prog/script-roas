@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body {
+  background: #fafbfc;
+  font-feature-settings: 'kern';
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Subtle scrollbar */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 6px; }
+*::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
+
+/* Recharts tooltip styling */
+.recharts-default-tooltip {
+  background: rgba(15, 23, 42, 0.95) !important;
+  border: none !important;
+  border-radius: 8px !important;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.15) !important;
+  padding: 10px 14px !important;
+}
+.recharts-tooltip-label { color: #cbd5e1 !important; margin-bottom: 4px !important; }
+.recharts-tooltip-item { color: #fff !important; }
