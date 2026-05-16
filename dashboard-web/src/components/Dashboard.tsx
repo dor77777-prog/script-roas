@@ -128,7 +128,11 @@ export function Dashboard() {
               storageKey="products"
               subtitle="פירוט מכירות לפי מוצר — יומי / שבועי / חודשי / שנתי"
             >
-              <ProductsTable range={filters.range} store={filters.store} />
+              <ProductsTable
+                range={filters.range}
+                store={filters.store}
+                stores={data.stores}
+              />
             </CollapsibleSection>
 
             <CollapsibleSection
