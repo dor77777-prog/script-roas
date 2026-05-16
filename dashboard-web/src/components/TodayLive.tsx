@@ -200,6 +200,18 @@ export function TodayLive({
   );
 }
 
+/**
+ * Length-aware sizing for the live stat values. Mirrors the helper in
+ * KpiCards.tsx — kept inline here to avoid a shared utility for two callsites.
+ */
+function liveValueSizeClass(value: string): string {
+  const len = value.length;
+  if (len <= 4)  return 'text-[1.375rem] sm:text-2xl';
+  if (len <= 6)  return 'text-[1.25rem] sm:text-xl';
+  if (len <= 8)  return 'text-base sm:text-lg';
+  return 'text-sm sm:text-base';
+}
+
 function LiveStat({
   icon,
   label,
@@ -233,8 +245,8 @@ function LiveStat({
         )}
         <span
           className={cn(
-            'font-light tabular-nums tracking-tight leading-none truncate',
-            'text-lg sm:text-2xl',
+            'font-light tabular-nums tracking-tight leading-none whitespace-nowrap',
+            liveValueSizeClass(value),
             accent === 'pos' && 'text-roas-green',
             accent === 'neg' && 'text-roas-red',
             !accent && 'text-text-primary',

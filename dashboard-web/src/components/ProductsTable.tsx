@@ -288,6 +288,10 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
     return () => clearInterval(t);
   }, []);
 
+  // Today (Israel TZ) — used as the max for the date inputs so the user can't
+  // select tomorrow / future dates that have no data yet.
+  const today = todayInIsrael();
+
   const buckets = useMemo(() => {
     if (!data) return [];
     return aggregate(data.rows, period, localStore, localRange);
@@ -394,11 +398,15 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
         <input
           type="date"
           value={localRange.from}
+          max={today}
           onChange={e => {
             const v = e.target.value;
             if (!v) return;
+            // Clamp to today as a safety net — the browser's native max already
+            // blocks the picker, but a paste / programmatic set could bypass it.
+            const safe = v > today ? today : v;
             setLocalRange(prev =>
-              v > prev.to ? { from: v, to: v } : { ...prev, from: v },
+              safe > prev.to ? { from: safe, to: safe } : { ...prev, from: safe },
             );
           }}
           aria-label="מתאריך"
@@ -411,11 +419,13 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
         <input
           type="date"
           value={localRange.to}
+          max={today}
           onChange={e => {
             const v = e.target.value;
             if (!v) return;
+            const safe = v > today ? today : v;
             setLocalRange(prev =>
-              v < prev.from ? { from: v, to: v } : { ...prev, to: v },
+              safe < prev.from ? { from: safe, to: safe } : { ...prev, to: safe },
             );
           }}
           aria-label="עד תאריך"
@@ -426,10 +436,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
         />
         <button
           type="button"
-          onClick={() => {
-            const t = todayInIsrael();
-            setLocalRange({ from: t, to: t });
-          }}
+          onClick={() => setLocalRange({ from: today, to: today })}
           className="rounded-lg border border-roas-green/40 bg-roas-greenBg/60 text-roas-green hover:bg-roas-greenBg px-2 py-1.5 text-xs font-semibold transition-colors"
           title="קפוץ ליום הנוכחי (live)"
         >

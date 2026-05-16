@@ -21,6 +21,38 @@ const TONE_BG: Record<string, string> = {
   gray:   'bg-surfaceMuted text-text-muted',
 };
 
+/**
+ * Length-aware value sizing — guarantees the number never truncates inside
+ * the card, even on xl:grid-cols-6 where each card is ~150-180px wide.
+ *
+ * Sized for the tightest column. xl gets the smallest steps because that's
+ * where 6 cards share a row; 2xl recovers some space when the viewport is
+ * actually wide enough.
+ *
+ * Tabular-nums means every digit is ~0.6em wide in Heebo, so the thresholds
+ * are conservative: "271,426" (7 chars) needs ~7×0.6=4.2em of horizontal room.
+ */
+function valueSizeClass(value: string): string {
+  const len = value.length;
+  if (len <= 4) {
+    // "2.60", "12.3"
+    return 'text-[1.75rem] sm:text-[2rem] xl:text-[1.625rem] 2xl:text-[2rem]';
+  }
+  if (len <= 6) {
+    // "4,336", "71,426"
+    return 'text-[1.5rem] sm:text-[1.75rem] xl:text-[1.375rem] 2xl:text-[1.75rem]';
+  }
+  if (len <= 8) {
+    // "271,426", "1,234,567"
+    return 'text-[1.25rem] sm:text-[1.5rem] xl:text-[1.125rem] 2xl:text-[1.5rem]';
+  }
+  if (len <= 10) {
+    return 'text-[1.125rem] sm:text-[1.375rem] xl:text-[1rem] 2xl:text-[1.25rem]';
+  }
+  // Very long numbers (>10 chars) — never seen in practice but safe fallback.
+  return 'text-[1rem] sm:text-[1.125rem] xl:text-[0.875rem] 2xl:text-[1rem]';
+}
+
 type Props = {
   current: Aggregate;
   previous: Aggregate;
@@ -135,7 +167,9 @@ function KpiCard({
         </div>
       </div>
 
-      {/* Value — thin weight, large, deep navy. */}
+      {/* Value — thin weight, large, deep navy. Font size auto-shrinks
+          based on string length so longer numbers (e.g. "271,426") never
+          get truncated into "...426". */}
       <div className="flex items-baseline gap-1.5 mb-2 sm:mb-2.5 min-w-0">
         {valuePrefix && (
           <span className="text-[11px] sm:text-xs font-medium text-text-muted shrink-0">
@@ -144,8 +178,8 @@ function KpiCard({
         )}
         <span
           className={cn(
-            'font-light tabular-nums tracking-tight leading-none truncate',
-            'text-[1.625rem] sm:text-[2rem] md:text-[2.25rem]',
+            'font-light tabular-nums tracking-tight leading-none whitespace-nowrap',
+            valueSizeClass(value),
             accent === 'pos' && 'text-roas-green',
             accent === 'neg' && 'text-roas-red',
             !accent && 'text-text-primary',
