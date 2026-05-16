@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 import { Bot, Copy, Check, Download, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -14,6 +14,9 @@ const fetcher = (url: string) => fetch(url).then(r => r.ok ? r.json() : null);
 type Props = {
   data: DashboardData;
   filters: F;
+  /** Increment this number to trigger the modal from outside (e.g. command
+   *  palette). The internal click handler keeps working independently. */
+  openSignal?: number;
 };
 
 /**
@@ -28,11 +31,19 @@ type Props = {
  *  - ad-set drill-down for the 5 highest-spend campaigns
  *  - a suggested prompt at the bottom so the user doesn't have to think
  */
-export function AiReportButton({ data, filters }: Props) {
+export function AiReportButton({ data, filters, openSignal }: Props) {
   const [open, setOpen] = useState(false);
   const [report, setReport] = useState<string>('');
   const [generating, setGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // External trigger: when openSignal changes (and is > 0), open the modal.
+  useEffect(() => {
+    if (openSignal !== undefined && openSignal > 0) {
+      setOpen(true);
+      setReport('');
+    }
+  }, [openSignal]);
 
   const { data: products } = useSWR<ProductsResponse | null>(
     open ? '/api/products' : null,

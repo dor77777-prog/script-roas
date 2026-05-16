@@ -30,6 +30,7 @@ import { CampaignsTable } from './CampaignsTable';
 import { WhatsWorking } from './WhatsWorking';
 import { AiReportButton } from './AiReportButton';
 import { HeroOverview } from './HeroOverview';
+import { CommandPalette } from './CommandPalette';
 import { TabNav, type TabDef } from './TabNav';
 import { SectionIntro } from './SectionIntro';
 
@@ -68,6 +69,10 @@ export function Dashboard() {
     store: 'All',
   }));
 
+  // Counter that increments whenever the command palette wants to open the
+  // AI report modal. AiReportButton listens to this prop via useEffect.
+  const [aiReportSignal, setAiReportSignal] = useState(0);
+
   const filtered = useMemo(() => {
     if (!data) return null;
     const cur = filterRows(data.rows, filters.range, filters.store);
@@ -89,6 +94,19 @@ export function Dashboard() {
       <Header
         isRefreshing={isValidating}
         onRefresh={() => mutate()}
+        commandPalette={
+          data ? (
+            <CommandPalette
+              data={data}
+              filters={filters}
+              setFilters={setFilters}
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              onRefresh={() => mutate()}
+              onOpenAiReport={() => setAiReportSignal(n => n + 1)}
+            />
+          ) : null
+        }
       />
 
       {/* Tabs only render once data is in — keeps initial paint clean */}
@@ -120,7 +138,13 @@ export function Dashboard() {
         {data && filtered && (
           <>
             {activeTab === 'home' && (
-              <HomeTab data={data} filtered={filtered} filters={filters} setFilters={setFilters} />
+              <HomeTab
+                data={data}
+                filtered={filtered}
+                filters={filters}
+                setFilters={setFilters}
+                aiReportSignal={aiReportSignal}
+              />
             )}
             {activeTab === 'analysis' && (
               <AnalysisTab data={data} filtered={filtered} filters={filters} setFilters={setFilters} />
@@ -152,6 +176,7 @@ function HomeTab({
   filtered,
   filters,
   setFilters,
+  aiReportSignal,
 }: {
   data: DashboardData;
   filtered: NonNullable<ReturnType<typeof Dashboard> extends infer _ ? never : never> | {
@@ -164,6 +189,8 @@ function HomeTab({
   };
   filters: F;
   setFilters: (next: F) => void;
+  /** Increments when the command palette wants to open the AI report. */
+  aiReportSignal: number;
 }) {
   return (
     <div className="space-y-4 sm:space-y-5 animate-fade-in-up">
@@ -176,7 +203,7 @@ function HomeTab({
           <CalendarDays size={14} className="text-text-muted" />
           <span>שנה טווח או חנות לעדכון כל המסך</span>
         </div>
-        <AiReportButton data={data} filters={filters} />
+        <AiReportButton data={data} filters={filters} openSignal={aiReportSignal} />
       </div>
       <Filters filters={filters} stores={data.stores} onChange={setFilters} />
 
@@ -360,9 +387,13 @@ function DetailTab({
 function Header({
   isRefreshing,
   onRefresh,
+  commandPalette,
 }: {
   isRefreshing: boolean;
   onRefresh: () => void;
+  /** The Cmd-K trigger pill is rendered inside the header so it's always
+   *  reachable, no matter which tab the user is on. */
+  commandPalette?: React.ReactNode;
 }) {
   return (
     <header className="sticky top-0 z-10 bg-primary-dark text-white shadow-sm">
@@ -386,14 +417,18 @@ function Header({
               מעקב הוצאות ↔ הכנסות לכל החנויות
             </p>
           </div>
-          <button
-            onClick={onRefresh}
-            className="inline-flex items-center gap-1.5 sm:gap-2 rounded-lg bg-white/12 hover:bg-white/20 active:bg-white/25 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium transition-colors shrink-0 ring-1 ring-white/10"
-            disabled={isRefreshing}
-          >
-            <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
-            <span className="hidden sm:inline">{isRefreshing ? 'מתעדכן…' : 'רענן'}</span>
-          </button>
+          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+            {commandPalette}
+            <button
+              onClick={onRefresh}
+              className="inline-flex items-center gap-1.5 sm:gap-2 rounded-lg bg-white/12 hover:bg-white/20 active:bg-white/25 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium transition-colors ring-1 ring-white/10"
+              disabled={isRefreshing}
+              aria-label="רענן נתונים"
+            >
+              <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
+              <span className="hidden sm:inline">{isRefreshing ? 'מתעדכן…' : 'רענן'}</span>
+            </button>
+          </div>
         </div>
       </div>
     </header>
