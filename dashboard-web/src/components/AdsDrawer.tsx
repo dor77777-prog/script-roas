@@ -403,7 +403,13 @@ function Stat({
   label: string;
   value: string;
   chip?: { text: string; tone: string } | null;
-  accent?: 'green';
+  /**
+   * Color emphasis for the value. Kept intentionally narrow — only the two
+   * tones used in totals strips today. Add new tones here (don't widen to
+   * `string`) so the TONE_BG lookup table and this prop stay in lockstep.
+   * Sibling components: `DrawerStat` in CampaignDrawer.tsx, also widening.
+   */
+  accent?: 'green' | 'red';
 }) {
   return (
     <div className="rounded-lg border border-borderSubtle bg-surfaceMuted/30 px-2.5 py-2">
@@ -411,6 +417,7 @@ function Stat({
       <div className={cn(
         'text-xs sm:text-sm font-semibold tabular-nums mt-0.5',
         accent === 'green' && 'text-roas-green',
+        accent === 'red' && 'text-roas-red',
       )}>
         {value}
       </div>
