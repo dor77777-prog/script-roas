@@ -265,7 +265,12 @@ function HomeTab({
         <div className="flex justify-end">
           <BillingSettings storeNames={data.stores} />
         </div>
-        <PnLBreakdown current={filtered.curAgg} storeNames={filtered.visibleStores} />
+        <PnLBreakdown
+          current={filtered.curAgg}
+          storeNames={filtered.visibleStores}
+          rangeFrom={filters.range.from}
+          rangeTo={filters.range.to}
+        />
       </div>
 
       {/* ===== Per-store cards ===== */}
