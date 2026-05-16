@@ -52,10 +52,16 @@ export function SyncIndicator() {
   function onClick() {
     if (status === 'error') {
       setExpanded(v => !v);
-    } else {
-      // Manual re-sync.
-      void hydrateFromCloud();
+      return;
     }
+    // Block manual re-sync while a sync is already in flight. Without this
+    // guard, clicks during a syncing state can stack additional hydrate
+    // calls, each of which may re-fire migration POSTs for empty cloud keys
+    // (cloudSync.hydrateFromCloud first-time-migration path). The user
+    // clicking the pill repeatedly multiplied the POST rate per click — a
+    // real rate-limit hazard on first deployment with several empty keys.
+    if (status === 'syncing' || pendingKeys > 0) return;
+    void hydrateFromCloud();
   }
 
   return (
