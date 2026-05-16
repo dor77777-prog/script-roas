@@ -64,8 +64,17 @@ const CHANGE_EVENTS: Record<StateKey, string> = {
 /** ms epoch of the last push we sent for each key. Used to skip stomping
  *  our own value when a poll round comes back. */
 const lastPushAt: Record<string, number> = {};
-/** Pending debounce timers per key. */
+/** Pending debounce timers per key (keyed by lsKey, e.g. `roas-dashboard:goal`). */
 const pendingTimers: Record<string, ReturnType<typeof setTimeout> | undefined> = {};
+/** In-flight retry timers per cloud key (keyed by the stripped form, e.g. just
+ *  `goal`, because that's what `postWithRetry` is called with). A retry queued
+ *  for a previous failed push captures the OLD value in its closure. If a
+ *  newer push arrives for the same key BEFORE the retry fires, the retry can
+ *  overwrite cloud with the stale value AFTER the newer push has already
+ *  succeeded — silently reverting the user's edit (and, 30s later, their UI
+ *  too via hydrate). We cancel any pending retry on every fresh push so the
+ *  freshest value always wins. */
+const pendingRetries: Record<string, ReturnType<typeof setTimeout> | undefined> = {};
 /** Marker we've completed initial hydrate at least once. */
 let hydrated = false;
 
@@ -140,6 +149,26 @@ export function pushCloudKey(localStorageKey: StateKey, value: unknown): void {
     clearTimeout(pendingTimers[localStorageKey]);
   }
 
+  // Cancel any in-flight retry for this key — the value we're about to send
+  // supersedes whatever value the retry captured in its closure. Without
+  // this, a retry queued for an earlier failed push would fire AFTER this
+  // newer push succeeds, overwriting cloud with the stale value (and 30s
+  // later the user's UI too, via hydrate).
+  //
+  // pendingKeys accounting: the failed-but-retrying push's contribution to
+  // pendingKeys is still alive (postWithRetry only decrements on success or
+  // final failure, not on a retry-scheduling). Cancelling the retry means
+  // that push is abandoned, so we decrement once. The new debounce above
+  // manages its own +1 via the !pendingTimers branch.
+  const existingRetry = pendingRetries[cloudKey];
+  if (existingRetry !== undefined) {
+    clearTimeout(existingRetry);
+    pendingRetries[cloudKey] = undefined;
+    updateSyncState(prev => ({
+      pendingKeys: Math.max(0, prev.pendingKeys - 1),
+    }));
+  }
+
   // Mark immediately so concurrent hydrates inside the debounce window
   // recognize this key as locally dirty and skip the overwrite.
   lastPushAt[localStorageKey] = Date.now();
@@ -154,6 +183,9 @@ export function pushCloudKey(localStorageKey: StateKey, value: unknown): void {
 }
 
 async function postWithRetry(key: string, value: unknown, attempt = 1): Promise<void> {
+  // This fire is no longer "pending" — clear the slot so a concurrent
+  // pushCloudKey doesn't redundantly cancel-and-decrement.
+  pendingRetries[key] = undefined;
   try {
     const res = await fetch('/api/dashboard-state', {
       method: 'POST',
@@ -191,7 +223,15 @@ async function postWithRetry(key: string, value: unknown, attempt = 1): Promise<
       }));
       return;
     }
-    setTimeout(() => void postWithRetry(key, value, attempt + 1), 5000);
+    // Schedule a single retry. Track the timer in pendingRetries so a
+    // newer pushCloudKey(key, ...) can cancel it BEFORE it fires (WR2-01).
+    // Without this tracking, the retry's closure captures the old `value`
+    // and can overwrite cloud with the stale value after the newer push
+    // has already succeeded.
+    pendingRetries[key] = setTimeout(
+      () => void postWithRetry(key, value, attempt + 1),
+      5000,
+    );
   }
 }
 
