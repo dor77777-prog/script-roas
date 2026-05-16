@@ -35,7 +35,6 @@ export type Aggregate = {
   trueNetProfit: number;
   /** trueNetProfit / revenue. Useful as a margin chip. */
   trueMargin: number;
-  cogsCoverage: number; // 0..1 - share of rows that had COGS reported
   rowCount: number;
 };
 
@@ -52,7 +51,7 @@ export function filterRows(
 }
 
 export function aggregate(rows: DailyRow[]): Aggregate {
-  let revenue = 0, spend = 0, fbSpend = 0, gaSpend = 0, cogs = 0, cogsRows = 0;
+  let revenue = 0, spend = 0, fbSpend = 0, gaSpend = 0, cogs = 0;
   const stores = new Set<string>();
   const dates = new Set<string>();
   let minDate: string | null = null;
@@ -63,7 +62,6 @@ export function aggregate(rows: DailyRow[]): Aggregate {
     fbSpend += r.fbSpend;
     gaSpend += r.gaSpend;
     cogs += r.cogs;
-    if (r.hasCogs) cogsRows++;
     stores.add(r.storeName);
     dates.add(r.date);
     if (!minDate || r.date < minDate) minDate = r.date;
@@ -97,7 +95,6 @@ export function aggregate(rows: DailyRow[]): Aggregate {
     daysCovered,
     trueNetProfit,
     trueMargin: revenue > 0 ? trueNetProfit / revenue : 0,
-    cogsCoverage: rows.length > 0 ? cogsRows / rows.length : 0,
     rowCount: rows.length,
   };
 }
