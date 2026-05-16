@@ -277,7 +277,15 @@ function getShopifyPlan(storeId) {
   const res = fetchWithRetry_(url, {
     method: 'post',
     contentType: 'application/json',
-    headers: { 'X-Shopify-Access-Token': token },
+    headers: {
+      'X-Shopify-Access-Token': token,
+      // Explicit Accept defends against rare cases (documented during
+      // Shopify status-page incidents) where the endpoint returns HTML or
+      // XML instead of JSON. With Accept set, JSON.parse failures fall into
+      // the non-JSON branch below rather than throwing past refreshAllStoreMeta
+      // and being silently logged as a generic exception.
+      'Accept': 'application/json',
+    },
     payload: JSON.stringify({ query: query }),
     muteHttpExceptions: true,
   });
