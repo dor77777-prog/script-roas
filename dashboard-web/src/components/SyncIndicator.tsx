@@ -13,11 +13,18 @@ import { getSyncState, hydrateFromCloud, type SyncState } from '@/lib/cloudSync'
 export function SyncIndicator() {
   const [state, setState] = useState<SyncState>(() => getSyncState());
   const [expanded, setExpanded] = useState(false);
+  // Bump tick every 30s so the "synced N seconds ago" tooltip text doesn't
+  // freeze between sync events (which can be minutes apart while idle).
+  const [, setTick] = useState(0);
 
   useEffect(() => {
     const sync = () => setState(getSyncState());
     window.addEventListener('roas-cloud-sync-state', sync);
-    return () => window.removeEventListener('roas-cloud-sync-state', sync);
+    const tickInterval = setInterval(() => setTick(t => t + 1), 30_000);
+    return () => {
+      window.removeEventListener('roas-cloud-sync-state', sync);
+      clearInterval(tickInterval);
+    };
   }, []);
 
   const { status, lastError, pendingKeys, lastSyncAt } = state;
