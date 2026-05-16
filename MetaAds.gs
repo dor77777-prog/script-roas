@@ -47,10 +47,14 @@ function getMetaAdSetInsights(storeId, dateStr) {
     for (const r of rows) {
       const spend = parseFloat(r.spend || 0);
       const impressions = parseInt(r.impressions || 0, 10);
-      // דלג על ad sets שלא היו פעילים ביום הזה (אין spend וגם אין חשיפות).
-      // קוצץ דרסטית את כמות השורות (מ-334 ל-~30-50 בפרקטיקה).
-      if (spend === 0 && impressions === 0) continue;
       const conv = extractMetaPurchases_(r);
+      // דלג על ad sets שלא היו פעילים ביום הזה (אין spend, אין חשיפות וגם
+      // אין המרות). חשוב לכלול conv.count בבדיקה: Meta routinely מייחס
+      // המרות מאוחרות (attribution window) למודעות שכבר הופסקו - השורה
+      // תיראה spend=0/impressions=0/conv>0, וזרקנו אותה בעבר בטעות.
+      // הסינון המקביל ב-lib/campaigns.ts כבר כולל conversions; משווים גם
+      // במקור כדי לא להפיל נתונים לפני שהם מגיעים לדשבורד.
+      if (spend === 0 && impressions === 0 && (conv.count || 0) === 0) continue;
       out.push({
         campaignId: r.campaign_id || '',
         campaignName: r.campaign_name || '',
@@ -269,8 +273,11 @@ function getMetaAdInsights(storeId, dateStr) {
     for (const r of rows) {
       const spend = parseFloat(r.spend || 0);
       const impressions = parseInt(r.impressions || 0, 10);
-      if (spend === 0 && impressions === 0) continue;
       const conv = extractMetaPurchases_(r);
+      // ראה הערה ב-getMetaAdSetInsights: late-attributed conversions שמגיעות
+      // למודעה שכבר הופסקה תוצגנה כ-spend=0/impressions=0/conv>0; הסינון
+      // הקודם זרק אותן בשקט. כוללים conv.count כדי שלא לאבד הכנסה.
+      if (spend === 0 && impressions === 0 && (conv.count || 0) === 0) continue;
       out.push({
         campaignId: r.campaign_id || '',
         campaignName: r.campaign_name || '',
