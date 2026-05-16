@@ -71,6 +71,13 @@ function getMetaAdSetInsights(storeId, dateStr) {
     url = (body.paging && body.paging.next) || null;
     safety++;
   }
+  if (safety >= 50) {
+    Logger.log(
+      `WARNING: hit pagination safety cap of 50 pages for Meta adsets ` +
+      `${storeId} ${dateStr} (${out.length} rows collected); data beyond ` +
+      `may be missing. Narrow the date window or raise the cap.`
+    );
+  }
   Logger.log(`Meta adsets ${storeId} ${dateStr}: ${out.length} ad sets`);
   return out;
 }
@@ -231,6 +238,13 @@ function getMetaBudgets(storeId) {
     curl = (body.paging && body.paging.next) || null;
     safety++;
   }
+  if (safety >= 50) {
+    Logger.log(
+      `WARNING: hit pagination safety cap of 50 pages for Meta campaign ` +
+      `budgets ${storeId} (${Object.keys(campaigns).length} rows collected); ` +
+      `some campaigns may be missing.`
+    );
+  }
 
   // ---- ad-sets --------------------------------------------------------------
   const adSets = {};
@@ -261,6 +275,13 @@ function getMetaBudgets(storeId) {
     }
     aurl = (body.paging && body.paging.next) || null;
     safety++;
+  }
+  if (safety >= 50) {
+    Logger.log(
+      `WARNING: hit pagination safety cap of 50 pages for Meta ad-set ` +
+      `budgets ${storeId} (${Object.keys(adSets).length} rows collected); ` +
+      `some ad-sets may be missing.`
+    );
   }
 
   Logger.log(`Meta budgets ${storeId}: ${Object.keys(campaigns).length} campaigns / ${Object.keys(adSets).length} adsets · currency=${currency}`);
@@ -334,6 +355,13 @@ function getMetaAdInsights(storeId, dateStr) {
     }
     url = (body.paging && body.paging.next) || null;
     safety++;
+  }
+  if (safety >= 50) {
+    Logger.log(
+      `WARNING: hit pagination safety cap of 50 pages for Meta ads ` +
+      `${storeId} ${dateStr} (${out.length} rows collected); data beyond ` +
+      `may be missing. Narrow the date window or raise the cap.`
+    );
   }
   Logger.log(`Meta ads ${storeId} ${dateStr}: ${out.length} ads`);
   return out;

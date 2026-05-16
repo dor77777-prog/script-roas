@@ -108,6 +108,13 @@ function getShopifyRevenue(storeId, dateStr) {
     url = m ? m[1] : null;
     safety++;
   }
+  if (safety >= 50) {
+    Logger.log(
+      `WARNING: hit pagination safety cap of 50 pages for Shopify orders ` +
+      `${storeId} ${dateStr} (${count} orders collected, total=${total.toFixed(2)}); ` +
+      `data beyond may be missing.`
+    );
+  }
 
   Logger.log(`Shopify ${storeId} ${dateStr}: ${count} orders, total=${total.toFixed(2)} CAD`);
   return total;
@@ -224,6 +231,13 @@ function getShopifyProductSalesForDay(storeId, dateStr) {
     const m = link.match(/<([^>]+)>;\s*rel="next"/);
     url = m ? m[1] : null;
     safety++;
+  }
+  if (safety >= 50) {
+    Logger.log(
+      `WARNING: hit pagination safety cap of 50 pages for Shopify product ` +
+      `sales ${storeId} ${dateStr} (${Object.keys(byProduct).length} products ` +
+      `collected so far); data beyond may be missing.`
+    );
   }
 
   const out = Object.values(byProduct)
