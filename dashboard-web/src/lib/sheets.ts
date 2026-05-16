@@ -130,6 +130,12 @@ export type StoreMetaRow = {
   shopifyPlus: boolean;
   partnerDevelopment: boolean;
   updatedAt: string | null;
+  /** When Apps Script's GraphQL call failed (missing scope, expired token,
+   *  GraphQL errors), refreshAllStoreMeta writes the error message to column G
+   *  of the store-meta tab so the dashboard can show the real reason
+   *  auto-detect isn't working. Empty string / null means the last refresh
+   *  succeeded. */
+  lastError: string | null;
 };
 
 /**
@@ -145,9 +151,12 @@ export async function fetchStoreMeta(): Promise<StoreMetaRow[]> {
   const spreadsheetId = getSpreadsheetId();
 
   try {
+    // Read through column G (Last Error) so the dashboard can surface
+    // GraphQL / scope failures. Older deployments without column G will simply
+    // return undefined for row[6] which we coerce to null.
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `${STORE_META_TAB}!A2:F1000`,
+      range: `${STORE_META_TAB}!A2:G1000`,
       valueRenderOption: 'UNFORMATTED_VALUE',
       dateTimeRenderOption: 'FORMATTED_STRING',
     });
@@ -157,6 +166,11 @@ export async function fetchStoreMeta(): Promise<StoreMetaRow[]> {
       const storeId = String(row[0] ?? '').trim();
       const storeName = String(row[1] ?? '').trim();
       if (!storeId) continue;
+      const lastErrorRaw = row[6];
+      const lastError =
+        lastErrorRaw === undefined || lastErrorRaw === null || lastErrorRaw === ''
+          ? null
+          : String(lastErrorRaw);
       out.push({
         storeId,
         storeName,
@@ -164,6 +178,7 @@ export async function fetchStoreMeta(): Promise<StoreMetaRow[]> {
         shopifyPlus: row[3] === true || row[3] === 'TRUE' || row[3] === 'true',
         partnerDevelopment: row[4] === true || row[4] === 'TRUE' || row[4] === 'true',
         updatedAt: row[5] ? String(row[5]) : null,
+        lastError,
       });
     }
     return out;

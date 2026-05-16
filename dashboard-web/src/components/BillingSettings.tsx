@@ -39,6 +39,11 @@ type StoreMetaRow = {
   shopifyPlus: boolean;
   partnerDevelopment: boolean;
   updatedAt: string | null;
+  /** When Apps Script's Shopify GraphQL call failed (missing scope, expired
+   *  token, etc.), refreshAllStoreMeta writes the reason into the store-meta
+   *  tab. We surface this so the user understands why auto-detect isn't
+   *  populating plans rather than silently showing nothing. */
+  lastError?: string | null;
 };
 type StoreMetaResponse = { rows: StoreMetaRow[]; lastUpdated?: string; error?: string };
 
@@ -298,6 +303,15 @@ function RecurringTab({
     });
   }, [detectedPlans, items, storeNames]);
 
+  // Stores whose Apps Script auto-detect call failed (missing scope, expired
+  // token, GraphQL error). We surface these so the user can fix the root
+  // cause instead of wondering why auto-detect isn't suggesting anything.
+  const planErrorStores = useMemo(() => {
+    return detectedPlans.filter(
+      m => !!m.lastError && storeNames.includes(m.storeName),
+    );
+  }, [detectedPlans, storeNames]);
+
   function addNew() {
     const fresh: RecurringCost = {
       id: generateId(),
@@ -357,6 +371,49 @@ function RecurringTab({
 
   return (
     <div className="space-y-3">
+      {planErrorStores.length > 0 && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+          <div className="flex items-start gap-2">
+            <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-amber-100 text-amber-700 shrink-0">
+              <AlertCircle size={14} />
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="text-xs sm:text-sm font-semibold text-amber-900">
+                זיהוי אוטומטי של תוכניות Shopify נכשל
+              </div>
+              <p className="text-[11px] sm:text-xs text-amber-900/85 mt-0.5 leading-relaxed">
+                Apps Script נכשל בקריאת ה-plan דרך GraphQL Admin API. סיבות
+                נפוצות: ה-token לא כולל את ה-scope <code>read_shop</code>,
+                ה-token פג, או החנות חסומה. תיקון נדרש בצד Apps Script
+                (Script Properties). עד אז ניתן להוסיף את התוכניות ידנית.
+              </p>
+              <ul className="mt-2 space-y-1">
+                {planErrorStores.map(m => (
+                  <li
+                    key={m.storeId}
+                    className="rounded-md bg-surface border border-amber-200 px-2.5 py-1.5"
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-text-primary shrink-0">
+                        {m.storeName}
+                      </span>
+                      <span className="text-[10px] text-text-muted shrink-0">
+                        {m.updatedAt ? `עודכן ${m.updatedAt}` : ''}
+                      </span>
+                    </div>
+                    <div
+                      dir="ltr"
+                      className="text-[10px] text-amber-900/80 font-mono mt-1 break-words"
+                    >
+                      {m.lastError}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
       {missingDetected.length > 0 && (
         <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
           <div className="flex items-start gap-2">

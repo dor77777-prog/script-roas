@@ -251,7 +251,12 @@ function bootstrapAllShopifyTokens() {
  * "Advanced Shopify" / "Shopify Plus" / "Starter". הצד של ה-dashboard עושה
  * mapping בין displayName למחיר USD סטטי.
  *
- * החזרה: { displayName, partnerDevelopment, shopifyPlus } או null אם נכשל.
+ * החזרה: { plan, error }.
+ *   plan  = { displayName, partnerDevelopment, shopifyPlus } אם נמצא, אחרת null
+ *   error = מחרוזת תיאור הכשל (HTTP error / GraphQL error / missing plan) אם
+ *           לא הצלחנו להחזיר plan, אחרת null. הקורא חושף את ה-error בטאב
+ *           store-meta כדי שהדשבורד יוכל להציג סיבת כשל אמיתית במקום
+ *           לתת אוטומציה שותקת לכשל.
  */
 function getShopifyPlan(storeId) {
   const domain = requireProp(`${storeId}.shopify.domain`).replace(/^https?:\/\//, '').replace(/\/$/, '');
@@ -277,18 +282,34 @@ function getShopifyPlan(storeId) {
     muteHttpExceptions: true,
   });
   const code = res.getResponseCode();
+  const responseText = res.getContentText();
   if (code !== 200) {
-    Logger.log(`Shopify plan ${storeId} failed (${code}): ${res.getContentText()}`);
-    return null;
+    const errMsg = `HTTP ${code}: ${responseText.slice(0, 300)}`;
+    Logger.log(`Shopify plan ${storeId} failed (${code}): ${responseText}`);
+    return { plan: null, error: errMsg };
   }
-  const body = JSON.parse(res.getContentText());
+  let body;
+  try {
+    body = JSON.parse(responseText);
+  } catch (e) {
+    const errMsg = `non-JSON response: ${responseText.slice(0, 200)}`;
+    Logger.log(`Shopify plan ${storeId}: ${errMsg}`);
+    return { plan: null, error: errMsg };
+  }
+  // GraphQL returns HTTP 200 even on permission/auth errors — surface them.
+  if (body && body.errors && body.errors.length) {
+    const errMsg = `GraphQL errors: ${JSON.stringify(body.errors).slice(0, 400)}`;
+    Logger.log(`Shopify plan ${storeId} ${errMsg}`);
+    return { plan: null, error: errMsg };
+  }
   const plan = body && body.data && body.data.shop && body.data.shop.plan;
   if (!plan || !plan.displayName) {
-    Logger.log(`Shopify plan ${storeId}: missing plan in response: ${res.getContentText()}`);
-    return null;
+    const errMsg = `missing plan in response: ${responseText.slice(0, 300)}`;
+    Logger.log(`Shopify plan ${storeId}: ${errMsg}`);
+    return { plan: null, error: errMsg };
   }
   Logger.log(`Shopify plan ${storeId}: ${plan.displayName} (plus=${plan.shopifyPlus}, dev=${plan.partnerDevelopment})`);
-  return plan;
+  return { plan: plan, error: null };
 }
 
 /**
@@ -302,10 +323,13 @@ function refreshAllStoreMeta() {
   const updatedAt = new Date();
   for (const store of STORES) {
     try {
-      const plan = getShopifyPlan(store.id);
-      writeStoreMetaRow_(ss, store.id, store.name, plan, updatedAt);
+      const result = getShopifyPlan(store.id);
+      writeStoreMetaRow_(ss, store.id, store.name, result.plan, updatedAt, result.error);
     } catch (e) {
-      Logger.log(`store-meta ${store.id} failed: ${e && e.message ? e.message : e}`);
+      const msg = e && e.message ? e.message : String(e);
+      Logger.log(`store-meta ${store.id} failed: ${msg}`);
+      // Bubble exception text into the sheet so the dashboard can show it.
+      writeStoreMetaRow_(ss, store.id, store.name, null, updatedAt, `exception: ${msg}`);
     }
   }
 }

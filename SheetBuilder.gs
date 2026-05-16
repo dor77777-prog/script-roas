@@ -838,7 +838,7 @@ function writeDailyFlatRow_(ss, dateStr, storeId, storeName, fbCad, gaCad, reven
 // ----------------------------------------------------------------------------
 
 const STORE_META_HEADERS = [
-  'Store ID', 'Store', 'Plan Display Name', 'Shopify Plus', 'Partner Dev', 'Updated At'
+  'Store ID', 'Store', 'Plan Display Name', 'Shopify Plus', 'Partner Dev', 'Updated At', 'Last Error'
 ];
 
 function ensureStoreMetaTab_(ss) {
@@ -862,6 +862,19 @@ function ensureStoreMetaTab_(ss) {
     sh.setColumnWidth(4, 100); // Shopify Plus
     sh.setColumnWidth(5, 100); // Partner Dev
     sh.setColumnWidth(6, 160); // Updated At
+    sh.setColumnWidth(7, 360); // Last Error (full GraphQL response excerpt)
+  } else {
+    // Sheet exists from a previous deploy without the Last Error column.
+    // Add it idempotently so dashboards can read it after the next refresh.
+    const headerRow = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0];
+    if (headerRow.length < 7 || String(headerRow[6] || '').trim() !== 'Last Error') {
+      sh.getRange(1, 7).setValue('Last Error')
+        .setFontWeight('bold')
+        .setBackground('#1c4587')
+        .setFontColor('#ffffff')
+        .setHorizontalAlignment('center');
+      sh.setColumnWidth(7, 360);
+    }
   }
   if (justCreated) {
     try { sh.hideSheet(); } catch (_) {}
@@ -872,8 +885,11 @@ function ensureStoreMetaTab_(ss) {
 /**
  * כותב/מעדכן שורה ב-store-meta. אידמפוטנטי לפי storeId.
  * plan = { displayName, partnerDevelopment, shopifyPlus } או null אם נכשל.
+ * lastError = מחרוזת תיאור הכשל מ-getShopifyPlan, או null אם הצליח. נכתב
+ *             לעמודה G כך שה-dashboard יכול להציג למשתמש למה auto-detect
+ *             לא עובד (חסר scope / טוקן פג / וכו') במקום לתת התנהגות שותקת.
  */
-function writeStoreMetaRow_(ss, storeId, storeName, plan, updatedAt) {
+function writeStoreMetaRow_(ss, storeId, storeName, plan, updatedAt, lastError) {
   const sh = ensureStoreMetaTab_(ss);
   const lastRow = sh.getLastRow();
   let targetRow = lastRow + 1;
@@ -891,9 +907,10 @@ function writeStoreMetaRow_(ss, storeId, storeName, plan, updatedAt) {
   const displayName = plan && plan.displayName ? String(plan.displayName) : '';
   const plus = plan ? !!plan.shopifyPlus : '';
   const dev = plan ? !!plan.partnerDevelopment : '';
+  const errCell = lastError ? String(lastError) : '';
 
-  sh.getRange(targetRow, 1, 1, 6).setValues([[
-    storeId, storeName, displayName, plus, dev, updatedAt
+  sh.getRange(targetRow, 1, 1, 7).setValues([[
+    storeId, storeName, displayName, plus, dev, updatedAt, errCell
   ]]);
   sh.getRange(targetRow, 6).setNumberFormat('yyyy-mm-dd hh:mm');
 }
