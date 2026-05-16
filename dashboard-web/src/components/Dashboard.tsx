@@ -13,6 +13,7 @@ import {
   Target,
   Store,
   CalendarDays,
+  Megaphone,
 } from 'lucide-react';
 import type { DashboardData, Filters as F } from '@/lib/types';
 import { computePresetRange, previousRange } from '@/lib/presets';
@@ -25,6 +26,7 @@ import { MonthlyTables } from './MonthlyTables';
 import { DetailTable } from './DetailTable';
 import { TodayLive } from './TodayLive';
 import { ProductsTable } from './ProductsTable';
+import { CampaignsTable } from './CampaignsTable';
 import { TabNav, type TabDef } from './TabNav';
 import { SectionIntro } from './SectionIntro';
 
@@ -39,13 +41,14 @@ const fetcher = async (url: string) => {
 
 const initialPreset = 'yesterday';
 
-type TabKey = 'home' | 'analysis' | 'products' | 'detail';
+type TabKey = 'home' | 'analysis' | 'campaigns' | 'products' | 'detail';
 
 const TABS: TabDef<TabKey>[] = [
-  { key: 'home', label: 'בית', icon: <Home size={16} /> },
-  { key: 'analysis', label: 'ניתוח', icon: <TrendingUp size={16} /> },
-  { key: 'products', label: 'מוצרים', icon: <Package size={16} /> },
-  { key: 'detail', label: 'פירוט', icon: <Table size={16} /> },
+  { key: 'home',      label: 'בית',     icon: <Home size={16} /> },
+  { key: 'analysis',  label: 'ניתוח',    icon: <TrendingUp size={16} /> },
+  { key: 'campaigns', label: 'קמפיינים', icon: <Megaphone size={16} /> },
+  { key: 'products',  label: 'מוצרים',   icon: <Package size={16} /> },
+  { key: 'detail',    label: 'פירוט',    icon: <Table size={16} /> },
 ];
 
 export function Dashboard() {
@@ -118,6 +121,9 @@ export function Dashboard() {
             )}
             {activeTab === 'analysis' && (
               <AnalysisTab data={data} filtered={filtered} filters={filters} setFilters={setFilters} />
+            )}
+            {activeTab === 'campaigns' && (
+              <CampaignsTab data={data} filters={filters} setFilters={setFilters} />
             )}
             {activeTab === 'products' && (
               <ProductsTab data={data} filters={filters} setFilters={setFilters} />
@@ -236,6 +242,38 @@ function AnalysisTab({
       />
       <div className="rounded-xl bg-surface border border-border shadow-card overflow-hidden">
         <MonthlyTables rows={data.rows} stores={data.stores} bare />
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Tab: CAMPAIGNS — campaign + ad-set performance with ROAS / CTR / CPC / CPA.
+// ============================================================================
+function CampaignsTab({
+  data,
+  filters,
+  setFilters,
+}: {
+  data: DashboardData;
+  filters: F;
+  setFilters: (next: F) => void;
+}) {
+  return (
+    <div className="space-y-4 sm:space-y-5">
+      <SectionIntro
+        icon={<Megaphone size={20} />}
+        title="ביצועי קמפיינים ומודעות"
+        description="קמפיין-לכל-קמפיין ואד-סט-לכל-אד-סט: כמה הוצאת, כמה החזיר, ROAS, CTR, CPC ו-CPA. ממויין כברירת מחדל לפי ROAS — שורות עליונות הן הזוכות. לחיצה על האייקון מימין לשורה פותחת ישירות את הקמפיין ב-Meta/Google Ads Manager."
+        formula="ROAS = ערך המרות / הוצאה · CTR = קליקים / חשיפות · CPA = הוצאה / המרות"
+      />
+      <Filters filters={filters} stores={data.stores} onChange={setFilters} />
+      <div className="rounded-xl bg-surface border border-borderSubtle shadow-card overflow-hidden">
+        <CampaignsTable
+          range={filters.range}
+          store={filters.store}
+          stores={data.stores}
+        />
       </div>
     </div>
   );
