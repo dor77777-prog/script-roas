@@ -87,6 +87,7 @@ function onOpen() {
       .addItem('הסר טריגר יומי', 'removeDailyTrigger')
       .addSeparator()
       .addItem('בנה/רענן דשבורד', 'setupDashboard')
+      .addItem('התקן טריגר לבורר התקופה', 'installDashboardEditTrigger')
       .addSeparator()
       .addItem('הסתר טאבים עזריים', 'hideAuxiliaryTabs')
       .addItem('הצג טאבים עזריים (debug)', 'showAuxiliaryTabs')

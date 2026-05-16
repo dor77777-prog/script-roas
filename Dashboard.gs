@@ -41,13 +41,43 @@ const DBC = {
 };
 
 /**
- * נקודת כניסה - בונה (או מרענן) את הדשבורד.
+ * נקודת כניסה - בונה (או מרענן) את הדשבורד + מבטיח שטריגר onEdit מותקן.
  */
 function setupDashboard() {
   const ss = ensureSpreadsheet();
   buildHelpersTab_(ss);
   buildDashboardTab_(ss);
+  installDashboardEditTrigger();
   Logger.log('Dashboard ready');
+}
+
+/**
+ * מתקין Installable onEdit trigger. אמין יותר מ-Simple trigger:
+ * רץ עם הרשאות מלאות של המשתמש, פחות מוגבל.
+ */
+function installDashboardEditTrigger() {
+  const ss = ensureSpreadsheet();
+  // הסר טריגרים קיימים של אותה הפונקציה (כדי לא לכפל)
+  const triggers = ScriptApp.getProjectTriggers();
+  for (const t of triggers) {
+    if (t.getHandlerFunction() === 'dashboardOnEditInstalled') {
+      ScriptApp.deleteTrigger(t);
+    }
+  }
+  ScriptApp.newTrigger('dashboardOnEditInstalled')
+    .forSpreadsheet(ss)
+    .onEdit()
+    .create();
+  Logger.log('Installable dashboard onEdit trigger created');
+}
+
+/** Handler ל-Installable onEdit trigger. */
+function dashboardOnEditInstalled(e) {
+  try {
+    dashboardOnEdit_(e);
+  } catch (err) {
+    Logger.log('dashboardOnEditInstalled error: ' + (err && err.message ? err.message : err));
+  }
 }
 
 /**
@@ -521,6 +551,10 @@ function buildChart_(sh, ss) {
   // צבעים מובחנים, באותו סדר של העמודות בגרף
   const chartColors = ['#1c4587', '#ea4335', '#34a853', '#fbbc04', '#9c27b0', '#00acc1'];
 
+  // ודא שעמודה A ב-helpers מעוצבת כתאריך - הגרף משתמש בערכי המקור.
+  // אם הערך הוא Date object אמיתי, ה-x-axis יהיה ציר תאריך (לא מספרים).
+  helpers.getRange('A:A').setNumberFormat('dd/MM/yyyy');
+
   const chart = sh.newChart()
     .setChartType(Charts.ChartType.LINE)
     .addRange(helpers.getRange('A3:L500'))
@@ -528,7 +562,8 @@ function buildChart_(sh, ss) {
     .setPosition(17, 1, 0, 0)
     .setOption('title', '')
     .setOption('legend', { position: 'top', alignment: 'center', textStyle: { fontSize: 13, bold: true } })
-    .setOption('hAxis', { title: '', format: 'd/M', slantedText: false })
+    // לא מגדירים hAxis.format כדי שגוגל תזהה אוטומטית שמדובר בציר תאריכים
+    .setOption('hAxis', { title: '', slantedText: false, format: 'dd/MM' })
     .setOption('vAxis', { title: 'ROAS', minValue: 0, gridlines: { count: 5 } })
     .setOption('width', 1100)
     .setOption('height', 320)
