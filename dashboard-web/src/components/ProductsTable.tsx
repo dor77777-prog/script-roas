@@ -130,21 +130,12 @@ function aggregate(
   period: Period,
   store: string,
   range: DateRange,
-  specificDay: string | null,
 ): BucketAgg[] {
   const today = todayInIsrael();
   const liveBucketKey = bucketKey(today, period);
-  // When a specific day is pinned (day view only), it overrides the range
-  // entirely and produces a single bucket — no need to also keep the wider
-  // range buckets, they would just be noise.
-  const useSpecific = period === 'day' && specificDay;
 
   const filtered = rows.filter(r => {
-    if (useSpecific) {
-      if (r.date !== specificDay) return false;
-    } else {
-      if (r.date < range.from || r.date > range.to) return false;
-    }
+    if (r.date < range.from || r.date > range.to) return false;
     if (store !== 'All' && r.storeName !== store) return false;
     return true;
   });
@@ -233,12 +224,7 @@ function aggregate(
   // Ensure today's bucket appears even with zero products (e.g. early morning,
   // or store hasn't had an order yet). User explicitly asked for the live row
   // to show "today as of now" even when empty.
-  // Skip this when the user pinned a specific day — they've narrowed to a
-  // single date and the live bucket would be misleading if that date isn't
-  // today.
-  const todayInRange = useSpecific
-    ? specificDay === today
-    : today >= range.from && today <= range.to;
+  const todayInRange = today >= range.from && today <= range.to;
   if (todayInRange && !out.some(b => b.key === liveBucketKey)) {
     out.push({
       key: liveBucketKey,
@@ -275,24 +261,25 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
   });
 
   const [period, setPeriod] = useState<Period>('day');
-  // Independent local store filter — defaults to whatever the global filter
-  // is, but the user can override it without changing the rest of the page.
-  // We sync to the global value when it changes (so when the user picks
-  // "uzoshop" in the global filter, products follow). They can then narrow
-  // further inside the products panel.
+
+  // Local store filter — defaults to global, syncs when global changes, but
+  // user can override per-section without affecting the rest of the page.
   const [localStore, setLocalStore] = useState(globalStore);
   useEffect(() => {
     setLocalStore(globalStore);
   }, [globalStore]);
 
-  // Optional pin to a specific date. Only meaningful in 'day' view — when set,
-  // every other date is filtered out and only that single day's bucket shows.
-  // Cleared automatically when the user switches away from 'day' view, so a
-  // pin made in day view doesn't quietly affect week/month/etc.
-  const [specificDay, setSpecificDay] = useState<string>('');
+  // Local date range — same pattern. From/to inputs let the user zoom into
+  // any window (single day if from===to, or any longer span).
+  const [localRange, setLocalRange] = useState<DateRange>(range);
   useEffect(() => {
-    if (period !== 'day') setSpecificDay('');
-  }, [period]);
+    setLocalRange(range);
+  }, [range.from, range.to]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Detect when the local range diverges from the global one — used to show
+  // a "מחזיר לטווח הגלובלי" reset button.
+  const isCustomRange =
+    localRange.from !== range.from || localRange.to !== range.to;
 
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [nowLabel, setNowLabel] = useState(nowInIsrael());
@@ -303,8 +290,42 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
 
   const buckets = useMemo(() => {
     if (!data) return [];
-    return aggregate(data.rows, period, localStore, range, specificDay || null);
-  }, [data, period, localStore, range, specificDay]);
+    return aggregate(data.rows, period, localStore, localRange);
+  }, [data, period, localStore, localRange]);
+
+  // Range-level totals for the summary card at the top.
+  const summary = useMemo(() => {
+    let units = 0;
+    let orders = 0;
+    let gross = 0;
+    let net: number | null = null;
+    const productKeys = new Set<string>();
+    let hasNet = false;
+    for (const b of buckets) {
+      units += b.totalUnits;
+      orders += b.totalOrders;
+      gross += b.totalRevenue;
+      if (b.hasNet && b.totalNetRevenue !== null) {
+        hasNet = true;
+        net = (net ?? 0) + b.totalNetRevenue;
+      }
+      for (const p of b.products) productKeys.add(p.productId || p.productTitle);
+    }
+    // Days in the selected range (inclusive).
+    const fromMs = new Date(localRange.from + 'T00:00:00Z').getTime();
+    const toMs = new Date(localRange.to + 'T00:00:00Z').getTime();
+    const days = Math.max(1, Math.round((toMs - fromMs) / 86400000) + 1);
+    return {
+      units,
+      orders,
+      gross,
+      net: hasNet ? net : null,
+      productCount: productKeys.size,
+      days,
+      avgUnitsPerDay: units / days,
+      avgGrossPerDay: gross / days,
+    };
+  }, [buckets, localRange]);
 
   function toggle(key: string) {
     setExpanded(prev => {
@@ -363,49 +384,66 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
         </select>
       </div>
 
-      {/* Specific day picker — only meaningful in day view */}
-      {period === 'day' && (
-        <div className="flex items-center gap-2">
-          <Calendar size={14} className="text-text-muted shrink-0" />
-          <div className="relative">
-            <input
-              type="date"
-              value={specificDay}
-              onChange={e => setSpecificDay(e.target.value)}
-              placeholder="יום ספציפי"
-              className={cn(
-                'rounded-lg border bg-surface px-2.5 py-1.5 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30',
-                specificDay
-                  ? 'border-primary text-primary pl-7'
-                  : 'border-border text-text-secondary',
-              )}
-            />
-            {specificDay && (
-              <button
-                type="button"
-                onClick={() => setSpecificDay('')}
-                className="absolute left-1 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-surfaceMuted text-text-muted hover:text-text-primary transition-colors"
-                aria-label="נקה תאריך"
-                title="חזרה לכל הימים"
-              >
-                <X size={14} />
-              </button>
-            )}
-          </div>
-        </div>
-      )}
+      {/* Range picker — works in all views. from===to means one day. */}
+      <div className="flex items-center gap-1.5 sm:gap-2">
+        <Calendar size={14} className="text-text-muted shrink-0" />
+        <input
+          type="date"
+          value={localRange.from}
+          max={localRange.to}
+          onChange={e => setLocalRange(prev => ({ ...prev, from: e.target.value }))}
+          aria-label="מתאריך"
+          className={cn(
+            'rounded-lg border bg-surface px-2 py-1.5 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30',
+            isCustomRange ? 'border-primary text-primary' : 'border-border text-text-secondary',
+          )}
+        />
+        <span className="text-text-muted text-xs">—</span>
+        <input
+          type="date"
+          value={localRange.to}
+          min={localRange.from}
+          onChange={e => setLocalRange(prev => ({ ...prev, to: e.target.value }))}
+          aria-label="עד תאריך"
+          className={cn(
+            'rounded-lg border bg-surface px-2 py-1.5 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30',
+            isCustomRange ? 'border-primary text-primary' : 'border-border text-text-secondary',
+          )}
+        />
+        {isCustomRange && (
+          <button
+            type="button"
+            onClick={() => setLocalRange(range)}
+            className="p-1 rounded hover:bg-surfaceMuted text-text-muted hover:text-text-primary transition-colors"
+            aria-label="חזור לטווח הגלובלי"
+            title="חזור לטווח שנבחר בסינון העליון"
+          >
+            <X size={14} />
+          </button>
+        )}
+      </div>
 
       <span className="text-[10px] sm:text-xs text-text-muted tabular-nums sm:mr-auto">
-        {specificDay
-          ? `יום אחד: ${formatDate(specificDay)}`
-          : `${buckets.length} ${period === 'day' ? 'ימים' : 'תקופות'}`}
+        {summary.days === 1
+          ? `יום אחד · ${formatDate(localRange.from)}`
+          : `${summary.days} ימים · ${buckets.length} ${period === 'day' ? 'ימים' : 'תקופות'}`}
       </span>
     </div>
+  );
+
+  const summaryCard = data && buckets.length > 0 && (
+    <SummaryCard
+      store={localStore}
+      from={localRange.from}
+      to={localRange.to}
+      summary={summary}
+    />
   );
 
   return (
     <div>
       {toolbar}
+      {summaryCard}
 
       {error && (
         <div className="m-4 rounded-lg bg-roas-redBg border border-roas-red/30 p-3 flex items-start gap-2 text-sm">
@@ -634,6 +672,141 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
               </div>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// SummaryCard — sits between the toolbar and the bucket list, gives the user
+// an at-a-glance "report" for the current store × range selection.
+// ============================================================================
+
+type SummaryData = {
+  units: number;
+  orders: number;
+  gross: number;
+  net: number | null;
+  productCount: number;
+  days: number;
+  avgUnitsPerDay: number;
+  avgGrossPerDay: number;
+};
+
+function SummaryCard({
+  store,
+  from,
+  to,
+  summary,
+}: {
+  store: string;
+  from: string;
+  to: string;
+  summary: SummaryData;
+}) {
+  const storeLabel = store === 'All' ? 'כל החנויות' : store;
+  const dateLabel =
+    from === to ? formatDate(from) : `${formatDate(from)} — ${formatDate(to)}`;
+  const haircut =
+    summary.net !== null && summary.gross > 0
+      ? 1 - summary.net / summary.gross
+      : null;
+
+  return (
+    <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gradient-to-l from-primary/5 to-surface border-b border-border">
+      <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-base sm:text-lg font-bold text-text-primary truncate">
+            🏪 {storeLabel}
+          </span>
+          <span className="text-xs sm:text-sm text-text-muted tabular-nums">·</span>
+          <span className="text-xs sm:text-sm text-text-secondary tabular-nums">
+            {dateLabel}
+          </span>
+          <span className="text-[10px] sm:text-xs text-text-muted">({summary.days} ימים)</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-2 sm:gap-3">
+        <Stat
+          label="הזמנות"
+          value={summary.orders > 0 ? formatNumber(summary.orders, 0) : '—'}
+        />
+        <Stat label="יחידות" value={formatNumber(summary.units, 0)} primary />
+        <Stat label="ברוטו" value={`CAD ${formatCurrency(summary.gross)}`} />
+        <Stat
+          label="נטו"
+          value={summary.net !== null ? `CAD ${formatCurrency(summary.net)}` : '—'}
+          accent={summary.net !== null && summary.net < summary.gross ? 'green' : undefined}
+          subtitle={
+            haircut !== null && haircut > 0.005
+              ? `−${(haircut * 100).toFixed(1)}% הנחות/החזרים`
+              : undefined
+          }
+        />
+        <Stat
+          label="מוצרים שונים"
+          value={formatNumber(summary.productCount, 0)}
+          className="col-span-2 sm:col-span-1"
+        />
+      </div>
+
+      {summary.days > 1 && (
+        <div className="mt-3 pt-3 border-t border-border/60 flex items-center justify-between gap-3 flex-wrap text-[10px] sm:text-xs text-text-muted tabular-nums">
+          <span>
+            ממוצע ליום:
+            <span className="text-text-secondary font-medium mr-1">
+              {formatNumber(summary.avgUnitsPerDay, 1)}
+            </span>
+            יחידות ·
+            <span className="text-text-secondary font-medium mr-1">
+              CAD {formatCurrency(summary.avgGrossPerDay)}
+            </span>
+            ברוטו
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  subtitle,
+  primary = false,
+  accent,
+  className,
+}: {
+  label: string;
+  value: string;
+  subtitle?: string;
+  primary?: boolean;
+  accent?: 'green';
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        'rounded-lg bg-surface border border-border px-2.5 sm:px-3 py-1.5 sm:py-2',
+        className,
+      )}
+    >
+      <div className="text-[10px] sm:text-xs text-text-muted leading-tight">{label}</div>
+      <div
+        className={cn(
+          'text-sm sm:text-base lg:text-lg font-bold tabular-nums leading-tight mt-0.5',
+          primary && 'text-primary',
+          accent === 'green' && 'text-roas-green',
+          !primary && !accent && 'text-text-primary',
+        )}
+      >
+        {value}
+      </div>
+      {subtitle && (
+        <div className="text-[9px] sm:text-[10px] text-text-muted leading-tight mt-0.5">
+          {subtitle}
         </div>
       )}
     </div>
