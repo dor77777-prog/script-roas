@@ -519,6 +519,7 @@ function buildChart_(sh, ss) {
   const chart = sh.newChart()
     .setChartType(Charts.ChartType.LINE)
     .addRange(helpers.getRange('A3:L500'))
+    .setNumHeaders(1)   // השורה הראשונה של ה-range = שמות חנויות (legend) + תאריך
     .setPosition(17, 1, 0, 0)
     .setOption('title', '')
     .setOption('legend', { position: 'top', alignment: 'center', textStyle: { fontSize: 13, bold: true } })
@@ -531,7 +532,6 @@ function buildChart_(sh, ss) {
     .setOption('lineWidth', 3)
     .setOption('backgroundColor', '#ffffff')
     .setOption('colors', chartColors)
-    .useFirstColumnAsDomain()
     .build();
   sh.insertChart(chart);
 
