@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import {
   RefreshCw,
@@ -33,6 +33,7 @@ import { HeroOverview } from './HeroOverview';
 import { CommandPalette } from './CommandPalette';
 import { TabNav, type TabDef } from './TabNav';
 import { SectionIntro } from './SectionIntro';
+import { readDashboardState, syncUrl } from '@/lib/urlState';
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -62,16 +63,38 @@ export function Dashboard() {
     { refreshInterval: 60_000, revalidateOnFocus: true },
   );
 
-  const [activeTab, setActiveTab] = useState<TabKey>('home');
-  const [filters, setFilters] = useState<F>(() => ({
-    preset: initialPreset,
-    range: computePresetRange(initialPreset),
-    store: 'All',
-  }));
+  // Initial state — read from URL search params on first mount so a refresh
+  // or bookmark restores the user's view. Falls back to defaults when no
+  // params are present.
+  const [activeTab, setActiveTab] = useState<TabKey>(() => {
+    if (typeof window === 'undefined') return 'home';
+    return readDashboardState(
+      {
+        tab: 'home',
+        filters: { preset: initialPreset, range: computePresetRange(initialPreset), store: 'All' },
+      },
+      window.location.search,
+    ).tab;
+  });
+  const [filters, setFilters] = useState<F>(() => {
+    const defaults = {
+      preset: initialPreset,
+      range: computePresetRange(initialPreset),
+      store: 'All',
+    } as F;
+    if (typeof window === 'undefined') return defaults;
+    return readDashboardState({ tab: 'home', filters: defaults }, window.location.search).filters;
+  });
 
   // Counter that increments whenever the command palette wants to open the
   // AI report modal. AiReportButton listens to this prop via useEffect.
   const [aiReportSignal, setAiReportSignal] = useState(0);
+
+  // Mirror state into the URL so refresh / bookmark / share survive. Uses
+  // replaceState so we don't pollute the back-button stack.
+  useEffect(() => {
+    syncUrl({ tab: activeTab, filters });
+  }, [activeTab, filters]);
 
   const filtered = useMemo(() => {
     if (!data) return null;
