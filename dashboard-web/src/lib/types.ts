@@ -17,6 +17,7 @@ export type DashboardData = {
   rows: DailyRow[];
   stores: string[];    // unique store names
   lastUpdated: string; // ISO timestamp
+  fxIlsToCad: number | null; // current FX rate (ECB via Frankfurter). null on failure.
 };
 
 export type DateRange = {

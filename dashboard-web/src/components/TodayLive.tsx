@@ -35,7 +35,13 @@ function nowInIsrael(): string {
   }).format(new Date());
 }
 
-export function TodayLive({ rows }: { rows: DailyRow[] }) {
+export function TodayLive({
+  rows,
+  fxIlsToCad,
+}: {
+  rows: DailyRow[];
+  fxIlsToCad: number | null;
+}) {
   const [now, setNow] = useState(nowInIsrael());
   useEffect(() => {
     const t = setInterval(() => setNow(nowInIsrael()), 30_000);
@@ -105,12 +111,13 @@ export function TodayLive({ rows }: { rows: DailyRow[] }) {
           {storeAggs.map((s, i) => {
             const color = STORE_COLORS[s.store] || ['#1c4587', '#ea4335', '#34a853'][i % 3];
             const info = roasLabel(s.roas);
+            const hasGoogle = s.gaSpend > 0;
             return (
               <div
                 key={s.store}
                 className="rounded-lg bg-surface/80 backdrop-blur-sm border border-border/60 p-2.5 sm:p-3 shadow-sm"
               >
-                <div className="flex items-center justify-between gap-2 mb-1.5">
+                <div className="flex items-center justify-between gap-2 mb-2">
                   <span
                     className="text-[11px] sm:text-xs font-semibold truncate"
                     style={{ color }}
@@ -123,21 +130,35 @@ export function TodayLive({ rows }: { rows: DailyRow[] }) {
                       TONE_BG[info.tone],
                     )}
                   >
-                    {s.roas > 0 ? formatNumber(s.roas) : '—'}
+                    ROAS {s.roas > 0 ? formatNumber(s.roas) : '—'}
                   </span>
                 </div>
-                <div className="grid grid-cols-2 gap-1 text-[10px] sm:text-xs tabular-nums">
+
+                <div className="grid grid-cols-2 gap-1.5 text-[10px] sm:text-xs tabular-nums mb-1.5">
                   <div>
                     <div className="text-text-muted">הכנסה</div>
-                    <div className="font-semibold text-text-primary">
+                    <div className="font-semibold text-roas-green">
                       {formatCurrency(s.revenue)}
                     </div>
                   </div>
                   <div>
-                    <div className="text-text-muted">הוצאה</div>
+                    <div className="text-text-muted">סך הוצאה</div>
                     <div className="font-semibold text-text-primary">
                       {formatCurrency(s.spend)}
                     </div>
+                  </div>
+                </div>
+
+                <div className="pt-1.5 border-t border-border/60 grid grid-cols-2 gap-1.5 text-[9px] sm:text-[10px] tabular-nums text-text-secondary">
+                  <div className="flex items-center justify-between">
+                    <span>Meta</span>
+                    <span className="font-medium">{formatCurrency(s.fbSpend)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Google</span>
+                    <span className="font-medium">
+                      {hasGoogle ? formatCurrency(s.gaSpend) : '—'}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -152,7 +173,24 @@ export function TodayLive({ rows }: { rows: DailyRow[] }) {
         </div>
       )}
 
-      <div className="mt-3 text-[10px] sm:text-xs text-text-muted/80 leading-relaxed text-center">
+      <div className="mt-3 sm:mt-4 pt-3 border-t border-border/40 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[10px] sm:text-xs text-text-muted">
+        {fxIlsToCad !== null && (
+          <span className="inline-flex items-center gap-1 tabular-nums">
+            <span>שער המרה:</span>
+            <span className="font-medium text-text-secondary">
+              1 ILS = {fxIlsToCad.toFixed(4)} CAD
+            </span>
+          </span>
+        )}
+        <span className="text-text-muted/60">•</span>
+        <span>Meta: ILS</span>
+        <span className="text-text-muted/60">•</span>
+        <span>Google: CAD</span>
+        <span className="text-text-muted/60">•</span>
+        <span>Shopify: CAD</span>
+      </div>
+
+      <div className="mt-2 text-[10px] sm:text-xs text-text-muted/80 leading-relaxed text-center">
         רענון אוטומטי כל 15 דקות. מכירות Shopify ב-real-time;
         Meta/Google מתעדכנים עם פיגור של ~20 דקות (מצד הפלטפורמה).
       </div>

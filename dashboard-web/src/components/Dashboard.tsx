@@ -82,7 +82,7 @@ export function Dashboard() {
 
         {data && filtered && (
           <>
-            <TodayLive rows={data.rows} />
+            <TodayLive rows={data.rows} fxIlsToCad={data.fxIlsToCad} />
 
             <Filters
               filters={filters}

@@ -238,6 +238,66 @@ function backfillZolUsmileMay1to14() {
   backfillRangeForStores('2026-05-01', '2026-05-14', ['zolplus', 'usmile360']);
 }
 
+/**
+ * Debug helper - מדפיס ללוג את כל הנתונים הגולמיים של היום עבור כל חנות
+ * **לפני המרה ל-CAD**, כך שאפשר להשוות מול הפלטפורמה (Meta / Google / Shopify).
+ *
+ * הרץ מהעורך כשהדשבורד נראה לא מסונכרן עם הפלטפורמה כדי לאתר את מקור הפער.
+ * הפלט יוצא ל-View → Logs.
+ */
+function debugTodaySpend() {
+  const dateStr = todayStr_();
+  const ilsToCad = getFxRate('ILS', 'CAD', dateStr);
+  Logger.log(`===== DEBUG ${dateStr} =====`);
+  Logger.log(`FX ILS->CAD = ${ilsToCad}  (1 ILS = ${ilsToCad} CAD)`);
+  Logger.log('');
+
+  for (const store of STORES) {
+    Logger.log(`----- ${store.name} (${store.id}) -----`);
+
+    // Shopify revenue
+    try {
+      const revCad = getShopifyRevenue(store.id, dateStr);
+      Logger.log(`  Shopify revenue: ${revCad.toFixed(2)} CAD (Shopify מחזיר ב-CAD ישירות)`);
+    } catch (e) {
+      Logger.log(`  Shopify revenue ERROR: ${e && e.message ? e.message : e}`);
+    }
+
+    // Meta spend
+    try {
+      const meta = getMetaSpend(store.id, dateStr);
+      const metaCad = meta.currency === 'CAD' ? meta.spend : meta.spend * ilsToCad;
+      Logger.log(`  Meta spend  : ${meta.spend.toFixed(2)} ${meta.currency}` +
+                 `  →  ${metaCad.toFixed(2)} CAD` +
+                 (meta.currency === 'ILS' ? `  (× ${ilsToCad})` : ''));
+    } catch (e) {
+      Logger.log(`  Meta spend ERROR: ${e && e.message ? e.message : e}`);
+    }
+
+    // Google Ads spend (אם רלוונטי)
+    if (store.hasGoogleAds) {
+      try {
+        const ga = getGoogleAdsSpend(store.id, dateStr);
+        const fx = ga.currency === 'CAD' ? 1 : getFxRate(ga.currency, 'CAD', dateStr);
+        const gaCad = ga.spend * fx;
+        Logger.log(`  Google spend: ${ga.spend.toFixed(2)} ${ga.currency}` +
+                   `  →  ${gaCad.toFixed(2)} CAD` +
+                   (fx !== 1 ? `  (× ${fx})` : ''));
+      } catch (e) {
+        Logger.log(`  Google spend ERROR: ${e && e.message ? e.message : e}`);
+      }
+    } else {
+      Logger.log(`  Google spend: — (החנות לא משתמשת ב-Google Ads)`);
+    }
+    Logger.log('');
+  }
+  Logger.log('===== END DEBUG =====');
+  Logger.log('להשוות:');
+  Logger.log('  Meta:    business.facebook.com → Ads Manager → סנן לתאריך היום → "Amount spent" (במטבע החשבון)');
+  Logger.log('  Google:  ads.google.com → Campaigns → סנן Today → "Cost" (במטבע החשבון)');
+  Logger.log('  Shopify: admin.shopify.com → Orders → Total sales היום');
+}
+
 function notifyError_(dateStr, message) {
   try {
     const email = Session.getActiveUser().getEmail();
