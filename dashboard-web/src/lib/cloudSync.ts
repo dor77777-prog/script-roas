@@ -62,6 +62,40 @@ let hydrated = false;
 
 const HYDRATE_GRACE_MS = 8_000; // skip poll-overwrite within this window of a local push
 
+// ---------------------------------------------------------------------------
+// Sync status — exposed so the UI can show a small "synced / syncing / error"
+// indicator. Critical for trust: if a write silently fails (e.g. the service
+// account doesn't have Editor permission on the Sheet), the user otherwise
+// has no way to know their data hasn't propagated.
+// ---------------------------------------------------------------------------
+
+export type SyncStatus = 'idle' | 'syncing' | 'ok' | 'error';
+export type SyncState = {
+  status: SyncStatus;
+  lastSyncAt: number | null;
+  lastError: string | null;
+  /** Number of pending POSTs waiting to fire (debounce queue). */
+  pendingKeys: number;
+};
+
+let syncState: SyncState = {
+  status: 'idle',
+  lastSyncAt: null,
+  lastError: null,
+  pendingKeys: 0,
+};
+
+function setSyncState(patch: Partial<SyncState>) {
+  syncState = { ...syncState, ...patch };
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('roas-cloud-sync-state'));
+  }
+}
+
+export function getSyncState(): SyncState {
+  return syncState;
+}
+
 /**
  * Push a key's value up to the cloud. Debounced 400ms so rapid edits (e.g.
  * typing in an inline form) coalesce into one POST. Fire-and-forget — never
@@ -71,9 +105,15 @@ export function pushCloudKey(localStorageKey: string, value: unknown): void {
   if (typeof window === 'undefined') return;
   const cloudKey = stripPrefix(localStorageKey);
 
-  if (pendingTimers[localStorageKey]) {
+  if (!pendingTimers[localStorageKey]) {
+    setSyncState({
+      status: 'syncing',
+      pendingKeys: syncState.pendingKeys + 1,
+    });
+  } else {
     clearTimeout(pendingTimers[localStorageKey]);
   }
+
   pendingTimers[localStorageKey] = setTimeout(() => {
     pendingTimers[localStorageKey] = undefined;
     lastPushAt[localStorageKey] = Date.now();
@@ -88,11 +128,30 @@ async function postWithRetry(key: string, value: unknown, attempt = 1): Promise<
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ key, value }),
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) {
+      // Surface the server's actual error so the user can see "service account
+      // doesn't have Editor permission" instead of a silent failure.
+      const body = await res.json().catch(() => ({}));
+      const msg = (body && body.error) || `HTTP ${res.status}`;
+      throw new Error(msg);
+    }
+    const nextPending = Math.max(0, syncState.pendingKeys - 1);
+    setSyncState({
+      status: nextPending === 0 ? 'ok' : 'syncing',
+      lastSyncAt: Date.now(),
+      lastError: null,
+      pendingKeys: nextPending,
+    });
   } catch (err) {
     if (attempt >= 2) {
+      const message = err instanceof Error ? err.message : String(err);
       // eslint-disable-next-line no-console
-      console.warn(`cloudSync push failed (${key}):`, err);
+      console.warn(`cloudSync push failed (${key}):`, message);
+      setSyncState({
+        status: 'error',
+        lastError: `כתיבה ל-${key} נכשלה: ${message}`,
+        pendingKeys: Math.max(0, syncState.pendingKeys - 1),
+      });
       return;
     }
     setTimeout(() => void postWithRetry(key, value, attempt + 1), 5000);
@@ -109,12 +168,20 @@ async function postWithRetry(key: string, value: unknown, attempt = 1): Promise<
  */
 export async function hydrateFromCloud(): Promise<boolean> {
   if (typeof window === 'undefined') return hydrated;
-  let payload: { kv?: Record<string, unknown> } | null = null;
+  let payload: { kv?: Record<string, unknown>; error?: string } | null = null;
   try {
     const r = await fetch('/api/dashboard-state', { cache: 'no-store' });
-    if (!r.ok) return hydrated;
-    payload = (await r.json()) as { kv?: Record<string, unknown> };
-  } catch {
+    payload = (await r.json()) as { kv?: Record<string, unknown>; error?: string };
+    if (!r.ok || payload.error) {
+      setSyncState({
+        status: 'error',
+        lastError: `קריאה מהענן נכשלה: ${payload.error || `HTTP ${r.status}`}`,
+      });
+      return hydrated;
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    setSyncState({ status: 'error', lastError: `רשת: ${message}` });
     return hydrated;
   }
 
@@ -143,6 +210,11 @@ export async function hydrateFromCloud(): Promise<boolean> {
     // Cloud wins on the regular path.
     writeLocal(lsKey, cloudVal);
     dispatchChange(lsKey);
+  }
+
+  // Pulled cleanly. If we had a prior error and no writes are pending, clear it.
+  if (syncState.status !== 'syncing' && syncState.pendingKeys === 0) {
+    setSyncState({ status: 'ok', lastSyncAt: Date.now(), lastError: null });
   }
 
   if (!hydrated) {

@@ -38,6 +38,7 @@ import { CommandPalette } from './CommandPalette';
 import { TabNav, type TabDef } from './TabNav';
 import { SectionIntro } from './SectionIntro';
 import { CloudSync } from './CloudSync';
+import { SyncIndicator } from './SyncIndicator';
 import { readDashboardState, syncUrl } from '@/lib/urlState';
 
 const fetcher = async (url: string) => {
@@ -470,6 +471,7 @@ function Header({
           </div>
           <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
             {commandPalette}
+            <SyncIndicator />
             <button
               onClick={onRefresh}
               className="inline-flex items-center gap-1.5 sm:gap-2 rounded-lg bg-white/12 hover:bg-white/20 active:bg-white/25 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium transition-colors ring-1 ring-white/10"
