@@ -221,8 +221,11 @@ export async function fetchDashboardState(): Promise<{
       dateTimeRenderOption: 'FORMATTED_STRING',
     });
     const values = res.data.values ?? [];
-    const kv: DashboardStateMap = {};
-    const updatedAtByKey: Record<string, string> = {};
+    // Object.create(null) hardens against prototype pollution: even if a row
+    // with key="__proto__" or "constructor" slipped past API validation, it
+    // can only set an own-property on this object, never Object.prototype.
+    const kv: DashboardStateMap = Object.create(null) as DashboardStateMap;
+    const updatedAtByKey: Record<string, string> = Object.create(null);
     for (const row of values) {
       const key = String(row[0] ?? '').trim();
       if (!key) continue;
@@ -236,8 +239,19 @@ export async function fetchDashboardState(): Promise<{
           parsed = rawValue;
         }
       }
+      const updatedAt = row[2] ? String(row[2]) : '';
+      // Dedupe duplicate rows for the same key. Duplicates can arise from a
+      // same-key concurrent-append race in `upsertDashboardStateKey` (CR2-01):
+      // two POSTs for the same missing key both observe existingIdx=-1 and
+      // both append. We keep the row with the newest updatedAt so reads are
+      // deterministic AND align with the row that `upsertDashboardStateKey`
+      // will target on the next write (which also picks the newest row).
+      // ISO-8601 timestamps compare lexicographically, so string `<` is the
+      // right operator here.
+      const prevAt = updatedAtByKey[key];
+      if (prevAt !== undefined && updatedAt < prevAt) continue;
       kv[key] = parsed;
-      updatedAtByKey[key] = row[2] ? String(row[2]) : '';
+      updatedAtByKey[key] = updatedAt;
     }
     return { kv, updatedAtByKey };
   } catch (err) {
@@ -259,14 +273,31 @@ export async function fetchDashboardState(): Promise<{
  *
  * Concurrent writes to DIFFERENT missing keys: handled atomically by routing
  * new keys through `spreadsheets.values.append` instead of computing a row
- * number from a previous read. The previous read-then-compute approach
- * produced a race where two POSTs for two different missing keys both
- * resolved to `keys.length + 2` and the later write silently overwrote the
- * earlier one. The Sheets API allocates rows server-side for `append`, so
- * two concurrent appends land on adjacent rows and neither is lost.
+ * number from a previous read. The Sheets API allocates rows server-side for
+ * `append`, so two concurrent appends for different keys land on distinct
+ * rows and neither is lost.
  *
- * For existing keys we still use a targeted `update` on the row we found, so
- * repeated writes to the same key don't leak rows.
+ * Concurrent writes to the SAME missing key (CR2-01 regression of CR-01): the
+ * append branch alone is NOT sufficient. Two simultaneous POSTs for the same
+ * new key both observe existingIdx=-1 and both append, producing duplicate
+ * rows. Without further handling, future `update`s pick the FIRST duplicate
+ * via `findIndex` while `fetchDashboardState`'s last-write-wins iteration
+ * returns the LAST duplicate — user updates become silently invisible to
+ * reads. Two-part mitigation:
+ *
+ *   1. On read: `fetchDashboardState` dedupes by key keeping the row with
+ *      the newest updatedAt (see that function).
+ *   2. On write: when the key already exists, we (a) target the row with the
+ *      newest updatedAt — same row reads return — and (b) clear any older
+ *      duplicate rows by blanking their content (RAW writes of "" into A:C).
+ *      "Blanking" rather than `deleteDimension` keeps the row index stable
+ *      for any in-flight read that already captured the range, and the
+ *      empty-key check at sheets.ts:228 already skips blank rows.
+ *
+ * After the next write following a same-key race, duplicates collapse and
+ * the system is self-healing. The window of inconsistency is bounded by the
+ * time until the user's next edit (or the next 30s poll triggering hydrate
+ * which itself does not write, but reads correctly thanks to dedupe).
  */
 export async function upsertDashboardStateKey(key: string, value: unknown): Promise<void> {
   const auth = getAuth(true);
@@ -275,32 +306,83 @@ export async function upsertDashboardStateKey(key: string, value: unknown): Prom
 
   await ensureStateTab_(sheets, spreadsheetId);
 
-  // Find the existing row (if any) by reading the key column only.
-  const colA = await sheets.spreadsheets.values.get({
+  // Read BOTH the key column and the updatedAt column so we can pick the
+  // newest duplicate (if any) and discover stale duplicates to clear.
+  const colAC = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `${STATE_TAB}!A2:A10000`,
+    range: `${STATE_TAB}!A2:C10000`,
     valueRenderOption: 'UNFORMATTED_VALUE',
   });
-  const keys = (colA.data.values ?? []).map(r => String(r[0] ?? ''));
-  const existingIdx = keys.findIndex(k => k === key);
+  const rows = colAC.data.values ?? [];
+
+  // Find ALL row indices matching `key`, then pick the one with the newest
+  // updatedAt (ISO-8601 strings compare lexicographically). Other matches
+  // are duplicates left over from a prior same-key concurrent-append race
+  // and must be cleared so future reads (which already dedupe by newest)
+  // and future writes (which use this same logic) stay consistent.
+  let bestIdx = -1;
+  let bestAt = '';
+  const duplicateIdxs: number[] = [];
+  for (let i = 0; i < rows.length; i++) {
+    const rowKey = String(rows[i][0] ?? '');
+    if (rowKey !== key) continue;
+    const at = String(rows[i][2] ?? '');
+    if (bestIdx === -1 || at >= bestAt) {
+      if (bestIdx !== -1) duplicateIdxs.push(bestIdx);
+      bestAt = at;
+      bestIdx = i;
+    } else {
+      duplicateIdxs.push(i);
+    }
+  }
 
   const json = JSON.stringify(value);
   const updatedAt = new Date().toISOString();
 
-  if (existingIdx >= 0) {
-    // Key already has a row — overwrite in place. last-write-wins is OK.
-    const targetRow = existingIdx + 2;
+  if (bestIdx >= 0) {
+    // Key already has a row — overwrite the newest one in place. This is
+    // the row that `fetchDashboardState` will return on reads, so writes
+    // and reads now agree.
+    const targetRow = bestIdx + 2;
     await sheets.spreadsheets.values.update({
       spreadsheetId,
       range: `${STATE_TAB}!A${targetRow}:C${targetRow}`,
       valueInputOption: 'RAW',
       requestBody: { values: [[key, json, updatedAt]] },
     });
+
+    // Best-effort: clear out any duplicate rows for this key (legacy
+    // pre-fix or fresh same-key races). Blanking is idempotent and safe
+    // even if another writer is racing — they'll just observe an empty
+    // row and treat it as "not present" via the empty-key skip in
+    // fetchDashboardState. We do NOT batch this with the primary update
+    // to keep the primary write atomic and short. If clearing fails,
+    // duplicates just persist until the next write — read-side dedupe
+    // keeps the user-visible state correct.
+    if (duplicateIdxs.length > 0) {
+      try {
+        await sheets.spreadsheets.values.batchUpdate({
+          spreadsheetId,
+          requestBody: {
+            valueInputOption: 'RAW',
+            data: duplicateIdxs.map(idx => ({
+              range: `${STATE_TAB}!A${idx + 2}:C${idx + 2}`,
+              values: [['', '', '']],
+            })),
+          },
+        });
+      } catch {
+        /* swallow — duplicates remain but read-side dedupe keeps state correct */
+      }
+    }
     return;
   }
 
   // New key: atomic server-side append. Two concurrent calls for two
   // different new keys land on distinct rows; neither overwrites the other.
+  // Two concurrent calls for the SAME new key still produce duplicates here,
+  // but the next write for that key (above branch) will pick the newer one
+  // AND clear the older one — and reads dedupe in the meantime.
   await sheets.spreadsheets.values.append({
     spreadsheetId,
     range: `${STATE_TAB}!A:C`,
