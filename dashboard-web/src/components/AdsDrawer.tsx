@@ -179,6 +179,14 @@ export function AdsDrawer({
   }, [data, storeId, campaignId, adSetId, rangeFrom, rangeTo]);
 
   if (!open) return null;
+  // Defensive guard: CampaignDrawer derives rangeFrom/rangeTo via
+  // `rows.reduce(..., rows[0]?.date ?? '')`, which returns '' if rows is empty.
+  // CampaignDrawer currently short-circuits when `rows.length === 0`
+  // (summary is null), so AdsDrawer never sees empty strings today — but if
+  // that guard is ever relaxed, the `r.date < rangeFrom || r.date > rangeTo`
+  // filter below would silently exclude EVERY ad (every non-empty ISO date is
+  // lexicographically > ''). Bail loudly instead. (#IN-01)
+  if (!rangeFrom || !rangeTo) return null;
 
   const sortedAds = summary
     ? (() => {
