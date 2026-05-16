@@ -606,6 +606,14 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                               נטו
                             </th>
                           )}
+                          {bucket.hasNet && (
+                            <th
+                              className="px-3 py-2 text-end font-medium w-[60px] sm:w-[80px] hidden md:table-cell"
+                              title="אחוז הנטו מתוך הברוטו — גבוה = מעט הנחות/החזרות"
+                            >
+                              מרג'ין
+                            </th>
+                          )}
                           <th className="px-3 sm:px-5 py-2 text-end font-medium w-[55px] sm:w-[70px] hidden lg:table-cell">
                             % יחידות
                           </th>
@@ -664,6 +672,37 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                                     >
                                       {formatCurrency(p.netRevenue)}
                                     </span>
+                                  ) : (
+                                    <span className="text-text-muted">—</span>
+                                  )}
+                                </td>
+                              )}
+                              {bucket.hasNet && (
+                                <td className="px-3 py-2 text-end tabular-nums hidden md:table-cell">
+                                  {p.netRevenue !== null && p.revenue > 0 ? (
+                                    (() => {
+                                      const margin = p.netRevenue / p.revenue;
+                                      const pctStr = `${(margin * 100).toFixed(0)}%`;
+                                      // Color the margin: <80% means heavy discounts/refunds.
+                                      return (
+                                        <span
+                                          className={cn(
+                                            'font-medium',
+                                            margin >= 0.95 && 'text-roas-green',
+                                            margin >= 0.8 && margin < 0.95 && 'text-text-primary',
+                                            margin < 0.8 && 'text-roas-orange',
+                                            margin < 0.5 && 'text-roas-red',
+                                          )}
+                                          title={
+                                            margin < 0.8
+                                              ? `הנחות/החזרים: ${((1 - margin) * 100).toFixed(0)}%`
+                                              : 'מרג\'ין גבוה - מעט הנחות'
+                                          }
+                                        >
+                                          {pctStr}
+                                        </span>
+                                      );
+                                    })()
                                   ) : (
                                     <span className="text-text-muted">—</span>
                                   )}

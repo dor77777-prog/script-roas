@@ -27,6 +27,7 @@ import { DetailTable } from './DetailTable';
 import { TodayLive } from './TodayLive';
 import { ProductsTable } from './ProductsTable';
 import { CampaignsTable } from './CampaignsTable';
+import { WhatsWorking } from './WhatsWorking';
 import { TabNav, type TabDef } from './TabNav';
 import { SectionIntro } from './SectionIntro';
 
@@ -171,6 +172,9 @@ function HomeTab({
         description="הכנסות Shopify בזמן אמת + הוצאות Meta/Google (עם פיגור של ~20 דק' מצד הפלטפורמה). מתעדכן אוטומטית כל 15 דקות עד חצות."
       />
       <TodayLive rows={data.rows} fxIlsToCad={data.fxIlsToCad} />
+
+      {/* ===== "What's Working" widget — top product / campaign / mover ===== */}
+      <WhatsWorking />
 
       {/* ===== Filters (apply to KPI + per-store below) ===== */}
       <SectionIntro
