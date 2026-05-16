@@ -182,11 +182,15 @@ type Props = {
   range: DateRange;
   store: string;
   stores: string[];
+  /** All daily rows from data-daily. Used to compute the Pixel-vs-Shopify
+   *  attribution gap panel — Shopify revenue is the source of truth, Meta's
+   *  conversion_value is the platform's self-report. */
+  dailyRows: import('@/lib/types').DailyRow[];
 };
 
 const TOP_N_DEFAULT = 10;
 
-export function CampaignsTable({ range, store: globalStore, stores }: Props) {
+export function CampaignsTable({ range, store: globalStore, stores, dailyRows }: Props) {
   const { data, error, isLoading } = useSWR<CampaignsResponse>(
     '/api/campaigns',
     fetcher,
@@ -258,6 +262,81 @@ export function CampaignsTable({ range, store: globalStore, stores }: Props) {
 
   const display = showAll ? aggregated : aggregated.slice(0, TOP_N_DEFAULT);
   const remaining = aggregated.length - display.length;
+
+  // ----- Pixel-vs-Shopify attribution gap ----------------------------------
+  // Compare what the ad platforms *claim* (conversionValue summed across the
+  // currently visible campaigns) against what Shopify actually recorded for
+  // the matching dates + stores. This is the highest-impact "trust" view:
+  // if Meta is over-counting by 40%, the user should know before scaling.
+  const attributionGap = useMemo(() => {
+    if (aggregated.length === 0) return null;
+
+    // Sum Meta/Google conversion value across all visible campaigns.
+    const platformClaimed = aggregated.reduce(
+      (s, a) => s + a.conversionValue,
+      0,
+    );
+
+    // Shopify revenue: same date range + same store scope as the table.
+    let shopifyRevenue = 0;
+    let metaSpendInScope = 0;
+    let googleSpendInScope = 0;
+    for (const r of dailyRows) {
+      if (r.date < localRange.from || r.date > localRange.to) continue;
+      if (localStore !== 'All' && r.storeName !== localStore) continue;
+      shopifyRevenue += r.revenue;
+      metaSpendInScope += r.fbSpend;
+      googleSpendInScope += r.gaSpend;
+    }
+
+    if (shopifyRevenue === 0 && platformClaimed === 0) return null;
+
+    // Gap = how much Shopify exceeds the platform's claim, as a percentage of
+    // Shopify revenue. Positive → platforms are UNDER-counting (you have
+    // more sales than they credit themselves with — iOS 14 / ad blockers /
+    // direct traffic / organic halo).
+    // Negative → platforms are OVER-counting (view-through inflation, double
+    // counting between Meta and Google, modeled conversions).
+    const absGap = shopifyRevenue - platformClaimed;
+    const gapPct = shopifyRevenue > 0 ? absGap / shopifyRevenue : 0;
+
+    // ROAS comparison — store-truth vs platform-truth.
+    const totalSpendShopify = metaSpendInScope + googleSpendInScope;
+    const storeRoas = totalSpendShopify > 0 ? shopifyRevenue / totalSpendShopify : 0;
+    const platformRoas =
+      totals.spend > 0 ? platformClaimed / totals.spend : 0;
+
+    // Interpretation copy — short, factual, Hebrew.
+    let interpretation: string;
+    let tone: 'good' | 'warn' | 'flag';
+    if (Math.abs(gapPct) < 0.1) {
+      interpretation =
+        'הפלטפורמות מדווחות בקרבת אמת ל-Shopify. שיוך אמין יחסית.';
+      tone = 'good';
+    } else if (gapPct > 0.1) {
+      // Shopify > platform — under-attribution
+      interpretation =
+        platform === 'all'
+          ? `הפלטפורמות מ-undercounting: יש לך ${(gapPct * 100).toFixed(0)}% יותר מכירות ב-Shopify ממה שהן מקבלות עליהם קרדיט. נפוץ ב-iOS 14+ / ad blockers / organic halo.`
+          : `${platform} מ-undercounting ב-${(gapPct * 100).toFixed(0)}% — ייתכן שיש מכירות שמיוחסות לערוץ אחר או לא משויכות בכלל.`;
+      tone = 'good';
+    } else {
+      // platform > Shopify — over-attribution
+      interpretation = `הפלטפורמות מ-overcounting ב-${(Math.abs(gapPct) * 100).toFixed(0)}%. כפיל-ספירה בין Meta ו-Google, view-through inflation, או modeled conversions. אל תקבל החלטות "להגדיל קמפיין" רק על בסיס ה-conversion value של הפלטפורמה.`;
+      tone = 'flag';
+    }
+
+    return {
+      platformClaimed,
+      shopifyRevenue,
+      absGap,
+      gapPct,
+      storeRoas,
+      platformRoas,
+      interpretation,
+      tone,
+    };
+  }, [aggregated, dailyRows, localRange, localStore, totals.spend, platform]);
 
   // ----- Toolbar -----
   const toolbar = (
@@ -417,6 +496,7 @@ export function CampaignsTable({ range, store: globalStore, stores }: Props) {
   return (
     <div>
       {toolbar}
+      {attributionGap && <AttributionGapPanel gap={attributionGap} />}
       {summary}
 
       {error && (
@@ -641,6 +721,115 @@ export function CampaignsTable({ range, store: globalStore, stores }: Props) {
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Pixel-vs-Shopify attribution gap panel. Sits between the toolbar and the
+ * summary card. The "trust" view: how much do the ad platforms claim vs.
+ * what Shopify actually recorded? This is the single most useful thing in
+ * the campaigns view because it tells the operator whether to *trust* the
+ * ROAS numbers below.
+ */
+function AttributionGapPanel({
+  gap,
+}: {
+  gap: {
+    platformClaimed: number;
+    shopifyRevenue: number;
+    absGap: number;
+    gapPct: number;
+    storeRoas: number;
+    platformRoas: number;
+    interpretation: string;
+    tone: 'good' | 'warn' | 'flag';
+  };
+}) {
+  const toneClass = {
+    good: 'border-roas-green/30 bg-roas-greenBg/40',
+    warn: 'border-amber-300 bg-amber-50',
+    flag: 'border-roas-red/30 bg-roas-redBg/40',
+  }[gap.tone];
+
+  const arrow = gap.gapPct > 0 ? '↗' : gap.gapPct < 0 ? '↘' : '=';
+
+  return (
+    <section
+      className={cn(
+        'px-4 sm:px-5 py-3 sm:py-4 border-b border-borderSubtle',
+        toneClass,
+      )}
+    >
+      <div className="flex items-center gap-2 mb-2">
+        <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-text-secondary">
+          התאמת שיוך · Meta &amp; Google ↔ Shopify
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
+        <div>
+          <div className="text-[10px] text-text-muted uppercase tracking-wide">
+            פלטפורמות מדווחות
+          </div>
+          <div className="text-base sm:text-lg font-semibold tabular-nums text-text-primary mt-0.5">
+            <span className="text-[10px] text-text-muted font-medium ml-1">CAD</span>
+            {formatCurrency(gap.platformClaimed)}
+          </div>
+          <div className="text-[10px] text-text-muted tabular-nums">
+            ROAS: {gap.platformRoas > 0 ? gap.platformRoas.toFixed(2) : '—'}
+          </div>
+        </div>
+
+        <div>
+          <div className="text-[10px] text-text-muted uppercase tracking-wide">
+            Shopify בפועל
+          </div>
+          <div className="text-base sm:text-lg font-bold tabular-nums text-text-primary mt-0.5">
+            <span className="text-[10px] text-text-muted font-medium ml-1">CAD</span>
+            {formatCurrency(gap.shopifyRevenue)}
+          </div>
+          <div className="text-[10px] text-text-muted tabular-nums">
+            ROAS: {gap.storeRoas > 0 ? gap.storeRoas.toFixed(2) : '—'}
+          </div>
+        </div>
+
+        <div>
+          <div className="text-[10px] text-text-muted uppercase tracking-wide">
+            פער (Shopify − Platforms)
+          </div>
+          <div
+            className={cn(
+              'text-base sm:text-lg font-bold tabular-nums mt-0.5',
+              gap.absGap >= 0 ? 'text-roas-green' : 'text-roas-red',
+            )}
+          >
+            <span className="text-[10px] text-text-muted font-medium ml-1">CAD</span>
+            {gap.absGap >= 0 ? '+' : ''}{formatCurrency(gap.absGap)}
+          </div>
+          <div className="text-[10px] text-text-muted tabular-nums">
+            {arrow} {(gap.gapPct * 100).toFixed(1)}%
+          </div>
+        </div>
+
+        <div>
+          <div className="text-[10px] text-text-muted uppercase tracking-wide">
+            יחס אמינות
+          </div>
+          <div className="text-base sm:text-lg font-semibold tabular-nums mt-0.5">
+            {gap.shopifyRevenue > 0
+              ? (gap.platformClaimed / gap.shopifyRevenue * 100).toFixed(0) + '%'
+              : '—'}
+          </div>
+          <div className="text-[10px] text-text-muted">
+            Platforms ÷ Shopify
+          </div>
+        </div>
+      </div>
+
+      <p className="mt-3 text-[11px] sm:text-xs text-text-secondary leading-relaxed">
+        <strong className="text-text-primary">משמעות:</strong> {gap.interpretation}
+      </p>
+    </section>
   );
 }
 

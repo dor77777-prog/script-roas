@@ -348,6 +348,7 @@ function CampaignsTab({
           range={filters.range}
           store={filters.store}
           stores={data.stores}
+          dailyRows={data.rows}
         />
       </div>
     </div>
