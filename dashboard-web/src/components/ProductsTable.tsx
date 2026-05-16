@@ -106,6 +106,8 @@ type ProductAgg = {
   units: number;
   orders: number;
   revenue: number;
+  /** null = no rows in this product had net revenue data yet. */
+  netRevenue: number | null;
   days: number;
 };
 
@@ -115,9 +117,12 @@ type BucketAgg = {
   totalUnits: number;
   totalOrders: number;
   totalRevenue: number;
+  /** null = no rows in this bucket had net revenue data yet. */
+  totalNetRevenue: number | null;
   products: ProductAgg[];
   isLive: boolean;
-  hasOrders: boolean; // false when no row in this bucket has orders data yet
+  hasOrders: boolean;
+  hasNet: boolean; // false until at least one row in this bucket reports net
 };
 
 function aggregate(
@@ -144,21 +149,28 @@ function aggregate(
     return true;
   });
 
-  // For each bucket, also track whether *any* row contributed real orders data
-  // (vs. legacy rows where orders=0 because the column didn't exist yet).
+  // For each bucket, track whether *any* row contributed real orders / net
+  // revenue data (vs. legacy rows where these columns didn't exist yet).
   const buckets = new Map<
     string,
     {
-      products: Map<string, ProductAgg & { dateSet: Set<string> }>;
+      products: Map<
+        string,
+        ProductAgg & { dateSet: Set<string>; hasNet: boolean }
+      >;
       hasOrders: boolean;
+      hasNet: boolean;
     }
   >();
 
   for (const r of filtered) {
     const bk = bucketKey(r.date, period);
-    if (!buckets.has(bk)) buckets.set(bk, { products: new Map(), hasOrders: false });
+    if (!buckets.has(bk))
+      buckets.set(bk, { products: new Map(), hasOrders: false, hasNet: false });
     const bucket = buckets.get(bk)!;
     if (r.orders > 0) bucket.hasOrders = true;
+    if (r.netRevenue !== null) bucket.hasNet = true;
+
     const productKey = store === 'All' ? `${r.storeName}::${r.productId}` : r.productId;
     const display = store === 'All' ? `${r.productTitle}  ·  ${r.storeName}` : r.productTitle;
     if (!bucket.products.has(productKey)) {
@@ -168,14 +180,20 @@ function aggregate(
         units: 0,
         orders: 0,
         revenue: 0,
+        netRevenue: null,
         days: 0,
         dateSet: new Set<string>(),
+        hasNet: false,
       });
     }
     const p = bucket.products.get(productKey)!;
     p.units += r.units;
     p.orders += r.orders;
     p.revenue += r.revenue;
+    if (r.netRevenue !== null) {
+      p.netRevenue = (p.netRevenue ?? 0) + r.netRevenue;
+      p.hasNet = true;
+    }
     p.dateSet.add(r.date);
   }
 
@@ -188,21 +206,27 @@ function aggregate(
         units: p.units,
         orders: p.orders,
         revenue: p.revenue,
+        netRevenue: p.hasNet ? p.netRevenue : null,
         days: p.dateSet.size,
       }))
       .sort((a, b) => b.units - a.units);
     const totalUnits = products.reduce((s, p) => s + p.units, 0);
     const totalOrders = products.reduce((s, p) => s + p.orders, 0);
     const totalRevenue = products.reduce((s, p) => s + p.revenue, 0);
+    const totalNetRevenue = bucket.hasNet
+      ? products.reduce((s, p) => s + (p.netRevenue ?? 0), 0)
+      : null;
     out.push({
       key,
       label: bucketLabel(key, period),
       totalUnits,
       totalOrders,
       totalRevenue,
+      totalNetRevenue,
       products,
       isLive: key === liveBucketKey,
       hasOrders: bucket.hasOrders,
+      hasNet: bucket.hasNet,
     });
   }
 
@@ -222,9 +246,11 @@ function aggregate(
       totalUnits: 0,
       totalOrders: 0,
       totalRevenue: 0,
+      totalNetRevenue: null,
       products: [],
       isLive: true,
       hasOrders: false,
+      hasNet: false,
     });
   }
 
@@ -460,11 +486,19 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                       </span>
                     </div>
                     <div className="hidden sm:block">
-                      <span className="text-text-muted text-[10px] sm:text-xs ml-1">הכנסה</span>
+                      <span className="text-text-muted text-[10px] sm:text-xs ml-1">ברוטו</span>
                       <span className="font-semibold text-text-primary">
                         CAD {formatCurrency(bucket.totalRevenue)}
                       </span>
                     </div>
+                    {bucket.hasNet && bucket.totalNetRevenue !== null && (
+                      <div className="hidden md:block" title="הכנסה אחרי הנחות והחזרים">
+                        <span className="text-text-muted text-[10px] sm:text-xs ml-1">נטו</span>
+                        <span className="font-semibold text-roas-green">
+                          CAD {formatCurrency(bucket.totalNetRevenue)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -491,10 +525,18 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                           <th className="px-3 py-2 text-end font-medium w-[70px] sm:w-[100px]">
                             יחידות
                           </th>
-                          <th className="px-3 py-2 text-end font-medium w-[90px] sm:w-[130px] hidden sm:table-cell">
-                            הכנסה
+                          <th className="px-3 py-2 text-end font-medium w-[90px] sm:w-[120px] hidden sm:table-cell">
+                            ברוטו
                           </th>
-                          <th className="px-3 sm:px-5 py-2 text-end font-medium w-[55px] sm:w-[70px] hidden md:table-cell">
+                          {bucket.hasNet && (
+                            <th
+                              className="px-3 py-2 text-end font-medium w-[90px] sm:w-[120px] hidden sm:table-cell"
+                              title="אחרי הנחות והחזרות"
+                            >
+                              נטו
+                            </th>
+                          )}
+                          <th className="px-3 sm:px-5 py-2 text-end font-medium w-[55px] sm:w-[70px] hidden lg:table-cell">
                             % יחידות
                           </th>
                         </tr>
@@ -539,7 +581,25 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                               <td className="px-3 py-2 text-end tabular-nums hidden sm:table-cell">
                                 {formatCurrency(p.revenue)}
                               </td>
-                              <td className="px-3 sm:px-5 py-2 text-end tabular-nums text-text-muted hidden md:table-cell">
+                              {bucket.hasNet && (
+                                <td className="px-3 py-2 text-end tabular-nums hidden sm:table-cell">
+                                  {p.netRevenue !== null ? (
+                                    <span
+                                      className={cn(
+                                        'font-medium',
+                                        p.netRevenue < p.revenue
+                                          ? 'text-roas-green'
+                                          : 'text-text-primary',
+                                      )}
+                                    >
+                                      {formatCurrency(p.netRevenue)}
+                                    </span>
+                                  ) : (
+                                    <span className="text-text-muted">—</span>
+                                  )}
+                                </td>
+                              )}
+                              <td className="px-3 sm:px-5 py-2 text-end tabular-nums text-text-muted hidden lg:table-cell">
                                 {(pct * 100).toFixed(1)}%
                               </td>
                             </tr>

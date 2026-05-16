@@ -68,12 +68,14 @@ function getShopifyRevenue(storeId, dateStr) {
 /**
  * שולף breakdown של מכירות לפי מוצר ליום נתון.
  * עובר על כל ההזמנות של היום, מקבץ line_items לפי product_id, ומחזיר
- * מערך אובייקטים: {productId, productTitle, units, revenueCad, orders}.
+ * מערך אובייקטים: {productId, productTitle, units, revenueCad,
+ *                  netRevenueCad, orders}.
  *
- * units  = סך הכמות שנמכרה מכל המוצר (sum of quantity על פני כל line items)
- * orders = מספר ההזמנות הייחודיות שהכילו את המוצר (order יכול להכיל
- *          כמה מוצרים שונים, וגם כמה יחידות מאותו מוצר — ספירה כאן היא
- *          per-order ולא per-line-item)
+ * units         = סך הכמות שנמכרה (sum of quantity)
+ * revenueCad    = הכנסה ברוטו: sum(price × quantity), לפני הנחות והחזרות
+ * netRevenueCad = הכנסה נטו: revenueCad − line_item.total_discount − refunds
+ *                 (refunds נשלפים מ-order.refunds[].refund_line_items[].subtotal)
+ * orders        = מספר ההזמנות הייחודיות שהכילו את המוצר
  *
  * משתמש באותו endpoint של getShopifyRevenue אבל מבקש את line_items.
  * Shopify מחזיר prices במטבע החנות (CAD בכל 3 החנויות) — אין צורך בהמרה.
@@ -93,9 +95,10 @@ function getShopifyProductSalesForDay(storeId, dateStr) {
             `?status=any&financial_status=any&limit=250` +
             `&created_at_min=${encodeURIComponent(dayStart)}` +
             `&created_at_max=${encodeURIComponent(dayEnd)}` +
-            `&fields=id,financial_status,test,line_items`;
+            `&fields=id,financial_status,test,line_items,refunds`;
 
-  // productId -> {productId, productTitle, units, revenueCad, orderIds: Set<id>}
+  // productId -> {productId, productTitle, units, revenueCad, netRevenueCad,
+  //               orderIds: {orderId: 1}}
   const byProduct = {};
   let safety = 0;
 
@@ -116,6 +119,20 @@ function getShopifyProductSalesForDay(storeId, dateStr) {
       if (o.test) continue;
       if (o.financial_status === 'voided') continue;
       const orderId = String(o.id || '');
+
+      // Build a per-line-item refund map for this order so we can subtract
+      // refunds at the line-item granularity (a partial refund of one product
+      // shouldn't shrink another product's revenue).
+      const refundByLineId = {};
+      for (const refund of (o.refunds || [])) {
+        for (const rli of (refund.refund_line_items || [])) {
+          const liId = String(rli.line_item_id || '');
+          if (!liId) continue;
+          const amount = parseFloat(rli.subtotal || rli.total || 0);
+          refundByLineId[liId] = (refundByLineId[liId] || 0) + amount;
+        }
+      }
+
       const items = o.line_items || [];
       for (const li of items) {
         const pid = String(li.product_id || ''); // could be empty for custom items
@@ -125,12 +142,19 @@ function getShopifyProductSalesForDay(storeId, dateStr) {
         const price = parseFloat(li.price || 0);
         const gross = qty * price;
 
+        // Shopify's `total_discount` aggregates all discounts applied to this
+        // line item (line-level + order-level allocated portion).
+        const lineDiscount = parseFloat(li.total_discount || 0);
+        const lineRefund = refundByLineId[String(li.id || '')] || 0;
+        const net = Math.max(0, gross - lineDiscount - lineRefund);
+
         if (!byProduct[key]) {
           byProduct[key] = {
             productId: pid,
             productTitle: title,
             units: 0,
             revenueCad: 0,
+            netRevenueCad: 0,
             // Tracked as keys of a plain object since GAS V8 is fine with Sets
             // but plain object lookups are cheaper here.
             orderIds: {},
@@ -138,6 +162,7 @@ function getShopifyProductSalesForDay(storeId, dateStr) {
         }
         byProduct[key].units += qty;
         byProduct[key].revenueCad += gross;
+        byProduct[key].netRevenueCad += net;
         if (orderId) byProduct[key].orderIds[orderId] = 1;
       }
     }
@@ -153,12 +178,15 @@ function getShopifyProductSalesForDay(storeId, dateStr) {
       productTitle: p.productTitle,
       units: p.units,
       revenueCad: p.revenueCad,
+      netRevenueCad: p.netRevenueCad,
       orders: Object.keys(p.orderIds).length,
     }))
     .sort((a, b) => b.units - a.units);
   const totalUnits = out.reduce((s, p) => s + p.units, 0);
   const totalOrders = out.reduce((s, p) => s + p.orders, 0);
-  Logger.log(`Shopify products ${storeId} ${dateStr}: ${out.length} products, ${totalUnits} units across ${totalOrders} order-product pairs`);
+  const totalGross = out.reduce((s, p) => s + p.revenueCad, 0);
+  const totalNet = out.reduce((s, p) => s + p.netRevenueCad, 0);
+  Logger.log(`Shopify products ${storeId} ${dateStr}: ${out.length} products, ${totalUnits} units / ${totalOrders} order-product pairs, gross=${totalGross.toFixed(2)} net=${totalNet.toFixed(2)} CAD`);
   return out;
 }
 

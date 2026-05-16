@@ -9,11 +9,14 @@ export type ProductRow = {
   productId: string;
   productTitle: string;
   units: number;
-  revenue: number;     // gross CAD
+  revenue: number;     // gross CAD (before discounts and refunds)
   /** Distinct orders that contained this product. 0 for historical rows
-   *  written before the Orders column was added — the dashboard treats 0
-   *  as "unknown" and falls back to showing units only. */
+   *  written before the Orders column was added. */
   orders: number;
+  /** Net revenue: gross − discounts − refunds.
+   *  null when the row was written before the Net Revenue column existed
+   *  (so the dashboard can distinguish "no data" from "0 net"). */
+  netRevenue: number | null;
 };
 
 function getAuth() {
@@ -71,7 +74,7 @@ export async function fetchProductsData(): Promise<ProductRow[]> {
   try {
     res = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `${PRODUCTS_TAB}!A2:H100000`,
+      range: `${PRODUCTS_TAB}!A2:I100000`,
       valueRenderOption: 'UNFORMATTED_VALUE',
       dateTimeRenderOption: 'FORMATTED_STRING',
     });
@@ -97,9 +100,24 @@ export async function fetchProductsData(): Promise<ProductRow[]> {
     const units = parseNumber(row[5]);
     const revenue = parseNumber(row[6]);
     const orders = parseNumber(row[7]); // 0 for rows written before this column existed
+    const netRaw = row[8];
+    const netRevenue =
+      netRaw === undefined || netRaw === null || netRaw === ''
+        ? null
+        : parseNumber(netRaw);
     if (units <= 0 && revenue <= 0) continue;
 
-    out.push({ date: dateStr, storeId, storeName, productId, productTitle, units, revenue, orders });
+    out.push({
+      date: dateStr,
+      storeId,
+      storeName,
+      productId,
+      productTitle,
+      units,
+      revenue,
+      orders,
+      netRevenue,
+    });
   }
   return out;
 }
