@@ -15,7 +15,15 @@ function colorFor(name: string, idx: number) {
   return STORE_COLORS[name] || ['#1c4587', '#ea4335', '#34a853', '#fbbc04', '#9c27b0'][idx % 5];
 }
 
-export function RoasChart({ data, stores }: { data: DailySeries[]; stores: string[] }) {
+type Props = {
+  data: DailySeries[];
+  stores: string[];
+  /** When true, render only the chart with no surrounding card/title.
+   *  Used when wrapped in a CollapsibleSection that already provides the title. */
+  bare?: boolean;
+};
+
+export function RoasChart({ data, stores, bare = false }: Props) {
   if (!data.length) return null;
   const chartData = data.map(d => ({
     date: d.date,
@@ -23,13 +31,8 @@ export function RoasChart({ data, stores }: { data: DailySeries[]; stores: strin
     ...d.byStore,
   }));
 
-  return (
-    <section className="rounded-xl bg-surface border border-border p-3 sm:p-5 shadow-card">
-      <h2 className="flex items-center gap-2 text-sm sm:text-base font-semibold text-text-primary mb-3 sm:mb-4">
-        <TrendingUp size={18} className="text-text-secondary" />
-        מגמת ROAS לאורך זמן
-      </h2>
-      <div className="h-64 sm:h-80">
+  const chart = (
+    <div className="h-64 sm:h-80">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
@@ -74,7 +77,18 @@ export function RoasChart({ data, stores }: { data: DailySeries[]; stores: strin
             ))}
           </LineChart>
         </ResponsiveContainer>
-      </div>
+    </div>
+  );
+
+  if (bare) return <div className="p-3 sm:p-5">{chart}</div>;
+
+  return (
+    <section className="rounded-xl bg-surface border border-border p-3 sm:p-5 shadow-card">
+      <h2 className="flex items-center gap-2 text-sm sm:text-base font-semibold text-text-primary mb-3 sm:mb-4">
+        <TrendingUp size={18} className="text-text-secondary" />
+        מגמת ROAS לאורך זמן
+      </h2>
+      {chart}
     </section>
   );
 }

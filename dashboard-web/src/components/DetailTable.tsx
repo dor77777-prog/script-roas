@@ -13,12 +13,26 @@ const ROAS_BG: Record<string, string> = {
   gray: '',
 };
 
-export function DetailTable({ rows }: { rows: DailyRow[] }) {
+function roasCellStyle(roas: number, revenue: number, totalSpend: number) {
+  if (revenue === 0 && totalSpend > 0) return { className: 'bg-black text-white', text: '0' };
+  if (revenue === 0 && totalSpend === 0) return { className: '', text: '' };
+  return { className: ROAS_BG[roasLabel(roas).tone], text: formatNumber(roas) };
+}
+
+type DetailProps = {
+  rows: DailyRow[];
+  bare?: boolean;
+};
+
+export function DetailTable({ rows, bare = false }: DetailProps) {
   const sorted = [...rows].sort((a, b) => b.date.localeCompare(a.date));
   const display = sorted.slice(0, 100);
   const showCogs = display.some(r => r.hasCogs);
 
   if (!display.length) {
+    if (bare) {
+      return <div className="p-8 text-center text-text-muted text-sm">אין נתונים בטווח שבחרת</div>;
+    }
     return (
       <section className="rounded-xl bg-surface border border-border p-8 text-center text-text-muted shadow-card">
         אין נתונים בטווח שבחרת
@@ -26,14 +40,8 @@ export function DetailTable({ rows }: { rows: DailyRow[] }) {
     );
   }
 
-  return (
-    <section className="rounded-xl bg-surface border border-border shadow-card overflow-hidden">
-      <h2 className="flex items-center gap-2 text-base font-semibold text-text-primary px-5 py-4 border-b border-border">
-        <Table size={18} className="text-text-secondary" />
-        פירוט יומי
-        <span className="text-xs text-text-muted font-normal">({display.length} שורות אחרונות)</span>
-      </h2>
-      <div className="overflow-x-auto">
+  const tableContent = (
+    <div className="overflow-x-auto">
         <table className="w-full text-xs sm:text-sm min-w-[700px]">
           <thead className="bg-surfaceMuted">
             <tr className="text-text-secondary">
@@ -51,7 +59,7 @@ export function DetailTable({ rows }: { rows: DailyRow[] }) {
           </thead>
           <tbody>
             {display.map((r, i) => {
-              const info = roasLabel(r.roas);
+              const cell = roasCellStyle(r.roas, r.revenue, r.totalSpend);
               return (
                 <tr key={i} className="border-t border-border hover:bg-surfaceMuted/50">
                   <td className="px-3 py-2 tabular-nums">{formatDate(r.date)}</td>
@@ -60,8 +68,8 @@ export function DetailTable({ rows }: { rows: DailyRow[] }) {
                   <td className="px-3 py-2 text-end tabular-nums">{formatNumber(r.gaSpend)}</td>
                   <td className="px-3 py-2 text-end tabular-nums">{formatNumber(r.totalSpend)}</td>
                   <td className="px-3 py-2 text-end tabular-nums">{formatNumber(r.revenue)}</td>
-                  <td className={cn('px-3 py-2 text-center font-medium tabular-nums', ROAS_BG[info.tone])}>
-                    {formatNumber(r.roas)}
+                  <td className={cn('px-3 py-2 text-center font-medium tabular-nums', cell.className)}>
+                    {cell.text}
                   </td>
                   <td className="px-3 py-2 text-end tabular-nums">{formatNumber(r.grossProfit)}</td>
                   {showCogs && (
@@ -86,7 +94,34 @@ export function DetailTable({ rows }: { rows: DailyRow[] }) {
             })}
           </tbody>
         </table>
+    </div>
+  );
+
+  const meta = (
+    <span className="text-xs text-text-muted font-normal">
+      ({display.length} שורות אחרונות)
+    </span>
+  );
+
+  if (bare) {
+    return (
+      <div>
+        <div className="px-4 sm:px-5 py-3 bg-surfaceMuted/40 border-b border-border text-xs text-text-secondary">
+          {meta}
+        </div>
+        {tableContent}
       </div>
+    );
+  }
+
+  return (
+    <section className="rounded-xl bg-surface border border-border shadow-card overflow-hidden">
+      <h2 className="flex items-center gap-2 text-base font-semibold text-text-primary px-5 py-4 border-b border-border">
+        <Table size={18} className="text-text-secondary" />
+        פירוט יומי
+        {meta}
+      </h2>
+      {tableContent}
     </section>
   );
 }

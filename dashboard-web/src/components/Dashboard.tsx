@@ -2,7 +2,15 @@
 
 import { useMemo, useState } from 'react';
 import useSWR from 'swr';
-import { RefreshCw, AlertCircle } from 'lucide-react';
+import {
+  RefreshCw,
+  AlertCircle,
+  TrendingUp,
+  Store,
+  CalendarDays,
+  Package,
+  Table,
+} from 'lucide-react';
 import type { DashboardData, Filters as F } from '@/lib/types';
 import { computePresetRange, previousRange } from '@/lib/presets';
 import { aggregate, aggregateByStore, dailySeries, filterRows } from '@/lib/analytics';
@@ -10,11 +18,11 @@ import { Filters } from './Filters';
 import { KpiCards } from './KpiCards';
 import { PerStoreCards } from './PerStoreCards';
 import { RoasChart } from './RoasChart';
-import { InsightsPanel } from './InsightsPanel';
 import { MonthlyTables } from './MonthlyTables';
 import { DetailTable } from './DetailTable';
 import { TodayLive } from './TodayLive';
 import { ProductsTable } from './ProductsTable';
+import { CollapsibleSection } from './CollapsibleSection';
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -64,7 +72,7 @@ export function Dashboard() {
         onRefresh={() => mutate()}
       />
 
-      <main className="max-w-7xl mx-auto px-3 sm:px-4 md:px-8 py-4 sm:py-6 md:py-8 space-y-4 sm:space-y-6">
+      <main className="max-w-7xl mx-auto px-3 sm:px-4 md:px-8 py-4 sm:py-6 md:py-8 space-y-4 sm:space-y-5">
         {error && (
           <div className="rounded-xl bg-roas-redBg border border-roas-red/30 p-4 flex items-start gap-3">
             <AlertCircle className="text-roas-red shrink-0" size={20} />
@@ -83,27 +91,63 @@ export function Dashboard() {
 
         {data && filtered && (
           <>
+            {/* ===== Always visible: today's live snapshot ===== */}
             <TodayLive rows={data.rows} fxIlsToCad={data.fxIlsToCad} />
 
-            <Filters
-              filters={filters}
-              stores={data.stores}
-              onChange={setFilters}
-            />
+            {/* ===== Filters (compact, can hide preset palette on small screens) ===== */}
+            <Filters filters={filters} stores={data.stores} onChange={setFilters} />
 
+            {/* ===== Above the fold: KPIs + per-store breakdown ===== */}
             <KpiCards current={filtered.curAgg} previous={filtered.prevAgg} />
 
-            <InsightsPanel storeAggs={filtered.storeAggs} rows={filtered.cur} />
+            <CollapsibleSection
+              title="ביצועים לפי חנות"
+              icon={<Store size={18} />}
+              defaultOpen
+              storageKey="store-breakdown"
+              subtitle={`${filtered.visibleStores.length} ${filtered.visibleStores.length === 1 ? 'חנות' : 'חנויות'} בטווח הנבחר`}
+            >
+              <PerStoreCards data={filtered.storeAggs} bare />
+            </CollapsibleSection>
 
-            <PerStoreCards data={filtered.storeAggs} />
+            {/* ===== Trend chart (open by default) ===== */}
+            <CollapsibleSection
+              title="מגמת ROAS לאורך זמן"
+              icon={<TrendingUp size={18} />}
+              defaultOpen
+              storageKey="roas-chart"
+              subtitle={`${filtered.series.length} ימים`}
+            >
+              <RoasChart data={filtered.series} stores={filtered.visibleStores} bare />
+            </CollapsibleSection>
 
-            <RoasChart data={filtered.series} stores={filtered.visibleStores} />
+            {/* ===== Below the fold: collapsed by default ===== */}
+            <CollapsibleSection
+              title="מוצרים שנמכרו"
+              icon={<Package size={18} />}
+              storageKey="products"
+              subtitle="פירוט מכירות לפי מוצר — יומי / שבועי / חודשי / שנתי"
+            >
+              <ProductsTable range={filters.range} store={filters.store} />
+            </CollapsibleSection>
 
-            <MonthlyTables rows={data.rows} stores={data.stores} />
+            <CollapsibleSection
+              title="טבלאות חודשיות"
+              icon={<CalendarDays size={18} />}
+              storageKey="monthly"
+              subtitle="טבלה לכל חודש — לפי חנות או סיכום משולב"
+            >
+              <MonthlyTables rows={data.rows} stores={data.stores} bare />
+            </CollapsibleSection>
 
-            <ProductsTable stores={data.stores} />
-
-            <DetailTable rows={filtered.cur} />
+            <CollapsibleSection
+              title="פירוט יומי"
+              icon={<Table size={18} />}
+              storageKey="detail"
+              subtitle="100 השורות האחרונות בטווח הנבחר"
+            >
+              <DetailTable rows={filtered.cur} bare />
+            </CollapsibleSection>
 
             <Footer lastUpdated={data.lastUpdated} />
           </>
@@ -114,7 +158,7 @@ export function Dashboard() {
 }
 
 function Header({
-  lastUpdated,
+  lastUpdated: _lastUpdated,
   isRefreshing,
   onRefresh,
 }: {
@@ -127,7 +171,9 @@ function Header({
       <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-8 py-3 sm:py-4 flex items-center justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-base sm:text-xl md:text-2xl font-bold truncate">📊 דשבורד ROAS</h1>
-          <p className="text-[10px] sm:text-xs text-blue-100/80 mt-0.5 hidden sm:block">מעקב יומי לכל החנויות</p>
+          <p className="text-[10px] sm:text-xs text-blue-100/80 mt-0.5 hidden sm:block">
+            מעקב יומי לכל החנויות
+          </p>
         </div>
         <button
           onClick={onRefresh}
@@ -145,7 +191,8 @@ function Header({
 function Footer({ lastUpdated }: { lastUpdated: string }) {
   return (
     <footer className="text-center text-xs text-text-muted py-6">
-      עדכון אחרון: {new Date(lastUpdated).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' })}
+      עדכון אחרון:{' '}
+      {new Date(lastUpdated).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' })}
       <br />
       מתעדכן אוטומטית כל דקה
     </footer>

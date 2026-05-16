@@ -1,6 +1,6 @@
-# ROAS Tracker — סקירת מערכת מלאה
+# ROAS Tracker — אפיון מערכת מלא
 
-מסמך מקיף שמתעד את המערכת שנבנתה: מבנה, טכנולוגיות, זרימת נתונים, תפעול שוטף, ואפשרויות שיפור.
+מסמך מקיף שמתעד את המערכת שנבנתה: ארכיטקטורה, רכיבים, זרימת נתונים, פיצ'רים, ותפעול שוטף. מעודכן לתאריך **מאי 2026**.
 
 ---
 
@@ -8,169 +8,275 @@
 
 1. [תמונה גדולה](#-תמונה-גדולה)
 2. [רכיבי המערכת](#-רכיבי-המערכת)
-3. [זרימת נתונים מלאה](#-זרימת-נתונים-מלאה)
-4. [טכנולוגיות](#-טכנולוגיות)
-5. [פירוט קבצים](#-פירוט-קבצים)
-6. [תפעול שוטף](#-תפעול-שוטף)
-7. [פתרון תקלות נפוצות](#-פתרון-תקלות-נפוצות)
-8. [אבטחה](#-אבטחה)
-9. [אפשרויות שיפור](#-אפשרויות-שיפור)
+3. [זרימת נתונים](#-זרימת-נתונים)
+4. [פיצ'רים עיקריים](#-פיצרים-עיקריים)
+5. [מבנה הגיליון](#-מבנה-הגיליון)
+6. [מבנה הדשבורד](#-מבנה-הדשבורד)
+7. [טכנולוגיות](#-טכנולוגיות)
+8. [פירוט קבצים](#-פירוט-קבצים)
+9. [תפעול שוטף](#-תפעול-שוטף)
+10. [פתרון תקלות](#-פתרון-תקלות)
+11. [אבטחה](#-אבטחה)
+12. [אפשרויות שיפור](#-אפשרויות-שיפור)
 
 ---
 
 ## 🎯 תמונה גדולה
 
-המערכת עוקבת אחרי ROAS (Return on Ad Spend) יומי של 3 חנויות Shopify, ומציגה את הנתונים ב-3 שכבות:
+המערכת עוקבת אחרי ROAS (Return on Ad Spend) של 3 חנויות Shopify ב-3 רמות:
 
 ```
-┌────────────────────────────────────────────────────────────────┐
-│ 🌐 שכבת תצוגה (Web Dashboard - Next.js on Vercel)             │
-│   - KPIs, גרפים, טבלאות חודשיות                                 │
-│   - בורר תאריכים + חנות                                          │
-│   - רענון אוטומטי כל דקה                                         │
-│   ↑                                                              │
-│   קורא דרך REST API                                              │
-└────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│ 🌐 שכבת תצוגה (Next.js on Vercel)                                  │
+│   - https://roas-dashboard-smoky.vercel.app                        │
+│   - TodayLive + KPI cards + Per-store + Chart + Products + Tables │
+│   - סקציות מתקפלות עם state ב-localStorage                          │
+│   - רענון אוטומטי כל 60 שניות                                       │
+│   ↑                                                                 │
+│   קריאות REST                                                       │
+└───────────────────────────────────────────────────────────────────┘
                               ↑
-┌────────────────────────────────────────────────────────────────┐
-│ 📊 שכבת נתונים (Google Sheets)                                  │
-│   - data-daily (flat) - מקור האמת הדיגיטלי                       │
-│   - טאבי חנות + סיכום (legacy/backup, ניתן להסיר)              │
-│   ↑                                                              │
-│   נכתב מ-Apps Script                                              │
-└────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│ 📊 שכבת נתונים (Google Sheets)                                     │
+│   - data-daily (flat, LTR) - מקור אמת לדשבורד                       │
+│   - products-daily - מוצרים שנמכרו לפי יום                          │
+│   - manual-spend - override ידני להוצאות (חשבונות מושבתים וכו')     │
+│   - sheets פר-חנות + סיכום (legacy)                                 │
+│   ↑                                                                 │
+│   נכתב מ-Apps Script                                                │
+└───────────────────────────────────────────────────────────────────┘
                               ↑
-┌────────────────────────────────────────────────────────────────┐
-│ 🔧 שכבת איסוף (Google Apps Script)                              │
-│   - טריגר יומי ב-00:05 שעון ישראל                                │
-│   - שולף מ-Shopify (הכנסות) + Meta Ads + Google Ads (הוצאות)   │
-│   - ממיר ILS→CAD לפי שער יומי                                    │
-│   - כותב ל-Sheet                                                  │
-│   ↑                                                              │
-│   מתחבר ל-APIs                                                    │
-└────────────────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────┐
+│ 🔧 שכבת איסוף (Google Apps Script)                                 │
+│   - Daily trigger: 00:05 IT  → סוגר את אתמול                       │
+│   - Live trigger: כל 15 דק׳  → מרענן את היום                       │
+│   - שולף Shopify (revenue + מוצרים) + Meta + Google Ads             │
+│   - בודק manual-spend לפני קריאה ל-API                              │
+│   - ממיר ILS/USD/EUR → CAD לפי שער יומי                             │
+│   - מחשב COGS = 25% × revenue                                       │
+│   ↑                                                                 │
+│   מתחבר ל-APIs                                                      │
+└───────────────────────────────────────────────────────────────────┘
                               ↑
-        APIs חיצוניים:  Shopify  •  Meta Graph  •  Google Ads  •  Frankfurter (FX)
+   APIs:  Shopify Admin · Meta Graph · Google Ads · Frankfurter (FX)
 ```
 
 **3 חנויות במעקב:**
-- **uzoshop** (uzo-d-s-2.myshopify.com) — Facebook + Google Ads
-- **Zol Plus** (2x1gqx-y0.myshopify.com) — Facebook בלבד
-- **360usmile** (360usmile.myshopify.com) — Facebook בלבד
+- **uzoshop** (uzo-d-s-2.myshopify.com) — Meta + Google Ads
+- **Zol Plus** (2x1gqx-y0.myshopify.com) — Meta בלבד
+- **360usmile** (360usmile.myshopify.com) — Meta בלבד
 
-הוצאות הפרסום בפועל בשקלים (ILS), הכנסות Shopify בדולר קנדי (CAD). כל המספרים מומרים ל-CAD לפני הצגה.
+**מטבעות:**
+- Shopify revenue: כל החנויות ב-CAD ישירות.
+- Meta spend: ברירת מחדל ILS (uzoshop ישן היה ILS, החדש CAD; Zol/360 ב-ILS).
+- Google Ads spend: CAD.
+- שער המרה: Frankfurter (ECB), נקרא פעם ביום ומוצג בדשבורד.
 
 ---
 
 ## 🧩 רכיבי המערכת
 
-### 1. Apps Script (`/` שורש הריפו) — שכבת איסוף
+### 1. Apps Script — שכבת איסוף
 
-קוד Google Apps Script שמותקן בפרויקט Apps Script מקוון. מתחבר ל-Google Sheets API ול-APIs חיצוניים.
+קבצי `.gs` ב-`/` שורש הריפו. מותקנים בפרויקט Apps Script מקוון.
 
 **אחריות:**
+- שליפה יומית/חיה של revenue, ad spend, ו-line items של מוצרים
 - ניהול 3 חנויות עם חשבונות שונים בעסקים שונים
-- שליפת נתוני הזמנות יומיים מ-Shopify (Admin API + Client Credentials Grant)
-- שליפת הוצאות פייסבוק יומיות מ-Meta Marketing API
-- שליפת הוצאות גוגל יומיות מ-Google Ads API (uzoshop בלבד)
-- שליפת ad-set/ad-group breakdown לכל יום
-- המרת מטבעות ILS→CAD דרך Frankfurter API
-- כתיבת הכל לטאבי הגיליון
-- אכיפת idempotency (הרצה חוזרת לא יוצרת כפילויות)
-- retry אוטומטי על כשלי רשת
+- override ידני להוצאות (כשחשבון מודעות הושבת)
+- המרת מטבעות
+- חישוב COGS פלאט (25% של revenue)
+- כתיבה מסונכרנת לטאבים השונים
+- אכיפת idempotency (הרצה חוזרת ↔ כתיבה מחדש בלי כפילויות)
+- retry על כשלי רשת/5xx/429
 
-**הפעלה:**
-- טריגר יומי ב-00:05 שעון ישראל
-- הרצה ידנית מהתפריט בגיליון לכל יום/טווח
+**שתי הפעלות אוטומטיות:**
+- `runDailyUpdate` ב-00:05 IT — סוגר את אתמול עם כל הנתונים
+- `runLiveUpdate` כל 15 דקות — מרענן את היום הנוכחי
 
 ### 2. Google Sheets — שכבת נתונים
 
-גיליון אחד עם הטאבים הבאים:
+גיליון אחד עם 6 סוגי טאבים. רוב הטאבים מוסתרים — המשתמש רואה רק את הטאבים החודשיים והסיכום.
 
-| טאב | סוג | תוכן |
-|------|------|------|
-| `סיכום` | unified | סיכום יומי משולב לכל החנויות, מבוסס נוסחאות VLOOKUP |
-| `uzoshop` | split | טבלה חודשית: FB + GA + רב + ROAS |
-| `Zol Plus` | unified | טבלה חודשית: יצא + נכנס + ROAS |
-| `360usmile` | unified | טבלה חודשית: יצא + נכנס + ROAS |
-| `data-daily` ⚙️ | flat (LTR, EN headers) | שורה אחת ל-(יום × חנות), מקור לדשבורד ה-web |
-| `uzoshop-campaigns` ⚙️ | flat | רזולוציית ad-set יומית עבור uzoshop |
-| `zolplus-campaigns` ⚙️ | flat | רזולוציית ad-set יומית עבור zolplus |
-| `usmile360-campaigns` ⚙️ | flat | רזולוציית ad-set יומית עבור usmile360 |
+### 3. Web Dashboard — שכבת תצוגה
 
-⚙️ = טאבים מוסתרים כברירת מחדל (אפשר לחשוף עם `showAuxiliaryTabs`).
-
-### 3. Web Dashboard (`/dashboard-web`) — שכבת תצוגה
-
-Next.js app שפרוס ב-Vercel. קורא מ-Google Sheets API ומציג בדפדפן.
+Next.js 15 + React 19 + Tailwind 3.4. פרוס ב-Vercel. RTL עברית, מובייל-first.
 
 **URL פרודקשן:** https://roas-dashboard-smoky.vercel.app
 
-**מה הוא מציג:**
-- KPI Cards (ROAS, הכנסות, הוצאות, רווח גולמי) עם השוואה לתקופה קודמת
-- כרטיסיות פר-חנות עם ROAS וסטטוס מילולי
-- גרף ROAS לאורך זמן (קו לכל חנות)
-- תובנות אוטומטיות (חנות מובילה, חנות בסיכון, יום חזק)
-- טבלאות חודשיות פר-חנות (כמו בגיליון, עם צביעת ROAS)
-- טבלת סיכום חודשי משולבת
-- טבלת פירוט יומי (100 שורות אחרונות)
-
-**מאפיינים:**
-- ממשק עברית RTL מלא
-- בורר תקופה (השבוע / החודש / חודש קודם / 30 ימים / מותאם)
-- בורר חנות
-- רענון אוטומטי כל דקה
-- מהירה מאוד (cached server-side, SWR client-side)
-
 ---
 
-## 🔄 זרימת נתונים מלאה
+## 🔄 זרימת נתונים
 
-### יום רגיל (אוטומטי, 00:05 שעון ישראל)
+### יום רגיל (אוטומטי)
 
 ```
-00:05  Apps Script trigger מופעל
-       └─ runDailyUpdate() → runUpdateForDate(yesterday)
+00:05 IT  Apps Script trigger מופעל
+          └─ runDailyUpdate() → runUpdateForDate(yesterday)
 
-00:05  לכל אחת מ-3 החנויות:
-       ├─ getShopifyRevenue(storeId, yesterday)
-       │   └─ Shopify Admin API: GET /admin/api/2024-10/orders.json
-       │
-       ├─ getMetaSpend(storeId, yesterday)
-       │   └─ Meta Graph API: GET /act_X/insights?level=account
-       │
-       ├─ (uzoshop בלבד) getGoogleAdsSpend(storeId, yesterday)
-       │   └─ Google Ads API: POST /customers/X/googleAds:search
-       │
-       └─ updateCampaignDataForStoreDate_(storeId, yesterday)
-           ├─ getMetaAdSetInsights — שולף ad-set breakdown (רק פעילים)
-           └─ getGoogleAdsAdGroupInsights — uzoshop בלבד
+00:05+    לכל אחת מ-3 החנויות:
+          ├─ getShopifyRevenue          ← Shopify Admin API
+          ├─ override-check ב-manual-spend (Meta)
+          ├─ override-check ב-manual-spend (Google, אם יש)
+          ├─ getMetaSpend                ← Meta Graph (אם אין override)
+          ├─ getGoogleAdsSpend           ← Google Ads (אם הוא רלוונטי + אין override)
+          ├─ updateCampaignDataForStoreDate_ → ad-set/ad-group breakdown
+          └─ getShopifyProductSalesForDay → רשימת מוצרים שנמכרו
 
-00:06  המרת מטבעות:
-       └─ getFxRate('ILS', 'CAD', yesterday) ← Frankfurter API
-
-00:06  כתיבה לגיליון:
-       ├─ writeDayRow(storeTab, ...) ← טבלה חודשית פר-חנות
-       ├─ writeDailyFlatRow_ ← שורה ב-data-daily (לדשבורד web)
-       └─ writeCampaignRowsForDay ← {storeId}-campaigns
-
-00:07  הטאב 'סיכום' מתעדכן אוטומטית דרך נוסחאות VLOOKUP
+00:06     המרת מטבעות + חישוב COGS
+          ├─ getFxRate(ILS, CAD, dateStr) ← Frankfurter (cached)
+          ├─ metaCad = meta.spend × fx
+          ├─ cogsCad = revenueCad × 0.25
+          └─ writeDailyFlatRow_ → data-daily
+              writeProductSalesForDay_ → products-daily
+              writeCampaignRowsForDay → {storeId}-campaigns
+              writeDayRow → טאב פר-חנות
 ```
 
-### צפייה בדשבורד (ידני, כל פעם)
+### Live update (כל 15 דקות)
+
+```
+xx:00, xx:15, xx:30, xx:45  Live trigger
+                            └─ runLiveUpdate() → runUpdateForDate(today)
+                            (אותה לוגיקה כמו daily, אבל על "היום")
+```
+
+### צפייה בדשבורד
 
 ```
 משתמש פותח https://roas-dashboard-smoky.vercel.app
 
 → React app נטען
-→ SWR מבקש GET /api/data
-→ Next.js API route:
-   ├─ Google Sheets API: GET data-daily!A:I  (UNFORMATTED_VALUE)
-   ├─ פירסור התשובה ל-DailyRow[]
-   └─ החזרה כ-JSON עם Cache-Control 60s
-→ Dashboard component מצירף KPIs, גרפים, טבלאות
-→ SWR poll-ים אוטומטי כל 60 שניות
+→ SWR מבקש GET /api/data + GET /api/products במקביל
+→ Next.js API routes:
+   ├─ /api/data: קורא data-daily!A:K + Frankfurter rate → JSON
+   └─ /api/products: קורא products-daily!A:G → JSON
+→ SWR cache 60s server-side + 60s client-side polling
+→ Dashboard מציג סקציות מתקפלות (state ב-localStorage)
 ```
+
+---
+
+## ✨ פיצ'רים עיקריים
+
+### 1. Live Today snapshot
+ל-uzoshop וכל החנויות, מציג ROAS / הכנסות / הוצאות של היום עד לרגע זה. מתעדכן כל 15 דק' מצד Apps Script + כל 60 שנ' מצד הלקוח.
+
+### 2. COGS — 25% מההכנסה
+`COGS_RATE_OF_REVENUE = 0.25` ב-Config.gs וב-analytics.ts. רווח נטו = Revenue − AdSpend − COGS. **לא משפיע על ROAS** (שמוגדר Revenue/AdSpend בלבד).
+
+### 3. Products breakdown
+טאב `products-daily` עם שורה לכל (date, store, product). הדשבורד מציג רשימה עם איגום ליום / שבוע / חודש / חצי-שנה / שנה, מסונן לפי טווח התאריכים והחנות הגלובליים.
+
+### 4. Manual overrides ל-ad spend
+טאב `manual-spend` עם דרופ-דאון לחנות/פלטפורמה/מטבע. כל ריצה (יומית/לייב/backfill) בודקת את הטאב לפני קריאה ל-API. שימושי כשחשבון פרסום הושבת.
+
+הוספה מהירה דרך helper:
+```javascript
+bulkAddManualOverrides('uzoshop', 'Meta', 'CAD', [
+  ['2026-04-01', 2575],
+  ...
+]);
+```
+
+או הקפאת ערכים קיימים מ-data-daily:
+```javascript
+freezeCurrentSpendAsOverride('uzoshop', 'Meta', '2026-05-01', '2026-05-08');
+```
+
+### 5. Backfill historical
+`backfillRange(start, end)` או `backfillRangeForStores(start, end, ['storeId'])`. כל יום נכתב מחדש באופן idempotent. מומלץ לחתוך לטווחים של ≤12 ימים בגלל מגבלת 6 דק' ב-Apps Script.
+
+### 6. Zero-revenue flag
+ROAS cells בטבלאות חודשיות וטבלת פירוט מוצגים עם רקע שחור + טקסט לבן + "0" כשrevenue=0 וspend>0 (יום שהוצאת בו כסף אך לא היו מכירות) — להפרדה ויזואלית בין "אין נתונים" ל-"כשל ROAS אמיתי".
+
+### 7. Collapsible UI
+כל סקציה גדולה בדשבורד מתקפלת (פתחו רק את מה שצריכים). מצב פתוח/סגור נשמר ב-`localStorage` בכל דפדפן.
+
+---
+
+## 📋 מבנה הגיליון
+
+| טאב | סוג | תוכן | מוסתר? |
+|------|------|------|--------|
+| `סיכום` | unified | סיכום יומי משולב לכל החנויות (VLOOKUP) | לא |
+| `uzoshop` | per-store | טבלה חודשית: FB + GA + Revenue + ROAS | לא |
+| `Zol Plus` | per-store | טבלה חודשית | לא |
+| `360usmile` | per-store | טבלה חודשית | לא |
+| `data-daily` ⚙️ | flat (EN, LTR) | שורה לכל (יום, חנות) — מקור הדשבורד | כן |
+| `products-daily` ⚙️ | flat | שורה לכל (יום, חנות, מוצר) | כן |
+| `manual-spend` | flat | override ידני להוצאות פרסום | לא (לעריכה) |
+| `uzoshop-campaigns` ⚙️ | flat | ad-set breakdown יומי | כן |
+| `zolplus-campaigns` ⚙️ | flat | ad-set breakdown יומי | כן |
+| `usmile360-campaigns` ⚙️ | flat | ad-set breakdown יומי | כן |
+
+⚙️ = מוסתר כברירת מחדל. אפשר לחשוף דרך תפריט **ROAS → "הצג טאבים עזריים"**.
+
+### Schema של `data-daily`
+| עמ' | שדה | מקור |
+|----|------|------|
+| A | Date | פעם אחת לכל יום |
+| B | Store ID | uzoshop / zolplus / usmile360 |
+| C | Store | שם תצוגה |
+| D | FB Spend (CAD) | Meta API או override |
+| E | GA Spend (CAD) | Google Ads API או override |
+| F | Total Spend (CAD) | D + E |
+| G | Revenue (CAD) | Shopify |
+| H | ROAS | נוסחה: =G/F |
+| I | Gross Profit (CAD) | =G - F |
+| J | COGS (CAD) | =G × 0.25 |
+| K | Net Profit (CAD) | =G - F - J |
+
+### Schema של `products-daily`
+| עמ' | שדה |
+|----|------|
+| A | Date |
+| B | Store ID |
+| C | Store |
+| D | Product ID |
+| E | Product Title |
+| F | Units |
+| G | Gross Revenue (CAD) |
+
+### Schema של `manual-spend`
+| עמ' | שדה | dropdown |
+|----|------|---------|
+| A | Date (YYYY-MM-DD) | — |
+| B | Store ID | uzoshop / zolplus / usmile360 |
+| C | Platform | Meta / Google |
+| D | Spend | מספר |
+| E | Currency | ILS / CAD / USD / EUR |
+| F | Notes | טקסט חופשי |
+
+---
+
+## 🖥️ מבנה הדשבורד
+
+### היררכיה ויזואלית (מלמעלה למטה)
+
+| # | רכיב | תמיד פתוח? | תיאור |
+|---|------|------------|-------|
+| 1 | **Header** | תמיד | סטיקי, גרדיינט כחול, כפתור רענון |
+| 2 | **TodayLive** | תמיד | פס ירוק עם נתוני היום + שער ILS→CAD |
+| 3 | **Filters** | תמיד | טווח מהיר (אתמול/מתחילת החודש) + חנות; טווחים נוספים מתקפלים |
+| 4 | **KPI Cards** | תמיד | 6 כרטיסים: ROAS, הכנסות, הוצאות, רווח גולמי, COGS, רווח נטו |
+| 5 | **ביצועים לפי חנות** | פתוח | כרטיסים פר-חנות עם trophy/warning badges |
+| 6 | **מגמת ROAS** | פתוח | גרף קו (Recharts) |
+| 7 | **מוצרים שנמכרו** | מקופל | toolbar עם יומי/שבועי/חודשי/חצי/שנתי; הצג עוד/פחות |
+| 8 | **טבלאות חודשיות** | מקופל | per-store / summary, ROAS צבוע |
+| 9 | **פירוט יומי** | מקופל | 100 שורות אחרונות |
+| 10 | **Footer** | תמיד | זמן עדכון אחרון |
+
+### צבעי ROAS
+
+| תחום | תווית | רקע |
+|------|-------|-----|
+| ROAS = 0 + spend > 0 | "0" | שחור, טקסט לבן |
+| 0 < ROAS < 2 | "דורש בחינה" | אדום בהיר |
+| 2 ≤ ROAS < 2.7 | "סביר" | כתום בהיר |
+| 2.7 ≤ ROAS ≤ 3 | "טוב" | ירוק בהיר |
+| ROAS > 3 | "מעולה" | כחול בהיר |
+| ללא נתונים | — | אפור / ריק |
 
 ---
 
@@ -180,41 +286,38 @@ Next.js app שפרוס ב-Vercel. קורא מ-Google Sheets API ומציג בד�
 
 | טכנולוגיה | תפקיד |
 |-----------|-------|
-| Google Apps Script (V8 runtime) | סביבת ריצה |
-| Shopify Admin REST API 2024-10 | קריאת הזמנות |
-| Meta Marketing API v20.0 | קריאת ההוצאה פייסבוק |
-| Google Ads API v20 (REST) | קריאת ההוצאה גוגל |
-| Frankfurter (api.frankfurter.dev) | המרת מטבעות ECB-based |
-| Google Sheets API | כתיבה לגיליון |
-| OAuth 2.0 Refresh Tokens (Google Ads) | התחדשות אוטומטית של גישה |
-| Shopify Client Credentials Grant | השגת access tokens אוטומטית |
+| Google Apps Script (V8) | סביבת ריצה לטריגרים |
+| Shopify Admin REST API 2024-10 | הזמנות + line items |
+| Meta Marketing API v20.0 | ad spend ברמת חשבון + ad-set |
+| Google Ads API v20 (REST) | ad spend ברמת חשבון + ad-group |
+| Frankfurter (ECB) | המרת מטבעות |
+| OAuth 2.0 Refresh Tokens | Google Ads access tokens |
+| Shopify Client Credentials Grant | Shopify Admin tokens אוטומטיים |
 | Meta System User Tokens | טוקנים שלא פגים |
 
-### Frontend (Next.js Web)
+### Frontend (Next.js)
 
 | טכנולוגיה | גרסה | תפקיד |
 |-----------|------|-------|
 | Next.js | 15.5+ | App Router, SSR, API routes |
-| React | 19 | UI library |
+| React | 19 | UI |
 | TypeScript | 5.x | Type safety |
-| Tailwind CSS | 3.4 | Styling utility-first |
-| Recharts | 2.15 | גרפי קו |
+| Tailwind CSS | 3.4 | Styling |
+| Recharts | 2.15 | LineChart |
 | SWR | 2.3 | Data fetching + revalidation |
 | googleapis | 144 | Service Account → Sheets API |
-| date-fns | 4 | טיפול בתאריכים |
 | lucide-react | 0.469 | אייקונים |
 
-### תשתית (Infrastructure)
+### תשתית
 
 | שירות | תפקיד | עלות |
 |--------|--------|------|
-| Google Apps Script | סביבת ריצה לטריגרים יומיים | חינמי |
+| Google Apps Script | טריגרים יומיים + לייב | חינמי |
 | Google Sheets | אחסון נתונים | חינמי |
-| Google Cloud (Service Account) | אימות לקריאת Sheet מ-Vercel | חינמי |
-| Vercel | פריסת Next.js web | חינמי (Hobby tier) |
-| GitHub | git repo | חינמי |
-
-**סה"כ עלות שוטפת: 0$/חודש** — כל השירותים בטיר חינמי.
+| Google Cloud Service Account | אימות Sheets API | חינמי |
+| Vercel | host של Next.js | חינמי (Hobby) |
+| GitHub | git repo + auto-deploy | חינמי |
+| **סה"כ** | | **0$/חודש** |
 
 ---
 
@@ -224,315 +327,185 @@ Next.js app שפרוס ב-Vercel. קורא מ-Google Sheets API ומציג בד�
 
 | קובץ | תפקיד |
 |------|-------|
-| `appsscript.json` | מניפסט - הרשאות, timezone, V8 runtime |
-| `Config.gs` | קבועים, רשימת חנויות, עזרי Script Properties, parseYMD_, fetchWithRetry_, verifyConfig |
-| `FX.gs` | שערי חליפין דרך Frankfurter, עם cache |
-| `Shopify.gs` | Shopify Admin API client + bootstrapShopifyToken (Client Credentials Grant) |
-| `MetaAds.gs` | Meta Marketing API: getMetaSpend, getMetaAdSetInsights |
-| `GoogleAds.gs` | Google Ads API: getGoogleAdsSpend, getGoogleAdsAdGroupInsights + OAuth refresh |
-| `SheetBuilder.gs` | בניית טאבים, חודשי בלוקים, צביעת ROAS, repair/verify/reset helpers |
-| `DailyUpdate.gs` | תזמור: runDailyUpdate, backfillRange, backfillRangeForStores |
-| `Main.gs` | נקודות כניסה: setupAll, installDailyTrigger, onOpen menu |
+| `appsscript.json` | manifest |
+| `Config.gs` | קבועים, רשימת חנויות, helpers (parseYMD, fetchWithRetry, verifyConfig, COGS_RATE) |
+| `FX.gs` | Frankfurter client + cache |
+| `Shopify.gs` | Shopify Admin client + bootstrapShopifyToken + getShopifyProductSalesForDay |
+| `MetaAds.gs` | Meta API: getMetaSpend, getMetaAdSetInsights |
+| `GoogleAds.gs` | Google Ads API + OAuth refresh |
+| `SheetBuilder.gs` | בניית טאבים, חודשי בלוקים, ROAS color rules, daily-flat, products-daily |
+| `DailyUpdate.gs` | runDailyUpdate, runLiveUpdate, backfillRange, debugTodaySpend |
+| `ManualOverrides.gs` | manual-spend tab, bulkAddManualOverrides, freezeCurrentSpendAsOverride |
+| `Main.gs` | setupAll, install*Trigger, onOpen menu |
 
 ### Web Dashboard (`/dashboard-web`)
 
 ```
-dashboard-web/
-├── package.json              ← תלויות
-├── tsconfig.json             ← TypeScript config
-├── next.config.ts            ← Next.js config
-├── tailwind.config.ts        ← Tailwind + צבעים
-├── postcss.config.mjs
-├── .env.local.example        ← תבנית למשתני סביבה
-├── .gitignore
-├── README.md                 ← מדריך הקמה
-└── src/
-    ├── app/
-    │   ├── layout.tsx        ← Root layout (RTL Hebrew)
-    │   ├── page.tsx          ← דף הבית
-    │   ├── globals.css       ← סגנונות גלובליים
-    │   └── api/data/
-    │       └── route.ts      ← REST API: GET /api/data
-    ├── components/
-    │   ├── Dashboard.tsx     ← Main component (SWR, state, layout)
-    │   ├── Filters.tsx       ← בורר תקופה + חנות
-    │   ├── KpiCards.tsx      ← 4 KPI cards עם delta
-    │   ├── PerStoreCards.tsx ← 3 כרטיסיות פר-חנות
-    │   ├── RoasChart.tsx     ← גרף קו (Recharts)
-    │   ├── InsightsPanel.tsx ← תובנות אוטומטיות
-    │   ├── MonthlyTables.tsx ← טבלאות חודשיות פר-חנות + סיכום
-    │   └── DetailTable.tsx   ← טבלת פירוט יומי
-    └── lib/
-        ├── types.ts          ← TypeScript types
-        ├── sheets.ts         ← Google Sheets client (Service Account)
-        ├── presets.ts        ← לוגיקה של בוררי תקופה
-        ├── analytics.ts      ← aggregate, filterRows, dailySeries, roasLabel
-        └── utils.ts          ← cn, formatCurrency, formatDate, formatPct
+dashboard-web/src/
+├── app/
+│   ├── layout.tsx          ← RTL Hebrew root layout
+│   ├── page.tsx            ← דף הבית
+│   ├── globals.css
+│   └── api/
+│       ├── data/route.ts   ← GET /api/data (data-daily + FX rate)
+│       └── products/route.ts ← GET /api/products (products-daily)
+├── components/
+│   ├── Dashboard.tsx           ← Main: SWR, state, layout, collapsible sections
+│   ├── CollapsibleSection.tsx  ← reusable disclosure primitive (state in localStorage)
+│   ├── TodayLive.tsx           ← live today snapshot + FX rate + Meta/Google split
+│   ├── Filters.tsx             ← preset + store + advanced toggle
+│   ├── KpiCards.tsx            ← 6 KPI cards
+│   ├── PerStoreCards.tsx       ← per-store cards with trophy/warning badges
+│   ├── RoasChart.tsx           ← line chart (bare mode supported)
+│   ├── MonthlyTables.tsx       ← monthly per-store / summary (bare mode)
+│   ├── DetailTable.tsx         ← last 100 daily rows (bare mode)
+│   └── ProductsTable.tsx       ← products with day/week/month/year rollup
+└── lib/
+    ├── types.ts            ← DailyRow, DashboardData, Filters, PresetKey
+    ├── sheets.ts           ← data-daily reader
+    ├── products.ts         ← products-daily reader
+    ├── presets.ts          ← preset → date range
+    ├── analytics.ts        ← aggregate, filterRows, dailySeries, roasLabel, COGS_RATE
+    └── utils.ts            ← cn, formatCurrency, formatDate, formatPct
 ```
 
 ### תיעוד
 
 | קובץ | תוכן |
 |------|------|
-| `README.md` | סקירה ראשית של ה-Apps Script |
-| `SETUP.md` | מדריך הקמה צעד-אחר-צעד של Apps Script (Shopify, Meta, Google Ads) |
-| `dashboard-web/README.md` | מדריך הקמה ופריסה של ה-web |
+| `README.md` | סקירה ראשית של Apps Script |
+| `SETUP.md` | מדריך הקמה מאפס |
+| `dashboard-web/README.md` | מדריך פריסה של הדשבורד |
+| `COGS_SETUP.md` | הסבר על כלל ה-25% |
 | `SYSTEM_OVERVIEW.md` | המסמך הזה |
+| `WELCOME.md` | תקציר ידידותי למשתמש קצה |
 
 ---
 
 ## 🔁 תפעול שוטף
 
-### יומי (אוטומטי - אין מה לעשות)
-
-- 00:05 שעון ישראל — Apps Script trigger רץ ומעדכן את הגיליון
-- 00:05+~30s — הדשבורד באינטרנט מציג את הנתונים החדשים (cache refresh)
+### יומי (אוטומטי — אין מה לעשות)
+- 00:05 IT: Daily trigger רץ ומעדכן אתמול
+- כל 15 דק׳: Live trigger מרענן את היום
+- Vercel ידפלוי דשבורד אוטומטית בכל `git push` ל-main
 
 ### תפעול ידני (לפי הצורך)
 
-**Apps Script (בעורך https://script.google.com):**
+**מעורך Apps Script:**
 - `runDailyUpdate` — עדכן אתמול עכשיו
-- `runUpdateForDate('2026-05-15')` — עדכן יום ספציפי
-- `backfillRange('2026-05-01', '2026-05-15')` — מילוי טווח
-- `verifyConfig` — בדוק שכל Script Properties מוגדרים
-- `hideAuxiliaryTabs` / `showAuxiliaryTabs` — שליטה בטאבים העזריים
+- `runLiveUpdate` — עדכן את היום עכשיו
+- `runUpdateForDate('2026-05-15')` — יום ספציפי
+- `backfillRange('2026-05-01', '2026-05-15')` — טווח (עד ~12 ימים בריצה)
+- `backfillRangeForStores('2026-05-01', '2026-05-15', ['uzoshop'])` — חנות אחת
+- `debugTodaySpend` — לוג של ערכי ה-API הגולמיים להיום
+- `verifyConfig` — בודק ש-Script Properties תקינים
+- `bulkAddManualOverrides(storeId, platform, currency, entries, notes)` — הוסף override-ים
+- `freezeCurrentSpendAsOverride(storeId, platform, start, end)` — קפיא ערכים קיימים מ-data-daily
 
-**Web Dashboard:**
-- כפתור **רענן** למעלה בדשבורד — מאלץ refetch
-- אוטומטי: refetch כל דקה ובחזרה למסך
+**מתפריט הגיליון (תפריט ROAS):**
+- הרץ עדכון ליום אתמול / לתאריך / טווח
+- התקן/הסר טריגר Daily ו-Live
+- פתח טאב Override ידני
+- הצג/הסתר טאבים עזריים
+- verifyConfig
 
-**פריסת קוד חדש:**
-- Apps Script: עדכן ידנית את הקבצים ב-editor
-- Web: `git push` ל-`main` → Vercel deploy אוטומטי
+**מהדשבורד:**
+- כפתור "רענן" למעלה — refetch מיידי
+- סקציות מתקפלות — לחץ על כותרת להרחיב/לסגור
+- פילטר ניטרלי: "כל החנויות" / "אתמול" / "מתחילת החודש"
 
 ---
 
-## 🆘 פתרון תקלות נפוצות
+## 🆘 פתרון תקלות
 
 ### Apps Script
 
 | תופעה | סיבה | פתרון |
 |--------|------|-------|
-| `Missing required property: X` | Script Property חסר | הגדר ב-Project Settings → Script Properties |
-| `Meta failed (190)` | Token פג / חסר הרשאה | חדש System User token ב-Business Settings |
-| `Shopify failed (401)` | Token לא תקף | הרץ `bootstrapAllShopifyTokens` |
-| `Google Ads PERMISSION_DENIED` | חשבון לא מקושר ל-MCC / Developer Token לא מאושר | בדוק MCC + API Center |
-| `Address unavailable` | כשל רשת זמני | retry אוטומטי (עד 4 ניסיונות) |
-| `Exceeded maximum execution time` | יותר מ-6 דקות | פצל backfill לטווחים קטנים |
+| `Missing required property: X` | Script Property חסר | Project Settings → Script Properties |
+| `Meta failed (190)` | טוקן פג | חדש System User token ב-Business Settings |
+| `Shopify failed (401)` | טוקן לא תקף | הרץ `bootstrapAllShopifyTokens` |
+| `Google Ads PERMISSION_DENIED` | חשבון לא ב-MCC | בדוק MCC + Developer Token |
+| `Exceeded maximum execution time` | יותר מ-6 דק׳ | פצל backfill ל-12 ימים בכל ריצה |
+| `Meta uzoshop: no data` | חשבון מודעות הושבת | השתמש ב-manual-spend לתאריך זה |
+| Live trigger לא רץ | טריגר לא הותקן | הרץ `installLiveTrigger` ידנית |
 
 ### Web Dashboard
 
 | תופעה | סיבה | פתרון |
 |--------|------|-------|
-| "Missing GOOGLE_..." | משתני סביבה לא מוגדרים | Vercel → Settings → Environment Variables |
-| "403 The caller does not have permission" | Service Account לא קיבל גישה לגיליון | Sheet → Share → הוסף את ה-`client_email` |
-| הדשבורד מציג 0 לכל הערכים | טאב `data-daily` ריק | הרץ `setupAll` או `backfillFlatFromStoreTabs` ב-Apps Script |
-| תאריכים מוצגים כמספרים | נתון בעמודה A הוא string ולא Date | הרץ `backfillFlatFromStoreTabs` ב-Apps Script לרענון |
-| Build נכשל ב-Vercel | TypeScript error | בדוק build מקומית ב-`npm run build` לפני push |
+| "Missing GOOGLE_..." | env vars לא מוגדרים | Vercel → Settings → Environment Variables |
+| "403 caller does not have permission" | Service Account לא קיבל גישה | Sheet → Share → הוסף את ה-`client_email` |
+| הדשבורד מציג 0 לכל הערכים | data-daily ריק | הרץ `setupAll` או `backfillRange` |
+| תאריכים כמספרים | בעיית פורמט | הרץ `repairAllFormulas` ב-Apps Script |
+| מוצרים ריקים | products-daily ריק | הרץ `runLiveUpdate` או `backfillRange` |
+| Build נכשל ב-Vercel | TS error | `npm run build` מקומית קודם |
 
 ---
 
 ## 🔒 אבטחה
 
-### מה רגיש
+### מפתחות רגישים
+| סוג | איפה נשמר |
+|-----|-----------|
+| Shopify Admin tokens (`shpat_*`) | Apps Script Properties |
+| Meta System User tokens | Apps Script Properties |
+| Google Ads OAuth refresh tokens | Apps Script Properties |
+| Service Account private key | Vercel Environment Variables |
 
-- **Shopify Admin API tokens** (`shpat_*`) — הרשאת קריאה להזמנות
-- **Meta System User tokens** — קריאת ad spend
-- **Google Ads OAuth tokens** (Refresh + Client Secret) — קריאת ad spend
-- **Service Account private key** — קריאה לגיליון
-
-### איפה נשמר
-
-| מיקום | תוכן | אבטחה |
-|--------|------|--------|
-| Apps Script Properties | כל ה-tokens של Shopify/Meta/Google Ads | מוצפן בשרתי Google, נגיש רק לאוזר שיש לו גישה לפרויקט |
-| Vercel Environment Variables | Service Account credentials + Spreadsheet ID | מוצפן בשרתי Vercel, נגיש לקוד בלבד |
-| `.env.local` (פיתוח מקומי) | אותם משתנים | קובץ ב-.gitignore, לא נכנס ל-Git |
-
-### מה לעשות אם מפתח דלף
-
-- Shopify token → Custom App → Revoke and regenerate
-- Meta token → Business Settings → System Users → Generate new token
-- Google Ads refresh token → OAuth Playground → קבל token חדש
-- Service Account key → Cloud Console → Keys → Delete old + Create new
+### Best practices
+- אין מפתחות hardcoded בקוד
+- `.env.local` ב-.gitignore
+- Service Account עם הרשאת spreadsheets.readonly בלבד
+- אם דלף מפתח: גלגול דרך הפלטפורמה הרלוונטית + עדכון Properties/env vars
 
 ---
 
 ## 🚀 אפשרויות שיפור
 
-### שיפורים מהירים (שעות בודדות)
+### Tier 1 — שעות בודדות
+1. **התראות במייל ל-ROAS נמוך** — `MailApp.sendEmail` אם daily ROAS < 1.5
+2. **השוואה Year-over-Year** — KPI נוסף: ROAS החודש מול אותו חודש שנה קודם
+3. **Export ל-CSV** — כפתור בדשבורד שמוריד את הנתונים המסוננים
+4. **Dark mode** — Tailwind תומך native
 
-1. **התראות במייל ל-ROAS נמוך**
-   - הוסף ל-Apps Script: אם ROAS יומי < 1.5, שלח מייל
-   - קל למימוש דרך `MailApp.sendEmail`
+### Tier 2 — יום-יומיים
+5. **Campaign-level UI בדשבורד** — הנתונים כבר ב-{storeId}-campaigns
+6. **ניתוח לפי יום בשבוע** — גרף עמודות "ROAS לפי יום"
+7. **Budget tracking** — תקציב חודשי + alert על חריגה
+8. **PWA manifest** — installable כאפליקציית מובייל
 
-2. **דשבורד היסטוריה ארוכה**
-   - הוסף לדשבורד web: גרפים חודשיים-שנתיים
-   - QUERY ב-data-daily שמסכם לפי חודש
-
-3. **השוואה Year-over-Year**
-   - KPI נוסף: ROAS החודש מול ROAS אותו חודש לפני שנה
-   - הצגה בגרף
-
-4. **Export ל-CSV/Excel**
-   - הוסף כפתור בדשבורד web שמוריד את הנתונים המסוננים
-
-5. **Dark mode**
-   - Tailwind תומך טיב-טיב, רק להוסיף theme provider
-
-### שיפורים בינוניים (יום-יומיים)
-
-6. **רמת קמפיין/אד-סט בדשבורד**
-   - הנתונים כבר נאספים בטאבי `*-campaigns`
-   - הוסף component בדשבורד web שמציג top campaigns, decay, וכו'
-   - דורש API route נוסף ועוד דף
-
-7. **ניתוח לפי יום בשבוע**
-   - שאלה: באיזה יום ROAS הכי טוב?
-   - חישוב פשוט מהנתונים הקיימים
-   - גרף עמודות בדשבורד
-
-8. **Real-time webhooks מ-Shopify**
-   - כל הזמנה ב-Shopify → webhook → כתיבה מיידית לגיליון
-   - דורש endpoint נוסף ב-Next.js (אפשרי)
-   - הופך את "real-time" מ"כל יום ב-00:05" ל"תוך שניות"
-
-9. **Mobile app**
-   - PWA — הדשבורד הקיים עובד טוב במובייל, הוסף manifest
-   - או React Native אם רוצים native feel
-
-10. **Budgets ו-anomaly detection**
-    - הגדר תקציב חודשי לכל חנות
-    - התראה אם spend עובר Y% מהממוצע
-    - גרף תקציב נשרף לאורך החודש
-
-### שיפורים גדולים (שבוע+)
-
-11. **מעבר ל-BigQuery במקום Sheets**
-    - Sheets מחזיק ~5M תאים, מספיק לכמה שנים
-    - אם תרצה היסטוריה ארוכה (~10 שנים) + פלטפורמות נוספות → BigQuery
-    - Apps Script יודע לכתוב ל-BigQuery (אבל לרוב עדיף Cloud Function)
-    - Looker Studio / Next.js יכולים לקרוא מ-BQ ישירות
-
-12. **הוספת חנויות ופלטפורמות**
-    - 4-5+ חנויות: שינוי קטן ב-`STORES` ב-Config.gs
-    - פלטפורמה חדשה (TikTok, Snap, Pinterest, Twitter): קובץ חדש דמוי `MetaAds.gs`
-    - שדות חדשים (cost per click, ROAS by audience): חדשים בטבלת `data-daily`
-
-13. **רב-משתמש עם הרשאות**
-    - אם תרצה לשתף את הדשבורד עם צוות, מעצבים, סוכנות
-    - הוסף NextAuth.js + ניהול תפקידים
-    - חשבונות יוכלו לראות חלק מהחנויות בלבד
-
-14. **ChatGPT/Claude integration**
-    - "שאל שאלה על הנתונים" → AI מסביר/ממליץ
-    - דורש OpenAI/Anthropic API
-    - אפשר לקפוץ ישר ל-Code Interpreter סטייל
-
-15. **A/B testing ו-attribution**
-    - אם תרצה לקבל החלטות יותר חזקות
-    - דורש more granular tracking (UTM, conversion events)
-    - גישה אנליטית רחבה יותר
-
-### שיפורי תפעול
-
-16. **גיבוי אוטומטי של נתונים**
-    - שמירת snapshot של data-daily כל שבוע ב-Drive
-    - מגן מפני מחיקה בטעות
-
-17. **Monitoring/Alerting**
-    - אם הטריגר היומי לא רץ → התראה
-    - אם API קורס מספר ימים ברצף → התראה
-    - אפשר ב-Uptime Robot חינמי על endpoint של Vercel
-
-18. **Documentation מעודכן**
-    - הסקירה הזאת + README.md + SETUP.md
-    - תחזק אחרי כל שינוי משמעותי
+### Tier 3 — שבוע+
+9. **BigQuery** — אם תרצה היסטוריה ארוכה / מקורות נוספים
+10. **חנויות/פלטפורמות נוספות** — TikTok/Snap/Pinterest
+11. **רב-משתמש עם הרשאות** — NextAuth.js + תפקידים
+12. **A/B testing + attribution** — UTM + conversion events
 
 ---
 
-## 📊 מטריקות שווה לעקוב אחריהן
+## 📊 KPIs שווה לעקוב
 
-לפי החשיבות (לפי דעתי) — מה ששווה לראות בדשבורד:
-
-**Tier 1 - חיוניות (קיים):**
-- ROAS יומי לכל חנות
-- ROAS משוקלל לתקופה
-- הכנסות נטו (revenue - spend)
-- מגמה לאורך זמן
-
-**Tier 2 - שווה להוסיף בקרוב:**
-- ROAS לפי קמפיין/אד-סט (יש נתונים, חסר UI)
-- AOV (ערך הזמנה ממוצע) — דורש order count
-- שיעור החזרות — דורש refund tracking
-- CTR (click-through-rate) — נתונים בטאב campaigns
-
-**Tier 3 - מתקדם:**
-- CAC (Customer Acquisition Cost) — דורש לקוחות חדשים מ-Shopify
-- LTV (Lifetime Value) — דורש 90+ יום היסטוריה
-- ROAS by audience/placement (Meta breakdowns)
-- Diminishing returns curve — מתי תוספת תקציב מפסיקה לשלם
-
----
-
-## ⚙️ מבנה הריפו (קוד מקור)
-
-הריפו ב-GitHub: **https://github.com/dor77777-prog/script-roas**
-
-```
-script-roas/
-├── README.md                    ← נקודת כניסה ראשית
-├── SETUP.md                     ← הקמה מאפס (Apps Script + APIs)
-├── SYSTEM_OVERVIEW.md           ← המסמך הזה
-├── .gitignore
-│
-├── appsscript.json              ← Apps Script manifest
-├── Config.gs                    ← קבועים + helpers
-├── FX.gs                        ← שערי חליפין
-├── Shopify.gs                   ← Shopify integration
-├── MetaAds.gs                   ← Meta Ads integration
-├── GoogleAds.gs                 ← Google Ads integration
-├── SheetBuilder.gs              ← בניית sheets
-├── DailyUpdate.gs               ← daily run logic
-├── Main.gs                      ← entry points + menu
-│
-└── dashboard-web/               ← Next.js project
-    ├── README.md                ← מדריך פריסה
-    ├── package.json
-    ├── src/
-    │   ├── app/
-    │   ├── components/
-    │   └── lib/
-    └── ...
-```
+**Tier 1 (קיים):** ROAS, Revenue, Spend, COGS, Net Profit, Top product
+**Tier 2 (שווה להוסיף):** AOV, refund rate, CTR, CPC, day-of-week ROAS
+**Tier 3 (מתקדם):** CAC, LTV, audience breakdowns, diminishing returns curve
 
 ---
 
 ## 🎬 סיכום מהיר
 
 **מה בנינו:**
-- 🤖 שכבת אוטומציה (Apps Script) שמעדכנת נתונים יומיים
-- 📊 שכבת אחסון (Google Sheets) עם schema מסודר
-- 🌐 שכבת תצוגה (Next.js + Vercel) עם UX איכותי
+- 🤖 Apps Script שאוסף יומי + 24/7 חי
+- 📊 Google Sheets כ-source-of-truth
+- 🌐 דשבורד Next.js רספונסיבי
+- 🛡️ Override system לחשבונות מושבתים
+- 📦 מוצרים שנמכרו עם 5 רמות איגום
 
-**כמה זה עלה:**
-- 0$/חודש (כל השירותים חינמיים)
+**כמה זה עולה:** 0$/חודש (הכל בטיר חינמי)
 
-**כמה זמן השקעת:**
-- הקמה ראשונה: ~10 שעות (Apps Script + APIs)
-- בניית Web Dashboard: ~יום
-- סה"כ: שבועיים של עבודה רכה כדי לחסוך שעות מדי שבוע
-
-**מה אתה מקבל:**
-- ROAS אמיתי, מדויק, ב-real-time
-- חיסכון של ~30 דקות ביום של איסוף ידני
-- בסיס לתוספות ולשיפורים בעתיד
-
-**איפה הדשבורד שלך:**
-- 🔗 **https://roas-dashboard-smoky.vercel.app**
+**איפה הדשבורד:** https://roas-dashboard-smoky.vercel.app
 
 המערכת בנויה כך שאתה לא תלוי בשום מפתח חיצוני. גם אם לא תרצה להשקיע יותר זמן, היא תעבוד שנים קדימה. אם תרצה להרחיב — הארכיטקטורה תומכת.
 
 ---
 
-*נוצר: מאי 2026  •  כלי: Claude (Anthropic) + GitHub + Apps Script + Next.js + Vercel*
+*עודכן: מאי 2026  •  Claude (Anthropic) + GitHub + Apps Script + Next.js + Vercel*

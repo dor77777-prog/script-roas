@@ -13,6 +13,8 @@ type Mode = 'per-store' | 'summary';
 type Props = {
   rows: DailyRow[];
   stores: string[];
+  /** When true, omit the outer title/header — used inside CollapsibleSection. */
+  bare?: boolean;
 };
 
 const ROAS_BG: Record<string, string> = {
@@ -23,11 +25,27 @@ const ROAS_BG: Record<string, string> = {
   gray: '',
 };
 
-export function MonthlyTables({ rows, stores }: Props) {
+/**
+ * Cell styling for ROAS. A day with revenue=0 means the day was a complete
+ * miss (spent money, no sales). Surfaces it visually with a black cell + "0"
+ * so it stands out from "no data yet" (gray, empty).
+ */
+function roasCell(roas: number, revenue: number, totalSpend: number): { className: string; text: string } {
+  // Day where revenue is zero but money WAS spent — flag as "0" on black.
+  if (revenue === 0 && totalSpend > 0) {
+    return { className: 'bg-black text-white', text: '0' };
+  }
+  // Day with no data at all (no spend AND no revenue) — leave blank.
+  if (revenue === 0 && totalSpend === 0) {
+    return { className: '', text: '' };
+  }
+  return { className: ROAS_BG[roasLabel(roas).tone], text: formatNumber(roas) };
+}
+
+export function MonthlyTables({ rows, stores, bare = false }: Props) {
   const [mode, setMode] = useState<Mode>('per-store');
   const [storeFilter, setStoreFilter] = useState<string>(stores[0] || 'All');
 
-  // Group all rows by year-month
   const monthGroups = useMemo(() => {
     const grouped = new Map<string, DailyRow[]>();
     for (const r of rows) {
@@ -37,10 +55,70 @@ export function MonthlyTables({ rows, stores }: Props) {
     }
     return Array.from(grouped.entries())
       .map(([ym, rs]) => ({ ym, rows: rs }))
-      .sort((a, b) => b.ym.localeCompare(a.ym)); // newest first
+      .sort((a, b) => b.ym.localeCompare(a.ym));
   }, [rows]);
 
   if (!rows.length) return null;
+
+  const toolbar = (
+    <div
+      className={cn(
+        'flex flex-wrap items-center gap-2',
+        bare && 'px-4 sm:px-5 py-3 bg-surfaceMuted/40 border-b border-border',
+      )}
+    >
+      <div
+        role="tablist"
+        className="inline-flex rounded-lg border border-border bg-surface overflow-hidden divide-x divide-border"
+        dir="ltr"
+      >
+        <Tab active={mode === 'per-store'} onClick={() => setMode('per-store')}>
+          לפי חנות
+        </Tab>
+        <Tab active={mode === 'summary'} onClick={() => setMode('summary')}>
+          סיכום כללי
+        </Tab>
+      </div>
+      {mode === 'per-store' && (
+        <select
+          value={storeFilter}
+          onChange={e => setStoreFilter(e.target.value)}
+          className="rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-medium"
+        >
+          {stores.map(s => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
+        </select>
+      )}
+      <span className="text-[10px] sm:text-xs text-text-muted ml-auto tabular-nums">
+        {monthGroups.length} חודשים
+      </span>
+    </div>
+  );
+
+  const blocks = (
+    <div className={cn('space-y-4', bare ? 'p-4 sm:p-5 pt-4' : 'space-y-6')}>
+      {monthGroups.map(({ ym, rows: monthRows }) => {
+        if (mode === 'per-store') {
+          const storeRows = monthRows.filter(r => r.storeName === storeFilter);
+          if (!storeRows.length) return null;
+          return <MonthBlockPerStore key={ym} ym={ym} storeName={storeFilter} rows={storeRows} />;
+        }
+        return <MonthBlockSummary key={ym} ym={ym} rows={monthRows} stores={stores} />;
+      })}
+    </div>
+  );
+
+  if (bare) {
+    return (
+      <div>
+        {toolbar}
+        {blocks}
+      </div>
+    );
+  }
 
   return (
     <section className="space-y-4">
@@ -49,45 +127,9 @@ export function MonthlyTables({ rows, stores }: Props) {
           <CalendarDays size={18} className="text-text-secondary" />
           טבלאות חודשיות
         </h2>
-        <div className="flex items-center gap-2">
-          <Tab active={mode === 'per-store'} onClick={() => setMode('per-store')}>
-            לפי חנות
-          </Tab>
-          <Tab active={mode === 'summary'} onClick={() => setMode('summary')}>
-            סיכום כללי
-          </Tab>
-        </div>
+        {toolbar}
       </div>
-
-      {mode === 'per-store' && (
-        <div className="flex items-center gap-2 -mt-2">
-          <span className="text-xs text-text-secondary">חנות:</span>
-          <select
-            value={storeFilter}
-            onChange={e => setStoreFilter(e.target.value)}
-            className="rounded-lg border border-border bg-surface px-3 py-1.5 text-sm font-medium"
-          >
-            {stores.map(s => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      <div className="space-y-6">
-        {monthGroups.map(({ ym, rows: monthRows }) => {
-          if (mode === 'per-store') {
-            const storeRows = monthRows.filter(r => r.storeName === storeFilter);
-            if (!storeRows.length) return null;
-            return (
-              <MonthBlockPerStore key={ym} ym={ym} storeName={storeFilter} rows={storeRows} />
-            );
-          }
-          return <MonthBlockSummary key={ym} ym={ym} rows={monthRows} stores={stores} />;
-        })}
-      </div>
+      {blocks}
     </section>
   );
 }
@@ -103,12 +145,14 @@ function Tab({
 }) {
   return (
     <button
+      role="tab"
+      aria-selected={active}
       onClick={onClick}
       className={cn(
-        'rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+        'px-3 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-medium transition-colors',
         active
-          ? 'bg-primary text-white shadow-sm'
-          : 'bg-surfaceMuted text-text-secondary hover:bg-border',
+          ? 'bg-primary text-white'
+          : 'bg-surface text-text-secondary hover:bg-surfaceMuted',
       )}
     >
       {children}
@@ -142,7 +186,6 @@ function MonthBlockPerStore({
     totalRev += r.revenue;
   }
   const totalRoas = totalSpend > 0 ? totalRev / totalSpend : 0;
-  const totalInfo = roasLabel(totalRoas);
 
   // Fill in missing days of month with empty rows
   const allDays = daysOfMonth(ym);
@@ -176,7 +219,9 @@ function MonthBlockPerStore({
               {allDays.map(d => {
                 const r = byDate.get(d);
                 const isEmpty = !r;
-                const info = r ? roasLabel(r.roas) : { tone: 'gray' };
+                const cell = r
+                  ? roasCell(r.roas, r.revenue, r.totalSpend)
+                  : { className: '', text: '' };
                 return (
                   <tr key={d} className={cn('border-t border-border', isEmpty && 'text-text-muted')}>
                     <td className="px-3 py-1.5 tabular-nums">{formatDate(d)}</td>
@@ -184,8 +229,8 @@ function MonthBlockPerStore({
                     {hasGa && <td className="px-3 py-1.5 text-end tabular-nums">{r ? formatNumber(r.gaSpend) : ''}</td>}
                     <td className="px-3 py-1.5 text-end tabular-nums">{r ? formatNumber(r.totalSpend) : ''}</td>
                     <td className="px-3 py-1.5 text-end tabular-nums">{r ? formatNumber(r.revenue) : ''}</td>
-                    <td className={cn('px-3 py-1.5 text-center tabular-nums font-medium', ROAS_BG[info.tone])}>
-                      {r && r.roas > 0 ? formatNumber(r.roas) : ''}
+                    <td className={cn('px-3 py-1.5 text-center tabular-nums font-medium', cell.className)}>
+                      {cell.text}
                     </td>
                   </tr>
                 );
@@ -196,8 +241,8 @@ function MonthBlockPerStore({
                 {hasGa && <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalGa)}</td>}
                 <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalSpend)}</td>
                 <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalRev)}</td>
-                <td className={cn('px-3 py-2 text-center tabular-nums', ROAS_BG[totalInfo.tone])}>
-                  {formatNumber(totalRoas)}
+                <td className={cn('px-3 py-2 text-center tabular-nums', roasCell(totalRoas, totalRev, totalSpend).className)}>
+                  {roasCell(totalRoas, totalRev, totalSpend).text}
                 </td>
               </tr>
             </tbody>
@@ -235,7 +280,7 @@ function MonthBlockSummary({
     totalRev += r.revenue;
   }
   const totalRoas = totalSpend > 0 ? totalRev / totalSpend : 0;
-  const totalInfo = roasLabel(totalRoas);
+  const totalCell = roasCell(totalRoas, totalRev, totalSpend);
 
   return (
     <div className="rounded-xl bg-surface border border-border shadow-card overflow-hidden">
@@ -254,8 +299,8 @@ function MonthBlockSummary({
             <thead className="bg-surfaceMuted">
               <tr className="text-text-secondary">
                 <th className="px-3 py-2 text-start font-medium">תאריך</th>
-                <th className="px-3 py-2 text-end font-medium">יצא סה"כ</th>
-                <th className="px-3 py-2 text-end font-medium">נכנס סה"כ</th>
+                <th className="px-3 py-2 text-end font-medium">יצא סה&quot;כ</th>
+                <th className="px-3 py-2 text-end font-medium">נכנס סה&quot;כ</th>
                 <th className="px-3 py-2 text-center font-medium">ROAS</th>
               </tr>
             </thead>
@@ -263,14 +308,16 @@ function MonthBlockSummary({
               {allDays.map(d => {
                 const agg = byDate.get(d);
                 const roas = agg && agg.spend > 0 ? agg.revenue / agg.spend : 0;
-                const info = roasLabel(roas);
+                const cell = agg
+                  ? roasCell(roas, agg.revenue, agg.spend)
+                  : { className: '', text: '' };
                 return (
                   <tr key={d} className={cn('border-t border-border', !agg && 'text-text-muted')}>
                     <td className="px-3 py-1.5 tabular-nums">{formatDate(d)}</td>
                     <td className="px-3 py-1.5 text-end tabular-nums">{agg ? formatNumber(agg.spend) : ''}</td>
                     <td className="px-3 py-1.5 text-end tabular-nums">{agg ? formatNumber(agg.revenue) : ''}</td>
-                    <td className={cn('px-3 py-1.5 text-center tabular-nums font-medium', ROAS_BG[info.tone])}>
-                      {roas > 0 ? formatNumber(roas) : ''}
+                    <td className={cn('px-3 py-1.5 text-center tabular-nums font-medium', cell.className)}>
+                      {cell.text}
                     </td>
                   </tr>
                 );
@@ -279,8 +326,8 @@ function MonthBlockSummary({
                 <td className="px-3 py-2">סך הכל</td>
                 <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalSpend)}</td>
                 <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalRev)}</td>
-                <td className={cn('px-3 py-2 text-center tabular-nums', ROAS_BG[totalInfo.tone])}>
-                  {formatNumber(totalRoas)}
+                <td className={cn('px-3 py-2 text-center tabular-nums', totalCell.className)}>
+                  {totalCell.text}
                 </td>
               </tr>
             </tbody>
