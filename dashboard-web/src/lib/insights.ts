@@ -1,4 +1,4 @@
-import { pushCloudKey } from './cloudSync';
+import { pushCloudKey, type StateKey } from './cloudSync';
 
 /**
  * Insights engine — pure analytics, no React.
@@ -516,7 +516,7 @@ export function forecastMonthEnd(rows: DailyRow[]): {
 // Goal tracking
 // ============================================================================
 
-const GOAL_STORAGE_KEY = 'roas-dashboard:monthly-revenue-goal';
+const GOAL_STORAGE_KEY: StateKey = 'roas-dashboard:monthly-revenue-goal';
 
 export function readGoal(): number | null {
   if (typeof window === 'undefined') return null;
@@ -577,7 +577,7 @@ export function computePacing(
 // Insight state: "done" / "ignored" — user actions, persisted to localStorage.
 // ============================================================================
 
-const INSIGHT_STATES_KEY = 'roas-dashboard:insight-states';
+const INSIGHT_STATES_KEY: StateKey = 'roas-dashboard:insight-states';
 /** When a "done" insight returns to view if its underlying condition still
  *  holds. 7 days is the sweet spot: long enough to feel like "I handled it",
  *  short enough that a reappearing problem doesn't stay hidden forever. */

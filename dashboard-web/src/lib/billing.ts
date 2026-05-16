@@ -1,4 +1,4 @@
-import { pushCloudKey } from './cloudSync';
+import { pushCloudKey, type StateKey } from './cloudSync';
 
 /**
  * Billing data layer — persists per-store cost entries in localStorage so the
@@ -50,14 +50,14 @@ export type CostSource =
   | 'one-off'           // App migration, consulting, etc.
   | 'other';
 
-const RECURRING_KEY = 'roas-dashboard:billing-recurring';
-const ONETIME_KEY = 'roas-dashboard:billing-onetime';
+const RECURRING_KEY: StateKey = 'roas-dashboard:billing-recurring';
+const ONETIME_KEY: StateKey = 'roas-dashboard:billing-onetime';
 
 // ============================================================================
 // Persistence
 // ============================================================================
 
-function safeReadArray<T>(key: string): T[] {
+function safeReadArray<T>(key: StateKey): T[] {
   if (typeof window === 'undefined') return [];
   try {
     const raw = window.localStorage.getItem(key);
@@ -69,7 +69,7 @@ function safeReadArray<T>(key: string): T[] {
   }
 }
 
-function safeWrite<T>(key: string, value: T[]) {
+function safeWrite<T>(key: StateKey, value: T[]) {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(key, JSON.stringify(value));

@@ -35,6 +35,15 @@
  * are user actions).
  */
 
+/**
+ * Every localStorage key that participates in cloud sync. Adding a new key
+ * here is the ONE place to register it — `pushCloudKey`, `hydrateFromCloud`,
+ * and `CHANGE_EVENTS` are all driven from this list, so we can't introduce
+ * a key that pushes to cloud but never hydrates back (or vice-versa). This
+ * closes the asymmetry the prior `pushCloudKey(string, unknown)` signature
+ * permitted, where a developer could send a never-hydrated key into the
+ * void.
+ */
 const STATE_KEYS = [
   'roas-dashboard:billing-recurring',
   'roas-dashboard:billing-onetime',
@@ -42,7 +51,7 @@ const STATE_KEYS = [
   'roas-dashboard:monthly-revenue-goal',
   'roas-dashboard:insight-states',
 ] as const;
-type StateKey = (typeof STATE_KEYS)[number];
+export type StateKey = (typeof STATE_KEYS)[number];
 
 const CHANGE_EVENTS: Record<StateKey, string> = {
   'roas-dashboard:billing-recurring': 'roas-billing-changed',
@@ -118,7 +127,7 @@ export function getSyncState(): SyncState {
  * then the debounced push would re-upload the now-overwritten stale value
  * to cloud (losing the edit on server too).
  */
-export function pushCloudKey(localStorageKey: string, value: unknown): void {
+export function pushCloudKey(localStorageKey: StateKey, value: unknown): void {
   if (typeof window === 'undefined') return;
   const cloudKey = stripPrefix(localStorageKey);
 

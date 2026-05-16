@@ -1,4 +1,4 @@
-import { pushCloudKey } from './cloudSync';
+import { pushCloudKey, type StateKey } from './cloudSync';
 
 /**
  * Activity annotations — user-logged events overlaid on charts.
@@ -34,7 +34,7 @@ export type Annotation = {
   createdAt: number;
 };
 
-const STORAGE_KEY = 'roas-dashboard:annotations';
+const STORAGE_KEY: StateKey = 'roas-dashboard:annotations';
 
 export const ANNOTATION_KIND_LABEL: Record<AnnotationKind, string> = {
   launch:    'השקה',
