@@ -1,5 +1,13 @@
 import type { DailyRow, DateRange } from './types';
 
+/**
+ * הערכת עלות סחורה (COGS) — אחוז קבוע מההכנסה היומית.
+ * משמש גם להיסטוריה (תאריכים שעוד לא נכתבו עם הערך החדש ב-data-daily).
+ *
+ * אם משנים את הערך, יש לעדכן גם את COGS_RATE_OF_REVENUE ב-Config.gs (Apps Script).
+ */
+export const COGS_RATE_OF_REVENUE = 0.25;
+
 export type Aggregate = {
   revenue: number;
   spend: number;

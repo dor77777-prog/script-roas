@@ -81,15 +81,9 @@ function updateStoreForDate_(ss, store, dateStr, year, month, day, ilsToCad) {
     Logger.log(`Campaign-level data for ${store.name} ${dateStr} failed: ${e && e.message ? e.message : e}`);
   }
 
-  // COGS (Cost of Goods Sold) - אופציונלי. דורש read_products + read_inventory scope.
-  // אם חסר scope או נכשל - נמשיך עם cogs=null (השורה ב-data-daily תישאר ריקה בעמודה הזו).
-  let cogsCad = null;
-  try {
-    const cogs = getShopifyCogs(store.id, dateStr);
-    if (cogs > 0) cogsCad = cogs;
-  } catch (e) {
-    Logger.log(`COGS for ${store.name} ${dateStr} failed (non-fatal): ${e && e.message ? e.message : e}`);
-  }
+  // COGS - מחושב כ-25% מההכנסה היומית (הערכה גסה: עלות סחורה ≈ רבע מהמכירה).
+  // מוגדר ב-Config.gs ב-COGS_RATE_OF_REVENUE כדי להקל על שינויים עתידיים.
+  const cogsCad = revenueCad * COGS_RATE_OF_REVENUE;
 
   // טאב daily-flat ל-Looker Studio / Web Dashboard
   try {

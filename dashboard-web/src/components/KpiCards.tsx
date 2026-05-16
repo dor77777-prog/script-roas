@@ -26,21 +26,8 @@ export function KpiCards({ current, previous }: Props) {
   const dCogs = deltaPct(current.cogs, previous.cogs);
   const dNet = deltaPct(current.netProfit, previous.netProfit);
 
-  // Only surface COGS/Net Profit when there's at least *some* COGS data in the
-  // current window. Otherwise the cards are misleading (would always read "0").
-  const showCogs = current.cogsCoverage > 0;
-  const cogsTooltip =
-    current.cogsCoverage < 1
-      ? `כיסוי חלקי: ${Math.round(current.cogsCoverage * 100)}% מהימים כוללים COGS`
-      : undefined;
-
   return (
-    <div
-      className={cn(
-        'grid gap-3 sm:gap-4',
-        showCogs ? 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-6' : 'grid-cols-2 lg:grid-cols-4',
-      )}
-    >
+    <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       <KpiCard
         label="ROAS לתקופה"
         value={formatNumber(current.roas)}
@@ -68,26 +55,20 @@ export function KpiCards({ current, previous }: Props) {
         delta={dProfit}
         icon={<TrendingUp size={16} />}
       />
-      {showCogs && (
-        <>
-          <KpiCard
-            label="עלות סחורה (COGS)"
-            value={`CAD ${formatCurrency(current.cogs)}`}
-            sublabel={cogsTooltip}
-            sublabelClass="bg-surfaceMuted text-text-muted"
-            delta={dCogs}
-            deltaInverse
-            icon={<Package size={16} />}
-          />
-          <KpiCard
-            label="רווח נטו"
-            value={`CAD ${formatCurrency(current.netProfit)}`}
-            delta={dNet}
-            icon={<Wallet size={16} />}
-            accent={current.netProfit >= 0 ? 'pos' : 'neg'}
-          />
-        </>
-      )}
+      <KpiCard
+        label="עלות סחורה (25%)"
+        value={`CAD ${formatCurrency(current.cogs)}`}
+        delta={dCogs}
+        deltaInverse
+        icon={<Package size={16} />}
+      />
+      <KpiCard
+        label="רווח נטו"
+        value={`CAD ${formatCurrency(current.netProfit)}`}
+        delta={dNet}
+        icon={<Wallet size={16} />}
+        accent={current.netProfit >= 0 ? 'pos' : 'neg'}
+      />
     </div>
   );
 }

@@ -11,6 +11,12 @@ const SHOPIFY_API_VERSION = '2024-10';
 const META_API_VERSION = 'v20.0';
 const GOOGLE_ADS_API_VERSION = 'v20';
 
+// הערכת COGS (עלות סחורה) כאחוז מההכנסה היומית.
+// נבחר 25% — שינוי עתידי כאן יחול אוטומטית בכל הריצות הבאות.
+// **שים לב**: צריך לעדכן גם את COGS_RATE_OF_REVENUE ב-dashboard-web/src/lib/analytics.ts
+// כדי שהדשבורד יציג את אותו ערך לתאריכים שעוד לא נכתבו ל-data-daily.
+const COGS_RATE_OF_REVENUE = 0.25;
+
 const STORES = [
   { id: 'uzoshop',   name: 'uzoshop',   hasGoogleAds: true  },
   { id: 'zolplus',   name: 'Zol Plus',  hasGoogleAds: false },

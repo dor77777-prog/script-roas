@@ -1,5 +1,6 @@
 import { google } from 'googleapis';
 import type { DailyRow } from './types';
+import { COGS_RATE_OF_REVENUE } from './analytics';
 
 const DATA_TAB = 'data-daily';
 
@@ -89,10 +90,11 @@ export async function fetchDailyData(): Promise<DailyRow[]> {
     const roas = totalSpend > 0 ? revenue / totalSpend : 0;
     const grossProfit = revenue - totalSpend;
 
-    const cogsRaw = row[9];
-    const hasCogs = cogsRaw !== null && cogsRaw !== undefined && cogsRaw !== '';
-    const cogs = hasCogs ? parseNumber(cogsRaw) : 0;
+    // COGS = 25% מההכנסה (מחושב אצלנו, מתעלם מהעמודה ב-sheet כדי לקבל ערך
+    // עקבי גם בתאריכים ישנים שעוד לא נכתבו עם הכלל החדש).
+    const cogs = revenue * COGS_RATE_OF_REVENUE;
     const netProfit = revenue - totalSpend - cogs;
+    const hasCogs = true;
 
     rows.push({
       date: dateStr,
