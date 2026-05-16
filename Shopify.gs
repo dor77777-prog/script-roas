@@ -33,7 +33,7 @@ function getShopifyRevenue(storeId, dateStr) {
   let safety = 0;
 
   while (url && safety < 50) {
-    const res = UrlFetchApp.fetch(url, {
+    const res = fetchWithRetry_(url, {
       method: 'get',
       headers: { 'X-Shopify-Access-Token': token },
       muteHttpExceptions: true,
@@ -83,7 +83,7 @@ function bootstrapShopifyToken(storeId) {
   const clientSecret = requireProp(`${storeId}.shopify.clientSecret`);
 
   const url = `https://${domain}/admin/oauth/access_token`;
-  const res = UrlFetchApp.fetch(url, {
+  const res = fetchWithRetry_(url, {
     method: 'post',
     contentType: 'application/json',
     payload: JSON.stringify({

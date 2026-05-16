@@ -30,7 +30,7 @@ function getMetaSpend(storeId, dateStr) {
               `&level=account` +
               `&access_token=${encodeURIComponent(token)}`;
 
-  const res = UrlFetchApp.fetch(url, { method: 'get', muteHttpExceptions: true });
+  const res = fetchWithRetry_(url, { method: 'get', muteHttpExceptions: true });
   const code = res.getResponseCode();
   if (code !== 200) {
     throw new Error(`Meta ${storeId} ${dateStr} failed (${code}): ${res.getContentText()}`);

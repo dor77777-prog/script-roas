@@ -32,7 +32,7 @@ function getGoogleAdsSpend(storeId, dateStr) {
     headers['login-customer-id'] = loginCustomerId;
   }
 
-  var res = UrlFetchApp.fetch(url, {
+  var res = fetchWithRetry_(url, {
     method: 'post',
     headers: headers,
     payload: JSON.stringify({ query: query }),
@@ -69,7 +69,7 @@ function getGoogleAdsAccessToken_() {
   var clientSecret = requireProp('googleads.clientSecret');
   var refreshToken = requireProp('googleads.refreshToken');
 
-  var res = UrlFetchApp.fetch('https://oauth2.googleapis.com/token', {
+  var res = fetchWithRetry_('https://oauth2.googleapis.com/token', {
     method: 'post',
     payload: {
       client_id: clientId,

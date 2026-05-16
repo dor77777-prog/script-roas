@@ -12,7 +12,7 @@ function getFxRate(from, to, dateStr) {
   if (cached !== null) return parseFloat(cached);
 
   const url = `https://api.frankfurter.dev/v1/${dateStr}?base=${from}&symbols=${to}`;
-  const res = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+  const res = fetchWithRetry_(url, { muteHttpExceptions: true });
   if (res.getResponseCode() !== 200) {
     throw new Error(`FX fetch failed (${from}->${to} on ${dateStr}): ${res.getContentText()}`);
   }

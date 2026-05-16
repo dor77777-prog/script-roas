@@ -22,26 +22,22 @@ function runUpdateForDate(dateStr) {
   const ilsToCad = getFxRate('ILS', 'CAD', dateStr);
   Logger.log(`FX ILS->CAD on ${dateStr}: ${ilsToCad}`);
 
-  let summarySpent = 0;
-  let summaryRevenue = 0;
   const errors = [];
 
   for (const store of STORES) {
     try {
-      const result = updateStoreForDate_(ss, store, dateStr, year, month, day, ilsToCad);
-      summarySpent += result.spent;
-      summaryRevenue += result.revenue;
+      updateStoreForDate_(ss, store, dateStr, year, month, day, ilsToCad);
     } catch (e) {
       errors.push(`[${store.name}] ${e && e.message ? e.message : e}`);
       Logger.log(`ERROR ${store.name}: ${e && e.stack ? e.stack : e}`);
     }
   }
 
+  // הסיכום מבוסס נוסחאות - מספיק להבטיח שבלוק החודש קיים כדי שהנוסחאות
+  // ימשכו אוטומטית את הערכים מהטאבים של החנויות.
   try {
     const summarySheet = ss.getSheetByName(SUMMARY_TAB);
-    // טאב סיכום הוא תמיד unified (4 עמודות) - שולחים את הסך כ"FB" וה-GA כ-0.
-    writeDayRow(summarySheet, year, month, day, summarySpent, 0, summaryRevenue);
-    Logger.log(`SUMMARY ${dateStr}: spent=${summarySpent.toFixed(2)} CAD, revenue=${summaryRevenue.toFixed(2)} CAD`);
+    writeDayRow(summarySheet, year, month, day, 0, 0, 0);
   } catch (e) {
     errors.push(`[summary] ${e && e.message ? e.message : e}`);
   }
@@ -94,9 +90,8 @@ function backfillRange(startDateStr, endDateStr) {
  * מילוי היסטורי **רק לחנויות ספציפיות**. שימושי כשרוצים למלא חנות אחת או שתיים
  * בלי להפעיל קריאות API לחנויות אחרות (לדוגמה אחרי שכבר מילאת את uzoshop).
  *
- * ⚠️ טאב הסיכום **לא יתעדכן** בקריאה זו (כי הנתונים חלקיים). הסיכום של אותם
- * ימים יישאר כמו שהיה. אם רוצים סיכום מעודכן - הרץ `backfillRange` רגיל
- * על אותו טווח (יקרא שוב לכל החנויות).
+ * 💡 טאב הסיכום מתעדכן אוטומטית: הוא מבוסס נוסחאות שמושכות מהטאבים של החנויות
+ * דרך VLOOKUP, אז אין צורך להריץ עליו backfill נפרד.
  *
  * @param startDateStr  פורמט YYYY-MM-DD
  * @param endDateStr    פורמט YYYY-MM-DD
@@ -132,6 +127,15 @@ function runUpdateForDateForStores_(dateStr, stores) {
     } catch (e) {
       Logger.log(`ERROR ${store.name} ${dateStr}: ${e && e.stack ? e.stack : e}`);
     }
+  }
+
+  // הסיכום מבוסס נוסחאות - גם בעדכון חלקי, ודא שהבלוק החודשי קיים בטאב הסיכום
+  // כדי שהנוסחאות יחושבו.
+  try {
+    const summarySheet = ss.getSheetByName(SUMMARY_TAB);
+    writeDayRow(summarySheet, year, month, day, 0, 0, 0);
+  } catch (e) {
+    Logger.log(`Summary block ensure error: ${e}`);
   }
 }
 

@@ -69,6 +69,43 @@ function yesterdayStr_() {
 }
 
 /**
+ * UrlFetchApp.fetch עם retry חכם. מטפל ב:
+ *   - שגיאות רשת חולפות (Address unavailable / DNS resolution failed / connection reset)
+ *   - 5xx server errors (תקלות זמניות מצד השרת)
+ *   - 429 rate limit (עם backoff ארוך יותר)
+ *
+ * נסיונות: עד 4 (כולל הראשון). השהיה: 2s, 5s, 10s (15s ל-429).
+ */
+function fetchWithRetry_(url, options) {
+  const maxAttempts = 4;
+  let lastError;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = UrlFetchApp.fetch(url, options);
+      const code = res.getResponseCode();
+      if ((code >= 500 && code < 600) || code === 429) {
+        if (attempt < maxAttempts) {
+          const wait = code === 429 ? attempt * 5000 : attempt * 2500;
+          Logger.log(`fetch attempt ${attempt}/${maxAttempts} got HTTP ${code}, retrying in ${wait/1000}s...`);
+          Utilities.sleep(wait);
+          continue;
+        }
+      }
+      return res;
+    } catch (e) {
+      lastError = e;
+      const msg = e && e.message ? e.message : String(e);
+      if (attempt < maxAttempts) {
+        const wait = attempt * 2500;
+        Logger.log(`fetch attempt ${attempt}/${maxAttempts} threw: ${msg}. Retrying in ${wait/1000}s...`);
+        Utilities.sleep(wait);
+      }
+    }
+  }
+  throw lastError || new Error(`fetch failed after ${maxAttempts} attempts`);
+}
+
+/**
  * מדפיס ללוג מה הוגדר ב-Script Properties ומה חסר, כדי לעזור באבחון.
  * הרץ לפני setupAll כדי לוודא שהכל במקום.
  */

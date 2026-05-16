@@ -13,6 +13,19 @@
  */
 
 function getLayout_(sheetName) {
+  if (sheetName === SUMMARY_TAB) {
+    // טאב הסיכום: 4 עמודות, נוסחאות שמסכמות את כל החנויות דרך VLOOKUP.
+    // אין צורך לקרוא לפונקציות API - הסיכום מתעדכן בזמן אמת אוטומטית.
+    return {
+      type: 'summary',
+      cols: 4,
+      headers: ['תאריך', 'יצא סה"כ (CAD)', 'נכנס סה"כ (CAD)', 'ROAS'],
+      totalCol: 2,
+      revenueCol: 3,
+      roasCol: 4,
+      formulaDriven: true,
+    };
+  }
   const store = STORES.find(s => s.name === sheetName);
   if (store && store.hasGoogleAds) {
     return {
@@ -33,6 +46,29 @@ function getLayout_(sheetName) {
     totalCol: 2,
     revenueCol: 3,
     roasCol: 4,
+  };
+}
+
+/**
+ * מחזיר נוסחאות סיכום ליום ספציפי בטאב סיכום.
+ * dateCell: התא בטאב הסיכום שמכיל את התאריך (לדוגמה 'A5')
+ * הנוסחה תסכום את עמודות "total" ו"revenue" מכל החנויות לפי VLOOKUP על התאריך.
+ */
+function summaryFormulasForRow_(dateCell) {
+  const spentParts = [];
+  const revenueParts = [];
+  for (const store of STORES) {
+    const layout = getLayout_(store.name);
+    const tabName = store.name;
+    // ציטוט שם הטאב אם יש בו רווח או תווים מיוחדים
+    const tabRef = /^[A-Za-z_][A-Za-z0-9_]*$/.test(tabName) ? tabName : `'${tabName.replace(/'/g, "''")}'`;
+    const range = `${tabRef}!A:Z`;
+    spentParts.push(`IFERROR(VLOOKUP(${dateCell}, ${range}, ${layout.totalCol}, FALSE), 0)`);
+    revenueParts.push(`IFERROR(VLOOKUP(${dateCell}, ${range}, ${layout.revenueCol}, FALSE), 0)`);
+  }
+  return {
+    spent: '=' + spentParts.join('+'),
+    revenue: '=' + revenueParts.join('+'),
   };
 }
 
@@ -144,6 +180,19 @@ function createMonthBlock_(sheet, titleRow, year, month, title) {
     .setNumberFormat('0.00')
     .setHorizontalAlignment('center');
 
+  // לטאב הסיכום - מאכלס נוסחאות לכל יום אוטומטית (live aggregation)
+  if (layout.formulaDriven && layout.type === 'summary') {
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dayRow = dataStart + d - 1;
+      const dateCell = `A${dayRow}`;
+      const formulas = summaryFormulasForRow_(dateCell);
+      sheet.getRange(dayRow, layout.totalCol).setFormula(formulas.spent);
+      sheet.getRange(dayRow, layout.revenueCol).setFormula(formulas.revenue);
+      sheet.getRange(dayRow, layout.roasCol)
+        .setFormula(`=IFERROR(${colLetter_(layout.revenueCol)}${dayRow}/${colLetter_(layout.totalCol)}${dayRow}, "")`);
+    }
+  }
+
   // total row
   const totalRow = dataStart + daysInMonth;
   sheet.getRange(totalRow, 1).setValue('סך הכל')
@@ -200,6 +249,13 @@ function createMonthBlock_(sheet, titleRow, year, month, title) {
  */
 function writeDayRow(sheet, year, month, day, fbSpentCad, gaSpentCad, revenueCad) {
   const layout = getLayout_(sheet.getName());
+  // הסיכום מבוסס נוסחאות - הקריאה כאן רק מבטיחה שהחודש קיים בטאב.
+  // הנוסחאות שנכתבו ב-createMonthBlock_ ימשכו את הערכים אוטומטית מהטאבים האחרים.
+  if (layout.formulaDriven) {
+    getOrCreateMonthBlock_(sheet, year, month);
+    return;
+  }
+
   const titleRow = getOrCreateMonthBlock_(sheet, year, month);
   const headerRow = titleRow + 1;
   const dayRow = headerRow + day;
