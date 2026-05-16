@@ -76,6 +76,25 @@ export function generateAiReport({
   out.push(`**יוצר**: ${new Date().toISOString().slice(0, 10)}`);
   out.push('');
 
+  // ===== Critical disclaimer up top — most important context for the AI =====
+  out.push('## ⚠️ הערה חשובה לפני ניתוח — דיוק שיוך המכירות');
+  out.push('');
+  out.push('**מקור האמת להכנסות**: Shopify Admin API — מדויק 100%, real-time, מבוסס על הזמנות אמיתיות שהתבצעו.');
+  out.push('');
+  out.push('**Meta ad-attribution (conversion_value, conversions ברמת קמפיין)**:');
+  out.push('Meta Ads Manager לעיתים מייחס מכירות לקמפיינים בצורה לא מדויקת — לפעמים סופר יותר מהרכישות בפועל, לפעמים פחות, ולפעמים מייחס לקמפיין הלא נכון. הסיבות:');
+  out.push('- attribution windows (Meta בודק 7 ימים אחורה מהקליק)');
+  out.push('- iOS 14+ / ATT — חוסר הסכמה לטראקינג מצמצם את הנראות של Meta');
+  out.push('- modeled conversions — Meta "ממציא" המרות חסרות באלגוריתם');
+  out.push('- view-through attribution — מכירה משויכת רק כי המשתמש ראה מודעה, אפילו בלי קליק');
+  out.push('');
+  out.push('**מסקנה לניתוח**: ה-ROAS *ברמת חנות* (מקור: Shopify revenue / Meta+Google spend) הוא המקור האמין. ROAS *ברמת קמפיין* (מקור: conversion_value מ-Meta / spend מ-Meta) הוא אינדיקציה כללית בלבד. אל תקבל החלטות "להפסיק קמפיין" רק על בסיס ROAS ברמת קמפיין — שווה לבדוק גם את ה-Shopify revenue בימים הסמוכים.');
+  out.push('');
+  out.push('**Google Ads attribution**: בדרך כלל מדויק יותר מ-Meta, במיוחד לקמפייני Search ו-Shopping (purchase event ישיר). PMax יכול לסבול מאותן בעיות כמו Meta.');
+  out.push('');
+  out.push('---');
+  out.push('');
+
   // ===== Summary KPIs =====
   let revenue = 0;
   let fbSpend = 0;
@@ -383,23 +402,152 @@ export function generateAiReport({
     }
   }
 
+  // ===== Day-of-week breakdown =====
+  out.push('## ביצועים לפי יום בשבוע');
+  out.push('');
+  out.push('הקטע הזה עוזר לזהות אם יש דפוסים שבועיים — לדוגמה אם ROAS גבוה באופן עקבי בימי שלישי או נמוך בשבתות.');
+  out.push('');
+  const HE_DOW = ['ראשון', 'שני', 'שלישי', 'רביעי', 'חמישי', 'שישי', 'שבת'];
+  const dowAgg: Array<{ count: number; revenue: number; spend: number }> = Array.from(
+    { length: 7 },
+    () => ({ count: 0, revenue: 0, spend: 0 }),
+  );
+  for (const r of daily) {
+    const [y, m, d] = r.date.split('-').map(Number);
+    const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+    dowAgg[dow].count++;
+    dowAgg[dow].revenue += r.revenue;
+    dowAgg[dow].spend += r.totalSpend;
+  }
+  out.push(`| יום | מספר ימים | הכנסות ממוצעות | הוצאה ממוצעת | ROAS משוקלל |`);
+  out.push(`|---|---|---|---|---|`);
+  for (let i = 0; i < 7; i++) {
+    const d = dowAgg[i];
+    if (d.count === 0) continue;
+    const avgRev = d.revenue / d.count;
+    const avgSpend = d.spend / d.count;
+    const roas = d.spend > 0 ? d.revenue / d.spend : 0;
+    out.push(
+      `| ${HE_DOW[i]} | ${d.count} | ${fmtCad(avgRev)} | ${fmtCad(avgSpend)} | ${roas > 0 ? fmtNum(roas, 2) : '—'} |`,
+    );
+  }
+  out.push('');
+
+  // ===== Week-over-week comparison (if range >= 14 days) =====
+  if (days >= 14) {
+    const midPoint = new Date(range.from + 'T00:00:00Z');
+    midPoint.setUTCDate(midPoint.getUTCDate() + Math.floor(days / 2));
+    const mid = midPoint.toISOString().slice(0, 10);
+    let firstHalfRev = 0, firstHalfSpend = 0, secondHalfRev = 0, secondHalfSpend = 0;
+    for (const r of daily) {
+      if (r.date < mid) {
+        firstHalfRev += r.revenue;
+        firstHalfSpend += r.totalSpend;
+      } else {
+        secondHalfRev += r.revenue;
+        secondHalfSpend += r.totalSpend;
+      }
+    }
+    const firstRoas = firstHalfSpend > 0 ? firstHalfRev / firstHalfSpend : 0;
+    const secondRoas = secondHalfSpend > 0 ? secondHalfRev / secondHalfSpend : 0;
+    const revChange = firstHalfRev > 0 ? (secondHalfRev - firstHalfRev) / firstHalfRev : 0;
+    const roasChange = firstRoas > 0 ? secondRoas - firstRoas : 0;
+
+    out.push('## השוואת מחצית ראשונה ↔ מחצית שנייה');
+    out.push('');
+    out.push(`| מטריקה | מחצית 1 (${fmtDate(range.from)} – ${fmtDate(mid)}) | מחצית 2 (${fmtDate(mid)} – ${fmtDate(range.to)}) | שינוי |`);
+    out.push(`|---|---|---|---|`);
+    out.push(`| הכנסות | ${fmtCad(firstHalfRev)} | ${fmtCad(secondHalfRev)} | ${revChange > 0 ? '+' : ''}${(revChange * 100).toFixed(1)}% |`);
+    out.push(`| הוצאות | ${fmtCad(firstHalfSpend)} | ${fmtCad(secondHalfSpend)} | ${firstHalfSpend > 0 ? `${((secondHalfSpend - firstHalfSpend) / firstHalfSpend * 100).toFixed(1)}%` : '—'} |`);
+    out.push(`| ROAS | ${firstRoas > 0 ? fmtNum(firstRoas, 2) : '—'} | ${secondRoas > 0 ? fmtNum(secondRoas, 2) : '—'} | ${roasChange > 0 ? '+' : ''}${roasChange.toFixed(2)} נק' |`);
+    out.push('');
+  }
+
+  // ===== Ad-spend efficiency by platform =====
+  out.push('## חלוקת תקציב לפי פלטפורמה');
+  out.push('');
+  let metaSpend = 0, googleSpend = 0;
+  for (const r of daily) {
+    metaSpend += r.fbSpend;
+    googleSpend += r.gaSpend;
+  }
+  const totalSpendAll = metaSpend + googleSpend;
+  if (totalSpendAll > 0) {
+    out.push(`| פלטפורמה | הוצאה | % מסך תקציב |`);
+    out.push(`|---|---|---|`);
+    out.push(`| Meta | ${fmtCad(metaSpend)} | ${(metaSpend / totalSpendAll * 100).toFixed(0)}% |`);
+    out.push(`| Google | ${fmtCad(googleSpend)} | ${(googleSpend / totalSpendAll * 100).toFixed(0)}% |`);
+    out.push('');
+    out.push('_שווה לבדוק אם החלוקה הזו אופטימלית. אם פלטפורמה אחת מספקת ROAS גבוה משמעותית יותר ברמת חנות (ראה Shopify revenue), שווה לשקול הסטת תקציב._');
+    out.push('');
+  }
+
+  // ===== Top products by margin (not just units) =====
+  out.push('## מוצרים עם מרג\'ין הגבוה ביותר');
+  out.push('');
+  out.push('המוצרים שמנפיקים הכי הרבה רווח נטו ביחס לברוטו (אחרי הנחות והחזרים). שווה לקדם בעדיפות כי הרווח האפקטיבי גבוה.');
+  out.push('');
+  const marginRanked = productsList
+    .filter(p => p.hasNet && p.net !== null && p.gross > 100)
+    .map(p => ({ ...p, margin: (p.net ?? 0) / p.gross }))
+    .sort((a, b) => b.margin - a.margin)
+    .slice(0, 10);
+  if (marginRanked.length > 0) {
+    out.push(`| מוצר | חנות | יחידות | ברוטו | נטו | מרג'ין |`);
+    out.push(`|---|---|---|---|---|---|`);
+    for (const p of marginRanked) {
+      out.push(
+        `| ${escapeMd(p.title)} | ${p.store} | ${fmtNum(p.units)} | ${fmtCad(p.gross)} | ${fmtCad(p.net ?? 0)} | ${fmtPct(p.margin, 0)} |`,
+      );
+    }
+    out.push('');
+  } else {
+    out.push('_עוד אין נתוני נטו זמינים — דוח זה ימולא בריצות הבאות._');
+    out.push('');
+  }
+
   // ===== Suggested AI prompt =====
   out.push('---');
   out.push('');
   out.push('## הוראה לבינה מלאכותית');
   out.push('');
-  out.push(
-    'נתח את הנתונים שלמעלה ותן לי תובנות מעשיות:',
-  );
-  out.push('1. אילו קמפיינים הכי מצליחים ולמה? איזה אחד הייתי צריך לחזק יותר?');
-  out.push('2. אילו קמפיינים מבזבזים תקציב? איזה הייתי צריך לעצור או לשפר?');
-  out.push('3. אילו מוצרים הם המנועי-מכירות? איזה הייתי צריך לקדם יותר?');
-  out.push('4. האם יש דפוסים יומיים (ימים בשבוע / שעות) ששווה לשים לב אליהם?');
-  out.push(
-    '5. מה ההמלצה הקונקרטית הראשונה שלך לשבוע הבא לשפר את ה-ROAS וה-Revenue?',
-  );
+  out.push('אתה analyst כלכלי ב-e-commerce. נתח את הנתונים שלמעלה לעומק ותן לי דוח מעשי שמכיל:');
   out.push('');
-  out.push('היעד הפנימי: ROAS 3.0 ומעלה.');
+  out.push('### חלק 1 — תמונת מצב כללית');
+  out.push('1. **מה הסיפור של התקופה?** האם המגמה חיובית, שלילית, או יציבה? התבסס על ROAS משוקלל ועל רווח נטו (לא רק על הכנסות).');
+  out.push('2. **האם החנות רווחית?** רווח נטו = הכנסות − פרסום − COGS (25%). אם שלילי — זה דגל אדום שמחייב פעולה.');
+  out.push('3. **השוואה למחצית הקודמת**: מה השתפר ומה החמיר?');
+  out.push('');
+  out.push('### חלק 2 — קמפיינים');
+  out.push('4. **קמפיינים לחזק (Scale)** — אילו 2-3 קמפיינים מצדיקים העלאת תקציב? התבסס על: ROAS גבוה ויציב (לפחות 7 ימים), CPA סביר, ערך המרות עולה על ההוצאה. שים לב — ה-ROAS *ברמת קמפיין* הוא מקור Meta/Google ולא מדויק לחלוטין (ראה ההערה למעלה).');
+  out.push('5. **קמפיינים לבדוק/לעצור (Pause/Investigate)** — אילו קמפיינים מבזבזים תקציב? קריטריונים: ROAS < 1.5, CPA גבוה משמעותית מהממוצע, או 0 המרות בכמות הוצאה משמעותית.');
+  out.push('6. **אד-סטים בעייתיים בתוך קמפיינים טובים** — אם יש קמפיין כללי טוב אבל אד-סט בודד גורר אותו למטה, ציין זאת.');
+  out.push('7. **חלוקת תקציב Meta vs Google** — האם החלוקה אופטימלית? אם אחת מהפלטפורמות מספקת ROAS גבוה משמעותית, מומלץ להעביר תקציב.');
+  out.push('');
+  out.push('### חלק 3 — מוצרים');
+  out.push('8. **המוצרים שמובילים** — אילו 2-3 מוצרים הם המנועי-המכירות? איזה מהם הייתי צריך לקדם בקמפיינים ייעודיים?');
+  out.push('9. **מוצרים עם מרג\'ין נמוך** — אילו מוצרים יש להם הרבה הנחות/החזרות? שווה לבחון את התמחור או את ה-product-market fit שלהם.');
+  out.push('10. **מוצרים שלא נמכרים** — אם יש מוצרים עם 0 מכירות בתקופה הזו אבל היו פעילים בעבר, ייתכן שהם איבדו רלוונטיות.');
+  out.push('');
+  out.push('### חלק 4 — דפוסים זמניים');
+  out.push('11. **ימים בשבוע** — אילו ימים מספקים את ה-ROAS הגבוה ביותר? האם שווה להגדיל תקציב בימים האלה ולחתוך בימים החלשים?');
+  out.push('12. **מגמה לאורך התקופה** — האם הביצועים משתפרים, מתדרדרים, או יציבים?');
+  out.push('');
+  out.push('### חלק 5 — הצעות פעולה ספציפיות');
+  out.push('13. **5 פעולות קונקרטיות לשבוע הקרוב** עם הצדקה לכל אחת:');
+  out.push('   - פעולה 1: ___ (כי ___)');
+  out.push('   - פעולה 2: ___ (כי ___)');
+  out.push('   - ...');
+  out.push('14. **2-3 בדיקות שכדאי לעשות** — בדיקות שדורשות מידע נוסף או A/B test');
+  out.push('15. **3 KPIs שכדאי לעקוב אחריהם בשבוע הבא** — מה חשוב לראות שיקרה');
+  out.push('');
+  out.push('### הקשר חשוב');
+  out.push('- **היעד הפנימי**: ROAS 3.0 ומעלה. ROAS 2-2.7 = "סביר", מתחת ל-2 = מצריך בחינה.');
+  out.push('- **COGS משוער**: 25% מההכנסה. רווח נטו = הכנסות − פרסום − 25% מההכנסה.');
+  out.push('- **שיוך מכירות Meta**: לפעמים סופר יותר/פחות מהמציאות בגלל iOS 14+, modeled conversions, או attribution windows. אל תקבל החלטות ל"לעצור קמפיין" רק על בסיס ROAS ברמת קמפיין שמ-Meta — בדוק גם את ה-Shopify revenue בימים הסמוכים.');
+  out.push('- **3 חנויות**: uzoshop, Zol Plus, 360usmile — לכל אחת מסע לקוח ומוצרים שונים. אל תכריע "כל החנויות צריכות לעשות X" אם הנתונים מצביעים על הבדלים.');
+  out.push('');
+  out.push('**פורמט תשובה**: השב בעברית, בכותרות (## / ###) ובנקודות, עם המלצות *קונקרטיות* (מספרים ושמות קמפיינים/מוצרים) ולא פרהזות כלליות.');
 
   return out.join('\n');
 }

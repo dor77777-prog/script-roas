@@ -15,6 +15,7 @@ import { cn, formatCurrency, formatNumber, formatPct } from '@/lib/utils';
 import { roasLabel, type Aggregate, deltaPct, COGS_RATE_OF_REVENUE } from '@/lib/analytics';
 import { RollingNumber } from './RollingNumber';
 import { Sparkline } from './Sparkline';
+import { MetricHelp, METRIC_HELP, type MetricHelpContent } from './MetricHelp';
 import type { DailyRow } from '@/lib/types';
 
 const TONE_BG: Record<string, string> = {
@@ -119,6 +120,7 @@ export function KpiCards({ current, previous, series }: Props) {
     <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
       <KpiCard
         label="ROAS"
+        help={METRIC_HELP.roas}
         rawValue={current.roas}
         format={n => formatNumber(n)}
         chip={{ text: roasInfo.text, tone: roasInfo.tone }}
@@ -128,6 +130,7 @@ export function KpiCards({ current, previous, series }: Props) {
       />
       <KpiCard
         label="הכנסות"
+        help={METRIC_HELP.revenue}
         rawValue={current.revenue}
         format={n => formatCurrency(n)}
         valuePrefix="CAD"
@@ -137,6 +140,7 @@ export function KpiCards({ current, previous, series }: Props) {
       />
       <KpiCard
         label="הוצאות פרסום"
+        help={METRIC_HELP.spend}
         rawValue={current.spend}
         format={n => formatCurrency(n)}
         valuePrefix="CAD"
@@ -147,6 +151,7 @@ export function KpiCards({ current, previous, series }: Props) {
       />
       <KpiCard
         label="רווח גולמי"
+        help={METRIC_HELP.grossProfit}
         rawValue={current.grossProfit}
         format={n => formatCurrency(n)}
         valuePrefix="CAD"
@@ -157,6 +162,7 @@ export function KpiCards({ current, previous, series }: Props) {
       <KpiCard
         label="עלות סחורה"
         labelSuffix="(25%)"
+        help={METRIC_HELP.cogs}
         rawValue={current.cogs}
         format={n => formatCurrency(n)}
         valuePrefix="CAD"
@@ -167,6 +173,7 @@ export function KpiCards({ current, previous, series }: Props) {
       />
       <KpiCard
         label="רווח נטו"
+        help={METRIC_HELP.netProfit}
         rawValue={current.netProfit}
         format={n => formatCurrency(n)}
         valuePrefix="CAD"
@@ -182,6 +189,7 @@ export function KpiCards({ current, previous, series }: Props) {
 function KpiCard({
   label,
   labelSuffix,
+  help,
   rawValue,
   format,
   valuePrefix,
@@ -194,6 +202,9 @@ function KpiCard({
 }: {
   label: string;
   labelSuffix?: string;
+  /** When provided, an inline "?" affordance is rendered next to the label
+   *  that opens a popover on hover/focus/click with definition + formula. */
+  help?: MetricHelpContent;
   rawValue: number;
   format: (n: number) => string;
   valuePrefix?: string;
@@ -237,6 +248,7 @@ function KpiCard({
               <span className="text-text-muted font-normal ml-1">{labelSuffix}</span>
             )}
           </span>
+          {help && <MetricHelp content={help} />}
         </div>
       </div>
 
