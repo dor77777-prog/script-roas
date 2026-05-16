@@ -215,6 +215,7 @@ function buildDashboardTab_(ss) {
   buildFilters_(sh);
   buildKpis_(sh);
   buildInsights_(sh);
+  buildPerStoreCards_(sh);
   buildChart_(sh, ss);
   buildTable_(sh);
 }
@@ -524,9 +525,14 @@ function buildInsights_(sh) {
   sh.setRowHeight(15, 15);
 }
 
-function buildChart_(sh, ss) {
+/**
+ * כרטיסיות פר-חנות - 3 כרטיסיות בשורה אחת, כל אחת מציגה ROAS, הכנסות, הוצאות, רווח
+ * עבור החנות. עוזר לראות מבט-על השוואתי על כל החנויות בלי לשנות סינון.
+ */
+function buildPerStoreCards_(sh) {
+  // כותרת קטע
   sh.getRange('A16:M16').merge()
-    .setValue('📈 מגמת ROAS לאורך זמן')
+    .setValue('🏪 ביצועים לפי חנות (לתקופה שנבחרה)')
     .setFontWeight('bold')
     .setFontSize(13)
     .setBackground(DBC.sectionBg)
@@ -534,6 +540,123 @@ function buildChart_(sh, ss) {
     .setHorizontalAlignment('center')
     .setVerticalAlignment('middle');
   sh.setRowHeight(16, 30);
+
+  const flat = `'${DAILY_FLAT_TAB}'`;
+  // 3 כרטיסיות, כל אחת 4 עמודות רוחב. חלוקה: A:D | E:H | I:L (M נשאר ריק כשוליים)
+  const cardCols = [
+    { start: 'A', end: 'D', valueCol: 'A' },
+    { start: 'E', end: 'H', valueCol: 'E' },
+    { start: 'I', end: 'L', valueCol: 'I' },
+  ];
+  const storeColors = ['#1c4587', '#ea4335', '#34a853']; // matches chart colors
+
+  for (let i = 0; i < STORES.length && i < cardCols.length; i++) {
+    const store = STORES[i];
+    const c = cardCols[i];
+    const color = storeColors[i];
+    const escName = store.name.replace(/"/g, '""');
+
+    // Common SUMIFS filter for this store + period
+    const spendFormula =
+      `SUMIFS(${flat}!F:F, ${flat}!A:A, ">="&$B$4, ${flat}!A:A, "<="&$D$4, ${flat}!C:C, "${escName}")`;
+    const revFormula =
+      `SUMIFS(${flat}!G:G, ${flat}!A:A, ">="&$B$4, ${flat}!A:A, "<="&$D$4, ${flat}!C:C, "${escName}")`;
+    const profitFormula = `(${revFormula})-(${spendFormula})`;
+    const roasFormula = `IFERROR((${revFormula})/(${spendFormula}), 0)`;
+
+    // שורה 17: שם חנות עם פס צבעוני
+    sh.getRange(`${c.start}17:${c.end}17`).merge()
+      .setValue('🏪  ' + store.name)
+      .setFontWeight('bold')
+      .setFontSize(13)
+      .setBackground(color)
+      .setFontColor('#ffffff')
+      .setHorizontalAlignment('center')
+      .setVerticalAlignment('middle');
+
+    // שורה 18: ROAS - ערך גדול
+    sh.getRange(`${c.start}18:${c.end}18`).merge()
+      .setFormula('=' + roasFormula)
+      .setNumberFormat('0.00')
+      .setFontWeight('bold')
+      .setFontSize(28)
+      .setBackground('#ffffff')
+      .setHorizontalAlignment('center')
+      .setVerticalAlignment('middle');
+
+    // שורה 19: תווית מילולית (סביר/טוב/מעולה/דורש בחינה)
+    sh.getRange(`${c.start}19:${c.end}19`).merge()
+      .setFormula(
+        `=IF(${roasFormula}=0,"אין נתונים",` +
+        `IF(${roasFormula}<2,"דורש בחינה",` +
+        `IF(${roasFormula}<2.7,"סביר",` +
+        `IF(${roasFormula}<=3,"טוב","מעולה"))))`
+      )
+      .setFontWeight('bold')
+      .setFontSize(11)
+      .setBackground('#f8f9fa')
+      .setHorizontalAlignment('center')
+      .setVerticalAlignment('middle');
+
+    // שורות 20-22: הכנסות, הוצאות, רווח
+    sh.getRange(`${c.start}20:${c.end}20`).merge()
+      .setFormula(`="💰 הכנסות:  CAD " & TEXT(${revFormula}, "#,##0")`)
+      .setFontSize(11)
+      .setBackground('#ffffff')
+      .setHorizontalAlignment('right')
+      .setVerticalAlignment('middle');
+
+    sh.getRange(`${c.start}21:${c.end}21`).merge()
+      .setFormula(`="📤 הוצאות:  CAD " & TEXT(${spendFormula}, "#,##0")`)
+      .setFontSize(11)
+      .setBackground('#ffffff')
+      .setHorizontalAlignment('right')
+      .setVerticalAlignment('middle');
+
+    sh.getRange(`${c.start}22:${c.end}22`).merge()
+      .setFormula(`="🏦 רווח גולמי:  CAD " & TEXT(${profitFormula}, "#,##0")`)
+      .setFontSize(11)
+      .setFontWeight('bold')
+      .setBackground('#ffffff')
+      .setHorizontalAlignment('right')
+      .setVerticalAlignment('middle');
+  }
+
+  // ROAS color rules for the per-store ROAS cells (A18, E18, I18)
+  const cardRoasRange = sh.getRangeList(['A18:D18', 'E18:H18', 'I18:L18']).getRanges();
+  const rules = sh.getConditionalFormatRules();
+  for (const r of cardRoasRange) {
+    rules.push(SpreadsheetApp.newConditionalFormatRule()
+      .whenNumberLessThan(2).setBackground(ROAS_COLORS.red).setRanges([r]).build());
+    rules.push(SpreadsheetApp.newConditionalFormatRule()
+      .whenNumberBetween(2, 2.6999).setBackground(ROAS_COLORS.orange).setRanges([r]).build());
+    rules.push(SpreadsheetApp.newConditionalFormatRule()
+      .whenNumberBetween(2.7, 3).setBackground(ROAS_COLORS.green).setRanges([r]).build());
+    rules.push(SpreadsheetApp.newConditionalFormatRule()
+      .whenNumberGreaterThan(3).setBackground(ROAS_COLORS.blue).setRanges([r]).build());
+  }
+  sh.setConditionalFormatRules(rules);
+
+  // גובהים נדיבים יותר לכרטיסיות
+  sh.setRowHeight(17, 32);
+  sh.setRowHeight(18, 56);
+  sh.setRowHeight(19, 26);
+  sh.setRowHeight(20, 26);
+  sh.setRowHeight(21, 26);
+  sh.setRowHeight(22, 26);
+  sh.setRowHeight(23, 25); // spacer
+}
+
+function buildChart_(sh, ss) {
+  sh.getRange('A25:M25').merge()
+    .setValue('📈 מגמת ROAS לאורך זמן')
+    .setFontWeight('bold')
+    .setFontSize(13)
+    .setBackground(DBC.sectionBg)
+    .setFontColor(DBC.sectionFg)
+    .setHorizontalAlignment('center')
+    .setVerticalAlignment('middle');
+  sh.setRowHeight(25, 30);
 
   const helpers = ss.getSheetByName(DASHBOARD_HELPERS_TAB);
   if (!helpers) return;
@@ -559,7 +682,7 @@ function buildChart_(sh, ss) {
     .setChartType(Charts.ChartType.LINE)
     .addRange(helpers.getRange('A3:L500'))
     .setNumHeaders(1)   // השורה הראשונה של ה-range = שמות חנויות (legend) + תאריך
-    .setPosition(17, 1, 0, 0)
+    .setPosition(26, 1, 0, 0)
     .setOption('title', '')
     .setOption('legend', { position: 'top', alignment: 'center', textStyle: { fontSize: 13, bold: true } })
     // לא מגדירים hAxis.format כדי שגוגל תזהה אוטומטית שמדובר בציר תאריכים
@@ -582,19 +705,19 @@ function buildChart_(sh, ss) {
 
 function buildChartLegend_(sh, chartStores, chartColors) {
   // כותרת המקרא
-  sh.getRange('A33:M33').merge()
+  sh.getRange('A42:M42').merge()
     .setValue('🎨 מקרא — איזה צבע מסמן איזו חנות')
     .setFontWeight('bold')
     .setFontSize(11)
     .setBackground('#f3f3f3')
     .setFontColor('#5f6368')
     .setHorizontalAlignment('center');
-  sh.setRowHeight(33, 26);
+  sh.setRowHeight(42, 26);
 
   // לכל חנות: תיבת צבע (עמודה B) + שם (C:F) + ROAS בתקופה (G:I)
   const flat = `'${DAILY_FLAT_TAB}'`;
   for (let i = 0; i < chartStores.length; i++) {
-    const row = 34 + i;
+    const row = 43 + i;
     const storeName = chartStores[i];
     const color = chartColors[i % chartColors.length];
 
@@ -628,7 +751,7 @@ function buildChartLegend_(sh, chartStores, chartColors) {
 function buildTable_(sh) {
   const flat = `'${DAILY_FLAT_TAB}'`;
 
-  sh.getRange('A40:M40').merge()
+  sh.getRange('A48:M48').merge()
     .setValue('📋 פירוט יומי')
     .setFontWeight('bold')
     .setFontSize(13)
@@ -636,8 +759,8 @@ function buildTable_(sh) {
     .setFontColor(DBC.sectionFg)
     .setHorizontalAlignment('center')
     .setVerticalAlignment('middle');
-  sh.setRowHeight(40, 30);
-  sh.setRowHeight(41, 10);
+  sh.setRowHeight(48, 30);
+  sh.setRowHeight(49, 10);
 
   // QUERY ללא FORMAT clause - הפורמטים יחולו דרך setNumberFormat (יותר אמין)
   const queryFormula =
@@ -652,23 +775,23 @@ function buildTable_(sh) {
     `G 'הכנסה', H 'ROAS', I 'רווח גולמי'", 1), ` +
     `"אין נתונים בטווח שבחרת")`;
 
-  sh.getRange('A42').setFormula(queryFormula);
+  sh.getRange('A50').setFormula(queryFormula);
 
   // עיצוב שורת הכותרת של ה-QUERY
-  sh.getRange('A42:H42')
+  sh.getRange('A50:H50')
     .setFontWeight('bold')
     .setBackground(DBC.cardLabelBg)
     .setHorizontalAlignment('center');
 
   // פורמטים ישירים על העמודות (לא דרך QUERY FORMAT - לא תמיד אמין):
   // A=תאריך  B=חנות  C=FB  D=GA  E=סה"כ הוצאה  F=הכנסה  G=ROAS  H=רווח גולמי
-  sh.getRange('A43:A500').setNumberFormat('dd/MM/yyyy').setHorizontalAlignment('center');
-  sh.getRange('C43:F500').setNumberFormat('#,##0.00');   // FB, GA, סה"כ הוצאה, הכנסה
-  sh.getRange('G43:G500').setNumberFormat('0.00').setHorizontalAlignment('center');  // ROAS
-  sh.getRange('H43:H500').setNumberFormat('#,##0.00');   // רווח גולמי
+  sh.getRange('A51:A500').setNumberFormat('dd/MM/yyyy').setHorizontalAlignment('center');
+  sh.getRange('C51:F500').setNumberFormat('#,##0.00');   // FB, GA, סה"כ הוצאה, הכנסה
+  sh.getRange('G51:G500').setNumberFormat('0.00').setHorizontalAlignment('center');  // ROAS
+  sh.getRange('H51:H500').setNumberFormat('#,##0.00');   // רווח גולמי
 
   // צביעת ROAS על עמודה G (העמודה השביעית בפלט)
-  const roasRange = sh.getRange('G43:G500');
+  const roasRange = sh.getRange('G51:G500');
   const rules = sh.getConditionalFormatRules();
   rules.push(SpreadsheetApp.newConditionalFormatRule().whenNumberLessThan(2).setBackground(ROAS_COLORS.red).setRanges([roasRange]).build());
   rules.push(SpreadsheetApp.newConditionalFormatRule().whenNumberBetween(2, 2.6999).setBackground(ROAS_COLORS.orange).setRanges([roasRange]).build());
