@@ -299,12 +299,20 @@ export async function hydrateFromCloud(): Promise<boolean> {
       continue;
     }
 
-    if (cloudVal === null) {
-      // Cloud row exists with an explicit null value — this means the user
-      // (possibly on another device) cleared the key. Mirror the deletion
-      // locally so we don't re-push the stale local value on the next round.
-      // CRITICAL: without this branch, a deleted goal would resurrect from
-      // a partner's localStorage every poll cycle.
+    if (cloudVal === null || cloudVal === undefined) {
+      // Cloud row exists but value is null or undefined.
+      //  - null: the user (possibly on another device) cleared the key.
+      //  - undefined: a row with key set but column B blank, possible if
+      //    ops manually deleted the value cell. fetchDashboardState stores
+      //    kv[key] = undefined in that case, which then slipped through to
+      //    writeLocal as undefined → localStorage.setItem coerces to the
+      //    literal string "undefined" → next read parses to "undefined"
+      //    → silent data loss (Array.isArray("undefined") === false → []).
+      //
+      // Mirror deletion locally for both cases so we don't re-push a stale
+      // local value, and we don't write the literal string "undefined" to
+      // localStorage. CRITICAL: without this branch, a deleted goal would
+      // resurrect from a partner's localStorage every poll cycle.
       removeLocal(lsKey);
       dispatchChange(lsKey);
       continue;
@@ -360,6 +368,17 @@ function readLocal(lsKey: string): unknown {
 
 function writeLocal(lsKey: string, value: unknown) {
   if (typeof window === 'undefined') return;
+  // Defense in depth (WR2-04): JSON.stringify(undefined) returns undefined
+  // (not "undefined") and setItem then coerces to the literal string
+  // "undefined", which on the next read appears as valid persisted data
+  // and causes silent data loss (Array.isArray("undefined") is false →
+  // safeReadArray returns []). The hydrate branch above already routes
+  // undefined to removeLocal, but routes that bypass hydrate (future
+  // refactors, direct callers) should not be able to corrupt storage.
+  if (value === undefined) {
+    removeLocal(lsKey);
+    return;
+  }
   try {
     if (typeof value === 'number' || typeof value === 'string') {
       window.localStorage.setItem(lsKey, String(value));
