@@ -441,7 +441,12 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
                       const markKey = `${a.storeId}::${a.platform}::${a.campaignId}::${a.id || ''}`;
                       const isOptimized = optimized.has(markKey);
                       const tight = a.spend > 0 && a.adSetBudgetCad && a.spend > a.adSetBudgetCad * 0.95;
-                      const canDrillToAds = a.platform === 'Meta' && a.id;
+                      // `!!()` so the type is strictly boolean — without it,
+                      // short-circuit gives `string | boolean` (the value of
+                      // `a.id` when truthy), which leaks into JSX props that
+                      // expect boolean (e.g. `disabled={!canDrillToAds}` would
+                      // render `disabled="123"` if added later). (#IN-06)
+                      const canDrillToAds = !!(a.platform === 'Meta' && a.id);
                       return (
                         <tr
                           key={a.id || a.name || i}
