@@ -60,12 +60,34 @@ function runUpdateForDate(dateStr) {
 function updateStoreForDate_(ss, store, dateStr, year, month, day, ilsToCad) {
   const revenueCad = getShopifyRevenue(store.id, dateStr);
 
-  const meta = getMetaSpend(store.id, dateStr);
-  const metaCad = meta.currency === 'CAD' ? meta.spend : meta.spend * ilsToCad;
+  // Meta: override ידני קודם, נופלים ל-API אם אין.
+  const metaOverride = getManualSpendOverride_(store.id, 'Meta', dateStr);
+  let meta;
+  let metaFromOverride = false;
+  if (metaOverride) {
+    meta = metaOverride;
+    metaFromOverride = true;
+    Logger.log(`Meta OVERRIDE ${store.name} ${dateStr}: ${meta.spend} ${meta.currency} (manual-spend tab)`);
+  } else {
+    meta = getMetaSpend(store.id, dateStr);
+  }
+  // המרה ל-CAD תומכת ב-ILS/USD/EUR/CAD; שאר המטבעות יעברו דרך Frankfurter.
+  const metaCad = meta.currency === 'CAD' ? meta.spend
+                : meta.currency === 'ILS' ? meta.spend * ilsToCad
+                : meta.spend * getFxRate(meta.currency, 'CAD', dateStr);
 
   let googleAdsCad = 0;
+  let gaFromOverride = false;
   if (store.hasGoogleAds) {
-    const ga = getGoogleAdsSpend(store.id, dateStr);
+    const gaOverride = getManualSpendOverride_(store.id, 'Google', dateStr);
+    let ga;
+    if (gaOverride) {
+      ga = gaOverride;
+      gaFromOverride = true;
+      Logger.log(`Google OVERRIDE ${store.name} ${dateStr}: ${ga.spend} ${ga.currency} (manual-spend tab)`);
+    } else {
+      ga = getGoogleAdsSpend(store.id, dateStr);
+    }
     googleAdsCad = ga.currency === 'CAD' ? ga.spend : ga.spend * getFxRate(ga.currency, 'CAD', dateStr);
   }
 
@@ -110,8 +132,12 @@ function updateStoreForDate_(ss, store, dateStr, year, month, day, ilsToCad) {
 function updateCampaignDataForStoreDate_(ss, store, dateStr, ilsToCad) {
   const rows = [];
 
-  // Meta - תמיד יש (כל החנויות מפרסמות שם)
-  try {
+  // Meta - מדלגים על קריאת campaign-level אם יש override ידני לאותו תאריך
+  // (אין לנו granularity ידנית, רק סה"כ — אז עדיף לא לקרוא ל-API ולכתוב כלום).
+  const metaOverrideForDay = getManualSpendOverride_(store.id, 'Meta', dateStr);
+  if (metaOverrideForDay) {
+    Logger.log(`Meta campaigns ${store.name} ${dateStr}: SKIPPED (manual override active)`);
+  } else try {
     const metaRows = getMetaAdSetInsights(store.id, dateStr);
     for (const r of metaRows) {
       const fxToCad = r.currency === 'CAD' ? 1
@@ -135,9 +161,12 @@ function updateCampaignDataForStoreDate_(ss, store, dateStr, ilsToCad) {
     Logger.log(`Meta ad-sets ${store.name} ${dateStr} fetch failed: ${e && e.message ? e.message : e}`);
   }
 
-  // Google Ads - רק לחנויות עם hasGoogleAds=true
+  // Google Ads - רק לחנויות עם hasGoogleAds=true; דילוג אם יש override
   if (store.hasGoogleAds) {
-    try {
+    const gaOverrideForDay = getManualSpendOverride_(store.id, 'Google', dateStr);
+    if (gaOverrideForDay) {
+      Logger.log(`Google campaigns ${store.name} ${dateStr}: SKIPPED (manual override active)`);
+    } else try {
       const gaRows = getGoogleAdsAdGroupInsights(store.id, dateStr);
       for (const r of gaRows) {
         const fxToCad = r.currency === 'CAD' ? 1

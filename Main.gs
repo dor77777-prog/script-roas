@@ -8,6 +8,7 @@
  */
 function setupAll() {
   const ss = ensureSpreadsheet();
+  ensureManualSpendTab_(ss);   // טאב להזנה ידנית של הוצאות (override ל-API)
   installDailyTrigger();   // 00:05 IT - "closes" yesterday's data
   installLiveTrigger();    // every 15 min - refreshes today's data so the dashboard is live
   Logger.log('================================');
@@ -111,6 +112,8 @@ function onOpen() {
       .addSeparator()
       .addItem('הסתר טאבים עזריים', 'hideAuxiliaryTabs')
       .addItem('הצג טאבים עזריים (debug)', 'showAuxiliaryTabs')
+      .addSeparator()
+      .addItem('פתח טאב Override ידני (manual-spend)', 'openManualSpendTab')
       .addSeparator()
       .addItem('בדוק הגדרות (verifyConfig)', 'showVerifyConfig_')
       .addItem('הוצא Shopify tokens (Client Credentials)', 'bootstrapAllShopifyTokens')
