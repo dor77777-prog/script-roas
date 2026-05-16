@@ -31,6 +31,7 @@ type Platform = 'all' | 'Meta' | 'Google';
 type SortKey =
   | 'name'
   | 'spend'
+  | 'budget'
   | 'conversionValue'
   | 'roas'
   | 'conversions'
@@ -162,6 +163,15 @@ function sortAggregated(
         return (mode === 'campaign' ? a.campaignName : a.adSetName || '') || '';
       case 'spend':
         return a.spend;
+      case 'budget':
+        // The visible budget for the row: campaign-level when in campaign mode,
+        // ad-set-level when in ad-set mode. null becomes 0 so empty rows sort
+        // to the bottom on desc.
+        return (
+          mode === 'campaign'
+            ? a.campaignBudgetCad ?? 0
+            : a.adSetBudgetCad ?? 0
+        );
       case 'conversionValue':
         return a.conversionValue;
       case 'roas':
@@ -587,6 +597,15 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     className="px-3 py-2 w-[80px]"
                   />
                   <SortHeader
+                    label="תקציב יומי"
+                    sortKey="budget"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[100px]"
+                  />
+                  <SortHeader
                     label="ערך המרות"
                     sortKey="conversionValue"
                     activeKey={sortKey}
@@ -705,32 +724,27 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                               {' · '}
                               {a.storeName}
                               {mode === 'adset' && a.campaignName ? ` · ${a.campaignName}` : ''}
-                              {/* Inline budget hint:
-                                  - In campaign mode: CBO campaigns show their
-                                    daily budget here ("תקציב יומי: CAD 50").
-                                  - In ad-set mode: ABO ad-sets show their
-                                    own daily budget. */}
-                              {mode === 'campaign' && a.campaignBudgetCad && a.campaignBudgetCad > 0 && (
-                                <span className="ml-1.5 inline-flex items-center gap-0.5 text-text-secondary">
-                                  · תקציב יומי{' '}
-                                  <span className="font-semibold tabular-nums text-text-primary">
-                                    CAD {formatCurrency(a.campaignBudgetCad)}
-                                  </span>
-                                </span>
-                              )}
-                              {mode === 'adset' && a.adSetBudgetCad && a.adSetBudgetCad > 0 && (
-                                <span className="ml-1.5 inline-flex items-center gap-0.5 text-text-secondary">
-                                  · תקציב יומי{' '}
-                                  <span className="font-semibold tabular-nums text-text-primary">
-                                    CAD {formatCurrency(a.adSetBudgetCad)}
-                                  </span>
-                                </span>
-                              )}
                             </div>
                           </div>
                         </div>
                       </td>
                       <td className="px-3 py-2 text-end tabular-nums">{formatCurrency(a.spend)}</td>
+                      <td className="px-3 py-2 text-end tabular-nums">
+                        {(() => {
+                          const budget = mode === 'campaign' ? a.campaignBudgetCad : a.adSetBudgetCad;
+                          if (!budget || budget <= 0) {
+                            return <span className="text-text-muted">—</span>;
+                          }
+                          // Color hint: when daily spend exceeds 95% of daily
+                          // budget, flag amber — useful "pacing" signal.
+                          const tight = a.spend > 0 && a.spend > budget * 0.95;
+                          return (
+                            <span className={cn('font-medium', tight && 'text-amber-700')}>
+                              {formatCurrency(budget)}
+                            </span>
+                          );
+                        })()}
+                      </td>
                       <td className={cn('px-3 py-2 text-end tabular-nums font-medium', a.conversionValue > a.spend && 'text-roas-green')}>
                         {formatCurrency(a.conversionValue)}
                       </td>
