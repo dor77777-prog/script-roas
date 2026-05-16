@@ -3,8 +3,9 @@ import { fetchStoreMeta } from '@/lib/sheets';
 
 // store-meta changes rarely (only when a store's Shopify plan changes), so
 // a longer cache is fine. Apps Script refreshes the underlying tab daily.
+// Plain ISR via `revalidate` — no `force-dynamic`, which would override the
+// cache config and make every request hit Sheets.
 export const revalidate = 3600;
-export const dynamic = 'force-dynamic';
 
 function userFacingError(message: string): string {
   if (/permission|forbidden|403/i.test(message)) {

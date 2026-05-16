@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
 import { fetchDashboardState, upsertDashboardStateKey } from '@/lib/sheets';
 
-// State updates are user-driven (clicking save in BillingSettings, etc.) — no
-// hard need to revalidate aggressively. We let the client poll us every ~30s.
-export const dynamic = 'force-dynamic';
+// Route handler — dynamic by default (no static generation). We rely on the
+// explicit Cache-Control header below for short CDN dedupe within the polling
+// window. Removed `force-dynamic` because it conflicted with that header.
 
 /**
  * Translate raw Google API errors into Hebrew messages safe to render in the
