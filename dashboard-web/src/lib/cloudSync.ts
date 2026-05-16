@@ -100,6 +100,14 @@ export function getSyncState(): SyncState {
  * Push a key's value up to the cloud. Debounced 400ms so rapid edits (e.g.
  * typing in an inline form) coalesce into one POST. Fire-and-forget — never
  * throws; the user shouldn't see UI errors for a sync failure.
+ *
+ * We mark `lastPushAt` immediately (not inside the timer callback) so a
+ * `hydrateFromCloud()` racing the debounce window — triggered by a 30s poll
+ * or a window-focus refresh — can detect we have an uncommitted local edit
+ * and not stomp it with a stale cloud value. Without this, the focus listener
+ * could overwrite the user's just-typed input before the debounce fires,
+ * then the debounced push would re-upload the now-overwritten stale value
+ * to cloud (losing the edit on server too).
  */
 export function pushCloudKey(localStorageKey: string, value: unknown): void {
   if (typeof window === 'undefined') return;
@@ -114,8 +122,14 @@ export function pushCloudKey(localStorageKey: string, value: unknown): void {
     clearTimeout(pendingTimers[localStorageKey]);
   }
 
+  // Mark immediately so concurrent hydrates inside the debounce window
+  // recognize this key as locally dirty and skip the overwrite.
+  lastPushAt[localStorageKey] = Date.now();
+
   pendingTimers[localStorageKey] = setTimeout(() => {
     pendingTimers[localStorageKey] = undefined;
+    // Refresh the marker on actual send so the post-send grace window
+    // (HYDRATE_GRACE_MS) measures from the send, not from the edit.
     lastPushAt[localStorageKey] = Date.now();
     void postWithRetry(cloudKey, value);
   }, 400);
@@ -191,8 +205,13 @@ export async function hydrateFromCloud(): Promise<boolean> {
     const cloudKey = stripPrefix(lsKey);
     const cloudVal = cloud[cloudKey];
 
-    // Skip stomping local state if we recently pushed (cloud may still be
-    // serving a slightly stale value due to caching).
+    // Skip stomping local state if (a) a debounce timer is still pending for
+    // this key — the local value is dirty and not yet on the server, so the
+    // cloud value is guaranteed stale; or (b) we recently pushed and cloud
+    // may still be serving the pre-push value due to caching.
+    if (pendingTimers[lsKey]) {
+      continue;
+    }
     if (lastPushAt[lsKey] && Date.now() - lastPushAt[lsKey] < HYDRATE_GRACE_MS) {
       continue;
     }
