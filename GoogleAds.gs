@@ -35,7 +35,7 @@ function getGoogleAdsSpend(storeId, dateStr) {
   var res = UrlFetchApp.fetch(url, {
     method: 'post',
     headers: headers,
-    payload: JSON.stringify({ query: query, pageSize: 1000 }),
+    payload: JSON.stringify({ query: query }),
     muteHttpExceptions: true
   });
   var code = res.getResponseCode();
