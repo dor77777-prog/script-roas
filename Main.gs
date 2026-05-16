@@ -8,12 +8,12 @@
  */
 function setupAll() {
   const ss = ensureSpreadsheet();
-  setupDashboard();
   installDailyTrigger();
   Logger.log('================================');
   Logger.log('Setup complete.');
   Logger.log('Spreadsheet URL: ' + ss.getUrl());
   Logger.log('Daily trigger: every day at 00:05 Asia/Jerusalem');
+  Logger.log('Web Dashboard: deployed separately at Vercel (see dashboard-web/)');
   Logger.log('================================');
   return ss.getUrl();
 }
@@ -64,18 +64,6 @@ function removeDailyTrigger() {
  * הצגת תפריט בתוך הגיליון (נטען כשפותחים את הגיליון).
  * עובד רק אם הגיליון נפתח אחרי שהפעלת setupCreateSheet ופתחת אותו לפחות פעם אחת.
  */
-/**
- * Simple trigger - רץ בכל עריכה בגיליון.
- * מנתב לטיפול הספציפי בדשבורד.
- */
-function onEdit(e) {
-  try {
-    dashboardOnEdit_(e);
-  } catch (err) {
-    Logger.log('onEdit dispatch error: ' + (err && err.message ? err.message : err));
-  }
-}
-
 function onOpen() {
   try {
     SpreadsheetApp.getUi().createMenu('ROAS')
@@ -85,9 +73,6 @@ function onOpen() {
       .addSeparator()
       .addItem('התקן טריגר יומי (00:05) + הרצה מיידית', 'installDailyTrigger')
       .addItem('הסר טריגר יומי', 'removeDailyTrigger')
-      .addSeparator()
-      .addItem('בנה/רענן דשבורד', 'setupDashboard')
-      .addItem('התקן טריגר לבורר התקופה', 'installDashboardEditTrigger')
       .addSeparator()
       .addItem('הסתר טאבים עזריים', 'hideAuxiliaryTabs')
       .addItem('הצג טאבים עזריים (debug)', 'showAuxiliaryTabs')
