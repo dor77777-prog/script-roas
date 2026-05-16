@@ -32,6 +32,7 @@ import { GoalTracker } from './GoalTracker';
 import { AiReportButton } from './AiReportButton';
 import { HeroOverview } from './HeroOverview';
 import { PnLBreakdown } from './PnLBreakdown';
+import { BillingSettings } from './BillingSettings';
 import { CommandPalette } from './CommandPalette';
 import { TabNav, type TabDef } from './TabNav';
 import { SectionIntro } from './SectionIntro';
@@ -256,7 +257,12 @@ function HomeTab({
       <KpiCards current={filtered.curAgg} previous={filtered.prevAgg} series={filtered.cur} />
 
       {/* ===== Full P&L breakdown — every cost line, true net profit ===== */}
-      <PnLBreakdown current={filtered.curAgg} storeNames={filtered.visibleStores} />
+      <div className="space-y-3">
+        <div className="flex justify-end">
+          <BillingSettings storeNames={data.stores} />
+        </div>
+        <PnLBreakdown current={filtered.curAgg} storeNames={filtered.visibleStores} />
+      </div>
 
       {/* ===== Per-store cards ===== */}
       <SectionIntro

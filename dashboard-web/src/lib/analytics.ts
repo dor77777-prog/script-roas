@@ -1,5 +1,6 @@
 import type { DailyRow, DateRange } from './types';
-import { TRANSACTION_FEES_RATE, prorateFixedCosts } from './costs';
+import { TRANSACTION_FEES_RATE } from './costs';
+import { billingForRange } from './billing';
 
 /**
  * הערכת עלות סחורה (COGS) — אחוז קבוע מההכנסה היומית.
@@ -54,6 +55,8 @@ export function aggregate(rows: DailyRow[]): Aggregate {
   let revenue = 0, spend = 0, fbSpend = 0, gaSpend = 0, cogs = 0, cogsRows = 0;
   const stores = new Set<string>();
   const dates = new Set<string>();
+  let minDate: string | null = null;
+  let maxDate: string | null = null;
   for (const r of rows) {
     revenue += r.revenue;
     spend += r.totalSpend;
@@ -63,15 +66,21 @@ export function aggregate(rows: DailyRow[]): Aggregate {
     if (r.hasCogs) cogsRows++;
     stores.add(r.storeName);
     dates.add(r.date);
+    if (!minDate || r.date < minDate) minDate = r.date;
+    if (!maxDate || r.date > maxDate) maxDate = r.date;
   }
   const roas = spend > 0 ? revenue / spend : 0;
   const transactionFees = revenue * TRANSACTION_FEES_RATE;
-  // Fixed costs (Shopify plan + apps + email) get prorated across the days
-  // the aggregate covers, applied to every store that was active. So a
-  // 16-day, 3-store view bills 16/30 of the monthly fixed costs × 3.
+  // Fixed costs now come from the billing data layer (recurring + one-time
+  // entries the user manages via the BillingSettings UI). When the user
+  // hasn't entered any data yet, the layer returns 0 and the seed UI
+  // prompts them to set it up.
   const storeNames = Array.from(stores);
   const daysCovered = dates.size;
-  const fixedCosts = prorateFixedCosts(storeNames, daysCovered);
+  const billing = minDate && maxDate
+    ? billingForRange({ from: minDate, to: maxDate, storeNames })
+    : { total: 0 };
+  const fixedCosts = billing.total;
   const trueNetProfit = revenue - spend - cogs - transactionFees - fixedCosts;
   return {
     revenue,

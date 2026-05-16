@@ -1,0 +1,889 @@
+'use client';
+
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Receipt,
+  Plus,
+  Trash2,
+  Upload,
+  X,
+  Edit3,
+  Check,
+  AlertCircle,
+  ChevronDown,
+  Settings as SettingsIcon,
+} from 'lucide-react';
+import { cn, formatCurrency } from '@/lib/utils';
+import {
+  generateId,
+  parseShopifyBillsCsv,
+  readOneTime,
+  readRecurring,
+  seedBillingIfEmpty,
+  writeOneTime,
+  writeRecurring,
+  type CostSource,
+  type OneTimeCost,
+  type RecurringCost,
+} from '@/lib/billing';
+
+/**
+ * Billing settings panel — manage recurring monthly costs (Shopify plan,
+ * external apps like Klaviyo, email service) + one-time / overage charges.
+ *
+ * Open via the trigger pill. Inside:
+ *   - Two tabs: "חודשי קבוע" (recurring) and "חיובים חד-פעמיים" (one-off)
+ *   - Drag-and-drop / paste Shopify Bills CSV to bulk-import one-time charges
+ *   - Edit any row inline
+ *   - Delete with confirmation
+ *
+ * Storage: localStorage via lib/billing helpers. Future: same shapes flow
+ * over the wire when we move to multi-device sync.
+ */
+
+type Props = {
+  storeNames: string[];
+};
+
+type Tab = 'recurring' | 'onetime' | 'import';
+
+const SOURCE_LABEL: Record<CostSource, string> = {
+  'shopify-plan': 'Shopify Plan',
+  'shopify-app':  'אפליקציה דרך Shopify',
+  'external-app': 'אפליקציה חיצונית',
+  email:          'שירות אימייל',
+  usage:          'חיוב סף / overage',
+  'one-off':      'חד-פעמי',
+  other:          'אחר',
+};
+
+const SOURCE_COLOR: Record<CostSource, string> = {
+  'shopify-plan': 'bg-primary/10 text-primary',
+  'shopify-app':  'bg-blue-100 text-blue-700',
+  'external-app': 'bg-purple-100 text-purple-700',
+  email:          'bg-amber-100 text-amber-700',
+  usage:          'bg-roas-orangeBg text-roas-orange',
+  'one-off':      'bg-text-muted/15 text-text-secondary',
+  other:          'bg-text-muted/15 text-text-secondary',
+};
+
+export function BillingSettings({ storeNames }: Props) {
+  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<Tab>('recurring');
+  const [recurring, setRecurring] = useState<RecurringCost[]>([]);
+  const [oneTime, setOneTime] = useState<OneTimeCost[]>([]);
+
+  // Hydrate from storage on mount + seed if empty so user has something to edit.
+  useEffect(() => {
+    seedBillingIfEmpty(storeNames);
+    setRecurring(readRecurring());
+    setOneTime(readOneTime());
+    function onChange() {
+      setRecurring(readRecurring());
+      setOneTime(readOneTime());
+    }
+    window.addEventListener('roas-billing-changed', onChange);
+    return () => window.removeEventListener('roas-billing-changed', onChange);
+  }, [storeNames]);
+
+  // Counts for the trigger pill subtitle.
+  const totalMonthly = useMemo(
+    () => recurring.filter(r => r.active).reduce((s, r) => s + r.monthlyCAD, 0),
+    [recurring],
+  );
+
+  function persistRecurring(next: RecurringCost[]) {
+    setRecurring(next);
+    writeRecurring(next);
+  }
+  function persistOneTime(next: OneTimeCost[]) {
+    setOneTime(next);
+    writeOneTime(next);
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        className={cn(
+          'inline-flex items-center gap-1.5 sm:gap-2 rounded-lg',
+          'bg-surface hover:bg-surfaceMuted text-text-secondary hover:text-text-primary',
+          'border border-borderSubtle hover:border-border',
+          'px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium transition-colors shrink-0',
+        )}
+        title="הגדרות עלויות חודשיות"
+      >
+        <SettingsIcon size={14} />
+        <span>עלויות חודשיות</span>
+        <span className="hidden sm:inline text-text-muted tabular-nums">
+          ({recurring.filter(r => r.active).length} פעילות · CAD {formatCurrency(totalMonthly)})
+        </span>
+      </button>
+
+      {open && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-text-primary/35 backdrop-blur-sm animate-fade-in"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            dir="rtl"
+            className="bg-surface w-full sm:max-w-3xl sm:mx-4 rounded-t-2xl sm:rounded-2xl shadow-elevated border border-borderSubtle max-h-[92vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-borderSubtle">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary shrink-0">
+                  <Receipt size={16} />
+                </span>
+                <div className="min-w-0">
+                  <h2 className="text-sm sm:text-base font-semibold text-text-primary tracking-tight truncate">
+                    עלויות חודשיות
+                  </h2>
+                  <p className="text-[10px] sm:text-xs text-text-muted mt-0.5 truncate">
+                    Shopify plan, אפליקציות, שירותים — מתעדכנים ב-P&amp;L האמיתי
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setOpen(false)}
+                className="p-1.5 rounded hover:bg-surfaceMuted text-text-muted hover:text-text-primary"
+                aria-label="סגור"
+              >
+                <X size={18} />
+              </button>
+            </header>
+
+            {/* Tabs */}
+            <nav className="px-4 sm:px-5 py-2 border-b border-borderSubtle flex items-center gap-1">
+              {([
+                { key: 'recurring' as Tab, label: 'חודשי קבוע', count: recurring.length },
+                { key: 'onetime' as Tab, label: 'חד-פעמיים', count: oneTime.length },
+                { key: 'import' as Tab, label: 'ייבא CSV מ-Shopify', count: 0 },
+              ]).map(t => (
+                <button
+                  key={t.key}
+                  onClick={() => setTab(t.key)}
+                  className={cn(
+                    'px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors',
+                    tab === t.key
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-text-secondary hover:bg-surfaceMuted',
+                  )}
+                >
+                  {t.label}
+                  {t.count > 0 && (
+                    <span className="ml-1.5 inline-block text-[10px] tabular-nums text-text-muted">
+                      ({t.count})
+                    </span>
+                  )}
+                </button>
+              ))}
+            </nav>
+
+            {/* Body */}
+            <div className="flex-1 overflow-y-auto p-4 sm:p-5">
+              {tab === 'recurring' && (
+                <RecurringTab
+                  items={recurring}
+                  storeNames={storeNames}
+                  onChange={persistRecurring}
+                />
+              )}
+              {tab === 'onetime' && (
+                <OneTimeTab
+                  items={oneTime}
+                  storeNames={storeNames}
+                  onChange={persistOneTime}
+                />
+              )}
+              {tab === 'import' && (
+                <ImportTab
+                  storeNames={storeNames}
+                  onImported={imported => {
+                    persistOneTime([...oneTime, ...imported]);
+                    setTab('onetime');
+                  }}
+                />
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+// ============================================================================
+// Recurring tab — list of monthly subscriptions
+// ============================================================================
+
+function RecurringTab({
+  items,
+  storeNames,
+  onChange,
+}: {
+  items: RecurringCost[];
+  storeNames: string[];
+  onChange: (next: RecurringCost[]) => void;
+}) {
+  const [editing, setEditing] = useState<string | null>(null);
+
+  function addNew() {
+    const fresh: RecurringCost = {
+      id: generateId(),
+      store: storeNames[0] ?? 'All',
+      name: '',
+      source: 'external-app',
+      monthlyCAD: 0,
+      active: true,
+    };
+    onChange([fresh, ...items]);
+    setEditing(fresh.id);
+  }
+  function update(id: string, patch: Partial<RecurringCost>) {
+    onChange(items.map(r => (r.id === id ? { ...r, ...patch } : r)));
+  }
+  function remove(id: string) {
+    onChange(items.filter(r => r.id !== id));
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs sm:text-sm text-text-secondary leading-relaxed">
+          מנויים חודשיים שחוזרים אוטומטית בכל חודש. Shopify plan, אפליקציות
+          חיצוניות (Klaviyo וכו&apos;), שירות אימייל. כל שורה פעילה תיכלל ב-P&amp;L.
+        </p>
+        <button
+          onClick={addNew}
+          className="inline-flex items-center gap-1 rounded-lg bg-primary text-white px-3 py-1.5 text-xs sm:text-sm font-semibold hover:bg-primary-dark shrink-0"
+        >
+          <Plus size={13} />
+          הוסף
+        </button>
+      </div>
+
+      {items.length === 0 ? (
+        <div className="text-center py-10 text-text-muted text-sm">
+          <Receipt size={28} className="mx-auto mb-2 text-text-muted/60" />
+          <div>אין מנויים חודשיים. לחץ "הוסף" כדי להתחיל.</div>
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {items.map(r => (
+            <li
+              key={r.id}
+              className={cn(
+                'rounded-lg border bg-surface',
+                r.active ? 'border-borderSubtle' : 'border-borderSubtle/50 opacity-60',
+              )}
+            >
+              {editing === r.id ? (
+                <RecurringEditForm
+                  item={r}
+                  storeNames={storeNames}
+                  onSave={patch => {
+                    update(r.id, patch);
+                    setEditing(null);
+                  }}
+                  onCancel={() => {
+                    if (!r.name) remove(r.id);
+                    setEditing(null);
+                  }}
+                />
+              ) : (
+                <div className="flex items-center gap-3 p-3">
+                  <input
+                    type="checkbox"
+                    checked={r.active}
+                    onChange={e => update(r.id, { active: e.target.checked })}
+                    className="w-4 h-4 rounded text-primary cursor-pointer"
+                    title={r.active ? 'פעיל' : 'מושעה'}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-text-primary">
+                        {r.name || '(ללא שם)'}
+                      </span>
+                      <span
+                        className={cn(
+                          'inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded',
+                          SOURCE_COLOR[r.source],
+                        )}
+                      >
+                        {SOURCE_LABEL[r.source]}
+                      </span>
+                      <span className="text-[11px] text-text-muted">
+                        {r.store === 'All' ? 'כל החנויות' : r.store}
+                      </span>
+                    </div>
+                    {r.notes && (
+                      <div className="text-[11px] text-text-muted mt-0.5">{r.notes}</div>
+                    )}
+                  </div>
+                  <div className="text-end shrink-0">
+                    <div className="text-sm font-bold tabular-nums text-text-primary">
+                      <span className="text-[10px] text-text-muted font-medium ml-1">CAD</span>
+                      {formatCurrency(r.monthlyCAD)}
+                    </div>
+                    <div className="text-[10px] text-text-muted">/חודש</div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => setEditing(r.id)}
+                      className="p-1.5 rounded text-text-muted hover:text-text-primary hover:bg-surfaceMuted"
+                      aria-label="ערוך"
+                    >
+                      <Edit3 size={14} />
+                    </button>
+                    <button
+                      onClick={() => remove(r.id)}
+                      className="p-1.5 rounded text-text-muted hover:text-roas-red hover:bg-roas-redBg"
+                      aria-label="מחק"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function RecurringEditForm({
+  item,
+  storeNames,
+  onSave,
+  onCancel,
+}: {
+  item: RecurringCost;
+  storeNames: string[];
+  onSave: (patch: Partial<RecurringCost>) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(item.name);
+  const [store, setStore] = useState(item.store);
+  const [source, setSource] = useState<CostSource>(item.source);
+  const [monthlyCAD, setMonthlyCAD] = useState(String(item.monthlyCAD));
+  const [notes, setNotes] = useState(item.notes ?? '');
+
+  function commit() {
+    const amount = parseFloat(monthlyCAD.replace(/,/g, ''));
+    onSave({
+      name: name.trim() || '(ללא שם)',
+      store,
+      source,
+      monthlyCAD: Number.isFinite(amount) ? amount : 0,
+      notes: notes.trim() || undefined,
+    });
+  }
+
+  return (
+    <div className="p-3 space-y-2.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div>
+          <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium">שם</label>
+          <input
+            value={name}
+            onChange={e => setName(e.target.value)}
+            placeholder="Klaviyo, Shopify Plan, וכו'"
+            autoFocus
+            onKeyDown={e => {
+              if (e.key === 'Enter') commit();
+              if (e.key === 'Escape') onCancel();
+            }}
+            className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm focus:outline-none focus:border-primary focus:shadow-focus"
+          />
+        </div>
+        <div>
+          <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium">חנות</label>
+          <select
+            value={store}
+            onChange={e => setStore(e.target.value)}
+            className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm focus:outline-none focus:border-primary focus:shadow-focus"
+          >
+            <option value="All">כל החנויות</option>
+            {storeNames.map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium">סוג</label>
+          <select
+            value={source}
+            onChange={e => setSource(e.target.value as CostSource)}
+            className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm focus:outline-none focus:border-primary focus:shadow-focus"
+          >
+            {Object.entries(SOURCE_LABEL).map(([k, label]) => (
+              <option key={k} value={k}>{label}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium">סכום חודשי (CAD)</label>
+          <input
+            value={monthlyCAD}
+            onChange={e => setMonthlyCAD(e.target.value.replace(/[^\d.,]/g, ''))}
+            inputMode="numeric"
+            placeholder="60"
+            onKeyDown={e => {
+              if (e.key === 'Enter') commit();
+              if (e.key === 'Escape') onCancel();
+            }}
+            className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm focus:outline-none focus:border-primary focus:shadow-focus tabular-nums"
+          />
+        </div>
+      </div>
+      <div>
+        <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium">הערות (אופציונלי)</label>
+        <input
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+          placeholder="לדוגמה: Klaviyo Pro plan, מתחיל מ-12.5%"
+          className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm focus:outline-none focus:border-primary focus:shadow-focus"
+        />
+      </div>
+      <div className="flex items-center gap-2 pt-1">
+        <button
+          onClick={commit}
+          className="inline-flex items-center gap-1 rounded-lg bg-primary text-white px-3 py-1.5 text-xs sm:text-sm font-semibold hover:bg-primary-dark"
+        >
+          <Check size={13} />
+          שמור
+        </button>
+        <button
+          onClick={onCancel}
+          className="inline-flex items-center gap-1 rounded-lg border border-border text-text-secondary hover:text-text-primary px-3 py-1.5 text-xs sm:text-sm"
+        >
+          ביטול
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// One-time tab
+// ============================================================================
+
+function OneTimeTab({
+  items,
+  storeNames,
+  onChange,
+}: {
+  items: OneTimeCost[];
+  storeNames: string[];
+  onChange: (next: OneTimeCost[]) => void;
+}) {
+  const [editing, setEditing] = useState<string | null>(null);
+
+  function addNew() {
+    const fresh: OneTimeCost = {
+      id: generateId(),
+      date: new Date().toISOString().slice(0, 10),
+      store: storeNames[0] ?? 'All',
+      description: '',
+      source: 'one-off',
+      amountCAD: 0,
+    };
+    onChange([fresh, ...items]);
+    setEditing(fresh.id);
+  }
+  function remove(id: string) {
+    onChange(items.filter(r => r.id !== id));
+  }
+  function update(id: string, patch: Partial<OneTimeCost>) {
+    onChange(items.map(r => (r.id === id ? { ...r, ...patch } : r)));
+  }
+
+  // Sort newest first.
+  const sorted = useMemo(
+    () => [...items].sort((a, b) => b.date.localeCompare(a.date)),
+    [items],
+  );
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-xs sm:text-sm text-text-secondary leading-relaxed">
+          חיובים חד-פעמיים: סף-חיוב של Shopify Email, התקנת אפליקציה, ייעוץ, וכל
+          הוצאה שלא חוזרת בכל חודש.
+        </p>
+        <button
+          onClick={addNew}
+          className="inline-flex items-center gap-1 rounded-lg bg-primary text-white px-3 py-1.5 text-xs sm:text-sm font-semibold hover:bg-primary-dark shrink-0"
+        >
+          <Plus size={13} />
+          הוסף
+        </button>
+      </div>
+
+      {sorted.length === 0 ? (
+        <div className="text-center py-10 text-text-muted text-sm">
+          <Receipt size={28} className="mx-auto mb-2 text-text-muted/60" />
+          <div>אין חיובים חד-פעמיים. ייבא CSV מ-Shopify ⬅️ או הוסף ידנית.</div>
+        </div>
+      ) : (
+        <ul className="space-y-2">
+          {sorted.map(r => (
+            <li key={r.id} className="rounded-lg border border-borderSubtle bg-surface">
+              {editing === r.id ? (
+                <OneTimeEditForm
+                  item={r}
+                  storeNames={storeNames}
+                  onSave={patch => {
+                    update(r.id, patch);
+                    setEditing(null);
+                  }}
+                  onCancel={() => {
+                    if (!r.description) remove(r.id);
+                    setEditing(null);
+                  }}
+                />
+              ) : (
+                <div className="flex items-center gap-3 p-3">
+                  <div className="text-[10px] sm:text-[11px] text-text-muted tabular-nums shrink-0 text-center min-w-[64px]">
+                    <div className="font-medium text-text-secondary">{r.date.slice(5)}</div>
+                    <div>{r.date.slice(0, 4)}</div>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-text-primary">
+                        {r.description || '(ללא תיאור)'}
+                      </span>
+                      <span
+                        className={cn(
+                          'inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded',
+                          SOURCE_COLOR[r.source],
+                        )}
+                      >
+                        {SOURCE_LABEL[r.source]}
+                      </span>
+                      <span className="text-[11px] text-text-muted">
+                        {r.store === 'All' ? 'כל החנויות' : r.store}
+                      </span>
+                    </div>
+                    {r.notes && (
+                      <div className="text-[11px] text-text-muted mt-0.5">{r.notes}</div>
+                    )}
+                  </div>
+                  <div className="text-end shrink-0">
+                    <div className="text-sm font-bold tabular-nums text-text-primary">
+                      <span className="text-[10px] text-text-muted font-medium ml-1">CAD</span>
+                      {formatCurrency(r.amountCAD)}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => setEditing(r.id)}
+                      className="p-1.5 rounded text-text-muted hover:text-text-primary hover:bg-surfaceMuted"
+                      aria-label="ערוך"
+                    >
+                      <Edit3 size={14} />
+                    </button>
+                    <button
+                      onClick={() => remove(r.id)}
+                      className="p-1.5 rounded text-text-muted hover:text-roas-red hover:bg-roas-redBg"
+                      aria-label="מחק"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function OneTimeEditForm({
+  item,
+  storeNames,
+  onSave,
+  onCancel,
+}: {
+  item: OneTimeCost;
+  storeNames: string[];
+  onSave: (patch: Partial<OneTimeCost>) => void;
+  onCancel: () => void;
+}) {
+  const [date, setDate] = useState(item.date);
+  const [store, setStore] = useState(item.store);
+  const [source, setSource] = useState<CostSource>(item.source);
+  const [description, setDescription] = useState(item.description);
+  const [amountCAD, setAmountCAD] = useState(String(item.amountCAD));
+  const [notes, setNotes] = useState(item.notes ?? '');
+
+  function commit() {
+    const amount = parseFloat(amountCAD.replace(/,/g, ''));
+    onSave({
+      date,
+      store,
+      source,
+      description: description.trim() || '(ללא תיאור)',
+      amountCAD: Number.isFinite(amount) ? amount : 0,
+      notes: notes.trim() || undefined,
+    });
+  }
+
+  return (
+    <div className="p-3 space-y-2.5">
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium">תאריך</label>
+          <input
+            type="date"
+            value={date}
+            onChange={e => setDate(e.target.value)}
+            className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm tabular-nums focus:outline-none focus:border-primary focus:shadow-focus"
+          />
+        </div>
+        <div>
+          <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium">חנות</label>
+          <select
+            value={store}
+            onChange={e => setStore(e.target.value)}
+            className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm focus:outline-none focus:border-primary focus:shadow-focus"
+          >
+            <option value="All">כל החנויות</option>
+            {storeNames.map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div>
+        <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium">תיאור</label>
+        <input
+          value={description}
+          onChange={e => setDescription(e.target.value)}
+          autoFocus
+          placeholder="לדוגמה: Shopify Email overage"
+          onKeyDown={e => {
+            if (e.key === 'Enter') commit();
+            if (e.key === 'Escape') onCancel();
+          }}
+          className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm focus:outline-none focus:border-primary focus:shadow-focus"
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium">סוג</label>
+          <select
+            value={source}
+            onChange={e => setSource(e.target.value as CostSource)}
+            className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm focus:outline-none focus:border-primary focus:shadow-focus"
+          >
+            {Object.entries(SOURCE_LABEL).map(([k, label]) => (
+              <option key={k} value={k}>{label}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium">סכום (CAD)</label>
+          <input
+            value={amountCAD}
+            onChange={e => setAmountCAD(e.target.value.replace(/[^\d.,]/g, ''))}
+            inputMode="numeric"
+            placeholder="25"
+            onKeyDown={e => {
+              if (e.key === 'Enter') commit();
+              if (e.key === 'Escape') onCancel();
+            }}
+            className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm focus:outline-none focus:border-primary focus:shadow-focus tabular-nums"
+          />
+        </div>
+      </div>
+      <div>
+        <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium">הערות (אופציונלי)</label>
+        <input
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+          className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm focus:outline-none focus:border-primary focus:shadow-focus"
+        />
+      </div>
+      <div className="flex items-center gap-2 pt-1">
+        <button
+          onClick={commit}
+          className="inline-flex items-center gap-1 rounded-lg bg-primary text-white px-3 py-1.5 text-xs sm:text-sm font-semibold hover:bg-primary-dark"
+        >
+          <Check size={13} />
+          שמור
+        </button>
+        <button
+          onClick={onCancel}
+          className="inline-flex items-center gap-1 rounded-lg border border-border text-text-secondary hover:text-text-primary px-3 py-1.5 text-xs sm:text-sm"
+        >
+          ביטול
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// CSV Import tab
+// ============================================================================
+
+function ImportTab({
+  storeNames,
+  onImported,
+}: {
+  storeNames: string[];
+  onImported: (items: OneTimeCost[]) => void;
+}) {
+  const [csv, setCsv] = useState('');
+  const [defaultStore, setDefaultStore] = useState(storeNames[0] ?? 'All');
+  const [preview, setPreview] = useState<OneTimeCost[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
+  const fileInput = useRef<HTMLInputElement | null>(null);
+
+  function parse() {
+    const { parsed, warnings } = parseShopifyBillsCsv(csv, defaultStore);
+    setPreview(parsed);
+    setWarnings(warnings);
+  }
+
+  function handleFile(file: File) {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = typeof reader.result === 'string' ? reader.result : '';
+      setCsv(text);
+      const { parsed, warnings } = parseShopifyBillsCsv(text, defaultStore);
+      setPreview(parsed);
+      setWarnings(warnings);
+    };
+    reader.readAsText(file);
+  }
+
+  function confirm() {
+    onImported(preview);
+    setCsv('');
+    setPreview([]);
+    setWarnings([]);
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg bg-surfaceMuted/60 border border-borderSubtle p-3 text-xs sm:text-sm text-text-secondary leading-relaxed">
+        <p className="mb-1">
+          <strong>איך מוציאים CSV מ-Shopify:</strong>
+        </p>
+        <ol className="list-decimal list-inside space-y-0.5 mr-3">
+          <li>Shopify Admin → Settings → Billing → Bill history</li>
+          <li>בחר את החודש הרצוי → לחץ &quot;Export&quot;</li>
+          <li>Shopify ישלח CSV למייל שלך</li>
+          <li>הורד את הקובץ מהמייל → גרור לכאן או הדבק</li>
+        </ol>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-end">
+        <div>
+          <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium">חנות יעד</label>
+          <select
+            value={defaultStore}
+            onChange={e => setDefaultStore(e.target.value)}
+            className="w-full rounded-lg border border-border bg-surface px-2.5 py-2 text-sm focus:outline-none focus:border-primary focus:shadow-focus"
+          >
+            {storeNames.map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+          <p className="text-[10px] text-text-muted mt-1">
+            כל החיובים שיובאו ישוייכו לחנות הזו (אפשר לערוך כל שורה ידנית אח&quot;כ).
+          </p>
+        </div>
+        <button
+          onClick={() => fileInput.current?.click()}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-white px-3 py-2 text-xs sm:text-sm font-semibold hover:bg-primary-dark"
+        >
+          <Upload size={14} />
+          בחר קובץ
+        </button>
+        <input
+          ref={fileInput}
+          type="file"
+          accept=".csv,text/csv"
+          className="hidden"
+          onChange={e => {
+            const f = e.target.files?.[0];
+            if (f) handleFile(f);
+          }}
+        />
+      </div>
+
+      <div>
+        <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium">או הדבק כאן את ה-CSV</label>
+        <textarea
+          value={csv}
+          onChange={e => setCsv(e.target.value)}
+          placeholder="Bill number,Issue date,Currency,Total,..."
+          rows={6}
+          dir="ltr"
+          className="w-full rounded-lg border border-border bg-surface px-2.5 py-2 text-xs font-mono leading-relaxed focus:outline-none focus:border-primary focus:shadow-focus"
+        />
+        <button
+          onClick={parse}
+          disabled={!csv.trim()}
+          className="mt-2 inline-flex items-center gap-1 rounded-lg bg-surface border border-border hover:border-primary/40 px-3 py-1.5 text-xs sm:text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          נתח
+        </button>
+      </div>
+
+      {warnings.length > 0 && (
+        <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 flex items-start gap-2">
+          <AlertCircle size={14} className="text-amber-700 shrink-0 mt-0.5" />
+          <div className="text-xs text-amber-900">
+            {warnings.map((w, i) => <div key={i}>{w}</div>)}
+          </div>
+        </div>
+      )}
+
+      {preview.length > 0 && (
+        <div className="rounded-lg border border-borderSubtle overflow-hidden">
+          <header className="flex items-center justify-between px-3 py-2 bg-surfaceMuted/60 border-b border-borderSubtle">
+            <span className="text-xs sm:text-sm font-semibold text-text-primary">
+              תצוגה מקדימה: {preview.length} שורות
+            </span>
+            <button
+              onClick={confirm}
+              className="inline-flex items-center gap-1 rounded-lg bg-primary text-white px-3 py-1.5 text-xs sm:text-sm font-semibold hover:bg-primary-dark"
+            >
+              <Check size={13} />
+              ייבא הכל
+            </button>
+          </header>
+          <ul className="divide-y divide-borderSubtle max-h-64 overflow-y-auto">
+            {preview.map(p => (
+              <li key={p.id} className="px-3 py-2 flex items-center gap-2">
+                <span className="text-[10px] text-text-muted tabular-nums min-w-[64px]">{p.date}</span>
+                <span className="flex-1 text-sm text-text-primary truncate">{p.description}</span>
+                <span
+                  className={cn(
+                    'text-[10px] font-semibold px-1.5 py-0.5 rounded',
+                    SOURCE_COLOR[p.source],
+                  )}
+                >
+                  {SOURCE_LABEL[p.source]}
+                </span>
+                <span className="text-xs font-semibold tabular-nums shrink-0">
+                  CAD {formatCurrency(p.amountCAD)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
