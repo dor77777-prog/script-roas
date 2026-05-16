@@ -45,15 +45,20 @@ function getMetaAdSetInsights(storeId, dateStr) {
     const body = JSON.parse(res.getContentText());
     const rows = (body && body.data) || [];
     for (const r of rows) {
+      const spend = parseFloat(r.spend || 0);
+      const impressions = parseInt(r.impressions || 0, 10);
+      // דלג על ad sets שלא היו פעילים ביום הזה (אין spend וגם אין חשיפות).
+      // קוצץ דרסטית את כמות השורות (מ-334 ל-~30-50 בפרקטיקה).
+      if (spend === 0 && impressions === 0) continue;
       const conv = extractMetaPurchases_(r);
       out.push({
         campaignId: r.campaign_id || '',
         campaignName: r.campaign_name || '',
         adSetId: r.adset_id || '',
         adSetName: r.adset_name || '',
-        spend: parseFloat(r.spend || 0),
+        spend: spend,
         currency: r.account_currency || 'ILS',
-        impressions: parseInt(r.impressions || 0, 10),
+        impressions: impressions,
         clicks: parseInt(r.clicks || 0, 10),
         conversions: conv.count,
         conversionValue: conv.value,

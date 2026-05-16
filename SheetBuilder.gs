@@ -653,10 +653,10 @@ function ensureCampaignRoasColorRules_(sheet) {
 
 /**
  * כותב שורות אד-סט לטאב הקמפיינים של חנות ליום נתון.
- * מוחק קודם שורות קיימות לאותו תאריך (idempotent - בטוח להריץ שוב).
+ * Idempotent - שורות קיימות לאותו תאריך נדרסות.
  *
- * rows: מערך של אובייקטים { date, platform, campaignId, campaignName,
- *       adSetId, adSetName, spendCad, impressions, clicks, conversions, conversionValueCad }
+ * אופטימיזציה: כל הפעולות ב-batch (קריאה אחת + כתיבה אחת), במקום deleteRow בלולאה.
+ * זה הופך את הריצה מ-30+ שניות ל-2-3 שניות גם עבור מאות שורות.
  */
 function writeCampaignRowsForDay(ss, storeId, dateStr, rows) {
   const tabName = campaignTabName_(storeId);
@@ -668,32 +668,26 @@ function writeCampaignRowsForDay(ss, storeId, dateStr, rows) {
   ensureCampaignTabHeaders_(sh);
   ensureCampaignRoasColorRules_(sh);
 
-  // מחק שורות קיימות לאותו תאריך
+  // שלב 1: קרא את כל הנתונים הקיימים (חוץ מכותרת)
   const lastRow = sh.getLastRow();
+  let keptRows = [];
   if (lastRow > 1) {
-    const dates = sh.getRange(2, 1, lastRow - 1, 1).getValues();
-    const toDelete = [];
-    for (let i = 0; i < dates.length; i++) {
-      const v = dates[i][0];
+    const allExisting = sh.getRange(2, 1, lastRow - 1, CAMPAIGN_HEADERS.length).getValues();
+    keptRows = allExisting.filter(r => {
+      const v = r[0];
       let key = null;
       if (v instanceof Date && !isNaN(v.getTime())) {
         key = Utilities.formatDate(v, TZ, 'yyyy-MM-dd');
       } else if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
         key = v;
       }
-      if (key === dateStr) toDelete.push(i + 2);
-    }
-    for (let i = toDelete.length - 1; i >= 0; i--) {
-      sh.deleteRow(toDelete[i]);
-    }
+      return key !== dateStr && key !== null; // השאר רק שורות מתאריכים אחרים
+    });
   }
 
-  if (!rows || rows.length === 0) return;
-
-  // הוסף שורות חדשות
-  const startRow = sh.getLastRow() + 1;
-  const data = rows.map(r => [
-    r.date,
+  // שלב 2: בנה את השורות החדשות
+  const newRowsArr = (rows || []).map(r => [
+    parseYMD_(r.date),
     r.platform,
     r.campaignId || '',
     r.campaignName || '',
@@ -704,24 +698,34 @@ function writeCampaignRowsForDay(ss, storeId, dateStr, rows) {
     parseInt(r.clicks || 0, 10),
     round2_(r.conversions || 0),
     round2_(r.conversionValueCad || 0),
-    '',  // ROAS - יומלא כנוסחה
+    '', // ROAS - נוסחה
   ]);
-  sh.getRange(startRow, 1, data.length, CAMPAIGN_HEADERS.length).setValues(data);
 
-  // פורמטים
-  sh.getRange(startRow, 1, data.length, 1).setNumberFormat('yyyy-mm-dd').setHorizontalAlignment('center');
-  sh.getRange(startRow, 7, data.length, 1).setNumberFormat('#,##0.00');   // Spend
-  sh.getRange(startRow, 8, data.length, 1).setNumberFormat('#,##0');       // Impressions
-  sh.getRange(startRow, 9, data.length, 1).setNumberFormat('#,##0');       // Clicks
-  sh.getRange(startRow, 10, data.length, 1).setNumberFormat('#,##0.00');   // Conversions
-  sh.getRange(startRow, 11, data.length, 1).setNumberFormat('#,##0.00');   // Conv value
-  sh.getRange(startRow, 12, data.length, 1).setNumberFormat('0.00').setHorizontalAlignment('center');
+  const combined = keptRows.concat(newRowsArr);
 
-  // ROAS = ערך המרות / יצא (לכל שורה)
-  for (let i = 0; i < data.length; i++) {
-    const row = startRow + i;
-    sh.getRange(row, 12).setFormula(`=IFERROR(K${row}/G${row}, "")`);
+  // שלב 3: נקה את כל אזור הנתונים ביעילות
+  if (lastRow > 1) {
+    sh.getRange(2, 1, lastRow - 1, CAMPAIGN_HEADERS.length).clearContent();
   }
+
+  if (combined.length === 0) return;
+
+  // שלב 4: כתוב הכל בכתיבה אחת
+  sh.getRange(2, 1, combined.length, CAMPAIGN_HEADERS.length).setValues(combined);
+
+  // שלב 5: פורמטים על כל אזור הנתונים בבת אחת
+  sh.getRange(2, 1, combined.length, 1).setNumberFormat('yyyy-mm-dd').setHorizontalAlignment('center');
+  sh.getRange(2, 7, combined.length, 1).setNumberFormat('#,##0.00');     // Spend
+  sh.getRange(2, 8, combined.length, 2).setNumberFormat('#,##0');         // Impressions, Clicks
+  sh.getRange(2, 10, combined.length, 2).setNumberFormat('#,##0.00');     // Conversions, Conv Value
+  sh.getRange(2, 12, combined.length, 1).setNumberFormat('0.00').setHorizontalAlignment('center');
+
+  // שלב 6: נוסחאות ROAS ב-batch אחד
+  const formulas = combined.map((_, i) => {
+    const r = 2 + i;
+    return [`=IFERROR(K${r}/G${r}, "")`];
+  });
+  sh.getRange(2, 12, combined.length, 1).setFormulas(formulas);
 }
 
 // ============================================================================
