@@ -37,6 +37,7 @@ import { AnnotationsPanel } from './AnnotationsPanel';
 import { CommandPalette } from './CommandPalette';
 import { TabNav, type TabDef } from './TabNav';
 import { SectionIntro } from './SectionIntro';
+import { CloudSync } from './CloudSync';
 import { readDashboardState, syncUrl } from '@/lib/urlState';
 
 const fetcher = async (url: string) => {
@@ -118,6 +119,9 @@ export function Dashboard() {
 
   return (
     <div dir="rtl" className="min-h-screen bg-background">
+      {/* Keeps billing / annotations / goal / insight-states in sync across
+          devices and partners by mirroring localStorage to Google Sheets. */}
+      <CloudSync />
       <Header
         isRefreshing={isValidating}
         onRefresh={() => mutate()}

@@ -1,3 +1,5 @@
+import { pushCloudKey } from './cloudSync';
+
 /**
  * Activity annotations — user-logged events overlaid on charts.
  *
@@ -84,6 +86,7 @@ export function writeAnnotations(items: Annotation[]) {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
     window.dispatchEvent(new CustomEvent('roas-annotations-changed'));
+    pushCloudKey(STORAGE_KEY, items);
   } catch {
     /* ignore */
   }

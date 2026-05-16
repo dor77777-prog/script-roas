@@ -1,3 +1,5 @@
+import { pushCloudKey } from './cloudSync';
+
 /**
  * Billing data layer — persists per-store cost entries in localStorage so the
  * P&L breakdown reflects real numbers instead of hardcoded constants.
@@ -74,6 +76,8 @@ function safeWrite<T>(key: string, value: T[]) {
     // Notify other components in the same tab via a custom event — useful
     // because localStorage's native "storage" event only fires across tabs.
     window.dispatchEvent(new CustomEvent('roas-billing-changed'));
+    // Mirror to cloud so partners on other devices see the same data.
+    pushCloudKey(key, value);
   } catch {
     /* ignore — usually quota or private mode */
   }

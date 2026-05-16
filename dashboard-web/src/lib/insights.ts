@@ -1,3 +1,5 @@
+import { pushCloudKey } from './cloudSync';
+
 /**
  * Insights engine — pure analytics, no React.
  *
@@ -533,9 +535,12 @@ export function writeGoal(value: number | null) {
   try {
     if (value === null || value <= 0) {
       window.localStorage.removeItem(GOAL_STORAGE_KEY);
+      pushCloudKey(GOAL_STORAGE_KEY, null);
     } else {
       window.localStorage.setItem(GOAL_STORAGE_KEY, String(value));
+      pushCloudKey(GOAL_STORAGE_KEY, value);
     }
+    window.dispatchEvent(new CustomEvent('roas-goal-changed'));
   } catch {
     /* ignore */
   }
@@ -622,6 +627,8 @@ export function writeInsightStates(states: InsightStates) {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(INSIGHT_STATES_KEY, JSON.stringify(states));
+    window.dispatchEvent(new CustomEvent('roas-insight-states-changed'));
+    pushCloudKey(INSIGHT_STATES_KEY, states);
   } catch {
     /* storage quota / private mode: silently ignore */
   }

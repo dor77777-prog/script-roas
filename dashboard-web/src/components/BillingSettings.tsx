@@ -30,6 +30,7 @@ import {
   type ParsedBillLine,
   type RecurringCost,
 } from '@/lib/billing';
+import { isHydrated } from '@/lib/cloudSync';
 
 type StoreMetaRow = {
   storeId: string;
@@ -103,17 +104,34 @@ export function BillingSettings({ storeNames }: Props) {
   );
   const detectedPlans: StoreMetaRow[] = meta?.rows ?? [];
 
-  // Hydrate from storage on mount + seed if empty so user has something to edit.
+  // Hydrate from storage on mount + seed if empty so user has something to
+  // edit. The seed is gated on cloud-hydrated to avoid stomping data a partner
+  // has already entered on another device. If hydrate already happened (e.g.
+  // navigating between tabs), seed immediately; otherwise wait for the event.
   useEffect(() => {
-    seedBillingIfEmpty(storeNames);
     setRecurring(readRecurring());
     setOneTime(readOneTime());
+
+    function maybeSeed() {
+      seedBillingIfEmpty(storeNames);
+      setRecurring(readRecurring());
+      setOneTime(readOneTime());
+    }
+    if (isHydrated()) {
+      maybeSeed();
+    } else {
+      window.addEventListener('roas-cloud-hydrated', maybeSeed, { once: true });
+    }
+
     function onChange() {
       setRecurring(readRecurring());
       setOneTime(readOneTime());
     }
     window.addEventListener('roas-billing-changed', onChange);
-    return () => window.removeEventListener('roas-billing-changed', onChange);
+    return () => {
+      window.removeEventListener('roas-billing-changed', onChange);
+      window.removeEventListener('roas-cloud-hydrated', maybeSeed);
+    };
   }, [storeNames]);
 
   // Counts for the trigger pill subtitle.

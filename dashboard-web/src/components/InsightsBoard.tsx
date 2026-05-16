@@ -123,6 +123,10 @@ export function InsightsBoard({ data }: Props) {
       /* ignore */
     }
     setHydrated(true);
+    // Re-read whenever another device pushes an updated states map.
+    const onChange = () => setStates(readInsightStates());
+    window.addEventListener('roas-insight-states-changed', onChange);
+    return () => window.removeEventListener('roas-insight-states-changed', onChange);
   }, []);
   function toggleBoard() {
     setBoardExpanded(prev => {

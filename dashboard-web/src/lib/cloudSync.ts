@@ -1,0 +1,203 @@
+/**
+ * Cloud sync layer — keeps the dashboard's localStorage-backed state in sync
+ * across devices and partners via the `dashboard-state` Google Sheet.
+ *
+ * Architecture
+ * -------------
+ * localStorage stays as a synchronous read cache (so every component that
+ * already reads `readRecurring()` / `readAnnotations()` / etc. keeps working
+ * without becoming async). On top of it, we add two flows:
+ *
+ *  1. **Hydrate**: on app mount, GET /api/dashboard-state once. For each
+ *     known key, overwrite localStorage with the cloud value and dispatch the
+ *     change event so already-mounted components re-read. If cloud is empty
+ *     for a key BUT localStorage has data, we treat that as first-time
+ *     migration and push the local data up to cloud.
+ *
+ *  2. **Write-through**: when any write function is called (writeRecurring,
+ *     writeAnnotations, writeGoal, writeInsightStates), the existing code
+ *     writes localStorage AND fires `pushCloudKey()` which does a debounced
+ *     fire-and-forget POST. If the POST fails, we retry once after 5s; if
+ *     that also fails we silently drop it — the user's next edit will
+ *     overwrite anyway.
+ *
+ * Polling
+ * -------
+ * After initial hydrate, we re-fetch every 30s to pick up edits from other
+ * devices. The poll merges keys conservatively: if a key has a pending write
+ * locally (push in flight), we skip it for that round.
+ *
+ * Last-write-wins
+ * ---------------
+ * No real merging happens server-side. Two partners editing the same key at
+ * the same time will see the later POST win. Acceptable for the kind of data
+ * here (billing edits are rare, annotations are append-only, insight states
+ * are user actions).
+ */
+
+const STATE_KEYS = [
+  'roas-dashboard:billing-recurring',
+  'roas-dashboard:billing-onetime',
+  'roas-dashboard:annotations',
+  'roas-dashboard:monthly-revenue-goal',
+  'roas-dashboard:insight-states',
+] as const;
+type StateKey = (typeof STATE_KEYS)[number];
+
+const CHANGE_EVENTS: Record<StateKey, string> = {
+  'roas-dashboard:billing-recurring': 'roas-billing-changed',
+  'roas-dashboard:billing-onetime': 'roas-billing-changed',
+  'roas-dashboard:annotations': 'roas-annotations-changed',
+  'roas-dashboard:monthly-revenue-goal': 'roas-goal-changed',
+  'roas-dashboard:insight-states': 'roas-insight-states-changed',
+};
+
+/** ms epoch of the last push we sent for each key. Used to skip stomping
+ *  our own value when a poll round comes back. */
+const lastPushAt: Record<string, number> = {};
+/** Pending debounce timers per key. */
+const pendingTimers: Record<string, ReturnType<typeof setTimeout> | undefined> = {};
+/** Marker we've completed initial hydrate at least once. */
+let hydrated = false;
+
+const HYDRATE_GRACE_MS = 8_000; // skip poll-overwrite within this window of a local push
+
+/**
+ * Push a key's value up to the cloud. Debounced 400ms so rapid edits (e.g.
+ * typing in an inline form) coalesce into one POST. Fire-and-forget — never
+ * throws; the user shouldn't see UI errors for a sync failure.
+ */
+export function pushCloudKey(localStorageKey: string, value: unknown): void {
+  if (typeof window === 'undefined') return;
+  const cloudKey = stripPrefix(localStorageKey);
+
+  if (pendingTimers[localStorageKey]) {
+    clearTimeout(pendingTimers[localStorageKey]);
+  }
+  pendingTimers[localStorageKey] = setTimeout(() => {
+    pendingTimers[localStorageKey] = undefined;
+    lastPushAt[localStorageKey] = Date.now();
+    void postWithRetry(cloudKey, value);
+  }, 400);
+}
+
+async function postWithRetry(key: string, value: unknown, attempt = 1): Promise<void> {
+  try {
+    const res = await fetch('/api/dashboard-state', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ key, value }),
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  } catch (err) {
+    if (attempt >= 2) {
+      // eslint-disable-next-line no-console
+      console.warn(`cloudSync push failed (${key}):`, err);
+      return;
+    }
+    setTimeout(() => void postWithRetry(key, value, attempt + 1), 5000);
+  }
+}
+
+/**
+ * Pull the cloud state and reconcile with localStorage. Called once on mount
+ * by `<CloudSync />` and again on each poll tick.
+ *
+ * Returns true once at least one successful hydrate has completed — used to
+ * gate the initial seed in BillingSettings so we don't double-seed on the
+ * first visit while the cloud fetch is still in flight.
+ */
+export async function hydrateFromCloud(): Promise<boolean> {
+  if (typeof window === 'undefined') return hydrated;
+  let payload: { kv?: Record<string, unknown> } | null = null;
+  try {
+    const r = await fetch('/api/dashboard-state', { cache: 'no-store' });
+    if (!r.ok) return hydrated;
+    payload = (await r.json()) as { kv?: Record<string, unknown> };
+  } catch {
+    return hydrated;
+  }
+
+  const cloud = payload?.kv ?? {};
+
+  for (const lsKey of STATE_KEYS) {
+    const cloudKey = stripPrefix(lsKey);
+    const cloudVal = cloud[cloudKey];
+
+    // Skip stomping local state if we recently pushed (cloud may still be
+    // serving a slightly stale value due to caching).
+    if (lastPushAt[lsKey] && Date.now() - lastPushAt[lsKey] < HYDRATE_GRACE_MS) {
+      continue;
+    }
+
+    if (cloudVal === undefined || cloudVal === null) {
+      // First-time migration: cloud has nothing, push local state up if any.
+      const local = readLocal(lsKey);
+      if (local !== null) {
+        lastPushAt[lsKey] = Date.now();
+        void postWithRetry(cloudKey, local);
+      }
+      continue;
+    }
+
+    // Cloud wins on the regular path.
+    writeLocal(lsKey, cloudVal);
+    dispatchChange(lsKey);
+  }
+
+  if (!hydrated) {
+    hydrated = true;
+    // Let gated logic (e.g. BillingSettings' default seed) know cloud has spoken.
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('roas-cloud-hydrated'));
+    }
+  }
+  return true;
+}
+
+function dispatchChange(lsKey: StateKey) {
+  const evt = CHANGE_EVENTS[lsKey];
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(evt));
+  }
+}
+
+function stripPrefix(lsKey: string): string {
+  return lsKey.replace(/^roas-dashboard:/, '');
+}
+
+function readLocal(lsKey: string): unknown {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(lsKey);
+    if (raw === null) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      // Goal is stored as a bare number string; return as-is.
+      const n = Number(raw);
+      return Number.isFinite(n) ? n : raw;
+    }
+  } catch {
+    return null;
+  }
+}
+
+function writeLocal(lsKey: string, value: unknown) {
+  if (typeof window === 'undefined') return;
+  try {
+    if (typeof value === 'number' || typeof value === 'string') {
+      window.localStorage.setItem(lsKey, String(value));
+    } else {
+      window.localStorage.setItem(lsKey, JSON.stringify(value));
+    }
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+/** Has initial cloud hydrate completed at least once this session? Used by
+ *  seed logic to avoid seeding before we know what the cloud has. */
+export function isHydrated(): boolean {
+  return hydrated;
+}

@@ -30,9 +30,13 @@ export function GoalTracker({ data }: Props) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
 
-  // Hydrate the goal from localStorage on mount.
+  // Hydrate the goal from localStorage on mount; re-read whenever the cloud
+  // sync layer updates the underlying value (other device, partner edit).
   useEffect(() => {
     setGoal(readGoal());
+    const onChange = () => setGoal(readGoal());
+    window.addEventListener('roas-goal-changed', onChange);
+    return () => window.removeEventListener('roas-goal-changed', onChange);
   }, []);
 
   const forecast = useMemo(() => forecastMonthEnd(data.rows), [data.rows]);
