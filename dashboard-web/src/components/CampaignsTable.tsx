@@ -420,7 +420,11 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       interpretation,
       tone,
     };
-  }, [aggregated, dailyRows, localRange, localStore, totals.spend, platform]);
+    // `totals` is derived from `aggregated` (see the totals useMemo above), so
+    // including `aggregated` already covers any change to `totals.spend`. The
+    // extra `totals.spend` dep was redundant and easy to mis-maintain if a
+    // future tweak referenced `totals.cpc` but forgot the dep. (#IN-05)
+  }, [aggregated, dailyRows, localRange, localStore, platform]);
 
   // ----- Toolbar -----
   const toolbar = (
