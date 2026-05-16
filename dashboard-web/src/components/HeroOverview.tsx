@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Area,
   AreaChart,
@@ -13,6 +13,14 @@ import {
   YAxis,
 } from 'recharts';
 import { TrendingUp, TrendingDown, Minus, LineChart } from 'lucide-react';
+import {
+  annotationsInScope,
+  ANNOTATION_KIND_COLOR,
+  ANNOTATION_KIND_EMOJI,
+  ANNOTATION_KIND_LABEL,
+  readAnnotations,
+  type Annotation,
+} from '@/lib/annotations';
 import type { DashboardData, Filters as F } from '@/lib/types';
 import { aggregate, dailySeries, filterRows, roasLabel } from '@/lib/analytics';
 import { previousRange } from '@/lib/presets';
@@ -217,6 +225,7 @@ export function HeroOverview({ data, filters }: Props) {
             data={chartData}
             fromDate={filters.range.from}
             toDate={filters.range.to}
+            store={filters.store}
           />
         )}
 
@@ -246,13 +255,29 @@ function RoasTrendChart({
   data,
   fromDate,
   toDate,
+  store,
 }: {
   data: Array<{ date: string; revenue: number; spend: number; roas: number }>;
   fromDate: string;
   toDate: string;
+  store: string;
 }) {
   // Sanitise: drop days with no spend (where roas=0 isn't meaningful).
   const series = data.filter(d => d.spend > 0 || d.revenue > 0);
+
+  // Pull annotations in scope (date range + store filter). Re-read when the
+  // user adds/edits one — the custom event from lib/annotations fires on
+  // every write, so we can hook into it cheaply.
+  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  useEffect(() => {
+    setAnnotations(annotationsInScope(readAnnotations(), { from: fromDate, to: toDate }, store));
+    function onChange() {
+      setAnnotations(annotationsInScope(readAnnotations(), { from: fromDate, to: toDate }, store));
+    }
+    window.addEventListener('roas-annotations-changed', onChange);
+    return () => window.removeEventListener('roas-annotations-changed', onChange);
+  }, [fromDate, toDate, store]);
+
   if (series.length < 2) return null;
 
   const maxRoas = Math.max(3.2, ...series.map(d => d.roas));
@@ -311,6 +336,28 @@ function RoasTrendChart({
               strokeDasharray="4 4"
               strokeWidth={1}
             />
+            {/* Annotation pins — one vertical line per logged event, only
+                if its date appears in the visible series. Label = emoji of
+                the annotation kind. Color follows the kind palette. */}
+            {annotations.map(a => {
+              if (!series.some(d => d.date === a.date)) return null;
+              const color = ANNOTATION_KIND_COLOR[a.kind];
+              return (
+                <ReferenceLine
+                  key={a.id}
+                  x={a.date}
+                  stroke={color}
+                  strokeOpacity={0.85}
+                  strokeWidth={1.5}
+                  label={{
+                    value: ANNOTATION_KIND_EMOJI[a.kind],
+                    position: 'top',
+                    fill: color,
+                    fontSize: 13,
+                  }}
+                />
+              );
+            })}
             <Line
               type="monotone"
               dataKey="roas"

@@ -33,6 +33,7 @@ import { AiReportButton } from './AiReportButton';
 import { HeroOverview } from './HeroOverview';
 import { PnLBreakdown } from './PnLBreakdown';
 import { BillingSettings } from './BillingSettings';
+import { AnnotationsPanel } from './AnnotationsPanel';
 import { CommandPalette } from './CommandPalette';
 import { TabNav, type TabDef } from './TabNav';
 import { SectionIntro } from './SectionIntro';
@@ -246,6 +247,9 @@ function HomeTab({
 
       {/* ===== Insights engine — anomalies, recommendations, opportunities ===== */}
       <InsightsBoard data={data} />
+
+      {/* ===== Activity log — events overlay on charts so anomalies have context ===== */}
+      <AnnotationsPanel range={filters.range} store={filters.store} />
 
       {/* ===== Detailed KPI cards — full breakdown, the "drill-down" of the hero ===== */}
       <SectionIntro
