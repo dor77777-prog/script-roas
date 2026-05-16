@@ -78,37 +78,55 @@ function colLetter_(n) {
 
 function ensureSpreadsheet() {
   let id = getProp('spreadsheet.id');
+  let ss;
   if (id) {
     try {
-      return SpreadsheetApp.openById(id);
+      ss = SpreadsheetApp.openById(id);
     } catch (e) {
       Logger.log(`Saved spreadsheet ID invalid, creating new one. Error: ${e}`);
     }
   }
-  const ss = SpreadsheetApp.create('ROAS Tracker - מעקב חנויות');
-  ss.setSpreadsheetTimeZone(TZ);
-  setProp('spreadsheet.id', ss.getId());
+  if (!ss) {
+    ss = SpreadsheetApp.create('ROAS Tracker - מעקב חנויות');
+    ss.setSpreadsheetTimeZone(TZ);
+    setProp('spreadsheet.id', ss.getId());
 
-  const tempName = ss.getSheets()[0].getName();
+    const tempName = ss.getSheets()[0].getName();
+    const temp = ss.getSheetByName(tempName);
+    if (temp) { try { ss.deleteSheet(temp); } catch (_) {} }
+  }
+
+  // טאבי סיכום + חנות (אם לא קיימים)
+  if (!ss.getSheetByName(SUMMARY_TAB)) ss.insertSheet(SUMMARY_TAB);
   for (const s of STORES) {
     if (!ss.getSheetByName(s.name)) ss.insertSheet(s.name);
+    const campTab = campaignTabName_(s.id);
+    if (!ss.getSheetByName(campTab)) {
+      const sh = ss.insertSheet(campTab);
+      ensureCampaignTabHeaders_(sh);
+    }
   }
-  if (!ss.getSheetByName(SUMMARY_TAB)) ss.insertSheet(SUMMARY_TAB);
 
+  // הצב את הסיכום בראש
   const summary = ss.getSheetByName(SUMMARY_TAB);
   ss.setActiveSheet(summary);
   ss.moveActiveSheet(1);
 
-  const temp = ss.getSheetByName(tempName);
-  if (temp && temp.getName() !== SUMMARY_TAB && !STORES.find(s => s.name === temp.getName())) {
-    ss.deleteSheet(temp);
-  }
-
+  // RTL + צבעי ROAS עבור טאבי הסיכום והחנויות (לא על טאבי קמפיינים - מבנה שונה)
   for (const s of [SUMMARY_TAB, ...STORES.map(x => x.name)]) {
     const sh = ss.getSheetByName(s);
     if (sh) {
       sh.setRightToLeft(true);
       ensureRoasColorRules_(sh);
+    }
+  }
+
+  // RTL + צבעי ROAS לטאבי הקמפיינים (עמודה L = ROAS)
+  for (const s of STORES) {
+    const sh = ss.getSheetByName(campaignTabName_(s.id));
+    if (sh) {
+      sh.setRightToLeft(true);
+      ensureCampaignRoasColorRules_(sh);
     }
   }
 
@@ -530,4 +548,127 @@ function verifyTabDataInRange(tabName, startDateStr, endDateStr) {
 /** קיצור דרך: בדיקת uzoshop בטווח 2026-05-08 עד 2026-05-14. */
 function verifyUzoshopMay8to14() {
   return verifyTabDataInRange('uzoshop', '2026-05-08', '2026-05-14');
+}
+
+// ============================================================================
+// טאבי קמפיינים (אד-סטים) - שכבת רזולוציה מתחת לסיכום היומי
+// ============================================================================
+
+const CAMPAIGN_HEADERS = [
+  'תאריך', 'פלטפורמה', 'מזהה קמפיין', 'שם קמפיין',
+  'מזהה אד-סט', 'שם אד-סט',
+  'יצא (CAD)', 'חשיפות', 'קליקים',
+  'המרות', 'ערך המרות (CAD)', 'ROAS'
+];
+
+function ensureCampaignTabHeaders_(sheet) {
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, CAMPAIGN_HEADERS.length)
+      .setValues([CAMPAIGN_HEADERS])
+      .setFontWeight('bold')
+      .setBackground('#d9d9d9')
+      .setHorizontalAlignment('center');
+    sheet.setFrozenRows(1);
+    sheet.setColumnWidth(1, 95);    // Date
+    sheet.setColumnWidth(2, 80);    // Platform
+    sheet.setColumnWidth(3, 120);   // Campaign ID
+    sheet.setColumnWidth(4, 260);   // Campaign Name
+    sheet.setColumnWidth(5, 120);   // Ad Set ID
+    sheet.setColumnWidth(6, 260);   // Ad Set Name
+    sheet.setColumnWidth(7, 100);   // Spend
+    sheet.setColumnWidth(8, 90);    // Impressions
+    sheet.setColumnWidth(9, 70);    // Clicks
+    sheet.setColumnWidth(10, 70);   // Conversions
+    sheet.setColumnWidth(11, 110);  // Conv Value
+    sheet.setColumnWidth(12, 70);   // ROAS
+  }
+}
+
+function ensureCampaignRoasColorRules_(sheet) {
+  const rangeStr = 'L1:L20000';
+  const range = sheet.getRange(rangeStr);
+  const keep = sheet.getConditionalFormatRules().filter(r => {
+    const ranges = r.getRanges();
+    return !ranges.some(rg => rg.getA1Notation() === rangeStr);
+  });
+  const newRules = [
+    SpreadsheetApp.newConditionalFormatRule().whenNumberLessThan(2).setBackground(ROAS_COLORS.red).setRanges([range]).build(),
+    SpreadsheetApp.newConditionalFormatRule().whenNumberBetween(2, 2.6999).setBackground(ROAS_COLORS.orange).setRanges([range]).build(),
+    SpreadsheetApp.newConditionalFormatRule().whenNumberBetween(2.7, 3).setBackground(ROAS_COLORS.green).setRanges([range]).build(),
+    SpreadsheetApp.newConditionalFormatRule().whenNumberGreaterThan(3).setBackground(ROAS_COLORS.blue).setRanges([range]).build(),
+  ];
+  sheet.setConditionalFormatRules([...keep, ...newRules]);
+}
+
+/**
+ * כותב שורות אד-סט לטאב הקמפיינים של חנות ליום נתון.
+ * מוחק קודם שורות קיימות לאותו תאריך (idempotent - בטוח להריץ שוב).
+ *
+ * rows: מערך של אובייקטים { date, platform, campaignId, campaignName,
+ *       adSetId, adSetName, spendCad, impressions, clicks, conversions, conversionValueCad }
+ */
+function writeCampaignRowsForDay(ss, storeId, dateStr, rows) {
+  const tabName = campaignTabName_(storeId);
+  let sh = ss.getSheetByName(tabName);
+  if (!sh) {
+    sh = ss.insertSheet(tabName);
+    sh.setRightToLeft(true);
+  }
+  ensureCampaignTabHeaders_(sh);
+  ensureCampaignRoasColorRules_(sh);
+
+  // מחק שורות קיימות לאותו תאריך
+  const lastRow = sh.getLastRow();
+  if (lastRow > 1) {
+    const dates = sh.getRange(2, 1, lastRow - 1, 1).getValues();
+    const toDelete = [];
+    for (let i = 0; i < dates.length; i++) {
+      const v = dates[i][0];
+      let key = null;
+      if (v instanceof Date && !isNaN(v.getTime())) {
+        key = Utilities.formatDate(v, TZ, 'yyyy-MM-dd');
+      } else if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
+        key = v;
+      }
+      if (key === dateStr) toDelete.push(i + 2);
+    }
+    for (let i = toDelete.length - 1; i >= 0; i--) {
+      sh.deleteRow(toDelete[i]);
+    }
+  }
+
+  if (!rows || rows.length === 0) return;
+
+  // הוסף שורות חדשות
+  const startRow = sh.getLastRow() + 1;
+  const data = rows.map(r => [
+    r.date,
+    r.platform,
+    r.campaignId || '',
+    r.campaignName || '',
+    r.adSetId || '',
+    r.adSetName || '',
+    round2_(r.spendCad || 0),
+    parseInt(r.impressions || 0, 10),
+    parseInt(r.clicks || 0, 10),
+    round2_(r.conversions || 0),
+    round2_(r.conversionValueCad || 0),
+    '',  // ROAS - יומלא כנוסחה
+  ]);
+  sh.getRange(startRow, 1, data.length, CAMPAIGN_HEADERS.length).setValues(data);
+
+  // פורמטים
+  sh.getRange(startRow, 1, data.length, 1).setNumberFormat('yyyy-mm-dd').setHorizontalAlignment('center');
+  sh.getRange(startRow, 7, data.length, 1).setNumberFormat('#,##0.00');   // Spend
+  sh.getRange(startRow, 8, data.length, 1).setNumberFormat('#,##0');       // Impressions
+  sh.getRange(startRow, 9, data.length, 1).setNumberFormat('#,##0');       // Clicks
+  sh.getRange(startRow, 10, data.length, 1).setNumberFormat('#,##0.00');   // Conversions
+  sh.getRange(startRow, 11, data.length, 1).setNumberFormat('#,##0.00');   // Conv value
+  sh.getRange(startRow, 12, data.length, 1).setNumberFormat('0.00').setHorizontalAlignment('center');
+
+  // ROAS = ערך המרות / יצא (לכל שורה)
+  for (let i = 0; i < data.length; i++) {
+    const row = startRow + i;
+    sh.getRange(row, 12).setFormula(`=IFERROR(K${row}/G${row}, "")`);
+  }
 }

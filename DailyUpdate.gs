@@ -66,8 +66,77 @@ function updateStoreForDate_(ss, store, dateStr, year, month, day, ilsToCad) {
   if (!sheet) throw new Error(`לא נמצא טאב לחנות ${store.name}`);
   writeDayRow(sheet, year, month, day, metaCad, googleAdsCad, revenueCad);
 
+  // שכבת קמפיינים/אד-סטים. נכשל ברך - לא יפיל את הסיכום היומי אם API קמפיינים שובת.
+  try {
+    updateCampaignDataForStoreDate_(ss, store, dateStr, ilsToCad);
+  } catch (e) {
+    Logger.log(`Campaign-level data for ${store.name} ${dateStr} failed: ${e && e.message ? e.message : e}`);
+  }
+
   Logger.log(`${store.name} ${dateStr}: spent=${totalSpentCad.toFixed(2)} CAD (FB ${metaCad.toFixed(2)} + GA ${googleAdsCad.toFixed(2)}), revenue=${revenueCad.toFixed(2)} CAD`);
   return { spent: totalSpentCad, revenue: revenueCad };
+}
+
+/**
+ * שולף נתוני אד-סט/אד-גרופ מ-Meta + Google ליום הזה, ממיר ל-CAD וכותב לטאב הקמפיינים.
+ */
+function updateCampaignDataForStoreDate_(ss, store, dateStr, ilsToCad) {
+  const rows = [];
+
+  // Meta - תמיד יש (כל החנויות מפרסמות שם)
+  try {
+    const metaRows = getMetaAdSetInsights(store.id, dateStr);
+    for (const r of metaRows) {
+      const fxToCad = r.currency === 'CAD' ? 1
+                    : r.currency === 'ILS' ? ilsToCad
+                    : getFxRate(r.currency, 'CAD', dateStr);
+      rows.push({
+        date: dateStr,
+        platform: 'Meta',
+        campaignId: r.campaignId,
+        campaignName: r.campaignName,
+        adSetId: r.adSetId,
+        adSetName: r.adSetName,
+        spendCad: r.spend * fxToCad,
+        impressions: r.impressions,
+        clicks: r.clicks,
+        conversions: r.conversions,
+        conversionValueCad: r.conversionValue * fxToCad,
+      });
+    }
+  } catch (e) {
+    Logger.log(`Meta ad-sets ${store.name} ${dateStr} fetch failed: ${e && e.message ? e.message : e}`);
+  }
+
+  // Google Ads - רק לחנויות עם hasGoogleAds=true
+  if (store.hasGoogleAds) {
+    try {
+      const gaRows = getGoogleAdsAdGroupInsights(store.id, dateStr);
+      for (const r of gaRows) {
+        const fxToCad = r.currency === 'CAD' ? 1
+                      : r.currency === 'ILS' ? ilsToCad
+                      : getFxRate(r.currency, 'CAD', dateStr);
+        rows.push({
+          date: dateStr,
+          platform: 'Google',
+          campaignId: r.campaignId,
+          campaignName: r.campaignName,
+          adSetId: r.adSetId,
+          adSetName: r.adSetName,
+          spendCad: r.spend * fxToCad,
+          impressions: r.impressions,
+          clicks: r.clicks,
+          conversions: r.conversions,
+          conversionValueCad: r.conversionValue * fxToCad,
+        });
+      }
+    } catch (e) {
+      Logger.log(`Google Ads ad-groups ${store.name} ${dateStr} fetch failed: ${e && e.message ? e.message : e}`);
+    }
+  }
+
+  writeCampaignRowsForDay(ss, store.id, dateStr, rows);
+  Logger.log(`Campaign data ${store.name} ${dateStr}: wrote ${rows.length} rows`);
 }
 
 /**

@@ -48,6 +48,10 @@ function requireProp(key) {
   return v;
 }
 
+function campaignTabName_(storeId) {
+  return `${storeId}-campaigns`;
+}
+
 function pad2_(n) { return n < 10 ? '0' + n : '' + n; }
 
 function monthNameHe_(month) {
