@@ -262,10 +262,17 @@ function ensureRoasColorRules_(sheet) {
 }
 
 /**
- * מנקה את כל התוכן של טאב חנות (כולל פורמטים) — שימושי כשמשנים פריסה.
+ * מנקה את כל התוכן של טאב נתון (כולל פורמטים) - שימושי כשמשנים פריסה.
  * אחרי הריצה, ההפעלה הבאה של runUpdateForDate / backfillRange תיצור את הבלוקים מחדש.
+ *
+ * ⚠️ ב-Apps Script לא ניתן להעביר פרמטרים דרך כפתור Run. השתמש בפונקציות
+ * ה-wrapper המוכנות מתחת (resetUzoshopTab / resetZolplusTab וכו') במקום
+ * לקרוא ישירות ל-resetTab().
  */
 function resetTab(tabName) {
+  if (!tabName) {
+    throw new Error('resetTab: חסר שם טאב. השתמש ב-resetUzoshopTab / resetZolplusTab / resetUsmile360Tab / resetSummaryTab במקום.');
+  }
   const ss = ensureSpreadsheet();
   const sh = ss.getSheetByName(tabName);
   if (!sh) throw new Error(`לא נמצא טאב: ${tabName}`);
@@ -275,3 +282,9 @@ function resetTab(tabName) {
   ensureRoasColorRules_(sh);
   Logger.log(`Reset tab: ${tabName}`);
 }
+
+/** קיצורי דרך נוחים - אפשר להריץ ישירות מ-Apps Script editor. */
+function resetUzoshopTab()    { resetTab('uzoshop'); }
+function resetZolplusTab()    { resetTab('Zol Plus'); }
+function resetUsmile360Tab()  { resetTab('360usmile'); }
+function resetSummaryTab()    { resetTab(SUMMARY_TAB); }
