@@ -197,6 +197,71 @@ function bulkAddManualOverrides(storeId, platform, currency, entries, notes) {
   Logger.log(`bulkAddManualOverrides ${storeId}/${platform}: ${appended} added, ${updated} updated`);
 }
 
+/**
+ * עוזר מיגרציה: סורק שורות ב-data-daily של חנות מסוימת בטווח תאריכים,
+ * וכותב את הערכים הקיימים שם (כבר ב-CAD) לטאב manual-spend.
+ *
+ * שימושי כשמערך פרסום הושבת אבל הנתונים הקיימים בגיליון נכונים — מקפיא
+ * אותם כ-override כדי שריצות backfill עתידיות לא ינסו לקרוא ל-API
+ * המושבת וידרסו את הנתונים ל-0.
+ *
+ * דוגמה (uzoshop Meta מ-1.5 עד 8.5):
+ *   freezeCurrentSpendAsOverride('uzoshop', 'Meta', '2026-05-01', '2026-05-08');
+ *
+ * @param storeId    'uzoshop' / 'zolplus' / 'usmile360'
+ * @param platform   'Meta' (עמודה D ב-data-daily) או 'Google' (עמודה E)
+ * @param startDate  YYYY-MM-DD
+ * @param endDate    YYYY-MM-DD
+ */
+function freezeCurrentSpendAsOverride(storeId, platform, startDate, endDate) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+    throw new Error('תאריכים לא תקינים. פורמט: YYYY-MM-DD');
+  }
+  const colIndex = platform === 'Meta' ? 4 : platform === 'Google' ? 5 : null;
+  if (!colIndex) throw new Error(`פלטפורמה לא נתמכת: ${platform}. השתמש ב-Meta או Google.`);
+
+  const ss = ensureSpreadsheet();
+  const sh = ss.getSheetByName(DAILY_FLAT_TAB);
+  if (!sh) throw new Error('טאב data-daily לא נמצא — הרץ setupAll קודם.');
+  const lastRow = sh.getLastRow();
+  if (lastRow < 2) {
+    Logger.log('data-daily ריק — אין מה להקפיא.');
+    return;
+  }
+
+  // קרא Date (A), Store ID (B), Meta (D) / Google (E)
+  const data = sh.getRange(2, 1, lastRow - 1, 5).getValues();
+  const entries = [];
+  for (const row of data) {
+    let dateStr = null;
+    const v = row[0];
+    if (v instanceof Date && !isNaN(v.getTime())) {
+      dateStr = Utilities.formatDate(v, TZ, 'yyyy-MM-dd');
+    } else if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) {
+      dateStr = v.slice(0, 10);
+    }
+    if (!dateStr) continue;
+    if (dateStr < startDate || dateStr > endDate) continue;
+    if (String(row[1]).trim() !== storeId) continue;
+    const spend = parseFloat(row[colIndex - 1]) || 0;
+    if (spend === 0) {
+      Logger.log(`Skip ${dateStr}: spend=0 (probably already broken).`);
+      continue;
+    }
+    entries.push([dateStr, spend]);
+  }
+
+  if (entries.length === 0) {
+    Logger.log(`No usable ${platform} spend found for ${storeId} in ${startDate}..${endDate}.`);
+    return;
+  }
+  bulkAddManualOverrides(
+    storeId, platform, 'CAD', entries,
+    `Frozen from data-daily ${startDate}..${endDate} on ${todayStr_()}`,
+  );
+  Logger.log(`Froze ${entries.length} days of ${storeId}/${platform} from data-daily.`);
+}
+
 /** מתפריט הגיליון - פותח את הטאב כדי שהמשתמש יוכל לערוך. */
 function openManualSpendTab() {
   const ss = ensureSpreadsheet();
