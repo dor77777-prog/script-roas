@@ -20,6 +20,7 @@ import type { CampaignRow } from '@/lib/campaigns';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { DateRange } from '@/lib/types';
 import { roasLabel } from '@/lib/analytics';
+import { CampaignDrawer } from './CampaignDrawer';
 
 type Mode = 'campaign' | 'adset';
 type Platform = 'all' | 'Meta' | 'Google';
@@ -218,6 +219,9 @@ export function CampaignsTable({ range, store: globalStore, stores }: Props) {
   useEffect(() => { setLocalStore(globalStore); }, [globalStore]);
 
   const [localRange, setLocalRange] = useState<DateRange>(range);
+  // Drill-down drawer state — set when the user clicks a row.
+  const [drillCampaignId, setDrillCampaignId] = useState<string | null>(null);
+  const [drillPlatform, setDrillPlatform] = useState<string | null>(null);
   useEffect(() => { setLocalRange(range); }, [range.from, range.to]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const today = todayInIsrael();
@@ -529,7 +533,17 @@ export function CampaignsTable({ range, store: globalStore, stores }: Props) {
                   return (
                     <tr
                       key={a.key}
-                      className="border-b border-borderSubtle hover:bg-surfaceMuted/40"
+                      className="border-b border-borderSubtle hover:bg-surfaceMuted/40 cursor-pointer"
+                      onClick={() => {
+                        // Only open the drawer in campaign mode (ad-set mode
+                        // already shows ad-set-level detail; opening a deeper
+                        // panel would just be the same view).
+                        if (mode === 'campaign' && a.campaignId) {
+                          setDrillCampaignId(a.campaignId);
+                          setDrillPlatform(a.platform);
+                        }
+                      }}
+                      title={mode === 'campaign' ? 'לחץ לפרטים מלאים' : undefined}
                     >
                       <td className="px-3 sm:px-5 py-2 max-w-[280px] sm:max-w-[400px]">
                         <div className="flex items-center gap-2">
@@ -572,6 +586,7 @@ export function CampaignsTable({ range, store: globalStore, stores }: Props) {
                             href={link}
                             target="_blank"
                             rel="noopener noreferrer"
+                            onClick={e => e.stopPropagation()}
                             className="inline-flex items-center justify-center w-7 h-7 rounded text-text-muted hover:text-primary hover:bg-primary/8 transition-colors"
                             title={`פתח ב-${a.platform} Ads Manager`}
                             aria-label="פתח ב-Ads Manager"
@@ -608,6 +623,22 @@ export function CampaignsTable({ range, store: globalStore, stores }: Props) {
             </div>
           )}
         </>
+      )}
+
+      {/* Side drawer with full campaign drill-down. Mounted at the end so
+          its fixed-position layout sits on top of everything. */}
+      {drillCampaignId && drillPlatform && data && (
+        <CampaignDrawer
+          campaignId={drillCampaignId}
+          open
+          onClose={() => { setDrillCampaignId(null); setDrillPlatform(null); }}
+          rows={data.rows.filter(r =>
+            r.campaignId === drillCampaignId &&
+            r.platform === drillPlatform &&
+            r.date >= localRange.from && r.date <= localRange.to &&
+            (localStore === 'All' || r.storeName === localStore),
+          )}
+        />
       )}
     </div>
   );
