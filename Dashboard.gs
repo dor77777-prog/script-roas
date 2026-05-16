@@ -65,8 +65,8 @@ function dashboardOnEdit_(e) {
 
   const dates = computePresetDates_(preset);
   if (!dates) return;
-  sheet.getRange('B4').setValue(dates.from);
-  sheet.getRange('D4').setValue(dates.to);
+  sheet.getRange('B4').setValue(parseYMD_(dates.from)).setNumberFormat('yyyy-mm-dd');
+  sheet.getRange('D4').setValue(parseYMD_(dates.to)).setNumberFormat('yyyy-mm-dd');
 }
 
 function computePresetDates_(preset) {
@@ -119,11 +119,12 @@ function buildHelpersTab_(ss) {
   const flat = `'${DAILY_FLAT_TAB}'`;
   const dash = `'${DASHBOARD_TAB}'`;
 
-  // אזור 1 (A:L): ROAS לפי תאריך וחנות (לגרף קו)
+  // אזור 1 (A:L): ROAS לפי תאריך וחנות (לגרף קו).
+  // PIVOT C יוצר עמודה לכל חנות; הסרת LABEL מבטיחה ששמות החנויות יהיו ב-row 3 (headers).
   sh.getRange('A1').setValue('ROAS by Date x Store').setFontWeight('bold');
   sh.getRange('A3').setFormula(
     `=IFERROR(QUERY(${flat}!A:I, ` +
-    `"SELECT A, AVG(H) WHERE A is not null GROUP BY A PIVOT C ORDER BY A LABEL AVG(H) ''", 1), "")`
+    `"SELECT A, AVG(H) WHERE A is not null GROUP BY A PIVOT C ORDER BY A LABEL A 'תאריך'", 1), "")`
   );
 
   // אזור 2 (N:Q): סיכומים לחנות בתקופה הנוכחית (לתובנות + גרפים)
@@ -243,13 +244,13 @@ function buildFilters_(sh) {
   const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
   sh.getRange('A4').setValue('מתאריך:').setFontWeight('bold').setHorizontalAlignment('left');
-  sh.getRange('B4').setValue(Utilities.formatDate(firstOfMonth, TZ, 'yyyy-MM-dd'))
+  sh.getRange('B4').setValue(firstOfMonth)
     .setNumberFormat('yyyy-mm-dd')
     .setBackground('#ffffff')
     .setHorizontalAlignment('center');
 
   sh.getRange('C4').setValue('עד תאריך:').setFontWeight('bold').setHorizontalAlignment('left');
-  sh.getRange('D4').setValue(Utilities.formatDate(now, TZ, 'yyyy-MM-dd'))
+  sh.getRange('D4').setValue(now)
     .setNumberFormat('yyyy-mm-dd')
     .setBackground('#ffffff')
     .setHorizontalAlignment('center');
@@ -279,9 +280,10 @@ function buildKpis_(sh) {
       valueRange: 'A7:C7',
       verbalRange: 'A8:C8',
       deltaRange: 'A9:C9',
-      label: 'ROAS ממוצע',
-      formulaCur: `=IFERROR(AVERAGEIFS(${flat}!H:H, ${curDate}, ${storeFilter}), 0)`,
-      formulaPrev: `=IFERROR(AVERAGEIFS(${flat}!H:H, ${prevDate}, ${storeFilter}), 0)`,
+      label: 'ROAS לתקופה',
+      // ממוצע משוקלל: סך הכנסות / סך הוצאות. זהה למה ששורת "סך הכל" בטאבי החנויות מציגה.
+      formulaCur: `=IFERROR(SUMIFS(${flat}!G:G, ${curDate}, ${storeFilter}) / SUMIFS(${flat}!F:F, ${curDate}, ${storeFilter}), 0)`,
+      formulaPrev: `=IFERROR(SUMIFS(${flat}!G:G, ${prevDate}, ${storeFilter}) / SUMIFS(${flat}!F:F, ${prevDate}, ${storeFilter}), 0)`,
       format: '0.00',
       verbal: true,
     },
@@ -443,7 +445,7 @@ function buildInsights_(sh) {
       `=IFERROR(` +
       `"🏆  חנות מובילה לתקופה: " & INDEX(${helpers}!N:N, 4) & ` +
       `"  •  ROAS " & TEXT(INDEX(${helpers}!Q:Q, 4), "0.00") & ` +
-      `"  •  הכנסות " & TEXT(INDEX(${helpers}!O:O, 4), "\"CAD \"#,##0"), ` +
+      `"  •  הכנסות CAD " & TEXT(INDEX(${helpers}!O:O, 4), "#,##0"), ` +
       `"אין נתונים לתקופה")`
     )
     .setBackground(DBC.insightBg)
@@ -470,9 +472,9 @@ function buildInsights_(sh) {
   sh.getRange('A14:M14').merge()
     .setFormula(
       `=IFERROR(` +
-      `"📅  היום הכי טוב בתקופה: " & TEXT(INDEX(${helpers}!S:S, 4), "d/M/yyyy") & ` +
+      `"📅  היום הכי טוב בתקופה: " & TEXT(INDEX(${helpers}!S:S, 4), "dd/MM/yyyy") & ` +
       `"  •  ROAS " & TEXT(INDEX(${helpers}!V:V, 4), "0.00") & ` +
-      `"  •  הכנסות " & TEXT(INDEX(${helpers}!T:T, 4), "\"CAD \"#,##0"), ` +
+      `"  •  הכנסות CAD " & TEXT(INDEX(${helpers}!T:T, 4), "#,##0"), ` +
       `"")`
     )
     .setBackground(DBC.insightBg)
@@ -506,15 +508,18 @@ function buildChart_(sh, ss) {
     .addRange(helpers.getRange('A3:L500'))
     .setPosition(17, 1, 0, 0)
     .setOption('title', '')
-    .setOption('legend', { position: 'top', alignment: 'center', textStyle: { fontSize: 12 } })
+    .setOption('headers', 1)  // השורה הראשונה של ה-range = שמות החנויות (legend)
+    .setOption('useFirstColumnAsDomain', true)
+    .setOption('legend', { position: 'top', alignment: 'center', textStyle: { fontSize: 13 } })
     .setOption('hAxis', { title: '', format: 'd/M', slantedText: false })
     .setOption('vAxis', { title: 'ROAS', minValue: 0, gridlines: { count: 5 } })
     .setOption('width', 1280)
     .setOption('height', 360)
     .setOption('curveType', 'function')
-    .setOption('pointSize', 5)
-    .setOption('lineWidth', 2.5)
+    .setOption('pointSize', 6)
+    .setOption('lineWidth', 3)
     .setOption('backgroundColor', '#ffffff')
+    .setOption('colors', ['#1c4587', '#ea4335', '#34a853', '#fbbc04', '#9c27b0', '#00acc1'])
     .build();
   sh.insertChart(chart);
 }

@@ -65,6 +65,17 @@ function nextDayStr_(dateStr) {
   return Utilities.formatDate(dt, 'UTC', 'yyyy-MM-dd');
 }
 
+/**
+ * ממיר מחרוזת YYYY-MM-DD לאובייקט Date (בלי שעה).
+ * אם הקלט כבר Date, מחזיר אותו כמו שהוא. אחרת מחזיר Date שגוי.
+ */
+function parseYMD_(ymd) {
+  if (ymd instanceof Date && !isNaN(ymd.getTime())) return ymd;
+  const m = String(ymd).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return ymd;
+  return new Date(parseInt(m[1], 10), parseInt(m[2], 10) - 1, parseInt(m[3], 10));
+}
+
 function yesterdayStr_() {
   const now = new Date();
   const tzStr = Utilities.formatDate(now, TZ, 'yyyy-MM-dd');

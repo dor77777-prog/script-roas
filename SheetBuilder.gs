@@ -799,8 +799,9 @@ function writeDailyFlatRow_(ss, dateStr, storeId, storeName, fbCad, gaCad, reven
   const rev = round2_(revenueCad || 0);
 
   sh.getRange(targetRow, 1, 1, 7).setValues([[
-    dateStr, storeId, storeName, fb, ga, total, rev
+    parseYMD_(dateStr), storeId, storeName, fb, ga, total, rev
   ]]);
+  sh.getRange(targetRow, 1).setNumberFormat('yyyy-mm-dd');
   sh.getRange(targetRow, 8).setFormula(`=IFERROR(G${targetRow}/F${targetRow}, "")`);
   sh.getRange(targetRow, 9).setFormula(`=G${targetRow}-F${targetRow}`);
 
