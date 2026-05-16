@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import {
   AlertOctagon,
@@ -13,11 +13,25 @@ import {
   ExternalLink,
   Info,
   RefreshCw,
+  Check,
+  EyeOff,
+  Eye,
+  Undo2,
+  ArchiveX,
 } from 'lucide-react';
 import type { DashboardData } from '@/lib/types';
 import type { ProductsResponse } from '@/app/api/products/route';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
-import { buildAllInsights, type Insight, type Severity } from '@/lib/insights';
+import {
+  buildAllInsights,
+  isInsightVisible,
+  readInsightStates,
+  writeInsightStates,
+  type Insight,
+  type InsightStates,
+  type InsightStateKind,
+  type Severity,
+} from '@/lib/insights';
 import { cn } from '@/lib/utils';
 
 const fetcher = (url: string) => fetch(url).then(r => (r.ok ? r.json() : null));
@@ -91,21 +105,64 @@ export function InsightsBoard({ data }: Props) {
     { refreshInterval: 120_000, revalidateOnFocus: false },
   );
 
-  const insights = useMemo(() => {
+  // Persisted per-insight state ("done" / "ignored") in localStorage.
+  // We hydrate after mount to avoid SSR/client mismatch.
+  const [states, setStates] = useState<InsightStates>({});
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => {
+    setStates(readInsightStates());
+    setHydrated(true);
+  }, []);
+
+  function markInsight(insight: Insight, kind: InsightStateKind) {
+    setStates(prev => {
+      const next: InsightStates = {
+        ...prev,
+        [insight.id]: { state: kind, at: Date.now(), title: insight.title },
+      };
+      writeInsightStates(next);
+      return next;
+    });
+  }
+
+  function restoreInsight(id: string) {
+    setStates(prev => {
+      const next = { ...prev };
+      delete next[id];
+      writeInsightStates(next);
+      return next;
+    });
+  }
+
+  // Build the full list, then split into "visible now" and "hidden by user".
+  const allInsights = useMemo(() => {
     return buildAllInsights(data.rows, campaigns?.rows ?? [], products?.rows ?? []);
   }, [data.rows, campaigns, products]);
 
-  // Group by severity
+  const { visible, hidden } = useMemo(() => {
+    if (!hydrated) return { visible: allInsights, hidden: [] as Insight[] };
+    const vis: Insight[] = [];
+    const hid: Insight[] = [];
+    for (const ins of allInsights) {
+      if (isInsightVisible(ins.id, states)) vis.push(ins);
+      else hid.push(ins);
+    }
+    return { visible: vis, hidden: hid };
+  }, [allInsights, states, hydrated]);
+
   const grouped = useMemo(() => {
     const buckets: Record<Severity, Insight[]> = {
       critical: [], warning: [], opportunity: [], positive: [], info: [],
     };
-    for (const i of insights) buckets[i.severity].push(i);
+    for (const i of visible) buckets[i.severity].push(i);
     return buckets;
-  }, [insights]);
+  }, [visible]);
 
   const loading = pLoading || cLoading;
-  const totalCount = insights.length;
+  const totalCount = visible.length;
+  const hiddenCount = hidden.length;
+
+  const [showHidden, setShowHidden] = useState(false);
 
   return (
     <section className="rounded-2xl bg-surface border border-borderSubtle shadow-card overflow-hidden">
@@ -125,19 +182,21 @@ export function InsightsBoard({ data }: Props) {
               </span>
             )}
           </div>
-          <div className="text-[10px] sm:text-xs text-text-muted flex items-center gap-1">
+          <div className="text-[10px] sm:text-xs text-text-muted flex items-center gap-1.5">
             {loading && <RefreshCw size={12} className="animate-spin" />}
-            <span>14 ימים אחרונים</span>
+            <span>14 ימים אחרונים · מתעדכן כל דקה</span>
           </div>
         </div>
       </header>
 
       {/* Empty state */}
-      {!loading && totalCount === 0 && (
+      {!loading && totalCount === 0 && hiddenCount === 0 && (
         <div className="px-4 sm:px-5 py-10 text-center text-text-muted">
           <Sparkles size={28} className="mx-auto mb-2 text-text-muted/60" />
           <div className="text-sm">אין תובנות חדשות לרגע זה.</div>
-          <div className="text-[11px] mt-1">המערכת תזהה אנומליות והזדמנויות ברגע שייצוצרו.</div>
+          <div className="text-[11px] mt-1">
+            המערכת תזהה אנומליות והזדמנויות ברגע שייווצרו.
+          </div>
         </div>
       )}
 
@@ -154,6 +213,7 @@ export function InsightsBoard({ data }: Props) {
                 severity={sev}
                 meta={meta}
                 items={list}
+                onMark={markInsight}
               />
             );
           })}
@@ -165,6 +225,64 @@ export function InsightsBoard({ data }: Props) {
           מנתח נתונים…
         </div>
       )}
+
+      {/* Hidden / muted insights — collapsed by default, expandable */}
+      {hiddenCount > 0 && (
+        <div className="border-t border-borderSubtle bg-surfaceMuted/30">
+          <button
+            onClick={() => setShowHidden(v => !v)}
+            className="w-full px-4 sm:px-5 py-2.5 flex items-center justify-between gap-2 text-text-secondary hover:text-text-primary hover:bg-surfaceMuted transition-colors"
+          >
+            <span className="inline-flex items-center gap-2 text-xs sm:text-sm">
+              {showHidden ? <Eye size={14} /> : <EyeOff size={14} />}
+              <span className="font-medium">
+                {hiddenCount} תובנות מוסתרות
+              </span>
+              <span className="text-text-muted text-[10px] sm:text-[11px]">
+                (סומנו כבוצעו או הוסתרו ידנית)
+              </span>
+            </span>
+            {showHidden ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
+          {showHidden && (
+            <ul className="divide-y divide-borderSubtle/70 animate-fade-in">
+              {hidden.map(ins => {
+                const st = states[ins.id];
+                const meta = SEVERITY_META[ins.severity];
+                const stateLabel = st?.state === 'done' ? 'סומן כבוצע' : 'הוסתר';
+                return (
+                  <li key={ins.id} className="px-4 sm:px-5 py-2.5 flex items-start gap-3">
+                    <span
+                      className={cn(
+                        'inline-flex items-center justify-center w-6 h-6 rounded-md shrink-0 mt-0.5 opacity-60',
+                        meta.color, 'bg-surface ring-1 ring-inset', meta.border,
+                      )}
+                    >
+                      {meta.icon}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-text-secondary leading-snug truncate">
+                        {ins.title}
+                      </div>
+                      <div className="text-[10px] sm:text-[11px] text-text-muted mt-0.5">
+                        {stateLabel}{st?.at ? ` · ${relativeTime(st.at)}` : ''}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => restoreInsight(ins.id)}
+                      className="inline-flex items-center gap-1 px-2 py-1 text-[10px] sm:text-[11px] font-semibold text-primary hover:bg-primary/10 rounded transition-colors shrink-0"
+                      title="שחזר תובנה לרשימה הראשית"
+                    >
+                      <Undo2 size={11} />
+                      שחזר
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
     </section>
   );
 }
@@ -173,13 +291,13 @@ function SeverityGroup({
   severity,
   meta,
   items,
+  onMark,
 }: {
   severity: Severity;
   meta: typeof SEVERITY_META[Severity];
   items: Insight[];
+  onMark: (insight: Insight, kind: InsightStateKind) => void;
 }) {
-  // Critical / warning start expanded; opportunity / positive default to first
-  // 3 visible with a "show more". The user always sees the urgent stuff first.
   const showAllByDefault = severity === 'critical' || severity === 'warning';
   const [showAll, setShowAll] = useState(showAllByDefault);
   const visible = showAll ? items : items.slice(0, 3);
@@ -201,7 +319,7 @@ function SeverityGroup({
       </div>
       <ul className="space-y-px">
         {visible.map(insight => (
-          <InsightRow key={insight.id} insight={insight} meta={meta} />
+          <InsightRow key={insight.id} insight={insight} meta={meta} onMark={onMark} />
         ))}
       </ul>
       {remaining > 0 && (
@@ -234,16 +352,18 @@ function SeverityGroup({
 function InsightRow({
   insight,
   meta,
+  onMark,
 }: {
   insight: Insight;
   meta: typeof SEVERITY_META[Severity];
+  onMark: (insight: Insight, kind: InsightStateKind) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const hasDetail = !!insight.why;
   return (
     <li
       className={cn(
-        'px-4 sm:px-5 py-2.5 sm:py-3',
+        'group/insight px-4 sm:px-5 py-2.5 sm:py-3',
         'hover:bg-surface/60 transition-colors',
         'border-t border-borderSubtle/50',
       )}
@@ -275,31 +395,57 @@ function InsightRow({
             )}
           </div>
 
-          <div className="flex items-center gap-3 mt-2">
-            {hasDetail && (
-              <button
-                onClick={() => setExpanded(v => !v)}
-                className="text-[11px] text-text-secondary hover:text-text-primary inline-flex items-center gap-1 transition-colors"
-              >
-                {expanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
-                {expanded ? 'הסתר הסבר' : 'למה?'}
-              </button>
-            )}
+          {/* Action row */}
+          <div className="flex items-center gap-2 sm:gap-3 mt-2 flex-wrap">
+            {/* Primary actions: mark done / ignore */}
+            <button
+              onClick={() => onMark(insight, 'done')}
+              className={cn(
+                'inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-semibold transition-colors',
+                'text-roas-green bg-roas-greenBg/70 hover:bg-roas-greenBg',
+              )}
+              title="סמן כבוצע — יוסתר ל-7 ימים, ויחזור אם הבעיה תחזור"
+            >
+              <Check size={12} />
+              בוצע
+            </button>
+            <button
+              onClick={() => onMark(insight, 'ignored')}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-text-muted hover:text-text-secondary hover:bg-surfaceMuted transition-colors"
+              title="התעלם — יוסתר עד שתשחזר ידנית"
+            >
+              <ArchiveX size={12} />
+              התעלם
+            </button>
+
+            {/* External link if any */}
             {insight.href && (
               <a
                 href={insight.href}
                 target="_blank"
                 rel="noopener noreferrer"
                 className={cn(
-                  'inline-flex items-center gap-1 text-[11px] font-semibold transition-colors',
-                  meta.color, 'hover:opacity-80',
+                  'inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-semibold transition-colors',
+                  meta.color, 'hover:opacity-80 hover:bg-surface/60',
                 )}
               >
                 <ExternalLink size={11} />
                 פתח קמפיין
               </a>
             )}
+
+            {/* Why disclosure pushed to the end */}
+            {hasDetail && (
+              <button
+                onClick={() => setExpanded(v => !v)}
+                className="text-[11px] text-text-secondary hover:text-text-primary inline-flex items-center gap-1 transition-colors ml-auto"
+              >
+                {expanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                {expanded ? 'הסתר הסבר' : 'למה?'}
+              </button>
+            )}
           </div>
+
           {expanded && hasDetail && (
             <div className="mt-2 px-2.5 py-1.5 text-[11px] sm:text-xs text-text-secondary bg-surface/60 border-l-2 border-borderSubtle rounded animate-fade-in leading-relaxed">
               {insight.why}
@@ -309,4 +455,21 @@ function InsightRow({
       </div>
     </li>
   );
+}
+
+/**
+ * Compact relative-time formatter — "לפני 3 שעות", "אתמול", etc.
+ * Avoids pulling date-fns just for this one place.
+ */
+function relativeTime(ts: number): string {
+  const diff = Date.now() - ts;
+  const min = Math.floor(diff / 60_000);
+  if (min < 1) return 'הרגע';
+  if (min < 60) return `לפני ${min} ${min === 1 ? 'דקה' : 'דק׳'}`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `לפני ${hr} ${hr === 1 ? 'שעה' : 'שעות'}`;
+  const day = Math.floor(hr / 24);
+  if (day < 7) return `לפני ${day} ${day === 1 ? 'יום' : 'ימים'}`;
+  const wk = Math.floor(day / 7);
+  return `לפני ${wk} ${wk === 1 ? 'שבוע' : 'שבועות'}`;
 }

@@ -569,6 +569,84 @@ export function computePacing(
 }
 
 // ============================================================================
+// Insight state: "done" / "ignored" — user actions, persisted to localStorage.
+// ============================================================================
+
+const INSIGHT_STATES_KEY = 'roas-dashboard:insight-states';
+/** When a "done" insight returns to view if its underlying condition still
+ *  holds. 7 days is the sweet spot: long enough to feel like "I handled it",
+ *  short enough that a reappearing problem doesn't stay hidden forever. */
+const DONE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+/** Forget any state older than this. Keeps the storage clean over years. */
+const STATE_GC_MS = 90 * 24 * 60 * 60 * 1000;
+
+export type InsightStateKind = 'done' | 'ignored';
+
+export type InsightStateEntry = {
+  state: InsightStateKind;
+  /** ms epoch when the action was taken. */
+  at: number;
+  /** Optional snapshot of the title for the "restore" UI, in case the
+   *  underlying insight is no longer present at the time the user
+   *  decides to restore. */
+  title?: string;
+};
+
+export type InsightStates = Record<string, InsightStateEntry>;
+
+export function readInsightStates(): InsightStates {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = window.localStorage.getItem(INSIGHT_STATES_KEY);
+    if (!raw) return {};
+    const parsed: InsightStates = JSON.parse(raw);
+    // Drop anything older than the GC window.
+    const now = Date.now();
+    let dirty = false;
+    for (const [k, v] of Object.entries(parsed)) {
+      if (!v || typeof v.at !== 'number' || now - v.at > STATE_GC_MS) {
+        delete parsed[k];
+        dirty = true;
+      }
+    }
+    if (dirty) {
+      window.localStorage.setItem(INSIGHT_STATES_KEY, JSON.stringify(parsed));
+    }
+    return parsed;
+  } catch {
+    return {};
+  }
+}
+
+export function writeInsightStates(states: InsightStates) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(INSIGHT_STATES_KEY, JSON.stringify(states));
+  } catch {
+    /* storage quota / private mode: silently ignore */
+  }
+}
+
+/**
+ * Visibility rule for an insight given its persisted state:
+ *  - no state     → visible
+ *  - "ignored"    → hidden until manually restored
+ *  - "done" < 7d  → hidden (user just handled it)
+ *  - "done" ≥ 7d  → visible again (condition may have returned)
+ */
+export function isInsightVisible(
+  id: string,
+  states: InsightStates,
+  now: number = Date.now(),
+): boolean {
+  const s = states[id];
+  if (!s) return true;
+  if (s.state === 'ignored') return false;
+  if (s.state === 'done') return now - s.at > DONE_TTL_MS;
+  return true;
+}
+
+// ============================================================================
 // All-in-one: combine everything for the InsightsBoard
 // ============================================================================
 
