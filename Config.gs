@@ -8,7 +8,7 @@ const SUMMARY_TAB = 'סיכום';
 
 const SHOPIFY_API_VERSION = '2024-10';
 const META_API_VERSION = 'v20.0';
-const GOOGLE_ADS_API_VERSION = 'v17';
+const GOOGLE_ADS_API_VERSION = 'v20';
 
 const STORES = [
   { id: 'uzoshop',   name: 'uzoshop',   hasGoogleAds: true  },
