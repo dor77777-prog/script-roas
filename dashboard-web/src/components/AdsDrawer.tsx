@@ -18,6 +18,7 @@ import type { AdRow } from '@/lib/ads';
 import type { AdsResponse } from '@/app/api/ads/route';
 import { buildAdsManagerLink, type AdAccountMap } from '@/lib/campaignsLinks';
 import { readOptimized, toggleOptimized } from '@/lib/campaignOptimized';
+import { useDrawerEsc } from '@/lib/drawerStack';
 
 /**
  * Slide-in drawer that opens when the user clicks an ad-set row in the
@@ -99,14 +100,10 @@ export function AdsDrawer({
     setOptimized(prev => toggleOptimized(key, prev));
   }
 
-  useEffect(() => {
-    if (!open) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  // Esc closes ONLY this drawer when it's on top of the stack. Coordinated
+  // via the shared drawer stack so a nested drawer over CampaignDrawer
+  // doesn't collapse both surfaces in one keystroke (#WR-01).
+  useDrawerEsc(open, onClose);
 
   useEffect(() => {
     if (!open) return;

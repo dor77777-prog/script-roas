@@ -31,6 +31,7 @@ import {
   readOptimized,
   toggleOptimized,
 } from '@/lib/campaignOptimized';
+import { useDrawerEsc } from '@/lib/drawerStack';
 import { AdsDrawer } from './AdsDrawer';
 
 /**
@@ -112,15 +113,11 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
   function onToggle(key: string) {
     setOptimized(prev => toggleOptimized(key, prev));
   }
-  // Close on Esc.
-  useEffect(() => {
-    if (!open) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  // Close on Esc — coordinated via the shared drawer stack so that when
+  // a nested drawer (AdsDrawer) is open over this one, Esc only closes
+  // the topmost. Otherwise both `window` listeners fire in the same tick
+  // and the whole drilldown collapses in one keystroke (#WR-01).
+  useDrawerEsc(open, onClose);
 
   // Lock body scroll while open.
   useEffect(() => {
