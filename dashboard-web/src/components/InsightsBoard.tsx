@@ -203,6 +203,18 @@ export function InsightsBoard({ data }: Props) {
     };
   }, [grouped]);
 
+  // The "headline" insight surfaced when the board is collapsed. We pull it
+  // from the highest-priority severity bucket and treat it as a typographic
+  // moment — this is the component meant to be *memorable* on the dashboard,
+  // not just another card. Falls through severities in priority order so we
+  // always have one insight to feature when there's anything to say.
+  const topInsight = useMemo<Insight | null>(() => {
+    for (const sev of SEVERITY_ORDER) {
+      if (grouped[sev].length > 0) return grouped[sev][0];
+    }
+    return null;
+  }, [grouped]);
+
   return (
     <section className="rounded-2xl bg-surface border border-borderSubtle shadow-card overflow-hidden">
       {/* Clickable header — toggles the whole board open/closed. */}
@@ -258,10 +270,31 @@ export function InsightsBoard({ data }: Props) {
         </div>
       </button>
 
-      {/* Body — only rendered when expanded so collapsed cards stay lightweight */}
+      {/* Memorable headline: when the board is collapsed AND we have something
+          to say, surface the top insight as an editorial moment — large title,
+          vertical accent bar in the severity color, short "click for the rest"
+          hint. Per frontend-design's "give the user one thing they'll
+          remember" principle, this is the dashboard's signature surface. */}
+      {!boardExpanded && topInsight && !loading && (
+        <InsightHero
+          insight={topInsight}
+          otherCount={totalCount - 1}
+          onClick={toggleBoard}
+        />
+      )}
+
+      {/* All-clear state — calm dark panel with a soft green pulse so the user
+          can instantly see "nothing demands my attention right now". */}
       {!boardExpanded && hiddenCount === 0 && totalCount === 0 && !loading && (
-        <div className="px-4 sm:px-5 py-4 text-center text-[11px] sm:text-xs text-text-muted">
-          אין תובנות חדשות לרגע זה. לחץ על הכותרת לעוד פרטים.
+        <div className="px-5 sm:px-6 py-5 flex items-center gap-3">
+          <span className="relative inline-flex w-2.5 h-2.5 shrink-0">
+            <span className="absolute inset-0 rounded-full bg-roas-green/40 animate-ping" />
+            <span className="relative inline-flex w-full h-full rounded-full bg-roas-green" />
+          </span>
+          <div className="text-[12px] sm:text-sm text-text-secondary">
+            <span className="text-text-primary font-semibold">הכל רגוע.</span>{' '}
+            <span className="text-text-muted">המערכת לא זיהתה אנומליות או הזדמנויות פעילות.</span>
+          </div>
         </div>
       )}
 
@@ -359,6 +392,75 @@ export function InsightsBoard({ data }: Props) {
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * Editorial "headline" preview shown when the board is collapsed and there's
+ * at least one insight. Treats the insight title as a typographic moment —
+ * larger size, looser tracking, a vertical accent bar in the severity color —
+ * so the surface feels different from the surrounding KPI grid. Clicking
+ * anywhere opens the board.
+ */
+function InsightHero({
+  insight,
+  otherCount,
+  onClick,
+}: {
+  insight: Insight;
+  otherCount: number;
+  onClick: () => void;
+}) {
+  const meta = SEVERITY_META[insight.severity];
+  // Map the meta's "border-X/20" to a solid accent on the bar so the colour
+  // reads at full strength against the white surface (border-opacity is too
+  // muted for the kind of vertical-rule moment we want here).
+  const ACCENT_BG: Record<Severity, string> = {
+    critical:    'bg-roas-red',
+    warning:     'bg-amber-500',
+    opportunity: 'bg-primary',
+    positive:    'bg-roas-green',
+    info:        'bg-text-muted',
+  };
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full text-start group flex items-stretch gap-4 sm:gap-5 px-4 sm:px-6 py-4 sm:py-5 hover:bg-surfaceMuted/40 transition-colors"
+      aria-label={`פתח לוח תובנות (${insight.title})`}
+    >
+      {/* Vertical accent bar — anchors the typographic moment and signals
+          severity at a glance. */}
+      <span
+        className={cn(
+          'shrink-0 w-[3px] rounded-full',
+          ACCENT_BG[insight.severity],
+        )}
+        aria-hidden
+      />
+
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <div className="flex items-center gap-2 text-[10px] sm:text-[11px] uppercase tracking-[0.12em] font-semibold">
+          <span className={meta.color}>{meta.label}</span>
+          {otherCount > 0 && (
+            <span className="text-text-muted normal-case tracking-normal font-normal">
+              · עוד {otherCount} {otherCount === 1 ? 'תובנה' : 'תובנות'}
+            </span>
+          )}
+        </div>
+        <div className="text-base sm:text-lg md:text-xl font-semibold text-text-primary leading-snug tracking-tight">
+          {insight.title}
+        </div>
+        {insight.detail && (
+          <p className="text-[12px] sm:text-sm text-text-secondary leading-relaxed line-clamp-2 max-w-2xl">
+            {insight.detail}
+          </p>
+        )}
+        <div className="pt-1 text-[11px] text-text-muted opacity-0 group-hover:opacity-100 transition-opacity">
+          לחץ לפרטים ולכל התובנות ←
+        </div>
+      </div>
+    </button>
   );
 }
 
