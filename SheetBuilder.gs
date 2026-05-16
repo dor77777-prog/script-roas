@@ -447,3 +447,87 @@ function repairAllFormulas() {
   repairUsmile360Formulas();
   repairSummaryFormulas();
 }
+
+/**
+ * סורק טווח תאריכים בטאב ומדפיס לכל יום אם יש בו את כל הערכים הנדרשים.
+ * שימושי כדי לוודא שלא פספסת ימים.
+ *
+ * דוגמה: verifyTabDataInRange('uzoshop', '2026-05-08', '2026-05-14')
+ */
+function verifyTabDataInRange(tabName, startDateStr, endDateStr) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDateStr) || !/^\d{4}-\d{2}-\d{2}$/.test(endDateStr)) {
+    throw new Error('תאריכים לא תקינים');
+  }
+  const ss = ensureSpreadsheet();
+  const sheet = ss.getSheetByName(tabName);
+  if (!sheet) throw new Error(`לא נמצא טאב: ${tabName}`);
+  const layout = getLayout_(tabName);
+
+  // אנדקס דירוגי יום לפי תאריך
+  const lastRow = sheet.getLastRow();
+  const colA = sheet.getRange(1, 1, lastRow, 1).getValues();
+  const dateToRow = {};
+  for (let i = 0; i < colA.length; i++) {
+    const v = colA[i][0];
+    let key = null;
+    if (v instanceof Date && !isNaN(v.getTime())) {
+      key = Utilities.formatDate(v, ss.getSpreadsheetTimeZone(), 'yyyy-MM-dd');
+    } else if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
+      key = v;
+    }
+    if (key) dateToRow[key] = i + 1;
+  }
+
+  const lines = [];
+  lines.push(`=== Verify "${tabName}" from ${startDateStr} to ${endDateStr} ===`);
+  let issues = 0;
+  let cur = startDateStr;
+  while (cur <= endDateStr) {
+    const row = dateToRow[cur];
+    if (!row) {
+      lines.push(`${cur}: ✗ שורה לא קיימת בטאב`);
+      issues++;
+    } else {
+      const lastCol = layout.cols;
+      const values = sheet.getRange(row, 1, 1, lastCol).getValues()[0];
+      const status = [];
+      let dayOk = true;
+
+      if (layout.type === 'split') {
+        const fb = values[layout.fbCol - 1];
+        const ga = values[layout.gaCol - 1];
+        const rev = values[layout.revenueCol - 1];
+        status.push(`FB=${fb === '' || fb === null ? '✗' : fb}`);
+        status.push(`GA=${ga === '' || ga === null ? '✗' : ga}`);
+        status.push(`Rev=${rev === '' || rev === null ? '✗' : rev}`);
+        if (fb === '' || fb === null) dayOk = false;
+        if (ga === '' || ga === null) dayOk = false;
+        if (rev === '' || rev === null) dayOk = false;
+      } else if (layout.type === 'unified') {
+        const total = values[layout.totalCol - 1];
+        const rev = values[layout.revenueCol - 1];
+        status.push(`Total=${total === '' || total === null ? '✗' : total}`);
+        status.push(`Rev=${rev === '' || rev === null ? '✗' : rev}`);
+        if (total === '' || total === null) dayOk = false;
+        if (rev === '' || rev === null) dayOk = false;
+      }
+      lines.push(`${cur}: ${dayOk ? '✓' : '✗'} (row ${row})  ${status.join('  ')}`);
+      if (!dayOk) issues++;
+    }
+    cur = nextDayStr_(cur);
+  }
+  lines.push('');
+  if (issues === 0) {
+    lines.push(`✓ כל הימים מלאים`);
+  } else {
+    lines.push(`✗ ${issues} ימים עם חוסרים - הרץ backfillRange על התאריכים האלה`);
+  }
+  const msg = lines.join('\n');
+  Logger.log(msg);
+  return msg;
+}
+
+/** קיצור דרך: בדיקת uzoshop בטווח 2026-05-08 עד 2026-05-14. */
+function verifyUzoshopMay8to14() {
+  return verifyTabDataInRange('uzoshop', '2026-05-08', '2026-05-14');
+}
