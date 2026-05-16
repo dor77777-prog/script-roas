@@ -21,6 +21,16 @@ export type CampaignRow = {
   clicks: number;
   conversions: number;
   conversionValue: number;  // CAD — revenue attributed by the platform
+  /** Daily budget at the campaign level (CAD). Populated only when the
+   *  campaign uses CBO (Campaign Budget Optimization). null/0 means either
+   *  the budget is at the ad-set level (ABO) or unknown. */
+  campaignBudgetCad: number | null;
+  /** Daily budget at the ad-set level (CAD). Populated only when the
+   *  ad-set itself owns the budget (ABO). null/0 means CBO or unknown. */
+  adSetBudgetCad: number | null;
+  /** Budget allocation type. 'CBO' = campaign owns budget. 'ABO' = ad-set
+   *  owns budget. '' / undefined = unknown (paused / lifetime-only / Google). */
+  budgetType: 'CBO' | 'ABO' | '';
 };
 
 /** Must match the IDs in Apps Script Config.gs STORES. */
@@ -86,7 +96,10 @@ export async function fetchCampaignsData(): Promise<CampaignRow[]> {
   const sheets = google.sheets({ version: 'v4', auth });
   const spreadsheetId = getSpreadsheetId();
 
-  const ranges = STORE_TAB_CONFIG.map(s => `${s.id}-campaigns!A2:L100000`);
+  // Range extended A:O to include columns M-O (campaign budget / ad-set
+  // budget / budget type). Older tabs without those columns will return
+  // shorter rows; the parser tolerates undefined positions.
+  const ranges = STORE_TAB_CONFIG.map(s => `${s.id}-campaigns!A2:O100000`);
 
   let res;
   try {
@@ -125,6 +138,18 @@ export async function fetchCampaignsData(): Promise<CampaignRow[]> {
       const conversions = parseNumber(row[9]);
       const conversionValue = parseNumber(row[10]);
 
+      // Cols M=12, N=13, O=14 (0-indexed). undefined for legacy tabs without
+      // the budget columns yet.
+      const cbRaw = row[12];
+      const abRaw = row[13];
+      const btRaw = String(row[14] ?? '').trim().toUpperCase();
+      const campaignBudgetCad =
+        cbRaw === undefined || cbRaw === null || cbRaw === '' ? null : parseNumber(cbRaw);
+      const adSetBudgetCad =
+        abRaw === undefined || abRaw === null || abRaw === '' ? null : parseNumber(abRaw);
+      const budgetType: 'CBO' | 'ABO' | '' =
+        btRaw === 'CBO' || btRaw === 'ABO' ? btRaw : '';
+
       // Drop totally-empty rows (no spend AND no impressions). Keeps the
       // dashboard from showing dormant ad sets that contribute nothing.
       if (spend === 0 && impressions === 0 && conversions === 0) continue;
@@ -143,6 +168,9 @@ export async function fetchCampaignsData(): Promise<CampaignRow[]> {
         clicks,
         conversions,
         conversionValue,
+        campaignBudgetCad,
+        adSetBudgetCad,
+        budgetType,
       });
     }
   }

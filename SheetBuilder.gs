@@ -608,11 +608,15 @@ function verifyUzoshopMay8to14() {
 // טאבי קמפיינים (אד-סטים) - שכבת רזולוציה מתחת לסיכום היומי
 // ============================================================================
 
+// Cols 1..12 are the original schema; 13..15 added 2026-05 to carry budget
+// info per row so the dashboard can show "this is a CBO campaign with
+// $50/day" or "this ad-set has $20/day".
 const CAMPAIGN_HEADERS = [
   'תאריך', 'פלטפורמה', 'מזהה קמפיין', 'שם קמפיין',
   'מזהה אד-סט', 'שם אד-סט',
   'יצא (CAD)', 'חשיפות', 'קליקים',
-  'המרות', 'ערך המרות (CAD)', 'ROAS'
+  'המרות', 'ערך המרות (CAD)', 'ROAS',
+  'תקציב קמפיין (CAD)', 'תקציב אד-סט (CAD)', 'סוג תקציב'
 ];
 
 function ensureCampaignTabHeaders_(sheet) {
@@ -635,6 +639,30 @@ function ensureCampaignTabHeaders_(sheet) {
     sheet.setColumnWidth(10, 70);   // Conversions
     sheet.setColumnWidth(11, 110);  // Conv Value
     sheet.setColumnWidth(12, 70);   // ROAS
+    sheet.setColumnWidth(13, 130);  // Campaign Budget (CAD)
+    sheet.setColumnWidth(14, 130);  // Ad Set Budget (CAD)
+    sheet.setColumnWidth(15, 100);  // Budget Type
+  } else {
+    // Older tabs missing cols 13-15: add the headers idempotently. Existing
+    // rows will get empty values for the new columns until the next daily
+    // refresh writes them.
+    const lastCol = sheet.getLastColumn();
+    if (lastCol < 15) {
+      const labels = ['תקציב קמפיין (CAD)', 'תקציב אד-סט (CAD)', 'סוג תקציב'];
+      for (let i = 0; i < 3; i++) {
+        const col = 13 + i;
+        const cell = sheet.getRange(1, col);
+        if (!cell.getValue()) {
+          cell.setValue(labels[i])
+            .setFontWeight('bold')
+            .setBackground('#d9d9d9')
+            .setHorizontalAlignment('center');
+        }
+      }
+      sheet.setColumnWidth(13, 130);
+      sheet.setColumnWidth(14, 130);
+      sheet.setColumnWidth(15, 100);
+    }
   }
 }
 
@@ -702,6 +730,12 @@ function writeCampaignRowsForDay(ss, storeId, dateStr, rows) {
     round2_(r.conversions || 0),
     round2_(r.conversionValueCad || 0),
     '', // ROAS - נוסחה
+    // Budget enrichment — populated by callers that include budget data on
+    // the row (currently MetaAds via getMetaBudgets). Google rows pass null
+    // for all three.
+    r.campaignBudgetCad != null ? round2_(r.campaignBudgetCad) : '',
+    r.adSetBudgetCad != null ? round2_(r.adSetBudgetCad) : '',
+    r.budgetType || '',  // 'CBO' | 'ABO' | '' (unknown)
   ]);
 
   const combined = keptRows.concat(newRowsArr);
@@ -722,6 +756,8 @@ function writeCampaignRowsForDay(ss, storeId, dateStr, rows) {
   sh.getRange(2, 8, combined.length, 2).setNumberFormat('#,##0');         // Impressions, Clicks
   sh.getRange(2, 10, combined.length, 2).setNumberFormat('#,##0.00');     // Conversions, Conv Value
   sh.getRange(2, 12, combined.length, 1).setNumberFormat('0.00').setHorizontalAlignment('center');
+  sh.getRange(2, 13, combined.length, 2).setNumberFormat('#,##0.00');     // Campaign Budget, Ad Set Budget
+  sh.getRange(2, 15, combined.length, 1).setHorizontalAlignment('center'); // Budget Type
 
   // שלב 6: נוסחאות ROAS ב-batch אחד
   const formulas = combined.map((_, i) => {

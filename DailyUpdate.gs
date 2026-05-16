@@ -145,11 +145,49 @@ function updateCampaignDataForStoreDate_(ss, store, dateStr, ilsToCad) {
   if (metaOverrideForDay) {
     Logger.log(`Meta campaigns ${store.name} ${dateStr}: SKIPPED (manual override active)`);
   } else try {
+    // Budgets are a current-state property (not time-windowed), so we fetch
+    // them once per store per run. Failure here is non-fatal — we still write
+    // spend/conversion rows, just without the budget enrichment.
+    let metaBudgets = null;
+    try {
+      metaBudgets = getMetaBudgets(store.id);
+    } catch (be) {
+      Logger.log(`Meta budgets ${store.name} fetch failed (non-fatal): ${be && be.message ? be.message : be}`);
+    }
+
     const metaRows = getMetaAdSetInsights(store.id, dateStr);
     for (const r of metaRows) {
       const fxToCad = r.currency === 'CAD' ? 1
                     : r.currency === 'ILS' ? ilsToCad
                     : getFxRate(r.currency, 'CAD', dateStr);
+
+      // Resolve budget for this row. Logic:
+      //   - If the campaign has its own budget > 0 → CBO. Show on the campaign
+      //     row (campaignBudgetCad), leave adSetBudgetCad blank.
+      //   - Else, if this row's ad-set has a budget > 0 → ABO. Show on the
+      //     ad-set row (adSetBudgetCad), leave campaignBudgetCad blank.
+      //   - Else → both blank, type empty (unknown / paused / lifetime-only
+      //     with 0 remaining).
+      let campaignBudgetCad = null;
+      let adSetBudgetCad = null;
+      let budgetType = '';
+      if (metaBudgets) {
+        const bFx = metaBudgets.currency === 'CAD' ? 1
+                  : metaBudgets.currency === 'ILS' ? ilsToCad
+                  : getFxRate(metaBudgets.currency, 'CAD', dateStr);
+        const cb = metaBudgets.campaigns[r.campaignId];
+        const ab = metaBudgets.adSets[r.adSetId];
+        const cbDaily = cb && cb.dailyBudget > 0 ? cb.dailyBudget : 0;
+        const abDaily = ab && ab.dailyBudget > 0 ? ab.dailyBudget : 0;
+        if (cbDaily > 0) {
+          campaignBudgetCad = cbDaily * bFx;
+          budgetType = 'CBO';
+        } else if (abDaily > 0) {
+          adSetBudgetCad = abDaily * bFx;
+          budgetType = 'ABO';
+        }
+      }
+
       rows.push({
         date: dateStr,
         platform: 'Meta',
@@ -162,6 +200,9 @@ function updateCampaignDataForStoreDate_(ss, store, dateStr, ilsToCad) {
         clicks: r.clicks,
         conversions: r.conversions,
         conversionValueCad: r.conversionValue * fxToCad,
+        campaignBudgetCad,
+        adSetBudgetCad,
+        budgetType,
       });
     }
   } catch (e) {

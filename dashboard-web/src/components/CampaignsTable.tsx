@@ -79,6 +79,14 @@ type Aggregated = {
   clicks: number;
   conversions: number;
   conversionValue: number;
+  /** Daily campaign-level budget in CAD (CBO). null when ABO / unknown. */
+  campaignBudgetCad: number | null;
+  /** Daily ad-set-level budget in CAD (ABO, ad-set rows only). null when CBO
+   *  or unknown. */
+  adSetBudgetCad: number | null;
+  /** 'CBO' / 'ABO' / '' (unknown). Taken from the most recent matching row
+   *  during aggregation since the type is a current-state property. */
+  budgetType: 'CBO' | 'ABO' | '';
 };
 
 function aggregate(
@@ -114,6 +122,12 @@ function aggregate(
         clicks: 0,
         conversions: 0,
         conversionValue: 0,
+        // Budgets are a current-state property — every row carries today's
+        // value. We always overwrite with the latest matching row so the
+        // displayed budget reflects "current" rather than averaging history.
+        campaignBudgetCad: r.campaignBudgetCad,
+        adSetBudgetCad: mode === 'adset' ? r.adSetBudgetCad : null,
+        budgetType: r.budgetType,
       });
     }
     const a = map.get(key)!;
@@ -122,6 +136,12 @@ function aggregate(
     a.clicks += r.clicks;
     a.conversions += r.conversions;
     a.conversionValue += r.conversionValue;
+    // Budget reflects "current" — overwrite with the latest non-null value
+    // we see. The daily rows are ordered chronologically inside the data
+    // tab, so the last write here is the most recent.
+    if (r.campaignBudgetCad != null) a.campaignBudgetCad = r.campaignBudgetCad;
+    if (mode === 'adset' && r.adSetBudgetCad != null) a.adSetBudgetCad = r.adSetBudgetCad;
+    if (r.budgetType) a.budgetType = r.budgetType;
   }
   return Array.from(map.values());
 }
@@ -657,15 +677,55 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                           <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-surfaceMuted text-[10px] font-bold text-text-secondary tabular-nums shrink-0">
                             {i + 1}
                           </span>
-                          <div className="min-w-0">
-                            <div className="font-medium text-text-primary truncate">
-                              {mode === 'campaign' ? a.campaignName : a.adSetName}
+                          <div className="min-w-0 flex-1">
+                            <div className="font-medium text-text-primary truncate flex items-center gap-1.5">
+                              <span className="truncate">
+                                {mode === 'campaign' ? a.campaignName : a.adSetName}
+                              </span>
+                              {/* CBO / ABO tag — small typographic signal so
+                                  the user can tell at a glance which level
+                                  owns the budget. Only shown for Meta and only
+                                  when we have a non-empty type. */}
+                              {a.platform === 'Meta' && a.budgetType && (
+                                <span
+                                  className={cn(
+                                    'inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0',
+                                    a.budgetType === 'CBO'
+                                      ? 'bg-primary/10 text-primary'
+                                      : 'bg-purple-100 text-purple-700',
+                                  )}
+                                  title={a.budgetType === 'CBO' ? 'Campaign Budget Optimization — תקציב ברמת קמפיין' : 'Ad-Set Budget Optimization — תקציב ברמת ad-set'}
+                                >
+                                  {a.budgetType}
+                                </span>
+                              )}
                             </div>
                             <div className="text-[10px] sm:text-[11px] text-text-muted truncate">
                               {a.platform}
                               {' · '}
                               {a.storeName}
                               {mode === 'adset' && a.campaignName ? ` · ${a.campaignName}` : ''}
+                              {/* Inline budget hint:
+                                  - In campaign mode: CBO campaigns show their
+                                    daily budget here ("תקציב יומי: CAD 50").
+                                  - In ad-set mode: ABO ad-sets show their
+                                    own daily budget. */}
+                              {mode === 'campaign' && a.campaignBudgetCad && a.campaignBudgetCad > 0 && (
+                                <span className="ml-1.5 inline-flex items-center gap-0.5 text-text-secondary">
+                                  · תקציב יומי{' '}
+                                  <span className="font-semibold tabular-nums text-text-primary">
+                                    CAD {formatCurrency(a.campaignBudgetCad)}
+                                  </span>
+                                </span>
+                              )}
+                              {mode === 'adset' && a.adSetBudgetCad && a.adSetBudgetCad > 0 && (
+                                <span className="ml-1.5 inline-flex items-center gap-0.5 text-text-secondary">
+                                  · תקציב יומי{' '}
+                                  <span className="font-semibold tabular-nums text-text-primary">
+                                    CAD {formatCurrency(a.adSetBudgetCad)}
+                                  </span>
+                                </span>
+                              )}
                             </div>
                           </div>
                         </div>

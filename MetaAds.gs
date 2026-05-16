@@ -120,3 +120,106 @@ function getMetaSpend(storeId, dateStr) {
   Logger.log(`Meta ${storeId} ${dateStr}: spend=${spend} ${currency}`);
   return { spend, currency };
 }
+
+/**
+ * שולף את התקציב היומי / לכל-החיים של כל הקמפיינים וה-ad-sets בחשבון.
+ *
+ * Meta API מחזיר תקציבים ביחידות מינוריות של המטבע (cents/agorot) כמחרוזות.
+ * דוגמה: "5000" בחשבון ILS = ₪50. צריך לחלק ב-100 כדי לקבל ערך אמיתי במטבע
+ * החשבון, ואז להמיר ל-CAD לפי FX היומי.
+ *
+ * הבחנת CBO/ABO:
+ *   - אם daily_budget או lifetime_budget של הקמפיין > 0 → CBO (קמפיין הוא
+ *     בעל התקציב, אין ל-ad-sets שלו תקציבים נפרדים).
+ *   - אם שניהם 0/null וה-ad-sets יש להם תקציבים → ABO (כל ad-set הוא בעל
+ *     תקציב משלו).
+ *
+ * החזרה:
+ *   {
+ *     currency: 'ILS' | 'USD' | ...,
+ *     campaigns: Map<campaignId, { dailyBudget, lifetimeBudget, bidStrategy }>,
+ *     adSets:    Map<adSetId,    { dailyBudget, lifetimeBudget, campaignId }>,
+ *   }
+ *
+ * הערכים daily/lifetime כבר חלוקים ב-100 (כלומר במטבע מלא, לא ב-cents).
+ */
+function getMetaBudgets(storeId) {
+  const token = getProp(`${storeId}.meta.accessToken`) || getProp('meta.accessToken');
+  if (!token) {
+    throw new Error(`חסר טוקן Meta עבור ${storeId}.`);
+  }
+  const adAccountId = requireProp(`${storeId}.meta.adAccountId`).replace(/^act_/, '');
+
+  // ---- account currency (one shot) -----------------------------------------
+  let currency = 'ILS';
+  try {
+    const acctUrl = `https://graph.facebook.com/${META_API_VERSION}/act_${adAccountId}` +
+                    `?fields=currency&access_token=${encodeURIComponent(token)}`;
+    const acctRes = fetchWithRetry_(acctUrl, { method: 'get', muteHttpExceptions: true });
+    if (acctRes.getResponseCode() === 200) {
+      const acctBody = JSON.parse(acctRes.getContentText());
+      currency = acctBody.currency || 'ILS';
+    }
+  } catch (_) {
+    // Fall back to ILS — the budget will still get FX-converted later, so a
+    // wrong currency tag is conservative but not catastrophic.
+  }
+
+  function toMajor(rawStr) {
+    const n = parseFloat(rawStr || 0);
+    return Number.isFinite(n) ? n / 100 : 0;
+  }
+
+  // ---- campaigns ------------------------------------------------------------
+  const campaigns = {};
+  let curl = `https://graph.facebook.com/${META_API_VERSION}/act_${adAccountId}/campaigns` +
+             `?fields=id,daily_budget,lifetime_budget,bid_strategy,status,effective_status` +
+             `&limit=500&access_token=${encodeURIComponent(token)}`;
+  let safety = 0;
+  while (curl && safety < 50) {
+    const res = fetchWithRetry_(curl, { method: 'get', muteHttpExceptions: true });
+    if (res.getResponseCode() !== 200) {
+      Logger.log(`Meta campaigns budgets ${storeId} failed (${res.getResponseCode()}): ${res.getContentText()}`);
+      break;
+    }
+    const body = JSON.parse(res.getContentText());
+    for (const c of (body.data || [])) {
+      campaigns[c.id] = {
+        dailyBudget: toMajor(c.daily_budget),
+        lifetimeBudget: toMajor(c.lifetime_budget),
+        bidStrategy: c.bid_strategy || '',
+        status: c.effective_status || c.status || '',
+      };
+    }
+    curl = (body.paging && body.paging.next) || null;
+    safety++;
+  }
+
+  // ---- ad-sets --------------------------------------------------------------
+  const adSets = {};
+  let aurl = `https://graph.facebook.com/${META_API_VERSION}/act_${adAccountId}/adsets` +
+             `?fields=id,campaign_id,daily_budget,lifetime_budget,status,effective_status` +
+             `&limit=500&access_token=${encodeURIComponent(token)}`;
+  safety = 0;
+  while (aurl && safety < 50) {
+    const res = fetchWithRetry_(aurl, { method: 'get', muteHttpExceptions: true });
+    if (res.getResponseCode() !== 200) {
+      Logger.log(`Meta adsets budgets ${storeId} failed (${res.getResponseCode()}): ${res.getContentText()}`);
+      break;
+    }
+    const body = JSON.parse(res.getContentText());
+    for (const a of (body.data || [])) {
+      adSets[a.id] = {
+        dailyBudget: toMajor(a.daily_budget),
+        lifetimeBudget: toMajor(a.lifetime_budget),
+        campaignId: a.campaign_id || '',
+        status: a.effective_status || a.status || '',
+      };
+    }
+    aurl = (body.paging && body.paging.next) || null;
+    safety++;
+  }
+
+  Logger.log(`Meta budgets ${storeId}: ${Object.keys(campaigns).length} campaigns / ${Object.keys(adSets).length} adsets · currency=${currency}`);
+  return { currency, campaigns, adSets };
+}
