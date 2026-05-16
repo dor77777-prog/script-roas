@@ -317,7 +317,14 @@ export function AdsDrawer({
                           <td className="px-2 py-2 text-center w-[36px]">
                             <button
                               type="button"
-                              onClick={() => onToggle(markKey)}
+                              onClick={e => {
+                                // Defensive stopPropagation: no parent row
+                                // onClick exists today, but matching the
+                                // CampaignDrawer / CampaignsTable pattern keeps
+                                // the toggle safe if a row-click is added.
+                                e.stopPropagation();
+                                onToggle(markKey);
+                              }}
                               className={cn(
                                 'inline-flex items-center justify-center w-7 h-7 rounded-full transition-colors',
                                 isOptimized

@@ -464,7 +464,14 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
                           <td className="px-2 py-2 text-center w-[36px]">
                             <button
                               type="button"
-                              onClick={() => onToggle(markKey)}
+                              onClick={e => {
+                                // Stop the click from bubbling up to the row,
+                                // which would also open AdsDrawer for this
+                                // ad-set. Mirrors the pattern used in
+                                // CampaignsTable.tsx (line ~778).
+                                e.stopPropagation();
+                                onToggle(markKey);
+                              }}
                               className={cn(
                                 'inline-flex items-center justify-center w-7 h-7 rounded-full transition-colors',
                                 isOptimized
