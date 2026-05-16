@@ -50,6 +50,7 @@ const STATE_KEYS = [
   'roas-dashboard:annotations',
   'roas-dashboard:monthly-revenue-goal',
   'roas-dashboard:insight-states',
+  'roas-dashboard:campaign-optimized',
 ] as const;
 export type StateKey = (typeof STATE_KEYS)[number];
 
@@ -59,6 +60,7 @@ const CHANGE_EVENTS: Record<StateKey, string> = {
   'roas-dashboard:annotations': 'roas-annotations-changed',
   'roas-dashboard:monthly-revenue-goal': 'roas-goal-changed',
   'roas-dashboard:insight-states': 'roas-insight-states-changed',
+  'roas-dashboard:campaign-optimized': 'roas-campaign-optimized-changed',
 };
 
 /** ms epoch of the last push we sent for each key. Used to skip stomping

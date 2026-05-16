@@ -234,6 +234,7 @@ export const ALLOWED_STATE_KEYS = [
   'annotations',
   'monthly-revenue-goal',
   'insight-states',
+  'campaign-optimized',
 ] as const;
 export type AllowedStateKey = (typeof ALLOWED_STATE_KEYS)[number];
 

@@ -8,8 +8,10 @@ import {
   ArrowUp,
   ArrowUpDown,
   Calendar,
+  CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Circle,
   ExternalLink,
   Megaphone,
   Store as StoreIcon,
@@ -18,6 +20,11 @@ import {
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import type { CampaignRow } from '@/lib/campaigns';
 import { buildAdsManagerLink, type AdAccountMap } from '@/lib/campaignsLinks';
+import {
+  clearAllOptimized,
+  readOptimized,
+  toggleOptimized,
+} from '@/lib/campaignOptimized';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { DateRange } from '@/lib/types';
 import { roasLabel } from '@/lib/analytics';
@@ -251,6 +258,24 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   const [mode, setMode] = useState<Mode>('campaign');
   const [platform, setPlatform] = useState<Platform>('all');
   const [showAll, setShowAll] = useState(false);
+
+  // "Optimized" marks — purely a UX helper while the user goes through
+  // campaigns/ad-sets and ticks the ones they've already touched. Hydrated
+  // from localStorage on mount, kept in sync across devices by the cloud
+  // sync layer (registered as 'campaign-optimized' in STATE_KEYS).
+  const [optimized, setOptimized] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    setOptimized(readOptimized());
+    const onChange = () => setOptimized(readOptimized());
+    window.addEventListener('roas-campaign-optimized-changed', onChange);
+    return () => window.removeEventListener('roas-campaign-optimized-changed', onChange);
+  }, []);
+  function onToggleOptimized(key: string) {
+    setOptimized(prev => toggleOptimized(key, prev));
+  }
+  function onClearAll() {
+    setOptimized(clearAllOptimized());
+  }
 
   // Sort state. Defaults to ROAS desc — same as the implicit sort before.
   // Click a different column → switch + reset to desc (because users almost
@@ -512,6 +537,25 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         )}
       </div>
 
+      {/* Optimized-mark counter + bulk-clear. Only renders when something is
+          marked, so the toolbar stays calm during the rest of the time. */}
+      {optimized.size > 0 && (
+        <div className="flex items-center gap-1.5 text-[11px] sm:text-xs">
+          <CheckCircle2 size={13} className="text-roas-green shrink-0" />
+          <span className="font-medium text-text-secondary tabular-nums">
+            {optimized.size} מסומנים
+          </span>
+          <button
+            type="button"
+            onClick={onClearAll}
+            className="font-semibold text-text-muted hover:text-roas-red transition-colors px-1.5 py-0.5 rounded hover:bg-roas-redBg/40"
+            title="הסר את כל הסימונים"
+          >
+            נקה הכל
+          </button>
+        </div>
+      )}
+
       <span className="text-[10px] sm:text-xs text-text-muted tabular-nums sm:mr-auto">
         {aggregated.length}{' '}
         {mode === 'campaign' ? 'קמפיינים' : 'אד-סטים'}
@@ -575,9 +619,13 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       {data && display.length > 0 && (
         <>
           <div className="overflow-x-auto">
-            <table className="w-full text-xs sm:text-sm min-w-[920px]">
+            <table className="w-full text-xs sm:text-sm min-w-[1060px]">
               <thead>
                 <tr className="text-text-secondary border-b border-borderSubtle bg-surfaceMuted/40">
+                  {/* Per-row optimization toggle. No label — the leading
+                      circle/check icon is self-explanatory and a label would
+                      crowd the header. */}
+                  <th className="px-3 py-2 w-[36px]" aria-label="סימון אופטימיזציה" />
                   <SortHeader
                     label={mode === 'campaign' ? 'קמפיין' : 'אד-סט'}
                     sortKey="name"
@@ -676,10 +724,18 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     adSetId: a.adSetId,
                     accounts: adAccounts,
                   });
+                  const isOptimized = optimized.has(a.key);
                   return (
                     <tr
                       key={a.key}
-                      className="border-b border-borderSubtle hover:bg-surfaceMuted/40 cursor-pointer"
+                      className={cn(
+                        'border-b border-borderSubtle hover:bg-surfaceMuted/40 cursor-pointer transition-opacity',
+                        // Marked rows visually retreat so the user's eye
+                        // anchors on the un-marked work-list. Hovering brings
+                        // them back to full opacity so re-reading details
+                        // (or unmarking) is easy.
+                        isOptimized && 'opacity-50 hover:opacity-100',
+                      )}
                       onClick={() => {
                         // Only open the drawer in campaign mode (ad-set mode
                         // already shows ad-set-level detail; opening a deeper
@@ -691,6 +747,30 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                       }}
                       title={mode === 'campaign' ? 'לחץ לפרטים מלאים' : undefined}
                     >
+                      {/* Per-row optimization toggle. Clicking flips the mark
+                          without bubbling into the row click (which would
+                          open the drawer). The empty Circle is the un-marked
+                          state; CheckCircle2 in green is the marked state. */}
+                      <td className="px-2 py-2 text-center w-[36px]">
+                        <button
+                          type="button"
+                          onClick={e => {
+                            e.stopPropagation();
+                            onToggleOptimized(a.key);
+                          }}
+                          className={cn(
+                            'inline-flex items-center justify-center w-7 h-7 rounded-full transition-colors',
+                            isOptimized
+                              ? 'text-roas-green hover:bg-roas-greenBg/60'
+                              : 'text-text-muted hover:text-roas-green hover:bg-roas-greenBg/40',
+                          )}
+                          title={isOptimized ? 'לחץ להסרת הסימון' : 'סמן כאופטימיזציה בוצעה'}
+                          aria-label={isOptimized ? 'בטל סימון אופטימיזציה' : 'סמן כאופטימיזציה בוצעה'}
+                          aria-pressed={isOptimized}
+                        >
+                          {isOptimized ? <CheckCircle2 size={18} /> : <Circle size={18} />}
+                        </button>
+                      </td>
                       <td className="px-3 sm:px-5 py-2 max-w-[280px] sm:max-w-[400px]">
                         <div className="flex items-center gap-2">
                           <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-surfaceMuted text-[10px] font-bold text-text-secondary tabular-nums shrink-0">
