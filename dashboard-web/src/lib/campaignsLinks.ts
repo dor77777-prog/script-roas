@@ -21,13 +21,16 @@ export type AdAccountMap = Record<
  *
  * The key insight: without an explicit account ID in the URL, both Meta and
  * Google Ads open whichever account the user was last viewing — not the
- * account that actually owns the campaign. The user lands on a "campaign not
- * found in this account" view. Including `act=<metaId>` (Meta) or
- * `__c=<customerId>` (Google) forces the right account to load first.
+ * account that actually owns the campaign. Including `act=<metaId>` (Meta)
+ * or `__c=<customerId>` (Google) forces the right account to load first.
  *
- * Returns null if the platform isn't supported OR if the account ID for the
- * store isn't configured yet (we'd rather hide the link than send the user
- * to the wrong account).
+ * Fallback behaviour when the account ID isn't configured yet (e.g. the user
+ * hasn't run `refreshAllStoreMeta` in Apps Script): we still return a URL
+ * — just without the account selector. That preserves the pre-fix behaviour
+ * ("Ads Manager opens on whatever account you were last in") which is
+ * suboptimal but strictly better than hiding the button entirely.
+ *
+ * Returns null only when the platform is unrecognised or campaignId is empty.
  */
 export function buildAdsManagerLink(opts: {
   platform: string;
@@ -41,29 +44,22 @@ export function buildAdsManagerLink(opts: {
   const acct = accounts[storeId];
 
   if (platform === 'Meta') {
-    const metaId = acct?.metaAdAccountId;
-    if (!metaId) return null;
-    // When we know the ad-set, drill straight to the ad-sets view filtered to
-    // that ad-set. Otherwise drill to the campaign's ad-sets view (one level
-    // deep is usually more useful than the campaigns list).
+    const metaId = acct?.metaAdAccountId ?? null;
     const params = new URLSearchParams();
-    params.set('act', metaId);
+    if (metaId) params.set('act', metaId);
     params.set('selected_campaign_ids', campaignId);
     if (adSetId) {
       params.set('selected_adset_ids', adSetId);
-      return `https://business.facebook.com/adsmanager/manage/adsets?${params.toString()}`;
     }
+    // adsets view drills one level deeper than the campaigns list — usually
+    // what the user wants when clicking through from a row.
     return `https://business.facebook.com/adsmanager/manage/adsets?${params.toString()}`;
   }
 
   if (platform === 'Google') {
-    const customerId = acct?.googleAdsCustomerId;
-    if (!customerId) return null;
-    // Google Ads URLs use `__c=<customerId>` to select the account. Drill to
-    // the campaign's ad-groups view if we have a specific campaign; ad-set
-    // ID isn't meaningful on Google's side (no equivalent UI in the URL).
+    const customerId = acct?.googleAdsCustomerId ?? null;
     const params = new URLSearchParams();
-    params.set('__c', customerId);
+    if (customerId) params.set('__c', customerId);
     params.set('campaignId', campaignId);
     if (adSetId) {
       params.set('adGroupId', adSetId);
@@ -73,4 +69,23 @@ export function buildAdsManagerLink(opts: {
   }
 
   return null;
+}
+
+/**
+ * True when we have the account ID and can build a deep link that opens the
+ * right account. False when we're falling back to the account-less URL (which
+ * still works but may land on the wrong account). UI can use this to render
+ * a tooltip explaining why some clicks may land on the wrong account until
+ * the user runs `refreshAllStoreMeta` once.
+ */
+export function hasAccountAwareLink(
+  platform: string,
+  storeId: string,
+  accounts: AdAccountMap,
+): boolean {
+  const acct = accounts[storeId];
+  if (!acct) return false;
+  if (platform === 'Meta') return !!acct.metaAdAccountId;
+  if (platform === 'Google') return !!acct.googleAdsCustomerId;
+  return false;
 }
