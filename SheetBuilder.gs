@@ -192,6 +192,29 @@ function createMonthBlock_(sheet, titleRow, year, month, title) {
         .setFormula(`=IFERROR(${colLetter_(layout.revenueCol)}${dayRow}/${colLetter_(layout.totalCol)}${dayRow}, "")`);
     }
   }
+  // לטאבי חנויות - מאכלסים נוסחאות "סה"כ" ו"ROAS" מראש לכל יום, כך שהזנה ידנית
+  // בעמודות FB/GA/Revenue תחושב אוטומטית גם בלי שהקוד יגע ביום הזה.
+  else if (layout.type === 'split') {
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dayRow = dataStart + d - 1;
+      const fbRef = `${colLetter_(layout.fbCol)}${dayRow}`;
+      const gaRef = `${colLetter_(layout.gaCol)}${dayRow}`;
+      const totalRef = `${colLetter_(layout.totalCol)}${dayRow}`;
+      const revRef = `${colLetter_(layout.revenueCol)}${dayRow}`;
+      sheet.getRange(dayRow, layout.totalCol)
+        .setFormula(`=IF(COUNT(${fbRef},${gaRef})=0, "", ${fbRef}+${gaRef})`);
+      sheet.getRange(dayRow, layout.roasCol)
+        .setFormula(`=IFERROR(${revRef}/${totalRef}, "")`);
+    }
+  } else if (layout.type === 'unified') {
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dayRow = dataStart + d - 1;
+      const totalRef = `${colLetter_(layout.totalCol)}${dayRow}`;
+      const revRef = `${colLetter_(layout.revenueCol)}${dayRow}`;
+      sheet.getRange(dayRow, layout.roasCol)
+        .setFormula(`=IFERROR(${revRef}/${totalRef}, "")`);
+    }
+  }
 
   // total row
   const totalRow = dataStart + daysInMonth;
@@ -344,3 +367,73 @@ function resetUzoshopTab()    { resetTab('uzoshop'); }
 function resetZolplusTab()    { resetTab('Zol Plus'); }
 function resetUsmile360Tab()  { resetTab('360usmile'); }
 function resetSummaryTab()    { resetTab(SUMMARY_TAB); }
+
+/**
+ * מאתר כל שורת יום (תאריך YYYY-MM-DD בעמודה A) ומבטיח שיש בה את נוסחאות
+ * "סה"כ" ו"ROAS" המתאימות לפריסת הטאב. לא מוחק ערכים קיימים בעמודות FB/GA/Revenue.
+ *
+ * שימושי כשהזנת ידנית ערכים בתאריכים שהקוד לא נגע בהם.
+ */
+function repairFormulasInTab(tabName) {
+  if (!tabName) {
+    throw new Error('repairFormulasInTab: חסר שם טאב. השתמש ב-repairUzoshopFormulas וכו\'.');
+  }
+  const ss = ensureSpreadsheet();
+  const sheet = ss.getSheetByName(tabName);
+  if (!sheet) throw new Error(`לא נמצא טאב: ${tabName}`);
+  const layout = getLayout_(tabName);
+  const lastRow = sheet.getLastRow();
+  if (lastRow === 0) {
+    Logger.log(`Tab ${tabName} is empty - nothing to repair`);
+    return;
+  }
+
+  const colA = sheet.getRange(1, 1, lastRow, 1).getValues();
+  let repaired = 0;
+  for (let i = 0; i < colA.length; i++) {
+    const val = colA[i][0];
+    if (typeof val !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(val)) continue;
+    const dayRow = i + 1;
+
+    if (layout.type === 'split') {
+      const fbRef = `${colLetter_(layout.fbCol)}${dayRow}`;
+      const gaRef = `${colLetter_(layout.gaCol)}${dayRow}`;
+      const totalRef = `${colLetter_(layout.totalCol)}${dayRow}`;
+      const revRef = `${colLetter_(layout.revenueCol)}${dayRow}`;
+      sheet.getRange(dayRow, layout.totalCol)
+        .setFormula(`=IF(COUNT(${fbRef},${gaRef})=0, "", ${fbRef}+${gaRef})`);
+      sheet.getRange(dayRow, layout.roasCol)
+        .setFormula(`=IFERROR(${revRef}/${totalRef}, "")`);
+      repaired++;
+    } else if (layout.type === 'unified') {
+      const totalRef = `${colLetter_(layout.totalCol)}${dayRow}`;
+      const revRef = `${colLetter_(layout.revenueCol)}${dayRow}`;
+      sheet.getRange(dayRow, layout.roasCol)
+        .setFormula(`=IFERROR(${revRef}/${totalRef}, "")`);
+      repaired++;
+    } else if (layout.type === 'summary') {
+      const dateCell = `A${dayRow}`;
+      const formulas = summaryFormulasForRow_(dateCell);
+      sheet.getRange(dayRow, layout.totalCol).setFormula(formulas.spent);
+      sheet.getRange(dayRow, layout.revenueCol).setFormula(formulas.revenue);
+      sheet.getRange(dayRow, layout.roasCol)
+        .setFormula(`=IFERROR(${colLetter_(layout.revenueCol)}${dayRow}/${colLetter_(layout.totalCol)}${dayRow}, "")`);
+      repaired++;
+    }
+  }
+  Logger.log(`Repaired formulas in ${repaired} day-rows of "${tabName}"`);
+}
+
+/** קיצורי דרך - הרץ ישירות מ-Apps Script editor. */
+function repairUzoshopFormulas()    { repairFormulasInTab('uzoshop'); }
+function repairZolplusFormulas()    { repairFormulasInTab('Zol Plus'); }
+function repairUsmile360Formulas()  { repairFormulasInTab('360usmile'); }
+function repairSummaryFormulas()    { repairFormulasInTab(SUMMARY_TAB); }
+
+/** מתקן נוסחאות בכל הטאבים בבת אחת. */
+function repairAllFormulas() {
+  repairUzoshopFormulas();
+  repairZolplusFormulas();
+  repairUsmile360Formulas();
+  repairSummaryFormulas();
+}
