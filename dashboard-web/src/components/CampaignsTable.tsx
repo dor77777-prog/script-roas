@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import type { CampaignRow } from '@/lib/campaigns';
+import { buildAdsManagerLink, type AdAccountMap } from '@/lib/campaignsLinks';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { DateRange } from '@/lib/types';
 import { roasLabel } from '@/lib/analytics';
@@ -66,6 +67,7 @@ function todayInIsrael(): string {
 
 type Aggregated = {
   key: string;             // groupBy key, used as React key
+  storeId: string;         // needed to build the right Ads Manager deep link
   storeName: string;
   platform: string;
   campaignId: string;
@@ -100,6 +102,7 @@ function aggregate(
     if (!map.has(key)) {
       map.set(key, {
         key,
+        storeId: r.storeId,
         storeName: r.storeName,
         platform: r.platform,
         campaignId: r.campaignId,
@@ -164,17 +167,11 @@ function sortAggregated(
   return sorted;
 }
 
-// Build a direct link to the right Ads Manager UI.
-function adsManagerLink(platform: string, campaignId: string): string | null {
-  if (!campaignId) return null;
-  if (platform === 'Meta') {
-    return `https://business.facebook.com/adsmanager/manage/ads?selected_campaign_ids=${encodeURIComponent(campaignId)}`;
-  }
-  if (platform === 'Google') {
-    return `https://ads.google.com/aw/campaigns?campaignId=${encodeURIComponent(campaignId)}`;
-  }
-  return null;
-}
+// Ads Manager deep links are built via `buildAdsManagerLink` in lib/campaigns
+// (which needs the storeId → ad-account-ID map fetched from /api/store-meta).
+// The old local stub here returned a link missing `act=` / `__c=`, so Meta
+// and Google Ads opened the user's last-used account instead of the
+// campaign's account — leading to "campaign not found" landings.
 
 // --- Component --------------------------------------------------------------
 
@@ -196,6 +193,30 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     fetcher,
     { refreshInterval: 120_000, revalidateOnFocus: false },
   );
+
+  // store-meta provides the Meta ad-account ID / Google Ads customer ID per
+  // store. We use it to build deep links that open the right account in Ads
+  // Manager. Without these IDs, links would land on whatever account the user
+  // last viewed (not the campaign's account).
+  const { data: storeMeta } = useSWR<{ rows: Array<{ storeId: string; metaAdAccountId: string | null; googleAdsCustomerId: string | null }> }>(
+    '/api/store-meta',
+    async (url: string) => {
+      const r = await fetch(url);
+      if (!r.ok) return { rows: [] };
+      return r.json();
+    },
+    { revalidateOnFocus: false, dedupingInterval: 300_000 },
+  );
+  const adAccounts: AdAccountMap = useMemo(() => {
+    const out: AdAccountMap = {};
+    for (const row of storeMeta?.rows ?? []) {
+      out[row.storeId] = {
+        metaAdAccountId: row.metaAdAccountId ?? null,
+        googleAdsCustomerId: row.googleAdsCustomerId ?? null,
+      };
+    }
+    return out;
+  }, [storeMeta]);
 
   const [mode, setMode] = useState<Mode>('campaign');
   const [platform, setPlatform] = useState<Platform>('all');
@@ -609,7 +630,13 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                   const cpc = a.clicks > 0 ? a.spend / a.clicks : 0;
                   const cpa = a.conversions > 0 ? a.spend / a.conversions : 0;
                   const info = roasLabel(roas);
-                  const link = adsManagerLink(a.platform, a.campaignId);
+                  const link = buildAdsManagerLink({
+                    platform: a.platform,
+                    storeId: a.storeId,
+                    campaignId: a.campaignId,
+                    adSetId: a.adSetId,
+                    accounts: adAccounts,
+                  });
                   return (
                     <tr
                       key={a.key}
@@ -718,6 +745,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
             r.date >= localRange.from && r.date <= localRange.to &&
             (localStore === 'All' || r.storeName === localStore),
           )}
+          adAccounts={adAccounts}
         />
       )}
     </div>

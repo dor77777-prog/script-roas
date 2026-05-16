@@ -21,6 +21,7 @@ import {
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import { roasLabel } from '@/lib/analytics';
 import type { CampaignRow } from '@/lib/campaigns';
+import { buildAdsManagerLink, type AdAccountMap } from '@/lib/campaignsLinks';
 
 /**
  * Slide-in drawer that opens when the user clicks a campaign row in the
@@ -44,6 +45,9 @@ type Props = {
   campaignId: string;
   open: boolean;
   onClose: () => void;
+  /** Map of storeId → ad-account IDs, used to build deep links into the
+   *  right account in Ads Manager. */
+  adAccounts: AdAccountMap;
 };
 
 const TONE_BG: Record<string, string> = {
@@ -54,18 +58,7 @@ const TONE_BG: Record<string, string> = {
   gray:   'bg-surfaceMuted text-text-muted',
 };
 
-function adsManagerLink(platform: string, campaignId: string): string | null {
-  if (!campaignId) return null;
-  if (platform === 'Meta') {
-    return `https://business.facebook.com/adsmanager/manage/ads?selected_campaign_ids=${encodeURIComponent(campaignId)}`;
-  }
-  if (platform === 'Google') {
-    return `https://ads.google.com/aw/campaigns?campaignId=${encodeURIComponent(campaignId)}`;
-  }
-  return null;
-}
-
-export function CampaignDrawer({ rows, campaignId, open, onClose }: Props) {
+export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: Props) {
   // Close on Esc.
   useEffect(() => {
     if (!open) return;
@@ -154,7 +147,15 @@ export function CampaignDrawer({ rows, campaignId, open, onClose }: Props) {
 
   if (!open || !summary) return null;
 
-  const link = adsManagerLink(summary.platform, campaignId);
+  // All rows in the drawer belong to the same campaign and the same store,
+  // so we can pick storeId off any of them to look up the ad-account ID.
+  const storeId = rows.length > 0 ? rows[0].storeId : '';
+  const link = buildAdsManagerLink({
+    platform: summary.platform,
+    storeId,
+    campaignId,
+    accounts: adAccounts,
+  });
   const roasInfo = roasLabel(summary.roas);
 
   return (

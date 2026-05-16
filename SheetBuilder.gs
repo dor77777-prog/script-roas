@@ -837,8 +837,13 @@ function writeDailyFlatRow_(ss, dateStr, storeId, storeName, fbCad, gaCad, reven
 // לחנות, מעודכן ע"י refreshAllStoreMeta() ב-Shopify.gs.
 // ----------------------------------------------------------------------------
 
+// Columns 1..7 are the original schema; 8..9 added 2026-05 to carry the
+// platform ad-account IDs so the dashboard can build deep links to the right
+// account in Meta / Google Ads (otherwise the links open whatever account
+// the user was last viewing, not the campaign's account).
 const STORE_META_HEADERS = [
-  'Store ID', 'Store', 'Plan Display Name', 'Shopify Plus', 'Partner Dev', 'Updated At', 'Last Error'
+  'Store ID', 'Store', 'Plan Display Name', 'Shopify Plus', 'Partner Dev',
+  'Updated At', 'Last Error', 'Meta Ad Account ID', 'Google Ads Customer ID',
 ];
 
 function ensureStoreMetaTab_(ss) {
@@ -862,18 +867,27 @@ function ensureStoreMetaTab_(ss) {
     sh.setColumnWidth(4, 100); // Shopify Plus
     sh.setColumnWidth(5, 100); // Partner Dev
     sh.setColumnWidth(6, 160); // Updated At
-    sh.setColumnWidth(7, 360); // Last Error (full GraphQL response excerpt)
+    sh.setColumnWidth(7, 360); // Last Error
+    sh.setColumnWidth(8, 160); // Meta Ad Account ID
+    sh.setColumnWidth(9, 170); // Google Ads Customer ID
   } else {
-    // Sheet exists from a previous deploy without the Last Error column.
-    // Add it idempotently so dashboards can read it after the next refresh.
-    const headerRow = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0];
-    if (headerRow.length < 7 || String(headerRow[6] || '').trim() !== 'Last Error') {
-      sh.getRange(1, 7).setValue('Last Error')
-        .setFontWeight('bold')
-        .setBackground('#1c4587')
-        .setFontColor('#ffffff')
-        .setHorizontalAlignment('center');
-      sh.setColumnWidth(7, 360);
+    // Migrate older sheets: ensure header cells in 7..9 are populated
+    // idempotently. Append-only — never re-orders prior columns.
+    const headerRow = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), STORE_META_HEADERS.length)).getValues()[0];
+    const migrations = [
+      { col: 7, expected: 'Last Error', width: 360 },
+      { col: 8, expected: 'Meta Ad Account ID', width: 160 },
+      { col: 9, expected: 'Google Ads Customer ID', width: 170 },
+    ];
+    for (const m of migrations) {
+      if (String(headerRow[m.col - 1] || '').trim() !== m.expected) {
+        sh.getRange(1, m.col).setValue(m.expected)
+          .setFontWeight('bold')
+          .setBackground('#1c4587')
+          .setFontColor('#ffffff')
+          .setHorizontalAlignment('center');
+        sh.setColumnWidth(m.col, m.width);
+      }
     }
   }
   if (justCreated) {
@@ -888,6 +902,12 @@ function ensureStoreMetaTab_(ss) {
  * lastError = מחרוזת תיאור הכשל מ-getShopifyPlan, או null אם הצליח. נכתב
  *             לעמודה G כך שה-dashboard יכול להציג למשתמש למה auto-detect
  *             לא עובד (חסר scope / טוקן פג / וכו') במקום לתת התנהגות שותקת.
+ *
+ * עמודות 8-9 (Meta Ad Account ID, Google Ads Customer ID) נשלפות
+ * אוטומטית מ-Script Properties — הם המזהים שכבר הוגדרו בקונפיג של
+ * החנות (`${storeId}.meta.adAccountId` / `${storeId}.googleads.customerId`).
+ * הם מתפרסמים ל-Sheet כדי שה-dashboard יוכל לבנות קישורים עמוקים
+ * נכונים ל-Ads Manager במקום לפתוח את החשבון האחרון של המשתמש.
  */
 function writeStoreMetaRow_(ss, storeId, storeName, plan, updatedAt, lastError) {
   const sh = ensureStoreMetaTab_(ss);
@@ -909,10 +929,20 @@ function writeStoreMetaRow_(ss, storeId, storeName, plan, updatedAt, lastError) 
   const dev = plan ? !!plan.partnerDevelopment : '';
   const errCell = lastError ? String(lastError) : '';
 
-  sh.getRange(targetRow, 1, 1, 7).setValues([[
-    storeId, storeName, displayName, plus, dev, updatedAt, errCell
+  // Pull the platform IDs from Script Properties. Meta ad accounts may be
+  // stored with the "act_" prefix; strip it because Ads Manager URLs expect
+  // the numeric portion only.
+  const metaRaw = getProp(`${storeId}.meta.adAccountId`, '');
+  const metaId = String(metaRaw || '').replace(/^act_/, '');
+  const googleId = String(getProp(`${storeId}.googleads.customerId`, '') || '').replace(/-/g, '');
+
+  sh.getRange(targetRow, 1, 1, 9).setValues([[
+    storeId, storeName, displayName, plus, dev, updatedAt, errCell, metaId, googleId,
   ]]);
   sh.getRange(targetRow, 6).setNumberFormat('yyyy-mm-dd hh:mm');
+  // Format ID cells as text so Sheets doesn't drop leading zeros or convert
+  // to scientific notation.
+  sh.getRange(targetRow, 8, 1, 2).setNumberFormat('@');
 }
 
 /**

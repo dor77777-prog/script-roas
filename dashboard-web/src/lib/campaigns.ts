@@ -148,3 +148,7 @@ export async function fetchCampaignsData(): Promise<CampaignRow[]> {
   }
   return out;
 }
+
+// Ads Manager deep-link helpers (buildAdsManagerLink, AdAccountMap) moved to
+// lib/campaignsLinks.ts so client components can import them without
+// pulling in the server-only googleapis dependency that this file uses.

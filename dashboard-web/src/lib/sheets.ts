@@ -136,6 +136,13 @@ export type StoreMetaRow = {
    *  auto-detect isn't working. Empty string / null means the last refresh
    *  succeeded. */
   lastError: string | null;
+  /** Meta ad account ID (numeric, no act_ prefix). Used by CampaignsTable +
+   *  CampaignDrawer to build correct deep links to Ads Manager. null if the
+   *  store has no Meta account configured. */
+  metaAdAccountId: string | null;
+  /** Google Ads customer ID (numeric, no dashes). Same role as the Meta one
+   *  for the Google Ads deep link. null when not configured. */
+  googleAdsCustomerId: string | null;
 };
 
 /**
@@ -151,12 +158,12 @@ export async function fetchStoreMeta(): Promise<StoreMetaRow[]> {
   const spreadsheetId = getSpreadsheetId();
 
   try {
-    // Read through column G (Last Error) so the dashboard can surface
-    // GraphQL / scope failures. Older deployments without column G will simply
-    // return undefined for row[6] which we coerce to null.
+    // Read through column I — covers Last Error (G), Meta Ad Account ID (H),
+    // and Google Ads Customer ID (I). Older deployments without H/I just
+    // return undefined for those positions, which we coerce to null.
     const res = await sheets.spreadsheets.values.get({
       spreadsheetId,
-      range: `${STORE_META_TAB}!A2:G1000`,
+      range: `${STORE_META_TAB}!A2:I1000`,
       valueRenderOption: 'UNFORMATTED_VALUE',
       dateTimeRenderOption: 'FORMATTED_STRING',
     });
@@ -171,6 +178,8 @@ export async function fetchStoreMeta(): Promise<StoreMetaRow[]> {
         lastErrorRaw === undefined || lastErrorRaw === null || lastErrorRaw === ''
           ? null
           : String(lastErrorRaw);
+      const metaRaw = String(row[7] ?? '').trim();
+      const googleRaw = String(row[8] ?? '').trim();
       out.push({
         storeId,
         storeName,
@@ -179,6 +188,8 @@ export async function fetchStoreMeta(): Promise<StoreMetaRow[]> {
         partnerDevelopment: row[4] === true || row[4] === 'TRUE' || row[4] === 'true',
         updatedAt: row[5] ? String(row[5]) : null,
         lastError,
+        metaAdAccountId: metaRaw ? metaRaw.replace(/^act_/, '') : null,
+        googleAdsCustomerId: googleRaw ? googleRaw.replace(/-/g, '') : null,
       });
     }
     return out;
