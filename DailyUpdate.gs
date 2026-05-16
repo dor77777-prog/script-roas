@@ -73,6 +73,13 @@ function updateStoreForDate_(ss, store, dateStr, year, month, day, ilsToCad) {
     Logger.log(`Campaign-level data for ${store.name} ${dateStr} failed: ${e && e.message ? e.message : e}`);
   }
 
+  // טאב daily-flat ל-Looker Studio
+  try {
+    writeDailyFlatRow_(ss, dateStr, store.id, store.name, metaCad, googleAdsCad, revenueCad);
+  } catch (e) {
+    Logger.log(`daily-flat write for ${store.name} ${dateStr} failed: ${e && e.message ? e.message : e}`);
+  }
+
   Logger.log(`${store.name} ${dateStr}: spent=${totalSpentCad.toFixed(2)} CAD (FB ${metaCad.toFixed(2)} + GA ${googleAdsCad.toFixed(2)}), revenue=${revenueCad.toFixed(2)} CAD`);
   return { spent: totalSpentCad, revenue: revenueCad };
 }

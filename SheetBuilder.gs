@@ -130,6 +130,9 @@ function ensureSpreadsheet() {
     }
   }
 
+  // טאב נתונים שטוחים ל-Looker Studio (LTR, English headers)
+  ensureDailyFlatTab_(ss);
+
   Logger.log(`Spreadsheet ready: ${ss.getUrl()}`);
   return ss;
 }
@@ -671,4 +674,126 @@ function writeCampaignRowsForDay(ss, storeId, dateStr, rows) {
     const row = startRow + i;
     sh.getRange(row, 12).setFormula(`=IFERROR(K${row}/G${row}, "")`);
   }
+}
+
+// ============================================================================
+// Daily-flat data tab - LTR, English headers, optimised for Looker Studio
+// ============================================================================
+
+const DAILY_FLAT_HEADERS = [
+  'Date', 'Store ID', 'Store', 'FB Spend (CAD)', 'GA Spend (CAD)',
+  'Total Spend (CAD)', 'Revenue (CAD)', 'ROAS', 'Gross Profit (CAD)'
+];
+
+function ensureDailyFlatTab_(ss) {
+  let sh = ss.getSheetByName(DAILY_FLAT_TAB);
+  if (!sh) {
+    sh = ss.insertSheet(DAILY_FLAT_TAB);
+    sh.setRightToLeft(false);
+  }
+  if (sh.getLastRow() === 0) {
+    sh.getRange(1, 1, 1, DAILY_FLAT_HEADERS.length).setValues([DAILY_FLAT_HEADERS])
+      .setFontWeight('bold')
+      .setBackground('#1c4587')
+      .setFontColor('#ffffff')
+      .setHorizontalAlignment('center');
+    sh.setFrozenRows(1);
+    sh.setColumnWidth(1, 95);   // Date
+    sh.setColumnWidth(2, 90);   // Store ID
+    sh.setColumnWidth(3, 110);  // Store Name
+    sh.setColumnWidth(4, 110);  // FB Spend
+    sh.setColumnWidth(5, 110);  // GA Spend
+    sh.setColumnWidth(6, 120);  // Total Spend
+    sh.setColumnWidth(7, 110);  // Revenue
+    sh.setColumnWidth(8, 70);   // ROAS
+    sh.setColumnWidth(9, 110);  // Gross Profit
+  }
+  return sh;
+}
+
+/**
+ * כותב/מעדכן שורה בטאב daily-flat. אידמפוטנטי לפי (date, storeId).
+ */
+function writeDailyFlatRow_(ss, dateStr, storeId, storeName, fbCad, gaCad, revenueCad) {
+  const sh = ensureDailyFlatTab_(ss);
+  const lastRow = sh.getLastRow();
+  let targetRow = lastRow + 1;
+  let isNew = true;
+
+  if (lastRow > 1) {
+    const dataIds = sh.getRange(2, 1, lastRow - 1, 2).getValues();
+    for (let i = 0; i < dataIds.length; i++) {
+      const rowDate = dataIds[i][0];
+      const rowStore = dataIds[i][1];
+      let dateKey = null;
+      if (rowDate instanceof Date && !isNaN(rowDate.getTime())) {
+        dateKey = Utilities.formatDate(rowDate, TZ, 'yyyy-MM-dd');
+      } else if (typeof rowDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rowDate)) {
+        dateKey = rowDate;
+      }
+      if (dateKey === dateStr && String(rowStore) === storeId) {
+        targetRow = i + 2;
+        isNew = false;
+        break;
+      }
+    }
+  }
+
+  const fb = round2_(fbCad || 0);
+  const ga = round2_(gaCad || 0);
+  const total = round2_(fb + ga);
+  const rev = round2_(revenueCad || 0);
+
+  sh.getRange(targetRow, 1, 1, 7).setValues([[
+    dateStr, storeId, storeName, fb, ga, total, rev
+  ]]);
+  sh.getRange(targetRow, 8).setFormula(`=IFERROR(G${targetRow}/F${targetRow}, "")`);
+  sh.getRange(targetRow, 9).setFormula(`=G${targetRow}-F${targetRow}`);
+
+  if (isNew) {
+    sh.getRange(targetRow, 1).setNumberFormat('yyyy-mm-dd').setHorizontalAlignment('center');
+    sh.getRange(targetRow, 4, 1, 3).setNumberFormat('#,##0.00');  // FB, GA, Total
+    sh.getRange(targetRow, 7).setNumberFormat('#,##0.00');         // Revenue
+    sh.getRange(targetRow, 8).setNumberFormat('0.00').setHorizontalAlignment('center');
+    sh.getRange(targetRow, 9).setNumberFormat('#,##0.00');         // Gross Profit
+  }
+}
+
+/**
+ * עזרה למיגרציה: סורק את טאבי החנויות הקיימים ומאכלס את daily-flat
+ * בלי לגעת ב-API. שימושי פעם אחת אחרי שמוסיפים את הטאב.
+ */
+function backfillFlatFromStoreTabs() {
+  const ss = ensureSpreadsheet();
+  let written = 0;
+  for (const store of STORES) {
+    const sh = ss.getSheetByName(store.name);
+    if (!sh) continue;
+    const layout = getLayout_(store.name);
+    const lastRow = sh.getLastRow();
+    if (lastRow === 0) continue;
+    const all = sh.getRange(1, 1, lastRow, layout.cols).getValues();
+    for (let i = 0; i < all.length; i++) {
+      const v = all[i][0];
+      if (!isDayRowValue_(v)) continue;
+      const dateStr = v instanceof Date
+        ? Utilities.formatDate(v, TZ, 'yyyy-MM-dd')
+        : v;
+      const row = all[i];
+      let fbCad = 0, gaCad = 0, revCad = 0;
+      if (layout.type === 'split') {
+        fbCad = parseFloat(row[layout.fbCol - 1]) || 0;
+        gaCad = parseFloat(row[layout.gaCol - 1]) || 0;
+        revCad = parseFloat(row[layout.revenueCol - 1]) || 0;
+      } else if (layout.type === 'unified') {
+        fbCad = parseFloat(row[layout.totalCol - 1]) || 0;
+        gaCad = 0;
+        revCad = parseFloat(row[layout.revenueCol - 1]) || 0;
+      }
+      if (fbCad === 0 && gaCad === 0 && revCad === 0) continue;
+      writeDailyFlatRow_(ss, dateStr, store.id, store.name, fbCad, gaCad, revCad);
+      written++;
+    }
+  }
+  Logger.log(`Backfilled ${written} rows into daily-flat from existing store tabs`);
 }
