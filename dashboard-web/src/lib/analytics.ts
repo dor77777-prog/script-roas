@@ -161,8 +161,19 @@ export function roasLabel(roas: number): { text: string; tone: 'red' | 'orange' 
 }
 
 export function deltaPct(cur: number, prev: number): { value: number; direction: 'up' | 'down' | 'flat' } {
-  if (!prev) return { value: 0, direction: 'flat' };
-  const pct = (cur - prev) / prev;
+  // Direction is the sign of the *signed* change (cur - prev), not the sign
+  // of the percent. This matters when `prev` is negative — e.g. net profit
+  // going from -200 to +500 is an improvement, but (cur-prev)/prev with a
+  // signed denominator would render as a negative percent + down arrow.
+  if (cur === prev) return { value: 0, direction: 'flat' };
+  const direction: 'up' | 'down' = cur > prev ? 'up' : 'down';
+
+  // Denominator uses |prev| so the percent always represents "size of change
+  // relative to the prior magnitude". When prev is zero we'd divide by zero;
+  // fall back to |cur| (or 1) so the value stays finite — the arrow direction
+  // is what matters most in that case anyway.
+  const denom = prev !== 0 ? Math.abs(prev) : Math.max(Math.abs(cur), 1);
+  const pct = (cur - prev) / denom;
   if (Math.abs(pct) < 0.001) return { value: 0, direction: 'flat' };
-  return { value: pct, direction: pct > 0 ? 'up' : 'down' };
+  return { value: pct, direction };
 }
