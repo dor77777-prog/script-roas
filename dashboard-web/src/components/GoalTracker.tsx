@@ -29,6 +29,10 @@ export function GoalTracker({ data }: Props) {
   const [goal, setGoal] = useState<number | null>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
+  // Inline validation error for the editor. Shown directly under the input
+  // when commitEdit refuses an invalid value, instead of silently swallowing
+  // the user's typed input. Cleared on every draft change.
+  const [editError, setEditError] = useState<string | null>(null);
 
   // Hydrate the goal from localStorage on mount; re-read whenever the cloud
   // sync layer updates the underlying value (other device, partner edit).
@@ -57,23 +61,45 @@ export function GoalTracker({ data }: Props) {
 
   function startEdit() {
     setDraft(goal != null ? String(goal) : '');
+    setEditError(null);
     setEditing(true);
   }
   function commitEdit() {
-    const n = Number(draft.replace(/,/g, ''));
-    if (Number.isFinite(n) && n > 0) {
-      setGoal(n);
-      writeGoal(n);
-    } else if (draft.trim() === '') {
+    // Empty draft → clear the goal. Always succeeds.
+    if (draft.trim() === '') {
       setGoal(null);
       writeGoal(null);
+      setEditError(null);
+      setEditing(false);
+      return;
     }
+    const n = Number(draft.replace(/,/g, ''));
+    if (!Number.isFinite(n) || n <= 0) {
+      // Surface invalid input to the user instead of silently swallowing.
+      // The input filter at the keyboard already strips non-digit-non-comma
+      // chars, but a paste of ",,," parses to NaN, and "-5"/"0" (which the
+      // filter does allow through the digit class) also reach here.
+      setEditError('הזן מספר חיובי');
+      return;
+    }
+    setGoal(n);
+    writeGoal(n);
+    setEditError(null);
     setEditing(false);
   }
   function cancelEdit() {
     setEditing(false);
     setDraft('');
+    setEditError(null);
   }
+  // Save button disabled when the current draft is non-empty AND obviously
+  // invalid. Empty is allowed (it clears the goal).
+  const draftTrimmed = draft.trim();
+  const draftIsInvalid = (() => {
+    if (draftTrimmed === '') return false;
+    const n = Number(draft.replace(/,/g, ''));
+    return !Number.isFinite(n) || n <= 0;
+  })();
 
   // ---- Render -------------------------------------------------------------
   // Two modes: goal set vs goal not set.
@@ -125,19 +151,35 @@ export function GoalTracker({ data }: Props) {
               type="text"
               inputMode="numeric"
               value={draft}
-              onChange={e => setDraft(e.target.value.replace(/[^\d,]/g, ''))}
+              onChange={e => {
+                setDraft(e.target.value.replace(/[^\d,]/g, ''));
+                // Clear any stale error as soon as the user types.
+                if (editError) setEditError(null);
+              }}
               onKeyDown={e => {
                 if (e.key === 'Enter') commitEdit();
                 if (e.key === 'Escape') cancelEdit();
               }}
               placeholder="100,000"
               autoFocus
-              className="w-full rounded-lg border border-border bg-surface pl-3 pr-12 py-2 text-sm focus:outline-none focus:border-primary focus:shadow-focus"
+              aria-invalid={editError != null || draftIsInvalid}
+              className={cn(
+                'w-full rounded-lg border bg-surface pl-3 pr-12 py-2 text-sm focus:outline-none focus:shadow-focus',
+                editError != null || draftIsInvalid
+                  ? 'border-amber-500 focus:border-amber-600'
+                  : 'border-border focus:border-primary',
+              )}
             />
           </div>
           <button
             onClick={commitEdit}
-            className="inline-flex items-center gap-1 rounded-lg bg-primary text-white px-3 py-2 text-xs sm:text-sm font-semibold hover:bg-primary-dark"
+            disabled={draftIsInvalid}
+            className={cn(
+              'inline-flex items-center gap-1 rounded-lg text-white px-3 py-2 text-xs sm:text-sm font-semibold',
+              draftIsInvalid
+                ? 'bg-primary/40 cursor-not-allowed'
+                : 'bg-primary hover:bg-primary-dark',
+            )}
           >
             <Check size={13} />
             שמור
@@ -150,6 +192,11 @@ export function GoalTracker({ data }: Props) {
             <X size={14} />
           </button>
         </div>
+        {editError && (
+          <p className="text-[11px] text-amber-700 mt-2" role="alert">
+            {editError}
+          </p>
+        )}
         <p className="text-[11px] text-text-muted mt-2">
           הערך נשמר רק בדפדפן הזה (localStorage). אפשר לעדכן בכל עת.
         </p>
