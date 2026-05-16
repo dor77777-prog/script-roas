@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   X,
   ExternalLink,
@@ -9,6 +9,9 @@ import {
   Store as StoreIcon,
   TrendingUp,
   Layers,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from 'lucide-react';
 import {
   Area,
@@ -58,7 +61,27 @@ const TONE_BG: Record<string, string> = {
   gray:   'bg-surfaceMuted text-text-muted',
 };
 
+// Columns the drawer's ad-set table can be sorted by. Kept narrow because
+// the drawer is a focused drilldown — full sortable surface is in
+// CampaignsTable.
+type AdSetSortKey = 'name' | 'spend' | 'value' | 'roas' | 'conversions';
+type AdSetSortDir = 'asc' | 'desc';
+
 export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: Props) {
+  // Drawer-local sort state. Default to spend-desc which matches the
+  // pre-sortable hardcoded ordering, so users already comfortable with the
+  // drawer don't see anything jump on first paint.
+  const [sortKey, setSortKey] = useState<AdSetSortKey>('spend');
+  const [sortDir, setSortDir] = useState<AdSetSortDir>('desc');
+
+  function handleSort(key: AdSetSortKey) {
+    if (key === sortKey) {
+      setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir('desc'); // first click on a new column → "largest first"
+    }
+  }
   // Close on Esc.
   useEffect(() => {
     if (!open) return;
@@ -145,6 +168,11 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
     };
   }, [rows]);
 
+  // Re-sort ad-sets per user choice. Computed outside the `if (!open || !summary)`
+  // guard would be wrong because hooks must run unconditionally — but useMemo
+  // is already called above inside the summary computation. Sorting here is a
+  // plain expression, no hook needed.
+
   if (!open || !summary) return null;
 
   // All rows in the drawer belong to the same campaign and the same store,
@@ -156,6 +184,26 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
     campaignId,
     accounts: adAccounts,
   });
+
+  const sortedAdSets = (() => {
+    const list = [...summary.adSets];
+    const sign = sortDir === 'asc' ? 1 : -1;
+    list.sort((x, y) => {
+      switch (sortKey) {
+        case 'name':
+          return sign * (x.name || '').localeCompare(y.name || '', 'he');
+        case 'spend':
+          return sign * (x.spend - y.spend);
+        case 'value':
+          return sign * (x.value - y.value);
+        case 'roas':
+          return sign * (x.roas - y.roas);
+        case 'conversions':
+          return sign * (x.conversions - y.conversions);
+      }
+    });
+    return list;
+  })();
   const roasInfo = roasLabel(summary.roas);
 
   return (
@@ -333,15 +381,15 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
                 <table className="w-full text-xs sm:text-sm">
                   <thead className="bg-surfaceMuted/60">
                     <tr className="text-text-secondary">
-                      <th className="px-3 py-2 text-start font-medium">שם</th>
-                      <th className="px-3 py-2 text-end font-medium">הוצאה</th>
-                      <th className="px-3 py-2 text-end font-medium">ערך</th>
-                      <th className="px-3 py-2 text-center font-medium">ROAS</th>
-                      <th className="px-3 py-2 text-end font-medium">המרות</th>
+                      <AdSetSortHeader label="שם"     col="name"        sortKey={sortKey} dir={sortDir} onClick={handleSort} align="start"  />
+                      <AdSetSortHeader label="הוצאה"  col="spend"       sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
+                      <AdSetSortHeader label="ערך"    col="value"       sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
+                      <AdSetSortHeader label="ROAS"   col="roas"        sortKey={sortKey} dir={sortDir} onClick={handleSort} align="center" />
+                      <AdSetSortHeader label="המרות"  col="conversions" sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
                     </tr>
                   </thead>
                   <tbody>
-                    {summary.adSets.map((a, i) => {
+                    {sortedAdSets.map((a, i) => {
                       const info = roasLabel(a.roas);
                       return (
                         <tr key={a.id || a.name || i} className="border-t border-borderSubtle">
@@ -424,5 +472,60 @@ function DrawerStat({
         </span>
       )}
     </div>
+  );
+}
+
+
+/**
+ * Sort-aware <th> for the drawer's ad-sets table. Mirrors the SortHeader in
+ * CampaignsTable but lives here so the drawer doesn't need to import that
+ * component's narrower SortKey union.
+ */
+function AdSetSortHeader({
+  label,
+  col,
+  sortKey,
+  dir,
+  onClick,
+  align,
+}: {
+  label: string;
+  col: AdSetSortKey;
+  sortKey: AdSetSortKey;
+  dir: AdSetSortDir;
+  onClick: (key: AdSetSortKey) => void;
+  align: 'start' | 'center' | 'end';
+}) {
+  const isActive = col === sortKey;
+  const justify =
+    align === 'start' ? 'justify-start' : align === 'end' ? 'justify-end' : 'justify-center';
+  const textAlign =
+    align === 'start' ? 'text-start' : align === 'end' ? 'text-end' : 'text-center';
+  return (
+    <th className={cn('font-medium px-3 py-2', textAlign)}>
+      <button
+        type="button"
+        onClick={() => onClick(col)}
+        className={cn(
+          'inline-flex items-center gap-1 transition-colors group select-none cursor-pointer w-full',
+          justify,
+          isActive
+            ? 'text-primary font-semibold'
+            : 'text-text-secondary hover:text-text-primary',
+        )}
+        aria-sort={isActive ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+      >
+        <span>{label}</span>
+        {isActive ? (
+          dir === 'asc' ? (
+            <ArrowUp size={12} className="text-primary" />
+          ) : (
+            <ArrowDown size={12} className="text-primary" />
+          )
+        ) : (
+          <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-60 transition-opacity" />
+        )}
+      </button>
+    </th>
   );
 }
