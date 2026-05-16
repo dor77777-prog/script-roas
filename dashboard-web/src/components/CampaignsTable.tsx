@@ -440,7 +440,7 @@ export function CampaignsTable({ range, store: globalStore, stores }: Props) {
       {data && display.length > 0 && (
         <>
           <div className="overflow-x-auto">
-            <table className="w-full text-xs sm:text-sm min-w-[720px]">
+            <table className="w-full text-xs sm:text-sm min-w-[920px]">
               <thead>
                 <tr className="text-text-secondary border-b border-borderSubtle bg-surfaceMuted/40">
                   <SortHeader
@@ -486,7 +486,7 @@ export function CampaignsTable({ range, store: globalStore, stores }: Props) {
                     dir={sortDir}
                     onClick={handleSort}
                     align="end"
-                    className="px-3 py-2 w-[64px] hidden sm:table-cell"
+                    className="px-3 py-2 w-[72px]"
                   />
                   <SortHeader
                     label="CTR"
@@ -495,7 +495,7 @@ export function CampaignsTable({ range, store: globalStore, stores }: Props) {
                     dir={sortDir}
                     onClick={handleSort}
                     align="end"
-                    className="px-3 py-2 w-[64px] hidden md:table-cell"
+                    className="px-3 py-2 w-[72px]"
                   />
                   <SortHeader
                     label="CPC"
@@ -504,7 +504,7 @@ export function CampaignsTable({ range, store: globalStore, stores }: Props) {
                     dir={sortDir}
                     onClick={handleSort}
                     align="end"
-                    className="px-3 py-2 w-[64px] hidden md:table-cell"
+                    className="px-3 py-2 w-[72px]"
                   />
                   <SortHeader
                     label="CPA"
@@ -513,7 +513,7 @@ export function CampaignsTable({ range, store: globalStore, stores }: Props) {
                     dir={sortDir}
                     onClick={handleSort}
                     align="end"
-                    className="px-3 py-2 w-[64px] hidden lg:table-cell"
+                    className="px-3 py-2 w-[72px]"
                   />
                   <th className="px-2 py-2 text-center font-medium w-[40px]" aria-label="פעולות" />
                 </tr>
@@ -556,14 +556,14 @@ export function CampaignsTable({ range, store: globalStore, stores }: Props) {
                       <td className={cn('px-3 py-2 text-center font-semibold tabular-nums rounded', TONE_BG[info.tone])}>
                         {roas > 0 ? formatNumber(roas) : '—'}
                       </td>
-                      <td className="px-3 py-2 text-end tabular-nums hidden sm:table-cell">{formatNumber(a.conversions, 0)}</td>
-                      <td className="px-3 py-2 text-end tabular-nums text-text-secondary hidden md:table-cell">
+                      <td className="px-3 py-2 text-end tabular-nums">{formatNumber(a.conversions, 0)}</td>
+                      <td className="px-3 py-2 text-end tabular-nums text-text-secondary">
                         {a.impressions > 0 ? `${(ctr * 100).toFixed(2)}%` : '—'}
                       </td>
-                      <td className="px-3 py-2 text-end tabular-nums text-text-secondary hidden md:table-cell">
+                      <td className="px-3 py-2 text-end tabular-nums text-text-secondary">
                         {a.clicks > 0 ? formatCurrency(cpc, 2) : '—'}
                       </td>
-                      <td className="px-3 py-2 text-end tabular-nums text-text-secondary hidden lg:table-cell">
+                      <td className="px-3 py-2 text-end tabular-nums text-text-secondary">
                         {a.conversions > 0 ? formatCurrency(cpa, 2) : '—'}
                       </td>
                       <td className="px-2 py-2 text-center">

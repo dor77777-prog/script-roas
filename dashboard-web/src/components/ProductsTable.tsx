@@ -583,24 +583,24 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                 {/* Products list */}
                 {!isEmpty && (
                   <div className="overflow-x-auto">
-                    <table className="w-full text-xs sm:text-sm">
+                    <table className="w-full text-xs sm:text-sm min-w-[680px]">
                       <thead>
                         <tr className="text-text-secondary border-y border-border bg-surfaceMuted/40">
                           <th className="px-4 sm:px-5 py-2 text-start font-medium">מוצר</th>
                           {bucket.hasOrders && (
-                            <th className="px-3 py-2 text-end font-medium w-[70px] sm:w-[90px]">
+                            <th className="px-3 py-2 text-end font-medium w-[80px]">
                               הזמנות
                             </th>
                           )}
-                          <th className="px-3 py-2 text-end font-medium w-[70px] sm:w-[100px]">
+                          <th className="px-3 py-2 text-end font-medium w-[80px]">
                             יחידות
                           </th>
-                          <th className="px-3 py-2 text-end font-medium w-[90px] sm:w-[120px] hidden sm:table-cell">
+                          <th className="px-3 py-2 text-end font-medium w-[110px]">
                             ברוטו
                           </th>
                           {bucket.hasNet && (
                             <th
-                              className="px-3 py-2 text-end font-medium w-[90px] sm:w-[120px] hidden sm:table-cell"
+                              className="px-3 py-2 text-end font-medium w-[110px]"
                               title="אחרי הנחות והחזרות"
                             >
                               נטו
@@ -608,13 +608,13 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                           )}
                           {bucket.hasNet && (
                             <th
-                              className="px-3 py-2 text-end font-medium w-[60px] sm:w-[80px] hidden md:table-cell"
+                              className="px-3 py-2 text-end font-medium w-[70px]"
                               title="אחוז הנטו מתוך הברוטו — גבוה = מעט הנחות/החזרות"
                             >
                               מרג'ין
                             </th>
                           )}
-                          <th className="px-3 sm:px-5 py-2 text-end font-medium w-[55px] sm:w-[70px] hidden lg:table-cell">
+                          <th className="px-3 sm:px-5 py-2 text-end font-medium w-[70px]">
                             % יחידות
                           </th>
                         </tr>
@@ -656,11 +656,11 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                               <td className="px-3 py-2 text-end font-semibold tabular-nums">
                                 {formatNumber(p.units, 0)}
                               </td>
-                              <td className="px-3 py-2 text-end tabular-nums hidden sm:table-cell">
+                              <td className="px-3 py-2 text-end tabular-nums">
                                 {formatCurrency(p.revenue)}
                               </td>
                               {bucket.hasNet && (
-                                <td className="px-3 py-2 text-end tabular-nums hidden sm:table-cell">
+                                <td className="px-3 py-2 text-end tabular-nums">
                                   {p.netRevenue !== null ? (
                                     <span
                                       className={cn(
@@ -678,12 +678,11 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                                 </td>
                               )}
                               {bucket.hasNet && (
-                                <td className="px-3 py-2 text-end tabular-nums hidden md:table-cell">
+                                <td className="px-3 py-2 text-end tabular-nums">
                                   {p.netRevenue !== null && p.revenue > 0 ? (
                                     (() => {
                                       const margin = p.netRevenue / p.revenue;
                                       const pctStr = `${(margin * 100).toFixed(0)}%`;
-                                      // Color the margin: <80% means heavy discounts/refunds.
                                       return (
                                         <span
                                           className={cn(
@@ -708,7 +707,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                                   )}
                                 </td>
                               )}
-                              <td className="px-3 sm:px-5 py-2 text-end tabular-nums text-text-muted hidden lg:table-cell">
+                              <td className="px-3 sm:px-5 py-2 text-end tabular-nums text-text-muted">
                                 {(pct * 100).toFixed(1)}%
                               </td>
                             </tr>
