@@ -778,7 +778,15 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                           </span>
                           <div className="min-w-0 flex-1">
                             <div className="font-medium text-text-primary truncate flex items-center gap-1.5">
-                              <span className="truncate">
+                              {/* Native tooltip on hover when the name overflows.
+                                  Browsers automatically show `title` after
+                                  a short delay, which is the lowest-friction
+                                  way to surface long campaign / ad-set names
+                                  without building a custom popover. */}
+                              <span
+                                className="truncate"
+                                title={mode === 'campaign' ? a.campaignName : (a.adSetName || a.campaignName)}
+                              >
                                 {mode === 'campaign' ? a.campaignName : a.adSetName}
                               </span>
                               {/* CBO / ABO tag — small typographic signal so
@@ -799,7 +807,14 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                                 </span>
                               )}
                             </div>
-                            <div className="text-[10px] sm:text-[11px] text-text-muted truncate">
+                            <div
+                              className="text-[10px] sm:text-[11px] text-text-muted truncate"
+                              title={
+                                mode === 'adset' && a.campaignName
+                                  ? `${a.platform} · ${a.storeName} · קמפיין: ${a.campaignName}`
+                                  : `${a.platform} · ${a.storeName}`
+                              }
+                            >
                               {a.platform}
                               {' · '}
                               {a.storeName}
