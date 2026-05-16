@@ -599,6 +599,7 @@ function buildTable_(sh) {
   sh.setRowHeight(40, 30);
   sh.setRowHeight(41, 10);
 
+  // QUERY ללא FORMAT clause - הפורמטים יחולו דרך setNumberFormat (יותר אמין)
   const queryFormula =
     `=IFERROR(QUERY(${flat}!A:I, ` +
     `"SELECT A, C, D, E, F, G, H, I ` +
@@ -608,9 +609,7 @@ function buildTable_(sh) {
     `&IF($F$3<>"All", "AND C = '"&$F$3&"' ", "")` +
     `&"ORDER BY A DESC LIMIT 100 ` +
     `LABEL A 'תאריך', C 'חנות', D 'פייסבוק', E 'גוגל', F 'סה""כ הוצאה', ` +
-    `G 'הכנסה', H 'ROAS', I 'רווח גולמי' ` +
-    `FORMAT A 'd/M/yyyy', D '#,##0.00', E '#,##0.00', F '#,##0.00', ` +
-    `G '#,##0.00', H '0.00', I '#,##0.00'", 1), ` +
+    `G 'הכנסה', H 'ROAS', I 'רווח גולמי'", 1), ` +
     `"אין נתונים בטווח שבחרת")`;
 
   sh.getRange('A42').setFormula(queryFormula);
@@ -620,6 +619,13 @@ function buildTable_(sh) {
     .setFontWeight('bold')
     .setBackground(DBC.cardLabelBg)
     .setHorizontalAlignment('center');
+
+  // פורמטים ישירים על העמודות (לא דרך QUERY FORMAT - לא תמיד אמין):
+  // A=תאריך  B=חנות  C=FB  D=GA  E=סה"כ הוצאה  F=הכנסה  G=ROAS  H=רווח גולמי
+  sh.getRange('A43:A500').setNumberFormat('dd/MM/yyyy').setHorizontalAlignment('center');
+  sh.getRange('C43:F500').setNumberFormat('#,##0.00');   // FB, GA, סה"כ הוצאה, הכנסה
+  sh.getRange('G43:G500').setNumberFormat('0.00').setHorizontalAlignment('center');  // ROAS
+  sh.getRange('H43:H500').setNumberFormat('#,##0.00');   // רווח גולמי
 
   // צביעת ROAS על עמודה G (העמודה השביעית בפלט)
   const roasRange = sh.getRange('G43:G500');
