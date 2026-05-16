@@ -241,3 +241,71 @@ function bootstrapAllShopifyTokens() {
     }
   }
 }
+
+/**
+ * שולף את שם תוכנית ה-Shopify של החנות דרך GraphQL Admin API.
+ *
+ * Shopify לא חושפת את עלות התוכנית דרך ה-API (Billing API מוגבל ל-app charges
+ * של האפליקציה שעשתה את הקריאה — לא רואים את חיוב ה-plan המרכזי). מה שכן זמין
+ * זה `shop.plan.displayName`, ערכים כמו "Basic Shopify" / "Shopify" /
+ * "Advanced Shopify" / "Shopify Plus" / "Starter". הצד של ה-dashboard עושה
+ * mapping בין displayName למחיר USD סטטי.
+ *
+ * החזרה: { displayName, partnerDevelopment, shopifyPlus } או null אם נכשל.
+ */
+function getShopifyPlan(storeId) {
+  const domain = requireProp(`${storeId}.shopify.domain`).replace(/^https?:\/\//, '').replace(/\/$/, '');
+  const token = requireProp(`${storeId}.shopify.token`);
+
+  const url = `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`;
+  const query = `{
+    shop {
+      name
+      plan {
+        displayName
+        partnerDevelopment
+        shopifyPlus
+      }
+    }
+  }`;
+
+  const res = fetchWithRetry_(url, {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { 'X-Shopify-Access-Token': token },
+    payload: JSON.stringify({ query: query }),
+    muteHttpExceptions: true,
+  });
+  const code = res.getResponseCode();
+  if (code !== 200) {
+    Logger.log(`Shopify plan ${storeId} failed (${code}): ${res.getContentText()}`);
+    return null;
+  }
+  const body = JSON.parse(res.getContentText());
+  const plan = body && body.data && body.data.shop && body.data.shop.plan;
+  if (!plan || !plan.displayName) {
+    Logger.log(`Shopify plan ${storeId}: missing plan in response: ${res.getContentText()}`);
+    return null;
+  }
+  Logger.log(`Shopify plan ${storeId}: ${plan.displayName} (plus=${plan.shopifyPlus}, dev=${plan.partnerDevelopment})`);
+  return plan;
+}
+
+/**
+ * רץ על כל החנויות, שולף את שם התוכנית ב-Shopify של כל אחת, וכותב לטאב
+ * store-meta כדי שהדשבורד יוכל לקרוא ולהציע אוטומטית "Basic Shopify ≈ $39/mo".
+ *
+ * אופציונלי להריץ ידנית או מתוך הטריגר היומי — תוכניות לא משתנות כל יום.
+ */
+function refreshAllStoreMeta() {
+  const ss = ensureSpreadsheet();
+  const updatedAt = new Date();
+  for (const store of STORES) {
+    try {
+      const plan = getShopifyPlan(store.id);
+      writeStoreMetaRow_(ss, store.id, store.name, plan, updatedAt);
+    } catch (e) {
+      Logger.log(`store-meta ${store.id} failed: ${e && e.message ? e.message : e}`);
+    }
+  }
+}

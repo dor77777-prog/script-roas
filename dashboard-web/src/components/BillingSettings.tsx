@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
+import useSWR from 'swr';
 import {
   Receipt,
   Plus,
@@ -10,7 +11,7 @@ import {
   Edit3,
   Check,
   AlertCircle,
-  ChevronDown,
+  Sparkles,
   Settings as SettingsIcon,
 } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
@@ -21,6 +22,7 @@ import {
   readOneTime,
   readRecurring,
   seedBillingIfEmpty,
+  shopifyPlanCadForName,
   writeOneTime,
   writeRecurring,
   type CostSource,
@@ -28,6 +30,22 @@ import {
   type ParsedBillLine,
   type RecurringCost,
 } from '@/lib/billing';
+
+type StoreMetaRow = {
+  storeId: string;
+  storeName: string;
+  planDisplayName: string;
+  shopifyPlus: boolean;
+  partnerDevelopment: boolean;
+  updatedAt: string | null;
+};
+type StoreMetaResponse = { rows: StoreMetaRow[]; lastUpdated?: string; error?: string };
+
+const metaFetcher = async (url: string): Promise<StoreMetaResponse> => {
+  const r = await fetch(url);
+  if (!r.ok) return { rows: [] };
+  return (await r.json()) as StoreMetaResponse;
+};
 
 /**
  * Billing settings panel — manage recurring monthly costs (Shopify plan,
@@ -74,6 +92,16 @@ export function BillingSettings({ storeNames }: Props) {
   const [tab, setTab] = useState<Tab>('recurring');
   const [recurring, setRecurring] = useState<RecurringCost[]>([]);
   const [oneTime, setOneTime] = useState<OneTimeCost[]>([]);
+
+  // Auto-detected Shopify plan per store (from Apps Script writing to the
+  // `store-meta` tab). Only fetched after the panel opens — no point pinging
+  // Sheets if the user never opens the settings.
+  const { data: meta } = useSWR<StoreMetaResponse>(
+    open ? '/api/store-meta' : null,
+    metaFetcher,
+    { revalidateOnFocus: false, dedupingInterval: 60_000 },
+  );
+  const detectedPlans: StoreMetaRow[] = meta?.rows ?? [];
 
   // Hydrate from storage on mount + seed if empty so user has something to edit.
   useEffect(() => {
@@ -189,6 +217,7 @@ export function BillingSettings({ storeNames }: Props) {
                 <RecurringTab
                   items={recurring}
                   storeNames={storeNames}
+                  detectedPlans={detectedPlans}
                   onChange={persistRecurring}
                 />
               )}
@@ -225,13 +254,31 @@ export function BillingSettings({ storeNames }: Props) {
 function RecurringTab({
   items,
   storeNames,
+  detectedPlans,
   onChange,
 }: {
   items: RecurringCost[];
   storeNames: string[];
+  detectedPlans: StoreMetaRow[];
   onChange: (next: RecurringCost[]) => void;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
+
+  // Detected plans missing from the user's current recurring list. We match by
+  // store name + source='shopify-plan' to avoid double-adding after the user
+  // already created a row manually or via CSV import.
+  const missingDetected = useMemo(() => {
+    return detectedPlans.filter(m => {
+      if (!m.planDisplayName) return false;
+      if (!storeNames.includes(m.storeName)) return false;
+      const alreadyHasPlan = items.some(
+        r =>
+          r.source === 'shopify-plan' &&
+          (r.store === m.storeName || r.store === 'All'),
+      );
+      return !alreadyHasPlan;
+    });
+  }, [detectedPlans, items, storeNames]);
 
   function addNew() {
     const fresh: RecurringCost = {
@@ -245,6 +292,44 @@ function RecurringTab({
     onChange([fresh, ...items]);
     setEditing(fresh.id);
   }
+
+  function addDetectedPlan(m: StoreMetaRow) {
+    const monthlyCad = shopifyPlanCadForName(m.planDisplayName) ?? 0;
+    const row: RecurringCost = {
+      id: generateId(),
+      store: m.storeName,
+      name: m.planDisplayName,
+      source: 'shopify-plan',
+      monthlyCAD: monthlyCad,
+      active: true,
+      notes:
+        monthlyCad > 0
+          ? `Auto-detected מ-Shopify GraphQL · USD→CAD ×1.36`
+          : `Auto-detected מ-Shopify (תוכנית מותאמת — עדכן את הסכום ידנית)`,
+    };
+    onChange([row, ...items]);
+  }
+
+  function addAllDetected() {
+    if (missingDetected.length === 0) return;
+    const news: RecurringCost[] = missingDetected.map(m => {
+      const monthlyCad = shopifyPlanCadForName(m.planDisplayName) ?? 0;
+      return {
+        id: generateId(),
+        store: m.storeName,
+        name: m.planDisplayName,
+        source: 'shopify-plan',
+        monthlyCAD: monthlyCad,
+        active: true,
+        notes:
+          monthlyCad > 0
+            ? `Auto-detected מ-Shopify GraphQL · USD→CAD ×1.36`
+            : `Auto-detected מ-Shopify (תוכנית מותאמת — עדכן את הסכום ידנית)`,
+      };
+    });
+    onChange([...news, ...items]);
+  }
+
   function update(id: string, patch: Partial<RecurringCost>) {
     onChange(items.map(r => (r.id === id ? { ...r, ...patch } : r)));
   }
@@ -254,6 +339,63 @@ function RecurringTab({
 
   return (
     <div className="space-y-3">
+      {missingDetected.length > 0 && (
+        <div className="rounded-lg border border-primary/30 bg-primary/5 p-3">
+          <div className="flex items-start gap-2">
+            <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-primary/15 text-primary shrink-0">
+              <Sparkles size={14} />
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="text-xs sm:text-sm font-semibold text-text-primary">
+                  זיהינו אוטומטית תוכניות Shopify
+                </div>
+                {missingDetected.length > 1 && (
+                  <button
+                    onClick={addAllDetected}
+                    className="text-[11px] sm:text-xs font-semibold text-primary hover:text-primary-dark"
+                  >
+                    הוסף את כולן ({missingDetected.length})
+                  </button>
+                )}
+              </div>
+              <p className="text-[11px] sm:text-xs text-text-secondary mt-0.5 leading-relaxed">
+                שלפנו את שם התוכנית דרך GraphQL ושיערנו את העלות החודשית
+                ב-CAD. סכומים מבוססים על מחירון Shopify הציבורי.
+              </p>
+              <ul className="mt-2 space-y-1">
+                {missingDetected.map(m => {
+                  const cad = shopifyPlanCadForName(m.planDisplayName);
+                  return (
+                    <li
+                      key={m.storeId}
+                      className="flex items-center gap-2 rounded-md bg-surface border border-borderSubtle px-2.5 py-1.5"
+                    >
+                      <span className="text-xs text-text-secondary shrink-0">
+                        {m.storeName}
+                      </span>
+                      <span className="text-xs font-semibold text-text-primary truncate">
+                        {m.planDisplayName}
+                      </span>
+                      <span className="text-[10px] text-text-muted tabular-nums shrink-0">
+                        {cad ? `≈ CAD ${formatCurrency(cad)}/מ` : 'מחיר לא ידוע — הזן ידנית'}
+                      </span>
+                      <button
+                        onClick={() => addDetectedPlan(m)}
+                        className="ml-auto inline-flex items-center gap-1 rounded-md bg-primary text-white px-2 py-0.5 text-[11px] font-semibold hover:bg-primary-dark shrink-0"
+                      >
+                        <Plus size={11} />
+                        הוסף
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between gap-2">
         <p className="text-xs sm:text-sm text-text-secondary leading-relaxed">
           מנויים חודשיים שחוזרים אוטומטית בכל חודש. Shopify plan, אפליקציות

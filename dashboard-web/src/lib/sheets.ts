@@ -3,6 +3,7 @@ import type { DailyRow } from './types';
 import { COGS_RATE_OF_REVENUE } from './analytics';
 
 const DATA_TAB = 'data-daily';
+const STORE_META_TAB = 'store-meta';
 
 function getAuth() {
   const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
@@ -113,4 +114,57 @@ export async function fetchDailyData(): Promise<DailyRow[]> {
   }
 
   return rows;
+}
+
+export type StoreMetaRow = {
+  storeId: string;
+  storeName: string;
+  planDisplayName: string;
+  shopifyPlus: boolean;
+  partnerDevelopment: boolean;
+  updatedAt: string | null;
+};
+
+/**
+ * Reads the `store-meta` tab populated by `refreshAllStoreMeta()` in Apps
+ * Script. Returns one row per store with the auto-detected Shopify plan name.
+ * The dashboard uses this to suggest the default monthly cost in BillingSettings.
+ * Returns [] if the tab doesn't exist yet (e.g. Apps Script hasn't been
+ * deployed) so the dashboard degrades gracefully.
+ */
+export async function fetchStoreMeta(): Promise<StoreMetaRow[]> {
+  const auth = getAuth();
+  const sheets = google.sheets({ version: 'v4', auth });
+  const spreadsheetId = getSpreadsheetId();
+
+  try {
+    const res = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${STORE_META_TAB}!A2:F1000`,
+      valueRenderOption: 'UNFORMATTED_VALUE',
+      dateTimeRenderOption: 'FORMATTED_STRING',
+    });
+    const values = res.data.values ?? [];
+    const out: StoreMetaRow[] = [];
+    for (const row of values) {
+      const storeId = String(row[0] ?? '').trim();
+      const storeName = String(row[1] ?? '').trim();
+      if (!storeId) continue;
+      out.push({
+        storeId,
+        storeName,
+        planDisplayName: String(row[2] ?? '').trim(),
+        shopifyPlus: row[3] === true || row[3] === 'TRUE' || row[3] === 'true',
+        partnerDevelopment: row[4] === true || row[4] === 'TRUE' || row[4] === 'true',
+        updatedAt: row[5] ? String(row[5]) : null,
+      });
+    }
+    return out;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Tab missing → return empty rather than 500ing the whole route. The UI
+    // shows the bills-CSV importer as the fallback in that case.
+    if (/Unable to parse range|not found/i.test(msg)) return [];
+    throw err;
+  }
 }

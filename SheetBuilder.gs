@@ -135,6 +135,9 @@ function ensureSpreadsheet() {
   // טאב נתונים שטוחים ל-Looker Studio (LTR, English headers)
   ensureDailyFlatTab_(ss);
 
+  // טאב store-meta: שם תוכנית Shopify לכל חנות. מתעדכן ע"י refreshAllStoreMeta().
+  ensureStoreMetaTab_(ss);
+
   Logger.log(`Spreadsheet ready: ${ss.getUrl()}`);
   return ss;
 }
@@ -826,6 +829,73 @@ function writeDailyFlatRow_(ss, dateStr, storeId, storeName, fbCad, gaCad, reven
     sh.getRange(targetRow, 10).setNumberFormat('#,##0.00');        // COGS
     sh.getRange(targetRow, 11).setNumberFormat('#,##0.00');        // Net Profit
   }
+}
+
+// ----------------------------------------------------------------------------
+// store-meta: שם תוכנית Shopify לכל חנות. הדשבורד קורא מכאן ומציע אוטומטית
+// "Basic Shopify ≈ $39/mo" כעלות חודשית קבועה ב-BillingSettings. שורה אחת
+// לחנות, מעודכן ע"י refreshAllStoreMeta() ב-Shopify.gs.
+// ----------------------------------------------------------------------------
+
+const STORE_META_HEADERS = [
+  'Store ID', 'Store', 'Plan Display Name', 'Shopify Plus', 'Partner Dev', 'Updated At'
+];
+
+function ensureStoreMetaTab_(ss) {
+  let sh = ss.getSheetByName(STORE_META_TAB);
+  let justCreated = false;
+  if (!sh) {
+    sh = ss.insertSheet(STORE_META_TAB);
+    sh.setRightToLeft(false);
+    justCreated = true;
+  }
+  if (sh.getLastRow() === 0) {
+    sh.getRange(1, 1, 1, STORE_META_HEADERS.length).setValues([STORE_META_HEADERS])
+      .setFontWeight('bold')
+      .setBackground('#1c4587')
+      .setFontColor('#ffffff')
+      .setHorizontalAlignment('center');
+    sh.setFrozenRows(1);
+    sh.setColumnWidth(1, 100); // Store ID
+    sh.setColumnWidth(2, 110); // Store
+    sh.setColumnWidth(3, 160); // Plan Display Name
+    sh.setColumnWidth(4, 100); // Shopify Plus
+    sh.setColumnWidth(5, 100); // Partner Dev
+    sh.setColumnWidth(6, 160); // Updated At
+  }
+  if (justCreated) {
+    try { sh.hideSheet(); } catch (_) {}
+  }
+  return sh;
+}
+
+/**
+ * כותב/מעדכן שורה ב-store-meta. אידמפוטנטי לפי storeId.
+ * plan = { displayName, partnerDevelopment, shopifyPlus } או null אם נכשל.
+ */
+function writeStoreMetaRow_(ss, storeId, storeName, plan, updatedAt) {
+  const sh = ensureStoreMetaTab_(ss);
+  const lastRow = sh.getLastRow();
+  let targetRow = lastRow + 1;
+
+  if (lastRow > 1) {
+    const ids = sh.getRange(2, 1, lastRow - 1, 1).getValues();
+    for (let i = 0; i < ids.length; i++) {
+      if (String(ids[i][0]) === storeId) {
+        targetRow = i + 2;
+        break;
+      }
+    }
+  }
+
+  const displayName = plan && plan.displayName ? String(plan.displayName) : '';
+  const plus = plan ? !!plan.shopifyPlus : '';
+  const dev = plan ? !!plan.partnerDevelopment : '';
+
+  sh.getRange(targetRow, 1, 1, 6).setValues([[
+    storeId, storeName, displayName, plus, dev, updatedAt
+  ]]);
+  sh.getRange(targetRow, 6).setNumberFormat('yyyy-mm-dd hh:mm');
 }
 
 /**

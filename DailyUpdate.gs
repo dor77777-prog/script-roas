@@ -50,6 +50,13 @@ function runUpdateForDate(dateStr) {
     errors.push(`[summary] ${e && e.message ? e.message : e}`);
   }
 
+  // store-meta: רענון יומי של שם תוכנית Shopify לכל חנות (לא קריטי, שגיאות לא מפילות).
+  try {
+    refreshAllStoreMeta();
+  } catch (e) {
+    Logger.log(`store-meta refresh failed (non-fatal): ${e && e.message ? e.message : e}`);
+  }
+
   if (errors.length) {
     const msg = `ROAS daily update ${dateStr} completed with errors:\n` + errors.join('\n');
     Logger.log(msg);

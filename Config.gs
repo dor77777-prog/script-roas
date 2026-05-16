@@ -7,6 +7,7 @@ const TZ = 'Asia/Jerusalem';
 const SUMMARY_TAB = 'סיכום';
 const DAILY_FLAT_TAB = 'data-daily';
 const PRODUCTS_DAILY_TAB = 'products-daily';
+const STORE_META_TAB = 'store-meta';
 
 const SHOPIFY_API_VERSION = '2024-10';
 const META_API_VERSION = 'v20.0';
