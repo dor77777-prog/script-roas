@@ -223,6 +223,14 @@ export async function hydrateFromCloud(): Promise<boolean> {
       const local = readLocal(lsKey);
       if (local !== null) {
         lastPushAt[lsKey] = Date.now();
+        // Bump pendingKeys so the SyncIndicator pill reflects in-flight
+        // migration pushes alongside any debounced user pushes. Without this
+        // the counter drifts and "ok" can fire prematurely while migration
+        // POSTs are still racing.
+        setSyncState({
+          status: 'syncing',
+          pendingKeys: syncState.pendingKeys + 1,
+        });
         void postWithRetry(cloudKey, local);
       }
       continue;
