@@ -547,8 +547,20 @@ function RecurringTab({
                     update(r.id, patch);
                     setEditing(null);
                   }}
-                  onCancel={() => {
-                    if (!r.name) remove(r.id);
+                  onCancel={(draft) => {
+                    // The user pressed Escape / clicked ביטול. If they had
+                    // typed a name into the draft but never committed it,
+                    // keep the row and persist the partial draft rather than
+                    // silently throwing away their typing. Only remove the
+                    // row when BOTH the saved item and the draft name are
+                    // empty (covers the "addNew then immediately cancel"
+                    // case where nothing was typed).
+                    const trimmed = draft.name.trim();
+                    if (!r.name && !trimmed) {
+                      remove(r.id);
+                    } else if (!r.name && trimmed) {
+                      update(r.id, { name: trimmed });
+                    }
                     setEditing(null);
                   }}
                 />
@@ -624,7 +636,9 @@ function RecurringEditForm({
   item: RecurringCost;
   storeNames: string[];
   onSave: (patch: Partial<RecurringCost>) => void;
-  onCancel: () => void;
+  /** Receives the form's in-progress draft so the parent can decide whether
+   *  to discard, persist as partial, or remove the row. See WR-10 fix. */
+  onCancel: (draft: { name: string }) => void;
 }) {
   const [name, setName] = useState(item.name);
   const [store, setStore] = useState(item.store);
@@ -643,6 +657,10 @@ function RecurringEditForm({
     });
   }
 
+  function cancel() {
+    onCancel({ name });
+  }
+
   return (
     <div className="p-3 space-y-2.5">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -655,7 +673,7 @@ function RecurringEditForm({
             autoFocus
             onKeyDown={e => {
               if (e.key === 'Enter') commit();
-              if (e.key === 'Escape') onCancel();
+              if (e.key === 'Escape') cancel();
             }}
             className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm focus:outline-none focus:border-primary focus:shadow-focus"
           />
@@ -694,7 +712,7 @@ function RecurringEditForm({
             placeholder="60"
             onKeyDown={e => {
               if (e.key === 'Enter') commit();
-              if (e.key === 'Escape') onCancel();
+              if (e.key === 'Escape') cancel();
             }}
             className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm focus:outline-none focus:border-primary focus:shadow-focus tabular-nums"
           />
@@ -718,7 +736,7 @@ function RecurringEditForm({
           שמור
         </button>
         <button
-          onClick={onCancel}
+          onClick={cancel}
           className="inline-flex items-center gap-1 rounded-lg border border-border text-text-secondary hover:text-text-primary px-3 py-1.5 text-xs sm:text-sm"
         >
           ביטול
@@ -801,8 +819,15 @@ function OneTimeTab({
                     update(r.id, patch);
                     setEditing(null);
                   }}
-                  onCancel={() => {
-                    if (!r.description) remove(r.id);
+                  onCancel={(draft) => {
+                    // Same WR-10 semantics as RecurringEditForm: keep
+                    // partial draft on cancel rather than discarding silently.
+                    const trimmed = draft.description.trim();
+                    if (!r.description && !trimmed) {
+                      remove(r.id);
+                    } else if (!r.description && trimmed) {
+                      update(r.id, { description: trimmed });
+                    }
                     setEditing(null);
                   }}
                 />
@@ -874,7 +899,9 @@ function OneTimeEditForm({
   item: OneTimeCost;
   storeNames: string[];
   onSave: (patch: Partial<OneTimeCost>) => void;
-  onCancel: () => void;
+  /** Receives the form's in-progress draft so the parent can decide whether
+   *  to discard, persist as partial, or remove the row. See WR-10 fix. */
+  onCancel: (draft: { description: string }) => void;
 }) {
   const [date, setDate] = useState(item.date);
   const [store, setStore] = useState(item.store);
@@ -893,6 +920,10 @@ function OneTimeEditForm({
       amountCAD: Number.isFinite(amount) ? amount : 0,
       notes: notes.trim() || undefined,
     });
+  }
+
+  function cancel() {
+    onCancel({ description });
   }
 
   return (
@@ -930,7 +961,7 @@ function OneTimeEditForm({
           placeholder="לדוגמה: Shopify Email overage"
           onKeyDown={e => {
             if (e.key === 'Enter') commit();
-            if (e.key === 'Escape') onCancel();
+            if (e.key === 'Escape') cancel();
           }}
           className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm focus:outline-none focus:border-primary focus:shadow-focus"
         />
@@ -957,7 +988,7 @@ function OneTimeEditForm({
             placeholder="25"
             onKeyDown={e => {
               if (e.key === 'Enter') commit();
-              if (e.key === 'Escape') onCancel();
+              if (e.key === 'Escape') cancel();
             }}
             className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm focus:outline-none focus:border-primary focus:shadow-focus tabular-nums"
           />
@@ -980,7 +1011,7 @@ function OneTimeEditForm({
           שמור
         </button>
         <button
-          onClick={onCancel}
+          onClick={cancel}
           className="inline-flex items-center gap-1 rounded-lg border border-border text-text-secondary hover:text-text-primary px-3 py-1.5 text-xs sm:text-sm"
         >
           ביטול
