@@ -118,54 +118,45 @@ export function BillingSettings({ storeNames }: Props) {
 
   // Hydrate from storage on mount + seed if empty so user has something to
   // edit. The seed is gated on cloud-hydrated to avoid stomping data a partner
-  // has already entered on another device. If hydrate already happened (e.g.
-  // navigating between tabs), seed immediately; otherwise wait for the event.
+  // has already entered on another device.
+  //
+  // WR2-02: Seeding is restricted to the FIRST hydrate of the session. If
+  // BillingSettings remounts (route change, tab toggle, parent re-render)
+  // AFTER hydrate already finished, we do NOT re-seed — by then any partner
+  // data was already merged into localStorage by the first hydrate, and the
+  // safety-net "re-fetch then seed" approach we previously used had a race:
+  // the fetch+seed sequence wasn't atomic, so a partner write landing
+  // between our re-fetch and our seed POST would be overwritten by the seed.
+  // Restricting seeding to the first hydrate eliminates the re-fetch race
+  // entirely (no re-fetch on remount, no seed on remount), while still
+  // serving genuine first-time users whose cloud is empty at hydrate time.
   useEffect(() => {
     setRecurring(readRecurring());
     setOneTime(readOneTime());
 
-    // Re-check the cloud one more time right before seeding so we don't
-    // double-seed against a partner who pushed data between mount and the
-    // first hydrate completing (or after, in which case roas-cloud-hydrated
-    // already fired and we never re-fire it). hasAnyBilling() reflects only
-    // local state — but cloudSync's writeLocal has already merged any cloud
-    // values before dispatching roas-cloud-hydrated, so local IS the source
-    // of truth at this point. The extra fetch is a final safety net for the
-    // case where a partner's push lands AFTER our hydrate but BEFORE seed.
     let cancelled = false;
     let cleanupSeedListener: (() => void) | null = null;
-    async function maybeSeed() {
-      if (hasAnyBilling()) return;
-      try {
-        const r = await fetch('/api/dashboard-state', { cache: 'no-store' });
+    // Only seed if hydrate has NOT yet completed when this effect runs.
+    // When hydrated is already true at mount, the first hydrate's snapshot
+    // is the source of truth and any seed would be redundant at best,
+    // racy at worst.
+    if (!isHydrated()) {
+      const onHydrated = () => {
         if (cancelled) return;
-        const data = (await r.json()) as { kv?: Record<string, unknown> };
-        const cloudRecurring = data?.kv?.['billing-recurring'];
-        const cloudOneTime = data?.kv?.['billing-onetime'];
-        // Cloud already has billing data from a partner — abort seed and let
-        // the normal poll round mirror that data into localStorage.
-        if (
-          (Array.isArray(cloudRecurring) && cloudRecurring.length > 0) ||
-          (Array.isArray(cloudOneTime) && cloudOneTime.length > 0)
-        ) {
+        // At this point the first hydrate just completed. hasAnyBilling()
+        // reflects local state AFTER cloudSync's writeLocal merged any
+        // cloud values — so local IS the authoritative snapshot of what
+        // cloud had at hydrate time. If empty, cloud was empty too, and
+        // seeding is the right action for a genuine first-time user.
+        if (hasAnyBilling()) {
+          setRecurring(readRecurring());
+          setOneTime(readOneTime());
           return;
         }
-      } catch {
-        // If the safety-net fetch fails, fall through to seed locally. The
-        // partner's data (if any) will replace ours on the next successful
-        // hydrate via the regular cloud-wins path; the cost is a momentary
-        // duplicate, which is recoverable, vs. blocking seed forever on a
-        // transient network error.
-      }
-      if (cancelled || hasAnyBilling()) return;
-      seedBillingIfEmpty(storeNames);
-      setRecurring(readRecurring());
-      setOneTime(readOneTime());
-    }
-    if (isHydrated()) {
-      void maybeSeed();
-    } else {
-      const onHydrated = () => { void maybeSeed(); };
+        seedBillingIfEmpty(storeNames);
+        setRecurring(readRecurring());
+        setOneTime(readOneTime());
+      };
       window.addEventListener('roas-cloud-hydrated', onHydrated, { once: true });
       cleanupSeedListener = () => {
         window.removeEventListener('roas-cloud-hydrated', onHydrated);
