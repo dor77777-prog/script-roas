@@ -1,5 +1,9 @@
 import { NextResponse } from 'next/server';
-import { fetchDashboardState, upsertDashboardStateKey } from '@/lib/sheets';
+import {
+  fetchDashboardState,
+  isAllowedStateKey,
+  upsertDashboardStateKey,
+} from '@/lib/sheets';
 
 // Route handler — dynamic by default (no static generation). We rely on the
 // explicit Cache-Control header below for short CDN dedupe within the polling
@@ -54,9 +58,21 @@ export async function GET() {
 
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as { key?: string; value?: unknown };
-    if (!body.key || typeof body.key !== 'string') {
-      return NextResponse.json({ error: 'missing key' }, { status: 400 });
+    const body = (await req.json()) as { key?: unknown; value?: unknown };
+    // Validate `key` against an explicit allowlist of dashboard-state keys.
+    // Two reasons:
+    //   1. Defense in depth against prototype-pollution: a client (legitimate
+    //      bug or adversarial) could POST key="__proto__" which, on the next
+    //      fetchDashboardState, the previous `kv[key] = parsed` line would
+    //      have set Object.prototype properties — affecting every object
+    //      created in the Node.js process. fetchDashboardState now also uses
+    //      Object.create(null), but rejecting at the boundary stops the bad
+    //      row from ever entering the sheet.
+    //   2. Type-system parity: the StateKey union in cloudSync.ts already
+    //      enumerates the legitimate keys; the API should mirror that
+    //      contract rather than accepting any string.
+    if (!isAllowedStateKey(body.key)) {
+      return NextResponse.json({ error: 'unknown key' }, { status: 400 });
     }
     await upsertDashboardStateKey(body.key, body.value ?? null);
     return NextResponse.json({ ok: true });

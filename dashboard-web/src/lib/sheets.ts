@@ -197,6 +197,39 @@ export async function fetchStoreMeta(): Promise<StoreMetaRow[]> {
 // Replaces localStorage so multiple devices and partners stay in sync.
 // ============================================================================
 
+/**
+ * Allowlist of valid dashboard-state keys. Mirrors the localStorage keys in
+ * `cloudSync.ts:STATE_KEYS` with the `roas-dashboard:` prefix stripped (this
+ * is the wire format used in the POST body and the sheet's column A).
+ *
+ * Used by the POST route to reject arbitrary keys at the API boundary.
+ * Without this allowlist, a client could write a row with key="__proto__"
+ * or "constructor"; on the next fetchDashboardState, the line
+ * `kv[key] = parsed` would set Object.prototype properties — affecting
+ * every object in the Node.js process until restart.
+ *
+ * fetchDashboardState additionally uses Object.create(null) so even keys
+ * that bypass this check (e.g. a row written directly in the sheet UI by
+ * ops) cannot pollute the prototype. Belt + suspenders.
+ *
+ * Keep this list in sync with cloudSync.ts:STATE_KEYS. The two cannot be
+ * the same array because cloudSync runs in browser code and pulls window
+ * globals; importing it from this server-only module would bundle in
+ * client-only references.
+ */
+export const ALLOWED_STATE_KEYS = [
+  'billing-recurring',
+  'billing-onetime',
+  'annotations',
+  'monthly-revenue-goal',
+  'insight-states',
+] as const;
+export type AllowedStateKey = (typeof ALLOWED_STATE_KEYS)[number];
+
+export function isAllowedStateKey(k: unknown): k is AllowedStateKey {
+  return typeof k === 'string' && (ALLOWED_STATE_KEYS as readonly string[]).includes(k);
+}
+
 export type DashboardStateMap = Record<string, unknown>;
 
 /**
