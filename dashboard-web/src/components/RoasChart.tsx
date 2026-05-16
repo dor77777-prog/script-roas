@@ -6,19 +6,26 @@ import type { DailySeries } from '@/lib/analytics';
 import { formatDate, formatNumber } from '@/lib/utils';
 
 /**
- * Series palette: a single dominant brand color + muted neutrals for the other
- * stores. The previous "rainbow" (red / green / yellow / purple) gave every
- * store equal visual weight, which made it impossible to track any single one.
- * Per the frontend-design playbook: dominant + sharp accents > evenly-spread
- * color. We pick a fixed brand color for the primary store and assign neutrals
- * to the rest.
+ * Series palette: distinct hues, one anchored as the dominant primary.
+ *
+ * Earlier iteration tried "primary + 2 slate neutrals" — but slate-400 vs
+ * slate-500 are visually indistinguishable in a line chart, defeating the
+ * whole point of separating the stores. We now use three different hue
+ * families (navy / amber / teal) so each store is identifiable at a glance,
+ * and keep the hierarchy via stroke weight + opacity on the primary line
+ * (so the eye still anchors instead of bouncing).
+ *
+ * Colors are picked for:
+ *   - distinct hue separation in the HSL wheel (~120° apart)
+ *   - sufficient lightness contrast against the white card background
+ *   - graceful pairing with the dashboard's navy primary
  */
 const SERIES_PALETTE = [
-  '#1c4587', // dominant — deep navy (matches dashboard primary)
-  '#94a3b8', // slate-400 — muted
-  '#64748b', // slate-500 — muted darker
-  '#0891b2', // cyan-600 — fallback accent if 4+ stores
-  '#7c3aed', // violet-600 — fallback accent if 5+ stores
+  '#1c4587', // navy   — primary store (dominant)
+  '#d97706', // amber  — warm hue, very distinct from navy
+  '#0d9488', // teal   — cool hue, distinct from both
+  '#a855f7', // violet — fallback if 4 stores
+  '#dc2626', // red    — fallback if 5 stores
 ];
 const STORE_COLORS: Record<string, string> = {
   uzoshop: SERIES_PALETTE[0],
@@ -58,8 +65,8 @@ export function RoasChart({ data, stores, bare = false }: Props) {
           return (
             <span key={s} className="inline-flex items-center gap-1.5">
               <span
-                className="inline-block w-3 h-[3px] rounded-sm shrink-0"
-                style={{ backgroundColor: color, opacity: isPrimary ? 1 : 0.85 }}
+                className="inline-block w-3.5 h-[3px] rounded-sm shrink-0"
+                style={{ backgroundColor: color }}
               />
               <span className={isPrimary ? 'font-semibold text-text-primary' : 'text-text-secondary'}>
                 {s}
@@ -142,8 +149,9 @@ export function RoasChart({ data, stores, bare = false }: Props) {
                   type="monotone"
                   dataKey={s}
                   stroke={color}
-                  strokeWidth={isPrimary ? 2.5 : 1.5}
-                  strokeOpacity={isPrimary ? 1 : 0.78}
+                  // Mild hierarchy via stroke weight only — opacity stays full
+                  // for every line so each store stays clearly visible.
+                  strokeWidth={isPrimary ? 2.75 : 2}
                   dot={false}
                   activeDot={{ r: isPrimary ? 5 : 4, strokeWidth: 0 }}
                   connectNulls
