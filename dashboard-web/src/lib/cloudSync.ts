@@ -92,6 +92,15 @@ function setSyncState(patch: Partial<SyncState>) {
   }
 }
 
+/** Apply a patch computed from the *current* syncState. Used by code paths
+ *  that decrement pendingKeys after an async resolution — without this, two
+ *  pushes resolving in the same microtask both read pendingKeys before
+ *  either has written, both compute (n-1), and the counter freezes at n-1
+ *  instead of reaching 0. */
+function updateSyncState(updater: (prev: SyncState) => Partial<SyncState>) {
+  setSyncState(updater(syncState));
+}
+
 export function getSyncState(): SyncState {
   return syncState;
 }
@@ -114,10 +123,10 @@ export function pushCloudKey(localStorageKey: string, value: unknown): void {
   const cloudKey = stripPrefix(localStorageKey);
 
   if (!pendingTimers[localStorageKey]) {
-    setSyncState({
+    updateSyncState(prev => ({
       status: 'syncing',
-      pendingKeys: syncState.pendingKeys + 1,
-    });
+      pendingKeys: prev.pendingKeys + 1,
+    }));
   } else {
     clearTimeout(pendingTimers[localStorageKey]);
   }
@@ -149,23 +158,29 @@ async function postWithRetry(key: string, value: unknown, attempt = 1): Promise<
       const msg = (body && body.error) || `HTTP ${res.status}`;
       throw new Error(msg);
     }
-    const nextPending = Math.max(0, syncState.pendingKeys - 1);
-    setSyncState({
-      status: nextPending === 0 ? 'ok' : 'syncing',
-      lastSyncAt: Date.now(),
-      lastError: null,
-      pendingKeys: nextPending,
+    // Functional update so the decrement reads the freshest pendingKeys
+    // count (defensive — JS's single-threaded scheduler already prevents
+    // interleaving inside one resolution, but this also covers any future
+    // refactor that splits the read/write across await boundaries).
+    updateSyncState(prev => {
+      const nextPending = Math.max(0, prev.pendingKeys - 1);
+      return {
+        status: nextPending === 0 ? 'ok' : 'syncing',
+        lastSyncAt: Date.now(),
+        lastError: null,
+        pendingKeys: nextPending,
+      };
     });
   } catch (err) {
     if (attempt >= 2) {
       const message = err instanceof Error ? err.message : String(err);
       // eslint-disable-next-line no-console
       console.warn(`cloudSync push failed (${key}):`, message);
-      setSyncState({
+      updateSyncState(prev => ({
         status: 'error',
         lastError: `כתיבה ל-${key} נכשלה: ${message}`,
-        pendingKeys: Math.max(0, syncState.pendingKeys - 1),
-      });
+        pendingKeys: Math.max(0, prev.pendingKeys - 1),
+      }));
       return;
     }
     setTimeout(() => void postWithRetry(key, value, attempt + 1), 5000);
@@ -227,10 +242,10 @@ export async function hydrateFromCloud(): Promise<boolean> {
         // migration pushes alongside any debounced user pushes. Without this
         // the counter drifts and "ok" can fire prematurely while migration
         // POSTs are still racing.
-        setSyncState({
+        updateSyncState(prev => ({
           status: 'syncing',
-          pendingKeys: syncState.pendingKeys + 1,
-        });
+          pendingKeys: prev.pendingKeys + 1,
+        }));
         void postWithRetry(cloudKey, local);
       }
       continue;
