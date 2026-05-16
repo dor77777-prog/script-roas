@@ -111,6 +111,11 @@ export function BillingSettings({ storeNames }: Props) {
   );
   const detectedPlans: StoreMetaRow[] = meta?.rows ?? [];
 
+  // The parent passes data.stores; SWR returns a new array reference on every
+  // refetch (60s). Deep-compare via a string key so the effect below doesn't
+  // re-register listeners every minute.
+  const storeNamesKey = storeNames.join('|');
+
   // Hydrate from storage on mount + seed if empty so user has something to
   // edit. The seed is gated on cloud-hydrated to avoid stomping data a partner
   // has already entered on another device. If hydrate already happened (e.g.
@@ -177,7 +182,12 @@ export function BillingSettings({ storeNames }: Props) {
       window.removeEventListener('roas-billing-changed', onChange);
       if (cleanupSeedListener) cleanupSeedListener();
     };
-  }, [storeNames]);
+    // Depending on the string key (not the array ref) avoids re-running on
+    // every SWR refetch when the underlying store list hasn't actually changed.
+    // storeNames is captured by closure; safe because the key only changes
+    // when the list does.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeNamesKey]);
 
   // Counts for the trigger pill subtitle.
   const totalMonthly = useMemo(
