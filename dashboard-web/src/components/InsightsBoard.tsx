@@ -395,27 +395,37 @@ function InsightRow({
             )}
           </div>
 
-          {/* Action row */}
-          <div className="flex items-center gap-2 sm:gap-3 mt-2 flex-wrap">
-            {/* Primary actions: mark done / ignore */}
+          {/* Action row — ghost buttons by default, intensify on hover so it's
+              clear these are actions, not state indicators. The previous
+              filled-green "בוצע" pill read as "this is already done". */}
+          <div className="flex items-center gap-1 mt-2 flex-wrap">
+            {/* Mark done — ghost gray, turns green on hover to telegraph intent */}
             <button
               onClick={() => onMark(insight, 'done')}
               className={cn(
-                'inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-semibold transition-colors',
-                'text-roas-green bg-roas-greenBg/70 hover:bg-roas-greenBg',
+                'inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium',
+                'border border-borderSubtle bg-surface',
+                'text-text-secondary hover:text-roas-green hover:border-roas-green/40 hover:bg-roas-greenBg/40',
+                'transition-colors',
               )}
-              title="סמן כבוצע — יוסתר ל-7 ימים, ויחזור אם הבעיה תחזור"
+              title="סמן שטיפלתי בזה — יוסתר ל-7 ימים, יחזור אם הבעיה תחזור"
             >
               <Check size={12} />
-              בוצע
+              טיפלתי
             </button>
+            {/* Hide — ghost gray, stays muted on hover (less aggressive) */}
             <button
               onClick={() => onMark(insight, 'ignored')}
-              className="inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium text-text-muted hover:text-text-secondary hover:bg-surfaceMuted transition-colors"
-              title="התעלם — יוסתר עד שתשחזר ידנית"
+              className={cn(
+                'inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium',
+                'border border-transparent bg-transparent',
+                'text-text-muted hover:text-text-primary hover:bg-surfaceMuted',
+                'transition-colors',
+              )}
+              title="הסתר — לא יחזור עד שתשחזר ידנית"
             >
               <ArchiveX size={12} />
-              התעלם
+              הסתר
             </button>
 
             {/* External link if any */}
@@ -425,8 +435,11 @@ function InsightRow({
                 target="_blank"
                 rel="noopener noreferrer"
                 className={cn(
-                  'inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-semibold transition-colors',
-                  meta.color, 'hover:opacity-80 hover:bg-surface/60',
+                  'inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold',
+                  'border border-transparent',
+                  meta.color,
+                  'hover:bg-surface/80 hover:border-borderSubtle',
+                  'transition-colors',
                 )}
               >
                 <ExternalLink size={11} />
@@ -438,7 +451,7 @@ function InsightRow({
             {hasDetail && (
               <button
                 onClick={() => setExpanded(v => !v)}
-                className="text-[11px] text-text-secondary hover:text-text-primary inline-flex items-center gap-1 transition-colors ml-auto"
+                className="text-[11px] text-text-muted hover:text-text-primary inline-flex items-center gap-1 transition-colors ml-auto px-2 py-1"
               >
                 {expanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
                 {expanded ? 'הסתר הסבר' : 'למה?'}
