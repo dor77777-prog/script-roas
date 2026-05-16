@@ -1,8 +1,18 @@
 'use client';
 
 import { useMemo } from 'react';
-import { Area, AreaChart, ResponsiveContainer, YAxis } from 'recharts';
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import {
+  Area,
+  AreaChart,
+  ComposedChart,
+  Line,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import { TrendingUp, TrendingDown, Minus, LineChart } from 'lucide-react';
 import type { DashboardData, Filters as F } from '@/lib/types';
 import { aggregate, dailySeries, filterRows, roasLabel } from '@/lib/analytics';
 import { previousRange } from '@/lib/presets';
@@ -137,36 +147,9 @@ export function HeroOverview({ data, filters }: Props) {
         className="absolute top-0 right-0 w-72 h-72 -translate-y-1/2 translate-x-1/3 rounded-full bg-cyan-300/15 blur-3xl pointer-events-none"
       />
 
-      {/* Background chart — locked to the bottom half of the hero, very soft */}
-      {chartData.length > 1 && (
-        <div
-          aria-hidden
-          className="absolute inset-x-0 bottom-0 h-[55%] opacity-50 pointer-events-none"
-          dir="ltr"
-        >
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={chartData} margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="hero-revenue" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%"   stopColor="#a5d4ff" stopOpacity={0.55} />
-                  <stop offset="100%" stopColor="#a5d4ff" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <YAxis hide domain={[0, 'auto']} />
-              <Area
-                type="monotone"
-                dataKey="revenue"
-                stroke="#cfe6ff"
-                strokeWidth={2}
-                fill="url(#hero-revenue)"
-                isAnimationActive
-                animationDuration={600}
-                animationEasing="ease-out"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      )}
+      {/* The chart used to live as a ghost background, but the user
+          couldn't tell what it represented. Moved into a clearly-labeled
+          section below the KPIs so it stands on its own as a story. */}
 
       {/* Content */}
       <div className="relative p-5 sm:p-7 md:p-9">
@@ -226,12 +209,154 @@ export function HeroOverview({ data, filters }: Props) {
           </div>
         </div>
 
-        {/* Bottom row: orders + units + product count (mini context) */}
-        <div className="mt-5 sm:mt-7 pt-4 sm:pt-5 border-t border-white/12 flex flex-wrap items-center gap-x-4 sm:gap-x-6 gap-y-2 text-[11px] sm:text-xs text-white/70 tabular-nums">
+        {/* ROAS trend chart — clearly labeled, with target reference line,
+            date axis, and hover tooltip. This is "what's the shape" of the
+            period, not an ambient decoration. */}
+        {chartData.length > 1 && (
+          <RoasTrendChart
+            data={chartData}
+            fromDate={filters.range.from}
+            toDate={filters.range.to}
+          />
+        )}
+
+        {/* Context strip */}
+        <div className="mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-white/12 flex flex-wrap items-center gap-x-4 sm:gap-x-6 gap-y-2 text-[11px] sm:text-xs text-white/70 tabular-nums">
           <ContextStat label="ROAS לתקופה הקודמת" value={fmtNum2(kpis.prevAgg.roas)} />
           <ContextStat label="הכנסות שכבר נצברו" value={<>CAD {fmtMoneyBare(kpis.curAgg.revenue)}</>} />
           <ContextStat label="ימי פעילות" value={fmtCount(daysInRange)} />
         </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * The trend chart used to live as a ghost layer behind the KPIs and the
+ * user (rightly) asked what it represented. Promoted to a real, labeled
+ * micro-section:
+ *
+ *  - line shows daily ROAS (the dashboard's North Star metric)
+ *  - dashed reference line at the internal target (ROAS 3.0)
+ *  - subtle x-axis with from/to dates so the period is obvious
+ *  - tooltip on hover with date + ROAS + revenue + spend
+ *  - "above target" days light up emerald, "below target" stay muted blue
+ */
+function RoasTrendChart({
+  data,
+  fromDate,
+  toDate,
+}: {
+  data: Array<{ date: string; revenue: number; spend: number; roas: number }>;
+  fromDate: string;
+  toDate: string;
+}) {
+  // Sanitise: drop days with no spend (where roas=0 isn't meaningful).
+  const series = data.filter(d => d.spend > 0 || d.revenue > 0);
+  if (series.length < 2) return null;
+
+  const maxRoas = Math.max(3.2, ...series.map(d => d.roas));
+
+  return (
+    <section className="mt-6 sm:mt-7" dir="ltr">
+      {/* Caption row - explains WHAT the chart shows */}
+      <div className="flex items-center justify-between mb-2 text-[10px] sm:text-[11px] text-white/65" dir="rtl">
+        <div className="inline-flex items-center gap-1.5">
+          <LineChart size={12} className="text-white/55" />
+          <span className="font-semibold text-white/85 tracking-wide">ROAS יומי</span>
+          <span className="text-white/45">·</span>
+          <span>קו מקווקו = יעד 3.0</span>
+        </div>
+        <div className="inline-flex items-center gap-3 tabular-nums">
+          <span>
+            <span className="text-white/45">מקסימום: </span>
+            <span className="font-semibold text-white/85">
+              <bdi dir="ltr">{Math.max(...series.map(d => d.roas)).toFixed(2)}</bdi>
+            </span>
+          </span>
+          <span>
+            <span className="text-white/45">מינימום: </span>
+            <span className="font-semibold text-white/85">
+              <bdi dir="ltr">
+                {Math.min(...series.filter(d => d.roas > 0).map(d => d.roas)).toFixed(2)}
+              </bdi>
+            </span>
+          </span>
+        </div>
+      </div>
+
+      {/* Chart */}
+      <div className="h-32 sm:h-36">
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={series} margin={{ top: 8, right: 12, left: 12, bottom: 0 }}>
+            <defs>
+              <linearGradient id="hero-roas-fill" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%"   stopColor="#bfdbfe" stopOpacity={0.45} />
+                <stop offset="100%" stopColor="#bfdbfe" stopOpacity={0} />
+              </linearGradient>
+            </defs>
+            <XAxis dataKey="date" hide />
+            <YAxis hide domain={[0, maxRoas]} />
+            <Area
+              type="monotone"
+              dataKey="roas"
+              stroke="transparent"
+              fill="url(#hero-roas-fill)"
+              isAnimationActive
+              animationDuration={500}
+            />
+            <ReferenceLine
+              y={3}
+              stroke="rgba(255,255,255,0.45)"
+              strokeDasharray="4 4"
+              strokeWidth={1}
+            />
+            <Line
+              type="monotone"
+              dataKey="roas"
+              stroke="#ffffff"
+              strokeWidth={2}
+              dot={{ r: 2.5, fill: '#ffffff', stroke: 'transparent' }}
+              activeDot={{ r: 5, fill: '#ffffff', stroke: '#0d3680', strokeWidth: 3 }}
+              isAnimationActive
+              animationDuration={500}
+            />
+            <Tooltip
+              content={({ active, payload }) => {
+                if (!active || !payload || payload.length === 0) return null;
+                const d = payload[0].payload as {
+                  date: string;
+                  revenue: number;
+                  spend: number;
+                  roas: number;
+                };
+                return (
+                  <div
+                    dir="rtl"
+                    className="rounded-lg bg-text-primary/95 text-white px-3 py-2 text-xs shadow-elevated tabular-nums"
+                  >
+                    <div className="text-white/65 mb-1 text-[10px]">{fmtDateShort(d.date)}</div>
+                    <div className="font-semibold">
+                      ROAS <bdi dir="ltr">{d.roas.toFixed(2)}</bdi>
+                    </div>
+                    <div className="text-white/75 text-[11px] mt-0.5">
+                      הכנסות <bdi dir="ltr">{Math.round(d.revenue).toLocaleString('he-IL')}</bdi>
+                      {' · '}
+                      הוצאה <bdi dir="ltr">{Math.round(d.spend).toLocaleString('he-IL')}</bdi>
+                    </div>
+                  </div>
+                );
+              }}
+            />
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+
+      {/* Date axis labels */}
+      <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-white/55 tabular-nums mt-1" dir="ltr">
+        <span>{fmtDateShort(fromDate)}</span>
+        <span className="text-white/35">{series.length} ימים</span>
+        <span>{fmtDateShort(toDate)}</span>
       </div>
     </section>
   );
