@@ -27,7 +27,8 @@ import { DetailTable } from './DetailTable';
 import { TodayLive } from './TodayLive';
 import { ProductsTable } from './ProductsTable';
 import { CampaignsTable } from './CampaignsTable';
-import { WhatsWorking } from './WhatsWorking';
+import { InsightsBoard } from './InsightsBoard';
+import { GoalTracker } from './GoalTracker';
 import { AiReportButton } from './AiReportButton';
 import { HeroOverview } from './HeroOverview';
 import { CommandPalette } from './CommandPalette';
@@ -238,8 +239,11 @@ function HomeTab({
       />
       <TodayLive rows={data.rows} fxIlsToCad={data.fxIlsToCad} />
 
-      {/* ===== Algorithm-curated highlights ===== */}
-      <WhatsWorking />
+      {/* ===== Goal tracker — monthly revenue target with pacing + forecast ===== */}
+      <GoalTracker data={data} />
+
+      {/* ===== Insights engine — anomalies, recommendations, opportunities ===== */}
+      <InsightsBoard data={data} />
 
       {/* ===== Detailed KPI cards — full breakdown, the "drill-down" of the hero ===== */}
       <SectionIntro
