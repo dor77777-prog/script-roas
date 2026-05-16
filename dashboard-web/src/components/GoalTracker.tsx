@@ -40,20 +40,20 @@ export function GoalTracker({ data }: Props) {
   }, []);
 
   const forecast = useMemo(() => forecastMonthEnd(data.rows), [data.rows]);
-  const daysInMonth = useMemo(() => {
-    if (!forecast) return 30;
-    return forecast.daysElapsedThisMonth + forecast.daysRemainingThisMonth;
-  }, [forecast]);
+  const daysInMonth = useMemo(
+    () => forecast.daysElapsedThisMonth + forecast.daysRemainingThisMonth,
+    [forecast],
+  );
 
-  const pacing = useMemo(() => {
-    if (!forecast) return computePacing(goal, 0, 1, 30);
-    return computePacing(
+  const pacing = useMemo(
+    () => computePacing(
       goal,
       forecast.monthToDateRevenue,
       forecast.daysElapsedThisMonth,
       daysInMonth,
-    );
-  }, [goal, forecast, daysInMonth]);
+    ),
+    [goal, forecast, daysInMonth],
+  );
 
   function startEdit() {
     setDraft(goal != null ? String(goal) : '');
@@ -74,8 +74,6 @@ export function GoalTracker({ data }: Props) {
     setEditing(false);
     setDraft('');
   }
-
-  if (!forecast) return null;
 
   // ---- Render -------------------------------------------------------------
   // Two modes: goal set vs goal not set.

@@ -455,7 +455,7 @@ export function forecastMonthEnd(rows: DailyRow[]): {
   projectedSpend: number;
   projectedNet: number;
   projectedRoas: number;
-} | null {
+} {
   const today = todayInIsrael();
   const [yStr, mStr] = today.split('-');
   const year = parseInt(yStr, 10);
