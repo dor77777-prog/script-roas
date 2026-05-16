@@ -50,7 +50,7 @@ const TONE_BG: Record<string, string> = {
   gray:   'bg-surfaceMuted text-text-muted',
 };
 
-type AdSortKey = 'name' | 'spend' | 'value' | 'roas' | 'conversions';
+type AdSortKey = 'name' | 'spend' | 'value' | 'roas' | 'conversions' | 'impressions' | 'clicks';
 type AdSortDir = 'asc' | 'desc';
 
 const fetcher = async (url: string): Promise<AdsResponse> => {
@@ -199,6 +199,10 @@ export function AdsDrawer({
               return sign * (x.roas - y.roas);
             case 'conversions':
               return sign * (x.conversions - y.conversions);
+            case 'impressions':
+              return sign * (x.impressions - y.impressions);
+            case 'clicks':
+              return sign * (x.clicks - y.clicks);
           }
         });
         return list;
@@ -273,16 +277,20 @@ export function AdsDrawer({
                 <Stat label="המרות" value={formatNumber(summary.totals.conversions, 0)} />
               </div>
 
-              <div className="rounded-xl border border-borderSubtle overflow-hidden">
-                <table className="w-full text-xs sm:text-sm">
+              {/* Horizontal scroll on narrow drawers — the extra impressions/
+                  clicks columns make the table wider than the panel. */}
+              <div className="rounded-xl border border-borderSubtle overflow-x-auto">
+                <table className="w-full text-xs sm:text-sm min-w-[720px]">
                   <thead className="bg-surfaceMuted/60">
                     <tr className="text-text-secondary">
                       <th className="px-2 py-2 w-[36px]" aria-label="סימון" />
-                      <AdSortHeader label="מודעה"  col="name"        sortKey={sortKey} dir={sortDir} onClick={handleSort} align="start"  />
-                      <AdSortHeader label="הוצאה"  col="spend"       sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
-                      <AdSortHeader label="ערך"    col="value"       sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
-                      <AdSortHeader label="ROAS"   col="roas"        sortKey={sortKey} dir={sortDir} onClick={handleSort} align="center" />
-                      <AdSortHeader label="המרות"  col="conversions" sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
+                      <AdSortHeader label="מודעה"     col="name"        sortKey={sortKey} dir={sortDir} onClick={handleSort} align="start"  />
+                      <AdSortHeader label="הוצאה"     col="spend"       sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
+                      <AdSortHeader label="ערך"       col="value"       sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
+                      <AdSortHeader label="ROAS"      col="roas"        sortKey={sortKey} dir={sortDir} onClick={handleSort} align="center" />
+                      <AdSortHeader label="המרות"     col="conversions" sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
+                      <AdSortHeader label="חשיפות"    col="impressions" sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
+                      <AdSortHeader label="קליקים"    col="clicks"      sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
                       <th className="px-2 py-2 w-[40px]" aria-label="פעולות" />
                     </tr>
                   </thead>
@@ -336,6 +344,12 @@ export function AdsDrawer({
                             {a.roas > 0 ? formatNumber(a.roas) : '—'}
                           </td>
                           <td className="px-3 py-2 text-end tabular-nums">{formatNumber(a.conversions, 0)}</td>
+                          <td className="px-3 py-2 text-end tabular-nums text-text-secondary">
+                            {formatNumber(a.impressions, 0)}
+                          </td>
+                          <td className="px-3 py-2 text-end tabular-nums text-text-secondary">
+                            {formatNumber(a.clicks, 0)}
+                          </td>
                           <td className="px-2 py-2 text-center w-[40px]">
                             {link && (
                               <a
