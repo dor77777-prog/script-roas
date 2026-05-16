@@ -8,6 +8,7 @@
  */
 function setupAll() {
   const ss = ensureSpreadsheet();
+  setupDashboard();
   installDailyTrigger();
   Logger.log('================================');
   Logger.log('Setup complete.');
@@ -73,6 +74,7 @@ function onOpen() {
       .addItem('התקן טריגר יומי (00:05) + הרצה מיידית', 'installDailyTrigger')
       .addItem('הסר טריגר יומי', 'removeDailyTrigger')
       .addSeparator()
+      .addItem('בנה/רענן דשבורד', 'setupDashboard')
       .addItem('בדוק הגדרות (verifyConfig)', 'showVerifyConfig_')
       .addItem('הוצא Shopify tokens (Client Credentials)', 'bootstrapAllShopifyTokens')
       .addItem('פתח גיליון הגדרות', 'showSpreadsheetUrl_')
