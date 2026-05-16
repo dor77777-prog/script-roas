@@ -161,7 +161,7 @@ function MonthBlockPerStore({
       </button>
       {open && (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs sm:text-sm min-w-[500px]">
             <thead className="bg-surfaceMuted">
               <tr className="text-text-secondary">
                 <th className="px-3 py-2 text-start font-medium">תאריך</th>
@@ -250,7 +250,7 @@ function MonthBlockSummary({
       </button>
       {open && (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-xs sm:text-sm min-w-[500px]">
             <thead className="bg-surfaceMuted">
               <tr className="text-text-secondary">
                 <th className="px-3 py-2 text-start font-medium">תאריך</th>

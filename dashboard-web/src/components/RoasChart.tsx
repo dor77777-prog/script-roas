@@ -24,12 +24,12 @@ export function RoasChart({ data, stores }: { data: DailySeries[]; stores: strin
   }));
 
   return (
-    <section className="rounded-xl bg-surface border border-border p-5 shadow-card">
-      <h2 className="flex items-center gap-2 text-base font-semibold text-text-primary mb-4">
+    <section className="rounded-xl bg-surface border border-border p-3 sm:p-5 shadow-card">
+      <h2 className="flex items-center gap-2 text-sm sm:text-base font-semibold text-text-primary mb-3 sm:mb-4">
         <TrendingUp size={18} className="text-text-secondary" />
         מגמת ROAS לאורך זמן
       </h2>
-      <div className="h-80">
+      <div className="h-64 sm:h-80">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={chartData} margin={{ top: 10, right: 10, left: 10, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />

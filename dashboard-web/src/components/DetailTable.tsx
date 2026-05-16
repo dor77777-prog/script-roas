@@ -33,7 +33,7 @@ export function DetailTable({ rows }: { rows: DailyRow[] }) {
         <span className="text-xs text-text-muted font-normal">({display.length} שורות אחרונות)</span>
       </h2>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-xs sm:text-sm min-w-[700px]">
           <thead className="bg-surfaceMuted">
             <tr className="text-text-secondary">
               <th className="px-3 py-2.5 text-start font-medium">תאריך</th>

@@ -25,7 +25,7 @@ export function KpiCards({ current, previous }: Props) {
   const dProfit = deltaPct(current.grossProfit, previous.grossProfit);
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
       <KpiCard
         label="ROAS לתקופה"
         value={formatNumber(current.roas)}
@@ -78,16 +78,16 @@ function KpiCard({
   const isBad = deltaInverse ? delta.direction === 'up' : delta.direction === 'down';
 
   return (
-    <div className="rounded-xl bg-surface border border-border p-5 shadow-card hover:shadow-cardHover transition-shadow">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-sm font-medium text-text-secondary">{label}</span>
-        <span className="text-text-muted">{icon}</span>
+    <div className="rounded-xl bg-surface border border-border p-3 sm:p-5 shadow-card hover:shadow-cardHover transition-shadow">
+      <div className="flex items-center justify-between mb-2 sm:mb-3">
+        <span className="text-xs sm:text-sm font-medium text-text-secondary leading-tight">{label}</span>
+        <span className="text-text-muted shrink-0">{icon}</span>
       </div>
-      <div className="text-3xl font-bold text-text-primary leading-tight tabular-nums">{value}</div>
+      <div className="text-xl sm:text-2xl md:text-3xl font-bold text-text-primary leading-tight tabular-nums break-words">{value}</div>
       {sublabel && (
         <span
           className={cn(
-            'inline-block mt-2 px-2 py-0.5 text-xs font-medium rounded',
+            'inline-block mt-1.5 sm:mt-2 px-2 py-0.5 text-[10px] sm:text-xs font-medium rounded',
             sublabelClass,
           )}
         >
@@ -96,7 +96,7 @@ function KpiCard({
       )}
       <div
         className={cn(
-          'mt-3 flex items-center gap-1 text-xs',
+          'mt-2 sm:mt-3 flex items-center gap-1 text-[10px] sm:text-xs',
           delta.direction === 'flat' && 'text-text-muted',
           isGood && 'text-roas-green',
           isBad && 'text-roas-red',
@@ -105,10 +105,10 @@ function KpiCard({
         {delta.direction === 'up' && <TrendingUp size={12} />}
         {delta.direction === 'down' && <TrendingDown size={12} />}
         {delta.direction === 'flat' && <Minus size={12} />}
-        <span className="tabular-nums">
+        <span className="tabular-nums leading-tight">
           {delta.direction === 'flat'
             ? 'ללא שינוי'
-            : `${formatPct(delta.value, true)} מהתקופה הקודמת`}
+            : `${formatPct(delta.value, true)} מהקודמת`}
         </span>
       </div>
     </div>

@@ -19,27 +19,35 @@ function addDays(d: Date, n: number): Date {
 }
 
 export const PRESET_LABELS: Record<PresetKey, string> = {
+  yesterday: 'אתמול',
+  this_month: 'מתחילת החודש',
   this_week: 'השבוע',
   last_7_days: '7 ימים אחרונים',
-  this_month: 'החודש הזה',
   last_month: 'חודש קודם',
   last_30_days: '30 ימים אחרונים',
   custom: 'מותאם אישית',
 };
 
-export const PRESET_ORDER: PresetKey[] = [
+/** הצגה ראשונה ומודגשת: אתמול ומתחילת החודש (השאלות הכי נפוצות). */
+export const PRESET_FEATURED: PresetKey[] = ['yesterday', 'this_month'];
+export const PRESET_SECONDARY: PresetKey[] = [
   'this_week',
   'last_7_days',
-  'this_month',
   'last_month',
   'last_30_days',
   'custom',
 ];
 
+export const PRESET_ORDER: PresetKey[] = [...PRESET_FEATURED, ...PRESET_SECONDARY];
+
 export function computePresetRange(preset: PresetKey, customRange?: DateRange): DateRange {
   const today = todayLocal();
 
   switch (preset) {
+    case 'yesterday': {
+      const y = addDays(today, -1);
+      return { from: fmt(y), to: fmt(y) };
+    }
     case 'this_week': {
       const day = today.getUTCDay(); // 0=Sunday in IL
       const sunday = addDays(today, -day);

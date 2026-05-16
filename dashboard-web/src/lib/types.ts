@@ -22,9 +22,10 @@ export type DateRange = {
 };
 
 export type PresetKey =
+  | 'yesterday'
+  | 'this_month'
   | 'this_week'
   | 'last_7_days'
-  | 'this_month'
   | 'last_month'
   | 'last_30_days'
   | 'custom';

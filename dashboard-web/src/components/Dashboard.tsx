@@ -23,7 +23,7 @@ const fetcher = async (url: string) => {
   return res.json() as Promise<DashboardData>;
 };
 
-const initialPreset = 'this_month';
+const initialPreset = 'yesterday';
 
 export function Dashboard() {
   const { data, error, isLoading, mutate, isValidating } = useSWR<DashboardData>(
@@ -62,7 +62,7 @@ export function Dashboard() {
         onRefresh={() => mutate()}
       />
 
-      <main className="max-w-7xl mx-auto px-4 md:px-8 py-6 md:py-8 space-y-6">
+      <main className="max-w-7xl mx-auto px-3 sm:px-4 md:px-8 py-4 sm:py-6 md:py-8 space-y-4 sm:space-y-6">
         {error && (
           <div className="rounded-xl bg-roas-redBg border border-roas-red/30 p-4 flex items-start gap-3">
             <AlertCircle className="text-roas-red shrink-0" size={20} />
@@ -117,19 +117,19 @@ function Header({
   onRefresh: () => void;
 }) {
   return (
-    <header className="bg-primary text-white shadow-sm sticky top-0 z-10">
-      <div className="max-w-7xl mx-auto px-4 md:px-8 py-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl md:text-2xl font-bold">דשבורד ROAS</h1>
-          <p className="text-xs text-blue-100/80 mt-0.5">מעקב יומי לכל החנויות</p>
+    <header className="bg-gradient-to-l from-primary-dark to-primary text-white shadow-md sticky top-0 z-10">
+      <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-8 py-3 sm:py-4 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-base sm:text-xl md:text-2xl font-bold truncate">📊 דשבורד ROAS</h1>
+          <p className="text-[10px] sm:text-xs text-blue-100/80 mt-0.5 hidden sm:block">מעקב יומי לכל החנויות</p>
         </div>
         <button
           onClick={onRefresh}
-          className="flex items-center gap-2 rounded-lg bg-white/10 hover:bg-white/20 px-3 py-1.5 text-sm transition-colors"
+          className="flex items-center gap-1.5 sm:gap-2 rounded-lg bg-white/10 hover:bg-white/20 active:bg-white/30 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm transition-colors shrink-0"
           disabled={isRefreshing}
         >
           <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
-          {isRefreshing ? 'מתעדכן...' : 'רענן'}
+          <span className="hidden sm:inline">{isRefreshing ? 'מתעדכן...' : 'רענן'}</span>
         </button>
       </div>
     </header>
