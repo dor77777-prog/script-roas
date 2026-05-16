@@ -203,6 +203,15 @@ export function Dashboard() {
 // Tab: HOME — at-a-glance snapshot. No filters; this is the "what's
 // happening right now + this period" view.
 // ============================================================================
+type FilteredView = {
+  curAgg: ReturnType<typeof aggregate>;
+  prevAgg: ReturnType<typeof aggregate>;
+  storeAggs: ReturnType<typeof aggregateByStore>;
+  series: ReturnType<typeof dailySeries>;
+  visibleStores: string[];
+  cur: DashboardData['rows'];
+};
+
 function HomeTab({
   data,
   filtered,
@@ -211,14 +220,7 @@ function HomeTab({
   aiReportSignal,
 }: {
   data: DashboardData;
-  filtered: NonNullable<ReturnType<typeof Dashboard> extends infer _ ? never : never> | {
-    curAgg: ReturnType<typeof aggregate>;
-    prevAgg: ReturnType<typeof aggregate>;
-    storeAggs: ReturnType<typeof aggregateByStore>;
-    series: ReturnType<typeof dailySeries>;
-    visibleStores: string[];
-    cur: DashboardData['rows'];
-  };
+  filtered: FilteredView;
   filters: F;
   setFilters: (next: F) => void;
   /** Increments when the command palette wants to open the AI report. */
