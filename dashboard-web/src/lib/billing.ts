@@ -253,6 +253,23 @@ export function shopifyPlanCadForName(planName: string, usdToCad = 1.36): number
 // ============================================================================
 
 /**
+ * A row parsed from the Shopify bills CSV. `suggestedType` is set by the
+ * heuristic in `parseShopifyBillsCsv` — the import UI lets the user override
+ * it per row before deciding the destination bucket.
+ */
+export type ParsedBillLine = {
+  /** Local-only id for the preview list — not stored. */
+  id: string;
+  date: string;
+  description: string;
+  source: CostSource;
+  amountCAD: number;
+  notes?: string;
+  /** Heuristic guess: monthly subscription vs one-time charge. */
+  suggestedType: 'recurring' | 'onetime';
+};
+
+/**
  * Parse a Shopify "Export your bills" CSV.
  *
  * Format (as of 2025-2026):
@@ -261,15 +278,14 @@ export function shopifyPlanCadForName(planName: string, usdToCad = 1.36): number
  * The exact columns vary slightly by region/account. We use a header map so
  * an unexpected order or extra column doesn't break the parser.
  *
- * Returns an array of OneTimeCost ready to be merged into the user's bucket.
- * Store assignment is the merchant's choice — we let them pick a store at
- * import time, since Shopify CSVs don't include store metadata (one shop =
- * one bills file).
+ * For each line we also guess whether it's a recurring subscription (Shopify
+ * plan, Klaviyo, ReConvert, etc.) or a one-time charge (overage, threshold,
+ * setup, migration). The user can flip any row during preview.
  */
 export function parseShopifyBillsCsv(
   csv: string,
   defaultStore: string,
-): { parsed: OneTimeCost[]; warnings: string[] } {
+): { parsed: ParsedBillLine[]; warnings: string[] } {
   const warnings: string[] = [];
   const lines = csv.split(/\r?\n/).filter(l => l.trim().length > 0);
   if (lines.length < 2) {
@@ -291,7 +307,13 @@ export function parseShopifyBillsCsv(
     return { parsed: [], warnings };
   }
 
-  const out: OneTimeCost[] = [];
+  // Use the bundled store arg only as the preview's default scope. The
+  // unused-parameter pattern keeps the public signature stable while making
+  // it explicit that the importer doesn't bake `defaultStore` into rows
+  // anymore (the UI does the routing).
+  void defaultStore;
+
+  const out: ParsedBillLine[] = [];
   for (let i = 1; i < lines.length; i++) {
     const cols = splitCsvLine(lines[i]);
     if (cols.length < Math.max(idx.date, idx.desc, idx.amount) + 1) continue;
@@ -305,14 +327,7 @@ export function parseShopifyBillsCsv(
     const amount = parseFloat((amountRaw ?? '').replace(/[^\d.\-]/g, ''));
     if (!Number.isFinite(amount) || amount === 0) continue;
 
-    // Best-effort source tagging based on description text.
-    let source: CostSource = 'shopify-app';
-    const lower = (desc ?? '').toLowerCase();
-    if (/(basic|shopify plan|advanced shopify|shopify plus|plan)/i.test(lower)) {
-      source = 'shopify-plan';
-    } else if (/(usage|overage|threshold|capacity|email|sms)/i.test(lower)) {
-      source = 'usage';
-    }
+    const classification = classifyBillLine(desc ?? '');
 
     // Convert USD → CAD if needed. The user can adjust per row in the UI.
     const amountCad = currency.toUpperCase() === 'CAD' ? amount : Math.round(amount * 1.36);
@@ -320,11 +335,11 @@ export function parseShopifyBillsCsv(
     out.push({
       id: generateId(),
       date,
-      store: defaultStore,
       description: desc || '(ללא תיאור)',
-      source,
+      source: classification.source,
       amountCAD: amountCad,
       notes: `CSV import · ${currency} ${amount.toFixed(2)}${currency.toUpperCase() === 'CAD' ? '' : ' (×1.36)'}`,
+      suggestedType: classification.suggestedType,
     });
   }
 
@@ -332,6 +347,78 @@ export function parseShopifyBillsCsv(
     warnings.push('לא נמצאו שורות תקפות לייבא.');
   }
   return { parsed: out, warnings };
+}
+
+/**
+ * Heuristic classifier for a single Shopify bill line. Tags both the
+ * canonical source (for color coding) and the suggested bucket (recurring
+ * subscription vs one-time charge).
+ *
+ * Recurring "tells" — words that strongly imply a monthly subscription:
+ *   plan, subscription, monthly, annual, recurring, app charge (the name
+ *   itself usually follows: "Klaviyo: Monthly app charge")
+ *
+ * One-time "tells" — words that imply a non-recurring event:
+ *   overage, threshold, usage, capacity, setup, migration, install, extra,
+ *   one-time, refund, credit
+ *
+ * Default: if neither set of words appears, we assume recurring — most lines
+ * on a Shopify bill are app subscriptions, and the user can flip individual
+ * rows in the preview.
+ */
+function classifyBillLine(desc: string): {
+  source: CostSource;
+  suggestedType: 'recurring' | 'onetime';
+} {
+  const lower = desc.toLowerCase();
+
+  // Shopify's own plan — strongest signal, always recurring.
+  if (/(basic shopify|shopify plus|advanced shopify|shopify plan|^shopify(\s|$)|\bshopify subscription\b)/i.test(lower)) {
+    return { source: 'shopify-plan', suggestedType: 'recurring' };
+  }
+
+  // One-time markers
+  const oneTimeMarkers = /(overage|threshold|usage|capacity|setup|migration|install|extra|one[\s-]?time|refund|credit|adjustment)/i;
+  if (oneTimeMarkers.test(lower)) {
+    // Within one-times, the "usage" sub-category gets its own color in UI.
+    const isUsage = /(overage|threshold|usage|capacity)/i.test(lower);
+    return {
+      source: isUsage ? 'usage' : 'one-off',
+      suggestedType: 'onetime',
+    };
+  }
+
+  // Recurring markers
+  const recurringMarkers = /(subscription|monthly|annual|recurring|app\s?charge|plan|pro|business)/i;
+  if (recurringMarkers.test(lower)) {
+    return { source: 'shopify-app', suggestedType: 'recurring' };
+  }
+
+  // Default: assume recurring app charge — most lines on a Shopify monthly
+  // bill ARE recurring app subscriptions; the user can flip in preview.
+  return { source: 'shopify-app', suggestedType: 'recurring' };
+}
+
+/**
+ * Routing decision for an imported parsed line. Tries to find an existing
+ * matching recurring entry to avoid duplicates ("the user already added
+ * Klaviyo $60, importing this month's bill shouldn't add a second row").
+ *
+ * Match rule: same description (case-insensitive, trimmed) AND same store
+ * AND within ±$2 of the existing amount (Shopify amounts shift by cents).
+ */
+export function findMatchingRecurring(
+  line: ParsedBillLine,
+  store: string,
+  existing: RecurringCost[],
+): RecurringCost | null {
+  const desc = line.description.trim().toLowerCase();
+  for (const r of existing) {
+    if (r.store !== store && r.store !== 'All') continue;
+    if (r.name.trim().toLowerCase() !== desc) continue;
+    if (Math.abs(r.monthlyCAD - line.amountCAD) <= 2) return r;
+  }
+  return null;
 }
 
 /** Naïve CSV line splitter that handles quoted fields with commas inside. */
