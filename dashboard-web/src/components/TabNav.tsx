@@ -20,8 +20,6 @@ export function TabNav<K extends string>({ tabs, active, onChange }: Props<K>) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const activeRef = useRef<HTMLButtonElement>(null);
 
-  // When a tab gets selected (especially on mobile where some are off-screen),
-  // bring it into view so the user always sees their current location.
   useEffect(() => {
     const el = activeRef.current;
     if (!el) return;
@@ -30,14 +28,18 @@ export function TabNav<K extends string>({ tabs, active, onChange }: Props<K>) {
 
   return (
     <nav
-      className="sticky top-[52px] sm:top-[64px] z-[9] bg-surface/95 backdrop-blur-md border-b border-border shadow-sm"
+      className={cn(
+        'sticky top-[52px] sm:top-[64px] z-[9]',
+        'bg-surface/85 backdrop-blur-xl supports-[backdrop-filter]:bg-surface/75',
+        'border-b border-borderSubtle',
+      )}
       aria-label="ניווט בדשבורד"
     >
       <div
         ref={scrollerRef}
-        className="max-w-7xl mx-auto px-3 sm:px-4 md:px-8 overflow-x-auto scrollbar-hide"
+        className="max-w-7xl mx-auto px-2 sm:px-4 md:px-8 overflow-x-auto scrollbar-hide"
       >
-        <div role="tablist" className="flex gap-1 sm:gap-2 min-w-max">
+        <div role="tablist" className="flex gap-0.5 sm:gap-1 min-w-max">
           {tabs.map(tab => {
             const isActive = active === tab.key;
             return (
@@ -48,19 +50,33 @@ export function TabNav<K extends string>({ tabs, active, onChange }: Props<K>) {
                 aria-selected={isActive}
                 onClick={() => onChange(tab.key)}
                 className={cn(
-                  'inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-semibold whitespace-nowrap transition-colors relative shrink-0',
+                  'group relative inline-flex items-center gap-1.5 sm:gap-2',
+                  'px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-medium',
+                  'whitespace-nowrap transition-colors shrink-0',
                   isActive
                     ? 'text-primary'
                     : 'text-text-secondary hover:text-text-primary',
                 )}
               >
-                <span className={cn(isActive && 'text-primary')}>{tab.icon}</span>
-                <span>{tab.label}</span>
-                {/* Active indicator bar */}
                 <span
                   className={cn(
-                    'absolute bottom-0 left-0 right-0 h-0.5 rounded-t-full transition-all',
-                    isActive ? 'bg-primary' : 'bg-transparent',
+                    'transition-transform duration-DEFAULT',
+                    isActive
+                      ? 'text-primary scale-110'
+                      : 'text-text-muted group-hover:text-text-primary',
+                  )}
+                >
+                  {tab.icon}
+                </span>
+                <span className={cn(isActive && 'font-semibold tracking-tight')}>
+                  {tab.label}
+                </span>
+                {/* Active underline — narrow, near-bottom, refined */}
+                <span
+                  aria-hidden
+                  className={cn(
+                    'absolute bottom-0 left-3 right-3 h-[2px] rounded-t transition-all duration-DEFAULT',
+                    isActive ? 'bg-primary opacity-100' : 'opacity-0',
                   )}
                 />
               </button>

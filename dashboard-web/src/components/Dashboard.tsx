@@ -100,8 +100,14 @@ export function Dashboard() {
         )}
 
         {isLoading && (
-          <div className="rounded-xl bg-surface border border-border p-8 text-center text-text-muted shadow-card">
-            טוען נתונים…
+          <div className="space-y-4 animate-fade-in">
+            <div className="skeleton h-40 sm:h-48 rounded-2xl" aria-hidden />
+            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="skeleton h-28 sm:h-36 rounded-xl" aria-hidden />
+              ))}
+            </div>
+            <div className="sr-only">טוען נתונים…</div>
           </div>
         )}
 
@@ -310,22 +316,36 @@ function Header({
   onRefresh: () => void;
 }) {
   return (
-    <header className="bg-gradient-to-l from-primary-dark to-primary text-white shadow-md sticky top-0 z-10">
-      <div className="max-w-7xl mx-auto px-3 sm:px-4 md:px-8 py-3 sm:py-4 flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-base sm:text-xl md:text-2xl font-bold truncate">📊 דשבורד ROAS</h1>
-          <p className="text-[10px] sm:text-xs text-blue-100/80 mt-0.5 hidden sm:block">
-            מעקב הוצאות ↔ הכנסות לכל החנויות
-          </p>
+    <header className="sticky top-0 z-10 bg-primary-dark text-white shadow-sm">
+      {/* Deep navy gradient with a subtle inner highlight; closer to Stripe/Linear than the
+          previous flat-ish gradient. */}
+      <div
+        className="relative bg-gradient-to-br from-primary-dark via-primary to-primary-light"
+        style={{
+          backgroundImage:
+            'linear-gradient(120deg, #091c4a 0%, #0d3680 55%, #1d4ed8 110%)',
+        }}
+      >
+        <div className="absolute inset-0 bg-[radial-gradient(at_top_left,_rgba(255,255,255,0.08),_transparent_50%)] pointer-events-none" />
+        <div className="relative max-w-7xl mx-auto px-3 sm:px-4 md:px-8 py-3 sm:py-4 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-base sm:text-lg md:text-xl font-semibold tracking-tight truncate flex items-center gap-2">
+              <span aria-hidden>📊</span>
+              <span>דשבורד ROAS</span>
+            </h1>
+            <p className="text-[10px] sm:text-xs text-white/65 mt-0.5 hidden sm:block tracking-wide">
+              מעקב הוצאות ↔ הכנסות לכל החנויות
+            </p>
+          </div>
+          <button
+            onClick={onRefresh}
+            className="inline-flex items-center gap-1.5 sm:gap-2 rounded-lg bg-white/12 hover:bg-white/20 active:bg-white/25 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium transition-colors shrink-0 ring-1 ring-white/10"
+            disabled={isRefreshing}
+          >
+            <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
+            <span className="hidden sm:inline">{isRefreshing ? 'מתעדכן…' : 'רענן'}</span>
+          </button>
         </div>
-        <button
-          onClick={onRefresh}
-          className="flex items-center gap-1.5 sm:gap-2 rounded-lg bg-white/10 hover:bg-white/20 active:bg-white/30 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm transition-colors shrink-0"
-          disabled={isRefreshing}
-        >
-          <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
-          <span className="hidden sm:inline">{isRefreshing ? 'מתעדכן...' : 'רענן'}</span>
-        </button>
       </div>
     </header>
   );
@@ -333,11 +353,15 @@ function Header({
 
 function Footer({ lastUpdated }: { lastUpdated: string }) {
   return (
-    <footer className="text-center text-xs text-text-muted py-6">
-      עדכון אחרון:{' '}
-      {new Date(lastUpdated).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' })}
-      <br />
-      מתעדכן אוטומטית כל דקה
+    <footer className="text-center text-[11px] sm:text-xs text-text-muted py-6 tabular-nums">
+      <span className="inline-block">
+        עדכון אחרון:{' '}
+        <span className="text-text-secondary font-medium">
+          {new Date(lastUpdated).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' })}
+        </span>
+      </span>
+      <span className="mx-2 text-text-subtle">·</span>
+      <span>מתעדכן אוטומטית כל דקה</span>
     </footer>
   );
 }

@@ -384,14 +384,23 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
         </select>
       </div>
 
-      {/* Range picker — works in all views. from===to means one day. */}
-      <div className="flex items-center gap-1.5 sm:gap-2">
+      {/* Range picker — works in all views. from===to means one day.
+          No cross-validation between the two inputs (max/min on each other)
+          because that locks the user out of valid moves — e.g. trying to
+          push "from" to today when "to" was previously yesterday. Instead
+          we auto-swap on the way in if needed. */}
+      <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
         <Calendar size={14} className="text-text-muted shrink-0" />
         <input
           type="date"
           value={localRange.from}
-          max={localRange.to}
-          onChange={e => setLocalRange(prev => ({ ...prev, from: e.target.value }))}
+          onChange={e => {
+            const v = e.target.value;
+            if (!v) return;
+            setLocalRange(prev =>
+              v > prev.to ? { from: v, to: v } : { ...prev, from: v },
+            );
+          }}
           aria-label="מתאריך"
           className={cn(
             'rounded-lg border bg-surface px-2 py-1.5 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30',
@@ -402,14 +411,30 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
         <input
           type="date"
           value={localRange.to}
-          min={localRange.from}
-          onChange={e => setLocalRange(prev => ({ ...prev, to: e.target.value }))}
+          onChange={e => {
+            const v = e.target.value;
+            if (!v) return;
+            setLocalRange(prev =>
+              v < prev.from ? { from: v, to: v } : { ...prev, to: v },
+            );
+          }}
           aria-label="עד תאריך"
           className={cn(
             'rounded-lg border bg-surface px-2 py-1.5 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30',
             isCustomRange ? 'border-primary text-primary' : 'border-border text-text-secondary',
           )}
         />
+        <button
+          type="button"
+          onClick={() => {
+            const t = todayInIsrael();
+            setLocalRange({ from: t, to: t });
+          }}
+          className="rounded-lg border border-roas-green/40 bg-roas-greenBg/60 text-roas-green hover:bg-roas-greenBg px-2 py-1.5 text-xs font-semibold transition-colors"
+          title="קפוץ ליום הנוכחי (live)"
+        >
+          היום
+        </button>
         {isCustomRange && (
           <button
             type="button"

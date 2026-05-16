@@ -7,14 +7,19 @@ type Props = {
   icon?: React.ReactNode;
   title: string;
   description: string;
-  /** Optional plain-text formula or note rendered in a code-like pill. */
+  /** Optional formula or note rendered in a code-like pill (LTR). */
   formula?: string;
-  /** When true, render compactly (no card, just text). Default false. */
+  /** Inline mode = no card, just a single muted info line. */
   inline?: boolean;
-  /** Optional right-side controls (e.g. local filters). */
   rightSlot?: React.ReactNode;
 };
 
+/**
+ * Elegant section header. Two visual modes:
+ *  - default: a thin label bar with eyebrow + heading + description (no box,
+ *    no nested-card feel). Sits naturally above the section content below.
+ *  - inline:  a single-line info hint with an icon — for in-context tips.
+ */
 export function SectionIntro({
   icon,
   title,
@@ -32,37 +37,41 @@ export function SectionIntro({
     );
   }
   return (
-    <header className="rounded-xl border border-primary/15 bg-gradient-to-br from-primary/5 via-surface to-surface p-4 sm:p-5">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="flex items-start gap-2.5 sm:gap-3 min-w-0">
-          {icon && (
-            <span className="text-primary shrink-0 mt-0.5 hidden sm:inline">
-              {icon}
-            </span>
-          )}
-          <div className="min-w-0">
-            <h2 className="text-base sm:text-lg font-bold text-text-primary flex items-center gap-2">
-              {icon && <span className="text-primary sm:hidden">{icon}</span>}
-              {title}
-            </h2>
-            <p className="text-xs sm:text-sm text-text-secondary mt-1 leading-relaxed">
-              {description}
-            </p>
-            {formula && (
-              <code
-                className={cn(
-                  'inline-block mt-2 px-2 py-1 rounded text-[10px] sm:text-[11px] tabular-nums',
-                  'bg-surfaceMuted border border-border text-text-primary',
-                )}
-                dir="ltr"
-              >
-                {formula}
-              </code>
+    <header className="flex items-start justify-between gap-3 flex-wrap">
+      <div className="flex items-start gap-2.5 sm:gap-3 min-w-0 flex-1">
+        {icon && (
+          <span
+            className={cn(
+              'shrink-0 mt-0.5 inline-flex items-center justify-center',
+              'w-7 h-7 sm:w-8 sm:h-8 rounded-lg',
+              'bg-primary/8 text-primary',
             )}
-          </div>
+          >
+            {icon}
+          </span>
+        )}
+        <div className="min-w-0">
+          <h2 className="text-sm sm:text-base font-semibold text-text-primary tracking-tight">
+            {title}
+          </h2>
+          <p className="text-[11px] sm:text-xs text-text-secondary mt-0.5 leading-relaxed">
+            {description}
+          </p>
+          {formula && (
+            <code
+              dir="ltr"
+              className={cn(
+                'inline-block mt-1.5 px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] tabular-nums',
+                'bg-surfaceMuted border border-borderSubtle text-text-secondary',
+                'font-mono',
+              )}
+            >
+              {formula}
+            </code>
+          )}
         </div>
-        {rightSlot && <div className="shrink-0">{rightSlot}</div>}
       </div>
+      {rightSlot && <div className="shrink-0">{rightSlot}</div>}
     </header>
   );
 }

@@ -2,29 +2,106 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===========================================================================
+   Base — body styles, font features, selection.
+   =========================================================================== */
 html, body {
-  background: #fafbfc;
-  font-feature-settings: 'kern';
+  background: #f6f9fc;
+  font-feature-settings: 'kern', 'ss01';
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
-/* Subtle scrollbar */
+/* Tabular numbers ON anywhere we tag with .tabular-nums (Tailwind's class)
+   PLUS for inputs by default — number alignment matters in this app. */
+.tabular-nums,
+input[type="date"],
+input[type="number"] {
+  font-feature-settings: 'tnum', 'kern';
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: rgba(13, 54, 128, 0.18);
+  color: #0d253d;
+}
+
+/* ===========================================================================
+   Scrollbars — soft, cool-tinted.
+   =========================================================================== */
 *::-webkit-scrollbar { width: 10px; height: 10px; }
 *::-webkit-scrollbar-track { background: transparent; }
-*::-webkit-scrollbar-thumb { background: #e5e7eb; border-radius: 6px; }
-*::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
+*::-webkit-scrollbar-thumb {
+  background: #d9e2ec;
+  border-radius: 8px;
+  border: 2px solid #f6f9fc;
+}
+*::-webkit-scrollbar-thumb:hover { background: #c4d0de; }
 
-/* Hide scrollbar for the tab nav strip — looks cleaner on mobile */
+/* Hide scrollbar for tab nav strip and other horizontal scrollers. */
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
-/* Recharts tooltip styling */
+/* ===========================================================================
+   Recharts tooltip — match the system shadow + radius.
+   =========================================================================== */
 .recharts-default-tooltip {
-  background: rgba(15, 23, 42, 0.95) !important;
+  background: rgba(13, 37, 61, 0.96) !important;
   border: none !important;
-  border-radius: 8px !important;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.15) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 12px 32px -6px rgba(15, 31, 81, 0.18),
+              0 4px 8px -2px rgba(15, 31, 81, 0.10) !important;
   padding: 10px 14px !important;
+  font-feature-settings: 'tnum';
 }
-.recharts-tooltip-label { color: #cbd5e1 !important; margin-bottom: 4px !important; }
-.recharts-tooltip-item { color: #fff !important; }
+.recharts-tooltip-label { color: #a8b5c2 !important; margin-bottom: 4px !important; font-size: 11px; }
+.recharts-tooltip-item  { color: #ffffff !important; font-size: 13px; }
+
+/* ===========================================================================
+   Focus-visible: a single, consistent ring across the dashboard.
+   =========================================================================== */
+:where(button, a, input, select, textarea, [role="tab"], [role="button"]):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(13, 54, 128, 0.20);
+  border-radius: 0.5rem;
+}
+
+/* ===========================================================================
+   Native inputs — clean up dark-mode invert + RTL date glyphs.
+   =========================================================================== */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  opacity: 0.55;
+  cursor: pointer;
+  transition: opacity 180ms;
+}
+input[type="date"]:hover::-webkit-calendar-picker-indicator {
+  opacity: 1;
+}
+
+/* Skeleton shimmer for loading rows. */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(217, 226, 236, 0.4) 0%,
+    rgba(217, 226, 236, 0.7) 50%,
+    rgba(217, 226, 236, 0.4) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+  border-radius: 8px;
+}
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+/* Respect prefers-reduced-motion — kill all animations except essentials. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
