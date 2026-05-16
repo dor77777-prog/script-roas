@@ -183,7 +183,6 @@ async function postWithRetry(key: string, value: unknown, attempt = 1): Promise<
   } catch (err) {
     if (attempt >= 2) {
       const message = err instanceof Error ? err.message : String(err);
-      // eslint-disable-next-line no-console
       console.warn(`cloudSync push failed (${key}):`, message);
       updateSyncState(prev => ({
         status: 'error',
