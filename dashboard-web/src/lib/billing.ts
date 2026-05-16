@@ -317,6 +317,23 @@ export function parseShopifyBillsCsv(
   // anymore (the UI does the routing).
   void defaultStore;
 
+  // First pass over currencies: if any row uses EUR/GBP we assume DMY date
+  // formatting (Shopify's EU storefronts emit DD/MM/YYYY), otherwise MDY.
+  // This is a best-effort heuristic; the slash-format detector in
+  // normalizeDate also catches unambiguous cases (one segment > 12).
+  let localeHint: DateLocaleHint = 'mdy';
+  if (idx.currency >= 0) {
+    for (let i = 1; i < lines.length; i++) {
+      const cols = splitCsvLine(lines[i]);
+      const cur = (cols[idx.currency] ?? '').trim().toUpperCase();
+      if (cur === 'EUR' || cur === 'GBP') { localeHint = 'dmy'; break; }
+    }
+  }
+
+  // Track ambiguous dates (both segments ≤ 12) so we can warn the user that
+  // the importer picked one interpretation and the other was equally valid.
+  let ambiguousSlashCount = 0;
+
   const out: ParsedBillLine[] = [];
   for (let i = 1; i < lines.length; i++) {
     const cols = splitCsvLine(lines[i]);
@@ -326,8 +343,15 @@ export function parseShopifyBillsCsv(
     const amountRaw = cols[idx.amount]?.trim();
     const currency = idx.currency >= 0 ? (cols[idx.currency]?.trim() || 'USD') : 'USD';
 
-    const date = normalizeDate(dateRaw);
+    const date = normalizeDate(dateRaw, localeHint);
     if (!date) continue;
+    // Flag ambiguity for the warning summary below.
+    const slashMatch = (dateRaw ?? '').match(/^(\d{1,2})\/(\d{1,2})\/\d{4}$/);
+    if (slashMatch) {
+      const an = parseInt(slashMatch[1], 10);
+      const bn = parseInt(slashMatch[2], 10);
+      if (an <= 12 && bn <= 12 && an !== bn) ambiguousSlashCount++;
+    }
     const amount = parseFloat((amountRaw ?? '').replace(/[^\d.\-]/g, ''));
     if (!Number.isFinite(amount) || amount === 0) continue;
 
@@ -349,6 +373,12 @@ export function parseShopifyBillsCsv(
 
   if (out.length === 0) {
     warnings.push('לא נמצאו שורות תקפות לייבא.');
+  }
+  if (ambiguousSlashCount > 0) {
+    const fmt = localeHint === 'dmy' ? 'DD/MM/YYYY' : 'MM/DD/YYYY';
+    warnings.push(
+      `יש ${ambiguousSlashCount} תאריכים עם פורמט סלאש דו-משמעי (X/Y/YYYY כאשר X,Y ≤ 12). הם פוענחו כ-${fmt} לפי המטבע. אם החודש לא נכון, בדוק את עמודת התאריך לפני אישור.`,
+    );
   }
   return { parsed: out, warnings };
 }
@@ -425,7 +455,14 @@ export function findMatchingRecurring(
   return null;
 }
 
-/** Naïve CSV line splitter that handles quoted fields with commas inside. */
+/**
+ * CSV line splitter that handles quoted fields with commas inside AND
+ * standard CSV escape for an embedded quote, which is a doubled quote
+ * (`""`) inside a quoted field. The previous toggle-only implementation
+ * silently corrupted fields like `"He said ""hi"""` into `He said hi""`,
+ * which would quietly mangle Shopify bill descriptions that contain
+ * quotation marks.
+ */
 function splitCsvLine(line: string): string[] {
   const out: string[] = [];
   let cur = '';
@@ -433,7 +470,14 @@ function splitCsvLine(line: string): string[] {
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
     if (ch === '"') {
-      inQuotes = !inQuotes;
+      if (inQuotes && line[i + 1] === '"') {
+        // Escaped quote inside a quoted field — emit one literal quote and
+        // skip the next character.
+        cur += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
     } else if (ch === ',' && !inQuotes) {
       out.push(cur);
       cur = '';
@@ -442,17 +486,59 @@ function splitCsvLine(line: string): string[] {
     }
   }
   out.push(cur);
-  return out.map(s => s.replace(/^"|"$/g, ''));
+  return out;
 }
 
-/** Accept MM/DD/YYYY, YYYY-MM-DD, "Aug 13, 2025", etc. Returns ISO date or null. */
-function normalizeDate(s: string | undefined): string | null {
+/**
+ * Accept MM/DD/YYYY, DD/MM/YYYY, YYYY-MM-DD, "Aug 13, 2025", etc. Returns
+ * ISO date or null.
+ *
+ * Slash-format ambiguity (#WR-08): Shopify bills from EU storefronts use
+ * DD/MM/YYYY, US accounts use MM/DD/YYYY. We disambiguate via:
+ *   1. If one segment is > 12, it must be the day (the other is the month).
+ *   2. Otherwise (both ≤ 12), defer to the optional `localeHint` arg. The
+ *      default is 'mdy' to preserve the prior behavior; callers that have
+ *      detected an EU bill (e.g. from a Currency=EUR/GBP column) should
+ *      pass 'dmy'.
+ *
+ * The previous unconditional MM/DD interpretation silently attributed EU
+ * bills to the wrong month in the P&L (e.g. 03/04/2026 → March 4 instead
+ * of April 3).
+ */
+type DateLocaleHint = 'mdy' | 'dmy';
+
+function normalizeDate(
+  s: string | undefined,
+  localeHint: DateLocaleHint = 'mdy',
+): string | null {
   if (!s) return null;
   s = s.trim();
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
   const slashMatch = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (slashMatch) {
-    const [, mm, dd, yyyy] = slashMatch;
+    const [, a, b, yyyy] = slashMatch;
+    const an = parseInt(a, 10);
+    const bn = parseInt(b, 10);
+    let mm: string;
+    let dd: string;
+    if (an > 12 && bn <= 12) {
+      // First segment cannot be a month — must be day. Locale is implicitly DMY.
+      dd = a;
+      mm = b;
+    } else if (bn > 12 && an <= 12) {
+      // Second segment cannot be a day-as-month — must be day. Locale is MDY.
+      mm = a;
+      dd = b;
+    } else {
+      // Both segments ≤ 12: genuinely ambiguous; trust the locale hint.
+      if (localeHint === 'dmy') {
+        dd = a;
+        mm = b;
+      } else {
+        mm = a;
+        dd = b;
+      }
+    }
     return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
   }
   const d = new Date(s);
