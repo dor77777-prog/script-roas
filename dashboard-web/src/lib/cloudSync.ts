@@ -203,6 +203,7 @@ export async function hydrateFromCloud(): Promise<boolean> {
 
   for (const lsKey of STATE_KEYS) {
     const cloudKey = stripPrefix(lsKey);
+    const cloudHas = Object.prototype.hasOwnProperty.call(cloud, cloudKey);
     const cloudVal = cloud[cloudKey];
 
     // Skip stomping local state if (a) a debounce timer is still pending for
@@ -216,13 +217,25 @@ export async function hydrateFromCloud(): Promise<boolean> {
       continue;
     }
 
-    if (cloudVal === undefined || cloudVal === null) {
-      // First-time migration: cloud has nothing, push local state up if any.
+    if (!cloudHas) {
+      // First-time migration: cloud has no row for this key at all. Push
+      // local state up if any so partners on other devices pick it up.
       const local = readLocal(lsKey);
       if (local !== null) {
         lastPushAt[lsKey] = Date.now();
         void postWithRetry(cloudKey, local);
       }
+      continue;
+    }
+
+    if (cloudVal === null) {
+      // Cloud row exists with an explicit null value — this means the user
+      // (possibly on another device) cleared the key. Mirror the deletion
+      // locally so we don't re-push the stale local value on the next round.
+      // CRITICAL: without this branch, a deleted goal would resurrect from
+      // a partner's localStorage every poll cycle.
+      removeLocal(lsKey);
+      dispatchChange(lsKey);
       continue;
     }
 
@@ -282,6 +295,18 @@ function writeLocal(lsKey: string, value: unknown) {
     } else {
       window.localStorage.setItem(lsKey, JSON.stringify(value));
     }
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+/** Used by hydrate when cloud signals "this key was explicitly cleared"
+ *  (cloud row exists with a null value). Removes the localStorage entry so
+ *  the next read sees the key as absent rather than as a stale string. */
+function removeLocal(lsKey: string) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(lsKey);
   } catch {
     /* quota / private mode */
   }
