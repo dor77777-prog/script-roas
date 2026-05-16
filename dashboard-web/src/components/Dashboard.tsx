@@ -44,7 +44,7 @@ const fetcher = async (url: string) => {
   return res.json() as Promise<DashboardData>;
 };
 
-const initialPreset = 'yesterday';
+const initialPreset = 'this_month';
 
 type TabKey = 'home' | 'analysis' | 'campaigns' | 'products' | 'detail';
 
@@ -248,7 +248,7 @@ function HomeTab({
         description="הסיכום של כל החנויות הנבחרות בטווח שבחרת. כל מספר מושווה לתקופה הקודמת באותו אורך."
         formula="ROAS = הכנסות / סך הוצאות פרסום   •   רווח נטו = הכנסות − הוצאות − COGS (25%)"
       />
-      <KpiCards current={filtered.curAgg} previous={filtered.prevAgg} />
+      <KpiCards current={filtered.curAgg} previous={filtered.prevAgg} series={filtered.cur} />
 
       {/* ===== Per-store cards ===== */}
       <SectionIntro

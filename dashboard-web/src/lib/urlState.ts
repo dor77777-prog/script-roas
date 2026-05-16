@@ -85,7 +85,7 @@ export function readDashboardState(
 export function writeDashboardState(state: DashboardState): string {
   const params = new URLSearchParams();
   if (state.tab !== 'home') params.set('tab', state.tab);
-  if (state.filters.preset !== 'yesterday') params.set('preset', state.filters.preset);
+  if (state.filters.preset !== 'this_month') params.set('preset', state.filters.preset);
   if (state.filters.preset === 'custom') {
     params.set('from', state.filters.range.from);
     params.set('to', state.filters.range.to);
