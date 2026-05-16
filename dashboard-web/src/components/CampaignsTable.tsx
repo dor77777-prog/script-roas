@@ -4,6 +4,9 @@ import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import {
   AlertCircle,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   Calendar,
   ChevronDown,
   ChevronUp,
@@ -20,6 +23,19 @@ import { roasLabel } from '@/lib/analytics';
 
 type Mode = 'campaign' | 'adset';
 type Platform = 'all' | 'Meta' | 'Google';
+
+/** All columns the user can sort by. Strings sort lexicographically;
+ *  everything else is a numeric metric. */
+type SortKey =
+  | 'name'
+  | 'spend'
+  | 'conversionValue'
+  | 'roas'
+  | 'conversions'
+  | 'ctr'
+  | 'cpc'
+  | 'cpa';
+type SortDir = 'asc' | 'desc';
 
 const fetcher = async (url: string) => {
   const r = await fetch(url);
@@ -103,13 +119,48 @@ function aggregate(
     a.conversions += r.conversions;
     a.conversionValue += r.conversionValue;
   }
-  return Array.from(map.values()).sort((x, y) => {
-    // Default sort: by ROAS desc, falling back to spend desc.
-    const rx = x.spend > 0 ? x.conversionValue / x.spend : 0;
-    const ry = y.spend > 0 ? y.conversionValue / y.spend : 0;
-    if (ry !== rx) return ry - rx;
-    return y.spend - x.spend;
+  return Array.from(map.values());
+}
+
+/** Sort a list of aggregated rows by the chosen column + direction.
+ *  Derived metrics (ROAS, CTR, CPC, CPA) are computed inline since they
+ *  aren't stored on the Aggregated type. */
+function sortAggregated(
+  list: Aggregated[],
+  mode: Mode,
+  sortKey: SortKey,
+  dir: SortDir,
+): Aggregated[] {
+  const sign = dir === 'asc' ? 1 : -1;
+  function valueOf(a: Aggregated): number | string {
+    switch (sortKey) {
+      case 'name':
+        return (mode === 'campaign' ? a.campaignName : a.adSetName || '') || '';
+      case 'spend':
+        return a.spend;
+      case 'conversionValue':
+        return a.conversionValue;
+      case 'roas':
+        return a.spend > 0 ? a.conversionValue / a.spend : 0;
+      case 'conversions':
+        return a.conversions;
+      case 'ctr':
+        return a.impressions > 0 ? a.clicks / a.impressions : 0;
+      case 'cpc':
+        return a.clicks > 0 ? a.spend / a.clicks : 0;
+      case 'cpa':
+        return a.conversions > 0 ? a.spend / a.conversions : 0;
+    }
+  }
+  const sorted = [...list].sort((x, y) => {
+    const vx = valueOf(x);
+    const vy = valueOf(y);
+    if (typeof vx === 'string' && typeof vy === 'string') {
+      return sign * vx.localeCompare(vy, 'he');
+    }
+    return sign * ((vx as number) - (vy as number));
   });
+  return sorted;
 }
 
 // Build a direct link to the right Ads Manager UI.
@@ -145,6 +196,23 @@ export function CampaignsTable({ range, store: globalStore, stores }: Props) {
   const [platform, setPlatform] = useState<Platform>('all');
   const [showAll, setShowAll] = useState(false);
 
+  // Sort state. Defaults to ROAS desc — same as the implicit sort before.
+  // Click a different column → switch + reset to desc (because users almost
+  // always want "biggest first" for ad metrics). Click the same column →
+  // toggle direction.
+  const [sortKey, setSortKey] = useState<SortKey>('roas');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  function handleSort(key: SortKey) {
+    if (key === sortKey) {
+      setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      // For the name column, ascending feels more natural (A-Z).
+      setSortDir(key === 'name' ? 'asc' : 'desc');
+    }
+    setShowAll(false); // collapse "show more" back to top-N after re-sort
+  }
+
   // Sync to global filters but allow local override.
   const [localStore, setLocalStore] = useState(globalStore);
   useEffect(() => { setLocalStore(globalStore); }, [globalStore]);
@@ -158,8 +226,9 @@ export function CampaignsTable({ range, store: globalStore, stores }: Props) {
 
   const aggregated = useMemo(() => {
     if (!data) return [];
-    return aggregate(data.rows, mode, localStore, platform, localRange);
-  }, [data, mode, localStore, platform, localRange]);
+    const list = aggregate(data.rows, mode, localStore, platform, localRange);
+    return sortAggregated(list, mode, sortKey, sortDir);
+  }, [data, mode, localStore, platform, localRange, sortKey, sortDir]);
 
   const totals = useMemo(() => {
     let spend = 0, conv = 0, val = 0, clicks = 0, imps = 0;
@@ -374,14 +443,78 @@ export function CampaignsTable({ range, store: globalStore, stores }: Props) {
             <table className="w-full text-xs sm:text-sm min-w-[720px]">
               <thead>
                 <tr className="text-text-secondary border-b border-borderSubtle bg-surfaceMuted/40">
-                  <th className="px-3 sm:px-5 py-2 text-start font-medium">{mode === 'campaign' ? 'קמפיין' : 'אד-סט'}</th>
-                  <th className="px-3 py-2 text-end font-medium w-[80px]">הוצאה</th>
-                  <th className="px-3 py-2 text-end font-medium w-[80px]">ערך המרות</th>
-                  <th className="px-3 py-2 text-center font-medium w-[64px]">ROAS</th>
-                  <th className="px-3 py-2 text-end font-medium w-[64px] hidden sm:table-cell">המרות</th>
-                  <th className="px-3 py-2 text-end font-medium w-[64px] hidden md:table-cell">CTR</th>
-                  <th className="px-3 py-2 text-end font-medium w-[64px] hidden md:table-cell">CPC</th>
-                  <th className="px-3 py-2 text-end font-medium w-[64px] hidden lg:table-cell">CPA</th>
+                  <SortHeader
+                    label={mode === 'campaign' ? 'קמפיין' : 'אד-סט'}
+                    sortKey="name"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="start"
+                    className="px-3 sm:px-5 py-2"
+                  />
+                  <SortHeader
+                    label="הוצאה"
+                    sortKey="spend"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[80px]"
+                  />
+                  <SortHeader
+                    label="ערך המרות"
+                    sortKey="conversionValue"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[80px]"
+                  />
+                  <SortHeader
+                    label="ROAS"
+                    sortKey="roas"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="center"
+                    className="px-3 py-2 w-[64px]"
+                  />
+                  <SortHeader
+                    label="המרות"
+                    sortKey="conversions"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[64px] hidden sm:table-cell"
+                  />
+                  <SortHeader
+                    label="CTR"
+                    sortKey="ctr"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[64px] hidden md:table-cell"
+                  />
+                  <SortHeader
+                    label="CPC"
+                    sortKey="cpc"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[64px] hidden md:table-cell"
+                  />
+                  <SortHeader
+                    label="CPA"
+                    sortKey="cpa"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[64px] hidden lg:table-cell"
+                  />
                   <th className="px-2 py-2 text-center font-medium w-[40px]" aria-label="פעולות" />
                 </tr>
               </thead>
@@ -477,6 +610,63 @@ export function CampaignsTable({ range, store: globalStore, stores }: Props) {
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Sortable column header. Renders the label + a sort-direction caret, and
+ * is clickable to switch sort. Visually subtle when the column isn't the
+ * active sort, prominent (primary color + bold) when it is.
+ */
+function SortHeader({
+  label,
+  sortKey,
+  activeKey,
+  dir,
+  onClick,
+  align,
+  className,
+}: {
+  label: string;
+  sortKey: SortKey;
+  activeKey: SortKey;
+  dir: SortDir;
+  onClick: (key: SortKey) => void;
+  align: 'start' | 'center' | 'end';
+  className?: string;
+}) {
+  const isActive = sortKey === activeKey;
+  const justify =
+    align === 'start' ? 'justify-start' : align === 'end' ? 'justify-end' : 'justify-center';
+  const textAlign =
+    align === 'start' ? 'text-start' : align === 'end' ? 'text-end' : 'text-center';
+  return (
+    <th className={cn('font-medium', textAlign, className)}>
+      <button
+        type="button"
+        onClick={() => onClick(sortKey)}
+        className={cn(
+          'inline-flex items-center gap-1 transition-colors group',
+          'select-none cursor-pointer',
+          justify,
+          isActive
+            ? 'text-primary font-semibold'
+            : 'text-text-secondary hover:text-text-primary',
+        )}
+        aria-sort={isActive ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
+      >
+        <span>{label}</span>
+        {isActive ? (
+          dir === 'asc' ? (
+            <ArrowUp size={12} className="text-primary" />
+          ) : (
+            <ArrowDown size={12} className="text-primary" />
+          )
+        ) : (
+          <ArrowUpDown size={12} className="text-text-subtle opacity-0 group-hover:opacity-100 transition-opacity" />
+        )}
+      </button>
+    </th>
   );
 }
 
