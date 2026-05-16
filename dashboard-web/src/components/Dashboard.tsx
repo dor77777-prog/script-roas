@@ -28,6 +28,7 @@ import { TodayLive } from './TodayLive';
 import { ProductsTable } from './ProductsTable';
 import { CampaignsTable } from './CampaignsTable';
 import { WhatsWorking } from './WhatsWorking';
+import { AiReportButton } from './AiReportButton';
 import { TabNav, type TabDef } from './TabNav';
 import { SectionIntro } from './SectionIntro';
 
@@ -181,6 +182,7 @@ function HomeTab({
         icon={<CalendarDays size={20} />}
         title="טווח לבחירה"
         description="הסינון שלמטה משפיע על כל הסיכומים בעמוד הזה ובלשונית 'ניתוח'. הלשונית 'מוצרים' משתמשת בסינון משלה."
+        rightSlot={<AiReportButton data={data} filters={filters} />}
       />
       <Filters filters={filters} stores={data.stores} onChange={setFilters} />
 
