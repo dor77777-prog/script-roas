@@ -18,6 +18,7 @@ import { cn, formatCurrency } from '@/lib/utils';
 import {
   findMatchingRecurring,
   generateId,
+  hasAnyBilling,
   parseShopifyBillsCsv,
   readOneTime,
   readRecurring,
@@ -117,15 +118,52 @@ export function BillingSettings({ storeNames }: Props) {
     setRecurring(readRecurring());
     setOneTime(readOneTime());
 
-    function maybeSeed() {
+    // Re-check the cloud one more time right before seeding so we don't
+    // double-seed against a partner who pushed data between mount and the
+    // first hydrate completing (or after, in which case roas-cloud-hydrated
+    // already fired and we never re-fire it). hasAnyBilling() reflects only
+    // local state — but cloudSync's writeLocal has already merged any cloud
+    // values before dispatching roas-cloud-hydrated, so local IS the source
+    // of truth at this point. The extra fetch is a final safety net for the
+    // case where a partner's push lands AFTER our hydrate but BEFORE seed.
+    let cancelled = false;
+    let cleanupSeedListener: (() => void) | null = null;
+    async function maybeSeed() {
+      if (hasAnyBilling()) return;
+      try {
+        const r = await fetch('/api/dashboard-state', { cache: 'no-store' });
+        if (cancelled) return;
+        const data = (await r.json()) as { kv?: Record<string, unknown> };
+        const cloudRecurring = data?.kv?.['billing-recurring'];
+        const cloudOneTime = data?.kv?.['billing-onetime'];
+        // Cloud already has billing data from a partner — abort seed and let
+        // the normal poll round mirror that data into localStorage.
+        if (
+          (Array.isArray(cloudRecurring) && cloudRecurring.length > 0) ||
+          (Array.isArray(cloudOneTime) && cloudOneTime.length > 0)
+        ) {
+          return;
+        }
+      } catch {
+        // If the safety-net fetch fails, fall through to seed locally. The
+        // partner's data (if any) will replace ours on the next successful
+        // hydrate via the regular cloud-wins path; the cost is a momentary
+        // duplicate, which is recoverable, vs. blocking seed forever on a
+        // transient network error.
+      }
+      if (cancelled || hasAnyBilling()) return;
       seedBillingIfEmpty(storeNames);
       setRecurring(readRecurring());
       setOneTime(readOneTime());
     }
     if (isHydrated()) {
-      maybeSeed();
+      void maybeSeed();
     } else {
-      window.addEventListener('roas-cloud-hydrated', maybeSeed, { once: true });
+      const onHydrated = () => { void maybeSeed(); };
+      window.addEventListener('roas-cloud-hydrated', onHydrated, { once: true });
+      cleanupSeedListener = () => {
+        window.removeEventListener('roas-cloud-hydrated', onHydrated);
+      };
     }
 
     function onChange() {
@@ -134,8 +172,9 @@ export function BillingSettings({ storeNames }: Props) {
     }
     window.addEventListener('roas-billing-changed', onChange);
     return () => {
+      cancelled = true;
       window.removeEventListener('roas-billing-changed', onChange);
-      window.removeEventListener('roas-cloud-hydrated', maybeSeed);
+      if (cleanupSeedListener) cleanupSeedListener();
     };
   }, [storeNames]);
 
