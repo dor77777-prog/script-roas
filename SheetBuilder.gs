@@ -866,3 +866,90 @@ function backfillFlatFromStoreTabs() {
   }
   Logger.log(`Backfilled ${written} rows into daily-flat from existing store tabs`);
 }
+
+// ============================================================================
+// Products-daily tab - one row per (date, store, product). LTR, hidden by default.
+// ============================================================================
+
+const PRODUCTS_DAILY_HEADERS = [
+  'Date', 'Store ID', 'Store', 'Product ID', 'Product Title', 'Units', 'Gross Revenue (CAD)'
+];
+
+function ensureProductsDailyTab_(ss) {
+  let sh = ss.getSheetByName(PRODUCTS_DAILY_TAB);
+  let justCreated = false;
+  if (!sh) {
+    sh = ss.insertSheet(PRODUCTS_DAILY_TAB);
+    sh.setRightToLeft(false);
+    justCreated = true;
+  }
+  if (sh.getLastRow() === 0) {
+    sh.getRange(1, 1, 1, PRODUCTS_DAILY_HEADERS.length)
+      .setValues([PRODUCTS_DAILY_HEADERS])
+      .setFontWeight('bold')
+      .setBackground('#1c4587')
+      .setFontColor('#ffffff')
+      .setHorizontalAlignment('center');
+    sh.setFrozenRows(1);
+    sh.setColumnWidth(1, 95);   // Date
+    sh.setColumnWidth(2, 90);   // Store ID
+    sh.setColumnWidth(3, 110);  // Store Name
+    sh.setColumnWidth(4, 130);  // Product ID
+    sh.setColumnWidth(5, 320);  // Product Title
+    sh.setColumnWidth(6, 70);   // Units
+    sh.setColumnWidth(7, 130);  // Gross Revenue
+  }
+  if (justCreated) {
+    try { sh.hideSheet(); } catch (_) {}
+  }
+  return sh;
+}
+
+/**
+ * אידמפוטנטי לפי (date, storeId): קורא את כל השורות שאינן של (date, storeId),
+ * שומר אותן, מוחק את שאר תוכן הגיליון, ומוסיף את השורות החדשות. כתיבה אחת
+ * בלבד ל-Sheets API (חוסכת זמן ריצה מול sh.deleteRow ברצף).
+ */
+function writeProductSalesForDay_(ss, dateStr, storeId, storeName, productRows) {
+  const sh = ensureProductsDailyTab_(ss);
+  const lastRow = sh.getLastRow();
+
+  let keptRows = [];
+  if (lastRow > 1) {
+    const allExisting = sh.getRange(2, 1, lastRow - 1, PRODUCTS_DAILY_HEADERS.length).getValues();
+    keptRows = allExisting.filter(r => {
+      const v = r[0];
+      const s = r[1];
+      let key = null;
+      if (v instanceof Date && !isNaN(v.getTime())) {
+        key = Utilities.formatDate(v, TZ, 'yyyy-MM-dd');
+      } else if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
+        key = v;
+      }
+      // Keep rows that are EITHER a different date OR a different store on this date
+      return !(key === dateStr && String(s) === storeId) && key !== null;
+    });
+  }
+
+  const newRowsArr = (productRows || []).map(p => [
+    parseYMD_(dateStr),
+    storeId,
+    storeName,
+    p.productId || '',
+    p.productTitle || '',
+    parseInt(p.units || 0, 10),
+    round2_(p.revenueCad || 0),
+  ]);
+
+  const combined = keptRows.concat(newRowsArr);
+
+  if (lastRow > 1) {
+    sh.getRange(2, 1, lastRow - 1, PRODUCTS_DAILY_HEADERS.length).clearContent();
+  }
+  if (combined.length === 0) return;
+
+  sh.getRange(2, 1, combined.length, PRODUCTS_DAILY_HEADERS.length).setValues(combined);
+  sh.getRange(2, 1, combined.length, 1).setNumberFormat('yyyy-mm-dd').setHorizontalAlignment('center');
+  sh.getRange(2, 6, combined.length, 1).setNumberFormat('#,##0').setHorizontalAlignment('center');
+  sh.getRange(2, 7, combined.length, 1).setNumberFormat('#,##0.00');
+}

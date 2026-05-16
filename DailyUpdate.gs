@@ -92,6 +92,14 @@ function updateStoreForDate_(ss, store, dateStr, year, month, day, ilsToCad) {
     Logger.log(`daily-flat write for ${store.name} ${dateStr} failed: ${e && e.message ? e.message : e}`);
   }
 
+  // טאב products-daily - breakdown של מוצרים שנמכרו ביום זה
+  try {
+    const products = getShopifyProductSalesForDay(store.id, dateStr);
+    writeProductSalesForDay_(ss, dateStr, store.id, store.name, products);
+  } catch (e) {
+    Logger.log(`products-daily for ${store.name} ${dateStr} failed (non-fatal): ${e && e.message ? e.message : e}`);
+  }
+
   Logger.log(`${store.name} ${dateStr}: spent=${totalSpentCad.toFixed(2)} CAD (FB ${metaCad.toFixed(2)} + GA ${googleAdsCad.toFixed(2)}), revenue=${revenueCad.toFixed(2)} CAD`);
   return { spent: totalSpentCad, revenue: revenueCad };
 }

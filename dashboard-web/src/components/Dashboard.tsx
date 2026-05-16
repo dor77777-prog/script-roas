@@ -14,6 +14,7 @@ import { InsightsPanel } from './InsightsPanel';
 import { MonthlyTables } from './MonthlyTables';
 import { DetailTable } from './DetailTable';
 import { TodayLive } from './TodayLive';
+import { ProductsTable } from './ProductsTable';
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -99,6 +100,8 @@ export function Dashboard() {
             <RoasChart data={filtered.series} stores={filtered.visibleStores} />
 
             <MonthlyTables rows={data.rows} stores={data.stores} />
+
+            <ProductsTable stores={data.stores} />
 
             <DetailTable rows={filtered.cur} />
 

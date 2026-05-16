@@ -66,6 +66,78 @@ function getShopifyRevenue(storeId, dateStr) {
 }
 
 /**
+ * שולף breakdown של מכירות לפי מוצר ליום נתון.
+ * עובר על כל ההזמנות של היום, מקבץ line_items לפי product_id, ומחזיר
+ * מערך אובייקטים: {productId, productTitle, units, revenueCad}.
+ *
+ * משתמש באותו endpoint של getShopifyRevenue אבל מבקש את line_items.
+ * Shopify מחזיר prices במטבע החנות (CAD בכל 3 החנויות) — אין צורך בהמרה.
+ *
+ * Revenue ברמת המוצר = sum(quantity × price) ללא ניכוי הנחות (gross).
+ * זה לא תואם בהכרח לסכום החנות (שמשתמש ב-current_total_price אחרי הנחות/החזרים),
+ * אז יש להתייחס לזה כ-"מכירה ברוטו לפני הנחות".
+ */
+function getShopifyProductSalesForDay(storeId, dateStr) {
+  const domain = requireProp(`${storeId}.shopify.domain`).replace(/^https?:\/\//, '').replace(/\/$/, '');
+  const token = requireProp(`${storeId}.shopify.token`);
+
+  const dayStart = `${dateStr}T00:00:00+03:00`;
+  const dayEnd = `${nextDayStr_(dateStr)}T00:00:00+03:00`;
+
+  let url = `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/orders.json` +
+            `?status=any&financial_status=any&limit=250` +
+            `&created_at_min=${encodeURIComponent(dayStart)}` +
+            `&created_at_max=${encodeURIComponent(dayEnd)}` +
+            `&fields=id,financial_status,test,line_items`;
+
+  // productId -> {productTitle, units, revenueGross}
+  const byProduct = {};
+  let safety = 0;
+
+  while (url && safety < 50) {
+    const res = fetchWithRetry_(url, {
+      method: 'get',
+      headers: { 'X-Shopify-Access-Token': token },
+      muteHttpExceptions: true,
+    });
+    const code = res.getResponseCode();
+    if (code === 429) { Utilities.sleep(2000); safety++; continue; }
+    if (code !== 200) {
+      throw new Error(`Shopify product sales ${storeId} ${dateStr} failed (${code}): ${res.getContentText()}`);
+    }
+    const body = JSON.parse(res.getContentText());
+    const orders = (body && body.orders) || [];
+    for (const o of orders) {
+      if (o.test) continue;
+      if (o.financial_status === 'voided') continue;
+      const items = o.line_items || [];
+      for (const li of items) {
+        const pid = String(li.product_id || ''); // could be empty for custom items
+        const key = pid || `custom:${li.title || 'Unknown'}`;
+        const title = li.title || li.name || 'Unknown';
+        const qty = parseInt(li.quantity || 0, 10);
+        const price = parseFloat(li.price || 0);
+        const gross = qty * price;
+
+        if (!byProduct[key]) {
+          byProduct[key] = { productId: pid, productTitle: title, units: 0, revenueCad: 0 };
+        }
+        byProduct[key].units += qty;
+        byProduct[key].revenueCad += gross;
+      }
+    }
+    const link = res.getHeaders()['Link'] || res.getHeaders()['link'] || '';
+    const m = link.match(/<([^>]+)>;\s*rel="next"/);
+    url = m ? m[1] : null;
+    safety++;
+  }
+
+  const out = Object.values(byProduct).sort((a, b) => b.units - a.units);
+  Logger.log(`Shopify products ${storeId} ${dateStr}: ${out.length} distinct products, ${out.reduce((s, p) => s + p.units, 0)} units`);
+  return out;
+}
+
+/**
  * משיג טוקן Admin API דרך Client Credentials Grant (לאפליקציות שהוקמו
  * דרך Dev Dashboard ואין להן "Reveal token once"). הטוקן שמוחזר ארוך-תוקף
  * ולא פג, אז קוראים לזה פעם אחת ושומרים ל-Script Properties.
