@@ -12,6 +12,8 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
+  CheckCircle2,
+  Circle,
 } from 'lucide-react';
 import {
   Area,
@@ -25,6 +27,10 @@ import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import { roasLabel } from '@/lib/analytics';
 import type { CampaignRow } from '@/lib/campaigns';
 import { buildAdsManagerLink, type AdAccountMap } from '@/lib/campaignsLinks';
+import {
+  readOptimized,
+  toggleOptimized,
+} from '@/lib/campaignOptimized';
 
 /**
  * Slide-in drawer that opens when the user clicks a campaign row in the
@@ -64,7 +70,7 @@ const TONE_BG: Record<string, string> = {
 // Columns the drawer's ad-set table can be sorted by. Kept narrow because
 // the drawer is a focused drilldown — full sortable surface is in
 // CampaignsTable.
-type AdSetSortKey = 'name' | 'spend' | 'value' | 'roas' | 'conversions';
+type AdSetSortKey = 'name' | 'spend' | 'budget' | 'value' | 'roas' | 'conversions';
 type AdSetSortDir = 'asc' | 'desc';
 
 export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: Props) {
@@ -81,6 +87,20 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
       setSortKey(key);
       setSortDir('desc'); // first click on a new column → "largest first"
     }
+  }
+
+  // Optimization marks — shared with the main CampaignsTable via the same
+  // localStorage key (lib/campaignOptimized), so a mark made in either place
+  // shows in the other. Hydrate on mount, listen for cross-tab/device sync.
+  const [optimized, setOptimized] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    setOptimized(readOptimized());
+    const onChange = () => setOptimized(readOptimized());
+    window.addEventListener('roas-campaign-optimized-changed', onChange);
+    return () => window.removeEventListener('roas-campaign-optimized-changed', onChange);
+  }, []);
+  function onToggle(key: string) {
+    setOptimized(prev => toggleOptimized(key, prev));
   }
   // Close on Esc.
   useEffect(() => {
@@ -109,11 +129,18 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
     const byAdSet = new Map<string, {
       id: string;
       name: string;
+      storeId: string;
+      platform: string;
+      campaignId: string;
       spend: number;
       value: number;
       clicks: number;
       impressions: number;
       conversions: number;
+      /** Latest non-null daily budget seen for this ad-set across the
+       *  selected range. Budget is a current-state property — most-recent wins
+       *  instead of summing across days. */
+      adSetBudgetCad: number | null;
     }>();
     for (const r of rows) {
       spend += r.spend;
@@ -132,11 +159,15 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
         byAdSet.set(aKey, {
           id: r.adSetId,
           name: r.adSetName || '—',
+          storeId: r.storeId,
+          platform: r.platform,
+          campaignId: r.campaignId,
           spend: 0,
           value: 0,
           clicks: 0,
           impressions: 0,
           conversions: 0,
+          adSetBudgetCad: r.adSetBudgetCad,
         });
       }
       const a = byAdSet.get(aKey)!;
@@ -145,6 +176,8 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
       a.clicks += r.clicks;
       a.impressions += r.impressions;
       a.conversions += r.conversions;
+      // Latest non-null budget wins (rows iterate in date order).
+      if (r.adSetBudgetCad != null) a.adSetBudgetCad = r.adSetBudgetCad;
     }
     const roas = spend > 0 ? value / spend : 0;
     const ctr = impressions > 0 ? clicks / impressions : 0;
@@ -194,6 +227,8 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
           return sign * (x.name || '').localeCompare(y.name || '', 'he');
         case 'spend':
           return sign * (x.spend - y.spend);
+        case 'budget':
+          return sign * ((x.adSetBudgetCad ?? 0) - (y.adSetBudgetCad ?? 0));
         case 'value':
           return sign * (x.value - y.value);
         case 'roas':
@@ -381,20 +416,60 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
                 <table className="w-full text-xs sm:text-sm">
                   <thead className="bg-surfaceMuted/60">
                     <tr className="text-text-secondary">
-                      <AdSetSortHeader label="שם"     col="name"        sortKey={sortKey} dir={sortDir} onClick={handleSort} align="start"  />
-                      <AdSetSortHeader label="הוצאה"  col="spend"       sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
-                      <AdSetSortHeader label="ערך"    col="value"       sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
-                      <AdSetSortHeader label="ROAS"   col="roas"        sortKey={sortKey} dir={sortDir} onClick={handleSort} align="center" />
-                      <AdSetSortHeader label="המרות"  col="conversions" sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
+                      <th className="px-2 py-2 w-[36px]" aria-label="סימון" />
+                      <AdSetSortHeader label="שם"          col="name"        sortKey={sortKey} dir={sortDir} onClick={handleSort} align="start"  />
+                      <AdSetSortHeader label="הוצאה"       col="spend"       sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
+                      <AdSetSortHeader label="תקציב יומי"  col="budget"      sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
+                      <AdSetSortHeader label="ערך"         col="value"       sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
+                      <AdSetSortHeader label="ROAS"        col="roas"        sortKey={sortKey} dir={sortDir} onClick={handleSort} align="center" />
+                      <AdSetSortHeader label="המרות"       col="conversions" sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
                     </tr>
                   </thead>
                   <tbody>
                     {sortedAdSets.map((a, i) => {
                       const info = roasLabel(a.roas);
+                      // Same composite key the main CampaignsTable uses for
+                      // ad-set rows, so a mark made here shows there and vice
+                      // versa.
+                      const markKey = `${a.storeId}::${a.platform}::${a.campaignId}::${a.id || ''}`;
+                      const isOptimized = optimized.has(markKey);
+                      const tight = a.spend > 0 && a.adSetBudgetCad && a.spend > a.adSetBudgetCad * 0.95;
                       return (
-                        <tr key={a.id || a.name || i} className="border-t border-borderSubtle">
-                          <td className="px-3 py-2 text-text-primary truncate max-w-[200px]">{a.name}</td>
+                        <tr
+                          key={a.id || a.name || i}
+                          className={cn(
+                            'border-t border-borderSubtle transition-opacity',
+                            isOptimized && 'opacity-50 hover:opacity-100',
+                          )}
+                        >
+                          <td className="px-2 py-2 text-center w-[36px]">
+                            <button
+                              type="button"
+                              onClick={() => onToggle(markKey)}
+                              className={cn(
+                                'inline-flex items-center justify-center w-7 h-7 rounded-full transition-colors',
+                                isOptimized
+                                  ? 'text-roas-green hover:bg-roas-greenBg/60'
+                                  : 'text-text-muted hover:text-roas-green hover:bg-roas-greenBg/40',
+                              )}
+                              title={isOptimized ? 'לחץ להסרת הסימון' : 'סמן כאופטימיזציה בוצעה'}
+                              aria-label={isOptimized ? 'בטל סימון אופטימיזציה' : 'סמן כאופטימיזציה בוצעה'}
+                              aria-pressed={isOptimized}
+                            >
+                              {isOptimized ? <CheckCircle2 size={16} /> : <Circle size={16} />}
+                            </button>
+                          </td>
+                          <td className="px-3 py-2 text-text-primary truncate max-w-[200px]" title={a.name}>{a.name}</td>
                           <td className="px-3 py-2 text-end tabular-nums">{formatCurrency(a.spend)}</td>
+                          <td className="px-3 py-2 text-end tabular-nums">
+                            {a.adSetBudgetCad && a.adSetBudgetCad > 0 ? (
+                              <span className={cn('font-medium', tight && 'text-amber-700')}>
+                                {formatCurrency(a.adSetBudgetCad)}
+                              </span>
+                            ) : (
+                              <span className="text-text-muted">—</span>
+                            )}
+                          </td>
                           <td className={cn('px-3 py-2 text-end tabular-nums', a.value > a.spend && 'text-roas-green font-medium')}>
                             {formatCurrency(a.value)}
                           </td>
