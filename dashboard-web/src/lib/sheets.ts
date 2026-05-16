@@ -253,9 +253,20 @@ export async function fetchDashboardState(): Promise<{
  * Upsert a single key→value row in `dashboard-state`. Idempotent. Creates the
  * tab if missing.
  *
- * Last-write-wins semantics: the body must be JSON-serializable. Concurrent
- * edits from two partners on the same key will collide; for billing/annotations
- * that's acceptable because edits are infrequent.
+ * Last-write-wins semantics for SAME key: the body must be JSON-serializable.
+ * Concurrent edits from two partners on the same key will collide; for
+ * billing/annotations that's acceptable because edits are infrequent.
+ *
+ * Concurrent writes to DIFFERENT missing keys: handled atomically by routing
+ * new keys through `spreadsheets.values.append` instead of computing a row
+ * number from a previous read. The previous read-then-compute approach
+ * produced a race where two POSTs for two different missing keys both
+ * resolved to `keys.length + 2` and the later write silently overwrote the
+ * earlier one. The Sheets API allocates rows server-side for `append`, so
+ * two concurrent appends land on adjacent rows and neither is lost.
+ *
+ * For existing keys we still use a targeted `update` on the row we found, so
+ * repeated writes to the same key don't leak rows.
  */
 export async function upsertDashboardStateKey(key: string, value: unknown): Promise<void> {
   const auth = getAuth(true);
@@ -272,15 +283,29 @@ export async function upsertDashboardStateKey(key: string, value: unknown): Prom
   });
   const keys = (colA.data.values ?? []).map(r => String(r[0] ?? ''));
   const existingIdx = keys.findIndex(k => k === key);
-  const targetRow = existingIdx >= 0 ? existingIdx + 2 : keys.length + 2;
 
   const json = JSON.stringify(value);
   const updatedAt = new Date().toISOString();
 
-  await sheets.spreadsheets.values.update({
+  if (existingIdx >= 0) {
+    // Key already has a row — overwrite in place. last-write-wins is OK.
+    const targetRow = existingIdx + 2;
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${STATE_TAB}!A${targetRow}:C${targetRow}`,
+      valueInputOption: 'RAW',
+      requestBody: { values: [[key, json, updatedAt]] },
+    });
+    return;
+  }
+
+  // New key: atomic server-side append. Two concurrent calls for two
+  // different new keys land on distinct rows; neither overwrites the other.
+  await sheets.spreadsheets.values.append({
     spreadsheetId,
-    range: `${STATE_TAB}!A${targetRow}:C${targetRow}`,
+    range: `${STATE_TAB}!A:C`,
     valueInputOption: 'RAW',
+    insertDataOption: 'INSERT_ROWS',
     requestBody: { values: [[key, json, updatedAt]] },
   });
 }
