@@ -7,6 +7,9 @@ export type Aggregate = {
   gaSpend: number;
   roas: number;
   grossProfit: number;
+  cogs: number;
+  netProfit: number;
+  cogsCoverage: number; // 0..1 - share of rows that had COGS reported
   rowCount: number;
 };
 
@@ -23,12 +26,14 @@ export function filterRows(
 }
 
 export function aggregate(rows: DailyRow[]): Aggregate {
-  let revenue = 0, spend = 0, fbSpend = 0, gaSpend = 0;
+  let revenue = 0, spend = 0, fbSpend = 0, gaSpend = 0, cogs = 0, cogsRows = 0;
   for (const r of rows) {
     revenue += r.revenue;
     spend += r.totalSpend;
     fbSpend += r.fbSpend;
     gaSpend += r.gaSpend;
+    cogs += r.cogs;
+    if (r.hasCogs) cogsRows++;
   }
   const roas = spend > 0 ? revenue / spend : 0;
   return {
@@ -38,6 +43,9 @@ export function aggregate(rows: DailyRow[]): Aggregate {
     gaSpend,
     roas,
     grossProfit: revenue - spend,
+    cogs,
+    netProfit: revenue - spend - cogs,
+    cogsCoverage: rows.length > 0 ? cogsRows / rows.length : 0,
     rowCount: rows.length,
   };
 }

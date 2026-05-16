@@ -8,6 +8,9 @@ export type DailyRow = {
   revenue: number;
   roas: number;
   grossProfit: number;
+  cogs: number;        // 0 when scope is missing or no orders
+  netProfit: number;   // revenue - spend - cogs
+  hasCogs: boolean;    // true if COGS column was populated (non-empty)
 };
 
 export type DashboardData = {

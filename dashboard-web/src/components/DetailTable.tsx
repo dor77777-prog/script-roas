@@ -16,6 +16,7 @@ const ROAS_BG: Record<string, string> = {
 export function DetailTable({ rows }: { rows: DailyRow[] }) {
   const sorted = [...rows].sort((a, b) => b.date.localeCompare(a.date));
   const display = sorted.slice(0, 100);
+  const showCogs = display.some(r => r.hasCogs);
 
   if (!display.length) {
     return (
@@ -40,10 +41,12 @@ export function DetailTable({ rows }: { rows: DailyRow[] }) {
               <th className="px-3 py-2.5 text-start font-medium">חנות</th>
               <th className="px-3 py-2.5 text-end font-medium">פייסבוק</th>
               <th className="px-3 py-2.5 text-end font-medium">גוגל</th>
-              <th className="px-3 py-2.5 text-end font-medium">סה"כ הוצאה</th>
+              <th className="px-3 py-2.5 text-end font-medium">סה&quot;כ הוצאה</th>
               <th className="px-3 py-2.5 text-end font-medium">הכנסה</th>
               <th className="px-3 py-2.5 text-center font-medium">ROAS</th>
               <th className="px-3 py-2.5 text-end font-medium">רווח גולמי</th>
+              {showCogs && <th className="px-3 py-2.5 text-end font-medium">COGS</th>}
+              {showCogs && <th className="px-3 py-2.5 text-end font-medium">רווח נטו</th>}
             </tr>
           </thead>
           <tbody>
@@ -61,6 +64,23 @@ export function DetailTable({ rows }: { rows: DailyRow[] }) {
                     {formatNumber(r.roas)}
                   </td>
                   <td className="px-3 py-2 text-end tabular-nums">{formatNumber(r.grossProfit)}</td>
+                  {showCogs && (
+                    <td className="px-3 py-2 text-end tabular-nums text-text-secondary">
+                      {r.hasCogs ? formatNumber(r.cogs) : '—'}
+                    </td>
+                  )}
+                  {showCogs && (
+                    <td
+                      className={cn(
+                        'px-3 py-2 text-end tabular-nums font-medium',
+                        r.hasCogs && r.netProfit >= 0 && 'text-roas-green',
+                        r.hasCogs && r.netProfit < 0 && 'text-roas-red',
+                        !r.hasCogs && 'text-text-muted',
+                      )}
+                    >
+                      {r.hasCogs ? formatCurrency(r.netProfit) : '—'}
+                    </td>
+                  )}
                 </tr>
               );
             })}

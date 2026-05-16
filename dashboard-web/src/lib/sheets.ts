@@ -67,7 +67,7 @@ export async function fetchDailyData(): Promise<DailyRow[]> {
 
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId,
-    range: `${DATA_TAB}!A2:I10000`, // skip header row
+    range: `${DATA_TAB}!A2:K10000`, // skip header row; K = Net Profit
     valueRenderOption: 'UNFORMATTED_VALUE',
     dateTimeRenderOption: 'FORMATTED_STRING',
   });
@@ -89,6 +89,11 @@ export async function fetchDailyData(): Promise<DailyRow[]> {
     const roas = totalSpend > 0 ? revenue / totalSpend : 0;
     const grossProfit = revenue - totalSpend;
 
+    const cogsRaw = row[9];
+    const hasCogs = cogsRaw !== null && cogsRaw !== undefined && cogsRaw !== '';
+    const cogs = hasCogs ? parseNumber(cogsRaw) : 0;
+    const netProfit = revenue - totalSpend - cogs;
+
     rows.push({
       date: dateStr,
       storeId,
@@ -99,6 +104,9 @@ export async function fetchDailyData(): Promise<DailyRow[]> {
       revenue,
       roas,
       grossProfit,
+      cogs,
+      netProfit,
+      hasCogs,
     });
   }
 

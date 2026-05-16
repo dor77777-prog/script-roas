@@ -8,11 +8,13 @@
  */
 function setupAll() {
   const ss = ensureSpreadsheet();
-  installDailyTrigger();
+  installDailyTrigger();   // 00:05 IT - "closes" yesterday's data
+  installLiveTrigger();    // every 15 min - refreshes today's data so the dashboard is live
   Logger.log('================================');
   Logger.log('Setup complete.');
   Logger.log('Spreadsheet URL: ' + ss.getUrl());
-  Logger.log('Daily trigger: every day at 00:05 Asia/Jerusalem');
+  Logger.log('Daily trigger: every day at 00:05 Asia/Jerusalem (סוגר את היום הקודם)');
+  Logger.log('Live trigger: every 15 minutes (מרענן את היום הנוכחי בדשבורד)');
   Logger.log('Web Dashboard: deployed separately at Vercel (see dashboard-web/)');
   Logger.log('================================');
   return ss.getUrl();
@@ -61,6 +63,37 @@ function removeDailyTrigger() {
 }
 
 /**
+ * מתקין טריגר "Live" שירוץ כל 15 דקות, מעדכן את היום הנוכחי.
+ * משמש את ה-dashboard להציג נתוני "Live" כמעט-real-time.
+ */
+function installLiveTrigger() {
+  removeLiveTrigger();
+  ScriptApp.newTrigger('runLiveUpdate')
+    .timeBased()
+    .everyMinutes(15)
+    .create();
+  Logger.log('Live trigger installed: runs every 15 minutes');
+  // הרצה מיידית כדי שיהיו נתוני היום עכשיו
+  try {
+    runLiveUpdate();
+  } catch (e) {
+    Logger.log(`Immediate live run failed: ${e && e.message ? e.message : e}`);
+  }
+}
+
+function removeLiveTrigger() {
+  const triggers = ScriptApp.getProjectTriggers();
+  let removed = 0;
+  for (const t of triggers) {
+    if (t.getHandlerFunction() === 'runLiveUpdate') {
+      ScriptApp.deleteTrigger(t);
+      removed++;
+    }
+  }
+  Logger.log(`Removed ${removed} live trigger(s)`);
+}
+
+/**
  * הצגת תפריט בתוך הגיליון (נטען כשפותחים את הגיליון).
  * עובד רק אם הגיליון נפתח אחרי שהפעלת setupCreateSheet ופתחת אותו לפחות פעם אחת.
  */
@@ -73,6 +106,8 @@ function onOpen() {
       .addSeparator()
       .addItem('התקן טריגר יומי (00:05) + הרצה מיידית', 'installDailyTrigger')
       .addItem('הסר טריגר יומי', 'removeDailyTrigger')
+      .addItem('התקן טריגר Live (כל 15 דקות)', 'installLiveTrigger')
+      .addItem('הסר טריגר Live', 'removeLiveTrigger')
       .addSeparator()
       .addItem('הסתר טאבים עזריים', 'hideAuxiliaryTabs')
       .addItem('הצג טאבים עזריים (debug)', 'showAuxiliaryTabs')

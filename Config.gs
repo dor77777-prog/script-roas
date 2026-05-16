@@ -84,6 +84,10 @@ function yesterdayStr_() {
   return Utilities.formatDate(dt, 'UTC', 'yyyy-MM-dd');
 }
 
+function todayStr_() {
+  return Utilities.formatDate(new Date(), TZ, 'yyyy-MM-dd');
+}
+
 /**
  * UrlFetchApp.fetch עם retry חכם. מטפל ב:
  *   - שגיאות רשת חולפות (Address unavailable / DNS resolution failed / connection reset)

@@ -1,6 +1,6 @@
 'use client';
 
-import { TrendingUp, TrendingDown, Minus, DollarSign, ShoppingCart, Target } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, DollarSign, ShoppingCart, Target, Package, Wallet } from 'lucide-react';
 import { cn, formatCurrency, formatNumber, formatPct } from '@/lib/utils';
 import { roasLabel, type Aggregate, deltaPct } from '@/lib/analytics';
 
@@ -23,9 +23,24 @@ export function KpiCards({ current, previous }: Props) {
   const dRev = deltaPct(current.revenue, previous.revenue);
   const dSpend = deltaPct(current.spend, previous.spend);
   const dProfit = deltaPct(current.grossProfit, previous.grossProfit);
+  const dCogs = deltaPct(current.cogs, previous.cogs);
+  const dNet = deltaPct(current.netProfit, previous.netProfit);
+
+  // Only surface COGS/Net Profit when there's at least *some* COGS data in the
+  // current window. Otherwise the cards are misleading (would always read "0").
+  const showCogs = current.cogsCoverage > 0;
+  const cogsTooltip =
+    current.cogsCoverage < 1
+      ? `כיסוי חלקי: ${Math.round(current.cogsCoverage * 100)}% מהימים כוללים COGS`
+      : undefined;
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+    <div
+      className={cn(
+        'grid gap-3 sm:gap-4',
+        showCogs ? 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-6' : 'grid-cols-2 lg:grid-cols-4',
+      )}
+    >
       <KpiCard
         label="ROAS לתקופה"
         value={formatNumber(current.roas)}
@@ -53,6 +68,26 @@ export function KpiCards({ current, previous }: Props) {
         delta={dProfit}
         icon={<TrendingUp size={16} />}
       />
+      {showCogs && (
+        <>
+          <KpiCard
+            label="עלות סחורה (COGS)"
+            value={`CAD ${formatCurrency(current.cogs)}`}
+            sublabel={cogsTooltip}
+            sublabelClass="bg-surfaceMuted text-text-muted"
+            delta={dCogs}
+            deltaInverse
+            icon={<Package size={16} />}
+          />
+          <KpiCard
+            label="רווח נטו"
+            value={`CAD ${formatCurrency(current.netProfit)}`}
+            delta={dNet}
+            icon={<Wallet size={16} />}
+            accent={current.netProfit >= 0 ? 'pos' : 'neg'}
+          />
+        </>
+      )}
     </div>
   );
 }
@@ -65,6 +100,7 @@ function KpiCard({
   delta,
   deltaInverse = false,
   icon,
+  accent,
 }: {
   label: string;
   value: string;
@@ -73,6 +109,7 @@ function KpiCard({
   delta: ReturnType<typeof deltaPct>;
   deltaInverse?: boolean;
   icon?: React.ReactNode;
+  accent?: 'pos' | 'neg';
 }) {
   const isGood = deltaInverse ? delta.direction === 'down' : delta.direction === 'up';
   const isBad = deltaInverse ? delta.direction === 'up' : delta.direction === 'down';
@@ -83,7 +120,16 @@ function KpiCard({
         <span className="text-xs sm:text-sm font-medium text-text-secondary leading-tight">{label}</span>
         <span className="text-text-muted shrink-0">{icon}</span>
       </div>
-      <div className="text-xl sm:text-2xl md:text-3xl font-bold text-text-primary leading-tight tabular-nums break-words">{value}</div>
+      <div
+        className={cn(
+          'text-xl sm:text-2xl md:text-3xl font-bold leading-tight tabular-nums break-words',
+          accent === 'pos' && 'text-roas-green',
+          accent === 'neg' && 'text-roas-red',
+          !accent && 'text-text-primary',
+        )}
+      >
+        {value}
+      </div>
       {sublabel && (
         <span
           className={cn(

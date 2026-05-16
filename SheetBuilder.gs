@@ -734,7 +734,8 @@ function writeCampaignRowsForDay(ss, storeId, dateStr, rows) {
 
 const DAILY_FLAT_HEADERS = [
   'Date', 'Store ID', 'Store', 'FB Spend (CAD)', 'GA Spend (CAD)',
-  'Total Spend (CAD)', 'Revenue (CAD)', 'ROAS', 'Gross Profit (CAD)'
+  'Total Spend (CAD)', 'Revenue (CAD)', 'ROAS', 'Gross Profit (CAD)',
+  'COGS (CAD)', 'Net Profit (CAD)'
 ];
 
 function ensureDailyFlatTab_(ss) {
@@ -761,6 +762,8 @@ function ensureDailyFlatTab_(ss) {
     sh.setColumnWidth(7, 110);  // Revenue
     sh.setColumnWidth(8, 70);   // ROAS
     sh.setColumnWidth(9, 110);  // Gross Profit
+    sh.setColumnWidth(10, 110); // COGS
+    sh.setColumnWidth(11, 110); // Net Profit
   }
   // הסתר את הטאב מהמשתמש - הוא משמש רק כמקור נתונים לדשבורד
   if (justCreated) {
@@ -771,8 +774,9 @@ function ensureDailyFlatTab_(ss) {
 
 /**
  * כותב/מעדכן שורה בטאב daily-flat. אידמפוטנטי לפי (date, storeId).
+ * cogsCad אופציונלי - אם 0/null, השדה יישאר ריק (לא נחשב כ-0).
  */
-function writeDailyFlatRow_(ss, dateStr, storeId, storeName, fbCad, gaCad, revenueCad) {
+function writeDailyFlatRow_(ss, dateStr, storeId, storeName, fbCad, gaCad, revenueCad, cogsCad) {
   const sh = ensureDailyFlatTab_(ss);
   const lastRow = sh.getLastRow();
   let targetRow = lastRow + 1;
@@ -801,6 +805,7 @@ function writeDailyFlatRow_(ss, dateStr, storeId, storeName, fbCad, gaCad, reven
   const ga = round2_(gaCad || 0);
   const total = round2_(fb + ga);
   const rev = round2_(revenueCad || 0);
+  const cogs = (cogsCad === null || cogsCad === undefined) ? '' : round2_(cogsCad);
 
   sh.getRange(targetRow, 1, 1, 7).setValues([[
     parseYMD_(dateStr), storeId, storeName, fb, ga, total, rev
@@ -808,6 +813,9 @@ function writeDailyFlatRow_(ss, dateStr, storeId, storeName, fbCad, gaCad, reven
   sh.getRange(targetRow, 1).setNumberFormat('yyyy-mm-dd');
   sh.getRange(targetRow, 8).setFormula(`=IFERROR(G${targetRow}/F${targetRow}, "")`);
   sh.getRange(targetRow, 9).setFormula(`=G${targetRow}-F${targetRow}`);
+  sh.getRange(targetRow, 10).setValue(cogs);
+  // Net Profit = Revenue - Spend - COGS. אם COGS חסר, ייקח כ-0.
+  sh.getRange(targetRow, 11).setFormula(`=G${targetRow}-F${targetRow}-IF(J${targetRow}="",0,J${targetRow})`);
 
   if (isNew) {
     sh.getRange(targetRow, 1).setNumberFormat('yyyy-mm-dd').setHorizontalAlignment('center');
@@ -815,6 +823,8 @@ function writeDailyFlatRow_(ss, dateStr, storeId, storeName, fbCad, gaCad, reven
     sh.getRange(targetRow, 7).setNumberFormat('#,##0.00');         // Revenue
     sh.getRange(targetRow, 8).setNumberFormat('0.00').setHorizontalAlignment('center');
     sh.getRange(targetRow, 9).setNumberFormat('#,##0.00');         // Gross Profit
+    sh.getRange(targetRow, 10).setNumberFormat('#,##0.00');        // COGS
+    sh.getRange(targetRow, 11).setNumberFormat('#,##0.00');        // Net Profit
   }
 }
 
