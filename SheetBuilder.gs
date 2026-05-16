@@ -305,6 +305,17 @@ function round2_(n) {
 }
 
 /**
+ * האם הערך הזה הוא תאריך-יום בעמודה A של בלוק חודש?
+ * Google Sheets לפעמים שומר את התאריך כ-Date object (אחרי המרה אוטומטית מ-string)
+ * ולפעמים כ-string. תומך בשניהם.
+ */
+function isDayRowValue_(val) {
+  if (val instanceof Date) return !isNaN(val.getTime());
+  if (typeof val === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(val)) return true;
+  return false;
+}
+
+/**
  * עיצוב מותנה על עמודת ROAS לכל הטאב. הכללים חלים גם לחודשים עתידיים.
  */
 function ensureRoasColorRules_(sheet) {
@@ -391,8 +402,7 @@ function repairFormulasInTab(tabName) {
   const colA = sheet.getRange(1, 1, lastRow, 1).getValues();
   let repaired = 0;
   for (let i = 0; i < colA.length; i++) {
-    const val = colA[i][0];
-    if (typeof val !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(val)) continue;
+    if (!isDayRowValue_(colA[i][0])) continue;
     const dayRow = i + 1;
 
     if (layout.type === 'split') {
