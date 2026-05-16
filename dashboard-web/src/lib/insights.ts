@@ -26,6 +26,7 @@ import { pushCloudKey, type StateKey } from './cloudSync';
 import type { DailyRow } from './types';
 import type { ProductRow } from './products';
 import type { CampaignRow } from './campaigns';
+import { COGS_RATE_OF_REVENUE } from './analytics';
 
 export type Severity = 'critical' | 'warning' | 'opportunity' | 'positive' | 'info';
 
@@ -495,7 +496,9 @@ export function forecastMonthEnd(rows: DailyRow[]): {
   const dailyAvgSpend = last7Spend / last7DaysCount;
   const projectedRev = mtdRev + dailyAvgRev * daysRemaining;
   const projectedSpend = mtdSpend + dailyAvgSpend * daysRemaining;
-  const projectedNet = projectedRev - projectedSpend - projectedRev * 0.25; // 25% COGS
+  // COGS_RATE_OF_REVENUE is the single source of truth for COGS-as-% of
+  // revenue, mirrored in Apps Script Config.gs (see analytics.ts docstring).
+  const projectedNet = projectedRev - projectedSpend - projectedRev * COGS_RATE_OF_REVENUE;
   const projectedRoas = projectedSpend > 0 ? projectedRev / projectedSpend : 0;
 
   return {
