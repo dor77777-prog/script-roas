@@ -51,22 +51,27 @@ function setupDashboard() {
 }
 
 /**
- * Hook הנקרא מ-Main.gs onEdit - מעדכן תאריכים כשמשנים את הבורר.
+ * Hook הנקרא מ-Main.gs onEdit - מעדכן תאריכים כשמשנים את בורר התקופה.
+ *
+ * B3:C3 הוא תא ממוזג, ו-Apps Script לפעמים מחזיר 'B3' ולפעמים 'B3:C3'.
+ * לכן בודקים לפי row/column ולא לפי A1 notation, וקוראים את הערך ישירות מהתא.
  */
 function dashboardOnEdit_(e) {
   if (!e || !e.range) return;
   const sheet = e.range.getSheet();
   if (sheet.getName() !== DASHBOARD_TAB) return;
-  const cell = e.range.getA1Notation();
-  if (cell !== 'B3') return; // רק לבורר התקופה
 
-  const preset = e.value;
-  if (preset === 'מותאם אישית') return; // אל תיגע ב-B4/D4
+  // בדיקה לפי תא התחלה (אמין יותר מ-getA1Notation במצב merged)
+  if (e.range.getRow() !== 3 || e.range.getColumn() !== 2) return;
+
+  // קריאה ישירה מהתא - לא דרך e.value (לא תמיד מתאכלס בקריאות מ-dropdown ב-merged)
+  const preset = sheet.getRange('B3').getValue();
+  if (!preset || preset === 'מותאם אישית') return;
 
   const dates = computePresetDates_(preset);
   if (!dates) return;
-  sheet.getRange('B4').setValue(parseYMD_(dates.from)).setNumberFormat('yyyy-mm-dd');
-  sheet.getRange('D4').setValue(parseYMD_(dates.to)).setNumberFormat('yyyy-mm-dd');
+  sheet.getRange('B4').setValue(parseYMD_(dates.from)).setNumberFormat('dd/MM/yyyy');
+  sheet.getRange('D4').setValue(parseYMD_(dates.to)).setNumberFormat('dd/MM/yyyy');
 }
 
 function computePresetDates_(preset) {
@@ -231,7 +236,7 @@ function buildFilters_(sh) {
     .setVerticalAlignment('middle');
 
   sh.getRange('I3:M3').merge()
-    .setFormula('="מציג " & ($D$4-$B$4+1) & " ימים  •  " & TEXT($B$4,"d/M/yyyy") & " — " & TEXT($D$4,"d/M/yyyy")')
+    .setFormula('="מציג " & ($D$4-$B$4+1) & " ימים  •  " & TEXT($B$4,"dd/MM/yyyy") & " — " & TEXT($D$4,"dd/MM/yyyy")')
     .setFontStyle('italic')
     .setFontColor(DBC.neutralFg)
     .setHorizontalAlignment('right')
@@ -245,13 +250,13 @@ function buildFilters_(sh) {
 
   sh.getRange('A4').setValue('מתאריך:').setFontWeight('bold').setHorizontalAlignment('left');
   sh.getRange('B4').setValue(firstOfMonth)
-    .setNumberFormat('yyyy-mm-dd')
+    .setNumberFormat('dd/MM/yyyy')
     .setBackground('#ffffff')
     .setHorizontalAlignment('center');
 
   sh.getRange('C4').setValue('עד תאריך:').setFontWeight('bold').setHorizontalAlignment('left');
   sh.getRange('D4').setValue(now)
-    .setNumberFormat('yyyy-mm-dd')
+    .setNumberFormat('dd/MM/yyyy')
     .setBackground('#ffffff')
     .setHorizontalAlignment('center');
 
