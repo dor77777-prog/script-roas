@@ -32,6 +32,7 @@ import {
   type RecurringCost,
 } from '@/lib/billing';
 import { isHydrated } from '@/lib/cloudSync';
+import { FROZEN_USD_TO_CAD } from '@/lib/constants';
 
 type StoreMetaRow = {
   storeId: string;
@@ -375,7 +376,7 @@ function RecurringTab({
       active: true,
       notes:
         monthlyCad > 0
-          ? `Auto-detected מ-Shopify GraphQL · USD→CAD ×1.36`
+          ? `Auto-detected מ-Shopify GraphQL · USD→CAD ×${FROZEN_USD_TO_CAD}`
           : `Auto-detected מ-Shopify (תוכנית מותאמת — עדכן את הסכום ידנית)`,
     };
     onChange([row, ...items]);
@@ -394,7 +395,7 @@ function RecurringTab({
         active: true,
         notes:
           monthlyCad > 0
-            ? `Auto-detected מ-Shopify GraphQL · USD→CAD ×1.36`
+            ? `Auto-detected מ-Shopify GraphQL · USD→CAD ×${FROZEN_USD_TO_CAD}`
             : `Auto-detected מ-Shopify (תוכנית מותאמת — עדכן את הסכום ידנית)`,
       };
     });

@@ -1,4 +1,5 @@
 import { pushCloudKey, type StateKey } from './cloudSync';
+import { FROZEN_USD_TO_CAD } from './constants';
 
 /**
  * Billing data layer — persists per-store cost entries in localStorage so the
@@ -245,8 +246,16 @@ export const SHOPIFY_PLAN_PRICES_USD: Record<string, number> = {
   Retail:            89,
 };
 
-/** Convert USD plan price to CAD using the dashboard's current FX. */
-export function shopifyPlanCadForName(planName: string, usdToCad = 1.36): number | null {
+/**
+ * Convert USD plan price to CAD. Defaults to the frozen reference rate
+ * (FROZEN_USD_TO_CAD) so the suggestion stays stable across sessions; the
+ * live FX rate is used elsewhere in the dashboard for actual ad-spend
+ * conversion. Callers that want the live rate can pass it explicitly.
+ */
+export function shopifyPlanCadForName(
+  planName: string,
+  usdToCad: number = FROZEN_USD_TO_CAD,
+): number | null {
   const usd = SHOPIFY_PLAN_PRICES_USD[planName];
   if (!usd) return null;
   return Math.round(usd * usdToCad);
@@ -357,8 +366,13 @@ export function parseShopifyBillsCsv(
 
     const classification = classifyBillLine(desc ?? '');
 
-    // Convert USD → CAD if needed. The user can adjust per row in the UI.
-    const amountCad = currency.toUpperCase() === 'CAD' ? amount : Math.round(amount * 1.36);
+    // Convert non-CAD → CAD using the frozen reference rate. The user can
+    // adjust per row in the UI. Frozen rather than live so a re-import of
+    // the same CSV reproduces identical CAD amounts.
+    const amountCad =
+      currency.toUpperCase() === 'CAD'
+        ? amount
+        : Math.round(amount * FROZEN_USD_TO_CAD);
 
     out.push({
       id: generateId(),
@@ -366,7 +380,7 @@ export function parseShopifyBillsCsv(
       description: desc || '(ללא תיאור)',
       source: classification.source,
       amountCAD: amountCad,
-      notes: `CSV import · ${currency} ${amount.toFixed(2)}${currency.toUpperCase() === 'CAD' ? '' : ' (×1.36)'}`,
+      notes: `CSV import · ${currency} ${amount.toFixed(2)}${currency.toUpperCase() === 'CAD' ? '' : ` (×${FROZEN_USD_TO_CAD})`}`,
       suggestedType: classification.suggestedType,
     });
   }
