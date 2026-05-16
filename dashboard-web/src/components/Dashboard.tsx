@@ -29,6 +29,7 @@ import { ProductsTable } from './ProductsTable';
 import { CampaignsTable } from './CampaignsTable';
 import { WhatsWorking } from './WhatsWorking';
 import { AiReportButton } from './AiReportButton';
+import { HeroOverview } from './HeroOverview';
 import { TabNav, type TabDef } from './TabNav';
 import { SectionIntro } from './SectionIntro';
 
@@ -165,41 +166,45 @@ function HomeTab({
   setFilters: (next: F) => void;
 }) {
   return (
-    <div className="space-y-4 sm:space-y-5">
-      {/* ===== Live snapshot ===== */}
+    <div className="space-y-4 sm:space-y-5 animate-fade-in-up">
+      {/* ===== Hero — editorial story + chart-as-background + floating KPIs ===== */}
+      <HeroOverview data={data} filters={filters} />
+
+      {/* ===== Filters — quiet, just controls. AI-report button on the right. ===== */}
+      <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
+        <div className="flex items-center gap-2 text-xs sm:text-sm text-text-secondary">
+          <CalendarDays size={14} className="text-text-muted" />
+          <span>שנה טווח או חנות לעדכון כל המסך</span>
+        </div>
+        <AiReportButton data={data} filters={filters} />
+      </div>
+      <Filters filters={filters} stores={data.stores} onChange={setFilters} />
+
+      {/* ===== Live snapshot (today) — still important, secondary to hero ===== */}
       <SectionIntro
-        icon={<Radio size={20} />}
+        icon={<Radio size={18} />}
         title="היום עד לרגע זה"
-        description="הכנסות Shopify בזמן אמת + הוצאות Meta/Google (עם פיגור של ~20 דק' מצד הפלטפורמה). מתעדכן אוטומטית כל 15 דקות עד חצות."
+        description="הכנסות Shopify בזמן אמת + הוצאות Meta/Google (עם פיגור ~20 דק'). רענון אוטומטי כל 15 דקות."
       />
       <TodayLive rows={data.rows} fxIlsToCad={data.fxIlsToCad} />
 
-      {/* ===== "What's Working" widget — top product / campaign / mover ===== */}
+      {/* ===== Algorithm-curated highlights ===== */}
       <WhatsWorking />
 
-      {/* ===== Filters (apply to KPI + per-store below) ===== */}
+      {/* ===== Detailed KPI cards — full breakdown, the "drill-down" of the hero ===== */}
       <SectionIntro
-        icon={<CalendarDays size={20} />}
-        title="טווח לבחירה"
-        description="הסינון שלמטה משפיע על כל הסיכומים בעמוד הזה ובלשונית 'ניתוח'. הלשונית 'מוצרים' משתמשת בסינון משלה."
-        rightSlot={<AiReportButton data={data} filters={filters} />}
-      />
-      <Filters filters={filters} stores={data.stores} onChange={setFilters} />
-
-      {/* ===== Summary KPIs ===== */}
-      <SectionIntro
-        icon={<Target size={20} />}
+        icon={<Target size={18} />}
         title="מדדים מסכמים לתקופה"
         description="הסיכום של כל החנויות הנבחרות בטווח שבחרת. כל מספר מושווה לתקופה הקודמת באותו אורך."
-        formula="ROAS = הכנסות / סך הוצאות פרסום    •    רווח נטו = הכנסות − הוצאות − COGS (25%)"
+        formula="ROAS = הכנסות / סך הוצאות פרסום   •   רווח נטו = הכנסות − הוצאות − COGS (25%)"
       />
       <KpiCards current={filtered.curAgg} previous={filtered.prevAgg} />
 
       {/* ===== Per-store cards ===== */}
       <SectionIntro
-        icon={<Store size={20} />}
+        icon={<Store size={18} />}
         title="ביצועים לפי חנות"
-        description="כרטיס לכל חנות עם ה-ROAS, ההכנסות, ההוצאות, והרווח הגולמי לתקופה הנבחרת. החנות עם ROAS הכי גבוה מקבלת אייקון מובילה, החנות עם ROAS נמוך מ-2 מסומנת כדורשת בחינה."
+        description="כרטיס לכל חנות עם ה-ROAS, ההכנסות, ההוצאות, והרווח הגולמי לתקופה הנבחרת. החנות עם ROAS הכי גבוה מקבלת אייקון מובילה."
       />
       <PerStoreCards data={filtered.storeAggs} bare />
     </div>
