@@ -503,31 +503,92 @@ function buildChart_(sh, ss) {
   const helpers = ss.getSheetByName(DASHBOARD_HELPERS_TAB);
   if (!helpers) return;
 
+  // ודא שה-QUERY ב-helpers הסתיים לפני שקוראים את הכותרות
+  SpreadsheetApp.flush();
+
+  // קרא את שורת הכותרות (A3:L3) - שמות החנויות בסדר שמופיע בגרף
+  const headerRow = helpers.getRange('A3:L3').getValues()[0];
+  const chartStores = [];
+  for (let i = 1; i < headerRow.length; i++) {
+    if (headerRow[i]) chartStores.push(String(headerRow[i]));
+  }
+
+  // צבעים מובחנים, באותו סדר של העמודות בגרף
+  const chartColors = ['#1c4587', '#ea4335', '#34a853', '#fbbc04', '#9c27b0', '#00acc1'];
+
   const chart = sh.newChart()
     .setChartType(Charts.ChartType.LINE)
     .addRange(helpers.getRange('A3:L500'))
     .setPosition(17, 1, 0, 0)
     .setOption('title', '')
-    .setOption('headers', 1)  // השורה הראשונה של ה-range = שמות החנויות (legend)
-    .setOption('useFirstColumnAsDomain', true)
-    .setOption('legend', { position: 'top', alignment: 'center', textStyle: { fontSize: 13 } })
+    .setOption('legend', { position: 'top', alignment: 'center', textStyle: { fontSize: 13, bold: true } })
     .setOption('hAxis', { title: '', format: 'd/M', slantedText: false })
     .setOption('vAxis', { title: 'ROAS', minValue: 0, gridlines: { count: 5 } })
-    .setOption('width', 1280)
-    .setOption('height', 360)
+    .setOption('width', 1100)
+    .setOption('height', 320)
     .setOption('curveType', 'function')
     .setOption('pointSize', 6)
     .setOption('lineWidth', 3)
     .setOption('backgroundColor', '#ffffff')
-    .setOption('colors', ['#1c4587', '#ea4335', '#34a853', '#fbbc04', '#9c27b0', '#00acc1'])
+    .setOption('colors', chartColors)
+    .useFirstColumnAsDomain()
     .build();
   sh.insertChart(chart);
+
+  // מקרא ידני מתחת לגרף - תיבת צבע + שם חנות + ROAS בתקופה.
+  // מבטיח שיהיה ברור מי מי גם אם ה-legend של הגרף עצמו לא מציג טוב.
+  buildChartLegend_(sh, chartStores, chartColors);
+}
+
+function buildChartLegend_(sh, chartStores, chartColors) {
+  // כותרת המקרא
+  sh.getRange('A33:M33').merge()
+    .setValue('🎨 מקרא — איזה צבע מסמן איזו חנות')
+    .setFontWeight('bold')
+    .setFontSize(11)
+    .setBackground('#f3f3f3')
+    .setFontColor('#5f6368')
+    .setHorizontalAlignment('center');
+  sh.setRowHeight(33, 26);
+
+  // לכל חנות: תיבת צבע (עמודה B) + שם (C:F) + ROAS בתקופה (G:I)
+  const flat = `'${DAILY_FLAT_TAB}'`;
+  for (let i = 0; i < chartStores.length; i++) {
+    const row = 34 + i;
+    const storeName = chartStores[i];
+    const color = chartColors[i % chartColors.length];
+
+    sh.getRange(row, 2).setBackground(color).setValue('')
+      .setBorder(true, true, true, true, false, false, '#999999', SpreadsheetApp.BorderStyle.SOLID);
+
+    sh.getRange(row, 3, 1, 4).merge()
+      .setValue('  ' + storeName)
+      .setFontWeight('bold')
+      .setFontSize(13)
+      .setHorizontalAlignment('right')
+      .setVerticalAlignment('middle');
+
+    // ROAS לתקופה לחנות הזו (לא תלוי בסינון של $F$3)
+    const roasFormula =
+      `=IFERROR("ROAS לתקופה: " & TEXT(` +
+      `SUMIFS(${flat}!G:G, ${flat}!A:A, ">="&$B$4, ${flat}!A:A, "<="&$D$4, ${flat}!C:C, "${storeName.replace(/"/g, '""')}") / ` +
+      `SUMIFS(${flat}!F:F, ${flat}!A:A, ">="&$B$4, ${flat}!A:A, "<="&$D$4, ${flat}!C:C, "${storeName.replace(/"/g, '""')}"), ` +
+      `"0.00"), "—")`;
+    sh.getRange(row, 7, 1, 4).merge()
+      .setFormula(roasFormula)
+      .setFontSize(12)
+      .setFontColor('#5f6368')
+      .setHorizontalAlignment('right')
+      .setVerticalAlignment('middle');
+
+    sh.setRowHeight(row, 26);
+  }
 }
 
 function buildTable_(sh) {
   const flat = `'${DAILY_FLAT_TAB}'`;
 
-  sh.getRange('A37:M37').merge()
+  sh.getRange('A40:M40').merge()
     .setValue('📋 פירוט יומי')
     .setFontWeight('bold')
     .setFontSize(13)
@@ -535,8 +596,8 @@ function buildTable_(sh) {
     .setFontColor(DBC.sectionFg)
     .setHorizontalAlignment('center')
     .setVerticalAlignment('middle');
-  sh.setRowHeight(37, 30);
-  sh.setRowHeight(38, 10);
+  sh.setRowHeight(40, 30);
+  sh.setRowHeight(41, 10);
 
   const queryFormula =
     `=IFERROR(QUERY(${flat}!A:I, ` +
@@ -552,16 +613,16 @@ function buildTable_(sh) {
     `G '#,##0.00', H '0.00', I '#,##0.00'", 1), ` +
     `"אין נתונים בטווח שבחרת")`;
 
-  sh.getRange('A39').setFormula(queryFormula);
+  sh.getRange('A42').setFormula(queryFormula);
 
   // עיצוב שורת הכותרת של ה-QUERY
-  sh.getRange('A39:H39')
+  sh.getRange('A42:H42')
     .setFontWeight('bold')
     .setBackground(DBC.cardLabelBg)
     .setHorizontalAlignment('center');
 
   // צביעת ROAS על עמודה G (העמודה השביעית בפלט)
-  const roasRange = sh.getRange('G40:G500');
+  const roasRange = sh.getRange('G43:G500');
   const rules = sh.getConditionalFormatRules();
   rules.push(SpreadsheetApp.newConditionalFormatRule().whenNumberLessThan(2).setBackground(ROAS_COLORS.red).setRanges([roasRange]).build());
   rules.push(SpreadsheetApp.newConditionalFormatRule().whenNumberBetween(2, 2.6999).setBackground(ROAS_COLORS.orange).setRanges([roasRange]).build());
