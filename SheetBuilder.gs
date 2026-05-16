@@ -1,16 +1,44 @@
 /**
  * SheetBuilder.gs - יצירה ותחזוקה של פריסת הגיליון.
  *
- * פריסה לכל טאב (חנות + סיכום):
- *   שורה N+0: כותרת חודש מאוחדת (לדוגמה "מאי 2026")
- *   שורה N+1: כותרות עמודות [תאריך | יצא (CAD) | נכנס (CAD) | ROAS]
- *   שורות N+2..N+1+daysInMonth: שורת נתונים לכל יום בחודש
- *   שורה אחרי: סך הכל
- *   שורה ריקה
- *   ואז הבלוק של החודש הבא...
+ * שני סוגי פריסה:
+ *
+ *   1) "split" (חנויות שיש להן גם Google Ads) — 6 עמודות:
+ *      [תאריך | יצא פייסבוק | יצא גוגל | יצא סה"כ | נכנס | ROAS]
+ *
+ *   2) "unified" (חנויות בלי Google Ads, וגם טאב הסיכום) — 4 עמודות:
+ *      [תאריך | יצא | נכנס | ROAS]
  *
  * חודשים חדשים מצורפים בסוף; חודשים קודמים לעולם לא נדרסים.
  */
+
+function getLayout_(sheetName) {
+  const store = STORES.find(s => s.name === sheetName);
+  if (store && store.hasGoogleAds) {
+    return {
+      type: 'split',
+      cols: 6,
+      headers: ['תאריך', 'יצא פייסבוק (CAD)', 'יצא גוגל (CAD)', 'יצא סה"כ (CAD)', 'נכנס (CAD)', 'ROAS'],
+      fbCol: 2,
+      gaCol: 3,
+      totalCol: 4,
+      revenueCol: 5,
+      roasCol: 6,
+    };
+  }
+  return {
+    type: 'unified',
+    cols: 4,
+    headers: ['תאריך', 'יצא (CAD)', 'נכנס (CAD)', 'ROAS'],
+    totalCol: 2,
+    revenueCol: 3,
+    roasCol: 4,
+  };
+}
+
+function colLetter_(n) {
+  return String.fromCharCode(64 + n);
+}
 
 function ensureSpreadsheet() {
   let id = getProp('spreadsheet.id');
@@ -72,9 +100,11 @@ function getOrCreateMonthBlock_(sheet, year, month) {
 }
 
 function createMonthBlock_(sheet, titleRow, year, month, title) {
+  const layout = getLayout_(sheet.getName());
   const daysInMonth = new Date(year, month, 0).getDate();
+  const cols = layout.cols;
 
-  sheet.getRange(titleRow, 1, 1, 4).merge()
+  sheet.getRange(titleRow, 1, 1, cols).merge()
     .setValue(title)
     .setHorizontalAlignment('center')
     .setFontWeight('bold')
@@ -83,8 +113,8 @@ function createMonthBlock_(sheet, titleRow, year, month, title) {
     .setFontColor('#ffffff');
 
   const headerRow = titleRow + 1;
-  sheet.getRange(headerRow, 1, 1, 4)
-    .setValues([['תאריך', 'יצא (CAD)', 'נכנס (CAD)', 'ROAS']])
+  sheet.getRange(headerRow, 1, 1, cols)
+    .setValues([layout.headers])
     .setFontWeight('bold')
     .setBackground('#d9d9d9')
     .setHorizontalAlignment('center');
@@ -92,49 +122,102 @@ function createMonthBlock_(sheet, titleRow, year, month, title) {
   const dataStart = headerRow + 1;
   const rows = [];
   for (let d = 1; d <= daysInMonth; d++) {
-    rows.push([`${year}-${pad2_(month)}-${pad2_(d)}`, '', '', '']);
+    const row = new Array(cols).fill('');
+    row[0] = `${year}-${pad2_(month)}-${pad2_(d)}`;
+    rows.push(row);
   }
-  sheet.getRange(dataStart, 1, daysInMonth, 4).setValues(rows);
+  sheet.getRange(dataStart, 1, daysInMonth, cols).setValues(rows);
 
-  sheet.getRange(dataStart, COL.DATE, daysInMonth, 1)
+  // date column
+  sheet.getRange(dataStart, 1, daysInMonth, 1)
     .setNumberFormat('yyyy-mm-dd')
     .setHorizontalAlignment('center');
-  sheet.getRange(dataStart, COL.SPENT, daysInMonth, 2).setNumberFormat('#,##0.00');
-  sheet.getRange(dataStart, COL.ROAS, daysInMonth, 1)
+
+  // currency columns (everything between date and ROAS)
+  const currencyCols = layout.roasCol - 2;
+  if (currencyCols > 0) {
+    sheet.getRange(dataStart, 2, daysInMonth, currencyCols).setNumberFormat('#,##0.00');
+  }
+
+  // ROAS column
+  sheet.getRange(dataStart, layout.roasCol, daysInMonth, 1)
     .setNumberFormat('0.00')
     .setHorizontalAlignment('center');
 
+  // total row
   const totalRow = dataStart + daysInMonth;
   sheet.getRange(totalRow, 1).setValue('סך הכל')
     .setFontWeight('bold').setBackground('#efefef').setHorizontalAlignment('center');
-  sheet.getRange(totalRow, COL.SPENT)
-    .setFormula(`=SUM(B${dataStart}:B${totalRow - 1})`)
-    .setNumberFormat('#,##0.00').setFontWeight('bold').setBackground('#efefef');
-  sheet.getRange(totalRow, COL.REVENUE)
-    .setFormula(`=SUM(C${dataStart}:C${totalRow - 1})`)
-    .setNumberFormat('#,##0.00').setFontWeight('bold').setBackground('#efefef');
-  sheet.getRange(totalRow, COL.ROAS)
-    .setFormula(`=IFERROR(C${totalRow}/B${totalRow}, "")`)
-    .setNumberFormat('0.00').setFontWeight('bold').setBackground('#efefef')
-    .setHorizontalAlignment('center');
 
+  if (layout.type === 'split') {
+    // FB, GA columns -> SUM
+    sheet.getRange(totalRow, layout.fbCol)
+      .setFormula(`=SUM(${colLetter_(layout.fbCol)}${dataStart}:${colLetter_(layout.fbCol)}${totalRow - 1})`)
+      .setNumberFormat('#,##0.00').setFontWeight('bold').setBackground('#efefef');
+    sheet.getRange(totalRow, layout.gaCol)
+      .setFormula(`=SUM(${colLetter_(layout.gaCol)}${dataStart}:${colLetter_(layout.gaCol)}${totalRow - 1})`)
+      .setNumberFormat('#,##0.00').setFontWeight('bold').setBackground('#efefef');
+    // Total column = FB total + GA total
+    sheet.getRange(totalRow, layout.totalCol)
+      .setFormula(`=${colLetter_(layout.fbCol)}${totalRow}+${colLetter_(layout.gaCol)}${totalRow}`)
+      .setNumberFormat('#,##0.00').setFontWeight('bold').setBackground('#efefef');
+    // Revenue column
+    sheet.getRange(totalRow, layout.revenueCol)
+      .setFormula(`=SUM(${colLetter_(layout.revenueCol)}${dataStart}:${colLetter_(layout.revenueCol)}${totalRow - 1})`)
+      .setNumberFormat('#,##0.00').setFontWeight('bold').setBackground('#efefef');
+    // ROAS column = revenue / total
+    sheet.getRange(totalRow, layout.roasCol)
+      .setFormula(`=IFERROR(${colLetter_(layout.revenueCol)}${totalRow}/${colLetter_(layout.totalCol)}${totalRow}, "")`)
+      .setNumberFormat('0.00').setFontWeight('bold').setBackground('#efefef')
+      .setHorizontalAlignment('center');
+  } else {
+    sheet.getRange(totalRow, layout.totalCol)
+      .setFormula(`=SUM(${colLetter_(layout.totalCol)}${dataStart}:${colLetter_(layout.totalCol)}${totalRow - 1})`)
+      .setNumberFormat('#,##0.00').setFontWeight('bold').setBackground('#efefef');
+    sheet.getRange(totalRow, layout.revenueCol)
+      .setFormula(`=SUM(${colLetter_(layout.revenueCol)}${dataStart}:${colLetter_(layout.revenueCol)}${totalRow - 1})`)
+      .setNumberFormat('#,##0.00').setFontWeight('bold').setBackground('#efefef');
+    sheet.getRange(totalRow, layout.roasCol)
+      .setFormula(`=IFERROR(${colLetter_(layout.revenueCol)}${totalRow}/${colLetter_(layout.totalCol)}${totalRow}, "")`)
+      .setNumberFormat('0.00').setFontWeight('bold').setBackground('#efefef')
+      .setHorizontalAlignment('center');
+  }
+
+  // column widths
   sheet.setColumnWidth(1, 110);
-  sheet.setColumnWidth(2, 130);
-  sheet.setColumnWidth(3, 130);
-  sheet.setColumnWidth(4, 90);
+  for (let c = 2; c < layout.roasCol; c++) sheet.setColumnWidth(c, 130);
+  sheet.setColumnWidth(layout.roasCol, 90);
 }
 
 /**
- * כותב ערכי הוצאה/הכנסה לתא של יום נתון. אם החודש לא קיים בטאב - יוצר אותו.
+ * כותב נתוני יום לתא. אם החודש לא קיים בטאב - יוצר אותו.
+ *
+ * @param sheet      טאב היעד
+ * @param year/month/day  התאריך
+ * @param fbSpentCad      הוצאת פייסבוק ב-CAD (גם בלייאאוט unified - יסוכם עם ga)
+ * @param gaSpentCad      הוצאת Google Ads ב-CAD (0 לחנויות ללא GA)
+ * @param revenueCad      הכנסות ב-CAD
  */
-function writeDayRow(sheet, year, month, day, spentCad, revenueCad) {
+function writeDayRow(sheet, year, month, day, fbSpentCad, gaSpentCad, revenueCad) {
+  const layout = getLayout_(sheet.getName());
   const titleRow = getOrCreateMonthBlock_(sheet, year, month);
   const headerRow = titleRow + 1;
   const dayRow = headerRow + day;
 
-  sheet.getRange(dayRow, COL.SPENT).setValue(round2_(spentCad));
-  sheet.getRange(dayRow, COL.REVENUE).setValue(round2_(revenueCad));
-  sheet.getRange(dayRow, COL.ROAS).setFormula(`=IFERROR(C${dayRow}/B${dayRow}, "")`);
+  if (layout.type === 'split') {
+    sheet.getRange(dayRow, layout.fbCol).setValue(round2_(fbSpentCad || 0));
+    sheet.getRange(dayRow, layout.gaCol).setValue(round2_(gaSpentCad || 0));
+    sheet.getRange(dayRow, layout.totalCol)
+      .setFormula(`=${colLetter_(layout.fbCol)}${dayRow}+${colLetter_(layout.gaCol)}${dayRow}`);
+    sheet.getRange(dayRow, layout.revenueCol).setValue(round2_(revenueCad));
+    sheet.getRange(dayRow, layout.roasCol)
+      .setFormula(`=IFERROR(${colLetter_(layout.revenueCol)}${dayRow}/${colLetter_(layout.totalCol)}${dayRow}, "")`);
+  } else {
+    sheet.getRange(dayRow, layout.totalCol).setValue(round2_((fbSpentCad || 0) + (gaSpentCad || 0)));
+    sheet.getRange(dayRow, layout.revenueCol).setValue(round2_(revenueCad));
+    sheet.getRange(dayRow, layout.roasCol)
+      .setFormula(`=IFERROR(${colLetter_(layout.revenueCol)}${dayRow}/${colLetter_(layout.totalCol)}${dayRow}, "")`);
+  }
 }
 
 function round2_(n) {
@@ -143,11 +226,12 @@ function round2_(n) {
 }
 
 /**
- * מגדיר עיצוב מותנה על עמודת ROAS לכל הטאב (D1:D5000), פעם אחת.
- * הכללים תקפים גם לחודשים עתידיים שייווצרו.
+ * עיצוב מותנה על עמודת ROAS לכל הטאב. הכללים חלים גם לחודשים עתידיים.
  */
 function ensureRoasColorRules_(sheet) {
-  const rangeStr = 'D1:D5000';
+  const layout = getLayout_(sheet.getName());
+  const letter = colLetter_(layout.roasCol);
+  const rangeStr = `${letter}1:${letter}5000`;
   const range = sheet.getRange(rangeStr);
 
   const keep = sheet.getConditionalFormatRules().filter(r => {
@@ -175,4 +259,19 @@ function ensureRoasColorRules_(sheet) {
   ];
 
   sheet.setConditionalFormatRules([...keep, ...newRules]);
+}
+
+/**
+ * מנקה את כל התוכן של טאב חנות (כולל פורמטים) — שימושי כשמשנים פריסה.
+ * אחרי הריצה, ההפעלה הבאה של runUpdateForDate / backfillRange תיצור את הבלוקים מחדש.
+ */
+function resetTab(tabName) {
+  const ss = ensureSpreadsheet();
+  const sh = ss.getSheetByName(tabName);
+  if (!sh) throw new Error(`לא נמצא טאב: ${tabName}`);
+  sh.clear();
+  sh.clearConditionalFormatRules();
+  sh.setRightToLeft(true);
+  ensureRoasColorRules_(sh);
+  Logger.log(`Reset tab: ${tabName}`);
 }
