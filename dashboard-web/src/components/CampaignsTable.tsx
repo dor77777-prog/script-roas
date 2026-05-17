@@ -93,33 +93,67 @@ function computeConfidence(
 ): ConfidenceLevel {
   const reasons: string[] = [];
   let level: ConfidenceLevel['level'] = 'high';
-  if (spend < 200) {
-    reasons.push(`הוצאה נמוכה בתקופה (CAD ${spend.toFixed(0)}) — מדגם קטן, רעש דומיננטי`);
-    level = 'low';
+
+  // The gap is the primary signal — if Meta and Shopify agree, every
+  // other warning becomes much weaker (the agreement is the validation).
+  // Computed first so downstream rules can reference it.
+  const gap = metaClaim > 0 || trueRevenue > 0
+    ? Math.abs(trueRevenue - metaClaim) / Math.max(metaClaim, trueRevenue, 1)
+    : 0;
+
+  // Pure return-value version so TS's flow-sensitive type tracking sees the
+  // mutations at the call sites (closure mutation hides them and made the
+  // final ternary fail with 'low and medium have no overlap'). Same logic:
+  // 'high' can drop to anything; 'medium' can drop to 'low'; 'low' stays.
+  function applyDowngrade(current: ConfidenceLevel['level'], target: 'medium' | 'low'): ConfidenceLevel['level'] {
+    if (current === 'high') return target;
+    if (current === 'medium' && target === 'low') return 'low';
+    return current;
   }
+
+  // Hard gap thresholds — Meta and Shopify telling different stories.
+  if (gap > 0.7) {
+    level = 'low';
+    reasons.push(`פער של ${(gap * 100).toFixed(0)}% מול Meta — בדוק לעומק לפני שמסיק מסקנות`);
+  } else if (gap > 0.3) {
+    level = applyDowngrade(level, 'medium');
+    reasons.push(`פער של ${(gap * 100).toFixed(0)}% מול Meta — סביר, יתכן שילוב של over-attribution + halo`);
+  }
+
+  // Shared products. 3+ is always concerning; 1-2 only matters when there's
+  // also a non-trivial gap (with perfect agreement, sharing is fine).
   if (sharedCampaigns >= 3) {
+    level = applyDowngrade(level, 'low');
     reasons.push(`מוצרים משותפים עם ${sharedCampaigns} קמפיינים אחרים — החלוקה קירוב`);
-    level = 'low';
-  } else if (sharedCampaigns >= 1) {
+  } else if (sharedCampaigns >= 1 && gap > 0.15) {
+    level = applyDowngrade(level, 'medium');
     reasons.push(`מוצרים משותפים עם עוד ${sharedCampaigns} קמפיין${sharedCampaigns > 1 ? 'ים' : ''} — חלוקה פרופורציונלית להוצאה`);
-    if (level !== 'low') level = 'medium';
   }
+
+  // Mapping completeness — single product + big gap suggests missing mapping.
+  // We don't penalise a single-product mapping when the numbers agree
+  // (that's actually evidence the mapping is correct).
   if (mappedCount < 2 && metaClaim > 0 && trueRevenue < metaClaim * 0.5) {
+    level = applyDowngrade(level, 'medium');
     reasons.push('מוצר יחיד משויך + פער גדול מול Meta — ייתכן שמיפוי לא מלא');
-    if (level !== 'low') level = 'medium';
   }
-  if (metaClaim > 0) {
-    const gap = Math.abs(trueRevenue - metaClaim) / Math.max(metaClaim, trueRevenue, 1);
-    if (gap > 0.7) {
-      reasons.push(`פער של ${(gap * 100).toFixed(0)}% מול Meta — בדוק לעומק לפני שמסיק מסקנות`);
-      level = 'low';
-    } else if (gap > 0.3) {
-      reasons.push(`פער של ${(gap * 100).toFixed(0)}% מול Meta — סביר, יתכן שילוב של over-attribution + halo`);
-      if (level === 'high') level = 'medium';
+
+  // Low spend = small sample. Used to be an automatic LOW downgrade, which
+  // produced false negatives whenever spend was modest but the two sources
+  // agreed strongly (e.g. CAD 78 spend, Meta 1335 vs Shopify 1375 — gap 3%).
+  // Now: only downgrade when the gap is also non-trivial; otherwise just
+  // an FYI line.
+  if (spend < 200) {
+    if (gap > 0.15) {
+      level = applyDowngrade(level, 'medium');
+      reasons.push(`הוצאה נמוכה בתקופה (CAD ${spend.toFixed(0)}) — המדגם קטן, פער ${(gap * 100).toFixed(0)}% עשוי להיות רעש`);
+    } else {
+      reasons.push(`הוצאה נמוכה (CAD ${spend.toFixed(0)}) — שני המקורות מסכימים, אבל המדגם קטן`);
     }
   }
+
   if (reasons.length === 0) {
-    reasons.push('מיפוי מלא, פער קטן מ-30%, הוצאה מספיקה — מספרים אמינים');
+    reasons.push('מיפוי מלא, פער קטן, הוצאה מספיקה — מספרים אמינים');
   }
   const label = level === 'high' ? 'אמין' : level === 'medium' ? 'חלקי' : 'לא אמין';
   return { level, label, reasons };
