@@ -77,13 +77,46 @@ function colLetter_(n) {
 }
 
 function ensureSpreadsheet() {
-  let id = getProp('spreadsheet.id');
+  const id = getProp('spreadsheet.id');
   let ss;
   if (id) {
-    try {
-      ss = SpreadsheetApp.openById(id);
-    } catch (e) {
-      Logger.log(`Saved spreadsheet ID invalid, creating new one. Error: ${e}`);
+    // Critical: distinguish "spreadsheet truly doesn't exist" from transient
+    // failures (network blip, Sheets API rate-limit, timeout). The original
+    // version conflated all errors into "create a new one", which silently
+    // forked the data into a phantom sheet whenever Apps Script's runtime
+    // hit a timeout. We now retry with backoff and only treat persistent
+    // permission/not-found errors as a real reason to recreate.
+    let lastErr;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        ss = SpreadsheetApp.openById(id);
+        break;
+      } catch (e) {
+        lastErr = e;
+        const msg = e && e.message ? e.message : String(e);
+        const transient =
+          /timed out|timeout|rate limit|Internal error|backend|temporarily|try again/i.test(msg);
+        if (!transient) {
+          // True "not found" / "no permission" → fall through to creation.
+          Logger.log(`Saved spreadsheet ID rejected (permanent): ${msg}`);
+          break;
+        }
+        Logger.log(`Saved spreadsheet open attempt ${attempt}/3 transient error: ${msg}. Retrying...`);
+        Utilities.sleep(2000 * attempt);
+      }
+    }
+    if (!ss && lastErr) {
+      const msg = lastErr.message ? lastErr.message : String(lastErr);
+      // If we're still hitting transient errors after 3 tries, THROW —
+      // do NOT fall through to creating a new spreadsheet. The user's data
+      // is safe in the original sheet; we'll just fail this run and retry
+      // on the next trigger. Creating a new sheet would silently lose data.
+      if (/timed out|timeout|rate limit|Internal error|backend|temporarily|try again/i.test(msg)) {
+        throw new Error(
+          `Cannot open spreadsheet ${id} after 3 retries — transient error: ${msg}. ` +
+          `Aborting run to protect existing data. Check Sheets API status, then retry.`
+        );
+      }
     }
   }
   if (!ss) {
@@ -1299,4 +1332,43 @@ function writeProductCatalogForStore_(ss, storeId, products) {
   sh.getRange(2, 1, rows.length, PRODUCT_CATALOG_HEADERS.length).setValues(rows);
   sh.getRange(2, 5, rows.length, 1).setNumberFormat('#,##0.00');
   sh.getRange(2, 9, rows.length, 1).setNumberFormat('yyyy-mm-dd hh:mm');
+}
+
+/**
+ * Returns true when the product-catalog tab for a store is missing,
+ * empty, or its newest "Updated At" cell is older than `maxAgeDays`.
+ * Caller uses this to skip the heavy daily refresh when the catalog is
+ * still fresh, avoiding Sheets API quota pressure when combined with the
+ * campaigns + ads writes.
+ */
+function catalogNeedsRefresh_(ss, storeId, maxAgeDays) {
+  const sh = ss.getSheetByName(productCatalogTabName_(storeId));
+  if (!sh) return true;
+  const lastRow = sh.getLastRow();
+  if (lastRow < 2) return true; // header only or empty
+  // Column 9 = "Updated At". Sample the first data row (we always
+  // overwrite all rows at the same time so all timestamps match).
+  const lastUpdate = sh.getRange(2, 9).getValue();
+  if (!(lastUpdate instanceof Date) || isNaN(lastUpdate.getTime())) return true;
+  const ageMs = Date.now() - lastUpdate.getTime();
+  const ageDays = ageMs / (1000 * 60 * 60 * 24);
+  return ageDays > maxAgeDays;
+}
+
+/**
+ * Manual full refresh of product catalogs for all stores. Useful after a
+ * launch: run this once to force a fresh fetch instead of waiting for the
+ * 7-day cache to expire naturally.
+ */
+function refreshAllProductCatalogs() {
+  const ss = ensureSpreadsheet();
+  for (const store of STORES) {
+    try {
+      const catalog = getShopifyProductsCatalog(store.id);
+      writeProductCatalogForStore_(ss, store.id, catalog);
+      Logger.log(`Catalog refreshed for ${store.name}: ${catalog.length} products`);
+    } catch (e) {
+      Logger.log(`Catalog refresh ${store.name} failed: ${e && e.message ? e.message : e}`);
+    }
+  }
 }

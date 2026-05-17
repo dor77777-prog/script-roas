@@ -140,10 +140,20 @@ function updateStoreForDate_(ss, store, dateStr, year, month, day, ilsToCad) {
   // טאב <store>-products-catalog — קטלוג מוצרים מלא של החנות (לא רק
   // נמכרים). דרוש לתצוגת ה-ProductPickerModal בדשבורד כדי לאפשר שיוך
   // לקמפיינים שמקדמים מוצרים חדשים שעוד לא ביצעו אפילו הזמנה אחת.
-  // נכשל ברך — אם Shopify חזר 5xx, המיפויים הקיימים לא ייפגעו.
+  //
+  // *Cache gate*: catalog rarely changes day-to-day (operators add a new
+  // product weekly at most). The full write of 200-500 products × 9 cols
+  // alongside the campaigns + ads writes was hitting the Sheets API quota
+  // and timing out. We now only refresh if the tab is empty or older than
+  // 7 days — so the catalog stays fresh enough for the picker without
+  // burning quota every run.
   try {
-    const catalog = getShopifyProductsCatalog(store.id);
-    writeProductCatalogForStore_(ss, store.id, catalog);
+    if (catalogNeedsRefresh_(ss, store.id, 7)) {
+      const catalog = getShopifyProductsCatalog(store.id);
+      writeProductCatalogForStore_(ss, store.id, catalog);
+    } else {
+      Logger.log(`Product catalog ${store.name}: fresh (<7 days), skipped`);
+    }
   } catch (e) {
     Logger.log(`Product catalog ${store.name} failed (non-fatal): ${e && e.message ? e.message : e}`);
   }
