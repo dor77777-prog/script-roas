@@ -419,8 +419,13 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
                 <Layers size={14} className="text-text-secondary" />
                 אד-סטים ({summary.adSets.length})
               </h3>
-              <div className="rounded-xl border border-borderSubtle overflow-hidden">
-                <table className="w-full text-xs sm:text-sm">
+              {/* Horizontal scroll mirrors the AdsDrawer pattern — the
+                  ad-sets table has 7 columns (toggle / name / spend / budget /
+                  value / ROAS / conversions) and gets wider than the drawer's
+                  640px on smaller widths. `overflow-x-auto` keeps the rounded
+                  border + lets the table scroll inside. */}
+              <div className="rounded-xl border border-borderSubtle overflow-x-auto">
+                <table className="w-full text-xs sm:text-sm min-w-[720px]">
                   <thead className="bg-surfaceMuted/60">
                     <tr className="text-text-secondary">
                       <th className="px-2 py-2 w-[36px]" aria-label="סימון" />
