@@ -109,18 +109,22 @@ export function ProductPickerModal({
   // /api/products has data on the product. Sort by units desc so heroes
   // float; unsold products sit at the bottom alphabetically.
   const products: PickableProduct[] = useMemo(() => {
-    // Step 1: aggregate sales by productId from products-daily.
-    const salesById = new Map<string, { units: number; revenue: number }>();
+    // Step 1: aggregate sales by productId from products-daily. We keep
+    // the most recent title we see for each product so the fallback path
+    // (when catalog isn't synced yet) still has a real name.
+    const salesById = new Map<string, { units: number; revenue: number; title: string }>();
     for (const r of (data?.rows as ProductRow[] | undefined) ?? []) {
       if (r.storeId !== storeId) continue;
       if (!r.productId) continue;
       const existing = salesById.get(r.productId);
       const net = r.netRevenue ?? r.revenue;
+      const title = r.productTitle || existing?.title || '';
       if (existing) {
         existing.units += r.units;
         existing.revenue += net;
+        if (title) existing.title = title;
       } else {
-        salesById.set(r.productId, { units: r.units, revenue: net });
+        salesById.set(r.productId, { units: r.units, revenue: net, title });
       }
     }
 
@@ -151,15 +155,21 @@ export function ProductPickerModal({
     }
 
     // Fallback: catalog hasn't been written yet → degrade to sold-only list.
+    // Use the actual product title from products-daily so the user can at
+    // least recognise products by name; a small warning lives in the
+    // header banner (rendered separately) explaining the missing catalog.
     return Array.from(salesById.entries())
       .map(([productId, s]) => ({
         productId,
-        title: '(ללא שם — קטלוג עוד לא סונכרן)',
+        title: s.title || `(ללא שם · ${productId})`,
         totalUnits: s.units,
         totalRevenue: s.revenue,
       }))
       .sort((a, b) => b.totalUnits - a.totalUnits);
   }, [catalogData, data, storeId]);
+  // Signal whether we're rendering the catalog or the sold-only fallback —
+  // drives the warning banner at the top of the picker.
+  const usingCatalog = (catalogData?.rows ?? []).some(c => c.storeId === storeId);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -231,6 +241,15 @@ export function ProductPickerModal({
         </header>
 
         <div className="px-4 sm:px-5 py-3 border-b border-borderSubtle">
+          {!isLoading && !usingCatalog && (
+            <div className="mb-2.5 rounded-md bg-amber-50 border border-amber-200 px-2.5 py-2 text-[11px] text-amber-900 leading-relaxed">
+              <strong>הקטלוג עוד לא סונכרן.</strong> מוצגים רק מוצרים שכבר ביצעו
+              מכירה. כדי לראות את כל המוצרים בחנות (כולל חדשים בלי הזמנות):
+              ב-Apps Script הרץ פעם אחת את{' '}
+              <code className="font-mono bg-amber-100 px-1 rounded">refreshAllProductCatalogs</code>{' '}
+              (קובץ <code className="font-mono">SheetBuilder.gs</code>).
+            </div>
+          )}
           <p className="text-[11px] sm:text-xs text-text-secondary leading-relaxed mb-2.5">
             בחר את המוצרים שהקמפיין מקדם. ה-ROAS יחושב מחדש לפי מכירות
             Shopify אמיתיות במקום ערך ההמרה ש-Meta דיווח.{' '}

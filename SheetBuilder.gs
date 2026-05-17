@@ -1359,16 +1359,72 @@ function catalogNeedsRefresh_(ss, storeId, maxAgeDays) {
  * Manual full refresh of product catalogs for all stores. Useful after a
  * launch: run this once to force a fresh fetch instead of waiting for the
  * 7-day cache to expire naturally.
+ *
+ * Resilience built in:
+ *  - Each store wrapped in its own try/catch so one failure doesn't cascade.
+ *  - 1-second sleep between stores to spread out Sheets API quota usage —
+ *    the actual reason the previous daily-run path timed out (campaigns +
+ *    ads + catalog all hitting the API in tight succession exceeded the
+ *    short-window quota).
+ *  - Per-store retry on transient Sheets timeout: write is repeated once
+ *    after a 3-second pause before declaring failure for that store.
+ *  - Catalog is written in chunks of 100 rows when the catalog is large,
+ *    further reducing the chance of a single setValues call timing out.
  */
 function refreshAllProductCatalogs() {
   const ss = ensureSpreadsheet();
-  for (const store of STORES) {
-    try {
-      const catalog = getShopifyProductsCatalog(store.id);
-      writeProductCatalogForStore_(ss, store.id, catalog);
-      Logger.log(`Catalog refreshed for ${store.name}: ${catalog.length} products`);
-    } catch (e) {
-      Logger.log(`Catalog refresh ${store.name} failed: ${e && e.message ? e.message : e}`);
+  for (let i = 0; i < STORES.length; i++) {
+    const store = STORES[i];
+    if (i > 0) Utilities.sleep(1000); // breathe between stores
+    let attempt = 0;
+    while (attempt < 2) {
+      attempt++;
+      try {
+        const catalog = getShopifyProductsCatalog(store.id);
+        writeProductCatalogForStoreChunked_(ss, store.id, catalog);
+        Logger.log(`Catalog refreshed for ${store.name}: ${catalog.length} products (attempt ${attempt})`);
+        break;
+      } catch (e) {
+        const msg = e && e.message ? e.message : String(e);
+        const transient = /timed out|timeout|rate limit|Internal error|backend|temporarily|try again/i.test(msg);
+        if (transient && attempt < 2) {
+          Logger.log(`Catalog ${store.name} attempt ${attempt} transient: ${msg}. Retrying in 3s...`);
+          Utilities.sleep(3000);
+          continue;
+        }
+        Logger.log(`Catalog refresh ${store.name} failed (final): ${msg}`);
+        break;
+      }
     }
   }
+}
+
+/**
+ * Like writeProductCatalogForStore_ but writes in chunks of 100 rows.
+ * A single setValues call of 500+ rows × 9 cols was the bottleneck in the
+ * timeout. Chunking keeps each Sheets API call modest and lets the script
+ * yield between them. Number formats are applied once at the end across
+ * the full data range — that operation is fast even on the largest catalog.
+ */
+function writeProductCatalogForStoreChunked_(ss, storeId, products) {
+  const sh = ensureProductCatalogTab_(ss, storeId);
+  const lastRow = sh.getLastRow();
+  if (lastRow > 1) {
+    sh.getRange(2, 1, lastRow - 1, PRODUCT_CATALOG_HEADERS.length).clearContent();
+  }
+  if (!products || products.length === 0) return;
+
+  const updatedAt = new Date();
+  const rows = products.map(p => [
+    p.productId, p.title, p.handle, p.status, p.priceCad,
+    p.imageUrl, p.productType, p.vendor, updatedAt,
+  ]);
+
+  const CHUNK = 100;
+  for (let i = 0; i < rows.length; i += CHUNK) {
+    const slice = rows.slice(i, i + CHUNK);
+    sh.getRange(2 + i, 1, slice.length, PRODUCT_CATALOG_HEADERS.length).setValues(slice);
+  }
+  sh.getRange(2, 5, rows.length, 1).setNumberFormat('#,##0.00');
+  sh.getRange(2, 9, rows.length, 1).setNumberFormat('yyyy-mm-dd hh:mm');
 }
