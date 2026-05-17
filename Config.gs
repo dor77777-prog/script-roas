@@ -221,3 +221,57 @@ function verifyConfig() {
   Logger.log(msg);
   return msg;
 }
+
+/**
+ * Emergency: reset the spreadsheet.id Script Property back to a known-good
+ * value. Use this when ensureSpreadsheet created a "phantom" spreadsheet
+ * (e.g. after a Sheets API timeout was misinterpreted as 'not found') and
+ * subsequent runs need to be pointed back to the original sheet that the
+ * dashboard reads from.
+ *
+ * Usage: edit the constant below to your real sheet ID, then run this
+ * function once from the Apps Script editor.
+ *
+ * To find the real ID: open the dashboard's Vercel project → Settings →
+ * Environment Variables → SPREADSHEET_ID. That's the truth — Vercel never
+ * had the phantom ID.
+ */
+function resetSpreadsheetIdToKnownGood() {
+  // ⚠️ Edit this to your real spreadsheet ID before running.
+  const REAL_ID = '1f5tbc-8eMG60Go1ubTldWALc_kwnpaXD_33IsPDWrAk';
+
+  const previous = getProp('spreadsheet.id');
+  Logger.log(`Current spreadsheet.id: ${previous}`);
+  Logger.log(`Setting spreadsheet.id to: ${REAL_ID}`);
+  setProp('spreadsheet.id', REAL_ID);
+  // Verify by trying to open it. If this throws, you have the wrong ID.
+  try {
+    const ss = SpreadsheetApp.openById(REAL_ID);
+    Logger.log(`✓ Opened successfully: ${ss.getName()} (${ss.getUrl()})`);
+  } catch (e) {
+    Logger.log(`✗ Failed to open ${REAL_ID}: ${e && e.message ? e.message : e}`);
+    // Restore the previous ID so we don't leave the script in a broken state.
+    if (previous) {
+      setProp('spreadsheet.id', previous);
+      Logger.log(`Restored previous spreadsheet.id: ${previous}`);
+    }
+    throw new Error(`Reset failed — REAL_ID ${REAL_ID} is not openable. Check the constant and try again.`);
+  }
+}
+
+/**
+ * Read-only diagnostic — prints which spreadsheet the Apps Script side
+ * thinks it's using. Useful for confirming the reset worked OR for
+ * detecting drift in the future.
+ */
+function printCurrentSpreadsheetId() {
+  const id = getProp('spreadsheet.id');
+  Logger.log(`spreadsheet.id Script Property: ${id || '(not set)'}`);
+  if (!id) return;
+  try {
+    const ss = SpreadsheetApp.openById(id);
+    Logger.log(`Resolves to: ${ss.getName()} — ${ss.getUrl()}`);
+  } catch (e) {
+    Logger.log(`Cannot open: ${e && e.message ? e.message : e}`);
+  }
+}
