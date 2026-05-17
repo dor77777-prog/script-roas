@@ -14,6 +14,8 @@ import {
   ArrowUpDown,
   CheckCircle2,
   Circle,
+  Package,
+  Edit3,
 } from 'lucide-react';
 import {
   Area,
@@ -33,6 +35,13 @@ import {
 } from '@/lib/campaignOptimized';
 import { useDrawerEsc } from '@/lib/drawerStack';
 import { AdsDrawer } from './AdsDrawer';
+import { ProductPickerModal } from './ProductPickerModal';
+import {
+  readProductMap,
+  campaignKey,
+  setMappedProducts,
+  type ProductMap,
+} from '@/lib/campaignProductMap';
 
 /**
  * Slide-in drawer that opens when the user clicks a campaign row in the
@@ -99,6 +108,17 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
     adSetId: string;
     adSetName: string;
   } | null>(null);
+
+  // Product-mapping picker state. The map is cloud-synced; we hydrate on
+  // mount and re-read when partners push changes from other devices.
+  const [productMap, setProductMap] = useState<ProductMap>(() => ({}));
+  const [pickerOpen, setPickerOpen] = useState(false);
+  useEffect(() => {
+    setProductMap(readProductMap());
+    const onChange = () => setProductMap(readProductMap());
+    window.addEventListener('roas-campaign-product-map-changed', onChange);
+    return () => window.removeEventListener('roas-campaign-product-map-changed', onChange);
+  }, []);
 
   // Optimization marks — shared with the main CampaignsTable via the same
   // localStorage key (lib/campaignOptimized), so a mark made in either place
@@ -412,6 +432,58 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
             </section>
           )}
 
+          {/* Mapped products — Meta only. Google PMax doesn't expose a
+              per-product attribution: the feed is what governs delivery,
+              so manually tagging products to a PMax campaign would be
+              misleading. We hide the section entirely for Google so users
+              don't try to do something that won't reflect reality. */}
+          {summary.platform === 'Meta' && (() => {
+            const storeIdForCampaign = rows[0]?.storeId ?? '';
+            const mappedIds = productMap[campaignKey(storeIdForCampaign, campaignId)] ?? [];
+            return (
+              <section>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <h3 className="text-sm font-semibold text-text-primary inline-flex items-center gap-1.5">
+                    <Package size={14} className="text-text-secondary" />
+                    מוצרי Shopify משויכים
+                    {mappedIds.length > 0 && (
+                      <span className="text-[10px] font-medium text-text-muted">
+                        ({mappedIds.length})
+                      </span>
+                    )}
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => setPickerOpen(true)}
+                    className="inline-flex items-center gap-1 rounded-md bg-surface border border-border hover:border-primary/40 px-2 py-1 text-[11px] font-medium text-text-secondary hover:text-primary transition-colors"
+                  >
+                    <Edit3 size={12} />
+                    {mappedIds.length > 0 ? 'ערוך מיפוי' : 'שייך מוצרים'}
+                  </button>
+                </div>
+                {mappedIds.length === 0 ? (
+                  <p className="text-[11px] text-text-muted leading-relaxed bg-surfaceMuted/40 rounded-lg px-3 py-2">
+                    לא משויכים מוצרים. לאחר שיוך, ה-ROAS יחושב מחדש לפי מכירות{' '}
+                    Shopify אמיתיות במקום ערך ההמרה ש-Meta דיווח (לרוב מנופח).
+                  </p>
+                ) : (
+                  <ul className="flex flex-wrap gap-1.5">
+                    {mappedIds.map(id => (
+                      <li
+                        key={id}
+                        className="inline-flex items-center gap-1 text-[11px] bg-primary/8 text-primary px-2 py-0.5 rounded-md font-mono"
+                        title={id}
+                      >
+                        <Package size={10} />
+                        <span className="truncate max-w-[120px]">{id}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
+            );
+          })()}
+
           {/* Ad-sets within this campaign */}
           {summary.adSets.length > 0 && (
             <section>
@@ -528,6 +600,21 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
           </div>
         </div>
       </aside>
+
+      {/* Product-mapping modal — opens from the 'מוצרי Shopify משויכים'
+          section. On save, persists to localStorage + cloud and the in-drawer
+          chip list re-renders via the change event. */}
+      <ProductPickerModal
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        storeId={rows[0]?.storeId ?? ''}
+        campaignName={summary.campaignName}
+        initial={productMap[campaignKey(rows[0]?.storeId ?? '', campaignId)] ?? []}
+        onSave={(productIds) => {
+          const storeIdForCampaign = rows[0]?.storeId ?? '';
+          setMappedProducts(storeIdForCampaign, campaignId, productIds);
+        }}
+      />
 
       {/* Nested ad-level drawer. Date range is derived from the rows the
           campaign drawer already has — guaranteed to cover the same window. */}

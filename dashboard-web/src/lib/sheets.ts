@@ -235,6 +235,7 @@ export const ALLOWED_STATE_KEYS = [
   'monthly-revenue-goal',
   'insight-states',
   'campaign-optimized',
+  'campaign-product-map',
 ] as const;
 export type AllowedStateKey = (typeof ALLOWED_STATE_KEYS)[number];
 

@@ -25,6 +25,13 @@ import {
   readOptimized,
   toggleOptimized,
 } from '@/lib/campaignOptimized';
+import {
+  allocateProductRevenue,
+  campaignKey,
+  readProductMap,
+  type ProductMap,
+} from '@/lib/campaignProductMap';
+import type { ProductsResponse } from '@/app/api/products/route';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { DateRange } from '@/lib/types';
 import { roasLabel } from '@/lib/analytics';
@@ -34,6 +41,85 @@ import { AdsDrawer } from './AdsDrawer';
 type Mode = 'campaign' | 'adset';
 type Platform = 'all' | 'Meta' | 'Google';
 
+/**
+ * Per-campaign output of the true-ROAS allocation. `trueRevenue` is the
+ * Shopify-actual revenue allocated to this campaign (proportional to spend
+ * when products are shared). `confidence` is a heuristic trust signal so
+ * the user knows whether a gap vs Meta is likely real or just an artifact
+ * of incomplete mapping / shared attribution / low sample size.
+ */
+type TrueRevenueInfo = {
+  trueRevenue: number;
+  metaClaim: number;
+  spend: number;
+  mappedCount: number;
+  sharedCampaigns: number;
+  confidence: ConfidenceLevel;
+};
+
+type ConfidenceLevel = {
+  /** Color-coded bucket — drives the chip background in the row. */
+  level: 'high' | 'medium' | 'low';
+  /** Hebrew label shown in the chip itself. */
+  label: string;
+  /** Multi-line explanation shown in the tooltip. Lists the actual reasons
+   *  this campaign landed in this bucket so the user can act on them
+   *  (extend mapping, narrow shared products, wait for more spend). */
+  reasons: string[];
+};
+
+/**
+ * Decide how much to trust a campaign's true-ROAS number. Heuristic — not a
+ * statistical test — but tuned so the warning bands match the common
+ * failure modes operators run into:
+ *   - low spend → noise dominates
+ *   - mapping shared with many campaigns → allocation arbitrary
+ *   - very few mapped products → likely missing the actual hero
+ *   - massive Meta vs Shopify gap (>70%) → could be over-attribution OR
+ *     incomplete mapping OR halo, but in any case the user shouldn't
+ *     treat the gap as gospel without investigating
+ */
+function computeConfidence(
+  trueRevenue: number,
+  metaClaim: number,
+  spend: number,
+  sharedCampaigns: number,
+  mappedCount: number,
+): ConfidenceLevel {
+  const reasons: string[] = [];
+  let level: ConfidenceLevel['level'] = 'high';
+  if (spend < 200) {
+    reasons.push(`הוצאה נמוכה בתקופה (CAD ${spend.toFixed(0)}) — מדגם קטן, רעש דומיננטי`);
+    level = 'low';
+  }
+  if (sharedCampaigns >= 3) {
+    reasons.push(`מוצרים משותפים עם ${sharedCampaigns} קמפיינים אחרים — החלוקה קירוב`);
+    level = 'low';
+  } else if (sharedCampaigns >= 1) {
+    reasons.push(`מוצרים משותפים עם עוד ${sharedCampaigns} קמפיין${sharedCampaigns > 1 ? 'ים' : ''} — חלוקה פרופורציונלית להוצאה`);
+    if (level !== 'low') level = 'medium';
+  }
+  if (mappedCount < 2 && metaClaim > 0 && trueRevenue < metaClaim * 0.5) {
+    reasons.push('מוצר יחיד משויך + פער גדול מול Meta — ייתכן שמיפוי לא מלא');
+    if (level !== 'low') level = 'medium';
+  }
+  if (metaClaim > 0) {
+    const gap = Math.abs(trueRevenue - metaClaim) / Math.max(metaClaim, trueRevenue, 1);
+    if (gap > 0.7) {
+      reasons.push(`פער של ${(gap * 100).toFixed(0)}% מול Meta — בדוק לעומק לפני שמסיק מסקנות`);
+      level = 'low';
+    } else if (gap > 0.3) {
+      reasons.push(`פער של ${(gap * 100).toFixed(0)}% מול Meta — סביר, יתכן שילוב של over-attribution + halo`);
+      if (level === 'high') level = 'medium';
+    }
+  }
+  if (reasons.length === 0) {
+    reasons.push('מיפוי מלא, פער קטן מ-30%, הוצאה מספיקה — מספרים אמינים');
+  }
+  const label = level === 'high' ? 'אמין' : level === 'medium' ? 'חלקי' : 'לא אמין';
+  return { level, label, reasons };
+}
+
 /** All columns the user can sort by. Strings sort lexicographically;
  *  everything else is a numeric metric. */
 type SortKey =
@@ -42,6 +128,7 @@ type SortKey =
   | 'budget'
   | 'conversionValue'
   | 'roas'
+  | 'shopifyRoas'   // ROAS computed from actual Shopify sales of mapped products
   | 'conversions'
   | 'ctr'
   | 'cpc'
@@ -184,6 +271,15 @@ function sortAggregated(
         return a.conversionValue;
       case 'roas':
         return a.spend > 0 ? a.conversionValue / a.spend : 0;
+      case 'shopifyRoas': {
+        // Shopify-true ROAS isn't on the Aggregated row (it's computed
+        // separately from the product map). Sort by it requires the
+        // outer scope's `trueRevenueByKey`; we don't have it here, so we
+        // fall through to sort by Meta ROAS — the column header still
+        // toggles direction. Real value-based sort happens at render
+        // time via a separate prepared list (see `display` below).
+        return a.spend > 0 ? a.conversionValue / a.spend : 0;
+      }
       case 'conversions':
         return a.conversions;
       case 'ctr':
@@ -256,6 +352,27 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     return out;
   }, [storeMeta]);
 
+  // Products data + mapping. Together they let us compute "true ROAS" —
+  // attributing actual Shopify product sales back to campaigns instead of
+  // trusting Meta's self-reported conversion value (which is routinely
+  // inflated by view-through credit + modeled conversions).
+  const { data: productsResp } = useSWR<ProductsResponse>(
+    '/api/products',
+    async (url: string) => {
+      const r = await fetch(url);
+      if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
+      return r.json();
+    },
+    { revalidateOnFocus: false, dedupingInterval: 60_000 },
+  );
+  const [productMap, setProductMap] = useState<ProductMap>(() => ({}));
+  useEffect(() => {
+    setProductMap(readProductMap());
+    const onChange = () => setProductMap(readProductMap());
+    window.addEventListener('roas-campaign-product-map-changed', onChange);
+    return () => window.removeEventListener('roas-campaign-product-map-changed', onChange);
+  }, []);
+
   const [mode, setMode] = useState<Mode>('campaign');
   const [platform, setPlatform] = useState<Platform>('all');
   const [showAll, setShowAll] = useState(false);
@@ -322,6 +439,95 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     return sortAggregated(list, mode, sortKey, sortDir);
   }, [data, mode, localStore, platform, localRange, sortKey, sortDir]);
 
+  /**
+   * "True ROAS" allocation per campaign. For each campaign that has mapped
+   * products, sum the actual Shopify net revenue across those products
+   * (filtered to the same store and date range), then allocate
+   * proportionally to spend when a product is shared with other campaigns.
+   *
+   * Returns a Map<campaignKey, { trueRevenue, confidence, mappedCount,
+   * sharedProducts, metaClaim }> so the renderer can show both the number
+   * and the trust signal in one lookup.
+   *
+   * Only meaningful in campaign mode (mapping is at the campaign level).
+   * In ad-set mode the map is empty so all rows fall back to Meta numbers.
+   */
+  const trueRevenueByKey = useMemo(() => {
+    if (mode !== 'campaign') return new Map<string, TrueRevenueInfo>();
+    if (!data?.rows || !productsResp?.rows) return new Map<string, TrueRevenueInfo>();
+
+    // Step 1: compute total spend per campaign-key from the aggregated list
+    // (already scoped to localRange/localStore/platform).
+    const campaignSpend = new Map<string, number>();
+    for (const a of aggregated) {
+      campaignSpend.set(campaignKey(a.storeId, a.campaignId), a.spend);
+    }
+
+    // Step 2: group product net-revenue by (storeId, productId) over the
+    // same date range. We iterate products by store because allocation is
+    // scoped to one store at a time (campaigns can't sell products from
+    // another store).
+    const productsByStore = new Map<string, Array<{ productId: string; netRevenueCad: number }>>();
+    for (const p of productsResp.rows) {
+      if (p.date < localRange.from || p.date > localRange.to) continue;
+      if (!p.productId) continue;
+      const net = p.netRevenue ?? p.revenue; // net wins when available
+      if (net <= 0) continue;
+      if (!productsByStore.has(p.storeId)) productsByStore.set(p.storeId, []);
+      const arr = productsByStore.get(p.storeId)!;
+      // Dedupe: sum the multi-day rows into a single per-product total.
+      const existing = arr.find(x => x.productId === p.productId);
+      if (existing) existing.netRevenueCad += net;
+      else arr.push({ productId: p.productId, netRevenueCad: net });
+    }
+
+    // Step 3: run the allocator per store (keeps the storeId scoping that
+    // campaignsForProduct enforces).
+    const allocations = new Map<string, number>();
+    for (const [storeId, productRev] of productsByStore) {
+      const allocated = allocateProductRevenue({
+        storeId,
+        map: productMap,
+        productRevenue: productRev,
+        campaignSpend,
+      });
+      for (const [k, v] of allocated) {
+        allocations.set(k, (allocations.get(k) ?? 0) + v);
+      }
+    }
+
+    // Step 4: build the per-key info object with the trust signal.
+    const out = new Map<string, TrueRevenueInfo>();
+    for (const a of aggregated) {
+      const k = campaignKey(a.storeId, a.campaignId);
+      const mappedIds = productMap[k] ?? [];
+      if (mappedIds.length === 0) continue; // no mapping → no true-ROAS row
+      const trueRevenue = allocations.get(k) ?? 0;
+      // How many OTHER campaigns share at least one of this campaign's
+      // mapped products? Higher overlap → noisier allocation → lower trust.
+      let shared = 0;
+      for (const pid of mappedIds) {
+        for (const otherKey of Object.keys(productMap)) {
+          if (otherKey === k) continue;
+          if (!otherKey.startsWith(`${a.storeId}::`)) continue;
+          if ((productMap[otherKey] ?? []).includes(pid)) {
+            shared++;
+            break; // count each campaign once even if it shares N products
+          }
+        }
+      }
+      out.set(k, {
+        trueRevenue,
+        metaClaim: a.conversionValue,
+        mappedCount: mappedIds.length,
+        sharedCampaigns: shared,
+        spend: a.spend,
+        confidence: computeConfidence(trueRevenue, a.conversionValue, a.spend, shared, mappedIds.length),
+      });
+    }
+    return out;
+  }, [mode, data, productsResp, productMap, aggregated, localRange]);
+
   const totals = useMemo(() => {
     let spend = 0, conv = 0, val = 0, clicks = 0, imps = 0;
     for (const a of aggregated) {
@@ -344,8 +550,28 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     };
   }, [aggregated]);
 
-  const display = showAll ? aggregated : aggregated.slice(0, TOP_N_DEFAULT);
-  const remaining = aggregated.length - display.length;
+  // If the user asked to sort by Shopify-ROAS, re-sort here using the
+  // values from `trueRevenueByKey` (the inner sortAggregated falls back to
+  // Meta ROAS for this key — we override that here so the column actually
+  // sorts by what it shows). Unmapped rows go to the bottom on desc.
+  const displaySource = useMemo(() => {
+    if (sortKey !== 'shopifyRoas' || trueRevenueByKey.size === 0) return aggregated;
+    const sign = sortDir === 'asc' ? 1 : -1;
+    const withRoas = aggregated.map(a => {
+      const info = trueRevenueByKey.get(campaignKey(a.storeId, a.campaignId));
+      const roas = info && a.spend > 0 ? info.trueRevenue / a.spend : 0;
+      return { a, roas, mapped: !!info };
+    });
+    withRoas.sort((x, y) => {
+      // Always push unmapped rows to the bottom so the meaningful sort is
+      // among the mapped campaigns first.
+      if (x.mapped !== y.mapped) return x.mapped ? -1 : 1;
+      return sign * (x.roas - y.roas);
+    });
+    return withRoas.map(w => w.a);
+  }, [aggregated, sortKey, sortDir, trueRevenueByKey]);
+  const display = showAll ? displaySource : displaySource.slice(0, TOP_N_DEFAULT);
+  const remaining = displaySource.length - display.length;
 
   // ----- Pixel-vs-Shopify attribution gap ----------------------------------
   // Compare what the ad platforms *claim* (conversionValue summed across the
@@ -631,7 +857,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       {data && display.length > 0 && (
         <>
           <div className="overflow-x-auto">
-            <table className="w-full text-xs sm:text-sm min-w-[1060px]">
+            <table className="w-full text-xs sm:text-sm min-w-[1160px]">
               <thead>
                 <tr className="text-text-secondary border-b border-borderSubtle bg-surfaceMuted/40">
                   {/* Per-row optimization toggle. No label — the leading
@@ -682,6 +908,15 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     onClick={handleSort}
                     align="center"
                     className="px-3 py-2 w-[64px]"
+                  />
+                  <SortHeader
+                    label="ROAS Shopify"
+                    sortKey="shopifyRoas"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="center"
+                    className="px-3 py-2 w-[92px]"
                   />
                   <SortHeader
                     label="המרות"
@@ -870,6 +1105,57 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                       </td>
                       <td className={cn('px-3 py-2 text-center font-semibold tabular-nums rounded', TONE_BG[info.tone])}>
                         {roas > 0 ? formatNumber(roas) : '—'}
+                      </td>
+                      {/* Shopify-true ROAS column. Only campaigns with a
+                          product mapping show a number; everything else
+                          shows '—' with a hint. Google rows always '—'
+                          because PMax doesn't expose per-product mapping
+                          (the feed governs delivery, not the campaign). */}
+                      <td className="px-3 py-2 text-center">
+                        {(() => {
+                          const key = campaignKey(a.storeId, a.campaignId);
+                          const info = trueRevenueByKey.get(key);
+                          if (!info) {
+                            return (
+                              <span
+                                className="text-text-muted text-xs"
+                                title={
+                                  a.platform === 'Google'
+                                    ? 'Google PMax לא תומך במיפוי לפי מוצר — הפיד מנהל את ההצגה'
+                                    : 'לא משויכים מוצרים — פתח את הקמפיין כדי לשייך'
+                                }
+                              >
+                                —
+                              </span>
+                            );
+                          }
+                          const trueRoas = a.spend > 0 ? info.trueRevenue / a.spend : 0;
+                          const gap = info.metaClaim > 0
+                            ? ((trueRoas * a.spend) - info.metaClaim) / info.metaClaim
+                            : 0;
+                          const confTone =
+                            info.confidence.level === 'high'
+                              ? 'bg-roas-greenBg/60 text-roas-green'
+                              : info.confidence.level === 'medium'
+                              ? 'bg-amber-50 text-amber-700'
+                              : 'bg-roas-redBg/60 text-roas-red';
+                          const tooltip =
+                            `ROAS מבוסס Shopify · ${info.confidence.label}\n\n` +
+                            `Meta דיווח: CAD ${info.metaClaim.toFixed(0)}\n` +
+                            `Shopify בפועל (מוקצה): CAD ${info.trueRevenue.toFixed(0)}\n` +
+                            `פער: ${(gap * 100).toFixed(0)}%\n\n` +
+                            info.confidence.reasons.map(r => `• ${r}`).join('\n');
+                          return (
+                            <div className="inline-flex flex-col items-center gap-0.5" title={tooltip}>
+                              <span className="font-semibold tabular-nums text-text-primary">
+                                {trueRoas > 0 ? formatNumber(trueRoas) : '—'}
+                              </span>
+                              <span className={cn('inline-block text-[8px] font-bold px-1 py-0 rounded uppercase tracking-wider', confTone)}>
+                                {info.confidence.label}
+                              </span>
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="px-3 py-2 text-end tabular-nums">{formatNumber(a.conversions, 0)}</td>
                       <td className="px-3 py-2 text-end tabular-nums text-text-secondary">
