@@ -6,6 +6,7 @@ import { Package, Search, X, Check } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import type { ProductRow } from '@/lib/products';
 import type { ProductsResponse } from '@/app/api/products/route';
+import type { ProductCatalogResponse } from '@/app/api/product-catalog/route';
 
 /**
  * Multi-select picker for tagging which Shopify product(s) a campaign
@@ -23,7 +24,12 @@ import type { ProductsResponse } from '@/app/api/products/route';
  *   the common-case (mapping a hero product) is one click away.
  */
 
-const fetcher = async (url: string): Promise<ProductsResponse> => {
+const salesFetcher = async (url: string): Promise<ProductsResponse> => {
+  const r = await fetch(url);
+  if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
+  return r.json();
+};
+const catalogFetcher = async (url: string): Promise<ProductCatalogResponse> => {
   const r = await fetch(url);
   if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
   return r.json();
@@ -33,6 +39,7 @@ type Props = {
   open: boolean;
   onClose: () => void;
   storeId: string;
+  storeName: string;
   campaignName: string;
   /** Currently-mapped product IDs for this campaign. */
   initial: string[];
@@ -52,15 +59,28 @@ export function ProductPickerModal({
   open,
   onClose,
   storeId,
+  storeName,
   campaignName,
   initial,
   onSave,
 }: Props) {
-  const { data, isLoading } = useSWR<ProductsResponse>(
+  // Full catalog from <storeId>-products-catalog → drives the picker list.
+  // Includes products that haven't sold yet, which products-daily misses.
+  const { data: catalogData, isLoading: catalogLoading } = useSWR<ProductCatalogResponse>(
+    open ? '/api/product-catalog' : null,
+    catalogFetcher,
+    { revalidateOnFocus: false, dedupingInterval: 300_000 },
+  );
+  // Sales data is overlaid as context (units sold, recent revenue) so the
+  // user can see which product is the hero — but it's NOT the source of
+  // truth for which products exist.
+  const { data: salesData, isLoading: salesLoading } = useSWR<ProductsResponse>(
     open ? '/api/products' : null,
-    fetcher,
+    salesFetcher,
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
+  const data = salesData;
+  const isLoading = catalogLoading || salesLoading;
 
   const [selected, setSelected] = useState<Set<string>>(() => new Set(initial));
   const [query, setQuery] = useState('');
@@ -84,30 +104,62 @@ export function ProductPickerModal({
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
-  // Dedupe + aggregate the multi-day product rows into one entry per
-  // productId. Sort by units desc so heroes float to the top.
+  // Build the picker list from the FULL catalog (so unsold products are
+  // visible too), then enrich with sales context (units / revenue) when
+  // /api/products has data on the product. Sort by units desc so heroes
+  // float; unsold products sit at the bottom alphabetically.
   const products: PickableProduct[] = useMemo(() => {
-    if (!data?.rows) return [];
-    const byId = new Map<string, PickableProduct>();
-    for (const r of data.rows as ProductRow[]) {
+    // Step 1: aggregate sales by productId from products-daily.
+    const salesById = new Map<string, { units: number; revenue: number }>();
+    for (const r of (data?.rows as ProductRow[] | undefined) ?? []) {
       if (r.storeId !== storeId) continue;
       if (!r.productId) continue;
-      const existing = byId.get(r.productId);
+      const existing = salesById.get(r.productId);
       const net = r.netRevenue ?? r.revenue;
       if (existing) {
-        existing.totalUnits += r.units;
-        existing.totalRevenue += net;
+        existing.units += r.units;
+        existing.revenue += net;
       } else {
-        byId.set(r.productId, {
-          productId: r.productId,
-          title: r.productTitle || '(ללא שם)',
-          totalUnits: r.units,
-          totalRevenue: net,
-        });
+        salesById.set(r.productId, { units: r.units, revenue: net });
       }
     }
-    return Array.from(byId.values()).sort((a, b) => b.totalUnits - a.totalUnits);
-  }, [data, storeId]);
+
+    // Step 2: build list from catalog (full source of truth for what
+    // exists). Fall back to salesById entries when catalog is empty
+    // (first-deploy edge case — catalog tab missing/empty).
+    const catalogRows = (catalogData?.rows ?? []).filter(c => c.storeId === storeId);
+    if (catalogRows.length > 0) {
+      const out: PickableProduct[] = catalogRows.map(c => {
+        const sales = salesById.get(c.productId);
+        return {
+          productId: c.productId,
+          title: c.title,
+          totalUnits: sales?.units ?? 0,
+          totalRevenue: sales?.revenue ?? 0,
+        };
+      });
+      // Heroes (sales > 0) first, sorted by units; cold inventory (sales = 0)
+      // after, alphabetical so the operator can still find a specific name.
+      out.sort((a, b) => {
+        if ((a.totalUnits > 0) !== (b.totalUnits > 0)) {
+          return a.totalUnits > 0 ? -1 : 1;
+        }
+        if (a.totalUnits > 0) return b.totalUnits - a.totalUnits;
+        return a.title.localeCompare(b.title, 'he');
+      });
+      return out;
+    }
+
+    // Fallback: catalog hasn't been written yet → degrade to sold-only list.
+    return Array.from(salesById.entries())
+      .map(([productId, s]) => ({
+        productId,
+        title: '(ללא שם — קטלוג עוד לא סונכרן)',
+        totalUnits: s.units,
+        totalRevenue: s.revenue,
+      }))
+      .sort((a, b) => b.totalUnits - a.totalUnits);
+  }, [catalogData, data, storeId]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -158,11 +210,15 @@ export function ProductPickerModal({
             </span>
             <div className="min-w-0">
               <div className="text-[10px] uppercase tracking-[0.12em] font-semibold text-text-muted">
-                שייך מוצרי Shopify לקמפיין
+                שייך מוצרי {storeName} לקמפיין
               </div>
               <h2 id="product-picker-title" className="text-sm sm:text-base font-bold text-text-primary tracking-tight truncate" title={campaignName}>
                 {campaignName}
               </h2>
+              <div className="text-[10px] text-text-muted mt-0.5 inline-flex items-center gap-1">
+                <span>מוצגים רק מוצרים מחנות:</span>
+                <span className="font-semibold text-primary">{storeName}</span>
+              </div>
             </div>
           </div>
           <button
@@ -245,7 +301,13 @@ export function ProductPickerModal({
                           {p.title}
                         </div>
                         <div className="text-[10px] sm:text-[11px] text-text-muted tabular-nums">
-                          {formatNumber(p.totalUnits, 0)} יח&apos; · CAD {formatCurrency(p.totalRevenue)}
+                          {p.totalUnits > 0 ? (
+                            <>
+                              {formatNumber(p.totalUnits, 0)} יח&apos; · CAD {formatCurrency(p.totalRevenue)}
+                            </>
+                          ) : (
+                            <span className="text-text-muted/80">עדיין לא בוצעו מכירות</span>
+                          )}
                         </div>
                       </div>
                     </button>

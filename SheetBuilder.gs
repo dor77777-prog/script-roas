@@ -1223,3 +1223,80 @@ function writeAdsRowsForDay(ss, storeId, dateStr, rows) {
   });
   sh.getRange(2, 14, combined.length, 1).setFormulas(formulas);
 }
+
+// ============================================================================
+// טאב product-catalog לכל חנות. שורה לכל מוצר פעיל מה-Shopify Admin API.
+// משמש את ה-ProductPickerModal בדשבורד כדי לאפשר שיוך גם למוצרים חדשים שעוד
+// לא ביצעו אפילו הזמנה אחת (products-daily מכיל רק נמכרים).
+// ============================================================================
+
+const PRODUCT_CATALOG_HEADERS = [
+  'Product ID', 'Title', 'Handle', 'Status', 'Price (CAD)',
+  'Image URL', 'Product Type', 'Vendor', 'Updated At'
+];
+
+function productCatalogTabName_(storeId) {
+  return `${storeId}-products-catalog`;
+}
+
+function ensureProductCatalogTab_(ss, storeId) {
+  const tabName = productCatalogTabName_(storeId);
+  let sh = ss.getSheetByName(tabName);
+  let justCreated = false;
+  if (!sh) {
+    sh = ss.insertSheet(tabName);
+    sh.setRightToLeft(false);
+    justCreated = true;
+  }
+  if (sh.getLastRow() === 0) {
+    sh.getRange(1, 1, 1, PRODUCT_CATALOG_HEADERS.length)
+      .setValues([PRODUCT_CATALOG_HEADERS])
+      .setFontWeight('bold')
+      .setBackground('#1c4587')
+      .setFontColor('#ffffff')
+      .setHorizontalAlignment('center');
+    sh.setFrozenRows(1);
+    sh.setColumnWidth(1, 130);  // Product ID
+    sh.setColumnWidth(2, 280);  // Title
+    sh.setColumnWidth(3, 160);  // Handle
+    sh.setColumnWidth(4, 80);   // Status
+    sh.setColumnWidth(5, 100);  // Price
+    sh.setColumnWidth(6, 240);  // Image URL
+    sh.setColumnWidth(7, 120);  // Product Type
+    sh.setColumnWidth(8, 120);  // Vendor
+    sh.setColumnWidth(9, 140);  // Updated At
+  }
+  if (justCreated) {
+    try { sh.hideSheet(); } catch (_) {}
+  }
+  return sh;
+}
+
+/**
+ * Replace-mode write — catalogs are small and the source-of-truth is
+ * Shopify itself. Idempotent: clear-then-write each refresh so deleted
+ * products don't linger in the sheet.
+ */
+function writeProductCatalogForStore_(ss, storeId, products) {
+  const sh = ensureProductCatalogTab_(ss, storeId);
+  const lastRow = sh.getLastRow();
+  if (lastRow > 1) {
+    sh.getRange(2, 1, lastRow - 1, PRODUCT_CATALOG_HEADERS.length).clearContent();
+  }
+  if (!products || products.length === 0) return;
+  const updatedAt = new Date();
+  const rows = products.map(p => [
+    p.productId,
+    p.title,
+    p.handle,
+    p.status,
+    p.priceCad,
+    p.imageUrl,
+    p.productType,
+    p.vendor,
+    updatedAt,
+  ]);
+  sh.getRange(2, 1, rows.length, PRODUCT_CATALOG_HEADERS.length).setValues(rows);
+  sh.getRange(2, 5, rows.length, 1).setNumberFormat('#,##0.00');
+  sh.getRange(2, 9, rows.length, 1).setNumberFormat('yyyy-mm-dd hh:mm');
+}

@@ -418,3 +418,74 @@ function refreshAllStoreMeta() {
     }
   }
 }
+
+/**
+ * שואב את כל המוצרים הפעילים בחנות (קטלוג מלא, לא רק כאלה שנמכרו).
+ *
+ * נדרש כדי שה-product picker בדשבורד יוכל להציג גם מוצרים חדשים שעוד לא
+ * עשו אפילו הזמנה אחת — בלעדיו אי אפשר לשייך קמפיין חדש למוצר חדש.
+ *
+ * מסנן רק מוצרים סטטוס=active (לא draft/archived). מחזיר רק את מה שהדשבורד
+ * צריך כדי להציג בסלקטור: id, title, status, image url ראשי, ומחיר variant
+ * ראשון (לסקירה מהירה).
+ */
+function getShopifyProductsCatalog(storeId) {
+  const domain = requireProp(`${storeId}.shopify.domain`).replace(/^https?:\/\//, '').replace(/\/$/, '');
+  let token = requireProp(`${storeId}.shopify.token`);
+  let bootstrapTried = false;
+
+  let url = `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/products.json` +
+            `?status=active&limit=250&fields=id,title,status,handle,image,variants,product_type,vendor`;
+
+  const out = [];
+  let safety = 0;
+  while (url && safety < 50) {
+    const res = fetchWithRetry_(url, {
+      method: 'get',
+      headers: { 'X-Shopify-Access-Token': token },
+      muteHttpExceptions: true,
+    });
+    const code = res.getResponseCode();
+    if (code === 429) { Utilities.sleep(2000); safety++; continue; }
+    if (code === 401 && !bootstrapTried) {
+      bootstrapTried = true;
+      const fresh = tryAutoBootstrapShopify_(storeId);
+      if (fresh) { token = fresh; continue; }
+    }
+    if (code !== 200) {
+      throw new Error(`Shopify catalog ${storeId} failed (${code}): ${res.getContentText()}`);
+    }
+    const body = JSON.parse(res.getContentText());
+    const products = (body && body.products) || [];
+    for (const p of products) {
+      // Use the first variant's price as a representative — most stores have
+      // a single variant or all variants priced similarly. The dashboard
+      // shows this as context, not as gospel.
+      const firstVariant = (p.variants || [])[0];
+      const price = firstVariant ? parseFloat(firstVariant.price || 0) : 0;
+      const imageUrl = (p.image && p.image.src) || '';
+      out.push({
+        productId: String(p.id || ''),
+        title: p.title || '(ללא שם)',
+        handle: p.handle || '',
+        status: p.status || '',
+        priceCad: price, // Shopify returns prices in the shop's currency (CAD here)
+        imageUrl: imageUrl,
+        productType: p.product_type || '',
+        vendor: p.vendor || '',
+      });
+    }
+    const link = res.getHeaders()['Link'] || res.getHeaders()['link'] || '';
+    const m = link.match(/<([^>]+)>;\s*rel="next"/);
+    url = m ? m[1] : null;
+    safety++;
+  }
+  if (safety >= 50) {
+    Logger.log(
+      `WARNING: hit pagination safety cap of 50 pages for Shopify catalog ` +
+      `${storeId} (${out.length} products collected); data beyond may be missing.`
+    );
+  }
+  Logger.log(`Shopify catalog ${storeId}: ${out.length} active products`);
+  return out;
+}

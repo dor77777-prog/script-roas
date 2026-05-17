@@ -608,6 +608,7 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
         storeId={rows[0]?.storeId ?? ''}
+        storeName={summary.storeName}
         campaignName={summary.campaignName}
         initial={productMap[campaignKey(rows[0]?.storeId ?? '', campaignId)] ?? []}
         onSave={(productIds) => {

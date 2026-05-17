@@ -137,6 +137,17 @@ function updateStoreForDate_(ss, store, dateStr, year, month, day, ilsToCad) {
     Logger.log(`Ad-level data for ${store.name} ${dateStr} failed: ${e && e.message ? e.message : e}`);
   }
 
+  // טאב <store>-products-catalog — קטלוג מוצרים מלא של החנות (לא רק
+  // נמכרים). דרוש לתצוגת ה-ProductPickerModal בדשבורד כדי לאפשר שיוך
+  // לקמפיינים שמקדמים מוצרים חדשים שעוד לא ביצעו אפילו הזמנה אחת.
+  // נכשל ברך — אם Shopify חזר 5xx, המיפויים הקיימים לא ייפגעו.
+  try {
+    const catalog = getShopifyProductsCatalog(store.id);
+    writeProductCatalogForStore_(ss, store.id, catalog);
+  } catch (e) {
+    Logger.log(`Product catalog ${store.name} failed (non-fatal): ${e && e.message ? e.message : e}`);
+  }
+
   Logger.log(`${store.name} ${dateStr}: spent=${totalSpentCad.toFixed(2)} CAD (FB ${metaCad.toFixed(2)} + GA ${googleAdsCad.toFixed(2)}), revenue=${revenueCad.toFixed(2)} CAD`);
   return { spent: totalSpentCad, revenue: revenueCad };
 }
