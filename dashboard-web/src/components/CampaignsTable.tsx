@@ -50,6 +50,11 @@ type Platform = 'all' | 'Meta' | 'Google';
  */
 type TrueRevenueInfo = {
   trueRevenue: number;
+  /** Allocated Shopify units sold of mapped products in the date range —
+   *  uses the same spend-proportional share as trueRevenue. Surfaced as a
+   *  separate column so the operator can sanity-check the revenue figure
+   *  against unit volume. */
+  trueUnits: number;
   metaClaim: number;
   spend: number;
   mappedCount: number;
@@ -467,23 +472,29 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     // same date range. We iterate products by store because allocation is
     // scoped to one store at a time (campaigns can't sell products from
     // another store).
-    const productsByStore = new Map<string, Array<{ productId: string; netRevenueCad: number }>>();
+    const productsByStore = new Map<string, Array<{ productId: string; netRevenueCad: number; units: number }>>();
     for (const p of productsResp.rows) {
       if (p.date < localRange.from || p.date > localRange.to) continue;
       if (!p.productId) continue;
       const net = p.netRevenue ?? p.revenue; // net wins when available
-      if (net <= 0) continue;
+      if (net <= 0 && p.units <= 0) continue;
       if (!productsByStore.has(p.storeId)) productsByStore.set(p.storeId, []);
       const arr = productsByStore.get(p.storeId)!;
       // Dedupe: sum the multi-day rows into a single per-product total.
       const existing = arr.find(x => x.productId === p.productId);
-      if (existing) existing.netRevenueCad += net;
-      else arr.push({ productId: p.productId, netRevenueCad: net });
+      if (existing) {
+        existing.netRevenueCad += net;
+        existing.units += p.units;
+      } else {
+        arr.push({ productId: p.productId, netRevenueCad: net, units: p.units });
+      }
     }
 
     // Step 3: run the allocator per store (keeps the storeId scoping that
-    // campaignsForProduct enforces).
-    const allocations = new Map<string, number>();
+    // campaignsForProduct enforces). The allocator now returns both
+    // revenue and units per campaign, sharing the same spend-proportional
+    // share so the numbers stay internally consistent.
+    const allocations = new Map<string, { revenue: number; units: number }>();
     for (const [storeId, productRev] of productsByStore) {
       const allocated = allocateProductRevenue({
         storeId,
@@ -492,7 +503,10 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         campaignSpend,
       });
       for (const [k, v] of allocated) {
-        allocations.set(k, (allocations.get(k) ?? 0) + v);
+        const cur = allocations.get(k) ?? { revenue: 0, units: 0 };
+        cur.revenue += v.revenue;
+        cur.units += v.units;
+        allocations.set(k, cur);
       }
     }
 
@@ -502,7 +516,9 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       const k = campaignKey(a.storeId, a.campaignId);
       const mappedIds = productMap[k] ?? [];
       if (mappedIds.length === 0) continue; // no mapping → no true-ROAS row
-      const trueRevenue = allocations.get(k) ?? 0;
+      const alloc = allocations.get(k) ?? { revenue: 0, units: 0 };
+      const trueRevenue = alloc.revenue;
+      const trueUnits = alloc.units;
       // How many OTHER campaigns share at least one of this campaign's
       // mapped products? Higher overlap → noisier allocation → lower trust.
       let shared = 0;
@@ -518,6 +534,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       }
       out.set(k, {
         trueRevenue,
+        trueUnits,
         metaClaim: a.conversionValue,
         mappedCount: mappedIds.length,
         sharedCampaigns: shared,
@@ -857,7 +874,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       {data && display.length > 0 && (
         <>
           <div className="overflow-x-auto">
-            <table className="w-full text-xs sm:text-sm min-w-[1160px]">
+            <table className="w-full text-xs sm:text-sm min-w-[1340px]">
               <thead>
                 <tr className="text-text-secondary border-b border-borderSubtle bg-surfaceMuted/40">
                   {/* Per-row optimization toggle. No label — the leading
@@ -918,6 +935,21 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     align="center"
                     className="px-3 py-2 w-[92px]"
                   />
+                  {/* New: Shopify-actual columns. NOT sortable because the
+                      computation depends on the full trueRevenueByKey map
+                      and adding two more sort keys would clutter the union
+                      without much value — users sort by 'ROAS Shopify' to
+                      surface heroes anyway. */}
+                  <th className="px-3 py-2 text-end font-medium text-text-secondary w-[88px]">
+                    <span className="inline-flex items-center gap-1" title="ערך המכירות בפועל ב-Shopify של המוצרים המשויכים בטווח הנבחר">
+                      ערך Shopify
+                    </span>
+                  </th>
+                  <th className="px-3 py-2 text-end font-medium text-text-secondary w-[80px]">
+                    <span className="inline-flex items-center gap-1" title="יחידות שנמכרו בפועל ב-Shopify של המוצרים המשויכים בטווח הנבחר">
+                      יח&apos; Shopify
+                    </span>
+                  </th>
                   <SortHeader
                     label="המרות"
                     sortKey="conversions"
@@ -1154,6 +1186,37 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                                 {info.confidence.label}
                               </span>
                             </div>
+                          );
+                        })()}
+                      </td>
+                      {/* Shopify actuals — ערך + יחידות. Empty cells when
+                          there's no mapping so the row stays cleanly
+                          aligned with mapped + unmapped campaigns. */}
+                      <td className="px-3 py-2 text-end tabular-nums">
+                        {(() => {
+                          const key = campaignKey(a.storeId, a.campaignId);
+                          const info = trueRevenueByKey.get(key);
+                          if (!info || info.trueRevenue <= 0) {
+                            return <span className="text-text-muted">—</span>;
+                          }
+                          return (
+                            <span className="font-medium" title="ערך המכירות בפועל ב-Shopify של המוצרים המשויכים — מוקצה פרופורציונלית להוצאה כשהמוצר חולק עם קמפיינים אחרים">
+                              {formatCurrency(info.trueRevenue)}
+                            </span>
+                          );
+                        })()}
+                      </td>
+                      <td className="px-3 py-2 text-end tabular-nums">
+                        {(() => {
+                          const key = campaignKey(a.storeId, a.campaignId);
+                          const info = trueRevenueByKey.get(key);
+                          if (!info || info.trueUnits <= 0) {
+                            return <span className="text-text-muted">—</span>;
+                          }
+                          return (
+                            <span className="font-medium" title="יחידות שנמכרו בפועל ב-Shopify של המוצרים המשויכים — מוקצה פרופורציונלית להוצאה">
+                              {formatNumber(info.trueUnits, info.trueUnits >= 10 ? 0 : 1)}
+                            </span>
                           );
                         })()}
                       </td>

@@ -122,14 +122,19 @@ export function campaignsForProduct(
 export function allocateProductRevenue(args: {
   storeId: string;
   map: ProductMap;
-  productRevenue: Array<{ productId: string; netRevenueCad: number }>;
+  /** Each entry is one product's totals in the date range. Both revenue
+   *  AND units are allocated using the same spend-proportional share, so
+   *  the displayed numbers stay consistent (a campaign that gets 70% of
+   *  the revenue also gets 70% of the units). */
+  productRevenue: Array<{ productId: string; netRevenueCad: number; units: number }>;
   campaignSpend: Map<string, number>; // campaignKey → spend in range
-}): Map<string, number> {
+}): Map<string, { revenue: number; units: number }> {
   const { storeId, map, productRevenue, campaignSpend } = args;
-  const out = new Map<string, number>();
+  const out = new Map<string, { revenue: number; units: number }>();
 
   for (const p of productRevenue) {
-    if (!p.productId || p.netRevenueCad <= 0) continue;
+    if (!p.productId) continue;
+    if (p.netRevenueCad <= 0 && p.units <= 0) continue;
     const mappedKeys = campaignsForProduct(storeId, p.productId, map);
     if (mappedKeys.length === 0) continue; // orphan — skip
 
@@ -140,10 +145,12 @@ export function allocateProductRevenue(args: {
       const k = mappedKeys[i];
       const share =
         totalSpend > 0
-          ? spendsForProduct[i] / totalSpend // proportional to spend
-          : 1 / mappedKeys.length;            // equal split if all-zero spend
-      const allocated = p.netRevenueCad * share;
-      out.set(k, (out.get(k) ?? 0) + allocated);
+          ? spendsForProduct[i] / totalSpend
+          : 1 / mappedKeys.length;
+      const cur = out.get(k) ?? { revenue: 0, units: 0 };
+      cur.revenue += p.netRevenueCad * share;
+      cur.units += p.units * share;
+      out.set(k, cur);
     }
   }
   return out;
