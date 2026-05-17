@@ -69,7 +69,10 @@ export function ProductPickerModal({
   const { data: catalogData, isLoading: catalogLoading } = useSWR<ProductCatalogResponse>(
     open ? '/api/product-catalog' : null,
     catalogFetcher,
-    { revalidateOnFocus: false, dedupingInterval: 300_000 },
+    // 30s dedupe — reasonable middle ground between "refetch every time
+    // the picker opens" (wasteful) and "user must wait 5 min to see a
+    // freshly-synced catalog" (the bug they just hit).
+    { revalidateOnFocus: false, dedupingInterval: 30_000 },
   );
   // Sales data is overlaid as context (units sold, recent revenue) so the
   // user can see which product is the hero — but it's NOT the source of

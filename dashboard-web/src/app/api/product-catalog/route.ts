@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
 import { fetchProductCatalog, type CatalogProduct } from '@/lib/productCatalog';
 
-// Catalog changes rarely (a new product launch a few times a month at most),
-// so a 1-hour ISR cache is plenty.
-export const revalidate = 3600;
+// 60 seconds — short enough that after running refreshAllProductCatalogs in
+// Apps Script, the user sees fresh data within a minute (instead of waiting
+// out a 1-hour CDN cache). The catalog is small (≤1k rows across all stores)
+// so the underlying Sheets read is cheap; no real cost to a tighter TTL.
+export const revalidate = 60;
 
 export type ProductCatalogResponse = {
   rows: CatalogProduct[];
@@ -17,7 +19,10 @@ export async function GET() {
       { rows, lastUpdated: new Date().toISOString() } satisfies ProductCatalogResponse,
       {
         headers: {
-          'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
+          // Match the route-level revalidate. 60s CDN cache + 5min stale
+          // gives a snappy "refresh after Apps Script run" experience while
+          // still de-duping the routes between concurrent partners.
+          'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
         },
       },
     );
