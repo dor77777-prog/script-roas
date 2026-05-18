@@ -745,7 +745,12 @@ function writeCampaignRowsForDay(ss, storeId, dateStr, rows) {
       } else if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
         key = v;
       }
-      return key !== dateStr && key !== null; // השאר רק שורות מתאריכים אחרים
+      // Preserve rows with unparseable dates rather than silently destroying
+      // them — a prior write may have crashed mid-format (setValues OK, then
+      // quota timeout before setNumberFormat), leaving valid data in a
+      // not-yet-formatted state. Operator can manually fix; the daily
+      // overwrite should not delete data it doesn't recognise.
+      return key !== dateStr;
     });
   }
 
@@ -1215,7 +1220,9 @@ function writeAdsRowsForDay(ss, storeId, dateStr, rows) {
       } else if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
         key = v;
       }
-      return key !== dateStr && key !== null;
+      // Preserve rows with unparseable dates — see writeCampaignRowsForDay
+      // for the rationale (avoid silently destroying mid-format crash victims).
+      return key !== dateStr;
     });
   }
 
@@ -1537,7 +1544,9 @@ function writeOrdersAttributionForDay(ss, storeId, dateStr, rows) {
       } else if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
         key = v;
       }
-      return key !== dateStr && key !== null;
+      // Preserve rows with unparseable dates — see writeCampaignRowsForDay
+      // for the rationale (avoid silently destroying mid-format crash victims).
+      return key !== dateStr;
     });
   }
 
