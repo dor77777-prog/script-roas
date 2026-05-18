@@ -232,6 +232,15 @@ function aggregate(
   range: DateRange,
 ): Aggregated[] {
   const map = new Map<string, Aggregated>();
+  // Per-key "latest budget date" tracker so the overwrite logic depends on
+  // the row's `date` field, NOT iteration order (#IN-02). Apps Script's
+  // writeCampaignRowsForDay appends backfilled past dates to the END of
+  // the sheet, which means a stale past-date row could otherwise stamp
+  // its budget as "current". Kept as a sidecar Map rather than fields on
+  // the public Aggregated type so consumers downstream are unaffected.
+  const latestBudgetDate = new Map<string, string>();
+  const latestAdSetBudgetDate = new Map<string, string>();
+  const latestBudgetTypeDate = new Map<string, string>();
   for (const r of rows) {
     if (r.date < range.from || r.date > range.to) continue;
     if (storeFilter !== 'All' && r.storeName !== storeFilter) continue;
@@ -258,12 +267,15 @@ function aggregate(
         conversions: 0,
         conversionValue: 0,
         // Budgets are a current-state property — every row carries today's
-        // value. We always overwrite with the latest matching row so the
-        // displayed budget reflects "current" rather than averaging history.
+        // value. Seed with this row's values; the loop below upgrades to
+        // the chronologically-latest value as we see more rows.
         campaignBudgetCad: r.campaignBudgetCad,
         adSetBudgetCad: mode === 'adset' ? r.adSetBudgetCad : null,
         budgetType: r.budgetType,
       });
+      if (r.campaignBudgetCad != null) latestBudgetDate.set(key, r.date);
+      if (mode === 'adset' && r.adSetBudgetCad != null) latestAdSetBudgetDate.set(key, r.date);
+      if (r.budgetType) latestBudgetTypeDate.set(key, r.date);
     }
     const a = map.get(key)!;
     a.spend += r.spend;
@@ -271,12 +283,31 @@ function aggregate(
     a.clicks += r.clicks;
     a.conversions += r.conversions;
     a.conversionValue += r.conversionValue;
-    // Budget reflects "current" — overwrite with the latest non-null value
-    // we see. The daily rows are ordered chronologically inside the data
-    // tab, so the last write here is the most recent.
-    if (r.campaignBudgetCad != null) a.campaignBudgetCad = r.campaignBudgetCad;
-    if (mode === 'adset' && r.adSetBudgetCad != null) a.adSetBudgetCad = r.adSetBudgetCad;
-    if (r.budgetType) a.budgetType = r.budgetType;
+    // Budget reflects "current" — pick the row with the chronologically
+    // latest `date`, NOT the last-iterated row. Backfills of past dates
+    // (Apps Script appends them to the end of the sheet) would otherwise
+    // stamp their stale budget value as current. (#IN-02)
+    if (r.campaignBudgetCad != null) {
+      const prev = latestBudgetDate.get(key);
+      if (!prev || r.date >= prev) {
+        a.campaignBudgetCad = r.campaignBudgetCad;
+        latestBudgetDate.set(key, r.date);
+      }
+    }
+    if (mode === 'adset' && r.adSetBudgetCad != null) {
+      const prev = latestAdSetBudgetDate.get(key);
+      if (!prev || r.date >= prev) {
+        a.adSetBudgetCad = r.adSetBudgetCad;
+        latestAdSetBudgetDate.set(key, r.date);
+      }
+    }
+    if (r.budgetType) {
+      const prev = latestBudgetTypeDate.get(key);
+      if (!prev || r.date >= prev) {
+        a.budgetType = r.budgetType;
+        latestBudgetTypeDate.set(key, r.date);
+      }
+    }
   }
   return Array.from(map.values());
 }
