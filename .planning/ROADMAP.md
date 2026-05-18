@@ -9,7 +9,7 @@ Multi-store Shopify ROAS dashboard with deterministic per-order attribution. The
 - [x] **Phase 0: Foundation (retroactive)** — Apps Script collection + Next.js dashboard + 4 rounds of code review + orders-attribution pipeline + Round 5 fix-ups
 - [x] **Phase 1: Channel-Level Product Attribution** — Per-product "came from Facebook" signal via order line items
 - [ ] **Phase 2: Foundations** — Vitest + 30-50 unit tests for attributionAnalysis + Sentry/ErrorBoundary + cacheConfig + row-count guards + safeDecode utility
-- [ ] **Phase 3: CI/CD for Apps Script** — clasp setup + GitHub Action for auto-deploy of `.gs` files
+- [x] **Phase 3: CI/CD for Apps Script** — clasp setup + GitHub Action for auto-deploy of `.gs` files
 - [ ] **Phase 4: Component Decomposition** — Split CampaignsTable / CampaignDrawer / BillingSettings to ≤500 lines each via hooks + sub-components
 - [ ] **Phase 5: Scalability** — API pagination, per-store Apps Script triggers (6-min cap fix), data-daily / products-daily retention, lazy line-items
 - [ ] **Phase 6: Security & Cloud-Sync** — Service-account split (reader/writer), rate limiting on POST, audit log, cloud-sync If-Match + adaptive polling
@@ -62,9 +62,9 @@ Multi-store Shopify ROAS dashboard with deterministic per-order attribution. The
   4. SETUP.md updated with new deployment instructions
   5. `.clasprc.json` is gitignored; only `.clasp.json` is committed
   6. SYSTEM_OVERVIEW.md notes the new CI/CD path
-**Plans:** 0/1 plans executed
+**Plans:** 1/1 plans executed
 Plans:
-- [ ] 03-PLAN.md — root package.json + clasp + .clasp.json + deploy-gs workflow + SETUP/SYSTEM_OVERVIEW docs (single-plan phase; 6 sequential tasks including 2 operator checkpoints)
+- [x] 03-PLAN.md — root package.json + clasp + .clasp.json + deploy-gs workflow + SETUP/SYSTEM_OVERVIEW docs (single-plan phase; 6 sequential tasks including 2 operator checkpoints) — completed 2026-05-18 (Action run #26053537084 green)
 
 ### Phase 4: Component Decomposition
 **Goal**: Reduce cognitive load + IDE pressure by splitting the three 1300+ line components into focused ≤500-line modules with extracted hooks.
