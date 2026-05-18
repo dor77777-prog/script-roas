@@ -257,6 +257,31 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
     };
   }, [rows]);
 
+  // Per-ad-set daily Meta conv-value series. Required by
+  // analyzeAttributionForAdSet → computeWindowStability / detectOutlierDays;
+  // without it those features are silently inert at the ad-set level. Built
+  // once in a useMemo (instead of per-render inside the row IIFE) so the
+  // walk over `rows` happens only when rows change, not on every sort/state
+  // tick. Keyed by the same `adSetId || adSetName || '(אחר)'` formula the
+  // summary aggregation uses, so a.id (which may be '') reliably maps back.
+  const dailyMetaByAdSet = useMemo(() => {
+    const buckets = new Map<string, Map<string, number>>();
+    for (const r of rows) {
+      const key = r.adSetId || r.adSetName || '(אחר)';
+      let b = buckets.get(key);
+      if (!b) {
+        b = new Map<string, number>();
+        buckets.set(key, b);
+      }
+      b.set(r.date, (b.get(r.date) ?? 0) + r.conversionValue);
+    }
+    const out = new Map<string, Array<{ date: string; value: number }>>();
+    for (const [key, byDate] of buckets) {
+      out.set(key, Array.from(byDate, ([date, value]) => ({ date, value })));
+    }
+    return out;
+  }, [rows]);
+
   // Re-sort ad-sets per user choice. Computed outside the `if (!open || !summary)`
   // guard would be wrong because hooks must run unconditionally — but useMemo
   // is already called above inside the summary computation. Sorting here is a
@@ -1021,6 +1046,10 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
                                 ordersAttrData?.rows ?? [],
                                 rows.reduce((min, r) => (r.date < min ? r.date : min), rows[0]?.date ?? ''),
                                 rows.reduce((max, r) => (r.date > max ? r.date : max), rows[0]?.date ?? ''),
+                                // Pass per-ad-set daily Meta series so window-
+                                // stability + outlier detection actually fire
+                                // at the ad-set level (WR5-03).
+                                dailyMetaByAdSet.get(a.id || a.name || '(אחר)') ?? [],
                               );
                               if (!adsetAttr) {
                                 return <span className="text-text-muted text-xs">—</span>;

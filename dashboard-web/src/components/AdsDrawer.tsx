@@ -192,6 +192,34 @@ export function AdsDrawer({
     };
   }, [data, storeId, campaignId, adSetId, rangeFrom, rangeTo]);
 
+  // Per-ad daily Meta conv-value series. Required by analyzeAttributionForAd →
+  // computeWindowStability / detectOutlierDays; without it those features
+  // silently no-op at the ad level. Keyed by `adId || adName` to match the
+  // summary aggregation. Built in useMemo so the walk over data.rows happens
+  // only on data/range changes, not every render. (WR5-03)
+  const dailyMetaByAd = useMemo(() => {
+    const buckets = new Map<string, Map<string, number>>();
+    if (!data?.rows) return new Map<string, Array<{ date: string; value: number }>>();
+    for (const r of data.rows) {
+      if (r.date < rangeFrom || r.date > rangeTo) continue;
+      if (r.storeId !== storeId) continue;
+      if (r.campaignId !== campaignId) continue;
+      if (r.adSetId !== adSetId) continue;
+      const k = r.adId || r.adName;
+      let b = buckets.get(k);
+      if (!b) {
+        b = new Map<string, number>();
+        buckets.set(k, b);
+      }
+      b.set(r.date, (b.get(r.date) ?? 0) + r.conversionValue);
+    }
+    const out = new Map<string, Array<{ date: string; value: number }>>();
+    for (const [k, byDate] of buckets) {
+      out.set(k, Array.from(byDate, ([date, value]) => ({ date, value })));
+    }
+    return out;
+  }, [data, storeId, campaignId, adSetId, rangeFrom, rangeTo]);
+
   if (!open) return null;
   // Defensive guard: CampaignDrawer derives rangeFrom/rangeTo via
   // `rows.reduce(..., rows[0]?.date ?? '')`, which returns '' if rows is empty.
@@ -387,6 +415,10 @@ export function AdsDrawer({
                                 ordersAttrData?.rows ?? [],
                                 rangeFrom,
                                 rangeTo,
+                                // Pass per-ad daily Meta series so window-
+                                // stability + outlier detection actually fire
+                                // at the ad level (WR5-03).
+                                dailyMetaByAd.get(a.adId || a.adName) ?? [],
                               );
                               if (!adAttr) {
                                 return <span className="text-text-muted text-xs">—</span>;
