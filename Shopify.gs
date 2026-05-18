@@ -613,7 +613,13 @@ function classifyOrderAttribution_(order) {
   // try/catch in runUpdateForDate, and abort the WHOLE day's
   // orders-attribution write for this store. Decode per-pair so one bad
   // value drops only that param, never the whole order.
-  const params = {};
+  // Null-prototype so a note_attribute named "hasOwnProperty" / "toString"
+  // / __proto__ doesn't collide with inherited keys (would otherwise
+  // make the `!params[name]` check pick up the inherited function and
+  // silently drop the attribute). Defensive — no security exposure in
+  // V8 since values are coerced to String, but the lookup correctness
+  // matters here. (IN5-05)
+  const params = Object.create(null);
   const qIdx = landing.indexOf('?');
   if (qIdx >= 0) {
     const qs = landing.slice(qIdx + 1);
