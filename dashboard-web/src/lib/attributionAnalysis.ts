@@ -186,8 +186,15 @@ export function analyzeAttribution(
   if (campaign.platform !== 'Meta') return null;
   if (!orders || orders.length === 0) return null;
 
+  // Filter out non-finite totalCad at the matched-order boundary so a single
+  // malformed order (NaN from an Apps Script cell write or downstream parser
+  // glitch) doesn't poison the entire reduce — NaN propagates through
+  // deterministicRevenue → coverage → trust ladder unpredictably (WR-02).
+  // computeWindowStability (line 431) already guards this way; analyzeAttribution
+  // matches that contract here.
   const matchedOrders = orders.filter(o => {
     if (o.date < dateFrom || o.date > dateTo) return false;
+    if (!Number.isFinite(o.totalCad)) return false;
     return orderMatchesCampaign(o, campaign);
   });
 
@@ -551,6 +558,7 @@ export function analyzeAttributionForAdSet(
   const matchedOrders = orders.filter(o => {
     if (o.date < dateFrom || o.date > dateTo) return false;
     if (o.storeId !== adSet.storeId) return false;
+    if (!Number.isFinite(o.totalCad)) return false; // WR-02 — guard NaN propagation
     return o.utmTerm && o.utmTerm.trim() === adSet.adSetId.trim();
   });
 
@@ -600,6 +608,7 @@ export function analyzeAttributionForAd(
   const matchedOrders = orders.filter(o => {
     if (o.date < dateFrom || o.date > dateTo) return false;
     if (o.storeId !== ad.storeId) return false;
+    if (!Number.isFinite(o.totalCad)) return false; // WR-02 — guard NaN propagation
     return o.utmContent && o.utmContent.trim() === ad.adId.trim();
   });
 
@@ -645,7 +654,14 @@ function buildAnalysis(opts: {
     bad: string;
   };
 }): AttributionAnalysis {
-  const { metaClaim, spend, matchedOrders, dailyMeta, dateFrom, dateTo, advice } = opts;
+  const { metaClaim, spend, matchedOrders: rawMatched, dailyMeta, dateFrom, dateTo, advice } = opts;
+
+  // Defensive guard: even though analyzeAttributionForAdSet / *ForAd filter
+  // non-finite totalCad upstream, a future caller of buildAnalysis might not.
+  // Strip NaN rows here too so a single bad cell can't poison the reduce
+  // → coverage → trust ladder. Mirrors computeWindowStability line 431 and
+  // the campaign-level filter in analyzeAttribution. (WR-02)
+  const matchedOrders = rawMatched.filter(o => Number.isFinite(o.totalCad));
 
   const deterministicRevenue = matchedOrders.reduce((s, o) => s + o.totalCad, 0);
   const deterministicOrders = matchedOrders.length;
