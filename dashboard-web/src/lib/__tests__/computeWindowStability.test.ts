@@ -26,17 +26,19 @@ describe('computeWindowStability', () => {
     expect(result).toBeNull();
   });
 
-  it('returns null when coverages.length < 2 (single window with meta data)', () => {
-    // One window with meta data — can't compute σ from a single point
+  it('returns null when only one of two windows has meta data (other has zero meta)', () => {
+    // GEOMETRY (IN-09): the 14-day range produces TWO 7-day windows; the
+    // misleading "single window" phrasing of the previous test description
+    // suggested one window existed total. The setup actually creates both
+    // buckets — the first 7-day bucket has meta=100×7 days, the second has
+    // meta=0 (no points in days 8-14). The filter at attributionAnalysis.ts
+    // line 455 drops zero-meta buckets, leaving coverages.length=1 → null.
     const metaSeries = Array.from({ length: 7 }, (_, i) => ({
       date: `2026-05-${String(i + 1).padStart(2, '0')}`,
       value: 100,
     }));
-    // 14-day range: 2 full windows. But only the first window has meta data → 1 coverage point
-    // → coverages.length < 2 → null
     const metaOnlyFirstWindow = metaSeries; // only first 7 days have data
     const result = computeWindowStability([], metaOnlyFirstWindow, '2026-05-01', '2026-05-14');
-    // Both windows exist but second window has meta=0 → filtered out → 1 coverage
     expect(result).toBeNull();
   });
 
