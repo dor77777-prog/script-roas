@@ -17,14 +17,15 @@
 - **פירוט** — DetailTable (100 רשומות אחרונות)
 
 ### Drawer drill-down
-- **CampaignDrawer** (1310 שורות): hero stats + daily chart + **Attribution Analysis Panel** (Bayesian CI + window stability + outlier days) + **Meta↔Shopify reconciliation** (Pearson r + lag detection) + mapped products + sortable ad-sets
+- **CampaignDrawer** (1370 שורות): hero stats + daily chart + **Attribution Analysis Panel** (Bayesian CI + window stability + outlier days) + **Channel-level breakdown** (Phase 1 — מציג % הזמנות מפייסבוק עבור המוצרים המשויכים) + **Meta↔Shopify reconciliation** (Pearson r + lag detection) + mapped products + sortable ad-sets
 - **AdsDrawer** (586 שורות): totals strip + sortable ads + per-ad attribution chip
 - **ProductPickerModal** (368 שורות): search + multi-select של מוצרי החנות
 
-### Attribution layer (`lib/attributionAnalysis.ts` — 746 שורות)
-- Click-id דטרמיניסטי: matches utm_id={{campaign.id}} / utm_term={{adset.id}} / utm_content={{ad.id}}
+### Attribution layer (`lib/attributionAnalysis.ts`)
+- Click-id דטרמיניסטי: `analyzeAttribution` / `analyzeAttributionForAdSet` / `analyzeAttributionForAd` — matches utm_id={{campaign.id}} / utm_term={{adset.id}} / utm_content={{ad.id}}
 - 4-level trust chip: high / medium / low / unknown
 - Fallback למיפוי מוצרים heuristic כש-click-id חסר (suffix `·מיפוי`)
+- **`analyzeProductChannel`** (Phase 1) — channel-level signal של המוצרים המשויכים: מחזיר `ProductChannelBreakdown` עם `totalOrders / totalRevenue / bySource / facebookShare`. Facebook predicate רחב (`meta-paid ∨ meta-organic ∨ fbclidPresent`). Pure source-grouping — לא משתמש ב-`buildAnalysis`. נצרך ע"י `CampaignDrawer` בלבד.
 - Recommendations עם רקע: סיבות + פעולות מוצעות
 
 ### Cloud Sync (`lib/cloudSync.ts` — 413 שורות)
@@ -209,9 +210,11 @@ dashboard-web/
         ├── productCatalog.ts         parse {store}-products-catalog
         │
         ├── Attribution layer:
-        ├── attributionAnalysis.ts (746) ⭐ NEW — Bayesian CI + window
-        │                              stability + outlier detection,
-        │                              3 entry points (campaign/adset/ad)
+        ├── attributionAnalysis.ts     Bayesian CI + window stability +
+        │                              outlier detection, 4 entry points:
+        │                              analyzeAttribution / *ForAdSet /
+        │                              *ForAd + analyzeProductChannel
+        │                              (Phase 1 — channel-level)
         ├── campaignProductMap.ts     mapping + allocateProductRevenue
         ├── campaignOptimized.ts      optimization marks (Set + toggle)
         ├── campaignsLinks.ts         buildAdsManagerLink

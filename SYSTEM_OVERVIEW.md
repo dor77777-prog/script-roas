@@ -128,7 +128,7 @@
 - `products-daily` — שורה לכל (יום, חנות, מוצר): productId, productTitle, units, revenue (CAD), netRevenue. רק מוצרים שנמכרו ביום ספציפי.
 - `{storeId}-campaigns` — שורה לכל (יום, חנות, קמפיין, ad-set). כולל: spend, conversionValue, conversions, impressions, clicks, **תקציב יומי** (`campaignBudgetCad` / `adSetBudgetCad`), **סוג CBO/ABO**, platform (Meta/Google).
 - `{storeId}-ads` — שורה לכל (יום, חנות, קמפיין, ad-set, **מודעה**). Meta בלבד (`level=ad`).
-- `{storeId}-orders-attribution` (NEW Round 5) — שורה לכל הזמנה ב-Shopify:
+- `{storeId}-orders-attribution` (NEW Round 5, **14 עמודות** מ-Phase 1) — שורה לכל הזמנה ב-Shopify:
   - תאריך, מזהה הזמנה, סכום (CAD)
   - **source** classification: `meta-paid` / `google-paid` / `meta-organic` / `google-organic` / `email` / `other-paid` / `other-referral` / `direct`
   - UTM tags: `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`
@@ -137,6 +137,7 @@
   - **`utmId`** (= `{{campaign.id}}` מ-Meta URL Parameters) — match key חזק ביותר
   - **`utmTerm`** (= `{{adset.id}}`) — match לרמת ad-set
   - (`utm_content` כבר נמצא בעמודה 8) — match לרמת מודעה
+  - **`Line Items (JSON)`** (עמודה N, Phase 1) — `[{"p":productId,"u":units,"r":revenueCad}, ...]`. רק פריטים עם `product_id` תקין; `r` חולק פרופורציונלית מתוך `order.totalCad`. עמודה ריקה לשורות מלפני המיגרציה — הדשבורד מחזיר `[]` ולא קורס.
 - `{storeId}-products-catalog` — **קטלוג מלא** של החנות (כולל מוצרים בלי הזמנות). מתחדש מנואלית ע"י `refreshAllProductCatalogs` (בעבר היה חלק מ-`runDailyUpdate` ומיצה את ה-quota — הוצא ב-Round 4).
 - `store-meta` — שורה לכל חנות: שם תוכנית Shopify, Meta ad-account ID, Google customer ID, last-error timestamp.
 - `dashboard-state` — Key-value: billing / annotations / goal / insight-states / campaign-optimized / **campaign-product-map**. נכתב ע"י service-account של הדשבורד (Vercel).
@@ -470,6 +471,26 @@ tooltip = always shows BOTH numbers (Meta claim, click-id revenue, mapping reven
 ```
 
 **רמת ad-set + ad:** רק סיגנל ה-click-id. אין fallback למיפוי מוצרים (אין mapping ברמה זו — היא יורשת מהקמפיין).
+
+### סיגנל 3: Channel-level של המוצרים המשויכים (`analyzeProductChannel`, Phase 1 — מאי 2026)
+
+**מקור הנתונים:** עמודה N החדשה ב-`{store}-orders-attribution` — `Line Items (JSON)` בפורמט קומפקטי `[{"p":productId,"u":units,"r":revenueCad}, ...]` (Apps Script מחשב את `r` כפרופורציה מתוך `order.totalCad`, מסנן פריטים עם `product_id=null`).
+
+**מה זה מודד:** "מאיפה הגיעו הקונים של המוצרים המשויכים לקמפיין?" — בלי תלות במצב ה-`utm_id` של ההזמנה. בעוד שה-click-id signal עונה "ההזמנה הזאת ספציפית שייכת לקמפיין A דרך utm_id?", הסיגנל הזה עונה "ההזמנות שכוללות את מוצרי הקמפיין — באו בכלל מפייסבוק?".
+
+**Facebook predicate (רחב יותר ממהשמ-`meta-paid`):** `source === 'meta-paid' || source === 'meta-organic' || fbclidPresent === true`. גם תנועה אורגנית מ-FB/IG נחשבת — הלקוח עדיין הגיע ממשטח Facebook.
+
+**איפה זה מופיע:** ב-`CampaignDrawer` בלבד (לא בטבלה הראשית — לא צריך לגדוש שם), בין `AttributionAnalysisPanel` (סיגנל 1) ל-`MetaShopifyReconciliation`. הסקציה מופיעה רק כש:
+- הפלטפורמה היא Meta (Google PMax אין mapping)
+- לקמפיין יש מוצרים משויכים
+- ≥3 הזמנות בתקופה כוללות לפחות מוצר אחד משויך (פחות מזה — רעש)
+
+**Recommendation chips:**
+- `facebookShare ≥ 60%` → ירוק: "ביטחון להעלאת תקציב הקמפיין"
+- `facebookShare < 30%` ו-`totalOrders ≥ 5` → אמבר: "ייתכן שהקמפיין לא הוא המניע — בדוק לפני העלאת תקציב"
+- בין 30% ל-60% → אין chip (אזור אפור)
+
+**מבדל מסיגנלים 1+2:** סיגנל 1 דורש URL Parameters תקינים ב-Meta; סיגנל 2 תלוי במיפוי המפעיל ל-Shopify-revenue-by-product. הסיגנל החדש דורש רק `line_items` של Shopify (תמיד זמין) ומיפוי מוצרים. הוא משלים — לא מחליף — את שני הסיגנלים הקודמים.
 
 ---
 
