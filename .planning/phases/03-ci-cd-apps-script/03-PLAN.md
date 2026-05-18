@@ -31,6 +31,11 @@ must_haves:
     - "SYSTEM_OVERVIEW.md mentions the new CI/CD path (Success Criterion 6)"
     - "Trigger runs only on paths `*.gs` + `appsscript.json` on push to `main` (D-01, D-03)"
     - "Action writes CLASPRC_JSON secret to `~/.clasprc.json` only — never echoed to stdout (D-08, threat T1)"
+    - "`.clasp.json` is removed from `.gitignore` and committed to the repo — script ID is not a secret per clasp docs (D-04)"
+    - "The `.gitignore` edit (remove `.clasp.json`, add `.clasprc.json`) lands in Task 1 BEFORE `.clasp.json` is created; otherwise the new file is silently ignored (D-05)"
+    - "`CLASPRC_JSON` GitHub Secret content equals the verbatim contents of `~/.clasprc.json` produced locally by `clasp login` (D-07)"
+    - "Workflow invokes `clasp push --force`; the `--force` flag is required for CI overwrite of server-side state, with the documented risk of clobbering Apps Script editor manual edits surfaced in SETUP.md (D-15)"
+    - "Deploy is idempotent: re-running `clasp push --force` with no `.gs` diff is a no-op; mid-failure retry is safe without rollback (D-18)"
   artifacts:
     - path: ".gitignore"
       provides: "ignore list without `.clasp.json`, with `.clasprc.json`"

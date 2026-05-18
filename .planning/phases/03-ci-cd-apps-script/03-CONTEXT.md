@@ -37,7 +37,7 @@
 ### Trigger Strategy
 
 - **D-01:** GitHub Action מופעל **על push ל-`main`** עם paths filter על `*.gs` + `appsscript.json`. push ל-`main` שלא נוגע ב-Apps Script files לא מריץ את ה-Action (חיסכון ב-Actions minutes + שקט ב-Actions tab).
-- **D-02:** אין `workflow_dispatch` (manual override) ב-phase הזה. אם Action נכשל וצריך retry, פותרים את ה-root cause + dummy commit / `git commit --amend` ודוחפים שוב. הוספת `workflow_dispatch` היא <5 שורות YAML ויכולה להתווסף מאוחר יותר ב-Phase 7 אם תהיה צריכה (לא חוסם עכשיו).
+- **D-02 [deferred]:** אין `workflow_dispatch` (manual override) ב-phase הזה. אם Action נכשל וצריך retry, פותרים את ה-root cause + dummy commit / `git commit --amend` ודוחפים שוב. הוספת `workflow_dispatch` היא <5 שורות YAML ויכולה להתווסף מאוחר יותר ב-Phase 7 אם תהיה צריכה (לא חוסם עכשיו).
 - **D-03:** Trigger רק על `main` — אין deploy מ-PR branches (Apps Script אין preview environment ממילא).
 
 ### `.clasp.json` Migration (currently in .gitignore — must change)
@@ -57,13 +57,13 @@
   ```
   אסור לעשות echo של הסוד ל-stdout (GitHub מצנזר, אבל עדיף לא לסמוך). אסור לכתוב אותו ל-repo path — רק ל-`$HOME`.
 - **D-09:** **Refresh token rotation:** setup-once-and-forget. SETUP.md יכלול פסקה: "Google OAuth refresh tokens של clasp expirim אחרי **6 חודשים של inactivity**. אם ה-Action נכשל פתאום עם `Error 401: invalid_grant`, רוצים: (1) `clasp login` local מחדש, (2) להעלות את `~/.clasprc.json` החדש כ-GitHub Secret value בשם `CLASPRC_JSON`."
-- **D-10:** **לא** מוסיפים cron job / scheduled action כדי "להפעיל את ה-token" באופן יזום — ה-Action עצמו רץ בכל פעם שמשנים `.gs`, מה ש-rotation-friendly.
+- **D-10 [informational]:** **לא** מוסיפים cron job / scheduled action כדי "להפעיל את ה-token" באופן יזום — ה-Action עצמו רץ בכל פעם שמשנים `.gs`, מה ש-rotation-friendly.
 
 ### Failure Notifications
 
-- **D-11:** Notifications של failure: **GitHub's default email** + **Actions tab**. אין Slack webhook, אין Sentry monitor, אין cron-checker.
+- **D-11 [informational]:** Notifications של failure: **GitHub's default email** + **Actions tab**. אין Slack webhook, אין Sentry monitor, אין cron-checker.
 - **D-12:** SETUP.md מסעיף "מה לעשות כש-deploy נכשל": (1) פתח את Actions tab → run האחרון → צפה ב-logs → fix → re-push. (2) אם ה-error הוא `invalid_grant` — חזור ל-D-09.
-- **D-13:** Sentry monitoring + Slack/email alerts מתוקצבים ל-**Phase 7 (Observability)**. שם יוסיפו גם monitoring ל-Apps Script runs עצמם (לא רק ל-deploy).
+- **D-13 [deferred]:** Sentry monitoring + Slack/email alerts מתוקצבים ל-**Phase 7 (Observability)**. שם יוסיפו גם monitoring ל-Apps Script runs עצמם (לא רק ל-deploy).
 
 ### `deploy:gs` Script Shape
 
@@ -85,7 +85,7 @@
 
 ### Pre-commit Hook
 
-- **D-17:** **נדחה ל-Phase 7.** Phase 7 כבר מתוכנן ל-observability — pre-commit hook ל-`.gs` syntax validation נכנס שם יחד עם Apps Script runtime logging. Phase 3 מתמקד **רק** ב-deploy mechanism.
+- **D-17 [deferred]:** **נדחה ל-Phase 7.** Phase 7 כבר מתוכנן ל-observability — pre-commit hook ל-`.gs` syntax validation נכנס שם יחד עם Apps Script runtime logging. Phase 3 מתמקד **רק** ב-deploy mechanism.
 
 ### Idempotency
 
