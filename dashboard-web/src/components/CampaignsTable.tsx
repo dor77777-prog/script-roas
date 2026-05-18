@@ -32,6 +32,11 @@ import {
   type ProductMap,
 } from '@/lib/campaignProductMap';
 import type { ProductsResponse } from '@/app/api/products/route';
+import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
+import {
+  analyzeAttribution,
+  type AttributionAnalysis,
+} from '@/lib/attributionAnalysis';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { DateRange } from '@/lib/types';
 import { roasLabel } from '@/lib/analytics';
@@ -60,6 +65,14 @@ type TrueRevenueInfo = {
   mappedCount: number;
   sharedCampaigns: number;
   confidence: ConfidenceLevel;
+  /** Deterministic per-order attribution analysis (from
+   *  /api/orders-attribution). When present, this is the authoritative
+   *  signal — replaces the heuristic confidence chip with click-ID-proven
+   *  numbers ('X orders tagged, Y modeled, Z% coverage'). null when:
+   *    - Google campaign (no per-product attribution),
+   *    - orders-attribution tab missing (first deploy), or
+   *    - the new pipeline hasn't run yet. */
+  attribution: AttributionAnalysis | null;
 };
 
 type ConfidenceLevel = {
@@ -435,6 +448,20 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     },
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
+  // Per-order attribution from {storeId}-orders-attribution tabs. Lets the
+  // confidence chip be based on actual click-ID proof instead of just the
+  // proportional product allocation. When this is empty (first deploy,
+  // before Apps Script has run the new pipeline), `analyzeAttribution`
+  // returns null and the row falls back to the old heuristic chip.
+  const { data: ordersAttrResp } = useSWR<OrdersAttributionResponse>(
+    '/api/orders-attribution',
+    async (url: string) => {
+      const r = await fetch(url);
+      if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
+      return r.json();
+    },
+    { revalidateOnFocus: false, dedupingInterval: 60_000 },
+  );
   const [productMap, setProductMap] = useState<ProductMap>(() => ({}));
   useEffect(() => {
     setProductMap(readProductMap());
@@ -604,6 +631,21 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         }
       }
       const shared = sharedKeys.size;
+      // Deterministic per-order attribution. Uses the campaign's name to
+      // match against orders' utm_campaign field. Returns null for non-Meta
+      // campaigns or when the attribution tab is empty (first deploy).
+      const attribution = analyzeAttribution(
+        {
+          campaignName: a.campaignName,
+          storeId: a.storeId,
+          platform: a.platform,
+          metaClaim: a.conversionValue,
+          spend: a.spend,
+        },
+        ordersAttrResp?.rows ?? [],
+        localRange.from,
+        localRange.to,
+      );
       out.set(k, {
         trueRevenue,
         trueUnits,
@@ -612,10 +654,11 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         sharedCampaigns: shared,
         spend: a.spend,
         confidence: computeConfidence(trueRevenue, a.conversionValue, a.spend, shared, mappedIds.length),
+        attribution,
       });
     }
     return out;
-  }, [mode, data, productsResp, productMap, aggregated, localRange]);
+  }, [mode, data, productsResp, ordersAttrResp, productMap, aggregated, localRange]);
 
   const totals = useMemo(() => {
     let spend = 0, conv = 0, val = 0, clicks = 0, imps = 0;
@@ -1241,25 +1284,53 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                           const gap = info.metaClaim > 0
                             ? ((trueRoas * a.spend) - info.metaClaim) / info.metaClaim
                             : 0;
+
+                          // When deterministic attribution is available, it
+                          // OVERRIDES the heuristic confidence — it's strictly
+                          // more accurate (click-IDs are proof, not estimate).
+                          // We surface 4 levels including 'unknown' (= no
+                          // utm_campaign configured) which the heuristic
+                          // doesn't produce.
+                          const useAttr = info.attribution !== null;
+                          const trustLabel = useAttr ? info.attribution!.trust.label : info.confidence.label;
+                          const trustLevel = useAttr ? info.attribution!.trust.level : info.confidence.level;
                           const confTone =
-                            info.confidence.level === 'high'
-                              ? 'bg-roas-greenBg/60 text-roas-green'
-                              : info.confidence.level === 'medium'
-                              ? 'bg-amber-50 text-amber-700'
-                              : 'bg-roas-redBg/60 text-roas-red';
-                          const tooltip =
-                            `ROAS מבוסס Shopify · ${info.confidence.label}\n\n` +
-                            `Meta דיווח: CAD ${info.metaClaim.toFixed(0)}\n` +
-                            `Shopify בפועל (מוקצה): CAD ${info.trueRevenue.toFixed(0)}\n` +
-                            `פער: ${(gap * 100).toFixed(0)}%\n\n` +
-                            info.confidence.reasons.map(r => `• ${r}`).join('\n');
+                            trustLevel === 'high'    ? 'bg-roas-greenBg/60 text-roas-green'
+                          : trustLevel === 'medium'  ? 'bg-amber-50 text-amber-700'
+                          : trustLevel === 'unknown' ? 'bg-surfaceMuted text-text-secondary'
+                          :                            'bg-roas-redBg/60 text-roas-red';
+
+                          let tooltip: string;
+                          if (useAttr) {
+                            const at = info.attribution!;
+                            const detRoas = a.spend > 0 ? at.deterministicRevenue / a.spend : 0;
+                            tooltip =
+                              `ROAS מבוסס click-id · ${at.trust.label} (${at.trust.score.toFixed(0)}/100)\n\n` +
+                              `Meta דיווח:           CAD ${info.metaClaim.toFixed(0)}\n` +
+                              `מתויג click-id:       CAD ${at.deterministicRevenue.toFixed(0)} (${at.deterministicOrders} הזמנות)\n` +
+                              `Modeled / view-through: CAD ${at.modeledRevenue.toFixed(0)}\n` +
+                              `coverage: ${(at.coverage * 100).toFixed(0)}%\n` +
+                              `ROAS אמיתי: ${detRoas.toFixed(2)}x  |  ROAS לפי Meta: ${(info.metaClaim / a.spend).toFixed(2)}x\n\n` +
+                              at.reasons.map(r => `• ${r}`).join('\n') +
+                              `\n\n💡 ${at.recommendation}`;
+                          } else {
+                            tooltip =
+                              `ROAS מבוסס Shopify · ${info.confidence.label}\n\n` +
+                              `Meta דיווח: CAD ${info.metaClaim.toFixed(0)}\n` +
+                              `Shopify בפועל (מוקצה): CAD ${info.trueRevenue.toFixed(0)}\n` +
+                              `פער: ${(gap * 100).toFixed(0)}%\n\n` +
+                              info.confidence.reasons.map(r => `• ${r}`).join('\n');
+                          }
                           return (
                             <div className="inline-flex flex-col items-center gap-0.5" title={tooltip}>
                               <span className="font-semibold tabular-nums text-text-primary">
                                 {trueRoas > 0 ? formatNumber(trueRoas) : '—'}
                               </span>
                               <span className={cn('inline-block text-[8px] font-bold px-1 py-0 rounded uppercase tracking-wider', confTone)}>
-                                {info.confidence.label}
+                                {trustLabel}
+                                {useAttr && (
+                                  <span className="ms-1 opacity-70">·{info.attribution!.deterministicOrders}</span>
+                                )}
                               </span>
                             </div>
                           );
