@@ -36,6 +36,30 @@ export type OrderAttributionRow = {
   /** Platform ad-set ID from utm_term={{adset.id}}. Enables per-adset
    *  matching when the URL Parameters are configured. */
   utmTerm: string;
+  /** Per-line-item breakdown from Shopify's `line_items` (added Phase 1).
+   *  Empty array on rows from days before the col-N migration was
+   *  deployed — downstream analyzers must treat `[]` as "no signal",
+   *  not "zero sales". */
+  lineItems: OrderLineItem[];
+};
+
+/**
+ * One physical line item inside a Shopify order. Captured by Apps Script
+ * from `order.line_items[]` and proportionally allocated against the
+ * order's `current_total_price` so the sum of `revenueCad` across an
+ * order's items equals (within rounding) `totalCad`. Items with a null /
+ * empty `product_id` (custom items, deleted products) are filtered out
+ * at write time — they can never match any campaign's mapped products.
+ */
+export type OrderLineItem = {
+  /** Shopify numeric product ID as string. Guaranteed non-empty (the
+   *  Apps Script writer skips items without a product_id). */
+  productId: string;
+  /** Units sold for this line. */
+  units: number;
+  /** Proportional CAD share of the order's `totalCad`
+   *  ( = (price × qty / order_subtotal) × current_total_price ). */
+  revenueCad: number;
 };
 
 export type OrderSource =
@@ -113,6 +137,44 @@ function parseSource(v: unknown): OrderSource {
 }
 
 /**
+ * Permissive JSON parser for col-N (`Line Items (JSON)`). Mirrors the
+ * `parseSource` design (line 109 above): be tolerant — a malformed cell
+ * on one row should NEVER take down the whole tab. Returns `[]` for:
+ *   - missing cell (`undefined` / `null` / `''` — old pre-migration rows)
+ *   - non-JSON strings
+ *   - JSON that decodes to a non-array
+ *   - non-object array elements
+ *   - elements with empty productId or non-finite units / revenueCad
+ *
+ * Phase 1 (added 2026-05-18). Defaults to `[]` rather than `null` so
+ * consumer code can always iterate without a null-guard — matches the
+ * "Claude's Discretion" call in RESEARCH.md.
+ */
+export function parseLineItems(v: unknown): OrderLineItem[] {
+  if (v === null || v === undefined || v === '') return [];
+  const raw = typeof v === 'string' ? v : String(v);
+  if (!raw.trim()) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((it): it is Record<string, unknown> => it !== null && typeof it === 'object')
+      .map(it => ({
+        productId: String(it.p ?? ''),
+        units: Number(it.u ?? 0),
+        revenueCad: Number(it.r ?? 0),
+      }))
+      .filter(li =>
+        li.productId &&
+        Number.isFinite(li.units) &&
+        Number.isFinite(li.revenueCad),
+      );
+  } catch {
+    return [];
+  }
+}
+
+/**
  * Reads every <storeId>-orders-attribution tab and merges. Tolerates
  * missing tabs (first-deploy case): returns empty array if the batch
  * fails on a 'not found' / 'unable to parse range' error.
@@ -168,6 +230,10 @@ export async function fetchOrdersAttribution(): Promise<OrderAttributionRow[]> {
         referringSite: String(row[10] ?? '').trim(),
         utmId: String(row[11] ?? '').trim(),
         utmTerm: String(row[12] ?? '').trim(),
+        // T-01: type now requires lineItems. Default to [] so the build
+        // stays green; T-02 swaps the range to A2:N100000 and wires
+        // parseLineItems(row[13]) here.
+        lineItems: [],
       });
     }
   }
