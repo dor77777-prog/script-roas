@@ -96,13 +96,20 @@ function parseDate(v: unknown): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
 }
 
+/**
+ * Source kinds the Apps Script `classifyOrderAttribution_` is known to
+ * emit at the time of writing. Kept as a documented contract — the type
+ * union in OrderSource doubles as the canonical list. When Apps Script
+ * adds a new bucket (e.g. 'tiktok-paid'), it'll pass through this parser
+ * via the type-cast fallback below (rather than being silently coerced
+ * to '' as the previous whitelist did). Downstream code that pattern-
+ * matches on specific values won't recognise the new kind, but the data
+ * survives — the dashboard stops going blind on new categories. (IN5-06)
+ */
 function parseSource(v: unknown): OrderSource {
   const s = String(v ?? '').trim();
-  const valid: OrderSource[] = [
-    'meta-paid', 'google-paid', 'meta-organic', 'google-organic',
-    'email', 'other-paid', 'other-referral', 'direct',
-  ];
-  return valid.includes(s as OrderSource) ? (s as OrderSource) : '';
+  if (!s) return '';
+  return s as OrderSource;
 }
 
 /**
