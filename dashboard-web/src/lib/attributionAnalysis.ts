@@ -327,10 +327,19 @@ export function analyzeAttribution(
     if (campaign.spend < 200) {
       reasons.push(`הוצאה נמוכה (CAD ${campaign.spend.toFixed(0)}) — מדגם קטן מגדיל אי-ודאות`);
     }
-    recommendation =
-      `ROAS אמיתי לפי click-id: ${(deterministicRevenue / campaign.spend).toFixed(2)}x. ` +
-      `ROAS לפי Meta: ${(campaign.metaClaim / campaign.spend).toFixed(2)}x. ` +
-      `הפער מעיד על modeled — הימנע מהחלטות אגרסיביות; הסתכל גם על הטרנד.`;
+    // Guard divide-by-zero: when spend === 0 (operator-backfilled or
+    // attribution-only campaigns), the ratio is Infinity and toFixed(2)
+    // yields the literal string "Infinity", which renders as
+    // "ROAS אמיתי: Infinityx" in tooltips — a user-visible defect (CR-03).
+    if (campaign.spend > 0) {
+      recommendation =
+        `ROAS אמיתי לפי click-id: ${(deterministicRevenue / campaign.spend).toFixed(2)}x. ` +
+        `ROAS לפי Meta: ${(campaign.metaClaim / campaign.spend).toFixed(2)}x. ` +
+        `הפער מעיד על modeled — הימנע מהחלטות אגרסיביות; הסתכל גם על הטרנד.`;
+    } else {
+      recommendation =
+        `${pct}% מההמרות תויגו אבל אין הוצאה לחשב ROAS. הפער מעיד על modeled — הימנע מהחלטות אגרסיביות.`;
+    }
   } else {
     const pct = Math.round(coverage * 100);
     trust = { level: 'low', label: 'לא אמין', score: pct };
@@ -703,9 +712,16 @@ function buildAnalysis(opts: {
     trust = { level: 'medium', label: 'חלקי', score: 40 + pct / 2 };
     reasons.push(`${pct}% תויגו (${deterministicOrders} הזמנות)`);
     reasons.push(`${Math.round((modeledRevenue / metaClaim) * 100)}% modeled`);
-    recommendation =
-      `ROAS אמיתי: ${(deterministicRevenue / spend).toFixed(2)}x  |  ROAS לפי Meta: ${(metaClaim / spend).toFixed(2)}x. ` +
-      advice.partial;
+    // Guard divide-by-zero — see CR-03 in 02-foundations/02-REVIEW.md. Without
+    // this, spend === 0 produces "ROAS אמיתי: Infinityx" tooltips.
+    if (spend > 0) {
+      recommendation =
+        `ROAS אמיתי: ${(deterministicRevenue / spend).toFixed(2)}x  |  ROAS לפי Meta: ${(metaClaim / spend).toFixed(2)}x. ` +
+        advice.partial;
+    } else {
+      recommendation =
+        `${pct}% מההמרות תויגו אבל אין הוצאה לחשב ROAS. ` + advice.partial;
+    }
   } else {
     const pct = Math.round(coverage * 100);
     trust = { level: 'low', label: 'לא אמין', score: pct };
