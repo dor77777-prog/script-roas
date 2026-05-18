@@ -217,17 +217,26 @@ export function analyzeAttribution(
     const meanAov = aovs.reduce((s, x) => s + x, 0) / aovs.length;
     const variance =
       aovs.reduce((s, x) => s + (x - meanAov) ** 2, 0) / aovs.length;
-    const stdDev = Math.sqrt(variance);
-    const stderrAov = stdDev / Math.sqrt(aovs.length);
-    // CI on total revenue = CI on (N × mean AOV) — N is treated as fixed
-    // (we observed it). 95% normal: ± 1.96 × stderr.
-    const revLow = Math.max(0, (meanAov - 1.96 * stderrAov) * aovs.length);
-    const revHigh = (meanAov + 1.96 * stderrAov) * aovs.length;
-    roasInterval = {
-      low: revLow / campaign.spend,
-      mid: deterministicRevenue / campaign.spend,
-      high: revHigh / campaign.spend,
-    };
+    if (variance === 0) {
+      // Homogeneous sample (e.g. single-SKU subscription store: every order
+      // is the same AOV). With zero observed variance the normal-approx CI
+      // collapses to a degenerate point, which renders as
+      // "טווח 95%: 2.30 – 2.30" — a falsely-precise signal from a tiny
+      // sample. Treat as "not enough info" instead.
+      roasInterval = null;
+    } else {
+      const stdDev = Math.sqrt(variance);
+      const stderrAov = stdDev / Math.sqrt(aovs.length);
+      // CI on total revenue = CI on (N × mean AOV) — N is treated as fixed
+      // (we observed it). 95% normal: ± 1.96 × stderr.
+      const revLow = Math.max(0, (meanAov - 1.96 * stderrAov) * aovs.length);
+      const revHigh = (meanAov + 1.96 * stderrAov) * aovs.length;
+      roasInterval = {
+        low: revLow / campaign.spend,
+        mid: deterministicRevenue / campaign.spend,
+        high: revHigh / campaign.spend,
+      };
+    }
   }
 
   // -----------------------------------------------------------------------
@@ -624,15 +633,22 @@ function buildAnalysis(opts: {
     const aovs = matchedOrders.map(o => o.totalCad);
     const meanAov = aovs.reduce((s, x) => s + x, 0) / aovs.length;
     const variance = aovs.reduce((s, x) => s + (x - meanAov) ** 2, 0) / aovs.length;
-    const stdDev = Math.sqrt(variance);
-    const stderrAov = stdDev / Math.sqrt(aovs.length);
-    const revLow = Math.max(0, (meanAov - 1.96 * stderrAov) * aovs.length);
-    const revHigh = (meanAov + 1.96 * stderrAov) * aovs.length;
-    roasInterval = {
-      low: revLow / spend,
-      mid: deterministicRevenue / spend,
-      high: revHigh / spend,
-    };
+    if (variance === 0) {
+      // Mirror analyzeAttribution: homogeneous sample → degenerate interval
+      // would mislead. Treat as "not enough info" so the tooltip doesn't
+      // render a falsely-precise CI.
+      roasInterval = null;
+    } else {
+      const stdDev = Math.sqrt(variance);
+      const stderrAov = stdDev / Math.sqrt(aovs.length);
+      const revLow = Math.max(0, (meanAov - 1.96 * stderrAov) * aovs.length);
+      const revHigh = (meanAov + 1.96 * stderrAov) * aovs.length;
+      roasInterval = {
+        low: revLow / spend,
+        mid: deterministicRevenue / spend,
+        high: revHigh / spend,
+      };
+    }
   }
 
   const windowStability = computeWindowStability(matchedOrders, dailyMeta, dateFrom, dateTo);
