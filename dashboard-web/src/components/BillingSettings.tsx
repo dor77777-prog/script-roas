@@ -1,12 +1,11 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import {
   Receipt,
   Plus,
   Trash2,
-  Upload,
   X,
   Edit3,
   Check,
@@ -16,15 +15,12 @@ import {
 } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import {
-  findMatchingRecurring,
   generateId,
   hasAnyBilling,
-  parseShopifyBillsCsv,
   seedBillingIfEmpty,
   shopifyPlanCadForName,
   type CostSource,
   type OneTimeCost,
-  type ParsedBillLine,
   type RecurringCost,
 } from '@/lib/billing';
 import { isHydrated } from '@/lib/cloudSync';
@@ -56,16 +52,11 @@ const metaFetcher = async (url: string): Promise<StoreMetaResponse> => {
 
 /**
  * Billing settings panel — manage recurring monthly costs (Shopify plan,
- * external apps like Klaviyo, email service) + one-time / overage charges.
+ * external apps like Klaviyo, email service) + one-time / overage charges +
+ * Shopify Bills CSV import (see ./BillingCsvImport).
  *
- * Open via the trigger pill. Inside:
- *   - Two tabs: "חודשי קבוע" (recurring) and "חיובים חד-פעמיים" (one-off)
- *   - Drag-and-drop / paste Shopify Bills CSV to bulk-import one-time charges
- *   - Edit any row inline
- *   - Delete with confirmation
- *
- * Storage: localStorage via lib/billing helpers. Future: same shapes flow
- * over the wire when we move to multi-device sync.
+ * Storage: cloud-synced via useBillingRecurring + useBillingOneTime hooks
+ * (both subscribe to the 'roas-billing-changed' event).
  */
 
 type Props = {
