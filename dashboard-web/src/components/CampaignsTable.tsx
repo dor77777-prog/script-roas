@@ -114,12 +114,9 @@ function aggregate(
   range: DateRange,
 ): Aggregated[] {
   const map = new Map<string, Aggregated>();
-  // Per-key "latest budget date" tracker so the overwrite logic depends on
-  // the row's `date` field, NOT iteration order (#IN-02). Apps Script's
-  // writeCampaignRowsForDay appends backfilled past dates to the END of
-  // the sheet, which means a stale past-date row could otherwise stamp
-  // its budget as "current". Kept as a sidecar Map rather than fields on
-  // the public Aggregated type so consumers downstream are unaffected.
+  // Per-key "latest budget date" trackers so overwrite depends on the row's
+  // `date`, NOT iteration order (#IN-02 — backfilled past dates appended to
+  // sheet end would otherwise stamp stale budgets as current).
   const latestBudgetDate = new Map<string, string>();
   const latestAdSetBudgetDate = new Map<string, string>();
   const latestBudgetTypeDate = new Map<string, string>();
@@ -148,9 +145,7 @@ function aggregate(
         clicks: 0,
         conversions: 0,
         conversionValue: 0,
-        // Budgets are a current-state property — every row carries today's
-        // value. Seed with this row's values; the loop below upgrades to
-        // the chronologically-latest value as we see more rows.
+        // Seed budgets with this row's values; loop below picks the latest.
         campaignBudgetCad: r.campaignBudgetCad,
         adSetBudgetCad: mode === 'adset' ? r.adSetBudgetCad : null,
         budgetType: r.budgetType,
@@ -165,10 +160,7 @@ function aggregate(
     a.clicks += r.clicks;
     a.conversions += r.conversions;
     a.conversionValue += r.conversionValue;
-    // Budget reflects "current" — pick the row with the chronologically
-    // latest `date`, NOT the last-iterated row. Backfills of past dates
-    // (Apps Script appends them to the end of the sheet) would otherwise
-    // stamp their stale budget value as current. (#IN-02)
+    // Budget = chronologically latest row's value (#IN-02 — see above).
     if (r.campaignBudgetCad != null) {
       const prev = latestBudgetDate.get(key);
       if (!prev || r.date >= prev) {
@@ -211,9 +203,7 @@ function sortAggregated(
       case 'spend':
         return a.spend;
       case 'budget':
-        // The visible budget for the row: campaign-level when in campaign mode,
-        // ad-set-level when in ad-set mode. null becomes 0 so empty rows sort
-        // to the bottom on desc.
+        // null → 0 so empty-budget rows sort to bottom on desc.
         return (
           mode === 'campaign'
             ? a.campaignBudgetCad ?? 0
@@ -224,12 +214,8 @@ function sortAggregated(
       case 'roas':
         return a.spend > 0 ? a.conversionValue / a.spend : 0;
       case 'shopifyRoas': {
-        // Shopify-true ROAS isn't on the Aggregated row (it's computed
-        // separately from the product map). Sort by it requires the
-        // outer scope's `trueRevenueByKey`; we don't have it here, so we
-        // fall through to sort by Meta ROAS — the column header still
-        // toggles direction. Real value-based sort happens at render
-        // time via a separate prepared list (see `display` below).
+        // Falls back to Meta ROAS; real Shopify-ROAS sort happens at render
+        // time via the `displaySource` memo which has trueRevenueByKey in scope.
         return a.spend > 0 ? a.conversionValue / a.spend : 0;
       }
       case 'conversions':
@@ -253,12 +239,6 @@ function sortAggregated(
   return sorted;
 }
 
-// Ads Manager deep links are built via `buildAdsManagerLink` in lib/campaigns
-// (which needs the storeId → ad-account-ID map fetched from /api/store-meta).
-// The old local stub here returned a link missing `act=` / `__c=`, so Meta
-// and Google Ads opened the user's last-used account instead of the
-// campaign's account — leading to "campaign not found" landings.
-
 // --- Component --------------------------------------------------------------
 
 type Props = {
@@ -280,10 +260,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     { refreshInterval: 120_000, revalidateOnFocus: false },
   );
 
-  // store-meta provides the Meta ad-account ID / Google Ads customer ID per
-  // store. We use it to build deep links that open the right account in Ads
-  // Manager. Without these IDs, links would land on whatever account the user
-  // last viewed (not the campaign's account).
+  // store-meta → Meta ad-account ID / Google Ads customer ID for deep links.
   const { data: storeMeta } = useSWR<{ rows: Array<{ storeId: string; metaAdAccountId: string | null; googleAdsCustomerId: string | null }> }>(
     '/api/store-meta',
     async (url: string) => {
@@ -304,10 +281,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     return out;
   }, [storeMeta]);
 
-  // Products data + mapping. Together they let us compute "true ROAS" —
-  // attributing actual Shopify product sales back to campaigns instead of
-  // trusting Meta's self-reported conversion value (which is routinely
-  // inflated by view-through credit + modeled conversions).
+  // Products + mapping feed `useCampaignTrueRevenue` (Shopify-based true ROAS).
   const { data: productsResp } = useSWR<ProductsResponse>(
     '/api/products',
     async (url: string) => {
@@ -317,11 +291,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     },
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
-  // Per-order attribution from {storeId}-orders-attribution tabs. Lets the
-  // confidence chip be based on actual click-ID proof instead of just the
-  // proportional product allocation. When this is empty (first deploy,
-  // before Apps Script has run the new pipeline), `analyzeAttribution`
-  // returns null and the row falls back to the old heuristic chip.
+  // Per-order attribution → trust chip basis (click-id proof vs heuristic).
   const { data: ordersAttrResp } = useSWR<OrdersAttributionResponse>(
     '/api/orders-attribution',
     async (url: string) => {
@@ -343,10 +313,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   const [platform, setPlatform] = useState<Platform>('all');
   const [showAll, setShowAll] = useState(false);
 
-  // "Optimized" marks — purely a UX helper while the user goes through
-  // campaigns/ad-sets and ticks the ones they've already touched. Hydrated
-  // from localStorage on mount, kept in sync across devices by the cloud
-  // sync layer (registered as 'campaign-optimized' in STATE_KEYS).
+  // "Optimized" marks (UX helper). Cloud-synced via 'campaign-optimized' key.
   const [optimized, setOptimized] = useState<Set<string>>(() => new Set());
   useEffect(() => {
     setOptimized(readOptimized());
@@ -361,10 +328,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     setOptimized(clearAllOptimized());
   }
 
-  // Sort state. Defaults to ROAS desc — same as the implicit sort before.
-  // Click a different column → switch + reset to desc (because users almost
-  // always want "biggest first" for ad metrics). Click the same column →
-  // toggle direction.
+  // Sort state. Same column → toggle dir; different column → switch + dir=desc.
   const [sortKey, setSortKey] = useState<SortKey>('roas');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   function handleSort(key: SortKey) {
@@ -437,10 +401,8 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     };
   }, [aggregated]);
 
-  // If the user asked to sort by Shopify-ROAS, re-sort here using the
-  // values from `trueRevenueByKey` (the inner sortAggregated falls back to
-  // Meta ROAS for this key — we override that here so the column actually
-  // sorts by what it shows). Unmapped rows go to the bottom on desc.
+  // Shopify-ROAS sort: re-rank using `trueRevenueByKey` (sortAggregated falls
+  // back to Meta ROAS). Unmapped rows pushed to bottom on desc.
   const displaySource = useMemo(() => {
     if (sortKey !== 'shopifyRoas' || trueRevenueByKey.size === 0) return aggregated;
     const sign = sortDir === 'asc' ? 1 : -1;
@@ -450,8 +412,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       return { a, roas, mapped: !!info };
     });
     withRoas.sort((x, y) => {
-      // Always push unmapped rows to the bottom so the meaningful sort is
-      // among the mapped campaigns first.
+      // Push unmapped rows to bottom so mapped sort is meaningful.
       if (x.mapped !== y.mapped) return x.mapped ? -1 : 1;
       return sign * (x.roas - y.roas);
     });
@@ -460,11 +421,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   const display = showAll ? displaySource : displaySource.slice(0, TOP_N_DEFAULT);
   const remaining = displaySource.length - display.length;
 
-  // ----- Pixel-vs-Shopify attribution gap ----------------------------------
-  // Compare what the ad platforms *claim* (conversionValue summed across the
-  // currently visible campaigns) against what Shopify actually recorded for
-  // the matching dates + stores. This is the highest-impact "trust" view:
-  // if Meta is over-counting by 40%, the user should know before scaling.
+  // ----- Pixel-vs-Shopify attribution gap (top-of-table trust view) -------
   const attributionGap = useMemo(() => {
     if (aggregated.length === 0) return null;
 
@@ -488,12 +445,9 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
 
     if (shopifyRevenue === 0 && platformClaimed === 0) return null;
 
-    // Gap = how much Shopify exceeds the platform's claim, as a percentage of
-    // Shopify revenue. Positive → platforms are UNDER-counting (you have
-    // more sales than they credit themselves with — iOS 14 / ad blockers /
-    // direct traffic / organic halo).
-    // Negative → platforms are OVER-counting (view-through inflation, double
-    // counting between Meta and Google, modeled conversions).
+    // Gap = (Shopify - platform) / Shopify. Positive → platforms under-count
+    // (iOS 14 / ad blockers / organic halo). Negative → over-count (view-through,
+    // double-counting between Meta+Google, modeled conversions).
     const absGap = shopifyRevenue - platformClaimed;
     const gapPct = shopifyRevenue > 0 ? absGap / shopifyRevenue : 0;
 
@@ -503,11 +457,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     const platformRoas =
       totals.spend > 0 ? platformClaimed / totals.spend : 0;
 
-    // Interpretation copy — short, factual, Hebrew.
-    // tone: 'warn' was previously declared but never assigned (only 'good'
-    // and 'flag' branches exist below). Dropped per #IN-01 to keep the
-    // type honest — if we want a moderate band later, add the branch AND
-    // the toneClass entry in one go.
+    // Interpretation copy (#IN-01: only 'good' and 'flag' tones — keep honest).
     let interpretation: string;
     let tone: 'good' | 'flag';
     if (Math.abs(gapPct) < 0.1) {
@@ -537,10 +487,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       interpretation,
       tone,
     };
-    // `totals` is derived from `aggregated` (see the totals useMemo above), so
-    // including `aggregated` already covers any change to `totals.spend`. The
-    // extra `totals.spend` dep was redundant and easy to mis-maintain if a
-    // future tweak referenced `totals.cpc` but forgot the dep. (#IN-05)
+    // `totals` covered transitively via `aggregated` dep (#IN-05).
   }, [aggregated, dailyRows, localRange, localStore, platform]);
 
   // ----- Toolbar -----
@@ -666,8 +613,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         )}
       </div>
 
-      {/* Optimized-mark counter + bulk-clear. Only renders when something is
-          marked, so the toolbar stays calm during the rest of the time. */}
+      {/* Optimized-mark counter + bulk-clear (only renders when something marked). */}
       {optimized.size > 0 && (
         <div className="flex items-center gap-1.5 text-[11px] sm:text-xs">
           <CheckCircle2 size={13} className="text-roas-green shrink-0" />
@@ -723,9 +669,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       {attributionGap && <AttributionGapPanel gap={attributionGap} />}
       {summary}
 
-      {/* Surface BOTH SWR-thrown errors AND the 200-with-empty-rows degraded
-        * path (data.error). After WR-06, /api/campaigns returns 200 with
-        * rows: [] + error on failure so SWR consumers stay consistent. */}
+      {/* Both SWR-thrown errors and the 200+data.error degraded path (#WR-06). */}
       {(error || data?.error) && (
         <div className="m-4 rounded-lg bg-roas-redBg border border-roas-red/30 p-3 flex items-start gap-2 text-sm">
           <AlertCircle className="text-roas-red shrink-0" size={18} />
@@ -752,20 +696,12 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
 
       {data && display.length > 0 && (
         <>
-          {/* Make the wrapper the vertical scroll context so the sticky thead
-              actually sticks. Without max-height, the wrapper grows to fit
-              the table and never scrolls vertically, so position: sticky has
-              nothing to stick relative to. With overflow-auto + max-h, the
-              wrapper becomes a real scrolling box and the thead pins at the
-              top of that box as the user scrolls rows. The max-h is sized
-              to leave room for the page header + tab nav + filters above. */}
+          {/* overflow-auto + max-h makes wrapper the scroll context so sticky
+              thead pins to the top of the box (not the page). */}
           <div className="overflow-auto max-h-[calc(100vh-180px)]">
             <table className="w-full text-xs sm:text-sm min-w-[1340px]">
               <thead className="sticky top-0 z-10 bg-surface">
                 <tr className="text-text-secondary border-b border-borderSubtle bg-surfaceMuted/40">
-                  {/* Per-row optimization toggle. No label — the leading
-                      circle/check icon is self-explanatory and a label would
-                      crowd the header. */}
                   <th className="px-3 py-2 w-[36px]" aria-label="סימון אופטימיזציה" />
                   <SortHeader
                     label={mode === 'campaign' ? 'קמפיין' : 'אד-סט'}
@@ -821,11 +757,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     align="center"
                     className="px-3 py-2 w-[92px]"
                   />
-                  {/* New: Shopify-actual columns. NOT sortable because the
-                      computation depends on the full trueRevenueByKey map
-                      and adding two more sort keys would clutter the union
-                      without much value — users sort by 'ROAS Shopify' to
-                      surface heroes anyway. */}
+                  {/* Shopify-actual columns: not sortable — sort via 'ROAS Shopify'. */}
                   <th className="px-3 py-2 text-end font-medium text-text-secondary w-[88px]">
                     <span className="inline-flex items-center gap-1" title="ערך המכירות בפועל ב-Shopify של המוצרים המשויכים בטווח הנבחר">
                       ערך Shopify
@@ -920,8 +852,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         </>
       )}
 
-      {/* Side drawer with full campaign drill-down. Mounted at the end so
-          its fixed-position layout sits on top of everything. */}
+      {/* Drill-down drawers (campaign + nested ad-level). */}
       {drillCampaignId && drillPlatform && data && (
         <CampaignDrawer
           campaignId={drillCampaignId}
@@ -934,18 +865,11 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
             (localStore === 'All' || r.storeName === localStore),
           )}
           adAccounts={adAccounts}
-          // Pass the user's selected window through so the channel
-          // breakdown can analyse the full range, not just campaign-active
-          // days. The reconciliation block still derives its own narrower
-          // window internally — Pearson needs paired observations.
           rangeFrom={localRange.from}
           rangeTo={localRange.to}
         />
       )}
 
-      {/* Ad-level drilldown. Opens when an ad-set row is clicked in
-          ad-set mode (Meta only). Uses a higher z-index than the
-          campaign drawer so it stacks correctly when both are open. */}
       {adDrill && (
         <AdsDrawer
           open
