@@ -62,7 +62,7 @@ Multi-store Shopify ROAS dashboard with deterministic per-order attribution. The
   4. SETUP.md updated with new deployment instructions
   5. `.clasprc.json` is gitignored; only `.clasp.json` is committed
   6. SYSTEM_OVERVIEW.md notes the new CI/CD path
-**Plans:** 1 plan
+**Plans:** 0/1 plans executed
 Plans:
 - [ ] 03-PLAN.md — root package.json + clasp + .clasp.json + deploy-gs workflow + SETUP/SYSTEM_OVERVIEW docs (single-plan phase; 6 sequential tasks including 2 operator checkpoints)
 
