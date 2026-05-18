@@ -716,6 +716,11 @@ function buildAnalysis(opts: {
   const outlierDays = detectOutlierDays(dailyMeta);
 
   // Trust ladder + level-specific advice.
+  // Hoisted Hebrew label so the no-conversions branch doesn't drift if a
+  // fourth level is ever added — single source of truth instead of two
+  // adjacent ternaries. (IN-05)
+  const hebLabel =
+    opts.label === 'ad' ? 'מודעה' : opts.label === 'ad-set' ? 'ad-set' : 'קמפיין';
   let trust: AttributionTrust;
   const reasons: string[] = [];
   let recommendation = '';
@@ -726,10 +731,10 @@ function buildAnalysis(opts: {
     trust = { level: 'unknown', label: 'אין המרות', score: 0 };
     if (spend > 0) {
       reasons.push(`הוצאה CAD ${spend.toFixed(0)} ללא המרות מ-Meta או מ-Shopify`);
-      recommendation = `אין המרות לניתוח. אם זה brand/reach — סבבה. אחרת בדוק שה-${opts.label === 'ad' ? 'מודעה' : opts.label === 'ad-set' ? 'ad-set' : 'קמפיין'} מכוון להמרות וה-Pixel/CAPI עובדים.`;
+      recommendation = `אין המרות לניתוח. אם זה brand/reach — סבבה. אחרת בדוק שה-${hebLabel} מכוון להמרות וה-Pixel/CAPI עובדים.`;
     } else {
       reasons.push('אין הוצאה ואין המרות בטווח הזה');
-      recommendation = `ה-${opts.label === 'ad' ? 'מודעה' : opts.label === 'ad-set' ? 'ad-set' : 'קמפיין'} לא רץ בטווח הזה — אין מה לנתח.`;
+      recommendation = `ה-${hebLabel} לא רץ בטווח הזה — אין מה לנתח.`;
     }
   } else if (deterministicOrders === 0 && metaClaim > 0) {
     trust = { level: 'unknown', label: 'לא ניתן לקבוע', score: 30 };
