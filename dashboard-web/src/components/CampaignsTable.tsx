@@ -555,17 +555,24 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       const trueUnits = alloc.units;
       // How many OTHER campaigns share at least one of this campaign's
       // mapped products? Higher overlap → noisier allocation → lower trust.
-      let shared = 0;
+      //
+      // #WR-02: Previously a `shared++` counter with `break` only on the
+      // inner loop double-counted whenever one other campaign overlapped
+      // on multiple products: A=[P1,P2] and B=[P1,P2] reported shared=2
+      // instead of 1, pushing computeConfidence toward 'low' too aggressively.
+      // Tracking the unique other-campaign keys in a Set and reading .size
+      // implements the documented "count each campaign once" semantics.
+      const sharedKeys = new Set<string>();
       for (const pid of mappedIds) {
         for (const otherKey of Object.keys(productMap)) {
           if (otherKey === k) continue;
           if (!otherKey.startsWith(`${a.storeId}::`)) continue;
           if ((productMap[otherKey] ?? []).includes(pid)) {
-            shared++;
-            break; // count each campaign once even if it shares N products
+            sharedKeys.add(otherKey);
           }
         }
       }
+      const shared = sharedKeys.size;
       out.set(k, {
         trueRevenue,
         trueUnits,
