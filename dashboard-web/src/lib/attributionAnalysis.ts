@@ -500,12 +500,22 @@ export function detectOutlierDays(
   const LOOKBACK = Math.min(14, Math.max(5, Math.floor(sorted.length / 2)));
   for (let i = LOOKBACK; i < sorted.length; i++) {
     const trail = sorted.slice(Math.max(0, i - LOOKBACK), i);
-    const vals = trail.map(p => p.value).filter(v => Number.isFinite(v) && v > 0);
+    // Keep zero-valued baseline days. Filtering `v > 0` (the previous
+    // behaviour) masked the most operationally important signal: a
+    // low-activity campaign with $0 conversions for days 1-13 then a
+    // $500 spike on day 14 would have empty vals and exit before the
+    // spike was evaluated. (WR-07)
+    const vals = trail.map(p => p.value).filter(v => Number.isFinite(v));
     if (vals.length < 5) continue;
     const mean = vals.reduce((s, x) => s + x, 0) / vals.length;
     const variance =
       vals.reduce((s, x) => s + (x - mean) ** 2, 0) / vals.length;
     const stdDev = Math.sqrt(variance);
+    // stdDev === 0 still skips correctly: uniform-zero baseline + a single
+    // non-zero day yields an undefined z-score (division by zero), and
+    // "the trail is all zeros" is not a meaningful statistical baseline
+    // for detecting spikes. The skip is conservative — preferred over a
+    // false-positive cascade on every first-conversion day.
     if (stdDev === 0) continue;
     if (!Number.isFinite(sorted[i].value)) continue;
     const z = (sorted[i].value - mean) / stdDev;
