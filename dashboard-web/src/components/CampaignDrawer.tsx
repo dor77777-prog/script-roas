@@ -606,6 +606,7 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
             const analysis = analyzeAttribution(
               {
                 campaignName: summary.campaignName,
+                campaignId,
                 storeId: storeIdForCampaign,
                 platform: summary.platform,
                 metaClaim: summary.value,

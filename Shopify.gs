@@ -559,6 +559,12 @@ function getShopifyOrdersAttribution(storeId, dateStr) {
         utmMedium: classified.utmMedium,
         utmCampaign: classified.utmCampaign,
         utmContent: classified.utmContent,
+        // utm_id / utm_term: when Meta's URL Parameters use {{campaign.id}}
+        // / {{adset.id}}, these carry the platform's primary keys — strictly
+        // more reliable for matching than utm_campaign (names can change,
+        // IDs cannot).
+        utmId: classified.utmId,
+        utmTerm: classified.utmTerm,
         fbclidPresent: classified.fbclidPresent,
         gclidPresent: classified.gclidPresent,
         referringSite: classified.referringSite,
@@ -613,6 +619,13 @@ function classifyOrderAttribution_(order) {
   const utmMedium = params['utm_medium'] || '';
   const utmCampaign = params['utm_campaign'] || '';
   const utmContent = params['utm_content'] || '';
+  // Meta's URL Parameters convention: utm_id = {{campaign.id}}, utm_term =
+  // {{adset.id}}. These give us an ID-based deterministic match — strictly
+  // better than utm_campaign-by-name because IDs don't change when an
+  // operator renames a campaign and don't have URL-encoding edge cases
+  // (Hebrew names, special chars).
+  const utmId = params['utm_id'] || '';
+  const utmTerm = params['utm_term'] || '';
   const fbclid = !!(params['fbclid'] || params['_fbc']);
   const gclid = !!params['gclid'];
 
@@ -649,6 +662,8 @@ function classifyOrderAttribution_(order) {
     utmMedium,
     utmCampaign,
     utmContent,
+    utmId,
+    utmTerm,
     fbclidPresent: fbclid,
     gclidPresent: gclid,
     referringSite: refTrimmed,

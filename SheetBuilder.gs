@@ -1452,10 +1452,15 @@ function writeProductCatalogForStoreChunked_(ss, storeId, products) {
 // הגיעו מקליקים על מודעות Meta — לא רק להאמין למה ש-Meta מדווח.
 // ============================================================================
 
+// Cols 1..11 are the original schema; 12-13 added when Meta's URL Parameters
+// were extended with utm_id={{campaign.id}} + utm_term={{adset.id}}. These
+// give us ID-based matching (strictly stronger than utm_campaign by name)
+// because IDs are immutable across renames.
 const ORDERS_ATTRIBUTION_HEADERS = [
   'תאריך', 'מזהה הזמנה', 'סכום (CAD)', 'מקור',
   'UTM Source', 'UTM Medium', 'UTM Campaign', 'UTM Content',
-  'fbclid', 'gclid', 'Referrer'
+  'fbclid', 'gclid', 'Referrer',
+  'UTM ID', 'UTM Term'
 ];
 
 function ensureOrdersAttributionTab_(ss, storeId) {
@@ -1485,6 +1490,27 @@ function ensureOrdersAttributionTab_(ss, storeId) {
     sh.setColumnWidth(9, 60);   // fbclid
     sh.setColumnWidth(10, 60);  // gclid
     sh.setColumnWidth(11, 200); // Referrer
+    sh.setColumnWidth(12, 150); // UTM ID
+    sh.setColumnWidth(13, 150); // UTM Term
+  } else {
+    // Idempotent migration: existing tabs created before the utm_id /
+    // utm_term columns get the new headers added without losing data.
+    const lastCol = sh.getLastColumn();
+    if (lastCol < 13) {
+      const labels = ['UTM ID', 'UTM Term'];
+      for (let i = 0; i < 2; i++) {
+        const col = 12 + i;
+        const cell = sh.getRange(1, col);
+        if (!cell.getValue()) {
+          cell.setValue(labels[i])
+            .setFontWeight('bold')
+            .setBackground('#d9d9d9')
+            .setHorizontalAlignment('center');
+        }
+      }
+      sh.setColumnWidth(12, 150);
+      sh.setColumnWidth(13, 150);
+    }
   }
   if (justCreated) {
     try { sh.hideSheet(); } catch (_) {}
@@ -1527,6 +1553,8 @@ function writeOrdersAttributionForDay(ss, storeId, dateStr, rows) {
     r.fbclidPresent ? 'TRUE' : '',
     r.gclidPresent ? 'TRUE' : '',
     r.referringSite || '',
+    r.utmId || '',
+    r.utmTerm || '',
   ]);
 
   const combined = keptRows.concat(newRowsArr);
@@ -1535,6 +1563,12 @@ function writeOrdersAttributionForDay(ss, storeId, dateStr, rows) {
     sh.getRange(2, 1, lastRow - 1, ORDERS_ATTRIBUTION_HEADERS.length).clearContent();
   }
   if (combined.length === 0) return;
+
+  // Force the ID columns (B, L, M) to text format BEFORE writing so Sheets
+  // doesn't convert long numeric IDs to scientific notation. Meta IDs are
+  // 17-19 digits — outside double precision representation as a number.
+  sh.getRange(2, 2, combined.length, 1).setNumberFormat('@');   // Order ID
+  sh.getRange(2, 12, combined.length, 2).setNumberFormat('@');  // UTM ID + UTM Term
 
   sh.getRange(2, 1, combined.length, ORDERS_ATTRIBUTION_HEADERS.length).setValues(combined);
   sh.getRange(2, 1, combined.length, 1).setNumberFormat('yyyy-mm-dd').setHorizontalAlignment('center');

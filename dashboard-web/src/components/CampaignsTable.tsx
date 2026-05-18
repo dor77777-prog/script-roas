@@ -648,14 +648,15 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         return Array.from(byDate.entries()).map(([date, value]) => ({ date, value }));
       })();
 
-      // Deterministic per-order attribution. Uses the campaign's name to
-      // match against orders' utm_campaign field. Returns null for non-Meta
-      // campaigns or when the attribution tab is empty (first deploy).
-      // Passes the daily series so the analysis can compute window
-      // stability + outlier days + Bayesian intervals.
+      // Deterministic per-order attribution. Uses utm_id (campaignId) for
+      // primary matching when present, falls back to utm_campaign by name.
+      // Returns null for non-Meta campaigns or when the attribution tab is
+      // empty (first deploy). Daily series enables Bayesian / window /
+      // outlier analysis.
       const attribution = analyzeAttribution(
         {
           campaignName: a.campaignName,
+          campaignId: a.campaignId,
           storeId: a.storeId,
           platform: a.platform,
           metaClaim: a.conversionValue,

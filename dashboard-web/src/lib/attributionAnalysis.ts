@@ -74,40 +74,49 @@ export type AttributionTrust = {
 /**
  * Match an order against a campaign deterministically.
  *
- * Tier 1 (strongest): fbclid OR gclid present AND date is in campaign's
- * active window. This proves a click happened during the campaign.
+ * Match tiers, strongest first:
  *
- * Tier 2 (strong): utm_campaign matches the campaign's name (case-insensitive,
- * trimmed). Meta Ads Manager defaults to setting utm_campaign = campaign name
- * when URL parameters are set.
+ * Tier 1 — utm_id matches campaignId. Meta's URL Parameters can include
+ *   `utm_id={{campaign.id}}`. When present, this is an ID-to-ID match
+ *   that's immune to renames + URL encoding edge cases. Strictly better
+ *   than the name match.
  *
- * We DON'T match on product alone — that's what the mapping layer does
- * proportionally. Attribution is a separate axis: "did the user actually
- * click this campaign?"
+ * Tier 2 — utm_campaign matches campaignName (case-insensitive, trimmed).
+ *   Fallback when utm_id isn't configured. Works as long as the operator
+ *   doesn't rename the campaign in Meta.
+ *
+ * We don't fall back to "fbclid present + same date range" at this layer
+ * because fbclid alone only proves the user clicked SOME Meta ad — not
+ * THIS campaign. The platform-level fallback is handled by
+ * `ordersForPlatform` separately.
  */
 export function orderMatchesCampaign(
   order: OrderAttributionRow,
-  campaign: { campaignName: string; storeId: string; platform: string },
+  campaign: {
+    campaignName: string;
+    storeId: string;
+    platform: string;
+    /** Campaign ID from the campaigns row (Meta's campaign.id). Optional
+     *  for back-compat with older callers; without it, name match is the
+     *  only path. */
+    campaignId?: string;
+  },
 ): boolean {
   if (order.storeId !== campaign.storeId) return false;
+  if (campaign.platform !== 'Meta') return false;
 
-  // Tier 2 — utm_campaign name match (case-insensitive, both trimmed).
-  // Works for Meta only since Google Ads doesn't propagate the campaign
-  // name into UTMs by default (it sends gclid + tracking template).
-  if (campaign.platform === 'Meta' && order.utmCampaign) {
+  // Tier 1 — ID match (strongest, immune to renames + special chars).
+  if (campaign.campaignId && order.utmId) {
+    if (order.utmId.trim() === campaign.campaignId.trim()) return true;
+  }
+
+  // Tier 2 — name match (fallback).
+  if (order.utmCampaign) {
     const a = order.utmCampaign.trim().toLowerCase();
     const b = campaign.campaignName.trim().toLowerCase();
     if (a === b) return true;
   }
 
-  // Tier 1 — click-id presence pulls the order into the campaign's
-  // platform bucket. We DON'T claim "this exact order came from this
-  // exact campaign" without the utm_campaign match, because fbclid alone
-  // only proves the user clicked SOME Meta ad. So this match is
-  // weaker than utm_campaign and the caller decides how to use it.
-  //
-  // We return false here so the caller can do platform-level fallbacks
-  // separately. Pure name-match is the deterministic per-campaign signal.
   return false;
 }
 
@@ -153,6 +162,7 @@ export function ordersForPlatform(
 export function analyzeAttribution(
   campaign: {
     campaignName: string;
+    campaignId?: string;       // primary match key when utm_id is configured
     storeId: string;
     platform: string;
     metaClaim: number; // CAD

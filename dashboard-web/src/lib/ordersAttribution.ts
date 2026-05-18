@@ -29,6 +29,13 @@ export type OrderAttributionRow = {
   fbclidPresent: boolean;
   gclidPresent: boolean;
   referringSite: string;
+  /** Platform campaign ID from utm_id={{campaign.id}} in Meta's URL
+   *  Parameters. When present, used as the PRIMARY match key — beats
+   *  utm_campaign-by-name because IDs are immutable. */
+  utmId: string;
+  /** Platform ad-set ID from utm_term={{adset.id}}. Enables per-adset
+   *  matching when the URL Parameters are configured. */
+  utmTerm: string;
 };
 
 export type OrderSource =
@@ -108,7 +115,10 @@ export async function fetchOrdersAttribution(): Promise<OrderAttributionRow[]> {
   const sheets = google.sheets({ version: 'v4', auth });
   const spreadsheetId = getSpreadsheetId();
 
-  const ranges = STORE_TAB_CONFIG.map(s => `${s.id}-orders-attribution!A2:K100000`);
+  // Range extended A:M to include the new utm_id + utm_term columns.
+  // Older tabs without cols 12-13 return undefined for those positions,
+  // which the parser coerces to '' so nothing breaks.
+  const ranges = STORE_TAB_CONFIG.map(s => `${s.id}-orders-attribution!A2:M100000`);
   let res;
   try {
     res = await sheets.spreadsheets.values.batchGet({
@@ -149,6 +159,8 @@ export async function fetchOrdersAttribution(): Promise<OrderAttributionRow[]> {
         fbclidPresent: row[8] === true || String(row[8] ?? '').toUpperCase() === 'TRUE',
         gclidPresent: row[9] === true || String(row[9] ?? '').toUpperCase() === 'TRUE',
         referringSite: String(row[10] ?? '').trim(),
+        utmId: String(row[11] ?? '').trim(),
+        utmTerm: String(row[12] ?? '').trim(),
       });
     }
   }
