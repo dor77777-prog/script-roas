@@ -155,9 +155,24 @@ export function BillingCsvImport({
           <select
             value={defaultStore}
             onChange={e => {
-              setDefaultStore(e.target.value);
-              // Re-bind store on existing preview rows.
-              setPreview(prev => prev.map(r => ({ ...r, store: e.target.value })));
+              const next = e.target.value;
+              setDefaultStore(next);
+              // Re-bind store AND recompute the duplicate flag against the
+              // new store. `findMatchingRecurring` is store-scoped, so a row
+              // that was duplicate-against-Store-A may be unique-to-Store-B
+              // (or vice versa). Without the recompute, the `skip` checkbox
+              // stays pinned to its old-store value, which silently
+              // double-adds recurring costs to P&L when the user changes
+              // destinations mid-import. (CR-01)
+              setPreview(prev => prev.map(r => {
+                const dupe = findMatchingRecurring(r, next, currentRecurring);
+                return {
+                  ...r,
+                  store: next,
+                  skip: !!dupe,
+                  duplicateOfId: dupe?.id,
+                };
+              }));
             }}
             className="w-full rounded-lg border border-border bg-surface px-2.5 py-2 text-sm focus:outline-none focus:border-primary focus:shadow-focus"
           >
