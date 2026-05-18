@@ -39,7 +39,19 @@ export async function GET() {
     // Log the raw message server-side so ops can see spreadsheet ID, service
     // account email, etc. — but don't leak those to the client UI.
     console.error('dashboard-state GET failed:', message);
-    return NextResponse.json({ kv: {}, error: userFacingError(message) }, { status: 200 });
+    // Include lastUpdated + updatedAtByKey so the response shape matches the
+    // success path. Without these, a consumer reading `data.lastUpdated`
+    // (e.g. SyncIndicator's "synced N min ago") gets `undefined → Invalid Date`
+    // and crashes. Mirrors the same fix /api/orders-attribution applied. (IN-08)
+    return NextResponse.json(
+      {
+        kv: {},
+        updatedAtByKey: {},
+        lastUpdated: new Date().toISOString(),
+        error: userFacingError(message),
+      },
+      { status: 200 },
+    );
   }
 }
 
