@@ -16,6 +16,8 @@ import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { roasLabel } from '@/lib/analytics';
 import type { AdRow } from '@/lib/ads';
 import type { AdsResponse } from '@/app/api/ads/route';
+import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
+import { analyzeAttributionForAd } from '@/lib/attributionAnalysis';
 import { buildAdsManagerLink, type AdAccountMap } from '@/lib/campaignsLinks';
 import { readOptimized, toggleOptimized } from '@/lib/campaignOptimized';
 import { useDrawerEsc } from '@/lib/drawerStack';
@@ -74,6 +76,18 @@ export function AdsDrawer({
   const { data, isLoading } = useSWR<AdsResponse>(
     open ? '/api/ads' : null,
     fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 60_000 },
+  );
+  // Per-order attribution for the deterministic ROAS chip per ad. Lazy: only
+  // fires when this drawer opens so users who never drill into ads don't pay
+  // the orders-attribution sheet read.
+  const { data: ordersAttrData } = useSWR<OrdersAttributionResponse>(
+    open ? '/api/orders-attribution' : null,
+    async (url: string) => {
+      const r = await fetch(url);
+      if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
+      return r.json();
+    },
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
 
@@ -293,6 +307,9 @@ export function AdsDrawer({
                       <AdSortHeader label="הוצאה"     col="spend"       sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
                       <AdSortHeader label="ערך"       col="value"       sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
                       <AdSortHeader label="ROAS"      col="roas"        sortKey={sortKey} dir={sortDir} onClick={handleSort} align="center" />
+                      <th className="font-medium px-3 py-2 text-center text-text-secondary" title="ROAS אמיתי לפי click-id (utm_content={{ad.id}})">
+                        ROAS Shopify
+                      </th>
                       <AdSortHeader label="המרות"     col="conversions" sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
                       <AdSortHeader label="חשיפות"    col="impressions" sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
                       <AdSortHeader label="קליקים"    col="clicks"      sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
@@ -354,6 +371,52 @@ export function AdsDrawer({
                           </td>
                           <td className={cn('px-3 py-2 text-center font-semibold tabular-nums rounded', TONE_BG[info.tone])}>
                             {a.roas > 0 ? formatNumber(a.roas) : '—'}
+                          </td>
+                          {/* Deterministic ROAS per ad via utm_content. */}
+                          <td className="px-3 py-2 text-center">
+                            {(() => {
+                              const adAttr = analyzeAttributionForAd(
+                                {
+                                  adId: a.adId,
+                                  adName: a.adName,
+                                  storeId: a.storeId,
+                                  platform: a.platform,
+                                  metaClaim: a.value,
+                                  spend: a.spend,
+                                },
+                                ordersAttrData?.rows ?? [],
+                                rangeFrom,
+                                rangeTo,
+                              );
+                              if (!adAttr) {
+                                return <span className="text-text-muted text-xs">—</span>;
+                              }
+                              const detRoas = a.spend > 0
+                                ? adAttr.deterministicRevenue / a.spend
+                                : 0;
+                              const tone =
+                                adAttr.trust.level === 'high'    ? 'bg-roas-greenBg/60 text-roas-green'
+                              : adAttr.trust.level === 'medium'  ? 'bg-amber-50 text-amber-700'
+                              : adAttr.trust.level === 'unknown' ? 'bg-surfaceMuted text-text-secondary'
+                              :                                    'bg-roas-redBg/60 text-roas-red';
+                              const tooltip =
+                                `ROAS אמיתי · ${adAttr.trust.label} (${adAttr.trust.score.toFixed(0)}/100)\n\n` +
+                                `Meta דיווח: CAD ${a.value.toFixed(0)}\n` +
+                                `click-id מתויג: CAD ${adAttr.deterministicRevenue.toFixed(0)} (${adAttr.deterministicOrders} הזמנות)\n` +
+                                `modeled: CAD ${adAttr.modeledRevenue.toFixed(0)}\n\n` +
+                                adAttr.reasons.map(r => `• ${r}`).join('\n') +
+                                `\n\n💡 ${adAttr.recommendation}`;
+                              return (
+                                <div className="inline-flex flex-col items-center gap-0.5" title={tooltip}>
+                                  <span className="font-semibold tabular-nums text-text-primary">
+                                    {detRoas > 0 ? formatNumber(detRoas) : '—'}
+                                  </span>
+                                  <span className={cn('inline-block text-[8px] font-bold px-1 py-0 rounded uppercase tracking-wider', tone)}>
+                                    {adAttr.trust.label}
+                                  </span>
+                                </div>
+                              );
+                            })()}
                           </td>
                           <td className="px-3 py-2 text-end tabular-nums">{formatNumber(a.conversions, 0)}</td>
                           <td className="px-3 py-2 text-end tabular-nums text-text-secondary">

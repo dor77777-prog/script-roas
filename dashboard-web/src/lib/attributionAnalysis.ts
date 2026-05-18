@@ -448,3 +448,231 @@ function detectOutlierDays(
   }
   return out;
 }
+
+// ============================================================================
+// Granular variants: ad-set level + ad level
+// ============================================================================
+//
+// Same algorithm as analyzeAttribution() at the campaign level, but the
+// matcher uses utm_term (ad-set ID) or utm_content (ad ID) instead of
+// utm_id / utm_campaign. The product mapping is INHERITED from the parent
+// campaign — there's no per-ad-set product picker — but the order-level
+// attribution data lets us tell which ad-set actually drove clicks.
+//
+// Why split into separate functions instead of one big `level: 'campaign'|...`?
+// The recommendations and reason wording are level-specific ("scale this
+// ad-set" reads differently from "scale this campaign"), and the API
+// signature stays cleaner when the caller doesn't have to think about which
+// fields to populate based on level.
+
+/**
+ * Per-ad-set attribution. Matches orders where `utm_term === adSetId`.
+ * Falls back to inheriting the campaign-level analysis if utm_term is
+ * unconfigured (in which case all of the campaign's tagged orders are
+ * shared across ad-sets — less precise but still strictly better than
+ * trusting Meta's per-ad-set conversion_value).
+ */
+export function analyzeAttributionForAdSet(
+  adSet: {
+    adSetId: string;
+    adSetName: string;
+    storeId: string;
+    platform: string;
+    metaClaim: number;       // CAD — Meta's conversion_value for this ad-set
+    spend: number;
+  },
+  orders: OrderAttributionRow[],
+  dateFrom: string,
+  dateTo: string,
+  dailyMeta?: Array<{ date: string; value: number }>,
+): AttributionAnalysis | null {
+  if (adSet.platform !== 'Meta') return null;
+  if (!orders || orders.length === 0) return null;
+  if (!adSet.adSetId) return null;
+
+  const matchedOrders = orders.filter(o => {
+    if (o.date < dateFrom || o.date > dateTo) return false;
+    if (o.storeId !== adSet.storeId) return false;
+    return o.utmTerm && o.utmTerm.trim() === adSet.adSetId.trim();
+  });
+
+  return buildAnalysis({
+    label: 'ad-set',
+    name: adSet.adSetName,
+    metaClaim: adSet.metaClaim,
+    spend: adSet.spend,
+    matchedOrders,
+    dailyMeta: dailyMeta ?? [],
+    dateFrom,
+    dateTo,
+    advice: {
+      misconfigured:
+        'אף הזמנה לא תויגה ל-ad-set הזה — סביר ש-utm_term לא מוגדר ב-URL Parameters (צריך {{adset.id}}).',
+      goodHalo: 'ה-ad-set מבצע מעבר למה ש-Meta דיווח — שקול גידול תקציב או פתיחת ad-set דומה.',
+      goodSteady: 'מספרי ה-ad-set אמינים, אופטימיזציה רגילה לפי ROAS.',
+      partial: 'modeled portion גדול ב-ad-set הזה — בדוק אם הוא באמת מביא מכירות או רק חשיפות שמיוחסות לו.',
+      bad: 'Meta מנפח דיווחים ל-ad-set הזה. שקול לכבות אותו ולחלק את התקציב ל-ad-sets שיש להם click-id אמיתי.',
+    },
+  });
+}
+
+/**
+ * Per-ad attribution. Matches orders where `utm_content === adId`. Same
+ * structure as the ad-set version. Useful for finding which creative is
+ * actually doing the work inside an ad-set.
+ */
+export function analyzeAttributionForAd(
+  ad: {
+    adId: string;
+    adName: string;
+    storeId: string;
+    platform: string;
+    metaClaim: number;
+    spend: number;
+  },
+  orders: OrderAttributionRow[],
+  dateFrom: string,
+  dateTo: string,
+  dailyMeta?: Array<{ date: string; value: number }>,
+): AttributionAnalysis | null {
+  if (ad.platform !== 'Meta') return null;
+  if (!orders || orders.length === 0) return null;
+  if (!ad.adId) return null;
+
+  const matchedOrders = orders.filter(o => {
+    if (o.date < dateFrom || o.date > dateTo) return false;
+    if (o.storeId !== ad.storeId) return false;
+    return o.utmContent && o.utmContent.trim() === ad.adId.trim();
+  });
+
+  return buildAnalysis({
+    label: 'ad',
+    name: ad.adName,
+    metaClaim: ad.metaClaim,
+    spend: ad.spend,
+    matchedOrders,
+    dailyMeta: dailyMeta ?? [],
+    dateFrom,
+    dateTo,
+    advice: {
+      misconfigured:
+        'אף הזמנה לא תויגה למודעה הזאת — סביר ש-utm_content לא מוגדר ב-URL Parameters (צריך {{ad.id}}).',
+      goodHalo: 'המודעה מבצעת מעבר למה ש-Meta דיווח — שקול הרחבת ה-creative הזה ל-ad-sets נוספים.',
+      goodSteady: 'מספרי המודעה אמינים. אם זה ה-top-performer ב-ad-set, שקול לבודד אותו ל-ad-set משלו.',
+      partial: 'modeled portion גדול במודעה הזאת — ייתכן שהקריאייטיב מקבל view-through אבל לא קליקים.',
+      bad: 'Meta מנפח דיווחים למודעה הזאת בלי click-id מתאים. שקול לכבות אותה.',
+    },
+  });
+}
+
+/**
+ * Shared engine. Pulled out so the level-specific functions stay short
+ * and the algorithm changes (Bayesian, outlier, etc.) ripple uniformly
+ * across campaign / ad-set / ad attribution.
+ */
+function buildAnalysis(opts: {
+  label: 'campaign' | 'ad-set' | 'ad';
+  name: string;
+  metaClaim: number;
+  spend: number;
+  matchedOrders: OrderAttributionRow[];
+  dailyMeta: Array<{ date: string; value: number }>;
+  dateFrom: string;
+  dateTo: string;
+  advice: {
+    misconfigured: string;
+    goodHalo: string;
+    goodSteady: string;
+    partial: string;
+    bad: string;
+  };
+}): AttributionAnalysis {
+  const { metaClaim, spend, matchedOrders, dailyMeta, dateFrom, dateTo, advice } = opts;
+
+  const deterministicRevenue = matchedOrders.reduce((s, o) => s + o.totalCad, 0);
+  const deterministicOrders = matchedOrders.length;
+  const modeledRevenue = Math.max(0, metaClaim - deterministicRevenue);
+  const coverage = metaClaim > 0
+    ? Math.min(2, deterministicRevenue / metaClaim)
+    : (deterministicRevenue > 0 ? 1 : 0);
+
+  // Bayesian CI (same as campaign-level).
+  let roasInterval: AttributionAnalysis['roasInterval'] = null;
+  if (spend > 0 && deterministicOrders >= 3) {
+    const aovs = matchedOrders.map(o => o.totalCad);
+    const meanAov = aovs.reduce((s, x) => s + x, 0) / aovs.length;
+    const variance = aovs.reduce((s, x) => s + (x - meanAov) ** 2, 0) / aovs.length;
+    const stdDev = Math.sqrt(variance);
+    const stderrAov = stdDev / Math.sqrt(aovs.length);
+    const revLow = Math.max(0, (meanAov - 1.96 * stderrAov) * aovs.length);
+    const revHigh = (meanAov + 1.96 * stderrAov) * aovs.length;
+    roasInterval = {
+      low: revLow / spend,
+      mid: deterministicRevenue / spend,
+      high: revHigh / spend,
+    };
+  }
+
+  const windowStability = computeWindowStability(matchedOrders, dailyMeta, dateFrom, dateTo);
+  const outlierDays = detectOutlierDays(dailyMeta);
+
+  // Trust ladder + level-specific advice.
+  let trust: AttributionTrust;
+  const reasons: string[] = [];
+  let recommendation = '';
+  if (deterministicOrders === 0 && metaClaim > 0) {
+    trust = { level: 'unknown', label: 'לא ניתן לקבוע', score: 30 };
+    reasons.push('אף הזמנה לא תויגה — סביר שחסר utm parameter רלוונטי');
+    recommendation = advice.misconfigured;
+  } else if (coverage >= 0.8) {
+    const pct = Math.round(coverage * 100);
+    trust = { level: 'high', label: 'אמין', score: Math.min(100, 70 + pct / 5) };
+    reasons.push(`${deterministicOrders} הזמנות תויגו (${pct}% coverage, CAD ${deterministicRevenue.toFixed(0)})`);
+    if (modeledRevenue > 0) reasons.push(`CAD ${modeledRevenue.toFixed(0)} modeled (view-through / cross-device)`);
+    recommendation = coverage >= 1.0 ? advice.goodHalo : advice.goodSteady;
+  } else if (coverage >= 0.4) {
+    const pct = Math.round(coverage * 100);
+    trust = { level: 'medium', label: 'חלקי', score: 40 + pct / 2 };
+    reasons.push(`${pct}% תויגו (${deterministicOrders} הזמנות)`);
+    reasons.push(`${Math.round((modeledRevenue / metaClaim) * 100)}% modeled`);
+    recommendation =
+      `ROAS אמיתי: ${(deterministicRevenue / spend).toFixed(2)}x  |  ROAS לפי Meta: ${(metaClaim / spend).toFixed(2)}x. ` +
+      advice.partial;
+  } else {
+    const pct = Math.round(coverage * 100);
+    trust = { level: 'low', label: 'לא אמין', score: pct };
+    reasons.push(`רק ${pct}% מההמרות (${deterministicOrders} הזמנות) תויגו`);
+    recommendation = advice.bad;
+  }
+
+  // Stability augmentations (downgrade if volatile).
+  if (windowStability && windowStability.windowCount >= 2) {
+    if (windowStability.verdict === 'stable') {
+      reasons.push(`יחס יציב על ${windowStability.windowCount} שבועות — ביאס קבוע`);
+    } else if (windowStability.verdict === 'volatile') {
+      reasons.push(`יחס תנודתי (σ=${(windowStability.stdDev * 100).toFixed(0)}%) — אל תסמוך על מספרי תקופה`);
+      if (trust.level === 'high') {
+        trust = { level: 'medium', label: 'חלקי', score: Math.min(trust.score, 65) };
+      }
+    }
+  }
+  if (outlierDays.length > 0) {
+    reasons.push(`${outlierDays.length} ימי spike מ-Meta (modeled)`);
+  }
+  if (roasInterval) {
+    reasons.push(`טווח 95%: ${roasInterval.low.toFixed(2)} – ${roasInterval.high.toFixed(2)}`);
+  }
+
+  return {
+    deterministicRevenue,
+    deterministicOrders,
+    modeledRevenue,
+    coverage,
+    trust,
+    reasons,
+    recommendation,
+    roasInterval,
+    windowStability,
+    outlierDays,
+  };
+}

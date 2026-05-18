@@ -30,7 +30,7 @@ import {
 } from 'recharts';
 import type { ProductsResponse } from '@/app/api/products/route';
 import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
-import { analyzeAttribution } from '@/lib/attributionAnalysis';
+import { analyzeAttribution, analyzeAttributionForAdSet } from '@/lib/attributionAnalysis';
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import { roasLabel } from '@/lib/analytics';
 import type { CampaignRow } from '@/lib/campaigns';
@@ -922,6 +922,12 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
                       <AdSetSortHeader label="תקציב יומי"  col="budget"      sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
                       <AdSetSortHeader label="ערך"         col="value"       sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
                       <AdSetSortHeader label="ROAS"        col="roas"        sortKey={sortKey} dir={sortDir} onClick={handleSort} align="center" />
+                      {/* Per-ad-set deterministic attribution. Header doesn't
+                          sort (the data is shape-inferred per row). Tooltip
+                          on each cell explains the chip. */}
+                      <th className="font-medium px-3 py-2 text-center text-text-secondary" title="ROAS אמיתי לפי click-id (utm_term)">
+                        ROAS Shopify
+                      </th>
                       <AdSetSortHeader label="המרות"       col="conversions" sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
                     </tr>
                   </thead>
@@ -999,6 +1005,52 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
                           </td>
                           <td className={cn('px-3 py-2 text-center font-semibold tabular-nums rounded', TONE_BG[info.tone])}>
                             {a.roas > 0 ? formatNumber(a.roas) : '—'}
+                          </td>
+                          {/* Deterministic ROAS per ad-set via utm_term. */}
+                          <td className="px-3 py-2 text-center">
+                            {(() => {
+                              const adsetAttr = analyzeAttributionForAdSet(
+                                {
+                                  adSetId: a.id,
+                                  adSetName: a.name,
+                                  storeId: a.storeId,
+                                  platform: a.platform,
+                                  metaClaim: a.value,
+                                  spend: a.spend,
+                                },
+                                ordersAttrData?.rows ?? [],
+                                rows.reduce((min, r) => (r.date < min ? r.date : min), rows[0]?.date ?? ''),
+                                rows.reduce((max, r) => (r.date > max ? r.date : max), rows[0]?.date ?? ''),
+                              );
+                              if (!adsetAttr) {
+                                return <span className="text-text-muted text-xs">—</span>;
+                              }
+                              const detRoas = a.spend > 0
+                                ? adsetAttr.deterministicRevenue / a.spend
+                                : 0;
+                              const tone =
+                                adsetAttr.trust.level === 'high'    ? 'bg-roas-greenBg/60 text-roas-green'
+                              : adsetAttr.trust.level === 'medium'  ? 'bg-amber-50 text-amber-700'
+                              : adsetAttr.trust.level === 'unknown' ? 'bg-surfaceMuted text-text-secondary'
+                              :                                       'bg-roas-redBg/60 text-roas-red';
+                              const tooltip =
+                                `ROAS אמיתי · ${adsetAttr.trust.label} (${adsetAttr.trust.score.toFixed(0)}/100)\n\n` +
+                                `Meta דיווח: CAD ${a.value.toFixed(0)}\n` +
+                                `click-id מתויג: CAD ${adsetAttr.deterministicRevenue.toFixed(0)} (${adsetAttr.deterministicOrders} הזמנות)\n` +
+                                `modeled: CAD ${adsetAttr.modeledRevenue.toFixed(0)}\n\n` +
+                                adsetAttr.reasons.map(r => `• ${r}`).join('\n') +
+                                `\n\n💡 ${adsetAttr.recommendation}`;
+                              return (
+                                <div className="inline-flex flex-col items-center gap-0.5" title={tooltip}>
+                                  <span className="font-semibold tabular-nums text-text-primary">
+                                    {detRoas > 0 ? formatNumber(detRoas) : '—'}
+                                  </span>
+                                  <span className={cn('inline-block text-[8px] font-bold px-1 py-0 rounded uppercase tracking-wider', tone)}>
+                                    {adsetAttr.trust.label}
+                                  </span>
+                                </div>
+                              );
+                            })()}
                           </td>
                           <td className="px-3 py-2 text-end tabular-nums">{formatNumber(a.conversions, 0)}</td>
                         </tr>
