@@ -306,10 +306,19 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
 
     const r = pearson(series.map(s => s.meta), series.map(s => s.shopify));
     // Lag detection: try offsets -3..3, pick the one with the highest r.
+    //
+    // #WR-03: pearson on n=2 returns ±1.0 trivially (two points fit a
+    // line perfectly), so a 5-day series with lag=3 leaves only 2 paired
+    // points and spuriously beats the true r — firing a false "lag
+    // detected" banner. Require at least 5 paired points AFTER shifting,
+    // matching the outer series.length<5 gate. With lag=3 this means the
+    // series itself must be >=8 days to even consider lag=±3.
     let bestLag = 0;
     let bestR = r;
     for (let lag = -3; lag <= 3; lag++) {
       if (lag === 0) continue;
+      const effectiveN = series.length - Math.abs(lag);
+      if (effectiveN < 5) continue; // n<5 makes |r| trivially close to 1
       const r2 = pearsonWithLag(series.map(s => s.meta), series.map(s => s.shopify), lag);
       if (Math.abs(r2) > Math.abs(bestR)) {
         bestR = r2;
