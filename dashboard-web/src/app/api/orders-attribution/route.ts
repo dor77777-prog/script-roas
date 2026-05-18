@@ -18,6 +18,9 @@ export type OrdersAttributionResponse = {
 export async function GET() {
   try {
     const rows = await fetchOrdersAttribution();
+    if (rows.length > 50000) {
+      console.warn(`/api/orders-attribution: large response (${rows.length} rows) — consider pagination`);
+    }
     return NextResponse.json(
       { rows, lastUpdated: new Date().toISOString() } satisfies OrdersAttributionResponse,
       {

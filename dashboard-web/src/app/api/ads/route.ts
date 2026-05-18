@@ -12,6 +12,9 @@ export type AdsResponse = {
 export async function GET() {
   try {
     const rows = await fetchAdsData();
+    if (rows.length > 50000) {
+      console.warn(`/api/ads: large response (${rows.length} rows) — consider pagination`);
+    }
     return NextResponse.json(
       { rows, lastUpdated: new Date().toISOString() } satisfies AdsResponse,
       {

@@ -13,6 +13,9 @@ export type ProductsResponse = {
 export async function GET() {
   try {
     const rows = await fetchProductsData();
+    if (rows.length > 50000) {
+      console.warn(`/api/products: large response (${rows.length} rows) — consider pagination`);
+    }
     const body: ProductsResponse = {
       rows,
       lastUpdated: new Date().toISOString(),

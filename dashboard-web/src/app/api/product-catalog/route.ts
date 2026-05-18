@@ -16,6 +16,9 @@ export type ProductCatalogResponse = {
 export async function GET() {
   try {
     const rows = await fetchProductCatalog();
+    if (rows.length > 50000) {
+      console.warn(`/api/product-catalog: large response (${rows.length} rows) — consider pagination`);
+    }
     return NextResponse.json(
       { rows, lastUpdated: new Date().toISOString() } satisfies ProductCatalogResponse,
       {

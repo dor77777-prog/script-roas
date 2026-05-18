@@ -24,6 +24,9 @@ function userFacingError(message: string): string {
 export async function GET() {
   try {
     const rows = await fetchStoreMeta();
+    if (rows.length > 50000) {
+      console.warn(`/api/store-meta: large response (${rows.length} rows) — consider pagination`);
+    }
     return NextResponse.json(
       { rows, lastUpdated: new Date().toISOString() },
       {

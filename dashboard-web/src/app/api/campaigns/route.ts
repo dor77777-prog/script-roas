@@ -13,6 +13,9 @@ export type CampaignsResponse = {
 export async function GET() {
   try {
     const rows = await fetchCampaignsData();
+    if (rows.length > 50000) {
+      console.warn(`/api/campaigns: large response (${rows.length} rows) — consider pagination`);
+    }
     const body: CampaignsResponse = {
       rows,
       lastUpdated: new Date().toISOString(),

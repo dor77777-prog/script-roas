@@ -24,6 +24,9 @@ async function fetchTodayFx(): Promise<number | null> {
 export async function GET() {
   try {
     const [rows, fxIlsToCad] = await Promise.all([fetchDailyData(), fetchTodayFx()]);
+    if (rows.length > 50000) {
+      console.warn(`/api/data: large response (${rows.length} rows) — consider pagination`);
+    }
     const stores = Array.from(new Set(rows.map(r => r.storeName))).sort();
     const data: DashboardData = {
       rows,

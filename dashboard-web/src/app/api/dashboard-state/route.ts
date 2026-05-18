@@ -39,6 +39,7 @@ function userFacingError(message: string): string {
 
 export async function GET() {
   try {
+    // dashboard-state is bounded by ALLOWED_STATE_KEYS (8 keys) — no guard needed
     const data = await fetchDashboardState();
     return NextResponse.json(
       { kv: data.kv, updatedAtByKey: data.updatedAtByKey, lastUpdated: new Date().toISOString() },
