@@ -409,8 +409,13 @@ function computeWindowStability(
   const totalDays = Math.round((toMs - fromMs) / 86400000) + 1;
   if (totalDays < 14) return null; // need ≥2 windows for any signal
 
-  // Aggregate matched + meta per window.
-  const windowCount = Math.floor(totalDays / 7);
+  // Aggregate matched + meta per window. Include a partial trailing bucket
+  // only when it covers ≥3 days — below that the tail is too noisy to
+  // contribute usefully to σ and can artificially spike the variance.
+  // (Previously the tail was silently truncated; IN5-03.)
+  const fullWindows = Math.floor(totalDays / 7);
+  const tailDays = totalDays - fullWindows * 7;
+  const windowCount = fullWindows + (tailDays >= 3 ? 1 : 0);
   const buckets: Array<{ matched: number; meta: number }> = [];
   for (let i = 0; i < windowCount; i++) {
     buckets.push({ matched: 0, meta: 0 });
@@ -423,10 +428,16 @@ function computeWindowStability(
     return idx;
   }
   for (const o of matchedOrders) {
+    if (!Number.isFinite(o.totalCad)) continue;
     const i = bucketIdx(o.date);
     if (i >= 0) buckets[i].matched += o.totalCad;
   }
   for (const p of dailyMetaSeries) {
+    // Reject non-finite values explicitly so an upstream NaN (e.g. a
+    // divide-by-zero in a derived metric) doesn't silently invalidate the
+    // whole window's stability signal — was being filtered out implicitly
+    // by `b.meta > 0` later, which is too easy to misread.
+    if (!Number.isFinite(p.value)) continue;
     const i = bucketIdx(p.date);
     if (i >= 0) buckets[i].meta += p.value;
   }
@@ -464,16 +475,23 @@ function detectOutlierDays(
   // Sort by date asc so trailing windows are causal.
   const sorted = [...series].sort((a, b) => a.date.localeCompare(b.date));
   const out: string[] = [];
-  const LOOKBACK = 14;
+  // Relax LOOKBACK on short ranges so 14-day "last 14 days" views (the
+  // dashboard's default) actually produce signal instead of silently
+  // returning []. With sorted.length=14 and LOOKBACK=14, i starts at 14
+  // which terminates the loop immediately — the docstring promised
+  // outliers but none were ever computed. Adaptive sizing trades some
+  // statistical strength for actually-fires-at-all behaviour. (IN5-02)
+  const LOOKBACK = Math.min(14, Math.max(5, Math.floor(sorted.length / 2)));
   for (let i = LOOKBACK; i < sorted.length; i++) {
     const trail = sorted.slice(Math.max(0, i - LOOKBACK), i);
-    const vals = trail.map(p => p.value).filter(v => v > 0);
+    const vals = trail.map(p => p.value).filter(v => Number.isFinite(v) && v > 0);
     if (vals.length < 5) continue;
     const mean = vals.reduce((s, x) => s + x, 0) / vals.length;
     const variance =
       vals.reduce((s, x) => s + (x - mean) ** 2, 0) / vals.length;
     const stdDev = Math.sqrt(variance);
     if (stdDev === 0) continue;
+    if (!Number.isFinite(sorted[i].value)) continue;
     const z = (sorted[i].value - mean) / stdDev;
     if (z > 2.5) out.push(sorted[i].date);
   }
