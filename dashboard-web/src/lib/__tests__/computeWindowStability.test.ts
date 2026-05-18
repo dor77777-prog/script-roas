@@ -44,7 +44,7 @@ describe('computeWindowStability', () => {
   // Tail bucket rules (IN5-03)
   // ----------------------------------------------------------------
 
-  it('IN5-03: includes tail bucket when >= 3 days (17 days = 2 full + 3 tail → windowCount includes tail)', () => {
+  it('IN5-03: includes tail bucket when >= 3 days (17 days = 2 full + 3 tail → windowCountWithData includes tail)', () => {
     // 17 days: 2 full 7-day windows + 3 tail days → tail >= 3 → included
     // Each window needs meta data to count
     const metaSeries = Array.from({ length: 17 }, (_, i) => ({
@@ -58,11 +58,12 @@ describe('computeWindowStability', () => {
     ];
     const result = computeWindowStability(orders, metaSeries, '2026-05-01', '2026-05-17');
     expect(result).not.toBeNull();
-    // windowCount should be 3 (2 full + 1 tail with >= 3 days)
-    expect(result!.windowCount).toBe(3);
+    // windowCountWithData should be 3 (2 full + 1 tail with >= 3 days),
+    // since each bucket has meta data.
+    expect(result!.windowCountWithData).toBe(3);
   });
 
-  it('IN5-03: excludes tail bucket when < 3 days (15 days = 2 full + 1 tail → windowCount 2)', () => {
+  it('IN5-03: excludes tail bucket when < 3 days (15 days = 2 full + 1 tail → windowCountWithData 2)', () => {
     // 15 days: 2 full windows + 1 tail day → tail < 3 → excluded
     const metaSeries = Array.from({ length: 15 }, (_, i) => ({
       date: `2026-05-${String(i + 1).padStart(2, '0')}`,
@@ -74,8 +75,8 @@ describe('computeWindowStability', () => {
     ];
     const result = computeWindowStability(orders, metaSeries, '2026-05-01', '2026-05-15');
     expect(result).not.toBeNull();
-    // windowCount should be 2 (tail excluded since 1 day < 3)
-    expect(result!.windowCount).toBe(2);
+    // windowCountWithData should be 2 (tail excluded since 1 day < 3)
+    expect(result!.windowCountWithData).toBe(2);
   });
 
   // ----------------------------------------------------------------

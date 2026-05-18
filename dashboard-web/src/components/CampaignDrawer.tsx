@@ -839,7 +839,7 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
                     <div className="text-[10px] flex flex-wrap gap-2 pt-1 border-t border-current/15">
                       {analysis.windowStability && (
                         <span className="opacity-70">
-                          יציבות ({analysis.windowStability.windowCount} שבועות):{' '}
+                          יציבות ({analysis.windowStability.windowCountWithData} שבועות):{' '}
                           <strong>{analysis.windowStability.verdict === 'stable' ? 'יציב' : analysis.windowStability.verdict === 'mixed' ? 'מעורב' : 'תנודתי'}</strong>{' '}
                           (σ={(analysis.windowStability.stdDev * 100).toFixed(0)}%)
                         </span>

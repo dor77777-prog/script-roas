@@ -52,8 +52,13 @@ export type AttributionAnalysis = {
 };
 
 export type WindowStability = {
-  /** Number of 7-day windows analysed. */
-  windowCount: number;
+  /** Number of 7-day windows that had meta data (`meta > 0`) and therefore
+   *  contributed a coverage point to the stdDev computation. Windows where
+   *  Meta claim was zero are filtered out — they produce no signal. This
+   *  is NOT the total bucket count (which equals
+   *  `floor(totalDays/7) + (tailDays >= 3 ? 1 : 0)`); for that, see the
+   *  inline `totalWindows` local in computeWindowStability. (IN-01) */
+  windowCountWithData: number;
   /** Mean of per-window coverages. */
   meanCoverage: number;
   /** Standard deviation of per-window coverages — low = stable bias,
@@ -363,10 +368,10 @@ export function analyzeAttribution(
   }
 
   // Augment reasons + recommendation with the new signals.
-  if (windowStability && windowStability.windowCount >= 2) {
+  if (windowStability && windowStability.windowCountWithData >= 2) {
     if (windowStability.verdict === 'stable') {
       reasons.push(
-        `יחס Meta:Shopify יציב לאורך ${windowStability.windowCount} שבועות (σ=${(windowStability.stdDev * 100).toFixed(0)}%) — ביאס קבוע, ניתן להסתמך על המגמה`,
+        `יחס Meta:Shopify יציב לאורך ${windowStability.windowCountWithData} שבועות (σ=${(windowStability.stdDev * 100).toFixed(0)}%) — ביאס קבוע, ניתן להסתמך על המגמה`,
       );
     } else if (windowStability.verdict === 'volatile') {
       reasons.push(
@@ -431,16 +436,19 @@ export function computeWindowStability(
   // (Previously the tail was silently truncated; IN5-03.)
   const fullWindows = Math.floor(totalDays / 7);
   const tailDays = totalDays - fullWindows * 7;
-  const windowCount = fullWindows + (tailDays >= 3 ? 1 : 0);
+  // `totalWindows` is the bucket count BEFORE filtering for meta>0. The
+  // returned WindowStability.windowCountWithData is the post-filter count —
+  // two distinct concepts that share the same arithmetic root. (IN-01)
+  const totalWindows = fullWindows + (tailDays >= 3 ? 1 : 0);
   const buckets: Array<{ matched: number; meta: number }> = [];
-  for (let i = 0; i < windowCount; i++) {
+  for (let i = 0; i < totalWindows; i++) {
     buckets.push({ matched: 0, meta: 0 });
   }
   function bucketIdx(dateStr: string): number {
     const d = ms(dateStr);
     if (!Number.isFinite(d) || d < fromMs) return -1;
     const idx = Math.floor((d - fromMs) / 86400000 / 7);
-    if (idx >= windowCount) return -1;
+    if (idx >= totalWindows) return -1;
     return idx;
   }
   for (const o of matchedOrders) {
@@ -471,7 +479,7 @@ export function computeWindowStability(
   const stdDev = Math.sqrt(variance);
   const verdict: WindowStability['verdict'] =
     stdDev < 0.15 ? 'stable' : stdDev < 0.35 ? 'mixed' : 'volatile';
-  return { windowCount: coverages.length, meanCoverage: mean, stdDev, verdict };
+  return { windowCountWithData: coverages.length, meanCoverage: mean, stdDev, verdict };
 }
 
 /**
@@ -756,9 +764,9 @@ function buildAnalysis(opts: {
   }
 
   // Stability augmentations (downgrade if volatile).
-  if (windowStability && windowStability.windowCount >= 2) {
+  if (windowStability && windowStability.windowCountWithData >= 2) {
     if (windowStability.verdict === 'stable') {
-      reasons.push(`יחס יציב על ${windowStability.windowCount} שבועות — ביאס קבוע`);
+      reasons.push(`יחס יציב על ${windowStability.windowCountWithData} שבועות — ביאס קבוע`);
     } else if (windowStability.verdict === 'volatile') {
       reasons.push(`יחס תנודתי (σ=${(windowStability.stdDev * 100).toFixed(0)}%) — אל תסמוך על מספרי תקופה`);
       if (trust.level === 'high') {
