@@ -1,7 +1,6 @@
 # ROAS Tracker — אפיון מערכת מלא
 
-מסמך מקיף שמתעד את המערכת במצבה הנוכחי: ארכיטקטורה, רכיבים, זרימת נתונים, פיצ'רים, ותפעול שוטף.
-**עודכן לאחרונה: מאי 2026** — משקף את כל מה שנבנה עד `d8f916a`.
+מסמך מקיף שמתעד את המערכת במצבה הנוכחי: ארכיטקטורה, רכיבים, זרימת נתונים, פיצ'רים, ותפעול שוטף. **עודכן: מאי 2026** — משקף את הקוד עד `6d9df13` (סוף Round 5 — attribution pipeline + 13 תיקוני code-review).
 
 ---
 
@@ -10,76 +9,84 @@
 1. [תמונה גדולה](#-תמונה-גדולה)
 2. [רכיבי המערכת](#-רכיבי-המערכת)
 3. [זרימת נתונים](#-זרימת-נתונים)
-4. [פיצ'רים עיקריים](#-פיצרים-עיקריים)
-5. [מבנה הגיליון](#-מבנה-הגיליון)
-6. [מבנה הדשבורד](#-מבנה-הדשבורד)
-7. [שכבת Cloud Sync](#-שכבת-cloud-sync)
-8. [פירוט קבצים](#-פירוט-קבצים)
-9. [תפעול שוטף](#-תפעול-שוטף)
-10. [פתרון תקלות](#-פתרון-תקלות)
-11. [אבטחה](#-אבטחה)
-12. [מגבלות ידועות](#-מגבלות-ידועות)
+4. [שכבת ה-Attribution](#-שכבת-ה-attribution)
+5. [פיצ'רים עיקריים](#-פיצרים-עיקריים)
+6. [מבנה הגיליון](#-מבנה-הגיליון)
+7. [מבנה הדשבורד](#-מבנה-הדשבורד)
+8. [שכבת Cloud Sync](#-שכבת-cloud-sync)
+9. [פירוט קבצים](#-פירוט-קבצים)
+10. [תפעול שוטף](#-תפעול-שוטף)
+11. [פתרון תקלות](#-פתרון-תקלות)
+12. [אבטחה](#-אבטחה)
+13. [מגבלות ידועות](#-מגבלות-ידועות)
 
 ---
 
 ## 🎯 תמונה גדולה
 
-המערכת עוקבת אחרי ROAS, רווחיות וביצועי קמפיינים של **3 חנויות Shopify** ב-3 רמות, ומחברת בין נתוני מודעות (Meta + Google Ads) לנתוני מכירות בפועל (Shopify) כדי לזהות פערי attribution אמיתיים.
+המערכת עוקבת אחרי ROAS, רווחיות וביצועי קמפיינים של **3 חנויות Shopify** (uzoshop, Zol Plus, 360usmile) בשלוש רמות (קמפיין → ad-set → ad), ומחברת בין נתוני מודעות (Meta + Google Ads) לנתוני מכירות בפועל (Shopify) **תוך הסתמכות על click-id דטרמיניסטי** (`fbclid` / `gclid` / `utm_id` / `utm_term` / `utm_content`) שמסביב ל-attribution heuristic של Meta.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│ 🌐 שכבת תצוגה (Next.js 15 + React 19 on Vercel)                       │
+│ 🌐 שכבת תצוגה (Next.js 15.5 + React 19 on Vercel)                     │
 │   - 6 טאבים: בית · P&L · ניתוח · קמפיינים · מוצרים · פירוט             │
-│   - CampaignsTable + 3 drawers nested (Campaign → Ads)                │
-│   - Cloud-synced state: billing / annotations / goal / insights /     │
-│     campaign-optimized / product-map (כל מכשיר רואה אותו דבר)         │
-│   - SyncIndicator pill בכותרת + Sheets-backed כתיבה (write-through)   │
+│   - CampaignsTable → CampaignDrawer → AdsDrawer (nested z-stack)      │
+│   - 7 keys מסונכרנים בענן: billing / annotations / goal /             │
+│     insight-states / campaign-optimized / product-map / billing-onetime│
+│   - Attribution trust chip עם 4 רמות + fallback למיפוי מוצרים          │
 │   ↑↓                                                                   │
-│   קריאות REST + POST /api/dashboard-state                              │
+│   קריאות REST + POST /api/dashboard-state (write-through)              │
 └──────────────────────────────────────────────────────────────────────┘
                                 ↑↓
 ┌──────────────────────────────────────────────────────────────────────┐
-│ 📊 שכבת נתונים (Google Sheets — spreadsheet אחד, 11 סוגי טאבים)       │
-│   קריאה לדשבורד:                                                       │
-│     - data-daily           · sums per (date, store)                    │
-│     - products-daily       · per-product sales per day                 │
-│     - {store}-campaigns    · per-adset daily + budgets + CBO/ABO       │
-│     - {store}-ads          · per-ad daily metrics                      │
-│     - {store}-products-catalog · full Shopify catalog (active)        │
-│     - store-meta           · plan name + Meta/Google account IDs      │
-│     - dashboard-state      · cloud-sync key-value                     │
-│   נוסחאות (legacy ROAS pages):                                         │
+│ 📊 שכבת נתונים (Google Sheets — spreadsheet אחד, 8 סוגי טאבים)        │
+│   קריאה לדשבורד (מוסתרים):                                              │
+│     - data-daily              · שורה לכל (יום, חנות)                   │
+│     - products-daily          · שורה לכל (יום, חנות, מוצר)              │
+│     - {store}-campaigns       · שורה לכל (יום, חנות, קמפיין, ad-set)    │
+│     - {store}-ads             · שורה לכל (יום, חנות, קמפיין, ad-set,    │
+│                                  מודעה)                                 │
+│     - {store}-orders-attribution · שורה לכל הזמנה (UTM + fbclid +      │
+│                                     gclid + referrer) ← NEW            │
+│     - {store}-products-catalog · קטלוג מלא של החנות (active)           │
+│     - store-meta              · plan + Meta/Google account IDs        │
+│     - dashboard-state         · cloud-sync key-value                  │
+│   נוסחאות (legacy ROAS pages, גלויות למשתמש):                          │
 │     - סיכום + {store}-sheets                                           │
 │   ↑                                                                    │
-│   נכתב ע"י Apps Script + service account (write)                       │
+│   נכתב ע"י Apps Script + service account (write רק על dashboard-state) │
 └──────────────────────────────────────────────────────────────────────┘
                                 ↑
 ┌──────────────────────────────────────────────────────────────────────┐
-│ 🔧 שכבת איסוף (Google Apps Script)                                    │
+│ 🔧 שכבת איסוף (Google Apps Script V8)                                 │
 │   Triggers:                                                            │
-│     - runDailyUpdate · 00:05 IT  → סוגר אתמול                          │
-│     - runLiveUpdate  · כל 15 דק׳ → מרענן את היום                      │
-│   שולף:                                                                │
-│     - Shopify revenue + orders + line items + refunds                  │
-│     - Shopify full catalog (per store, weekly cache)                   │
+│     - runDailyUpdate · 00:05 IL → סוגר את אתמול                        │
+│     - runLiveUpdate  · כל 15 דק׳ → מרענן את היום הנוכחי                │
+│   שולף לכל יום, לכל חנות:                                              │
+│     - Shopify revenue + orders (REST + retry)                          │
+│     - Shopify orders attribution: landing_site → UTM + fbclid + gclid │
+│     - Shopify line items per order (product-level revenue)             │
 │     - Shopify plan name (GraphQL)                                      │
-│     - Meta insights (account + ad-set + ad levels)                     │
+│     - Shopify full catalog (manual, refreshAllProductCatalogs)         │
+│     - Meta insights ב-3 רמות (account + ad-set + ad)                  │
 │     - Meta budgets (campaign + adset, current state)                   │
 │     - Google Ads spend + ad-group insights (uzoshop בלבד)              │
-│     - Manual override sheet (חשבונות מושבתים וכו')                     │
 │   מטפל ב:                                                              │
-│     - 401 → auto-bootstrap (Client Credentials Grant) → retry          │
-│     - 429/5xx → retry עם backoff                                       │
-│     - Timeout של Sheets → retry, לעולם לא יוצר phantom spreadsheet     │
-│     - ILS/USD/EUR → CAD לפי שער יומי (Frankfurter API)                 │
+│     - 401 Shopify → auto-bootstrap (Client Credentials Grant) → retry │
+│     - 429/5xx → exponential backoff עם jitter                          │
+│     - Sheets timeout → 3 retries; לעולם לא יוצר phantom spreadsheet    │
+│     - Quota throttle: 1500ms sleep בין חנויות, 500ms בין כתיבות         │
+│     - URIError ב-decodeURIComponent → safeDecode_ במקום קריסה            │
+│     - ILS/USD/EUR → CAD לפי שער יומי (Frankfurter / ECB)               │
 └──────────────────────────────────────────────────────────────────────┘
                                 ↑
 ┌──────────────────────────────────────────────────────────────────────┐
 │ 🌍 APIs חיצוניים                                                       │
-│   - Shopify Admin (REST + GraphQL): orders, products, plan            │
-│   - Meta Marketing API v20.0: insights + campaigns + adsets           │
-│   - Google Ads API v20: campaigns + ad groups                         │
-│   - Frankfurter (FX): ILS/USD/EUR → CAD                               │
+│   - Shopify Admin (REST + GraphQL): orders (incl. landing_site) +     │
+│     products + plan                                                   │
+│   - Meta Marketing API v20.0: insights × 3 levels + campaigns/adsets │
+│   - Google Ads API v20: campaigns + ad groups (OAuth refresh token)   │
+│   - Frankfurter (FX): ILS/USD/EUR → CAD (daily, cached)               │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -89,87 +96,131 @@
 
 ### 1. Google Apps Script (איסוף נתונים)
 
-**קבצים עיקריים** (`*.gs`):
+קוד V8, רץ מתחת לחשבון הגוגל של המפעיל. 9 קבצי `.gs` + `appsscript.json`:
 
-| קובץ | אחריות |
-|------|--------|
-| `Main.gs` | nav entrypoint, setup triggers |
-| `Config.gs` | constants, getProp/setProp, fetchWithRetry, verifyConfig, **resetSpreadsheetIdToKnownGood**, **printCurrentSpreadsheetId** |
-| `Shopify.gs` | revenue + product sales + plan + **auto-bootstrap on 401** + product catalog |
-| `MetaAds.gs` | account spend + ad-set insights + **ad-level insights** + **getMetaBudgets** |
-| `GoogleAds.gs` | account spend + ad-group insights (OAuth refresh-token flow) |
-| `FX.gs` | Frankfurter API, daily cache ב-Script Properties |
-| `ManualOverrides.gs` | קריאה מטאב manual-spend |
-| `DailyUpdate.gs` | `runDailyUpdate`, `runLiveUpdate`, `backfillRange*`, **notifyError_ עם 3-tier email resolver** |
-| `SheetBuilder.gs` | יצירה/תחזוקת כל הטאבים, מיגרציות אידמפוטנטיות, **refreshAllProductCatalogs**, **catalogNeedsRefresh_**, chunked writes |
+| קובץ | אחריות מרכזית |
+|------|---------------|
+| [Main.gs](Main.gs) | `setupAll`, `installDailyTrigger`, התפריט בעורך |
+| [Config.gs](Config.gs) | קבועים (STORES, COGS_RATE_OF_REVENUE = 0.25), `getProp`/`setProp`, `fetchWithRetry_` עם backoff, `verifyConfig`, **`resetSpreadsheetIdToKnownGood`**, **`printCurrentSpreadsheetId`** להגנה מפני phantom-spreadsheet |
+| [Shopify.gs](Shopify.gs) | `getShopifyRevenue`, `getShopifyProductSalesForDay`, `getShopifyPlan` (GraphQL), **`getShopifyProductsCatalog`**, **`getShopifyOrdersAttribution`** (Round 5: per-order classification), `bootstrapShopifyTokenForStore_` (auto-bootstrap on 401), `safeDecode_` (URI guard) |
+| [MetaAds.gs](MetaAds.gs) | `getMetaSpend` (account level), `getMetaAdSetInsights` (ad-set), `getMetaAdInsights` (ad level — Meta בלבד), `getMetaBudgets` (CBO/ABO state) |
+| [GoogleAds.gs](GoogleAds.gs) | `getGoogleAdsSpend`, `getGoogleAdsAdGroupInsights`, OAuth refresh-token flow |
+| [FX.gs](FX.gs) | Frankfurter API, daily cache ב-Script Properties |
+| [ManualOverrides.gs](ManualOverrides.gs) | קריאה מטאב `manual-spend` כדי לעקוף את ה-API ליום מסוים |
+| [DailyUpdate.gs](DailyUpdate.gs) | `runDailyUpdate`, `runLiveUpdate`, `runUpdateForDate`, `backfillRange`, `backfillRangeForStores`, `runUpdateForDateForStores_`, `updateStoreForDate_`, `notifyError_` (3-tier email resolver) |
+| [SheetBuilder.gs](SheetBuilder.gs) | יצירת+תחזוקה של כל ה-tabs, מיגרציות אידמפוטנטיות, **`writeOrdersAttributionForDay`**, **`ensureOrdersAttributionTab_`**, **`refreshAllProductCatalogs`**, chunked writes |
 
-**טריגרים**:
-- `runDailyUpdate` — 00:05 שעון ישראל
-- `runLiveUpdate` — כל 15 דקות
+**Triggers (מותקנים אוטומטית ע"י `installDailyTrigger`):**
+- `runDailyUpdate` — 00:05 שעון ישראל (סוגר את אתמול)
+- `runLiveUpdate` — כל 15 דקות (מרענן את היום הנוכחי)
 
 ### 2. Google Sheets (נתונים)
 
-**11 סוגי טאבים** (לפי מטרה):
+**8 סוגי טאבים** (ב-spreadsheet יחיד שה-`SPREADSHEET_ID` מצביע אליו):
 
-**Read-only למשתמש**:
-- `סיכום` — נוסחה-driven, שורת ROAS לכל יום (legacy view)
+**גלויים למשתמש (read-only מהסקריפט):**
+- `סיכום` — נוסחה-driven, שורת ROAS לכל יום (legacy view, אינו נדרש לדשבורד)
 - `uzoshop` / `Zol Plus` / `360usmile` — סיכום פר-חנות, נוסחה-driven
 - `manual-spend` — overrides ידניים שהמשתמש כותב
 
-**מוסתרים (data-only)**:
-- `data-daily` — שורה לכל (יום, חנות). מקור האמת ל-`/api/data` בדשבורד
-- `products-daily` — שורה לכל (יום, חנות, מוצר) — רק מוצרים שנמכרו
-- `{storeId}-campaigns` — שורה לכל (יום, חנות, קמפיין, ad-set). כולל **תקציב יומי + סוג CBO/ABO**
-- `{storeId}-ads` — שורה לכל (יום, חנות, קמפיין, ad-set, מודעה)
-- `{storeId}-products-catalog` — **קטלוג מלא של חנות**, כולל מוצרים פעילים בלי הזמנות. מתחדש כל 7 ימים (cache gate)
-- `store-meta` — שורה לחנות: שם תוכנית Shopify + Meta ad-account ID + Google customer ID + last-error
-- `dashboard-state` — Key-value: billing / annotations / goal / insight-states / campaign-optimized / **campaign-product-map**
+**מוסתרים (data-only, מקור האמת לדשבורד):**
+- `data-daily` — שורה לכל (יום, חנות). 13 עמודות (date, storeId, storeName, FB spend, GA spend, total spend, revenue, ROAS, conversions placeholder, **COGS** = revenue×0.25, **netProfit** = revenue - spend - COGS, וכו'). הבסיס ל-`/api/data`.
+- `products-daily` — שורה לכל (יום, חנות, מוצר): productId, productTitle, units, revenue (CAD), netRevenue. רק מוצרים שנמכרו ביום ספציפי.
+- `{storeId}-campaigns` — שורה לכל (יום, חנות, קמפיין, ad-set). כולל: spend, conversionValue, conversions, impressions, clicks, **תקציב יומי** (`campaignBudgetCad` / `adSetBudgetCad`), **סוג CBO/ABO**, platform (Meta/Google).
+- `{storeId}-ads` — שורה לכל (יום, חנות, קמפיין, ad-set, **מודעה**). Meta בלבד (`level=ad`).
+- `{storeId}-orders-attribution` (NEW Round 5) — שורה לכל הזמנה ב-Shopify:
+  - תאריך, מזהה הזמנה, סכום (CAD)
+  - **source** classification: `meta-paid` / `google-paid` / `meta-organic` / `google-organic` / `email` / `other-paid` / `other-referral` / `direct`
+  - UTM tags: `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`
+  - Click IDs (boolean): `fbclidPresent`, `gclidPresent`
+  - `referringSite`
+  - **`utmId`** (= `{{campaign.id}}` מ-Meta URL Parameters) — match key חזק ביותר
+  - **`utmTerm`** (= `{{adset.id}}`) — match לרמת ad-set
+  - (`utm_content` כבר נמצא בעמודה 8) — match לרמת מודעה
+- `{storeId}-products-catalog` — **קטלוג מלא** של החנות (כולל מוצרים בלי הזמנות). מתחדש מנואלית ע"י `refreshAllProductCatalogs` (בעבר היה חלק מ-`runDailyUpdate` ומיצה את ה-quota — הוצא ב-Round 4).
+- `store-meta` — שורה לכל חנות: שם תוכנית Shopify, Meta ad-account ID, Google customer ID, last-error timestamp.
+- `dashboard-state` — Key-value: billing / annotations / goal / insight-states / campaign-optimized / **campaign-product-map**. נכתב ע"י service-account של הדשבורד (Vercel).
 
 ### 3. Next.js Dashboard (תצוגה)
 
+`dashboard-web/` — Next.js 15.5 App Router + React 19 + TypeScript + Tailwind 3.4. פרוס ב-Vercel (auto-deploy על push ל-main).
+
 **6 טאבים ראשיים** (`TabNav`):
 
-1. **בית** — HeroOverview chart + Filters + AI report + TodayLive + GoalTracker + InsightsBoard + AnnotationsPanel + KpiCards + PerStoreCards
-2. **P&L** — SectionIntro + BillingSettings + PnLBreakdown (hero strip + waterfall, פתוח כברירת מחדל)
-3. **ניתוח** — RoasChart trend + MonthlyTables
-4. **קמפיינים** — CampaignsTable (Meta + Google, sortable, **per-campaign optimization marks**, **CBO/ABO budgets**, **ROAS Shopify + confidence chip**, **Shopify actual revenue + units**)
-5. **מוצרים** — ProductsTable
-6. **פירוט** — DetailTable
+1. **בית** — `HomeTab`:
+   - `HeroOverview` (chart גדול של ROAS לאורך זמן + annotations כ-ReferenceLines)
+   - `Filters` + `AiReportButton`
+   - `TodayLive` (היום הנוכחי, מתעדכן כל 15 דק׳)
+   - `GoalTracker` (יעד הכנסות חודשי + projected EoM)
+   - `InsightsBoard` (anomalies + recommendations + forecasts)
+   - `AnnotationsPanel` (אירועים על ציר זמן)
+   - `KpiCards` (ROAS / Revenue / Spend / Gross Profit + השוואה)
+   - `PerStoreCards` (3 כרטיסיות בולטות פר חנות)
 
-**Drawers** (z-indexed stack):
-- `CampaignDrawer` (z-50) — נפתח בלחיצה על שורת קמפיין
-  - Hero stats, daily chart, **mapped products + picker**, **Meta-vs-Shopify reconciliation** (Pearson r + lag detection + per-day delta table), sortable ad-sets
-- `AdsDrawer` (z-60) — נפתח בלחיצה על שורת ad-set (Meta בלבד)
-  - Totals strip, sortable ads table, optimization toggle per ad, deep link to Ads Manager
-- `ProductPickerModal` (z-70) — נפתח מתוך CampaignDrawer
+2. **P&L** — `PnLTab`:
+   - `SectionIntro`
+   - `Filters`
+   - `BillingSettings` (modal לניהול עלויות שותפים)
+   - `PnLBreakdown` (Hero strip תמיד גלוי + Waterfall פתוח כברירת מחדל)
+
+3. **ניתוח** — `AnalysisTab`:
+   - `RoasChart` (trend per-store, multi-line)
+   - `MonthlyTables` (פר חנות + סיכום משולב)
+
+4. **קמפיינים** — `CampaignsTab` → **`CampaignsTable`** (1722 שורות — הקומפוננטה הגדולה במערכת):
+   - מפ-aggregating Meta (3 רמות: campaign / adset / ad-platform-level) + Google (campaign / ad-group)
+   - Sortable, RTL, optimization marks, CBO/ABO badges
+   - **ROAS Shopify + 4-level trust chip** (high/medium/low/unknown)
+   - **Shopify-actual revenue + units** מוקצים פרופורציונלית לקמפיין
+   - לחיצה על שורה → `CampaignDrawer`
+
+5. **מוצרים** — `ProductsTab` → `ProductsTable`
+
+6. **פירוט** — `DetailTab` → `DetailTable`
+
+**Drawers** (z-indexed stack, Esc סוגר רק את העליון):
+
+- **`CampaignDrawer`** (z-50, 1310 שורות) — נפתח בלחיצה על קמפיין:
+  - Hero stats (spend, value, ROAS, conversions, CTR, CPC, CPA)
+  - Daily chart (Meta vs Shopify mapped revenue)
+  - **`AttributionAnalysisPanel`** (קופסה מסומנת עם confidence score + recommendation)
+  - **`MetaShopifyReconciliation`** (Pearson r + lag detection + per-day delta table)
+  - **Mapped products** — list + lחץ לפתוח `ProductPickerModal`
+  - **Ad-sets table** עם ROAS Shopify + trust chip לכל ad-set
+- **`AdsDrawer`** (z-60, 586 שורות) — נפתח בלחיצה על ad-set:
+  - Totals strip, sortable ads table, ROAS Shopify + trust chip לכל מודעה
+- **`ProductPickerModal`** (z-70, 368 שורות) — נפתח מ-CampaignDrawer:
   - Search + multi-select של מוצרי החנות (קטלוג מלא)
 
-ה-stack מנוהל ע"י `lib/drawerStack.ts` — Esc סוגר רק את העליון.
+ה-stack מנוהל ע"י [`lib/drawerStack.ts`](dashboard-web/src/lib/drawerStack.ts).
 
 ### 4. Service Account & Auth
 
 **Server-side** (`dashboard-web/src/lib/sheets.ts`):
-- Service account `roas-dashboard-reader@roas-tracker-ga.iam.gserviceaccount.com`
-- Scopes: `spreadsheets.readonly` לכל הקריאות + `spreadsheets` (write) רק לכתיבת `dashboard-state` (cloud sync)
+- Service account: `roas-dashboard-reader@roas-tracker-ga.iam.gserviceaccount.com`
+- Scopes: `spreadsheets.readonly` לכל הקריאות; `spreadsheets` (write) רק לכתיבת `dashboard-state`
 - Env vars ב-Vercel: `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `SPREADSHEET_ID`
 
-**Apps Script**: רץ כמשתמש שמחזיק את ה-Script Properties (`spreadsheet.id`, `{storeId}.shopify.token`, וכו'). יש לוודא שהוא Editor על ה-Sheet.
+**Apps Script:** רץ כמשתמש שמחזיק את ה-Script Properties (`spreadsheet.id`, `{storeId}.shopify.token`, וכו'). יש לוודא שהוא Editor על ה-Sheet.
 
 ---
 
 ## 🔄 זרימת נתונים
 
-### זרימת הקריאה (כשאתה פותח את הדשבורד):
+### זרימת הקריאה (פתיחת הדשבורד)
 
 ```
 Browser ─ GET /api/data
-       │  └─ fetchDailyData() → Sheets read data-daily → DailyRow[]
+       │  └─ fetchDailyData() → batchGet data-daily → DailyRow[]
        ├─ GET /api/campaigns
        │  └─ fetchCampaignsData() → batchGet {store}-campaigns × 3 → CampaignRow[]
        ├─ GET /api/products
-       │  └─ fetchProductsData() → Sheets read products-daily → ProductRow[]
-       ├─ GET /api/ads
+       │  └─ fetchProductsData() → batchGet products-daily → ProductRow[]
+       ├─ GET /api/ads            (lazy — רק כש-AdsDrawer פתוח)
        │  └─ fetchAdsData() → batchGet {store}-ads × 3 → AdRow[]
+       ├─ GET /api/orders-attribution  (lazy — רק כש-CampaignDrawer/AdsDrawer פתוח)
+       │  └─ fetchOrdersAttribution() → batchGet {store}-orders-attribution × 3
+       │     → OrderAttributionRow[]
        ├─ GET /api/product-catalog
        │  └─ fetchProductCatalog() → batchGet {store}-products-catalog × 3
        ├─ GET /api/store-meta
@@ -179,57 +230,246 @@ Browser ─ GET /api/data
               (CloudSync polls every 30s)
 ```
 
-### זרימת הכתיבה (כש-Apps Script רץ):
+**Cache TTLs** (HTTP `Cache-Control: s-maxage=...`):
+| Route | s-maxage | stale-while-revalidate |
+|-------|----------|------------------------|
+| `/api/data` | 60s | 120s |
+| `/api/campaigns` | 60s | 120s |
+| `/api/products` | 60s | 120s |
+| `/api/ads` | 300s (5m) | 900s |
+| `/api/orders-attribution` | 300s (5m) | 900s |
+| `/api/product-catalog` | 60s | 300s |
+| `/api/store-meta` | 3600s (1h) | 86400s |
+| `/api/dashboard-state` | 10s | 60s |
+
+SWR client-side dedupe: 30s-60s לפי הroute.
+
+### זרימת הכתיבה (Apps Script)
+
+#### `runDailyUpdate(dateStr)` — הפונקציה המרכזית
 
 ```
-runDailyUpdate(dateStr):
-  ensureSpreadsheet()                    # opens existing, retry-on-timeout
-  for each store:
-    updateStoreForDate_(store, dateStr):
-      revenueCad = getShopifyRevenue(...)     # Shopify orders
-      metaSpend  = getMetaSpend(...) (or manual override)
-      googleAdsSpend = getGoogleAdsSpend(...) # if hasGoogleAds
-      writeDayRow(...)                          # store sheet
-      updateCampaignDataForStoreDate_(...):
-        budgets = getMetaBudgets(...)           # campaign + adset budgets
-        metaRows = getMetaAdSetInsights(...)
-        gaRows = getGoogleAdsAdGroupInsights(...) # if hasGoogleAds
-        writeCampaignRowsForDay(...)            # {store}-campaigns
-      cogsCad = revenueCad × 0.25
-      writeDailyFlatRow_(...)                   # data-daily
-      products = getShopifyProductSalesForDay(...)
-      writeProductSalesForDay_(...)             # products-daily
-      updateAdDataForStoreDate_(...):           # {store}-ads
-        adRows = getMetaAdInsights(level=ad)
-        writeAdsRowsForDay(...)
-      if catalogNeedsRefresh_(store, 7):        # weekly cache gate
-        catalog = getShopifyProductsCatalog(...)
-        writeProductCatalogForStore_(...)
-  refreshAllStoreMeta()                          # plan + Meta/GA IDs
-  notifyError_(...) on errors                    # email via 3-tier resolver
+runDailyUpdate(dateStr):                       # dateStr = ברירת מחדל = אתמול
+  ensureSpreadsheet()                          # opens existing, retry-on-timeout
+                                                # NEVER creates phantom on timeout
+  for i, store in enumerate(STORES):
+    if i > 0: Utilities.sleep(1500)            # quota-relief throttle
+    updateStoreForDate_(ss, store, dateStr):
+      ┌─ revenueCad = getShopifyRevenue(...)           # /orders.json (paid)
+      ├─ metaCad = manualOverride? || getMetaSpend(...)
+      ├─ googleAdsCad = if hasGoogleAds: getGoogleAdsSpend(...)
+      ├─ writeDayRow(...)                              # סיכום + per-store tabs
+      │
+      ├─ try: updateCampaignDataForStoreDate_(...):   # campaign/ad-set rows
+      │     ┌─ budgets = getMetaBudgets(store)        # current state (campaign+adset)
+      │     ├─ metaRows = getMetaAdSetInsights(...)
+      │     ├─ resolve CBO vs ABO per row
+      │     ├─ gaRows = getGoogleAdsAdGroupInsights(...)
+      │     └─ writeCampaignRowsForDay(...)           # {store}-campaigns
+      ├─ sleep(500)
+      │
+      ├─ cogsCad = revenueCad × 0.25
+      ├─ writeDailyFlatRow_(...)                       # data-daily
+      ├─ products = getShopifyProductSalesForDay(...)  # /orders + line_items
+      ├─ writeProductSalesForDay_(...)                 # products-daily
+      ├─ sleep(500)
+      │
+      ├─ try: updateAdDataForStoreDate_(...):          # ad-level (Meta only)
+      │     ┌─ adRows = getMetaAdInsights(level=ad)
+      │     └─ writeAdsRowsForDay(...)                # {store}-ads
+      ├─ sleep(500)
+      │
+      ├─ try: orders = getShopifyOrdersAttribution(store.id, dateStr)
+      │     ┌─ /orders.json?status=paid&financial_status=paid
+      │     ├─ pull landing_site + referring_site + note_attributes per order
+      │     ├─ classify each: fbclid → meta-paid, gclid → google-paid,
+      │     │                 utm_source+utm_medium → ..., referrer → ...,
+      │     │                 fallback → direct
+      │     └─ build OrderAttributionRow[]
+      ├─ writeOrdersAttributionForDay(...)             # {store}-orders-attribution
+      │     (idempotent: clears rows for dateStr, appends new ones)
+      │
+      └─ if catalogNeedsRefresh_(store, 14):
+           Logger.log("⚠️ catalog stale — run refreshAllProductCatalogs manually")
+           # NB: לא מבצע refresh בתוך runDailyUpdate (גורם ל-quota cascade —
+           #     הוצא ב-Round 4, commit 225fcb9)
+
+  refreshAllStoreMeta()                                # plan + Meta/GA account IDs
+  notifyError_(...) on errors                          # email via 3-tier resolver
 ```
 
-### זרימת user actions:
+#### `runLiveUpdate()` — מרענן את היום הנוכחי
+
+מקריא רק את נתוני היום (`asia-jerusalem today`), בלי קריאות catalog/products-daily. נועד לרענן את `TodayLive` בדשבורד.
+
+#### `backfillRange(start, end)` ו-`backfillRangeForStores(start, end, storeIds)`
+
+```
+backfillRange(start, end):
+  cur = start
+  while cur <= end:
+    runUpdateForDate(cur)             # ~3-4 min per day with all 3 stores
+    cur = nextDayStr_(cur)
+
+backfillRangeForStores(start, end, storeIds):
+  stores = STORES.filter(s => storeIds.includes(s.id))
+  cur = start
+  while cur <= end:
+    runUpdateForDateForStores_(cur, stores)
+    cur = nextDayStr_(cur)
+```
+
+**הגבלת זמן ב-Apps Script:** 6 דקות לכל execution. backfill של 11 ימים × 3 חנויות = ~35 דק׳ → חייב להפצל לחבילות של יום-יומיים בכל run.
+
+### זרימת user actions (write-through to cloud)
 
 ```
 משתמש לוחץ "שמור" ב-BillingSettings:
-  writeRecurring(items)
-    → localStorage.setItem
-    → window.dispatchEvent('roas-billing-changed')
-    → pushCloudKey('roas-dashboard:billing-recurring', items)
-        → debounce 400ms
-        → fetch POST /api/dashboard-state { key, value }
-            → upsertDashboardStateKey (serialized append to dashboard-state)
+  writeRecurring(items)                       # lib/billing.ts
+    ↓
+    localStorage.setItem(key, JSON.stringify(items))     # immediate
+    ↓
+    window.dispatchEvent('roas-billing-changed')         # component re-reads
+    ↓
+    pushCloudKey('roas-dashboard:billing-recurring', items)   # lib/cloudSync.ts
+      ↓ debounce 400ms
+      fetch POST /api/dashboard-state
+        body: { key, value }
+        ↓
+        upsertDashboardStateKey(key, value)             # lib/sheets.ts
+          ↓
+          appendValues to dashboard-state tab           # serialised, last-write-wins
+            ↓ (cached s-maxage=10s on the route)
 
-מכשיר אחר (כל 30 שניות):
-  CloudSync.hydrateFromCloud()
-    → GET /api/dashboard-state
-    → for each STATE_KEYS:
-        if cloud has value:
-          writeLocal(key, value)
-          dispatchEvent('roas-billing-changed' / etc.)
-            → component re-reads localStorage → re-renders
+מכשיר אחר (כל 30 שניות + on focus):
+  CloudSync.hydrateFromCloud()                          # CloudSync.tsx
+    ↓
+    fetch GET /api/dashboard-state
+    ↓
+    for each STATE_KEYS:
+      if cloud has value && value !== local:
+        writeLocal(key, value)
+        dispatchEvent(EVENT_MAP[key])                    # billing-changed / annotations-changed / etc.
+        ↓ component re-reads localStorage → re-renders
 ```
+
+---
+
+## 🎯 שכבת ה-Attribution
+
+הליבה של Round 5. שני סיגנלים מסביב ל-Meta:
+
+### סיגנל 1: Click-id דטרמיניסטי (`lib/attributionAnalysis.ts`, 746 שורות)
+
+**מקור הנתונים:** `{store}-orders-attribution` — כל הזמנה ב-Shopify מסווגת לפי `landing_site` (URL שאליו הלקוח נחת):
+
+```js
+classifyOrderAttribution_(order) {
+  parse landing_site URL → params { utm_source, utm_medium, utm_campaign,
+                                      utm_id, utm_term, utm_content }
+                             + booleans { fbclidPresent, gclidPresent }
+  also scan order.note_attributes for the same keys
+
+  priority ladder:
+    1. fbclidPresent && (utm_source≈facebook||no utm) → 'meta-paid'
+    2. gclidPresent && (utm_source≈google||no utm)   → 'google-paid'
+    3. utm_medium∈{cpc,paid_social,paidsearch,...}:
+         utm_source≈facebook → 'meta-paid'
+         utm_source≈google   → 'google-paid'
+         else                → 'other-paid'
+    4. utm_source∈{email,klaviyo,newsletter}        → 'email'
+    5. referring_site like *facebook*||*instagram*  → 'meta-organic'
+    6. referring_site like *google*                  → 'google-organic'
+    7. else if referring_site set                    → 'other-referral'
+    8. else                                          → 'direct'
+}
+```
+
+**Match tiers** (חזק לחלש):
+
+| Tier | זיהוי | מבוסס על |
+|------|-------|----------|
+| 1 (Campaign) | `utm_id` == `campaignId` | `utm_id={{campaign.id}}` ב-Meta URL Parameters |
+| 2 (Campaign) | `utm_campaign` (case-insens.) == `campaignName` | `utm_campaign={{campaign.name}}` |
+| 1 (Ad-set) | `utm_term` == `adSetId` | `utm_term={{adset.id}}` |
+| 1 (Ad) | `utm_content` == `adId` | `utm_content={{ad.id}}` |
+
+**חשוב (Round 5 fix CR5-01):** כש-`utm_id` קיים על ההזמנה, הוא **authoritative** — אם הוא לא תואם לקמפיין הנבדק, ההזמנה **לא** נופלת חזרה ל-name match. זה מונע מiscattribution להזמנות שעוטפות שני קמפיינים עם שמות זהים.
+
+### האנליזה (`analyzeAttribution`, `analyzeAttributionForAdSet`, `analyzeAttributionForAd`)
+
+לכל קמפיין/ad-set/ad מחושב:
+
+```
+deterministicRevenue = Σ(totalCad) של ההזמנות שתואמות לפי utm
+deterministicOrders  = N של אותן הזמנות
+modeledRevenue       = max(0, metaClaim − deterministicRevenue)
+coverage             = min(2, deterministicRevenue / metaClaim)
+```
+
+**ועוד שלושה סיגנלים אנליטיים:**
+
+1. **Bayesian-flavoured 95% CI** (`roasInterval`): normal approximation על AOV — `CI = mean ± 1.96 × stdDev/√N`. רק כש-`spend > 0` ו-`N ≥ 3` ו-`variance > 0` (Round 5 fix WR5-04 — variance=0 לא מציג טווח מטעה).
+
+2. **Multi-window stability** (`computeWindowStability`): מפצל את התקופה ל-7-day buckets, מחשב coverage לכל bucket, σ של ה-coverages:
+   - σ < 0.15 → `stable` (bias קבוע — אפשר לסמוך על הטרנד)
+   - 0.15 ≤ σ < 0.35 → `mixed`
+   - σ ≥ 0.35 → `volatile` (downgrades `high` ל-`medium`)
+   - Round 5 fix IN5-03: כולל partial trailing bucket כש-`tailDays ≥ 3`.
+
+3. **Outlier detection** (`detectOutlierDays`): ימים שבהם `Meta daily conv-value > 2.5σ` מעל הממוצע הנגרר ב-14 הימים שקדמו. Round 5 fix IN5-02: LOOKBACK אדפטיבי (`min(14, max(5, floor(N/2)))`) כך שטווח של 14 ימים (הברירת מחדל בדשבורד) מייצר signal במקום `[]` ריק.
+
+### Trust ladder
+
+```
+if metaClaim === 0 && deterministicOrders === 0:
+   trust = 'unknown'      label = "אין המרות"        score = 0
+else if deterministicOrders === 0 && metaClaim > 0:
+   trust = 'unknown'      label = "לא ניתן לקבוע"     score = 30
+   recommendation = "הוסף URL Parameters ב-Meta Ads Manager"
+else if coverage >= 0.8:
+   trust = 'high'         label = "אמין"              score = 70..100
+else if coverage >= 0.4:
+   trust = 'medium'       label = "חלקי"              score = 40..60
+else:
+   trust = 'low'          label = "לא אמין"           score = 0..40
+   recommendation = "Meta מנפח דיווחים..."
+```
+
+**Round 5 fix:** ה-`metaClaim===0 && det===0` short-circuit נוסף כדי לא לתייג קמפיינים ללא פעילות כ"Meta מנפח" — דבר שלא היה הגיוני בגלל ש-Meta דיווח 0.
+
+### סיגנל 2: Product-mapping heuristic (`lib/campaignProductMap.ts`)
+
+**מקור הנתונים:** מיפוי many-to-many ש-המפעיל מגדיר ידנית (קמפיין → מוצרים). מסונכרן בענן.
+
+**מה זה מודד:**
+- `trueRevenue` = הכנסה מ-Shopify של המוצרים המשויכים לקמפיין, מוקצה פרופורציונלית להוצאה כשהמוצר חולק עם כמה קמפיינים
+- `confidence` = Heuristic על הפער בין `metaClaim` ל-`trueRevenue`:
+  - פער > 70% → `low`
+  - פער 30-70% → `medium`
+  - מוצרים משותפים עם 3+ קמפיינים → `low`
+  - הוצאה < CAD 200 + פער > 15% → `medium`
+  - אחרת → `high`
+
+### הסיגנל בדשבורד: Tiered chip
+
+`CampaignsTable.tsx` (lines ~1300-1357) משלב את שני הסיגנלים:
+
+```
+useAttr = attribution !== null && attribution.trust.level !== 'unknown'
+
+if useAttr:
+  chip = click-id signal (high/medium/low)
+  suffix = "·{N}" (deterministicOrders count)
+else:                                  # fallback
+  chip = product-mapping confidence
+  suffix = "·מיפוי"
+
+tooltip = always shows BOTH numbers (Meta claim, click-id revenue, mapping revenue)
+          so the operator can triangulate when signals disagree
+```
+
+**רמת ad-set + ad:** רק סיגנל ה-click-id. אין fallback למיפוי מוצרים (אין mapping ברמה זו — היא יורשת מהקמפיין).
 
 ---
 
@@ -237,59 +477,62 @@ runDailyUpdate(dateStr):
 
 ### 1. P&L מפורט (טאב משלו)
 
-`PnLBreakdown` (`src/components/PnLBreakdown.tsx`):
-- **Hero strip** תמיד גלוי: הכנסות / סך עלויות / רווח נטו עם פסי גרף יחסיים
-- Waterfall (פתוח כברירת מחדל): Revenue → -Ad Spend → -COGS → -Transaction Fees → -Fixed → True Net
-- COGS: 25% מהכנסות (גלובלי)
-- Transaction Fees: 6.5% מהכנסות (PayPal + FX)
-- Fixed Costs: מ-`lib/billing` — recurring monthly subs + one-time charges, prorated לטווח
+[`PnLBreakdown.tsx`](dashboard-web/src/components/PnLBreakdown.tsx) (442 שורות):
+- **Hero strip** תמיד גלוי: Revenue / Total Costs / Net Profit + פסי גרף יחסיים
+- **Waterfall** (פתוח כברירת מחדל): Revenue → -Ad Spend → -COGS → -Transaction Fees → -Fixed → True Net
+- COGS: 25% מהכנסות (גלובלי, מוגדר ב-`COGS_RATE_OF_REVENUE` בשני המקומות — Apps Script + dashboard)
+- Transaction Fees: 6.5% מהכנסות (PayPal + FX — מוגדר ב-`lib/costs.ts`)
+- Fixed Costs: מ-`lib/billing.ts` — recurring monthly subs + one-time charges, prorated לטווח
 
 ### 2. BillingSettings — ניהול עלויות שותפים
 
-`BillingSettings.tsx` + `lib/billing.ts`:
+[`BillingSettings.tsx`](dashboard-web/src/components/BillingSettings.tsx) (1328 שורות):
 - 3 טאבים: חודשי קבוע · חד-פעמיים · ייבא CSV
-- Auto-detect: שואב מ-store-meta את שם תוכנית Shopify של כל חנות → מציע "הוסף Basic Shopify ≈ CAD 53/mo" בלחיצה
+- **Auto-detect**: שואב מ-`store-meta` את שם תוכנית Shopify של כל חנות → מציע "הוסף Basic Shopify ≈ CAD 53/mo" בלחיצה
 - CSV import עם classifier heuristic + dedup (`findMatchingRecurring`)
-- מסונכרן בענן ל-`dashboard-state`
+- מסונכרן בענן ל-`dashboard-state` תחת המפתחות `roas-dashboard:billing-recurring` ו-`billing-onetime`
 
-### 3. CampaignsTable — שכבת הקמפיינים
+### 3. CampaignsTable — שורת הליבה
 
-`CampaignsTable.tsx` (940+ שורות, הקומפוננטה הגדולה במערכת):
+[`CampaignsTable.tsx`](dashboard-web/src/components/CampaignsTable.tsx) (1722 שורות):
 
-**עמודות** (סדר מימין לשמאל ב-RTL):
-1. Toggle (סימון אופטימיזציה ✓)
-2. שם קמפיין/ad-set + CBO/ABO chip (Meta בלבד)
-3. הוצאה
-4. תקציב יומי (Meta בלבד, מאד-set לפי ABO/קמפיין לפי CBO)
-5. ערך המרות (Meta)
-6. ROAS (Meta)
-7. **ROAS Shopify** + confidence chip (אם יש mapping)
-8. **ערך Shopify** (Shopify-actual)
-9. **יח׳ Shopify** (units)
-10. המרות (Meta)
-11. CTR / CPC / CPA
-12. External link
+**עמודות (RTL, מימין לשמאל):**
 
-**Confidence chip** (מבוסס heuristic, לא מבחן סטטיסטי):
-- **High** (ירוק "אמין"): מיפוי מלא + פער < 30% + שני המקורות עקביים
-- **Medium** (כתום "חלקי"): פער 30-70%, או מוצרים משותפים + פער > 15%, או הוצאה < 200 + פער > 15%
-- **Low** (אדום "לא אמין"): פער > 70%, או 3+ קמפיינים חולקים מוצר, או מוצר יחיד + פער > 50%
-- **חשוב**: low spend לבדה אינה מורידה לאוטומטית — רק בשילוב עם פער. אם המספרים מסכימים, הצ׳יפ נשאר ירוק עם FYI על המדגם הקטן
+| # | עמודה | מקור |
+|---|-------|------|
+| 1 | Toggle (סימון אופטימיזציה ✓) | `lib/campaignOptimized.ts` |
+| 2 | שם קמפיין/ad-set + CBO/ABO chip | `{store}-campaigns` |
+| 3 | הוצאה | spend |
+| 4 | תקציב יומי (Meta) | `campaignBudgetCad` / `adSetBudgetCad` |
+| 5 | ערך המרות (Meta) | conversionValue |
+| 6 | ROAS (Meta) | conversionValue / spend |
+| 7 | **ROAS Shopify** + **4-level trust chip** | `analyzeAttribution` || product-mapping fallback |
+| 8 | **ערך Shopify** (actual) | `allocateProductRevenue` |
+| 9 | **יח׳ Shopify** | מאותו allocation |
+| 10 | המרות (Meta) | conversions |
+| 11 | CTR | clicks / impressions |
+| 12 | CPC | spend / clicks |
+| 13 | CPA | spend / conversions |
+| 14 | 🔗 External link ל-Ads Manager | `buildAdsManagerLink` (`campaignsLinks.ts`) |
+
+**Sortable** על כל עמודה מספרית. Optimization marks משתפים State עם ה-AdsDrawer ועם CampaignDrawer's ad-sets table.
+
+**Aggregation:** Apps Script כותב שורה לכל (יום, חנות, קמפיין, ad-set). הדשבורד מ-aggregate אותן לפי `groupBy: campaign` או `groupBy: adSet` בזמן ריצה.
 
 ### 4. Campaign → Product Mapping
 
-`lib/campaignProductMap.ts` + `ProductPickerModal.tsx`:
+[`lib/campaignProductMap.ts`](dashboard-web/src/lib/campaignProductMap.ts) + [`ProductPickerModal.tsx`](dashboard-web/src/components/ProductPickerModal.tsx):
 - Many-to-many: קמפיין יכול לקדם N מוצרים, מוצר יכול להיות מקודם ע"י N קמפיינים
-- מאוחסן כ-`Record<storeId::campaignId, productId[]>`
-- מסונכרן בענן ל-`dashboard-state`
+- נשמר כ-`Record<storeId::campaignId, productId[]>`
+- מסונכרן בענן תחת `roas-dashboard:campaign-product-map`
 - ה-picker שואב מ-`{store}-products-catalog` (קטלוג מלא, כולל מוצרים בלי מכירות)
 - Fallback ל-products-daily אם הקטלוג עוד לא סונכרן (עם warning banner)
 - ⚠️ Google PMax — picker מוסתר (אין attribution per-product, הפיד מנהל)
 
-**Allocation logic** (`allocateProductRevenue`):
+**`allocateProductRevenue`:**
 - מוצר עם spend > 0 בכמה קמפיינים → חלוקה פרופורציונלית להוצאה
 - כל הקמפיינים עם 0 spend → חלוקה שווה
-- מוצר orphan (אין mapping) → לא מוקצה
+- מוצר orphan (אין mapping) → לא מוקצה לקמפיין
 - **גם units וגם revenue** מוקצים באותו share
 
 ### 5. Meta ↔ Shopify Reconciliation (בתוך CampaignDrawer)
@@ -299,21 +542,28 @@ runDailyUpdate(dateStr):
 - r > 0.7 → "Meta תופס את הטרנדים נכון, הפער הוא bias קבוע" (ירוק)
 - r 0.3-0.7 → "התעלם מ-Meta ברמת יום בודד, הסתכל על 7+ ימים" (כתום)
 - r < 0.3 → "Meta מדווח על המרות שלא קורות, אל תקבל החלטות לפי המספרים שלו" (אדום)
-- **Lag detection** ב-3 ימים אחורה/קדימה — מזהה חלון attribution
+- **Lag detection** ב-±3 ימים — מזהה חלון attribution
 - טבלה collapsable יום-לפי-יום: Meta / Shopify / Δ%
 
 ### 6. AdsDrawer — drill-down ברמת המודעה
 
-`AdsDrawer.tsx`:
-- נפתח בלחיצה על ad-set ב-CampaignsTable (Meta בלבד)
-- שואב lazy מ-`/api/ads`
-- Totals strip + sortable table (7 metric columns: name/spend/value/ROAS/conversions/impressions/clicks)
-- Optimization toggle לכל ad
-- Deep link לכל מודעה ב-Ads Manager (`?selected_ad_ids=...`)
+[`AdsDrawer.tsx`](dashboard-web/src/components/AdsDrawer.tsx) (586 שורות):
+- נפתח בלחיצה על ad-set ב-CampaignsTable או ב-CampaignDrawer (Meta בלבד)
+- שואב lazy מ-`/api/ads` + `/api/orders-attribution`
+- Totals strip + sortable table:
+  | עמודה | מקור |
+  |-------|------|
+  | Toggle ✓ | optimization marks |
+  | שם מודעה | `{store}-ads` |
+  | הוצאה / ערך / ROAS | aggregated |
+  | **ROAS Shopify + trust chip** | `analyzeAttributionForAd` (memoized, IN5-01) |
+  | המרות / חשיפות / קליקים | aggregated |
+  | 🔗 deep link | `?selected_ad_ids=...` |
+- Per-ad daily Meta series מועבר ל-analyzer כך ש-window stability ו-outlier detection מופעלים גם ברמה זו (Round 5 fix WR5-03)
 
 ### 7. Optimization Marks
 
-`lib/campaignOptimized.ts`:
+[`lib/campaignOptimized.ts`](dashboard-web/src/lib/campaignOptimized.ts):
 - Set של composite keys: `storeId::platform::campaignId::adSetId::adId`
 - Toggle בכל שורה (בטבלה הראשית + AdsDrawer + ad-sets table ב-CampaignDrawer)
 - שורה מסומנת מתעמעת ל-50% opacity + ריחוף מחזיר ל-100%
@@ -322,7 +572,7 @@ runDailyUpdate(dateStr):
 
 ### 8. Annotations System
 
-`lib/annotations.ts` + `AnnotationsPanel.tsx`:
+[`lib/annotations.ts`](dashboard-web/src/lib/annotations.ts) + [`AnnotationsPanel.tsx`](dashboard-web/src/components/AnnotationsPanel.tsx):
 - 8 סוגי events: launch · pause · budget · pricing · sale · creative · supplier · other
 - כל אחד עם emoji + Hebrew label + צבע פלטה
 - נצפים כ-ReferenceLines על גרף ה-ROAS ב-HeroOverview
@@ -330,14 +580,15 @@ runDailyUpdate(dateStr):
 
 ### 9. SyncIndicator (בכותרת)
 
-`SyncIndicator.tsx`:
+[`SyncIndicator.tsx`](dashboard-web/src/components/SyncIndicator.tsx):
 - Pill קטן ליד "רענן": Cloud / RefreshCw / CloudOff
 - 4 מצבים: idle · syncing · ok · error
-- בכישלון: לחיצה פותחת popover עם השגיאה המדויקת מהשרת + רשימת בדיקות מהירות (Editor permission, env vars)
+- בכישלון: לחיצה פותחת popover עם השגיאה המדויקת + רשימת בדיקות (Editor permission, env vars)
+- מתעדכן כל 30 שניות (refresh tick)
 
 ### 10. Insights Engine
 
-`lib/insights.ts` + `InsightsBoard.tsx`:
+[`lib/insights.ts`](dashboard-web/src/lib/insights.ts) (671 שורות) + [`InsightsBoard.tsx`](dashboard-web/src/components/InsightsBoard.tsx) (707 שורות):
 - 3 סוגי תובנות: anomalies (z-score נגד trailing 14d), recommendations, forecasts
 - 5 רמות severity: critical → warning → opportunity → positive → info
 - כשהלוח סגור: "headline" אדיטוריאלי של התובנה הכי דחופה (typographic moment)
@@ -345,24 +596,34 @@ runDailyUpdate(dateStr):
 
 ### 11. Goal Tracker
 
-`GoalTracker.tsx` + `lib/insights.ts:readGoal/writeGoal`:
+[`GoalTracker.tsx`](dashboard-web/src/components/GoalTracker.tsx) + insights:
 - יעד הכנסות חודשי, מסונכרן בענן
 - מחשב MTD vs יעד + projected end-of-month based on trailing 7d avg
 - חיווי: ahead / on-pace / behind
 
 ### 12. Today Live (real-time)
 
-`TodayLive.tsx`:
+[`TodayLive.tsx`](dashboard-web/src/components/TodayLive.tsx):
 - מציג את היום הנוכחי עם הכנסות + הוצאות עד עכשיו (פיגור ~20 דק׳ מ-Meta/Google API)
-- מתעדכן כל 15 דק׳ ע"י runLiveUpdate ב-Apps Script
+- מתעדכן כל 15 דק׳ ע"י `runLiveUpdate` ב-Apps Script
+
+### 13. AI Report
+
+[`AiReportButton.tsx`](dashboard-web/src/components/AiReportButton.tsx) + [`lib/aiReport.ts`](dashboard-web/src/lib/aiReport.ts):
+- מייצר prompt מקיף עם כל הנתונים בטווח הנבחר → מעתיק ל-clipboard
+- המשתמש מדביק ל-Claude/ChatGPT לקבלת ניתוח עומק
 
 ---
 
 ## 📊 מבנה הגיליון
 
-ראה הסעיף "רכיבי המערכת > Google Sheets" לעיל לפירוט מלא של 11 סוגי הטאבים.
+ראה הסעיף "רכיבי המערכת > Google Sheets" לעיל לפירוט מלא של 8 סוגי הטאבים.
 
-**Critical**: ה-`SPREADSHEET_ID` ב-Vercel וה-`spreadsheet.id` ב-Script Properties **חייבים להתאים**. אם לא — Apps Script כותב לגיליון אחד והדשבורד קורא מגיליון אחר. הוסף ב-`Config.gs`: `resetSpreadsheetIdToKnownGood()` ו-`printCurrentSpreadsheetId()` לזיהוי ותיקון.
+**Critical**: ה-`SPREADSHEET_ID` ב-Vercel וה-`spreadsheet.id` ב-Script Properties **חייבים להתאים**. אם לא — Apps Script כותב לגיליון אחד והדשבורד קורא מאחר. הוסף ב-`Config.gs`:
+- `resetSpreadsheetIdToKnownGood()` — מאפס לדמה אמיתי קבוע בקוד
+- `printCurrentSpreadsheetId()` — מדפיס את ה-ID הנוכחי לזיהוי phantom-spreadsheet
+
+**Idempotent writes**: כל פונקציית `write*ForDay` (campaigns, ads, products, orders-attribution) קודם מסננת שורות עם אותו `dateStr` ומשאירה את היתר, ואז מוסיפה את החדשות. Round 5 fix WR5-02: שורות עם תאריך שאינו פיריק (`key === null`) נשמרות במקום להימחק.
 
 ---
 
@@ -371,7 +632,7 @@ runDailyUpdate(dateStr):
 ### עץ הקומפוננטות:
 
 ```
-Dashboard
+Dashboard (545 שורות, App Router root)
 ├── CloudSync (invisible — שואב/דוחף state)
 ├── Header
 │   ├── CommandPalette (Cmd-K)
@@ -380,52 +641,58 @@ Dashboard
 ├── TabNav (בית · P&L · ניתוח · קמפיינים · מוצרים · פירוט)
 ├── Main:
 │   ├── HomeTab
-│   │   ├── HeroOverview
+│   │   ├── HeroOverview (525 lines — ROAS chart + annotations)
 │   │   ├── Filters + AiReportButton
 │   │   ├── TodayLive
 │   │   ├── GoalTracker
-│   │   ├── InsightsBoard
+│   │   ├── InsightsBoard (707 lines)
 │   │   │   └── InsightHero (כשסגור) / SeverityGroup[] (כשפתוח)
 │   │   ├── AnnotationsPanel
 │   │   ├── KpiCards
-│   │   └── PerStoreCards
+│   │   ├── PerStoreCards
+│   │   └── WhatsWorking (292 lines)
 │   ├── PnLTab
 │   │   ├── SectionIntro
 │   │   ├── Filters
-│   │   ├── BillingSettings (modal)
+│   │   ├── BillingSettings (modal, 1328 lines)
 │   │   └── PnLBreakdown (hero strip + waterfall)
 │   ├── AnalysisTab → RoasChart + MonthlyTables
-│   ├── CampaignsTab → CampaignsTable
-│   │   ├── CampaignDrawer (on row click)
-│   │   │   ├── ProductPickerModal (z-70)
-│   │   │   └── AdsDrawer (z-60, on ad-set click)
-│   ├── ProductsTab → ProductsTable
+│   ├── CampaignsTab → CampaignsTable (1722 lines)
+│   │   └── CampaignDrawer (1310 lines, on row click)
+│   │       ├── AttributionAnalysisPanel
+│   │       ├── MetaShopifyReconciliation
+│   │       ├── ProductPickerModal (368 lines, z-70)
+│   │       └── AdsDrawer (586 lines, z-60, on ad-set click)
+│   ├── ProductsTab → ProductsTable (884 lines)
 │   └── DetailTab → DetailTable
 └── Footer
 ```
 
 ### State management:
 
-- **URL state** (`lib/urlState.ts`): tab + filters → URL params, restored on refresh
-- **localStorage**: 6 keys מסונכרנים בענן (ראה Cloud Sync)
-- **SWR** caches: per-API-route, dedupe interval 30s-5min
+- **URL state** ([`lib/urlState.ts`](dashboard-web/src/lib/urlState.ts)): tab + filters → URL params, restored on refresh
+- **localStorage**: 7 keys מסונכרנים בענן (ראה Cloud Sync)
+- **SWR caches**: per-API-route, dedupe interval 30s-5min
 
 ---
 
 ## ☁️ שכבת Cloud Sync
 
-`lib/cloudSync.ts` + `components/CloudSync.tsx`:
+[`lib/cloudSync.ts`](dashboard-web/src/lib/cloudSync.ts) (413 שורות) + [`components/CloudSync.tsx`](dashboard-web/src/components/CloudSync.tsx):
 
 **7 keys מסונכרנים** (`STATE_KEYS`):
-1. `roas-dashboard:billing-recurring` — recurring costs (Klaviyo, Shopify Plan, וכו')
-2. `roas-dashboard:billing-onetime` — one-time charges
-3. `roas-dashboard:annotations` — activity events
-4. `roas-dashboard:monthly-revenue-goal` — single number
-5. `roas-dashboard:insight-states` — handled/hidden per insight ID
-6. `roas-dashboard:campaign-optimized` — Set of marked campaign keys
-7. `roas-dashboard:campaign-product-map` — `{campaignKey → productId[]}`
 
-**Lifecycle**:
+| Key | תוכן |
+|-----|------|
+| `roas-dashboard:billing-recurring` | recurring costs (Klaviyo, Shopify Plan, וכו') |
+| `roas-dashboard:billing-onetime` | one-time charges |
+| `roas-dashboard:annotations` | activity events |
+| `roas-dashboard:monthly-revenue-goal` | single number |
+| `roas-dashboard:insight-states` | handled/hidden per insight ID |
+| `roas-dashboard:campaign-optimized` | Set of marked campaign keys |
+| `roas-dashboard:campaign-product-map` | `{campaignKey → productId[]}` |
+
+**Lifecycle:**
 - **On mount**: `hydrateFromCloud()` → GET `/api/dashboard-state` → writeLocal each key → dispatch change events
 - **On any write**: localStorage immediate + `pushCloudKey()` debounced 400ms → POST `/api/dashboard-state`
 - **Every 30s**: poll `hydrateFromCloud()` → merge cloud changes
@@ -433,10 +700,11 @@ Dashboard
 
 **Conflict policy**: last-write-wins. Acceptable for low-frequency edits. Race window protected by `lastPushAt` grace of 8 seconds.
 
-**Defense in depth**:
-- ALLOWED_STATE_KEYS allowlist on the server (`lib/sheets.ts`) prevents prototype pollution via arbitrary keys
+**Defense in depth (security):**
+- `ALLOWED_STATE_KEYS` allowlist on the server (`lib/sheets.ts`) prevents prototype pollution via arbitrary keys
 - `Object.create(null)` for the kv map on read
 - Drops cloud `null` values (treated as cleared)
+- `userFacingError()` עוטף Sheets errors כדי לא לדלוף Sheet ID / service account email
 
 ---
 
@@ -446,64 +714,82 @@ Dashboard
 
 | קובץ | תפקיד |
 |------|-------|
-| `Main.gs` | UI menu + setup helpers |
-| `Config.gs` | constants, prop helpers, fetchWithRetry_, verifyConfig, **resetSpreadsheetIdToKnownGood**, **printCurrentSpreadsheetId** |
-| `Shopify.gs` | revenue + products + plan (GraphQL) + **catalog** + auto-bootstrap on 401 |
-| `MetaAds.gs` | account spend + adset insights + **ad insights** + **getMetaBudgets** |
-| `GoogleAds.gs` | account spend + ad-group insights, OAuth refresh |
-| `FX.gs` | Frankfurter API, daily caching ב-Script Properties |
-| `ManualOverrides.gs` | קריאה מטאב manual-spend |
-| `DailyUpdate.gs` | runDailyUpdate, runLiveUpdate, backfillRange*, debugTodaySpend, notifyError_ |
-| `SheetBuilder.gs` | יצירה+תחזוקה של כל הטאבים, **refreshAllProductCatalogs**, **catalogNeedsRefresh_**, chunked writes |
+| [Main.gs](Main.gs) | UI menu + setup helpers (`setupAll`, `installDailyTrigger`) |
+| [Config.gs](Config.gs) | constants, prop helpers, `fetchWithRetry_`, `verifyConfig`, **`resetSpreadsheetIdToKnownGood`**, **`printCurrentSpreadsheetId`**, `campaignTabName_`, `adsTabName_`, **`ordersAttributionTabName_`** |
+| [Shopify.gs](Shopify.gs) | `getShopifyRevenue`, `getShopifyProductSalesForDay`, `getShopifyPlan`, `getShopifyProductsCatalog`, **`getShopifyOrdersAttribution`**, **`classifyOrderAttribution_`**, **`safeDecode_`** (Round 5: URI guard), auto-bootstrap on 401 |
+| [MetaAds.gs](MetaAds.gs) | `getMetaSpend`, `getMetaAdSetInsights`, `getMetaAdInsights` (ad level), `getMetaBudgets` |
+| [GoogleAds.gs](GoogleAds.gs) | `getGoogleAdsSpend`, `getGoogleAdsAdGroupInsights`, OAuth refresh |
+| [FX.gs](FX.gs) | Frankfurter API, daily caching ב-Script Properties |
+| [ManualOverrides.gs](ManualOverrides.gs) | קריאה מטאב manual-spend |
+| [DailyUpdate.gs](DailyUpdate.gs) | `runDailyUpdate`, `runLiveUpdate`, `runUpdateForDate`, `backfillRange`, `backfillRangeForStores`, `runUpdateForDateForStores_` (Round 5 fix WR5-01: sleep בין חנויות), `updateStoreForDate_`, `notifyError_` |
+| [SheetBuilder.gs](SheetBuilder.gs) | יצירה+תחזוקה של 8 סוגי tabs, מיגרציות אידמפוטנטיות, **`ensureOrdersAttributionTab_`**, **`writeOrdersAttributionForDay`** (Round 5 fix WR5-02), `refreshAllProductCatalogs`, `catalogNeedsRefresh_`, chunked writes |
 
 ### Dashboard data layer (`dashboard-web/src/lib/`)
 
 | קובץ | תפקיד |
 |------|-------|
-| `sheets.ts` | Google Sheets read (kv state) + write helpers + allowlist |
-| `campaigns.ts` | parse `{store}-campaigns` → CampaignRow[] |
-| `campaignsLinks.ts` | `buildAdsManagerLink` עם `act=` / `__c=` / `selected_ad_ids=` |
-| `campaignOptimized.ts` | optimization marks (Set + toggle/clear) |
-| `campaignProductMap.ts` | mapping + `allocateProductRevenue` |
-| `ads.ts` | parse `{store}-ads` → AdRow[] |
-| `productCatalog.ts` | parse `{store}-products-catalog` → CatalogProduct[] |
-| `products.ts` | parse `products-daily` → ProductRow[] |
-| `analytics.ts` | aggregate / dailySeries / deltaPct / forecastMonthEnd / cogsRate |
-| `insights.ts` | InsightsBoard logic + goal + insight-states |
-| `annotations.ts` | annotation CRUD + scope filtering |
-| `billing.ts` | recurring + one-time + CSV importer + `billingForRange` |
-| `cloudSync.ts` | STATE_KEYS, hydrate, push, sync state |
-| `drawerStack.ts` | shared Esc handler for nested drawers |
-| `urlState.ts` | URL ↔ tab+filters serialization |
-| `presets.ts` | date range presets |
-| `constants.ts` | FROZEN_USD_TO_CAD |
-| `costs.ts` | TRANSACTION_FEES_RATE |
-| `utils.ts` | formatters (currency, number, date) |
-| `types.ts` | shared types (Filters, DailyRow, etc.) |
+| [sheets.ts](dashboard-web/src/lib/sheets.ts) (470) | Google Sheets read (kv state) + write helpers + ALLOWED_STATE_KEYS allowlist |
+| [campaigns.ts](dashboard-web/src/lib/campaigns.ts) | parse `{store}-campaigns` → CampaignRow[] |
+| [campaignsLinks.ts](dashboard-web/src/lib/campaignsLinks.ts) | `buildAdsManagerLink` עם `act=` / `__c=` / `selected_ad_ids=` |
+| [campaignOptimized.ts](dashboard-web/src/lib/campaignOptimized.ts) | optimization marks (Set + toggle/clear) |
+| [campaignProductMap.ts](dashboard-web/src/lib/campaignProductMap.ts) | mapping + `allocateProductRevenue` (proportional split) |
+| [ads.ts](dashboard-web/src/lib/ads.ts) | parse `{store}-ads` → AdRow[] |
+| [productCatalog.ts](dashboard-web/src/lib/productCatalog.ts) | parse `{store}-products-catalog` → CatalogProduct[] |
+| [products.ts](dashboard-web/src/lib/products.ts) | parse `products-daily` → ProductRow[] |
+| [ordersAttribution.ts](dashboard-web/src/lib/ordersAttribution.ts) | **NEW Round 5**: parse `{store}-orders-attribution` → OrderAttributionRow[] |
+| [attributionAnalysis.ts](dashboard-web/src/lib/attributionAnalysis.ts) (746) | **NEW Round 5**: `analyzeAttribution`, `analyzeAttributionForAdSet`, `analyzeAttributionForAd`, `buildAnalysis` (shared engine), Bayesian CI, window stability, outlier detection, trust ladder, `orderMatchesCampaign` (utm_id authoritative) |
+| [analytics.ts](dashboard-web/src/lib/analytics.ts) | aggregate / dailySeries / deltaPct / forecastMonthEnd / cogsRate |
+| [insights.ts](dashboard-web/src/lib/insights.ts) (671) | InsightsBoard logic + goal + insight-states |
+| [annotations.ts](dashboard-web/src/lib/annotations.ts) | annotation CRUD + scope filtering |
+| [billing.ts](dashboard-web/src/lib/billing.ts) (561) | recurring + one-time + CSV importer + `billingForRange` |
+| [cloudSync.ts](dashboard-web/src/lib/cloudSync.ts) (413) | STATE_KEYS, hydrate, push, sync state |
+| [aiReport.ts](dashboard-web/src/lib/aiReport.ts) (564) | prompt assembly למשלוח ל-AI |
+| [drawerStack.ts](dashboard-web/src/lib/drawerStack.ts) | shared Esc handler for nested drawers |
+| [urlState.ts](dashboard-web/src/lib/urlState.ts) | URL ↔ tab+filters serialization |
+| [presets.ts](dashboard-web/src/lib/presets.ts) | date range presets |
+| [constants.ts](dashboard-web/src/lib/constants.ts) | FROZEN_USD_TO_CAD |
+| [costs.ts](dashboard-web/src/lib/costs.ts) | TRANSACTION_FEES_RATE |
+| [format.ts](dashboard-web/src/lib/format.ts) | additional formatters |
+| [utils.ts](dashboard-web/src/lib/utils.ts) | formatters (currency, number, date), cn helper |
+| [types.ts](dashboard-web/src/lib/types.ts) | shared types (Filters, DailyRow, etc.) |
 
 ### API routes (`dashboard-web/src/app/api/`)
 
-| Route | מטרה | Cache |
-|-------|------|-------|
+| Route | מטרה | Cache (s-maxage) |
+|-------|------|------------------|
 | `/api/data` | daily rows + FX | 60s |
 | `/api/campaigns` | per-adset rows × 3 stores | 60s |
-| `/api/products` | per-product daily sales | 5m |
-| `/api/ads` | per-ad daily rows × 3 stores | 5m |
+| `/api/products` | per-product daily sales | 60s |
+| `/api/ads` | per-ad daily rows × 3 stores | 300s |
+| **`/api/orders-attribution`** | **NEW Round 5**: per-order attribution × 3 stores | 300s |
 | `/api/product-catalog` | full catalog × 3 stores | 60s |
-| `/api/store-meta` | plan + Meta/Google IDs | 1h |
+| `/api/store-meta` | plan + Meta/Google IDs | 3600s |
 | `/api/dashboard-state` | kv cloud sync (GET/POST) | 10s |
 
 ### Components (`dashboard-web/src/components/`)
 
-24+ קומפוננטות. עיקריות (>200 lines):
-- `Dashboard.tsx` (~500) — root + tab routing
-- `CampaignsTable.tsx` (~940) — שורת הליבה של המוצר
-- `CampaignDrawer.tsx` (~700) — drill-down + reconciliation + ad-sets
-- `AdsDrawer.tsx` (~450) — drill-down למודעות
-- `ProductPickerModal.tsx` (~360) — multi-select modal לשיוך מוצרים
-- `BillingSettings.tsx` (~1100) — billing modal עם 3 טאבים + CSV import + recurring/onetime CRUD
-- `PnLBreakdown.tsx` (~400) — hero strip + waterfall
-- `InsightsBoard.tsx` (~600) — collapsable insights surface + InsightHero
+**31 קומפוננטות.** עיקריות (>200 lines):
+
+| קובץ | שורות | תפקיד |
+|------|------|-------|
+| [CampaignsTable.tsx](dashboard-web/src/components/CampaignsTable.tsx) | 1722 | שורת הליבה — Meta + Google, sortable, attribution chip + fallback |
+| [BillingSettings.tsx](dashboard-web/src/components/BillingSettings.tsx) | 1328 | billing modal עם 3 טאבים + CSV |
+| [CampaignDrawer.tsx](dashboard-web/src/components/CampaignDrawer.tsx) | 1310 | drill-down + reconciliation + ad-sets table |
+| [ProductsTable.tsx](dashboard-web/src/components/ProductsTable.tsx) | 884 | products tab |
+| [InsightsBoard.tsx](dashboard-web/src/components/InsightsBoard.tsx) | 707 | collapsable insights surface + InsightHero |
+| [CommandPalette.tsx](dashboard-web/src/components/CommandPalette.tsx) | 626 | Cmd-K navigator |
+| [AdsDrawer.tsx](dashboard-web/src/components/AdsDrawer.tsx) | 586 | drill-down למודעות |
+| [Dashboard.tsx](dashboard-web/src/components/Dashboard.tsx) | 545 | root + tab routing |
+| [HeroOverview.tsx](dashboard-web/src/components/HeroOverview.tsx) | 525 | hero chart + annotations |
+| [PnLBreakdown.tsx](dashboard-web/src/components/PnLBreakdown.tsx) | 442 | hero strip + waterfall |
+| [ProductPickerModal.tsx](dashboard-web/src/components/ProductPickerModal.tsx) | 368 | multi-select modal לשיוך מוצרים |
+| [MonthlyTables.tsx](dashboard-web/src/components/MonthlyTables.tsx) | 349 | טבלאות חודשיות |
+| [AnnotationsPanel.tsx](dashboard-web/src/components/AnnotationsPanel.tsx) | 347 | annotations CRUD |
+| [GoalTracker.tsx](dashboard-web/src/components/GoalTracker.tsx) | 335 | monthly goal + projection |
+| [KpiCards.tsx](dashboard-web/src/components/KpiCards.tsx) | 327 | 4-column KPI strip |
+| [TodayLive.tsx](dashboard-web/src/components/TodayLive.tsx) | 298 | today's snapshot |
+| [WhatsWorking.tsx](dashboard-web/src/components/WhatsWorking.tsx) | 292 | top-performers card |
+| [AiReportButton.tsx](dashboard-web/src/components/AiReportButton.tsx) | 240 | prompt assembly + copy |
 
 ---
 
@@ -513,14 +799,29 @@ Dashboard
 
 | מה | איך |
 |-----|------|
-| כל הטוקנים של Shopify פגי-תוקף | אוטומטי — auto-bootstrap on 401 |
+| הטוקנים של Shopify פגי-תוקף | אוטומטי — auto-bootstrap on 401 (`bootstrapShopifyTokenForStore_`) |
 | מוצר חדש בחנות לא מופיע ב-picker | Apps Script → `refreshAllProductCatalogs` (SheetBuilder.gs) |
-| שיוך מחדש של קמפיין למוצר | פתח את ה-Campaign drawer → "מוצרי Shopify משויכים" → "ערוך מיפוי" |
+| שיוך מחדש של קמפיין למוצר | פתח את ה-CampaignDrawer → "מוצרי Shopify משויכים" → "ערוך מיפוי" |
 | Apps Script timeout פתאומי | בדוק ש-`spreadsheet.id` ב-Script Properties מצביע לגיליון הנכון (`printCurrentSpreadsheetId`) |
-| ה-`spreadsheet.id` מצביע ל-phantom | `resetSpreadsheetIdToKnownGood` (Config.gs) — צריך לערוך את REAL_ID לפי הצורך |
-| Backfill טווח תאריכים | `backfillRange('2026-01-01', '2026-01-31')` |
-| backfill חנות אחת בלבד | `backfillRangeForStores(start, end, ['zolplus'])` |
+| ה-`spreadsheet.id` מצביע ל-phantom | `resetSpreadsheetIdToKnownGood` (Config.gs) — צריך לערוך REAL_ID בקוד לפי הצורך |
+| Backfill טווח תאריכים | `backfillRange('2026-01-01', '2026-01-15')` — פצל לחבילות של 1-2 ימים כדי להישאר מתחת ל-6 דק׳ |
+| Backfill חנות אחת בלבד | `backfillRangeForStores(start, end, ['zolplus'])` |
 | אימייל אזעקות לא מגיע | Script Properties → `notification.email` → הגדר ידנית |
+
+### מגבלת הזמן של Apps Script
+
+כל execution מוגבל ל-**6 דקות**. ריצה אחת של `runUpdateForDate` עם 3 חנויות לוקחת ~3-4 דק׳ (כולל ה-sleeps החדשים). לכן:
+- backfill של 1-2 ימים → ריצה אחת (~3-6 דק׳)
+- backfill של 11 ימים → חייב לפצל ל-6 ריצות נפרדות
+
+הריצה היומית הרגילה (`runDailyUpdate` ב-00:05) עוסקת ביום אחד ולא נכנסת למגבלה.
+
+### Quota relief (Round 4 + 5)
+
+- `Utilities.sleep(1500)` בין חנויות ב-`runUpdateForDate` וב-`runUpdateForDateForStores_`
+- `Utilities.sleep(500)` בין כתיבות גדולות בתוך אותה חנות
+- Catalog refresh הוצא מ-`runDailyUpdate` — מנואלי דרך `refreshAllProductCatalogs`
+- `getMetaAdInsights` מוגן ב-try/catch כדי לא להפיל את הריצה אם Meta מחזיר 5xx
 
 ### אינדיקטורים שכדאי לעקוב אחריהם
 
@@ -542,13 +843,13 @@ Dashboard
 
 ### "401 Invalid API key" מ-Shopify
 
-- `bootstrapAllShopifyTokens` ידני, או
-- מחדש את הטוקן ב-Shopify Admin ושים ב-Script Properties
+- אם זה מסלול B (Dev Dashboard): `bootstrapAllShopifyTokens` ידני
+- אם זה מסלול A (קלאסי): מחדש את הטוקן ב-Shopify Admin ושים ב-Script Properties
 
 ### "Cannot find name 'XXX'" ב-Apps Script
 
 - Apps Script לא תומך ב-ES modules; כל הפונקציות globals
-- בדוק שהקובץ קיים בעורך ב-Apps Script (לפעמים `clasp push` מפספס)
+- בדוק שהקובץ קיים בעורך ב-Apps Script (אם משתמשים בהעתקה ידנית — תוודא ש-3 קבצים אחרונים הועלו)
 
 ### `Service Spreadsheets timed out`
 
@@ -558,13 +859,29 @@ Dashboard
 
 ### Phantom spreadsheet (15tYa...)
 
-- אם בעבר נוצר → מוצב ב-Script Property
+- אם בעבר נוצר → הוצב ב-Script Property
 - `printCurrentSpreadsheetId` יראה זאת
 - `resetSpreadsheetIdToKnownGood` יתקן
 
-### `Confidence chip` מציג "לא אמין" למרות שהמספרים דומים
+### "אין המרות" על קמפיין שיש לו spend
 
-- מתוקן ב-`d8f916a`. ה-rule של spend < 200 כבר לא מוריד אוטומטית — רק אם יש גם פער > 15%.
+- זה לא bug — זה אומר שהקמפיין לא הביא המרות לא מ-Meta ולא מ-Shopify
+- אם זה קמפיין brand-awareness → תקין
+- אחרת → בדוק שה-Pixel/CAPI עובדים והקמפיין מכוון להמרות
+
+### Trust chip מציג `·מיפוי` (fallback)
+
+- ההזמנות בטווח חסרות `utm_id`/`utm_campaign` ב-landing_site
+- בדוק שב-Meta Ads Manager > URL Parameters מוגדר:
+  ```
+  utm_source=meta&utm_medium=paid_social&utm_campaign={{campaign.name}}
+  &utm_id={{campaign.id}}&utm_term={{adset.id}}&utm_content={{ad.id}}
+  ```
+- אחרי שמגדירים, הזמנות חדשות יקבלו את הפרמטרים; היסטוריות יישארו `·מיפוי`
+
+### URIError ב-Shopify orders
+
+- מתוקן ב-Round 5 (`safeDecode_`). אם רואה את זה בלוגים → ודא ש-Shopify.gs המעודכן ב-Apps Script.
 
 ---
 
@@ -572,10 +889,12 @@ Dashboard
 
 - **Service Account**: scope `spreadsheets.readonly` לרוב הקריאות + `spreadsheets` (write) רק ל-dashboard-state
 - **Allowlist on POST**: `/api/dashboard-state` בודק `isAllowedStateKey(body.key)` כדי למנוע prototype pollution
-- **Env vars**: `GOOGLE_PRIVATE_KEY` נשמר ב-Vercel Encrypted. רק bypass אם הפעם הראשונה ב-`pull`
+- **Env vars**: `GOOGLE_PRIVATE_KEY` נשמר ב-Vercel Encrypted
 - **Apps Script credentials**: רק ב-Script Properties, לא ב-source
 - **Error sanitization**: `/api/dashboard-state` עוטף Sheets errors ב-`userFacingError()` כדי לא לדלוף Sheet ID / service account email
 - **CloudSync error reporting**: שגיאות נחשפות ב-SyncIndicator עם הטקסט המסונן, לא הגלם
+- **Object.create(null)**: ב-`classifyOrderAttribution_` (Round 5 IN5-05) למניעת collisions עם Object.prototype
+- **safeDecode_**: ב-`classifyOrderAttribution_` (Round 5 CR5-02) להגן מ-URIError על URLs פסולים מבוטים
 
 ---
 
@@ -584,23 +903,27 @@ Dashboard
 | איזור | מגבלה | סיבה |
 |------|--------|------|
 | Google PMax | אין mapping per-product | PMax מנהל הצגה לפי הפיד, לא לפי קמפיין |
-| Attribution | proportional split כשמוצר משויך לכמה קמפיינים | אין real attribution data — חישוב מקורב |
-| Confidence chip | heuristic, לא מבחן סטטיסטי | פער + הוצאה + sharing — לא MTA אמיתי |
+| Click-id attribution | רק להזמנות עם UTM/click-id ב-landing_site | תלוי במה ש-Meta הוסיף ל-URL בשעת הקליק |
+| Historical orders pre-UTM | לא יוכלו להיות matched ל-utm_id | URL Parameters הוגדרו בנקודה מסוימת בזמן; הזמנות לפני כן יוצרות trust=unknown → fallback למיפוי |
+| Trust chip ad-set/ad level | אין fallback למיפוי מוצרים | אין mapping ברמה זו (יורש מהקמפיין) |
 | Last-write-wins | שני שותפים שעורכים אותה רשומה במקביל → השני מנצח | Acceptable עבור עריכות לא-תכופות |
 | Historical campaigns paused | לא מופיעים בנתונים חדשים אחרי הפסקה | Meta API מחזיר רק ad-sets פעילים — היסטוריה נשמרת בגיליון |
-| Catalog refresh weekly | מוצר חדש לא יופיע מיד | `refreshAllProductCatalogs` ידני, או חכה לטריגר השבועי |
+| Catalog refresh manual | מוצר חדש לא יופיע מיד | `refreshAllProductCatalogs` ידני אחרי הוספה |
 | FX rate | יומי, לא inter-day | Frankfurter API מספק שערים יומיים בלבד |
-| Per-order attribution | עדיין לא ממומש — רק campaign-level | utm/fbclid/gclid parsing מתוכנן אבל לא נבנה |
+| Bayesian CI | normal approximation, לא Wilson מלא | מספיק טוב לתצוגה — אם N קטן ה-CI ממילא רחב |
+| Outlier detection | דורש 15+ ימים (Round 5: 10+ עם LOOKBACK אדפטיבי) | trailing baseline צריך מינימום מדגם |
+| Window stability | partial trailing bucket דורש ≥3 ימים | פחות מזה מוסיף רעש ל-σ |
 
 ---
 
 ## 📞 קישורים שימושיים
 
 - **Dashboard**: https://roas-dashboard-smoky.vercel.app
-- **Spreadsheet**: בקש מהמפעיל את ה-ID (sensitive in Vercel env). אזכור היסטורי: `1f5tbc-8eMG60Go1ubTldWALc_kwnpaXD_33IsPDWrAk`
+- **Spreadsheet**: בקש מהמפעיל את ה-ID (sensitive in Vercel env)
 - **Apps Script**: `printCurrentSpreadsheetId` בעורך → תקבל את הקישור הישיר
 - **Vercel project**: roas-dashboard
+- **GitHub repo**: dor77777-prog/script-roas
 
 ---
 
-_עודכן בקומיט: `d8f916a` (מאי 2026). שינויים גדולים מאז גרסה קודמת: P&L tab משלו, BillingSettings, CloudSync cross-device, Campaign→Product mapping + Confidence chip, Meta↔Shopify reconciliation, Optimization marks, AdsDrawer (ad-level drilldown), Shopify catalog (full inventory), CBO/ABO budget display, Annotations, GoalTracker, SyncIndicator, auto-bootstrap on 401, phantom-spreadsheet protection._
+_עודכן בקומיט: `6d9df13` (מאי 2026). שינויים גדולים מ-Round 4: orders-attribution pipeline עם classification per-order, Bayesian CI + window stability + outlier detection, attribution analysis ב-3 רמות (campaign / ad-set / ad) דרך utm_id+utm_term+utm_content, trust chip fallback למיפוי מוצרים, safeDecode_ + Object.create(null) + quota throttle, 13 תיקוני code-review (2 critical, 5 warning, 6 info)._

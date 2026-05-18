@@ -15,6 +15,7 @@
    - `Shopify.gs`
    - `MetaAds.gs`
    - `GoogleAds.gs`
+   - `ManualOverrides.gs`
    - `SheetBuilder.gs`
    - `DailyUpdate.gs`
    - `Main.gs`
@@ -757,7 +758,75 @@ curl "https://graph.facebook.com/v20.0/act_AD_ACCOUNT_ID/insights?date_preset=ye
 backfillRange('2026-05-01', '2026-05-15')
 ```
 
-⚠️ הגבלה: כל הרצת Apps Script מוגבלת ל-6 דקות. אם הטווח גדול מדי, פצל לכמה הרצות.
+⚠️ הגבלה: כל הרצת Apps Script מוגבלת ל-**6 דקות**. ריצה של `runUpdateForDate` (יום אחד × 3 חנויות) לוקחת ~3-4 דק׳ עם ה-throttling החדש (sleep 1500ms בין חנויות). לכן:
+
+- backfill של **יום-יומיים** = ריצה אחת (~3-6 דק׳, בטוח)
+- backfill של 5+ ימים — חייב לפצל לחבילות נפרדות
+
+### דוגמה: backfill של 11 ימים (8-18 במאי)
+
+1. ערוך את ה-Apps Script והוסף 6 פונקציות עוטפות בקצה של `DailyUpdate.gs`:
+
+   ```javascript
+   function backfill1() { backfillRange("2026-05-08", "2026-05-09"); }
+   function backfill2() { backfillRange("2026-05-10", "2026-05-11"); }
+   function backfill3() { backfillRange("2026-05-12", "2026-05-13"); }
+   function backfill4() { backfillRange("2026-05-14", "2026-05-15"); }
+   function backfill5() { backfillRange("2026-05-16", "2026-05-17"); }
+   function backfill6() { runUpdateForDate("2026-05-18"); }
+   ```
+
+2. שמור (Cmd+S).
+3. בדרופ-דאון של הפונקציות בחר `backfill1` → Run → המתן ~5-6 דק׳.
+4. עבור ל-`backfill2` → Run → המתן. וכן הלאה עד `backfill6`.
+5. ב-View → Executions תראה את הסטטוס; בלוגים (Cmd+Enter) תראה הודעות `-- Backfill {date} --`.
+6. בסיום אפשר למחוק את 6 הפונקציות.
+
+אם ריצה אחת נכשלת באמצע — הכתיבה idempotent, אז פשוט הרץ אותה שוב; שורות יום קודמות לא נדרסות.
+
+---
+
+## שלב 8 — Meta URL Parameters (להפעלת ה-attribution layer)
+
+⭐ **חובה לקבלת trust chip ב-attribution על קמפיינים/ad-sets/מודעות.**
+
+המערכת ממיינת כל הזמנה ב-Shopify לפי ה-`landing_site` (URL שאליו הלקוח נחת). אם ל-Meta תצורף URL Parameters שמטמיעות `utm_id={{campaign.id}}` ועוד — אז המערכת יודעת לקשר הזמנה ספציפית לקמפיין ספציפי **בוודאות דטרמיניסטית** (לא heuristic, לא modeling). זה הסיגנל החזק ביותר במערכת.
+
+### איך מגדירים
+
+1. ב-**Meta Ads Manager** היכנס לכל חשבון פרסום בנפרד (uzoshop, zolplus, 360usmile — אם הם בעסקים שונים).
+2. נווט: **Settings** (אייקון ⚙️ בפינה השמאלית התחתונה של ה-Ads Manager) → **Account Settings** → **URL Parameters**.
+3. בשדה "URL parameters" הדבק את הסטרינג הבא:
+
+   ```
+   utm_source=meta&utm_medium=paid_social&utm_campaign={{campaign.name}}&utm_id={{campaign.id}}&utm_term={{adset.id}}&utm_content={{ad.id}}&adset_name={{adset.name}}&ad_name={{ad.name}}&meta_placement={{placement}}&meta_source={{site_source_name}}
+   ```
+
+   - `utm_source=meta&utm_medium=paid_social` — סטטיים. עוזרים לסיווג כללי של הטראפיק כ-`meta-paid`.
+   - `utm_campaign={{campaign.name}}` — שם הקמפיין (fallback של ה-match).
+   - **`utm_id={{campaign.id}}`** — מזהה הקמפיין. ה-match הכי חזק (immutable, לא משתנה כשמשנים שם).
+   - **`utm_term={{adset.id}}`** — מזהה ה-ad-set. מאפשר trust chip ספציפי ל-ad-set.
+   - **`utm_content={{ad.id}}`** — מזהה המודעה. מאפשר trust chip ספציפי למודעה.
+   - השאר — informational, לא משמשים ל-match אבל מועילים לדיבוג.
+
+4. שמור.
+5. חזור על השלבים לכל חשבון פרסום.
+
+### מה קורה אחרי
+
+- כל קליק חדש מ-Meta יוסיף את הפרמטרים האלה ל-URL שאליו הלקוח נחת
+- כשהלקוח מבצע הזמנה, Shopify שומר את ה-`landing_site` המקורי על אובייקט ההזמנה
+- בריצה היומית הבאה (00:05) — `getShopifyOrdersAttribution` יקרא את ההזמנה, יפענח את ה-URL Parameters, ויכתוב את ה-`utm_id`/`utm_term`/`utm_content` לטאב `{store}-orders-attribution`
+- הדשבורד יקרא את הטאב ויחבר כל הזמנה לקמפיין/ad-set/מודעה הספציפיים
+
+**⚠️ חשוב**: רק הזמנות שהגיעו **אחרי** שהגדרת את ה-URL Parameters יקבלו את הפרמטרים. הזמנות ישנות לא יוכלו להיות matched ל-`utm_id` — הן יקבלו `trust=unknown` ב-chip והדשבורד יעבור ל-fallback של מיפוי מוצרים (chip עם suffix `·מיפוי`).
+
+### בדיקה שזה עובד
+
+1. בריצה היומית הראשונה אחרי ההגדרה, פתח את הטאב `uzoshop-orders-attribution` בגיליון.
+2. בעמודות **L (UTM ID)** ו-**M (UTM Term)** של הזמנות חדשות אמורות להופיע מזהים מספריים (לא ריקים).
+3. אם הן ריקות — ה-URL Parameters לא נוגעות בלקוחות חדשים; ייתכן שהשמירה ב-Meta לא נתפסה. נסה שוב, שמור, וודא שאתה ב-Account Settings ולא ב-Campaign Settings (אחרת זה יחול רק על קמפיין ספציפי).
+4. בדשבורד — פתח CampaignsTable ובדוק את ה-chip בעמודת "ROAS Shopify". חיווי תקין: chip עם suffix `·N` (= N הזמנות תויגו) במקום `·מיפוי`.
 
 ---
 
