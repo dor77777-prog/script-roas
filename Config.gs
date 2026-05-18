@@ -229,16 +229,27 @@ function verifyConfig() {
  * subsequent runs need to be pointed back to the original sheet that the
  * dashboard reads from.
  *
- * Usage: edit the constant below to your real sheet ID, then run this
- * function once from the Apps Script editor.
+ * Setup (one-time, per deployment): in the Apps Script editor open
+ *   Project Settings → Script Properties → Add property
+ *     Property:  spreadsheet.canonical-id
+ *     Value:     <your real spreadsheet ID>
+ *
+ * Once that property exists, run this function from the editor. The ID
+ * is no longer hardcoded in source (#IN-03) — it now travels with the
+ * deployment's Script Properties rather than git history.
  *
  * To find the real ID: open the dashboard's Vercel project → Settings →
  * Environment Variables → SPREADSHEET_ID. That's the truth — Vercel never
  * had the phantom ID.
  */
 function resetSpreadsheetIdToKnownGood() {
-  // ⚠️ Edit this to your real spreadsheet ID before running.
-  const REAL_ID = '1f5tbc-8eMG60Go1ubTldWALc_kwnpaXD_33IsPDWrAk';
+  const REAL_ID = getProp('spreadsheet.canonical-id');
+  if (!REAL_ID) {
+    throw new Error(
+      'Set Script Property "spreadsheet.canonical-id" to your real spreadsheet ID ' +
+      'before running. Project Settings → Script Properties → Add property.'
+    );
+  }
 
   const previous = getProp('spreadsheet.id');
   Logger.log(`Current spreadsheet.id: ${previous}`);
@@ -255,7 +266,10 @@ function resetSpreadsheetIdToKnownGood() {
       setProp('spreadsheet.id', previous);
       Logger.log(`Restored previous spreadsheet.id: ${previous}`);
     }
-    throw new Error(`Reset failed — REAL_ID ${REAL_ID} is not openable. Check the constant and try again.`);
+    throw new Error(
+      `Reset failed — spreadsheet.canonical-id (${REAL_ID}) is not openable. ` +
+      `Check the Script Property value and try again.`
+    );
   }
 }
 
