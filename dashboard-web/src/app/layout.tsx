@@ -1,6 +1,7 @@
 import './globals.css';
 import type { Metadata, Viewport } from 'next';
 import { Heebo } from 'next/font/google';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 
 // Heebo is the de-facto Hebrew sans-serif for product UIs: clean, readable,
 // supports the full set of weights we use (300 for big numbers, 600 for
@@ -26,7 +27,9 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="he" dir="rtl" className={heebo.variable}>
-      <body className="font-sans antialiased text-text-primary bg-background">{children}</body>
+      <body className="font-sans antialiased text-text-primary bg-background">
+        <ErrorBoundary>{children}</ErrorBoundary>
+      </body>
     </html>
   );
 }
