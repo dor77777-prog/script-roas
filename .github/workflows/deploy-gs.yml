@@ -1,0 +1,50 @@
+name: Deploy Apps Script (clasp push)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '**.gs'
+      - 'appsscript.json'
+
+concurrency:
+  group: deploy-gs
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: clasp push --force
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies (npm ci from root)
+        run: npm ci
+
+      - name: Write clasp credentials from secret
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          if [ -z "$CLASPRC_JSON" ]; then
+            echo "::error::CLASPRC_JSON secret is empty. Set it under Settings -> Secrets and variables -> Actions."
+            exit 1
+          fi
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          chmod 600 "$HOME/.clasprc.json"
+
+      - name: Verify clasp can see the project
+        run: npx clasp status
+
+      - name: Push to Apps Script
+        run: npm run deploy:gs
