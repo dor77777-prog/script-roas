@@ -98,6 +98,18 @@ export function Dashboard() {
   // AI report modal. AiReportButton listens to this prop via useEffect.
   const [aiReportSignal, setAiReportSignal] = useState(0);
 
+  // `aggregate()` reads billing from localStorage to compute fixedCosts. The
+  // `filtered` memo below doesn't know billing exists, so editing a cost
+  // wouldn't refresh KPI / PnL / per-store totals until the page reloaded.
+  // This tick increments on every 'roas-billing-changed' dispatch and is
+  // included in the memo deps to force a re-aggregate.
+  const [billingTick, setBillingTick] = useState(0);
+  useEffect(() => {
+    const bump = () => setBillingTick(t => t + 1);
+    window.addEventListener('roas-billing-changed', bump);
+    return () => window.removeEventListener('roas-billing-changed', bump);
+  }, []);
+
   // Mirror state into the URL so refresh / bookmark / share survive. Uses
   // replaceState so we don't pollute the back-button stack.
   useEffect(() => {
@@ -118,7 +130,8 @@ export function Dashboard() {
       series: dailySeries(cur, stores),
       visibleStores: stores,
     };
-  }, [data, filters]);
+    // billingTick: re-aggregate on billing edits so live values stay in sync.
+  }, [data, filters, billingTick]);
 
   return (
     <div dir="rtl" className="min-h-screen bg-background">
