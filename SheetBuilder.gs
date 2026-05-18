@@ -1414,10 +1414,17 @@ function writeProductCatalogForStoreChunked_(ss, storeId, products) {
   }
   if (!products || products.length === 0) return;
 
-  const updatedAt = new Date();
+  // Stage 1: write all rows with the Updated At column LEFT EMPTY. This
+  // matters for the catalogNeedsRefresh_ cache gate (#WR-01): if a chunk
+  // fails partway, the partial sheet has NO timestamp on any row, so the
+  // gate at SheetBuilder.gs:1351 sees an empty col-9 value, fails the
+  // `instanceof Date` check, returns true, and the next run re-fetches.
+  // Previously we wrote `updatedAt` on every chunked row, which meant a
+  // partial write left a fresh timestamp on rows 2..101 and the gate
+  // mistakenly skipped the refresh for up to 7 days.
   const rows = products.map(p => [
     p.productId, p.title, p.handle, p.status, p.priceCad,
-    p.imageUrl, p.productType, p.vendor, updatedAt,
+    p.imageUrl, p.productType, p.vendor, '', // <- empty timestamp during chunked write
   ]);
 
   const CHUNK = 100;
@@ -1425,6 +1432,15 @@ function writeProductCatalogForStoreChunked_(ss, storeId, products) {
     const slice = rows.slice(i, i + CHUNK);
     sh.getRange(2 + i, 1, slice.length, PRODUCT_CATALOG_HEADERS.length).setValues(slice);
   }
+
+  // Stage 2: ONLY after every chunk succeeded, stamp Updated At across the
+  // whole data range in one batch write. If any earlier chunk threw, we
+  // never reach this line, and the sheet stays in a "fresh data, no
+  // timestamp" state that catalogNeedsRefresh_ correctly treats as stale.
+  const updatedAt = new Date();
+  const stamps = rows.map(() => [updatedAt]);
+  sh.getRange(2, 9, rows.length, 1).setValues(stamps);
+
   sh.getRange(2, 5, rows.length, 1).setNumberFormat('#,##0.00');
   sh.getRange(2, 9, rows.length, 1).setNumberFormat('yyyy-mm-dd hh:mm');
 }
