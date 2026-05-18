@@ -9,12 +9,6 @@ import {
   Calendar,
   Store as StoreIcon,
   TrendingUp,
-  Layers,
-  ArrowUp,
-  ArrowDown,
-  ArrowUpDown,
-  CheckCircle2,
-  Circle,
   Package,
   Edit3,
 } from 'lucide-react';
@@ -49,6 +43,11 @@ import {
   buildReconciliation,
 } from './MetaShopifyReconciliation';
 import { ProductChannelBreakdown } from './ProductChannelBreakdown';
+import {
+  AdSetTable,
+  type AdSetSortKey,
+  type AdSetSortDir,
+} from './AdSetTable';
 import { ProductPickerModal } from './ProductPickerModal';
 import {
   readProductMap,
@@ -99,11 +98,9 @@ const TONE_BG: Record<string, string> = {
   gray:   'bg-surfaceMuted text-text-muted',
 };
 
-// Columns the drawer's ad-set table can be sorted by. Kept narrow because
-// the drawer is a focused drilldown — full sortable surface is in
-// CampaignsTable.
-type AdSetSortKey = 'name' | 'spend' | 'budget' | 'value' | 'roas' | 'conversions';
-type AdSetSortDir = 'asc' | 'desc';
+// AdSetSortKey + AdSetSortDir moved to AdSetTable.tsx (T-H) — imported
+// above. Re-exported via the AdSetTable module so the drawer's sort-state
+// declarations can still reference them.
 
 export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, rangeFrom, rangeTo }: Props) {
   // Drawer-local sort state. Default to spend-desc which matches the
@@ -677,158 +674,16 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
 
           {/* Ad-sets within this campaign */}
           {summary.adSets.length > 0 && (
-            <section>
-              <h3 className="text-sm font-semibold text-text-primary inline-flex items-center gap-1.5 mb-2">
-                <Layers size={14} className="text-text-secondary" />
-                אד-סטים ({summary.adSets.length})
-              </h3>
-              {/* Horizontal scroll mirrors the AdsDrawer pattern — the
-                  ad-sets table has 7 columns (toggle / name / spend / budget /
-                  value / ROAS / conversions) and gets wider than the drawer's
-                  640px on smaller widths. `overflow-x-auto` keeps the rounded
-                  border + lets the table scroll inside. */}
-              {/* Same pattern as AdsDrawer: a real vertical scroll context
-                  on the wrapper so the sticky thead pins correctly when
-                  scrolling rows. */}
-              <div className="rounded-xl border border-borderSubtle overflow-auto max-h-[50vh]">
-                <table className="w-full text-xs sm:text-sm min-w-[720px]">
-                  <thead className="bg-surfaceMuted/60 sticky top-0 z-10">
-                    <tr className="text-text-secondary">
-                      <th className="px-2 py-2 w-[36px]" aria-label="סימון" />
-                      <AdSetSortHeader label="שם"          col="name"        sortKey={sortKey} dir={sortDir} onClick={handleSort} align="start"  />
-                      <AdSetSortHeader label="הוצאה"       col="spend"       sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
-                      <AdSetSortHeader label="תקציב יומי"  col="budget"      sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
-                      <AdSetSortHeader label="ערך"         col="value"       sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
-                      <AdSetSortHeader label="ROAS"        col="roas"        sortKey={sortKey} dir={sortDir} onClick={handleSort} align="center" />
-                      {/* Per-ad-set deterministic attribution. Header doesn't
-                          sort (the data is shape-inferred per row). Tooltip
-                          on each cell explains the chip. */}
-                      <th className="font-medium px-3 py-2 text-center text-text-secondary" title="ROAS אמיתי לפי click-id (utm_term)">
-                        ROAS Shopify
-                      </th>
-                      <AdSetSortHeader label="המרות"       col="conversions" sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sortedAdSets.map((a, i) => {
-                      const info = roasLabel(a.roas);
-                      // Same composite key the main CampaignsTable uses for
-                      // ad-set rows, so a mark made here shows there and vice
-                      // versa.
-                      const markKey = `${a.storeId}::${a.platform}::${a.campaignId}::${a.id || ''}`;
-                      const isOptimized = optimized.has(markKey);
-                      const tight = a.spend > 0 && a.adSetBudgetCad && a.spend > a.adSetBudgetCad * 0.95;
-                      // `!!()` so the type is strictly boolean — without it,
-                      // short-circuit gives `string | boolean` (the value of
-                      // `a.id` when truthy), which leaks into JSX props that
-                      // expect boolean (e.g. `disabled={!canDrillToAds}` would
-                      // render `disabled="123"` if added later). (#IN-06)
-                      const canDrillToAds = !!(a.platform === 'Meta' && a.id);
-                      return (
-                        <tr
-                          key={a.id || a.name || i}
-                          className={cn(
-                            'border-t border-borderSubtle transition-opacity',
-                            isOptimized && 'opacity-50 hover:opacity-100',
-                            canDrillToAds && 'cursor-pointer hover:bg-surfaceMuted/30',
-                          )}
-                          onClick={() => {
-                            if (!canDrillToAds) return;
-                            setAdDrillSet({
-                              storeId: a.storeId,
-                              campaignId: a.campaignId,
-                              adSetId: a.id,
-                              adSetName: a.name,
-                            });
-                          }}
-                          title={canDrillToAds ? 'לחץ לראות את המודעות באד-סט' : undefined}
-                        >
-                          <td className="px-2 py-2 text-center w-[36px]">
-                            <button
-                              type="button"
-                              onClick={e => {
-                                // Stop the click from bubbling up to the row,
-                                // which would also open AdsDrawer for this
-                                // ad-set. Mirrors the pattern used in
-                                // CampaignsTable.tsx (line ~778).
-                                e.stopPropagation();
-                                onToggle(markKey);
-                              }}
-                              className={cn(
-                                'inline-flex items-center justify-center w-7 h-7 rounded-full transition-colors',
-                                isOptimized
-                                  ? 'text-roas-green hover:bg-roas-greenBg/60'
-                                  : 'text-text-muted hover:text-roas-green hover:bg-roas-greenBg/40',
-                              )}
-                              title={isOptimized ? 'לחץ להסרת הסימון' : 'סמן כאופטימיזציה בוצעה'}
-                              aria-label={isOptimized ? 'בטל סימון אופטימיזציה' : 'סמן כאופטימיזציה בוצעה'}
-                              aria-pressed={isOptimized}
-                            >
-                              {isOptimized ? <CheckCircle2 size={16} /> : <Circle size={16} />}
-                            </button>
-                          </td>
-                          <td className="px-3 py-2 text-text-primary truncate max-w-[200px]" title={a.name}>{a.name}</td>
-                          <td className="px-3 py-2 text-end tabular-nums">{formatCurrency(a.spend)}</td>
-                          <td className="px-3 py-2 text-end tabular-nums">
-                            {a.adSetBudgetCad && a.adSetBudgetCad > 0 ? (
-                              <span className={cn('font-medium', tight && 'text-amber-700')}>
-                                {formatCurrency(a.adSetBudgetCad)}
-                              </span>
-                            ) : (
-                              <span className="text-text-muted">—</span>
-                            )}
-                          </td>
-                          <td className={cn('px-3 py-2 text-end tabular-nums', a.value > a.spend && 'text-roas-green font-medium')}>
-                            {formatCurrency(a.value)}
-                          </td>
-                          <td className={cn('px-3 py-2 text-center font-semibold tabular-nums rounded', TONE_BG[info.tone])}>
-                            {a.roas > 0 ? formatNumber(a.roas) : '—'}
-                          </td>
-                          {/* Deterministic ROAS per ad-set via utm_term. */}
-                          <td className="px-3 py-2 text-center">
-                            {(() => {
-                              // Look up the pre-computed analysis instead of
-                              // re-running the orders walk + Bayesian + window
-                              // stability per cell per render. (IN5-01)
-                              const adsetAttr = attributionByAdSet.get(a.id || a.name || '(אחר)') ?? null;
-                              if (!adsetAttr) {
-                                return <span className="text-text-muted text-xs">—</span>;
-                              }
-                              const detRoas = a.spend > 0
-                                ? adsetAttr.deterministicRevenue / a.spend
-                                : 0;
-                              const tone =
-                                adsetAttr.trust.level === 'high'    ? 'bg-roas-greenBg/60 text-roas-green'
-                              : adsetAttr.trust.level === 'medium'  ? 'bg-amber-50 text-amber-700'
-                              : adsetAttr.trust.level === 'unknown' ? 'bg-surfaceMuted text-text-secondary'
-                              :                                       'bg-roas-redBg/60 text-roas-red';
-                              const tooltip =
-                                `ROAS אמיתי · ${adsetAttr.trust.label} (${adsetAttr.trust.score.toFixed(0)}/100)\n\n` +
-                                `Meta דיווח: CAD ${a.value.toFixed(0)}\n` +
-                                `click-id מתויג: CAD ${adsetAttr.deterministicRevenue.toFixed(0)} (${adsetAttr.deterministicOrders} הזמנות)\n` +
-                                `modeled: CAD ${adsetAttr.modeledRevenue.toFixed(0)}\n\n` +
-                                adsetAttr.reasons.map(r => `• ${r}`).join('\n') +
-                                `\n\n💡 ${adsetAttr.recommendation}`;
-                              return (
-                                <div className="inline-flex flex-col items-center gap-0.5" title={tooltip}>
-                                  <span className="font-semibold tabular-nums text-text-primary">
-                                    {detRoas > 0 ? formatNumber(detRoas) : '—'}
-                                  </span>
-                                  <span className={cn('inline-block text-[8px] font-bold px-1 py-0 rounded uppercase tracking-wider', tone)}>
-                                    {adsetAttr.trust.label}
-                                  </span>
-                                </div>
-                              );
-                            })()}
-                          </td>
-                          <td className="px-3 py-2 text-end tabular-nums">{formatNumber(a.conversions, 0)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </section>
+            <AdSetTable
+              adSets={sortedAdSets}
+              sortKey={sortKey}
+              sortDir={sortDir}
+              onSort={handleSort}
+              attributionByAdSet={attributionByAdSet}
+              optimized={optimized}
+              onToggleOptimized={onToggle}
+              onDrillAds={setAdDrillSet}
+            />
           )}
 
           {/* Foot - tiny */}
@@ -934,60 +789,10 @@ function DrawerStat({
 }
 
 
-/**
- * Sort-aware <th> for the drawer's ad-sets table. Mirrors the SortHeader in
- * CampaignsTable but lives here so the drawer doesn't need to import that
- * component's narrower SortKey union.
- */
-function AdSetSortHeader({
-  label,
-  col,
-  sortKey,
-  dir,
-  onClick,
-  align,
-}: {
-  label: string;
-  col: AdSetSortKey;
-  sortKey: AdSetSortKey;
-  dir: AdSetSortDir;
-  onClick: (key: AdSetSortKey) => void;
-  align: 'start' | 'center' | 'end';
-}) {
-  const isActive = col === sortKey;
-  const justify =
-    align === 'start' ? 'justify-start' : align === 'end' ? 'justify-end' : 'justify-center';
-  const textAlign =
-    align === 'start' ? 'text-start' : align === 'end' ? 'text-end' : 'text-center';
-  return (
-    <th className={cn('font-medium px-3 py-2', textAlign)}>
-      <button
-        type="button"
-        onClick={() => onClick(col)}
-        className={cn(
-          'inline-flex items-center gap-1 transition-colors group select-none cursor-pointer w-full',
-          justify,
-          isActive
-            ? 'text-primary font-semibold'
-            : 'text-text-secondary hover:text-text-primary',
-        )}
-        aria-sort={isActive ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
-      >
-        <span>{label}</span>
-        {isActive ? (
-          dir === 'asc' ? (
-            <ArrowUp size={12} className="text-primary" />
-          ) : (
-            <ArrowDown size={12} className="text-primary" />
-          )
-        ) : (
-          <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-60 transition-opacity" />
-        )}
-      </button>
-    </th>
-  );
-}
-
+// AdSetSortHeader moved to AdSetTable.tsx as a module-private helper
+// (T-H). The drawer no longer needs the Arrow* lucide icons either —
+// AdSetTable owns them.
+//
 // pearson + pearsonWithLag moved to MetaShopifyReconciliation.tsx as
 // named exports for Phase 5/6/7 reuse (T-F). The byte-identical clamp
 // `Math.max(-1, Math.min(1, r))` + lag shift logic are preserved there.
