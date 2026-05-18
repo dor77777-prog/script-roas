@@ -3,8 +3,9 @@ import { fetchCampaignsData, type CampaignRow } from '@/lib/campaigns';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
 
+// No `force-dynamic` — it would override `revalidate` and the Cache-Control
+// header, defeating ISR. (IN-06)
 export const revalidate = 60; // matches CACHE_CONFIG.campaigns.revalidate; literal required by Next.js
-export const dynamic = 'force-dynamic';
 
 export type CampaignsResponse = {
   rows: CampaignRow[];

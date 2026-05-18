@@ -6,8 +6,11 @@ import { userFacingError } from '@/lib/apiErrors';
 
 // Revalidate the underlying data every 60 seconds (server-side cache).
 // Client SWR will poll us; this prevents hammering the Sheets API.
+//
+// No `force-dynamic` — it overrides `revalidate` and the explicit
+// `Cache-Control` header on the response, defeating the caching this
+// route relies on. See IN-06 and the matching comment in /api/dashboard-state.
 export const revalidate = 60; // matches CACHE_CONFIG.data.revalidate; literal required by Next.js static analysis
-export const dynamic = 'force-dynamic';
 
 async function fetchTodayFx(): Promise<number | null> {
   try {
