@@ -152,6 +152,18 @@ function computeConfidence(
  *
  * Only meaningful in campaign mode (mapping is at the campaign level).
  * In ad-set mode the map is empty so all rows fall back to Meta numbers.
+ *
+ * IMPORTANT — `localRange` reference-equality contract (WR-05):
+ * The inner useMemo lists `localRange` as a dep (alongside its
+ * destructured siblings). The dep array compares by reference, so the
+ * caller MUST replace `localRange` on every change — never mutate it
+ * in place. Concretely, callers should do
+ *   setLocalRange({ from, to })
+ * (creating a fresh object) and NOT
+ *   setLocalRange(prev => { prev.from = ...; return prev; })
+ * (mutating the existing object). In-place mutation would yield the
+ * same reference, the memo would not invalidate, and the allocation
+ * would keep returning numbers from the stale range — silently.
  */
 export function useCampaignTrueRevenue(opts: {
   mode: 'campaign' | 'adset';
