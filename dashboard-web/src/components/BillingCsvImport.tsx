@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Upload, AlertCircle, Check } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import {
@@ -47,6 +47,33 @@ export function BillingCsvImport({
   const [preview, setPreview] = useState<PreviewRow[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
   const fileInput = useRef<HTMLInputElement | null>(null);
+
+  // useState only seeds `defaultStore` from `storeNames[0]` at mount, so if
+  // the parent's SWR refetch returns a new `data.stores` list (e.g. after
+  // a newly-onboarded store appears, or after a store is removed) the
+  // <select>'s value can fall off the option list. React then renders a
+  // <select> whose value matches no <option>, which produces a DOM warning
+  // and silently shows whatever the browser picks. Sync via effect when
+  // `defaultStore` is no longer in `storeNames`. We also recompute the
+  // duplicate-flag on preview rows for the same reason CR-01 fixed the
+  // user-driven onChange path: `findMatchingRecurring` is store-scoped, so
+  // the silent store switch must trigger the same skip/duplicateOfId
+  // recomputation. (WR-02)
+  useEffect(() => {
+    if (!storeNames.includes(defaultStore) && defaultStore !== 'All') {
+      const next = storeNames[0] ?? 'All';
+      setDefaultStore(next);
+      setPreview(prev => prev.map(r => {
+        const dupe = findMatchingRecurring(r, next, currentRecurring);
+        return {
+          ...r,
+          store: next,
+          skip: !!dupe,
+          duplicateOfId: dupe?.id,
+        };
+      }));
+    }
+  }, [storeNames, defaultStore, currentRecurring]);
 
   function buildPreview(parsed: ParsedBillLine[]): PreviewRow[] {
     return parsed.map(p => {
