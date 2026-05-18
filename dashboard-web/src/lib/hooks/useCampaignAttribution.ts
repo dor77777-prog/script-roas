@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import {
   analyzeAttributionForAdSet,
+  type AttributionAnalysis,
 } from '@/lib/attributionAnalysis';
 import type { CampaignRow } from '@/lib/campaigns';
 import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
@@ -63,7 +64,7 @@ export function useCampaignAttribution(opts: {
   summary: CampaignDrawerSummary | null;
   rows: CampaignRow[];
   ordersAttrData: OrdersAttributionResponse | undefined;
-}): Map<string, ReturnType<typeof analyzeAttributionForAdSet>> {
+}): Map<string, AttributionAnalysis | null> {
   const { summary, rows, ordersAttrData } = opts;
 
   // Per-ad-set daily Meta conv-value series. Required by
@@ -95,7 +96,7 @@ export function useCampaignAttribution(opts: {
   // change instead of inside the row IIFE on every render — was walking the
   // full orders array per cell × per render before. (IN5-01)
   return useMemo(() => {
-    const out = new Map<string, ReturnType<typeof analyzeAttributionForAdSet>>();
+    const out = new Map<string, AttributionAnalysis | null>();
     if (!summary || summary.platform !== 'Meta') return out;
     const ordersRows = ordersAttrData?.rows ?? [];
     if (ordersRows.length === 0 || rows.length === 0) return out;
