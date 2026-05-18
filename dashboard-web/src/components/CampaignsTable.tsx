@@ -675,8 +675,12 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       totals.spend > 0 ? platformClaimed / totals.spend : 0;
 
     // Interpretation copy — short, factual, Hebrew.
+    // tone: 'warn' was previously declared but never assigned (only 'good'
+    // and 'flag' branches exist below). Dropped per #IN-01 to keep the
+    // type honest — if we want a moderate band later, add the branch AND
+    // the toneClass entry in one go.
     let interpretation: string;
-    let tone: 'good' | 'warn' | 'flag';
+    let tone: 'good' | 'flag';
     if (Math.abs(gapPct) < 0.1) {
       interpretation =
         'הפלטפורמות מדווחות בקרבת אמת ל-Shopify. שיוך אמין יחסית.';
@@ -1371,12 +1375,11 @@ function AttributionGapPanel({
     storeRoas: number;
     platformRoas: number;
     interpretation: string;
-    tone: 'good' | 'warn' | 'flag';
+    tone: 'good' | 'flag';
   };
 }) {
   const toneClass = {
     good: 'border-roas-green/30 bg-roas-greenBg/40',
-    warn: 'border-amber-300 bg-amber-50',
     flag: 'border-roas-red/30 bg-roas-redBg/40',
   }[gap.tone];
 
