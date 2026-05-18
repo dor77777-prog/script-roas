@@ -43,6 +43,17 @@ export async function GET() {
   }
 }
 
+/**
+ * Max serialized size of a single dashboard-state value. ~64KB matches the
+ * practical per-cell budget for a Google Sheets text cell write (the hard
+ * cap is 50,000 chars per cell but accounting for JSON escape overhead we
+ * keep the headroom at 64 KB of stringified bytes). A client posting a
+ * larger payload would either fail the cell write (catch path leaks raw
+ * Google error) or, worse, succeed but produce a row that pulls
+ * fetchDashboardState into a slow read. Reject early. (WR-04)
+ */
+const VALUE_MAX_BYTES = 64_000;
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as { key?: unknown; value?: unknown };
@@ -60,6 +71,13 @@ export async function POST(req: Request) {
     //      contract rather than accepting any string.
     if (!isAllowedStateKey(body.key)) {
       return NextResponse.json({ error: 'unknown key' }, { status: 400 });
+    }
+    // Validate value size — see VALUE_MAX_BYTES above. JSON.stringify itself
+    // throws on circular refs / BigInt; that lands in the catch below and
+    // gets the sanitized "load failed" message instead of leaking internals.
+    const serialized = JSON.stringify(body.value ?? null);
+    if (serialized.length > VALUE_MAX_BYTES) {
+      return NextResponse.json({ error: 'value too large' }, { status: 413 });
     }
     await upsertDashboardStateKey(body.key, body.value ?? null);
     return NextResponse.json({ ok: true });
