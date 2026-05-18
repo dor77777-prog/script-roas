@@ -18,6 +18,10 @@ export type DashboardData = {
   stores: string[];    // unique store names
   lastUpdated: string; // ISO timestamp
   fxIlsToCad: number | null; // current FX rate (ECB via Frankfurter). null on failure.
+  /** Present only on the degraded-error path (rows: []). Consumers should
+   *  surface this through the standard error banner. /api/data uses the
+   *  200-with-empty-rows pattern uniformly with /api/ads etc. (WR-06) */
+  error?: string;
 };
 
 export type DateRange = {

@@ -147,12 +147,19 @@ export function Dashboard() {
       {data && <TabNav tabs={TABS} active={activeTab} onChange={setActiveTab} />}
 
       <main className="max-w-7xl mx-auto px-3 sm:px-4 md:px-8 py-4 sm:py-6 md:py-8 space-y-4 sm:space-y-5">
-        {error && (
+        {/* Two error sources: (a) SWR threw (network failure, malformed JSON),
+          * (b) /api/data returned 200 + empty rows + error field (WR-06 degraded
+          * path — preferred over status 500 so SWR consumers downstream stay
+          * consistent across /api/data, /api/campaigns, /api/products, /api/ads,
+          * /api/orders-attribution, etc.). Either surfaces in the same banner. */}
+        {(error || data?.error) && (
           <div className="rounded-xl bg-roas-redBg border border-roas-red/30 p-4 flex items-start gap-3">
             <AlertCircle className="text-roas-red shrink-0" size={20} />
             <div>
               <div className="font-semibold text-roas-red">שגיאה בטעינת הנתונים</div>
-              <div className="text-sm text-text-secondary mt-1">{(error as Error).message}</div>
+              <div className="text-sm text-text-secondary mt-1">
+                {error ? (error as Error).message : data?.error}
+              </div>
             </div>
           </div>
         )}

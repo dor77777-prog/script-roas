@@ -989,12 +989,17 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       {attributionGap && <AttributionGapPanel gap={attributionGap} />}
       {summary}
 
-      {error && (
+      {/* Surface BOTH SWR-thrown errors AND the 200-with-empty-rows degraded
+        * path (data.error). After WR-06, /api/campaigns returns 200 with
+        * rows: [] + error on failure so SWR consumers stay consistent. */}
+      {(error || data?.error) && (
         <div className="m-4 rounded-lg bg-roas-redBg border border-roas-red/30 p-3 flex items-start gap-2 text-sm">
           <AlertCircle className="text-roas-red shrink-0" size={18} />
           <div>
             <div className="font-semibold text-roas-red">שגיאה בטעינת קמפיינים</div>
-            <div className="text-text-secondary text-xs mt-1">{(error as Error).message}</div>
+            <div className="text-text-secondary text-xs mt-1">
+              {error ? (error as Error).message : data?.error}
+            </div>
           </div>
         </div>
       )}
@@ -1003,7 +1008,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         <div className="p-8 text-center text-text-muted text-sm">טוען נתוני קמפיינים…</div>
       )}
 
-      {data && !error && aggregated.length === 0 && (
+      {data && !error && !data.error && aggregated.length === 0 && (
         <div className="p-8 text-center text-text-muted text-sm">
           <Megaphone className="mx-auto mb-2 text-text-muted/60" size={28} />
           <div>אין קמפיינים פעילים בטווח הזה.</div>

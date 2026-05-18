@@ -9,6 +9,10 @@ export const dynamic = 'force-dynamic';
 export type CampaignsResponse = {
   rows: CampaignRow[];
   lastUpdated: string;
+  /** Present only on the degraded-error path (rows: []). Consumers that
+   *  surface "synced N min ago" should treat the response as data-less when
+   *  this is set, even though rows + lastUpdated still satisfy the type. */
+  error?: string;
 };
 
 export async function GET() {
@@ -28,6 +32,14 @@ export async function GET() {
     const message = err instanceof Error ? err.message : String(err);
     // Raw message logged server-side for ops; sanitized message returned to client.
     console.error('Campaigns fetch failed:', message);
-    return NextResponse.json({ error: userFacingError(message) }, { status: 500 });
+    // Degrade gracefully with 200 + empty rows — matches /api/ads etc. (WR-06).
+    return NextResponse.json(
+      {
+        rows: [],
+        lastUpdated: new Date().toISOString(),
+        error: userFacingError(message),
+      } satisfies CampaignsResponse,
+      { status: 200 },
+    );
   }
 }

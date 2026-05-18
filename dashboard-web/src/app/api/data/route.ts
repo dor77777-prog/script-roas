@@ -45,6 +45,21 @@ export async function GET() {
     // Log the raw message server-side so ops can see spreadsheet ID / service
     // account email / stack details — but don't leak any of that to the client.
     console.error('Sheets fetch failed:', message);
-    return NextResponse.json({ error: userFacingError(message) }, { status: 500 });
+    // Degrade gracefully with status 200 + empty rows — matches /api/ads,
+    // /api/orders-attribution, /api/store-meta, /api/product-catalog. The
+    // consumer-side fetcher in Dashboard.tsx now checks `data.error` and
+    // surfaces it through the same error banner, so the UX still shows
+    // "שגיאה בטעינת הנתונים" instead of silently rendering an empty dashboard.
+    // (WR-06)
+    return NextResponse.json(
+      {
+        rows: [],
+        stores: [],
+        lastUpdated: new Date().toISOString(),
+        fxIlsToCad: null,
+        error: userFacingError(message),
+      } satisfies DashboardData,
+      { status: 200 },
+    );
   }
 }
