@@ -203,7 +203,7 @@ function MonthBlockPerStore({
         {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
       </button>
       {open && (
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[60vh]">
           <table className="w-full text-xs sm:text-sm min-w-[500px]">
             <thead className="bg-surfaceMuted sticky top-0 z-10">
               <tr className="text-text-secondary">
@@ -294,7 +294,7 @@ function MonthBlockSummary({
         {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
       </button>
       {open && (
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[60vh]">
           <table className="w-full text-xs sm:text-sm min-w-[500px]">
             <thead className="bg-surfaceMuted sticky top-0 z-10">
               <tr className="text-text-secondary">

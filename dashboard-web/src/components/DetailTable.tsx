@@ -41,7 +41,7 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
   }
 
   const tableContent = (
-    <div className="overflow-x-auto">
+    <div className="overflow-auto max-h-[70vh]">
         <table className="w-full text-xs sm:text-sm min-w-[700px]">
           <thead className="bg-surfaceMuted sticky top-0 z-10">
             <tr className="text-text-secondary">

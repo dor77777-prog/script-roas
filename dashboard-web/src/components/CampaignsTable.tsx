@@ -1013,12 +1013,15 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
 
       {data && display.length > 0 && (
         <>
-          <div className="overflow-x-auto">
+          {/* Make the wrapper the vertical scroll context so the sticky thead
+              actually sticks. Without max-height, the wrapper grows to fit
+              the table and never scrolls vertically, so position: sticky has
+              nothing to stick relative to. With overflow-auto + max-h, the
+              wrapper becomes a real scrolling box and the thead pins at the
+              top of that box as the user scrolls rows. The max-h is sized
+              to leave room for the page header + tab nav + filters above. */}
+          <div className="overflow-auto max-h-[calc(100vh-180px)]">
             <table className="w-full text-xs sm:text-sm min-w-[1340px]">
-              {/* Sticky thead: column titles stay pinned to the top of the
-                  scroll context while the user scans through long campaign
-                  lists. `top-0` sticks at the top of the nearest scrolling
-                  ancestor; `bg-surface` paints over rows underneath. */}
               <thead className="sticky top-0 z-10 bg-surface">
                 <tr className="text-text-secondary border-b border-borderSubtle bg-surfaceMuted/40">
                   {/* Per-row optimization toggle. No label — the leading

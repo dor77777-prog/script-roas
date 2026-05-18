@@ -1098,7 +1098,10 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
                   value / ROAS / conversions) and gets wider than the drawer's
                   640px on smaller widths. `overflow-x-auto` keeps the rounded
                   border + lets the table scroll inside. */}
-              <div className="rounded-xl border border-borderSubtle overflow-x-auto">
+              {/* Same pattern as AdsDrawer: a real vertical scroll context
+                  on the wrapper so the sticky thead pins correctly when
+                  scrolling rows. */}
+              <div className="rounded-xl border border-borderSubtle overflow-auto max-h-[50vh]">
                 <table className="w-full text-xs sm:text-sm min-w-[720px]">
                   <thead className="bg-surfaceMuted/60 sticky top-0 z-10">
                     <tr className="text-text-secondary">

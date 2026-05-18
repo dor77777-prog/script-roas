@@ -355,7 +355,12 @@ export function AdsDrawer({
 
               {/* Horizontal scroll on narrow drawers — the extra impressions/
                   clicks columns make the table wider than the panel. */}
-              <div className="rounded-xl border border-borderSubtle overflow-x-auto">
+              {/* overflow-auto + max-h turns this into a real scrolling box
+                  so the sticky thead actually has a vertical scroll context
+                  to stick within. Drawer body already scrolls, but the inner
+                  overflow-x-auto we used to have here scoped sticky to a
+                  wrapper that didn't scroll vertically. */}
+              <div className="rounded-xl border border-borderSubtle overflow-auto max-h-[60vh]">
                 <table className="w-full text-xs sm:text-sm min-w-[720px]">
                   <thead className="bg-surfaceMuted/60 sticky top-0 z-10">
                     <tr className="text-text-secondary">

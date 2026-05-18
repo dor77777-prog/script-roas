@@ -582,7 +582,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
 
                 {/* Products list */}
                 {!isEmpty && (
-                  <div className="overflow-x-auto">
+                  <div className="overflow-auto max-h-[70vh]">
                     <table className="w-full text-xs sm:text-sm min-w-[680px]">
                       <thead className="sticky top-0 z-10 bg-surface">
                         <tr className="text-text-secondary border-y border-border bg-surfaceMuted/40">
