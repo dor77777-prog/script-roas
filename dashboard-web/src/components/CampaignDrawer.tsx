@@ -30,7 +30,11 @@ import {
 } from 'recharts';
 import type { ProductsResponse } from '@/app/api/products/route';
 import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
-import { analyzeAttribution, analyzeAttributionForAdSet } from '@/lib/attributionAnalysis';
+import {
+  analyzeAttribution,
+  analyzeAttributionForAdSet,
+  analyzeProductChannel,
+} from '@/lib/attributionAnalysis';
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import { roasLabel } from '@/lib/analytics';
 import type { CampaignRow } from '@/lib/campaigns';
@@ -313,6 +317,52 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
     return out;
   }, [summary, ordersAttrData, rows, dailyMetaByAdSet]);
 
+  // Stabilize mappedIds reference (RESEARCH.md §7 caveat). Without this, the
+  // inline `productMap[...] ?? []` returns a fresh [] array every render when
+  // the key is missing, which would defeat the productChannelBreakdown memo
+  // below (and any other downstream useMemo that uses mappedIds as a dep).
+  // storeId is derived inline (rows[0]?.storeId) because the post-guard
+  // `storeId` declaration on line ~325 isn't visible to a top-level hook.
+  const mappedIds = useMemo(
+    () => {
+      const sid = rows[0]?.storeId ?? '';
+      return productMap[campaignKey(sid, campaignId)] ?? [];
+    },
+    [productMap, rows, campaignId],
+  );
+
+  // Per-product channel breakdown (Phase 1). Triple-gate is concentrated
+  // here so the JSX render below can do a single `{productChannelBreakdown
+  // && (...)}` truthy check:
+  //   - return null when platform isn't Meta (Google has no mapping)
+  //   - return null when the campaign has no mapped products
+  //   - return null when fewer than 3 mapped-product orders exist in the
+  //     period (CONTEXT — "signal too noisy below 3")
+  // analyzeProductChannel itself returns an explicit-zero breakdown (not
+  // null), so the ≥3 threshold check lives here as the final gate.
+  const productChannelBreakdown = useMemo(() => {
+    if (!summary || summary.platform !== 'Meta') return null;
+    if (mappedIds.length === 0) return null;
+    const ordersRows = ordersAttrData?.rows ?? [];
+    if (ordersRows.length === 0 || rows.length === 0) return null;
+    const storeIdForCampaign = rows[0]?.storeId ?? '';
+    if (!storeIdForCampaign) return null;
+    const first = rows[0];
+    const dateFrom = rows.reduce((min, r) => (r.date < min ? r.date : min), first.date);
+    const dateTo = rows.reduce((max, r) => (r.date > max ? r.date : max), first.date);
+    const breakdown = analyzeProductChannel({
+      productIds: mappedIds,
+      orders: ordersRows,
+      storeId: storeIdForCampaign,
+      dateFrom,
+      dateTo,
+    });
+    // ≥3 orders gate (per CONTEXT) — collapse to null so the renderer's
+    // single truthy check hides the whole section.
+    if (breakdown.totalOrders < 3) return null;
+    return breakdown;
+  }, [summary, ordersAttrData, rows, mappedIds]);
+
   // Re-sort ad-sets per user choice. Computed outside the `if (!open || !summary)`
   // guard would be wrong because hooks must run unconditionally — but useMemo
   // is already called above inside the summary computation. Sorting here is a
@@ -346,7 +396,10 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
   // maximises correlation. If non-zero, that's the attribution window
   // showing up — Meta credits sooner than Shopify records.
   // -----------------------------------------------------------------------
-  const mappedIds = productMap[campaignKey(storeId, campaignId)] ?? [];
+  // `mappedIds` is the memoized hook value from above (line ~316). The
+  // inline `productMap[...] ?? []` that used to live here was a fresh
+  // array reference every render — see RESEARCH.md §7 for why that
+  // matters for the new productChannelBreakdown memo.
   const reconciliation = (() => {
     if (mappedIds.length === 0) return null;
     if (summary.platform !== 'Meta') return null; // Google has no mapping
