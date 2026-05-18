@@ -32,7 +32,14 @@ function runUpdateForDate(dateStr) {
 
   const errors = [];
 
-  for (const store of STORES) {
+  for (let i = 0; i < STORES.length; i++) {
+    const store = STORES[i];
+    // Breathe between stores so the Sheets API short-window quota has
+    // time to recover. Without this, store 2 and 3 were timing out
+    // because store 1's ~10k-cell writes (campaigns + ads + products +
+    // orders-attribution) saturated the quota window. 1.5s isn't free
+    // but it's well under the runtime budget (~6 min total for 3 stores).
+    if (i > 0) Utilities.sleep(1500);
     try {
       updateStoreForDate_(ss, store, dateStr, year, month, day, ilsToCad);
     } catch (e) {
@@ -109,6 +116,10 @@ function updateStoreForDate_(ss, store, dateStr, year, month, day, ilsToCad) {
   } catch (e) {
     Logger.log(`Campaign-level data for ${store.name} ${dateStr} failed: ${e && e.message ? e.message : e}`);
   }
+  // Pause between major batch-writes so the Sheets API quota window
+  // gets a moment to refresh. ~500ms is enough to noticeably reduce
+  // timeouts during multi-store runs.
+  Utilities.sleep(500);
 
   // COGS - מחושב כ-25% מההכנסה היומית (הערכה גסה: עלות סחורה ≈ רבע מהמכירה).
   // מוגדר ב-Config.gs ב-COGS_RATE_OF_REVENUE כדי להקל על שינויים עתידיים.
@@ -128,6 +139,7 @@ function updateStoreForDate_(ss, store, dateStr, year, month, day, ilsToCad) {
   } catch (e) {
     Logger.log(`products-daily for ${store.name} ${dateStr} failed (non-fatal): ${e && e.message ? e.message : e}`);
   }
+  Utilities.sleep(500);
 
   // טאב <store>-ads — drill-down מודעות מתחת ל-ad-sets. נכשל ברך כדי לא
   // להפיל את הריצה היומית אם Meta מחזיר 5xx לעומס insights ברמת ad.
@@ -136,6 +148,7 @@ function updateStoreForDate_(ss, store, dateStr, year, month, day, ilsToCad) {
   } catch (e) {
     Logger.log(`Ad-level data for ${store.name} ${dateStr} failed: ${e && e.message ? e.message : e}`);
   }
+  Utilities.sleep(500);
 
   // טאב <store>-orders-attribution — שורה לכל הזמנה עם classification של
   // ערוץ הטראפיק (UTM + fbclid + gclid + referrer). מאפשר לדשבורד להבדיל
@@ -149,26 +162,30 @@ function updateStoreForDate_(ss, store, dateStr, year, month, day, ilsToCad) {
     Logger.log(`Orders attribution ${store.name} ${dateStr} failed (non-fatal): ${e && e.message ? e.message : e}`);
   }
 
-  // טאב <store>-products-catalog — קטלוג מוצרים מלא של החנות (לא רק
-  // נמכרים). דרוש לתצוגת ה-ProductPickerModal בדשבורד כדי לאפשר שיוך
-  // לקמפיינים שמקדמים מוצרים חדשים שעוד לא ביצעו אפילו הזמנה אחת.
+  // Product catalog is NOT refreshed inside runDailyUpdate anymore — the
+  // 200-500 row × 9 col write per store alongside the campaigns + ads
+  // writes consistently exhausts Sheets API short-window quota and
+  // cascades into "Service Spreadsheets timed out" for the LATER stores
+  // in the loop. Each store after the first was failing.
   //
-  // *Cache gate*: catalog rarely changes day-to-day (operators add a new
-  // product weekly at most). The full write of 200-500 products × 9 cols
-  // alongside the campaigns + ads writes was hitting the Sheets API quota
-  // and timing out. We now only refresh if the tab is empty or older than
-  // 7 days — so the catalog stays fresh enough for the picker without
-  // burning quota every run.
+  // Catalog is a low-volatility resource (operators add a product
+  // weekly at most). Refreshing it is now an EXPLICIT manual action via
+  // refreshAllProductCatalogs() — runs on its own Apps Script execution,
+  // gets its own 6-min budget AND its own quota window, doesn't compete
+  // with the daily updates.
+  //
+  // For ongoing awareness, we log a warning when the catalog is older
+  // than 14 days so ops sees the staleness in the logs without it
+  // breaking anything.
   try {
-    if (catalogNeedsRefresh_(ss, store.id, 7)) {
-      const catalog = getShopifyProductsCatalog(store.id);
-      writeProductCatalogForStore_(ss, store.id, catalog);
-    } else {
-      Logger.log(`Product catalog ${store.name}: fresh (<7 days), skipped`);
+    if (catalogNeedsRefresh_(ss, store.id, 14)) {
+      Logger.log(
+        `⚠️ Product catalog ${store.name} is >14 days old or missing — ` +
+        `run refreshAllProductCatalogs() manually to update it ` +
+        `(daily run no longer auto-refreshes to avoid quota timeouts).`
+      );
     }
-  } catch (e) {
-    Logger.log(`Product catalog ${store.name} failed (non-fatal): ${e && e.message ? e.message : e}`);
-  }
+  } catch (_) { /* age check is best-effort */ }
 
   Logger.log(`${store.name} ${dateStr}: spent=${totalSpentCad.toFixed(2)} CAD (FB ${metaCad.toFixed(2)} + GA ${googleAdsCad.toFixed(2)}), revenue=${revenueCad.toFixed(2)} CAD`);
   return { spent: totalSpentCad, revenue: revenueCad };
