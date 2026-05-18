@@ -1488,6 +1488,12 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
             (localStore === 'All' || r.storeName === localStore),
           )}
           adAccounts={adAccounts}
+          // Pass the user's selected window through so the channel
+          // breakdown can analyse the full range, not just campaign-active
+          // days. The reconciliation block still derives its own narrower
+          // window internally — Pearson needs paired observations.
+          rangeFrom={localRange.from}
+          rangeTo={localRange.to}
         />
       )}
 

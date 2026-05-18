@@ -1149,6 +1149,13 @@ function writeProductSalesForDay_(ss, dateStr, storeId, storeName, productRows) 
 
   sh.getRange(2, 1, combined.length, PRODUCTS_DAILY_HEADERS.length).setValues(combined);
   sh.getRange(2, 1, combined.length, 1).setNumberFormat('yyyy-mm-dd').setHorizontalAlignment('center');
+  // Force text on Product ID (col 4) so 13-19 digit Shopify IDs aren't
+  // silently rounded to JS-Number precision (16 digits). Without this,
+  // a 17+ digit ID written as a numeric string gets stored as a Number,
+  // loses trailing digits, and never matches the productMap on the
+  // dashboard side. Mirrors the existing @-format we apply to UTM IDs
+  // and the line-items JSON column on orders-attribution.
+  sh.getRange(2, 4, combined.length, 1).setNumberFormat('@');                                         // Product ID
   sh.getRange(2, 6, combined.length, 1).setNumberFormat('#,##0').setHorizontalAlignment('center');   // Units
   sh.getRange(2, 7, combined.length, 1).setNumberFormat('#,##0.00');                                  // Gross Revenue
   sh.getRange(2, 8, combined.length, 1).setNumberFormat('#,##0').setHorizontalAlignment('center');   // Orders
@@ -1337,8 +1344,13 @@ function writeProductCatalogForStore_(ss, storeId, products) {
     updatedAt,
   ]);
   sh.getRange(2, 1, rows.length, PRODUCT_CATALOG_HEADERS.length).setValues(rows);
-  sh.getRange(2, 5, rows.length, 1).setNumberFormat('#,##0.00');
-  sh.getRange(2, 9, rows.length, 1).setNumberFormat('yyyy-mm-dd hh:mm');
+  // Force text on Product ID (col 1) so long Shopify IDs survive the
+  // Sheets-Number roundtrip. The picker stores these IDs in the
+  // productMap and matches them against products-daily.productId; if
+  // either side loses precision, mapping breaks silently.
+  sh.getRange(2, 1, rows.length, 1).setNumberFormat('@');                      // Product ID
+  sh.getRange(2, 5, rows.length, 1).setNumberFormat('#,##0.00');               // Price
+  sh.getRange(2, 9, rows.length, 1).setNumberFormat('yyyy-mm-dd hh:mm');       // Updated At
 }
 
 /**

@@ -78,6 +78,13 @@ type Props = {
   /** Map of storeId → ad-account IDs, used to build deep links into the
    *  right account in Ads Manager. */
   adAccounts: AdAccountMap;
+  /** The user's selected date range from the parent CampaignsTable.
+   *  Distinct from min/max(rows.date), which narrows to *campaign-active*
+   *  days only — for the channel breakdown we want all mapped-product
+   *  orders in the user's window regardless of whether the campaign was
+   *  spending on a given day. */
+  rangeFrom: string;
+  rangeTo: string;
 };
 
 const TONE_BG: Record<string, string> = {
@@ -94,7 +101,7 @@ const TONE_BG: Record<string, string> = {
 type AdSetSortKey = 'name' | 'spend' | 'budget' | 'value' | 'roas' | 'conversions';
 type AdSetSortDir = 'asc' | 'desc';
 
-export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: Props) {
+export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, rangeFrom, rangeTo }: Props) {
   // Drawer-local sort state. Default to spend-desc which matches the
   // pre-sortable hardcoded ordering, so users already comfortable with the
   // drawer don't see anything jump on first paint.
@@ -347,21 +354,24 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
     if (ordersRows.length === 0 || rows.length === 0) return null;
     const storeIdForCampaign = rows[0]?.storeId ?? '';
     if (!storeIdForCampaign) return null;
-    const first = rows[0];
-    const dateFrom = rows.reduce((min, r) => (r.date < min ? r.date : min), first.date);
-    const dateTo = rows.reduce((max, r) => (r.date > max ? r.date : max), first.date);
+    // Use the user's selected window (passed from CampaignsTable), NOT
+    // min/max(rows.date). The latter narrows to campaign-active days
+    // only — but the channel-breakdown question is "where did the mapped
+    // products' sales come from in this period?", which should include
+    // orders on days the campaign happened to be paused. Without this
+    // fix, sales on non-active days are silently missing.
     const breakdown = analyzeProductChannel({
       productIds: mappedIds,
       orders: ordersRows,
       storeId: storeIdForCampaign,
-      dateFrom,
-      dateTo,
+      dateFrom: rangeFrom,
+      dateTo: rangeTo,
     });
     // ≥3 orders gate (per CONTEXT) — collapse to null so the renderer's
     // single truthy check hides the whole section.
     if (breakdown.totalOrders < 3) return null;
     return breakdown;
-  }, [summary, ordersAttrData, rows, mappedIds]);
+  }, [summary, ordersAttrData, rows, mappedIds, rangeFrom, rangeTo]);
 
   // Re-sort ad-sets per user choice. Computed outside the `if (!open || !summary)`
   // guard would be wrong because hooks must run unconditionally — but useMemo
