@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { fetchProductCatalog, type CatalogProduct } from '@/lib/productCatalog';
+import { cacheControl } from '@/lib/cacheConfig';
 
 // 60 seconds — short enough that after running refreshAllProductCatalogs in
 // Apps Script, the user sees fresh data within a minute (instead of waiting
 // out a 1-hour CDN cache). The catalog is small (≤1k rows across all stores)
 // so the underlying Sheets read is cheap; no real cost to a tighter TTL.
-export const revalidate = 60;
+export const revalidate = 60; // matches CACHE_CONFIG.productCatalog.revalidate; literal required by Next.js
 
 export type ProductCatalogResponse = {
   rows: CatalogProduct[];
@@ -15,6 +16,9 @@ export type ProductCatalogResponse = {
 export async function GET() {
   try {
     const rows = await fetchProductCatalog();
+    if (rows.length > 50000) {
+      console.warn(`/api/product-catalog: large response (${rows.length} rows) — consider pagination`);
+    }
     return NextResponse.json(
       { rows, lastUpdated: new Date().toISOString() } satisfies ProductCatalogResponse,
       {
@@ -22,7 +26,7 @@ export async function GET() {
           // Match the route-level revalidate. 60s CDN cache + 5min stale
           // gives a snappy "refresh after Apps Script run" experience while
           // still de-duping the routes between concurrent partners.
-          'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
+          'Cache-Control': cacheControl('productCatalog'),
         },
       },
     );

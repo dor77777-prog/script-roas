@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { fetchAdsData, type AdRow } from '@/lib/ads';
+import { cacheControl } from '@/lib/cacheConfig';
 
-export const revalidate = 300; // 5 min — ads data refreshes daily, no need for tight cache
+export const revalidate = 300; // matches CACHE_CONFIG.ads.revalidate; 5 min — literal required by Next.js
 
 export type AdsResponse = {
   rows: AdRow[];
@@ -11,11 +12,14 @@ export type AdsResponse = {
 export async function GET() {
   try {
     const rows = await fetchAdsData();
+    if (rows.length > 50000) {
+      console.warn(`/api/ads: large response (${rows.length} rows) — consider pagination`);
+    }
     return NextResponse.json(
       { rows, lastUpdated: new Date().toISOString() } satisfies AdsResponse,
       {
         headers: {
-          'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=900',
+          'Cache-Control': cacheControl('ads'),
         },
       },
     );

@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { fetchOrdersAttribution, type OrderAttributionRow } from '@/lib/ordersAttribution';
+import { cacheControl } from '@/lib/cacheConfig';
 
 // 5-minute cache. Attribution rows are written daily; refreshing more often
 // doesn't help the analysis but does burn Sheets quota.
-export const revalidate = 300;
+export const revalidate = 300; // matches CACHE_CONFIG.ordersAttribution.revalidate; literal required by Next.js
 
 export type OrdersAttributionResponse = {
   rows: OrderAttributionRow[];
@@ -17,11 +18,14 @@ export type OrdersAttributionResponse = {
 export async function GET() {
   try {
     const rows = await fetchOrdersAttribution();
+    if (rows.length > 50000) {
+      console.warn(`/api/orders-attribution: large response (${rows.length} rows) — consider pagination`);
+    }
     return NextResponse.json(
       { rows, lastUpdated: new Date().toISOString() } satisfies OrdersAttributionResponse,
       {
         headers: {
-          'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=900',
+          'Cache-Control': cacheControl('ordersAttribution'),
         },
       },
     );

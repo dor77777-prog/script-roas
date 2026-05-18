@@ -697,6 +697,26 @@ Dashboard (545 שורות, App Router root)
 
 ---
 
+## 🧪 תשתיות Phase 2 (בדיקות, monitoring, cache, guards)
+
+### שכבת בדיקות (Phase 2)
+
+ה-dashboard מצויד ב-Vitest (תקין ל-Node 22 + Vercel LTS). הבדיקות ב-`src/lib/__tests__/` מכסות את ה-pure-functions ב-`attributionAnalysis.ts` — 76+ בדיקות ל-`orderMatchesCampaign`, `analyzeAttribution`, `analyzeAttributionForAdSet`, `analyzeAttributionForAd`, `analyzeProductChannel`, `detectOutlierDays`, `computeWindowStability`, ו-`safeDecode`. `npm run test` לפני כל merge ל-main.
+
+### שכבת monitoring (Phase 2)
+
+Sentry מחובר ב-`instrumentation.ts` + global `ErrorBoundary` ב-`app/layout.tsx`. שגיאות client + server זורמות ל-Sentry dashboard כשמוגדר DSN. ב-localhost — no-op שקט (אין warnings, אין overhead). ראה `.env.local.example` לרשימת משתני הסביבה.
+
+### שכבת cache config (Phase 2)
+
+`src/lib/cacheConfig.ts` הוא מקור-אמת יחיד ל-`stale-while-revalidate` + `s-maxage` של כל 8 ה-API routes. פונקציית `cacheControl(key)` מייצרת את ה-`Cache-Control` header. כדי לשנות TTL, ערוך רק את `CACHE_CONFIG` — לא את ה-route handlers.
+
+### שכבת row-count guards (Phase 2)
+
+כל route (חוץ מ-`dashboard-state` שמוגבל ל-8 מפתחות) מכיל `if (rows.length > 50000) console.warn(...)`. Threshold 50k = 5× מהנפח הנוכחי הצפוי (~10k שורות). Runs ב-Vercel logs.
+
+---
+
 ## ☁️ שכבת Cloud Sync
 
 [`lib/cloudSync.ts`](dashboard-web/src/lib/cloudSync.ts) (413 שורות) + [`components/CloudSync.tsx`](dashboard-web/src/components/CloudSync.tsx):

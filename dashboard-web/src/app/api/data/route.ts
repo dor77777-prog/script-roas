@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
 import { fetchDailyData } from '@/lib/sheets';
 import type { DashboardData } from '@/lib/types';
+import { cacheControl } from '@/lib/cacheConfig';
 
 // Revalidate the underlying data every 60 seconds (server-side cache).
 // Client SWR will poll us; this prevents hammering the Sheets API.
-export const revalidate = 60;
+export const revalidate = 60; // matches CACHE_CONFIG.data.revalidate; literal required by Next.js static analysis
 export const dynamic = 'force-dynamic';
 
 async function fetchTodayFx(): Promise<number | null> {
@@ -23,6 +24,9 @@ async function fetchTodayFx(): Promise<number | null> {
 export async function GET() {
   try {
     const [rows, fxIlsToCad] = await Promise.all([fetchDailyData(), fetchTodayFx()]);
+    if (rows.length > 50000) {
+      console.warn(`/api/data: large response (${rows.length} rows) — consider pagination`);
+    }
     const stores = Array.from(new Set(rows.map(r => r.storeName))).sort();
     const data: DashboardData = {
       rows,
@@ -32,7 +36,7 @@ export async function GET() {
     };
     return NextResponse.json(data, {
       headers: {
-        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=120',
+        'Cache-Control': cacheControl('data'),
       },
     });
   } catch (err) {

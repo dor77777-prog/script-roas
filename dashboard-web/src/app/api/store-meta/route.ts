@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server';
 import { fetchStoreMeta } from '@/lib/sheets';
+import { cacheControl } from '@/lib/cacheConfig';
 
 // store-meta changes rarely (only when a store's Shopify plan changes), so
 // a longer cache is fine. Apps Script refreshes the underlying tab daily.
 // Plain ISR via `revalidate` — no `force-dynamic`, which would override the
 // cache config and make every request hit Sheets.
-export const revalidate = 3600;
+export const revalidate = 3600; // matches CACHE_CONFIG.storeMeta.revalidate; literal required by Next.js
 
 function userFacingError(message: string): string {
   if (/permission|forbidden|403/i.test(message)) {
@@ -23,11 +24,14 @@ function userFacingError(message: string): string {
 export async function GET() {
   try {
     const rows = await fetchStoreMeta();
+    if (rows.length > 50000) {
+      console.warn(`/api/store-meta: large response (${rows.length} rows) — consider pagination`);
+    }
     return NextResponse.json(
       { rows, lastUpdated: new Date().toISOString() },
       {
         headers: {
-          'Cache-Control': 'public, s-maxage=3600, stale-while-revalidate=86400',
+          'Cache-Control': cacheControl('storeMeta'),
         },
       },
     );
