@@ -114,6 +114,8 @@
 - `runDailyUpdate` — 00:05 שעון ישראל (סוגר את אתמול)
 - `runLiveUpdate` — כל 15 דקות (מרענן את היום הנוכחי)
 
+**Deploy אוטומטי (מ-Phase 3):** קבצי `.gs` ו-`appsscript.json` deploy אוטומטית ל-script.google.com דרך GitHub Actions בכל push ל-`main`. ה-workflow ב-`.github/workflows/deploy-gs.yml` מריץ `clasp push --force` כשנגעו ב-`**.gs` או ב-`appsscript.json`. לפרטי setup ראה `SETUP.md` שלב 0.5.
+
 ### 2. Google Sheets (נתונים)
 
 **8 סוגי טאבים** (ב-spreadsheet יחיד שה-`SPREADSHEET_ID` מצביע אליו):

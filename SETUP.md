@@ -6,6 +6,8 @@
 
 ## שלב 0 — יצירת פרויקט Apps Script
 
+> 💡 **חדש מ-Phase 3 (CI/CD)**: deploy של קבצי `*.gs` הוא **אוטומטי** עכשיו דרך GitHub Actions. אחרי ה-setup הראשוני (השלבים למטה), שום upload ידני לא נדרש — כל `git push` ל-`main` שמשנה `*.gs` או `appsscript.json` מפעיל workflow שעושה `clasp push --force` לפרויקט Apps Script אוטומטית. ראה **שלב 0.5** למטה למסלול ה-CI/CD המלא.
+
 1. היכנס ל-https://script.google.com והקלק **New project**.
 2. שנה את שם הפרויקט ל-`ROAS Tracker`.
 3. בעורך, מחק את ברירת המחדל `Code.gs`.
@@ -21,6 +23,83 @@
    - `Main.gs`
 5. בתפריט השמאלי, לחץ על **Project Settings** ⚙️ → סמן **"Show appsscript.json manifest file in editor"**.
 6. חזור לעורך → פתח את `appsscript.json` והדבק את התוכן מהריפו.
+
+---
+
+## שלב 0.5 — חיבור clasp ל-Apps Script project (CI/CD)
+
+> 💡 שלב חד-פעמי. אחרי הגדרה ראשונית, deploy של `.gs` יקרה אוטומטית בכל push ל-`main`.
+
+### 0.5א. התקנת clasp + login מקומי
+
+מ-root של ה-repo (לא מ-`dashboard-web/`):
+
+```bash
+npm install              # מתקין את @google/clasp כ-devDependency
+npx clasp login          # פותח דפדפן ל-Google OAuth
+```
+
+ב-OAuth: להתחבר עם **חשבון Google שיש לו edit access ל-Apps Script project** (אותו חשבון שבו פתחת את ה-project ב-script.google.com בשלב 0).
+
+תוצאה: נוצר `~/.clasprc.json` עם credentials. **הקובץ הזה ב-gitignore — אסור לקמיט אותו.**
+
+### 0.5ב. קישור ל-Apps Script project
+
+1. https://script.google.com → ה-project של ROAS Tracker → **Project Settings ⚙️** → להעתיק את **Script ID**.
+2. לערוך את `.clasp.json` ב-root של ה-repo:
+   ```json
+   {
+     "scriptId": "<הדבק כאן את ה-Script ID האמיתי>",
+     "rootDir": "."
+   }
+   ```
+3. לבדוק שהקישור עובד:
+   ```bash
+   npx clasp status
+   ```
+   צריך להחזיר list של 9 קבצי `*.gs` + `appsscript.json`.
+
+4. אופציה אלטרנטיבית: `npx clasp clone <scriptId>` (יוצר את `.clasp.json` אוטומטית, אבל **דורס קבצים מקומיים** אם יש drift — תמיד לבדוק `git diff` לפני commit).
+
+> 💡 **`.claspignore`**: `.claspignore` ב-root מצמצם את clasp לקבצי `*.gs` + `appsscript.json` בלבד (אחרת clasp ינסה לדחוף את כל `node_modules/` שנוצר על ידי `npm install`). הקובץ commited ב-repo — אין צורך לערוך אותו.
+
+### 0.5ג. הגדרת GitHub Secret
+
+כדי שה-GitHub Action יוכל לדחוף, צריך את ה-credentials כ-Secret:
+
+1. מקומית:
+   ```bash
+   cat ~/.clasprc.json
+   ```
+   להעתיק את כל ה-JSON.
+2. GitHub: ה-repo → **Settings → Secrets and variables → Actions → New repository secret**:
+   - **Name**: `CLASPRC_JSON` (case-sensitive)
+   - **Value**: הדבק את ה-JSON.
+   - **Add secret**.
+
+> ⚠️ **אזהרה (T2):** אסור לקמיט את `~/.clasprc.json` או להדביק את התוכן ל-Slack / email / chat. הוא מכיל refresh token של Google. `.gitignore` כבר מגן (יש שם `.clasprc.json`), אבל הזהרות אנושיות לא מזיקות.
+
+### 0.5ד. בדיקת end-to-end
+
+1. לשנות קובץ `.gs` קטן (לדוגמה הוסף comment ב-`ManualOverrides.gs`).
+2. `git commit && git push origin main`.
+3. GitHub → **Actions** tab → לוודא שה-workflow **"Deploy Apps Script (clasp push)"** רץ ועובר ירוק.
+4. https://script.google.com → ה-project → לוודא שה-change נכנס.
+
+### 0.5ה. מה לעשות כש-deploy נכשל
+
+| תופעה | סיבה אפשרית | פתרון |
+|---|---|---|
+| `Error 401: invalid_grant` ב-Action log | refresh token פג (6 חודשי inactivity, D-09) | `npx clasp login` מקומית מחדש → `cat ~/.clasprc.json` → לעדכן את ערך ה-Secret `CLASPRC_JSON` ב-GitHub Settings |
+| `Script ID not found` ב-Action log | `scriptId` לא תקין ב-`.clasp.json` | להעתיק שוב מ-Project Settings ⚙️ ב-script.google.com → לעדכן `.clasp.json` → commit + push |
+| Action לא רץ בכלל אחרי push | קובץ שהשתנה לא תואם ל-paths filter (`**.gs` או `appsscript.json`) | זה התנהגות מכוונת (D-01). אם רוצים להפעיל manually — לקמיט שינוי ב-`.gs` (אפילו comment) |
+| ה-Action ירוק אבל הקובץ לא מתעדכן ב-Apps Script | `scriptId` ב-`.clasp.json` מצביע על project אחר | להשוות את ה-`scriptId` ב-`.clasp.json` עם ה-Script ID ב-script.google.com → תיקון + push |
+| ה-Action דרס שינויים שעשיתי ידנית בעורך Apps Script | זה התנהגות מכוונת של `clasp push --force` (D-15, threat T3) | `git revert <commit-hash>` של ה-push הבעייתי → push חדש → ה-Action יחזיר את המצב הקודם |
+| Warning ב-Action log: "Node.js 20 actions are deprecated" | `actions/checkout@v4` ו-`actions/setup-node@v4` משתמשים פנימית ב-Node 20. GitHub יאלץ Node 24 כברירת מחדל מ-2 ביוני 2026 ויסיר Node 20 ב-16 בספטמבר 2026 | אזהרה בלבד, לא חוסם. כשתגיע ההסרה — לבדוק האם יצא `actions/checkout@v5` / `actions/setup-node@v5` ולעדכן את ה-pin |
+
+> 💡 **תזכורת (T3):** `clasp push --force` דורס שינויים שנעשו ידנית בעורך Apps Script. **כל שינוי ל-`.gs` צריך לעבור דרך git** מכאן והלאה — לא דרך העורך באתר. אם בכל זאת ערכת ידנית, להעתיק את התוכן ל-git לפני שאתה pushיים שוב.
+
+> 💡 **GitHub default email**: ב-failure של Action, GitHub שולח email למחבר ה-commit (D-11). אם רוצים פחות notifications — Settings → Notifications. אין Slack integration ב-phase הזה (נדחה ל-Phase 7 per D-13).
 
 ---
 
@@ -864,3 +943,4 @@ ensureSpreadsheet();  // יוצר/פותח
 - כל הטוקנים נשמרים ב-Script Properties — לא בקוד, ולא בגיליון.
 - הטריגר רץ תחת חשבון הגוגל שלך, עם ההרשאות שאישרת בשלב ה-OAuth.
 - ה-Spreadsheet ב-Drive שלך. שתף רק עם מי שאתה רוצה שיראה את הנתונים.
+- `~/.clasprc.json` (Google OAuth refresh token של clasp) gitignored ומועלה כ-GitHub Secret בשם `CLASPRC_JSON`. אסור לקמיט אותו או להעבירו ב-channels לא מוצפנים.
