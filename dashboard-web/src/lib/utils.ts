@@ -34,3 +34,28 @@ export function formatPct(n: number, sign = false): string {
   }).format(n);
   return sign && n > 0 ? '+' + fmt : fmt;
 }
+
+/**
+ * Try/catch wrapper around `decodeURIComponent`. Returns the decoded
+ * string on success, or the input unchanged on failure. Use anywhere a
+ * decoded URL-encoded user-supplied string is consumed (utm parameters
+ * already in Sheets, landing-URL manual-spend rows, anything that could
+ * contain a lone `%` character that crashes `decodeURIComponent`).
+ *
+ * Why not throw? The original `decodeURIComponent('%E0')` throws
+ * `URIError: URI malformed`. In a UI render path that's a white-screen.
+ * Returning the raw input lets the caller render the as-is value
+ * (slightly ugly) rather than crash the page.
+ *
+ * No existing call sites in dashboard-web at Phase 2 task time (grep confirmed 0).
+ * This utility is preemptive for Phase 5 (query params) and Phase 8 (i18n).
+ * Pattern: returns '' for null/undefined, matching formatDate's always-string contract.
+ */
+export function safeDecode(value: string | null | undefined): string {
+  if (value == null) return '';
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
