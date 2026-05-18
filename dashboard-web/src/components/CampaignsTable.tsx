@@ -1306,13 +1306,23 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                             ? ((trueRoas * a.spend) - info.metaClaim) / info.metaClaim
                             : 0;
 
-                          // When deterministic attribution is available, it
-                          // OVERRIDES the heuristic confidence — it's strictly
-                          // more accurate (click-IDs are proof, not estimate).
-                          // We surface 4 levels including 'unknown' (= no
-                          // utm_campaign configured) which the heuristic
-                          // doesn't produce.
-                          const useAttr = info.attribution !== null;
+                          // Tiered signal:
+                          //   1. Click-id (deterministic) — used when available
+                          //      AND the trust verdict is non-trivial
+                          //      (high/medium/low). Strongest evidence.
+                          //   2. Product-mapping (heuristic) — used as fallback
+                          //      when click-id is null or 'unknown' (utm
+                          //      misconfigured / no Meta claim to compare).
+                          //      Less precise but still better than silence.
+                          //
+                          // The tooltip always surfaces both numbers (Meta,
+                          // click-id, mapping) regardless of which drove the
+                          // chip — lets the operator triangulate when the two
+                          // sources disagree.
+                          const attrAvailable = info.attribution !== null;
+                          const attrUnknown =
+                            attrAvailable && info.attribution!.trust.level === 'unknown';
+                          const useAttr = attrAvailable && !attrUnknown;
                           const trustLabel = useAttr ? info.attribution!.trust.label : info.confidence.label;
                           const trustLevel = useAttr ? info.attribution!.trust.level : info.confidence.level;
                           const confTone =
@@ -1320,6 +1330,15 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                           : trustLevel === 'medium'  ? 'bg-amber-50 text-amber-700'
                           : trustLevel === 'unknown' ? 'bg-surfaceMuted text-text-secondary'
                           :                            'bg-roas-redBg/60 text-roas-red';
+
+                          // Mapping comparison line, reused in both tooltip
+                          // branches so the operator always sees what the other
+                          // signal would have said.
+                          const mappingLine =
+                            `Shopify מוקצה (מיפוי): CAD ${info.trueRevenue.toFixed(0)}` +
+                            (info.metaClaim > 0
+                              ? ` (פער ${(gap * 100).toFixed(0)}% מול Meta)`
+                              : '');
 
                           let tooltip: string;
                           if (useAttr) {
@@ -1329,17 +1348,23 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                               `ROAS מבוסס click-id · ${at.trust.label} (${at.trust.score.toFixed(0)}/100)\n\n` +
                               `Meta דיווח:           CAD ${info.metaClaim.toFixed(0)}\n` +
                               `מתויג click-id:       CAD ${at.deterministicRevenue.toFixed(0)} (${at.deterministicOrders} הזמנות)\n` +
+                              `${mappingLine}\n` +
                               `Modeled / view-through: CAD ${at.modeledRevenue.toFixed(0)}\n` +
                               `coverage: ${(at.coverage * 100).toFixed(0)}%\n` +
                               `ROAS אמיתי: ${detRoas.toFixed(2)}x  |  ROAS לפי Meta: ${(info.metaClaim / a.spend).toFixed(2)}x\n\n` +
                               at.reasons.map(r => `• ${r}`).join('\n') +
                               `\n\n💡 ${at.recommendation}`;
                           } else {
+                            // Fallback path. Note explicitly that click-id data
+                            // is missing/unusable so the operator knows why
+                            // they're seeing the heuristic instead.
+                            const clickIdNote = attrUnknown
+                              ? `\n(click-id: ${info.attribution!.deterministicOrders} הזמנות תויגו — לא מספיק לסיגנל; חוזרים למיפוי מוצרים)`
+                              : '\n(אין נתוני click-id בטווח — חוזרים למיפוי מוצרים)';
                             tooltip =
-                              `ROAS מבוסס Shopify · ${info.confidence.label}\n\n` +
+                              `ROAS מבוסס מיפוי מוצרים · ${info.confidence.label}${clickIdNote}\n\n` +
                               `Meta דיווח: CAD ${info.metaClaim.toFixed(0)}\n` +
-                              `Shopify בפועל (מוקצה): CAD ${info.trueRevenue.toFixed(0)}\n` +
-                              `פער: ${(gap * 100).toFixed(0)}%\n\n` +
+                              `${mappingLine}\n\n` +
                               info.confidence.reasons.map(r => `• ${r}`).join('\n');
                           }
                           return (
@@ -1349,8 +1374,14 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                               </span>
                               <span className={cn('inline-block text-[8px] font-bold px-1 py-0 rounded uppercase tracking-wider', confTone)}>
                                 {trustLabel}
-                                {useAttr && (
+                                {useAttr ? (
                                   <span className="ms-1 opacity-70">·{info.attribution!.deterministicOrders}</span>
+                                ) : (
+                                  // Marker so the operator can tell at a glance
+                                  // that this chip comes from the heuristic, not
+                                  // from click-id. Lowercase + opacity so it
+                                  // reads as a subdued sub-label, not noise.
+                                  <span className="ms-1 opacity-70 normal-case">·מיפוי</span>
                                 )}
                               </span>
                             </div>
