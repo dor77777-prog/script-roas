@@ -1,0 +1,10 @@
+{
+  "name": "roas-tracker-root",
+  "private": true,
+  "scripts": {
+    "deploy:gs": "clasp push --force"
+  },
+  "devDependencies": {
+    "@google/clasp": "^2.4.2"
+  }
+}
