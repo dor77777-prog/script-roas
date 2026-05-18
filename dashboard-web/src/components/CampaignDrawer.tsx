@@ -57,35 +57,22 @@ import {
 } from '@/lib/campaignProductMap';
 
 /**
- * Slide-in drawer that opens when the user clicks a campaign row in the
- * campaigns table. Linear / Vercel-style: full context, but the rest of the
- * dashboard remains in view so the user knows where they came from.
- *
- * Contents:
- *  - hero: campaign name, store badge, platform badge, ROAS chip, key
- *    aggregate KPIs (spend, value, conversions, CTR, CPC, CPA)
- *  - daily area chart of spend vs conversion value (the cleanest visual
- *    answer to "is this campaign worth it?")
- *  - all ad-sets within the campaign, ranked by spend, with their own
- *    ROAS / spend / conversions
- *  - "פתח ב-Ads Manager" button as the primary action
+ * Slide-in campaign drilldown drawer. Linear/Vercel-style: full context
+ * pane but the dashboard stays visible. Composes 4 sub-panels:
+ * AttributionAnalysisPanel, ProductChannelBreakdown,
+ * MetaShopifyReconciliation, AdSetTable (DOM order pinned by UI-SPEC).
  */
 
 type Props = {
-  /** All rows matching this campaign in the selected period (any store,
-   *  any ad-set, any day). The drawer aggregates internally. */
+  /** Rows already filtered to this campaign — drawer aggregates internally. */
   rows: CampaignRow[];
   campaignId: string;
   open: boolean;
   onClose: () => void;
-  /** Map of storeId → ad-account IDs, used to build deep links into the
-   *  right account in Ads Manager. */
+  /** storeId → ad-account IDs, used to build Ads Manager deep links. */
   adAccounts: AdAccountMap;
-  /** The user's selected date range from the parent CampaignsTable.
-   *  Distinct from min/max(rows.date), which narrows to *campaign-active*
-   *  days only — for the channel breakdown we want all mapped-product
-   *  orders in the user's window regardless of whether the campaign was
-   *  spending on a given day. */
+  /** User-selected date window (NOT min/max of rows.date — channel
+   *  breakdown needs mapped-product orders on campaign-paused days too). */
   rangeFrom: string;
   rangeTo: string;
 };
@@ -98,14 +85,9 @@ const TONE_BG: Record<string, string> = {
   gray:   'bg-surfaceMuted text-text-muted',
 };
 
-// AdSetSortKey + AdSetSortDir moved to AdSetTable.tsx (T-H) — imported
-// above. Re-exported via the AdSetTable module so the drawer's sort-state
-// declarations can still reference them.
-
 export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, rangeFrom, rangeTo }: Props) {
-  // Drawer-local sort state. Default to spend-desc which matches the
-  // pre-sortable hardcoded ordering, so users already comfortable with the
-  // drawer don't see anything jump on first paint.
+  // Drawer-local sort state. Default spend-desc matches the pre-sortable
+  // hardcoded ordering so first paint doesn't jump.
   const [sortKey, setSortKey] = useState<AdSetSortKey>('spend');
   const [sortDir, setSortDir] = useState<AdSetSortDir>('desc');
 
@@ -118,8 +100,7 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
     }
   }
 
-  // Ad-set → ads drilldown (Meta only). Click on an ad-set row inside the
-  // drawer opens the AdsDrawer scoped to that ad-set.
+  // Ad-set → ads drilldown (Meta only).
   const [adDrillSet, setAdDrillSet] = useState<{
     storeId: string;
     campaignId: string;
@@ -127,8 +108,7 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
     adSetName: string;
   } | null>(null);
 
-  // Product-mapping picker state. The map is cloud-synced; we hydrate on
-  // mount and re-read when partners push changes from other devices.
+  // Product-mapping picker state. Cloud-synced via the change event.
   const [productMap, setProductMap] = useState<ProductMap>(() => ({}));
   const [pickerOpen, setPickerOpen] = useState(false);
   useEffect(() => {
@@ -138,9 +118,7 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
     return () => window.removeEventListener('roas-campaign-product-map-changed', onChange);
   }, []);
 
-  // Sales data — needed for the Meta-vs-Shopify reconciliation panel. Fetched
-  // lazily only while the drawer is open. Bigger payload than campaigns but
-  // SWR dedupes globally so the cost is paid once per session.
+  // SWR fetches — lazy while open, SWR-deduped per session.
   const { data: productsData } = useSWR<ProductsResponse>(
     open ? '/api/products' : null,
     async (url: string) => {
@@ -150,7 +128,6 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
     },
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
-  // Per-order attribution for the deterministic confidence panel.
   const { data: ordersAttrData } = useSWR<OrdersAttributionResponse>(
     open ? '/api/orders-attribution' : null,
     async (url: string) => {
@@ -161,9 +138,7 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
 
-  // Optimization marks — shared with the main CampaignsTable via the same
-  // localStorage key (lib/campaignOptimized), so a mark made in either place
-  // shows in the other. Hydrate on mount, listen for cross-tab/device sync.
+  // Optimization marks — shared with CampaignsTable via lib/campaignOptimized.
   const [optimized, setOptimized] = useState<Set<string>>(() => new Set());
   useEffect(() => {
     setOptimized(readOptimized());
@@ -174,10 +149,8 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
   function onToggle(key: string) {
     setOptimized(prev => toggleOptimized(key, prev));
   }
-  // Close on Esc — coordinated via the shared drawer stack so that when
-  // a nested drawer (AdsDrawer) is open over this one, Esc only closes
-  // the topmost. Otherwise both `window` listeners fire in the same tick
-  // and the whole drilldown collapses in one keystroke (#WR-01).
+  // Esc — coordinated via the shared drawer stack so nested AdsDrawer
+  // pops alone instead of collapsing the whole stack (#WR-01).
   useDrawerEsc(open, onClose);
 
   // Lock body scroll while open.
@@ -194,20 +167,11 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
     const first = rows[0];
     let spend = 0, value = 0, clicks = 0, impressions = 0, conversions = 0;
     const byDay = new Map<string, { spend: number; value: number }>();
+    // adSetBudgetCad: latest non-null daily budget (most-recent wins,
+    // not summed — budget is current-state, not period-cumulative).
     const byAdSet = new Map<string, {
-      id: string;
-      name: string;
-      storeId: string;
-      platform: string;
-      campaignId: string;
-      spend: number;
-      value: number;
-      clicks: number;
-      impressions: number;
-      conversions: number;
-      /** Latest non-null daily budget seen for this ad-set across the
-       *  selected range. Budget is a current-state property — most-recent wins
-       *  instead of summing across days. */
+      id: string; name: string; storeId: string; platform: string; campaignId: string;
+      spend: number; value: number; clicks: number; impressions: number; conversions: number;
       adSetBudgetCad: number | null;
     }>();
     for (const r of rows) {
@@ -269,17 +233,12 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
     };
   }, [rows]);
 
-  // Per-ad-set deterministic attribution analysis — memoized in
-  // useCampaignAttribution hook. Hook internally manages dailyMetaByAdSet
-  // and preserves the IN5-01 contract (no per-cell recomputation).
+  // Per-ad-set attribution Map — hook preserves IN5-01 (no per-cell recompute).
   const attributionByAdSet = useCampaignAttribution({ summary, rows, ordersAttrData });
 
-  // Stabilize mappedIds reference (RESEARCH.md §7 caveat). Without this, the
-  // inline `productMap[...] ?? []` returns a fresh [] array every render when
-  // the key is missing, which would defeat the productChannelBreakdown memo
-  // below (and any other downstream useMemo that uses mappedIds as a dep).
-  // storeId is derived inline (rows[0]?.storeId) because the post-guard
-  // `storeId` declaration on line ~325 isn't visible to a top-level hook.
+  // Stabilize mappedIds reference (RESEARCH.md §7 caveat). Inline
+  // `productMap[...] ?? []` would return a fresh [] every render and defeat
+  // the productChannelBreakdown memo below.
   const mappedIds = useMemo(
     () => {
       const sid = rows[0]?.storeId ?? '';
@@ -288,15 +247,11 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
     [productMap, rows, campaignId],
   );
 
-  // Per-product channel breakdown (Phase 1). Triple-gate is concentrated
-  // here so the JSX render below can do a single `{productChannelBreakdown
-  // && (...)}` truthy check:
-  //   - return null when platform isn't Meta (Google has no mapping)
-  //   - return null when the campaign has no mapped products
-  //   - return null when fewer than 3 mapped-product orders exist in the
-  //     period (CONTEXT — "signal too noisy below 3")
-  // analyzeProductChannel itself returns an explicit-zero breakdown (not
-  // null), so the ≥3 threshold check lives here as the final gate.
+  // Per-product channel breakdown (Phase 1). Triple-gate (Meta-only,
+  // mapped products, ≥3 mapped-product orders) is concentrated here so
+  // the JSX guard is a single truthy check. Range uses rangeFrom/rangeTo
+  // (user window) — NOT min/max(rows.date), which would miss orders on
+  // campaign-paused days.
   const productChannelBreakdown = useMemo(() => {
     if (!summary || summary.platform !== 'Meta') return null;
     if (mappedIds.length === 0) return null;
@@ -304,12 +259,6 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
     if (ordersRows.length === 0 || rows.length === 0) return null;
     const storeIdForCampaign = rows[0]?.storeId ?? '';
     if (!storeIdForCampaign) return null;
-    // Use the user's selected window (passed from CampaignsTable), NOT
-    // min/max(rows.date). The latter narrows to campaign-active days
-    // only — but the channel-breakdown question is "where did the mapped
-    // products' sales come from in this period?", which should include
-    // orders on days the campaign happened to be paused. Without this
-    // fix, sales on non-active days are silently missing.
     const breakdown = analyzeProductChannel({
       productIds: mappedIds,
       orders: ordersRows,
@@ -317,61 +266,28 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
       dateFrom: rangeFrom,
       dateTo: rangeTo,
     });
-    // ≥3 orders gate (per CONTEXT) — collapse to null so the renderer's
-    // single truthy check hides the whole section.
     if (breakdown.totalOrders < 3) return null;
     return breakdown;
   }, [summary, ordersAttrData, rows, mappedIds, rangeFrom, rangeTo]);
 
-  // Re-sort ad-sets per user choice. Computed outside the `if (!open || !summary)`
-  // guard would be wrong because hooks must run unconditionally — but useMemo
-  // is already called above inside the summary computation. Sorting here is a
-  // plain expression, no hook needed.
-
   if (!open || !summary) return null;
 
-  // All rows in the drawer belong to the same campaign and the same store,
-  // so we can pick storeId off any of them to look up the ad-account ID.
+  // All rows share one storeId (pre-filtered by parent).
   const storeId = rows.length > 0 ? rows[0].storeId : '';
 
-  // -----------------------------------------------------------------------
-  // Meta vs Shopify reconciliation. Build a day-by-day series from:
-  //   - summary.dailyArr[i].value  → what Meta claimed per day
-  //   - productsData filtered to this campaign's mapped products,
-  //     same store, same day  → what Shopify actually sold per day
-  //
-  // Then compute Pearson correlation r. Interpretation:
-  //   r > 0.7  — Meta tracks the trend correctly even if the level is off.
-  //              Gap is probably a constant bias (view-through credit, halo
-  //              attribution). Directional decisions from Meta are reliable.
-  //   r 0.3-0.7 — Partial correlation. Either attribution lag is shifting
-  //                them, or Meta over-fires on some days. Don't trust
-  //                day-by-day Meta numbers; aggregate over 7-14 days.
-  //   r < 0.3  — Meta and Shopify don't move together. Either the mapping
-  //              is missing big products, or Meta is firing on conversions
-  //              that aren't happening (over-attribution). Numbers
-  //              unreliable per-period.
-  //
-  // We also compute a coarse lag: the offset (in days, -3..3) that
-  // maximises correlation. If non-zero, that's the attribution window
-  // showing up — Meta credits sooner than Shopify records.
-  // -----------------------------------------------------------------------
-  // `mappedIds` is the memoized hook value from above (line ~316). The
-  // inline `productMap[...] ?? []` that used to live here was a fresh
-  // array reference every render — see RESEARCH.md §7 for why that
-  // matters for the new productChannelBreakdown memo.
-  // The reconciliation analysis IIFE + pearson + pearsonWithLag helpers
-  // moved to MetaShopifyReconciliation.tsx (T-F). `buildReconciliation`
-  // returns the chart-ready series + Pearson r + best lag, or null when
-  // not applicable (non-Meta, no mapped products, fewer than 5 paired
-  // days). The `effectiveN < 5` guard inside the helper preserves the
-  // WR-03 fix byte-identical.
-  const reconciliation = buildReconciliation({
-    summary,
-    productsData,
-    mappedIds,
-    storeId,
-  });
+  // Reconciliation + analysis: helpers gate their own mounts (return null
+  // when not applicable). Reconciliation lives in MetaShopifyReconciliation
+  // (T-F); analyzeAttribution stays in @/lib/attributionAnalysis.
+  const reconciliation = buildReconciliation({ summary, productsData, mappedIds, storeId });
+  const analysisDateFrom = rows.reduce((min, r) => (r.date < min ? r.date : min), rows[0]?.date ?? '');
+  const analysisDateTo = rows.reduce((max, r) => (r.date > max ? r.date : max), rows[0]?.date ?? '');
+  const analysis = analyzeAttribution(
+    { campaignName: summary.campaignName, campaignId, storeId, platform: summary.platform, metaClaim: summary.value, spend: summary.spend },
+    ordersAttrData?.rows ?? [],
+    analysisDateFrom,
+    analysisDateTo,
+    summary.dailyArr.map(d => ({ date: d.date, value: d.value })),
+  );
   const link = buildAdsManagerLink({
     platform: summary.platform,
     storeId,
@@ -409,14 +325,11 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
       aria-modal="true"
       aria-labelledby="campaign-drawer-title"
     >
-      {/* Backdrop */}
       <div
         className="absolute inset-0 bg-text-primary/35 backdrop-blur-sm"
         onClick={onClose}
         aria-hidden
       />
-
-      {/* Drawer — slides in from the start side (RTL: from the left). */}
       <aside
         dir="rtl"
         className={cn(
@@ -425,7 +338,6 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
           'shadow-elevated animate-fade-in-up',
         )}
       >
-        {/* Header */}
         <header className="sticky top-0 bg-surface/95 backdrop-blur-md z-10 px-4 sm:px-6 py-4 border-b border-borderSubtle">
           <div className="flex items-start justify-between gap-3 mb-2">
             <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -433,10 +345,7 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
                 <Megaphone size={16} />
               </span>
               <div className="min-w-0">
-                <h2
-                  id="campaign-drawer-title"
-                  className="text-base sm:text-lg font-semibold text-text-primary tracking-tight truncate"
-                >
+                <h2 id="campaign-drawer-title" className="text-base sm:text-lg font-semibold text-text-primary tracking-tight truncate">
                   {summary.campaignName || '(ללא שם)'}
                 </h2>
                 <div className="text-[11px] sm:text-xs text-text-muted flex items-center gap-1.5 mt-0.5">
@@ -450,21 +359,12 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
                 </div>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="p-1.5 rounded hover:bg-surfaceMuted text-text-muted hover:text-text-primary transition-colors shrink-0"
-              aria-label="סגור"
-            >
+            <button onClick={onClose} aria-label="סגור" className="p-1.5 rounded hover:bg-surfaceMuted text-text-muted hover:text-text-primary transition-colors shrink-0">
               <X size={18} />
             </button>
           </div>
           {link && (
-            <a
-              href={link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-primary hover:text-primary-dark font-medium"
-            >
+            <a href={link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-primary hover:text-primary-dark font-medium">
               <ExternalLink size={13} />
               פתח ב-{summary.platform} Ads Manager
             </a>
@@ -472,7 +372,6 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
         </header>
 
         <div className="p-4 sm:p-6 space-y-5 sm:space-y-6">
-          {/* KPI row */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
             <DrawerStat label="ROAS" value={summary.roas > 0 ? formatNumber(summary.roas) : '—'} chip={{ text: roasInfo.text, tone: roasInfo.tone }} primary />
             <DrawerStat label="הוצאה" value={formatCurrency(summary.spend)} prefix="CAD" />
@@ -480,14 +379,12 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
             <DrawerStat label="המרות" value={formatNumber(summary.conversions, 0)} />
           </div>
 
-          {/* Secondary metrics */}
           <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
             <DrawerStat label="CTR" value={summary.impressions > 0 ? `${(summary.ctr * 100).toFixed(2)}%` : '—'} compact />
             <DrawerStat label="CPC" value={summary.clicks > 0 ? `CAD ${formatCurrency(summary.cpc, 2)}` : '—'} compact />
             <DrawerStat label="CPA" value={summary.conversions > 0 ? `CAD ${formatCurrency(summary.cpa, 2)}` : '—'} compact />
           </div>
 
-          {/* Daily trend chart */}
           {summary.dailyArr.length >= 2 && (
             <section>
               <div className="flex items-center justify-between mb-2">
@@ -525,10 +422,7 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
                         if (!active || !payload || payload.length === 0) return null;
                         const d = payload[0].payload as { date: string; spend: number; value: number };
                         return (
-                          <div
-                            dir="rtl"
-                            className="rounded-lg bg-text-primary text-white px-3 py-2 text-xs shadow-elevated tabular-nums"
-                          >
+                          <div dir="rtl" className="rounded-lg bg-text-primary text-white px-3 py-2 text-xs shadow-elevated tabular-nums">
                             <div className="text-white/70 mb-1 text-[10px]">{formatDate(d.date)}</div>
                             <div>הוצאה: <span className="font-semibold">CAD {formatCurrency(d.spend)}</span></div>
                             <div>ערך המרות: <span className="font-semibold text-emerald-300">CAD {formatCurrency(d.value)}</span></div>
@@ -536,20 +430,8 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
                         );
                       }}
                     />
-                    <Area
-                      type="monotone"
-                      dataKey="value"
-                      stroke="#15803d"
-                      strokeWidth={1.5}
-                      fill="url(#drawer-value)"
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="spend"
-                      stroke="#dc2626"
-                      strokeWidth={1.5}
-                      fill="url(#drawer-spend)"
-                    />
+                    <Area type="monotone" dataKey="value" stroke="#15803d" strokeWidth={1.5} fill="url(#drawer-value)" />
+                    <Area type="monotone" dataKey="spend" stroke="#dc2626" strokeWidth={1.5} fill="url(#drawer-spend)" />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -566,113 +448,55 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
             </section>
           )}
 
-          {/* Mapped products — Meta only. Google PMax doesn't expose a
-              per-product attribution: the feed is what governs delivery,
-              so manually tagging products to a PMax campaign would be
-              misleading. We hide the section entirely for Google so users
-              don't try to do something that won't reflect reality. */}
-          {summary.platform === 'Meta' && (() => {
-            const storeIdForCampaign = rows[0]?.storeId ?? '';
-            const mappedIds = productMap[campaignKey(storeIdForCampaign, campaignId)] ?? [];
-            return (
-              <section>
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <h3 className="text-sm font-semibold text-text-primary inline-flex items-center gap-1.5">
-                    <Package size={14} className="text-text-secondary" />
-                    מוצרי Shopify משויכים
-                    {mappedIds.length > 0 && (
-                      <span className="text-[10px] font-medium text-text-muted">
-                        ({mappedIds.length})
-                      </span>
-                    )}
-                  </h3>
-                  <button
-                    type="button"
-                    onClick={() => setPickerOpen(true)}
-                    className="inline-flex items-center gap-1 rounded-md bg-surface border border-border hover:border-primary/40 px-2 py-1 text-[11px] font-medium text-text-secondary hover:text-primary transition-colors"
-                  >
-                    <Edit3 size={12} />
-                    {mappedIds.length > 0 ? 'ערוך מיפוי' : 'שייך מוצרים'}
-                  </button>
-                </div>
-                {mappedIds.length === 0 ? (
-                  <p className="text-[11px] text-text-muted leading-relaxed bg-surfaceMuted/40 rounded-lg px-3 py-2">
-                    לא משויכים מוצרים. לאחר שיוך, ה-ROAS יחושב מחדש לפי מכירות{' '}
-                    Shopify אמיתיות במקום ערך ההמרה ש-Meta דיווח (לרוב מנופח).
-                  </p>
-                ) : (
-                  <ul className="flex flex-wrap gap-1.5">
-                    {mappedIds.map(id => (
-                      <li
-                        key={id}
-                        className="inline-flex items-center gap-1 text-[11px] bg-primary/8 text-primary px-2 py-0.5 rounded-md font-mono"
-                        title={id}
-                      >
-                        <Package size={10} />
-                        <span className="truncate max-w-[120px]">{id}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-            );
-          })()}
+          {/* Mapped products — Meta only (Google PMax delivery is feed-
+              governed; manual tagging would mislead). */}
+          {summary.platform === 'Meta' && (
+            <section>
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <h3 className="text-sm font-semibold text-text-primary inline-flex items-center gap-1.5">
+                  <Package size={14} className="text-text-secondary" />
+                  מוצרי Shopify משויכים
+                  {mappedIds.length > 0 && (
+                    <span className="text-[10px] font-medium text-text-muted">
+                      ({mappedIds.length})
+                    </span>
+                  )}
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setPickerOpen(true)}
+                  className="inline-flex items-center gap-1 rounded-md bg-surface border border-border hover:border-primary/40 px-2 py-1 text-[11px] font-medium text-text-secondary hover:text-primary transition-colors"
+                >
+                  <Edit3 size={12} />
+                  {mappedIds.length > 0 ? 'ערוך מיפוי' : 'שייך מוצרים'}
+                </button>
+              </div>
+              {mappedIds.length === 0 ? (
+                <p className="text-[11px] text-text-muted leading-relaxed bg-surfaceMuted/40 rounded-lg px-3 py-2">
+                  לא משויכים מוצרים. לאחר שיוך, ה-ROAS יחושב מחדש לפי מכירות{' '}
+                  Shopify אמיתיות במקום ערך ההמרה ש-Meta דיווח (לרוב מנופח).
+                </p>
+              ) : (
+                <ul className="flex flex-wrap gap-1.5">
+                  {mappedIds.map(id => (
+                    <li key={id} title={id} className="inline-flex items-center gap-1 text-[11px] bg-primary/8 text-primary px-2 py-0.5 rounded-md font-mono">
+                      <Package size={10} />
+                      <span className="truncate max-w-[120px]">{id}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </section>
+          )}
 
-          {/* Deterministic attribution panel (Meta only). Parent computes
-              `analysis` via analyzeAttribution + gates the mount; the panel
-              renders the trust callout. */}
-          {(() => {
-            const storeIdForCampaign = rows[0]?.storeId ?? '';
-            const dailyMeta = summary.dailyArr.map(d => ({ date: d.date, value: d.value }));
-            const dateFrom = rows.reduce(
-              (min, r) => (r.date < min ? r.date : min),
-              rows[0]?.date ?? '',
-            );
-            const dateTo = rows.reduce(
-              (max, r) => (r.date > max ? r.date : max),
-              rows[0]?.date ?? '',
-            );
-            const analysis = analyzeAttribution(
-              {
-                campaignName: summary.campaignName,
-                campaignId,
-                storeId: storeIdForCampaign,
-                platform: summary.platform,
-                metaClaim: summary.value,
-                spend: summary.spend,
-              },
-              ordersAttrData?.rows ?? [],
-              dateFrom,
-              dateTo,
-              dailyMeta,
-            );
-            if (!analysis) return null;
-            return (
-              <AttributionAnalysisPanel
-                analysis={analysis}
-                spend={summary.spend}
-                value={summary.value}
-              />
-            );
-          })()}
+          {analysis && (
+            <AttributionAnalysisPanel analysis={analysis} spend={summary.spend} value={summary.value} />
+          )}
 
-          {/* Phase 1 — Channel-level product attribution. The triple-gate
-              (platform Meta / mapped products / ≥3 orders) was concentrated
-              in the productChannelBreakdown useMemo above (line ~303), so
-              the JSX guard is a single truthy check. The panel itself
-              moved to ProductChannelBreakdown.tsx (T-G). */}
           {productChannelBreakdown && <ProductChannelBreakdown breakdown={productChannelBreakdown} />}
 
-          {/* Meta vs Shopify reconciliation. Only when products are mapped
-              AND we have at least 5 days of data to correlate. The chart +
-              Pearson r + interpretation help the user decide whether a
-              Meta-vs-Shopify gap is real (Meta over-claiming) or fake
-              (mapping incomplete / halo effect / lag from attribution
-              window). The JSX panel + chart + Pearson logic moved to
-              MetaShopifyReconciliation.tsx (T-F). */}
           {reconciliation && <MetaShopifyReconciliation reconciliation={reconciliation} />}
 
-          {/* Ad-sets within this campaign */}
           {summary.adSets.length > 0 && (
             <AdSetTable
               adSets={sortedAdSets}
@@ -686,16 +510,12 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
             />
           )}
 
-          {/* Foot - tiny */}
           <div className="text-[10px] text-text-muted text-center pt-2">
             לחץ Esc או על הרקע לסגירה
           </div>
         </div>
       </aside>
 
-      {/* Product-mapping modal — opens from the 'מוצרי Shopify משויכים'
-          section. On save, persists to localStorage + cloud and the in-drawer
-          chip list re-renders via the change event. */}
       <ProductPickerModal
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
@@ -709,8 +529,7 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
         }}
       />
 
-      {/* Nested ad-level drawer. Date range is derived from the rows the
-          campaign drawer already has — guaranteed to cover the same window. */}
+      {/* Nested ad-level drawer. Range derived from rows. */}
       {adDrillSet && (
         <AdsDrawer
           open
@@ -719,14 +538,8 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
           campaignId={adDrillSet.campaignId}
           adSetId={adDrillSet.adSetId}
           adSetName={adDrillSet.adSetName}
-          rangeFrom={rows.reduce(
-            (min, r) => (r.date < min ? r.date : min),
-            rows[0]?.date ?? '',
-          )}
-          rangeTo={rows.reduce(
-            (max, r) => (r.date > max ? r.date : max),
-            rows[0]?.date ?? '',
-          )}
+          rangeFrom={rows.reduce((min, r) => (r.date < min ? r.date : min), rows[0]?.date ?? '')}
+          rangeTo={rows.reduce((max, r) => (r.date > max ? r.date : max), rows[0]?.date ?? '')}
           adAccounts={adAccounts}
         />
       )}
@@ -734,15 +547,7 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
   );
 }
 
-function DrawerStat({
-  label,
-  value,
-  prefix,
-  chip,
-  primary,
-  compact,
-  accent,
-}: {
+function DrawerStat({ label, value, prefix, chip, primary, compact, accent }: {
   label: string;
   value: string;
   prefix?: string;
@@ -789,10 +594,3 @@ function DrawerStat({
 }
 
 
-// AdSetSortHeader moved to AdSetTable.tsx as a module-private helper
-// (T-H). The drawer no longer needs the Arrow* lucide icons either —
-// AdSetTable owns them.
-//
-// pearson + pearsonWithLag moved to MetaShopifyReconciliation.tsx as
-// named exports for Phase 5/6/7 reuse (T-F). The byte-identical clamp
-// `Math.max(-1, Math.min(1, r))` + lag shift logic are preserved there.
