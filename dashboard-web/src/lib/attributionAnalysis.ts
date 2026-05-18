@@ -395,7 +395,7 @@ export function analyzeAttribution(
  * the gap is unstable and shouldn't be used to make decisions on period
  * totals.
  */
-function computeWindowStability(
+export function computeWindowStability(
   matchedOrders: OrderAttributionRow[],
   dailyMetaSeries: Array<{ date: string; value: number }>,
   dateFrom: string,
@@ -468,7 +468,7 @@ function computeWindowStability(
  * We use 2.5σ rather than 2σ to keep the false-positive rate low; the
  * operator only sees days that are genuinely anomalous.
  */
-function detectOutlierDays(
+export function detectOutlierDays(
   series: Array<{ date: string; value: number }>,
 ): string[] {
   if (series.length < 8) return [];
