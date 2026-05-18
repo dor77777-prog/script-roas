@@ -583,6 +583,16 @@ function getShopifyOrdersAttribution(storeId, dateStr) {
 }
 
 /**
+ * decodeURIComponent that never throws. URIError on malformed percent-escapes
+ * is silently swallowed and the raw input is returned — for our purposes a
+ * raw "%E0" string is strictly better than aborting the day's classification.
+ */
+function safeDecode_(s) {
+  try { return decodeURIComponent(s); }
+  catch (_) { return s; }
+}
+
+/**
  * Internal: classify a single Shopify order object into its attribution
  * source. Pulls UTM/fbclid/gclid from landing_site, falls back to
  * note_attributes (some apps stash _fbc/_fbp/fbclid there from the Pixel),
@@ -595,7 +605,14 @@ function classifyOrderAttribution_(order) {
   const ref = String(order.referring_site || '').toLowerCase();
   const noteAttrs = order.note_attributes || [];
 
-  // Parse UTM-like params from landing URL (which is the full URL incl. ?...)
+  // Parse UTM-like params from landing URL (which is the full URL incl. ?...).
+  // decodeURIComponent throws URIError on malformed percent-escapes (e.g. %E0,
+  // %FF%FE, stray %). Bot traffic, scrapers, and mis-built affiliate links
+  // routinely produce these. Without this guard, a single bad order would
+  // throw, propagate up through getShopifyOrdersAttribution into the
+  // try/catch in runUpdateForDate, and abort the WHOLE day's
+  // orders-attribution write for this store. Decode per-pair so one bad
+  // value drops only that param, never the whole order.
   const params = {};
   const qIdx = landing.indexOf('?');
   if (qIdx >= 0) {
@@ -603,8 +620,8 @@ function classifyOrderAttribution_(order) {
     for (const pair of qs.split('&')) {
       const eq = pair.indexOf('=');
       if (eq < 0) continue;
-      const k = decodeURIComponent(pair.slice(0, eq)).toLowerCase();
-      const v = decodeURIComponent(pair.slice(eq + 1));
+      const k = safeDecode_(pair.slice(0, eq)).toLowerCase();
+      const v = safeDecode_(pair.slice(eq + 1));
       params[k] = v;
     }
   }
