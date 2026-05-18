@@ -1,4 +1,4 @@
-.clasp.json
 .DS_Store
 node_modules/
 .vercel
+.clasprc.json
