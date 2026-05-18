@@ -20,12 +20,8 @@ import {
   generateId,
   hasAnyBilling,
   parseShopifyBillsCsv,
-  readOneTime,
-  readRecurring,
   seedBillingIfEmpty,
   shopifyPlanCadForName,
-  writeOneTime,
-  writeRecurring,
   type CostSource,
   type OneTimeCost,
   type ParsedBillLine,
@@ -33,6 +29,8 @@ import {
 } from '@/lib/billing';
 import { isHydrated } from '@/lib/cloudSync';
 import { FROZEN_USD_TO_CAD } from '@/lib/constants';
+import { useBillingRecurring } from '@/lib/hooks/useBillingRecurring';
+import { useBillingOneTime } from '@/lib/hooks/useBillingOneTime';
 
 type StoreMetaRow = {
   storeId: string;
@@ -98,8 +96,12 @@ const SOURCE_COLOR: Record<CostSource, string> = {
 export function BillingSettings({ storeNames }: Props) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('recurring');
-  const [recurring, setRecurring] = useState<RecurringCost[]>([]);
-  const [oneTime, setOneTime] = useState<OneTimeCost[]>([]);
+  // Cloud-synced billing state lives in two custom hooks. Both subscribe to
+  // the SAME `'roas-billing-changed'` event (cloudSync.ts:58-66 maps both
+  // billing keys to one event). The hooks' returned setters write through
+  // to localStorage + cloud + event via `writeRecurring` / `writeOneTime`.
+  const { recurring, setRecurring: persistRecurring, totalMonthly } = useBillingRecurring();
+  const { oneTime, setOneTime: persistOneTime } = useBillingOneTime();
 
   // Auto-detected Shopify plan per store (from Apps Script writing to the
   // `store-meta` tab). Only fetched after the panel opens — no point pinging
@@ -116,9 +118,11 @@ export function BillingSettings({ storeNames }: Props) {
   // re-register listeners every minute.
   const storeNamesKey = storeNames.join('|');
 
-  // Hydrate from storage on mount + seed if empty so user has something to
-  // edit. The seed is gated on cloud-hydrated to avoid stomping data a partner
-  // has already entered on another device.
+  // Seed-on-empty branch. The hooks above already handle hydrate + listen +
+  // re-read; here we ONLY handle the case where cloud-hydrate completes and
+  // the local snapshot is still empty — a genuine first-time user. The seed
+  // depends on `storeNames` (a prop), which is why it stays in the shell and
+  // not in the generic hook.
   //
   // WR2-02: Seeding is restricted to the FIRST hydrate of the session. If
   // BillingSettings remounts (route change, tab toggle, parent re-render)
@@ -131,47 +135,30 @@ export function BillingSettings({ storeNames }: Props) {
   // entirely (no re-fetch on remount, no seed on remount), while still
   // serving genuine first-time users whose cloud is empty at hydrate time.
   useEffect(() => {
-    setRecurring(readRecurring());
-    setOneTime(readOneTime());
-
-    let cancelled = false;
-    let cleanupSeedListener: (() => void) | null = null;
     // Only seed if hydrate has NOT yet completed when this effect runs.
     // When hydrated is already true at mount, the first hydrate's snapshot
     // is the source of truth and any seed would be redundant at best,
     // racy at worst.
-    if (!isHydrated()) {
-      const onHydrated = () => {
-        if (cancelled) return;
-        // At this point the first hydrate just completed. hasAnyBilling()
-        // reflects local state AFTER cloudSync's writeLocal merged any
-        // cloud values — so local IS the authoritative snapshot of what
-        // cloud had at hydrate time. If empty, cloud was empty too, and
-        // seeding is the right action for a genuine first-time user.
-        if (hasAnyBilling()) {
-          setRecurring(readRecurring());
-          setOneTime(readOneTime());
-          return;
-        }
-        seedBillingIfEmpty(storeNames);
-        setRecurring(readRecurring());
-        setOneTime(readOneTime());
-      };
-      window.addEventListener('roas-cloud-hydrated', onHydrated, { once: true });
-      cleanupSeedListener = () => {
-        window.removeEventListener('roas-cloud-hydrated', onHydrated);
-      };
-    }
+    if (isHydrated()) return;
 
-    function onChange() {
-      setRecurring(readRecurring());
-      setOneTime(readOneTime());
-    }
-    window.addEventListener('roas-billing-changed', onChange);
+    let cancelled = false;
+    const onHydrated = () => {
+      if (cancelled) return;
+      // At this point the first hydrate just completed. hasAnyBilling()
+      // reflects local state AFTER cloudSync's writeLocal merged any
+      // cloud values — so local IS the authoritative snapshot of what
+      // cloud had at hydrate time. If non-empty, the hooks' own
+      // `'roas-billing-changed'` listeners will pick up cloudSync's writes;
+      // no extra action needed here. If empty, seed — `writeRecurring` /
+      // `writeOneTime` inside `seedBillingIfEmpty` will fire the same event
+      // and the hooks will re-read.
+      if (hasAnyBilling()) return;
+      seedBillingIfEmpty(storeNames);
+    };
+    window.addEventListener('roas-cloud-hydrated', onHydrated, { once: true });
     return () => {
       cancelled = true;
-      window.removeEventListener('roas-billing-changed', onChange);
-      if (cleanupSeedListener) cleanupSeedListener();
+      window.removeEventListener('roas-cloud-hydrated', onHydrated);
     };
     // Depending on the string key (not the array ref) avoids re-running on
     // every SWR refetch when the underlying store list hasn't actually changed.
@@ -179,21 +166,6 @@ export function BillingSettings({ storeNames }: Props) {
     // when the list does.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeNamesKey]);
-
-  // Counts for the trigger pill subtitle.
-  const totalMonthly = useMemo(
-    () => recurring.filter(r => r.active).reduce((s, r) => s + r.monthlyCAD, 0),
-    [recurring],
-  );
-
-  function persistRecurring(next: RecurringCost[]) {
-    setRecurring(next);
-    writeRecurring(next);
-  }
-  function persistOneTime(next: OneTimeCost[]) {
-    setOneTime(next);
-    writeOneTime(next);
-  }
 
   return (
     <>
