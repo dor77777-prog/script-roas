@@ -3,9 +3,10 @@ import { withSentryConfig } from '@sentry/nextjs';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  experimental: {
-    serverActions: { bodySizeLimit: '2mb' },
-  },
+  // No `experimental.serverActions` block — the dashboard has no Server
+  // Actions; all mutations go through `route.ts` POST handlers, which use
+  // a separate request-body limit. Reintroduce only when a Server Action
+  // is actually added. (IN-04)
 };
 
 // Sentry build-time wrapper. Without SENTRY_AUTH_TOKEN, the wrapper won't
