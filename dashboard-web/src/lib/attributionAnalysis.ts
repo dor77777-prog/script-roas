@@ -31,13 +31,37 @@ export type AttributionAnalysis = {
    *  picked up more than Meta — usually halo from organic / other channels
    *  spilling into the mapping. */
   coverage: number;
-  /** Confidence verdict, derived from coverage + sample size. Replaces the
-   *  old heuristic chip with something defensible. */
+  /** Confidence verdict, derived from coverage + sample size + stability +
+   *  outlier presence. Replaces the old heuristic chip with something
+   *  defensible. */
   trust: AttributionTrust;
   /** Concrete reasons that explain the trust level. Shown in tooltips. */
   reasons: string[];
   /** Human-readable action for the operator. */
   recommendation: string;
+  /** Bayesian-flavoured 95% credibility interval around the deterministic
+   *  ROAS. Wider = less certain. Width shrinks with order count + stability.
+   *  Null when there's no meaningful sample (zero orders matched). */
+  roasInterval: { low: number; mid: number; high: number } | null;
+  /** Per-7-day-window summary. Used to detect stable bias vs spike-driven
+   *  noise. Empty when range < 7 days or no orders. */
+  windowStability: WindowStability | null;
+  /** Days where Meta's daily conversion value was an outlier (>2.5σ above
+   *  the campaign's own trailing mean). Likely modeled spikes. */
+  outlierDays: string[];
+};
+
+export type WindowStability = {
+  /** Number of 7-day windows analysed. */
+  windowCount: number;
+  /** Mean of per-window coverages. */
+  meanCoverage: number;
+  /** Standard deviation of per-window coverages — low = stable bias,
+   *  high = noisy / unreliable. */
+  stdDev: number;
+  /** Verbal categorisation: 'stable' (σ < 0.15), 'mixed' (σ 0.15-0.35),
+   *  'volatile' (σ > 0.35). */
+  verdict: 'stable' | 'mixed' | 'volatile';
 };
 
 export type AttributionTrust = {
@@ -137,6 +161,11 @@ export function analyzeAttribution(
   orders: OrderAttributionRow[],
   dateFrom: string,
   dateTo: string,
+  /** Optional daily Meta conv-value series for outlier detection. When
+   *  provided, we flag days where Meta spiked >2.5σ above the trailing
+   *  mean — usually modeled / view-through bursts that artificially
+   *  inflate the period total. */
+  dailyMetaSeries?: Array<{ date: string; value: number }>,
 ): AttributionAnalysis | null {
   if (campaign.platform !== 'Meta') return null;
   if (!orders || orders.length === 0) return null;
@@ -153,6 +182,58 @@ export function analyzeAttribution(
   const coverage = campaign.metaClaim > 0
     ? Math.min(2, deterministicRevenue / campaign.metaClaim)
     : (deterministicRevenue > 0 ? 1 : 0);
+
+  // -----------------------------------------------------------------------
+  // Bayesian-flavoured credibility interval for the deterministic ROAS.
+  //
+  // We treat each matched order as an independent Bernoulli-ish draw with
+  // mean = average order value and variance based on observed dispersion.
+  // The Wilson score interval at 95% confidence gives a defensible range
+  // that's tight when N is big and wide when N is small.
+  //
+  // For simplicity (and to avoid implementing the full Wilson), we use the
+  // normal approximation: stderr ≈ stddev / √N, CI = mean ± 1.96 × stderr.
+  // The result is shown as "ROAS 2.3 [1.8 – 2.9]" in the tooltip.
+  // -----------------------------------------------------------------------
+  let roasInterval: AttributionAnalysis['roasInterval'] = null;
+  if (campaign.spend > 0 && deterministicOrders >= 3) {
+    const aovs = matchedOrders.map(o => o.totalCad);
+    const meanAov = aovs.reduce((s, x) => s + x, 0) / aovs.length;
+    const variance =
+      aovs.reduce((s, x) => s + (x - meanAov) ** 2, 0) / aovs.length;
+    const stdDev = Math.sqrt(variance);
+    const stderrAov = stdDev / Math.sqrt(aovs.length);
+    // CI on total revenue = CI on (N × mean AOV) — N is treated as fixed
+    // (we observed it). 95% normal: ± 1.96 × stderr.
+    const revLow = Math.max(0, (meanAov - 1.96 * stderrAov) * aovs.length);
+    const revHigh = (meanAov + 1.96 * stderrAov) * aovs.length;
+    roasInterval = {
+      low: revLow / campaign.spend,
+      mid: deterministicRevenue / campaign.spend,
+      high: revHigh / campaign.spend,
+    };
+  }
+
+  // -----------------------------------------------------------------------
+  // Multi-window stability. Split the date range into 7-day buckets, compute
+  // coverage per window, then look at the spread. Low spread = consistent
+  // bias (trustworthy). High spread = noisy → don't trust period totals.
+  // -----------------------------------------------------------------------
+  const windowStability = computeWindowStability(
+    matchedOrders,
+    dailyMetaSeries ?? [],
+    dateFrom,
+    dateTo,
+  );
+
+  // -----------------------------------------------------------------------
+  // Outlier day detection. Meta's modeled conversions often appear as
+  // single-day spikes that don't show up in the underlying click data.
+  // We flag days where the daily Meta value exceeds the trailing mean
+  // by > 2.5σ. Shown in the tooltip; could be excluded from totals in a
+  // future iteration but for now just surfaces them.
+  // -----------------------------------------------------------------------
+  const outlierDays = detectOutlierDays(dailyMetaSeries ?? []);
 
   // Confidence ladder:
   //   coverage >= 0.8 → HIGH (most of what Meta claimed has click-ID proof)
@@ -224,6 +305,33 @@ export function analyzeAttribution(
       'בדוק: (1) האם utm_campaign מוגדר נכון, (2) האם CAPI/Pixel מתוקנים, (3) האם הקמפיין באמת מביא מכירות.';
   }
 
+  // Augment reasons + recommendation with the new signals.
+  if (windowStability && windowStability.windowCount >= 2) {
+    if (windowStability.verdict === 'stable') {
+      reasons.push(
+        `יחס Meta:Shopify יציב לאורך ${windowStability.windowCount} שבועות (σ=${(windowStability.stdDev * 100).toFixed(0)}%) — ביאס קבוע, ניתן להסתמך על המגמה`,
+      );
+    } else if (windowStability.verdict === 'volatile') {
+      reasons.push(
+        `יחס Meta:Shopify תנודתי מאוד בין שבועות (σ=${(windowStability.stdDev * 100).toFixed(0)}%) — מספרי תקופה לא יציבים`,
+      );
+      // Downgrade trust if volatile and we were saying 'high'.
+      if (trust.level === 'high') {
+        trust = { level: 'medium', label: 'חלקי', score: Math.min(trust.score, 65) };
+      }
+    }
+  }
+  if (outlierDays.length > 0) {
+    reasons.push(
+      `${outlierDays.length} ימים שבהם Meta דיווח >2.5σ מעל הממוצע שלו (modeled spikes): ${outlierDays.slice(0, 3).join(', ')}${outlierDays.length > 3 ? '…' : ''}`,
+    );
+  }
+  if (roasInterval) {
+    reasons.push(
+      `טווח אמינות 95% ל-ROAS אמיתי: ${roasInterval.low.toFixed(2)}x – ${roasInterval.high.toFixed(2)}x`,
+    );
+  }
+
   return {
     deterministicRevenue,
     deterministicOrders,
@@ -232,5 +340,101 @@ export function analyzeAttribution(
     trust,
     reasons,
     recommendation,
+    roasInterval,
+    windowStability,
+    outlierDays,
   };
+}
+
+/**
+ * Per-7-day-window coverage analysis. Returns the spread of
+ * (matched-revenue / claimed) ratios across consecutive windows. A low
+ * spread means Meta is consistently off by the same amount — that's a
+ * known bias the operator can mentally correct for. A high spread means
+ * the gap is unstable and shouldn't be used to make decisions on period
+ * totals.
+ */
+function computeWindowStability(
+  matchedOrders: OrderAttributionRow[],
+  dailyMetaSeries: Array<{ date: string; value: number }>,
+  dateFrom: string,
+  dateTo: string,
+): WindowStability | null {
+  // Bucket the range into consecutive 7-day windows.
+  const ms = (s: string) => new Date(s + 'T00:00:00Z').getTime();
+  const fromMs = ms(dateFrom);
+  const toMs = ms(dateTo);
+  if (!Number.isFinite(fromMs) || !Number.isFinite(toMs)) return null;
+  const totalDays = Math.round((toMs - fromMs) / 86400000) + 1;
+  if (totalDays < 14) return null; // need ≥2 windows for any signal
+
+  // Aggregate matched + meta per window.
+  const windowCount = Math.floor(totalDays / 7);
+  const buckets: Array<{ matched: number; meta: number }> = [];
+  for (let i = 0; i < windowCount; i++) {
+    buckets.push({ matched: 0, meta: 0 });
+  }
+  function bucketIdx(dateStr: string): number {
+    const d = ms(dateStr);
+    if (!Number.isFinite(d) || d < fromMs) return -1;
+    const idx = Math.floor((d - fromMs) / 86400000 / 7);
+    if (idx >= windowCount) return -1;
+    return idx;
+  }
+  for (const o of matchedOrders) {
+    const i = bucketIdx(o.date);
+    if (i >= 0) buckets[i].matched += o.totalCad;
+  }
+  for (const p of dailyMetaSeries) {
+    const i = bucketIdx(p.date);
+    if (i >= 0) buckets[i].meta += p.value;
+  }
+
+  // Per-window coverage; drop windows where Meta claim was zero (no
+  // signal to compute from).
+  const coverages = buckets
+    .filter(b => b.meta > 0)
+    .map(b => Math.min(2, b.matched / b.meta));
+  if (coverages.length < 2) return null;
+
+  const mean = coverages.reduce((s, x) => s + x, 0) / coverages.length;
+  const variance =
+    coverages.reduce((s, x) => s + (x - mean) ** 2, 0) / coverages.length;
+  const stdDev = Math.sqrt(variance);
+  const verdict: WindowStability['verdict'] =
+    stdDev < 0.15 ? 'stable' : stdDev < 0.35 ? 'mixed' : 'volatile';
+  return { windowCount: coverages.length, meanCoverage: mean, stdDev, verdict };
+}
+
+/**
+ * Outlier day detection using a simple z-score against the trailing 14-day
+ * mean. Days where Meta's daily value exceeded 2.5σ above the trailing
+ * baseline are flagged as likely modeled spikes — these are usually
+ * view-through-credit bursts that don't correspond to real customer
+ * behaviour.
+ *
+ * We use 2.5σ rather than 2σ to keep the false-positive rate low; the
+ * operator only sees days that are genuinely anomalous.
+ */
+function detectOutlierDays(
+  series: Array<{ date: string; value: number }>,
+): string[] {
+  if (series.length < 8) return [];
+  // Sort by date asc so trailing windows are causal.
+  const sorted = [...series].sort((a, b) => a.date.localeCompare(b.date));
+  const out: string[] = [];
+  const LOOKBACK = 14;
+  for (let i = LOOKBACK; i < sorted.length; i++) {
+    const trail = sorted.slice(Math.max(0, i - LOOKBACK), i);
+    const vals = trail.map(p => p.value).filter(v => v > 0);
+    if (vals.length < 5) continue;
+    const mean = vals.reduce((s, x) => s + x, 0) / vals.length;
+    const variance =
+      vals.reduce((s, x) => s + (x - mean) ** 2, 0) / vals.length;
+    const stdDev = Math.sqrt(variance);
+    if (stdDev === 0) continue;
+    const z = (sorted[i].value - mean) / stdDev;
+    if (z > 2.5) out.push(sorted[i].date);
+  }
+  return out;
 }

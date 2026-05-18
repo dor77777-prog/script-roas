@@ -631,9 +631,28 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         }
       }
       const shared = sharedKeys.size;
+      // Daily Meta conv-value series for this specific campaign — used by
+      // attribution analysis for outlier detection + window stability.
+      // We pull from the raw rows (already filtered to range by aggregate)
+      // and bucket by date.
+      const dailyMeta = (() => {
+        const byDate = new Map<string, number>();
+        if (!data) return [];
+        for (const r of data.rows) {
+          if (r.storeId !== a.storeId) continue;
+          if (r.platform !== a.platform) continue;
+          if (r.campaignId !== a.campaignId) continue;
+          if (r.date < localRange.from || r.date > localRange.to) continue;
+          byDate.set(r.date, (byDate.get(r.date) ?? 0) + r.conversionValue);
+        }
+        return Array.from(byDate.entries()).map(([date, value]) => ({ date, value }));
+      })();
+
       // Deterministic per-order attribution. Uses the campaign's name to
       // match against orders' utm_campaign field. Returns null for non-Meta
       // campaigns or when the attribution tab is empty (first deploy).
+      // Passes the daily series so the analysis can compute window
+      // stability + outlier days + Bayesian intervals.
       const attribution = analyzeAttribution(
         {
           campaignName: a.campaignName,
@@ -645,6 +664,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         ordersAttrResp?.rows ?? [],
         localRange.from,
         localRange.to,
+        dailyMeta,
       );
       out.set(k, {
         trueRevenue,
