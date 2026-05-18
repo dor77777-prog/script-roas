@@ -238,6 +238,33 @@ dashboard-web/
 
 ---
 
+## תשתיות Phase 2
+
+### Testing (Vitest)
+
+Run `npm run test` to run vitest in CI mode (exits after run). Tests live in `src/lib/__tests__/`. Coverage focuses on `attributionAnalysis.ts` pure functions (76+ tests covering `orderMatchesCampaign`, `analyzeAttribution`, `analyzeAttributionForAdSet`, `analyzeAttributionForAd`, `analyzeProductChannel`, `detectOutlierDays`, `computeWindowStability`, `safeDecode`). No integration tests yet — they're in scope for Phase 4.
+
+- `npm run test` — run once (CI mode)
+- `npm run test:watch` — interactive watch mode
+- `npm run test:coverage` — with v8 coverage report
+
+### Sentry (Error Reporting)
+
+Set `NEXT_PUBLIC_SENTRY_DSN` + `SENTRY_DSN` in `.env.local` to enable client + server error reporting. Without these vars, Sentry is a **silent no-op** (zero overhead, zero warnings in localhost). A global `ErrorBoundary` in `app/layout.tsx` catches React rendering errors and shows a Hebrew RTL fallback UI.
+
+### Cache Config
+
+All API route cache settings live in `src/lib/cacheConfig.ts`. The `cacheControl(key)` helper generates the `Cache-Control` header value. To change a TTL, edit that file — don't touch the `export const revalidate` literals in route handlers directly (they match `CACHE_CONFIG[key].revalidate`).
+
+### Utilities
+
+`src/lib/utils.ts` exports:
+- `cn` — className merge (clsx + tailwind-merge)
+- `formatCurrency` / `formatNumber` / `formatDate` / `formatPct` — localized formatters
+- `safeDecode(value)` — `decodeURIComponent` wrapped in try/catch; returns raw input on `URIError` instead of crashing. Use for any URL-encoded user-supplied string (utm params, query params). Returns `''` for null/undefined.
+
+---
+
 ## תחזוקה שוטפת
 
 **הוספת חנות חדשה?** עדכן `STORES` ב-`Config.gs` (Apps Script), הוסף Script Properties, והרץ `setupAll`. הדשבורד יציג את החנות החדשה אוטומטית בלי שינוי קוד.
