@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { readRecurring, writeRecurring, type RecurringCost } from '@/lib/billing';
 
 /**
@@ -29,9 +29,25 @@ export function useBillingRecurring(): {
 } {
   const [recurring, setRecurring] = useState<RecurringCost[]>([]);
 
+  // Set to true inside `persist` immediately before `writeRecurring` fires
+  // the synchronous 'roas-billing-changed' event; the event listener then
+  // sees it, clears it, and skips the redundant re-read. This breaks the
+  // self-bounce that produced two distinct re-renders per write (state
+  // setter + event-driven re-read of the same data), most visibly when
+  // `persist` was called outside a React event-handler boundary (e.g. from
+  // a Promise callback in the CSV import flow) where React did NOT batch
+  // the two setState calls. Cross-hook re-reads (one-time listener
+  // responding to a recurring write, etc.) are unaffected — only the
+  // hook's OWN self-bounce is suppressed. (WR-03)
+  const selfWritePending = useRef(false);
+
   useEffect(() => {
     setRecurring(readRecurring());
     function onChange() {
+      if (selfWritePending.current) {
+        selfWritePending.current = false;
+        return;
+      }
       setRecurring(readRecurring());
     }
     window.addEventListener('roas-billing-changed', onChange);
@@ -52,6 +68,10 @@ export function useBillingRecurring(): {
   // (WR-01)
   const persist = useCallback((next: RecurringCost[]) => {
     setRecurring(next);
+    // Flag set BEFORE writeRecurring because the event dispatch inside
+    // safeWrite is synchronous — the listener observes the ref on the
+    // same call stack and skips the redundant re-read. (WR-03)
+    selfWritePending.current = true;
     writeRecurring(next); // safeWrite dispatches the event + pushes to cloud
   }, []);
 

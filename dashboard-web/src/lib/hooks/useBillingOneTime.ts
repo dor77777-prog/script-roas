@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { readOneTime, writeOneTime, type OneTimeCost } from '@/lib/billing';
 
 /**
@@ -18,9 +18,19 @@ export function useBillingOneTime(): {
 } {
   const [oneTime, setOneTime] = useState<OneTimeCost[]>([]);
 
+  // Self-bounce suppression — mirrors the same pattern in
+  // useBillingRecurring. See that hook's `selfWritePending` block for the
+  // rationale. Cross-hook re-reads (the recurring hook responding to a
+  // one-time write) are intentionally unaffected. (WR-03)
+  const selfWritePending = useRef(false);
+
   useEffect(() => {
     setOneTime(readOneTime());
     function onChange() {
+      if (selfWritePending.current) {
+        selfWritePending.current = false;
+        return;
+      }
       setOneTime(readOneTime());
     }
     // SAME event as recurring — see hook-level docstring + UI-SPEC.
@@ -34,6 +44,7 @@ export function useBillingOneTime(): {
   // dep array is intentionally empty. (WR-01)
   const persist = useCallback((next: OneTimeCost[]) => {
     setOneTime(next);
+    selfWritePending.current = true;
     writeOneTime(next);
   }, []);
 
