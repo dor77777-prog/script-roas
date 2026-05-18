@@ -8,6 +8,10 @@ export const revalidate = 300;
 export type OrdersAttributionResponse = {
   rows: OrderAttributionRow[];
   lastUpdated: string;
+  /** Present only on the degraded-error path (rows: []). Consumers that
+   *  surface "synced N min ago" should treat the response as data-less when
+   *  this is set, even though rows + lastUpdated still satisfy the type. */
+  error?: string;
 };
 
 export async function GET() {
@@ -25,7 +29,18 @@ export async function GET() {
     const message = err instanceof Error ? err.message : String(err);
     console.error('orders-attribution fetch failed:', message);
     // Degrade gracefully — empty array lets dashboards render without the
-    // deterministic-confidence column instead of breaking.
-    return NextResponse.json({ rows: [], error: message }, { status: 200 });
+    // deterministic-confidence column instead of breaking. lastUpdated is
+    // included so the response shape satisfies the declared type — a
+    // consumer reading `data.lastUpdated` on the error path now gets a
+    // valid ISO timestamp instead of `undefined` (which would crash
+    // downstream Date()/formatDate).
+    return NextResponse.json(
+      {
+        rows: [],
+        lastUpdated: new Date().toISOString(),
+        error: message,
+      } satisfies OrdersAttributionResponse,
+      { status: 200 },
+    );
   }
 }
