@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { Package, Search, X, Check } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
+import { useDrawerEsc } from '@/lib/drawerStack';
 import type { ProductRow } from '@/lib/products';
 import type { ProductsResponse } from '@/app/api/products/route';
 import type { ProductCatalogResponse } from '@/app/api/product-catalog/route';
@@ -97,15 +98,16 @@ export function ProductPickerModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, initial.join('|')]);
 
-  // Esc to close (without saving). Mirrors AdsDrawer/CampaignDrawer pattern.
-  useEffect(() => {
-    if (!open) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose();
-    }
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  // Esc to close (without saving). Route through the shared drawerStack
+  // so when this picker opens on top of CampaignDrawer, a single Esc only
+  // closes the topmost layer (this picker) — not both at once.
+  //
+  // #WR-04 was a regression of WR-01 (commit af602b7): the picker
+  // registered its own window.addEventListener('keydown',...) directly,
+  // so pressing Esc fired BOTH the drawerStack's shared listener (closing
+  // CampaignDrawer) and the picker's own listener (closing itself) in
+  // the same tick.
+  useDrawerEsc(open, onClose);
 
   // Build the picker list from the FULL catalog (so unsold products are
   // visible too), then enrich with sales context (units / revenue) when
