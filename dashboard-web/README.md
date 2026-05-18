@@ -252,6 +252,8 @@ Run `npm run test` to run vitest in CI mode (exits after run). Tests live in `sr
 
 Set `NEXT_PUBLIC_SENTRY_DSN` + `SENTRY_DSN` in `.env.local` to enable client + server error reporting. Without these vars, Sentry is a **silent no-op** (zero overhead, zero warnings in localhost). A global `ErrorBoundary` in `app/layout.tsx` catches React rendering errors and shows a Hebrew RTL fallback UI.
 
+**Privacy — no session replay.** The Sentry client config deliberately does NOT include `replayIntegration`. Session replay would capture DOM mutations, click coordinates, scroll behaviour, and full URL paths (UTM identifiers, store IDs, date ranges) — which in our EU/Canada B2B context is likely PII processing that requires user consent. We don't have a consent UX or privacy-policy copy yet, so replay stays disabled. Error context comes from breadcrumbs + stack traces only. If you re-enable replay later, **also** wire up consent + a documented privacy policy.
+
 ### Cache Config
 
 All API route cache settings live in `src/lib/cacheConfig.ts`. The `cacheControl(key)` helper generates the `Cache-Control` header value. To change a TTL, edit that file — don't touch the `export const revalidate` literals in route handlers directly (they match `CACHE_CONFIG[key].revalidate`).
