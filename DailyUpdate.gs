@@ -395,7 +395,13 @@ function runUpdateForDateForStores_(dateStr, stores) {
   const ilsToCad = getFxRate('ILS', 'CAD', dateStr);
   Logger.log(`FX ILS->CAD on ${dateStr}: ${ilsToCad}`);
 
-  for (const store of stores) {
+  for (let i = 0; i < stores.length; i++) {
+    const store = stores[i];
+    // Mirror runUpdateForDate's inter-store throttle: breathe between stores
+    // so the Sheets API short-window quota has time to recover. Without this,
+    // multi-store backfills (e.g. backfillRangeForStores → 28 store-day runs)
+    // hit the same quota cascade that the daily run was fixing.
+    if (i > 0) Utilities.sleep(1500);
     try {
       updateStoreForDate_(ss, store, dateStr, year, month, day, ilsToCad);
     } catch (e) {
