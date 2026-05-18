@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { readOneTime, writeOneTime, type OneTimeCost } from '@/lib/billing';
 
 /**
@@ -28,10 +28,14 @@ export function useBillingOneTime(): {
     return () => window.removeEventListener('roas-billing-changed', onChange);
   }, []);
 
-  function persist(next: OneTimeCost[]) {
+  // Wrapped in useCallback so the returned setter keeps a stable reference
+  // across renders — mirrors the same pattern in useBillingRecurring.
+  // `setOneTime` is React-stable, `writeOneTime` is module-scoped, so the
+  // dep array is intentionally empty. (WR-01)
+  const persist = useCallback((next: OneTimeCost[]) => {
     setOneTime(next);
     writeOneTime(next);
-  }
+  }, []);
 
   return { oneTime, setOneTime: persist };
 }

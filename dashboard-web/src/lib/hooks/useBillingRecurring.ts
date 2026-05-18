@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { readRecurring, writeRecurring, type RecurringCost } from '@/lib/billing';
 
 /**
@@ -43,10 +43,17 @@ export function useBillingRecurring(): {
     [recurring],
   );
 
-  function persist(next: RecurringCost[]) {
+  // Wrapped in useCallback so the returned setter keeps a stable reference
+  // across renders. `setRecurring` (the raw state setter from useState) is
+  // already stable per React's guarantee, and `writeRecurring` is
+  // module-scoped — so the dep array is intentionally empty. Stable
+  // reference matters for consumers that pass this setter into useMemo
+  // deps, React.memo'd children, or other identity-sensitive sinks.
+  // (WR-01)
+  const persist = useCallback((next: RecurringCost[]) => {
     setRecurring(next);
     writeRecurring(next); // safeWrite dispatches the event + pushes to cloud
-  }
+  }, []);
 
   return { recurring, setRecurring: persist, totalMonthly };
 }
