@@ -137,6 +137,18 @@ function updateStoreForDate_(ss, store, dateStr, year, month, day, ilsToCad) {
     Logger.log(`Ad-level data for ${store.name} ${dateStr} failed: ${e && e.message ? e.message : e}`);
   }
 
+  // טאב <store>-orders-attribution — שורה לכל הזמנה עם classification של
+  // ערוץ הטראפיק (UTM + fbclid + gclid + referrer). מאפשר לדשבורד להבדיל
+  // בין conversions שיש להן click-id אמיתי לבין conversions ש-Meta דיווח
+  // עליהן בלי click (modeled / view-through). נכשל ברך — אם Shopify
+  // חזר 5xx, הרצות אחרות לא נפגעות.
+  try {
+    const attribution = getShopifyOrdersAttribution(store.id, dateStr);
+    writeOrdersAttributionForDay(ss, store.id, dateStr, attribution);
+  } catch (e) {
+    Logger.log(`Orders attribution ${store.name} ${dateStr} failed (non-fatal): ${e && e.message ? e.message : e}`);
+  }
+
   // טאב <store>-products-catalog — קטלוג מוצרים מלא של החנות (לא רק
   // נמכרים). דרוש לתצוגת ה-ProductPickerModal בדשבורד כדי לאפשר שיוך
   // לקמפיינים שמקדמים מוצרים חדשים שעוד לא ביצעו אפילו הזמנה אחת.

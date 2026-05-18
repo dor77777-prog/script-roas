@@ -65,6 +65,10 @@ function adsTabName_(storeId) {
   return `${storeId}-ads`;
 }
 
+function ordersAttributionTabName_(storeId) {
+  return `${storeId}-orders-attribution`;
+}
+
 function pad2_(n) { return n < 10 ? '0' + n : '' + n; }
 
 function monthNameHe_(month) {

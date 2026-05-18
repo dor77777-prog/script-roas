@@ -1444,3 +1444,100 @@ function writeProductCatalogForStoreChunked_(ss, storeId, products) {
   sh.getRange(2, 5, rows.length, 1).setNumberFormat('#,##0.00');
   sh.getRange(2, 9, rows.length, 1).setNumberFormat('yyyy-mm-dd hh:mm');
 }
+
+// ============================================================================
+// טאב {storeId}-orders-attribution. שורה לכל הזמנה ב-Shopify עם classification
+// של מקור הטראפיק (meta-paid / google-paid / direct / organic / etc.) מ-UTM,
+// fbclid, gclid, ו-referring_site. זה מאפשר לדשבורד לדעת *באמת* כמה הזמנות
+// הגיעו מקליקים על מודעות Meta — לא רק להאמין למה ש-Meta מדווח.
+// ============================================================================
+
+const ORDERS_ATTRIBUTION_HEADERS = [
+  'תאריך', 'מזהה הזמנה', 'סכום (CAD)', 'מקור',
+  'UTM Source', 'UTM Medium', 'UTM Campaign', 'UTM Content',
+  'fbclid', 'gclid', 'Referrer'
+];
+
+function ensureOrdersAttributionTab_(ss, storeId) {
+  const tabName = ordersAttributionTabName_(storeId);
+  let sh = ss.getSheetByName(tabName);
+  let justCreated = false;
+  if (!sh) {
+    sh = ss.insertSheet(tabName);
+    sh.setRightToLeft(true);
+    justCreated = true;
+  }
+  if (sh.getLastRow() === 0) {
+    sh.getRange(1, 1, 1, ORDERS_ATTRIBUTION_HEADERS.length)
+      .setValues([ORDERS_ATTRIBUTION_HEADERS])
+      .setFontWeight('bold')
+      .setBackground('#d9d9d9')
+      .setHorizontalAlignment('center');
+    sh.setFrozenRows(1);
+    sh.setColumnWidth(1, 95);   // Date
+    sh.setColumnWidth(2, 130);  // Order ID
+    sh.setColumnWidth(3, 90);   // Total
+    sh.setColumnWidth(4, 110);  // Source
+    sh.setColumnWidth(5, 110);  // UTM Source
+    sh.setColumnWidth(6, 110);  // UTM Medium
+    sh.setColumnWidth(7, 200);  // UTM Campaign
+    sh.setColumnWidth(8, 140);  // UTM Content
+    sh.setColumnWidth(9, 60);   // fbclid
+    sh.setColumnWidth(10, 60);  // gclid
+    sh.setColumnWidth(11, 200); // Referrer
+  }
+  if (justCreated) {
+    try { sh.hideSheet(); } catch (_) {}
+  }
+  return sh;
+}
+
+/**
+ * Idempotent write — rows for `dateStr` are replaced; rows for other days
+ * stay. Same shape as writeCampaignRowsForDay (filter-kept + concat + clear
+ * + single setValues).
+ */
+function writeOrdersAttributionForDay(ss, storeId, dateStr, rows) {
+  const sh = ensureOrdersAttributionTab_(ss, storeId);
+  const lastRow = sh.getLastRow();
+  let keptRows = [];
+  if (lastRow > 1) {
+    const allExisting = sh.getRange(2, 1, lastRow - 1, ORDERS_ATTRIBUTION_HEADERS.length).getValues();
+    keptRows = allExisting.filter(r => {
+      const v = r[0];
+      let key = null;
+      if (v instanceof Date && !isNaN(v.getTime())) {
+        key = Utilities.formatDate(v, TZ, 'yyyy-MM-dd');
+      } else if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
+        key = v;
+      }
+      return key !== dateStr && key !== null;
+    });
+  }
+
+  const newRowsArr = (rows || []).map(r => [
+    parseYMD_(dateStr),
+    r.orderId,
+    round2_(r.totalCad || 0),
+    r.source || '',
+    r.utmSource || '',
+    r.utmMedium || '',
+    r.utmCampaign || '',
+    r.utmContent || '',
+    r.fbclidPresent ? 'TRUE' : '',
+    r.gclidPresent ? 'TRUE' : '',
+    r.referringSite || '',
+  ]);
+
+  const combined = keptRows.concat(newRowsArr);
+
+  if (lastRow > 1) {
+    sh.getRange(2, 1, lastRow - 1, ORDERS_ATTRIBUTION_HEADERS.length).clearContent();
+  }
+  if (combined.length === 0) return;
+
+  sh.getRange(2, 1, combined.length, ORDERS_ATTRIBUTION_HEADERS.length).setValues(combined);
+  sh.getRange(2, 1, combined.length, 1).setNumberFormat('yyyy-mm-dd').setHorizontalAlignment('center');
+  sh.getRange(2, 3, combined.length, 1).setNumberFormat('#,##0.00');
+  sh.getRange(2, 9, combined.length, 2).setHorizontalAlignment('center');
+}

@@ -489,3 +489,168 @@ function getShopifyProductsCatalog(storeId) {
   Logger.log(`Shopify catalog ${storeId}: ${out.length} active products`);
   return out;
 }
+
+/**
+ * שואב את ההזמנות של היום עם **שדות attribution** (landing_site,
+ * referring_site, note_attributes), מסווג כל הזמנה לערוץ המקור שלה
+ * ('meta-paid' / 'google-paid' / 'meta-organic' / etc.), ומחזיר מערך
+ * שמוכן לכתיבה לטאב `{storeId}-orders-attribution`.
+ *
+ * הלוגיקה (לפי סדר עדיפות):
+ *   1. fbclid נוכח ב-landing_site OR ב-note_attributes → 'meta-paid'
+ *      (fbclid נוצר *רק* בקליק על מודעת Meta — proof דטרמיניסטי)
+ *   2. gclid נוכח → 'google-paid' (אותו עיקרון, רק ל-Google)
+ *   3. utm_medium = 'cpc'/'paid'/'paidsocial' + utm_source מזוהה:
+ *      - 'facebook'/'fb'/'instagram'/'ig'/'meta' → 'meta-paid'
+ *      - 'google'/'youtube' → 'google-paid'
+ *   4. utm_source = 'email'/'newsletter'/'klaviyo' → 'email'
+ *   5. referring_site = facebook.com / instagram.com + ללא UTM → 'meta-organic'
+ *   6. referring_site = google.com + ללא UTM → 'google-organic'
+ *   7. utm_source קיים אבל לא מזוהה (TikTok וכו') → 'other-paid'
+ *   8. כלום → 'direct'
+ *
+ * החזרה: שורות עם order_id, total, source, utm fields, fbclid/gclid flags,
+ *         referring_site, ו-utm_campaign (לקישור 1:1 לקמפיין Meta אם
+ *         המפרסם מגדיר את שם הקמפיין כ-utm_campaign).
+ */
+function getShopifyOrdersAttribution(storeId, dateStr) {
+  const domain = requireProp(`${storeId}.shopify.domain`).replace(/^https?:\/\//, '').replace(/\/$/, '');
+  let token = requireProp(`${storeId}.shopify.token`);
+  let bootstrapTried = false;
+
+  const dayStart = `${dateStr}T00:00:00+03:00`;
+  const dayEnd = `${nextDayStr_(dateStr)}T00:00:00+03:00`;
+
+  let url = `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/orders.json` +
+            `?status=any&financial_status=any&limit=250` +
+            `&created_at_min=${encodeURIComponent(dayStart)}` +
+            `&created_at_max=${encodeURIComponent(dayEnd)}` +
+            `&fields=id,current_total_price,financial_status,test,landing_site,referring_site,note_attributes,source_name`;
+
+  const out = [];
+  let safety = 0;
+  while (url && safety < 50) {
+    const res = fetchWithRetry_(url, {
+      method: 'get',
+      headers: { 'X-Shopify-Access-Token': token },
+      muteHttpExceptions: true,
+    });
+    const code = res.getResponseCode();
+    if (code === 429) { Utilities.sleep(2000); safety++; continue; }
+    if (code === 401 && !bootstrapTried) {
+      bootstrapTried = true;
+      const fresh = tryAutoBootstrapShopify_(storeId);
+      if (fresh) { token = fresh; continue; }
+    }
+    if (code !== 200) {
+      throw new Error(`Shopify orders-attribution ${storeId} ${dateStr} failed (${code}): ${res.getContentText()}`);
+    }
+    const body = JSON.parse(res.getContentText());
+    const orders = (body && body.orders) || [];
+    for (const o of orders) {
+      if (o.test) continue;
+      if (o.financial_status === 'voided') continue;
+      const classified = classifyOrderAttribution_(o);
+      out.push({
+        orderId: String(o.id || ''),
+        totalCad: parseFloat(o.current_total_price || 0),
+        source: classified.source,
+        utmSource: classified.utmSource,
+        utmMedium: classified.utmMedium,
+        utmCampaign: classified.utmCampaign,
+        utmContent: classified.utmContent,
+        fbclidPresent: classified.fbclidPresent,
+        gclidPresent: classified.gclidPresent,
+        referringSite: classified.referringSite,
+      });
+    }
+    const link = res.getHeaders()['Link'] || res.getHeaders()['link'] || '';
+    const m = link.match(/<([^>]+)>;\s*rel="next"/);
+    url = m ? m[1] : null;
+    safety++;
+  }
+  if (safety >= 50) {
+    Logger.log(`WARNING: hit pagination safety cap for Shopify orders-attribution ${storeId} ${dateStr} (${out.length} orders)`);
+  }
+  Logger.log(`Shopify orders-attribution ${storeId} ${dateStr}: ${out.length} orders classified`);
+  return out;
+}
+
+/**
+ * Internal: classify a single Shopify order object into its attribution
+ * source. Pulls UTM/fbclid/gclid from landing_site, falls back to
+ * note_attributes (some apps stash _fbc/_fbp/fbclid there from the Pixel),
+ * and finally to referring_site for organic-source detection.
+ *
+ * Returns an object the caller embeds into the order row.
+ */
+function classifyOrderAttribution_(order) {
+  const landing = String(order.landing_site || '');
+  const ref = String(order.referring_site || '').toLowerCase();
+  const noteAttrs = order.note_attributes || [];
+
+  // Parse UTM-like params from landing URL (which is the full URL incl. ?...)
+  const params = {};
+  const qIdx = landing.indexOf('?');
+  if (qIdx >= 0) {
+    const qs = landing.slice(qIdx + 1);
+    for (const pair of qs.split('&')) {
+      const eq = pair.indexOf('=');
+      if (eq < 0) continue;
+      const k = decodeURIComponent(pair.slice(0, eq)).toLowerCase();
+      const v = decodeURIComponent(pair.slice(eq + 1));
+      params[k] = v;
+    }
+  }
+  // Some Shopify integrations stash click IDs in note_attributes — check there too.
+  for (const na of noteAttrs) {
+    const name = String(na.name || '').toLowerCase();
+    if (!name) continue;
+    if (!params[name]) params[name] = String(na.value || '');
+  }
+
+  const utmSource = params['utm_source'] || '';
+  const utmMedium = params['utm_medium'] || '';
+  const utmCampaign = params['utm_campaign'] || '';
+  const utmContent = params['utm_content'] || '';
+  const fbclid = !!(params['fbclid'] || params['_fbc']);
+  const gclid = !!params['gclid'];
+
+  // Strongest signal first: click-IDs.
+  let source;
+  if (fbclid) {
+    source = 'meta-paid';
+  } else if (gclid) {
+    source = 'google-paid';
+  } else if (/cpc|paid|paidsocial|social/i.test(utmMedium)) {
+    if (/^(facebook|fb|meta|instagram|ig)$/i.test(utmSource)) source = 'meta-paid';
+    else if (/^(google|youtube)$/i.test(utmSource)) source = 'google-paid';
+    else source = 'other-paid';
+  } else if (/^(email|newsletter|klaviyo|mailchimp)$/i.test(utmSource)) {
+    source = 'email';
+  } else if (utmSource) {
+    source = 'other-paid'; // tagged but unrecognised (TikTok / influencer / etc.)
+  } else if (/(facebook|fb|instagram|ig)\.com/.test(ref)) {
+    source = 'meta-organic';
+  } else if (/(google|youtube)\.com/.test(ref)) {
+    source = 'google-organic';
+  } else if (ref) {
+    source = 'other-referral';
+  } else {
+    source = 'direct';
+  }
+
+  // Keep referring site short for the sheet.
+  const refTrimmed = ref.replace(/^https?:\/\//, '').replace(/\/$/, '').slice(0, 120);
+
+  return {
+    source,
+    utmSource,
+    utmMedium,
+    utmCampaign,
+    utmContent,
+    fbclidPresent: fbclid,
+    gclidPresent: gclid,
+    referringSite: refTrimmed,
+  };
+}
