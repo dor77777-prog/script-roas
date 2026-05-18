@@ -258,7 +258,23 @@ export function analyzeAttribution(
   const reasons: string[] = [];
   let recommendation = '';
 
-  if (deterministicOrders === 0 && campaign.metaClaim > 0) {
+  if (campaign.metaClaim === 0 && deterministicOrders === 0) {
+    // No conversions on either side — common for brand-awareness / reach
+    // campaigns, paused campaigns with no activity in the range, or genuinely
+    // non-converting campaigns. "Meta מנפח" makes zero sense here; surface
+    // honestly as "nothing to analyse" so the operator doesn't see a false
+    // 0/100 "untrusted" badge on every zero-conversion campaign.
+    trust = { level: 'unknown', label: 'אין המרות', score: 0 };
+    if (campaign.spend > 0) {
+      reasons.push(`הוצאה CAD ${campaign.spend.toFixed(0)} ללא המרות מ-Meta או מ-Shopify`);
+      recommendation =
+        'אין המרות לניתוח. אם זה קמפיין brand-awareness/reach — סבבה. ' +
+        'אחרת בדוק שה-Pixel/CAPI עובדים והקמפיין מכוון להמרות.';
+    } else {
+      reasons.push('אין הוצאה ואין המרות בטווח הזה');
+      recommendation = 'הקמפיין לא רץ בטווח הזה — אין מה לנתח.';
+    }
+  } else if (deterministicOrders === 0 && campaign.metaClaim > 0) {
     trust = { level: 'unknown', label: 'לא ניתן לקבוע', score: 30 };
     reasons.push(
       'אף הזמנה לא תויגה לקמפיין הזה — סביר ש-utm_campaign לא מוגדר ב-URL Parameters ב-Meta Ads Manager',
@@ -620,7 +636,19 @@ function buildAnalysis(opts: {
   let trust: AttributionTrust;
   const reasons: string[] = [];
   let recommendation = '';
-  if (deterministicOrders === 0 && metaClaim > 0) {
+  if (metaClaim === 0 && deterministicOrders === 0) {
+    // Mirrors the campaign-level guard in analyzeAttribution(). When neither
+    // Meta nor Shopify saw a conversion, there's nothing to assess — don't
+    // brand the row as "untrusted" with a 0/100 score.
+    trust = { level: 'unknown', label: 'אין המרות', score: 0 };
+    if (spend > 0) {
+      reasons.push(`הוצאה CAD ${spend.toFixed(0)} ללא המרות מ-Meta או מ-Shopify`);
+      recommendation = `אין המרות לניתוח. אם זה brand/reach — סבבה. אחרת בדוק שה-${opts.label === 'ad' ? 'מודעה' : opts.label === 'ad-set' ? 'ad-set' : 'קמפיין'} מכוון להמרות וה-Pixel/CAPI עובדים.`;
+    } else {
+      reasons.push('אין הוצאה ואין המרות בטווח הזה');
+      recommendation = `ה-${opts.label === 'ad' ? 'מודעה' : opts.label === 'ad-set' ? 'ad-set' : 'קמפיין'} לא רץ בטווח הזה — אין מה לנתח.`;
+    }
+  } else if (deterministicOrders === 0 && metaClaim > 0) {
     trust = { level: 'unknown', label: 'לא ניתן לקבוע', score: 30 };
     reasons.push('אף הזמנה לא תויגה — סביר שחסר utm parameter רלוונטי');
     recommendation = advice.misconfigured;
