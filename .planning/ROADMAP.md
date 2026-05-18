@@ -95,7 +95,7 @@ Plans:
   6. CampaignDrawer's 3 panels (attribution / reconciliation / channel-breakdown) all still render
 
 Plans:
-- [ ] 04-PLAN.md — single phase plan, 10 tasks (T-A..T-J) across 3 components: CampaignsTable (3 tasks: useCampaignTrueRevenue + useCampaignAttribution + CampaignsTableRow), CampaignDrawer (4 tasks: AttributionAnalysisPanel + MetaShopifyReconciliation + ProductChannelBreakdown + AdSetTable), BillingSettings (3 tasks: useBillingRecurring + useBillingOneTime + BillingCsvImport)
+- [ ] 04-01-PLAN.md — single phase plan, 12 tasks (T-A..T-L) + 3 human-verify checkpoints. CampaignsTable group (T-A useCampaignTrueRevenue + T-B useCampaignAttribution + T-C CampaignsTableRow + T-D shell shrink). CampaignDrawer group (T-E AttributionAnalysisPanel + T-F MetaShopifyReconciliation incl. pearson exports + T-G ProductChannelBreakdown + T-H AdSetTable + T-I shell shrink). BillingSettings group (T-J useBillingRecurring + useBillingOneTime + T-K BillingCsvImport + T-L shell shrink). Sequential execution per D-06; per-task atomic commits per D-07.
 
 ### Phase 5: Scalability
 **Goal**: Prepare the system for 5x growth (more stores, more orders, multi-year history) without hitting Apps Script timeouts or Sheets cell caps.
