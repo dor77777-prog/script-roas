@@ -525,7 +525,11 @@ function getShopifyOrdersAttribution(storeId, dateStr) {
             `?status=any&financial_status=any&limit=250` +
             `&created_at_min=${encodeURIComponent(dayStart)}` +
             `&created_at_max=${encodeURIComponent(dayEnd)}` +
-            `&fields=id,current_total_price,financial_status,test,landing_site,referring_site,note_attributes,source_name`;
+            // Phase 1: `line_items` added so each order arrives with per-line
+            // product_id / quantity / price. The dashboard's analyzer needs
+            // this to compute "what fraction of orders containing mapped
+            // products came from Facebook?" — see SheetBuilder.gs col N.
+            `&fields=id,current_total_price,financial_status,test,landing_site,referring_site,note_attributes,source_name,line_items`;
 
   const out = [];
   let safety = 0;
@@ -551,9 +555,10 @@ function getShopifyOrdersAttribution(storeId, dateStr) {
       if (o.test) continue;
       if (o.financial_status === 'voided') continue;
       const classified = classifyOrderAttribution_(o);
+      const totalCad = parseFloat(o.current_total_price || 0);
       out.push({
         orderId: String(o.id || ''),
-        totalCad: parseFloat(o.current_total_price || 0),
+        totalCad: totalCad,
         source: classified.source,
         utmSource: classified.utmSource,
         utmMedium: classified.utmMedium,
@@ -568,6 +573,11 @@ function getShopifyOrdersAttribution(storeId, dateStr) {
         fbclidPresent: classified.fbclidPresent,
         gclidPresent: classified.gclidPresent,
         referringSite: classified.referringSite,
+        // Phase 1: per-line-item proportional CAD breakdown. The dashboard
+        // serializes this as JSON into col N. Items with null product_id
+        // (custom items, deleted products) are filtered out inside the
+        // helper — they can never match a campaign's mapped products.
+        lineItems: computeLineItemsCad_(o, totalCad),
       });
     }
     const link = res.getHeaders()['Link'] || res.getHeaders()['link'] || '';
@@ -579,6 +589,62 @@ function getShopifyOrdersAttribution(storeId, dateStr) {
     Logger.log(`WARNING: hit pagination safety cap for Shopify orders-attribution ${storeId} ${dateStr} (${out.length} orders)`);
   }
   Logger.log(`Shopify orders-attribution ${storeId} ${dateStr}: ${out.length} orders classified`);
+  return out;
+}
+
+/**
+ * Phase 1: compute the per-line-item CAD breakdown for a single order.
+ *
+ * Returns an array of `{p, u, r}` objects — compact key names keep the
+ * downstream JSON cell within Sheets' 50K char limit even for big orders.
+ *
+ * All 3 stores are CAD-native (Shopify.gs:472 — Shopify returns prices in
+ * the shop's currency, which is CAD here), so `li.price` is already in
+ * CAD. The proportional split is purely to allocate order-level
+ * adjustments (tax, shipping, discounts) back to line items so the
+ * lineItems[].r sums to totalCad.
+ *
+ * Three defensive guards (RESEARCH.md Pitfalls 1, 2, A4):
+ *   1. Skip items where `product_id` is null/empty (custom items, deleted
+ *      products) — they can never match a campaign's mapped products
+ *      anyway, so storing them just wastes Sheets cell space.
+ *   2. If `sum(price × qty) === 0` (rare: a free-gift / 100%-discount
+ *      order), spread totalCad equally across items instead of dividing
+ *      by zero (which would produce NaN → cell would render as #NUM!).
+ *      Log a warning so the operator can see this in Executions.
+ *   3. round2_ each lineCad so the JSON stays compact and free of float
+ *      noise.
+ */
+function computeLineItemsCad_(order, totalCad) {
+  const items = (order && order.line_items) || [];
+  if (items.length === 0) return [];
+
+  const subtotal = items.reduce(function (s, li) {
+    return s + (parseFloat(li.price || 0) * parseInt(li.quantity || 0, 10));
+  }, 0);
+
+  const useFlatSpread = !(subtotal > 0);
+  if (useFlatSpread) {
+    // Pitfall 2: guard divide-by-zero, log so operators can see it in
+    // Executions if it ever recurs.
+    Logger.log('computeLineItemsCad_: subtotal=0 for order ' + (order && order.id) + ', spreading equally');
+  }
+
+  const out = [];
+  for (var i = 0; i < items.length; i++) {
+    const li = items[i];
+    const pid = li && li.product_id != null ? String(li.product_id) : '';
+    if (!pid) continue; // Pitfall 1: skip custom / deleted-product items.
+    const qty = parseInt(li.quantity || 0, 10);
+    const lineGross = parseFloat(li.price || 0) * qty;
+    var lineCad;
+    if (useFlatSpread) {
+      lineCad = items.length > 0 ? (totalCad / items.length) : 0;
+    } else {
+      lineCad = (lineGross / subtotal) * totalCad;
+    }
+    out.push({ p: pid, u: qty, r: round2_(lineCad) });
+  }
   return out;
 }
 

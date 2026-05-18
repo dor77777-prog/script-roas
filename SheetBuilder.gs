@@ -1463,11 +1463,16 @@ function writeProductCatalogForStoreChunked_(ss, storeId, products) {
 // were extended with utm_id={{campaign.id}} + utm_term={{adset.id}}. These
 // give us ID-based matching (strictly stronger than utm_campaign by name)
 // because IDs are immutable across renames.
+// Col 14 (Phase 1) carries per-order line items as compact JSON
+// (`[{"p":productId,"u":units,"r":revenueCad}, ...]`) so the dashboard can
+// answer channel-level questions about mapped products independent of
+// utm_id matching. See computeLineItemsCad_ in Shopify.gs.
 const ORDERS_ATTRIBUTION_HEADERS = [
   'תאריך', 'מזהה הזמנה', 'סכום (CAD)', 'מקור',
   'UTM Source', 'UTM Medium', 'UTM Campaign', 'UTM Content',
   'fbclid', 'gclid', 'Referrer',
-  'UTM ID', 'UTM Term'
+  'UTM ID', 'UTM Term',
+  'Line Items (JSON)'
 ];
 
 function ensureOrdersAttributionTab_(ss, storeId) {
@@ -1499,6 +1504,7 @@ function ensureOrdersAttributionTab_(ss, storeId) {
     sh.setColumnWidth(11, 200); // Referrer
     sh.setColumnWidth(12, 150); // UTM ID
     sh.setColumnWidth(13, 150); // UTM Term
+    sh.setColumnWidth(14, 320); // Line Items (JSON) — wider, JSON cells are long
   } else {
     // Idempotent migration: existing tabs created before the utm_id /
     // utm_term columns get the new headers added without losing data.
@@ -1517,6 +1523,20 @@ function ensureOrdersAttributionTab_(ss, storeId) {
       }
       sh.setColumnWidth(12, 150);
       sh.setColumnWidth(13, 150);
+    }
+    // Phase 1 migration: add col 14 = Line Items (JSON). Append (NOT
+    // replace) the existing lastCol<13 block — a tab that's been completely
+    // untouched needs BOTH migrations applied, so they coexist via
+    // independent defensive checks.
+    if (lastCol < 14) {
+      const cell = sh.getRange(1, 14);
+      if (!cell.getValue()) {
+        cell.setValue('Line Items (JSON)')
+          .setFontWeight('bold')
+          .setBackground('#d9d9d9')
+          .setHorizontalAlignment('center');
+      }
+      sh.setColumnWidth(14, 320);
     }
   }
   if (justCreated) {
@@ -1564,6 +1584,11 @@ function writeOrdersAttributionForDay(ss, storeId, dateStr, rows) {
     r.referringSite || '',
     r.utmId || '',
     r.utmTerm || '',
+    // Phase 1 col N: JSON.stringify on `[]` gives '[]' which is more
+    // self-documenting than '' and both decode to [] in the dashboard
+    // parser. Always 14 cells per row regardless of line-item content
+    // (Pitfall 5 — Sheets `setValues` is strict about rectangle width).
+    JSON.stringify(r.lineItems || []),
   ]);
 
   const combined = keptRows.concat(newRowsArr);
@@ -1578,6 +1603,10 @@ function writeOrdersAttributionForDay(ss, storeId, dateStr, rows) {
   // 17-19 digits — outside double precision representation as a number.
   sh.getRange(2, 2, combined.length, 1).setNumberFormat('@');   // Order ID
   sh.getRange(2, 12, combined.length, 2).setNumberFormat('@');  // UTM ID + UTM Term
+  // Phase 1: col N carries JSON strings. Force text format so Sheets
+  // doesn't try to interpret '[{...}]' as some other type and corrupt the
+  // payload on round-trip.
+  sh.getRange(2, 14, combined.length, 1).setNumberFormat('@');  // Line Items (JSON)
 
   sh.getRange(2, 1, combined.length, ORDERS_ATTRIBUTION_HEADERS.length).setValues(combined);
   sh.getRange(2, 1, combined.length, 1).setNumberFormat('yyyy-mm-dd').setHorizontalAlignment('center');
