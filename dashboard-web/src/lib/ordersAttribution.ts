@@ -184,10 +184,10 @@ export async function fetchOrdersAttribution(): Promise<OrderAttributionRow[]> {
   const sheets = google.sheets({ version: 'v4', auth });
   const spreadsheetId = getSpreadsheetId();
 
-  // Range extended A:M to include the new utm_id + utm_term columns.
-  // Older tabs without cols 12-13 return undefined for those positions,
-  // which the parser coerces to '' so nothing breaks.
-  const ranges = STORE_TAB_CONFIG.map(s => `${s.id}-orders-attribution!A2:M100000`);
+  // Range extended A:N to include the new line-items JSON column (Phase 1).
+  // Older tabs without cols 12-14 return undefined for those positions —
+  // strings coerce to '' and parseLineItems returns [] so nothing breaks.
+  const ranges = STORE_TAB_CONFIG.map(s => `${s.id}-orders-attribution!A2:N100000`);
   let res;
   try {
     res = await sheets.spreadsheets.values.batchGet({
@@ -230,10 +230,7 @@ export async function fetchOrdersAttribution(): Promise<OrderAttributionRow[]> {
         referringSite: String(row[10] ?? '').trim(),
         utmId: String(row[11] ?? '').trim(),
         utmTerm: String(row[12] ?? '').trim(),
-        // T-01: type now requires lineItems. Default to [] so the build
-        // stays green; T-02 swaps the range to A2:N100000 and wires
-        // parseLineItems(row[13]) here.
-        lineItems: [],
+        lineItems: parseLineItems(row[13]),
       });
     }
   }
