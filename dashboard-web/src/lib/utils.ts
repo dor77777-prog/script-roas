@@ -35,6 +35,11 @@ export function formatPct(n: number, sign = false): string {
   return sign && n > 0 ? '+' + fmt : fmt;
 }
 
+// TODO(phase-5): wire safeDecode() into useSearchParams() consumers for UTM
+// param surfaces (CampaignDrawer URL params, future deep-link routes,
+// landing-URL manual-spend rows). Until then this is preemptive infrastructure
+// — keep the tests green so the contract doesn't drift before the first
+// caller arrives. (IN-07)
 /**
  * Try/catch wrapper around `decodeURIComponent`. Returns the decoded
  * string on success, or the input unchanged on failure. Use anywhere a
