@@ -54,14 +54,22 @@ describe('detectOutlierDays', () => {
   // Z-score threshold at 2.5σ
   // ----------------------------------------------------------------
 
-  it('does not flag a day at ~1.5σ above baseline (below 2.5σ threshold)', () => {
-    // Baseline: 13 days of 100. Mean=100, stdDev=0 → actually uniform → skip
-    // Use varied baseline so stdDev != 0
+  it('does not flag a day at ~1.5σ above the full-series baseline (still below 2.5σ vs trailing window)', () => {
+    // NOTE on narrative (IN-02): we pre-compute `mean`/`stdDev` over the FULL
+    // 13-value base series for convenience here, but detectOutlierDays uses
+    // the TRAILING window (last LOOKBACK values, not the full series) to
+    // compute its z-score. With sorted.length=14 and adaptive LOOKBACK=7,
+    // the trail is 7 of the 13 base values — a different mean/stdDev. The
+    // test still passes because 1.5σ-against-full-series happens to also be
+    // < 2.5σ-against-trailing-window, but the literal "1.5σ" in the
+    // variable name describes our setup, NOT the function's internal stat.
+    // Don't infer trail-statistic equality from this test.
     const baseValues = [80, 90, 100, 110, 120, 80, 90, 100, 110, 120, 80, 90, 100];
     const mean = baseValues.reduce((s, v) => s + v, 0) / baseValues.length;
     const variance = baseValues.reduce((s, v) => s + (v - mean) ** 2, 0) / baseValues.length;
     const stdDev = Math.sqrt(variance);
-    // A value ~1.5σ above mean (should not be flagged)
+    // A value ~1.5σ above full-series mean (still well below the 2.5σ gate
+    // the function applies against its trailing window).
     const mildValue = Math.round(mean + 1.5 * stdDev);
 
     const series = [
