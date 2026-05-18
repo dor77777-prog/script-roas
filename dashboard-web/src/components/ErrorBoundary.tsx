@@ -36,8 +36,16 @@ export class ErrorBoundary extends Component<Props, State> {
             <p className="text-sm text-text-secondary">
               הדשבורד נתקל בשגיאה בלתי צפויה. ניתן לרענן את הדף או לנסות שוב.
             </p>
+            {/* In development we render the raw message to aid local debugging.
+              * In production we show a stable Hebrew message — raw error.message
+              * can contain server paths (e.g. ENOENT '.env.production.local'),
+              * source-file names, and internal call sites that leak implementation
+              * details into screenshots / support tickets. React's text-escape
+              * protects against XSS but does NOT prevent information disclosure. */}
             <p className="text-[11px] text-text-muted font-mono break-all">
-              {this.state.error?.message ?? 'Unknown error'}
+              {process.env.NODE_ENV === 'development'
+                ? (this.state.error?.message ?? 'Unknown error')
+                : 'שגיאה פנימית. נסה לרענן את הדף.'}
             </p>
             <div className="flex gap-2">
               <button
