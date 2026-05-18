@@ -18,7 +18,7 @@
  * defensible quantitative breakdown.
  */
 
-import type { OrderAttributionRow } from './ordersAttribution';
+import type { OrderAttributionRow, OrderSource } from './ordersAttribution';
 
 export type AttributionAnalysis = {
   /** Sum of order totals where the order is provably from this campaign. */
@@ -742,5 +742,137 @@ function buildAnalysis(opts: {
     roasInterval,
     windowStability,
     outlierDays,
+  };
+}
+
+// ============================================================================
+// Channel-level product attribution (Phase 1, added 2026-05-18)
+// ============================================================================
+//
+// Third sibling alongside analyzeAttributionForAdSet / analyzeAttributionForAd
+// but with a deliberately different shape — see CONTEXT/PATTERNS.md §4d:
+// this analyzer is PURE source-grouping (orders bucketed by source label),
+// it does NOT compute coverage / trust / Bayesian. Those concepts apply to
+// click-id-vs-Meta-claim reconciliation, which is not what we're measuring
+// here.
+//
+// The question this analyzer answers: "of the orders containing this
+// campaign's mapped products in the period, what fraction came from a
+// Facebook surface (paid OR organic OR any fbclid)?" — independent of
+// utm_id matching. The signal complements the existing per-campaign trust
+// chip; both render side-by-side in CampaignDrawer.
+
+export type ProductChannelBreakdown = {
+  /** Orders containing AT LEAST ONE of the mapped products in the period.
+   *  Each order is counted ONCE even if it contains multiple mapped
+   *  products. */
+  totalOrders: number;
+  /** Sum of mapped-product revenueCad across all matched orders. An order
+   *  with two mapped products contributes both their proportional shares. */
+  totalRevenue: number;
+  /** Per-OrderSource breakdown. Empty-string source is lumped into
+   *  'direct' (RESEARCH.md Open Question 1) so the bucket count is bounded
+   *  by the OrderSource union plus 'direct'. Missing keys mean zero — the
+   *  caller should default-coalesce when reading. */
+  bySource: Partial<Record<OrderSource | 'direct', { orders: number; revenue: number; units: number }>>;
+  /** Orders qualifying as "Facebook" by the locked CONTEXT predicate:
+   *  source ∈ {meta-paid, meta-organic} OR fbclidPresent === true. */
+  facebookOrders: number;
+  facebookRevenue: number;
+  /** facebookOrders / totalOrders. 0 when totalOrders === 0 — never NaN
+   *  (RESEARCH.md Pitfall 3). The caller is still responsible for the
+   *  ≥3 orders gate before rendering. */
+  facebookShare: number;
+};
+
+/**
+ * Per-product channel breakdown. For the given productIds (a campaign's
+ * mapped products), find every order in the date+store window that
+ * contains AT LEAST one of those products, then group those orders by
+ * source. Returns an explicit-zero `ProductChannelBreakdown` (NOT null)
+ * when input is unusable — empty productIds or empty orders — so the
+ * caller's threshold gate (≥3 orders) can read `breakdown.totalOrders`
+ * without a null-check.
+ *
+ * Pure function — no side effects, no IO. Safe to memoize on inputs.
+ */
+export function analyzeProductChannel(opts: {
+  productIds: string[];
+  orders: OrderAttributionRow[];
+  storeId: string;
+  dateFrom: string;
+  dateTo: string;
+}): ProductChannelBreakdown {
+  const { productIds, orders, storeId, dateFrom, dateTo } = opts;
+  const empty: ProductChannelBreakdown = {
+    totalOrders: 0,
+    totalRevenue: 0,
+    bySource: {},
+    facebookOrders: 0,
+    facebookRevenue: 0,
+    facebookShare: 0,
+  };
+  if (!productIds || productIds.length === 0) return empty;
+  if (!orders || orders.length === 0) return empty;
+
+  const wantedIds = new Set(productIds);
+
+  let totalOrders = 0;
+  let totalRevenue = 0;
+  let facebookOrders = 0;
+  let facebookRevenue = 0;
+  const bySource: ProductChannelBreakdown['bySource'] = {};
+
+  for (const o of orders) {
+    // Date + store window (mirrors analyzeAttributionForAdSet:542-546).
+    if (o.date < dateFrom || o.date > dateTo) continue;
+    if (o.storeId !== storeId) continue;
+    if (!o.lineItems || o.lineItems.length === 0) continue;
+
+    // Aggregate the order's mapped-product contribution. An order with
+    // two mapped products counts ONCE but sums both their revenues.
+    let orderMappedRevenue = 0;
+    let orderMappedUnits = 0;
+    let hitMapped = false;
+    for (const li of o.lineItems) {
+      if (!wantedIds.has(li.productId)) continue;
+      hitMapped = true;
+      orderMappedRevenue += li.revenueCad;
+      orderMappedUnits += li.units;
+    }
+    if (!hitMapped) continue;
+
+    totalOrders++;
+    totalRevenue += orderMappedRevenue;
+
+    // Bucket by raw source label, lumping empty-string source into
+    // 'direct' so the UI can render a clean 4-segment Facebook/Google/
+    // Direct/Other bar without an extra "unknown" segment.
+    const sourceKey: OrderSource | 'direct' = (o.source || 'direct') as OrderSource | 'direct';
+    const bucket = bySource[sourceKey] ?? { orders: 0, revenue: 0, units: 0 };
+    bucket.orders++;
+    bucket.revenue += orderMappedRevenue;
+    bucket.units += orderMappedUnits;
+    bySource[sourceKey] = bucket;
+
+    // Facebook (broad) per CONTEXT locked criteria — do NOT extend.
+    const isFacebook =
+      o.source === 'meta-paid' ||
+      o.source === 'meta-organic' ||
+      o.fbclidPresent === true;
+    if (isFacebook) {
+      facebookOrders++;
+      facebookRevenue += orderMappedRevenue;
+    }
+  }
+
+  return {
+    totalOrders,
+    totalRevenue,
+    bySource,
+    facebookOrders,
+    facebookRevenue,
+    // Guard divide-by-zero (RESEARCH.md Pitfall 3) — zero, never NaN.
+    facebookShare: totalOrders > 0 ? facebookOrders / totalOrders : 0,
   };
 }
