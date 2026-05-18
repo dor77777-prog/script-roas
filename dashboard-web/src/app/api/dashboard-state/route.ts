@@ -4,6 +4,9 @@ import {
   isAllowedStateKey,
   upsertDashboardStateKey,
 } from '@/lib/sheets';
+import { cacheControl } from '@/lib/cacheConfig';
+
+export const revalidate = 10; // matches CACHE_CONFIG.dashboardState.revalidate; literal required by Next.js
 
 // Route handler — dynamic by default (no static generation). We rely on the
 // explicit Cache-Control header below for short CDN dedupe within the polling
@@ -43,7 +46,7 @@ export async function GET() {
         headers: {
           // Short s-maxage so concurrent partners pick up edits quickly. SWR
           // will dedupe in-browser; this just lets the CDN coalesce bursts.
-          'Cache-Control': 'public, s-maxage=10, stale-while-revalidate=60',
+          'Cache-Control': cacheControl('dashboardState'),
         },
       },
     );
