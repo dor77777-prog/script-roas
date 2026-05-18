@@ -357,7 +357,7 @@ export function AdsDrawer({
                   clicks columns make the table wider than the panel. */}
               <div className="rounded-xl border border-borderSubtle overflow-x-auto">
                 <table className="w-full text-xs sm:text-sm min-w-[720px]">
-                  <thead className="bg-surfaceMuted/60">
+                  <thead className="bg-surfaceMuted/60 sticky top-0 z-10">
                     <tr className="text-text-secondary">
                       <th className="px-2 py-2 w-[36px]" aria-label="סימון" />
                       <AdSortHeader label="מודעה"     col="name"        sortKey={sortKey} dir={sortDir} onClick={handleSort} align="start"  />

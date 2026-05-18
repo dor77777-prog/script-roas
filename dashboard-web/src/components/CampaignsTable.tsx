@@ -1015,7 +1015,11 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         <>
           <div className="overflow-x-auto">
             <table className="w-full text-xs sm:text-sm min-w-[1340px]">
-              <thead>
+              {/* Sticky thead: column titles stay pinned to the top of the
+                  scroll context while the user scans through long campaign
+                  lists. `top-0` sticks at the top of the nearest scrolling
+                  ancestor; `bg-surface` paints over rows underneath. */}
+              <thead className="sticky top-0 z-10 bg-surface">
                 <tr className="text-text-secondary border-b border-borderSubtle bg-surfaceMuted/40">
                   {/* Per-row optimization toggle. No label — the leading
                       circle/check icon is self-explanatory and a label would

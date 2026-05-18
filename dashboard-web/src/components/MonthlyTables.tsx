@@ -205,7 +205,7 @@ function MonthBlockPerStore({
       {open && (
         <div className="overflow-x-auto">
           <table className="w-full text-xs sm:text-sm min-w-[500px]">
-            <thead className="bg-surfaceMuted">
+            <thead className="bg-surfaceMuted sticky top-0 z-10">
               <tr className="text-text-secondary">
                 <th className="px-3 py-2 text-start font-medium">תאריך</th>
                 {hasGa && <th className="px-3 py-2 text-end font-medium">פייסבוק</th>}
@@ -296,7 +296,7 @@ function MonthBlockSummary({
       {open && (
         <div className="overflow-x-auto">
           <table className="w-full text-xs sm:text-sm min-w-[500px]">
-            <thead className="bg-surfaceMuted">
+            <thead className="bg-surfaceMuted sticky top-0 z-10">
               <tr className="text-text-secondary">
                 <th className="px-3 py-2 text-start font-medium">תאריך</th>
                 <th className="px-3 py-2 text-end font-medium">יצא סה&quot;כ</th>
