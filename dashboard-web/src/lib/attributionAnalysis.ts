@@ -105,16 +105,22 @@ export function orderMatchesCampaign(
   if (order.storeId !== campaign.storeId) return false;
   if (campaign.platform !== 'Meta') return false;
 
-  // Tier 1 — ID match (strongest, immune to renames + special chars).
-  if (campaign.campaignId && order.utmId) {
-    if (order.utmId.trim() === campaign.campaignId.trim()) return true;
+  // Tier 1 — utm_id is authoritative when present on the order.
+  // If campaignId is configured AND the IDs match, accept.
+  // If campaignId mismatches or campaign.campaignId is undefined,
+  // DO NOT fall through — utm_id is the trusted signal on this order,
+  // and falling back to name would mis-attribute to namesake campaigns
+  // (e.g. duplicated campaigns "Summer Sale" vs "Summer Sale - Retargeting"
+  // sharing a name across stores/accounts).
+  if (order.utmId) {
+    return !!campaign.campaignId
+      && order.utmId.trim() === campaign.campaignId.trim();
   }
 
-  // Tier 2 — name match (fallback).
+  // Tier 2 — utm_id absent → fall back to utm_campaign name match.
   if (order.utmCampaign) {
-    const a = order.utmCampaign.trim().toLowerCase();
-    const b = campaign.campaignName.trim().toLowerCase();
-    if (a === b) return true;
+    return order.utmCampaign.trim().toLowerCase()
+         === campaign.campaignName.trim().toLowerCase();
   }
 
   return false;
