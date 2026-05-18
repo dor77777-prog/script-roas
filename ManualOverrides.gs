@@ -277,3 +277,5 @@ function openManualSpendTab() {
     SpreadsheetApp.getUi().ButtonSet.OK,
   );
 }
+
+// CI/CD validation — Phase 3 deploy-gs workflow smoke test
