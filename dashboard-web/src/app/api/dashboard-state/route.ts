@@ -7,7 +7,7 @@ import {
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
 
-export const revalidate = 10; // matches CACHE_CONFIG.dashboardState.revalidate; literal required by Next.js
+export const revalidate = 30; // matches CACHE_CONFIG.dashboardState.revalidate; literal required by Next.js
 
 // Route handler — dynamic by default (no static generation). We rely on the
 // explicit Cache-Control header below for short CDN dedupe within the polling
