@@ -282,6 +282,37 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
     return out;
   }, [rows]);
 
+  // Per-ad-set attribution analysis. Pre-computes once per orders/rows/range
+  // change instead of inside the row IIFE on every render — was walking the
+  // full orders array per cell × per render before. (IN5-01)
+  const attributionByAdSet = useMemo(() => {
+    const out = new Map<string, ReturnType<typeof analyzeAttributionForAdSet>>();
+    if (!summary || summary.platform !== 'Meta') return out;
+    const ordersRows = ordersAttrData?.rows ?? [];
+    if (ordersRows.length === 0 || rows.length === 0) return out;
+    const first = rows[0];
+    const dateFrom = rows.reduce((min, r) => (r.date < min ? r.date : min), first.date);
+    const dateTo = rows.reduce((max, r) => (r.date > max ? r.date : max), first.date);
+    for (const a of summary.adSets) {
+      const key = a.id || a.name || '(אחר)';
+      out.set(key, analyzeAttributionForAdSet(
+        {
+          adSetId: a.id,
+          adSetName: a.name,
+          storeId: a.storeId,
+          platform: a.platform,
+          metaClaim: a.value,
+          spend: a.spend,
+        },
+        ordersRows,
+        dateFrom,
+        dateTo,
+        dailyMetaByAdSet.get(key) ?? [],
+      ));
+    }
+    return out;
+  }, [summary, ordersAttrData, rows, dailyMetaByAdSet]);
+
   // Re-sort ad-sets per user choice. Computed outside the `if (!open || !summary)`
   // guard would be wrong because hooks must run unconditionally — but useMemo
   // is already called above inside the summary computation. Sorting here is a
@@ -1034,23 +1065,10 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts }: 
                           {/* Deterministic ROAS per ad-set via utm_term. */}
                           <td className="px-3 py-2 text-center">
                             {(() => {
-                              const adsetAttr = analyzeAttributionForAdSet(
-                                {
-                                  adSetId: a.id,
-                                  adSetName: a.name,
-                                  storeId: a.storeId,
-                                  platform: a.platform,
-                                  metaClaim: a.value,
-                                  spend: a.spend,
-                                },
-                                ordersAttrData?.rows ?? [],
-                                rows.reduce((min, r) => (r.date < min ? r.date : min), rows[0]?.date ?? ''),
-                                rows.reduce((max, r) => (r.date > max ? r.date : max), rows[0]?.date ?? ''),
-                                // Pass per-ad-set daily Meta series so window-
-                                // stability + outlier detection actually fire
-                                // at the ad-set level (WR5-03).
-                                dailyMetaByAdSet.get(a.id || a.name || '(אחר)') ?? [],
-                              );
+                              // Look up the pre-computed analysis instead of
+                              // re-running the orders walk + Bayesian + window
+                              // stability per cell per render. (IN5-01)
+                              const adsetAttr = attributionByAdSet.get(a.id || a.name || '(אחר)') ?? null;
                               if (!adsetAttr) {
                                 return <span className="text-text-muted text-xs">—</span>;
                               }

@@ -220,6 +220,35 @@ export function AdsDrawer({
     return out;
   }, [data, storeId, campaignId, adSetId, rangeFrom, rangeTo]);
 
+  // Per-ad attribution analysis. Pre-computes once per orders/summary change
+  // rather than calling analyzeAttributionForAd inside the row IIFE per render
+  // (each call walks the full orders array + runs Bayesian / window stability
+  // / outlier z-scores; not free). (IN5-01)
+  const attributionByAd = useMemo(() => {
+    const out = new Map<string, ReturnType<typeof analyzeAttributionForAd>>();
+    if (!summary) return out;
+    const ordersRows = ordersAttrData?.rows ?? [];
+    if (ordersRows.length === 0) return out;
+    for (const a of summary.ads) {
+      const key = a.adId || a.adName;
+      out.set(key, analyzeAttributionForAd(
+        {
+          adId: a.adId,
+          adName: a.adName,
+          storeId: a.storeId,
+          platform: a.platform,
+          metaClaim: a.value,
+          spend: a.spend,
+        },
+        ordersRows,
+        rangeFrom,
+        rangeTo,
+        dailyMetaByAd.get(key) ?? [],
+      ));
+    }
+    return out;
+  }, [summary, ordersAttrData, rangeFrom, rangeTo, dailyMetaByAd]);
+
   if (!open) return null;
   // Defensive guard: CampaignDrawer derives rangeFrom/rangeTo via
   // `rows.reduce(..., rows[0]?.date ?? '')`, which returns '' if rows is empty.
@@ -403,23 +432,9 @@ export function AdsDrawer({
                           {/* Deterministic ROAS per ad via utm_content. */}
                           <td className="px-3 py-2 text-center">
                             {(() => {
-                              const adAttr = analyzeAttributionForAd(
-                                {
-                                  adId: a.adId,
-                                  adName: a.adName,
-                                  storeId: a.storeId,
-                                  platform: a.platform,
-                                  metaClaim: a.value,
-                                  spend: a.spend,
-                                },
-                                ordersAttrData?.rows ?? [],
-                                rangeFrom,
-                                rangeTo,
-                                // Pass per-ad daily Meta series so window-
-                                // stability + outlier detection actually fire
-                                // at the ad level (WR5-03).
-                                dailyMetaByAd.get(a.adId || a.adName) ?? [],
-                              );
+                              // Look up the pre-computed analysis instead of
+                              // re-running per cell per render. (IN5-01)
+                              const adAttr = attributionByAd.get(a.adId || a.adName) ?? null;
                               if (!adAttr) {
                                 return <span className="text-text-muted text-xs">—</span>;
                               }
