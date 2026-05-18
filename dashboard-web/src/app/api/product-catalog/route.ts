@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { fetchProductCatalog, type CatalogProduct } from '@/lib/productCatalog';
 import { cacheControl } from '@/lib/cacheConfig';
+import { userFacingError } from '@/lib/apiErrors';
 
 // 60 seconds — short enough that after running refreshAllProductCatalogs in
 // Apps Script, the user sees fresh data within a minute (instead of waiting
@@ -32,9 +33,10 @@ export async function GET() {
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    // Raw message logged server-side for ops; sanitized message returned to client.
     console.error('product-catalog fetch failed:', message);
     // Degrade gracefully — picker falls back to /api/products list when this
     // route returns empty.
-    return NextResponse.json({ rows: [], error: message }, { status: 200 });
+    return NextResponse.json({ rows: [], error: userFacingError(message) }, { status: 200 });
   }
 }

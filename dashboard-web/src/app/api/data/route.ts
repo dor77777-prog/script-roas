@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { fetchDailyData } from '@/lib/sheets';
 import type { DashboardData } from '@/lib/types';
 import { cacheControl } from '@/lib/cacheConfig';
+import { userFacingError } from '@/lib/apiErrors';
 
 // Revalidate the underlying data every 60 seconds (server-side cache).
 // Client SWR will poll us; this prevents hammering the Sheets API.
@@ -41,7 +42,9 @@ export async function GET() {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    // Log the raw message server-side so ops can see spreadsheet ID / service
+    // account email / stack details — but don't leak any of that to the client.
     console.error('Sheets fetch failed:', message);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: userFacingError(message) }, { status: 500 });
   }
 }

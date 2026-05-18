@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { fetchOrdersAttribution, type OrderAttributionRow } from '@/lib/ordersAttribution';
 import { cacheControl } from '@/lib/cacheConfig';
+import { userFacingError } from '@/lib/apiErrors';
 
 // 5-minute cache. Attribution rows are written daily; refreshing more often
 // doesn't help the analysis but does burn Sheets quota.
@@ -31,6 +32,7 @@ export async function GET() {
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    // Raw message logged server-side for ops; sanitized message returned to client.
     console.error('orders-attribution fetch failed:', message);
     // Degrade gracefully — empty array lets dashboards render without the
     // deterministic-confidence column instead of breaking. lastUpdated is
@@ -42,7 +44,7 @@ export async function GET() {
       {
         rows: [],
         lastUpdated: new Date().toISOString(),
-        error: message,
+        error: userFacingError(message),
       } satisfies OrdersAttributionResponse,
       { status: 200 },
     );

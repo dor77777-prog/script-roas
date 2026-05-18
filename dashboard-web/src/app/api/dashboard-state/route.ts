@@ -5,37 +5,20 @@ import {
   upsertDashboardStateKey,
 } from '@/lib/sheets';
 import { cacheControl } from '@/lib/cacheConfig';
+import { userFacingError } from '@/lib/apiErrors';
 
 export const revalidate = 10; // matches CACHE_CONFIG.dashboardState.revalidate; literal required by Next.js
 
 // Route handler — dynamic by default (no static generation). We rely on the
 // explicit Cache-Control header below for short CDN dedupe within the polling
 // window. Removed `force-dynamic` because it conflicted with that header.
-
-/**
- * Translate raw Google API errors into Hebrew messages safe to render in the
- * SyncIndicator popover. Raw messages embed the spreadsheet ID and service
- * account email, neither of which a partner UI user needs to see. The full
- * raw message is still logged server-side via console.error for ops.
- */
-function userFacingError(message: string): string {
-  if (/permission|forbidden|403/i.test(message)) {
-    return 'הסנכרון נכשל: הרשאות אינן מספיקות. ודא ש-Service Account מוגדר כ-Editor על הגיליון.';
-  }
-  if (/not found|404|Unable to parse range/i.test(message)) {
-    return 'הסנכרון נכשל: הגיליון או הטאב לא נמצאו. בדוק את SPREADSHEET_ID.';
-  }
-  if (/quota|429|rate ?limit/i.test(message)) {
-    return 'הסנכרון נכשל: חרגנו ממכסת Google. נסה שוב בעוד דקה.';
-  }
-  if (/Missing GOOGLE_CLIENT_EMAIL|GOOGLE_PRIVATE_KEY|SPREADSHEET_ID/i.test(message)) {
-    return 'הסנכרון נכשל: משתני סביבה של Google חסרים בשרת.';
-  }
-  if (/ENOTFOUND|ECONNREFUSED|fetch failed|network/i.test(message)) {
-    return 'הסנכרון נכשל: שגיאת רשת. בדוק את החיבור לאינטרנט.';
-  }
-  return 'הסנכרון נכשל: שגיאה לא צפויה. בדוק את הלוגים בצד השרת.';
-}
+//
+// Error sanitisation: uses the shared `userFacingError()` from `@/lib/apiErrors`.
+// Previously this file had its own inline copy with sync-specific phrasing
+// ("הסנכרון נכשל"). It has been unified with /api/store-meta (which also had
+// an inline copy) onto the shared helper that returns generic "הטעינה נכשלה"
+// messages. The SyncIndicator popover surfaces these as-is. Raw messages are
+// still logged server-side via console.error for ops.
 
 export async function GET() {
   try {

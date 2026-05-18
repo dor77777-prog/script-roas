@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { fetchAdsData, type AdRow } from '@/lib/ads';
 import { cacheControl } from '@/lib/cacheConfig';
+import { userFacingError } from '@/lib/apiErrors';
 
 export const revalidate = 300; // matches CACHE_CONFIG.ads.revalidate; 5 min — literal required by Next.js
 
@@ -25,9 +26,10 @@ export async function GET() {
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    // Raw message logged server-side for ops; sanitized message returned to client.
     console.error('ads fetch failed:', message);
     // Degrade gracefully — empty array lets the AdsDrawer show an "no data"
     // state instead of crashing the campaigns surface.
-    return NextResponse.json({ rows: [], error: message }, { status: 200 });
+    return NextResponse.json({ rows: [], error: userFacingError(message) }, { status: 200 });
   }
 }

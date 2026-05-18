@@ -1,25 +1,13 @@
 import { NextResponse } from 'next/server';
 import { fetchStoreMeta } from '@/lib/sheets';
 import { cacheControl } from '@/lib/cacheConfig';
+import { userFacingError } from '@/lib/apiErrors';
 
 // store-meta changes rarely (only when a store's Shopify plan changes), so
 // a longer cache is fine. Apps Script refreshes the underlying tab daily.
 // Plain ISR via `revalidate` — no `force-dynamic`, which would override the
 // cache config and make every request hit Sheets.
 export const revalidate = 3600; // matches CACHE_CONFIG.storeMeta.revalidate; literal required by Next.js
-
-function userFacingError(message: string): string {
-  if (/permission|forbidden|403/i.test(message)) {
-    return 'טעינת store-meta נכשלה: הרשאות אינן מספיקות.';
-  }
-  if (/not found|404/i.test(message)) {
-    return 'טעינת store-meta נכשלה: הגיליון לא נמצא.';
-  }
-  if (/quota|429/i.test(message)) {
-    return 'טעינת store-meta נכשלה: חרגנו ממכסת Google.';
-  }
-  return 'טעינת store-meta נכשלה: שגיאה לא צפויה.';
-}
 
 export async function GET() {
   try {
