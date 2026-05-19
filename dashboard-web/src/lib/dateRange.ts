@@ -22,10 +22,27 @@ export const DEFAULT_RANGE_DAYS = 90;
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
 /**
+ * Round-trip date check. The ISO_DATE regex above only validates SHAPE
+ * (four-digit year, two-digit month, two-digit day separated by dashes)
+ * — strings like "2026-99-99", "2026-02-30", or "9999-13-31" pass the
+ * regex but are NOT real dates. Without this check, a malformed query
+ * combined with the lexicographic comparator in isInRange could let
+ * every row through (e.g. from="0001-01-01"&to="9999-12-31"), which
+ * with archive-fallback at sheets.ts:127 could trigger a 100k-row
+ * archive read. WR-01.
+ */
+function isRealDate(s: string): boolean {
+  const d = new Date(`${s}T00:00:00Z`);
+  if (!Number.isFinite(d.getTime())) return false;
+  return d.toISOString().slice(0, 10) === s;
+}
+
+/**
  * Parses ?from=&to= out of a Next.js Request URL. Validation:
  *   - Both keys absent  → returns the default last-90-days range
  *   - Exactly one key absent  → 400-able error (caller throws)
  *   - Either key malformed (not YYYY-MM-DD) → 400-able error
+ *   - Either key NOT a real calendar date (e.g. 2026-02-30) → 400-able error
  *   - from > to → 400-able error
  */
 export function parseRangeParams(searchParams: URLSearchParams): DateRange {
@@ -39,6 +56,9 @@ export function parseRangeParams(searchParams: URLSearchParams): DateRange {
   }
   if (!ISO_DATE.test(from) || !ISO_DATE.test(to)) {
     throw new RangeParamError('from/to must be in YYYY-MM-DD format.');
+  }
+  if (!isRealDate(from) || !isRealDate(to)) {
+    throw new RangeParamError('from/to must be a real calendar date (YYYY-MM-DD).');
   }
   if (from > to) {
     throw new RangeParamError('Invalid range: from must be <= to.');
