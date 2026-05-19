@@ -46,8 +46,8 @@ export type AttributionAnalysis = {
   /** Per-7-day-window summary. Used to detect stable bias vs spike-driven
    *  noise. Empty when range < 7 days or no orders. */
   windowStability: WindowStability | null;
-  /** Days where Meta's daily conversion value was an outlier (>2.5σ above
-   *  the campaign's own trailing mean). Likely modeled spikes. */
+  /** Days where Meta's daily conversion value was a robust trailing-window
+   *  outlier by median + MAD. Likely modeled spikes. */
   outlierDays: string[];
 };
 
@@ -239,9 +239,9 @@ export function analyzeAttribution(
   dateFrom: string,
   dateTo: string,
   /** Optional daily Meta conv-value series for outlier detection. When
-   *  provided, we flag days where Meta spiked >2.5σ above the trailing
-   *  mean — usually modeled / view-through bursts that artificially
-   *  inflate the period total. */
+   *  provided, we flag days where Meta is a robust trailing-window outlier
+   *  by median + MAD — usually modeled / view-through bursts that
+   *  artificially inflate the period total. */
   dailyMetaSeries?: Array<{ date: string; value: number }>,
 ): AttributionAnalysis | null {
   if (campaign.platform !== 'Meta') return null;
@@ -322,9 +322,9 @@ export function analyzeAttribution(
   // -----------------------------------------------------------------------
   // Outlier day detection. Meta's modeled conversions often appear as
   // single-day spikes that don't show up in the underlying click data.
-  // We flag days where the daily Meta value exceeds the trailing mean
-  // by > 2.5σ. Shown in the tooltip; could be excluded from totals in a
-  // future iteration but for now just surfaces them.
+  // We flag robust trailing-window outliers by median + MAD. Shown in
+  // the tooltip; could be excluded from totals in a future iteration but
+  // for now just surfaces them.
   // -----------------------------------------------------------------------
   const outlierDays = detectOutlierDays(dailyMetaSeries ?? []);
 
@@ -539,14 +539,9 @@ export function computeWindowStability(
 }
 
 /**
- * Outlier day detection using a simple z-score against the trailing 14-day
- * mean. Days where Meta's daily value exceeded 2.5σ above the trailing
- * baseline are flagged as likely modeled spikes — these are usually
- * view-through-credit bursts that don't correspond to real customer
- * behaviour.
- *
- * We use 2.5σ rather than 2σ to keep the false-positive rate low; the
- * operator only sees days that are genuinely anomalous.
+ * Outlier day detection using median + MAD against the trailing 7-day
+ * baseline. The robust baseline prevents one outlier from inflating the
+ * next day's threshold and hiding a cascading spike.
  */
 export function detectOutlierDays(
   series: Array<{ date: string; value: number }>,
@@ -555,13 +550,7 @@ export function detectOutlierDays(
   // Sort by date asc so trailing windows are causal.
   const sorted = [...series].sort((a, b) => a.date.localeCompare(b.date));
   const out: string[] = [];
-  // Relax LOOKBACK on short ranges so 14-day "last 14 days" views (the
-  // dashboard's default) actually produce signal instead of silently
-  // returning []. With sorted.length=14 and LOOKBACK=14, i starts at 14
-  // which terminates the loop immediately — the docstring promised
-  // outliers but none were ever computed. Adaptive sizing trades some
-  // statistical strength for actually-fires-at-all behaviour. (IN5-02)
-  const LOOKBACK = Math.min(14, Math.max(5, Math.floor(sorted.length / 2)));
+  const LOOKBACK = 7;
   for (let i = LOOKBACK; i < sorted.length; i++) {
     const trail = sorted.slice(Math.max(0, i - LOOKBACK), i);
     // Keep zero-valued baseline days. Filtering `v > 0` (the previous
@@ -571,21 +560,30 @@ export function detectOutlierDays(
     // spike was evaluated. (WR-07)
     const vals = trail.map(p => p.value).filter(v => Number.isFinite(v));
     if (vals.length < 5) continue;
-    const mean = vals.reduce((s, x) => s + x, 0) / vals.length;
-    const variance =
-      vals.reduce((s, x) => s + (x - mean) ** 2, 0) / vals.length;
-    const stdDev = Math.sqrt(variance);
-    // stdDev === 0 still skips correctly: uniform-zero baseline + a single
-    // non-zero day yields an undefined z-score (division by zero), and
-    // "the trail is all zeros" is not a meaningful statistical baseline
-    // for detecting spikes. The skip is conservative — preferred over a
-    // false-positive cascade on every first-conversion day.
-    if (stdDev === 0) continue;
     if (!Number.isFinite(sorted[i].value)) continue;
-    const z = (sorted[i].value - mean) / stdDev;
-    if (z > 2.5) out.push(sorted[i].date);
+    const med = median(vals);
+    const deviation = mad(vals, med);
+    const diff = Math.abs(sorted[i].value - med);
+    const threshold = deviation > 0
+      ? 3 * deviation
+      : Math.max(1e-9, Math.abs(med) * 0.05);
+    if (diff > threshold) out.push(sorted[i].date);
   }
   return out;
+}
+
+function median(arr: number[]): number {
+  if (arr.length === 0) return 0;
+  const sorted = [...arr].sort((a, b) => a - b);
+  const m = sorted.length;
+  return m % 2 === 0
+    ? (sorted[m / 2 - 1] + sorted[m / 2]) / 2
+    : sorted[Math.floor(m / 2)];
+}
+
+function mad(arr: number[], med: number): number {
+  if (arr.length === 0) return 0;
+  return median(arr.map(x => Math.abs(x - med)));
 }
 
 // ============================================================================

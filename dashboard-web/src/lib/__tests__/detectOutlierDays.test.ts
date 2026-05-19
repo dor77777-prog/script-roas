@@ -27,7 +27,7 @@ describe('detectOutlierDays', () => {
       date: `2026-05-${String(i + 1).padStart(2, '0')}`,
       value: 100,
     }));
-    // Uniform → stdDev = 0 → skipped
+    // Uniform with no deviation stays quiet.
     expect(detectOutlierDays(series)).toEqual([]);
   });
 
@@ -36,7 +36,7 @@ describe('detectOutlierDays', () => {
   // ----------------------------------------------------------------
 
   it('detects a single spike day as outlier', () => {
-    // 13 baseline days with variance + 1 spike day (>2.5σ above mean)
+    // 13 baseline days with variance + 1 spike day (>3x MAD above median)
     const baseValues = [90, 110, 95, 105, 100, 90, 110, 95, 105, 100, 90, 110, 95];
     const series = [
       ...baseValues.map((value, i) => ({
@@ -51,25 +51,18 @@ describe('detectOutlierDays', () => {
   });
 
   // ----------------------------------------------------------------
-  // Z-score threshold at 2.5σ
+  // Median/MAD threshold
   // ----------------------------------------------------------------
 
-  it('does not flag a day at ~1.5σ above the full-series baseline (still below 2.5σ vs trailing window)', () => {
-    // NOTE on narrative (IN-02): we pre-compute `mean`/`stdDev` over the FULL
-    // 13-value base series for convenience here, but detectOutlierDays uses
-    // the TRAILING window (last LOOKBACK values, not the full series) to
-    // compute its z-score. With sorted.length=14 and adaptive LOOKBACK=7,
-    // the trail is 7 of the 13 base values — a different mean/stdDev. The
-    // test still passes because 1.5σ-against-full-series happens to also be
-    // < 2.5σ-against-trailing-window, but the literal "1.5σ" in the
-    // variable name describes our setup, NOT the function's internal stat.
-    // Don't infer trail-statistic equality from this test.
+  it('does not flag a mild day below the trailing median/MAD threshold', () => {
+    // We still use mean/stddev to generate a convenient mild value, but the
+    // function evaluates against trailing median + MAD, not z-score.
     const baseValues = [80, 90, 100, 110, 120, 80, 90, 100, 110, 120, 80, 90, 100];
     const mean = baseValues.reduce((s, v) => s + v, 0) / baseValues.length;
     const variance = baseValues.reduce((s, v) => s + (v - mean) ** 2, 0) / baseValues.length;
     const stdDev = Math.sqrt(variance);
-    // A value ~1.5σ above full-series mean (still well below the 2.5σ gate
-    // the function applies against its trailing window).
+    // A value ~1.5σ above full-series mean, still below the median/MAD gate
+    // the function applies against its trailing 7-day window.
     const mildValue = Math.round(mean + 1.5 * stdDev);
 
     const series = [
@@ -83,7 +76,7 @@ describe('detectOutlierDays', () => {
     expect(result).not.toContain('2026-05-14');
   });
 
-  it('flags a day at ~5σ above baseline (clearly above 2.5σ threshold)', () => {
+  it('flags a clear spike above the trailing median/MAD threshold', () => {
     const baseValues = [80, 90, 100, 110, 120, 80, 90, 100, 110, 120, 80, 90, 100];
     const mean = baseValues.reduce((s, v) => s + v, 0) / baseValues.length;
     const variance = baseValues.reduce((s, v) => s + (v - mean) ** 2, 0) / baseValues.length;
@@ -102,12 +95,11 @@ describe('detectOutlierDays', () => {
   });
 
   // ----------------------------------------------------------------
-  // Trailing window scoping with adaptive LOOKBACK
+  // Trailing window scoping with 7-day LOOKBACK
   // ----------------------------------------------------------------
 
-  it('detects outliers in a 10-day series (adaptive LOOKBACK=5)', () => {
-    // 10 days: LOOKBACK = min(14, max(5, floor(10/2))) = min(14, 5) = 5
-    // Loop: i=5..9 → indices 5-9 checked
+  it('detects outliers in a 10-day series', () => {
+    // 10 days: LOOKBACK = 7. Loop: i=7..9 → indices 7-9 checked.
     // Put outliers at idx 8 and 9
     const baseValues = [80, 90, 100, 110, 120]; // 5 values for trail at i=5
     const series = [
@@ -146,12 +138,12 @@ describe('detectOutlierDays', () => {
   });
 
   // ----------------------------------------------------------------
-  // IN5-02: stdDev === 0 skip
+  // MAD === 0 fallback
   // ----------------------------------------------------------------
 
-  it('IN5-02: does not flag outlier when trailing window has stdDev=0', () => {
-    // 5 identical values in trail, then spike
-    // With only 5 values and stdDev=0, the guard skips the z-score check
+  it('flags a spike when trailing window has MAD=0 via absolute-difference fallback', () => {
+    // 7 identical values in trail, then spike. The old z-score path skipped
+    // this because stdDev=0; median/MAD fallback catches it.
     const series = [
       { date: '2026-05-01', value: 100 },
       { date: '2026-05-02', value: 100 },
@@ -160,13 +152,9 @@ describe('detectOutlierDays', () => {
       { date: '2026-05-05', value: 100 },
       { date: '2026-05-06', value: 100 },
       { date: '2026-05-07', value: 100 },
-      { date: '2026-05-08', value: 500 }, // would be outlier but stdDev=0 in trail
+      { date: '2026-05-08', value: 500 },
     ];
-    // With 8 items: LOOKBACK = min(14, max(5, floor(8/2))) = min(14, max(5,4)) = min(14,5) = 5
-    // i=5: trail = [0..4] = 5 × 100 → stdDev=0 → skip
-    // i=6: trail = [1..5] = 5 × 100 → stdDev=0 → skip
-    // i=7: trail = [2..6] = 5 × 100 → stdDev=0 → skip → no outlier
     const result = detectOutlierDays(series);
-    expect(result).not.toContain('2026-05-08');
+    expect(result).toContain('2026-05-08');
   });
 });
