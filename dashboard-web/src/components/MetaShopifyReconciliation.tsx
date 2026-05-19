@@ -76,17 +76,55 @@ function aggregateMappedConversionValue(
 }
 
 /**
- * Reconciliation analysis seam (PATTERNS.md Option A). Consumes the drawer's
- * already-aggregated `dailyArr` plus the raw Shopify product rows; returns a
- * chart-ready series with Pearson r + best lag, or null when not applicable
- * (no mapped products, fewer than 5 paired days).
+ * Reconciliation analysis seam (PATTERNS.md Option A). Returns a
+ * chart-ready 4-series array (meta / google / organic / shopify) with
+ * 4 Pearson values + best lag + darkTrafficPercent, or null when not
+ * applicable (no mapped products, fewer than 5 paired days).
  *
- * Extended in Phase 5.2: now also accepts campaignsData (for Google series),
- * ordersData (for organic series), and productMap (for cross-campaign lookup).
- * Returns 4-series data (meta/google/organic/shopify) + 4 Pearson values +
- * darkTrafficPercent.
+ * Extended in Phase 5.2: accepts campaignsData (for Meta + Google
+ * series), ordersData (for organic + shopify-actual series), and
+ * productMap (for cross-campaign lookup).
  *
  * Pure function — no side effects, no IO. Safe to memoize on inputs.
+ *
+ * --------------------------------------------------------------------
+ * WR-08 — DENOMINATION BOUNDARY (read before editing this function):
+ * --------------------------------------------------------------------
+ * The four output series are NOT all on the same accounting basis.
+ * Three series come from different sources of truth:
+ *
+ *   - `meta`    = Σ `conversionValue` over Meta campaigns mapped to
+ *                 the requested products. Platform CLAIM, post-window,
+ *                 may include modeled / view-through attribution.
+ *   - `google`  = Σ `conversionValue` over Google campaigns mapped to
+ *                 the requested products. Platform CLAIM, same caveats.
+ *   - `organic` = Σ mapped-product line-item revenueCad over orders
+ *                 whose source is NOT meta-paid / NOT google-paid
+ *                 (no fbclid, no gclid). Shopify-ACTUAL.
+ *   - `shopify` = Σ mapped-product line-item revenueCad over ALL
+ *                 orders regardless of source (paid + organic). The
+ *                 ground-truth denominator the chart compares against.
+ *
+ * Consequence: `meta + google + organic` is NOT the same accounting
+ * basis as `shopify`. Specifically a meta-paid order contributes its
+ * `lineItem.revenueCad` to `shopify` AND its campaign's
+ * `conversionValue` to `meta` — two different numbers on different
+ * bases. The `darkTrafficPercent = round((1 - sumChannels / sumShopify)
+ * * 100)` value below treats the ratio as if both denominators were
+ * Shopify-actual, which they are not. When platform claims under-
+ * report (typical post-iOS-14), `darkTrafficPercent` overstates the
+ * organic gap. When platforms over-report (view-through, modeled),
+ * the ratio can swing negative — the implementation only warns when
+ * `sumChannels / sumShopify < 0.8`, so over-attribution is invisible
+ * in this signal.
+ *
+ * This is INTENTIONAL: the operator's primary lens is "what the
+ * platforms claim", and silently replacing meta/google with click-id
+ * gated line-item revenue would change the chart's meaning without
+ * the user noticing. The denomination mismatch is surfaced in the
+ * MetaShopifyReconciliation component's chart-legend / explainer
+ * copy below; do NOT remove that copy without re-evaluating this
+ * comment.
  */
 export function buildReconciliation(opts: {
   /**
@@ -539,6 +577,22 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
             <span className="text-text-secondary">Shopify (בפועל)</span>
           </span>
         </div>
+
+        {/* WR-08: denomination boundary explainer. The chart mixes two
+            accounting bases — Meta/Google are platform CLAIMS
+            (conversionValue, may include modeled/view-through), while
+            Organic/Shopify are Shopify-ACTUAL line-item revenue. The
+            "פער" column and the darkTrafficPercent chip both compute
+            `(channels - shopify) / shopify` as if both denominators
+            were on the same basis, which they are not. The percentage
+            is directional ("platforms over- or under-claim vs
+            Shopify"), not a strict accounting reconciliation. */}
+        <p className="text-[10px] text-text-muted leading-relaxed text-center">
+          <strong>שים לב למשמעות:</strong>{' '}
+          Meta ו-Google מציגים את ה-<em>דיווח</em> שלהם (conversionValue, יכול לכלול modeled/view-through).{' '}
+          Organic ו-Shopify מציגים מכירות Shopify <em>בפועל</em> (revenueCad של פריטי המוצרים המשויכים).{' '}
+          הפער בין הסכימה לבין Shopify מעיד על under/over-claim של הפלטפורמות, לא על reconciliation חשבונאי מדויק.
+        </p>
 
         <details className="text-[11px]">
           <summary className="cursor-pointer text-text-secondary hover:text-text-primary select-none py-1">
