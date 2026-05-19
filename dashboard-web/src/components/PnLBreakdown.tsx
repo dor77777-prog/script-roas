@@ -282,8 +282,7 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo }: Props)
               </summary>
               <div className="mt-2 rounded-lg bg-surfaceMuted/40 border border-borderSubtle p-3">
                 <table className="w-full text-xs tabular-nums">
-                  {/* WR-10: page-sticky thead below the Dashboard nav stack. */}
-                  <thead className="sticky top-[92px] sm:top-[108px] z-[8] bg-surfaceMuted/40">
+                  <thead className="sticky top-0 z-10 bg-surfaceMuted/40">
                     <tr className="text-[10px] uppercase text-text-muted tracking-wide">
                       <th className="text-start font-medium pb-1.5">קטגוריה</th>
                       <th className="text-end font-medium pb-1.5">סכום (יחסי לטווח)</th>

@@ -767,14 +767,11 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
 
       {data && display.length > 0 && (
         <>
-          {/* WR-10: thead sticks to page (not container) at top-[92px] mobile
-              / [108px] desktop so it lands just below the Dashboard nav stack
-              (Header 52/64px + TabNav 40/44px). overflow-x-auto keeps
-              horizontal scroll for wide tables; no max-h so vertical scroll
-              is the page's own. z-[8] is below the TabNav's z-[9]. */}
-          <div className="overflow-x-auto">
+          {/* overflow-auto + max-h makes wrapper the scroll context so sticky
+              thead pins to the top of the box (not the page). */}
+          <div className="overflow-auto max-h-[calc(100vh-180px)]">
             <table className="w-full text-xs sm:text-sm min-w-[1340px]">
-              <thead className="sticky top-[92px] sm:top-[108px] z-[8] bg-surface">
+              <thead className="sticky top-0 z-10 bg-surface">
                 <tr className="text-text-secondary border-b border-borderSubtle bg-surfaceMuted/40">
                   <th className="px-3 py-2 w-[36px]" aria-label="סימון אופטימיזציה" />
                   <SortHeader
