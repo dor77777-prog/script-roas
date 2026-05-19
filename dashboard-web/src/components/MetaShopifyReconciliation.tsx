@@ -10,6 +10,9 @@ import {
   YAxis,
 } from 'recharts';
 import type { ProductsResponse } from '@/app/api/products/route';
+import type { CampaignRow } from '@/lib/campaigns';
+import type { OrderAttributionRow } from '@/lib/ordersAttribution';
+import type { ProductMap } from '@/lib/campaignProductMap';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
 
 /**
@@ -79,29 +82,43 @@ export function pearsonWithLag(xs: number[], ys: number[], lag: number): number 
  * Reconciliation analysis seam (PATTERNS.md Option A). Consumes the drawer's
  * already-aggregated `dailyArr` plus the raw Shopify product rows; returns a
  * chart-ready series with Pearson r + best lag, or null when not applicable
- * (non-Meta platform, no mapped products, fewer than 5 paired days).
+ * (no mapped products, fewer than 5 paired days).
+ *
+ * Extended in Phase 5.2: now also accepts campaignsData (for Google series),
+ * ordersData (for organic series), and productMap (for cross-campaign lookup).
+ * Returns 4-series data (meta/google/organic/shopify) + 4 Pearson values +
+ * darkTrafficPercent.
  *
  * Pure function — no side effects, no IO. Safe to memoize on inputs.
  */
 export function buildReconciliation(opts: {
   summary: {
     platform: string;
+    campaignId?: string;
     dailyArr: Array<{ date: string; value: number }>;
   };
   productsData: ProductsResponse | undefined;
   mappedIds: string[];
   storeId: string;
+  campaignsData?: { rows: CampaignRow[] } | null;
+  ordersData?: { rows: OrderAttributionRow[] } | null;
+  productMap?: ProductMap;
 }): {
-  series: Array<{ date: string; meta: number; shopify: number }>;
+  series: Array<{ date: string; meta: number; google: number; organic: number; shopify: number }>;
   r: number;
+  rGoogle: number;
+  rOrganic: number;
+  rCombined: number;
   bestLag: number;
   bestR: number;
+  darkTrafficPercent: number;
 } | null {
-  const { summary, productsData, mappedIds, storeId } = opts;
+  const { summary, productsData, mappedIds, storeId, campaignsData, ordersData, productMap } = opts;
   if (mappedIds.length === 0) return null;
-  if (summary.platform !== 'Meta') return null; // Google has no mapping
+  // No longer gate on platform === 'Meta' — support Google campaigns too (Phase 5.2)
   const productRows = productsData?.rows ?? [];
   const wantedIds = new Set(mappedIds);
+
   // Build {date → shopify net revenue} for the campaign's mapped products
   // in this store, scoped to the same date window as the drawer's data.
   const shopifyByDate = new Map<string, number>();
@@ -114,15 +131,84 @@ export function buildReconciliation(opts: {
     if (net <= 0) continue;
     shopifyByDate.set(p.date, (shopifyByDate.get(p.date) ?? 0) + net);
   }
-  // Build the paired series, one point per day in the drawer's window.
+
+  // Build {date → meta revenue}:
+  // If this is a Meta campaign, use conversionValue from dailyArr.
+  // If this is a Google campaign (or other), meta series = 0 for all days.
+  const metaByDate = new Map<string, number>();
+  if (summary.platform === 'Meta') {
+    for (const d of summary.dailyArr) {
+      metaByDate.set(d.date, d.value);
+    }
+  }
+
+  // Build {date → google revenue}:
+  // Sum conversionValue of ALL Google campaigns in this store that map to
+  // any of the wantedIds (including the current campaign if it's Google).
+  const googleByDate = new Map<string, number>();
+  if (campaignsData?.rows && productMap) {
+    for (const row of campaignsData.rows) {
+      if (row.platform !== 'Google') continue;
+      if (row.storeId !== storeId) continue;
+      // Check if this Google campaign maps to any product in wantedIds
+      const campaignProducts = productMap[`${storeId}::${row.campaignId}`] ?? [];
+      const sharesProduct = campaignProducts.some(pid => wantedIds.has(pid));
+      if (!sharesProduct) continue;
+      googleByDate.set(row.date, (googleByDate.get(row.date) ?? 0) + row.conversionValue);
+    }
+  }
+
+  // Build {date → organic revenue}:
+  // Sum line-item revenue (partial-order attribution) for orders whose source
+  // is organic (NOT meta-paid or google-paid) and that contain at least one
+  // mapped product. Only count the mapped-product line items' revenueCad.
+  const organicByDate = new Map<string, number>();
+  const ORGANIC_SOURCES = new Set([
+    'meta-organic',
+    'organic-search-engine',
+    'direct',
+    'meta-other',
+    'other',
+    'other-referral',
+    'email',
+  ]);
+  if (ordersData?.rows) {
+    for (const order of ordersData.rows) {
+      if (order.storeId !== storeId) continue;
+      if (!ORGANIC_SOURCES.has(order.source)) continue;
+      if (!order.lineItems || order.lineItems.length === 0) continue;
+      // Partial-order summation: only count revenue for mapped products
+      let mappedRevenue = 0;
+      for (const li of order.lineItems) {
+        if (wantedIds.has(li.productId)) {
+          mappedRevenue += li.revenueCad;
+        }
+      }
+      if (mappedRevenue <= 0) continue;
+      organicByDate.set(order.date, (organicByDate.get(order.date) ?? 0) + mappedRevenue);
+    }
+  }
+
+  // Compose the 4-series array aligned to the drawer's date window
   const series = summary.dailyArr.map(d => ({
     date: d.date,
-    meta: d.value,
+    meta: metaByDate.get(d.date) ?? 0,
+    google: googleByDate.get(d.date) ?? 0,
+    organic: organicByDate.get(d.date) ?? 0,
     shopify: shopifyByDate.get(d.date) ?? 0,
   }));
+
   if (series.length < 5) return null; // not enough points for r
 
+  // Compute 4 Pearson values
   const r = pearson(series.map(s => s.meta), series.map(s => s.shopify));
+  const rGoogle = pearson(series.map(s => s.google), series.map(s => s.shopify));
+  const rOrganic = pearson(series.map(s => s.organic), series.map(s => s.shopify));
+  const rCombined = pearson(
+    series.map(s => s.meta + s.google + s.organic),
+    series.map(s => s.shopify),
+  );
+
   // Lag detection: try offsets -3..3, pick the one with the highest r.
   //
   // #WR-03: pearson on n=2 returns ±1.0 trivially (two points fit a
@@ -143,7 +229,16 @@ export function buildReconciliation(opts: {
       bestLag = lag;
     }
   }
-  return { series, r, bestLag, bestR };
+
+  // Dark traffic: if channels account for < 80% of Shopify actual, flag the gap
+  const sumChannels = series.reduce((acc, s) => acc + s.meta + s.google + s.organic, 0);
+  const sumShopify = series.reduce((acc, s) => acc + s.shopify, 0);
+  const darkTrafficPercent =
+    sumShopify > 0 && sumChannels / sumShopify < 0.8
+      ? Math.round((1 - sumChannels / sumShopify) * 100)
+      : 0;
+
+  return { series, r, rGoogle, rOrganic, rCombined, bestLag, bestR, darkTrafficPercent };
 }
 
 type Props = {
@@ -155,9 +250,18 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
     <section>
       <h3 className="text-sm font-semibold text-text-primary inline-flex items-center gap-1.5 mb-2">
         <TrendingUp size={14} className="text-text-secondary" />
-        Meta מול Shopify — מתאם יומי
+        ערוצים מול Shopify — מתאם יומי
       </h3>
       <div className="rounded-xl border border-borderSubtle bg-surfaceMuted/30 p-3 space-y-3">
+
+        {/* Dark traffic chip */}
+        {reconciliation.darkTrafficPercent > 0 && (
+          <div className="rounded-md bg-amber-50 border border-amber-200 px-2.5 py-1.5 text-[11px] text-amber-900">
+            <strong>פער &quot;Dark traffic&quot; {reconciliation.darkTrafficPercent}%:</strong>{' '}
+            סכום Meta+Google+Organic נמוך מ-Shopify בפועל. ייתכן channel attribution חסר (UTMs לא מוגדרים נכון, סוגי orders שלא מתויגים).
+          </div>
+        )}
+
         <div className="flex items-start gap-3 flex-wrap">
           <div className="shrink-0">
             <div className="text-[10px] text-text-muted uppercase tracking-wide">
@@ -206,6 +310,14 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
           </div>
         </div>
 
+        {/* Pearson values for all 4 channels */}
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-text-muted tabular-nums">
+          <span>r(Meta)={reconciliation.r.toFixed(2)}</span>
+          <span>r(Google)={reconciliation.rGoogle.toFixed(2)}</span>
+          <span>r(Organic)={reconciliation.rOrganic.toFixed(2)}</span>
+          <span>r(Combined)={reconciliation.rCombined.toFixed(2)}</span>
+        </div>
+
         {reconciliation.bestLag !== 0 && Math.abs(reconciliation.bestR) > Math.abs(reconciliation.r) + 0.1 && (
           <div className="rounded-md bg-amber-50 border border-amber-200 px-2.5 py-1.5 text-[11px] text-amber-900">
             <strong>זוהה lag של {Math.abs(reconciliation.bestLag)} ימים:</strong>{' '}
@@ -232,13 +344,21 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
               <Tooltip
                 content={({ active, payload }) => {
                   if (!active || !payload || payload.length === 0) return null;
-                  const d = payload[0].payload as { date: string; meta: number; shopify: number };
+                  const d = payload[0].payload as { date: string; meta: number; google: number; organic: number; shopify: number };
                   return (
                     <div dir="rtl" className="rounded-lg bg-text-primary/95 text-white px-3 py-2 text-xs shadow-elevated tabular-nums">
                       <div className="text-white/65 mb-1 text-[10px]">{formatDate(d.date)}</div>
                       <div className="flex items-center gap-2">
                         <span className="inline-block w-2 h-2 rounded-full bg-amber-400" />
                         <span>Meta: CAD {formatCurrency(d.meta)}</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="inline-block w-2 h-2 rounded-full bg-blue-600" />
+                        <span>Google: CAD {formatCurrency(d.google)}</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="inline-block w-2 h-2 rounded-full bg-green-600" />
+                        <span>Organic: CAD {formatCurrency(d.organic)}</span>
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="inline-block w-2 h-2 rounded-full bg-roas-green" />
@@ -249,14 +369,26 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 }}
               />
               <Line type="monotone" dataKey="meta" stroke="#d97706" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="google" stroke="#2563eb" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="organic" stroke="#16a34a" strokeWidth={2} dot={false} />
               <Line type="monotone" dataKey="shopify" stroke="#15803d" strokeWidth={2} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
-        <div className="flex items-center justify-center gap-4 text-[10px] sm:text-[11px]">
+
+        {/* 4-entry legend */}
+        <div className="flex items-center justify-center flex-wrap gap-3 text-[10px] sm:text-[11px]">
           <span className="inline-flex items-center gap-1.5">
             <span className="inline-block w-3 h-[2px] bg-amber-600" />
             <span className="text-text-secondary">Meta (מדווח)</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block w-3 h-[2px] bg-blue-600" />
+            <span className="text-text-secondary">Google (מדווח)</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block w-3 h-[2px] bg-green-600" />
+            <span className="text-text-secondary">Organic</span>
           </span>
           <span className="inline-flex items-center gap-1.5">
             <span className="inline-block w-3 h-[2px] bg-roas-green" />
@@ -274,17 +406,20 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 <tr className="text-text-muted">
                   <th className="px-2 py-1.5 text-start font-medium">תאריך</th>
                   <th className="px-2 py-1.5 text-end font-medium">Meta</th>
+                  <th className="px-2 py-1.5 text-end font-medium">Google</th>
+                  <th className="px-2 py-1.5 text-end font-medium">Organic</th>
                   <th className="px-2 py-1.5 text-end font-medium">Shopify</th>
                   <th className="px-2 py-1.5 text-center font-medium">פער</th>
                 </tr>
               </thead>
               <tbody>
                 {reconciliation.series.map(s => {
-                  const delta = s.shopify - s.meta;
-                  const denom = Math.max(s.meta, s.shopify, 1);
+                  const channelTotal = s.meta + s.google + s.organic;
+                  const delta = s.shopify - channelTotal;
+                  const denom = Math.max(channelTotal, s.shopify, 1);
                   const deltaPct = (delta / denom) * 100;
                   let tone = 'text-text-muted';
-                  if (s.meta > 0 || s.shopify > 0) {
+                  if (channelTotal > 0 || s.shopify > 0) {
                     if (Math.abs(deltaPct) > 50) tone = 'text-roas-red';
                     else if (Math.abs(deltaPct) > 20) tone = 'text-amber-600';
                     else tone = 'text-roas-green';
@@ -293,9 +428,11 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                     <tr key={s.date} className="border-t border-borderSubtle">
                       <td className="px-2 py-1 text-text-secondary tabular-nums">{s.date.slice(5)}</td>
                       <td className="px-2 py-1 text-end tabular-nums">{formatCurrency(s.meta)}</td>
+                      <td className="px-2 py-1 text-end tabular-nums">{formatCurrency(s.google)}</td>
+                      <td className="px-2 py-1 text-end tabular-nums">{formatCurrency(s.organic)}</td>
                       <td className="px-2 py-1 text-end tabular-nums">{formatCurrency(s.shopify)}</td>
                       <td className={cn('px-2 py-1 text-center tabular-nums font-medium', tone)}>
-                        {s.meta === 0 && s.shopify === 0 ? '—' : `${deltaPct > 0 ? '+' : ''}${deltaPct.toFixed(0)}%`}
+                        {channelTotal === 0 && s.shopify === 0 ? '—' : `${deltaPct > 0 ? '+' : ''}${deltaPct.toFixed(0)}%`}
                       </td>
                     </tr>
                   );
