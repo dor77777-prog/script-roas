@@ -229,12 +229,22 @@ function sortAggregated(
       case 'cpa':
         return a.conversions > 0 ? a.spend / a.conversions : 0;
       default: {
-        // Exhaustiveness check (WR-04). If a future SortKey value is
-        // added but a case is forgotten here, TypeScript fails the
-        // `never` assignment at compile time. Belt-and-suspenders for
-        // when noFallthroughCasesInSwitch isn't on.
+        // Exhaustiveness check. If a future SortKey value is added but
+        // a case is forgotten here, TypeScript fails the `never`
+        // assignment at compile time.
+        //
+        // WR-04: return 0 (stable sort) at runtime rather than throw.
+        // Throwing inside the Array.prototype.sort comparator
+        // propagates out of .sort() and tears down the whole table
+        // tree via React's error boundary (or worse, an uncaught error
+        // if no boundary). If sortKey ever widens at runtime — stale
+        // localStorage, hot-reload glitch, future URL-param SortKey —
+        // we'd rather collapse sort to "input order" than crash the
+        // campaigns view. Mirrors CampaignDrawer.tsx AdSetTable sort
+        // (already documented "collapses sort to stable" rationale).
         const _exhaustive: never = sortKey;
-        throw new Error(`Unhandled SortKey: ${String(_exhaustive)}`);
+        void _exhaustive;
+        return 0;
       }
     }
   }
