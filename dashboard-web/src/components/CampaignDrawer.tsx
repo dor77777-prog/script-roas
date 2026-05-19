@@ -131,8 +131,13 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
     },
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
+  // Drawer needs the full lineItems column for productChannelBreakdown.
+  // buildDateRangeKey always produces "?from=...&to=..." so &lineItems=true
+  // safely appends as a second query param. The route default is false —
+  // explicit opt-in here keeps CampaignsTable on the lighter payload.
+  const ordersAttrBaseKey = open ? buildDateRangeKey('/api/orders-attribution', drawerRange) : null;
   const { data: ordersAttrData } = useSWR<OrdersAttributionResponse>(
-    open ? buildDateRangeKey('/api/orders-attribution', drawerRange) : null,
+    ordersAttrBaseKey ? `${ordersAttrBaseKey}&lineItems=true` : null,
     async (url: string) => {
       const r = await fetch(url);
       if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
