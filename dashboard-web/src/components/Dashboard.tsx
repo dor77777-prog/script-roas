@@ -375,7 +375,7 @@ function AnalysisTab({
       <SectionIntro
         icon={<CalendarDays size={20} />}
         title="טווח לניתוח"
-        description="הסינון מטה משפיע על גרף המגמה. הטבלאות החודשיות מציגות את כל החודשים בכל מקרה (לא מסונן)."
+        description="הסינון מטה משפיע על גרף המגמה בלבד. הטבלאות החודשיות מציגות עד 17 חודשים אחורה — בלי תלות בטווח שבחרת."
       />
       <Filters filters={filters} stores={data.stores} onChange={setFilters} />
 
@@ -391,10 +391,10 @@ function AnalysisTab({
       <SectionIntro
         icon={<CalendarDays size={20} />}
         title="טבלאות חודשיות"
-        description="טבלה לכל חודש עם שורה לכל יום. ROAS צבוע: אדום (<2), כתום (2-2.7), ירוק (2.7-3), כחול (>3). יום עם הוצאה אך ללא מכירה מסומן בשחור עם '0'."
+        description="טבלה לכל חודש עם שורה לכל יום, עד 17 חודשים אחורה. ROAS צבוע: אדום (<2), כתום (2-2.7), ירוק (2.7-3), כחול (>3). יום עם הוצאה אך ללא מכירה מסומן בשחור עם '0'."
       />
       <div className="rounded-xl bg-surface border border-border shadow-card overflow-hidden">
-        <MonthlyTables rows={data.rows} stores={data.stores} bare />
+        <MonthlyTables stores={data.stores} bare />
       </div>
     </div>
   );

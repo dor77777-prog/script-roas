@@ -1,20 +1,68 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import useSWR from 'swr';
 import { CalendarDays, ChevronDown, ChevronUp } from 'lucide-react';
-import type { DailyRow } from '@/lib/types';
+import type { DailyRow, DashboardData } from '@/lib/types';
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import { roasLabel } from '@/lib/analytics';
+import { buildDateRangeKey } from '@/lib/dateRange';
 
 const HE_MONTHS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
 
 type Mode = 'per-store' | 'summary';
 
 type Props = {
-  rows: DailyRow[];
   stores: string[];
   /** When true, omit the outer title/header — used inside CollapsibleSection. */
   bare?: boolean;
+};
+
+/**
+ * Months of history MonthlyTables shows in the analysis tab. Sized just
+ * inside the Phase 5 archive cutoff (ARCHIVE_FALLBACK_MONTHS = 18) so the
+ * fetch stays warm-only and never triggers a 100k-row archive read.
+ *
+ * WR-09 hotfix: previously the component reused the dashboard's range-scoped
+ * /api/data response, which made the "monthly tables show all months
+ * regardless" promise false whenever the user narrowed their global range.
+ * Now it owns its own SWR fetch covering this wider window.
+ */
+const MONTHLY_TABLES_HISTORY_MONTHS = 17;
+
+function isoMonthsAgo(months: number): string {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jerusalem',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const today = new Date();
+  const past = new Date(
+    today.getFullYear(),
+    today.getMonth() - months,
+    today.getDate(),
+  );
+  return fmt.format(past);
+}
+
+function isoToday(): string {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jerusalem',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  return fmt.format(new Date());
+}
+
+const fetcher = async (url: string): Promise<DashboardData> => {
+  const res = await fetch(url);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body?.error || `Failed to load (${res.status})`);
+  }
+  return res.json() as Promise<DashboardData>;
 };
 
 const ROAS_BG: Record<string, string> = {
@@ -42,9 +90,22 @@ function roasCell(roas: number, revenue: number, totalSpend: number): { classNam
   return { className: ROAS_BG[roasLabel(roas).tone], text: formatNumber(roas) };
 }
 
-export function MonthlyTables({ rows, stores, bare = false }: Props) {
+export function MonthlyTables({ stores, bare = false }: Props) {
   const [mode, setMode] = useState<Mode>('per-store');
   const [storeFilter, setStoreFilter] = useState<string>(stores[0] || 'All');
+
+  const historyRange = useMemo(
+    () => ({ from: isoMonthsAgo(MONTHLY_TABLES_HISTORY_MONTHS), to: isoToday() }),
+    [],
+  );
+
+  const { data, error, isLoading } = useSWR<DashboardData>(
+    buildDateRangeKey('/api/data', historyRange),
+    fetcher,
+    { revalidateOnFocus: false },
+  );
+
+  const rows: DailyRow[] = data?.rows ?? [];
 
   const monthGroups = useMemo(() => {
     const grouped = new Map<string, DailyRow[]>();
@@ -57,6 +118,22 @@ export function MonthlyTables({ rows, stores, bare = false }: Props) {
       .map(([ym, rs]) => ({ ym, rows: rs }))
       .sort((a, b) => b.ym.localeCompare(a.ym));
   }, [rows]);
+
+  if (isLoading) {
+    return (
+      <div className={cn('px-4 sm:px-5 py-6 text-sm text-text-secondary', bare && 'border-b border-border')}>
+        טוען טבלאות חודשיות...
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className={cn('px-4 sm:px-5 py-6 text-sm text-roas-red', bare && 'border-b border-border')}>
+        שגיאה בטעינת הטבלאות החודשיות: {error instanceof Error ? error.message : String(error)}
+      </div>
+    );
+  }
 
   if (!rows.length) return null;
 
