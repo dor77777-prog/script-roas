@@ -151,6 +151,15 @@ describe('buildReconciliation', () => {
         lineItems: [{ productId: PROD_A, units: 1, revenueCad: organicValues[i] }],
       }),
     );
+    const paidOrders = DATES.map((date, i) =>
+      makeOrderRow({
+        date,
+        orderId: `paid-${i}`,
+        source: 'meta-paid',
+        fbclidPresent: true,
+        lineItems: [{ productId: PROD_A, units: 1, revenueCad: shopifyValues[i] - organicValues[i] }],
+      }),
+    );
 
     const productMap: ProductMap = {
       [`${STORE}::${CAMP_META}`]: [PROD_A],
@@ -164,7 +173,7 @@ describe('buildReconciliation', () => {
       mappedIds: [PROD_A],
       storeId: STORE,
       campaignsData: { rows: [...metaCampaignRows, ...googleCampaignRows] },
-      ordersData: { rows: organicOrders },
+      ordersData: { rows: [...organicOrders, ...paidOrders] },
       productMap,
       rangeFrom: RANGE_FROM,
       rangeTo: RANGE_TO,
@@ -291,13 +300,22 @@ describe('buildReconciliation', () => {
         conversionValue: 60,
       }),
     );
+    const shopifyOrders = DATES.map((date, i) =>
+      makeOrderRow({
+        date,
+        orderId: `paid-dark-${i}`,
+        source: 'meta-paid',
+        fbclidPresent: true,
+        lineItems: [{ productId: PROD_A, units: 1, revenueCad: 100 }],
+      }),
+    );
     const result = buildReconciliation({
       summary: makeSummary({ values: [60, 60, 60, 60, 60] }),
       productsData,
       mappedIds: [PROD_A],
       storeId: STORE,
       campaignsData: { rows: metaRows },
-      ordersData: { rows: [] },
+      ordersData: { rows: shopifyOrders },
       productMap: { [`${STORE}::${CAMP_META}`]: [PROD_A] },
       rangeFrom: RANGE_FROM,
       rangeTo: RANGE_TO,
@@ -339,8 +357,9 @@ describe('buildReconciliation', () => {
       expect(s.google).toBe(0);
       expect(s.organic).toBe(0);
     }
-    // Shopify should still be correct; platform channels require mapped campaign rows.
-    expect(result!.series[0].shopify).toBe(95);
+    // Shopify actual now uses orders-attribution line items; without ordersData,
+    // it stays zero instead of falling back to products-daily netRevenue.
+    expect(result!.series[0].shopify).toBe(0);
     // rGoogle/rOrganic are null (all zeros -> no variance)
     expect(result!.rGoogle).toBeNull();
     expect(result!.rOrganic).toBeNull();

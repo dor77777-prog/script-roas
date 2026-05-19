@@ -114,24 +114,33 @@ export function buildReconciliation(opts: {
   bestR: number | null;
   darkTrafficPercent: number;
 } | null {
-  const { summary, productsData, mappedIds, storeId, campaignsData, ordersData, productMap, rangeFrom, rangeTo } = opts;
+  const { summary, mappedIds, storeId, campaignsData, ordersData, productMap, rangeFrom, rangeTo } = opts;
   if (mappedIds.length === 0) return null;
   const dateList = enumerateDateRange(rangeFrom, rangeTo);
   if (dateList.length === 0) return null;
   // No longer gate on platform === 'Meta' — support Google campaigns too (Phase 5.2)
-  const productRows = productsData?.rows ?? [];
   const wantedIds = new Set(mappedIds);
 
-  // Build {date → shopify net revenue} for the campaign's mapped products
-  // in this store, scoped to the user's selected drawer date window.
+  // Shopify actual: sum line-item revenue for mapped products, across ALL
+  // orders regardless of source. This intentionally uses the same
+  // orders-attribution proportional line-item revenue basis as the Organic
+  // series below, so those two chart lines can be compared directly.
+  // Fix for CODEX-NEW-P2-01.
   const shopifyByDate = new Map<string, number>();
-  for (const p of productRows) {
-    if (p.storeId !== storeId) continue;
-    if (!wantedIds.has(p.productId)) continue;
-    if (p.date < rangeFrom || p.date > rangeTo) continue;
-    const net = p.netRevenue ?? p.revenue;
-    if (net <= 0) continue;
-    shopifyByDate.set(p.date, (shopifyByDate.get(p.date) ?? 0) + net);
+  if (ordersData?.rows) {
+    for (const order of ordersData.rows) {
+      if (order.storeId !== storeId) continue;
+      if (!order.lineItems || order.lineItems.length === 0) continue;
+      if (order.date < rangeFrom || order.date > rangeTo) continue;
+      let mappedRevenue = 0;
+      for (const li of order.lineItems) {
+        if (wantedIds.has(li.productId)) {
+          mappedRevenue += li.revenueCad;
+        }
+      }
+      if (mappedRevenue === 0) continue;
+      shopifyByDate.set(order.date, (shopifyByDate.get(order.date) ?? 0) + mappedRevenue);
+    }
   }
 
   // Meta channel - sum across ALL Meta campaigns mapped to the same products
