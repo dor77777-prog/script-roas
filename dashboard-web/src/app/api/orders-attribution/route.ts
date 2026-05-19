@@ -20,9 +20,10 @@ export type OrdersAttributionResponse = {
 export async function GET(req: Request) {
   // RangeParamError (malformed ?from=&to=) → 400 with no-store.
   // All other errors (Sheets API failures) → 200 + empty rows (degraded path).
+  const searchParams = new URL(req.url).searchParams;
   let range;
   try {
-    range = parseRangeParams(new URL(req.url).searchParams);
+    range = parseRangeParams(searchParams);
   } catch (e) {
     if (e instanceof RangeParamError) {
       return NextResponse.json({ error: e.message }, {
@@ -33,8 +34,16 @@ export async function GET(req: Request) {
     throw e;
   }
 
+  // Default false — explicit opt-in via ?lineItems=true. Anything else
+  // (missing param, 'false', '0', 'yes', etc.) → false to keep the
+  // payload light. Only CampaignDrawer.productChannelBreakdown needs
+  // lineItems today; all other callers benefit from the smaller body.
+  // T-05-03-01: strict === 'true' comparison prevents accidental opt-in
+  // via truthy-ish strings or prototype tricks.
+  const includeLineItems = searchParams.get('lineItems') === 'true';
+
   try {
-    const rows = await fetchOrdersAttribution({ range });
+    const rows = await fetchOrdersAttribution({ range, includeLineItems });
     if (rows.length > 50000) {
       console.warn(`/api/orders-attribution: large response (${rows.length} rows) — consider pagination`);
     }
