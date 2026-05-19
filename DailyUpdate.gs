@@ -766,7 +766,32 @@ function archiveTabRows_(warm, archive, spec, cutoff, dryRun) {
 
 /** Menu helpers — dry-run + production for the standard 18-month retention. */
 function archive18MonthsDryRun()    { archiveOlderThan(18, {dryRun: true});  }
-function archive18MonthsProduction(){ archiveOlderThan(18, {dryRun: false}); }
+
+/**
+ * Production archive. The menu item sits one click away from the dry-run
+ * item, so this wrapper gates the destructive call behind a confirmation
+ * prompt that requires typing 'ARCHIVE' to proceed (WR-03). A misclick
+ * on the menu item alone is no longer enough to trigger an irreversible
+ * 6-to-18-month delete across 5 tabs.
+ *
+ * Falls through to archiveOlderThan only when:
+ *   1. The OK button is pressed (Cancel returns silently), AND
+ *   2. The typed confirmation matches 'ARCHIVE' exactly.
+ */
+function archive18MonthsProduction() {
+  const ui = SpreadsheetApp.getUi();
+  const res = ui.prompt(
+    'ארכוב לפרודקשן',
+    'פעולה הרסנית — מעבירה ~6-18 חודשים של שורות מ-5 טאבים. הזן ARCHIVE לאישור.',
+    ui.ButtonSet.OK_CANCEL,
+  );
+  if (res.getSelectedButton() !== ui.Button.OK) return;
+  if (res.getResponseText().trim() !== 'ARCHIVE') {
+    ui.alert('הפעולה בוטלה — לא הוזנה אישור תקין (נדרש: ARCHIVE).');
+    return;
+  }
+  archiveOlderThan(18, {dryRun: false});
+}
 
 // ============================================================================
 
