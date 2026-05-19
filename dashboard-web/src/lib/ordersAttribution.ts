@@ -131,7 +131,7 @@ function parseDate(v: unknown): string | null {
  * matches on specific values won't recognise the new kind, but the data
  * survives — the dashboard stops going blind on new categories. (IN5-06)
  */
-function parseSource(v: unknown): OrderSource {
+export function parseSource(v: unknown): OrderSource {
   const s = String(v ?? '').trim();
   if (!s) return '';
   return s as OrderSource;
