@@ -170,6 +170,39 @@ Plans:
 Plans:
 - [x] 05.2-01-PLAN.md — extend buildReconciliation + chart UI + Pearson additions
 
+### Phase 05.2.1: Algorithm correctness audit (Opus + codex cross-AI review) (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 5.2
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 05.2.1 to break down)
+
+### Phase 05.2.1.1: Algorithm correctness fixes (codex via GSD cross-AI)
+
+**Goal**: Apply 23 fixes identified by the Opus+codex algorithm audit (Phase 5.2.1) before starting Phase 6. Executed via codex (GPT-5) through GSD's cross-AI execution mechanism — codex receives each plan via stdin, produces SUMMARY.md output, fully audited as commits in main.
+**Why now**: Phase 5.2.1 audit surfaced concrete bugs: (a) ORGANIC_SOURCES silently drops YouTube/Google-organic orders, (b) hardcoded `+03:00` in Shopify.gs corrupts winter daily windows by 1 hour, (c) products-daily shared-tab race, (d) Phase 5.2 Meta series asymmetric with Google, (e) true revenue allocation changes with UI platform filter. Phase 6 (security) cannot safely build on this stack until fixed.
+**Depends on**: Phase 5.2.1 (audit + peer review)
+**Execution**: All 3 plans have `cross_ai: true`. Run `/gsd-execute-phase 05.2.1.1 --cross-ai` — GSD pipes each task prompt to `codex exec -s workspace-write --skip-git-repo-check -`, captures SUMMARY.md, commits per fix.
+**Requirements** (23 items, see SYNTHESIS.md):
+  - FIX-01..FIX-07: P0/P1 critical — Plan 05.2.1.1-01
+  - FIX-08..FIX-15: P2 secondary — Plan 05.2.1.1-02
+  - TEST-01..TEST-08: regression coverage — Plan 05.2.1.1-03
+**Success Criteria**:
+  1. All 23 fixes committed atomically with `fix(05.2.1.1-NN): ...` prefix
+  2. `npm test` count rises from 89 → ~100-105
+  3. `npm run build` + `tsc --noEmit` green
+  4. Apps Script `.gs` syntax-clean
+  5. SUMMARY.md per plan documents deviations + user-action items
+  6. Post-deploy production check: 4-channel chart includes google-organic orders correctly
+
+Plans:
+- [ ] 05.2.1.1-01-PLAN.md — P0/P1 critical (7 tasks: ORGANIC predicate, Shopify TZ, products-daily LockService, symmetric Meta series, allocation-filter independence, channel-aware narrative, pearson zero-variance)
+- [ ] 05.2.1.1-02-PLAN.md — P2 secondary (8 tasks: ID text format + migration, consistent date range, robust outlier detection, productMap freshness chip, canonical revenue basis, ad-set docstring, campaignKey platform namespace, Bayesian Bessel correction)
+- [ ] 05.2.1.1-03-PLAN.md — test coverage (8 tasks: OrderSource contract, darkTraffic boundary, signed revenue, cross-store hook, Google primary path, lineItemsCad, whitespace+long-ID, OrderSource sweep)
+
 ### Phase 6: Security & Cloud-Sync (SLIMMED — single-user internal context)
 
 **Context (added 2026-05-19)**: After Phase 5 we revisited scope. The dashboard is a SINGLE-USER INTERNAL tool with at most one user editing at a time. Multi-user concerns (rate-limit-against-DDoS, optimistic-concurrency If-Match) and auth gating were intentionally dropped — user accepted URL-obscurity as the trust boundary.
