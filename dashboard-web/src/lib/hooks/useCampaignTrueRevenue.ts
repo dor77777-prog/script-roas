@@ -188,7 +188,7 @@ export function useCampaignTrueRevenue(opts: {
     const campaignSpend = new Map<string, number>();
     for (const r of allCampaignRows) {
       if (r.date < localRange.from || r.date > localRange.to) continue;
-      const key = campaignKey(r.storeId, r.campaignId);
+      const key = campaignKey(r.storeId, r.platform, r.campaignId);
       campaignSpend.set(key, (campaignSpend.get(key) ?? 0) + r.spend);
     }
 
@@ -237,7 +237,7 @@ export function useCampaignTrueRevenue(opts: {
     // Step 4: build the per-key info object with the trust signal.
     const out = new Map<string, TrueRevenueInfo>();
     for (const a of aggregated) {
-      const k = campaignKey(a.storeId, a.campaignId);
+      const k = campaignKey(a.storeId, a.platform, a.campaignId);
       const mappedIds = productMap[k] ?? [];
       if (mappedIds.length === 0) continue; // no mapping → no true-ROAS row
       const alloc = allocations.get(k) ?? { revenue: 0, units: 0 };

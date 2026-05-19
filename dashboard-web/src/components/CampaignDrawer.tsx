@@ -263,9 +263,10 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
   const mappedIds = useMemo(
     () => {
       const sid = rows[0]?.storeId ?? '';
-      return productMap[campaignKey(sid, campaignId)] ?? [];
+      const platformForCampaign = rows[0]?.platform ?? summary?.platform ?? '';
+      return productMap[campaignKey(sid, platformForCampaign, campaignId)] ?? [];
     },
-    [productMap, rows, campaignId],
+    [productMap, rows, summary?.platform, campaignId],
   );
 
   // Per-product channel breakdown (Phase 1). Triple-gate (Meta-only,
@@ -561,10 +562,10 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
         storeId={rows[0]?.storeId ?? ''}
         storeName={summary.storeName}
         campaignName={summary.campaignName}
-        initial={productMap[campaignKey(rows[0]?.storeId ?? '', campaignId)] ?? []}
+        initial={productMap[campaignKey(rows[0]?.storeId ?? '', summary.platform, campaignId)] ?? []}
         onSave={(productIds) => {
           const storeIdForCampaign = rows[0]?.storeId ?? '';
-          setMappedProducts(storeIdForCampaign, campaignId, productIds);
+          setMappedProducts(storeIdForCampaign, summary.platform, campaignId, productIds);
         }}
       />
 
@@ -631,4 +632,3 @@ function DrawerStat({ label, value, prefix, chip, primary, compact, accent }: {
     </div>
   );
 }
-

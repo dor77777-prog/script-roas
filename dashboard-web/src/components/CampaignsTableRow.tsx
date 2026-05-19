@@ -195,7 +195,7 @@ export function CampaignsTableRow({
           (the feed governs delivery, not the campaign). */}
       <td className="px-3 py-2 text-center">
         {(() => {
-          const key = campaignKey(a.storeId, a.campaignId);
+          const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);
           if (!info) {
             return (
@@ -303,7 +303,7 @@ export function CampaignsTableRow({
           aligned with mapped + unmapped campaigns. */}
       <td className="px-3 py-2 text-end tabular-nums">
         {(() => {
-          const key = campaignKey(a.storeId, a.campaignId);
+          const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);
           if (!info || info.trueRevenue <= 0) {
             return <span className="text-text-muted">—</span>;
@@ -317,7 +317,7 @@ export function CampaignsTableRow({
       </td>
       <td className="px-3 py-2 text-end tabular-nums">
         {(() => {
-          const key = campaignKey(a.storeId, a.campaignId);
+          const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);
           if (!info || info.trueUnits <= 0) {
             return <span className="text-text-muted">—</span>;

@@ -9,8 +9,8 @@
  *   - One campaign can promote N products (a "best of" or bundle campaign)
  *
  * Storage shape: `{ [campaignKey]: productId[] }` where campaignKey is the
- * composite `${storeId}::${campaignId}` so the same product ID from
- * different stores doesn't collide.
+ * composite `${storeId}::${platform}::${campaignId}` so the same campaign ID
+ * from different stores or ad platforms doesn't collide.
  *
  * Cloud-synced via the existing pushCloudKey infrastructure (registered as
  * 'campaign-product-map' in STATE_KEYS). Partners on other devices see the
@@ -25,8 +25,8 @@ const STORAGE_KEY = 'roas-dashboard:campaign-product-map' as const;
  *  around without re-reading localStorage. */
 export type ProductMap = Record<string, string[]>;
 
-export function campaignKey(storeId: string, campaignId: string): string {
-  return `${storeId}::${campaignId}`;
+export function campaignKey(storeId: string, platform: string, campaignId: string): string {
+  return `${storeId}::${platform}::${campaignId}`;
 }
 
 export function readProductMap(): ProductMap {
@@ -60,16 +60,63 @@ export function writeProductMap(map: ProductMap) {
   }
 }
 
+type CampaignKeyMigrationRow = {
+  storeId: string;
+  campaignId: string;
+  platform: string;
+};
+
+/**
+ * One-time localStorage migration from the legacy
+ * `${storeId}::${campaignId}` key to `${storeId}::${platform}::${campaignId}`.
+ * When a platform cannot be inferred from current campaign rows, the old key
+ * is kept and a warning is logged so the mapping is not destroyed.
+ */
+export function migrateProductMapKeys(campaignsData?: { rows?: CampaignKeyMigrationRow[] } | null): ProductMap {
+  const map = readProductMap();
+  const rows = campaignsData?.rows ?? [];
+  let changed = false;
+
+  for (const oldKey of Object.keys(map)) {
+    if (!/^[^:]+::[^:]+$/.test(oldKey)) continue;
+    const [storeId, campaignId] = oldKey.split('::');
+    const platforms = new Set(
+      rows
+        .filter(r => r.storeId === storeId && r.campaignId === campaignId)
+        .map(r => r.platform)
+        .filter(Boolean),
+    );
+
+    if (platforms.size !== 1) {
+      console.warn(
+        `Could not migrate product map key "${oldKey}" because campaign platform could not be determined.`,
+      );
+      continue;
+    }
+
+    const platform = Array.from(platforms)[0];
+    const nextKey = campaignKey(storeId, platform, campaignId);
+    const merged = Array.from(new Set([...(map[nextKey] ?? []), ...(map[oldKey] ?? [])]));
+    map[nextKey] = merged;
+    delete map[oldKey];
+    changed = true;
+  }
+
+  if (changed) writeProductMap(map);
+  return map;
+}
+
 /** Convenience: replace the product list for a single campaign. Empty
  *  array (or no products) removes the campaign's entry entirely so the
  *  storage stays clean. */
 export function setMappedProducts(
   storeId: string,
+  platform: string,
   campaignId: string,
   productIds: string[],
 ): ProductMap {
   const map = readProductMap();
-  const k = campaignKey(storeId, campaignId);
+  const k = campaignKey(storeId, platform, campaignId);
   const cleaned = Array.from(new Set(productIds.filter(Boolean)));
   if (cleaned.length === 0) {
     delete map[k];
@@ -84,6 +131,21 @@ export function setMappedProducts(
  *  the campaignKeys, scoped to the same store (cross-store sharing isn't
  *  meaningful — each Shopify product lives in exactly one store). */
 export function campaignsForProduct(
+  storeId: string,
+  platform: string,
+  productId: string,
+  map: ProductMap,
+): string[] {
+  const prefix = `${storeId}::${platform}::`;
+  const out: string[] = [];
+  for (const [k, productIds] of Object.entries(map)) {
+    if (!k.startsWith(prefix)) continue;
+    if (productIds.includes(productId)) out.push(k);
+  }
+  return out;
+}
+
+function campaignsForProductInStore(
   storeId: string,
   productId: string,
   map: ProductMap,
@@ -135,7 +197,7 @@ export function allocateProductRevenue(args: {
   for (const p of productRevenue) {
     if (!p.productId) continue;
     if (p.netRevenueCad <= 0 && p.units <= 0) continue;
-    const mappedKeys = campaignsForProduct(storeId, p.productId, map);
+    const mappedKeys = campaignsForProductInStore(storeId, p.productId, map);
     if (mappedKeys.length === 0) continue; // orphan — skip
 
     const spendsForProduct = mappedKeys.map(k => campaignSpend.get(k) ?? 0);

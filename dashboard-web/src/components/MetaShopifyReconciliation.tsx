@@ -13,7 +13,7 @@ import {
 import type { ProductsResponse } from '@/app/api/products/route';
 import type { CampaignRow } from '@/lib/campaigns';
 import type { OrderAttributionRow, OrderSource } from '@/lib/ordersAttribution';
-import type { ProductMap } from '@/lib/campaignProductMap';
+import { campaignKey, type ProductMap } from '@/lib/campaignProductMap';
 import { pearson, pearsonWithLag } from '@/lib/attributionAnalysis';
 import { enumerateDateRange } from '@/lib/dateRange';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
@@ -57,7 +57,7 @@ function aggregateMappedConversionValue(
   const wantedIds = new Set(mappedIds);
   const mappedKeys = new Set<string>();
   for (const key of Object.keys(productMap)) {
-    if (!key.startsWith(`${storeId}::`)) continue;
+    if (!key.startsWith(`${storeId}::${platform}::`)) continue;
     const products = productMap[key] ?? [];
     if (products.some(pid => wantedIds.has(pid))) {
       mappedKeys.add(key);
@@ -68,7 +68,7 @@ function aggregateMappedConversionValue(
     if (row.storeId !== storeId) continue;
     if (row.platform !== platform) continue;
     if (row.date < rangeFrom || row.date > rangeTo) continue;
-    const rowKey = `${row.storeId}::${row.campaignId}`;
+    const rowKey = campaignKey(row.storeId, row.platform, row.campaignId);
     if (!mappedKeys.has(rowKey)) continue;
     byDate.set(row.date, (byDate.get(row.date) ?? 0) + row.conversionValue);
   }

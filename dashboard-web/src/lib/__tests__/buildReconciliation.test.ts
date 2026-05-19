@@ -15,7 +15,7 @@ vi.mock('recharts', () => ({
 import { buildReconciliation } from '@/components/MetaShopifyReconciliation';
 import type { CampaignRow } from '@/lib/campaigns';
 import type { OrderAttributionRow } from '@/lib/ordersAttribution';
-import type { ProductMap } from '@/lib/campaignProductMap';
+import { campaignKey, type ProductMap } from '@/lib/campaignProductMap';
 import type { ProductRow } from '@/lib/products';
 
 // ---------------------------------------------------------------------------
@@ -162,9 +162,9 @@ describe('buildReconciliation', () => {
     );
 
     const productMap: ProductMap = {
-      [`${STORE}::${CAMP_META}`]: [PROD_A],
-      [`${STORE}::${CAMP_META_2}`]: [PROD_A],
-      [`${STORE}::${CAMP_GOOGLE}`]: [PROD_A],
+      [campaignKey(STORE, 'Meta', CAMP_META)]: [PROD_A],
+      [campaignKey(STORE, 'Meta', CAMP_META_2)]: [PROD_A],
+      [campaignKey(STORE, 'Google', CAMP_GOOGLE)]: [PROD_A],
     };
 
     const result = buildReconciliation({
@@ -214,7 +214,7 @@ describe('buildReconciliation', () => {
     };
 
     // zolplus has no Google campaigns, productMap empty for Google
-    const productMap: ProductMap = { [`${STORE}::${CAMP_META}`]: [PROD_A] };
+    const productMap: ProductMap = { [campaignKey(STORE, 'Meta', CAMP_META)]: [PROD_A] };
 
     const result = buildReconciliation({
       summary: makeSummary({ values: [100, 120, 80, 110, 90] }),
@@ -316,7 +316,7 @@ describe('buildReconciliation', () => {
       storeId: STORE,
       campaignsData: { rows: metaRows },
       ordersData: { rows: shopifyOrders },
-      productMap: { [`${STORE}::${CAMP_META}`]: [PROD_A] },
+      productMap: { [campaignKey(STORE, 'Meta', CAMP_META)]: [PROD_A] },
       rangeFrom: RANGE_FROM,
       rangeTo: RANGE_TO,
     });

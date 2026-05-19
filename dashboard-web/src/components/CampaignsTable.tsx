@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
 import {
   AlertCircle,
@@ -25,6 +25,7 @@ import {
 } from '@/lib/campaignOptimized';
 import {
   campaignKey,
+  migrateProductMapKeys,
   readProductMap,
   type ProductMap,
 } from '@/lib/campaignProductMap';
@@ -327,12 +328,18 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
   const [productMap, setProductMap] = useState<ProductMap>(() => ({}));
+  const productMapMigrationRan = useRef(false);
   useEffect(() => {
-    setProductMap(readProductMap());
+    if (data && !productMapMigrationRan.current) {
+      setProductMap(migrateProductMapKeys(data));
+      productMapMigrationRan.current = true;
+    } else {
+      setProductMap(readProductMap());
+    }
     const onChange = () => setProductMap(readProductMap());
     window.addEventListener('roas-campaign-product-map-changed', onChange);
     return () => window.removeEventListener('roas-campaign-product-map-changed', onChange);
-  }, []);
+  }, [data]);
 
   const [mode, setMode] = useState<Mode>('campaign');
   const [platform, setPlatform] = useState<Platform>('all');
@@ -441,7 +448,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     if (sortKey !== 'shopifyRoas' || trueRevenueByKey.size === 0) return aggregated;
     const sign = sortDir === 'asc' ? 1 : -1;
     const withRoas = aggregated.map(a => {
-      const info = trueRevenueByKey.get(campaignKey(a.storeId, a.campaignId));
+      const info = trueRevenueByKey.get(campaignKey(a.storeId, a.platform, a.campaignId));
       const roas = info && a.spend > 0 ? info.trueRevenue / a.spend : 0;
       return { a, roas, mapped: !!info };
     });
