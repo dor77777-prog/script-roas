@@ -141,6 +141,7 @@ export function buildReconciliation(opts: {
   productMap?: ProductMap;
 }): {
   series: Array<{ date: string; meta: number; google: number; organic: number; shopify: number }>;
+  primaryChannel: 'Meta' | 'Google' | 'Combined';
   r: number;
   rGoogle: number;
   rOrganic: number;
@@ -246,6 +247,10 @@ export function buildReconciliation(opts: {
     series.map(s => s.meta + s.google + s.organic),
     series.map(s => s.shopify),
   );
+  const primaryChannel: 'Meta' | 'Google' | 'Combined' =
+    summary.platform === 'Google' ? 'Google'
+      : summary.platform === 'Meta' ? 'Meta'
+      : 'Combined';
 
   // Lag detection: try offsets -3..3, pick the one with the highest r.
   //
@@ -276,7 +281,7 @@ export function buildReconciliation(opts: {
       ? Math.round((1 - sumChannels / sumShopify) * 100)
       : 0;
 
-  return { series, r, rGoogle, rOrganic, rCombined, bestLag, bestR, darkTrafficPercent };
+  return { series, primaryChannel, r, rGoogle, rOrganic, rCombined, bestLag, bestR, darkTrafficPercent };
 }
 
 type Props = {
@@ -284,6 +289,17 @@ type Props = {
 };
 
 export function MetaShopifyReconciliation({ reconciliation }: Props) {
+  const primaryChannel = reconciliation.primaryChannel;
+  const primaryR =
+    primaryChannel === 'Google' ? reconciliation.rGoogle
+      : primaryChannel === 'Meta' ? reconciliation.r
+      : reconciliation.rCombined;
+  const primaryAbsR = Math.abs(primaryR);
+  const primaryRClass =
+    primaryAbsR >= 0.7 ? 'text-roas-green'
+      : primaryAbsR >= 0.3 ? 'text-amber-600'
+      : 'text-roas-red';
+
   return (
     <section>
       <h3 className="text-sm font-semibold text-text-primary inline-flex items-center gap-1.5 mb-2">
@@ -303,21 +319,37 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
         <div className="flex items-start gap-3 flex-wrap">
           <div className="shrink-0">
             <div className="text-[10px] text-text-muted uppercase tracking-wide">
-              מתאם (Pearson r)
+              מתאם (Pearson r) · {primaryChannel}
             </div>
             <div className={cn(
               'text-2xl font-bold tabular-nums leading-tight',
-              Math.abs(reconciliation.r) >= 0.7 ? 'text-roas-green'
-                : Math.abs(reconciliation.r) >= 0.3 ? 'text-amber-600'
-                : 'text-roas-red',
+              primaryRClass,
             )}>
-              {reconciliation.r >= 0 ? '+' : ''}{reconciliation.r.toFixed(2)}
+              {primaryR >= 0 ? '+' : ''}{primaryR.toFixed(2)}
             </div>
           </div>
           <div className="flex-1 min-w-[200px] text-[11px] sm:text-xs text-text-secondary leading-relaxed">
             {(() => {
-              const absR = Math.abs(reconciliation.r);
-              if (absR >= 0.7) {
+              if (primaryAbsR >= 0.7) {
+                if (primaryChannel === 'Google') {
+                  return (
+                    <>
+                      <strong className="text-roas-green">מתאם גבוה.</strong>{' '}
+                      Google תופס את הטרנדים נכון. אם יש פער במספרים — סביר שזה{' '}
+                      <strong>bias קבוע</strong> (חלון attribution, modeled conversions, halo).{' '}
+                      החלטות גידול תקציב על בסיס מגמות Google אמינות.
+                    </>
+                  );
+                }
+                if (primaryChannel === 'Combined') {
+                  return (
+                    <>
+                      <strong className="text-roas-green">מתאם גבוה.</strong>{' '}
+                      Σ של 3 הערוצים מול Shopify תופס את הטרנדים נכון. פער קבוע במספרים{' '}
+                      מעיד בדרך כלל על bias בערוצי הדיווח, לא על שבירת המגמה.
+                    </>
+                  );
+                }
                 return (
                   <>
                     <strong className="text-roas-green">מתאם גבוה.</strong>{' '}
@@ -327,12 +359,49 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                   </>
                 );
               }
-              if (absR >= 0.3) {
+              if (primaryAbsR >= 0.3) {
+                if (primaryChannel === 'Google') {
+                  return (
+                    <>
+                      <strong className="text-amber-600">מתאם חלקי.</strong>{' '}
+                      Google תופס חלק מהתנועות אבל יש ימים שהוא חורג.{' '}
+                      התעלם מ-Google ברמת יום בודד, התייחס רק לאגרגציה של 7+ ימים.
+                    </>
+                  );
+                }
+                if (primaryChannel === 'Combined') {
+                  return (
+                    <>
+                      <strong className="text-amber-600">מתאם חלקי.</strong>{' '}
+                      Σ של 3 הערוצים מול Shopify מסביר חלק מהתנועה, אבל חסרים ימים.{' '}
+                      בדוק מיפוי מוצרים, UTMs וערוצים שלא נכנסים לאחת הסדרות.
+                    </>
+                  );
+                }
                 return (
                   <>
                     <strong className="text-amber-600">מתאם חלקי.</strong>{' '}
                     Meta תופס חלק מהתנועות אבל יש ימים שהוא חורג.{' '}
                     התעלם מ-Meta ברמת יום בודד, התייחס רק לאגרגציה של 7+ ימים.
+                  </>
+                );
+              }
+              if (primaryChannel === 'Google') {
+                return (
+                  <>
+                    <strong className="text-roas-red">אין מתאם.</strong>{' '}
+                    Google מדווח על המרות שלא מופיעות ב-Shopify. או שהמיפוי לא מלא{' '}
+                    (חסרים מוצרים), או שיש over-attribution אגרסיבי. אל תקבל החלטות{' '}
+                    על בסיס המרות Google של הקמפיין הזה.
+                  </>
+                );
+              }
+              if (primaryChannel === 'Combined') {
+                return (
+                  <>
+                    <strong className="text-roas-red">אין מתאם.</strong>{' '}
+                    Σ של 3 הערוצים מול Shopify לא מסביר את מכירות Shopify בפועל.{' '}
+                    בדוק אם חסרים מוצרים במיפוי, UTMs, או ערוצי מכירה שלא מסווגים.
                   </>
                 );
               }
@@ -356,7 +425,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
           <span>r(Combined)={reconciliation.rCombined.toFixed(2)}</span>
         </div>
 
-        {reconciliation.bestLag !== 0 && Math.abs(reconciliation.bestR) > Math.abs(reconciliation.r) + 0.1 && (
+        {primaryChannel === 'Meta' && reconciliation.bestLag !== 0 && Math.abs(reconciliation.bestR) > Math.abs(reconciliation.r) + 0.1 && (
           <div className="rounded-md bg-amber-50 border border-amber-200 px-2.5 py-1.5 text-[11px] text-amber-900">
             <strong>זוהה lag של {Math.abs(reconciliation.bestLag)} ימים:</strong>{' '}
             {reconciliation.bestLag > 0
