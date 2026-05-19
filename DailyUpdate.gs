@@ -82,6 +82,29 @@ function runLiveUpdateUsmile() {
 }
 
 /**
+ * Manual "refresh all 3 stores now" — safe version of the legacy
+ * runLiveUpdate(). Instead of running all 3 stores sequentially in
+ * ONE 6-min execution (the pattern that caused 19% timeouts before
+ * Phase 5.1), this schedules each per-store wrapper as an INDEPENDENT
+ * one-shot trigger 25 seconds apart. Each fires in its own execution
+ * context with its own 6-min budget.
+ *
+ * One-shot triggers auto-delete after firing — no cleanup needed.
+ * Trigger quota impact: peak +3 (briefly), well below the 20/script
+ * Apps Script limit. Combined with the 7 standing triggers we have
+ * 10 max, which is fine.
+ *
+ * Use this from the editor when you want "all stores up to the
+ * minute right now" without waiting for the next 15-min boundary.
+ */
+function refreshAllStoresNow() {
+  ScriptApp.newTrigger('runLiveUpdateUzoshop').timeBased().after(5 * 1000).create();
+  ScriptApp.newTrigger('runLiveUpdateZolplus').timeBased().after(30 * 1000).create();
+  ScriptApp.newTrigger('runLiveUpdateUsmile').timeBased().after(55 * 1000).create();
+  Logger.log('Scheduled 3 per-store refreshes (uzoshop +5s, zolplus +30s, usmile +55s). They run in independent executions.');
+}
+
+/**
  * Writes a zero-row to the summary tab for `dateStr`. The summary tab
  * is formula-driven — we only need writeDayRow() to fire so that
  * getOrCreateMonthBlock_ runs and creates the block for a new month.
