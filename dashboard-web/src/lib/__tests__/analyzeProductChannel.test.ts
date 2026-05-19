@@ -190,4 +190,97 @@ describe('analyzeProductChannel', () => {
     const r2 = analyzeProductChannel({ ...BASE_OPTS, productIds: ['p-1'], orders: ordersWrongStore });
     expect(r2.totalOrders).toBe(0);
   });
+
+  // ----------------------------------------------------------------
+  // Full OrderSource sweep (TEST-08 — pins AUDIT-P3-08)
+  // ----------------------------------------------------------------
+
+  describe('full OrderSource sweep', () => {
+    it('buckets every OrderSource value into bySource (with google-organic explicitly present)', () => {
+      // One order per writer-emitted source label, all containing the
+      // same mapped product. Verifies that no OrderSource value is silently
+      // dropped — the original bug was google-organic missing from the
+      // organic whitelist (AUDIT-P0-01).
+      const sources: Array<{ source: 'meta-paid' | 'meta-organic' | 'google-paid' | 'google-organic' | 'direct' | 'email' | 'other-paid' | 'other-referral'; fbclidPresent: boolean; gclidPresent: boolean }> = [
+        { source: 'meta-paid', fbclidPresent: true, gclidPresent: false },
+        { source: 'meta-organic', fbclidPresent: false, gclidPresent: false },
+        { source: 'google-paid', fbclidPresent: false, gclidPresent: true },
+        { source: 'google-organic', fbclidPresent: false, gclidPresent: false },
+        { source: 'direct', fbclidPresent: false, gclidPresent: false },
+        { source: 'email', fbclidPresent: false, gclidPresent: false },
+        { source: 'other-paid', fbclidPresent: false, gclidPresent: false },
+        { source: 'other-referral', fbclidPresent: false, gclidPresent: false },
+      ];
+      const orders = sources.map(s => makeOrder({
+        source: s.source,
+        fbclidPresent: s.fbclidPresent,
+        gclidPresent: s.gclidPresent,
+        orderId: `o-${s.source}`,
+        lineItems: [makeLineItem({ productId: 'p-1' })],
+        date: '2026-05-10',
+      }));
+
+      const result = analyzeProductChannel({
+        ...BASE_OPTS,
+        productIds: ['p-1'],
+        orders,
+      });
+
+      // Every source has one order with one revenue unit (50 from
+      // makeLineItem default). bySource maps must contain every label.
+      expect(result.totalOrders).toBe(8);
+      expect(result.bySource['meta-paid']?.orders).toBe(1);
+      expect(result.bySource['meta-organic']?.orders).toBe(1);
+      expect(result.bySource['google-paid']?.orders).toBe(1);
+      // CRITICAL: google-organic must be present, not silently merged.
+      expect(result.bySource['google-organic']?.orders).toBe(1);
+      expect(result.bySource['direct']?.orders).toBe(1);
+      expect(result.bySource['email']?.orders).toBe(1);
+      expect(result.bySource['other-paid']?.orders).toBe(1);
+      expect(result.bySource['other-referral']?.orders).toBe(1);
+    });
+
+    it('counts google-organic distinctly in bySource (not silently dropped)', () => {
+      // Targeted regression test for the AUDIT-P0-01 omission. Pre-fix
+      // the dashboard's organic whitelist had impossible labels and
+      // missed google-organic — analyzeProductChannel buckets by raw
+      // source string so the bucket appears regardless, but we keep
+      // this assertion focused as documentation of the specific bug.
+      const order = makeOrder({
+        source: 'google-organic',
+        fbclidPresent: false,
+        gclidPresent: false,
+        lineItems: [makeLineItem({ productId: 'p-1' })],
+        date: '2026-05-10',
+      });
+      const result = analyzeProductChannel({
+        ...BASE_OPTS,
+        productIds: ['p-1'],
+        orders: [order],
+      });
+      expect(result.bySource['google-organic']?.orders).toBe(1);
+      expect(result.bySource['google-organic']?.revenue).toBeGreaterThan(0);
+    });
+
+    it('Facebook count includes meta-paid + meta-organic + fbclidPresent (3 paths)', () => {
+      // Locked CONTEXT predicate: facebook = (source ∈ {meta-paid,
+      // meta-organic}) OR fbclidPresent. Three orders, each exercising
+      // exactly one path → facebookOrders = 3.
+      const orders = [
+        makeOrder({ source: 'meta-paid', fbclidPresent: false, lineItems: [makeLineItem({ productId: 'p-1' })], date: '2026-05-10', orderId: 'o1' }),
+        makeOrder({ source: 'meta-organic', fbclidPresent: false, lineItems: [makeLineItem({ productId: 'p-1' })], date: '2026-05-11', orderId: 'o2' }),
+        // fbclid present but source is google-paid — would NOT match a
+        // simple "source startsWith meta-" check, but must still count.
+        makeOrder({ source: 'google-paid', fbclidPresent: true, lineItems: [makeLineItem({ productId: 'p-1' })], date: '2026-05-12', orderId: 'o3' }),
+      ];
+      const result = analyzeProductChannel({
+        ...BASE_OPTS,
+        productIds: ['p-1'],
+        orders,
+      });
+      expect(result.totalOrders).toBe(3);
+      expect(result.facebookOrders).toBe(3);
+      expect(result.facebookRevenue).toBeGreaterThan(0);
+    });
+  });
 });
