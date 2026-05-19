@@ -428,10 +428,24 @@ export function analyzeAttribution(
     }
   } else {
     const pct = Math.round(coverage * 100);
-    trust = { level: 'low', label: 'לא אמין', score: pct };
-    reasons.push(
-      `רק ${pct}% מההמרות (${deterministicOrders} הזמנות) תויגו לקמפיין הזה`,
-    );
+    // WR-03: clamp the visible score to [0, 100]. coverage can be negative
+    // when refunds exceed sales (TEST-03 signed-revenue path) — without the
+    // clamp, trust.score would render as e.g. -200, breaking the
+    // documented [0, 100] contract (line 75) and any downstream comparator
+    // (Math.max, range checks, color thresholds).
+    const safePct = Math.max(0, pct);
+    trust = { level: 'low', label: 'לא אמין', score: safePct };
+    if (pct < 0) {
+      // Refund-heavy day: phrase the reason in terms of net loss, not
+      // a meaningless "רק -200% מההמרות תויגו" string.
+      reasons.push(
+        `החזרים גדולים מההזמנות (${deterministicOrders} פעולות, CAD ${deterministicRevenue.toFixed(0)} נטו)`,
+      );
+    } else {
+      reasons.push(
+        `רק ${pct}% מההמרות (${deterministicOrders} הזמנות) תויגו לקמפיין הזה`,
+      );
+    }
     reasons.push(
       `Meta מייחס CAD ${campaign.metaClaim.toFixed(0)} אבל רק CAD ${deterministicRevenue.toFixed(0)} בפועל יש להם click-id`,
     );
@@ -854,8 +868,17 @@ function buildAnalysis(opts: {
     }
   } else {
     const pct = Math.round(coverage * 100);
-    trust = { level: 'low', label: 'לא אמין', score: pct };
-    reasons.push(`רק ${pct}% מההמרות (${deterministicOrders} הזמנות) תויגו`);
+    // WR-03: clamp the visible score to [0, 100]. Coverage can go
+    // negative for refund-heavy windows (TEST-03 signed-revenue path),
+    // which would otherwise emit a negative score and a "רק -X%
+    // תויגו" string. Mirror analyzeAttribution.
+    const safePct = Math.max(0, pct);
+    trust = { level: 'low', label: 'לא אמין', score: safePct };
+    if (pct < 0) {
+      reasons.push(`החזרים גדולים מההזמנות (${deterministicOrders} פעולות, CAD ${deterministicRevenue.toFixed(0)} נטו)`);
+    } else {
+      reasons.push(`רק ${pct}% מההמרות (${deterministicOrders} הזמנות) תויגו`);
+    }
     recommendation = advice.bad;
   }
 

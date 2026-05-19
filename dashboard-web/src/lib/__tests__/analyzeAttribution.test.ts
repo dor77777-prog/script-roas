@@ -268,6 +268,29 @@ describe('analyzeAttribution', () => {
       expect(Number.isFinite(result!.coverage)).toBe(true);
       expect(Number.isNaN(result!.coverage)).toBe(false);
     });
+
+    it('WR-03: trust.score is clamped to [0, 100] when coverage is negative (refund-heavy day)', () => {
+      // Negative coverage previously emitted trust.score = -200 (raw pct),
+      // breaking the documented [0, 100] contract on AttributionTrust.score
+      // (attributionAnalysis.ts:75). Downstream comparators (Math.max,
+      // color thresholds, range checks) would treat a negative score as
+      // "extreme low", but the UI label / tooltip rendered the literal
+      // "-200" which is meaningless. Post-WR-03 fix: score clamps to 0.
+      const campaign = makeCampaign({ metaClaim: 100, spend: 50, campaignId: 'camp-1' });
+      const orders = [
+        makeOrder({ orderId: 'refund-1', totalCad: -200, utmId: 'camp-1', date: '2026-05-10' }),
+      ];
+      const result = analyzeAttribution(campaign, orders, DATE_FROM, DATE_TO);
+      expect(result).not.toBeNull();
+      expect(result!.trust.score).toBeGreaterThanOrEqual(0);
+      expect(result!.trust.score).toBeLessThanOrEqual(100);
+      // The reason string MUST NOT render "רק -X%" — that's the nonsense
+      // copy WR-03 fixed. Use the refund-specific phrasing instead.
+      const reasonsJoined = result!.reasons.join(' ');
+      expect(reasonsJoined).not.toMatch(/רק\s*-\d+%/);
+      // Refund-heavy day must surface the net-CAD phrasing.
+      expect(reasonsJoined).toMatch(/החזרים/);
+    });
   });
 
   it('volatile windowStability downgrades trust from high to medium', () => {
