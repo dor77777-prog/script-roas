@@ -78,14 +78,40 @@ export class RangeParamError extends Error {
 }
 
 /**
- * Returns the default last-90-days range, anchored on "today" in UTC
- * so server and client agree on the boundary (no timezone surprises).
+ * Returns the default last-90-days range, anchored on "today" in
+ * Asia/Jerusalem (the spreadsheet's TZ — see TZ constant in Config.gs).
+ *
+ * Previously anchored on UTC midnight. At 02:00 IL on a day boundary
+ * (UTC = previous-day 23:00), to=toISOString().slice(0,10) returned
+ * yesterday-UTC = day-before-yesterday-IL, so the default 90-day window
+ * excluded today entirely until UTC ticked over (WR-09). Tying both
+ * boundaries to Asia/Jerusalem matches the user's mental model of
+ * "today" and the spreadsheet's row stamps.
  */
 export function defaultRange(): DateRange {
-  const today = new Date();
-  const to = today.toISOString().slice(0, 10);
-  const fromDate = new Date(today.getTime() - DEFAULT_RANGE_DAYS * 86400 * 1000);
-  const from = fromDate.toISOString().slice(0, 10);
+  // 'en-CA' formats as YYYY-MM-DD which is exactly what the spreadsheet
+  // and isInRange() expect — no string surgery needed.
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jerusalem',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const to = fmt.format(new Date());
+  // Anchor `from` arithmetic in UTC milliseconds based on the IL "today"
+  // string. Constructing a Date at "${to}T00:00:00Z" gives a stable
+  // epoch ms that ignores the runtime's local TZ; subtracting
+  // DEFAULT_RANGE_DAYS * 86400 * 1000 and re-formatting via the same IL
+  // formatter avoids DST edge-cases (Israel observes IDT/IST; subtracting
+  // 24h ms across a DST shift would otherwise return the same day twice
+  // or skip one).
+  const toEpochMs = Date.UTC(
+    Number(to.slice(0, 4)),
+    Number(to.slice(5, 7)) - 1,
+    Number(to.slice(8, 10)),
+  );
+  const fromEpochMs = toEpochMs - DEFAULT_RANGE_DAYS * 86400 * 1000;
+  const from = fmt.format(new Date(fromEpochMs));
   return { from, to };
 }
 
