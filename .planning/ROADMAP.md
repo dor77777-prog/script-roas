@@ -199,9 +199,9 @@ Plans:
   6. Post-deploy production check: 4-channel chart includes google-organic orders correctly
 
 Plans:
-- [ ] 05.2.1.1-01-PLAN.md — P0/P1 critical (7 tasks: ORGANIC predicate, Shopify TZ, products-daily LockService, symmetric Meta series, allocation-filter independence, channel-aware narrative, pearson zero-variance)
-- [ ] 05.2.1.1-02-PLAN.md — P2 secondary (8 tasks: ID text format + migration, consistent date range, robust outlier detection, productMap freshness chip, canonical revenue basis, ad-set docstring, campaignKey platform namespace, Bayesian Bessel correction)
-- [ ] 05.2.1.1-03-PLAN.md — test coverage (8 tasks: OrderSource contract, darkTraffic boundary, signed revenue, cross-store hook, Google primary path, lineItemsCad, whitespace+long-ID, OrderSource sweep)
+- [x] 05.2.1.1-01-PLAN.md — P0/P1 critical (7 tasks: ORGANIC predicate, Shopify TZ, products-daily LockService, symmetric Meta series, allocation-filter independence, channel-aware narrative, pearson zero-variance)
+- [x] 05.2.1.1-02-PLAN.md — P2 secondary (8 tasks: ID text format + migration, consistent date range, robust outlier detection, productMap freshness chip, canonical revenue basis, ad-set docstring, campaignKey platform namespace, Bayesian Bessel correction)
+- [x] 05.2.1.1-03-PLAN.md — test coverage (8 tasks: OrderSource contract, darkTraffic boundary, signed revenue, cross-store hook, Google primary path, lineItemsCad, whitespace+long-ID, OrderSource sweep)
 
 ### Phase 6: Security & Cloud-Sync (SLIMMED — single-user internal context)
 
