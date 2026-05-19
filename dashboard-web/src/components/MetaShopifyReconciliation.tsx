@@ -79,6 +79,42 @@ export function pearsonWithLag(xs: number[], ys: number[], lag: number): number 
 }
 
 /**
+ * Sum daily conversion value across all campaigns on a platform that map to
+ * any of the requested products. This keeps Meta and Google reconciliation
+ * symmetric instead of treating the drawer campaign as the only Meta source.
+ */
+function aggregateMappedConversionValue(
+  rows: CampaignRow[] | undefined,
+  platform: 'Meta' | 'Google',
+  storeId: string,
+  productMap: ProductMap | undefined,
+  mappedIds: string[],
+): Map<string, number> {
+  const byDate = new Map<string, number>();
+  if (!rows || !productMap) return byDate;
+
+  const wantedIds = new Set(mappedIds);
+  const mappedKeys = new Set<string>();
+  for (const key of Object.keys(productMap)) {
+    if (!key.startsWith(`${storeId}::`)) continue;
+    const products = productMap[key] ?? [];
+    if (products.some(pid => wantedIds.has(pid))) {
+      mappedKeys.add(key);
+    }
+  }
+
+  for (const row of rows) {
+    if (row.storeId !== storeId) continue;
+    if (row.platform !== platform) continue;
+    const rowKey = `${row.storeId}::${row.campaignId}`;
+    if (!mappedKeys.has(rowKey)) continue;
+    byDate.set(row.date, (byDate.get(row.date) ?? 0) + row.conversionValue);
+  }
+
+  return byDate;
+}
+
+/**
  * Reconciliation analysis seam (PATTERNS.md Option A). Consumes the drawer's
  * already-aggregated `dailyArr` plus the raw Shopify product rows; returns a
  * chart-ready series with Pearson r + best lag, or null when not applicable
@@ -132,31 +168,28 @@ export function buildReconciliation(opts: {
     shopifyByDate.set(p.date, (shopifyByDate.get(p.date) ?? 0) + net);
   }
 
-  // Build {date → meta revenue}:
-  // If this is a Meta campaign, use conversionValue from dailyArr.
-  // If this is a Google campaign (or other), meta series = 0 for all days.
-  const metaByDate = new Map<string, number>();
-  if (summary.platform === 'Meta') {
-    for (const d of summary.dailyArr) {
-      metaByDate.set(d.date, d.value);
-    }
-  }
+  // Meta channel - sum across ALL Meta campaigns mapped to the same products
+  // (mirrors the Google loop). Was previously asymmetric - only used the
+  // current drawer campaign's dailyArr, undercounting Meta when 2+ Meta
+  // campaigns promote the same product. Fix for CODEX-NEW-P1-01.
+  const metaByDate = aggregateMappedConversionValue(
+    campaignsData?.rows,
+    'Meta',
+    storeId,
+    productMap,
+    mappedIds,
+  );
 
   // Build {date → google revenue}:
   // Sum conversionValue of ALL Google campaigns in this store that map to
   // any of the wantedIds (including the current campaign if it's Google).
-  const googleByDate = new Map<string, number>();
-  if (campaignsData?.rows && productMap) {
-    for (const row of campaignsData.rows) {
-      if (row.platform !== 'Google') continue;
-      if (row.storeId !== storeId) continue;
-      // Check if this Google campaign maps to any product in wantedIds
-      const campaignProducts = productMap[`${storeId}::${row.campaignId}`] ?? [];
-      const sharesProduct = campaignProducts.some(pid => wantedIds.has(pid));
-      if (!sharesProduct) continue;
-      googleByDate.set(row.date, (googleByDate.get(row.date) ?? 0) + row.conversionValue);
-    }
-  }
+  const googleByDate = aggregateMappedConversionValue(
+    campaignsData?.rows,
+    'Google',
+    storeId,
+    productMap,
+    mappedIds,
+  );
 
   /** Inverted paid-exclusion predicate (fix for AUDIT-P0-01).
    * An order contributes to the "Organic / Direct" channel if it's NOT

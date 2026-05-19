@@ -24,6 +24,7 @@ import type { ProductRow } from '@/lib/products';
 
 const STORE = 'uzoshop';
 const CAMP_META = 'meta-camp-1';
+const CAMP_META_2 = 'meta-camp-2';
 const CAMP_GOOGLE = 'google-camp-1';
 const PROD_A = 'prod-a';
 const PROD_B = 'prod-b';
@@ -110,6 +111,7 @@ function makeOrderRow(overrides: Partial<OrderAttributionRow>): OrderAttribution
 describe('buildReconciliation', () => {
   it('returns 4-key series + 4 Pearson values + darkTrafficPercent for full data', () => {
     const metaValues = [100, 120, 80, 110, 90];
+    const extraMetaValues = [5, 6, 4, 5, 4];
     const shopifyValues = [95, 115, 75, 105, 85]; // close to meta
     const googleValues = [20, 30, 10, 25, 15];
     const organicValues = [10, 15, 5, 12, 8];
@@ -119,6 +121,22 @@ describe('buildReconciliation', () => {
       lastUpdated: new Date().toISOString(),
     };
 
+    const metaCampaignRows = DATES.flatMap((date, i) => [
+      makeCampaignRow({
+        date,
+        platform: 'Meta',
+        campaignId: CAMP_META,
+        campaignName: 'Meta Camp 1',
+        conversionValue: metaValues[i],
+      }),
+      makeCampaignRow({
+        date,
+        platform: 'Meta',
+        campaignId: CAMP_META_2,
+        campaignName: 'Meta Camp 2',
+        conversionValue: extraMetaValues[i],
+      }),
+    ]);
     const googleCampaignRows = DATES.map((date, i) =>
       makeCampaignRow({ date, conversionValue: googleValues[i] }),
     );
@@ -132,14 +150,18 @@ describe('buildReconciliation', () => {
       }),
     );
 
-    const productMap: ProductMap = { [`${STORE}::${CAMP_GOOGLE}`]: [PROD_A] };
+    const productMap: ProductMap = {
+      [`${STORE}::${CAMP_META}`]: [PROD_A],
+      [`${STORE}::${CAMP_META_2}`]: [PROD_A],
+      [`${STORE}::${CAMP_GOOGLE}`]: [PROD_A],
+    };
 
     const result = buildReconciliation({
       summary: makeSummary({ values: metaValues }),
       productsData,
       mappedIds: [PROD_A],
       storeId: STORE,
-      campaignsData: { rows: googleCampaignRows },
+      campaignsData: { rows: [...metaCampaignRows, ...googleCampaignRows] },
       ordersData: { rows: organicOrders },
       productMap,
     });
@@ -150,7 +172,7 @@ describe('buildReconciliation', () => {
     // Each point has all 4 keys
     const first = result!.series[0];
     expect(first).toHaveProperty('date', '2026-05-01');
-    expect(first).toHaveProperty('meta', 100);
+    expect(first).toHaveProperty('meta', 105);
     expect(first).toHaveProperty('google', 20);
     expect(first).toHaveProperty('organic', 10);
     expect(first).toHaveProperty('shopify', 95);
@@ -252,14 +274,23 @@ describe('buildReconciliation', () => {
     };
 
     // Meta claims 60 per day, no google, no organic → channels = 60, shopify = 100
+    const metaRows = DATES.map(date =>
+      makeCampaignRow({
+        date,
+        platform: 'Meta',
+        campaignId: CAMP_META,
+        campaignName: 'Meta Camp 1',
+        conversionValue: 60,
+      }),
+    );
     const result = buildReconciliation({
       summary: makeSummary({ values: [60, 60, 60, 60, 60] }),
       productsData,
       mappedIds: [PROD_A],
       storeId: STORE,
-      campaignsData: { rows: [] },
+      campaignsData: { rows: metaRows },
       ordersData: { rows: [] },
-      productMap: {},
+      productMap: { [`${STORE}::${CAMP_META}`]: [PROD_A] },
     });
 
     expect(result).not.toBeNull();
@@ -269,10 +300,10 @@ describe('buildReconciliation', () => {
   });
 
   // ---------------------------------------------------------------------------
-  // Test 5: Backwards-compat — null/empty optional fields → google=0, organic=0
+  // Test 5: Missing optional aggregation inputs → all channel series zero
   // ---------------------------------------------------------------------------
 
-  it('returns google=0 and organic=0 when campaignsData/ordersData/productMap are absent', () => {
+  it('returns channel series as zero when campaignsData/ordersData/productMap are absent', () => {
     const metaValues = [100, 120, 80, 110, 90];
     const shopifyValues = [95, 115, 75, 105, 85];
 
@@ -292,11 +323,11 @@ describe('buildReconciliation', () => {
 
     expect(result).not.toBeNull();
     for (const s of result!.series) {
+      expect(s.meta).toBe(0);
       expect(s.google).toBe(0);
       expect(s.organic).toBe(0);
     }
-    // Meta and shopify should still be correct
-    expect(result!.series[0].meta).toBe(100);
+    // Shopify should still be correct; platform channels require mapped campaign rows.
     expect(result!.series[0].shopify).toBe(95);
     // rGoogle = 0 (all zeros → degenerate)
     expect(result!.rGoogle).toBe(0);
