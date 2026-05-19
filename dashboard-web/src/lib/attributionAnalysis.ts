@@ -20,6 +20,45 @@
 
 import type { OrderAttributionRow, OrderSource } from './ordersAttribution';
 
+// ============================================================================
+// Tunable constants (IN-05 — hoisted from inline literals).
+// ============================================================================
+//
+// These are the algorithm's tunable parameters. Hoisting them gives an analyst
+// ONE place to tune behaviour without grep'ing the file, and makes the magic
+// numbers searchable / lintable. Update here and the change ripples through
+// every consumer.
+
+/** Two-tailed 95% normal quantile. Used by the AOV-based ROAS CI. */
+const NORMAL_QUANTILE_95 = 1.96;
+/** Window size for stability bucketing. Each window represents a "weekly"
+ *  coverage slice. */
+const WINDOW_DAYS = 7;
+/** Minimum days in the trailing window-stability tail before it counts as a
+ *  bucket of its own. Below this the partial window is too noisy to add to σ. */
+const TAIL_DAYS_MIN_FOR_PARTIAL_BUCKET = 3;
+/** Minimum total range (in days) before window-stability is computed. Below
+ *  this we can't form even 2 windows so the verdict is meaningless. */
+const MIN_RANGE_DAYS_FOR_STABILITY = 2 * WINDOW_DAYS;
+/** Stability verdict: σ < this → 'stable' (consistent bias). */
+const STABLE_THRESHOLD = 0.15;
+/** Stability verdict: σ < this (but >= STABLE) → 'mixed'; >= → 'volatile'. */
+const VOLATILE_THRESHOLD = 0.35;
+/** Outlier detection: trailing-window lookback length. */
+const OUTLIER_LOOKBACK_DAYS = 7;
+/** Outlier detection: minimum non-NaN values in the lookback window before
+ *  we'll evaluate this day for a spike. */
+const OUTLIER_MIN_BASELINE_SAMPLES = 5;
+/** Outlier detection: multiple of MAD that constitutes a spike. */
+const MAD_OUTLIER_MULTIPLIER = 3;
+/** Outlier detection: when MAD == 0 (constant baseline), fall back to this
+ *  fraction of |median| as the threshold so we don't divide by zero. */
+const MAD_FALLBACK_FRACTION = 0.05;
+/** Coverage upper clamp. Halo (det >> claim) above this is collapsed back to
+ *  this constant; the upper clamp prevents one freak day from blowing the
+ *  trust ladder. */
+const COVERAGE_UPPER_CLAMP = 2;
+
 export type AttributionAnalysis = {
   /** Sum of order totals where the order is provably from this campaign. */
   deterministicRevenue: number;
@@ -103,7 +142,7 @@ export type AttributionTrust = {
  */
 export function computeCoverage(deterministicRevenue: number, metaClaim: number): number {
   return metaClaim > 0
-    ? Math.min(2, deterministicRevenue / metaClaim)
+    ? Math.min(COVERAGE_UPPER_CLAMP, deterministicRevenue / metaClaim)
     : metaClaim < 0
       ? 0
       : (deterministicRevenue > 0 ? 1 : 0);
@@ -334,9 +373,9 @@ export function analyzeAttribution(
         const stdDev = Math.sqrt(variance);
         const stderrAov = stdDev / Math.sqrt(aovs.length);
         // CI on total revenue = CI on (N × mean AOV) — N is treated as fixed
-        // (we observed it). 95% normal: ± 1.96 × stderr.
-        const revLow = Math.max(0, (meanAov - 1.96 * stderrAov) * aovs.length);
-        const revHigh = (meanAov + 1.96 * stderrAov) * aovs.length;
+        // (we observed it). 95% normal: ± NORMAL_QUANTILE_95 × stderr.
+        const revLow = Math.max(0, (meanAov - NORMAL_QUANTILE_95 * stderrAov) * aovs.length);
+        const revHigh = (meanAov + NORMAL_QUANTILE_95 * stderrAov) * aovs.length;
         roasInterval = {
           low: revLow / campaign.spend,
           mid: deterministicRevenue / campaign.spend,
@@ -531,24 +570,24 @@ export function computeWindowStability(
   dateFrom: string,
   dateTo: string,
 ): WindowStability | null {
-  // Bucket the range into consecutive 7-day windows.
+  // Bucket the range into consecutive WINDOW_DAYS windows.
   const ms = (s: string) => new Date(s + 'T00:00:00Z').getTime();
   const fromMs = ms(dateFrom);
   const toMs = ms(dateTo);
   if (!Number.isFinite(fromMs) || !Number.isFinite(toMs)) return null;
   const totalDays = Math.round((toMs - fromMs) / 86400000) + 1;
-  if (totalDays < 14) return null; // need ≥2 windows for any signal
+  if (totalDays < MIN_RANGE_DAYS_FOR_STABILITY) return null; // need ≥2 windows for any signal
 
   // Aggregate matched + meta per window. Include a partial trailing bucket
-  // only when it covers ≥3 days — below that the tail is too noisy to
-  // contribute usefully to σ and can artificially spike the variance.
-  // (Previously the tail was silently truncated; IN5-03.)
-  const fullWindows = Math.floor(totalDays / 7);
-  const tailDays = totalDays - fullWindows * 7;
+  // only when it covers ≥ TAIL_DAYS_MIN_FOR_PARTIAL_BUCKET days — below that
+  // the tail is too noisy to contribute usefully to σ and can artificially
+  // spike the variance. (Previously the tail was silently truncated; IN5-03.)
+  const fullWindows = Math.floor(totalDays / WINDOW_DAYS);
+  const tailDays = totalDays - fullWindows * WINDOW_DAYS;
   // `totalWindows` is the bucket count BEFORE filtering for meta>0. The
   // returned WindowStability.windowCountWithData is the post-filter count —
   // two distinct concepts that share the same arithmetic root. (IN-01)
-  const totalWindows = fullWindows + (tailDays >= 3 ? 1 : 0);
+  const totalWindows = fullWindows + (tailDays >= TAIL_DAYS_MIN_FOR_PARTIAL_BUCKET ? 1 : 0);
   const buckets: Array<{ matched: number; meta: number }> = [];
   for (let i = 0; i < totalWindows; i++) {
     buckets.push({ matched: 0, meta: 0 });
@@ -556,7 +595,7 @@ export function computeWindowStability(
   function bucketIdx(dateStr: string): number {
     const d = ms(dateStr);
     if (!Number.isFinite(d) || d < fromMs) return -1;
-    const idx = Math.floor((d - fromMs) / 86400000 / 7);
+    const idx = Math.floor((d - fromMs) / 86400000 / WINDOW_DAYS);
     if (idx >= totalWindows) return -1;
     return idx;
   }
@@ -579,7 +618,7 @@ export function computeWindowStability(
   // signal to compute from).
   const coverages = buckets
     .filter(b => b.meta > 0)
-    .map(b => Math.min(2, b.matched / b.meta));
+    .map(b => Math.min(COVERAGE_UPPER_CLAMP, b.matched / b.meta));
   if (coverages.length < 2) return null;
 
   const mean = coverages.reduce((s, x) => s + x, 0) / coverages.length;
@@ -587,39 +626,41 @@ export function computeWindowStability(
     coverages.reduce((s, x) => s + (x - mean) ** 2, 0) / coverages.length;
   const stdDev = Math.sqrt(variance);
   const verdict: WindowStability['verdict'] =
-    stdDev < 0.15 ? 'stable' : stdDev < 0.35 ? 'mixed' : 'volatile';
+    stdDev < STABLE_THRESHOLD ? 'stable'
+    : stdDev < VOLATILE_THRESHOLD ? 'mixed'
+    : 'volatile';
   return { windowCountWithData: coverages.length, meanCoverage: mean, stdDev, verdict };
 }
 
 /**
- * Outlier day detection using median + MAD against the trailing 7-day
- * baseline. The robust baseline prevents one outlier from inflating the
- * next day's threshold and hiding a cascading spike.
+ * Outlier day detection using median + MAD against the trailing
+ * OUTLIER_LOOKBACK_DAYS baseline. The robust baseline prevents one
+ * outlier from inflating the next day's threshold and hiding a
+ * cascading spike.
  */
 export function detectOutlierDays(
   series: Array<{ date: string; value: number }>,
 ): string[] {
-  if (series.length < 8) return [];
+  if (series.length < OUTLIER_LOOKBACK_DAYS + 1) return [];
   // Sort by date asc so trailing windows are causal.
   const sorted = [...series].sort((a, b) => a.date.localeCompare(b.date));
   const out: string[] = [];
-  const LOOKBACK = 7;
-  for (let i = LOOKBACK; i < sorted.length; i++) {
-    const trail = sorted.slice(Math.max(0, i - LOOKBACK), i);
+  for (let i = OUTLIER_LOOKBACK_DAYS; i < sorted.length; i++) {
+    const trail = sorted.slice(Math.max(0, i - OUTLIER_LOOKBACK_DAYS), i);
     // Keep zero-valued baseline days. Filtering `v > 0` (the previous
     // behaviour) masked the most operationally important signal: a
     // low-activity campaign with $0 conversions for days 1-13 then a
     // $500 spike on day 14 would have empty vals and exit before the
     // spike was evaluated. (WR-07)
     const vals = trail.map(p => p.value).filter(v => Number.isFinite(v));
-    if (vals.length < 5) continue;
+    if (vals.length < OUTLIER_MIN_BASELINE_SAMPLES) continue;
     if (!Number.isFinite(sorted[i].value)) continue;
     const med = median(vals);
     const deviation = mad(vals, med);
     const diff = Math.abs(sorted[i].value - med);
     const threshold = deviation > 0
-      ? 3 * deviation
-      : Math.max(1e-9, Math.abs(med) * 0.05);
+      ? MAD_OUTLIER_MULTIPLIER * deviation
+      : Math.max(1e-9, Math.abs(med) * MAD_FALLBACK_FRACTION);
     if (diff > threshold) out.push(sorted[i].date);
   }
   return out;
@@ -821,8 +862,9 @@ function buildAnalysis(opts: {
       } else {
         const stdDev = Math.sqrt(variance);
         const stderrAov = stdDev / Math.sqrt(aovs.length);
-        const revLow = Math.max(0, (meanAov - 1.96 * stderrAov) * aovs.length);
-        const revHigh = (meanAov + 1.96 * stderrAov) * aovs.length;
+        // ± NORMAL_QUANTILE_95 × stderr — mirrors campaign-level analyzer.
+        const revLow = Math.max(0, (meanAov - NORMAL_QUANTILE_95 * stderrAov) * aovs.length);
+        const revHigh = (meanAov + NORMAL_QUANTILE_95 * stderrAov) * aovs.length;
         roasInterval = {
           low: revLow / spend,
           mid: deterministicRevenue / spend,
