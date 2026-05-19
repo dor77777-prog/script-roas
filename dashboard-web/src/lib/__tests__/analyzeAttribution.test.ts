@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { analyzeAttribution } from '@/lib/attributionAnalysis';
-import { makeOrder, makeCampaign, makeDailySeries } from './fixtures';
+import { makeOrder, makeCampaign } from './fixtures';
 
 const DATE_FROM = '2026-05-01';
 const DATE_TO = '2026-05-15';
