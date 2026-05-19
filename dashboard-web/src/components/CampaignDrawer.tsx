@@ -21,6 +21,7 @@ import {
   YAxis,
 } from 'recharts';
 import type { ProductsResponse } from '@/app/api/products/route';
+import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
 import {
   analyzeAttribution,
@@ -124,6 +125,18 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
   const drawerRange = { from: rangeFrom, to: rangeTo };
   const { data: productsData } = useSWR<ProductsResponse>(
     open ? buildDateRangeKey('/api/products', drawerRange) : null,
+    async (url: string) => {
+      const r = await fetch(url);
+      if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
+      return r.json();
+    },
+    { revalidateOnFocus: false, dedupingInterval: 60_000 },
+  );
+  // All campaign rows for the date range — used by buildReconciliation to
+  // compute the Google series (other Google campaigns promoting same products).
+  // SWR dedupes against CampaignsTable's identical key so no extra network call.
+  const { data: campaignsData } = useSWR<CampaignsResponse>(
+    open ? buildDateRangeKey('/api/campaigns', drawerRange) : null,
     async (url: string) => {
       const r = await fetch(url);
       if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
@@ -286,7 +299,15 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
   // Reconciliation + analysis: helpers gate their own mounts (return null
   // when not applicable). Reconciliation lives in MetaShopifyReconciliation
   // (T-F); analyzeAttribution stays in @/lib/attributionAnalysis.
-  const reconciliation = buildReconciliation({ summary, productsData, mappedIds, storeId });
+  const reconciliation = buildReconciliation({
+    summary,
+    productsData,
+    mappedIds,
+    storeId,
+    campaignsData,
+    ordersData: ordersAttrData,
+    productMap,
+  });
   const analysisDateFrom = rows.reduce((min, r) => (r.date < min ? r.date : min), rows[0]?.date ?? '');
   const analysisDateTo = rows.reduce((max, r) => (r.date > max ? r.date : max), rows[0]?.date ?? '');
   const analysis = analyzeAttribution(
