@@ -25,8 +25,10 @@
  *
  * TODO (future phase): extract a shared revenue-allocation schema so
  * Shopify.gs and dashboard-web stop duplicating this logic. Tracked
- * in .planning/phases/05.2.1.1-algorithm-correctness-fixes-codex-via-gsd-cross-ai/05.2.1.1-SUMMARY.md
- * "Flagged for Follow-up".
+ * in .planning/phases/05.2.1.1-algorithm-correctness-fixes-codex-via-gsd-cross-ai/05.2.1.1-REVIEW.md
+ * WR-01 (the post-mortem that explicitly documented the
+ * "KEEP IN SYNC" duplication risk, including the off-by-shape bug
+ * fixed in that commit).
  */
 
 export type LineItemInput = {
