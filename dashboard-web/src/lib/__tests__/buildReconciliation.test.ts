@@ -328,6 +328,111 @@ describe('buildReconciliation', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // darkTrafficPercent boundary (TEST-02 — pin AUDIT-P3-02)
+  // ---------------------------------------------------------------------------
+
+  describe('darkTrafficPercent boundary', () => {
+    function buildBoundaryFixture(opts: {
+      metaPerDay: number;
+      shopifyPerDay: number;
+    }) {
+      const { metaPerDay, shopifyPerDay } = opts;
+      const productsData = {
+        rows: DATES.map(date => makeProductRow({ date, netRevenue: shopifyPerDay })),
+        lastUpdated: new Date().toISOString(),
+      };
+      // Meta campaign rows — sole channel source, simple to reason about.
+      const metaRows = DATES.map(date =>
+        makeCampaignRow({
+          date,
+          platform: 'Meta',
+          campaignId: CAMP_META,
+          campaignName: 'Meta Camp 1',
+          conversionValue: metaPerDay,
+        }),
+      );
+      // Shopify-actual via line-item revenue (post-FIX-12 canonical basis).
+      const shopifyOrders = shopifyPerDay > 0
+        ? DATES.map((date, i) =>
+            makeOrderRow({
+              date,
+              orderId: `paid-${i}`,
+              source: 'meta-paid',
+              fbclidPresent: true,
+              lineItems: [{ productId: PROD_A, units: 1, revenueCad: shopifyPerDay }],
+            }),
+          )
+        : [];
+      return {
+        productsData,
+        metaRows,
+        shopifyOrders,
+        productMap: { [campaignKey(STORE, 'Meta', CAMP_META)]: [PROD_A] } as ProductMap,
+      };
+    }
+
+    it('returns 0 when channels are exactly 80% of Shopify (boundary excludes warning)', () => {
+      // 80 (meta per day) / 100 (shopify per day) = 0.80 exactly. The code
+      // uses `< 0.8` which is non-inclusive at the boundary → no warning.
+      const fx = buildBoundaryFixture({ metaPerDay: 80, shopifyPerDay: 100 });
+      const result = buildReconciliation({
+        summary: makeSummary({ values: [80, 80, 80, 80, 80] }),
+        productsData: fx.productsData,
+        mappedIds: [PROD_A],
+        storeId: STORE,
+        campaignsData: { rows: fx.metaRows },
+        ordersData: { rows: fx.shopifyOrders },
+        productMap: fx.productMap,
+        rangeFrom: RANGE_FROM,
+        rangeTo: RANGE_TO,
+      });
+      expect(result).not.toBeNull();
+      // 80/100 = 0.8 — strictly NOT less than 0.8 → no warning, 0%.
+      expect(result!.darkTrafficPercent).toBe(0);
+    });
+
+    it('fires warning just below the 80% boundary (ratio 0.799)', () => {
+      // 79.9 / 100 = 0.799 < 0.8 → round((1 - 0.799) * 100) = round(20.1) = 20.
+      // Note: the plan's text said "21" but the arithmetic is round(20.1) = 20.
+      // The test pins the actual implementation.
+      const fx = buildBoundaryFixture({ metaPerDay: 79.9, shopifyPerDay: 100 });
+      const result = buildReconciliation({
+        summary: makeSummary({ values: [79.9, 79.9, 79.9, 79.9, 79.9] }),
+        productsData: fx.productsData,
+        mappedIds: [PROD_A],
+        storeId: STORE,
+        campaignsData: { rows: fx.metaRows },
+        ordersData: { rows: fx.shopifyOrders },
+        productMap: fx.productMap,
+        rangeFrom: RANGE_FROM,
+        rangeTo: RANGE_TO,
+      });
+      expect(result).not.toBeNull();
+      expect(result!.darkTrafficPercent).toBe(20);
+    });
+
+    it('returns 0 (not NaN) when Shopify is 0 (avoid divide-by-zero)', () => {
+      // No Shopify orders at all → sumShopify = 0. The guard `sumShopify > 0`
+      // in MetaShopifyReconciliation:260 must short-circuit before division.
+      const fx = buildBoundaryFixture({ metaPerDay: 100, shopifyPerDay: 0 });
+      const result = buildReconciliation({
+        summary: makeSummary({ values: [100, 100, 100, 100, 100] }),
+        productsData: fx.productsData,
+        mappedIds: [PROD_A],
+        storeId: STORE,
+        campaignsData: { rows: fx.metaRows },
+        ordersData: { rows: fx.shopifyOrders },
+        productMap: fx.productMap,
+        rangeFrom: RANGE_FROM,
+        rangeTo: RANGE_TO,
+      });
+      expect(result).not.toBeNull();
+      expect(result!.darkTrafficPercent).toBe(0);
+      expect(Number.isNaN(result!.darkTrafficPercent)).toBe(false);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // Test 5: Missing optional aggregation inputs → all channel series zero
   // ---------------------------------------------------------------------------
 
