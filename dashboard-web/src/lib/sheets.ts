@@ -126,6 +126,14 @@ export async function fetchDailyData(opts?: { range?: DateRange }): Promise<Dail
   const archiveId = getArchiveSpreadsheetId();
   const needsArchive = !!archiveId && !!opts?.range && opts.range.from < archiveCutoff;
 
+  // Archive read cap. Sheets' hard cap is 10M cells per spreadsheet — at
+  // 11 columns wide, that's ~900k rows comfortably in a single tab. We
+  // cap at 100k to keep payload bounded, but detect truncation after the
+  // read (see below) so silent row loss is logged instead of invisible.
+  // WR-06. Bumping this requires profiling: 100k rows ≈ 1.1M cells, well
+  // within quota, but the wire-level cost scales linearly.
+  const ARCHIVE_MAX_ROWS = 100_000;
+
   const reads: Array<Promise<{ data: { values?: unknown[][] | null } }>> = [
     sheets.spreadsheets.values.get({
       spreadsheetId: warmId,
@@ -138,7 +146,7 @@ export async function fetchDailyData(opts?: { range?: DateRange }): Promise<Dail
     reads.push(
       sheets.spreadsheets.values.get({
         spreadsheetId: archiveId,
-        range: `${DATA_TAB}!A2:K100000`, // archive may be larger
+        range: `${DATA_TAB}!A2:K${ARCHIVE_MAX_ROWS + 1}`, // archive may be larger
         valueRenderOption: 'UNFORMATTED_VALUE',
         dateTimeRenderOption: 'FORMATTED_STRING',
       }) as Promise<{ data: { values?: unknown[][] | null } }>,
@@ -147,8 +155,18 @@ export async function fetchDailyData(opts?: { range?: DateRange }): Promise<Dail
 
   const responses = await Promise.all(reads);
   const allValues: unknown[][] = [];
-  for (const r of responses) {
-    const v = r.data.values ?? [];
+  for (let i = 0; i < responses.length; i++) {
+    const v = responses[i].data.values ?? [];
+    // The second response (when present) is the archive read. If it
+    // returned a full ARCHIVE_MAX_ROWS rows, older data may have been
+    // silently truncated — log a warning so ops can see it without
+    // having to read a missing-data ticket cold. WR-06.
+    if (needsArchive && i === 1 && v.length >= ARCHIVE_MAX_ROWS) {
+      console.warn(
+        `/lib/sheets archive read hit row cap of ${ARCHIVE_MAX_ROWS}; ` +
+        `older rows may be excluded. Consider bumping ARCHIVE_MAX_ROWS or paginating.`,
+      );
+    }
     for (const row of v) allValues.push(row as unknown[]);
   }
 
