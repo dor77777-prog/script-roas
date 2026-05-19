@@ -11,6 +11,7 @@ import {
 import type { ProductsResponse } from '@/app/api/products/route';
 import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
+import type { CampaignRow } from '@/lib/campaigns';
 import type { DateRange } from '@/lib/types';
 import type { Aggregated } from '@/components/CampaignsTable';
 
@@ -172,18 +173,23 @@ export function useCampaignTrueRevenue(opts: {
   ordersAttrResp: OrdersAttributionResponse | undefined;
   productMap: ProductMap;
   aggregated: Aggregated[];
+  allCampaignRows: CampaignRow[];
   localRange: DateRange;
 }): Map<string, TrueRevenueInfo> {
-  const { mode, data, productsResp, ordersAttrResp, productMap, aggregated, localRange } = opts;
+  const { mode, data, productsResp, ordersAttrResp, productMap, aggregated, allCampaignRows, localRange } = opts;
   return useMemo(() => {
     if (mode !== 'campaign') return new Map<string, TrueRevenueInfo>();
     if (!data?.rows || !productsResp?.rows) return new Map<string, TrueRevenueInfo>();
 
-    // Step 1: compute total spend per campaign-key from the aggregated list
-    // (already scoped to localRange/localStore/platform).
+    // Step 1: compute total spend per campaign-key from ALL campaign rows in
+    // the store/date range, before the UI platform filter is applied.
+    // Otherwise hidden-platform campaigns get spend=0 and inflate the visible
+    // platform's allocated revenue. Fix for CODEX-NEW-P1-02.
     const campaignSpend = new Map<string, number>();
-    for (const a of aggregated) {
-      campaignSpend.set(campaignKey(a.storeId, a.campaignId), a.spend);
+    for (const r of allCampaignRows) {
+      if (r.date < localRange.from || r.date > localRange.to) continue;
+      const key = campaignKey(r.storeId, r.campaignId);
+      campaignSpend.set(key, (campaignSpend.get(key) ?? 0) + r.spend);
     }
 
     // Step 2: group product net-revenue by (storeId, productId) over the
@@ -305,5 +311,5 @@ export function useCampaignTrueRevenue(opts: {
       });
     }
     return out;
-  }, [mode, data, productsResp, ordersAttrResp, productMap, aggregated, localRange]);
+  }, [mode, data, productsResp, ordersAttrResp, productMap, aggregated, allCampaignRows, localRange]);
 }

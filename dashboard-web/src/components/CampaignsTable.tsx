@@ -393,6 +393,15 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     return sortAggregated(list, mode, sortKey, sortDir);
   }, [data, mode, localStore, platform, localRange, sortKey, sortDir]);
 
+  const allCampaignRows = useMemo(() => {
+    if (!data) return [];
+    return data.rows.filter(r => {
+      if (r.date < localRange.from || r.date > localRange.to) return false;
+      if (localStore !== 'All' && r.storeName !== localStore) return false;
+      return true;
+    });
+  }, [data, localStore, localRange]);
+
   const trueRevenueByKey = useCampaignTrueRevenue({
     mode,
     data,
@@ -400,6 +409,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     ordersAttrResp,
     productMap,
     aggregated,
+    allCampaignRows,
     localRange,
   });
 
