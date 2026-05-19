@@ -1,6 +1,7 @@
 import { google } from 'googleapis';
 import type { DailyRow } from './types';
 import { COGS_RATE_OF_REVENUE } from './analytics';
+import { type DateRange, isInRange } from './dateRange';
 
 const DATA_TAB = 'data-daily';
 const STORE_META_TAB = 'store-meta';
@@ -68,8 +69,10 @@ function parseDate(v: unknown): string | null {
 
 /**
  * Reads the data-daily tab and returns one normalized row per (date, store).
+ * When `opts.range` is provided, rows outside [from, to] are filtered out
+ * server-side before returning to the caller (Phase 5 pagination).
  */
-export async function fetchDailyData(): Promise<DailyRow[]> {
+export async function fetchDailyData(opts?: { range?: DateRange }): Promise<DailyRow[]> {
   const auth = getAuth();
   const sheets = google.sheets({ version: 'v4', auth });
   const spreadsheetId = getSpreadsheetId();
@@ -87,6 +90,7 @@ export async function fetchDailyData(): Promise<DailyRow[]> {
   for (const row of values) {
     const dateStr = parseDate(row[0]);
     if (!dateStr) continue;
+    if (opts?.range && !isInRange(dateStr, opts.range)) continue;
     const storeId = String(row[1] ?? '').trim();
     const storeName = String(row[2] ?? '').trim();
     if (!storeId || !storeName) continue;

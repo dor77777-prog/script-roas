@@ -1,4 +1,5 @@
 import { google } from 'googleapis';
+import { type DateRange, isInRange } from './dateRange';
 
 /**
  * Per-order attribution row. One per Shopify order, sourced from the
@@ -178,8 +179,10 @@ export function parseLineItems(v: unknown): OrderLineItem[] {
  * Reads every <storeId>-orders-attribution tab and merges. Tolerates
  * missing tabs (first-deploy case): returns empty array if the batch
  * fails on a 'not found' / 'unable to parse range' error.
+ * When `opts.range` is provided, rows outside [from, to] are filtered out
+ * server-side (Phase 5 pagination).
  */
-export async function fetchOrdersAttribution(): Promise<OrderAttributionRow[]> {
+export async function fetchOrdersAttribution(opts?: { range?: DateRange }): Promise<OrderAttributionRow[]> {
   const auth = getAuth();
   const sheets = google.sheets({ version: 'v4', auth });
   const spreadsheetId = getSpreadsheetId();
@@ -212,6 +215,7 @@ export async function fetchOrdersAttribution(): Promise<OrderAttributionRow[]> {
     for (const row of values) {
       const date = parseDate(row[0]);
       if (!date) continue;
+      if (opts?.range && !isInRange(date, opts.range)) continue;
       const orderId = String(row[1] ?? '').trim();
       if (!orderId) continue;
       out.push({
