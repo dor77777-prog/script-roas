@@ -13,7 +13,11 @@ import type { ProductsResponse } from '@/app/api/products/route';
 import type { CampaignRow } from '@/lib/campaigns';
 import type { OrderAttributionRow, OrderSource } from '@/lib/ordersAttribution';
 import type { ProductMap } from '@/lib/campaignProductMap';
+import { pearson, pearsonWithLag } from '@/lib/attributionAnalysis';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
+export { pearson, pearsonWithLag };
+
+const LAG_IMPROVEMENT_THRESHOLD = 0.05;
 
 /**
  * Day-by-day Meta-claim vs Shopify-actual reconciliation panel for a single
@@ -21,62 +25,14 @@ import { cn, formatCurrency, formatDate } from '@/lib/utils';
  * byte-identical from CampaignDrawer.tsx (pre-refactor lines 768-923 JSX +
  * lines 363-410 analysis IIFE + lines 1242-1279 pearson helpers).
  *
- * The two named-exported helpers (`pearson`, `pearsonWithLag`) are pure and
- * marked safe-to-memoize so Phase 5/6/7 can reuse them without a fresh
- * dependency boundary (CONTEXT 04 §Reusable Assets 3rd bullet).
+ * The named-exported helpers (`pearson`, `pearsonWithLag`) live in
+ * attributionAnalysis.ts and are re-exported here for backwards compatibility.
  *
  * `buildReconciliation` (Option A from 04-PATTERNS.md) is the analysis seam:
  * the parent passes raw inputs, the helper returns the chart-ready series +
  * Pearson r + best lag. The component then renders unconditionally given a
  * non-null `reconciliation` prop.
  */
-
-/**
- * Pearson correlation coefficient. Returns 0 for degenerate cases (constant
- * arrays, length < 2, mismatched lengths). Output is clamped to [-1, 1].
- *
- * Pure function — no side effects, no IO. Safe to memoize on inputs.
- */
-export function pearson(xs: number[], ys: number[]): number {
-  const n = Math.min(xs.length, ys.length);
-  if (n < 2) return 0;
-  let sx = 0, sy = 0;
-  for (let i = 0; i < n; i++) { sx += xs[i]; sy += ys[i]; }
-  const mx = sx / n;
-  const my = sy / n;
-  let cov = 0, vx = 0, vy = 0;
-  for (let i = 0; i < n; i++) {
-    const dx = xs[i] - mx;
-    const dy = ys[i] - my;
-    cov += dx * dy;
-    vx += dx * dx;
-    vy += dy * dy;
-  }
-  const denom = Math.sqrt(vx * vy);
-  if (denom === 0) return 0;
-  const r = cov / denom;
-  return Math.max(-1, Math.min(1, r));
-}
-
-/**
- * Pearson correlation with a lag applied to the second series — useful for
- * detecting attribution windows (Meta credits sooner than Shopify records).
- * Positive lag = `ys` shifted forward (compare xs[i] with ys[i + lag]).
- *
- * Pure function — no side effects, no IO. Safe to memoize on inputs.
- */
-export function pearsonWithLag(xs: number[], ys: number[], lag: number): number {
-  if (lag === 0) return pearson(xs, ys);
-  const xsShift: number[] = [];
-  const ysShift: number[] = [];
-  for (let i = 0; i < xs.length; i++) {
-    const j = i + lag;
-    if (j < 0 || j >= ys.length) continue;
-    xsShift.push(xs[i]);
-    ysShift.push(ys[j]);
-  }
-  return pearson(xsShift, ysShift);
-}
 
 /**
  * Sum daily conversion value across all campaigns on a platform that map to
@@ -142,12 +98,12 @@ export function buildReconciliation(opts: {
 }): {
   series: Array<{ date: string; meta: number; google: number; organic: number; shopify: number }>;
   primaryChannel: 'Meta' | 'Google' | 'Combined';
-  r: number;
-  rGoogle: number;
-  rOrganic: number;
-  rCombined: number;
+  r: number | null;
+  rGoogle: number | null;
+  rOrganic: number | null;
+  rCombined: number | null;
   bestLag: number;
-  bestR: number;
+  bestR: number | null;
   darkTrafficPercent: number;
 } | null {
   const { summary, productsData, mappedIds, storeId, campaignsData, ordersData, productMap } = opts;
@@ -267,7 +223,7 @@ export function buildReconciliation(opts: {
     const effectiveN = series.length - Math.abs(lag);
     if (effectiveN < 5) continue; // n<5 makes |r| trivially close to 1
     const r2 = pearsonWithLag(series.map(s => s.meta), series.map(s => s.shopify), lag);
-    if (Math.abs(r2) > Math.abs(bestR)) {
+    if (r2 !== null && bestR !== null && r2 > 0 && r2 > bestR + LAG_IMPROVEMENT_THRESHOLD) {
       bestR = r2;
       bestLag = lag;
     }
@@ -294,11 +250,24 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
     primaryChannel === 'Google' ? reconciliation.rGoogle
       : primaryChannel === 'Meta' ? reconciliation.r
       : reconciliation.rCombined;
-  const primaryAbsR = Math.abs(primaryR);
+  const primaryAbsR = primaryR === null ? null : Math.abs(primaryR);
   const primaryRClass =
-    primaryAbsR >= 0.7 ? 'text-roas-green'
+    primaryAbsR === null ? 'text-text-muted'
+      : primaryAbsR >= 0.7 ? 'text-roas-green'
       : primaryAbsR >= 0.3 ? 'text-amber-600'
       : 'text-roas-red';
+  const noSignalTitle = 'אין שונות בסדרה — לא ניתן לחשב';
+  const formatR = (value: number | null) => (
+    value === null ? '—' : value.toFixed(2)
+  );
+  const renderR = (label: string, value: number | null) => (
+    <span
+      title={value === null ? noSignalTitle : undefined}
+      className={cn(value === null && 'text-text-subtle')}
+    >
+      {label}={formatR(value)}
+    </span>
+  );
 
   return (
     <section>
@@ -324,12 +293,20 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
             <div className={cn(
               'text-2xl font-bold tabular-nums leading-tight',
               primaryRClass,
-            )}>
-              {primaryR >= 0 ? '+' : ''}{primaryR.toFixed(2)}
+            )} title={primaryR === null ? noSignalTitle : undefined}>
+              {primaryR === null ? '—' : `${primaryR >= 0 ? '+' : ''}${primaryR.toFixed(2)}`}
             </div>
           </div>
           <div className="flex-1 min-w-[200px] text-[11px] sm:text-xs text-text-secondary leading-relaxed">
             {(() => {
+              if (primaryAbsR === null) {
+                return (
+                  <>
+                    <strong className="text-text-muted">אין שונות בסדרה.</strong>{' '}
+                    אין מספיק שינוי יומי בערוץ הזה מול Shopify, ולכן לא ניתן לחשב מתאם אמין.
+                  </>
+                );
+              }
               if (primaryAbsR >= 0.7) {
                 if (primaryChannel === 'Google') {
                   return (
@@ -419,13 +396,17 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
 
         {/* Pearson values for all 4 channels */}
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-text-muted tabular-nums">
-          <span>r(Meta)={reconciliation.r.toFixed(2)}</span>
-          <span>r(Google)={reconciliation.rGoogle.toFixed(2)}</span>
-          <span>r(Organic)={reconciliation.rOrganic.toFixed(2)}</span>
-          <span>r(Combined)={reconciliation.rCombined.toFixed(2)}</span>
+          {renderR('r(Meta)', reconciliation.r)}
+          {renderR('r(Google)', reconciliation.rGoogle)}
+          {renderR('r(Organic)', reconciliation.rOrganic)}
+          {renderR('r(Combined)', reconciliation.rCombined)}
         </div>
 
-        {primaryChannel === 'Meta' && reconciliation.bestLag !== 0 && Math.abs(reconciliation.bestR) > Math.abs(reconciliation.r) + 0.1 && (
+        {primaryChannel === 'Meta' &&
+          reconciliation.bestLag !== 0 &&
+          reconciliation.bestR !== null &&
+          reconciliation.r !== null &&
+          reconciliation.bestR > reconciliation.r + LAG_IMPROVEMENT_THRESHOLD && (
           <div className="rounded-md bg-amber-50 border border-amber-200 px-2.5 py-1.5 text-[11px] text-amber-900">
             <strong>זוהה lag של {Math.abs(reconciliation.bestLag)} ימים:</strong>{' '}
             {reconciliation.bestLag > 0

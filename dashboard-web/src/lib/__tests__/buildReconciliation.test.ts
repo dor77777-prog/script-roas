@@ -217,8 +217,8 @@ describe('buildReconciliation', () => {
     for (const s of result!.series) {
       expect(s.google).toBe(0);
     }
-    // rGoogle should be 0 (all zeros → no variance)
-    expect(result!.rGoogle).toBe(0);
+    // rGoogle is null (all zeros -> no variance)
+    expect(result!.rGoogle).toBeNull();
   });
 
   // ---------------------------------------------------------------------------
@@ -329,9 +329,8 @@ describe('buildReconciliation', () => {
     }
     // Shopify should still be correct; platform channels require mapped campaign rows.
     expect(result!.series[0].shopify).toBe(95);
-    // rGoogle = 0 (all zeros → degenerate)
-    expect(result!.rGoogle).toBe(0);
-    // rOrganic = 0 (all zeros → degenerate)
-    expect(result!.rOrganic).toBe(0);
+    // rGoogle/rOrganic are null (all zeros -> no variance)
+    expect(result!.rGoogle).toBeNull();
+    expect(result!.rOrganic).toBeNull();
   });
 });

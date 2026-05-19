@@ -77,6 +77,62 @@ export type AttributionTrust = {
 };
 
 /**
+ * Pearson correlation coefficient. Returns null when the correlation is not
+ * mathematically meaningful: too few finite pairs or zero variance in either
+ * input. Output is clamped to [-1, 1].
+ *
+ * Pure function - no side effects, no IO. Safe to memoize on inputs.
+ */
+export function pearson(xs: number[], ys: number[]): number | null {
+  const pairs: Array<[number, number]> = [];
+  const n = Math.min(xs.length, ys.length);
+  for (let i = 0; i < n; i++) {
+    const x = xs[i];
+    const y = ys[i];
+    if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+    pairs.push([x, y]);
+  }
+  if (pairs.length < 2) return null;
+
+  const sx = pairs.reduce((sum, [x]) => sum + x, 0);
+  const sy = pairs.reduce((sum, [, y]) => sum + y, 0);
+  const mx = sx / pairs.length;
+  const my = sy / pairs.length;
+  let cov = 0, vx = 0, vy = 0;
+  for (const [x, y] of pairs) {
+    const dx = x - mx;
+    const dy = y - my;
+    cov += dx * dy;
+    vx += dx * dx;
+    vy += dy * dy;
+  }
+  if (vx === 0 || vy === 0) return null;
+  const denom = Math.sqrt(vx * vy);
+  if (!Number.isFinite(denom) || denom === 0) return null;
+  const r = cov / denom;
+  return Number.isFinite(r) ? Math.max(-1, Math.min(1, r)) : null;
+}
+
+/**
+ * Pearson correlation with a lag applied to the second series. Positive lag =
+ * `ys` shifted forward (compare xs[i] with ys[i + lag]).
+ *
+ * Pure function - no side effects, no IO. Safe to memoize on inputs.
+ */
+export function pearsonWithLag(xs: number[], ys: number[], lag: number): number | null {
+  if (lag === 0) return pearson(xs, ys);
+  const xsShift: number[] = [];
+  const ysShift: number[] = [];
+  for (let i = 0; i < xs.length; i++) {
+    const j = i + lag;
+    if (j < 0 || j >= ys.length) continue;
+    xsShift.push(xs[i]);
+    ysShift.push(ys[j]);
+  }
+  return pearson(xsShift, ysShift);
+}
+
+/**
  * Match an order against a campaign deterministically.
  *
  * Match tiers, strongest first:
