@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { analyzeAttribution } from '@/lib/attributionAnalysis';
+import { analyzeAttribution, computeCoverage } from '@/lib/attributionAnalysis';
 import { makeOrder, makeCampaign } from './fixtures';
 
 const DATE_FROM = '2026-05-01';
@@ -290,6 +290,45 @@ describe('analyzeAttribution', () => {
       expect(reasonsJoined).not.toMatch(/רק\s*-\d+%/);
       // Refund-heavy day must surface the net-CAD phrasing.
       expect(reasonsJoined).toMatch(/החזרים/);
+    });
+  });
+
+  // ----------------------------------------------------------------
+  // computeCoverage shared helper (IN-04 — single source of truth)
+  // ----------------------------------------------------------------
+
+  describe('computeCoverage shared helper', () => {
+    it('positive claim: returns det/claim clamped to upper bound 2', () => {
+      expect(computeCoverage(50, 100)).toBeCloseTo(0.5, 4);
+      expect(computeCoverage(80, 100)).toBeCloseTo(0.8, 4);
+      // Upper clamp at 2.
+      expect(computeCoverage(500, 100)).toBeCloseTo(2, 4);
+    });
+
+    it('positive claim: preserves negative coverage when det < 0 (refund-heavy day)', () => {
+      // No lower clamp — negative carries semantic info ("refunds
+      // exceeded sales"). Mirrors the assertion in
+      // "refund larger than positive orders drives deterministicRevenue
+      // negative" above.
+      expect(computeCoverage(-200, 100)).toBeCloseTo(-2, 4);
+    });
+
+    it('zero claim, positive det: legacy fallback to 1.0', () => {
+      // "Meta claimed nothing but Shopify saw orders" → perfect coverage.
+      expect(computeCoverage(50, 0)).toBe(1);
+    });
+
+    it('zero claim, zero det: 0 (nothing to assess)', () => {
+      expect(computeCoverage(0, 0)).toBe(0);
+    });
+
+    it('negative claim: undefined → 0 (signed-input guard)', () => {
+      // Without this guard the legacy fallback `det > 0 ? 1 : 0` would
+      // silently emit coverage=1 for any positive det — a false-positive
+      // trust signal. TEST-03 / IN-04 pins coverage to 0 in this branch.
+      expect(computeCoverage(50, -100)).toBe(0);
+      expect(computeCoverage(-50, -100)).toBe(0);
+      expect(computeCoverage(0, -100)).toBe(0);
     });
   });
 

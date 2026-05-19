@@ -77,6 +77,39 @@ export type AttributionTrust = {
 };
 
 /**
+ * Coverage = deterministic-revenue / metaClaim, with signed-input
+ * guards (TEST-03). Extracted helper so the formula has ONE source
+ * of truth instead of two near-identical copies in analyzeAttribution
+ * and buildAnalysis (IN-04). Update here to ripple uniformly.
+ *
+ * Semantics:
+ *   - metaClaim > 0:   ratio = det / claim, clamped to [-∞, 2].
+ *                      Upper clamp prevents halo (det >> claim) from
+ *                      blowing the trust ladder; lower bound preserved
+ *                      because negative values carry real semantic
+ *                      information ("refunds exceeded sales", WR-03).
+ *   - metaClaim === 0: fallback to {1 if det>0, else 0}. Legacy
+ *                      semantic — "Meta claimed nothing but Shopify
+ *                      saw orders" presents as perfect coverage.
+ *   - metaClaim < 0:   coverage undefined → 0. Negative claim is
+ *                      malformed input (Meta never emits negative
+ *                      conversion_value); without this guard the
+ *                      legacy fallback silently emits coverage = 1
+ *                      ("perfect") for any positive det — a
+ *                      false-positive trust signal that previously
+ *                      had no test until TEST-03 (signed-revenue).
+ *
+ * Pure function - no side effects, no IO. Safe to memoize on inputs.
+ */
+export function computeCoverage(deterministicRevenue: number, metaClaim: number): number {
+  return metaClaim > 0
+    ? Math.min(2, deterministicRevenue / metaClaim)
+    : metaClaim < 0
+      ? 0
+      : (deterministicRevenue > 0 ? 1 : 0);
+}
+
+/**
  * Pearson correlation coefficient. Returns null when the correlation is not
  * mathematically meaningful: too few finite pairs or zero variance in either
  * input. Output is clamped to [-1, 1].
@@ -268,22 +301,9 @@ export function analyzeAttribution(
   const deterministicOrders = matchedOrders.length;
   const modeledRevenue = Math.max(0, campaign.metaClaim - deterministicRevenue);
 
-  // Coverage with signed-input guards (TEST-03):
-  // * metaClaim > 0   → normal ratio, clamped to [0, 2].
-  // * metaClaim == 0  → fallback to {1 if det>0, else 0} (legacy semantic:
-  //                     "Meta claimed nothing but Shopify saw orders").
-  // * metaClaim < 0   → treat as malformed input (Meta never emits negative
-  //                     conversion_value; would only happen from a bad
-  //                     sheet edit or upstream transform glitch). Coverage
-  //                     is undefined → 0. Without this guard the legacy
-  //                     fallback silently emits coverage = 1 ("perfect")
-  //                     for any positive det — a false-positive trust
-  //                     signal that previously had no test.
-  const coverage = campaign.metaClaim > 0
-    ? Math.min(2, deterministicRevenue / campaign.metaClaim)
-    : campaign.metaClaim < 0
-      ? 0
-      : (deterministicRevenue > 0 ? 1 : 0);
+  // IN-04: delegate to the shared computeCoverage helper so the
+  // signed-input guard contract has a single source of truth.
+  const coverage = computeCoverage(deterministicRevenue, campaign.metaClaim);
 
   // -----------------------------------------------------------------------
   // Approximate 95% CI for the deterministic ROAS.
@@ -777,16 +797,9 @@ function buildAnalysis(opts: {
   const deterministicRevenue = matchedOrders.reduce((s, o) => s + o.totalCad, 0);
   const deterministicOrders = matchedOrders.length;
   const modeledRevenue = Math.max(0, metaClaim - deterministicRevenue);
-  // Signed-input guard (TEST-03): negative metaClaim is malformed input
-  // (Meta never emits negative conversion_value). Without this fall-through,
-  // negative metaClaim + positive det would silently produce coverage=1
-  // ("perfect coverage") — a false-positive trust signal. Mirror the
-  // campaign-level analyzer.
-  const coverage = metaClaim > 0
-    ? Math.min(2, deterministicRevenue / metaClaim)
-    : metaClaim < 0
-      ? 0
-      : (deterministicRevenue > 0 ? 1 : 0);
+  // IN-04: delegate to the shared computeCoverage helper. Same
+  // signed-input guard contract as the campaign-level analyzer.
+  const coverage = computeCoverage(deterministicRevenue, metaClaim);
 
   // Approximate CI (same as campaign-level).
   let roasInterval: AttributionAnalysis['roasInterval'] = null;
