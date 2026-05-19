@@ -251,8 +251,9 @@ export function analyzeAttribution(
   // malformed order (NaN from an Apps Script cell write or downstream parser
   // glitch) doesn't poison the entire reduce — NaN propagates through
   // deterministicRevenue → coverage → trust ladder unpredictably (WR-02).
-  // computeWindowStability (line 431) already guards this way; analyzeAttribution
-  // matches that contract here.
+  // computeWindowStability already guards this way at its matched-orders
+  // loop (the `Number.isFinite(o.totalCad)` filter); analyzeAttribution
+  // matches that contract here. (IN-03: removed stale line-number reference.)
   const matchedOrders = orders.filter(o => {
     if (o.date < dateFrom || o.date > dateTo) return false;
     if (!Number.isFinite(o.totalCad)) return false;
@@ -768,8 +769,9 @@ function buildAnalysis(opts: {
   // Defensive guard: even though analyzeAttributionForAdSet / *ForAd filter
   // non-finite totalCad upstream, a future caller of buildAnalysis might not.
   // Strip NaN rows here too so a single bad cell can't poison the reduce
-  // → coverage → trust ladder. Mirrors computeWindowStability line 431 and
-  // the campaign-level filter in analyzeAttribution. (WR-02)
+  // → coverage → trust ladder. Mirrors the matched-orders Number.isFinite
+  // filter inside computeWindowStability and the campaign-level filter in
+  // analyzeAttribution. (WR-02; IN-03: removed stale line-number reference.)
   const matchedOrders = rawMatched.filter(o => Number.isFinite(o.totalCad));
 
   const deterministicRevenue = matchedOrders.reduce((s, o) => s + o.totalCad, 0);
