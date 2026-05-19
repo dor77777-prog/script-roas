@@ -39,16 +39,52 @@ function runDailyUpdateZolplus() {
   runUpdateForSingleStore_('zolplus', yesterdayStr_());
 }
 function runDailyUpdateUsmile() {
-  runUpdateForSingleStore_('usmile360', yesterdayStr_());
+  const dateStr = yesterdayStr_();
+  runUpdateForSingleStore_('usmile360', dateStr);
+  // Phase 5 (CR-01 fix): the per-store wrappers do not touch the summary
+  // tab on their own, but the summary tab needs writeDayRow() at least
+  // once per day so that getOrCreateMonthBlock_ creates the new-month
+  // block when a month boundary is crossed. The summary itself is
+  // formula-driven — the third per-store run is enough to keep it
+  // consistent for any date.
+  //
+  // Done here (the LAST per-store wrapper) rather than in each wrapper
+  // so we only pay the cost once. Failures are swallowed: missing a
+  // month-block refresh is a UX glitch on day 1 of the month, NOT a
+  // data-loss failure, and we do NOT want to notifyError_ over it.
+  try {
+    ensureSummaryMonthBlock_(dateStr);
+  } catch (e) {
+    Logger.log(`[summary] month-block refresh failed (non-fatal): ${e && e.message ? e.message : e}`);
+  }
+}
+
+/**
+ * Writes a zero-row to the summary tab for `dateStr`. The summary tab
+ * is formula-driven — we only need writeDayRow() to fire so that
+ * getOrCreateMonthBlock_ runs and creates the block for a new month.
+ * Idempotent: if the row already exists it is overwritten with the
+ * same zero values.
+ */
+function ensureSummaryMonthBlock_(dateStr) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    throw new Error(`תאריך לא תקין: ${dateStr}. נדרש פורמט YYYY-MM-DD.`);
+  }
+  const ss = ensureSpreadsheet();
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const summarySheet = ss.getSheetByName(SUMMARY_TAB);
+  if (!summarySheet) throw new Error(`טאב סיכום לא נמצא: ${SUMMARY_TAB}`);
+  writeDayRow(summarySheet, year, month, day, 0, 0, 0);
 }
 
 /**
  * Runs updateStoreForDate_ for a SINGLE store. Used by the per-store
  * trigger entry points (Phase 5 trigger split). Mirrors the error
  * handling shape of runUpdateForDate (per-store try/catch +
- * notifyError_ on failure) but DOES NOT touch the summary tab — the
- * summary is formula-driven and the next store's run (or the
- * next-day's run) will keep it consistent.
+ * notifyError_ on failure). Does NOT touch the summary tab itself —
+ * the summary is formula-driven, and the LAST per-store wrapper
+ * (runDailyUpdateUsmile) is responsible for triggering
+ * ensureSummaryMonthBlock_() exactly once per day.
  */
 function runUpdateForSingleStore_(storeId, dateStr) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
