@@ -320,6 +320,16 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
           return sign * (x.roas - y.roas);
         case 'conversions':
           return sign * (x.conversions - y.conversions);
+        default: {
+          // Exhaustiveness check (WR-04). If a future AdSetSortKey value
+          // is added but a case is forgotten, TypeScript fails the
+          // `never` assignment at compile time. Returns 0 at runtime so
+          // an unhandled key collapses sort to "stable" rather than
+          // returning undefined and producing arbitrary order.
+          const _exhaustive: never = sortKey;
+          void _exhaustive;
+          return 0;
+        }
       }
     });
     return list;

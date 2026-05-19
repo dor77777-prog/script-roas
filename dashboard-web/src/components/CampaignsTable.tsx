@@ -227,6 +227,14 @@ function sortAggregated(
         return a.clicks > 0 ? a.spend / a.clicks : 0;
       case 'cpa':
         return a.conversions > 0 ? a.spend / a.conversions : 0;
+      default: {
+        // Exhaustiveness check (WR-04). If a future SortKey value is
+        // added but a case is forgotten here, TypeScript fails the
+        // `never` assignment at compile time. Belt-and-suspenders for
+        // when noFallthroughCasesInSwitch isn't on.
+        const _exhaustive: never = sortKey;
+        throw new Error(`Unhandled SortKey: ${String(_exhaustive)}`);
+      }
     }
   }
   const sorted = [...list].sort((x, y) => {
