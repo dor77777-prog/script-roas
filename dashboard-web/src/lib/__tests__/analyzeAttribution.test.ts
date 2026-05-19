@@ -209,6 +209,67 @@ describe('analyzeAttribution', () => {
   // Window stability downgrade
   // ----------------------------------------------------------------
 
+  // ----------------------------------------------------------------
+  // Signed revenue handling (TEST-03 — pins AUDIT-P3-03)
+  // ----------------------------------------------------------------
+
+  describe('signed revenue handling', () => {
+    it('subtracts negative totalCad orders from deterministic revenue (refunds)', () => {
+      // 1 positive +100 order matches the campaign, 1 refund -30 order
+      // matches the same campaign. Deterministic revenue should net out
+      // to 70 (100 + -30), not 100 (refund silently dropped) and not
+      // 130 (refund's absolute value naively added).
+      const campaign = makeCampaign({ metaClaim: 100, spend: 50, campaignId: 'camp-1' });
+      const orders = [
+        makeOrder({ orderId: 'sale-1', totalCad: 100, utmId: 'camp-1', date: '2026-05-10' }),
+        makeOrder({ orderId: 'refund-1', totalCad: -30, utmId: 'camp-1', date: '2026-05-11' }),
+      ];
+      const result = analyzeAttribution(campaign, orders, DATE_FROM, DATE_TO);
+      expect(result).not.toBeNull();
+      expect(result!.deterministicRevenue).toBeCloseTo(70, 4);
+      expect(result!.deterministicOrders).toBe(2);
+    });
+
+    it('does not silently emit coverage=1 for negative metaClaim with positive det', () => {
+      // metaClaim < 0 is malformed input — Meta never emits negative
+      // conversion_value in production. Without the signed-input guard
+      // (analyzeAttribution coverage formula), the fallback branch
+      // `metaClaim > 0 ? ... : (det > 0 ? 1 : 0)` would silently emit
+      // coverage = 1 ("perfect coverage") for any positive det. The
+      // post-TEST-03 guard returns 0 instead — a sensible "undefined
+      // coverage" signal, not a false-positive trust ceiling.
+      const campaign = makeCampaign({ metaClaim: -50, spend: 50, campaignId: 'camp-1' });
+      const orders = [
+        makeOrder({ orderId: 'sale-1', totalCad: 100, utmId: 'camp-1', date: '2026-05-10' }),
+      ];
+      const result = analyzeAttribution(campaign, orders, DATE_FROM, DATE_TO);
+      expect(result).not.toBeNull();
+      // Critical assertion: coverage MUST NOT be 1 — that's the silent bug.
+      expect(result!.coverage).not.toBe(1);
+      expect(result!.coverage).toBe(0);
+      expect(result!.deterministicRevenue).toBeCloseTo(100, 4);
+    });
+
+    it('refund larger than positive orders drives deterministicRevenue negative', () => {
+      // Edge case: matched orders are all refunds → deterministicRevenue
+      // goes negative. Coverage clamping must still hold (Math.min(2, ...)),
+      // and the function must not throw or produce NaN. metaClaim > 0 path.
+      const campaign = makeCampaign({ metaClaim: 100, spend: 50, campaignId: 'camp-1' });
+      const orders = [
+        makeOrder({ orderId: 'refund-1', totalCad: -200, utmId: 'camp-1', date: '2026-05-10' }),
+      ];
+      const result = analyzeAttribution(campaign, orders, DATE_FROM, DATE_TO);
+      expect(result).not.toBeNull();
+      expect(result!.deterministicRevenue).toBeCloseTo(-200, 4);
+      // -200 / 100 = -2, clamped by Math.min(2, ...) → still -2 (no lower clamp).
+      // The clamp only caps the upper end; negative coverage is preserved
+      // because it carries real semantic information ("refunds exceeded sales").
+      expect(result!.coverage).toBeCloseTo(-2, 4);
+      expect(Number.isFinite(result!.coverage)).toBe(true);
+      expect(Number.isNaN(result!.coverage)).toBe(false);
+    });
+  });
+
   it('volatile windowStability downgrades trust from high to medium', () => {
     const campaign = makeCampaign({ metaClaim: 300, spend: 100 });
     // Create matched orders for a 28-day range — enough for 4 windows

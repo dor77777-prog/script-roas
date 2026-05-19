@@ -259,13 +259,30 @@ export function analyzeAttribution(
     return orderMatchesCampaign(o, campaign);
   });
 
+  // Signed sum: negative totalCad rows (refunds — Phase 5.2 added the
+  // signed-row contract) subtract from deterministicRevenue. This is the
+  // intended behavior so a refund of an attributed order doesn't leave
+  // the deterministic side artificially high. (TEST-03)
   const deterministicRevenue = matchedOrders.reduce((s, o) => s + o.totalCad, 0);
   const deterministicOrders = matchedOrders.length;
   const modeledRevenue = Math.max(0, campaign.metaClaim - deterministicRevenue);
 
+  // Coverage with signed-input guards (TEST-03):
+  // * metaClaim > 0   → normal ratio, clamped to [0, 2].
+  // * metaClaim == 0  → fallback to {1 if det>0, else 0} (legacy semantic:
+  //                     "Meta claimed nothing but Shopify saw orders").
+  // * metaClaim < 0   → treat as malformed input (Meta never emits negative
+  //                     conversion_value; would only happen from a bad
+  //                     sheet edit or upstream transform glitch). Coverage
+  //                     is undefined → 0. Without this guard the legacy
+  //                     fallback silently emits coverage = 1 ("perfect")
+  //                     for any positive det — a false-positive trust
+  //                     signal that previously had no test.
   const coverage = campaign.metaClaim > 0
     ? Math.min(2, deterministicRevenue / campaign.metaClaim)
-    : (deterministicRevenue > 0 ? 1 : 0);
+    : campaign.metaClaim < 0
+      ? 0
+      : (deterministicRevenue > 0 ? 1 : 0);
 
   // -----------------------------------------------------------------------
   // Approximate 95% CI for the deterministic ROAS.
@@ -744,9 +761,16 @@ function buildAnalysis(opts: {
   const deterministicRevenue = matchedOrders.reduce((s, o) => s + o.totalCad, 0);
   const deterministicOrders = matchedOrders.length;
   const modeledRevenue = Math.max(0, metaClaim - deterministicRevenue);
+  // Signed-input guard (TEST-03): negative metaClaim is malformed input
+  // (Meta never emits negative conversion_value). Without this fall-through,
+  // negative metaClaim + positive det would silently produce coverage=1
+  // ("perfect coverage") — a false-positive trust signal. Mirror the
+  // campaign-level analyzer.
   const coverage = metaClaim > 0
     ? Math.min(2, deterministicRevenue / metaClaim)
-    : (deterministicRevenue > 0 ? 1 : 0);
+    : metaClaim < 0
+      ? 0
+      : (deterministicRevenue > 0 ? 1 : 0);
 
   // Approximate CI (same as campaign-level).
   let roasInterval: AttributionAnalysis['roasInterval'] = null;
