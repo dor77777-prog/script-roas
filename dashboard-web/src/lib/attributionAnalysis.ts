@@ -39,9 +39,9 @@ export type AttributionAnalysis = {
   reasons: string[];
   /** Human-readable action for the operator. */
   recommendation: string;
-  /** Bayesian-flavoured 95% credibility interval around the deterministic
-   *  ROAS. Wider = less certain. Width shrinks with order count + stability.
-   *  Null when there's no meaningful sample (zero orders matched). */
+  /** Approximate 95% CI around deterministic ROAS based on observed AOV
+   *  dispersion. Models AOV variability only, not conversion-count
+   *  uncertainty. Null when there is no meaningful sample. */
   roasInterval: { low: number; mid: number; high: number } | null;
   /** Per-7-day-window summary. Used to detect stable bias vs spike-driven
    *  noise. Empty when range < 7 days or no orders. */
@@ -268,42 +268,43 @@ export function analyzeAttribution(
     : (deterministicRevenue > 0 ? 1 : 0);
 
   // -----------------------------------------------------------------------
-  // Bayesian-flavoured credibility interval for the deterministic ROAS.
+  // Approximate 95% CI for the deterministic ROAS.
   //
-  // We treat each matched order as an independent Bernoulli-ish draw with
-  // mean = average order value and variance based on observed dispersion.
-  // The Wilson score interval at 95% confidence gives a defensible range
-  // that's tight when N is big and wide when N is small.
-  //
-  // For simplicity (and to avoid implementing the full Wilson), we use the
-  // normal approximation: stderr ≈ stddev / √N, CI = mean ± 1.96 × stderr.
-  // The result is shown as "ROAS 2.3 [1.8 – 2.9]" in the tooltip.
+  // Approximate 95% CI based on observed AOV dispersion. Models only AOV
+  // variability — does NOT model conversion-count uncertainty. Use as a
+  // directional guide, not a strict statistical claim.
   // -----------------------------------------------------------------------
   let roasInterval: AttributionAnalysis['roasInterval'] = null;
-  if (campaign.spend > 0 && deterministicOrders >= 3) {
+  if (campaign.spend > 0 && deterministicOrders > 0) {
     const aovs = matchedOrders.map(o => o.totalCad);
-    const meanAov = aovs.reduce((s, x) => s + x, 0) / aovs.length;
-    const variance =
-      aovs.reduce((s, x) => s + (x - meanAov) ** 2, 0) / aovs.length;
-    if (variance === 0) {
-      // Homogeneous sample (e.g. single-SKU subscription store: every order
-      // is the same AOV). With zero observed variance the normal-approx CI
-      // collapses to a degenerate point, which renders as
-      // "טווח 95%: 2.30 – 2.30" — a falsely-precise signal from a tiny
-      // sample. Treat as "not enough info" instead.
+    const n = aovs.length;
+    if (n < 2) {
       roasInterval = null;
     } else {
-      const stdDev = Math.sqrt(variance);
-      const stderrAov = stdDev / Math.sqrt(aovs.length);
-      // CI on total revenue = CI on (N × mean AOV) — N is treated as fixed
-      // (we observed it). 95% normal: ± 1.96 × stderr.
-      const revLow = Math.max(0, (meanAov - 1.96 * stderrAov) * aovs.length);
-      const revHigh = (meanAov + 1.96 * stderrAov) * aovs.length;
-      roasInterval = {
-        low: revLow / campaign.spend,
-        mid: deterministicRevenue / campaign.spend,
-        high: revHigh / campaign.spend,
-      };
+      const meanAov = aovs.reduce((s, x) => s + x, 0) / aovs.length;
+      const variance =
+        // Bessel correction: sample variance uses N - 1.
+        aovs.reduce((s, x) => s + (x - meanAov) ** 2, 0) / (n - 1);
+      if (variance === 0) {
+        // Homogeneous sample (e.g. single-SKU subscription store: every order
+        // is the same AOV). With zero observed variance the normal-approx CI
+        // collapses to a degenerate point, which renders as
+        // "טווח 95%: 2.30 – 2.30" — a falsely-precise signal from a tiny
+        // sample. Treat as "not enough info" instead.
+        roasInterval = null;
+      } else {
+        const stdDev = Math.sqrt(variance);
+        const stderrAov = stdDev / Math.sqrt(aovs.length);
+        // CI on total revenue = CI on (N × mean AOV) — N is treated as fixed
+        // (we observed it). 95% normal: ± 1.96 × stderr.
+        const revLow = Math.max(0, (meanAov - 1.96 * stderrAov) * aovs.length);
+        const revHigh = (meanAov + 1.96 * stderrAov) * aovs.length;
+        roasInterval = {
+          low: revLow / campaign.spend,
+          mid: deterministicRevenue / campaign.spend,
+          high: revHigh / campaign.spend,
+        };
+      }
     }
   }
 
@@ -747,27 +748,34 @@ function buildAnalysis(opts: {
     ? Math.min(2, deterministicRevenue / metaClaim)
     : (deterministicRevenue > 0 ? 1 : 0);
 
-  // Bayesian CI (same as campaign-level).
+  // Approximate CI (same as campaign-level).
   let roasInterval: AttributionAnalysis['roasInterval'] = null;
-  if (spend > 0 && deterministicOrders >= 3) {
+  if (spend > 0 && deterministicOrders > 0) {
     const aovs = matchedOrders.map(o => o.totalCad);
-    const meanAov = aovs.reduce((s, x) => s + x, 0) / aovs.length;
-    const variance = aovs.reduce((s, x) => s + (x - meanAov) ** 2, 0) / aovs.length;
-    if (variance === 0) {
-      // Mirror analyzeAttribution: homogeneous sample → degenerate interval
-      // would mislead. Treat as "not enough info" so the tooltip doesn't
-      // render a falsely-precise CI.
+    const n = aovs.length;
+    if (n < 2) {
       roasInterval = null;
     } else {
-      const stdDev = Math.sqrt(variance);
-      const stderrAov = stdDev / Math.sqrt(aovs.length);
-      const revLow = Math.max(0, (meanAov - 1.96 * stderrAov) * aovs.length);
-      const revHigh = (meanAov + 1.96 * stderrAov) * aovs.length;
-      roasInterval = {
-        low: revLow / spend,
-        mid: deterministicRevenue / spend,
-        high: revHigh / spend,
-      };
+      const meanAov = aovs.reduce((s, x) => s + x, 0) / aovs.length;
+      const variance =
+        // Bessel correction: sample variance uses N - 1.
+        aovs.reduce((s, x) => s + (x - meanAov) ** 2, 0) / (n - 1);
+      if (variance === 0) {
+        // Mirror analyzeAttribution: homogeneous sample → degenerate interval
+        // would mislead. Treat as "not enough info" so the tooltip doesn't
+        // render a falsely-precise CI.
+        roasInterval = null;
+      } else {
+        const stdDev = Math.sqrt(variance);
+        const stderrAov = stdDev / Math.sqrt(aovs.length);
+        const revLow = Math.max(0, (meanAov - 1.96 * stderrAov) * aovs.length);
+        const revHigh = (meanAov + 1.96 * stderrAov) * aovs.length;
+        roasInterval = {
+          low: revLow / spend,
+          mid: deterministicRevenue / spend,
+          high: revHigh / spend,
+        };
+      }
     }
   }
 

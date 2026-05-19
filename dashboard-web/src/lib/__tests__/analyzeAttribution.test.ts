@@ -132,6 +132,8 @@ describe('analyzeAttribution', () => {
     expect(mid).toBeLessThan(high);
     const deterministicRevenue = aovs.reduce((s, v) => s + v, 0);
     expect(mid).toBeCloseTo(deterministicRevenue / 200, 4);
+    expect(low).toBeCloseTo(2.1535, 3);
+    expect(high).toBeCloseTo(2.8465, 3);
   });
 
   // ----------------------------------------------------------------
@@ -149,14 +151,13 @@ describe('analyzeAttribution', () => {
   });
 
   // ----------------------------------------------------------------
-  // CI — sample too small (< 3 orders)
+  // CI — sample too small (< 2 orders)
   // ----------------------------------------------------------------
 
-  it('roasInterval is null when fewer than 3 matched orders', () => {
+  it('roasInterval is null when fewer than 2 matched orders', () => {
     const campaign = makeCampaign({ metaClaim: 200, spend: 100 });
     const orders = [
       makeOrder({ orderId: 'o-1', totalCad: 80, utmId: 'camp-1', date: '2026-05-10' }),
-      makeOrder({ orderId: 'o-2', totalCad: 120, utmId: 'camp-1', date: '2026-05-10' }),
     ];
     const result = analyzeAttribution(campaign, orders, DATE_FROM, DATE_TO);
     expect(result).not.toBeNull();
