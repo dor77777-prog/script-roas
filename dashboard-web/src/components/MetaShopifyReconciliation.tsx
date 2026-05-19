@@ -11,7 +11,7 @@ import {
 } from 'recharts';
 import type { ProductsResponse } from '@/app/api/products/route';
 import type { CampaignRow } from '@/lib/campaigns';
-import type { OrderAttributionRow } from '@/lib/ordersAttribution';
+import type { OrderAttributionRow, OrderSource } from '@/lib/ordersAttribution';
 import type { ProductMap } from '@/lib/campaignProductMap';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
 
@@ -158,24 +158,29 @@ export function buildReconciliation(opts: {
     }
   }
 
+  /** Inverted paid-exclusion predicate (fix for AUDIT-P0-01).
+   * An order contributes to the "Organic / Direct" channel if it's NOT
+   * deterministically paid. We previously used a whitelist that had three
+   * impossible labels AND omitted google-organic (real label emitted by
+   * Shopify.gs). The inverted predicate is robust to new OrderSource
+   * values added later by the writer. */
+  function isOrganicSource(order: { source: OrderSource | string; fbclidPresent?: boolean; gclidPresent?: boolean }): boolean {
+    if (order.fbclidPresent) return false;
+    if (order.gclidPresent) return false;
+    if (order.source === 'meta-paid') return false;
+    if (order.source === 'google-paid') return false;
+    return true;
+  }
+
   // Build {date → organic revenue}:
   // Sum line-item revenue (partial-order attribution) for orders whose source
   // is organic (NOT meta-paid or google-paid) and that contain at least one
   // mapped product. Only count the mapped-product line items' revenueCad.
   const organicByDate = new Map<string, number>();
-  const ORGANIC_SOURCES = new Set([
-    'meta-organic',
-    'organic-search-engine',
-    'direct',
-    'meta-other',
-    'other',
-    'other-referral',
-    'email',
-  ]);
   if (ordersData?.rows) {
     for (const order of ordersData.rows) {
       if (order.storeId !== storeId) continue;
-      if (!ORGANIC_SOURCES.has(order.source)) continue;
+      if (!isOrganicSource(order)) continue;
       if (!order.lineItems || order.lineItems.length === 0) continue;
       // Partial-order summation: only count revenue for mapped products
       let mappedRevenue = 0;
