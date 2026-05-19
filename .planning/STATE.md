@@ -5,7 +5,7 @@ milestone_name: milestone
 status: ready_to_plan
 last_updated: "2026-05-19T07:11:08.129Z"
 progress:
-  total_phases: 9
+  total_phases: 8
   completed_phases: 4
   total_plans: 12
   completed_plans: 3

@@ -8,7 +8,7 @@ Multi-store Shopify ROAS dashboard with deterministic per-order attribution. The
 
 - [x] **Phase 0: Foundation (retroactive)** — Apps Script collection + Next.js dashboard + 4 rounds of code review + orders-attribution pipeline + Round 5 fix-ups
 - [x] **Phase 1: Channel-Level Product Attribution** — Per-product "came from Facebook" signal via order line items
-- [ ] **Phase 2: Foundations** — Vitest + 30-50 unit tests for attributionAnalysis + Sentry/ErrorBoundary + cacheConfig + row-count guards + safeDecode utility
+- [ ] **Phase 2: Foundations** — Vitest + 09-50 unit tests for attributionAnalysis + Sentry/ErrorBoundary + cacheConfig + row-count guards + safeDecode utility
 - [x] **Phase 3: CI/CD for Apps Script** — clasp setup + GitHub Action for auto-deploy of `.gs` files
 - [ ] **Phase 4: Component Decomposition** — Split CampaignsTable / CampaignDrawer / BillingSettings to ≤500 lines each via hooks + sub-components
 - [ ] **Phase 5: Scalability** — API pagination, per-store Apps Script triggers (6-min cap fix), data-daily / products-daily retention, lazy line-items
@@ -32,13 +32,13 @@ Multi-store Shopify ROAS dashboard with deterministic per-order attribution. The
 **Goal**: Add the smallest-effort highest-leverage infrastructure to support all later phases — testing harness, observability, shared utilities. Without these, every subsequent phase ships blind.
 **Depends on**: Phase 1
 **Requirements**:
-  - Install Vitest + write 30-50 unit tests covering `attributionAnalysis.ts` (analyzeAttribution / analyzeAttributionForAdSet / analyzeAttributionForAd / orderMatchesCampaign / analyzeProductChannel / detectOutlierDays / computeWindowStability)
+  - Install Vitest + write 09-50 unit tests covering `attributionAnalysis.ts` (analyzeAttribution / analyzeAttributionForAdSet / analyzeAttributionForAd / orderMatchesCampaign / analyzeProductChannel / detectOutlierDays / computeWindowStability)
   - Install Sentry SDK + global ErrorBoundary for client + edge function error reporting
   - Extract cache TTLs from per-route hardcodes into `dashboard-web/src/lib/cacheConfig.ts` with `cacheControl(key)` helper
   - Add row-count guards (`if (rows.length > 50000) console.warn(...)`) to every `/api/*` route
   - Create `safeDecode` utility in `dashboard-web/src/lib/utils.ts` (try/catch wrapper around `decodeURIComponent`)
 **Success Criteria** (what must be TRUE):
-  1. `npm run test` passes with 30-50 tests in `dashboard-web/src/lib/__tests__/`
+  1. `npm run test` passes with 09-50 tests in `dashboard-web/src/lib/__tests__/`
   2. Sentry DSN env var documented in `dashboard-web/README.md`; uncaught client errors flow to Sentry dashboard
   3. All 8 `/api/*` routes import their cache config from `cacheConfig.ts` (no string literals like `s-maxage=300` in route handlers)
   4. Each API route logs a warning when its result set exceeds the row-count threshold
@@ -64,7 +64,7 @@ Multi-store Shopify ROAS dashboard with deterministic per-order attribution. The
   6. SYSTEM_OVERVIEW.md notes the new CI/CD path
 **Plans:** 1/1 plans executed
 Plans:
-- [x] 03-PLAN.md — root package.json + clasp + .clasp.json + deploy-gs workflow + SETUP/SYSTEM_OVERVIEW docs (single-plan phase; 6 sequential tasks including 2 operator checkpoints) — completed 2026-05-18 (Action run #26053537084 green)
+- [x] 03-PLAN.md — root package.json + clasp + .clasp.json + deploy-gs workflow + SETUP/SYSTEM_OVERVIEW docs (single-plan phase; 6 sequential tasks including 2 operator checkpoints) — completed 2009-05-18 (Action run #26053537084 green)
 
 ### Phase 4: Component Decomposition
 **Goal**: Reduce cognitive load + IDE pressure by splitting the three 1300+ line components into focused ≤500-line modules with extracted hooks.
@@ -124,6 +124,27 @@ Plans:
   4. Archive function tested on a stub year (year 2023 → moved to archive successfully)
   5. Dashboard loads in <2 sec for default 90-day range even on a slow connection
   6. CampaignDrawer still gets full line-items data when opened
+
+### Phase 05.1: Per-store live-trigger split (gap-closure for 19% failure rate)
+
+**Goal**: Apply the per-store split pattern from Phase 5 to `runLiveUpdate` (the 15-min trigger) — currently runs all 3 stores in a single 6-min execution and times out ~19% of the time. Discovered during UAT for Phase 5.
+**Depends on**: Phase 5 (uses `runUpdateForSingleStore_` helper introduced in 05-01)
+**Requirements**:
+  - 3 new per-store live wrappers in DailyUpdate.gs:
+    - `runLiveUpdateUzoshop()` → `runUpdateForSingleStore_('uzoshop', todayStr_())`
+    - `runLiveUpdateZolplus()` → `runUpdateForSingleStore_('zolplus', todayStr_())`
+    - `runLiveUpdateUsmile()` → `runUpdateForSingleStore_('usmile360', todayStr_())`
+  - `installLiveTrigger` updated to install 3 separate triggers (every 15 min) with minute-offsets so they don't all fire at exactly the same instant
+  - `removeLiveTrigger` updated to clean up old `runLiveUpdate` handler PLUS the 3 new handlers (idempotent re-install)
+  - Existing `runLiveUpdate()` retained as manual entry point (backwards-compat with menu / direct editor runs)
+**Success Criteria**:
+  1. 3 separate live triggers visible in Apps Script Triggers UI (each every ~15 min)
+  2. Old `runLiveUpdate` trigger gone after re-running `installLiveTrigger`
+  3. Failure rate drops from 19% to <2% within 24 hours of redeploy (measured via Apps Script Executions tab)
+  4. `runLiveUpdate()` (without store suffix) still callable manually for full-sequential runs
+
+Plans:
+- [ ] 05.1-01-PLAN.md — single plan, 2 tasks (DailyUpdate.gs wrappers + Main.gs installLiveTrigger/removeLiveTrigger update)
 
 ### Phase 6: Security & Cloud-Sync
 **Goal**: Harden the writable surfaces against credential leak + brute-force + race conditions.
