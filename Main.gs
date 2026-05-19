@@ -30,37 +30,66 @@ function setupCreateSheet() {
   return ss.getUrl();
 }
 
+/**
+ * Installs FOUR daily triggers (Phase 5 trigger split):
+ *   - runDailyUpdateUzoshop      @ 00:05 IL
+ *   - runDailyUpdateZolplus      @ 00:08 IL
+ *   - runDailyUpdateUsmile       @ 00:11 IL
+ *   - refreshAllStoreMeta        @ 00:14 IL
+ *
+ * Each per-store function runs in its OWN Apps Script execution, so each
+ * gets its OWN 6-min budget and its OWN Sheets API short-window quota
+ * window. The 3-min spacing between them gives the quota a chance to
+ * refresh between executions.
+ *
+ * Note: unlike the old installer, this one does NOT run any of the
+ * functions immediately. The first per-store run happens at the next
+ * scheduled minute (e.g., next 00:05). Rationale: an immediate
+ * sequential run of all 3 stores from inside installDailyTrigger would
+ * defeat the very quota separation we're trying to set up. If you want
+ * to backfill yesterday right now, run `runDailyUpdate` (the manual
+ * entry point that retains the original sequential behavior) from the
+ * editor.
+ */
 function installDailyTrigger() {
   removeDailyTrigger();
-  ScriptApp.newTrigger('runDailyUpdate')
-    .timeBased()
-    .atHour(0)
-    .nearMinute(5)
-    .everyDays(1)
-    .inTimezone(TZ)
-    .create();
-  Logger.log('Daily trigger installed: 00:05 Asia/Jerusalem');
 
-  // הרצה מיידית עבור היום הקודם, כדי לא לחכות עד 00:05 מחר.
-  // אם נכשל - הטריגר עדיין מתוזמן, רק לוג של השגיאה.
-  try {
-    Logger.log('Running daily update now for yesterday...');
-    runDailyUpdate();
-  } catch (e) {
-    Logger.log(`Immediate run failed: ${e && e.message ? e.message : e}. Scheduled trigger remains active.`);
-  }
+  ScriptApp.newTrigger('runDailyUpdateUzoshop')
+    .timeBased().atHour(0).nearMinute(5).everyDays(1).inTimezone(TZ).create();
+  ScriptApp.newTrigger('runDailyUpdateZolplus')
+    .timeBased().atHour(0).nearMinute(8).everyDays(1).inTimezone(TZ).create();
+  ScriptApp.newTrigger('runDailyUpdateUsmile')
+    .timeBased().atHour(0).nearMinute(11).everyDays(1).inTimezone(TZ).create();
+  ScriptApp.newTrigger('refreshAllStoreMeta')
+    .timeBased().atHour(0).nearMinute(14).everyDays(1).inTimezone(TZ).create();
+
+  Logger.log('4 daily triggers installed: uzoshop@00:05, zolplus@00:08, usmile@00:11, store-meta@00:14 (Asia/Jerusalem)');
+  Logger.log('First run at next 00:05 IL. To backfill yesterday immediately, run runDailyUpdate from the editor.');
 }
 
+/**
+ * Removes ALL handlers that the daily-trigger installer knows about,
+ * including the legacy single-trigger handler ('runDailyUpdate') so a
+ * re-install after deploying Phase 5 doesn't leave the old trigger
+ * orphaned. installLiveTrigger remains untouched.
+ */
 function removeDailyTrigger() {
+  const HANDLERS = new Set([
+    'runDailyUpdate',          // legacy — pre-Phase-5
+    'runDailyUpdateUzoshop',
+    'runDailyUpdateZolplus',
+    'runDailyUpdateUsmile',
+    'refreshAllStoreMeta',
+  ]);
   const triggers = ScriptApp.getProjectTriggers();
   let removed = 0;
   for (const t of triggers) {
-    if (t.getHandlerFunction() === 'runDailyUpdate') {
+    if (HANDLERS.has(t.getHandlerFunction())) {
       ScriptApp.deleteTrigger(t);
       removed++;
     }
   }
-  Logger.log(`Removed ${removed} trigger(s)`);
+  Logger.log(`Removed ${removed} daily/store-meta trigger(s)`);
 }
 
 /**
