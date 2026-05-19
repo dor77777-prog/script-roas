@@ -25,6 +25,42 @@
  * Otherwise the daily run "self-heals" silently and writes a log line so
  * ops can see what happened.
  */
+/**
+ * Returns an ISO-8601 timestamp for local midnight on `dateStr` (YYYY-MM-DD)
+ * in the project timezone (TZ = Asia/Jerusalem). The timezone offset is
+ * resolved from the actual date instead of using a hardcoded summer offset.
+ *
+ * Fix for CODEX-NEW-P0-01.
+ */
+function isoLocalMidnight_(dateStr) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    throw new Error(`isoLocalMidnight_: invalid dateStr "${dateStr}"`);
+  }
+
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const targetLocalAsUtc = Date.UTC(y, m - 1, d, 0, 0, 0);
+  let instantMs = targetLocalAsUtc;
+
+  for (let i = 0; i < 3; i++) {
+    const local = Utilities.formatDate(new Date(instantMs), TZ, "yyyy-MM-dd'T'HH:mm:ss");
+    const match = local.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})$/);
+    if (!match) throw new Error(`isoLocalMidnight_: could not parse local time "${local}"`);
+    const localAsUtc = Date.UTC(
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3]),
+      Number(match[4]),
+      Number(match[5]),
+      Number(match[6]),
+    );
+    const deltaMs = localAsUtc - targetLocalAsUtc;
+    if (deltaMs === 0) break;
+    instantMs -= deltaMs;
+  }
+
+  return Utilities.formatDate(new Date(instantMs), TZ, "yyyy-MM-dd'T'HH:mm:ssXXX");
+}
+
 function shopifyCanAutoBootstrap_(storeId) {
   return !!(getProp(`${storeId}.shopify.clientId`) &&
             getProp(`${storeId}.shopify.clientSecret`));
@@ -56,8 +92,8 @@ function getShopifyRevenue(storeId, dateStr) {
   let token   = requireProp(`${storeId}.shopify.token`);
   let bootstrapTried = false;
 
-  const dayStart = `${dateStr}T00:00:00+03:00`;
-  const dayEnd   = `${nextDayStr_(dateStr)}T00:00:00+03:00`;
+  const dayStart = isoLocalMidnight_(dateStr);
+  const dayEnd   = isoLocalMidnight_(nextDayStr_(dateStr));
 
   let url = `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/orders.json` +
             `?status=any&financial_status=any&limit=250` +
@@ -144,8 +180,8 @@ function getShopifyProductSalesForDay(storeId, dateStr) {
   let token = requireProp(`${storeId}.shopify.token`);
   let bootstrapTried = false;
 
-  const dayStart = `${dateStr}T00:00:00+03:00`;
-  const dayEnd = `${nextDayStr_(dateStr)}T00:00:00+03:00`;
+  const dayStart = isoLocalMidnight_(dateStr);
+  const dayEnd = isoLocalMidnight_(nextDayStr_(dateStr));
 
   let url = `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/orders.json` +
             `?status=any&financial_status=any&limit=250` +
@@ -518,8 +554,8 @@ function getShopifyOrdersAttribution(storeId, dateStr) {
   let token = requireProp(`${storeId}.shopify.token`);
   let bootstrapTried = false;
 
-  const dayStart = `${dateStr}T00:00:00+03:00`;
-  const dayEnd = `${nextDayStr_(dateStr)}T00:00:00+03:00`;
+  const dayStart = isoLocalMidnight_(dateStr);
+  const dayEnd = isoLocalMidnight_(nextDayStr_(dateStr));
 
   let url = `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/orders.json` +
             `?status=any&financial_status=any&limit=250` +
