@@ -26,7 +26,13 @@ const NOTIFY_DASHBOARD_URL_DEFAULT = 'https://roas-dashboard-smoky.vercel.app';
 
 /**
  * Reads Twilio + phone-number config from Script Properties.
- * Throws if any required key is missing so failures are loud.
+ *
+ * Required: twilio.accountSid, twilio.authToken, twilio.whatsappFrom,
+ *           notify.phone1
+ * Optional: notify.phone2 (if set, also sends to this number),
+ *           notify.dashboardUrl (default points to production URL)
+ *
+ * Throws if any REQUIRED key is missing so failures are loud during setup.
  */
 function getNotifyConfig_() {
   const props = PropertiesService.getScriptProperties();
@@ -43,7 +49,7 @@ function getNotifyConfig_() {
   if (!cfg.authToken)    missing.push('twilio.authToken');
   if (!cfg.whatsappFrom) missing.push('twilio.whatsappFrom');
   if (!cfg.phone1)       missing.push('notify.phone1');
-  if (!cfg.phone2)       missing.push('notify.phone2');
+  // phone2 is OPTIONAL — if blank, only phone1 receives the notification.
   if (missing.length) {
     throw new Error('Missing Script Properties for WhatsApp notifications: ' + missing.join(', '));
   }
@@ -267,7 +273,9 @@ function sendNotificationForDate_(dateStr, title) {
   }
   const summary = buildStoreSummary_(dateStr);
   const body = buildMessageBody_(summary, title, cfg.dashboardUrl);
-  const recipients = [cfg.phone1, cfg.phone2];
+  // phone2 is optional — filter out blanks so a missing notify.phone2 just
+  // means "single-recipient mode" instead of an error.
+  const recipients = [cfg.phone1, cfg.phone2].filter(function (p) { return !!p; });
   for (const to of recipients) {
     try {
       sendWhatsAppViaTwilio_(cfg, to, body);
