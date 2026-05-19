@@ -1,4 +1,5 @@
 import { google } from 'googleapis';
+import { type DateRange, isInRange } from './dateRange';
 
 const PRODUCTS_TAB = 'products-daily';
 
@@ -65,7 +66,7 @@ function parseDate(v: unknown): string | null {
   return null;
 }
 
-export async function fetchProductsData(): Promise<ProductRow[]> {
+export async function fetchProductsData(opts?: { range?: DateRange }): Promise<ProductRow[]> {
   const auth = getAuth();
   const sheets = google.sheets({ version: 'v4', auth });
   const spreadsheetId = getSpreadsheetId();
@@ -92,6 +93,7 @@ export async function fetchProductsData(): Promise<ProductRow[]> {
   for (const row of values) {
     const dateStr = parseDate(row[0]);
     if (!dateStr) continue;
+    if (opts?.range && !isInRange(dateStr, opts.range)) continue;
     const storeId = String(row[1] ?? '').trim();
     const storeName = String(row[2] ?? '').trim();
     if (!storeId || !storeName) continue;

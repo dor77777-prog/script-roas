@@ -15,6 +15,7 @@ import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import type { ProductRow } from '@/lib/products';
 import type { ProductsResponse } from '@/app/api/products/route';
 import type { DateRange } from '@/lib/types';
+import { buildDateRangeKey } from '@/lib/dateRange';
 
 type Period = 'day' | 'week' | 'month' | 'half_year' | 'year';
 
@@ -255,11 +256,6 @@ type Props = {
 const TOP_N_DEFAULT = 5;
 
 export function ProductsTable({ range, store: globalStore, stores }: Props) {
-  const { data, error, isLoading } = useSWR<ProductsResponse>('/api/products', fetcher, {
-    refreshInterval: 60_000,
-    revalidateOnFocus: true,
-  });
-
   const [period, setPeriod] = useState<Period>('day');
 
   // Local store filter — defaults to global, syncs when global changes, but
@@ -271,10 +267,22 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
 
   // Local date range — same pattern. From/to inputs let the user zoom into
   // any window (single day if from===to, or any longer span).
+  // NOTE: declared before useSWR so buildDateRangeKey can use localRange as
+  // the SWR key (Phase 5 — range-keyed pagination). Changing localRange
+  // triggers a fresh SWR fetch (new key = new request, no stale-cache shadow).
   const [localRange, setLocalRange] = useState<DateRange>(range);
   useEffect(() => {
     setLocalRange(range);
   }, [range.from, range.to]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const { data, error, isLoading } = useSWR<ProductsResponse>(
+    buildDateRangeKey('/api/products', localRange),
+    fetcher,
+    {
+      refreshInterval: 60_000,
+      revalidateOnFocus: true,
+    },
+  );
 
   // Detect when the local range diverges from the global one — used to show
   // a "מחזיר לטווח הגלובלי" reset button.

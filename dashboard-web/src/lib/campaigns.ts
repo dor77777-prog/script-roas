@@ -1,4 +1,5 @@
 import { google } from 'googleapis';
+import { type DateRange, isInRange } from './dateRange';
 
 /**
  * One row per (date, store, ad_set). Schema mirrors Apps Script
@@ -90,8 +91,10 @@ function parseDate(v: unknown): string | null {
  * Pulls campaign rows from all three store tabs in a single batchGet, so the
  * Sheets API quota cost is one request not three. Missing tabs are tolerated
  * (e.g. a store with no campaigns yet returns no rows instead of failing).
+ * When `opts.range` is provided, rows outside [from, to] are filtered out
+ * server-side (Phase 5 pagination).
  */
-export async function fetchCampaignsData(): Promise<CampaignRow[]> {
+export async function fetchCampaignsData(opts?: { range?: DateRange }): Promise<CampaignRow[]> {
   const auth = getAuth();
   const sheets = google.sheets({ version: 'v4', auth });
   const spreadsheetId = getSpreadsheetId();
@@ -126,6 +129,7 @@ export async function fetchCampaignsData(): Promise<CampaignRow[]> {
     for (const row of values) {
       const dateStr = parseDate(row[0]);
       if (!dateStr) continue;
+      if (opts?.range && !isInRange(dateStr, opts.range)) continue;
 
       const platform = String(row[1] ?? '').trim() || 'Meta';
       const campaignId = String(row[2] ?? '').trim();

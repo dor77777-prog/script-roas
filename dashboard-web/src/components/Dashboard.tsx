@@ -41,6 +41,7 @@ import { SectionIntro } from './SectionIntro';
 import { CloudSync } from './CloudSync';
 import { SyncIndicator } from './SyncIndicator';
 import { readDashboardState, syncUrl } from '@/lib/urlState';
+import { buildDateRangeKey } from '@/lib/dateRange';
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -65,15 +66,11 @@ const TABS: TabDef<TabKey>[] = [
 ];
 
 export function Dashboard() {
-  const { data, error, isLoading, mutate, isValidating } = useSWR<DashboardData>(
-    '/api/data',
-    fetcher,
-    { refreshInterval: 60_000, revalidateOnFocus: true },
-  );
-
   // Initial state — read from URL search params on first mount so a refresh
   // or bookmark restores the user's view. Falls back to defaults when no
   // params are present.
+  // NOTE: filters must be declared before useSWR so buildDateRangeKey can
+  // use filters.range as the SWR key (Phase 5 — range-keyed pagination).
   const [activeTab, setActiveTab] = useState<TabKey>(() => {
     if (typeof window === 'undefined') return 'home';
     return readDashboardState(
@@ -93,6 +90,12 @@ export function Dashboard() {
     if (typeof window === 'undefined') return defaults;
     return readDashboardState({ tab: 'home', filters: defaults }, window.location.search).filters;
   });
+
+  const { data, error, isLoading, mutate, isValidating } = useSWR<DashboardData>(
+    buildDateRangeKey('/api/data', filters.range),
+    fetcher,
+    { refreshInterval: 60_000, revalidateOnFocus: true },
+  );
 
   // Counter that increments whenever the command palette wants to open the
   // AI report modal. AiReportButton listens to this prop via useEffect.

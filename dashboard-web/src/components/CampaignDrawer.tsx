@@ -55,6 +55,7 @@ import {
   setMappedProducts,
   type ProductMap,
 } from '@/lib/campaignProductMap';
+import { buildDateRangeKey } from '@/lib/dateRange';
 
 /**
  * Slide-in campaign drilldown drawer. Linear/Vercel-style: full context
@@ -119,8 +120,10 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
   }, []);
 
   // SWR fetches — lazy while open, SWR-deduped per session.
+  // Keys include the range so a range change triggers a fresh fetch (no stale cache).
+  const drawerRange = { from: rangeFrom, to: rangeTo };
   const { data: productsData } = useSWR<ProductsResponse>(
-    open ? '/api/products' : null,
+    open ? buildDateRangeKey('/api/products', drawerRange) : null,
     async (url: string) => {
       const r = await fetch(url);
       if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
@@ -129,7 +132,7 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
   const { data: ordersAttrData } = useSWR<OrdersAttributionResponse>(
-    open ? '/api/orders-attribution' : null,
+    open ? buildDateRangeKey('/api/orders-attribution', drawerRange) : null,
     async (url: string) => {
       const r = await fetch(url);
       if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };

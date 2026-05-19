@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { fetchProductsData, type ProductRow } from '@/lib/products';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
+import { parseRangeParams, RangeParamError } from '@/lib/dateRange';
 
 // No `force-dynamic` — it would override `revalidate` and the Cache-Control
 // header, defeating ISR. (IN-06)
@@ -16,9 +17,22 @@ export type ProductsResponse = {
   error?: string;
 };
 
-export async function GET() {
+export async function GET(req: Request) {
+  let range;
   try {
-    const rows = await fetchProductsData();
+    range = parseRangeParams(new URL(req.url).searchParams);
+  } catch (e) {
+    if (e instanceof RangeParamError) {
+      return NextResponse.json({ error: e.message }, {
+        status: 400,
+        headers: { 'Cache-Control': 'no-store' },
+      });
+    }
+    throw e;
+  }
+
+  try {
+    const rows = await fetchProductsData({ range });
     if (rows.length > 50000) {
       console.warn(`/api/products: large response (${rows.length} rows) — consider pagination`);
     }
