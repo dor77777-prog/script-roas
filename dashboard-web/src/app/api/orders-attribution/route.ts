@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { fetchOrdersAttribution, type OrderAttributionRow } from '@/lib/ordersAttribution';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
+import { parseRangeParams, RangeParamError } from '@/lib/dateRange';
 
 // 5-minute cache. Attribution rows are written daily; refreshing more often
 // doesn't help the analysis but does burn Sheets quota.
@@ -16,9 +17,24 @@ export type OrdersAttributionResponse = {
   error?: string;
 };
 
-export async function GET() {
+export async function GET(req: Request) {
+  // RangeParamError (malformed ?from=&to=) → 400 with no-store.
+  // All other errors (Sheets API failures) → 200 + empty rows (degraded path).
+  let range;
   try {
-    const rows = await fetchOrdersAttribution();
+    range = parseRangeParams(new URL(req.url).searchParams);
+  } catch (e) {
+    if (e instanceof RangeParamError) {
+      return NextResponse.json({ error: e.message }, {
+        status: 400,
+        headers: { 'Cache-Control': 'no-store' },
+      });
+    }
+    throw e;
+  }
+
+  try {
+    const rows = await fetchOrdersAttribution({ range });
     if (rows.length > 50000) {
       console.warn(`/api/orders-attribution: large response (${rows.length} rows) — consider pagination`);
     }

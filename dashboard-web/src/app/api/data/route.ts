@@ -3,6 +3,7 @@ import { fetchDailyData } from '@/lib/sheets';
 import type { DashboardData } from '@/lib/types';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
+import { parseRangeParams, RangeParamError } from '@/lib/dateRange';
 
 // Revalidate the underlying data every 60 seconds (server-side cache).
 // Client SWR will poll us; this prevents hammering the Sheets API.
@@ -25,9 +26,22 @@ async function fetchTodayFx(): Promise<number | null> {
   }
 }
 
-export async function GET() {
+export async function GET(req: Request) {
+  let range;
   try {
-    const [rows, fxIlsToCad] = await Promise.all([fetchDailyData(), fetchTodayFx()]);
+    range = parseRangeParams(new URL(req.url).searchParams);
+  } catch (e) {
+    if (e instanceof RangeParamError) {
+      return NextResponse.json({ error: e.message }, {
+        status: 400,
+        headers: { 'Cache-Control': 'no-store' },
+      });
+    }
+    throw e;
+  }
+
+  try {
+    const [rows, fxIlsToCad] = await Promise.all([fetchDailyData({ range }), fetchTodayFx()]);
     if (rows.length > 50000) {
       console.warn(`/api/data: large response (${rows.length} rows) — consider pagination`);
     }
