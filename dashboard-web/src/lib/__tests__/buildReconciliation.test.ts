@@ -433,6 +433,177 @@ describe('buildReconciliation', () => {
   });
 
   // ---------------------------------------------------------------------------
+  // Google primary path (TEST-05 — pin AUDIT-P3-05)
+  // ---------------------------------------------------------------------------
+
+  describe('Google campaign primary path', () => {
+    it('Google campaign summary still populates Meta series when other Meta campaigns map to the same products (FIX-04 symmetric)', () => {
+      const metaValues = [10, 15, 8, 12, 9];   // a separate Meta campaign in the store
+      const googleValues = [40, 50, 35, 45, 38];
+      const shopifyValues = [80, 90, 70, 85, 75];
+
+      const productsData = {
+        rows: DATES.map((date, i) => makeProductRow({ date, netRevenue: shopifyValues[i] })),
+        lastUpdated: new Date().toISOString(),
+      };
+
+      const metaCampaignRows = DATES.map((date, i) =>
+        makeCampaignRow({
+          date,
+          platform: 'Meta',
+          campaignId: CAMP_META,
+          campaignName: 'Meta Camp 1',
+          conversionValue: metaValues[i],
+        }),
+      );
+      const googleCampaignRows = DATES.map((date, i) =>
+        makeCampaignRow({
+          date,
+          platform: 'Google',
+          campaignId: CAMP_GOOGLE,
+          campaignName: 'Google Camp 1',
+          conversionValue: googleValues[i],
+        }),
+      );
+      const shopifyOrders = DATES.map((date, i) =>
+        makeOrderRow({
+          date,
+          orderId: `paid-${i}`,
+          source: 'google-paid',
+          gclidPresent: true,
+          fbclidPresent: false,
+          lineItems: [{ productId: PROD_A, units: 1, revenueCad: shopifyValues[i] }],
+        }),
+      );
+
+      const productMap: ProductMap = {
+        [campaignKey(STORE, 'Meta', CAMP_META)]: [PROD_A],
+        [campaignKey(STORE, 'Google', CAMP_GOOGLE)]: [PROD_A],
+      };
+
+      // Drawer is opened on the GOOGLE campaign, but Meta series should
+      // still be populated because Meta Camp 1 maps to PROD_A too.
+      const result = buildReconciliation({
+        summary: { platform: 'Google', campaignId: CAMP_GOOGLE, dailyArr: [] },
+        productsData,
+        mappedIds: [PROD_A],
+        storeId: STORE,
+        campaignsData: { rows: [...metaCampaignRows, ...googleCampaignRows] },
+        ordersData: { rows: shopifyOrders },
+        productMap,
+        rangeFrom: RANGE_FROM,
+        rangeTo: RANGE_TO,
+      });
+
+      expect(result).not.toBeNull();
+      expect(result!.primaryChannel).toBe('Google');
+      // Meta series carries the OTHER campaign's conversionValue, not zero.
+      // Asymmetric pre-FIX-04 behavior would have set Meta to 0 here because
+      // the drawer campaign is Google. Post-FIX-04 the helper walks all
+      // mapped Meta campaigns in the store, regardless of the drawer.
+      result!.series.forEach((s, i) => {
+        expect(s.meta).toBeCloseTo(metaValues[i], 4);
+        expect(s.google).toBeCloseTo(googleValues[i], 4);
+        expect(s.shopify).toBeCloseTo(shopifyValues[i], 4);
+      });
+    });
+
+    it('primaryChannel = Google when summary.platform=Google; rGoogle is the meaningful correlation', () => {
+      const googleValues = [40, 50, 35, 45, 38];
+      const shopifyValues = [80, 100, 70, 90, 76];   // strongly correlated with google
+
+      const productsData = {
+        rows: DATES.map((date, i) => makeProductRow({ date, netRevenue: shopifyValues[i] })),
+        lastUpdated: new Date().toISOString(),
+      };
+      const googleCampaignRows = DATES.map((date, i) =>
+        makeCampaignRow({
+          date,
+          platform: 'Google',
+          campaignId: CAMP_GOOGLE,
+          campaignName: 'Google Camp 1',
+          conversionValue: googleValues[i],
+        }),
+      );
+      const shopifyOrders = DATES.map((date, i) =>
+        makeOrderRow({
+          date,
+          orderId: `paid-${i}`,
+          source: 'google-paid',
+          gclidPresent: true,
+          fbclidPresent: false,
+          lineItems: [{ productId: PROD_A, units: 1, revenueCad: shopifyValues[i] }],
+        }),
+      );
+
+      const result = buildReconciliation({
+        summary: { platform: 'Google', campaignId: CAMP_GOOGLE, dailyArr: [] },
+        productsData,
+        mappedIds: [PROD_A],
+        storeId: STORE,
+        campaignsData: { rows: googleCampaignRows },   // no Meta rows at all
+        ordersData: { rows: shopifyOrders },
+        productMap: { [campaignKey(STORE, 'Google', CAMP_GOOGLE)]: [PROD_A] },
+        rangeFrom: RANGE_FROM,
+        rangeTo: RANGE_TO,
+      });
+
+      expect(result).not.toBeNull();
+      expect(result!.primaryChannel).toBe('Google');
+      expect(result!.rGoogle).not.toBeNull();
+      expect(result!.rGoogle!).toBeGreaterThan(0.9);   // strongly positive
+      // Meta series is all zeros → no variance → r = null (post-FIX-07).
+      expect(result!.r).toBeNull();
+    });
+
+    it('Pearson r = null (not 0) when Meta series is all-zero variance (post-FIX-07)', () => {
+      // Same Google-primary fixture but make Meta series explicitly zero
+      // by ensuring no Meta campaign rows exist. Pre-FIX-07 pearson()
+      // returned 0 for zero-variance inputs ("no signal" misread as
+      // "no correlation"). Post-FIX-07 it returns null.
+      const productsData = {
+        rows: DATES.map(date => makeProductRow({ date, netRevenue: 100 })),
+        lastUpdated: new Date().toISOString(),
+      };
+      const googleRows = DATES.map(date =>
+        makeCampaignRow({
+          date,
+          platform: 'Google',
+          campaignId: CAMP_GOOGLE,
+          campaignName: 'Google Camp 1',
+          conversionValue: 50,
+        }),
+      );
+      const shopifyOrders = DATES.map((date, i) =>
+        makeOrderRow({
+          date,
+          orderId: `paid-${i}`,
+          source: 'google-paid',
+          gclidPresent: true,
+          fbclidPresent: false,
+          lineItems: [{ productId: PROD_A, units: 1, revenueCad: 100 }],
+        }),
+      );
+      const result = buildReconciliation({
+        summary: { platform: 'Google', campaignId: CAMP_GOOGLE, dailyArr: [] },
+        productsData,
+        mappedIds: [PROD_A],
+        storeId: STORE,
+        campaignsData: { rows: googleRows },
+        ordersData: { rows: shopifyOrders },
+        productMap: { [campaignKey(STORE, 'Google', CAMP_GOOGLE)]: [PROD_A] },
+        rangeFrom: RANGE_FROM,
+        rangeTo: RANGE_TO,
+      });
+      expect(result).not.toBeNull();
+      // Meta is identically zero on every day → zero variance → pearson null.
+      // NOT 0 — 0 would imply "no correlation found" which is operationally
+      // different from "no signal to correlate" (FIX-07).
+      expect(result!.r).toBeNull();
+    });
+  });
+
+  // ---------------------------------------------------------------------------
   // Test 5: Missing optional aggregation inputs → all channel series zero
   // ---------------------------------------------------------------------------
 
