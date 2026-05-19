@@ -603,11 +603,16 @@ function mad(arr: number[], med: number): number {
 // fields to populate based on level.
 
 /**
- * Per-ad-set attribution. Matches orders where `utm_term === adSetId`.
- * Falls back to inheriting the campaign-level analysis if utm_term is
- * unconfigured (in which case all of the campaign's tagged orders are
- * shared across ad-sets — less precise but still strictly better than
- * trusting Meta's per-ad-set conversion_value).
+ * Per-ad-set attribution analysis. Matches orders to an ad set via
+ * exact `utm_term === adSet.adSetId` comparison.
+ *
+ * REQUIRES UTMs to be configured at the AD SET level (`utm_term={{adset.id}}`
+ * in Meta Ads Manager URL parameters). If only `utm_id` is configured
+ * (campaign level), this function will report zero matched orders — that
+ * is correct behavior, NOT a bug. Use the `analyzeAttribution`
+ * campaign-level analyzer for stores that only configure campaign-level UTMs.
+ *
+ * Returns the same shape as analyzeAttribution but scoped to a single ad set.
  */
 export function analyzeAttributionForAdSet(
   adSet: {
