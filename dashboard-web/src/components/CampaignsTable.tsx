@@ -255,8 +255,21 @@ type Props = {
 const TOP_N_DEFAULT = 10;
 
 export function CampaignsTable({ range, store: globalStore, stores, dailyRows }: Props) {
+  // NOTE: localRange is declared BEFORE the useSWR calls so buildDateRangeKey
+  // can use it as the SWR key (CR-02 fix — Phase 5 range-keyed pagination).
+  // Changing localRange via the in-toolbar date picker triggers a fresh SWR
+  // fetch (new key = new request, no stale-cache shadow). Mirrors the
+  // ProductsTable pattern. Without this, the table aggregator filters on
+  // localRange but the fetch is keyed on the GLOBAL range — any
+  // localRange.from earlier than range.from (or .to later than range.to)
+  // would silently filter against dates that were never fetched.
+  const [localRange, setLocalRange] = useState<DateRange>(range);
+  useEffect(() => {
+    setLocalRange(range);
+  }, [range.from, range.to]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const { data, error, isLoading } = useSWR<CampaignsResponse>(
-    buildDateRangeKey('/api/campaigns', range),
+    buildDateRangeKey('/api/campaigns', localRange),
     fetcher,
     { refreshInterval: 120_000, revalidateOnFocus: false },
   );
@@ -283,8 +296,10 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   }, [storeMeta]);
 
   // Products + mapping feed `useCampaignTrueRevenue` (Shopify-based true ROAS).
+  // Keyed on localRange so the trust chip and Shopify-ROAS columns stay in
+  // sync with the active filter window (CR-02).
   const { data: productsResp } = useSWR<ProductsResponse>(
-    buildDateRangeKey('/api/products', range),
+    buildDateRangeKey('/api/products', localRange),
     async (url: string) => {
       const r = await fetch(url);
       if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
@@ -293,8 +308,9 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
   // Per-order attribution → trust chip basis (click-id proof vs heuristic).
+  // Also keyed on localRange (CR-02).
   const { data: ordersAttrResp } = useSWR<OrdersAttributionResponse>(
-    buildDateRangeKey('/api/orders-attribution', range),
+    buildDateRangeKey('/api/orders-attribution', localRange),
     async (url: string) => {
       const r = await fetch(url);
       if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
@@ -347,7 +363,6 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   const [localStore, setLocalStore] = useState(globalStore);
   useEffect(() => { setLocalStore(globalStore); }, [globalStore]);
 
-  const [localRange, setLocalRange] = useState<DateRange>(range);
   // Drill-down drawer state — set when the user clicks a row.
   const [drillCampaignId, setDrillCampaignId] = useState<string | null>(null);
   const [drillPlatform, setDrillPlatform] = useState<string | null>(null);
@@ -358,7 +373,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     adSetId: string;
     adSetName: string;
   } | null>(null);
-  useEffect(() => { setLocalRange(range); }, [range.from, range.to]); // eslint-disable-line react-hooks/exhaustive-deps
+  // (localRange and its sync-effect moved above the useSWR calls — see CR-02.)
 
   const today = todayInIsrael();
   const isCustomRange =
