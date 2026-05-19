@@ -19,6 +19,65 @@ function runLiveUpdate() {
   runUpdateForDate(todayStr_());
 }
 
+/**
+ * Per-store daily trigger entry points (Phase 5).
+ *
+ * Each gets its own 6-min budget — eliminates the quota cascade where
+ * store 2 + 3 used to time out because store 1 saturated the Sheets API
+ * short-window quota. installDailyTrigger installs each at a different
+ * minute (00:05, 00:08, 00:11) so they run sequentially but in
+ * INDEPENDENT executions (each has its own 6-min cap).
+ *
+ * The original runDailyUpdate() is retained as a MANUAL entry point
+ * for full-sequential runs (e.g., from the editor / spreadsheet menu).
+ * Triggers no longer call it directly.
+ */
+function runDailyUpdateUzoshop() {
+  runUpdateForSingleStore_('uzoshop', yesterdayStr_());
+}
+function runDailyUpdateZolplus() {
+  runUpdateForSingleStore_('zolplus', yesterdayStr_());
+}
+function runDailyUpdateUsmile() {
+  runUpdateForSingleStore_('usmile360', yesterdayStr_());
+}
+
+/**
+ * Runs updateStoreForDate_ for a SINGLE store. Used by the per-store
+ * trigger entry points (Phase 5 trigger split). Mirrors the error
+ * handling shape of runUpdateForDate (per-store try/catch +
+ * notifyError_ on failure) but DOES NOT touch the summary tab — the
+ * summary is formula-driven and the next store's run (or the
+ * next-day's run) will keep it consistent.
+ */
+function runUpdateForSingleStore_(storeId, dateStr) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    throw new Error(`תאריך לא תקין: ${dateStr}. נדרש פורמט YYYY-MM-DD.`);
+  }
+  const store = getStoreById(storeId);
+  if (!store) throw new Error(`חנות לא ידועה: ${storeId}`);
+
+  const ss = ensureSpreadsheet();
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const ilsToCad = getFxRate('ILS', 'CAD', dateStr);
+  Logger.log(`[${store.name}] FX ILS->CAD on ${dateStr}: ${ilsToCad}`);
+
+  const errors = [];
+  try {
+    updateStoreForDate_(ss, store, dateStr, year, month, day, ilsToCad);
+  } catch (e) {
+    const msg = `[${store.name}] ${e && e.message ? e.message : e}`;
+    errors.push(msg);
+    Logger.log(`ERROR ${store.name}: ${e && e.stack ? e.stack : e}`);
+  }
+
+  if (errors.length) {
+    const fullMsg = `ROAS per-store update ${dateStr} (${store.name}) completed with errors:\n` + errors.join('\n');
+    Logger.log(fullMsg);
+    notifyError_(dateStr, fullMsg);
+  }
+}
+
 function runUpdateForDate(dateStr) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
     throw new Error(`תאריך לא תקין: ${dateStr}. נדרש פורמט YYYY-MM-DD.`);
