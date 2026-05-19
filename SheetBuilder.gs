@@ -786,6 +786,10 @@ function writeCampaignRowsForDay(ss, storeId, dateStr, rows) {
   if (combined.length === 0) return;
 
   // שלב 4: כתוב הכל בכתיבה אחת
+  // Force long platform IDs to text before writing. Meta IDs can exceed JS
+  // number precision if Sheets auto-parses them as numeric cells.
+  sh.getRange(2, 3, combined.length, 1).setNumberFormat('@'); // Campaign ID
+  sh.getRange(2, 5, combined.length, 1).setNumberFormat('@'); // Ad Set ID
   sh.getRange(2, 1, combined.length, CAMPAIGN_HEADERS.length).setValues(combined);
 
   // שלב 5: פורמטים על כל אזור הנתונים בבת אחת
@@ -1267,6 +1271,11 @@ function writeAdsRowsForDay(ss, storeId, dateStr, rows) {
   }
   if (combined.length === 0) return;
 
+  // Force long platform IDs to text before writing. Meta IDs can exceed JS
+  // number precision if Sheets auto-parses them as numeric cells.
+  sh.getRange(2, 3, combined.length, 1).setNumberFormat('@'); // Campaign ID
+  sh.getRange(2, 5, combined.length, 1).setNumberFormat('@'); // Ad Set ID
+  sh.getRange(2, 7, combined.length, 1).setNumberFormat('@'); // Ad ID
   sh.getRange(2, 1, combined.length, ADS_HEADERS.length).setValues(combined);
   sh.getRange(2, 1, combined.length, 1).setNumberFormat('yyyy-mm-dd').setHorizontalAlignment('center');
   sh.getRange(2, 9, combined.length, 1).setNumberFormat('#,##0.00');                   // Spend

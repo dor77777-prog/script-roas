@@ -845,6 +845,45 @@ function archive18MonthsProduction() {
   archiveOlderThan(18, {dryRun: false});
 }
 
+/**
+ * One-time migration: reformat campaignId/adSetId/adId columns as text
+ * across all per-store campaign and ads tabs. Run manually from the
+ * Apps Script editor after deploying FIX-08.
+ *
+ * Idempotent — re-running has no effect after the first successful run.
+ */
+function migrateIdColumnsToText() {
+  const ss = ensureSpreadsheet();
+  let totalRows = 0;
+  let totalTabs = 0;
+
+  for (const store of STORES) {
+    const tabs = [
+      { name: campaignTabName_(store.id), idCols: [3, 5] },
+      { name: adsTabName_(store.id),      idCols: [3, 5, 7] },
+    ];
+
+    for (const t of tabs) {
+      const sh = ss.getSheetByName(t.name);
+      if (!sh) continue;
+
+      const lastRow = sh.getLastRow();
+      if (lastRow < 2) continue;
+
+      totalTabs++;
+      for (const col of t.idCols) {
+        const range = sh.getRange(2, col, lastRow - 1, 1);
+        const values = range.getValues();
+        range.setNumberFormat('@');
+        range.setValues(values.map(r => [r[0] == null ? '' : String(r[0])]));
+      }
+      totalRows += lastRow - 1;
+    }
+  }
+
+  Logger.log(`Reformatted ${totalRows} rows across ${totalTabs} tabs.`);
+}
+
 // ============================================================================
 
 function notifyError_(dateStr, message) {
