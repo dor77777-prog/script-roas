@@ -65,13 +65,15 @@ export async function GET(req: Request) {
     // consumer reading `data.lastUpdated` on the error path now gets a
     // valid ISO timestamp instead of `undefined` (which would crash
     // downstream Date()/formatDate).
+    // Cache-Control: no-store — without it, the route-level `revalidate = 300`
+    // would pin a transient upstream blip in the CDN for 5 minutes. WR-02.
     return NextResponse.json(
       {
         rows: [],
         lastUpdated: new Date().toISOString(),
         error: userFacingError(message),
       } satisfies OrdersAttributionResponse,
-      { status: 200 },
+      { status: 200, headers: { 'Cache-Control': 'no-store' } },
     );
   }
 }

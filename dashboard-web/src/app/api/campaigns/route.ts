@@ -48,13 +48,14 @@ export async function GET(req: Request) {
     // Raw message logged server-side for ops; sanitized message returned to client.
     console.error('Campaigns fetch failed:', message);
     // Degrade gracefully with 200 + empty rows — matches /api/ads etc. (WR-06).
+    // Cache-Control: no-store — see WR-02 comment in /api/data/route.ts.
     return NextResponse.json(
       {
         rows: [],
         lastUpdated: new Date().toISOString(),
         error: userFacingError(message),
       } satisfies CampaignsResponse,
-      { status: 200 },
+      { status: 200, headers: { 'Cache-Control': 'no-store' } },
     );
   }
 }

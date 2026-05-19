@@ -68,6 +68,11 @@ export async function GET(req: Request) {
     // surfaces it through the same error banner, so the UX still shows
     // "שגיאה בטעינת הנתונים" instead of silently rendering an empty dashboard.
     // (WR-06)
+    // Cache-Control: no-store ensures a transient upstream blip does NOT
+    // get pinned in the CDN by the route-level `revalidate = 60`. Without
+    // this header, ISR semantics treat the 200-degraded-error response
+    // as cacheable and every consumer until T+60s sees the same error.
+    // WR-02. Mirrors the 400 RangeParamError path above.
     return NextResponse.json(
       {
         rows: [],
@@ -76,7 +81,7 @@ export async function GET(req: Request) {
         fxIlsToCad: null,
         error: userFacingError(message),
       } satisfies DashboardData,
-      { status: 200 },
+      { status: 200, headers: { 'Cache-Control': 'no-store' } },
     );
   }
 }
