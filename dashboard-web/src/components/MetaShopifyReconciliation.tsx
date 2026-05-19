@@ -1,6 +1,7 @@
 'use client';
 
-import { TrendingUp } from 'lucide-react';
+import { useState } from 'react';
+import { Info, TrendingUp, X } from 'lucide-react';
 import {
   ComposedChart,
   Line,
@@ -19,6 +20,7 @@ import { cn, formatCurrency, formatDate } from '@/lib/utils';
 export { pearson, pearsonWithLag };
 
 const LAG_IMPROVEMENT_THRESHOLD = 0.05;
+const PRODUCT_MAP_CHIP_KEY = 'roas:productMapChipHidden';
 
 /**
  * Day-by-day Meta-claim vs Shopify-actual reconciliation panel for a single
@@ -258,6 +260,9 @@ type Props = {
 };
 
 export function MetaShopifyReconciliation({ reconciliation }: Props) {
+  const [chipHidden, setChipHidden] = useState(() => (
+    typeof window !== 'undefined' && window.sessionStorage.getItem(PRODUCT_MAP_CHIP_KEY) === '1'
+  ));
   const primaryChannel = reconciliation.primaryChannel;
   const primaryR =
     primaryChannel === 'Google' ? reconciliation.rGoogle
@@ -289,6 +294,28 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
         ערוצים מול Shopify — מתאם יומי
       </h3>
       <div className="rounded-xl border border-borderSubtle bg-surfaceMuted/30 p-3 space-y-3">
+        {!chipHidden && (
+          <div
+            title="current state, not date-versioned"
+            className="rounded-md bg-gray-50 border border-gray-200 px-2.5 py-1.5 text-[11px] text-text-muted flex items-center gap-1.5"
+          >
+            <Info size={12} className="shrink-0 text-text-subtle" />
+            <span className="leading-relaxed">
+              ה-product↔campaign mapping מבוסס על המיפוי הנוכחי שלך. שינוי המיפוי משפיע על נתונים היסטוריים בדיעבד.
+            </span>
+            <button
+              type="button"
+              aria-label="הסתר הודעת מיפוי"
+              onClick={() => {
+                window.sessionStorage.setItem(PRODUCT_MAP_CHIP_KEY, '1');
+                setChipHidden(true);
+              }}
+              className="ms-auto shrink-0 rounded p-0.5 text-text-subtle hover:bg-gray-100 hover:text-text-secondary transition-colors"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        )}
 
         {/* Dark traffic chip */}
         {reconciliation.darkTrafficPercent > 0 && (

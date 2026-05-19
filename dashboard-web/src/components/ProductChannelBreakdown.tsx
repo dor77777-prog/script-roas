@@ -1,6 +1,7 @@
 'use client';
 
-import { Package } from 'lucide-react';
+import { useState } from 'react';
+import { Info, Package, X } from 'lucide-react';
 import type { ProductChannelBreakdown as ProductChannelBreakdownType } from '@/lib/attributionAnalysis';
 
 /**
@@ -19,7 +20,12 @@ type Props = {
   breakdown: ProductChannelBreakdownType;
 };
 
+const PRODUCT_MAP_CHIP_KEY = 'roas:productMapChipHidden';
+
 export function ProductChannelBreakdown({ breakdown }: Props) {
+  const [chipHidden, setChipHidden] = useState(() => (
+    typeof window !== 'undefined' && window.sessionStorage.getItem(PRODUCT_MAP_CHIP_KEY) === '1'
+  ));
   const total = breakdown.totalOrders;
   const fb = breakdown.facebookOrders;
   const google = (breakdown.bySource['google-paid']?.orders ?? 0)
@@ -36,6 +42,29 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
         </span>
       </h3>
       <div className="rounded-xl border border-borderSubtle bg-surfaceMuted/30 p-3 space-y-3">
+        {!chipHidden && (
+          <div
+            title="current state, not date-versioned"
+            className="rounded-md bg-gray-50 border border-gray-200 px-2.5 py-1.5 text-[11px] text-text-muted flex items-center gap-1.5"
+          >
+            <Info size={12} className="shrink-0 text-text-subtle" />
+            <span className="leading-relaxed">
+              ה-product↔campaign mapping מבוסס על המיפוי הנוכחי שלך. שינוי המיפוי משפיע על נתונים היסטוריים בדיעבד.
+            </span>
+            <button
+              type="button"
+              aria-label="הסתר הודעת מיפוי"
+              onClick={() => {
+                window.sessionStorage.setItem(PRODUCT_MAP_CHIP_KEY, '1');
+                setChipHidden(true);
+              }}
+              className="ms-auto shrink-0 rounded p-0.5 text-text-subtle hover:bg-gray-100 hover:text-text-secondary transition-colors"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        )}
+
         {/* Summary line — total orders + CAD */}
         <div className="text-[12px] text-text-secondary tabular-nums">
           {total} הזמנות של מוצרים משויכים · CAD {breakdown.totalRevenue.toFixed(0)} סה&quot;כ
