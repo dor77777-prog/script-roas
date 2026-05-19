@@ -146,36 +146,36 @@ Plans:
 Plans:
 - [x] 05.1-01-PLAN.md — single plan, 2 tasks (DailyUpdate.gs wrappers + Main.gs installLiveTrigger/removeLiveTrigger update)
 
-### Phase 6: Security & Cloud-Sync
-**Goal**: Harden the writable surfaces against credential leak + brute-force + race conditions.
+### Phase 6: Security & Cloud-Sync (SLIMMED — single-user internal context)
+
+**Context (added 2026-05-19)**: After Phase 5 we revisited scope. The dashboard is a SINGLE-USER INTERNAL tool with at most one user editing at a time. Multi-user concerns (rate-limit-against-DDoS, optimistic-concurrency If-Match) and auth gating were intentionally dropped — user accepted URL-obscurity as the trust boundary.
+
+**Goal**: Defense in depth for credential leak + self-forensics + quota efficiency. NOT multi-user concurrency, NOT rate-limit, NOT auth.
 **Depends on**: Phase 2 (need tests to verify) + Phase 5 (cleaner API surface)
-**Requirements**:
+**Requirements** (slim):
   - Service-account split:
     - Create new service-account `roas-dashboard-writer@...` with `spreadsheets` scope, restricted to write only `dashboard-state` + `dashboard-state-audit` tabs
     - Existing service-account becomes read-only (`spreadsheets.readonly`)
     - Two env var sets in Vercel: `GOOGLE_READER_EMAIL`/`GOOGLE_READER_KEY` + `GOOGLE_WRITER_EMAIL`/`GOOGLE_WRITER_KEY`
     - `sheets.ts` uses reader for all GETs and writer only for `upsertDashboardStateKey`
-  - Rate limiting on POST `/api/dashboard-state`:
-    - Use Upstash Redis (free tier) or Vercel Edge Config for IP-based rate limit (10/min/IP)
-    - Server-side debounce of 1s per key (if 2 POSTs for same key within 100ms, only last applied)
   - Audit log:
     - New tab `dashboard-state-audit` with 4 columns: `timestamp`, `key`, `old_value` (truncated to 500 chars), `new_value` (truncated)
     - Every POST writes one row before updating `dashboard-state`
     - 30-day retention; older rows pruned in a scheduled cleanup
-  - Cloud-sync If-Match:
-    - Client tracks `updatedAt` per key; sends `If-Match: <updatedAt>` header on POST
-    - Server rejects with 412 Precondition Failed if `updatedAt` mismatches → client re-hydrates + retries
   - Adaptive polling:
     - Visible tab: 30s poll
     - Hidden tab (`document.visibilityState === 'hidden'`): 5min poll
     - Page idle > 10min: stop polling until next focus
+**Dropped (rationale)**:
+  - ❌ Rate limiting — single user, no DDoS surface. URL obscurity is the access boundary.
+  - ❌ If-Match (optimistic concurrency) — single user means no concurrent edits, no race condition risk.
+  - ❌ Auth layer — user explicitly accepts URL-obscurity as the trust model (2026-05-19); not retrofitting a login flow.
 **Success Criteria**:
-  1. Service-account split deployed; reader returns 403 if attempting to write
-  2. Rate limit middleware rejects >10 POSTs/min/IP with 429
-  3. `dashboard-state-audit` tab populates with one row per POST; verified after a billing edit
-  4. Concurrent edit from 2 browsers → second one gets 412 → silently retries → both edits land correctly
-  5. Hidden tab polling rate drops to 1/5min (verified via Network panel)
-  6. SYSTEM_OVERVIEW.md security section updated
+  1. Service-account split deployed; reader credentials return 403 if attempting to write
+  2. `dashboard-state-audit` tab populates with one row per POST; verified after a billing edit
+  3. Hidden tab polling rate drops to 1/5min (verified via Network panel)
+  4. SYSTEM_OVERVIEW.md security section updated to reflect single-user trust model
+**Note**: The existing `06-PLAN.md` was written in the batch wave with the ORIGINAL multi-user scope (rate-limit / If-Match / auth). Run `/gsd-plan-phase 6` to refresh against this slim scope before executing.
 
 ### Phase 7: Observability
 **Goal**: Long-tail debugging and proactive alerting. Logs that survive past 30 days, alerts before quota is hit, scripts to fix the one-off data corruptions.
