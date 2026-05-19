@@ -2,3 +2,4 @@
 node_modules/
 .vercel
 .clasprc.json
+dashboard-web/node_modules
