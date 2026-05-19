@@ -159,14 +159,23 @@ export function parseLineItems(v: unknown): OrderLineItem[] {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     return parsed
-      .filter((it): it is Record<string, unknown> => it !== null && typeof it === 'object')
+      // Require it.p to be a non-empty string (WR-08). Without this,
+      // String(it.p ?? '') would happily accept e.g. {p: [1,2,3]} and
+      // emit productId="1,2,3" — a synthetic ID that never appears in
+      // the catalog. Phase 1's writer guarantees p is a string per-row,
+      // but a malformed sheet edit could slip in a non-string and the
+      // dashboard would silently consume it.
+      .filter((it): it is { p: string; u: unknown; r: unknown } =>
+        it !== null && typeof it === 'object' &&
+        typeof (it as { p?: unknown }).p === 'string' &&
+        (it as { p: string }).p.length > 0,
+      )
       .map(it => ({
-        productId: String(it.p ?? ''),
+        productId: it.p,
         units: Number(it.u ?? 0),
         revenueCad: Number(it.r ?? 0),
       }))
       .filter(li =>
-        li.productId &&
         Number.isFinite(li.units) &&
         Number.isFinite(li.revenueCad),
       );
