@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import {
   AlertCircle,
@@ -328,11 +328,24 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
   const [productMap, setProductMap] = useState<ProductMap>(() => ({}));
-  const productMapMigrationRan = useRef(false);
   useEffect(() => {
-    if (data && !productMapMigrationRan.current) {
+    // WR-02: Migration runs on EVERY change to `data`, not once per session.
+    // The previous useRef-guarded "one-shot" implementation only inspected
+    // the SWR window (default 90 days) and silently abandoned legacy
+    // 2-segment keys for campaigns paused / inactive in the current
+    // window. The downstream cost was a silent UX failure (drawer mapped-
+    // products empty) AND a reverse-lookup double-count (legacy 2-seg key
+    // matched the `startsWith('${storeId}::')` prefix → halved share
+    // via the `share = 1/mappedKeys.length` fallback + biased trust
+    // toward 'low' via the shared-campaigns heuristic).
+    //
+    // migrateProductMapKeys is idempotent — once a key is migrated to
+    // 3-segment form, the explicit-segment-count check (WR-07) skips
+    // it on subsequent runs. Re-running on each `data` refresh handles
+    // the "user widens range to include paused campaign's history"
+    // case at marginal cost.
+    if (data) {
       setProductMap(migrateProductMapKeys(data));
-      productMapMigrationRan.current = true;
     } else {
       setProductMap(readProductMap());
     }
