@@ -437,6 +437,13 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     });
     withRoas.sort((x, y) => {
       // Push unmapped rows to bottom so mapped sort is meaningful.
+      // DESIGN INTENT (WR-05): the tie-break is INTENTIONALLY direction-
+      // independent — mapped rows always come first, even when the user
+      // clicks the ROAS-Shopify header to flip asc/desc. Only the within-
+      // group order rotates with `sign`. Rationale: unmapped rows have
+      // no Shopify-ROAS value (their `roas` is 0), so mixing them in with
+      // the directional sort would put them at the top on asc — visually
+      // dominating the table with rows that carry no information.
       if (x.mapped !== y.mapped) return x.mapped ? -1 : 1;
       return sign * (x.roas - y.roas);
     });
