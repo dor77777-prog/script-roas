@@ -146,6 +146,30 @@ Plans:
 Plans:
 - [x] 05.1-01-PLAN.md — single plan, 2 tasks (DailyUpdate.gs wrappers + Main.gs installLiveTrigger/removeLiveTrigger update)
 
+### Phase 05.2: Multi-channel reconciliation chart (Google + Organic overlay)
+
+**Goal**: Extend the existing Meta-vs-Shopify daily reconciliation chart to a 4-series chart that overlays Google-claimed sales and Organic/Direct sales for the SAME mapped products. Gives the user a complete picture of "what each platform claims sold vs. what Shopify actually recorded" per day.
+**Depends on**: Phase 4 (CampaignDrawer infrastructure) + Phase 5 (paginated routes, no breaking changes there)
+**Why now**: Discovered during Phase 5.1 UAT discussion (2026-05-19). The data already exists — Google Ads `conversionValue` is captured by `GoogleAds.gs:getGoogleAdsAdGroupInsights` and lands in `{store}-campaigns` tab with `platform='Google'`. Organic/direct sales are derivable from `OrderSource` classification (`meta-organic`, `direct`, etc.) in `{store}-orders-attribution`. The current `MetaShopifyReconciliation` panel only uses 2 of the 4 available data sources.
+**Requirements**:
+  - Extend `buildReconciliation` in `useCampaignTrueRevenue.ts` to compute 4 daily series instead of 2:
+    1. Shopify actual revenue (mapped products) — already computed
+    2. Meta-claimed (sum of `conversionValue` for Meta campaigns mapped to product) — already computed
+    3. Google-claimed (sum of `conversionValue` for Google campaigns mapped to product) — NEW
+    4. Organic/Direct (sum of order revenue for orders where `source ∈ {meta-organic, direct, organic-search, other}` AND order contains mapped product) — NEW
+  - Add 3 additional Pearson correlations: Google-vs-Shopify, Organic-vs-Shopify, (Meta+Google+Organic)-vs-Shopify
+  - Update `MetaShopifyReconciliation.tsx` to render 4 series with legend + colors (rename to `ChannelReconciliation.tsx` is optional)
+  - "Coverage gap" indicator: if `Σ(Meta+Google+Organic) / Shopify_actual < 0.8` → render an amber chip "20%+ dark traffic — check attribution leakage"
+**Success Criteria**:
+  1. The reconciliation chart in CampaignDrawer renders 4 distinct series with clear legend
+  2. For stores without Google Ads (zolplus, usmile360 today): Google series renders as flat 0 line, NOT broken
+  3. All 4 series compute correctly: tested via existing fixtures + a new test case in `__tests__/`
+  4. `npm run build` + `npm test` pass
+  5. Eyeball on production: open CampaignDrawer for a mapped Meta campaign → see 4 lines
+
+Plans:
+- [ ] 05.2-01-PLAN.md — extend buildReconciliation + chart UI + Pearson additions
+
 ### Phase 6: Security & Cloud-Sync (SLIMMED — single-user internal context)
 
 **Context (added 2026-05-19)**: After Phase 5 we revisited scope. The dashboard is a SINGLE-USER INTERNAL tool with at most one user editing at a time. Multi-user concerns (rate-limit-against-DDoS, optimistic-concurrency If-Match) and auth gating were intentionally dropped — user accepted URL-obscurity as the trust boundary.
@@ -175,7 +199,13 @@ Plans:
   2. `dashboard-state-audit` tab populates with one row per POST; verified after a billing edit
   3. Hidden tab polling rate drops to 1/5min (verified via Network panel)
   4. SYSTEM_OVERVIEW.md security section updated to reflect single-user trust model
-**Note**: The existing `06-PLAN.md` was written in the batch wave with the ORIGINAL multi-user scope (rate-limit / If-Match / auth). Run `/gsd-plan-phase 6` to refresh against this slim scope before executing.
+**Plans:** 4 plans
+Plans:
+- [ ] 06-PLAN.md — outline document mapping plans to waves (Wave 1: 06-01 + 06-02 parallel; Wave 2: 06-03; Wave 3: 06-04)
+- [ ] 06-01-PLAN.md — Service-account split (reader/writer) + .env.example + SETUP.md runbook. 2 tasks: refactor + checkpoint:human-verify (operator runs the SA split in Google Cloud + Vercel). Wave 1, autonomous: false.
+- [ ] 06-02-PLAN.md — Adaptive polling hook (useAdaptivePolling.ts) + CloudSync.tsx rewire. 1 task. Wave 1, autonomous: true (parallel with 06-01).
+- [ ] 06-03-PLAN.md — Audit log: `dashboard-state-audit` tab auto-creation + appendAuditRow + POST handler wiring. 2 tasks. Wave 2 (depends on 06-01 for writer auth), autonomous: true.
+- [ ] 06-04-PLAN.md — Retention cleanup: Apps Script `pruneAuditLogOlderThan` + weekly `pruneAuditLogTrigger` (Sunday 03:00) + `installAuditPruneTrigger` installer + SYSTEM_OVERVIEW.md Phase 6 section. 2 tasks. Wave 3 (depends on 06-03), autonomous: true.
 
 ### Phase 7: Observability
 **Goal**: Long-tail debugging and proactive alerting. Logs that survive past 30 days, alerts before quota is hit, scripts to fix the one-off data corruptions.
