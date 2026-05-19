@@ -76,7 +76,16 @@ describe('computeLineItemsCad', () => {
   });
 
   it('skips line items with empty productId (matches Shopify.gs:672-673)', () => {
-    // Custom items / deleted products have empty product_id.
+    // Custom items / deleted products have empty product_id. WR-01:
+    // matches Shopify.gs semantics — subtotal includes the custom item's
+    // contribution to the denominator so the real product gets its
+    // PRO-RATA share of orderTotal, not the whole pot.
+    //
+    // Concrete: order $100, both items priced at $50 (custom + real).
+    // Shopify.gs subtotal = 50+50 = 100. Real-item share = 50/100 * 100 = 50.
+    // The custom item's $50 share is dropped from the output (matches the
+    // .gs writer skipping custom items before push), so Σ output ≠
+    // orderTotal — that's the documented contract.
     const total = 100;
     const split = computeLineItemsCad(total, [
       { productId: 'p-1', price: 50, quantity: 1 },
@@ -84,9 +93,44 @@ describe('computeLineItemsCad', () => {
     ]);
     expect(split).toHaveLength(1);
     expect(split[0].productId).toBe('p-1');
-    // All revenue routes to the one valid item (subtotal recomputed
-    // over filtered items: only p-1 → gross 50 → share = 50/50 = 100%).
-    expect(split[0].revenueCad).toBeCloseTo(total, 2);
+    // (50/100) * 100 = 50 — matches .gs writer output. Previously the TS
+    // mirror returned 100 (whole pot) because it recomputed subtotal over
+    // the filtered array, which diverged from .gs and broke the parity
+    // claim in the module docstring.
+    expect(split[0].revenueCad).toBeCloseTo(50, 2);
+  });
+
+  it('WR-01 parity: mixed real+custom items use unfiltered subtotal (.gs semantics)', () => {
+    // Triple-verify the parity contract with an asymmetric mix:
+    // 1 real ($30) + 2 custom items (total $70). Shopify.gs subtotal =
+    // 30+40+30 = 100. Real-item share = 30/100 * orderTotal.
+    const total = 200;
+    const split = computeLineItemsCad(total, [
+      { productId: 'p-real', price: 30, quantity: 1 },  // gross 30
+      { productId: '',       price: 40, quantity: 1 },  // gross 40 (custom)
+      { productId: '',       price: 15, quantity: 2 },  // gross 30 (custom)
+    ]);
+    expect(split).toHaveLength(1);
+    expect(split[0].productId).toBe('p-real');
+    // 30/100 * 200 = 60. The TS mirror previously emitted 200 (recomputed
+    // subtotal over filtered=[p-real]=30 → share = 30/30 = 100%), which
+    // would have over-credited the real product by 3.3x. WR-01 fixed.
+    expect(split[0].revenueCad).toBeCloseTo(60, 2);
+  });
+
+  it('WR-01 parity: flat-spread denominator uses items.length (.gs semantics)', () => {
+    // When subtotal=0, Shopify.gs:678 spreads totalCad across items.length
+    // (unfiltered), NOT valid.length. So 1 real + 1 custom item, totalCad=10:
+    // real-item share = 10/2 = 5, custom's $5 share is dropped from output.
+    const total = 10;
+    const split = computeLineItemsCad(total, [
+      { productId: 'p-1', price: 0, quantity: 1 },
+      { productId: '',    price: 0, quantity: 1 },
+    ]);
+    expect(split).toHaveLength(1);
+    // 10/2 = 5 — matches .gs writer. Previously the TS mirror used
+    // valid.length=1 → 10/1 = 10, diverging from .gs.
+    expect(split[0].revenueCad).toBeCloseTo(5, 2);
   });
 
   it('empty line_items array → empty split', () => {

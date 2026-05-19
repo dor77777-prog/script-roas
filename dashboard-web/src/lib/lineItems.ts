@@ -5,10 +5,18 @@
  * runtime for the .gs source.
  *
  * KEEP IN SYNC with Shopify.gs. The behavior contract:
- *   - `subtotal = Σ price × qty` over line items.
- *   - If `subtotal > 0`: each line item gets `(lineGross / subtotal) × orderTotal`.
+ *   - `subtotal = Σ price × qty` over the UNFILTERED line items (includes
+ *     custom / empty-productId items). This matters when an order mixes
+ *     a real product with a custom item — the custom item still occupies
+ *     a share of orderTotal, so excluding it from the denominator would
+ *     over-credit the real product. (WR-01)
+ *   - If `subtotal > 0`: each retained line item gets
+ *     `(lineGross / subtotal) × orderTotal`.
  *   - If `subtotal === 0` (rare — free-gift / 100%-discount orders):
- *     spread `orderTotal` equally across items (avoid divide-by-zero).
+ *     spread `orderTotal` equally across ALL items (denominator =
+ *     items.length, mirroring Shopify.gs:678). Items without productId
+ *     are still skipped from the output, but they consume their share
+ *     of the flat-spread denominator.
  *   - Items with empty `productId` are skipped (the writer skips
  *     custom / deleted-product items at line 672-673).
  *   - Results are rounded to 2 decimal places via `round2_` in the
@@ -17,7 +25,8 @@
  *
  * TODO (future phase): extract a shared revenue-allocation schema so
  * Shopify.gs and dashboard-web stop duplicating this logic. Tracked
- * in the SUMMARY's "Flagged for Follow-up" section.
+ * in .planning/phases/05.2.1.1-algorithm-correctness-fixes-codex-via-gsd-cross-ai/05.2.1.1-SUMMARY.md
+ * "Flagged for Follow-up".
  */
 
 export type LineItemInput = {
@@ -48,28 +57,38 @@ export function computeLineItemsCad(
 ): LineItemSplit[] {
   if (!lineItems || lineItems.length === 0) return [];
 
-  // Filter to items with a productId (matches the writer's behavior — items
-  // without product_id can never match a campaign's mapped products anyway).
-  const valid = lineItems.filter(li => li.productId && li.productId.length > 0);
-  if (valid.length === 0) return [];
-
-  const subtotal = valid.reduce(
+  // Mirror Shopify.gs:658 — subtotal includes ALL items, including
+  // custom/empty-productId. This matters when an order mixes a real
+  // product with a custom item: excluding custom items from the
+  // denominator would silently over-credit the real product's share
+  // of orderTotal vs the .gs writer's output. (WR-01)
+  const subtotal = lineItems.reduce(
     (s, li) => s + (Number(li.price) || 0) * (Number(li.quantity) || 0),
     0,
   );
 
   const useFlatSpread = !(subtotal > 0);
+  // Mirror Shopify.gs:678 — flat-spread denominator uses items.length
+  // (the unfiltered count), not the filtered-valid count.
+  const denom = lineItems.length;
 
-  return valid.map(li => {
+  const out: LineItemSplit[] = [];
+  for (const li of lineItems) {
+    // Skip custom / deleted-product items — matches Shopify.gs:672-673.
+    // The custom item still contributed to `subtotal` and `denom` above,
+    // so its share of orderTotal stays out of the output array (consistent
+    // with the .gs writer skipping it before push).
+    if (!li.productId || li.productId.length === 0) continue;
     const qty = Number(li.quantity) || 0;
     const lineGross = (Number(li.price) || 0) * qty;
     const lineCad = useFlatSpread
-      ? (valid.length > 0 ? orderTotal / valid.length : 0)
+      ? (denom > 0 ? orderTotal / denom : 0)
       : (lineGross / subtotal) * orderTotal;
-    return {
+    out.push({
       productId: li.productId,
       units: qty,
       revenueCad: round2(lineCad),
-    };
-  });
+    });
+  }
+  return out;
 }
