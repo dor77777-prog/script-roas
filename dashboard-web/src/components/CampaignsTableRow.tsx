@@ -235,11 +235,17 @@ export function CampaignsTableRow({
           const useAttr = attrAvailable && !attrUnknown;
           const trustLabel = useAttr ? info.attribution!.trust.label : info.confidence.label;
           const trustLevel = useAttr ? info.attribution!.trust.level : info.confidence.level;
+          // WR-06: the 'unknown' branch is statically unreachable here.
+          // `useAttr === true` implies info.attribution!.trust.level is one
+          // of 'high' | 'medium' | 'low' (we explicitly excluded 'unknown'
+          // via `!attrUnknown` above). When `useAttr === false`, trustLevel
+          // is sourced from info.confidence.level whose type union is
+          // 'high' | 'medium' | 'low' (no 'unknown'). The unknown branch
+          // was dead code masking the actual fallback rule — dropped.
           const confTone =
-            trustLevel === 'high'    ? 'bg-roas-greenBg/60 text-roas-green'
-          : trustLevel === 'medium'  ? 'bg-amber-50 text-amber-700'
-          : trustLevel === 'unknown' ? 'bg-surfaceMuted text-text-secondary'
-          :                            'bg-roas-redBg/60 text-roas-red';
+            trustLevel === 'high'   ? 'bg-roas-greenBg/60 text-roas-green'
+          : trustLevel === 'medium' ? 'bg-amber-50 text-amber-700'
+          :                           'bg-roas-redBg/60 text-roas-red';
 
           // Mapping comparison line, reused in both tooltip
           // branches so the operator always sees what the other
