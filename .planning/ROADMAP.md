@@ -168,7 +168,7 @@ Plans:
   5. Eyeball on production: open CampaignDrawer for a mapped Meta campaign → see 4 lines
 
 Plans:
-- [ ] 05.2-01-PLAN.md — extend buildReconciliation + chart UI + Pearson additions
+- [x] 05.2-01-PLAN.md — extend buildReconciliation + chart UI + Pearson additions
 
 ### Phase 6: Security & Cloud-Sync (SLIMMED — single-user internal context)
 
