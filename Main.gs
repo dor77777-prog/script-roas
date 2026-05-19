@@ -93,29 +93,57 @@ function removeDailyTrigger() {
 }
 
 /**
- * מתקין טריגר "Live" שירוץ כל 15 דקות, מעדכן את היום הנוכחי.
- * משמש את ה-dashboard להציג נתוני "Live" כמעט-real-time.
+ * Installs THREE live triggers (Phase 5.1 split) — one per store.
+ *
+ * Each runs every 15 minutes in its own execution context, so each
+ * gets its own 6-min budget. Mirrors the daily split (Phase 5 — 05-01)
+ * that fixed the same quota-cascade problem for the 00:05 daily
+ * trigger. Without this split, the historical 19% failure rate of
+ * the single combined trigger continues.
+ *
+ * Apps Script's everyMinutes(15) doesn't offer a minute-offset knob,
+ * so all 3 fire at the same scheduled instant. That's fine: each
+ * execution is INDEPENDENT (its own 6-min budget, its own Sheets
+ * API context). Short-window quota contention is bounded because
+ * each execution only handles 1 store's worth of API calls.
+ *
+ * Unlike the old installer, this one does NOT run any of the
+ * functions immediately. The first per-store live update happens at
+ * the next 15-minute boundary. Rationale: an immediate sequential
+ * burst would defeat the very quota separation we're setting up,
+ * and the next firing is at most 15 minutes away.
  */
 function installLiveTrigger() {
   removeLiveTrigger();
-  ScriptApp.newTrigger('runLiveUpdate')
-    .timeBased()
-    .everyMinutes(15)
-    .create();
-  Logger.log('Live trigger installed: runs every 15 minutes');
-  // הרצה מיידית כדי שיהיו נתוני היום עכשיו
-  try {
-    runLiveUpdate();
-  } catch (e) {
-    Logger.log(`Immediate live run failed: ${e && e.message ? e.message : e}`);
-  }
+
+  ScriptApp.newTrigger('runLiveUpdateUzoshop')
+    .timeBased().everyMinutes(15).create();
+  ScriptApp.newTrigger('runLiveUpdateZolplus')
+    .timeBased().everyMinutes(15).create();
+  ScriptApp.newTrigger('runLiveUpdateUsmile')
+    .timeBased().everyMinutes(15).create();
+
+  Logger.log('3 live triggers installed: uzoshop / zolplus / usmile (every 15 minutes)');
+  Logger.log('First run at next 15-min boundary. To refresh today now, run runLiveUpdate from the editor.');
 }
 
+/**
+ * Removes ALL handlers that the live-trigger installer knows about,
+ * including the legacy single-trigger handler ('runLiveUpdate') so a
+ * re-install after deploying Phase 5.1 doesn't leave the old trigger
+ * orphaned. installDailyTrigger remains untouched.
+ */
 function removeLiveTrigger() {
+  const HANDLERS = new Set([
+    'runLiveUpdate',          // legacy — pre-Phase-5.1
+    'runLiveUpdateUzoshop',
+    'runLiveUpdateZolplus',
+    'runLiveUpdateUsmile',
+  ]);
   const triggers = ScriptApp.getProjectTriggers();
   let removed = 0;
   for (const t of triggers) {
-    if (t.getHandlerFunction() === 'runLiveUpdate') {
+    if (HANDLERS.has(t.getHandlerFunction())) {
       ScriptApp.deleteTrigger(t);
       removed++;
     }

@@ -60,6 +60,28 @@ function runDailyUpdateUsmile() {
 }
 
 /**
+ * Per-store LIVE trigger entry points (Phase 5.1).
+ *
+ * Mirrors the daily per-store split (Phase 5) — each gets its OWN
+ * 6-min budget so a slow Shopify/Meta response on one store can't
+ * cascade into a timeout for the others. Triggers run independently
+ * every 15 minutes via installLiveTrigger().
+ *
+ * The original runLiveUpdate() is retained as a MANUAL entry point
+ * for full-sequential runs (e.g., from the editor / spreadsheet menu).
+ * Triggers no longer call it directly.
+ */
+function runLiveUpdateUzoshop() {
+  runUpdateForSingleStore_('uzoshop', todayStr_());
+}
+function runLiveUpdateZolplus() {
+  runUpdateForSingleStore_('zolplus', todayStr_());
+}
+function runLiveUpdateUsmile() {
+  runUpdateForSingleStore_('usmile360', todayStr_());
+}
+
+/**
  * Writes a zero-row to the summary tab for `dateStr`. The summary tab
  * is formula-driven — we only need writeDayRow() to fire so that
  * getOrCreateMonthBlock_ runs and creates the block for a new month.
