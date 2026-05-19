@@ -78,8 +78,18 @@ export function migrateProductMapKeys(campaignsData?: { rows?: CampaignKeyMigrat
   let changed = false;
 
   for (const oldKey of Object.keys(map)) {
-    if (!/^[^:]+::[^:]+$/.test(oldKey)) continue;
-    const [storeId, campaignId] = oldKey.split('::');
+    // WR-07: detect legacy 2-segment keys via explicit segment count,
+    // not the `^[^:]+::[^:]+$` regex. The regex assumes neither storeId
+    // nor campaignId contains a colon, which currently holds in production
+    // (all storeIds alphanumeric; Meta/Google campaign IDs numeric) but
+    // is defense-in-depth: if a campaignId ever picks up a colon (manual
+    // sheet edit, future platform), the regex silently fails to migrate
+    // and the legacy key stays orphaned. Explicit count is also easier
+    // to grep when debugging.
+    const parts = oldKey.split('::');
+    if (parts.length !== 2) continue; // skip 3-segment (already migrated) and malformed
+    const [storeId, campaignId] = parts;
+    if (!storeId || !campaignId) continue; // skip empty segments (e.g. "foo::" or "::bar")
     const platforms = new Set(
       rows
         .filter(r => r.storeId === storeId && r.campaignId === campaignId)
