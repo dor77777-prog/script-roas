@@ -558,6 +558,182 @@ function debugTodaySpend() {
  * at a glance. Body includes the URL of the script so the user can jump to
  * the logs without searching.
  */
+// ============================================================================
+// Archive / retention (Phase 5).
+//
+// Moves rows older than `months` from 5 high-growth tabs into a separate
+// ARCHIVE spreadsheet. Reduces the cell-count pressure on the warm
+// spreadsheet (warm is currently ~6M of the 10M cell cap; without
+// retention we'll cross 8M within a year).
+//
+// Safety:
+//   - DRY-RUN by default — opts.dryRun=false must be passed explicitly
+//   - Verbose logging of every (tab, rowCount, dateRange) BEFORE any write
+//   - archive.spreadsheet.id MUST be set in Script Properties — throws
+//     otherwise (no implicit creation, no "phantom archive" risk)
+//   - Append-then-delete order: rows land in archive BEFORE removal from
+//     warm, so a crash mid-run leaves duplicates (recoverable) not gaps
+//     (unrecoverable). Same defensive pattern as ensureSpreadsheet.
+// ============================================================================
+
+/**
+ * Returns YYYY-MM-DD that is `months` months before today (in TZ).
+ */
+function monthsAgoStr_(months) {
+  const now = new Date();
+  const tzStr = Utilities.formatDate(now, TZ, 'yyyy-MM-dd');
+  const [y, m, d] = tzStr.split('-').map(Number);
+  // JavaScript Date handles negative month offset correctly (e.g. month=-1 → Dec previous year).
+  const dt = new Date(y, m - 1 - months, d);
+  return Utilities.formatDate(dt, TZ, 'yyyy-MM-dd');
+}
+
+/**
+ * Tab specs the archiver knows how to move. Each entry resolves at runtime
+ * to a list of (warmTabName, archiveTabName) — the latter mirrors the
+ * former. Per-store tabs expand at runtime via STORES.
+ */
+function ARCHIVE_TAB_SPECS_() {
+  const specs = [
+    { warm: DAILY_FLAT_TAB,      archive: DAILY_FLAT_TAB,      label: 'data-daily' },
+    { warm: PRODUCTS_DAILY_TAB,  archive: PRODUCTS_DAILY_TAB,  label: 'products-daily' },
+  ];
+  for (const store of STORES) {
+    specs.push({ warm: campaignTabName_(store.id),           archive: campaignTabName_(store.id),           label: `${store.id}-campaigns` });
+    specs.push({ warm: adsTabName_(store.id),                archive: adsTabName_(store.id),                label: `${store.id}-ads` });
+    specs.push({ warm: ordersAttributionTabName_(store.id),  archive: ordersAttributionTabName_(store.id),  label: `${store.id}-orders-attribution` });
+  }
+  return specs;
+}
+
+/**
+ * Public entry. Default is DRY-RUN — logs what *would* move without writing.
+ * Pass {dryRun: false} (and ONLY after dry-running first) to actually move.
+ *
+ * @param {number} months   Rows with date < (today - months) are archived.
+ *                          Recommend >= 18 (matches the dashboard fallback).
+ * @param {object} [opts]
+ * @param {boolean} [opts.dryRun=true]  If true, logs intended moves only.
+ */
+function archiveOlderThan(months, opts) {
+  const dryRun = !opts || opts.dryRun !== false;
+  const archiveId = getProp('archive.spreadsheet.id');
+  if (!archiveId) {
+    throw new Error(
+      'Set Script Property "archive.spreadsheet.id" to the ID of an empty ' +
+      'Google Sheets spreadsheet shared with the service-account. See ' +
+      '05-04-PLAN.md user_setup section for the full procedure.'
+    );
+  }
+  if (!Number.isFinite(months) || months <= 0) {
+    throw new Error(`archiveOlderThan: invalid months=${months}, expected positive number`);
+  }
+
+  const warm = ensureSpreadsheet();
+  const archive = SpreadsheetApp.openById(archiveId);
+  const cutoff = monthsAgoStr_(months);
+  Logger.log(`========== archive ${dryRun ? '[DRY-RUN]' : '[PRODUCTION]'} ==========`);
+  Logger.log(`Cutoff: rows with date < ${cutoff} will be moved`);
+  Logger.log(`Source: ${warm.getUrl()}`);
+  Logger.log(`Target: ${archive.getUrl()}`);
+
+  const specs = ARCHIVE_TAB_SPECS_();
+  const summary = [];
+  for (const spec of specs) {
+    try {
+      const moved = archiveTabRows_(warm, archive, spec, cutoff, dryRun);
+      summary.push(`[${spec.label}] ${moved.count} rows (${moved.oldest || '—'} → ${moved.newest || '—'})`);
+    } catch (e) {
+      const msg = e && e.message ? e.message : String(e);
+      Logger.log(`[${spec.label}] ERROR: ${msg}`);
+      summary.push(`[${spec.label}] ERROR: ${msg}`);
+    }
+  }
+  Logger.log(`========== summary (${dryRun ? 'DRY-RUN' : 'PRODUCTION'}) ==========`);
+  for (const line of summary) Logger.log(line);
+  Logger.log(`Done. To execute for real after dry-run, call archiveOlderThan(${months}, {dryRun: false}).`);
+}
+
+/**
+ * Moves rows with col-A date < cutoff from a warm tab to its archive
+ * counterpart. Returns {count, oldest, newest} so the orchestrator can
+ * print a summary. When dryRun=true, performs no writes and no deletes.
+ */
+function archiveTabRows_(warm, archive, spec, cutoff, dryRun) {
+  const warmSheet = warm.getSheetByName(spec.warm);
+  if (!warmSheet) {
+    Logger.log(`[${spec.label}] warm tab missing — skipping`);
+    return { count: 0, oldest: null, newest: null };
+  }
+  const lastRow = warmSheet.getLastRow();
+  const lastCol = warmSheet.getLastColumn();
+  if (lastRow <= 1 || lastCol === 0) {
+    Logger.log(`[${spec.label}] empty — skipping`);
+    return { count: 0, oldest: null, newest: null };
+  }
+
+  const header = warmSheet.getRange(1, 1, 1, lastCol).getValues();
+  const allRows = warmSheet.getRange(2, 1, lastRow - 1, lastCol).getValues();
+
+  const toMove = [];
+  const toKeep = [];
+  let oldest = null, newest = null;
+  for (const r of allRows) {
+    const v = r[0];
+    let key = null;
+    if (v instanceof Date && !isNaN(v.getTime())) {
+      key = Utilities.formatDate(v, TZ, 'yyyy-MM-dd');
+    } else if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}/.test(v)) {
+      key = v.slice(0, 10);
+    }
+    // Preserve rows with unparseable dates — mirror the pattern used in
+    // writeOrdersAttributionForDay etc. (WR5-02). Better to keep noise
+    // than silently destroy a mid-format row.
+    if (key && key < cutoff) {
+      toMove.push(r);
+      if (!oldest || key < oldest) oldest = key;
+      if (!newest || key > newest) newest = key;
+    } else {
+      toKeep.push(r);
+    }
+  }
+
+  Logger.log(`[${spec.label}] would move ${toMove.length} rows (oldest=${oldest || '—'} newest=${newest || '—'}); ${toKeep.length} stay`);
+
+  if (dryRun || toMove.length === 0) {
+    return { count: toMove.length, oldest, newest };
+  }
+
+  // 1) Ensure archive tab exists with same header.
+  let archSheet = archive.getSheetByName(spec.archive);
+  if (!archSheet) {
+    archSheet = archive.insertSheet(spec.archive);
+    archSheet.getRange(1, 1, 1, lastCol).setValues(header);
+    archSheet.setFrozenRows(1);
+  }
+  // 2) Append moved rows to archive FIRST. Crash here = nothing lost.
+  archSheet.getRange(archSheet.getLastRow() + 1, 1, toMove.length, lastCol).setValues(toMove);
+  // Preserve date format on col A so archive reads parse correctly.
+  archSheet.getRange(2, 1, archSheet.getLastRow() - 1, 1).setNumberFormat('yyyy-mm-dd');
+  Logger.log(`[${spec.label}] appended ${toMove.length} rows to archive`);
+
+  // 3) Rewrite warm with only the kept rows.
+  warmSheet.getRange(2, 1, lastRow - 1, lastCol).clearContent();
+  if (toKeep.length > 0) {
+    warmSheet.getRange(2, 1, toKeep.length, lastCol).setValues(toKeep);
+    warmSheet.getRange(2, 1, toKeep.length, 1).setNumberFormat('yyyy-mm-dd');
+  }
+  Logger.log(`[${spec.label}] warm now has ${toKeep.length} data rows (was ${allRows.length})`);
+
+  return { count: toMove.length, oldest, newest };
+}
+
+/** Menu helpers — dry-run + production for the standard 18-month retention. */
+function archive18MonthsDryRun()    { archiveOlderThan(18, {dryRun: true});  }
+function archive18MonthsProduction(){ archiveOlderThan(18, {dryRun: false}); }
+
+// ============================================================================
+
 function notifyError_(dateStr, message) {
   try {
     const configured = getProp('notification.email');

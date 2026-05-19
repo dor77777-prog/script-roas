@@ -7,6 +7,41 @@ const DATA_TAB = 'data-daily';
 const STORE_META_TAB = 'store-meta';
 const STATE_TAB = 'dashboard-state';
 
+/**
+ * The dashboard's archive fallback (Phase 5).
+ *
+ * When the user picks a date range whose `from` is older than this many
+ * months, /api/data fetches BOTH the warm spreadsheet AND the archive
+ * spreadsheet, then merges. For shorter ranges we read warm only —
+ * unchanged from pre-Phase-5 behavior, no perf cost added.
+ *
+ * Should match the same cutoff used in archiveOlderThan() on the
+ * Apps Script side (18 months) so the boundary aligns: archive holds
+ * rows older than 18 months, warm holds the rest, the dashboard
+ * decides between them based on the requested `from`.
+ */
+export const ARCHIVE_FALLBACK_MONTHS = 18;
+
+function getArchiveSpreadsheetId(): string | null {
+  const id = process.env.ARCHIVE_SPREADSHEET_ID;
+  return id ? id : null;
+}
+
+/**
+ * Returns YYYY-MM-DD that is `months` months before today (UTC).
+ * Used to determine whether a requested range crosses the archive
+ * boundary — independent of TZ because we compare ISO strings.
+ */
+function monthsAgoUtcStr(months: number): string {
+  const now = new Date();
+  const dt = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth() - months,
+    now.getUTCDate(),
+  ));
+  return dt.toISOString().slice(0, 10);
+}
+
 function getAuth(write = false) {
   const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
   const privateKeyRaw = process.env.GOOGLE_PRIVATE_KEY;
@@ -71,23 +106,54 @@ function parseDate(v: unknown): string | null {
  * Reads the data-daily tab and returns one normalized row per (date, store).
  * When `opts.range` is provided, rows outside [from, to] are filtered out
  * server-side before returning to the caller (Phase 5 pagination).
+ *
+ * Phase 5 archive fallback: when range.from is older than ARCHIVE_FALLBACK_MONTHS
+ * AND process.env.ARCHIVE_SPREADSHEET_ID is set, fetches from BOTH the warm
+ * spreadsheet and the archive spreadsheet in parallel, then merges results.
+ * Without the env var the behavior is unchanged (warm only — fail-safe).
  */
 export async function fetchDailyData(opts?: { range?: DateRange }): Promise<DailyRow[]> {
   const auth = getAuth();
   const sheets = google.sheets({ version: 'v4', auth });
-  const spreadsheetId = getSpreadsheetId();
+  const warmId = getSpreadsheetId();
 
-  const res = await sheets.spreadsheets.values.get({
-    spreadsheetId,
-    range: `${DATA_TAB}!A2:K10000`, // skip header row; K = Net Profit
-    valueRenderOption: 'UNFORMATTED_VALUE',
-    dateTimeRenderOption: 'FORMATTED_STRING',
-  });
+  // Decide whether the archive read is needed. Only when:
+  //   1. caller provided a range with `from` older than 18 months, AND
+  //   2. ARCHIVE_SPREADSHEET_ID env var is set (otherwise silent no-op
+  //      — Phase 5 ships with archive being optional; deployments
+  //      without it still work, just won't show very old data).
+  const archiveCutoff = monthsAgoUtcStr(ARCHIVE_FALLBACK_MONTHS);
+  const archiveId = getArchiveSpreadsheetId();
+  const needsArchive = !!archiveId && !!opts?.range && opts.range.from < archiveCutoff;
 
-  const values = res.data.values ?? [];
+  const reads: Array<Promise<{ data: { values?: unknown[][] | null } }>> = [
+    sheets.spreadsheets.values.get({
+      spreadsheetId: warmId,
+      range: `${DATA_TAB}!A2:K10000`,
+      valueRenderOption: 'UNFORMATTED_VALUE',
+      dateTimeRenderOption: 'FORMATTED_STRING',
+    }) as Promise<{ data: { values?: unknown[][] | null } }>,
+  ];
+  if (needsArchive && archiveId) {
+    reads.push(
+      sheets.spreadsheets.values.get({
+        spreadsheetId: archiveId,
+        range: `${DATA_TAB}!A2:K100000`, // archive may be larger
+        valueRenderOption: 'UNFORMATTED_VALUE',
+        dateTimeRenderOption: 'FORMATTED_STRING',
+      }) as Promise<{ data: { values?: unknown[][] | null } }>,
+    );
+  }
+
+  const responses = await Promise.all(reads);
+  const allValues: unknown[][] = [];
+  for (const r of responses) {
+    const v = r.data.values ?? [];
+    for (const row of v) allValues.push(row as unknown[]);
+  }
+
   const rows: DailyRow[] = [];
-
-  for (const row of values) {
+  for (const row of allValues) {
     const dateStr = parseDate(row[0]);
     if (!dateStr) continue;
     if (opts?.range && !isInRange(dateStr, opts.range)) continue;
@@ -101,9 +167,6 @@ export async function fetchDailyData(opts?: { range?: DateRange }): Promise<Dail
     const revenue = parseNumber(row[6]);
     const roas = totalSpend > 0 ? revenue / totalSpend : 0;
     const grossProfit = revenue - totalSpend;
-
-    // COGS = 25% מההכנסה (מחושב אצלנו, מתעלם מהעמודה ב-sheet כדי לקבל ערך
-    // עקבי גם בתאריכים ישנים שעוד לא נכתבו עם הכלל החדש).
     const cogs = revenue * COGS_RATE_OF_REVENUE;
     const netProfit = revenue - totalSpend - cogs;
     const hasCogs = true;
@@ -123,7 +186,6 @@ export async function fetchDailyData(opts?: { range?: DateRange }): Promise<Dail
       hasCogs,
     });
   }
-
   return rows;
 }
 
