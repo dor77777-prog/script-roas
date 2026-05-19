@@ -144,7 +144,7 @@ Plans:
   4. `runLiveUpdate()` (without store suffix) still callable manually for full-sequential runs
 
 Plans:
-- [ ] 05.1-01-PLAN.md — single plan, 2 tasks (DailyUpdate.gs wrappers + Main.gs installLiveTrigger/removeLiveTrigger update)
+- [x] 05.1-01-PLAN.md — single plan, 2 tasks (DailyUpdate.gs wrappers + Main.gs installLiveTrigger/removeLiveTrigger update)
 
 ### Phase 6: Security & Cloud-Sync
 **Goal**: Harden the writable surfaces against credential leak + brute-force + race conditions.
