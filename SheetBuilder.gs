@@ -1103,63 +1103,73 @@ function ensureProductsDailyTab_(ss) {
 }
 
 /**
- * אידמפוטנטי לפי (date, storeId): קורא את כל השורות שאינן של (date, storeId),
- * שומר אותן, מוחק את שאר תוכן הגיליון, ומוסיף את השורות החדשות. כתיבה אחת
- * בלבד ל-Sheets API (חוסכת זמן ריצה מול sh.deleteRow ברצף).
+ * Writes product-sales rows for a single (store, date) into the shared
+ * `products-daily` tab. The tab is shared across all 3 stores -
+ * Phase 5 per-store triggers can overlap on slow API days, so we
+ * serialize writes with a script-wide LockService to prevent the
+ * read-clear-write sequence from racing.
+ *
+ * Fix for CODEX-NEW-P0-02.
  */
 function writeProductSalesForDay_(ss, dateStr, storeId, storeName, productRows) {
-  const sh = ensureProductsDailyTab_(ss);
-  const lastRow = sh.getLastRow();
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30 * 1000);
+  try {
+    const sh = ensureProductsDailyTab_(ss);
+    const lastRow = sh.getLastRow();
 
-  let keptRows = [];
-  if (lastRow > 1) {
-    const allExisting = sh.getRange(2, 1, lastRow - 1, PRODUCTS_DAILY_HEADERS.length).getValues();
-    keptRows = allExisting.filter(r => {
-      const v = r[0];
-      const s = r[1];
-      let key = null;
-      if (v instanceof Date && !isNaN(v.getTime())) {
-        key = Utilities.formatDate(v, TZ, 'yyyy-MM-dd');
-      } else if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
-        key = v;
-      }
-      // Keep rows that are EITHER a different date OR a different store on this date
-      return !(key === dateStr && String(s) === storeId) && key !== null;
-    });
+    let keptRows = [];
+    if (lastRow > 1) {
+      const allExisting = sh.getRange(2, 1, lastRow - 1, PRODUCTS_DAILY_HEADERS.length).getValues();
+      keptRows = allExisting.filter(r => {
+        const v = r[0];
+        const s = r[1];
+        let key = null;
+        if (v instanceof Date && !isNaN(v.getTime())) {
+          key = Utilities.formatDate(v, TZ, 'yyyy-MM-dd');
+        } else if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
+          key = v;
+        }
+        // Keep rows that are EITHER a different date OR a different store on this date
+        return !(key === dateStr && String(s) === storeId) && key !== null;
+      });
+    }
+
+    const newRowsArr = (productRows || []).map(p => [
+      parseYMD_(dateStr),
+      storeId,
+      storeName,
+      p.productId || '',
+      p.productTitle || '',
+      parseInt(p.units || 0, 10),
+      round2_(p.revenueCad || 0),
+      parseInt(p.orders || 0, 10),
+      round2_(p.netRevenueCad || 0),
+    ]);
+
+    const combined = keptRows.concat(newRowsArr);
+
+    if (lastRow > 1) {
+      sh.getRange(2, 1, lastRow - 1, PRODUCTS_DAILY_HEADERS.length).clearContent();
+    }
+    if (combined.length === 0) return;
+
+    sh.getRange(2, 1, combined.length, PRODUCTS_DAILY_HEADERS.length).setValues(combined);
+    sh.getRange(2, 1, combined.length, 1).setNumberFormat('yyyy-mm-dd').setHorizontalAlignment('center');
+    // Force text on Product ID (col 4) so 13-19 digit Shopify IDs aren't
+    // silently rounded to JS-Number precision (16 digits). Without this,
+    // a 17+ digit ID written as a numeric string gets stored as a Number,
+    // loses trailing digits, and never matches the productMap on the
+    // dashboard side. Mirrors the existing @-format we apply to UTM IDs
+    // and the line-items JSON column on orders-attribution.
+    sh.getRange(2, 4, combined.length, 1).setNumberFormat('@');                                         // Product ID
+    sh.getRange(2, 6, combined.length, 1).setNumberFormat('#,##0').setHorizontalAlignment('center');   // Units
+    sh.getRange(2, 7, combined.length, 1).setNumberFormat('#,##0.00');                                  // Gross Revenue
+    sh.getRange(2, 8, combined.length, 1).setNumberFormat('#,##0').setHorizontalAlignment('center');   // Orders
+    sh.getRange(2, 9, combined.length, 1).setNumberFormat('#,##0.00');                                  // Net Revenue
+  } finally {
+    lock.releaseLock();
   }
-
-  const newRowsArr = (productRows || []).map(p => [
-    parseYMD_(dateStr),
-    storeId,
-    storeName,
-    p.productId || '',
-    p.productTitle || '',
-    parseInt(p.units || 0, 10),
-    round2_(p.revenueCad || 0),
-    parseInt(p.orders || 0, 10),
-    round2_(p.netRevenueCad || 0),
-  ]);
-
-  const combined = keptRows.concat(newRowsArr);
-
-  if (lastRow > 1) {
-    sh.getRange(2, 1, lastRow - 1, PRODUCTS_DAILY_HEADERS.length).clearContent();
-  }
-  if (combined.length === 0) return;
-
-  sh.getRange(2, 1, combined.length, PRODUCTS_DAILY_HEADERS.length).setValues(combined);
-  sh.getRange(2, 1, combined.length, 1).setNumberFormat('yyyy-mm-dd').setHorizontalAlignment('center');
-  // Force text on Product ID (col 4) so 13-19 digit Shopify IDs aren't
-  // silently rounded to JS-Number precision (16 digits). Without this,
-  // a 17+ digit ID written as a numeric string gets stored as a Number,
-  // loses trailing digits, and never matches the productMap on the
-  // dashboard side. Mirrors the existing @-format we apply to UTM IDs
-  // and the line-items JSON column on orders-attribution.
-  sh.getRange(2, 4, combined.length, 1).setNumberFormat('@');                                         // Product ID
-  sh.getRange(2, 6, combined.length, 1).setNumberFormat('#,##0').setHorizontalAlignment('center');   // Units
-  sh.getRange(2, 7, combined.length, 1).setNumberFormat('#,##0.00');                                  // Gross Revenue
-  sh.getRange(2, 8, combined.length, 1).setNumberFormat('#,##0').setHorizontalAlignment('center');   // Orders
-  sh.getRange(2, 9, combined.length, 1).setNumberFormat('#,##0.00');                                  // Net Revenue
 }
 
 // ============================================================================
