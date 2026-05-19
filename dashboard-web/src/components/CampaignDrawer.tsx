@@ -20,7 +20,6 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { ProductsResponse } from '@/app/api/products/route';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
 import {
@@ -122,16 +121,14 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
 
   // SWR fetches — lazy while open, SWR-deduped per session.
   // Keys include the range so a range change triggers a fresh fetch (no stale cache).
+  //
+  // WR-05: the productsData SWR fetch was removed alongside the
+  // buildReconciliation `productsData` parameter. The helper switched
+  // to orders-attribution line items as its Shopify-actual basis
+  // (CODEX-NEW-P2-01) and stopped reading the products-daily netRevenue
+  // fallback; the SWR call was left in flight as dead weight and is
+  // now gone.
   const drawerRange = { from: rangeFrom, to: rangeTo };
-  const { data: productsData } = useSWR<ProductsResponse>(
-    open ? buildDateRangeKey('/api/products', drawerRange) : null,
-    async (url: string) => {
-      const r = await fetch(url);
-      if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
-      return r.json();
-    },
-    { revalidateOnFocus: false, dedupingInterval: 60_000 },
-  );
   // All campaign rows for the date range — used by buildReconciliation to
   // compute the Google series (other Google campaigns promoting same products).
   // SWR dedupes against CampaignsTable's identical key so no extra network call.
@@ -300,9 +297,12 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
   // Reconciliation + analysis: helpers gate their own mounts (return null
   // when not applicable). Reconciliation lives in MetaShopifyReconciliation
   // (T-F); analyzeAttribution stays in @/lib/attributionAnalysis.
+  // WR-05: buildReconciliation now only reads `summary.platform`.
+  // Pass a minimal projection rather than the full summary — both
+  // documents the contract at the call site and removes the noise
+  // of unused fields.
   const reconciliation = buildReconciliation({
-    summary,
-    productsData,
+    summary: { platform: summary.platform },
     mappedIds,
     storeId,
     campaignsData,

@@ -10,7 +10,6 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { ProductsResponse } from '@/app/api/products/route';
 import type { CampaignRow } from '@/lib/campaigns';
 import type { OrderAttributionRow, OrderSource } from '@/lib/ordersAttribution';
 import { campaignKey, type ProductMap } from '@/lib/campaignProductMap';
@@ -90,12 +89,20 @@ function aggregateMappedConversionValue(
  * Pure function — no side effects, no IO. Safe to memoize on inputs.
  */
 export function buildReconciliation(opts: {
+  /**
+   * Only `platform` is consumed — drives the `primaryChannel` selection
+   * for the headline Pearson value (Meta / Google / Combined).
+   *
+   * WR-05: previously also accepted `dailyArr` and `campaignId`. Both
+   * went unread once the analyzer switched to per-platform aggregation
+   * across all campaigns mapped to the same products
+   * (aggregateMappedConversionValue, CODEX-NEW-P1-01). Removed from
+   * the signature so call sites stop paying memory cost for fields
+   * the helper ignores.
+   */
   summary: {
     platform: string;
-    campaignId?: string;
-    dailyArr: Array<{ date: string; value: number }>;
   };
-  productsData: ProductsResponse | undefined;
   mappedIds: string[];
   storeId: string;
   campaignsData?: { rows: CampaignRow[] } | null;

@@ -118,11 +118,6 @@ describe('buildReconciliation', () => {
     const googleValues = [20, 30, 10, 25, 15];
     const organicValues = [10, 15, 5, 12, 8];
 
-    const productsData = {
-      rows: DATES.map((date, i) => makeProductRow({ date, netRevenue: shopifyValues[i] })),
-      lastUpdated: new Date().toISOString(),
-    };
-
     const metaCampaignRows = DATES.flatMap((date, i) => [
       makeCampaignRow({
         date,
@@ -169,7 +164,6 @@ describe('buildReconciliation', () => {
 
     const result = buildReconciliation({
       summary: makeSummary({ values: metaValues }),
-      productsData,
       mappedIds: [PROD_A],
       storeId: STORE,
       campaignsData: { rows: [...metaCampaignRows, ...googleCampaignRows] },
@@ -208,17 +202,11 @@ describe('buildReconciliation', () => {
   // ---------------------------------------------------------------------------
 
   it('returns google series = 0 for every day when no Google campaigns in productMap', () => {
-    const productsData = {
-      rows: DATES.map(date => makeProductRow({ date, netRevenue: 100 })),
-      lastUpdated: new Date().toISOString(),
-    };
-
     // zolplus has no Google campaigns, productMap empty for Google
     const productMap: ProductMap = { [campaignKey(STORE, 'Meta', CAMP_META)]: [PROD_A] };
 
     const result = buildReconciliation({
       summary: makeSummary({ values: [100, 120, 80, 110, 90] }),
-      productsData,
       mappedIds: [PROD_A],
       storeId: STORE,
       campaignsData: { rows: [] }, // no campaigns at all
@@ -241,11 +229,6 @@ describe('buildReconciliation', () => {
   // ---------------------------------------------------------------------------
 
   it('counts only mapped-product line items for organic, not unmapped products', () => {
-    const productsData = {
-      rows: DATES.map(date => makeProductRow({ date, netRevenue: 100 })),
-      lastUpdated: new Date().toISOString(),
-    };
-
     // One order per day: mixed product (prod-a mapped, prod-b NOT mapped)
     const orders = DATES.map((date, i) =>
       makeOrderRow({
@@ -262,7 +245,6 @@ describe('buildReconciliation', () => {
 
     const result = buildReconciliation({
       summary: makeSummary(),
-      productsData,
       mappedIds: [PROD_A], // only PROD_A mapped, not PROD_B
       storeId: STORE,
       campaignsData: { rows: [] },
@@ -285,11 +267,6 @@ describe('buildReconciliation', () => {
 
   it('sets darkTrafficPercent when Meta+Google+Organic < 80% of Shopify', () => {
     // channels = 60 total per day, shopify = 100 per day → gap = 40%
-    const productsData = {
-      rows: DATES.map(date => makeProductRow({ date, netRevenue: 100 })),
-      lastUpdated: new Date().toISOString(),
-    };
-
     // Meta claims 60 per day, no google, no organic → channels = 60, shopify = 100
     const metaRows = DATES.map(date =>
       makeCampaignRow({
@@ -311,7 +288,6 @@ describe('buildReconciliation', () => {
     );
     const result = buildReconciliation({
       summary: makeSummary({ values: [60, 60, 60, 60, 60] }),
-      productsData,
       mappedIds: [PROD_A],
       storeId: STORE,
       campaignsData: { rows: metaRows },
@@ -337,10 +313,6 @@ describe('buildReconciliation', () => {
       shopifyPerDay: number;
     }) {
       const { metaPerDay, shopifyPerDay } = opts;
-      const productsData = {
-        rows: DATES.map(date => makeProductRow({ date, netRevenue: shopifyPerDay })),
-        lastUpdated: new Date().toISOString(),
-      };
       // Meta campaign rows — sole channel source, simple to reason about.
       const metaRows = DATES.map(date =>
         makeCampaignRow({
@@ -364,7 +336,6 @@ describe('buildReconciliation', () => {
           )
         : [];
       return {
-        productsData,
         metaRows,
         shopifyOrders,
         productMap: { [campaignKey(STORE, 'Meta', CAMP_META)]: [PROD_A] } as ProductMap,
@@ -377,7 +348,6 @@ describe('buildReconciliation', () => {
       const fx = buildBoundaryFixture({ metaPerDay: 80, shopifyPerDay: 100 });
       const result = buildReconciliation({
         summary: makeSummary({ values: [80, 80, 80, 80, 80] }),
-        productsData: fx.productsData,
         mappedIds: [PROD_A],
         storeId: STORE,
         campaignsData: { rows: fx.metaRows },
@@ -398,7 +368,6 @@ describe('buildReconciliation', () => {
       const fx = buildBoundaryFixture({ metaPerDay: 79.9, shopifyPerDay: 100 });
       const result = buildReconciliation({
         summary: makeSummary({ values: [79.9, 79.9, 79.9, 79.9, 79.9] }),
-        productsData: fx.productsData,
         mappedIds: [PROD_A],
         storeId: STORE,
         campaignsData: { rows: fx.metaRows },
@@ -417,7 +386,6 @@ describe('buildReconciliation', () => {
       const fx = buildBoundaryFixture({ metaPerDay: 100, shopifyPerDay: 0 });
       const result = buildReconciliation({
         summary: makeSummary({ values: [100, 100, 100, 100, 100] }),
-        productsData: fx.productsData,
         mappedIds: [PROD_A],
         storeId: STORE,
         campaignsData: { rows: fx.metaRows },
@@ -484,8 +452,8 @@ describe('buildReconciliation', () => {
       // Drawer is opened on the GOOGLE campaign, but Meta series should
       // still be populated because Meta Camp 1 maps to PROD_A too.
       const result = buildReconciliation({
-        summary: { platform: 'Google', campaignId: CAMP_GOOGLE, dailyArr: [] },
-        productsData,
+        // WR-05: buildReconciliation no longer reads campaignId / dailyArr.
+        summary: { platform: 'Google' },
         mappedIds: [PROD_A],
         storeId: STORE,
         campaignsData: { rows: [...metaCampaignRows, ...googleCampaignRows] },
@@ -537,8 +505,8 @@ describe('buildReconciliation', () => {
       );
 
       const result = buildReconciliation({
-        summary: { platform: 'Google', campaignId: CAMP_GOOGLE, dailyArr: [] },
-        productsData,
+        // WR-05: buildReconciliation no longer reads campaignId / dailyArr.
+        summary: { platform: 'Google' },
         mappedIds: [PROD_A],
         storeId: STORE,
         campaignsData: { rows: googleCampaignRows },   // no Meta rows at all
@@ -585,8 +553,8 @@ describe('buildReconciliation', () => {
         }),
       );
       const result = buildReconciliation({
-        summary: { platform: 'Google', campaignId: CAMP_GOOGLE, dailyArr: [] },
-        productsData,
+        // WR-05: buildReconciliation no longer reads campaignId / dailyArr.
+        summary: { platform: 'Google' },
         mappedIds: [PROD_A],
         storeId: STORE,
         campaignsData: { rows: googleRows },
@@ -609,17 +577,10 @@ describe('buildReconciliation', () => {
 
   it('returns channel series as zero when campaignsData/ordersData/productMap are absent', () => {
     const metaValues = [100, 120, 80, 110, 90];
-    const shopifyValues = [95, 115, 75, 105, 85];
-
-    const productsData = {
-      rows: DATES.map((date, i) => makeProductRow({ date, netRevenue: shopifyValues[i] })),
-      lastUpdated: new Date().toISOString(),
-    };
 
     // Call without optional params — backwards-compat
     const result = buildReconciliation({
       summary: makeSummary({ values: metaValues }),
-      productsData,
       mappedIds: [PROD_A],
       storeId: STORE,
       // No campaignsData, ordersData, productMap
