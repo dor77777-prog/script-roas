@@ -32,6 +32,7 @@ import type { ProductsResponse } from '@/app/api/products/route';
 import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { DateRange } from '@/lib/types';
+import { buildDateRangeKey } from '@/lib/dateRange';
 import { roasLabel } from '@/lib/analytics';
 import { useCampaignTrueRevenue } from '@/lib/hooks/useCampaignTrueRevenue';
 import { CampaignsTableRow } from './CampaignsTableRow';
@@ -255,7 +256,7 @@ const TOP_N_DEFAULT = 10;
 
 export function CampaignsTable({ range, store: globalStore, stores, dailyRows }: Props) {
   const { data, error, isLoading } = useSWR<CampaignsResponse>(
-    '/api/campaigns',
+    buildDateRangeKey('/api/campaigns', range),
     fetcher,
     { refreshInterval: 120_000, revalidateOnFocus: false },
   );
@@ -283,7 +284,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
 
   // Products + mapping feed `useCampaignTrueRevenue` (Shopify-based true ROAS).
   const { data: productsResp } = useSWR<ProductsResponse>(
-    '/api/products',
+    buildDateRangeKey('/api/products', range),
     async (url: string) => {
       const r = await fetch(url);
       if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
@@ -293,7 +294,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   );
   // Per-order attribution → trust chip basis (click-id proof vs heuristic).
   const { data: ordersAttrResp } = useSWR<OrdersAttributionResponse>(
-    '/api/orders-attribution',
+    buildDateRangeKey('/api/orders-attribution', range),
     async (url: string) => {
       const r = await fetch(url);
       if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
