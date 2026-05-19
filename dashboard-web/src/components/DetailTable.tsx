@@ -41,9 +41,11 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
   }
 
   const tableContent = (
-    <div className="overflow-auto max-h-[70vh]">
+    // WR-10: thead sticks to page (top-[92px]/[108px]) so it clears the
+    // Dashboard nav. Page-level vertical scroll; horizontal scroll for wide rows.
+    <div className="overflow-x-auto">
         <table className="w-full text-xs sm:text-sm min-w-[700px]">
-          <thead className="bg-surfaceMuted sticky top-0 z-10">
+          <thead className="bg-surfaceMuted sticky top-[92px] sm:top-[108px] z-[8]">
             <tr className="text-text-secondary">
               <th className="px-3 py-2.5 text-start font-medium">תאריך</th>
               <th className="px-3 py-2.5 text-start font-medium">חנות</th>

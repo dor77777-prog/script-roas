@@ -595,9 +595,12 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
 
                 {/* Products list */}
                 {!isEmpty && (
-                  <div className="overflow-auto max-h-[70vh]">
+                  // WR-10: thead sticks to page at top-[92px]/[108px] so it
+                  // lands below the Dashboard nav stack. overflow-x-auto for
+                  // wide tables; no max-h so vertical scroll is page-level.
+                  <div className="overflow-x-auto">
                     <table className="w-full text-xs sm:text-sm min-w-[680px]">
-                      <thead className="sticky top-0 z-10 bg-surface">
+                      <thead className="sticky top-[92px] sm:top-[108px] z-[8] bg-surface">
                         <tr className="text-text-secondary border-y border-border bg-surfaceMuted/40">
                           <th className="px-4 sm:px-5 py-2 text-start font-medium">מוצר</th>
                           {bucket.hasOrders && (
