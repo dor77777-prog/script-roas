@@ -748,9 +748,16 @@ function archiveTabRows_(warm, archive, spec, cutoff, dryRun) {
     archSheet.setFrozenRows(1);
   }
   // 2) Append moved rows to archive FIRST. Crash here = nothing lost.
-  archSheet.getRange(archSheet.getLastRow() + 1, 1, toMove.length, lastCol).setValues(toMove);
+  // Capture the first new-row index BEFORE appending so we can scope the
+  // setNumberFormat call to ONLY the newly-appended rows (WR-07).
+  // Previously this re-formatted col A from row 2 to last row on every
+  // run — an O(archive-size) Sheets-API write that compounded across
+  // monthly runs and contributed to the quota burn the Phase 5 trigger
+  // split was supposed to avoid.
+  const firstNewArchRow = archSheet.getLastRow() + 1;
+  archSheet.getRange(firstNewArchRow, 1, toMove.length, lastCol).setValues(toMove);
   // Preserve date format on col A so archive reads parse correctly.
-  archSheet.getRange(2, 1, archSheet.getLastRow() - 1, 1).setNumberFormat('yyyy-mm-dd');
+  archSheet.getRange(firstNewArchRow, 1, toMove.length, 1).setNumberFormat('yyyy-mm-dd');
   Logger.log(`[${spec.label}] appended ${toMove.length} rows to archive`);
 
   // 3) Rewrite warm with only the kept rows.
