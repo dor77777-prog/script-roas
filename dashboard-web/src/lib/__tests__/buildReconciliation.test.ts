@@ -31,6 +31,8 @@ const PROD_B = 'prod-b';
 
 /** 5 consecutive dates starting 2026-05-01 */
 const DATES = ['2026-05-01', '2026-05-02', '2026-05-03', '2026-05-04', '2026-05-05'];
+const RANGE_FROM = DATES[0];
+const RANGE_TO = DATES[DATES.length - 1];
 
 function makeSummary(overrides: {
   platform?: string;
@@ -164,6 +166,8 @@ describe('buildReconciliation', () => {
       campaignsData: { rows: [...metaCampaignRows, ...googleCampaignRows] },
       ordersData: { rows: organicOrders },
       productMap,
+      rangeFrom: RANGE_FROM,
+      rangeTo: RANGE_TO,
     });
 
     expect(result).not.toBeNull();
@@ -211,6 +215,8 @@ describe('buildReconciliation', () => {
       campaignsData: { rows: [] }, // no campaigns at all
       ordersData: { rows: [] },
       productMap,
+      rangeFrom: RANGE_FROM,
+      rangeTo: RANGE_TO,
     });
 
     expect(result).not.toBeNull();
@@ -253,6 +259,8 @@ describe('buildReconciliation', () => {
       campaignsData: { rows: [] },
       ordersData: { rows: orders },
       productMap: {},
+      rangeFrom: RANGE_FROM,
+      rangeTo: RANGE_TO,
     });
 
     expect(result).not.toBeNull();
@@ -291,6 +299,8 @@ describe('buildReconciliation', () => {
       campaignsData: { rows: metaRows },
       ordersData: { rows: [] },
       productMap: { [`${STORE}::${CAMP_META}`]: [PROD_A] },
+      rangeFrom: RANGE_FROM,
+      rangeTo: RANGE_TO,
     });
 
     expect(result).not.toBeNull();
@@ -319,6 +329,8 @@ describe('buildReconciliation', () => {
       mappedIds: [PROD_A],
       storeId: STORE,
       // No campaignsData, ordersData, productMap
+      rangeFrom: RANGE_FROM,
+      rangeTo: RANGE_TO,
     });
 
     expect(result).not.toBeNull();

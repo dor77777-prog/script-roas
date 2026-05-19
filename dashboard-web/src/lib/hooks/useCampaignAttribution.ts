@@ -64,8 +64,10 @@ export function useCampaignAttribution(opts: {
   summary: CampaignDrawerSummary | null;
   rows: CampaignRow[];
   ordersAttrData: OrdersAttributionResponse | undefined;
+  rangeFrom: string;
+  rangeTo: string;
 }): Map<string, AttributionAnalysis | null> {
-  const { summary, rows, ordersAttrData } = opts;
+  const { summary, rows, ordersAttrData, rangeFrom, rangeTo } = opts;
 
   // Per-ad-set daily Meta conv-value series. Required by
   // analyzeAttributionForAdSet → computeWindowStability / detectOutlierDays;
@@ -100,9 +102,7 @@ export function useCampaignAttribution(opts: {
     if (!summary || summary.platform !== 'Meta') return out;
     const ordersRows = ordersAttrData?.rows ?? [];
     if (ordersRows.length === 0 || rows.length === 0) return out;
-    const first = rows[0];
-    const dateFrom = rows.reduce((min, r) => (r.date < min ? r.date : min), first.date);
-    const dateTo = rows.reduce((max, r) => (r.date > max ? r.date : max), first.date);
+    if (!rangeFrom || !rangeTo) return out;
     for (const a of summary.adSets) {
       const key = a.id || a.name || '(אחר)';
       out.set(key, analyzeAttributionForAdSet(
@@ -115,11 +115,11 @@ export function useCampaignAttribution(opts: {
           spend: a.spend,
         },
         ordersRows,
-        dateFrom,
-        dateTo,
+        rangeFrom,
+        rangeTo,
         dailyMetaByAdSet.get(key) ?? [],
       ));
     }
     return out;
-  }, [summary, ordersAttrData, rows, dailyMetaByAdSet]);
+  }, [summary, ordersAttrData, rows, rangeFrom, rangeTo, dailyMetaByAdSet]);
 }

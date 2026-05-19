@@ -255,7 +255,7 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
   }, [rows]);
 
   // Per-ad-set attribution Map — hook preserves IN5-01 (no per-cell recompute).
-  const attributionByAdSet = useCampaignAttribution({ summary, rows, ordersAttrData });
+  const attributionByAdSet = useCampaignAttribution({ summary, rows, ordersAttrData, rangeFrom, rangeTo });
 
   // Stabilize mappedIds reference (RESEARCH.md §7 caveat). Inline
   // `productMap[...] ?? []` would return a fresh [] every render and defeat
@@ -307,14 +307,14 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
     campaignsData,
     ordersData: ordersAttrData,
     productMap,
+    rangeFrom,
+    rangeTo,
   });
-  const analysisDateFrom = rows.reduce((min, r) => (r.date < min ? r.date : min), rows[0]?.date ?? '');
-  const analysisDateTo = rows.reduce((max, r) => (r.date > max ? r.date : max), rows[0]?.date ?? '');
   const analysis = analyzeAttribution(
     { campaignName: summary.campaignName, campaignId, storeId, platform: summary.platform, metaClaim: summary.value, spend: summary.spend },
     ordersAttrData?.rows ?? [],
-    analysisDateFrom,
-    analysisDateTo,
+    rangeFrom,
+    rangeTo,
     summary.dailyArr.map(d => ({ date: d.date, value: d.value })),
   );
   const link = buildAdsManagerLink({
@@ -568,7 +568,7 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
         }}
       />
 
-      {/* Nested ad-level drawer. Range derived from rows. */}
+      {/* Nested ad-level drawer uses the same user-selected range. */}
       {adDrillSet && (
         <AdsDrawer
           open
@@ -577,8 +577,8 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
           campaignId={adDrillSet.campaignId}
           adSetId={adDrillSet.adSetId}
           adSetName={adDrillSet.adSetName}
-          rangeFrom={rows.reduce((min, r) => (r.date < min ? r.date : min), rows[0]?.date ?? '')}
-          rangeTo={rows.reduce((max, r) => (r.date > max ? r.date : max), rows[0]?.date ?? '')}
+          rangeFrom={rangeFrom}
+          rangeTo={rangeTo}
           adAccounts={adAccounts}
         />
       )}
@@ -631,5 +631,4 @@ function DrawerStat({ label, value, prefix, chip, primary, compact, accent }: {
     </div>
   );
 }
-
 

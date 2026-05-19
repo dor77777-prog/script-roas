@@ -14,6 +14,7 @@ import type { CampaignRow } from '@/lib/campaigns';
 import type { OrderAttributionRow, OrderSource } from '@/lib/ordersAttribution';
 import type { ProductMap } from '@/lib/campaignProductMap';
 import { pearson, pearsonWithLag } from '@/lib/attributionAnalysis';
+import { enumerateDateRange } from '@/lib/dateRange';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
 export { pearson, pearsonWithLag };
 
@@ -45,6 +46,8 @@ function aggregateMappedConversionValue(
   storeId: string,
   productMap: ProductMap | undefined,
   mappedIds: string[],
+  rangeFrom: string,
+  rangeTo: string,
 ): Map<string, number> {
   const byDate = new Map<string, number>();
   if (!rows || !productMap) return byDate;
@@ -62,6 +65,7 @@ function aggregateMappedConversionValue(
   for (const row of rows) {
     if (row.storeId !== storeId) continue;
     if (row.platform !== platform) continue;
+    if (row.date < rangeFrom || row.date > rangeTo) continue;
     const rowKey = `${row.storeId}::${row.campaignId}`;
     if (!mappedKeys.has(rowKey)) continue;
     byDate.set(row.date, (byDate.get(row.date) ?? 0) + row.conversionValue);
@@ -95,6 +99,8 @@ export function buildReconciliation(opts: {
   campaignsData?: { rows: CampaignRow[] } | null;
   ordersData?: { rows: OrderAttributionRow[] } | null;
   productMap?: ProductMap;
+  rangeFrom: string;
+  rangeTo: string;
 }): {
   series: Array<{ date: string; meta: number; google: number; organic: number; shopify: number }>;
   primaryChannel: 'Meta' | 'Google' | 'Combined';
@@ -106,20 +112,21 @@ export function buildReconciliation(opts: {
   bestR: number | null;
   darkTrafficPercent: number;
 } | null {
-  const { summary, productsData, mappedIds, storeId, campaignsData, ordersData, productMap } = opts;
+  const { summary, productsData, mappedIds, storeId, campaignsData, ordersData, productMap, rangeFrom, rangeTo } = opts;
   if (mappedIds.length === 0) return null;
+  const dateList = enumerateDateRange(rangeFrom, rangeTo);
+  if (dateList.length === 0) return null;
   // No longer gate on platform === 'Meta' — support Google campaigns too (Phase 5.2)
   const productRows = productsData?.rows ?? [];
   const wantedIds = new Set(mappedIds);
 
   // Build {date → shopify net revenue} for the campaign's mapped products
-  // in this store, scoped to the same date window as the drawer's data.
+  // in this store, scoped to the user's selected drawer date window.
   const shopifyByDate = new Map<string, number>();
-  const datesInDrawer = new Set(summary.dailyArr.map(d => d.date));
   for (const p of productRows) {
     if (p.storeId !== storeId) continue;
     if (!wantedIds.has(p.productId)) continue;
-    if (!datesInDrawer.has(p.date)) continue;
+    if (p.date < rangeFrom || p.date > rangeTo) continue;
     const net = p.netRevenue ?? p.revenue;
     if (net <= 0) continue;
     shopifyByDate.set(p.date, (shopifyByDate.get(p.date) ?? 0) + net);
@@ -135,6 +142,8 @@ export function buildReconciliation(opts: {
     storeId,
     productMap,
     mappedIds,
+    rangeFrom,
+    rangeTo,
   );
 
   // Build {date → google revenue}:
@@ -146,6 +155,8 @@ export function buildReconciliation(opts: {
     storeId,
     productMap,
     mappedIds,
+    rangeFrom,
+    rangeTo,
   );
 
   /** Inverted paid-exclusion predicate (fix for AUDIT-P0-01).
@@ -172,6 +183,7 @@ export function buildReconciliation(opts: {
       if (order.storeId !== storeId) continue;
       if (!isOrganicSource(order)) continue;
       if (!order.lineItems || order.lineItems.length === 0) continue;
+      if (order.date < rangeFrom || order.date > rangeTo) continue;
       // Partial-order summation: only count revenue for mapped products
       let mappedRevenue = 0;
       for (const li of order.lineItems) {
@@ -184,13 +196,14 @@ export function buildReconciliation(opts: {
     }
   }
 
-  // Compose the 4-series array aligned to the drawer's date window
-  const series = summary.dailyArr.map(d => ({
-    date: d.date,
-    meta: metaByDate.get(d.date) ?? 0,
-    google: googleByDate.get(d.date) ?? 0,
-    organic: organicByDate.get(d.date) ?? 0,
-    shopify: shopifyByDate.get(d.date) ?? 0,
+  // Compose the 4-series array aligned to the user's full selected date
+  // window, not just days where the drawer campaign was active.
+  const series = dateList.map(date => ({
+    date,
+    meta: metaByDate.get(date) ?? 0,
+    google: googleByDate.get(date) ?? 0,
+    organic: organicByDate.get(date) ?? 0,
+    shopify: shopifyByDate.get(date) ?? 0,
   }));
 
   if (series.length < 5) return null; // not enough points for r

@@ -128,6 +128,26 @@ export function buildDateRangeKey(basePath: string, range: DateRange | null | un
   return `${basePath}?from=${range.from}&to=${range.to}`;
 }
 
+/** Enumerates every YYYY-MM-DD date in the inclusive [from, to] range. */
+export function enumerateDateRange(from: string, to: string): string[] {
+  if (!ISO_DATE.test(from) || !ISO_DATE.test(to) || from > to) return [];
+  const dates: string[] = [];
+  const start = Date.UTC(
+    Number(from.slice(0, 4)),
+    Number(from.slice(5, 7)) - 1,
+    Number(from.slice(8, 10)),
+  );
+  const end = Date.UTC(
+    Number(to.slice(0, 4)),
+    Number(to.slice(5, 7)) - 1,
+    Number(to.slice(8, 10)),
+  );
+  for (let t = start; t <= end; t += 24 * 60 * 60 * 1000) {
+    dates.push(new Date(t).toISOString().slice(0, 10));
+  }
+  return dates;
+}
+
 /** Helper for lib-side filtering. Returns true if `date` ∈ [from, to]. */
 export function isInRange(date: string, range: DateRange): boolean {
   return date >= range.from && date <= range.to;
