@@ -128,6 +128,45 @@ export function buildDateRangeKey(basePath: string, range: DateRange | null | un
   return `${basePath}?from=${range.from}&to=${range.to}`;
 }
 
+/**
+ * Strict UTC-anchored date parser. Returns 'YYYY-MM-DD' or null.
+ * Handles: numeric Apps Script serial dates, ISO 8601 strings, 'YYYY-MM-DD',
+ * and 'DD/MM/YYYY' legacy strings. Anything else returns null and warns.
+ *
+ * FIX-20 (5.2.2.1): centralized to eliminate local-TZ `new Date(string)`
+ * fallbacks in campaigns.ts / ads.ts / ordersAttribution.ts.
+ */
+export function parseDate(s: string | number | null | undefined): string | null {
+  if (s == null) return null;
+  if (typeof s === 'number' && Number.isFinite(s)) {
+    const d = new Date(Math.round((s - 25569) * 86400 * 1000));
+    if (Number.isNaN(d.getTime())) {
+      console.warn(`parseDate: NaN from numeric ${s}`);
+      return null;
+    }
+    return d.toISOString().slice(0, 10);
+  }
+
+  const str = String(s).trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
+  if (/^\d{4}-\d{2}-\d{2}T/.test(str)) {
+    const d = new Date(str);
+    if (Number.isNaN(d.getTime())) {
+      console.warn(`parseDate: NaN from ISO ${str}`);
+      return null;
+    }
+    return d.toISOString().slice(0, 10);
+  }
+  const dmy = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(str);
+  if (dmy) {
+    const [, dd, mm, yyyy] = dmy;
+    return `${yyyy}-${mm}-${dd}`;
+  }
+
+  console.warn(`parseDate: unrecognized format "${str}"`);
+  return null;
+}
+
 /** Enumerates every YYYY-MM-DD date in the inclusive [from, to] range. */
 export function enumerateDateRange(from: string, to: string): string[] {
   if (!ISO_DATE.test(from) || !ISO_DATE.test(to) || from > to) return [];

@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import { type DateRange, isInRange } from './dateRange';
+import { parseDate, type DateRange, isInRange } from './dateRange';
 
 /**
  * Per-order attribution row. One per Shopify order, sourced from the
@@ -104,23 +104,6 @@ function parseNumber(v: unknown): number {
   const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/,/g, ''));
   return Number.isFinite(n) ? n : 0;
 }
-function parseDate(v: unknown): string | null {
-  if (!v) return null;
-  if (typeof v === 'number') {
-    const ms = (v - 25569) * 86400 * 1000;
-    const d = new Date(ms);
-    return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
-  }
-  const s = String(v).trim();
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-  if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
-    const [d, m, y] = s.split('/').map(Number);
-    return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-  }
-  const d = new Date(s);
-  return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
-}
-
 /**
  * Source kinds the Apps Script `classifyOrderAttribution_` is known to
  * emit at the time of writing. Kept as a documented contract — the type
