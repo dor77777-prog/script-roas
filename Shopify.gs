@@ -304,6 +304,32 @@ function getShopifyProductSalesForDay(storeId, dateStr) {
     );
   }
 
+  // Phase 05.2.3.0 D-A3, D-C2, D-D3: Subtract cross-day refunds per product.
+  // Same fetcher as getShopifyRevenue — one HTTP call's worth of data, two
+  // consumers (D-A3). refund_line_items[].subtotal is tax-exclusive, matching
+  // line_items[].price semantics used in the gross calculation above (D-C2).
+  // Refund-only products (no day-D sales but a cross-day refund hit) surface
+  // with netRevenueCad < 0 so the operator sees the deduction.
+  const crossDayRefunds = getShopifyRefundsForDay_(storeId, dateStr);
+  let refundOnlyCount = 0;
+  for (const pid of Object.keys(crossDayRefunds.byProduct)) {
+    const refundCad = crossDayRefunds.byProduct[pid].refundCad;
+    if (byProduct[pid]) {
+      byProduct[pid].netRevenueCad -= refundCad;
+    } else {
+      byProduct[pid] = {
+        productId: pid,
+        productTitle: '(refund-only)',
+        units: 0,
+        revenueCad: 0,
+        netRevenueCad: -refundCad,
+        orderIds: {},
+      };
+      refundOnlyCount++;
+    }
+  }
+  Logger.log(`Shopify product-refunds ${storeId} ${dateStr}: ${Object.keys(crossDayRefunds.byProduct).length} products with cross-day refunds (${refundOnlyCount} refund-only)`);
+
   const out = Object.values(byProduct)
     .map(p => ({
       productId: p.productId,
