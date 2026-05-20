@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { analyzeCpmVsRoas } from '@/lib/cpmRoasAnalysis';
+import { analyzeCpmVsRoas, pearsonForCpmRoas } from '@/lib/cpmRoasAnalysis';
+import { PRODUCT_MAP_CHIP_KEY } from '@/lib/sessionKeys';
 
 /**
  * Build a 7-day series. Each day overrides any field via the patch arg.
@@ -188,5 +189,21 @@ describe('analyzeCpmVsRoas', () => {
     // CPM up 25%, ROAS up 20% — both growing
     expect(result.details.cpmDeltaPct).toBeCloseTo(0.25, 2);
     expect(result.details.roasDeltaPct).toBeCloseTo(0.2, 2);
+  });
+});
+
+describe('Pearson N=3 threshold — locks TEST-08 (5.2.2.1)', () => {
+  it('returns null for N=2', () => {
+    expect(pearsonForCpmRoas([10, 12], [2, 3])).toBeNull();
+  });
+
+  it('returns a finite number for N=3', () => {
+    const result = pearsonForCpmRoas([10, 12, 15], [2, 3, 5]);
+    expect(typeof result).toBe('number');
+    expect(Number.isFinite(result)).toBe(true);
+  });
+
+  it('PRODUCT_MAP_CHIP_KEY is the shared product-map freshness key', () => {
+    expect(PRODUCT_MAP_CHIP_KEY).toBe('roas:productMapChipHidden');
   });
 });

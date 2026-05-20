@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Info, Package, X } from 'lucide-react';
 import type { ProductChannelBreakdown as ProductChannelBreakdownType } from '@/lib/attributionAnalysis';
+import { PRODUCT_MAP_CHIP_KEY } from '@/lib/sessionKeys';
 
 /**
  * Phase 1 channel-level product attribution panel — answers "where did the
@@ -19,8 +20,6 @@ import type { ProductChannelBreakdown as ProductChannelBreakdownType } from '@/l
 type Props = {
   breakdown: ProductChannelBreakdownType;
 };
-
-const PRODUCT_MAP_CHIP_KEY = 'roas:productMapChipHidden';
 
 export function ProductChannelBreakdown({ breakdown }: Props) {
   const [chipHidden, setChipHidden] = useState(() => (

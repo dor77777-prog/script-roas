@@ -51,7 +51,7 @@ export type CpmRoasAnalysis = {
  * when either series has fewer than 3 points OR has zero variance — the
  * caller treats null as "no signal".
  */
-function pearson_(a: number[], b: number[]): number | null {
+export function pearsonForCpmRoas(a: number[], b: number[]): number | null {
   const n = Math.min(a.length, b.length);
   if (n < 3) return null;
   let sumA = 0;
@@ -146,7 +146,7 @@ export function analyzeCpmVsRoas(
 
   const cpms = validRows.map(d => d.cpm);
   const roases = validRows.map(d => d.roas);
-  const r = pearson_(cpms, roases);
+  const r = pearsonForCpmRoas(cpms, roases);
 
   // Baseline selection:
   //   - When the caller passes prev (a previous-period series with >= 3

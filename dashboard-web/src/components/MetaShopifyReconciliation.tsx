@@ -16,11 +16,11 @@ import { campaignKey, type ProductMap } from '@/lib/campaignProductMap';
 import { pearson, pearsonWithLag } from '@/lib/attributionAnalysis';
 import { CHART_COLORS } from '@/lib/chartColors';
 import { enumerateDateRange } from '@/lib/dateRange';
+import { PRODUCT_MAP_CHIP_KEY } from '@/lib/sessionKeys';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
 export { pearson, pearsonWithLag };
 
 const LAG_IMPROVEMENT_THRESHOLD = 0.05;
-const PRODUCT_MAP_CHIP_KEY = 'roas:productMapChipHidden';
 
 /**
  * Day-by-day Meta-claim vs Shopify-actual reconciliation panel for a single
