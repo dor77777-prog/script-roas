@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { safeDecode } from '@/lib/utils';
+import { formatCurrency, safeDecode } from '@/lib/utils';
 
 describe('safeDecode', () => {
   it('decodes a valid URL-encoded string', () => {
@@ -35,5 +35,72 @@ describe('safeDecode', () => {
   it('returns the raw input for malformed mid-string encoding (foo%E0bar)', () => {
     // %E0 is an incomplete 2-byte UTF-8 sequence → URIError → return as-is
     expect(safeDecode('foo%E0bar')).toBe('foo%E0bar');
+  });
+});
+
+/**
+ * Regression coverage for the formatCurrency rounding bug. Previously
+ * `formatCurrency` did `Math.round(n)` BEFORE passing into
+ * Intl.NumberFormat, which threw away the fractional part even when the
+ * caller asked for 2 decimals. So `formatCurrency(5.40, 2)` returned
+ * "5.00" instead of "5.40", breaking every CPC / CPM / CPA cell across
+ * the campaigns table.
+ *
+ * Pin the fix: fractionDigits controls the displayed precision, not a
+ * pre-rounding step.
+ */
+describe('formatCurrency', () => {
+  it('returns the integer part rounded to nearest when fractionDigits=0 (default)', () => {
+    expect(formatCurrency(5.4)).toBe('5');
+    expect(formatCurrency(5.6)).toBe('6');
+    expect(formatCurrency(0)).toBe('0');
+  });
+
+  it('preserves 2 decimal places when fractionDigits=2 — the previously broken case', () => {
+    expect(formatCurrency(5.40, 2)).toBe('5.40');
+    expect(formatCurrency(5.45, 2)).toBe('5.45');
+    expect(formatCurrency(5.49, 2)).toBe('5.49');
+    expect(formatCurrency(5.51, 2)).toBe('5.51');
+  });
+
+  it('handles small fractional CPC / CPM values without rounding to integer', () => {
+    // Pre-fix: formatCurrency(0.45, 2) returned "0.00" (Math.round(0.45) = 0)
+    // After fix: returns "0.45"
+    expect(formatCurrency(0.45, 2)).toBe('0.45');
+    expect(formatCurrency(0.03, 2)).toBe('0.03');
+    expect(formatCurrency(1.23, 2)).toBe('1.23');
+  });
+
+  it('rounds at the requested precision boundary (banker / nearest)', () => {
+    // 5.455 rounds to 5.46 (or 5.45 depending on Intl rounding mode); both
+    // are valid 2-decimal representations — the point is we get 2 decimals,
+    // not "5.00".
+    const result = formatCurrency(5.455, 2);
+    expect(['5.45', '5.46']).toContain(result);
+  });
+
+  it('handles negative values correctly', () => {
+    // he-IL prefixes with a left-to-right mark (‎) and uses standard
+    // hyphen-minus. Strip the LRM so the assertion is locale-independent.
+    expect(formatCurrency(-3.7, 2).replace(/‎/g, '')).toBe('-3.70');
+  });
+
+  it('formats with locale grouping for thousands', () => {
+    // he-IL uses comma as thousands separator
+    expect(formatCurrency(1234.56, 2)).toBe('1,234.56');
+    expect(formatCurrency(1234567)).toBe('1,234,567');
+  });
+
+  it('handles zero correctly with both precisions', () => {
+    expect(formatCurrency(0)).toBe('0');
+    expect(formatCurrency(0, 2)).toBe('0.00');
+  });
+
+  it('does not silently lose precision on edge cases that mattered for CPC', () => {
+    // Before fix: a campaign with cpc=0.65 displayed as "1.00" because
+    // Math.round(0.65) = 1. After fix: "0.65".
+    expect(formatCurrency(0.65, 2)).toBe('0.65');
+    // 5.99 was displayed as "6.00" — now displays as "5.99"
+    expect(formatCurrency(5.99, 2)).toBe('5.99');
   });
 });

@@ -547,12 +547,25 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
                         tick={{ fontSize: 10, fill: '#7a8a9a' }}
                         tickLine={false}
                         axisLine={false}
-                        // C$ prefix (not bare $) so the axis is unambiguous
-                        // about the currency — matches the chart title's
-                        // explicit "CAD" label.
-                        tickFormatter={v => `C$${Number(v).toFixed(0)}`}
-                        width={42}
-                        domain={[0, 'auto']}
+                        // 2 decimals so a tick at 5.40 is shown as C$5.40, not
+                        // rounded to C$5. CPM in this project sits between
+                        // C$0.30 and C$50 typically, so the decimals matter.
+                        tickFormatter={v => `C$${Number(v).toFixed(2)}`}
+                        width={56}
+                        // Auto-fit the axis to the actual CPM range with a
+                        // 12% padding above/below so small day-to-day moves
+                        // (e.g. C$4.20 -> C$4.55) are visually obvious instead
+                        // of being squashed against a 0-baseline. Lower bound
+                        // is clamped at 0 since CPM is non-negative — without
+                        // the clamp a very-low-CPM day could push the axis
+                        // negative. Recharts' default 5 tickCount + the wider
+                        // float domain produces round-ish numbers (its "nice"
+                        // algorithm picks half / quarter steps automatically).
+                        domain={[
+                          (dataMin: number) => Math.max(0, dataMin * 0.88),
+                          (dataMax: number) => dataMax * 1.12,
+                        ]}
+                        allowDecimals
                       />
                       <Tooltip
                         content={({ active, payload }) => {

@@ -6,11 +6,17 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function formatCurrency(n: number, fractionDigits = 0): string {
+  // Previously this passed `Math.round(n)` to Intl.NumberFormat, which threw
+  // away the fractional part BEFORE the formatter ran — so `formatCurrency(5.40, 2)`
+  // showed "5.00" instead of "5.40". That silently broke every CPC / CPM / CPA
+  // cell in the table for ~ever. Let Intl.NumberFormat do the rounding to the
+  // requested precision — it handles both fractionDigits=0 (→ integer) and
+  // fractionDigits=2 (→ 2 decimals) correctly via maximumFractionDigits.
   return new Intl.NumberFormat('he-IL', {
     style: 'decimal',
     minimumFractionDigits: fractionDigits,
     maximumFractionDigits: fractionDigits,
-  }).format(Math.round(n));
+  }).format(n);
 }
 
 export function formatNumber(n: number, fractionDigits = 2): string {
