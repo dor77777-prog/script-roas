@@ -217,6 +217,34 @@ const customItemCrossDay: Order = {
   }],
 };
 
+// ---------------------------------------------------------------------------
+// SYNTHETIC FIXTURE for D-C3 invariant 6 (Gap 2 / CR-02 lock-in):
+// Same-day order created on DAY_D with a FUTURE-day refund (5 days later).
+// The intra-order refundByLineId map MUST filter by processed_at day so
+// the same-day per-product net is the line gross (NOT line gross minus
+// the future refund). Pre-Plan-08 algorithm leaked the future refund into
+// same-day per-product net (CR-02 double-deduction shape).
+//
+// Numeric values are SYNTHETIC (not from PROBE-EVIDENCE.md) — the probe
+// didn't capture a same-day order with a future refund. The SHAPE is
+// what locks Gap 2's fix in.
+// ---------------------------------------------------------------------------
+const sameDayOrderWithFutureRefund: Order = {
+  id: 'same-day-with-future-refund-001',
+  created_at: '2026-05-20T10:00:00+03:00',     // SAME calendar day as DAY_D
+  total_price: '100.00',
+  current_total_price: '100.00',
+  financial_status: 'partially_refunded',
+  line_items: [
+    { product_id: 'prod-future-refund', price: '100.00', quantity: 1 },
+  ],
+  refunds: [{
+    processed_at: '2026-05-25T12:00:00+03:00', // 5 DAYS LATER — different calendar day
+    transactions: [{ amount: '40.00' }],       // diagnostic noise — algorithm ignores
+    refund_line_items: [{ product_id: 'prod-future-refund', subtotal: '40.00' }],
+  }],
+};
+
 const fixtureOrders: Order[] = [
   uzoshopCrossDay,
   zolplusCrossDay,
@@ -350,5 +378,126 @@ describe('cross-day refunds', () => {
       sumByProductNet - result.customItemRefundCad,
       2,
     );
+  });
+
+  it('D-C3 invariant 5: period reconciliation - sum(storeNetCad) across all relevant days == sum(total_price) - sum(refund_line_items.subtotal) (closes Gap 5 / WR-01 - the suite previously could not catch CR-01 double-deduction)', () => {
+    // Period under test = every unique day that appears in fixtureOrders:
+    //   - Order-creation days: 2026-03-09, 2026-04-11, 2026-05-02, 2026-05-10, 2026-05-20
+    //   - Refund-processing days: 2026-05-20 (all 5 fixture refunds, including
+    //     sameDayOrder intra-order and customItemCrossDay)
+    // Distinct days = 5.
+    //
+    // === DUAL-ALGORITHM RED GATE VERIFICATION ===
+    //
+    // Under Plan 08 algorithm (HEAD — total_price + no cross-day filter):
+    //   2026-03-09 row: total_price(zolplus)=65.28; refunds=0  -> 65.28
+    //   2026-04-11 row: total_price(usmile360)=136.43; refunds=0  -> 136.43
+    //   2026-05-02 row: total_price(uzoshop)=68.80; refunds=0  -> 68.80
+    //   2026-05-10 row: total_price(customItem)=60.00; refunds=0  -> 60.00
+    //   2026-05-20 row: total_price(sameDay)=50.00;
+    //                   refunds = uzo 68.80 + zol 65.28 + usmile 81.08+55.35
+    //                          + intra-order 20.00 + custom 5.00 = 295.51
+    //                   -> 50.00 - 295.51 = -245.51
+    //   Period sum = 65.28 + 136.43 + 68.80 + 60.00 + (-245.51) = 85.00
+    //
+    //   Sum(total_price) (excl test/voided) = 65.28 + 136.43 + 68.80 + 60.00 + 50.00 = 380.51
+    //   Sum(refund_line_items.subtotal)     = 68.80 + 65.28 + 81.08 + 55.35 + 20.00 + 5.00 = 295.51
+    //   380.51 - 295.51 = 85.00  ✓
+    //
+    // Under PRE-Plan-08 algorithm (current_total_price + cross-day filter):
+    //   2026-03-09 row: current_total_price(zolplus)=0.00; cross-day=0  -> 0
+    //   2026-04-11 row: current_total_price(usmile360)=0.00; cross-day=0  -> 0
+    //   2026-05-02 row: current_total_price(uzoshop)=0.00; cross-day=0  -> 0
+    //   2026-05-10 row: current_total_price(customItem)=55.00; cross-day=0  -> 55.00
+    //   2026-05-20 row: current_total_price(sameDay)=30.00;
+    //                   cross-day = uzo 68.80 + zol 65.28 + usmile 81.08+55.35 + custom 5.00 = 275.51
+    //                   -> 30.00 - 275.51 = -245.51
+    //   Period sum (OLD) = 0 + 0 + 0 + 55.00 + (-245.51) = -190.51
+    //
+    // The pre-Plan-08 period sum (-190.51) != Plan 08 period sum (85.00) by
+    // 275.51 CAD — exactly the cross-day refund double-deduction magnitude
+    // for this fixture set. The 4 existing invariants 1-4 never sum across
+    // days so they cannot catch this drift — invariant 5 closes that gate
+    // (Gap 5 / WR-01).
+
+    const PERIOD_DAYS = [
+      '2026-03-09',
+      '2026-04-11',
+      '2026-05-02',
+      '2026-05-10',
+      '2026-05-20',
+    ];
+    const periodSum = PERIOD_DAYS.reduce((acc, day) => {
+      const r = computeRevenueWithCrossDayRefunds(fixtureOrders, day, PROBE_TZ);
+      return acc + r.storeNetCad;
+    }, 0);
+
+    // Sum(total_price) (non-test, non-voided):
+    //   uzoshop 68.80 + zolplus 65.28 + usmile360 136.43 + sameDay 50.00 + customItem 60.00
+    //   = 380.51
+    const SUM_TOTAL_PRICE = 380.51;
+    // Sum(refund_line_items.subtotal) (all refunds, same-day intra-order + cross-day):
+    //   uzoshop 68.80 + zolplus 65.28 + usmile360 (81.08+55.35) + sameDay 20.00 + customItem 5.00
+    //   = 295.51
+    const SUM_REFUND_SUBTOTAL = 295.51;
+
+    expect(periodSum).toBeCloseTo(SUM_TOTAL_PRICE - SUM_REFUND_SUBTOTAL, 2);
+    expect(periodSum).toBeCloseTo(85.00, 2);
+  });
+
+  it('D-C3 invariant 6: same-day order with FUTURE-day refund - per-product same-day net == line gross (closes Gap 2 / CR-02 - pre-Plan-08 leaked the future refund into same-day net)', () => {
+    // Fixture: order created 2026-05-20, refund processed 2026-05-25 (5 days later).
+    //
+    // === DUAL-ALGORITHM RED GATE VERIFICATION ===
+    //
+    // Under Plan 08 algorithm (Task 3 — refundByLineId filtered by processed_at):
+    //   On 2026-05-20: refund's processed_at=2026-05-25 != 2026-05-20,
+    //     so refundByLineId is EMPTY for this order today.
+    //     Per-product net = line gross (100.00).
+    //     storeNet = total_price(100.00) - 0 = 100.00.
+    //   On 2026-05-25: order's created_at=2026-05-20 != 2026-05-25,
+    //     so order does NOT contribute to same-day gross today.
+    //     Refund's processed_at=2026-05-25 matches today, so it deducts.
+    //     Per-product net = -refund_subtotal = -40.00.
+    //     storeNet = 0 (no orders created today) - 40.00 = -40.00.
+    //   Period sum = 100.00 + (-40.00) = 60.00.
+    //   total_price - refund_subtotal = 100.00 - 40.00 = 60.00 ✓
+    //
+    // Under PRE-Plan-08 algorithm (refundByLineId UNFILTERED):
+    //   On 2026-05-20: refundByLineId includes the future refund subtotal=40.00.
+    //     Per-line net = max(0, 100 - 0 - 40) = 60.00 (per-product double-deduction starts).
+    //     storeNet = current_total_price (60.00 after refund applied — IF the
+    //                refund is already applied by 2026-05-20 query time;
+    //                otherwise 100.00). Live field, unpredictable.
+    //   On 2026-05-25: cross-day filter triggers, refund_line_items[].subtotal=40.00 deducts.
+    //     Per-product net = -40.00.
+    //   Period sum (OLD) = 60.00 + (-40.00) = 20.00  --> WRONG, off by 40.00 (double-deducted).
+    //
+    // Invariant 6 locks Plan 08 Task 3's fix: refundByLineId MUST filter by processed_at day.
+
+    // Same-day path (D = 2026-05-20): per-product net == line gross (100.00).
+    const onDayD = computeRevenueWithCrossDayRefunds(
+      [sameDayOrderWithFutureRefund],
+      '2026-05-20',
+      PROBE_TZ,
+    );
+    expect(onDayD.byProduct['prod-future-refund']).toBeDefined();
+    expect(onDayD.byProduct['prod-future-refund'].netRevenueCad).toBeCloseTo(100.00, 2);
+    expect(onDayD.storeNetCad).toBeCloseTo(100.00, 2); // total_price(100) - 0 refunds today
+
+    // Refund day (D+5 = 2026-05-25): per-product net == -refund_subtotal (-40.00).
+    const onRefundDay = computeRevenueWithCrossDayRefunds(
+      [sameDayOrderWithFutureRefund],
+      '2026-05-25',
+      PROBE_TZ,
+    );
+    expect(onRefundDay.byProduct['prod-future-refund']).toBeDefined();
+    expect(onRefundDay.byProduct['prod-future-refund'].netRevenueCad).toBeCloseTo(-40.00, 2);
+    expect(onRefundDay.storeNetCad).toBeCloseTo(-40.00, 2); // no orders created on D+5; 40.00 refund deducts
+
+    // Period sum lock: total_price - refund_subtotal = 100 - 40 = 60.
+    const periodSum = onDayD.storeNetCad + onRefundDay.storeNetCad;
+    expect(periodSum).toBeCloseTo(100.00 - 40.00, 2);
+    expect(periodSum).toBeCloseTo(60.00, 2);
   });
 });
