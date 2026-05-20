@@ -1,10 +1,21 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Radio, TrendingUp, DollarSign, ShoppingCart, Target } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import useSWR from 'swr';
+import { Radio, TrendingUp, DollarSign, ShoppingCart, Target, Eye } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { aggregate, aggregateByStore, roasLabel } from '@/lib/analytics';
 import type { DailyRow } from '@/lib/types';
+import type { CampaignsResponse } from '@/app/api/campaigns/route';
+
+const campaignsFetcher = async (url: string): Promise<CampaignsResponse> => {
+  const r = await fetch(url);
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    throw new Error(body?.error || `HTTP ${r.status}`);
+  }
+  return r.json() as Promise<CampaignsResponse>;
+};
 
 const TONE_BG: Record<string, string> = {
   red:    'bg-roas-redBg text-roas-red',
@@ -55,6 +66,45 @@ export function TodayLive({
   const roas = roasLabel(agg.roas);
   const hasAnyData = agg.revenue > 0 || agg.spend > 0;
 
+  // Fetch today's campaign rows to compute CPM (data-daily doesn't carry
+  // impressions). Range key is today-to-today so SWR caches a single
+  // narrow response; navigating to the Campaigns tab triggers a separate
+  // wider-range fetch — both coexist.
+  const { data: campaignsToday } = useSWR<CampaignsResponse>(
+    `/api/campaigns?from=${today}&to=${today}`,
+    campaignsFetcher,
+    { refreshInterval: 60_000, revalidateOnFocus: false },
+  );
+
+  // Aggregate impressions + spend overall and per store from today's
+  // campaign rows. Per-store is keyed by storeName so it joins cleanly
+  // with the existing storeAggs from analytics.
+  const cpmData = useMemo(() => {
+    const rows = campaignsToday?.rows ?? [];
+    let totalSpend = 0;
+    let totalImpressions = 0;
+    const byStore = new Map<string, { spend: number; impressions: number }>();
+    for (const r of rows) {
+      if (r.date !== today) continue;
+      totalSpend += r.spend;
+      totalImpressions += r.impressions;
+      const key = r.storeName;
+      if (!byStore.has(key)) byStore.set(key, { spend: 0, impressions: 0 });
+      const s = byStore.get(key)!;
+      s.spend += r.spend;
+      s.impressions += r.impressions;
+    }
+    const cpmByStore = new Map<string, number>();
+    for (const [store, v] of byStore) {
+      cpmByStore.set(store, v.impressions > 0 ? (v.spend / v.impressions) * 1000 : 0);
+    }
+    return {
+      cpm: totalImpressions > 0 ? (totalSpend / totalImpressions) * 1000 : 0,
+      impressions: totalImpressions,
+      cpmByStore,
+    };
+  }, [campaignsToday, today]);
+
   return (
     <section
       className={cn(
@@ -92,7 +142,7 @@ export function TodayLive({
         </header>
 
         {/* Stats grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-3">
           <LiveStat
             icon={<Target size={13} />}
             label="ROAS עד עכשיו"
@@ -119,6 +169,12 @@ export function TodayLive({
             valuePrefix="CAD"
             accent={agg.grossProfit >= 0 ? 'pos' : 'neg'}
           />
+          <LiveStat
+            icon={<Eye size={13} />}
+            label="CPM (היום)"
+            value={cpmData.impressions > 0 ? formatCurrency(cpmData.cpm, 2) : '—'}
+            valuePrefix={cpmData.impressions > 0 ? 'CAD' : undefined}
+          />
         </div>
 
         {/* Per-store breakdown */}
@@ -128,6 +184,7 @@ export function TodayLive({
               const color = STORE_COLORS[s.store] || '#0d3680';
               const info = roasLabel(s.roas);
               const hasGoogle = s.gaSpend > 0;
+              const storeCpm = cpmData.cpmByStore.get(s.store) ?? 0;
               return (
                 <div
                   key={s.store}
@@ -160,6 +217,15 @@ export function TodayLive({
                       label="Google"
                       value={hasGoogle ? formatCurrency(s.gaSpend) : '—'}
                       muted
+                    />
+                  </div>
+                  {/* CPM row — full-width below the 2x2 grid so it stands
+                      out as an auction-side metric (vs the spend / revenue
+                      flow above). Falls back to "—" when no impressions yet. */}
+                  <div className="mt-2 pt-2 border-t border-borderSubtle/50 text-[11px] tabular-nums">
+                    <Mini
+                      label="CPM"
+                      value={storeCpm > 0 ? `CAD ${formatCurrency(storeCpm, 2)}` : '—'}
                     />
                   </div>
                 </div>

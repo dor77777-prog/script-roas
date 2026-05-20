@@ -88,13 +88,27 @@ export function HeroOverview({ data, filters }: Props) {
     { revalidateOnFocus: false },
   );
 
-  const cpmAgg = useMemo(() => {
-    const rows = campaignsData?.rows ?? [];
+  // Second campaigns fetch for the PREVIOUS period — feeds the CPM
+  // delta-vs-previous-period chip. Same range function the other KPIs
+  // use, so the "delta" comparison is apples-to-apples across the strip.
+  const prevRange = useMemo(() => previousRange(filters.range), [filters.range]);
+  const { data: campaignsDataPrev } = useSWR<CampaignsResponse>(
+    buildDateRangeKey('/api/campaigns', prevRange),
+    campaignsFetcher,
+    { revalidateOnFocus: false },
+  );
+
+  function aggregateCpm_(
+    rows: CampaignsResponse['rows'] | undefined,
+    from: string,
+    to: string,
+    store: string,
+  ): { spend: number; impressions: number; cpm: number } {
     let spend = 0;
     let impressions = 0;
-    for (const r of rows) {
-      if (r.date < filters.range.from || r.date > filters.range.to) continue;
-      if (filters.store !== 'All' && r.storeName !== filters.store) continue;
+    for (const r of rows ?? []) {
+      if (r.date < from || r.date > to) continue;
+      if (store !== 'All' && r.storeName !== store) continue;
       spend += r.spend;
       impressions += r.impressions;
     }
@@ -103,7 +117,24 @@ export function HeroOverview({ data, filters }: Props) {
       impressions,
       cpm: impressions > 0 ? (spend / impressions) * 1000 : 0,
     };
-  }, [campaignsData, filters.range.from, filters.range.to, filters.store]);
+  }
+
+  const cpmAgg = useMemo(
+    () => aggregateCpm_(campaignsData?.rows, filters.range.from, filters.range.to, filters.store),
+    [campaignsData, filters.range.from, filters.range.to, filters.store],
+  );
+  const cpmAggPrev = useMemo(
+    () => aggregateCpm_(campaignsDataPrev?.rows, prevRange.from, prevRange.to, filters.store),
+    [campaignsDataPrev, prevRange.from, prevRange.to, filters.store],
+  );
+  // Delta as fractional change vs previous period (matches the other KPIs).
+  // Null when we can't compute (either period has zero impressions) — the
+  // tile shows the absolute value without a delta pill.
+  // Lower CPM is BETTER (cheaper reach), so the tile uses inverseDelta to
+  // flip the green/red coloring on the DeltaPill.
+  const dCpm = cpmAgg.cpm > 0 && cpmAggPrev.cpm > 0
+    ? (cpmAgg.cpm - cpmAggPrev.cpm) / cpmAggPrev.cpm
+    : null;
 
   const { story, kpis, chartData } = useMemo(() => {
     const cur = filterRows(data.rows, filters.range, filters.store);
@@ -259,7 +290,8 @@ export function HeroOverview({ data, filters }: Props) {
               label="CPM"
               value={cpmAgg.cpm > 0 ? fmtMoneyBare(cpmAgg.cpm, 2) : <>—</>}
               valuePrefix={cpmAgg.cpm > 0 ? 'CAD' : undefined}
-              delta={null}
+              delta={dCpm}
+              inverseDelta
             />
           </div>
         </div>
