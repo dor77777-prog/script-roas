@@ -24,6 +24,7 @@ import {
   YAxis,
 } from 'recharts';
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
+import { analyzeCpmVsRoas } from '@/lib/cpmRoasAnalysis';
 import type { CampaignRow } from '@/lib/campaigns';
 import type { AdAccountMap } from '@/lib/campaignsLinks';
 import {
@@ -481,21 +482,25 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     };
   }, [aggregated]);
 
-  // Per-day CPM across the same filters that produce `aggregated` (store,
-  // platform, date range). Drives the expandable CPM-over-time chart that
-  // sits below the summary cards. Days with zero impressions are filtered
+  // Per-day CPM (and ROAS) across the same filters that produce `aggregated`
+  // (store, platform, date range). Drives the expandable CPM-over-time chart
+  // that sits below the summary cards. Days with zero impressions are filtered
   // out so the line is continuous over real activity.
+  //
+  // We also accumulate conversionValue per day so the ROAS overlay (toggle
+  // below) has a per-day series to plot on the second Y axis.
   const cpmDaily = useMemo(() => {
-    const byDay = new Map<string, { spend: number; impressions: number }>();
+    const byDay = new Map<string, { spend: number; impressions: number; value: number }>();
     const rows = data?.rows ?? [];
     for (const r of rows) {
       if (r.date < localRange.from || r.date > localRange.to) continue;
       if (localStore !== 'All' && r.storeName !== localStore) continue;
       if (platform !== 'all' && r.platform !== platform) continue;
-      if (!byDay.has(r.date)) byDay.set(r.date, { spend: 0, impressions: 0 });
+      if (!byDay.has(r.date)) byDay.set(r.date, { spend: 0, impressions: 0, value: 0 });
       const d = byDay.get(r.date)!;
       d.spend += r.spend;
       d.impressions += r.impressions;
+      d.value += r.conversionValue;
     }
     return Array.from(byDay.entries())
       .sort((a, b) => a[0].localeCompare(b[0]))
@@ -504,11 +509,15 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         date,
         spend: v.spend,
         impressions: v.impressions,
+        value: v.value,
         cpm: (v.spend / v.impressions) * 1000,
+        roas: v.spend > 0 ? v.value / v.spend : 0,
       }));
   }, [data?.rows, localRange.from, localRange.to, localStore, platform]);
 
   const [cpmExpanded, setCpmExpanded] = useState(false);
+  // ROAS overlay toggle (same UX as the CampaignDrawer CPM chart).
+  const [cpmShowRoas, setCpmShowRoas] = useState(false);
 
   // Shopify-ROAS sort: re-rank using `trueRevenueByKey` (sortAggregated falls
   // back to Meta ROAS). Unmapped rows pushed to bottom on desc.
@@ -773,9 +782,22 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
           active={cpmExpanded}
         />
       </div>
-      {cpmExpanded && cpmDaily.length >= 2 && (
+      {cpmExpanded && cpmDaily.length >= 2 && (() => {
+        // Compute the smart-analysis verdict for this scope before render so
+        // the JSX stays flat. Scope label mirrors the chart-title parens so
+        // the analysis text reads "for THIS view" without being repeated.
+        const analysis = analyzeCpmVsRoas(
+          cpmDaily.map(d => ({ date: d.date, cpm: d.cpm, roas: d.roas })),
+        );
+        const toneBg: Record<typeof analysis.tone, string> = {
+          positive: 'bg-roas-greenBg/40 border-roas-green/30 text-roas-green',
+          warning:  'bg-amber-50 border-amber-300 text-amber-800',
+          negative: 'bg-roas-redBg/40 border-roas-red/30 text-roas-red',
+          neutral:  'bg-surfaceMuted border-borderSubtle text-text-secondary',
+        };
+        return (
         <div className="mt-3 rounded-lg bg-surface border border-borderSubtle p-3">
-          <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
             <h3 className="text-xs sm:text-sm font-semibold text-text-primary inline-flex items-center gap-1.5">
               CPM לאורך זמן
               <span className="text-[10px] font-medium text-text-muted">
@@ -784,18 +806,29 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                 {', CAD'})
               </span>
             </h3>
-            <button
-              type="button"
-              onClick={() => setCpmExpanded(false)}
-              className="text-[11px] text-text-muted hover:text-text-primary transition-colors"
-              aria-label="סגור"
-            >
-              ✕
-            </button>
+            <div className="flex items-center gap-3">
+              <label className="inline-flex items-center gap-1.5 text-[11px] text-text-secondary cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={cpmShowRoas}
+                  onChange={e => setCpmShowRoas(e.target.checked)}
+                  className="rounded border-borderSubtle text-primary focus:ring-primary/30 cursor-pointer"
+                />
+                הוסף ROAS לגרף
+              </label>
+              <button
+                type="button"
+                onClick={() => setCpmExpanded(false)}
+                className="text-[11px] text-text-muted hover:text-text-primary transition-colors"
+                aria-label="סגור"
+              >
+                ✕
+              </button>
+            </div>
           </div>
           <div className="h-40 sm:h-48" dir="ltr">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={cpmDaily} margin={{ top: 8, right: 16, left: 4, bottom: 0 }}>
+              <LineChart data={cpmDaily} margin={{ top: 8, right: cpmShowRoas ? 56 : 16, left: 4, bottom: 0 }}>
                 <XAxis
                   dataKey="date"
                   tick={{ fontSize: 10, fill: '#7a8a9a' }}
@@ -808,6 +841,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                   padding={{ left: 12, right: 12 }}
                 />
                 <YAxis
+                  yAxisId="cpm"
                   tick={{ fontSize: 10, fill: '#7a8a9a' }}
                   tickLine={false}
                   axisLine={false}
@@ -819,14 +853,33 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                   ]}
                   allowDecimals
                 />
+                {cpmShowRoas && (
+                  <YAxis
+                    yAxisId="roas"
+                    orientation="right"
+                    tick={{ fontSize: 10, fill: '#15803d' }}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={v => Number(v).toFixed(2)}
+                    width={42}
+                    domain={[
+                      (dataMin: number) => Math.max(0, dataMin * 0.88),
+                      (dataMax: number) => dataMax * 1.12,
+                    ]}
+                    allowDecimals
+                  />
+                )}
                 <Tooltip
                   content={({ active, payload }) => {
                     if (!active || !payload || payload.length === 0) return null;
-                    const d = payload[0].payload as { date: string; cpm: number; impressions: number; spend: number };
+                    const d = payload[0].payload as { date: string; cpm: number; impressions: number; spend: number; roas: number };
                     return (
                       <div dir="rtl" className="rounded-lg bg-text-primary text-white px-3 py-2 text-xs shadow-elevated tabular-nums">
                         <div className="text-white/70 mb-1 text-[10px]">{formatDate(d.date)}</div>
                         <div>CPM: <span className="font-semibold text-amber-200">CAD {formatCurrency(d.cpm, 2)}</span></div>
+                        {cpmShowRoas && (
+                          <div>ROAS: <span className="font-semibold text-emerald-300">{formatNumber(d.roas, 2)}</span></div>
+                        )}
                         <div className="text-white/70 text-[10px] mt-0.5">
                           {formatNumber(d.impressions, 0)} חשיפות · CAD {formatCurrency(d.spend, 2)}
                         </div>
@@ -835,6 +888,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                   }}
                 />
                 <Line
+                  yAxisId="cpm"
                   type="monotone"
                   dataKey="cpm"
                   stroke="#d97706"
@@ -842,11 +896,42 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                   dot={{ r: 2.5, fill: '#d97706', stroke: 'none' }}
                   activeDot={{ r: 4, fill: '#d97706', stroke: 'white', strokeWidth: 1.5 }}
                 />
+                {cpmShowRoas && (
+                  <Line
+                    yAxisId="roas"
+                    type="monotone"
+                    dataKey="roas"
+                    stroke="#15803d"
+                    strokeWidth={1.75}
+                    strokeDasharray="5 3"
+                    dot={{ r: 2.5, fill: '#15803d', stroke: 'none' }}
+                    activeDot={{ r: 4, fill: '#15803d', stroke: 'white', strokeWidth: 1.5 }}
+                  />
+                )}
               </LineChart>
             </ResponsiveContainer>
           </div>
+          {cpmShowRoas && (
+            <div className="flex items-center justify-center gap-4 text-[10px] text-text-muted mt-1.5">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block w-3 h-[2px] bg-amber-600" />
+                CPM (ציר שמאל)
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="inline-block w-3 border-t-2 border-dashed border-roas-green" />
+                ROAS (ציר ימין)
+              </span>
+            </div>
+          )}
+          {analysis.hasData && (
+            <div className={cn('mt-2 rounded-lg border px-3 py-2 text-[11px] leading-relaxed', toneBg[analysis.tone])}>
+              <span className="font-semibold ml-1">ניתוח:</span>
+              <span>{analysis.text}</span>
+            </div>
+          )}
         </div>
-      )}
+        );
+      })()}
       {totals.spend > 0 && (
         <div className="mt-3 pt-3 border-t border-borderSubtle text-[10px] sm:text-xs text-text-muted tabular-nums flex flex-wrap gap-x-3 gap-y-1">
           <span>CPC: <span className="text-text-secondary font-medium">CAD {formatCurrency(totals.cpc, 2)}</span></span>

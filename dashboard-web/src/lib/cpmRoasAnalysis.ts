@@ -1,0 +1,207 @@
+/**
+ * Shared smart-analysis helper for CPM-vs-ROAS overlay charts.
+ *
+ * Used by the CampaignDrawer CPM chart and the CampaignsTable expandable
+ * CPM chart. Both charts let the user toggle a ROAS line on top of the
+ * CPM line; the analysis box below summarizes what the two curves are
+ * doing together (correlation + trend) in plain Hebrew.
+ *
+ * The interpretation logic is intentionally conservative:
+ *   - Needs >= 5 days of data to draw any "trend" conclusion
+ *   - Pearson correlation with explicit small-N guard so a noisy 3-day
+ *     run doesn't produce a confident "highly correlated" statement
+ *   - Threshold-based trend detection (first-half mean vs second-half
+ *     mean) instead of regression slope, because the chart user reads
+ *     "the second half" naturally
+ *
+ * Returns a single short sentence plus a tone hint so the UI can render
+ * the box in the right color (positive / neutral / negative).
+ */
+
+export type DailyCpmRoasPoint = {
+  date: string;
+  cpm: number;
+  roas: number;
+};
+
+export type CpmRoasAnalysis = {
+  /** Short Hebrew summary sentence the UI renders verbatim. */
+  text: string;
+  /** Visual tone: positive (green), warning (amber), negative (red),
+   *  neutral (gray). Drives the analysis-box background. */
+  tone: 'positive' | 'warning' | 'negative' | 'neutral';
+  /** When false (e.g. < 5 days, all-zero ROAS), the UI can hide the
+   *  analysis block entirely instead of showing a placeholder. */
+  hasData: boolean;
+  /** Diagnostics for tooltips / debugging — not surfaced in production
+   *  UI by default. */
+  details: {
+    n: number;
+    cpmDeltaPct: number | null;
+    roasDeltaPct: number | null;
+    pearson: number | null;
+  };
+};
+
+/**
+ * Pearson correlation with zero-variance + small-N guards. Returns null
+ * when either series has fewer than 3 points OR has zero variance — the
+ * caller treats null as "no signal".
+ */
+function pearson_(a: number[], b: number[]): number | null {
+  const n = Math.min(a.length, b.length);
+  if (n < 3) return null;
+  let sumA = 0;
+  let sumB = 0;
+  for (let i = 0; i < n; i++) {
+    sumA += a[i];
+    sumB += b[i];
+  }
+  const meanA = sumA / n;
+  const meanB = sumB / n;
+  let cov = 0;
+  let varA = 0;
+  let varB = 0;
+  for (let i = 0; i < n; i++) {
+    const da = a[i] - meanA;
+    const db = b[i] - meanB;
+    cov += da * db;
+    varA += da * da;
+    varB += db * db;
+  }
+  if (varA === 0 || varB === 0) return null;
+  return cov / Math.sqrt(varA * varB);
+}
+
+/**
+ * Compares the mean of the second half of a series to the mean of the
+ * first half. Returns the relative change as a fraction (0.12 = +12%).
+ * Falls back to null when the first-half mean is 0 (avoids divide by
+ * zero) or n < 4.
+ */
+function halfOverHalfDelta_(values: number[]): number | null {
+  if (values.length < 4) return null;
+  const mid = Math.floor(values.length / 2);
+  const firstHalf = values.slice(0, mid);
+  const secondHalf = values.slice(mid);
+  const meanFirst = firstHalf.reduce((s, x) => s + x, 0) / firstHalf.length;
+  const meanSecond = secondHalf.reduce((s, x) => s + x, 0) / secondHalf.length;
+  if (meanFirst === 0) return null;
+  return (meanSecond - meanFirst) / meanFirst;
+}
+
+/** Threshold for "stable" — changes smaller than this are considered noise. */
+const STABLE_THRESHOLD = 0.05; // 5%
+
+/**
+ * Build the analysis sentence from the daily series. Handles the
+ * common combinations:
+ *
+ *   CPM trend   ROAS trend   Verdict
+ *   ----------  -----------  -----------------------------------------
+ *   up          up           יעיל למרות עלות גבוהה — תקציב משתלם
+ *   up          down         הוצאה גוברת עם תשואה נופלת — דורש בחינה
+ *   up          flat         CPM עולה אבל ROAS יציב — לחץ אוקציה ללא השפעה
+ *   down        up           הצלחה — חשיפות זולות עם תשואה גבוהה
+ *   down        down         ROAS נופל גם כשהCPM יורד — בעיה לא-אוקציונית
+ *   down        flat         חיסכון בלי שינוי בתשואה — שיפור יעילות
+ *   flat        up           יציבות עם שיפור — אופטימיזציה משתפרת
+ *   flat        down         יציבות עם החמרה — בעיה בקריאייטיב/audience
+ *   flat        flat         יציבות מלאה — הקמפיין במצב סטדי
+ */
+export function analyzeCpmVsRoas(series: DailyCpmRoasPoint[]): CpmRoasAnalysis {
+  const validRows = series.filter(d => d.cpm > 0 && d.roas > 0);
+  const n = validRows.length;
+
+  // Not enough data → return a "neutral" placeholder.
+  if (n < 5) {
+    return {
+      text: 'צריך לפחות 5 ימים עם נתונים מלאים כדי לסיק מסקנה. הגרף ימשיך להציג, הניתוח יופיע כשיהיה מספיק היסטוריה.',
+      tone: 'neutral',
+      hasData: false,
+      details: { n, cpmDeltaPct: null, roasDeltaPct: null, pearson: null },
+    };
+  }
+
+  const cpms = validRows.map(d => d.cpm);
+  const roases = validRows.map(d => d.roas);
+  const cpmDelta = halfOverHalfDelta_(cpms);
+  const roasDelta = halfOverHalfDelta_(roases);
+  const r = pearson_(cpms, roases);
+
+  function categorize(delta: number | null): 'up' | 'down' | 'flat' {
+    if (delta === null) return 'flat';
+    if (delta > STABLE_THRESHOLD) return 'up';
+    if (delta < -STABLE_THRESHOLD) return 'down';
+    return 'flat';
+  }
+
+  const cpmDir = categorize(cpmDelta);
+  const roasDir = categorize(roasDelta);
+
+  const cpmPct = cpmDelta !== null ? Math.round(cpmDelta * 100) : 0;
+  const roasPct = roasDelta !== null ? Math.round(roasDelta * 100) : 0;
+
+  // Optional correlation flavor — only when |r| > 0.5 and we have enough
+  // points (already gated by n >= 5).
+  const corrLabel =
+    r === null || Math.abs(r) < 0.5 ? '' :
+    r > 0 ? ' (CPM וROAS נעים יחד)' :
+    ' (CPM וROAS נעים בכיוונים הפוכים)';
+
+  let text = '';
+  let tone: CpmRoasAnalysis['tone'] = 'neutral';
+
+  // ====== UP + UP — paid more, got more
+  if (cpmDir === 'up' && roasDir === 'up') {
+    text = `CPM עלה ב-${cpmPct}% אבל ROAS השתפר ב-${roasPct}% — התקציב עובד קשה יותר ומחזיר יותר. כדאי לבדוק אם הגידול בCPM נובע מהגדלת תקציב יזומה או מלחץ באוקציה.${corrLabel}`;
+    tone = 'positive';
+  }
+  // ====== UP + DOWN — danger zone
+  else if (cpmDir === 'up' && roasDir === 'down') {
+    text = `CPM עלה ב-${cpmPct}% וROAS ירד ב-${Math.abs(roasPct)}% — דבר רע. אתה משלם יותר על חשיפות ומקבל פחות החזר. בדוק את הקריאייטיב, audience וsetting של auction.${corrLabel}`;
+    tone = 'negative';
+  }
+  // ====== UP + FLAT — auction pressure absorbed
+  else if (cpmDir === 'up' && roasDir === 'flat') {
+    text = `CPM עלה ב-${cpmPct}% אבל ROAS נשאר יציב. לחץ באוקציה לא פגע בתשואה — סימן לקריאייטיב חזק או audience ממוקד. תשומת לב לעלייה מתמשכת.${corrLabel}`;
+    tone = 'warning';
+  }
+  // ====== DOWN + UP — best case
+  else if (cpmDir === 'down' && roasDir === 'up') {
+    text = `CPM ירד ב-${Math.abs(cpmPct)}% וROAS עלה ב-${roasPct}% — המצב האידיאלי. תקציב יעיל יותר ותשואה משתפרת. שווה לבדוק להגדיל תקציב כדי לרכוב על המומנטום.${corrLabel}`;
+    tone = 'positive';
+  }
+  // ====== DOWN + DOWN — non-auction issue
+  else if (cpmDir === 'down' && roasDir === 'down') {
+    text = `CPM ירד ב-${Math.abs(cpmPct)}% אבל גם ROAS ירד ב-${Math.abs(roasPct)}% — חשיפות זולות לא הצילו את התשואה. הבעיה כנראה לא באוקציה אלא בקריאייטיב/audience/landing page.${corrLabel}`;
+    tone = 'negative';
+  }
+  // ====== DOWN + FLAT — efficiency win
+  else if (cpmDir === 'down' && roasDir === 'flat') {
+    text = `CPM ירד ב-${Math.abs(cpmPct)}% וROAS נשאר יציב — חיסכון נטו בלי לפגוע בתשואה. אופטימיזציה טובה של תקציב.${corrLabel}`;
+    tone = 'positive';
+  }
+  // ====== FLAT + UP — optimization win
+  else if (cpmDir === 'flat' && roasDir === 'up') {
+    text = `CPM יציב וROAS עלה ב-${roasPct}% — שיפור באופטימיזציה (קריאייטיב חדש? audience טוב יותר?) בלי שינוי בלחץ האוקציה.${corrLabel}`;
+    tone = 'positive';
+  }
+  // ====== FLAT + DOWN — creative fatigue
+  else if (cpmDir === 'flat' && roasDir === 'down') {
+    text = `CPM יציב אבל ROAS ירד ב-${Math.abs(roasPct)}% — הקריאייטיב או audience נשחק. אותה עלות חשיפה, פחות המרות. שווה לרענן.${corrLabel}`;
+    tone = 'warning';
+  }
+  // ====== FLAT + FLAT — steady state
+  else {
+    text = `CPM וROAS יציבים על פני התקופה — הקמפיין במצב סטדי. אין סיגנל לפעולה דחופה.${corrLabel}`;
+    tone = 'neutral';
+  }
+
+  return {
+    text,
+    tone,
+    hasData: true,
+    details: { n, cpmDeltaPct: cpmDelta, roasDeltaPct: roasDelta, pearson: r },
+  };
+}
