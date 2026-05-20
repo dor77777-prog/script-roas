@@ -321,6 +321,25 @@ type Props = {
   reconciliation: NonNullable<ReturnType<typeof buildReconciliation>>;
 };
 
+/**
+ * TEST-04 (5.2.2.1): pure day-table delta label policy from FIX-16.
+ */
+export function computeDayDelta(channelTotal: number, shopify: number): {
+  label: string;
+  tone: 'neutral' | 'green' | 'red';
+} {
+  if (channelTotal === 0 && shopify > 0) return { label: 'Shopify only', tone: 'neutral' };
+  if (channelTotal > 0 && shopify === 0) return { label: 'Channels only', tone: 'neutral' };
+  if (channelTotal > 0 && shopify > 0) {
+    const pct = ((channelTotal - shopify) / shopify) * 100;
+    return {
+      label: `${pct >= 0 ? '+' : ''}${pct.toFixed(0)}%`,
+      tone: Math.abs(pct) < 20 ? 'green' : 'red',
+    };
+  }
+  return { label: '—', tone: 'neutral' };
+}
+
 export function MetaShopifyReconciliation({ reconciliation }: Props) {
   const [chipHidden, setChipHidden] = useState(() => (
     typeof window !== 'undefined' && window.sessionStorage.getItem(PRODUCT_MAP_CHIP_KEY) === '1'
@@ -625,22 +644,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 {reconciliation.series.map(s => {
                   const channelTotal = s.meta + s.google + s.organic;
                   // FIX-16 (5.2.2.1): three distinct cases for per-day-table delta. Operationally different signals.
-                  let deltaLabel: string;
-                  let deltaTone: 'neutral' | 'green' | 'red';
-                  if (channelTotal === 0 && s.shopify > 0) {
-                    deltaLabel = 'Shopify only';
-                    deltaTone = 'neutral';
-                  } else if (channelTotal > 0 && s.shopify === 0) {
-                    deltaLabel = 'Channels only';
-                    deltaTone = 'neutral';
-                  } else if (channelTotal > 0 && s.shopify > 0) {
-                    const pct = ((channelTotal - s.shopify) / s.shopify) * 100;
-                    deltaLabel = `${pct >= 0 ? '+' : ''}${pct.toFixed(0)}%`;
-                    deltaTone = Math.abs(pct) < 20 ? 'green' : 'red';
-                  } else {
-                    deltaLabel = '—';
-                    deltaTone = 'neutral';
-                  }
+                  const { label: deltaLabel, tone: deltaTone } = computeDayDelta(channelTotal, s.shopify);
                   const deltaClass = {
                     neutral: 'text-text-muted',
                     green: 'text-roas-green',
