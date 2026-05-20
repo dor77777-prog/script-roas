@@ -176,6 +176,7 @@ function onOpen() {
       .addItem('פתח טאב Override ידני (manual-spend)', 'openManualSpendTab')
       .addSeparator()
       .addItem('בדוק הגדרות (verifyConfig)', 'showVerifyConfig_')
+      .addItem('בדיקת חוזה החזרים (Shopify probe)', 'probeRefundContract_')
       .addItem('הוצא Shopify tokens (Client Credentials)', 'bootstrapAllShopifyTokens')
       .addItem('פתח גיליון הגדרות', 'showSpreadsheetUrl_')
       .addToUi();
