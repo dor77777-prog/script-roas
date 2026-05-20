@@ -265,13 +265,17 @@ export function AdsDrawer({
   }, [summary, ordersAttrData, rangeFrom, rangeTo, dailyMetaByAd]);
 
   if (!open) return null;
-  // Defensive guard: CampaignDrawer derives rangeFrom/rangeTo via
-  // `rows.reduce(..., rows[0]?.date ?? '')`, which returns '' if rows is empty.
-  // CampaignDrawer currently short-circuits when `rows.length === 0`
-  // (summary is null), so AdsDrawer never sees empty strings today — but if
-  // that guard is ever relaxed, the `r.date < rangeFrom || r.date > rangeTo`
-  // filter below would silently exclude EVERY ad (every non-empty ISO date is
-  // lexicographically > ''). Bail loudly instead. (#IN-01)
+  // Defensive guard. CampaignDrawer and CampaignsTable BOTH pass
+  // localRange.from / localRange.to (the toolbar's date range) directly
+  // as required props — neither caller derives the range from rows
+  // anymore. IN-02 (5.2.2.1): the old comment described a deprecated
+  // `rows.reduce(..., rows[0]?.date ?? '')` derivation that no longer
+  // exists. Today's contract is "callers pass real ISO strings"; the
+  // guard below stays useful as defense-in-depth for future callers
+  // that might pass empty strings instead of erroring out. If
+  // rangeFrom is '', every `r.date < rangeFrom || r.date > rangeTo`
+  // check below would silently exclude EVERY ad (every non-empty ISO
+  // date is lexicographically > ''). Bail loudly instead.
   if (!rangeFrom || !rangeTo) return null;
 
   const sortedAds = summary
