@@ -327,6 +327,7 @@ export function analyzeAttribution(
   // loop (the `Number.isFinite(o.totalCad)` filter); analyzeAttribution
   // matches that contract here. (IN-03: removed stale line-number reference.)
   const matchedOrders = orders.filter(o => {
+    if (o.storeId !== campaign.storeId) return false;   // FIX-09 (5.2.2.1): defense-in-depth boundary guard; mirrors ad-set/ad analyzers.
     if (o.date < dateFrom || o.date > dateTo) return false;
     if (!Number.isFinite(o.totalCad)) return false;
     return orderMatchesCampaign(o, campaign);
