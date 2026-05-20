@@ -144,4 +144,49 @@ describe('analyzeCpmVsRoas', () => {
     // Second half (6,7,8,9 mean) is higher than first half (4, 4.5, 5)
     expect(result.details.cpmDeltaPct!).toBeGreaterThan(0);
   });
+
+  it("reports mode = 'half-over-half' when no prev series is provided", () => {
+    const series = makeSeries({ cpm: 5, roas: 3 });
+    const result = analyzeCpmVsRoas(series);
+    expect(result.mode).toBe('half-over-half');
+  });
+
+  it("reports mode = 'previous-period' when prev series is provided with >= 3 valid days", () => {
+    const current = makeSeries({ cpm: 5, roas: 3 });
+    const prev = makeSeries({ cpm: 4, roas: 2.5 });
+    const result = analyzeCpmVsRoas(current, { prev });
+    expect(result.mode).toBe('previous-period');
+  });
+
+  it('falls back to half-over-half when prev has fewer than 3 valid days', () => {
+    const current = makeSeries({ cpm: 5, roas: 3 });
+    const prev = makeSeries({ cpm: 4, roas: 2 }, [{}, { cpm: 0, roas: 0 }, { cpm: 0, roas: 0 }, { cpm: 0, roas: 0 }, { cpm: 0, roas: 0 }, { cpm: 0, roas: 0 }, { cpm: 0, roas: 0 }]);
+    const result = analyzeCpmVsRoas(current, { prev });
+    // Only 1 valid prev day → falls back
+    expect(result.mode).toBe('half-over-half');
+  });
+
+  it('computes previous-period delta = (curMean - prevMean) / prevMean', () => {
+    // Current: 5 days, all CPM=10. Mean current = 10.
+    const current = [
+      { date: '2026-05-10', cpm: 10, roas: 3 },
+      { date: '2026-05-11', cpm: 10, roas: 3 },
+      { date: '2026-05-12', cpm: 10, roas: 3 },
+      { date: '2026-05-13', cpm: 10, roas: 3 },
+      { date: '2026-05-14', cpm: 10, roas: 3 },
+    ];
+    // Prev: 5 days, all CPM=8. Mean prev = 8. Delta = (10-8)/8 = +0.25 = +25%.
+    const prev = [
+      { date: '2026-05-05', cpm: 8, roas: 2.5 },
+      { date: '2026-05-06', cpm: 8, roas: 2.5 },
+      { date: '2026-05-07', cpm: 8, roas: 2.5 },
+      { date: '2026-05-08', cpm: 8, roas: 2.5 },
+      { date: '2026-05-09', cpm: 8, roas: 2.5 },
+    ];
+    const result = analyzeCpmVsRoas(current, { prev });
+    expect(result.mode).toBe('previous-period');
+    // CPM up 25%, ROAS up 20% — both growing
+    expect(result.details.cpmDeltaPct).toBeCloseTo(0.25, 2);
+    expect(result.details.roasDeltaPct).toBeCloseTo(0.2, 2);
+  });
 });

@@ -518,6 +518,54 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   const [cpmExpanded, setCpmExpanded] = useState(false);
   // ROAS overlay toggle (same UX as the CampaignDrawer CPM chart).
   const [cpmShowRoas, setCpmShowRoas] = useState(false);
+  // Smart-analysis baseline mode: 'half' compares first vs second half
+  // of the selected range; 'prev' compares against the equally-long
+  // window immediately before the selected range (the conventional
+  // "vs previous period" the Hero KPIs use).
+  const [cpmAnalysisMode, setCpmAnalysisMode] = useState<'half' | 'prev'>('half');
+
+  // Build the previous-period series from data?.rows without a second
+  // fetch: data.rows already covers a wider 17-month window (per Hero
+  // monthly tables fetch) and the same store/platform filters apply.
+  // Range = same length as current, ending the day before current.from.
+  const cpmDailyPrev = useMemo(() => {
+    if (cpmAnalysisMode !== 'prev') return null;
+    const fromMs = Date.UTC(
+      Number(localRange.from.slice(0, 4)),
+      Number(localRange.from.slice(5, 7)) - 1,
+      Number(localRange.from.slice(8, 10)),
+    );
+    const toMs = Date.UTC(
+      Number(localRange.to.slice(0, 4)),
+      Number(localRange.to.slice(5, 7)) - 1,
+      Number(localRange.to.slice(8, 10)),
+    );
+    const spanDays = Math.round((toMs - fromMs) / 86400000) + 1;
+    const prevToMs = fromMs - 86400000;
+    const prevFromMs = prevToMs - (spanDays - 1) * 86400000;
+    const prevFrom = new Date(prevFromMs).toISOString().slice(0, 10);
+    const prevTo = new Date(prevToMs).toISOString().slice(0, 10);
+    const byDay = new Map<string, { spend: number; impressions: number; value: number }>();
+    const rows = data?.rows ?? [];
+    for (const r of rows) {
+      if (r.date < prevFrom || r.date > prevTo) continue;
+      if (localStore !== 'All' && r.storeName !== localStore) continue;
+      if (platform !== 'all' && r.platform !== platform) continue;
+      if (!byDay.has(r.date)) byDay.set(r.date, { spend: 0, impressions: 0, value: 0 });
+      const d = byDay.get(r.date)!;
+      d.spend += r.spend;
+      d.impressions += r.impressions;
+      d.value += r.conversionValue;
+    }
+    return Array.from(byDay.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .filter(([, v]) => v.impressions > 0)
+      .map(([date, v]) => ({
+        date,
+        cpm: (v.spend / v.impressions) * 1000,
+        roas: v.spend > 0 ? v.value / v.spend : 0,
+      }));
+  }, [cpmAnalysisMode, data?.rows, localRange.from, localRange.to, localStore, platform]);
 
   // Shopify-ROAS sort: re-rank using `trueRevenueByKey` (sortAggregated falls
   // back to Meta ROAS). Unmapped rows pushed to bottom on desc.
@@ -784,10 +832,13 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       </div>
       {cpmExpanded && cpmDaily.length >= 2 && (() => {
         // Compute the smart-analysis verdict for this scope before render so
-        // the JSX stays flat. Scope label mirrors the chart-title parens so
-        // the analysis text reads "for THIS view" without being repeated.
+        // the JSX stays flat. Mode toggle ('half' vs 'prev') picks the
+        // baseline — when 'prev', we pass the matching-length window
+        // immediately before the current range so the helper compares
+        // means apples-to-apples (same baseline the Hero KPI deltas use).
         const analysis = analyzeCpmVsRoas(
           cpmDaily.map(d => ({ date: d.date, cpm: d.cpm, roas: d.roas })),
+          cpmAnalysisMode === 'prev' && cpmDailyPrev ? { prev: cpmDailyPrev } : undefined,
         );
         const toneBg: Record<typeof analysis.tone, string> = {
           positive: 'bg-roas-greenBg/40 border-roas-green/30 text-roas-green',
@@ -795,6 +846,9 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
           negative: 'bg-roas-redBg/40 border-roas-red/30 text-roas-red',
           neutral:  'bg-surfaceMuted border-borderSubtle text-text-secondary',
         };
+        const baselineLabel = analysis.mode === 'previous-period'
+          ? 'השוואה: vs תקופה קודמת באותו אורך'
+          : 'השוואה: חצי שני vs חצי ראשון של הטווח';
         return (
         <div className="mt-3 rounded-lg bg-surface border border-borderSubtle p-3">
           <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
@@ -806,7 +860,36 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                 {', CAD'})
               </span>
             </h3>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
+              {/* Analysis baseline toggle — picks what the smart-analysis
+                  box compares against. Two modes: half-over-half (within
+                  range) vs previous-period (same-length window before). */}
+              <div className="inline-flex items-center gap-0.5 rounded-md border border-borderSubtle bg-surface p-0.5 text-[10px]">
+                <button
+                  type="button"
+                  onClick={() => setCpmAnalysisMode('half')}
+                  className={cn(
+                    'px-2 py-0.5 rounded transition-colors',
+                    cpmAnalysisMode === 'half'
+                      ? 'bg-primary/10 text-primary font-medium'
+                      : 'text-text-muted hover:text-text-primary',
+                  )}
+                >
+                  חצי-חצי
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCpmAnalysisMode('prev')}
+                  className={cn(
+                    'px-2 py-0.5 rounded transition-colors',
+                    cpmAnalysisMode === 'prev'
+                      ? 'bg-primary/10 text-primary font-medium'
+                      : 'text-text-muted hover:text-text-primary',
+                  )}
+                >
+                  vs תקופה קודמת
+                </button>
+              </div>
               <label className="inline-flex items-center gap-1.5 text-[11px] text-text-secondary cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -925,6 +1008,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
           )}
           {analysis.hasData && (
             <div className={cn('mt-2 rounded-lg border px-3 py-2 text-[11px] leading-relaxed', toneBg[analysis.tone])}>
+              <div className="text-[10px] opacity-70 mb-1">{baselineLabel}</div>
               <span className="font-semibold ml-1">ניתוח:</span>
               <span>{analysis.text}</span>
             </div>

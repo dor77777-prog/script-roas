@@ -190,7 +190,10 @@ export function TodayLive({
                   key={s.store}
                   className="rounded-xl bg-surface/90 backdrop-blur-sm border border-borderSubtle p-3 shadow-xs"
                 >
-                  <div className="flex items-center justify-between gap-2 mb-2">
+                  {/* Header: store name + larger ROAS chip — keeps ROAS the
+                      headline metric of the card. Chip text bumped from
+                      10px to 12px so it carries more visual weight. */}
+                  <div className="flex items-center justify-between gap-2 mb-2.5">
                     <div className="flex items-center gap-2 min-w-0">
                       <span
                         className="inline-block w-2 h-2 rounded-full shrink-0"
@@ -202,31 +205,41 @@ export function TodayLive({
                     </div>
                     <span
                       className={cn(
-                        'px-1.5 py-0.5 text-[10px] font-bold rounded tabular-nums shrink-0',
+                        'px-2 py-0.5 text-xs sm:text-sm font-bold rounded tabular-nums shrink-0',
                         TONE_BG[info.tone],
                       )}
                     >
                       {s.roas > 0 ? formatNumber(s.roas) : '—'}
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[11px] tabular-nums">
-                    <Mini label="הכנסה" value={formatCurrency(s.revenue)} accent="green" />
-                    <Mini label="סך הוצאה" value={formatCurrency(s.spend)} />
-                    <Mini label="Meta" value={formatCurrency(s.fbSpend)} muted />
-                    <Mini
-                      label="Google"
-                      value={hasGoogle ? formatCurrency(s.gaSpend) : '—'}
-                      muted
-                    />
-                  </div>
-                  {/* CPM row — full-width below the 2x2 grid so it stands
-                      out as an auction-side metric (vs the spend / revenue
-                      flow above). Falls back to "—" when no impressions yet. */}
-                  <div className="mt-2 pt-2 border-t border-borderSubtle/50 text-[11px] tabular-nums">
-                    <Mini
-                      label="CPM"
-                      value={storeCpm > 0 ? `CAD ${formatCurrency(storeCpm, 2)}` : '—'}
-                    />
+                  {/* Three full-width rows — spend (with FB/Google breakdown
+                      inline), revenue (emphasized in green), CPM. Layout
+                      mirrors the user's mental model: cost in, revenue out,
+                      cost-per-reach. */}
+                  <div className="space-y-1.5 text-xs tabular-nums">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-text-muted">סך הוצאה</span>
+                      <span className="text-text-primary font-semibold">
+                        CAD {formatCurrency(s.spend)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 ps-3 text-[11px] text-text-muted">
+                      <span>Meta: <span className="text-text-secondary tabular-nums">{formatCurrency(s.fbSpend)}</span></span>
+                      <span>·</span>
+                      <span>Google: <span className="text-text-secondary tabular-nums">{hasGoogle ? formatCurrency(s.gaSpend) : '—'}</span></span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 rounded-md bg-roas-greenBg/40 px-2 py-1.5 mt-1.5">
+                      <span className="text-roas-green/80 font-medium">הכנסה</span>
+                      <span className="text-roas-green text-sm sm:text-base font-bold">
+                        CAD {formatCurrency(s.revenue)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 pt-1">
+                      <span className="text-text-muted">CPM</span>
+                      <span className="text-text-primary font-semibold">
+                        {storeCpm > 0 ? `CAD ${formatCurrency(storeCpm, 2)}` : '—'}
+                      </span>
+                    </div>
                   </div>
                 </div>
               );

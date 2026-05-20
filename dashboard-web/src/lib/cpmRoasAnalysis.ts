@@ -33,6 +33,9 @@ export type CpmRoasAnalysis = {
   /** When false (e.g. < 5 days, all-zero ROAS), the UI can hide the
    *  analysis block entirely instead of showing a placeholder. */
   hasData: boolean;
+  /** Which baseline the analysis compared against — drives the small
+   *  "השוואה: ..." label the UI shows above the analysis box. */
+  mode: 'half-over-half' | 'previous-period';
   /** Diagnostics for tooltips / debugging — not surfaced in production
    *  UI by default. */
   details: {
@@ -109,9 +112,26 @@ const STABLE_THRESHOLD = 0.05; // 5%
  *   flat        down         יציבות עם החמרה — בעיה בקריאייטיב/audience
  *   flat        flat         יציבות מלאה — הקמפיין במצב סטדי
  */
-export function analyzeCpmVsRoas(series: DailyCpmRoasPoint[]): CpmRoasAnalysis {
+/**
+ * Mean of an array, or null when empty / sum is 0 (used to skip zero
+ * baselines that would cause divide-by-zero in delta math).
+ */
+function meanOrNull_(values: number[]): number | null {
+  if (values.length === 0) return null;
+  const sum = values.reduce((s, x) => s + x, 0);
+  if (sum === 0) return null;
+  return sum / values.length;
+}
+
+export function analyzeCpmVsRoas(
+  series: DailyCpmRoasPoint[],
+  options?: { prev?: DailyCpmRoasPoint[] },
+): CpmRoasAnalysis {
   const validRows = series.filter(d => d.cpm > 0 && d.roas > 0);
   const n = validRows.length;
+  const prevSeries = (options?.prev ?? []).filter(d => d.cpm > 0 && d.roas > 0);
+  const havePrev = prevSeries.length >= 3;
+  const mode: 'half-over-half' | 'previous-period' = havePrev ? 'previous-period' : 'half-over-half';
 
   // Not enough data → return a "neutral" placeholder.
   if (n < 5) {
@@ -119,15 +139,39 @@ export function analyzeCpmVsRoas(series: DailyCpmRoasPoint[]): CpmRoasAnalysis {
       text: 'צריך לפחות 5 ימים עם נתונים מלאים כדי לסיק מסקנה. הגרף ימשיך להציג, הניתוח יופיע כשיהיה מספיק היסטוריה.',
       tone: 'neutral',
       hasData: false,
+      mode,
       details: { n, cpmDeltaPct: null, roasDeltaPct: null, pearson: null },
     };
   }
 
   const cpms = validRows.map(d => d.cpm);
   const roases = validRows.map(d => d.roas);
-  const cpmDelta = halfOverHalfDelta_(cpms);
-  const roasDelta = halfOverHalfDelta_(roases);
   const r = pearson_(cpms, roases);
+
+  // Baseline selection:
+  //   - When the caller passes prev (a previous-period series with >= 3
+  //     valid days), we compare current-period MEAN to prev-period MEAN.
+  //     This is the conventional "vs last period" baseline matching the
+  //     Hero KPI deltas.
+  //   - Otherwise, fall back to half-over-half within the current range
+  //     so the user still gets a momentum read on shorter spans.
+  let cpmDelta: number | null;
+  let roasDelta: number | null;
+  if (havePrev) {
+    const curCpmMean = meanOrNull_(cpms);
+    const prevCpmMean = meanOrNull_(prevSeries.map(d => d.cpm));
+    cpmDelta = curCpmMean !== null && prevCpmMean !== null && prevCpmMean !== 0
+      ? (curCpmMean - prevCpmMean) / prevCpmMean
+      : null;
+    const curRoasMean = meanOrNull_(roases);
+    const prevRoasMean = meanOrNull_(prevSeries.map(d => d.roas));
+    roasDelta = curRoasMean !== null && prevRoasMean !== null && prevRoasMean !== 0
+      ? (curRoasMean - prevRoasMean) / prevRoasMean
+      : null;
+  } else {
+    cpmDelta = halfOverHalfDelta_(cpms);
+    roasDelta = halfOverHalfDelta_(roases);
+  }
 
   function categorize(delta: number | null): 'up' | 'down' | 'flat' {
     if (delta === null) return 'flat';
@@ -202,6 +246,7 @@ export function analyzeCpmVsRoas(series: DailyCpmRoasPoint[]): CpmRoasAnalysis {
     text,
     tone,
     hasData: true,
+    mode,
     details: { n, cpmDeltaPct: cpmDelta, roasDeltaPct: roasDelta, pearson: r },
   };
 }

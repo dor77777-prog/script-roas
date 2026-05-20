@@ -102,6 +102,10 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
   const [isFullscreen, setIsFullscreen] = useState(false);
   // CPM chart can overlay ROAS on a second Y axis when the user enables it.
   const [showRoasOverlay, setShowRoasOverlay] = useState(false);
+  // Analysis baseline: 'half' = first-half vs second-half within the
+  // range; 'prev' = compare to the equally-long window immediately
+  // before the range.
+  const [cpmAnalysisMode, setCpmAnalysisMode] = useState<'half' | 'prev'>('half');
 
   function handleSort(key: AdSetSortKey) {
     if (key === sortKey) {
@@ -140,11 +144,44 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
   // fallback; the SWR call was left in flight as dead weight and is
   // now gone.
   const drawerRange = { from: rangeFrom, to: rangeTo };
+  // Equal-length window immediately before the current range. Only used
+  // by the CPM-vs-ROAS analysis when the mode toggle is set to 'prev'.
+  const prevRange = useMemo(() => {
+    const fromMs = Date.UTC(
+      Number(rangeFrom.slice(0, 4)),
+      Number(rangeFrom.slice(5, 7)) - 1,
+      Number(rangeFrom.slice(8, 10)),
+    );
+    const toMs = Date.UTC(
+      Number(rangeTo.slice(0, 4)),
+      Number(rangeTo.slice(5, 7)) - 1,
+      Number(rangeTo.slice(8, 10)),
+    );
+    const spanDays = Math.round((toMs - fromMs) / 86400000) + 1;
+    const prevToMs = fromMs - 86400000;
+    const prevFromMs = prevToMs - (spanDays - 1) * 86400000;
+    return {
+      from: new Date(prevFromMs).toISOString().slice(0, 10),
+      to: new Date(prevToMs).toISOString().slice(0, 10),
+    };
+  }, [rangeFrom, rangeTo]);
   // All campaign rows for the date range — used by buildReconciliation to
   // compute the Google series (other Google campaigns promoting same products).
   // SWR dedupes against CampaignsTable's identical key so no extra network call.
   const { data: campaignsData } = useSWR<CampaignsResponse>(
     open ? buildDateRangeKey('/api/campaigns', drawerRange) : null,
+    async (url: string) => {
+      const r = await fetch(url);
+      if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
+      return r.json();
+    },
+    { revalidateOnFocus: false, dedupingInterval: 60_000 },
+  );
+  // Previous-period campaign rows — only fetched when the user actually
+  // switches the analysis baseline to 'prev', so the default open path
+  // costs zero extra network.
+  const { data: campaignsDataPrev } = useSWR<CampaignsResponse>(
+    open && cpmAnalysisMode === 'prev' ? buildDateRangeKey('/api/campaigns', prevRange) : null,
     async (url: string) => {
       const r = await fetch(url);
       if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
@@ -546,12 +583,42 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
             );
             const rangeDays = Math.round((toMs - fromMs) / 86400000) + 1;
             if (rangeDays < 3 || cpmSeries.length < 2) return null;
+            // Build the previous-period per-day series for THIS campaign
+            // by filtering campaignsDataPrev to rows matching this drawer's
+            // campaignId. Mirrors the live `summary` aggregation but for
+            // the historical window. Only used when the user picks the
+            // 'prev' analysis baseline.
+            const prevDaily = (() => {
+              if (cpmAnalysisMode !== 'prev') return undefined;
+              const rows = (campaignsDataPrev?.rows ?? []).filter(r => r.campaignId === campaignId);
+              if (rows.length === 0) return undefined;
+              const byDay = new Map<string, { spend: number; impressions: number; value: number }>();
+              for (const r of rows) {
+                if (!byDay.has(r.date)) byDay.set(r.date, { spend: 0, impressions: 0, value: 0 });
+                const d = byDay.get(r.date)!;
+                d.spend += r.spend;
+                d.impressions += r.impressions;
+                d.value += r.conversionValue;
+              }
+              return Array.from(byDay.entries())
+                .sort((a, b) => a[0].localeCompare(b[0]))
+                .filter(([, v]) => v.impressions > 0)
+                .map(([date, v]) => ({
+                  date,
+                  cpm: (v.spend / v.impressions) * 1000,
+                  roas: v.spend > 0 ? v.value / v.spend : 0,
+                }));
+            })();
             // Smart analysis runs over the same filtered series the chart
             // draws — empty/zero days are excluded so a single dud day
             // doesn't poison the trend calculation.
             const analysis = analyzeCpmVsRoas(
               cpmSeries.map(d => ({ date: d.date, cpm: d.cpm, roas: d.roas })),
+              prevDaily ? { prev: prevDaily } : undefined,
             );
+            const baselineLabel = analysis.mode === 'previous-period'
+              ? 'השוואה: vs תקופה קודמת באותו אורך'
+              : 'השוואה: חצי שני vs חצי ראשון של הטווח';
             const toneBg: Record<typeof analysis.tone, string> = {
               positive: 'bg-roas-greenBg/40 border-roas-green/30 text-roas-green',
               warning:  'bg-amber-50 border-amber-300 text-amber-800',
@@ -568,18 +635,47 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
                       (עלות ל-1000 חשיפות, CAD)
                     </span>
                   </h3>
-                  {/* ROAS overlay toggle — a tiny switch that adds a second
-                      line + right Y-axis for ROAS so the user can compare
-                      auction cost vs return-on-spend at a glance. */}
-                  <label className="inline-flex items-center gap-1.5 text-[11px] text-text-secondary cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={showRoasOverlay}
-                      onChange={e => setShowRoasOverlay(e.target.checked)}
-                      className="rounded border-borderSubtle text-primary focus:ring-primary/30 cursor-pointer"
-                    />
-                    הוסף ROAS לגרף
-                  </label>
+                  <div className="flex items-center gap-3 flex-wrap">
+                    {/* Analysis baseline toggle — same UX as CampaignsTable. */}
+                    <div className="inline-flex items-center gap-0.5 rounded-md border border-borderSubtle bg-surface p-0.5 text-[10px]">
+                      <button
+                        type="button"
+                        onClick={() => setCpmAnalysisMode('half')}
+                        className={cn(
+                          'px-2 py-0.5 rounded transition-colors',
+                          cpmAnalysisMode === 'half'
+                            ? 'bg-primary/10 text-primary font-medium'
+                            : 'text-text-muted hover:text-text-primary',
+                        )}
+                      >
+                        חצי-חצי
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setCpmAnalysisMode('prev')}
+                        className={cn(
+                          'px-2 py-0.5 rounded transition-colors',
+                          cpmAnalysisMode === 'prev'
+                            ? 'bg-primary/10 text-primary font-medium'
+                            : 'text-text-muted hover:text-text-primary',
+                        )}
+                      >
+                        vs תקופה קודמת
+                      </button>
+                    </div>
+                    {/* ROAS overlay toggle — a tiny switch that adds a second
+                        line + right Y-axis for ROAS so the user can compare
+                        auction cost vs return-on-spend at a glance. */}
+                    <label className="inline-flex items-center gap-1.5 text-[11px] text-text-secondary cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={showRoasOverlay}
+                        onChange={e => setShowRoasOverlay(e.target.checked)}
+                        className="rounded border-borderSubtle text-primary focus:ring-primary/30 cursor-pointer"
+                      />
+                      הוסף ROAS לגרף
+                    </label>
+                  </div>
                 </div>
                 <div className="h-40 sm:h-44 rounded-xl bg-surfaceMuted/40 border border-borderSubtle p-2" dir="ltr">
                   <ResponsiveContainer width="100%" height="100%">
@@ -690,6 +786,7 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
                     points and only as a hint, not a directive. */}
                 {analysis.hasData && (
                   <div className={cn('mt-2 rounded-lg border px-3 py-2 text-[11px] leading-relaxed', toneBg[analysis.tone])}>
+                    <div className="text-[10px] opacity-70 mb-1">{baselineLabel}</div>
                     <span className="font-semibold ml-1">ניתוח:</span>
                     <span>{analysis.text}</span>
                   </div>
