@@ -215,17 +215,18 @@ export function buildReconciliation(opts: {
     rangeTo,
   );
 
-  /** Inverted paid-exclusion predicate (fix for AUDIT-P0-01).
-   * An order contributes to the "Organic / Direct" channel if it's NOT
-   * deterministically paid. We previously used a whitelist that had three
-   * impossible labels AND omitted google-organic (real label emitted by
-   * Shopify.gs). The inverted predicate is robust to new OrderSource
-   * values added later by the writer. */
+  /**
+   * Organic predicate (post-5.2.2.1 FIX-01):
+   * organic = NOT meta-paid AND NOT google-paid AND NOT other-paid AND NOT empty AND NOT fbclid/gclid present.
+   * Adding a new paid OrderSource member (e.g. 'tiktok-paid') will require an explicit decision here.
+   */
   function isOrganicSource(order: { source: OrderSource | string; fbclidPresent?: boolean; gclidPresent?: boolean }): boolean {
     if (order.fbclidPresent) return false;
     if (order.gclidPresent) return false;
     if (order.source === 'meta-paid') return false;
     if (order.source === 'google-paid') return false;
+    if (order.source === 'other-paid') return false;   // UTM-tagged paid non-Meta/non-Google (e.g. TikTok, influencer) — must not bucket as organic
+    if (order.source === '') return false;             // classifier failure — not safe to default to organic
     return true;
   }
 
