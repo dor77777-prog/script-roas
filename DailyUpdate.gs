@@ -60,25 +60,49 @@ function runDailyUpdateUsmile() {
 }
 
 /**
- * Per-store LIVE trigger entry points (Phase 5.1).
+ * Per-store LIVE trigger entry points (Phase 5.1 + Phase 05.2.3.0).
  *
  * Mirrors the daily per-store split (Phase 5) — each gets its OWN
  * 6-min budget so a slow Shopify/Meta response on one store can't
  * cascade into a timeout for the others. Triggers run independently
  * every 15 minutes via installLiveTrigger().
  *
+ * Phase 05.2.3.0 D-D1: each wrapper runs a rolling 3-day backfill
+ * (D-2, D-1, D in that order). Cross-day refunds processed in the
+ * prior 48h are re-attributed automatically — the operator never
+ * needs to run a manual cleanup for routine within-48h refunds.
+ * Estimated runtime: ~46s per wrapper (3x ~15s), well under the
+ * 6-min Apps Script cap.
+ *
+ * Order is oldest-first (D-2 then D-1 then D) so a mid-execution
+ * timeout leaves the older days correctly written and the most
+ * recent day stale (which the NEXT 15-min trigger run will refresh)
+ * rather than leaving the older days uncorrected.
+ *
  * The original runLiveUpdate() is retained as a MANUAL entry point
- * for full-sequential runs (e.g., from the editor / spreadsheet menu).
- * Triggers no longer call it directly.
+ * for full-sequential runs (e.g., from the editor / spreadsheet
+ * menu) and is also updated to do the 3-day rolling backfill.
  */
 function runLiveUpdateUzoshop() {
-  runUpdateForSingleStore_('uzoshop', todayStr_());
+  const today = todayStr_();
+  for (let n = 2; n >= 0; n--) {
+    const dateStr = previousDayStr_(today, n);
+    runUpdateForSingleStore_('uzoshop', dateStr);
+  }
 }
 function runLiveUpdateZolplus() {
-  runUpdateForSingleStore_('zolplus', todayStr_());
+  const today = todayStr_();
+  for (let n = 2; n >= 0; n--) {
+    const dateStr = previousDayStr_(today, n);
+    runUpdateForSingleStore_('zolplus', dateStr);
+  }
 }
 function runLiveUpdateUsmile() {
-  runUpdateForSingleStore_('usmile360', todayStr_());
+  const today = todayStr_();
+  for (let n = 2; n >= 0; n--) {
+    const dateStr = previousDayStr_(today, n);
+    runUpdateForSingleStore_('usmile360', dateStr);
+  }
 }
 
 /**
