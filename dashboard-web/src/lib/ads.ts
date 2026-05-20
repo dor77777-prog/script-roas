@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import { parseDate, type DateRange } from './dateRange';
+import { isInRange, parseDate, type DateRange } from './dateRange';
 
 /**
  * One row per (date, store, campaign, adset, ad). Mirrors the
@@ -99,6 +99,12 @@ export async function fetchAdsData(opts?: { range?: DateRange }): Promise<AdRow[
     for (const row of values) {
       const dateStr = parseDate(row[0]);
       if (!dateStr) continue;
+      // IN-05 (5.2.2.1): mirror campaigns.ts:113 — apply range filter at
+      // parse time via isInRange so we never allocate AdRows we're just
+      // going to drop. Replaces the post-loop `out.filter(...)` at the
+      // tail of this function and aligns the two libs on a single
+      // filter helper from dateRange.ts.
+      if (range && !isInRange(dateStr, range)) continue;
       const platform = String(row[1] ?? '').trim() || 'Meta';
       const campaignId = String(row[2] ?? '').trim();
       const campaignName = String(row[3] ?? '').trim() || '—';
@@ -131,8 +137,7 @@ export async function fetchAdsData(opts?: { range?: DateRange }): Promise<AdRow[
       });
     }
   }
-  if (range) {
-    return out.filter(r => r.date >= range.from && r.date <= range.to);
-  }
+  // IN-05 (5.2.2.1): post-loop filter removed; range is applied in the
+  // parse loop above via isInRange (mirrors campaigns.ts).
   return out;
 }
