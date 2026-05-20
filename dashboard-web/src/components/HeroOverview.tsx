@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import useSWR from 'swr';
 import {
   Area,
   AreaChart,
@@ -22,7 +23,9 @@ import {
   type Annotation,
 } from '@/lib/annotations';
 import type { DashboardData, Filters as F } from '@/lib/types';
+import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import { aggregate, dailySeries, filterRows, roasLabel } from '@/lib/analytics';
+import { buildDateRangeKey } from '@/lib/dateRange';
 import { previousRange } from '@/lib/presets';
 import { cn } from '@/lib/utils';
 import {
@@ -32,6 +35,15 @@ import {
   fmtMoneyBare,
   fmtNum2,
 } from '@/lib/format';
+
+const campaignsFetcher = async (url: string): Promise<CampaignsResponse> => {
+  const r = await fetch(url);
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    throw new Error(body?.error || `HTTP ${r.status}`);
+  }
+  return r.json() as Promise<CampaignsResponse>;
+};
 
 /**
  * Hero block for the Home tab. Inspired by Robinhood (chart-as-background),
@@ -66,6 +78,33 @@ const TONE_CHIP: Record<string, string> = {
 };
 
 export function HeroOverview({ data, filters }: Props) {
+  // Pull /api/campaigns to compute blended CPM across the visible scope —
+  // data-daily doesn't carry impressions, only spend + revenue, so we
+  // can't derive CPM from data.rows alone. SWR caches the response so
+  // navigating to the Campaigns tab reuses the same fetch.
+  const { data: campaignsData } = useSWR<CampaignsResponse>(
+    buildDateRangeKey('/api/campaigns', filters.range),
+    campaignsFetcher,
+    { revalidateOnFocus: false },
+  );
+
+  const cpmAgg = useMemo(() => {
+    const rows = campaignsData?.rows ?? [];
+    let spend = 0;
+    let impressions = 0;
+    for (const r of rows) {
+      if (r.date < filters.range.from || r.date > filters.range.to) continue;
+      if (filters.store !== 'All' && r.storeName !== filters.store) continue;
+      spend += r.spend;
+      impressions += r.impressions;
+    }
+    return {
+      spend,
+      impressions,
+      cpm: impressions > 0 ? (spend / impressions) * 1000 : 0,
+    };
+  }, [campaignsData, filters.range.from, filters.range.to, filters.store]);
+
   const { story, kpis, chartData } = useMemo(() => {
     const cur = filterRows(data.rows, filters.range, filters.store);
     const prev = filterRows(data.rows, previousRange(filters.range), filters.store);
@@ -181,7 +220,7 @@ export function HeroOverview({ data, filters }: Props) {
         </h2>
 
         {/* Floating KPI strip — no card chrome, just hairline dividers */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-6 sm:gap-x-8 gap-y-5 sm:gap-y-6">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-x-6 sm:gap-x-8 gap-y-5 sm:gap-y-6">
           <FloatingKpi
             label="הכנסות"
             value={fmtMoneyBare(kpis.curAgg.revenue)}
@@ -213,6 +252,14 @@ export function HeroOverview({ data, filters }: Props) {
               valuePrefix="CAD"
               delta={kpis.dNet}
               accent={kpis.curAgg.netProfit >= 0 ? 'positive' : 'negative'}
+            />
+          </div>
+          <div className="lg:border-r lg:border-white/12 lg:ps-7">
+            <FloatingKpi
+              label="CPM"
+              value={cpmAgg.cpm > 0 ? fmtMoneyBare(cpmAgg.cpm, 2) : <>—</>}
+              valuePrefix={cpmAgg.cpm > 0 ? 'CAD' : undefined}
+              delta={null}
             />
           </div>
         </div>
