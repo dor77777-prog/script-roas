@@ -108,7 +108,7 @@ function tryAutoBootstrapShopify_(storeId) {
   }
 }
 
-function getShopifyRevenue(storeId, dateStr) {
+function getShopifyRevenue(storeId, dateStr, refunds) {
   const domain = requireProp(`${storeId}.shopify.domain`).replace(/^https?:\/\//, '').replace(/\/$/, '');
   let token   = requireProp(`${storeId}.shopify.token`);
   let bootstrapTried = false;
@@ -120,7 +120,7 @@ function getShopifyRevenue(storeId, dateStr) {
             `?status=any&financial_status=any&limit=250` +
             `&created_at_min=${encodeURIComponent(dayStart)}` +
             `&created_at_max=${encodeURIComponent(dayEnd)}` +
-            `&fields=id,current_total_price,financial_status,test`;
+            `&fields=id,total_price,financial_status,test`;
 
   let total = 0;
   let count = 0;
@@ -157,7 +157,7 @@ function getShopifyRevenue(storeId, dateStr) {
     for (const o of orders) {
       if (o.test) continue;
       if (o.financial_status === 'voided') continue;
-      total += parseFloat(o.current_total_price || 0);
+      total += parseFloat(o.total_price || 0);
       count++;
     }
     const link = res.getHeaders()['Link'] || res.getHeaders()['link'] || '';
@@ -173,14 +173,16 @@ function getShopifyRevenue(storeId, dateStr) {
     );
   }
 
-  // Phase 05.2.3.0 D-A1..D-A2: current_total_price already nets same-day refunds.
-  // We subtract cross-day refunds (refund processed on D against orders created on
-  // a different day) so today's row reflects today's refund activity. D-D3:
-  // negative result is correct accounting, NOT clamped.
-  const refunds = getShopifyRefundsForDay_(storeId, dateStr);
-  total -= refunds.storeRefundCad;
+  // Phase 05.2.3.0 (gap-closure 08): D-A1 model change. Switched from
+  // current_total_price (live, refund-reflecting — DOUBLE-DEDUCTS when
+  // rows are re-fetched, per CR-01) to total_price (immutable gross).
+  // Every refund attributes to its processed_at day exactly once via
+  // getShopifyRefundsForDay_ — the cross-day filter is dropped. D-D3:
+  // negative net is correct accounting; no clamping.
+  const r = (refunds !== undefined) ? refunds : getShopifyRefundsForDay_(storeId, dateStr);
+  total -= r.storeRefundCad;
 
-  Logger.log(`Shopify ${storeId} ${dateStr}: ${count} orders, gross-of-cross-day=${(total + refunds.storeRefundCad).toFixed(2)} CAD, cross-day-refunds=${refunds.storeRefundCad.toFixed(2)} CAD (${refunds.processedAtCount} refunds), net=${total.toFixed(2)} CAD`);
+  Logger.log(`Shopify ${storeId} ${dateStr}: ${count} orders, gross=${(total + r.storeRefundCad).toFixed(2)} CAD, refunds=${r.storeRefundCad.toFixed(2)} CAD (${r.processedAtCount} refunds), net=${total.toFixed(2)} CAD`);
   return total;
 }
 
