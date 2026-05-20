@@ -1,40 +1,50 @@
 /**
  * KEEP-IN-SYNC with Shopify.gs:getShopifyRefundsForDay_ + getShopifyRevenue +
- * getShopifyProductSalesForDay (Phase 05.2.3.0).
+ * getShopifyProductSalesForDay (Phase 05.2.3.0 + gap-closure 08).
  *
- * This is the pure-TS mirror of the cross-day refund attribution algorithm.
- * Any change to the algorithm must be applied to BOTH files in the same commit.
- * Tests live at dashboard-web/src/lib/__tests__/shopifyRevenueRefunds.test.ts —
- * fixtures derive from
- * .planning/phases/05.2.3.0-shopify-revenue-refunds-bug-fix/05.2.3.0-PROBE-EVIDENCE.md
- * per D-C4. NO fictional fixtures.
+ * This is the pure-TS mirror of the refund attribution algorithm. Any change
+ * must be applied to BOTH files in the same commit.
  *
- * === REVISED CONTRACT (2026-05-21) ===
+ * === LOAD-BEARING INVARIANTS (gap-closure 08, 2026-05-21) ===
  *
- * The 2026-05-21 empirical probe falsified the original hypothesis that
- * `transactions[].amount` is the store-level deduction (PROBE-EVIDENCE.md
- * §Finding 1: `transactions[].amount` ran 2–4× the order total on 3/3
- * stores because it is denominated in payout/transaction currency and
- * includes duplicate-refund/void artifacts). CONTEXT.md D-B2, D-C1, D-C3
- * were revised before this mirror was written. The corrected invariant
- *   `current_total_price == total_price − Σ refund_line_items[].subtotal`
- * matched 3/3 stores exactly.
+ * Three invariants MUST remain identical between Apps Script and this file
+ * — drift between them ships a double-deduction bug to production:
  *
- * Decision-ID citations applied in this file:
- * - D-A1: current_total_price is net of intra-order refunds (AUDIT-P0-03).
- * - D-A2: cross-day filter is `refund.processed_at on D AND order.created_at NOT on D`.
- *         Same-day refunds are already in current_total_price and must NOT
- *         be subtracted again (the rolled-back double-deduction trap).
+ *   1. Store-level gross uses total_price (immutable per Shopify Admin REST
+ *      2024-10), NOT current_total_price (which is live and reflects all
+ *      refunds applied so far). Under current_total_price + cross-day
+ *      filter, every refund within 48h of order creation was deducted
+ *      twice once any backfill re-fetched the prior-day row. See CR-01
+ *      in 05.2.3.0-REVIEW.md.
+ *
+ *   2. Refunds attribute to their `processed_at` day exactly ONCE — no
+ *      cross-day filter. Same-day and cross-day refunds both deduct on
+ *      the refund day. Re-fetching prior-day rows no longer changes their
+ *      value because total_price is immutable.
+ *
+ *   3. Per-product intra-order refund map (refundByLineId in Apps Script;
+ *      the same-day path here in TS) is built ONLY from refunds whose
+ *      processed_at falls on the same day as the order. A future-day
+ *      refund on an order created on day D must NOT be deducted from
+ *      day D's per-product net — it deducts on its processed_at day.
+ *      See CR-02 in 05.2.3.0-REVIEW.md.
+ *
+ * Additionally:
+ *   - No Math.max(0, …) clamping ANYWHERE — per-line, per-product, and
+ *     store-level nets can all go negative (D-D3). See CR-03 in
+ *     05.2.3.0-REVIEW.md.
+ *   - transactions[].amount is IGNORED (PROBE-EVIDENCE.md §Finding 1 —
+ *     ran 2–4× the order total on 3/3 stores, unsafe to deduct).
+ *
+ * Decision-ID citations applied in this file (post-gap-closure 08):
+ * - D-A1: total_price is the immutable gross at order creation.
+ * - D-A2 (REVISED gap-closure 08): every refund attributes to its
+ *   processed_at day — no cross-day filter anymore.
  * - D-A4: all day comparisons use Asia/Jerusalem TZ via Intl.DateTimeFormat.
- * - D-C1 (REVISED): store-level subtracts Σ refund_line_items[].subtotal
- *        across ALL refund_line_items (including null product_id),
- *        NOT transactions[].amount.
- * - D-C2: per-product subtracts refund_line_items[].subtotal grouped by
- *         product_id (skipping null/missing).
- * - D-C3 (REVISED): cross-path reconciliation collapses onto the same field
- *        (no tax/shipping gap). Null-product refunds surface in
- *        customItemRefundCad.
- * - D-D3: result can be negative; no clamping.
+ * - D-C1 / D-C2: store-level and per-product both use
+ *   refund_line_items[].subtotal.
+ * - D-C3 (REVISED): customItemRefundCad surfaces null/missing-pid refunds.
+ * - D-D3: no clamping.
  */
 
 type ShopifyLineItem = {
@@ -71,10 +81,14 @@ export type ShopifyOrderInput = {
 export type CrossDayRefundResult = {
   /**
    * Store-level net revenue for day D:
-   *   Σ current_total_price(orders.created_at=D, excl test/voided)
-   *   − Σ refund_line_items[].subtotal(refunds.processed_at=D AND order.created_at != D,
-   *                                    across ALL refund_line_items including null product_id)
+   *   Σ total_price(orders.created_at=D, excl test/voided)
+   *   − Σ refund_line_items[].subtotal(refunds.processed_at=D,
+   *                                    across ALL refund_line_items including null product_id,
+   *                                    regardless of when the order was created)
    * D-D3: can be negative; no clamping.
+   *
+   * Gap-closure 08 model change: total_price is immutable, so re-fetching
+   * prior-day rows is mathematically safe (no double-deduction risk).
    */
   storeNetCad: number;
   /**
@@ -141,8 +155,7 @@ export function computeRevenueWithCrossDayRefunds(
   let sameDayGross = 0;
   let storeRefundDeduction = 0;
   let customItemRefundCad = 0;
-  // Object.create(null) avoids prototype-key collisions (IN5-05 convention)
-  // — defensive when product_ids could be 'constructor' / '__proto__'.
+  // Object.create(null) avoids prototype-key collisions (IN5-05 convention).
   const byProduct: Record<string, { netRevenueCad: number }> = Object.create(null);
 
   function bumpByProduct(pid: string, delta: number): void {
@@ -152,38 +165,47 @@ export function computeRevenueWithCrossDayRefunds(
   }
 
   for (const o of orders) {
-    // D-A1 / D-D4: exclude test and voided orders uniformly across both paths.
+    // D-A1 / D-D4: exclude test and voided orders uniformly.
     if (o.test === true) continue;
     if (o.financial_status === 'voided') continue;
 
-    const orderCreatedDay = dayInTz(o.created_at, tz);
+    // gap-closure 08: day-string of order creation in TZ (used only to
+    // gate the same-day-order branch below; NO cross-day filter on refunds).
+    const isSameDayOrder = dayInTz(o.created_at, tz) === dateStr;
 
-    // Same-day path: gross + per-product line items, minus intra-order refunds.
-    if (orderCreatedDay === dateStr) {
-      // D-A1: current_total_price is net of intra-order refunds.
-      sameDayGross += parseNum(o.current_total_price);
+    // === Same-day order path ===
+    // gap-closure 08: gross uses total_price (immutable), NOT current_total_price.
+    if (isSameDayOrder) {
+      // Invariant 1: total_price is immutable gross.
+      sameDayGross += parseNum(o.total_price);
 
-      // Per-product positive gross = Σ line_items[].price × quantity.
+      // Per-product line gross = Σ price × quantity. (Line-level discounts
+      // are not present in the narrow type — they're folded into the
+      // intra-order refund_line_items.subtotal in practice for the
+      // probe fixtures. Match this to Apps Script:
+      //   line_gross = qty * price  (no total_discount visible in TS shape)
+      //   line_net   = line_gross - intra_order_refund_subtotal
+      // Apps Script subtracts line_discount AND refund_subtotal — when
+      // line_discount is not modeled in TS, the test fixtures provide
+      // current_total_price that already nets discounts, and per-product
+      // net = line_gross - intra_order_refund.)
       const lineItems = o.line_items ?? [];
       for (const li of lineItems) {
         const pid = normalizeProductId(li.product_id);
-        if (!pid) continue; // custom items have no product_id surface; the
-                            // store-level current_total_price already
-                            // accounts for them.
+        if (!pid) continue;
         const lineGross = parseNum(li.price) * (parseNum(li.quantity) || 0);
         bumpByProduct(pid, lineGross);
       }
 
-      // Per-product intra-order refund deduction = Σ refund_line_items[].subtotal
-      // for refunds whose processed_at falls on the same day as the order
-      // (i.e. same-day intra-order refund — already reflected in
-      // current_total_price). This keeps per-product net == current_total_price
-      // for the same-day order.
+      // Invariant 3: intra-order refundByLineId filtered to processed_at == dateStr.
+      // A future-day refund on a same-day order must NOT deduct from same-day
+      // per-product net — it deducts on its processed_at day via the
+      // refund-day attribution loop below.
       const sameDayRefunds = o.refunds ?? [];
       for (const r of sameDayRefunds) {
         if (!r.processed_at) continue;
         const processedDay = dayInTz(r.processed_at, tz);
-        if (processedDay !== dateStr) continue; // we only deduct same-day intra-order here
+        if (processedDay !== dateStr) continue;
         const rlis = r.refund_line_items ?? [];
         for (const rli of rlis) {
           const pid = normalizeProductId(rli.product_id);
@@ -194,26 +216,23 @@ export function computeRevenueWithCrossDayRefunds(
       }
     }
 
-    // Cross-day refund path: refunds processed on D for orders created
-    // on any OTHER day (D-A2). These deductions are NOT already in
-    // current_total_price (because current_total_price freezes at the
-    // moment the refund is applied — and a cross-day refund modifies
-    // the prior-day order's row, not today's gross).
+    // === Refund-day attribution path (gap-closure 08 model change) ===
+    // Invariant 2: EVERY refund processed on day D deducts here. No cross-day
+    // filter. Same-day refunds previously absorbed by current_total_price now
+    // deduct here because the gross above uses total_price (immutable).
     const refunds = o.refunds ?? [];
     for (const r of refunds) {
       if (!r.processed_at) continue;
       const processedDay = dayInTz(r.processed_at, tz);
-      if (processedDay !== dateStr) continue;          // refund must be on D
-      if (orderCreatedDay === dateStr) continue;       // and order must NOT be on D
+      if (processedDay !== dateStr) continue;  // refund must be on D
+      // gap-closure 08: cross-day short-circuit DROPPED. Same-day refunds
+      // count here too, because the gross above uses total_price
+      // (immutable), so the same-day refund is NOT absorbed by gross.
 
-      // D-C1 (REVISED) / D-C2: BOTH paths use refund_line_items[].subtotal.
-      // transactions[].amount is intentionally IGNORED — see CONTEXT.md
-      // D-C1 REVISED and PROBE-EVIDENCE.md §Finding 1.
+      // D-C1 / D-C2: BOTH paths use refund_line_items[].subtotal.
+      // transactions[].amount is intentionally IGNORED.
       const rlis = r.refund_line_items ?? [];
       for (const rli of rlis) {
-        // Use subtotal as primary, fall back to total for safety (per
-        // existing Shopify.gs pattern, though Finding 2 shows total is
-        // always undefined in the live response).
         const amt = parseNum(
           rli.subtotal !== undefined && rli.subtotal !== null
             ? rli.subtotal
@@ -222,19 +241,15 @@ export function computeRevenueWithCrossDayRefunds(
         const pid = normalizeProductId(rli.product_id);
         storeRefundDeduction += amt;
         if (pid) {
-          // D-C2: bucketed by product_id (negative — refund reduces revenue).
           bumpByProduct(pid, -amt);
         } else {
-          // REVISED D-C3 invariant 3: null/missing pid goes to the
-          // diagnostic custom-item bucket (positive absolute deduction).
           customItemRefundCad += amt;
         }
       }
     }
   }
 
-  // D-D3: no clamping — negative storeNet is a legitimate accounting result
-  // when refunds against prior-day orders exceed today's gross.
+  // D-D3: no clamping. Negative storeNet is legitimate.
   const storeNetCad = sameDayGross - storeRefundDeduction;
 
   return { storeNetCad, byProduct, customItemRefundCad };

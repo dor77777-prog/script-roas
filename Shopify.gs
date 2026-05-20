@@ -108,7 +108,7 @@ function tryAutoBootstrapShopify_(storeId) {
   }
 }
 
-function getShopifyRevenue(storeId, dateStr) {
+function getShopifyRevenue(storeId, dateStr, refunds) {
   const domain = requireProp(`${storeId}.shopify.domain`).replace(/^https?:\/\//, '').replace(/\/$/, '');
   let token   = requireProp(`${storeId}.shopify.token`);
   let bootstrapTried = false;
@@ -120,7 +120,7 @@ function getShopifyRevenue(storeId, dateStr) {
             `?status=any&financial_status=any&limit=250` +
             `&created_at_min=${encodeURIComponent(dayStart)}` +
             `&created_at_max=${encodeURIComponent(dayEnd)}` +
-            `&fields=id,current_total_price,financial_status,test`;
+            `&fields=id,total_price,financial_status,test`;
 
   let total = 0;
   let count = 0;
@@ -157,7 +157,7 @@ function getShopifyRevenue(storeId, dateStr) {
     for (const o of orders) {
       if (o.test) continue;
       if (o.financial_status === 'voided') continue;
-      total += parseFloat(o.current_total_price || 0);
+      total += parseFloat(o.total_price || 0);
       count++;
     }
     const link = res.getHeaders()['Link'] || res.getHeaders()['link'] || '';
@@ -173,14 +173,16 @@ function getShopifyRevenue(storeId, dateStr) {
     );
   }
 
-  // Phase 05.2.3.0 D-A1..D-A2: current_total_price already nets same-day refunds.
-  // We subtract cross-day refunds (refund processed on D against orders created on
-  // a different day) so today's row reflects today's refund activity. D-D3:
-  // negative result is correct accounting, NOT clamped.
-  const refunds = getShopifyRefundsForDay_(storeId, dateStr);
-  total -= refunds.storeRefundCad;
+  // Phase 05.2.3.0 (gap-closure 08): D-A1 model change. Switched from
+  // current_total_price (live, refund-reflecting — DOUBLE-DEDUCTS when
+  // rows are re-fetched, per CR-01) to total_price (immutable gross).
+  // Every refund attributes to its processed_at day exactly once via
+  // getShopifyRefundsForDay_ — the cross-day filter is dropped. D-D3:
+  // negative net is correct accounting; no clamping.
+  const r = (refunds !== undefined) ? refunds : getShopifyRefundsForDay_(storeId, dateStr);
+  total -= r.storeRefundCad;
 
-  Logger.log(`Shopify ${storeId} ${dateStr}: ${count} orders, gross-of-cross-day=${(total + refunds.storeRefundCad).toFixed(2)} CAD, cross-day-refunds=${refunds.storeRefundCad.toFixed(2)} CAD (${refunds.processedAtCount} refunds), net=${total.toFixed(2)} CAD`);
+  Logger.log(`Shopify ${storeId} ${dateStr}: ${count} orders, gross=${(total + r.storeRefundCad).toFixed(2)} CAD, refunds=${r.storeRefundCad.toFixed(2)} CAD (${r.processedAtCount} refunds), net=${total.toFixed(2)} CAD`);
   return total;
 }
 
@@ -203,10 +205,12 @@ function getShopifyRevenue(storeId, dateStr) {
  * זה לא תואם בהכרח לסכום החנות (שמשתמש ב-current_total_price אחרי הנחות/החזרים),
  * אז יש להתייחס לזה כ-"מכירה ברוטו לפני הנחות".
  */
-function getShopifyProductSalesForDay(storeId, dateStr) {
+function getShopifyProductSalesForDay(storeId, dateStr, refunds) {
   const domain = requireProp(`${storeId}.shopify.domain`).replace(/^https?:\/\//, '').replace(/\/$/, '');
   let token = requireProp(`${storeId}.shopify.token`);
   let bootstrapTried = false;
+  // gap-closure 08: cache TZ once for the processed_at filter in refundByLineId.
+  const TZ_LOCAL = TZ;
 
   const dayStart = isoLocalMidnight_(dateStr);
   const dayEnd = isoLocalMidnight_(nextDayStr_(dateStr));
@@ -245,11 +249,17 @@ function getShopifyProductSalesForDay(storeId, dateStr) {
       if (o.financial_status === 'voided') continue;
       const orderId = String(o.id || '');
 
-      // Build a per-line-item refund map for this order so we can subtract
-      // refunds at the line-item granularity (a partial refund of one product
-      // shouldn't shrink another product's revenue).
+      // gap-closure 08 (CR-02 fix): filter intra-order refunds by processed_at day.
+      // Under the total_price + drop-cross-day-filter model, an order created on
+      // day D with a future-day refund must NOT have that refund deducted from
+      // day D's per-product net — the refund deducts on its own processed_at day
+      // via the crossDayRefunds loop below. Same shape as the TS mirror at
+      // shopifyRevenueRefunds.ts:182-194.
       const refundByLineId = {};
       for (const refund of (o.refunds || [])) {
+        if (!refund.processed_at) continue;
+        const processedDay = Utilities.formatDate(new Date(refund.processed_at), TZ_LOCAL, 'yyyy-MM-dd');
+        if (processedDay !== dateStr) continue;
         for (const rli of (refund.refund_line_items || [])) {
           const liId = String(rli.line_item_id || '');
           if (!liId) continue;
@@ -271,7 +281,10 @@ function getShopifyProductSalesForDay(storeId, dateStr) {
         // line item (line-level + order-level allocated portion).
         const lineDiscount = parseFloat(li.total_discount || 0);
         const lineRefund = refundByLineId[String(li.id || '')] || 0;
-        const net = Math.max(0, gross - lineDiscount - lineRefund);
+        // gap-closure 08 (CR-03 fix): D-D3 forbids clamping. Negative per-product
+        // net is correct accounting (e.g., a refund-only product surfaces with
+        // signed negative). The User Manual §16.11.5 documents this policy.
+        const net = gross - lineDiscount - lineRefund;
 
         if (!byProduct[key]) {
           byProduct[key] = {
@@ -304,13 +317,15 @@ function getShopifyProductSalesForDay(storeId, dateStr) {
     );
   }
 
-  // Phase 05.2.3.0 D-A3, D-C2, D-D3: Subtract cross-day refunds per product.
-  // Same fetcher as getShopifyRevenue — one HTTP call's worth of data, two
-  // consumers (D-A3). refund_line_items[].subtotal is tax-exclusive, matching
-  // line_items[].price semantics used in the gross calculation above (D-C2).
-  // Refund-only products (no day-D sales but a cross-day refund hit) surface
-  // with netRevenueCad < 0 so the operator sees the deduction.
-  const crossDayRefunds = getShopifyRefundsForDay_(storeId, dateStr);
+  // Phase 05.2.3.0 D-A3, D-C2, D-D3 + gap-closure 08 model change.
+  // Same fetcher as getShopifyRevenue — accept caller-provided refunds to
+  // avoid double-fetching (WR-04 / Gap 6). refund_line_items[].subtotal is
+  // tax-exclusive, matching line_items[].price semantics used in the gross
+  // calculation above (D-C2). Refund-only products (no day-D sales but
+  // a refund hit) surface with netRevenueCad < 0 so the operator sees
+  // the deduction (D-D3, no clamping anywhere — see also the line-net
+  // computation above which dropped its Math.max(0, ...) clamp).
+  const crossDayRefunds = (refunds !== undefined) ? refunds : getShopifyRefundsForDay_(storeId, dateStr);
   let refundOnlyCount = 0;
   for (const pid of Object.keys(crossDayRefunds.byProduct)) {
     const refundCad = crossDayRefunds.byProduct[pid].refundCad;
@@ -581,45 +596,39 @@ function getShopifyProductsCatalog(storeId) {
 }
 
 /**
- * Phase 05.2.3.0 (D-A1..D-A4, D-C1, D-C2, D-D4): Shared cross-day refund fetcher.
+ * Phase 05.2.3.0 (D-A1..D-A4, D-C1, D-C2, D-D4) + gap-closure 08 model change.
  *
- * Returns refunds processed on day `dateStr` (Asia/Jerusalem) whose underlying
- * order was created on a DIFFERENT day. These are the refunds that
- * `current_total_price` of yesterday's order does NOT reflect in today's
- * revenue sheet — they must be subtracted manually from today's totals.
+ * Shared refund fetcher. Returns ALL refunds processed on day `dateStr`
+ * (Asia/Jerusalem), regardless of when the underlying order was created.
  *
- * Per D-A3: ONE HTTP call, TWO consumers. After the 2026-05-21 CONTEXT.md
- * revision, D-C1 and D-C2 use the SAME field — `refund_line_items[].subtotal`.
- * The store-level total sums every refund_line_item subtotal (including
- * custom items with no product_id); the per-product map sums only those
- * with an indexable product_id. This shared call avoids duplicating API
- * quota burn and keeps both consumers on the same source of truth.
+ * Per the 2026-05-21 gap-closure (CR-01 in REVIEW.md): the prior cross-day
+ * filter (`orderCreatedDay !== dateStr`) caused double-deduction whenever
+ * the rolling 3-day backfill or 20-day cleanup re-fetched a prior-day
+ * row, because `current_total_price` is live (reflects all refunds).
+ * The model change in `getShopifyRevenue` switches the gross field to
+ * `total_price` (immutable), so refunds must deduct on their processed_at
+ * day exactly ONCE — same-day or cross-day, doesn't matter anymore.
  *
- * Per D-A2: the cross-day filter is `refund.processed_at on D AND
- * order.created_at NOT on D`. Refunds processed on the same day as the
- * order are ALREADY netted by current_total_price (proven by AUDIT-P0-03)
- * — subtracting them again would double-deduct (the rolled-back trap).
+ * Per D-A3: ONE HTTP call, TWO consumers. The caller in DailyUpdate.gs
+ * (`updateStoreForDate_`) fetches once and passes the result into both
+ * `getShopifyRevenue` and `getShopifyProductSalesForDay` via an optional
+ * third parameter. Per-day Shopify API call count is now 1 (was 2).
  *
- * NOT used (per PROBE-EVIDENCE.md §Finding 1): refund.transactions[].amount.
- * Empirically ran 2–4× the order total on 3/3 stores (currency mismatch and
- * duplicate-refund artifacts); unsafe to deduct from current_total_price-
- * based revenue. Captured by Plan 01's probe; intentionally not consumed
- * by this fetcher.
+ * Field choice (D-C1 revised + D-C2): `refund_line_items[].subtotal`.
+ * NOT used: `transactions[].amount` (PROBE-EVIDENCE.md §Finding 1 —
+ * 2–4× the order total due to currency mismatch + duplicate-refund
+ * artifacts; unsafe to deduct).
  *
  * Returns:
  *   {
- *     storeRefundCad: number,             // Σ rli.subtotal across ALL refund_line_items (D-C1 revised — merchandise-only, order display currency)
- *     byProduct: { [productId]: { refundCad: number } }, // Σ rli.subtotal grouped by product_id (D-C2 — null/missing product_id excluded)
- *     customItemRefundCad: number,        // Σ rli.subtotal for items with null/missing product_id (D-C3 invariant 3 diagnostic; expect ≈0 in practice)
- *     processedAtCount: number,           // diagnostic — # refunds attributed to day D
+ *     storeRefundCad: number,             // Σ rli.subtotal across ALL refund_line_items
+ *     byProduct: { [productId]: { refundCad: number } }, // Σ rli.subtotal grouped by product_id
+ *     customItemRefundCad: number,        // Σ rli.subtotal for null/missing product_id (diagnostic)
+ *     processedAtCount: number,           // # refunds attributed to day D
  *   }
  *
  * Reconciliation invariant: storeRefundCad === Σ byProduct[pid].refundCad + customItemRefundCad
- * (exact within float rounding ±0.01 CAD; if customItemRefundCad > 1 CAD, log WARNING).
- *
- * Errors are not swallowed — callers in DailyUpdate.gs wrap their
- * sub-section calls in try/catch already (the existing `non-fatal`
- * pattern). A failed fetch here propagates up to that handler.
+ * (exact within float rounding ±0.01 CAD).
  */
 function getShopifyRefundsForDay_(storeId, dateStr) {
   const domain = requireProp(`${storeId}.shopify.domain`).replace(/^https?:\/\//, '').replace(/\/$/, '');
@@ -668,19 +677,13 @@ function getShopifyRefundsForDay_(storeId, dateStr) {
       if (o.test) continue;
       if (o.financial_status === 'voided') continue;
 
-      // Day-string of the order's creation in Asia/Jerusalem.
-      const orderCreatedDay = o.created_at
-        ? Utilities.formatDate(new Date(o.created_at), TZ, 'yyyy-MM-dd')
-        : '';
-
       const refunds = o.refunds || [];
       for (const r of refunds) {
         if (!r.processed_at) continue;
         const processedDay = Utilities.formatDate(new Date(r.processed_at), TZ, 'yyyy-MM-dd');
 
-        // D-A2 cross-day filter — both conditions required.
+        // gap-closure 08 model change: ONLY processed_at-day filter remains. Cross-day check (orderCreatedDay !== dateStr) DROPPED — under total_price model, every refund attributes to its processed_at day exactly once, no double-deduction risk.
         if (processedDay !== dateStr) continue;
-        if (orderCreatedDay === dateStr) continue;
 
         processedAtCount++;
 
