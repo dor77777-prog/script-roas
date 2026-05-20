@@ -241,6 +241,8 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
       spend: number; value: number; clicks: number; impressions: number; conversions: number;
       adSetBudgetCad: number | null;
     }>();
+    // FIX-05 (5.2.2.1): latest-date budget per (campaign, ad set). Mirrors aggregate() in CampaignsTable.tsx:131-196. Without this, late-arriving backfilled days silently revert the displayed budget.
+    const latestAdSetBudgetDate = new Map<string, string>();
     for (const r of rows) {
       spend += r.spend;
       value += r.conversionValue;
@@ -269,6 +271,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
           conversions: 0,
           adSetBudgetCad: r.adSetBudgetCad,
         });
+        if (r.adSetBudgetCad != null) latestAdSetBudgetDate.set(aKey, r.date);
       }
       const a = byAdSet.get(aKey)!;
       a.spend += r.spend;
@@ -276,8 +279,13 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
       a.clicks += r.clicks;
       a.impressions += r.impressions;
       a.conversions += r.conversions;
-      // Latest non-null budget wins (rows iterate in date order).
-      if (r.adSetBudgetCad != null) a.adSetBudgetCad = r.adSetBudgetCad;
+      if (r.adSetBudgetCad != null) {
+        const prev = latestAdSetBudgetDate.get(aKey);
+        if (!prev || r.date > prev) {                 // strict > per RESEARCH §5.1 (matches FIX-13 policy)
+          a.adSetBudgetCad = r.adSetBudgetCad;
+          latestAdSetBudgetDate.set(aKey, r.date);
+        }
+      }
     }
     const roas = spend > 0 ? value / spend : 0;
     const ctr = impressions > 0 ? clicks / impressions : 0;
