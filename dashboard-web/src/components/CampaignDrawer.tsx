@@ -595,7 +595,12 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
             // 'prev' analysis baseline.
             const prevDaily = (() => {
               if (cpmAnalysisMode !== 'prev') return undefined;
-              const rows = (campaignsDataPrev?.rows ?? []).filter(r => r.campaignId === campaignId);
+              // FIX-10 (5.2.2.1): namespace-strict previous-period filter. Same campaign ID in another store/platform can contaminate the baseline.
+              const rows = (campaignsDataPrev?.rows ?? []).filter(r =>
+                r.storeId === storeId &&
+                r.platform === summary.platform &&
+                r.campaignId === campaignId,
+              );
               if (rows.length === 0) return undefined;
               const byDay = new Map<string, { spend: number; impressions: number; value: number }>();
               for (const r of rows) {
