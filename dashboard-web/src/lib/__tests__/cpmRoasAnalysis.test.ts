@@ -1,4 +1,6 @@
 import { describe, it, expect } from 'vitest';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import { analyzeCpmVsRoas, pearsonForCpmRoas } from '@/lib/cpmRoasAnalysis';
 import { PRODUCT_MAP_CHIP_KEY } from '@/lib/sessionKeys';
 
@@ -218,4 +220,54 @@ describe('Pearson N=3 threshold — locks TEST-08 (5.2.2.1)', () => {
   it('PRODUCT_MAP_CHIP_KEY is the shared product-map freshness key', () => {
     expect(PRODUCT_MAP_CHIP_KEY).toBe('roas:productMapChipHidden');
   });
+
+  // WR-03 (5.2.2.1): the assertion above only locks the literal value of
+  // the constant. It does NOT verify that the two consumer components
+  // (MetaShopifyReconciliation, ProductChannelBreakdown) actually import
+  // and use the shared constant — a regression where one component
+  // reverts to the inline literal 'roas:productMapChipHidden' (while the
+  // constant stays in sessionKeys.ts) would still pass the value
+  // assertion, even though the whole point of FIX-08's extraction is
+  // that the two components stay in lockstep on key changes.
+  //
+  // The smoke checks below load each component's source via fs.readFileSync
+  // and assert that
+  //   (a) it imports PRODUCT_MAP_CHIP_KEY from @/lib/sessionKeys (or a
+  //       relative path), and
+  //   (b) it does NOT contain an inline 'roas:productMapChipHidden'
+  //       literal outside of the sessionKeys.ts definition.
+  // If either component drifts back to the inline literal, BOTH guards
+  // fire and the regression is loud.
+
+  const consumerComponents = [
+    {
+      label: 'MetaShopifyReconciliation',
+      // Path is relative to the test file's location (`src/lib/__tests__/`).
+      relPath: '../../components/MetaShopifyReconciliation.tsx',
+    },
+    {
+      label: 'ProductChannelBreakdown',
+      relPath: '../../components/ProductChannelBreakdown.tsx',
+    },
+  ];
+
+  for (const { label, relPath } of consumerComponents) {
+    it(`${label} imports PRODUCT_MAP_CHIP_KEY from sessionKeys and does not inline the literal`, () => {
+      const filePath = path.resolve(__dirname, relPath);
+      const source = fs.readFileSync(filePath, 'utf-8');
+
+      // (a) An import statement referencing PRODUCT_MAP_CHIP_KEY from
+      //     sessionKeys must be present. Matches either '@/lib/sessionKeys'
+      //     or any relative './'/'../' path ending in 'sessionKeys'.
+      const importRegex = /import\s*\{[^}]*\bPRODUCT_MAP_CHIP_KEY\b[^}]*\}\s*from\s*['"](?:@\/lib\/sessionKeys|(?:\.\.?\/)+(?:[^'"]*\/)?sessionKeys)['"]/;
+      expect(source).toMatch(importRegex);
+
+      // (b) The literal must NOT appear anywhere outside the import we
+      //     just verified. The import line itself contains the constant
+      //     IDENTIFIER, not the string literal, so this check catches a
+      //     `sessionStorage.getItem('roas:productMapChipHidden')` regression.
+      expect(source).not.toContain("'roas:productMapChipHidden'");
+      expect(source).not.toContain('"roas:productMapChipHidden"');
+    });
+  }
 });
