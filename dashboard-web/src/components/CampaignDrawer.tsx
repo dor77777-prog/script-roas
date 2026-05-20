@@ -909,6 +909,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
           open
           onClose={() => setAdDrillSet(null)}
           storeId={adDrillSet.storeId}
+          platform={summary.platform === 'Google' ? 'Google' : 'Meta'}
           campaignId={adDrillSet.campaignId}
           adSetId={adDrillSet.adSetId}
           adSetName={adDrillSet.adSetName}

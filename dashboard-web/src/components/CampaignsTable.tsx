@@ -1295,6 +1295,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
           open
           onClose={() => setAdDrill(null)}
           storeId={adDrill.storeId}
+          platform="Meta"
           campaignId={adDrill.campaignId}
           adSetId={adDrill.adSetId}
           adSetName={adDrill.adSetName}

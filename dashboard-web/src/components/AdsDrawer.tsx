@@ -40,6 +40,7 @@ type Props = {
   onClose: () => void;
   /** Filter scope — the drawer fetches all ads then narrows by these. */
   storeId: string;
+  platform: 'Meta' | 'Google';
   campaignId: string;
   adSetId: string;
   adSetName: string;
@@ -69,6 +70,7 @@ export function AdsDrawer({
   open,
   onClose,
   storeId,
+  platform,
   campaignId,
   adSetId,
   adSetName,
@@ -160,6 +162,7 @@ export function AdsDrawer({
     }>();
     for (const r of data.rows) {
       // FIX-07 (5.2.2.1): date filter removed — /api/ads now filters by range server-side via fetchAdsData({ range }).
+      if (r.platform !== platform) continue;   // FIX-11 (5.2.2.1): prevent cross-platform rows from sharing an ad drawer scope.
       if (r.storeId !== storeId) continue;
       if (r.campaignId !== campaignId) continue;
       if (r.adSetId !== adSetId) continue;
@@ -201,7 +204,7 @@ export function AdsDrawer({
         roas: spend > 0 ? value / spend : 0,
       },
     };
-  }, [data, storeId, campaignId, adSetId, rangeFrom, rangeTo]);
+  }, [data, storeId, platform, campaignId, adSetId, rangeFrom, rangeTo]);
 
   // Per-ad daily Meta conv-value series. Required by analyzeAttributionForAd →
   // computeWindowStability / detectOutlierDays; without it those features
@@ -212,6 +215,7 @@ export function AdsDrawer({
     const buckets = new Map<string, Map<string, number>>();
     if (!data?.rows) return new Map<string, Array<{ date: string; value: number }>>();
     for (const r of data.rows) {
+      if (r.platform !== platform) continue;   // FIX-11 (5.2.2.1): keep daily attribution series on the same ad platform.
       if (r.date < rangeFrom || r.date > rangeTo) continue;
       if (r.storeId !== storeId) continue;
       if (r.campaignId !== campaignId) continue;
@@ -229,7 +233,7 @@ export function AdsDrawer({
       out.set(k, Array.from(byDate, ([date, value]) => ({ date, value })));
     }
     return out;
-  }, [data, storeId, campaignId, adSetId, rangeFrom, rangeTo]);
+  }, [data, storeId, platform, campaignId, adSetId, rangeFrom, rangeTo]);
 
   // Per-ad attribution analysis. Pre-computes once per orders/summary change
   // rather than calling analyzeAttributionForAd inside the row IIFE per render
