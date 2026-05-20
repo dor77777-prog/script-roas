@@ -12,11 +12,21 @@ function runDailyUpdate() {
 }
 
 /**
- * עדכון "חי" - מריץ עבור היום הנוכחי במקום אתמול. שימושי לטריגר תכוף יותר
- * (כל 15 דקות) כדי להציג את מצב היום עד לרגע הזה ב-dashboard.
+ * Manual "refresh all 3 stores, rolling 3-day window" entry point
+ * (Phase 05.2.3.0 D-D1). Calls runUpdateForDate(dateStr) for D-2, D-1, D
+ * in that order — same rolling-window semantics as the per-store trigger
+ * wrappers, but spans all 3 stores in a single execution (uses
+ * runUpdateForDate's existing inter-store breathing loop).
+ *
+ * Estimated runtime: ~138s for 3 stores × 3 days. Manual-only; the
+ * per-store triggers continue to use the 3 individual wrappers above.
  */
 function runLiveUpdate() {
-  runUpdateForDate(todayStr_());
+  const today = todayStr_();
+  for (let n = 2; n >= 0; n--) {
+    const dateStr = previousDayStr_(today, n);
+    runUpdateForDate(dateStr);
+  }
 }
 
 /**
