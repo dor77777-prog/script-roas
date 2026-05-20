@@ -11,6 +11,8 @@ import {
   ArrowUpDown,
   CheckCircle2,
   Circle,
+  Maximize2,
+  Minimize2,
 } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { roasLabel } from '@/lib/analytics';
@@ -93,6 +95,9 @@ export function AdsDrawer({
 
   const [sortKey, setSortKey] = useState<AdSortKey>('spend');
   const [sortDir, setSortDir] = useState<AdSortDir>('desc');
+  // Mirror CampaignDrawer's fullscreen toggle so the ad-level drilldown can
+  // also expand edge-to-edge for inspection of long ad lists / tables.
+  const [isFullscreen, setIsFullscreen] = useState(false);
   function handleSort(key: AdSortKey) {
     if (key === sortKey) {
       setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
@@ -296,7 +301,11 @@ export function AdsDrawer({
       <div className="absolute inset-0 bg-text-primary/35 backdrop-blur-sm" onClick={onClose} aria-hidden />
       <aside
         dir="rtl"
-        className="relative ms-0 me-auto w-full sm:max-w-[640px] h-full bg-surface shadow-elevated border-s border-borderSubtle flex flex-col animate-slide-in"
+        className={cn(
+          'relative h-full bg-surface shadow-elevated border-s border-borderSubtle flex flex-col animate-slide-in',
+          !isFullscreen && 'ms-0 me-auto w-full sm:max-w-[640px]',
+          isFullscreen && 'w-full max-w-full',
+        )}
       >
         <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-borderSubtle">
           <div className="min-w-0 flex items-center gap-2.5">
@@ -312,13 +321,23 @@ export function AdsDrawer({
               </h2>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded hover:bg-surfaceMuted text-text-muted hover:text-text-primary shrink-0"
-            aria-label="סגור"
-          >
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-1 shrink-0">
+            <button
+              onClick={() => setIsFullscreen(v => !v)}
+              aria-label={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
+              title={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
+              className="p-1.5 rounded hover:bg-surfaceMuted text-text-muted hover:text-text-primary transition-colors"
+            >
+              {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+            </button>
+            <button
+              onClick={onClose}
+              className="p-1.5 rounded hover:bg-surfaceMuted text-text-muted hover:text-text-primary"
+              aria-label="סגור"
+            >
+              <X size={18} />
+            </button>
+          </div>
         </header>
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">

@@ -5,11 +5,13 @@ import useSWR from 'swr';
 import {
   X,
   ExternalLink,
+  Maximize2,
   Megaphone,
   Calendar,
   Store as StoreIcon,
   TrendingUp,
   Package,
+  Minimize2,
   Edit3,
 } from 'lucide-react';
 import {
@@ -93,6 +95,10 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
   // hardcoded ordering so first paint doesn't jump.
   const [sortKey, setSortKey] = useState<AdSetSortKey>('spend');
   const [sortDir, setSortDir] = useState<AdSetSortDir>('desc');
+  // Drawer can expand to fullscreen for users who want more space to inspect
+  // charts (especially CPM-over-time + AdSetTable). Toggle button sits next
+  // to the X close button in the header — same icon language as VS Code.
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   function handleSort(key: AdSetSortKey) {
     if (key === sortKey) {
@@ -385,9 +391,13 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
       <aside
         dir="rtl"
         className={cn(
-          'relative bg-surface w-full sm:w-[min(640px,100vw)] max-w-full',
-          'ml-0 sm:ms-auto h-full overflow-y-auto',
+          'relative bg-surface max-w-full',
+          'h-full overflow-y-auto',
           'shadow-elevated animate-fade-in-up',
+          // Side-drawer mode: 640px panel anchored to the start (right in RTL)
+          // Fullscreen mode: stretches edge-to-edge so charts + tables breathe
+          !isFullscreen && 'w-full sm:w-[min(640px,100vw)] ml-0 sm:ms-auto',
+          isFullscreen && 'w-full',
         )}
       >
         <header className="sticky top-0 bg-surface/95 backdrop-blur-md z-10 px-4 sm:px-6 py-4 border-b border-borderSubtle">
@@ -411,9 +421,19 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
                 </div>
               </div>
             </div>
-            <button onClick={onClose} aria-label="סגור" className="p-1.5 rounded hover:bg-surfaceMuted text-text-muted hover:text-text-primary transition-colors shrink-0">
-              <X size={18} />
-            </button>
+            <div className="flex items-center gap-1 shrink-0">
+              <button
+                onClick={() => setIsFullscreen(v => !v)}
+                aria-label={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
+                title={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
+                className="p-1.5 rounded hover:bg-surfaceMuted text-text-muted hover:text-text-primary transition-colors"
+              >
+                {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+              </button>
+              <button onClick={onClose} aria-label="סגור" className="p-1.5 rounded hover:bg-surfaceMuted text-text-muted hover:text-text-primary transition-colors">
+                <X size={18} />
+              </button>
+            </div>
           </div>
           {link && (
             <a href={link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-primary hover:text-primary-dark font-medium">
@@ -530,9 +550,9 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
                     </span>
                   </h3>
                 </div>
-                <div className="h-40 sm:h-44 rounded-xl bg-surfaceMuted/40 border border-borderSubtle p-2">
+                <div className="h-40 sm:h-44 rounded-xl bg-surfaceMuted/40 border border-borderSubtle p-2" dir="ltr">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={cpmSeries} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                    <LineChart data={cpmSeries} margin={{ top: 8, right: 16, left: 4, bottom: 0 }}>
                       <XAxis
                         dataKey="date"
                         tick={{ fontSize: 10, fill: '#7a8a9a' }}
@@ -542,6 +562,11 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
                           const m = String(d).match(/^\d{4}-(\d{2})-(\d{2})/);
                           return m ? `${m[2]}/${m[1]}` : String(d);
                         }}
+                        // Push the first tick + first data point away from
+                        // the Y-axis labels so "14/05" / C$22.40 don't sit
+                        // on top of each other. Same on the right edge to
+                        // keep the last point visually anchored.
+                        padding={{ left: 12, right: 12 }}
                       />
                       <YAxis
                         tick={{ fontSize: 10, fill: '#7a8a9a' }}
@@ -551,16 +576,11 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
                         // rounded to C$5. CPM in this project sits between
                         // C$0.30 and C$50 typically, so the decimals matter.
                         tickFormatter={v => `C$${Number(v).toFixed(2)}`}
-                        width={56}
-                        // Auto-fit the axis to the actual CPM range with a
-                        // 12% padding above/below so small day-to-day moves
-                        // (e.g. C$4.20 -> C$4.55) are visually obvious instead
-                        // of being squashed against a 0-baseline. Lower bound
-                        // is clamped at 0 since CPM is non-negative — without
-                        // the clamp a very-low-CPM day could push the axis
-                        // negative. Recharts' default 5 tickCount + the wider
-                        // float domain produces round-ish numbers (its "nice"
-                        // algorithm picks half / quarter steps automatically).
+                        // Width sized for "C$25.58" (7 chars) + breathing room
+                        // so labels never bleed into the plot area. The dir="ltr"
+                        // wrapper above also ensures Recharts doesn't confuse
+                        // the axis side under RTL inheritance.
+                        width={68}
                         domain={[
                           (dataMin: number) => Math.max(0, dataMin * 0.88),
                           (dataMax: number) => dataMax * 1.12,

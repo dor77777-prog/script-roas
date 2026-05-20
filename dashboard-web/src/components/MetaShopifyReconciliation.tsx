@@ -539,7 +539,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                         <span>Google: CAD {formatCurrency(d.google)}</span>
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="inline-block w-2 h-2 rounded-full bg-green-600" />
+                        <span className="inline-block w-2 h-2 rounded-full bg-purple-600" />
                         <span>Organic: CAD {formatCurrency(d.organic)}</span>
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
@@ -552,7 +552,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
               />
               <Line type="monotone" dataKey="meta" stroke="#d97706" strokeWidth={2} dot={false} />
               <Line type="monotone" dataKey="google" stroke="#2563eb" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="organic" stroke="#16a34a" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="organic" stroke="#9333ea" strokeWidth={2} dot={false} />
               <Line type="monotone" dataKey="shopify" stroke="#15803d" strokeWidth={2} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
@@ -569,7 +569,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
             <span className="text-text-secondary">Google (מדווח)</span>
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block w-3 h-[2px] bg-green-600" />
+            <span className="inline-block w-3 h-[2px] bg-purple-600" />
             <span className="text-text-secondary">Organic</span>
           </span>
           <span className="inline-flex items-center gap-1.5">

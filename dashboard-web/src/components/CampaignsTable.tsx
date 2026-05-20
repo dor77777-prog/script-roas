@@ -15,7 +15,15 @@ import {
   Store as StoreIcon,
   X,
 } from 'lucide-react';
-import { cn, formatCurrency, formatNumber } from '@/lib/utils';
+import {
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
+import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import type { CampaignRow } from '@/lib/campaigns';
 import type { AdAccountMap } from '@/lib/campaignsLinks';
 import {
@@ -467,8 +475,40 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       cpc: clicks > 0 ? spend / clicks : 0,
       cpa: conv > 0 ? spend / conv : 0,
       ctr: imps > 0 ? clicks / imps : 0,
+      // Store-level (or all-stores) blended CPM. Same formula as the per-row
+      // cell — zero-impressions guard returns 0 so the card renders "—".
+      cpm: imps > 0 ? (spend / imps) * 1000 : 0,
     };
   }, [aggregated]);
+
+  // Per-day CPM across the same filters that produce `aggregated` (store,
+  // platform, date range). Drives the expandable CPM-over-time chart that
+  // sits below the summary cards. Days with zero impressions are filtered
+  // out so the line is continuous over real activity.
+  const cpmDaily = useMemo(() => {
+    const byDay = new Map<string, { spend: number; impressions: number }>();
+    const rows = data?.rows ?? [];
+    for (const r of rows) {
+      if (r.date < localRange.from || r.date > localRange.to) continue;
+      if (localStore !== 'All' && r.storeName !== localStore) continue;
+      if (platform !== 'all' && r.platform !== platform) continue;
+      if (!byDay.has(r.date)) byDay.set(r.date, { spend: 0, impressions: 0 });
+      const d = byDay.get(r.date)!;
+      d.spend += r.spend;
+      d.impressions += r.impressions;
+    }
+    return Array.from(byDay.entries())
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .filter(([, v]) => v.impressions > 0)
+      .map(([date, v]) => ({
+        date,
+        spend: v.spend,
+        impressions: v.impressions,
+        cpm: (v.spend / v.impressions) * 1000,
+      }));
+  }, [data?.rows, localRange.from, localRange.to, localStore, platform]);
+
+  const [cpmExpanded, setCpmExpanded] = useState(false);
 
   // Shopify-ROAS sort: re-rank using `trueRevenueByKey` (sortAggregated falls
   // back to Meta ROAS). Unmapped rows pushed to bottom on desc.
@@ -718,14 +758,95 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   const roasInfo = roasLabel(totals.roas);
   const summary = aggregated.length > 0 && (
     <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gradient-to-l from-primary/5 to-surface border-b border-borderSubtle">
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3">
         <Stat label="ROAS" value={totals.roas > 0 ? formatNumber(totals.roas) : '—'} chip={{ text: roasInfo.text, tone: roasInfo.tone }} />
         <Stat label="הוצאה" value={formatCurrency(totals.spend)} prefix="CAD" />
         <Stat label="ערך המרות" value={formatCurrency(totals.conversionValue)} prefix="CAD" accent={totals.conversionValue >= totals.spend ? 'green' : undefined} />
         <Stat label="המרות" value={formatNumber(totals.conversions, 0)} />
         <Stat label="קליקים" value={formatNumber(totals.clicks, 0)} />
         <Stat label="CTR" value={totals.impressions > 0 ? `${(totals.ctr * 100).toFixed(2)}%` : '—'} />
+        <Stat
+          label="CPM"
+          value={totals.impressions > 0 ? formatCurrency(totals.cpm, 2) : '—'}
+          prefix={totals.impressions > 0 ? 'CAD' : undefined}
+          onClick={totals.impressions > 0 && cpmDaily.length >= 2 ? () => setCpmExpanded(v => !v) : undefined}
+          active={cpmExpanded}
+        />
       </div>
+      {cpmExpanded && cpmDaily.length >= 2 && (
+        <div className="mt-3 rounded-lg bg-surface border border-borderSubtle p-3">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xs sm:text-sm font-semibold text-text-primary inline-flex items-center gap-1.5">
+              CPM לאורך זמן
+              <span className="text-[10px] font-medium text-text-muted">
+                ({localStore === 'All' ? 'כל החנויות' : localStore}
+                {platform !== 'all' ? ` · ${platform}` : ''}
+                {', CAD'})
+              </span>
+            </h3>
+            <button
+              type="button"
+              onClick={() => setCpmExpanded(false)}
+              className="text-[11px] text-text-muted hover:text-text-primary transition-colors"
+              aria-label="סגור"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="h-40 sm:h-48" dir="ltr">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={cpmDaily} margin={{ top: 8, right: 16, left: 4, bottom: 0 }}>
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 10, fill: '#7a8a9a' }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={d => {
+                    const m = String(d).match(/^\d{4}-(\d{2})-(\d{2})/);
+                    return m ? `${m[2]}/${m[1]}` : String(d);
+                  }}
+                  padding={{ left: 12, right: 12 }}
+                />
+                <YAxis
+                  tick={{ fontSize: 10, fill: '#7a8a9a' }}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={v => `C$${Number(v).toFixed(2)}`}
+                  width={68}
+                  domain={[
+                    (dataMin: number) => Math.max(0, dataMin * 0.88),
+                    (dataMax: number) => dataMax * 1.12,
+                  ]}
+                  allowDecimals
+                />
+                <Tooltip
+                  content={({ active, payload }) => {
+                    if (!active || !payload || payload.length === 0) return null;
+                    const d = payload[0].payload as { date: string; cpm: number; impressions: number; spend: number };
+                    return (
+                      <div dir="rtl" className="rounded-lg bg-text-primary text-white px-3 py-2 text-xs shadow-elevated tabular-nums">
+                        <div className="text-white/70 mb-1 text-[10px]">{formatDate(d.date)}</div>
+                        <div>CPM: <span className="font-semibold text-amber-200">CAD {formatCurrency(d.cpm, 2)}</span></div>
+                        <div className="text-white/70 text-[10px] mt-0.5">
+                          {formatNumber(d.impressions, 0)} חשיפות · CAD {formatCurrency(d.spend, 2)}
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="cpm"
+                  stroke="#d97706"
+                  strokeWidth={1.75}
+                  dot={{ r: 2.5, fill: '#d97706', stroke: 'none' }}
+                  activeDot={{ r: 4, fill: '#d97706', stroke: 'white', strokeWidth: 1.5 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
       {totals.spend > 0 && (
         <div className="mt-3 pt-3 border-t border-borderSubtle text-[10px] sm:text-xs text-text-muted tabular-nums flex flex-wrap gap-x-3 gap-y-1">
           <span>CPC: <span className="text-text-secondary font-medium">CAD {formatCurrency(totals.cpc, 2)}</span></span>
@@ -1143,15 +1264,30 @@ function Stat({
   prefix,
   chip,
   accent,
+  onClick,
+  active,
 }: {
   label: string;
   value: string;
   prefix?: string;
   chip?: { text: string; tone: string };
   accent?: 'green';
+  /** When provided, the card becomes a button (keyboard focusable + hover
+   *  affordance). Use for cards that drill into a deeper view. */
+  onClick?: () => void;
+  /** Render the card with a pressed / open visual state — used when the
+   *  drill-down panel is currently expanded. */
+  active?: boolean;
 }) {
-  return (
-    <div className="rounded-lg bg-surface border border-borderSubtle px-2.5 sm:px-3 py-1.5 sm:py-2">
+  const interactive = !!onClick;
+  const className = cn(
+    'rounded-lg border px-2.5 sm:px-3 py-1.5 sm:py-2 text-start',
+    !interactive && 'bg-surface border-borderSubtle',
+    interactive && !active && 'bg-surface border-borderSubtle hover:border-primary/40 hover:bg-primary/[0.02] transition-colors cursor-pointer',
+    interactive && active && 'bg-primary/[0.04] border-primary/40 ring-1 ring-primary/20 cursor-pointer',
+  );
+  const content = (
+    <>
       <div className="text-[10px] sm:text-xs text-text-muted leading-tight">{label}</div>
       <div className="flex items-baseline gap-1 mt-0.5">
         {prefix && (
@@ -1178,6 +1314,14 @@ function Stat({
           {chip.text}
         </span>
       )}
-    </div>
+    </>
   );
+  if (interactive) {
+    return (
+      <button type="button" onClick={onClick} aria-pressed={active} className={className}>
+        {content}
+      </button>
+    );
+  }
+  return <div className={className}>{content}</div>;
 }
