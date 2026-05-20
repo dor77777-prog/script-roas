@@ -26,6 +26,7 @@ import {
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import { analyzeCpmVsRoas } from '@/lib/cpmRoasAnalysis';
 import { aggregate, type Aggregated } from '@/lib/campaignsAggregator';
+import { CHART_COLORS } from '@/lib/chartColors';
 import { filterDrillRows } from '@/lib/drillFilter';
 import type { AdAccountMap } from '@/lib/campaignsLinks';
 import {
@@ -838,7 +839,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
               <LineChart data={cpmDaily} margin={{ top: 8, right: cpmShowRoas ? 56 : 16, left: 4, bottom: 0 }}>
                 <XAxis
                   dataKey="date"
-                  tick={{ fontSize: 10, fill: '#7a8a9a' }}
+                  tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={d => {
@@ -849,7 +850,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                 />
                 <YAxis
                   yAxisId="cpm"
-                  tick={{ fontSize: 10, fill: '#7a8a9a' }}
+                  tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={v => `C$${Number(v).toFixed(2)}`}
@@ -864,7 +865,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                   <YAxis
                     yAxisId="roas"
                     orientation="right"
-                    tick={{ fontSize: 10, fill: '#15803d' }}
+                    tick={{ fontSize: 10, fill: CHART_COLORS.roas }}
                     tickLine={false}
                     axisLine={false}
                     tickFormatter={v => Number(v).toFixed(2)}
@@ -898,21 +899,21 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                   yAxisId="cpm"
                   type="monotone"
                   dataKey="cpm"
-                  stroke="#d97706"
+                  stroke={CHART_COLORS.cpm}
                   strokeWidth={1.75}
-                  dot={{ r: 2.5, fill: '#d97706', stroke: 'none' }}
-                  activeDot={{ r: 4, fill: '#d97706', stroke: 'white', strokeWidth: 1.5 }}
+                  dot={{ r: 2.5, fill: CHART_COLORS.cpm, stroke: 'none' }}
+                  activeDot={{ r: 4, fill: CHART_COLORS.cpm, stroke: 'white', strokeWidth: 1.5 }}
                 />
                 {cpmShowRoas && (
                   <Line
                     yAxisId="roas"
                     type="monotone"
                     dataKey="roas"
-                    stroke="#15803d"
+                    stroke={CHART_COLORS.roas}
                     strokeWidth={1.75}
                     strokeDasharray="5 3"
-                    dot={{ r: 2.5, fill: '#15803d', stroke: 'none' }}
-                    activeDot={{ r: 4, fill: '#15803d', stroke: 'white', strokeWidth: 1.5 }}
+                    dot={{ r: 2.5, fill: CHART_COLORS.roas, stroke: 'none' }}
+                    activeDot={{ r: 4, fill: CHART_COLORS.roas, stroke: 'white', strokeWidth: 1.5 }}
                   />
                 )}
               </LineChart>

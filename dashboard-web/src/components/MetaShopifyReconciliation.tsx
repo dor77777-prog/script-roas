@@ -14,6 +14,7 @@ import type { CampaignRow } from '@/lib/campaigns';
 import type { OrderAttributionRow, OrderSource } from '@/lib/ordersAttribution';
 import { campaignKey, type ProductMap } from '@/lib/campaignProductMap';
 import { pearson, pearsonWithLag } from '@/lib/attributionAnalysis';
+import { CHART_COLORS } from '@/lib/chartColors';
 import { enumerateDateRange } from '@/lib/dateRange';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
 export { pearson, pearsonWithLag };
@@ -541,7 +542,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
             <ComposedChart data={reconciliation.series} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
               <XAxis
                 dataKey="date"
-                tick={{ fontSize: 9, fill: '#64748b' }}
+                tick={{ fontSize: 9, fill: CHART_COLORS.reconciliationAxis }}
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={d => {
@@ -577,10 +578,10 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                   );
                 }}
               />
-              <Line type="monotone" dataKey="meta" stroke="#d97706" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="google" stroke="#2563eb" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="organic" stroke="#9333ea" strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="shopify" stroke="#15803d" strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="meta" stroke={CHART_COLORS.meta} strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="google" stroke={CHART_COLORS.google} strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="organic" stroke={CHART_COLORS.organic} strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="shopify" stroke={CHART_COLORS.shopify} strokeWidth={2} dot={false} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>

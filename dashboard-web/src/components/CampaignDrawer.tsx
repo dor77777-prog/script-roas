@@ -60,6 +60,7 @@ import {
   setMappedProducts,
   type ProductMap,
 } from '@/lib/campaignProductMap';
+import { CHART_COLORS } from '@/lib/chartColors';
 import { buildDateRangeKey, getPreviousPeriod } from '@/lib/dateRange';
 
 /**
@@ -501,17 +502,17 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                   <AreaChart data={summary.dailyArr} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
                     <defs>
                       <linearGradient id="drawer-spend" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#dc2626" stopOpacity={0.35} />
-                        <stop offset="100%" stopColor="#dc2626" stopOpacity={0} />
+                        <stop offset="0%" stopColor={CHART_COLORS.spend} stopOpacity={0.35} />
+                        <stop offset="100%" stopColor={CHART_COLORS.spend} stopOpacity={0} />
                       </linearGradient>
                       <linearGradient id="drawer-value" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor="#15803d" stopOpacity={0.35} />
-                        <stop offset="100%" stopColor="#15803d" stopOpacity={0} />
+                        <stop offset="0%" stopColor={CHART_COLORS.value} stopOpacity={0.35} />
+                        <stop offset="100%" stopColor={CHART_COLORS.value} stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <XAxis
                       dataKey="date"
-                      tick={{ fontSize: 10, fill: '#7a8a9a' }}
+                      tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
                       tickLine={false}
                       axisLine={false}
                       tickFormatter={d => {
@@ -533,8 +534,8 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                         );
                       }}
                     />
-                    <Area type="monotone" dataKey="value" stroke="#15803d" strokeWidth={1.5} fill="url(#drawer-value)" />
-                    <Area type="monotone" dataKey="spend" stroke="#dc2626" strokeWidth={1.5} fill="url(#drawer-spend)" />
+                    <Area type="monotone" dataKey="value" stroke={CHART_COLORS.value} strokeWidth={1.5} fill="url(#drawer-value)" />
+                    <Area type="monotone" dataKey="spend" stroke={CHART_COLORS.spend} strokeWidth={1.5} fill="url(#drawer-spend)" />
                   </AreaChart>
                 </ResponsiveContainer>
               </div>
@@ -689,7 +690,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                     <LineChart data={cpmSeries} margin={{ top: 8, right: showRoasOverlay ? 56 : 16, left: 4, bottom: 0 }}>
                       <XAxis
                         dataKey="date"
-                        tick={{ fontSize: 10, fill: '#7a8a9a' }}
+                        tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
                         tickLine={false}
                         axisLine={false}
                         tickFormatter={d => {
@@ -700,7 +701,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                       />
                       <YAxis
                         yAxisId="cpm"
-                        tick={{ fontSize: 10, fill: '#7a8a9a' }}
+                        tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
                         tickLine={false}
                         axisLine={false}
                         tickFormatter={v => `C$${Number(v).toFixed(2)}`}
@@ -715,7 +716,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                         <YAxis
                           yAxisId="roas"
                           orientation="right"
-                          tick={{ fontSize: 10, fill: '#15803d' }}
+                          tick={{ fontSize: 10, fill: CHART_COLORS.roas }}
                           tickLine={false}
                           axisLine={false}
                           tickFormatter={v => Number(v).toFixed(2)}
@@ -755,21 +756,21 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                         yAxisId="cpm"
                         type="monotone"
                         dataKey="cpm"
-                        stroke="#d97706"
+                        stroke={CHART_COLORS.cpm}
                         strokeWidth={1.75}
-                        dot={{ r: 2.5, fill: '#d97706', stroke: 'none' }}
-                        activeDot={{ r: 4, fill: '#d97706', stroke: 'white', strokeWidth: 1.5 }}
+                        dot={{ r: 2.5, fill: CHART_COLORS.cpm, stroke: 'none' }}
+                        activeDot={{ r: 4, fill: CHART_COLORS.cpm, stroke: 'white', strokeWidth: 1.5 }}
                       />
                       {showRoasOverlay && (
                         <Line
                           yAxisId="roas"
                           type="monotone"
                           dataKey="roas"
-                          stroke="#15803d"
+                          stroke={CHART_COLORS.roas}
                           strokeWidth={1.75}
                           strokeDasharray="5 3"
-                          dot={{ r: 2.5, fill: '#15803d', stroke: 'none' }}
-                          activeDot={{ r: 4, fill: '#15803d', stroke: 'white', strokeWidth: 1.5 }}
+                          dot={{ r: 2.5, fill: CHART_COLORS.roas, stroke: 'none' }}
+                          activeDot={{ r: 4, fill: CHART_COLORS.roas, stroke: 'white', strokeWidth: 1.5 }}
                         />
                       )}
                     </LineChart>
