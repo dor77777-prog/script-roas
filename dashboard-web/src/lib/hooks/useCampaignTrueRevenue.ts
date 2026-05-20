@@ -195,6 +195,33 @@ export function useCampaignTrueRevenue(opts: {
     return out;
   }, [allCampaignRows]);
 
+  // FIX-15 (5.2.2.1): pre-build productToCampaigns index so per-campaign
+  // shared-product lookup is O(M) instead of walking every productMap key.
+  const productToCampaigns = useMemo(() => {
+    const out = new Map<string, Map<string, Set<string>>>();
+    for (const k of Object.keys(productMap)) {
+      // campaignKey format is `${storeId}::${platform}::${campaignId}`.
+      const parts = k.split('::');
+      if (parts.length !== 3) continue;
+      const storeId = parts[0];
+      const products = productMap[k] ?? [];
+      let inner = out.get(storeId);
+      if (!inner) {
+        inner = new Map<string, Set<string>>();
+        out.set(storeId, inner);
+      }
+      for (const pid of products) {
+        let set = inner.get(pid);
+        if (!set) {
+          set = new Set<string>();
+          inner.set(pid, set);
+        }
+        set.add(k);
+      }
+    }
+    return out;
+  }, [productMap]);
+
   return useMemo(() => {
     if (mode !== 'campaign') return new Map<string, TrueRevenueInfo>();
     if (!data?.rows || !productsResp?.rows) return new Map<string, TrueRevenueInfo>();
@@ -271,12 +298,13 @@ export function useCampaignTrueRevenue(opts: {
       // Tracking the unique other-campaign keys in a Set and reading .size
       // implements the documented "count each campaign once" semantics.
       const sharedKeys = new Set<string>();
-      for (const pid of mappedIds) {
-        for (const otherKey of Object.keys(productMap)) {
-          if (otherKey === k) continue;
-          if (!otherKey.startsWith(`${a.storeId}::`)) continue;
-          if ((productMap[otherKey] ?? []).includes(pid)) {
-            sharedKeys.add(otherKey);
+      const perStoreIndex = productToCampaigns.get(a.storeId);
+      if (perStoreIndex) {
+        for (const pid of mappedIds) {
+          const keys = perStoreIndex.get(pid);
+          if (!keys) continue;
+          for (const otherKey of keys) {
+            if (otherKey !== k) sharedKeys.add(otherKey);
           }
         }
       }
@@ -321,5 +349,5 @@ export function useCampaignTrueRevenue(opts: {
       });
     }
     return out;
-  }, [mode, data, productsResp, ordersAttrResp, productMap, aggregated, allCampaignRows, localRange, dailyMetaByCampaign]);
+  }, [mode, data, productsResp, ordersAttrResp, productMap, aggregated, allCampaignRows, localRange, dailyMetaByCampaign, productToCampaigns]);
 }
