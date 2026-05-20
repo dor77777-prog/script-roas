@@ -177,6 +177,24 @@ export function useCampaignTrueRevenue(opts: {
   localRange: DateRange;
 }): Map<string, TrueRevenueInfo> {
   const { mode, data, productsResp, ordersAttrResp, productMap, aggregated, allCampaignRows, localRange } = opts;
+
+  // FIX-08 (5.2.2.1): hoist dailyMetaByCampaign so per-campaign lookup is O(1)
+  // instead of rebuilding from all rows per campaign. Uses allCampaignRows for
+  // consistency with the cross-platform allocation basis.
+  const dailyMetaByCampaign = useMemo(() => {
+    const out = new Map<string, Map<string, number>>();
+    for (const r of allCampaignRows) {
+      const k = campaignKey(r.storeId, r.platform, r.campaignId);
+      let inner = out.get(k);
+      if (!inner) {
+        inner = new Map<string, number>();
+        out.set(k, inner);
+      }
+      inner.set(r.date, (inner.get(r.date) ?? 0) + r.conversionValue);
+    }
+    return out;
+  }, [allCampaignRows]);
+
   return useMemo(() => {
     if (mode !== 'campaign') return new Map<string, TrueRevenueInfo>();
     if (!data?.rows || !productsResp?.rows) return new Map<string, TrueRevenueInfo>();
@@ -268,16 +286,8 @@ export function useCampaignTrueRevenue(opts: {
       // We pull from the raw rows (already filtered to range by aggregate)
       // and bucket by date.
       const dailyMeta = (() => {
-        const byDate = new Map<string, number>();
-        if (!data) return [];
-        for (const r of data.rows) {
-          if (r.storeId !== a.storeId) continue;
-          if (r.platform !== a.platform) continue;
-          if (r.campaignId !== a.campaignId) continue;
-          if (r.date < localRange.from || r.date > localRange.to) continue;
-          byDate.set(r.date, (byDate.get(r.date) ?? 0) + r.conversionValue);
-        }
-        return Array.from(byDate.entries()).map(([date, value]) => ({ date, value }));
+        const byDate = dailyMetaByCampaign.get(campaignKey(a.storeId, a.platform, a.campaignId));
+        return Array.from(byDate ?? [], ([date, value]) => ({ date, value }));
       })();
 
       // Deterministic per-order attribution. Uses utm_id (campaignId) for
@@ -311,5 +321,5 @@ export function useCampaignTrueRevenue(opts: {
       });
     }
     return out;
-  }, [mode, data, productsResp, ordersAttrResp, productMap, aggregated, allCampaignRows, localRange]);
+  }, [mode, data, productsResp, ordersAttrResp, productMap, aggregated, allCampaignRows, localRange, dailyMetaByCampaign]);
 }
