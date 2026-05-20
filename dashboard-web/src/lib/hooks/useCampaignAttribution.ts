@@ -77,6 +77,8 @@ export function useCampaignAttribution(opts: {
   // tick. Keyed by the same `adSetId || adSetName || '(אחר)'` formula the
   // summary aggregation uses, so a.id (which may be '') reliably maps back.
   const dailyMetaByAdSet = useMemo(() => {
+    // FIX-21 (5.2.2.1): early exit for null summary or non-Meta platform — analyzer is never called in those cases.
+    if (!summary || summary.platform !== 'Meta') return new Map<string, Array<{ date: string; value: number }>>();
     const buckets = new Map<string, Map<string, number>>();
     for (const r of rows) {
       const key = r.adSetId || r.adSetName || '(אחר)';
@@ -92,7 +94,7 @@ export function useCampaignAttribution(opts: {
       out.set(key, Array.from(byDate, ([date, value]) => ({ date, value })));
     }
     return out;
-  }, [rows]);
+  }, [rows, summary]);
 
   // Per-ad-set attribution analysis. Pre-computes once per orders/rows/range
   // change instead of inside the row IIFE on every render — was walking the
