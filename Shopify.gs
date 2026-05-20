@@ -1,18 +1,39 @@
 /**
- * Shopify.gs - שליפת הכנסות יומיות מ-Shopify Admin API.
+ * Shopify.gs - שליפת הכנסות יומיות ומכירות פר-מוצר מ-Shopify Admin API
+ * עם ייחוס החזרים לפי יום העיבוד (Phase 05.2.3.0).
  *
  * נדרש לכל חנות:
  *   - {storeId}.shopify.domain         (לדוגמה: my-shop.myshopify.com)
  *   - {storeId}.shopify.token          (Admin API access token, shpat_...)
  *
- * אם החנות הוקמה דרך Shopify Dev Dashboard החדש ואין כפתור "Reveal token once",
+ * אם החנות הוקמה דרך Shopify Dev Dashboard ואין כפתור "Reveal token once",
  * השג את הטוקן ע"י Client Credentials Grant - ראה bootstrapShopifyToken().
  * נדרש במקרה הזה גם:
  *   - {storeId}.shopify.clientId       (מהאפליקציה ב-Dev Dashboard)
  *   - {storeId}.shopify.clientSecret   (מהאפליקציה ב-Dev Dashboard)
  *
- * אנו סוכמים את current_total_price של ההזמנות שנוצרו בחלון היום (שעון ישראל),
- * למעט הזמנות test ו-voided. current_total_price כבר מנכה החזרים על ההזמנה.
+ * חוזה ייחוס החזרים (D-A1..D-A4, D-C1, D-C2, D-D3, D-D4):
+ *   getShopifyRevenue(D) = sum current_total_price(orders.created_at=D, excl test/voided)
+ *                          - getShopifyRefundsForDay_(D).storeRefundCad
+ *
+ *   getShopifyProductSalesForDay(D)[pid].netRevenueCad =
+ *      sum (qty*price - line_discount - intra_order_refund) for orders.created_at=D
+ *      - getShopifyRefundsForDay_(D).byProduct[pid].refundCad
+ *
+ *   current_total_price (D-A1, מאומת אמפירית ע"י AUDIT-P0-03 ופרובה
+ *   ב-05.2.3.0-PROBE-EVIDENCE.md) כבר מנכה החזרים שיושמו על אותה הזמנה.
+ *   getShopifyRefundsForDay_ (D-A2) מחזיר רק החזרים שעובדו ביום D נגד
+ *   הזמנות שנוצרו ביום אחר — כך לא נופלים במלכודת double-deduction של
+ *   הניסיון שגולגל אחורה ב-2026-05-20.
+ *
+ *   D-D3: הכנסה יומית שלילית מוצגת כפי שהיא (ללא clamping ל-0). יום עם
+ *   החזרים גדולים על הזמנות מימים קודמים יכול להראות הכנסה שלילית —
+ *   זו חשבונאות נכונה, לא באג. הדשבורד מציג את המספר השלילי בצבע אדום
+ *   על-ידי החוקים הקיימים.
+ *
+ *   D-D4: אותו אלגוריתם רץ ל-3 החנויות (uzoshop / zolplus / usmile360).
+ *   אין סניפים פר-חנות - Shopify Admin REST 2024-10 הוא חוזה שווה לכל
+ *   חנות באותה גרסת API.
  */
 
 /**
@@ -152,7 +173,14 @@ function getShopifyRevenue(storeId, dateStr) {
     );
   }
 
-  Logger.log(`Shopify ${storeId} ${dateStr}: ${count} orders, total=${total.toFixed(2)} CAD`);
+  // Phase 05.2.3.0 D-A1..D-A2: current_total_price already nets same-day refunds.
+  // We subtract cross-day refunds (refund processed on D against orders created on
+  // a different day) so today's row reflects today's refund activity. D-D3:
+  // negative result is correct accounting, NOT clamped.
+  const refunds = getShopifyRefundsForDay_(storeId, dateStr);
+  total -= refunds.storeRefundCad;
+
+  Logger.log(`Shopify ${storeId} ${dateStr}: ${count} orders, gross-of-cross-day=${(total + refunds.storeRefundCad).toFixed(2)} CAD, cross-day-refunds=${refunds.storeRefundCad.toFixed(2)} CAD (${refunds.processedAtCount} refunds), net=${total.toFixed(2)} CAD`);
   return total;
 }
 
@@ -275,6 +303,32 @@ function getShopifyProductSalesForDay(storeId, dateStr) {
       `collected so far); data beyond may be missing.`
     );
   }
+
+  // Phase 05.2.3.0 D-A3, D-C2, D-D3: Subtract cross-day refunds per product.
+  // Same fetcher as getShopifyRevenue — one HTTP call's worth of data, two
+  // consumers (D-A3). refund_line_items[].subtotal is tax-exclusive, matching
+  // line_items[].price semantics used in the gross calculation above (D-C2).
+  // Refund-only products (no day-D sales but a cross-day refund hit) surface
+  // with netRevenueCad < 0 so the operator sees the deduction.
+  const crossDayRefunds = getShopifyRefundsForDay_(storeId, dateStr);
+  let refundOnlyCount = 0;
+  for (const pid of Object.keys(crossDayRefunds.byProduct)) {
+    const refundCad = crossDayRefunds.byProduct[pid].refundCad;
+    if (byProduct[pid]) {
+      byProduct[pid].netRevenueCad -= refundCad;
+    } else {
+      byProduct[pid] = {
+        productId: pid,
+        productTitle: '(refund-only)',
+        units: 0,
+        revenueCad: 0,
+        netRevenueCad: -refundCad,
+        orderIds: {},
+      };
+      refundOnlyCount++;
+    }
+  }
+  Logger.log(`Shopify product-refunds ${storeId} ${dateStr}: ${Object.keys(crossDayRefunds.byProduct).length} products with cross-day refunds (${refundOnlyCount} refund-only)`);
 
   const out = Object.values(byProduct)
     .map(p => ({
