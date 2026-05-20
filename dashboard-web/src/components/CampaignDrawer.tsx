@@ -30,7 +30,7 @@ import {
   analyzeAttribution,
   analyzeProductChannel,
 } from '@/lib/attributionAnalysis';
-import { analyzeCpmVsRoas } from '@/lib/cpmRoasAnalysis';
+import { analyzeCpmVsRoas, PREV_PERIOD_MIN_DAYS } from '@/lib/cpmRoasAnalysis';
 import { useCampaignAttribution } from '@/lib/hooks/useCampaignAttribution';
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import { roasLabel } from '@/lib/analytics';
@@ -792,14 +792,18 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                 )}
                 {cpmAnalysisMode === 'prev' && !isLoadingPrev && analysis.mode === 'half-over-half' && (
                   <div className="text-[10px] text-amber-700 bg-amber-50 px-2 py-1 rounded mt-1">
-                    {/* FIX-19 (5.2.2.1): fallback disclosure when previous period had <3 active days.
+                    {/* FIX-19 (5.2.2.1): fallback disclosure when previous period had
+                        fewer than PREV_PERIOD_MIN_DAYS active days.
                         WR-01 (5.2.2.1): gated by !isLoadingPrev so the banner does not fire prematurely
                         while SWR is still resolving cpmPrevData (~100-500ms after toggling to 'prev').
                         Without the gate, the analyzer runs without prev data, returns
-                        analysis.mode='half-over-half', and the banner asserts <3 active days even
+                        analysis.mode='half-over-half', and the banner asserts <N active days even
                         though prev was never actually evaluated. The banner self-corrects when data
-                        arrives, but the operator briefly sees an incorrect explanation. */}
-                    תקופה קודמת לא הספיקה (פחות מ-3 ימים פעילים) — חזרנו להשוואת חצי-חצי.
+                        arrives, but the operator briefly sees an incorrect explanation.
+                        IN-08 (5.2.2.1): the threshold N is sourced from
+                        PREV_PERIOD_MIN_DAYS (cpmRoasAnalysis.ts) so the banner copy can
+                        never drift from the analyzer gate. */}
+                    {`תקופה קודמת לא הספיקה (פחות מ-${PREV_PERIOD_MIN_DAYS} ימים פעילים) — חזרנו להשוואת חצי-חצי.`}
                   </div>
                 )}
                 {/* Smart analysis box — always renders so the user sees an

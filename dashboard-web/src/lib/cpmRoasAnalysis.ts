@@ -18,6 +18,20 @@
  * the box in the right color (positive / neutral / negative).
  */
 
+/**
+ * Minimum number of active days (cpm>0 AND roas>0) required in the
+ * previous-period series for analyzeCpmVsRoas to actually use it as a
+ * baseline. Below this threshold the analyzer falls back to
+ * mode='half-over-half'.
+ *
+ * IN-08 (5.2.2.1): exported so the FIX-19 fallback banner copy in
+ * CampaignsTable.tsx and CampaignDrawer.tsx can interpolate the same
+ * number it gates on. Previously the banner text hardcoded "3" and
+ * the analyzer hardcoded `prevSeries.length >= 3` — two literals that
+ * could drift independently.
+ */
+export const PREV_PERIOD_MIN_DAYS = 3;
+
 export type DailyCpmRoasPoint = {
   date: string;
   cpm: number;
@@ -130,7 +144,7 @@ export function analyzeCpmVsRoas(
   const validRows = series.filter(d => d.cpm > 0 && d.roas > 0);
   const n = validRows.length;
   const prevSeries = (options?.prev ?? []).filter(d => d.cpm > 0 && d.roas > 0);
-  const havePrev = prevSeries.length >= 3;
+  const havePrev = prevSeries.length >= PREV_PERIOD_MIN_DAYS;
   const mode: 'half-over-half' | 'previous-period' = havePrev ? 'previous-period' : 'half-over-half';
 
   // Not enough data → return a "neutral" placeholder.

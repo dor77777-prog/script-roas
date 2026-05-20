@@ -24,7 +24,7 @@ import {
   YAxis,
 } from 'recharts';
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
-import { analyzeCpmVsRoas } from '@/lib/cpmRoasAnalysis';
+import { analyzeCpmVsRoas, PREV_PERIOD_MIN_DAYS } from '@/lib/cpmRoasAnalysis';
 import { aggregate, type Aggregated } from '@/lib/campaignsAggregator';
 import { CHART_COLORS } from '@/lib/chartColors';
 import { filterDrillRows } from '@/lib/drillFilter';
@@ -951,14 +951,18 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
           )}
           {cpmAnalysisMode === 'prev' && !isLoadingPrev && analysis.mode === 'half-over-half' && (
             <div className="text-[10px] text-amber-700 bg-amber-50 px-2 py-1 rounded mt-1">
-              {/* FIX-19 (5.2.2.1): fallback disclosure when previous period had <3 active days.
+              {/* FIX-19 (5.2.2.1): fallback disclosure when previous period had
+                  fewer than PREV_PERIOD_MIN_DAYS active days.
                   WR-01 (5.2.2.1): gated by !isLoadingPrev so the banner does not fire prematurely
                   while SWR is still resolving cpmPrevData (~100-500ms after toggling to 'prev').
                   Without the gate, the analyzer runs without prev data, returns
-                  analysis.mode='half-over-half', and the banner asserts <3 active days even though
+                  analysis.mode='half-over-half', and the banner asserts <N active days even though
                   prev was never actually evaluated. The banner self-corrects when data arrives, but
-                  the operator briefly sees an incorrect explanation. */}
-              תקופה קודמת לא הספיקה (פחות מ-3 ימים פעילים) — חזרנו להשוואת חצי-חצי.
+                  the operator briefly sees an incorrect explanation.
+                  IN-08 (5.2.2.1): the threshold N is sourced from
+                  PREV_PERIOD_MIN_DAYS (cpmRoasAnalysis.ts) so the banner copy can
+                  never drift from the analyzer gate. */}
+              {`תקופה קודמת לא הספיקה (פחות מ-${PREV_PERIOD_MIN_DAYS} ימים פעילים) — חזרנו להשוואת חצי-חצי.`}
             </div>
           )}
           {/* FIX-24 (5.2.2.1): always render so sparse campaigns see an explicit
