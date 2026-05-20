@@ -1,4 +1,5 @@
 import { google } from 'googleapis';
+import type { DateRange } from './dateRange';
 
 /**
  * One row per (date, store, campaign, adset, ad). Mirrors the
@@ -84,7 +85,8 @@ function parseDate(v: unknown): string | null {
  * tolerate it instead of failing the whole route. Drops totally-empty rows
  * (no spend AND no impressions AND no conversions).
  */
-export async function fetchAdsData(): Promise<AdRow[]> {
+export async function fetchAdsData(opts?: { range?: DateRange }): Promise<AdRow[]> {
+  const { range } = opts ?? {};
   const auth = getAuth();
   const sheets = google.sheets({ version: 'v4', auth });
   const spreadsheetId = getSpreadsheetId();
@@ -145,6 +147,9 @@ export async function fetchAdsData(): Promise<AdRow[]> {
         conversionValue,
       });
     }
+  }
+  if (range) {
+    return out.filter(r => r.date >= range.from && r.date <= range.to);
   }
   return out;
 }

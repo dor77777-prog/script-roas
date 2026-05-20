@@ -78,8 +78,10 @@ export function AdsDrawer({
 }: Props) {
   // FIX-04 (5.2.2.1): range-keyed SWR for orders-attribution. Without ?from=&to=, the server defaults to 90 days and the drawer sees zero matched orders for any older date.
   const drawerRange = { from: rangeFrom, to: rangeTo };
+  // FIX-07 (5.2.2.1): range-keyed SWR for /api/ads. Server now filters by range; cache key per range prevents drawer-to-drawer cache pollution.
+  const adsBaseKey = open ? buildDateRangeKey('/api/ads', drawerRange) : null;
   const { data, isLoading } = useSWR<AdsResponse>(
-    open ? '/api/ads' : null,
+    adsBaseKey,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
@@ -157,7 +159,7 @@ export function AdsDrawer({
       conversions: number;
     }>();
     for (const r of data.rows) {
-      if (r.date < rangeFrom || r.date > rangeTo) continue;
+      // FIX-07 (5.2.2.1): date filter removed — /api/ads now filters by range server-side via fetchAdsData({ range }).
       if (r.storeId !== storeId) continue;
       if (r.campaignId !== campaignId) continue;
       if (r.adSetId !== adSetId) continue;
