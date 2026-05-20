@@ -392,6 +392,11 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     const byDay = new Map<string, { spend: number; impressions: number; value: number }>();
     const rows = data?.rows ?? [];
     for (const r of rows) {
+      // IN-03 (5.2.2.1): defense-in-depth. /api/campaigns already filters by
+      // range via parseRangeParams (campaigns.ts fetchCampaignsData uses
+      // isInRange in the parse loop). This in-memory filter is redundant
+      // today but cheap and catches any future regression where the lib
+      // contract changes — e.g., a cache layer that serves a wider window.
       if (r.date < localRange.from || r.date > localRange.to) continue;
       if (localStore !== 'All' && r.storeName !== localStore) continue;
       if (platform !== 'all' && r.platform !== platform) continue;
@@ -443,6 +448,9 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     const byDay = new Map<string, { spend: number; impressions: number; value: number }>();
     const rows = cpmPrevData?.rows ?? [];
     for (const r of rows) {
+      // IN-03 (5.2.2.1): defense-in-depth — see cpmDaily comment above.
+      // /api/campaigns is already filtered server-side by cpmPrevRange via
+      // parseRangeParams (the SWR key includes buildDateRangeKey).
       if (r.date < cpmPrevRange.from || r.date > cpmPrevRange.to) continue;
       if (localStore !== 'All' && r.storeName !== localStore) continue;
       if (platform !== 'all' && r.platform !== platform) continue;
@@ -504,6 +512,10 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     let metaSpendInScope = 0;
     let googleSpendInScope = 0;
     for (const r of dailyRows) {
+      // IN-03 (5.2.2.1): defense-in-depth filter — `dailyRows` (the Sheet's
+      // daily-summary tab) is NOT pre-filtered by range on the server today.
+      // Unlike /api/campaigns this filter is the authoritative one for
+      // dailyRows; do not remove without first range-filtering at the source.
       if (r.date < localRange.from || r.date > localRange.to) continue;
       if (localStore !== 'All' && r.storeName !== localStore) continue;
       shopifyRevenue += r.revenue;
