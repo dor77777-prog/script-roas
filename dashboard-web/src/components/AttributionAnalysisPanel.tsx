@@ -85,14 +85,15 @@ export function AttributionAnalysisPanel({ analysis, spend, value }: Props) {
               <span className="opacity-80">click-id מתויג: {analysis.deterministicOrders} הזמנות (CAD {analysis.deterministicRevenue.toFixed(0)})</span>
               <span className="opacity-80">modeled: CAD {analysis.modeledRevenue.toFixed(0)}</span>
             </div>
+            {/* FIX-12 (5.2.2.1): clamp widths to [0, 100]; signed revenue can otherwise produce negative widths or >100% bars. */}
             <div className="h-2.5 rounded-full bg-white/40 overflow-hidden flex">
               <div
                 className="h-full bg-current opacity-70"
-                style={{ width: `${Math.min(100, (analysis.deterministicRevenue / value) * 100)}%` }}
+                style={{ width: `${Math.max(0, Math.min(100, (analysis.deterministicRevenue / value) * 100))}%` }}
               />
               <div
                 className="h-full bg-current opacity-25"
-                style={{ width: `${Math.min(100, (analysis.modeledRevenue / value) * 100)}%` }}
+                style={{ width: `${Math.max(0, Math.min(100, (analysis.modeledRevenue / value) * 100))}%` }}
               />
             </div>
           </div>
