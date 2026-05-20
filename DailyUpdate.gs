@@ -640,6 +640,53 @@ function backfillCurrentMonthUsmile360() {
 }
 
 /**
+ * Safer chunked variants (added 2026-05-21): 7-day chunks per store, 9 total.
+ *
+ * Use these instead of `backfillCurrentMonth<Store>` when (a) a single store's
+ * 21-day range looks too close to the 6-min cap (busy month, heavy refunds, or
+ * known timeout history), or (b) you want fine-grained restart points.
+ *
+ * Recommended sequence (each ~2-3 min @ ~15-25s/store-day):
+ *   1. backfillUzoshopMay01to07      →  ▶  ⏳ ~2-3min  →  alert
+ *   2. backfillUzoshopMay08to14      →  ▶  ⏳ ~2-3min  →  alert
+ *   3. backfillUzoshopMay15to21      →  ▶  ⏳ ~2-3min  →  alert
+ *   4-6. Zolplus May 01-07 / 08-14 / 15-21
+ *   7-9. Usmile360 May 01-07 / 08-14 / 15-21
+ *
+ * All 9 are idempotent — re-running a chunk re-writes the same data-daily +
+ * products-daily rows; no duplicates created. Safe to re-run a failed chunk.
+ */
+function backfillUzoshopMay01to07() {
+  return backfillRangeForStores('2026-05-01', '2026-05-07', ['uzoshop']);
+}
+function backfillUzoshopMay08to14() {
+  return backfillRangeForStores('2026-05-08', '2026-05-14', ['uzoshop']);
+}
+function backfillUzoshopMay15to21() {
+  return backfillRangeForStores('2026-05-15', '2026-05-21', ['uzoshop']);
+}
+
+function backfillZolplusMay01to07() {
+  return backfillRangeForStores('2026-05-01', '2026-05-07', ['zolplus']);
+}
+function backfillZolplusMay08to14() {
+  return backfillRangeForStores('2026-05-08', '2026-05-14', ['zolplus']);
+}
+function backfillZolplusMay15to21() {
+  return backfillRangeForStores('2026-05-15', '2026-05-21', ['zolplus']);
+}
+
+function backfillUsmile360May01to07() {
+  return backfillRangeForStores('2026-05-01', '2026-05-07', ['usmile360']);
+}
+function backfillUsmile360May08to14() {
+  return backfillRangeForStores('2026-05-08', '2026-05-14', ['usmile360']);
+}
+function backfillUsmile360May15to21() {
+  return backfillRangeForStores('2026-05-15', '2026-05-21', ['usmile360']);
+}
+
+/**
  * Debug helper - מדפיס ללוג את כל הנתונים הגולמיים של היום עבור כל חנות
  * **לפני המרה ל-CAD**, כך שאפשר להשוות מול הפלטפורמה (Meta / Google / Shopify).
  *
