@@ -1,16 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import type { AttributionTrust } from '@/lib/attributionAnalysis';
-import type { ConfidenceLevel } from '@/lib/hooks/useCampaignTrueRevenue';
+import {
+  computeTrustTone,
+  type CampaignsTableRowTrustLevel,
+} from '@/components/CampaignsTableRow';
 
-type CampaignsTableRowTrustLevel =
-  | ConfidenceLevel['level']
-  | Exclude<AttributionTrust['level'], 'unknown'>;
-
-function toneForTrustLevel(trustLevel: CampaignsTableRowTrustLevel): string {
-  return trustLevel === 'high' ? 'green'
-    : trustLevel === 'medium' ? 'amber'
-    : 'red';
-}
+// WR-02 (5.2.2.1): previously this test declared its own
+// `CampaignsTableRowTrustLevel` alias and a local `toneForTrustLevel` mock,
+// then asserted against THOSE. That meant the @ts-expect-error / value
+// checks were exercising a type defined inside the test file, not the
+// row's actual trustLevel derivation — a future regression that widened
+// the row's narrowing (e.g., removing the `!attrUnknown` guard) would
+// still type-check and still let this test pass.
+//
+// The fix exports `CampaignsTableRowTrustLevel` + `computeTrustTone` from
+// CampaignsTableRow.tsx; this test now imports both so the assertions
+// land on the production bindings.
 
 describe('CampaignsTableRow trustLevel — locks TEST-07 (5.2.2.1)', () => {
   it('excludes "unknown" at the type level', () => {
@@ -19,18 +23,18 @@ describe('CampaignsTableRow trustLevel — locks TEST-07 (5.2.2.1)', () => {
     expect(value).toBe('unknown');
   });
 
-  it('accepts "high"', () => {
+  it('maps "high" to the green chip tone via the production helper', () => {
     const value: CampaignsTableRowTrustLevel = 'high';
-    expect(toneForTrustLevel(value)).toBe('green');
+    expect(computeTrustTone(value)).toBe('bg-roas-greenBg/60 text-roas-green');
   });
 
-  it('accepts "medium"', () => {
+  it('maps "medium" to the amber chip tone via the production helper', () => {
     const value: CampaignsTableRowTrustLevel = 'medium';
-    expect(toneForTrustLevel(value)).toBe('amber');
+    expect(computeTrustTone(value)).toBe('bg-amber-50 text-amber-700');
   });
 
-  it('accepts "low"', () => {
+  it('maps "low" to the red chip tone via the production helper', () => {
     const value: CampaignsTableRowTrustLevel = 'low';
-    expect(toneForTrustLevel(value)).toBe('red');
+    expect(computeTrustTone(value)).toBe('bg-roas-redBg/60 text-roas-red');
   });
 });

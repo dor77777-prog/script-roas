@@ -6,7 +6,39 @@ import { campaignKey } from '@/lib/campaignProductMap';
 import { buildAdsManagerLink, type AdAccountMap } from '@/lib/campaignsLinks';
 import { roasLabel } from '@/lib/analytics';
 import type { Aggregated } from '@/lib/campaignsAggregator';
-import type { TrueRevenueInfo } from '@/lib/hooks/useCampaignTrueRevenue';
+import type { ConfidenceLevel, TrueRevenueInfo } from '@/lib/hooks/useCampaignTrueRevenue';
+import type { AttributionTrust } from '@/lib/attributionAnalysis';
+
+/**
+ * The narrowed trust-level union actually used by CampaignsTableRow's
+ * tone derivation. WR-02 (5.2.2.1): exported so TEST-07 can import the
+ * production binding instead of redeclaring a parallel alias locally.
+ *
+ * 'unknown' is statically excluded — see the comment at the trustLevel
+ * derivation site below (the !attrUnknown guard collapses the union to
+ * 'high' | 'medium' | 'low' on both ternary branches).
+ */
+export type CampaignsTableRowTrustLevel =
+  | ConfidenceLevel['level']
+  | Exclude<AttributionTrust['level'], 'unknown'>;
+
+/**
+ * Pure helper that maps a narrowed trust level to a tailwind chip tone
+ * class string. WR-02 (5.2.2.1): extracted into a top-level helper so
+ * TEST-07 can import and assert against this exact function (was an
+ * inline ternary ladder buried inside the JSX render IIFE; tests had to
+ * redeclare the logic to assert it).
+ *
+ * The 'unknown' branch is intentionally not in the input union: callers
+ * MUST narrow first. If a future caller has 'unknown' on hand, the
+ * type-checker forces them to decide which fallback bucket it belongs
+ * to before calling here.
+ */
+export function computeTrustTone(level: CampaignsTableRowTrustLevel): string {
+  return level === 'high'   ? 'bg-roas-greenBg/60 text-roas-green'
+       : level === 'medium' ? 'bg-amber-50 text-amber-700'
+       :                      'bg-roas-redBg/60 text-roas-red';
+}
 
 // Duplicated from CampaignsTable.tsx:199-205 per D-04 (target-soft cap) —
 // leaving this tiny lookup table colocated with the row that uses it
@@ -237,7 +269,6 @@ export function CampaignsTableRow({
             attrAvailable && info.attribution!.trust.level === 'unknown';
           const useAttr = attrAvailable && !attrUnknown;
           const trustLabel = useAttr ? info.attribution!.trust.label : info.confidence.label;
-          const trustLevel = useAttr ? info.attribution!.trust.level : info.confidence.level;
           // WR-06: the 'unknown' branch is statically unreachable here.
           // `useAttr === true` implies info.attribution!.trust.level is one
           // of 'high' | 'medium' | 'low' (we explicitly excluded 'unknown'
@@ -245,10 +276,15 @@ export function CampaignsTableRow({
           // is sourced from info.confidence.level whose type union is
           // 'high' | 'medium' | 'low' (no 'unknown'). The unknown branch
           // was dead code masking the actual fallback rule — dropped.
-          const confTone =
-            trustLevel === 'high'   ? 'bg-roas-greenBg/60 text-roas-green'
-          : trustLevel === 'medium' ? 'bg-amber-50 text-amber-700'
-          :                           'bg-roas-redBg/60 text-roas-red';
+          //
+          // WR-02 (5.2.2.1): the narrowed level + tone-string mapping is now
+          // exported (CampaignsTableRowTrustLevel + computeTrustTone) so
+          // TEST-07 asserts against this exact production binding.
+          const trustLevel: CampaignsTableRowTrustLevel =
+            useAttr
+              ? (info.attribution!.trust.level as Exclude<AttributionTrust['level'], 'unknown'>)
+              : info.confidence.level;
+          const confTone = computeTrustTone(trustLevel);
 
           // Mapping comparison line, reused in both tooltip
           // branches so the operator always sees what the other
