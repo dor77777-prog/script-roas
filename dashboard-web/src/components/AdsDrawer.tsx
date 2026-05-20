@@ -23,6 +23,7 @@ import { analyzeAttributionForAd } from '@/lib/attributionAnalysis';
 import { buildAdsManagerLink, type AdAccountMap } from '@/lib/campaignsLinks';
 import { readOptimized, toggleOptimized } from '@/lib/campaignOptimized';
 import { useDrawerEsc } from '@/lib/drawerStack';
+import { buildDateRangeKey } from '@/lib/dateRange';
 
 /**
  * Slide-in drawer that opens when the user clicks an ad-set row in the
@@ -75,6 +76,8 @@ export function AdsDrawer({
   rangeTo,
   adAccounts,
 }: Props) {
+  // FIX-04 (5.2.2.1): range-keyed SWR for orders-attribution. Without ?from=&to=, the server defaults to 90 days and the drawer sees zero matched orders for any older date.
+  const drawerRange = { from: rangeFrom, to: rangeTo };
   const { data, isLoading } = useSWR<AdsResponse>(
     open ? '/api/ads' : null,
     fetcher,
@@ -83,8 +86,9 @@ export function AdsDrawer({
   // Per-order attribution for the deterministic ROAS chip per ad. Lazy: only
   // fires when this drawer opens so users who never drill into ads don't pay
   // the orders-attribution sheet read.
+  const ordersAttrBaseKey = open ? buildDateRangeKey('/api/orders-attribution', drawerRange) : null;
   const { data: ordersAttrData } = useSWR<OrdersAttributionResponse>(
-    open ? '/api/orders-attribution' : null,
+    ordersAttrBaseKey,
     async (url: string) => {
       const r = await fetch(url);
       if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
