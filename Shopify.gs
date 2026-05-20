@@ -205,10 +205,12 @@ function getShopifyRevenue(storeId, dateStr, refunds) {
  * זה לא תואם בהכרח לסכום החנות (שמשתמש ב-current_total_price אחרי הנחות/החזרים),
  * אז יש להתייחס לזה כ-"מכירה ברוטו לפני הנחות".
  */
-function getShopifyProductSalesForDay(storeId, dateStr) {
+function getShopifyProductSalesForDay(storeId, dateStr, refunds) {
   const domain = requireProp(`${storeId}.shopify.domain`).replace(/^https?:\/\//, '').replace(/\/$/, '');
   let token = requireProp(`${storeId}.shopify.token`);
   let bootstrapTried = false;
+  // gap-closure 08: cache TZ once for the processed_at filter in refundByLineId.
+  const TZ_LOCAL = TZ;
 
   const dayStart = isoLocalMidnight_(dateStr);
   const dayEnd = isoLocalMidnight_(nextDayStr_(dateStr));
@@ -247,11 +249,17 @@ function getShopifyProductSalesForDay(storeId, dateStr) {
       if (o.financial_status === 'voided') continue;
       const orderId = String(o.id || '');
 
-      // Build a per-line-item refund map for this order so we can subtract
-      // refunds at the line-item granularity (a partial refund of one product
-      // shouldn't shrink another product's revenue).
+      // gap-closure 08 (CR-02 fix): filter intra-order refunds by processed_at day.
+      // Under the total_price + drop-cross-day-filter model, an order created on
+      // day D with a future-day refund must NOT have that refund deducted from
+      // day D's per-product net — the refund deducts on its own processed_at day
+      // via the crossDayRefunds loop below. Same shape as the TS mirror at
+      // shopifyRevenueRefunds.ts:182-194.
       const refundByLineId = {};
       for (const refund of (o.refunds || [])) {
+        if (!refund.processed_at) continue;
+        const processedDay = Utilities.formatDate(new Date(refund.processed_at), TZ_LOCAL, 'yyyy-MM-dd');
+        if (processedDay !== dateStr) continue;
         for (const rli of (refund.refund_line_items || [])) {
           const liId = String(rli.line_item_id || '');
           if (!liId) continue;
@@ -273,7 +281,10 @@ function getShopifyProductSalesForDay(storeId, dateStr) {
         // line item (line-level + order-level allocated portion).
         const lineDiscount = parseFloat(li.total_discount || 0);
         const lineRefund = refundByLineId[String(li.id || '')] || 0;
-        const net = Math.max(0, gross - lineDiscount - lineRefund);
+        // gap-closure 08 (CR-03 fix): D-D3 forbids clamping. Negative per-product
+        // net is correct accounting (e.g., a refund-only product surfaces with
+        // signed negative). The User Manual §16.11.5 documents this policy.
+        const net = gross - lineDiscount - lineRefund;
 
         if (!byProduct[key]) {
           byProduct[key] = {
@@ -306,13 +317,15 @@ function getShopifyProductSalesForDay(storeId, dateStr) {
     );
   }
 
-  // Phase 05.2.3.0 D-A3, D-C2, D-D3: Subtract cross-day refunds per product.
-  // Same fetcher as getShopifyRevenue — one HTTP call's worth of data, two
-  // consumers (D-A3). refund_line_items[].subtotal is tax-exclusive, matching
-  // line_items[].price semantics used in the gross calculation above (D-C2).
-  // Refund-only products (no day-D sales but a cross-day refund hit) surface
-  // with netRevenueCad < 0 so the operator sees the deduction.
-  const crossDayRefunds = getShopifyRefundsForDay_(storeId, dateStr);
+  // Phase 05.2.3.0 D-A3, D-C2, D-D3 + gap-closure 08 model change.
+  // Same fetcher as getShopifyRevenue — accept caller-provided refunds to
+  // avoid double-fetching (WR-04 / Gap 6). refund_line_items[].subtotal is
+  // tax-exclusive, matching line_items[].price semantics used in the gross
+  // calculation above (D-C2). Refund-only products (no day-D sales but
+  // a refund hit) surface with netRevenueCad < 0 so the operator sees
+  // the deduction (D-D3, no clamping anywhere — see also the line-net
+  // computation above which dropped its Math.max(0, ...) clamp).
+  const crossDayRefunds = (refunds !== undefined) ? refunds : getShopifyRefundsForDay_(storeId, dateStr);
   let refundOnlyCount = 0;
   for (const pid of Object.keys(crossDayRefunds.byProduct)) {
     const refundCad = crossDayRefunds.byProduct[pid].refundCad;
