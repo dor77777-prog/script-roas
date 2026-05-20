@@ -14,7 +14,7 @@ vi.mock('recharts', () => ({
 
 import { buildReconciliation } from '@/components/MetaShopifyReconciliation';
 import type { CampaignRow } from '@/lib/campaigns';
-import type { OrderAttributionRow } from '@/lib/ordersAttribution';
+import type { OrderAttributionRow, OrderSource } from '@/lib/ordersAttribution';
 import { campaignKey, type ProductMap } from '@/lib/campaignProductMap';
 import type { ProductRow } from '@/lib/products';
 
@@ -600,5 +600,88 @@ describe('buildReconciliation', () => {
     // rGoogle/rOrganic are null (all zeros -> no variance)
     expect(result!.rGoogle).toBeNull();
     expect(result!.rOrganic).toBeNull();
+  });
+});
+
+describe('OrderSource sweep — locks FIX-01 (5.2.2.1)', () => {
+  const SOURCE_COVERAGE = {
+    'meta-paid': false,
+    'meta-organic': true,
+    'google-paid': false,
+    'google-organic': true,
+    email: true,
+    'other-paid': false,
+    'other-referral': true,
+    direct: true,
+    '': false,
+  } satisfies Record<OrderSource, boolean>;
+
+  const SOURCE_CASES = [
+    { source: 'meta-paid', organic: SOURCE_COVERAGE['meta-paid'] },
+    { source: 'meta-organic', organic: SOURCE_COVERAGE['meta-organic'] },
+    { source: 'google-paid', organic: SOURCE_COVERAGE['google-paid'] },
+    { source: 'google-organic', organic: SOURCE_COVERAGE['google-organic'] },
+    { source: 'email', organic: SOURCE_COVERAGE.email },
+    { source: 'other-paid', organic: SOURCE_COVERAGE['other-paid'] },
+    { source: 'other-referral', organic: SOURCE_COVERAGE['other-referral'] },
+    { source: 'direct', organic: SOURCE_COVERAGE.direct },
+    { source: '', organic: SOURCE_COVERAGE[''] },
+  ] satisfies Array<{ source: OrderSource; organic: boolean }>;
+
+  function reconciliationFor(order: OrderAttributionRow) {
+    return buildReconciliation({
+      summary: { platform: 'Meta' },
+      mappedIds: [PROD_A],
+      storeId: STORE,
+      campaignsData: { rows: [] },
+      ordersData: { rows: [order] },
+      productMap: {},
+      rangeFrom: RANGE_FROM,
+      rangeTo: RANGE_TO,
+    });
+  }
+
+  for (const { source, organic } of SOURCE_CASES) {
+    it(`source="${source || '(empty)'}" -> ${organic ? 'IN' : 'NOT'} organicByDate`, () => {
+      const order = makeOrderRow({
+        source,
+        fbclidPresent: false,
+        gclidPresent: false,
+        lineItems: [{ productId: PROD_A, units: 1, revenueCad: 50 }],
+      });
+      const result = reconciliationFor(order);
+      expect(result).not.toBeNull();
+      const point = result!.series.find(s => s.date === order.date);
+      expect(point).toBeDefined();
+      if (organic) {
+        expect(point!.organic, `${source} must contribute to organic`).toBe(50);
+      } else {
+        expect(point!.organic, `${source} must NOT contribute to organic`).toBe(0);
+      }
+    });
+  }
+
+  it('fbclidPresent=true excludes from organic even for source="direct"', () => {
+    const order = makeOrderRow({
+      source: 'direct',
+      fbclidPresent: true,
+      gclidPresent: false,
+      lineItems: [{ productId: PROD_A, units: 1, revenueCad: 50 }],
+    });
+    const result = reconciliationFor(order);
+    expect(result).not.toBeNull();
+    expect(result!.series.find(s => s.date === order.date)!.organic).toBe(0);
+  });
+
+  it('gclidPresent=true excludes from organic even for source="direct"', () => {
+    const order = makeOrderRow({
+      source: 'direct',
+      fbclidPresent: false,
+      gclidPresent: true,
+      lineItems: [{ productId: PROD_A, units: 1, revenueCad: 50 }],
+    });
+    const result = reconciliationFor(order);
+    expect(result).not.toBeNull();
+    expect(result!.series.find(s => s.date === order.date)!.organic).toBe(0);
   });
 });
