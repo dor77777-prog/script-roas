@@ -686,6 +686,17 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     // `totals` covered transitively via `aggregated` dep (#IN-05).
   }, [aggregated, dailyRows, localRange, localStore, platform]);
 
+  // FIX-22 (5.2.2.1): memoize drillRows so the drawer's useMemo([rows]) doesn't invalidate on every parent re-render.
+  const drillRows = useMemo(() => {
+    if (!drillCampaignId || !drillPlatform || !drillStoreId || !data) return null;
+    return data.rows.filter(r =>
+      r.storeId === drillStoreId &&
+      r.platform === drillPlatform &&
+      r.campaignId === drillCampaignId &&
+      r.date >= localRange.from && r.date <= localRange.to,
+    );
+  }, [data, drillCampaignId, drillPlatform, drillStoreId, localRange.from, localRange.to]);
+
   // ----- Toolbar -----
   const toolbar = (
     <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2 sm:gap-3 px-4 sm:px-5 py-3 bg-surfaceMuted/40 border-b border-borderSubtle">
@@ -1279,18 +1290,13 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       )}
 
       {/* Drill-down drawers (campaign + nested ad-level). */}
-      {drillCampaignId && drillPlatform && drillStoreId && data && (
+      {drillRows && drillCampaignId && drillPlatform && drillStoreId && (
         <CampaignDrawer
           campaignId={drillCampaignId}
           storeId={drillStoreId}
           open
           onClose={() => { setDrillCampaignId(null); setDrillPlatform(null); setDrillStoreId(null); }}
-          rows={data.rows.filter(r =>
-            r.storeId === drillStoreId &&            // FIX-03 (5.2.2.1): strict storeId equality, no storeName fallback
-            r.platform === drillPlatform &&
-            r.campaignId === drillCampaignId &&
-            r.date >= localRange.from && r.date <= localRange.to,
-          )}
+          rows={drillRows}
           adAccounts={adAccounts}
           rangeFrom={localRange.from}
           rangeTo={localRange.to}
