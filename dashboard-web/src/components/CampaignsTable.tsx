@@ -931,9 +931,15 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
               </span>
             </div>
           )}
-          {cpmAnalysisMode === 'prev' && analysis.mode === 'half-over-half' && (
+          {cpmAnalysisMode === 'prev' && !isLoadingPrev && analysis.mode === 'half-over-half' && (
             <div className="text-[10px] text-amber-700 bg-amber-50 px-2 py-1 rounded mt-1">
-              {/* FIX-19 (5.2.2.1): fallback disclosure when previous period had <3 active days. */}
+              {/* FIX-19 (5.2.2.1): fallback disclosure when previous period had <3 active days.
+                  WR-01 (5.2.2.1): gated by !isLoadingPrev so the banner does not fire prematurely
+                  while SWR is still resolving cpmPrevData (~100-500ms after toggling to 'prev').
+                  Without the gate, the analyzer runs without prev data, returns
+                  analysis.mode='half-over-half', and the banner asserts <3 active days even though
+                  prev was never actually evaluated. The banner self-corrects when data arrives, but
+                  the operator briefly sees an incorrect explanation. */}
               תקופה קודמת לא הספיקה (פחות מ-3 ימים פעילים) — חזרנו להשוואת חצי-חצי.
             </div>
           )}
