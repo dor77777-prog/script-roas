@@ -135,20 +135,19 @@ function sendWhatsAppViaTwilio_(cfg, toNumber, body) {
 /**
  * Sends one WhatsApp message via Meta Cloud API.
  *
- * If cfg.templateName is set: sends a template message (required for
- * proactive outbound to recipients outside the 24h conversation window).
- * The body is split into one component parameter — Meta's template engine
- * will substitute it into the {{1}} placeholder of the approved template.
- * (For multi-placeholder templates, see comment below.)
+ * If cfg.templateName is set to a real template name: sends a template
+ * message (required for proactive outbound to recipients outside the 24h
+ * conversation window).
  *
- * If cfg.templateName is blank: sends a freeform text message. This only
- * works when the recipient messaged the test phone number in the last 24h,
- * OR when the recipient is in the test-recipients allowlist of an unverified
- * Meta App in development mode. Use for the FIRST manual sanity check, then
- * switch to templates for production.
+ * If cfg.templateName is missing, empty, or a placeholder (-, none, null):
+ * sends a freeform text message. Freeform only works when the recipient
+ * messaged the test phone number in the last 24h, OR when the recipient
+ * is in the test-recipients allowlist of an unverified Meta App in
+ * development mode AND the 24h window is open. Use for the FIRST manual
+ * sanity check, then switch to templates for production.
  *
- * `toNumber` is in E.164 with "+" prefix (e.g. "+972501234567"). Meta accepts
- * with or without "+"; we strip it to match their preferred form.
+ * `toNumber` is in E.164 with "+" prefix (e.g. "+972501234567"). Meta
+ * accepts with or without "+"; we strip it to match their preferred form.
  *
  * Throws on non-2xx status.
  */
@@ -157,8 +156,17 @@ function sendWhatsAppViaMetaCloud_(cfg, toNumber, body) {
   // Meta wants the number without "+" prefix
   const to = String(toNumber).replace(/^\+/, '').replace(/[^0-9]/g, '');
 
+  // Apps Script Properties UI requires a non-empty value, so users commonly
+  // enter "-" or "none" as a placeholder for "no template yet". Treat those
+  // as freeform mode instead of trying to send a template with that name.
+  const templateNameRaw = (cfg.templateName || '').trim().toLowerCase();
+  const isPlaceholder = templateNameRaw === '' || templateNameRaw === '-' ||
+    templateNameRaw === 'none' || templateNameRaw === 'null' ||
+    templateNameRaw === 'n/a';
+  const useTemplate = !isPlaceholder;
+
   var payload;
-  if (cfg.templateName) {
+  if (useTemplate) {
     // Template message — content is passed as a single body parameter
     // substituted into the template's {{1}} placeholder. If your approved
     // template has multiple placeholders, build the parameters array to
