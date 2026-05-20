@@ -221,10 +221,10 @@ Plans:
 **Requirements**: TBD (run /gsd-discuss-phase 05.2.3.0)
 **Depends on:** Phase 05.2.1.1 (last stable Shopify-side fix set; FIX-26 lastActiveDate convention reused for the refund-day aggregation)
 **Why now (URGENT):** Discovered 2026-05-20 — operator reported that today's refunds do not show up in any "revenue" surface in the dashboard. Affects trust in every KPI that reads from `{store}-daily` sheet. Blocks Phase 05.4 (Unmapped Active Campaigns Indicator) until corrected — 05.4 surfaces operator UX about campaigns vs. revenue, and if revenue itself is wrong, the indicator's trust signal is compromised.
-**Plans:** 7 plans
+**Plans:** 1/7 plans executed
 
 Plans:
-- [ ] 05.2.3.0-01-PLAN.md — Read-only Shopify refund-contract probe (probeRefundContract_ in Main.gs + ROAS menu item) + operator checkpoint that writes 05.2.3.0-PROBE-EVIDENCE.md. Wave 1, autonomous: false (D-B1..D-B4).
+- [x] 05.2.3.0-01-PLAN.md — Read-only Shopify refund-contract probe (probeRefundContract_ in Main.gs + ROAS menu item) + operator checkpoint that writes 05.2.3.0-PROBE-EVIDENCE.md. Wave 1, autonomous: false (D-B1..D-B4).
 - [ ] 05.2.3.0-02-PLAN.md — Shared cross-day refund fetcher getShopifyRefundsForDay_ in Shopify.gs (updated_at-windowed orders.json, D-A2 cross-day filter, D-C1+D-C2 field reads) + previousDayStr_ helper in Config.gs. Wave 2, autonomous: true.
 - [ ] 05.2.3.0-03-PLAN.md — Wire getShopifyRefundsForDay_ into getShopifyRevenue and getShopifyProductSalesForDay (subtract cross-day refunds) + update Shopify.gs file header docstring. Wave 3, autonomous: true. Depends on 02.
 - [ ] 05.2.3.0-04-PLAN.md — Pure-TS mirror dashboard-web/src/lib/shopifyRevenueRefunds.ts + 4 D-C3 invariant tests with fixtures from PROBE-EVIDENCE.md (D-C4, NO fictional fixtures). Wave 2, autonomous: true, type: tdd. Depends on 01.
