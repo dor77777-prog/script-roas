@@ -23,6 +23,15 @@ export type Aggregated = {
   campaignBudgetCad: number | null;
   adSetBudgetCad: number | null;
   budgetType: 'CBO' | 'ABO' | '';
+  /**
+   * FIX-26: latest YYYY-MM-DD inside the selected range where this campaign
+   * actually ran (spend>0). Used by CampaignsTableRow to render the "currently
+   * off" chip when the row's last-active day is older than a recency threshold.
+   * Null when the campaign has zero spend across the entire range (the row
+   * still appears because impressions/conversions/value alone are enough to
+   * survive existing filters, but we can't infer "was active" from those).
+   */
+  lastActiveDate: string | null;
 };
 
 export function aggregate(
@@ -76,6 +85,7 @@ export function aggregate(
         campaignBudgetCad: r.campaignBudgetCad,
         adSetBudgetCad: mode === 'adset' ? r.adSetBudgetCad : null,
         budgetType: r.budgetType,
+        lastActiveDate: null,
       });
       if (r.campaignBudgetCad != null) latestBudgetDate.set(key, r.date);
       if (mode === 'adset' && r.adSetBudgetCad != null) latestAdSetBudgetDate.set(key, r.date);
@@ -87,6 +97,17 @@ export function aggregate(
     a.clicks += r.clicks;
     a.conversions += r.conversions;
     a.conversionValue += r.conversionValue;
+    // FIX-26: track the latest day with actual spend so the row can render
+    // "currently off · last DD/MM" when this date is older than today−N days.
+    // Strict > matches the FIX-13 tie-break policy (first-write-wins on
+    // duplicate dates). We gate on spend>0 specifically because a row can
+    // appear with impressions/conversions but zero spend (refund-only days
+    // after the campaign was paused).
+    if (r.spend > 0) {
+      if (!a.lastActiveDate || r.date > a.lastActiveDate) {
+        a.lastActiveDate = r.date;
+      }
+    }
     // Budget = chronologically latest row's value (#IN-02 — see above).
     // FIX-13 (5.2.2.1): strict > (not >=) so duplicate-date rows preserve the
     // first-observed budget per write order; later writes for the same date are

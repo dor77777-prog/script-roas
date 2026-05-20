@@ -73,4 +73,37 @@ describe('aggregate() — locks FIX-05, FIX-06, FIX-13', () => {
     expect(row.campaignBudgetCad).toBe(50);
     expect(row.adSetBudgetCad).toBeNull();
   });
+
+  it('FIX-26: lastActiveDate tracks the latest day with spend>0', () => {
+    const row = aggregateSingle([
+      makeRow({ date: '2026-05-10', spend: 100 }),
+      makeRow({ date: '2026-05-15', spend: 50 }),
+      makeRow({ date: '2026-05-12', spend: 200 }),
+    ], 'campaign');
+
+    expect(row.lastActiveDate).toBe('2026-05-15');
+  });
+
+  it('FIX-26: lastActiveDate ignores days with spend=0 even if they have impressions/conversions', () => {
+    // Real-world case: campaign paused on 12th but refund/late-conversion
+    // rows on 14th show with impressions but zero spend.
+    const row = aggregateSingle([
+      makeRow({ date: '2026-05-10', spend: 100 }),
+      makeRow({ date: '2026-05-12', spend: 80 }),
+      makeRow({ date: '2026-05-14', spend: 0, impressions: 500, conversionValue: 25 }),
+    ], 'campaign');
+
+    expect(row.lastActiveDate).toBe('2026-05-12');
+  });
+
+  it('FIX-26: lastActiveDate is null when no day in range had spend>0', () => {
+    // A row that only ever appears via refund/impression data without any
+    // actual spend should not falsely register as "active".
+    const row = aggregateSingle([
+      makeRow({ date: '2026-05-10', spend: 0, impressions: 100 }),
+      makeRow({ date: '2026-05-11', spend: 0, conversionValue: 15 }),
+    ], 'campaign');
+
+    expect(row.lastActiveDate).toBeNull();
+  });
 });

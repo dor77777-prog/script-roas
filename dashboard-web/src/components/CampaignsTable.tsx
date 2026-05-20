@@ -1157,6 +1157,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     trueRevenueByKey={trueRevenueByKey}
                     adAccounts={adAccounts}
                     optimized={optimized}
+                    today={today}
                     onToggleOptimized={onToggleOptimized}
                     onDrillCampaign={(campaignId, platform, storeId) => {
                       setDrillCampaignId(campaignId);

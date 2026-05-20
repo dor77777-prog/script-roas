@@ -59,10 +59,56 @@ type Props = {
   trueRevenueByKey: Map<string, TrueRevenueInfo>;
   adAccounts: AdAccountMap;
   optimized: Set<string>;
+  /**
+   * FIX-26: today (Asia/Jerusalem) as YYYY-MM-DD. Used to decide whether
+   * to render the "currently off" chip on rows whose last active day is
+   * older than today − OFF_RECENCY_DAYS. Threaded as a prop so we compute
+   * it once per render in the parent instead of per-row.
+   */
+  today: string;
   onToggleOptimized: (key: string) => void;
   onDrillCampaign: (campaignId: string, platform: string, storeId: string) => void;
   onDrillAd: (set: { storeId: string; campaignId: string; adSetId: string; adSetName: string }) => void;
 };
+
+/**
+ * FIX-26: how many days of inactivity (zero spend) before a row is
+ * considered "currently off". 2 days is the safety buffer for Apps Script
+ * collection latency — at 10:00 IL the data-daily row for "today−1" is
+ * already populated, but "today" itself is in flight via the live probe
+ * until 04:15 the next morning. A campaign that ran yesterday is almost
+ * certainly still active; a campaign that hasn't run in 2+ days is the
+ * earliest point we can call "paused" without false-positives on the
+ * delivery cadence.
+ */
+export const OFF_RECENCY_DAYS = 2;
+
+/**
+ * FIX-26: returns true iff `lastActiveDate` is older than `today − OFF_RECENCY_DAYS`.
+ * Lexicographic comparison on YYYY-MM-DD is correct here — both inputs are
+ * canonical ISO date strings, so string comparison matches calendar order.
+ *
+ * Edge cases:
+ *  - lastActiveDate === null  → false (not enough data to call it "off";
+ *    the campaign shows in the table on impressions/conversions/value alone
+ *    without any spend ever, which is rare and almost certainly stale data
+ *    rather than a paused campaign).
+ *  - today malformed          → false (fail-open, do not render the chip).
+ */
+export function isCampaignCurrentlyOff(lastActiveDate: string | null, today: string): boolean {
+  if (!lastActiveDate) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(today)) return false;
+  const [yyyy, mm, dd] = today.split('-').map(Number);
+  const todayMs = Date.UTC(yyyy, mm - 1, dd);
+  const thresholdMs = todayMs - OFF_RECENCY_DAYS * 86400_000;
+  const threshold = new Date(thresholdMs).toISOString().slice(0, 10);
+  return lastActiveDate < threshold;
+}
+
+/** Format YYYY-MM-DD as DD/MM for the off-chip tooltip text. */
+function formatLastActiveDate(iso: string): string {
+  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
+}
 
 export function CampaignsTableRow({
   a,
@@ -71,10 +117,16 @@ export function CampaignsTableRow({
   trueRevenueByKey,
   adAccounts,
   optimized,
+  today,
   onToggleOptimized,
   onDrillCampaign,
   onDrillAd,
 }: Props) {
+  // FIX-26: render a "currently off" chip when this row's last active day
+  // is older than today − OFF_RECENCY_DAYS. The row still appears in the
+  // table on the merits of its in-range performance — the chip only adds
+  // a visual signal that the operator is looking at historical data.
+  const isCurrentlyOff = isCampaignCurrentlyOff(a.lastActiveDate, today);
   const roas = a.spend > 0 ? a.conversionValue / a.spend : 0;
   const ctr = a.impressions > 0 ? a.clicks / a.impressions : 0;
   const cpc = a.clicks > 0 ? a.spend / a.clicks : 0;
@@ -181,6 +233,19 @@ export function CampaignsTableRow({
                   title={a.budgetType === 'CBO' ? 'Campaign Budget Optimization — תקציב ברמת קמפיין' : 'Ad-Set Budget Optimization — תקציב ברמת ad-set'}
                 >
                   {a.budgetType}
+                </span>
+              )}
+              {/* FIX-26: "currently off" chip — surfaces campaigns that
+                  appear in the table on historical data alone (no spend
+                  in the last 2+ days). Helps the operator review a paused
+                  campaign's past performance without confusing it for an
+                  active one. */}
+              {isCurrentlyOff && a.lastActiveDate && (
+                <span
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-surfaceMuted text-text-muted border border-borderSubtle"
+                  title={`קמפיין כבוי כרגע. הריצה האחרונה: ${formatLastActiveDate(a.lastActiveDate)}. הנתונים בשורה הם היסטוריים בלבד.`}
+                >
+                  ⏸ כבוי · {formatLastActiveDate(a.lastActiveDate)}
                 </span>
               )}
             </div>
