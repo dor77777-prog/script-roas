@@ -220,8 +220,7 @@ export function pearsonWithLag(xs: number[], ys: number[], lag: number): number 
  *
  * We don't fall back to "fbclid present + same date range" at this layer
  * because fbclid alone only proves the user clicked SOME Meta ad — not
- * THIS campaign. The platform-level fallback is handled by
- * `ordersForPlatform` separately.
+ * THIS campaign. There is no platform-level fallback in this analyzer.
  */
 export function orderMatchesCampaign(
   order: OrderAttributionRow,
@@ -260,28 +259,11 @@ export function orderMatchesCampaign(
 }
 
 /**
- * Per-platform fallback when utm_campaign isn't set. We can still tie
- * orders to a platform via fbclid / gclid, then attribute them to
- * campaigns within that platform proportionally to spend. Less precise
- * than the name match but still strictly better than no attribution.
- */
-export function ordersForPlatform(
-  orders: OrderAttributionRow[],
-  storeId: string,
-  platform: 'Meta' | 'Google',
-  dateFrom: string,
-  dateTo: string,
-): OrderAttributionRow[] {
-  return orders.filter(o => {
-    if (o.storeId !== storeId) return false;
-    if (o.date < dateFrom || o.date > dateTo) return false;
-    if (platform === 'Meta') return o.fbclidPresent || o.source === 'meta-paid';
-    return o.gclidPresent || o.source === 'google-paid';
-  });
-}
-
-/**
  * Build the per-campaign attribution analysis.
+ *
+ * Strict: matches orders to a single campaign via `orderMatchesCampaign`.
+ * There is NO platform-level fallback — the old platform fallback helper
+ * was never wired up and was removed in 5.2.2.1 (FIX-17).
  *
  * Strategy:
  *   1. Find orders that name-match this campaign (utm_campaign equality).
