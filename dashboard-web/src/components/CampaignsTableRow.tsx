@@ -28,7 +28,7 @@ type Props = {
   adAccounts: AdAccountMap;
   optimized: Set<string>;
   onToggleOptimized: (key: string) => void;
-  onDrillCampaign: (campaignId: string, platform: string) => void;
+  onDrillCampaign: (campaignId: string, platform: string, storeId: string) => void;
   onDrillAd: (set: { storeId: string; campaignId: string; adSetId: string; adSetName: string }) => void;
 };
 
@@ -72,7 +72,7 @@ export function CampaignsTableRow({
       onClick={() => {
         if (mode === 'campaign' && a.campaignId) {
           // Campaign click → ad-sets drawer.
-          onDrillCampaign(a.campaignId, a.platform);
+          onDrillCampaign(a.campaignId, a.platform, a.storeId);
         } else if (mode === 'adset' && a.adSetId && a.platform === 'Meta') {
           // Ad-set click → drill deeper into individual ads.
           // Only Meta — Google ad-level isn't fetched yet.

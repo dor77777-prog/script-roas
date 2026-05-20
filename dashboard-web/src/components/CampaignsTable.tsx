@@ -418,6 +418,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   // Drill-down drawer state — set when the user clicks a row.
   const [drillCampaignId, setDrillCampaignId] = useState<string | null>(null);
   const [drillPlatform, setDrillPlatform] = useState<string | null>(null);
+  const [drillStoreId, setDrillStoreId] = useState<string | null>(null);   // FIX-03 (5.2.2.1): drilldown namespace must carry storeId to prevent cross-store merges
   // Ad-level drilldown: when set, opens the AdsDrawer scoped to one ad-set.
   const [adDrill, setAdDrill] = useState<{
     storeId: string;
@@ -1228,9 +1229,10 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     adAccounts={adAccounts}
                     optimized={optimized}
                     onToggleOptimized={onToggleOptimized}
-                    onDrillCampaign={(campaignId, platform) => {
+                    onDrillCampaign={(campaignId, platform, storeId) => {
                       setDrillCampaignId(campaignId);
                       setDrillPlatform(platform);
+                      setDrillStoreId(storeId);   // FIX-03 (5.2.2.1)
                     }}
                     onDrillAd={(set) => setAdDrill(set)}
                   />
@@ -1263,16 +1265,17 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       )}
 
       {/* Drill-down drawers (campaign + nested ad-level). */}
-      {drillCampaignId && drillPlatform && data && (
+      {drillCampaignId && drillPlatform && drillStoreId && data && (
         <CampaignDrawer
           campaignId={drillCampaignId}
+          storeId={drillStoreId}
           open
-          onClose={() => { setDrillCampaignId(null); setDrillPlatform(null); }}
+          onClose={() => { setDrillCampaignId(null); setDrillPlatform(null); setDrillStoreId(null); }}
           rows={data.rows.filter(r =>
-            r.campaignId === drillCampaignId &&
+            r.storeId === drillStoreId &&            // FIX-03 (5.2.2.1): strict storeId equality, no storeName fallback
             r.platform === drillPlatform &&
-            r.date >= localRange.from && r.date <= localRange.to &&
-            (localStore === 'All' || r.storeName === localStore),
+            r.campaignId === drillCampaignId &&
+            r.date >= localRange.from && r.date <= localRange.to,
           )}
           adAccounts={adAccounts}
           rangeFrom={localRange.from}

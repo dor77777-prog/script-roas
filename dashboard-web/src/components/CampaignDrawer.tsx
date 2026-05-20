@@ -73,6 +73,7 @@ type Props = {
   /** Rows already filtered to this campaign — drawer aggregates internally. */
   rows: CampaignRow[];
   campaignId: string;
+  storeId: string;
   open: boolean;
   onClose: () => void;
   /** storeId → ad-account IDs, used to build Ads Manager deep links. */
@@ -91,7 +92,7 @@ const TONE_BG: Record<string, string> = {
   gray:   'bg-surfaceMuted text-text-muted',
 };
 
-export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, rangeFrom, rangeTo }: Props) {
+export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAccounts, rangeFrom, rangeTo }: Props) {
   // Drawer-local sort state. Default spend-desc matches the pre-sortable
   // hardcoded ordering so first paint doesn't jump.
   const [sortKey, setSortKey] = useState<AdSetSortKey>('spend');
@@ -321,11 +322,10 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
   // the productChannelBreakdown memo below.
   const mappedIds = useMemo(
     () => {
-      const sid = rows[0]?.storeId ?? '';
       const platformForCampaign = rows[0]?.platform ?? summary?.platform ?? '';
-      return productMap[campaignKey(sid, platformForCampaign, campaignId)] ?? [];
+      return productMap[campaignKey(storeId, platformForCampaign, campaignId)] ?? [];
     },
-    [productMap, rows, summary?.platform, campaignId],
+    [productMap, rows, summary?.platform, storeId, campaignId],
   );
 
   // Per-product channel breakdown (Phase 1). Triple-gate (Meta-only,
@@ -338,23 +338,20 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
     if (mappedIds.length === 0) return null;
     const ordersRows = ordersAttrData?.rows ?? [];
     if (ordersRows.length === 0 || rows.length === 0) return null;
-    const storeIdForCampaign = rows[0]?.storeId ?? '';
-    if (!storeIdForCampaign) return null;
     const breakdown = analyzeProductChannel({
       productIds: mappedIds,
       orders: ordersRows,
-      storeId: storeIdForCampaign,
+      storeId,
       dateFrom: rangeFrom,
       dateTo: rangeTo,
     });
     if (breakdown.totalOrders < 3) return null;
     return breakdown;
-  }, [summary, ordersAttrData, rows, mappedIds, rangeFrom, rangeTo]);
+  }, [summary, ordersAttrData, rows, mappedIds, storeId, rangeFrom, rangeTo]);
 
   if (!open || !summary) return null;
 
-  // All rows share one storeId (pre-filtered by parent).
-  const storeId = rows.length > 0 ? rows[0].storeId : '';
+  // FIX-03 (5.2.2.1): storeId arrives as a required prop. Removed rows[0].storeId derivation (which was unreachable but defensive-noisy per AUDIT-P2-11).
 
   // Reconciliation + analysis: helpers gate their own mounts (return null
   // when not applicable). Reconciliation lives in MetaShopifyReconciliation
@@ -884,13 +881,12 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
       <ProductPickerModal
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
-        storeId={rows[0]?.storeId ?? ''}
+        storeId={storeId}
         storeName={summary.storeName}
         campaignName={summary.campaignName}
-        initial={productMap[campaignKey(rows[0]?.storeId ?? '', summary.platform, campaignId)] ?? []}
+        initial={productMap[campaignKey(storeId, summary.platform, campaignId)] ?? []}
         onSave={(productIds) => {
-          const storeIdForCampaign = rows[0]?.storeId ?? '';
-          setMappedProducts(storeIdForCampaign, summary.platform, campaignId, productIds);
+          setMappedProducts(storeId, summary.platform, campaignId, productIds);
         }}
       />
 
