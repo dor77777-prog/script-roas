@@ -547,8 +547,11 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
                         tick={{ fontSize: 10, fill: '#7a8a9a' }}
                         tickLine={false}
                         axisLine={false}
-                        tickFormatter={v => `$${Number(v).toFixed(0)}`}
-                        width={36}
+                        // C$ prefix (not bare $) so the axis is unambiguous
+                        // about the currency — matches the chart title's
+                        // explicit "CAD" label.
+                        tickFormatter={v => `C$${Number(v).toFixed(0)}`}
+                        width={42}
                         domain={[0, 'auto']}
                       />
                       <Tooltip
