@@ -12,7 +12,7 @@ Multi-store Shopify ROAS dashboard with deterministic per-order attribution. The
 - [x] **Phase 3: CI/CD for Apps Script** — clasp setup + GitHub Action for auto-deploy of `.gs` files
 - [ ] **Phase 4: Component Decomposition** — Split CampaignsTable / CampaignDrawer / BillingSettings to ≤500 lines each via hooks + sub-components
 - [ ] **Phase 5: Scalability** — API pagination, per-store Apps Script triggers (6-min cap fix), data-daily / products-daily retention, lazy line-items
-- [ ] **Phase 05.2.3.0: Shopify revenue net-of-refunds** — URGENT bug-fix: store-level revenue across the dashboard is inflated when refunds happen on prior-day orders (today's refund on yesterday's order is never subtracted). Fix `getShopifyRevenue` to compute refund-day net using `refunds.processed_at`, add regression test + operator runbook (INSERTED)
+- [x] **Phase 05.2.3.0: Shopify revenue net-of-refunds** — URGENT bug-fix: store-level revenue across the dashboard is inflated when refunds happen on prior-day orders (today's refund on yesterday's order is never subtracted). Fix `getShopifyRevenue` to compute refund-day net using `refunds.processed_at`, add regression test + operator runbook (INSERTED) (completed 2026-05-20)
 - [ ] **Phase 05.4: Unmapped Active Campaigns Indicator** — Per-ad-manager (Meta/Google) chip in Campaigns view showing count of currently-active campaigns with no product mapping, drill-down to the list, green "all mapped" indicator when clean (INSERTED — FROZEN pending 05.2.3.0)
 - [ ] **Phase 6: Security & Cloud-Sync** — Service-account split (reader/writer), rate limiting on POST, audit log, cloud-sync If-Match + adaptive polling
 - [ ] **Phase 7: Observability** — Logs tab + structured logging, quota approach alerts, phantom-spreadsheet daily assertion, reconciliation date toggle, productId retroactive fix script
@@ -221,7 +221,7 @@ Plans:
 **Requirements**: TBD (run /gsd-discuss-phase 05.2.3.0)
 **Depends on:** Phase 05.2.1.1 (last stable Shopify-side fix set; FIX-26 lastActiveDate convention reused for the refund-day aggregation)
 **Why now (URGENT):** Discovered 2026-05-20 — operator reported that today's refunds do not show up in any "revenue" surface in the dashboard. Affects trust in every KPI that reads from `{store}-daily` sheet. Blocks Phase 05.4 (Unmapped Active Campaigns Indicator) until corrected — 05.4 surfaces operator UX about campaigns vs. revenue, and if revenue itself is wrong, the indicator's trust signal is compromised.
-**Plans:** 6/7 plans executed
+**Plans:** 7/7 plans complete
 
 Plans:
 - [x] 05.2.3.0-01-PLAN.md — Read-only Shopify refund-contract probe (probeRefundContract_ in Main.gs + ROAS menu item) + operator checkpoint that writes 05.2.3.0-PROBE-EVIDENCE.md. Wave 1, autonomous: false (D-B1..D-B4).
@@ -230,7 +230,7 @@ Plans:
 - [x] 05.2.3.0-04-PLAN.md — Pure-TS mirror dashboard-web/src/lib/shopifyRevenueRefunds.ts + 4 D-C3 invariant tests with fixtures from PROBE-EVIDENCE.md (D-C4, NO fictional fixtures). Wave 2, autonomous: true, type: tdd. Depends on 01.
 - [x] 05.2.3.0-05-PLAN.md — Rolling 3-day backfill in 3 per-store live wrappers + legacy runLiveUpdate manual entry (DailyUpdate.gs D-D1). Wave 3, autonomous: true. Depends on 02.
 - [x] 05.2.3.0-06-PLAN.md — 3 per-store 20-day cleanup menu items in Main.gs (D-D2 verbatim Hebrew strings: רענן הכנסות (20 ימים) — uzoshop / Zol Plus / 360usmile) + refreshRevenue20Days*_ handlers. Wave 3, autonomous: true. Depends on 01.
-- [ ] 05.2.3.0-07-PLAN.md — User Manual §16.11 Refund-Day Attribution (refund-day model + canonical PROBE-EVIDENCE-derived example + 3 cleanup menu items verbatim + negative-revenue policy per D-D3 + 3 Shopify Admin verification URLs). Wave 4, autonomous: true. Depends on 01-06.
+- [x] 05.2.3.0-07-PLAN.md — User Manual §16.11 Refund-Day Attribution (refund-day model + canonical PROBE-EVIDENCE-derived example + 3 cleanup menu items verbatim + negative-revenue policy per D-D3 + 3 Shopify Admin verification URLs). Wave 4, autonomous: true. Depends on 01-06.
 
 ### Phase 05.4: Unmapped Active Campaigns Indicator (INSERTED — FROZEN pending 05.2.3.0)
 
