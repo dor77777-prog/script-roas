@@ -173,23 +173,24 @@ function aggregate(
     a.conversions += r.conversions;
     a.conversionValue += r.conversionValue;
     // Budget = chronologically latest row's value (#IN-02 — see above).
+    // FIX-13 (5.2.2.1): strict > so duplicate-date rows don't tie-break by row-write order; first-observed budget for a given date wins.
     if (r.campaignBudgetCad != null) {
       const prev = latestBudgetDate.get(key);
-      if (!prev || r.date >= prev) {
+      if (!prev || r.date > prev) {
         a.campaignBudgetCad = r.campaignBudgetCad;
         latestBudgetDate.set(key, r.date);
       }
     }
     if (mode === 'adset' && r.adSetBudgetCad != null) {
       const prev = latestAdSetBudgetDate.get(key);
-      if (!prev || r.date >= prev) {
+      if (!prev || r.date > prev) {
         a.adSetBudgetCad = r.adSetBudgetCad;
         latestAdSetBudgetDate.set(key, r.date);
       }
     }
     if (r.budgetType) {
       const prev = latestBudgetTypeDate.get(key);
-      if (!prev || r.date >= prev) {
+      if (!prev || r.date > prev) {
         a.budgetType = r.budgetType;
         latestBudgetTypeDate.set(key, r.date);
       }
