@@ -162,6 +162,10 @@ function onOpen() {
       .addItem('הרץ לתאריך מסוים…', 'promptRunForDate_')
       .addItem('מילוי היסטורי (טווח)…', 'promptBackfill_')
       .addSeparator()
+      .addItem('רענן הכנסות (20 ימים) — uzoshop', 'refreshRevenue20DaysUzoshop_')
+      .addItem('רענן הכנסות (20 ימים) — Zol Plus', 'refreshRevenue20DaysZolplus_')
+      .addItem('רענן הכנסות (20 ימים) — 360usmile', 'refreshRevenue20DaysUsmile_')
+      .addSeparator()
       .addItem('התקן טריגר יומי (00:05) + הרצה מיידית', 'installDailyTrigger')
       .addItem('הסר טריגר יומי', 'removeDailyTrigger')
       .addItem('התקן טריגר Live (כל 15 דקות)', 'installLiveTrigger')
@@ -331,4 +335,63 @@ function probeRefundContract() {
 function showVerifyConfig_() {
   const msg = verifyConfig();
   SpreadsheetApp.getUi().alert('Verify Config', msg, SpreadsheetApp.getUi().ButtonSet.OK);
+}
+
+/**
+ * Phase 05.2.3.0 D-D2: Per-store 20-day revenue cleanup handlers.
+ *
+ * Each refreshes ~20 days for ONE store using backfillRangeForStores.
+ * Estimated runtime ~300s per store (20 days × ~15s/day), under the
+ * 6-min cap with a small margin. Operator must wait ~30 seconds
+ * between clicks to avoid concurrent Apps Script executions exceeding
+ * the 30-concurrent-execution quota.
+ *
+ * The menu strings (D-D2 verbatim):
+ *   רענן הכנסות (20 ימים) — uzoshop      → refreshRevenue20DaysUzoshop_
+ *   רענן הכנסות (20 ימים) — Zol Plus     → refreshRevenue20DaysZolplus_
+ *   רענן הכנסות (20 ימים) — 360usmile    → refreshRevenue20DaysUsmile_
+ */
+function refreshRevenue20DaysUzoshop_() {
+  refreshRevenue20DaysImpl_('uzoshop', 'uzoshop');
+}
+function refreshRevenue20DaysZolplus_() {
+  refreshRevenue20DaysImpl_('zolplus', 'Zol Plus');
+}
+function refreshRevenue20DaysUsmile_() {
+  refreshRevenue20DaysImpl_('usmile360', '360usmile');
+}
+
+/**
+ * Shared implementation — 20-day rolling-window cleanup for ONE store.
+ * Range: previousDayStr_(today, 19) .. todayStr_() inclusive = 20 days.
+ */
+function refreshRevenue20DaysImpl_(storeId, storeLabel) {
+  const today = todayStr_();
+  const start = previousDayStr_(today, 19);
+  const ui = SpreadsheetApp.getUi();
+  Logger.log(`[refreshRevenue20Days] ${storeLabel} (${storeId}) — backfilling ${start}..${today}`);
+  ui.alert(
+    `רענון הכנסות — ${storeLabel}`,
+    `מתחיל מילוי 20 ימים (${start} עד ${today}). ` +
+    `ההרצה תיקח עד 5 דקות. אל תסגור את הגיליון. ` +
+    `כשתסיים, חכה ~30 שניות לפני שתלחץ על המנה הבאה.`,
+    ui.ButtonSet.OK,
+  );
+  try {
+    backfillRangeForStores(start, today, [storeId]);
+    Logger.log(`[refreshRevenue20Days] ${storeLabel} — completed`);
+    ui.alert(
+      `רענון הכנסות — ${storeLabel}`,
+      `הסתיים בהצלחה. בדוק את לוח הביצועים — שורות ${start} עד ${today} צריכות לשקף את ההחזרים העדכניים.`,
+      ui.ButtonSet.OK,
+    );
+  } catch (e) {
+    const msg = e && e.message ? e.message : String(e);
+    Logger.log(`[refreshRevenue20Days] ${storeLabel} — ERROR: ${msg}`);
+    ui.alert(
+      `שגיאה ברענון — ${storeLabel}`,
+      `הריצה נכשלה: ${msg}\n\nבדוק את ה-Executions log ב-Apps Script Editor.`,
+      ui.ButtonSet.OK,
+    );
+  }
 }
