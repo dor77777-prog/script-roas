@@ -160,7 +160,23 @@ export function parseDate(s: string | number | null | undefined): string | null 
   const dmy = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(str);
   if (dmy) {
     const [, dd, mm, yyyy] = dmy;
-    return `${yyyy}-${mm}-${dd}`;
+    const candidate = `${yyyy}-${mm}-${dd}`;
+    // WR-04 (5.2.2.1): validate that the day/month numbers form a real
+    // calendar date. The previous code just reformatted the string
+    // ("31/02/2026" -> "2026-02-31") without checking that the month
+    // has 31 days. Downstream lexicographic comparisons accept it and
+    // the row gets included with a fake date. Round-trip via Date and
+    // compare the ISO slice to the candidate — mismatch means the JS
+    // Date constructor rolled the day over (e.g., Feb 31 -> Mar 03)
+    // and the original input was not a real date. parseRangeParams
+    // already validates query params via isRealDate; this aligns the
+    // legacy DMY fallback to the same gate.
+    const d = new Date(`${candidate}T00:00:00Z`);
+    if (!Number.isFinite(d.getTime()) || d.toISOString().slice(0, 10) !== candidate) {
+      console.warn(`parseDate: invalid DD/MM/YYYY "${str}"`);
+      return null;
+    }
+    return candidate;
   }
 
   console.warn(`parseDate: unrecognized format "${str}"`);
