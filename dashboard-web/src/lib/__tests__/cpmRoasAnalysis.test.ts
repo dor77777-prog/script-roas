@@ -39,11 +39,38 @@ describe('analyzeCpmVsRoas', () => {
     expect(result.tone).toBe('neutral');
   });
 
-  it('filters out days with zero CPM or zero ROAS before checking n', () => {
-    // 7 days but 3 with zero ROAS = 4 valid; below threshold.
-    const series = makeSeries({ cpm: 5, roas: 2 }, [{}, {}, {}, { roas: 0 }, { roas: 0 }, { roas: 0 }]);
+  it('filters out days with zero CPM (campaign was not running) before checking n', () => {
+    // 7 days but 3 with zero CPM = 4 active days; below threshold.
+    const series = makeSeries({ cpm: 5, roas: 2 }, [{}, {}, {}, { cpm: 0 }, { cpm: 0 }, { cpm: 0 }]);
     const result = analyzeCpmVsRoas(series);
     expect(result.hasData).toBe(false);
+  });
+
+  it('FIX-25: counts days with roas=0 as active when cpm>0 (no-conversion days still inform CPM trend)', () => {
+    // 7 days, ALL with cpm>0 but only 4 with roas>0 — under the old (pre-FIX-25)
+    // filter this returned hasData=false; under FIX-25 the analyzer sees 7 active days
+    // and produces a real verdict.
+    const series = makeSeries({ cpm: 5, roas: 2 }, [
+      { roas: 0 }, { roas: 0 }, { roas: 0 },
+      { roas: 2 }, { roas: 2 }, { roas: 2 }, { roas: 2 },
+    ]);
+    const result = analyzeCpmVsRoas(series);
+    expect(result.hasData).toBe(true);
+    expect(result.details.n).toBe(7);
+  });
+
+  it('FIX-25: previous-period mode triggers when prev has 3+ active days, even if some have roas=0', () => {
+    // Current period: 7 days of normal activity.
+    const current = makeSeries({ cpm: 5, roas: 3 });
+    // Previous period: 7 days where the campaign ran (cpm>0) but only 2 had conversions.
+    // Pre-FIX-25 this would filter prev down to 2 valid days → < 3 → fallback to half-over-half.
+    // Post-FIX-25 all 7 are active → mode='previous-period'.
+    const prev = makeSeries({ cpm: 4, roas: 0 }, [
+      { roas: 0 }, { roas: 0 }, { roas: 0 }, { roas: 0 }, { roas: 0 },
+      { roas: 2 }, { roas: 2 },
+    ]);
+    const result = analyzeCpmVsRoas(current, { prev });
+    expect(result.mode).toBe('previous-period');
   });
 
   it('flags UP/UP — paying more, returning more (positive)', () => {

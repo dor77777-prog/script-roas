@@ -962,7 +962,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                   IN-08 (5.2.2.1): the threshold N is sourced from
                   PREV_PERIOD_MIN_DAYS (cpmRoasAnalysis.ts) so the banner copy can
                   never drift from the analyzer gate. */}
-              {`תקופה קודמת לא הספיקה (פחות מ-${PREV_PERIOD_MIN_DAYS} ימים פעילים) — חזרנו להשוואת חצי-חצי.`}
+              {`לתקופה הקודמת פחות מ-${PREV_PERIOD_MIN_DAYS} ימים שבהם הקמפיין רץ (חשיפות + הוצאה) — מציג השוואת חצי-חצי במקום.`}
             </div>
           )}
           {/* FIX-24 (5.2.2.1): always render so sparse campaigns see an explicit

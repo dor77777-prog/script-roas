@@ -141,16 +141,25 @@ export function analyzeCpmVsRoas(
   series: DailyCpmRoasPoint[],
   options?: { prev?: DailyCpmRoasPoint[] },
 ): CpmRoasAnalysis {
-  const validRows = series.filter(d => d.cpm > 0 && d.roas > 0);
+  // FIX-25 (5.2.2.1): "active day" = the campaign actually ran (impressions
+  // and spend produced a CPM). We DO NOT require roas > 0 — a day that ran
+  // but produced no conversions is still a meaningful data point (it tells
+  // us CPM at that ROAS=0). The previous `roas > 0` requirement made the
+  // analyzer fall back to half-over-half too eagerly: any campaign that
+  // didn't convert on every day in its prev period would trip the FIX-19
+  // banner, even though prev had plenty of impression data. The Pearson
+  // zero-variance guard already handles the degenerate case where all
+  // ROAS values are 0 (returns null, which categorize() maps to "flat").
+  const validRows = series.filter(d => d.cpm > 0);
   const n = validRows.length;
-  const prevSeries = (options?.prev ?? []).filter(d => d.cpm > 0 && d.roas > 0);
+  const prevSeries = (options?.prev ?? []).filter(d => d.cpm > 0);
   const havePrev = prevSeries.length >= PREV_PERIOD_MIN_DAYS;
   const mode: 'half-over-half' | 'previous-period' = havePrev ? 'previous-period' : 'half-over-half';
 
   // Not enough data → return a "neutral" placeholder.
   if (n < 5) {
     return {
-      text: 'צריך לפחות 5 ימים עם נתונים מלאים כדי לסיק מסקנה. הגרף ימשיך להציג, הניתוח יופיע כשיהיה מספיק היסטוריה.',
+      text: 'צריך לפחות 5 ימים פעילים (עם חשיפות והוצאה) כדי לסיק מסקנה. הגרף ימשיך להציג, הניתוח יופיע כשיהיה מספיק היסטוריה.',
       tone: 'neutral',
       hasData: false,
       mode,
