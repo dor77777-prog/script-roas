@@ -12,7 +12,8 @@ Multi-store Shopify ROAS dashboard with deterministic per-order attribution. The
 - [x] **Phase 3: CI/CD for Apps Script** — clasp setup + GitHub Action for auto-deploy of `.gs` files
 - [ ] **Phase 4: Component Decomposition** — Split CampaignsTable / CampaignDrawer / BillingSettings to ≤500 lines each via hooks + sub-components
 - [ ] **Phase 5: Scalability** — API pagination, per-store Apps Script triggers (6-min cap fix), data-daily / products-daily retention, lazy line-items
-- [ ] **Phase 05.4: Unmapped Active Campaigns Indicator** — Per-ad-manager (Meta/Google) chip in Campaigns view showing count of currently-active campaigns with no product mapping, drill-down to the list, green "all mapped" indicator when clean (INSERTED)
+- [ ] **Phase 05.2.3.0: Shopify revenue net-of-refunds** — URGENT bug-fix: store-level revenue across the dashboard is inflated when refunds happen on prior-day orders (today's refund on yesterday's order is never subtracted). Fix `getShopifyRevenue` to compute refund-day net using `refunds.processed_at`, add regression test + operator runbook (INSERTED)
+- [ ] **Phase 05.4: Unmapped Active Campaigns Indicator** — Per-ad-manager (Meta/Google) chip in Campaigns view showing count of currently-active campaigns with no product mapping, drill-down to the list, green "all mapped" indicator when clean (INSERTED — FROZEN pending 05.2.3.0)
 - [ ] **Phase 6: Security & Cloud-Sync** — Service-account split (reader/writer), rate limiting on POST, audit log, cloud-sync If-Match + adaptive polling
 - [ ] **Phase 7: Observability** — Logs tab + structured logging, quota approach alerts, phantom-spreadsheet daily assertion, reconciliation date toggle, productId retroactive fix script
 - [ ] **Phase 8: i18n** — Externalize Hebrew strings to `strings.he.ts` with type-safe key map
@@ -214,15 +215,28 @@ Plans:
 - [x] 05.2.1.1-02-PLAN.md — P2 secondary (8 tasks: ID text format + migration, consistent date range, robust outlier detection, productMap freshness chip, canonical revenue basis, ad-set docstring, campaignKey platform namespace, Bayesian Bessel correction)
 - [x] 05.2.1.1-03-PLAN.md — test coverage (8 tasks: OrderSource contract, darkTraffic boundary, signed revenue, cross-store hook, Google primary path, lineItemsCad, whitespace+long-ID, OrderSource sweep)
 
-### Phase 05.4: Unmapped Active Campaigns Indicator (INSERTED)
+### Phase 05.2.3.0: Shopify revenue net-of-refunds (URGENT BUG-FIX — INSERTED)
 
-**Goal:** [Urgent work — to be planned. Operator-facing UX in the Campaigns view: per-ad-manager (Meta/Google) live count of active campaigns that have no product mapping in ManualOverrides, click-through to the list, green ✓ chip when all active campaigns are mapped.]
-**Requirements**: TBD (run /gsd-discuss-phase 05.4)
-**Depends on:** Phase 5 (latest stable campaigns data path); independent of 05.3 (manual tab)
+**Goal:** [Urgent bug-fix — to be planned. Store-level revenue across the dashboard (home page KPI cards, PerStoreCards, GoalTracker, daily P&L) is inflated when refunds happen on prior-day orders. Two root causes: (1) `getShopifyRevenue` in `Shopify.gs:90` queries by `created_at` window only, so refunds processed today on yesterday's order never appear; yesterday's sheet row stays frozen with pre-refund total. (2) The code relies on `current_total_price` alleged to "deduct refunds" — but in API 2024-10 this is unreliable for refund-without-restock + 15-min sync lag. Per-product path at `Shopify.gs:220-246` already does refunds correctly (subtracts per-line-item from `o.refunds[]`); store-level path does not. Fix: compute revenue per day as `sum(orders.current_total_price created on day D) − sum(refunds.transactions.amount processed on day D)` so refunds appear on the day they were issued, regardless of original order date. Includes regression test using a known refund event and a documented operator runbook on how to refresh historical sheet rows after deploy.]
+**Requirements**: TBD (run /gsd-discuss-phase 05.2.3.0)
+**Depends on:** Phase 05.2.1.1 (last stable Shopify-side fix set; FIX-26 lastActiveDate convention reused for the refund-day aggregation)
+**Why now (URGENT):** Discovered 2026-05-20 — operator reported that today's refunds do not show up in any "revenue" surface in the dashboard. Affects trust in every KPI that reads from `{store}-daily` sheet. Blocks Phase 05.4 (Unmapped Active Campaigns Indicator) until corrected — 05.4 surfaces operator UX about campaigns vs. revenue, and if revenue itself is wrong, the indicator's trust signal is compromised.
 **Plans:** 0 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 05.4 to break down)
+- [ ] TBD (run /gsd-plan-phase 05.2.3.0 to break down)
+
+### Phase 05.4: Unmapped Active Campaigns Indicator (INSERTED — FROZEN pending 05.2.3.0)
+
+**Status:** FROZEN as of 2026-05-20 until Phase 05.2.3.0 (Shopify revenue refund bug-fix) ships. Reason: 05.4 surfaces an indicator over per-(store, platform) campaign data that the operator implicitly trusts against revenue; while store-level revenue is inflated by un-deducted refunds, building MORE operator-trust surfaces would compound the problem. Re-thaw by removing this status line and the FROZEN tag from the heading after 05.2.3.0 lands.
+
+**Goal:** [Urgent work — to be planned. Operator-facing UX in the Campaigns view: per-ad-manager (Meta/Google) live count of active campaigns that have no product mapping in ManualOverrides, click-through to the list, green ✓ chip when all active campaigns are mapped.]
+**Requirements**: TBD (run /gsd-discuss-phase 05.4)
+**Depends on:** Phase 5 (latest stable campaigns data path); independent of 05.3 (manual tab); now also depends on 05.2.3.0 (revenue trust restored before this indicator ships)
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 05.4 to break down) — blocked until 05.2.3.0 ships
 
 ### Phase 6: Security & Cloud-Sync (SLIMMED — single-user internal context)
 
