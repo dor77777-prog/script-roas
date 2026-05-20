@@ -603,6 +603,43 @@ function backfillZolUsmileMay1to14() {
 }
 
 /**
+ * One-off helpers (added 2026-05-21 after Phase 05.2.3.0 gap-closure 08):
+ *
+ * Re-write data-daily + products-daily for the current month-to-date under the
+ * corrected total_price model. Each helper runs ONE store (bounded to ~5 min
+ * @ ~15s/store-day × ~21 days) so each invocation stays under the Apps Script
+ * 6-min cap. Run them in sequence from the Run dropdown:
+ *
+ *   1. backfillCurrentMonthUzoshop   →  ▶   (~5 min, alert when done)
+ *   2. backfillCurrentMonthZolplus    →  ▶   (~5 min)
+ *   3. backfillCurrentMonthUsmile360  →  ▶   (~5 min)
+ *
+ * After all 3 complete, the dashboard reflects the entire current month under
+ * the post-gap-closure-08 algorithm. Safe to re-run any time the month
+ * changes — `monthStart` is computed from the system clock in Asia/Jerusalem.
+ */
+function backfillCurrentMonthUzoshop() {
+  const monthStart = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-01');
+  const today = todayStr_();
+  Logger.log('=== backfillCurrentMonthUzoshop: ' + monthStart + ' .. ' + today + ' ===');
+  return backfillRangeForStores(monthStart, today, ['uzoshop']);
+}
+
+function backfillCurrentMonthZolplus() {
+  const monthStart = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-01');
+  const today = todayStr_();
+  Logger.log('=== backfillCurrentMonthZolplus: ' + monthStart + ' .. ' + today + ' ===');
+  return backfillRangeForStores(monthStart, today, ['zolplus']);
+}
+
+function backfillCurrentMonthUsmile360() {
+  const monthStart = Utilities.formatDate(new Date(), TZ, 'yyyy-MM-01');
+  const today = todayStr_();
+  Logger.log('=== backfillCurrentMonthUsmile360: ' + monthStart + ' .. ' + today + ' ===');
+  return backfillRangeForStores(monthStart, today, ['usmile360']);
+}
+
+/**
  * Debug helper - מדפיס ללוג את כל הנתונים הגולמיים של היום עבור כל חנות
  * **לפני המרה ל-CAD**, כך שאפשר להשוות מול הפלטפורמה (Meta / Google / Shopify).
  *
