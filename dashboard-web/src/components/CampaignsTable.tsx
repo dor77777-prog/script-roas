@@ -55,6 +55,7 @@ type SortKey =
   | 'conversions'
   | 'ctr'
   | 'cpc'
+  | 'cpm'           // cost per 1000 impressions (spend / impressions * 1000)
   | 'cpa';
 type SortDir = 'asc' | 'desc';
 
@@ -226,6 +227,10 @@ function sortAggregated(
         return a.impressions > 0 ? a.clicks / a.impressions : 0;
       case 'cpc':
         return a.clicks > 0 ? a.spend / a.clicks : 0;
+      case 'cpm':
+        // Cost per 1000 impressions: zero impressions → 0 so empty-impression
+        // rows sort to the bottom on desc (matching ctr/cpc/cpa convention).
+        return a.impressions > 0 ? (a.spend / a.impressions) * 1000 : 0;
       case 'cpa':
         return a.conversions > 0 ? a.spend / a.conversions : 0;
       default: {
@@ -865,6 +870,15 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     onClick={handleSort}
                     align="end"
                     className="px-3 py-2 w-[72px]"
+                  />
+                  <SortHeader
+                    label="CPM"
+                    sortKey="cpm"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[80px]"
                   />
                   <SortHeader
                     label="CPA"

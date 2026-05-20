@@ -15,6 +15,8 @@ import {
 import {
   Area,
   AreaChart,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -184,7 +186,7 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
     // Drawer always receives rows already filtered to this campaign.
     const first = rows[0];
     let spend = 0, value = 0, clicks = 0, impressions = 0, conversions = 0;
-    const byDay = new Map<string, { spend: number; value: number }>();
+    const byDay = new Map<string, { spend: number; value: number; impressions: number }>();
     // adSetBudgetCad: latest non-null daily budget (most-recent wins,
     // not summed — budget is current-state, not period-cumulative).
     const byAdSet = new Map<string, {
@@ -199,10 +201,11 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
       impressions += r.impressions;
       conversions += r.conversions;
 
-      if (!byDay.has(r.date)) byDay.set(r.date, { spend: 0, value: 0 });
+      if (!byDay.has(r.date)) byDay.set(r.date, { spend: 0, value: 0, impressions: 0 });
       const d = byDay.get(r.date)!;
       d.spend += r.spend;
       d.value += r.conversionValue;
+      d.impressions += r.impressions;
 
       const aKey = r.adSetId || r.adSetName || '(אחר)';
       if (!byAdSet.has(aKey)) {
@@ -235,7 +238,16 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
     const cpa = conversions > 0 ? spend / conversions : 0;
     const dailyArr = Array.from(byDay.entries())
       .sort((a, b) => a[0].localeCompare(b[0]))
-      .map(([date, v]) => ({ date, spend: v.spend, value: v.value }));
+      .map(([date, v]) => ({
+        date,
+        spend: v.spend,
+        value: v.value,
+        impressions: v.impressions,
+        // CPM per day: zero impressions -> 0. UI gates the CPM chart on
+        // impressions > 0 anyway, but compute defensively here so any
+        // future consumer of dailyArr gets a sane value.
+        cpm: v.impressions > 0 ? (v.spend / v.impressions) * 1000 : 0,
+      }));
     const adSets = Array.from(byAdSet.values())
       .map(a => ({ ...a, roas: a.spend > 0 ? a.value / a.spend : 0 }))
       .sort((a, b) => b.spend - a.spend);
@@ -487,6 +499,92 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
               </div>
             </section>
           )}
+
+          {/* CPM over time — cost per 1000 impressions, CAD. Only shows when
+              the user picked a range of at least 3 days AND there are at least
+              2 days with actual impressions (a single point is not a chart).
+              Days with zero impressions are filtered out — they have no
+              meaningful CPM and would visually drop the line to zero. */}
+          {(() => {
+            const cpmSeries = summary.dailyArr.filter(d => d.impressions > 0);
+            const fromMs = Date.UTC(
+              Number(rangeFrom.slice(0, 4)),
+              Number(rangeFrom.slice(5, 7)) - 1,
+              Number(rangeFrom.slice(8, 10)),
+            );
+            const toMs = Date.UTC(
+              Number(rangeTo.slice(0, 4)),
+              Number(rangeTo.slice(5, 7)) - 1,
+              Number(rangeTo.slice(8, 10)),
+            );
+            const rangeDays = Math.round((toMs - fromMs) / 86400000) + 1;
+            if (rangeDays < 3 || cpmSeries.length < 2) return null;
+            return (
+              <section>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold text-text-primary inline-flex items-center gap-1.5">
+                    <TrendingUp size={14} className="text-text-secondary" />
+                    CPM לאורך זמן
+                    <span className="text-[10px] font-medium text-text-muted">
+                      (עלות ל-1000 חשיפות, CAD)
+                    </span>
+                  </h3>
+                </div>
+                <div className="h-40 sm:h-44 rounded-xl bg-surfaceMuted/40 border border-borderSubtle p-2">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={cpmSeries} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                      <XAxis
+                        dataKey="date"
+                        tick={{ fontSize: 10, fill: '#7a8a9a' }}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={d => {
+                          const m = String(d).match(/^\d{4}-(\d{2})-(\d{2})/);
+                          return m ? `${m[2]}/${m[1]}` : String(d);
+                        }}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 10, fill: '#7a8a9a' }}
+                        tickLine={false}
+                        axisLine={false}
+                        tickFormatter={v => `$${Number(v).toFixed(0)}`}
+                        width={36}
+                        domain={[0, 'auto']}
+                      />
+                      <Tooltip
+                        content={({ active, payload }) => {
+                          if (!active || !payload || payload.length === 0) return null;
+                          const d = payload[0].payload as {
+                            date: string;
+                            cpm: number;
+                            impressions: number;
+                            spend: number;
+                          };
+                          return (
+                            <div dir="rtl" className="rounded-lg bg-text-primary text-white px-3 py-2 text-xs shadow-elevated tabular-nums">
+                              <div className="text-white/70 mb-1 text-[10px]">{formatDate(d.date)}</div>
+                              <div>CPM: <span className="font-semibold text-amber-200">CAD {formatCurrency(d.cpm, 2)}</span></div>
+                              <div className="text-white/70 text-[10px] mt-0.5">
+                                {formatNumber(d.impressions, 0)} חשיפות · CAD {formatCurrency(d.spend, 2)}
+                              </div>
+                            </div>
+                          );
+                        }}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="cpm"
+                        stroke="#d97706"
+                        strokeWidth={1.75}
+                        dot={{ r: 2.5, fill: '#d97706', stroke: 'none' }}
+                        activeDot={{ r: 4, fill: '#d97706', stroke: 'white', strokeWidth: 1.5 }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
+              </section>
+            );
+          })()}
 
           {/* Mapped products — Meta only (Google PMax delivery is feed-
               governed; manual tagging would mislead). */}

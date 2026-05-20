@@ -46,6 +46,9 @@ export function CampaignsTableRow({
   const roas = a.spend > 0 ? a.conversionValue / a.spend : 0;
   const ctr = a.impressions > 0 ? a.clicks / a.impressions : 0;
   const cpc = a.clicks > 0 ? a.spend / a.clicks : 0;
+  // CPM = cost per 1000 impressions. Meta's standard auction metric — what
+  // you pay on average to be seen by 1000 people. spend / impressions * 1000.
+  const cpm = a.impressions > 0 ? (a.spend / a.impressions) * 1000 : 0;
   const cpa = a.conversions > 0 ? a.spend / a.conversions : 0;
   const info = roasLabel(roas);
   const link = buildAdsManagerLink({
@@ -341,6 +344,9 @@ export function CampaignsTableRow({
       </td>
       <td className="px-3 py-2 text-end tabular-nums text-text-secondary">
         {a.clicks > 0 ? formatCurrency(cpc, 2) : '—'}
+      </td>
+      <td className="px-3 py-2 text-end tabular-nums text-text-secondary">
+        {a.impressions > 0 ? formatCurrency(cpm, 2) : '—'}
       </td>
       <td className="px-3 py-2 text-end tabular-nums text-text-secondary">
         {a.conversions > 0 ? formatCurrency(cpa, 2) : '—'}
