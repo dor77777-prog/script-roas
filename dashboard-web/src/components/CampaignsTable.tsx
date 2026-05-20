@@ -26,6 +26,7 @@ import {
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import { analyzeCpmVsRoas } from '@/lib/cpmRoasAnalysis';
 import { aggregate, type Aggregated } from '@/lib/campaignsAggregator';
+import { filterDrillRows } from '@/lib/drillFilter';
 import type { AdAccountMap } from '@/lib/campaignsLinks';
 import {
   clearAllOptimized,
@@ -559,12 +560,13 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   // FIX-22 (5.2.2.1): memoize drillRows so the drawer's useMemo([rows]) doesn't invalidate on every parent re-render.
   const drillRows = useMemo(() => {
     if (!drillCampaignId || !drillPlatform || !drillStoreId || !data) return null;
-    return data.rows.filter(r =>
-      r.storeId === drillStoreId &&
-      r.platform === drillPlatform &&
-      r.campaignId === drillCampaignId &&
-      r.date >= localRange.from && r.date <= localRange.to,
-    );
+    return filterDrillRows(data.rows, {
+      storeId: drillStoreId,
+      platform: drillPlatform,
+      campaignId: drillCampaignId,
+      rangeFrom: localRange.from,
+      rangeTo: localRange.to,
+    });
   }, [data, drillCampaignId, drillPlatform, drillStoreId, localRange.from, localRange.to]);
 
   // ----- Toolbar -----
