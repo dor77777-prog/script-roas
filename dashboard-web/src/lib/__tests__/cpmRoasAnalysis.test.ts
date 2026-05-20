@@ -25,6 +25,18 @@ describe('analyzeCpmVsRoas', () => {
     expect(result.text).toContain('5 ימים');
   });
 
+  it('FIX-24: placeholder text explains the 5-day threshold so the UI can surface it', () => {
+    // CampaignDrawer + CampaignsTable render the analysis box unconditionally
+    // (the {analysis.hasData &&} gate was removed in FIX-24 5.2.2.1). For sparse
+    // campaigns this is the message the user reads — it MUST be self-explanatory.
+    const result = analyzeCpmVsRoas(makeSeries({ cpm: 5, roas: 2 }).slice(0, 3));
+    expect(result.hasData).toBe(false);
+    expect(result.text).toMatch(/5 ימים/);
+    expect(result.text).toMatch(/ניתוח יופיע|מספיק היסטוריה|מסקנה/);
+    // Tone is neutral so the UI renders in the muted gray bg, not red/green.
+    expect(result.tone).toBe('neutral');
+  });
+
   it('filters out days with zero CPM or zero ROAS before checking n', () => {
     // 7 days but 3 with zero ROAS = 4 valid; below threshold.
     const series = makeSeries({ cpm: 5, roas: 2 }, [{}, {}, {}, { roas: 0 }, { roas: 0 }, { roas: 0 }]);

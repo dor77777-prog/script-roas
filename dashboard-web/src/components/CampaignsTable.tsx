@@ -937,16 +937,19 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
               תקופה קודמת לא הספיקה (פחות מ-3 ימים פעילים) — חזרנו להשוואת חצי-חצי.
             </div>
           )}
-          {analysis.hasData && (
-            <div className={cn('mt-2 rounded-lg border px-3 py-2 text-[11px] leading-relaxed', toneBg[analysis.tone])}>
+          {/* FIX-24 (5.2.2.1): always render so sparse campaigns see an explicit
+              placeholder instead of an empty space that looks like a UI bug.
+              Previously gated by {analysis.hasData &&}. */}
+          <div className={cn('mt-2 rounded-lg border px-3 py-2 text-[11px] leading-relaxed', toneBg[analysis.tone])}>
+            {analysis.hasData && (
               <div className="text-[10px] opacity-70 mb-1">
                 {baselineLabel}
                 {isLoadingPrev && <span className="ms-2 opacity-50">· טוען נתוני תקופה קודמת...</span>}
               </div>
-              <span className="font-semibold ml-1">ניתוח:</span>
-              <span>{analysis.text}</span>
-            </div>
-          )}
+            )}
+            <span className="font-semibold ml-1">ניתוח:</span>
+            <span>{analysis.text}</span>
+          </div>
         </div>
         );
       })()}

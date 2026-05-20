@@ -796,18 +796,21 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                     תקופה קודמת לא הספיקה (פחות מ-3 ימים פעילים) — חזרנו להשוואת חצי-חצי.
                   </div>
                 )}
-                {/* Smart analysis box — speaks only when there are enough
-                    points and only as a hint, not a directive. */}
-                {analysis.hasData && (
-                  <div className={cn('mt-2 rounded-lg border px-3 py-2 text-[11px] leading-relaxed', toneBg[analysis.tone])}>
+                {/* Smart analysis box — always renders so the user sees an
+                    explicit placeholder when there are too few data points
+                    (FIX-24 5.2.2.1: previously hidden via {analysis.hasData &&},
+                    which made the analysis silently disappear in sparse
+                    campaigns and was indistinguishable from a UI bug). */}
+                <div className={cn('mt-2 rounded-lg border px-3 py-2 text-[11px] leading-relaxed', toneBg[analysis.tone])}>
+                  {analysis.hasData && (
                     <div className="text-[10px] opacity-70 mb-1">
                       {baselineLabel}
                       {isLoadingPrev && <span className="ms-2 opacity-50">· טוען נתוני תקופה קודמת...</span>}
                     </div>
-                    <span className="font-semibold ml-1">ניתוח:</span>
-                    <span>{analysis.text}</span>
-                  </div>
-                )}
+                  )}
+                  <span className="font-semibold ml-1">ניתוח:</span>
+                  <span>{analysis.text}</span>
+                </div>
               </section>
             );
           })()}
