@@ -437,10 +437,16 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
 
   // Fetch previous-period campaigns only when the user actually flips the
   // baseline toggle — so the default open path stays at one fetch.
+  //
+  // IN-04 (5.2.2.1): match CampaignDrawer's SWR options (line 162/174/188)
+  // by passing dedupingInterval: 60_000. SWR's default dedupingInterval is
+  // 2000ms, so without this the campaigns table dedupes much more
+  // aggressively than the drawer — operators rapidly toggling 'prev' would
+  // refetch every ~2s instead of every 60s. Aligns the two sites.
   const { data: cpmPrevData } = useSWR<CampaignsResponse>(
     cpmAnalysisMode === 'prev' ? buildDateRangeKey('/api/campaigns', cpmPrevRange) : null,
     fetcher,
-    { revalidateOnFocus: false },
+    { revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
 
   const cpmDailyPrev = useMemo(() => {
