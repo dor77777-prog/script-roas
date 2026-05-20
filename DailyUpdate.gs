@@ -686,6 +686,121 @@ function backfillUsmile360May15to21() {
   return backfillRangeForStores('2026-05-15', '2026-05-21', ['usmile360']);
 }
 
+/* =====================================================================
+ * AUTO-CHAIN: one-click May 2026 backfill (added 2026-05-21)
+ *
+ * Click `startMayBackfillAuto` once from the Run dropdown. It enqueues 9
+ * chunks (3 chunks × 3 stores) in PropertiesService and creates a one-shot
+ * time-based trigger that fires the next chunk in 10 seconds. Each chunk
+ * runs ~2-3 min and on completion schedules the next chunk 30s later.
+ *
+ * Total wallclock: ~30-45 min (your laptop can sleep — Apps Script runs in
+ * the cloud). When done, the final chunk logs `auto-chain complete` and
+ * clears state.
+ *
+ * Abort: click `cancelMayBackfillAuto` (deletes the pending trigger + clears
+ * the queue state — partial progress already written to data-daily is kept).
+ *
+ * Restart: re-click `startMayBackfillAuto` — it idempotently clears the
+ * previous queue + any pending trigger first, then restarts from chunk 1.
+ * (Re-running chunks is safe — backfillRangeForStores is idempotent-by-row.)
+ * ===================================================================== */
+
+function startMayBackfillAuto() {
+  removeMayBackfillTriggers_();
+
+  const chunks = [
+    ['2026-05-01', '2026-05-07', 'uzoshop'],
+    ['2026-05-08', '2026-05-14', 'uzoshop'],
+    ['2026-05-15', '2026-05-21', 'uzoshop'],
+    ['2026-05-01', '2026-05-07', 'zolplus'],
+    ['2026-05-08', '2026-05-14', 'zolplus'],
+    ['2026-05-15', '2026-05-21', 'zolplus'],
+    ['2026-05-01', '2026-05-07', 'usmile360'],
+    ['2026-05-08', '2026-05-14', 'usmile360'],
+    ['2026-05-15', '2026-05-21', 'usmile360'],
+  ];
+
+  const props = PropertiesService.getScriptProperties();
+  props.setProperty('mayBackfillQueue', JSON.stringify(chunks));
+  props.setProperty('mayBackfillIdx', '0');
+
+  Logger.log('=== May backfill auto-chain initialized: ' + chunks.length + ' chunks queued ===');
+  Logger.log('First chunk fires in ~10 seconds. Watch Executions tab for progress.');
+  Logger.log('Estimated total wallclock: ~30-45 minutes.');
+  Logger.log('To abort: run cancelMayBackfillAuto from the Run dropdown.');
+
+  scheduleNextMayBackfillChunk_(10);
+}
+
+function runNextMayBackfillChunk() {
+  // One-shot: delete THIS trigger before doing work (so a long chunk does
+  // not accumulate orphan triggers if Apps Script retries).
+  removeMayBackfillTriggers_();
+
+  const props = PropertiesService.getScriptProperties();
+  const queueRaw = props.getProperty('mayBackfillQueue');
+  if (!queueRaw) {
+    Logger.log('runNextMayBackfillChunk fired but no queue in PropertiesService. Abort.');
+    return;
+  }
+  const queue = JSON.parse(queueRaw);
+  const idx = parseInt(props.getProperty('mayBackfillIdx') || '0', 10);
+
+  if (idx >= queue.length) {
+    Logger.log('=== May backfill auto-chain COMPLETE: ' + queue.length + '/' + queue.length + ' chunks done ===');
+    props.deleteProperty('mayBackfillQueue');
+    props.deleteProperty('mayBackfillIdx');
+    return;
+  }
+
+  const start = queue[idx][0];
+  const end = queue[idx][1];
+  const storeId = queue[idx][2];
+  Logger.log('=== Chunk ' + (idx + 1) + '/' + queue.length + ': ' + storeId + ' ' + start + ' .. ' + end + ' ===');
+
+  try {
+    backfillRangeForStores(start, end, [storeId]);
+  } catch (e) {
+    Logger.log('ERROR in chunk ' + (idx + 1) + ' (' + storeId + ' ' + start + '..' + end + '): ' + (e && e.stack ? e.stack : e));
+    // Continue to next chunk anyway — better to make progress than halt the whole chain.
+  }
+
+  props.setProperty('mayBackfillIdx', String(idx + 1));
+  scheduleNextMayBackfillChunk_(30); // 30s breathing room between chunks for Sheets-API quota
+}
+
+function cancelMayBackfillAuto() {
+  removeMayBackfillTriggers_();
+  const props = PropertiesService.getScriptProperties();
+  const idx = props.getProperty('mayBackfillIdx') || '0';
+  const queueRaw = props.getProperty('mayBackfillQueue');
+  const total = queueRaw ? JSON.parse(queueRaw).length : 0;
+  props.deleteProperty('mayBackfillQueue');
+  props.deleteProperty('mayBackfillIdx');
+  Logger.log('May backfill auto-chain CANCELLED at chunk ' + idx + '/' + total + '. State cleared.');
+  Logger.log('Partial progress (data-daily / products-daily rows already written) is preserved.');
+}
+
+function scheduleNextMayBackfillChunk_(delaySec) {
+  ScriptApp.newTrigger('runNextMayBackfillChunk')
+    .timeBased()
+    .after(delaySec * 1000)
+    .create();
+}
+
+function removeMayBackfillTriggers_() {
+  const triggers = ScriptApp.getProjectTriggers();
+  let removed = 0;
+  for (let i = 0; i < triggers.length; i++) {
+    if (triggers[i].getHandlerFunction() === 'runNextMayBackfillChunk') {
+      ScriptApp.deleteTrigger(triggers[i]);
+      removed++;
+    }
+  }
+  if (removed > 0) Logger.log('Removed ' + removed + ' pending runNextMayBackfillChunk trigger(s)');
+}
+
 /**
  * Debug helper - מדפיס ללוג את כל הנתונים הגולמיים של היום עבור כל חנות
  * **לפני המרה ל-CAD**, כך שאפשר להשוות מול הפלטפורמה (Meta / Google / Shopify).
