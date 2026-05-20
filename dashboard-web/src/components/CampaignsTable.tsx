@@ -524,12 +524,12 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   // "vs previous period" the Hero KPIs use).
   const [cpmAnalysisMode, setCpmAnalysisMode] = useState<'half' | 'prev'>('half');
 
-  // Build the previous-period series from data?.rows without a second
-  // fetch: data.rows already covers a wider 17-month window (per Hero
-  // monthly tables fetch) and the same store/platform filters apply.
-  // Range = same length as current, ending the day before current.from.
-  const cpmDailyPrev = useMemo(() => {
-    if (cpmAnalysisMode !== 'prev') return null;
+  // Compute the equally-long previous-period window (the N days immediately
+  // before localRange.from). Used both to label the baseline and to drive
+  // the second SWR fetch below — the current /api/campaigns response only
+  // covers the user-selected range (Phase 5 range pagination), so an extra
+  // fetch is required to get the prev-period rows.
+  const cpmPrevRange = useMemo(() => {
     const fromMs = Date.UTC(
       Number(localRange.from.slice(0, 4)),
       Number(localRange.from.slice(5, 7)) - 1,
@@ -543,12 +543,26 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     const spanDays = Math.round((toMs - fromMs) / 86400000) + 1;
     const prevToMs = fromMs - 86400000;
     const prevFromMs = prevToMs - (spanDays - 1) * 86400000;
-    const prevFrom = new Date(prevFromMs).toISOString().slice(0, 10);
-    const prevTo = new Date(prevToMs).toISOString().slice(0, 10);
+    return {
+      from: new Date(prevFromMs).toISOString().slice(0, 10),
+      to: new Date(prevToMs).toISOString().slice(0, 10),
+    };
+  }, [localRange.from, localRange.to]);
+
+  // Fetch previous-period campaigns only when the user actually flips the
+  // baseline toggle — so the default open path stays at one fetch.
+  const { data: cpmPrevData } = useSWR<CampaignsResponse>(
+    cpmAnalysisMode === 'prev' ? buildDateRangeKey('/api/campaigns', cpmPrevRange) : null,
+    fetcher,
+    { revalidateOnFocus: false },
+  );
+
+  const cpmDailyPrev = useMemo(() => {
+    if (cpmAnalysisMode !== 'prev') return null;
     const byDay = new Map<string, { spend: number; impressions: number; value: number }>();
-    const rows = data?.rows ?? [];
+    const rows = cpmPrevData?.rows ?? [];
     for (const r of rows) {
-      if (r.date < prevFrom || r.date > prevTo) continue;
+      if (r.date < cpmPrevRange.from || r.date > cpmPrevRange.to) continue;
       if (localStore !== 'All' && r.storeName !== localStore) continue;
       if (platform !== 'all' && r.platform !== platform) continue;
       if (!byDay.has(r.date)) byDay.set(r.date, { spend: 0, impressions: 0, value: 0 });
@@ -565,7 +579,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         cpm: (v.spend / v.impressions) * 1000,
         roas: v.spend > 0 ? v.value / v.spend : 0,
       }));
-  }, [cpmAnalysisMode, data?.rows, localRange.from, localRange.to, localStore, platform]);
+  }, [cpmAnalysisMode, cpmPrevData?.rows, cpmPrevRange.from, cpmPrevRange.to, localStore, platform]);
 
   // Shopify-ROAS sort: re-rank using `trueRevenueByKey` (sortAggregated falls
   // back to Meta ROAS). Unmapped rows pushed to bottom on desc.
@@ -846,9 +860,27 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
           negative: 'bg-roas-redBg/40 border-roas-red/30 text-roas-red',
           neutral:  'bg-surfaceMuted border-borderSubtle text-text-secondary',
         };
+        // Build an explicit baseline label with the actual date windows so
+        // the user knows exactly what's being compared. Format MM-DD/DD →
+        // MM-DD/DD so it reads naturally in Hebrew RTL.
+        const fmtRangeShort = (from: string, to: string) => {
+          const f = from.slice(5).replace('-', '/');
+          const t = to.slice(5).replace('-', '/');
+          return `${f}—${t}`;
+        };
+        const halfMidIdx = Math.floor(cpmDaily.length / 2);
+        const firstHalfDates = cpmDaily.length >= 4
+          ? `${cpmDaily[0].date.slice(5).replace('-', '/')}—${cpmDaily[halfMidIdx - 1].date.slice(5).replace('-', '/')}`
+          : '';
+        const secondHalfDates = cpmDaily.length >= 4
+          ? `${cpmDaily[halfMidIdx].date.slice(5).replace('-', '/')}—${cpmDaily[cpmDaily.length - 1].date.slice(5).replace('-', '/')}`
+          : '';
         const baselineLabel = analysis.mode === 'previous-period'
-          ? 'השוואה: vs תקופה קודמת באותו אורך'
+          ? `השוואה: ${fmtRangeShort(localRange.from, localRange.to)} מול ${fmtRangeShort(cpmPrevRange.from, cpmPrevRange.to)} (תקופה קודמת באותו אורך)`
+          : firstHalfDates && secondHalfDates
+          ? `השוואה: חצי שני (${secondHalfDates}) מול חצי ראשון (${firstHalfDates})`
           : 'השוואה: חצי שני vs חצי ראשון של הטווח';
+        const isLoadingPrev = cpmAnalysisMode === 'prev' && !cpmPrevData;
         return (
         <div className="mt-3 rounded-lg bg-surface border border-borderSubtle p-3">
           <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
@@ -1008,7 +1040,10 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
           )}
           {analysis.hasData && (
             <div className={cn('mt-2 rounded-lg border px-3 py-2 text-[11px] leading-relaxed', toneBg[analysis.tone])}>
-              <div className="text-[10px] opacity-70 mb-1">{baselineLabel}</div>
+              <div className="text-[10px] opacity-70 mb-1">
+                {baselineLabel}
+                {isLoadingPrev && <span className="ms-2 opacity-50">· טוען נתוני תקופה קודמת...</span>}
+              </div>
               <span className="font-semibold ml-1">ניתוח:</span>
               <span>{analysis.text}</span>
             </div>

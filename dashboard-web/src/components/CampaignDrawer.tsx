@@ -616,9 +616,24 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
               cpmSeries.map(d => ({ date: d.date, cpm: d.cpm, roas: d.roas })),
               prevDaily ? { prev: prevDaily } : undefined,
             );
+            const fmtRangeShort = (from: string, to: string) => {
+              const f = from.slice(5).replace('-', '/');
+              const t = to.slice(5).replace('-', '/');
+              return `${f}—${t}`;
+            };
+            const halfMidIdx = Math.floor(cpmSeries.length / 2);
+            const firstHalfDates = cpmSeries.length >= 4
+              ? `${cpmSeries[0].date.slice(5).replace('-', '/')}—${cpmSeries[halfMidIdx - 1].date.slice(5).replace('-', '/')}`
+              : '';
+            const secondHalfDates = cpmSeries.length >= 4
+              ? `${cpmSeries[halfMidIdx].date.slice(5).replace('-', '/')}—${cpmSeries[cpmSeries.length - 1].date.slice(5).replace('-', '/')}`
+              : '';
             const baselineLabel = analysis.mode === 'previous-period'
-              ? 'השוואה: vs תקופה קודמת באותו אורך'
+              ? `השוואה: ${fmtRangeShort(rangeFrom, rangeTo)} מול ${fmtRangeShort(prevRange.from, prevRange.to)} (תקופה קודמת באותו אורך)`
+              : firstHalfDates && secondHalfDates
+              ? `השוואה: חצי שני (${secondHalfDates}) מול חצי ראשון (${firstHalfDates})`
               : 'השוואה: חצי שני vs חצי ראשון של הטווח';
+            const isLoadingPrev = cpmAnalysisMode === 'prev' && !campaignsDataPrev;
             const toneBg: Record<typeof analysis.tone, string> = {
               positive: 'bg-roas-greenBg/40 border-roas-green/30 text-roas-green',
               warning:  'bg-amber-50 border-amber-300 text-amber-800',
@@ -786,7 +801,10 @@ export function CampaignDrawer({ rows, campaignId, open, onClose, adAccounts, ra
                     points and only as a hint, not a directive. */}
                 {analysis.hasData && (
                   <div className={cn('mt-2 rounded-lg border px-3 py-2 text-[11px] leading-relaxed', toneBg[analysis.tone])}>
-                    <div className="text-[10px] opacity-70 mb-1">{baselineLabel}</div>
+                    <div className="text-[10px] opacity-70 mb-1">
+                      {baselineLabel}
+                      {isLoadingPrev && <span className="ms-2 opacity-50">· טוען נתוני תקופה קודמת...</span>}
+                    </div>
                     <span className="font-semibold ml-1">ניתוח:</span>
                     <span>{analysis.text}</span>
                   </div>
