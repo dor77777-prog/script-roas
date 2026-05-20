@@ -191,3 +191,33 @@ export function enumerateDateRange(from: string, to: string): string[] {
 export function isInRange(date: string, range: DateRange): boolean {
   return date >= range.from && date <= range.to;
 }
+
+/**
+ * Returns the previous-period DateRange of equal length immediately preceding
+ * `range`. Validates inputs via regex; returns the input range as a no-op
+ * fallback if malformed.
+ *
+ * FIX-23 (5.2.2.1): centralized to avoid duplicated UTC math and
+ * NaN-throwing edges in component code.
+ */
+export function getPreviousPeriod(range: DateRange): DateRange {
+  if (!ISO_DATE.test(range.from) || !ISO_DATE.test(range.to)) {
+    console.warn('getPreviousPeriod: malformed range, returning as-is', range);
+    return range;
+  }
+  const fromMs = Date.UTC(
+    Number(range.from.slice(0, 4)),
+    Number(range.from.slice(5, 7)) - 1,
+    Number(range.from.slice(8, 10)),
+  );
+  const toMs = Date.UTC(
+    Number(range.to.slice(0, 4)),
+    Number(range.to.slice(5, 7)) - 1,
+    Number(range.to.slice(8, 10)),
+  );
+  const lengthMs = toMs - fromMs;
+  const prevToMs = fromMs - 86400_000;
+  const prevFromMs = prevToMs - lengthMs;
+  const toIso = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+  return { from: toIso(prevFromMs), to: toIso(prevToMs) };
+}

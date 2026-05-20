@@ -60,7 +60,7 @@ import {
   setMappedProducts,
   type ProductMap,
 } from '@/lib/campaignProductMap';
-import { buildDateRangeKey } from '@/lib/dateRange';
+import { buildDateRangeKey, getPreviousPeriod } from '@/lib/dateRange';
 
 /**
  * Slide-in campaign drilldown drawer. Linear/Vercel-style: full context
@@ -147,25 +147,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
   const drawerRange = { from: rangeFrom, to: rangeTo };
   // Equal-length window immediately before the current range. Only used
   // by the CPM-vs-ROAS analysis when the mode toggle is set to 'prev'.
-  const prevRange = useMemo(() => {
-    const fromMs = Date.UTC(
-      Number(rangeFrom.slice(0, 4)),
-      Number(rangeFrom.slice(5, 7)) - 1,
-      Number(rangeFrom.slice(8, 10)),
-    );
-    const toMs = Date.UTC(
-      Number(rangeTo.slice(0, 4)),
-      Number(rangeTo.slice(5, 7)) - 1,
-      Number(rangeTo.slice(8, 10)),
-    );
-    const spanDays = Math.round((toMs - fromMs) / 86400000) + 1;
-    const prevToMs = fromMs - 86400000;
-    const prevFromMs = prevToMs - (spanDays - 1) * 86400000;
-    return {
-      from: new Date(prevFromMs).toISOString().slice(0, 10),
-      to: new Date(prevToMs).toISOString().slice(0, 10),
-    };
-  }, [rangeFrom, rangeTo]);
+  const prevRange = useMemo(() => getPreviousPeriod({ from: rangeFrom, to: rangeTo }), [rangeFrom, rangeTo]);
   // All campaign rows for the date range — used by buildReconciliation to
   // compute the Google series (other Google campaigns promoting same products).
   // SWR dedupes against CampaignsTable's identical key so no extra network call.

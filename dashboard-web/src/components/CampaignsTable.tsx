@@ -42,7 +42,7 @@ import type { ProductsResponse } from '@/app/api/products/route';
 import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { DateRange } from '@/lib/types';
-import { buildDateRangeKey } from '@/lib/dateRange';
+import { buildDateRangeKey, getPreviousPeriod } from '@/lib/dateRange';
 import { roasLabel } from '@/lib/analytics';
 import { useCampaignTrueRevenue } from '@/lib/hooks/useCampaignTrueRevenue';
 import { CampaignsTableRow } from './CampaignsTableRow';
@@ -538,25 +538,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   // the second SWR fetch below — the current /api/campaigns response only
   // covers the user-selected range (Phase 5 range pagination), so an extra
   // fetch is required to get the prev-period rows.
-  const cpmPrevRange = useMemo(() => {
-    const fromMs = Date.UTC(
-      Number(localRange.from.slice(0, 4)),
-      Number(localRange.from.slice(5, 7)) - 1,
-      Number(localRange.from.slice(8, 10)),
-    );
-    const toMs = Date.UTC(
-      Number(localRange.to.slice(0, 4)),
-      Number(localRange.to.slice(5, 7)) - 1,
-      Number(localRange.to.slice(8, 10)),
-    );
-    const spanDays = Math.round((toMs - fromMs) / 86400000) + 1;
-    const prevToMs = fromMs - 86400000;
-    const prevFromMs = prevToMs - (spanDays - 1) * 86400000;
-    return {
-      from: new Date(prevFromMs).toISOString().slice(0, 10),
-      to: new Date(prevToMs).toISOString().slice(0, 10),
-    };
-  }, [localRange.from, localRange.to]);
+  const cpmPrevRange = useMemo(() => getPreviousPeriod(localRange), [localRange.from, localRange.to]);
 
   // Fetch previous-period campaigns only when the user actually flips the
   // baseline toggle — so the default open path stays at one fetch.
