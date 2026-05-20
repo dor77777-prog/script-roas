@@ -171,6 +171,7 @@ export function buildReconciliation(opts: {
   // orders-attribution proportional line-item revenue basis as the Organic
   // series below, so those two chart lines can be compared directly.
   // Fix for CODEX-NEW-P2-01.
+  // FIX-02 (5.2.2.1): hitMapped boolean — skip only orders with NO mapped product. Keeps refund days in series. Matches analyzeProductChannel:1060-1069.
   const shopifyByDate = new Map<string, number>();
   if (ordersData?.rows) {
     for (const order of ordersData.rows) {
@@ -178,12 +179,14 @@ export function buildReconciliation(opts: {
       if (!order.lineItems || order.lineItems.length === 0) continue;
       if (order.date < rangeFrom || order.date > rangeTo) continue;
       let mappedRevenue = 0;
+      let hitMapped = false;
       for (const li of order.lineItems) {
         if (wantedIds.has(li.productId)) {
+          hitMapped = true;
           mappedRevenue += li.revenueCad;
         }
       }
-      if (mappedRevenue === 0) continue;
+      if (!hitMapped) continue;   // skip only when NO mapped product hit; refund-cancel days (mappedRevenue=0 but hitMapped=true) stay in series
       shopifyByDate.set(order.date, (shopifyByDate.get(order.date) ?? 0) + mappedRevenue);
     }
   }
@@ -234,6 +237,7 @@ export function buildReconciliation(opts: {
   // Sum line-item revenue (partial-order attribution) for orders whose source
   // is organic (NOT meta-paid or google-paid) and that contain at least one
   // mapped product. Only count the mapped-product line items' revenueCad.
+  // FIX-02 (5.2.2.1): hitMapped boolean — skip only orders with NO mapped product. Keeps refund days in series. Matches analyzeProductChannel:1060-1069.
   const organicByDate = new Map<string, number>();
   if (ordersData?.rows) {
     for (const order of ordersData.rows) {
@@ -243,12 +247,14 @@ export function buildReconciliation(opts: {
       if (order.date < rangeFrom || order.date > rangeTo) continue;
       // Partial-order summation: only count revenue for mapped products
       let mappedRevenue = 0;
+      let hitMapped = false;
       for (const li of order.lineItems) {
         if (wantedIds.has(li.productId)) {
+          hitMapped = true;
           mappedRevenue += li.revenueCad;
         }
       }
-      if (mappedRevenue <= 0) continue;
+      if (!hitMapped) continue;   // keep refund days (negative mappedRevenue) and exactly-cancelling refunds (mappedRevenue=0)
       organicByDate.set(order.date, (organicByDate.get(order.date) ?? 0) + mappedRevenue);
     }
   }
