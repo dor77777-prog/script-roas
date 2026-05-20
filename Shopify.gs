@@ -527,6 +527,154 @@ function getShopifyProductsCatalog(storeId) {
 }
 
 /**
+ * Phase 05.2.3.0 (D-A1..D-A4, D-C1, D-C2, D-D4): Shared cross-day refund fetcher.
+ *
+ * Returns refunds processed on day `dateStr` (Asia/Jerusalem) whose underlying
+ * order was created on a DIFFERENT day. These are the refunds that
+ * `current_total_price` of yesterday's order does NOT reflect in today's
+ * revenue sheet — they must be subtracted manually from today's totals.
+ *
+ * Per D-A3: ONE HTTP call, TWO consumers. After the 2026-05-21 CONTEXT.md
+ * revision, D-C1 and D-C2 use the SAME field — `refund_line_items[].subtotal`.
+ * The store-level total sums every refund_line_item subtotal (including
+ * custom items with no product_id); the per-product map sums only those
+ * with an indexable product_id. This shared call avoids duplicating API
+ * quota burn and keeps both consumers on the same source of truth.
+ *
+ * Per D-A2: the cross-day filter is `refund.processed_at on D AND
+ * order.created_at NOT on D`. Refunds processed on the same day as the
+ * order are ALREADY netted by current_total_price (proven by AUDIT-P0-03)
+ * — subtracting them again would double-deduct (the rolled-back trap).
+ *
+ * NOT used (per PROBE-EVIDENCE.md §Finding 1): refund.transactions[].amount.
+ * Empirically ran 2–4× the order total on 3/3 stores (currency mismatch and
+ * duplicate-refund artifacts); unsafe to deduct from current_total_price-
+ * based revenue. Captured by Plan 01's probe; intentionally not consumed
+ * by this fetcher.
+ *
+ * Returns:
+ *   {
+ *     storeRefundCad: number,             // Σ rli.subtotal across ALL refund_line_items (D-C1 revised — merchandise-only, order display currency)
+ *     byProduct: { [productId]: { refundCad: number } }, // Σ rli.subtotal grouped by product_id (D-C2 — null/missing product_id excluded)
+ *     customItemRefundCad: number,        // Σ rli.subtotal for items with null/missing product_id (D-C3 invariant 3 diagnostic; expect ≈0 in practice)
+ *     processedAtCount: number,           // diagnostic — # refunds attributed to day D
+ *   }
+ *
+ * Reconciliation invariant: storeRefundCad === Σ byProduct[pid].refundCad + customItemRefundCad
+ * (exact within float rounding ±0.01 CAD; if customItemRefundCad > 1 CAD, log WARNING).
+ *
+ * Errors are not swallowed — callers in DailyUpdate.gs wrap their
+ * sub-section calls in try/catch already (the existing `non-fatal`
+ * pattern). A failed fetch here propagates up to that handler.
+ */
+function getShopifyRefundsForDay_(storeId, dateStr) {
+  const domain = requireProp(`${storeId}.shopify.domain`).replace(/^https?:\/\//, '').replace(/\/$/, '');
+  let token = requireProp(`${storeId}.shopify.token`);
+  let bootstrapTried = false;
+
+  const dayStart = isoLocalMidnight_(dateStr);
+  const dayEnd = isoLocalMidnight_(nextDayStr_(dateStr));
+
+  // updated_at window catches every order whose refund advanced its updated_at into day D —
+  // regardless of when the order was created. We then JS-filter to keep only refunds whose
+  // processed_at is on day D AND whose underlying order's created_at is NOT on day D.
+  let url = `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/orders.json` +
+            `?status=any&financial_status=any&limit=250` +
+            `&updated_at_min=${encodeURIComponent(dayStart)}` +
+            `&updated_at_max=${encodeURIComponent(dayEnd)}` +
+            `&fields=id,created_at,financial_status,test,refunds`;
+
+  let storeRefundCad = 0;
+  const byProduct = Object.create(null); // IN5-05 pattern — defensive against pollution from product_id keys
+  let customItemRefundCad = 0;
+  let processedAtCount = 0;
+  let safety = 0;
+
+  while (url && safety < 50) {
+    const res = fetchWithRetry_(url, {
+      method: 'get',
+      headers: { 'X-Shopify-Access-Token': token },
+      muteHttpExceptions: true,
+    });
+    const code = res.getResponseCode();
+    if (code === 429) { Utilities.sleep(2000); safety++; continue; }
+    if (code === 401 && !bootstrapTried) {
+      bootstrapTried = true;
+      const fresh = tryAutoBootstrapShopify_(storeId);
+      if (fresh) { token = fresh; continue; }
+      // No bootstrap path → fall through to throw with the original 401.
+    }
+    if (code !== 200) {
+      throw new Error(`Shopify refunds ${storeId} ${dateStr} failed (${code}): ${res.getContentText().slice(0, 200)}`);
+    }
+    const body = JSON.parse(res.getContentText());
+    const orders = (body && body.orders) || [];
+
+    for (const o of orders) {
+      if (o.test) continue;
+      if (o.financial_status === 'voided') continue;
+
+      // Day-string of the order's creation in Asia/Jerusalem.
+      const orderCreatedDay = o.created_at
+        ? Utilities.formatDate(new Date(o.created_at), TZ, 'yyyy-MM-dd')
+        : '';
+
+      const refunds = o.refunds || [];
+      for (const r of refunds) {
+        if (!r.processed_at) continue;
+        const processedDay = Utilities.formatDate(new Date(r.processed_at), TZ, 'yyyy-MM-dd');
+
+        // D-A2 cross-day filter — both conditions required.
+        if (processedDay !== dateStr) continue;
+        if (orderCreatedDay === dateStr) continue;
+
+        processedAtCount++;
+
+        // D-C1 revised + D-C2: single field (refund_line_items[].subtotal) for BOTH paths.
+        // Store-level accumulates every item; per-product groups only by valid product_id;
+        // custom items (no product_id) surface in customItemRefundCad as a diagnostic.
+        // PROBE-EVIDENCE.md §Finding 2: rli.total is undefined in live response —
+        // `|| rli.total` is a defensive fallback only.
+        const rlis = r.refund_line_items || [];
+        for (const rli of rlis) {
+          const amt = parseFloat(rli.subtotal || rli.total || 0);
+          if (!Number.isFinite(amt)) continue;
+          storeRefundCad += amt;
+          const pid = String(rli.product_id || '');
+          if (pid) {
+            if (!byProduct[pid]) byProduct[pid] = { refundCad: 0 };
+            byProduct[pid].refundCad += amt;
+          } else {
+            customItemRefundCad += amt;
+          }
+        }
+      }
+    }
+
+    const link = res.getHeaders()['Link'] || res.getHeaders()['link'] || '';
+    const m = link.match(/<([^>]+)>;\s*rel="next"/);
+    url = m ? m[1] : null;
+    safety++;
+  }
+  if (safety >= 50) {
+    Logger.log(
+      `WARNING: hit pagination safety cap of 50 pages for Shopify refunds ` +
+      `${storeId} ${dateStr} (storeRefundCad=${storeRefundCad.toFixed(2)}); ` +
+      `data beyond may be missing.`
+    );
+  }
+
+  // D-C3 invariant 3 diagnostic: surface custom-item refund magnitude.
+  if (customItemRefundCad > 1) {
+    Logger.log(`WARNING: customItemRefundCad=${customItemRefundCad.toFixed(2)} CAD on ${storeId} ${dateStr} (> 1 CAD; refunds against line items with no product_id). Indicates either a manual discount refund or a custom-item refund worth investigating.`);
+  } else if (customItemRefundCad > 0) {
+    Logger.log(`Shopify refunds ${storeId} ${dateStr}: customItemRefundCad=${customItemRefundCad.toFixed(2)} CAD (≤ 1 CAD, diagnostic only).`);
+  }
+  Logger.log(`Shopify refunds ${storeId} ${dateStr}: ${processedAtCount} cross-day refunds, storeRefundCad=${storeRefundCad.toFixed(2)} CAD, products=${Object.keys(byProduct).length}`);
+  return { storeRefundCad, byProduct, customItemRefundCad, processedAtCount };
+}
+
+/**
  * שואב את ההזמנות של היום עם **שדות attribution** (landing_site,
  * referring_site, note_attributes), מסווג כל הזמנה לערוץ המקור שלה
  * ('meta-paid' / 'google-paid' / 'meta-organic' / etc.), ומחזיר מערך

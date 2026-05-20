@@ -82,6 +82,23 @@ function nextDayStr_(dateStr) {
 }
 
 /**
+ * Mirror of nextDayStr_ for negative offset.
+ * Returns the YYYY-MM-DD string `n` days BEFORE dateStr (default n=1).
+ *
+ * Phase 05.2.3.0 D-D1: live trigger wrappers iterate D-2, D-1, D for the
+ * rolling 3-day backfill that catches cross-day refunds processed in the
+ * prior 48h. Uses Date.UTC arithmetic (same as nextDayStr_) so the day-
+ * string math works across DST + month boundaries without local-time
+ * landmines.
+ */
+function previousDayStr_(dateStr, n) {
+  const offset = (typeof n === 'number' && Number.isFinite(n) && n > 0) ? Math.floor(n) : 1;
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d - offset));
+  return Utilities.formatDate(dt, 'UTC', 'yyyy-MM-dd');
+}
+
+/**
  * ממיר מחרוזת YYYY-MM-DD לאובייקט Date (בלי שעה).
  * אם הקלט כבר Date, מחזיר אותו כמו שהוא. אחרת מחזיר Date שגוי.
  */
