@@ -1,18 +1,39 @@
 /**
- * Shopify.gs - שליפת הכנסות יומיות מ-Shopify Admin API.
+ * Shopify.gs - שליפת הכנסות יומיות ומכירות פר-מוצר מ-Shopify Admin API
+ * עם ייחוס החזרים לפי יום העיבוד (Phase 05.2.3.0).
  *
  * נדרש לכל חנות:
  *   - {storeId}.shopify.domain         (לדוגמה: my-shop.myshopify.com)
  *   - {storeId}.shopify.token          (Admin API access token, shpat_...)
  *
- * אם החנות הוקמה דרך Shopify Dev Dashboard החדש ואין כפתור "Reveal token once",
+ * אם החנות הוקמה דרך Shopify Dev Dashboard ואין כפתור "Reveal token once",
  * השג את הטוקן ע"י Client Credentials Grant - ראה bootstrapShopifyToken().
  * נדרש במקרה הזה גם:
  *   - {storeId}.shopify.clientId       (מהאפליקציה ב-Dev Dashboard)
  *   - {storeId}.shopify.clientSecret   (מהאפליקציה ב-Dev Dashboard)
  *
- * אנו סוכמים את current_total_price של ההזמנות שנוצרו בחלון היום (שעון ישראל),
- * למעט הזמנות test ו-voided. current_total_price כבר מנכה החזרים על ההזמנה.
+ * חוזה ייחוס החזרים (D-A1..D-A4, D-C1, D-C2, D-D3, D-D4):
+ *   getShopifyRevenue(D) = sum current_total_price(orders.created_at=D, excl test/voided)
+ *                          - getShopifyRefundsForDay_(D).storeRefundCad
+ *
+ *   getShopifyProductSalesForDay(D)[pid].netRevenueCad =
+ *      sum (qty*price - line_discount - intra_order_refund) for orders.created_at=D
+ *      - getShopifyRefundsForDay_(D).byProduct[pid].refundCad
+ *
+ *   current_total_price (D-A1, מאומת אמפירית ע"י AUDIT-P0-03 ופרובה
+ *   ב-05.2.3.0-PROBE-EVIDENCE.md) כבר מנכה החזרים שיושמו על אותה הזמנה.
+ *   getShopifyRefundsForDay_ (D-A2) מחזיר רק החזרים שעובדו ביום D נגד
+ *   הזמנות שנוצרו ביום אחר — כך לא נופלים במלכודת double-deduction של
+ *   הניסיון שגולגל אחורה ב-2026-05-20.
+ *
+ *   D-D3: הכנסה יומית שלילית מוצגת כפי שהיא (ללא clamping ל-0). יום עם
+ *   החזרים גדולים על הזמנות מימים קודמים יכול להראות הכנסה שלילית —
+ *   זו חשבונאות נכונה, לא באג. הדשבורד מציג את המספר השלילי בצבע אדום
+ *   על-ידי החוקים הקיימים.
+ *
+ *   D-D4: אותו אלגוריתם רץ ל-3 החנויות (uzoshop / zolplus / usmile360).
+ *   אין סניפים פר-חנות - Shopify Admin REST 2024-10 הוא חוזה שווה לכל
+ *   חנות באותה גרסת API.
  */
 
 /**
