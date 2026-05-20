@@ -176,6 +176,7 @@ function onOpen() {
       .addItem('פתח טאב Override ידני (manual-spend)', 'openManualSpendTab')
       .addSeparator()
       .addItem('בדוק הגדרות (verifyConfig)', 'showVerifyConfig_')
+      .addItem('בדיקת חוזה החזרים (Shopify probe)', 'probeRefundContract_')
       .addItem('הוצא Shopify tokens (Client Credentials)', 'bootstrapAllShopifyTokens')
       .addItem('פתח גיליון הגדרות', 'showSpreadsheetUrl_')
       .addToUi();
@@ -205,6 +206,126 @@ function promptBackfill_() {
 function showSpreadsheetUrl_() {
   const ss = ensureSpreadsheet();
   SpreadsheetApp.getUi().alert(ss.getUrl());
+}
+
+/**
+ * D-B1..D-B4 (Phase 05.2.3.0): Empirical probe of Shopify's refund payload contract.
+ *
+ * READ-ONLY. Logs the 9 D-B2 fields for ONE refunded order per store so the operator
+ * can populate 05.2.3.0-PROBE-EVIDENCE.md before any TS mirror / production fetcher
+ * change ships. This is the structural mechanism that prevents the fictional-fixture
+ * trap (CR-04 from the rolled-back review).
+ *
+ * STRIDE-I — PII redaction:
+ *   The `fields=` query parameter explicitly enumerates ONLY id, created_at,
+ *   total_price, current_total_price, subtotal_price, total_tax, refunds. Customer
+ *   identifiers (customer.*, email, phone, billing_address, shipping_address) are
+ *   NEVER requested from Shopify, NEVER hit `Logger.log`. This is the security
+ *   acceptance criterion for the probe — see threat_model below.
+ *
+ * Run: ROAS menu → "בדיקת חוזה החזרים (Shopify probe)" OR Apps Script editor → Run dropdown.
+ */
+function probeRefundContract_() {
+  Logger.log('===== Shopify refund-contract probe =====');
+  Logger.log(`API version: ${SHOPIFY_API_VERSION}; lookback: 60 days; PII fields explicitly excluded from fields= param`);
+  Logger.log('');
+
+  const nowMs = Date.now();
+  const sixtyDaysAgoIso = new Date(nowMs - 60 * 24 * 60 * 60 * 1000).toISOString();
+
+  for (const store of STORES) {
+    Logger.log(`=== ${store.name} (${store.id}) ===`);
+    try {
+      const domain = requireProp(`${store.id}.shopify.domain`).replace(/^https?:\/\//, '').replace(/\/$/, '');
+      let token = requireProp(`${store.id}.shopify.token`);
+      let bootstrapTried = false;
+
+      // fields= enumerated explicitly — NO customer.*, NO addresses, NO note_attributes, NO line_items.
+      let url = `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/orders.json` +
+                `?status=any&financial_status=any&limit=250` +
+                `&updated_at_min=${encodeURIComponent(sixtyDaysAgoIso)}` +
+                `&fields=id,created_at,total_price,current_total_price,subtotal_price,total_tax,refunds`;
+
+      let found = null;
+      let safety = 0;
+      while (url && safety < 50 && !found) {
+        const res = fetchWithRetry_(url, {
+          method: 'get',
+          headers: { 'X-Shopify-Access-Token': token },
+          muteHttpExceptions: true,
+        });
+        const code = res.getResponseCode();
+        if (code === 429) { Utilities.sleep(2000); safety++; continue; }
+        if (code === 401 && !bootstrapTried) {
+          bootstrapTried = true;
+          const fresh = tryAutoBootstrapShopify_(store.id);
+          if (fresh) { token = fresh; continue; }
+        }
+        if (code !== 200) {
+          throw new Error(`Probe ${store.id} failed (${code}): ${res.getContentText().slice(0, 200)}`);
+        }
+        const body = JSON.parse(res.getContentText());
+        const orders = (body && body.orders) || [];
+        for (const o of orders) {
+          if (o.refunds && o.refunds.length > 0 &&
+              o.refunds[0].transactions && o.refunds[0].transactions.length > 0) {
+            found = o;
+            break;
+          }
+        }
+        const link = res.getHeaders()['Link'] || res.getHeaders()['link'] || '';
+        const m = link.match(/<([^>]+)>;\s*rel="next"/);
+        url = m ? m[1] : null;
+        safety++;
+      }
+
+      if (!found) {
+        Logger.log(`=== ${store.name}: NO REFUND FOUND IN LAST 60 DAYS — extend window or pick a different test order in Shopify Admin manually ===`);
+        Logger.log('');
+        continue;
+      }
+
+      // Emit the 9 D-B2 fields verbatim.
+      Logger.log(`order.id                       : ${found.id}`);
+      Logger.log(`order.created_at               : ${found.created_at}`);
+      Logger.log(`order.total_price              : ${found.total_price}`);
+      Logger.log(`order.current_total_price      : ${found.current_total_price}`);
+      Logger.log(`order.subtotal_price           : ${found.subtotal_price}`);
+      Logger.log(`order.total_tax                : ${found.total_tax}`);
+
+      let txSum = 0;
+      for (let ri = 0; ri < found.refunds.length; ri++) {
+        const r = found.refunds[ri];
+        Logger.log(`refunds[${ri}].processed_at      : ${r.processed_at}`);
+        const txs = r.transactions || [];
+        for (let ti = 0; ti < txs.length; ti++) {
+          Logger.log(`refunds[${ri}].transactions[${ti}].amount : ${txs[ti].amount}`);
+          txSum += parseFloat(txs[ti].amount || 0);
+        }
+        const rlis = r.refund_line_items || [];
+        for (let li = 0; li < rlis.length; li++) {
+          Logger.log(`refunds[${ri}].refund_line_items[${li}].subtotal : ${rlis[li].subtotal}`);
+          Logger.log(`refunds[${ri}].refund_line_items[${li}].total    : ${rlis[li].total}`);
+        }
+      }
+
+      // Math invariant from D-B2.
+      const total = parseFloat(found.total_price || 0);
+      const cur = parseFloat(found.current_total_price || 0);
+      const delta = Math.abs(cur - (total - txSum));
+      if (delta < 0.01) {
+        Logger.log(`MATH OK: current_total_price (${cur}) == total_price (${total}) - Σ refunds.transactions.amount (${txSum})`);
+      } else {
+        Logger.log(`MATH MISMATCH: cur=${cur} total=${total} refundsSum=${txSum} delta=${delta.toFixed(4)}`);
+      }
+      Logger.log('');
+    } catch (e) {
+      Logger.log(`=== ${store.name}: PROBE ERROR: ${e && e.message ? e.message : e} ===`);
+      Logger.log('');
+    }
+  }
+
+  Logger.log('===== Probe complete — copy the above into 05.2.3.0-PROBE-EVIDENCE.md =====');
 }
 
 function showVerifyConfig_() {
