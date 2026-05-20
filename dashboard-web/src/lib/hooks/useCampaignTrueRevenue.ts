@@ -12,8 +12,8 @@ import type { ProductsResponse } from '@/app/api/products/route';
 import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { CampaignRow } from '@/lib/campaigns';
+import type { Aggregated } from '@/lib/campaignsAggregator';
 import type { DateRange } from '@/lib/types';
-import type { Aggregated } from '@/components/CampaignsTable';
 
 /**
  * Per-campaign output of the true-ROAS allocation. `trueRevenue` is the

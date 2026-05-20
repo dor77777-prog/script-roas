@@ -25,7 +25,7 @@ import {
 } from 'recharts';
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import { analyzeCpmVsRoas } from '@/lib/cpmRoasAnalysis';
-import type { CampaignRow } from '@/lib/campaigns';
+import { aggregate, type Aggregated } from '@/lib/campaignsAggregator';
 import type { AdAccountMap } from '@/lib/campaignsLinks';
 import {
   clearAllOptimized,
@@ -93,118 +93,6 @@ function todayInIsrael(): string {
 }
 
 // --- Aggregation ------------------------------------------------------------
-
-export type Aggregated = {
-  key: string;             // groupBy key, used as React key
-  storeId: string;         // needed to build the right Ads Manager deep link
-  storeName: string;
-  platform: string;
-  campaignId: string;
-  campaignName: string;
-  adSetId?: string;
-  adSetName?: string;
-  spend: number;
-  impressions: number;
-  clicks: number;
-  conversions: number;
-  conversionValue: number;
-  /** Daily campaign-level budget in CAD (CBO). null when ABO / unknown. */
-  campaignBudgetCad: number | null;
-  /** Daily ad-set-level budget in CAD (ABO, ad-set rows only). null when CBO
-   *  or unknown. */
-  adSetBudgetCad: number | null;
-  /** 'CBO' / 'ABO' / '' (unknown). Taken from the most recent matching row
-   *  during aggregation since the type is a current-state property. */
-  budgetType: 'CBO' | 'ABO' | '';
-};
-
-function aggregate(
-  rows: CampaignRow[],
-  mode: Mode,
-  storeFilter: string,
-  platformFilter: Platform,
-  range: DateRange,
-): Aggregated[] {
-  const map = new Map<string, Aggregated>();
-  // Per-key "latest budget date" trackers so overwrite depends on the row's
-  // `date`, NOT iteration order (#IN-02 — backfilled past dates appended to
-  // sheet end would otherwise stamp stale budgets as current).
-  const latestBudgetDate = new Map<string, string>();
-  const latestAdSetBudgetDate = new Map<string, string>();
-  const latestBudgetTypeDate = new Map<string, string>();
-  for (const r of rows) {
-    if (r.date < range.from || r.date > range.to) continue;
-    if (storeFilter !== 'All' && r.storeName !== storeFilter) continue;
-    if (platformFilter !== 'all' && r.platform !== platformFilter) continue;
-
-    const key =
-      mode === 'campaign'
-        ? `${r.storeId}::${r.platform}::${r.campaignId}`
-        : `${r.storeId}::${r.platform}::${r.campaignId}::${r.adSetId}`;
-
-    if (!map.has(key)) {
-      map.set(key, {
-        key,
-        storeId: r.storeId,
-        storeName: r.storeName,
-        platform: r.platform,
-        campaignId: r.campaignId,
-        campaignName: r.campaignName,
-        adSetId: mode === 'adset' ? r.adSetId : undefined,
-        adSetName: mode === 'adset' ? r.adSetName : undefined,
-        spend: 0,
-        impressions: 0,
-        clicks: 0,
-        conversions: 0,
-        conversionValue: 0,
-        // Seed budgets with this row's values; loop below picks the latest.
-        campaignBudgetCad: r.campaignBudgetCad,
-        adSetBudgetCad: mode === 'adset' ? r.adSetBudgetCad : null,
-        budgetType: r.budgetType,
-      });
-      if (r.campaignBudgetCad != null) latestBudgetDate.set(key, r.date);
-      if (mode === 'adset' && r.adSetBudgetCad != null) latestAdSetBudgetDate.set(key, r.date);
-      if (r.budgetType) latestBudgetTypeDate.set(key, r.date);
-    }
-    const a = map.get(key)!;
-    a.spend += r.spend;
-    a.impressions += r.impressions;
-    a.clicks += r.clicks;
-    a.conversions += r.conversions;
-    a.conversionValue += r.conversionValue;
-    // Budget = chronologically latest row's value (#IN-02 — see above).
-    // FIX-13 (5.2.2.1): strict > so duplicate-date rows don't tie-break by row-write order; first-observed budget for a given date wins.
-    if (r.campaignBudgetCad != null) {
-      const prev = latestBudgetDate.get(key);
-      if (!prev || r.date > prev) {
-        a.campaignBudgetCad = r.campaignBudgetCad;
-        latestBudgetDate.set(key, r.date);
-      }
-    }
-    if (mode === 'adset' && r.adSetBudgetCad != null) {
-      const prev = latestAdSetBudgetDate.get(key);
-      if (!prev || r.date > prev) {
-        a.adSetBudgetCad = r.adSetBudgetCad;
-        latestAdSetBudgetDate.set(key, r.date);
-      }
-    }
-    if (r.budgetType) {
-      const prev = latestBudgetTypeDate.get(key);
-      if (!prev || r.date > prev) {
-        a.budgetType = r.budgetType;
-        latestBudgetTypeDate.set(key, r.date);
-      }
-    }
-  }
-  // FIX-06 (5.2.2.1): normalize budget shape to match the chronologically-latest budgetType.
-  // Must run as a SECOND PASS — inlining inside the per-row loop would produce wrong results for mixed-type rows mid-iteration.
-  // Row component renders `null` cleanly as `—`, so no UI change needed.
-  for (const a of map.values()) {
-    if (a.budgetType === 'ABO') a.campaignBudgetCad = null;
-    if (a.budgetType === 'CBO') a.adSetBudgetCad = null;
-  }
-  return Array.from(map.values());
-}
 
 /** Sort a list of aggregated rows by the chosen column + direction.
  *  Derived metrics (ROAS, CTR, CPC, CPA) are computed inline since they

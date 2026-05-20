@@ -5,7 +5,7 @@ import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { campaignKey } from '@/lib/campaignProductMap';
 import { buildAdsManagerLink, type AdAccountMap } from '@/lib/campaignsLinks';
 import { roasLabel } from '@/lib/analytics';
-import type { Aggregated } from './CampaignsTable';
+import type { Aggregated } from '@/lib/campaignsAggregator';
 import type { TrueRevenueInfo } from '@/lib/hooks/useCampaignTrueRevenue';
 
 // Duplicated from CampaignsTable.tsx:199-205 per D-04 (target-soft cap) —
