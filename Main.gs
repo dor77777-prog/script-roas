@@ -176,7 +176,7 @@ function onOpen() {
       .addItem('פתח טאב Override ידני (manual-spend)', 'openManualSpendTab')
       .addSeparator()
       .addItem('בדוק הגדרות (verifyConfig)', 'showVerifyConfig_')
-      .addItem('בדיקת חוזה החזרים (Shopify probe)', 'probeRefundContract_')
+      .addItem('בדיקת חוזה החזרים (Shopify probe)', 'probeRefundContract')
       .addItem('הוצא Shopify tokens (Client Credentials)', 'bootstrapAllShopifyTokens')
       .addItem('פתח גיליון הגדרות', 'showSpreadsheetUrl_')
       .addToUi();
@@ -225,7 +225,7 @@ function showSpreadsheetUrl_() {
  *
  * Run: ROAS menu → "בדיקת חוזה החזרים (Shopify probe)" OR Apps Script editor → Run dropdown.
  */
-function probeRefundContract_() {
+function probeRefundContract() {
   Logger.log('===== Shopify refund-contract probe =====');
   Logger.log(`API version: ${SHOPIFY_API_VERSION}; lookback: 60 days; PII fields explicitly excluded from fields= param`);
   Logger.log('');
