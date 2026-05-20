@@ -173,7 +173,14 @@ function getShopifyRevenue(storeId, dateStr) {
     );
   }
 
-  Logger.log(`Shopify ${storeId} ${dateStr}: ${count} orders, total=${total.toFixed(2)} CAD`);
+  // Phase 05.2.3.0 D-A1..D-A2: current_total_price already nets same-day refunds.
+  // We subtract cross-day refunds (refund processed on D against orders created on
+  // a different day) so today's row reflects today's refund activity. D-D3:
+  // negative result is correct accounting, NOT clamped.
+  const refunds = getShopifyRefundsForDay_(storeId, dateStr);
+  total -= refunds.storeRefundCad;
+
+  Logger.log(`Shopify ${storeId} ${dateStr}: ${count} orders, gross-of-cross-day=${(total + refunds.storeRefundCad).toFixed(2)} CAD, cross-day-refunds=${refunds.storeRefundCad.toFixed(2)} CAD (${refunds.processedAtCount} refunds), net=${total.toFixed(2)} CAD`);
   return total;
 }
 
