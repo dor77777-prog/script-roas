@@ -1,23 +1,51 @@
 /**
- * WhatsApp daily summary notifications via Twilio.
+ * WhatsApp daily summary notifications. TWO providers supported, switchable
+ * via the `notify.provider` Script Property:
+ *
+ *   - "metacloud" (default)  Meta WhatsApp Cloud API direct, no middleman.
+ *                            Free up to 1000 conversations/month. Uses Meta-
+ *                            assigned test phone number (immediate, free) or
+ *                            your own production phone number. Templates
+ *                            required for proactive outbound — Meta usually
+ *                            approves Utility templates within hours.
+ *
+ *   - "twilio"               Production WhatsApp via Twilio. Requires Twilio
+ *                            account in good standing + WhatsApp Sender +
+ *                            Templates. Use if you have an active Twilio
+ *                            account; switch back to "metacloud" otherwise.
  *
  * Three triggers per day:
  *   - 12:00 (noon)         -> today so far
  *   - 18:00 (evening)      -> today so far
  *   - 00:05 (next morning) -> yesterday full day
  *
- * Each notification sends to 2 phone numbers configured in Script Properties.
+ * Common Script Properties (both providers):
+ *   - notify.provider         "metacloud" | "twilio"  (default: "metacloud")
+ *   - notify.dashboardUrl     defaults to production URL
  *
- * Required Script Properties (set via Project Settings -> Script Properties):
- *   - twilio.accountSid       e.g. "ACxxxxxxxxxxxxxxxx"
- *   - twilio.authToken        Twilio auth token
- *   - twilio.whatsappFrom     e.g. "whatsapp:+14155238886" (sandbox) or paid number
- *   - notify.phone1           e.g. "whatsapp:+972501234567"
- *   - notify.phone2           e.g. "whatsapp:+972507654321"
- *   - notify.dashboardUrl     (optional, defaults to production URL)
+ * Required Script Properties when provider = "metacloud":
+ *   - metacloud.phoneNumberId   Meta WABA phone number ID (numeric, NOT the
+ *                               phone number itself — find under Meta App
+ *                               Dashboard -> WhatsApp -> API Setup)
+ *   - metacloud.accessToken     Permanent system-user access token, or the
+ *                               temporary 24h token from the API Setup page
+ *   - metacloud.templateName    Approved template name (e.g. "daily_roas_summary")
+ *                               OR leave blank during dev to send freeform
+ *                               within 24h conversation window
+ *   - metacloud.templateLang    Template language code (e.g. "he", "en_US")
+ *   - notify.phone1             Recipient 1 in E.164 WITH "+" prefix,
+ *                               e.g. "+972501234567"
+ *   - notify.phone2             (optional) Recipient 2 in same format
+ *
+ * Required Script Properties when provider = "twilio":
+ *   - twilio.accountSid         e.g. "ACxxxxxxxxxxxxxxxx"
+ *   - twilio.authToken          Twilio auth token
+ *   - twilio.whatsappFrom       e.g. "whatsapp:+14155238886" (sandbox or paid)
+ *   - notify.phone1             e.g. "whatsapp:+972501234567"
+ *   - notify.phone2             (optional) e.g. "whatsapp:+972507654321"
  *
  * Setup (one-time, from Apps Script editor):
- *   1. Set the 5-6 Script Properties above
+ *   1. Set notify.provider + provider-specific keys above
  *   2. Run setupNotificationTriggers() once
  *   3. (optional) Run testNoonNotification() to verify before triggers fire
  */
@@ -25,35 +53,60 @@
 const NOTIFY_DASHBOARD_URL_DEFAULT = 'https://roas-dashboard-smoky.vercel.app';
 
 /**
- * Reads Twilio + phone-number config from Script Properties.
+ * Reads notification config from Script Properties. Returned shape depends
+ * on `notify.provider` — the caller branches by `cfg.provider`.
  *
- * Required: twilio.accountSid, twilio.authToken, twilio.whatsappFrom,
- *           notify.phone1
- * Optional: notify.phone2 (if set, also sends to this number),
- *           notify.dashboardUrl (default points to production URL)
- *
- * Throws if any REQUIRED key is missing so failures are loud during setup.
+ * Throws with a clear message listing every missing REQUIRED key so a fresh
+ * deploy without setup fails loud, not silent.
  */
 function getNotifyConfig_() {
   const props = PropertiesService.getScriptProperties();
-  const cfg = {
-    accountSid:   props.getProperty('twilio.accountSid')   || '',
-    authToken:    props.getProperty('twilio.authToken')    || '',
-    whatsappFrom: props.getProperty('twilio.whatsappFrom') || '',
-    phone1:       props.getProperty('notify.phone1')       || '',
-    phone2:       props.getProperty('notify.phone2')       || '',
-    dashboardUrl: props.getProperty('notify.dashboardUrl') || NOTIFY_DASHBOARD_URL_DEFAULT,
-  };
-  const missing = [];
-  if (!cfg.accountSid)   missing.push('twilio.accountSid');
-  if (!cfg.authToken)    missing.push('twilio.authToken');
-  if (!cfg.whatsappFrom) missing.push('twilio.whatsappFrom');
-  if (!cfg.phone1)       missing.push('notify.phone1');
-  // phone2 is OPTIONAL — if blank, only phone1 receives the notification.
-  if (missing.length) {
-    throw new Error('Missing Script Properties for WhatsApp notifications: ' + missing.join(', '));
+  const provider = (props.getProperty('notify.provider') || 'metacloud').toLowerCase();
+  const dashboardUrl = props.getProperty('notify.dashboardUrl') || NOTIFY_DASHBOARD_URL_DEFAULT;
+
+  if (provider === 'metacloud') {
+    const cfg = {
+      provider:       'metacloud',
+      dashboardUrl:   dashboardUrl,
+      phoneNumberId:  props.getProperty('metacloud.phoneNumberId') || '',
+      accessToken:    props.getProperty('metacloud.accessToken')   || '',
+      templateName:   props.getProperty('metacloud.templateName')  || '',
+      templateLang:   props.getProperty('metacloud.templateLang')  || 'he',
+      phone1:         props.getProperty('notify.phone1')           || '',
+      phone2:         props.getProperty('notify.phone2')           || '',
+    };
+    const missing = [];
+    if (!cfg.phoneNumberId) missing.push('metacloud.phoneNumberId');
+    if (!cfg.accessToken)   missing.push('metacloud.accessToken');
+    if (!cfg.phone1)        missing.push('notify.phone1');
+    if (missing.length) {
+      throw new Error('Missing Script Properties for Meta Cloud API: ' + missing.join(', '));
+    }
+    return cfg;
   }
-  return cfg;
+
+  if (provider === 'twilio') {
+    const cfg = {
+      provider:     'twilio',
+      dashboardUrl: dashboardUrl,
+      accountSid:   props.getProperty('twilio.accountSid')   || '',
+      authToken:    props.getProperty('twilio.authToken')    || '',
+      whatsappFrom: props.getProperty('twilio.whatsappFrom') || '',
+      phone1:       props.getProperty('notify.phone1')       || '',
+      phone2:       props.getProperty('notify.phone2')       || '',
+    };
+    const missing = [];
+    if (!cfg.accountSid)   missing.push('twilio.accountSid');
+    if (!cfg.authToken)    missing.push('twilio.authToken');
+    if (!cfg.whatsappFrom) missing.push('twilio.whatsappFrom');
+    if (!cfg.phone1)       missing.push('notify.phone1');
+    if (missing.length) {
+      throw new Error('Missing Script Properties for Twilio WhatsApp: ' + missing.join(', '));
+    }
+    return cfg;
+  }
+
+  throw new Error('Unknown notify.provider: "' + provider + '". Use "metacloud" or "twilio".');
 }
 
 /**
@@ -75,6 +128,78 @@ function sendWhatsAppViaTwilio_(cfg, toNumber, body) {
   const code = res.getResponseCode();
   if (code >= 300) {
     throw new Error('Twilio HTTP ' + code + ': ' + res.getContentText().slice(0, 500));
+  }
+  return JSON.parse(res.getContentText());
+}
+
+/**
+ * Sends one WhatsApp message via Meta Cloud API.
+ *
+ * If cfg.templateName is set: sends a template message (required for
+ * proactive outbound to recipients outside the 24h conversation window).
+ * The body is split into one component parameter — Meta's template engine
+ * will substitute it into the {{1}} placeholder of the approved template.
+ * (For multi-placeholder templates, see comment below.)
+ *
+ * If cfg.templateName is blank: sends a freeform text message. This only
+ * works when the recipient messaged the test phone number in the last 24h,
+ * OR when the recipient is in the test-recipients allowlist of an unverified
+ * Meta App in development mode. Use for the FIRST manual sanity check, then
+ * switch to templates for production.
+ *
+ * `toNumber` is in E.164 with "+" prefix (e.g. "+972501234567"). Meta accepts
+ * with or without "+"; we strip it to match their preferred form.
+ *
+ * Throws on non-2xx status.
+ */
+function sendWhatsAppViaMetaCloud_(cfg, toNumber, body) {
+  const url = 'https://graph.facebook.com/v18.0/' + cfg.phoneNumberId + '/messages';
+  // Meta wants the number without "+" prefix
+  const to = String(toNumber).replace(/^\+/, '').replace(/[^0-9]/g, '');
+
+  var payload;
+  if (cfg.templateName) {
+    // Template message — content is passed as a single body parameter
+    // substituted into the template's {{1}} placeholder. If your approved
+    // template has multiple placeholders, build the parameters array to
+    // match the template structure exactly (Meta is strict).
+    payload = {
+      messaging_product: 'whatsapp',
+      to: to,
+      type: 'template',
+      template: {
+        name: cfg.templateName,
+        language: { code: cfg.templateLang },
+        components: [{
+          type: 'body',
+          parameters: [{ type: 'text', text: body }],
+        }],
+      },
+    };
+  } else {
+    // Freeform text — only valid within the 24h conversation window or for
+    // test recipients on an unverified app
+    payload = {
+      messaging_product: 'whatsapp',
+      to: to,
+      type: 'text',
+      text: { body: body },
+    };
+  }
+
+  const options = {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify(payload),
+    headers: {
+      Authorization: 'Bearer ' + cfg.accessToken,
+    },
+    muteHttpExceptions: true,
+  };
+  const res = UrlFetchApp.fetch(url, options);
+  const code = res.getResponseCode();
+  if (code >= 300) {
+    throw new Error('Meta Cloud HTTP ' + code + ': ' + res.getContentText().slice(0, 800));
   }
   return JSON.parse(res.getContentText());
 }
@@ -278,10 +403,14 @@ function sendNotificationForDate_(dateStr, title) {
   const recipients = [cfg.phone1, cfg.phone2].filter(function (p) { return !!p; });
   for (const to of recipients) {
     try {
-      sendWhatsAppViaTwilio_(cfg, to, body);
-      Logger.log('Sent WhatsApp summary for ' + dateStr + ' to ' + to);
+      if (cfg.provider === 'metacloud') {
+        sendWhatsAppViaMetaCloud_(cfg, to, body);
+      } else {
+        sendWhatsAppViaTwilio_(cfg, to, body);
+      }
+      Logger.log('Sent WhatsApp summary for ' + dateStr + ' to ' + to + ' via ' + cfg.provider);
     } catch (e) {
-      const errMsg = 'WhatsApp send to ' + to + ' for ' + dateStr + ' failed: ' + e;
+      const errMsg = 'WhatsApp send to ' + to + ' for ' + dateStr + ' via ' + cfg.provider + ' failed: ' + e;
       Logger.log(errMsg);
       try { notifyError_(dateStr, errMsg); } catch (_) { /* best-effort */ }
     }
