@@ -261,6 +261,16 @@ function HomeTab({
 }) {
   return (
     <div className="space-y-4 sm:space-y-5 animate-fade-in-up">
+      {/* ===== Live snapshot (today) — now the FIRST section per user
+                    request. Real-time read of the day-in-progress trumps the
+                    Hero editorial summary as the at-a-glance default. ===== */}
+      <SectionIntro
+        icon={<Radio size={18} />}
+        title="היום עד לרגע זה"
+        description="הכנסות Shopify בזמן אמת + הוצאות Meta/Google (עם פיגור ~20 דק'). רענון אוטומטי כל 15 דקות."
+      />
+      <TodayLive rows={data.rows} fxIlsToCad={data.fxIlsToCad} />
+
       {/* ===== Hero — editorial story + chart-as-background + floating KPIs ===== */}
       <HeroOverview data={data} filters={filters} />
 
@@ -273,14 +283,6 @@ function HomeTab({
         <AiReportButton data={data} filters={filters} openSignal={aiReportSignal} />
       </div>
       <Filters filters={filters} stores={data.stores} onChange={setFilters} />
-
-      {/* ===== Live snapshot (today) — still important, secondary to hero ===== */}
-      <SectionIntro
-        icon={<Radio size={18} />}
-        title="היום עד לרגע זה"
-        description="הכנסות Shopify בזמן אמת + הוצאות Meta/Google (עם פיגור ~20 דק'). רענון אוטומטי כל 15 דקות."
-      />
-      <TodayLive rows={data.rows} fxIlsToCad={data.fxIlsToCad} />
 
       {/* ===== Goal tracker — monthly revenue target with pacing + forecast ===== */}
       <GoalTracker data={data} />

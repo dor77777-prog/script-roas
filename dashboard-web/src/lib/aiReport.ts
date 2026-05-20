@@ -131,6 +131,25 @@ export function generateAiReport({
     productKeys.add(`${p.storeName}::${p.productId || p.productTitle}`);
   }
 
+  // Auction-side totals (impressions + clicks + conversions) — pulled
+  // from campaign rows since data-daily doesn't carry them. Used for the
+  // CPM / CTR / CPC / CPA / AOV / funnel sections below.
+  let totalImpressions = 0;
+  let totalClicks = 0;
+  let totalConversions = 0;
+  let totalConversionValue = 0;
+  for (const c of campaigns) {
+    totalImpressions += c.impressions;
+    totalClicks += c.clicks;
+    totalConversions += c.conversions;
+    totalConversionValue += c.conversionValue;
+  }
+  const blendedCpm = totalImpressions > 0 ? (totalSpend / totalImpressions) * 1000 : 0;
+  const blendedCtr = totalImpressions > 0 ? totalClicks / totalImpressions : 0;
+  const blendedCpc = totalClicks > 0 ? totalSpend / totalClicks : 0;
+  const blendedCpa = totalConversions > 0 ? totalSpend / totalConversions : 0;
+  const aov = totalOrders > 0 ? revenue / totalOrders : 0;
+
   out.push('## תקציר ביצועים');
   out.push('');
   out.push(`| מטריקה | ערך |`);
@@ -145,6 +164,9 @@ export function generateAiReport({
   out.push(`| **רווח נטו** | **${fmtCad(netProfit)}** |`);
   if (hasOrdersData) {
     out.push(`| מספר הזמנות (לפי מוצר) | ${fmtNum(totalOrders)} |`);
+    if (aov > 0) {
+      out.push(`| AOV (ערך הזמנה ממוצע) | ${fmtCad(aov)} |`);
+    }
   }
   out.push(`| יחידות שנמכרו | ${fmtNum(totalUnits)} |`);
   out.push(`| מוצרים שונים שנמכרו | ${productKeys.size} |`);
@@ -152,7 +174,71 @@ export function generateAiReport({
     const margin = totalGrossProducts > 0 ? totalNetProducts / totalGrossProducts : 0;
     out.push(`| מרג'ין ממוצע (נטו/ברוטו) | ${fmtPct(margin, 1)} |`);
   }
+  if (totalImpressions > 0) {
+    out.push(`| חשיפות (Meta+Google) | ${fmtNum(totalImpressions)} |`);
+    out.push(`| קליקים | ${fmtNum(totalClicks)} |`);
+    out.push(`| המרות (לפי הפלטפורמות) | ${fmtNum(totalConversions)} |`);
+    out.push(`| CTR משוקלל | ${fmtPct(blendedCtr, 2)} |`);
+    out.push(`| **CPM משוקלל** | **${fmtCad(blendedCpm)}** (עלות ל-1000 חשיפות) |`);
+    out.push(`| CPC משוקלל | ${fmtCad(blendedCpc)} |`);
+    out.push(`| CPA משוקלל | ${fmtCad(blendedCpa)} |`);
+  }
   out.push('');
+
+  // ===== Funnel summary — impressions -> clicks -> orders -> revenue =====
+  if (totalImpressions > 0) {
+    out.push('## משפך — מחשיפות להזמנות');
+    out.push('');
+    out.push(`| שלב | ערך | יחס לשלב הקודם |`);
+    out.push(`|---|---|---|`);
+    out.push(`| חשיפות | ${fmtNum(totalImpressions)} | — |`);
+    const clickRate = totalImpressions > 0 ? totalClicks / totalImpressions : 0;
+    out.push(`| קליקים | ${fmtNum(totalClicks)} | ${fmtPct(clickRate, 2)} (CTR) |`);
+    if (hasOrdersData && totalOrders > 0) {
+      const orderRate = totalClicks > 0 ? totalOrders / totalClicks : 0;
+      out.push(`| הזמנות (Shopify בפועל) | ${fmtNum(totalOrders)} | ${fmtPct(orderRate, 2)} (conversion rate) |`);
+    } else if (totalConversions > 0) {
+      const convRate = totalClicks > 0 ? totalConversions / totalClicks : 0;
+      out.push(`| המרות (Meta/Google מדווח) | ${fmtNum(totalConversions)} | ${fmtPct(convRate, 2)} |`);
+    }
+    const revenuePerClick = totalClicks > 0 ? revenue / totalClicks : 0;
+    out.push(`| הכנסה לקליק | ${fmtCad(revenuePerClick)} | — |`);
+    out.push('');
+    out.push('**מה לבדוק**: CTR נמוך (<1%) = הקריאייטיב לא מושך, audience רחב מדי, או auction יקר. Conversion rate נמוך (<1%) = קליקים מגיעים אבל הdf landing page / מוצר / מחיר לא ממירים. בעיה במשפך מצביעה בדיוק היכן להתערב.');
+    out.push('');
+  }
+
+  // ===== Per-platform CPM/efficiency breakdown =====
+  if (totalImpressions > 0) {
+    let fbImps = 0, fbClicks = 0;
+    let gImps = 0, gClicks = 0;
+    for (const c of campaigns) {
+      if (c.platform === 'Meta') {
+        fbImps += c.impressions;
+        fbClicks += c.clicks;
+      } else if (c.platform === 'Google') {
+        gImps += c.impressions;
+        gClicks += c.clicks;
+      }
+    }
+    const fbCpm = fbImps > 0 ? (fbSpend / fbImps) * 1000 : 0;
+    const gCpm = gImps > 0 ? (gaSpend / gImps) * 1000 : 0;
+    const fbCtr = fbImps > 0 ? fbClicks / fbImps : 0;
+    const gCtr = gImps > 0 ? gClicks / gImps : 0;
+    out.push('## פלטפורמות — CPM ו-CTR לפי ערוץ');
+    out.push('');
+    out.push(`| ערוץ | חשיפות | CPM | קליקים | CTR | הוצאה |`);
+    out.push(`|---|---|---|---|---|---|`);
+    if (fbImps > 0) {
+      out.push(`| Meta | ${fmtNum(fbImps)} | ${fmtCad(fbCpm)} | ${fmtNum(fbClicks)} | ${fmtPct(fbCtr, 2)} | ${fmtCad(fbSpend)} |`);
+    }
+    if (gImps > 0) {
+      out.push(`| Google | ${fmtNum(gImps)} | ${fmtCad(gCpm)} | ${fmtNum(gClicks)} | ${fmtPct(gCtr, 2)} | ${fmtCad(gaSpend)} |`);
+    }
+    out.push('');
+    out.push('**הקשר**: CPM גבוה בערוץ אחד לעומת השני יכול לנבוע מ-(א) קהל יקר יותר (lookalike% / interest stack), (ב) קריאייטיב פחות מושך שגורם לMeta/Google להגביה את המחיר כדי לדחוף אותו, או (ג) פורמט מודעה דורש placement יקר (Reels vs feed, Shopping vs Search).');
+    out.push('');
+  }
 
   // ===== Daily breakdown (compact) =====
   out.push('## פירוט יומי');
@@ -368,6 +454,32 @@ export function generateAiReport({
     a.conversions += c.conversions;
   }
 
+  // ===== Budget drainers — campaigns sorted by spend descending, but
+  // filtered to ROAS < 1.5 (or ROAS == 0 with meaningful spend). These
+  // are the ones the operator should consider pausing / investigating. =====
+  const SPEND_FLOOR = 50; // CAD — ignore tiny test campaigns
+  const drainers = [...campaignsList]
+    .filter(c => c.spend >= SPEND_FLOOR && (c.roas < 1.5 || c.spend / Math.max(c.conversions, 0.001) > 200))
+    .sort((a, b) => b.spend - a.spend)
+    .slice(0, 10);
+  if (drainers.length > 0) {
+    out.push('## ⚠️ קמפיינים שמבזבזים — מומלץ לבדוק/לעצור');
+    out.push('');
+    out.push('קריטריונים: הוצאה ≥ CAD 50 בטווח **וגם** (ROAS < 1.5 או CPA > CAD 200). ממוין לפי הוצאה יורדת — הראשונים בטבלה הם הבזבזנים הכי כבדים.');
+    out.push('');
+    out.push(`| קמפיין | חנות | פלטפורמה | הוצאה | הכנסה (לפי הפלטפורמה) | ROAS | המרות | CPA |`);
+    out.push(`|---|---|---|---|---|---|---|---|`);
+    for (const c of drainers) {
+      const cpa = c.conversions > 0 ? c.spend / c.conversions : 0;
+      out.push(
+        `| ${escapeMd(c.name)} | ${c.store} | ${c.platform} | ${fmtCad(c.spend)} | ${fmtCad(c.value)} | ${c.roas > 0 ? fmtNum(c.roas, 2) : '0 (FAILED)'} | ${fmtNum(c.conversions)} | ${cpa > 0 ? fmtCad(cpa) : '∞'} |`,
+      );
+    }
+    out.push('');
+    out.push('**אזהרה**: שים לב לחלק "⚠️ הערה חשובה" בראש הדוח — Meta יכול לסבול מ-under-reporting (במיוחד אחרי iOS 14). לפני שאתה עוצר קמפיין על בסיס הטבלה הזאת בלבד, בדוק את ה-Shopify revenue בימים שהקמפיין רץ — אולי המכירות הגיעו אבל לא יוחסו אליו.');
+    out.push('');
+  }
+
   const topCampaignsForDrill = [...campaignsList]
     .sort((a, b) => b.spend - a.spend) // by spend, where attention should go
     .slice(0, 5);
@@ -520,9 +632,11 @@ export function generateAiReport({
   out.push('');
   out.push('### חלק 2 — קמפיינים');
   out.push('4. **קמפיינים לחזק (Scale)** — אילו 2-3 קמפיינים מצדיקים העלאת תקציב? התבסס על: ROAS גבוה ויציב (לפחות 7 ימים), CPA סביר, ערך המרות עולה על ההוצאה. שים לב — ה-ROAS *ברמת קמפיין* הוא מקור Meta/Google ולא מדויק לחלוטין (ראה ההערה למעלה).');
-  out.push('5. **קמפיינים לבדוק/לעצור (Pause/Investigate)** — אילו קמפיינים מבזבזים תקציב? קריטריונים: ROAS < 1.5, CPA גבוה משמעותית מהממוצע, או 0 המרות בכמות הוצאה משמעותית.');
+  out.push('5. **קמפיינים לבדוק/לעצור (Pause/Investigate)** — אילו קמפיינים מבזבזים תקציב? התייחס לטבלת "⚠️ קמפיינים שמבזבזים" שבדוח. קריטריונים: ROAS < 1.5, CPA גבוה משמעותית מהממוצע, או 0 המרות בכמות הוצאה משמעותית.');
   out.push('6. **אד-סטים בעייתיים בתוך קמפיינים טובים** — אם יש קמפיין כללי טוב אבל אד-סט בודד גורר אותו למטה, ציין זאת.');
   out.push('7. **חלוקת תקציב Meta vs Google** — האם החלוקה אופטימלית? אם אחת מהפלטפורמות מספקת ROAS גבוה משמעותית, מומלץ להעביר תקציב.');
+  out.push('8. **CPM ו-CTR לפי ערוץ** — התבסס על טבלת "פלטפורמות — CPM ו-CTR לפי ערוץ". CPM גבוה בלי CTR מתאים = הקהל יקר ו/או הקריאייטיב לא מתחבר. CTR גבוה אבל ROAS חלש = הקליק קורה אבל הconversion לא — בעיה ב-landing page או בתמחור.');
+  out.push('9. **משפך החשיפות-הזמנות** — התבסס על טבלת "משפך". זהה את החוליה הכי חלשה: CTR נמוך = בעיה ב-creative/audience; conversion rate נמוך = בעיה ב-landing/מחיר; הכנסה לקליק נמוכה = AOV נמוך או conversion rate נמוך.');
   out.push('');
   out.push('### חלק 3 — מוצרים');
   out.push('8. **המוצרים שמובילים** — אילו 2-3 מוצרים הם המנועי-המכירות? איזה מהם הייתי צריך לקדם בקמפיינים ייעודיים?');
