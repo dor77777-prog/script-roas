@@ -12,6 +12,7 @@ Multi-store Shopify ROAS dashboard with deterministic per-order attribution. The
 - [x] **Phase 3: CI/CD for Apps Script** — clasp setup + GitHub Action for auto-deploy of `.gs` files
 - [ ] **Phase 4: Component Decomposition** — Split CampaignsTable / CampaignDrawer / BillingSettings to ≤500 lines each via hooks + sub-components
 - [ ] **Phase 5: Scalability** — API pagination, per-store Apps Script triggers (6-min cap fix), data-daily / products-daily retention, lazy line-items
+- [ ] **Phase 05.4: Unmapped Active Campaigns Indicator** — Per-ad-manager (Meta/Google) chip in Campaigns view showing count of currently-active campaigns with no product mapping, drill-down to the list, green "all mapped" indicator when clean (INSERTED)
 - [ ] **Phase 6: Security & Cloud-Sync** — Service-account split (reader/writer), rate limiting on POST, audit log, cloud-sync If-Match + adaptive polling
 - [ ] **Phase 7: Observability** — Logs tab + structured logging, quota approach alerts, phantom-spreadsheet daily assertion, reconciliation date toggle, productId retroactive fix script
 - [ ] **Phase 8: i18n** — Externalize Hebrew strings to `strings.he.ts` with type-safe key map
@@ -212,6 +213,16 @@ Plans:
 - [x] 05.2.1.1-01-PLAN.md — P0/P1 critical (7 tasks: ORGANIC predicate, Shopify TZ, products-daily LockService, symmetric Meta series, allocation-filter independence, channel-aware narrative, pearson zero-variance)
 - [x] 05.2.1.1-02-PLAN.md — P2 secondary (8 tasks: ID text format + migration, consistent date range, robust outlier detection, productMap freshness chip, canonical revenue basis, ad-set docstring, campaignKey platform namespace, Bayesian Bessel correction)
 - [x] 05.2.1.1-03-PLAN.md — test coverage (8 tasks: OrderSource contract, darkTraffic boundary, signed revenue, cross-store hook, Google primary path, lineItemsCad, whitespace+long-ID, OrderSource sweep)
+
+### Phase 05.4: Unmapped Active Campaigns Indicator (INSERTED)
+
+**Goal:** [Urgent work — to be planned. Operator-facing UX in the Campaigns view: per-ad-manager (Meta/Google) live count of active campaigns that have no product mapping in ManualOverrides, click-through to the list, green ✓ chip when all active campaigns are mapped.]
+**Requirements**: TBD (run /gsd-discuss-phase 05.4)
+**Depends on:** Phase 5 (latest stable campaigns data path); independent of 05.3 (manual tab)
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 05.4 to break down)
 
 ### Phase 6: Security & Cloud-Sync (SLIMMED — single-user internal context)
 
