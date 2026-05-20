@@ -41,6 +41,19 @@ const LAG_IMPROVEMENT_THRESHOLD = 0.05;
  * Sum daily conversion value across all campaigns on a platform that map to
  * any of the requested products. This keeps Meta and Google reconciliation
  * symmetric instead of treating the drawer campaign as the only Meta source.
+ *
+ * WR-06 (5.2.2.1) NOTE: this site uses the legacy O(K * P) walk
+ * (`Object.keys(productMap)` x `products.some(...)`) instead of the
+ * pre-built `productToCampaigns` index in
+ * `useCampaignTrueRevenue.ts:184-223` (FIX-15). Intentional: this
+ * helper runs exactly twice per drawer open (one Meta call, one Google
+ * call) with `productMap` already filtered to the drawer's store via
+ * `key.startsWith(storeId::...)`, so the inner loop is bounded by the
+ * tiny per-store key count (~tens). The hook's index is the canonical
+ * hot-path optimization for the campaigns-table render loop; do NOT
+ * copy it here without first measuring the drawer-open cost. If a
+ * future maintainer needs to share the index, hoist it into a shared
+ * lib (e.g., `productCatalog.ts`) consumed by both sites.
  */
 function aggregateMappedConversionValue(
   rows: CampaignRow[] | undefined,
