@@ -221,6 +221,20 @@ export function getPreviousPeriod(range: DateRange): DateRange {
     console.warn('getPreviousPeriod: malformed range, returning as-is', range);
     return range;
   }
+  // WR-05 (5.2.2.1): also guard against inverted ranges. If a caller passes
+  // { from: '2026-05-31', to: '2026-05-01' } (corrupted localStorage,
+  // future caller that doesn't enforce ordering, etc.), `lengthMs` is
+  // negative and `prevFromMs = prevToMs - lengthMs = prevToMs + |lengthMs|`
+  // — the returned prev range satisfies `prevFromMs > prevToMs`, an
+  // inverted output. Downstream `r.date >= prev.from && r.date <= prev.to`
+  // becomes impossible and silently returns empty.
+  // CampaignsTable enforces ordering on its date inputs (swap on blur),
+  // so today's call sites are safe, but the helper's contract is
+  // independent — fail loudly here.
+  if (range.from > range.to) {
+    console.warn('getPreviousPeriod: from > to, returning as-is', range);
+    return range;
+  }
   const fromMs = Date.UTC(
     Number(range.from.slice(0, 4)),
     Number(range.from.slice(5, 7)) - 1,
