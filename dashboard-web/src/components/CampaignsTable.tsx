@@ -195,6 +195,13 @@ function aggregate(
       }
     }
   }
+  // FIX-06 (5.2.2.1): normalize budget shape to match the chronologically-latest budgetType.
+  // Must run as a SECOND PASS — inlining inside the per-row loop would produce wrong results for mixed-type rows mid-iteration.
+  // Row component renders `null` cleanly as `—`, so no UI change needed.
+  for (const a of map.values()) {
+    if (a.budgetType === 'ABO') a.campaignBudgetCad = null;
+    if (a.budgetType === 'CBO') a.adSetBudgetCad = null;
+  }
   return Array.from(map.values());
 }
 
