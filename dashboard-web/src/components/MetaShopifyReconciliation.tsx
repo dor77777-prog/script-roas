@@ -271,13 +271,14 @@ export function buildReconciliation(opts: {
 
   if (series.length < 5) return null; // not enough points for r
 
-  // Compute 4 Pearson values
-  const r = pearson(series.map(s => s.meta), series.map(s => s.shopify));
-  const rGoogle = pearson(series.map(s => s.google), series.map(s => s.shopify));
-  const rOrganic = pearson(series.map(s => s.organic), series.map(s => s.shopify));
+  // FIX-14 (5.2.2.1): Pearson over active days only. Long paused periods produce zero-zero pairs that inflate r toward +1.
+  const activeSeries = series.filter(s => s.meta + s.google + s.organic + s.shopify > 0);
+  const r = pearson(activeSeries.map(s => s.meta), activeSeries.map(s => s.shopify));
+  const rGoogle = pearson(activeSeries.map(s => s.google), activeSeries.map(s => s.shopify));
+  const rOrganic = pearson(activeSeries.map(s => s.organic), activeSeries.map(s => s.shopify));
   const rCombined = pearson(
-    series.map(s => s.meta + s.google + s.organic),
-    series.map(s => s.shopify),
+    activeSeries.map(s => s.meta + s.google + s.organic),
+    activeSeries.map(s => s.shopify),
   );
   const primaryChannel: 'Meta' | 'Google' | 'Combined' =
     summary.platform === 'Google' ? 'Google'
@@ -599,6 +600,9 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
           Meta ו-Google מציגים את ה-<em>דיווח</em> שלהם (conversionValue, יכול לכלול modeled/view-through).{' '}
           Organic ו-Shopify מציגים מכירות Shopify <em>בפועל</em> (revenueCad של פריטי המוצרים המשויכים).{' '}
           הפער בין הסכימה לבין Shopify מעיד על under/over-claim של הפלטפורמות, לא על reconciliation חשבונאי מדויק.
+        </p>
+        <p className="text-[10px] text-text-muted leading-relaxed text-center">
+          <strong>בסיס המתאם:</strong> Pearson r מחושב על ימים פעילים בלבד (לפחות ערוץ אחד או Shopify ≠ 0). תקופות עצירה לא משפיעות על r כדי שלא יצרו &quot;הסכמה&quot; מלאכותית של אפס-אפס.
         </p>
 
         <details className="text-[11px]">
