@@ -80,7 +80,13 @@ export function aggregate(
     a.conversions += r.conversions;
     a.conversionValue += r.conversionValue;
     // Budget = chronologically latest row's value (#IN-02 — see above).
-    // FIX-13 (5.2.2.1): strict > so duplicate-date rows don't tie-break by row-write order; first-observed budget for a given date wins.
+    // FIX-13 (5.2.2.1): strict > (not >=) so duplicate-date rows preserve the
+    // first-observed budget per write order; later writes for the same date are
+    // ignored. The previous comment claimed the policy decoupled from write
+    // order entirely, which it doesn't — write order still breaks ties when
+    // two rows share a date; strict > just picks the FIRST of those rather
+    // than the LAST. Both choices are deterministic; "first" matches what
+    // Apps Script's `appendRow` semantics would naturally produce.
     if (r.campaignBudgetCad != null) {
       const prev = latestBudgetDate.get(key);
       if (!prev || r.date > prev) {
