@@ -246,7 +246,11 @@ function runUpdateForDate(dateStr) {
 }
 
 function updateStoreForDate_(ss, store, dateStr, year, month, day, ilsToCad) {
-  const revenueCad = getShopifyRevenue(store.id, dateStr);
+  // Phase 05.2.3.0 gap-closure 08 (WR-04 / Gap 6 fix):
+  // ONE refund fetch per (store, day), dependency-injected into both
+  // consumers. Reduces per-day Shopify API calls from 2 to 1.
+  const refunds = getShopifyRefundsForDay_(store.id, dateStr);
+  const revenueCad = getShopifyRevenue(store.id, dateStr, refunds);
 
   // Meta: override ידני קודם, נופלים ל-API אם אין.
   const metaOverride = getManualSpendOverride_(store.id, 'Meta', dateStr);
@@ -308,7 +312,7 @@ function updateStoreForDate_(ss, store, dateStr, year, month, day, ilsToCad) {
 
   // טאב products-daily - breakdown של מוצרים שנמכרו ביום זה
   try {
-    const products = getShopifyProductSalesForDay(store.id, dateStr);
+    const products = getShopifyProductSalesForDay(store.id, dateStr, refunds);
     writeProductSalesForDay_(ss, dateStr, store.id, store.name, products);
   } catch (e) {
     Logger.log(`products-daily for ${store.name} ${dateStr} failed (non-fatal): ${e && e.message ? e.message : e}`);
