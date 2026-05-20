@@ -151,7 +151,7 @@ function sendWhatsAppViaTwilio_(cfg, toNumber, body) {
  *
  * Throws on non-2xx status.
  */
-function sendWhatsAppViaMetaCloud_(cfg, toNumber, body) {
+function sendWhatsAppViaMetaCloud_(cfg, toNumber, freeformBody, templateParams) {
   const url = 'https://graph.facebook.com/v18.0/' + cfg.phoneNumberId + '/messages';
   // Meta wants the number without "+" prefix
   const to = String(toNumber).replace(/^\+/, '').replace(/[^0-9]/g, '');
@@ -167,10 +167,12 @@ function sendWhatsAppViaMetaCloud_(cfg, toNumber, body) {
 
   var payload;
   if (useTemplate) {
-    // Template message — content is passed as a single body parameter
-    // substituted into the template's {{1}} placeholder. If your approved
-    // template has multiple placeholders, build the parameters array to
-    // match the template structure exactly (Meta is strict).
+    // Template message — body parameters must match the {{N}} placeholders
+    // in the approved Meta template, in order. Our `roas_daily_summary`
+    // template has 5 placeholders: title, store1, store2, store3, totals.
+    const parameters = (templateParams || []).map(function (p) {
+      return { type: 'text', text: String(p == null ? '' : p) };
+    });
     payload = {
       messaging_product: 'whatsapp',
       to: to,
@@ -180,7 +182,7 @@ function sendWhatsAppViaMetaCloud_(cfg, toNumber, body) {
         language: { code: cfg.templateLang },
         components: [{
           type: 'body',
-          parameters: [{ type: 'text', text: body }],
+          parameters: parameters,
         }],
       },
     };
@@ -191,7 +193,7 @@ function sendWhatsAppViaMetaCloud_(cfg, toNumber, body) {
       messaging_product: 'whatsapp',
       to: to,
       type: 'text',
-      text: { body: body },
+      text: { body: freeformBody },
     };
   }
 
@@ -329,6 +331,61 @@ function formatCad_(amount) {
 }
 
 /**
+ * Builds the exact 5-parameter array the approved Meta template expects:
+ *   {{1}} = date + time title
+ *   {{2}} = store 1 block (or "—" if missing)
+ *   {{3}} = store 2 block
+ *   {{4}} = store 3 block
+ *   {{5}} = grand-totals block
+ *
+ * Store order follows summary.stores insertion order (which itself follows
+ * the STORES iteration in DailyUpdate.gs). When fewer than 3 stores have
+ * data for the requested date, missing slots get a placeholder so the
+ * template always receives exactly 5 parameters (Meta is strict about
+ * parameter count matching the {{N}} placeholders).
+ */
+function buildTemplateParameters_(summary, title) {
+  function storeBlock(s) {
+    return '🏪 ' + s.storeName + ':\n' +
+      '• הוצאה: ' + formatCad_(s.totalSpend) + '\n' +
+      '• הכנסות: ' + formatCad_(s.revenue) + '\n' +
+      '• ROAS: ' + formatRoas_(s.roas) + '\n' +
+      '• הזמנות: ' + s.orders +
+        '  (פייסבוק: ' + s.facebook +
+        ', גוגל: ' + s.google +
+        ', אחרים: ' + s.other + ')';
+  }
+
+  function totalsBlock(t) {
+    return '🎯 סה"כ:\n' +
+      '• הוצאה: ' + formatCad_(t.spend) + '\n' +
+      '• הכנסות: ' + formatCad_(t.revenue) + '\n' +
+      '• ROAS: ' + formatRoas_(t.roas) + '\n' +
+      '• הזמנות: ' + t.orders +
+        '  (פייסבוק: ' + t.facebook +
+        ', גוגל: ' + t.google +
+        ', אחרים: ' + t.other + ')';
+  }
+
+  const params = [title];
+  const storeIds = summary && summary.stores ? Object.keys(summary.stores) : [];
+  for (let i = 0; i < 3; i++) {
+    const sid = storeIds[i];
+    if (sid) {
+      params.push(storeBlock(summary.stores[sid]));
+    } else {
+      params.push('—');
+    }
+  }
+  if (summary && summary.totals) {
+    params.push(totalsBlock(summary.totals));
+  } else {
+    params.push('אין נתונים זמינים');
+  }
+  return params;
+}
+
+/**
  * Composes the WhatsApp message body (Hebrew, plain text, no markdown).
  *
  * Per-store breakdown:
@@ -405,14 +462,17 @@ function sendNotificationForDate_(dateStr, title) {
     }
   }
   const summary = buildStoreSummary_(dateStr);
+  // Build BOTH forms — freeform body (single text blob) for Twilio /
+  // freeform-mode metacloud, and parameter array for template-mode metacloud.
   const body = buildMessageBody_(summary, title, cfg.dashboardUrl);
+  const templateParams = buildTemplateParameters_(summary, title);
   // phone2 is optional — filter out blanks so a missing notify.phone2 just
   // means "single-recipient mode" instead of an error.
   const recipients = [cfg.phone1, cfg.phone2].filter(function (p) { return !!p; });
   for (const to of recipients) {
     try {
       if (cfg.provider === 'metacloud') {
-        sendWhatsAppViaMetaCloud_(cfg, to, body);
+        sendWhatsAppViaMetaCloud_(cfg, to, body, templateParams);
       } else {
         sendWhatsAppViaTwilio_(cfg, to, body);
       }
