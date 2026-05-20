@@ -807,6 +807,12 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                     </span>
                   </div>
                 )}
+                {cpmAnalysisMode === 'prev' && analysis.mode === 'half-over-half' && (
+                  <div className="text-[10px] text-amber-700 bg-amber-50 px-2 py-1 rounded mt-1">
+                    {/* FIX-19 (5.2.2.1): fallback disclosure when previous period had <3 active days. */}
+                    תקופה קודמת לא הספיקה (פחות מ-3 ימים פעילים) — חזרנו להשוואת חצי-חצי.
+                  </div>
+                )}
                 {/* Smart analysis box — speaks only when there are enough
                     points and only as a hint, not a directive. */}
                 {analysis.hasData && (
