@@ -41,6 +41,14 @@ export function aggregate(
   const latestBudgetTypeDate = new Map<string, string>();
   for (const r of rows) {
     if (r.date < range.from || r.date > range.to) continue;
+    // IN-07 (5.2.2.1, deferred): storeFilter is matched by DISPLAY NAME
+    // (`r.storeName`), not store id. STORE_TAB_CONFIG in lib/campaigns.ts
+    // currently keeps all names unique ('uzoshop', 'Zol Plus', '360usmile'),
+    // so the filter is correct today. If a future store with a duplicate
+    // display name is added, rows from both stores would aggregate together.
+    // FIX-03 already migrated the DRILLDOWN to storeId; the toolbar filter
+    // pipeline needs the same migration (thread storeId through Filters →
+    // CampaignsTable → here). Tracked as a future-phase refactor.
     if (storeFilter !== 'All' && r.storeName !== storeFilter) continue;
     if (platformFilter !== 'all' && r.platform !== platformFilter) continue;
 
