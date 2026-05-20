@@ -168,10 +168,10 @@ export function parseLineItems(v: unknown): OrderLineItem[] {
       .filter((it): it is { p: string; u: unknown; r: unknown } =>
         it !== null && typeof it === 'object' &&
         typeof (it as { p?: unknown }).p === 'string' &&
-        (it as { p: string }).p.length > 0,
+        (it as { p: string }).p.trim().length > 0,
       )
       .map(it => ({
-        productId: it.p,
+        productId: String(it.p ?? '').trim(),   // FIX-18 (5.2.2.1): normalize at parse boundary; downstream Set.has comparisons benefit.
         units: Number(it.u ?? 0),
         revenueCad: Number(it.r ?? 0),
       }))
