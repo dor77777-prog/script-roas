@@ -181,9 +181,17 @@ export function useCampaignTrueRevenue(opts: {
   // FIX-08 (5.2.2.1): hoist dailyMetaByCampaign so per-campaign lookup is O(1)
   // instead of rebuilding from all rows per campaign. Uses allCampaignRows for
   // consistency with the cross-platform allocation basis.
+  //
+  // IN-06 (5.2.2.1): skip non-Meta rows. analyzeAttribution short-circuits
+  // before reading dailyMeta for any non-Meta campaign (analyzer line 301:
+  // `if (campaign.platform !== 'Meta') return null;`), so any entry we put
+  // here for Google would be pure overhead — bounded today (~a few KB per
+  // drawer mount) but unnecessary. If a future analyzer supports Google
+  // click-id attribution, widen this gate accordingly.
   const dailyMetaByCampaign = useMemo(() => {
     const out = new Map<string, Map<string, number>>();
     for (const r of allCampaignRows) {
+      if (r.platform !== 'Meta') continue;
       const k = campaignKey(r.storeId, r.platform, r.campaignId);
       let inner = out.get(k);
       if (!inner) {
