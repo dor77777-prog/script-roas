@@ -125,6 +125,16 @@ Plans:
   5. Dashboard loads in <2 sec for default 90-day range even on a slow connection
   6. CampaignDrawer still gets full line-items data when opened
 
+### Phase 05.3: In-dashboard searchable user manual with live component examples (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 5
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 05.3 to break down)
+
 ### Phase 05.1: Per-store live-trigger split (gap-closure for 19% failure rate)
 
 **Goal**: Apply the per-store split pattern from Phase 5 to `runLiveUpdate` (the 15-min trigger) — currently runs all 3 stores in a single 6-min execution and times out ~19% of the time. Discovered during UAT for Phase 5.
