@@ -12,11 +12,21 @@ function runDailyUpdate() {
 }
 
 /**
- * עדכון "חי" - מריץ עבור היום הנוכחי במקום אתמול. שימושי לטריגר תכוף יותר
- * (כל 15 דקות) כדי להציג את מצב היום עד לרגע הזה ב-dashboard.
+ * Manual "refresh all 3 stores, rolling 3-day window" entry point
+ * (Phase 05.2.3.0 D-D1). Calls runUpdateForDate(dateStr) for D-2, D-1, D
+ * in that order — same rolling-window semantics as the per-store trigger
+ * wrappers, but spans all 3 stores in a single execution (uses
+ * runUpdateForDate's existing inter-store breathing loop).
+ *
+ * Estimated runtime: ~138s for 3 stores × 3 days. Manual-only; the
+ * per-store triggers continue to use the 3 individual wrappers above.
  */
 function runLiveUpdate() {
-  runUpdateForDate(todayStr_());
+  const today = todayStr_();
+  for (let n = 2; n >= 0; n--) {
+    const dateStr = previousDayStr_(today, n);
+    runUpdateForDate(dateStr);
+  }
 }
 
 /**
@@ -60,25 +70,49 @@ function runDailyUpdateUsmile() {
 }
 
 /**
- * Per-store LIVE trigger entry points (Phase 5.1).
+ * Per-store LIVE trigger entry points (Phase 5.1 + Phase 05.2.3.0).
  *
  * Mirrors the daily per-store split (Phase 5) — each gets its OWN
  * 6-min budget so a slow Shopify/Meta response on one store can't
  * cascade into a timeout for the others. Triggers run independently
  * every 15 minutes via installLiveTrigger().
  *
+ * Phase 05.2.3.0 D-D1: each wrapper runs a rolling 3-day backfill
+ * (D-2, D-1, D in that order). Cross-day refunds processed in the
+ * prior 48h are re-attributed automatically — the operator never
+ * needs to run a manual cleanup for routine within-48h refunds.
+ * Estimated runtime: ~46s per wrapper (3x ~15s), well under the
+ * 6-min Apps Script cap.
+ *
+ * Order is oldest-first (D-2 then D-1 then D) so a mid-execution
+ * timeout leaves the older days correctly written and the most
+ * recent day stale (which the NEXT 15-min trigger run will refresh)
+ * rather than leaving the older days uncorrected.
+ *
  * The original runLiveUpdate() is retained as a MANUAL entry point
- * for full-sequential runs (e.g., from the editor / spreadsheet menu).
- * Triggers no longer call it directly.
+ * for full-sequential runs (e.g., from the editor / spreadsheet
+ * menu) and is also updated to do the 3-day rolling backfill.
  */
 function runLiveUpdateUzoshop() {
-  runUpdateForSingleStore_('uzoshop', todayStr_());
+  const today = todayStr_();
+  for (let n = 2; n >= 0; n--) {
+    const dateStr = previousDayStr_(today, n);
+    runUpdateForSingleStore_('uzoshop', dateStr);
+  }
 }
 function runLiveUpdateZolplus() {
-  runUpdateForSingleStore_('zolplus', todayStr_());
+  const today = todayStr_();
+  for (let n = 2; n >= 0; n--) {
+    const dateStr = previousDayStr_(today, n);
+    runUpdateForSingleStore_('zolplus', dateStr);
+  }
 }
 function runLiveUpdateUsmile() {
-  runUpdateForSingleStore_('usmile360', todayStr_());
+  const today = todayStr_();
+  for (let n = 2; n >= 0; n--) {
+    const dateStr = previousDayStr_(today, n);
+    runUpdateForSingleStore_('usmile360', dateStr);
+  }
 }
 
 /**
