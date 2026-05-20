@@ -313,7 +313,11 @@ function RoasTrendChart({
       {/* Chart */}
       <div className="h-32 sm:h-36">
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={series} margin={{ top: 8, right: 12, left: 12, bottom: 0 }}>
+          {/* top margin of 28 (not 8) so annotation emoji labels — positioned
+              'top' on the ReferenceLines — get the vertical room they need.
+              An emoji at fontSize 13 takes ~18-22 px; an 8 px margin clipped
+              all but a sliver, which is what the user saw. */}
+          <ComposedChart data={series} margin={{ top: 28, right: 12, left: 12, bottom: 0 }}>
             <defs>
               <linearGradient id="hero-roas-fill" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%"   stopColor="#bfdbfe" stopOpacity={0.45} />
