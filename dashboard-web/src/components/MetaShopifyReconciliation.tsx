@@ -624,15 +624,28 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
               <tbody>
                 {reconciliation.series.map(s => {
                   const channelTotal = s.meta + s.google + s.organic;
-                  const delta = s.shopify - channelTotal;
-                  const denom = Math.max(channelTotal, s.shopify, 1);
-                  const deltaPct = (delta / denom) * 100;
-                  let tone = 'text-text-muted';
-                  if (channelTotal > 0 || s.shopify > 0) {
-                    if (Math.abs(deltaPct) > 50) tone = 'text-roas-red';
-                    else if (Math.abs(deltaPct) > 20) tone = 'text-amber-600';
-                    else tone = 'text-roas-green';
+                  // FIX-16 (5.2.2.1): three distinct cases for per-day-table delta. Operationally different signals.
+                  let deltaLabel: string;
+                  let deltaTone: 'neutral' | 'green' | 'red';
+                  if (channelTotal === 0 && s.shopify > 0) {
+                    deltaLabel = 'Shopify only';
+                    deltaTone = 'neutral';
+                  } else if (channelTotal > 0 && s.shopify === 0) {
+                    deltaLabel = 'Channels only';
+                    deltaTone = 'neutral';
+                  } else if (channelTotal > 0 && s.shopify > 0) {
+                    const pct = ((channelTotal - s.shopify) / s.shopify) * 100;
+                    deltaLabel = `${pct >= 0 ? '+' : ''}${pct.toFixed(0)}%`;
+                    deltaTone = Math.abs(pct) < 20 ? 'green' : 'red';
+                  } else {
+                    deltaLabel = '—';
+                    deltaTone = 'neutral';
                   }
+                  const deltaClass = {
+                    neutral: 'text-text-muted',
+                    green: 'text-roas-green',
+                    red: 'text-roas-red',
+                  }[deltaTone];
                   return (
                     <tr key={s.date} className="border-t border-borderSubtle">
                       <td className="px-2 py-1 text-text-secondary tabular-nums">{s.date.slice(5)}</td>
@@ -640,8 +653,8 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                       <td className="px-2 py-1 text-end tabular-nums">{formatCurrency(s.google)}</td>
                       <td className="px-2 py-1 text-end tabular-nums">{formatCurrency(s.organic)}</td>
                       <td className="px-2 py-1 text-end tabular-nums">{formatCurrency(s.shopify)}</td>
-                      <td className={cn('px-2 py-1 text-center tabular-nums font-medium', tone)}>
-                        {channelTotal === 0 && s.shopify === 0 ? '—' : `${deltaPct > 0 ? '+' : ''}${deltaPct.toFixed(0)}%`}
+                      <td className={cn('px-2 py-1 text-center tabular-nums font-medium', deltaClass)}>
+                        {deltaLabel}
                       </td>
                     </tr>
                   );
