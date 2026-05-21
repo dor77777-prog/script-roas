@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { RotateCcw } from 'lucide-react';
 import { formatNumber } from '@/lib/utils';
 
@@ -14,30 +15,95 @@ import { formatNumber } from '@/lib/utils';
  *
  * Why not the native `title` attribute? It's unreliable across browsers:
  * 1.5+ second delay before showing, no support on touch devices, and
- * newlines are not consistently rendered as line breaks. The 2026-05-21
- * first-pass implementation used `title`; users reported nothing appeared
- * on hover. Replaced with a CSS+state tooltip that pops instantly.
+ * newlines are not consistently rendered as line breaks.
  *
- * Mobile UX: tap toggles open/closed. A document-level click handler
- * closes the tooltip when the user taps elsewhere — same pattern as the
- * existing CampaignDrawer trigger.
+ * Why a React Portal to document.body? The dashboard's daily-detail and
+ * monthly tables wrap their content in `<div className="overflow-auto
+ * max-h-[70vh]">`. Tooltips on the bottom row (or top row when flipped)
+ * get clipped by that wrapper. Portal + position:fixed escapes the
+ * wrapper entirely and lets the tooltip float above all DOM ancestors.
  *
- * Positioning: the tooltip is `absolute` and anchors BELOW the icon —
- * top-row tooltips would otherwise be clipped by the surrounding table
- * wrapper's `overflow-auto`. Top-anchored bubbles only show fully on the
- * last visible row; bottom-anchored bubbles work on every row except the
- * very last (an acceptable trade since the totals row is what the user
- * already sees).
+ * Auto-flip: on open, the tooltip measures the icon's bounding rect and
+ * compares space-below vs space-above in the viewport. If there's less
+ * than the tooltip's estimated height below, it flips to above.
+ *
+ * Mobile UX: tap toggles open/closed. Document mousedown handler closes
+ * the tooltip on outside taps. The icon is 14px (touch target) sitting
+ * in a 24×24 hit region via inline-flex padding.
  */
+
+type TooltipPos = {
+  top: number;
+  left: number;
+  placement: 'above' | 'below';
+};
+
+const TOOLTIP_HEIGHT_ESTIMATE = 88; // px — header + 2 lines + padding
+const TOOLTIP_WIDTH_ESTIMATE = 200; // px — min-width 170 + padding
+const GAP = 6; // px between icon and tooltip
+
+function computePosition(anchor: DOMRect): TooltipPos {
+  if (typeof window === 'undefined') {
+    return { top: 0, left: 0, placement: 'below' };
+  }
+  const vh = window.innerHeight;
+  const vw = window.innerWidth;
+  const spaceBelow = vh - anchor.bottom;
+  const spaceAbove = anchor.top;
+
+  // Default below; flip to above only if below doesn't fit AND above does.
+  let placement: 'above' | 'below' = 'below';
+  if (spaceBelow < TOOLTIP_HEIGHT_ESTIMATE && spaceAbove > spaceBelow) {
+    placement = 'above';
+  }
+
+  // Right-align the tooltip's right edge to the icon's right edge in RTL.
+  // In LTR pages the tooltip would otherwise stick out off-screen on the
+  // right; clamp so the tooltip stays within the viewport.
+  const desiredRight = anchor.right;
+  let left = desiredRight - TOOLTIP_WIDTH_ESTIMATE;
+  if (left < 8) left = 8;
+  if (left + TOOLTIP_WIDTH_ESTIMATE > vw - 8) {
+    left = vw - TOOLTIP_WIDTH_ESTIMATE - 8;
+  }
+
+  const top =
+    placement === 'below'
+      ? anchor.bottom + GAP
+      : anchor.top - TOOLTIP_HEIGHT_ESTIMATE - GAP;
+  return { top, left, placement };
+}
+
 export function RefundIndicator(props: {
   grossRevenue: number | null;
   refundDeduction: number | null;
 }) {
   const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<TooltipPos | null>(null);
   const wrapRef = useRef<HTMLSpanElement | null>(null);
+  const btnRef = useRef<HTMLButtonElement | null>(null);
   const { grossRevenue, refundDeduction } = props;
 
-  // Close on click outside (mobile + safety for desktop)
+  // Compute portal position whenever the tooltip opens (and refresh on
+  // window scroll/resize while it stays open — anchor moves with the
+  // user's scrolling).
+  useLayoutEffect(() => {
+    if (!open || !btnRef.current) return;
+    const update = () => {
+      if (btnRef.current) {
+        setPos(computePosition(btnRef.current.getBoundingClientRect()));
+      }
+    };
+    update();
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
+  }, [open]);
+
+  // Close on click outside.
   useEffect(() => {
     if (!open) return;
     function onDocClick(e: MouseEvent) {
@@ -71,6 +137,7 @@ export function RefundIndicator(props: {
       onMouseLeave={() => setOpen(false)}
     >
       <button
+        ref={btnRef}
         type="button"
         aria-label="הצג פירוט החזרים"
         onClick={(e) => {
@@ -81,26 +148,36 @@ export function RefundIndicator(props: {
       >
         <RotateCcw size={14} />
       </button>
-      {open && (
-        <span
-          className="absolute z-50 top-full right-0 mt-1.5 px-3 py-2 rounded-md shadow-xl bg-slate-900 text-white text-xs leading-relaxed pointer-events-none text-start min-w-[170px]"
-          dir="rtl"
-        >
-          <span className="block font-semibold text-amber-300 mb-1">
-            יום עם החזרים
-          </span>
-          <span className="block">
-            לפני החזרים:{' '}
-            <span className="tabular-nums font-medium">{grossLabel}</span>
-          </span>
-          <span className="block">
-            סכום החזרים:{' '}
-            <span className="tabular-nums font-medium text-amber-200">
-              −{refundLabel}
+      {open &&
+        pos &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <span
+            style={{
+              position: 'fixed',
+              top: pos.top,
+              left: pos.left,
+              minWidth: TOOLTIP_WIDTH_ESTIMATE - 32,
+            }}
+            className="z-[9999] px-3 py-2 rounded-md shadow-xl bg-slate-900 text-white text-xs leading-relaxed pointer-events-none text-start"
+            dir="rtl"
+          >
+            <span className="block font-semibold text-amber-300 mb-1">
+              יום עם החזרים
             </span>
-          </span>
-        </span>
-      )}
+            <span className="block">
+              לפני החזרים:{' '}
+              <span className="tabular-nums font-medium">{grossLabel}</span>
+            </span>
+            <span className="block">
+              סכום החזרים:{' '}
+              <span className="tabular-nums font-medium text-amber-200">
+                −{refundLabel}
+              </span>
+            </span>
+          </span>,
+          document.body,
+        )}
     </span>
   );
 }
