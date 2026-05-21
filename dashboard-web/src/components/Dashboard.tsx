@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import useSWR from 'swr';
 import {
   RefreshCw,
@@ -15,6 +16,7 @@ import {
   CalendarDays,
   Megaphone,
   Receipt,
+  Cog,
 } from 'lucide-react';
 import type { DashboardData, Filters as F } from '@/lib/types';
 import { computePresetRange, previousRange } from '@/lib/presets';
@@ -538,6 +540,18 @@ function Header({
           <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
             {commandPalette}
             <SyncIndicator />
+            {/* Operator console (D-D1) — sibling Next.js route at /operator.
+                NOT a TabKey: stays out of the in-page TabNav so the main
+                dashboard's tab semantics don't drift. Sub-views land in
+                plans 13-16. */}
+            <Link
+              href="/operator"
+              className="inline-flex items-center gap-1.5 sm:gap-2 rounded-lg bg-white/12 hover:bg-white/20 active:bg-white/25 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium transition-colors ring-1 ring-white/10"
+              aria-label="ניהול"
+            >
+              <Cog size={14} />
+              <span className="hidden sm:inline">ניהול</span>
+            </Link>
             <button
               onClick={onRefresh}
               className="inline-flex items-center gap-1.5 sm:gap-2 rounded-lg bg-white/12 hover:bg-white/20 active:bg-white/25 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium transition-colors ring-1 ring-white/10"
