@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { fetchProductCatalog, type CatalogProduct } from '@/lib/productCatalog';
+import { fetchProductCatalogFromPostgres } from '@/lib/postgresReaders';
+import { readFrom } from '@/lib/featureFlags';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
 
@@ -16,7 +18,11 @@ export type ProductCatalogResponse = {
 
 export async function GET() {
   try {
-    const rows = await fetchProductCatalog();
+    // D-E3 branch: postgres path dormant in 05.6; 05.7 flips READ_FROM=postgres.
+    // Both branches return CatalogProduct[].
+    const rows = readFrom() === 'postgres'
+      ? await fetchProductCatalogFromPostgres()
+      : await fetchProductCatalog();
     if (rows.length > 50000) {
       console.warn(`/api/product-catalog: large response (${rows.length} rows) — consider pagination`);
     }

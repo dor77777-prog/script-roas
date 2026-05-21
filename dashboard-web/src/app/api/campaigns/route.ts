@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { fetchCampaignsData, type CampaignRow } from '@/lib/campaigns';
+import { fetchCampaignsFromPostgres } from '@/lib/postgresReaders';
+import { readFrom } from '@/lib/featureFlags';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
 import { parseRangeParams, RangeParamError } from '@/lib/dateRange';
@@ -32,7 +34,11 @@ export async function GET(req: Request) {
   }
 
   try {
-    const rows = await fetchCampaignsData({ range });
+    // D-E3 branch: postgres path dormant in 05.6; 05.7 flips READ_FROM=postgres.
+    // Both branches return CampaignRow[].
+    const rows = readFrom() === 'postgres'
+      ? await fetchCampaignsFromPostgres({ range })
+      : await fetchCampaignsData({ range });
     if (rows.length > 50000) {
       console.warn(`/api/campaigns: large response (${rows.length} rows) — consider pagination`);
     }

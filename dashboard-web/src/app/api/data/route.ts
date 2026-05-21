@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { fetchDailyData } from '@/lib/sheets';
+import { fetchDailyDataFromPostgres } from '@/lib/postgresReaders';
+import { readFrom } from '@/lib/featureFlags';
 import type { DashboardData } from '@/lib/types';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
@@ -41,7 +43,13 @@ export async function GET(req: Request) {
   }
 
   try {
-    const [rows, fxIlsToCad] = await Promise.all([fetchDailyData({ range }), fetchTodayFx()]);
+    // D-E3 branch: postgres path is dormant in 05.6 (READ_FROM default 'sheets').
+    // Phase 05.7 sets READ_FROM=postgres in Vercel to flip with zero code change.
+    // Both branches return DailyRow[] (postgresReaders.ts mirrors shape exactly).
+    const dailyPromise = readFrom() === 'postgres'
+      ? fetchDailyDataFromPostgres({ range })
+      : fetchDailyData({ range });
+    const [rows, fxIlsToCad] = await Promise.all([dailyPromise, fetchTodayFx()]);
     if (rows.length > 50000) {
       console.warn(`/api/data: large response (${rows.length} rows) — consider pagination`);
     }

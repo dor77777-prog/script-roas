@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { fetchStoreMeta } from '@/lib/sheets';
+import { fetchStoreMetaFromPostgres } from '@/lib/postgresReaders';
+import { readFrom } from '@/lib/featureFlags';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
 
@@ -11,7 +13,11 @@ export const revalidate = 3600; // matches CACHE_CONFIG.storeMeta.revalidate; li
 
 export async function GET() {
   try {
-    const rows = await fetchStoreMeta();
+    // D-E3 branch: postgres path dormant in 05.6; 05.7 flips READ_FROM=postgres.
+    // Both branches return StoreMetaRow[].
+    const rows = readFrom() === 'postgres'
+      ? await fetchStoreMetaFromPostgres()
+      : await fetchStoreMeta();
     if (rows.length > 50000) {
       console.warn(`/api/store-meta: large response (${rows.length} rows) — consider pagination`);
     }

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { fetchAdsData, type AdRow } from '@/lib/ads';
+import { fetchAdsFromPostgres } from '@/lib/postgresReaders';
+import { readFrom } from '@/lib/featureFlags';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
 import { parseRangeParams, RangeParamError } from '@/lib/dateRange';
@@ -26,7 +28,11 @@ export async function GET(req: Request) {
   }
 
   try {
-    const rows = await fetchAdsData({ range });
+    // D-E3 branch: postgres path dormant in 05.6; 05.7 flips READ_FROM=postgres.
+    // Both branches return AdRow[].
+    const rows = readFrom() === 'postgres'
+      ? await fetchAdsFromPostgres({ range })
+      : await fetchAdsData({ range });
     if (rows.length > 50000) {
       console.warn(`/api/ads: large response (${rows.length} rows) — consider pagination`);
     }
