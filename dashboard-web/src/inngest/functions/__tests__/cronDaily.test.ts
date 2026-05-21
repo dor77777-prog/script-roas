@@ -95,6 +95,13 @@ type MockState = {
     conversions: number;
     conversionValue: number;
   }>;
+  // Phase 05.6.1 → 2026-05-21: MetaAdRow exposes raw `spend` + `currency` +
+  // `conversionValue` (was `spendCad`/`conversionValueCad: null`). The
+  // cronDaily writer FX-converts once per (store, date) via `cadFor`.
+  // Stale field names here would silently make `r.spend`/`r.currency`/
+  // `r.conversionValue` undefined in the writer — `cadFor(undefined, …)`
+  // short-circuits to 0 because the Number.isFinite guard catches it, but
+  // the test would not exercise the real Meta-ad FX path.
   metaAdResult: Array<{
     storeId: string;
     date: string;
@@ -108,8 +115,9 @@ type MockState = {
     impressions: number;
     clicks: number;
     conversions: number;
-    conversionValueCad: number | null;
-    spendCad: number | null;
+    spend: number;
+    currency: string;
+    conversionValue: number;
   }>;
   metaSpendResult: { storeId: string; date: string; spend: number; currency: string };
   // Phase 05.7.2 — Meta budgets fetch result. Maps campaign/adset ID → budget.
@@ -235,8 +243,10 @@ const mockState = vi.hoisted<MockState>(() => ({
       impressions: 600,
       clicks: 30,
       conversions: 3,
-      conversionValueCad: null,
-      spendCad: null,
+      // 2026-05-21: raw ILS values (writer FX-converts to CAD via cadFor).
+      spend: 60,
+      currency: 'ILS',
+      conversionValue: 300,
     },
   ],
   metaSpendResult: { storeId: 'uzoshop', date: '2026-05-20', spend: 100, currency: 'ILS' },
