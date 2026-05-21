@@ -250,7 +250,7 @@ Plans:
 Plans:
 - [ ] TBD (run /gsd-plan-phase 05.4 to break down) — blocked until 05.2.3.0 ships
 
-### Phase 05.5: v2.0 — Supabase Foundation + PROPS-MAP (INSERTED 2026-05-21)
+### Phase 05.5: Supabase foundation + PROPS-MAP — v2.0 stack — INSERTED 2026-05-21
 
 **Context (2026-05-21):** After Phase 05.2.3.0 shipped, three frictions hit at once — Sheets API short-window quota saturation, 6-min Apps Script cap forcing artificial chunking, and `clasp push` slowing every iteration. Operator chose Supabase Postgres + Inngest cloud + Vercel as the v2.0 stack via `/gsd-explore` (2026-05-21). This phase is the runway — no fetcher work yet, just stand up Supabase + classify properties + verify connectivity. Full exploration record: `.planning/notes/v2-migration-exploration-2026-05-21.md`.
 
@@ -262,7 +262,7 @@ Plans:
 Plans:
 - [ ] TBD (run /gsd-plan-phase 05.5) — Supabase project + schema, PROPS-MAP classification + seeding, dashboard Supabase client wiring (read-only, smoke-test query), connectivity check in "Sync OK" indicator
 
-### Phase 05.6: v2.0 — TS Port + Inngest + Operator Console (INSERTED 2026-05-21)
+### Phase 05.6: TS port + Inngest + operator console (v2.0 stack — INSERTED 2026-05-21)
 
 **Context (2026-05-21):** Active migration phase. Port the 5 Apps Script fetchers (Shopify / Meta / Google Ads / FX / ManualOverrides) to TS, set up Inngest cloud (daily cron + 15-min cron + on-demand events), build the operator console UI in dashboard. Apps Script continues running in parallel writing to Sheets — the two systems are independent (no dual-write), both reading from the same upstream APIs. Dashboard reads via feature flag (`READ_FROM=sheets|postgres`, defaults to sheets).
 
@@ -274,7 +274,7 @@ Plans:
 Plans:
 - [ ] TBD (run /gsd-plan-phase 05.6) — TS ports of 5 fetchers, Inngest setup + 3 cron functions + 2 event functions, "ניהול" tab UI, manual_overrides CRUD UI, 38-row importer, feature flag in dashboard `/api/*` routes
 
-### Phase 05.7: v2.0 — Cut-over + Apps Script Decommission (INSERTED 2026-05-21)
+### Phase 05.7: Cut-over + Apps Script decommission (v2.0 stack — INSERTED 2026-05-21)
 
 **Context (2026-05-21):** The "point of no return" phase. Run verification harness that diffs Sheets-side numbers vs Supabase-side numbers for the last 14 days (acceptable delta: zero modulo the Phase 05.2.3.0 algorithm-correction delta — Sheets retains old algorithm artifacts, Supabase reflects corrected algorithm). Once verified, flip the dashboard feature flag from `READ_FROM=sheets` to `postgres`, monitor production for 7 days, then disable Apps Script triggers and delete the `clasp` CI workflow. Sheets get archived read-only.
 
