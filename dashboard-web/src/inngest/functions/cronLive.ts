@@ -90,6 +90,9 @@
 
 import { inngest } from '@/inngest/client';
 import { fetchShopifyDayRows, type ShopifyDayRows } from '@/lib/fetchers/shopify';
+import { fetchMetaSpendForDay } from '@/lib/fetchers/meta';
+import { fetchGoogleAdsSpendForDay } from '@/lib/fetchers/googleAds';
+import { getFxRate } from '@/lib/fetchers/fx';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 // =============================================================================
@@ -206,6 +209,14 @@ async function persistDayForStore(
   storeId: StoreId,
   date: string,
   shopify: ShopifyDayRows,
+  /**
+   * Phase 05.7.6 (2026-05-22): when cron-live fetches Meta+Google for
+   * "today" (idx=0 of the rolling window), it passes the fresh CAD spend
+   * here so we OVERWRITE the spend columns on data_daily. For yesterday +
+   * day-before (idx=1, idx=2 of rolling window) callers omit this and
+   * we preserve the spend that cron-daily wrote at 00:05.
+   */
+  spendOverride?: { fbSpendCad: number; gaSpendCad: number },
 ): Promise<void> {
   const admin = getSupabaseAdmin();
 
@@ -222,12 +233,28 @@ async function persistDayForStore(
     throw new Error(`data_daily select for ${storeId} ${date}: ${selErr.message}`);
   }
 
-  const preservedTotalSpend = Number(existing?.total_spend_cad ?? 0) || 0;
+  // Phase 05.7.6: if a spendOverride is supplied (cron-live fetched live
+  // Meta+Google today), use it. Otherwise preserve whatever cron-daily
+  // wrote previously (rolling-window backfill of yesterday / day-before
+  // must not stomp Meta+Google totals).
+  const fbSpendCad =
+    spendOverride !== undefined
+      ? spendOverride.fbSpendCad
+      : Number(existing?.fb_spend_cad ?? 0) || 0;
+  const gaSpendCad =
+    spendOverride !== undefined
+      ? spendOverride.gaSpendCad
+      : Number(existing?.ga_spend_cad ?? 0) || 0;
+  const totalSpendCad =
+    spendOverride !== undefined
+      ? fbSpendCad + gaSpendCad
+      : Number(existing?.total_spend_cad ?? 0) || 0;
+
   const revenueCad = shopify.revenueCad;
   const cogs = revenueCad * COGS_RATE;
-  const grossProfit = revenueCad - preservedTotalSpend;
+  const grossProfit = revenueCad - totalSpendCad;
   const netProfit = grossProfit - cogs;
-  const roas = preservedTotalSpend > 0 ? revenueCad / preservedTotalSpend : 0;
+  const roas = totalSpendCad > 0 ? revenueCad / totalSpendCad : 0;
 
   // Build the payload. Spend columns ABSENT from the payload → preserved on
   // ON CONFLICT DO UPDATE (Supabase JS only includes payload keys in the
@@ -270,7 +297,16 @@ async function persistDayForStore(
     cogs_cad: cogs,
     net_profit_cad: netProfit,
   };
-  if (!existing) {
+  // When spendOverride is supplied, include the spend columns in the payload
+  // so the UPSERT updates them. When NOT supplied and the row exists, omit
+  // them so ON CONFLICT preserves existing values. When NOT supplied and the
+  // row doesn't exist (fresh INSERT), seed with zeros so subsequent reads
+  // get NUMERIC 0 instead of NULL.
+  if (spendOverride !== undefined) {
+    dataDailyPayload.fb_spend_cad = fbSpendCad;
+    dataDailyPayload.ga_spend_cad = gaSpendCad;
+    dataDailyPayload.total_spend_cad = totalSpendCad;
+  } else if (!existing) {
     dataDailyPayload.fb_spend_cad = 0;
     dataDailyPayload.ga_spend_cad = 0;
     dataDailyPayload.total_spend_cad = 0;
@@ -335,38 +371,96 @@ export async function runLiveForStore(
   storeId: StoreId;
   rollingDates: string[];
   perDayRevenue: Record<string, number>;
+  todaySpendCad: { fb: number; ga: number };
 }> {
   const { step } = ctx;
   const dates = rollingWindowDates(ROLLING_WINDOW_DAYS);
+  const today = dates[0];
 
-  // ----- STEP 1: fetch Shopify for each rolling-window date (parallel) -----
-  // Single step.run wraps all 3 fetches: per Pitfall 4, this counts as one
-  // exec, not three. Promise.all gives us concurrency to keep the wall-clock
-  // ≤ the slowest of 3 fetches (~25s worst case on a busy day).
+  // ----- STEP 1: fetch everything (parallel, one step.run = one exec) -----
   //
-  // Note: we intentionally DO NOT call the Meta-spend or Google-Ads-spend
-  // fetchers here. Live cadence is Shopify-only (see module header
-  // §Why Shopify-only on live). The 05.6-09-PLAN.md verify block greps
-  // for the absence of those import symbols in this file — keep them out.
-  const shopifyByDate = await step.run('fetch-shopify-rolling-3day', async () => {
-    const results = await Promise.all(dates.map((d) => fetchShopifyDayRows(storeId, d)));
-    const map: Record<string, ShopifyDayRows> = {};
+  // Phase 05.7.6 (2026-05-22): live cron now ALSO fetches Meta + Google
+  // spend for today. Previously cron-live was Shopify-only; the dashboard
+  // therefore showed $0 for fb_spend_cad / ga_spend_cad on "today" all day
+  // until cron-daily ran at 00:05 the NEXT morning. The operator surfaced
+  // this as "the dashboard isn't live" (rightly so).
+  //
+  // What we fetch:
+  //   - Shopify rolling 3-day (revenue + refund attribution; unchanged)
+  //   - Meta spend for TODAY (store-level total; per-campaign refresh stays
+  //     in cron-daily for exec-budget reasons)
+  //   - Google Ads spend for TODAY (uzoshop only; others short-circuit)
+  //
+  // FX: Meta spend returns in advertiser currency (ILS for our 3 stores) +
+  // currency field; we convert to CAD inside this step so the persist step
+  // doesn't need an HTTP round-trip. getFxRate caches per (from, to, date)
+  // so repeated calls in the same tick share the rate.
+  const fetched = await step.run('fetch-live-rolling-3day-plus-today-ads', async () => {
+    const [shopifyResults, metaToday, googleToday] = await Promise.all([
+      Promise.all(dates.map((d) => fetchShopifyDayRows(storeId, d))),
+      // Meta + Google fetchers throw on missing creds. We don't want a
+      // single platform outage to take down the whole cron-live tick, so
+      // each is wrapped — Promise.all stays in the success path even when
+      // one platform errors. The dashboard degrades to "$0 spend on the
+      // failed platform" until next tick.
+      fetchMetaSpendForDay(storeId, today).catch((e) => {
+        console.warn(`cron-live: Meta spend fetch for ${storeId} ${today} failed: ${e instanceof Error ? e.message : e}`);
+        return null;
+      }),
+      fetchGoogleAdsSpendForDay(storeId, today).catch((e) => {
+        console.warn(`cron-live: Google spend fetch for ${storeId} ${today} failed: ${e instanceof Error ? e.message : e}`);
+        return null;
+      }),
+    ]);
+
+    const shopifyByDate: Record<string, ShopifyDayRows> = {};
     for (let i = 0; i < dates.length; i++) {
-      map[dates[i]] = results[i];
+      shopifyByDate[dates[i]] = shopifyResults[i];
     }
-    return map;
+
+    // FX-convert Meta spend (advertiser currency → CAD). Both fetchers
+    // return `{ spend, currency }`; Google Ads is conventionally CAD per
+    // cronDaily.ts:254 ("{ spend, currency:'CAD' } or zero"), but we
+    // run the same FX guard either way in case a store's ad-account is
+    // ever re-configured to a different currency.
+    const cadConvert = async (
+      value: { spend: number; currency: string } | null,
+    ): Promise<number> => {
+      if (!value || !Number.isFinite(value.spend) || value.spend === 0) return 0;
+      const currency = (value.currency || 'CAD').toUpperCase();
+      if (currency === 'CAD') return value.spend;
+      const rate = await getFxRate(currency, 'CAD', today);
+      return value.spend * rate;
+    };
+    const fbSpendCad = await cadConvert(metaToday);
+    const gaSpendCad = await cadConvert(googleToday);
+
+    return { shopifyByDate, fbSpendCad, gaSpendCad };
   });
 
-  // ----- STEP 2: persist each date's row (sequential, idempotent) -----
-  // Sequential persistence keeps the Supabase pool unsaturated (3 dates × 1
-  // store = trivial, but staying sequential matches cron-daily's pattern
-  // and avoids per-table connection-pool spikes). Inngest retries the
-  // WHOLE step on transient errors — each persistDayForStore call is
-  // idempotent (SELECT+UPSERT) so re-runs are safe.
+  const { shopifyByDate, fbSpendCad, gaSpendCad } = fetched as {
+    shopifyByDate: Record<string, ShopifyDayRows>;
+    fbSpendCad: number;
+    gaSpendCad: number;
+  };
+
+  // ----- STEP 2: persist (sequential, idempotent) -----
+  // For TODAY: include spendOverride so Meta+Google CAD totals are written
+  // alongside Shopify revenue.
+  // For YESTERDAY + DAY-BEFORE: omit spendOverride so cron-daily's spend
+  // values from earlier are preserved (refund attribution updates only
+  // touch revenue + gross + refund_deduction columns).
   await step.run('persist-rolling-3day', async () => {
-    for (const date of dates) {
+    for (let i = 0; i < dates.length; i++) {
+      const date = dates[i];
       const shopify = shopifyByDate[date];
-      await persistDayForStore(storeId, date, shopify);
+      const isToday = i === 0;
+      await persistDayForStore(
+        storeId,
+        date,
+        shopify,
+        isToday ? { fbSpendCad, gaSpendCad } : undefined,
+      );
     }
   });
 
@@ -374,7 +468,12 @@ export async function runLiveForStore(
   for (const date of dates) {
     perDayRevenue[date] = shopifyByDate[date].revenueCad;
   }
-  return { storeId, rollingDates: dates, perDayRevenue };
+  return {
+    storeId,
+    rollingDates: dates,
+    perDayRevenue,
+    todaySpendCad: { fb: fbSpendCad, ga: gaSpendCad },
+  };
 }
 
 // =============================================================================
@@ -402,11 +501,14 @@ function makeCronLive(storeId: StoreId) {
   return inngest.createFunction(
     {
       id: `cron-live-${storeId}`,
-      // Inlined literal (NOT `TZ=${TZ} */15 * * * *`) because the plan's
-      // verify block greps for the exact substring `TZ=Asia/Jerusalem */15 * * * *`
-      // — template-literal interpolation would defeat the grep. Behavior
-      // is identical to `TZ=${TZ} */15 * * * *`.
-      triggers: [{ cron: 'TZ=Asia/Jerusalem */15 * * * *' }],
+      // Phase 05.7.6 (2026-05-22): cadence reduced from */15 to */10 so the
+      // dashboard's "today" data refreshes within 10 min of new orders +
+      // ad spend changes. The Phase 05.6 plan's grep guard for the exact
+      // substring `TZ=Asia/Jerusalem */15 * * * *` was deliberately dropped
+      // along with the cadence change (the test now checks for `*/10 * * * *`
+      // instead). Exec budget remains within the 50K/month Inngest free-tier
+      // cap: 2 step.runs × 3 stores × 144 ticks/day = 864/day = ~26K/month.
+      triggers: [{ cron: 'TZ=Asia/Jerusalem */10 * * * *' }],
     },
     async ({ step }) =>
       // The cast narrows Inngest's full step API (which has `sendEvent`,
