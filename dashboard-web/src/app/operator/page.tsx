@@ -9,6 +9,13 @@
 //   - Plan 14: BackfillPicker      → "Backfill טווח תאריכים"  ← landed wave 7
 //   - Plan 15: ManualOverridesCrud → "החלפות הוצאה ידניות"    ← landed wave 4
 //   - Plan 16: SyncNowButtons      → "סנכרון עכשיו"           ← landed wave 8
+//   - Phase 05.7.1: ResetData      → "ניקוי וריסט"            ← destructive,
+//                                                              placed at the
+//                                                              bottom so it
+//                                                              never reads as
+//                                                              "the next step
+//                                                              in the normal
+//                                                              flow"
 //
 // Each plan replaced ONE <section>'s body with the corresponding
 // component; it did NOT restructure the page. With plan 16 in, no
@@ -23,6 +30,7 @@ import { ManualOverridesCrud } from '@/components/operator/ManualOverridesCrud';
 import { JobsTable } from '@/components/operator/JobsTable';
 import { BackfillPicker } from '@/components/operator/BackfillPicker';
 import { SyncNowButtons } from '@/components/operator/SyncNowButtons';
+import { ResetData } from '@/components/operator/ResetData';
 
 export const metadata = {
   title: 'ניהול — ROAS Dashboard',
@@ -74,6 +82,28 @@ export default function OperatorPage() {
             live component. The component handles its own loading / error /
             empty states; this <section> only owns the title. */}
         <ManualOverridesCrud />
+      </section>
+
+      {/* Phase 05.7.1: destructive reset panel. Placed at the bottom +
+          separated by a horizontal rule so it is visually distinct from
+          the normal sync / backfill / overrides flow above. Section
+          heading 'ניקוי וריסט' (cleanup & reset) signals the read-this-
+          carefully nature; the component itself enforces a typed-token
+          confirmation before any DELETE fires. */}
+      <hr className="border-white/10" />
+      <section>
+        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+          <span>ניקוי וריסט</span>
+          <span className="text-text-secondary text-xs font-normal">
+            (destructive — איפוס נתונים)
+          </span>
+        </h2>
+        <p className="text-text-secondary text-sm mb-3">
+          מחיקה רבת-טבלאות של נתוני הדשבורד ב-Supabase, על מנת להריץ
+          backfill מאפס ולוודא שהדשבורד מתמלא מחדש כראוי. הפעולה מתאשרת
+          על-ידי הקלדת טוקן ייחודי לכל מצב.
+        </p>
+        <ResetData />
       </section>
     </div>
   );
