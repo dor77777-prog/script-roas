@@ -1,7 +1,7 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.0
-milestone_name: stack — INSERTED 2026-05-21
+milestone_name: milestone
 status: ready_to_plan
 last_updated: "2026-05-21T01:54:20.185Z"
 progress:
