@@ -14,7 +14,10 @@ Multi-store Shopify ROAS dashboard with deterministic per-order attribution. The
 - [ ] **Phase 5: Scalability** — API pagination, per-store Apps Script triggers (6-min cap fix), data-daily / products-daily retention, lazy line-items
 - [x] **Phase 05.2.3.0: Shopify revenue net-of-refunds** — URGENT bug-fix: store-level revenue across the dashboard is inflated when refunds happen on prior-day orders. Initial 7 plans shipped 2026-05-20; 2026-05-21 code review surfaced structural double-deduction bug (CR-01) — 3 gap-closure plans (08/09/10) pending: model change from current_total_price → total_price, drop cross-day filter, test gate + docs revision (INSERTED) (completed 2026-05-20)
 - [ ] **Phase 05.4: Unmapped Active Campaigns Indicator** — Per-ad-manager (Meta/Google) chip in Campaigns view showing count of currently-active campaigns with no product mapping, drill-down to the list, green "all mapped" indicator when clean (INSERTED — FROZEN pending 05.2.3.0)
-- [ ] **Phase 6: Security & Cloud-Sync** — Service-account split (reader/writer), rate limiting on POST, audit log, cloud-sync If-Match + adaptive polling
+- [ ] **Phase 05.5: v2.0 — Supabase Foundation + PROPS-MAP** — Stand up Supabase Postgres, classify all 40 env properties (SECRET / CONFIG / DATA), seed Vercel env vars + Supabase `stores` / `notification_config` tables, write `docs/PROPS-MAP.md` as the operator checklist gating cut-over. No fetcher work yet; Apps Script unchanged. (INSERTED 2026-05-21 — see `.planning/notes/v2-migration-exploration-2026-05-21.md`)
+- [ ] **Phase 05.6: v2.0 — TS Port + Inngest + Operator Console** — Port 5 fetchers (Shopify / Meta / Google Ads / FX / ManualOverrides) from `.gs` to TS; set up Inngest cloud (daily cron + 15-min cron + sync-now + backfill events); new "ניהול" tab in dashboard with jobs table + backfill range picker + manual_overrides CRUD; one-off importer of 38 manual-spend rows; feature flag `READ_FROM=sheets|postgres` defaulting to sheets. (INSERTED 2026-05-21)
+- [ ] **Phase 05.7: v2.0 — Cut-over + Apps Script Decommission** — Verification harness (diff Sheets vs Postgres 14 days); flip dashboard flag to postgres; disable Apps Script triggers; monitor 7 days; delete `clasp` CI workflow; archive Sheets read-only. (INSERTED 2026-05-21)
+- [ ] **Phase 6: Security & Cloud-Sync** — Service-account split (reader/writer), rate limiting on POST, audit log, cloud-sync If-Match + adaptive polling — **NEEDS RESCOPE post-v2.0** (current goals are Sheets-architecture-specific; reconsider after Phase 05.7 ships)
 - [ ] **Phase 7: Observability** — Logs tab + structured logging, quota approach alerts, phantom-spreadsheet daily assertion, reconciliation date toggle, productId retroactive fix script
 - [ ] **Phase 8: i18n** — Externalize Hebrew strings to `strings.he.ts` with type-safe key map
 
@@ -246,6 +249,42 @@ Plans:
 
 Plans:
 - [ ] TBD (run /gsd-plan-phase 05.4 to break down) — blocked until 05.2.3.0 ships
+
+### Phase 05.5: v2.0 — Supabase Foundation + PROPS-MAP (INSERTED 2026-05-21)
+
+**Context (2026-05-21):** After Phase 05.2.3.0 shipped, three frictions hit at once — Sheets API short-window quota saturation, 6-min Apps Script cap forcing artificial chunking, and `clasp push` slowing every iteration. Operator chose Supabase Postgres + Inngest cloud + Vercel as the v2.0 stack via `/gsd-explore` (2026-05-21). This phase is the runway — no fetcher work yet, just stand up Supabase + classify properties + verify connectivity. Full exploration record: `.planning/notes/v2-migration-exploration-2026-05-21.md`.
+
+**Goal:** Stand up Supabase Postgres (free tier) with initial schema; classify all 40 properties from `.env` into SECRET / CONFIG / DATA; seed Vercel env vars + Supabase `stores` + `notification_config` tables; produce `docs/PROPS-MAP.md` as the operator checklist that will gate cut-over (Phase 05.7); verify dashboard can connect to Supabase end-to-end. **No production behavior change.**
+**Requirements**: TBD (run /gsd-discuss-phase 05.5)
+**Depends on:** Phase 05.2.3.0 complete (stable algorithm before we replicate it in TS) + `.env` populated with all 40 properties (done 2026-05-21)
+**Plans:** 0 plans (run /gsd-plan-phase 05.5 to break down)
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 05.5) — Supabase project + schema, PROPS-MAP classification + seeding, dashboard Supabase client wiring (read-only, smoke-test query), connectivity check in "Sync OK" indicator
+
+### Phase 05.6: v2.0 — TS Port + Inngest + Operator Console (INSERTED 2026-05-21)
+
+**Context (2026-05-21):** Active migration phase. Port the 5 Apps Script fetchers (Shopify / Meta / Google Ads / FX / ManualOverrides) to TS, set up Inngest cloud (daily cron + 15-min cron + on-demand events), build the operator console UI in dashboard. Apps Script continues running in parallel writing to Sheets — the two systems are independent (no dual-write), both reading from the same upstream APIs. Dashboard reads via feature flag (`READ_FROM=sheets|postgres`, defaults to sheets).
+
+**Goal:** Replace Apps Script's data-plane responsibility with Inngest jobs writing to Supabase, and add operator-facing UI surfaces to the dashboard: sync now button, jobs table, backfill range picker, manual_overrides CRUD. One-off importer ports the 38 existing manual-spend rows. **Production reads still come from Sheets** until Phase 05.7 flips the flag.
+**Requirements**: TBD (run /gsd-discuss-phase 05.6)
+**Depends on:** Phase 05.5 (Supabase + PROPS-MAP must exist) + Phase 05.2.3.0 (algorithm correctness — TS port must mirror the corrected `getShopifyRefundsForDay_` model from Phase 05.2.3.0-08)
+**Plans:** 0 plans (run /gsd-plan-phase 05.6 to break down — expect 6-10 plans)
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 05.6) — TS ports of 5 fetchers, Inngest setup + 3 cron functions + 2 event functions, "ניהול" tab UI, manual_overrides CRUD UI, 38-row importer, feature flag in dashboard `/api/*` routes
+
+### Phase 05.7: v2.0 — Cut-over + Apps Script Decommission (INSERTED 2026-05-21)
+
+**Context (2026-05-21):** The "point of no return" phase. Run verification harness that diffs Sheets-side numbers vs Supabase-side numbers for the last 14 days (acceptable delta: zero modulo the Phase 05.2.3.0 algorithm-correction delta — Sheets retains old algorithm artifacts, Supabase reflects corrected algorithm). Once verified, flip the dashboard feature flag from `READ_FROM=sheets` to `postgres`, monitor production for 7 days, then disable Apps Script triggers and delete the `clasp` CI workflow. Sheets get archived read-only.
+
+**Goal:** Cut over the dashboard's read path from Sheets to Supabase; decommission Apps Script as the active data-plane writer (keep project as a frozen archive); delete `clasp` CI; archive Sheets to read-only snapshot. After this phase, Sheets + Apps Script are completely out of the active dependency graph.
+**Requirements**: TBD (run /gsd-discuss-phase 05.7)
+**Depends on:** Phase 05.6 complete (Inngest jobs writing real data to Supabase for at least 7 days before cut-over)
+**Plans:** 0 plans (run /gsd-plan-phase 05.7 to break down — expect 4-5 plans)
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 05.7) — verification harness (Sheets vs Postgres diff per-day per-store per-metric), feature flag flip + monitor, Apps Script trigger disable, `clasp` workflow deletion, Sheets archive snapshot, CLAUDE.md / SYSTEM_OVERVIEW.md updates
 
 ### Phase 6: Security & Cloud-Sync (SLIMMED — single-user internal context)
 
