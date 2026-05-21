@@ -292,3 +292,153 @@ describe('googleAds fetcher — token cache reuse (RESEARCH §Don\'t Hand-Roll l
     expect(thirdCallUrl).not.toContain('oauth2.googleapis.com');
   });
 });
+
+// ===========================================================================
+// Phase 05.6.1 — fetchGoogleAdsAdInsights (ad_group_ad GAQL port)
+// ===========================================================================
+
+describe('googleAds fetcher — fetchGoogleAdsAdInsights', () => {
+  it('Ad Test 1: returns [] for non-uzoshop stores WITHOUT calling fetch (short-circuit)', async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const { fetchGoogleAdsAdInsights } = await import('../googleAds');
+
+    const z = await fetchGoogleAdsAdInsights('zolplus', '2026-05-19');
+    const u = await fetchGoogleAdsAdInsights('usmile360', '2026-05-19');
+    expect(z).toEqual([]);
+    expect(u).toEqual([]);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('Ad Test 2: uzoshop happy path — issues ad_group_ad GAQL query and maps response to GoogleAdsAdRow', async () => {
+    setUzoshopEnv();
+    // OAuth + one ad_group_ad GAQL response with a single ad.
+    const responseQueue: Array<{ status: number; body: unknown }> = [
+      {
+        status: 200,
+        body: { access_token: 'tok-abc', expires_in: 3600, token_type: 'Bearer' },
+      },
+      {
+        status: 200,
+        body: {
+          results: [
+            {
+              campaign: { id: '111', name: 'Camp 1' },
+              adGroup: { id: 'g1', name: 'Group 1' },
+              adGroupAd: { ad: { id: 'ad-99', name: 'Ad Ninety-Nine' } },
+              metrics: {
+                costMicros: '12000000', // 12.00 CAD
+                impressions: '500',
+                clicks: '25',
+                conversions: '2',
+                conversionsValue: '80.00',
+              },
+              customer: { currencyCode: 'CAD' },
+            },
+          ],
+        },
+      },
+    ];
+    const spy = vi.fn(async (_url: string | URL, _init?: RequestInit) => {
+      const next = responseQueue.shift();
+      if (!next) throw new Error('mock exhausted');
+      return new Response(JSON.stringify(next.body), { status: next.status });
+    });
+    vi.stubGlobal('fetch', spy);
+
+    const { fetchGoogleAdsAdInsights } = await import('../googleAds');
+    const out = await fetchGoogleAdsAdInsights('uzoshop', '2026-05-19');
+
+    // Sequence: OAuth call → GAQL call.
+    expect(spy).toHaveBeenCalledTimes(2);
+    const gaqlCall = spy.mock.calls[1];
+    expect(String(gaqlCall[0])).toMatch(
+      /^https:\/\/googleads\.googleapis\.com\/v24\/customers\/4014537400\/googleAds:search$/,
+    );
+    // The query body must target ad_group_ad and include the date predicate.
+    const gaqlBody = JSON.parse(String(gaqlCall[1]?.body ?? '{}'));
+    expect(gaqlBody.query).toContain('FROM ad_group_ad');
+    expect(gaqlBody.query).toContain("WHERE segments.date = '2026-05-19'");
+    expect(gaqlBody.query).toContain("ad_group_ad.status = 'ENABLED'");
+    expect(gaqlBody.query).toContain('ad_group_ad.ad.id');
+    expect(gaqlBody.query).toContain('ad_group_ad.ad.name');
+
+    // Row shape.
+    expect(out).toHaveLength(1);
+    expect(out[0]).toEqual({
+      storeId: 'uzoshop',
+      date: '2026-05-19',
+      platform: 'google',
+      campaignId: '111',
+      campaignName: 'Camp 1',
+      adSetId: 'g1',
+      adSetName: 'Group 1',
+      adId: 'ad-99',
+      adName: 'Ad Ninety-Nine',
+      impressions: 500,
+      clicks: 25,
+      conversions: 2,
+      conversionValueCad: 80,
+      spendCad: 12,
+    });
+  });
+
+  it('Ad Test 3: drops rows with spend=0 AND impressions=0 AND conversions=0', async () => {
+    setUzoshopEnv();
+    const responseQueue: Array<{ status: number; body: unknown }> = [
+      {
+        status: 200,
+        body: { access_token: 'tok-abc', expires_in: 3600, token_type: 'Bearer' },
+      },
+      {
+        status: 200,
+        body: {
+          results: [
+            // Drop — fully inactive ad.
+            {
+              campaign: { id: 'c', name: 'C' },
+              adGroup: { id: 'g', name: 'G' },
+              adGroupAd: { ad: { id: 'dead', name: 'Dead Ad' } },
+              metrics: {
+                costMicros: '0',
+                impressions: '0',
+                clicks: '0',
+                conversions: '0',
+                conversionsValue: '0',
+              },
+              customer: { currencyCode: 'CAD' },
+            },
+            // Keep — has spend.
+            {
+              campaign: { id: 'c', name: 'C' },
+              adGroup: { id: 'g', name: 'G' },
+              adGroupAd: { ad: { id: 'live', name: 'Live Ad' } },
+              metrics: {
+                costMicros: '1000000', // 1.00 CAD
+                impressions: '0',
+                clicks: '0',
+                conversions: '0',
+                conversionsValue: '0',
+              },
+              customer: { currencyCode: 'CAD' },
+            },
+          ],
+        },
+      },
+    ];
+    const spy = vi.fn(async (_url: string | URL, _init?: RequestInit) => {
+      const next = responseQueue.shift();
+      if (!next) throw new Error('mock exhausted');
+      return new Response(JSON.stringify(next.body), { status: next.status });
+    });
+    vi.stubGlobal('fetch', spy);
+
+    const { fetchGoogleAdsAdInsights } = await import('../googleAds');
+    const out = await fetchGoogleAdsAdInsights('uzoshop', '2026-05-19');
+
+    expect(out).toHaveLength(1);
+    expect(out[0].adId).toBe('live');
+    expect(out[0].spendCad).toBe(1);
+  });
+});

@@ -23,6 +23,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   fetchMetaAdSetInsights,
+  fetchMetaAdInsights,
   fetchMetaSpendForDay,
   META_API_VERSION,
 } from '../meta';
@@ -493,5 +494,180 @@ describe('Phase 05.6-04 — meta.ts fetchMetaSpendForDay (per-day store-level ag
     expect(res.currency).toBe('ILS');
     expect(res.storeId).toBe(STORE_ID);
     expect(res.date).toBe(DATE);
+  });
+});
+
+// ===========================================================================
+// Phase 05.6.1 — fetchMetaAdInsights (level=ad port of fetchMetaAdSetInsights)
+// ===========================================================================
+
+// Wire-row type for the level=ad endpoint — adds ad_id + ad_name to MetaRow.
+type MetaAdRowWire = MetaRow & { ad_id?: string; ad_name?: string };
+function buildAdResponse(rows: MetaAdRowWire[], next?: string) {
+  const body: { data: MetaAdRowWire[]; paging?: { next?: string } } = { data: rows };
+  if (next) body.paging = { next };
+  return {
+    ok: true,
+    status: 200,
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  } as unknown as Response;
+}
+
+describe('Phase 05.6.1 — meta.ts fetchMetaAdInsights (level=ad port)', () => {
+  const originalToken = process.env[TOKEN_KEY];
+  const originalAcct = process.env[ACCT_KEY];
+  let fetchSpy: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    process.env[TOKEN_KEY] = 'test-token-uzoshop';
+    process.env[ACCT_KEY] = AD_ACCOUNT_ID;
+    delete process.env.META_GLOBAL_TOKEN;
+    fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+  });
+
+  afterEach(() => {
+    if (originalToken === undefined) delete process.env[TOKEN_KEY];
+    else process.env[TOKEN_KEY] = originalToken;
+    if (originalAcct === undefined) delete process.env[ACCT_KEY];
+    else process.env[ACCT_KEY] = originalAcct;
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('Ad Test 1: builds URL with level=ad and ad_id/ad_name in fields list', async () => {
+    fetchSpy.mockResolvedValueOnce(buildAdResponse([]));
+
+    await fetchMetaAdInsights(STORE_ID, DATE);
+
+    const calledUrl = String(fetchSpy.mock.calls[0][0]);
+    expect(calledUrl).toContain('level=ad');
+    expect(calledUrl).not.toContain('level=adset');
+    // Both fields must appear in the URL's fields= param.
+    expect(calledUrl).toMatch(/fields=[^&]*ad_id/);
+    expect(calledUrl).toMatch(/fields=[^&]*ad_name/);
+    // Preserves the canonical query convention.
+    expect(calledUrl).toContain(`graph.facebook.com/${META_API_VERSION}`);
+    expect(calledUrl).toContain(`act_${AD_ACCOUNT_ID}/insights`);
+    expect(calledUrl).toContain('limit=500');
+  });
+
+  it('Ad Test 2: maps response to MetaAdRow shape with platform=meta and spendCad/conversionValueCad=null', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      buildAdResponse([
+        {
+          campaign_id: 'cmp-1',
+          campaign_name: 'Camp 1',
+          adset_id: 'as-1',
+          adset_name: 'AdSet 1',
+          ad_id: 'ad-1',
+          ad_name: 'Ad 1',
+          spend: '42.50', // in account currency (ILS), but should NOT surface
+          impressions: '1000',
+          clicks: '20',
+          actions: [{ action_type: 'purchase', value: '3' }],
+          action_values: [{ action_type: 'purchase', value: '120' }],
+          account_currency: 'ILS',
+        },
+      ]),
+    );
+
+    const out = await fetchMetaAdInsights(STORE_ID, DATE);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toEqual({
+      storeId: STORE_ID,
+      date: DATE,
+      platform: 'meta',
+      campaignId: 'cmp-1',
+      campaignName: 'Camp 1',
+      adSetId: 'as-1',
+      adSetName: 'AdSet 1',
+      adId: 'ad-1',
+      adName: 'Ad 1',
+      impressions: 1000,
+      clicks: 20,
+      conversions: 3,
+      // Both intentionally null at the ad level — per-ad FX conversion is
+      // deferred to keep the cron-daily exec count at 6/run.
+      conversionValueCad: null,
+      spendCad: null,
+    });
+  });
+
+  it('Ad Test 3: reuses the same conversion priority chain (omni_purchase wins, fb_pixel_purchase falls through)', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      buildAdResponse([
+        // omni_purchase present → priority 1 wins, conversions=5.
+        {
+          campaign_id: 'c1',
+          adset_id: 'as1',
+          ad_id: 'ad-omni',
+          spend: '10',
+          impressions: '100',
+          actions: [
+            { action_type: 'offsite_conversion.fb_pixel_purchase', value: '2' },
+            { action_type: 'purchase', value: '4' },
+            { action_type: 'omni_purchase', value: '5' },
+          ],
+          action_values: [],
+          account_currency: 'ILS',
+        },
+        // Only fb_pixel_purchase → priority 3, conversions=2.
+        {
+          campaign_id: 'c2',
+          adset_id: 'as2',
+          ad_id: 'ad-fbp',
+          spend: '10',
+          impressions: '100',
+          actions: [
+            { action_type: 'offsite_conversion.fb_pixel_purchase', value: '2' },
+          ],
+          action_values: [],
+          account_currency: 'ILS',
+        },
+      ]),
+    );
+
+    const out = await fetchMetaAdInsights(STORE_ID, DATE);
+    const byAd = new Map(out.map((r) => [r.adId, r.conversions]));
+    expect(byAd.get('ad-omni')).toBe(5);
+    expect(byAd.get('ad-fbp')).toBe(2);
+  });
+
+  it('Ad Test 4: drops rows where spend=0 AND impressions=0 AND conversions=0; keeps late-attributed rows', async () => {
+    fetchSpy.mockResolvedValueOnce(
+      buildAdResponse([
+        // Drop — fully inactive.
+        {
+          campaign_id: 'c',
+          adset_id: 'as',
+          ad_id: 'inactive',
+          spend: '0',
+          impressions: '0',
+          clicks: '0',
+          actions: [],
+          action_values: [],
+          account_currency: 'ILS',
+        },
+        // Keep — late-attributed conversion on a paused ad.
+        {
+          campaign_id: 'c',
+          adset_id: 'as',
+          ad_id: 'late-attr',
+          spend: '0',
+          impressions: '0',
+          clicks: '0',
+          actions: [{ action_type: 'omni_purchase', value: '1' }],
+          action_values: [{ action_type: 'omni_purchase', value: '60' }],
+          account_currency: 'ILS',
+        },
+      ]),
+    );
+
+    const out = await fetchMetaAdInsights(STORE_ID, DATE);
+    expect(out).toHaveLength(1);
+    expect(out[0].adId).toBe('late-attr');
+    expect(out[0].conversions).toBe(1);
   });
 });

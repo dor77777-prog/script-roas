@@ -51,6 +51,38 @@ type MockState = {
     productRows: Array<{ product_id: string; net_revenue_cad: number }>;
     customItemRefundCad: number;
   };
+  // Phase 05.6.1 — three new fetcher results wired into the same step.run
+  // callbacks. Each test sets these per-scenario; the default values exercise
+  // the happy path where all 3 new writers fire.
+  shopifyOrdersResult: Array<{
+    storeId: string;
+    orderId: string;
+    date: string;
+    totalCad: number;
+    source: string;
+    utmSource: string | null;
+    utmMedium: string | null;
+    utmCampaign: string | null;
+    utmContent: string | null;
+    fbclidPresent: boolean;
+    gclidPresent: boolean;
+    referrer: string | null;
+    utmId: string | null;
+    utmTerm: string | null;
+    lineItems: Array<{ p: string; u: number; r: number }> | null;
+  }>;
+  shopifyCatalogResult: Array<{
+    storeId: string;
+    productId: string;
+    title: string;
+    handle: string;
+    status: string;
+    priceCad: number | null;
+    imageUrl: string | null;
+    productType: string | null;
+    vendor: string | null;
+    updatedAt: string | null;
+  }>;
   metaAdSetResult: Array<{
     campaignId: string;
     campaignName: string;
@@ -62,6 +94,22 @@ type MockState = {
     clicks: number;
     conversions: number;
     conversionValue: number;
+  }>;
+  metaAdResult: Array<{
+    storeId: string;
+    date: string;
+    platform: 'meta';
+    campaignId: string;
+    campaignName: string;
+    adSetId: string;
+    adSetName: string;
+    adId: string;
+    adName: string;
+    impressions: number;
+    clicks: number;
+    conversions: number;
+    conversionValueCad: number | null;
+    spendCad: number | null;
   }>;
   metaSpendResult: { storeId: string; date: string; spend: number; currency: string };
   googleSpendResult: { storeId: string; date: string; spend: number; currency: string };
@@ -76,6 +124,22 @@ type MockState = {
     clicks: number;
     conversions: number;
     conversionValue: number;
+  }>;
+  googleAdResult: Array<{
+    storeId: string;
+    date: string;
+    platform: 'google';
+    campaignId: string;
+    campaignName: string;
+    adSetId: string;
+    adSetName: string;
+    adId: string;
+    adName: string;
+    impressions: number;
+    clicks: number;
+    conversions: number;
+    conversionValueCad: number;
+    spendCad: number;
   }>;
   mergeResult: {
     fbSpendCad: number;
@@ -104,6 +168,39 @@ const mockState = vi.hoisted<MockState>(() => ({
     ],
     customItemRefundCad: 0,
   },
+  shopifyOrdersResult: [
+    {
+      storeId: 'uzoshop',
+      orderId: 'O-1',
+      date: '2026-05-20',
+      totalCad: 150,
+      source: 'meta-paid',
+      utmSource: 'facebook',
+      utmMedium: 'cpc',
+      utmCampaign: 'spring_sale',
+      utmContent: null,
+      fbclidPresent: true,
+      gclidPresent: false,
+      referrer: 'l.facebook.com',
+      utmId: null,
+      utmTerm: null,
+      lineItems: [{ p: 'p1', u: 1, r: 150 }],
+    },
+  ],
+  shopifyCatalogResult: [
+    {
+      storeId: 'uzoshop',
+      productId: 'p1',
+      title: 'Test Product',
+      handle: 'test-product',
+      status: 'active',
+      priceCad: 19.99,
+      imageUrl: 'https://cdn.shopify.com/img.jpg',
+      productType: 'Widget',
+      vendor: 'TestCo',
+      updatedAt: '2026-05-20T08:00:00Z',
+    },
+  ],
   metaAdSetResult: [
     {
       campaignId: 'c1',
@@ -116,6 +213,24 @@ const mockState = vi.hoisted<MockState>(() => ({
       clicks: 50,
       conversions: 5,
       conversionValue: 500,
+    },
+  ],
+  metaAdResult: [
+    {
+      storeId: 'uzoshop',
+      date: '2026-05-20',
+      platform: 'meta',
+      campaignId: 'c1',
+      campaignName: 'Campaign 1',
+      adSetId: 'as1',
+      adSetName: 'Ad Set 1',
+      adId: 'ad-meta-1',
+      adName: 'Meta Ad 1',
+      impressions: 600,
+      clicks: 30,
+      conversions: 3,
+      conversionValueCad: null,
+      spendCad: null,
     },
   ],
   metaSpendResult: { storeId: 'uzoshop', date: '2026-05-20', spend: 100, currency: 'ILS' },
@@ -132,6 +247,24 @@ const mockState = vi.hoisted<MockState>(() => ({
       clicks: 25,
       conversions: 2,
       conversionValue: 200,
+    },
+  ],
+  googleAdResult: [
+    {
+      storeId: 'uzoshop',
+      date: '2026-05-20',
+      platform: 'google',
+      campaignId: 'gc1',
+      campaignName: 'Google Campaign 1',
+      adSetId: 'ag1',
+      adSetName: 'Ad Group 1',
+      adId: 'ad-g-1',
+      adName: 'Google Ad 1',
+      impressions: 300,
+      clicks: 15,
+      conversions: 1,
+      conversionValueCad: 90,
+      spendCad: 25,
     },
   ],
   mergeResult: {
@@ -152,6 +285,15 @@ vi.mock('@/lib/fetchers/shopify', () => ({
     if (mockState.throwIn === 'shopify') throw new Error('shopify-failed');
     return mockState.shopifyResult;
   }),
+  // Phase 05.6.1 — 2 new Shopify fetchers wired alongside fetchShopifyDayRows.
+  fetchShopifyOrdersAttribution: vi.fn(async () => {
+    if (mockState.throwIn === 'shopify') throw new Error('shopify-orders-failed');
+    return mockState.shopifyOrdersResult;
+  }),
+  fetchShopifyProductsCatalog: vi.fn(async () => {
+    if (mockState.throwIn === 'shopify') throw new Error('shopify-catalog-failed');
+    return mockState.shopifyCatalogResult;
+  }),
 }));
 
 vi.mock('@/lib/fetchers/meta', () => ({
@@ -163,6 +305,11 @@ vi.mock('@/lib/fetchers/meta', () => ({
     if (mockState.throwIn === 'meta') throw new Error('meta-spend-failed');
     return mockState.metaSpendResult;
   }),
+  // Phase 05.6.1 — ad-level insights wired inside fetch-meta step.
+  fetchMetaAdInsights: vi.fn(async () => {
+    if (mockState.throwIn === 'meta') throw new Error('meta-ad-failed');
+    return mockState.metaAdResult;
+  }),
 }));
 
 vi.mock('@/lib/fetchers/googleAds', () => ({
@@ -173,6 +320,11 @@ vi.mock('@/lib/fetchers/googleAds', () => ({
   fetchGoogleAdsAdGroupInsights: vi.fn(async () => {
     if (mockState.throwIn === 'google') throw new Error('google-adgroup-failed');
     return mockState.googleAdGroupResult;
+  }),
+  // Phase 05.6.1 — ad-level insights wired inside fetch-google step.
+  fetchGoogleAdsAdInsights: vi.fn(async () => {
+    if (mockState.throwIn === 'google') throw new Error('google-ad-failed');
+    return mockState.googleAdResult;
   }),
 }));
 
@@ -237,10 +389,24 @@ function readFunctionId(fn: unknown): string | undefined {
   return opts?.id;
 }
 
+// Phase 05.6.1 — capture initial array fixtures so each test starts from a
+// known-good state even after Test 8 (which empties them). Deep-copying via
+// structuredClone preserves nested objects (e.g. lineItems arrays) without the
+// risk of accidental cross-test mutation.
+const INITIAL_SHOPIFY_ORDERS = structuredClone(mockState.shopifyOrdersResult);
+const INITIAL_SHOPIFY_CATALOG = structuredClone(mockState.shopifyCatalogResult);
+const INITIAL_META_ADS = structuredClone(mockState.metaAdResult);
+const INITIAL_GOOGLE_ADS = structuredClone(mockState.googleAdResult);
+
 beforeEach(() => {
   mockState.upserts = [];
   mockState.upsertError = null;
   mockState.throwIn = null;
+  // Reset the Phase 05.6.1 fixture arrays so Test 8's emptying does not leak.
+  mockState.shopifyOrdersResult = structuredClone(INITIAL_SHOPIFY_ORDERS);
+  mockState.shopifyCatalogResult = structuredClone(INITIAL_SHOPIFY_CATALOG);
+  mockState.metaAdResult = structuredClone(INITIAL_META_ADS);
+  mockState.googleAdResult = structuredClone(INITIAL_GOOGLE_ADS);
 });
 
 // ===========================================================================
@@ -324,6 +490,60 @@ describe('cronDaily — factory + handler', () => {
     for (const c of campaignsCalls) {
       expect(c.opts.onConflict).toBe('date,store_id,platform,campaign_id,ad_set_id');
     }
+
+    // Phase 05.6.1 — 3 new tables.
+    // ads_daily — PK (date, store_id, ad_id). One combined upsert with
+    // both Meta and Google rows.
+    const adsCalls = byTable.get('ads_daily') ?? [];
+    expect(adsCalls.length).toBe(1);
+    expect(adsCalls[0].opts.onConflict).toBe('date,store_id,ad_id');
+    // Rows array must include both platforms (1 meta + 1 google from the
+    // fixture defaults).
+    const adsRows = adsCalls[0].rows as Array<{ platform: string }>;
+    expect(adsRows.map((r) => r.platform).sort()).toEqual(['google', 'meta']);
+
+    // orders_attribution — PK (store_id, order_id) — NOT date-scoped.
+    const ordersCalls = byTable.get('orders_attribution') ?? [];
+    expect(ordersCalls.length).toBe(1);
+    expect(ordersCalls[0].opts.onConflict).toBe('store_id,order_id');
+
+    // product_catalog — PK (store_id, product_id) — snapshot, no date.
+    const catalogCalls = byTable.get('product_catalog') ?? [];
+    expect(catalogCalls.length).toBe(1);
+    expect(catalogCalls[0].opts.onConflict).toBe('store_id,product_id');
+  });
+
+  it('Test 7: result exposes the 4 new row counts (metaAd, googleAd, ordersAttribution, productCatalog)', async () => {
+    const { step } = makeMockStep();
+    const result = await runDailyForStore('uzoshop', '2026-05-20', { step });
+
+    // Default fixtures: 1 meta ad, 1 google ad, 1 order, 1 catalog product.
+    expect(result.metaAdRowCount).toBe(1);
+    expect(result.googleAdRowCount).toBe(1);
+    expect(result.ordersAttributionRowCount).toBe(1);
+    expect(result.productCatalogRowCount).toBe(1);
+  });
+
+  it('Test 8: empty fetcher results skip writes (no upsert calls when arrays are empty)', async () => {
+    mockState.shopifyOrdersResult = [];
+    mockState.shopifyCatalogResult = [];
+    mockState.metaAdResult = [];
+    mockState.googleAdResult = [];
+
+    const { step } = makeMockStep();
+    await runDailyForStore('uzoshop', '2026-05-20', { step });
+
+    const tables = new Set(mockState.upserts.map((u) => u.table));
+    // The 3 newly-added tables MUST NOT be hit when their input arrays are
+    // empty — same conservative pattern the existing products_daily and
+    // campaigns_daily writes follow at cronDaily.ts:249/280/314.
+    expect(tables.has('ads_daily')).toBe(false);
+    expect(tables.has('orders_attribution')).toBe(false);
+    expect(tables.has('product_catalog')).toBe(false);
+
+    // The 3 pre-existing writes still happen (data_daily always; products and
+    // campaigns when their fixtures have rows — they DO in the defaults).
+    expect(tables.has('data_daily')).toBe(true);
   });
 
   it('Test 6: an error inside any step propagates out of `runDailyForStore` (D-B6 retry-on-throw)', async () => {
