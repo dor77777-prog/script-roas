@@ -90,6 +90,7 @@
 26. [נספח ד — Checklists למפעיל](#נספח-ד--checklists-למפעיל)
 27. [ניהול (Operator Console) — Phase 05.6](#27-ניהול-operator-console--phase-056)
 28. [ניתוק Sheets — Phase 05.7](#28-ניתוק-sheets--phase-057)
+29. [איפוס נתונים — Reset Data (Phase 05.7.1)](#29-איפוס-נתונים--reset-data-phase-0571)
 
 ---
 
@@ -2484,9 +2485,120 @@ curl -s "$PROD/api/health" | jq '.'
 
 ---
 
+## 29. איפוס נתונים — Reset Data (Phase 05.7.1)
+
+> **TL;DR:** ב-`/operator` ישנו פאנל הרסני בתחתית בשם **"ניקוי וריסט"** עם שני כפתורים — **איפוס מלא** ו-**איפוס חלקי**. כל לחיצה פותחת מודאל שמבקש מהמפעיל להקליד טוקן ייחודי (`YES-DELETE-ALL-DATA` או `YES-DELETE-EXCEPT-MANUAL`) באנגלית, אות אות. אחרי אישור, הפעולה מוחקת את כל שורות הנתונים בטבלאות הנבחרות ב-Supabase ומחזירה דו"ח של כמה שורות נמחקו לכל טבלה.
+
+### 29.1 מתי להשתמש
+
+- **רוצה לוודא ש-backfill עובד מקצה לקצה.** המפעיל מאפס את הדאטה, מריץ Backfill (פרק 16 / 27.3.3), ועוקב אחרי /operator → "ריצות אחרונות" עד שהריצות הסתיימו בהצלחה. אחר-כך פותח את הדשבורד ובודק ש-`/api/data`, `/api/campaigns`, `/api/products` מחזירים שורות עם המספרים הנכונים.
+- **דאטה הסתכסך לאחר באג / ניסוי לא מוצלח.** במקום לתקן ידנית, מוחק הכל ומריץ backfill מאפס.
+- **בדיקת end-to-end לפני cut-over משמעותי.** לוודא ששרשרת ה-fetch (Shopify / Meta / Google / FX) → Inngest → Postgres → דשבורד תקינה.
+
+**אל תשתמש אם:** רק שורה אחת או יומיים מסויימים בעיתיים. במקרים האלה, השתמש ב-Backfill עם טווח תאריכים ספציפי — Backfill כותב `upsert` (לא מוחק קודם), ולכן ידרס את הנתונים הקיימים בלי לאבד שאר ההיסטוריה.
+
+### 29.2 שני המצבים
+
+| מצב | טוקן אישור | טבלאות שיימחקו | נשמרת |
+| --- | --- | --- | --- |
+| **איפוס מלא** (כפתור אדום) | `YES-DELETE-ALL-DATA` | `data_daily`, `products_daily`, `campaigns_daily`, `ads_daily`, `orders_attribution`, `product_catalog`, `manual_overrides` | — |
+| **איפוס חלקי** (כפתור כתום) | `YES-DELETE-EXCEPT-MANUAL` | `data_daily`, `products_daily`, `campaigns_daily`, `ads_daily`, `orders_attribution`, `product_catalog` | `manual_overrides` |
+
+**איפוס חלקי הוא ברירת המחדל המומלצת.** ה-`manual_overrides` נכתבו ידנית (38+ שורות עבור חודש מאי 2026 — ראה 27.7.1) והם נתונים שאף backfill אינו מסוגל לשחזר. הוסף אותם רק כאשר אתה רוצה התחלה מאפס אבסולוטית.
+
+### 29.3 טבלאות שה-Reset לעולם לא נוגע בהן
+
+הקוד שומר רשימת `PROTECTED_TABLES` קשיחה. אלו הטבלאות שאף פעם, בשום מצב, לא נמחקות על-ידי `/api/operator/reset`:
+
+- **`stores`** — 3 שורות חנות עם הקונפיג שלהן (`uzoshop`, `zolplus`, `usmile360`). שורות אלה מקודדות במיגרציה (Phase 05.5 seed) ולא ניתנות לשחזור מ-fetch — מחיקתן תפיל את כל ה-FK constraints של שאר הטבלאות.
+- **`notification_config`** — 2 שורות ספק התראות (Meta Cloud + Twilio fallback). גם הן seed.
+- **`dashboard_state`** — ה-UI prefs של המפעיל (annotations, billing recurring/onetime, monthly goal, campaign-product-map, campaign-optimized, insight-states). זהו state שנוצר ידנית בדשבורד; מחיקתו תאלץ את המפעיל להזין מחדש סימוני קמפיינים-לא-פעילים, יעדי חודש, וכו'.
+
+ה-route מחזיר 200 גם אם חלק מהטבלאות נכשלו — הפלט כולל `errors` per-table. בודק את התשובה ב-DevTools / Network panel אם רוצים את הפרטים.
+
+### 29.4 איך זה עובד מאחורי הקלעים
+
+```
+דפדפן /operator → "ניקוי וריסט" → כפתור "איפוס חלקי"
+   │
+   ▼
+[מודאל] "הקלד 'YES-DELETE-EXCEPT-MANUAL' כדי לאשר"
+   │
+   ▼
+POST /api/operator/reset { scope: 'except-manual', confirm: 'YES-DELETE-EXCEPT-MANUAL' }
+   │
+   ▼ (server, service_role)
+   for table in [data_daily, products_daily, campaigns_daily, ads_daily,
+                 orders_attribution, product_catalog]:
+       DELETE FROM table WHERE store_id IS NOT NULL  -- always-true filter
+   │
+   ▼
+תשובה 200: { scope, deleted: { table → rowCount }, total, durationMs }
+   │
+   ▼
+[ה-UI] מציג דו"ח ירוק עם פירוט per-טבלה + רענן אוטומטי של SWR caches
+```
+
+**טוקן האישור הוא defense-in-depth.** ה-UI כבר מבקש את ההקלדה הידנית — אבל מי שיכריח curl `POST` ישירות לא יוכל לדלג; ה-route מאמת מחדש את הטוקן לפני שהוא מתחיל למחוק. בלי הטוקן הנכון, התשובה היא 400 וההגעה ל-Postgres לא מתבצעת בכלל.
+
+**פילטר ה-DELETE — למה `.not('store_id', 'is', null)`?** supabase-js מסרב לבצע `DELETE` בלי פילטר (הגנה מובנית של PostgREST). כל 7 הטבלאות מכילות עמודת `store_id NOT NULL` (מאומת ב-`20260521063112_initial_schema.sql` + `20260521075741_add_constraints_and_grants.sql`), כך שהפילטר `store_id IS NOT NULL` תמיד אמת ובוחר כל שורה. זה הצורה האחידה היחידה שעובדת על כל 7 הטבלאות — `id` אינו קיים בטבלאות `*_daily` (יש להן PK מורכב), ו-`updated_at` אינו קיים בטבלאות `data_daily` / `products_daily` / `campaigns_daily` / `ads_daily` / `orders_attribution`.
+
+**הספירה (`{count: 'exact'}`) — מאיפה זה מגיע?** PostgREST תומך בפרמטר `Prefer: count=exact` שמחזיר את מספר השורות שהושפעו. supabase-js עוטף את זה ב-`.delete({count: 'exact'})` ומחזיר `{count, error}`. כך הדו"ח שמוצג במסך כולל את המספר המדויק של שורות שנמחקו לכל טבלה.
+
+### 29.5 אזהרות אבטחה ושימוש
+
+- **הפעולה בלתי הפיכה** עד שתורץ Backfill מחדש. אין rollback. אין trashcan. הדאטה נעלם.
+- **רק `SUPABASE_SERVICE_ROLE_KEY` יכול לבצע DELETE** על הטבלאות (anon מוגבל ל-SELECT). הוא מאוחסן רק ב-Vercel env-vars בצד השרת — אסור לקליינט. הקומפוננטה `ResetData.tsx` לא מייבאת את `supabaseAdmin`, היא מדברת אך ורק עם `/api/operator/reset`.
+- **אין auth.** המודל הוא URL-obscurity (פרק 27.1). הטוקן והמודאל הם friction-bumps על פעולה הרסנית — לא תחליף ל-auth. אל תשתף את ה-URL של `/operator`.
+- **לאחר איפוס מלא**, יש להריץ מחדש את `import-manual-overrides.ts` (פרק 27.7.1) אם רוצים להחזיר את 38 שורות ה-manual_overrides. הסקריפט מטיל הזה אידמפוטנטי, אז ניתן להריץ אותו תמיד אחרי איפוס מלא ללא חשש.
+
+### 29.6 רצף ה-end-to-end verification המומלץ
+
+זה הרצף שהפיצ'ר נבנה לתמוך בו. עבור על השלבים ב-order:
+
+```bash
+PROD=https://roas-dashboard-smoky.vercel.app
+
+# 1. (אופציונלי) Snapshot של מה שיש לפני ה-reset, ל-comparison
+curl -s "$PROD/api/data" | jq '.rows | length' > /tmp/data-rows-before.txt
+
+# 2. עבור ל-/operator, גלול לפאנל "ניקוי וריסט" בתחתית
+#    לחץ "איפוס חלקי — מחק הכל פרט להוצאות ידניות"
+#    הקלד: YES-DELETE-EXCEPT-MANUAL
+#    לחץ "אשר ומחק"
+#    אמת שהדו"ח הירוק מציג מספרים non-zero לכל 6 הטבלאות
+
+# 3. אמת שה-API מחזיר 0 שורות (Postgres ריק עכשיו)
+curl -s "$PROD/api/data" | jq '.rows | length'         # expect 0
+curl -s "$PROD/api/campaigns" | jq '.rows | length'    # expect 0
+curl -s "$PROD/api/products" | jq '.rows | length'     # expect 0
+
+# 4. עבור ל-/operator → "Backfill טווח תאריכים"
+#    בחר טווח 2026-05-15 עד 2026-05-20 + שלוש החנויות
+#    לחץ "הפעל Backfill"
+
+# 5. ב-/operator → "ריצות אחרונות", המתן לכל הריצות לעבור ל-Completed
+#    טווח 5 ימים × 3 חנויות ≈ 90 שניות סה"כ
+
+# 6. אמת שהדאטה חזרה
+curl -s "$PROD/api/data?from=2026-05-15&to=2026-05-20" | jq '.rows | length'
+# expect: ≥ 15 (5 ימים × 3 חנויות) — אם נמוך, ראה /operator לזיהוי הריצה שנכשלה
+```
+
+אם הצעד האחרון מחזיר מספר נמוך מהצפוי, יש קופסה שחורה במקום כלשהו ב-pipeline. /operator → "ריצות אחרונות" הוא הצומת הראשי לאיתור איזה Inngest function נכשל ולמה.
+
+### 29.7 מגבלות ידועות
+
+- **אין rollback**. הדאטה נעלם פיזית מ-Postgres.
+- **אין rate limiting** על ה-endpoint — מפעיל יחיד שמרגיש "אצביע מהר" יכול לטרגר wipe ב-1 לחיצה אחרי הקודמת, גם אם הריצה הקודמת עוד לא הסתיימה (אך כל הקריאות לא יהיו async, אז הקריאה השנייה תמתין בפועל). לא הוסבך rate limiting כי המפעיל היחיד הוא operator עם URL-obscurity (D-D2).
+- **אין transactional guarantee** בין הטבלאות. אם DELETE על `data_daily` הצליח אבל על `products_daily` נכשל, המצב הסופי הוא "data_daily ריקה, products_daily כמעט-ריקה" עד שיריצו את הפעולה שוב או יתקנו ידנית. הדו"ח מציג כשלים per-table — אם רואים `errors` בתגובה, לחץ שוב על אותו כפתור עם אותו טוקן.
+- **אין כיסוי לוויזואלי ב-vitest**. בדיקות vitest כיסו את הוולידטור + הטבלאות הסטטיות (`operatorReset.test.ts`, 15 tests). בדיקת ה-UI עצמה (modal opens, button disabled until token matches) נדרשת ב-JSDOM שלא מוגדר בפרויקט — האימות נסמך על בדיקה ויזואלית של המפעיל לאחר deploy.
+
+---
+
 ## סוף המסמך
 
-**גרסה:** 1.4 · **תאריך עדכון:** 2026-05-21 · **בסיס קוד:** Phase 05.7
+**גרסה:** 1.5 · **תאריך עדכון:** 2026-05-21 · **בסיס קוד:** Phase 05.7.1
 
 > מסמך זה מתעדכן עם כל שינוי משמעותי במערכת. אם משהו לא תואם למה שאתה רואה במסך — בדוק את ה-git log בריפו או דווח כדי לעדכן.
 
