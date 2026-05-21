@@ -202,6 +202,40 @@ function parseLineItems(v: unknown): OrderLineItem[] {
  * as a belt-and-suspenders measure for the edge case where Postgres date
  * comparison semantics diverge (e.g. tz-shift on the DB side).
  */
+/**
+ * Phase 05.7.6 — Returns the most recent `updated_at` across data_daily
+ * rows in the given range (or null if no rows exist). Used by /api/data
+ * to surface `dataLastWriteAt` for the dashboard's freshness chip.
+ *
+ * Implementation: single .order('updated_at', desc).limit(1) call —
+ * MUCH cheaper than scanning all rows. Postgres uses an index on
+ * (date, store_id) PK; the LIMIT 1 short-circuits after one row.
+ */
+export async function fetchDataDailyLastWriteAt(
+  opts?: { range?: DateRange },
+): Promise<string | null> {
+  try {
+    let q = getSupabase()
+      .from('data_daily')
+      .select('updated_at')
+      .order('updated_at', { ascending: false })
+      .limit(1);
+    if (opts?.range) {
+      q = q.gte('date', opts.range.from).lte('date', opts.range.to);
+    }
+    const { data, error } = await q;
+    if (error) throw error;
+    const row = (data ?? [])[0];
+    if (!row) return null;
+    const ts = (row as { updated_at?: string | null }).updated_at;
+    return ts ?? null;
+  } catch {
+    // Don't fail the whole /api/data response over a freshness lookup —
+    // the dashboard degrades to "no chip" when this returns null.
+    return null;
+  }
+}
+
 export async function fetchDailyDataFromPostgres(
   opts?: { range?: DateRange },
 ): Promise<DailyRow[]> {

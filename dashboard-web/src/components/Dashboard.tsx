@@ -42,6 +42,7 @@ import { TabNav, type TabDef } from './TabNav';
 import { SectionIntro } from './SectionIntro';
 import { CloudSync } from './CloudSync';
 import { SyncIndicator } from './SyncIndicator';
+import { FreshnessChip } from './FreshnessChip';
 import { readDashboardState, syncUrl } from '@/lib/urlState';
 import { buildDateRangeKey } from '@/lib/dateRange';
 
@@ -146,6 +147,7 @@ export function Dashboard() {
       <Header
         isRefreshing={isValidating}
         onRefresh={() => mutate()}
+        dataLastWriteAt={data?.dataLastWriteAt ?? null}
         commandPalette={
           data ? (
             <CommandPalette
@@ -508,12 +510,20 @@ function Header({
   isRefreshing,
   onRefresh,
   commandPalette,
+  dataLastWriteAt,
 }: {
   isRefreshing: boolean;
   onRefresh: () => void;
   /** The Cmd-K trigger pill is rendered inside the header so it's always
    *  reachable, no matter which tab the user is on. */
   commandPalette?: React.ReactNode;
+  /**
+   * Phase 05.7.6 — ISO timestamp of the most-recent data_daily row write
+   * (cron-live / cron-daily / event-sync-now). Surfaced as a chip in the
+   * header so the operator can see when data was last refreshed without
+   * jumping to /operator > Jobs.
+   */
+  dataLastWriteAt: string | null;
 }) {
   return (
     <header className="sticky top-0 z-10 bg-primary-dark text-white shadow-sm">
@@ -538,6 +548,12 @@ function Header({
             </p>
           </div>
           <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+            {/* Phase 05.7.6: freshness chip. Hidden on the smallest screens
+                so the header doesn't wrap; on sm+ it sits left of the
+                command-palette + sync indicators. */}
+            <span className="hidden sm:inline-flex">
+              <FreshnessChip dataLastWriteAt={dataLastWriteAt} />
+            </span>
             {commandPalette}
             <SyncIndicator />
             {/* Operator console (D-D1) — sibling Next.js route at /operator.

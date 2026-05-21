@@ -30,7 +30,17 @@ export type DailyRow = {
 export type DashboardData = {
   rows: DailyRow[];
   stores: string[];    // unique store names
-  lastUpdated: string; // ISO timestamp
+  lastUpdated: string; // ISO timestamp — when the API responded (server fetch time)
+  /**
+   * Phase 05.7.6 — ISO timestamp of the MOST RECENT data_daily row write
+   * across the queried date range. Distinct from `lastUpdated` (server
+   * fetch time): this answers "when did a cron last touch this data?"
+   * which is what the dashboard's "עודכן לפני X דק׳" chip displays.
+   *
+   * `null` when no rows match the range (or all rows pre-date the
+   * 2026-05-22 migration that added the column).
+   */
+  dataLastWriteAt: string | null;
   fxIlsToCad: number | null; // current FX rate (ECB via Frankfurter). null on failure.
   /** Present only on the degraded-error path (rows: []). Consumers should
    *  surface this through the standard error banner. /api/data uses the

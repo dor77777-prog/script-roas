@@ -1,5 +1,8 @@
 import { NextResponse } from 'next/server';
-import { fetchDailyDataFromPostgres } from '@/lib/postgresReaders';
+import {
+  fetchDailyDataFromPostgres,
+  fetchDataDailyLastWriteAt,
+} from '@/lib/postgresReaders';
 import type { DashboardData } from '@/lib/types';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
@@ -45,9 +48,10 @@ export async function GET(req: Request) {
   try {
     // Phase 05.7: Postgres-only. The readFrom() branch was removed; the
     // dashboard reads exclusively from Supabase now.
-    const [rows, fxIlsToCad] = await Promise.all([
+    const [rows, fxIlsToCad, dataLastWriteAt] = await Promise.all([
       fetchDailyDataFromPostgres({ range }),
       fetchTodayFx(),
+      fetchDataDailyLastWriteAt({ range }),
     ]);
     if (rows.length > 50000) {
       console.warn(`/api/data: large response (${rows.length} rows) — consider pagination`);
@@ -57,6 +61,7 @@ export async function GET(req: Request) {
       rows,
       stores,
       lastUpdated: new Date().toISOString(),
+      dataLastWriteAt,
       fxIlsToCad,
     };
     return NextResponse.json(data, {
@@ -87,6 +92,7 @@ export async function GET(req: Request) {
         rows: [],
         stores: [],
         lastUpdated: new Date().toISOString(),
+        dataLastWriteAt: null,
         fxIlsToCad: null,
         error: userFacingError(message),
       } satisfies DashboardData,
