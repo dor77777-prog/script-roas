@@ -7,9 +7,9 @@
 │                                                  │
 │      מדריך הפעלה שוטף למפעיל הדשבורד            │
 │                                                  │
-│      גרסה:        1.2                            │
+│      גרסה:        1.3                            │
 │      תאריך:       2026-05-21                     │
-│      בסיס קוד:    Phase 05.5-03                  │
+│      בסיס קוד:    Phase 05.6-22                  │
 │      קהל יעד:     מפעיל יחיד · החלטות יומיות   │
 │                                                  │
 │      חנויות נתמכות:                              │
@@ -88,6 +88,7 @@
 24. [נספח ב — מדדים (Metrics)](#נספח-ב--מדדים-metrics)
 25. [נספח ג — מגבלות ידועות (Known Limitations)](#נספח-ג--מגבלות-ידועות-known-limitations)
 26. [נספח ד — Checklists למפעיל](#נספח-ד--checklists-למפעיל)
+27. [ניהול (Operator Console) — Phase 05.6](#27-ניהול-operator-console--phase-056)
 
 ---
 
@@ -124,6 +125,34 @@
                   └────────────────────────────┘
 ```
 
+**עדכון Phase 05.6 — צינור Inngest רץ במקביל ל-Apps Script:**
+
+החל מ-Phase 05.6 קיים צינור איסוף שני שרץ **במקביל** ל-Apps Script (ללא Dual-Write — שתי המערכות עצמאיות, כל אחת קוראת מאותם API של Shopify/Meta/Google/OXR וכותבת לאחסון משלה). ה-Dashboard עדיין קורא **רק** מ-Sheets בברירת מחדל (`READ_FROM=sheets`). ראה פרק [27](#27-ניהול-operator-console--phase-056) להסבר מלא.
+
+```
+┌──────────────┐    ┌───────────┐    ┌──────────────┐    ┌──────┐
+│ Shopify      │    │ Meta Ads  │    │ Google Ads   │    │  FX  │
+└──────┬───────┘    └─────┬─────┘    └─────┬────────┘    └──┬───┘
+       └──────────────────┴────────────────┴────────────────┘
+                                │
+                  ┌─────────────▼──────────────┐
+                  │   Inngest Cloud            │
+                  │   (8 פונקציות: 3 cron-     │
+                  │   daily + 3 cron-live +    │
+                  │   sync-now + backfill)     │
+                  └─────────────┬──────────────┘
+                                │
+                  ┌─────────────▼──────────────┐
+                  │   Supabase Postgres        │
+                  │   (10 טבלאות — קיימות    │
+                  │   מאז Phase 05.5)          │
+                  └────────────────────────────┘
+
+                  שני הצינורות קוראים מאותם APIs במקביל.
+                  ה-Dashboard בוחר ממה לקרוא לפי דגל READ_FROM.
+                  במצב 05.6: דגל=sheets — Postgres רדום עד Phase 05.7.
+```
+
 ### 1.2 מה זה Apps Script (במונחים לא טכניים)
 Apps Script הוא **מנגנון איסוף אוטומטי** שרץ ב-Google ברקע. הוא מתחבר ל-Meta Ads, Google Ads, ו-Shopify, מושך את הנתונים, ושומר אותם ב-Google Sheets שלך. רץ כל 5 דקות (live) ופעם ביום (סיכום).
 
@@ -143,12 +172,16 @@ https://roas-dashboard-smoky.vercel.app
 - ✅ **סדרות יומיות** (`data-daily`, `campaigns-daily`, וכו') — אחת ליום (סביב 04:15 ישראל).
 - ✅ **הזמנות עם click-IDs** (`orders-attribution`) — אחת ליום.
 - ✅ **שערי חליפין** — אחת ליום מ-Frankfurter API.
+- ✅ **Inngest cron-daily** (מאז Phase 05.6) — 00:05 Asia/Jerusalem פר חנות (3 פונקציות), כותב ל-Supabase במקביל ל-Apps Script. רדום מבחינת ה-Dashboard עד Phase 05.7.
+- ✅ **Inngest cron-live** (מאז Phase 05.6) — כל 15 דקות פר חנות (3 פונקציות), כותב ל-Supabase. רדום מבחינת ה-Dashboard עד Phase 05.7.
 
 ### 1.6 מה דורש פעולה ידנית מהמפעיל
-- 🛠️ **Backfill היסטורי** — אם תיקנו באג שמשפיע על פירוש נתונים ישנים. הסבר מלא בפרק 16.
+- 🛠️ **Backfill היסטורי** — אם תיקנו באג שמשפיע על פירוש נתונים ישנים. הסבר מלא בפרק 16 (דרך Apps Script) או דרך טאב ה-ניהול החדש (פרק 27).
 - 🛠️ **עדכון BillingSettings** — להוסיף עלויות חדשות (אפליקציות, דומיינים).
 - 🛠️ **מיפוי Mapped Products** — לקמפיינים חדשים, ידנית.
 - 🛠️ **Annotations** — לציין אירועים חשובים על הציר (קמפיין חדש, שינוי מחיר וכו').
+- 🛠️ **CRUD ל-manual_overrides** — דרך טאב הניהול (פרק 27), טבלת `manual_overrides` ב-Supabase.
+- 🛠️ **סקריפט one-off (Phase 05.6 setup)** — `cd dashboard-web && npx --yes tsx scripts/import-manual-overrides.ts` — מייבא את 38 שורות `manual-spend` מ-Sheets אל Supabase. ראה פרק [27.7](#277-סקריפטים-של-תפעיל) להסבר.
 
 ### 1.7 מצב אבטחה ב-Supabase — מה צפוי
 
@@ -166,6 +199,8 @@ https://roas-dashboard-smoky.vercel.app
 - **התעלמו.** האזהרה היא משתמרת (`0013_rls_disabled_in_public`) ומופיעה על כל אחת מ-10 הטבלאות (`stores`, `data_daily`, `campaigns_daily`, `ads_daily`, `products_daily`, `orders_attribution`, `product_catalog`, `manual_overrides`, `dashboard_state`, `notification_config`).
 - אל תיכנעו לפיתוי ללחוץ "Enable RLS" — זה ישבור את ה-ping ויהפוך את האינדיקטור לצהוב.
 - אם משתנה במודל האמון (למשל, רוצים לשתף את הדשבורד עם פרטנר), פותחים phase חדשה שמוסיפה Auth + policies במקביל.
+
+**הערה ל-Phase 05.7 (cut-over):** כשנהפוך את הדגל `READ_FROM` ל-`postgres`, ה-Dashboard יתחיל לקרוא דרך ה-anon key של Supabase. מודל ה-URL-obscurity יתרחב גם לנתיב Postgres — ה-anon key לבדה לא יוצרת חשיפה מעבר ל-URL הסודי של הדשבורד. עד אז (כל 05.6), Sheets נשאר מקור הקריאה היחיד והאזהרות נשארות כמו שהן.
 
 ---
 
@@ -198,6 +233,7 @@ https://roas-dashboard-smoky.vercel.app
 במקביל, בזמן כתיבה לענן (לדוגמה: שמירת goal חדש או annotation), האינדיקטור עובר באופן זמני למצב `שומר…` (רקע אופ-ווייט, אייקון מסתובב) — זהו מצב orthogonal לתוצאת ה-`/api/health` ולא משפיע על צבע הרקע הטריאנרי.
 
 - **Refresh Button**: מחדש את כל הקריאות. גם פועל אוטומטית כל 60 שניות.
+- **קישור ניהול ⚙️** (Phase 05.6, ליד ה-Sync Indicator): פותח את עמוד `/operator` — קונסולת תפעיל לסנכרון יזום, Backfill, ניהול manual_overrides ומעקב ריצות Inngest. ראה פרק [27](#27-ניהול-operator-console--phase-056). **שים לב:** הקישור הוא **לא** טאב — הוא יושב ב-Header (לא ב-TabNav), כדי לא להיכנס לזרימת קבלת ההחלטות היומית.
 
 ### 2.2 טאבים (6)
 ```
@@ -2054,12 +2090,278 @@ backfillRangeForStores('2026-05-13', '2026-05-19', ['uzoshop'])
 - [ ] CampaignDrawer פותח עם תוכן
 - [ ] CPM-vs-ROAS chart מציג ניתוח (אם יש 5+ ימים)
 - [ ] Cloud Sync לא מעלה errors
+- [ ] **(Phase 05.6)** `/operator` נטען ומכיל "ניהול"
+- [ ] **(Phase 05.6)** `/api/inngest` GET מחזיר metadata של 8 פונקציות
+- [ ] **(Phase 05.6)** `/api/operator/jobs` מחזיר shape תקין (`runs[]`)
+- [ ] **(Phase 05.6)** `/api/operator/manual-overrides` מחזיר ≥ 38 שורות
+
+---
+
+## 27. ניהול (Operator Console) — Phase 05.6
+
+> **TL;DR:** טאב חדש בשם **ניהול** (לחיצה על אייקון ⚙️ ב-Header, לא ב-TabNav) פותח את `/operator` — קונסולת מפעיל ל-Phase 05.6. ארבע פעולות: **סנכרון עכשיו**, **ריצות אחרונות**, **Backfill טווח תאריכים**, ו-**ניהול manual_overrides**. ה-Dashboard עדיין קורא רק מ-Sheets — Postgres רדום עד Phase 05.7.
+
+### 27.1 איך להגיע
+- כתובת: `https://roas-dashboard-smoky.vercel.app/operator`
+- או דרך הקישור ⚙️ ב-Header (ליד ה-Sync Indicator) של כל עמוד.
+- אותו מודל אמון של URL-obscurity — אין login, אין auth. אל תשלח את הקישור לאף אחד.
+
+### 27.2 ארכיטקטורה (לתפעיל בלבד — לא נדרש לקבל החלטות יומיות)
+
+```
+┌──────────────────────────────────────────────────────────────┐
+│ דפדפן ← /operator                                            │
+│  │                                                            │
+│  ├── סנכרון עכשיו     → POST /api/operator/sync-now          │
+│  ├── ריצות אחרונות   → GET  /api/operator/jobs (poll 15s)   │
+│  ├── Backfill         → POST /api/operator/backfill          │
+│  └── manual_overrides → CRUD /api/operator/manual-overrides  │
+│                                                               │
+│ ה-API פונה ל-Inngest cloud (event/sync-now, event/backfill) │
+│ או ישירות ל-Supabase (manual_overrides).                    │
+│                                                               │
+│ Inngest מריץ את 8 הפונקציות שמושכות מ-Shopify/Meta/Google/  │
+│ FX וכותבות ל-Supabase. ה-Dashboard עדיין קורא מ-Sheets       │
+│ (READ_FROM=sheets) — Postgres הוא דרישה ל-Phase 05.7.       │
+└──────────────────────────────────────────────────────────────┘
+```
+
+**ה-keys הרגישים** (`INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) **לא** מגיעים אל הדפדפן — הם רק ב-API routes בצד השרת (proxy pattern). מבדיקת bundle scan לאחר build: 0 התאמות לכל אחד מהמפתחות בקבצי `.next/static/`.
+
+### 27.3 ארבע תת-מסכי הניהול
+
+#### 27.3.1 סנכרון עכשיו (Sync Now)
+
+**מה זה עושה:** מפעיל איסוף מיידי (cron-live equivalent) של כל המקורות (Shopify/Meta/Google/FX) — עבור חנות יחידה או כל החנויות במקביל.
+
+**ממשק:**
+- 4 כפתורים: "סנכרן הכול" + 3 כפתורי פר-חנות (uzoshop / zolplus / usmile360).
+- בלחיצה: POST ל-`/api/operator/sync-now` עם `{scope: 'all' | storeId}` → Inngest שולח אירוע `event/sync-now` ומחזיר 202 + eventIds.
+- הכפתור שננלחץ מוחלף ב-spinner; כל הכפתורים מנוטרלים עד שהתשובה חוזרת (מניעת double-fire).
+- הודעת הצלחה / שגיאה מתחת לכפתורים בעברית (`role="status"` / `role="alert"` ל-a11y).
+
+**סמנטיקה a-סינכרונית (חשוב להבין):**
+- לחיצה לא ממתינה לסיום הסנכרון. החזרת 202 = "האירוע נכנס לתור".
+- כדי לראות תוצאות בפועל, פתח את "ריצות אחרונות" (27.3.2) ועקוב אחרי `status` בכל פונקציה. ריצה טיפוסית: 30-90 שניות לחנות.
+
+#### 27.3.2 ריצות אחרונות (Jobs Table)
+
+**מה זה עושה:** היסטוריית הריצות האחרונות של 8 פונקציות ה-Inngest, מעודכן כל 15 שניות אוטומטית.
+
+**ממשק:**
+- טבלת RTL עם 5 עמודות: **function_id** (cron-daily-uzoshop וכו'), **סטטוס** (Completed / Failed / Running / Cancelled — תגית צבעונית), **התחיל ב-** (זמן יחסי + ISO ב-tooltip), **משך** (mm:ss), **פלט** (אקספנדבל — JSON ב-`<pre dir="ltr">`).
+- חיווי `lastUpdated` מתעדכן בכל 15 שניות (פולס) — גם כשהטבלה ריקה, כדי שתדע ש-polling פעיל.
+- שגיאה זמנית (Inngest API down) מציגה באנר ענברי ולא מרוקנת את הטבלה.
+
+**מתי הטבלה תהיה ריקה:**
+- מיד אחרי deploy ראשון של 05.6, עד שה-cron הראשון בוקע (00:05 IL) או שאתה לוחץ "סנכרן עכשיו".
+- אם מעבר 24 שעות בלי אירועים (בעצם בלתי אפשרי כי cron-live רץ כל 15 דקות).
+
+**מקור הדאטה:** Inngest REST v1 (`/v1/events` ואז per-event `/v1/events/{id}/runs`) — מתבצע **בצד השרת** דרך `/api/operator/jobs`. ה-`INNGEST_SIGNING_KEY` לעולם לא מגיע אל הדפדפן.
+
+#### 27.3.3 Backfill טווח תאריכים (Date-Range Backfill)
+
+**מה זה עושה:** איסוף נתונים היסטוריים על טווח תאריכים שנבחר. תחליף מודרני ל-`backfillRange()` של Apps Script (פרק 16).
+
+**ממשק:**
+- **תאריך מ-** + **תאריך עד** (date inputs עם `dir="ltr"`).
+- **רב-בחירה של חנויות** (3 checkboxes — uzoshop / zolplus / usmile360).
+- כפתור "הפעל Backfill" שולח POST ל-`/api/operator/backfill` → Inngest שולח `event/backfill`.
+
+**מגבלות:**
+- **רצפת היסטוריה: `2026-05-01`** (D-A3). הניסיון לבחור תאריך לפני זה ייכשל בצד הקליינט (`<input type="date" min="2026-05-01">`) וגם בצד השרת (גוף ה-route דוחה — defense in depth).
+- כל cron-step לוקח כ-1-2 שניות בהיעדר rate limit ב-API; Backfill של 21 ימים × 3 חנויות = ~380 ריצות step.run (פחות מ-1% מקצובת Inngest free tier).
+- אין rate limiting אקטיבי — שמור על טווחים סבירים בכל פעם (עד 30 ימים × 3 חנויות).
+
+**אופן הצריכה:**
+- כמו "סנכרון עכשיו", סמנטיקה אסינכרונית — 202 = "התקבל". עקוב אחרי "ריצות אחרונות" לסטטוס.
+
+#### 27.3.4 ניהול manual_overrides (Manual Overrides CRUD)
+
+**מה זה עושה:** הוספה / רישום / מחיקה של שורות בטבלת `manual_overrides` ב-Supabase. הטבלה משמשת ל-spend ידני שלא מגיע מ-Meta/Google API (כמו חודש מאי 2026 ל-uzoshop, 38 שורות שיובאו בסקריפט one-off — ראה 27.7).
+
+**ממשק:**
+- **טופס הוספה** (inline, RTL):
+  - **תאריך** (date)
+  - **חנות** (dropdown: uzoshop / zolplus / usmile360)
+  - **פלטפורמה** (dropdown: meta / google)
+  - **Spend** (number, `dir="ltr"`)
+  - **מטבע** (dropdown: ILS / CAD / USD)
+  - **הערות** (textarea, אופציונלי)
+- **טבלה** עם כל השורות הקיימות + כפתור 🗑 בכל שורה.
+- **מודאל אישור מחיקה** — לחיצה על 🗑 פותחת חלונית "אישור מחיקה" כדי למנוע מחיקה בטעות.
+- **עריכה (EDIT)** — לא קיימת ב-05.6 (הוחלט להידחות). מעקף: למחוק ולהוסיף מחדש.
+
+**הגנות:**
+- ה-API דוחה ערכי `platform` / `store_id` / `currency` לא תקינים **לפני** שהם מגיעים ל-CHECK constraint של Postgres → הודעות שגיאה ברורות בעברית.
+- ה-`SUPABASE_SERVICE_ROLE_KEY` יושב רק ב-API route (`getSupabaseAdmin()`); 0 רפרנסים בקומפוננטות ה-UI.
+- POST משתמש ב-`ON CONFLICT (date, store_id, platform) DO UPDATE` — שורה כפולה תעדכן את הקיימת, לא תיצור שורה שנייה.
+
+### 27.4 דגל ה-READ_FROM (Feature Flag)
+
+**מהו:** משתנה סביבה ב-Vercel ששולט מאיפה ה-Dashboard קורא נתונים.
+
+**ערכים:**
+- `READ_FROM=sheets` — **ברירת מחדל ב-Phase 05.6**. ה-Dashboard קורא מ-Google Sheets דרך `sheets.ts` (הקוד הקיים מ-Phase 04 ואילך). זוהי ההתנהגות הנוכחית והפעילה.
+- `READ_FROM=postgres` — **רדום ב-05.6**. ה-Dashboard יקרא מ-Supabase Postgres דרך `postgresReaders.ts`. **לא יופעל לפני Phase 05.7** (cut-over).
+
+**איך לשנות:**
+- Vercel → Project Settings → Environment Variables → `READ_FROM` → ערך חדש → Save.
+- **אין צורך ב-redeploy.** הדגל נקרא בכל בקשה (`readFrom()` הוא פונקציה שמעריכה `process.env.READ_FROM` ב-runtime ולא ב-module-load). הבקשה הבאה כבר תפעל בהתאם.
+
+**זהירות:**
+- אל תהפוך את הדגל ל-`postgres` ב-Phase 05.6 — ה-postgresReaders אומנם קיימים אבל לא עברו את חבילת אימות 14 הימים שמתוכננת ל-Phase 05.7. ההיפוך = החלטה תכנונית ב-05.7, לא הפעלה ספונטנית.
+
+**במקרה של שגיאה:** שני הענפים נופלים לאותו `userFacingError` soft-fail — תיראה הודעה ענברית בכל הדשבורד, לא שורה ריקה. אם בכל זאת הפכת את הדגל בטעות, החזר מיד ל-`sheets`.
+
+### 27.5 Inngest Cloud — סקירה
+
+**מהו Inngest:** שירות SaaS לתזמון פונקציות (cron + event-driven). חליף ל-`triggers` של Apps Script + מבנה ה-queue/chunking ב-`DailyUpdate.gs`. רץ ב-cloud, לא בענן של Google.
+
+**8 הפונקציות שלנו** (Phase 05.6, רשומות אוטומטית בכל deploy ל-Vercel):
+
+| Function ID | מתי רצה | מה היא עושה |
+|---|---|---|
+| `cron-daily-uzoshop` | 00:05 Asia/Jerusalem | איסוף יומי מלא (Shopify + Meta + Google + FX) ל-uzoshop |
+| `cron-daily-zolplus` | 00:05 Asia/Jerusalem | אותו דבר ל-zolplus |
+| `cron-daily-usmile360` | 00:05 Asia/Jerusalem | אותו דבר ל-usmile360 |
+| `cron-live-uzoshop` | כל 15 דקות | סנכרון live של היום הנוכחי ל-uzoshop |
+| `cron-live-zolplus` | כל 15 דקות | אותו דבר ל-zolplus |
+| `cron-live-usmile360` | כל 15 דקות | אותו דבר ל-usmile360 |
+| `event-sync-now` | מטריגרים של "סנכרן עכשיו" | זהה ל-cron-live אך מופעל ידנית |
+| `event-backfill` | מטריגר של "Backfill" | רץ על טווח תאריכים, חנויות נבחרות |
+
+**עלות והקצאה:**
+- כל ההגדרות ב-Inngest free tier — 50,000 executions לחודש.
+- תחזית עומס בפועל: ~28,000/חודש (כ-56% מהמכסה). מעקב שבועי בחודש הראשון אחרי 05.6 deploy.
+
+**צפייה ב-Inngest Dashboard:**
+- `https://app.inngest.com` (חשבון המפעיל).
+- שתי המערכות הרושמות-אוטומטית של Vercel + Inngest מסונכרנות דרך marketplace integration — `INNGEST_EVENT_KEY` ו-`INNGEST_SIGNING_KEY` מוזרקים אוטומטית ל-Vercel ב-Production env, מסומנים Encrypted.
+
+### 27.6 Apps Script ימשיך לרוץ במקביל (לא Dual-Write)
+
+**זה לא באג, זה תכנון:**
+- **Apps Script** ממשיך לרוץ עם ה-triggers שלו (פעם ביום + כל 15 דקות), קורא מ-Shopify/Meta/Google ישירות וכותב ל-**Sheets**.
+- **Inngest** רץ במקביל עם 8 הפונקציות שלו, קורא מאותם APIs עצמאית, וכותב ל-**Supabase**.
+- שתי המערכות **לא** מדברות זו עם זו. אין dual-write דרך אחת המערכות שכותבת לשנייה — שתיהן עצמאיות לחלוטין.
+
+**למה כך:**
+- מצב מקבילי = רשת ביטחון. אם Inngest יפול / יהיה באג בפונקציית TS / יחרוג מהמכסה — Apps Script + Sheets ימשיכו לפעול וה-Dashboard ימשיך להציג נתונים (בזכות `READ_FROM=sheets`).
+- ב-Phase 05.7 (cut-over) נאמת ב-14 ימים שהמספרים זהים, נהפוך את הדגל ל-`postgres`, ורק אחרי אישור מלא נסיר את ה-triggers של Apps Script.
+- עד אז: שתי מערכות עצמאיות, כל אחת אחראית על הכתיבה לאחסון משלה.
+
+### 27.7 סקריפטים של תפעיל
+
+#### 27.7.1 import-manual-overrides.ts — ייבוא חד-פעמי של 38 שורות
+
+**מתי להריץ:** אחרי deploy ראשון של 05.6, **לפני** השימוש ב-Backfill. מייבא את 38 שורות `manual-spend` הקיימות ב-Sheets אל טבלת `manual_overrides` ב-Supabase.
+
+```bash
+cd dashboard-web && npx --yes tsx scripts/import-manual-overrides.ts
+```
+
+**פלט צפוי בריצה ראשונה:**
+```
+Imported 38 rows, skipped 0, errored 0
+```
+
+**פלט צפוי בריצה חוזרת (idempotent):**
+```
+Imported 0 rows, skipped 38, errored 0
+```
+
+**דרישות סביבה:** ה-`.env.local` של `dashboard-web/` חייב לכלול:
+- `SPREADSHEET_ID` — מזהה ה-Sheets workbook
+- `GOOGLE_CLIENT_EMAIL` — שירות חשבון של Sheets
+- `GOOGLE_PRIVATE_KEY` — מפתח השירות (escaped newlines)
+- `SUPABASE_URL` — `https://npegxufdupooqovrewyb.supabase.co`
+- `SUPABASE_SERVICE_ROLE_KEY` — מפתח service_role (אסור לקליינט)
+
+הסקריפט טוען את ה-env דרך `dotenv` בצורה דינמית. בריצה ב-CI/Vercel הסקריפט לא רץ — הוא ייעודי להפעלה לוקאלית של המפעיל.
+
+**אידמפוטנטיות:** כל שורה משתמשת ב-`ON CONFLICT (date, store_id, platform) DO NOTHING`. אפשר להריץ פעמיים ללא נזק.
+
+#### 27.7.2 capture-snapshot.ts — Snapshot של Sheets baseline (parity test)
+
+**מתי להריץ:** רק כאשר רוצים לרענן את ה-baseline של בדיקות ה-Algorithm-parity (D-C4). הסקריפט שומר תמונת מצב של מספרי Sheets לטווח תאריכים נבחר, ש-vitest משווה אליה כדי לזהות drift אלגוריתמי ב-TS port.
+
+```bash
+cd dashboard-web && npx --yes tsx scripts/capture-snapshot.ts
+```
+
+**מה הוא יוצר:** את הקובץ `src/lib/fetchers/__tests__/snapshots/sheets-baseline-2026-05-15-to-2026-05-20.json` (overwrite atomically).
+
+**מתי צריך לרענן:**
+- אחרי תיקון אלגוריתמי מכוון ב-Apps Script (כמו Phase 05.2.3.0 refund-correction) שמעדכן את המספרים — ה-snapshot היה ישן וצריך לרענן כדי לא להפיל את ה-parity tests.
+- לפני cut-over של Phase 05.7 — operator מריץ פעם אחרונה כדי לתפוס שינויים אחרונים של Apps Script.
+
+**אזהרה:** הסקריפט מבצע קריאות חיות ל-Sheets API. לא להריץ אותו במהלך quota crunch.
+
+**ברירת מחדל ב-05.6:** ה-snapshot שמופיע ב-repo הוא stub עם `_TODO` markers — המפעיל יריץ את הסקריפט בסביבת ה-Production לפני ה-cut-over של 05.7.
+
+### 27.8 אינדיקטור הסנכרון — קישור ל-Inngest
+
+הסעיף בפרק 2.1 על ה-Sync Indicator הטריאנרי (ירוק/צהוב/אדום) נשאר כמו שהוא — הוא מודד **רק** את הקריאה מ-Sheets ו-Supabase, לא את בריאות Inngest. אבל יש קישור עקיף:
+
+- אם פונקציות Inngest נופלות שוב ושוב (dead-letter) → `data_daily` ב-Supabase מפסיק להתעדכן → ה-Dashboard עדיין יציג נתונים ירוקים כי הוא קורא מ-Sheets. **אבל** הטבלה "ריצות אחרונות" ב-`/operator` תציג שורות `Failed` ברצף.
+- **לכן:** בדיקת בריאות Inngest = לבדוק את **27.3.2 (ריצות אחרונות)**. ראה גם פרק 21 (Troubleshooting) — נוסיף תרחיש בעתיד כשנעבור ל-Phase 05.7.
+
+### 27.9 Post-Deploy Smoke Tests (לאחר merge ל-main)
+
+לאחר merge ל-main, Vercel CI עושה deploy אוטומטי. הריץ את הבדיקות הבאות **מול הכתובת הפרודקשן** (לא localhost / לא Vercel preview — כלל זיכרון של המפעיל):
+
+```bash
+PROD=https://roas-dashboard-smoky.vercel.app
+
+# 1. /operator נטען + מכיל "ניהול"
+curl -s "$PROD/operator" | grep -q "ניהול" && echo "OK: /operator"
+
+# 2. /api/inngest GET מחזיר metadata של 8 פונקציות
+curl -s "$PROD/api/inngest" | jq '.functions | length' # expect 8
+
+# 3. Jobs table proxy מחזיר shape
+curl -s "$PROD/api/operator/jobs?limit=10" | jq -e '.runs' >/dev/null && echo "OK: /api/operator/jobs"
+
+# 4. Sync-now POST מחזיר 202 + 3 eventIds (scope=all)
+curl -s -X POST "$PROD/api/operator/sync-now" \
+  -H "Content-Type: application/json" -d '{"scope":"all"}' \
+  | jq -e '.accepted == 3' && echo "OK: /api/operator/sync-now"
+
+# 5. manual_overrides GET מחזיר ≥ 38 שורות
+curl -s "$PROD/api/operator/manual-overrides" | jq -e '.rows | length >= 38' && echo "OK: /api/operator/manual-overrides"
+
+# 6. Backfill POST מחזיר 202
+curl -s -X POST "$PROD/api/operator/backfill" \
+  -H "Content-Type: application/json" \
+  -d '{"from":"2026-05-15","to":"2026-05-15","storeIds":["uzoshop"]}' \
+  | jq -e '.accepted == 1' && echo "OK: /api/operator/backfill"
+
+# 7. /api/data עדיין מחזיר 200 + שורות (Sheets default unchanged)
+curl -s "$PROD/api/data" | jq -e '.rows' >/dev/null && echo "OK: /api/data (Sheets default)"
+
+# 8. בדיקה ויזואלית — לוודא ש-https://app.inngest.com מציג את 8 הפונקציות הרשומות.
+```
+
+**הערות אבטחה לבדיקות:** אף curl לא חושף keys. כל ה-keys (signing/event/service_role) הם server-side only. אם בודק נטמן כלשהו מהם מופיעים בתגובות — זוהי באג חמורה ויש לפתוח Phase תיקון.
+
+### 27.10 גבולות ידועים ב-Phase 05.6 (deferred ל-Phase 05.7)
+
+- ❌ **אין יכולת לעבור ל-Postgres** — `READ_FROM=postgres` רדום. ההיפוך הוא החלטת Phase 05.7 בלבד.
+- ❌ **אין EDIT למחיקות manual_overrides** — רק ADD / DELETE. מעקף: delete + add מחדש.
+- ❌ **אין real-time updates** ב-jobs table — polling של 15 שניות, לא Supabase Realtime.
+- ❌ **אין אזהרה אם Backfill טווח גדול חורג ממכסת Inngest** — המפעיל אחראי לבחור טווחים סבירים.
+- ❌ **Apps Script triggers עדיין רצים** — לא בוטלו ב-05.6. ביטולם מתוכנן ל-Phase 05.7.
+- ❌ **clasp CI workflow פעיל** — אם תדחוף `.gs` ל-main, הוא ידחוף ל-Apps Script. בוטל ב-Phase 05.7.
+- ❌ **חסרה verification harness של 14 ימים** Sheets vs Postgres — חלק מ-Phase 05.7's gate.
+
+ראה גם פרק [1.7](#17-מצב-אבטחה-ב-supabase--מה-צפוי) להשלמת ה-RLS warnings שנשארות.
 
 ---
 
 ## סוף המסמך
 
-**גרסה:** 1.1 · **תאריך עדכון:** 2026-05-20 · **בסיס קוד:** Phase 05.2.2.1 + FIX-25
+**גרסה:** 1.3 · **תאריך עדכון:** 2026-05-21 · **בסיס קוד:** Phase 05.6-22
 
 > מסמך זה מתעדכן עם כל שינוי משמעותי במערכת. אם משהו לא תואם למה שאתה רואה במסך — בדוק את ה-git log בריפו או דווח כדי לעדכן.
 
