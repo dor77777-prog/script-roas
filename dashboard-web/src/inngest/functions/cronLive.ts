@@ -234,11 +234,22 @@ async function persistDayForStore(
   // SET clause). For a fresh INSERT (no existing row), we ADD zeros so the
   // 3 spend columns have NUMERIC defaults — otherwise they'd be NULL until
   // the next daily-cron tick.
+  //
+  // Phase 05.7.4 (2026-05-22) — gross_revenue_cad + refund_deduction_cad MUST
+  // be written together with revenue_cad. If cronLive writes revenue_cad in
+  // isolation (as it did pre-fix), a stale gross from a prior cronDaily run
+  // produces the impossible state `revenue > gross` (uzoshop 2026-05-21
+  // showed revenue=$2,133 vs gross=$2,029, refund=$0). The fetcher returns
+  // all three together, so passing all three to the upsert costs nothing
+  // and preserves the invariant `revenue = gross − refund_deduction` on
+  // every write.
   type DataDailyUpsertRow = {
     date: string;
     store_id: string;
     store_name: string;
     revenue_cad: number;
+    gross_revenue_cad: number;
+    refund_deduction_cad: number;
     roas: number;
     gross_profit_cad: number;
     cogs_cad: number;
@@ -252,6 +263,8 @@ async function persistDayForStore(
     store_id: storeId,
     store_name: shopify.storeName,
     revenue_cad: revenueCad,
+    gross_revenue_cad: shopify.grossRevenueCad,
+    refund_deduction_cad: shopify.refundDeductionCad,
     roas,
     gross_profit_cad: grossProfit,
     cogs_cad: cogs,
