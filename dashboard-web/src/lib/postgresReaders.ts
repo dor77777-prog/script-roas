@@ -61,6 +61,52 @@ import type { CatalogProduct } from './productCatalog';
 type DbRow = Record<string, unknown>;
 
 /**
+ * Pagination helper — works around Supabase Cloud's `db-max-rows = 1000`
+ * PostgREST cap. `.range(0, 49999)` alone returns only 1000 rows because
+ * PostgREST clamps to the project setting, not the client request.
+ *
+ * Loops chunked .range() requests until the supabase-js result is smaller
+ * than the requested chunk (signal that we've reached the end of the
+ * dataset). Each call rebuilds the query via `buildQuery()` because
+ * supabase-js queries are not safely reusable across awaits.
+ *
+ * Type hint: `buildQuery` should return the chain right before .range()
+ * (i.e. .from().select().gte().lte() etc.). The helper only adds .range().
+ *
+ * Note: `any` is unavoidable for the chain return type — supabase-js's
+ * query builder is heavily generic and constructing a precise type for
+ * the partial chain (with .range still available) needs Database<T> codegen
+ * we don't have. The cast is contained to this helper; callers pass a
+ * lambda that returns a typed builder.
+ */
+/* eslint-disable @typescript-eslint/no-explicit-any */
+async function paginate<T>(
+  buildQuery: () => {
+    range: (
+      from: number,
+      to: number,
+    ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>;
+  },
+  chunkSize = 1000,
+): Promise<T[]> {
+  const all: T[] = [];
+  let start = 0;
+  // Hard ceiling — 50 chunks × 1k = 50k rows. Prevents runaway loops if a
+  // server bug returns the same page forever.
+  const MAX_CHUNKS = 50;
+  for (let chunk = 0; chunk < MAX_CHUNKS; chunk++) {
+    const { data, error } = await buildQuery().range(start, start + chunkSize - 1);
+    if (error) throw new Error(error.message);
+    if (!data || data.length === 0) break;
+    all.push(...data);
+    if (data.length < chunkSize) break;
+    start += chunkSize;
+  }
+  return all;
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+/**
  * Coerces an unknown DB cell to a finite number. NUMERIC columns come back
  * from supabase-js as either `number` or `string` (depending on size /
  * configuration); BIGINT comes back as `number` for small values and as
@@ -150,27 +196,27 @@ function parseLineItems(v: unknown): OrderLineItem[] {
 export async function fetchDailyDataFromPostgres(
   opts?: { range?: DateRange },
 ): Promise<DailyRow[]> {
-  // supabase-js defaults to a 1,000-row PostgREST max. Date-rolled aggregate
-  // tables can exceed that quickly with multi-store × 30-day windows, so we
-  // raise the per-query cap to a generous ceiling (50k rows ≈ 5 years of
-  // 3 stores × ~10 rows/day for data_daily — far above realistic usage).
-  let q = getSupabase()
-    .from('data_daily')
-    .select(
-      'date, store_id, store_name, fb_spend_cad, ga_spend_cad, total_spend_cad, ' +
-        'revenue_cad, roas, gross_profit_cad, cogs_cad, net_profit_cad',
-    )
-    .range(0, 49_999);
-
-  if (opts?.range) {
-    q = q.gte('date', opts.range.from).lte('date', opts.range.to);
+  // Paginate to bypass Supabase Cloud's db-max-rows=1000 cap (see `paginate()`).
+  let data: DbRow[];
+  try {
+    data = await paginate<DbRow>(() => {
+      let q = getSupabase()
+        .from('data_daily')
+        .select(
+          'date, store_id, store_name, fb_spend_cad, ga_spend_cad, total_spend_cad, ' +
+            'revenue_cad, roas, gross_profit_cad, cogs_cad, net_profit_cad',
+        );
+      if (opts?.range) {
+        q = q.gte('date', opts.range.from).lte('date', opts.range.to);
+      }
+      return q;
+    });
+  } catch (e) {
+    throw new Error(`postgresReaders.fetchDailyData: ${(e as Error).message}`);
   }
 
-  const { data, error } = await q;
-  if (error) throw new Error(`postgresReaders.fetchDailyData: ${error.message}`);
-
   const rows: DailyRow[] = [];
-  for (const r of (data as unknown as DbRow[] | null) ?? []) {
+  for (const r of data) {
     const dateStr = String(r.date);
     if (opts?.range && !isInRange(dateStr, opts.range)) continue;
 
@@ -341,24 +387,26 @@ export async function fetchDashboardStateFromPostgres(): Promise<{
 export async function fetchProductsFromPostgres(
   opts?: { range?: DateRange },
 ): Promise<ProductRow[]> {
-  // supabase-js 1,000-row cap override (see fetchDailyDataFromPostgres comment).
-  let q = getSupabase()
-    .from('products_daily')
-    .select(
-      'date, store_id, store_name, product_id, product_title, units, ' +
-        'gross_revenue_cad, orders, net_revenue_cad',
-    )
-    .range(0, 49_999);
-
-  if (opts?.range) {
-    q = q.gte('date', opts.range.from).lte('date', opts.range.to);
+  let data: DbRow[];
+  try {
+    data = await paginate<DbRow>(() => {
+      let q = getSupabase()
+        .from('products_daily')
+        .select(
+          'date, store_id, store_name, product_id, product_title, units, ' +
+            'gross_revenue_cad, orders, net_revenue_cad',
+        );
+      if (opts?.range) {
+        q = q.gte('date', opts.range.from).lte('date', opts.range.to);
+      }
+      return q;
+    });
+  } catch (e) {
+    throw new Error(`postgresReaders.fetchProducts: ${(e as Error).message}`);
   }
 
-  const { data, error } = await q;
-  if (error) throw new Error(`postgresReaders.fetchProducts: ${error.message}`);
-
   const rows: ProductRow[] = [];
-  for (const r of (data as unknown as DbRow[] | null) ?? []) {
+  for (const r of data) {
     const dateStr = String(r.date);
     if (opts?.range && !isInRange(dateStr, opts.range)) continue;
 
@@ -420,26 +468,27 @@ export async function fetchCampaignsFromPostgres(
   // data_daily + products_daily do). Querying it caused a Postgres error
   // surfaced as a soft-fail with 0 rows. We project store_name on the
   // boundary via STORE_NAME_BY_ID below.
-  let q = getSupabase()
-    .from('campaigns_daily')
-    .select(
-      'date, store_id, platform, campaign_id, campaign_name, ' +
-        'ad_set_id, ad_set_name, spend_cad, impressions, clicks, conversions, ' +
-        'conversion_value_cad, campaign_budget_cad, ad_set_budget_cad, budget_type',
-    )
-    // supabase-js 1,000-row cap override — campaigns_daily grows fastest
-    // (~50 ad-sets × 3 stores × N days × 2 platforms).
-    .range(0, 49_999);
-
-  if (opts?.range) {
-    q = q.gte('date', opts.range.from).lte('date', opts.range.to);
+  let data: DbRow[];
+  try {
+    data = await paginate<DbRow>(() => {
+      let q = getSupabase()
+        .from('campaigns_daily')
+        .select(
+          'date, store_id, platform, campaign_id, campaign_name, ' +
+            'ad_set_id, ad_set_name, spend_cad, impressions, clicks, conversions, ' +
+            'conversion_value_cad, campaign_budget_cad, ad_set_budget_cad, budget_type',
+        );
+      if (opts?.range) {
+        q = q.gte('date', opts.range.from).lte('date', opts.range.to);
+      }
+      return q;
+    });
+  } catch (e) {
+    throw new Error(`postgresReaders.fetchCampaigns: ${(e as Error).message}`);
   }
 
-  const { data, error } = await q;
-  if (error) throw new Error(`postgresReaders.fetchCampaigns: ${error.message}`);
-
   const rows: CampaignRow[] = [];
-  for (const r of (data as unknown as DbRow[] | null) ?? []) {
+  for (const r of data) {
     const dateStr = String(r.date);
     if (opts?.range && !isInRange(dateStr, opts.range)) continue;
 
@@ -493,25 +542,27 @@ export async function fetchCampaignsFromPostgres(
 export async function fetchAdsFromPostgres(
   opts?: { range?: DateRange },
 ): Promise<AdRow[]> {
-  let q = getSupabase()
-    .from('ads_daily')
-    .select(
-      'date, store_id, platform, campaign_id, campaign_name, ad_set_id, ' +
-        'ad_set_name, ad_id, ad_name, spend_cad, impressions, clicks, ' +
-        'conversions, conversion_value_cad',
-    )
-    // supabase-js 1,000-row cap override.
-    .range(0, 49_999);
-
-  if (opts?.range) {
-    q = q.gte('date', opts.range.from).lte('date', opts.range.to);
+  let data: DbRow[];
+  try {
+    data = await paginate<DbRow>(() => {
+      let q = getSupabase()
+        .from('ads_daily')
+        .select(
+          'date, store_id, platform, campaign_id, campaign_name, ad_set_id, ' +
+            'ad_set_name, ad_id, ad_name, spend_cad, impressions, clicks, ' +
+            'conversions, conversion_value_cad',
+        );
+      if (opts?.range) {
+        q = q.gte('date', opts.range.from).lte('date', opts.range.to);
+      }
+      return q;
+    });
+  } catch (e) {
+    throw new Error(`postgresReaders.fetchAds: ${(e as Error).message}`);
   }
 
-  const { data, error } = await q;
-  if (error) throw new Error(`postgresReaders.fetchAds: ${error.message}`);
-
   const rows: AdRow[] = [];
-  for (const r of (data as unknown as DbRow[] | null) ?? []) {
+  for (const r of data) {
     const dateStr = String(r.date);
     if (opts?.range && !isInRange(dateStr, opts.range)) continue;
 
@@ -567,25 +618,27 @@ export async function fetchOrdersAttributionFromPostgres(
 ): Promise<OrderAttributionRow[]> {
   const includeLI = opts?.includeLineItems === true;
 
-  let q = getSupabase()
-    .from('orders_attribution')
-    .select(
-      'date, store_id, order_id, total_cad, source, utm_source, utm_medium, ' +
-        'utm_campaign, utm_content, fbclid_present, gclid_present, referrer, ' +
-        'utm_id, utm_term, line_items',
-    )
-    // supabase-js 1,000-row cap override.
-    .range(0, 49_999);
-
-  if (opts?.range) {
-    q = q.gte('date', opts.range.from).lte('date', opts.range.to);
+  let data: DbRow[];
+  try {
+    data = await paginate<DbRow>(() => {
+      let q = getSupabase()
+        .from('orders_attribution')
+        .select(
+          'date, store_id, order_id, total_cad, source, utm_source, utm_medium, ' +
+            'utm_campaign, utm_content, fbclid_present, gclid_present, referrer, ' +
+            'utm_id, utm_term, line_items',
+        );
+      if (opts?.range) {
+        q = q.gte('date', opts.range.from).lte('date', opts.range.to);
+      }
+      return q;
+    });
+  } catch (e) {
+    throw new Error(`postgresReaders.fetchOrdersAttribution: ${(e as Error).message}`);
   }
 
-  const { data, error } = await q;
-  if (error) throw new Error(`postgresReaders.fetchOrdersAttribution: ${error.message}`);
-
   const rows: OrderAttributionRow[] = [];
-  for (const r of (data as unknown as DbRow[] | null) ?? []) {
+  for (const r of data) {
     const dateStr = String(r.date);
     if (opts?.range && !isInRange(dateStr, opts.range)) continue;
 
@@ -631,16 +684,19 @@ export async function fetchOrdersAttributionFromPostgres(
  * the ProductPickerModal so fresh items (zero sales yet) are still pickable.
  */
 export async function fetchProductCatalogFromPostgres(): Promise<CatalogProduct[]> {
-  const { data, error } = await getSupabase()
-    .from('product_catalog')
-    .select('store_id, product_id, title, handle, status, price_cad, image_url, product_type, vendor')
-    // supabase-js 1,000-row cap override — catalog can hit 700+ products/store.
-    .range(0, 49_999);
-
-  if (error) throw new Error(`postgresReaders.fetchProductCatalog: ${error.message}`);
+  let data: DbRow[];
+  try {
+    data = await paginate<DbRow>(() =>
+      getSupabase()
+        .from('product_catalog')
+        .select('store_id, product_id, title, handle, status, price_cad, image_url, product_type, vendor'),
+    );
+  } catch (e) {
+    throw new Error(`postgresReaders.fetchProductCatalog: ${(e as Error).message}`);
+  }
 
   const rows: CatalogProduct[] = [];
-  for (const r of (data as unknown as DbRow[] | null) ?? []) {
+  for (const r of data) {
     const productId = String(r.product_id ?? '').trim();
     if (!productId) continue;
 
