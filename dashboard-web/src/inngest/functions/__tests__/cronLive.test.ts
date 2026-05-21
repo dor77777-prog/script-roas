@@ -268,13 +268,15 @@ describe('cronLive — runLiveForStore handler (Shopify-only, rolling 3-day)', (
     expect(labels.length).toBeLessThanOrEqual(3);
   });
 
-  it('Test 5 (Phase 05.7.6 inverted): Meta + Google fetchers ARE called by the live handler — for TODAY only', async () => {
-    // Pre-Phase-05.7.6 this test asserted these fetchers were NEVER called
-    // by cron-live (live was Shopify-only). That design left fb_spend_cad /
-    // ga_spend_cad at $0 for "today" all day until cron-daily ran at 00:05
-    // the NEXT morning. The operator surfaced this as "the dashboard isn't
-    // live" — rightly so for an ad-spend dashboard. Now cron-live fetches
-    // Meta + Google spend for TODAY each tick.
+  it('Test 5: Meta + Google Ads fetchers are NEVER called by the live handler', async () => {
+    // Phase 05.7.6 ROLLBACK (2026-05-22 02:25 IL): cron-live attempted to
+    // add Meta + Google spend fetches alongside Shopify. The Meta /insights
+    // endpoint is slow + the combined Promise.all stalled Inngest runs past
+    // their 5-min timeout, killing all 3 cron-live ticks. Reverted to
+    // Shopify-only. Today's Meta + Google spend now refreshes via:
+    //   - cron-daily at 00:05 IL (yesterday), or
+    //   - user clicks "רענן הכל" in the dashboard header (sync-now-all)
+    // This test re-asserts the invariant: live = Shopify-only.
     const mod = await import('../cronLive');
 
     vi.spyOn(shopifyFetcher, 'fetchShopifyDayRows').mockImplementation(async (storeId, date) => ({
@@ -289,10 +291,10 @@ describe('cronLive — runLiveForStore handler (Shopify-only, rolling 3-day)', (
     }));
     const metaSpy = vi
       .spyOn(metaFetcher, 'fetchMetaSpendForDay')
-      .mockResolvedValue({ storeId: 'uzoshop', date: '2026-05-22', spend: 0, currency: 'ILS' });
+      .mockResolvedValue({ storeId: 'uzoshop', date: '2026-05-21', spend: 0, currency: 'ILS' });
     const googleSpy = vi
       .spyOn(googleAdsFetcher, 'fetchGoogleAdsSpendForDay')
-      .mockResolvedValue({ storeId: 'uzoshop', date: '2026-05-22', spend: 0, currency: 'CAD' });
+      .mockResolvedValue({ storeId: 'uzoshop', date: '2026-05-21', spend: 0, currency: 'CAD' });
 
     const { admin } = makeSupabaseAdminMock();
     vi.spyOn(supabaseAdminMod, 'getSupabaseAdmin').mockReturnValue(
@@ -302,15 +304,10 @@ describe('cronLive — runLiveForStore handler (Shopify-only, rolling 3-day)', (
     const { step } = makeStepStub();
     await mod.runLiveForStore('uzoshop', { step });
 
-    // Both fetchers MUST be called exactly once (only for the today position
-    // of the rolling window; yesterday + day-before are Shopify-only).
-    expect(metaSpy).toHaveBeenCalledTimes(1);
-    expect(googleSpy).toHaveBeenCalledTimes(1);
-    // First positional arg is storeId; second is dateStr (today in
-    // Asia/Jerusalem).
-    expect(metaSpy.mock.calls[0][0]).toBe('uzoshop');
-    expect(googleSpy.mock.calls[0][0]).toBe('uzoshop');
-    expect(metaSpy.mock.calls[0][1]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    // The whole point of the live cadence: it must NEVER hit Meta or Google.
+    // Daily cron owns spend reconciliation; live owns revenue only.
+    expect(metaSpy).not.toHaveBeenCalled();
+    expect(googleSpy).not.toHaveBeenCalled();
   });
 
   it('Test 6: an error thrown from a step.run callback propagates out of the handler', async () => {

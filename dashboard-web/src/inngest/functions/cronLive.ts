@@ -90,9 +90,11 @@
 
 import { inngest } from '@/inngest/client';
 import { fetchShopifyDayRows, type ShopifyDayRows } from '@/lib/fetchers/shopify';
-import { fetchMetaSpendForDay } from '@/lib/fetchers/meta';
-import { fetchGoogleAdsSpendForDay } from '@/lib/fetchers/googleAds';
-import { getFxRate } from '@/lib/fetchers/fx';
+// Phase 05.7.6 ROLLBACK (2026-05-22 02:25 IL): Meta + Google fetchers
+// imports removed — re-add when the cron-spend-live follow-up ships.
+//   import { fetchMetaSpendForDay } from '@/lib/fetchers/meta';
+//   import { fetchGoogleAdsSpendForDay } from '@/lib/fetchers/googleAds';
+//   import { getFxRate } from '@/lib/fetchers/fx';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 // =============================================================================
@@ -377,90 +379,48 @@ export async function runLiveForStore(
   const dates = rollingWindowDates(ROLLING_WINDOW_DAYS);
   const today = dates[0];
 
-  // ----- STEP 1: fetch everything (parallel, one step.run = one exec) -----
+  // ----- STEP 1: fetch Shopify rolling 3-day (parallel) -----
   //
-  // Phase 05.7.6 (2026-05-22): live cron now ALSO fetches Meta + Google
-  // spend for today. Previously cron-live was Shopify-only; the dashboard
-  // therefore showed $0 for fb_spend_cad / ga_spend_cad on "today" all day
-  // until cron-daily ran at 00:05 the NEXT morning. The operator surfaced
-  // this as "the dashboard isn't live" (rightly so).
+  // Phase 05.7.6 ROLLBACK (2026-05-22 02:25 IL): Meta + Google spend fetches
+  // were added to cron-live in commit eb72d18 to surface today's ad spend
+  // live. Within minutes of deploy, all 3 cron-live ticks at 23:00 UTC
+  // FAILED. The 23:20 retry ticks also stalled ("Running" for 3+ minutes,
+  // never completing — likely the Meta /insights endpoint timing out
+  // because per-adset insights for the full ad account is a heavy query
+  // when run alongside the Shopify rolling 3-day fetch).
   //
-  // What we fetch:
-  //   - Shopify rolling 3-day (revenue + refund attribution; unchanged)
-  //   - Meta spend for TODAY (store-level total; per-campaign refresh stays
-  //     in cron-daily for exec-budget reasons)
-  //   - Google Ads spend for TODAY (uzoshop only; others short-circuit)
+  // Reverted to Shopify-only here. Today's Meta + Google spend now refreshes
+  // ONLY when:
+  //   - cron-daily runs at 00:05 IL (the next morning, for yesterday)
+  //   - User clicks "רענן הכל" in the dashboard header (sync-now-for-all)
   //
-  // FX: Meta spend returns in advertiser currency (ILS for our 3 stores) +
-  // currency field; we convert to CAD inside this step so the persist step
-  // doesn't need an HTTP round-trip. getFxRate caches per (from, to, date)
-  // so repeated calls in the same tick share the rate.
-  const fetched = await step.run('fetch-live-rolling-3day-plus-today-ads', async () => {
-    const [shopifyResults, metaToday, googleToday] = await Promise.all([
-      Promise.all(dates.map((d) => fetchShopifyDayRows(storeId, d))),
-      // Meta + Google fetchers throw on missing creds. We don't want a
-      // single platform outage to take down the whole cron-live tick, so
-      // each is wrapped — Promise.all stays in the success path even when
-      // one platform errors. The dashboard degrades to "$0 spend on the
-      // failed platform" until next tick.
-      fetchMetaSpendForDay(storeId, today).catch((e) => {
-        console.warn(`cron-live: Meta spend fetch for ${storeId} ${today} failed: ${e instanceof Error ? e.message : e}`);
-        return null;
-      }),
-      fetchGoogleAdsSpendForDay(storeId, today).catch((e) => {
-        console.warn(`cron-live: Google spend fetch for ${storeId} ${today} failed: ${e instanceof Error ? e.message : e}`);
-        return null;
-      }),
-    ]);
-
-    const shopifyByDate: Record<string, ShopifyDayRows> = {};
+  // For the live cadence we'll re-add Meta + Google in a separate function
+  // (cron-spend-live) that fetches ONLY store-level spend totals — NOT
+  // per-adset insights — which should be 10× faster and won't stall the
+  // Shopify revenue refresh. That's a follow-up; for now we have to get
+  // the dashboard's revenue back to live.
+  //
+  // The 10-min cadence change stays — fixed revenue refresh is now within
+  // 10 min of new orders.
+  const shopifyByDate = await step.run('fetch-shopify-rolling-3day', async () => {
+    const results = await Promise.all(dates.map((d) => fetchShopifyDayRows(storeId, d)));
+    const map: Record<string, ShopifyDayRows> = {};
     for (let i = 0; i < dates.length; i++) {
-      shopifyByDate[dates[i]] = shopifyResults[i];
+      map[dates[i]] = results[i];
     }
-
-    // FX-convert Meta spend (advertiser currency → CAD). Both fetchers
-    // return `{ spend, currency }`; Google Ads is conventionally CAD per
-    // cronDaily.ts:254 ("{ spend, currency:'CAD' } or zero"), but we
-    // run the same FX guard either way in case a store's ad-account is
-    // ever re-configured to a different currency.
-    const cadConvert = async (
-      value: { spend: number; currency: string } | null,
-    ): Promise<number> => {
-      if (!value || !Number.isFinite(value.spend) || value.spend === 0) return 0;
-      const currency = (value.currency || 'CAD').toUpperCase();
-      if (currency === 'CAD') return value.spend;
-      const rate = await getFxRate(currency, 'CAD', today);
-      return value.spend * rate;
-    };
-    const fbSpendCad = await cadConvert(metaToday);
-    const gaSpendCad = await cadConvert(googleToday);
-
-    return { shopifyByDate, fbSpendCad, gaSpendCad };
+    return map;
   });
+  // Quiet TS unused-variable warning — `today` is still in scope for the
+  // future re-add of live ad-spend fetches.
+  void today;
 
-  const { shopifyByDate, fbSpendCad, gaSpendCad } = fetched as {
-    shopifyByDate: Record<string, ShopifyDayRows>;
-    fbSpendCad: number;
-    gaSpendCad: number;
-  };
-
-  // ----- STEP 2: persist (sequential, idempotent) -----
-  // For TODAY: include spendOverride so Meta+Google CAD totals are written
-  // alongside Shopify revenue.
-  // For YESTERDAY + DAY-BEFORE: omit spendOverride so cron-daily's spend
-  // values from earlier are preserved (refund attribution updates only
-  // touch revenue + gross + refund_deduction columns).
+  // ----- STEP 2: persist each date's row (Shopify-only) -----
+  // No spendOverride — Meta + Google spend columns are preserved on
+  // each row (written by cron-daily at 00:05 IL OR by event-sync-now).
   await step.run('persist-rolling-3day', async () => {
-    for (let i = 0; i < dates.length; i++) {
-      const date = dates[i];
+    for (const date of dates) {
       const shopify = shopifyByDate[date];
-      const isToday = i === 0;
-      await persistDayForStore(
-        storeId,
-        date,
-        shopify,
-        isToday ? { fbSpendCad, gaSpendCad } : undefined,
-      );
+      await persistDayForStore(storeId, date, shopify);
     }
   });
 
@@ -472,7 +432,7 @@ export async function runLiveForStore(
     storeId,
     rollingDates: dates,
     perDayRevenue,
-    todaySpendCad: { fb: fbSpendCad, ga: gaSpendCad },
+    todaySpendCad: { fb: 0, ga: 0 },
   };
 }
 
