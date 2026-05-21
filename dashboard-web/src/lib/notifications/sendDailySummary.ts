@@ -100,6 +100,14 @@ function fmtTimeAndDate(hh: string, dateStr: string): string {
   return `${hh}:00, ${d}/${m}/${y}`;
 }
 
+function fmtDateOnly(dateStr: string): string {
+  // Output: "DD/MM/YYYY" — no time component. Used by the EOD title where
+  // the operator (2026-05-22) preferred to drop the "23:00" prefix because
+  // the time has no meaning on a full-day summary.
+  const [y, m, d] = dateStr.split('-');
+  return `${d}/${m}/${y}`;
+}
+
 /** Title for the 12:00 noon snapshot — TODAY so far. */
 export function titleNoon(dateStr: string): string {
   return fmtTimeAndDate('12', dateStr);
@@ -110,10 +118,9 @@ export function titleEvening(dateStr: string): string {
   return fmtTimeAndDate('18', dateStr);
 }
 
-/** Title for the 00:10 EOD summary — YESTERDAY full day. */
+/** Title for the 00:10 EOD summary — YESTERDAY full day (date only). */
 export function titleEod(dateStr: string): string {
-  // Use 23:59 to mark end-of-day boundary in the message.
-  return `סיכום יום מלא — ${fmtTimeAndDate('23', dateStr)}`;
+  return `סיכום יום מלא — ${fmtDateOnly(dateStr)}`;
 }
 
 // ────────────────────────────────────────────────────────────────────────
