@@ -80,13 +80,21 @@ type DbRow = Record<string, unknown>;
  * lambda that returns a typed builder.
  */
 /* eslint-disable @typescript-eslint/no-explicit-any */
+/**
+ * Internal type — what supabase-js's PostgrestFilterBuilder returns when awaited.
+ * We don't depend on a generated Database<T> type, so the data is `unknown[]`
+ * (re-cast to DbRow[] in each reader after the error guard, same pattern as
+ * the un-paginated readers used to do).
+ */
+type PaginatedQuery = {
+  range: (from: number, to: number) => PromiseLike<{
+    data: unknown[] | null;
+    error: { message: string } | null;
+  }>;
+};
+
 async function paginate<T>(
-  buildQuery: () => {
-    range: (
-      from: number,
-      to: number,
-    ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>;
-  },
+  buildQuery: () => any,
   chunkSize = 1000,
 ): Promise<T[]> {
   const all: T[] = [];
@@ -95,10 +103,11 @@ async function paginate<T>(
   // server bug returns the same page forever.
   const MAX_CHUNKS = 50;
   for (let chunk = 0; chunk < MAX_CHUNKS; chunk++) {
-    const { data, error } = await buildQuery().range(start, start + chunkSize - 1);
+    const q = buildQuery() as PaginatedQuery;
+    const { data, error } = await q.range(start, start + chunkSize - 1);
     if (error) throw new Error(error.message);
     if (!data || data.length === 0) break;
-    all.push(...data);
+    all.push(...(data as T[]));
     if (data.length < chunkSize) break;
     start += chunkSize;
   }
