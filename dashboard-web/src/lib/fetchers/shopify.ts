@@ -253,13 +253,40 @@ function isoLocalMidnight(dateStr: string, tz: string): string {
   }
 
   // Compute the offset hh:mm at the resolved instant.
-  const offsetMin = (Date.UTC(
-    ...(formatLocalIso(instantMs, tz)
-      .match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})$/)!
-      .slice(1)
-      .map(Number) as [number, number, number, number, number, number]),
-  ) -
-    instantMs) / 60000;
+  //
+  // CRITICAL FIX (2026-05-22 incident): Date.UTC expects month 0-indexed
+  // (Jan=0 .. Dec=11). The previous version spread the regex groups
+  // directly via .slice(1).map(Number), passing month=5 for "05" → which
+  // Date.UTC treats as JUNE → produced an offset of +747:00 (= 31 days +
+  // 3 hours in minutes) instead of +03:00 for Asia/Jerusalem in May.
+  //
+  // Shopify silently accepts invalid timezone offsets > +14:00 and returns
+  // an empty orders[] array, so the fetcher silently lost EVERY order on
+  // every day. The dashboard had been showing zero revenue for "today" on
+  // every store since this codepath went live; backfill on prior days hid
+  // it because re-fetches just overwrote already-correct values until the
+  // 2026-05-22 day rollover when nothing was queued to backfill the new
+  // day. See debug endpoint /api/debug/shopify-fetch for the diagnostic
+  // that surfaced this.
+  const offsetMatch = formatLocalIso(instantMs, tz).match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})$/,
+  );
+  if (!offsetMatch) {
+    throw new Error(
+      `isoLocalMidnight: offset calc could not parse "${formatLocalIso(instantMs, tz)}"`,
+    );
+  }
+  const offsetMin =
+    (Date.UTC(
+      Number(offsetMatch[1]),
+      Number(offsetMatch[2]) - 1, // ← month MUST be 0-indexed for Date.UTC
+      Number(offsetMatch[3]),
+      Number(offsetMatch[4]),
+      Number(offsetMatch[5]),
+      Number(offsetMatch[6]),
+    ) -
+      instantMs) /
+    60000;
   const sign = offsetMin >= 0 ? '+' : '-';
   const absMin = Math.abs(offsetMin);
   const oh = String(Math.floor(absMin / 60)).padStart(2, '0');

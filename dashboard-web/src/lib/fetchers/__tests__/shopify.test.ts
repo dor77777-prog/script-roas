@@ -87,21 +87,47 @@ describe('shopify fetcher — fetchShopifyDayRows', () => {
     expect(apiCall, 'expected at least one /admin/api/2024-10/orders.json call').toBeDefined();
 
     // The lower bound of the window must be 2026-05-19 local midnight in Asia/Jerusalem.
-    // Asia/Jerusalem in May is IDT (UTC+3) → 2026-05-19T00:00:00+03:00.
+    // Asia/Jerusalem in May is IDT (UTC+3) → MUST be exactly 2026-05-19T00:00:00+03:00.
+    //
+    // Phase 05.7.6 regression guard: prior tests only checked startsWith('T00:00:00'),
+    // letting the +747:00 offset bug ship to prod undetected (Date.UTC month-indexing
+    // bug in isoLocalMidnight offset calc). Now we lock the FULL ISO with explicit
+    // offset shape.
     const createdAtMin = decodeURIComponent(
       /created_at_min=([^&]+)/.exec(apiCall!.url)?.[1] ?? '',
     );
-    expect(createdAtMin.startsWith('2026-05-19T00:00:00')).toBe(true);
+    expect(createdAtMin).toBe('2026-05-19T00:00:00+03:00');
 
     // The upper bound must be next-day local midnight (2026-05-20T00:00:00+03:00).
     const createdAtMax = decodeURIComponent(
       /created_at_max=([^&]+)/.exec(apiCall!.url)?.[1] ?? '',
     );
-    expect(createdAtMax.startsWith('2026-05-20T00:00:00')).toBe(true);
+    expect(createdAtMax).toBe('2026-05-20T00:00:00+03:00');
 
     // Auth header — X-Shopify-Access-Token (NOT Bearer)
     const headers = apiCall!.init?.headers as Record<string, string> | undefined;
     expect(headers?.['X-Shopify-Access-Token']).toBe('shpat_test_TOKEN');
+  });
+
+  it('Test 1b (Phase 05.7.6 regression): offset is +03:00 (NOT +747:00) for May IDT', async () => {
+    // Direct regression guard for the Date.UTC month-indexing bug that
+    // shipped to prod on 2026-05-22. The bug produced offsets like
+    // `+747:00` (= 31 days + 3 hours = month-rollover artifact) because
+    // Date.UTC treats month as 0-indexed (Jan=0) but the offset calc
+    // was passing it 1-indexed. Shopify silently returned empty arrays
+    // for the malformed offset, breaking ALL revenue writes on day-of.
+    const { fn, calls } = makeFetchMock([{ body: { orders: [] } }, { body: { orders: [] } }]);
+    vi.stubGlobal('fetch', fn);
+
+    await fetchShopifyDayRows(STORE_ID, DATE_STR);
+
+    const apiCall = calls.find((c) => c.url.includes('/admin/api/2024-10/orders.json'));
+    const createdAtMin = decodeURIComponent(
+      /created_at_min=([^&]+)/.exec(apiCall!.url)?.[1] ?? '',
+    );
+    // The MUST-MATCH ending — explicitly NOT '+747:00' or any other broken shape.
+    expect(createdAtMin).toMatch(/\+03:00$/);
+    expect(createdAtMin).not.toMatch(/\+\d{3}:\d{2}$/); // 3-digit hours = bug
   });
 
   it('Test 2: Link header rel="next" triggers a second fetch to that URL', async () => {
