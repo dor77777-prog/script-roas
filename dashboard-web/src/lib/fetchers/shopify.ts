@@ -128,6 +128,69 @@ export type ShopifyDayRows = {
   customItemRefundCad: number;
 };
 
+/**
+ * Phase 05.6.1 — one product-catalog snapshot row per active Shopify product.
+ *
+ * Port of `Shopify.gs:537` (`getShopifyProductsCatalog`). Shape matches the
+ * `product_catalog` table in migration 20260521063112_initial_schema.sql:141.
+ *
+ * `storeId` is included so the writer in cronDaily.ts can UPSERT with the
+ * full (store_id, product_id) PK without a second pass.
+ *
+ * `priceCad` is the FIRST variant's price (representative, not authoritative).
+ * Apps Script line 569-570 documents this — "most stores have a single variant
+ * or all variants priced similarly". The dashboard shows it as context, not
+ * gospel. `null` when the product has no variants (rare but possible during
+ * draft → active transitions).
+ *
+ * `updatedAt` carries Shopify's last-modified timestamp so future deltas can
+ * detect changes without re-fetching the full catalog.
+ */
+export type ShopifyCatalogRow = {
+  storeId: string;
+  productId: string;
+  title: string;
+  handle: string;
+  status: string;
+  priceCad: number | null;
+  imageUrl: string | null;
+  productType: string | null;
+  vendor: string | null;
+  updatedAt: string | null;
+};
+
+/**
+ * Phase 05.6.1 — one attribution row per non-test, non-voided Shopify order
+ * on day `dateStr`.
+ *
+ * Port of `Shopify.gs:757` (`getShopifyOrdersAttribution`). Shape matches the
+ * `orders_attribution` table in migration 20260521063112_initial_schema.sql:119
+ * (using camelCase here; writer in cronDaily.ts snake_cases on the way to DB).
+ *
+ * `source` follows the Apps Script priority chain (line 940-984) but the
+ * unified-schema label format (kept here: 'meta-paid' / 'google-paid' /
+ * 'meta-organic' / 'google-organic' / 'email' / 'other-paid' / 'other-referral'
+ * / 'direct') — matching what postgresReaders.ts:589 reads back into
+ * OrderAttributionRow.source.
+ */
+export type ShopifyOrderRow = {
+  storeId: string;
+  orderId: string;
+  date: string;
+  totalCad: number;
+  source: string;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  utmContent: string | null;
+  fbclidPresent: boolean;
+  gclidPresent: boolean;
+  referrer: string | null;
+  utmId: string | null;
+  utmTerm: string | null;
+  lineItems: Array<{ p: string; u: number; r: number }> | null;
+};
+
 // =============================================================================
 // Helpers — day boundaries & Link header parsing
 // =============================================================================
@@ -432,4 +495,437 @@ export async function fetchShopifyDayRows(
     })),
     customItemRefundCad,
   };
+}
+
+// =============================================================================
+// Phase 05.6.1 — product catalog snapshot
+// =============================================================================
+
+/**
+ * Resolve domain + token from env. Centralized so the three Shopify fetchers
+ * in this file share one canonical PROPS-MAP-aligned lookup
+ * (`${STORE}_SHOPIFY_DOMAIN` / `${STORE}_SHOPIFY_TOKEN`, rows 22/25/29/32/35/38
+ * in `docs/PROPS-MAP.md`).
+ *
+ * Why a separate helper instead of inlining a fourth copy: a single mis-typed
+ * env-var name across the three fetchers would silently break two of the
+ * three writers but pass tests (each fetcher's tests stub its own envs).
+ * One source of truth → one place to keep in sync with PROPS-MAP.
+ */
+function getShopifyCreds(storeId: string): { domain: string; token: string } {
+  const upper = storeId.toUpperCase();
+  const domain = process.env[`${upper}_SHOPIFY_DOMAIN`];
+  const token = process.env[`${upper}_SHOPIFY_TOKEN`];
+
+  if (!domain || !token) {
+    throw new Error(
+      `Missing Shopify creds for store "${storeId}" — expected ` +
+        `${upper}_SHOPIFY_DOMAIN and ${upper}_SHOPIFY_TOKEN env vars ` +
+        `(per docs/PROPS-MAP.md Phase 05.5).`,
+    );
+  }
+  return { domain, token };
+}
+
+/**
+ * Phase 05.6.1 — snapshot of every active product in a Shopify store.
+ *
+ * Port of `Shopify.gs:537` (`getShopifyProductsCatalog`). This is a snapshot
+ * (no date arg) — each call returns ALL active products for the store. The
+ * writer in cronDaily.ts UPSERTs with PK `(store_id, product_id)` so daily
+ * re-fetches harmlessly overwrite the prior snapshot.
+ *
+ * Pagination: Shopify cursor pagination via `Link: <...>; rel="next"` header
+ * (same mechanism as the orders fetcher above). Cap at `PAGINATION_CAP` (50)
+ * pages of 250 = 12,500 active products — well beyond any single store.
+ *
+ * Non-200 throws. Inngest's default 4-retry exponential backoff handles
+ * transient 5xx/429 (same convention as `fetchShopifyDayRows`).
+ */
+export async function fetchShopifyProductsCatalog(
+  storeId: string,
+): Promise<ShopifyCatalogRow[]> {
+  const { domain, token } = getShopifyCreds(storeId);
+
+  const fields = 'id,title,status,handle,image,variants,product_type,vendor,updated_at';
+  let url: string | undefined =
+    `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/products.json` +
+    `?status=active&limit=250&fields=${fields}`;
+
+  const out: ShopifyCatalogRow[] = [];
+  let pages = 0;
+
+  // Narrowed payload shape — only the fields we read are typed; everything else
+  // (variants[].compare_at_price, images[], etc.) is ignored.
+  type CatalogProductPayload = {
+    id?: number | string;
+    title?: string;
+    handle?: string;
+    status?: string;
+    image?: { src?: string } | null;
+    variants?: Array<{ price?: string | number }>;
+    product_type?: string;
+    vendor?: string;
+    updated_at?: string;
+  };
+
+  while (url && pages < PAGINATION_CAP) {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'X-Shopify-Access-Token': token,
+        Accept: 'application/json',
+      },
+    });
+
+    if (!res.ok) {
+      const bodyTxt = await res.text().catch(() => '');
+      throw new Error(
+        `Shopify catalog ${storeId} failed ` +
+          `(${res.status}): ${bodyTxt.slice(0, 200)}`,
+      );
+    }
+
+    const body = (await res.json()) as { products?: CatalogProductPayload[] };
+    const products = body?.products ?? [];
+
+    for (const p of products) {
+      // First-variant price as a representative (Apps Script Shopify.gs:569-570).
+      // `null` when the product has no variants — distinguishes "free product"
+      // (priceCad=0) from "no variants" (priceCad=null) for the dashboard.
+      const firstVariant = (p.variants ?? [])[0];
+      const priceParsed =
+        firstVariant && firstVariant.price !== undefined
+          ? parseFloat(String(firstVariant.price))
+          : NaN;
+      const priceCad = Number.isFinite(priceParsed) ? priceParsed : null;
+
+      const imageUrl = p.image?.src ?? null;
+
+      out.push({
+        storeId,
+        productId: String(p.id ?? ''),
+        // Apps Script line 574 falls back to '(ללא שם)' here. We pass the
+        // empty title through and let postgresReaders.ts (line 636) apply
+        // the localized fallback — keeps the storage layer free of UI
+        // strings.
+        title: p.title ?? '',
+        handle: p.handle ?? '',
+        status: p.status ?? '',
+        priceCad,
+        imageUrl,
+        productType: p.product_type ?? null,
+        vendor: p.vendor ?? null,
+        updatedAt: p.updated_at ?? null,
+      });
+    }
+
+    url = parseNextLink(res.headers);
+    pages++;
+  }
+
+  if (pages >= PAGINATION_CAP && url) {
+    console.warn(
+      `Shopify catalog ${storeId}: hit pagination cap of ${PAGINATION_CAP} ` +
+        `pages (${out.length} products collected); data beyond may be missing. ` +
+        `(05.6-RESEARCH.md Pitfall 6)`,
+    );
+  }
+
+  return out;
+}
+
+// =============================================================================
+// Phase 05.6.1 — orders attribution
+// =============================================================================
+
+/**
+ * Classifier helper — pulls UTM/fbclid/gclid from `landing_site` + falls back
+ * to `note_attributes`. Mirrors `Shopify.gs:classifyOrderAttribution_` at
+ * line 910-1001.
+ *
+ * Defensive guards (matching Apps Script verbatim):
+ *   - `safeDecode`: decodeURIComponent that swallows URIError on malformed
+ *     percent-escapes (bot traffic regularly produces these). Drops the bad
+ *     param, never aborts the whole order.
+ *   - `Object.create(null)` for the params bag so a query param named
+ *     `__proto__` / `hasOwnProperty` / `toString` does not collide with
+ *     inherited Object prototype keys (Apps Script IN5-05 / Shopify.gs:929).
+ *   - source_name override: when Shopify sets `source_name` to 'fb' / 'google',
+ *     treat that as a deterministic platform signal BEFORE we fall back to
+ *     the landing-URL UTM parsing. Apps Script does not branch on source_name
+ *     because Shopify's source_name is "web" for nearly every storefront
+ *     order. We surface it here per the plan scope so cleanly-tagged
+ *     server-side orders are not misclassified as 'direct' just because they
+ *     happen to lack a landing_site UTM tail.
+ */
+type ShopifyOrderPayload = {
+  id?: number | string;
+  current_total_price?: string | number;
+  financial_status?: string;
+  test?: boolean;
+  landing_site?: string;
+  referring_site?: string;
+  note_attributes?: Array<{ name?: string; value?: string }>;
+  source_name?: string;
+  line_items?: Array<{
+    product_id?: number | string | null;
+    quantity?: number | string;
+    price?: number | string;
+  }>;
+};
+
+function safeDecode(s: string): string {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s;
+  }
+}
+
+function classifyOrderAttribution(order: ShopifyOrderPayload): {
+  source: string;
+  utmSource: string;
+  utmMedium: string;
+  utmCampaign: string;
+  utmContent: string;
+  utmId: string;
+  utmTerm: string;
+  fbclidPresent: boolean;
+  gclidPresent: boolean;
+  referrer: string;
+} {
+  const landing = String(order.landing_site ?? '');
+  const ref = String(order.referring_site ?? '').toLowerCase();
+  const sourceName = String(order.source_name ?? '').toLowerCase();
+  const noteAttrs = order.note_attributes ?? [];
+
+  // Parse UTM-like params from landing URL.
+  const params: Record<string, string> = Object.create(null);
+  const qIdx = landing.indexOf('?');
+  if (qIdx >= 0) {
+    const qs = landing.slice(qIdx + 1);
+    for (const pair of qs.split('&')) {
+      const eq = pair.indexOf('=');
+      if (eq < 0) continue;
+      const k = safeDecode(pair.slice(0, eq)).toLowerCase();
+      const v = safeDecode(pair.slice(eq + 1));
+      params[k] = v;
+    }
+  }
+  // Some Shopify integrations stash click IDs in note_attributes (Apps Script
+  // line 942-946) — check there too.
+  for (const na of noteAttrs) {
+    const name = String(na.name ?? '').toLowerCase();
+    if (!name) continue;
+    if (!params[name]) params[name] = String(na.value ?? '');
+  }
+
+  const utmSource = params['utm_source'] ?? '';
+  const utmMedium = params['utm_medium'] ?? '';
+  const utmCampaign = params['utm_campaign'] ?? '';
+  const utmContent = params['utm_content'] ?? '';
+  const utmId = params['utm_id'] ?? '';
+  const utmTerm = params['utm_term'] ?? '';
+  const fbclid = !!(params['fbclid'] || params['_fbc']);
+  const gclid = !!params['gclid'];
+
+  // Source priority chain. Same order as Apps Script Shopify.gs:963-984
+  // with one prepended branch: trust source_name='fb'/'google' before UTM
+  // sniffing. source_name is set by Shopify's checkout when the order
+  // arrives via the Facebook/Google channel SDKs — strictly more reliable
+  // than landing_site UTM tags (which can be stripped by a redirect).
+  let source: string;
+  if (sourceName === 'fb' || sourceName === 'facebook') {
+    source = 'meta-paid';
+  } else if (sourceName === 'google') {
+    source = 'google-paid';
+  } else if (fbclid) {
+    source = 'meta-paid';
+  } else if (gclid) {
+    source = 'google-paid';
+  } else if (/cpc|paid|paidsocial|social/i.test(utmMedium)) {
+    if (/^(facebook|fb|meta|instagram|ig)$/i.test(utmSource)) source = 'meta-paid';
+    else if (/^(google|youtube)$/i.test(utmSource)) source = 'google-paid';
+    else if (/^tiktok$/i.test(utmSource)) source = 'other-paid';
+    else source = 'other-paid';
+  } else if (/^(email|newsletter|klaviyo|mailchimp)$/i.test(utmSource)) {
+    source = 'email';
+  } else if (utmSource) {
+    // Tagged but unrecognised (TikTok / influencer / etc.)
+    source = 'other-paid';
+  } else if (/(facebook|fb|instagram|ig)\.com/.test(ref)) {
+    source = 'meta-organic';
+  } else if (/(google|youtube)\.com/.test(ref)) {
+    source = 'google-organic';
+  } else if (ref) {
+    source = 'other-referral';
+  } else {
+    source = 'direct';
+  }
+
+  // Keep referring site short for storage. Matches Apps Script line 987.
+  const refTrimmed = ref.replace(/^https?:\/\//, '').replace(/\/$/, '').slice(0, 120);
+
+  return {
+    source,
+    utmSource,
+    utmMedium,
+    utmCampaign,
+    utmContent,
+    utmId,
+    utmTerm,
+    fbclidPresent: fbclid,
+    gclidPresent: gclid,
+    referrer: refTrimmed,
+  };
+}
+
+/**
+ * Compute the per-line-item CAD breakdown for a single order. Returns an
+ * array of `{p, u, r}` (compact keys per Apps Script Shopify.gs:887 + the
+ * postgresReaders.ts:101-120 parser shape).
+ *
+ * All 3 stores are CAD-native, so `li.price` is already in CAD. The
+ * proportional split allocates order-level adjustments (tax, shipping,
+ * discounts) back to line items so the lineItems[].r sums to ~totalCad.
+ *
+ * Three guards (Apps Script Pitfalls 1, 2, A4):
+ *   1. Skip items with null/empty `product_id` (custom items, deleted
+ *      products) — they can never match a mapped campaign anyway.
+ *   2. If `sum(price × qty) === 0` (rare: 100%-discount / free-gift), spread
+ *      `totalCad` equally across items instead of dividing by zero.
+ *   3. Round each lineCad to 2 decimals so the JSONB stays compact.
+ */
+function computeLineItemsCad(
+  order: ShopifyOrderPayload,
+  totalCad: number,
+): Array<{ p: string; u: number; r: number }> {
+  const items = order.line_items ?? [];
+  if (items.length === 0) return [];
+
+  const subtotal = items.reduce((s, li) => {
+    const price = parseFloat(String(li.price ?? '0')) || 0;
+    const qty = parseInt(String(li.quantity ?? '0'), 10) || 0;
+    return s + price * qty;
+  }, 0);
+
+  const useFlatSpread = !(subtotal > 0);
+
+  const out: Array<{ p: string; u: number; r: number }> = [];
+  for (const li of items) {
+    const pid = li.product_id != null ? String(li.product_id) : '';
+    if (!pid) continue; // Guard 1
+    const qty = parseInt(String(li.quantity ?? '0'), 10) || 0;
+    const price = parseFloat(String(li.price ?? '0')) || 0;
+    const lineGross = price * qty;
+    const lineCad = useFlatSpread
+      ? items.length > 0
+        ? totalCad / items.length
+        : 0
+      : (lineGross / subtotal) * totalCad;
+    out.push({ p: pid, u: qty, r: Math.round(lineCad * 100) / 100 });
+  }
+  return out;
+}
+
+/**
+ * Phase 05.6.1 — order attribution rows for a single day.
+ *
+ * Port of `Shopify.gs:757` (`getShopifyOrdersAttribution`). Returns one row
+ * per non-test, non-voided order created on `dateStr`. Each row carries:
+ *   - the order's CAD total (`current_total_price` — D-A1 already deducts
+ *     same-day refunds; cross-day refunds are NOT subtracted here because the
+ *     `orders_attribution` table is order-level, not net-revenue)
+ *   - the classified attribution source (see `classifyOrderAttribution`)
+ *   - UTM params + fbclid/gclid presence flags
+ *   - per-line-item CAD breakdown (compact `{p,u,r}` JSON for storage; the
+ *     reader at postgresReaders.ts:101 maps it back to the dashboard shape)
+ *
+ * Day boundaries use `isoLocalMidnight(dateStr, SHOPIFY_TZ)` — same
+ * Asia/Jerusalem convention as the orders+refunds fetcher above.
+ *
+ * Pagination via `Link: <...>; rel="next"` header, cap at PAGINATION_CAP.
+ */
+export async function fetchShopifyOrdersAttribution(
+  storeId: string,
+  dateStr: string,
+): Promise<ShopifyOrderRow[]> {
+  const { domain, token } = getShopifyCreds(storeId);
+
+  const dayStart = isoLocalMidnight(dateStr, SHOPIFY_TZ);
+  const dayEnd = isoLocalMidnight(nextDayStr(dateStr), SHOPIFY_TZ);
+  const fields =
+    'id,current_total_price,financial_status,test,landing_site,referring_site,' +
+    'note_attributes,source_name,line_items';
+
+  let url: string | undefined =
+    `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/orders.json` +
+    `?status=any&financial_status=any&limit=250` +
+    `&created_at_min=${encodeURIComponent(dayStart)}` +
+    `&created_at_max=${encodeURIComponent(dayEnd)}` +
+    `&fields=${fields}`;
+
+  const out: ShopifyOrderRow[] = [];
+  let pages = 0;
+
+  while (url && pages < PAGINATION_CAP) {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'X-Shopify-Access-Token': token,
+        Accept: 'application/json',
+      },
+    });
+
+    if (!res.ok) {
+      const bodyTxt = await res.text().catch(() => '');
+      throw new Error(
+        `Shopify orders-attribution ${storeId} ${dateStr} failed ` +
+          `(${res.status}): ${bodyTxt.slice(0, 200)}`,
+      );
+    }
+
+    const body = (await res.json()) as { orders?: ShopifyOrderPayload[] };
+    const orders = body?.orders ?? [];
+
+    for (const o of orders) {
+      if (o.test) continue;
+      if (o.financial_status === 'voided') continue;
+
+      const totalCad = parseFloat(String(o.current_total_price ?? '0')) || 0;
+      const classified = classifyOrderAttribution(o);
+
+      out.push({
+        storeId,
+        orderId: String(o.id ?? ''),
+        date: dateStr,
+        totalCad,
+        source: classified.source,
+        utmSource: classified.utmSource || null,
+        utmMedium: classified.utmMedium || null,
+        utmCampaign: classified.utmCampaign || null,
+        utmContent: classified.utmContent || null,
+        fbclidPresent: classified.fbclidPresent,
+        gclidPresent: classified.gclidPresent,
+        referrer: classified.referrer || null,
+        utmId: classified.utmId || null,
+        utmTerm: classified.utmTerm || null,
+        lineItems: computeLineItemsCad(o, totalCad),
+      });
+    }
+
+    url = parseNextLink(res.headers);
+    pages++;
+  }
+
+  if (pages >= PAGINATION_CAP && url) {
+    console.warn(
+      `Shopify orders-attribution ${storeId} ${dateStr}: hit pagination cap ` +
+        `of ${PAGINATION_CAP} pages (${out.length} orders collected); data ` +
+        `beyond may be missing.`,
+    );
+  }
+
+  return out;
 }
