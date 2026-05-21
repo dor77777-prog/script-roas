@@ -267,12 +267,15 @@ describe('cronLive — runLiveForStore handler (Shopify-only, rolling 3-day)', (
       customItemRefundCad: 0,
     }));
 
+    // Resolved values match each fetcher's full return type so vi.spyOn
+    // doesn't reject the mock at type-check time — the bodies are
+    // irrelevant since Test 5's whole point is that these are NEVER awaited.
     const metaSpy = vi
       .spyOn(metaFetcher, 'fetchMetaSpendForDay')
-      .mockResolvedValue({ spend: 0, currency: 'ILS' });
+      .mockResolvedValue({ storeId: 'uzoshop', date: '2026-05-21', spend: 0, currency: 'ILS' });
     const googleSpy = vi
       .spyOn(googleAdsFetcher, 'fetchGoogleAdsSpendForDay')
-      .mockResolvedValue({ spend: 0, currency: 'CAD' });
+      .mockResolvedValue({ storeId: 'uzoshop', date: '2026-05-21', spend: 0, currency: 'CAD' });
 
     const { admin } = makeSupabaseAdminMock();
     vi.spyOn(supabaseAdminMod, 'getSupabaseAdmin').mockReturnValue(
