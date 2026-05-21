@@ -17,20 +17,30 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // ---- module-scoped mock state, exposed via hoisted vars ---------------------
 
-const mockState = vi.hoisted(() => {
-  return {
-    rows: [] as Array<{
-      date: string;
-      store_id: string;
-      platform: string;
-      spend: number | string;
-      currency: string;
-    }>,
-    error: null as null | { message: string },
-    fxCalls: [] as Array<{ from: string; to: string; date: string }>,
-    fxResponder: ((from: string, to: string, date: string) => number) | null,
-  };
-});
+type MockRow = {
+  date: string;
+  store_id: string;
+  platform: string;
+  spend: number | string;
+  currency: string;
+};
+
+type FxCall = { from: string; to: string; date: string };
+type FxResponder = (from: string, to: string, date: string) => number;
+
+type MockState = {
+  rows: MockRow[];
+  error: null | { message: string };
+  fxCalls: FxCall[];
+  fxResponder: FxResponder | null;
+};
+
+const mockState = vi.hoisted<MockState>(() => ({
+  rows: [],
+  error: null,
+  fxCalls: [],
+  fxResponder: null,
+}));
 
 vi.mock('@/lib/supabaseAdmin', () => ({
   getSupabaseAdmin: () => ({
