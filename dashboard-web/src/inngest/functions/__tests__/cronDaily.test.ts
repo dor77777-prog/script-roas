@@ -95,6 +95,13 @@ type MockState = {
     conversions: number;
     conversionValue: number;
   }>;
+  // Phase 05.6.1 → 2026-05-21: MetaAdRow exposes raw `spend` + `currency` +
+  // `conversionValue` (was `spendCad`/`conversionValueCad: null`). The
+  // cronDaily writer FX-converts once per (store, date) via `cadFor`.
+  // Stale field names here would silently make `r.spend`/`r.currency`/
+  // `r.conversionValue` undefined in the writer — `cadFor(undefined, …)`
+  // short-circuits to 0 because the Number.isFinite guard catches it, but
+  // the test would not exercise the real Meta-ad FX path.
   metaAdResult: Array<{
     storeId: string;
     date: string;
@@ -108,10 +115,17 @@ type MockState = {
     impressions: number;
     clicks: number;
     conversions: number;
-    conversionValueCad: number | null;
-    spendCad: number | null;
+    spend: number;
+    currency: string;
+    conversionValue: number;
   }>;
   metaSpendResult: { storeId: string; date: string; spend: number; currency: string };
+  // Phase 05.7.2 — Meta budgets fetch result. Maps campaign/adset ID → budget.
+  metaBudgetsResult: {
+    currency: string;
+    campaigns: Record<string, { dailyBudget: number; lifetimeBudget: number; bidStrategy: string | null }>;
+    adSets: Record<string, { dailyBudget: number; lifetimeBudget: number; campaignId: string }>;
+  };
   googleSpendResult: { storeId: string; date: string; spend: number; currency: string };
   googleAdGroupResult: Array<{
     campaignId: string;
@@ -229,11 +243,24 @@ const mockState = vi.hoisted<MockState>(() => ({
       impressions: 600,
       clicks: 30,
       conversions: 3,
-      conversionValueCad: null,
-      spendCad: null,
+      // 2026-05-21: raw ILS values (writer FX-converts to CAD via cadFor).
+      spend: 60,
+      currency: 'ILS',
+      conversionValue: 300,
     },
   ],
   metaSpendResult: { storeId: 'uzoshop', date: '2026-05-20', spend: 100, currency: 'ILS' },
+  // Phase 05.7.2 — Default Meta budgets fixture: one CBO campaign + one ABO
+  // ad-set. Demonstrates both branches in a single fixture row.
+  metaBudgetsResult: {
+    currency: 'ILS',
+    campaigns: {
+      c1: { dailyBudget: 50, lifetimeBudget: 0, bidStrategy: 'LOWEST_COST_WITHOUT_CAP' },
+    },
+    adSets: {
+      as1: { dailyBudget: 0, lifetimeBudget: 0, campaignId: 'c1' },
+    },
+  },
   googleSpendResult: { storeId: 'uzoshop', date: '2026-05-20', spend: 50, currency: 'CAD' },
   googleAdGroupResult: [
     {
@@ -309,6 +336,11 @@ vi.mock('@/lib/fetchers/meta', () => ({
   fetchMetaAdInsights: vi.fn(async () => {
     if (mockState.throwIn === 'meta') throw new Error('meta-ad-failed');
     return mockState.metaAdResult;
+  }),
+  // Phase 05.7.2 — per-campaign / per-adset budgets wired inside fetch-meta step.
+  fetchMetaBudgets: vi.fn(async () => {
+    if (mockState.throwIn === 'meta') throw new Error('meta-budgets-failed');
+    return mockState.metaBudgetsResult;
   }),
 }));
 
@@ -544,6 +576,104 @@ describe('cronDaily — factory + handler', () => {
     // The 3 pre-existing writes still happen (data_daily always; products and
     // campaigns when their fixtures have rows — they DO in the defaults).
     expect(tables.has('data_daily')).toBe(true);
+  });
+
+  it('Test 9 (Phase 05.7.2): campaigns_daily Meta upsert populates budget_type + budget CAD per row', async () => {
+    // Override the default 1-adset fixture with 3 adsets that cover the 3
+    // budget cases: CBO (campaign has daily), ABO (adset has daily), '' (paused).
+    mockState.metaAdSetResult = [
+      {
+        campaignId: 'c-cbo',
+        campaignName: 'CBO Campaign',
+        adSetId: 'as-cbo-1',
+        adSetName: 'AdSet CBO 1',
+        spend: 100,
+        currency: 'ILS',
+        impressions: 1000,
+        clicks: 50,
+        conversions: 5,
+        conversionValue: 500,
+      },
+      {
+        campaignId: 'c-abo',
+        campaignName: 'ABO Campaign',
+        adSetId: 'as-abo-1',
+        adSetName: 'AdSet ABO 1',
+        spend: 200,
+        currency: 'ILS',
+        impressions: 2000,
+        clicks: 100,
+        conversions: 10,
+        conversionValue: 1000,
+      },
+      {
+        campaignId: 'c-paused',
+        campaignName: 'Paused Campaign',
+        adSetId: 'as-paused-1',
+        adSetName: 'AdSet Paused',
+        spend: 0,
+        currency: 'ILS',
+        impressions: 0,
+        clicks: 0,
+        conversions: 1, // late-attributed (matches keep-rule)
+        conversionValue: 30,
+      },
+    ];
+    // Matching budgets fixture: CBO with daily, ABO with adset daily, paused empty.
+    mockState.metaBudgetsResult = {
+      currency: 'ILS',
+      campaigns: {
+        'c-cbo': { dailyBudget: 75, lifetimeBudget: 0, bidStrategy: 'LOWEST_COST_WITHOUT_CAP' },
+        'c-abo': { dailyBudget: 0, lifetimeBudget: 0, bidStrategy: null },
+        'c-paused': { dailyBudget: 0, lifetimeBudget: 0, bidStrategy: null },
+      },
+      adSets: {
+        'as-cbo-1': { dailyBudget: 0, lifetimeBudget: 0, campaignId: 'c-cbo' },
+        'as-abo-1': { dailyBudget: 40, lifetimeBudget: 0, campaignId: 'c-abo' },
+        'as-paused-1': { dailyBudget: 0, lifetimeBudget: 0, campaignId: 'c-paused' },
+      },
+    };
+
+    const { step } = makeMockStep();
+    await runDailyForStore('uzoshop', '2026-05-20', { step });
+
+    // Find the Meta campaigns_daily upsert (NOT the google one — first
+    // upsert call to campaigns_daily is meta per the writer order).
+    const campaignsCalls = mockState.upserts.filter(
+      (u) => u.table === 'campaigns_daily',
+    );
+    expect(campaignsCalls.length).toBeGreaterThanOrEqual(1);
+    const metaUpsert = campaignsCalls[0];
+    const rows = metaUpsert.rows as Array<{
+      campaign_id: string;
+      ad_set_id: string;
+      budget_type: 'CBO' | 'ABO' | '';
+      campaign_budget_cad: number | null;
+      ad_set_budget_cad: number | null;
+    }>;
+    expect(rows).toHaveLength(3);
+
+    // CBO row — campaign owns daily=75, adset owns nothing. campaign_budget_cad
+    // is some positive CAD number (the actual FX rate depends on the FX
+    // closure; we just assert >0 so the test isn't brittle to ILS→CAD rates).
+    const cbo = rows.find((r) => r.campaign_id === 'c-cbo')!;
+    expect(cbo.budget_type).toBe('CBO');
+    expect(cbo.campaign_budget_cad).not.toBeNull();
+    expect(cbo.campaign_budget_cad!).toBeGreaterThan(0);
+    expect(cbo.ad_set_budget_cad).toBeNull();
+
+    // ABO row — campaign 0, adset has daily=40.
+    const abo = rows.find((r) => r.campaign_id === 'c-abo')!;
+    expect(abo.budget_type).toBe('ABO');
+    expect(abo.campaign_budget_cad).toBeNull();
+    expect(abo.ad_set_budget_cad).not.toBeNull();
+    expect(abo.ad_set_budget_cad!).toBeGreaterThan(0);
+
+    // Paused row — both zero, empty budget_type, both CAD fields null.
+    const paused = rows.find((r) => r.campaign_id === 'c-paused')!;
+    expect(paused.budget_type).toBe('');
+    expect(paused.campaign_budget_cad).toBeNull();
+    expect(paused.ad_set_budget_cad).toBeNull();
   });
 
   it('Test 6: an error inside any step propagates out of `runDailyForStore` (D-B6 retry-on-throw)', async () => {

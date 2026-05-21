@@ -812,6 +812,12 @@ Holiday Push Sweater   [CBO]  [⏸ כבוי · 15/05]
   - בטבלת Campaigns, ה-Daily Budget הוא סכום הכל.
   - בטבלת Ad-Sets, כל שורה עם הסכום שלה.
 
+> **מקור הנתונים (Phase 05.7.2):** הערכים נשלפים מ-Meta דרך
+> `/act_{id}/campaigns` + `/act_{id}/adsets` (ב-Cron-Daily ב-00:05 שעון ישראל)
+> ומומרים מ-agorot ל-ILS ואז ל-CAD לפי שער ה-FX היומי של אותו יום.
+> אם רואים "—" בעמודה למרות שהקמפיין רץ, בדוק שלרוץ ה-cron של אותו יום
+> היה גישה לטוקן Meta (Vercel env vars: `<STORE>_META_ACCESS_TOKEN`).
+
 ### 7.11 מיון
 - לחץ על כותרת עמודה למיון.
 - לחיצה שנייה הופכת כיוון.
