@@ -30,6 +30,19 @@ export const CACHE_CONFIG = {
   // the response can be fresher than the dashboardState route. swr=60
   // covers the gap between client polls + CDN coalescing.
   health: { revalidate: 10, swr: 60 },
+  // Phase 05.6-15 operator console CRUD. NOTE: the actual route uses
+  // `dynamic = 'force-dynamic'` (no `revalidate`) because the operator is
+  // editing rows in real time and any cached list would surface stale data
+  // immediately after an add/delete (Pitfall 11 — never combine
+  // force-dynamic with revalidate). This entry exists so the cache
+  // contract is documented centrally — a future plan that adds a separate
+  // read-only "live overrides" surface (e.g. for the main dashboard's
+  // /api/data path to pre-fetch the overrides used in spend reconciliation)
+  // can pull `cacheControl('manualOverrides')` from here without
+  // re-deciding the window. revalidate=0 / swr=0 makes any accidental
+  // use of `cacheControl('manualOverrides')` on the CRUD route a no-op
+  // rather than a silent staleness bug.
+  manualOverrides: { revalidate: 0, swr: 0 },
 } as const;
 
 export type CacheKey = keyof typeof CACHE_CONFIG;
