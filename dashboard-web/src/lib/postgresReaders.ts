@@ -357,7 +357,13 @@ export async function fetchProductsFromPostgres(
 
     const units = toNumber(r.units);
     const revenue = toNumber(r.gross_revenue_cad);
-    if (units <= 0 && revenue <= 0) continue;
+    const netRev = toNumber(r.net_revenue_cad);
+    // Drop rows that are zero on EVERY revenue surface. Phase 05.6 fetchers
+    // populate net_revenue_cad (the refund-corrected number) but leave
+    // units + gross_revenue_cad at 0/null — so the original units+revenue-only
+    // filter would discard real product rows. Keep any row where ANY of the
+    // three has meaningful data.
+    if (units <= 0 && revenue <= 0 && netRev <= 0) continue;
 
     const netRaw = r.net_revenue_cad;
     rows.push({
@@ -403,10 +409,14 @@ const STORE_NAME_BY_ID: Record<string, string> = {
 export async function fetchCampaignsFromPostgres(
   opts?: { range?: DateRange },
 ): Promise<CampaignRow[]> {
+  // NOTE: campaigns_daily schema does NOT include a store_name column (only
+  // data_daily + products_daily do). Querying it caused a Postgres error
+  // surfaced as a soft-fail with 0 rows. We project store_name on the
+  // boundary via STORE_NAME_BY_ID below.
   let q = getSupabase()
     .from('campaigns_daily')
     .select(
-      'date, store_id, store_name, platform, campaign_id, campaign_name, ' +
+      'date, store_id, platform, campaign_id, campaign_name, ' +
         'ad_set_id, ad_set_name, spend_cad, impressions, clicks, conversions, ' +
         'conversion_value_cad, campaign_budget_cad, ad_set_budget_cad, budget_type',
     );
@@ -436,9 +446,9 @@ export async function fetchCampaignsFromPostgres(
     rows.push({
       date: dateStr,
       storeId,
-      // store_name may not be a column in campaigns_daily — fall back to the
-      // ID-to-display map used by the Sheets-side fetcher (campaigns.ts:38).
-      storeName: String(r.store_name ?? STORE_NAME_BY_ID[storeId] ?? storeId),
+      // campaigns_daily has no store_name column — derive from store_id via
+      // the canonical map (mirrors campaigns.ts:38 sheets-side behavior).
+      storeName: STORE_NAME_BY_ID[storeId] ?? storeId,
       platform: titleCasePlatform(r.platform),
       campaignId: String(r.campaign_id),
       campaignName: String(r.campaign_name ?? '').trim() || '—',
