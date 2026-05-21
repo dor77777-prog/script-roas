@@ -7,9 +7,9 @@
 │                                                  │
 │      מדריך הפעלה שוטף למפעיל הדשבורד            │
 │                                                  │
-│      גרסה:        1.1                            │
-│      תאריך:       2026-05-20                     │
-│      בסיס קוד:    Phase 05.2.2.1 + FIX-25       │
+│      גרסה:        1.2                            │
+│      תאריך:       2026-05-21                     │
+│      בסיס קוד:    Phase 05.5-03                  │
 │      קהל יעד:     מפעיל יחיד · החלטות יומיות   │
 │                                                  │
 │      חנויות נתמכות:                              │
@@ -150,6 +150,23 @@ https://roas-dashboard-smoky.vercel.app
 - 🛠️ **מיפוי Mapped Products** — לקמפיינים חדשים, ידנית.
 - 🛠️ **Annotations** — לציין אירועים חשובים על הציר (קמפיין חדש, שינוי מחיר וכו').
 
+### 1.7 מצב אבטחה ב-Supabase — מה צפוי
+
+> **TL;DR:** Supabase Security Advisor יראה 10 אזהרות אדומות (`0013_rls_disabled_in_public`).
+> **זה תקין ומכוון — אל תפעיל RLS.**
+
+מודל האמון של הדשבורד הוא **URL-obscurity יחיד-משתמש** (החלטה ב-`/gsd-explore` 2026-05-21). אין login, אין multi-user, ואין צורך ב-Row Level Security. ה-`anon key` ב-Vercel היא ה-credential היחיד שמגיע אל Supabase, וה-URL של הדשבורד אינו חשוף לציבור.
+
+**למה לא להפעיל RLS:**
+1. הפעלת RLS ללא policies תחסום את ה-ping של `/api/health` (`SELECT count(*) FROM stores`) — האינדיקטור ייכנס למצב צהוב (D-D1) ויטעה את המפעיל.
+2. כתיבת policies תאמץ זמן ולא תוסיף הגנה ממשית כל עוד יש משתמש יחיד.
+3. אם בעתיד יחליטו על multi-user, יוסיפו `enable row level security` + policies + Supabase Auth ב-phase ייעודית (לא 05.5).
+
+**מה לעשות אם רואים את האזהרות ב-Supabase Dashboard:**
+- **התעלמו.** האזהרה היא משתמרת (`0013_rls_disabled_in_public`) ומופיעה על כל אחת מ-10 הטבלאות (`stores`, `data_daily`, `campaigns_daily`, `ads_daily`, `products_daily`, `orders_attribution`, `product_catalog`, `manual_overrides`, `dashboard_state`, `notification_config`).
+- אל תיכנעו לפיתוי ללחוץ "Enable RLS" — זה ישבור את ה-ping ויהפוך את האינדיקטור לצהוב.
+- אם משתנה במודל האמון (למשל, רוצים לשתף את הדשבורד עם פרטנר), פותחים phase חדשה שמוסיפה Auth + policies במקביל.
+
 ---
 
 ## 2. מבנה הדשבורד וניווט בסיסי
@@ -166,10 +183,20 @@ https://roas-dashboard-smoky.vercel.app
 **רכיבים מימין לשמאל בגרסה העברית של הממשק:**
 - **לוגו ותגית** (שמאל): "דשבורד ROAS · מעקב הוצאות ↔ הכנסות לכל החנויות"
 - **כפתור Cmd-K**: מקלדת לפתיחת חיפוש מהיר. תומך בעברית — תכתוב "אתמול" וזה ימצא את פריסט "אתמול".
-- **Sync Indicator** (פיפ עיגול): מציין את מצב הסנכרון מ-Google Sheets:
-  - 🟢 **ירוק** = "sync OK" — הכל תקין
-  - 🟡 **כתום** = "שומר..." — סנכרון לענן בתהליך
-  - 🔴 **אדום** = "sync שגיאה" — לחץ עליו לראות פרטים
+- **Sync Indicator** (פיפ עיגול): מציין את מצב הסנכרון של הדשבורד מול ה-cloud.
+
+**מאז Phase 05.5 (מאי 2026) — האינדיקטור הוא טריאנרי:**
+
+| מצב | משמעות | פעולה נדרשת מהמפעיל |
+|-----|--------|---------------------|
+| 🟢 ירוק (`sync OK`) | Sheets + Supabase שניהם נגישים — המצב התקין | אין |
+| 🟡 צהוב (`sync OK` ברקע כתום) | Sheets נגיש אך Supabase לא — תקלת ענן או env vars שגויים ב-Vercel | בדוק SUPABASE_URL / SUPABASE_ANON_KEY ב-Vercel → Project Settings → Environment Variables. הריץ redeploy אחרי תיקון. |
+| 🔴 אדום (`sync שגיאה`) | Sheets לא נגיש — Service Account לא משותף או GOOGLE_CLIENT_EMAIL/GOOGLE_PRIVATE_KEY שגויים | לחץ על האינדיקטור לפתיחת חלון השגיאה (התנהגות קיימת — ללא שינוי) |
+
+האינדיקטור משתמש ב-endpoint חדש `/api/health` שמבצע ping מקבילי ל-Sheets API ול-Supabase כל 30 שניות (refreshInterval ב-SWR). תוצאת ה-ping היא JSON עם השדות `sheets` ו-`supabase` (כל אחד `ok` או `down`).
+
+במקביל, בזמן כתיבה לענן (לדוגמה: שמירת goal חדש או annotation), האינדיקטור עובר באופן זמני למצב `שומר…` (רקע אופ-ווייט, אייקון מסתובב) — זהו מצב orthogonal לתוצאת ה-`/api/health` ולא משפיע על צבע הרקע הטריאנרי.
+
 - **Refresh Button**: מחדש את כל הקריאות. גם פועל אוטומטית כל 60 שניות.
 
 ### 2.2 טאבים (6)
