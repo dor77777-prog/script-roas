@@ -61,10 +61,19 @@ export function SyncIndicator() {
   //   3. Both fine → GREEN
   // The 'syncing' state keeps its existing in-flight visual (bg-white/15)
   // because it's a transient state ORTHOGONAL to the health check.
+  //
+  // REVIEW.md WR-01 fix: supabase-down evaluation is HOISTED ABOVE the status
+  // branches so a healthy cloudSync 'idle'/initial-load state can still
+  // surface amber the moment /api/health reports `supabase: 'down'`. Before
+  // this fix, the 'ok'-gated branch swallowed the warning during the first
+  // SWR cycle and on every page load (status starts 'idle' until the first
+  // hydrate completes).
   let icon = <Cloud size={13} />;
   let label = 'sync';
   let tone = 'bg-white/12 text-white/85 hover:bg-white/20';
   let title = '';
+
+  const supabaseDown = health?.supabase === 'down';
 
   if (status === 'syncing') {
     icon = <RefreshCw size={13} className="animate-spin" />;
@@ -76,8 +85,10 @@ export function SyncIndicator() {
     label = 'sync שגיאה';
     tone = 'bg-red-500/85 text-white hover:bg-red-500';
     title = 'לחץ לפרטים';
-  } else if (status === 'ok' && health?.supabase === 'down') {
-    // D-D1 yellow — Sheets OK but Supabase unreachable (env vars wrong or project paused)
+  } else if (supabaseDown) {
+    // D-D1 yellow — Sheets OK (or hasn't synced yet), Supabase unreachable.
+    // Fires regardless of cloudSync status (idle / ok / first-paint) so the
+    // operator gets the documented amber signal as soon as health reports.
     icon = <Cloud size={13} />;
     label = 'sync OK';
     tone = 'bg-amber-500/30 text-white hover:bg-amber-500/40';

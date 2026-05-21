@@ -32,6 +32,13 @@
    additive-only as the load-bearing safety net; a destructive change should be reviewed
    before being committed, not afterward.
 
+6. **Seeds MUST be idempotent.** Established by REVIEW.md WR-03 fix
+   (`20260521075829_make_seeds_idempotent.sql`). Every `INSERT INTO …` migration row
+   ends with `ON CONFLICT (<pkey-or-unique>) DO NOTHING` (or `DO UPDATE SET …` if the
+   intent is upsert). A `INSERT` without an `ON CONFLICT` clause is a migration defect —
+   reviewer should reject. Reason: replaying migrations against a dev branch / fresh DB
+   should be a no-op for already-seeded rows, not a `_pkey` violation.
+
 ## Rationale
 
 Phase 05.5 ships the v2.0 schema upfront (D-A1, D-A5). Phase 05.6 ports fetchers but
