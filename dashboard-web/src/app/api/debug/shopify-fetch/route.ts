@@ -2,20 +2,60 @@
 //
 // One-time debug endpoint (Phase 05.7.6 — 2026-05-22 incident).
 //
-// Investigates why fetchShopifyDayRows() returns revenueCad=0 in
-// production even though the Shopify Admin API directly returns the
-// order. Hits the fetcher for the requested store+date and returns the
-// raw result so we can pinpoint where the data is lost.
-//
-// SECURITY: read-only; reads same env vars as cronDaily; no destructive
-// actions. The endpoint is gated only by URL obscurity (matches the
-// rest of /api/operator/*). Safe to remove or leave in place after the
-// incident is resolved.
+// Reveals WHY fetchShopifyDayRows() returns 0 in prod. Bypasses the
+// algorithm + writer; hits Shopify Admin REST directly with the exact
+// URL the fetcher would build, then returns counts + sample rows.
 
 import { NextResponse } from 'next/server';
-import { fetchShopifyDayRows } from '@/lib/fetchers/shopify';
 
 export const dynamic = 'force-dynamic';
+
+const SHOPIFY_TZ = 'Asia/Jerusalem';
+const SHOPIFY_API_VERSION = '2024-10';
+
+function isoLocalMidnight(dateStr: string, tz: string): string {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) throw new Error(`bad dateStr ${dateStr}`);
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const targetLocalAsUtc = Date.UTC(y, m - 1, d, 0, 0, 0);
+  let instantMs = targetLocalAsUtc;
+  for (let i = 0; i < 3; i++) {
+    const local = formatLocalIso(instantMs, tz);
+    const match = local.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})$/);
+    if (!match) throw new Error(`bad local format ${local}`);
+    const localAsUtc = Date.UTC(
+      Number(match[1]), Number(match[2]) - 1, Number(match[3]),
+      Number(match[4]), Number(match[5]), Number(match[6]),
+    );
+    const deltaMs = localAsUtc - targetLocalAsUtc;
+    if (deltaMs === 0) break;
+    instantMs -= deltaMs;
+  }
+  const offsetMin = (Date.UTC(
+    ...(formatLocalIso(instantMs, tz).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})$/)!
+      .slice(1).map(Number) as [number, number, number, number, number, number]),
+  ) - instantMs) / 60000;
+  const sign = offsetMin >= 0 ? '+' : '-';
+  const absMin = Math.abs(offsetMin);
+  const oh = String(Math.floor(absMin / 60)).padStart(2, '0');
+  const om = String(absMin % 60).padStart(2, '0');
+  const local = formatLocalIso(instantMs, tz);
+  return `${local}${sign}${oh}:${om}`;
+}
+
+function formatLocalIso(instantMs: number, tz: string): string {
+  const d = new Date(instantMs);
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
+  });
+  return fmt.format(d).replace(', ', 'T').replace(' ', 'T').replace(/T24:/, 'T00:');
+}
+
+function nextDayStr(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + 1));
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, '0')}-${String(dt.getUTCDate()).padStart(2, '0')}`;
+}
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -27,25 +67,47 @@ export async function GET(req: Request) {
       { status: 400 },
     );
   }
-  try {
-    const result = await fetchShopifyDayRows(storeId, date);
+  const upper = storeId.toUpperCase();
+  const domain = process.env[`${upper}_SHOPIFY_DOMAIN`];
+  const token = process.env[`${upper}_SHOPIFY_TOKEN`];
+  if (!domain || !token) {
     return NextResponse.json({
-      ok: true,
-      storeId,
-      date,
-      result,
-      productRowsCount: result.productRows.length,
-      summary: {
-        revenueCad: result.revenueCad,
-        grossRevenueCad: result.grossRevenueCad,
-        refundDeductionCad: result.refundDeductionCad,
-      },
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return NextResponse.json(
-      { ok: false, storeId, date, error: message },
-      { status: 500 },
-    );
+      error: 'Missing env vars',
+      hasDomain: !!domain,
+      hasToken: !!token,
+      domainVal: domain ? domain.slice(0, 15) + '...' : null,
+    }, { status: 500 });
   }
+
+  // Build Window A URL exactly like buildWindowUrl does.
+  const dayStartA = isoLocalMidnight(date, SHOPIFY_TZ);
+  const dayEndA = isoLocalMidnight(nextDayStr(date), SHOPIFY_TZ);
+  const fields = 'id,created_at,total_price,current_total_price,test,financial_status,line_items,refunds';
+  const windowAUrl = `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/orders.json?status=any&limit=250&created_at_min=${encodeURIComponent(dayStartA)}&created_at_max=${encodeURIComponent(dayEndA)}&fields=${fields}`;
+
+  const resA = await fetch(windowAUrl, {
+    method: 'GET',
+    headers: { 'X-Shopify-Access-Token': token, Accept: 'application/json' },
+  });
+  const bodyA = await resA.text();
+  let parsedA: { orders?: Array<Record<string, unknown>> } = {};
+  try { parsedA = JSON.parse(bodyA); } catch { /* keep empty */ }
+
+  return NextResponse.json({
+    storeId,
+    date,
+    timestamp: new Date().toISOString(),
+    domain,
+    tokenPrefix: token.slice(0, 10) + '...',
+    windowAUrl,
+    dayStartA,
+    dayEndA,
+    response: {
+      status: resA.status,
+      ok: resA.ok,
+      orderCount: parsedA.orders?.length ?? 0,
+      sampleOrder: parsedA.orders?.[0] ?? null,
+      bodyPrefix: bodyA.slice(0, 500),
+    },
+  });
 }
