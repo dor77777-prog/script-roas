@@ -640,51 +640,40 @@ function backfillCurrentMonthUsmile360() {
 }
 
 /**
- * Safer chunked variants (added 2026-05-21): 7-day chunks per store, 9 total.
+ * Smaller 3-day chunks (revised 2026-05-21): 7 chunks per store, 21 total.
  *
- * Use these instead of `backfillCurrentMonth<Store>` when (a) a single store's
- * 21-day range looks too close to the 6-min cap (busy month, heavy refunds, or
- * known timeout history), or (b) you want fine-grained restart points.
+ * The original 7-day chunks (now removed) timed out on chunk 2 (May 8-14) in
+ * practice — heavy days with many orders + the live trigger competing for
+ * the Sheets API short-window quota pushed runtime past the 6-min cap. The
+ * 3-day chunks bound each invocation to ~45-90s @ ~15-30s/store-day, which
+ * leaves a wide safety margin even on the busiest store-days.
  *
- * Recommended sequence (each ~2-3 min @ ~15-25s/store-day):
- *   1. backfillUzoshopMay01to07      →  ▶  ⏳ ~2-3min  →  alert
- *   2. backfillUzoshopMay08to14      →  ▶  ⏳ ~2-3min  →  alert
- *   3. backfillUzoshopMay15to21      →  ▶  ⏳ ~2-3min  →  alert
- *   4-6. Zolplus May 01-07 / 08-14 / 15-21
- *   7-9. Usmile360 May 01-07 / 08-14 / 15-21
- *
- * All 9 are idempotent — re-running a chunk re-writes the same data-daily +
- * products-daily rows; no duplicates created. Safe to re-run a failed chunk.
+ * Naming: backfill{Store}May{NN}to{MM} — runs from Apps Script Run dropdown.
+ * All idempotent (`data-daily` / `products-daily` are row-keyed by date).
  */
-function backfillUzoshopMay01to07() {
-  return backfillRangeForStores('2026-05-01', '2026-05-07', ['uzoshop']);
-}
-function backfillUzoshopMay08to14() {
-  return backfillRangeForStores('2026-05-08', '2026-05-14', ['uzoshop']);
-}
-function backfillUzoshopMay15to21() {
-  return backfillRangeForStores('2026-05-15', '2026-05-21', ['uzoshop']);
-}
+function backfillUzoshopMay01to03() { return backfillRangeForStores('2026-05-01', '2026-05-03', ['uzoshop']); }
+function backfillUzoshopMay04to06() { return backfillRangeForStores('2026-05-04', '2026-05-06', ['uzoshop']); }
+function backfillUzoshopMay07to09() { return backfillRangeForStores('2026-05-07', '2026-05-09', ['uzoshop']); }
+function backfillUzoshopMay10to12() { return backfillRangeForStores('2026-05-10', '2026-05-12', ['uzoshop']); }
+function backfillUzoshopMay13to15() { return backfillRangeForStores('2026-05-13', '2026-05-15', ['uzoshop']); }
+function backfillUzoshopMay16to18() { return backfillRangeForStores('2026-05-16', '2026-05-18', ['uzoshop']); }
+function backfillUzoshopMay19to21() { return backfillRangeForStores('2026-05-19', '2026-05-21', ['uzoshop']); }
 
-function backfillZolplusMay01to07() {
-  return backfillRangeForStores('2026-05-01', '2026-05-07', ['zolplus']);
-}
-function backfillZolplusMay08to14() {
-  return backfillRangeForStores('2026-05-08', '2026-05-14', ['zolplus']);
-}
-function backfillZolplusMay15to21() {
-  return backfillRangeForStores('2026-05-15', '2026-05-21', ['zolplus']);
-}
+function backfillZolplusMay01to03() { return backfillRangeForStores('2026-05-01', '2026-05-03', ['zolplus']); }
+function backfillZolplusMay04to06() { return backfillRangeForStores('2026-05-04', '2026-05-06', ['zolplus']); }
+function backfillZolplusMay07to09() { return backfillRangeForStores('2026-05-07', '2026-05-09', ['zolplus']); }
+function backfillZolplusMay10to12() { return backfillRangeForStores('2026-05-10', '2026-05-12', ['zolplus']); }
+function backfillZolplusMay13to15() { return backfillRangeForStores('2026-05-13', '2026-05-15', ['zolplus']); }
+function backfillZolplusMay16to18() { return backfillRangeForStores('2026-05-16', '2026-05-18', ['zolplus']); }
+function backfillZolplusMay19to21() { return backfillRangeForStores('2026-05-19', '2026-05-21', ['zolplus']); }
 
-function backfillUsmile360May01to07() {
-  return backfillRangeForStores('2026-05-01', '2026-05-07', ['usmile360']);
-}
-function backfillUsmile360May08to14() {
-  return backfillRangeForStores('2026-05-08', '2026-05-14', ['usmile360']);
-}
-function backfillUsmile360May15to21() {
-  return backfillRangeForStores('2026-05-15', '2026-05-21', ['usmile360']);
-}
+function backfillUsmile360May01to03() { return backfillRangeForStores('2026-05-01', '2026-05-03', ['usmile360']); }
+function backfillUsmile360May04to06() { return backfillRangeForStores('2026-05-04', '2026-05-06', ['usmile360']); }
+function backfillUsmile360May07to09() { return backfillRangeForStores('2026-05-07', '2026-05-09', ['usmile360']); }
+function backfillUsmile360May10to12() { return backfillRangeForStores('2026-05-10', '2026-05-12', ['usmile360']); }
+function backfillUsmile360May13to15() { return backfillRangeForStores('2026-05-13', '2026-05-15', ['usmile360']); }
+function backfillUsmile360May16to18() { return backfillRangeForStores('2026-05-16', '2026-05-18', ['usmile360']); }
+function backfillUsmile360May19to21() { return backfillRangeForStores('2026-05-19', '2026-05-21', ['usmile360']); }
 
 /* =====================================================================
  * AUTO-CHAIN: one-click May 2026 backfill (added 2026-05-21)
@@ -709,16 +698,31 @@ function backfillUsmile360May15to21() {
 function startMayBackfillAuto() {
   removeMayBackfillTriggers_();
 
+  // 21 chunks (3 days each, 7 per store). Revised from 9 7-day chunks after
+  // chunk 2 (May 8-14) timed out in practice — Sheets-API contention with
+  // the 15-min live trigger pushed total runtime over the 6-min cap.
   const chunks = [
-    ['2026-05-01', '2026-05-07', 'uzoshop'],
-    ['2026-05-08', '2026-05-14', 'uzoshop'],
-    ['2026-05-15', '2026-05-21', 'uzoshop'],
-    ['2026-05-01', '2026-05-07', 'zolplus'],
-    ['2026-05-08', '2026-05-14', 'zolplus'],
-    ['2026-05-15', '2026-05-21', 'zolplus'],
-    ['2026-05-01', '2026-05-07', 'usmile360'],
-    ['2026-05-08', '2026-05-14', 'usmile360'],
-    ['2026-05-15', '2026-05-21', 'usmile360'],
+    ['2026-05-01', '2026-05-03', 'uzoshop'],
+    ['2026-05-04', '2026-05-06', 'uzoshop'],
+    ['2026-05-07', '2026-05-09', 'uzoshop'],
+    ['2026-05-10', '2026-05-12', 'uzoshop'],
+    ['2026-05-13', '2026-05-15', 'uzoshop'],
+    ['2026-05-16', '2026-05-18', 'uzoshop'],
+    ['2026-05-19', '2026-05-21', 'uzoshop'],
+    ['2026-05-01', '2026-05-03', 'zolplus'],
+    ['2026-05-04', '2026-05-06', 'zolplus'],
+    ['2026-05-07', '2026-05-09', 'zolplus'],
+    ['2026-05-10', '2026-05-12', 'zolplus'],
+    ['2026-05-13', '2026-05-15', 'zolplus'],
+    ['2026-05-16', '2026-05-18', 'zolplus'],
+    ['2026-05-19', '2026-05-21', 'zolplus'],
+    ['2026-05-01', '2026-05-03', 'usmile360'],
+    ['2026-05-04', '2026-05-06', 'usmile360'],
+    ['2026-05-07', '2026-05-09', 'usmile360'],
+    ['2026-05-10', '2026-05-12', 'usmile360'],
+    ['2026-05-13', '2026-05-15', 'usmile360'],
+    ['2026-05-16', '2026-05-18', 'usmile360'],
+    ['2026-05-19', '2026-05-21', 'usmile360'],
   ];
 
   const props = PropertiesService.getScriptProperties();
