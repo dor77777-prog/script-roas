@@ -257,11 +257,11 @@ Plans:
 **Goal:** Stand up Supabase Postgres (free tier) with initial schema; classify all 40 properties from `.env` into SECRET / CONFIG / DATA; seed Vercel env vars + Supabase `stores` + `notification_config` tables; produce `docs/PROPS-MAP.md` as the operator checklist that will gate cut-over (Phase 05.7); verify dashboard can connect to Supabase end-to-end. **No production behavior change.**
 **Requirements**: TBD (run /gsd-discuss-phase 05.5)
 **Depends on:** Phase 05.2.3.0 complete (stable algorithm before we replicate it in TS) + `.env` populated with all 40 properties (done 2026-05-21)
-**Plans:** 1/3 plans executed
+**Plans:** 2/3 plans executed
 
 Plans:
 - [x] 05.5-01-PLAN.md — Supabase CLI init + cloud project link + 0001_initial_schema.sql (10-table DDL — D-A5) + 0002_seed_stores.sql (3 stores + 2 notification_config rows) + MIGRATION-DISCIPLINE.md (D-B4 additive-only tripwire) + [BLOCKING] `supabase db push` checkpoint. Wave 1, autonomous: false (1 human-action for Supabase project creation + 1 human-verify for db push).
-- [ ] 05.5-02-PLAN.md — docs/PROPS-MAP.md (43-row classification table — D-C1..D-C5) + .env Section 5 with 3 new Supabase keys (D-C5) + Vercel production env-var seeding (SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY). Wave 2 (depends on plan 01 for the 3 Supabase keys to exist), autonomous: false (1 human-verify for `vercel env add` checkpoint).
+- [x] 05.5-02-PLAN.md — docs/PROPS-MAP.md (43-row classification table — D-C1..D-C5) + .env Section 5 with 3 new Supabase keys (D-C5) + Vercel production env-var seeding (SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY). Wave 2 (depends on plan 01 for the 3 Supabase keys to exist), autonomous: false (1 human-verify for `vercel env add` checkpoint).
 - [ ] 05.5-03-PLAN.md — @supabase/supabase-js install + dashboard-web/src/lib/supabase.ts (server-only client) + cacheConfig.ts `health:` entry + dashboard-web/src/app/api/health/route.ts (Promise.allSettled, D-D2 ping) + SyncIndicator.tsx ternary extension via SWR (Option A — does NOT touch cloudSync.ts) + User Manual update for ternary states + RLS-off lint expectation + production curl smoke test against Vercel-deployed /api/health. Wave 3 (depends on plans 01 + 02), autonomous: false (1 human-verify for production deploy + curl smoke).
 
 ### Phase 05.6: TS port + Inngest + operator console (v2.0 stack — INSERTED 2026-05-21)
