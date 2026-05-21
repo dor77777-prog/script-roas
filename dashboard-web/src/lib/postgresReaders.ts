@@ -213,7 +213,8 @@ export async function fetchDailyDataFromPostgres(
         .from('data_daily')
         .select(
           'date, store_id, store_name, fb_spend_cad, ga_spend_cad, total_spend_cad, ' +
-            'revenue_cad, roas, gross_profit_cad, cogs_cad, net_profit_cad',
+            'revenue_cad, roas, gross_profit_cad, cogs_cad, net_profit_cad, ' +
+            'gross_revenue_cad, refund_deduction_cad',
         );
       if (opts?.range) {
         q = q.gte('date', opts.range.from).lte('date', opts.range.to);
@@ -255,6 +256,15 @@ export async function fetchDailyDataFromPostgres(
         ? revenue - totalSpend - cogs
         : toNumber(r.net_profit_cad);
 
+    // Surface gross + refund_deduction as nullable (Phase 05.7.3).
+    // Historical rows pre-migration have NULL — UI degrades gracefully.
+    const grossRaw = r.gross_revenue_cad;
+    const refundRaw = r.refund_deduction_cad;
+    const grossRevenue =
+      grossRaw === null || grossRaw === undefined ? null : toNumber(grossRaw);
+    const refundDeduction =
+      refundRaw === null || refundRaw === undefined ? null : toNumber(refundRaw);
+
     rows.push({
       date: dateStr,
       storeId: String(r.store_id),
@@ -268,6 +278,8 @@ export async function fetchDailyDataFromPostgres(
       cogs,
       netProfit,
       hasCogs: true,
+      grossRevenue,
+      refundDeduction,
     });
   }
   return rows;

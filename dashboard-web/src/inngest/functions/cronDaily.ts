@@ -300,6 +300,10 @@ export async function runDailyForStore(
     };
 
     // 5a. data_daily UPSERT — PK (date, store_id)
+    // 2026-05-21 (Phase 05.7.3): also populate gross_revenue_cad +
+    // refund_deduction_cad so the dashboard can show "before/after refunds"
+    // and the refund-day indicator chip + tooltip. Invariant:
+    // revenue_cad = gross_revenue_cad − refund_deduction_cad.
     {
       const { error } = await admin.from('data_daily').upsert(
         {
@@ -310,6 +314,8 @@ export async function runDailyForStore(
           ga_spend_cad: merged.gaSpendCad,
           total_spend_cad: merged.totalSpendCad,
           revenue_cad: shopify.revenueCad,
+          gross_revenue_cad: shopify.grossRevenueCad,
+          refund_deduction_cad: shopify.refundDeductionCad,
           roas,
           gross_profit_cad: grossProfitCad,
           cogs_cad: cogsCad,

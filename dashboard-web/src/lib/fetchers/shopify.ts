@@ -135,6 +135,18 @@ export type ShopifyDayRows = {
   revenueCad: number;
   productRows: ShopifyProductRow[];
   customItemRefundCad: number;
+  /**
+   * Σ total_price for orders created on D (BEFORE refund subtraction).
+   * `revenueCad + refundDeductionCad` should equal this. Surfaced for the
+   * dashboard's refund indicator badge + tooltip (2026-05-21).
+   */
+  grossRevenueCad: number;
+  /**
+   * Σ refund_line_items[].subtotal for refunds processed on D. POSITIVE
+   * value; equals `grossRevenueCad − revenueCad`. Used by the UI to render
+   * the per-day refund chip and the "before refunds" tooltip.
+   */
+  refundDeductionCad: number;
 };
 
 /**
@@ -308,12 +320,38 @@ function parseNextLink(headers: Headers): string | undefined {
 // =============================================================================
 
 /**
- * Build the initial URL for a window query. The Apps Script convention is:
+ * Build the initial URL for a window query.
+ *
  *   /admin/api/{VER}/orders.json?status=any&limit=250
- *     &{windowField}_min={iso_start}&{windowField}_max={iso_end}
+ *     &{windowField}_min={iso_start}[&{windowField}_max={iso_end}]
  *     &fields={fields_csv}
- * where windowField is either `created_at` (Window A — same-day gross) or
- * `updated_at` (Window B — cross-day refunds, mirrors Shopify.gs:644-648).
+ *
+ * windowField is either:
+ *   - `created_at` (Window A — same-day gross): bounded [D, D+1)
+ *   - `updated_at` (Window B — cross-day refunds): bounded [D, today+1)
+ *
+ * Why Window B is open-ended (extends to today, not D+1):
+ *
+ * Shopify advances `Order.updated_at` whenever ANY refund is attached, but
+ * subsequent updates (tag changes, batch jobs, fulfillment status, customer
+ * notes) push it further out. Bug 2026-05-21: 8 of 10 refunds processed on
+ * 2026-05-20 for uzoshop were on orders whose `updated_at` had advanced to
+ * 2026-05-21T15:31 (some kind of batch update). The narrow [D, D+1) window
+ * missed all 8 ($832.43 in `refund_line_items.subtotal`), leaving the
+ * dashboard $832 above the truth.
+ *
+ * Fix: drop the upper bound and use `today+1` so any order updated AT OR
+ * AFTER D is candidates for the refund.processed_at==D filter applied by
+ * `computeRevenueWithCrossDayRefunds`. Cost grows linearly with backfill
+ * depth (~250 orders/day for these stores), bounded by PAGINATION_CAP (50
+ * pages = 12,500 orders), which covers ~50 days of typical store volume.
+ *
+ * NOTE: this is a TS-only fix. Apps Script (`Shopify.gs:644-648`) has the
+ * same bug but is no longer the source of truth (READ_FROM=postgres
+ * permanent as of Phase 05.7.0). The two implementations have legitimately
+ * diverged on this point; the load-bearing-invariants header in
+ * `shopifyRevenueRefunds.ts` (the ALGORITHM) is still in sync — only the
+ * I/O wrapper changed.
  *
  * Fields list mirrors `Shopify.gs:222` (the more-inclusive product-sales
  * variant) — it's a superset of what `getShopifyRevenue` requests, so a
@@ -325,16 +363,47 @@ function buildWindowUrl(
   dateStr: string,
 ): string {
   const dayStart = isoLocalMidnight(dateStr, SHOPIFY_TZ);
-  const dayEnd = isoLocalMidnight(nextDayStr(dateStr), SHOPIFY_TZ);
   const fields =
     'id,created_at,total_price,current_total_price,test,financial_status,line_items,refunds';
-  return (
+  let url =
     `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/orders.json` +
     `?status=any&limit=250` +
-    `&${windowField}_min=${encodeURIComponent(dayStart)}` +
-    `&${windowField}_max=${encodeURIComponent(dayEnd)}` +
-    `&fields=${fields}`
-  );
+    `&${windowField}_min=${encodeURIComponent(dayStart)}`;
+
+  if (windowField === 'created_at') {
+    // Same-day gross: tight [D, D+1) window.
+    const dayEnd = isoLocalMidnight(nextDayStr(dateStr), SHOPIFY_TZ);
+    url += `&${windowField}_max=${encodeURIComponent(dayEnd)}`;
+  } else {
+    // Cross-day refunds: open the upper bound to today+1 (covers orders
+    // whose updated_at advanced after the refund-day). See JSDoc above.
+    const todayStr = dayInTz(new Date().toISOString(), SHOPIFY_TZ);
+    const tomorrowEnd = isoLocalMidnight(nextDayStr(todayStr), SHOPIFY_TZ);
+    url += `&${windowField}_max=${encodeURIComponent(tomorrowEnd)}`;
+  }
+
+  url += `&fields=${fields}`;
+  return url;
+}
+
+/**
+ * Local copy of the algorithm's TZ day-string helper. Used by
+ * `buildWindowUrl` to compute "today" in Asia/Jerusalem for the open-ended
+ * Window B upper bound. Mirrors the helper in `shopifyRevenueRefunds.ts:185`
+ * verbatim — duplicated here to avoid importing from a pure-algorithm file
+ * that's tested in isolation.
+ */
+function dayInTz(ts: string, tz: string): string {
+  if (!ts) return '';
+  const d = new Date(ts);
+  if (!Number.isFinite(d.getTime())) return '';
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: tz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  return fmt.format(d);
 }
 
 /**
@@ -488,8 +557,13 @@ export async function fetchShopifyDayRows(
     storeId,
   );
 
-  const { storeNetCad, byProduct, customItemRefundCad } =
-    computeRevenueWithCrossDayRefunds(orders, dateStr, SHOPIFY_TZ);
+  const {
+    storeNetCad,
+    byProduct,
+    customItemRefundCad,
+    storeGrossCad,
+    storeRefundDeductionCad,
+  } = computeRevenueWithCrossDayRefunds(orders, dateStr, SHOPIFY_TZ);
 
   const storeName = STORE_NAMES[storeId] ?? storeId;
 
@@ -507,6 +581,8 @@ export async function fetchShopifyDayRows(
       product_title: p.productTitle,
     })),
     customItemRefundCad,
+    grossRevenueCad: storeGrossCad,
+    refundDeductionCad: storeRefundDeductionCad,
   };
 }
 

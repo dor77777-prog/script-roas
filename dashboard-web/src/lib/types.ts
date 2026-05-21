@@ -11,6 +11,20 @@ export type DailyRow = {
   cogs: number;        // 0 when scope is missing or no orders
   netProfit: number;   // revenue - spend - cogs
   hasCogs: boolean;    // true if COGS column was populated (non-empty)
+  /**
+   * Gross revenue BEFORE refund_line_items.subtotal deduction. Equals
+   * `revenue + refundDeductionCad`. Surfaced from Phase 05.7.3 so dashboard
+   * tables can show "before / after refunds" side-by-side. `null` for
+   * historical rows where the column wasn't populated yet.
+   */
+  grossRevenue: number | null;
+  /**
+   * Σ refund_line_items[].subtotal for refunds processed on this date.
+   * POSITIVE value. `null` for historical rows. When > 0 the dashboard
+   * renders a refund-day chip with a tooltip showing the "before refunds"
+   * (gross) amount alongside the net.
+   */
+  refundDeduction: number | null;
 };
 
 export type DashboardData = {

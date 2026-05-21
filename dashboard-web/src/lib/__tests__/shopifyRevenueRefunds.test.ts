@@ -26,7 +26,10 @@
  * Return type: { storeNetCad, byProduct, customItemRefundCad }.
  */
 import { describe, it, expect } from 'vitest';
-import { computeRevenueWithCrossDayRefunds } from '../shopifyRevenueRefunds';
+import {
+  computeRevenueWithCrossDayRefunds,
+  type ShopifyOrderInput,
+} from '../shopifyRevenueRefunds';
 
 // ---------------------------------------------------------------------------
 // Type aliases mirroring the narrowed Shopify Admin REST payload shape

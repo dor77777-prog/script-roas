@@ -189,7 +189,13 @@ describe('shopify fetcher — fetchShopifyDayRows', () => {
         // The fetcher MUST pass a deduped array.
         const merged = orders;
         // Capture for outer scope assertion via the spy.mock.calls record
-        return { storeNetCad: 0, byProduct: {}, customItemRefundCad: 0 };
+        return {
+          storeNetCad: 0,
+          byProduct: {},
+          customItemRefundCad: 0,
+          storeGrossCad: 0,
+          storeRefundDeductionCad: 0,
+        };
         void merged;
       });
 
@@ -260,6 +266,54 @@ describe('shopify fetcher — fetchShopifyDayRows', () => {
     vi.stubEnv('UZOSHOP_SHOPIFY_TOKEN', '');
 
     await expect(fetchShopifyDayRows(STORE_ID, DATE_STR)).rejects.toThrow(/uzoshop/i);
+  });
+
+  it('Test 4b (bug 2026-05-21): Window B (updated_at) is OPEN-ENDED to today, not D+1', async () => {
+    // Bug 2026-05-21: 8 of 10 refunds processed on 2026-05-20 for uzoshop
+    // were on orders whose updated_at advanced into 2026-05-21 (batch update).
+    // The original [D, D+1) window missed all 8 ($832 in refund_line_items).
+    // Fix: Window B upper bound = today+1 so subsequent-day updates are still
+    // caught. Window A is unchanged (still tight [D, D+1)).
+    const { fn, calls } = makeFetchMock([
+      { body: { orders: [] } },
+      { body: { orders: [] } },
+    ]);
+    vi.stubGlobal('fetch', fn);
+
+    await fetchShopifyDayRows(STORE_ID, DATE_STR);
+
+    // Find the two calls
+    const createdCall = calls.find((c) => /created_at_min/.test(c.url));
+    const updatedCall = calls.find((c) => /updated_at_min/.test(c.url));
+    expect(createdCall).toBeDefined();
+    expect(updatedCall).toBeDefined();
+
+    // Window A: both bounds tight to D / D+1
+    const createdMin = decodeURIComponent(
+      /created_at_min=([^&]+)/.exec(createdCall!.url)?.[1] ?? '',
+    );
+    const createdMax = decodeURIComponent(
+      /created_at_max=([^&]+)/.exec(createdCall!.url)?.[1] ?? '',
+    );
+    expect(createdMin.startsWith('2026-05-19T00:00:00')).toBe(true);
+    expect(createdMax.startsWith('2026-05-20T00:00:00')).toBe(true);
+
+    // Window B: min still = D, but max must extend to TODAY+1 (not D+1).
+    // Today depends on when the test runs, but it MUST be > D+1 = 2026-05-20.
+    const updatedMin = decodeURIComponent(
+      /updated_at_min=([^&]+)/.exec(updatedCall!.url)?.[1] ?? '',
+    );
+    const updatedMax = decodeURIComponent(
+      /updated_at_max=([^&]+)/.exec(updatedCall!.url)?.[1] ?? '',
+    );
+    expect(updatedMin.startsWith('2026-05-19T00:00:00')).toBe(true);
+    // The key assertion: updatedMax is NOT 2026-05-20 (which was the bug).
+    // It should be today+1, which since this test runs after 2026-05-20 must
+    // be >= 2026-05-21 — i.e. the YYYY-MM-DD prefix must be strictly greater
+    // than '2026-05-20'.
+    expect(updatedMax.startsWith('2026-05-20')).toBe(false);
+    const updatedMaxDatePart = updatedMax.slice(0, 10);
+    expect(updatedMaxDatePart > '2026-05-20').toBe(true);
   });
 
   it('Test 7: computeRevenueWithCrossDayRefunds is called EXACTLY ONCE per invocation (delegation gate)', async () => {

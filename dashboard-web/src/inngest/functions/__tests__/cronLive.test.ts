@@ -202,8 +202,19 @@ describe('cronLive — runLiveForStore handler (Shopify-only, rolling 3-day)', (
         date,
         storeName: 'uzoshop',
         revenueCad: 1000,
-        productRows: [{ product_id: 'p1', net_revenue_cad: 500 }],
+        productRows: [
+          {
+            product_id: 'p1',
+            net_revenue_cad: 500,
+            gross_revenue_cad: 500,
+            units: 1,
+            orders: 1,
+            product_title: '',
+          },
+        ],
         customItemRefundCad: 0,
+        grossRevenueCad: 1000,
+        refundDeductionCad: 0,
       }));
 
     const { admin, upsertCalls, updateCalls, selectCalls } = makeSupabaseAdminMock();
@@ -265,6 +276,8 @@ describe('cronLive — runLiveForStore handler (Shopify-only, rolling 3-day)', (
       revenueCad: 0,
       productRows: [],
       customItemRefundCad: 0,
+      grossRevenueCad: 0,
+      refundDeductionCad: 0,
     }));
 
     // Resolved values match each fetcher's full return type so vi.spyOn

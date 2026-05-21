@@ -202,6 +202,10 @@ export async function fetchDailyData(opts?: { range?: DateRange }): Promise<Dail
       cogs,
       netProfit,
       hasCogs,
+      // Sheets path has no gross/refund_deduction columns — UI degrades to
+      // "no indicator" when these are null (Phase 05.7.3 2026-05-21).
+      grossRevenue: null,
+      refundDeduction: null,
     });
   }
   return rows;

@@ -4,6 +4,7 @@ import { Table } from 'lucide-react';
 import type { DailyRow } from '@/lib/types';
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import { roasLabel } from '@/lib/analytics';
+import { RefundIndicator } from './RefundIndicator';
 
 const ROAS_BG: Record<string, string> = {
   red: 'bg-roas-redBg',
@@ -67,7 +68,13 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
                   <td className="px-3 py-2 text-end tabular-nums">{formatNumber(r.fbSpend)}</td>
                   <td className="px-3 py-2 text-end tabular-nums">{formatNumber(r.gaSpend)}</td>
                   <td className="px-3 py-2 text-end tabular-nums">{formatNumber(r.totalSpend)}</td>
-                  <td className="px-3 py-2 text-end tabular-nums">{formatNumber(r.revenue)}</td>
+                  <td className="px-3 py-2 text-end tabular-nums">
+                    {formatNumber(r.revenue)}
+                    <RefundIndicator
+                      grossRevenue={r.grossRevenue}
+                      refundDeduction={r.refundDeduction}
+                    />
+                  </td>
                   <td className={cn('px-3 py-2 text-center font-medium tabular-nums', cell.className)}>
                     {cell.text}
                   </td>

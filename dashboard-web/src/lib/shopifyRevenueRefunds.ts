@@ -175,6 +175,23 @@ export type CrossDayRefundResult = {
    * the same refund_line_items[].subtotal field).
    */
   customItemRefundCad: number;
+  /**
+   * Σ total_price for orders created on D (BEFORE refund subtraction).
+   * Used by the UI to render the gross revenue alongside net, and to compute
+   * `refund_deduction_cad = gross - net` for the refund indicator badge
+   * (bug fix 2026-05-21: dashboard tables now show both numbers so days with
+   * material refunds can be flagged with a chip + tooltip).
+   *
+   * Equals `storeNetCad + storeRefundDeductionCad` exactly.
+   */
+  storeGrossCad: number;
+  /**
+   * Σ refund_line_items[].subtotal for refunds.processed_at = D (POSITIVE
+   * value; equals `storeGrossCad − storeNetCad`). Surfaced separately so the
+   * dashboard can render the refund-day indicator with the actual subtracted
+   * amount, not just a boolean "had refunds" flag.
+   */
+  storeRefundDeductionCad: number;
 };
 
 /**
@@ -381,5 +398,11 @@ export function computeRevenueWithCrossDayRefunds(
   // D-D3: no clamping. Negative storeNet is legitimate.
   const storeNetCad = sameDayGross - storeRefundDeduction;
 
-  return { storeNetCad, byProduct, customItemRefundCad };
+  return {
+    storeNetCad,
+    byProduct,
+    customItemRefundCad,
+    storeGrossCad: sameDayGross,
+    storeRefundDeductionCad: storeRefundDeduction,
+  };
 }

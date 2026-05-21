@@ -5,6 +5,7 @@ import useSWR from 'swr';
 import { CalendarDays, ChevronDown, ChevronUp } from 'lucide-react';
 import type { DailyRow, DashboardData } from '@/lib/types';
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
+import { RefundIndicator } from './RefundIndicator';
 import { roasLabel } from '@/lib/analytics';
 import { buildDateRangeKey } from '@/lib/dateRange';
 
@@ -256,11 +257,18 @@ function MonthBlockPerStore({
   const hasGa = rows.some(r => r.gaSpend > 0);
 
   let totalFb = 0, totalGa = 0, totalSpend = 0, totalRev = 0;
+  let totalGross = 0;
+  let totalRefund = 0;
   for (const r of rows) {
     totalFb += r.fbSpend;
     totalGa += r.gaSpend;
     totalSpend += r.totalSpend;
     totalRev += r.revenue;
+    // Treat null gross/refund as "no refund day" (gross == net).
+    totalGross += r.grossRevenue ?? r.revenue;
+    if (r.refundDeduction !== null && r.refundDeduction > 0) {
+      totalRefund += r.refundDeduction;
+    }
   }
   const totalRoas = totalSpend > 0 ? totalRev / totalSpend : 0;
 
@@ -305,7 +313,15 @@ function MonthBlockPerStore({
                     {hasGa && <td className="px-3 py-1.5 text-end tabular-nums">{r ? formatNumber(r.fbSpend) : ''}</td>}
                     {hasGa && <td className="px-3 py-1.5 text-end tabular-nums">{r ? formatNumber(r.gaSpend) : ''}</td>}
                     <td className="px-3 py-1.5 text-end tabular-nums">{r ? formatNumber(r.totalSpend) : ''}</td>
-                    <td className="px-3 py-1.5 text-end tabular-nums">{r ? formatNumber(r.revenue) : ''}</td>
+                    <td className="px-3 py-1.5 text-end tabular-nums">
+                      {r ? formatNumber(r.revenue) : ''}
+                      {r && (
+                        <RefundIndicator
+                          grossRevenue={r.grossRevenue}
+                          refundDeduction={r.refundDeduction}
+                        />
+                      )}
+                    </td>
                     <td className={cn('px-3 py-1.5 text-center tabular-nums font-medium', cell.className)}>
                       {cell.text}
                     </td>
@@ -317,7 +333,13 @@ function MonthBlockPerStore({
                 {hasGa && <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalFb)}</td>}
                 {hasGa && <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalGa)}</td>}
                 <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalSpend)}</td>
-                <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalRev)}</td>
+                <td className="px-3 py-2 text-end tabular-nums">
+                  {formatNumber(totalRev)}
+                  <RefundIndicator
+                    grossRevenue={totalGross}
+                    refundDeduction={totalRefund}
+                  />
+                </td>
                 <td className={cn('px-3 py-2 text-center tabular-nums', roasCell(totalRoas, totalRev, totalSpend).className)}>
                   {roasCell(totalRoas, totalRev, totalSpend).text}
                 </td>
@@ -342,19 +364,30 @@ function MonthBlockSummary({
   const [open, setOpen] = useState(true);
   const allDays = daysOfMonth(ym);
 
-  // Aggregate by date across all stores
-  const byDate = new Map<string, { spend: number; revenue: number }>();
+  // Aggregate by date across all stores. Phase 05.7.3: also accumulate
+  // gross + refund so the summary table can show the refund indicator
+  // per-day and on the month total.
+  type Agg = { spend: number; revenue: number; gross: number; refund: number };
+  const byDate = new Map<string, Agg>();
   for (const r of rows) {
-    if (!byDate.has(r.date)) byDate.set(r.date, { spend: 0, revenue: 0 });
+    if (!byDate.has(r.date)) byDate.set(r.date, { spend: 0, revenue: 0, gross: 0, refund: 0 });
     const e = byDate.get(r.date)!;
     e.spend += r.totalSpend;
     e.revenue += r.revenue;
+    e.gross += r.grossRevenue ?? r.revenue;
+    if (r.refundDeduction !== null && r.refundDeduction > 0) {
+      e.refund += r.refundDeduction;
+    }
   }
 
-  let totalSpend = 0, totalRev = 0;
+  let totalSpend = 0, totalRev = 0, totalGross = 0, totalRefund = 0;
   for (const r of rows) {
     totalSpend += r.totalSpend;
     totalRev += r.revenue;
+    totalGross += r.grossRevenue ?? r.revenue;
+    if (r.refundDeduction !== null && r.refundDeduction > 0) {
+      totalRefund += r.refundDeduction;
+    }
   }
   const totalRoas = totalSpend > 0 ? totalRev / totalSpend : 0;
   const totalCell = roasCell(totalRoas, totalRev, totalSpend);
@@ -392,7 +425,15 @@ function MonthBlockSummary({
                   <tr key={d} className={cn('border-t border-border', !agg && 'text-text-muted')}>
                     <td className="px-3 py-1.5 tabular-nums">{formatDate(d)}</td>
                     <td className="px-3 py-1.5 text-end tabular-nums">{agg ? formatNumber(agg.spend) : ''}</td>
-                    <td className="px-3 py-1.5 text-end tabular-nums">{agg ? formatNumber(agg.revenue) : ''}</td>
+                    <td className="px-3 py-1.5 text-end tabular-nums">
+                      {agg ? formatNumber(agg.revenue) : ''}
+                      {agg && agg.refund > 0 && (
+                        <RefundIndicator
+                          grossRevenue={agg.gross}
+                          refundDeduction={agg.refund}
+                        />
+                      )}
+                    </td>
                     <td className={cn('px-3 py-1.5 text-center tabular-nums font-medium', cell.className)}>
                       {cell.text}
                     </td>
@@ -402,7 +443,13 @@ function MonthBlockSummary({
               <tr className="border-t-2 border-border bg-surfaceMuted font-semibold">
                 <td className="px-3 py-2">סך הכל</td>
                 <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalSpend)}</td>
-                <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalRev)}</td>
+                <td className="px-3 py-2 text-end tabular-nums">
+                  {formatNumber(totalRev)}
+                  <RefundIndicator
+                    grossRevenue={totalGross}
+                    refundDeduction={totalRefund}
+                  />
+                </td>
                 <td className={cn('px-3 py-2 text-center tabular-nums', totalCell.className)}>
                   {totalCell.text}
                 </td>
