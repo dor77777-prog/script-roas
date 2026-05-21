@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { fetchDailyData } from '@/lib/sheets';
 import { fetchDailyDataFromPostgres } from '@/lib/postgresReaders';
-import { readFrom } from '@/lib/featureFlags';
 import type { DashboardData } from '@/lib/types';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
 import { parseRangeParams, RangeParamError } from '@/lib/dateRange';
+// Phase 05.7: removed `fetchDailyData` from '@/lib/sheets' + `readFrom` from
+// '@/lib/featureFlags'. All eight data routes now read Postgres exclusively.
 
 // Revalidate the underlying data every 60 seconds (server-side cache).
 // Client SWR will poll us; this prevents hammering the Sheets API.
@@ -43,13 +43,12 @@ export async function GET(req: Request) {
   }
 
   try {
-    // D-E3 branch: postgres path is dormant in 05.6 (READ_FROM default 'sheets').
-    // Phase 05.7 sets READ_FROM=postgres in Vercel to flip with zero code change.
-    // Both branches return DailyRow[] (postgresReaders.ts mirrors shape exactly).
-    const dailyPromise = readFrom() === 'postgres'
-      ? fetchDailyDataFromPostgres({ range })
-      : fetchDailyData({ range });
-    const [rows, fxIlsToCad] = await Promise.all([dailyPromise, fetchTodayFx()]);
+    // Phase 05.7: Postgres-only. The readFrom() branch was removed; the
+    // dashboard reads exclusively from Supabase now.
+    const [rows, fxIlsToCad] = await Promise.all([
+      fetchDailyDataFromPostgres({ range }),
+      fetchTodayFx(),
+    ]);
     if (rows.length > 50000) {
       console.warn(`/api/data: large response (${rows.length} rows) — consider pagination`);
     }
@@ -67,9 +66,11 @@ export async function GET(req: Request) {
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    // Log the raw message server-side so ops can see spreadsheet ID / service
-    // account email / stack details — but don't leak any of that to the client.
-    console.error('Sheets fetch failed:', message);
+    // Log the raw message server-side so ops can see Postgres error details
+    // (table, column, constraint, etc.) — but don't leak any of that to the
+    // client. Phase 05.7 changed the underlying source from Sheets → Postgres;
+    // the sanitised user-facing message is unchanged.
+    console.error('data fetch failed:', message);
     // Degrade gracefully with status 200 + empty rows — matches /api/ads,
     // /api/orders-attribution, /api/store-meta, /api/product-catalog. The
     // consumer-side fetcher in Dashboard.tsx now checks `data.error` and
