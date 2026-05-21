@@ -82,17 +82,27 @@ function nextDayStr_(dateStr) {
 }
 
 /**
- * Mirror of nextDayStr_ for negative offset.
- * Returns the YYYY-MM-DD string `n` days BEFORE dateStr (default n=1).
+ * Mirror of nextDayStr_ for non-positive offset.
+ * Returns the YYYY-MM-DD string `n` days BEFORE dateStr.
+ *   n=0 → dateStr itself (today)
+ *   n=1 → yesterday (default when n is omitted)
+ *   n=2 → 2 days ago
+ *   negative/NaN/non-numeric → defaults to 1 (yesterday)
  *
  * Phase 05.2.3.0 D-D1: live trigger wrappers iterate D-2, D-1, D for the
  * rolling 3-day backfill that catches cross-day refunds processed in the
  * prior 48h. Uses Date.UTC arithmetic (same as nextDayStr_) so the day-
  * string math works across DST + month boundaries without local-time
  * landmines.
+ *
+ * BUGFIX 2026-05-21: previously checked `n > 0`, which made n=0 fall back
+ * to the default offset of 1 — so the live-trigger loop iterating n=2/1/0
+ * actually backfilled D-2, D-1, D-1 (duplicate) and SKIPPED today entirely.
+ * Symptom: HomeTab / TodayLive never showed today's orders. Check is now
+ * `n >= 0` so n=0 returns dateStr unchanged (today).
  */
 function previousDayStr_(dateStr, n) {
-  const offset = (typeof n === 'number' && Number.isFinite(n) && n > 0) ? Math.floor(n) : 1;
+  const offset = (typeof n === 'number' && Number.isFinite(n) && n >= 0) ? Math.floor(n) : 1;
   const [y, m, d] = dateStr.split('-').map(Number);
   const dt = new Date(Date.UTC(y, m - 1, d - offset));
   return Utilities.formatDate(dt, 'UTC', 'yyyy-MM-dd');
