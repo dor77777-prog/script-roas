@@ -54,10 +54,10 @@ export default function OperatorPage() {
 
       <section>
         <h2 className="text-lg font-semibold mb-3">Backfill טווח תאריכים</h2>
-        <p className="text-text-secondary text-sm">
-          {/* Plan 14: BackfillPicker */}
-          (בורר טווח תאריכים יופיע כאן — ממומש בשלב הבא)
-        </p>
+        {/* Plan 14: BackfillPicker — replaced placeholder copy with the
+            live component. The component owns its own loading / error /
+            confirmation states; this <section> only owns the title. */}
+        <BackfillPicker />
       </section>
 
       <section>
