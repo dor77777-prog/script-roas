@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { fetchOrdersAttribution, type OrderAttributionRow } from '@/lib/ordersAttribution';
+import { fetchOrdersAttributionFromPostgres } from '@/lib/postgresReaders';
+import { readFrom } from '@/lib/featureFlags';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
 import { parseRangeParams, RangeParamError } from '@/lib/dateRange';
@@ -43,7 +45,12 @@ export async function GET(req: Request) {
   const includeLineItems = searchParams.get('lineItems') === 'true';
 
   try {
-    const rows = await fetchOrdersAttribution({ range, includeLineItems });
+    // D-E3 branch: postgres path dormant in 05.6; 05.7 flips READ_FROM=postgres.
+    // Both branches return OrderAttributionRow[] (same shape; includeLineItems
+    // parity is preserved in postgresReaders.ts:543).
+    const rows = readFrom() === 'postgres'
+      ? await fetchOrdersAttributionFromPostgres({ range, includeLineItems })
+      : await fetchOrdersAttribution({ range, includeLineItems });
     if (rows.length > 50000) {
       console.warn(`/api/orders-attribution: large response (${rows.length} rows) — consider pagination`);
     }

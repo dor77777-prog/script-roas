@@ -4,8 +4,20 @@ import {
   isAllowedStateKey,
   upsertDashboardStateKey,
 } from '@/lib/sheets';
+import { fetchDashboardStateFromPostgres } from '@/lib/postgresReaders';
+import { readFrom } from '@/lib/featureFlags';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
+
+// TODO (Phase 05.7): The POST handler below still writes to Sheets via
+// upsertDashboardStateKey regardless of READ_FROM. The write-side branch was
+// deliberately deferred to 05.7 per 05.6-19-PLAN <output> note: cut-over to
+// Postgres writes requires the supabaseAdmin (service_role) wiring, which is
+// out of scope for 05.6 (read-path-only feature flag). When 05.7 ships:
+//   1. Add upsertDashboardStateKeyPostgres in postgresReaders.ts (currently
+//      intentionally NOT exported per the module-level comment in
+//      postgresReaders.ts:28-31).
+//   2. Branch the POST handler below symmetrically to the GET handler.
 
 export const revalidate = 30; // matches CACHE_CONFIG.dashboardState.revalidate; literal required by Next.js
 
@@ -23,7 +35,11 @@ export const revalidate = 30; // matches CACHE_CONFIG.dashboardState.revalidate;
 export async function GET() {
   try {
     // dashboard-state is bounded by ALLOWED_STATE_KEYS (8 keys) — no guard needed
-    const data = await fetchDashboardState();
+    // D-E3 branch (READ side only; POST write-side branching deferred to 05.7).
+    // Both branches return { kv, updatedAtByKey } with identical semantics.
+    const data = readFrom() === 'postgres'
+      ? await fetchDashboardStateFromPostgres()
+      : await fetchDashboardState();
     return NextResponse.json(
       { kv: data.kv, updatedAtByKey: data.updatedAtByKey, lastUpdated: new Date().toISOString() },
       {
