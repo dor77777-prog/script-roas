@@ -792,6 +792,19 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
           ? `השוואה: חצי שני (${secondHalfDates}) מול חצי ראשון (${firstHalfDates})`
           : 'השוואה: חצי שני vs חצי ראשון של הטווח';
         const isLoadingPrev = cpmAnalysisMode === 'prev' && !cpmPrevData;
+        // Build the chart's data array. When the user toggled the 'prev'
+        // baseline AND we have previous-period rows, merge in the previous
+        // period's CPM by INDEX (day 1 of prev aligns with day 1 of current,
+        // etc.). The operator can visually verify the up/down arrow from the
+        // analysis text on the chart itself. X-axis labels stay on the
+        // current period's dates; the previous period's actual date surfaces
+        // in the tooltip.
+        const cpmChartData = cpmDaily.map((d, i) => ({
+          ...d,
+          prevCpm: cpmDailyPrev?.[i]?.cpm ?? null,
+          prevDate: cpmDailyPrev?.[i]?.date ?? null,
+        }));
+        const showPrevLine = cpmAnalysisMode === 'prev' && !isLoadingPrev && (cpmDailyPrev?.length ?? 0) > 0;
         return (
         <div className="mt-3 rounded-lg bg-surface border border-borderSubtle p-3">
           <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
@@ -854,7 +867,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
           </div>
           <div className="h-40 sm:h-48" dir="ltr">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={cpmDaily} margin={{ top: 8, right: cpmShowRoas ? 56 : 16, left: 4, bottom: 0 }}>
+              <LineChart data={cpmChartData} margin={{ top: 8, right: cpmShowRoas ? 56 : 16, left: 4, bottom: 0 }}>
                 <XAxis
                   dataKey="date"
                   tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
@@ -898,13 +911,42 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                 <Tooltip
                   content={({ active, payload }) => {
                     if (!active || !payload || payload.length === 0) return null;
-                    const d = payload[0].payload as { date: string; cpm: number; impressions: number; spend: number; roas: number };
+                    const d = payload[0].payload as {
+                      date: string;
+                      cpm: number;
+                      impressions: number;
+                      spend: number;
+                      roas: number;
+                      prevCpm: number | null;
+                      prevDate: string | null;
+                    };
+                    const prevDeltaPct = (showPrevLine && d.prevCpm != null && d.prevCpm > 0)
+                      ? ((d.cpm - d.prevCpm) / d.prevCpm) * 100
+                      : null;
                     return (
                       <div dir="rtl" className="rounded-lg bg-text-primary text-white px-3 py-2 text-xs shadow-elevated tabular-nums">
                         <div className="text-white/70 mb-1 text-[10px]">{formatDate(d.date)}</div>
                         <div>CPM: <span className="font-semibold text-amber-200">CAD {formatCurrency(d.cpm, 2)}</span></div>
                         {cpmShowRoas && (
                           <div>ROAS: <span className="font-semibold text-emerald-300">{formatNumber(d.roas, 2)}</span></div>
+                        )}
+                        {showPrevLine && d.prevCpm != null && (
+                          <div className="mt-1 pt-1 border-t border-white/10">
+                            <div className="text-white/60 text-[10px]">
+                              תקופה קודמת{d.prevDate ? ` (${formatDate(d.prevDate)})` : ''}:
+                            </div>
+                            <div>
+                              CPM: <span className="font-semibold text-amber-100/80">CAD {formatCurrency(d.prevCpm, 2)}</span>
+                              {prevDeltaPct != null && (
+                                <span className={cn(
+                                  'ms-1.5 text-[10px] font-semibold',
+                                  prevDeltaPct < 0 ? 'text-emerald-300' : prevDeltaPct > 0 ? 'text-rose-300' : 'text-white/60',
+                                )}>
+                                  ({prevDeltaPct > 0 ? '+' : ''}{prevDeltaPct.toFixed(1)}%)
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         )}
                         <div className="text-white/70 text-[10px] mt-0.5">
                           {formatNumber(d.impressions, 0)} חשיפות · CAD {formatCurrency(d.spend, 2)}
@@ -922,6 +964,21 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                   dot={{ r: 2.5, fill: CHART_COLORS.cpm, stroke: 'none' }}
                   activeDot={{ r: 4, fill: CHART_COLORS.cpm, stroke: 'white', strokeWidth: 1.5 }}
                 />
+                {showPrevLine && (
+                  <Line
+                    yAxisId="cpm"
+                    type="monotone"
+                    dataKey="prevCpm"
+                    stroke={CHART_COLORS.cpmPrev}
+                    strokeWidth={1.5}
+                    strokeDasharray="5 3"
+                    strokeOpacity={0.85}
+                    dot={{ r: 2, fill: CHART_COLORS.cpmPrev, stroke: 'none', fillOpacity: 0.7 }}
+                    activeDot={{ r: 3.5, fill: CHART_COLORS.cpmPrev, stroke: 'white', strokeWidth: 1.5 }}
+                    connectNulls={false}
+                    isAnimationActive={false}
+                  />
+                )}
                 {cpmShowRoas && (
                   <Line
                     yAxisId="roas"
@@ -937,16 +994,24 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
               </LineChart>
             </ResponsiveContainer>
           </div>
-          {cpmShowRoas && (
-            <div className="flex items-center justify-center gap-4 text-[10px] text-text-muted mt-1.5">
+          {(cpmShowRoas || showPrevLine) && (
+            <div className="flex items-center justify-center gap-4 text-[10px] text-text-muted mt-1.5 flex-wrap">
               <span className="inline-flex items-center gap-1.5">
                 <span className="inline-block w-3 h-[2px] bg-amber-600" />
-                CPM (ציר שמאל)
+                CPM {cpmShowRoas ? '(ציר שמאל)' : ''}
               </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="inline-block w-3 border-t-2 border-dashed border-roas-green" />
-                ROAS (ציר ימין)
-              </span>
+              {showPrevLine && (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-block w-3 border-t-2 border-dashed border-amber-400" />
+                  CPM תקופה קודמת
+                </span>
+              )}
+              {cpmShowRoas && (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="inline-block w-3 border-t-2 border-dashed border-roas-green" />
+                  ROAS (ציר ימין)
+                </span>
+              )}
             </div>
           )}
           {cpmAnalysisMode === 'prev' && !isLoadingPrev && analysis.mode === 'half-over-half' && (

@@ -609,6 +609,21 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
               cpmSeries.map(d => ({ date: d.date, cpm: d.cpm, roas: d.roas })),
               prevDaily ? { prev: prevDaily } : undefined,
             );
+            // Build the chart's data array. When the user toggled the 'prev'
+            // baseline AND we have previous-period rows, merge in the previous
+            // period's CPM by INDEX (day 1 of prev aligns with day 1 of current,
+            // etc.). This visualizes "did CPM go up or down vs the equally-
+            // long window before this one" directly on the chart — the
+            // operator can verify the analysis text's up/down arrow with eyes.
+            // X-axis labels stay on the current period's dates; the previous
+            // period's actual date surfaces in the tooltip.
+            const chartData = cpmSeries.map((d, i) => ({
+              ...d,
+              prevCpm: prevDaily?.[i]?.cpm ?? null,
+              prevDate: prevDaily?.[i]?.date ?? null,
+            }));
+            const isLoadingPrev = cpmAnalysisMode === 'prev' && !campaignsDataPrev;
+            const showPrevLine = cpmAnalysisMode === 'prev' && !isLoadingPrev && (prevDaily?.length ?? 0) > 0;
             const fmtRangeShort = (from: string, to: string) => {
               const f = from.slice(5).replace('-', '/');
               const t = to.slice(5).replace('-', '/');
@@ -626,7 +641,6 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
               : firstHalfDates && secondHalfDates
               ? `השוואה: חצי שני (${secondHalfDates}) מול חצי ראשון (${firstHalfDates})`
               : 'השוואה: חצי שני vs חצי ראשון של הטווח';
-            const isLoadingPrev = cpmAnalysisMode === 'prev' && !campaignsDataPrev;
             const toneBg: Record<typeof analysis.tone, string> = {
               positive: 'bg-roas-greenBg/40 border-roas-green/30 text-roas-green',
               warning:  'bg-amber-50 border-amber-300 text-amber-800',
@@ -687,7 +701,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                 </div>
                 <div className="h-40 sm:h-44 rounded-xl bg-surfaceMuted/40 border border-borderSubtle p-2" dir="ltr">
                   <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={cpmSeries} margin={{ top: 8, right: showRoasOverlay ? 56 : 16, left: 4, bottom: 0 }}>
+                    <LineChart data={chartData} margin={{ top: 8, right: showRoasOverlay ? 56 : 16, left: 4, bottom: 0 }}>
                       <XAxis
                         dataKey="date"
                         tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
@@ -737,13 +751,39 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                             impressions: number;
                             spend: number;
                             roas: number;
+                            prevCpm: number | null;
+                            prevDate: string | null;
                           };
+                          // Δ% — sign convention: negative = CPM went DOWN
+                          // vs. previous period (good for the operator).
+                          // Guard against prevCpm===0 to avoid Infinity.
+                          const prevDeltaPct = (showPrevLine && d.prevCpm != null && d.prevCpm > 0)
+                            ? ((d.cpm - d.prevCpm) / d.prevCpm) * 100
+                            : null;
                           return (
                             <div dir="rtl" className="rounded-lg bg-text-primary text-white px-3 py-2 text-xs shadow-elevated tabular-nums">
                               <div className="text-white/70 mb-1 text-[10px]">{formatDate(d.date)}</div>
                               <div>CPM: <span className="font-semibold text-amber-200">CAD {formatCurrency(d.cpm, 2)}</span></div>
                               {showRoasOverlay && (
                                 <div>ROAS: <span className="font-semibold text-emerald-300">{formatNumber(d.roas, 2)}</span></div>
+                              )}
+                              {showPrevLine && d.prevCpm != null && (
+                                <div className="mt-1 pt-1 border-t border-white/10">
+                                  <div className="text-white/60 text-[10px]">
+                                    תקופה קודמת{d.prevDate ? ` (${formatDate(d.prevDate)})` : ''}:
+                                  </div>
+                                  <div>
+                                    CPM: <span className="font-semibold text-amber-100/80">CAD {formatCurrency(d.prevCpm, 2)}</span>
+                                    {prevDeltaPct != null && (
+                                      <span className={cn(
+                                        'ms-1.5 text-[10px] font-semibold',
+                                        prevDeltaPct < 0 ? 'text-emerald-300' : prevDeltaPct > 0 ? 'text-rose-300' : 'text-white/60',
+                                      )}>
+                                        ({prevDeltaPct > 0 ? '+' : ''}{prevDeltaPct.toFixed(1)}%)
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
                               )}
                               <div className="text-white/70 text-[10px] mt-0.5">
                                 {formatNumber(d.impressions, 0)} חשיפות · CAD {formatCurrency(d.spend, 2)}
@@ -761,6 +801,21 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                         dot={{ r: 2.5, fill: CHART_COLORS.cpm, stroke: 'none' }}
                         activeDot={{ r: 4, fill: CHART_COLORS.cpm, stroke: 'white', strokeWidth: 1.5 }}
                       />
+                      {showPrevLine && (
+                        <Line
+                          yAxisId="cpm"
+                          type="monotone"
+                          dataKey="prevCpm"
+                          stroke={CHART_COLORS.cpmPrev}
+                          strokeWidth={1.5}
+                          strokeDasharray="5 3"
+                          strokeOpacity={0.85}
+                          dot={{ r: 2, fill: CHART_COLORS.cpmPrev, stroke: 'none', fillOpacity: 0.7 }}
+                          activeDot={{ r: 3.5, fill: CHART_COLORS.cpmPrev, stroke: 'white', strokeWidth: 1.5 }}
+                          connectNulls={false}
+                          isAnimationActive={false}
+                        />
+                      )}
                       {showRoasOverlay && (
                         <Line
                           yAxisId="roas"
@@ -776,18 +831,26 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
-                {/* Mini legend — only when overlay is on. The CPM-only state
-                    is unambiguous (one orange line, axis label says CPM). */}
-                {showRoasOverlay && (
-                  <div className="flex items-center justify-center gap-4 text-[10px] text-text-muted mt-1.5">
+                {/* Mini legend — appears whenever there is more than one line
+                    on the chart (ROAS overlay OR previous-period overlay). */}
+                {(showRoasOverlay || showPrevLine) && (
+                  <div className="flex items-center justify-center gap-4 text-[10px] text-text-muted mt-1.5 flex-wrap">
                     <span className="inline-flex items-center gap-1.5">
                       <span className="inline-block w-3 h-[2px] bg-amber-600" />
-                      CPM (ציר שמאל)
+                      CPM {showRoasOverlay ? '(ציר שמאל)' : ''}
                     </span>
-                    <span className="inline-flex items-center gap-1.5">
-                      <span className="inline-block w-3 border-t-2 border-dashed border-roas-green" />
-                      ROAS (ציר ימין)
-                    </span>
+                    {showPrevLine && (
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="inline-block w-3 border-t-2 border-dashed border-amber-400" />
+                        CPM תקופה קודמת
+                      </span>
+                    )}
+                    {showRoasOverlay && (
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="inline-block w-3 border-t-2 border-dashed border-roas-green" />
+                        ROAS (ציר ימין)
+                      </span>
+                    )}
                   </div>
                 )}
                 {cpmAnalysisMode === 'prev' && !isLoadingPrev && analysis.mode === 'half-over-half' && (

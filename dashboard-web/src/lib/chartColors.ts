@@ -8,6 +8,7 @@ export const CHART_COLORS = {
   organic: '#9333ea',
   shopify: '#15803d',
   cpm: '#d97706',
+  cpmPrev: '#fbbf24',
   roas: '#15803d',
   value: '#15803d',
   spend: '#dc2626',
