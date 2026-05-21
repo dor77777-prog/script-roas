@@ -40,11 +40,20 @@
 //   triggers: { event: '...' } }, handler)".
 
 import { inngest } from '@/inngest/client';
-import { fetchShopifyDayRows } from '@/lib/fetchers/shopify';
-import { fetchMetaAdSetInsights, fetchMetaSpendForDay } from '@/lib/fetchers/meta';
+import {
+  fetchShopifyDayRows,
+  fetchShopifyOrdersAttribution,
+  fetchShopifyProductsCatalog,
+} from '@/lib/fetchers/shopify';
+import {
+  fetchMetaAdSetInsights,
+  fetchMetaAdInsights,
+  fetchMetaSpendForDay,
+} from '@/lib/fetchers/meta';
 import {
   fetchGoogleAdsSpendForDay,
   fetchGoogleAdsAdGroupInsights,
+  fetchGoogleAdsAdInsights,
 } from '@/lib/fetchers/googleAds';
 import { mergeOverridesFromSupabase } from '@/lib/fetchers/manualOverrides';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -119,6 +128,13 @@ export type RunDailyResult = {
   productRowCount: number;
   metaCampaignRowCount: number;
   googleCampaignRowCount: number;
+  // Phase 05.6.1 — the 3 newly-populated user-data tables. Surfaced on the
+  // return value so the operator console's jobs table (plan 12) can show a
+  // "what just got written" summary without re-querying the DB.
+  metaAdRowCount: number;
+  googleAdRowCount: number;
+  ordersAttributionRowCount: number;
+  productCatalogRowCount: number;
 };
 
 // ===========================================================================
@@ -152,43 +168,64 @@ export async function runDailyForStore(
   const { step } = ctx;
 
   // ---- Step 1: Shopify (orders × 2 windows, dedup, refund-aware net rev) --
-  // Type narrowing: step.run returns Promise<unknown> (see RunDailyStep
-  // doc above); we cast to the fetcher's declared return type. The runtime
-  // shape is guaranteed by the fetcher contract (verified in fetcher tests).
-  const shopify = (await step.run('fetch-shopify', () =>
-    fetchShopifyDayRows(storeId, dateStr),
-  )) as Awaited<ReturnType<typeof fetchShopifyDayRows>>;
+  // Phase 05.6.1: extended to also fetch orders-attribution + product-catalog
+  // in parallel. The 3 HTTP calls share one step.run callback so the cron
+  // exec count stays at 5 (RESEARCH §Pitfall 4 free-tier budget).
+  //
+  // catalog is a snapshot (no date arg) — same payload regardless of dateStr;
+  // we fetch it inside the daily run anyway because:
+  //   1) Inngest steps are isolated per-execution (no shared cache across
+  //      stores), so a daily refresh per store costs at most ~250 products
+  //      worth of bandwidth (well under any quota).
+  //   2) Operator drift detection: if a product is archived/deleted between
+  //      two daily runs, the next-day snapshot reflects it (Apps Script
+  //      behavior parity — Shopify.gs:537 is also called per daily run).
+  const shopify = (await step.run('fetch-shopify', async () => {
+    const [day, orders, catalog] = await Promise.all([
+      fetchShopifyDayRows(storeId, dateStr),
+      fetchShopifyOrdersAttribution(storeId, dateStr),
+      fetchShopifyProductsCatalog(storeId),
+    ]);
+    return { ...day, orders, catalog };
+  })) as Awaited<ReturnType<typeof fetchShopifyDayRows>> & {
+    orders: Awaited<ReturnType<typeof fetchShopifyOrdersAttribution>>;
+    catalog: Awaited<ReturnType<typeof fetchShopifyProductsCatalog>>;
+  };
 
-  // ---- Step 2: Meta (adset insights + store-level spend sum) --------------
-  // fetchMetaSpendForDay internally sums adset rows, so we duplicate the
-  // HTTP call inside one step.run rather than splitting (Pitfall 4: keep
-  // step count low). Promise.all parallelizes the two HTTP roundtrips
-  // within a single step's wall-clock.
+  // ---- Step 2: Meta (adset + ad-level insights + store-level spend sum) ---
+  // Phase 05.6.1: extended Promise.all to fetch ad-level insights alongside
+  // adset-level and store-level spend. Three parallel HTTP roundtrips within
+  // one step's wall-clock — exec count unchanged.
   const meta = (await step.run('fetch-meta', async () => {
-    const [spend, adsetRows] = await Promise.all([
+    const [spend, adsetRows, adRows] = await Promise.all([
       fetchMetaSpendForDay(storeId, dateStr),
       fetchMetaAdSetInsights(storeId, dateStr),
+      fetchMetaAdInsights(storeId, dateStr),
     ]);
-    return { spend, adsetRows };
+    return { spend, adsetRows, adRows };
   })) as {
     spend: Awaited<ReturnType<typeof fetchMetaSpendForDay>>;
     adsetRows: Awaited<ReturnType<typeof fetchMetaAdSetInsights>>;
+    adRows: Awaited<ReturnType<typeof fetchMetaAdInsights>>;
   };
 
-  // ---- Step 3: Google Ads (spend + ad-group insights) ---------------------
-  // Both helpers short-circuit to empty/zero for non-uzoshop stores per
-  // googleAds.ts:279,323 (STORES_WITH_GOOGLE_ADS.has(storeId)). The step
-  // still runs (returns the zero/empty values) — keeping the step ID stable
-  // across stores simplifies the jobs-table UI in plan 12.
+  // ---- Step 3: Google Ads (spend + ad-group + ad-level insights) ----------
+  // Phase 05.6.1: extended to fetch ad-level insights. All three helpers
+  // short-circuit to empty/zero for non-uzoshop stores per googleAds.ts —
+  // the step still runs for non-uzoshop (returns zero/empty), keeping the
+  // step ID stable across stores so the jobs-table UI (plan 12) can render
+  // a uniform per-store row.
   const google = (await step.run('fetch-google', async () => {
-    const [spend, adGroupRows] = await Promise.all([
+    const [spend, adGroupRows, adRows] = await Promise.all([
       fetchGoogleAdsSpendForDay(storeId, dateStr),
       fetchGoogleAdsAdGroupInsights(storeId, dateStr),
+      fetchGoogleAdsAdInsights(storeId, dateStr),
     ]);
-    return { spend, adGroupRows };
+    return { spend, adGroupRows, adRows };
   })) as {
     spend: Awaited<ReturnType<typeof fetchGoogleAdsSpendForDay>>;
     adGroupRows: Awaited<ReturnType<typeof fetchGoogleAdsAdGroupInsights>>;
+    adRows: Awaited<ReturnType<typeof fetchGoogleAdsAdInsights>>;
   };
 
   // ---- Step 4: Manual overrides + FX → CAD totals -------------------------
@@ -341,6 +378,134 @@ export async function runDailyForStore(
         );
       }
     }
+
+    // Phase 05.6.1 — 5e. ads_daily UPSERT (Meta + Google ad-level rows).
+    // PK (date, store_id, ad_id). Both platforms write into the same table
+    // because the schema is platform-tagged (`platform` column).
+    //
+    // Meta rows leave spend_cad / conversion_value_cad NULL (per the
+    // MetaAdRow type docstring — per-ad FX conversion deferred).
+    // Google rows populate both (CAD-native for uzoshop).
+    //
+    // We build a single combined array and issue ONE upsert call so the
+    // total number of DB roundtrips inside persist-batch stays bounded
+    // (Pitfall 4 budget — 1 SQL statement per logical table, not per
+    // platform). Supabase's UPSERT handles mixed-row arrays correctly.
+    {
+      const metaAdsRows = meta.adRows.map((r) => ({
+        date: r.date,
+        store_id: r.storeId,
+        platform: r.platform, // 'meta'
+        campaign_id: r.campaignId,
+        campaign_name: r.campaignName,
+        ad_set_id: r.adSetId,
+        ad_set_name: r.adSetName,
+        ad_id: r.adId,
+        ad_name: r.adName,
+        spend_cad: r.spendCad, // null per MetaAdRow docstring
+        impressions: r.impressions,
+        clicks: r.clicks,
+        conversions: r.conversions,
+        conversion_value_cad: r.conversionValueCad, // null per MetaAdRow docstring
+        roas: null,
+      }));
+      const googleAdsRows = google.adRows.map((r) => ({
+        date: r.date,
+        store_id: r.storeId,
+        platform: r.platform, // 'google'
+        campaign_id: r.campaignId,
+        campaign_name: r.campaignName,
+        ad_set_id: r.adSetId,
+        ad_set_name: r.adSetName,
+        ad_id: r.adId,
+        ad_name: r.adName,
+        spend_cad: r.spendCad,
+        impressions: r.impressions,
+        clicks: r.clicks,
+        conversions: r.conversions,
+        conversion_value_cad: r.conversionValueCad,
+        roas: null,
+      }));
+      const adsRows = [...metaAdsRows, ...googleAdsRows];
+      if (adsRows.length > 0) {
+        const { error } = await admin
+          .from('ads_daily')
+          .upsert(adsRows, { onConflict: 'date,store_id,ad_id' });
+        if (error) {
+          throw new Error(
+            `ads_daily upsert for ${storeId} ${dateStr}: ${error.message}`,
+          );
+        }
+      }
+    }
+
+    // Phase 05.6.1 — 5f. orders_attribution UPSERT.
+    // PK (store_id, order_id) — note: NOT (date, store_id, order_id). The
+    // PK lives outside the date axis because order_id is globally unique
+    // per store; an order can only ever have ONE attribution row even if
+    // a backfill re-fetches a different day's window (a refund or update
+    // does not change the order's primary attribution).
+    //
+    // line_items is JSONB — we pass the `{p,u,r}` compact array through
+    // as-is; the postgresReaders parser at line 101-120 reads it back
+    // into the dashboard shape.
+    if (shopify.orders.length > 0) {
+      const orderRows = shopify.orders.map((o) => ({
+        store_id: o.storeId,
+        order_id: o.orderId,
+        date: o.date,
+        total_cad: o.totalCad,
+        source: o.source,
+        utm_source: o.utmSource,
+        utm_medium: o.utmMedium,
+        utm_campaign: o.utmCampaign,
+        utm_content: o.utmContent,
+        fbclid_present: o.fbclidPresent,
+        gclid_present: o.gclidPresent,
+        referrer: o.referrer,
+        utm_id: o.utmId,
+        utm_term: o.utmTerm,
+        line_items: o.lineItems,
+      }));
+      const { error } = await admin
+        .from('orders_attribution')
+        .upsert(orderRows, { onConflict: 'store_id,order_id' });
+      if (error) {
+        throw new Error(
+          `orders_attribution upsert for ${storeId} ${dateStr}: ${error.message}`,
+        );
+      }
+    }
+
+    // Phase 05.6.1 — 5g. product_catalog UPSERT.
+    // PK (store_id, product_id). Snapshot table — each daily run overwrites
+    // the prior snapshot for active products. Products that go inactive
+    // (archived / deleted) are NOT pruned here — they remain in the table
+    // with their last-known status. A future plan can add a "vacuum
+    // archived products older than N days" pass; for now the dashboard
+    // filters on `status = 'active'` at read time.
+    if (shopify.catalog.length > 0) {
+      const catalogRows = shopify.catalog.map((p) => ({
+        store_id: p.storeId,
+        product_id: p.productId,
+        title: p.title,
+        handle: p.handle,
+        status: p.status,
+        price_cad: p.priceCad,
+        image_url: p.imageUrl,
+        product_type: p.productType,
+        vendor: p.vendor,
+        updated_at: p.updatedAt,
+      }));
+      const { error } = await admin
+        .from('product_catalog')
+        .upsert(catalogRows, { onConflict: 'store_id,product_id' });
+      if (error) {
+        throw new Error(
+          `product_catalog upsert for ${storeId} ${dateStr}: ${error.message}`,
+        );
+      }
+    }
   });
 
   const roas =
@@ -364,6 +529,11 @@ export async function runDailyForStore(
     productRowCount: shopify.productRows.length,
     metaCampaignRowCount: meta.adsetRows.length,
     googleCampaignRowCount: google.adGroupRows.length,
+    // Phase 05.6.1 — newly populated user-data tables.
+    metaAdRowCount: meta.adRows.length,
+    googleAdRowCount: google.adRows.length,
+    ordersAttributionRowCount: shopify.orders.length,
+    productCatalogRowCount: shopify.catalog.length,
   };
 }
 
