@@ -16,18 +16,29 @@
  *    queries (e.g., realtime), promote them to `NEXT_PUBLIC_SUPABASE_URL` and
  *    `NEXT_PUBLIC_SUPABASE_ANON_KEY` — but defer that to 05.6 when the read-
  *    path actually flips to Postgres.
+ *
+ * Pattern: lazy factory (NOT module-load throw). Mirrors sheets.ts:getAuth —
+ * the throw happens inside the function so a missing env var manifests as a
+ * caught `pingSupabase` rejection (→ amber SyncIndicator) instead of a route
+ * module that fails to load (→ HTTP 500 → indicator stays neutral / never amber,
+ * silently violating the soft-fail contract documented in the User Manual §2.1).
  */
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
-const url = process.env.SUPABASE_URL;
-const key = process.env.SUPABASE_ANON_KEY;
+let cached: SupabaseClient | null = null;
 
-if (!url || !key) {
-  // Fail fast at module load if env vars are missing — same pattern as
-  // dashboard-web/src/lib/sheets.ts which requires GOOGLE_PRIVATE_KEY at boot.
-  throw new Error('SUPABASE_URL or SUPABASE_ANON_KEY missing — check Vercel env vars');
+export function getSupabase(): SupabaseClient {
+  if (cached) return cached;
+
+  const url = process.env.SUPABASE_URL;
+  const key = process.env.SUPABASE_ANON_KEY;
+
+  if (!url || !key) {
+    throw new Error('SUPABASE_URL or SUPABASE_ANON_KEY missing — check Vercel env vars');
+  }
+
+  cached = createClient(url, key, {
+    auth: { persistSession: false },  // server-side, no user session
+  });
+  return cached;
 }
-
-export const supabase = createClient(url, key, {
-  auth: { persistSession: false },  // server-side, no user session
-});

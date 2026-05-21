@@ -11,7 +11,7 @@
  */
 import { NextResponse } from 'next/server';
 import { google } from 'googleapis';
-import { supabase } from '@/lib/supabase';
+import { getSupabase } from '@/lib/supabase';
 import { getAuth } from '@/lib/sheets';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
@@ -51,7 +51,7 @@ async function pingSheets(): Promise<void> {
  * bandwidth ~zero — only metadata transferred, never row data.
  */
 async function pingSupabase(): Promise<void> {
-  const { error } = await supabase
+  const { error } = await getSupabase()
     .from('stores')
     .select('id', { count: 'exact', head: true });
   if (error) throw new Error(error.message);
