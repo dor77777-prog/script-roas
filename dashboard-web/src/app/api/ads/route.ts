@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import type { AdRow } from '@/lib/ads';
-import { fetchAdsFromPostgres } from '@/lib/postgresReaders';
+import {
+  fetchAdsFromPostgres,
+  fetchAdsDailyLastWriteAt,
+} from '@/lib/postgresReaders';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
 import { parseRangeParams, RangeParamError } from '@/lib/dateRange';
@@ -11,6 +14,8 @@ export const revalidate = 300; // matches CACHE_CONFIG.ads.revalidate; 5 min —
 export type AdsResponse = {
   rows: AdRow[];
   lastUpdated: string;
+  /** Phase 05.7.6 — most-recent ads_daily updated_at in the range. */
+  dataLastWriteAt: string | null;
 };
 
 export async function GET(req: Request) {
@@ -28,25 +33,34 @@ export async function GET(req: Request) {
   }
 
   try {
-    // Phase 05.7: Postgres-only — readFrom() branch removed.
-    const rows = await fetchAdsFromPostgres({ range });
+    const [rows, dataLastWriteAt] = await Promise.all([
+      fetchAdsFromPostgres({ range }),
+      fetchAdsDailyLastWriteAt({ range }),
+    ]);
     if (rows.length > 50000) {
       console.warn(`/api/ads: large response (${rows.length} rows) — consider pagination`);
     }
     return NextResponse.json(
-      { rows, lastUpdated: new Date().toISOString() } satisfies AdsResponse,
       {
-        headers: {
-          'Cache-Control': cacheControl('ads'),
-        },
+        rows,
+        lastUpdated: new Date().toISOString(),
+        dataLastWriteAt,
+      } satisfies AdsResponse,
+      {
+        headers: { 'Cache-Control': cacheControl('ads') },
       },
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    // Raw message logged server-side for ops; sanitized message returned to client.
     console.error('ads fetch failed:', message);
-    // Degrade gracefully — empty array lets the AdsDrawer show an "no data"
-    // state instead of crashing the campaigns surface.
-    return NextResponse.json({ rows: [], error: userFacingError(message) }, { status: 200 });
+    return NextResponse.json(
+      {
+        rows: [],
+        lastUpdated: new Date().toISOString(),
+        dataLastWriteAt: null,
+        error: userFacingError(message),
+      },
+      { status: 200 },
+    );
   }
 }

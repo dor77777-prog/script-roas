@@ -203,20 +203,21 @@ function parseLineItems(v: unknown): OrderLineItem[] {
  * comparison semantics diverge (e.g. tz-shift on the DB side).
  */
 /**
- * Phase 05.7.6 — Returns the most recent `updated_at` across data_daily
- * rows in the given range (or null if no rows exist). Used by /api/data
- * to surface `dataLastWriteAt` for the dashboard's freshness chip.
+ * Phase 05.7.6 — Returns the most recent `updated_at` across rows in the
+ * given table+range (or null if no rows exist). Used by /api/* endpoints
+ * to surface `dataLastWriteAt` for the dashboard's per-tab freshness chip.
  *
  * Implementation: single .order('updated_at', desc).limit(1) call —
- * MUCH cheaper than scanning all rows. Postgres uses an index on
- * (date, store_id) PK; the LIMIT 1 short-circuits after one row.
+ * MUCH cheaper than scanning all rows. Each table has an `updated_at`
+ * column with a trigger that sets NOW() on every INSERT/UPDATE.
  */
-export async function fetchDataDailyLastWriteAt(
+async function fetchTableLastWriteAt(
+  table: 'data_daily' | 'campaigns_daily' | 'products_daily' | 'ads_daily',
   opts?: { range?: DateRange },
 ): Promise<string | null> {
   try {
     let q = getSupabase()
-      .from('data_daily')
+      .from(table)
       .select('updated_at')
       .order('updated_at', { ascending: false })
       .limit(1);
@@ -230,10 +231,34 @@ export async function fetchDataDailyLastWriteAt(
     const ts = (row as { updated_at?: string | null }).updated_at;
     return ts ?? null;
   } catch {
-    // Don't fail the whole /api/data response over a freshness lookup —
+    // Don't fail the whole API response over a freshness lookup —
     // the dashboard degrades to "no chip" when this returns null.
     return null;
   }
+}
+
+export async function fetchDataDailyLastWriteAt(
+  opts?: { range?: DateRange },
+): Promise<string | null> {
+  return fetchTableLastWriteAt('data_daily', opts);
+}
+
+export async function fetchCampaignsDailyLastWriteAt(
+  opts?: { range?: DateRange },
+): Promise<string | null> {
+  return fetchTableLastWriteAt('campaigns_daily', opts);
+}
+
+export async function fetchProductsDailyLastWriteAt(
+  opts?: { range?: DateRange },
+): Promise<string | null> {
+  return fetchTableLastWriteAt('products_daily', opts);
+}
+
+export async function fetchAdsDailyLastWriteAt(
+  opts?: { range?: DateRange },
+): Promise<string | null> {
+  return fetchTableLastWriteAt('ads_daily', opts);
 }
 
 export async function fetchDailyDataFromPostgres(

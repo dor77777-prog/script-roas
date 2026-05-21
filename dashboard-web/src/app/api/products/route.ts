@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import type { ProductRow } from '@/lib/products';
-import { fetchProductsFromPostgres } from '@/lib/postgresReaders';
+import {
+  fetchProductsFromPostgres,
+  fetchProductsDailyLastWriteAt,
+} from '@/lib/postgresReaders';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
 import { parseRangeParams, RangeParamError } from '@/lib/dateRange';
@@ -14,9 +17,9 @@ export const revalidate = 60; // matches CACHE_CONFIG.products.revalidate; liter
 export type ProductsResponse = {
   rows: ProductRow[];
   lastUpdated: string;
-  /** Present only on the degraded-error path (rows: []). Consumers that
-   *  surface "synced N min ago" should treat the response as data-less when
-   *  this is set, even though rows + lastUpdated still satisfy the type. */
+  /** Phase 05.7.6 — most-recent products_daily updated_at in the range. */
+  dataLastWriteAt: string | null;
+  /** Present only on the degraded-error path (rows: []). */
   error?: string;
 };
 
@@ -35,28 +38,29 @@ export async function GET(req: Request) {
   }
 
   try {
-    // Phase 05.7: Postgres-only — readFrom() branch removed.
-    const rows = await fetchProductsFromPostgres({ range });
+    const [rows, dataLastWriteAt] = await Promise.all([
+      fetchProductsFromPostgres({ range }),
+      fetchProductsDailyLastWriteAt({ range }),
+    ]);
     if (rows.length > 50000) {
       console.warn(`/api/products: large response (${rows.length} rows) — consider pagination`);
     }
     const body: ProductsResponse = {
       rows,
       lastUpdated: new Date().toISOString(),
+      dataLastWriteAt,
     };
     return NextResponse.json(body, {
       headers: { 'Cache-Control': cacheControl('products') },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    // Raw message logged server-side for ops; sanitized message returned to client.
     console.error('Products fetch failed:', message);
-    // Degrade gracefully with 200 + empty rows — matches /api/ads etc. (WR-06).
-    // Cache-Control: no-store — see WR-02 comment in /api/data/route.ts.
     return NextResponse.json(
       {
         rows: [],
         lastUpdated: new Date().toISOString(),
+        dataLastWriteAt: null,
         error: userFacingError(message),
       } satisfies ProductsResponse,
       { status: 200, headers: { 'Cache-Control': 'no-store' } },

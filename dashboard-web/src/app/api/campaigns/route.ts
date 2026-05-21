@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import type { CampaignRow } from '@/lib/campaigns';
-import { fetchCampaignsFromPostgres } from '@/lib/postgresReaders';
+import {
+  fetchCampaignsFromPostgres,
+  fetchCampaignsDailyLastWriteAt,
+} from '@/lib/postgresReaders';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
 import { parseRangeParams, RangeParamError } from '@/lib/dateRange';
@@ -13,6 +16,12 @@ export const revalidate = 60; // matches CACHE_CONFIG.campaigns.revalidate; lite
 export type CampaignsResponse = {
   rows: CampaignRow[];
   lastUpdated: string;
+  /**
+   * Phase 05.7.6 — ISO timestamp of the most-recent campaigns_daily row
+   * write across the queried date range. Distinct from `lastUpdated`
+   * (server fetch time). Used by the per-tab freshness chip.
+   */
+  dataLastWriteAt: string | null;
   /** Present only on the degraded-error path (rows: []). Consumers that
    *  surface "synced N min ago" should treat the response as data-less when
    *  this is set, even though rows + lastUpdated still satisfy the type. */
@@ -35,27 +44,29 @@ export async function GET(req: Request) {
 
   try {
     // Phase 05.7: Postgres-only — readFrom() branch removed.
-    const rows = await fetchCampaignsFromPostgres({ range });
+    const [rows, dataLastWriteAt] = await Promise.all([
+      fetchCampaignsFromPostgres({ range }),
+      fetchCampaignsDailyLastWriteAt({ range }),
+    ]);
     if (rows.length > 50000) {
       console.warn(`/api/campaigns: large response (${rows.length} rows) — consider pagination`);
     }
     const body: CampaignsResponse = {
       rows,
       lastUpdated: new Date().toISOString(),
+      dataLastWriteAt,
     };
     return NextResponse.json(body, {
       headers: { 'Cache-Control': cacheControl('campaigns') },
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    // Raw message logged server-side for ops; sanitized message returned to client.
     console.error('Campaigns fetch failed:', message);
-    // Degrade gracefully with 200 + empty rows — matches /api/ads etc. (WR-06).
-    // Cache-Control: no-store — see WR-02 comment in /api/data/route.ts.
     return NextResponse.json(
       {
         rows: [],
         lastUpdated: new Date().toISOString(),
+        dataLastWriteAt: null,
         error: userFacingError(message),
       } satisfies CampaignsResponse,
       { status: 200, headers: { 'Cache-Control': 'no-store' } },

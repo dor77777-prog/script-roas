@@ -43,6 +43,7 @@ import { SectionIntro } from './SectionIntro';
 import { CloudSync } from './CloudSync';
 import { SyncIndicator } from './SyncIndicator';
 import { FreshnessChip } from './FreshnessChip';
+import { TabFreshnessHeader } from './TabFreshnessHeader';
 import { readDashboardState, syncUrl } from '@/lib/urlState';
 import { buildDateRangeKey } from '@/lib/dateRange';
 
@@ -198,6 +199,13 @@ export function Dashboard() {
 
         {data && filtered && (
           <>
+            {/* Phase 05.7.6 — per-tab freshness chip + global refresh button.
+                Rendered once at the top so it appears on every tab. The
+                chip reflects data_daily.updated_at which is a good proxy
+                for all 4 daily tables (they all bump on the same cron tick).
+                The refresh button fires sync-now for all 3 stores +
+                polls until backend is done + SWR-mutates every key. */}
+            <TabFreshnessHeader dataLastWriteAt={data.dataLastWriteAt ?? null} />
             {activeTab === 'home' && (
               <HomeTab
                 data={data}

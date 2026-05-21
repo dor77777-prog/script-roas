@@ -62,7 +62,7 @@ type AdSortDir = 'asc' | 'desc';
 
 const fetcher = async (url: string): Promise<AdsResponse> => {
   const r = await fetch(url);
-  if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
+  if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString(), dataLastWriteAt: null };
   return r.json();
 };
 
