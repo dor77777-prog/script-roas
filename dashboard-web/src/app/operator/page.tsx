@@ -31,6 +31,7 @@ import { JobsTable } from '@/components/operator/JobsTable';
 import { BackfillPicker } from '@/components/operator/BackfillPicker';
 import { SyncNowButtons } from '@/components/operator/SyncNowButtons';
 import { ResetData } from '@/components/operator/ResetData';
+import { WhatsappTestButtons } from '@/components/operator/WhatsappTestButtons';
 
 export const metadata = {
   title: 'ניהול — ROAS Dashboard',
@@ -82,6 +83,22 @@ export default function OperatorPage() {
             live component. The component handles its own loading / error /
             empty states; this <section> only owns the title. */}
         <ManualOverridesCrud />
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+          <span>התראות WhatsApp</span>
+          <span className="text-text-secondary text-xs font-normal">
+            (3 הודעות אוטומטיות ביום — 12:00, 18:00, 00:10)
+          </span>
+        </h2>
+        <p className="text-text-secondary text-sm mb-3">
+          הקרון של Inngest שולח דוח ROAS יומי ב-WhatsApp ל-2 מספרים מוגדרים
+          (notification_config). הכפתורים למטה מאפשרים לשלוח ידנית את אותה
+          הודעה בדיוק — לבדיקה לאחר שינוי env vars (WHATSAPP_*), רוטציית
+          טוקן System User, או אישור template חדש ב-Meta WhatsApp Manager.
+        </p>
+        <WhatsappTestButtons />
       </section>
 
       {/* Phase 05.7.1: destructive reset panel. Placed at the bottom +

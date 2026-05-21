@@ -99,6 +99,10 @@ import { cronDailyFunctions } from '@/inngest/functions/cronDaily';
 import { cronLiveFunctions } from '@/inngest/functions/cronLive';
 import { eventSyncNow } from '@/inngest/functions/eventSyncNow';
 import { eventBackfill } from '@/inngest/functions/eventBackfill';
+import {
+  whatsappCronFunctions,
+  eventWhatsappSendNow,
+} from '@/inngest/functions/cronWhatsapp';
 
 // Vercel route segment config: maxDuration must be a literal number per
 // Next.js's static analyzer (same constraint as the revalidate opt-in —
@@ -112,6 +116,8 @@ export const { GET, POST, PUT } = serve({
     ...cronLiveFunctions, // 3 functions (uzoshop / zolplus / usmile360)
     eventSyncNow, // 1 function (operator "Sync now" button)
     eventBackfill, // 1 function (operator backfill range picker)
+    ...whatsappCronFunctions, // 3 functions (12:00, 18:00, 00:10 IL)
+    eventWhatsappSendNow, // 1 function (operator "send WhatsApp now")
   ],
   // INNGEST_SIGNING_KEY auto-read from process.env at request time;
   // serve() validates X-Inngest-Signature on every POST and rejects

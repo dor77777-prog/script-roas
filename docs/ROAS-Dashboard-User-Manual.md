@@ -2630,9 +2630,159 @@ curl -s "$PROD/api/data?from=2026-05-15&to=2026-05-20" | jq '.rows | length'
 
 ---
 
+## 30. התראות WhatsApp אוטומטיות (Phase 05.7.4)
+
+### 30.1 מה זה ומתי זה רץ
+
+המערכת שולחת **3 הודעות WhatsApp ביום** למספרים מוגדרים, ללא התערבות מפעיל:
+
+| שעה (Asia/Jerusalem) | תוכן | מקור נתונים |
+|---|---|---|
+| **12:00** | סנפשוט "היום עד כה" | data_daily של היום הנוכחי |
+| **18:00** | סנפשוט "היום עד כה" (מעודכן) | data_daily של היום הנוכחי |
+| **00:10** | סיכום יום מלא של אתמול | data_daily של היום שהסתיים |
+
+ההודעה מבוססת על **template מאושר ב-Meta WhatsApp Manager** בשם `roas_daily_summary` עם 5 placeholders ({{1}}-{{5}}). הפורמט בעברית:
+
+```
+📊 דוח ROAS יומי
+
+תאריך ושעה: 12:00, 20/05/2026
+
+🏪 uzoshop:
+• הוצאה: C$450
+• הכנסות: C$1,890
+• ROAS: 4.20
+• הזמנות: 28  (פייסבוק: 18, גוגל: 6, אחרים: 4)
+
+🏪 zolplus:
+...
+
+🎯 סה"כ:
+...
+
+לפרטים מלאים — פתח את הדשבורד.
+```
+
+### 30.2 איפה זה רץ
+
+```
+Inngest cloud cron (TZ=Asia/Jerusalem)
+   │
+   ├─ "0 12 * * *"   → whatsappNoon
+   ├─ "0 18 * * *"   → whatsappEvening
+   └─ "10 0 * * *"   → whatsappEod
+        │
+        ▼
+   sendDailySummary(dateStr, title)        ← /lib/notifications/sendDailySummary.ts
+        │
+        ├─ loadActiveMetacloudConfig()      ← notification_config (active=TRUE)
+        ├─ buildStoreSummary(dateStr)       ← data_daily + orders_attribution (Postgres)
+        ├─ buildTemplateParameters(...)     ← 5-element string[] for Meta template
+        │
+        ▼
+   sendWhatsAppTemplate({to, templateName, templateLang, templateParams})
+        │
+        ▼
+   POST https://graph.facebook.com/v23.0/{WHATSAPP_PHONE_NUMBER_ID}/messages
+        Authorization: Bearer {WHATSAPP_ACCESS_TOKEN}
+```
+
+החלפת Apps Script `Notifications.gs` ב-TS+Inngest:
+- **דייקנות תזמון**: Apps Script trigger יורה בחלון של שעה (`atHour(0)` = משהו בין 00:00 ל-01:00). Inngest cron יורה תוך שניות מ-cron expression — 00:10 בדיוק.
+- **Idempotency**: Inngest מבטיח exactly-once על-ידי-job של מערכת ההפעלה. Apps Script לא היה לו.
+- **Retries**: 3 ניסיונות אוטומטיים עם exponential backoff. Apps Script הסתפק בכשל שקט.
+- **Observability**: כל ריצה מופיעה ב-/operator > ריצות אחרונות (Inngest jobs feed). Apps Script דרש Apps Script > Executions.
+
+### 30.3 קונפיג נדרש — env vars + DB
+
+**Vercel env vars (פעם אחת בלבד):**
+
+| שם | ערך | היכן | מי קובע |
+|---|---|---|---|
+| `WHATSAPP_PHONE_NUMBER_ID` | `1091010644104167` | Vercel > Project > Settings > Environment Variables | קבוע — מ-Meta API Setup |
+| `WHATSAPP_ACCESS_TOKEN` | `EAA...` (System User token) | אותו מקום | נדרש לרענן אם לא permanent |
+
+**Postgres `notification_config` (כבר seed):**
+
+| שדה | ערך נוכחי | מה זה |
+|---|---|---|
+| `provider` | `metacloud` | תמיד metacloud מאז Phase 05.7.4 (Twilio הוסר) |
+| `active` | `TRUE` | אם FALSE — הקרון מדלג בשקט |
+| `template_name` | `roas_daily_summary` | שם ה-template המאושר ב-Meta |
+| `template_lang` | `he` | קוד שפה — חייב להתאים ל-Meta |
+| `phone1` | `+972524809540` | נמען #1 (E.164 עם `+`) |
+| `phone2` | `+972546100067` | נמען #2 (E.164 עם `+`) — null = single-recipient mode |
+| `dashboard_url` | `https://roas-dashboard-smoky.vercel.app` | לא משמש כרגע (ה-button URL מוגדר בתוך ה-template ב-Meta) |
+
+לשינוי נמענים: עדכן את `notification_config` ישירות ב-Supabase Studio → table → edit row. עדכון ייכנס לתוקף בקרון הבא; אין צורך ב-restart.
+
+### 30.4 יצירת Permanent System User Token (פעם אחת בלבד)
+
+הטוקן ה"רגיל" שמופק ב-Meta API Setup פג תוקף **תוך 24 שעות**. עבור פעולה אוטומטית 24/7, חובה ליצור **System User token** שלא פג. שלבים:
+
+1. עבור ל-[business.facebook.com/settings/system-users](https://business.facebook.com/settings/system-users)
+2. בחר Business Portfolio `IDF_SINGLE`
+3. **Users → System Users → Add** → Name: `RoasTrackerSystem` → Role: `Admin` → Create
+4. בחר את ה-System User החדש → **Add Assets** → **Apps** → סמן את `ROAS Tracker Notifications` → Full control → Save
+5. לחץ **Generate New Token**:
+   - App: `ROAS Tracker Notifications`
+   - Expiration: `Never` (אם זמין)
+   - Permissions:
+     - ✅ `whatsapp_business_messaging`
+     - ✅ `whatsapp_business_management`
+6. העתק את הטוקן (מוצג רק פעם אחת!)
+7. עבור ל-Vercel → Project Settings → Environment Variables → ערוך `WHATSAPP_ACCESS_TOKEN` → הדבק → Save
+8. Redeploy או חכה ל-deploy הבא — Vercel מזריק את הערך החדש לכל cold start
+
+### 30.5 בדיקה ידנית (לאחר deploy ראשון או רוטציית טוקן)
+
+לפני שמסתמכים על הקרון:
+
+1. עבור ל-`/operator`
+2. גלול לפאנל **"התראות WhatsApp"**
+3. לחץ **"שלח כמו 12:00 (היום עד כה)"**
+4. המתן 3-5 שניות
+5. בדוק את 2 הטלפונים — הודעה אמורה להגיע על שניהם
+6. אם לא הגיעה: עבור ל-**"ריצות אחרונות"** ובדוק את שורת `event-whatsapp-send-now` — שגיאה תופיע שם
+
+תרחישי שגיאה נפוצים:
+
+| שגיאה | סיבה | תיקון |
+|---|---|---|
+| `missing env vars WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID` | env vars לא מוגדרים ב-Vercel | סעיף 30.3 — הוסף את שניהם, redeploy |
+| `Meta Cloud HTTP 401: invalid OAuth access token` | טוקן פג (היה temp 24h) או הוחלף | סעיף 30.4 — צור permanent System User token |
+| `Meta Cloud HTTP 400: Parameter count mismatch (132012)` | ה-template דורש N פרמטרים אבל הקוד שולח M | ראה `templateParams.ts` — ודא שהמספרי `{{N}}` ב-Meta תואמים ל-5 הפרמטרים שהקוד שולח |
+| `Meta Cloud HTTP 400: Template name does not exist (132001)` | שם ה-template לא תואם בין `notification_config.template_name` ו-Meta | תקן את הערך ב-DB דרך Supabase Studio |
+| `no active metacloud notification_config row` | מישהו `UPDATE notification_config SET active=FALSE` | בצע `UPDATE notification_config SET active=TRUE WHERE provider='metacloud'` |
+
+### 30.6 איך לבטל זמנית
+
+אם רוצים לעצור את ההודעות בלי למחוק את הקרון:
+
+```sql
+UPDATE notification_config SET active = FALSE WHERE provider = 'metacloud';
+```
+
+הקרון יפנה ל-`loadActiveMetacloudConfig()`, יקבל `null`, וידלג בלי שגיאה. כדי להחזיר:
+
+```sql
+UPDATE notification_config SET active = TRUE WHERE provider = 'metacloud';
+```
+
+ביטול מוחלט (מחיקת הקרון מ-Inngest): הסר את `whatsappCronFunctions` מ-`src/app/api/inngest/route.ts` ו-redeploy. הקרון יוסר אוטומטית מ-Inngest dashboard.
+
+### 30.7 קונספט הצפי לעלויות
+
+- **Meta WhatsApp Cloud**: 1000 שיחות חינם בחודש (utility templates נכללים). 3 הודעות/יום × 2 נמענים × 30 ימים = **180 הודעות/חודש**. הרבה מתחת ל-cap.
+- **Inngest**: 3 cron functions × 1 step.run × 30 ימים = **90 execs/חודש**. בטל זניח מול ה-50K cap.
+- **Vercel**: כל הקרון מבוצע ב-Inngest cloud (לא Vercel Functions). 0 cost על Vercel.
+
+---
+
 ## סוף המסמך
 
-**גרסה:** 1.5 · **תאריך עדכון:** 2026-05-21 · **בסיס קוד:** Phase 05.7.1
+**גרסה:** 1.6 · **תאריך עדכון:** 2026-05-21 · **בסיס קוד:** Phase 05.7.4
 
 > מסמך זה מתעדכן עם כל שינוי משמעותי במערכת. אם משהו לא תואם למה שאתה רואה במסך — בדוק את ה-git log בריפו או דווח כדי לעדכן.
 
