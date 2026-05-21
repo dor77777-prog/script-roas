@@ -13,10 +13,15 @@ import { NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { supabase } from '@/lib/supabase';
 import { getAuth } from '@/lib/sheets';
-import { cacheControl, CACHE_CONFIG } from '@/lib/cacheConfig';
+import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
 
-export const revalidate = CACHE_CONFIG.health.revalidate;  // 10s — matches Cache-Control s-maxage
+// Next.js requires `revalidate` to be a literal number, not a MemberExpression
+// (CACHE_CONFIG.health.revalidate would fail Next's static analyzer with
+// "Unsupported node type MemberExpression"). Same pattern as
+// dashboard-state/route.ts:10 + store-meta/route.ts:10. The literal 10 below
+// MUST stay in sync with CACHE_CONFIG.health.revalidate.
+export const revalidate = 10;  // matches CACHE_CONFIG.health.revalidate; literal required by Next.js
 
 export type HealthStatus = 'ok' | 'down';
 export type HealthResponse = {
