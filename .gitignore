@@ -3,3 +3,14 @@ node_modules/
 .vercel
 .clasprc.json
 dashboard-web/node_modules
+
+# Secrets — never commit. The .env file at the project root is the
+# canonical store for Script Properties exported from Apps Script
+# (Shopify / Meta / Google Ads tokens + per-store domains + spreadsheet
+# IDs). See docs/PROPS-MAP.md (planned, v2.0 milestone) for the
+# operator-facing inventory.
+.env
+.env.local
+.env.*.local
+*.env
+!.env.example
