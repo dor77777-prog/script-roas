@@ -411,7 +411,9 @@ describe('Phase 05.6-04 — meta.ts fetchMetaAdSetInsights (port of MetaAds.gs)'
   });
 
   it('throws with status code + body when Meta returns non-200', async () => {
-    fetchSpy.mockResolvedValueOnce(buildErrorResponse(400, 'Invalid OAuth access token'));
+    // Both `expect(...).rejects.toThrow()` calls below invoke the SUT, so the
+    // mock must yield the same error response twice.
+    fetchSpy.mockResolvedValue(buildErrorResponse(400, 'Invalid OAuth access token'));
 
     await expect(fetchMetaAdSetInsights(STORE_ID, DATE)).rejects.toThrow(/400/);
     await expect(fetchMetaAdSetInsights(STORE_ID, DATE)).rejects.toThrow(/uzoshop/i);
