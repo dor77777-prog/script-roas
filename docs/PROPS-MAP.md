@@ -65,9 +65,9 @@
 | 39  | usmile360.meta.accessToken   | SECRET | VERCEL_ENV: USMILE360_META_ACCESS_TOKEN                     | EAAeL5Kw...                             | [ ]     |
 | 40  | usmile360.meta.adAccountId   | CONFIG | VERCEL_ENV: USMILE360_META_AD_ACCOUNT_ID                    | 981695850074160                         | [ ]     |
 | **§5 — Supabase (NEW, 3 props per D-C5)** | | | | | |
-| 41  | supabase.url                 | CONFIG | VERCEL_ENV: SUPABASE_URL                                    | https://npegxufdupooqovrewyb.supabase.co | [ ]     |
-| 42  | supabase.anon.key            | SECRET | VERCEL_ENV: SUPABASE_ANON_KEY                               | eyJhbGc...                              | [ ]     |
-| 43  | supabase.service.role.key    | SECRET | VERCEL_ENV: SUPABASE_SERVICE_ROLE_KEY                       | eyJhbGc...                              | [ ]     |
+| 41  | supabase.url                 | CONFIG | VERCEL_ENV: SUPABASE_URL                                    | https://npegxufdupooqovrewyb.supabase.co | [x]     |
+| 42  | supabase.anon.key            | SECRET | VERCEL_ENV: SUPABASE_ANON_KEY                               | eyJhbGc...                              | [x]     |
+| 43  | supabase.service.role.key    | SECRET | VERCEL_ENV: SUPABASE_SERVICE_ROLE_KEY                       | eyJhbGc...                              | [x]     |
 
 ## Notes
 
