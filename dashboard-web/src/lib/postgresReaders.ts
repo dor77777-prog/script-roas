@@ -8,7 +8,7 @@
  *   Every function in this file returns the SAME shape as its Sheets-side
  *   counterpart. Drift = silent regression at cut-over.
  *
- * Coverage in this module (8 reader functions):
+ * Coverage in this module (8 reader functions + 1 writer):
  *   1. fetchDailyDataFromPostgres    — sheets.ts:fetchDailyData         (DailyRow[])
  *   2. fetchStoreMetaFromPostgres    — sheets.ts:fetchStoreMeta         (StoreMetaRow[])
  *   3. fetchDashboardStateFromPostgres — sheets.ts:fetchDashboardState  ({kv, updatedAtByKey})
@@ -17,6 +17,7 @@
  *   6. fetchAdsFromPostgres          — ads.ts:fetchAdsData              (AdRow[])
  *   7. fetchOrdersAttributionFromPostgres — ordersAttribution.ts:fetchOrdersAttribution (OrderAttributionRow[])
  *   8. fetchProductCatalogFromPostgres — productCatalog.ts:fetchProductCatalog (CatalogProduct[])
+ *   9. upsertDashboardStateKeyPostgres — sheets.ts:upsertDashboardStateKey (WRITE, Phase 05.7)
  *
  * Notes:
  *   - All reads use getSupabase() (anon role). Phase 05.5-03 grants SELECT
@@ -25,13 +26,12 @@
  *     (migration 20260521075741 CHECK constraint). The sheets.ts CampaignRow
  *     / AdRow shape uses 'Meta'|'Google' (capitalized). Each reader
  *     TitleCases at the boundary so consumers don't have to.
- *   - `upsertDashboardStateKeyPostgres` is intentionally NOT exported here.
- *     It's a WRITE that needs `getSupabaseAdmin()` (service_role) per D-B4,
- *     and the dashboard-state POST branching is deferred to Phase 05.7
- *     per Plan 19 (which only branches the READ path in 05.6).
- *   - Dormant in 05.6 — no `/api/*` route imports this file yet.
+ *   - Phase 05.7: `upsertDashboardStateKeyPostgres` is the dashboard-state
+ *     write path that replaces the Sheets writer. Uses `getSupabaseAdmin()`
+ *     (service_role) because anon only has SELECT per migration 20260521075741.
  */
 import { getSupabase } from '@/lib/supabase';
+import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import type { DailyRow } from './types';
 import type { DateRange } from './dateRange';
 import { isInRange } from './dateRange';
@@ -724,4 +724,65 @@ export async function fetchProductCatalogFromPostgres(): Promise<CatalogProduct[
     });
   }
   return rows;
+}
+
+// ────────────────────────────────────────────────────────────────────────
+// 9. upsertDashboardStateKeyPostgres — dashboard_state INSERT/UPDATE
+//    Mirrors sheets.ts:upsertDashboardStateKey (line 432) — WRITE side.
+//    Phase 05.7 — replaces the Sheets write path for /api/dashboard-state POST.
+// ────────────────────────────────────────────────────────────────────────
+
+/**
+ * Postgres equivalent of sheets.ts:upsertDashboardStateKey.
+ *
+ * Atomic UPSERT on the `dashboard_state` table (`key TEXT PRIMARY KEY,
+ * value JSONB, updated_at TIMESTAMPTZ` per migration 20260521063112).
+ *
+ * Why service_role (`getSupabaseAdmin`) and not anon:
+ *   - Migration 20260521075741 grants anon SELECT only on dashboard_state.
+ *     INSERT/UPDATE need an authenticated role; service_role bypasses RLS
+ *     (which is disabled here anyway) and is the simplest write path under
+ *     the URL-obscurity trust model (D-D2).
+ *   - This function is server-side only (called from the /api/dashboard-state
+ *     POST handler). It must NEVER be imported by a client component, same
+ *     constraint as `getSupabaseAdmin` itself.
+ *
+ * Concurrency vs. the Sheets writer: the Sheets writer had a CR2-01 race
+ * (two concurrent appends for the same new key produced duplicate rows).
+ * Postgres's PRIMARY KEY on `key` + the `onConflict: 'key'` upsert clause
+ * collapses that race to a single row server-side — no duplicate-cleanup
+ * branch needed. The .upsert call here is therefore strictly safer than
+ * the Sheets path it replaces, with no behavioral regression on the
+ * single-key happy path.
+ *
+ * Caller invariants (matches sheets.ts:upsertDashboardStateKey):
+ *   - `key` MUST already pass `isAllowedStateKey` (the /api/dashboard-state
+ *     route validates this at the API boundary; we do not re-validate here
+ *     for the same reason the Sheets writer does not).
+ *   - `value` MUST be JSON-serializable (the JSONB column will throw on
+ *     non-serializable inputs — `BigInt`, circular refs, etc. The route
+ *     handler's `JSON.stringify(body.value ?? null)` size-check above this
+ *     call also surfaces those errors first).
+ */
+export async function upsertDashboardStateKeyPostgres(
+  key: string,
+  value: unknown,
+): Promise<void> {
+  const admin = getSupabaseAdmin();
+  const { error } = await admin
+    .from('dashboard_state')
+    .upsert(
+      {
+        key,
+        // JSONB column accepts any JSON-serializable value. Cast is required
+        // because supabase-js's untyped insert type insists on a row-shape
+        // mapping; we don't have a generated Database<T> codegen.
+        value: value as never,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'key' },
+    );
+  if (error) {
+    throw new Error(`dashboard_state upsert (${key}): ${error.message}`);
+  }
 }

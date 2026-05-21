@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-import { fetchProductCatalog, type CatalogProduct } from '@/lib/productCatalog';
+import type { CatalogProduct } from '@/lib/productCatalog';
 import { fetchProductCatalogFromPostgres } from '@/lib/postgresReaders';
-import { readFrom } from '@/lib/featureFlags';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
+// Phase 05.7: removed `fetchProductCatalog` (Sheets path) + `readFrom`.
 
 // 60 seconds — short enough that after running refreshAllProductCatalogs in
 // Apps Script, the user sees fresh data within a minute (instead of waiting
@@ -18,11 +18,8 @@ export type ProductCatalogResponse = {
 
 export async function GET() {
   try {
-    // D-E3 branch: postgres path dormant in 05.6; 05.7 flips READ_FROM=postgres.
-    // Both branches return CatalogProduct[].
-    const rows = readFrom() === 'postgres'
-      ? await fetchProductCatalogFromPostgres()
-      : await fetchProductCatalog();
+    // Phase 05.7: Postgres-only — readFrom() branch removed.
+    const rows = await fetchProductCatalogFromPostgres();
     if (rows.length > 50000) {
       console.warn(`/api/product-catalog: large response (${rows.length} rows) — consider pagination`);
     }

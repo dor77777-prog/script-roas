@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
-import { fetchProductsData, type ProductRow } from '@/lib/products';
+import type { ProductRow } from '@/lib/products';
 import { fetchProductsFromPostgres } from '@/lib/postgresReaders';
-import { readFrom } from '@/lib/featureFlags';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
 import { parseRangeParams, RangeParamError } from '@/lib/dateRange';
+// Phase 05.7: removed `fetchProductsData` (Sheets path) + `readFrom`.
+// `ProductRow` type kept as a re-export contract only.
 
 // No `force-dynamic` — it would override `revalidate` and the Cache-Control
 // header, defeating ISR. (IN-06)
@@ -34,11 +35,8 @@ export async function GET(req: Request) {
   }
 
   try {
-    // D-E3 branch: postgres path dormant in 05.6; 05.7 flips READ_FROM=postgres.
-    // Both branches return ProductRow[].
-    const rows = readFrom() === 'postgres'
-      ? await fetchProductsFromPostgres({ range })
-      : await fetchProductsData({ range });
+    // Phase 05.7: Postgres-only — readFrom() branch removed.
+    const rows = await fetchProductsFromPostgres({ range });
     if (rows.length > 50000) {
       console.warn(`/api/products: large response (${rows.length} rows) — consider pagination`);
     }
