@@ -150,12 +150,17 @@ function parseLineItems(v: unknown): OrderLineItem[] {
 export async function fetchDailyDataFromPostgres(
   opts?: { range?: DateRange },
 ): Promise<DailyRow[]> {
+  // supabase-js defaults to a 1,000-row PostgREST max. Date-rolled aggregate
+  // tables can exceed that quickly with multi-store × 30-day windows, so we
+  // raise the per-query cap to a generous ceiling (50k rows ≈ 5 years of
+  // 3 stores × ~10 rows/day for data_daily — far above realistic usage).
   let q = getSupabase()
     .from('data_daily')
     .select(
       'date, store_id, store_name, fb_spend_cad, ga_spend_cad, total_spend_cad, ' +
         'revenue_cad, roas, gross_profit_cad, cogs_cad, net_profit_cad',
-    );
+    )
+    .range(0, 49_999);
 
   if (opts?.range) {
     q = q.gte('date', opts.range.from).lte('date', opts.range.to);
@@ -336,12 +341,14 @@ export async function fetchDashboardStateFromPostgres(): Promise<{
 export async function fetchProductsFromPostgres(
   opts?: { range?: DateRange },
 ): Promise<ProductRow[]> {
+  // supabase-js 1,000-row cap override (see fetchDailyDataFromPostgres comment).
   let q = getSupabase()
     .from('products_daily')
     .select(
       'date, store_id, store_name, product_id, product_title, units, ' +
         'gross_revenue_cad, orders, net_revenue_cad',
-    );
+    )
+    .range(0, 49_999);
 
   if (opts?.range) {
     q = q.gte('date', opts.range.from).lte('date', opts.range.to);
@@ -419,7 +426,10 @@ export async function fetchCampaignsFromPostgres(
       'date, store_id, platform, campaign_id, campaign_name, ' +
         'ad_set_id, ad_set_name, spend_cad, impressions, clicks, conversions, ' +
         'conversion_value_cad, campaign_budget_cad, ad_set_budget_cad, budget_type',
-    );
+    )
+    // supabase-js 1,000-row cap override — campaigns_daily grows fastest
+    // (~50 ad-sets × 3 stores × N days × 2 platforms).
+    .range(0, 49_999);
 
   if (opts?.range) {
     q = q.gte('date', opts.range.from).lte('date', opts.range.to);
@@ -489,7 +499,9 @@ export async function fetchAdsFromPostgres(
       'date, store_id, platform, campaign_id, campaign_name, ad_set_id, ' +
         'ad_set_name, ad_id, ad_name, spend_cad, impressions, clicks, ' +
         'conversions, conversion_value_cad',
-    );
+    )
+    // supabase-js 1,000-row cap override.
+    .range(0, 49_999);
 
   if (opts?.range) {
     q = q.gte('date', opts.range.from).lte('date', opts.range.to);
@@ -561,7 +573,9 @@ export async function fetchOrdersAttributionFromPostgres(
       'date, store_id, order_id, total_cad, source, utm_source, utm_medium, ' +
         'utm_campaign, utm_content, fbclid_present, gclid_present, referrer, ' +
         'utm_id, utm_term, line_items',
-    );
+    )
+    // supabase-js 1,000-row cap override.
+    .range(0, 49_999);
 
   if (opts?.range) {
     q = q.gte('date', opts.range.from).lte('date', opts.range.to);
@@ -619,7 +633,9 @@ export async function fetchOrdersAttributionFromPostgres(
 export async function fetchProductCatalogFromPostgres(): Promise<CatalogProduct[]> {
   const { data, error } = await getSupabase()
     .from('product_catalog')
-    .select('store_id, product_id, title, handle, status, price_cad, image_url, product_type, vendor');
+    .select('store_id, product_id, title, handle, status, price_cad, image_url, product_type, vendor')
+    // supabase-js 1,000-row cap override — catalog can hit 700+ products/store.
+    .range(0, 49_999);
 
   if (error) throw new Error(`postgresReaders.fetchProductCatalog: ${error.message}`);
 
