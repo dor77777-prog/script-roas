@@ -21,7 +21,11 @@ export default defineConfig({
     //   2. Add `@testing-library/react` + `@testing-library/jest-dom` deps.
     //   3. Configure setupFiles for jest-dom matchers.
     environment: 'node',
-    include: ['src/lib/__tests__/**/*.test.{ts,tsx}'],
+    // Phase 05.6 adds src/lib/fetchers/__tests__/ — the TS fetcher ports
+    // (meta, googleAds, fx, manualOverrides, shopify) live in a sibling
+    // sub-directory. Globbing src/lib/**/__tests__ keeps both locations
+    // picked up by `npm run test` without per-fetcher config churn.
+    include: ['src/lib/**/__tests__/**/*.test.{ts,tsx}'],
     globals: false, // explicit imports — not relying on describe/it globals
   },
   resolve: {
