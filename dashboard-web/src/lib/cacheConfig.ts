@@ -43,6 +43,16 @@ export const CACHE_CONFIG = {
   // use of `cacheControl('manualOverrides')` on the CRUD route a no-op
   // rather than a silent staleness bug.
   manualOverrides: { revalidate: 0, swr: 0 },
+  // Phase 05.6-13 operator console Inngest jobs proxy. Client polls
+  // /api/operator/jobs every 15s (D-D3). Server caches 5s so concurrent
+  // tabs / SWR mutate() bursts get coalesced by the CDN within the
+  // polling window without serving stale-by-more-than-one-tick data.
+  // swr=30 covers the gap when the operator opens a tab after a brief
+  // idle and lets the CDN return the previous payload while
+  // re-fetching. Together these match RESEARCH §Pattern 6 lines 766-832
+  // and the threat-model mitigation T-05.6-13-D3 (CDN coalescing across
+  // multiple tabs to avoid Inngest REST quota burn).
+  operatorJobs: { revalidate: 5, swr: 30 },
 } as const;
 
 export type CacheKey = keyof typeof CACHE_CONFIG;
