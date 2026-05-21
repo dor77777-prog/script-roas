@@ -25,6 +25,7 @@ import {
   fetchMetaAdSetInsights,
   fetchMetaAdInsights,
   fetchMetaSpendForDay,
+  fetchMetaBudgets,
   META_API_VERSION,
 } from '../meta';
 
@@ -673,5 +674,321 @@ describe('Phase 05.6.1 — meta.ts fetchMetaAdInsights (level=ad port)', () => {
     expect(out).toHaveLength(1);
     expect(out[0].adId).toBe('late-attr');
     expect(out[0].conversions).toBe(1);
+  });
+});
+
+// ===========================================================================
+// Phase 05.7.2 — fetchMetaBudgets (port of MetaAds.gs:157-289)
+//
+// Covers:
+//   1. Happy path — 2 campaigns, 3 adsets, currency=ILS, minor→major.
+//   2. Pagination follows body.paging.next on BOTH campaigns + adsets loops.
+//   3. Missing budget fields default to 0 (no NaN, no crash).
+//   4. Account-currency fetch failure falls back to ILS without throwing.
+//   5. Minor→major conversion is exact (5000 agorot → 50.00 ILS).
+//   6. Per-page non-200 in campaigns/adsets is soft-failure (warn + return
+//      partial map), not a thrown error — operators get partial data instead
+//      of a cron-blocking outage.
+// ===========================================================================
+
+type CampaignWireRow = {
+  id?: string;
+  daily_budget?: string;
+  lifetime_budget?: string;
+  bid_strategy?: string;
+  status?: string;
+  effective_status?: string;
+};
+type AdSetWireRow = {
+  id?: string;
+  campaign_id?: string;
+  daily_budget?: string;
+  lifetime_budget?: string;
+  status?: string;
+  effective_status?: string;
+};
+
+/** Build an account-currency response (`act_{id}?fields=currency`). */
+function buildAccountCurrencyResponse(currency: string | undefined): Response {
+  const body = currency === undefined ? {} : { currency };
+  return {
+    ok: true,
+    status: 200,
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  } as unknown as Response;
+}
+
+function buildCampaignsBudgetsResponse(rows: CampaignWireRow[], next?: string): Response {
+  const body: { data: CampaignWireRow[]; paging?: { next?: string } } = { data: rows };
+  if (next) body.paging = { next };
+  return {
+    ok: true,
+    status: 200,
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  } as unknown as Response;
+}
+
+function buildAdSetsBudgetsResponse(rows: AdSetWireRow[], next?: string): Response {
+  const body: { data: AdSetWireRow[]; paging?: { next?: string } } = { data: rows };
+  if (next) body.paging = { next };
+  return {
+    ok: true,
+    status: 200,
+    json: async () => body,
+    text: async () => JSON.stringify(body),
+  } as unknown as Response;
+}
+
+describe('Phase 05.7.2 — meta.ts fetchMetaBudgets (port of MetaAds.gs getMetaBudgets)', () => {
+  const originalToken = process.env[TOKEN_KEY];
+  const originalAcct = process.env[ACCT_KEY];
+  let fetchSpy: ReturnType<typeof vi.fn>;
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    process.env[TOKEN_KEY] = 'test-token-uzoshop';
+    process.env[ACCT_KEY] = AD_ACCOUNT_ID;
+    delete process.env.META_GLOBAL_TOKEN;
+    fetchSpy = vi.fn();
+    vi.stubGlobal('fetch', fetchSpy);
+    // Silence the expected warn() calls so the test output stays clean; we
+    // assert against `warnSpy.mock.calls` directly where the test cares.
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    if (originalToken === undefined) delete process.env[TOKEN_KEY];
+    else process.env[TOKEN_KEY] = originalToken;
+    if (originalAcct === undefined) delete process.env[ACCT_KEY];
+    else process.env[ACCT_KEY] = originalAcct;
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    warnSpy.mockRestore();
+  });
+
+  it('Budgets Test 1: happy path — currency, 2 campaigns, 3 adsets, minor→major conversion', async () => {
+    // 1st call: account currency. 2nd: campaigns page 1 (no next). 3rd: adsets page 1 (no next).
+    fetchSpy
+      .mockResolvedValueOnce(buildAccountCurrencyResponse('ILS'))
+      .mockResolvedValueOnce(
+        buildCampaignsBudgetsResponse([
+          { id: 'c-cbo', daily_budget: '5000', lifetime_budget: '0', bid_strategy: 'LOWEST_COST_WITHOUT_CAP' },
+          { id: 'c-abo', daily_budget: '0', lifetime_budget: '0' }, // ABO — adset owns budget
+        ]),
+      )
+      .mockResolvedValueOnce(
+        buildAdSetsBudgetsResponse([
+          { id: 'as-1', campaign_id: 'c-cbo', daily_budget: '0', lifetime_budget: '0' },
+          { id: 'as-2', campaign_id: 'c-abo', daily_budget: '3000', lifetime_budget: '0' },
+          { id: 'as-3', campaign_id: 'c-abo', daily_budget: '0', lifetime_budget: '12000' },
+        ]),
+      );
+
+    const out = await fetchMetaBudgets(STORE_ID);
+
+    expect(out.currency).toBe('ILS');
+    // Campaign minor→major: 5000 agorot → 50.00 ILS.
+    expect(out.campaigns['c-cbo']).toEqual({
+      dailyBudget: 50,
+      lifetimeBudget: 0,
+      bidStrategy: 'LOWEST_COST_WITHOUT_CAP',
+    });
+    expect(out.campaigns['c-abo']).toEqual({
+      dailyBudget: 0,
+      lifetimeBudget: 0,
+      bidStrategy: null,
+    });
+    // AdSet minor→major: 3000 → 30.00; 12000 → 120.00.
+    expect(out.adSets['as-1']).toEqual({
+      dailyBudget: 0,
+      lifetimeBudget: 0,
+      campaignId: 'c-cbo',
+    });
+    expect(out.adSets['as-2']).toEqual({
+      dailyBudget: 30,
+      lifetimeBudget: 0,
+      campaignId: 'c-abo',
+    });
+    expect(out.adSets['as-3']).toEqual({
+      dailyBudget: 0,
+      lifetimeBudget: 120,
+      campaignId: 'c-abo',
+    });
+
+    // URL invariants — all 3 calls use the META_API_VERSION constant and target
+    // the correct ad account.
+    const urls = fetchSpy.mock.calls.map((c: unknown[]) => String(c[0]));
+    expect(urls[0]).toMatch(/act_\d+\?fields=currency/);
+    expect(urls[1]).toContain(`/act_${AD_ACCOUNT_ID}/campaigns`);
+    expect(urls[1]).toContain('daily_budget');
+    expect(urls[1]).toContain('lifetime_budget');
+    expect(urls[1]).toContain('bid_strategy');
+    expect(urls[2]).toContain(`/act_${AD_ACCOUNT_ID}/adsets`);
+    expect(urls[2]).toContain('campaign_id');
+    for (const url of urls) {
+      expect(url).toContain(`graph.facebook.com/${META_API_VERSION}`);
+    }
+  });
+
+  it('Budgets Test 2: pagination follows body.paging.next on BOTH loops', async () => {
+    fetchSpy
+      .mockResolvedValueOnce(buildAccountCurrencyResponse('ILS'))
+      // Campaigns: page 1 → next URL → page 2 (terminal).
+      .mockResolvedValueOnce(
+        buildCampaignsBudgetsResponse(
+          [{ id: 'c1', daily_budget: '1000', lifetime_budget: '0' }],
+          'https://graph.facebook.com/campaigns-page-2',
+        ),
+      )
+      .mockResolvedValueOnce(
+        buildCampaignsBudgetsResponse([{ id: 'c2', daily_budget: '2000', lifetime_budget: '0' }]),
+      )
+      // AdSets: page 1 → next URL → page 2 (terminal).
+      .mockResolvedValueOnce(
+        buildAdSetsBudgetsResponse(
+          [{ id: 'as1', campaign_id: 'c1', daily_budget: '500', lifetime_budget: '0' }],
+          'https://graph.facebook.com/adsets-page-2',
+        ),
+      )
+      .mockResolvedValueOnce(
+        buildAdSetsBudgetsResponse([{ id: 'as2', campaign_id: 'c2', daily_budget: '700', lifetime_budget: '0' }]),
+      );
+
+    const out = await fetchMetaBudgets(STORE_ID);
+
+    expect(Object.keys(out.campaigns).sort()).toEqual(['c1', 'c2']);
+    expect(Object.keys(out.adSets).sort()).toEqual(['as1', 'as2']);
+    expect(out.campaigns['c1'].dailyBudget).toBe(10); // 1000/100
+    expect(out.campaigns['c2'].dailyBudget).toBe(20);
+    expect(out.adSets['as1'].dailyBudget).toBe(5);
+    expect(out.adSets['as2'].dailyBudget).toBe(7);
+
+    // Verify the paging.next URLs were actually followed verbatim.
+    const urls = fetchSpy.mock.calls.map((c: unknown[]) => String(c[0]));
+    expect(urls[2]).toBe('https://graph.facebook.com/campaigns-page-2');
+    expect(urls[4]).toBe('https://graph.facebook.com/adsets-page-2');
+    expect(fetchSpy).toHaveBeenCalledTimes(5);
+  });
+
+  it('Budgets Test 3: missing budget fields default to 0 (no NaN)', async () => {
+    fetchSpy
+      .mockResolvedValueOnce(buildAccountCurrencyResponse('ILS'))
+      .mockResolvedValueOnce(
+        buildCampaignsBudgetsResponse([
+          // No daily/lifetime/bid_strategy at all.
+          { id: 'c-empty' },
+          // Empty string daily, null lifetime via undefined.
+          { id: 'c-empty-str', daily_budget: '' },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        buildAdSetsBudgetsResponse([
+          { id: 'as-empty', campaign_id: '' },
+          // Missing id → must be skipped (no `''` key in adSets).
+          { campaign_id: 'cX', daily_budget: '100' },
+        ]),
+      );
+
+    const out = await fetchMetaBudgets(STORE_ID);
+
+    expect(out.campaigns['c-empty']).toEqual({
+      dailyBudget: 0,
+      lifetimeBudget: 0,
+      bidStrategy: null,
+    });
+    expect(out.campaigns['c-empty-str']).toEqual({
+      dailyBudget: 0,
+      lifetimeBudget: 0,
+      bidStrategy: null,
+    });
+    expect(out.adSets['as-empty']).toEqual({
+      dailyBudget: 0,
+      lifetimeBudget: 0,
+      campaignId: '',
+    });
+    // Missing id ⇒ no row created (we don't want '' as a real key).
+    expect(out.adSets['']).toBeUndefined();
+
+    // No NaN anywhere — confirms the parseFloat('') guard works.
+    for (const c of Object.values(out.campaigns)) {
+      expect(Number.isFinite(c.dailyBudget)).toBe(true);
+      expect(Number.isFinite(c.lifetimeBudget)).toBe(true);
+    }
+    for (const a of Object.values(out.adSets)) {
+      expect(Number.isFinite(a.dailyBudget)).toBe(true);
+      expect(Number.isFinite(a.lifetimeBudget)).toBe(true);
+    }
+  });
+
+  it('Budgets Test 4: account-currency fetch failure falls back to ILS (warn but don\'t throw)', async () => {
+    // 1st call (currency): HTTP 500. 2nd: campaigns. 3rd: adsets.
+    fetchSpy
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        json: async () => ({ error: { message: 'server error' } }),
+        text: async () => 'server error',
+      } as unknown as Response)
+      .mockResolvedValueOnce(buildCampaignsBudgetsResponse([{ id: 'c1', daily_budget: '1000' }]))
+      .mockResolvedValueOnce(buildAdSetsBudgetsResponse([{ id: 'a1', campaign_id: 'c1', daily_budget: '500' }]));
+
+    const out = await fetchMetaBudgets(STORE_ID);
+
+    // Defaulted to ILS — the explicit fallback per MetaAds.gs:194.
+    expect(out.currency).toBe('ILS');
+    // Other data still returned despite the currency fetch failing.
+    expect(out.campaigns['c1'].dailyBudget).toBe(10);
+    expect(out.adSets['a1'].dailyBudget).toBe(5);
+    // A warning was emitted so operators see it in the Inngest log.
+    const warned = warnSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('|');
+    expect(warned.toLowerCase()).toContain('currency');
+    expect(warned).toContain('uzoshop');
+  });
+
+  it('Budgets Test 5: minor→major conversion exactness (string units → divide by 100)', async () => {
+    fetchSpy
+      .mockResolvedValueOnce(buildAccountCurrencyResponse('ILS'))
+      .mockResolvedValueOnce(
+        buildCampaignsBudgetsResponse([
+          // 10000 agorot = ₪100.00 exact.
+          { id: 'c-exact', daily_budget: '10000', lifetime_budget: '0' },
+          // 1 agora = ₪0.01 (edge case).
+          { id: 'c-cent', daily_budget: '1' },
+        ]),
+      )
+      .mockResolvedValueOnce(buildAdSetsBudgetsResponse([]));
+
+    const out = await fetchMetaBudgets(STORE_ID);
+
+    expect(out.campaigns['c-exact'].dailyBudget).toBe(100);
+    expect(out.campaigns['c-cent'].dailyBudget).toBe(0.01);
+  });
+
+  it('Budgets Test 6: per-page non-200 on campaigns is a soft-fail (warn + return partial)', async () => {
+    // currency OK, campaigns HTTP 500, adsets OK with one row.
+    fetchSpy
+      .mockResolvedValueOnce(buildAccountCurrencyResponse('ILS'))
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        text: async () => 'oops',
+        json: async () => ({}),
+      } as unknown as Response)
+      .mockResolvedValueOnce(
+        buildAdSetsBudgetsResponse([{ id: 'a1', campaign_id: 'c-unknown', daily_budget: '500' }]),
+      );
+
+    const out = await fetchMetaBudgets(STORE_ID);
+
+    // Campaigns map empty (no crash, no throw).
+    expect(out.campaigns).toEqual({});
+    // AdSets still populated — the campaigns failure must NOT abort the adsets loop.
+    expect(out.adSets['a1'].dailyBudget).toBe(5);
+    // Warning surfaces the storeId + status.
+    const warned = warnSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('|');
+    expect(warned).toContain('uzoshop');
+    expect(warned).toContain('500');
   });
 });

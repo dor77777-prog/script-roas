@@ -124,6 +124,45 @@ export type MetaDailyStoreSpend = {
   currency: string;
 };
 
+/**
+ * Phase 05.7.2 — return shape for `fetchMetaBudgets`. Direct port of the
+ * `getMetaBudgets` shape in `MetaAds.gs:148-156`. Two map-of-id objects + a
+ * single account-currency code so the cron writer can FX-convert once.
+ *
+ * Budget values are in MAJOR units (e.g. ILS or USD), already divided by 100
+ * from Meta's minor-unit wire shape (agorot/cents). The Apps Script docstring
+ * line 155-156 makes the unit explicit: "הערכים daily/lifetime כבר חלוקים
+ * ב-100 (כלומר במטבע מלא, לא ב-cents)".
+ */
+export type MetaBudgets = {
+  /** ISO 4217 from `act_{id}?fields=currency`. Defaults to 'ILS' on fetch failure. */
+  currency: string;
+  /** campaignId → budgets, populated for both CBO and lifetime-only campaigns. */
+  campaigns: Record<
+    string,
+    {
+      /** Daily budget in MAJOR currency units. 0 when unset / lifetime-only / paused. */
+      dailyBudget: number;
+      /** Lifetime budget in MAJOR currency units. 0 when unset. */
+      lifetimeBudget: number;
+      /** e.g. 'LOWEST_COST_WITHOUT_CAP', 'COST_CAP', '' when unset. */
+      bidStrategy: string | null;
+    }
+  >;
+  /** adSetId → budgets + campaign membership. */
+  adSets: Record<
+    string,
+    {
+      /** Daily budget in MAJOR currency units. 0 when CBO (campaign owns budget). */
+      dailyBudget: number;
+      /** Lifetime budget in MAJOR currency units. 0 when unset. */
+      lifetimeBudget: number;
+      /** Parent campaign — used by the writer to look up the right CBO bucket. */
+      campaignId: string;
+    }
+  >;
+};
+
 // --- Wire types -------------------------------------------------------------
 // Narrowed shape of the fields we actually read from the /insights response.
 type MetaActionEntry = { action_type: string; value: string };
@@ -449,4 +488,203 @@ export async function fetchMetaAdInsights(
     );
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Wire-row shapes for the campaigns + adsets + account endpoints used by
+// `fetchMetaBudgets`. Separate from the /insights wire types above because
+// these endpoints expose budget fields (not metrics), and the budget values
+// come back as STRINGS in MINOR currency units (agorot for ILS, cents for
+// USD). The `toMajor` helper inside `fetchMetaBudgets` performs the divide-
+// by-100 conversion — see MetaAds.gs:205-208 for the canonical implementation.
+// ---------------------------------------------------------------------------
+type MetaCampaignWireRow = {
+  id?: string;
+  daily_budget?: string;
+  lifetime_budget?: string;
+  bid_strategy?: string;
+  status?: string;
+  effective_status?: string;
+};
+type MetaAdSetWireRow = {
+  id?: string;
+  campaign_id?: string;
+  daily_budget?: string;
+  lifetime_budget?: string;
+  status?: string;
+  effective_status?: string;
+};
+type MetaCampaignsBudgetsBody = {
+  data?: MetaCampaignWireRow[];
+  paging?: { next?: string };
+};
+type MetaAdSetsBudgetsBody = {
+  data?: MetaAdSetWireRow[];
+  paging?: { next?: string };
+};
+
+/**
+ * Phase 05.7.2 — 1:1 port of `getMetaBudgets` in MetaAds.gs:157-289.
+ *
+ * Returns the campaign + ad-set daily / lifetime budgets, plus the ad
+ * account's currency. The cron writer (`cronDaily.ts` Step 5c) uses this to
+ * populate the `campaign_budget_cad`, `ad_set_budget_cad`, and `budget_type`
+ * columns on `campaigns_daily`, which previously wrote null and made the
+ * dashboard's campaigns tab unable to show budgets — a Sheets-side
+ * regression at cut-over.
+ *
+ * Why a SEPARATE fetcher (not folded into /insights):
+ *   Meta's /insights endpoint does NOT expose budgets. They live on the
+ *   campaigns / adsets endpoints (not /insights), each with its own
+ *   pagination loop. The Apps Script side calls them 1× per daily cron
+ *   (MetaAds.gs:288); we match that frequency — one call per (store, day)
+ *   inside the existing fetch-meta step.run, so the daily exec budget stays
+ *   at 6 (no new step added).
+ *
+ * Three HTTP calls in this function:
+ *   1. `GET /act_{id}?fields=currency` — account currency one-shot.
+ *      Soft-failure (warns + falls back to ILS) per MetaAds.gs:174-203,
+ *      because a partial budget map is much more useful than throwing.
+ *   2. `GET /act_{id}/campaigns?fields=...` — paginated up to 50 pages.
+ *   3. `GET /act_{id}/adsets?fields=...` — paginated up to 50 pages.
+ *
+ * Units: Meta returns budget values as STRINGS in MINOR currency units
+ * (e.g. `"5000"` in an ILS account = ₪50.00). The `toMajor` helper
+ * divides by 100 to convert to MAJOR units. The cron writer then runs
+ * the result through `cadFor()` (same FX closure that already converts
+ * spend + conversion_value) so the column lands in CAD on disk.
+ *
+ * Error handling: this fetcher must NEVER throw on a single page error
+ * (mirrors MetaAds.gs:218-221 + 257-260). A partial budget map is far
+ * more useful than a hard failure that breaks the whole cron run.
+ * Operators see the warn() in the Inngest job log, and the unaffected
+ * campaigns still get their budgets populated.
+ */
+export async function fetchMetaBudgets(storeId: string): Promise<MetaBudgets> {
+  const token = getMetaToken(storeId);
+  const adAccountId = getMetaAdAccountId(storeId);
+
+  // ---- toMajor: minor → major unit conversion --------------------------
+  // Meta returns budget values as STRINGS in MINOR units (agorot/cents)
+  // — e.g. `"5000"` in an ILS account is ₪50.00. Direct port of
+  // MetaAds.gs:205-208.
+  function toMajor(rawStr: string | undefined): number {
+    if (rawStr === undefined || rawStr === null || rawStr === '') return 0;
+    const n = parseFloat(rawStr);
+    return Number.isFinite(n) ? n / 100 : 0;
+  }
+
+  // ---- 1. account currency (one shot) ---------------------------------
+  // Mirrors MetaAds.gs:172-203. A silent ILS fallback would multiply USD
+  // budgets by the ILS→CAD rate (~0.36) instead of USD→CAD (~1.36) —
+  // ~3.8x off. The Apps Script logs a loud warning on the fallback; we
+  // do the same so the operator sees it in the Inngest run output.
+  let currency = 'ILS';
+  try {
+    const acctUrl =
+      `https://graph.facebook.com/${META_API_VERSION}/act_${adAccountId}` +
+      `?fields=currency&access_token=${encodeURIComponent(token)}`;
+    const acctRes = await fetch(acctUrl);
+    if (acctRes.ok) {
+      const acctBody = (await acctRes.json()) as { currency?: string };
+      if (acctBody.currency) {
+        currency = acctBody.currency;
+      } else {
+        console.warn(
+          `Meta budgets ${storeId}: account currency fetch returned 200 ` +
+            `but no currency field; defaulting to ILS. Non-ILS accounts ` +
+            `will be mis-converted (~3-4x off).`,
+        );
+      }
+    } else {
+      const body = await acctRes.text();
+      console.warn(
+        `Meta budgets ${storeId}: account currency fetch failed ` +
+          `(${acctRes.status}: ${body.slice(0, 200)}); defaulting to ILS.`,
+      );
+    }
+  } catch (e) {
+    // Network / DNS / abort — never throw out of currency fetch (parity
+    // with MetaAds.gs:197-203 catch block).
+    console.warn(
+      `Meta budgets ${storeId}: account currency fetch threw: ` +
+        `${(e as Error).message ?? String(e)}; defaulting to ILS.`,
+    );
+  }
+
+  // ---- 2. campaigns (paginated) ---------------------------------------
+  const campaigns: MetaBudgets['campaigns'] = {};
+  let curl: string | null =
+    `https://graph.facebook.com/${META_API_VERSION}/act_${adAccountId}/campaigns` +
+    `?fields=id,daily_budget,lifetime_budget,bid_strategy,status,effective_status` +
+    `&limit=500&access_token=${encodeURIComponent(token)}`;
+  let safety = 0;
+  while (curl && safety < 50) {
+    const res = await fetch(curl);
+    if (!res.ok) {
+      const body = await res.text();
+      // SOFT-FAIL per MetaAds.gs:218-221 — partial map > throw on a
+      // transient page error. Log and bail out of the loop.
+      console.warn(
+        `Meta budgets ${storeId} campaigns failed (${res.status}): ` +
+          `${body.slice(0, 200)}`,
+      );
+      break;
+    }
+    const body = (await res.json()) as MetaCampaignsBudgetsBody;
+    for (const c of body.data ?? []) {
+      if (!c.id) continue;
+      campaigns[c.id] = {
+        dailyBudget: toMajor(c.daily_budget),
+        lifetimeBudget: toMajor(c.lifetime_budget),
+        bidStrategy: c.bid_strategy || null,
+      };
+    }
+    curl = body.paging?.next ?? null;
+    safety++;
+  }
+  if (safety >= 50 && curl) {
+    console.warn(
+      `Meta budgets ${storeId}: hit pagination cap of 50 pages for campaigns ` +
+        `(${Object.keys(campaigns).length} rows collected); some campaigns may be missing.`,
+    );
+  }
+
+  // ---- 3. ad-sets (paginated) -----------------------------------------
+  const adSets: MetaBudgets['adSets'] = {};
+  let aurl: string | null =
+    `https://graph.facebook.com/${META_API_VERSION}/act_${adAccountId}/adsets` +
+    `?fields=id,campaign_id,daily_budget,lifetime_budget,status,effective_status` +
+    `&limit=500&access_token=${encodeURIComponent(token)}`;
+  safety = 0;
+  while (aurl && safety < 50) {
+    const res = await fetch(aurl);
+    if (!res.ok) {
+      const body = await res.text();
+      console.warn(
+        `Meta budgets ${storeId} adsets failed (${res.status}): ` +
+          `${body.slice(0, 200)}`,
+      );
+      break;
+    }
+    const body = (await res.json()) as MetaAdSetsBudgetsBody;
+    for (const a of body.data ?? []) {
+      if (!a.id) continue;
+      adSets[a.id] = {
+        dailyBudget: toMajor(a.daily_budget),
+        lifetimeBudget: toMajor(a.lifetime_budget),
+        campaignId: a.campaign_id || '',
+      };
+    }
+    aurl = body.paging?.next ?? null;
+    safety++;
+  }
+  if (safety >= 50 && aurl) {
+    console.warn(
+      `Meta budgets ${storeId}: hit pagination cap of 50 pages for adsets ` +
+        `(${Object.keys(adSets).length} rows collected); some ad-sets may be missing.`,
+    );
+  }
+
+  return { currency, campaigns, adSets };
 }
