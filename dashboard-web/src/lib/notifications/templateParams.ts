@@ -10,8 +10,25 @@
 //   {{4}} = store 3 block (or "—" if missing)
 //   {{5}} = grand-totals block (or "אין נתונים זמינים" if no data)
 //
-// The block format is a 5-line Hebrew bullet list — see `storeBlock` /
-// `totalsBlock` below.
+// === CRITICAL: NO newlines / tabs / 5+ consecutive spaces inside a param ===
+//
+// 2026-05-21 first-pass shipped with `\n` separators inside each block (the
+// Apps Script version's format from when it was used for freeform Twilio
+// messages too). Meta rejected with error 132018:
+//
+//   "Param text cannot have new-line/tab characters or more than 4
+//    consecutive spaces"
+//
+// Meta's approved template body ALREADY contains the blank lines BETWEEN
+// {{N}} placeholders — each individual parameter must be a single-line
+// string with inline separators. Format matches the user's original
+// approved-template sample exactly:
+//
+//   🏪 uzoshop: • הוצאה: C$450 • הכנסות: C$1,890 • ROAS: 4.20 • הזמנות: 28  (פייסבוק: 18, גוגל: 6, אחרים: 4)
+//
+// Bullet separator: ` • ` (space-bullet-space). Order count + source
+// breakdown keep the 2-space separator before the paren so the breakdown
+// reads as a sub-clause (matches the sample on the approved template).
 
 import type { DaySummary, StoreSummary } from './summary';
 
@@ -29,17 +46,13 @@ function storeBlock(s: StoreSummary): string {
   return (
     '🏪 ' +
     s.storeName +
-    ':\n' +
-    '• הוצאה: ' +
+    ': • הוצאה: ' +
     formatCad(s.totalSpend) +
-    '\n' +
-    '• הכנסות: ' +
+    ' • הכנסות: ' +
     formatCad(s.revenue) +
-    '\n' +
-    '• ROAS: ' +
+    ' • ROAS: ' +
     formatRoas(s.roas) +
-    '\n' +
-    '• הזמנות: ' +
+    ' • הזמנות: ' +
     s.orders +
     '  (פייסבוק: ' +
     s.facebook +
@@ -53,17 +66,13 @@ function storeBlock(s: StoreSummary): string {
 
 function totalsBlock(t: DaySummary['totals']): string {
   return (
-    '🎯 סה"כ:\n' +
-    '• הוצאה: ' +
+    '🎯 סה"כ: • הוצאה: ' +
     formatCad(t.spend) +
-    '\n' +
-    '• הכנסות: ' +
+    ' • הכנסות: ' +
     formatCad(t.revenue) +
-    '\n' +
-    '• ROAS: ' +
+    ' • ROAS: ' +
     formatRoas(t.roas) +
-    '\n' +
-    '• הזמנות: ' +
+    ' • הזמנות: ' +
     t.orders +
     '  (פייסבוק: ' +
     t.facebook +
