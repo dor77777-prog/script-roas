@@ -25,6 +25,11 @@ export const CACHE_CONFIG = {
   // are user-driven (no background mutation), so 30s still feels instant
   // for cloud-sync; swr stays at 60 to keep stale-content tolerance high.
   dashboardState: { revalidate: 30, swr: 60 },
+  // Phase 05.5 D-D3: health endpoint pings sheets + supabase every 30s
+  // (SWR refreshInterval on the client). Server-side ISR window is 10s so
+  // the response can be fresher than the dashboardState route. swr=60
+  // covers the gap between client polls + CDN coalescing.
+  health: { revalidate: 10, swr: 60 },
 } as const;
 
 export type CacheKey = keyof typeof CACHE_CONFIG;

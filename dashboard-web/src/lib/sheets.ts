@@ -42,7 +42,7 @@ function monthsAgoUtcStr(months: number): string {
   return dt.toISOString().slice(0, 10);
 }
 
-function getAuth(write = false) {
+export function getAuth(write = false) {
   const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
   const privateKeyRaw = process.env.GOOGLE_PRIVATE_KEY;
 
