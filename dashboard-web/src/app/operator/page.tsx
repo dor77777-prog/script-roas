@@ -6,7 +6,7 @@
 //
 //   - Plan 13: JobsTable          → "ריצות אחרונות"
 //   - Plan 14: BackfillPicker     → "Backfill טווח תאריכים"
-//   - Plan 15: ManualOverridesCrud → "החלפות הוצאה ידניות"
+//   - Plan 15: ManualOverridesCrud → "החלפות הוצאה ידניות"   ← landed wave 4
 //   - Plan 16: SyncNowButtons      → "סנכרון עכשיו"
 //
 // Each plan replaces ONE <section>'s body with the corresponding component;
@@ -15,6 +15,8 @@
 //
 // Design tokens (`max-w-7xl`, `text-text-secondary`, etc.) follow S-8 (RTL +
 // Hebrew) and D-D4 (match existing dashboard styling — no new tokens).
+
+import { ManualOverridesCrud } from '@/components/operator/ManualOverridesCrud';
 
 export const metadata = {
   title: 'ניהול — ROAS Dashboard',
@@ -56,10 +58,10 @@ export default function OperatorPage() {
 
       <section>
         <h2 className="text-lg font-semibold mb-3">החלפות הוצאה ידניות</h2>
-        <p className="text-text-secondary text-sm">
-          {/* Plan 15: ManualOverridesCrud */}
-          (CRUD על manual_overrides יופיע כאן — ממומש בשלב הבא)
-        </p>
+        {/* Plan 15: ManualOverridesCrud — replaced placeholder copy with the
+            live component. The component handles its own loading / error /
+            empty states; this <section> only owns the title. */}
+        <ManualOverridesCrud />
       </section>
     </div>
   );
