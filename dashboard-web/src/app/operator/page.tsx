@@ -2,22 +2,27 @@
 //
 // ניהול (Management) — operator console tab. Per D-D1, this is a sibling
 // Next.js route (NOT a TabKey in the main dashboard's in-page tab nav). The
-// four sub-sections are filled in incrementally by plans 13-16:
+// four sub-sections were filled in incrementally by plans 13-16; all four
+// are now live:
 //
-//   - Plan 13: JobsTable          → "ריצות אחרונות"           ← landed wave 7
-//   - Plan 14: BackfillPicker     → "Backfill טווח תאריכים"
-//   - Plan 15: ManualOverridesCrud → "החלפות הוצאה ידניות"   ← landed wave 4
-//   - Plan 16: SyncNowButtons      → "סנכרון עכשיו"
+//   - Plan 13: JobsTable           → "ריצות אחרונות"          ← landed wave 7
+//   - Plan 14: BackfillPicker      → "Backfill טווח תאריכים"  ← landed wave 7
+//   - Plan 15: ManualOverridesCrud → "החלפות הוצאה ידניות"    ← landed wave 4
+//   - Plan 16: SyncNowButtons      → "סנכרון עכשיו"           ← landed wave 8
 //
-// Each plan replaces ONE <section>'s body with the corresponding component;
-// it does NOT restructure the page. Until each component lands, these
-// sections render placeholder copy ("ממומש בשלב הבא").
+// Each plan replaced ONE <section>'s body with the corresponding
+// component; it did NOT restructure the page. With plan 16 in, no
+// placeholder copy remains (the operator console is feature-complete
+// per D-D2). Plan 22 owns the matching User Manual section + the
+// post-deploy smoke battery for all four sub-views.
 //
 // Design tokens (`max-w-7xl`, `text-text-secondary`, etc.) follow S-8 (RTL +
 // Hebrew) and D-D4 (match existing dashboard styling — no new tokens).
 
 import { ManualOverridesCrud } from '@/components/operator/ManualOverridesCrud';
 import { JobsTable } from '@/components/operator/JobsTable';
+import { BackfillPicker } from '@/components/operator/BackfillPicker';
+import { SyncNowButtons } from '@/components/operator/SyncNowButtons';
 
 export const metadata = {
   title: 'ניהול — ROAS Dashboard',
@@ -35,10 +40,13 @@ export default function OperatorPage() {
 
       <section>
         <h2 className="text-lg font-semibold mb-3">סנכרון עכשיו</h2>
-        <p className="text-text-secondary text-sm">
-          {/* Plan 16: SyncNowButtons */}
-          (כפתורי סנכרון יופיעו כאן — ממומש בשלב הבא)
-        </p>
+        {/* Plan 16: SyncNowButtons — replaced placeholder copy with the
+            live component. 1 global + 3 per-store buttons. The component
+            owns its own pending / message / error states; this <section>
+            only owns the title. The Inngest event-key env var stays
+            server-side in /api/operator/sync-now/route.ts; this client
+            component never references it. */}
+        <SyncNowButtons />
       </section>
 
       <section>
