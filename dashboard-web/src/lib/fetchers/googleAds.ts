@@ -113,6 +113,40 @@ export type GoogleAdsAdGroupRow = {
 };
 
 /**
+ * Phase 05.6.1 — one row of Google Ads at `ad_group_ad` granularity. Shape
+ * matches the `ads_daily` writer's expected row in cronDaily.ts:5e.
+ *
+ * Google Ads is CAD-native for uzoshop (the only Google Ads store), so
+ * `spendCad` + `conversionValueCad` are populated directly from
+ * `cost_micros / 1_000_000` and `conversionsValue` — unlike the Meta ad-row
+ * type, no FX deferral is needed.
+ *
+ * Why `adSetId` for ad_group.id: the unified schema treats ad_group as the
+ * "ad set" peer of Meta's adset (GoogleAds.gs:96-100 documents the
+ * alignment; same convention used for GoogleAdsAdGroupRow).
+ *
+ * Responsive Search ads can have an empty `ad_group_ad.ad.name` — we pass
+ * the empty string through; the postgresReaders fallback at line 523 maps
+ * empty to '—' for display.
+ */
+export type GoogleAdsAdRow = {
+  storeId: string;
+  date: string;
+  platform: 'google';
+  campaignId: string;
+  campaignName: string;
+  adSetId: string;
+  adSetName: string;
+  adId: string;
+  adName: string;
+  impressions: number;
+  clicks: number;
+  conversions: number;
+  conversionValueCad: number;
+  spendCad: number;
+};
+
+/**
  * Returns the customer ID from env for `storeId`, or throws an env-var-naming
  * error. Strips dashes (Google sometimes formats customer IDs as
  * `123-456-7890`; the API path requires a flat numeric).
@@ -450,6 +484,121 @@ export async function fetchGoogleAdsAdGroupInsights(
       });
     }
   }
+
+  return out;
+}
+
+/**
+ * Phase 05.6.1 — one row per (campaign × ad_group × ad) for `storeId` on
+ * `dateStr`. Mirrors `fetchGoogleAdsAdGroupInsights` shape but at `ad_group_ad`
+ * granularity, with no Shopping/PMax fallback (Shopping/PMax campaigns return
+ * zero ads here — they are aggregated at the ad-group/campaign level only).
+ *
+ * Short-circuits to `[]` for non-Google-Ads stores (per `STORES_WITH_GOOGLE_ADS`,
+ * only uzoshop has Google Ads). The dominant code path (2 of 3 stores) thus
+ * makes zero API calls for ad-level insights.
+ *
+ * GAQL query targets the `ad_group_ad` resource — the canonical "ad inside an
+ * ad group" view. Metrics are 1:1 with ad-group-level metrics in semantics
+ * (impressions, clicks, cost_micros, conversions, conversions_value) just at
+ * finer granularity. `WHERE ad_group_ad.status = 'ENABLED'` filters paused
+ * ads — matches the ad-group-level filter at GoogleAds.gs:33-144 spirit.
+ *
+ * Empty-row filter: drop rows with spend=0 AND impressions=0 AND conv=0.
+ * Same threshold used at adset/ad-group level — keeps late-attributed
+ * conversions on paused ads when they exist.
+ *
+ * Currency: response carries `customer.currency_code` — same as the spend
+ * fetcher. We follow the same "report what the API says, no clamping"
+ * convention (D-D3 / D-C4).
+ */
+export async function fetchGoogleAdsAdInsights(
+  storeId: string,
+  dateStr: string,
+): Promise<GoogleAdsAdRow[]> {
+  // ---- Short-circuit FIRST: 2 of 3 stores skip the API entirely.
+  if (!STORES_WITH_GOOGLE_ADS.has(storeId)) {
+    return [];
+  }
+
+  const customerId = getCustomerIdOrThrow(storeId);
+  const accessToken = await getAccessToken(storeId);
+
+  // GAQL — ad_group_ad resource. The `ad_group_ad.ad.id` + `ad_group_ad.ad.name`
+  // selectors are the documented way to reach the inner Ad entity (RSAs may
+  // have an empty name; we surface that empty string and the postgresReaders
+  // fallback handles the display).
+  const adQuery =
+    'SELECT campaign.id, campaign.name, ' +
+    'ad_group.id, ad_group.name, ' +
+    'ad_group_ad.ad.id, ad_group_ad.ad.name, ' +
+    'metrics.impressions, metrics.clicks, metrics.cost_micros, ' +
+    'metrics.conversions, metrics.conversions_value, customer.currency_code ' +
+    `FROM ad_group_ad WHERE segments.date = '${dateStr}' ` +
+    "AND ad_group_ad.status = 'ENABLED'";
+
+  const results = await runGaqlQuery(
+    storeId,
+    customerId,
+    accessToken,
+    adQuery,
+    dateStr,
+  );
+
+  const out: GoogleAdsAdRow[] = [];
+  let currency = 'CAD';
+
+  for (const r of results) {
+    const customer = (r.customer ?? {}) as { currencyCode?: string };
+    if (customer.currencyCode) currency = customer.currencyCode;
+
+    const campaign = (r.campaign ?? {}) as { id?: string | number; name?: string };
+    const adGroup = (r.adGroup ?? {}) as { id?: string | number; name?: string };
+    // Google's REST/JSON shape camelCases the resource path:
+    // `ad_group_ad.ad.id` → `adGroupAd.ad.id`.
+    const adGroupAd = (r.adGroupAd ?? {}) as {
+      ad?: { id?: string | number; name?: string };
+    };
+    const metrics = (r.metrics ?? {}) as {
+      costMicros?: string;
+      impressions?: string;
+      clicks?: string;
+      conversions?: string;
+      conversionsValue?: string;
+    };
+
+    const spend = (parseFloat(metrics.costMicros ?? '0') || 0) / 1_000_000;
+    const impressions = parseInt(metrics.impressions ?? '0', 10) || 0;
+    const conversions = parseFloat(metrics.conversions ?? '0') || 0;
+
+    // Same activity threshold as adset/ad-group fetchers (cronDaily callers
+    // also re-filter in their writer when building rows, but doing it here
+    // keeps the on-wire row count small).
+    if (spend === 0 && impressions === 0 && conversions === 0) continue;
+
+    out.push({
+      storeId,
+      date: dateStr,
+      platform: 'google',
+      campaignId: String(campaign.id ?? ''),
+      campaignName: campaign.name ?? '',
+      adSetId: String(adGroup.id ?? ''),
+      adSetName: adGroup.name ?? '',
+      adId: String(adGroupAd.ad?.id ?? ''),
+      adName: adGroupAd.ad?.name ?? '',
+      impressions,
+      clicks: parseInt(metrics.clicks ?? '0', 10) || 0,
+      conversions,
+      conversionValueCad: parseFloat(metrics.conversionsValue ?? '0') || 0,
+      spendCad: spend,
+    });
+  }
+
+  // Currency is captured but not embedded in the row — the unified ads_daily
+  // schema treats spend_cad as the canonical CAD column. We retain `currency`
+  // here only for future use (e.g. if Google Ads stores in a future non-CAD
+  // store are added). Linter quieting:
+  void currency;
 
   return out;
 }
