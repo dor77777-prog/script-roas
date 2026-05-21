@@ -59,8 +59,8 @@ const STORE_ID = 'uzoshop';
 const DATE_STR = '2026-05-19';
 
 beforeEach(() => {
-  vi.stubEnv('SHOPIFY_UZOSHOP_DOMAIN', 'uzoshop.myshopify.com');
-  vi.stubEnv('SHOPIFY_UZOSHOP_TOKEN', 'shpat_test_TOKEN');
+  vi.stubEnv('UZOSHOP_SHOPIFY_DOMAIN', 'uzoshop.myshopify.com');
+  vi.stubEnv('UZOSHOP_SHOPIFY_TOKEN', 'shpat_test_TOKEN');
 });
 
 afterEach(() => {
@@ -238,12 +238,12 @@ describe('shopify fetcher — fetchShopifyDayRows', () => {
     }
   });
 
-  it('Test 6: Missing SHOPIFY_{storeId}_DOMAIN or SHOPIFY_{storeId}_TOKEN env vars throws clear error including storeId', async () => {
+  it('Test 6: Missing {STORE}_SHOPIFY_DOMAIN or {STORE}_SHOPIFY_TOKEN env vars throws clear error including storeId', async () => {
     vi.unstubAllEnvs();
     // Re-stub the token only; domain missing
-    vi.stubEnv('SHOPIFY_UZOSHOP_TOKEN', 'shpat_test_TOKEN');
+    vi.stubEnv('UZOSHOP_SHOPIFY_TOKEN', 'shpat_test_TOKEN');
     // Ensure domain is unset
-    vi.stubEnv('SHOPIFY_UZOSHOP_DOMAIN', '');
+    vi.stubEnv('UZOSHOP_SHOPIFY_DOMAIN', '');
 
     const noopFetch = vi.fn(async () => new Response('{}'));
     vi.stubGlobal('fetch', noopFetch);
@@ -252,8 +252,8 @@ describe('shopify fetcher — fetchShopifyDayRows', () => {
 
     // Also: missing token
     vi.unstubAllEnvs();
-    vi.stubEnv('SHOPIFY_UZOSHOP_DOMAIN', 'uzoshop.myshopify.com');
-    vi.stubEnv('SHOPIFY_UZOSHOP_TOKEN', '');
+    vi.stubEnv('UZOSHOP_SHOPIFY_DOMAIN', 'uzoshop.myshopify.com');
+    vi.stubEnv('UZOSHOP_SHOPIFY_TOKEN', '');
 
     await expect(fetchShopifyDayRows(STORE_ID, DATE_STR)).rejects.toThrow(/uzoshop/i);
   });

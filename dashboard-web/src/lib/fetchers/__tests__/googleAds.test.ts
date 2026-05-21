@@ -33,22 +33,22 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 const ORIGINAL_ENV = { ...process.env };
 
 function setUzoshopEnv(): void {
-  process.env.GOOGLE_ADS_DEVELOPER_TOKEN = 'dev-tok-test';
-  process.env.GOOGLE_ADS_CLIENT_ID = 'client-id-test';
-  process.env.GOOGLE_ADS_CLIENT_SECRET = 'client-secret-test';
-  process.env.GOOGLE_ADS_REFRESH_TOKEN = 'refresh-tok-test';
-  process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID = '9999999999';
-  process.env.GOOGLE_ADS_UZOSHOP_CUSTOMER_ID = '4014537400';
+  process.env.GOOGLEADS_DEVELOPER_TOKEN = 'dev-tok-test';
+  process.env.GOOGLEADS_CLIENT_ID = 'client-id-test';
+  process.env.GOOGLEADS_CLIENT_SECRET = 'client-secret-test';
+  process.env.GOOGLEADS_REFRESH_TOKEN = 'refresh-tok-test';
+  process.env.GOOGLEADS_LOGIN_CUSTOMER_ID = '9999999999';
+  process.env.UZOSHOP_GOOGLEADS_CUSTOMER_ID = '4014537400';
 }
 
 function clearGoogleAdsEnv(): void {
-  delete process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
-  delete process.env.GOOGLE_ADS_CLIENT_ID;
-  delete process.env.GOOGLE_ADS_CLIENT_SECRET;
-  delete process.env.GOOGLE_ADS_REFRESH_TOKEN;
-  delete process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID;
-  delete process.env.GOOGLE_ADS_UZOSHOP_CUSTOMER_ID;
-  delete process.env.GOOGLE_ADS_UZOSHOP_REFRESH_TOKEN;
+  delete process.env.GOOGLEADS_DEVELOPER_TOKEN;
+  delete process.env.GOOGLEADS_CLIENT_ID;
+  delete process.env.GOOGLEADS_CLIENT_SECRET;
+  delete process.env.GOOGLEADS_REFRESH_TOKEN;
+  delete process.env.GOOGLEADS_LOGIN_CUSTOMER_ID;
+  delete process.env.UZOSHOP_GOOGLEADS_CUSTOMER_ID;
+  delete process.env.UZOSHOP_GOOGLEADS_REFRESH_TOKEN;
 }
 
 /**
@@ -115,16 +115,16 @@ beforeEach(() => {
   vi.restoreAllMocks();
   vi.resetModules();
   // Reset env to ORIGINAL_ENV before each test — prevents leakage from one test setting
-  // GOOGLE_ADS_* env vars and the next test (short-circuit) inheriting them.
+  // GOOGLEADS_* / {STORE}_GOOGLEADS_* env vars and the next test (short-circuit) inheriting them.
   for (const k of Object.keys(process.env)) {
-    if (k.startsWith('GOOGLE_ADS_')) delete process.env[k];
+    if (k.startsWith('GOOGLEADS_') || k.includes('_GOOGLEADS_')) delete process.env[k];
   }
 });
 
 afterEach(() => {
-  // Restore any GOOGLE_ADS_* env vars that existed before this test file ran.
+  // Restore any GOOGLEADS_* / {STORE}_GOOGLEADS_* env vars that existed before this test file ran.
   for (const k of Object.keys(ORIGINAL_ENV)) {
-    if (k.startsWith('GOOGLE_ADS_')) process.env[k] = ORIGINAL_ENV[k];
+    if (k.startsWith('GOOGLEADS_') || k.includes('_GOOGLEADS_')) process.env[k] = ORIGINAL_ENV[k];
   }
 });
 
@@ -224,11 +224,11 @@ describe('googleAds fetcher — env-var error path', () => {
     clearGoogleAdsEnv();
     // Set everything EXCEPT the customer ID for uzoshop — the operator's
     // most likely Vercel misconfiguration after a fresh deploy.
-    process.env.GOOGLE_ADS_DEVELOPER_TOKEN = 'dev-tok';
-    process.env.GOOGLE_ADS_CLIENT_ID = 'cid';
-    process.env.GOOGLE_ADS_CLIENT_SECRET = 'csec';
-    process.env.GOOGLE_ADS_REFRESH_TOKEN = 'super-secret-refresh-token-value-xyz';
-    // GOOGLE_ADS_UZOSHOP_CUSTOMER_ID intentionally unset.
+    process.env.GOOGLEADS_DEVELOPER_TOKEN = 'dev-tok';
+    process.env.GOOGLEADS_CLIENT_ID = 'cid';
+    process.env.GOOGLEADS_CLIENT_SECRET = 'csec';
+    process.env.GOOGLEADS_REFRESH_TOKEN = 'super-secret-refresh-token-value-xyz';
+    // UZOSHOP_GOOGLEADS_CUSTOMER_ID intentionally unset.
 
     const fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);
@@ -245,7 +245,7 @@ describe('googleAds fetcher — env-var error path', () => {
     const msg = (caught as Error).message;
     // The env-var name MUST appear (operator-actionable) and the actual
     // refresh-token VALUE must NOT appear (info-disclosure mitigation).
-    expect(msg).toMatch(/GOOGLE_ADS_UZOSHOP_CUSTOMER_ID/);
+    expect(msg).toMatch(/UZOSHOP_GOOGLEADS_CUSTOMER_ID/);
     expect(msg).not.toContain('super-secret-refresh-token-value-xyz');
     expect(fetchSpy).not.toHaveBeenCalled();
   });

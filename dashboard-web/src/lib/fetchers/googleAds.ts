@@ -40,7 +40,7 @@
  *     check above (#1) confirmed v24 accepts GAQL at the major-version path.
  *     Algorithm-parity tests at plan 05.6-21 detect any field-shape drift.
  *   - T-05.6-05-I2 (refresh-token leak in error message): the throw paths
- *     name the env-var (e.g. `Missing GOOGLE_ADS_UZOSHOP_CUSTOMER_ID for uzoshop`)
+ *     name the env-var (e.g. `Missing UZOSHOP_GOOGLEADS_CUSTOMER_ID for uzoshop`)
  *     but NEVER include the env-var VALUE. Token strings never reach
  *     console.warn or Error.message.
  *   - T-05.6-05-D3 (concurrent OAuth refresh DoS): only uzoshop has Google
@@ -117,15 +117,17 @@ export type GoogleAdsAdGroupRow = {
  * error. Strips dashes (Google sometimes formats customer IDs as
  * `123-456-7890`; the API path requires a flat numeric).
  *
- * Convention `GOOGLE_ADS_{UPPER}_CUSTOMER_ID` matches the
- * Apps-Script-to-Vercel-env-var PROPS-MAP destination per RESEARCH line 1623+.
+ * Convention matches `docs/PROPS-MAP.md` (Phase 05.5-02 row 28):
+ * `${STORE}_GOOGLEADS_CUSTOMER_ID`. The original ordering
+ * (GOOGLE_ADS_${STORE}_*) was a fetcher-side bug that caused live cron-daily
+ * runs to fail with "Missing GOOGLE_ADS_*" against properly-seeded Vercel env vars.
  */
 function getCustomerIdOrThrow(storeId: string): string {
-  const envName = `GOOGLE_ADS_${storeId.toUpperCase()}_CUSTOMER_ID`;
+  const envName = `${storeId.toUpperCase()}_GOOGLEADS_CUSTOMER_ID`;
   const raw = process.env[envName];
   if (!raw) {
     throw new Error(
-      `Missing ${envName} for ${storeId} (set in Vercel env vars)`,
+      `Missing ${envName} for ${storeId} (per docs/PROPS-MAP.md; set in Vercel env vars)`,
     );
   }
   return raw.replace(/-/g, '');
@@ -143,25 +145,28 @@ async function getAccessToken(storeId: string): Promise<string> {
   const cached = tokenCache.get(storeId);
   if (cached && Date.now() < cached.expiresAt) return cached.token;
 
-  const clientId = process.env.GOOGLE_ADS_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_ADS_CLIENT_SECRET;
+  // Global Google Ads OAuth creds — PROPS-MAP rows 17/18/21 (and 19 for dev token,
+  // 20 for login customer ID) use `GOOGLEADS_*` (single word, no underscore between
+  // GOOGLE and ADS).
+  const clientId = process.env.GOOGLEADS_CLIENT_ID;
+  const clientSecret = process.env.GOOGLEADS_CLIENT_SECRET;
   // Per-store refresh token wins over the global one — supports a future
   // multi-store-Google-Ads world without changing this module.
-  const perStoreRefreshEnv = `GOOGLE_ADS_${storeId.toUpperCase()}_REFRESH_TOKEN`;
+  const perStoreRefreshEnv = `${storeId.toUpperCase()}_GOOGLEADS_REFRESH_TOKEN`;
   const refreshToken =
-    process.env[perStoreRefreshEnv] || process.env.GOOGLE_ADS_REFRESH_TOKEN;
+    process.env[perStoreRefreshEnv] || process.env.GOOGLEADS_REFRESH_TOKEN;
 
   if (!clientId) {
-    throw new Error('Missing GOOGLE_ADS_CLIENT_ID (set in Vercel env vars)');
+    throw new Error('Missing GOOGLEADS_CLIENT_ID (per docs/PROPS-MAP.md row 17; set in Vercel env vars)');
   }
   if (!clientSecret) {
     throw new Error(
-      'Missing GOOGLE_ADS_CLIENT_SECRET (set in Vercel env vars)',
+      'Missing GOOGLEADS_CLIENT_SECRET (per docs/PROPS-MAP.md row 18; set in Vercel env vars)',
     );
   }
   if (!refreshToken) {
     throw new Error(
-      `Missing ${perStoreRefreshEnv} or GOOGLE_ADS_REFRESH_TOKEN for ${storeId} (set in Vercel env vars)`,
+      `Missing ${perStoreRefreshEnv} or GOOGLEADS_REFRESH_TOKEN for ${storeId} (per docs/PROPS-MAP.md row 21; set in Vercel env vars)`,
     );
   }
 
@@ -203,10 +208,11 @@ async function getAccessToken(storeId: string): Promise<string> {
  * is missing (the operator's most likely Vercel misconfig).
  */
 function buildGoogleAdsHeaders(accessToken: string): Record<string, string> {
-  const developerToken = process.env.GOOGLE_ADS_DEVELOPER_TOKEN;
+  // PROPS-MAP row 19 — `GOOGLEADS_DEVELOPER_TOKEN`
+  const developerToken = process.env.GOOGLEADS_DEVELOPER_TOKEN;
   if (!developerToken) {
     throw new Error(
-      'Missing GOOGLE_ADS_DEVELOPER_TOKEN (set in Vercel env vars)',
+      'Missing GOOGLEADS_DEVELOPER_TOKEN (per docs/PROPS-MAP.md row 19; set in Vercel env vars)',
     );
   }
 
@@ -216,7 +222,8 @@ function buildGoogleAdsHeaders(accessToken: string): Record<string, string> {
     'Content-Type': 'application/json',
   };
 
-  const loginCustomerId = process.env.GOOGLE_ADS_LOGIN_CUSTOMER_ID;
+  // PROPS-MAP row 20 — `GOOGLEADS_LOGIN_CUSTOMER_ID`
+  const loginCustomerId = process.env.GOOGLEADS_LOGIN_CUSTOMER_ID;
   if (loginCustomerId) {
     // Strip dashes (defensive — Google IDs sometimes have dashes in admin UI).
     headers['login-customer-id'] = loginCustomerId.replace(/-/g, '');

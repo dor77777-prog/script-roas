@@ -12,10 +12,10 @@
  *   5. Missing token / ad-account env vars throw with storeId in the message
  *      (matches MetaAds.gs:21-25 + RESEARCH §Pattern 3 lines 527-533)
  *
- * Env-var convention (mirrors PROPS-MAP destination column + RESEARCH §Pattern 3):
- *   META_${storeId.toUpperCase()}_TOKEN           (preferred)
- *   META_GLOBAL_TOKEN                              (fallback)
- *   META_${storeId.toUpperCase()}_AD_ACCOUNT_ID    (numeric; `act_` prefix is stripped)
+ * Env-var convention (mirrors PROPS-MAP destination column rows 26 + 27 + 33 + 34 + 39 + 40):
+ *   ${storeId.toUpperCase()}_META_ACCESS_TOKEN     (preferred — per-store)
+ *   META_GLOBAL_TOKEN                              (fallback — dev-only convenience)
+ *   ${storeId.toUpperCase()}_META_AD_ACCOUNT_ID    (numeric; `act_` prefix is stripped)
  *
  * The uzoshop ad account id (26442930835313109) matches the Phase 05.5-01 seed
  * row in supabase/migrations/20260521063301_seed_stores.sql:7.
@@ -70,8 +70,9 @@ function buildErrorResponse(status: number, message: string) {
 // without changing semantics.
 // ---------------------------------------------------------------------------
 const STORE_ID = 'uzoshop';
-const TOKEN_KEY = `META_${STORE_ID.toUpperCase()}_TOKEN`;
-const ACCT_KEY = `META_${STORE_ID.toUpperCase()}_AD_ACCOUNT_ID`;
+// PROPS-MAP convention (rows 26 + 27): `${STORE}_META_ACCESS_TOKEN` + `${STORE}_META_AD_ACCOUNT_ID`
+const TOKEN_KEY = `${STORE_ID.toUpperCase()}_META_ACCESS_TOKEN`;
+const ACCT_KEY = `${STORE_ID.toUpperCase()}_META_AD_ACCOUNT_ID`;
 const AD_ACCOUNT_ID = '26442930835313109'; // Phase 05.5-01 seed row
 const DATE = '2026-05-15';
 
@@ -372,7 +373,7 @@ describe('Phase 05.6-04 — meta.ts fetchMetaAdSetInsights (port of MetaAds.gs)'
   // ------------------------------------------------------------------------
   // Test 5 — env-var error handling
   // ------------------------------------------------------------------------
-  it('throws a clear error including storeId when neither META_<STORE>_TOKEN nor META_GLOBAL_TOKEN is set', async () => {
+  it('throws a clear error including storeId when neither <STORE>_META_ACCESS_TOKEN nor META_GLOBAL_TOKEN is set', async () => {
     delete process.env[TOKEN_KEY];
     delete process.env.META_GLOBAL_TOKEN;
 

@@ -372,7 +372,7 @@ async function fetchOrdersWithRefundsForDay(
  * Fetch one day's Shopify revenue + per-product net for a single store.
  *
  * Pipeline:
- *   1. Resolve per-store creds from env (`SHOPIFY_${storeId.toUpperCase()}_*`)
+ *   1. Resolve per-store creds from env (`${STORE}_SHOPIFY_DOMAIN/_TOKEN`)
  *   2. Paginate BOTH `created_at=D` and `updated_at=D` windows, merge deduped
  *   3. Delegate to `computeRevenueWithCrossDayRefunds` for the algorithm
  *   4. Shape the result for the Inngest writers (plans 08-10)
@@ -380,6 +380,12 @@ async function fetchOrdersWithRefundsForDay(
  * Throws on missing env vars, non-200 responses. Inngest's retry layer
  * handles transient errors; permanent errors (auth, missing creds) surface
  * to the operator console's jobs table.
+ *
+ * Env var convention: matches `docs/PROPS-MAP.md` (Phase 05.5-02) which is
+ * the operator-facing canonical list — `${STORE}_SHOPIFY_*`, NOT
+ * `SHOPIFY_${STORE}_*`. The earlier ordering was a fetcher-side bug that
+ * caused live cron-live runs to fail with "Missing Shopify creds" against
+ * properly-seeded Vercel env vars.
  *
  * Algorithm parity guarantee: the EXISTING pure-TS function at
  * `shopifyRevenueRefunds.ts:150` is called exactly once per invocation
@@ -391,13 +397,15 @@ export async function fetchShopifyDayRows(
   dateStr: string,
 ): Promise<ShopifyDayRows> {
   const upper = storeId.toUpperCase();
-  const domain = process.env[`SHOPIFY_${upper}_DOMAIN`];
-  const token = process.env[`SHOPIFY_${upper}_TOKEN`];
+  // PROPS-MAP rows 22/25/29/32/35/38 — `${STORE}_SHOPIFY_DOMAIN/_TOKEN`
+  const domain = process.env[`${upper}_SHOPIFY_DOMAIN`];
+  const token = process.env[`${upper}_SHOPIFY_TOKEN`];
 
   if (!domain || !token) {
     throw new Error(
       `Missing Shopify creds for store "${storeId}" — expected ` +
-        `SHOPIFY_${upper}_DOMAIN and SHOPIFY_${upper}_TOKEN env vars.`,
+        `${upper}_SHOPIFY_DOMAIN and ${upper}_SHOPIFY_TOKEN env vars ` +
+        `(per docs/PROPS-MAP.md Phase 05.5).`,
     );
   }
 

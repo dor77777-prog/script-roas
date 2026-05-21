@@ -100,25 +100,33 @@ type MetaInsightsBody = {
 };
 
 // --- Env-var helpers --------------------------------------------------------
+// Env var convention matches `docs/PROPS-MAP.md` (Phase 05.5-02 rows 26/33/39
+// for per-store access tokens, rows 27/34/40 for ad account IDs):
+//   `${STORE}_META_ACCESS_TOKEN` + `${STORE}_META_AD_ACCOUNT_ID`
+// The original ordering (META_${STORE}_*) was a fetcher-side bug that caused
+// live cron-live runs to fail with "Missing Meta access token" against
+// properly-seeded Vercel env vars.
 function getMetaToken(storeId: string): string {
-  // Per-store first (`META_UZOSHOP_TOKEN`), global fallback. Mirrors the
-  // Apps Script convention (`{storeId}.meta.accessToken` ?? `meta.accessToken`)
-  // and the PROPS-MAP destination column (RESEARCH §Pattern 3).
-  const perStore = process.env[`META_${storeId.toUpperCase()}_TOKEN`];
+  const upper = storeId.toUpperCase();
+  // PROPS-MAP rows 26/33/39
+  const perStore = process.env[`${upper}_META_ACCESS_TOKEN`];
+  // Optional global fallback (not in PROPS-MAP, but kept for dev convenience)
   const global = process.env.META_GLOBAL_TOKEN;
   const token = perStore || global;
   if (!token) {
     throw new Error(
       `Missing Meta access token for ${storeId}. ` +
-        `Set META_${storeId.toUpperCase()}_TOKEN (preferred) or META_GLOBAL_TOKEN ` +
-        `as a Vercel environment variable.`,
+        `Set ${upper}_META_ACCESS_TOKEN (per docs/PROPS-MAP.md) or ` +
+        `META_GLOBAL_TOKEN as a Vercel environment variable.`,
     );
   }
   return token;
 }
 
 function getMetaAdAccountId(storeId: string): string {
-  const raw = process.env[`META_${storeId.toUpperCase()}_AD_ACCOUNT_ID`] || '';
+  const upper = storeId.toUpperCase();
+  // PROPS-MAP rows 27/34/40
+  const raw = process.env[`${upper}_META_AD_ACCOUNT_ID`] || '';
   // Strip a leading `act_` so the URL builder can always re-prepend it. This
   // mirrors MetaAds.gs:26 — operators sometimes paste the `act_` prefix from
   // the Meta UI and we want both forms to work.
@@ -126,7 +134,7 @@ function getMetaAdAccountId(storeId: string): string {
   if (!stripped) {
     throw new Error(
       `Missing Meta ad account id for ${storeId}. ` +
-        `Set META_${storeId.toUpperCase()}_AD_ACCOUNT_ID (numeric, optionally with act_ prefix).`,
+        `Set ${upper}_META_AD_ACCOUNT_ID (per docs/PROPS-MAP.md; numeric, optionally with act_ prefix).`,
     );
   }
   return stripped;
