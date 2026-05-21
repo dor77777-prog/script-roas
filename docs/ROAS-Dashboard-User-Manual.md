@@ -7,9 +7,9 @@
 │                                                  │
 │      מדריך הפעלה שוטף למפעיל הדשבורד            │
 │                                                  │
-│      גרסה:        1.3                            │
+│      גרסה:        1.4                            │
 │      תאריך:       2026-05-21                     │
-│      בסיס קוד:    Phase 05.6-22                  │
+│      בסיס קוד:    Phase 05.7                     │
 │      קהל יעד:     מפעיל יחיד · החלטות יומיות   │
 │                                                  │
 │      חנויות נתמכות:                              │
@@ -89,6 +89,7 @@
 25. [נספח ג — מגבלות ידועות (Known Limitations)](#נספח-ג--מגבלות-ידועות-known-limitations)
 26. [נספח ד — Checklists למפעיל](#נספח-ד--checklists-למפעיל)
 27. [ניהול (Operator Console) — Phase 05.6](#27-ניהול-operator-console--phase-056)
+28. [ניתוק Sheets — Phase 05.7](#28-ניתוק-sheets--phase-057)
 
 ---
 
@@ -2345,23 +2346,147 @@ curl -s "$PROD/api/data" | jq -e '.rows' >/dev/null && echo "OK: /api/data (Shee
 
 **הערות אבטחה לבדיקות:** אף curl לא חושף keys. כל ה-keys (signing/event/service_role) הם server-side only. אם בודק נטמן כלשהו מהם מופיעים בתגובות — זוהי באג חמורה ויש לפתוח Phase תיקון.
 
-### 27.10 גבולות ידועים ב-Phase 05.6 (deferred ל-Phase 05.7)
+### 27.10 גבולות ידועים ב-Phase 05.6 (סטטוס לאחר 05.7)
 
-- ❌ **אין יכולת לעבור ל-Postgres** — `READ_FROM=postgres` רדום. ההיפוך הוא החלטת Phase 05.7 בלבד.
+- ✅ **המעבר ל-Postgres הושלם ב-Phase 05.7** — `READ_FROM` כבר לא בשימוש; כל ה-API routes קוראים רק מ-Postgres. ראה פרק [28](#28-ניתוק-sheets--phase-057).
 - ❌ **אין EDIT למחיקות manual_overrides** — רק ADD / DELETE. מעקף: delete + add מחדש.
 - ❌ **אין real-time updates** ב-jobs table — polling של 15 שניות, לא Supabase Realtime.
 - ❌ **אין אזהרה אם Backfill טווח גדול חורג ממכסת Inngest** — המפעיל אחראי לבחור טווחים סבירים.
-- ❌ **Apps Script triggers עדיין רצים** — לא בוטלו ב-05.6. ביטולם מתוכנן ל-Phase 05.7.
-- ❌ **clasp CI workflow פעיל** — אם תדחוף `.gs` ל-main, הוא ידחוף ל-Apps Script. בוטל ב-Phase 05.7.
-- ❌ **חסרה verification harness של 14 ימים** Sheets vs Postgres — חלק מ-Phase 05.7's gate.
+- ⚠️  **Apps Script triggers עדיין רצים אלא אם בוטלו ידנית** — הקוד של 05.7 לא מתערב ב-Apps Script. ביטול הוא פעולת מפעיל; ראה [28.4.1](#2841-ביטול-apps-script-triggers-מומלץ).
+- ✅ **clasp CI workflow נמחק ב-Phase 05.7** — דחיפה של .gs ל-main לא תפעיל יותר deploy אוטומטי.
+- ⚠️  **verification harness של 14 ימים Sheets vs Postgres** — לא הופעלה כחלק מ-05.7 (cut-over היה תלוי בבחירת המפעיל; הוא אישר ידנית שהמספרים תואמים בסביבה).
 
 ראה גם פרק [1.7](#17-מצב-אבטחה-ב-supabase--מה-צפוי) להשלמת ה-RLS warnings שנשארות.
 
 ---
 
+## 28. ניתוק Sheets — Phase 05.7
+
+**מטרת הפרק:** לתעד את הקאט-אובר שבו הדשבורד הפסיק לחלוטין לקרוא ולכתוב ל-Google Sheets. מאחרי שינויי 05.7, כל המידע שהמשתמש רואה ב-Dashboard מגיע **רק** מ-Supabase. ה-spreadsheet עדיין קיים ועדיין מתעדכן על ידי Apps Script triggers (אם לא בוטלו) — אבל הדשבורד לא רואה את זה.
+
+### 28.1 מה השתנה ב-05.7 — סיכום
+
+| תחום | לפני (05.6) | אחרי (05.7) |
+| --- | --- | --- |
+| **קריאות /api/data** | ערוץ קונפיג: ברירת מחדל Sheets, אופציה Postgres דרך `READ_FROM=postgres` | **תמיד Postgres**. אין דגל. |
+| **קריאות /api/products, /api/campaigns, /api/ads, /api/orders-attribution, /api/store-meta, /api/product-catalog, /api/dashboard-state (GET)** | ערוץ קונפיג עם branch ב-`readFrom()` | **תמיד Postgres**. אין דגל. |
+| **כתיבות /api/dashboard-state (POST)** | כתיבה תמיד ל-`dashboard-state` Sheet | **תמיד ל-Supabase `dashboard_state` (JSONB)** דרך service_role client. |
+| **/api/health** | Promise.allSettled על pingSheets + pingSupabase | **רק pingSupabase**. השדה `sheets` ב-response נשמר ותמיד שווה `'ok'` (backward-compat ל-SyncIndicator). |
+| **CI workflow `.github/workflows/deploy-gs.yml`** | `clasp push` אוטומטי על כל push של .gs | **נמחק.** דחיפה של .gs לא משפיעה יותר ב-CI. |
+| **Apps Script triggers** | רצים אוטומטית + כותבים ל-Sheets | **לא משתנה אוטומטית.** המפעיל צריך לבטל ב-Apps Script editor (ראה 28.4). |
+
+### 28.2 איך הדאטה זורם אחרי 05.7
+
+```
+┌──────────────────────┐
+│ Shopify / Meta /     │
+│ Google / FX          │
+└──────────┬───────────┘
+           │
+           ▼
+┌──────────────────────┐         ┌──────────────────────┐
+│ Inngest Functions    │────────▶│   Supabase Postgres  │
+│ (Phase 05.6)         │         │   (10 tables)        │
+└──────────────────────┘         └──────────┬───────────┘
+                                            │
+                                            │ /api/*
+                                            ▼
+                                 ┌──────────────────────┐
+                                 │ Next.js Dashboard    │
+                                 │ (Vercel)             │
+                                 └──────────────────────┘
+
+(Apps Script triggers — אם עוד פעילים — כותבים ל-Sheets בלבד.
+הדשבורד לא רואה את ה-Sheets ולא תלוי בהם.)
+```
+
+### 28.3 חיסכוני קוורסום של Sheets API
+
+הדשבורד הפסיק לפנות ל-Google Sheets API ב-runtime. זה אומר:
+
+- **0 קריאות `sheets.spreadsheets.values.get`** מ-API routes.
+- **0 קריאות `sheets.spreadsheets.values.update / append`** מ-API routes.
+- **0 קריאות `sheets.spreadsheets.get`** (health-ping בוטל).
+- **/api/health** עדיין מציג את השדה `sheets: 'ok'` — אבל זה ערך קבוע, לא בדיקה אמיתית. ה-Sync Indicator (כפתור הירוק/אדום/צהוב בכותרת) משתמש ב-`health.supabase` בלבד לקביעת הטון.
+
+המכסה של Google Sheets API (Read requests per minute, 60/minute/user) חוסכת לחלוטין — לא חשוב כמה מפעילים עובדים במקביל בדשבורד.
+
+### 28.4 פעולות מפעיל לאחר deploy של 05.7
+
+קאט-אובר 05.7 הוא רק קוד. ה-Apps Script triggers ועצם קיום ה-spreadsheet הם **החלטה תפעולית** של המפעיל, לא של ה-code. אחרי שה-merge עבר ו-Vercel deploy הסתיים, בצע:
+
+#### 28.4.1 ביטול Apps Script triggers (מומלץ)
+
+1. כנס ל-Apps Script editor: `https://script.google.com/home`.
+2. פתח את הפרויקט של ROAS Tracker (השם בדרך כלל `script-roas`).
+3. לחץ על אייקון השעון (`Triggers`) בתפריט השמאלי.
+4. ראה את הרשימה — בדרך כלל 5-10 triggers (`refreshAllStoreMeta`, `refreshAllProductCatalogs`, `dailySyncMeta`, `dailySyncGoogle`, etc.).
+5. עבור כל trigger: הקלק על שלוש הנקודות בצד ימין → `Delete trigger`.
+6. ודא שכל ה-triggers בוטלו לפני שתסגור את העמוד.
+
+**למה כדאי לבטל:** Apps Script ימשיך לרוץ באלם — לא יזיק לדשבורד, אבל יבזבז את ה-Apps Script daily quota של Google. אם תרצה לרענן את ה-spreadsheet ידנית פעם בחודש לארכיון, אפשר להריץ דרך Apps Script editor בלחיצה כפתור.
+
+#### 28.4.2 בדיקה שה-Sheets לא נדרש יותר (smoke test)
+
+לאחר ה-deploy, וודא שהדשבורד עובד גם **אם תכבה לחלוטין** את ה-Sheets:
+
+```bash
+# 1. וודא שהדשבורד מציג נתונים מהפרודקשן (לא localhost)
+PROD=https://roas-dashboard-smoky.vercel.app
+curl -s "$PROD/api/data" | jq -e '.rows | length > 0' && echo "OK: /api/data"
+curl -s "$PROD/api/campaigns" | jq -e '.rows | length > 0' && echo "OK: /api/campaigns"
+curl -s "$PROD/api/dashboard-state" | jq -e '.kv' >/dev/null && echo "OK: /api/dashboard-state GET"
+
+# 2. וודא שכתיבה ב-/api/dashboard-state עוברת ל-Supabase
+curl -s -X POST "$PROD/api/dashboard-state" \
+  -H "Content-Type: application/json" \
+  -d '{"key":"annotations","value":{"test_05_7": "ok"}}' \
+  | jq -e '.ok == true' && echo "OK: /api/dashboard-state POST writes to Supabase"
+
+# 3. וודא ש-/api/health לא מצליב יותר את Sheets
+curl -s "$PROD/api/health" | jq '.'
+# הצפי: { "sheets": "ok", "supabase": "ok" | "down", "lastChecked": "..." }
+# שדה sheets תמיד 'ok' עכשיו — backward-compat, לא בדיקה אמיתית.
+```
+
+#### 28.4.3 ארכוב ה-spreadsheet (אופציונלי)
+
+מאחר שהדשבורד לא קורא יותר מה-spreadsheet, אפשר:
+
+1. לפתוח את ה-spreadsheet (`SPREADSHEET_ID` ב-Vercel env).
+2. `File` → `Make a copy` → לקרוא לעותק `ROAS-archive-pre-05-7-cutover`.
+3. בעותק המקורי — `File` → `Move to trash` או להגדיר את כל הטאבים כ-Frozen view-only ל-Editors כדי שלא תקבל עריכות מקריות.
+4. **חשוב:** **אל תמחק** את ה-env vars `SPREADSHEET_ID`, `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY` ב-Vercel עדיין — הקוד של `dashboard-web/src/lib/sheets.ts` עוד קיים (אם כי לא נקרא יותר מ-route handlers), והשמירה של ה-env vars מספקת רשת ביטחון אם רוצים rollback מהיר ל-05.6.
+
+### 28.5 שינויי קוד ב-05.7 — לאן להסתכל בריפו
+
+| קובץ | מה השתנה |
+| --- | --- |
+| `dashboard-web/src/lib/postgresReaders.ts` | נוסף `upsertDashboardStateKeyPostgres` (write — service_role) |
+| `dashboard-web/src/app/api/dashboard-state/route.ts` | POST כותב ל-Supabase; GET קורא רק מ-Postgres; הוסר ה-readFrom branch |
+| `dashboard-web/src/app/api/health/route.ts` | הוסר `pingSheets` + `googleapis` import; רק Supabase מנוטר |
+| `dashboard-web/src/app/api/{data,store-meta,products,campaigns,ads,orders-attribution,product-catalog}/route.ts` | הוסרו imports של `@/lib/sheets` + `@/lib/featureFlags`; ערוץ Postgres בלבד |
+| `.github/workflows/deploy-gs.yml` | נמחק |
+| `dashboard-web/src/lib/sheets.ts` | **נשאר בקוד** (dead code; tree-shaking יסיר מהבאנדל); `isAllowedStateKey` עדיין מיוצא ומשמש ב-/api/dashboard-state כ-validator |
+| `dashboard-web/src/lib/featureFlags.ts` | **נשאר בקוד** (לא בשימוש; safety net אם רוצים להחזיר את ה-flag במקרה קיצון) |
+
+### 28.6 Rollback מהיר (אם משהו נשבר)
+
+אם אחרי deploy של 05.7 מתגלה בעיה חמורה ב-Postgres path:
+
+1. **לא צריך revert** של ה-commit — קוד ה-Sheets עדיין קיים בריפו (lib/sheets.ts, lib/products.ts, lib/campaigns.ts וכו'), רק לא נקרא מ-route handlers.
+2. **חזרת חירום של route**: צריך לחזור ל-route handler ספציפי (למשל /api/data/route.ts), להחזיר את ה-`fetchDailyData` import ואת ה-readFrom branch, ל-deploy מחדש.
+3. **חזרת חירום של POST**: לחזור את `/api/dashboard-state/route.ts` ל-`upsertDashboardStateKey` (Sheets), ל-deploy מחדש.
+
+הזמן ל-rollback מלא: ~10 דקות (commit + push + Vercel deploy).
+
+לחילופין — לחזור ל-commit שלפני ה-cutover (`git revert` של commits של Phase 05.7) ולעשות force push דרך PR לחדש. הזמן: ~20 דקות.
+
+---
+
 ## סוף המסמך
 
-**גרסה:** 1.3 · **תאריך עדכון:** 2026-05-21 · **בסיס קוד:** Phase 05.6-22
+**גרסה:** 1.4 · **תאריך עדכון:** 2026-05-21 · **בסיס קוד:** Phase 05.7
 
 > מסמך זה מתעדכן עם כל שינוי משמעותי במערכת. אם משהו לא תואם למה שאתה רואה במסך — בדוק את ה-git log בריפו או דווח כדי לעדכן.
 
