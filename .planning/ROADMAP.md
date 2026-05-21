@@ -271,7 +271,7 @@ Plans:
 **Goal:** Replace Apps Script's data-plane responsibility with Inngest jobs writing to Supabase, and add operator-facing UI surfaces to the dashboard: sync now button, jobs table, backfill range picker, manual_overrides CRUD. One-off importer ports the 38 existing manual-spend rows. **Production reads still come from Sheets** until Phase 05.7 flips the flag.
 **Requirements**: TBD (run /gsd-discuss-phase 05.6)
 **Depends on:** Phase 05.5 (Supabase + PROPS-MAP must exist) + Phase 05.2.3.0 (algorithm correctness — TS port must mirror the corrected `getShopifyRefundsForDay_` model from Phase 05.2.3.0-08)
-**Plans:** 16/22 plans executed
+**Plans:** 18/22 plans executed
 
 Plans:
 - [ ] TBD (run /gsd-plan-phase 05.6) — TS ports of 5 fetchers, Inngest setup + 3 cron functions + 2 event functions, "ניהול" tab UI, manual_overrides CRUD UI, 38-row importer, feature flag in dashboard `/api/*` routes
