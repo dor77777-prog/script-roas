@@ -58,6 +58,7 @@ import { mutate } from 'swr';
 import { Loader2, AlertTriangle, X } from 'lucide-react';
 import {
   CONFIRM_TOKEN_FOR_SCOPE,
+  PROTECTED_TABLES,
   type ResetScope,
 } from '@/lib/operatorReset';
 
@@ -284,14 +285,39 @@ export function ResetData() {
                   </li>
                 ))}
               </ul>
-              {active.preserves && (
-                <p className="text-text-secondary text-xs mt-2">
-                  נשמרת ולא תיגע:{' '}
-                  <code className="text-green-400" dir="ltr">
-                    {active.preserves}
-                  </code>
-                </p>
-              )}
+              <p className="text-text-secondary text-xs mt-3 mb-1">
+                טבלאות שתמיד מוגנות (לעולם לא נמחקות):
+              </p>
+              <ul className="text-xs space-y-0.5">
+                {PROTECTED_TABLES.map((t) => (
+                  <li key={t} dir="ltr">
+                    <code className="text-green-400">{t}</code>
+                    {t === 'stores' && (
+                      <span className="text-text-secondary" dir="rtl">
+                        {' '}— 3 החנויות שלך
+                      </span>
+                    )}
+                    {t === 'notification_config' && (
+                      <span className="text-text-secondary" dir="rtl">
+                        {' '}— הגדרות התראות (לא נמשך מ-API)
+                      </span>
+                    )}
+                    {t === 'dashboard_state' && (
+                      <span className="text-text-secondary" dir="rtl">
+                        {' '}— הגדרות UI (annotations, billing, monthly goal, product mapping)
+                      </span>
+                    )}
+                  </li>
+                ))}
+                {active.preserves && (
+                  <li dir="ltr">
+                    <code className="text-green-400">{active.preserves}</code>
+                    <span className="text-text-secondary" dir="rtl">
+                      {' '}— הוצאות ידניות (במצב חלקי)
+                    </span>
+                  </li>
+                )}
+              </ul>
             </div>
 
             <label className="block mb-2">
