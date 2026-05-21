@@ -21,7 +21,13 @@ export default defineConfig({
     //   2. Add `@testing-library/react` + `@testing-library/jest-dom` deps.
     //   3. Configure setupFiles for jest-dom matchers.
     environment: 'node',
-    include: ['src/lib/__tests__/**/*.test.{ts,tsx}'],
+    // Widened in Phase 05.6-06 (FX fetcher port) to discover any
+    // `src/lib/<subdir>/__tests__/` folder. Previous glob
+    // `src/lib/__tests__/**/*.test.{ts,tsx}` silently skipped tests under
+    // `src/lib/fetchers/__tests__/`. The new glob preserves the existing
+    // 25 test files under `src/lib/__tests__/` AND enables co-located test
+    // dirs for the 5 new fetcher modules added in Phase 05.6 (plans 03-07).
+    include: ['src/lib/**/__tests__/**/*.test.{ts,tsx}'],
     globals: false, // explicit imports — not relying on describe/it globals
   },
   resolve: {
