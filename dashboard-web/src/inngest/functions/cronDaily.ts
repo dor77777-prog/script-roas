@@ -49,6 +49,7 @@ import {
   fetchMetaAdSetInsights,
   fetchMetaAdInsights,
   fetchMetaSpendForDay,
+  fetchMetaBudgets,
 } from '@/lib/fetchers/meta';
 import {
   fetchGoogleAdsSpendForDay,
@@ -193,21 +194,32 @@ export async function runDailyForStore(
     catalog: Awaited<ReturnType<typeof fetchShopifyProductsCatalog>>;
   };
 
-  // ---- Step 2: Meta (adset + ad-level insights + store-level spend sum) ---
+  // ---- Step 2: Meta (adset + ad-level insights + store-level spend sum + budgets) ---
   // Phase 05.6.1: extended Promise.all to fetch ad-level insights alongside
-  // adset-level and store-level spend. Three parallel HTTP roundtrips within
-  // one step's wall-clock — exec count unchanged.
+  // adset-level and store-level spend.
+  // Phase 05.7.2: extended again to fetch per-campaign + per-adset BUDGETS in
+  // parallel. The Sheets-side reader had budget data (sourced from
+  // MetaAds.gs:157 getMetaBudgets); cronDaily previously wrote `null` for
+  // campaign_budget_cad/ad_set_budget_cad/budget_type, leaving the dashboard
+  // campaigns tab unable to show budgets — a cut-over regression.
+  //
+  // Four parallel HTTP roundtrips within one step's wall-clock — exec count
+  // unchanged. The budgets endpoint is the SAME ad account + token, so all 4
+  // fetches share the auth/host warmup and finish in roughly the same time
+  // as the slowest one (insights is dominant; budgets is a small endpoint).
   const meta = (await step.run('fetch-meta', async () => {
-    const [spend, adsetRows, adRows] = await Promise.all([
+    const [spend, adsetRows, adRows, budgets] = await Promise.all([
       fetchMetaSpendForDay(storeId, dateStr),
       fetchMetaAdSetInsights(storeId, dateStr),
       fetchMetaAdInsights(storeId, dateStr),
+      fetchMetaBudgets(storeId),
     ]);
-    return { spend, adsetRows, adRows };
+    return { spend, adsetRows, adRows, budgets };
   })) as {
     spend: Awaited<ReturnType<typeof fetchMetaSpendForDay>>;
     adsetRows: Awaited<ReturnType<typeof fetchMetaAdSetInsights>>;
     adRows: Awaited<ReturnType<typeof fetchMetaAdInsights>>;
+    budgets: Awaited<ReturnType<typeof fetchMetaBudgets>>;
   };
 
   // ---- Step 3: Google Ads (spend + ad-group + ad-level insights) ----------
@@ -362,27 +374,71 @@ export async function runDailyForStore(
     // preserve precision; not worth a migration for now since the
     // dashboard sums these by 4+ rows and the rounding error vanishes.)
     if (meta.adsetRows.length > 0) {
-      // 2026-05-21: populate spend_cad + conversion_value_cad via FX
+      // 2026-05-21 (FX fix): populate spend_cad + conversion_value_cad via FX
       // (was hardcoded null — see cadFor() comment above).
+      //
+      // 2026-05-21 (Phase 05.7.2 budgets): populate campaign_budget_cad,
+      // ad_set_budget_cad, budget_type from the new `meta.budgets` fetch.
+      // Mirrors MetaAds.gs:142-146 (Hebrew comment) — CBO vs ABO logic:
+      //   - CBO: campaign owns the budget. campaign daily/lifetime > 0.
+      //   - ABO: ad-set owns the budget. ad-set daily/lifetime > 0.
+      //   - '' (unknown / paused / lifetime-only fallback): both 0.
+      //
+      // Lifetime-budget fallback: when daily_budget is 0 we use
+      // lifetime_budget as the "current commitment" surface — matches the
+      // Apps Script semantics. The dashboard renders ONE number per row;
+      // operators reading it understand "daily" or "lifetime" by the
+      // budgetType chip on the row (CBO/ABO).
       const metaCampaignRows = await Promise.all(
-        meta.adsetRows.map(async (r) => ({
-          date: dateStr,
-          store_id: storeId,
-          platform: 'meta',
-          campaign_id: r.campaignId,
-          campaign_name: r.campaignName,
-          ad_set_id: r.adSetId,
-          ad_set_name: r.adSetName,
-          spend_cad: await cadFor(r.spend, r.currency),
-          impressions: Math.round(r.impressions),
-          clicks: Math.round(r.clicks),
-          conversions: Math.round(r.conversions),
-          conversion_value_cad: await cadFor(r.conversionValue, r.currency),
-          roas: null,
-          campaign_budget_cad: null,
-          ad_set_budget_cad: null,
-          budget_type: null,
-        })),
+        meta.adsetRows.map(async (r) => {
+          const cBud = meta.budgets.campaigns[r.campaignId];
+          const aBud = meta.budgets.adSets[r.adSetId];
+          // Prefer daily; fall back to lifetime when daily is 0/unset.
+          const cDaily = cBud?.dailyBudget ?? 0;
+          const cLifetime = cBud?.lifetimeBudget ?? 0;
+          const aDaily = aBud?.dailyBudget ?? 0;
+          const aLifetime = aBud?.lifetimeBudget ?? 0;
+          const campaignBudgetRaw = cDaily > 0 ? cDaily : cLifetime;
+          const adSetBudgetRaw = aDaily > 0 ? aDaily : aLifetime;
+          // Budget-type classification: CBO wins if the campaign owns budget,
+          // else ABO if the ad-set owns it. If neither has budget data the
+          // value is '' (empty string) — the dashboard's CampaignsTableRow
+          // hides the CBO/ABO chip for empty budgetType.
+          let bt: 'CBO' | 'ABO' | '' = '';
+          if (campaignBudgetRaw > 0) bt = 'CBO';
+          else if (adSetBudgetRaw > 0) bt = 'ABO';
+          return {
+            date: dateStr,
+            store_id: storeId,
+            platform: 'meta',
+            campaign_id: r.campaignId,
+            campaign_name: r.campaignName,
+            ad_set_id: r.adSetId,
+            ad_set_name: r.adSetName,
+            spend_cad: await cadFor(r.spend, r.currency),
+            impressions: Math.round(r.impressions),
+            clicks: Math.round(r.clicks),
+            conversions: Math.round(r.conversions),
+            conversion_value_cad: await cadFor(r.conversionValue, r.currency),
+            roas: null,
+            // Budgets are denominated in `meta.budgets.currency` (the account
+            // currency from the act_{id}?fields=currency one-shot). Pass it
+            // through `cadFor` so the column lands in CAD on disk — the
+            // dashboard's CampaignsTableRow renders this value as `C$X.XX`
+            // and assumes CAD.
+            campaign_budget_cad:
+              campaignBudgetRaw > 0
+                ? await cadFor(campaignBudgetRaw, meta.budgets.currency)
+                : null,
+            ad_set_budget_cad:
+              adSetBudgetRaw > 0
+                ? await cadFor(adSetBudgetRaw, meta.budgets.currency)
+                : null,
+            // Empty string '' stays in the DB; `postgresReaders.fetchCampaigns`
+            // already normalizes '' / null / undefined → '' (campaigns.ts:135).
+            budget_type: bt,
+          };
+        }),
       );
       const { error } = await admin.from('campaigns_daily').upsert(metaCampaignRows, {
         onConflict: 'date,store_id,platform,campaign_id,ad_set_id',
