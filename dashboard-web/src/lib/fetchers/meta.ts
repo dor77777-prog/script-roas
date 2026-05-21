@@ -98,10 +98,19 @@ export type MetaAdRow = {
   clicks: number;
   /** purchase COUNT — same priority chain as MetaAdSetRow.conversions */
   conversions: number;
-  /** purchase VALUE in CAD; null per the docstring above */
-  conversionValueCad: number | null;
-  /** spend in CAD; null per the docstring above */
-  spendCad: number | null;
+  /**
+   * spend in the ad account's CURRENCY (e.g. ILS). The writer in
+   * cronDaily.ts FX-converts this to CAD once per (store, date) and
+   * stores in ads_daily.spend_cad. Before 2026-05-21 this was typed
+   * `spendCad: number | null` and always set to null, which made the
+   * dashboard render every Meta ad with $0 spend — a major regression
+   * vs the Sheets-side reader. Same fix path as MetaAdSetRow.
+   */
+  spend: number;
+  /** ISO 4217 code from `account_currency` (defaults to 'ILS' if missing) */
+  currency: string;
+  /** purchase VALUE in account currency (mirror of MetaAdSetRow.conversionValue) */
+  conversionValue: number;
 };
 
 /** Per-day store-level aggregate returned by `fetchMetaSpendForDay`. */
@@ -421,10 +430,13 @@ export async function fetchMetaAdInsights(
         impressions,
         clicks: parseInt(r.clicks ?? '0', 10) || 0,
         conversions: conv.count,
-        // See MetaAdRow type docstring — per-ad FX conversion is deferred to
-        // keep the cron-daily exec count at 6/run.
-        conversionValueCad: null,
-        spendCad: null,
+        // 2026-05-21: expose raw account-currency values. The cronDaily.ts
+        // writer fetches one FX rate per (store, date) and converts both
+        // ad-set + ad-level rows together — one extra fetch per cron run,
+        // not one per row, so the exec budget is preserved.
+        spend,
+        currency: r.account_currency ?? 'ILS',
+        conversionValue: conv.value,
       });
     }
     url = body.paging?.next ?? null;

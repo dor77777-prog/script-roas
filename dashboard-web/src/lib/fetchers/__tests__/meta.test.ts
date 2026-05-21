@@ -553,7 +553,12 @@ describe('Phase 05.6.1 — meta.ts fetchMetaAdInsights (level=ad port)', () => {
     expect(calledUrl).toContain('limit=500');
   });
 
-  it('Ad Test 2: maps response to MetaAdRow shape with platform=meta and spendCad/conversionValueCad=null', async () => {
+  it('Ad Test 2: maps response to MetaAdRow shape exposing raw spend + currency + conversionValue', async () => {
+    // 2026-05-21: changed from `spendCad/conversionValueCad: null` to
+    // raw-currency `spend/currency/conversionValue`. Per-row FX is now done
+    // by the cronDaily.ts writer (one rate per (store, date)) so the
+    // ads_daily.spend_cad column actually populates instead of staying null.
+    // See MetaAdRow type docstring for the new shape rationale.
     fetchSpy.mockResolvedValueOnce(
       buildAdResponse([
         {
@@ -563,7 +568,7 @@ describe('Phase 05.6.1 — meta.ts fetchMetaAdInsights (level=ad port)', () => {
           adset_name: 'AdSet 1',
           ad_id: 'ad-1',
           ad_name: 'Ad 1',
-          spend: '42.50', // in account currency (ILS), but should NOT surface
+          spend: '42.50', // ILS, surfaces raw — writer FX-converts
           impressions: '1000',
           clicks: '20',
           actions: [{ action_type: 'purchase', value: '3' }],
@@ -588,10 +593,9 @@ describe('Phase 05.6.1 — meta.ts fetchMetaAdInsights (level=ad port)', () => {
       impressions: 1000,
       clicks: 20,
       conversions: 3,
-      // Both intentionally null at the ad level — per-ad FX conversion is
-      // deferred to keep the cron-daily exec count at 6/run.
-      conversionValueCad: null,
-      spendCad: null,
+      spend: 42.5,
+      currency: 'ILS',
+      conversionValue: 120,
     });
   });
 

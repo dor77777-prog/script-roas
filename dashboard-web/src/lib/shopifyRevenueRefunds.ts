@@ -51,6 +51,9 @@ type ShopifyLineItem = {
   product_id: string | number | null;
   price: string | number;
   quantity: number;
+  /** Optional — first non-empty title encountered seeds bucket.productTitle. */
+  title?: string;
+  name?: string;
 };
 
 type ShopifyRefundLineItem = {
@@ -140,7 +143,28 @@ export type CrossDayRefundResult = {
    * Null/missing product_id refunds are diverted to customItemRefundCad
    * (D-C2 / REVISED D-C3 invariant 3).
    */
-  byProduct: Record<string, { netRevenueCad: number }>;
+  byProduct: Record<
+    string,
+    {
+      /** Net revenue after refund-line-items subtraction (refund-day attribution). */
+      netRevenueCad: number;
+      /**
+       * Gross revenue for D — sum of (line.price × line.quantity) across
+       * same-day orders for this product, BEFORE any refund subtraction.
+       * Used by the UI to render refund % as `(1 − net/gross)` (see
+       * `ProductsTable.tsx` "הנחות/החזרים" tooltip). 2026-05-21: added
+       * to fix the all-products-show-0%-refund regression after the
+       * Postgres cut-over.
+       */
+      grossRevenueCad: number;
+      /** Sum of line.quantity for this product across same-day orders. */
+      units: number;
+      /** Distinct same-day orders that contain this product. */
+      orders: number;
+      /** First non-empty title encountered for this product_id (best-effort label). */
+      productTitle: string;
+    }
+  >;
   /**
    * Sum of refund_line_items[].subtotal where product_id is null or empty,
    * for refunds.processed_at == D AND order.created_at != D. POSITIVE value
@@ -196,12 +220,49 @@ export function computeRevenueWithCrossDayRefunds(
   let storeRefundDeduction = 0;
   let customItemRefundCad = 0;
   // Object.create(null) avoids prototype-key collisions (IN5-05 convention).
-  const byProduct: Record<string, { netRevenueCad: number }> = Object.create(null);
+  type ProductBucket = {
+    netRevenueCad: number;
+    grossRevenueCad: number;
+    units: number;
+    orders: number;
+    productTitle: string;
+  };
+  const byProduct: Record<string, ProductBucket> = Object.create(null);
+
+  function ensureBucket(pid: string): ProductBucket {
+    if (!byProduct[pid]) {
+      byProduct[pid] = {
+        netRevenueCad: 0,
+        grossRevenueCad: 0,
+        units: 0,
+        orders: 0,
+        productTitle: '',
+      };
+    }
+    return byProduct[pid];
+  }
 
   function bumpByProduct(pid: string, delta: number): void {
     if (!pid) return; // null/empty pid → caller handles via customItemRefundCad
-    if (!byProduct[pid]) byProduct[pid] = { netRevenueCad: 0 };
-    byProduct[pid].netRevenueCad += delta;
+    ensureBucket(pid).netRevenueCad += delta;
+  }
+
+  /**
+   * Record the same-day line item: bump both gross and net by line.price ×
+   * line.quantity, increment units, and capture title if not yet set.
+   */
+  function recordSameDayLine(
+    pid: string,
+    lineGross: number,
+    quantity: number,
+    title: string,
+  ): void {
+    if (!pid) return;
+    const b = ensureBucket(pid);
+    b.grossRevenueCad += lineGross;
+    b.netRevenueCad += lineGross;
+    b.units += quantity;
+    if (!b.productTitle && title) b.productTitle = title;
   }
 
   for (const o of orders) {
@@ -230,11 +291,23 @@ export function computeRevenueWithCrossDayRefunds(
       // current_total_price that already nets discounts, and per-product
       // net = line_gross - intra_order_refund.)
       const lineItems = o.line_items ?? [];
+      // 2026-05-21: track gross + units + orders + title on the bucket so the
+      // dashboard can render refund % (1 − net/gross) and per-product
+      // unit/order counts. Previously only netRevenueCad was tracked, so
+      // gross_revenue_cad stayed null in Supabase and the UI's refund %
+      // formula degenerated to 0%.
+      const productsThisOrder = new Set<string>();
       for (const li of lineItems) {
         const pid = normalizeProductId(li.product_id);
         if (!pid) continue;
-        const lineGross = parseNum(li.price) * (parseNum(li.quantity) || 0);
-        bumpByProduct(pid, lineGross);
+        const qty = parseNum(li.quantity) || 0;
+        const lineGross = parseNum(li.price) * qty;
+        const title = (li.title ?? li.name ?? '').toString().trim();
+        recordSameDayLine(pid, lineGross, qty, title);
+        productsThisOrder.add(pid);
+      }
+      for (const pid of productsThisOrder) {
+        ensureBucket(pid).orders += 1;
       }
 
       // Invariant 3: intra-order refundByLineId filtered to processed_at == dateStr.

@@ -111,6 +111,15 @@ const STORE_NAMES: Record<string, string> = {
 export type ShopifyProductRow = {
   product_id: string;
   net_revenue_cad: number;
+  /**
+   * 2026-05-21 additions for products_daily completeness — the UI's
+   * "הנחות/החזרים" refund-% formula is `(1 − net_revenue / gross_revenue) × 100`,
+   * which was always rendering 0% pre-fix because gross was null.
+   */
+  gross_revenue_cad: number;
+  units: number;
+  orders: number;
+  product_title: string;
 };
 
 /**
@@ -492,6 +501,10 @@ export async function fetchShopifyDayRows(
     productRows: Object.entries(byProduct).map(([pid, p]) => ({
       product_id: pid,
       net_revenue_cad: p.netRevenueCad,
+      gross_revenue_cad: p.grossRevenueCad,
+      units: p.units,
+      orders: p.orders,
+      product_title: p.productTitle,
     })),
     customItemRefundCad,
   };

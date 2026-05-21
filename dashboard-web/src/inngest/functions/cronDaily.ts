@@ -56,6 +56,7 @@ import {
   fetchGoogleAdsAdInsights,
 } from '@/lib/fetchers/googleAds';
 import { mergeOverridesFromSupabase } from '@/lib/fetchers/manualOverrides';
+import { getFxRate } from '@/lib/fetchers/fx';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
 // ---------------------------------------------------------------------------
@@ -254,6 +255,38 @@ export async function runDailyForStore(
     const cogsCad = shopify.revenueCad * COGS_RATE_OF_REVENUE;
     const netProfitCad = grossProfitCad - cogsCad;
 
+    // 2026-05-21 fix: per-row Meta FX conversion.
+    //
+    // Previously the campaigns_daily + ads_daily Meta rows wrote
+    // `spend_cad: null` / `conversion_value_cad: null` because per-row
+    // FX was deferred (see prior cronDaily.ts comment + MetaAdRow
+    // docstring before today's edit). The dashboard's campaigns tab
+    // therefore rendered every Meta campaign with $0 spend — a
+    // regression vs the Sheets-side reader.
+    //
+    // Fix: fetch ONE FX rate per (store, date) — `currency` is uniform
+    // across all rows in a given Meta /insights response because it's
+    // sourced from `account_currency`. If a row's currency is not ILS,
+    // we fetch a different rate (defensive — shouldn't happen for our
+    // 3 stores but keeps the code generic).
+    //
+    // We cache rates inside the closure: getFxRate fires one Frankfurter
+    // call per unique currency. For the dominant case (all ILS), that's
+    // exactly 1 extra HTTP call per cron-daily, inside the existing
+    // persist-batch step.run — exec budget unchanged.
+    const fxCache = new Map<string, number>();
+    const cadFor = async (amount: number, currency: string): Promise<number> => {
+      if (!Number.isFinite(amount) || amount === 0) return 0;
+      const cur = (currency || 'ILS').toUpperCase();
+      if (cur === 'CAD') return amount;
+      let rate = fxCache.get(cur);
+      if (rate === undefined) {
+        rate = await getFxRate(cur, 'CAD', dateStr);
+        fxCache.set(cur, rate);
+      }
+      return amount * rate;
+    };
+
     // 5a. data_daily UPSERT — PK (date, store_id)
     {
       const { error } = await admin.from('data_daily').upsert(
@@ -284,17 +317,20 @@ export async function runDailyForStore(
     // Test 5's onConflict assertion is exercised regardless of fixture
     // data. supabase-js treats upsert([]) as a no-op (no SQL issued).
     if (shopify.productRows.length > 0) {
+      // 2026-05-21: now populates gross_revenue_cad / units / orders /
+      // product_title (previously only net_revenue_cad was tracked, which
+      // broke the dashboard's refund % formula `(1 − net/gross)` because
+      // gross stayed null and degenerated the calc to 0%).
       const productRows = shopify.productRows.map((p) => ({
         date: dateStr,
         store_id: storeId,
         store_name: shopify.storeName,
         product_id: p.product_id,
+        product_title: p.product_title || null,
+        units: Math.round(p.units),
+        gross_revenue_cad: p.gross_revenue_cad,
+        orders: Math.round(p.orders),
         net_revenue_cad: p.net_revenue_cad,
-        // gross_revenue_cad, units, orders, product_title — not yet
-        // surfaced by fetchShopifyDayRows (the algorithm returns only
-        // net_revenue_cad per product). Defaults: units=0, orders=0
-        // (NOT NULL with DEFAULT 0 in the migration); other NUMERIC
-        // columns are nullable and omitted.
       }));
       const { error } = await admin
         .from('products_daily')
@@ -326,24 +362,28 @@ export async function runDailyForStore(
     // preserve precision; not worth a migration for now since the
     // dashboard sums these by 4+ rows and the rounding error vanishes.)
     if (meta.adsetRows.length > 0) {
-      const metaCampaignRows = meta.adsetRows.map((r) => ({
-        date: dateStr,
-        store_id: storeId,
-        platform: 'meta',
-        campaign_id: r.campaignId,
-        campaign_name: r.campaignName,
-        ad_set_id: r.adSetId,
-        ad_set_name: r.adSetName,
-        spend_cad: null,
-        impressions: Math.round(r.impressions),
-        clicks: Math.round(r.clicks),
-        conversions: Math.round(r.conversions),
-        conversion_value_cad: null,
-        roas: null,
-        campaign_budget_cad: null,
-        ad_set_budget_cad: null,
-        budget_type: null,
-      }));
+      // 2026-05-21: populate spend_cad + conversion_value_cad via FX
+      // (was hardcoded null — see cadFor() comment above).
+      const metaCampaignRows = await Promise.all(
+        meta.adsetRows.map(async (r) => ({
+          date: dateStr,
+          store_id: storeId,
+          platform: 'meta',
+          campaign_id: r.campaignId,
+          campaign_name: r.campaignName,
+          ad_set_id: r.adSetId,
+          ad_set_name: r.adSetName,
+          spend_cad: await cadFor(r.spend, r.currency),
+          impressions: Math.round(r.impressions),
+          clicks: Math.round(r.clicks),
+          conversions: Math.round(r.conversions),
+          conversion_value_cad: await cadFor(r.conversionValue, r.currency),
+          roas: null,
+          campaign_budget_cad: null,
+          ad_set_budget_cad: null,
+          budget_type: null,
+        })),
+      );
       const { error } = await admin.from('campaigns_daily').upsert(metaCampaignRows, {
         onConflict: 'date,store_id,platform,campaign_id,ad_set_id',
       });
@@ -404,24 +444,28 @@ export async function runDailyForStore(
     // (Pitfall 4 budget — 1 SQL statement per logical table, not per
     // platform). Supabase's UPSERT handles mixed-row arrays correctly.
     {
-      const metaAdsRows = meta.adRows.map((r) => ({
-        date: r.date,
-        store_id: r.storeId,
-        platform: r.platform, // 'meta'
-        campaign_id: r.campaignId,
-        campaign_name: r.campaignName,
-        ad_set_id: r.adSetId,
-        ad_set_name: r.adSetName,
-        ad_id: r.adId,
-        ad_name: r.adName,
-        spend_cad: r.spendCad, // null per MetaAdRow docstring
-        // BIGINT-safe: see comment on metaCampaignRows above.
-        impressions: Math.round(r.impressions),
-        clicks: Math.round(r.clicks),
-        conversions: Math.round(r.conversions),
-        conversion_value_cad: r.conversionValueCad, // null per MetaAdRow docstring
-        roas: null,
-      }));
+      // 2026-05-21: populate spend_cad + conversion_value_cad via FX
+      // (was hardcoded null — see cadFor() comment above).
+      const metaAdsRows = await Promise.all(
+        meta.adRows.map(async (r) => ({
+          date: r.date,
+          store_id: r.storeId,
+          platform: r.platform, // 'meta'
+          campaign_id: r.campaignId,
+          campaign_name: r.campaignName,
+          ad_set_id: r.adSetId,
+          ad_set_name: r.adSetName,
+          ad_id: r.adId,
+          ad_name: r.adName,
+          spend_cad: await cadFor(r.spend, r.currency),
+          // BIGINT-safe: see comment on metaCampaignRows above.
+          impressions: Math.round(r.impressions),
+          clicks: Math.round(r.clicks),
+          conversions: Math.round(r.conversions),
+          conversion_value_cad: await cadFor(r.conversionValue, r.currency),
+          roas: null,
+        })),
+      );
       const googleAdsRows = google.adRows.map((r) => ({
         date: r.date,
         store_id: r.storeId,
