@@ -59,13 +59,53 @@ type ShopifyRefundLineItem = {
   total?: string | number;
 };
 
-type ShopifyRefundTx = { amount: string | number };
+type ShopifyRefundTx = {
+  amount: string | number;
+  /**
+   * Shopify transaction status — `success`, `failure`, `pending`, `error`.
+   * Used by `hasSuccessfulRefundTransaction()` to skip refunds whose
+   * underlying payment processor (PayPal, Stripe, …) rejected the
+   * refund attempt. See bug report 2026-05-21: usmile360 order
+   * 4697724059855 had two `status: failure` PayPal refund attempts
+   * (`error_code: processing_error`) for $302.10 each, but the algorithm
+   * still subtracted $136.43 from May 20 revenue because the
+   * `refund_line_items` were populated regardless of whether money
+   * actually moved. The Apps Script original (Phase 05.2.3.0) had the
+   * same defect; the TS port inherited it via the 1:1 mirror.
+   */
+  status?: string;
+};
 
 type ShopifyRefund = {
   processed_at: string;
   transactions?: ShopifyRefundTx[];
   refund_line_items?: ShopifyRefundLineItem[];
 };
+
+/**
+ * Returns true if the refund actually moved money. The bug we're fixing
+ * (2026-05-21) is the modern case where `transactions[]` is populated
+ * with EXPLICIT `status: 'failure'` entries (e.g., PayPal refund attempt
+ * rejected) but the algorithm still subtracted the refund_line_items.
+ *
+ * Conservative legacy behaviour: treat a missing `transactions` array
+ * (length 0), or transactions that lack a `status` field, as legitimate.
+ * Sparse/older Shopify orders sometimes ship without the status field,
+ * and we'd rather over-count those than silently drop them. Only skip
+ * when the array is populated AND every entry has a non-empty status
+ * that is explicitly not 'success'.
+ */
+function hasSuccessfulRefundTransaction(r: ShopifyRefund): boolean {
+  const txs = r.transactions ?? [];
+  if (txs.length === 0) return true; // legacy / missing — assume real
+  return txs.some((t) => {
+    const s = (t.status ?? '').toLowerCase();
+    // Missing/blank status → legacy data, treat as success.
+    // Explicit 'success' → real.
+    // Anything else ('failure', 'pending', 'error') → not yet money.
+    return s === '' || s === 'success';
+  });
+}
 
 export type ShopifyOrderInput = {
   id: string | number;
@@ -201,11 +241,17 @@ export function computeRevenueWithCrossDayRefunds(
       // A future-day refund on a same-day order must NOT deduct from same-day
       // per-product net — it deducts on its processed_at day via the
       // refund-day attribution loop below.
+      //
+      // Bug fix 2026-05-21: also skip refunds whose transactions all failed
+      // (e.g., PayPal refund attempt rejected with `processing_error`).
+      // The refund_line_items still exist in failed attempts but no money
+      // actually moved, so subtracting them inflates the deduction.
       const sameDayRefunds = o.refunds ?? [];
       for (const r of sameDayRefunds) {
         if (!r.processed_at) continue;
         const processedDay = dayInTz(r.processed_at, tz);
         if (processedDay !== dateStr) continue;
+        if (!hasSuccessfulRefundTransaction(r)) continue; // bug fix 2026-05-21
         const rlis = r.refund_line_items ?? [];
         for (const rli of rlis) {
           const pid = normalizeProductId(rli.product_id);
@@ -228,9 +274,19 @@ export function computeRevenueWithCrossDayRefunds(
       // gap-closure 08: cross-day short-circuit DROPPED. Same-day refunds
       // count here too, because the gross above uses total_price
       // (immutable), so the same-day refund is NOT absorbed by gross.
+      // Bug fix 2026-05-21: skip refunds where the underlying transactions
+      // all failed (e.g., PayPal `status:failure` with `error_code:
+      // processing_error`). No money actually moved, so the
+      // refund_line_items[].subtotal must not deduct from revenue.
+      // See `hasSuccessfulRefundTransaction()` for the legacy-data fallback
+      // (refunds with empty/missing transactions[] still count, to avoid
+      // breaking older orders that never populated the field).
+      if (!hasSuccessfulRefundTransaction(r)) continue;
 
       // D-C1 / D-C2: BOTH paths use refund_line_items[].subtotal.
-      // transactions[].amount is intentionally IGNORED.
+      // transactions[].amount is intentionally IGNORED for the AMOUNT;
+      // the new transaction-status filter above gates WHETHER to count
+      // this refund at all.
       const rlis = r.refund_line_items ?? [];
       for (const rli of rlis) {
         const amt = parseNum(

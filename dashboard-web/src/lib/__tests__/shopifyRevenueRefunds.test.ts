@@ -573,3 +573,132 @@ describe('cross-day refunds', () => {
     expect(periodSum).toBeCloseTo(60.00, 2);
   });
 });
+
+describe('refund transaction status filtering (bug fix 2026-05-21)', () => {
+  // Regression test for the live bug discovered on 2026-05-21 against
+  // usmile360 May 20:
+  //
+  //   Shopify order 4697724059855 (created April 11, total $136.43) had
+  //   TWO refund attempts processed on May 20. Both PayPal transactions
+  //   came back with `status: failure` + `error_code: processing_error`
+  //   (the underlying PayPal account couldn't service the refund). No
+  //   money actually moved.
+  //
+  //   But the refund #1 still had `refund_line_items: [{subtotal: 81.08},
+  //   {subtotal: 55.35}]` = $136.43 populated (the operator's INTENT to
+  //   refund). The pre-fix algorithm subtracted that $136.43 from May 20
+  //   revenue, even though no actual refund occurred.
+  //
+  //   Net effect on May 20:
+  //     Sales today:          $60.71 (one paid order)
+  //     "Refund" deduction:   $136.43 (from failed-tx refund_line_items)
+  //     storeNetCad:          -$75.72  ← incorrect; should be $60.71
+  //
+  // Fix: `hasSuccessfulRefundTransaction()` skips refunds whose
+  // transactions[] all have status !== 'success'.
+
+  it('skips refund whose transactions are ALL `status: failure` (live usmile360 case)', () => {
+    const tz = 'Asia/Jerusalem';
+    const dateStr = '2026-05-20';
+
+    // Order A: created April 11, big total. Two refund attempts on May 20,
+    // both failed at the gateway. Per the Shopify REST sample we captured:
+    //   refund_line_items[0].subtotal = 81.08
+    //   refund_line_items[1].subtotal = 55.35
+    //   transactions[0] = {amount: 302.10, status: 'failure'}  (retry 1)
+    //   transactions[1] = {amount: 302.10, status: 'failure'}  (retry 2)
+    const orderWithFailedRefunds: ShopifyOrderInput = {
+      id: 4697724059855,
+      created_at: '2026-04-11T11:35:10+03:00',
+      total_price: '136.43',
+      current_total_price: '0.00',
+      financial_status: 'paid',
+      refunds: [
+        {
+          processed_at: '2026-05-20T15:25:16+03:00',
+          transactions: [{ amount: '302.10', status: 'failure' }],
+          refund_line_items: [
+            { product_id: null, subtotal: 81.08 },
+            { product_id: null, subtotal: 55.35 },
+          ],
+        },
+        {
+          processed_at: '2026-05-20T15:25:46+03:00',
+          transactions: [{ amount: '302.10', status: 'failure' }],
+          refund_line_items: [],
+        },
+      ],
+    };
+
+    // Order B: created May 20, one paid order — the only real sale today.
+    const orderCreatedToday: ShopifyOrderInput = {
+      id: 4730013778127,
+      created_at: '2026-05-20T10:47:38+03:00',
+      total_price: '60.71',
+      current_total_price: '60.71',
+      financial_status: 'paid',
+      refunds: [],
+    };
+
+    const result = computeRevenueWithCrossDayRefunds(
+      [orderWithFailedRefunds, orderCreatedToday],
+      dateStr,
+      tz,
+    );
+
+    // Before fix: storeNetCad = 60.71 - 136.43 = -75.72  (WRONG)
+    // After fix:  storeNetCad = 60.71 - 0      = 60.71   (CORRECT)
+    expect(result.storeNetCad).toBeCloseTo(60.71, 2);
+    expect(result.customItemRefundCad).toBeCloseTo(0, 2);
+  });
+
+  it('still counts refund when at least ONE transaction is success', () => {
+    // Mixed-status refund: one transaction failed, one succeeded
+    // (e.g., partial settlement). The successful one means real money
+    // moved → the refund_line_items.subtotal MUST be deducted.
+    const tz = 'Asia/Jerusalem';
+    const dateStr = '2026-05-20';
+    const order: ShopifyOrderInput = {
+      id: 'order-mixed',
+      created_at: '2026-04-11T11:35:10+03:00',
+      total_price: '100.00',
+      current_total_price: '40.00',
+      refunds: [
+        {
+          processed_at: '2026-05-20T12:00:00+03:00',
+          transactions: [
+            { amount: '60.00', status: 'failure' }, // retry that failed
+            { amount: '60.00', status: 'success' }, // retry that worked
+          ],
+          refund_line_items: [{ product_id: null, subtotal: 60.00 }],
+        },
+      ],
+    };
+    const result = computeRevenueWithCrossDayRefunds([order], dateStr, tz);
+    // No same-day orders. Refund counts: storeNet = 0 - 60.00 = -60.
+    expect(result.storeNetCad).toBeCloseTo(-60.00, 2);
+  });
+
+  it('counts refund when transactions[] is missing/empty (legacy data)', () => {
+    // Older Shopify orders may not include the `transactions` array.
+    // The conservative behaviour is to assume the refund is real (otherwise
+    // legacy data would silently start under-counting revenue corrections).
+    const tz = 'Asia/Jerusalem';
+    const dateStr = '2026-05-20';
+    const order: ShopifyOrderInput = {
+      id: 'order-legacy',
+      created_at: '2026-04-11T11:35:10+03:00',
+      total_price: '100.00',
+      current_total_price: '60.00',
+      refunds: [
+        {
+          processed_at: '2026-05-20T12:00:00+03:00',
+          // transactions OMITTED — legacy / sparse data
+          refund_line_items: [{ product_id: null, subtotal: 40.00 }],
+        },
+      ],
+    };
+    const result = computeRevenueWithCrossDayRefunds([order], dateStr, tz);
+    expect(result.storeNetCad).toBeCloseTo(-40.00, 2);
+  });
+});

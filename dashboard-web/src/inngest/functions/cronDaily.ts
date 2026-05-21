@@ -314,6 +314,17 @@ export async function runDailyForStore(
     // total — per-adset CAD conversion is left to plan 09 (cron-live) or
     // a future enhancement. The other metrics are platform-neutral
     // (impressions, clicks, conversions) and persist verbatim.
+    //
+    // Bug fix 2026-05-21 (Postgres bigint coercion): campaigns_daily +
+    // ads_daily have BIGINT columns for impressions/clicks/conversions,
+    // but Google Ads + Meta APIs can return FRACTIONAL conversions
+    // (view-through attribution, multi-touch, partial-credit models —
+    // e.g. `conversions: 16.88633`). The DB rejects these with
+    // `invalid input syntax for type bigint: "16.88633"`. We round to
+    // the nearest whole number for the BIGINT columns and lose the
+    // sub-conversion decimal. (Future: a NUMERIC schema change would
+    // preserve precision; not worth a migration for now since the
+    // dashboard sums these by 4+ rows and the rounding error vanishes.)
     if (meta.adsetRows.length > 0) {
       const metaCampaignRows = meta.adsetRows.map((r) => ({
         date: dateStr,
@@ -324,9 +335,9 @@ export async function runDailyForStore(
         ad_set_id: r.adSetId,
         ad_set_name: r.adSetName,
         spend_cad: null,
-        impressions: r.impressions,
-        clicks: r.clicks,
-        conversions: r.conversions,
+        impressions: Math.round(r.impressions),
+        clicks: Math.round(r.clicks),
+        conversions: Math.round(r.conversions),
         conversion_value_cad: null,
         roas: null,
         campaign_budget_cad: null,
@@ -358,9 +369,10 @@ export async function runDailyForStore(
         ad_set_id: r.adSetId,
         ad_set_name: r.adSetName,
         spend_cad: r.spend, // Google returns CAD for uzoshop
-        impressions: r.impressions,
-        clicks: r.clicks,
-        conversions: r.conversions,
+        // BIGINT-safe: see comment on metaCampaignRows above.
+        impressions: Math.round(r.impressions),
+        clicks: Math.round(r.clicks),
+        conversions: Math.round(r.conversions),
         conversion_value_cad: r.conversionValue,
         roas: null,
         campaign_budget_cad: null,
@@ -403,9 +415,10 @@ export async function runDailyForStore(
         ad_id: r.adId,
         ad_name: r.adName,
         spend_cad: r.spendCad, // null per MetaAdRow docstring
-        impressions: r.impressions,
-        clicks: r.clicks,
-        conversions: r.conversions,
+        // BIGINT-safe: see comment on metaCampaignRows above.
+        impressions: Math.round(r.impressions),
+        clicks: Math.round(r.clicks),
+        conversions: Math.round(r.conversions),
         conversion_value_cad: r.conversionValueCad, // null per MetaAdRow docstring
         roas: null,
       }));
@@ -420,9 +433,10 @@ export async function runDailyForStore(
         ad_id: r.adId,
         ad_name: r.adName,
         spend_cad: r.spendCad,
-        impressions: r.impressions,
-        clicks: r.clicks,
-        conversions: r.conversions,
+        // BIGINT-safe: see comment on metaCampaignRows above.
+        impressions: Math.round(r.impressions),
+        clicks: Math.round(r.clicks),
+        conversions: Math.round(r.conversions),
         conversion_value_cad: r.conversionValueCad,
         roas: null,
       }));
