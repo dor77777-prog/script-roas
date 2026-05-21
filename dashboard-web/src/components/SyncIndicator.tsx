@@ -1,21 +1,47 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import useSWR from 'swr';
 import { Cloud, CloudOff, RefreshCw, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getSyncState, hydrateFromCloud, type SyncState } from '@/lib/cloudSync';
+import type { HealthResponse } from '@/app/api/health/route';
 
 /**
  * Header pill showing the current cloud-sync status. Clicking the pill (in
  * error state) opens a small popover with the actual error message — critical
  * for diagnosing "I entered data on device A but device B is empty".
+ *
+ * Phase 05.5 D-D1: ternary state machine:
+ *   🟢 green  = sheets + supabase both reachable (happy path)
+ *   🟡 amber  = sheets ok, supabase down (new — Phase 05.5)
+ *   🔴 red    = sheets unreachable (existing error behavior, unchanged)
+ *
+ * Implementation: Option A from RESEARCH.md §Pattern 6 — parallel useSWR on
+ * /api/health, combined with the existing cloudSync.getSyncState() status.
+ * Option B (extend SyncState in cloudSync.ts) deferred to Phase 05.6 when
+ * Supabase enters the read path.
  */
+
+const fetcher = (url: string) => fetch(url).then(r => (r.ok ? r.json() : null));
+
 export function SyncIndicator() {
   const [state, setState] = useState<SyncState>(() => getSyncState());
   const [expanded, setExpanded] = useState(false);
   // Bump tick every 30s so the "synced N seconds ago" tooltip text doesn't
   // freeze between sync events (which can be minutes apart while idle).
   const [, setTick] = useState(0);
+
+  // D-D2: poll /api/health every 30s — same cadence as the existing 30s
+  // tickInterval below. Returns null on non-2xx per the fetcher contract.
+  const { data: health } = useSWR<HealthResponse | null>(
+    '/api/health',
+    fetcher,
+    {
+      refreshInterval: 30_000,
+      revalidateOnFocus: true,
+    },
+  );
 
   useEffect(() => {
     const sync = () => setState(getSyncState());
@@ -29,6 +55,12 @@ export function SyncIndicator() {
 
   const { status, lastError, pendingKeys, lastSyncAt } = state;
 
+  // D-D1 ternary tone resolution. Priority:
+  //   1. Sheets-write error (cloudSync POST failure) → RED — same as before
+  //   2. Supabase ping fails (from health) → AMBER — new in 05.5
+  //   3. Both fine → GREEN
+  // The 'syncing' state keeps its existing in-flight visual (bg-white/15)
+  // because it's a transient state ORTHOGONAL to the health check.
   let icon = <Cloud size={13} />;
   let label = 'sync';
   let tone = 'bg-white/12 text-white/85 hover:bg-white/20';
@@ -44,6 +76,12 @@ export function SyncIndicator() {
     label = 'sync שגיאה';
     tone = 'bg-red-500/85 text-white hover:bg-red-500';
     title = 'לחץ לפרטים';
+  } else if (status === 'ok' && health?.supabase === 'down') {
+    // D-D1 yellow — Sheets OK but Supabase unreachable (env vars wrong or project paused)
+    icon = <Cloud size={13} />;
+    label = 'sync OK';
+    tone = 'bg-amber-500/30 text-white hover:bg-amber-500/40';
+    title = 'Sheets תקין, Supabase לא זמין — בדוק SUPABASE_URL / SUPABASE_ANON_KEY ב-Vercel';
   } else if (status === 'ok') {
     icon = <Cloud size={13} />;
     label = 'sync OK';
