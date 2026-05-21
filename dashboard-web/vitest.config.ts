@@ -26,7 +26,16 @@ export default defineConfig({
     // TS-port test suites run by default. Pre-Phase-05.6 there was only one
     // canonical tests location; with multiple fetcher modules each owning
     // their own __tests__ folder, a single glob would silently skip them.
-    include: ['src/lib/**/__tests__/**/*.test.{ts,tsx}'],
+    //
+    // Phase 05.6 plan 08 added a second top-level path — `src/inngest/**` —
+    // so Inngest function tests (e.g. src/inngest/functions/__tests__/cronDaily.test.ts)
+    // are picked up alongside the lib fetcher suites. Same rationale as the
+    // plan-03 widening: a new top-level source directory means the include
+    // glob must explicitly enumerate it or its tests silently skip.
+    include: [
+      'src/lib/**/__tests__/**/*.test.{ts,tsx}',
+      'src/inngest/**/__tests__/**/*.test.{ts,tsx}',
+    ],
     globals: false, // explicit imports — not relying on describe/it globals
   },
   resolve: {

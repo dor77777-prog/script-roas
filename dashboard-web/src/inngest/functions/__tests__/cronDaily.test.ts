@@ -1,0 +1,342 @@
+// dashboard-web/src/inngest/functions/__tests__/cronDaily.test.ts
+//
+// Phase 05.6 plan 08 — tests for the 3 cron-daily-{store} Inngest functions
+// and their shared handler body `runDailyForStore`.
+//
+// Coverage map (6 tests, one per acceptance-criteria line in 05.6-08-PLAN.md):
+//   Test 1 — cronDailyFunctions.length === 3 (one per store from STORES const)
+//   Test 2 — each function has unique id matching `cron-daily-{storeId}`
+//   Test 3 — each function's cron trigger is `TZ=Asia/Jerusalem 5 0 * * *`
+//            (verifies RESEARCH §Pitfall 1 — Israel-local timezone, NOT UTC)
+//   Test 4 — `runDailyForStore` invokes step.run with the expected ordered IDs
+//            (free-tier budget per RESEARCH §Pitfall 4 — keep step count low)
+//   Test 5 — supabaseAdmin upserts use the correct onConflict strings matching
+//            migration 20260521063112_initial_schema.sql PK/UNIQUE definitions
+//   Test 6 — an error thrown from any step.run propagates (proves Inngest's
+//            retry-on-throw will kick in — D-B6 retry policy)
+//
+// Mock strategy:
+//   - All 5 fetchers in @/lib/fetchers/* are mocked with vi.mock + vi.hoisted
+//     state so we can drive their return values per test without real network.
+//   - getSupabaseAdmin is mocked to return a chainable stub whose
+//     .from(table).upsert(rows, opts) records (table, rows, opts) into a
+//     shared array — used by Test 5 to assert onConflict strings.
+//   - step.run('id', cb) is mocked to call cb() and record the id; this
+//     mirrors Inngest's default-runner behavior (no memoization, no retry)
+//     and is sufficient for shape assertions.
+//
+// Why we do NOT exercise inngest.createFunction at runtime:
+//   The SDK's InngestFunction type surface IS introspectable (`fn.opts.triggers`)
+//   so Tests 1-3 read those directly. The handler body is the inner
+//   async ({ step }) function — Test 4 invokes it via runDailyForStore() with
+//   a hand-rolled mockStep. This sidesteps the need to spin up an Inngest
+//   dev server or signing layer.
+
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+// ---------------------------------------------------------------------------
+// Hoisted mock state — accessible from inside vi.mock factories AND tests
+// ---------------------------------------------------------------------------
+
+type UpsertCall = { table: string; rows: unknown; opts: { onConflict?: string } };
+
+type MockState = {
+  upserts: UpsertCall[];
+  upsertError: { message: string } | null;
+  shopifyResult: {
+    storeId: string;
+    date: string;
+    storeName: string;
+    revenueCad: number;
+    productRows: Array<{ product_id: string; net_revenue_cad: number }>;
+    customItemRefundCad: number;
+  };
+  metaAdSetResult: Array<{
+    campaignId: string;
+    campaignName: string;
+    adSetId: string;
+    adSetName: string;
+    spend: number;
+    currency: string;
+    impressions: number;
+    clicks: number;
+    conversions: number;
+    conversionValue: number;
+  }>;
+  metaSpendResult: { storeId: string; date: string; spend: number; currency: string };
+  googleSpendResult: { storeId: string; date: string; spend: number; currency: string };
+  googleAdGroupResult: Array<{
+    campaignId: string;
+    campaignName: string;
+    adSetId: string;
+    adSetName: string;
+    spend: number;
+    currency: string;
+    impressions: number;
+    clicks: number;
+    conversions: number;
+    conversionValue: number;
+  }>;
+  mergeResult: {
+    fbSpendCad: number;
+    gaSpendCad: number;
+    totalSpendCad: number;
+    overridesApplied: { meta: boolean; google: boolean };
+  };
+  /**
+   * If set, the named fetcher throws `new Error(throwIn)` instead of returning
+   * its mocked value. Test 6 uses this to verify step.run errors propagate.
+   */
+  throwIn: null | 'shopify' | 'meta' | 'google' | 'merge' | 'upsert';
+};
+
+const mockState = vi.hoisted<MockState>(() => ({
+  upserts: [],
+  upsertError: null,
+  shopifyResult: {
+    storeId: 'uzoshop',
+    date: '2026-05-20',
+    storeName: 'uzoshop',
+    revenueCad: 1234.56,
+    productRows: [
+      { product_id: 'p1', net_revenue_cad: 800 },
+      { product_id: 'p2', net_revenue_cad: 434.56 },
+    ],
+    customItemRefundCad: 0,
+  },
+  metaAdSetResult: [
+    {
+      campaignId: 'c1',
+      campaignName: 'Campaign 1',
+      adSetId: 'as1',
+      adSetName: 'Ad Set 1',
+      spend: 100,
+      currency: 'ILS',
+      impressions: 1000,
+      clicks: 50,
+      conversions: 5,
+      conversionValue: 500,
+    },
+  ],
+  metaSpendResult: { storeId: 'uzoshop', date: '2026-05-20', spend: 100, currency: 'ILS' },
+  googleSpendResult: { storeId: 'uzoshop', date: '2026-05-20', spend: 50, currency: 'CAD' },
+  googleAdGroupResult: [
+    {
+      campaignId: 'gc1',
+      campaignName: 'Google Campaign 1',
+      adSetId: 'ag1',
+      adSetName: 'Ad Group 1',
+      spend: 50,
+      currency: 'CAD',
+      impressions: 500,
+      clicks: 25,
+      conversions: 2,
+      conversionValue: 200,
+    },
+  ],
+  mergeResult: {
+    fbSpendCad: 36, // 100 ILS * ~0.36 CAD/ILS
+    gaSpendCad: 50,
+    totalSpendCad: 86,
+    overridesApplied: { meta: false, google: false },
+  },
+  throwIn: null,
+}));
+
+// ---------------------------------------------------------------------------
+// Mocks — order matters: declare BEFORE the SUT import.
+// ---------------------------------------------------------------------------
+
+vi.mock('@/lib/fetchers/shopify', () => ({
+  fetchShopifyDayRows: vi.fn(async () => {
+    if (mockState.throwIn === 'shopify') throw new Error('shopify-failed');
+    return mockState.shopifyResult;
+  }),
+}));
+
+vi.mock('@/lib/fetchers/meta', () => ({
+  fetchMetaAdSetInsights: vi.fn(async () => {
+    if (mockState.throwIn === 'meta') throw new Error('meta-adset-failed');
+    return mockState.metaAdSetResult;
+  }),
+  fetchMetaSpendForDay: vi.fn(async () => {
+    if (mockState.throwIn === 'meta') throw new Error('meta-spend-failed');
+    return mockState.metaSpendResult;
+  }),
+}));
+
+vi.mock('@/lib/fetchers/googleAds', () => ({
+  fetchGoogleAdsSpendForDay: vi.fn(async () => {
+    if (mockState.throwIn === 'google') throw new Error('google-spend-failed');
+    return mockState.googleSpendResult;
+  }),
+  fetchGoogleAdsAdGroupInsights: vi.fn(async () => {
+    if (mockState.throwIn === 'google') throw new Error('google-adgroup-failed');
+    return mockState.googleAdGroupResult;
+  }),
+}));
+
+vi.mock('@/lib/fetchers/manualOverrides', () => ({
+  mergeOverridesFromSupabase: vi.fn(async () => {
+    if (mockState.throwIn === 'merge') throw new Error('merge-failed');
+    return mockState.mergeResult;
+  }),
+}));
+
+vi.mock('@/lib/supabaseAdmin', () => ({
+  getSupabaseAdmin: () => ({
+    from: (table: string) => ({
+      upsert: (rows: unknown, opts: { onConflict?: string } = {}) => {
+        mockState.upserts.push({ table, rows, opts });
+        if (mockState.throwIn === 'upsert') {
+          return Promise.resolve({ error: { message: 'upsert-failed' } });
+        }
+        return Promise.resolve({ error: mockState.upsertError });
+      },
+    }),
+  }),
+}));
+
+// ---- SUT import (after mocks) ----------------------------------------------
+
+import { cronDailyFunctions, runDailyForStore } from '../cronDaily';
+
+// ---- Shared helpers --------------------------------------------------------
+
+/**
+ * A minimal mock for the Inngest StepTools `step` arg. Records each call's
+ * id (in order), then invokes the callback directly — no retry, no
+ * memoization. Sufficient for shape assertions.
+ */
+function makeMockStep(): { step: { run: (id: string, cb: () => Promise<unknown>) => Promise<unknown> }; ids: string[] } {
+  const ids: string[] = [];
+  const step = {
+    run: async (id: string, cb: () => Promise<unknown>) => {
+      ids.push(id);
+      return await cb();
+    },
+  };
+  return { step, ids };
+}
+
+/**
+ * Inngest function objects carry their triggers at `fn.opts.triggers`. The
+ * SDK normalizes single-trigger input to an array via `sanitizeTriggers`
+ * (see Inngest.cjs:561-565), so this access is uniform whether the producer
+ * passed `triggers: { cron: '...' }` or `triggers: [{ cron: '...' }]`.
+ */
+function readCronTrigger(fn: unknown): string | undefined {
+  const opts = (fn as { opts?: { triggers?: Array<{ cron?: string }> } }).opts;
+  const triggers = opts?.triggers;
+  if (!triggers || triggers.length === 0) return undefined;
+  return triggers[0]?.cron;
+}
+
+function readFunctionId(fn: unknown): string | undefined {
+  const opts = (fn as { opts?: { id?: string } }).opts;
+  return opts?.id;
+}
+
+beforeEach(() => {
+  mockState.upserts = [];
+  mockState.upsertError = null;
+  mockState.throwIn = null;
+});
+
+// ===========================================================================
+// Tests
+// ===========================================================================
+
+describe('cronDaily — factory + handler', () => {
+  it('Test 1: exports a `cronDailyFunctions` array with one entry per store (3 stores)', () => {
+    expect(Array.isArray(cronDailyFunctions)).toBe(true);
+    expect(cronDailyFunctions.length).toBe(3);
+  });
+
+  it('Test 2: each function has a unique `cron-daily-{storeId}` id', () => {
+    const ids = cronDailyFunctions.map(readFunctionId);
+    expect(ids).toEqual([
+      'cron-daily-uzoshop',
+      'cron-daily-zolplus',
+      'cron-daily-usmile360',
+    ]);
+    // Sanity: no duplicates.
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('Test 3: each function fires on `TZ=Asia/Jerusalem 5 0 * * *` (Israel-local 00:05, NOT UTC)', () => {
+    // Per RESEARCH §Pitfall 1: a raw `5 0 * * *` would fire at 00:05 UTC =
+    // 02:05/03:05 Asia/Jerusalem (depending on DST), 2-3 hours off the
+    // intended Apps Script trigger time. The TZ= prefix is mandatory.
+    for (const fn of cronDailyFunctions) {
+      const cron = readCronTrigger(fn);
+      expect(cron).toBe('TZ=Asia/Jerusalem 5 0 * * *');
+    }
+  });
+
+  it('Test 4: `runDailyForStore` invokes step.run with the expected ordered step IDs', async () => {
+    const { step, ids } = makeMockStep();
+    await runDailyForStore('uzoshop', '2026-05-20', { step });
+
+    // Per RESEARCH §Pitfall 4 recommended decomposition (≤6 steps/run for
+    // free-tier budget): fetch-shopify, fetch-meta, fetch-google,
+    // apply-manual-overrides, persist-batch = 5 step.run calls.
+    expect(ids).toEqual([
+      'fetch-shopify',
+      'fetch-meta',
+      'fetch-google',
+      'apply-manual-overrides',
+      'persist-batch',
+    ]);
+    // Free-tier guard: total step count must stay ≤ 6 (1 function + 5 steps
+    // = 6 execs/run; × 3 stores × 1 run/day × 30 days = 540 execs/month
+    // from cron-daily alone — well under the 50K/mo free-tier limit).
+    expect(ids.length).toBeLessThanOrEqual(6);
+  });
+
+  it('Test 5: persist-batch upserts use the correct `onConflict` strings (match migration PK/UNIQUE)', async () => {
+    const { step } = makeMockStep();
+    await runDailyForStore('uzoshop', '2026-05-20', { step });
+
+    // Inspect every upsert call made by the persist-batch step.
+    const byTable = new Map<string, UpsertCall[]>();
+    for (const call of mockState.upserts) {
+      const list = byTable.get(call.table) ?? [];
+      list.push(call);
+      byTable.set(call.table, list);
+    }
+
+    // data_daily — PK (date, store_id)
+    const dataDailyCalls = byTable.get('data_daily') ?? [];
+    expect(dataDailyCalls.length).toBeGreaterThan(0);
+    expect(dataDailyCalls[0].opts.onConflict).toBe('date,store_id');
+
+    // products_daily — PK (date, store_id, product_id)
+    const productsCalls = byTable.get('products_daily') ?? [];
+    expect(productsCalls.length).toBeGreaterThan(0);
+    expect(productsCalls[0].opts.onConflict).toBe('date,store_id,product_id');
+
+    // campaigns_daily — PK (date, store_id, platform, campaign_id, ad_set_id)
+    // There may be TWO campaigns_daily upsert calls (one for meta rows, one
+    // for google rows) — both must use the same onConflict string.
+    const campaignsCalls = byTable.get('campaigns_daily') ?? [];
+    expect(campaignsCalls.length).toBeGreaterThan(0);
+    for (const c of campaignsCalls) {
+      expect(c.opts.onConflict).toBe('date,store_id,platform,campaign_id,ad_set_id');
+    }
+  });
+
+  it('Test 6: an error inside any step propagates out of `runDailyForStore` (D-B6 retry-on-throw)', async () => {
+    mockState.throwIn = 'shopify';
+    const { step } = makeMockStep();
+    await expect(runDailyForStore('uzoshop', '2026-05-20', { step })).rejects.toThrow(/shopify-failed/);
+
+    mockState.throwIn = 'merge';
+    const { step: step2 } = makeMockStep();
+    await expect(runDailyForStore('uzoshop', '2026-05-20', { step: step2 })).rejects.toThrow(/merge-failed/);
+
+    mockState.throwIn = 'upsert';
+    const { step: step3 } = makeMockStep();
+    await expect(runDailyForStore('uzoshop', '2026-05-20', { step: step3 })).rejects.toThrow(/upsert/);
+  });
+});
