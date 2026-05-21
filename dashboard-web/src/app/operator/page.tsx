@@ -5,7 +5,7 @@
 // four sub-sections are filled in incrementally by plans 13-16:
 //
 //   - Plan 13: JobsTable          → "ריצות אחרונות"
-//   - Plan 14: BackfillPicker     → "Backfill טווח תאריכים"
+//   - Plan 14: BackfillPicker     → "Backfill טווח תאריכים"   ← landed wave 7
 //   - Plan 15: ManualOverridesCrud → "החלפות הוצאה ידניות"   ← landed wave 4
 //   - Plan 16: SyncNowButtons      → "סנכרון עכשיו"
 //
@@ -17,6 +17,7 @@
 // Hebrew) and D-D4 (match existing dashboard styling — no new tokens).
 
 import { ManualOverridesCrud } from '@/components/operator/ManualOverridesCrud';
+import { BackfillPicker } from '@/components/operator/BackfillPicker';
 
 export const metadata = {
   title: 'ניהול — ROAS Dashboard',
@@ -50,10 +51,10 @@ export default function OperatorPage() {
 
       <section>
         <h2 className="text-lg font-semibold mb-3">Backfill טווח תאריכים</h2>
-        <p className="text-text-secondary text-sm">
-          {/* Plan 14: BackfillPicker */}
-          (בורר טווח תאריכים יופיע כאן — ממומש בשלב הבא)
-        </p>
+        {/* Plan 14: BackfillPicker — replaced placeholder copy with the
+            live component. The component owns its own loading / error /
+            confirmation states; this <section> only owns the title. */}
+        <BackfillPicker />
       </section>
 
       <section>
