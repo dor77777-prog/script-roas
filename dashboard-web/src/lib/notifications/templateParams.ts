@@ -42,6 +42,17 @@ function formatCad(amount: number): string {
   return 'C$' + Math.round(amount).toLocaleString('en-CA');
 }
 
+// Phase 05.7.5 (2026-05-22): tiktok-paid orders are tracked as a separate
+// bucket in `StoreSummary`, but the approved Meta WhatsApp template still
+// has only 3 source slots — פייסבוק / גוגל / אחרים. Phase D will submit
+// a new template with a 4th slot for טיקטוק; until then, we COMBINE
+// tiktok-paid into "אחרים" so the WhatsApp output stays consistent with
+// the prior count (no mysterious shift in "אחרים" once tiktok-paid starts
+// classifying orders out of it).
+function combinedOther(other: number, tiktok: number): number {
+  return other + tiktok;
+}
+
 function storeBlock(s: StoreSummary): string {
   return (
     '🏪 ' +
@@ -59,7 +70,7 @@ function storeBlock(s: StoreSummary): string {
     ', גוגל: ' +
     s.google +
     ', אחרים: ' +
-    s.other +
+    combinedOther(s.other, s.tiktok) +
     ')'
   );
 }
@@ -79,7 +90,7 @@ function totalsBlock(t: DaySummary['totals']): string {
     ', גוגל: ' +
     t.google +
     ', אחרים: ' +
-    t.other +
+    combinedOther(t.other, t.tiktok) +
     ')'
   );
 }

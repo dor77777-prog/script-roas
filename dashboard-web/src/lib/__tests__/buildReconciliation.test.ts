@@ -609,6 +609,9 @@ describe('OrderSource sweep — locks FIX-01 (5.2.2.1)', () => {
     'meta-organic': true,
     'google-paid': false,
     'google-organic': true,
+    // Phase 05.7.5: tiktok-paid is a paid source (not organic) — same
+    // classification as meta-paid / google-paid for reconciliation purposes.
+    'tiktok-paid': false,
     email: true,
     'other-paid': false,
     'other-referral': true,
@@ -621,6 +624,7 @@ describe('OrderSource sweep — locks FIX-01 (5.2.2.1)', () => {
     { source: 'meta-organic', organic: SOURCE_COVERAGE['meta-organic'] },
     { source: 'google-paid', organic: SOURCE_COVERAGE['google-paid'] },
     { source: 'google-organic', organic: SOURCE_COVERAGE['google-organic'] },
+    { source: 'tiktok-paid', organic: SOURCE_COVERAGE['tiktok-paid'] },
     { source: 'email', organic: SOURCE_COVERAGE.email },
     { source: 'other-paid', organic: SOURCE_COVERAGE['other-paid'] },
     { source: 'other-referral', organic: SOURCE_COVERAGE['other-referral'] },

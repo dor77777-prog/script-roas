@@ -233,16 +233,17 @@ export function buildReconciliation(opts: {
   );
 
   /**
-   * Organic predicate (post-5.2.2.1 FIX-01):
-   * organic = NOT meta-paid AND NOT google-paid AND NOT other-paid AND NOT empty AND NOT fbclid/gclid present.
-   * Adding a new paid OrderSource member (e.g. 'tiktok-paid') will require an explicit decision here.
+   * Organic predicate (post-5.2.2.1 FIX-01, updated Phase 05.7.5 for tiktok-paid):
+   * organic = NOT meta-paid AND NOT google-paid AND NOT tiktok-paid AND NOT other-paid
+   *           AND NOT empty AND NOT fbclid/gclid present.
    */
   function isOrganicSource(order: { source: OrderSource | string; fbclidPresent?: boolean; gclidPresent?: boolean }): boolean {
     if (order.fbclidPresent) return false;
     if (order.gclidPresent) return false;
     if (order.source === 'meta-paid') return false;
     if (order.source === 'google-paid') return false;
-    if (order.source === 'other-paid') return false;   // UTM-tagged paid non-Meta/non-Google (e.g. TikTok, influencer) — must not bucket as organic
+    if (order.source === 'tiktok-paid') return false;  // Phase 05.7.5 — first-class TikTok paid bucket
+    if (order.source === 'other-paid') return false;   // UTM-tagged paid non-Meta/non-Google/non-TikTok (e.g. influencer) — must not bucket as organic
     if (order.source === '') return false;             // classifier failure — not safe to default to organic
     return true;
   }

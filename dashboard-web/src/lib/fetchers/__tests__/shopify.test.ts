@@ -584,9 +584,86 @@ describe('shopify fetcher — fetchShopifyOrdersAttribution', () => {
 
     const out = await fetchShopifyOrdersAttribution(STORE_ID, DATE_STR);
     const byId = new Map(out.map((o) => [o.orderId, o.source]));
-    expect(byId.get('tiktok')).toBe('other-paid');
+    // Phase 05.7.5: utm_source=tiktok was previously bucketed to 'other-paid';
+    // now it's a first-class 'tiktok-paid' source.
+    expect(byId.get('tiktok')).toBe('tiktok-paid');
     expect(byId.get('org-fb')).toBe('meta-organic');
     expect(byId.get('direct')).toBe('direct');
+  });
+
+  it('Orders Test 3b (Phase 05.7.5): ttclid / source_name=tiktok / utm_source=tiktok all classify as tiktok-paid', async () => {
+    // Three independent detection paths for TikTok paid traffic — same
+    // structure as the meta-paid (fbclid / source_name=fb / utm=facebook)
+    // and google-paid (gclid / source_name=google / utm=google) chains.
+    const { fn } = makeFetchMock([
+      {
+        body: {
+          orders: [
+            {
+              id: 'tt-clickid',
+              current_total_price: '50',
+              landing_site:
+                '/products/widget?ttclid=E.C.P.AbCdEf123&utm_source=somethingelse',
+              referring_site: '',
+              note_attributes: [],
+              source_name: 'web',
+              line_items: [],
+            },
+            {
+              id: 'tt-source-name',
+              current_total_price: '60',
+              landing_site: '/products/widget', // no UTM tail
+              referring_site: '',
+              note_attributes: [],
+              source_name: 'tiktok', // Shopify TikTok channel signal
+              line_items: [],
+            },
+            {
+              id: 'tt-utm-cpc',
+              current_total_price: '70',
+              landing_site: '/?utm_source=tiktok&utm_medium=cpc&utm_campaign=tt_spring',
+              referring_site: '',
+              note_attributes: [],
+              source_name: 'web',
+              line_items: [],
+            },
+            {
+              id: 'tt-utm-no-medium',
+              current_total_price: '80',
+              // utm_source=tiktok but no utm_medium — still tiktok-paid per
+              // the dedicated fallback branch (creators sometimes set source
+              // but omit medium).
+              landing_site: '/?utm_source=tiktok',
+              referring_site: '',
+              note_attributes: [],
+              source_name: 'web',
+              line_items: [],
+            },
+            {
+              id: 'tt-organic-referral',
+              current_total_price: '90',
+              // Referrer-only tiktok.com (organic share) — must NOT classify
+              // as tiktok-paid. Keep tiktok-paid for ad-attributed only.
+              landing_site: '/',
+              referring_site: 'https://www.tiktok.com/@creator/video/123',
+              note_attributes: [],
+              source_name: 'web',
+              line_items: [],
+            },
+          ],
+        },
+      },
+    ]);
+    vi.stubGlobal('fetch', fn);
+
+    const out = await fetchShopifyOrdersAttribution(STORE_ID, DATE_STR);
+    const byId = new Map(out.map((o) => [o.orderId, o.source]));
+    expect(byId.get('tt-clickid')).toBe('tiktok-paid');
+    expect(byId.get('tt-source-name')).toBe('tiktok-paid');
+    expect(byId.get('tt-utm-cpc')).toBe('tiktok-paid');
+    expect(byId.get('tt-utm-no-medium')).toBe('tiktok-paid');
+    // Organic referrer falls under other-referral, NOT tiktok-paid.
+    expect(byId.get('tt-organic-referral')).toBe('other-referral');
   });
 
   it('Orders Test 4: drops test=true and financial_status=voided orders', async () => {

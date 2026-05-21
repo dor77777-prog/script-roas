@@ -66,6 +66,7 @@ export type OrderLineItem = {
 export type OrderSource =
   | 'meta-paid'        // fbclid OR utm_source=facebook + cpc
   | 'google-paid'      // gclid OR utm_source=google + cpc
+  | 'tiktok-paid'      // ttclid OR utm_source=tiktok + cpc OR source_name=tiktok (Phase 05.7.5)
   | 'meta-organic'     // referrer fb/ig, no UTM
   | 'google-organic'   // referrer google, no UTM
   | 'email'            // utm_source = email/newsletter/klaviyo

@@ -818,35 +818,64 @@ function classifyOrderAttribution(order: ShopifyOrderPayload): {
   const utmTerm = params['utm_term'] ?? '';
   const fbclid = !!(params['fbclid'] || params['_fbc']);
   const gclid = !!params['gclid'];
+  // Phase 05.7.5: TikTok click ID. Same pattern as fbclid/gclid — TikTok's
+  // ad SDK appends `ttclid` to landing URLs when the click came from a
+  // TikTok ad. Promoted to its own variable for symmetry with the other
+  // two paid platforms.
+  const ttclid = !!params['ttclid'];
 
-  // Source priority chain. Same order as Apps Script Shopify.gs:963-984
-  // with one prepended branch: trust source_name='fb'/'google' before UTM
-  // sniffing. source_name is set by Shopify's checkout when the order
-  // arrives via the Facebook/Google channel SDKs — strictly more reliable
-  // than landing_site UTM tags (which can be stripped by a redirect).
+  // Source priority chain. Apps Script Shopify.gs:963-984 + two prepended
+  // branches:
+  //   1. source_name overrides (fb/google/tiktok) — Shopify's checkout SDK
+  //      writes source_name when the order arrives via the platform's
+  //      channel app. More reliable than landing_site UTMs (which can be
+  //      stripped by a redirect chain).
+  //   2. Click-ID overrides (fbclid / gclid / ttclid) — the platform's
+  //      JavaScript SDK tags the landing URL. Trumps UTM tags because the
+  //      click-ID is canonical (platform-signed) whereas UTMs can be hand-
+  //      typed / spoofed.
   let source: string;
   if (sourceName === 'fb' || sourceName === 'facebook') {
     source = 'meta-paid';
   } else if (sourceName === 'google') {
     source = 'google-paid';
+  } else if (sourceName === 'tiktok') {
+    source = 'tiktok-paid';
   } else if (fbclid) {
     source = 'meta-paid';
   } else if (gclid) {
     source = 'google-paid';
+  } else if (ttclid) {
+    source = 'tiktok-paid';
   } else if (/cpc|paid|paidsocial|social/i.test(utmMedium)) {
     if (/^(facebook|fb|meta|instagram|ig)$/i.test(utmSource)) source = 'meta-paid';
     else if (/^(google|youtube)$/i.test(utmSource)) source = 'google-paid';
-    else if (/^tiktok$/i.test(utmSource)) source = 'other-paid';
+    else if (/^tiktok$/i.test(utmSource)) source = 'tiktok-paid';
     else source = 'other-paid';
   } else if (/^(email|newsletter|klaviyo|mailchimp)$/i.test(utmSource)) {
     source = 'email';
+  } else if (/^tiktok$/i.test(utmSource)) {
+    // Tagged as TikTok but utm_medium isn't cpc/paid (e.g. organic share
+    // from a TikTok creator). Still a TikTok-paid attribution under our
+    // model because the click came from a paid placement — TikTok organic
+    // doesn't generate utm_source=tiktok tagging in practice; only paid
+    // creative does.
+    source = 'tiktok-paid';
   } else if (utmSource) {
-    // Tagged but unrecognised (TikTok / influencer / etc.)
+    // Tagged but unrecognised (influencer / partner / etc.)
     source = 'other-paid';
   } else if (/(facebook|fb|instagram|ig)\.com/.test(ref)) {
     source = 'meta-organic';
   } else if (/(google|youtube)\.com/.test(ref)) {
     source = 'google-organic';
+  } else if (/tiktok\.com/.test(ref)) {
+    // Organic TikTok referrer (someone shared the product link on TikTok
+    // and a viewer clicked through). Treated as other-referral rather
+    // than tiktok-paid — we keep tiktok-paid for ad-attributed traffic
+    // only (ttclid / utm_source=tiktok). Future Phase D may split this
+    // into 'tiktok-organic' if useful; for now 'other-referral' keeps
+    // the source taxonomy clean.
+    source = 'other-referral';
   } else if (ref) {
     source = 'other-referral';
   } else {
