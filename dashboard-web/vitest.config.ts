@@ -21,7 +21,11 @@ export default defineConfig({
     //   2. Add `@testing-library/react` + `@testing-library/jest-dom` deps.
     //   3. Configure setupFiles for jest-dom matchers.
     environment: 'node',
-    include: ['src/lib/__tests__/**/*.test.{ts,tsx}'],
+    // Phase 05.6-05: widened from `src/lib/__tests__/**` to `src/lib/**/__tests__/**`
+    // so per-fetcher __tests__ folders are picked up — the 5 fetchers (Plans
+    // 05.6-03..07) each colocate their tests under `src/lib/fetchers/__tests__/`
+    // alongside the fetcher source, which the previous glob did not match.
+    include: ['src/lib/**/__tests__/**/*.test.{ts,tsx}'],
     globals: false, // explicit imports — not relying on describe/it globals
   },
   resolve: {
