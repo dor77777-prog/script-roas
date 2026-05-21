@@ -50,6 +50,7 @@ vi.mock('@/lib/supabase', () => {
       return q;
     });
     q.order = vi.fn(() => q);
+    q.range = vi.fn(() => q);
     q.then = (resolve: (v: { data: unknown[] | null; error: { message: string } | null }) => unknown) =>
       Promise.resolve({ data: mockError ? null : mockRows, error: mockError }).then(resolve);
     return q;
