@@ -68,6 +68,42 @@ export type MetaAdSetRow = {
   conversionValue: number;
 };
 
+/**
+ * Phase 05.6.1 — one row of Meta /insights at `level=ad`. Same shape that
+ * the `ads_daily` writer in cronDaily.ts UPSERTs into Supabase.
+ *
+ * `spendCad`/`conversionValueCad` are intentionally NULL here even when
+ * spend > 0 in the source currency: per-ad FX conversion would require
+ * another step.run call (or a per-ad rate lookup) and the store-level total
+ * is already FX-converted by mergeOverridesFromSupabase. Leaving these as
+ * null at the ad-row level keeps the daily exec budget at 6 steps/run
+ * (matches the plan's free-tier guarantee in cronDaily.ts:24-26). A future
+ * pass can backfill these from a single store-level FX rate per day.
+ *
+ * `platform` is fixed to 'meta' so the writer can `.map(r => ({ ...r,
+ * platform: 'meta' }))` if needed; we include it in the type for symmetry
+ * with `GoogleAdsAdRow`.
+ */
+export type MetaAdRow = {
+  storeId: string;
+  date: string;
+  platform: 'meta';
+  campaignId: string;
+  campaignName: string;
+  adSetId: string;
+  adSetName: string;
+  adId: string;
+  adName: string;
+  impressions: number;
+  clicks: number;
+  /** purchase COUNT — same priority chain as MetaAdSetRow.conversions */
+  conversions: number;
+  /** purchase VALUE in CAD; null per the docstring above */
+  conversionValueCad: number | null;
+  /** spend in CAD; null per the docstring above */
+  spendCad: number | null;
+};
+
 /** Per-day store-level aggregate returned by `fetchMetaSpendForDay`. */
 export type MetaDailyStoreSpend = {
   storeId: string;
@@ -96,6 +132,17 @@ type MetaInsightsRow = {
 };
 type MetaInsightsBody = {
   data?: MetaInsightsRow[];
+  paging?: { next?: string };
+};
+
+// Ad-level rows additionally carry ad_id + ad_name. Other fields overlap
+// with MetaInsightsRow, so we extend rather than duplicate.
+type MetaInsightsAdRow = MetaInsightsRow & {
+  ad_id?: string;
+  ad_name?: string;
+};
+type MetaInsightsAdBody = {
+  data?: MetaInsightsAdRow[];
   paging?: { next?: string };
 };
 
@@ -283,4 +330,111 @@ export async function fetchMetaSpendForDay(
   const spend = rows.reduce((acc, r) => acc + r.spend, 0);
   const currency = rows[0]?.currency ?? 'ILS';
   return { storeId, date: dateStr, spend, currency };
+}
+
+/**
+ * Phase 05.6.1 — fetch Meta /insights at `level=ad` for a single day.
+ *
+ * Mirrors `fetchMetaAdSetInsights` but at ad granularity. URL changes:
+ *   - `level=ad` (was `level=adset`)
+ *   - fields list adds `ad_id,ad_name`; keeps adset_id/adset_name/campaign_*
+ *     so each ad-row can be JOIN'd back to its parent ad set without a
+ *     second pass.
+ *
+ * Conversion priority chain: reuses `extractMetaPurchases` exactly — D-C4
+ * algorithm parity demands the same omni_purchase → purchase → fb_pixel
+ * priority at every aggregation level. A per-level fork would let one level
+ * drift and silently disagree with another about the same ad's conversion
+ * count.
+ *
+ * Empty-row filter: same threshold as the adset version (spend=0 AND
+ * impressions=0 AND conversions=0). Late-attributed conversions on paused
+ * ads are kept — Meta routinely attributes purchases to ads that were
+ * paused days earlier via its attribution window.
+ *
+ * Spend conversion: `spendCad: null` in every returned row. Per-ad FX
+ * conversion is intentionally deferred — see the MetaAdRow type docstring.
+ *
+ * Free-tier impact: this fetcher is called INSIDE the existing fetch-meta
+ * step.run (parallel with fetchMetaAdSetInsights + fetchMetaSpendForDay),
+ * so the cron-daily exec count stays at 6/run.
+ */
+export async function fetchMetaAdInsights(
+  storeId: string,
+  dateStr: string,
+): Promise<MetaAdRow[]> {
+  const token = getMetaToken(storeId);
+  const adAccountId = getMetaAdAccountId(storeId);
+
+  const fields = [
+    'campaign_id',
+    'campaign_name',
+    'adset_id',
+    'adset_name',
+    'ad_id',
+    'ad_name',
+    'spend',
+    'impressions',
+    'clicks',
+    'actions',
+    'action_values',
+    'account_currency',
+  ].join(',');
+
+  let url: string | null =
+    `https://graph.facebook.com/${META_API_VERSION}/act_${adAccountId}/insights` +
+    `?fields=${fields}` +
+    `&time_range=${encodeURIComponent(
+      JSON.stringify({ since: dateStr, until: dateStr }),
+    )}` +
+    `&level=ad` +
+    `&limit=500` +
+    `&access_token=${encodeURIComponent(token)}`;
+
+  const out: MetaAdRow[] = [];
+  let safety = 0;
+  while (url && safety < 50) {
+    const res = await fetch(url);
+    if (!res.ok) {
+      const body = await res.text();
+      throw new Error(
+        `Meta ads ${storeId} ${dateStr} failed (${res.status}): ${body}`,
+      );
+    }
+    const body = (await res.json()) as MetaInsightsAdBody;
+    for (const r of body.data ?? []) {
+      const spend = parseFloat(r.spend ?? '0') || 0;
+      const impressions = parseInt(r.impressions ?? '0', 10) || 0;
+      const conv = extractMetaPurchases(r.actions ?? [], r.action_values ?? []);
+      // Same activity filter as adset-level (MetaAds.gs:51-56 + meta.ts:229-234).
+      if (spend === 0 && impressions === 0 && conv.count === 0) continue;
+      out.push({
+        storeId,
+        date: dateStr,
+        platform: 'meta',
+        campaignId: r.campaign_id ?? '',
+        campaignName: r.campaign_name ?? '',
+        adSetId: r.adset_id ?? '',
+        adSetName: r.adset_name ?? '',
+        adId: r.ad_id ?? '',
+        adName: r.ad_name ?? '',
+        impressions,
+        clicks: parseInt(r.clicks ?? '0', 10) || 0,
+        conversions: conv.count,
+        // See MetaAdRow type docstring — per-ad FX conversion is deferred to
+        // keep the cron-daily exec count at 6/run.
+        conversionValueCad: null,
+        spendCad: null,
+      });
+    }
+    url = body.paging?.next ?? null;
+    safety++;
+  }
+  if (safety >= 50 && url) {
+    console.warn(
+      `Meta ads ${storeId} ${dateStr}: hit pagination cap of 50 pages ` +
+        `(${out.length} rows collected); data beyond may be missing.`,
+    );
+  }
+  return out;
 }
