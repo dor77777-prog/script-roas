@@ -318,7 +318,22 @@ export async function fetchTikTokAdInsights(
       impressions?: string | number;
       clicks?: string | number;
       conversion?: string | number;
-      conversion_value?: string | number;
+      /**
+       * Phase 05.7.8 — TikTok Marketing API does NOT have a generic
+       * `conversion_value` metric (the prior code used that name and got
+       * `40002 Invalid metric fields`). For e-commerce, the canonical
+       * "revenue attributed to the ad" metric is `total_complete_payment_rate`
+       * × spend → no, that's a rate. The real value field is
+       * `complete_payment` count × `value_per_complete_payment` per row,
+       * but TikTok also exposes `total_complete_payment_value` directly
+       * (= sum of purchase event values reported via Web Events / Pixel).
+       * We map this onto the existing `conversionValue` shape so
+       * CampaignsTable / aiReport / Pixel-vs-Shopify reconciliation
+       * surfaces TikTok like Meta + Google without code changes downstream.
+       */
+      complete_payment?: string | number;
+      total_complete_payment_rate?: string | number;
+      value_per_complete_payment?: string | number;
       campaign_id?: string;
       campaign_name?: string;
       adgroup_id?: string;
@@ -343,8 +358,15 @@ export async function fetchTikTokAdInsights(
         report_type: 'BASIC',
         data_level: 'AUCTION_AD',
         dimensions: '["ad_id"]',
+        // Phase 05.7.8 — replaced invalid `conversion_value` with TikTok's
+        // real metric names: `complete_payment` (count of purchase events)
+        // and `value_per_complete_payment` (avg purchase value). Multiplied
+        // together they give the TikTok-attributed revenue equivalent of
+        // Meta's `action_value:purchase`. See TikTok Marketing API v1.3
+        // metrics reference: business-api.tiktok.com/portal/docs?id=1738864915188737
         metrics:
-          '["spend","impressions","clicks","conversion","conversion_value",' +
+          '["spend","impressions","clicks","conversion","complete_payment",' +
+          '"value_per_complete_payment",' +
           '"campaign_id","campaign_name","adgroup_id","adgroup_name","ad_name"]',
         start_date: dateStr,
         end_date: dateStr,
@@ -364,6 +386,15 @@ export async function fetchTikTokAdInsights(
       const conversions = parseNum(m.conversion);
       if (spend === 0 && impressions === 0 && conversions === 0) continue;
 
+      // Phase 05.7.8 — synthesize conversionValue from the two TikTok
+      // primitives: complete_payment (count) × value_per_complete_payment
+      // (avg value per purchase). When TikTok returns 0 for either,
+      // conversionValue → 0, matching Meta/Google's behavior on rows with
+      // no purchase events tracked.
+      const purchases = parseNum(m.complete_payment);
+      const avgPurchase = parseNum(m.value_per_complete_payment);
+      const conversionValue = purchases * avgPurchase;
+
       out.push({
         campaignId: String(m.campaign_id ?? ''),
         campaignName: String(m.campaign_name ?? ''),
@@ -376,7 +407,7 @@ export async function fetchTikTokAdInsights(
         impressions,
         clicks: parseNum(m.clicks),
         conversions,
-        conversionValue: parseNum(m.conversion_value),
+        conversionValue,
       });
     }
 
