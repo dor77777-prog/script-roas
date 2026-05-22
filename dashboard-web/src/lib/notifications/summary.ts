@@ -24,6 +24,15 @@ export type StoreSummary = {
   google: number;
   tiktok: number;           // Phase 05.7.5 — order count classified as 'tiktok-paid'.
   other: number;
+  /** Phase 05.7.x — sum of impressions across all of the store's
+   *  campaigns_daily rows for `dateStr`. Used to compute `cpm`. 0 when
+   *  no campaign rows exist (rare; ad-platform fetchers failed or store
+   *  had no active campaigns that day). */
+  impressions: number;
+  /** Phase 05.7.x — Cost Per Mille (CAD per 1000 impressions). Formula:
+   *  (totalSpend / impressions) × 1000. 0 when impressions = 0; the
+   *  WhatsApp template renders '—' in that case (same convention as ROAS). */
+  cpm: number;
 };
 
 export type DaySummary = {
@@ -41,6 +50,12 @@ export type DaySummary = {
     tiktok: number;
     other: number;
     roas: number;
+    /** Phase 05.7.x — totals.impressions / totals.cpm mirror the
+     *  per-store fields above. CPM here is the BLENDED CPM across all
+     *  three stores (Σ spend ÷ Σ impressions × 1000), not a simple
+     *  average of per-store CPMs. */
+    impressions: number;
+    cpm: number;
   };
 };
 
@@ -75,7 +90,7 @@ export async function buildStoreSummary(
   dateStr: string,
 ): Promise<DaySummary | null> {
   const sb = admin();
-  const [dataDailyRes, ordersRes] = await Promise.all([
+  const [dataDailyRes, ordersRes, campaignsRes] = await Promise.all([
     sb
       .from('data_daily')
       .select(
@@ -83,6 +98,16 @@ export async function buildStoreSummary(
       )
       .eq('date', dateStr),
     sb.from('orders_attribution').select('store_id, source').eq('date', dateStr),
+    // Phase 05.7.x — impressions live on campaigns_daily (per (date, store,
+    // platform, campaign, ad_set)). data_daily carries spend totals but
+    // NOT impressions, so we hit the campaigns table to sum them per
+    // store. Soft-fail to an empty bucket so the existing summary keeps
+    // working even when the ad-platform fetchers errored out (we'd just
+    // show CPM as '—').
+    sb
+      .from('campaigns_daily')
+      .select('store_id, impressions')
+      .eq('date', dateStr),
   ]);
 
   if (dataDailyRes.error) {
@@ -95,9 +120,28 @@ export async function buildStoreSummary(
       `notifications/summary orders_attribution query: ${ordersRes.error.message}`,
     );
   }
+  if (campaignsRes.error) {
+    // Soft-fail — impressions are decorative (drive CPM). Without them
+    // we still send the message, CPM just renders as '—'.
+    console.warn(
+      `notifications/summary campaigns_daily query: ${campaignsRes.error.message} ` +
+        `— CPM will render as '—' for ${dateStr}`,
+    );
+  }
   const dataRows = dataDailyRes.data ?? [];
   if (dataRows.length === 0) return null;
   const orderRows = ordersRes.data ?? [];
+  const campaignRows = campaignsRes.error ? [] : campaignsRes.data ?? [];
+
+  // Phase 05.7.x — pre-bucket impressions by storeId so the per-store
+  // CPM lookup is O(1) inside the data_daily loop below.
+  const impressionsByStore: Record<string, number> = {};
+  for (const r of campaignRows) {
+    const storeId = String(r.store_id ?? '').trim();
+    if (!storeId) continue;
+    impressionsByStore[storeId] =
+      (impressionsByStore[storeId] ?? 0) + (Number(r.impressions ?? 0) || 0);
+  }
 
   // Pre-bucket orders by storeId so we can resolve in O(1).
   // Phase 05.7.5: 'tiktok-paid' gets its own bucket alongside facebook/google.
@@ -142,6 +186,8 @@ export async function buildStoreSummary(
     tiktok: 0,
     other: 0,
     roas: 0,
+    impressions: 0,
+    cpm: 0,
   };
 
   for (const r of dataRows) {
@@ -165,6 +211,7 @@ export async function buildStoreSummary(
       tiktok: 0,
       other: 0,
     };
+    const impressions = impressionsByStore[storeId] ?? 0;
     stores[storeId] = {
       storeName,
       fbSpend,
@@ -178,6 +225,11 @@ export async function buildStoreSummary(
       google: counts.google,
       tiktok: counts.tiktok,
       other: counts.other,
+      impressions,
+      // Phase 05.7.x — CPM = (spend / impressions) × 1000. 0 when
+      // impressions = 0 so the template renders '—' (formatCpm in
+      // templateParams.ts handles the conversion).
+      cpm: impressions > 0 ? (totalSpend / impressions) * 1000 : 0,
     };
     totals.fbSpend += fbSpend;
     totals.gaSpend += gaSpend;
@@ -189,8 +241,12 @@ export async function buildStoreSummary(
     totals.google += counts.google;
     totals.tiktok += counts.tiktok;
     totals.other += counts.other;
+    totals.impressions += impressions;
   }
   totals.roas = totals.spend > 0 ? totals.revenue / totals.spend : 0;
+  // Blended CPM across the visible stores. NOT a simple average of
+  // per-store CPMs — that would over-weight low-impression stores.
+  totals.cpm = totals.impressions > 0 ? (totals.spend / totals.impressions) * 1000 : 0;
 
   return { dateStr, stores, totals };
 }

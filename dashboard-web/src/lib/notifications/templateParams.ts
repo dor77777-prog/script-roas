@@ -42,6 +42,18 @@ function formatCad(amount: number): string {
   return 'C$' + Math.round(amount).toLocaleString('en-CA');
 }
 
+/**
+ * Phase 05.7.x — CPM is reported with 2 decimals because the typical
+ * value range is C$3-C$30 and operators care about sub-dollar moves
+ * (a CPM creeping from C$6.40 → C$7.10 is the early-warning signal
+ * for creative fatigue). Empty / zero impressions → '—' so the message
+ * doesn't read "CPM: C$0" when impressions data is missing.
+ */
+function formatCpm(cpm: number): string {
+  if (!Number.isFinite(cpm) || cpm <= 0) return '—';
+  return 'C$' + cpm.toFixed(2);
+}
+
 // Phase 05.7.5 (2026-05-22): tiktok-paid orders are tracked as a separate
 // bucket in `StoreSummary`, but the approved Meta WhatsApp template still
 // has only 3 source slots — פייסבוק / גוגל / אחרים. Phase D will submit
@@ -54,6 +66,10 @@ function combinedOther(other: number, tiktok: number): number {
 }
 
 function storeBlock(s: StoreSummary): string {
+  // Phase 05.7.x — appended `• CPM: C$X.XX` after ROAS. Position chosen
+  // to keep the cost-side metrics (Spend → ROAS → CPM) clustered before
+  // the volume-side (orders + breakdown). No Meta template change
+  // required — the strings inside {{N}} placeholders are operator-set.
   return (
     '🏪 ' +
     s.storeName +
@@ -63,6 +79,8 @@ function storeBlock(s: StoreSummary): string {
     formatCad(s.revenue) +
     ' • ROAS: ' +
     formatRoas(s.roas) +
+    ' • CPM: ' +
+    formatCpm(s.cpm) +
     ' • הזמנות: ' +
     s.orders +
     '  (פייסבוק: ' +
@@ -83,6 +101,8 @@ function totalsBlock(t: DaySummary['totals']): string {
     formatCad(t.revenue) +
     ' • ROAS: ' +
     formatRoas(t.roas) +
+    ' • CPM: ' +
+    formatCpm(t.cpm) +
     ' • הזמנות: ' +
     t.orders +
     '  (פייסבוק: ' +
