@@ -24,8 +24,16 @@ import {
   YAxis,
 } from 'recharts';
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
-import { analyzeCpmVsRoas, PREV_PERIOD_MIN_DAYS } from '@/lib/cpmRoasAnalysis';
+import {
+  analyzeCpmVsRoas,
+  PREV_PERIOD_MIN_DAYS,
+  type DailyCpmRoasPoint,
+} from '@/lib/cpmRoasAnalysis';
 import { aggregate, type Aggregated } from '@/lib/campaignsAggregator';
+import {
+  computeCampaignHealth,
+  type CampaignHealth,
+} from '@/lib/campaignHealthScore';
 import {
   readCampaignsColumnPrefs,
   buildHiddenColumnsCss,
@@ -52,7 +60,7 @@ import type { DateRange } from '@/lib/types';
 import { buildDateRangeKey, getPreviousPeriod } from '@/lib/dateRange';
 import { roasLabel } from '@/lib/analytics';
 import { useCampaignTrueRevenue } from '@/lib/hooks/useCampaignTrueRevenue';
-import { CampaignsTableRow } from './CampaignsTableRow';
+import { CampaignsTableRow, isCampaignCurrentlyOff } from './CampaignsTableRow';
 import { CampaignDrawer } from './CampaignDrawer';
 import { AdsDrawer } from './AdsDrawer';
 
@@ -68,6 +76,7 @@ type SortKey =
   | 'conversionValue'
   | 'roas'
   | 'shopifyRoas'   // ROAS computed from actual Shopify sales of mapped products
+  | 'health'        // unified Campaign Health Score (Phase 05.7.x)
   | 'conversions'
   | 'ctr'
   | 'cpc'
@@ -131,6 +140,11 @@ function sortAggregated(
       case 'shopifyRoas': {
         // Falls back to Meta ROAS; real Shopify-ROAS sort happens at render
         // time via the `displaySource` memo which has trueRevenueByKey in scope.
+        return a.spend > 0 ? a.conversionValue / a.spend : 0;
+      }
+      case 'health': {
+        // Falls back to Meta ROAS; real Health-sort happens in `displaySource`
+        // where `healthByKey` is in scope (same pattern as shopifyRoas above).
         return a.spend > 0 ? a.conversionValue / a.spend : 0;
       }
       case 'conversions':
@@ -389,6 +403,84 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     localRange,
   });
 
+  // Phase 05.7.x — per-campaign daily CPM/ROAS series, used by the unified
+  // Health Score's `trajectory` component. Built ONCE per data refresh from
+  // the same range/store/platform filter as `aggregated`, then handed to
+  // `analyzeCpmVsRoas` per row in the health memo. Without this memo the
+  // health score has no momentum signal and every campaign scores neutral
+  // (60) on trajectory — defeating the "next dollar's expected return"
+  // axis the score is built around.
+  const dailyByCampaign = useMemo(() => {
+    const out = new Map<string, DailyCpmRoasPoint[]>();
+    if (!data) return out;
+    // Group rows by the same key shape `aggregate()` uses (mode-aware), then
+    // by date, so each campaign-or-adset ends up with one daily series.
+    type DayBucket = { spend: number; impressions: number; conversionValue: number };
+    const grouped = new Map<string, Map<string, DayBucket>>();
+    for (const r of data.rows) {
+      if (r.date < localRange.from || r.date > localRange.to) continue;
+      if (localStore !== 'All' && r.storeName !== localStore) continue;
+      if (platform !== 'all' && r.platform !== platform) continue;
+      const key =
+        mode === 'campaign'
+          ? `${r.storeId}::${r.platform}::${r.campaignId}`
+          : `${r.storeId}::${r.platform}::${r.campaignId}::${r.adSetId}`;
+      let dateMap = grouped.get(key);
+      if (!dateMap) {
+        dateMap = new Map<string, DayBucket>();
+        grouped.set(key, dateMap);
+      }
+      const existing = dateMap.get(r.date) ?? { spend: 0, impressions: 0, conversionValue: 0 };
+      existing.spend += r.spend;
+      existing.impressions += r.impressions;
+      existing.conversionValue += r.conversionValue;
+      dateMap.set(r.date, existing);
+    }
+    for (const [key, dates] of grouped) {
+      const series: DailyCpmRoasPoint[] = [];
+      for (const [date, b] of dates) {
+        // Drop fully-empty days so analyzeCpmVsRoas's 5-day threshold counts
+        // only days the campaign was actually running.
+        if (b.spend === 0 && b.impressions === 0) continue;
+        series.push({
+          date,
+          cpm: b.impressions > 0 ? (b.spend / b.impressions) * 1000 : 0,
+          roas: b.spend > 0 ? b.conversionValue / b.spend : 0,
+        });
+      }
+      series.sort((a, b) => a.date.localeCompare(b.date));
+      out.set(key, series);
+    }
+    return out;
+  }, [data, localRange.from, localRange.to, localStore, platform, mode]);
+
+  // Phase 05.7.x — unified Campaign Health Score per row. Combines the
+  // signals previously rendered as independent chips (trust / off-day /
+  // CPM trajectory / multiple ROAS values) into one 0..100 score + grade.
+  // See `src/lib/campaignHealthScore.ts` for the algorithm + weights.
+  const healthByKey = useMemo(() => {
+    const out = new Map<string, CampaignHealth>();
+    for (const a of aggregated) {
+      const info = trueRevenueByKey.get(campaignKey(a.storeId, a.platform, a.campaignId));
+      const series = dailyByCampaign.get(a.key);
+      const trajectory =
+        series && series.length >= 5 ? analyzeCpmVsRoas(series) : undefined;
+      const isOff = isCampaignCurrentlyOff(a.lastActiveDate, today);
+      const isOpt = optimized.has(a.key);
+      out.set(
+        a.key,
+        computeCampaignHealth({
+          aggregated: a,
+          trueRevenueInfo: info,
+          cpmRoasAnalysis: trajectory,
+          optimized: isOpt,
+          isCurrentlyOff: isOff,
+        }),
+      );
+    }
+    return out;
+  }, [aggregated, trueRevenueByKey, dailyByCampaign, today, optimized]);
+
   const totals = useMemo(() => {
     let spend = 0, conv = 0, val = 0, clicks = 0, imps = 0;
     for (const a of aggregated) {
@@ -511,28 +603,48 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
 
   // Shopify-ROAS sort: re-rank using `trueRevenueByKey` (sortAggregated falls
   // back to Meta ROAS). Unmapped rows pushed to bottom on desc.
+  //
+  // Phase 05.7.x — same pattern extended for `health`: re-rank by the score
+  // from `healthByKey`. Insufficient / unknown grades sort to the bottom
+  // regardless of direction so they don't dominate the worklist.
   const displaySource = useMemo(() => {
-    if (sortKey !== 'shopifyRoas' || trueRevenueByKey.size === 0) return aggregated;
-    const sign = sortDir === 'asc' ? 1 : -1;
-    const withRoas = aggregated.map(a => {
-      const info = trueRevenueByKey.get(campaignKey(a.storeId, a.platform, a.campaignId));
-      const roas = info && a.spend > 0 ? info.trueRevenue / a.spend : 0;
-      return { a, roas, mapped: !!info };
-    });
-    withRoas.sort((x, y) => {
-      // Push unmapped rows to bottom so mapped sort is meaningful.
-      // DESIGN INTENT (WR-05): the tie-break is INTENTIONALLY direction-
-      // independent — mapped rows always come first, even when the user
-      // clicks the ROAS-Shopify header to flip asc/desc. Only the within-
-      // group order rotates with `sign`. Rationale: unmapped rows have
-      // no Shopify-ROAS value (their `roas` is 0), so mixing them in with
-      // the directional sort would put them at the top on asc — visually
-      // dominating the table with rows that carry no information.
-      if (x.mapped !== y.mapped) return x.mapped ? -1 : 1;
-      return sign * (x.roas - y.roas);
-    });
-    return withRoas.map(w => w.a);
-  }, [aggregated, sortKey, sortDir, trueRevenueByKey]);
+    if (sortKey === 'shopifyRoas' && trueRevenueByKey.size > 0) {
+      const sign = sortDir === 'asc' ? 1 : -1;
+      const withRoas = aggregated.map(a => {
+        const info = trueRevenueByKey.get(campaignKey(a.storeId, a.platform, a.campaignId));
+        const roas = info && a.spend > 0 ? info.trueRevenue / a.spend : 0;
+        return { a, roas, mapped: !!info };
+      });
+      withRoas.sort((x, y) => {
+        // Push unmapped rows to bottom so mapped sort is meaningful.
+        // DESIGN INTENT (WR-05): the tie-break is INTENTIONALLY direction-
+        // independent — mapped rows always come first, even when the user
+        // clicks the ROAS-Shopify header to flip asc/desc. Only the within-
+        // group order rotates with `sign`. Rationale: unmapped rows have
+        // no Shopify-ROAS value (their `roas` is 0), so mixing them in with
+        // the directional sort would put them at the top on asc — visually
+        // dominating the table with rows that carry no information.
+        if (x.mapped !== y.mapped) return x.mapped ? -1 : 1;
+        return sign * (x.roas - y.roas);
+      });
+      return withRoas.map(w => w.a);
+    }
+    if (sortKey === 'health' && healthByKey.size > 0) {
+      const sign = sortDir === 'asc' ? 1 : -1;
+      const withHealth = aggregated.map(a => {
+        const h = healthByKey.get(a.key);
+        return { a, score: h?.score ?? 0, ready: !!h && !h.insufficient };
+      });
+      withHealth.sort((x, y) => {
+        // Insufficient / unknown grades always sort last (same tie-break
+        // policy as unmapped rows in the shopifyRoas branch above).
+        if (x.ready !== y.ready) return x.ready ? -1 : 1;
+        return sign * (x.score - y.score);
+      });
+      return withHealth.map(w => w.a);
+    }
+    return aggregated;
+  }, [aggregated, sortKey, sortDir, trueRevenueByKey, healthByKey]);
   const display = showAll ? displaySource : displaySource.slice(0, TOP_N_DEFAULT);
   const remaining = displaySource.length - display.length;
 
@@ -1154,6 +1266,17 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     tooltip="צ׳קבוקס לסימון קמפיינים שאתה מבצע בהם אופטימיזציה פעילה (מעקב אישי). לא משפיע על חישובים — רק עוזר לזכור איפה אתה בעבודה."
                   />
                   <SortHeader
+                    label="ציון"
+                    sortKey="health"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="center"
+                    className="px-2 py-2 w-[78px]"
+                    dataColId="health"
+                    tooltip="Campaign Health Score 0–100 — ציון מאוחד שמשלב 4 רכיבים (רווחיות 40% × אמינות + נפח 15% + מומנטום CPM↔ROAS 25% + בהירות attribution 20%) ± התאמת אופרטור (+15 לאופטימיזציה, −30 לקמפיין כבוי). אות A/B/C/D/F מסכמת. לחץ על התג כדי לראות פירוט מלא של הרכיבים והנימוקים."
+                  />
+                  <SortHeader
                     label={mode === 'campaign' ? 'קמפיין' : 'אד-סט'}
                     sortKey="name"
                     activeKey={sortKey}
@@ -1359,6 +1482,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     i={i}
                     mode={mode}
                     trueRevenueByKey={trueRevenueByKey}
+                    health={healthByKey.get(a.key)}
                     adAccounts={adAccounts}
                     optimized={optimized}
                     today={today}

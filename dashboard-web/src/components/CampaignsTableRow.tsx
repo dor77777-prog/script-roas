@@ -8,6 +8,8 @@ import { roasLabel } from '@/lib/analytics';
 import type { Aggregated } from '@/lib/campaignsAggregator';
 import type { ConfidenceLevel, TrueRevenueInfo } from '@/lib/hooks/useCampaignTrueRevenue';
 import type { AttributionTrust } from '@/lib/attributionAnalysis';
+import type { CampaignHealth } from '@/lib/campaignHealthScore';
+import { HealthScoreBadge } from './HealthScoreBadge';
 
 /**
  * The narrowed trust-level union actually used by CampaignsTableRow's
@@ -57,6 +59,14 @@ type Props = {
   i: number;
   mode: 'campaign' | 'adset';
   trueRevenueByKey: Map<string, TrueRevenueInfo>;
+  /**
+   * Phase 05.7.x — pre-computed Campaign Health Score for this row.
+   * Computed once in the parent (`CampaignsTable.tsx healthByKey` memo)
+   * so each row doesn't repeat the per-campaign trajectory analysis.
+   * Undefined when the parent hasn't built a score for this key yet
+   * (still in initial render before `aggregated` settles).
+   */
+  health: CampaignHealth | undefined;
   adAccounts: AdAccountMap;
   optimized: Set<string>;
   /**
@@ -121,6 +131,7 @@ export function CampaignsTableRow({
   i,
   mode,
   trueRevenueByKey,
+  health,
   adAccounts,
   optimized,
   today,
@@ -212,6 +223,19 @@ export function CampaignsTableRow({
         >
           {isOptimized ? <CheckCircle2 size={18} /> : <Circle size={18} />}
         </button>
+      </td>
+      {/* Phase 05.7.x — unified Campaign Health Score badge. Replaces the
+          mental cost of synthesising 5 independent chips (trust, off-day,
+          CPM trajectory, ROAS color, ROAS Shopify trust) into one A/B/C/D/F
+          grade. Click opens a drilldown popover with the 4 weighted
+          components + reasons. Empty cell until the parent's healthByKey
+          memo settles (initial render before SWR resolves). */}
+      <td
+        data-col-id="health"
+        className="px-2 py-2 text-center w-[78px]"
+        onClick={e => e.stopPropagation()}
+      >
+        {health ? <HealthScoreBadge health={health} /> : null}
       </td>
       <td data-col-id="campaignName" className="px-3 sm:px-5 py-2 max-w-[280px] sm:max-w-[400px]">
         <div className="flex items-center gap-2">
