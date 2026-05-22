@@ -467,22 +467,28 @@ export function CampaignsTableRow({
               `${mappingLine}\n\n` +
               info.confidence.reasons.map(r => `• ${r}`).join('\n');
           }
+          // Phase 05.7.x — the standalone trust chip (אמין / חלקי / לא אמין
+          // with `confTone` background) was retired here on 2026-05-22. The
+          // unified Campaign Health Score's "אמינות attribution" component
+          // (20% of the grade) now carries the same signal more clearly:
+          // it lives in its own column with a drilldown that explains the
+          // 0–100 trust score in context with the other 3 weighted
+          // components, instead of competing as a tiny chip stacked under
+          // the ROAS number. Tooltip on the ROAS Shopify cell is preserved
+          // so a hover still surfaces the click-id / mapping breakdown for
+          // operators who want the raw reasoning.
+          //
+          // Variables computed above (trustLabel, confTone, trustLevel)
+          // remain in scope because the tooltip text below references the
+          // narrowed `useAttr` branch + reason strings — removing them
+          // would orphan that path.
+          void trustLabel;
+          void trustLevel;
+          void confTone;
           return (
             <div className="inline-flex flex-col items-center gap-0.5" title={tooltip}>
               <span className="font-semibold tabular-nums text-text-primary">
                 {trueRoas > 0 ? formatNumber(trueRoas) : '—'}
-              </span>
-              <span className={cn('inline-block text-[8px] font-bold px-1 py-0 rounded uppercase tracking-wider', confTone)}>
-                {trustLabel}
-                {useAttr ? (
-                  <span className="ms-1 opacity-70">·{info.attribution!.deterministicOrders}</span>
-                ) : (
-                  // Marker so the operator can tell at a glance
-                  // that this chip comes from the heuristic, not
-                  // from click-id. Lowercase + opacity so it
-                  // reads as a subdued sub-label, not noise.
-                  <span className="ms-1 opacity-70 normal-case">·מיפוי</span>
-                )}
               </span>
             </div>
           );
