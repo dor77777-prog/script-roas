@@ -316,21 +316,56 @@ describe('cronLive — runLiveForStore handler (Shopify-only, rolling 3-day)', (
     expect(lightMetaSpy.mock.calls[0][1]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
-  it('Test 6: an error thrown from a step.run callback propagates out of the handler', async () => {
+  it('Test 6 (Phase 05.7.6): fetcher errors are CAUGHT (cron always completes, never stalls)', async () => {
+    // Pre-05.7.6 this test asserted that a Shopify error PROPAGATES out of
+    // the handler — which made Inngest mark the run Failed and retry up
+    // to 4 times. That behavior caused cron-live to STALL on Meta API
+    // slowness, never completing within the 5-min step.run budget.
+    //
+    // The new contract: a slow/failing fetcher returns zero/null INSIDE
+    // the step.run, the handler completes successfully, and the next
+    // cron tick (10 min later) tries again. The dashboard's freshness
+    // chip surfaces the staleness so the operator knows.
     const mod = await import('../cronLive');
 
     vi.spyOn(shopifyFetcher, 'fetchShopifyDayRows').mockRejectedValue(
       new Error('Shopify 503 — service unavailable'),
     );
+    vi.spyOn(metaFetcher, 'fetchMetaSpendForDayLight').mockResolvedValue({
+      storeId: 'uzoshop',
+      date: '2026-05-22',
+      spend: 0,
+      currency: 'ILS',
+    });
+    vi.spyOn(googleAdsFetcher, 'fetchGoogleAdsSpendForDay').mockResolvedValue({
+      storeId: 'uzoshop',
+      date: '2026-05-22',
+      spend: 0,
+      currency: 'CAD',
+    });
 
     const { admin } = makeSupabaseAdminMock();
     vi.spyOn(supabaseAdminMod, 'getSupabaseAdmin').mockReturnValue(
       admin as unknown as ReturnType<typeof supabaseAdminMod.getSupabaseAdmin>,
     );
 
+    // Silence the expected console.warn during the test.
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
     const { step } = makeStepStub();
-    await expect(mod.runLiveForStore('uzoshop', { step })).rejects.toThrow(
-      /Shopify 503|service unavailable/i,
+    // The handler completes (does NOT throw) — Shopify failures are
+    // caught + logged, replaced with zero-data rows, persist still runs.
+    const result = await mod.runLiveForStore('uzoshop', { step });
+    expect(result.storeId).toBe('uzoshop');
+    // All 3 rolling dates fell through the .catch path → revenue=0 each.
+    for (const date of result.rollingDates) {
+      expect(result.perDayRevenue[date]).toBe(0);
+    }
+    // Shopify warnings were emitted (one per failed date).
+    expect(warnSpy).toHaveBeenCalled();
+    const warnMessages = warnSpy.mock.calls.map((c) => String(c[0]));
+    expect(warnMessages.some((m) => /Shopify.*503|service unavailable/i.test(m))).toBe(
+      true,
     );
   });
 });

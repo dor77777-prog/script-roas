@@ -377,11 +377,43 @@ export async function runLiveForStore(
   const dates = rollingWindowDates(ROLLING_WINDOW_DAYS);
   const today = dates[0];
 
-  // ----- STEP 1: fetch Shopify rolling 3-day (parallel) -----
-  // Kept as its own step.run so a Shopify hiccup doesn't take down the
-  // ads-side fetch (separate step = separate retry boundary).
+  // Phase 05.7.6 PROPER FIX v2 (2026-05-22 03:00 IL): every fetcher is
+  // wrapped in a 12-second timeout. This GUARANTEES the cron-live step
+  // completes within ~15 seconds total even if Meta / Google / Shopify
+  // is slow or hanging upstream. Without timeouts, a single slow API
+  // dragged previous cron-live ticks past the Inngest 5-min wall-clock
+  // and killed every run.
+  //
+  // Trade-off: a timed-out fetcher returns null → that platform's data
+  // is "no update this tick". Next tick (10 min later) tries again.
+  // Better than blocking the entire dashboard refresh for everyone.
+  //
+  // ----- STEP 1: fetch Shopify rolling 3-day (with timeout per day) -----
   const shopifyByDate = await step.run('fetch-shopify-rolling-3day', async () => {
-    const results = await Promise.all(dates.map((d) => fetchShopifyDayRows(storeId, d)));
+    const results = await Promise.all(
+      dates.map((d) =>
+        withTimeout(fetchShopifyDayRows(storeId, d), 12_000, `Shopify ${d}`).catch(
+          (e) => {
+            console.warn(
+              `cron-live: Shopify ${storeId} ${d} failed/timed-out: ${e instanceof Error ? e.message : e}`,
+            );
+            // Return a zero-valued ShopifyDayRows so the writer can still
+            // run for the other 2 dates. revenue stays at whatever was
+            // there (the writer's existing-row preservation logic kicks in).
+            return {
+              storeId,
+              date: d,
+              storeName: 'unknown',
+              revenueCad: 0,
+              productRows: [],
+              customItemRefundCad: 0,
+              grossRevenueCad: 0,
+              refundDeductionCad: 0,
+            };
+          },
+        ),
+      ),
+    );
     const map: Record<string, ShopifyDayRows> = {};
     for (let i = 0; i < dates.length; i++) {
       map[dates[i]] = results[i];
@@ -389,43 +421,25 @@ export async function runLiveForStore(
     return map;
   });
 
-  // ----- STEP 2: fetch today's Meta + Google spend (LIGHT) -----
-  //
-  // Phase 05.7.6 PROPER FIX (2026-05-22 02:35 IL): the first attempt
-  // (commit eb72d18) used `fetchMetaSpendForDay` which internally calls
-  // `fetchMetaAdSetInsights` — paginated per-adset, 10-30s wall-clock,
-  // pushed the combined cron-live step past Inngest's 5-min step.run
-  // budget and stalled every tick.
-  //
-  // The proper fix uses `fetchMetaSpendForDayLight` which calls Meta's
-  // /insights endpoint at `level=account` — a single API call, ~500ms,
-  // returns one row with the account total spend. The full per-adset
-  // refresh stays in cron-daily (00:05 IL) where it's needed for the
-  // campaigns_daily writer. Google Ads spend was already lightweight
-  // (one GAQL query against the `customer` resource).
-  //
-  // SEPARATE step.run from the Shopify fetch — if Meta or Google has a
-  // transient outage, only this step retries; the Shopify result above
-  // is already persisted via the next step. Inngest treats step.run
-  // boundaries as memoization points.
-  //
-  // FX: both fetchers return `{ spend, currency }`. Meta is ILS for our
-  // 3 stores; Google is CAD. We FX-convert both defensively via getFxRate
-  // (it short-circuits when from === to, so the Google call is free).
+  // ----- STEP 2: fetch today's Meta + Google spend (LIGHT + timed-out) -----
   const todaySpend = await step.run('fetch-meta-google-spend-light', async () => {
     const [metaToday, googleToday] = await Promise.all([
-      fetchMetaSpendForDayLight(storeId, today).catch((e) => {
-        console.warn(
-          `cron-live: Meta light spend fetch for ${storeId} ${today} failed: ${e instanceof Error ? e.message : e}`,
-        );
-        return null;
-      }),
-      fetchGoogleAdsSpendForDay(storeId, today).catch((e) => {
-        console.warn(
-          `cron-live: Google spend fetch for ${storeId} ${today} failed: ${e instanceof Error ? e.message : e}`,
-        );
-        return null;
-      }),
+      withTimeout(fetchMetaSpendForDayLight(storeId, today), 12_000, 'Meta').catch(
+        (e) => {
+          console.warn(
+            `cron-live: Meta light spend ${storeId} ${today} failed/timed-out: ${e instanceof Error ? e.message : e}`,
+          );
+          return null;
+        },
+      ),
+      withTimeout(fetchGoogleAdsSpendForDay(storeId, today), 12_000, 'Google').catch(
+        (e) => {
+          console.warn(
+            `cron-live: Google spend ${storeId} ${today} failed/timed-out: ${e instanceof Error ? e.message : e}`,
+          );
+          return null;
+        },
+      ),
     ]);
     const cadConvert = async (
       value: { spend: number; currency: string } | null,
@@ -433,35 +447,45 @@ export async function runLiveForStore(
       if (!value || !Number.isFinite(value.spend) || value.spend === 0) return 0;
       const currency = (value.currency || 'CAD').toUpperCase();
       if (currency === 'CAD') return value.spend;
-      const rate = await getFxRate(currency, 'CAD', today);
+      const rate = await withTimeout(
+        getFxRate(currency, 'CAD', today),
+        5_000,
+        'FX',
+      ).catch(() => 1);
       return value.spend * rate;
     };
+    // If BOTH fetchers timed out (null), we don't have new spend data —
+    // signal the persist step to preserve existing values.
+    if (metaToday === null && googleToday === null) {
+      return { fbSpendCad: null, gaSpendCad: null };
+    }
     return {
-      fbSpendCad: await cadConvert(metaToday),
-      gaSpendCad: await cadConvert(googleToday),
+      fbSpendCad: metaToday ? await cadConvert(metaToday) : null,
+      gaSpendCad: googleToday ? await cadConvert(googleToday) : null,
     };
   });
   const { fbSpendCad, gaSpendCad } = todaySpend as {
-    fbSpendCad: number;
-    gaSpendCad: number;
+    fbSpendCad: number | null;
+    gaSpendCad: number | null;
   };
 
   // ----- STEP 3: persist (sequential, idempotent) -----
-  // For TODAY (idx=0): pass spendOverride so Meta+Google CAD totals are
-  // written alongside Shopify revenue/gross/refund.
-  // For YESTERDAY + DAY-BEFORE: omit spendOverride so cron-daily-written
-  // spend values from earlier are preserved (refund attribution updates
-  // only touch revenue/gross/refund_deduction columns).
+  // Only pass spendOverride when BOTH spend values successfully fetched.
+  // If either timed out, persistDayForStore preserves the existing value
+  // (don't overwrite Meta+Google with 0 when the API was just unreachable).
   await step.run('persist-rolling-3day', async () => {
     for (let i = 0; i < dates.length; i++) {
       const date = dates[i];
       const shopify = shopifyByDate[date];
       const isToday = i === 0;
+      const haveBothSpend = fbSpendCad !== null && gaSpendCad !== null;
       await persistDayForStore(
         storeId,
         date,
         shopify,
-        isToday ? { fbSpendCad, gaSpendCad } : undefined,
+        isToday && haveBothSpend
+          ? { fbSpendCad: fbSpendCad as number, gaSpendCad: gaSpendCad as number }
+          : undefined,
       );
     }
   });
@@ -474,8 +498,30 @@ export async function runLiveForStore(
     storeId,
     rollingDates: dates,
     perDayRevenue,
-    todaySpendCad: { fb: fbSpendCad, ga: gaSpendCad },
+    todaySpendCad: { fb: fbSpendCad ?? 0, ga: gaSpendCad ?? 0 },
   };
+}
+
+/**
+ * Phase 05.7.6 — wraps a promise with a wall-clock timeout. Rejects with
+ * `Error: <label> timed out after Nms` if the wrapped promise hasn't
+ * settled by then. The timer is cleared if the inner promise settles
+ * first so we don't leak it.
+ *
+ * Used to prevent any single fetcher (Shopify / Meta / Google) from
+ * stalling the entire cron-live tick past Inngest's 5-min step budget.
+ */
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error(`${label} timed out after ${ms}ms`)),
+      ms,
+    );
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timer) clearTimeout(timer);
+  }) as Promise<T>;
 }
 
 // =============================================================================
