@@ -35,6 +35,89 @@ const TONE_BG: Record<string, string> = {
   gray:   'bg-surfaceMuted text-text-muted',
 };
 
+/**
+ * Phase 05.7.x — live ROAS band → backdrop styling for the TodayLive
+ * section. The hero card on the home page used to wear a fixed green
+ * tint regardless of whether the day was actually profitable; the
+ * operator's complaint was that the green became visual noise once you
+ * knew it was always green. These bands match the same thresholds the
+ * campaigns table uses for the per-row ROAS chip (roasLabel in analytics.ts):
+ *   - red:    < 2.0   (losing money)
+ *   - orange: 2.0–2.5 (borderline)
+ *   - green:  2.5–3.0 (healthy)
+ *   - blue:   ≥ 3.0   (excellent)
+ *   - gray:   no spend/value at all
+ *
+ * Returned tokens drive the gradient, border, glow blob, accent pulse,
+ * and "LIVE" pill so the entire hero card moves together by band rather
+ * than mixing colours.
+ */
+type LiveTone = {
+  /** Tailwind classes for the outer card: gradient + border. */
+  cardBg: string;
+  cardBorder: string;
+  /** Decorative blur blob in the corner. */
+  blob: string;
+  /** Animated pulse dot to the left of the title. */
+  pulse: string;
+  /** "LIVE" pill colour. */
+  pill: string;
+  /** Radio icon tint. */
+  iconColor: string;
+};
+
+function liveToneFromRoas(roas: number, hasAnyData: boolean): LiveTone {
+  if (!hasAnyData || roas <= 0) {
+    return {
+      cardBg: 'bg-gradient-to-br from-surfaceMuted/60 via-surface to-surface',
+      cardBorder: 'border-borderSubtle',
+      blob: 'bg-text-muted/10',
+      pulse: 'bg-text-muted',
+      pill: 'bg-text-muted text-white',
+      iconColor: 'text-text-muted',
+    };
+  }
+  if (roas < 2.0) {
+    return {
+      cardBg: 'bg-gradient-to-br from-roas-redBg/60 via-surface to-surface',
+      cardBorder: 'border-roas-red/35',
+      blob: 'bg-roas-red/12',
+      pulse: 'bg-roas-red',
+      pill: 'bg-roas-red text-white',
+      iconColor: 'text-roas-red',
+    };
+  }
+  if (roas < 2.5) {
+    return {
+      cardBg: 'bg-gradient-to-br from-roas-orangeBg/60 via-surface to-surface',
+      cardBorder: 'border-roas-orange/35',
+      blob: 'bg-roas-orange/12',
+      pulse: 'bg-roas-orange',
+      pill: 'bg-roas-orange text-white',
+      iconColor: 'text-roas-orange',
+    };
+  }
+  if (roas < 3.0) {
+    return {
+      cardBg: 'bg-gradient-to-br from-roas-greenBg/50 via-surface to-surface',
+      cardBorder: 'border-roas-green/30',
+      blob: 'bg-roas-green/10',
+      pulse: 'bg-roas-green',
+      pill: 'bg-roas-green text-white',
+      iconColor: 'text-roas-green',
+    };
+  }
+  // roas >= 3.0
+  return {
+    cardBg: 'bg-gradient-to-br from-roas-blueBg/55 via-surface to-surface',
+    cardBorder: 'border-roas-blue/30',
+    blob: 'bg-roas-blue/12',
+    pulse: 'bg-roas-blue',
+    pill: 'bg-roas-blue text-white',
+    iconColor: 'text-roas-blue',
+  };
+}
+
 // Per-store accent dot. Kept saturated since it's a tiny element.
 const STORE_COLORS: Record<string, string> = {
   uzoshop:     '#1e3a8a',
@@ -140,18 +223,33 @@ export function TodayLive({
     };
   }, [campaignsToday, today]);
 
+  // Phase 05.7.x — live ROAS-driven hero tint. Replaces the fixed green
+  // gradient that used to wear the same colour regardless of whether the
+  // day was profitable. Single source of truth: `liveToneFromRoas` —
+  // matches the same red/orange/green/blue thresholds the per-row ROAS
+  // chip uses elsewhere in the dashboard.
+  const liveTone = liveToneFromRoas(agg.roas, hasAnyData);
+
   return (
     <section
       className={cn(
-        'relative overflow-hidden rounded-2xl border border-roas-green/30',
-        'bg-gradient-to-br from-roas-greenBg/50 via-surface to-surface',
+        'relative overflow-hidden rounded-2xl border transition-colors duration-500',
+        liveTone.cardBg,
+        liveTone.cardBorder,
         'shadow-card animate-fade-in',
       )}
     >
-      {/* Decorative top-right pulse (very subtle). */}
+      {/* Decorative corner blob — tinted to match the current ROAS band so
+          the visual mood of the card moves together with the headline
+          number. In RTL we want it on the start (right) side; using
+          `start-0` keeps it RTL-aware. */}
       <div
         aria-hidden
-        className="absolute top-0 left-0 w-48 h-48 -translate-x-1/4 -translate-y-1/4 rounded-full bg-roas-green/10 blur-3xl pointer-events-none"
+        className={cn(
+          'absolute top-0 start-0 w-48 h-48 -translate-x-1/4 -translate-y-1/4',
+          'rounded-full blur-3xl pointer-events-none transition-colors duration-500',
+          liveTone.blob,
+        )}
       />
 
       <div className="relative p-4 sm:p-6">
@@ -159,14 +257,14 @@ export function TodayLive({
         <header className="flex items-center justify-between gap-3 mb-4 sm:mb-5">
           <div className="flex items-center gap-2.5 min-w-0">
             <span className="relative flex h-2.5 w-2.5 shrink-0">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-roas-green opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-roas-green" />
+              <span className={cn('animate-ping absolute inline-flex h-full w-full rounded-full opacity-75', liveTone.pulse)} />
+              <span className={cn('relative inline-flex rounded-full h-2.5 w-2.5', liveTone.pulse)} />
             </span>
             <h2 className="flex items-center gap-2 text-sm sm:text-base font-semibold text-text-primary truncate">
-              <Radio size={16} className="text-roas-green shrink-0" />
+              <Radio size={16} className={cn('shrink-0 transition-colors duration-500', liveTone.iconColor)} />
               היום — חי
             </h2>
-            <span className="hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded bg-roas-green text-white shrink-0">
+            <span className={cn('hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded shrink-0 transition-colors duration-500', liveTone.pill)}>
               LIVE
             </span>
           </div>
