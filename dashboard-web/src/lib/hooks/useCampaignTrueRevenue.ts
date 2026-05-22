@@ -25,9 +25,10 @@ import type { DateRange } from '@/lib/types';
 export type TrueRevenueInfo = {
   trueRevenue: number;
   /** Allocated Shopify units sold of mapped products in the date range —
-   *  uses the same spend-proportional share as trueRevenue. Surfaced as a
-   *  separate column so the operator can sanity-check the revenue figure
-   *  against unit volume. */
+   *  Phase 05.7.9: now uses deterministic-first (orders' source / click-id)
+   *  + spend-proportional fallback (was pure spend-proportional). Surfaced
+   *  as a separate column so the operator can sanity-check the revenue
+   *  figure against unit volume. */
   trueUnits: number;
   metaClaim: number;
   spend: number;
@@ -42,6 +43,16 @@ export type TrueRevenueInfo = {
    *    - orders-attribution tab missing (first deploy), or
    *    - the new pipeline hasn't run yet. */
   attribution: AttributionAnalysis | null;
+  /** Phase 05.7.9 — product TOTALS across ALL platforms for this
+   *  campaign's mapped products in the date range. Operator-visible in the
+   *  units tooltip so the per-campaign allocated share has a denominator
+   *  context ("this campaign got 2 of the 2 units the product sold —
+   *  matches reality" vs "this campaign got 1.7 of 2, the other 0.3 went
+   *  to the Meta campaign also mapped to this product"). */
+  productTotals: {
+    revenue: number;
+    units: number;
+  };
 };
 
 export type ConfidenceLevel = {
@@ -271,6 +282,23 @@ export function useCampaignTrueRevenue(opts: {
     // campaignsForProduct enforces). The allocator now returns both
     // revenue and units per campaign, sharing the same spend-proportional
     // share so the numbers stay internally consistent.
+    // Phase 05.7.9 — flatten orders down to the allocator's minimal shape
+    // (no need to ship the full OrderAttributionRow). Filtering by date
+    // happens here once instead of per-product inside the allocator.
+    const ordersForAllocator = (ordersAttrResp?.rows ?? [])
+      .filter(o => o.date >= localRange.from && o.date <= localRange.to)
+      .map(o => ({
+        storeId: o.storeId,
+        source: o.source,
+        fbclidPresent: o.fbclidPresent,
+        gclidPresent: o.gclidPresent,
+        lineItems: o.lineItems.map(li => ({
+          productId: li.productId,
+          units: li.units,
+          revenueCad: li.revenueCad,
+        })),
+      }));
+
     const allocations = new Map<string, { revenue: number; units: number }>();
     for (const [storeId, productRev] of productsByStore) {
       const allocated = allocateProductRevenue({
@@ -278,12 +306,34 @@ export function useCampaignTrueRevenue(opts: {
         map: productMap,
         productRevenue: productRev,
         campaignSpend,
+        orders: ordersForAllocator,
       });
       for (const [k, v] of allocated) {
         const cur = allocations.get(k) ?? { revenue: 0, units: 0 };
         cur.revenue += v.revenue;
         cur.units += v.units;
         allocations.set(k, cur);
+      }
+    }
+
+    // Phase 05.7.9 — per-product totals for the units-cell tooltip.
+    // We need to surface, alongside the per-campaign allocated share, the
+    // TOTAL Shopify units/revenue for this campaign's mapped products
+    // across ALL platforms. That gives the operator the denominator
+    // ("got X of N total") so a rounded "2" is grounded in reality.
+    //
+    // Built once here as a (storeId, productId) -> totals map; per-campaign
+    // tooltip summation happens in the loop below.
+    const productTotalsByStoreProduct = new Map<
+      string,
+      { revenue: number; units: number }
+    >();
+    for (const [storeId, productRev] of productsByStore) {
+      for (const p of productRev) {
+        productTotalsByStoreProduct.set(`${storeId}::${p.productId}`, {
+          revenue: p.netRevenueCad,
+          units: p.units,
+        });
       }
     }
 
@@ -345,6 +395,16 @@ export function useCampaignTrueRevenue(opts: {
         localRange.to,
         dailyMeta,
       );
+      // Phase 05.7.9 — sum the totals across this campaign's mapped
+      // products. A campaign mapped to [P1, P2] gets `productTotals =
+      // P1.totals + P2.totals`. Provides the tooltip denominator.
+      const productTotals = { revenue: 0, units: 0 };
+      for (const pid of mappedIds) {
+        const t = productTotalsByStoreProduct.get(`${a.storeId}::${pid}`);
+        if (!t) continue;
+        productTotals.revenue += t.revenue;
+        productTotals.units += t.units;
+      }
       out.set(k, {
         trueRevenue,
         trueUnits,
@@ -354,6 +414,7 @@ export function useCampaignTrueRevenue(opts: {
         spend: a.spend,
         confidence: computeConfidence(trueRevenue, a.conversionValue, a.spend, shared, mappedIds.length),
         attribution,
+        productTotals,
       });
     }
     return out;

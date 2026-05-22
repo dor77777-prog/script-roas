@@ -170,39 +170,108 @@ function campaignsForProductInStore(
 }
 
 /**
- * Allocate each mapped product's actual Shopify revenue across the campaigns
- * that map to it, proportionally to each campaign's ad spend in the same
- * date range. Returns a map of `campaignKey → trueRevenueCad`.
+ * Minimal order shape the allocator needs. Subset of OrderAttributionRow —
+ * we don't import the full type to keep this module dependency-light.
+ * Only the four signal fields used to classify an order to a platform.
+ */
+type AllocatorOrder = {
+  storeId: string;
+  source: string;
+  fbclidPresent: boolean;
+  gclidPresent: boolean;
+  lineItems: Array<{ productId: string; units: number; revenueCad: number }>;
+};
+
+/**
+ * Classify an order to the ad platform that *deterministically* drove it.
+ * Returns null when the order has no platform signal (direct, organic
+ * referrer, lost UTM, etc.) — those fall through to the spend-proportional
+ * fallback in the allocator.
  *
- * Allocation rule:
- *   For each product P with mapped campaigns [C1..Cn]:
- *     totalSpend = sum of C1..Cn spend in the range
- *     For each campaign Ci:
- *       trueRevenue[Ci] += P.netRevenue * (Ci.spend / totalSpend)
+ * Mirrors shopify.ts:classifyOrderAttribution's priority chain, narrowed
+ * to the paid-platform buckets (organic Meta/Google/TikTok are NOT counted
+ * as "platform-driven" here because the user wouldn't expect their paid
+ * ad campaign to be credited for an organic visit).
+ */
+function classifyOrderToPlatform(
+  o: AllocatorOrder,
+): 'Meta' | 'Google' | 'TikTok' | null {
+  if (o.source === 'tiktok-paid') return 'TikTok';
+  if (o.source === 'meta-paid') return 'Meta';
+  if (o.source === 'google-paid') return 'Google';
+  if (o.fbclidPresent) return 'Meta';
+  if (o.gclidPresent) return 'Google';
+  // ttclid is folded into source='tiktok-paid' by the classifier already,
+  // so no separate ttclid check is needed here.
+  return null;
+}
+
+/**
+ * Allocate each mapped product's actual Shopify revenue + units across the
+ * campaigns that map to it. Returns a map of `campaignKey → {revenue, units}`.
  *
- * Edge cases:
- *   - If a campaign has 0 spend AND it's the only one mapped → it gets
- *     100% of the product (no other valid attribution exists).
- *   - If multiple campaigns map to P but ALL have 0 spend → split equally.
- *   - A product with no mapped campaigns contributes 0 to the result
- *     (it's an "orphan" — surfaced separately in the UI).
+ * # Algorithm — deterministic-first, spend-proportional fallback (Phase 05.7.9)
  *
- * `productRevenue` is an iterable of `{ productId, netRevenueCad }` already
- * filtered to the same store + date range as `campaignSpend`. The caller
- * computes both from `/api/products` and the local CampaignRow set.
+ * For each product P:
+ *   1. **Deterministic per-platform attribution.** For each order containing P
+ *      with a platform signal (source='X-paid' OR fbclid/gclid), credit the
+ *      order's line-items for P directly to that platform's bucket. Then,
+ *      within a platform, split the platform's deterministic total among the
+ *      campaigns of that platform mapped to P, proportionally to intra-
+ *      platform spend.
+ *   2. **Fallback for unsignaled orders.** The remainder of P's Shopify total
+ *      (orders without click-id / source-name, e.g., direct + organic) is
+ *      split proportionally to spend across ALL campaigns mapped to P. This
+ *      is the original (pre-05.7.9) algorithm, now applied ONLY to the
+ *      unattributed slice.
+ *
+ * # Why this matters
+ *
+ * Pre-05.7.9 the entire product total was split by spend share — so when a
+ * product was mapped to BOTH a Meta and a TikTok campaign, the TikTok cell
+ * would show e.g. "1.7 units" for a product with 2 Shopify sales even when
+ * BOTH sales had `ttclid` in landing_site (both deterministically TikTok).
+ * The new algo correctly credits TikTok with 2 units in that case.
+ *
+ * # Edge cases
+ *
+ *   - **No orders data passed** (`orders === undefined`): falls back to the
+ *     pre-05.7.9 pure spend-proportional behaviour for backwards compat.
+ *     Tests + tools that don't have orders in scope still work unchanged.
+ *   - **Single campaign mapped**: deterministic step is unnecessary — that
+ *     campaign gets 100% of the product (revenue + units), same as before.
+ *   - **Multiple campaigns OF THE SAME PLATFORM mapped to P**: the
+ *     deterministic count for that platform is split among those campaigns
+ *     by intra-platform spend share (we know the platform but not which
+ *     specific campaign within the platform).
+ *   - **Deterministic > total**: capped at total. Defensive — shouldn't
+ *     happen in practice but guards against attribution double-counts.
+ *   - **All campaigns have 0 spend**: deterministic step still runs, then
+ *     the remainder splits equally (same as before).
+ *   - **Product with no mapped campaigns**: orphan, skipped entirely.
+ *
+ * `productRevenue` is an iterable of `{ productId, netRevenueCad, units }`
+ * already filtered to the store + date range. `orders` is the (optional)
+ * order list for the same window, used for the deterministic step.
  */
 export function allocateProductRevenue(args: {
   storeId: string;
   map: ProductMap;
-  /** Each entry is one product's totals in the date range. Both revenue
-   *  AND units are allocated using the same spend-proportional share, so
-   *  the displayed numbers stay consistent (a campaign that gets 70% of
-   *  the revenue also gets 70% of the units). */
   productRevenue: Array<{ productId: string; netRevenueCad: number; units: number }>;
   campaignSpend: Map<string, number>; // campaignKey → spend in range
+  /** Phase 05.7.9 — orders for the same (storeId, date range). When
+   *  provided, the allocator uses deterministic per-platform attribution
+   *  before falling back to spend-proportional split. Optional for
+   *  backwards compat with tests + callers that don't have orders. */
+  orders?: AllocatorOrder[];
 }): Map<string, { revenue: number; units: number }> {
-  const { storeId, map, productRevenue, campaignSpend } = args;
+  const { storeId, map, productRevenue, campaignSpend, orders } = args;
   const out = new Map<string, { revenue: number; units: number }>();
+
+  // Pre-filter orders to the store once. Cheap O(N) — used per product.
+  const storeOrders = orders
+    ? orders.filter(o => o.storeId === storeId)
+    : null;
 
   for (const p of productRevenue) {
     if (!p.productId) continue;
@@ -210,19 +279,133 @@ export function allocateProductRevenue(args: {
     const mappedKeys = campaignsForProductInStore(storeId, p.productId, map);
     if (mappedKeys.length === 0) continue; // orphan — skip
 
-    const spendsForProduct = mappedKeys.map(k => campaignSpend.get(k) ?? 0);
-    const totalSpend = spendsForProduct.reduce((s, x) => s + x, 0);
+    // ── Step 1: deterministic per-platform attribution ──────────────────
+    // Walk orders containing this product; for each order with a platform
+    // signal, sum the product's lineItems units + revenueCad into the
+    // platform's bucket. Caps at total to defend against attribution
+    // double-counts (shouldn't happen but safer than allocating > 100%).
+    const detByPlatform: Record<
+      'Meta' | 'Google' | 'TikTok',
+      { revenue: number; units: number }
+    > = {
+      Meta: { revenue: 0, units: 0 },
+      Google: { revenue: 0, units: 0 },
+      TikTok: { revenue: 0, units: 0 },
+    };
+    if (storeOrders) {
+      for (const o of storeOrders) {
+        const platform = classifyOrderToPlatform(o);
+        if (!platform) continue;
+        for (const li of o.lineItems) {
+          if (li.productId !== p.productId) continue;
+          detByPlatform[platform].revenue += li.revenueCad;
+          detByPlatform[platform].units += li.units;
+        }
+      }
+      // Cap each platform at the product's Shopify totals — guards against
+      // attribution double-counting (e.g., a single order tagged twice).
+      for (const k of ['Meta', 'Google', 'TikTok'] as const) {
+        if (detByPlatform[k].revenue > p.netRevenueCad) {
+          detByPlatform[k].revenue = p.netRevenueCad;
+        }
+        if (detByPlatform[k].units > p.units) {
+          detByPlatform[k].units = p.units;
+        }
+      }
+      // Also cap the SUM across platforms at the product's totals (rare
+      // edge case — an order classified to multiple platforms shouldn't
+      // happen given the priority chain, but defend in depth).
+      const sumDetRev =
+        detByPlatform.Meta.revenue +
+        detByPlatform.Google.revenue +
+        detByPlatform.TikTok.revenue;
+      const sumDetUnits =
+        detByPlatform.Meta.units +
+        detByPlatform.Google.units +
+        detByPlatform.TikTok.units;
+      if (sumDetRev > p.netRevenueCad && sumDetRev > 0) {
+        const ratio = p.netRevenueCad / sumDetRev;
+        detByPlatform.Meta.revenue *= ratio;
+        detByPlatform.Google.revenue *= ratio;
+        detByPlatform.TikTok.revenue *= ratio;
+      }
+      if (sumDetUnits > p.units && sumDetUnits > 0) {
+        const ratio = p.units / sumDetUnits;
+        detByPlatform.Meta.units *= ratio;
+        detByPlatform.Google.units *= ratio;
+        detByPlatform.TikTok.units *= ratio;
+      }
+    }
 
-    for (let i = 0; i < mappedKeys.length; i++) {
-      const k = mappedKeys[i];
-      const share =
-        totalSpend > 0
-          ? spendsForProduct[i] / totalSpend
-          : 1 / mappedKeys.length;
-      const cur = out.get(k) ?? { revenue: 0, units: 0 };
-      cur.revenue += p.netRevenueCad * share;
-      cur.units += p.units * share;
-      out.set(k, cur);
+    // ── Step 2: split each platform's deterministic total among that
+    //           platform's mapped campaigns (intra-platform spend share) ──
+    const keysByPlatform: Record<'Meta' | 'Google' | 'TikTok', string[]> = {
+      Meta: [],
+      Google: [],
+      TikTok: [],
+    };
+    for (const k of mappedKeys) {
+      // campaignKey format: storeId::platform::campaignId
+      const parts = k.split('::');
+      const platform = parts[1] as 'Meta' | 'Google' | 'TikTok' | undefined;
+      if (platform && platform in keysByPlatform) {
+        keysByPlatform[platform].push(k);
+      }
+    }
+    for (const platform of ['Meta', 'Google', 'TikTok'] as const) {
+      const platformKeys = keysByPlatform[platform];
+      const det = detByPlatform[platform];
+      if (platformKeys.length === 0) {
+        // No campaign of this platform is mapped — the deterministic count
+        // for this platform has no campaign to credit. It still came out
+        // of total, so we leave it as a residual that the fallback step
+        // (Step 3) will redistribute. Concretely we zero it here so it
+        // joins the unattributed pool.
+        detByPlatform[platform] = { revenue: 0, units: 0 };
+        continue;
+      }
+      if (det.revenue === 0 && det.units === 0) continue;
+      const intraSpends = platformKeys.map(k => campaignSpend.get(k) ?? 0);
+      const intraTotal = intraSpends.reduce((s, x) => s + x, 0);
+      for (let i = 0; i < platformKeys.length; i++) {
+        const share =
+          intraTotal > 0
+            ? intraSpends[i] / intraTotal
+            : 1 / platformKeys.length;
+        const cur = out.get(platformKeys[i]) ?? { revenue: 0, units: 0 };
+        cur.revenue += det.revenue * share;
+        cur.units += det.units * share;
+        out.set(platformKeys[i], cur);
+      }
+    }
+
+    // ── Step 3: split the unattributed remainder by spend share across
+    //           ALL mapped campaigns (the original algorithm, now scoped
+    //           to the "unsignaled" pool) ──
+    const totalDetRev =
+      detByPlatform.Meta.revenue +
+      detByPlatform.Google.revenue +
+      detByPlatform.TikTok.revenue;
+    const totalDetUnits =
+      detByPlatform.Meta.units +
+      detByPlatform.Google.units +
+      detByPlatform.TikTok.units;
+    const remRev = Math.max(0, p.netRevenueCad - totalDetRev);
+    const remUnits = Math.max(0, p.units - totalDetUnits);
+    if (remRev > 0 || remUnits > 0) {
+      const spendsForProduct = mappedKeys.map(k => campaignSpend.get(k) ?? 0);
+      const totalSpend = spendsForProduct.reduce((s, x) => s + x, 0);
+      for (let i = 0; i < mappedKeys.length; i++) {
+        const k = mappedKeys[i];
+        const share =
+          totalSpend > 0
+            ? spendsForProduct[i] / totalSpend
+            : 1 / mappedKeys.length;
+        const cur = out.get(k) ?? { revenue: 0, units: 0 };
+        cur.revenue += remRev * share;
+        cur.units += remUnits * share;
+        out.set(k, cur);
+      }
     }
   }
   return out;

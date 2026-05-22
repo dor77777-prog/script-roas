@@ -431,8 +431,27 @@ export function CampaignsTableRow({
           if (!info || info.trueRevenue <= 0) {
             return <span className="text-text-muted">—</span>;
           }
+          // Phase 05.7.9 — tooltip mirrors the units cell: surface the
+          // exact allocated revenue + the Shopify total across all
+          // platforms so the operator has the denominator visible.
+          const tooltip = (() => {
+            const lines: string[] = [];
+            lines.push(
+              `CAD ${info.trueRevenue.toFixed(0)} מוקצות לקמפיין הזה (חלוקה דטרמיניסטית + fallback פרופורציונלי).`,
+            );
+            lines.push(
+              `סה"כ ב-Shopify למוצרים הממופים בטווח: CAD ${info.productTotals.revenue.toFixed(0)} (כל הפלטפורמות יחד).`,
+            );
+            if (info.sharedCampaigns > 0) {
+              lines.push('');
+              lines.push(
+                `המוצר ממופה גם ל-${info.sharedCampaigns} קמפיין${info.sharedCampaigns === 1 ? '' : 'ים'} נוספ${info.sharedCampaigns === 1 ? '' : 'ים'}.`,
+              );
+            }
+            return lines.join('\n');
+          })();
           return (
-            <span className="font-medium" title="ערך המכירות בפועל ב-Shopify של המוצרים המשויכים — מוקצה פרופורציונלית להוצאה כשהמוצר חולק עם קמפיינים אחרים">
+            <span className="font-medium" title={tooltip}>
               {formatCurrency(info.trueRevenue)}
             </span>
           );
@@ -445,39 +464,66 @@ export function CampaignsTableRow({
           if (!info || info.trueUnits <= 0) {
             return <span className="text-text-muted">—</span>;
           }
-          // Phase 05.7.9 — display rounded integer (units are physically
-          // whole), but expose the exact spend-proportional allocation in
-          // the tooltip. Operator feedback: "1.7 yc' doesn't make sense
-          // for unit count even though it's the mathematically correct
-          // share". The underlying allocation in campaignProductMap.ts
-          // is unchanged — only the rendering rounds for display sanity.
+          // Phase 05.7.9 — display rounded integer for the per-campaign
+          // share (units are physically whole), but the tooltip surfaces:
+          //   (a) exact allocated share for this campaign,
+          //   (b) total Shopify units for this campaign's mapped products
+          //       across ALL platforms (the denominator — so the rounded
+          //       integer is grounded in reality).
+          // The underlying allocation now uses deterministic-first
+          // attribution (orders' source / click-id) with a spend-
+          // proportional fallback for unsignaled orders — see
+          // campaignProductMap.ts:allocateProductRevenue.
           const exactUnits = info.trueUnits;
           const displayUnits = Math.round(exactUnits);
+          const totalUnits = Math.round(info.productTotals.units);
           const isFractional = Math.abs(exactUnits - displayUnits) >= 0.05;
-          const tooltip = isFractional
-            ? (
-                `יחידות שנמכרו ב-Shopify של המוצרים המשויכים, ` +
-                `מוקצות פרופורציונלית להוצאה בין כל הפלטפורמות הממופות. ` +
-                `חישוב מדויק: ${exactUnits.toFixed(2)} יח' (עוגל לתצוגה). ` +
-                `המוצר ככל הנראה ממופה גם לקמפיין נוסף — חלקו של הקמפיין הזה ` +
-                `הוא לפי חלקו בהוצאה הכוללת.`
-              )
-            : `יחידות שנמכרו ב-Shopify של המוצרים המשויכים בטווח הנבחר`;
+          const isPartialShare = totalUnits > displayUnits;
+          const tooltip = (() => {
+            const lines: string[] = [];
+            lines.push(
+              `${exactUnits.toFixed(2)} יח' מוקצות לקמפיין הזה (עוגל ל-${displayUnits}).`,
+            );
+            lines.push(
+              `סה"כ ב-Shopify למוצרים הממופים בטווח: ${totalUnits} יח' (כל הפלטפורמות יחד).`,
+            );
+            lines.push('');
+            lines.push(
+              'שיטת חלוקה: הזמנות עם click-ID או source מזוהים מוקצות ישירות לפלטפורמה שלהן (דטרמיניסטי). ' +
+                'הזמנות ללא סיגנל (direct / utm חסר) מתחלקות פרופורציונלית להוצאה.',
+            );
+            if (info.sharedCampaigns > 0) {
+              lines.push('');
+              lines.push(
+                `המוצר ממופה גם ל-${info.sharedCampaigns} קמפיין${info.sharedCampaigns === 1 ? '' : 'ים'} נוספ${info.sharedCampaigns === 1 ? '' : 'ים'} — חלק מהיחידות הוקצו אליהם.`,
+              );
+            }
+            return lines.join('\n');
+          })();
           return (
             <span
               className="font-medium inline-flex items-center gap-0.5"
               title={tooltip}
             >
               <span>{displayUnits}</span>
-              {/* Fraction indicator: tiny dot suffix when the displayed
-                  integer hides a non-trivial fractional allocation. Lets
-                  the operator know there's a tooltip worth reading. */}
+              {/* Suffix mark: "*" when this campaign got a non-integer
+                  share (rounding hides math); "/N" when the campaign got
+                  only a partial share of the total even after rounding.
+                  Both invite the operator to hover for the breakdown. */}
               {isFractional && (
                 <span
                   aria-hidden="true"
                   className="text-[8px] text-text-muted"
                 >
                   *
+                </span>
+              )}
+              {isPartialShare && !isFractional && (
+                <span
+                  aria-hidden="true"
+                  className="text-[10px] text-text-muted ms-0.5"
+                >
+                  /{totalUnits}
                 </span>
               )}
             </span>
