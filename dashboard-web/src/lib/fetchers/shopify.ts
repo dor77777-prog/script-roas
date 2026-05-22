@@ -58,6 +58,7 @@ import {
   computeRevenueWithCrossDayRefunds,
   type ShopifyOrderInput,
 } from '@/lib/shopifyRevenueRefunds';
+import { getShopifyAccessToken } from '@/lib/fetchers/shopifyAuth';
 
 // =============================================================================
 // Constants
@@ -564,18 +565,18 @@ export async function fetchShopifyDayRows(
   storeId: string,
   dateStr: string,
 ): Promise<ShopifyDayRows> {
+  // Phase 05.7.7: Dev Dashboard apps use OAuth client_credentials grant —
+  // exchange Client ID + Secret for a 24h access token (cached in-process).
+  // See shopifyAuth.ts for the helper that owns the cache + refresh logic.
   const upper = storeId.toUpperCase();
-  // PROPS-MAP rows 22/25/29/32/35/38 — `${STORE}_SHOPIFY_DOMAIN/_TOKEN`
   const domain = process.env[`${upper}_SHOPIFY_DOMAIN`];
-  const token = process.env[`${upper}_SHOPIFY_TOKEN`];
-
-  if (!domain || !token) {
+  if (!domain) {
     throw new Error(
-      `Missing Shopify creds for store "${storeId}" — expected ` +
-        `${upper}_SHOPIFY_DOMAIN and ${upper}_SHOPIFY_TOKEN env vars ` +
-        `(per docs/PROPS-MAP.md Phase 05.5).`,
+      `Missing Shopify domain for store "${storeId}" — expected ` +
+        `${upper}_SHOPIFY_DOMAIN env var.`,
     );
   }
+  const token = await getShopifyAccessToken(storeId);
 
   const orders = await fetchOrdersWithRefundsForDay(
     domain,
@@ -618,28 +619,28 @@ export async function fetchShopifyDayRows(
 // =============================================================================
 
 /**
- * Resolve domain + token from env. Centralized so the three Shopify fetchers
- * in this file share one canonical PROPS-MAP-aligned lookup
- * (`${STORE}_SHOPIFY_DOMAIN` / `${STORE}_SHOPIFY_TOKEN`, rows 22/25/29/32/35/38
- * in `docs/PROPS-MAP.md`).
+ * Resolve domain + a fresh Admin API access_token. Phase 05.7.7 changed
+ * the auth model from a static `${STORE}_SHOPIFY_TOKEN` env var to
+ * OAuth client_credentials grant (Client ID + Secret exchanged for a
+ * 24h token, cached in-process via `getShopifyAccessToken`).
  *
- * Why a separate helper instead of inlining a fourth copy: a single mis-typed
- * env-var name across the three fetchers would silently break two of the
- * three writers but pass tests (each fetcher's tests stub its own envs).
- * One source of truth → one place to keep in sync with PROPS-MAP.
+ * Centralized so all 3 Shopify fetchers (day rows, products catalog,
+ * orders attribution) share ONE canonical auth path. A drift between
+ * fetchers on auth scheme would silently break some writers.
  */
-function getShopifyCreds(storeId: string): { domain: string; token: string } {
+async function getShopifyCreds(
+  storeId: string,
+): Promise<{ domain: string; token: string }> {
   const upper = storeId.toUpperCase();
   const domain = process.env[`${upper}_SHOPIFY_DOMAIN`];
-  const token = process.env[`${upper}_SHOPIFY_TOKEN`];
 
-  if (!domain || !token) {
+  if (!domain) {
     throw new Error(
-      `Missing Shopify creds for store "${storeId}" — expected ` +
-        `${upper}_SHOPIFY_DOMAIN and ${upper}_SHOPIFY_TOKEN env vars ` +
-        `(per docs/PROPS-MAP.md Phase 05.5).`,
+      `Missing Shopify domain for store "${storeId}" — expected ` +
+        `${upper}_SHOPIFY_DOMAIN env var.`,
     );
   }
+  const token = await getShopifyAccessToken(storeId);
   return { domain, token };
 }
 
@@ -661,7 +662,7 @@ function getShopifyCreds(storeId: string): { domain: string; token: string } {
 export async function fetchShopifyProductsCatalog(
   storeId: string,
 ): Promise<ShopifyCatalogRow[]> {
-  const { domain, token } = getShopifyCreds(storeId);
+  const { domain, token } = await getShopifyCreds(storeId);
 
   const fields = 'id,title,status,handle,image,variants,product_type,vendor,updated_at';
   let url: string | undefined =
@@ -996,7 +997,7 @@ export async function fetchShopifyOrdersAttribution(
   storeId: string,
   dateStr: string,
 ): Promise<ShopifyOrderRow[]> {
-  const { domain, token } = getShopifyCreds(storeId);
+  const { domain, token } = await getShopifyCreds(storeId);
 
   const dayStart = isoLocalMidnight(dateStr, SHOPIFY_TZ);
   const dayEnd = isoLocalMidnight(nextDayStr(dateStr), SHOPIFY_TZ);

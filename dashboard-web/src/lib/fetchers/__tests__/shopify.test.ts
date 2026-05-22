@@ -24,6 +24,7 @@
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as algo from '@/lib/shopifyRevenueRefunds';
+import * as shopifyAuth from '@/lib/fetchers/shopifyAuth';
 import {
   fetchShopifyDayRows,
   fetchShopifyProductsCatalog,
@@ -63,8 +64,17 @@ const STORE_ID = 'uzoshop';
 const DATE_STR = '2026-05-19';
 
 beforeEach(() => {
+  // Phase 05.7.7: Dev Dashboard apps authenticate via OAuth client_credentials
+  // grant — Client ID + Secret exchanged for a 24h access token. Tests
+  // bypass the OAuth fetch by mocking getShopifyAccessToken directly so
+  // the existing fetch mock queue stays focused on Admin API calls.
   vi.stubEnv('UZOSHOP_SHOPIFY_DOMAIN', 'uzoshop.myshopify.com');
-  vi.stubEnv('UZOSHOP_SHOPIFY_TOKEN', 'shpat_test_TOKEN');
+  vi.stubEnv('UZOSHOP_SHOPIFY_CLIENT_ID', 'test_client_id');
+  vi.stubEnv('UZOSHOP_SHOPIFY_CLIENT_SECRET', 'shpss_test_secret');
+  shopifyAuth._resetShopifyAuthCacheForTesting();
+  vi.spyOn(shopifyAuth, 'getShopifyAccessToken').mockResolvedValue(
+    'shpat_test_TOKEN',
+  );
 });
 
 afterEach(() => {
@@ -274,11 +284,14 @@ describe('shopify fetcher — fetchShopifyDayRows', () => {
     }
   });
 
-  it('Test 6: Missing {STORE}_SHOPIFY_DOMAIN or {STORE}_SHOPIFY_TOKEN env vars throws clear error including storeId', async () => {
+  it('Test 6 (Phase 05.7.7): Missing _DOMAIN or _CLIENT_ID/_CLIENT_SECRET throws clear error with storeId', async () => {
+    // Restore the real getShopifyAccessToken so we can test its error path.
+    vi.restoreAllMocks();
+
     vi.unstubAllEnvs();
-    // Re-stub the token only; domain missing
-    vi.stubEnv('UZOSHOP_SHOPIFY_TOKEN', 'shpat_test_TOKEN');
-    // Ensure domain is unset
+    // Re-stub creds partially — domain missing
+    vi.stubEnv('UZOSHOP_SHOPIFY_CLIENT_ID', 'test_id');
+    vi.stubEnv('UZOSHOP_SHOPIFY_CLIENT_SECRET', 'shpss_test');
     vi.stubEnv('UZOSHOP_SHOPIFY_DOMAIN', '');
 
     const noopFetch = vi.fn(async () => new Response('{}'));
@@ -286,10 +299,12 @@ describe('shopify fetcher — fetchShopifyDayRows', () => {
 
     await expect(fetchShopifyDayRows(STORE_ID, DATE_STR)).rejects.toThrow(/uzoshop/i);
 
-    // Also: missing token
+    // Also: missing CLIENT_SECRET (the OAuth helper rejects)
     vi.unstubAllEnvs();
     vi.stubEnv('UZOSHOP_SHOPIFY_DOMAIN', 'uzoshop.myshopify.com');
-    vi.stubEnv('UZOSHOP_SHOPIFY_TOKEN', '');
+    vi.stubEnv('UZOSHOP_SHOPIFY_CLIENT_ID', 'test_id');
+    vi.stubEnv('UZOSHOP_SHOPIFY_CLIENT_SECRET', '');
+    shopifyAuth._resetShopifyAuthCacheForTesting();
 
     await expect(fetchShopifyDayRows(STORE_ID, DATE_STR)).rejects.toThrow(/uzoshop/i);
   });
