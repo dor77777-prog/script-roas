@@ -381,6 +381,62 @@ export async function fetchMetaSpendForDay(
 }
 
 /**
+ * Phase 05.7.6 — LIGHTWEIGHT per-day store-level Meta spend.
+ *
+ * Calls Meta /insights at `level=account` directly — returns ONE row with
+ * the account total spend, NO pagination, NO per-adset overhead. Typical
+ * wall-clock: ~500ms (vs 10-30s for `fetchMetaSpendForDay` which paginates
+ * all ad sets).
+ *
+ * Used by `cronLive.ts` to refresh today's Meta spend every 10 min without
+ * stalling the cron's step.run budget. The heavier `fetchMetaSpendForDay`
+ * stays in cron-daily (00:05 IL) where the per-adset fetch is needed
+ * anyway for campaigns_daily writes.
+ *
+ * The two fetchers MUST produce the same store-level total (Meta
+ * guarantees the account aggregate equals the sum of adsets); a future
+ * follow-up could merge them, but for now we keep them parallel to avoid
+ * regressing the cron-daily flow.
+ *
+ * Returns `{ spend: 0, currency: 'ILS' }` on missing creds / API failure
+ * — caller (cron-live) wraps in .catch() and degrades gracefully.
+ */
+export async function fetchMetaSpendForDayLight(
+  storeId: string,
+  dateStr: string,
+): Promise<MetaDailyStoreSpend> {
+  const token = getMetaToken(storeId);
+  const adAccountId = getMetaAdAccountId(storeId);
+
+  // level=account returns a single row aggregating the entire ad-account.
+  // No pagination needed (1 row max). Field list is minimal — just spend +
+  // currency, which is all the cron-live writer needs for fb_spend_cad.
+  const url =
+    `https://graph.facebook.com/${META_API_VERSION}/act_${adAccountId}/insights` +
+    `?fields=spend,account_currency` +
+    `&time_range=${encodeURIComponent(JSON.stringify({ since: dateStr, until: dateStr }))}` +
+    `&level=account` +
+    `&access_token=${encodeURIComponent(token)}`;
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(
+      `Meta account spend ${storeId} ${dateStr} failed (${res.status}): ${body.slice(0, 400)}`,
+    );
+  }
+  const body = (await res.json()) as MetaInsightsBody;
+  const row = body.data?.[0];
+  if (!row) {
+    // No spend reported for this day yet (e.g. very early in the day).
+    return { storeId, date: dateStr, spend: 0, currency: 'ILS' };
+  }
+  const spend = parseFloat(row.spend ?? '0') || 0;
+  const currency = row.account_currency ?? 'ILS';
+  return { storeId, date: dateStr, spend, currency };
+}
+
+/**
  * Phase 05.6.1 — fetch Meta /insights at `level=ad` for a single day.
  *
  * Mirrors `fetchMetaAdSetInsights` but at ad granularity. URL changes:

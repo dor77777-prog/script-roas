@@ -268,15 +268,14 @@ describe('cronLive — runLiveForStore handler (Shopify-only, rolling 3-day)', (
     expect(labels.length).toBeLessThanOrEqual(3);
   });
 
-  it('Test 5: Meta + Google Ads fetchers are NEVER called by the live handler', async () => {
-    // Phase 05.7.6 ROLLBACK (2026-05-22 02:25 IL): cron-live attempted to
-    // add Meta + Google spend fetches alongside Shopify. The Meta /insights
-    // endpoint is slow + the combined Promise.all stalled Inngest runs past
-    // their 5-min timeout, killing all 3 cron-live ticks. Reverted to
-    // Shopify-only. Today's Meta + Google spend now refreshes via:
-    //   - cron-daily at 00:05 IL (yesterday), or
-    //   - user clicks "רענן הכל" in the dashboard header (sync-now-all)
-    // This test re-asserts the invariant: live = Shopify-only.
+  it('Test 5 (Phase 05.7.6): cron-live calls LIGHT Meta + Google fetchers — NOT the heavy fetchMetaSpendForDay', async () => {
+    // History: cron-live was originally Shopify-only. Phase 05.7.6 added
+    // Meta + Google spend fetches; the first attempt (commit eb72d18)
+    // used the HEAVY `fetchMetaSpendForDay` which paginated all ad-sets,
+    // pushed past the 5-min step.run budget, and stalled every tick. The
+    // proper fix uses `fetchMetaSpendForDayLight` (level=account, single
+    // API call, ~500ms) — this test locks the choice. The heavy fetcher
+    // must NEVER be called from cron-live.
     const mod = await import('../cronLive');
 
     vi.spyOn(shopifyFetcher, 'fetchShopifyDayRows').mockImplementation(async (storeId, date) => ({
@@ -289,12 +288,15 @@ describe('cronLive — runLiveForStore handler (Shopify-only, rolling 3-day)', (
       grossRevenueCad: 0,
       refundDeductionCad: 0,
     }));
-    const metaSpy = vi
+    const lightMetaSpy = vi
+      .spyOn(metaFetcher, 'fetchMetaSpendForDayLight')
+      .mockResolvedValue({ storeId: 'uzoshop', date: '2026-05-22', spend: 0, currency: 'ILS' });
+    const heavyMetaSpy = vi
       .spyOn(metaFetcher, 'fetchMetaSpendForDay')
-      .mockResolvedValue({ storeId: 'uzoshop', date: '2026-05-21', spend: 0, currency: 'ILS' });
+      .mockResolvedValue({ storeId: 'uzoshop', date: '2026-05-22', spend: 0, currency: 'ILS' });
     const googleSpy = vi
       .spyOn(googleAdsFetcher, 'fetchGoogleAdsSpendForDay')
-      .mockResolvedValue({ storeId: 'uzoshop', date: '2026-05-21', spend: 0, currency: 'CAD' });
+      .mockResolvedValue({ storeId: 'uzoshop', date: '2026-05-22', spend: 0, currency: 'CAD' });
 
     const { admin } = makeSupabaseAdminMock();
     vi.spyOn(supabaseAdminMod, 'getSupabaseAdmin').mockReturnValue(
@@ -304,10 +306,14 @@ describe('cronLive — runLiveForStore handler (Shopify-only, rolling 3-day)', (
     const { step } = makeStepStub();
     await mod.runLiveForStore('uzoshop', { step });
 
-    // The whole point of the live cadence: it must NEVER hit Meta or Google.
-    // Daily cron owns spend reconciliation; live owns revenue only.
-    expect(metaSpy).not.toHaveBeenCalled();
-    expect(googleSpy).not.toHaveBeenCalled();
+    // Light fetchers MUST be called once (for today).
+    expect(lightMetaSpy).toHaveBeenCalledTimes(1);
+    expect(googleSpy).toHaveBeenCalledTimes(1);
+    // Heavy fetcher MUST NOT be called — it stalls the cron.
+    expect(heavyMetaSpy).not.toHaveBeenCalled();
+    // First positional arg = storeId; second = today's dateStr.
+    expect(lightMetaSpy.mock.calls[0][0]).toBe('uzoshop');
+    expect(lightMetaSpy.mock.calls[0][1]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
   it('Test 6: an error thrown from a step.run callback propagates out of the handler', async () => {
