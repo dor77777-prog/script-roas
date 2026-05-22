@@ -23,31 +23,46 @@ import { AlertCircle } from 'lucide-react';
  * header layout responsive (the chip is hidden on small screens; the
  * refresh button stays visible).
  */
-export function FreshnessChip(props: { dataLastWriteAt: string | null }) {
-  const { dataLastWriteAt } = props;
+export function FreshnessChip(props: {
+  dataLastWriteAt: string | null;
+  /**
+   * 'dark' = soft-on-dark palette for the navy header (default).
+   * 'light' = readable-on-white palette for use inside tab bodies.
+   * Phase 05.7.6 follow-up — user reported the chip text was invisible
+   * on white tab bodies because the original palette uses light pastels
+   * on transparent backgrounds, designed for the dark header.
+   */
+  variant?: 'dark' | 'light';
+}) {
+  const { dataLastWriteAt, variant = 'dark' } = props;
   // Re-render every 30s so "X minutes ago" updates without a server hit.
   const [tick, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 30_000);
     return () => clearInterval(id);
   }, []);
-  // Reference `tick` so the effect's value actually influences rendering.
   void tick;
 
   const { label, tone, warning } = formatTimeAgo(dataLastWriteAt);
 
-  // Header palette — soft-on-dark tones, NOT the dashboard's standard
-  // pill colors (those would clash with the navy gradient). Each tone
-  // has matching text + background that reads well on the bg-primary-dark
-  // header.
-  const toneClass =
-    tone === 'green'
-      ? 'bg-emerald-500/15 text-emerald-200 ring-emerald-400/30'
-      : tone === 'yellow'
-        ? 'bg-amber-500/20 text-amber-100 ring-amber-300/40'
-        : tone === 'red'
-          ? 'bg-red-500/25 text-red-100 ring-red-300/50'
-          : 'bg-white/10 text-white/80 ring-white/15';
+  // Two palettes:
+  //   - dark (header, navy bg): light tones, transparent bg
+  //   - light (tab body, white bg): SOLID light bg + dark text — same
+  //     contrast level as the existing 'סביר' / 'מעולה' pills on the
+  //     leaderboard cards (matched to user's visual expectation).
+  const darkPalette = {
+    green: 'bg-emerald-500/15 text-emerald-200 ring-emerald-400/30',
+    yellow: 'bg-amber-500/20 text-amber-100 ring-amber-300/40',
+    red: 'bg-red-500/25 text-red-100 ring-red-300/50',
+    gray: 'bg-white/10 text-white/80 ring-white/15',
+  } as const;
+  const lightPalette = {
+    green: 'bg-emerald-100 text-emerald-800 ring-emerald-300',
+    yellow: 'bg-amber-100 text-amber-800 ring-amber-300',
+    red: 'bg-red-100 text-red-800 ring-red-300',
+    gray: 'bg-gray-100 text-gray-700 ring-gray-300',
+  } as const;
+  const toneClass = (variant === 'light' ? lightPalette : darkPalette)[tone];
 
   return (
     <span
