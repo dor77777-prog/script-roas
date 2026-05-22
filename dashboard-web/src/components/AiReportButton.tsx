@@ -8,6 +8,8 @@ import { generateAiReport } from '@/lib/aiReport';
 import type { DashboardData, Filters as F } from '@/lib/types';
 import type { ProductsResponse } from '@/app/api/products/route';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
+import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
+import { buildDateRangeKey } from '@/lib/dateRange';
 
 const fetcher = (url: string) => fetch(url).then(r => r.ok ? r.json() : null);
 
@@ -55,6 +57,15 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
     fetcher,
     { revalidateOnFocus: false },
   );
+  // Phase 05.7.x — orders-attribution feeds the new "תנועה לפי מקור" section
+  // (per-source AOV + click-id coverage). Range-keyed so the SWR cache lines
+  // up with the user's selected date window — same pattern the campaigns
+  // table uses.
+  const { data: orders } = useSWR<OrdersAttributionResponse | null>(
+    open ? buildDateRangeKey('/api/orders-attribution', filters.range) : null,
+    fetcher,
+    { revalidateOnFocus: false },
+  );
 
   async function handleGenerate() {
     setGenerating(true);
@@ -67,6 +78,7 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
         dailyRows: data.rows,
         productRows: products?.rows ?? [],
         campaignRows: campaigns?.rows ?? [],
+        ordersRows: orders?.rows ?? [],
       });
       setReport(md);
     } finally {
@@ -98,6 +110,8 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
     URL.revokeObjectURL(url);
   }
 
+  // Orders are nice-to-have (the report degrades gracefully when missing),
+  // so we don't gate "create report" on them — only the core two datasets.
   const dataReady = !!products && !!campaigns;
 
   return (

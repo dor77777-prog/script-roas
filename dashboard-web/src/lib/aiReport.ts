@@ -1,6 +1,7 @@
 import type { DailyRow } from './types';
 import type { ProductRow } from './products';
 import type { CampaignRow } from './campaigns';
+import type { OrderAttributionRow } from './ordersAttribution';
 
 /**
  * Generates an AI-friendly markdown report for a store × date range.
@@ -22,6 +23,16 @@ type Params = {
   dailyRows: DailyRow[];      // filtered by store + range upstream OR full set
   productRows: ProductRow[];
   campaignRows: CampaignRow[];
+  /**
+   * Phase 05.7.x — order-level attribution rows from Shopify (one per
+   * order, with source/utm/click-id signals). Used to slice revenue by
+   * traffic source, compute AOV per source, and gauge click-id coverage
+   * — all dimensions an experienced media buyer needs but that don't
+   * surface from daily/campaign aggregates alone.
+   * Empty array is acceptable (pipeline still warming up) — the
+   * dependent sections fall back to "data not available".
+   */
+  ordersRows?: OrderAttributionRow[];
 };
 
 const fmtNum = (n: number, d = 0) =>
@@ -47,10 +58,11 @@ export function generateAiReport({
   dailyRows,
   productRows,
   campaignRows,
+  ordersRows,
 }: Params): string {
   const out: string[] = [];
 
-  // Pre-filter all three datasets by range + store.
+  // Pre-filter all four datasets by range + store.
   const storeFilter = storeName === 'All' ? null : storeName;
   const daily = dailyRows.filter(
     r => inRange(r.date, range) && (!storeFilter || r.storeName === storeFilter),
@@ -59,6 +71,9 @@ export function generateAiReport({
     r => inRange(r.date, range) && (!storeFilter || r.storeName === storeFilter),
   );
   const campaigns = campaignRows.filter(
+    r => inRange(r.date, range) && (!storeFilter || r.storeName === storeFilter),
+  );
+  const orders = (ordersRows ?? []).filter(
     r => inRange(r.date, range) && (!storeFilter || r.storeName === storeFilter),
   );
 
@@ -253,6 +268,85 @@ export function generateAiReport({
     out.push('');
     out.push('**הקשר**: CPM גבוה בערוץ אחד לעומת השני יכול לנבוע מ-(א) קהל יקר יותר (lookalike% / interest stack), (ב) קריאייטיב פחות מושך שגורם לMeta/Google להגביה את המחיר כדי לדחוף אותו, או (ג) פורמט מודעה דורש placement יקר (Reels vs feed, Shopping vs Search).');
     out.push('');
+
+    // ===== CPM Volatility per platform — daily stddev as % of mean =====
+    // Phase 05.7.x — analyst-grade. CPM that moves wildly day-to-day
+    // signals an unstable auction (creative fatigue, audience saturation,
+    // budget overshoot relative to delivery). Quiet, low-volatility CPM
+    // is a sign the campaign has stabilised — safer to scale.
+    type DailyCpm = { date: string; cpm: number };
+    const cpmByPlatform: Record<string, DailyCpm[]> = {
+      Meta: [],
+      Google: [],
+      TikTok: [],
+    };
+    const dailyAgg: Record<string, Record<string, { spend: number; imps: number }>> = {
+      Meta: {},
+      Google: {},
+      TikTok: {},
+    };
+    for (const c of campaigns) {
+      const p = c.platform;
+      if (p !== 'Meta' && p !== 'Google' && p !== 'TikTok') continue;
+      if (!dailyAgg[p][c.date]) dailyAgg[p][c.date] = { spend: 0, imps: 0 };
+      dailyAgg[p][c.date].spend += c.spend;
+      dailyAgg[p][c.date].imps += c.impressions;
+    }
+    for (const p of ['Meta', 'Google', 'TikTok']) {
+      for (const [date, v] of Object.entries(dailyAgg[p])) {
+        if (v.imps > 0) cpmByPlatform[p].push({ date, cpm: (v.spend / v.imps) * 1000 });
+      }
+    }
+    const platformStats: Array<{
+      platform: string;
+      n: number;
+      mean: number;
+      stddev: number;
+      cv: number;
+      min: number;
+      max: number;
+    }> = [];
+    for (const p of ['Meta', 'Google', 'TikTok']) {
+      const arr = cpmByPlatform[p];
+      if (arr.length < 3) continue;
+      const mean = arr.reduce((s, d) => s + d.cpm, 0) / arr.length;
+      const variance =
+        arr.reduce((s, d) => s + Math.pow(d.cpm - mean, 2), 0) / arr.length;
+      const stddev = Math.sqrt(variance);
+      const cv = mean > 0 ? stddev / mean : 0;
+      const min = Math.min(...arr.map(d => d.cpm));
+      const max = Math.max(...arr.map(d => d.cpm));
+      platformStats.push({ platform: p, n: arr.length, mean, stddev, cv, min, max });
+    }
+    if (platformStats.length > 0) {
+      out.push('## תנודתיות CPM לאורך הימים');
+      out.push('');
+      out.push(
+        '**מה זה אומר**: CV (coefficient of variation = stddev/mean) הוא ' +
+          'מדד יציבות. CV < 0.15 = יציב מאוד (בטוח לסקייל); 0.15-0.35 = תנודה ' +
+          'בינונית; CV > 0.35 = תנודה גבוהה (creative fatigue, budget thrashing, ' +
+          'או auction לא יציב — לעצור לפני סקייל).',
+      );
+      out.push('');
+      out.push(
+        `| פלטפורמה | ימים | CPM ממוצע | CPM מינ׳ | CPM מקס׳ | תנודה (CV) | אבחנה |`,
+      );
+      out.push(`|---|---|---|---|---|---|---|`);
+      for (const s of platformStats) {
+        const verdict =
+          s.cv < 0.15
+            ? 'יציב'
+            : s.cv < 0.35
+              ? 'בינוני'
+              : 'תנודתי';
+        out.push(
+          `| ${s.platform} | ${s.n} | ${fmtCad(s.mean)} | ${fmtCad(
+            s.min,
+          )} | ${fmtCad(s.max)} | ${fmtPct(s.cv, 0)} | ${verdict} |`,
+        );
+      }
+      out.push('');
+    }
   }
 
   // ===== Daily breakdown (compact) =====
@@ -280,6 +374,141 @@ export function generateAiReport({
   }
   out.push('');
 
+  // ===== Anomaly Days — outliers in revenue / spend / ROAS =====
+  // Phase 05.7.x — analyst-grade. Surfaces days that deviated >2× MAD
+  // from the period's median revenue or spend. Most operators eyeball
+  // the daily table and miss the outlier; flagging it explicitly catches
+  // "what happened on Wednesday?" follow-ups that drive learning.
+  if (daily.length >= 5) {
+    // Aggregate per-date (sum across stores) so anomalies are at the
+    // dashboard level, not per-store.
+    const byDate = new Map<string, { revenue: number; spend: number }>();
+    for (const r of daily) {
+      if (!byDate.has(r.date)) byDate.set(r.date, { revenue: 0, spend: 0 });
+      const e = byDate.get(r.date)!;
+      e.revenue += r.revenue;
+      e.spend += r.totalSpend;
+    }
+    const datesSorted = Array.from(byDate.entries()).sort((a, b) =>
+      a[0].localeCompare(b[0]),
+    );
+    function medianMad(values: number[]): { median: number; mad: number } {
+      const sorted = [...values].sort((a, b) => a - b);
+      const mid = Math.floor(sorted.length / 2);
+      const median =
+        sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+      const deviations = values.map(v => Math.abs(v - median)).sort((a, b) => a - b);
+      const dmid = Math.floor(deviations.length / 2);
+      const mad =
+        deviations.length % 2 === 0
+          ? (deviations[dmid - 1] + deviations[dmid]) / 2
+          : deviations[dmid];
+      return { median, mad };
+    }
+    const revenues = datesSorted.map(([, v]) => v.revenue);
+    const spends = datesSorted.map(([, v]) => v.spend);
+    const revStats = medianMad(revenues);
+    const spendStats = medianMad(spends);
+    // Robust z-score: (value - median) / (1.4826 × MAD). >2 = outlier.
+    type Anomaly = {
+      date: string;
+      revenue: number;
+      spend: number;
+      revZ: number;
+      spendZ: number;
+      kind: string;
+    };
+    const anomalies: Anomaly[] = [];
+    for (const [date, v] of datesSorted) {
+      const revZ =
+        revStats.mad > 0
+          ? (v.revenue - revStats.median) / (1.4826 * revStats.mad)
+          : 0;
+      const spendZ =
+        spendStats.mad > 0
+          ? (v.spend - spendStats.median) / (1.4826 * spendStats.mad)
+          : 0;
+      const isRevOutlier = Math.abs(revZ) >= 2.0;
+      const isSpendOutlier = Math.abs(spendZ) >= 2.0;
+      if (!isRevOutlier && !isSpendOutlier) continue;
+      const parts: string[] = [];
+      if (revZ > 2.0) parts.push('הכנסה גבוהה במיוחד');
+      if (revZ < -2.0) parts.push('הכנסה נמוכה במיוחד');
+      if (spendZ > 2.0) parts.push('הוצאה גבוהה במיוחד');
+      if (spendZ < -2.0) parts.push('הוצאה נמוכה במיוחד');
+      anomalies.push({ date, revenue: v.revenue, spend: v.spend, revZ, spendZ, kind: parts.join(' + ') });
+    }
+    if (anomalies.length > 0) {
+      out.push('## ימים חריגים בטווח (אנומליות סטטיסטיות)');
+      out.push('');
+      out.push(
+        `**מתודה**: זיהוי ע"י robust z-score על median + MAD (Median Absolute ` +
+          `Deviation). ימים עם |z| ≥ 2.0 מסומנים. המדיאן בטווח: הכנסות ${fmtCad(
+            revStats.median,
+          )} · הוצאות ${fmtCad(spendStats.median)}.`,
+      );
+      out.push('');
+      out.push(`| תאריך | הכנסה | z-הכנסה | הוצאה | z-הוצאה | אבחנה |`);
+      out.push(`|---|---|---|---|---|---|`);
+      for (const a of anomalies.sort((x, y) => x.date.localeCompare(y.date))) {
+        out.push(
+          `| ${fmtDate(a.date)} | ${fmtCad(a.revenue)} | ${a.revZ.toFixed(
+            1,
+          )} | ${fmtCad(a.spend)} | ${a.spendZ.toFixed(1)} | ${a.kind} |`,
+        );
+      }
+      out.push('');
+      out.push(
+        '**מה לבדוק**: ספייקים חיוביים = אירוע חיצוני (קמפיין שעלה, viral creative, מבצע?) ' +
+          '— שווה לפענח ולשחזר. ספייקים שליליים = אירוע שלילי (קמפיין שכבה, ' +
+          'בעיית checkout, יום חג שלא היה צפוי?) — שווה לבדוק שלא נכנס שוב.',
+      );
+      out.push('');
+    }
+  }
+
+  // ===== Pixel vs Shopify Reconciliation =====
+  // Phase 05.7.x — analyst-grade. Quantifies the iOS-14/ATT attribution
+  // gap by comparing platform-reported conversion_value (Σ across all
+  // campaigns) vs Shopify-reported revenue. Magnitude of gap is the
+  // operator's "how much can I trust Meta/Google ROAS?" calibration.
+  if (totalConversionValue > 0 && revenue > 0) {
+    const gap = revenue - totalConversionValue;
+    const gapPct = revenue > 0 ? gap / revenue : 0;
+    let verdict: string;
+    if (Math.abs(gapPct) < 0.1) {
+      verdict =
+        'הפלטפורמות בקנה אחד עם Shopify (פער < 10%) — ROAS ברמת קמפיין אמין יחסית.';
+    } else if (gapPct > 0.1) {
+      verdict =
+        'הפלטפורמות *מדווחות פחות* ממה ש-Shopify רואה — סימן ל-iOS 14 ATT / ad-blockers / late attribution. ROAS האמיתי גבוה ממה שמופיע ב-Meta/Google.';
+    } else {
+      verdict =
+        'הפלטפורמות *מדווחות יותר* ממה ש-Shopify רואה — view-through מעצים, modeled conversions, או double-counting בין Meta ו-Google. ROAS האמיתי נמוך ממה שמופיע בפלטפורמות.';
+    }
+    out.push('## פער Pixel ↔ Shopify (כיול אמינות פלטפורמות)');
+    out.push('');
+    out.push(`| מטריקה | ערך |`);
+    out.push(`|---|---|`);
+    out.push(`| הכנסות Shopify | ${fmtCad(revenue)} |`);
+    out.push(
+      `| Σ conversion_value (Meta+Google+TikTok ברמת קמפיין) | ${fmtCad(
+        totalConversionValue,
+      )} |`,
+    );
+    out.push(`| פער (Shopify − פלטפורמות) | ${fmtCad(gap)} |`);
+    out.push(
+      `| פער יחסי | ${gapPct >= 0 ? '+' : ''}${(gapPct * 100).toFixed(0)}% |`,
+    );
+    out.push(`| ROAS לפי Shopify | ${roas > 0 ? fmtNum(roas, 2) : '—'} |`);
+    const platformRoas =
+      totalSpend > 0 ? totalConversionValue / totalSpend : 0;
+    out.push(`| ROAS לפי פלטפורמות | ${platformRoas > 0 ? fmtNum(platformRoas, 2) : '—'} |`);
+    out.push('');
+    out.push(`**אבחנה**: ${verdict}`);
+    out.push('');
+  }
+
   // ===== Per-store summary (if "All" stores) =====
   if (storeName === 'All') {
     const perStore = new Map<string, { rev: number; spend: number; units: number; orders: number }>();
@@ -306,6 +535,103 @@ export function generateAiReport({
         `| ${s} | ${fmtCad(e.spend)} | ${fmtCad(e.rev)} | ${r > 0 ? fmtNum(r, 2) : '—'} | ${fmtNum(e.units)} | ${fmtNum(e.orders)} |`,
       );
     }
+    out.push('');
+  }
+
+  // ===== Traffic Source Breakdown — orders + AOV by source =====
+  // Phase 05.7.x — analyst-grade addition. Slices revenue + order count
+  // by where the customer actually came from (Shopify-side ground truth),
+  // so the operator can see how much of revenue is platform-claimed vs
+  // organic/direct. AOV per source surfaces which channel attracts
+  // higher-spending customers — a signal Meta/Google ROAS doesn't carry.
+  if (orders.length > 0) {
+    const SOURCE_LABEL: Record<string, string> = {
+      'meta-paid':       'Meta (paid)',
+      'google-paid':     'Google (paid)',
+      'tiktok-paid':     'TikTok (paid)',
+      'meta-organic':    'Meta (organic)',
+      'google-organic':  'Google (organic)',
+      email:             'אימייל / Klaviyo',
+      'other-paid':      'אחר (paid)',
+      'other-referral':  'הפניה (לא מסווגת)',
+      direct:            'ישיר (no UTM)',
+      '':                'לא ידוע',
+    };
+    type Bucket = { count: number; revenue: number };
+    const bySource: Record<string, Bucket> = {};
+    let grandTotal = 0;
+    let grandOrders = 0;
+    for (const o of orders) {
+      const key = o.source || '';
+      if (!bySource[key]) bySource[key] = { count: 0, revenue: 0 };
+      bySource[key].count += 1;
+      bySource[key].revenue += o.totalCad;
+      grandTotal += o.totalCad;
+      grandOrders += 1;
+    }
+    // Click-id deterministic coverage — % of revenue that came with an
+    // explicit click identifier (fbclid / gclid / ttclid / utm_source).
+    let deterministicRevenue = 0;
+    let deterministicOrders = 0;
+    for (const o of orders) {
+      const hasClickId =
+        o.fbclidPresent ||
+        o.gclidPresent ||
+        o.source === 'meta-paid' ||
+        o.source === 'google-paid' ||
+        o.source === 'tiktok-paid';
+      if (hasClickId) {
+        deterministicRevenue += o.totalCad;
+        deterministicOrders += 1;
+      }
+    }
+    const coveragePct = grandTotal > 0 ? deterministicRevenue / grandTotal : 0;
+
+    out.push('## תנועה לפי מקור (Shopify-side ground truth)');
+    out.push('');
+    out.push(
+      '**זה ה-source-of-truth להכנסות.** Shopify רואה את הקליק האחרון שמיתג את ' +
+        'ההזמנה — לפי `utm_source`, `fbclid`, `gclid`, `ttclid`, או referrer. ' +
+        'כשמשווים את העמודה הזו ל-conversion_value שמ-Meta/Google מדווחים, ' +
+        'אפשר לכמת את פער ה-attribution האמיתי שלך.',
+    );
+    out.push('');
+    out.push(`| מקור | הזמנות | % | הכנסות | AOV |`);
+    out.push(`|---|---|---|---|---|`);
+    const sortedSources = Object.entries(bySource).sort(
+      (a, b) => b[1].revenue - a[1].revenue,
+    );
+    for (const [src, b] of sortedSources) {
+      const label = SOURCE_LABEL[src] ?? src;
+      const pct = grandTotal > 0 ? (b.revenue / grandTotal) * 100 : 0;
+      const aov = b.count > 0 ? b.revenue / b.count : 0;
+      out.push(
+        `| ${label} | ${fmtNum(b.count)} | ${pct.toFixed(0)}% | ${fmtCad(
+          b.revenue,
+        )} | ${fmtCad(aov)} |`,
+      );
+    }
+    out.push(
+      `| **סה"כ** | **${fmtNum(grandOrders)}** | **100%** | **${fmtCad(
+        grandTotal,
+      )}** | **${fmtCad(grandTotal > 0 ? grandTotal / grandOrders : 0)}** |`,
+    );
+    out.push('');
+    out.push(
+      `**כיסוי deterministic**: ${fmtPct(coveragePct, 0)} מההכנסות הגיעו עם ` +
+        `click-id ברור (fbclid / gclid / ttclid / utm_source=פלטפורמה). ` +
+        `השאר (${fmtPct(1 - coveragePct, 0)}) — direct/organic/other — לא ניתן ` +
+        `לייחס בוודאות לפרסום אלא רק במודלים.`,
+    );
+    out.push('');
+    out.push(
+      '**מה לבדוק**: (1) אם paid-Meta וpaid-Google מסבירים <50% מההכנסות → ' +
+        'יש לך הרבה תנועה אורגנית/ישירה — הקמפיינים אולי מספקים תפקיד ' +
+        'awareness שלא נספר ב-ROAS. (2) AOV גבוה ב-direct/email לעומת paid → ' +
+        'הלקוחות החוזרים שלך אינם זקוקים לקליק בתשלום, סיבה לחזק email/owned-channels. ' +
+        '(3) AOV נמוך במקור paid מסוים → או שאתה מושך לקוחות לא נכונים, או ' +
+        'שהמוצר זול דורש פרסום זול יותר (CPC נמוך יותר).',
+    );
     out.push('');
   }
 
@@ -438,6 +764,106 @@ export function generateAiReport({
     }
   }
   out.push('');
+
+  // ===== Campaign Momentum — first half vs second half ROAS per top campaign =====
+  // Phase 05.7.x — analyst-grade addition. ROAS at the period level can
+  // hide a campaign that started strong and is now decaying, OR one that
+  // ramped up in week 2 and deserves more budget. The first/second-half
+  // ROAS pair surfaces the slope so the operator knows which direction
+  // to bet on.
+  if (campaigns.length > 0 && days >= 6) {
+    const midPoint = new Date(range.from + 'T00:00:00Z');
+    midPoint.setUTCDate(midPoint.getUTCDate() + Math.floor(days / 2));
+    const mid = midPoint.toISOString().slice(0, 10);
+    type Halves = {
+      name: string;
+      store: string;
+      platform: string;
+      spend: number;
+      h1Spend: number;
+      h1Value: number;
+      h2Spend: number;
+      h2Value: number;
+    };
+    const halves = new Map<string, Halves>();
+    for (const c of campaigns) {
+      const k = `${c.storeId}::${c.platform}::${c.campaignId}`;
+      if (!halves.has(k)) {
+        halves.set(k, {
+          name: c.campaignName,
+          store: c.storeName,
+          platform: c.platform,
+          spend: 0,
+          h1Spend: 0,
+          h1Value: 0,
+          h2Spend: 0,
+          h2Value: 0,
+        });
+      }
+      const h = halves.get(k)!;
+      h.spend += c.spend;
+      if (c.date < mid) {
+        h.h1Spend += c.spend;
+        h.h1Value += c.conversionValue;
+      } else {
+        h.h2Spend += c.spend;
+        h.h2Value += c.conversionValue;
+      }
+    }
+    type Row = Halves & {
+      h1Roas: number;
+      h2Roas: number;
+      delta: number;
+      verdict: 'מאיץ' | 'יציב' | 'נחלש' | 'חדש' | 'התקרר';
+    };
+    const rows: Row[] = [];
+    for (const h of halves.values()) {
+      // Require ≥CAD 100 total spend so noisy mini-campaigns don't dominate.
+      if (h.spend < 100) continue;
+      const h1Roas = h.h1Spend > 0 ? h.h1Value / h.h1Spend : 0;
+      const h2Roas = h.h2Spend > 0 ? h.h2Value / h.h2Spend : 0;
+      const delta = h1Roas > 0 ? h2Roas - h1Roas : h2Roas;
+      let verdict: Row['verdict'];
+      if (h.h1Spend === 0 && h.h2Spend > 0) verdict = 'חדש';
+      else if (h.h2Spend === 0 && h.h1Spend > 0) verdict = 'התקרר';
+      else if (delta > 0.5) verdict = 'מאיץ';
+      else if (delta < -0.5) verdict = 'נחלש';
+      else verdict = 'יציב';
+      rows.push({ ...h, h1Roas, h2Roas, delta, verdict });
+    }
+    rows.sort((a, b) => b.spend - a.spend);
+
+    if (rows.length > 0) {
+      out.push('## מומנטום קמפיינים — מחצית 1 ↔ מחצית 2');
+      out.push('');
+      out.push(
+        '**מה זה אומר**: ROAS לכל הטווח יכול להסתיר קמפיין שהתחיל חזק ועכשיו ' +
+          'נחלש (לעצור / לרענן creative), או קמפיין שהתחיל חלש ועלה (להגדיל ' +
+          'תקציב). המחצית הראשונה מול השנייה מציגה את הכיוון. ' +
+          '**מאיץ** = ROAS שני גבוה ב-0.5+ מהראשון; **נחלש** = ROAS שני נמוך ' +
+          'ב-0.5+. **חדש** = הופעל רק במחצית השנייה; **התקרר** = הופסק במחצית השנייה.',
+      );
+      out.push('');
+      out.push(
+        `| קמפיין | פלטפ׳ | חנות | הוצאה | ROAS חצי-1 | ROAS חצי-2 | Δ | מסקנה |`,
+      );
+      out.push(`|---|---|---|---|---|---|---|---|`);
+      for (const r of rows.slice(0, 20)) {
+        const deltaStr =
+          r.h1Roas > 0
+            ? (r.delta >= 0 ? '+' : '') + r.delta.toFixed(2)
+            : '—';
+        out.push(
+          `| ${escapeMd(r.name)} | ${r.platform} | ${r.store} | ${fmtCad(
+            r.spend,
+          )} | ${r.h1Roas > 0 ? fmtNum(r.h1Roas, 2) : '—'} | ${
+            r.h2Roas > 0 ? fmtNum(r.h2Roas, 2) : '—'
+          } | ${deltaStr} | ${r.verdict} |`,
+        );
+      }
+      out.push('');
+    }
+  }
 
   // ===== Ad-set drill-down for top 5 highest-spend campaigns =====
   const adsetsByCampaign = new Map<
@@ -649,45 +1075,152 @@ export function generateAiReport({
   out.push('');
   out.push('## הוראה לבינה מלאכותית');
   out.push('');
-  out.push('אתה analyst כלכלי ב-e-commerce. נתח את הנתונים שלמעלה לעומק ותן לי דוח מעשי שמכיל:');
+  out.push(
+    'אתה **Senior E-commerce Performance Strategist** ברמה של הכי-טוב-בתעשייה ' +
+      '(Common Thread Collective / Tier 11 / Disruptive Advertising). אל תהיה ' +
+      'מנומס — תהיה ישיר, מספרי, ומכוון פעולה. הימנע מ-platitudes ("צריך לשפר ' +
+      'את הקריאייטיב") — תן הצעה ספציפית עם מספר ושם קמפיין/מוצר.',
+  );
   out.push('');
-  out.push('### חלק 1 — תמונת מצב כללית');
-  out.push('1. **מה הסיפור של התקופה?** האם המגמה חיובית, שלילית, או יציבה? התבסס על ROAS משוקלל ועל רווח נטו (לא רק על הכנסות).');
-  out.push('2. **האם החנות רווחית?** רווח נטו = הכנסות − פרסום − COGS (25%). אם שלילי — זה דגל אדום שמחייב פעולה.');
-  out.push('3. **השוואה למחצית הקודמת**: מה השתפר ומה החמיר?');
-  out.push('');
-  out.push('### חלק 2 — קמפיינים');
-  out.push('4. **קמפיינים לחזק (Scale)** — אילו 2-3 קמפיינים מצדיקים העלאת תקציב? התבסס על: ROAS גבוה ויציב (לפחות 7 ימים), CPA סביר, ערך המרות עולה על ההוצאה. שים לב — ה-ROAS *ברמת קמפיין* הוא מקור Meta/Google ולא מדויק לחלוטין (ראה ההערה למעלה).');
-  out.push('5. **קמפיינים לבדוק/לעצור (Pause/Investigate)** — אילו קמפיינים מבזבזים תקציב? התייחס לטבלת "⚠️ קמפיינים שמבזבזים" שבדוח. קריטריונים: ROAS < 1.5, CPA גבוה משמעותית מהממוצע, או 0 המרות בכמות הוצאה משמעותית.');
-  out.push('6. **אד-סטים בעייתיים בתוך קמפיינים טובים** — אם יש קמפיין כללי טוב אבל אד-סט בודד גורר אותו למטה, ציין זאת.');
-  out.push('7. **חלוקת תקציב Meta vs Google** — האם החלוקה אופטימלית? אם אחת מהפלטפורמות מספקת ROAS גבוה משמעותית, מומלץ להעביר תקציב.');
-  out.push('8. **CPM ו-CTR לפי ערוץ** — התבסס על טבלת "פלטפורמות — CPM ו-CTR לפי ערוץ". CPM גבוה בלי CTR מתאים = הקהל יקר ו/או הקריאייטיב לא מתחבר. CTR גבוה אבל ROAS חלש = הקליק קורה אבל הconversion לא — בעיה ב-landing page או בתמחור.');
-  out.push('9. **משפך החשיפות-הזמנות** — התבסס על טבלת "משפך". זהה את החוליה הכי חלשה: CTR נמוך = בעיה ב-creative/audience; conversion rate נמוך = בעיה ב-landing/מחיר; הכנסה לקליק נמוכה = AOV נמוך או conversion rate נמוך.');
-  out.push('');
-  out.push('### חלק 3 — מוצרים');
-  out.push('8. **המוצרים שמובילים** — אילו 2-3 מוצרים הם המנועי-המכירות? איזה מהם הייתי צריך לקדם בקמפיינים ייעודיים?');
-  out.push('9. **מוצרים עם מרג\'ין נמוך** — אילו מוצרים יש להם הרבה הנחות/החזרות? שווה לבחון את התמחור או את ה-product-market fit שלהם.');
-  out.push('10. **מוצרים שלא נמכרים** — אם יש מוצרים עם 0 מכירות בתקופה הזו אבל היו פעילים בעבר, ייתכן שהם איבדו רלוונטיות.');
-  out.push('');
-  out.push('### חלק 4 — דפוסים זמניים');
-  out.push('11. **ימים בשבוע** — אילו ימים מספקים את ה-ROAS הגבוה ביותר? האם שווה להגדיל תקציב בימים האלה ולחתוך בימים החלשים?');
-  out.push('12. **מגמה לאורך התקופה** — האם הביצועים משתפרים, מתדרדרים, או יציבים?');
-  out.push('');
-  out.push('### חלק 5 — הצעות פעולה ספציפיות');
-  out.push('13. **5 פעולות קונקרטיות לשבוע הקרוב** עם הצדקה לכל אחת:');
-  out.push('   - פעולה 1: ___ (כי ___)');
-  out.push('   - פעולה 2: ___ (כי ___)');
-  out.push('   - ...');
-  out.push('14. **2-3 בדיקות שכדאי לעשות** — בדיקות שדורשות מידע נוסף או A/B test');
-  out.push('15. **3 KPIs שכדאי לעקוב אחריהם בשבוע הבא** — מה חשוב לראות שיקרה');
-  out.push('');
-  out.push('### הקשר חשוב');
-  out.push('- **היעד הפנימי**: ROAS 3.0 ומעלה. ROAS 2-2.7 = "סביר", מתחת ל-2 = מצריך בחינה.');
+  out.push('### הקשר עסקי');
+  out.push(
+    '- **יעד ROAS פנימי**: 3.0+ (כתום מעל 2.5, ירוק מעל 2.7, כחול מעל 3.0).' +
+      ' מתחת ל-2.0 = הפסד.',
+  );
   out.push('- **COGS משוער**: 25% מההכנסה. רווח נטו = הכנסות − פרסום − 25% מההכנסה.');
-  out.push('- **שיוך מכירות Meta**: לפעמים סופר יותר/פחות מהמציאות בגלל iOS 14+, modeled conversions, או attribution windows. אל תקבל החלטות ל"לעצור קמפיין" רק על בסיס ROAS ברמת קמפיין שמ-Meta — בדוק גם את ה-Shopify revenue בימים הסמוכים.');
-  out.push('- **3 חנויות**: uzoshop, Zol Plus, 360usmile — לכל אחת מסע לקוח ומוצרים שונים. אל תכריע "כל החנויות צריכות לעשות X" אם הנתונים מצביעים על הבדלים.');
+  out.push(
+    '- **שלוש חנויות**: uzoshop, Zol Plus, 360usmile. כל אחת קהל ומוצרים שונים — ' +
+      'אל תאחד מסקנות אם המספרים לכל חנות מספרים סיפור שונה.',
+  );
+  out.push(
+    '- **שני מקורות אמת לROAS**: (1) Shopify-side = הכנסות / הוצאה (אמין 100%). ' +
+      '(2) Pixel-side ברמת קמפיין = conversion_value / spend (מ-Meta/Google API, ' +
+      'יכול להיות לא מדויק בגלל iOS 14+ ATT, view-through, modeled conversions). ' +
+      'התבסס על Shopify-side ל-decisions; ב-Pixel-side השתמש רק לשקול-תקציב יחסי ' +
+      'בין קמפיינים.',
+  );
   out.push('');
-  out.push('**פורמט תשובה**: השב בעברית, בכותרות (## / ###) ובנקודות, עם המלצות *קונקרטיות* (מספרים ושמות קמפיינים/מוצרים) ולא פרהזות כלליות.');
+  out.push('### חלק 1 — הערכת מצב (Diagnostic)');
+  out.push(
+    '**1.1 הסיפור בכותרת אחת**: שורה אחת שמסכמת את התקופה (מגמה + רווחיות + ' +
+      'בעיית-מפתח אם יש). דוגמה: "ROAS Shopify 2.4 (מתחת ליעד), נחלש מ-2.8 ' +
+      'במחצית הראשונה ל-2.0 בשנייה, בעיקר בגלל קמפיין X שמייצר 35% מההוצאה ועלות ' +
+      'CPA שלו זינקה מ-$40 ל-$67."',
+  );
+  out.push(
+    '**1.2 רווחיות**: רווח נטו בפועל. אם שלילי — דגל אדום ראשון. אם חיובי אבל ' +
+      'נמוך (<10% מההכנסות) — דגל צהוב.',
+  );
+  out.push(
+    '**1.3 כיול אמינות**: התבונן בטבלת "פער Pixel ↔ Shopify". אם הפער > 20% ' +
+      '— ROAS הפלטפורמות כמעט חסר ערך לדיון על קמפיינים בודדים; ה-Shopify-side ' +
+      'הוא הקובע. אם הפער < 10% — אפשר לסמוך גם על ROAS ברמת קמפיין.',
+  );
+  out.push(
+    '**1.4 מקור התנועה האמיתי**: התבונן בטבלת "תנועה לפי מקור". כמה אחוז מההכנסות ' +
+      'הגיעו מ-paid Meta/Google/TikTok? כמה מ-direct/organic? אם paid < 50% → ' +
+      'הקמפיינים אולי מספקים awareness שלא נספר ב-ROAS isolation.',
+  );
+  out.push('');
+  out.push('### חלק 2 — אבחון קמפיינים (Campaign Triage)');
+  out.push(
+    '**2.1 קמפיינים לסקייל (לפי הסדר)**: רשום 1-3 קמפיינים שמצדיקים העלאת תקציב ' +
+      '+20-40%. קריטריונים מצטברים: (א) ROAS *Shopify-side* ≥ 2.7 לאורך 7+ ימים ' +
+      '(ב) CPM יציב (CV<0.25 לפי טבלת תנודתיות) (ג) במצב **מאיץ** או **יציב** ' +
+      'בטבלת מומנטום (ד) הוצאה ≥ $200 בטווח. לכל קמפיין: שם + תקציב חדש מומלץ + ' +
+      'הצדקה במספרים.',
+  );
+  out.push(
+    '**2.2 קמפיינים לעצור / לרענן (Pause/Investigate)**: רשום 1-3 קמפיינים שמבזבזים. ' +
+      'התבסס על טבלת "⚠️ קמפיינים שמבזבזים" אבל הוסף סינון: אם קמפיין הופיע ' +
+      'בטבלה אך **Shopify-side ROAS** בפועל (לא Pixel) שווה בערך לפלטפורמה — ' +
+      'אז הוא באמת נכשל. אם Shopify-side ROAS גבוה משמעותית — זה רק חוסר ' +
+      'attribution, לא לעצור.',
+  );
+  out.push(
+    '**2.3 קמפיינים במגמה שלילית**: בדוק טבלת "מומנטום קמפיינים". כל קמפיין ' +
+      'במצב **נחלש** עם הוצאה ≥ $200 = שווה התערבות (creative refresh, audience ' +
+      'broadening, או pause). תן 1-2 שמות.',
+  );
+  out.push(
+    '**2.4 קמפיינים חדשים שעולים**: כל מי שמסומן **חדש** או **מאיץ** וב-ROAS > 2.0 ' +
+      '— מועמדים לסקייל הדרגתי. תן הצעה.',
+  );
+  out.push('');
+  out.push('### חלק 3 — דיאגנוסטיקת משפך (Funnel Diagnosis)');
+  out.push(
+    '**3.1 איפה הדליפה?** התבונן בטבלת "משפך — מחשיפות להזמנות". זהה את החוליה ' +
+      'הכי חלשה לפי benchmark:',
+  );
+  out.push('   - **CTR < 1.0%** → בעיית **creative או audience** (לא מושך / רחב מדי).');
+  out.push(
+    '   - **CTR גבוה (>1.5%) אבל conversion rate < 1.0%** → קליקים מגיעים אבל ' +
+      'הלקוחות לא קונים. בעיה ב-**landing page / מחיר / hero offer**.',
+  );
+  out.push(
+    '   - **CPM זוחל למעלה (טבלת תנודתיות → CV > 0.35 או CPM מקסימלי > 1.5× ' +
+      'הממוצע)** → **creative fatigue / audience saturation**. צריך creative refresh.',
+  );
+  out.push(
+    '**3.2 AOV per source**: בדוק טבלת "תנועה לפי מקור". אם AOV של paid-Meta ' +
+      'נמוך משמעותית מ-AOV של direct/email → אתה מושך לקוחות "זולים" ב-Meta. ' +
+      'אופציות: לעבור ל-upsell post-purchase, או להחליף creative ל-positioning ' +
+      'יקר יותר.',
+  );
+  out.push('');
+  out.push('### חלק 4 — תקציב + אסטרטגיה ערוצית');
+  out.push(
+    '**4.1 חלוקת תקציב פלטפורמות**: התבסס על "חלוקת תקציב לפי פלטפורמה" ועל ' +
+      'תנודתיות CPM. אם פלטפורמה X מספקת **Shopify-side ROAS** גבוה ב-30%+ ' +
+      'ותנודתיות נמוכה — הצע העברת 10-20% מהפלטפורמה השנייה (לא יותר; אסטרטגיה ' +
+      '"scale by 20% per week" כדי לא להפר את ה-learning phase).',
+  );
+  out.push(
+    '**4.2 דפוסי יום**: בטבלת "ביצועים לפי יום בשבוע" — אם יש יום שמספק ROAS ' +
+      'גבוה ב-50%+ מהממוצע, הצע day-parting (העלאת תקציב באותו יום). אם יש יום ' +
+      'חלש מאוד — שווה לבדוק dayparting הפוך (orgnaic spike בלי paid).',
+  );
+  out.push('');
+  out.push('### חלק 5 — אבחון מוצרים');
+  out.push(
+    '**5.1 Hero products**: 2-3 מוצרים ברמת המכירות. הצע: (א) קמפיין ייעודי ' +
+      'אם אין; (ב) הוספה ל-Shopping/PMax feed; (ג) bundle עם מוצרים חלשים יותר.',
+  );
+  out.push(
+    '**5.2 מרג\'ין**: מוצרים עם נטו<70% מהברוטו ← הנחות גדולות/החזרים גבוהים. ' +
+      'הצע: בדיקת תמחור, או החלפת הנחה ב-bundle.',
+  );
+  out.push(
+    '**5.3 Dead inventory**: מוצרים שבעבר נמכרו אבל בטווח הזה 0 — לבדוק אם ' +
+      'הוסרו מהקטלוג בכוונה או נשכחו.',
+  );
+  out.push('');
+  out.push('### חלק 6 — אירועים חריגים');
+  out.push(
+    'אם יש טבלת "ימים חריגים" — לכל אנומליה תן השערה: מה גרם? (קמפיין חדש שעלה ' +
+      'אותו יום? מבצע? viral creative? יום חג?). אם אין הסבר ברור — תן 2-3 ' +
+      'השערות אפשריות וההצעה איך לחקור.',
+  );
+  out.push('');
+  out.push('### חלק 7 — תכנית פעולה לשבוע הבא');
+  out.push('**5 פעולות מספריות שאני אבצע השבוע** — כל אחת בפורמט:');
+  out.push('   - **פעולה**: "להעלות תקציב של [שם קמפיין] מ-$X ל-$Y" / "להפסיק [שם]" / "להחליף creative ב-[ad-set]"');
+  out.push('   - **הצדקה**: 1-2 מספרים מהדוח');
+  out.push('   - **תוצאה צפויה**: מה אני מצפה לראות תוך 7 ימים');
+  out.push('   - **סף-נסיגה**: אם המספר X לא משתפר תוך Y ימים → לחזור אחורה');
+  out.push('');
+  out.push('### חלק 8 — KPIs לשבוע');
+  out.push(
+    '3 מספרים שאני אעקוב אחריהם כל יום השבוע הבא (לא ROAS — משהו ספציפי יותר ' +
+      'כמו "CPM של קמפיין X", "AOV של paid-Meta", "כיסוי deterministic").',
+  );
+  out.push('');
+  out.push(
+    '**פורמט סופי**: עברית. כותרות ## / ### וטבלאות כשאפשר. שמות קמפיינים ' +
+      'ומוצרים *בדיוק כמו שמופיעים* בדוח. אם נתון חסר, ציין "אין מספיק נתונים" — ' +
+      'אל תמציא. השב כמו ה-strategist המנוסה ביותר שעבדתי איתו — ישיר, מספרי, ' +
+      'מבוסס-תזה (לא "אני חושב..." אלא "המספרים מצביעים על X, לכן Y").',
+  );
 
   return out.join('\n');
 }
