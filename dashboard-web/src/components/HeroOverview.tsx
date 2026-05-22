@@ -165,7 +165,12 @@ export function HeroOverview({ data, filters }: Props) {
       story = 'אין עדיין נתונים לטווח הזה.';
     } else if (Math.abs(dRev) >= 0.05) {
       const verb = dRev > 0 ? 'עלו' : 'ירדו';
-      story = `הכנסות ${verb} ב-${Math.abs(dRev * 100).toFixed(0)}% מהתקופה הקודמת, ROAS ${curAgg.roas >= 2.7 ? 'בריא' : curAgg.roas >= 2 ? 'סביר' : 'דורש בחינה'} על ${curAgg.roas.toFixed(2)}.`;
+      // Phase 05.7.8 — pull the ROAS label from the canonical roasLabel()
+      // helper instead of inline thresholds. Previously the inline copy
+      // (בריא/סביר/דורש בחינה) drifted from roasLabel()'s table
+      // (מעולה/טוב/סביר/דורש בחינה) so the hero sentence and the chip
+      // below the ROAS KPI could disagree on the same number.
+      story = `הכנסות ${verb} ב-${Math.abs(dRev * 100).toFixed(0)}% מהתקופה הקודמת, ROAS ${roasLabel(curAgg.roas).text} על ${curAgg.roas.toFixed(2)}.`;
     } else if (Math.abs(dRoas) >= 0.2) {
       const verb = dRoas > 0 ? 'השתפר' : 'נחלש';
       story = `ROAS ${verb} ב-${Math.abs(dRoas).toFixed(2)} נקודות, מ-${prevAgg.roas.toFixed(2)} ל-${curAgg.roas.toFixed(2)}.`;

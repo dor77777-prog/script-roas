@@ -517,6 +517,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     let shopifyRevenue = 0;
     let metaSpendInScope = 0;
     let googleSpendInScope = 0;
+    let ttSpendInScope = 0;
     for (const r of dailyRows) {
       // IN-03 (5.2.2.1): defense-in-depth filter — `dailyRows` (the Sheet's
       // daily-summary tab) is NOT pre-filtered by range on the server today.
@@ -527,11 +528,13 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       shopifyRevenue += r.revenue;
       metaSpendInScope += r.fbSpend;
       googleSpendInScope += r.gaSpend;
-      // TikTok spend isn't compared to a "Shopify-attributed revenue" today
-      // because the TikTok pixel doesn't fire on Shopify checkout (the same
-      // reason the attribution gap analysis already isolates Meta+Google
-      // from Shopify totals). We surface ttSpend in the dedicated PnL/KPI
-      // lines instead.
+      ttSpendInScope += r.ttSpend ?? 0;
+      // Phase 05.7.8 — include TikTok spend in the denominator so the
+      // store-truth ROAS in the reconciliation panel doesn't overstate
+      // ROAS for uzoshop. The "platforms claimed" total above is gathered
+      // from CampaignsResponse rows which already include TikTok when
+      // present, so adding TikTok spend here keeps the comparison
+      // apples-to-apples.
     }
 
     if (shopifyRevenue === 0 && platformClaimed === 0) return null;
@@ -543,7 +546,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     const gapPct = shopifyRevenue > 0 ? absGap / shopifyRevenue : 0;
 
     // ROAS comparison — store-truth vs platform-truth.
-    const totalSpendShopify = metaSpendInScope + googleSpendInScope;
+    const totalSpendShopify = metaSpendInScope + googleSpendInScope + ttSpendInScope;
     const storeRoas = totalSpendShopify > 0 ? shopifyRevenue / totalSpendShopify : 0;
     const platformRoas =
       totals.spend > 0 ? platformClaimed / totals.spend : 0;

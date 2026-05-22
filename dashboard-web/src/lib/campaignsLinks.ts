@@ -13,7 +13,12 @@
  */
 export type AdAccountMap = Record<
   string,
-  { metaAdAccountId: string | null; googleAdsCustomerId: string | null }
+  {
+    metaAdAccountId: string | null;
+    googleAdsCustomerId: string | null;
+    /** Phase 05.7.8 — TikTok advertiser_id for Ads Manager deep links. */
+    tiktokAdvertiserId?: string | null;
+  }
 >;
 
 /**
@@ -77,6 +82,20 @@ export function buildAdsManagerLink(opts: {
     return `https://ads.google.com/aw/adgroups?${params.toString()}`;
   }
 
+  if (platform === 'TikTok') {
+    // Phase 05.7.8 — TikTok Ads Manager deep link. The required URL params
+    // are `aadvid` (advertiser_id) + `campaign_id` (and optional adgroup_id /
+    // ad_id). Without aadvid the URL still opens but defaults to whatever
+    // advertiser the operator was last viewing.
+    const advertiserId = acct?.tiktokAdvertiserId ?? null;
+    const params = new URLSearchParams();
+    if (advertiserId) params.set('aadvid', advertiserId);
+    params.set('campaign_id', campaignId);
+    if (adSetId) params.set('adgroup_id', adSetId);
+    if (adId) params.set('ad_id', adId);
+    return `https://ads.tiktok.com/i18n/perf/campaign?${params.toString()}`;
+  }
+
   return null;
 }
 
@@ -96,5 +115,6 @@ export function hasAccountAwareLink(
   if (!acct) return false;
   if (platform === 'Meta') return !!acct.metaAdAccountId;
   if (platform === 'Google') return !!acct.googleAdsCustomerId;
+  if (platform === 'TikTok') return !!acct.tiktokAdvertiserId;
   return false;
 }

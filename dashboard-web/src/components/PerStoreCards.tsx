@@ -151,7 +151,7 @@ function StoreCard({
                 הזמנות
               </span>
             }
-            value={orderCount === undefined ? '—' : formatNumber(orderCount)}
+            value={orderCount === undefined ? '—' : formatNumber(orderCount, 0)}
           />
           <Row label="רווח גולמי" value={`CAD ${formatCurrency(agg.grossProfit)}`} bold />
         </div>

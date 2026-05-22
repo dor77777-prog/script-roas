@@ -355,7 +355,22 @@ async function persistDayForStore(
   }
 
   // -----------------------------------------------------------------
-  // products_daily — UPSERT net_revenue_cad only
+  // products_daily — UPSERT including units/orders/gross/title so a fresh
+  // INSERT path (no prior cron-daily row exists yet for today) doesn't
+  // leave NULLs that read back as phantom "—" rows on the dashboard.
+  //
+  // Phase 05.7.8 fix (2026-05-22):
+  //   Earlier the payload omitted units/orders/gross_revenue_cad/product_title
+  //   to "preserve" them on UPDATE. That preservation logic was correct, but
+  //   on the FIRST INSERT of the day cron-live created rows with NULL/0 for
+  //   every column except net_revenue_cad — so a refund-only product with
+  //   only a net_revenue_cad value rendered in the dashboard as a phantom
+  //   row with title="—", units=0, orders=0, gross=0. fetchShopifyDayRows
+  //   already returns gross_revenue_cad / units / orders / product_title on
+  //   every productRow (shopify.ts:603-610), so passing them through costs
+  //   nothing and keeps the table self-consistent. Idempotent: cron-daily's
+  //   later write still owns those columns and will overwrite with the
+  //   authoritative full-day values.
   // -----------------------------------------------------------------
   if (shopify.productRows.length > 0) {
     const productRows = shopify.productRows.map((p) => ({
@@ -363,6 +378,10 @@ async function persistDayForStore(
       store_id: storeId,
       store_name: shopify.storeName,
       product_id: p.product_id,
+      product_title: p.product_title || '(refund-only)',
+      units: p.units,
+      orders: p.orders,
+      gross_revenue_cad: p.gross_revenue_cad,
       net_revenue_cad: p.net_revenue_cad,
     }));
 
@@ -593,25 +612,57 @@ export async function runLiveForStore(
         continue;
       }
 
-      // For non-TikTok stores: treat tt as 0 (not as missing), so we still
-      // write override when fb+ga succeeded. For TikTok-enabled stores
-      // (uzoshop): require all three.
-      const haveFbGa = fbSpendCad !== null && gaSpendCad !== null;
-      const requireTt = STORES_WITH_TIKTOK.has(storeId);
-      const haveAllSpend = haveFbGa && (!requireTt || ttSpendCad !== null);
+      // Phase 05.7.8 (2026-05-22) — relaxed the all-or-nothing override gate.
+      //
+      // Previous behavior (regression):
+      //   If ANY of Meta / Google / TikTok returned null (timeout, 401,
+      //   missing creds), the whole spend override was dropped, so
+      //   persistDayForStore got `undefined` and BOTH fb+ga (which DID
+      //   succeed) were preserved at their stale value. For a TikTok store
+      //   like uzoshop, a single TikTok auth blip would freeze today's
+      //   Meta+Google spend for hours.
+      //
+      // New behavior (per-platform preserve):
+      //   We always write an override on "today", and for each platform that
+      //   returned null we fall back to the existing column value from the
+      //   data_daily row (or 0 if the row doesn't exist yet). That way Meta
+      //   updates fresh even when TikTok 401s, TikTok updates fresh even
+      //   when Meta times out, etc. The "preserve" logic moves down into
+      //   persistDayForStore via the per-column nullish-coalesce below.
+      //
+      // We still skip the override entirely if cron-live couldn't fetch ANY
+      // of the three platforms (network down at the worker) — in that case
+      // there's nothing fresh to write and we let cron-daily handle today's
+      // spend at 00:05 IL tomorrow.
+      const haveAnySpend =
+        fbSpendCad !== null || gaSpendCad !== null || ttSpendCad !== null;
 
-      await persistDayForStore(
-        storeId,
-        date,
-        shopify,
-        isToday && haveAllSpend
-          ? {
-              fbSpendCad: fbSpendCad as number,
-              gaSpendCad: gaSpendCad as number,
-              ttSpendCad: (ttSpendCad as number | null) ?? 0,
-            }
-          : undefined,
-      );
+      if (isToday && haveAnySpend) {
+        // Read the existing row's spend columns so we can fall back for
+        // platforms that returned null on this tick. This is a fresh SELECT
+        // because persistDayForStore does its own SELECT internally, but
+        // doing it here keeps the "merge with existing" logic explicit at
+        // the call site.
+        const admin = getSupabaseAdmin();
+        const { data: prior } = await admin
+          .from('data_daily')
+          .select('fb_spend_cad, ga_spend_cad, tt_spend_cad')
+          .eq('date', date)
+          .eq('store_id', storeId)
+          .maybeSingle();
+        const priorFb = Number(prior?.fb_spend_cad ?? 0) || 0;
+        const priorGa = Number(prior?.ga_spend_cad ?? 0) || 0;
+        const priorTt = Number(prior?.tt_spend_cad ?? 0) || 0;
+        await persistDayForStore(storeId, date, shopify, {
+          fbSpendCad: fbSpendCad ?? priorFb,
+          gaSpendCad: gaSpendCad ?? priorGa,
+          ttSpendCad: STORES_WITH_TIKTOK.has(storeId)
+            ? (ttSpendCad ?? priorTt)
+            : 0,
+        });
+      } else {
+        await persistDayForStore(storeId, date, shopify, undefined);
+      }
     }
 
     // Phase 05.7.8 — persist today's orders_attribution rows. Same UPSERT

@@ -158,8 +158,10 @@ export function Dashboard() {
     const stores = filters.store === 'All' ? data.stores : [filters.store];
     return {
       cur,
-      curAgg: aggregate(cur),
-      prevAgg: aggregate(prev),
+      // Phase 05.7.8 — pass the request range so fixed-cost proration uses
+      // the user-selected window, not the data-derived min/max date.
+      curAgg: aggregate(cur, filters.range),
+      prevAgg: aggregate(prev, prevR),
       storeAggs: aggregateByStore(cur),
       series: dailySeries(cur, stores),
       visibleStores: stores,
@@ -169,9 +171,15 @@ export function Dashboard() {
 
   // Phase 05.7.8 — per-store order count map for the current range. Filters
   // the same way `filtered.cur` does so cards stay in sync with the global
-  // store dropdown.
+  // store dropdown. Seeds zero for every visible store so a store with no
+  // orders in the range renders "0" instead of "—" (— means "still loading").
   const ordersByStore = useMemo<Record<string, number>>(() => {
     const out: Record<string, number> = {};
+    if (data?.stores) {
+      for (const s of data.stores) {
+        if (filters.store === 'All' || s === filters.store) out[s] = 0;
+      }
+    }
     const rows = ordersData?.rows ?? [];
     for (const r of rows) {
       const storeName = r.storeName;
@@ -180,7 +188,7 @@ export function Dashboard() {
       out[storeName] = (out[storeName] ?? 0) + 1;
     }
     return out;
-  }, [ordersData, filters.store]);
+  }, [ordersData, data, filters.store]);
 
   return (
     <div dir="rtl" className="min-h-screen bg-background">
@@ -325,7 +333,7 @@ function HomeTab({
       <SectionIntro
         icon={<Radio size={18} />}
         title="היום עד לרגע זה"
-        description="הכנסות Shopify בזמן אמת + הוצאות Meta/Google (עם פיגור ~20 דק'). רענון אוטומטי כל 15 דקות."
+        description="הכנסות Shopify + הזמנות בזמן אמת + הוצאות Meta/Google/TikTok (עם פיגור ~20 דק'). רענון אוטומטי כל 10 דקות."
       />
       <TodayLive rows={data.rows} fxIlsToCad={data.fxIlsToCad} />
 

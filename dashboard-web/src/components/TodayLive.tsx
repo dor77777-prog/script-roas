@@ -207,7 +207,7 @@ export function TodayLive({
           <LiveStat
             icon={<ShoppingBag size={13} />}
             label="הזמנות (היום)"
-            value={ordersToday === undefined ? '—' : formatNumber(totalOrdersToday)}
+            value={ordersToday === undefined ? '—' : formatNumber(totalOrdersToday, 0)}
           />
           <LiveStat
             icon={<Eye size={13} />}
@@ -288,7 +288,7 @@ export function TodayLive({
                         הזמנות
                       </span>
                       <span className="text-text-primary font-semibold">
-                        {ordersToday === undefined ? '—' : formatNumber(storeOrders ?? 0)}
+                        {ordersToday === undefined ? '—' : formatNumber(storeOrders ?? 0, 0)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-2">
@@ -306,7 +306,7 @@ export function TodayLive({
 
         {!hasAnyData && (
           <div className="mt-3 text-center text-xs text-text-muted">
-            עוד אין נתוני היום. הטריגר ה-Live ירוץ אוטומטית כל 15 דקות.
+            עוד אין נתוני היום. הטריגר ה-Live ירוץ אוטומטית כל 10 דקות.
           </div>
         )}
 
@@ -325,11 +325,13 @@ export function TodayLive({
           <span className="text-text-subtle">·</span>
           <span>Google: CAD</span>
           <span className="text-text-subtle">·</span>
+          <span>TikTok: USD</span>
+          <span className="text-text-subtle">·</span>
           <span>Shopify: CAD</span>
         </div>
         <div className="mt-1.5 text-[10px] sm:text-xs text-text-muted/80 text-center leading-relaxed">
-          רענון אוטומטי כל 15 דקות. Shopify ב-real-time;
-          Meta/Google עם פיגור של ~20 דק' מצד הפלטפורמה.
+          רענון אוטומטי כל 10 דקות. Shopify + הזמנות ב-real-time;
+          Meta/Google/TikTok עם פיגור של ~20 דק' מצד הפלטפורמה.
         </div>
       </div>
     </section>

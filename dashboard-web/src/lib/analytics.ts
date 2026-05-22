@@ -52,7 +52,7 @@ export function filterRows(
   });
 }
 
-export function aggregate(rows: DailyRow[]): Aggregate {
+export function aggregate(rows: DailyRow[], range?: DateRange): Aggregate {
   let revenue = 0, spend = 0, fbSpend = 0, gaSpend = 0, ttSpend = 0, cogs = 0;
   const stores = new Set<string>();
   const dates = new Set<string>();
@@ -78,8 +78,15 @@ export function aggregate(rows: DailyRow[]): Aggregate {
   // prompts them to set it up.
   const storeNames = Array.from(stores);
   const daysCovered = dates.size;
-  const billing = minDate && maxDate
-    ? billingForRange({ from: minDate, to: maxDate, storeNames })
+  // Phase 05.7.8 — when caller hands in a request range, prefer it over
+  // data-derived min/maxDate so the prorated fixed-cost slice matches what
+  // the user actually selected (not just what data we have). Without this,
+  // a 30-day window with 5 days of data was prorating fixed costs over 5
+  // days only — silently overstating trueNetProfit.
+  const billingFrom = range?.from ?? minDate;
+  const billingTo = range?.to ?? maxDate;
+  const billing = billingFrom && billingTo
+    ? billingForRange({ from: billingFrom, to: billingTo, storeNames })
     : { total: 0 };
   const fixedCosts = billing.total;
   const trueNetProfit = revenue - spend - cogs - transactionFees - fixedCosts;

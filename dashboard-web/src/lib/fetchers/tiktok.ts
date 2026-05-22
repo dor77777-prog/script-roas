@@ -218,7 +218,15 @@ export async function fetchTikTokAdvertiserInfo(
     '/advertiser/info/',
     accessToken,
     {
-      advertiser_ids: `[${advertiserId}]`,
+      // Phase 05.7.8 FIX (root cause of "TikTok shows 0"): the advertiser_ids
+      // param must be a JSON-encoded array of STRINGS. Previously this used a
+      // template literal `[${advertiserId}]` which produced an UNQUOTED number
+      // array like `[7012345678901234567]`. TikTok's API rejects that with
+      // `code=40002 advertiser_ids.0: Not a valid string`, the .catch in
+      // cron-live/cron-daily silently swallowed the error → tt_spend_cad
+      // stayed 0 for every day since the integration shipped, no campaigns,
+      // no ads. Quoting the ID restores the entire TikTok data plane.
+      advertiser_ids: JSON.stringify([String(advertiserId)]),
       fields: '["advertiser_id","name","currency","timezone"]',
     },
   );
