@@ -52,6 +52,8 @@ const STATE_KEYS = [
   'roas-dashboard:insight-states',
   'roas-dashboard:campaign-optimized',
   'roas-dashboard:campaign-product-map',
+  // Phase 05.7.9d — per-table column visibility preferences (hide/show).
+  'roas-dashboard:campaigns-column-visibility',
 ] as const;
 export type StateKey = (typeof STATE_KEYS)[number];
 
@@ -63,6 +65,7 @@ const CHANGE_EVENTS: Record<StateKey, string> = {
   'roas-dashboard:insight-states': 'roas-insight-states-changed',
   'roas-dashboard:campaign-optimized': 'roas-campaign-optimized-changed',
   'roas-dashboard:campaign-product-map': 'roas-campaign-product-map-changed',
+  'roas-dashboard:campaigns-column-visibility': 'roas-campaigns-column-visibility-changed',
 };
 
 /** ms epoch of the last push we sent for each key. Used to skip stomping

@@ -328,6 +328,7 @@ export const ALLOWED_STATE_KEYS = [
   'insight-states',
   'campaign-optimized',
   'campaign-product-map',
+  'campaigns-column-visibility',
 ] as const;
 export type AllowedStateKey = (typeof ALLOWED_STATE_KEYS)[number];
 

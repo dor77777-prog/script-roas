@@ -26,6 +26,11 @@ import {
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import { analyzeCpmVsRoas, PREV_PERIOD_MIN_DAYS } from '@/lib/cpmRoasAnalysis';
 import { aggregate, type Aggregated } from '@/lib/campaignsAggregator';
+import {
+  readCampaignsColumnPrefs,
+  buildHiddenColumnsCss,
+} from '@/lib/campaignsColumnPrefs';
+import { CampaignsColumnsMenu } from './CampaignsColumnsMenu';
 import { CHART_COLORS } from '@/lib/chartColors';
 import { filterDrillRows } from '@/lib/drillFilter';
 import type { AdAccountMap } from '@/lib/campaignsLinks';
@@ -321,6 +326,24 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   // Sync to global filters but allow local override.
   const [localStore, setLocalStore] = useState(globalStore);
   useEffect(() => { setLocalStore(globalStore); }, [globalStore]);
+
+  // Phase 05.7.9d — column visibility prefs (hide/show only; reorder deferred).
+  // Subscribes to the cloud-sync event so a toggle on another device
+  // applies here on the next poll without a manual refresh.
+  const [columnHiddenCss, setColumnHiddenCss] = useState('');
+  useEffect(() => {
+    const apply = () => {
+      const prefs = readCampaignsColumnPrefs();
+      setColumnHiddenCss(buildHiddenColumnsCss(prefs.hidden));
+    };
+    apply();
+    window.addEventListener('roas-campaigns-column-visibility-changed', apply);
+    return () =>
+      window.removeEventListener(
+        'roas-campaigns-column-visibility-changed',
+        apply,
+      );
+  }, []);
 
   // Drill-down drawer state — set when the user clicks a row.
   const [drillCampaignId, setDrillCampaignId] = useState<string | null>(null);
@@ -751,6 +774,9 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         {aggregated.length}{' '}
         {mode === 'campaign' ? 'קמפיינים' : 'אד-סטים'}
       </span>
+
+      {/* Phase 05.7.9d — column visibility menu (hide/show only). */}
+      <CampaignsColumnsMenu mode={mode} />
     </div>
   );
 
@@ -1112,11 +1138,16 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         <>
           {/* overflow-auto + max-h makes wrapper the scroll context so sticky
               thead pins to the top of the box (not the page). */}
-          <div className="overflow-auto max-h-[calc(100vh-180px)]">
+          <div className="overflow-auto max-h-[calc(100vh-180px)] roas-campaigns-table">
+            {/* Phase 05.7.9d — column visibility CSS. The roas-campaigns-table
+                class scopes the rules so they don't leak into other tables. */}
+            {columnHiddenCss && (
+              <style dangerouslySetInnerHTML={{ __html: columnHiddenCss }} />
+            )}
             <table className="w-full text-xs sm:text-sm min-w-[1340px]">
               <thead className="sticky top-0 z-10 bg-surface">
                 <tr className="text-text-secondary border-b border-borderSubtle bg-surfaceMuted/40">
-                  <th className="px-3 py-2 w-[36px]" aria-label="סימון אופטימיזציה" />
+                  <th className="px-3 py-2 w-[36px]" aria-label="סימון אופטימיזציה" data-col-id="optimized" />
                   <SortHeader
                     label={mode === 'campaign' ? 'קמפיין' : 'אד-סט'}
                     sortKey="name"
@@ -1125,6 +1156,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     onClick={handleSort}
                     align="start"
                     className="px-3 sm:px-5 py-2"
+                    dataColId="campaignName"
                   />
                   <SortHeader
                     label="הוצאה"
@@ -1134,6 +1166,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     onClick={handleSort}
                     align="end"
                     className="px-3 py-2 w-[80px]"
+                    dataColId="spend"
                   />
                   <SortHeader
                     label="תקציב יומי"
@@ -1143,6 +1176,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     onClick={handleSort}
                     align="end"
                     className="px-3 py-2 w-[100px]"
+                    dataColId="budget"
                   />
                   <SortHeader
                     label="ערך המרות"
@@ -1152,6 +1186,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     onClick={handleSort}
                     align="end"
                     className="px-3 py-2 w-[80px]"
+                    dataColId="conversionValue"
                   />
                   <SortHeader
                     label="ROAS"
@@ -1161,6 +1196,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     onClick={handleSort}
                     align="center"
                     className="px-3 py-2 w-[64px]"
+                    dataColId="roas"
                   />
                   <SortHeader
                     label="ROAS Shopify"
@@ -1170,7 +1206,25 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     onClick={handleSort}
                     align="center"
                     className="px-3 py-2 w-[92px]"
+                    dataColId="roasShopify"
                   />
+                  {/* Phase 05.7.9e — third ROAS column. Operator request:
+                      ROAS Shopify but using ONLY the deterministic
+                      (source/click-id) revenue divided by this campaign's
+                      spend. Together with ROAS Shopify (combined) and ROAS
+                      (platform claim) gives 3 angles on the same metric. */}
+                  <th
+                    className="px-3 py-2 text-center font-medium text-text-secondary w-[100px]"
+                    data-col-id="roasShopifyPlatform"
+                  >
+                    <span
+                      className="inline-flex flex-col items-center leading-tight"
+                      title="ROAS Shopify מבוסס רק על הזמנות שסווגו דטרמיניסטית לפלטפורמה הזו (deterministicRevenue / spend). ללא fallback פרופורציונלי, רק מה שאנחנו יכולים להוכיח."
+                    >
+                      <span>ROAS Shopify</span>
+                      <span className="text-[9px] text-text-muted font-normal">פלטפורמה</span>
+                    </span>
+                  </th>
                   {/* Phase 05.7.9b — 4 Shopify columns (was 2):
                       (1) ערך / פלטפורמה — deterministic per-platform (orders
                           classified to THIS row's platform via source/click-id)
@@ -1181,7 +1235,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                           serves as a denominator)
                       (4) יח' / סה"כ — same, units
                       Not sortable — sort via 'ROAS Shopify'. */}
-                  <th className="px-3 py-2 text-end font-medium text-text-secondary w-[92px] border-r border-borderSubtle">
+                  <th className="px-3 py-2 text-end font-medium text-text-secondary w-[92px] border-r border-borderSubtle" data-col-id="shopifyValuePlatform">
                     <span
                       className="inline-flex flex-col items-end leading-tight"
                       title="ערך המכירות שסווגו דטרמיניסטית לפלטפורמה הזו דרך source/click-id ב-Shopify (utm_source, ttclid, fbclid, gclid). רק הזמנות שאנחנו בטוחים שהן מהפלטפורמה הזו."
@@ -1190,7 +1244,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                       <span className="text-[9px] text-text-muted font-normal">פלטפורמה</span>
                     </span>
                   </th>
-                  <th className="px-3 py-2 text-end font-medium text-text-secondary w-[78px] border-r border-borderSubtle">
+                  <th className="px-3 py-2 text-end font-medium text-text-secondary w-[78px] border-r border-borderSubtle" data-col-id="shopifyUnitsPlatform">
                     <span
                       className="inline-flex flex-col items-end leading-tight"
                       title="יחידות שנמכרו ב-Shopify מהזמנות שסווגו דטרמיניסטית לפלטפורמה הזו. רק הזמנות עם source/click-id ברור."
@@ -1199,7 +1253,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                       <span className="text-[9px] text-text-muted font-normal">פלטפורמה</span>
                     </span>
                   </th>
-                  <th className="px-3 py-2 text-end font-medium text-text-secondary w-[92px]">
+                  <th className="px-3 py-2 text-end font-medium text-text-secondary w-[92px]" data-col-id="shopifyValueTotal">
                     <span
                       className="inline-flex flex-col items-end leading-tight"
                       title="סך ערך המכירות ב-Shopify של המוצרים המשויכים בטווח הנבחר, בלי קשר לפלטפורמה (כולל direct, organic, ופלטפורמות אחרות). זהו המכנה האמיתי."
@@ -1208,7 +1262,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                       <span className="text-[9px] text-text-muted font-normal">סה&quot;כ</span>
                     </span>
                   </th>
-                  <th className="px-3 py-2 text-end font-medium text-text-secondary w-[78px]">
+                  <th className="px-3 py-2 text-end font-medium text-text-secondary w-[78px]" data-col-id="shopifyUnitsTotal">
                     <span
                       className="inline-flex flex-col items-end leading-tight"
                       title="סך היחידות שנמכרו ב-Shopify של המוצרים המשויכים בטווח הנבחר, בלי קשר לפלטפורמה. זהו המכנה האמיתי."
@@ -1225,6 +1279,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     onClick={handleSort}
                     align="end"
                     className="px-3 py-2 w-[72px]"
+                    dataColId="conversions"
                   />
                   <SortHeader
                     label="CTR"
@@ -1234,6 +1289,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     onClick={handleSort}
                     align="end"
                     className="px-3 py-2 w-[72px]"
+                    dataColId="ctr"
                   />
                   <SortHeader
                     label="CPC"
@@ -1243,6 +1299,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     onClick={handleSort}
                     align="end"
                     className="px-3 py-2 w-[72px]"
+                    dataColId="cpc"
                   />
                   <SortHeader
                     label="CPM"
@@ -1252,6 +1309,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     onClick={handleSort}
                     align="end"
                     className="px-3 py-2 w-[80px]"
+                    dataColId="cpm"
                   />
                   <SortHeader
                     label="CPA"
@@ -1261,8 +1319,9 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     onClick={handleSort}
                     align="end"
                     className="px-3 py-2 w-[72px]"
+                    dataColId="cpa"
                   />
-                  <th className="px-2 py-2 text-center font-medium w-[40px]" aria-label="פעולות" />
+                  <th className="px-2 py-2 text-center font-medium w-[40px]" aria-label="פעולות" data-col-id="deepLink" />
                 </tr>
               </thead>
               <tbody>
@@ -1465,6 +1524,7 @@ function SortHeader({
   onClick,
   align,
   className,
+  dataColId,
 }: {
   label: string;
   sortKey: SortKey;
@@ -1473,6 +1533,9 @@ function SortHeader({
   onClick: (key: SortKey) => void;
   align: 'start' | 'center' | 'end';
   className?: string;
+  /** Phase 05.7.9d — column ID for the visibility prefs. The CSS
+   *  generated by buildHiddenColumnsCss matches this attribute. */
+  dataColId?: string;
 }) {
   const isActive = sortKey === activeKey;
   const justify =
@@ -1480,7 +1543,7 @@ function SortHeader({
   const textAlign =
     align === 'start' ? 'text-start' : align === 'end' ? 'text-end' : 'text-center';
   return (
-    <th className={cn('font-medium', textAlign, className)}>
+    <th className={cn('font-medium', textAlign, className)} data-col-id={dataColId}>
       <button
         type="button"
         onClick={() => onClick(sortKey)}

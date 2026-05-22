@@ -193,7 +193,7 @@ export function CampaignsTableRow({
           without bubbling into the row click (which would
           open the drawer). The empty Circle is the un-marked
           state; CheckCircle2 in green is the marked state. */}
-      <td className="px-2 py-2 text-center w-[36px]">
+      <td data-col-id="optimized" className="px-2 py-2 text-center w-[36px]">
         <button
           type="button"
           onClick={e => {
@@ -213,7 +213,7 @@ export function CampaignsTableRow({
           {isOptimized ? <CheckCircle2 size={18} /> : <Circle size={18} />}
         </button>
       </td>
-      <td className="px-3 sm:px-5 py-2 max-w-[280px] sm:max-w-[400px]">
+      <td data-col-id="campaignName" className="px-3 sm:px-5 py-2 max-w-[280px] sm:max-w-[400px]">
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-surfaceMuted text-[10px] font-bold text-text-secondary tabular-nums shrink-0">
             {i + 1}
@@ -278,8 +278,8 @@ export function CampaignsTableRow({
           </div>
         </div>
       </td>
-      <td className="px-3 py-2 text-end tabular-nums">{formatCurrency(a.spend)}</td>
-      <td className="px-3 py-2 text-end tabular-nums">
+      <td data-col-id="spend" className="px-3 py-2 text-end tabular-nums">{formatCurrency(a.spend)}</td>
+      <td data-col-id="budget" className="px-3 py-2 text-end tabular-nums">
         {(() => {
           const budget = mode === 'campaign' ? a.campaignBudgetCad : a.adSetBudgetCad;
           if (!budget || budget <= 0) {
@@ -295,10 +295,10 @@ export function CampaignsTableRow({
           );
         })()}
       </td>
-      <td className={cn('px-3 py-2 text-end tabular-nums font-medium', a.conversionValue > a.spend && 'text-roas-green')}>
+      <td data-col-id="conversionValue" className={cn('px-3 py-2 text-end tabular-nums font-medium', a.conversionValue > a.spend && 'text-roas-green')}>
         {formatCurrency(a.conversionValue)}
       </td>
-      <td className={cn('px-3 py-2 text-center font-semibold tabular-nums rounded', TONE_BG[info.tone])}>
+      <td data-col-id="roas" className={cn('px-3 py-2 text-center font-semibold tabular-nums rounded', TONE_BG[info.tone])}>
         {roas > 0 ? formatNumber(roas) : '—'}
       </td>
       {/* Shopify-true ROAS column. Only campaigns with a
@@ -306,7 +306,7 @@ export function CampaignsTableRow({
           shows '—' with a hint. Google rows always '—'
           because PMax doesn't expose per-product mapping
           (the feed governs delivery, not the campaign). */}
-      <td className="px-3 py-2 text-center">
+      <td data-col-id="roasShopify" className="px-3 py-2 text-center">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);
@@ -421,6 +421,44 @@ export function CampaignsTableRow({
           );
         })()}
       </td>
+      {/* Phase 05.7.9e — third ROAS column.
+          ROAS Shopify · פלטפורמה = deterministicRevenue / spend.
+          Sits between the combined ROAS Shopify (left) and the
+          per-platform value/units columns (right). Operator now sees
+          three angles: platform-claimed ROAS, deterministic-Shopify
+          ROAS for this platform, and the mapping-combined ROAS. */}
+      <td data-col-id="roasShopifyPlatform" className="px-3 py-2 text-center">
+        {(() => {
+          const key = campaignKey(a.storeId, a.platform, a.campaignId);
+          const info = trueRevenueByKey.get(key);
+          if (!info || a.spend <= 0 || info.deterministicRevenue <= 0) {
+            return (
+              <span
+                className="text-text-muted"
+                title={`אין הזמנות שסווגו דטרמיניסטית ל-${a.platform} עבור המוצרים המשויכים בטווח. כדי לראות ROAS פלטפורמה — צריך ש-Shopify יראה את ה-source/click-id של ההזמנות.`}
+              >
+                —
+              </span>
+            );
+          }
+          const detRoas = info.deterministicRevenue / a.spend;
+          const totalUnits = Math.round(info.productTotals.units);
+          const detUnits = Math.round(info.deterministicUnits);
+          const tooltip =
+            `ROAS Shopify · פלטפורמה = ${detRoas.toFixed(2)}x\n` +
+            `  (${formatCurrency(info.deterministicRevenue)} / ${formatCurrency(a.spend)})\n\n` +
+            `מבוסס על ${detUnits} מתוך ${totalUnits} יחידות שנמכרו (רק הזמנות עם source='${a.platform === 'Meta' ? 'meta-paid' : a.platform === 'Google' ? 'google-paid' : 'tiktok-paid'}' או click-id מזוהה). ` +
+            `השאר עברו דרך direct / organic / פלטפורמות אחרות.`;
+          return (
+            <span
+              className="font-semibold tabular-nums"
+              title={tooltip}
+            >
+              {formatNumber(detRoas)}
+            </span>
+          );
+        })()}
+      </td>
       {/* Shopify actuals — ערך + יחידות. Empty cells when
           there's no mapping so the row stays cleanly
           aligned with mapped + unmapped campaigns. */}
@@ -433,7 +471,7 @@ export function CampaignsTableRow({
           useCampaignTrueRevenue.ts and live on TrueRevenueInfo as
           deterministicRevenue/Units + productTotals. */}
       {/* [1] ערך Shopify · פלטפורמה — deterministic revenue */}
-      <td className="px-3 py-2 text-end tabular-nums border-r border-borderSubtle/40">
+      <td data-col-id="shopifyValuePlatform" className="px-3 py-2 text-end tabular-nums border-r border-borderSubtle/40">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);
@@ -458,7 +496,7 @@ export function CampaignsTableRow({
         })()}
       </td>
       {/* [2] יח' Shopify · פלטפורמה — deterministic units */}
-      <td className="px-3 py-2 text-end tabular-nums border-r border-borderSubtle/40">
+      <td data-col-id="shopifyUnitsPlatform" className="px-3 py-2 text-end tabular-nums border-r border-borderSubtle/40">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);
@@ -493,7 +531,7 @@ export function CampaignsTableRow({
         })()}
       </td>
       {/* [3] ערך Shopify · סה"כ — total revenue across all platforms */}
-      <td className="px-3 py-2 text-end tabular-nums">
+      <td data-col-id="shopifyValueTotal" className="px-3 py-2 text-end tabular-nums">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);
@@ -511,7 +549,7 @@ export function CampaignsTableRow({
         })()}
       </td>
       {/* [4] יח' Shopify · סה"כ — total units across all platforms */}
-      <td className="px-3 py-2 text-end tabular-nums">
+      <td data-col-id="shopifyUnitsTotal" className="px-3 py-2 text-end tabular-nums">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);
@@ -529,20 +567,20 @@ export function CampaignsTableRow({
           );
         })()}
       </td>
-      <td className="px-3 py-2 text-end tabular-nums">{formatNumber(a.conversions, 0)}</td>
-      <td className="px-3 py-2 text-end tabular-nums text-text-secondary">
+      <td data-col-id="conversions" className="px-3 py-2 text-end tabular-nums">{formatNumber(a.conversions, 0)}</td>
+      <td data-col-id="ctr" className="px-3 py-2 text-end tabular-nums text-text-secondary">
         {a.impressions > 0 ? `${(ctr * 100).toFixed(2)}%` : '—'}
       </td>
-      <td className="px-3 py-2 text-end tabular-nums text-text-secondary">
+      <td data-col-id="cpc" className="px-3 py-2 text-end tabular-nums text-text-secondary">
         {a.clicks > 0 ? formatCurrency(cpc, 2) : '—'}
       </td>
-      <td className="px-3 py-2 text-end tabular-nums text-text-secondary">
+      <td data-col-id="cpm" className="px-3 py-2 text-end tabular-nums text-text-secondary">
         {a.impressions > 0 ? formatCurrency(cpm, 2) : '—'}
       </td>
-      <td className="px-3 py-2 text-end tabular-nums text-text-secondary">
+      <td data-col-id="cpa" className="px-3 py-2 text-end tabular-nums text-text-secondary">
         {a.conversions > 0 ? formatCurrency(cpa, 2) : '—'}
       </td>
-      <td className="px-2 py-2 text-center">
+      <td data-col-id="deepLink" className="px-2 py-2 text-center">
         {link && (
           <a
             href={link}
