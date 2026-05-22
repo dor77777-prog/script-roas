@@ -1162,18 +1162,50 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     align="center"
                     className="px-3 py-2 w-[92px]"
                   />
-                  {/* Shopify-actual columns: not sortable — sort via 'ROAS Shopify'. */}
-                  <th className="px-3 py-2 text-end font-medium text-text-secondary w-[88px]">
-                    <span className="inline-flex items-center gap-1" title="ערך המכירות בפועל ב-Shopify של המוצרים המשויכים בטווח הנבחר">
-                      ערך Shopify
+                  {/* Phase 05.7.9b — 4 Shopify columns (was 2):
+                      (1) ערך / פלטפורמה — deterministic per-platform (orders
+                          classified to THIS row's platform via source/click-id)
+                      (2) יח' / פלטפורמה — same, units
+                      (3) ערך / סה"כ — total Shopify revenue for the mapped
+                          products in range, across ALL platforms (same value
+                          for every campaign mapped to the same product set —
+                          serves as a denominator)
+                      (4) יח' / סה"כ — same, units
+                      Not sortable — sort via 'ROAS Shopify'. */}
+                  <th className="px-3 py-2 text-end font-medium text-text-secondary w-[92px] border-r border-borderSubtle">
+                    <span
+                      className="inline-flex flex-col items-end leading-tight"
+                      title="ערך המכירות שסווגו דטרמיניסטית לפלטפורמה הזו דרך source/click-id ב-Shopify (utm_source, ttclid, fbclid, gclid). רק הזמנות שאנחנו בטוחים שהן מהפלטפורמה הזו."
+                    >
+                      <span>ערך Shopify</span>
+                      <span className="text-[9px] text-text-muted font-normal">פלטפורמה</span>
                     </span>
                   </th>
-                  <th className="px-3 py-2 text-end font-medium text-text-secondary w-[80px]">
+                  <th className="px-3 py-2 text-end font-medium text-text-secondary w-[78px] border-r border-borderSubtle">
                     <span
-                      className="inline-flex items-center gap-1"
-                      title="יחידות שנמכרו בפועל ב-Shopify של המוצרים המשויכים בטווח הנבחר. כשהמוצר ממופה למספר פלטפורמות, היחידות מוקצות פרופורציונלית להוצאה (וההצגה מעוגלת למספר שלם — ה-* מסמן ערך שעוגל)."
+                      className="inline-flex flex-col items-end leading-tight"
+                      title="יחידות שנמכרו ב-Shopify מהזמנות שסווגו דטרמיניסטית לפלטפורמה הזו. רק הזמנות עם source/click-id ברור."
                     >
-                      יח&apos; Shopify
+                      <span>יח&apos; Shopify</span>
+                      <span className="text-[9px] text-text-muted font-normal">פלטפורמה</span>
+                    </span>
+                  </th>
+                  <th className="px-3 py-2 text-end font-medium text-text-secondary w-[92px]">
+                    <span
+                      className="inline-flex flex-col items-end leading-tight"
+                      title="סך ערך המכירות ב-Shopify של המוצרים המשויכים בטווח הנבחר, בלי קשר לפלטפורמה (כולל direct, organic, ופלטפורמות אחרות). זהו המכנה האמיתי."
+                    >
+                      <span>ערך Shopify</span>
+                      <span className="text-[9px] text-text-muted font-normal">סה&quot;כ</span>
+                    </span>
+                  </th>
+                  <th className="px-3 py-2 text-end font-medium text-text-secondary w-[78px]">
+                    <span
+                      className="inline-flex flex-col items-end leading-tight"
+                      title="סך היחידות שנמכרו ב-Shopify של המוצרים המשויכים בטווח הנבחר, בלי קשר לפלטפורמה. זהו המכנה האמיתי."
+                    >
+                      <span>יח&apos; Shopify</span>
+                      <span className="text-[9px] text-text-muted font-normal">סה&quot;כ</span>
                     </span>
                   </th>
                   <SortHeader

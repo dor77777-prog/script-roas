@@ -23,12 +23,9 @@ import type { DateRange } from '@/lib/types';
  * of incomplete mapping / shared attribution / low sample size.
  */
 export type TrueRevenueInfo = {
+  /** Full allocation: deterministic + spend-proportional fallback combined.
+   *  Used for ROAS Shopify column + sort. */
   trueRevenue: number;
-  /** Allocated Shopify units sold of mapped products in the date range —
-   *  Phase 05.7.9: now uses deterministic-first (orders' source / click-id)
-   *  + spend-proportional fallback (was pure spend-proportional). Surfaced
-   *  as a separate column so the operator can sanity-check the revenue
-   *  figure against unit volume. */
   trueUnits: number;
   metaClaim: number;
   spend: number;
@@ -43,16 +40,20 @@ export type TrueRevenueInfo = {
    *    - orders-attribution tab missing (first deploy), or
    *    - the new pipeline hasn't run yet. */
   attribution: AttributionAnalysis | null;
-  /** Phase 05.7.9 — product TOTALS across ALL platforms for this
-   *  campaign's mapped products in the date range. Operator-visible in the
-   *  units tooltip so the per-campaign allocated share has a denominator
-   *  context ("this campaign got 2 of the 2 units the product sold —
-   *  matches reality" vs "this campaign got 1.7 of 2, the other 0.3 went
-   *  to the Meta campaign also mapped to this product"). */
+  /** Phase 05.7.9b — product TOTALS across ALL platforms for this
+   *  campaign's mapped products in the date range. Used for the "ערך/יח'
+   *  Shopify · סה"כ" columns. */
   productTotals: {
     revenue: number;
     units: number;
   };
+  /** Phase 05.7.9b — deterministic-only share. Orders with an explicit
+   *  platform signal (source='X-paid' OR fbclid/gclid) classified to this
+   *  campaign's platform, then split among the platform's mapped campaigns
+   *  by intra-platform spend share. NO heuristic fallback. Used for the
+   *  "ערך/יח' Shopify · פלטפורמה" columns. */
+  deterministicRevenue: number;
+  deterministicUnits: number;
 };
 
 export type ConfidenceLevel = {
@@ -299,7 +300,15 @@ export function useCampaignTrueRevenue(opts: {
         })),
       }));
 
-    const allocations = new Map<string, { revenue: number; units: number }>();
+    const allocations = new Map<
+      string,
+      {
+        revenue: number;
+        units: number;
+        deterministicRevenue: number;
+        deterministicUnits: number;
+      }
+    >();
     for (const [storeId, productRev] of productsByStore) {
       const allocated = allocateProductRevenue({
         storeId,
@@ -309,9 +318,16 @@ export function useCampaignTrueRevenue(opts: {
         orders: ordersForAllocator,
       });
       for (const [k, v] of allocated) {
-        const cur = allocations.get(k) ?? { revenue: 0, units: 0 };
+        const cur = allocations.get(k) ?? {
+          revenue: 0,
+          units: 0,
+          deterministicRevenue: 0,
+          deterministicUnits: 0,
+        };
         cur.revenue += v.revenue;
         cur.units += v.units;
+        cur.deterministicRevenue += v.deterministicRevenue;
+        cur.deterministicUnits += v.deterministicUnits;
         allocations.set(k, cur);
       }
     }
@@ -343,7 +359,12 @@ export function useCampaignTrueRevenue(opts: {
       const k = campaignKey(a.storeId, a.platform, a.campaignId);
       const mappedIds = productMap[k] ?? [];
       if (mappedIds.length === 0) continue; // no mapping → no true-ROAS row
-      const alloc = allocations.get(k) ?? { revenue: 0, units: 0 };
+      const alloc = allocations.get(k) ?? {
+        revenue: 0,
+        units: 0,
+        deterministicRevenue: 0,
+        deterministicUnits: 0,
+      };
       const trueRevenue = alloc.revenue;
       const trueUnits = alloc.units;
       // How many OTHER campaigns share at least one of this campaign's
@@ -415,6 +436,8 @@ export function useCampaignTrueRevenue(opts: {
         confidence: computeConfidence(trueRevenue, a.conversionValue, a.spend, shared, mappedIds.length),
         attribution,
         productTotals,
+        deterministicRevenue: alloc.deterministicRevenue,
+        deterministicUnits: alloc.deterministicUnits,
       });
     }
     return out;

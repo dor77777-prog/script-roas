@@ -424,108 +424,107 @@ export function CampaignsTableRow({
       {/* Shopify actuals — ערך + יחידות. Empty cells when
           there's no mapping so the row stays cleanly
           aligned with mapped + unmapped campaigns. */}
-      <td className="px-3 py-2 text-end tabular-nums">
+      {/* Phase 05.7.9b — 4 Shopify columns (was 2):
+          [1] ערך / פלטפורמה — deterministic per-platform revenue
+          [2] יח' / פלטפורמה — deterministic per-platform units
+          [3] ערך / סה"כ — total across all platforms
+          [4] יח' / סה"כ — total across all platforms
+          Determined and total figures are computed in
+          useCampaignTrueRevenue.ts and live on TrueRevenueInfo as
+          deterministicRevenue/Units + productTotals. */}
+      {/* [1] ערך Shopify · פלטפורמה — deterministic revenue */}
+      <td className="px-3 py-2 text-end tabular-nums border-r border-borderSubtle/40">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);
-          if (!info || info.trueRevenue <= 0) {
-            return <span className="text-text-muted">—</span>;
+          if (!info || info.deterministicRevenue <= 0) {
+            return (
+              <span
+                className="text-text-muted"
+                title={`אין הזמנות שסווגו דטרמיניסטית ל-${a.platform} עבור המוצרים המשויכים בטווח הנבחר.`}
+              >
+                —
+              </span>
+            );
           }
-          // Phase 05.7.9 — tooltip mirrors the units cell: surface the
-          // exact allocated revenue + the Shopify total across all
-          // platforms so the operator has the denominator visible.
-          const tooltip = (() => {
-            const lines: string[] = [];
-            lines.push(
-              `CAD ${info.trueRevenue.toFixed(0)} מוקצות לקמפיין הזה (חלוקה דטרמיניסטית + fallback פרופורציונלי).`,
-            );
-            lines.push(
-              `סה"כ ב-Shopify למוצרים הממופים בטווח: CAD ${info.productTotals.revenue.toFixed(0)} (כל הפלטפורמות יחד).`,
-            );
-            if (info.sharedCampaigns > 0) {
-              lines.push('');
-              lines.push(
-                `המוצר ממופה גם ל-${info.sharedCampaigns} קמפיין${info.sharedCampaigns === 1 ? '' : 'ים'} נוספ${info.sharedCampaigns === 1 ? '' : 'ים'}.`,
-              );
-            }
-            return lines.join('\n');
-          })();
+          const tooltip =
+            `CAD ${info.deterministicRevenue.toFixed(0)} מהזמנות שסווגו ב-Shopify ל-${a.platform} ` +
+            `(source='${a.platform === 'Meta' ? 'meta-paid' : a.platform === 'Google' ? 'google-paid' : 'tiktok-paid'}' או click-id מזוהה).`;
           return (
             <span className="font-medium" title={tooltip}>
-              {formatCurrency(info.trueRevenue)}
+              {formatCurrency(info.deterministicRevenue)}
             </span>
           );
         })()}
       </td>
-      <td className="px-3 py-2 text-end tabular-nums">
+      {/* [2] יח' Shopify · פלטפורמה — deterministic units */}
+      <td className="px-3 py-2 text-end tabular-nums border-r border-borderSubtle/40">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);
-          if (!info || info.trueUnits <= 0) {
-            return <span className="text-text-muted">—</span>;
+          if (!info || info.deterministicUnits <= 0) {
+            return (
+              <span
+                className="text-text-muted"
+                title={`אין הזמנות שסווגו דטרמיניסטית ל-${a.platform} עבור המוצרים המשויכים בטווח הנבחר.`}
+              >
+                —
+              </span>
+            );
           }
-          // Phase 05.7.9 — display rounded integer for the per-campaign
-          // share (units are physically whole), but the tooltip surfaces:
-          //   (a) exact allocated share for this campaign,
-          //   (b) total Shopify units for this campaign's mapped products
-          //       across ALL platforms (the denominator — so the rounded
-          //       integer is grounded in reality).
-          // The underlying allocation now uses deterministic-first
-          // attribution (orders' source / click-id) with a spend-
-          // proportional fallback for unsignaled orders — see
-          // campaignProductMap.ts:allocateProductRevenue.
-          const exactUnits = info.trueUnits;
-          const displayUnits = Math.round(exactUnits);
-          const totalUnits = Math.round(info.productTotals.units);
-          const isFractional = Math.abs(exactUnits - displayUnits) >= 0.05;
-          const isPartialShare = totalUnits > displayUnits;
-          const tooltip = (() => {
-            const lines: string[] = [];
-            lines.push(
-              `${exactUnits.toFixed(2)} יח' מוקצות לקמפיין הזה (עוגל ל-${displayUnits}).`,
-            );
-            lines.push(
-              `סה"כ ב-Shopify למוצרים הממופים בטווח: ${totalUnits} יח' (כל הפלטפורמות יחד).`,
-            );
-            lines.push('');
-            lines.push(
-              'שיטת חלוקה: הזמנות עם click-ID או source מזוהים מוקצות ישירות לפלטפורמה שלהן (דטרמיניסטי). ' +
-                'הזמנות ללא סיגנל (direct / utm חסר) מתחלקות פרופורציונלית להוצאה.',
-            );
-            if (info.sharedCampaigns > 0) {
-              lines.push('');
-              lines.push(
-                `המוצר ממופה גם ל-${info.sharedCampaigns} קמפיין${info.sharedCampaigns === 1 ? '' : 'ים'} נוספ${info.sharedCampaigns === 1 ? '' : 'ים'} — חלק מהיחידות הוקצו אליהם.`,
-              );
-            }
-            return lines.join('\n');
-          })();
+          const exact = info.deterministicUnits;
+          const display = Math.round(exact);
+          const isFractional = Math.abs(exact - display) >= 0.05;
+          const tooltip = isFractional
+            ? `${exact.toFixed(2)} יח' מוקצות לקמפיין הזה מתוך הסך הדטרמיניסטי של ${a.platform} ` +
+              `(חלוקה לפי הוצאה בין הקמפיינים של ${a.platform} שממופים לאותם מוצרים).`
+            : `${display} יח' מהזמנות שסווגו ב-Shopify ל-${a.platform} עבור המוצרים המשויכים.`;
           return (
             <span
               className="font-medium inline-flex items-center gap-0.5"
               title={tooltip}
             >
-              <span>{displayUnits}</span>
-              {/* Suffix mark: "*" when this campaign got a non-integer
-                  share (rounding hides math); "/N" when the campaign got
-                  only a partial share of the total even after rounding.
-                  Both invite the operator to hover for the breakdown. */}
+              <span>{display}</span>
               {isFractional && (
-                <span
-                  aria-hidden="true"
-                  className="text-[8px] text-text-muted"
-                >
-                  *
-                </span>
+                <span aria-hidden="true" className="text-[8px] text-text-muted">*</span>
               )}
-              {isPartialShare && !isFractional && (
-                <span
-                  aria-hidden="true"
-                  className="text-[10px] text-text-muted ms-0.5"
-                >
-                  /{totalUnits}
-                </span>
-              )}
+            </span>
+          );
+        })()}
+      </td>
+      {/* [3] ערך Shopify · סה"כ — total revenue across all platforms */}
+      <td className="px-3 py-2 text-end tabular-nums">
+        {(() => {
+          const key = campaignKey(a.storeId, a.platform, a.campaignId);
+          const info = trueRevenueByKey.get(key);
+          if (!info || info.productTotals.revenue <= 0) {
+            return <span className="text-text-muted">—</span>;
+          }
+          return (
+            <span
+              className="font-medium text-text-secondary"
+              title={`סך ערך המכירות ב-Shopify של המוצרים המשויכים בטווח הנבחר, מכל הערוצים יחד (paid + organic + direct).`}
+            >
+              {formatCurrency(info.productTotals.revenue)}
+            </span>
+          );
+        })()}
+      </td>
+      {/* [4] יח' Shopify · סה"כ — total units across all platforms */}
+      <td className="px-3 py-2 text-end tabular-nums">
+        {(() => {
+          const key = campaignKey(a.storeId, a.platform, a.campaignId);
+          const info = trueRevenueByKey.get(key);
+          if (!info || info.productTotals.units <= 0) {
+            return <span className="text-text-muted">—</span>;
+          }
+          const total = Math.round(info.productTotals.units);
+          return (
+            <span
+              className="font-medium text-text-secondary"
+              title={`סך היחידות שנמכרו ב-Shopify של המוצרים המשויכים בטווח הנבחר, מכל הערוצים יחד.`}
+            >
+              {total}
             </span>
           );
         })()}

@@ -254,6 +254,25 @@ function classifyOrderToPlatform(
  * already filtered to the store + date range. `orders` is the (optional)
  * order list for the same window, used for the deterministic step.
  */
+/** Phase 05.7.9b — allocator output per campaign.
+ *
+ * `revenue`/`units` are the FULL allocation (deterministic + spend-
+ * proportional fallback). Used for ROAS Shopify column + sort.
+ *
+ * `deterministicRevenue`/`deterministicUnits` are ONLY the deterministic
+ * share for this campaign — orders with an explicit platform signal
+ * (source='X-paid' OR fbclid/gclid) split among the campaigns of that
+ * platform by intra-platform spend. NO fallback included. Used for
+ * the "ערך/יח' Shopify · פלטפורמה" columns added per operator request:
+ * shows what we can PROVE came from this platform without heuristics.
+ */
+export type CampaignAllocation = {
+  revenue: number;
+  units: number;
+  deterministicRevenue: number;
+  deterministicUnits: number;
+};
+
 export function allocateProductRevenue(args: {
   storeId: string;
   map: ProductMap;
@@ -264,14 +283,23 @@ export function allocateProductRevenue(args: {
    *  before falling back to spend-proportional split. Optional for
    *  backwards compat with tests + callers that don't have orders. */
   orders?: AllocatorOrder[];
-}): Map<string, { revenue: number; units: number }> {
+}): Map<string, CampaignAllocation> {
   const { storeId, map, productRevenue, campaignSpend, orders } = args;
-  const out = new Map<string, { revenue: number; units: number }>();
+  const out = new Map<string, CampaignAllocation>();
 
   // Pre-filter orders to the store once. Cheap O(N) — used per product.
   const storeOrders = orders
     ? orders.filter(o => o.storeId === storeId)
     : null;
+
+  // Helper: initialize a campaign allocation accumulator. Used at every
+  // out.get() site to keep the deterministic vs full breakdown consistent.
+  const emptyAlloc = (): CampaignAllocation => ({
+    revenue: 0,
+    units: 0,
+    deterministicRevenue: 0,
+    deterministicUnits: 0,
+  });
 
   for (const p of productRevenue) {
     if (!p.productId) continue;
@@ -372,9 +400,16 @@ export function allocateProductRevenue(args: {
           intraTotal > 0
             ? intraSpends[i] / intraTotal
             : 1 / platformKeys.length;
-        const cur = out.get(platformKeys[i]) ?? { revenue: 0, units: 0 };
-        cur.revenue += det.revenue * share;
-        cur.units += det.units * share;
+        const cur = out.get(platformKeys[i]) ?? emptyAlloc();
+        // Deterministic contribution goes into BOTH the full allocation
+        // (used for ROAS Shopify + sort) AND the deterministic-only bucket
+        // (used for the new per-platform Shopify columns).
+        const detRevShare = det.revenue * share;
+        const detUnitsShare = det.units * share;
+        cur.revenue += detRevShare;
+        cur.units += detUnitsShare;
+        cur.deterministicRevenue += detRevShare;
+        cur.deterministicUnits += detUnitsShare;
         out.set(platformKeys[i], cur);
       }
     }
@@ -401,7 +436,9 @@ export function allocateProductRevenue(args: {
           totalSpend > 0
             ? spendsForProduct[i] / totalSpend
             : 1 / mappedKeys.length;
-        const cur = out.get(k) ?? { revenue: 0, units: 0 };
+        const cur = out.get(k) ?? emptyAlloc();
+        // Fallback contribution: NOT deterministic, so it only updates
+        // the full revenue/units fields, NOT the deterministic-only ones.
         cur.revenue += remRev * share;
         cur.units += remUnits * share;
         out.set(k, cur);
