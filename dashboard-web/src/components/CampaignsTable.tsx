@@ -240,8 +240,17 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   );
   // Per-order attribution → trust chip basis (click-id proof vs heuristic).
   // Also keyed on localRange (CR-02).
+  //
+  // Phase 05.7.9b — append `&lineItems=true` so the response carries the
+  // JSONB `lineItems[]` payload. Required for the new deterministic-per-
+  // platform Shopify columns: the allocator needs to see which products
+  // each order purchased to credit them to the right platform. Without
+  // this flag the route strips lineItems for bandwidth (see
+  // orders-attribution/route.ts:45) and the new columns render '—' for
+  // every row even when the underlying classification is correct.
+  const ordersAttrKeyBase = buildDateRangeKey('/api/orders-attribution', localRange);
   const { data: ordersAttrResp } = useSWR<OrdersAttributionResponse>(
-    buildDateRangeKey('/api/orders-attribution', localRange),
+    ordersAttrKeyBase ? `${ordersAttrKeyBase}&lineItems=true` : null,
     async (url: string) => {
       const r = await fetch(url);
       if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
