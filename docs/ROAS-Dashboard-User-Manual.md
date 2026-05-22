@@ -394,6 +394,18 @@ ROAS ירד פתאום?
 - אם השעה היא לפני 12:00 — הטבלה רזה מאוד. אל תקבל החלטות.
 - אם "Live since" של חנות מוצג לפני יותר משעה — Apps Script לא רץ. בדוק את ה-trigger.
 
+**צבע רקע דינמי לפי ROAS (Phase 05.7.x):** הגרדיאנט של הכרטיס משתנה לפי ה-ROAS המשוקלל הנוכחי של היום, כך שמבט אחד מספיק לדעת איפה אנחנו עומדים:
+
+| ROAS | רקע + פלס + אייקון | משמעות |
+|---|---|---|
+| < 2.0 | 🔴 אדום | מפסידים |
+| 2.0–2.5 | 🟠 כתום | גבולי |
+| 2.5–3.0 | 🟢 ירוק | בריא |
+| ≥ 3.0 | 🔵 כחול | מצוין |
+| אין נתונים | ⚪ אפור עמום | עוד לא נצברה הוצאה היום |
+
+המעבר בין הצבעים מתחלק 500ms — חלקה ולא מבליטה. אותם sephre של ROAS משמשים בעמודת ה-ROAS בכל הטבלאות, כך שהדאשבורד מדבר באותה שפה צבעונית.
+
 ### 4.2 HeroOverview — KPI Strip + ROAS Chart
 חמישה כרטיסים אחד ליד השני:
 
@@ -749,23 +761,30 @@ ROAS
 ### 7.6 Campaigns Table — הטבלה הראשית
 שורה לכל קמפיין (או ad-set, לפי Mode).
 
-**עמודות:**
+**עמודות (סדר ברירת מחדל, ניתן לשינוי דרך תפריט "עמודות"):**
 | עמודה | פירוש |
 |---|---|
-| **Name** | שם הקמפיין/ad-set |
-| **Spend** | סך הוצאה בטווח |
-| **Daily Budget** | תקציב יומי נוכחי |
-| **Conversion Value** | הכנסה לפי Pixel (Meta/Google) |
+| ✓ **Optimized** | סימון ידני שהקמפיין מותב |
+| **ציון** (Health Score) | A/B/C/D/F + ניקוד 0–100, מאחד 4 רכיבים — ראה 7.16 |
+| **Name** | שם הקמפיין/ad-set + תג פלטפורמה (Meta/Google/TikTok) + CBO/ABO |
+| **Spend** | סך הוצאה בטווח (CAD) |
+| **Daily Budget** | תקציב יומי נוכחי (CAD) |
+| **Conversion Value** | הכנסה לפי Pixel (Meta/Google/TikTok) |
 | **ROAS** | Platform ROAS = Conversion Value / Spend |
-| **ROAS Shopify** | True ROAS = Shopify Value / Spend (אם יש מיפוי) |
-| **Shopify Value** | True Revenue מ-Shopify |
-| **Shopify Units** | יחידות שנמכרו |
-| **Conversions** | המרות לפי הפלטפורמה |
+| **ROAS Shopify** | Combined Shopify ROAS = (deterministic + proportional) / Spend |
+| **ROAS Shopify · פלטפורמה** | Deterministic-only Shopify ROAS = deterministicRevenue / Spend |
+| **ערך Shopify · פלטפורמה** | Revenue מ-Shopify שסווג דטרמיניסטית לפלטפורמה הזו |
+| **יח׳ Shopify · פלטפורמה** | Units מ-Shopify שסווגו דטרמיניסטית לפלטפורמה הזו |
+| **ערך Shopify · סה"כ** | Total Shopify revenue של המוצרים הממופים (כל הערוצים) |
+| **יח׳ Shopify · סה"כ** | Total Shopify units של המוצרים הממופים |
+| **Conversions** | המרות לפי הפלטפורמה (TikTok: complete_payment) |
 | **CTR** | Click-Through Rate |
 | **CPC** | Cost Per Click |
 | **CPM** | Cost Per Mille |
 | **CPA** | Cost Per Acquisition |
-| **Trust** | Trust Chip 🟢/🟠/🔴 |
+| 🔗 **Deep link** | פותח את הקמפיין ב-Ads Manager |
+
+**Tooltips על כל כותרת**: hover על שם עמודה פותח פופ-אובר מסוגנן שמסביר מה המדד מודד, איך הוא מחושב, ומה המגבלות שלו. אין יותר native browser tooltip (`title=`).
 
 ### 7.7 ROAS Tone (קוד צבע)
 תאי ROAS צבועים לפי הסקאלה:
@@ -774,38 +793,36 @@ ROAS
 - 🟢 2.7 ≤ ROAS < 3.0
 - 🔵 ROAS ≥ 3.0
 
-### 7.8 Trust Chip בכל שורה
-**אמינות פר-קמפיין:**
-- 🟢 **High** = Pixel ו-Shopify מסכימים תוך 10%.
-- 🟠 **Medium** = פער 10-30%.
-- 🔴 **Low** = פער > 30% או חוסר מיפוי. **אל תקבל החלטות אגרסיביות על בסיס שורה ב-Low Trust.**
+### 7.8 ⚠️ Trust Chip — הוסר (2026-05-22)
+ה-Trust chip הקטן (🟢/🟠/🔴) שהיה מתחת ל-ROAS Shopify הוסר. הסיגנל שלו (אמינות attribution) נכלל עכשיו כ-20% מ-**Campaign Health Score** (ראה 7.16) — מקטע "אמינות attribution" בדרילדאון של הציון. ה-tooltip על תא ROAS Shopify עדיין מציג את הניתוח המפורט (click-id coverage / mapping comparison) — רק ה-chip הוויזואלי הקטן הוסר כדי לא להתחרות עם ה-Health Score.
 
-### 7.9 Chip "כבוי כרגע" (FIX-26)
+### 7.9 Chip "כבוי כרגע" — מעודכן לפי effective_status אמיתי (Phase 05.7.x)
 
-כשבוחרים טווח שכולל ימים בהם הקמפיין רץ אבל הוא **כבוי כרגע** (לא רץ ב-2+ הימים האחרונים), מופיע chip אפור-מאט ליד שם הקמפיין:
+כשבוחרים טווח שכולל ימים בהם הקמפיין רץ אבל הוא **כבוי כרגע** מופיע chip אפור-מאט ליד שם הקמפיין:
 
 ```
 Holiday Push Sweater   [CBO]  [⏸ כבוי · 15/05]
 ```
 
 - 🅛 **חצי-עיגול ⏸** = סימן השעיה.
-- **15/05** = ה-DD/MM של היום האחרון שהקמפיין הוציא כסף בטווח הנוכחי.
+- **15/05** = ה-DD/MM של היום האחרון שהקמפיין הוציא כסף בטווח הנוכחי (כשאין effective_status זמין).
+
+**מקור הסיגנל (חדש)**: עד 2026-05-22 ה-chip הסתמך רק על heuristic של "2+ ימים בלי spend". עכשיו ה-chip מתבסס על **effective_status האמיתי מהפלטפורמה** — נמשך מ-Meta, Google ו-TikTok APIs ונשמר בעמודה `effective_status` ב-`campaigns_daily`.
+
+**מצב פעיל / כבוי לפי פלטפורמה:**
+| פלטפורמה | פעיל | כל ערך אחר → כבוי |
+|---|---|---|
+| Meta | `ACTIVE` | `PAUSED` / `CAMPAIGN_PAUSED` / `ARCHIVED` / `ADSET_PAUSED` / `DISAPPROVED` / `PENDING_REVIEW` / `WITH_ISSUES` / ... |
+| Google | `ENABLED` | `PAUSED` / `REMOVED` |
+| TikTok | `ADGROUP_STATUS_DELIVERY_OK` | `ADGROUP_STATUS_DISABLE` / `BUDGET_EXCEED` / `TIMEDOUT` / `FROZEN` / `ARCHIVED` / `DELETE` / `AUDIT` |
+
+**Fallback**: כשעדיין אין effective_status (שורה כתובה לפני המיגרציה, או fetcher soft-fail) — ה-chip חוזר ל-heuristic הישן של "2+ ימים בלי spend".
+
+**Freshness**: effective_status מתעדכן ב-cron-daily (00:05 שעון ישראל) או בלחיצה ידנית על "רענן הכל". אם קמפיין הושבת בשעה האחרונה — ה-chip יעדכן ברענון הקרוב, לא מיד.
 
 **מה זה אומר:**
 - הקמפיין הריץ בעבר → לכן מופיע בטבלה עם המדדים ההיסטוריים שלו.
 - אבל הוא לא רץ עכשיו → המספרים בשורה הם **רטרוספקטיביים בלבד**, לא מצב חי.
-
-**מתי השתמש בזה:**
-- כשרוצה לסקור ביצועים היסטוריים של קמפיין כבוי בלי להתבלבל עם קמפיינים פעילים.
-- כשבחרת טווח שחלק ממנו הקמפיין רץ וחלק לא — תראה את הביצועים בטווח, אבל ה-chip יזהיר שהוא לא ממשיך כרגע.
-
-**איך נקבע "כבוי כרגע":**
-- "כבוי" = פחות מ-2 ימים מאז ה-spend האחרון של הקמפיין.
-- ה-2-day buffer קיים כדי לא ליפול ב-false positive בגלל latency של Apps Script (הנתונים של היום עוד אולי לא נאספו במלואם).
-
-**מה הוא לא:**
-- ❌ אין לו קשר ל-status של הקמפיין ב-Meta/Google בפועל. אנחנו לא קוראים את ה-status — אנחנו מסיקים אותו מהעדר spend.
-- ❌ קמפיין שכבוי 1 יום בלבד **לא יסומן** (לא חצה את ה-threshold).
 
 ### 7.10 CBO vs ABO — תקציבים
 - **CBO (Campaign Budget Optimization)**: התקציב מוגדר ברמת הקמפיין ומתחלק אוטומטית בין ad-sets.
@@ -825,6 +842,7 @@ Holiday Push Sweater   [CBO]  [⏸ כבוי · 15/05]
 - לחץ על כותרת עמודה למיון.
 - לחיצה שנייה הופכת כיוון.
 - תאי "—" (null) ממוינים לסוף.
+- **כל העמודות sortable** — כולל 5 עמודות Shopify (Phase 05.7.x: `roasShopifyPlatform`, `shopifyValuePlatform`, `shopifyUnitsPlatform`, `shopifyValueTotal`, `shopifyUnitsTotal`) ועמודת **ציון** (Health Score). שורות לא ממופות (`info=undefined`) צוללות לתחתית גם ב-asc וגם ב-desc.
 
 ### 7.12 Show-More
 ברירת מחדל: 10 שורות. לחיצה על "הצג עוד" מוסיפה 10. זה לא מסמך פתוח שטוען 200 קמפיינים מיד.
@@ -870,8 +888,58 @@ Holiday Push Sweater   [CBO]  [⏸ כבוי · 15/05]
 
 ### 7.15 טעויות נפוצות בכרטיסיית Campaigns
 - ❌ **בחירת Mode "Ad-Set" וניתוח כאילו רואים קמפיינים** — תקציב Ad-Set שונה מ-Campaign Budget. ב-CBO ה-Ad-Set Budget = null.
-- ❌ **שינוי תקציב על בסיס שורה ב-Low Trust** — תקן מעקב לפני.
+- ❌ **שינוי תקציב על בסיס Health Score נמוך כשרק attribution clarity חלשה** — תקן URL Parameters לפני שמכבים. ראה 7.16.
 - ❌ **התעלמות מ-CPM שעולה אבל ROAS יציב** — הניתוח האוטומטי בא ממקום מקצועי, לא decorative.
+
+### 7.16 Campaign Health Score — הציון המאוחד (Phase 05.7.x)
+
+עד הסשן הזה היו 6 סיגנלים נפרדים על כל קמפיין (Trust chip, off-chip, CPM-vs-ROAS analysis, ROAS color tone, 3 ROAS values שונים, optimized marker) — כל אחד מהם מודד דבר שונה ולא מדבר עם השני. ה-Health Score מאחד אותם לציון אחד 0–100 + אות (A/B/C/D/F).
+
+**איפה זה מופיע:**
+1. **בטבלה** — עמודה "ציון" עם תג מסוגנן (A=ירוק, B=כחול, C=כתום, D/F=אדום, ⏳=מוקדם מדי). לחיצה פותחת drilldown עם 4 בארי-תקדמות שמראים על מה הציון מבוסס.
+2. **במגירת קמפיין** — `HealthScorePanel` בראש המגירה (אחרי הסטטים), מציג את הציון בפירוט מלא עם המלצה דרייב-מהרכיב-החלש.
+3. **בדוח AI** — מקטע "Campaign Health Score — ציון מאוחד פר קמפיין" עם טבלה ל-25 קמפיינים מובילים.
+
+**הנוסחה (4 רכיבים משוקללים):**
+| רכיב | משקל | מה הוא מודד |
+|---|---|---|
+| **רווחיות** | 40% | ROAS × אמינות attribution. עדיפות source: Shopify דטרמיניסטי → Shopify משולב → פלטפורמה (×0.5 penalty כש-undocumented). ROAS 1.0 → 0 נקודות, 2.0 → 50, 3.0+ → 100 (capped). |
+| **נפח** | 15% | סולם הוצאה — ≥$500: 100; $200-$500: 70; $50-$200: 40; <$50: 10. קמפיינים עם הוצאה מועטה מקבלים ציון נמוך אפילו עם ROAS מצוין (מדגם רעשני). |
+| **מומנטום** | 25% | תוצאת `analyzeCpmVsRoas` על הסדרה היומית: חיובי → 100, נייטרלי → 60, אזהרה → 40, שלילי → 0. בלי 5+ ימי פעילות → 60 (נייטרלי). |
+| **בהירות attribution** | 20% | trust.score של ה-click-id coverage (0–100). Google ללא attribution → 50 (נייטרלי). |
+| **התאמת אופרטור** | ± | +15 אם מסומן אופטימיזציה פעילה; −30 אם effective_status = כבוי. |
+
+**הציון הסופי**: סכום משוקלל של ה-4 רכיבים + התאמת אופרטור, clamped ל-[0, 100]. אות לפי הסולם: A ≥ 75 · B ≥ 60 · C ≥ 45 · D ≥ 30 · F < 30.
+
+**מצב "מוקדם מדי" (⏳ unknown):**
+קמפיין שעדיין לא צבר מספיק נתונים — אחד מאלה מטריגר את הציון `unknown`:
+- הוצאה < $30 בטווח, או
+- הוצאה < $100 + 0 conversions.
+
+זה כדי לא ליפול לטעות של "F → לעצור" על קמפיין שעדיין בתהליך learning. ⏳ → לחכות, לא להחליט.
+
+**איך להשתמש:**
+- 🟢 **A/B** + פער Pixel↔Shopify < 15% + CPM יציב → **לסקייל** (+20-40% תקציב).
+- 🔵 **B** + מומנטום מאיץ → **לסקייל בזהירות** (+10-20%).
+- 🟠 **C** → **לעקוב, לבחון פירוט הרכיבים**.
+- 🔴 **D/F** + רווחיות נמוכה → **לעצור / לרענן קריאייטיב**.
+- 🔴 **D/F** + רק attribution clarity נמוך (השאר טובים) → **לתקן URL Parameters**, לא לעצור.
+
+**מקור האמת**: הציון מחושב בכל פעם שהדאטה מתחדש (לא נשמר ב-DB). הטבלה והמגירה תמיד מציגות ציון עדכני לפי הנתונים החיים.
+
+### 7.17 שינוי סדר עמודות (Column Reorder)
+
+**איפה:** לחץ על כפתור **"עמודות"** בסרגל הכלים של ה-Campaigns. בתפריט שנפתח, ליד כל עמודה מטריקה יש חצים ▲▼.
+
+**איך זה עובד:**
+- חצים ▲▼ מזיזים את העמודה שלב אחד למעלה/למטה בסדר העמודות בטבלה.
+- הסדר נשמר ב-localStorage **וסנכרון עננה** — אם תפתח את הדשבורד מדפדפן אחר, הסדר ישוחזר.
+- "אפס סדר עמודות" בתחתית התפריט מחזיר לברירת מחדל.
+
+**עמודות שאפשר להזיז (15):**
+spend, budget, conversionValue, roas, roasShopify, roasShopifyPlatform, shopifyValuePlatform, shopifyUnitsPlatform, shopifyValueTotal, shopifyUnitsTotal, conversions, ctr, cpc, cpm, cpa.
+
+**עמודות שלא ניתן להזיז (קבועות):** Optimized, ציון, שם הקמפיין (התחלה); Deep link (סוף).
 
 ---
 
@@ -884,7 +952,12 @@ Holiday Push Sweater   [CBO]  [⏸ כבוי · 15/05]
 ┌─────────────────────────────────────────────────────────────┐
 │ Campaign Holiday Push 2026 | Store: uzoshop | Meta   ⤢ X   │
 ├─────────────────────────────────────────────────────────────┤
+│  HealthScorePanel (Phase 05.7.x) — ראש המגירה              │
+│  ציון 78/100 + 4 בארי-תקדמות + המלצה דרייב-מהרכיב-החלש    │
+├─────────────────────────────────────────────────────────────┤
 │  Summary KPIs: Spend $850 | ROAS 2.82 | CTR 1.8% | CPM $14 │
+├─────────────────────────────────────────────────────────────┤
+│  הוצאה ↔ ערך המרות לאורך הזמן (גרף עם Y-axis labels)        │
 ├─────────────────────────────────────────────────────────────┤
 │  Attribution Analysis Panel                                  │
 │  (Pixel vs Shopify breakdown)                                │
@@ -893,7 +966,7 @@ Holiday Push Sweater   [CBO]  [⏸ כבוי · 15/05]
 │  (איזה מוצרים נמכרו, מאיזה ערוץ הגיעו)                     │
 ├─────────────────────────────────────────────────────────────┤
 │  MetaShopify Reconciliation                                  │
-│  (טבלה יומית של Pixel Value vs Shopify Value)               │
+│  (טבלה יומית של Pixel Value vs Shopify Value, עם Y-axis)    │
 ├─────────────────────────────────────────────────────────────┤
 │  CPM-over-time Chart + Analysis Box                          │
 │  (גרף + ניתוח אוטומטי)                                       │
@@ -905,6 +978,8 @@ Holiday Push Sweater   [CBO]  [⏸ כבוי · 15/05]
 │  (רשימת ad-sets שלוקחת חלק בקמפיין)                          │
 └─────────────────────────────────────────────────────────────┘
 ```
+
+**HealthScorePanel (חדש, Phase 05.7.x):** הצלע העליונה של המגירה היא אותו ציון בריאות שמופיע בעמודה "ציון" בטבלה — רק מורחב לתצוגה מלאה. 4 בארי-תקדמות (רווחיות / נפח / מומנטום / בהירות attribution), ניקוד 0–100 לכל אחד, נימוק טקסטואלי, ובלוק המלצה דינמי שמבוסס על הרכיב החלש ביותר ("הציון מושך מטה ע״י…"). אם הציון insufficient — תוצג הודעת "מוקדם מדי, חכה לעוד נתונים" במקום ההמלצות.
 
 ### 8.2 Summary KPIs (חלק עליון)
 KPIs מצרפיים של הקמפיין:
@@ -2654,20 +2729,20 @@ curl -s "$PROD/api/data?from=2026-05-15&to=2026-05-20" | jq '.rows | length'
 
 תאריך ושעה: 12:00, 20/05/2026
 
-🏪 uzoshop:
-• הוצאה: C$450
-• הכנסות: C$1,890
-• ROAS: 4.20
-• הזמנות: 28  (פייסבוק: 18, גוגל: 6, אחרים: 4)
+🏪 uzoshop: • הוצאה: C$450 • הכנסות: C$1,890 • ROAS: 4.20 • CPM: C$5.40 • הזמנות: 28  (פייסבוק: 18, גוגל: 6, אחרים: 4)
 
-🏪 zolplus:
-...
+🏪 zolplus: …
 
-🎯 סה"כ:
-...
+🎯 סה"כ: • הוצאה: C$X • הכנסות: C$Y • ROAS: Z • CPM: C$W • הזמנות: N  (פייסבוק: …, גוגל: …, אחרים: …)
 
 לפרטים מלאים — פתח את הדשבורד.
 ```
+
+**CPM ב-WhatsApp (Phase 05.7.x):** כל בלוק חנות וגם בלוק ה-"סה״כ" כוללים `CPM: C$X.XX` בין ROAS למספר ההזמנות.
+- ב-12:00 ו-18:00: CPM של היום עד הרגע הזה.
+- ב-00:10: CPM של אתמול ליום שלם.
+- ה-CPM המצרפי הוא **משוקלל** — Σ spend ÷ Σ impressions × 1000, לא ממוצע פשוט של ה-CPM-ים פר חנות (זה היה over-weight לחנויות עם חשיפות מעטות).
+- אם impressions = 0 — מציג "—" במקום `C$0`. ה-template של Meta לא משתנה (אותם 5 placeholders) — רק התוכן בתוך כל פרמטר מתרחב, ולא נדרש re-approval.
 
 ### 30.2 איפה זה רץ
 
@@ -2785,9 +2860,83 @@ UPDATE notification_config SET active = TRUE WHERE provider = 'metacloud';
 
 ---
 
+## 31. ייצוא דוח ל-AI (AI Report Export)
+
+לחצן **"ייצא דוח ל-AI"** בטאב הבית מייצר דוח Markdown מלא של החנות + הטווח הנבחר, להדבקה ל-ChatGPT / Claude / Gemini. הדוח (Phase 05.7.x — v3) הורחב משמעותית מ-2026-05-22 כדי לשקף את כל הסיגנלים שהדאשבורד מציג, ומדבר בפרסונה של senior e-commerce strategist.
+
+### 31.1 מה הדוח כולל
+
+**מקטעים בסיסיים:**
+- 📌 הערת attribution (Shopify vs Meta/Google/TikTok) בראש
+- תקציר KPIs (revenue / spend / ROAS / CPM / CTR / CPC / CPA / AOV)
+- משפך החשיפות→הזמנות
+- פירוט CPM ו-CTR לפי ערוץ
+- פירוט יומי + פירוט לפי חנות
+- 25 מוצרים מובילים + 25 קמפיינים מובילים
+- ⚠️ קמפיינים שמבזבזים (drainers)
+- אד-סטים של 5 הקמפיינים עם ההוצאה הגבוהה
+- ביצועים לפי יום בשבוע
+- השוואת מחצית-1 ↔ מחצית-2
+- חלוקת תקציב לפי פלטפורמה
+- מוצרים עם מרג'ין הגבוה ביותר
+
+**מקטעים analyst-grade (v2 — נוספו 2026-05-22):**
+- **תנועה לפי מקור** — הזמנות + AOV + % לכל source (Meta-paid / Google-paid / TikTok-paid / direct / organic / email / other). כיסוי deterministic.
+- **מומנטום קמפיינים** — ROAS חצי-1 vs חצי-2 לכל קמפיין עם ≥$100 הוצאה, +Δ + תיוג (מאיץ / יציב / נחלש / חדש / התקרר).
+- **תנודתיות CPM** — CV (stddev/mean) לכל פלטפורמה.
+- **ימים חריגים** — robust z-score על median + MAD.
+- **פער Pixel ↔ Shopify** — period-level gap לכיול אמינות פלטפורמות.
+
+**מקטעים שמתחברים לסיגנלים החדשים (v3 — נוספו 2026-05-22):**
+- **Campaign Health Score** — אותו ציון מהדאשבורד, לכל קמפיין מהטופ 25, עם פירוט 4 הרכיבים (רווחיות / נפח / מומנטום / attribution) + סטטוס פלטפורמה.
+- **השוואת ROAS לקמפיין — Pixel ↔ Shopify deterministic** — match לפי `utm_id` / `utm_campaign` ל-25 קמפיינים מובילים, עם פער ב-% + אבחנה ("Shopify רואה X%+ יותר" / "Meta מדווח Y% עודף" / "אין click-id").
+- **קמפיינים כבויים כעת** — לפי `effective_status` אמיתי מ-Meta/Google/TikTok.
+- **TikTok — צלילה ייעודית** — מופיע רק כש-`ttSpend > 0`. ROAS Pixel vs Shopify deterministic ספציפי ל-TikTok + AOV לקוחות TikTok + פער + per-campaign list.
+
+### 31.2 ה-Prompt בתחתית
+
+ה-prompt מסביר ל-AI שהוא **Senior E-commerce Performance Strategist** ברמה של Common Thread Collective / Tier 11 / Disruptive Advertising. הוא דורש:
+- "2.0 קרא את ה-Health Score קודם" — להתחיל מהציון כ-headline ולהשתמש בפירוט הרכיבים לכוון את ההמלצה
+- Scale = A/B + פער<15% + CPM יציב + מאיץ/יציב + הוצאה ≥$200
+- Pause = D/F אלא אם רק attribution-clarity חלשה (אז לתקן URL Parameters, לא להפסיק)
+- חלק 4.2 "TikTok specifically" — לא לאחד מסקנות עם Meta
+- חלק 7: 5 פעולות עם שם קמפיין, מספרים, תוצאה צפויה ותנאי roll-back
+- חלק 8: 3 KPIs ספציפיים לעקוב אחריהם בשבוע הבא
+
+**Anti-platitudes**: כל המלצה חייבת לכלול שם קמפיין / מוצר ומספר מהדוח. אסור "צריך לשפר את הקריאייטיב".
+
+### 31.3 מקורות הנתונים
+
+הדוח שולף מכל ה-APIs של הדשבורד:
+- `/api/data` — daily revenue/spend per store
+- `/api/products` — מוצרים נמכרים
+- `/api/campaigns` — קמפיינים כולל `effective_status`
+- `/api/orders-attribution` — order-level עם source/utm/click-id (Phase 05.7.x — חדש בדוח)
+
+אם orders-attribution לא זמין (pipeline עדיין מתחמם) — המקטעים שתלויים בו (תנועה לפי מקור, Pixel↔Shopify per-campaign, TikTok deep-dive) יתחילו עם הודעת "אין נתונים זמינים".
+
+---
+
 ## סוף המסמך
 
-**גרסה:** 1.8 · **תאריך עדכון:** 2026-05-22 · **בסיס קוד:** Phase 05.7.9
+**גרסה:** 1.9 · **תאריך עדכון:** 2026-05-22 · **בסיס קוד:** Phase 05.7.x
+
+### עדכון 2026-05-22 (Phase 05.7.x) — Stacking + Health Score + off-chip + TikTok + reorder + WhatsApp CPM + AI report v3
+
+סיכום השינויים בסשן המאוחד (17 commits, e45f743 → 3681884):
+
+- **תיקון Stacking ב-Tables** — `<thead>` ירדו מ-z-10 ל-z-[5] כדי לא לכסות את ה-Header (z-30) וה-TabNav (z-20). תוקנו 9 קבצים של טבלאות. סולם z-index מקודם חדש: drawers 50-70, header 30, tabnav 20, table thead 5.
+- **Tooltips מסוגנן בכותרות עמודות** — `ColumnHeaderTh` חדש מחליף את ה-native `title=` בעמודות. tooltip מסוגנן (dark navy, 180ms delay) על כל אחת מ-13 כותרות העמודות בטבלת הקמפיינים.
+- **Campaign Health Score** — ציון 0–100 + A/B/C/D/F + 4 רכיבים משוקללים (רווחיות 40% / נפח 15% / מומנטום 25% / attribution 20%) ± התאמת אופרטור. מופיע בעמודה "ציון" בטבלת הקמפיינים, ב-HealthScorePanel בראש המגירה, וב-AI report. ראה 7.16.
+- **off-chip עם status אמיתי** — Meta / Google / TikTok `effective_status` נמשך ונשמר ב-`campaigns_daily.effective_status` (migration 20260522180000). ה-chip "כבוי" מתבסס על הסטטוס האמיתי כש-זמין, fallback ל-heuristic של 2 ימים אם null. ראה 7.9.
+- **TikTok — תיקוני שלמות** — fetchTikTokAdGroupStatuses מ-`/adgroup/get/` (`secondary_status`) מתמזג ל-`TikTokAdRow.effectiveStatus`. `m.conversion` ⇒ `m.complete_payment` כדי לחבר את ספירת ההמרות לעמודה של conversionValue (שני המקורות היו לא תואמים).
+- **5 עמודות Shopify למיון** — `roasShopifyPlatform`, `shopifyValuePlatform`, `shopifyUnitsPlatform`, `shopifyValueTotal`, `shopifyUnitsTotal` — כולן sortable. ראה 7.11.
+- **שינוי סדר עמודות** — 15 עמודות מטריקה ניתנות להזזה דרך חצים ▲▼ בתפריט "עמודות". הסדר נשמר ב-localStorage ומסונכרן ענן. ראה 7.17.
+- **TodayLive gradient דינמי** — צבע רקע + פלס + אייקון של "היום עד לרגע זה" משתנים לפי ROAS המשוקלל. ראה 4.1.
+- **WhatsApp CPM** — שלושת ההודעות (12:00 / 18:00 / 00:10) כוללות עכשיו CPM פר חנות וגם CPM משוקלל בסיכום. ראה 30.1.
+- **AI Report v3** — דוח deepening משמעותי: Health Score per campaign, Pixel↔Shopify per-campaign, off campaigns table, TikTok deep-dive, prompt בפרסונה של Senior Strategist. ראה 31.
+- **Y-axis labels** — תוקנו ב-2 גרפים שהיו מציגים `<YAxis hide ...>`: "הוצאה ↔ ערך המרות לאורך הזמן" ב-CampaignDrawer + "ערוצים מול Shopify" ב-MetaShopifyReconciliation. עכשיו עם CAD ticks.
+- **ניקוי trust chip** — ה-trust chip הקטן (אמין / חלקי / לא אמין) שהיה מתחת ל-ROAS Shopify הוסר. הסיגנל נכלל ברכיב "attribution clarity" של ה-Health Score.
 
 ### עדכון 2026-05-22 (Phase 05.7.9) — TikTok product-mapping + refresh UX
 
