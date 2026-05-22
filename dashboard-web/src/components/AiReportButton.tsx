@@ -9,6 +9,7 @@ import type { DashboardData, Filters as F } from '@/lib/types';
 import type { ProductsResponse } from '@/app/api/products/route';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
+import type { AdsResponse } from '@/app/api/ads/route';
 import { buildDateRangeKey } from '@/lib/dateRange';
 
 const fetcher = (url: string) => fetch(url).then(r => r.ok ? r.json() : null);
@@ -66,6 +67,14 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
     fetcher,
     { revalidateOnFocus: false },
   );
+  // Phase 05.7.x — ads feeds the new ad-level (creative) drill-down section.
+  // Range-keyed so the SWR cache matches the user's selected window. Same
+  // pattern as orders-attribution.
+  const { data: ads } = useSWR<AdsResponse | null>(
+    open ? buildDateRangeKey('/api/ads', filters.range) : null,
+    fetcher,
+    { revalidateOnFocus: false },
+  );
 
   async function handleGenerate() {
     setGenerating(true);
@@ -79,6 +88,7 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
         productRows: products?.rows ?? [],
         campaignRows: campaigns?.rows ?? [],
         ordersRows: orders?.rows ?? [],
+        adsRows: ads?.rows ?? [],
       });
       setReport(md);
     } finally {

@@ -320,11 +320,12 @@ UPDATE notification_config SET active = FALSE WHERE provider = 'metacloud';
 ### 10.2 קומפוננטה
 `dashboard-web/src/components/AiReportButton.tsx` — modal עם כפתורי "צור דוח" / "העתק" / "הורד .md".
 
-### 10.3 Data sources (4 APIs)
+### 10.3 Data sources (5 APIs)
 - `/api/data` — daily revenue/spend/ROAS per store.
 - `/api/products` — top products with margin.
 - `/api/campaigns` — campaigns כולל `effective_status`.
-- `/api/orders-attribution` — order-level עם source/utm/click-id (חדש בדוח, range-keyed via `buildDateRangeKey`).
+- `/api/orders-attribution` — order-level עם source/utm/click-id (range-keyed via `buildDateRangeKey`).
+- `/api/ads` — ad-level rows (`ads_daily`) ל-creative drill-down + winners/losers (range-keyed, Phase 05.7.x).
 
 ### 10.4 מקטעי הדוח (v3)
 
@@ -356,6 +357,11 @@ UPDATE notification_config SET active = FALSE WHERE provider = 'metacloud';
 - Per-campaign Pixel ↔ Shopify deterministic comparison (match by `utm_id`/`utm_campaign`)
 - Currently-off campaigns (real `effective_status`)
 - TikTok deep-dive (only when `ttSpend > 0`)
+
+**Creative-level (v4 — 2026-05-22):**
+- Per-campaign creative drill-down for top-5-spend campaigns (top 8 ads each, with CTR/CPA/ROAS)
+- 🏆 Creative winners — cross-campaign top-5 by ROAS (≥$25 spend + ≥2 conversions + ROAS ≥ 2.0)
+- 💸 Creative drainers — cross-campaign top-5 by waste (≥$25 spend + ROAS < 1.5, or 0 conv with ≥$100 spend)
 
 ### 10.5 Prompt
 פרסונה של **Senior E-commerce Performance Strategist** ברמה של Common Thread Collective / Tier 11 / Disruptive Advertising. 8 numbered sections. Anti-platitudes: כל המלצה חייבת לכלול שם קמפיין / מוצר ומספר מהדוח.

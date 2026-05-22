@@ -2,6 +2,7 @@ import type { DailyRow } from './types';
 import type { ProductRow } from './products';
 import type { CampaignRow } from './campaigns';
 import type { OrderAttributionRow } from './ordersAttribution';
+import type { AdRow } from './ads';
 import {
   computeCampaignHealth,
   type CampaignHealth,
@@ -40,6 +41,13 @@ type Params = {
    * dependent sections fall back to "data not available".
    */
   ordersRows?: OrderAttributionRow[];
+  /**
+   * Phase 05.7.x — ad-level rows (one per (date, store, campaign, ad-set,
+   * ad)). Used for creative-level drill-down inside top campaigns +
+   * cross-campaign creative winners/losers. Source: ads_daily (Meta-only
+   * for now; Google PMax doesn't expose ad granularity). Empty acceptable.
+   */
+  adsRows?: AdRow[];
 };
 
 const fmtNum = (n: number, d = 0) =>
@@ -66,6 +74,7 @@ export function generateAiReport({
   productRows,
   campaignRows,
   ordersRows,
+  adsRows,
 }: Params): string {
   const out: string[] = [];
 
@@ -81,6 +90,13 @@ export function generateAiReport({
     r => inRange(r.date, range) && (!storeFilter || r.storeName === storeFilter),
   );
   const orders = (ordersRows ?? []).filter(
+    r => inRange(r.date, range) && (!storeFilter || r.storeName === storeFilter),
+  );
+  // Phase 05.7.x — ad-level rows for creative drill-down. Meta-only in
+  // practice (Google PMax / Shopping don't expose ad granularity), but
+  // we don't filter by platform here — let the downstream section
+  // handle "no ads" gracefully.
+  const ads = (adsRows ?? []).filter(
     r => inRange(r.date, range) && (!storeFilter || r.storeName === storeFilter),
   );
 
@@ -1447,6 +1463,166 @@ export function generateAiReport({
         );
       }
       out.push('');
+    }
+  }
+
+  // ===== Ad-level (creative) drill-down — Phase 05.7.x =====
+  //
+  // The deepest drill-down the dashboard has. Two slices:
+  //   1. Per-campaign: top creatives inside each of the top 5 spend campaigns
+  //      (mirrors the AdsDrawer view in the UI).
+  //   2. Cross-campaign winners + losers: the 5 best creatives by ROAS across
+  //      ALL campaigns (with spend floor to filter noise), and the 5 biggest
+  //      cash drains (high spend + low ROAS).
+  //
+  // Why this matters for the AI's recommendations: a campaign that looks bad
+  // overall can have ONE great creative carrying it (kill the rest), and a
+  // campaign that looks great can have ONE bad creative dragging the average.
+  // The campaign-level + ad-set-level views above can't show this.
+  if (ads.length > 0) {
+    // Aggregate to (storeId, platform, campaignId, adSetId, adId).
+    type AdAgg = {
+      storeName: string;
+      platform: string;
+      campaignName: string;
+      adSetName: string;
+      adName: string;
+      spend: number;
+      impressions: number;
+      clicks: number;
+      conversions: number;
+      conversionValue: number;
+      // For grouping back into per-campaign tables below.
+      campaignKey: string;
+    };
+    const adAgg = new Map<string, AdAgg>();
+    for (const a of ads) {
+      if (!a.adId) continue;
+      const adKey = `${a.storeId}::${a.platform}::${a.campaignId}::${a.adSetId}::${a.adId}`;
+      const existing = adAgg.get(adKey);
+      if (existing) {
+        existing.spend += a.spend;
+        existing.impressions += a.impressions;
+        existing.clicks += a.clicks;
+        existing.conversions += a.conversions;
+        existing.conversionValue += a.conversionValue;
+      } else {
+        adAgg.set(adKey, {
+          storeName: a.storeName,
+          platform: a.platform,
+          campaignName: a.campaignName,
+          adSetName: a.adSetName,
+          adName: a.adName,
+          spend: a.spend,
+          impressions: a.impressions,
+          clicks: a.clicks,
+          conversions: a.conversions,
+          conversionValue: a.conversionValue,
+          campaignKey: `${a.storeId}::${a.platform}::${a.campaignId}`,
+        });
+      }
+    }
+
+    // Slice 1 — per-campaign top creatives for the top-5-spend campaigns.
+    // Use the same `topCampaignsForDrill` list defined earlier so the
+    // section reads consistently with the ad-set drill-down above.
+    if (topCampaignsForDrill.length > 0) {
+      out.push('## מודעות (creatives) — drill-down בתוך 5 הקמפיינים');
+      out.push('');
+      out.push(
+        '_זום פנימה ברמת המודעה הבודדת. CTR ו-ROAS פר creative חושף איזו מודעה נושאת את הקמפיין ' +
+          'ואיזו גוררת אותו למטה. כיבוי מודעה אחת חלשה בתוך קמפיין מצליח עדיף על-פני כיבוי כל הקמפיין._',
+      );
+      out.push('');
+      for (const c of topCampaignsForDrill) {
+        // The map key in adAgg uses storeId, not storeName. Find it by
+        // matching the suffix (platform::campaignId) — same trick the
+        // ad-set drill-down uses above.
+        const matchingAds = Array.from(adAgg.values())
+          .filter(a => a.campaignKey.endsWith(`::${c.platform}::${c.campaignId}`))
+          .map(a => ({
+            ...a,
+            roas: a.spend > 0 ? a.conversionValue / a.spend : 0,
+            ctr: a.impressions > 0 ? a.clicks / a.impressions : 0,
+            cpa: a.conversions > 0 ? a.spend / a.conversions : 0,
+          }))
+          .filter(a => a.spend > 0 || a.impressions > 0)
+          .sort((a, b) => b.spend - a.spend)
+          .slice(0, 8);
+        if (matchingAds.length === 0) continue;
+        out.push(`### ${c.platform} — ${escapeMd(c.name)} (${c.store})`);
+        out.push(`_הוצאת קמפיין: ${fmtCad(c.spend)} · ${matchingAds.length} מודעות בטופ_`);
+        out.push('');
+        out.push(`| מודעה | אד-סט | הוצאה | חשיפות | CTR | המרות | ROAS | CPA |`);
+        out.push(`|---|---|---|---|---|---|---|---|`);
+        for (const a of matchingAds) {
+          out.push(
+            `| ${escapeMd(a.adName) || '—'} | ${escapeMd(a.adSetName)} | ${fmtCad(a.spend)} | ${fmtNum(a.impressions)} | ${a.ctr > 0 ? fmtPct(a.ctr, 2) : '—'} | ${fmtNum(a.conversions)} | ${a.roas > 0 ? fmtNum(a.roas, 2) : '—'} | ${a.cpa > 0 ? fmtCad(a.cpa) : '—'} |`,
+          );
+        }
+        out.push('');
+      }
+    }
+
+    // Slice 2 — cross-campaign winners + losers. Spend floor avoids
+    // statistical noise (a single conversion on $5 spend would otherwise
+    // rocket to a "winner" with ROAS=20).
+    const AD_SPEND_FLOOR = 25; // CAD
+    const adsWithMetrics = Array.from(adAgg.values())
+      .filter(a => a.spend >= AD_SPEND_FLOOR)
+      .map(a => ({
+        ...a,
+        roas: a.spend > 0 ? a.conversionValue / a.spend : 0,
+        ctr: a.impressions > 0 ? a.clicks / a.impressions : 0,
+        cpa: a.conversions > 0 ? a.spend / a.conversions : 0,
+      }));
+
+    if (adsWithMetrics.length >= 5) {
+      const winners = [...adsWithMetrics]
+        .filter(a => a.conversions >= 2 && a.roas >= 2.0)
+        .sort((a, b) => b.roas - a.roas)
+        .slice(0, 5);
+      const losers = [...adsWithMetrics]
+        .filter(a => a.roas < 1.5 || (a.conversions === 0 && a.spend >= 100))
+        .sort((a, b) => b.spend - a.spend)
+        .slice(0, 5);
+
+      if (winners.length > 0) {
+        out.push('## 🏆 Creative winners — מודעות מובילות לפי ROAS');
+        out.push('');
+        out.push(
+          `_מסנן: ≥ ${fmtCad(AD_SPEND_FLOOR)} הוצאה + ≥ 2 המרות + ROAS ≥ 2.0 (כדי לא להרים מודעה עם המרה אחת מקרית). ` +
+            'אלה הקריאייטיבים שמושכים — לפני סקייל של הקמפיין כולו, שווה לראות אם אפשר לרכז תקציב על המודעה המנצחת._',
+        );
+        out.push('');
+        out.push(`| מודעה | קמפיין | אד-סט | הוצאה | המרות | CTR | ROAS |`);
+        out.push(`|---|---|---|---|---|---|---|`);
+        for (const a of winners) {
+          out.push(
+            `| ${escapeMd(a.adName) || '—'} | ${escapeMd(a.campaignName)} | ${escapeMd(a.adSetName)} | ${fmtCad(a.spend)} | ${fmtNum(a.conversions)} | ${a.ctr > 0 ? fmtPct(a.ctr, 2) : '—'} | ${fmtNum(a.roas, 2)} |`,
+          );
+        }
+        out.push('');
+      }
+
+      if (losers.length > 0) {
+        out.push('## 💸 Creative drainers — מודעות שגורעות');
+        out.push('');
+        out.push(
+          `_מסנן: ≥ ${fmtCad(AD_SPEND_FLOOR)} הוצאה + (ROAS < 1.5 או 0 המרות עם ≥ ${fmtCad(100)} הוצאה). ` +
+            'מודעה במצב הזה לרוב גוררת את ה-CPM של ה-ad-set שלה למעלה — כיבוי שלה לבד (לא כל הקמפיין) ' +
+            'יכול לשפר את הביצועים של השאר באותו ad-set._',
+        );
+        out.push('');
+        out.push(`| מודעה | קמפיין | אד-סט | הוצאה | המרות | CTR | ROAS |`);
+        out.push(`|---|---|---|---|---|---|---|`);
+        for (const a of losers) {
+          out.push(
+            `| ${escapeMd(a.adName) || '—'} | ${escapeMd(a.campaignName)} | ${escapeMd(a.adSetName)} | ${fmtCad(a.spend)} | ${fmtNum(a.conversions)} | ${a.ctr > 0 ? fmtPct(a.ctr, 2) : '—'} | ${a.roas > 0 ? fmtNum(a.roas, 2) : '0 (FAILED)'} |`,
+          );
+        }
+        out.push('');
+      }
     }
   }
 
