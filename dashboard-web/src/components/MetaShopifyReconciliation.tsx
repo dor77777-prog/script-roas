@@ -57,7 +57,7 @@ const LAG_IMPROVEMENT_THRESHOLD = 0.05;
  */
 function aggregateMappedConversionValue(
   rows: CampaignRow[] | undefined,
-  platform: 'Meta' | 'Google',
+  platform: 'Meta' | 'Google' | 'TikTok',
   storeId: string,
   productMap: ProductMap | undefined,
   mappedIds: string[],
@@ -163,10 +163,18 @@ export function buildReconciliation(opts: {
   rangeFrom: string;
   rangeTo: string;
 }): {
-  series: Array<{ date: string; meta: number; google: number; organic: number; shopify: number }>;
-  primaryChannel: 'Meta' | 'Google' | 'Combined';
+  series: Array<{
+    date: string;
+    meta: number;
+    google: number;
+    tiktok: number;
+    organic: number;
+    shopify: number;
+  }>;
+  primaryChannel: 'Meta' | 'Google' | 'TikTok' | 'Combined';
   r: number | null;
   rGoogle: number | null;
+  rTiktok: number | null;
   rOrganic: number | null;
   rCombined: number | null;
   bestLag: number;
@@ -232,6 +240,21 @@ export function buildReconciliation(opts: {
     rangeTo,
   );
 
+  // Build {date → tiktok revenue}:
+  // Sum conversionValue of ALL TikTok campaigns in this store mapped to any
+  // of the wantedIds. Phase 05.7.9 — added when product-mapping was opened
+  // for TikTok campaigns so the reconciliation panel can show all 3 paid
+  // platforms side-by-side, not just Meta + Google.
+  const tiktokByDate = aggregateMappedConversionValue(
+    campaignsData?.rows,
+    'TikTok',
+    storeId,
+    productMap,
+    mappedIds,
+    rangeFrom,
+    rangeTo,
+  );
+
   /**
    * Organic predicate (post-5.2.2.1 FIX-01, updated Phase 05.7.5 for tiktok-paid):
    * organic = NOT meta-paid AND NOT google-paid AND NOT tiktok-paid AND NOT other-paid
@@ -274,30 +297,39 @@ export function buildReconciliation(opts: {
     }
   }
 
-  // Compose the 4-series array aligned to the user's full selected date
-  // window, not just days where the drawer campaign was active.
+  // Compose the 5-series array (Phase 05.7.9 — added TikTok) aligned to
+  // the user's full selected date window, not just days where the drawer
+  // campaign was active.
   const series = dateList.map(date => ({
     date,
     meta: metaByDate.get(date) ?? 0,
     google: googleByDate.get(date) ?? 0,
+    tiktok: tiktokByDate.get(date) ?? 0,
     organic: organicByDate.get(date) ?? 0,
     shopify: shopifyByDate.get(date) ?? 0,
   }));
 
   if (series.length < 5) return null; // not enough points for r
 
-  // FIX-14 (5.2.2.1): Pearson over active days only. Long paused periods produce zero-zero pairs that inflate r toward +1.
-  const activeSeries = series.filter(s => s.meta + s.google + s.organic + s.shopify > 0);
+  // FIX-14 (5.2.2.1): Pearson over active days only. Long paused periods
+  // produce zero-zero pairs that inflate r toward +1. Phase 05.7.9 — the
+  // active-day filter now also includes TikTok so a TikTok-only ramp doesn't
+  // get filtered out as "inactive" when Meta + Google were paused.
+  const activeSeries = series.filter(
+    s => s.meta + s.google + s.tiktok + s.organic + s.shopify > 0,
+  );
   const r = pearson(activeSeries.map(s => s.meta), activeSeries.map(s => s.shopify));
   const rGoogle = pearson(activeSeries.map(s => s.google), activeSeries.map(s => s.shopify));
+  const rTiktok = pearson(activeSeries.map(s => s.tiktok), activeSeries.map(s => s.shopify));
   const rOrganic = pearson(activeSeries.map(s => s.organic), activeSeries.map(s => s.shopify));
   const rCombined = pearson(
-    activeSeries.map(s => s.meta + s.google + s.organic),
+    activeSeries.map(s => s.meta + s.google + s.tiktok + s.organic),
     activeSeries.map(s => s.shopify),
   );
-  const primaryChannel: 'Meta' | 'Google' | 'Combined' =
+  const primaryChannel: 'Meta' | 'Google' | 'TikTok' | 'Combined' =
     summary.platform === 'Google' ? 'Google'
       : summary.platform === 'Meta' ? 'Meta'
+      : summary.platform === 'TikTok' ? 'TikTok'
       : 'Combined';
 
   // Lag detection: try offsets -3..3, pick the one with the highest r.
@@ -329,7 +361,7 @@ export function buildReconciliation(opts: {
       ? Math.round((1 - sumChannels / sumShopify) * 100)
       : 0;
 
-  return { series, primaryChannel, r, rGoogle, rOrganic, rCombined, bestLag, bestR, darkTrafficPercent };
+  return { series, primaryChannel, r, rGoogle, rTiktok, rOrganic, rCombined, bestLag, bestR, darkTrafficPercent };
 }
 
 type Props = {
@@ -363,6 +395,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
   const primaryR =
     primaryChannel === 'Google' ? reconciliation.rGoogle
       : primaryChannel === 'Meta' ? reconciliation.r
+      : primaryChannel === 'TikTok' ? reconciliation.rTiktok
       : reconciliation.rCombined;
   const primaryAbsR = primaryR === null ? null : Math.abs(primaryR);
   const primaryRClass =
@@ -454,11 +487,21 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                     </>
                   );
                 }
+                if (primaryChannel === 'TikTok') {
+                  return (
+                    <>
+                      <strong className="text-roas-green">מתאם גבוה.</strong>{' '}
+                      TikTok תופס את הטרנדים נכון. אם יש פער במספרים — סביר שזה{' '}
+                      <strong>bias קבוע</strong> (TikTok pixel + modeled conversions).{' '}
+                      החלטות גידול תקציב על בסיס מגמות TikTok אמינות.
+                    </>
+                  );
+                }
                 if (primaryChannel === 'Combined') {
                   return (
                     <>
                       <strong className="text-roas-green">מתאם גבוה.</strong>{' '}
-                      Σ של 3 הערוצים מול Shopify תופס את הטרנדים נכון. פער קבוע במספרים{' '}
+                      Σ של 4 הערוצים מול Shopify תופס את הטרנדים נכון. פער קבוע במספרים{' '}
                       מעיד בדרך כלל על bias בערוצי הדיווח, לא על שבירת המגמה.
                     </>
                   );
@@ -482,11 +525,20 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                     </>
                   );
                 }
+                if (primaryChannel === 'TikTok') {
+                  return (
+                    <>
+                      <strong className="text-amber-600">מתאם חלקי.</strong>{' '}
+                      TikTok תופס חלק מהתנועות אבל יש ימים שהוא חורג.{' '}
+                      התעלם מ-TikTok ברמת יום בודד, התייחס רק לאגרגציה של 7+ ימים.
+                    </>
+                  );
+                }
                 if (primaryChannel === 'Combined') {
                   return (
                     <>
                       <strong className="text-amber-600">מתאם חלקי.</strong>{' '}
-                      Σ של 3 הערוצים מול Shopify מסביר חלק מהתנועה, אבל חסרים ימים.{' '}
+                      Σ של 4 הערוצים מול Shopify מסביר חלק מהתנועה, אבל חסרים ימים.{' '}
                       בדוק מיפוי מוצרים, UTMs וערוצים שלא נכנסים לאחת הסדרות.
                     </>
                   );
@@ -509,11 +561,21 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                   </>
                 );
               }
+              if (primaryChannel === 'TikTok') {
+                return (
+                  <>
+                    <strong className="text-roas-red">אין מתאם.</strong>{' '}
+                    TikTok מדווח על המרות שלא מופיעות ב-Shopify. או שהמיפוי לא מלא{' '}
+                    (חסרים מוצרים), או שיש over-attribution אגרסיבי (TikTok pixel
+                    + view-through). אל תקבל החלטות על בסיס המרות TikTok של הקמפיין הזה.
+                  </>
+                );
+              }
               if (primaryChannel === 'Combined') {
                 return (
                   <>
                     <strong className="text-roas-red">אין מתאם.</strong>{' '}
-                    Σ של 3 הערוצים מול Shopify לא מסביר את מכירות Shopify בפועל.{' '}
+                    Σ של 4 הערוצים מול Shopify לא מסביר את מכירות Shopify בפועל.{' '}
                     בדוק אם חסרים מוצרים במיפוי, UTMs, או ערוצי מכירה שלא מסווגים.
                   </>
                 );
@@ -530,10 +592,11 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
           </div>
         </div>
 
-        {/* Pearson values for all 4 channels */}
+        {/* Pearson values for all 5 channels (Phase 05.7.9 — added TikTok). */}
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-text-muted tabular-nums">
           {renderR('r(Meta)', reconciliation.r)}
           {renderR('r(Google)', reconciliation.rGoogle)}
+          {renderR('r(TikTok)', reconciliation.rTiktok)}
           {renderR('r(Organic)', reconciliation.rOrganic)}
           {renderR('r(Combined)', reconciliation.rCombined)}
         </div>
@@ -568,7 +631,14 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
               <Tooltip
                 content={({ active, payload }) => {
                   if (!active || !payload || payload.length === 0) return null;
-                  const d = payload[0].payload as { date: string; meta: number; google: number; organic: number; shopify: number };
+                  const d = payload[0].payload as {
+                    date: string;
+                    meta: number;
+                    google: number;
+                    tiktok: number;
+                    organic: number;
+                    shopify: number;
+                  };
                   return (
                     <div dir="rtl" className="rounded-lg bg-text-primary/95 text-white px-3 py-2 text-xs shadow-elevated tabular-nums">
                       <div className="text-white/65 mb-1 text-[10px]">{formatDate(d.date)}</div>
@@ -579,6 +649,10 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="inline-block w-2 h-2 rounded-full bg-blue-600" />
                         <span>Google: CAD {formatCurrency(d.google)}</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="inline-block w-2 h-2 rounded-full bg-pink-500" />
+                        <span>TikTok: CAD {formatCurrency(d.tiktok)}</span>
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="inline-block w-2 h-2 rounded-full bg-purple-600" />
@@ -592,15 +666,28 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                   );
                 }}
               />
-              <Line type="monotone" dataKey="meta" stroke={CHART_COLORS.meta} strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="google" stroke={CHART_COLORS.google} strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="organic" stroke={CHART_COLORS.organic} strokeWidth={2} dot={false} />
-              <Line type="monotone" dataKey="shopify" stroke={CHART_COLORS.shopify} strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="meta" stroke={CHART_COLORS.meta} strokeWidth={1.5} dot={false} opacity={0.85} />
+              <Line type="monotone" dataKey="google" stroke={CHART_COLORS.google} strokeWidth={1.5} dot={false} opacity={0.85} />
+              <Line type="monotone" dataKey="tiktok" stroke={CHART_COLORS.tiktok} strokeWidth={1.5} dot={false} opacity={0.85} />
+              <Line type="monotone" dataKey="organic" stroke={CHART_COLORS.organic} strokeWidth={1.5} dot={false} opacity={0.85} />
+              {/* Shopify line — source of truth (actual orders). Phase 05.7.9:
+                  made visually dominant (thicker stroke + filled dots + full
+                  opacity) so the eye anchors on it as the baseline; the four
+                  platform lines become "claims to compare against" rather
+                  than peers. */}
+              <Line
+                type="monotone"
+                dataKey="shopify"
+                stroke={CHART_COLORS.shopify}
+                strokeWidth={3.5}
+                dot={{ r: 2.5, fill: CHART_COLORS.shopify, strokeWidth: 0 }}
+                activeDot={{ r: 4 }}
+              />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
 
-        {/* 4-entry legend */}
+        {/* 5-entry legend (Phase 05.7.9 — added TikTok) */}
         <div className="flex items-center justify-center flex-wrap gap-3 text-[10px] sm:text-[11px]">
           <span className="inline-flex items-center gap-1.5">
             <span className="inline-block w-3 h-[2px] bg-amber-600" />
@@ -611,12 +698,19 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
             <span className="text-text-secondary">Google (מדווח)</span>
           </span>
           <span className="inline-flex items-center gap-1.5">
+            <span className="inline-block w-3 h-[2px] bg-pink-500" />
+            <span className="text-text-secondary">TikTok (מדווח)</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
             <span className="inline-block w-3 h-[2px] bg-purple-600" />
             <span className="text-text-secondary">Organic</span>
           </span>
+          {/* Shopify legend entry — visually dominant to match the chart's
+              thicker stroke (Phase 05.7.9). Bold typography + thicker swatch
+              communicates "source of truth" at a glance. */}
           <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block w-3 h-[2px] bg-roas-green" />
-            <span className="text-text-secondary">Shopify (בפועל)</span>
+            <span className="inline-block w-4 h-[3px] bg-roas-green rounded-sm" />
+            <span className="text-text-primary font-semibold">Shopify (בפועל)</span>
           </span>
         </div>
 

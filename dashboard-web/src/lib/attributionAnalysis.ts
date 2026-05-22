@@ -992,6 +992,13 @@ export type ProductChannelBreakdown = {
    *  (RESEARCH.md Pitfall 3). The caller is still responsible for the
    *  ≥3 orders gate before rendering. */
   facebookShare: number;
+  /** Phase 05.7.9 — TikTok bucket. Counts orders with source === 'tiktok-paid'
+   *  (set when ttclid is in the landing URL or source_name === 'tiktok').
+   *  Mirrors facebookOrders/Revenue/Share so the UI can render TikTok as a
+   *  first-class platform alongside Meta + Google. */
+  tiktokOrders: number;
+  tiktokRevenue: number;
+  tiktokShare: number;
 };
 
 /**
@@ -1020,6 +1027,9 @@ export function analyzeProductChannel(opts: {
     facebookOrders: 0,
     facebookRevenue: 0,
     facebookShare: 0,
+    tiktokOrders: 0,
+    tiktokRevenue: 0,
+    tiktokShare: 0,
   };
   if (!productIds || productIds.length === 0) return empty;
   if (!orders || orders.length === 0) return empty;
@@ -1030,6 +1040,8 @@ export function analyzeProductChannel(opts: {
   let totalRevenue = 0;
   let facebookOrders = 0;
   let facebookRevenue = 0;
+  let tiktokOrders = 0;
+  let tiktokRevenue = 0;
   const bySource: ProductChannelBreakdown['bySource'] = {};
 
   for (const o of orders) {
@@ -1073,6 +1085,15 @@ export function analyzeProductChannel(opts: {
       facebookOrders++;
       facebookRevenue += orderMappedRevenue;
     }
+
+    // Phase 05.7.9 — TikTok bucket. Mirrors the Facebook predicate but
+    // narrower: only paid (no ttclidPresent on the row + no organic
+    // bucket because tiktok-paid is the only TikTok classification today,
+    // see shopify.ts:classifyOrderAttribution priority chain).
+    if (o.source === 'tiktok-paid') {
+      tiktokOrders++;
+      tiktokRevenue += orderMappedRevenue;
+    }
   }
 
   return {
@@ -1083,5 +1104,8 @@ export function analyzeProductChannel(opts: {
     facebookRevenue,
     // Guard divide-by-zero (RESEARCH.md Pitfall 3) — zero, never NaN.
     facebookShare: totalOrders > 0 ? facebookOrders / totalOrders : 0,
+    tiktokOrders,
+    tiktokRevenue,
+    tiktokShare: totalOrders > 0 ? tiktokOrders / totalOrders : 0,
   };
 }

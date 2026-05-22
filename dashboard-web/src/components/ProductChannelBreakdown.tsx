@@ -29,8 +29,12 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
   const fb = breakdown.facebookOrders;
   const google = (breakdown.bySource['google-paid']?.orders ?? 0)
               + (breakdown.bySource['google-organic']?.orders ?? 0);
+  // Phase 05.7.9 — TikTok bucket. tiktok-paid is currently the only TikTok
+  // source classification (organic TikTok referrers fall through to
+  // 'other-referral' per shopify.ts:classifyOrderAttribution line 900-906).
+  const tiktok = breakdown.tiktokOrders;
   const direct = breakdown.bySource['direct']?.orders ?? 0;
-  const other = Math.max(0, total - fb - google - direct);
+  const other = Math.max(0, total - fb - google - tiktok - direct);
   const fbPct = Math.round(breakdown.facebookShare * 100);
   return (
     <section>
@@ -69,14 +73,17 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
           {total} הזמנות של מוצרים משויכים · CAD {breakdown.totalRevenue.toFixed(0)} סה&quot;כ
         </div>
 
-        {/* 4-segment source breakdown bar */}
+        {/* 5-segment source breakdown bar (Phase 05.7.9 — added TikTok). */}
         <div className="space-y-1">
           <div className="flex justify-between text-[11px] text-text-secondary tabular-nums">
-            <span>פייסבוק: {fb} · גוגל: {google} · ישיר: {direct} · אחר: {other}</span>
+            <span>
+              פייסבוק: {fb} · גוגל: {google} · טיקטוק: {tiktok} · ישיר: {direct} · אחר: {other}
+            </span>
           </div>
           <div className="h-2.5 rounded-full bg-surfaceMuted overflow-hidden flex">
             <div className="h-full bg-roas-blue"   style={{ width: `${(fb / total) * 100}%` }} />
             <div className="h-full bg-amber-500"   style={{ width: `${(google / total) * 100}%` }} />
+            <div className="h-full bg-pink-500"    style={{ width: `${(tiktok / total) * 100}%` }} />
             <div className="h-full bg-text-muted"  style={{ width: `${(direct / total) * 100}%` }} />
             <div className="h-full bg-text-subtle" style={{ width: `${(other / total) * 100}%` }} />
           </div>

@@ -5,6 +5,7 @@ export const CHART_COLORS = {
   reconciliationAxis: '#64748b',
   meta: '#d97706',
   google: '#2563eb',
+  tiktok: '#ec4899',
   organic: '#9333ea',
   shopify: '#15803d',
   cpm: '#d97706',
