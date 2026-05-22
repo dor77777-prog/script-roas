@@ -107,6 +107,17 @@ const STORES = ['uzoshop', 'zolplus', 'usmile360'] as const;
 type StoreId = (typeof STORES)[number];
 
 /**
+ * Canonical store-name map. Used by the Shopify-fetch .catch fallback so a
+ * 401 / timeout never overwrites the row's store_name with the literal
+ * 'unknown' string. Matches shopify.ts:STORE_NAMES verbatim.
+ */
+const STORE_NAMES: Record<StoreId, string> = {
+  uzoshop: 'uzoshop',
+  zolplus: 'Zol Plus',
+  usmile360: '360usmile',
+};
+
+/**
  * Project TZ. Matches `Config.gs:6` + `dashboard-web/src/lib/fetchers/shopify.ts:77`.
  * Used both for cron scheduling AND for the rolling-3-day-window date computation.
  */
@@ -389,6 +400,18 @@ export async function runLiveForStore(
   // Better than blocking the entire dashboard refresh for everyone.
   //
   // ----- STEP 1: fetch Shopify rolling 3-day (with timeout per day) -----
+  //
+  // On error/timeout: we return a sentinel ShopifyDayRows-shaped object
+  // so the persist step can still run for the other 2 dates AND the
+  // 2 ad-platforms. CRITICAL: the sentinel uses the canonical store name
+  // from STORE_NAMES (NOT the literal 'unknown') — otherwise a Shopify
+  // 401 would overwrite the row's store_name in data_daily with 'unknown',
+  // breaking the dashboard's per-store grouping.
+  //
+  // ALSO CRITICAL: the sentinel sets a flag (`__shopifyFailed: true` via
+  // type assertion) so the persist step knows NOT to overwrite revenue /
+  // gross / refund_deduction columns on a Shopify failure — preserve
+  // whatever was last successfully written.
   const shopifyByDate = await step.run('fetch-shopify-rolling-3day', async () => {
     const results = await Promise.all(
       dates.map((d) =>
@@ -397,24 +420,24 @@ export async function runLiveForStore(
             console.warn(
               `cron-live: Shopify ${storeId} ${d} failed/timed-out: ${e instanceof Error ? e.message : e}`,
             );
-            // Return a zero-valued ShopifyDayRows so the writer can still
-            // run for the other 2 dates. revenue stays at whatever was
-            // there (the writer's existing-row preservation logic kicks in).
+            // Sentinel: canonical store_name (NOT 'unknown'), and we
+            // mark __shopifyFailed so the persister can short-circuit.
             return {
               storeId,
               date: d,
-              storeName: 'unknown',
+              storeName: STORE_NAMES[storeId],
               revenueCad: 0,
               productRows: [],
               customItemRefundCad: 0,
               grossRevenueCad: 0,
               refundDeductionCad: 0,
-            };
+              __shopifyFailed: true,
+            } as ShopifyDayRows & { __shopifyFailed: true };
           },
         ),
       ),
     );
-    const map: Record<string, ShopifyDayRows> = {};
+    const map: Record<string, ShopifyDayRows & { __shopifyFailed?: boolean }> = {};
     for (let i = 0; i < dates.length; i++) {
       map[dates[i]] = results[i];
     }
@@ -470,14 +493,34 @@ export async function runLiveForStore(
   };
 
   // ----- STEP 3: persist (sequential, idempotent) -----
-  // Only pass spendOverride when BOTH spend values successfully fetched.
-  // If either timed out, persistDayForStore preserves the existing value
-  // (don't overwrite Meta+Google with 0 when the API was just unreachable).
+  //
+  // Three write modes per date based on what succeeded:
+  //
+  //   1. Shopify OK + both ad platforms OK → write everything
+  //      (revenue/gross/refund + fb/ga/total spend + derived cols)
+  //   2. Shopify OK + ads partial/failed → write Shopify cols, preserve spend
+  //      (persistDayForStore default behavior: omit spendOverride)
+  //   3. Shopify FAILED → write NOTHING for this date
+  //      (don't write 0 revenue + zero spend over good existing data;
+  //       wait for next 10-min cron tick to retry Shopify)
+  //
+  // The today-only Meta+Google write happens only when BOTH ad platforms
+  // succeeded AND Shopify succeeded (case 1). Otherwise we preserve
+  // whatever cron-daily wrote earlier and just emit warnings.
   await step.run('persist-rolling-3day', async () => {
     for (let i = 0; i < dates.length; i++) {
       const date = dates[i];
       const shopify = shopifyByDate[date];
       const isToday = i === 0;
+      const shopifyOk = !(shopify as { __shopifyFailed?: boolean }).__shopifyFailed;
+
+      if (!shopifyOk) {
+        console.warn(
+          `cron-live ${storeId} ${date}: Shopify failed — skipping persist to preserve last good row.`,
+        );
+        continue;
+      }
+
       const haveBothSpend = fbSpendCad !== null && gaSpendCad !== null;
       await persistDayForStore(
         storeId,
