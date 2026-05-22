@@ -627,7 +627,18 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                   return m ? `${m[2]}/${m[1]}` : String(d);
                 }}
               />
-              <YAxis hide domain={[0, 'auto']} />
+              {/* Phase 05.7.x — visible Y axis with CAD labels. The chart
+                  compares channel-claimed totals (Σ Meta+Google+TikTok+Organic)
+                  vs Shopify net revenue; without a labelled Y axis the
+                  operator couldn't read the magnitude of agreement / gap. */}
+              <YAxis
+                tick={{ fontSize: 9, fill: CHART_COLORS.reconciliationAxis }}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={v => `C$${formatCurrency(Number(v))}`}
+                width={56}
+                domain={[0, 'auto']}
+              />
               <Tooltip
                 content={({ active, payload }) => {
                   if (!active || !payload || payload.length === 0) return null;

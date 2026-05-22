@@ -538,7 +538,18 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                         return m ? `${m[2]}/${m[1]}` : String(d);
                       }}
                     />
-                    <YAxis hide domain={[0, 'auto']} />
+                    {/* Phase 05.7.x — show the Y axis with CAD labels so the
+                        operator can read the spend / value magnitudes at a
+                        glance. Was `hide` previously which left the chart
+                        ambiguous (peaks indistinguishable from troughs). */}
+                    <YAxis
+                      tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={v => `C$${formatCurrency(Number(v))}`}
+                      width={60}
+                      domain={[0, 'auto']}
+                    />
                     <Tooltip
                       content={({ active, payload }) => {
                         if (!active || !payload || payload.length === 0) return null;
