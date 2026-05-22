@@ -161,11 +161,35 @@ type MockState = {
     totalSpendCad: number;
     overridesApplied: { meta: boolean; google: boolean };
   };
+  /** Phase 05.7.7 — TikTok mock fields. Default to zero/empty so the
+   *  existing tests don't need to know about TikTok unless they care. */
+  tiktokSpendResult: {
+    storeId: string;
+    date: string;
+    spend: number;
+    currency: string;
+  };
+  tiktokAdResult: Array<{
+    campaignId: string;
+    campaignName: string;
+    adGroupId: string;
+    adGroupName: string;
+    adId: string;
+    adName: string;
+    spend: number;
+    currency: string;
+    impressions: number;
+    clicks: number;
+    conversions: number;
+    conversionValue: number;
+  }>;
+  /** USD→CAD rate used by the mocked getFxRate. Default 1.35. */
+  fxRate: number;
   /**
    * If set, the named fetcher throws `new Error(throwIn)` instead of returning
    * its mocked value. Test 6 uses this to verify step.run errors propagate.
    */
-  throwIn: null | 'shopify' | 'meta' | 'google' | 'merge' | 'upsert';
+  throwIn: null | 'shopify' | 'meta' | 'google' | 'tiktok' | 'merge' | 'upsert';
 };
 
 const mockState = vi.hoisted<MockState>(() => ({
@@ -300,6 +324,17 @@ const mockState = vi.hoisted<MockState>(() => ({
     totalSpendCad: 86,
     overridesApplied: { meta: false, google: false },
   },
+  // Phase 05.7.7 — TikTok defaults (zero spend, no ads). Tests that
+  // exercise TikTok writes (campaigns_daily(platform=tiktok), ads_daily,
+  // tt_spend_cad) populate these explicitly.
+  tiktokSpendResult: {
+    storeId: 'uzoshop',
+    date: '2026-05-20',
+    spend: 0,
+    currency: 'USD',
+  },
+  tiktokAdResult: [],
+  fxRate: 1.35,
   throwIn: null,
 }));
 
@@ -365,6 +400,34 @@ vi.mock('@/lib/fetchers/manualOverrides', () => ({
     if (mockState.throwIn === 'merge') throw new Error('merge-failed');
     return mockState.mergeResult;
   }),
+}));
+
+// Phase 05.7.7 — TikTok fetchers (uzoshop only in prod, but the mock
+// returns zero/empty by default for all stores so test 4 step-order
+// assertions stay deterministic; tests that need TikTok data populate
+// mockState.tiktokSpendResult / mockState.tiktokAdResult explicitly).
+vi.mock('@/lib/fetchers/tiktok', () => ({
+  fetchTikTokSpendForDay: vi.fn(async () => {
+    if (mockState.throwIn === 'tiktok') throw new Error('tiktok-spend-failed');
+    return mockState.tiktokSpendResult;
+  }),
+  fetchTikTokAdInsights: vi.fn(async () => {
+    if (mockState.throwIn === 'tiktok') throw new Error('tiktok-ad-failed');
+    return mockState.tiktokAdResult;
+  }),
+  fetchTikTokAdvertiserInfo: vi.fn(async () => ({
+    advertiserId: '7306450983905787906',
+    name: 'DOD DIGITAL1128',
+    currency: 'USD',
+    timezone: 'Etc/GMT-2',
+  })),
+}));
+
+// Phase 05.7.7 — FX helper mock. cron-daily uses getFxRate for TikTok
+// USD→CAD conversion at persist-batch time. Tests can override the rate
+// via mockState.fxRate; default 1.35 = realistic USD→CAD ratio.
+vi.mock('@/lib/fetchers/fx', () => ({
+  getFxRate: vi.fn(async () => mockState.fxRate ?? 1.35),
 }));
 
 vi.mock('@/lib/supabaseAdmin', () => ({
@@ -476,20 +539,23 @@ describe('cronDaily — factory + handler', () => {
     const { step, ids } = makeMockStep();
     await runDailyForStore('uzoshop', '2026-05-20', { step });
 
-    // Per RESEARCH §Pitfall 4 recommended decomposition (≤6 steps/run for
-    // free-tier budget): fetch-shopify, fetch-meta, fetch-google,
-    // apply-manual-overrides, persist-batch = 5 step.run calls.
+    // Per RESEARCH §Pitfall 4 recommended decomposition (≤7 steps/run
+    // for free-tier budget). Phase 05.7.7 added fetch-tiktok as a 6th
+    // step:
+    //   fetch-shopify, fetch-meta, fetch-google, fetch-tiktok,
+    //   apply-manual-overrides, persist-batch = 6 step.run calls.
     expect(ids).toEqual([
       'fetch-shopify',
       'fetch-meta',
       'fetch-google',
+      'fetch-tiktok',
       'apply-manual-overrides',
       'persist-batch',
     ]);
-    // Free-tier guard: total step count must stay ≤ 6 (1 function + 5 steps
-    // = 6 execs/run; × 3 stores × 1 run/day × 30 days = 540 execs/month
-    // from cron-daily alone — well under the 50K/mo free-tier limit).
-    expect(ids.length).toBeLessThanOrEqual(6);
+    // Free-tier guard: total step count must stay ≤ 7 (1 function + 6
+    // steps = 7 execs/run; × 3 stores × 1 run/day × 30 days = 630
+    // execs/month from cron-daily — still well under 50K/mo free-tier).
+    expect(ids.length).toBeLessThanOrEqual(7);
   });
 
   it('Test 5: persist-batch upserts use the correct `onConflict` strings (match migration PK/UNIQUE)', async () => {

@@ -92,6 +92,7 @@ import { inngest } from '@/inngest/client';
 import { fetchShopifyDayRows, type ShopifyDayRows } from '@/lib/fetchers/shopify';
 import { fetchMetaSpendForDayLight } from '@/lib/fetchers/meta';
 import { fetchGoogleAdsSpendForDay } from '@/lib/fetchers/googleAds';
+import { fetchTikTokSpendForDay } from '@/lib/fetchers/tiktok';
 import { getFxRate } from '@/lib/fetchers/fx';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -116,6 +117,14 @@ const STORE_NAMES: Record<StoreId, string> = {
   zolplus: 'Zol Plus',
   usmile360: '360usmile',
 };
+
+/**
+ * Phase 05.7.7 — Per-store TikTok activation flag. Currently uzoshop only.
+ * Used by cron-live to short-circuit TikTok fetches for stores that don't
+ * have TikTok creds — avoids hitting the OAuth-token-helper error path
+ * on every tick for the 2 stores that legitimately have no TikTok integration.
+ */
+const STORES_WITH_TIKTOK: Set<StoreId> = new Set(['uzoshop']);
 
 /**
  * Project TZ. Matches `Config.gs:6` + `dashboard-web/src/lib/fetchers/shopify.ts:77`.
@@ -221,13 +230,20 @@ async function persistDayForStore(
   date: string,
   shopify: ShopifyDayRows,
   /**
-   * Phase 05.7.6 (2026-05-22): when cron-live fetches Meta+Google for
-   * "today" (idx=0 of the rolling window), it passes the fresh CAD spend
-   * here so we OVERWRITE the spend columns on data_daily. For yesterday +
-   * day-before (idx=1, idx=2 of rolling window) callers omit this and
-   * we preserve the spend that cron-daily wrote at 00:05.
+   * Phase 05.7.6 (2026-05-22): when cron-live fetches Meta+Google+TikTok
+   * for "today" (idx=0 of the rolling window), it passes the fresh CAD
+   * spend here so we OVERWRITE the spend columns on data_daily. For
+   * yesterday + day-before (idx=1, idx=2 of rolling window) callers omit
+   * this and we preserve the spend that cron-daily wrote at 00:05.
+   *
+   * Phase 05.7.7 (2026-05-22) — extended with ttSpendCad for the new
+   * TikTok integration (uzoshop only currently).
    */
-  spendOverride?: { fbSpendCad: number; gaSpendCad: number },
+  spendOverride?: {
+    fbSpendCad: number;
+    gaSpendCad: number;
+    ttSpendCad: number;
+  },
 ): Promise<void> {
   const admin = getSupabaseAdmin();
 
@@ -236,7 +252,7 @@ async function persistDayForStore(
   // -----------------------------------------------------------------
   const { data: existing, error: selErr } = await admin
     .from('data_daily')
-    .select('fb_spend_cad, ga_spend_cad, total_spend_cad')
+    .select('fb_spend_cad, ga_spend_cad, tt_spend_cad, total_spend_cad')
     .eq('date', date)
     .eq('store_id', storeId)
     .maybeSingle();
@@ -244,10 +260,6 @@ async function persistDayForStore(
     throw new Error(`data_daily select for ${storeId} ${date}: ${selErr.message}`);
   }
 
-  // Phase 05.7.6: if a spendOverride is supplied (cron-live fetched live
-  // Meta+Google today), use it. Otherwise preserve whatever cron-daily
-  // wrote previously (rolling-window backfill of yesterday / day-before
-  // must not stomp Meta+Google totals).
   const fbSpendCad =
     spendOverride !== undefined
       ? spendOverride.fbSpendCad
@@ -256,9 +268,13 @@ async function persistDayForStore(
     spendOverride !== undefined
       ? spendOverride.gaSpendCad
       : Number(existing?.ga_spend_cad ?? 0) || 0;
+  const ttSpendCad =
+    spendOverride !== undefined
+      ? spendOverride.ttSpendCad
+      : Number(existing?.tt_spend_cad ?? 0) || 0;
   const totalSpendCad =
     spendOverride !== undefined
-      ? fbSpendCad + gaSpendCad
+      ? fbSpendCad + gaSpendCad + ttSpendCad
       : Number(existing?.total_spend_cad ?? 0) || 0;
 
   const revenueCad = shopify.revenueCad;
@@ -294,6 +310,7 @@ async function persistDayForStore(
     net_profit_cad: number;
     fb_spend_cad?: number;
     ga_spend_cad?: number;
+    tt_spend_cad?: number;
     total_spend_cad?: number;
   };
   const dataDailyPayload: DataDailyUpsertRow = {
@@ -316,10 +333,12 @@ async function persistDayForStore(
   if (spendOverride !== undefined) {
     dataDailyPayload.fb_spend_cad = fbSpendCad;
     dataDailyPayload.ga_spend_cad = gaSpendCad;
+    dataDailyPayload.tt_spend_cad = ttSpendCad;
     dataDailyPayload.total_spend_cad = totalSpendCad;
   } else if (!existing) {
     dataDailyPayload.fb_spend_cad = 0;
     dataDailyPayload.ga_spend_cad = 0;
+    dataDailyPayload.tt_spend_cad = 0;
     dataDailyPayload.total_spend_cad = 0;
   }
 
@@ -444,9 +463,25 @@ export async function runLiveForStore(
     return map;
   });
 
-  // ----- STEP 2: fetch today's Meta + Google spend (LIGHT + timed-out) -----
-  const todaySpend = await step.run('fetch-meta-google-spend-light', async () => {
-    const [metaToday, googleToday] = await Promise.all([
+  // ----- STEP 2: fetch today's Meta + Google + TikTok spend (LIGHT + timed-out) -----
+  // Phase 05.7.7: TikTok added alongside Meta + Google. Each fetcher is
+  // timeout-wrapped + .catch'd independently — if one platform is slow or
+  // 401's the cron tick still completes and the other platforms still
+  // write. TikTok is uzoshop-only via STORES_WITH_TIKTOK; other stores
+  // short-circuit to null without hitting the API.
+  const todaySpend = await step.run('fetch-meta-google-tiktok-spend-light', async () => {
+    const tiktokPromise = STORES_WITH_TIKTOK.has(storeId)
+      ? withTimeout(fetchTikTokSpendForDay(storeId, today), 12_000, 'TikTok').catch(
+          (e) => {
+            console.warn(
+              `cron-live: TikTok spend ${storeId} ${today} failed/timed-out: ${e instanceof Error ? e.message : e}`,
+            );
+            return null;
+          },
+        )
+      : Promise.resolve(null);
+
+    const [metaToday, googleToday, tiktokToday] = await Promise.all([
       withTimeout(fetchMetaSpendForDayLight(storeId, today), 12_000, 'Meta').catch(
         (e) => {
           console.warn(
@@ -463,6 +498,7 @@ export async function runLiveForStore(
           return null;
         },
       ),
+      tiktokPromise,
     ]);
     const cadConvert = async (
       value: { spend: number; currency: string } | null,
@@ -477,36 +513,40 @@ export async function runLiveForStore(
       ).catch(() => 1);
       return value.spend * rate;
     };
-    // If BOTH fetchers timed out (null), we don't have new spend data —
-    // signal the persist step to preserve existing values.
-    if (metaToday === null && googleToday === null) {
-      return { fbSpendCad: null, gaSpendCad: null };
+    // If ALL fetchers (that we attempted) returned null, no new spend data
+    // — signal the persist step to preserve existing values.
+    const attemptedAds =
+      metaToday !== null ||
+      googleToday !== null ||
+      (STORES_WITH_TIKTOK.has(storeId) && tiktokToday !== null);
+    if (!attemptedAds) {
+      return { fbSpendCad: null, gaSpendCad: null, ttSpendCad: null };
     }
     return {
       fbSpendCad: metaToday ? await cadConvert(metaToday) : null,
       gaSpendCad: googleToday ? await cadConvert(googleToday) : null,
+      ttSpendCad: tiktokToday ? await cadConvert(tiktokToday) : null,
     };
   });
-  const { fbSpendCad, gaSpendCad } = todaySpend as {
+  const { fbSpendCad, gaSpendCad, ttSpendCad } = todaySpend as {
     fbSpendCad: number | null;
     gaSpendCad: number | null;
+    ttSpendCad: number | null;
   };
 
   // ----- STEP 3: persist (sequential, idempotent) -----
   //
   // Three write modes per date based on what succeeded:
   //
-  //   1. Shopify OK + both ad platforms OK → write everything
-  //      (revenue/gross/refund + fb/ga/total spend + derived cols)
+  //   1. Shopify OK + all ad platforms attempted OK → write everything
+  //      (revenue/gross/refund + fb/ga/tt/total spend + derived cols)
   //   2. Shopify OK + ads partial/failed → write Shopify cols, preserve spend
-  //      (persistDayForStore default behavior: omit spendOverride)
-  //   3. Shopify FAILED → write NOTHING for this date
-  //      (don't write 0 revenue + zero spend over good existing data;
-  //       wait for next 10-min cron tick to retry Shopify)
+  //   3. Shopify FAILED → write NOTHING for this date (preserve last good row)
   //
-  // The today-only Meta+Google write happens only when BOTH ad platforms
-  // succeeded AND Shopify succeeded (case 1). Otherwise we preserve
-  // whatever cron-daily wrote earlier and just emit warnings.
+  // For TikTok: stores NOT in STORES_WITH_TIKTOK always pass ttSpendCad=0 in
+  // the override (so total_spend stays correct), without ever calling the
+  // TikTok API. For uzoshop with a failed TikTok fetch, we treat it like
+  // any other platform failure — preserve whatever was last written.
   await step.run('persist-rolling-3day', async () => {
     for (let i = 0; i < dates.length; i++) {
       const date = dates[i];
@@ -521,13 +561,23 @@ export async function runLiveForStore(
         continue;
       }
 
-      const haveBothSpend = fbSpendCad !== null && gaSpendCad !== null;
+      // For non-TikTok stores: treat tt as 0 (not as missing), so we still
+      // write override when fb+ga succeeded. For TikTok-enabled stores
+      // (uzoshop): require all three.
+      const haveFbGa = fbSpendCad !== null && gaSpendCad !== null;
+      const requireTt = STORES_WITH_TIKTOK.has(storeId);
+      const haveAllSpend = haveFbGa && (!requireTt || ttSpendCad !== null);
+
       await persistDayForStore(
         storeId,
         date,
         shopify,
-        isToday && haveBothSpend
-          ? { fbSpendCad: fbSpendCad as number, gaSpendCad: gaSpendCad as number }
+        isToday && haveAllSpend
+          ? {
+              fbSpendCad: fbSpendCad as number,
+              gaSpendCad: gaSpendCad as number,
+              ttSpendCad: (ttSpendCad as number | null) ?? 0,
+            }
           : undefined,
       );
     }

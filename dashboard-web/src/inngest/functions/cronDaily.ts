@@ -56,6 +56,12 @@ import {
   fetchGoogleAdsAdGroupInsights,
   fetchGoogleAdsAdInsights,
 } from '@/lib/fetchers/googleAds';
+import {
+  fetchTikTokSpendForDay,
+  fetchTikTokAdInsights,
+  type TikTokDaySpend,
+  type TikTokAdRow,
+} from '@/lib/fetchers/tiktok';
 import { mergeOverridesFromSupabase } from '@/lib/fetchers/manualOverrides';
 import { getFxRate } from '@/lib/fetchers/fx';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
@@ -70,6 +76,14 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 // ---------------------------------------------------------------------------
 const STORES = ['uzoshop', 'zolplus', 'usmile360'] as const;
 export type StoreId = typeof STORES[number];
+
+/**
+ * Phase 05.7.7 — Per-store TikTok activation flag. Currently uzoshop only.
+ * Non-TikTok stores short-circuit to zero spend + empty insights without
+ * hitting the TikTok API. Matches the same constant in cronLive.ts; if a
+ * second store gains a TikTok account, update BOTH files.
+ */
+const STORES_WITH_TIKTOK: Set<StoreId> = new Set(['uzoshop']);
 
 const COGS_RATE_OF_REVENUE = 0.25;
 
@@ -241,6 +255,32 @@ export async function runDailyForStore(
     adRows: Awaited<ReturnType<typeof fetchGoogleAdsAdInsights>>;
   };
 
+  // ---- Step 3.5: TikTok (spend + ad-level insights) — uzoshop only --------
+  // Phase 05.7.7: TikTok integration. Other stores short-circuit to zero/empty
+  // so the step ID stays stable across stores (jobs-table uniformity) and the
+  // step counts as 1 exec regardless of whether a fetch happened.
+  const tiktok = (await step.run('fetch-tiktok', async () => {
+    if (!STORES_WITH_TIKTOK.has(storeId)) {
+      return {
+        spend: {
+          storeId,
+          date: dateStr,
+          spend: 0,
+          currency: 'USD',
+        } as TikTokDaySpend,
+        adRows: [] as TikTokAdRow[],
+      };
+    }
+    const [spend, adRows] = await Promise.all([
+      fetchTikTokSpendForDay(storeId, dateStr),
+      fetchTikTokAdInsights(storeId, dateStr),
+    ]);
+    return { spend, adRows };
+  })) as {
+    spend: TikTokDaySpend;
+    adRows: TikTokAdRow[];
+  };
+
   // ---- Step 4: Manual overrides + FX → CAD totals -------------------------
   // mergeOverridesFromSupabase reads the manual_overrides table for
   // (date, storeId) and REPLACES (not adds) the fb/ga spend if any rows
@@ -261,9 +301,27 @@ export async function runDailyForStore(
   // writes safely (D-B5).
   await step.run('persist-batch', async () => {
     const admin = getSupabaseAdmin();
+    // Phase 05.7.7: TikTok spend → CAD. Other stores have tt.spend=0 from
+    // the short-circuit in the fetch-tiktok step above, so this is a no-op
+    // FX call for them (cadFor returns 0 when amount is 0).
+    const ttSpendCad =
+      tiktok.spend.spend > 0
+        ? await (async () => {
+            // Local FX (closure below builds fxCache); inline here so we
+            // can compute total_spend_cad before the broader cadFor closure
+            // is defined. Using getFxRate directly is OK since this fires
+            // once per cron-daily and per-currency caching isn't needed for
+            // a single value.
+            const cur = (tiktok.spend.currency || 'USD').toUpperCase();
+            if (cur === 'CAD') return tiktok.spend.spend;
+            const rate = await getFxRate(cur, 'CAD', dateStr);
+            return tiktok.spend.spend * rate;
+          })()
+        : 0;
+    const totalSpendCadAll = merged.totalSpendCad + ttSpendCad;
     const roas =
-      merged.totalSpendCad > 0 ? shopify.revenueCad / merged.totalSpendCad : 0;
-    const grossProfitCad = shopify.revenueCad - merged.totalSpendCad;
+      totalSpendCadAll > 0 ? shopify.revenueCad / totalSpendCadAll : 0;
+    const grossProfitCad = shopify.revenueCad - totalSpendCadAll;
     const cogsCad = shopify.revenueCad * COGS_RATE_OF_REVENUE;
     const netProfitCad = grossProfitCad - cogsCad;
 
@@ -312,7 +370,8 @@ export async function runDailyForStore(
           store_name: shopify.storeName,
           fb_spend_cad: merged.fbSpendCad,
           ga_spend_cad: merged.gaSpendCad,
-          total_spend_cad: merged.totalSpendCad,
+          tt_spend_cad: ttSpendCad,
+          total_spend_cad: totalSpendCadAll,
           revenue_cad: shopify.revenueCad,
           gross_revenue_cad: shopify.grossRevenueCad,
           refund_deduction_cad: shopify.refundDeductionCad,
@@ -546,7 +605,29 @@ export async function runDailyForStore(
         conversion_value_cad: r.conversionValueCad,
         roas: null,
       }));
-      const adsRows = [...metaAdsRows, ...googleAdsRows];
+      // Phase 05.7.7: TikTok rows. Same shape as Meta/Google but flagged
+      // platform='tiktok'. TikTok ads return per-ad spend in account
+      // currency (USD for uzoshop), so we FX-convert via cadFor.
+      const tiktokAdsRows = await Promise.all(
+        tiktok.adRows.map(async (r) => ({
+          date: dateStr,
+          store_id: storeId,
+          platform: 'tiktok',
+          campaign_id: r.campaignId,
+          campaign_name: r.campaignName,
+          ad_set_id: r.adGroupId,
+          ad_set_name: r.adGroupName,
+          ad_id: r.adId,
+          ad_name: r.adName,
+          spend_cad: await cadFor(r.spend, r.currency),
+          impressions: Math.round(r.impressions),
+          clicks: Math.round(r.clicks),
+          conversions: Math.round(r.conversions),
+          conversion_value_cad: await cadFor(r.conversionValue, r.currency),
+          roas: null,
+        })),
+      );
+      const adsRows = [...metaAdsRows, ...googleAdsRows, ...tiktokAdsRows];
       if (adsRows.length > 0) {
         const { error } = await admin
           .from('ads_daily')
@@ -556,6 +637,85 @@ export async function runDailyForStore(
             `ads_daily upsert for ${storeId} ${dateStr}: ${error.message}`,
           );
         }
+      }
+    }
+
+    // 5d-tiktok. campaigns_daily UPSERT (TikTok rows) — same PK as 5c.
+    // TikTok per-ad insights include campaign_id + ad_group_id; we
+    // aggregate to the (campaign, ad_group) level to match the unified
+    // schema (campaigns_daily PK includes ad_set_id, which maps to
+    // ad_group_id on TikTok's side — same convention as Google in 5d).
+    if (tiktok.adRows.length > 0) {
+      type CampaignAggKey = string; // `${campaignId}__${adGroupId}`
+      type CampaignAgg = {
+        campaign_id: string;
+        campaign_name: string;
+        ad_set_id: string;
+        ad_set_name: string;
+        spend: number;
+        impressions: number;
+        clicks: number;
+        conversions: number;
+        conversionValue: number;
+        currency: string;
+      };
+      const byCampaign = new Map<CampaignAggKey, CampaignAgg>();
+      for (const ad of tiktok.adRows) {
+        const key = `${ad.campaignId}__${ad.adGroupId}`;
+        const existing = byCampaign.get(key);
+        if (existing) {
+          existing.spend += ad.spend;
+          existing.impressions += ad.impressions;
+          existing.clicks += ad.clicks;
+          existing.conversions += ad.conversions;
+          existing.conversionValue += ad.conversionValue;
+        } else {
+          byCampaign.set(key, {
+            campaign_id: ad.campaignId,
+            campaign_name: ad.campaignName,
+            ad_set_id: ad.adGroupId,
+            ad_set_name: ad.adGroupName,
+            spend: ad.spend,
+            impressions: ad.impressions,
+            clicks: ad.clicks,
+            conversions: ad.conversions,
+            conversionValue: ad.conversionValue,
+            currency: ad.currency,
+          });
+        }
+      }
+      const tiktokCampaignRows = await Promise.all(
+        Array.from(byCampaign.values()).map(async (agg) => ({
+          date: dateStr,
+          store_id: storeId,
+          platform: 'tiktok',
+          campaign_id: agg.campaign_id,
+          campaign_name: agg.campaign_name,
+          ad_set_id: agg.ad_set_id,
+          ad_set_name: agg.ad_set_name,
+          spend_cad: await cadFor(agg.spend, agg.currency),
+          impressions: Math.round(agg.impressions),
+          clicks: Math.round(agg.clicks),
+          conversions: Math.round(agg.conversions),
+          conversion_value_cad: await cadFor(
+            agg.conversionValue,
+            agg.currency,
+          ),
+          roas: null,
+          campaign_budget_cad: null,
+          ad_set_budget_cad: null,
+          budget_type: null,
+        })),
+      );
+      const { error } = await admin
+        .from('campaigns_daily')
+        .upsert(tiktokCampaignRows, {
+          onConflict: 'date,store_id,platform,campaign_id,ad_set_id',
+        });
+      if (error) {
+        throw new Error(
+          `campaigns_daily (tiktok) upsert for ${storeId} ${dateStr}: ${error.message}`,
+        );
       }
     }
 
