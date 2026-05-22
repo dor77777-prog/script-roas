@@ -1,5 +1,6 @@
 'use client';
 
+import { Fragment } from 'react';
 import { CheckCircle2, Circle, ExternalLink } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { campaignKey } from '@/lib/campaignProductMap';
@@ -67,6 +68,17 @@ type Props = {
    * (still in initial render before `aggregated` settles).
    */
   health: CampaignHealth | undefined;
+  /**
+   * Phase 05.7.x — resolved order for the 15 reorderable metric columns
+   * (spend / budget / conversionValue / roas / roasShopify /
+   * roasShopifyPlatform / shopifyValuePlatform / shopifyUnitsPlatform /
+   * shopifyValueTotal / shopifyUnitsTotal / conversions / ctr / cpc /
+   * cpm / cpa). Computed once in the parent from CampaignsColumnPrefs
+   * + resolveCampaignsColumnOrder, then threaded here so the row's
+   * <td> order matches the thead order exactly (any drift would put
+   * cells under the wrong columns).
+   */
+  columnOrder: string[];
   adAccounts: AdAccountMap;
   optimized: Set<string>;
   /**
@@ -173,6 +185,7 @@ export function CampaignsTableRow({
   mode,
   trueRevenueByKey,
   health,
+  columnOrder,
   adAccounts,
   optimized,
   today,
@@ -345,8 +358,19 @@ export function CampaignsTableRow({
           </div>
         </div>
       </td>
-      <td data-col-id="spend" className="px-3 py-2 text-end tabular-nums">{formatCurrency(a.spend)}</td>
-      <td data-col-id="budget" className="px-3 py-2 text-end tabular-nums">
+      {(() => {
+      // Phase 05.7.x — Build the 15 reorderable metric <td> cells into a
+      // colId → JSX map, then render them in the operator's preferred
+      // order (the `columnOrder` prop, threaded from the parent's
+      // resolveCampaignsColumnOrder pass). Mirrors the same trick the
+      // thead in CampaignsTable.tsx uses, so header and cells stay in
+      // lock-step regardless of order.
+      const metricCells: Record<string, React.ReactNode> = {
+      spend: (
+        <td data-col-id="spend" className="px-3 py-2 text-end tabular-nums">{formatCurrency(a.spend)}</td>
+      ),
+      budget: (
+        <td data-col-id="budget" className="px-3 py-2 text-end tabular-nums">
         {(() => {
           const budget = mode === 'campaign' ? a.campaignBudgetCad : a.adSetBudgetCad;
           if (!budget || budget <= 0) {
@@ -361,18 +385,19 @@ export function CampaignsTableRow({
             </span>
           );
         })()}
-      </td>
-      <td data-col-id="conversionValue" className={cn('px-3 py-2 text-end tabular-nums font-medium', a.conversionValue > a.spend && 'text-roas-green')}>
+        </td>
+      ),
+      conversionValue: (
+        <td data-col-id="conversionValue" className={cn('px-3 py-2 text-end tabular-nums font-medium', a.conversionValue > a.spend && 'text-roas-green')}>
         {formatCurrency(a.conversionValue)}
-      </td>
-      <td data-col-id="roas" className={cn('px-3 py-2 text-center font-semibold tabular-nums rounded', TONE_BG[info.tone])}>
+        </td>
+      ),
+      roas: (
+        <td data-col-id="roas" className={cn('px-3 py-2 text-center font-semibold tabular-nums rounded', TONE_BG[info.tone])}>
         {roas > 0 ? formatNumber(roas) : '—'}
-      </td>
-      {/* Shopify-true ROAS column. Only campaigns with a
-          product mapping show a number; everything else
-          shows '—' with a hint. Google rows always '—'
-          because PMax doesn't expose per-product mapping
-          (the feed governs delivery, not the campaign). */}
+        </td>
+      ),
+      roasShopify: (
       <td data-col-id="roasShopify" className="px-3 py-2 text-center">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
@@ -494,12 +519,11 @@ export function CampaignsTableRow({
           );
         })()}
       </td>
-      {/* Phase 05.7.9e — third ROAS column.
-          ROAS Shopify · פלטפורמה = deterministicRevenue / spend.
-          Sits between the combined ROAS Shopify (left) and the
-          per-platform value/units columns (right). Operator now sees
-          three angles: platform-claimed ROAS, deterministic-Shopify
-          ROAS for this platform, and the mapping-combined ROAS. */}
+      ),
+      // Phase 05.7.9e — third ROAS column. ROAS Shopify · פלטפורמה =
+      // deterministicRevenue / spend. Sits between combined ROAS Shopify
+      // (left) and per-platform value/units columns (right).
+      roasShopifyPlatform: (
       <td data-col-id="roasShopifyPlatform" className="px-3 py-2 text-center">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
@@ -532,18 +556,14 @@ export function CampaignsTableRow({
           );
         })()}
       </td>
-      {/* Shopify actuals — ערך + יחידות. Empty cells when
-          there's no mapping so the row stays cleanly
-          aligned with mapped + unmapped campaigns. */}
-      {/* Phase 05.7.9b — 4 Shopify columns (was 2):
-          [1] ערך / פלטפורמה — deterministic per-platform revenue
-          [2] יח' / פלטפורמה — deterministic per-platform units
-          [3] ערך / סה"כ — total across all platforms
-          [4] יח' / סה"כ — total across all platforms
-          Determined and total figures are computed in
-          useCampaignTrueRevenue.ts and live on TrueRevenueInfo as
-          deterministicRevenue/Units + productTotals. */}
-      {/* [1] ערך Shopify · פלטפורמה — deterministic revenue */}
+      ),
+      // Shopify actuals — ערך + יחידות. Empty cells when there's no
+      // mapping so the row stays cleanly aligned. The 4 Shopify
+      // columns (deterministic per-platform value/units + product
+      // totals across all platforms) are computed in
+      // useCampaignTrueRevenue.ts (deterministicRevenue/Units +
+      // productTotals).
+      shopifyValuePlatform: (
       <td data-col-id="shopifyValuePlatform" className="px-3 py-2 text-end tabular-nums border-e border-borderSubtle/40">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
@@ -568,7 +588,9 @@ export function CampaignsTableRow({
           );
         })()}
       </td>
-      {/* [2] יח' Shopify · פלטפורמה — deterministic units */}
+      ),
+      // [2] יח' Shopify · פלטפורמה — deterministic units
+      shopifyUnitsPlatform: (
       <td data-col-id="shopifyUnitsPlatform" className="px-3 py-2 text-end tabular-nums border-e border-borderSubtle/40">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
@@ -603,7 +625,9 @@ export function CampaignsTableRow({
           );
         })()}
       </td>
-      {/* [3] ערך Shopify · סה"כ — total revenue across all platforms */}
+      ),
+      // [3] ערך Shopify · סה"כ — total revenue across all platforms
+      shopifyValueTotal: (
       <td data-col-id="shopifyValueTotal" className="px-3 py-2 text-end tabular-nums">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
@@ -621,7 +645,9 @@ export function CampaignsTableRow({
           );
         })()}
       </td>
-      {/* [4] יח' Shopify · סה"כ — total units across all platforms */}
+      ),
+      // [4] יח' Shopify · סה"כ — total units across all platforms
+      shopifyUnitsTotal: (
       <td data-col-id="shopifyUnitsTotal" className="px-3 py-2 text-end tabular-nums">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
@@ -640,19 +666,35 @@ export function CampaignsTableRow({
           );
         })()}
       </td>
-      <td data-col-id="conversions" className="px-3 py-2 text-end tabular-nums">{formatNumber(a.conversions, 0)}</td>
-      <td data-col-id="ctr" className="px-3 py-2 text-end tabular-nums text-text-secondary">
-        {a.impressions > 0 ? `${(ctr * 100).toFixed(2)}%` : '—'}
-      </td>
-      <td data-col-id="cpc" className="px-3 py-2 text-end tabular-nums text-text-secondary">
-        {a.clicks > 0 ? formatCurrency(cpc, 2) : '—'}
-      </td>
-      <td data-col-id="cpm" className="px-3 py-2 text-end tabular-nums text-text-secondary">
-        {a.impressions > 0 ? formatCurrency(cpm, 2) : '—'}
-      </td>
-      <td data-col-id="cpa" className="px-3 py-2 text-end tabular-nums text-text-secondary">
-        {a.conversions > 0 ? formatCurrency(cpa, 2) : '—'}
-      </td>
+      ),
+      conversions: (
+        <td data-col-id="conversions" className="px-3 py-2 text-end tabular-nums">{formatNumber(a.conversions, 0)}</td>
+      ),
+      ctr: (
+        <td data-col-id="ctr" className="px-3 py-2 text-end tabular-nums text-text-secondary">
+          {a.impressions > 0 ? `${(ctr * 100).toFixed(2)}%` : '—'}
+        </td>
+      ),
+      cpc: (
+        <td data-col-id="cpc" className="px-3 py-2 text-end tabular-nums text-text-secondary">
+          {a.clicks > 0 ? formatCurrency(cpc, 2) : '—'}
+        </td>
+      ),
+      cpm: (
+        <td data-col-id="cpm" className="px-3 py-2 text-end tabular-nums text-text-secondary">
+          {a.impressions > 0 ? formatCurrency(cpm, 2) : '—'}
+        </td>
+      ),
+      cpa: (
+        <td data-col-id="cpa" className="px-3 py-2 text-end tabular-nums text-text-secondary">
+          {a.conversions > 0 ? formatCurrency(cpa, 2) : '—'}
+        </td>
+      ),
+      };
+      return columnOrder.map(id => (
+        <Fragment key={id}>{metricCells[id]}</Fragment>
+      ));
+      })()}
       <td data-col-id="deepLink" className="px-2 py-2 text-center">
         {link && (
           <a

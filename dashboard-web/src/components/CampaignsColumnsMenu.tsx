@@ -1,13 +1,17 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { Columns3, RotateCcw, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronDown, ChevronUp, Columns3, RotateCcw, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   CAMPAIGNS_COLUMNS,
+  REORDERABLE_COLUMN_IDS,
   readCampaignsColumnPrefs,
   toggleCampaignsColumnHidden,
   restoreAllCampaignsColumns,
+  resolveCampaignsColumnOrder,
+  moveCampaignsColumn,
+  resetCampaignsColumnOrder,
   type CampaignsColumnPrefs,
 } from '@/lib/campaignsColumnPrefs';
 
@@ -68,14 +72,38 @@ export function CampaignsColumnsMenu({
     };
   }, [open]);
 
-  // Filter pinned + mode-specific columns out of the toggle list.
-  const toggleable = CAMPAIGNS_COLUMNS.filter(c => {
-    if (c.pinned) return false;
-    if (c.campaignOnly && mode !== 'campaign') return false;
-    return true;
-  });
+  // Phase 05.7.x — order the visible list by the operator's saved
+  // metric-column order. Structural columns (pinned + non-reorderable)
+  // are appended at the end in their canonical positions. Metric columns
+  // appear in the order they'll actually render in the table, so the
+  // operator sees the change instantly when they click the up/down
+  // chevrons.
+  const REORDERABLE = REORDERABLE_COLUMN_IDS as readonly string[];
+  const toggleable = useMemo(() => {
+    const canonical = CAMPAIGNS_COLUMNS.filter(c => {
+      if (c.pinned) return false;
+      if (c.campaignOnly && mode !== 'campaign') return false;
+      return true;
+    });
+    const effectiveOrder = resolveCampaignsColumnOrder(prefs.order);
+    const orderIndex = new Map<string, number>();
+    effectiveOrder.forEach((id, idx) => orderIndex.set(id, idx));
+    return [...canonical].sort((a, b) => {
+      const aReord = REORDERABLE.includes(a.id);
+      const bReord = REORDERABLE.includes(b.id);
+      // Non-reorderable columns (e.g. optimized checkbox) sink to the
+      // bottom of the list — the operator can still hide them but can't
+      // move them.
+      if (aReord !== bReord) return aReord ? -1 : 1;
+      if (aReord && bReord) {
+        return (orderIndex.get(a.id) ?? 0) - (orderIndex.get(b.id) ?? 0);
+      }
+      return 0;
+    });
+  }, [mode, prefs.order]);
 
   const hiddenCount = prefs.hidden.length;
+  const hasCustomOrder = !!prefs.order && prefs.order.length > 0;
 
   const toggle = (id: string) => {
     const next = toggleCampaignsColumnHidden(id);
@@ -84,6 +112,16 @@ export function CampaignsColumnsMenu({
 
   const restoreAll = () => {
     const next = restoreAllCampaignsColumns();
+    setPrefs(next);
+  };
+
+  const move = (id: string, direction: 'up' | 'down') => {
+    const next = moveCampaignsColumn(id, direction);
+    setPrefs(next);
+  };
+
+  const resetOrder = () => {
+    const next = resetCampaignsColumnOrder();
     setPrefs(next);
   };
 
@@ -138,46 +176,111 @@ export function CampaignsColumnsMenu({
             סמן/בטל סימון כדי להציג/להסתיר עמודות. ההגדרות שמורות בכל הדפדפנים שלך.
           </p>
           <ul className="space-y-1 max-h-[420px] overflow-auto">
-            {toggleable.map(col => {
-              const isHidden = prefs.hidden.includes(col.id);
-              return (
-                <li key={col.id}>
-                  <label
-                    className={cn(
-                      'flex items-start gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors',
-                      'hover:bg-surfaceMuted',
-                    )}
-                    title={col.description ?? ''}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={!isHidden}
-                      onChange={() => toggle(col.id)}
-                      className="mt-0.5 shrink-0"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="text-xs text-text-primary">{col.label}</div>
-                      {col.description && (
-                        <div className="text-[10px] text-text-muted leading-snug">
-                          {col.description}
-                        </div>
+            {(() => {
+              // Pre-compute the up/down boundary indices among reorderable
+              // entries so the chevron disabled state stays in sync with
+              // the rendered order (first reorderable can't move up, last
+              // can't move down).
+              const reorderableIdxs = toggleable
+                .map((c, i) => (REORDERABLE.includes(c.id) ? i : -1))
+                .filter(i => i >= 0);
+              const firstReord = reorderableIdxs[0] ?? -1;
+              const lastReord =
+                reorderableIdxs[reorderableIdxs.length - 1] ?? -1;
+              return toggleable.map((col, idx) => {
+                const isHidden = prefs.hidden.includes(col.id);
+                const isReorderable = REORDERABLE.includes(col.id);
+                const canUp = isReorderable && idx > firstReord;
+                const canDown = isReorderable && idx < lastReord;
+                return (
+                  <li key={col.id} className="flex items-stretch gap-1">
+                    <label
+                      className={cn(
+                        'flex items-start gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors flex-1 min-w-0',
+                        'hover:bg-surfaceMuted',
                       )}
-                    </div>
-                  </label>
-                </li>
-              );
-            })}
+                      title={col.description ?? ''}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={!isHidden}
+                        onChange={() => toggle(col.id)}
+                        className="mt-0.5 shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="text-xs text-text-primary">{col.label}</div>
+                        {col.description && (
+                          <div className="text-[10px] text-text-muted leading-snug">
+                            {col.description}
+                          </div>
+                        )}
+                      </div>
+                    </label>
+                    {/* Phase 05.7.x — up/down chevrons for reorderable
+                        metric columns. Structural columns (optimized, etc.)
+                        get no controls; their slot stays empty so the row
+                        baselines line up with their reorderable siblings. */}
+                    {isReorderable && (
+                      <div className="flex flex-col shrink-0 self-center">
+                        <button
+                          type="button"
+                          onClick={() => move(col.id, 'up')}
+                          disabled={!canUp}
+                          aria-label={`הזז ${col.label} למעלה`}
+                          title="הזז למעלה"
+                          className={cn(
+                            'inline-flex items-center justify-center w-5 h-4 rounded-sm transition-colors',
+                            canUp
+                              ? 'text-text-secondary hover:text-text-primary hover:bg-surfaceMuted'
+                              : 'text-text-subtle/40 cursor-not-allowed',
+                          )}
+                        >
+                          <ChevronUp size={12} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => move(col.id, 'down')}
+                          disabled={!canDown}
+                          aria-label={`הזז ${col.label} למטה`}
+                          title="הזז למטה"
+                          className={cn(
+                            'inline-flex items-center justify-center w-5 h-4 rounded-sm transition-colors',
+                            canDown
+                              ? 'text-text-secondary hover:text-text-primary hover:bg-surfaceMuted'
+                              : 'text-text-subtle/40 cursor-not-allowed',
+                          )}
+                        >
+                          <ChevronDown size={12} />
+                        </button>
+                      </div>
+                    )}
+                  </li>
+                );
+              });
+            })()}
           </ul>
-          {hiddenCount > 0 && (
-            <div className="mt-2 pt-2 border-t border-borderSubtle">
-              <button
-                type="button"
-                onClick={restoreAll}
-                className="inline-flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 font-medium"
-              >
-                <RotateCcw size={12} />
-                <span>השב את כל העמודות</span>
-              </button>
+          {(hiddenCount > 0 || hasCustomOrder) && (
+            <div className="mt-2 pt-2 border-t border-borderSubtle flex flex-col gap-1.5">
+              {hiddenCount > 0 && (
+                <button
+                  type="button"
+                  onClick={restoreAll}
+                  className="inline-flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 font-medium"
+                >
+                  <RotateCcw size={12} />
+                  <span>השב את כל העמודות</span>
+                </button>
+              )}
+              {hasCustomOrder && (
+                <button
+                  type="button"
+                  onClick={resetOrder}
+                  className="inline-flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 font-medium"
+                >
+                  <RotateCcw size={12} />
+                  <span>אפס סדר עמודות</span>
+                </button>
+              )}
             </div>
           )}
         </div>

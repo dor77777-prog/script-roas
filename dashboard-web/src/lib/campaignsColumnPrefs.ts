@@ -73,9 +73,43 @@ export type CampaignsColumnId = (typeof CAMPAIGNS_COLUMNS)[number]['id'];
 
 export type CampaignsColumnPrefs = {
   hidden: string[];
+  /**
+   * Phase 05.7.x — user-set order for the reorderable metric columns.
+   * List of column IDs in the order the operator wants them rendered.
+   * Only the IDs in REORDERABLE_COLUMN_IDS appear here; structural
+   * columns (optimized / health / campaignName / deepLink) stay fixed
+   * at the table's edges. Missing IDs are appended in the default
+   * `CAMPAIGNS_COLUMNS` order so the operator never loses access to a
+   * column even if their saved prefs are stale.
+   */
+  order?: string[];
 };
 
-const EMPTY: CampaignsColumnPrefs = { hidden: [] };
+/**
+ * Columns the operator may reorder. Structural columns are excluded
+ * (they live in fixed positions at table edges):
+ *   start-fixed: optimized, health, campaignName
+ *   end-fixed:   deepLink
+ */
+export const REORDERABLE_COLUMN_IDS = [
+  'spend',
+  'budget',
+  'conversionValue',
+  'roas',
+  'roasShopify',
+  'roasShopifyPlatform',
+  'shopifyValuePlatform',
+  'shopifyUnitsPlatform',
+  'shopifyValueTotal',
+  'shopifyUnitsTotal',
+  'conversions',
+  'ctr',
+  'cpc',
+  'cpm',
+  'cpa',
+] as const;
+
+const EMPTY: CampaignsColumnPrefs = { hidden: [], order: undefined };
 
 export function readCampaignsColumnPrefs(): CampaignsColumnPrefs {
   if (typeof window === 'undefined') return EMPTY;
@@ -88,17 +122,83 @@ export function readCampaignsColumnPrefs(): CampaignsColumnPrefs {
     if (Array.isArray(parsed)) {
       return { hidden: parsed.filter(x => typeof x === 'string') };
     }
-    if (Array.isArray((parsed as { hidden?: unknown }).hidden)) {
-      return {
-        hidden: ((parsed as { hidden: unknown[] }).hidden).filter(
-          (x): x is string => typeof x === 'string',
-        ),
-      };
-    }
-    return EMPTY;
+    const obj = parsed as { hidden?: unknown; order?: unknown };
+    const hidden = Array.isArray(obj.hidden)
+      ? obj.hidden.filter((x): x is string => typeof x === 'string')
+      : [];
+    // Phase 05.7.x — surface the saved order, filtered to strings only.
+    // resolveCampaignsColumnOrder merges this list with the canonical
+    // REORDERABLE_COLUMN_IDS so unknown / dropped IDs don't break the
+    // operator's view (missing IDs get appended in default position).
+    const order = Array.isArray(obj.order)
+      ? obj.order.filter((x): x is string => typeof x === 'string')
+      : undefined;
+    return { hidden, order };
   } catch {
     return EMPTY;
   }
+}
+
+/**
+ * Resolve the effective order of the reorderable metric columns by
+ * combining the saved order (if any) with the canonical
+ * REORDERABLE_COLUMN_IDS list:
+ *   1. Walk the saved order first, keeping only IDs that still exist
+ *      in REORDERABLE_COLUMN_IDS (handles schema renames / removals).
+ *   2. Append any REORDERABLE_COLUMN_IDS missing from the saved order,
+ *      in their default position.
+ *
+ * Returns the new full list — both the CampaignsTable header and the
+ * CampaignsTableRow body iterate this exact list to keep header / cells
+ * in lock-step.
+ */
+export function resolveCampaignsColumnOrder(
+  saved: string[] | undefined,
+): string[] {
+  const canonical = REORDERABLE_COLUMN_IDS as readonly string[];
+  if (!saved || saved.length === 0) return [...canonical];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of saved) {
+    if (canonical.includes(id) && !seen.has(id)) {
+      out.push(id);
+      seen.add(id);
+    }
+  }
+  for (const id of canonical) {
+    if (!seen.has(id)) out.push(id);
+  }
+  return out;
+}
+
+/**
+ * Move a reorderable column one slot up (toward the start) or down
+ * (toward the end) in the effective order. Writes the new order back
+ * to prefs. No-op when the column is already at the edge in that
+ * direction.
+ */
+export function moveCampaignsColumn(
+  id: string,
+  direction: 'up' | 'down',
+): CampaignsColumnPrefs {
+  const cur = readCampaignsColumnPrefs();
+  const order = resolveCampaignsColumnOrder(cur.order);
+  const idx = order.indexOf(id);
+  if (idx < 0) return cur;
+  const target = direction === 'up' ? idx - 1 : idx + 1;
+  if (target < 0 || target >= order.length) return cur;
+  [order[idx], order[target]] = [order[target], order[idx]];
+  const next: CampaignsColumnPrefs = { ...cur, order };
+  writeCampaignsColumnPrefs(next);
+  return next;
+}
+
+/** Convenience: reset the reorder back to the canonical default. */
+export function resetCampaignsColumnOrder(): CampaignsColumnPrefs {
+  const cur = readCampaignsColumnPrefs();
+  const next: CampaignsColumnPrefs = { ...cur, order: undefined };
+  writeCampaignsColumnPrefs(next);
+  return next;
 }
 
 export function writeCampaignsColumnPrefs(prefs: CampaignsColumnPrefs): void {

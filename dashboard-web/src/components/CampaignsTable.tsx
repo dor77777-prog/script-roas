@@ -37,6 +37,7 @@ import {
 import {
   readCampaignsColumnPrefs,
   buildHiddenColumnsCss,
+  resolveCampaignsColumnOrder,
 } from '@/lib/campaignsColumnPrefs';
 import { CampaignsColumnsMenu } from './CampaignsColumnsMenu';
 import { CHART_COLORS } from '@/lib/chartColors';
@@ -356,14 +357,18 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   const [localStore, setLocalStore] = useState(globalStore);
   useEffect(() => { setLocalStore(globalStore); }, [globalStore]);
 
-  // Phase 05.7.9d — column visibility prefs (hide/show only; reorder deferred).
+  // Phase 05.7.9d / 05.7.x — column visibility + order prefs.
   // Subscribes to the cloud-sync event so a toggle on another device
   // applies here on the next poll without a manual refresh.
   const [columnHiddenCss, setColumnHiddenCss] = useState('');
+  const [columnOrder, setColumnOrder] = useState<string[]>(() =>
+    resolveCampaignsColumnOrder(undefined),
+  );
   useEffect(() => {
     const apply = () => {
       const prefs = readCampaignsColumnPrefs();
       setColumnHiddenCss(buildHiddenColumnsCss(prefs.hidden));
+      setColumnOrder(resolveCampaignsColumnOrder(prefs.order));
     };
     apply();
     window.addEventListener('roas-campaigns-column-visibility-changed', apply);
@@ -1320,6 +1325,251 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
             {columnHiddenCss && (
               <style dangerouslySetInnerHTML={{ __html: columnHiddenCss }} />
             )}
+            {(() => {
+              // Phase 05.7.x — build the metric-column headers into a
+              // colId → JSX map so the thead can render them in the
+              // operator's preferred order (state `columnOrder`).
+              // Structural cells (optimized / health / campaignName /
+              // deepLink) stay fixed at the edges and aren't part of
+              // this map; only the 15 metric columns are reorderable.
+              const metricHeaders: Record<string, React.ReactNode> = {
+                spend: (
+                  <SortHeader
+                    key="spend"
+                    label="הוצאה"
+                    sortKey="spend"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[80px]"
+                    dataColId="spend"
+                    tooltip="סך ההוצאה (CAD) על הקמפיין בטווח הנבחר. מקור: API של פלטפורמת הפרסום — Meta Ads Insights / Google Ads / TikTok Marketing API, ממירים מ-USD/ILS ל-CAD ברגע ההזנה."
+                  />
+                ),
+                budget: (
+                  <SortHeader
+                    key="budget"
+                    label="תקציב יומי"
+                    sortKey="budget"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[100px]"
+                    dataColId="budget"
+                    tooltip="התקציב היומי שהוגדר בפלטפורמה (CAD). במצב CBO התקציב נשמר ברמת הקמפיין ולכן זהה לכל האד-סטים שבו; במצב ABO כל אד-סט מחזיק תקציב נפרד. ערך — = אין תקציב יומי מוגדר (תקציב Lifetime או לא זמין)."
+                  />
+                ),
+                conversionValue: (
+                  <SortHeader
+                    key="conversionValue"
+                    label="ערך המרות"
+                    sortKey="conversionValue"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[80px]"
+                    dataColId="conversionValue"
+                    tooltip="ערך ההמרות שדווח ע״י הפלטפורמה עצמה (conversion_value מ-Meta Pixel / Google Ads). זו ההצהרה של הפלטפורמה — מה ש-Pixel ראה — לא בהכרח מה שקרה בפועל ב-Shopify. השווה לעמודות ה-Shopify מימין כדי לראות פערי attribution."
+                  />
+                ),
+                roas: (
+                  <SortHeader
+                    key="roas"
+                    label="ROAS"
+                    sortKey="roas"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="center"
+                    className="px-3 py-2 w-[64px]"
+                    dataColId="roas"
+                    tooltip={'ROAS לפי הפלטפורמה. נוסחה: ערך המרות ÷ הוצאה. צביעה: אדום <2 (מפסיד), כתום 2-2.7 (גבולי), ירוק 2.7-3 (בריא), כחול >3 (מצוין). זהו ה-ROAS שהפלטפורמה ״רואה״, ולא בהכרח מה שקרה בפועל — קח עם מלח, השווה ל-ROAS Shopify.'}
+                  />
+                ),
+                roasShopify: (
+                  <SortHeader
+                    key="roasShopify"
+                    label="ROAS Shopify"
+                    sortKey="shopifyRoas"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="center"
+                    className="px-3 py-2 w-[92px]"
+                    dataColId="roasShopify"
+                    tooltip={'ROAS לפי המכירות בפועל ב-Shopify של המוצרים המשויכים לקמפיין. נוסחה: (revenue דטרמיניסטי + הקצאה פרופורציונלית של נותר) ÷ הוצאה. זהו ה-ROAS האמיתי ביותר — מבוסס על מה ש-Shopify רושם, לא על מה שה-Pixel מדווח. דורש שהקמפיין ימופה למוצרים (לחץ על השורה כדי למפות).'}
+                  />
+                ),
+                roasShopifyPlatform: (
+                  <SortHeader
+                    key="roasShopifyPlatform"
+                    label={
+                      <span className="inline-flex flex-col items-center leading-tight">
+                        <span>ROAS Shopify</span>
+                        <span className="text-[9px] text-text-muted font-normal">פלטפורמה</span>
+                      </span>
+                    }
+                    sortKey="roasShopifyPlatform"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="center"
+                    className="px-3 py-2 w-[100px]"
+                    dataColId="roasShopifyPlatform"
+                    tooltip="ROAS Shopify מבוסס רק על הזמנות שסווגו דטרמיניסטית לפלטפורמה הזו דרך source / click-id (ttclid, fbclid, gclid, utm_source). נוסחה: deterministicRevenue ÷ הוצאה. אין fallback פרופורציונלי — רק מה שאנחנו יכולים להוכיח. ROAS גבוה כאן = הקמפיין מייצר מכירות שאפשר לייחס אליו בוודאות."
+                  />
+                ),
+                shopifyValuePlatform: (
+                  <SortHeader
+                    key="shopifyValuePlatform"
+                    label={
+                      <span className="inline-flex flex-col items-end leading-tight">
+                        <span>ערך Shopify</span>
+                        <span className="text-[9px] text-text-muted font-normal">פלטפורמה</span>
+                      </span>
+                    }
+                    sortKey="shopifyValuePlatform"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[92px] border-e border-borderSubtle"
+                    dataColId="shopifyValuePlatform"
+                    tooltip="ערך המכירות (CAD) שסווגו דטרמיניסטית לפלטפורמה הזו דרך source / click-id ב-Shopify (utm_source, ttclid, fbclid, gclid). רק הזמנות שאנחנו 100% בטוחים שהן מהפלטפורמה הזו — בלי הקצאה פרופורציונלית. זה מה שאפשר להוכיח."
+                  />
+                ),
+                shopifyUnitsPlatform: (
+                  <SortHeader
+                    key="shopifyUnitsPlatform"
+                    label={
+                      <span className="inline-flex flex-col items-end leading-tight">
+                        <span>יח&apos; Shopify</span>
+                        <span className="text-[9px] text-text-muted font-normal">פלטפורמה</span>
+                      </span>
+                    }
+                    sortKey="shopifyUnitsPlatform"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[78px] border-e border-borderSubtle"
+                    dataColId="shopifyUnitsPlatform"
+                    tooltip="מספר היחידות שנמכרו ב-Shopify מהזמנות שסווגו דטרמיניסטית לפלטפורמה הזו. סופר units (line_items.quantity) — לא orders. רק הזמנות עם source / click-id ברור."
+                  />
+                ),
+                shopifyValueTotal: (
+                  <SortHeader
+                    key="shopifyValueTotal"
+                    label={
+                      <span className="inline-flex flex-col items-end leading-tight">
+                        <span>ערך Shopify</span>
+                        <span className="text-[9px] text-text-muted font-normal">סה&quot;כ</span>
+                      </span>
+                    }
+                    sortKey="shopifyValueTotal"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[92px]"
+                    dataColId="shopifyValueTotal"
+                    tooltip="סך ערך המכירות (CAD) ב-Shopify של המוצרים המשויכים בטווח הנבחר, בלי קשר לפלטפורמה (כולל direct, organic, ופלטפורמות אחרות). זהו ה״מכנה״ — מסגרת הייחוס לכמה מהמכירות הגיעו דרך הקמפיין הזה."
+                  />
+                ),
+                shopifyUnitsTotal: (
+                  <SortHeader
+                    key="shopifyUnitsTotal"
+                    label={
+                      <span className="inline-flex flex-col items-end leading-tight">
+                        <span>יח&apos; Shopify</span>
+                        <span className="text-[9px] text-text-muted font-normal">סה&quot;כ</span>
+                      </span>
+                    }
+                    sortKey="shopifyUnitsTotal"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[78px]"
+                    dataColId="shopifyUnitsTotal"
+                    tooltip="סך היחידות שנמכרו ב-Shopify של המוצרים המשויכים בטווח הנבחר, בלי קשר לפלטפורמה. ה״מכנה״ ל-יח׳ פלטפורמה ממש כמו ש-ערך סה״כ הוא המכנה ל-ערך פלטפורמה."
+                  />
+                ),
+                conversions: (
+                  <SortHeader
+                    key="conversions"
+                    label="המרות"
+                    sortKey="conversions"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[72px]"
+                    dataColId="conversions"
+                    tooltip="מספר ההמרות (purchase events) שהפלטפורמה ייחסה לקמפיין בטווח. ב-Meta: actions.purchase, ב-Google: conversions, ב-TikTok: complete_payment. זוהי הספירה של הפלטפורמה — לא בהכרח שווה למספר ההזמנות ב-Shopify."
+                  />
+                ),
+                ctr: (
+                  <SortHeader
+                    key="ctr"
+                    label="CTR"
+                    sortKey="ctr"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[72px]"
+                    dataColId="ctr"
+                    tooltip="Click-Through Rate — מה אחוז הצופים שלחצו על המודעה. נוסחה: קליקים ÷ חשיפות × 100. בנצ׳מארק כללי: <0.5% חלש, 0.5-1% סביר, 1-2% טוב, >2% מעולה (תלוי תעשייה ופלטפורמה)."
+                  />
+                ),
+                cpc: (
+                  <SortHeader
+                    key="cpc"
+                    label="CPC"
+                    sortKey="cpc"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[72px]"
+                    dataColId="cpc"
+                    tooltip="Cost Per Click — כמה עלה לך כל קליק. נוסחה: הוצאה ÷ קליקים. ב-CAD. CPC נמוך לבד לא אומר כלום — צריך גם CTR בריא וגם המרות, אחרת זה רק קליקים זולים שלא קונים."
+                  />
+                ),
+                cpm: (
+                  <SortHeader
+                    key="cpm"
+                    label="CPM"
+                    sortKey="cpm"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[80px]"
+                    dataColId="cpm"
+                    tooltip="Cost Per Mille — עלות לאלף חשיפות. נוסחה: (הוצאה ÷ חשיפות) × 1000. ב-CAD. אינדיקטור לרמת התחרות בקהל היעד / איכות היצירתיים: CPM עולה משמעו או יותר תחרות או יצירתיב גרוע יותר."
+                  />
+                ),
+                cpa: (
+                  <SortHeader
+                    key="cpa"
+                    label="CPA"
+                    sortKey="cpa"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[72px]"
+                    dataColId="cpa"
+                    tooltip="Cost Per Acquisition — כמה עלתה לך כל המרה. נוסחה: הוצאה ÷ המרות. ב-CAD. בריא אם CPA קטן מהרווח הממוצע למוצר. מתבסס על ספירת ההמרות של הפלטפורמה — לא של Shopify."
+                  />
+                ),
+              };
+              return (
             <table className="w-full text-xs sm:text-sm min-w-[1340px]">
               <thead className="sticky top-0 z-[5] bg-surface">
                 <tr className="text-text-secondary border-b border-borderSubtle bg-surfaceMuted/40">
@@ -1355,211 +1605,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                         : 'שם האד-סט כפי שמוגדר בפלטפורמה. לחיצה ממיינת אלפבתית.'
                     }
                   />
-                  <SortHeader
-                    label="הוצאה"
-                    sortKey="spend"
-                    activeKey={sortKey}
-                    dir={sortDir}
-                    onClick={handleSort}
-                    align="end"
-                    className="px-3 py-2 w-[80px]"
-                    dataColId="spend"
-                    tooltip="סך ההוצאה (CAD) על הקמפיין בטווח הנבחר. מקור: API של פלטפורמת הפרסום — Meta Ads Insights / Google Ads / TikTok Marketing API, ממירים מ-USD/ILS ל-CAD ברגע ההזנה."
-                  />
-                  <SortHeader
-                    label="תקציב יומי"
-                    sortKey="budget"
-                    activeKey={sortKey}
-                    dir={sortDir}
-                    onClick={handleSort}
-                    align="end"
-                    className="px-3 py-2 w-[100px]"
-                    dataColId="budget"
-                    tooltip="התקציב היומי שהוגדר בפלטפורמה (CAD). במצב CBO התקציב נשמר ברמת הקמפיין ולכן זהה לכל האד-סטים שבו; במצב ABO כל אד-סט מחזיק תקציב נפרד. ערך — = אין תקציב יומי מוגדר (תקציב Lifetime או לא זמין)."
-                  />
-                  <SortHeader
-                    label="ערך המרות"
-                    sortKey="conversionValue"
-                    activeKey={sortKey}
-                    dir={sortDir}
-                    onClick={handleSort}
-                    align="end"
-                    className="px-3 py-2 w-[80px]"
-                    dataColId="conversionValue"
-                    tooltip="ערך ההמרות שדווח ע״י הפלטפורמה עצמה (conversion_value מ-Meta Pixel / Google Ads). זו ההצהרה של הפלטפורמה — מה ש-Pixel ראה — לא בהכרח מה שקרה בפועל ב-Shopify. השווה לעמודות ה-Shopify מימין כדי לראות פערי attribution."
-                  />
-                  <SortHeader
-                    label="ROAS"
-                    sortKey="roas"
-                    activeKey={sortKey}
-                    dir={sortDir}
-                    onClick={handleSort}
-                    align="center"
-                    className="px-3 py-2 w-[64px]"
-                    dataColId="roas"
-                    tooltip={'ROAS לפי הפלטפורמה. נוסחה: ערך המרות ÷ הוצאה. צביעה: אדום <2 (מפסיד), כתום 2-2.7 (גבולי), ירוק 2.7-3 (בריא), כחול >3 (מצוין). זהו ה-ROAS שהפלטפורמה ״רואה״, ולא בהכרח מה שקרה בפועל — קח עם מלח, השווה ל-ROAS Shopify.'}
-                  />
-                  <SortHeader
-                    label="ROAS Shopify"
-                    sortKey="shopifyRoas"
-                    activeKey={sortKey}
-                    dir={sortDir}
-                    onClick={handleSort}
-                    align="center"
-                    className="px-3 py-2 w-[92px]"
-                    dataColId="roasShopify"
-                    tooltip={'ROAS לפי המכירות בפועל ב-Shopify של המוצרים המשויכים לקמפיין. נוסחה: (revenue דטרמיניסטי + הקצאה פרופורציונלית של נותר) ÷ הוצאה. זהו ה-ROAS האמיתי ביותר — מבוסס על מה ש-Shopify רושם, לא על מה שה-Pixel מדווח. דורש שהקמפיין ימופה למוצרים (לחץ על השורה כדי למפות).'}
-                  />
-                  {/* Phase 05.7.9e — third ROAS column. Operator request:
-                      ROAS Shopify but using ONLY the deterministic
-                      (source/click-id) revenue divided by this campaign's
-                      spend. Together with ROAS Shopify (combined) and ROAS
-                      (platform claim) gives 3 angles on the same metric. */}
-                  <SortHeader
-                    label={
-                      <span className="inline-flex flex-col items-center leading-tight">
-                        <span>ROAS Shopify</span>
-                        <span className="text-[9px] text-text-muted font-normal">פלטפורמה</span>
-                      </span>
-                    }
-                    sortKey="roasShopifyPlatform"
-                    activeKey={sortKey}
-                    dir={sortDir}
-                    onClick={handleSort}
-                    align="center"
-                    className="px-3 py-2 w-[100px]"
-                    dataColId="roasShopifyPlatform"
-                    tooltip="ROAS Shopify מבוסס רק על הזמנות שסווגו דטרמיניסטית לפלטפורמה הזו דרך source / click-id (ttclid, fbclid, gclid, utm_source). נוסחה: deterministicRevenue ÷ הוצאה. אין fallback פרופורציונלי — רק מה שאנחנו יכולים להוכיח. ROAS גבוה כאן = הקמפיין מייצר מכירות שאפשר לייחס אליו בוודאות."
-                  />
-                  {/* Phase 05.7.9b — 4 Shopify columns (was 2):
-                      (1) ערך / פלטפורמה — deterministic per-platform (orders
-                          classified to THIS row's platform via source/click-id)
-                      (2) יח' / פלטפורמה — same, units
-                      (3) ערך / סה"כ — total Shopify revenue for the mapped
-                          products in range, across ALL platforms (same value
-                          for every campaign mapped to the same product set —
-                          serves as a denominator)
-                      (4) יח' / סה"כ — same, units
-                      Not sortable — sort via 'ROAS Shopify'. */}
-                  <SortHeader
-                    label={
-                      <span className="inline-flex flex-col items-end leading-tight">
-                        <span>ערך Shopify</span>
-                        <span className="text-[9px] text-text-muted font-normal">פלטפורמה</span>
-                      </span>
-                    }
-                    sortKey="shopifyValuePlatform"
-                    activeKey={sortKey}
-                    dir={sortDir}
-                    onClick={handleSort}
-                    align="end"
-                    className="px-3 py-2 w-[92px] border-e border-borderSubtle"
-                    dataColId="shopifyValuePlatform"
-                    tooltip="ערך המכירות (CAD) שסווגו דטרמיניסטית לפלטפורמה הזו דרך source / click-id ב-Shopify (utm_source, ttclid, fbclid, gclid). רק הזמנות שאנחנו 100% בטוחים שהן מהפלטפורמה הזו — בלי הקצאה פרופורציונלית. זה מה שאפשר להוכיח."
-                  />
-                  <SortHeader
-                    label={
-                      <span className="inline-flex flex-col items-end leading-tight">
-                        <span>יח&apos; Shopify</span>
-                        <span className="text-[9px] text-text-muted font-normal">פלטפורמה</span>
-                      </span>
-                    }
-                    sortKey="shopifyUnitsPlatform"
-                    activeKey={sortKey}
-                    dir={sortDir}
-                    onClick={handleSort}
-                    align="end"
-                    className="px-3 py-2 w-[78px] border-e border-borderSubtle"
-                    dataColId="shopifyUnitsPlatform"
-                    tooltip="מספר היחידות שנמכרו ב-Shopify מהזמנות שסווגו דטרמיניסטית לפלטפורמה הזו. סופר units (line_items.quantity) — לא orders. רק הזמנות עם source / click-id ברור."
-                  />
-                  <SortHeader
-                    label={
-                      <span className="inline-flex flex-col items-end leading-tight">
-                        <span>ערך Shopify</span>
-                        <span className="text-[9px] text-text-muted font-normal">סה&quot;כ</span>
-                      </span>
-                    }
-                    sortKey="shopifyValueTotal"
-                    activeKey={sortKey}
-                    dir={sortDir}
-                    onClick={handleSort}
-                    align="end"
-                    className="px-3 py-2 w-[92px]"
-                    dataColId="shopifyValueTotal"
-                    tooltip="סך ערך המכירות (CAD) ב-Shopify של המוצרים המשויכים בטווח הנבחר, בלי קשר לפלטפורמה (כולל direct, organic, ופלטפורמות אחרות). זהו ה״מכנה״ — מסגרת הייחוס לכמה מהמכירות הגיעו דרך הקמפיין הזה."
-                  />
-                  <SortHeader
-                    label={
-                      <span className="inline-flex flex-col items-end leading-tight">
-                        <span>יח&apos; Shopify</span>
-                        <span className="text-[9px] text-text-muted font-normal">סה&quot;כ</span>
-                      </span>
-                    }
-                    sortKey="shopifyUnitsTotal"
-                    activeKey={sortKey}
-                    dir={sortDir}
-                    onClick={handleSort}
-                    align="end"
-                    className="px-3 py-2 w-[78px]"
-                    dataColId="shopifyUnitsTotal"
-                    tooltip="סך היחידות שנמכרו ב-Shopify של המוצרים המשויכים בטווח הנבחר, בלי קשר לפלטפורמה. ה״מכנה״ ל-יח׳ פלטפורמה ממש כמו ש-ערך סה״כ הוא המכנה ל-ערך פלטפורמה."
-                  />
-                  <SortHeader
-                    label="המרות"
-                    sortKey="conversions"
-                    activeKey={sortKey}
-                    dir={sortDir}
-                    onClick={handleSort}
-                    align="end"
-                    className="px-3 py-2 w-[72px]"
-                    dataColId="conversions"
-                    tooltip="מספר ההמרות (purchase events) שהפלטפורמה ייחסה לקמפיין בטווח. ב-Meta: actions.purchase, ב-Google: conversions, ב-TikTok: complete_payment. זוהי הספירה של הפלטפורמה — לא בהכרח שווה למספר ההזמנות ב-Shopify."
-                  />
-                  <SortHeader
-                    label="CTR"
-                    sortKey="ctr"
-                    activeKey={sortKey}
-                    dir={sortDir}
-                    onClick={handleSort}
-                    align="end"
-                    className="px-3 py-2 w-[72px]"
-                    dataColId="ctr"
-                    tooltip="Click-Through Rate — מה אחוז הצופים שלחצו על המודעה. נוסחה: קליקים ÷ חשיפות × 100. בנצ׳מארק כללי: <0.5% חלש, 0.5-1% סביר, 1-2% טוב, >2% מעולה (תלוי תעשייה ופלטפורמה)."
-                  />
-                  <SortHeader
-                    label="CPC"
-                    sortKey="cpc"
-                    activeKey={sortKey}
-                    dir={sortDir}
-                    onClick={handleSort}
-                    align="end"
-                    className="px-3 py-2 w-[72px]"
-                    dataColId="cpc"
-                    tooltip="Cost Per Click — כמה עלה לך כל קליק. נוסחה: הוצאה ÷ קליקים. ב-CAD. CPC נמוך לבד לא אומר כלום — צריך גם CTR בריא וגם המרות, אחרת זה רק קליקים זולים שלא קונים."
-                  />
-                  <SortHeader
-                    label="CPM"
-                    sortKey="cpm"
-                    activeKey={sortKey}
-                    dir={sortDir}
-                    onClick={handleSort}
-                    align="end"
-                    className="px-3 py-2 w-[80px]"
-                    dataColId="cpm"
-                    tooltip="Cost Per Mille — עלות לאלף חשיפות. נוסחה: (הוצאה ÷ חשיפות) × 1000. ב-CAD. אינדיקטור לרמת התחרות בקהל היעד / איכות היצירתיים: CPM עולה משמעו או יותר תחרות או יצירתיב גרוע יותר."
-                  />
-                  <SortHeader
-                    label="CPA"
-                    sortKey="cpa"
-                    activeKey={sortKey}
-                    dir={sortDir}
-                    onClick={handleSort}
-                    align="end"
-                    className="px-3 py-2 w-[72px]"
-                    dataColId="cpa"
-                    tooltip="Cost Per Acquisition — כמה עלתה לך כל המרה. נוסחה: הוצאה ÷ המרות. ב-CAD. בריא אם CPA קטן מהרווח הממוצע למוצר. מתבסס על ספירת ההמרות של הפלטפורמה — לא של Shopify."
-                  />
+                  {columnOrder.map(id => metricHeaders[id] ?? null)}
                   <ColumnHeaderTh
                     className="px-2 py-2 text-center font-medium w-[40px]"
                     ariaLabel="פעולות"
@@ -1577,6 +1623,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     mode={mode}
                     trueRevenueByKey={trueRevenueByKey}
                     health={healthByKey.get(a.key)}
+                    columnOrder={columnOrder}
                     adAccounts={adAccounts}
                     optimized={optimized}
                     today={today}
@@ -1591,6 +1638,8 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                 ))}
               </tbody>
             </table>
+              );
+            })()}
           </div>
 
           {aggregated.length > TOP_N_DEFAULT && (
