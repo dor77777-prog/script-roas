@@ -1147,7 +1147,12 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
             <table className="w-full text-xs sm:text-sm min-w-[1340px]">
               <thead className="sticky top-0 z-[5] bg-surface">
                 <tr className="text-text-secondary border-b border-borderSubtle bg-surfaceMuted/40">
-                  <th className="px-3 py-2 w-[36px]" aria-label="סימון אופטימיזציה" data-col-id="optimized" />
+                  <th
+                    className="px-3 py-2 w-[36px]"
+                    aria-label="סימון אופטימיזציה"
+                    data-col-id="optimized"
+                    title="צ׳קבוקס לסימון קמפיינים שאתה מבצע בהם אופטימיזציה פעילה (מעקב אישי). לא משפיע על חישובים — רק עוזר לזכור איפה אתה בעבודה."
+                  />
                   <SortHeader
                     label={mode === 'campaign' ? 'קמפיין' : 'אד-סט'}
                     sortKey="name"
@@ -1157,6 +1162,11 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     align="start"
                     className="px-3 sm:px-5 py-2"
                     dataColId="campaignName"
+                    tooltip={
+                      mode === 'campaign'
+                        ? 'שם הקמפיין כפי שמוגדר בפלטפורמה (Meta / Google / TikTok). תג בצבע ליד השם מציין את הפלטפורמה. ה-CBO/ABO באייקון משמאל מציין אם התקציב ברמת הקמפיין (CBO) או ברמת האד-סט (ABO). לחיצה ממיינת אלפבתית.'
+                        : 'שם האד-סט כפי שמוגדר בפלטפורמה. לחיצה ממיינת אלפבתית.'
+                    }
                   />
                   <SortHeader
                     label="הוצאה"
@@ -1167,6 +1177,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     align="end"
                     className="px-3 py-2 w-[80px]"
                     dataColId="spend"
+                    tooltip="סך ההוצאה (CAD) על הקמפיין בטווח הנבחר. מקור: API של פלטפורמת הפרסום — Meta Ads Insights / Google Ads / TikTok Marketing API, ממירים מ-USD/ILS ל-CAD ברגע ההזנה."
                   />
                   <SortHeader
                     label="תקציב יומי"
@@ -1177,6 +1188,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     align="end"
                     className="px-3 py-2 w-[100px]"
                     dataColId="budget"
+                    tooltip="התקציב היומי שהוגדר בפלטפורמה (CAD). במצב CBO התקציב נשמר ברמת הקמפיין ולכן זהה לכל האד-סטים שבו; במצב ABO כל אד-סט מחזיק תקציב נפרד. ערך — = אין תקציב יומי מוגדר (תקציב Lifetime או לא זמין)."
                   />
                   <SortHeader
                     label="ערך המרות"
@@ -1187,6 +1199,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     align="end"
                     className="px-3 py-2 w-[80px]"
                     dataColId="conversionValue"
+                    tooltip="ערך ההמרות שדווח ע״י הפלטפורמה עצמה (conversion_value מ-Meta Pixel / Google Ads). זו ההצהרה של הפלטפורמה — מה ש-Pixel ראה — לא בהכרח מה שקרה בפועל ב-Shopify. השווה לעמודות ה-Shopify מימין כדי לראות פערי attribution."
                   />
                   <SortHeader
                     label="ROAS"
@@ -1197,6 +1210,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     align="center"
                     className="px-3 py-2 w-[64px]"
                     dataColId="roas"
+                    tooltip={'ROAS לפי הפלטפורמה. נוסחה: ערך המרות ÷ הוצאה. צביעה: אדום <2 (מפסיד), כתום 2-2.7 (גבולי), ירוק 2.7-3 (בריא), כחול >3 (מצוין). זהו ה-ROAS שהפלטפורמה ״רואה״, ולא בהכרח מה שקרה בפועל — קח עם מלח, השווה ל-ROAS Shopify.'}
                   />
                   <SortHeader
                     label="ROAS Shopify"
@@ -1207,6 +1221,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     align="center"
                     className="px-3 py-2 w-[92px]"
                     dataColId="roasShopify"
+                    tooltip={'ROAS לפי המכירות בפועל ב-Shopify של המוצרים המשויכים לקמפיין. נוסחה: (revenue דטרמיניסטי + הקצאה פרופורציונלית של נותר) ÷ הוצאה. זהו ה-ROAS האמיתי ביותר — מבוסס על מה ש-Shopify רושם, לא על מה שה-Pixel מדווח. דורש שהקמפיין ימופה למוצרים (לחץ על השורה כדי למפות).'}
                   />
                   {/* Phase 05.7.9e — third ROAS column. Operator request:
                       ROAS Shopify but using ONLY the deterministic
@@ -1280,6 +1295,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     align="end"
                     className="px-3 py-2 w-[72px]"
                     dataColId="conversions"
+                    tooltip="מספר ההמרות (purchase events) שהפלטפורמה ייחסה לקמפיין בטווח. ב-Meta: actions.purchase, ב-Google: conversions, ב-TikTok: complete_payment. זוהי הספירה של הפלטפורמה — לא בהכרח שווה למספר ההזמנות ב-Shopify."
                   />
                   <SortHeader
                     label="CTR"
@@ -1290,6 +1306,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     align="end"
                     className="px-3 py-2 w-[72px]"
                     dataColId="ctr"
+                    tooltip="Click-Through Rate — מה אחוז הצופים שלחצו על המודעה. נוסחה: קליקים ÷ חשיפות × 100. בנצ׳מארק כללי: <0.5% חלש, 0.5-1% סביר, 1-2% טוב, >2% מעולה (תלוי תעשייה ופלטפורמה)."
                   />
                   <SortHeader
                     label="CPC"
@@ -1300,6 +1317,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     align="end"
                     className="px-3 py-2 w-[72px]"
                     dataColId="cpc"
+                    tooltip="Cost Per Click — כמה עלה לך כל קליק. נוסחה: הוצאה ÷ קליקים. ב-CAD. CPC נמוך לבד לא אומר כלום — צריך גם CTR בריא וגם המרות, אחרת זה רק קליקים זולים שלא קונים."
                   />
                   <SortHeader
                     label="CPM"
@@ -1310,6 +1328,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     align="end"
                     className="px-3 py-2 w-[80px]"
                     dataColId="cpm"
+                    tooltip="Cost Per Mille — עלות לאלף חשיפות. נוסחה: (הוצאה ÷ חשיפות) × 1000. ב-CAD. אינדיקטור לרמת התחרות בקהל היעד / איכות היצירתיים: CPM עולה משמעו או יותר תחרות או יצירתיב גרוע יותר."
                   />
                   <SortHeader
                     label="CPA"
@@ -1320,8 +1339,14 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     align="end"
                     className="px-3 py-2 w-[72px]"
                     dataColId="cpa"
+                    tooltip="Cost Per Acquisition — כמה עלתה לך כל המרה. נוסחה: הוצאה ÷ המרות. ב-CAD. בריא אם CPA קטן מהרווח הממוצע למוצר. מתבסס על ספירת ההמרות של הפלטפורמה — לא של Shopify."
                   />
-                  <th className="px-2 py-2 text-center font-medium w-[40px]" aria-label="פעולות" data-col-id="deepLink" />
+                  <th
+                    className="px-2 py-2 text-center font-medium w-[40px]"
+                    aria-label="פעולות"
+                    data-col-id="deepLink"
+                    title="לחיצה על אייקון הקישור פותחת את הקמפיין ישירות במנהל המודעות של הפלטפורמה (Meta Ads Manager / Google Ads / TikTok Ads Manager) בטאב חדש."
+                  />
                 </tr>
               </thead>
               <tbody>
@@ -1525,6 +1550,7 @@ function SortHeader({
   align,
   className,
   dataColId,
+  tooltip,
 }: {
   label: string;
   sortKey: SortKey;
@@ -1536,6 +1562,10 @@ function SortHeader({
   /** Phase 05.7.9d — column ID for the visibility prefs. The CSS
    *  generated by buildHiddenColumnsCss matches this attribute. */
   dataColId?: string;
+  /** Native browser tooltip explaining what the column means + how it's
+   *  computed. Mirrors the title= pattern used on the manual Shopify
+   *  <th> blocks elsewhere in this file. */
+  tooltip?: string;
 }) {
   const isActive = sortKey === activeKey;
   const justify =
@@ -1543,7 +1573,7 @@ function SortHeader({
   const textAlign =
     align === 'start' ? 'text-start' : align === 'end' ? 'text-end' : 'text-center';
   return (
-    <th className={cn('font-medium', textAlign, className)} data-col-id={dataColId}>
+    <th className={cn('font-medium', textAlign, className)} data-col-id={dataColId} title={tooltip}>
       <button
         type="button"
         onClick={() => onClick(sortKey)}
