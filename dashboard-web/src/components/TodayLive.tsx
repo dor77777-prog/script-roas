@@ -5,6 +5,7 @@ import useSWR from 'swr';
 import { Radio, TrendingUp, DollarSign, ShoppingCart, Target, Eye, ShoppingBag } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { aggregate, aggregateByStore, roasLabel } from '@/lib/analytics';
+import { storeHasTikTok } from '@/lib/platformsByStore';
 import type { DailyRow } from '@/lib/types';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
@@ -322,7 +323,13 @@ export function TodayLive({
               const color = STORE_COLORS[s.store] || '#0d3680';
               const info = roasLabel(s.roas);
               const hasGoogle = s.gaSpend > 0;
-              const hasTikTok = (s.ttSpend ?? 0) > 0;
+              // Phase 05.7.x — TikTok is rendered for every store that
+              // has the integration wired (currently uzoshop only), even
+              // when ttSpend = 0 — same convention as Google above. This
+              // way the operator can tell at a glance "yes, TikTok is
+              // configured here, today just hasn't spent yet" vs "this
+              // store doesn't have TikTok at all".
+              const hasTikTok = storeHasTikTok(s.store);
               const storeCpm = cpmData.cpmByStore.get(s.store) ?? 0;
               const storeOrders = ordersByStoreToday[s.store];
               return (
@@ -370,7 +377,7 @@ export function TodayLive({
                       {hasTikTok && (
                         <>
                           <span>·</span>
-                          <span>TikTok: <span className="text-text-secondary tabular-nums">{formatCurrency(s.ttSpend)}</span></span>
+                          <span>TikTok: <span className="text-text-secondary tabular-nums">{(s.ttSpend ?? 0) > 0 ? formatCurrency(s.ttSpend ?? 0) : '—'}</span></span>
                         </>
                       )}
                     </div>

@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { Trophy, AlertTriangle, ShoppingBag } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { roasLabel, type StoreAgg } from '@/lib/analytics';
+import { storeHasTikTok } from '@/lib/platformsByStore';
 
 const STORE_COLORS: Record<string, string> = {
   uzoshop: '#1c4587',
@@ -131,13 +132,18 @@ function StoreCard({
           <Row label="הכנסות" value={`CAD ${formatCurrency(agg.revenue)}`} />
           <Row label="הוצאות" value={`CAD ${formatCurrency(agg.spend)}`} />
           {/* Phase 05.7.7 — surface Meta / Google / TikTok breakdown so each
-              store card shows where the ad budget actually went. TikTok line
-              hides for stores without a TikTok integration. */}
+              store card shows where the ad budget actually went.
+              Phase 05.7.x (2026-05-23): TikTok now renders for every store
+              that has the integration wired (currently uzoshop only) even
+              when ttSpend = 0 — same convention as Google. Operators
+              expected to see "TikTok: —" on a zero-spend day, not a missing
+              column ("did the integration break? am I looking at the wrong
+              store?"). */}
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-[11px] text-text-muted ps-3">
             <span>Meta: <span className="text-text-secondary tabular-nums">{formatCurrency(agg.fbSpend)}</span></span>
             <span>Google: <span className="text-text-secondary tabular-nums">{agg.gaSpend > 0 ? formatCurrency(agg.gaSpend) : '—'}</span></span>
-            {(agg.ttSpend ?? 0) > 0 && (
-              <span>TikTok: <span className="text-text-secondary tabular-nums">{formatCurrency(agg.ttSpend)}</span></span>
+            {storeHasTikTok(agg.store) && (
+              <span>TikTok: <span className="text-text-secondary tabular-nums">{(agg.ttSpend ?? 0) > 0 ? formatCurrency(agg.ttSpend ?? 0) : '—'}</span></span>
             )}
           </div>
           {/* Phase 05.7.8 — order count for the range. `undefined` means the
