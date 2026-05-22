@@ -671,15 +671,17 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
               <Line type="monotone" dataKey="tiktok" stroke={CHART_COLORS.tiktok} strokeWidth={1.5} dot={false} opacity={0.85} />
               <Line type="monotone" dataKey="organic" stroke={CHART_COLORS.organic} strokeWidth={1.5} dot={false} opacity={0.85} />
               {/* Shopify line — source of truth (actual orders). Phase 05.7.9:
-                  made visually dominant (thicker stroke + filled dots + full
-                  opacity) so the eye anchors on it as the baseline; the four
-                  platform lines become "claims to compare against" rather
-                  than peers. */}
+                  made visually dominant with a DASHED pattern (operator
+                  feedback: "make it dashed so it's easier to tell apart").
+                  Dashed stroke + 2.5px width + filled dots stand out cleanly
+                  against the 1.5px solid platform lines without competing
+                  for color attention. */}
               <Line
                 type="monotone"
                 dataKey="shopify"
                 stroke={CHART_COLORS.shopify}
-                strokeWidth={3.5}
+                strokeWidth={2.5}
+                strokeDasharray="6 3"
                 dot={{ r: 2.5, fill: CHART_COLORS.shopify, strokeWidth: 0 }}
                 activeDot={{ r: 4 }}
               />
@@ -705,11 +707,24 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
             <span className="inline-block w-3 h-[2px] bg-purple-600" />
             <span className="text-text-secondary">Organic</span>
           </span>
-          {/* Shopify legend entry — visually dominant to match the chart's
-              thicker stroke (Phase 05.7.9). Bold typography + thicker swatch
-              communicates "source of truth" at a glance. */}
+          {/* Shopify legend entry — dashed pattern matches the chart's
+              dashed stroke (Phase 05.7.9). Bold typography communicates
+              "source of truth" at a glance. The dashed pattern is what
+              actually distinguishes Shopify from the 4 solid platform
+              lines, so the swatch must match. */}
           <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block w-4 h-[3px] bg-roas-green rounded-sm" />
+            <svg width="18" height="3" viewBox="0 0 18 3" aria-hidden="true">
+              <line
+                x1="0"
+                y1="1.5"
+                x2="18"
+                y2="1.5"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeDasharray="4 2"
+                className="text-roas-green"
+              />
+            </svg>
             <span className="text-text-primary font-semibold">Shopify (בפועל)</span>
           </span>
         </div>
