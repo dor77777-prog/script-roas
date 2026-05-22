@@ -93,7 +93,7 @@ Supabase Security Advisor יראה 10 אזהרות `0013_rls_disabled_in_public`
 | `cron-daily-uzoshop` | `5 0 * * *` IL | Shopify + Meta + Google + TikTok + FX לכל ה-yesterday |
 | `cron-daily-zolplus` | `5 0 * * *` IL | אותו דבר ל-zolplus |
 | `cron-daily-usmile360` | `5 0 * * *` IL | אותו דבר ל-usmile360 |
-| `cron-live-uzoshop` | `*/10 * * * *` | rolling 3-day Shopify + Meta + Google + TikTok + orders_attribution של היום |
+| `cron-live-uzoshop` | `*/10 * * * *` | rolling 3-day Shopify + Meta + Google + TikTok spend + orders_attribution של היום + refresh effective_status (lookback 7 ימים) |
 | `cron-live-zolplus` | `*/10 * * * *` | אותו דבר |
 | `cron-live-usmile360` | `*/10 * * * *` | אותו דבר |
 | `event-sync-now` | event-triggered (`event/sync-now`) | זהה ל-cron-live, ידני מ-`/operator` |
@@ -180,9 +180,14 @@ Supabase Security Advisor יראה 10 אזהרות `0013_rls_disabled_in_public`
 5. **Fallback**: כשעדיין null (שורה לפני המיגרציה, או fetcher soft-fail) — חזרה ל-heuristic של "2+ ימים בלי spend".
 
 ### 6.3 Freshness
-- cron-daily רץ ב-00:05 IL — סטטוס מתעדכן פעם ביום.
-- cron-live רץ כל 10 דקות וגם הוא כותב effective_status (Phase 05.7.x — נוסף לאחר ה-cron-daily).
-- "רענן הכל" בכותרת טאב הקמפיינים מטריגר sync-now → effective_status מתעדכן.
+- cron-daily רץ ב-00:05 IL — כותב את ה-status כחלק מהשורה היומית המלאה (יחד עם spend / impressions / etc).
+- **cron-live רץ כל 10 דקות** וגם הוא מרענן `effective_status` בלבד (Phase 05.7.x). הצעד החדש `refresh-effective-status`:
+  1. שולף במקביל את ה-statuses מ-Meta (`fetchMetaBudgets`), Google (`fetchGoogleAdsAdGroupInsights` ליום אתמול), ו-TikTok (`fetchTikTokAdGroupStatuses`) — כל אחד עם timeout 15s ו-soft-fail.
+  2. עבור כל פלטפורמה, מריץ `UPDATE campaigns_daily SET effective_status = ?` לפי `(store_id, platform, ad_set_id)` עם תנאי `date >= today - 6` (לאחור של 7 ימים).
+  3. UPDATE (לא UPSERT) — לא יוצרים שורות phantom עם spend=0 על קמפיינים שכבר לא רצים.
+- "רענן הכל" בכותרת טאב הקמפיינים מטריגר `event-sync-now` שמריץ את אותה לוגיקה של cron-live → effective_status מתעדכן מיד.
+
+**Aggregator behaviour** (`campaignsAggregator.ts`): כשהדשבורד מציג קמפיין על פני טווח תאריכים, הוא בוחר את ה-`effective_status` של ה-**שורה הכי חדשה** (max date) שיש בה לקמפיין הזה. עדכון על כל 7 הימים האחרונים מבטיח שהשורה הכי חדשה — בדרך כלל אתמול — תקבל את הסטטוס הטרי.
 
 ---
 

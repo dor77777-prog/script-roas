@@ -95,9 +95,15 @@ import {
   type ShopifyDayRows,
   type ShopifyOrderRow,
 } from '@/lib/fetchers/shopify';
-import { fetchMetaSpendForDayLight } from '@/lib/fetchers/meta';
-import { fetchGoogleAdsSpendForDay } from '@/lib/fetchers/googleAds';
-import { fetchTikTokSpendForDay } from '@/lib/fetchers/tiktok';
+import { fetchMetaBudgets, fetchMetaSpendForDayLight } from '@/lib/fetchers/meta';
+import {
+  fetchGoogleAdsAdGroupInsights,
+  fetchGoogleAdsSpendForDay,
+} from '@/lib/fetchers/googleAds';
+import {
+  fetchTikTokAdGroupStatuses,
+  fetchTikTokSpendForDay,
+} from '@/lib/fetchers/tiktok';
 import { getFxRate } from '@/lib/fetchers/fx';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 
@@ -697,6 +703,158 @@ export async function runLiveForStore(
           `orders_attribution upsert for ${storeId} ${today}: ${ordErr.message}`,
         );
       }
+    }
+  });
+
+  // ----- STEP 5: refresh effective_status across last 7 days -----
+  //
+  // Phase 05.7.x freshness fix (2026-05-22):
+  //   Until now `effective_status` was only written by cron-daily at 00:05 IL.
+  //   A campaign paused at 10:00 IL would show ACTIVE in the dashboard's
+  //   "כבוי" chip until the next 00:05 cron — a 24-hour lag. The fix is to
+  //   re-fetch all 3 platforms' statuses on every cron-live tick (every 10
+  //   min) and UPDATE the existing campaigns_daily rows for the rolling
+  //   lookback window. The dashboard's campaignsAggregator picks the
+  //   chronologically-latest effective_status across the date range, so
+  //   updating the most-recent rows is enough to flip the off-chip.
+  //
+  // We use UPDATE (not UPSERT) on purpose:
+  //   - UPSERT would create phantom rows with NULL metrics for ad-sets that
+  //     have no spend in the lookback window — those rows would render in
+  //     the campaigns table as 0-spend zombie entries.
+  //   - UPDATE is no-op on rows that don't exist — exactly what we want.
+  //
+  // Soft-fail per platform: a 401 / timeout / quota error on one platform
+  // doesn't block the others. The previous status survives until the next
+  // tick.
+  await step.run('refresh-effective-status', async () => {
+    const lookbackDays = 7;
+    const lookbackFrom = (() => {
+      const tick = Date.now() - (lookbackDays - 1) * 86400_000;
+      return dayInJerusalem(tick);
+    })();
+    const admin = getSupabaseAdmin();
+
+    // 1. Parallel fetch of all 3 platforms' statuses with per-platform
+    //    timeout + soft-fail. Each fetcher returns a Map (or null on fail).
+    const metaPromise = withTimeout(
+      fetchMetaBudgets(storeId),
+      15_000,
+      'Meta budgets (status)',
+    ).catch((e) => {
+      console.warn(
+        `cron-live: Meta status refresh ${storeId} failed/timed-out: ${e instanceof Error ? e.message : e}`,
+      );
+      return null;
+    });
+    const googlePromise = withTimeout(
+      // We fetch yesterday's ad-group insights — yesterday's GAQL hits are
+      // the ad-groups most likely to also exist in our DB rows. Today's
+      // insights would also work but the daily-aggregate-row latency is
+      // higher (Google updates today's totals through the day).
+      fetchGoogleAdsAdGroupInsights(storeId, dates[1] ?? dates[0]),
+      15_000,
+      'Google ad-group statuses',
+    ).catch((e) => {
+      console.warn(
+        `cron-live: Google status refresh ${storeId} failed/timed-out: ${e instanceof Error ? e.message : e}`,
+      );
+      return null;
+    });
+    const tiktokPromise: Promise<Map<string, string> | null> = STORES_WITH_TIKTOK.has(storeId)
+      ? withTimeout(
+          fetchTikTokAdGroupStatuses(storeId),
+          15_000,
+          'TikTok ad-group statuses',
+        ).catch((e) => {
+          console.warn(
+            `cron-live: TikTok status refresh ${storeId} failed/timed-out: ${e instanceof Error ? e.message : e}`,
+          );
+          return null;
+        })
+      : Promise.resolve(null);
+
+    const [metaBudgets, googleRows, tiktokStatuses] = await Promise.all([
+      metaPromise,
+      googlePromise,
+      tiktokPromise,
+    ]);
+
+    // 2. Apply Meta updates. Meta has a separate status at campaign vs
+    //    ad-set level — ad-set wins (matches cronDaily's precedence in
+    //    cronDaily.ts:475-481). Skip ad-sets where the status is null so a
+    //    fetcher soft-fail can't blank out a previously-known status.
+    if (metaBudgets) {
+      const updates: Array<{ adSetId: string; status: string }> = [];
+      for (const [adSetId, bucket] of Object.entries(metaBudgets.adSets)) {
+        // Prefer ad-set status; fall back to campaign-level when ad-set is
+        // unknown. Matches cronDaily's precedence so the row we UPDATE here
+        // ends up identical to what cronDaily would write at 00:05.
+        const adSetStatus = bucket.effectiveStatus ?? null;
+        const campaignStatus =
+          metaBudgets.campaigns[bucket.campaignId]?.effectiveStatus ?? null;
+        const status = adSetStatus ?? campaignStatus;
+        if (!status) continue;
+        updates.push({ adSetId, status });
+      }
+      // Run UPDATEs in parallel (PostgREST handles connection pooling).
+      // Per-row UPDATEs are simpler than a CASE-WHEN batch and keep the
+      // failure surface small (one bad row doesn't blow up the whole step).
+      await Promise.all(
+        updates.map(({ adSetId, status }) =>
+          admin
+            .from('campaigns_daily')
+            .update({ effective_status: status })
+            .eq('store_id', storeId)
+            .eq('platform', 'meta')
+            .eq('ad_set_id', adSetId)
+            .gte('date', lookbackFrom),
+        ),
+      );
+    }
+
+    // 3. Apply Google updates. fetchGoogleAdsAdGroupInsights already does
+    //    the same ad-group→campaign fallback in the GAQL response, so each
+    //    row's `effectiveStatus` is the final value.
+    if (googleRows) {
+      const updates: Array<{ adSetId: string; status: string }> = [];
+      for (const r of googleRows) {
+        if (!r.effectiveStatus) continue;
+        updates.push({ adSetId: r.adSetId, status: r.effectiveStatus });
+      }
+      await Promise.all(
+        updates.map(({ adSetId, status }) =>
+          admin
+            .from('campaigns_daily')
+            .update({ effective_status: status })
+            .eq('store_id', storeId)
+            .eq('platform', 'google')
+            .eq('ad_set_id', adSetId)
+            .gte('date', lookbackFrom),
+        ),
+      );
+    }
+
+    // 4. Apply TikTok updates. TikTok's status is per ad-group and matches
+    //    our schema's `ad_set_id` (which we use generically across all
+    //    platforms for the ad-set / ad-group / line-item level).
+    if (tiktokStatuses) {
+      const updates: Array<{ adSetId: string; status: string }> = [];
+      for (const [adSetId, status] of tiktokStatuses.entries()) {
+        if (!status) continue;
+        updates.push({ adSetId, status });
+      }
+      await Promise.all(
+        updates.map(({ adSetId, status }) =>
+          admin
+            .from('campaigns_daily')
+            .update({ effective_status: status })
+            .eq('store_id', storeId)
+            .eq('platform', 'tiktok')
+            .eq('ad_set_id', adSetId)
+            .gte('date', lookbackFrom),
+        ),
+      );
     }
   });
 
