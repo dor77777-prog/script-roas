@@ -85,16 +85,16 @@ afterEach(() => {
 // ===========================================================================
 
 describe('shopify fetcher — fetchShopifyDayRows', () => {
-  it('Test 1: calls Shopify Admin REST 2024-10 with correct day-boundary window (Asia/Jerusalem)', async () => {
+  it('Test 1: calls Shopify Admin REST 2026-04 with correct day-boundary window (Asia/Jerusalem)', async () => {
     const { fn, calls } = makeFetchMock([{ body: { orders: [] } }, { body: { orders: [] } }]);
     vi.stubGlobal('fetch', fn);
 
     await fetchShopifyDayRows(STORE_ID, DATE_STR);
 
-    // At least one call must hit the orders.json endpoint with API version 2024-10
+    // At least one call must hit the orders.json endpoint with API version 2026-04
     expect(calls.length).toBeGreaterThanOrEqual(1);
-    const apiCall = calls.find((c) => c.url.includes('/admin/api/2024-10/orders.json'));
-    expect(apiCall, 'expected at least one /admin/api/2024-10/orders.json call').toBeDefined();
+    const apiCall = calls.find((c) => c.url.includes('/admin/api/2026-04/orders.json'));
+    expect(apiCall, 'expected at least one /admin/api/2026-04/orders.json call').toBeDefined();
 
     // The lower bound of the window must be 2026-05-19 local midnight in Asia/Jerusalem.
     // Asia/Jerusalem in May is IDT (UTC+3) → MUST be exactly 2026-05-19T00:00:00+03:00.
@@ -131,7 +131,7 @@ describe('shopify fetcher — fetchShopifyDayRows', () => {
 
     await fetchShopifyDayRows(STORE_ID, DATE_STR);
 
-    const apiCall = calls.find((c) => c.url.includes('/admin/api/2024-10/orders.json'));
+    const apiCall = calls.find((c) => c.url.includes('/admin/api/2026-04/orders.json'));
     const createdAtMin = decodeURIComponent(
       /created_at_min=([^&]+)/.exec(apiCall!.url)?.[1] ?? '',
     );
@@ -142,7 +142,7 @@ describe('shopify fetcher — fetchShopifyDayRows', () => {
 
   it('Test 2: Link header rel="next" triggers a second fetch to that URL', async () => {
     const nextUrl =
-      'https://uzoshop.myshopify.com/admin/api/2024-10/orders.json?limit=250&page_info=NEXT_PAGE_TOKEN';
+      'https://uzoshop.myshopify.com/admin/api/2026-04/orders.json?limit=250&page_info=NEXT_PAGE_TOKEN';
     const { fn, calls } = makeFetchMock([
       // Page 1 of window A (created_at): one order + Link rel="next"
       {
@@ -176,7 +176,7 @@ describe('shopify fetcher — fetchShopifyDayRows', () => {
 
   it('Test 3: Pagination cap at 50 pages emits console.warn; does NOT throw', async () => {
     // Make 100 responses, each with a "next" link, so the cap is hit.
-    const everPagingLink = `<https://uzoshop.myshopify.com/admin/api/2024-10/orders.json?page_info=KEEP_GOING>; rel="next"`;
+    const everPagingLink = `<https://uzoshop.myshopify.com/admin/api/2026-04/orders.json?page_info=KEEP_GOING>; rel="next"`;
     const responses = Array.from({ length: 110 }, () => ({
       body: { orders: [] },
       link: everPagingLink,
@@ -413,7 +413,7 @@ describe('shopify fetcher — fetchShopifyProductsCatalog', () => {
     // documented fields list (id,title,status,handle,image,variants,
     // product_type,vendor,updated_at).
     const apiCall = calls[0];
-    expect(apiCall.url).toContain('/admin/api/2024-10/products.json');
+    expect(apiCall.url).toContain('/admin/api/2026-04/products.json');
     expect(apiCall.url).toContain('status=active');
     expect(apiCall.url).toContain('limit=250');
     expect(apiCall.url).toMatch(/fields=[^&]*variants/);
@@ -441,7 +441,7 @@ describe('shopify fetcher — fetchShopifyProductsCatalog', () => {
 
   it('Catalog Test 2: follows Link rel="next" header for pagination across multiple pages', async () => {
     const nextUrl =
-      'https://uzoshop.myshopify.com/admin/api/2024-10/products.json?limit=250&page_info=PAGE_TWO';
+      'https://uzoshop.myshopify.com/admin/api/2026-04/products.json?limit=250&page_info=PAGE_TWO';
     const { fn, calls } = makeFetchMock([
       // Page 1 — one product + Link rel="next"
       {

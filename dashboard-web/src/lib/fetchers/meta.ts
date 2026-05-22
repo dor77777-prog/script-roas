@@ -21,13 +21,14 @@
  *     routinely attributes purchases to already-paused ad sets via its
  *     attribution window, and dropping them lost revenue in the past.
  *
- * Version bump (D-C5 + RESEARCH §State of the Art):
- *   META_API_VERSION = 'v23.0'. The Apps Script side stays on v20.0 (which
- *   deprecates 2026-09-24). All Marketing API versions <v24.0 deprecate
- *   2026-06-09. v23.0 is the current stable per RESEARCH (line 508) and
- *   exposes the same insights field shape as v20 (assumption A2). The Apps
- *   Script side is bumped in a parallel commit — not in this file (D-C5 +
- *   Phase 05.6 CONTEXT "No .gs file modifications").
+ * Version bump (2026-05-22):
+ *   META_API_VERSION = 'v25.0' (current latest). Previously v23.0 — every
+ *   Marketing API version <v24.0 deprecates 2026-06-09; bumped ahead of that
+ *   cliff. Apps Script side (`MetaAds.gs`) is still on v20.0 since
+ *   READ_FROM=postgres is permanent and the .gs codepath is dormant
+ *   (Phase 05.7.0). v24/v25 changes are write-side only — read-side fields
+ *   (spend, impressions, clicks, actions, action_values, daily_budget,
+ *   lifetime_budget, bid_strategy, status, effective_status) are unchanged.
  *
  * Trust boundary (threat T-05.6-04-I2):
  *   The access token rides in the URL query string — Meta's Marketing API
@@ -40,12 +41,16 @@
  */
 
 /**
- * Meta Graph API version. Pinned to v23.0 — v20.0 (Apps Script) deprecates
- * 2026-09-24; all versions <v24.0 deprecate 2026-06-09. v23.0 is the current
- * stable surface at planning time and exposes the same insights endpoint
- * field shape as v20.0 (assumption A2 — RESEARCH §Pattern 3).
+ * Meta Graph API version. Bumped 2026-05-22 from v23.0 → v25.0 ahead of the
+ * 2026-06-09 deprecation cliff (every version <v24.0 stops working that day).
+ * v25.0 is the current latest at bump time. The dashboard is read-only against
+ * /insights, /campaigns, /adsets — none of v24/v25's breaking changes touch
+ * read-side fields (Advantage+ shopping creation, lookalike_spec, Messenger
+ * lead ads, is_adset_budget_sharing_enabled are all write-side). Spend,
+ * impressions, clicks, actions, action_values, daily_budget, lifetime_budget,
+ * bid_strategy semantics unchanged.
  */
-export const META_API_VERSION = 'v23.0';
+export const META_API_VERSION = 'v25.0';
 
 /**
  * One row of Meta /insights at `level=adset` — the unified shape the

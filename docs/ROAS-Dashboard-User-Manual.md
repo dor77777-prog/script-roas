@@ -2685,7 +2685,7 @@ Inngest cloud cron (TZ=Asia/Jerusalem)
    sendWhatsAppTemplate({to, templateName, templateLang, templateParams})
         │
         ▼
-   POST https://graph.facebook.com/v23.0/{WHATSAPP_PHONE_NUMBER_ID}/messages
+   POST https://graph.facebook.com/v25.0/{WHATSAPP_PHONE_NUMBER_ID}/messages
         Authorization: Bearer {WHATSAPP_ACCESS_TOKEN}
 ```
 
@@ -2783,7 +2783,35 @@ UPDATE notification_config SET active = TRUE WHERE provider = 'metacloud';
 
 ## סוף המסמך
 
-**גרסה:** 1.6 · **תאריך עדכון:** 2026-05-21 · **בסיס קוד:** Phase 05.7.4
+**גרסה:** 1.7 · **תאריך עדכון:** 2026-05-22 · **בסיס קוד:** Phase 05.7.8
+
+### עדכון 2026-05-22 — ביקורת API + רוטציית TikTok
+
+**גרסאות API שמיועדות לאוטומציות:**
+- Meta Marketing API: **v25.0** (היה v23.0). כל גרסה <v24.0 נסגרת **2026-06-09** — הקפצה ל-v25 ב-`meta.ts` ו-`whatsapp.ts` (Cloud /messages POST).
+- Shopify Admin REST: **2026-04** (היה 2024-10). 2024-10 לא נתמך מאז ינואר 2026 — Shopify "fall forward" השאיר את הקריאות עובדות אבל לא תקין לטווח ארוך.
+- Google Ads: **v24** (ללא שינוי). יורד מהאוויר רק במאי 2027.
+- TikTok Marketing: **v1.3** (ללא שינוי). אומת live שכל המטריקות `complete_payment` + `value_per_complete_payment` + `campaign_id`/`campaign_name`/`adgroup_*`/`ad_name` חוזרות באופן תקין מ-`/report/integrated/get/` ב-data_level=AUCTION_AD.
+
+**רוטציית TikTok creds (כשהטוקן פג או צריך לחדש):**
+
+1. פתח את ה-Advertiser Authorization URL מ-TikTok Developers Portal (Apps → ROAS Tracker — uzoshop). זה יחזיר `auth_code` קצר-תוקף (שעה, חד-פעמי).
+2. החלף ל-permanent access_token:
+
+   ```bash
+   curl -X POST 'https://business-api.tiktok.com/open_api/v1.3/oauth2/access_token/' \
+     -H 'Content-Type: application/json' \
+     -d '{"app_id":"<APP_ID>","secret":"<APP_SECRET>","auth_code":"<AUTH_CODE>"}'
+   ```
+
+3. עדכן ב-Vercel env vars (Production + Development) → Redeploy:
+   - `UZOSHOP_TIKTOK_ACCESS_TOKEN` = `data.access_token`
+   - `UZOSHOP_TIKTOK_ADVERTISER_ID` = `data.advertiser_ids[0]`
+4. ודא בריצת cron-live הבאה (10 דקות) ש-`tt_spend_cad` מתעדכן.
+
+**ה-CHECK constraint הוסיף 'tiktok':** מיגרציה `20260522102151_add_tiktok_platform_check.sql` הוסיפה את הערך `'tiktok'` לעמודה `platform` ב-`ads_daily`, `campaigns_daily`, ו-`manual_overrides`. עד אז, כל ניסיון לכתוב שורת TikTok ל-ads_daily היה נחסם על-ידי `ads_daily_platform_check` ונכשל עם `new row ... violates check constraint`.
+
+**גרסה 1.6 — נשארה:** 2026-05-21 · Phase 05.7.4
 
 > מסמך זה מתעדכן עם כל שינוי משמעותי במערכת. אם משהו לא תואם למה שאתה רואה במסך — בדוק את ה-git log בריפו או דווח כדי לעדכן.
 

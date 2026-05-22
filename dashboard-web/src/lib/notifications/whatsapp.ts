@@ -20,7 +20,10 @@
 //     `docs/ROAS-Dashboard-User-Manual.md` § WhatsApp setup for the 7-click
 //     generation flow.
 
-const META_API_VERSION = 'v23.0';
+// Bumped 2026-05-22 from v23.0 → v25.0 ahead of the 2026-06-09 deprecation
+// of every version <v24.0. WhatsApp Cloud API /messages payload shape unchanged
+// across v23..v25 for template messages (text + components.body[].parameters).
+const META_API_VERSION = 'v25.0';
 
 export type WhatsAppConfig = {
   phoneNumberId: string;

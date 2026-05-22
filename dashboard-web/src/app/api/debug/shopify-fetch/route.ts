@@ -11,7 +11,9 @@ import { NextResponse } from 'next/server';
 export const dynamic = 'force-dynamic';
 
 const SHOPIFY_TZ = 'Asia/Jerusalem';
-const SHOPIFY_API_VERSION = '2024-10';
+// Bumped 2026-05-22 in lockstep with the main fetcher's bump to 2026-04
+// (Shopify supports the last 4 stables; 2024-10 fell out of support Jan 2026).
+const SHOPIFY_API_VERSION = '2026-04';
 
 function isoLocalMidnight(dateStr: string, tz: string): string {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) throw new Error(`bad dateStr ${dateStr}`);

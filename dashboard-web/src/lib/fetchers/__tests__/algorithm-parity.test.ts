@@ -14,8 +14,8 @@
  *
  * The non-skipped variant of this suite makes LIVE upstream API calls:
  *
- *   - Shopify Admin REST 2024-10 (2 paginated windows per (store, date))
- *   - Meta Marketing v23 /insights
+ *   - Shopify Admin REST 2026-04 (2 paginated windows per (store, date))
+ *   - Meta Marketing v25 /insights
  *   - Google Ads v24 GAQL (uzoshop only)
  *   - Frankfurter v1 /historical
  *

@@ -49,7 +49,9 @@
  * Decision-ID citations:
  *   - D-C1 / D-C4: algorithm parity with Apps Script via REUSE of the
  *     existing pure-TS implementation.
- *   - D-C4: `SHOPIFY_API_VERSION = '2024-10'` matches `Config.gs:12`.
+ *   - D-C4: `SHOPIFY_API_VERSION` was '2024-10' (Config.gs:12) — bumped to
+ *     '2026-04' on 2026-05-22; see the SHOPIFY_API_VERSION docstring below
+ *     for why the divergence from Config.gs is safe.
  *   - D-A4: TZ = 'Asia/Jerusalem' (passed to algorithm).
  *   - D-D3: no clamping anywhere.
  */
@@ -65,11 +67,25 @@ import { getShopifyAccessToken } from '@/lib/fetchers/shopifyAuth';
 // =============================================================================
 
 /**
- * Shopify Admin REST API version. MUST match `Config.gs:12` exactly per D-C4
- * (algorithm parity demands identical API version → identical response shape).
- * Bumping requires re-validating the algorithm's payload assumptions.
+ * Shopify Admin REST API version. Bumped 2026-05-22 from 2024-10 → 2026-04.
+ * Shopify supports the last 4 stable versions; as of May 2026 those are
+ * 2026-04 (latest), 2026-01, 2025-10, 2025-04. 2024-10 was already out of
+ * the supported window (sunset Jan 2026); Shopify "falls forward" so requests
+ * still worked but were silently served the latest-stable semantics.
+ *
+ * The orders payload fields we read (id, created_at, total_price,
+ * current_total_price, test, financial_status, line_items[], refunds[],
+ * note_attributes[], landing_site, referring_site, source_name) and the
+ * products payload fields (id, title, status, handle, image, variants[].price,
+ * product_type, vendor, updated_at) are stable across 2024-10..2026-04 —
+ * no breaking changes on the read paths we use.
+ *
+ * Apps Script side (`Config.gs:12`) is still on 2024-10; the load-bearing
+ * algorithm (`shopifyRevenueRefunds.ts`) is version-agnostic — its three
+ * invariants depend on `total_price` being immutable, which has been true
+ * since Shopify Admin REST 2024-10. Bumping the TS-side path is safe.
  */
-const SHOPIFY_API_VERSION = '2024-10';
+const SHOPIFY_API_VERSION = '2026-04';
 
 /**
  * Project TZ (matches `Config.gs:6`). The algorithm uses this for all
