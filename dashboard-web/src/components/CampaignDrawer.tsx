@@ -43,6 +43,8 @@ import {
 import { useDrawerEsc } from '@/lib/drawerStack';
 import { AdsDrawer } from './AdsDrawer';
 import { AttributionAnalysisPanel } from './AttributionAnalysisPanel';
+import { HealthScorePanel } from './HealthScorePanel';
+import type { CampaignHealth } from '@/lib/campaignHealthScore';
 import {
   MetaShopifyReconciliation,
   buildReconciliation,
@@ -83,6 +85,15 @@ type Props = {
    *  breakdown needs mapped-product orders on campaign-paused days too). */
   rangeFrom: string;
   rangeTo: string;
+  /** Phase 05.7.x — unified Campaign Health Score, computed by the parent
+   *  (CampaignsTable.tsx healthByKey memo) so the drawer doesn't repeat
+   *  the per-campaign trajectory analysis. Renders as a HealthScorePanel
+   *  at the top of the drawer body, giving the same throughline the table
+   *  badge surfaces — one verdict, one set of weighted components, one
+   *  recommendation block. Undefined in adset-mode drilldown (where the
+   *  table's healthByKey is keyed by adSet rather than campaign — V2
+   *  doesn't backfill campaign-level health for adset mode). */
+  health?: CampaignHealth;
 };
 
 const TONE_BG: Record<string, string> = {
@@ -93,7 +104,7 @@ const TONE_BG: Record<string, string> = {
   gray:   'bg-surfaceMuted text-text-muted',
 };
 
-export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAccounts, rangeFrom, rangeTo }: Props) {
+export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAccounts, rangeFrom, rangeTo, health }: Props) {
   // Drawer-local sort state. Default spend-desc matches the pre-sortable
   // hardcoded ordering so first paint doesn't jump.
   const [sortKey, setSortKey] = useState<AdSetSortKey>('spend');
@@ -476,6 +487,13 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
         </header>
 
         <div className="p-4 sm:p-6 space-y-5 sm:space-y-6">
+          {/* Phase 05.7.x — Health Score throughline. The same verdict the
+              operator just clicked in the table, expanded inline. Sits
+              ABOVE the raw stat cards so the synthesised conclusion is the
+              first thing the eye lands on; the individual ROAS / spend /
+              conversions stats below are the inputs that fed the score. */}
+          {health && <HealthScorePanel health={health} />}
+
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
             <DrawerStat label="ROAS" value={summary.roas > 0 ? formatNumber(summary.roas) : '—'} chip={{ text: roasInfo.text, tone: roasInfo.tone }} primary />
             <DrawerStat label="הוצאה" value={formatCurrency(summary.spend)} prefix="CAD" />

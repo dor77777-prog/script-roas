@@ -1533,6 +1533,17 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
           adAccounts={adAccounts}
           rangeFrom={localRange.from}
           rangeTo={localRange.to}
+          // Phase 05.7.x — pass the campaign-level Health Score so the
+          // drawer can mirror the table badge's verdict. In campaign mode
+          // the drilled row's a.key is exactly the campaign key, so the
+          // healthByKey lookup matches. In adset mode the table's
+          // healthByKey is keyed per adSet — campaign-level health isn't
+          // backfilled in V2, so we just omit the prop.
+          health={
+            mode === 'campaign'
+              ? healthByKey.get(`${drillStoreId}::${drillPlatform}::${drillCampaignId}`)
+              : undefined
+          }
         />
       )}
 
