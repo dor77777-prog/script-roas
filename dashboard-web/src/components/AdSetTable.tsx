@@ -129,7 +129,11 @@ export function AdSetTable({
               // `a.id` when truthy), which leaks into JSX props that
               // expect boolean (e.g. `disabled={!canDrillToAds}` would
               // render `disabled="123"` if added later). (#IN-06)
-              const canDrillToAds = !!(a.platform === 'Meta' && a.id);
+              // Phase 05.7.9 — TikTok ad-level rows now live in ads_daily
+              // (Phase 05.7.7), so the drill-down works for both Meta and
+              // TikTok. Google PMax still excluded (Shopping/PMax fallback
+              // synthesizes campaign-level rows, no real ad granularity).
+              const canDrillToAds = !!((a.platform === 'Meta' || a.platform === 'TikTok') && a.id);
               return (
                 <tr
                   key={a.id || a.name || i}

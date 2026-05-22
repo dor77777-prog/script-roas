@@ -323,6 +323,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     campaignId: string;
     adSetId: string;
     adSetName: string;
+    platform: 'Meta' | 'Google' | 'TikTok';
   } | null>(null);
   // (localRange and its sync-effect moved above the useSWR calls — see CR-02.)
 
@@ -567,7 +568,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       tone = 'good';
     } else {
       // platform > Shopify — over-attribution
-      interpretation = `הפלטפורמות מ-overcounting ב-${(Math.abs(gapPct) * 100).toFixed(0)}%. כפיל-ספירה בין Meta ו-Google, view-through inflation, או modeled conversions. אל תקבל החלטות "להגדיל קמפיין" רק על בסיס ה-conversion value של הפלטפורמה.`;
+      interpretation = `הפלטפורמות מ-overcounting ב-${(Math.abs(gapPct) * 100).toFixed(0)}%. כפיל-ספירה בין Meta / Google / TikTok, view-through inflation, או modeled conversions. אל תקבל החלטות "להגדיל קמפיין" רק על בסיס ה-conversion value של הפלטפורמה.`;
       tone = 'flag';
     }
 
@@ -1286,7 +1287,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
           open
           onClose={() => setAdDrill(null)}
           storeId={adDrill.storeId}
-          platform="Meta"
+          platform={adDrill.platform}
           campaignId={adDrill.campaignId}
           adSetId={adDrill.adSetId}
           adSetName={adDrill.adSetName}
@@ -1336,7 +1337,7 @@ function AttributionGapPanel({
     >
       <div className="flex items-center gap-2 mb-2">
         <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-text-secondary">
-          התאמת שיוך · Meta &amp; Google ↔ Shopify
+          התאמת שיוך · Meta &amp; Google &amp; TikTok ↔ Shopify
         </span>
       </div>
 

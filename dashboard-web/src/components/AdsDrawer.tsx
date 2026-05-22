@@ -40,7 +40,7 @@ type Props = {
   onClose: () => void;
   /** Filter scope — the drawer fetches all ads then narrows by these. */
   storeId: string;
-  platform: 'Meta' | 'Google';
+  platform: 'Meta' | 'Google' | 'TikTok';
   campaignId: string;
   adSetId: string;
   adSetName: string;

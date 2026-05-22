@@ -68,7 +68,13 @@ type Props = {
   today: string;
   onToggleOptimized: (key: string) => void;
   onDrillCampaign: (campaignId: string, platform: string, storeId: string) => void;
-  onDrillAd: (set: { storeId: string; campaignId: string; adSetId: string; adSetName: string }) => void;
+  onDrillAd: (set: {
+    storeId: string;
+    campaignId: string;
+    adSetId: string;
+    adSetName: string;
+    platform: 'Meta' | 'Google' | 'TikTok';
+  }) => void;
 };
 
 /**
@@ -157,21 +163,28 @@ export function CampaignsTableRow({
         if (mode === 'campaign' && a.campaignId) {
           // Campaign click → ad-sets drawer.
           onDrillCampaign(a.campaignId, a.platform, a.storeId);
-        } else if (mode === 'adset' && a.adSetId && a.platform === 'Meta') {
+        } else if (
+          mode === 'adset' &&
+          a.adSetId &&
+          (a.platform === 'Meta' || a.platform === 'TikTok')
+        ) {
           // Ad-set click → drill deeper into individual ads.
-          // Only Meta — Google ad-level isn't fetched yet.
+          // Meta + TikTok have ad-level rows in ads_daily (Phase 05.6.1 +
+          // 05.7.7). Google still excluded — PMax/Shopping ad-group fallback
+          // doesn't surface individual ads in a meaningful way.
           onDrillAd({
             storeId: a.storeId,
             campaignId: a.campaignId,
             adSetId: a.adSetId,
             adSetName: a.adSetName || a.campaignName,
+            platform: a.platform as 'Meta' | 'TikTok',
           });
         }
       }}
       title={
         mode === 'campaign'
           ? 'לחץ לפרטים מלאים'
-          : mode === 'adset' && a.platform === 'Meta'
+          : mode === 'adset' && (a.platform === 'Meta' || a.platform === 'TikTok')
           ? 'לחץ לראות את המודעות באד-סט'
           : undefined
       }

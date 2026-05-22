@@ -888,9 +888,13 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
             );
           })()}
 
-          {/* Mapped products — Meta only (Google PMax delivery is feed-
-              governed; manual tagging would mislead). */}
-          {summary.platform === 'Meta' && (
+          {/* Mapped products — Meta + TikTok (manual targeting). Google PMax
+              is excluded because PMax delivery is feed-governed; manual
+              tagging would mislead. TikTok ads, like Meta, target specific
+              products manually so manual mapping is meaningful — added
+              2026-05-22 per operator request to look at "what's happening"
+              on each platform. */}
+          {(summary.platform === 'Meta' || summary.platform === 'TikTok') && (
             <section>
               <div className="flex items-center justify-between gap-2 mb-2">
                 <h3 className="text-sm font-semibold text-text-primary inline-flex items-center gap-1.5">
@@ -914,7 +918,8 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
               {mappedIds.length === 0 ? (
                 <p className="text-[11px] text-text-muted leading-relaxed bg-surfaceMuted/40 rounded-lg px-3 py-2">
                   לא משויכים מוצרים. לאחר שיוך, ה-ROAS יחושב מחדש לפי מכירות{' '}
-                  Shopify אמיתיות במקום ערך ההמרה ש-Meta דיווח (לרוב מנופח).
+                  Shopify אמיתיות במקום ערך ההמרה ש-{summary.platform} דיווחה
+                  (לרוב מנופח).
                 </p>
               ) : (
                 <ul className="flex flex-wrap gap-1.5">
@@ -968,13 +973,23 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
         }}
       />
 
-      {/* Nested ad-level drawer uses the same user-selected range. */}
+      {/* Nested ad-level drawer uses the same user-selected range.
+          Platform pass-through preserves the parent campaign's platform
+          (Meta / Google / TikTok) instead of forcing 'Meta' as a default —
+          a TikTok ad drill-down would otherwise mis-fetch from ads_daily
+          filtered to platform='meta' (Phase 05.7.7 added TikTok ad rows). */}
       {adDrillSet && (
         <AdsDrawer
           open
           onClose={() => setAdDrillSet(null)}
           storeId={adDrillSet.storeId}
-          platform={summary.platform === 'Google' ? 'Google' : 'Meta'}
+          platform={
+            summary.platform === 'Google'
+              ? 'Google'
+              : summary.platform === 'TikTok'
+                ? 'TikTok'
+                : 'Meta'
+          }
           campaignId={adDrillSet.campaignId}
           adSetId={adDrillSet.adSetId}
           adSetName={adDrillSet.adSetName}

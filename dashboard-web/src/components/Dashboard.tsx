@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import useSWR from 'swr';
 import {
-  RefreshCw,
   AlertCircle,
   Home,
   TrendingUp,
@@ -112,7 +111,7 @@ export function Dashboard() {
     return readDashboardState({ tab: 'home', filters: defaults }, window.location.search).filters;
   });
 
-  const { data, error, isLoading, mutate, isValidating } = useSWR<DashboardData>(
+  const { data, error, isLoading, mutate } = useSWR<DashboardData>(
     buildDateRangeKey('/api/data', filters.range),
     fetcher,
     { refreshInterval: 60_000, revalidateOnFocus: true },
@@ -196,8 +195,6 @@ export function Dashboard() {
           devices and partners by mirroring localStorage to Google Sheets. */}
       <CloudSync />
       <Header
-        isRefreshing={isValidating}
-        onRefresh={() => mutate()}
         dataLastWriteAt={data?.dataLastWriteAt ?? null}
         commandPalette={
           data ? (
@@ -569,13 +566,9 @@ function DetailTab({
 // Header + Footer
 // ============================================================================
 function Header({
-  isRefreshing,
-  onRefresh,
   commandPalette,
   dataLastWriteAt,
 }: {
-  isRefreshing: boolean;
-  onRefresh: () => void;
   /** The Cmd-K trigger pill is rendered inside the header so it's always
    *  reachable, no matter which tab the user is on. */
   commandPalette?: React.ReactNode;
@@ -630,15 +623,11 @@ function Header({
               <Cog size={14} />
               <span className="hidden sm:inline">ניהול</span>
             </Link>
-            <button
-              onClick={onRefresh}
-              className="inline-flex items-center gap-1.5 sm:gap-2 rounded-lg bg-white/12 hover:bg-white/20 active:bg-white/25 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium transition-colors ring-1 ring-white/10"
-              disabled={isRefreshing}
-              aria-label="רענן נתונים"
-            >
-              <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
-              <span className="hidden sm:inline">{isRefreshing ? 'מתעדכן…' : 'רענן'}</span>
-            </button>
+            {/* Phase 05.7.9 — header "Refresh" button removed per operator
+                request. It only called SWR mutate() (local cache revalidate),
+                which the auto-poll already does every 60s, and visually it
+                competed with the real "רענן הכל" button in TabFreshnessHeader
+                (which fires a full Inngest sync). Removing avoids confusion. */}
           </div>
         </div>
       </div>

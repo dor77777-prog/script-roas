@@ -14,6 +14,10 @@ import { useDashboardRefresh } from '@/lib/useDashboardRefresh';
  *     dataLastWriteAt advances, then SWR-mutates every cache key)
  *
  * UX during refresh:
+ *   - Confirm() dialog before triggering — surfaces the cost (30-60s wait,
+ *     fires Inngest sync for ALL 3 stores) so the operator doesn't trigger
+ *     it by accident when an auto-refresh would have caught up anyway.
+ *     Phase 05.7.9 — added per operator request 2026-05-22.
  *   - Spinner on the refresh button
  *   - Toast banner above the chip: "מרענן את כל הדשבורד... ייקח 30-60 שניות"
  *   - Button disabled to prevent double-trigger
@@ -26,6 +30,24 @@ export function TabFreshnessHeader(props: {
 }) {
   const { dataLastWriteAt } = props;
   const { isRefreshing, refresh } = useDashboardRefresh();
+
+  const handleRefreshClick = () => {
+    // Confirm dialog — the action fires Inngest sync-now for all 3 stores
+    // (Shopify + Meta + Google + TikTok), then polls until the writers
+    // commit. Takes ~30-60s and burns Inngest quota. The auto-poll (10 min)
+    // catches up most of the time, so we want the operator to consciously
+    // opt-in to the heavier path.
+    const ok = window.confirm(
+      'רענון מלא ירוץ עכשיו?\n\n' +
+        '• מרענן את כל הדשבורד מ-Shopify + Meta + Google + TikTok עבור 3 החנויות.\n' +
+        '• לוקח 30-60 שניות. תוכל להמשיך לעבוד; הדשבורד יתעדכן אוטומטית כשיסתיים.\n' +
+        '• בדרך כלל אין צורך — קיים רענון אוטומטי כל 10 דקות.\n\n' +
+        'ללחוץ "אישור" כדי להריץ.',
+    );
+    if (ok) {
+      void refresh();
+    }
+  };
 
   return (
     <div className="flex items-center justify-between gap-3 mb-3">
@@ -43,10 +65,10 @@ export function TabFreshnessHeader(props: {
       </div>
       <button
         type="button"
-        onClick={refresh}
+        onClick={handleRefreshClick}
         disabled={isRefreshing}
         className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface hover:bg-surfaceMuted disabled:opacity-50 disabled:cursor-not-allowed px-2.5 py-1.5 text-xs sm:text-sm text-text-secondary transition-colors"
-        title="מרענן את כל הנתונים בדשבורד מ-Shopify, Meta, Google. לוקח 30-60 שניות."
+        title="מרענן את כל הנתונים בדשבורד מ-Shopify, Meta, Google, TikTok. לוקח 30-60 שניות (יוצג אישור לפני ההפעלה)."
         aria-label="רענן את כל הדשבורד"
       >
         <RefreshCw
