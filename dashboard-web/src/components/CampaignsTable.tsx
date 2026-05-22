@@ -75,12 +75,17 @@ type SortKey =
   | 'budget'
   | 'conversionValue'
   | 'roas'
-  | 'shopifyRoas'   // ROAS computed from actual Shopify sales of mapped products
-  | 'health'        // unified Campaign Health Score (Phase 05.7.x)
+  | 'shopifyRoas'              // combined Shopify ROAS (deterministic + proportional)
+  | 'roasShopifyPlatform'      // Shopify ROAS using ONLY deterministic per-platform revenue
+  | 'shopifyValuePlatform'     // deterministic per-platform Shopify revenue
+  | 'shopifyUnitsPlatform'     // deterministic per-platform Shopify units
+  | 'shopifyValueTotal'        // total Shopify revenue (across all platforms) of mapped products
+  | 'shopifyUnitsTotal'        // total Shopify units (across all platforms) of mapped products
+  | 'health'                   // unified Campaign Health Score (Phase 05.7.x)
   | 'conversions'
   | 'ctr'
   | 'cpc'
-  | 'cpm'           // cost per 1000 impressions (spend / impressions * 1000)
+  | 'cpm'                      // cost per 1000 impressions (spend / impressions * 1000)
   | 'cpa';
 type SortDir = 'asc' | 'desc';
 
@@ -140,6 +145,16 @@ function sortAggregated(
       case 'shopifyRoas': {
         // Falls back to Meta ROAS; real Shopify-ROAS sort happens at render
         // time via the `displaySource` memo which has trueRevenueByKey in scope.
+        return a.spend > 0 ? a.conversionValue / a.spend : 0;
+      }
+      case 'roasShopifyPlatform':
+      case 'shopifyValuePlatform':
+      case 'shopifyUnitsPlatform':
+      case 'shopifyValueTotal':
+      case 'shopifyUnitsTotal': {
+        // Phase 05.7.x — same pattern as shopifyRoas: comparator falls
+        // back to Meta ROAS, real sort runs in `displaySource` where
+        // `trueRevenueByKey` is in scope.
         return a.spend > 0 ? a.conversionValue / a.spend : 0;
       }
       case 'health': {
@@ -646,6 +661,51 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         return sign * (x.score - y.score);
       });
       return withHealth.map(w => w.a);
+    }
+    // Phase 05.7.x — the 5 Shopify metric columns each pull their sort
+    // value from trueRevenueByKey (per-platform deterministic share +
+    // per-product totals). Same tie-break policy as shopifyRoas above:
+    // unmapped rows (no info) sink to the bottom regardless of direction
+    // so the operator's "sort by Shopify revenue" still surfaces real
+    // values at the top on asc.
+    const shopifyCols = [
+      'roasShopifyPlatform',
+      'shopifyValuePlatform',
+      'shopifyUnitsPlatform',
+      'shopifyValueTotal',
+      'shopifyUnitsTotal',
+    ] as const;
+    if ((shopifyCols as readonly string[]).includes(sortKey) && trueRevenueByKey.size > 0) {
+      const sign = sortDir === 'asc' ? 1 : -1;
+      const withVal = aggregated.map(a => {
+        const info = trueRevenueByKey.get(campaignKey(a.storeId, a.platform, a.campaignId));
+        let v = 0;
+        if (info) {
+          switch (sortKey) {
+            case 'roasShopifyPlatform':
+              v = a.spend > 0 ? info.deterministicRevenue / a.spend : 0;
+              break;
+            case 'shopifyValuePlatform':
+              v = info.deterministicRevenue;
+              break;
+            case 'shopifyUnitsPlatform':
+              v = info.deterministicUnits;
+              break;
+            case 'shopifyValueTotal':
+              v = info.productTotals.revenue;
+              break;
+            case 'shopifyUnitsTotal':
+              v = info.productTotals.units;
+              break;
+          }
+        }
+        return { a, v, mapped: !!info };
+      });
+      withVal.sort((x, y) => {
+        if (x.mapped !== y.mapped) return x.mapped ? -1 : 1;
+        return sign * (x.v - y.v);
+      });
+      return withVal.map(w => w.a);
     }
     return aggregated;
   }, [aggregated, sortKey, sortDir, trueRevenueByKey, healthByKey]);
@@ -1355,16 +1415,22 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                       (source/click-id) revenue divided by this campaign's
                       spend. Together with ROAS Shopify (combined) and ROAS
                       (platform claim) gives 3 angles on the same metric. */}
-                  <ColumnHeaderTh
-                    className="px-3 py-2 text-center font-medium text-text-secondary w-[100px]"
+                  <SortHeader
+                    label={
+                      <span className="inline-flex flex-col items-center leading-tight">
+                        <span>ROAS Shopify</span>
+                        <span className="text-[9px] text-text-muted font-normal">פלטפורמה</span>
+                      </span>
+                    }
+                    sortKey="roasShopifyPlatform"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="center"
+                    className="px-3 py-2 w-[100px]"
                     dataColId="roasShopifyPlatform"
                     tooltip="ROAS Shopify מבוסס רק על הזמנות שסווגו דטרמיניסטית לפלטפורמה הזו דרך source / click-id (ttclid, fbclid, gclid, utm_source). נוסחה: deterministicRevenue ÷ הוצאה. אין fallback פרופורציונלי — רק מה שאנחנו יכולים להוכיח. ROAS גבוה כאן = הקמפיין מייצר מכירות שאפשר לייחס אליו בוודאות."
-                  >
-                    <span className="inline-flex flex-col items-center leading-tight">
-                      <span>ROAS Shopify</span>
-                      <span className="text-[9px] text-text-muted font-normal">פלטפורמה</span>
-                    </span>
-                  </ColumnHeaderTh>
+                  />
                   {/* Phase 05.7.9b — 4 Shopify columns (was 2):
                       (1) ערך / פלטפורמה — deterministic per-platform (orders
                           classified to THIS row's platform via source/click-id)
@@ -1375,46 +1441,70 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                           serves as a denominator)
                       (4) יח' / סה"כ — same, units
                       Not sortable — sort via 'ROAS Shopify'. */}
-                  <ColumnHeaderTh
-                    className="px-3 py-2 text-end font-medium text-text-secondary w-[92px] border-e border-borderSubtle"
+                  <SortHeader
+                    label={
+                      <span className="inline-flex flex-col items-end leading-tight">
+                        <span>ערך Shopify</span>
+                        <span className="text-[9px] text-text-muted font-normal">פלטפורמה</span>
+                      </span>
+                    }
+                    sortKey="shopifyValuePlatform"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[92px] border-e border-borderSubtle"
                     dataColId="shopifyValuePlatform"
                     tooltip="ערך המכירות (CAD) שסווגו דטרמיניסטית לפלטפורמה הזו דרך source / click-id ב-Shopify (utm_source, ttclid, fbclid, gclid). רק הזמנות שאנחנו 100% בטוחים שהן מהפלטפורמה הזו — בלי הקצאה פרופורציונלית. זה מה שאפשר להוכיח."
-                  >
-                    <span className="inline-flex flex-col items-end leading-tight">
-                      <span>ערך Shopify</span>
-                      <span className="text-[9px] text-text-muted font-normal">פלטפורמה</span>
-                    </span>
-                  </ColumnHeaderTh>
-                  <ColumnHeaderTh
-                    className="px-3 py-2 text-end font-medium text-text-secondary w-[78px] border-e border-borderSubtle"
+                  />
+                  <SortHeader
+                    label={
+                      <span className="inline-flex flex-col items-end leading-tight">
+                        <span>יח&apos; Shopify</span>
+                        <span className="text-[9px] text-text-muted font-normal">פלטפורמה</span>
+                      </span>
+                    }
+                    sortKey="shopifyUnitsPlatform"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[78px] border-e border-borderSubtle"
                     dataColId="shopifyUnitsPlatform"
                     tooltip="מספר היחידות שנמכרו ב-Shopify מהזמנות שסווגו דטרמיניסטית לפלטפורמה הזו. סופר units (line_items.quantity) — לא orders. רק הזמנות עם source / click-id ברור."
-                  >
-                    <span className="inline-flex flex-col items-end leading-tight">
-                      <span>יח&apos; Shopify</span>
-                      <span className="text-[9px] text-text-muted font-normal">פלטפורמה</span>
-                    </span>
-                  </ColumnHeaderTh>
-                  <ColumnHeaderTh
-                    className="px-3 py-2 text-end font-medium text-text-secondary w-[92px]"
+                  />
+                  <SortHeader
+                    label={
+                      <span className="inline-flex flex-col items-end leading-tight">
+                        <span>ערך Shopify</span>
+                        <span className="text-[9px] text-text-muted font-normal">סה&quot;כ</span>
+                      </span>
+                    }
+                    sortKey="shopifyValueTotal"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[92px]"
                     dataColId="shopifyValueTotal"
                     tooltip="סך ערך המכירות (CAD) ב-Shopify של המוצרים המשויכים בטווח הנבחר, בלי קשר לפלטפורמה (כולל direct, organic, ופלטפורמות אחרות). זהו ה״מכנה״ — מסגרת הייחוס לכמה מהמכירות הגיעו דרך הקמפיין הזה."
-                  >
-                    <span className="inline-flex flex-col items-end leading-tight">
-                      <span>ערך Shopify</span>
-                      <span className="text-[9px] text-text-muted font-normal">סה&quot;כ</span>
-                    </span>
-                  </ColumnHeaderTh>
-                  <ColumnHeaderTh
-                    className="px-3 py-2 text-end font-medium text-text-secondary w-[78px]"
+                  />
+                  <SortHeader
+                    label={
+                      <span className="inline-flex flex-col items-end leading-tight">
+                        <span>יח&apos; Shopify</span>
+                        <span className="text-[9px] text-text-muted font-normal">סה&quot;כ</span>
+                      </span>
+                    }
+                    sortKey="shopifyUnitsTotal"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[78px]"
                     dataColId="shopifyUnitsTotal"
                     tooltip="סך היחידות שנמכרו ב-Shopify של המוצרים המשויכים בטווח הנבחר, בלי קשר לפלטפורמה. ה״מכנה״ ל-יח׳ פלטפורמה ממש כמו ש-ערך סה״כ הוא המכנה ל-ערך פלטפורמה."
-                  >
-                    <span className="inline-flex flex-col items-end leading-tight">
-                      <span>יח&apos; Shopify</span>
-                      <span className="text-[9px] text-text-muted font-normal">סה&quot;כ</span>
-                    </span>
-                  </ColumnHeaderTh>
+                  />
                   <SortHeader
                     label="המרות"
                     sortKey="conversions"
@@ -1782,7 +1872,11 @@ function SortHeader({
   dataColId,
   tooltip,
 }: {
-  label: string;
+  /** Phase 05.7.x — widened from `string` to ReactNode so multi-line
+   *  column labels (e.g. the Shopify column group's stacked "ערך
+   *  Shopify / פלטפורמה" pair) can become sortable headers without
+   *  losing their two-line layout. Existing string labels still work. */
+  label: React.ReactNode;
   sortKey: SortKey;
   activeKey: SortKey;
   dir: SortDir;

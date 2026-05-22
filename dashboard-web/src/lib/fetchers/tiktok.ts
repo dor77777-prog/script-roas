@@ -478,21 +478,29 @@ export async function fetchTikTokAdInsights(
     for (const r of rows) {
       const m = r.metrics ?? {};
       const d = r.dimensions ?? {};
-      // Drop empty rows (no spend, no impressions, no conversion) — matches
-      // meta.ts:fetchMetaAdSetInsights line 57 convention.
+      // Phase 05.7.x — purchase-specific count is the operator's mental
+      // model of "המרות" in this dashboard (matches what TikTok Ads
+      // Manager displays under "Complete Payments"). The generic
+      // `m.conversion` metric counts ALL optimisation events depending
+      // on the campaign objective (could include Add-to-Cart, View
+      // Content, etc.) — which mismatches what we use to compute
+      // conversionValue (purchase-specific). Mapping both to
+      // complete_payment keeps the columns internally consistent.
       const spend = parseNum(m.spend);
       const impressions = parseNum(m.impressions);
-      const conversions = parseNum(m.conversion);
-      if (spend === 0 && impressions === 0 && conversions === 0) continue;
+      const purchases = parseNum(m.complete_payment);
+      // Drop empty rows (no spend, no impressions, no purchases) — matches
+      // meta.ts:fetchMetaAdSetInsights line 57 convention.
+      if (spend === 0 && impressions === 0 && purchases === 0) continue;
 
       // Phase 05.7.8 — synthesize conversionValue from the two TikTok
       // primitives: complete_payment (count) × value_per_complete_payment
       // (avg value per purchase). When TikTok returns 0 for either,
       // conversionValue → 0, matching Meta/Google's behavior on rows with
       // no purchase events tracked.
-      const purchases = parseNum(m.complete_payment);
       const avgPurchase = parseNum(m.value_per_complete_payment);
       const conversionValue = purchases * avgPurchase;
+      const conversions = purchases;
 
       out.push({
         campaignId: String(m.campaign_id ?? ''),
