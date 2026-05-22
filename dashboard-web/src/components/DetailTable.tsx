@@ -29,6 +29,10 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
   const sorted = [...rows].sort((a, b) => b.date.localeCompare(a.date));
   const display = sorted.slice(0, 100);
   const showCogs = display.some(r => r.hasCogs);
+  // Phase 05.7.7 — show TikTok column only when at least one row in the
+  // visible slice has TikTok spend. Keeps the table layout unchanged for
+  // stores without TikTok (zolplus, 360usmile).
+  const showTikTok = display.some(r => (r.ttSpend ?? 0) > 0);
 
   if (!display.length) {
     if (bare) {
@@ -50,6 +54,7 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
               <th className="px-3 py-2.5 text-start font-medium">חנות</th>
               <th className="px-3 py-2.5 text-end font-medium">פייסבוק</th>
               <th className="px-3 py-2.5 text-end font-medium">גוגל</th>
+              {showTikTok && <th className="px-3 py-2.5 text-end font-medium">טיקטוק</th>}
               <th className="px-3 py-2.5 text-end font-medium">סה&quot;כ הוצאה</th>
               <th className="px-3 py-2.5 text-end font-medium">הכנסה</th>
               <th className="px-3 py-2.5 text-center font-medium">ROAS</th>
@@ -67,6 +72,11 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
                   <td className="px-3 py-2 font-medium">{r.storeName}</td>
                   <td className="px-3 py-2 text-end tabular-nums">{formatNumber(r.fbSpend)}</td>
                   <td className="px-3 py-2 text-end tabular-nums">{formatNumber(r.gaSpend)}</td>
+                  {showTikTok && (
+                    <td className="px-3 py-2 text-end tabular-nums">
+                      {(r.ttSpend ?? 0) > 0 ? formatNumber(r.ttSpend) : '—'}
+                    </td>
+                  )}
                   <td className="px-3 py-2 text-end tabular-nums">{formatNumber(r.totalSpend)}</td>
                   <td className="px-3 py-2 text-end tabular-nums">
                     {formatNumber(r.revenue)}

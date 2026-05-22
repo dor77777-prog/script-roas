@@ -1,6 +1,7 @@
 'use client';
 
-import { Trophy, AlertTriangle } from 'lucide-react';
+import type { ReactNode } from 'react';
+import { Trophy, AlertTriangle, ShoppingBag } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { roasLabel, type StoreAgg } from '@/lib/analytics';
 
@@ -24,11 +25,17 @@ const TONE_BG: Record<string, string> = {
 
 type Props = {
   data: StoreAgg[];
+  /**
+   * Phase 05.7.8 — per-store order count for the active range. Keyed by
+   * `storeName` to match `StoreAgg.store`. Missing keys render as "—" so the
+   * card degrades gracefully while orders-attribution is still loading.
+   */
+  ordersByStore?: Record<string, number>;
   /** Wrap output in <section> with a header. False when used inside CollapsibleSection. */
   bare?: boolean;
 };
 
-export function PerStoreCards({ data, bare = false }: Props) {
+export function PerStoreCards({ data, ordersByStore, bare = false }: Props) {
   if (!data.length) return null;
 
   // Identify top/bottom by ROAS so we can decorate the cards inline.
@@ -49,6 +56,7 @@ export function PerStoreCards({ data, bare = false }: Props) {
           color={colorFor(s.store, i)}
           isTop={s.store === topStore}
           isRisky={s.store === riskyStore}
+          orderCount={ordersByStore?.[s.store]}
         />
       ))}
     </div>
@@ -71,11 +79,13 @@ function StoreCard({
   color,
   isTop,
   isRisky,
+  orderCount,
 }: {
   agg: StoreAgg;
   color: string;
   isTop: boolean;
   isRisky: boolean;
+  orderCount?: number;
 }) {
   const info = roasLabel(agg.roas);
   return (
@@ -120,6 +130,29 @@ function StoreCard({
         <div className="grid grid-cols-1 gap-1.5 text-sm pt-2 border-t border-border">
           <Row label="הכנסות" value={`CAD ${formatCurrency(agg.revenue)}`} />
           <Row label="הוצאות" value={`CAD ${formatCurrency(agg.spend)}`} />
+          {/* Phase 05.7.7 — surface Meta / Google / TikTok breakdown so each
+              store card shows where the ad budget actually went. TikTok line
+              hides for stores without a TikTok integration. */}
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-[11px] text-text-muted ps-3">
+            <span>Meta: <span className="text-text-secondary tabular-nums">{formatCurrency(agg.fbSpend)}</span></span>
+            <span>Google: <span className="text-text-secondary tabular-nums">{agg.gaSpend > 0 ? formatCurrency(agg.gaSpend) : '—'}</span></span>
+            {(agg.ttSpend ?? 0) > 0 && (
+              <span>TikTok: <span className="text-text-secondary tabular-nums">{formatCurrency(agg.ttSpend)}</span></span>
+            )}
+          </div>
+          {/* Phase 05.7.8 — order count for the range. `undefined` means the
+              orders-attribution fetch hasn't resolved yet; show "—" until it
+              does. 0 is a legitimate value (e.g., a slow morning) and renders
+              as the explicit zero. */}
+          <Row
+            label={
+              <span className="inline-flex items-center gap-1">
+                <ShoppingBag size={12} className="text-text-muted" />
+                הזמנות
+              </span>
+            }
+            value={orderCount === undefined ? '—' : formatNumber(orderCount)}
+          />
           <Row label="רווח גולמי" value={`CAD ${formatCurrency(agg.grossProfit)}`} bold />
         </div>
       </div>
@@ -127,7 +160,7 @@ function StoreCard({
   );
 }
 
-function Row({ label, value, bold = false }: { label: string; value: string; bold?: boolean }) {
+function Row({ label, value, bold = false }: { label: ReactNode; value: string; bold?: boolean }) {
   return (
     <div className="flex justify-between">
       <span className="text-text-secondary">{label}:</span>

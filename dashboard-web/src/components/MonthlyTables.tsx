@@ -255,13 +255,17 @@ function MonthBlockPerStore({
   const [open, setOpen] = useState(true);
   // detect if store has GA (any row with gaSpend > 0)
   const hasGa = rows.some(r => r.gaSpend > 0);
+  // Phase 05.7.7 — show TikTok column only when at least one row in this
+  // month/store has TikTok spend (currently uzoshop-only).
+  const hasTt = rows.some(r => (r.ttSpend ?? 0) > 0);
 
-  let totalFb = 0, totalGa = 0, totalSpend = 0, totalRev = 0;
+  let totalFb = 0, totalGa = 0, totalTt = 0, totalSpend = 0, totalRev = 0;
   let totalGross = 0;
   let totalRefund = 0;
   for (const r of rows) {
     totalFb += r.fbSpend;
     totalGa += r.gaSpend;
+    totalTt += r.ttSpend ?? 0;
     totalSpend += r.totalSpend;
     totalRev += r.revenue;
     // Treat null gross/refund as "no refund day" (gross == net).
@@ -295,6 +299,7 @@ function MonthBlockPerStore({
                 <th className="px-3 py-2 text-start font-medium">תאריך</th>
                 {hasGa && <th className="px-3 py-2 text-end font-medium">פייסבוק</th>}
                 {hasGa && <th className="px-3 py-2 text-end font-medium">גוגל</th>}
+                {hasTt && <th className="px-3 py-2 text-end font-medium">טיקטוק</th>}
                 <th className="px-3 py-2 text-end font-medium">{hasGa ? 'יצא סה"כ' : 'יצא'}</th>
                 <th className="px-3 py-2 text-end font-medium">נכנס</th>
                 <th className="px-3 py-2 text-center font-medium">ROAS</th>
@@ -312,6 +317,11 @@ function MonthBlockPerStore({
                     <td className="px-3 py-1.5 tabular-nums">{formatDate(d)}</td>
                     {hasGa && <td className="px-3 py-1.5 text-end tabular-nums">{r ? formatNumber(r.fbSpend) : ''}</td>}
                     {hasGa && <td className="px-3 py-1.5 text-end tabular-nums">{r ? formatNumber(r.gaSpend) : ''}</td>}
+                    {hasTt && (
+                      <td className="px-3 py-1.5 text-end tabular-nums">
+                        {r ? ((r.ttSpend ?? 0) > 0 ? formatNumber(r.ttSpend) : '—') : ''}
+                      </td>
+                    )}
                     <td className="px-3 py-1.5 text-end tabular-nums">{r ? formatNumber(r.totalSpend) : ''}</td>
                     <td className="px-3 py-1.5 text-end tabular-nums">
                       {r ? formatNumber(r.revenue) : ''}
@@ -332,6 +342,7 @@ function MonthBlockPerStore({
                 <td className="px-3 py-2">סך הכל</td>
                 {hasGa && <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalFb)}</td>}
                 {hasGa && <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalGa)}</td>}
+                {hasTt && <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalTt)}</td>}
                 <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalSpend)}</td>
                 <td className="px-3 py-2 text-end tabular-nums">
                   {formatNumber(totalRev)}

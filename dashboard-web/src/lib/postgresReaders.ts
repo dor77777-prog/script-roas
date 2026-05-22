@@ -135,11 +135,12 @@ function toNumber(v: unknown): number {
  * uses 'Meta' / 'Google'. TitleCase at the boundary so consumer code keeps
  * its existing pattern matches without case-conversion glue.
  */
-function titleCasePlatform(v: unknown): 'Meta' | 'Google' | string {
+function titleCasePlatform(v: unknown): 'Meta' | 'Google' | 'TikTok' | string {
   const s = String(v ?? '').trim();
   if (!s) return '';
   if (s.toLowerCase() === 'meta') return 'Meta';
   if (s.toLowerCase() === 'google') return 'Google';
+  if (s.toLowerCase() === 'tiktok') return 'TikTok';
   return s; // Pass through unknown values — matches sheets.ts permissive behavior.
 }
 
@@ -271,7 +272,7 @@ export async function fetchDailyDataFromPostgres(
       let q = getSupabase()
         .from('data_daily')
         .select(
-          'date, store_id, store_name, fb_spend_cad, ga_spend_cad, total_spend_cad, ' +
+          'date, store_id, store_name, fb_spend_cad, ga_spend_cad, tt_spend_cad, total_spend_cad, ' +
             'revenue_cad, roas, gross_profit_cad, cogs_cad, net_profit_cad, ' +
             'gross_revenue_cad, refund_deduction_cad',
         );
@@ -291,11 +292,12 @@ export async function fetchDailyDataFromPostgres(
 
     const fbSpend = toNumber(r.fb_spend_cad);
     const gaSpend = toNumber(r.ga_spend_cad);
+    const ttSpend = toNumber(r.tt_spend_cad);
     const totalSpendRaw = r.total_spend_cad;
     const totalSpend =
       totalSpendRaw === null || totalSpendRaw === undefined
-        ? fbSpend + gaSpend
-        : toNumber(totalSpendRaw) || fbSpend + gaSpend;
+        ? fbSpend + gaSpend + ttSpend
+        : toNumber(totalSpendRaw) || fbSpend + gaSpend + ttSpend;
     const revenue = toNumber(r.revenue_cad);
     const roasRaw = r.roas;
     const roas =
@@ -330,6 +332,7 @@ export async function fetchDailyDataFromPostgres(
       storeName: String(r.store_name),
       fbSpend,
       gaSpend,
+      ttSpend,
       totalSpend,
       revenue,
       roas,

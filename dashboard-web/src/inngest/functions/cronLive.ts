@@ -89,7 +89,12 @@
  */
 
 import { inngest } from '@/inngest/client';
-import { fetchShopifyDayRows, type ShopifyDayRows } from '@/lib/fetchers/shopify';
+import {
+  fetchShopifyDayRows,
+  fetchShopifyOrdersAttribution,
+  type ShopifyDayRows,
+  type ShopifyOrderRow,
+} from '@/lib/fetchers/shopify';
 import { fetchMetaSpendForDayLight } from '@/lib/fetchers/meta';
 import { fetchGoogleAdsSpendForDay } from '@/lib/fetchers/googleAds';
 import { fetchTikTokSpendForDay } from '@/lib/fetchers/tiktok';
@@ -534,7 +539,34 @@ export async function runLiveForStore(
     ttSpendCad: number | null;
   };
 
-  // ----- STEP 3: persist (sequential, idempotent) -----
+  // ----- STEP 3: fetch today's orders_attribution (for WhatsApp summary) -----
+  //
+  // Phase 05.7.8 (2026-05-22 fix): cron-daily writes orders_attribution at
+  // 00:05 IL — meaning the 12:00 + 18:00 WhatsApp summaries see STALE order
+  // counts (everything from after 00:05 today is missing). Net result: the
+  // noon WhatsApp shows "1 order" when uzoshop already had 6 orders, leading
+  // the operator to think the dashboard is broken.
+  //
+  // Fix: cron-live refreshes orders_attribution for TODAY only (not the full
+  // rolling 3-day window — yesterday + day-before are owned by cron-daily and
+  // re-fetching them every 10 min wastes Shopify API quota). Today's orders
+  // arrive via UPSERT on PK (store_id, order_id) so the operation is fully
+  // idempotent across the 10-min cadence. Refunds processed today on orders
+  // from D-1 / D-2 are still captured by cron-daily's next tick.
+  const todayOrders = await step.run('fetch-shopify-orders-attribution-today', async () => {
+    return await withTimeout(
+      fetchShopifyOrdersAttribution(storeId, today),
+      12_000,
+      `Shopify orders-attribution ${today}`,
+    ).catch((e) => {
+      console.warn(
+        `cron-live: orders-attribution ${storeId} ${today} failed/timed-out: ${e instanceof Error ? e.message : e}`,
+      );
+      return [] as ShopifyOrderRow[];
+    });
+  });
+
+  // ----- STEP 4: persist (sequential, idempotent) -----
   //
   // Three write modes per date based on what succeeded:
   //
@@ -580,6 +612,40 @@ export async function runLiveForStore(
             }
           : undefined,
       );
+    }
+
+    // Phase 05.7.8 — persist today's orders_attribution rows. Same UPSERT
+    // semantics as cron-daily (onConflict: 'store_id,order_id'). When the
+    // fetch failed/timed-out above, `todayOrders` is `[]` — the .length>0
+    // guard short-circuits without throwing so the spend persist above is
+    // never reverted.
+    if (todayOrders.length > 0) {
+      const admin = getSupabaseAdmin();
+      const orderRows = todayOrders.map((o) => ({
+        store_id: o.storeId,
+        order_id: o.orderId,
+        date: o.date,
+        total_cad: o.totalCad,
+        source: o.source,
+        utm_source: o.utmSource,
+        utm_medium: o.utmMedium,
+        utm_campaign: o.utmCampaign,
+        utm_content: o.utmContent,
+        fbclid_present: o.fbclidPresent,
+        gclid_present: o.gclidPresent,
+        referrer: o.referrer,
+        utm_id: o.utmId,
+        utm_term: o.utmTerm,
+        line_items: o.lineItems,
+      }));
+      const { error: ordErr } = await admin
+        .from('orders_attribution')
+        .upsert(orderRows, { onConflict: 'store_id,order_id' });
+      if (ordErr) {
+        throw new Error(
+          `orders_attribution upsert for ${storeId} ${today}: ${ordErr.message}`,
+        );
+      }
     }
   });
 

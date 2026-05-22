@@ -99,14 +99,17 @@ export function generateAiReport({
   let revenue = 0;
   let fbSpend = 0;
   let gaSpend = 0;
+  let ttSpend = 0;
   let cogs = 0;
   for (const r of daily) {
     revenue += r.revenue;
     fbSpend += r.fbSpend;
     gaSpend += r.gaSpend;
+    ttSpend += r.ttSpend ?? 0;
     cogs += r.cogs;
   }
-  const totalSpend = fbSpend + gaSpend;
+  const hasTikTok = ttSpend > 0;
+  const totalSpend = fbSpend + gaSpend + ttSpend;
   const roas = totalSpend > 0 ? revenue / totalSpend : 0;
   const grossProfit = revenue - totalSpend;
   const netProfit = revenue - totalSpend - cogs;
@@ -158,6 +161,9 @@ export function generateAiReport({
   out.push(`| הוצאות פרסום | ${fmtCad(totalSpend)} |`);
   out.push(`| הוצאות Meta | ${fmtCad(fbSpend)} |`);
   out.push(`| הוצאות Google | ${fmtCad(gaSpend)} |`);
+  if (hasTikTok) {
+    out.push(`| הוצאות TikTok | ${fmtCad(ttSpend)} |`);
+  }
   out.push(`| ROAS משוקלל | ${roas > 0 ? fmtNum(roas, 2) : '—'} |`);
   out.push(`| רווח גולמי (Revenue − Spend) | ${fmtCad(grossProfit)} |`);
   out.push(`| COGS (25% מההכנסה) | ${fmtCad(cogs)} |`);
@@ -212,6 +218,7 @@ export function generateAiReport({
   if (totalImpressions > 0) {
     let fbImps = 0, fbClicks = 0;
     let gImps = 0, gClicks = 0;
+    let ttImps = 0, ttClicks = 0;
     for (const c of campaigns) {
       if (c.platform === 'Meta') {
         fbImps += c.impressions;
@@ -219,12 +226,17 @@ export function generateAiReport({
       } else if (c.platform === 'Google') {
         gImps += c.impressions;
         gClicks += c.clicks;
+      } else if (c.platform === 'TikTok') {
+        ttImps += c.impressions;
+        ttClicks += c.clicks;
       }
     }
     const fbCpm = fbImps > 0 ? (fbSpend / fbImps) * 1000 : 0;
     const gCpm = gImps > 0 ? (gaSpend / gImps) * 1000 : 0;
+    const ttCpm = ttImps > 0 ? (ttSpend / ttImps) * 1000 : 0;
     const fbCtr = fbImps > 0 ? fbClicks / fbImps : 0;
     const gCtr = gImps > 0 ? gClicks / gImps : 0;
+    const ttCtr = ttImps > 0 ? ttClicks / ttImps : 0;
     out.push('## פלטפורמות — CPM ו-CTR לפי ערוץ');
     out.push('');
     out.push(`| ערוץ | חשיפות | CPM | קליקים | CTR | הוצאה |`);
@@ -235,6 +247,9 @@ export function generateAiReport({
     if (gImps > 0) {
       out.push(`| Google | ${fmtNum(gImps)} | ${fmtCad(gCpm)} | ${fmtNum(gClicks)} | ${fmtPct(gCtr, 2)} | ${fmtCad(gaSpend)} |`);
     }
+    if (ttImps > 0) {
+      out.push(`| TikTok | ${fmtNum(ttImps)} | ${fmtCad(ttCpm)} | ${fmtNum(ttClicks)} | ${fmtPct(ttCtr, 2)} | ${fmtCad(ttSpend)} |`);
+    }
     out.push('');
     out.push('**הקשר**: CPM גבוה בערוץ אחד לעומת השני יכול לנבוע מ-(א) קהל יקר יותר (lookalike% / interest stack), (ב) קריאייטיב פחות מושך שגורם לMeta/Google להגביה את המחיר כדי לדחוף אותו, או (ג) פורמט מודעה דורש placement יקר (Reels vs feed, Shopping vs Search).');
     out.push('');
@@ -243,14 +258,25 @@ export function generateAiReport({
   // ===== Daily breakdown (compact) =====
   out.push('## פירוט יומי');
   out.push('');
-  out.push(`| תאריך | חנות | Meta | Google | Revenue | ROAS |`);
-  out.push(`|---|---|---|---|---|---|`);
+  if (hasTikTok) {
+    out.push(`| תאריך | חנות | Meta | Google | TikTok | Revenue | ROAS |`);
+    out.push(`|---|---|---|---|---|---|---|`);
+  } else {
+    out.push(`| תאריך | חנות | Meta | Google | Revenue | ROAS |`);
+    out.push(`|---|---|---|---|---|---|`);
+  }
   const sortedDaily = [...daily].sort((a, b) => a.date.localeCompare(b.date) || a.storeName.localeCompare(b.storeName));
   for (const r of sortedDaily) {
     const dr = r.roas > 0 ? fmtNum(r.roas, 2) : (r.revenue === 0 && r.totalSpend > 0 ? '0 (FAILED)' : '—');
-    out.push(
-      `| ${fmtDate(r.date)} | ${r.storeName} | ${fmtCad(r.fbSpend)} | ${fmtCad(r.gaSpend)} | ${fmtCad(r.revenue)} | ${dr} |`,
-    );
+    if (hasTikTok) {
+      out.push(
+        `| ${fmtDate(r.date)} | ${r.storeName} | ${fmtCad(r.fbSpend)} | ${fmtCad(r.gaSpend)} | ${fmtCad(r.ttSpend ?? 0)} | ${fmtCad(r.revenue)} | ${dr} |`,
+      );
+    } else {
+      out.push(
+        `| ${fmtDate(r.date)} | ${r.storeName} | ${fmtCad(r.fbSpend)} | ${fmtCad(r.gaSpend)} | ${fmtCad(r.revenue)} | ${dr} |`,
+      );
+    }
   }
   out.push('');
 

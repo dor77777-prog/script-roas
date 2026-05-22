@@ -4,7 +4,7 @@ import type { CampaignRow } from './campaigns';
 import type { DateRange } from './dateRange';
 
 export type AggregateMode = 'campaign' | 'adset';
-export type AggregatePlatformFilter = 'all' | 'Meta' | 'Google';
+export type AggregatePlatformFilter = 'all' | 'Meta' | 'Google' | 'TikTok';
 
 export type Aggregated = {
   key: string;

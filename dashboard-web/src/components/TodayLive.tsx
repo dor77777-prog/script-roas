@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
-import { Radio, TrendingUp, DollarSign, ShoppingCart, Target, Eye } from 'lucide-react';
+import { Radio, TrendingUp, DollarSign, ShoppingCart, Target, Eye, ShoppingBag } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { aggregate, aggregateByStore, roasLabel } from '@/lib/analytics';
 import type { DailyRow } from '@/lib/types';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
+import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
 
 const campaignsFetcher = async (url: string): Promise<CampaignsResponse> => {
   const r = await fetch(url);
@@ -15,6 +16,15 @@ const campaignsFetcher = async (url: string): Promise<CampaignsResponse> => {
     throw new Error(body?.error || `HTTP ${r.status}`);
   }
   return r.json() as Promise<CampaignsResponse>;
+};
+
+const ordersFetcher = async (url: string): Promise<OrdersAttributionResponse> => {
+  const r = await fetch(url);
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    throw new Error(body?.error || `HTTP ${r.status}`);
+  }
+  return r.json() as Promise<OrdersAttributionResponse>;
 };
 
 const TONE_BG: Record<string, string> = {
@@ -75,6 +85,31 @@ export function TodayLive({
     campaignsFetcher,
     { refreshInterval: 60_000, revalidateOnFocus: false },
   );
+
+  // Phase 05.7.8 — fetch today's orders so each live store card can show
+  // "X הזמנות עד עכשיו". cron-live now refreshes orders_attribution for
+  // today on every tick (10 min), so this number is at most 10 min stale.
+  const { data: ordersToday } = useSWR<OrdersAttributionResponse>(
+    `/api/orders-attribution?from=${today}&to=${today}`,
+    ordersFetcher,
+    { refreshInterval: 60_000, revalidateOnFocus: false },
+  );
+
+  const ordersByStoreToday = useMemo<Record<string, number>>(() => {
+    const out: Record<string, number> = {};
+    const rows = ordersToday?.rows ?? [];
+    for (const r of rows) {
+      if (r.date !== today) continue;
+      const sn = r.storeName;
+      if (!sn) continue;
+      out[sn] = (out[sn] ?? 0) + 1;
+    }
+    return out;
+  }, [ordersToday, today]);
+
+  const totalOrdersToday = useMemo(() => {
+    return Object.values(ordersByStoreToday).reduce((a, b) => a + b, 0);
+  }, [ordersByStoreToday]);
 
   // Aggregate impressions + spend overall and per store from today's
   // campaign rows. Per-store is keyed by storeName so it joins cleanly
@@ -142,7 +177,7 @@ export function TodayLive({
         </header>
 
         {/* Stats grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2.5 sm:gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-6 gap-2.5 sm:gap-3">
           <LiveStat
             icon={<Target size={13} />}
             label="ROAS עד עכשיו"
@@ -170,6 +205,11 @@ export function TodayLive({
             accent={agg.grossProfit >= 0 ? 'pos' : 'neg'}
           />
           <LiveStat
+            icon={<ShoppingBag size={13} />}
+            label="הזמנות (היום)"
+            value={ordersToday === undefined ? '—' : formatNumber(totalOrdersToday)}
+          />
+          <LiveStat
             icon={<Eye size={13} />}
             label="CPM (היום)"
             value={cpmData.impressions > 0 ? formatCurrency(cpmData.cpm, 2) : '—'}
@@ -184,7 +224,9 @@ export function TodayLive({
               const color = STORE_COLORS[s.store] || '#0d3680';
               const info = roasLabel(s.roas);
               const hasGoogle = s.gaSpend > 0;
+              const hasTikTok = (s.ttSpend ?? 0) > 0;
               const storeCpm = cpmData.cpmByStore.get(s.store) ?? 0;
+              const storeOrders = ordersByStoreToday[s.store];
               return (
                 <div
                   key={s.store}
@@ -223,10 +265,16 @@ export function TodayLive({
                         CAD {formatCurrency(s.spend)}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between gap-2 ps-3 text-[11px] text-text-muted">
+                    <div className="flex items-center justify-between gap-2 ps-3 text-[11px] text-text-muted flex-wrap">
                       <span>Meta: <span className="text-text-secondary tabular-nums">{formatCurrency(s.fbSpend)}</span></span>
                       <span>·</span>
                       <span>Google: <span className="text-text-secondary tabular-nums">{hasGoogle ? formatCurrency(s.gaSpend) : '—'}</span></span>
+                      {hasTikTok && (
+                        <>
+                          <span>·</span>
+                          <span>TikTok: <span className="text-text-secondary tabular-nums">{formatCurrency(s.ttSpend)}</span></span>
+                        </>
+                      )}
                     </div>
                     <div className="flex items-center justify-between gap-2 rounded-md bg-roas-greenBg/40 px-2 py-1.5 mt-1.5">
                       <span className="text-roas-green/80 font-medium">הכנסה</span>
@@ -235,6 +283,15 @@ export function TodayLive({
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-2 pt-1">
+                      <span className="text-text-muted inline-flex items-center gap-1">
+                        <ShoppingBag size={11} className="text-text-muted" />
+                        הזמנות
+                      </span>
+                      <span className="text-text-primary font-semibold">
+                        {ordersToday === undefined ? '—' : formatNumber(storeOrders ?? 0)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
                       <span className="text-text-muted">CPM</span>
                       <span className="text-text-primary font-semibold">
                         {storeCpm > 0 ? `CAD ${formatCurrency(storeCpm, 2)}` : '—'}

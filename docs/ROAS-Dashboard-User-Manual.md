@@ -170,12 +170,13 @@ https://roas-dashboard-smoky.vercel.app
 ```
 
 ### 1.5 מה מתעדכן אוטומטית
-- ✅ **Today Live** — כל 15 דקות מ-Meta/Google API + Shopify.
+- ✅ **Today Live** — כל 10 דקות מ-Meta/Google/TikTok API + Shopify (כולל ספירת הזמנות פר חנות).
 - ✅ **סדרות יומיות** (`data-daily`, `campaigns-daily`, וכו') — אחת ליום (סביב 04:15 ישראל).
-- ✅ **הזמנות עם click-IDs** (`orders-attribution`) — אחת ליום.
+- ✅ **הזמנות עם click-IDs** (`orders-attribution`) — בסיס פעם ביום (cron-daily) + ריענון של "היום" כל 10 דקות (cron-live, Phase 05.7.8). זה גם הבסיס לספירת הזמנות בהודעות WhatsApp של 12:00 ו-18:00.
 - ✅ **שערי חליפין** — אחת ליום מ-Frankfurter API.
-- ✅ **Inngest cron-daily** (מאז Phase 05.6) — 00:05 Asia/Jerusalem פר חנות (3 פונקציות), כותב ל-Supabase במקביל ל-Apps Script. רדום מבחינת ה-Dashboard עד Phase 05.7.
-- ✅ **Inngest cron-live** (מאז Phase 05.6) — כל 15 דקות פר חנות (3 פונקציות), כותב ל-Supabase. רדום מבחינת ה-Dashboard עד Phase 05.7.
+- ✅ **Inngest cron-daily** (מאז Phase 05.6) — 00:05 Asia/Jerusalem פר חנות (3 פונקציות), כותב ל-Supabase. Phase 05.7+ — מקור האמת הבלעדי.
+- ✅ **Inngest cron-live** (מאז Phase 05.6, הורחב Phase 05.7.7/05.7.8) — כל 10 דקות פר חנות: Shopify rolling 3-day + Meta + Google + TikTok (uzoshop) + orders_attribution של היום. כותב ל-Supabase.
+- ✅ **TikTok Ads (uzoshop)** — מאז Phase 05.7.7: הוצאות יומיות + פר-קמפיין/פר-מודעה. נכנס לטבלאות `data_daily.tt_spend_cad`, `campaigns_daily` ו-`ads_daily` עם `platform='tiktok'`.
 
 ### 1.6 מה דורש פעולה ידנית מהמפעיל
 - 🛠️ **Backfill היסטורי** — אם תיקנו באג שמשפיע על פירוש נתונים ישנים. הסבר מלא בפרק 16 (דרך Apps Script) או דרך טאב ה-ניהול החדש (פרק 27).

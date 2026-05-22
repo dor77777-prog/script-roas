@@ -262,10 +262,12 @@ describe('cronLive — runLiveForStore handler (Shopify-only, rolling 3-day)', (
     ).length;
     expect(dataTouches).toBeGreaterThanOrEqual(3);
 
-    // Step labels must match Pitfall 4 recommendation: ≤3 step.runs.
-    // Allow 2 or 3 (fetch + persist, or fetch + per-date persist if split).
+    // Step labels must stay close to Pitfall 4 recommendation. Phase 05.7.7
+    // added the meta/google/tiktok spend step; 05.7.8 added the
+    // orders-attribution-today step. Budget is now 4 (fetch-shopify +
+    // fetch-spend-light + fetch-orders-attribution + persist).
     expect(labels.length).toBeGreaterThanOrEqual(1);
-    expect(labels.length).toBeLessThanOrEqual(3);
+    expect(labels.length).toBeLessThanOrEqual(4);
   });
 
   it('Test 5 (Phase 05.7.6): cron-live calls LIGHT Meta + Google fetchers — NOT the heavy fetchMetaSpendForDay', async () => {

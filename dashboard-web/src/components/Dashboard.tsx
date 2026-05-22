@@ -56,6 +56,23 @@ const fetcher = async (url: string) => {
   return res.json() as Promise<DashboardData>;
 };
 
+// Phase 05.7.8 — orders fetcher (separate response shape from DashboardData).
+// Returns the orders-attribution rows for the current range so the dashboard
+// can surface per-store order counts (live + range-based) in cards.
+type OrdersResponseShape = {
+  rows: Array<{ storeName: string; date: string }>;
+  lastUpdated: string;
+  error?: string;
+};
+const ordersFetcher = async (url: string): Promise<OrdersResponseShape> => {
+  const res = await fetch(url);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body?.error || `Failed to load (${res.status})`);
+  }
+  return res.json() as Promise<OrdersResponseShape>;
+};
+
 const initialPreset = 'this_month';
 
 type TabKey = 'home' | 'pnl' | 'analysis' | 'campaigns' | 'products' | 'detail';
@@ -101,6 +118,16 @@ export function Dashboard() {
     { refreshInterval: 60_000, revalidateOnFocus: true },
   );
 
+  // Phase 05.7.8 — fetch orders for the same range so per-store cards can show
+  // "X הזמנות" alongside revenue/spend. Keeps the data path separate from
+  // /api/data (which doesn't carry per-store order counts) without baking
+  // it into the heavier dashboard payload.
+  const { data: ordersData } = useSWR(
+    buildDateRangeKey('/api/orders-attribution', filters.range),
+    ordersFetcher,
+    { refreshInterval: 60_000, revalidateOnFocus: true },
+  );
+
   // Counter that increments whenever the command palette wants to open the
   // AI report modal. AiReportButton listens to this prop via useEffect.
   const [aiReportSignal, setAiReportSignal] = useState(0);
@@ -139,6 +166,21 @@ export function Dashboard() {
     };
     // billingTick: re-aggregate on billing edits so live values stay in sync.
   }, [data, filters, billingTick]);
+
+  // Phase 05.7.8 — per-store order count map for the current range. Filters
+  // the same way `filtered.cur` does so cards stay in sync with the global
+  // store dropdown.
+  const ordersByStore = useMemo<Record<string, number>>(() => {
+    const out: Record<string, number> = {};
+    const rows = ordersData?.rows ?? [];
+    for (const r of rows) {
+      const storeName = r.storeName;
+      if (!storeName) continue;
+      if (filters.store !== 'All' && storeName !== filters.store) continue;
+      out[storeName] = (out[storeName] ?? 0) + 1;
+    }
+    return out;
+  }, [ordersData, filters.store]);
 
   return (
     <div dir="rtl" className="min-h-screen bg-background">
@@ -213,6 +255,7 @@ export function Dashboard() {
                 filters={filters}
                 setFilters={setFilters}
                 aiReportSignal={aiReportSignal}
+                ordersByStore={ordersByStore}
               />
             )}
             {activeTab === 'pnl' && (
@@ -263,6 +306,7 @@ function HomeTab({
   filters,
   setFilters,
   aiReportSignal,
+  ordersByStore,
 }: {
   data: DashboardData;
   filtered: FilteredView;
@@ -270,6 +314,8 @@ function HomeTab({
   setFilters: (next: F) => void;
   /** Increments when the command palette wants to open the AI report. */
   aiReportSignal: number;
+  /** Phase 05.7.8 — per-store order count for the range, keyed by storeName. */
+  ordersByStore: Record<string, number>;
 }) {
   return (
     <div className="space-y-4 sm:space-y-5 animate-fade-in-up">
@@ -320,7 +366,7 @@ function HomeTab({
         title="ביצועים לפי חנות"
         description="כרטיס לכל חנות עם ה-ROAS, ההכנסות, ההוצאות, והרווח הגולמי לתקופה הנבחרת. החנות עם ROAS הכי גבוה מקבלת אייקון מובילה."
       />
-      <PerStoreCards data={filtered.storeAggs} bare />
+      <PerStoreCards data={filtered.storeAggs} ordersByStore={ordersByStore} bare />
     </div>
   );
 }

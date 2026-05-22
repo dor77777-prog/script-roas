@@ -52,7 +52,7 @@ import { CampaignDrawer } from './CampaignDrawer';
 import { AdsDrawer } from './AdsDrawer';
 
 type Mode = 'campaign' | 'adset';
-type Platform = 'all' | 'Meta' | 'Google';
+type Platform = 'all' | 'Meta' | 'Google' | 'TikTok';
 
 /** All columns the user can sort by. Strings sort lexicographically;
  *  everything else is a numeric metric. */
@@ -527,6 +527,11 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       shopifyRevenue += r.revenue;
       metaSpendInScope += r.fbSpend;
       googleSpendInScope += r.gaSpend;
+      // TikTok spend isn't compared to a "Shopify-attributed revenue" today
+      // because the TikTok pixel doesn't fire on Shopify checkout (the same
+      // reason the attribution gap analysis already isolates Meta+Google
+      // from Shopify totals). We surface ttSpend in the dedicated PnL/KPI
+      // lines instead.
     }
 
     if (shopifyRevenue === 0 && platformClaimed === 0) return null;
@@ -627,7 +632,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
           className="inline-flex rounded-lg border border-border bg-surface overflow-hidden divide-x divide-border"
           dir="ltr"
         >
-          {(['all', 'Meta', 'Google'] as Platform[]).map(p => (
+          {(['all', 'Meta', 'Google', 'TikTok'] as Platform[]).map(p => (
             <button
               key={p}
               role="tab"

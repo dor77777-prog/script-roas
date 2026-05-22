@@ -15,6 +15,8 @@ export type Aggregate = {
   spend: number;
   fbSpend: number;
   gaSpend: number;
+  /** Phase 05.7.7 — TikTok ad spend in CAD. 0 for stores without TikTok. */
+  ttSpend: number;
   roas: number;
   grossProfit: number;       // revenue − ad spend
   cogs: number;              // 25% of revenue
@@ -51,7 +53,7 @@ export function filterRows(
 }
 
 export function aggregate(rows: DailyRow[]): Aggregate {
-  let revenue = 0, spend = 0, fbSpend = 0, gaSpend = 0, cogs = 0;
+  let revenue = 0, spend = 0, fbSpend = 0, gaSpend = 0, ttSpend = 0, cogs = 0;
   const stores = new Set<string>();
   const dates = new Set<string>();
   let minDate: string | null = null;
@@ -61,6 +63,7 @@ export function aggregate(rows: DailyRow[]): Aggregate {
     spend += r.totalSpend;
     fbSpend += r.fbSpend;
     gaSpend += r.gaSpend;
+    ttSpend += r.ttSpend ?? 0;
     cogs += r.cogs;
     stores.add(r.storeName);
     dates.add(r.date);
@@ -85,6 +88,7 @@ export function aggregate(rows: DailyRow[]): Aggregate {
     spend,
     fbSpend,
     gaSpend,
+    ttSpend,
     roas,
     grossProfit: revenue - spend,
     cogs,

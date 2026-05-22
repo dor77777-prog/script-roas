@@ -4,6 +4,12 @@ export type DailyRow = {
   storeName: string;
   fbSpend: number;
   gaSpend: number;
+  /**
+   * Phase 05.7.7 — TikTok ad spend in CAD for the day. 0 for stores
+   * without a TikTok integration (currently only uzoshop has one) and
+   * for historical rows pre-migration. Always finite, never null.
+   */
+  ttSpend: number;
   totalSpend: number;
   revenue: number;
   roas: number;

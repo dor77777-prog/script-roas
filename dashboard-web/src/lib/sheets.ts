@@ -195,6 +195,10 @@ export async function fetchDailyData(opts?: { range?: DateRange }): Promise<Dail
       storeName,
       fbSpend,
       gaSpend,
+      // Sheets legacy fallback never had a TikTok column. Phase 05.7.7
+      // postgres rows carry the real value; sheets-side reads are only
+      // used when the Postgres flag is off (effectively zero in prod).
+      ttSpend: 0,
       totalSpend,
       revenue,
       roas,
