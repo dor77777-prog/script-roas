@@ -637,7 +637,7 @@ function InsightRow({
           </div>
 
           {expanded && hasDetail && (
-            <div className="mt-2 px-2.5 py-1.5 text-[11px] sm:text-xs text-text-secondary bg-surface/60 border-l-2 border-borderSubtle rounded animate-fade-in leading-relaxed">
+            <div className="mt-2 px-2.5 py-1.5 text-[11px] sm:text-xs text-text-secondary bg-surface/60 border-s-2 border-borderSubtle rounded animate-fade-in leading-relaxed">
               {insight.why}
             </div>
           )}

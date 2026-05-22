@@ -66,7 +66,7 @@ export function MetricHelp({ content, className, subtle = true }: Props) {
           dir="rtl"
           // Position below the trigger; on small screens it falls back to fixed-bottom.
           className={cn(
-            'absolute z-30 top-full mt-2 right-0',
+            'absolute z-30 top-full mt-2 end-0',
             'w-[260px] sm:w-[300px] max-w-[min(90vw,320px)]',
             'rounded-xl bg-text-primary text-white p-3 shadow-elevated',
             'text-xs leading-relaxed animate-fade-in',
@@ -99,7 +99,7 @@ export function MetricHelp({ content, className, subtle = true }: Props) {
           {/* Small triangle pointer to anchor the tooltip to the trigger */}
           <div
             aria-hidden
-            className="absolute -top-1.5 right-1.5 w-2.5 h-2.5 bg-text-primary rotate-45"
+            className="absolute -top-1.5 end-1.5 w-2.5 h-2.5 bg-text-primary rotate-45"
           />
         </div>
       )}

@@ -581,7 +581,7 @@ function Header({
   dataLastWriteAt: string | null;
 }) {
   return (
-    <header className="sticky top-0 z-10 bg-primary-dark text-white shadow-sm">
+    <header className="sticky top-0 z-30 bg-primary-dark text-white shadow-sm">
       {/* Deep navy gradient with a subtle inner highlight; closer to Stripe/Linear than the
           previous flat-ish gradient. */}
       <div

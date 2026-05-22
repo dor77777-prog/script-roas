@@ -29,7 +29,7 @@ export function TabNav<K extends string>({ tabs, active, onChange }: Props<K>) {
   return (
     <nav
       className={cn(
-        'sticky top-[52px] sm:top-[64px] z-[9]',
+        'sticky top-[52px] sm:top-[64px] z-20',
         'bg-surface/85 backdrop-blur-xl supports-[backdrop-filter]:bg-surface/75',
         'border-b border-borderSubtle',
       )}
@@ -75,7 +75,7 @@ export function TabNav<K extends string>({ tabs, active, onChange }: Props<K>) {
                 <span
                   aria-hidden
                   className={cn(
-                    'absolute bottom-0 left-3 right-3 h-[2px] rounded-t transition-all duration-DEFAULT',
+                    'absolute bottom-0 inset-x-3 h-[2px] rounded-t transition-all duration-DEFAULT',
                     isActive ? 'bg-primary opacity-100' : 'opacity-0',
                   )}
                 />

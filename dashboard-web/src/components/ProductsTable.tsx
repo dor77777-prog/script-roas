@@ -597,7 +597,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                 {!isEmpty && (
                   <div className="overflow-auto max-h-[70vh]">
                     <table className="w-full text-xs sm:text-sm min-w-[680px]">
-                      <thead className="sticky top-0 z-10 bg-surface">
+                      <thead className="sticky top-0 z-[5] bg-surface">
                         <tr className="text-text-secondary border-y border-border bg-surfaceMuted/40">
                           <th className="px-4 sm:px-5 py-2 text-start font-medium">מוצר</th>
                           {bucket.hasOrders && (

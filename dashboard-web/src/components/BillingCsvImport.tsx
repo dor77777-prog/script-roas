@@ -328,7 +328,7 @@ export function BillingCsvImport({
                   <button
                     onClick={() => setRow(p.id, { type: 'onetime' })}
                     className={cn(
-                      'px-1.5 py-0.5 transition-colors border-r border-border',
+                      'px-1.5 py-0.5 transition-colors border-e border-border',
                       p.type === 'onetime'
                         ? 'bg-primary text-white'
                         : 'text-text-secondary hover:bg-surfaceMuted',

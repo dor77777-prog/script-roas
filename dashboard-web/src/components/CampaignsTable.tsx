@@ -1145,7 +1145,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
               <style dangerouslySetInnerHTML={{ __html: columnHiddenCss }} />
             )}
             <table className="w-full text-xs sm:text-sm min-w-[1340px]">
-              <thead className="sticky top-0 z-10 bg-surface">
+              <thead className="sticky top-0 z-[5] bg-surface">
                 <tr className="text-text-secondary border-b border-borderSubtle bg-surfaceMuted/40">
                   <th className="px-3 py-2 w-[36px]" aria-label="סימון אופטימיזציה" data-col-id="optimized" />
                   <SortHeader
@@ -1235,7 +1235,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                           serves as a denominator)
                       (4) יח' / סה"כ — same, units
                       Not sortable — sort via 'ROAS Shopify'. */}
-                  <th className="px-3 py-2 text-end font-medium text-text-secondary w-[92px] border-r border-borderSubtle" data-col-id="shopifyValuePlatform">
+                  <th className="px-3 py-2 text-end font-medium text-text-secondary w-[92px] border-e border-borderSubtle" data-col-id="shopifyValuePlatform">
                     <span
                       className="inline-flex flex-col items-end leading-tight"
                       title="ערך המכירות שסווגו דטרמיניסטית לפלטפורמה הזו דרך source/click-id ב-Shopify (utm_source, ttclid, fbclid, gclid). רק הזמנות שאנחנו בטוחים שהן מהפלטפורמה הזו."
@@ -1244,7 +1244,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                       <span className="text-[9px] text-text-muted font-normal">פלטפורמה</span>
                     </span>
                   </th>
-                  <th className="px-3 py-2 text-end font-medium text-text-secondary w-[78px] border-r border-borderSubtle" data-col-id="shopifyUnitsPlatform">
+                  <th className="px-3 py-2 text-end font-medium text-text-secondary w-[78px] border-e border-borderSubtle" data-col-id="shopifyUnitsPlatform">
                     <span
                       className="inline-flex flex-col items-end leading-tight"
                       title="יחידות שנמכרו ב-Shopify מהזמנות שסווגו דטרמיניסטית לפלטפורמה הזו. רק הזמנות עם source/click-id ברור."

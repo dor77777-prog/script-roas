@@ -282,7 +282,7 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo }: Props)
               </summary>
               <div className="mt-2 rounded-lg bg-surfaceMuted/40 border border-borderSubtle p-3">
                 <table className="w-full text-xs tabular-nums">
-                  <thead className="sticky top-0 z-10 bg-surfaceMuted/40">
+                  <thead className="sticky top-0 z-[5] bg-surfaceMuted/40">
                     <tr className="text-[10px] uppercase text-text-muted tracking-wide">
                       <th className="text-start font-medium pb-1.5">קטגוריה</th>
                       <th className="text-end font-medium pb-1.5">סכום (יחסי לטווח)</th>
@@ -424,7 +424,7 @@ function PnLLine({
           {pct > 0 && tone === 'positive' ? '100%' : `${pct.toFixed(1)}%`}
         </div>
       </div>
-      <div className="text-end shrink-0 hidden sm:block min-w-[110px] border-r border-borderSubtle pr-3">
+      <div className="text-end shrink-0 hidden sm:block min-w-[110px] border-s border-borderSubtle ps-3">
         <div className="text-[10px] text-text-muted uppercase tracking-wide leading-tight">
           נשאר
         </div>

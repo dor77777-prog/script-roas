@@ -754,7 +754,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
           </summary>
           <div className="mt-2 max-h-48 overflow-y-auto rounded-md border border-borderSubtle">
             <table className="w-full text-[11px]">
-              <thead className="bg-surfaceMuted/60 sticky top-0">
+              <thead className="bg-surfaceMuted/60 sticky top-0 z-[5]">
                 <tr className="text-text-muted">
                   <th className="px-2 py-1.5 text-start font-medium">תאריך</th>
                   <th className="px-2 py-1.5 text-end font-medium">Meta</th>

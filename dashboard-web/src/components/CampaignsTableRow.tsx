@@ -471,7 +471,7 @@ export function CampaignsTableRow({
           useCampaignTrueRevenue.ts and live on TrueRevenueInfo as
           deterministicRevenue/Units + productTotals. */}
       {/* [1] ערך Shopify · פלטפורמה — deterministic revenue */}
-      <td data-col-id="shopifyValuePlatform" className="px-3 py-2 text-end tabular-nums border-r border-borderSubtle/40">
+      <td data-col-id="shopifyValuePlatform" className="px-3 py-2 text-end tabular-nums border-e border-borderSubtle/40">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);
@@ -496,7 +496,7 @@ export function CampaignsTableRow({
         })()}
       </td>
       {/* [2] יח' Shopify · פלטפורמה — deterministic units */}
-      <td data-col-id="shopifyUnitsPlatform" className="px-3 py-2 text-end tabular-nums border-r border-borderSubtle/40">
+      <td data-col-id="shopifyUnitsPlatform" className="px-3 py-2 text-end tabular-nums border-e border-borderSubtle/40">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);

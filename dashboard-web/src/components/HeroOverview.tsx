@@ -263,7 +263,7 @@ export function HeroOverview({ data, filters }: Props) {
             valuePrefix="CAD"
             delta={kpis.dRev}
           />
-          <div className="lg:border-r lg:border-white/12 lg:ps-7">
+          <div className="lg:border-s lg:border-white/12 lg:ps-7">
             <FloatingKpi
               label="ROAS"
               value={fmtNum2(kpis.curAgg.roas)}
@@ -272,7 +272,7 @@ export function HeroOverview({ data, filters }: Props) {
               rawDelta={kpis.dRoas}
             />
           </div>
-          <div className="lg:border-r lg:border-white/12 lg:ps-7">
+          <div className="lg:border-s lg:border-white/12 lg:ps-7">
             <FloatingKpi
               label="הוצאות פרסום"
               value={fmtMoneyBare(kpis.curAgg.spend)}
@@ -281,7 +281,7 @@ export function HeroOverview({ data, filters }: Props) {
               inverseDelta
             />
           </div>
-          <div className="lg:border-r lg:border-white/12 lg:ps-7">
+          <div className="lg:border-s lg:border-white/12 lg:ps-7">
             <FloatingKpi
               label="רווח נטו"
               value={fmtMoneyBare(kpis.curAgg.netProfit)}
@@ -290,7 +290,7 @@ export function HeroOverview({ data, filters }: Props) {
               accent={kpis.curAgg.netProfit >= 0 ? 'positive' : 'negative'}
             />
           </div>
-          <div className="lg:border-r lg:border-white/12 lg:ps-7">
+          <div className="lg:border-s lg:border-white/12 lg:ps-7">
             <FloatingKpi
               label="CPM"
               value={cpmAgg.cpm > 0 ? fmtMoneyBare(cpmAgg.cpm, 2) : <>—</>}

@@ -98,7 +98,7 @@ export function AdSetTable({
           scrolling rows. */}
       <div className="rounded-xl border border-borderSubtle overflow-auto max-h-[50vh]">
         <table className="w-full text-xs sm:text-sm min-w-[720px]">
-          <thead className="bg-surfaceMuted/60 sticky top-0 z-10">
+          <thead className="bg-surfaceMuted/60 sticky top-0 z-[5]">
             <tr className="text-text-secondary">
               <th className="px-2 py-2 w-[36px]" aria-label="סימון" />
               <AdSetSortHeader label="שם"          col="name"        sortKey={sortKey} dir={sortDir} onClick={onSort} align="start"  />
