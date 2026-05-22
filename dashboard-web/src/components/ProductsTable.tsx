@@ -556,27 +556,27 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                   <div className="flex items-center gap-3 sm:gap-5 text-xs sm:text-sm tabular-nums">
                     {bucket.hasOrders && (
                       <div>
-                        <span className="text-text-muted text-[10px] sm:text-xs ml-1">הזמנות</span>
+                        <span className="text-text-muted text-[10px] sm:text-xs me-1">הזמנות</span>
                         <span className="font-semibold text-text-primary">
                           {formatNumber(bucket.totalOrders, 0)}
                         </span>
                       </div>
                     )}
                     <div>
-                      <span className="text-text-muted text-[10px] sm:text-xs ml-1">יחידות</span>
+                      <span className="text-text-muted text-[10px] sm:text-xs me-1">יחידות</span>
                       <span className="font-semibold text-text-primary">
                         {formatNumber(bucket.totalUnits, 0)}
                       </span>
                     </div>
                     <div className="hidden sm:block">
-                      <span className="text-text-muted text-[10px] sm:text-xs ml-1">ברוטו</span>
+                      <span className="text-text-muted text-[10px] sm:text-xs me-1">ברוטו</span>
                       <span className="font-semibold text-text-primary">
                         CAD {formatCurrency(bucket.totalRevenue)}
                       </span>
                     </div>
                     {bucket.hasNet && bucket.totalNetRevenue !== null && (
                       <div className="hidden md:block" title="הכנסה אחרי הנחות והחזרים">
-                        <span className="text-text-muted text-[10px] sm:text-xs ml-1">נטו</span>
+                        <span className="text-text-muted text-[10px] sm:text-xs me-1">נטו</span>
                         <span className="font-semibold text-roas-green">
                           CAD {formatCurrency(bucket.totalNetRevenue)}
                         </span>
@@ -839,11 +839,11 @@ function SummaryCard({
         <div className="mt-3 pt-3 border-t border-border/60 flex items-center justify-between gap-3 flex-wrap text-[10px] sm:text-xs text-text-muted tabular-nums">
           <span>
             ממוצע ליום:
-            <span className="text-text-secondary font-medium mr-1">
+            <span className="text-text-secondary font-medium ms-1">
               {formatNumber(summary.avgUnitsPerDay, 1)}
             </span>
             יחידות ·
-            <span className="text-text-secondary font-medium mr-1">
+            <span className="text-text-secondary font-medium ms-1">
               CAD {formatCurrency(summary.avgGrossPerDay)}
             </span>
             ברוטו

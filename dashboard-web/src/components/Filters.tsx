@@ -83,7 +83,7 @@ export function Filters({ filters, stores, onChange }: Props) {
               <select
                 value={filters.store}
                 onChange={e => onChange({ ...filters, store: e.target.value })}
-                className="w-full appearance-none rounded-lg border border-border bg-surface pl-3 pr-9 py-2.5 sm:py-2 text-sm font-medium text-text-primary hover:border-borderStrong focus:outline-none focus:border-primary focus:shadow-focus transition-colors cursor-pointer"
+                className="w-full appearance-none rounded-lg border border-border bg-surface ps-3 pe-9 py-2.5 sm:py-2 text-sm font-medium text-text-primary hover:border-borderStrong focus:outline-none focus:border-primary focus:shadow-focus transition-colors cursor-pointer"
               >
                 <option value="All">כל החנויות</option>
                 {stores.map(s => (
@@ -94,7 +94,7 @@ export function Filters({ filters, stores, onChange }: Props) {
               </select>
               <ChevronDown
                 size={14}
-                className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-text-muted"
+                className="pointer-events-none absolute end-2.5 top-1/2 -translate-y-1/2 text-text-muted"
               />
             </div>
           </div>

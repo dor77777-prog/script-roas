@@ -144,7 +144,7 @@ export function GoalTracker({ data }: Props) {
         </div>
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
-            <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-text-muted font-medium">
+            <span className="absolute start-3 top-1/2 -translate-y-1/2 text-xs text-text-muted font-medium">
               CAD
             </span>
             <input
@@ -164,7 +164,7 @@ export function GoalTracker({ data }: Props) {
               autoFocus
               aria-invalid={editError != null || draftIsInvalid}
               className={cn(
-                'w-full rounded-lg border bg-surface pl-3 pr-12 py-2 text-sm focus:outline-none focus:shadow-focus',
+                'w-full rounded-lg border bg-surface pe-3 ps-12 py-2 text-sm focus:outline-none focus:shadow-focus',
                 editError != null || draftIsInvalid
                   ? 'border-amber-500 focus:border-amber-600'
                   : 'border-border focus:border-primary',
@@ -260,7 +260,7 @@ export function GoalTracker({ data }: Props) {
               נצבר עד כה
             </div>
             <div className="text-base sm:text-lg font-bold tabular-nums text-text-primary mt-0.5">
-              <span className="text-[10px] text-text-muted font-medium ml-1">CAD</span>
+              <span className="text-[10px] text-text-muted font-medium me-1">CAD</span>
               {Math.round(forecast.monthToDateRevenue).toLocaleString('he-IL')}
             </div>
             <div className="text-[10px] sm:text-[11px] text-text-muted tabular-nums mt-0.5">
@@ -272,7 +272,7 @@ export function GoalTracker({ data }: Props) {
               יעד החודש
             </div>
             <div className="text-base sm:text-lg font-bold tabular-nums text-text-primary mt-0.5">
-              <span className="text-[10px] text-text-muted font-medium ml-1">CAD</span>
+              <span className="text-[10px] text-text-muted font-medium me-1">CAD</span>
               {goal!.toLocaleString('he-IL')}
             </div>
             <div className="text-[10px] sm:text-[11px] text-text-muted tabular-nums mt-0.5">
@@ -285,7 +285,7 @@ export function GoalTracker({ data }: Props) {
               חיזוי סוף חודש
             </div>
             <div className="text-base sm:text-lg font-bold tabular-nums text-text-primary mt-0.5">
-              <span className="text-[10px] text-text-muted font-medium ml-1">CAD</span>
+              <span className="text-[10px] text-text-muted font-medium me-1">CAD</span>
               {Math.round(forecast.projectedRevenue).toLocaleString('he-IL')}
             </div>
             <div className="text-[10px] sm:text-[11px] text-text-muted tabular-nums mt-0.5">
