@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
 import {
   AlertCircle,
@@ -1147,11 +1147,11 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
             <table className="w-full text-xs sm:text-sm min-w-[1340px]">
               <thead className="sticky top-0 z-[5] bg-surface">
                 <tr className="text-text-secondary border-b border-borderSubtle bg-surfaceMuted/40">
-                  <th
+                  <ColumnHeaderTh
                     className="px-3 py-2 w-[36px]"
-                    aria-label="סימון אופטימיזציה"
-                    data-col-id="optimized"
-                    title="צ׳קבוקס לסימון קמפיינים שאתה מבצע בהם אופטימיזציה פעילה (מעקב אישי). לא משפיע על חישובים — רק עוזר לזכור איפה אתה בעבודה."
+                    ariaLabel="סימון אופטימיזציה"
+                    dataColId="optimized"
+                    tooltip="צ׳קבוקס לסימון קמפיינים שאתה מבצע בהם אופטימיזציה פעילה (מעקב אישי). לא משפיע על חישובים — רק עוזר לזכור איפה אתה בעבודה."
                   />
                   <SortHeader
                     label={mode === 'campaign' ? 'קמפיין' : 'אד-סט'}
@@ -1228,18 +1228,16 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                       (source/click-id) revenue divided by this campaign's
                       spend. Together with ROAS Shopify (combined) and ROAS
                       (platform claim) gives 3 angles on the same metric. */}
-                  <th
+                  <ColumnHeaderTh
                     className="px-3 py-2 text-center font-medium text-text-secondary w-[100px]"
-                    data-col-id="roasShopifyPlatform"
+                    dataColId="roasShopifyPlatform"
+                    tooltip="ROAS Shopify מבוסס רק על הזמנות שסווגו דטרמיניסטית לפלטפורמה הזו דרך source / click-id (ttclid, fbclid, gclid, utm_source). נוסחה: deterministicRevenue ÷ הוצאה. אין fallback פרופורציונלי — רק מה שאנחנו יכולים להוכיח. ROAS גבוה כאן = הקמפיין מייצר מכירות שאפשר לייחס אליו בוודאות."
                   >
-                    <span
-                      className="inline-flex flex-col items-center leading-tight"
-                      title="ROAS Shopify מבוסס רק על הזמנות שסווגו דטרמיניסטית לפלטפורמה הזו (deterministicRevenue / spend). ללא fallback פרופורציונלי, רק מה שאנחנו יכולים להוכיח."
-                    >
+                    <span className="inline-flex flex-col items-center leading-tight">
                       <span>ROAS Shopify</span>
                       <span className="text-[9px] text-text-muted font-normal">פלטפורמה</span>
                     </span>
-                  </th>
+                  </ColumnHeaderTh>
                   {/* Phase 05.7.9b — 4 Shopify columns (was 2):
                       (1) ערך / פלטפורמה — deterministic per-platform (orders
                           classified to THIS row's platform via source/click-id)
@@ -1250,42 +1248,46 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                           serves as a denominator)
                       (4) יח' / סה"כ — same, units
                       Not sortable — sort via 'ROAS Shopify'. */}
-                  <th className="px-3 py-2 text-end font-medium text-text-secondary w-[92px] border-e border-borderSubtle" data-col-id="shopifyValuePlatform">
-                    <span
-                      className="inline-flex flex-col items-end leading-tight"
-                      title="ערך המכירות שסווגו דטרמיניסטית לפלטפורמה הזו דרך source/click-id ב-Shopify (utm_source, ttclid, fbclid, gclid). רק הזמנות שאנחנו בטוחים שהן מהפלטפורמה הזו."
-                    >
+                  <ColumnHeaderTh
+                    className="px-3 py-2 text-end font-medium text-text-secondary w-[92px] border-e border-borderSubtle"
+                    dataColId="shopifyValuePlatform"
+                    tooltip="ערך המכירות (CAD) שסווגו דטרמיניסטית לפלטפורמה הזו דרך source / click-id ב-Shopify (utm_source, ttclid, fbclid, gclid). רק הזמנות שאנחנו 100% בטוחים שהן מהפלטפורמה הזו — בלי הקצאה פרופורציונלית. זה מה שאפשר להוכיח."
+                  >
+                    <span className="inline-flex flex-col items-end leading-tight">
                       <span>ערך Shopify</span>
                       <span className="text-[9px] text-text-muted font-normal">פלטפורמה</span>
                     </span>
-                  </th>
-                  <th className="px-3 py-2 text-end font-medium text-text-secondary w-[78px] border-e border-borderSubtle" data-col-id="shopifyUnitsPlatform">
-                    <span
-                      className="inline-flex flex-col items-end leading-tight"
-                      title="יחידות שנמכרו ב-Shopify מהזמנות שסווגו דטרמיניסטית לפלטפורמה הזו. רק הזמנות עם source/click-id ברור."
-                    >
+                  </ColumnHeaderTh>
+                  <ColumnHeaderTh
+                    className="px-3 py-2 text-end font-medium text-text-secondary w-[78px] border-e border-borderSubtle"
+                    dataColId="shopifyUnitsPlatform"
+                    tooltip="מספר היחידות שנמכרו ב-Shopify מהזמנות שסווגו דטרמיניסטית לפלטפורמה הזו. סופר units (line_items.quantity) — לא orders. רק הזמנות עם source / click-id ברור."
+                  >
+                    <span className="inline-flex flex-col items-end leading-tight">
                       <span>יח&apos; Shopify</span>
                       <span className="text-[9px] text-text-muted font-normal">פלטפורמה</span>
                     </span>
-                  </th>
-                  <th className="px-3 py-2 text-end font-medium text-text-secondary w-[92px]" data-col-id="shopifyValueTotal">
-                    <span
-                      className="inline-flex flex-col items-end leading-tight"
-                      title="סך ערך המכירות ב-Shopify של המוצרים המשויכים בטווח הנבחר, בלי קשר לפלטפורמה (כולל direct, organic, ופלטפורמות אחרות). זהו המכנה האמיתי."
-                    >
+                  </ColumnHeaderTh>
+                  <ColumnHeaderTh
+                    className="px-3 py-2 text-end font-medium text-text-secondary w-[92px]"
+                    dataColId="shopifyValueTotal"
+                    tooltip="סך ערך המכירות (CAD) ב-Shopify של המוצרים המשויכים בטווח הנבחר, בלי קשר לפלטפורמה (כולל direct, organic, ופלטפורמות אחרות). זהו ה״מכנה״ — מסגרת הייחוס לכמה מהמכירות הגיעו דרך הקמפיין הזה."
+                  >
+                    <span className="inline-flex flex-col items-end leading-tight">
                       <span>ערך Shopify</span>
                       <span className="text-[9px] text-text-muted font-normal">סה&quot;כ</span>
                     </span>
-                  </th>
-                  <th className="px-3 py-2 text-end font-medium text-text-secondary w-[78px]" data-col-id="shopifyUnitsTotal">
-                    <span
-                      className="inline-flex flex-col items-end leading-tight"
-                      title="סך היחידות שנמכרו ב-Shopify של המוצרים המשויכים בטווח הנבחר, בלי קשר לפלטפורמה. זהו המכנה האמיתי."
-                    >
+                  </ColumnHeaderTh>
+                  <ColumnHeaderTh
+                    className="px-3 py-2 text-end font-medium text-text-secondary w-[78px]"
+                    dataColId="shopifyUnitsTotal"
+                    tooltip="סך היחידות שנמכרו ב-Shopify של המוצרים המשויכים בטווח הנבחר, בלי קשר לפלטפורמה. ה״מכנה״ ל-יח׳ פלטפורמה ממש כמו ש-ערך סה״כ הוא המכנה ל-ערך פלטפורמה."
+                  >
+                    <span className="inline-flex flex-col items-end leading-tight">
                       <span>יח&apos; Shopify</span>
                       <span className="text-[9px] text-text-muted font-normal">סה&quot;כ</span>
                     </span>
-                  </th>
+                  </ColumnHeaderTh>
                   <SortHeader
                     label="המרות"
                     sortKey="conversions"
@@ -1341,11 +1343,11 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     dataColId="cpa"
                     tooltip="Cost Per Acquisition — כמה עלתה לך כל המרה. נוסחה: הוצאה ÷ המרות. ב-CAD. בריא אם CPA קטן מהרווח הממוצע למוצר. מתבסס על ספירת ההמרות של הפלטפורמה — לא של Shopify."
                   />
-                  <th
+                  <ColumnHeaderTh
                     className="px-2 py-2 text-center font-medium w-[40px]"
-                    aria-label="פעולות"
-                    data-col-id="deepLink"
-                    title="לחיצה על אייקון הקישור פותחת את הקמפיין ישירות במנהל המודעות של הפלטפורמה (Meta Ads Manager / Google Ads / TikTok Ads Manager) בטאב חדש."
+                    ariaLabel="פעולות"
+                    dataColId="deepLink"
+                    tooltip="לחיצה על אייקון הקישור פותחת את הקמפיין ישירות במנהל המודעות של הפלטפורמה (Meta Ads Manager / Google Ads / TikTok Ads Manager) בטאב חדש."
                   />
                 </tr>
               </thead>
@@ -1537,6 +1539,95 @@ function AttributionGapPanel({
 }
 
 /**
+ * Styled column-header tooltip. Wraps a <th> so hovering the cell pops a
+ * dark RTL-aware card explaining the metric. Replaces the native `title=`
+ * attribute (slow appearance + ugly OS chrome) with the same look used by
+ * MetricHelp elsewhere in the dashboard.
+ *
+ * Behavior:
+ *   - 180ms enter delay so accidental flyovers don't flash a tooltip.
+ *   - Cancels the timeout on early mouse-leave.
+ *   - Renders nothing if `tooltip` is undefined / empty — keeps icon-only
+ *     header cells with no help-text from getting a stray relative wrapper.
+ *   - Anchors to end-0 (start edge in RTL) and z-[15] so it floats above
+ *     the row body (auto stacking) but below TabNav (z-20) and Header
+ *     (z-30) — same ladder established in the stacking-bug fix.
+ *   - `pointer-events-none` keeps the popover from intercepting the
+ *     header's sort-click target.
+ */
+function ColumnHeaderTh({
+  tooltip,
+  className,
+  dataColId,
+  ariaLabel,
+  children,
+}: {
+  tooltip?: string;
+  className?: string;
+  dataColId?: string;
+  ariaLabel?: string;
+  children?: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const timeoutRef = useRef<number | null>(null);
+
+  const cancel = () => {
+    if (timeoutRef.current !== null) {
+      window.clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  };
+
+  const handleEnter = () => {
+    if (!tooltip) return;
+    cancel();
+    timeoutRef.current = window.setTimeout(() => setOpen(true), 180);
+  };
+  const handleLeave = () => {
+    cancel();
+    setOpen(false);
+  };
+
+  // Clean up the pending timeout if the row unmounts mid-hover (date-range
+  // swap, store filter change, etc.) — otherwise the setTimeout would fire
+  // setState on an unmounted component → React warning + leak.
+  useEffect(() => cancel, []);
+
+  return (
+    <th
+      className={cn('relative', className)}
+      data-col-id={dataColId}
+      aria-label={ariaLabel}
+      onMouseEnter={handleEnter}
+      onMouseLeave={handleLeave}
+      onFocus={handleEnter}
+      onBlur={handleLeave}
+    >
+      {children}
+      {open && tooltip && (
+        <span
+          role="tooltip"
+          dir="rtl"
+          className={cn(
+            'absolute z-[15] top-full mt-2 end-0',
+            'w-[260px] sm:w-[280px] max-w-[min(85vw,300px)]',
+            'rounded-xl bg-text-primary text-white px-3 py-2.5',
+            'shadow-elevated text-[11px] sm:text-[12px] leading-relaxed',
+            'pointer-events-none animate-fade-in font-normal text-start whitespace-normal',
+          )}
+        >
+          {tooltip}
+          <span
+            aria-hidden
+            className="absolute -top-1 end-4 w-2 h-2 bg-text-primary rotate-45"
+          />
+        </span>
+      )}
+    </th>
+  );
+}
+
+/**
  * Sortable column header. Renders the label + a sort-direction caret, and
  * is clickable to switch sort. Visually subtle when the column isn't the
  * active sort, prominent (primary color + bold) when it is.
@@ -1562,9 +1653,8 @@ function SortHeader({
   /** Phase 05.7.9d — column ID for the visibility prefs. The CSS
    *  generated by buildHiddenColumnsCss matches this attribute. */
   dataColId?: string;
-  /** Native browser tooltip explaining what the column means + how it's
-   *  computed. Mirrors the title= pattern used on the manual Shopify
-   *  <th> blocks elsewhere in this file. */
+  /** Styled hover-popover tooltip explaining the metric. Rendered via
+   *  ColumnHeaderTh (replaces the previous native title= attribute). */
   tooltip?: string;
 }) {
   const isActive = sortKey === activeKey;
@@ -1573,7 +1663,11 @@ function SortHeader({
   const textAlign =
     align === 'start' ? 'text-start' : align === 'end' ? 'text-end' : 'text-center';
   return (
-    <th className={cn('font-medium', textAlign, className)} data-col-id={dataColId} title={tooltip}>
+    <ColumnHeaderTh
+      className={cn('font-medium', textAlign, className)}
+      dataColId={dataColId}
+      tooltip={tooltip}
+    >
       <button
         type="button"
         onClick={() => onClick(sortKey)}
@@ -1598,7 +1692,7 @@ function SortHeader({
           <ArrowUpDown size={12} className="text-text-subtle opacity-0 group-hover:opacity-100 transition-opacity" />
         )}
       </button>
-    </th>
+    </ColumnHeaderTh>
   );
 }
 
