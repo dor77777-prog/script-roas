@@ -110,6 +110,15 @@ export type GoogleAdsAdGroupRow = {
   clicks: number;
   conversions: number;
   conversionValue: number;
+  /** Phase 05.7.x — Google Ads campaign + ad_group `status`. Possible
+   *  values: ENABLED / PAUSED / REMOVED. Ad-group status when available
+   *  (more specific — an ENABLED campaign can hold PAUSED ad_groups);
+   *  campaign-level falls back when the row was synthesised from a
+   *  Shopping/PMax campaign-level aggregate (no ad_group). null when
+   *  the field was missing on the wire (defensive — Google reliably
+   *  returns it). Used by the dashboard's "כבוי" chip so a real PAUSED
+   *  status fires without waiting 2 days for the lastActiveDate heuristic. */
+  effectiveStatus: string | null;
 };
 
 /**
@@ -369,8 +378,15 @@ export async function fetchGoogleAdsAdGroupInsights(
   const accessToken = await getAccessToken(storeId);
 
   // 1) Ad-group query (granular when available).
+  // Phase 05.7.x — added campaign.status + ad_group.status so the
+  // dashboard's "כבוי" chip can fire on the real Google Ads status
+  // instead of waiting 2 days for the lastActiveDate heuristic to
+  // catch up. Status is current-at-fetch-time (no per-day dimension);
+  // GAQL returns the same value for every segmented row of that
+  // campaign / ad-group, which is fine for our daily upsert.
   const adGroupQuery =
-    'SELECT campaign.id, campaign.name, ad_group.id, ad_group.name, ' +
+    'SELECT campaign.id, campaign.name, campaign.status, ' +
+    'ad_group.id, ad_group.name, ad_group.status, ' +
     'metrics.cost_micros, metrics.impressions, metrics.clicks, ' +
     'metrics.conversions, metrics.conversions_value, customer.currency_code ' +
     `FROM ad_group WHERE segments.date = '${dateStr}'`;
@@ -384,7 +400,7 @@ export async function fetchGoogleAdsAdGroupInsights(
 
   // 2) Campaign query (always-accurate totals — used for Shopping/PMax fallback).
   const campaignQuery =
-    'SELECT campaign.id, campaign.name, ' +
+    'SELECT campaign.id, campaign.name, campaign.status, ' +
     'metrics.cost_micros, metrics.impressions, metrics.clicks, ' +
     'metrics.conversions, metrics.conversions_value, customer.currency_code ' +
     `FROM campaign WHERE segments.date = '${dateStr}'`;
@@ -406,8 +422,16 @@ export async function fetchGoogleAdsAdGroupInsights(
     const customer = (r.customer ?? {}) as { currencyCode?: string };
     if (customer.currencyCode) currency = customer.currencyCode;
 
-    const campaign = (r.campaign ?? {}) as { id?: string | number; name?: string };
-    const adGroup = (r.adGroup ?? {}) as { id?: string | number; name?: string };
+    const campaign = (r.campaign ?? {}) as {
+      id?: string | number;
+      name?: string;
+      status?: string;
+    };
+    const adGroup = (r.adGroup ?? {}) as {
+      id?: string | number;
+      name?: string;
+      status?: string;
+    };
     const metrics = (r.metrics ?? {}) as {
       costMicros?: string;
       impressions?: string;
@@ -425,6 +449,10 @@ export async function fetchGoogleAdsAdGroupInsights(
     }
     const bucket = adGroupByCampaign.get(cid)!;
     bucket.activity += spend + impressions;
+    // Phase 05.7.x — prefer ad-group status (more specific) and fall
+    // back to campaign status. Empty string normalised to null so the
+    // downstream off-chip can use a single nullish check.
+    const status = (adGroup.status || campaign.status || '').trim() || null;
     bucket.rows.push({
       campaignId: cid,
       campaignName: campaign.name ?? '',
@@ -436,6 +464,7 @@ export async function fetchGoogleAdsAdGroupInsights(
       clicks: parseInt(metrics.clicks ?? '0', 10) || 0,
       conversions: parseFloat(metrics.conversions ?? '0') || 0,
       conversionValue: parseFloat(metrics.conversionsValue ?? '0') || 0,
+      effectiveStatus: status,
     });
   }
 
@@ -448,7 +477,11 @@ export async function fetchGoogleAdsAdGroupInsights(
     const customer = (cr.customer ?? {}) as { currencyCode?: string };
     if (customer.currencyCode) currency = customer.currencyCode;
 
-    const campaign = (cr.campaign ?? {}) as { id?: string | number; name?: string };
+    const campaign = (cr.campaign ?? {}) as {
+      id?: string | number;
+      name?: string;
+      status?: string;
+    };
     const metrics = (cr.metrics ?? {}) as {
       costMicros?: string;
       impressions?: string;
@@ -481,6 +514,9 @@ export async function fetchGoogleAdsAdGroupInsights(
         clicks: parseInt(metrics.clicks ?? '0', 10) || 0,
         conversions: parseFloat(metrics.conversions ?? '0') || 0,
         conversionValue: parseFloat(metrics.conversionsValue ?? '0') || 0,
+        // Shopping/PMax fallback path — no ad-group exists, use the
+        // campaign-level status directly.
+        effectiveStatus: (campaign.status || '').trim() || null,
       });
     }
   }

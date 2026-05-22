@@ -32,6 +32,17 @@ export type Aggregated = {
    * survive existing filters, but we can't infer "was active" from those).
    */
   lastActiveDate: string | null;
+  /**
+   * Phase 05.7.x — platform-native effective status (Meta PAUSED / ACTIVE,
+   * Google ENABLED / PAUSED, TikTok ADGROUP_STATUS_DISABLE / DELIVERY_OK).
+   * Surfaced into the aggregate as the LATEST non-null value across rows
+   * by date — status is current-at-fetch-time and doesn't actually vary
+   * per day, but late-arriving rows from cronDaily can backfill a NULL.
+   * Used by CampaignsTableRow to drive the "כבוי" chip on real status
+   * instead of the 2-day lastActiveDate heuristic; falls back to the
+   * heuristic when this is null (old data / fetcher soft-failed).
+   */
+  effectiveStatus: string | null;
 };
 
 export function aggregate(
@@ -48,6 +59,10 @@ export function aggregate(
   const latestBudgetDate = new Map<string, string>();
   const latestAdSetBudgetDate = new Map<string, string>();
   const latestBudgetTypeDate = new Map<string, string>();
+  // Phase 05.7.x — same chronologically-latest-wins policy as the
+  // budget trackers above, for effective_status. Status is current-at-
+  // fetch-time so the LATEST date's row is the authoritative state.
+  const latestEffectiveStatusDate = new Map<string, string>();
   for (const r of rows) {
     if (r.date < range.from || r.date > range.to) continue;
     // IN-07 (5.2.2.1, deferred): storeFilter is matched by DISPLAY NAME
@@ -86,10 +101,12 @@ export function aggregate(
         adSetBudgetCad: mode === 'adset' ? r.adSetBudgetCad : null,
         budgetType: r.budgetType,
         lastActiveDate: null,
+        effectiveStatus: r.effectiveStatus,
       });
       if (r.campaignBudgetCad != null) latestBudgetDate.set(key, r.date);
       if (mode === 'adset' && r.adSetBudgetCad != null) latestAdSetBudgetDate.set(key, r.date);
       if (r.budgetType) latestBudgetTypeDate.set(key, r.date);
+      if (r.effectiveStatus) latestEffectiveStatusDate.set(key, r.date);
     }
     const a = map.get(key)!;
     a.spend += r.spend;
@@ -135,6 +152,17 @@ export function aggregate(
       if (!prev || r.date > prev) {
         a.budgetType = r.budgetType;
         latestBudgetTypeDate.set(key, r.date);
+      }
+    }
+    // Phase 05.7.x — chronologically-latest effective_status wins.
+    // Skip null rows so a late-arriving NULL can't clobber a known
+    // status from an earlier write (the column was added by migration
+    // 20260522180000; rows persisted before that day return null).
+    if (r.effectiveStatus) {
+      const prev = latestEffectiveStatusDate.get(key);
+      if (!prev || r.date > prev) {
+        a.effectiveStatus = r.effectiveStatus;
+        latestEffectiveStatusDate.set(key, r.date);
       }
     }
   }

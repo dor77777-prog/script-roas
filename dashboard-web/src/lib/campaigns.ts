@@ -32,6 +32,19 @@ export type CampaignRow = {
   /** Budget allocation type. 'CBO' = campaign owns budget. 'ABO' = ad-set
    *  owns budget. '' / undefined = unknown (paused / lifetime-only / Google). */
   budgetType: 'CBO' | 'ABO' | '';
+  /**
+   * Phase 05.7.x — platform-native effective status fetched alongside
+   * insights:
+   *   Meta:   ACTIVE / PAUSED / CAMPAIGN_PAUSED / ARCHIVED / ADSET_PAUSED / ...
+   *   Google: ENABLED / PAUSED / REMOVED
+   *   TikTok: ADGROUP_STATUS_DELIVERY_OK / ADGROUP_STATUS_DISABLE / ...
+   * NULL = unknown (older row written before the column existed, or the
+   *   platform's status fetcher soft-failed). The dashboard's "כבוי" chip
+   *   uses this when present and falls back to the 2-day lastActiveDate
+   *   heuristic when null, so existing rows keep working until the next
+   *   cron tick backfills the field.
+   */
+  effectiveStatus: string | null;
 };
 
 /** Must match the IDs in Apps Script Config.gs STORES. */
@@ -156,6 +169,11 @@ export async function fetchCampaignsData(opts?: { range?: DateRange }): Promise<
         campaignBudgetCad,
         adSetBudgetCad,
         budgetType,
+        // Phase 05.7.x — the Sheets schema doesn't carry effective_status
+        // (the new column lives in Postgres only). The Sheets path is a
+        // pre-Phase-05.7 fallback that should rarely run in production;
+        // null here means the UI falls back to lastActiveDate heuristic.
+        effectiveStatus: null,
       });
     }
   }

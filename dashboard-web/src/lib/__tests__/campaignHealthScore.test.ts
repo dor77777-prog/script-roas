@@ -29,6 +29,7 @@ function makeAggregated(patch: Partial<Aggregated> = {}): Aggregated {
     adSetBudgetCad: null,
     budgetType: 'CBO',
     lastActiveDate: '2026-05-22',
+    effectiveStatus: null,
     ...patch,
   };
 }

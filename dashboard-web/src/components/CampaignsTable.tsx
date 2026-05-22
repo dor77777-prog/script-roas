@@ -60,7 +60,7 @@ import type { DateRange } from '@/lib/types';
 import { buildDateRangeKey, getPreviousPeriod } from '@/lib/dateRange';
 import { roasLabel } from '@/lib/analytics';
 import { useCampaignTrueRevenue } from '@/lib/hooks/useCampaignTrueRevenue';
-import { CampaignsTableRow, isCampaignCurrentlyOff } from './CampaignsTableRow';
+import { CampaignsTableRow, isCampaignOff } from './CampaignsTableRow';
 import { CampaignDrawer } from './CampaignDrawer';
 import { AdsDrawer } from './AdsDrawer';
 
@@ -465,7 +465,11 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       const series = dailyByCampaign.get(a.key);
       const trajectory =
         series && series.length >= 5 ? analyzeCpmVsRoas(series) : undefined;
-      const isOff = isCampaignCurrentlyOff(a.lastActiveDate, today);
+      // Phase 05.7.x — feeds the Health Score's operator-flag component.
+      // Uses real effective_status when available, lastActiveDate fallback
+      // when not — same precedence as the row's off-chip so the score and
+      // the chip always agree on whether a campaign is "currently off".
+      const isOff = isCampaignOff(a.effectiveStatus, a.platform, a.lastActiveDate, today);
       const isOpt = optimized.has(a.key);
       out.set(
         a.key,

@@ -472,6 +472,13 @@ export async function runDailyForStore(
           let bt: 'CBO' | 'ABO' | '' = '';
           if (campaignBudgetRaw > 0) bt = 'CBO';
           else if (adSetBudgetRaw > 0) bt = 'ABO';
+          // Phase 05.7.x — pick the most specific effective_status:
+          // ad-set first (an ACTIVE Meta campaign can hold an
+          // ADSET_PAUSED ad-set; the operator's "this is off" intuition
+          // tracks the ad-set state), fall back to campaign level.
+          const adSetStatus = aBud?.effectiveStatus ?? null;
+          const campaignStatus = cBud?.effectiveStatus ?? null;
+          const effectiveStatus = adSetStatus ?? campaignStatus;
           return {
             date: dateStr,
             store_id: storeId,
@@ -502,6 +509,10 @@ export async function runDailyForStore(
             // Empty string '' stays in the DB; `postgresReaders.fetchCampaigns`
             // already normalizes '' / null / undefined → '' (campaigns.ts:135).
             budget_type: bt,
+            // Phase 05.7.x — Meta effective_status (PAUSED / ACTIVE / etc).
+            // Migration 20260522180000 added the column; NULL when the
+            // budgets fetch soft-failed.
+            effective_status: effectiveStatus,
           };
         }),
       );
@@ -539,6 +550,11 @@ export async function runDailyForStore(
         campaign_budget_cad: null,
         ad_set_budget_cad: null,
         budget_type: null,
+        // Phase 05.7.x — Google Ads status (ENABLED / PAUSED / REMOVED).
+        // Fetcher prefers ad_group.status, falls back to campaign.status
+        // (for Shopping/PMax campaign-level aggregates). NULL only when
+        // both fields were missing on the wire (defensive).
+        effective_status: r.effectiveStatus ?? null,
       }));
       const { error } = await admin
         .from('campaigns_daily')
@@ -658,6 +674,10 @@ export async function runDailyForStore(
         conversions: number;
         conversionValue: number;
         currency: string;
+        /** Phase 05.7.x — TikTok ad-group secondary_status (all rows of
+         *  the same ad-group carry the same status; we keep the first
+         *  non-null seen while folding). */
+        effectiveStatus: string | null;
       };
       const byCampaign = new Map<CampaignAggKey, CampaignAgg>();
       for (const ad of tiktok.adRows) {
@@ -669,6 +689,12 @@ export async function runDailyForStore(
           existing.clicks += ad.clicks;
           existing.conversions += ad.conversions;
           existing.conversionValue += ad.conversionValue;
+          // Status is ad-group-level; first non-null wins (all ads of
+          // the same ad-group share the value, so picking later wouldn't
+          // change anything in practice — first-wins is just simpler).
+          if (!existing.effectiveStatus && ad.effectiveStatus) {
+            existing.effectiveStatus = ad.effectiveStatus;
+          }
         } else {
           byCampaign.set(key, {
             campaign_id: ad.campaignId,
@@ -681,6 +707,7 @@ export async function runDailyForStore(
             conversions: ad.conversions,
             conversionValue: ad.conversionValue,
             currency: ad.currency,
+            effectiveStatus: ad.effectiveStatus,
           });
         }
       }
@@ -705,6 +732,10 @@ export async function runDailyForStore(
           campaign_budget_cad: null,
           ad_set_budget_cad: null,
           budget_type: null,
+          // Phase 05.7.x — TikTok ad-group status (ADGROUP_STATUS_DISABLE,
+          // ADGROUP_STATUS_DELIVERY_OK, etc). Source: /open_api/v1.3/adgroup/get/
+          // via fetchTikTokAdGroupStatuses, merged into TikTokAdRow by adGroupId.
+          effective_status: agg.effectiveStatus,
         })),
       );
       const { error } = await admin

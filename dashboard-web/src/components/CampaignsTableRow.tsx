@@ -121,6 +121,47 @@ export function isCampaignCurrentlyOff(lastActiveDate: string | null, today: str
   return lastActiveDate < threshold;
 }
 
+/**
+ * Phase 05.7.x — "is this campaign currently off?" using the platform's
+ * real effective_status when available, falling back to FIX-26's date
+ * heuristic when status is null (older data, status fetcher soft-failed,
+ * or Sheets path).
+ *
+ * Active state per platform (anything else → off):
+ *   Meta:   'ACTIVE'
+ *   Google: 'ENABLED'
+ *   TikTok: 'ADGROUP_STATUS_DELIVERY_OK'
+ *
+ * This is the signal the dashboard's "כבוי" chip now consumes — replaces
+ * the previous 2-day blanket buffer so a campaign paused 1 hour ago lights
+ * up the chip on the next cron tick (or next manual refresh) instead of
+ * waiting 2 full days for the heuristic to catch up.
+ */
+export function isCampaignOff(
+  effectiveStatus: string | null,
+  platform: string,
+  lastActiveDate: string | null,
+  today: string,
+): boolean {
+  if (effectiveStatus) {
+    const norm = effectiveStatus.trim().toUpperCase();
+    const platformNorm = (platform || '').toLowerCase();
+    switch (platformNorm) {
+      case 'meta':
+        return norm !== 'ACTIVE';
+      case 'google':
+        return norm !== 'ENABLED';
+      case 'tiktok':
+        return norm !== 'ADGROUP_STATUS_DELIVERY_OK';
+      default:
+        // Unknown platform name — fall through to the date heuristic
+        // rather than risk a false-positive on an unmapped status.
+        break;
+    }
+  }
+  return isCampaignCurrentlyOff(lastActiveDate, today);
+}
+
 /** Format YYYY-MM-DD as DD/MM for the off-chip tooltip text. */
 function formatLastActiveDate(iso: string): string {
   return `${iso.slice(8, 10)}/${iso.slice(5, 7)}`;
@@ -143,7 +184,9 @@ export function CampaignsTableRow({
   // is older than today − OFF_RECENCY_DAYS. The row still appears in the
   // table on the merits of its in-range performance — the chip only adds
   // a visual signal that the operator is looking at historical data.
-  const isCurrentlyOff = isCampaignCurrentlyOff(a.lastActiveDate, today);
+  // Phase 05.7.x — prefer the platform's real effective_status; fall back
+  // to FIX-26's lastActiveDate heuristic when status is unknown.
+  const isCurrentlyOff = isCampaignOff(a.effectiveStatus, a.platform, a.lastActiveDate, today);
   const roas = a.spend > 0 ? a.conversionValue / a.spend : 0;
   const ctr = a.impressions > 0 ? a.clicks / a.impressions : 0;
   const cpc = a.clicks > 0 ? a.spend / a.clicks : 0;

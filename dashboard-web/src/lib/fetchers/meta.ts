@@ -152,6 +152,17 @@ export type MetaBudgets = {
       lifetimeBudget: number;
       /** e.g. 'LOWEST_COST_WITHOUT_CAP', 'COST_CAP', '' when unset. */
       bidStrategy: string | null;
+      /** Phase 05.7.x — Meta effective_status, the value Ads Manager
+       *  shows next to a campaign (ACTIVE / PAUSED / CAMPAIGN_PAUSED /
+       *  ARCHIVED / DELETED / IN_PROCESS / WITH_ISSUES / ADSET_PAUSED /
+       *  DISAPPROVED / PENDING_REVIEW / PREAPPROVED / PENDING_BILLING_INFO).
+       *  Already requested by the fields= query (line 680) — this field
+       *  now actually retains the value so the dashboard's "כבוי" chip
+       *  can fire on the real status instead of waiting 2 days for the
+       *  lastActiveDate heuristic to catch up. null when the campaign
+       *  was missing the field on the wire (rare; the API always returns
+       *  it on /campaigns). */
+      effectiveStatus: string | null;
     }
   >;
   /** adSetId → budgets + campaign membership. */
@@ -164,6 +175,13 @@ export type MetaBudgets = {
       lifetimeBudget: number;
       /** Parent campaign — used by the writer to look up the right CBO bucket. */
       campaignId: string;
+      /** Phase 05.7.x — same effective_status semantics as the campaign
+       *  bucket above, but at the ad-set level (the granularity
+       *  campaigns_daily writes against). Ad-set status is the more
+       *  specific signal — a campaign can be ACTIVE while one of its
+       *  ad-sets is ADSET_PAUSED, and the operator's "this campaign is
+       *  off" intuition usually maps to ad-set state. */
+      effectiveStatus: string | null;
     }
   >;
 };
@@ -699,6 +717,12 @@ export async function fetchMetaBudgets(storeId: string): Promise<MetaBudgets> {
         dailyBudget: toMajor(c.daily_budget),
         lifetimeBudget: toMajor(c.lifetime_budget),
         bidStrategy: c.bid_strategy || null,
+        // Phase 05.7.x — already requested via the fields= query above,
+        // previously discarded. Retain it so the dashboard can drive its
+        // "כבוי" chip from the real Meta status rather than the 2-day
+        // lastActiveDate heuristic. Empty string normalised to null so
+        // downstream consumers can use a single nullish check.
+        effectiveStatus: (c.effective_status || '').trim() || null,
       };
     }
     curl = body.paging?.next ?? null;
@@ -735,6 +759,12 @@ export async function fetchMetaBudgets(storeId: string): Promise<MetaBudgets> {
         dailyBudget: toMajor(a.daily_budget),
         lifetimeBudget: toMajor(a.lifetime_budget),
         campaignId: a.campaign_id || '',
+        // Phase 05.7.x — same retention as the campaign bucket above.
+        // Ad-set status is more specific than campaign status (an
+        // ACTIVE campaign can have an ADSET_PAUSED ad-set), so we
+        // record both granularities; cronDaily picks ad-set first and
+        // falls back to campaign when missing.
+        effectiveStatus: (a.effective_status || '').trim() || null,
       };
     }
     aurl = body.paging?.next ?? null;

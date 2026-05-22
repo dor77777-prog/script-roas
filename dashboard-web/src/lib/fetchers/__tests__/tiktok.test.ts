@@ -190,6 +190,23 @@ describe('tiktok fetcher — fetchTikTokAdInsights row shape', () => {
           },
         },
       },
+      // Phase 05.7.x — /adgroup/get/ statuses call. fetchTikTokAdInsights
+      // kicks this off in parallel with the report fetch (statusesPromise),
+      // so canneds are consumed in this order: info → adgroup/get → report.
+      // Two adgroup statuses returned so we can assert merge into rows.
+      {
+        body: {
+          code: 0,
+          message: 'OK',
+          data: {
+            list: [
+              { adgroup_id: 'AG1', secondary_status: 'ADGROUP_STATUS_DELIVERY_OK' },
+              { adgroup_id: 'AG2', secondary_status: 'ADGROUP_STATUS_DISABLE' },
+            ],
+            page_info: { total_page: 1, page: 1 },
+          },
+        },
+      },
       // report/integrated/get — 3 rows: real, late-attribution, drop-me
       {
         body: {
@@ -268,5 +285,10 @@ describe('tiktok fetcher — fetchTikTokAdInsights row shape', () => {
     expect(lateRow?.spend).toBe(0);
     expect(lateRow?.conversions).toBe(1);
     expect(lateRow?.conversionValue).toBe(25);
+    // Phase 05.7.x — adgroup statuses merged into rows by adgroup_id.
+    // AG1 → DELIVERY_OK (active), AG2 → DISABLE (paused by operator).
+    const ad1 = rows.find((r) => r.adId === 'AD1');
+    expect(ad1?.effectiveStatus).toBe('ADGROUP_STATUS_DELIVERY_OK');
+    expect(lateRow?.effectiveStatus).toBe('ADGROUP_STATUS_DISABLE');
   });
 });

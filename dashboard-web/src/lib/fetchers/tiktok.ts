@@ -77,6 +77,14 @@ export type TikTokAdRow = {
   conversions: number;
   /** Reported conversion value in advertiser currency; 0 when TikTok cannot attribute. */
   conversionValue: number;
+  /** Phase 05.7.x — TikTok ad-group `secondary_status` (campaign delivery
+   *  state at fetch time). Possible values: ADGROUP_STATUS_DELIVERY_OK,
+   *  ADGROUP_STATUS_DISABLE (paused), ADGROUP_STATUS_BUDGET_EXCEED,
+   *  ADGROUP_STATUS_TIMEDOUT, ADGROUP_STATUS_FROZEN, ADGROUP_STATUS_ARCHIVED,
+   *  ADGROUP_STATUS_DELETE, ADGROUP_STATUS_AUDIT, etc. Source:
+   *  /open_api/v1.3/adgroup/get/. Populated by fetchTikTokAdGroupStatuses
+   *  inside fetchTikTokAdInsights — same call site, additional API hop. */
+  effectiveStatus: string | null;
 };
 
 /**
@@ -305,12 +313,103 @@ export async function fetchTikTokSpendForDay(
  */
 const TIKTOK_PAGINATION_CAP = 50;
 
+/**
+ * Phase 05.7.x — pull ad-group `secondary_status` for every ad-group
+ * under this advertiser, returning a Map<adgroup_id, status>. Status
+ * values: ADGROUP_STATUS_DELIVERY_OK (delivering), ADGROUP_STATUS_DISABLE
+ * (paused by operator), ADGROUP_STATUS_BUDGET_EXCEED, ADGROUP_STATUS_TIMEDOUT,
+ * ADGROUP_STATUS_FROZEN, ADGROUP_STATUS_ARCHIVED, ADGROUP_STATUS_DELETE,
+ * ADGROUP_STATUS_AUDIT (in review), and several more.
+ *
+ * Two API hops because TikTok's /report/integrated/get/ does NOT carry
+ * delivery status — it's a metrics endpoint, not an entity endpoint. We
+ * separately query /adgroup/get/ which exposes the entity-level state.
+ * fetchTikTokAdInsights then merges the status into each TikTokAdRow by
+ * adgroup_id.
+ *
+ * Soft-fail: on any error we return an empty Map so the insights flow
+ * still completes (status is a nice-to-have signal; the spend / value
+ * data must not depend on it). Errors logged for the Inngest run log.
+ *
+ * Paginates with TikTok's `page` / `page_size` semantics — same shape
+ * as the report endpoint. 50-page cap (1000 ad-groups max for this
+ * advertiser, way above realistic counts).
+ */
+export async function fetchTikTokAdGroupStatuses(
+  storeId: string,
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  let advertiserId: string;
+  let accessToken: string;
+  try {
+    ({ advertiserId, accessToken } = getTikTokCreds(storeId));
+  } catch {
+    // No creds → no statuses. Caller already short-circuits via
+    // STORES_WITH_TIKTOK; reaching here is a soft-fail edge case.
+    return out;
+  }
+
+  type AdGroupRow = {
+    adgroup_id?: string | number;
+    secondary_status?: string;
+    operation_status?: string;
+  };
+  type ListPayload = {
+    list?: AdGroupRow[];
+    page_info?: { total_page?: number; page?: number };
+  };
+
+  let page = 1;
+  while (page <= TIKTOK_PAGINATION_CAP) {
+    let data: ListPayload;
+    try {
+      data = await tiktokGet<ListPayload>('/adgroup/get/', accessToken, {
+        advertiser_id: advertiserId,
+        fields: '["adgroup_id","secondary_status","operation_status"]',
+        page_size: '200',
+        page: String(page),
+      });
+    } catch (e) {
+      console.warn(
+        `TikTok adgroup statuses ${storeId} page ${page} failed (soft): ` +
+          `${(e as Error).message ?? String(e)}`,
+      );
+      return out; // partial map > throw — same policy as Meta budgets.
+    }
+
+    for (const r of data.list ?? []) {
+      const id = String(r.adgroup_id ?? '').trim();
+      if (!id) continue;
+      // Prefer secondary_status (granular delivery state); fall back to
+      // operation_status (operator-set enable/disable, less specific).
+      const status = (r.secondary_status || r.operation_status || '').trim() || null;
+      if (status) out.set(id, status);
+    }
+
+    const totalPages = Number(data.page_info?.total_page ?? 1);
+    if (page >= totalPages) break;
+    page++;
+  }
+  if (page >= TIKTOK_PAGINATION_CAP) {
+    console.warn(
+      `TikTok adgroup statuses ${storeId}: hit pagination cap of ` +
+        `${TIKTOK_PAGINATION_CAP} pages — some ad-groups may be missing.`,
+    );
+  }
+  return out;
+}
+
 export async function fetchTikTokAdInsights(
   storeId: string,
   dateStr: string,
 ): Promise<TikTokAdRow[]> {
   const { advertiserId, accessToken } = getTikTokCreds(storeId);
   const info = await fetchTikTokAdvertiserInfo(storeId);
+
+  // Phase 05.7.x — fetch ad-group statuses in parallel with the
+  // first report page. /adgroup/get/ is an entity endpoint (status
+  // doesn't change per-day), so one call serves the whole day.
+  const statusesPromise = fetchTikTokAdGroupStatuses(storeId);
 
   type AdReportRow = {
     metrics?: {
@@ -408,6 +507,9 @@ export async function fetchTikTokAdInsights(
         clicks: parseNum(m.clicks),
         conversions,
         conversionValue,
+        // Patched below after statuses resolve. Placeholder keeps the
+        // shape consistent so TypeScript doesn't see an optional gap.
+        effectiveStatus: null,
       });
     }
 
@@ -422,5 +524,20 @@ export async function fetchTikTokAdInsights(
         `investigate ad volume.`,
     );
   }
+
+  // Phase 05.7.x — merge ad-group statuses into the rows. /adgroup/get/
+  // returns the current state at fetch time (no per-day dimension), so
+  // each ad's row carries the same status as every other ad in the same
+  // ad-group. Soft-fail policy: empty map → all rows keep effectiveStatus
+  // null, which downstream UI treats as "fall back to lastActiveDate
+  // heuristic" — same posture as Meta when budgets soft-failed.
+  const statuses = await statusesPromise;
+  if (statuses.size > 0) {
+    for (const row of out) {
+      const s = statuses.get(row.adGroupId);
+      if (s) row.effectiveStatus = s;
+    }
+  }
+
   return out;
 }

@@ -559,7 +559,12 @@ export async function fetchCampaignsFromPostgres(
         .select(
           'date, store_id, platform, campaign_id, campaign_name, ' +
             'ad_set_id, ad_set_name, spend_cad, impressions, clicks, conversions, ' +
-            'conversion_value_cad, campaign_budget_cad, ad_set_budget_cad, budget_type',
+            'conversion_value_cad, campaign_budget_cad, ad_set_budget_cad, ' +
+            // Phase 05.7.x — effective_status column added in migration
+            // 20260522180000. NULL for rows written before the migration; the
+            // dashboard's CampaignsTableRow falls back to its 2-day
+            // lastActiveDate heuristic when this is null.
+            'budget_type, effective_status',
         );
       if (opts?.range) {
         q = q.gte('date', opts.range.from).lte('date', opts.range.to);
@@ -606,6 +611,16 @@ export async function fetchCampaignsFromPostgres(
       adSetBudgetCad:
         abRaw === null || abRaw === undefined || abRaw === '' ? null : toNumber(abRaw),
       budgetType: btRaw === 'CBO' || btRaw === 'ABO' ? btRaw : '',
+      // Phase 05.7.x — pass effective_status through with no
+      // normalisation; the dashboard groups statuses platform-by-platform
+      // (Meta PAUSED ≠ Google PAUSED ≠ TikTok ADGROUP_STATUS_DISABLE),
+      // so converting to a common enum here would lose information.
+      effectiveStatus: (() => {
+        const v = (r as { effective_status?: unknown }).effective_status;
+        if (v === null || v === undefined) return null;
+        const s = String(v).trim();
+        return s || null;
+      })(),
     });
   }
   return rows;

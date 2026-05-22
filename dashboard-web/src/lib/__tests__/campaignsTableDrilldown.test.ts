@@ -20,6 +20,7 @@ function makeRow(overrides: Partial<CampaignRow> = {}): CampaignRow {
     campaignBudgetCad: null,
     adSetBudgetCad: null,
     budgetType: '',
+    effectiveStatus: null,
   };
   return { ...base, ...overrides };
 }

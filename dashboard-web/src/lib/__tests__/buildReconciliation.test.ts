@@ -80,6 +80,7 @@ function makeCampaignRow(overrides: Partial<CampaignRow>): CampaignRow {
     campaignBudgetCad: null,
     adSetBudgetCad: null,
     budgetType: '',
+    effectiveStatus: null,
     ...overrides,
   };
 }
