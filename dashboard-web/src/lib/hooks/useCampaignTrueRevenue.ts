@@ -194,16 +194,15 @@ export function useCampaignTrueRevenue(opts: {
   // instead of rebuilding from all rows per campaign. Uses allCampaignRows for
   // consistency with the cross-platform allocation basis.
   //
-  // IN-06 (5.2.2.1): skip non-Meta rows. analyzeAttribution short-circuits
-  // before reading dailyMeta for any non-Meta campaign (analyzer line 301:
-  // `if (campaign.platform !== 'Meta') return null;`), so any entry we put
-  // here for Google would be pure overhead — bounded today (~a few KB per
-  // drawer mount) but unnecessary. If a future analyzer supports Google
-  // click-id attribution, widen this gate accordingly.
+  // IN-06 (5.2.2.1): only includes platforms analyzeAttribution can process.
+  // Phase 05.7.9c — TikTok added (analyzer extended). Google still excluded
+  // (PMax/Shopping utm flow unreliable). The name is a misnomer at this point
+  // — kept to avoid a large rename — but semantically it's "daily conv-value
+  // series per campaign for any platform we analyze".
   const dailyMetaByCampaign = useMemo(() => {
     const out = new Map<string, Map<string, number>>();
     for (const r of allCampaignRows) {
-      if (r.platform !== 'Meta') continue;
+      if (r.platform !== 'Meta' && r.platform !== 'TikTok') continue;
       const k = campaignKey(r.storeId, r.platform, r.campaignId);
       let inner = out.get(k);
       if (!inner) {
@@ -402,7 +401,7 @@ export function useCampaignTrueRevenue(opts: {
       // Returns null for non-Meta campaigns or when the attribution tab is
       // empty (first deploy). Daily series enables Bayesian / window /
       // outlier analysis.
-      const attribution = analyzeAttribution(
+      let attribution = analyzeAttribution(
         {
           campaignName: a.campaignName,
           campaignId: a.campaignId,
@@ -416,6 +415,58 @@ export function useCampaignTrueRevenue(opts: {
         localRange.to,
         dailyMeta,
       );
+
+      // Phase 05.7.9c — Two-method-agreement trust upgrade.
+      //
+      // The attribution analyzer's trust is computed from click-id
+      // coverage alone (% of Meta's claim that we could match to a
+      // tagged order). When coverage is low it labels the chip "לא אמין"
+      // even if the Shopify product-mapping ALSO confirms Meta's claim.
+      //
+      // Two independent methods (click-id + product mapping) agreeing is
+      // STRONGER evidence than either alone, so a small gap between
+      // metaClaim and trueRevenue (via mapping) deserves a trust bump:
+      //
+      //   - gap < 10% → high (override low/medium)
+      //   - gap < 20% → at least medium (override low)
+      //
+      // Operator feedback 2026-05-22: "if both methods agree to within
+      // a few percent and the chip still says 'not trusted', that's
+      // wrong — the agreement IS the trust signal."
+      if (attribution && a.conversionValue > 0 && trueRevenue > 0) {
+        const gap =
+          Math.abs(trueRevenue - a.conversionValue) /
+          Math.max(a.conversionValue, trueRevenue);
+        if (gap < 0.1 && attribution.trust.level !== 'high') {
+          attribution = {
+            ...attribution,
+            trust: {
+              level: 'high',
+              label: 'אמין',
+              // Score = 100 - gap%. With gap=5% the score is 95, etc.
+              // Always >= 90 in this branch by construction.
+              score: Math.round(100 - gap * 100),
+            },
+            reasons: [
+              `הסכמה בין Meta ל-Shopify mapping בתוך ${(gap * 100).toFixed(1)}% — שתי שיטות עצמאיות חופפות, סיגנל חזק`,
+              ...attribution.reasons,
+            ],
+          };
+        } else if (gap < 0.2 && attribution.trust.level === 'low') {
+          attribution = {
+            ...attribution,
+            trust: {
+              level: 'medium',
+              label: 'חלקי',
+              score: Math.max(attribution.trust.score, Math.round(70 - gap * 100)),
+            },
+            reasons: [
+              `Meta ↔ Shopify mapping מסכימים בתוך ${(gap * 100).toFixed(0)}% — חיזוק חלקי לאמינות, גם ש-click-id coverage נמוך`,
+              ...attribution.reasons,
+            ],
+          };
+        }
+      }
       // Phase 05.7.9 — sum the totals across this campaign's mapped
       // products. A campaign mapped to [P1, P2] gets `productTotals =
       // P1.totals + P2.totals`. Provides the tooltip denominator.

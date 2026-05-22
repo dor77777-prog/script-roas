@@ -235,7 +235,12 @@ export function orderMatchesCampaign(
   },
 ): boolean {
   if (order.storeId !== campaign.storeId) return false;
-  if (campaign.platform !== 'Meta') return false;
+  // Phase 05.7.9c — extended to TikTok per operator request. The matching
+  // logic below works for any platform whose URL Parameters pass utm_id /
+  // utm_campaign onto the landing URL (Meta + TikTok both support this).
+  // Google Ads still excluded — Google's GAQL flow exposes campaign
+  // structure but the click → utm mapping is unreliable for PMax/Shopping.
+  if (campaign.platform !== 'Meta' && campaign.platform !== 'TikTok') return false;
 
   // Tier 1 — utm_id is authoritative when present on the order.
   // If campaignId is configured AND the IDs match, accept.
@@ -298,7 +303,11 @@ export function analyzeAttribution(
    *  artificially inflate the period total. */
   dailyMetaSeries?: Array<{ date: string; value: number }>,
 ): AttributionAnalysis | null {
-  if (campaign.platform !== 'Meta') return null;
+  // Phase 05.7.9c — extended to TikTok. Returns null for Google (PMax
+  // utm-tracking unreliable) and any other platform. `metaClaim` is named
+  // historically but semantically holds the PLATFORM's claimed
+  // conversionValue for whichever platform we accept here.
+  if (campaign.platform !== 'Meta' && campaign.platform !== 'TikTok') return null;
   if (!orders || orders.length === 0) return null;
 
   // Filter out non-finite totalCad at the matched-order boundary so a single
@@ -424,7 +433,7 @@ export function analyzeAttribution(
       'אף הזמנה לא תויגה לקמפיין הזה — סביר ש-utm_campaign לא מוגדר ב-URL Parameters ב-Meta Ads Manager',
     );
     reasons.push(
-      `Meta דיווח על CAD ${campaign.metaClaim.toFixed(0)} המרות בלי שום click-id מתאים`,
+      `${campaign.platform} דיווח על CAD ${campaign.metaClaim.toFixed(0)} המרות בלי שום click-id מתאים`,
     );
     recommendation =
       'הוסף URL Parameters לקמפיין ב-Meta: utm_source=facebook&utm_medium=cpc&utm_campaign={{campaign.name}}. ' +
@@ -433,7 +442,7 @@ export function analyzeAttribution(
     const pct = Math.round(coverage * 100);
     trust = { level: 'high', label: 'אמין', score: Math.min(100, 70 + pct / 5) };
     reasons.push(
-      `${deterministicOrders} הזמנות תויגו לקמפיין (CAD ${deterministicRevenue.toFixed(0)} מתוך CAD ${campaign.metaClaim.toFixed(0)} ש-Meta דיווח — ${pct}% coverage)`,
+      `${deterministicOrders} הזמנות תויגו לקמפיין (CAD ${deterministicRevenue.toFixed(0)} מתוך CAD ${campaign.metaClaim.toFixed(0)} ש-${campaign.platform} דיווח — ${pct}% coverage)`,
     );
     if (modeledRevenue > 0) {
       reasons.push(
@@ -516,7 +525,7 @@ export function analyzeAttribution(
   }
   if (outlierDays.length > 0) {
     reasons.push(
-      `${outlierDays.length} ימים שבהם Meta דיווח >2.5σ מעל הממוצע שלו (modeled spikes): ${outlierDays.slice(0, 3).join(', ')}${outlierDays.length > 3 ? '…' : ''}`,
+      `${outlierDays.length} ימים שבהם ${campaign.platform} דיווח >2.5σ מעל הממוצע שלו (modeled spikes): ${outlierDays.slice(0, 3).join(', ')}${outlierDays.length > 3 ? '…' : ''}`,
     );
   }
   if (roasInterval) {
