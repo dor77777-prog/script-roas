@@ -1169,7 +1169,10 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     </span>
                   </th>
                   <th className="px-3 py-2 text-end font-medium text-text-secondary w-[80px]">
-                    <span className="inline-flex items-center gap-1" title="יחידות שנמכרו בפועל ב-Shopify של המוצרים המשויכים בטווח הנבחר">
+                    <span
+                      className="inline-flex items-center gap-1"
+                      title="יחידות שנמכרו בפועל ב-Shopify של המוצרים המשויכים בטווח הנבחר. כשהמוצר ממופה למספר פלטפורמות, היחידות מוקצות פרופורציונלית להוצאה (וההצגה מעוגלת למספר שלם — ה-* מסמן ערך שעוגל)."
+                    >
                       יח&apos; Shopify
                     </span>
                   </th>

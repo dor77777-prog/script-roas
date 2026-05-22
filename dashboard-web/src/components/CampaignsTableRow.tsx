@@ -445,9 +445,41 @@ export function CampaignsTableRow({
           if (!info || info.trueUnits <= 0) {
             return <span className="text-text-muted">—</span>;
           }
+          // Phase 05.7.9 — display rounded integer (units are physically
+          // whole), but expose the exact spend-proportional allocation in
+          // the tooltip. Operator feedback: "1.7 yc' doesn't make sense
+          // for unit count even though it's the mathematically correct
+          // share". The underlying allocation in campaignProductMap.ts
+          // is unchanged — only the rendering rounds for display sanity.
+          const exactUnits = info.trueUnits;
+          const displayUnits = Math.round(exactUnits);
+          const isFractional = Math.abs(exactUnits - displayUnits) >= 0.05;
+          const tooltip = isFractional
+            ? (
+                `יחידות שנמכרו ב-Shopify של המוצרים המשויכים, ` +
+                `מוקצות פרופורציונלית להוצאה בין כל הפלטפורמות הממופות. ` +
+                `חישוב מדויק: ${exactUnits.toFixed(2)} יח' (עוגל לתצוגה). ` +
+                `המוצר ככל הנראה ממופה גם לקמפיין נוסף — חלקו של הקמפיין הזה ` +
+                `הוא לפי חלקו בהוצאה הכוללת.`
+              )
+            : `יחידות שנמכרו ב-Shopify של המוצרים המשויכים בטווח הנבחר`;
           return (
-            <span className="font-medium" title="יחידות שנמכרו בפועל ב-Shopify של המוצרים המשויכים — מוקצה פרופורציונלית להוצאה">
-              {formatNumber(info.trueUnits, info.trueUnits >= 10 ? 0 : 1)}
+            <span
+              className="font-medium inline-flex items-center gap-0.5"
+              title={tooltip}
+            >
+              <span>{displayUnits}</span>
+              {/* Fraction indicator: tiny dot suffix when the displayed
+                  integer hides a non-trivial fractional allocation. Lets
+                  the operator know there's a tooltip worth reading. */}
+              {isFractional && (
+                <span
+                  aria-hidden="true"
+                  className="text-[8px] text-text-muted"
+                >
+                  *
+                </span>
+              )}
             </span>
           );
         })()}
