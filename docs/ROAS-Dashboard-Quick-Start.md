@@ -1,19 +1,19 @@
 # ROAS Dashboard — Quick Start (גרסת כיס)
 
-> מסמך 1-2 עמודים. למדריך המלא: `docs/ROAS-Dashboard-User-Manual.md`.
+> מסמך 1-2 עמודים למפעיל. למדריך מלא: `docs/ROAS-Dashboard-User-Manual.md`.
 
 ---
 
 ## מה אתה צריך לבדוק בכל יום (5 דקות)
 
-1. **Sync Indicator (פינה ימנית עליונה)** — חייב להיות 🟢 ירוק. אם הוא לא, כל מה שאחריו לא רלוונטי.
-2. **בית tab → Today Live** — האם יש חנות עם Spend אבל 0 Revenue? אם כן, תחקור.
+1. **Sync Indicator (פינה ימנית עליונה)** — חייב להיות 🟢 ירוק. אם לא, כל מה שאחריו לא רלוונטי.
+2. **בית tab → היום עד לרגע זה** — האם יש חנות עם Spend אבל 0 Revenue? אם כן, תחקור.
 3. **בית tab → Hero KPI strip** — ROAS chip 🟢 או 🔵 = טוב. 🟠 = גבולי. 🔴 = בעייתי.
-4. **Campaigns tab → Top-5** — אילו קמפיינים יש להם Trust Chip אדום? אל תקבל החלטה לפני שתבדוק.
+4. **Campaigns tab → Top-5** — אילו קמפיינים יש להם ציון D/F? אל תקבל החלטה לפני שתבדוק.
 
 ---
 
-## איך לקרוא ROAS ו-True ROAS
+## איך לקרוא ROAS
 
 | ROAS | פירוש | תווית |
 |---|---|---|
@@ -22,10 +22,25 @@
 | 2.0 – 2.7 | גבולי | 🟠 כתום |
 | < 2.0 | לא רווחי | 🔴 אדום |
 
-**Platform ROAS** = מה ש-Meta/Google דיווחו לפי Pixel.
-**True ROAS (ROAS Shopify)** = הכנסה אמיתית מ-Shopify של המוצרים המשויכים, לחלק ב-Spend.
+**Platform ROAS** = מה ש-Meta/Google/TikTok דיווחו לפי Pixel.
+**ROAS Shopify** = הכנסה אמיתית מ-Shopify של המוצרים הממופים, לחלק ב-Spend.
 
-> **כשמיפוי קיים — תאמין ל-True ROAS, לא ל-Platform ROAS.**
+> **כשמיפוי קיים — תאמין ל-ROAS Shopify, לא ל-Platform ROAS.**
+
+---
+
+## ציון הקמפיין (Campaign Health Score)
+
+עמודת "ציון" בטבלת הקמפיינים נותנת אות (A/B/C/D/F) או ⏳ ("מוקדם מדי"):
+
+| אות | מה לעשות |
+|---|---|
+| 🟢 **A/B** + פער Pixel↔Shopify < 15% | **לסקייל** (+20-40% תקציב) |
+| 🔵 **B** + מומנטום מאיץ | **לסקייל בזהירות** (+10-20%) |
+| 🟠 **C** | **לעקוב**, לחץ על הציון לראות פירוט הרכיבים |
+| 🔴 **D/F** + רווחיות נמוכה | **לעצור / לרענן קריאייטיב** |
+| 🔴 **D/F** + רק attribution clarity חלשה | **לתקן UTMs**, לא לעצור |
+| ⏳ **מוקדם מדי** | אל תקבל החלטה, חכה לעוד נתונים |
 
 ---
 
@@ -34,14 +49,14 @@
 לחיצה על שם קמפיין ב-Campaigns table פותחת drawer מפורט. תפתח אותו:
 
 - כשתרצה לקבל החלטה תקציבית (scale / pause / inspect).
-- כשתראה Trust Chip 🟠 / 🔴 — תרצה לראות למה.
+- כשתראה ציון C/D/F — תרצה לראות למה.
 - כשתרצה לנתח Pixel vs Shopify (Reconciliation panel).
 - כשתרצה לראות איזה ad-sets/מודעות נושאים את הקמפיין.
 
 **מה לבדוק ב-Drawer לפני שינוי תקציב:**
-- [ ] Trust 🟢 High?
+- [ ] ציון בריאות A או B?
 - [ ] טווח ≥ 7 ימים?
-- [ ] True ROAS תואם ל-Platform ROAS?
+- [ ] ROAS Shopify תואם ל-Platform ROAS (פער < 15%)?
 - [ ] Analysis Box של גרף CPM לא שלילי?
 - [ ] Reconciliation בלי 5+ ימי Channels/Shopify only?
 
@@ -52,10 +67,10 @@
 ## מתי לא לסמוך על מספר
 
 - ❌ **טווח של פחות מ-5 ימים פעילים** — הניתוח לא יוצג כלל. אל תקבל החלטות.
-- ❌ **Trust Chip 🔴 Low** — Pixel ו-Shopify לא מסכימים. תקן מעקב לפני.
+- ❌ **ציון D/F בגלל "attribution clarity" בלבד** — Pixel ו-Shopify לא מסכימים. תקן UTMs לפני.
 - ❌ **Refunds-heavy day** — Revenue ירד יכול להיות לקוח שהחזיר, לא ביצועי קמפיין.
-- ❌ **True ROAS שונה מאוד מ-Platform ROAS** — תאמין ל-Shopify.
-- ❌ **Organic נראה גבוה מדי** — בדוק `orders-attribution` ידנית, מקרי classifier-failure.
+- ❌ **ROAS Shopify שונה מאוד מ-Platform ROAS** — תאמין ל-Shopify.
+- ❌ **Organic נראה גבוה מדי** — ייתכן ש-UTMs נשברו ו-traffic של Meta/Google מסווג כ-Organic.
 
 ---
 
@@ -63,49 +78,38 @@
 
 | בעיה | פעולה ראשונה |
 |---|---|
-| הדשבורד לא נטען | רענן (Cmd-Shift-R) → בדוק DevTools Network → בדוק Vercel status |
-| Sync Indicator אדום | לחץ עליו לראות שגיאה → בדוק Google Sheets permissions של service account |
-| נתונים חסרים להיום | בדוק "Live since" ב-Today Live → אם > שעה, הרץ `runDailyUpdateUzoshop()` ידנית ב-Apps Script |
-| נתונים חסרים לאתמול | בדוק `data-daily` tab ב-Sheets → אם חסר, הרץ `backfillRangeForStores('YYYY-MM-DD', 'YYYY-MM-DD', ['<store-id>'])` |
-| CampaignDrawer ריק | וודא Platform filter תואם לקמפיין (Meta/Google) → רענן |
-| True ROAS = "—" | מיפוי לא קיים → פתח Drawer → "ערוך מיפוי" |
-| Pixel-Shopify לא מסכימים | בדוק Pixel ב-Meta Events Manager → בדוק UTM ב-Shopify Admin → בדוק Pearson r |
+| הדשבורד לא נטען | רענן (Cmd-Shift-R) |
+| Sync Indicator אדום | לחץ עליו לראות שגיאה — דווח למפתח אם נמשך |
+| נתונים חסרים להיום | בדוק "Live since" ב-Today Live → אם > שעה, לחץ "רענן הכל" |
+| נתונים חסרים לאתמול | `/operator > Backfill טווח תאריכים` → בחר את היום החסר + החנות → הפעל |
+| CampaignDrawer ריק | וודא Platform filter תואם לקמפיין (Meta/Google/TikTok) → רענן |
+| ROAS Shopify = "—" | מיפוי לא קיים → פתח Drawer → "ערוך מיפוי" |
+| Pixel-Shopify לא מסכימים | בדוק Pixel ב-Meta Events Manager → בדוק UTM ב-Shopify Admin |
 
 ---
 
-## Backfill מהיר (אם נדרש)
+## Backfill מהיר
 
-**מתי:** רק אחרי תקלה ב-Apps Script או baggige באיסוף.
-**לא:** אחרי תיקון פירוש (כמו Phase 5.2.2.1 — לא צריך backfill).
+עבור ל-`/operator` (אייקון ⚙️ בכותרת) → "Backfill טווח תאריכים" → בחר טווח + חנויות → "הפעל Backfill" → עקוב ב-"ריצות אחרונות" עד Completed.
 
-**איך:** Apps Script Editor → Select function → Run
-
-```javascript
-// חנות אחת בכל פעם (בטוח, מומלץ):
-backfillRangeForStores('2026-05-08', '2026-05-19', ['uzoshop'])
-backfillRangeForStores('2026-05-08', '2026-05-19', ['zolplus'])
-backfillRangeForStores('2026-05-08', '2026-05-19', ['usmile360'])
-
-// או כל שלוש החנויות יחד (פחות בטוח לטווחים גדולים):
-backfillRange('2026-05-08', '2026-05-19')
-```
-
-**אחרי:** Cmd-Shift-R בדשבורד + בדוק שהנתונים מופיעים.
+**מתי:** רק אם זיהית פערים בנתונים היסטוריים. אל תרוץ "ליתר ביטחון".
 
 ---
 
 ## הכי חשוב לזכור
 
 1. **תקבל החלטה רק על בסיס 7+ ימים פעילים** — לא יום אחד, לא 3 ימים.
-2. **אל תאמין ל-Trust Low** — תקן מעקב לפני שינוי תקציב.
-3. **תמיד תצליב Platform ROAS ל-True ROAS** — Shopify הוא האמת.
-4. **אל תערוך ידנית טאבים ב-Google Sheets** — Apps Script ידרוס.
-5. **כל שינוי = Annotation חדש** — כדי שתזכור בעוד חודש מה עשית.
+2. **תקן UTMs לפני שמכבים** — ציון נמוך בגלל attribution clarity דורש תיקון, לא עצירה.
+3. **תמיד תצליב Platform ROAS ל-ROAS Shopify** — Shopify הוא האמת.
+4. **כל שינוי = Annotation חדש** — כדי שתזכור בעוד חודש מה עשית.
+5. **דווחי WhatsApp 12:00 / 18:00 / 00:10** — אם הם לא הגיעו, בדוק `/operator > ריצות אחרונות`.
 
 ---
 
-**גרסה:** 1.0 · **תאריך:** 2026-05-20 · **בסיס קוד:** Phase 05.2.2.1 + FIX-25
+**גרסה:** 2.0 · **תאריך:** 2026-05-22
 
 קישורים:
-- מדריך מלא: [docs/ROAS-Dashboard-User-Manual.md](./ROAS-Dashboard-User-Manual.md)
+- מדריך משתמש מלא: [docs/ROAS-Dashboard-User-Manual.md](./ROAS-Dashboard-User-Manual.md)
+- Architecture (טכני, לא למפעיל): [docs/ARCHITECTURE.md](./ARCHITECTURE.md)
 - Production: https://roas-dashboard-smoky.vercel.app
+- Operator console: https://roas-dashboard-smoky.vercel.app/operator
