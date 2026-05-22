@@ -91,9 +91,15 @@ export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
         <div
           role="dialog"
           dir="rtl"
+          // Anchor `start-0` (right edge in RTL) so the popover extends
+          // LEFTWARD into the table body instead of rightward off the
+          // viewport edge. The ציון column sits near the right side of the
+          // table (DOM column 2 = second from right in RTL), so extending
+          // toward the right was clipping the popover at the screen edge.
+          // Arrow flipped to start-4 to match.
           className={cn(
-            'absolute z-[15] top-full mt-2 end-0',
-            'w-[340px] max-w-[min(92vw,380px)]',
+            'absolute z-[15] top-full mt-2 start-0',
+            'w-[320px] sm:w-[340px] max-w-[min(86vw,360px)]',
             'rounded-xl bg-surface text-text-primary border border-borderSubtle',
             'shadow-elevated p-3.5',
             'text-[12px] leading-relaxed text-start animate-fade-in',
