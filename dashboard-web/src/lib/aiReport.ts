@@ -2,6 +2,13 @@ import type { DailyRow } from './types';
 import type { ProductRow } from './products';
 import type { CampaignRow } from './campaigns';
 import type { OrderAttributionRow } from './ordersAttribution';
+import {
+  computeCampaignHealth,
+  type CampaignHealth,
+  type HealthGrade,
+} from './campaignHealthScore';
+import { analyzeCpmVsRoas, type DailyCpmRoasPoint } from './cpmRoasAnalysis';
+import type { Aggregated } from './campaignsAggregator';
 
 /**
  * Generates an AI-friendly markdown report for a store × date range.
@@ -765,6 +772,123 @@ export function generateAiReport({
   }
   out.push('');
 
+  // ===== Per-campaign deterministic Shopify ROAS + Pixel↔Shopify gap =====
+  // Phase 05.7.x — analyst-grade. The dashboard surfaces 3 ROAS variants
+  // per row (Platform / Shopify combined / Shopify deterministic). The
+  // report now mirrors that for top campaigns: matches orders to
+  // campaigns by utmId / utmCampaign, sums deterministic revenue, and
+  // compares to platform-claimed conversion_value. The gap surfaces
+  // which campaigns Meta/Google/TikTok are OVER-reporting (modeled +
+  // view-through) vs UNDER-reporting (iOS 14 ATT) — the operator's
+  // actual "should I trust this ROAS?" calibration per campaign.
+  if (orders.length > 0 && campaigns.length > 0) {
+    // Pre-bucket orders by their utmId / utmCampaign so the per-campaign
+    // lookup is O(1). utmId wins when present (immutable platform ID);
+    // utmCampaign by name is the legacy fallback.
+    const ordersByCampaignId = new Map<string, number>();
+    const ordersByCampaignName = new Map<string, number>();
+    for (const o of orders) {
+      const id = (o.utmId ?? '').trim();
+      const name = (o.utmCampaign ?? '').trim();
+      if (id) ordersByCampaignId.set(id, (ordersByCampaignId.get(id) ?? 0) + o.totalCad);
+      if (name)
+        ordersByCampaignName.set(
+          name.toLowerCase(),
+          (ordersByCampaignName.get(name.toLowerCase()) ?? 0) + o.totalCad,
+        );
+    }
+
+    type CompareRow = {
+      name: string;
+      platform: string;
+      store: string;
+      spend: number;
+      platformValue: number;
+      detRevenue: number;
+      platformRoas: number;
+      detRoas: number;
+      gap: number;
+      verdict: string;
+    };
+    const rows: CompareRow[] = [];
+    for (const c of campaignsList) {
+      // Match by ID first (deterministic), fall back to name. Skip
+      // anything with no campaign ID at all.
+      const det =
+        ordersByCampaignId.get(c.campaignId) ??
+        ordersByCampaignName.get(c.name.toLowerCase()) ??
+        0;
+      const detRoas = c.spend > 0 ? det / c.spend : 0;
+      const platformRoas = c.spend > 0 ? c.value / c.spend : 0;
+      // Gap is positive when Shopify > platform (under-reporting).
+      const gap = c.value > 0 ? (det - c.value) / c.value : det > 0 ? 1 : 0;
+      let verdict: string;
+      if (det === 0 && c.value > 0) {
+        verdict = 'אין click-id (חוסר שיוך)';
+      } else if (Math.abs(gap) < 0.15) {
+        verdict = 'מאוזן (אמין)';
+      } else if (gap > 0.15) {
+        verdict = `Shopify רואה ${(gap * 100).toFixed(0)}%+ יותר (Meta מדווח חסר)`;
+      } else {
+        verdict = `Meta מדווח ${Math.abs(gap * 100).toFixed(0)}% יותר (modeled / view-through)`;
+      }
+      rows.push({
+        name: c.name,
+        platform: c.platform,
+        store: c.store,
+        spend: c.spend,
+        platformValue: c.value,
+        detRevenue: det,
+        platformRoas,
+        detRoas,
+        gap,
+        verdict,
+      });
+    }
+    rows.sort((a, b) => b.spend - a.spend);
+
+    out.push('## השוואת ROAS לקמפיין — Pixel ↔ Shopify (deterministic)');
+    out.push('');
+    out.push(
+      '**מה זה אומר**: לכל קמפיין — ROAS לפי הפלטפורמה (conversion_value מ-Meta/Google/TikTok ÷ הוצאה) מול ROAS לפי Shopify (הזמנות שתויגו דטרמיניסטית לקמפיין הזה דרך `utm_id` / `utm_campaign` ÷ הוצאה). הפער הוא ההפרש בכסף: חיובי = Meta מדווח חסר (iOS 14 ATT), שלילי = Meta מדווח עודף (modeled / view-through / double-count). **שיקול קבלת החלטות**: אם פער > ±20% — אל תקבל החלטה על בסיס ה-ROAS של הפלטפורמה לבד.',
+    );
+    out.push('');
+    out.push(
+      `| קמפיין | פלטפ׳ | חנות | הוצאה | Pixel value | Shopify det. | ROAS Pixel | ROAS Det. | פער | אבחנה |`,
+    );
+    out.push(
+      `|---|---|---|---|---|---|---|---|---|---|`,
+    );
+    for (const r of rows.slice(0, 25)) {
+      const gapStr =
+        r.platformValue > 0
+          ? (r.gap >= 0 ? '+' : '') + (r.gap * 100).toFixed(0) + '%'
+          : r.detRevenue > 0
+            ? 'אין הצהרת פלטפורמה'
+            : '—';
+      out.push(
+        `| ${escapeMd(r.name)} | ${r.platform} | ${r.store} | ${fmtCad(
+          r.spend,
+        )} | ${fmtCad(r.platformValue)} | ${fmtCad(r.detRevenue)} | ${
+          r.platformRoas > 0 ? fmtNum(r.platformRoas, 2) : '—'
+        } | ${r.detRoas > 0 ? fmtNum(r.detRoas, 2) : '—'} | ${gapStr} | ${r.verdict} |`,
+      );
+    }
+    if (rows.length > 25) {
+      out.push('');
+      out.push(`_… ועוד ${rows.length - 25} קמפיינים._`);
+    }
+    out.push('');
+    out.push(
+      '**איך לקרוא**: "Shopify רואה X%+ יותר" → ROAS האמיתי גבוה ממה ש-Meta מציג, ' +
+        'אל תעצור על בסיס ROAS נמוך מ-Meta. "Meta מדווח Y% יותר" → ROAS האמיתי ' +
+        'נמוך, התקרבת לדיווח מנופח (תקין בעיקר אם יש view-through רחב). "אין ' +
+        'click-id" → ה-URL Parameters של הקמפיין לא מוגדרים נכון — אם תתקן, ' +
+        'תקבל deterministic attribution בעתיד.',
+    );
+    out.push('');
+  }
+
   // ===== Campaign Momentum — first half vs second half ROAS per top campaign =====
   // Phase 05.7.x — analyst-grade addition. ROAS at the period level can
   // hide a campaign that started strong and is now decaying, OR one that
@@ -863,6 +987,366 @@ export function generateAiReport({
       }
       out.push('');
     }
+  }
+
+  // ===== Campaign Health Score — unified verdict per campaign =====
+  // Phase 05.7.x — analyst-grade. Mirrors the dashboard's Health Score
+  // column, but inside the AI report so the operator gets the same
+  // verdict (and the AI can reason about which campaigns are A-grade
+  // vs F-grade in plain language). The 4-component breakdown lets the
+  // AI explain WHY a campaign scored low (volume / profitability /
+  // trajectory / attribution clarity) rather than guessing.
+  //
+  // The report-side Health Score uses simplified inputs because the
+  // dashboard's full TrueRevenueInfo (with product mapping) isn't in
+  // the report's data path. Specifically:
+  //   - deterministicRevenue = revenue from orders tagged to this
+  //     campaign via utmId / utmCampaign (when we have orders data).
+  //   - confidence + attribution.trust are synthesised from click-id
+  //     coverage so computeCampaignHealth can apply its trust modulator.
+  //   - trajectory = analyzeCpmVsRoas on the campaign's daily CPM/ROAS
+  //     series within the range.
+  if (campaignsList.length > 0) {
+    // Build per-campaign daily CPM/ROAS series for trajectory analysis.
+    const dailyByKey = new Map<
+      string,
+      Map<string, { spend: number; impressions: number; value: number }>
+    >();
+    for (const c of campaigns) {
+      const key = `${c.storeId}::${c.platform}::${c.campaignId}`;
+      if (!dailyByKey.has(key)) dailyByKey.set(key, new Map());
+      const m = dailyByKey.get(key)!;
+      const e = m.get(c.date) ?? { spend: 0, impressions: 0, value: 0 };
+      e.spend += c.spend;
+      e.impressions += c.impressions;
+      e.value += c.conversionValue;
+      m.set(c.date, e);
+    }
+    // Order-matching for deterministic revenue (reuse the buckets from
+    // the Pixel↔Shopify comparison if orders are present).
+    const detById = new Map<string, number>();
+    const detByName = new Map<string, number>();
+    for (const o of orders) {
+      const id = (o.utmId ?? '').trim();
+      const name = (o.utmCampaign ?? '').trim();
+      if (id) detById.set(id, (detById.get(id) ?? 0) + o.totalCad);
+      if (name)
+        detByName.set(
+          name.toLowerCase(),
+          (detByName.get(name.toLowerCase()) ?? 0) + o.totalCad,
+        );
+    }
+
+    // Effective-status lookup — latest non-null per campaign.
+    const statusByKey = new Map<string, string>();
+    for (const c of campaigns) {
+      if (!c.effectiveStatus) continue;
+      const key = `${c.storeId}::${c.platform}::${c.campaignId}`;
+      statusByKey.set(key, c.effectiveStatus); // last write wins (sorted iteration would be ideal, but campaigns is unordered — close enough for status)
+    }
+    function isStatusOff(status: string | undefined, platform: string): boolean {
+      if (!status) return false;
+      const norm = status.trim().toUpperCase();
+      const p = platform.toLowerCase();
+      if (p === 'meta') return norm !== 'ACTIVE';
+      if (p === 'google') return norm !== 'ENABLED';
+      if (p === 'tiktok') return norm !== 'ADGROUP_STATUS_DELIVERY_OK';
+      return false;
+    }
+
+    type HealthRow = {
+      name: string;
+      platform: string;
+      store: string;
+      spend: number;
+      health: CampaignHealth;
+      effectiveStatus: string | null;
+    };
+    const healthRows: HealthRow[] = [];
+    for (const c of campaignsList.slice(0, 25)) {
+      // We don't have a clean storeId in campaignsList (the aggregation
+      // collapses store name only) — find the matching status by
+      // scanning the dailyByKey map prefix.
+      const matchingDailyKey = Array.from(dailyByKey.keys()).find(k =>
+        k.endsWith(`::${c.platform}::${c.campaignId}`),
+      );
+      const status = matchingDailyKey ? (statusByKey.get(matchingDailyKey) ?? null) : null;
+      const isOff = isStatusOff(status ?? undefined, c.platform);
+
+      // Daily series → trajectory.
+      const dailyMap = matchingDailyKey ? dailyByKey.get(matchingDailyKey) : null;
+      const series: DailyCpmRoasPoint[] = dailyMap
+        ? Array.from(dailyMap.entries())
+            .filter(([, v]) => v.spend > 0 || v.impressions > 0)
+            .map(([date, v]) => ({
+              date,
+              cpm: v.impressions > 0 ? (v.spend / v.impressions) * 1000 : 0,
+              roas: v.spend > 0 ? v.value / v.spend : 0,
+            }))
+            .sort((a, b) => a.date.localeCompare(b.date))
+        : [];
+      const trajectory = series.length >= 5 ? analyzeCpmVsRoas(series) : undefined;
+
+      // Deterministic revenue + synthetic trust info.
+      const det =
+        detById.get(c.campaignId) ??
+        detByName.get(c.name.toLowerCase()) ??
+        0;
+      const coverage = c.value > 0 ? Math.min(1, det / c.value) : det > 0 ? 1 : 0;
+      const trustScore = Math.round(coverage * 100);
+      const trustLevel =
+        trustScore >= 80 ? 'high' : trustScore >= 40 ? 'medium' : 'low';
+
+      // Synthesise a minimal TrueRevenueInfo so computeCampaignHealth's
+      // priority chain (deterministic → trueRevenue → platform) picks
+      // the right modulator.
+      const trueRevenueInfo =
+        det > 0
+          ? {
+              trueRevenue: det,
+              trueUnits: 0,
+              metaClaim: c.value,
+              spend: c.spend,
+              mappedCount: 1,
+              sharedCampaigns: 0,
+              confidence: { level: trustLevel as 'high' | 'medium' | 'low', label: trustLevel, reasons: [] },
+              attribution: {
+                trust: { level: trustLevel as 'high' | 'medium' | 'low', label: trustLevel, score: trustScore },
+              } as unknown as ReturnType<typeof analyzeCpmVsRoas>['details'] extends infer X ? X : never,
+              productTotals: { revenue: det, units: 0 },
+              deterministicRevenue: det,
+              deterministicUnits: 0,
+            }
+          : undefined;
+
+      // Build Aggregated shape — partial OK because computeCampaignHealth
+      // only reads spend / conversionValue / conversions for fallbacks.
+      const agg: Aggregated = {
+        key: matchingDailyKey ?? `${c.platform}::${c.campaignId}`,
+        storeId: '',
+        storeName: c.store,
+        platform: c.platform,
+        campaignId: c.campaignId,
+        campaignName: c.name,
+        adSetId: undefined,
+        adSetName: undefined,
+        spend: c.spend,
+        impressions: c.impressions,
+        clicks: c.clicks,
+        conversions: c.conversions,
+        conversionValue: c.value,
+        campaignBudgetCad: null,
+        adSetBudgetCad: null,
+        budgetType: '',
+        lastActiveDate: null,
+        effectiveStatus: status,
+      };
+      const health = computeCampaignHealth({
+        aggregated: agg,
+        trueRevenueInfo: trueRevenueInfo as never,
+        cpmRoasAnalysis: trajectory,
+        optimized: false,
+        isCurrentlyOff: isOff,
+      });
+      healthRows.push({
+        name: c.name,
+        platform: c.platform,
+        store: c.store,
+        spend: c.spend,
+        health,
+        effectiveStatus: status,
+      });
+    }
+    // Sort by score descending; insufficient grades to bottom.
+    healthRows.sort((a, b) => {
+      if (a.health.insufficient !== b.health.insufficient)
+        return a.health.insufficient ? 1 : -1;
+      return b.health.score - a.health.score;
+    });
+
+    const gradeIcon: Record<HealthGrade, string> = {
+      A: '🟢 A',
+      B: '🔵 B',
+      C: '🟠 C',
+      D: '🔴 D',
+      F: '🔴 F',
+      unknown: '⏳ —',
+    };
+
+    out.push('## Campaign Health Score — ציון מאוחד פר קמפיין');
+    out.push('');
+    out.push(
+      '**מה זה אומר**: לכל קמפיין — ציון 0–100 + אות (A/B/C/D/F) שמשלב 4 רכיבים: ' +
+        '**רווחיות 40%** (ROAS × אמינות attribution) · **נפח 15%** (סולם הוצאה) · ' +
+        '**מומנטום 25%** (CPM↔ROAS trend) · **בהירות attribution 20%** (click-id coverage). ' +
+        '+15 אם הקמפיין מסומן אופטימיזציה פעילה; −30 אם כבוי. **ציון < 30 (F) = ' +
+        'לעצור / לבדוק; A = להרחיב.** הציון אינו מקור החלטה יחיד אלא כותרת — ' +
+        'תבחר מתוך הרכיבים מה לתקן.',
+    );
+    out.push('');
+    out.push(
+      `| קמפיין | פלטפ׳ | חנות | הוצאה | ציון | רווחיות | נפח | מומנטום | Attribution | אופ׳ | סטטוס |`,
+    );
+    out.push(
+      `|---|---|---|---|---|---|---|---|---|---|---|`,
+    );
+    for (const r of healthRows) {
+      const comp = r.health.components;
+      const opAdj =
+        comp.operatorAdjustment === 0
+          ? '—'
+          : (comp.operatorAdjustment > 0 ? '+' : '') + comp.operatorAdjustment;
+      const statusLabel = r.effectiveStatus
+        ? r.effectiveStatus.replace(/^ADGROUP_STATUS_/, '')
+        : '—';
+      out.push(
+        `| ${escapeMd(r.name)} | ${r.platform} | ${r.store} | ${fmtCad(
+          r.spend,
+        )} | **${gradeIcon[r.health.grade]} ${r.health.insufficient ? '' : r.health.score}** | ${comp.profitability} | ${comp.volume} | ${comp.trajectory} | ${comp.attributionClarity} | ${opAdj} | ${statusLabel} |`,
+      );
+    }
+    out.push('');
+  }
+
+  // ===== Currently Off Campaigns =====
+  // Phase 05.7.x — uses the new effective_status column (Meta/Google/TikTok
+  // platform-real status). Lets the operator see at a glance which campaigns
+  // in the period are now off — useful for "did we pause everything we
+  // intended to pause?" sanity checks AND for end-of-month reporting where
+  // a paused campaign's historical numbers don't reflect a strategic call.
+  if (campaignsList.length > 0) {
+    const offCampaigns: Array<{
+      name: string;
+      platform: string;
+      store: string;
+      spend: number;
+      roas: number;
+      status: string;
+    }> = [];
+    function isOff(status: string | null, platform: string): boolean {
+      if (!status) return false;
+      const norm = status.trim().toUpperCase();
+      const p = platform.toLowerCase();
+      if (p === 'meta') return norm !== 'ACTIVE';
+      if (p === 'google') return norm !== 'ENABLED';
+      if (p === 'tiktok') return norm !== 'ADGROUP_STATUS_DELIVERY_OK';
+      return false;
+    }
+    // Need to find effective_status per campaign — pull latest from campaigns array.
+    const statusByCampaign = new Map<string, string | null>();
+    for (const c of campaigns) {
+      const key = `${c.platform}::${c.campaignId}`;
+      if (c.effectiveStatus) statusByCampaign.set(key, c.effectiveStatus);
+    }
+    for (const c of campaignsList) {
+      const status = statusByCampaign.get(`${c.platform}::${c.campaignId}`) ?? null;
+      if (status && isOff(status, c.platform)) {
+        offCampaigns.push({
+          name: c.name,
+          platform: c.platform,
+          store: c.store,
+          spend: c.spend,
+          roas: c.roas,
+          status,
+        });
+      }
+    }
+    if (offCampaigns.length > 0) {
+      offCampaigns.sort((a, b) => b.spend - a.spend);
+      out.push('## קמפיינים כבויים כעת (status אמיתי מהפלטפורמה)');
+      out.push('');
+      out.push(
+        '**מה זה אומר**: הקמפיינים הבאים הופיעו בטווח עם הוצאות, אבל ' +
+          'effective_status מהפלטפורמה (Meta `effective_status` / Google `status` / ' +
+          'TikTok `secondary_status`) מצביע ש**הם לא דולקים כרגע**. הנתונים בדוח ' +
+          'משקפים היסטוריה — אם תחליט לחדש קמפיין, התוצאות העתידיות עשויות להיות ' +
+          'שונות (creative fatigue / audience saturation שהצטברו מאז ההפסקה).',
+      );
+      out.push('');
+      out.push(`| קמפיין | פלטפ׳ | חנות | הוצאה בטווח | ROAS היסטורי | סטטוס |`);
+      out.push(`|---|---|---|---|---|---|`);
+      for (const o of offCampaigns) {
+        const cleanStatus = o.status.replace(/^ADGROUP_STATUS_/, '').replace(/^CAMPAIGN_/, '');
+        out.push(
+          `| ${escapeMd(o.name)} | ${o.platform} | ${o.store} | ${fmtCad(
+            o.spend,
+          )} | ${o.roas > 0 ? fmtNum(o.roas, 2) : '—'} | ${cleanStatus} |`,
+        );
+      }
+      out.push('');
+    }
+  }
+
+  // ===== TikTok Deep-Dive (when TikTok data exists) =====
+  // Phase 05.7.x — TikTok is the newest platform in the pipeline and its
+  // attribution model differs from Meta/Google (no Pixel-style modeled
+  // conversions; complete_payment is the canonical purchase event).
+  // Worth its own section so the operator + AI can reason about it on
+  // its own terms rather than blending with Meta/Google.
+  if (ttSpend > 0) {
+    const ttCampaigns = campaignsList.filter(c => c.platform === 'TikTok');
+    const ttOrders = orders.filter(o => o.source === 'tiktok-paid');
+    const ttOrderRevenue = ttOrders.reduce((s, o) => s + o.totalCad, 0);
+    const ttAov = ttOrders.length > 0 ? ttOrderRevenue / ttOrders.length : 0;
+    const ttRoasShopify = ttSpend > 0 ? ttOrderRevenue / ttSpend : 0;
+    const ttPlatformValue = ttCampaigns.reduce((s, c) => s + c.value, 0);
+    const ttRoasPlatform = ttSpend > 0 ? ttPlatformValue / ttSpend : 0;
+
+    out.push('## TikTok — צלילה ייעודית');
+    out.push('');
+    out.push(
+      '**הקשר**: TikTok Marketing API מדווח `complete_payment` (purchase events) ' +
+        'באופן עצמאי מ-Meta/Google. ה-attribution שלו פחות אגרסיבי (אין view-through-' +
+        'rich-modeled כמו Meta). מומלץ לראות אותו כ-channel נפרד עם KPI נפרדים.',
+    );
+    out.push('');
+    out.push(`| מטריקה | ערך |`);
+    out.push(`|---|---|`);
+    out.push(`| הוצאה בטווח | ${fmtCad(ttSpend)} |`);
+    out.push(`| ערך המרות (TikTok report) | ${fmtCad(ttPlatformValue)} |`);
+    out.push(`| ROAS לפי TikTok (Pixel) | ${ttRoasPlatform > 0 ? fmtNum(ttRoasPlatform, 2) : '—'} |`);
+    out.push(`| הזמנות Shopify שתויגו tiktok-paid | ${fmtNum(ttOrders.length)} |`);
+    out.push(`| הכנסות Shopify מ-tiktok-paid | ${fmtCad(ttOrderRevenue)} |`);
+    out.push(`| ROAS לפי Shopify (deterministic) | ${ttRoasShopify > 0 ? fmtNum(ttRoasShopify, 2) : '—'} |`);
+    out.push(`| AOV של לקוחות TikTok | ${ttAov > 0 ? fmtCad(ttAov) : '—'} |`);
+    out.push(`| מספר קמפיינים פעילים בטווח | ${fmtNum(ttCampaigns.length)} |`);
+    out.push('');
+
+    if (ttCampaigns.length > 0) {
+      out.push('### קמפיינים פעילים ב-TikTok');
+      out.push('');
+      out.push(`| קמפיין | אד-גרופ | הוצאה | ROAS Pixel | המרות | CTR | CPC |`);
+      out.push(`|---|---|---|---|---|---|---|`);
+      for (const c of ttCampaigns.slice(0, 10)) {
+        out.push(
+          `| ${escapeMd(c.name)} | — | ${fmtCad(c.spend)} | ${c.roas > 0 ? fmtNum(c.roas, 2) : '—'} | ${fmtNum(c.conversions)} | ${c.impressions > 0 ? fmtPct(c.ctr, 2) : '—'} | ${c.clicks > 0 ? fmtCad(c.cpc) : '—'} |`,
+        );
+      }
+      out.push('');
+    }
+
+    // Comparison: TikTok-side gap (Pixel vs Shopify) — same logic as the
+    // overall section but TikTok-isolated, because TikTok's ATT impact +
+    // age skew can differ from Meta's.
+    if (ttPlatformValue > 0 && ttOrderRevenue > 0) {
+      const gap = ttOrderRevenue - ttPlatformValue;
+      const gapPct = ttOrderRevenue > 0 ? gap / ttOrderRevenue : 0;
+      out.push(
+        `**פער TikTok ↔ Shopify**: ${fmtCad(gap)} (${gapPct >= 0 ? '+' : ''}${(gapPct * 100).toFixed(0)}%). ` +
+          (Math.abs(gapPct) < 0.15
+            ? 'TikTok ו-Shopify מסכימים — אפשר לסמוך על Pixel ROAS.'
+            : gapPct > 0
+              ? 'Shopify רואה יותר מ-TikTok — ה-Pixel תת-מדווח (probably attribution windows / ad-blockers).'
+              : 'TikTok מדווח יותר מ-Shopify — possibly modeled conversions או double-attribution. בדוק את ה-Pixel.'),
+      );
+      out.push('');
+    }
+    out.push(
+      '**KPI להמלצה ל-TikTok**: ה-ROAS Shopify (deterministic) הוא הקנה-מידה — לא ה-Pixel. ' +
+        'אם ROAS Shopify > 2.0 עם CPM יציב → מועמד להעלאת תקציב. AOV נמוך משמעותית ' +
+        'מ-Meta? סימן שהקהל ב-TikTok חוזר על הזמנות זולות יותר — שווה לבדוק upsell post-purchase.',
+    );
+    out.push('');
   }
 
   // ===== Ad-set drill-down for top 5 highest-spend campaigns =====
@@ -1124,27 +1608,40 @@ export function generateAiReport({
   out.push('');
   out.push('### חלק 2 — אבחון קמפיינים (Campaign Triage)');
   out.push(
+    '**2.0 קרא את ה-Health Score קודם**: התחל מטבלת "Campaign Health Score". ' +
+      'הציון (A/B/C/D/F) הוא הכותרת — אבל ההמלצה תתבסס על *פירוט הרכיבים*: ' +
+      'רווחיות / נפח / מומנטום / attribution. ציון F עם רווחיות 0 = ROAS אמיתי ' +
+      'נמוך; ציון F עם attribution 30 = הקמפיין אולי עובד אבל אין click-id לראות זאת.',
+  );
+  out.push(
     '**2.1 קמפיינים לסקייל (לפי הסדר)**: רשום 1-3 קמפיינים שמצדיקים העלאת תקציב ' +
-      '+20-40%. קריטריונים מצטברים: (א) ROAS *Shopify-side* ≥ 2.7 לאורך 7+ ימים ' +
-      '(ב) CPM יציב (CV<0.25 לפי טבלת תנודתיות) (ג) במצב **מאיץ** או **יציב** ' +
-      'בטבלת מומנטום (ד) הוצאה ≥ $200 בטווח. לכל קמפיין: שם + תקציב חדש מומלץ + ' +
-      'הצדקה במספרים.',
+      '+20-40%. קריטריונים מצטברים: (א) **Health Score A או B** (75+ נקודות) ' +
+      '(ב) פער Pixel↔Shopify (בטבלת "השוואת ROAS לקמפיין") < ±15% — כלומר ה-ROAS ' +
+      'שאתה רואה הוא אמיתי (ג) CPM יציב (CV<0.25 לפי טבלת תנודתיות) (ד) במצב ' +
+      '**מאיץ** או **יציב** בטבלת מומנטום (ה) הוצאה ≥ $200 בטווח (ו) **לא ' +
+      'מופיע בטבלת "קמפיינים כבויים כעת"**. לכל קמפיין: שם + תקציב חדש מומלץ ' +
+      '+ הצדקה במספרים.',
   );
   out.push(
     '**2.2 קמפיינים לעצור / לרענן (Pause/Investigate)**: רשום 1-3 קמפיינים שמבזבזים. ' +
-      'התבסס על טבלת "⚠️ קמפיינים שמבזבזים" אבל הוסף סינון: אם קמפיין הופיע ' +
-      'בטבלה אך **Shopify-side ROAS** בפועל (לא Pixel) שווה בערך לפלטפורמה — ' +
-      'אז הוא באמת נכשל. אם Shopify-side ROAS גבוה משמעותית — זה רק חוסר ' +
-      'attribution, לא לעצור.',
+      'התבסס על השילוב: **Health Score D או F** + ROAS Shopify deterministic < 1.5 ' +
+      '(בטבלת "השוואת ROAS לקמפיין"). אם הציון נמוך אבל attribution-clarity הרכיב ' +
+      'היחיד שגרר אותו למטה (כלומר רווחיות וקצב טובים) — לא לעצור, רק לתקן את ' +
+      'ה-URL Parameters שיהיה click-id.',
   );
   out.push(
     '**2.3 קמפיינים במגמה שלילית**: בדוק טבלת "מומנטום קמפיינים". כל קמפיין ' +
-      'במצב **נחלש** עם הוצאה ≥ $200 = שווה התערבות (creative refresh, audience ' +
-      'broadening, או pause). תן 1-2 שמות.',
+      'במצב **נחלש** עם הוצאה ≥ $200 + ציון Health יורד = שווה התערבות (creative ' +
+      'refresh, audience broadening, או pause). תן 1-2 שמות.',
   );
   out.push(
-    '**2.4 קמפיינים חדשים שעולים**: כל מי שמסומן **חדש** או **מאיץ** וב-ROAS > 2.0 ' +
+    '**2.4 קמפיינים חדשים שעולים**: כל מי שמסומן **חדש** או **מאיץ** וב-Health Score B+ ' +
       '— מועמדים לסקייל הדרגתי. תן הצעה.',
+  );
+  out.push(
+    '**2.5 קמפיינים כבויים שראויים לחידוש**: התבונן בטבלת "קמפיינים כבויים כעת". ' +
+      'אם קמפיין כבוי אבל ROAS היסטורי שלו היה > 2.5 והוא לא נחלש לפני שכבה — ' +
+      'אולי שווה לחדש (היה Health A/B לפני ההפסקה). אם ROAS היסטורי < 1.5 — לא לחזור.',
   );
   out.push('');
   out.push('### חלק 3 — דיאגנוסטיקת משפך (Funnel Diagnosis)');
@@ -1176,9 +1673,17 @@ export function generateAiReport({
       '"scale by 20% per week" כדי לא להפר את ה-learning phase).',
   );
   out.push(
-    '**4.2 דפוסי יום**: בטבלת "ביצועים לפי יום בשבוע" — אם יש יום שמספק ROAS ' +
+    '**4.2 TikTok specifically**: אם יש מקטע "TikTok — צלילה ייעודית" בדוח, ' +
+      'התייחס אליו בנפרד. TikTok\'s `complete_payment` הוא purchase-specific (לא ' +
+      'אגרגציה כללית כמו Meta\'s `actions`), והדמוגרפיה שונה. אל תאחד מסקנות עם ' +
+      'Meta — שאל בנפרד: האם ROAS Shopify של TikTok ≥ 2.0? האם AOV של לקוחות ' +
+      'TikTok דומה ל-AOV של Meta או נמוך משמעותית? מה הציון Health של הקמפיין ' +
+      'הראשי?',
+  );
+  out.push(
+    '**4.3 דפוסי יום**: בטבלת "ביצועים לפי יום בשבוע" — אם יש יום שמספק ROAS ' +
       'גבוה ב-50%+ מהממוצע, הצע day-parting (העלאת תקציב באותו יום). אם יש יום ' +
-      'חלש מאוד — שווה לבדוק dayparting הפוך (orgnaic spike בלי paid).',
+      'חלש מאוד — שווה לבדוק dayparting הפוך (organic spike בלי paid).',
   );
   out.push('');
   out.push('### חלק 5 — אבחון מוצרים');
