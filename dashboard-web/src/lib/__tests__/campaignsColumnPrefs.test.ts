@@ -391,6 +391,43 @@ describe('toggleCampaignsColumnHidden — hide/show one column', () => {
     const out = readCampaignsColumnPrefs();
     expect(out.hidden).toEqual(['cpa', 'cpc', 'cpm']);
   });
+
+  /**
+   * HIGH-4 audit fix (2026-05-23): toggle must preserve the operator's
+   * saved order. Pre-fix code constructed `{hidden: [...]}` without
+   * copying `order` — every hide/show toggle silently reset the saved
+   * order to the canonical default.
+   *
+   * Operator scenario: reorder → hide → reorder → hide ... the saved
+   * reorder must survive every toggle so the operator's layout doesn't
+   * collapse mid-workflow.
+   */
+  it('preserves the saved order across hide → reorder → hide (HIGH-4)', () => {
+    // 1) Hide a column.
+    toggleCampaignsColumnHidden('cpm');
+    // 2) Reorder another.
+    moveCampaignsColumn('budget', 'up');
+    const orderAfterReorder = readCampaignsColumnPrefs().order;
+    expect(orderAfterReorder![0]).toBe('budget');
+    // 3) Hide a SECOND column.
+    toggleCampaignsColumnHidden('cpa');
+    const out = readCampaignsColumnPrefs();
+    // Order MUST survive the second toggle.
+    expect(out.order).toEqual(orderAfterReorder);
+    expect(out.order![0]).toBe('budget');
+    // Both columns remain hidden.
+    expect(out.hidden).toEqual(['cpa', 'cpm']);
+  });
+
+  it('preserves the saved order across un-hide (toggle to clear)', () => {
+    moveCampaignsColumn('cpa', 'up');
+    const orderAfterReorder = readCampaignsColumnPrefs().order;
+    toggleCampaignsColumnHidden('cpm'); // hide
+    toggleCampaignsColumnHidden('cpm'); // un-hide (same call, opposite effect)
+    const out = readCampaignsColumnPrefs();
+    expect(out.order).toEqual(orderAfterReorder);
+    expect(out.hidden).not.toContain('cpm');
+  });
 });
 
 describe('restoreAllCampaignsColumns — show everything', () => {
@@ -401,16 +438,36 @@ describe('restoreAllCampaignsColumns — show everything', () => {
     expect(out.hidden).toEqual([]);
   });
 
-  it('also wipes the saved order (lock current behaviour)', () => {
-    // `restoreAllCampaignsColumns` constructs {hidden: []} without
-    // copying the existing order — this wipes the order as a side
-    // effect. Lock that so a future refactor that splits the two
-    // surfaces them as separate decisions.
+  /**
+   * HIGH-4 audit fix (2026-05-23): post-fix `restoreAllCampaignsColumns`
+   * preserves the operator's saved column order. Pre-fix it constructed
+   * `{hidden: []}` without copying `order` — silently wiping the saved
+   * reorder as a side effect of "show everything". Operators reported
+   * losing their reordered column layout when restoring visibility.
+   *
+   * If the operator explicitly wants to reset the order, they call
+   * `resetCampaignsColumnOrder` (a separate, intentional action).
+   */
+  it('preserves the saved order across restore (HIGH-4)', () => {
     moveCampaignsColumn('budget', 'up');
+    toggleCampaignsColumnHidden('cpm');
+    const orderBeforeRestore = readCampaignsColumnPrefs().order;
+    expect(orderBeforeRestore).toBeDefined();
+    expect(orderBeforeRestore![0]).toBe('budget');
+    restoreAllCampaignsColumns();
+    const out = readCampaignsColumnPrefs();
+    expect(out.hidden).toEqual([]);
+    // Order MUST survive — same first element as before the restore.
+    expect(out.order).toEqual(orderBeforeRestore);
+    expect(out.order![0]).toBe('budget');
+  });
+
+  it('preserves the canonical-default order (no explicit order saved) across restore', () => {
     toggleCampaignsColumnHidden('cpm');
     restoreAllCampaignsColumns();
     const out = readCampaignsColumnPrefs();
     expect(out.hidden).toEqual([]);
+    // No order was ever saved → order stays undefined (canonical default).
     expect(out.order).toBeUndefined();
   });
 });

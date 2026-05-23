@@ -219,7 +219,16 @@ export function writeCampaignsColumnPrefs(prefs: CampaignsColumnPrefs): void {
   }
 }
 
-/** Convenience: toggle a single column ID's hidden state. */
+/**
+ * Convenience: toggle a single column ID's hidden state.
+ *
+ * HIGH-4 audit fix (2026-05-23): spread `...cur` into the next prefs
+ * object so the operator's user-set `order` (set via
+ * `moveCampaignsColumn`) is preserved across hide/show toggles. Pre-fix
+ * code constructed `{hidden: [...]}` without copying `order`, silently
+ * resetting the saved column order to the canonical default every time
+ * the operator hid or restored a column.
+ */
 export function toggleCampaignsColumnHidden(id: string): CampaignsColumnPrefs {
   const cur = readCampaignsColumnPrefs();
   const set = new Set(cur.hidden);
@@ -228,14 +237,25 @@ export function toggleCampaignsColumnHidden(id: string): CampaignsColumnPrefs {
   } else {
     set.add(id);
   }
-  const next: CampaignsColumnPrefs = { hidden: Array.from(set).sort() };
+  const next: CampaignsColumnPrefs = { ...cur, hidden: Array.from(set).sort() };
   writeCampaignsColumnPrefs(next);
   return next;
 }
 
-/** Convenience: restore all columns (clear the hidden list). */
+/**
+ * Convenience: restore all columns (clear the hidden list).
+ *
+ * HIGH-4 audit fix (2026-05-23): spread `...cur` so the user-set `order`
+ * survives the "show everything" action. Pre-fix code wiped the order
+ * as a side effect — operators reported reordering ROAS → spend → ...
+ * then clicking "restore all" and losing the reorder.
+ *
+ * If the operator explicitly wants to reset the order too, they call
+ * `resetCampaignsColumnOrder` (a separate, intentional action).
+ */
 export function restoreAllCampaignsColumns(): CampaignsColumnPrefs {
-  const next: CampaignsColumnPrefs = { hidden: [] };
+  const cur = readCampaignsColumnPrefs();
+  const next: CampaignsColumnPrefs = { ...cur, hidden: [] };
   writeCampaignsColumnPrefs(next);
   return next;
 }
