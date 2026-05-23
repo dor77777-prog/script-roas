@@ -143,7 +143,11 @@ export function getSyncState(): SyncState {
  * then the debounced push would re-upload the now-overwritten stale value
  * to cloud (losing the edit on server too).
  */
-export function pushCloudKey(localStorageKey: StateKey, value: unknown): void {
+export function pushCloudKey(
+  localStorageKey: StateKey,
+  value: unknown,
+  options?: { immediate?: boolean },
+): void {
   if (typeof window === 'undefined') return;
   const cloudKey = stripPrefix(localStorageKey);
 
@@ -179,6 +183,22 @@ export function pushCloudKey(localStorageKey: StateKey, value: unknown): void {
   // Mark immediately so concurrent hydrates inside the debounce window
   // recognize this key as locally dirty and skip the overwrite.
   lastPushAt[localStorageKey] = Date.now();
+
+  // Phase 05.7.x (2026-05-23) — `immediate: true` bypasses the 400ms
+  // debounce and fires the POST synchronously. Used by explicit
+  // "Save" actions (e.g. product mapping) where the user has clicked
+  // a button and may refresh / close the tab immediately after. The
+  // debounce is only valuable for fast-typing scenarios (goal input,
+  // annotations) where bundling keystrokes saves API calls. For a
+  // discrete save, the cost of an extra debounce is far outweighed
+  // by the bug it causes: user-saves-then-refreshes → debounce never
+  // fires → hydrateFromCloud overwrites the just-saved value with
+  // the stale cloud value → user's mapping is silently lost.
+  if (options?.immediate) {
+    pendingTimers[localStorageKey] = undefined;
+    void postWithRetry(cloudKey, value);
+    return;
+  }
 
   pendingTimers[localStorageKey] = setTimeout(() => {
     pendingTimers[localStorageKey] = undefined;

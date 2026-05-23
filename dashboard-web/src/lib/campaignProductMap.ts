@@ -54,7 +54,16 @@ export function writeProductMap(map: ProductMap) {
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
     window.dispatchEvent(new CustomEvent('roas-campaign-product-map-changed'));
-    pushCloudKey(STORAGE_KEY, map);
+    // Phase 05.7.x (2026-05-23) — `immediate: true` skips the 400ms
+    // debounce. Product mapping is an explicit "Save" action: the
+    // operator clicks Save in ProductPickerModal and often refreshes
+    // / closes the tab immediately after. With the debounce, the
+    // POST never fires before reload → on reload, hydrateFromCloud
+    // pulls the STALE cloud value and overwrites the just-saved
+    // mapping → operator's new mapping silently disappears. The
+    // immediate flag fires the POST synchronously so the cloud has
+    // the new value before any refresh can race it.
+    pushCloudKey(STORAGE_KEY, map, { immediate: true });
   } catch {
     /* quota / private mode — local-only failure, ignore */
   }
