@@ -31,7 +31,12 @@ import {
   analyzeAttribution,
   analyzeProductChannel,
 } from '@/lib/attributionAnalysis';
-import { analyzeCpmVsRoas, PREV_PERIOD_MIN_DAYS } from '@/lib/cpmRoasAnalysis';
+import {
+  analyzeCpmVsRoas,
+  dayOffsetFromRangeStart,
+  indexPrevByDateOffset,
+  PREV_PERIOD_MIN_DAYS,
+} from '@/lib/cpmRoasAnalysis';
 import { useCampaignAttribution } from '@/lib/hooks/useCampaignAttribution';
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import { roasLabel } from '@/lib/analytics';
@@ -899,17 +904,25 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
             );
             // Build the chart's data array. When the user toggled the 'prev'
             // baseline AND we have previous-period rows, merge in the previous
-            // period's CPM by INDEX (day 1 of prev aligns with day 1 of current,
-            // etc.). This visualizes "did CPM go up or down vs the equally-
-            // long window before this one" directly on the chart — the
-            // operator can verify the analysis text's up/down arrow with eyes.
-            // X-axis labels stay on the current period's dates; the previous
-            // period's actual date surfaces in the tooltip.
-            const chartData = cpmSeries.map((d, i) => ({
-              ...d,
-              prevCpm: prevDaily?.[i]?.cpm ?? null,
-              prevDate: prevDaily?.[i]?.date ?? null,
-            }));
+            // period's CPM by CALENDAR OFFSET — "day 0 of current pairs with
+            // day 0 of prev", "day 1 with day 1", regardless of which days
+            // got filtered out for zero impressions. Naive index pairing (the
+            // original bug c/CR-01) silently warped this whenever current and
+            // prev had a different number of active days. Now both series are
+            // anchored to days-since-window-start, so the dashed line truly is
+            // the same relative day. X-axis labels stay on the current
+            // period's dates; the previous period's actual date surfaces in
+            // the tooltip.
+            const prevByOffset = indexPrevByDateOffset(prevDaily, prevRange.from);
+            const chartData = cpmSeries.map(d => {
+              const offset = dayOffsetFromRangeStart(d.date, rangeFrom);
+              const prev = prevByOffset.get(offset);
+              return {
+                ...d,
+                prevCpm: prev?.cpm ?? null,
+                prevDate: prev?.date ?? null,
+              };
+            });
             const isLoadingPrev = cpmAnalysisMode === 'prev' && !campaignsDataPrev;
             const showPrevLine = cpmAnalysisMode === 'prev' && !isLoadingPrev && (prevDaily?.length ?? 0) > 0;
             const fmtRangeShort = (from: string, to: string) => {

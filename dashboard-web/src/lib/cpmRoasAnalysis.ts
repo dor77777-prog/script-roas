@@ -38,6 +38,53 @@ export type DailyCpmRoasPoint = {
   roas: number;
 };
 
+/**
+ * c/CR-01 (audit-2026-05-23-v2): align a CPM previous-period series to the
+ * current-period series by **calendar offset** (days from each window's
+ * `from`) rather than by surviving-array INDEX.
+ *
+ * The bug this guards against: both `cpmDaily` and `cpmDailyPrev` are
+ * pre-filtered to drop zero-impression days. If current has 12 active days
+ * and prev has 14, naive `prev[i]` pairing aligns "current day 7" with
+ * "prev day 7" — which can be off by several calendar days. The dashed
+ * overlay then visually warps every operator decision about "vs previous
+ * period."
+ *
+ * This helper indexes the prev series by `days-from-prevRange.from`. The
+ * caller then walks the current series and asks for the matching offset.
+ * Missing days stay null (Recharts breaks the line with `connectNulls={false}`).
+ *
+ * Pure function — no side effects, safe to memoize on inputs.
+ */
+export function indexPrevByDateOffset<T extends { date: string }>(
+  prevSeries: ReadonlyArray<T> | null | undefined,
+  prevRangeFrom: string,
+): Map<number, T> {
+  const out = new Map<number, T>();
+  if (!prevSeries) return out;
+  const prevPeriodStart = new Date(prevRangeFrom + 'T00:00:00Z').getTime();
+  for (const p of prevSeries) {
+    const offsetDays = Math.round(
+      (new Date(p.date + 'T00:00:00Z').getTime() - prevPeriodStart) / 86400000,
+    );
+    out.set(offsetDays, p);
+  }
+  return out;
+}
+
+/**
+ * Companion to `indexPrevByDateOffset`: given a current-period date and the
+ * current-period start, return the days-from-current-start offset. Caller
+ * uses that offset to look up the prev-period point that fell on the same
+ * relative calendar day.
+ */
+export function dayOffsetFromRangeStart(date: string, rangeFrom: string): number {
+  const rangeStart = new Date(rangeFrom + 'T00:00:00Z').getTime();
+  return Math.round(
+    (new Date(date + 'T00:00:00Z').getTime() - rangeStart) / 86400000,
+  );
+}
+
 export type CpmRoasAnalysis = {
   /** Short Hebrew summary sentence the UI renders verbatim. */
   text: string;

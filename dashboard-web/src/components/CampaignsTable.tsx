@@ -26,6 +26,8 @@ import {
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import {
   analyzeCpmVsRoas,
+  dayOffsetFromRangeStart,
+  indexPrevByDateOffset,
   PREV_PERIOD_MIN_DAYS,
   type DailyCpmRoasPoint,
 } from '@/lib/cpmRoasAnalysis';
@@ -1209,16 +1211,24 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         const isLoadingPrev = cpmAnalysisMode === 'prev' && !cpmPrevData;
         // Build the chart's data array. When the user toggled the 'prev'
         // baseline AND we have previous-period rows, merge in the previous
-        // period's CPM by INDEX (day 1 of prev aligns with day 1 of current,
-        // etc.). The operator can visually verify the up/down arrow from the
-        // analysis text on the chart itself. X-axis labels stay on the
-        // current period's dates; the previous period's actual date surfaces
-        // in the tooltip.
-        const cpmChartData = cpmDaily.map((d, i) => ({
-          ...d,
-          prevCpm: cpmDailyPrev?.[i]?.cpm ?? null,
-          prevDate: cpmDailyPrev?.[i]?.date ?? null,
-        }));
+        // period's CPM by CALENDAR OFFSET — "day 0 of current pairs with day 0
+        // of prev", "day 1 with day 1", regardless of which days got filtered
+        // out for zero impressions. Naive index pairing (the original bug
+        // c/CR-01) silently warped this whenever current and prev had a
+        // different number of active days. Now both series are anchored to
+        // days-since-window-start, so the dashed line truly is the same
+        // relative day. X-axis labels stay on the current period's dates;
+        // the previous period's actual date surfaces in the tooltip.
+        const prevByOffset = indexPrevByDateOffset(cpmDailyPrev, cpmPrevRange.from);
+        const cpmChartData = cpmDaily.map(d => {
+          const offset = dayOffsetFromRangeStart(d.date, localRange.from);
+          const prev = prevByOffset.get(offset);
+          return {
+            ...d,
+            prevCpm: prev?.cpm ?? null,
+            prevDate: prev?.date ?? null,
+          };
+        });
         const showPrevLine = cpmAnalysisMode === 'prev' && !isLoadingPrev && (cpmDailyPrev?.length ?? 0) > 0;
         return (
         <div className="mt-3 rounded-lg bg-surface border border-borderSubtle p-3">
