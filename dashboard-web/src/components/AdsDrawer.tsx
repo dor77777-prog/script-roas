@@ -161,7 +161,19 @@ export function AdsDrawer({
       conversions: number;
     }>();
     for (const r of data.rows) {
-      // FIX-07 (5.2.2.1): date filter removed — /api/ads now filters by range server-side via fetchAdsData({ range }).
+      // d/HI-04 (audit 2026-05-23): date filter RESTORED for defensive
+      // consistency with `dailyMetaByAd` below — both useMemos walk the
+      // same `data.rows`, and the `summary` deps array already includes
+      // rangeFrom/rangeTo, so removing the actual filter while keeping
+      // the deps was a foot-gun (any future range change re-ran the memo
+      // but didn't actually narrow). The server-side filter in
+      // fetchAdsData({ range }) is still the primary defense; this is
+      // belt-and-suspenders so the two memos can't drift out of sync
+      // (which silently produces different ad totals vs daily series).
+      // The original FIX-07 (5.2.2.1) note about server-side filtering
+      // is still true — this line just keeps the client-side guard
+      // symmetric with dailyMetaByAd.
+      if (r.date < rangeFrom || r.date > rangeTo) continue;
       if (r.platform !== platform) continue;   // FIX-11 (5.2.2.1): prevent cross-platform rows from sharing an ad drawer scope.
       if (r.storeId !== storeId) continue;
       if (r.campaignId !== campaignId) continue;
