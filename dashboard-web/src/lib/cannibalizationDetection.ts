@@ -43,7 +43,7 @@ import type { ProductMap } from './campaignProductMap';
 // Public types
 // =============================================================================
 
-export type CannibalizationRisk = 'none' | 'low' | 'medium' | 'high' | 'insufficient';
+export type CannibalizationRisk = 'none' | 'low' | 'medium' | 'high' | 'insufficient' | 'composition_changed';
 
 export type CannibalizationVerdict = {
   productId: string;
@@ -227,23 +227,59 @@ export function detectProductCannibalization(args: {
 
   const verdicts: CannibalizationVerdict[] = [];
 
+  // Audit fix 2026-05-23 (HIGH-03 multi-mapping): require cohort
+  // composition stability before the spend/revenue growth comparison
+  // means anything. A "material" member (≥ this share of either
+  // half's spend) MUST be active in both halves; otherwise the
+  // comparison conflates "we scaled A" with "we launched B" or
+  // "we paused B", emitting false HIGH / false NONE.
+  const MATERIAL_MEMBER_SPEND_SHARE = 0.2;
+  const MIN_ACTIVE_DAYS_PER_HALF = 3;
+
   for (const [productId, cohortKeys] of cohortByProduct.entries()) {
     if (cohortKeys.length < 2) continue; // not multi-mapped — skip
 
-    // Aggregate cohort spend per half.
-    let earlySpend = 0;
-    let lateSpend = 0;
-    let earlyActiveDays = 0;
-    let lateActiveDays = 0;
-
+    // Per-member spend per half (used both for composition guard and
+    // the cohort-total computation below).
+    const memberStats = new Map<string, {
+      earlySpend: number;
+      lateSpend: number;
+      earlyActiveDays: number;
+      lateActiveDays: number;
+    }>();
     for (const k of cohortKeys) {
       const rows = campaignsDailyByKey.get(k) ?? [];
-      earlySpend += sumInWindow(rows, halves.early.from, halves.early.to, r => r.spend);
-      lateSpend += sumInWindow(rows, halves.late.from, halves.late.to, r => r.spend);
+      const earlyMemberDays = new Set<string>();
+      const lateMemberDays = new Set<string>();
+      let earlyMemberSpend = 0;
+      let lateMemberSpend = 0;
+      for (const r of rows) {
+        if (r.date >= halves.early.from && r.date <= halves.early.to) {
+          earlyMemberSpend += r.spend;
+          if (r.spend > 0) earlyMemberDays.add(r.date);
+        } else if (r.date >= halves.late.from && r.date <= halves.late.to) {
+          lateMemberSpend += r.spend;
+          if (r.spend > 0) lateMemberDays.add(r.date);
+        }
+      }
+      memberStats.set(k, {
+        earlySpend: earlyMemberSpend,
+        lateSpend: lateMemberSpend,
+        earlyActiveDays: earlyMemberDays.size,
+        lateActiveDays: lateMemberDays.size,
+      });
     }
-    // Active days = distinct dates with ANY cohort spend in that half.
-    // We union across all cohort campaigns — a day where ONE cohort
-    // member ran counts as an "active day" for cannibalization purposes.
+
+    // Cohort-total spend per half (derived from member stats).
+    let earlySpend = 0;
+    let lateSpend = 0;
+    for (const s of memberStats.values()) {
+      earlySpend += s.earlySpend;
+      lateSpend += s.lateSpend;
+    }
+    // Cohort-level active-days union (preserved for the "insufficient"
+    // floor check — a half is "active enough" if ANY cohort member ran
+    // ≥3 days).
     const earlyActiveDates = new Set<string>();
     const lateActiveDates = new Set<string>();
     for (const k of cohortKeys) {
@@ -257,8 +293,8 @@ export function detectProductCannibalization(args: {
         }
       }
     }
-    earlyActiveDays = earlyActiveDates.size;
-    lateActiveDays = lateActiveDates.size;
+    const earlyActiveDays = earlyActiveDates.size;
+    const lateActiveDays = lateActiveDates.size;
 
     // Aggregate product net revenue per half.
     const productRows = productsDailyByProduct.get(productId) ?? [];
@@ -293,6 +329,71 @@ export function detectProductCannibalization(args: {
           lateHalfRevenue: lateRev,
           spendGrowthPct: 0,
           revenueGrowthPct: 0,
+          marginalRoas: null,
+        },
+      });
+      continue;
+    }
+
+    // Audit fix 2026-05-23 (HIGH-03 multi-mapping): composition-stability
+    // guard. The half-over-half split assumes the same set of campaigns
+    // ran in both halves. When a "material" member (≥ 20% of either half's
+    // spend) is missing from one half — paused mid-range OR launched
+    // mid-range — the spend-growth comparison conflates that change with
+    // genuine scaling and emits false HIGH / false NONE verdicts.
+    //
+    // Operator's natural flow ("I paused the weak one and scaled the
+    // strong one") used to silently emit NONE; launching a fresh
+    // experiment on a multi-mapped product used to trip HIGH. Both
+    // verdicts mislead. Surface the composition change explicitly.
+    const composChangedMembers: Array<{ key: string; reason: string }> = [];
+    for (const k of cohortKeys) {
+      const s = memberStats.get(k);
+      if (!s) continue;
+      const earlyShare =
+        earlySpend > 0 ? s.earlySpend / earlySpend : 0;
+      const lateShare =
+        lateSpend > 0 ? s.lateSpend / lateSpend : 0;
+      const material =
+        earlyShare >= MATERIAL_MEMBER_SPEND_SHARE ||
+        lateShare >= MATERIAL_MEMBER_SPEND_SHARE;
+      if (!material) continue;
+      if (s.earlyActiveDays < MIN_ACTIVE_DAYS_PER_HALF) {
+        composChangedMembers.push({
+          key: k,
+          reason: `הושק/קיבל תקציב מהותי במחצית השנייה (${s.lateActiveDays}d פעיל) אחרי מחצית ראשונה כמעט-ריקה (${s.earlyActiveDays}d).`,
+        });
+      } else if (s.lateActiveDays < MIN_ACTIVE_DAYS_PER_HALF) {
+        composChangedMembers.push({
+          key: k,
+          reason: `הופסק/הופחת תקציב מהותי במחצית השנייה (${s.lateActiveDays}d פעיל) אחרי מחצית ראשונה פעילה (${s.earlyActiveDays}d).`,
+        });
+      }
+    }
+    if (composChangedMembers.length > 0) {
+      const summary = composChangedMembers
+        .map(m => `• ${m.key.split('::').slice(-1)[0]}: ${m.reason}`)
+        .join(' ');
+      verdicts.push({
+        productId,
+        productTitle: productTitles.get(productId) ?? productId,
+        cohortKeys,
+        risk: 'composition_changed',
+        reason:
+          `הרכב הקבוצה השתנה בתוך הטווח — לא ניתן להשוות חצי-לחצי באופן הוגן: ${summary} ` +
+          `ההשוואה הקלאסית של "סקיילנו → צמחה ההכנסה?" דורשת שאותם קמפיינים יהיו פעילים בשני החצאים.`,
+        metrics: {
+          earlyHalfDays,
+          lateHalfDays,
+          earlyHalfSpend: earlySpend,
+          lateHalfSpend: lateSpend,
+          earlyHalfRevenue: earlyRev,
+          lateHalfRevenue: lateRev,
+          spendGrowthPct: earlySpend > 0 ? (lateSpend - earlySpend) / earlySpend : 0,
+          revenueGrowthPct:
+            earlyRev !== 0
+              ? (lateRev - earlyRev) / Math.abs(earlyRev)
+              : lateRev > 0 ? Infinity : 0,
           marginalRoas: null,
         },
       });

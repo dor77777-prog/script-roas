@@ -228,11 +228,26 @@ export function CohortComparisonPanel({
   const cannibalizationAlerts = (cannibalizationVerdicts ?? [])
     .filter(v => v.risk === 'high' || v.risk === 'medium' || v.risk === 'low')
     .sort((a, b) => {
-      const order = { high: 0, medium: 1, low: 2, none: 3, insufficient: 4 };
+      // Audit fix 2026-05-23: `composition_changed` added to risk type
+      // but intentionally excluded from the alert sort (it's surfaced
+      // separately as an info banner below, not as a severity).
+      const order: Record<CannibalizationVerdict['risk'], number> = {
+        high: 0,
+        medium: 1,
+        low: 2,
+        none: 3,
+        insufficient: 4,
+        composition_changed: 5,
+      };
       const sevDiff = order[a.risk] - order[b.risk];
       if (sevDiff !== 0) return sevDiff;
       return b.metrics.spendGrowthPct - a.metrics.spendGrowthPct;
     });
+  // Audit fix 2026-05-23 (HIGH-03 multi-mapping): composition-change
+  // verdicts surface as an info banner — operator should understand
+  // why the cannibalization analysis is suppressed for these products.
+  const compositionChangedAlerts = (cannibalizationVerdicts ?? [])
+    .filter(v => v.risk === 'composition_changed');
   // Build per-section ranked lists. Each section's ranking is INTERNAL —
   // ranking #1 in the intra-platform table doesn't necessarily mean #1
   // overall (a cross-platform member with higher ROAS could be overall
@@ -372,6 +387,34 @@ export function CohortComparisonPanel({
                 </span>
                 <br />
                 <span className="text-text-secondary">{v.reason}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Audit fix 2026-05-23 (HIGH-03 multi-mapping): composition-change
+          info banner. Surfaces when the cohort's spend ↔ revenue comparison
+          is suppressed because a material member was launched or paused
+          mid-range — operator should understand WHY the cannibalization
+          analysis is empty for these products instead of inferring "all is
+          well". Distinct visual treatment (neutral surfaceMuted, not the
+          red/amber/blue severity tones) so it doesn't read as an alarm. */}
+      {compositionChangedAlerts.length > 0 && (
+        <div className="rounded-lg border border-borderSubtle bg-surfaceMuted/40 px-3 py-2.5 space-y-2">
+          <div className="flex items-center gap-2 text-xs font-semibold text-text-secondary">
+            <TrendingDown size={14} className="text-text-muted" />
+            <span>ניתוח קניבליזציה מושהה — הרכב הקבוצה השתנה בתוך הטווח</span>
+          </div>
+          <ul className="space-y-1.5">
+            {compositionChangedAlerts.map(v => (
+              <li
+                key={v.productId}
+                className="text-[11px] text-text-secondary leading-relaxed"
+              >
+                <strong className="text-text-primary">{v.productTitle}</strong>
+                <br />
+                <span className="text-text-muted">{v.reason}</span>
               </li>
             ))}
           </ul>

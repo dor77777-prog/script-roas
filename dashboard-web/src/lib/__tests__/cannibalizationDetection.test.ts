@@ -499,3 +499,113 @@ describe('detectProductCannibalization — edge revenue', () => {
     expect(result[0].risk).toBe('none'); // revenue grew from 0 → 200, no cannibalization
   });
 });
+
+// ---------------------------------------------------------------------------
+// Composition-change guard — locks audit HIGH-03 fix (2026-05-23)
+//
+// The old half-over-half cohort-total comparison conflated "we scaled A"
+// with "we launched B" / "we paused B". Verifies the new
+// 'composition_changed' verdict fires when a material member is missing
+// from one half, and that the legacy thresholds still fire when the
+// composition is stable.
+// ---------------------------------------------------------------------------
+
+describe('detectProductCannibalization — composition-change guard (audit HIGH-03)', () => {
+  const map: ProductMap = {
+    [k('Meta', 'c1')]: ['p1'],
+    [k('Meta', 'c2')]: ['p1'],
+  };
+
+  it('emits composition_changed when a material member is launched mid-range', () => {
+    // c1 ran throughout. c2 started in the LATE half only.
+    // Pre-fix: cohort spend doubled → falsely flagged HIGH cannibalization.
+    // Post-fix: c2's share in late half = 50% >= 20% material AND c2's
+    //           early active-days = 0 < 3 → composition_changed.
+    const result = detectProductCannibalization({
+      range: FULL_RANGE,
+      storeId: STORE,
+      productMap: map,
+      campaignsDaily: [
+        ...buildCampaignDaysHalf('c1', 100, 1, 7),
+        ...buildCampaignDaysHalf('c2', 0, 1, 7), // not running
+        ...buildCampaignDaysHalf('c1', 100, 8, 14),
+        ...buildCampaignDaysHalf('c2', 100, 8, 14), // launched
+      ],
+      productsDaily: [
+        ...buildProductDaysHalf('p1', 300, 1, 7),
+        ...buildProductDaysHalf('p1', 310, 8, 14), // ~flat revenue
+      ],
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0].risk).toBe('composition_changed');
+    // No marginal ROAS for composition_changed.
+    expect(result[0].metrics.marginalRoas).toBeNull();
+  });
+
+  it('emits composition_changed when a material member is paused mid-range', () => {
+    // c1 ran throughout. c2 ran in EARLY half only (paused going into late).
+    // Pre-fix: cohort spend halved → falsely flagged NONE (scale-down).
+    // Post-fix: c2 had ≥20% share in early but 0 days in late → composition_changed.
+    const result = detectProductCannibalization({
+      range: FULL_RANGE,
+      storeId: STORE,
+      productMap: map,
+      campaignsDaily: [
+        ...buildCampaignDaysHalf('c1', 100, 1, 7),
+        ...buildCampaignDaysHalf('c2', 100, 1, 7), // running
+        ...buildCampaignDaysHalf('c1', 130, 8, 14),
+        ...buildCampaignDaysHalf('c2', 0, 8, 14),  // paused
+      ],
+      productsDaily: [
+        ...buildProductDaysHalf('p1', 400, 1, 7),
+        ...buildProductDaysHalf('p1', 200, 8, 14),
+      ],
+    });
+    expect(result[0].risk).toBe('composition_changed');
+  });
+
+  it('still applies HIGH when composition is stable (no member added/dropped)', () => {
+    // BOTH c1 and c2 run throughout. Spend grows materially, revenue is flat.
+    // Composition guard should NOT fire — classic HIGH cannibalization.
+    const result = detectProductCannibalization({
+      range: FULL_RANGE,
+      storeId: STORE,
+      productMap: map,
+      campaignsDaily: [
+        ...buildCampaignDaysHalf('c1', 100, 1, 7),
+        ...buildCampaignDaysHalf('c2', 100, 1, 7),
+        ...buildCampaignDaysHalf('c1', 150, 8, 14),
+        ...buildCampaignDaysHalf('c2', 150, 8, 14),
+      ],
+      productsDaily: [
+        ...buildProductDaysHalf('p1', 600, 1, 7),
+        ...buildProductDaysHalf('p1', 605, 8, 14), // ~flat
+      ],
+    });
+    expect(result[0].risk).toBe('high');
+  });
+
+  it('does NOT fire composition_changed for a non-material member', () => {
+    // c1 contributes >99% of spend in both halves; c2 contributes <1%.
+    // c2 only ran in late half — but it's not material, so the guard
+    // doesn't trigger. Legacy threshold applies (c1 scaled 50% on flat rev).
+    const result = detectProductCannibalization({
+      range: FULL_RANGE,
+      storeId: STORE,
+      productMap: map,
+      campaignsDaily: [
+        ...buildCampaignDaysHalf('c1', 1000, 1, 7),
+        ...buildCampaignDaysHalf('c2', 0, 1, 7),
+        ...buildCampaignDaysHalf('c1', 1500, 8, 14),
+        ...buildCampaignDaysHalf('c2', 5, 8, 14), // tiny test spend; <1% material
+      ],
+      productsDaily: [
+        ...buildProductDaysHalf('p1', 3000, 1, 7),
+        ...buildProductDaysHalf('p1', 3000, 8, 14),
+      ],
+    });
+    expect(result[0].risk).not.toBe('composition_changed');
+    // c1 alone drove the analysis; spend +50%, revenue 0% → should be HIGH.
+    expect(result[0].risk).toBe('high');
+  });
+});
