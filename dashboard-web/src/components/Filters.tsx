@@ -10,6 +10,26 @@ import {
 import type { Filters as F, PresetKey } from '@/lib/types';
 import { Calendar, ChevronDown, Store, Zap } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
+import { applyFromCandidate, applyToCandidate } from '@/lib/rangeClamp';
+
+/**
+ * Asia/Jerusalem "today" as YYYY-MM-DD. Capped value for the custom-range
+ * inputs (HIGH-3 audit fix 2026-05-23) so the operator cannot pick a
+ * future date and cascade malformed YYYY-MM-DD into downstream SWR keys.
+ *
+ * Recomputed on every render — the dashboard runs as a long-lived SPA so
+ * a render that straddles midnight in Asia/Jerusalem should pick up the
+ * new boundary on the next render rather than freezing yesterday's value
+ * for the session. Matches CampaignsTable.tsx's todayInIsrael() helper.
+ */
+function todayInIsrael(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jerusalem',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
 
 type Props = {
   filters: F;
@@ -145,21 +165,54 @@ export function Filters({ filters, stores, onChange }: Props) {
 
             {filters.preset === 'custom' && (
               <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-2">
+                {/*
+                  HIGH-3 audit fix (2026-05-23): both inputs now go
+                  through the shared `applyFromCandidate` /
+                  `applyToCandidate` helpers from `lib/rangeClamp.ts`.
+                  Behavior:
+                    1. Empty input ('' on backspace through year) → no-op,
+                       state stays valid YYYY-MM-DD (was: cleared range
+                       to '', which 400'd 6 downstream SWR keys).
+                    2. Future date → clamped to todayInIsrael() (was:
+                       silently broke cohort comparisons that assume
+                       to <= today).
+                    3. from > to (or to < from) → swap to single-day
+                       range at the picked date (matches the operator's
+                       intuition "I picked this day"; same semantics as
+                       CampaignsTable.tsx's inline range input which has
+                       always done this).
+                  Both <input>s carry `max={today}` so the native picker
+                  also disables future days at the calendar widget layer.
+                */}
                 <input
                   type="date"
                   value={filters.range.from}
-                  onChange={e =>
-                    onChange({ ...filters, range: { ...filters.range, from: e.target.value } })
-                  }
+                  max={todayInIsrael()}
+                  onChange={e => {
+                    const next = applyFromCandidate(
+                      filters.range,
+                      e.target.value,
+                      todayInIsrael(),
+                    );
+                    if (next === null) return;
+                    onChange({ ...filters, range: next });
+                  }}
                   className="rounded-lg border border-border bg-surface px-3 py-2 text-sm w-full focus:outline-none focus:border-primary focus:shadow-focus transition-colors"
                 />
                 <span className="text-text-secondary text-center hidden sm:inline">—</span>
                 <input
                   type="date"
                   value={filters.range.to}
-                  onChange={e =>
-                    onChange({ ...filters, range: { ...filters.range, to: e.target.value } })
-                  }
+                  max={todayInIsrael()}
+                  onChange={e => {
+                    const next = applyToCandidate(
+                      filters.range,
+                      e.target.value,
+                      todayInIsrael(),
+                    );
+                    if (next === null) return;
+                    onChange({ ...filters, range: next });
+                  }}
                   className="rounded-lg border border-border bg-surface px-3 py-2 text-sm w-full focus:outline-none focus:border-primary focus:shadow-focus transition-colors"
                 />
               </div>
