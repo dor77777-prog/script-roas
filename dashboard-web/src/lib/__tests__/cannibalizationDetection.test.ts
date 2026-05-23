@@ -665,3 +665,201 @@ describe('detectProductCannibalization — composition-change guard (audit HIGH-
     expect(result[0].risk).toBe('high');
   });
 });
+
+// ---------------------------------------------------------------------------
+// Rebalanced mid-range guard — locks audit b/HI-04 fix (2026-05-23)
+//
+// The HIGH-03 composition-stability guard caught members entirely missing
+// from one half (paused/launched). HIGH-04 widens it to catch members that
+// are active in BOTH halves but had their share-of-cohort flip ≥2× — i.e.,
+// the cohort was REBALANCED, not scaled. The half-over-half comparison is
+// just as unfair in that scenario, so it should also emit composition_changed.
+// ---------------------------------------------------------------------------
+
+describe('detectProductCannibalization — rebalanced mid-range guard (audit b/HI-04)', () => {
+  const map: ProductMap = {
+    [k('Meta', 'c1')]: ['p1'],
+    [k('Meta', 'c2')]: ['p1'],
+  };
+
+  it('POSITIVE: fires composition_changed when c2 share triples (7% → 21%) — both halves active', () => {
+    // Scenario: c1 was dominant early (~93% share), c2 was a small test
+    // (~7% share). In the late half, c2 was scaled up — c1 went to 79%,
+    // c2 went to 21%. Both ran throughout.
+    //
+    // Pre-fix: the days-check on c2 passes (active both halves) AND
+    // c2's late share = 21% > 20% so it's "material", but the days
+    // check returns false — fell through to legacy thresholds.
+    // Actually with cohort spend changing too, legacy could fire HIGH
+    // or NONE depending on revenue noise. Either way, the verdict is
+    // misleading: the operator REALLOCATED, didn't scale.
+    //
+    // Post-fix: c2's share ratio = 21% / 7% = 3× → shareRatioFlipped
+    // → composition_changed fires. (Same for c1's mirror flip: 79% / 93%
+    // is < 2× drop, but lateShare=79% is material and earlyShare=93% is
+    // material — material gate fires anyway. Both members trigger via
+    // different paths; we only need ONE to fire.)
+    //
+    // Cohort totals chosen: early 1000+75=1075, late 950+250=1200.
+    // c1 ran all 14 days; c2 ran all 14 days.
+    const result = detectProductCannibalization({
+      range: FULL_RANGE,
+      storeId: STORE,
+      productMap: map,
+      campaignsDaily: [
+        ...buildCampaignDaysHalf('c1', 1000, 1, 7),
+        ...buildCampaignDaysHalf('c2', 75, 1, 7),   // 7% of cohort
+        ...buildCampaignDaysHalf('c1', 950, 8, 14),
+        ...buildCampaignDaysHalf('c2', 250, 8, 14), // 21% of cohort
+      ],
+      productsDaily: [
+        ...buildProductDaysHalf('p1', 3000, 1, 7),
+        ...buildProductDaysHalf('p1', 3100, 8, 14),
+      ],
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0].risk).toBe('composition_changed');
+    // Reason text mentions the share-flip phrasing so the operator
+    // understands WHY (vs the missing-half phrasing for paused/launched).
+    expect(result[0].reason).toMatch(/הקצאה מחדש|חלק יחסי/);
+  });
+
+  it('NEGATIVE: does NOT fire when shares fluctuate within 5-15% (small drift, not rebalancing)', () => {
+    // Scenario: c1 ≈ 88-92% in both halves; c2 ≈ 8-12% in both halves.
+    // The ratio drift (8%/12% = 1.5×) is BELOW the 2× threshold — and
+    // critically c2's smaller share is above the 5% noise floor in
+    // both halves, so the relative-share logic checks correctly.
+    // Neither material gate fires (c2 never hits 20%) and the share
+    // ratio doesn't flip (under 2×). Falls through to legacy thresholds.
+    //
+    // Legacy: cohort spend grew from 1000 → 1100 = 10% (below 20% LOW
+    // floor) → NONE expected.
+    const result = detectProductCannibalization({
+      range: FULL_RANGE,
+      storeId: STORE,
+      productMap: map,
+      campaignsDaily: [
+        ...buildCampaignDaysHalf('c1', 880, 1, 7),  // 88%
+        ...buildCampaignDaysHalf('c2', 120, 1, 7),  // 12%
+        ...buildCampaignDaysHalf('c1', 990, 8, 14), // 90%
+        ...buildCampaignDaysHalf('c2', 110, 8, 14), // 10%
+      ],
+      productsDaily: [
+        ...buildProductDaysHalf('p1', 3000, 1, 7),
+        ...buildProductDaysHalf('p1', 3000, 8, 14),
+      ],
+    });
+    expect(result[0].risk).not.toBe('composition_changed');
+  });
+
+  it('NEGATIVE: does NOT fire when the smaller share is below the 5% noise floor', () => {
+    // c2 went from 1% → 4% — share quadrupled but the LARGER of early
+    // and late is still below 5%, so neither branch of the shareRatioFlipped
+    // OR fires (both require the > 0.05 gate). Legitimate "experiment got
+    // a tiny bump" pattern that shouldn't trip the guard.
+    const result = detectProductCannibalization({
+      range: FULL_RANGE,
+      storeId: STORE,
+      productMap: map,
+      campaignsDaily: [
+        ...buildCampaignDaysHalf('c1', 1000, 1, 7),
+        ...buildCampaignDaysHalf('c2', 10, 1, 7),   // 1%
+        ...buildCampaignDaysHalf('c1', 1000, 8, 14),
+        ...buildCampaignDaysHalf('c2', 42, 8, 14),  // ~4%
+      ],
+      productsDaily: [
+        ...buildProductDaysHalf('p1', 3000, 1, 7),
+        ...buildProductDaysHalf('p1', 3000, 8, 14),
+      ],
+    });
+    expect(result[0].risk).not.toBe('composition_changed');
+  });
+
+  it('LOW threshold $50 absolute floor is STILL honored after b/HI-04 fix', () => {
+    // Regression guard: HIGH-04's pre-existing $50 absolute spend delta
+    // floor for the LOW tier must keep working after the composition
+    // guard widens. Compose a scenario where:
+    //   - composition is stable (no share flip, no missing halves)
+    //   - spend grew +25% but only by $25 absolute
+    //   - revenue grew between spend/2 (12.5%) and spend*0.75 (18.75%)
+    // Pre-fix b/HI-04 would have fired LOW; post-fix (HIGH-04 floor)
+    // still blocks at $50. b/HI-04 must NOT have inadvertently lowered
+    // the floor.
+    const result = detectProductCannibalization({
+      range: FULL_RANGE,
+      storeId: STORE,
+      productMap: map,
+      campaignsDaily: [
+        ...buildCampaignDaysHalf('c1', 100, 1, 7),
+        ...buildCampaignDaysHalf('c2', 0, 1, 7),
+        ...buildCampaignDaysHalf('c1', 125, 8, 14), // +$25 delta (< $50 floor)
+        ...buildCampaignDaysHalf('c2', 0, 8, 14),
+      ],
+      productsDaily: [
+        ...buildProductDaysHalf('p1', 300, 1, 7),
+        ...buildProductDaysHalf('p1', 345, 8, 14), // +15%
+      ],
+    });
+    expect(result[0].risk).toBe('none');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5+ member cohort + composition_changed — locks audit a/INFO-3 (2026-05-23)
+//
+// The composition guard was originally tested on 2-member cohorts. With
+// 5+ members and a mix of material + immaterial cohort members, the
+// guard should still correctly identify the ONE member that was paused
+// mid-range and emit composition_changed without being confused by the
+// noise from the small members.
+// ---------------------------------------------------------------------------
+
+describe('detectProductCannibalization — 5+ member cohort composition_changed (audit a/INFO-3)', () => {
+  it('fires composition_changed when 1 of 5 material members is paused mid-range', () => {
+    // 5-member cohort. c1+c2 are both material (~40% each in early half,
+    // ~50%/0% in late half). c3, c4, c5 are each <5% — non-material noise.
+    //
+    // Late half: c2 was paused (0 spend, 0 active days). Material member
+    // dropped out entirely → composition_changed.
+    //
+    // Without the guard: cohort spend halved → false NONE (looks like
+    // operator scaled down → no cannibalization to worry about). But the
+    // truth is they restructured the cohort, so the comparison is unfair.
+    const map5: ProductMap = {
+      [k('Meta', 'c1')]: ['p1'],
+      [k('Meta', 'c2')]: ['p1'],
+      [k('Meta', 'c3')]: ['p1'],
+      [k('Meta', 'c4')]: ['p1'],
+      [k('Meta', 'c5')]: ['p1'],
+    };
+    const result = detectProductCannibalization({
+      range: FULL_RANGE,
+      storeId: STORE,
+      productMap: map5,
+      campaignsDaily: [
+        // Early half: c1 + c2 each 40%, c3-c5 each ~7% (just above noise floor).
+        ...buildCampaignDaysHalf('c1', 400, 1, 7),
+        ...buildCampaignDaysHalf('c2', 400, 1, 7),
+        ...buildCampaignDaysHalf('c3', 70, 1, 7),
+        ...buildCampaignDaysHalf('c4', 70, 1, 7),
+        ...buildCampaignDaysHalf('c5', 70, 1, 7),
+        // Late half: c2 paused (0 spend, 0 active days). Others continue.
+        ...buildCampaignDaysHalf('c1', 400, 8, 14),
+        ...buildCampaignDaysHalf('c2', 0, 8, 14),
+        ...buildCampaignDaysHalf('c3', 70, 8, 14),
+        ...buildCampaignDaysHalf('c4', 70, 8, 14),
+        ...buildCampaignDaysHalf('c5', 70, 8, 14),
+      ],
+      productsDaily: [
+        ...buildProductDaysHalf('p1', 3000, 1, 7),
+        ...buildProductDaysHalf('p1', 2000, 8, 14),
+      ],
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0].cohortKeys).toHaveLength(5);
+    expect(result[0].risk).toBe('composition_changed');
+    // Reason text mentions c2 specifically (the paused material member),
+    // not c3/c4/c5 (which are non-material and didn't trigger).
+    expect(result[0].reason).toContain('c2');
+  });
+});

@@ -346,6 +346,18 @@ export function detectProductCannibalization(args: {
     // strong one") used to silently emit NONE; launching a fresh
     // experiment on a multi-mapped product used to trip HIGH. Both
     // verdicts mislead. Surface the composition change explicitly.
+    //
+    // Audit fix 2026-05-23 (b/HI-04 rebalanced mid-range): the original
+    // guard only caught missing-half patterns (member paused/launched
+    // entirely). It missed the "rebalanced inside both halves" case —
+    // c1 dropped from 93% → 79%, c2 grew from 7% → 21%. Both active in
+    // both halves so the days-check never fires, and neither half hits
+    // the 20% material threshold alone. But the spend MIX shifted
+    // enough to invalidate the half-over-half comparison: the operator
+    // didn't "scale the cohort", they reallocated INSIDE it. Now the
+    // shareRatioFlipped check catches any member whose share ≥ doubled
+    // or halved between halves (when the smaller of the two shares is
+    // still above the 5% noise floor).
     const composChangedMembers: Array<{ key: string; reason: string }> = [];
     for (const k of cohortKeys) {
       const s = memberStats.get(k);
@@ -357,7 +369,18 @@ export function detectProductCannibalization(args: {
       const material =
         earlyShare >= MATERIAL_MEMBER_SPEND_SHARE ||
         lateShare >= MATERIAL_MEMBER_SPEND_SHARE;
-      if (!material) continue;
+      // Audit fix 2026-05-23 (b/HI-04): share-ratio flip detection.
+      // A member that doubled (or halved) its share-of-cohort between
+      // halves changed the cohort's internal allocation enough to
+      // invalidate the simple "did we scale → did revenue follow?"
+      // comparison — even when neither half alone hits the 20%
+      // material threshold and even when the member ran in both halves.
+      // The 5% noise floor on the smaller side prevents firing on
+      // legitimate fluctuations between, e.g., 3% and 6%.
+      const shareRatioFlipped =
+        (earlyShare > 0.05 && lateShare / earlyShare >= 2) ||
+        (lateShare > 0.05 && earlyShare / lateShare >= 2);
+      if (!material && !shareRatioFlipped) continue;
       if (s.earlyActiveDays < MIN_ACTIVE_DAYS_PER_HALF) {
         composChangedMembers.push({
           key: k,
@@ -367,6 +390,18 @@ export function detectProductCannibalization(args: {
         composChangedMembers.push({
           key: k,
           reason: `הופסק/הופחת תקציב מהותי במחצית השנייה (${s.lateActiveDays}d פעיל) אחרי מחצית ראשונה פעילה (${s.earlyActiveDays}d).`,
+        });
+      } else if (shareRatioFlipped) {
+        // Member active in both halves but share allocation shifted
+        // dramatically — the cohort was REBALANCED, not scaled. The
+        // half-over-half growth comparison treats reallocation as
+        // scaling, so we surface this so the operator knows to look
+        // at the per-member breakdown before judging cannibalization.
+        const earlyPctTxt = (earlyShare * 100).toFixed(0);
+        const latePctTxt = (lateShare * 100).toFixed(0);
+        composChangedMembers.push({
+          key: k,
+          reason: `חלק יחסי בתוך הקבוצה השתנה דרמטית: ${earlyPctTxt}% → ${latePctTxt}% (הקצאה מחדש בתוך הקבוצה, לא סקייל אמיתי).`,
         });
       }
     }
