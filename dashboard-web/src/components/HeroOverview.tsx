@@ -386,8 +386,18 @@ function RoasTrendChart({
           <span>
             <span className="text-white/45">מינימום: </span>
             <span className="font-semibold text-white/85">
+              {/* Audit fix 2026-05-23 (FIND-04 dashboard-fidelity): if
+                  every day in the visible series has roas === 0 (e.g.,
+                  zero-spend store, refund-heavy window), the previous
+                  Math.min(...[]) → Infinity → rendered literal "Infinity"
+                  at the top of the dashboard. Guard the empty case. */}
               <bdi dir="ltr">
-                {Math.min(...series.filter(d => d.roas > 0).map(d => d.roas)).toFixed(2)}
+                {(() => {
+                  const positives = series.filter(d => d.roas > 0).map(d => d.roas);
+                  return positives.length > 0
+                    ? Math.min(...positives).toFixed(2)
+                    : '—';
+                })()}
               </bdi>
             </span>
           </span>

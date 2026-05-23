@@ -12,11 +12,20 @@ export function formatCurrency(n: number, fractionDigits = 0): string {
   // cell in the table for ~ever. Let Intl.NumberFormat do the rounding to the
   // requested precision — it handles both fractionDigits=0 (→ integer) and
   // fractionDigits=2 (→ 2 decimals) correctly via maximumFractionDigits.
+  //
+  // Audit fix 2026-05-23 (FIND-07 dashboard-fidelity): avoid the "-0" /
+  // "-0.00" output that Intl.NumberFormat produces when a tiny negative
+  // input rounds to zero magnitude at the requested precision. Pre-
+  // normalize so the operator never sees a "-0" cell that looks like a
+  // rendering glitch but is actually the rounded form of e.g. -0.4 CAD.
+  const factor = Math.pow(10, fractionDigits);
+  const rounded = Math.round(n * factor) / factor;
+  const normalized = rounded === 0 ? 0 : n;
   return new Intl.NumberFormat('he-IL', {
     style: 'decimal',
     minimumFractionDigits: fractionDigits,
     maximumFractionDigits: fractionDigits,
-  }).format(n);
+  }).format(normalized);
 }
 
 export function formatNumber(n: number, fractionDigits = 2): string {

@@ -103,4 +103,24 @@ describe('formatCurrency', () => {
     // 5.99 was displayed as "6.00" — now displays as "5.99"
     expect(formatCurrency(5.99, 2)).toBe('5.99');
   });
+
+  it('normalizes negative-zero to "0" (audit fix 2026-05-23 FIND-07)', () => {
+    // Pre-fix: Intl.NumberFormat('he-IL').format(-0) preserved the sign,
+    // so a tiny negative spend (e.g. -0.4 CAD from FX-rounding) that
+    // rounded to 0 magnitude rendered as "-0" — looked like a glitch.
+    // Post-fix: rounds-to-zero values are coerced to a true 0.
+    expect(formatCurrency(-0.4, 0)).toBe('0');
+    expect(formatCurrency(-0.49, 0)).toBe('0');
+    expect(formatCurrency(-0.001, 2)).toBe('0.00');
+    // Object.is(-0, 0) === false, but rendered output should be the
+    // positive "0" form regardless.
+    expect(formatCurrency(-0, 0)).toBe('0');
+    expect(formatCurrency(-0, 2)).toBe('0.00');
+    // True negatives still render with the minus sign (LRM stripped).
+    // Note: JS Math.round rounds half toward +Infinity, so
+    // Math.round(-0.5) === 0 — the magnitude becomes 0 and the
+    // normalization correctly drops the sign. -0.51 rounds to -1.
+    expect(formatCurrency(-0.51, 0).replace(/‎/g, '')).toBe('-1');
+    expect(formatCurrency(-1, 0).replace(/‎/g, '')).toBe('-1');
+  });
 });
