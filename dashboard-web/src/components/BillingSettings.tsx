@@ -615,14 +615,28 @@ function RecurringEditForm({
   const [source, setSource] = useState<CostSource>(item.source);
   const [monthlyCAD, setMonthlyCAD] = useState(String(item.monthlyCAD));
   const [notes, setNotes] = useState(item.notes ?? '');
+  // Audit fix 2026-05-23 (d/MD-07): inline validation error so invalid
+  // numeric input does not silently commit as 0.
+  const [editError, setEditError] = useState<string | null>(null);
 
   function commit() {
     const amount = parseFloat(monthlyCAD.replace(/,/g, ''));
+    // Audit fix 2026-05-23 (d/MD-07): block commit when the amount is not
+    // a real positive number. Previously a typo (e.g. "five", " ", "abc")
+    // produced NaN, the Number.isFinite check fell through to `: 0`, and
+    // the row was silently persisted as $0 — corrupting the P&L total.
+    // Mirror GoalTracker's pattern: surface an inline error and keep the
+    // form open.
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setEditError('הזן סכום חיובי תקין (לדוגמה: 60)');
+      return;
+    }
+    setEditError(null);
     onSave({
       name: name.trim() || '(ללא שם)',
       store,
       source,
-      monthlyCAD: Number.isFinite(amount) ? amount : 0,
+      monthlyCAD: amount,
       notes: notes.trim() || undefined,
     });
   }
@@ -677,15 +691,31 @@ function RecurringEditForm({
           <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium">סכום חודשי (CAD)</label>
           <input
             value={monthlyCAD}
-            onChange={e => setMonthlyCAD(e.target.value.replace(/[^\d.,]/g, ''))}
+            onChange={e => {
+              setMonthlyCAD(e.target.value.replace(/[^\d.,]/g, ''));
+              if (editError) setEditError(null);
+            }}
             inputMode="numeric"
             placeholder="60"
             onKeyDown={e => {
               if (e.key === 'Enter') commit();
               if (e.key === 'Escape') cancel();
             }}
-            className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm focus:outline-none focus:border-primary focus:shadow-focus tabular-nums"
+            className={cn(
+              'w-full rounded-lg border bg-surface px-2.5 py-1.5 text-sm focus:outline-none tabular-nums',
+              editError
+                ? 'border-roas-red focus:border-roas-red focus:shadow-[0_0_0_2px_rgba(220,38,38,0.15)]'
+                : 'border-border focus:border-primary focus:shadow-focus',
+            )}
           />
+          {editError && (
+            <div
+              role="alert"
+              className="mt-1 text-[11px] text-roas-red font-medium"
+            >
+              {editError}
+            </div>
+          )}
         </div>
       </div>
       <div>
@@ -879,15 +909,25 @@ function OneTimeEditForm({
   const [description, setDescription] = useState(item.description);
   const [amountCAD, setAmountCAD] = useState(String(item.amountCAD));
   const [notes, setNotes] = useState(item.notes ?? '');
+  // Audit fix 2026-05-23 (d/MD-07): inline validation error so invalid
+  // numeric input does not silently commit as 0.
+  const [editError, setEditError] = useState<string | null>(null);
 
   function commit() {
     const amount = parseFloat(amountCAD.replace(/,/g, ''));
+    // Audit fix 2026-05-23 (d/MD-07): block commit when the amount is not
+    // a real positive number. Mirror RecurringEditForm.
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setEditError('הזן סכום חיובי תקין (לדוגמה: 25)');
+      return;
+    }
+    setEditError(null);
     onSave({
       date,
       store,
       source,
       description: description.trim() || '(ללא תיאור)',
-      amountCAD: Number.isFinite(amount) ? amount : 0,
+      amountCAD: amount,
       notes: notes.trim() || undefined,
     });
   }
@@ -953,15 +993,31 @@ function OneTimeEditForm({
           <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium">סכום (CAD)</label>
           <input
             value={amountCAD}
-            onChange={e => setAmountCAD(e.target.value.replace(/[^\d.,]/g, ''))}
+            onChange={e => {
+              setAmountCAD(e.target.value.replace(/[^\d.,]/g, ''));
+              if (editError) setEditError(null);
+            }}
             inputMode="numeric"
             placeholder="25"
             onKeyDown={e => {
               if (e.key === 'Enter') commit();
               if (e.key === 'Escape') cancel();
             }}
-            className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm focus:outline-none focus:border-primary focus:shadow-focus tabular-nums"
+            className={cn(
+              'w-full rounded-lg border bg-surface px-2.5 py-1.5 text-sm focus:outline-none tabular-nums',
+              editError
+                ? 'border-roas-red focus:border-roas-red focus:shadow-[0_0_0_2px_rgba(220,38,38,0.15)]'
+                : 'border-border focus:border-primary focus:shadow-focus',
+            )}
           />
+          {editError && (
+            <div
+              role="alert"
+              className="mt-1 text-[11px] text-roas-red font-medium"
+            >
+              {editError}
+            </div>
+          )}
         </div>
       </div>
       <div>
