@@ -26,6 +26,18 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
     typeof window !== 'undefined' && window.sessionStorage.getItem(PRODUCT_MAP_CHIP_KEY) === '1'
   ));
   const total = breakdown.totalOrders;
+  // d/CR-05 (audit 2026-05-23): bail when total === 0. Without this guard,
+  // every `(fb / total) * 100` etc. below resolves to NaN%, which renders
+  // the segment bar as broken (browsers drop NaN widths to 0, but the bar
+  // looks empty/cosmetically broken — and the share-based recommendation
+  // chips below are meaningless on zero-order data anyway). The parent's
+  // triple-gate (CampaignDrawer's `productChannelBreakdown` useMemo) is
+  // supposed to suppress this path entirely, but the gate is platform/
+  // mapping-aware not zero-order-aware, so empty breakdowns can still slip
+  // through (e.g., when the parent's order count >= 3 but the breakdown
+  // returns 0 after its own filtering). Returning null here is the safe
+  // floor — the parent's surface still renders cleanly without us.
+  if (total <= 0) return null;
   const fb = breakdown.facebookOrders;
   const google = (breakdown.bySource['google-paid']?.orders ?? 0)
               + (breakdown.bySource['google-organic']?.orders ?? 0);
