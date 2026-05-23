@@ -117,16 +117,54 @@ function parseKey(
   return { storeId, platform, campaignId };
 }
 
+/**
+ * Bayesian shrinkage anchor for ranking. Spend below this floor gets its
+ * ROAS pulled toward 1.0 (break-even) proportionally to how far it sits
+ * below the floor — the smaller the sample, the more aggressive the pull.
+ *
+ * Audit fix 2026-05-23 (CRITICAL-02 multi-mapping): the previous raw-ROAS
+ * formula let a $40-spend / ROAS-12 anomaly score 3× higher than a
+ * $20K-spend / ROAS-4 mature campaign — operator would be told to scale
+ * the anomaly and pause the mature. With this anchor at CAD 500:
+ *   - $40 + ROAS 12 → shrunk ROAS ≈ 1.86 (~3 orders of noise discounted)
+ *   - $500 + ROAS 8 → shrunk ROAS ≈ 4.5 (~10 orders of signal preserved)
+ *   - $20K + ROAS 4 → shrunk ROAS ≈ 3.93 (large-sample, barely shifted)
+ *
+ * Tuning: $500 is the operator's typical "minimum statistically meaningful
+ * sample" in the 3-store / 3-platform setup. Lower numbers (e.g., the
+ * audit's first-pass k=100) didn't fully neutralize the $40 vs $20K case.
+ * Higher numbers would over-penalize legitimate launches.
+ */
+const ROAS_SHRINKAGE_ANCHOR_CAD = 500;
+
+/** Shrink raw ROAS toward 1.0 (break-even) based on sample size (spend).
+ *  Returns the ROAS estimate to use for ranking — NOT for display. */
+function shrinkRoas(roas: number, spend: number): number {
+  if (spend <= 0) return 1.0; // unspendable sample → break-even neutral
+  const w = spend / (spend + ROAS_SHRINKAGE_ANCHOR_CAD);
+  return roas * w + 1.0 * (1 - w);
+}
+
 /** Rank-by score for cohort members. Higher = better.
- *  Primary: roasShopify (combined). Secondary: roasShopifyPlatform
- *  (more conservative). Tertiary: spend (more invested = more "weight").
+ *
+ *  Primary: shrunk roasShopify (combined Shopify ROAS, sample-size weighted).
+ *  Secondary: shrunk roasShopifyPlatform (deterministic-only — when wired,
+ *  this discriminates among same-combined-ROAS members based on platform-
+ *  attributed orders).
+ *  Tertiary: spend (more invested = more "weight" in true ties).
+ *
  *  Members without metrics (campaign had no spend in the range) sink to
- *  the bottom but don't get NaN-treated. */
+ *  the bottom but don't get NaN-treated.
+ *
+ *  Audit fix 2026-05-23 (CRITICAL-02): the raw-ROAS version let small-
+ *  sample anomalies dominate. See `ROAS_SHRINKAGE_ANCHOR_CAD` above. */
 function rankingScore(m: CohortMember): number {
   if (!m.metrics) return -Infinity;
+  const shrunk = shrinkRoas(m.metrics.roasShopify, m.metrics.spend);
+  const shrunkPlat = shrinkRoas(m.metrics.roasShopifyPlatform, m.metrics.spend);
   return (
-    m.metrics.roasShopify * 1_000_000 +
-    m.metrics.roasShopifyPlatform * 1_000 +
+    shrunk * 1_000_000 +
+    shrunkPlat * 1_000 +
     m.metrics.spend
   );
 }

@@ -254,6 +254,38 @@ describe('computeMultiMappingCohort — ranking', () => {
     expect(result!.isWeakest).toBe(false);
   });
 
+  it('large-spend mature campaign ranks ABOVE tiny-spend anomaly (audit fix CRITICAL-02)', () => {
+    // Pins the operator's exact scenario from the audit:
+    //   - Campaign A: $40 spend, ROAS 12 (one lucky order)
+    //   - Campaign B: $20,000 spend, ROAS 4 (mature, hundreds of orders)
+    // Pre-fix the ranking formula was `roas * 1e6 + ...` so A scored 3×
+    // higher than B and was labeled "leader" — telling the operator to
+    // scale the anomaly and pause the mature. Bayesian shrinkage at the
+    // CAD 500 anchor flips the ranking back to defensible order.
+    const result = computeMultiMappingCohort({
+      currentCampaignKey: key('Meta', 'tiny'),
+      productMap: {
+        [key('Meta', 'tiny')]: ['p1'],
+        [key('Meta', 'mature')]: ['p1'],
+      },
+      aggregated: [
+        makeAgg({ key: key('Meta', 'tiny'), campaignId: 'tiny', spend: 40 }),
+        makeAgg({ key: key('Meta', 'mature'), campaignId: 'mature', spend: 20000 }),
+      ],
+      roasShopifyByKey: new Map([
+        [key('Meta', 'tiny'), 12.0],
+        [key('Meta', 'mature'), 4.0],
+      ]),
+      roasShopifyPlatformByKey: new Map([
+        [key('Meta', 'tiny'), 12.0],
+        [key('Meta', 'mature'), 4.0],
+      ]),
+    });
+    expect(result!.currentRank).toBe(2); // tiny is NOT the leader anymore
+    expect(result!.isLeader).toBe(false);
+    expect(result!.rankedAll[0].campaignKey).toBe(key('Meta', 'mature')); // mature leads
+  });
+
   it('uses platform-deterministic ROAS as a secondary tie-breaker', () => {
     const result = computeMultiMappingCohort({
       currentCampaignKey: key('Meta', 'c1'),
