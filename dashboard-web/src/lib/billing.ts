@@ -176,6 +176,15 @@ export function billingForRange(input: {
   const storeSet = new Set(storeNames);
 
   // Recurring: monthly × (days/30) for each row whose store matches.
+  //
+  // Audit fix 2026-05-23 (d/CR-01): an "All"-stores row must contribute
+  // its amount EXACTLY ONCE to `recurringInPeriod` and `bySource` — it's
+  // a single subscription that covers every store, NOT a per-store charge.
+  // For `byStore` we split the amount evenly across the in-scope stores
+  // so each card shows its fair share and the per-store totals reconcile
+  // back to the period total. Before the fix, a $60/mo Klaviyo "All" row
+  // with 3 stores reported $180 to recurringInPeriod (3× the truth) —
+  // tripling the net-cost line on the dashboard.
   let recurringInPeriod = 0;
   const bySource = emptySourceMap();
   const byStore: Record<string, number> = Object.fromEntries(
@@ -183,29 +192,48 @@ export function billingForRange(input: {
   );
   for (const r of readRecurring()) {
     if (!r.active) continue;
-    const stores =
-      r.store === 'All' ? storeNames : storeSet.has(r.store) ? [r.store] : [];
-    for (const s of stores) {
-      // Each store getting an "All" cost takes its share — but in practice
-      // we shouldn't double-bill: an "All" row applies once per store, so
-      // the cost is replicated.
-      const amount = (r.monthlyCAD * days) / 30;
+    const amount = (r.monthlyCAD * days) / 30;
+    if (r.store === 'All') {
+      // "All" rows are one subscription that covers every store; charge
+      // the total once, then split the per-store attribution evenly so
+      // sum(byStore) == recurringInPeriod (within floating-point eps).
+      if (storeNames.length === 0) continue;
       recurringInPeriod += amount;
       bySource[r.source] = (bySource[r.source] ?? 0) + amount;
-      byStore[s] = (byStore[s] ?? 0) + amount;
+      const perStoreShare = amount / storeNames.length;
+      for (const s of storeNames) {
+        byStore[s] = (byStore[s] ?? 0) + perStoreShare;
+      }
+    } else if (storeSet.has(r.store)) {
+      // Store-specific row: charge once to its store.
+      recurringInPeriod += amount;
+      bySource[r.source] = (bySource[r.source] ?? 0) + amount;
+      byStore[r.store] = (byStore[r.store] ?? 0) + amount;
     }
   }
 
   // One-time: include if date is in [from, to] AND store is in scope.
+  //
+  // Audit fix 2026-05-23 (d/CR-01): for "All"-store one-times we used to
+  // dump the entire amount into `storeNames[0]`, inflating that store's
+  // card while leaving the rest at zero. Split evenly across in-scope
+  // stores so the per-store breakdown reconciles to `oneTimeInPeriod`.
   let oneTimeInPeriod = 0;
   for (const o of readOneTime()) {
     if (o.date < from || o.date > to) continue;
-    const inScope = o.store === 'All' || storeSet.has(o.store);
-    if (!inScope) continue;
-    oneTimeInPeriod += o.amountCAD;
-    bySource[o.source] = (bySource[o.source] ?? 0) + o.amountCAD;
-    const sKey = o.store === 'All' ? storeNames[0] ?? 'All' : o.store;
-    byStore[sKey] = (byStore[sKey] ?? 0) + o.amountCAD;
+    if (o.store === 'All') {
+      if (storeNames.length === 0) continue;
+      oneTimeInPeriod += o.amountCAD;
+      bySource[o.source] = (bySource[o.source] ?? 0) + o.amountCAD;
+      const perStoreShare = o.amountCAD / storeNames.length;
+      for (const s of storeNames) {
+        byStore[s] = (byStore[s] ?? 0) + perStoreShare;
+      }
+    } else if (storeSet.has(o.store)) {
+      oneTimeInPeriod += o.amountCAD;
+      bySource[o.source] = (bySource[o.source] ?? 0) + o.amountCAD;
+      byStore[o.store] = (byStore[o.store] ?? 0) + o.amountCAD;
+    }
   }
 
   return {
@@ -369,10 +397,13 @@ export function parseShopifyBillsCsv(
     // Convert non-CAD → CAD using the frozen reference rate. The user can
     // adjust per row in the UI. Frozen rather than live so a re-import of
     // the same CSV reproduces identical CAD amounts.
+    //
+    // Audit fix 2026-05-23 (d/HI-06): the per-row Math.round was dropping
+    // 50¢ of precision per line — a $39.50 USD subscription became C$53
+    // instead of C$53.72. Over a typical 30-row bill that drift compounded
+    // into a multi-dollar P&L lie. Keep the float; display layer formats.
     const amountCad =
-      currency.toUpperCase() === 'CAD'
-        ? amount
-        : Math.round(amount * FROZEN_USD_TO_CAD);
+      currency.toUpperCase() === 'CAD' ? amount : amount * FROZEN_USD_TO_CAD;
 
     out.push({
       id: generateId(),
@@ -462,7 +493,16 @@ export function findMatchingRecurring(
 ): RecurringCost | null {
   const desc = line.description.trim().toLowerCase();
   for (const r of existing) {
-    if (r.store !== store && r.store !== 'All') continue;
+    // Audit fix 2026-05-23 (d/HI-05): symmetric scope. Pre-fix this only
+    // accepted r.store === store OR r.store === 'All'. If the incoming
+    // line was scoped to 'All' but an existing record was store-specific,
+    // we'd treat them as distinct and re-import would duplicate it. The
+    // correct semantics is: a match exists whenever the two scopes
+    // overlap — either both target the same store, the existing row
+    // covers everything, OR the incoming line covers everything.
+    const lineMatchesStore =
+      r.store === store || r.store === 'All' || store === 'All';
+    if (!lineMatchesStore) continue;
     if (r.name.trim().toLowerCase() !== desc) continue;
     if (Math.abs(r.monthlyCAD - line.amountCAD) <= 2) return r;
   }

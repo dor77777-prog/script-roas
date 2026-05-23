@@ -1021,10 +1021,13 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                         axisLine={false}
                         tickFormatter={v => `C$${Number(v).toFixed(2)}`}
                         width={68}
-                        domain={[
-                          (dataMin: number) => Math.max(0, dataMin * 0.88),
-                          (dataMax: number) => dataMax * 1.12,
-                        ]}
+                        // c/CR-02: zero-anchored Y axis. The previous
+                        // `[dataMin * 0.88, dataMax * 1.12]` suppression turned
+                        // a 3% CPM change into a chart-height-spanning curve —
+                        // the textbook misleading-axis pattern. Operator
+                        // dashboards should show the true magnitude; CPM is
+                        // always >= 0.
+                        domain={[0, (dataMax: number) => dataMax * 1.12]}
                         allowDecimals
                       />
                       {showRoasOverlay && (
@@ -1036,10 +1039,8 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                           axisLine={false}
                           tickFormatter={v => Number(v).toFixed(2)}
                           width={42}
-                          domain={[
-                            (dataMin: number) => Math.max(0, dataMin * 0.88),
-                            (dataMax: number) => dataMax * 1.12,
-                          ]}
+                          // c/CR-02: same zero-anchor rule for the ROAS overlay.
+                          domain={[0, (dataMax: number) => dataMax * 1.12]}
                           allowDecimals
                         />
                       )}
