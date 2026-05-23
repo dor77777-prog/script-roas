@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Target, Edit3, Check, X, TrendingUp, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { DashboardData } from '@/lib/types';
+import type { DashboardData, Filters as F } from '@/lib/types';
+import { filterRows } from '@/lib/analytics';
 import {
   computePacing,
   forecastMonthEnd,
@@ -23,9 +24,20 @@ import {
 
 type Props = {
   data: DashboardData;
+  /**
+   * Global dashboard filters. d/CR-04 (audit 2026-05-23): the goal tracker
+   * must scope month-to-date revenue + forecast to the operator's selected
+   * store; without it, "X% מהיעד" rendered the all-stores total even when
+   * the dashboard was filtered to a single store, contradicting every other
+   * KPI on the same screen. `filters.range` is intentionally NOT used here
+   * — the widget is always month-anchored (forecastMonthEnd derives its
+   * own monthStart/today). Only `filters.store` matters for filtering the
+   * rows fed into the forecaster.
+   */
+  filters: F;
 };
 
-export function GoalTracker({ data }: Props) {
+export function GoalTracker({ data, filters }: Props) {
   const [goal, setGoal] = useState<number | null>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -43,11 +55,31 @@ export function GoalTracker({ data }: Props) {
     return () => window.removeEventListener('roas-goal-changed', onChange);
   }, []);
 
-  const forecast = useMemo(() => forecastMonthEnd(data.rows), [data.rows]);
+  // d/CR-04 (audit 2026-05-23): filter rows by the global store selection
+  // before forecasting. Pass a full-month range so filterRows' date guard
+  // doesn't accidentally trim out today's data — forecastMonthEnd does its
+  // OWN month-window slicing internally (rows outside the month are simply
+  // ignored), so the range here just needs to be permissive. Using the
+  // operator's selected range would clip MTD when they picked a historical
+  // window like "last month".
+  const FULL_RANGE = useMemo(
+    () => ({ from: '0000-01-01', to: '9999-12-31' }),
+    [],
+  );
+  const scopedRows = useMemo(
+    () => filterRows(data.rows, FULL_RANGE, filters.store),
+    [data.rows, filters.store, FULL_RANGE],
+  );
+  const forecast = useMemo(() => forecastMonthEnd(scopedRows), [scopedRows]);
   const daysInMonth = useMemo(
     () => forecast.daysElapsedThisMonth + forecast.daysRemainingThisMonth,
     [forecast],
   );
+  // Header suffix surfaces the active scope so the operator sees at a
+  // glance whether the goal panel matches the rest of the (filtered)
+  // dashboard. When store === 'All', no suffix — the default "יעד חודשי"
+  // already communicates "all stores".
+  const headerSuffix = filters.store === 'All' ? '' : ` · ${filters.store}`;
 
   const pacing = useMemo(
     () => computePacing(
@@ -198,7 +230,12 @@ export function GoalTracker({ data }: Props) {
           </p>
         )}
         <p className="text-[11px] text-text-muted mt-2">
-          הערך נשמר רק בדפדפן הזה (localStorage). אפשר לעדכן בכל עת.
+          {/* d/CR-04 (audit 2026-05-23): copy used to say "נשמר רק בדפדפן
+              הזה (localStorage)" — but writeGoal() in lib/insights.ts ALSO
+              calls pushCloudKey(GOAL_STORAGE_KEY, value) which mirrors to
+              Google Sheets. The lie misled the operator into thinking the
+              goal wouldn't survive a device switch. */}
+          הערך נשמר גם בענן (cloud-synced) וגם בדפדפן. אפשר לעדכן בכל עת.
         </p>
       </section>
     );
@@ -234,7 +271,7 @@ export function GoalTracker({ data }: Props) {
               <Target size={14} />
             </span>
             <h2 className="text-sm sm:text-base font-semibold text-text-primary tracking-tight">
-              יעד חודשי
+              יעד חודשי{headerSuffix}
             </h2>
             <span className={cn(
               'inline-flex items-center px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold rounded',

@@ -348,8 +348,10 @@ function HomeTab({
       </div>
       <Filters filters={filters} stores={data.stores} onChange={setFilters} />
 
-      {/* ===== Goal tracker — monthly revenue target with pacing + forecast ===== */}
-      <GoalTracker data={data} />
+      {/* ===== Goal tracker — monthly revenue target with pacing + forecast.
+                d/CR-04 (audit 2026-05-23): pass `filters` so the panel
+                scopes MTD + forecast to the operator's selected store. ===== */}
+      <GoalTracker data={data} filters={filters} />
 
       {/* ===== Insights engine — anomalies, recommendations, opportunities ===== */}
       <InsightsBoard data={data} />
