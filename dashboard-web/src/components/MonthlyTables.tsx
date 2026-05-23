@@ -31,30 +31,45 @@ type Props = {
  */
 const MONTHLY_TABLES_HISTORY_MONTHS = 17;
 
-function isoMonthsAgo(months: number): string {
-  const fmt = new Intl.DateTimeFormat('en-CA', {
+// Audit fix 2026-05-23 (d/HI-08): the pre-fix isoMonthsAgo built `past`
+// from `today.getFullYear() / getMonth() / getDate()` — those getters
+// return the SERVER/CLIENT local-zone date, NOT IL. When a CI worker or
+// remote machine ran in a non-IL zone the resulting `past` date could
+// be off by one day, which then leaked into the data fetch range and
+// silently dropped a month's worth of edge-day rows. Now we resolve IL
+// "today" as a YYYY-MM-DD string FIRST, parse the components, then do
+// month arithmetic in pure UTC (no local-zone leakage). Output is still
+// Intl-formatted IL — same return contract as before.
+function ilTodayParts(): { y: number; m: number; d: number } {
+  const iso = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Jerusalem',
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  });
-  const today = new Date();
-  const past = new Date(
-    today.getFullYear(),
-    today.getMonth() - months,
-    today.getDate(),
-  );
-  return fmt.format(past);
+  }).format(new Date());
+  const [y, m, d] = iso.split('-').map(Number);
+  return { y, m, d };
+}
+
+// Exported for unit testing — the helpers are pure and stateless so
+// pinning their behavior across DST and edge dates protects the table
+// from silent off-by-month bugs that would manifest only on specific
+// worker zones / specific calendar days.
+export function _isoMonthsAgoFromIlParts(months: number, todayParts: { y: number; m: number; d: number }): string {
+  const past = new Date(Date.UTC(todayParts.y, todayParts.m - 1 - months, todayParts.d));
+  const yy = past.getUTCFullYear();
+  const mm = String(past.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(past.getUTCDate()).padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
+function isoMonthsAgo(months: number): string {
+  return _isoMonthsAgoFromIlParts(months, ilTodayParts());
 }
 
 function isoToday(): string {
-  const fmt = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Asia/Jerusalem',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  });
-  return fmt.format(new Date());
+  const { y, m, d } = ilTodayParts();
+  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 }
 
 const fetcher = async (url: string): Promise<DashboardData> => {
