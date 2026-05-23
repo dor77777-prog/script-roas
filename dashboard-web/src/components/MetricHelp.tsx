@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -16,6 +16,18 @@ import { cn } from '@/lib/utils';
  * For tooltips that need rich content (formulas, examples), we use a
  * controlled popover rather than the native title attribute.
  */
+
+/**
+ * HIGH-5 audit fix (2026-05-23): mirror the v2 d/CR-08 RefundIndicator
+ * grace-timer pattern (commit a271b3a). Pre-fix MetricHelp's button
+ * onMouseLeave fired `setOpen(false)` IMMEDIATELY, so any cursor transit
+ * from the "?" icon down into the popover (a few pixels of physical gap
+ * to cross) closed the popover before the user could read or interact
+ * with it. 200ms matches OS-level tooltip dismiss timings (macOS /
+ * Win HelpTip) and is short enough that an accidental hover doesn't
+ * linger after the cursor moves on.
+ */
+const HIDE_GRACE_MS = 200;
 
 export type MetricHelpContent = {
   /** Short metric name, "ROAS" / "CTR" / etc. */
@@ -39,16 +51,45 @@ type Props = {
 
 export function MetricHelp({ content, className, subtle = true }: Props) {
   const [open, setOpen] = useState(false);
+  // HIGH-5 audit fix (2026-05-23): grace timer ref. Tracking via ref
+  // instead of state so we can cancel synchronously inside the re-entry
+  // mouseEnter handler without waiting for React to flush a state update
+  // that would race with the timer's setOpen(false). Mirrors RefundIndicator.
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function cancelHide() {
+    if (hideTimerRef.current !== null) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+  }
+  function scheduleHide() {
+    cancelHide();
+    hideTimerRef.current = setTimeout(() => {
+      setOpen(false);
+      hideTimerRef.current = null;
+    }, HIDE_GRACE_MS);
+  }
+  // Clear any pending timer on unmount so we don't setState on a dead
+  // component (also stops the StrictMode warning).
+  useEffect(() => {
+    return () => cancelHide();
+  }, []);
 
   return (
     <span className={cn('relative inline-block', className)}>
       <button
         type="button"
-        onClick={e => { e.stopPropagation(); setOpen(o => !o); }}
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setOpen(false)}
+        onClick={e => { e.stopPropagation(); cancelHide(); setOpen(o => !o); }}
+        // HIGH-5: mouseEnter on the button cancels any pending hide
+        // timer (so re-entry within the grace window keeps it open).
+        // mouseLeave SCHEDULES the hide instead of executing it
+        // immediately — the cursor gets 200ms to land in the popover
+        // (which fires its own cancelHide on mouseEnter).
+        onMouseEnter={() => { cancelHide(); setOpen(true); }}
+        onMouseLeave={scheduleHide}
+        onFocus={() => { cancelHide(); setOpen(true); }}
+        onBlur={scheduleHide}
         aria-label={`הסבר על ${content.name}`}
         className={cn(
           'inline-flex items-center justify-center w-4 h-4 rounded-full transition-colors',
@@ -72,8 +113,11 @@ export function MetricHelp({ content, className, subtle = true }: Props) {
             'text-xs leading-relaxed animate-fade-in',
             'pointer-events-auto',
           )}
-          onMouseEnter={() => setOpen(true)}
-          onMouseLeave={() => setOpen(false)}
+          // HIGH-5: symmetric grace-timer handling on the popover surface
+          // — mouseEnter cancels, mouseLeave schedules. This means cursor
+          // can transit popover ↔ button freely without flicker.
+          onMouseEnter={cancelHide}
+          onMouseLeave={scheduleHide}
         >
           <div className="font-semibold text-white mb-1.5">{content.name}</div>
           <div className="text-white/80">{content.whatIs}</div>
