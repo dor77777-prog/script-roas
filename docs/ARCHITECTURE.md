@@ -179,6 +179,16 @@ Supabase Security Advisor יראה 10 אזהרות `0013_rls_disabled_in_public`
    - TikTok: `'ADGROUP_STATUS_DELIVERY_OK'` → on, אחרת off.
 5. **Fallback**: כשעדיין null (שורה לפני המיגרציה, או fetcher soft-fail) — חזרה ל-heuristic של "2+ ימים בלי spend".
 
+### 6.2b Reader filter (Phase 05.7.x — 2026-05-23)
+`postgresReaders.fetchCampaigns` keeps a row if EITHER:
+- It has activity (`spend > 0 OR impressions > 0 OR conversions > 0`), OR
+- Its `effective_status` is "currently active" for its platform (`Meta='ACTIVE'`, `Google='ENABLED'`, `TikTok='ADGROUP_STATUS_DELIVERY_OK'`).
+
+Drops everything else. This is the operator spec: show campaigns with activity in the range, OR campaigns currently active (so brand-new ones appear within 10 min), but NOT paused-no-activity ad-sets that would be visual noise.
+
+### 6.2c Active-only placeholder enrollment
+cron-live's `refresh-effective-status` step UPSERTs a placeholder row for TODAY for each enumerated ad-set whose status is "active" for its platform. Paused/archived ad-sets are skipped at INSERT but their existing past-day rows still get effective_status UPDATEs (so an ad-set paused this morning lights up the off-chip on yesterday's row).
+
 ### 6.3 Freshness
 - cron-daily רץ ב-00:05 IL — כותב את ה-status כחלק מהשורה היומית המלאה (יחד עם spend / impressions / etc).
 - **cron-live רץ כל 10 דקות** וגם הוא מרענן `effective_status` בלבד (Phase 05.7.x). הצעד החדש `refresh-effective-status`:
@@ -309,6 +319,62 @@ UPDATE notification_config SET active = FALSE WHERE provider = 'metacloud';
 | `Meta Cloud HTTP 400: Parameter count mismatch (132012)` | מספר ה-`{{N}}` לא תואם | ראה `templateParams.ts` |
 | `Meta Cloud HTTP 400: Template name does not exist (132001)` | שם ה-template ב-DB לא תואם ל-Meta | `UPDATE notification_config SET template_name = ...` |
 | `Meta Cloud HTTP 400: Param newline/tab/5+ spaces (132018)` | פורמט פרמטר לא תקין | ראה §8.4 |
+
+---
+
+## 9.5 Token Failure Alerts (Phase 05.7.x — 2026-05-23)
+
+Detect + persist + alert on upstream auth/API failures across all
+providers. Two-phase rollout:
+- ✅ **Shipped now**: persistence + throttle + notifier function + /operator UI.
+- ⏳ **Waiting**: WhatsApp template approval from Meta, then fetcher wiring.
+
+### 9.5.1 Schema
+- Migration `supabase/migrations/20260523080000_add_token_failures.sql`.
+- Table `token_failures(provider, store_id, operation, ...)` — composite PK on those 3.
+- Providers: `meta` / `google` / `tiktok` / `whatsapp` / `shopify` / `fx`.
+- Stores: `uzoshop` / `zolplus` / `usmile360` / `global` (last for cross-store failures like WhatsApp Cloud or OXR).
+
+### 9.5.2 Notifier
+- `dashboard-web/src/lib/notifications/tokenFailures.ts` → `notifyTokenFailure({provider, storeId, operation, errorMsg, advice?})`.
+- Soft-fail (never throws — caller's original exception keeps propagating).
+- 6h throttle per (provider, storeId, operation) — bumps `seen_count` every call, sends WhatsApp only when `last_alert_sent_at` is null or > 6h old.
+- Sends to single hard-coded recipient: `+972524809540` (operator's explicit instruction). Distinct from the daily-summary phone1/phone2 in `notification_config`.
+
+### 9.5.3 WhatsApp template (`token_failure_alert`)
+- Language `en` (4 params).
+- Body (submit via Meta WhatsApp Manager → Utility category):
+```
+🚨 Token failure · ROAS Tracker
+
+{{1}}
+
+❌ Error:
+{{2}}
+
+💡 Fix:
+{{3}}
+
+{{4}}
+
+Open /operator for details: https://roas-dashboard-smoky.vercel.app/operator
+```
+- Params:
+  - `{{1}}` = `${PROVIDER} · ${storeId} · ${operation} @ DD/MM HH:mm`
+  - `{{2}}` = sanitized error message (≤500 chars)
+  - `{{3}}` = advice or `—`
+  - `{{4}}` = `Seen N times. Alert #M.`
+
+### 9.5.4 Operator console
+- `/operator > בעיות טוקן` (top section, above ריצות אחרונות).
+- `dashboard-web/src/components/operator/TokenFailuresTable.tsx` + endpoint `dashboard-web/src/app/api/operator/token-failures/route.ts`.
+- GET returns unresolved + 7-day-resolved rows. POST `{action:'resolve'}` clears `last_alert_sent_at` so the next failure restarts the alert cycle.
+
+### 9.5.5 Pending fetcher wiring (gated on Meta approval)
+- `dashboard-web/src/lib/fetchers/googleAds.ts:getAccessToken` — detect `invalid_grant` → `notifyTokenFailure({provider:'google', operation:'oauth_refresh'})`.
+- `dashboard-web/src/lib/fetchers/meta.ts` — detect 401 + subcodes 102/190 → `{provider:'meta', operation:'access_token'}`.
+- `dashboard-web/src/lib/fetchers/tiktok.ts:tiktokGet` — detect codes 40104/40105 → `{provider:'tiktok', operation:'access_token'}`.
+- `dashboard-web/src/lib/notifications/whatsapp.ts:sendWhatsAppTemplate` — detect 401 with `OAuth access token` body → `{provider:'whatsapp', storeId:'global', operation:'send_template'}`. CAUTION: if WhatsApp itself is dead, alert can't deliver via WhatsApp — DB row is the only signal until a future email-fallback iteration.
 
 ---
 
