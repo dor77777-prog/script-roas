@@ -121,34 +121,129 @@ describe('isCampaignOff — locks Phase 05.7.x effective_status contract', () =>
     });
   });
 
-  describe('TikTok — ADGROUP_STATUS_DELIVERY_OK is the only on-state', () => {
-    it('ADGROUP_STATUS_DELIVERY_OK → not off', () => {
+  /**
+   * OPERATOR-1 audit fix (2026-05-23): TikTok status classification uses
+   * explicit ACTIVE-enough vs. OFF sets instead of strict equality to
+   * ADGROUP_STATUS_DELIVERY_OK. The operator reported that the previous
+   * strict-equality check painted active campaigns as "כבוי" whenever
+   * TikTok temporarily reported BUDGET_EXCEED (daily-cap hit), AUDIT
+   * (creative review), REVIEWING (alternate spelling some endpoints
+   * return), or NOT_START (scheduled but not yet started).
+   *
+   * Pre-fix expectations covered partial strings (BUDGET_EXCEED, FROZEN,
+   * AUDIT, etc. without ADGROUP_STATUS_ prefix) — but real TikTok API
+   * responses always carry the prefix, so the suite is rewritten to test
+   * the actual production status taxonomy.
+   *
+   * Reference list (10 statuses total — all must be exercised below):
+   *   Delivering / preparing (5 — return false):
+   *     ADGROUP_STATUS_DELIVERY_OK   ADGROUP_STATUS_BUDGET_EXCEED
+   *     ADGROUP_STATUS_AUDIT         ADGROUP_STATUS_REVIEWING
+   *     ADGROUP_STATUS_NOT_START
+   *   Truly off (5 — return true):
+   *     ADGROUP_STATUS_DISABLE       ADGROUP_STATUS_TIMEDOUT
+   *     ADGROUP_STATUS_FROZEN        ADGROUP_STATUS_ARCHIVED
+   *     ADGROUP_STATUS_DELETE
+   */
+  describe('TikTok — ACTIVE-enough vs. OFF sets (OPERATOR-1, 2026-05-23)', () => {
+    const TIKTOK_ACTIVE_ENOUGH = [
+      'ADGROUP_STATUS_DELIVERY_OK',
+      'ADGROUP_STATUS_BUDGET_EXCEED',
+      'ADGROUP_STATUS_AUDIT',
+      'ADGROUP_STATUS_REVIEWING',
+      'ADGROUP_STATUS_NOT_START',
+    ] as const;
+    const TIKTOK_OFF_STATUSES = [
+      'ADGROUP_STATUS_DISABLE',
+      'ADGROUP_STATUS_TIMEDOUT',
+      'ADGROUP_STATUS_FROZEN',
+      'ADGROUP_STATUS_ARCHIVED',
+      'ADGROUP_STATUS_DELETE',
+    ] as const;
+
+    // Strict — exercise ALL 5 active-enough statuses.
+    for (const status of TIKTOK_ACTIVE_ENOUGH) {
+      it(`${status} → not off`, () => {
+        expect(isCampaignOff(status, 'tiktok', '2026-05-20', '2026-05-20')).toBe(false);
+      });
+    }
+
+    // Strict — exercise ALL 5 off statuses.
+    for (const status of TIKTOK_OFF_STATUSES) {
+      it(`${status} → off`, () => {
+        expect(isCampaignOff(status, 'tiktok', '2026-05-20', '2026-05-20')).toBe(true);
+      });
+    }
+
+    // Operator scenario: campaign was DISABLE → re-enabled → returns
+    // DELIVERY_OK. Should now read as ON.
+    it('re-enabled campaign (DISABLE → DELIVERY_OK) reads as ON', () => {
       expect(
         isCampaignOff('ADGROUP_STATUS_DELIVERY_OK', 'tiktok', '2026-05-20', '2026-05-20'),
       ).toBe(false);
     });
-    it('ADGROUP_STATUS_DISABLE → off', () => {
-      expect(isCampaignOff('ADGROUP_STATUS_DISABLE', 'tiktok', '2026-05-20', '2026-05-20')).toBe(
-        true,
-      );
+
+    // Operator scenario: campaign hit daily cap mid-day. TikTok Ads
+    // Manager shows it as Active, but TikTok's status field returns
+    // BUDGET_EXCEED until midnight. The chip MUST NOT flip to "off".
+    it('BUDGET_EXCEED (daily cap hit mid-day) reads as ON (operator scenario)', () => {
+      expect(
+        isCampaignOff('ADGROUP_STATUS_BUDGET_EXCEED', 'tiktok', '2026-05-20', '2026-05-20'),
+      ).toBe(false);
     });
-    it('BUDGET_EXCEED → off', () => {
-      expect(isCampaignOff('BUDGET_EXCEED', 'tiktok', '2026-05-20', '2026-05-20')).toBe(true);
+
+    // Operator scenario: brand-new creative under TikTok review.
+    it('AUDIT (creative review) reads as ON', () => {
+      expect(
+        isCampaignOff('ADGROUP_STATUS_AUDIT', 'tiktok', '2026-05-20', '2026-05-20'),
+      ).toBe(false);
     });
-    it('FROZEN → off', () => {
-      expect(isCampaignOff('FROZEN', 'tiktok', '2026-05-20', '2026-05-20')).toBe(true);
+
+    it('REVIEWING (alternate review spelling) reads as ON', () => {
+      expect(
+        isCampaignOff('ADGROUP_STATUS_REVIEWING', 'tiktok', '2026-05-20', '2026-05-20'),
+      ).toBe(false);
     });
-    it('DELETE → off', () => {
-      expect(isCampaignOff('DELETE', 'tiktok', '2026-05-20', '2026-05-20')).toBe(true);
+
+    it('NOT_START (scheduled, not yet at start time) reads as ON', () => {
+      expect(
+        isCampaignOff('ADGROUP_STATUS_NOT_START', 'tiktok', '2026-05-20', '2026-05-20'),
+      ).toBe(false);
     });
-    it('AUDIT → off (TikTok review state)', () => {
-      expect(isCampaignOff('AUDIT', 'tiktok', '2026-05-20', '2026-05-20')).toBe(true);
+
+    it('ACTIVE (Meta state on TikTok) → not in either TikTok set → falls through to date heuristic', () => {
+      // 2026-05-20 - 2 = 2026-05-18 threshold. lastActive '2026-05-20' is on/after threshold → not off.
+      expect(isCampaignOff('ACTIVE', 'tiktok', '2026-05-20', '2026-05-20')).toBe(false);
+      // Old lastActive → date heuristic fires → off.
+      expect(isCampaignOff('ACTIVE', 'tiktok', '2026-05-10', '2026-05-20')).toBe(true);
     });
-    it('ACTIVE (Meta state on TikTok) → off (TikTok never returns ACTIVE)', () => {
-      expect(isCampaignOff('ACTIVE', 'tiktok', '2026-05-20', '2026-05-20')).toBe(true);
+
+    it('ENABLED (Google state on TikTok) → not in either TikTok set → falls through to date heuristic', () => {
+      expect(isCampaignOff('ENABLED', 'tiktok', '2026-05-20', '2026-05-20')).toBe(false);
+      expect(isCampaignOff('ENABLED', 'tiktok', '2026-05-10', '2026-05-20')).toBe(true);
     });
-    it('ENABLED (Google state on TikTok) → off', () => {
-      expect(isCampaignOff('ENABLED', 'tiktok', '2026-05-20', '2026-05-20')).toBe(true);
+
+    it('unknown future TikTok status → falls through to date heuristic (fail-safe)', () => {
+      // If TikTok ships a brand-new status value we haven't classified,
+      // we trust the lastActiveDate heuristic rather than risk flipping
+      // a live campaign to "off" on a single bad classification.
+      expect(
+        isCampaignOff('ADGROUP_STATUS_FUTURE_UNKNOWN', 'tiktok', '2026-05-20', '2026-05-20'),
+      ).toBe(false);
+      expect(
+        isCampaignOff('ADGROUP_STATUS_FUTURE_UNKNOWN', 'tiktok', '2026-05-10', '2026-05-20'),
+      ).toBe(true);
+    });
+
+    it('status is whitespace-trimmed and uppercased before lookup', () => {
+      // TikTok API has been observed returning padded strings; the helper
+      // normalises before lookup.
+      expect(
+        isCampaignOff('  adgroup_status_delivery_ok  ', 'tiktok', '2026-05-20', '2026-05-20'),
+      ).toBe(false);
+      expect(
+        isCampaignOff('  adgroup_status_disable  ', 'tiktok', '2026-05-20', '2026-05-20'),
+      ).toBe(true);
     });
   });
 

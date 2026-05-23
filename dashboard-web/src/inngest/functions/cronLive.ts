@@ -213,6 +213,76 @@ function dayInJerusalem(instantMs: number): string {
   return fmt.format(new Date(instantMs));
 }
 
+// =============================================================================
+// Effective-status classification — OPERATOR-1 audit fix (2026-05-23)
+// =============================================================================
+//
+// TikTok's ad-group status taxonomy has TEN distinct values — FIVE are
+// "delivering / preparing" (ad-group will spend) and FIVE are "terminal /
+// blocked" (truly off). Pre-fix code at cronLive.ts (the local
+// `isActiveForPlatform` previously nested inside the
+// 'refresh-effective-status' step) treated any TikTok status other than
+// 'ADGROUP_STATUS_DELIVERY_OK' as NOT-ACTIVE, which meant we never
+// enrolled placeholder rows for ad-groups in BUDGET_EXCEED (paused TODAY
+// due to daily cap; resumes tomorrow), AUDIT (under creative review;
+// will deliver once approved), REVIEWING (same), or NOT_START (scheduled,
+// not yet at start time). The operator reported (2026-05-23) that
+// campaigns showing in TikTok Ads Manager as Active were missing from the
+// dashboard's placeholder-enrollment step.
+//
+// The TIKTOK_ACTIVE_ENOUGH set below mirrors the dashboard chip helper
+// `CampaignsTableRow.isCampaignOff`'s TIKTOK_ACTIVE_ENOUGH (the full
+// off vs. active taxonomy + a more verbose JSDoc lives there — this
+// cron only needs the "is delivering / preparing" half because the OFF
+// path here just returns false from `isActiveForPlatform`). Both helpers
+// MUST agree — otherwise an ad-set in BUDGET_EXCEED could be UPSERTed
+// here as "active" while the row chip simultaneously paints it "off".
+//
+// Source: TikTok Business API `/adgroup/get/` `operation_status` field.
+// https://business-api.tiktok.com/portal/docs?id=1739561631127553
+const TIKTOK_ACTIVE_ENOUGH = new Set([
+  'ADGROUP_STATUS_DELIVERY_OK',
+  'ADGROUP_STATUS_BUDGET_EXCEED',
+  'ADGROUP_STATUS_AUDIT',
+  'ADGROUP_STATUS_REVIEWING',
+  'ADGROUP_STATUS_NOT_START',
+]);
+
+/**
+ * Should an ad-set's current `status` qualify for placeholder enrollment
+ * (an UPSERT of TODAY's campaigns_daily row)?
+ *
+ * Per-platform active state:
+ *   Meta:   'ACTIVE'
+ *   Google: 'ENABLED'
+ *   TikTok: any value in TIKTOK_ACTIVE_ENOUGH (delivering / preparing).
+ *           TIKTOK_OFF_STATUSES → not enrolled. Anything outside both
+ *           sets (e.g. an unknown future TikTok status) → not enrolled,
+ *           so we don't invent a placeholder row for an ad-set we can't
+ *           classify.
+ *
+ * Mirrored in `CampaignsTableRow.isCampaignOff` (the dashboard chip logic).
+ * Both helpers MUST agree — otherwise an ad-set in BUDGET_EXCEED could
+ * be UPSERTed here as "active" while the row chip simultaneously paints
+ * it "off". OPERATOR-1 audit fix (2026-05-23) makes the two consistent.
+ *
+ * Exported so the audit's regression tests can pin all 10 TikTok status
+ * values without standing up a full Inngest dev server.
+ */
+export function isActiveForPlatform(platform: string, status: string): boolean {
+  const norm = status.trim().toUpperCase();
+  switch (platform) {
+    case 'meta':
+      return norm === 'ACTIVE';
+    case 'google':
+      return norm === 'ENABLED';
+    case 'tiktok':
+      return TIKTOK_ACTIVE_ENOUGH.has(norm);
+    default:
+      return false;
+  }
+}
+
 /**
  * Returns the rolling N-day window as an array of 'YYYY-MM-DD' dates in
  * Asia/Jerusalem time, ordered today→oldest (today, today-1, ..., today-(N-1)).
@@ -952,19 +1022,6 @@ export async function runLiveForStore(
     //    INSERT path uses the schema defaults (0) for the missing
     //    metrics — exactly the "placeholder" state we want for a
     //    just-launched, not-yet-spent campaign.
-    function isActiveForPlatform(platform: string, status: string): boolean {
-      const norm = status.trim().toUpperCase();
-      switch (platform) {
-        case 'meta':
-          return norm === 'ACTIVE';
-        case 'google':
-          return norm === 'ENABLED';
-        case 'tiktok':
-          return norm === 'ADGROUP_STATUS_DELIVERY_OK';
-        default:
-          return false;
-      }
-    }
     const activeEnrollments = enrollments.filter((e) =>
       isActiveForPlatform(e.platform, e.status),
     );

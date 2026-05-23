@@ -145,20 +145,78 @@ export function isCampaignCurrentlyOff(lastActiveDate: string | null, today: str
 }
 
 /**
+ * OPERATOR-1 (audit v3, 2026-05-23): TikTok's ad-group status taxonomy
+ * has FIVE distinct "off-ish" terminal/blocked states and FIVE distinct
+ * "on-ish" delivering/preparing states. Pre-fix code treated any status
+ * !== 'ADGROUP_STATUS_DELIVERY_OK' as OFF — which flipped active campaigns
+ * to "כבוי" whenever TikTok temporarily reported BUDGET_EXCEED (very
+ * common — fires whenever the daily budget caps mid-day, but the campaign
+ * is still ACTIVE in TikTok Ads Manager), AUDIT / REVIEWING (the moderation
+ * loop on new creatives), or NOT_START (a scheduled-to-start ad-group
+ * that hasn't reached its start time yet).
+ *
+ * The operator reported (2026-05-23): "dashboard shows the campaign as
+ * off but TikTok Ads Manager shows it as Active". The 5 status values
+ * below were the culprits in production.
+ *
+ * Source: TikTok Business API `/adgroup/get/` `operation_status` field.
+ * https://business-api.tiktok.com/portal/docs?id=1739561631127553
+ *
+ * Reference list (10 statuses total):
+ *   Delivering / preparing (TIKTOK_ACTIVE_ENOUGH):
+ *     ADGROUP_STATUS_DELIVERY_OK      — actively serving impressions
+ *     ADGROUP_STATUS_BUDGET_EXCEED    — paused TODAY (daily cap); resumes tomorrow
+ *     ADGROUP_STATUS_AUDIT            — under TikTok creative review (will deliver after approval)
+ *     ADGROUP_STATUS_REVIEWING        — alternate spelling some endpoints return
+ *     ADGROUP_STATUS_NOT_START        — scheduled, before start time
+ *
+ *   Truly off (TIKTOK_OFF_STATUSES):
+ *     ADGROUP_STATUS_DISABLE          — operator manually paused
+ *     ADGROUP_STATUS_TIMEDOUT         — past scheduled end date
+ *     ADGROUP_STATUS_FROZEN           — TikTok policy-frozen
+ *     ADGROUP_STATUS_ARCHIVED         — operator archived
+ *     ADGROUP_STATUS_DELETE           — soft-deleted (still surfaces in some API responses)
+ */
+const TIKTOK_OFF_STATUSES = new Set([
+  'ADGROUP_STATUS_DISABLE',
+  'ADGROUP_STATUS_TIMEDOUT',
+  'ADGROUP_STATUS_FROZEN',
+  'ADGROUP_STATUS_ARCHIVED',
+  'ADGROUP_STATUS_DELETE',
+]);
+
+const TIKTOK_ACTIVE_ENOUGH = new Set([
+  'ADGROUP_STATUS_DELIVERY_OK',
+  'ADGROUP_STATUS_BUDGET_EXCEED',
+  'ADGROUP_STATUS_AUDIT',
+  'ADGROUP_STATUS_REVIEWING',
+  'ADGROUP_STATUS_NOT_START',
+]);
+
+/**
  * Phase 05.7.x — "is this campaign currently off?" using the platform's
  * real effective_status when available, falling back to FIX-26's date
  * heuristic when status is null (older data, status fetcher soft-failed,
  * or Sheets path).
  *
- * Active state per platform (anything else → off):
+ * Active state per platform:
  *   Meta:   'ACTIVE'
  *   Google: 'ENABLED'
- *   TikTok: 'ADGROUP_STATUS_DELIVERY_OK'
+ *   TikTok: anything in TIKTOK_ACTIVE_ENOUGH (delivering / preparing) is ON;
+ *           anything in TIKTOK_OFF_STATUSES (terminal / blocked) is OFF.
+ *           See the TIKTOK_OFF_STATUSES JSDoc above for the operator-reported
+ *           rationale (OPERATOR-1 audit fix 2026-05-23).
  *
  * This is the signal the dashboard's "כבוי" chip now consumes — replaces
  * the previous 2-day blanket buffer so a campaign paused 1 hour ago lights
  * up the chip on the next cron tick (or next manual refresh) instead of
  * waiting 2 full days for the heuristic to catch up.
+ *
+ * TikTok statuses that match NEITHER set (e.g. a future TikTok status
+ * we don't know about yet) fall through to the date heuristic — fail-safe
+ * default: rely on lastActiveDate rather than guessing how to interpret
+ * an unmapped status (which could otherwise flip a live campaign to "off"
+ * on a single bad classification).
  */
 export function isCampaignOff(
   effectiveStatus: string | null,
@@ -175,7 +233,12 @@ export function isCampaignOff(
       case 'google':
         return norm !== 'ENABLED';
       case 'tiktok':
-        return norm !== 'ADGROUP_STATUS_DELIVERY_OK';
+        // Tiered classification (OPERATOR-1 audit fix 2026-05-23):
+        // explicit OFF set → true; explicit ACTIVE-enough set → false;
+        // anything else falls through to the date heuristic.
+        if (TIKTOK_OFF_STATUSES.has(norm)) return true;
+        if (TIKTOK_ACTIVE_ENOUGH.has(norm)) return false;
+        break;
       default:
         // Unknown platform name — fall through to the date heuristic
         // rather than risk a false-positive on an unmapped status.
