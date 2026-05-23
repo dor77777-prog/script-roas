@@ -221,14 +221,40 @@ export async function runDailyForStore(
   // unchanged. The budgets endpoint is the SAME ad account + token, so all 4
   // fetches share the auth/host warmup and finish in roughly the same time
   // as the slowest one (insights is dominant; budgets is a small endpoint).
+  // Audit fix 2026-05-23 (HG-01 pipeline): each platform's fetch is now
+  // wrapped in try/catch returning a zero-spend sentinel. Pre-fix, a
+  // single platform's token expiry threw → Inngest retried 4× → final
+  // failure killed the ENTIRE runDailyForStore (Shopify + Meta + Google
+  // + TikTok all skipped for that store/day). Now a Meta 401 only zeros
+  // Meta's contribution; Google + TikTok + Shopify still land.
+  //
+  // The silent-zero is intentionally paired with the token-failure alert
+  // path (notifyTokenFailure / token_failure_alert WhatsApp template) so
+  // the operator still gets a signal — once Meta approves that template
+  // and the fetchers call notifyTokenFailure, the warn below becomes
+  // operator-visible. Until then it lands in Inngest run logs.
   const meta = (await step.run('fetch-meta', async () => {
-    const [spend, adsetRows, adRows, budgets] = await Promise.all([
-      fetchMetaSpendForDay(storeId, dateStr),
-      fetchMetaAdSetInsights(storeId, dateStr),
-      fetchMetaAdInsights(storeId, dateStr),
-      fetchMetaBudgets(storeId),
-    ]);
-    return { spend, adsetRows, adRows, budgets };
+    try {
+      const [spend, adsetRows, adRows, budgets] = await Promise.all([
+        fetchMetaSpendForDay(storeId, dateStr),
+        fetchMetaAdSetInsights(storeId, dateStr),
+        fetchMetaAdInsights(storeId, dateStr),
+        fetchMetaBudgets(storeId),
+      ]);
+      return { spend, adsetRows, adRows, budgets };
+    } catch (e) {
+      console.warn(
+        `cron-daily ${storeId} ${dateStr}: Meta fetch failed — zeroing Meta contribution to allow other platforms + Shopify to persist. Error: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+      return {
+        spend: { storeId, date: dateStr, spend: 0, currency: 'ILS' },
+        adsetRows: [],
+        adRows: [],
+        budgets: { campaigns: new Map(), adSets: new Map() },
+      };
+    }
   })) as {
     spend: Awaited<ReturnType<typeof fetchMetaSpendForDay>>;
     adsetRows: Awaited<ReturnType<typeof fetchMetaAdSetInsights>>;
@@ -242,13 +268,27 @@ export async function runDailyForStore(
   // the step still runs for non-uzoshop (returns zero/empty), keeping the
   // step ID stable across stores so the jobs-table UI (plan 12) can render
   // a uniform per-store row.
+  // Audit fix 2026-05-23 (HG-01 pipeline): same soft-fail wrap as Meta above.
   const google = (await step.run('fetch-google', async () => {
-    const [spend, adGroupRows, adRows] = await Promise.all([
-      fetchGoogleAdsSpendForDay(storeId, dateStr),
-      fetchGoogleAdsAdGroupInsights(storeId, dateStr),
-      fetchGoogleAdsAdInsights(storeId, dateStr),
-    ]);
-    return { spend, adGroupRows, adRows };
+    try {
+      const [spend, adGroupRows, adRows] = await Promise.all([
+        fetchGoogleAdsSpendForDay(storeId, dateStr),
+        fetchGoogleAdsAdGroupInsights(storeId, dateStr),
+        fetchGoogleAdsAdInsights(storeId, dateStr),
+      ]);
+      return { spend, adGroupRows, adRows };
+    } catch (e) {
+      console.warn(
+        `cron-daily ${storeId} ${dateStr}: Google Ads fetch failed — zeroing Google contribution. Error: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+      return {
+        spend: { storeId, date: dateStr, spend: 0, currency: 'CAD' },
+        adGroupRows: [],
+        adRows: [],
+      };
+    }
   })) as {
     spend: Awaited<ReturnType<typeof fetchGoogleAdsSpendForDay>>;
     adGroupRows: Awaited<ReturnType<typeof fetchGoogleAdsAdGroupInsights>>;
@@ -259,6 +299,10 @@ export async function runDailyForStore(
   // Phase 05.7.7: TikTok integration. Other stores short-circuit to zero/empty
   // so the step ID stays stable across stores (jobs-table uniformity) and the
   // step counts as 1 exec regardless of whether a fetch happened.
+  // Audit fix 2026-05-23 (HG-01 pipeline): same soft-fail wrap as Meta/Google.
+  // The pre-fix behavior was especially painful here: a single uzoshop
+  // TikTok token expiry failed the ENTIRE cron-daily run for uzoshop —
+  // Shopify revenue + Meta + Google all rolled back too.
   const tiktok = (await step.run('fetch-tiktok', async () => {
     if (!STORES_WITH_TIKTOK.has(storeId)) {
       return {
@@ -271,11 +315,23 @@ export async function runDailyForStore(
         adRows: [] as TikTokAdRow[],
       };
     }
-    const [spend, adRows] = await Promise.all([
-      fetchTikTokSpendForDay(storeId, dateStr),
-      fetchTikTokAdInsights(storeId, dateStr),
-    ]);
-    return { spend, adRows };
+    try {
+      const [spend, adRows] = await Promise.all([
+        fetchTikTokSpendForDay(storeId, dateStr),
+        fetchTikTokAdInsights(storeId, dateStr),
+      ]);
+      return { spend, adRows };
+    } catch (e) {
+      console.warn(
+        `cron-daily ${storeId} ${dateStr}: TikTok fetch failed — zeroing TikTok contribution. Error: ${
+          e instanceof Error ? e.message : String(e)
+        }`,
+      );
+      return {
+        spend: { storeId, date: dateStr, spend: 0, currency: 'USD' } as TikTokDaySpend,
+        adRows: [] as TikTokAdRow[],
+      };
+    }
   })) as {
     spend: TikTokDaySpend;
     adRows: TikTokAdRow[];
