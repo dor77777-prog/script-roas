@@ -277,7 +277,15 @@ export function ProductPickerModal({
             </span>
           </p>
           <div className="relative">
-            <Search size={14} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+            {/*
+              HIGH-2 audit fix (2026-05-23): use the logical `end-2.5`
+              property (Tailwind v3 emits `inset-inline-end`) instead of
+              `right-2.5`. The picker is rendered inside a `dir="rtl"`
+              Hebrew document, where physical right == start (not end).
+              The icon now anchors next to the input's `pe-9` padded
+              edge in BOTH directions: RTL → visually right, LTR → left.
+            */}
+            <Search size={14} className="absolute end-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
             <input
               type="text"
               value={query}
