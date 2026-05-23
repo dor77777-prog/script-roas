@@ -25,7 +25,7 @@ import {
 import type { DashboardData, Filters as F } from '@/lib/types';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import { aggregate, dailySeries, filterRows, roasLabel } from '@/lib/analytics';
-import { buildDateRangeKey } from '@/lib/dateRange';
+import { buildDateRangeKey, enumerateDateRange } from '@/lib/dateRange';
 import { previousRange } from '@/lib/presets';
 import { cn } from '@/lib/utils';
 import {
@@ -346,8 +346,26 @@ function RoasTrendChart({
   toDate: string;
   store: string;
 }) {
-  // Sanitise: drop days with no spend (where roas=0 isn't meaningful).
-  const series = data.filter(d => d.spend > 0 || d.revenue > 0);
+  // c/CR-03: enumerate the full calendar range and fill missing days with
+  // null `roas` so Recharts draws line breaks at the gaps (via the line's
+  // default null-handling). The old `data.filter(d => d.spend > 0)` dropped
+  // zero-spend days entirely; combined with the categorical X-axis below,
+  // that visually compressed 17 active days into the same width as a
+  // continuous 30-day window — the chart shape lied about the calendar.
+  // The footer also disagreed with the eyebrow on "how many days."
+  const byDate = new Map(data.map(d => [d.date, d]));
+  const series = enumerateDateRange(fromDate, toDate).map(date => {
+    const d = byDate.get(date);
+    return {
+      date,
+      revenue: d?.revenue ?? 0,
+      spend: d?.spend ?? 0,
+      // Null roas on paused days — Recharts breaks the line at null so the
+      // operator sees a true gap, not a smoothed-over interpolation. The
+      // dot is also suppressed for null points.
+      roas: d && d.spend > 0 ? d.roas : null,
+    };
+  });
 
   // Pull annotations in scope (date range + store filter). Re-read when the
   // user adds/edits one — the custom event from lib/annotations fires on
@@ -362,9 +380,12 @@ function RoasTrendChart({
     return () => window.removeEventListener('roas-annotations-changed', onChange);
   }, [fromDate, toDate, store]);
 
-  if (series.length < 2) return null;
+  // Need at least 2 active days for a meaningful line chart.
+  const activeSeries = series.filter(d => d.roas !== null) as Array<typeof series[0] & { roas: number }>;
+  if (activeSeries.length < 2) return null;
 
-  const maxRoas = Math.max(3.2, ...series.map(d => d.roas));
+  const daysInRange = series.length;
+  const maxRoas = Math.max(3.2, ...activeSeries.map(d => d.roas));
 
   return (
     <section className="mt-6 sm:mt-7" dir="ltr">
@@ -380,20 +401,20 @@ function RoasTrendChart({
           <span>
             <span className="text-white/45">מקסימום: </span>
             <span className="font-semibold text-white/85">
-              <bdi dir="ltr">{Math.max(...series.map(d => d.roas)).toFixed(2)}</bdi>
+              <bdi dir="ltr">{Math.max(...activeSeries.map(d => d.roas)).toFixed(2)}</bdi>
             </span>
           </span>
           <span>
             <span className="text-white/45">מינימום: </span>
             <span className="font-semibold text-white/85">
               {/* Audit fix 2026-05-23 (FIND-04 dashboard-fidelity): if
-                  every day in the visible series has roas === 0 (e.g.,
-                  zero-spend store, refund-heavy window), the previous
-                  Math.min(...[]) → Infinity → rendered literal "Infinity"
-                  at the top of the dashboard. Guard the empty case. */}
+                  every active day has roas === 0 (e.g., zero-spend store,
+                  refund-heavy window), the previous Math.min(...[]) →
+                  Infinity → rendered literal "Infinity" at the top of the
+                  dashboard. Guard the empty case. */}
               <bdi dir="ltr">
                 {(() => {
-                  const positives = series.filter(d => d.roas > 0).map(d => d.roas);
+                  const positives = activeSeries.filter(d => d.roas > 0).map(d => d.roas);
                   return positives.length > 0
                     ? Math.min(...positives).toFixed(2)
                     : '—';
@@ -463,6 +484,10 @@ function RoasTrendChart({
               strokeWidth={2}
               dot={{ r: 2.5, fill: '#ffffff', stroke: 'transparent' }}
               activeDot={{ r: 5, fill: '#ffffff', stroke: '#0d3680', strokeWidth: 3 }}
+              // c/CR-03: explicitly DO NOT bridge paused days. The gap in
+              // the line is the operator's visual signal that the campaign
+              // was off — interpolating would mask that.
+              connectNulls={false}
               isAnimationActive
               animationDuration={500}
             />
@@ -473,7 +498,9 @@ function RoasTrendChart({
                   date: string;
                   revenue: number;
                   spend: number;
-                  roas: number;
+                  // c/CR-03: paused days now carry null so the Recharts
+                  // Line breaks at the gap instead of interpolating.
+                  roas: number | null;
                 };
                 return (
                   <div
@@ -482,7 +509,7 @@ function RoasTrendChart({
                   >
                     <div className="text-white/65 mb-1 text-[10px]">{fmtDateShort(d.date)}</div>
                     <div className="font-semibold">
-                      ROAS <bdi dir="ltr">{d.roas.toFixed(2)}</bdi>
+                      ROAS <bdi dir="ltr">{d.roas !== null ? d.roas.toFixed(2) : '—'}</bdi>
                     </div>
                     <div className="text-white/75 text-[11px] mt-0.5">
                       הכנסות <bdi dir="ltr">{Math.round(d.revenue).toLocaleString('he-IL')}</bdi>
@@ -497,10 +524,14 @@ function RoasTrendChart({
         </ResponsiveContainer>
       </div>
 
-      {/* Date axis labels */}
+      {/* Date axis labels — c/CR-03: report the full calendar day count
+          (matches the eyebrow above) rather than the post-filter active-day
+          count. The two used to disagree whenever a range contained paused
+          days, leaving the operator with two contradictory "how many days"
+          numbers for the same scope. */}
       <div className="flex items-center justify-between text-[10px] sm:text-[11px] text-white/55 tabular-nums mt-1" dir="ltr">
         <span>{fmtDateShort(fromDate)}</span>
-        <span className="text-white/35">{series.length} ימים</span>
+        <span className="text-white/35">{daysInRange} ימים</span>
         <span>{fmtDateShort(toDate)}</span>
       </div>
     </section>
