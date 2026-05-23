@@ -88,12 +88,25 @@ type FormState = {
   notes: string;
 };
 
+// Audit fix 2026-05-23 (d/HI-03 companion): use Intl Asia/Jerusalem so
+// the form default matches the IL operator's calendar day during early-
+// morning sessions (UTC midnight was 1-3 calendar hours BEHIND IL until
+// 02:00/03:00 IL time depending on DST). The user can still pick any
+// date; this just removes the off-by-one default.
+function todayInIsrael(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jerusalem',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
 function initialForm(): FormState {
-  // Default to today (UTC date — matches how the dashboard otherwise
-  // anchors its "today" semantics on the server side). The user picks any
-  // date via the date input; this is just an opinionated starting point.
+  // Default to IL today (operator-friendly). The user picks any date via
+  // the date input; this is just an opinionated starting point.
   return {
-    date: new Date().toISOString().slice(0, 10),
+    date: todayInIsrael(),
     store_id: 'uzoshop',
     platform: 'meta',
     spend: '0',

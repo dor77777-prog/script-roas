@@ -63,12 +63,24 @@ type SuccessBody = {
   storeIds: string[];
 };
 
+// Audit fix 2026-05-23 (d/HI-03): use Intl Asia/Jerusalem-formatted
+// today string instead of `new Date().toISOString()`. The old call
+// returned UTC midnight which, between 02:00 and 04:00 IL time
+// (UTC 00:00-02:00 winter, 22:00-00:00 summer), was the WRONG calendar
+// day for an IL operator. Now the picker defaults to the IL today even
+// for early-morning sessions. Mirrors insights.ts:todayInIsrael()
+// pattern + the MonthlyTables / CommandPalette helpers.
+function todayInIsrael(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jerusalem',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
+}
+
 export function BackfillPicker() {
-  // "Today" in the user's local zone — fine as a default because the
-  // operator picks any range explicitly. We don't anchor on
-  // Asia/Jerusalem here because the picker is just a UX initialiser;
-  // the server route validates and the worker re-resolves dates in tz.
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = todayInIsrael();
 
   const [from, setFrom] = useState(HISTORY_BOUNDARY);
   const [to, setTo] = useState(todayIso);
