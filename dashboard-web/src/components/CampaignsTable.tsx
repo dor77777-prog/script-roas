@@ -635,8 +635,13 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   }, [aggregated, trueRevenueByKey, dailyByCampaign, today, optimized, productMap, data, productsResp, localRange]);
 
   const totals = useMemo(() => {
+    // Audit fix 2026-05-23 (FIND-01): summary cards must track what's
+    // actually rendered. When "🔗 multi-mapped only" filter is ON,
+    // `aggregatedFiltered` is the visible row set; iterating `aggregated`
+    // (the unfiltered list) made the totals diverge from the visible
+    // rows — operator sees 5 rows of $12K with a "$80K" card.
     let spend = 0, conv = 0, val = 0, clicks = 0, imps = 0;
-    for (const a of aggregated) {
+    for (const a of aggregatedFiltered) {
       spend += a.spend;
       conv += a.conversions;
       val += a.conversionValue;
@@ -657,7 +662,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       // cell — zero-impressions guard returns 0 so the card renders "—".
       cpm: imps > 0 ? (spend / imps) * 1000 : 0,
     };
-  }, [aggregated]);
+  }, [aggregatedFiltered]);
 
   // Per-day CPM (and ROAS) across the same filters that produce `aggregated`
   // (store, platform, date range). Drives the expandable CPM-over-time chart
@@ -856,6 +861,13 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
 
   // ----- Pixel-vs-Shopify attribution gap (top-of-table trust view) -------
   const attributionGap = useMemo(() => {
+    // Audit fix 2026-05-23 (FIND-01 follow-up): the trust panel reconciles
+    // platform-claimed conversion value against the *store's full* Shopify
+    // revenue (from dailyRows). When the multi-mapped filter is ON, we'd
+    // be comparing a campaign subset's claim against the store total —
+    // dishonest math (would always show absurd negative gap). Hide the
+    // panel rather than show misleading numbers.
+    if (showOnlyMultiMapped) return null;
     if (aggregated.length === 0) return null;
 
     // Sum Meta/Google conversion value across all visible campaigns.
@@ -933,7 +945,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       tone,
     };
     // `totals` covered transitively via `aggregated` dep (#IN-05).
-  }, [aggregated, dailyRows, localRange, localStore, platform]);
+  }, [aggregated, dailyRows, localRange, localStore, platform, showOnlyMultiMapped]);
 
   // FIX-22 (5.2.2.1): memoize drillRows so the drawer's useMemo([rows]) doesn't invalidate on every parent re-render.
   const drillRows = useMemo(() => {
@@ -1110,7 +1122,11 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       )}
 
       <span className="text-[10px] sm:text-xs text-text-muted tabular-nums sm:mr-auto">
-        {aggregated.length}{' '}
+        {/* Audit fix 2026-05-23 (FIND-14): when the multi-mapped filter is
+            on, show the visible-row count instead of the pre-filter total so
+            this headline number doesn't disagree with the table body. The
+            chip on line 1037-1040 still surfaces "X מתוך Y" detail. */}
+        {showOnlyMultiMapped ? aggregatedFiltered.length : aggregated.length}{' '}
         {mode === 'campaign' ? 'קמפיינים' : 'אד-סטים'}
       </span>
 
