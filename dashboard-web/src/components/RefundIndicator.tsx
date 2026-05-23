@@ -74,6 +74,38 @@ function computePosition(anchor: DOMRect): TooltipPos {
   return { top, left, placement };
 }
 
+/**
+ * d/CR-08 (audit 2026-05-23): grace period before hide-on-mouseleave so
+ * the cursor can transit the gap between the icon and the body-portal
+ * tooltip (which is position: fixed, NOT a DOM descendant of the wrapper
+ * — so any move into the tooltip fires the wrapper's onMouseLeave and
+ * the tooltip used to disappear before the user could read it).
+ *
+ * 200ms matches OS-level tooltip dismiss timings (macOS / Win HelpTip)
+ * and is short enough that an actual unintended hover doesn't linger.
+ */
+const HIDE_GRACE_MS = 200;
+
+/**
+ * d/CR-08: touch-device detection. On mobile, a tap fires the synthetic
+ * sequence pointerdown → mouseenter → mousedown → mouseup → click →
+ * mouseleave. The historic mouseenter/leave wiring made tap-to-open
+ * essentially impossible: the tooltip flashed open and disappeared in
+ * the same frame as the leave event from the tap-and-release motion.
+ *
+ * The runtime check fires once on first use, since the answer doesn't
+ * change for the lifetime of the page session. Browsers without
+ * pointerdown.pointerType (older iOS) fall back to ontouchstart.
+ */
+function isTouchDevice(): boolean {
+  if (typeof window === 'undefined') return false;
+  return (
+    // navigator.maxTouchPoints is the canonical signal on modern browsers
+    (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) ||
+    'ontouchstart' in window
+  );
+}
+
 export function RefundIndicator(props: {
   grossRevenue: number | null;
   refundDeduction: number | null;
@@ -82,7 +114,33 @@ export function RefundIndicator(props: {
   const [pos, setPos] = useState<TooltipPos | null>(null);
   const wrapRef = useRef<HTMLSpanElement | null>(null);
   const btnRef = useRef<HTMLButtonElement | null>(null);
+  // Portal ref so onMouseLeave's grace timer can be cancelled when the
+  // cursor re-enters EITHER the wrapper OR the floating tooltip body.
+  const portalRef = useRef<HTMLSpanElement | null>(null);
+  // Grace timer for delayed-hide. Tracking via ref instead of state so we
+  // can cancel synchronously inside a re-entry event handler without
+  // waiting for React to flush.
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { grossRevenue, refundDeduction } = props;
+
+  function cancelHide() {
+    if (hideTimerRef.current !== null) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+  }
+  function scheduleHide() {
+    cancelHide();
+    hideTimerRef.current = setTimeout(() => {
+      setOpen(false);
+      hideTimerRef.current = null;
+    }, HIDE_GRACE_MS);
+  }
+  // Clear any pending timer on unmount so we don't setState on a dead
+  // component (also stops the warning that would surface in StrictMode).
+  useEffect(() => {
+    return () => cancelHide();
+  }, []);
 
   // Compute portal position whenever the tooltip opens (and refresh on
   // window scroll/resize while it stays open — anchor moves with the
@@ -103,18 +161,35 @@ export function RefundIndicator(props: {
     };
   }, [open]);
 
-  // Close on click outside.
+  // Close on click outside. d/CR-08 (audit 2026-05-23): also treat a click
+  // INSIDE the portal-rendered tooltip as "inside" — the portal is a
+  // document.body descendant, NOT a wrapRef descendant, so the original
+  // single-ref check would close the tooltip the moment the user clicked
+  // anywhere within it (e.g., to select the amount text to copy).
   useEffect(() => {
     if (!open) return;
     function onDocClick(e: MouseEvent) {
-      if (!wrapRef.current) return;
-      if (!wrapRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      const insideWrap = wrapRef.current?.contains(target) ?? false;
+      const insidePortal = portalRef.current?.contains(target) ?? false;
+      if (!insideWrap && !insidePortal) {
         setOpen(false);
       }
     }
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [open]);
+
+  // d/CR-08: snapshot touch-vs-mouse once on first render. The event
+  // wiring below branches on this so:
+  //   - touch device: ONLY the explicit click toggles open/close.
+  //     mouseenter / mouseleave fire from the synthetic tap sequence
+  //     (down → enter → up → leave) on iOS/Android and would otherwise
+  //     close the tooltip in the same frame it opened.
+  //   - mouse device: hover opens, hover-leave starts the grace timer
+  //     (cancelled if the cursor re-enters wrapper OR portal). The
+  //     click still toggles for keyboard users + accessibility parity.
+  const touch = useRef(isTouchDevice()).current;
 
   if (
     refundDeduction === null ||
@@ -133,8 +208,12 @@ export function RefundIndicator(props: {
     <span
       ref={wrapRef}
       className="relative inline-flex items-center align-middle ms-1"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
+      // d/CR-08: hover-to-open only on mouse devices. On touch, the
+      // synthetic mouseenter from a tap would race with the immediate
+      // mouseleave from tap-and-release, closing the tooltip in the same
+      // frame it opened. Touch users get explicit click-to-toggle below.
+      onMouseEnter={touch ? undefined : () => { cancelHide(); setOpen(true); }}
+      onMouseLeave={touch ? undefined : scheduleHide}
     >
       <button
         ref={btnRef}
@@ -142,6 +221,12 @@ export function RefundIndicator(props: {
         aria-label="הצג פירוט החזרים"
         onClick={(e) => {
           e.stopPropagation();
+          // d/CR-08: explicit toggle works on BOTH touch and mouse so the
+          // keyboard / a11y story stays intact. On touch this is the ONLY
+          // way the tooltip opens (no hover events bound). On mouse this
+          // is a redundant manual toggle — useful for "pinning" the
+          // tooltip open while the cursor moves freely.
+          cancelHide();
           setOpen((v) => !v);
         }}
         className="inline-flex items-center justify-center text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 cursor-pointer"
@@ -153,13 +238,25 @@ export function RefundIndicator(props: {
         typeof document !== 'undefined' &&
         createPortal(
           <span
+            ref={portalRef}
             style={{
               position: 'fixed',
               top: pos.top,
               left: pos.left,
               minWidth: TOOLTIP_WIDTH_ESTIMATE - 32,
             }}
-            className="z-[9999] px-3 py-2 rounded-md shadow-xl bg-slate-900 text-white text-xs leading-relaxed pointer-events-none text-start"
+            // d/CR-08: dropped `pointer-events-none` so the cursor can
+            // actually transit INTO the tooltip without falling through
+            // to whatever's underneath (and without firing the wrapper's
+            // mouseleave). pointerEvents-auto means we own the events on
+            // the tooltip surface — onMouseEnter cancels the grace timer
+            // so the tooltip stays open while the mouse is inside; the
+            // click-outside handler above also walks portalRef so a click
+            // inside the tooltip body (e.g., to select-and-copy the
+            // refund amount) doesn't dismiss.
+            onMouseEnter={touch ? undefined : cancelHide}
+            onMouseLeave={touch ? undefined : scheduleHide}
+            className="z-[9999] px-3 py-2 rounded-md shadow-xl bg-slate-900 text-white text-xs leading-relaxed text-start"
             dir="rtl"
           >
             <span className="block font-semibold text-amber-300 mb-1">
