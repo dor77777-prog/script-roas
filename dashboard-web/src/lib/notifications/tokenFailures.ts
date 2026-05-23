@@ -275,7 +275,17 @@ export async function notifyTokenFailure(
     if (!existing) {
       payload.first_seen_at = new Date(now).toISOString();
     }
-    if (result.alerted) {
+    // Audit fix 2026-05-23 (d/CR-09): bump `last_alert_sent_at` on every
+    // ATTEMPTED send, not only on success. Previously this only updated
+    // when `result.alerted === true`, meaning a failed send (WhatsApp
+    // 401, template not approved, network blip) left the throttle clock
+    // un-advanced. The next cron-live tick (~30s later) would re-attempt
+    // and re-fail in a tight loop, hammering both Meta's API and the
+    // operator's quota. We're not interested in retrying a failed send
+    // here — the DB row records the failure and `/operator` surfaces it
+    // — so advancing the clock on attempt prevents the loop while
+    // preserving the original throttle semantics (one alert per 6h key).
+    if (shouldAlert) {
       payload.last_alert_sent_at = new Date(now).toISOString();
     }
     const { error } = await sb
