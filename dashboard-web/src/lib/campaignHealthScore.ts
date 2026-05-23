@@ -55,11 +55,16 @@ export type HealthScoreComponents = {
    *  optimized, −30 if currently off (can stack). NOT a 0..100 score. */
   operatorAdjustment: number;
   /** Phase 05.7.x (2026-05-23) — Net cohort adjustment applied AFTER
-   *  the operator adjustment by `applyCohortHealthAdjustment`. Default
+   *  the operator adjustment by `applyCohortAdjustmentOnce`. Default
    *  0 when no cohort exists or the campaign is solo on its products.
    *  Negative when the campaign is the weakest in a saturated cohort
    *  OR when a shared product shows cannibalization signals; small
-   *  positive when the campaign is the dominant leader in its cohort. */
+   *  positive when the campaign is the dominant leader in its cohort.
+   *
+   *  Audit fix 2026-05-24 (U-06): the apply function was renamed from
+   *  `applyCohortHealthAdjustment` to `applyCohortAdjustmentOnce` and
+   *  now asserts this field is 0 on entry — calling it twice on the
+   *  same base throws instead of silently double-applying. */
   cohortAdjustment: number;
 };
 
@@ -501,7 +506,7 @@ export type CohortAdjustmentInputs = {
    * composition shifted inside the visible range (a material member
    * paused/launched mid-range), the half-over-half scale-vs-revenue
    * comparison is unfair, so we abstain from a low/medium/high judgment.
-   * The switch in `applyCohortHealthAdjustment` deliberately lets it
+   * The switch in `applyCohortAdjustmentOnce` deliberately lets it
    * fall through `default` → zero delta → no health adjustment fires.
    * The UI surfaces the verdict to the operator separately so they know
    * to investigate before scaling.
@@ -509,10 +514,47 @@ export type CohortAdjustmentInputs = {
   cannibalizationRisk: 'none' | 'low' | 'medium' | 'high' | 'insufficient' | 'composition_changed';
 };
 
-export function applyCohortHealthAdjustment(
+/**
+ * Apply the cohort-aware adjustment to a base CampaignHealth result.
+ *
+ * Audit fix 2026-05-24 (U-06): renamed from `applyCohortHealthAdjustment`
+ * → `applyCohortAdjustmentOnce` to communicate the once-only contract.
+ * The function OVERWRITES `base.components.cohortAdjustment` (it doesn't
+ * accumulate), so calling it twice on the same base would silently
+ * replace the first delta with the second — a subtle double-apply bug
+ * waiting to happen the moment a caller composes two cohort signals.
+ *
+ * The runtime assert at the top of the function makes the contract
+ * loud: if a caller passes a base that ALREADY carries a non-zero
+ * cohortAdjustment, we throw instead of silently overwriting it. A
+ * caller that genuinely needs to re-derive the adjustment must first
+ * reset `base.components.cohortAdjustment = 0`, which makes the intent
+ * explicit at the call site.
+ *
+ * No backward-compat alias is exported: callers that referenced the
+ * old name now get a clean ReferenceError at build-time. This is
+ * intentional — a silent re-export would let the double-apply bug
+ * survive the rename.
+ */
+export function applyCohortAdjustmentOnce(
   base: CampaignHealth,
   inputs: CohortAdjustmentInputs,
 ): CampaignHealth {
+  // U-06 runtime guard. The function overwrites cohortAdjustment, so
+  // calling it twice on the same result would silently drop the first
+  // adjustment. Fail loud at the second call instead. (Solo / insufficient
+  // short-circuits below run AFTER the assert because a base that
+  // shouldn't be touched still shouldn't carry a stale cohort delta.)
+  if (base.components.cohortAdjustment !== 0) {
+    throw new Error(
+      'applyCohortAdjustmentOnce: base already has a non-zero ' +
+        `components.cohortAdjustment (${base.components.cohortAdjustment}). ` +
+        'Calling the function twice would overwrite the first delta. ' +
+        'Reset base.components.cohortAdjustment to 0 if you genuinely ' +
+        'need to re-derive (audit U-06, 2026-05-24).',
+    );
+  }
+
   // Unknown-grade campaigns aren't touched — they need data, not cohort
   // context. Same for solo campaigns.
   if (base.insufficient) return base;

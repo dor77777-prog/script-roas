@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   computeCampaignHealth,
-  applyCohortHealthAdjustment,
+  applyCohortAdjustmentOnce,
   type HealthScoreInputs,
   type CampaignHealth,
 } from '@/lib/campaignHealthScore';
@@ -706,7 +706,7 @@ describe('reasons strings', () => {
 // ─────────────────────────────────────────────────────────────────────────
 // Phase 05.7.x (2026-05-23) — Cohort-aware adjustment.
 //
-// applyCohortHealthAdjustment(base, inputs) → CampaignHealth' with:
+// applyCohortAdjustmentOnce(base, inputs) → CampaignHealth' with:
 //   - new components.cohortAdjustment captured
 //   - score adjusted + clamped to [0,100]
 //   - grade re-derived
@@ -730,10 +730,10 @@ function makeBaseHealth(score = 70): CampaignHealth {
   };
 }
 
-describe('applyCohortHealthAdjustment — solo cases', () => {
+describe('applyCohortAdjustmentOnce — solo cases', () => {
   it('returns base unchanged when cohortSize < 2', () => {
     const base = makeBaseHealth(70);
-    const out = applyCohortHealthAdjustment(base, {
+    const out = applyCohortAdjustmentOnce(base, {
       isLeader: false,
       isWeakest: false,
       cohortSize: 1,
@@ -748,7 +748,7 @@ describe('applyCohortHealthAdjustment — solo cases', () => {
       grade: 'unknown',
       insufficient: true,
     };
-    const out = applyCohortHealthAdjustment(base, {
+    const out = applyCohortAdjustmentOnce(base, {
       isLeader: false,
       isWeakest: true,
       cohortSize: 5,
@@ -759,7 +759,7 @@ describe('applyCohortHealthAdjustment — solo cases', () => {
 
   it('returns base unchanged when no adjustment fires (delta == 0)', () => {
     const base = makeBaseHealth(70);
-    const out = applyCohortHealthAdjustment(base, {
+    const out = applyCohortAdjustmentOnce(base, {
       isLeader: false,
       isWeakest: false,
       cohortSize: 4,
@@ -769,9 +769,9 @@ describe('applyCohortHealthAdjustment — solo cases', () => {
   });
 });
 
-describe('applyCohortHealthAdjustment — leader / weakest', () => {
+describe('applyCohortAdjustmentOnce — leader / weakest', () => {
   it('+3 when leader (no cannibalization)', () => {
-    const out = applyCohortHealthAdjustment(makeBaseHealth(70), {
+    const out = applyCohortAdjustmentOnce(makeBaseHealth(70), {
       isLeader: true,
       isWeakest: false,
       cohortSize: 4,
@@ -783,7 +783,7 @@ describe('applyCohortHealthAdjustment — leader / weakest', () => {
   });
 
   it('−5 when weakest in cohort of 3+', () => {
-    const out = applyCohortHealthAdjustment(makeBaseHealth(70), {
+    const out = applyCohortAdjustmentOnce(makeBaseHealth(70), {
       isLeader: false,
       isWeakest: true,
       cohortSize: 3,
@@ -795,7 +795,7 @@ describe('applyCohortHealthAdjustment — leader / weakest', () => {
   });
 
   it('NO weakest penalty for 2-member cohorts (someone has to be lower)', () => {
-    const out = applyCohortHealthAdjustment(makeBaseHealth(70), {
+    const out = applyCohortAdjustmentOnce(makeBaseHealth(70), {
       isLeader: false,
       isWeakest: true,
       cohortSize: 2, // floor: penalty only kicks at >=3
@@ -808,7 +808,7 @@ describe('applyCohortHealthAdjustment — leader / weakest', () => {
     // If a caller passes both, we credit leader and skip weakest because
     // isLeader is checked first (independent +3) and isWeakest's >=3 floor
     // doesn't gate against isLeader directly. Both ADDITIVELY apply.
-    const out = applyCohortHealthAdjustment(makeBaseHealth(70), {
+    const out = applyCohortAdjustmentOnce(makeBaseHealth(70), {
       isLeader: true,
       isWeakest: true,
       cohortSize: 3,
@@ -819,9 +819,9 @@ describe('applyCohortHealthAdjustment — leader / weakest', () => {
   });
 });
 
-describe('applyCohortHealthAdjustment — cannibalization', () => {
+describe('applyCohortAdjustmentOnce — cannibalization', () => {
   it('−10 for high cannibalization', () => {
-    const out = applyCohortHealthAdjustment(makeBaseHealth(70), {
+    const out = applyCohortAdjustmentOnce(makeBaseHealth(70), {
       isLeader: false,
       isWeakest: false,
       cohortSize: 4,
@@ -832,7 +832,7 @@ describe('applyCohortHealthAdjustment — cannibalization', () => {
   });
 
   it('−5 for medium cannibalization', () => {
-    const out = applyCohortHealthAdjustment(makeBaseHealth(70), {
+    const out = applyCohortAdjustmentOnce(makeBaseHealth(70), {
       isLeader: false,
       isWeakest: false,
       cohortSize: 4,
@@ -842,7 +842,7 @@ describe('applyCohortHealthAdjustment — cannibalization', () => {
   });
 
   it('−2 for low cannibalization', () => {
-    const out = applyCohortHealthAdjustment(makeBaseHealth(70), {
+    const out = applyCohortAdjustmentOnce(makeBaseHealth(70), {
       isLeader: false,
       isWeakest: false,
       cohortSize: 4,
@@ -853,7 +853,7 @@ describe('applyCohortHealthAdjustment — cannibalization', () => {
 
   it('0 for insufficient (no signal — no adjustment)', () => {
     const base = makeBaseHealth(70);
-    const out = applyCohortHealthAdjustment(base, {
+    const out = applyCohortAdjustmentOnce(base, {
       isLeader: false,
       isWeakest: false,
       cohortSize: 4,
@@ -867,13 +867,13 @@ describe('applyCohortHealthAdjustment — cannibalization', () => {
   it('0 for composition_changed (informational — no adjustment) — audit a/WARN-6', () => {
     // Audit fix 2026-05-23 (a/WARN-6): `composition_changed` is part of
     // the cannibalizationRisk union now, and the switch in
-    // applyCohortHealthAdjustment intentionally lets it fall through
+    // applyCohortAdjustmentOnce intentionally lets it fall through
     // `default` → zero delta. The verdict means "we can't fairly compare
     // halves because cohort composition shifted mid-range" — abstain,
     // don't penalize. The cannibalization banner in the drawer surfaces
     // it visually so the operator knows to investigate before scaling.
     const base = makeBaseHealth(70);
-    const out = applyCohortHealthAdjustment(base, {
+    const out = applyCohortAdjustmentOnce(base, {
       isLeader: false,
       isWeakest: false,
       cohortSize: 4,
@@ -884,9 +884,9 @@ describe('applyCohortHealthAdjustment — cannibalization', () => {
   });
 });
 
-describe('applyCohortHealthAdjustment — stacking', () => {
+describe('applyCohortAdjustmentOnce — stacking', () => {
   it('weakest + high cannibalization = −15 (max negative)', () => {
-    const out = applyCohortHealthAdjustment(makeBaseHealth(70), {
+    const out = applyCohortAdjustmentOnce(makeBaseHealth(70), {
       isLeader: false,
       isWeakest: true,
       cohortSize: 5,
@@ -897,7 +897,7 @@ describe('applyCohortHealthAdjustment — stacking', () => {
   });
 
   it('clamps at 0 when stacked adjustment would drag below', () => {
-    const out = applyCohortHealthAdjustment(makeBaseHealth(10), {
+    const out = applyCohortAdjustmentOnce(makeBaseHealth(10), {
       isLeader: false,
       isWeakest: true,
       cohortSize: 5,
@@ -907,7 +907,7 @@ describe('applyCohortHealthAdjustment — stacking', () => {
   });
 
   it('clamps at 100 when leader adjustment would push above', () => {
-    const out = applyCohortHealthAdjustment(makeBaseHealth(99), {
+    const out = applyCohortAdjustmentOnce(makeBaseHealth(99), {
       isLeader: true,
       isWeakest: false,
       cohortSize: 3,
@@ -918,7 +918,7 @@ describe('applyCohortHealthAdjustment — stacking', () => {
 
   it('re-derives grade after the adjustment', () => {
     // 70 starts as B. -15 → 55 should be C.
-    const out = applyCohortHealthAdjustment(makeBaseHealth(70), {
+    const out = applyCohortAdjustmentOnce(makeBaseHealth(70), {
       isLeader: false,
       isWeakest: true,
       cohortSize: 5,
@@ -930,7 +930,7 @@ describe('applyCohortHealthAdjustment — stacking', () => {
   it('does not mutate the base input', () => {
     const base = makeBaseHealth(70);
     const snapshot = JSON.stringify(base);
-    applyCohortHealthAdjustment(base, {
+    applyCohortAdjustmentOnce(base, {
       isLeader: false,
       isWeakest: true,
       cohortSize: 5,
@@ -941,7 +941,7 @@ describe('applyCohortHealthAdjustment — stacking', () => {
 
   it('appends reasons (does not replace)', () => {
     const base = makeBaseHealth(70);
-    const out = applyCohortHealthAdjustment(base, {
+    const out = applyCohortAdjustmentOnce(base, {
       isLeader: false,
       isWeakest: true,
       cohortSize: 5,
@@ -950,5 +950,118 @@ describe('applyCohortHealthAdjustment — stacking', () => {
     expect(out.reasons.length).toBe(base.reasons.length + 2); // +weakest +high
     // First 4 base reasons preserved verbatim
     expect(out.reasons.slice(0, 4)).toEqual(base.reasons);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// AUDIT U-06 (2026-05-24) — rename + double-apply assert.
+//
+// Pre-fix: `applyCohortHealthAdjustment` overwrote
+// `base.components.cohortAdjustment` (rather than accumulating). Calling
+// it twice on the same base would silently DROP the first delta — a
+// subtle bug waiting to happen the moment a caller composed two cohort
+// signals (e.g. cohort signal + future re-eval pass).
+//
+// Post-fix: function renamed to `applyCohortAdjustmentOnce` to make the
+// once-only contract loud, AND a runtime assert at the top of the
+// function throws when called on a base that already carries a
+// non-zero cohortAdjustment.
+// ─────────────────────────────────────────────────────────────────────────
+describe('applyCohortAdjustmentOnce — U-06 double-apply assert + rename', () => {
+  it('works normally on a fresh base (cohortAdjustment === 0)', () => {
+    // Sanity: the assert does NOT trip on the normal case. Same fixture
+    // as the existing "−5 weakest" test, copy here so a future refactor
+    // that removes the original block doesn't accidentally drop the
+    // U-06 coverage.
+    const base = makeBaseHealth(70);
+    expect(base.components.cohortAdjustment).toBe(0);
+    const out = applyCohortAdjustmentOnce(base, {
+      isLeader: false,
+      isWeakest: true,
+      cohortSize: 3,
+      cannibalizationRisk: 'none',
+    });
+    expect(out.score).toBe(65);
+    expect(out.components.cohortAdjustment).toBe(-5);
+  });
+
+  it('THROWS when called on a base that already has a non-zero cohortAdjustment (double-apply guard)', () => {
+    // The U-06 contract: re-applying must fail loud. Build a base that
+    // ALREADY carries a -5 cohort adjustment (e.g. from a previous call,
+    // or a caller that pre-populates it).
+    const baseAlreadyAdjusted: CampaignHealth = {
+      ...makeBaseHealth(70),
+      components: {
+        ...makeBaseHealth(70).components,
+        cohortAdjustment: -5,
+      },
+    };
+    expect(() =>
+      applyCohortAdjustmentOnce(baseAlreadyAdjusted, {
+        isLeader: false,
+        isWeakest: true,
+        cohortSize: 5,
+        cannibalizationRisk: 'high',
+      }),
+    ).toThrow(/applyCohortAdjustmentOnce/);
+  });
+
+  it('THROWS even when the existing cohortAdjustment is POSITIVE (leader-stacking guard)', () => {
+    // Symmetry guard: the assert is symmetric — a base with a +3 leader
+    // delta is just as much a double-apply candidate.
+    const baseAlreadyLeader: CampaignHealth = {
+      ...makeBaseHealth(70),
+      components: {
+        ...makeBaseHealth(70).components,
+        cohortAdjustment: 3,
+      },
+    };
+    expect(() =>
+      applyCohortAdjustmentOnce(baseAlreadyLeader, {
+        isLeader: true,
+        isWeakest: false,
+        cohortSize: 4,
+        cannibalizationRisk: 'none',
+      }),
+    ).toThrow(/non-zero/);
+  });
+
+  it('chaining via reset works: explicit cohortAdjustment=0 lets the second call proceed', () => {
+    // The contract says: a caller that genuinely needs to re-derive
+    // must reset the field to 0 first. This pins that documented
+    // escape hatch. Practical use: a future re-eval pass after the
+    // cohort composition changes mid-render.
+    const base = makeBaseHealth(70);
+    const first = applyCohortAdjustmentOnce(base, {
+      isLeader: false,
+      isWeakest: true,
+      cohortSize: 3,
+      cannibalizationRisk: 'none',
+    });
+    expect(first.components.cohortAdjustment).toBe(-5);
+
+    // Reset and re-derive with a different signal.
+    const resetBase: CampaignHealth = {
+      ...first,
+      components: { ...first.components, cohortAdjustment: 0 },
+    };
+    const second = applyCohortAdjustmentOnce(resetBase, {
+      isLeader: true,
+      isWeakest: false,
+      cohortSize: 3,
+      cannibalizationRisk: 'none',
+    });
+    // Now +3 leader bonus applies on top of the prior score+grade.
+    expect(second.components.cohortAdjustment).toBe(3);
+  });
+
+  it('the old name `applyCohortHealthAdjustment` is no longer exported (no silent alias)', async () => {
+    // Pin that the rename is HARD — there's no back-compat alias to
+    // let the old name keep working. A caller that referenced the old
+    // name MUST be updated; otherwise the build fails with a clean
+    // ReferenceError. We assert this by inspecting the module's keys.
+    const mod = await import('@/lib/campaignHealthScore');
+    expect(mod).not.toHaveProperty('applyCohortHealthAdjustment');
+    expect(mod).toHaveProperty('applyCohortAdjustmentOnce');
   });
 });

@@ -87,7 +87,7 @@ export type MultiMappingCohort = {
    *  Audit fix 2026-05-23 (HIGH-02 multi-mapping): the floor
    *  `totalMembers >= 3` prevents auto-flagging the loser of a 2-member
    *  cohort just because someone had to be lower. The companion
-   *  health-score adjustment in `applyCohortHealthAdjustment` already
+   *  health-score adjustment in `applyCohortAdjustmentOnce` already
    *  enforces the same `cohortSize >= 3` floor (campaignHealthScore.ts:424)
    *  — pulling the gate up to the source so the UI chip and the score
    *  adjustment agree on the definition of "weakest". */
@@ -317,7 +317,7 @@ export function computeMultiMappingCohort(args: {
   // Audit fix 2026-05-23 (HIGH-02): require cohortSize >= 3 before flagging
   // "weakest". For a 2-cohort, the loser by 1% is mathematically rank-N
   // but is not actionable signal ("someone had to be second"). Matches the
-  // floor already present in applyCohortHealthAdjustment.
+  // floor already present in applyCohortAdjustmentOnce.
   const isWeakest = totalMembers >= 3 && currentRank === totalMembers;
 
   // Split others by platform.

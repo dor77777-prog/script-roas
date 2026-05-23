@@ -34,7 +34,7 @@ import {
 import { aggregate, type Aggregated } from '@/lib/campaignsAggregator';
 import {
   computeCampaignHealth,
-  applyCohortHealthAdjustment,
+  applyCohortAdjustmentOnce,
   type CampaignHealth,
 } from '@/lib/campaignHealthScore';
 import { computeMultiMappingCohort } from '@/lib/multiMappingCohort';
@@ -542,7 +542,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   // Phase 05.7.x (2026-05-23): after the base score is computed,
   // apply the cohort adjustment so the score reflects multi-mapping
   // context (weakest in cohort → −5; high cannibalization → −10;
-  // leader → +3; etc). See campaignHealthScore.ts:applyCohortHealthAdjustment.
+  // leader → +3; etc). See campaignHealthScore.ts:applyCohortAdjustmentOnce.
   // The cohort + cannibalization computations run on the full
   // aggregated + productMap so each campaign's adjustment is consistent
   // with what its drawer shows.
@@ -612,7 +612,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       // `CannibalizationRisk` is type-correct without an implicit cast.
       // composition_changed is informational only — it doesn't get bumped
       // up the severity ladder below (the `if (v.risk === ...)` chain only
-      // matches low/medium/high), and applyCohortHealthAdjustment's switch
+      // matches low/medium/high), and applyCohortAdjustmentOnce's switch
       // lets it fall through to zero delta. Net effect: composition_changed
       // never silently overwrites a worse risk that's already been seen.
       let worstRisk: 'none' | 'low' | 'medium' | 'high' | 'insufficient' | 'composition_changed' = 'none';
@@ -648,7 +648,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         }
       }
       const adjusted = cohort
-        ? applyCohortHealthAdjustment(base, {
+        ? applyCohortAdjustmentOnce(base, {
             isLeader: cohort.isLeader,
             isWeakest: cohort.isWeakest,
             cohortSize: cohort.totalMembers,

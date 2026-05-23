@@ -352,7 +352,7 @@ export function CohortComparisonPanel({
                 // enough for the verdict to mean something (>= 3 members).
                 // For a 2-cohort the loser is automatically "weakest" by
                 // construction — not actionable signal. Matches the
-                // floor in `applyCohortHealthAdjustment`.
+                // floor in `applyCohortAdjustmentOnce`.
                 : intraCount >= 3 && currentRankIntra === intraCount
                   ? 'bg-roas-redBg/60 text-roas-red border-roas-red/30'
                   : 'bg-amber-100 text-amber-800 border-amber-300',

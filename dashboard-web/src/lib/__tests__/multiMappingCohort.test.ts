@@ -643,7 +643,7 @@ describe('computeMultiMappingCohort — edge cases + invariants', () => {
     expect(result!.currentRank).toBe(2);
     // Audit fix 2026-05-23 (HIGH-02): isWeakest now requires totalMembers >= 3.
     // 2-cohort losers no longer auto-flag as "weakest" — matches the
-    // applyCohortHealthAdjustment floor and prevents the loud red UI chip
+    // applyCohortAdjustmentOnce floor and prevents the loud red UI chip
     // for "someone had to be second" cases.
     expect(result!.totalMembers).toBe(2);
     expect(result!.isWeakest).toBe(false);
