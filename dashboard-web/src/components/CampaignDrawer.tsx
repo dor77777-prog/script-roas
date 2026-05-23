@@ -50,6 +50,8 @@ import {
   buildReconciliation,
 } from './MetaShopifyReconciliation';
 import { ProductChannelBreakdown } from './ProductChannelBreakdown';
+import { CohortComparisonPanel } from './CohortComparisonPanel';
+import { computeMultiMappingCohort } from '@/lib/multiMappingCohort';
 import {
   AdSetTable,
   type AdSetSortKey,
@@ -367,6 +369,95 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
     }
     return out;
   }, [productMap, storeId, currentCampaignKey, campaignNameByKey]);
+
+  // Phase 05.7.x (2026-05-23) — Multi-mapping cohort. Builds the
+  // current campaign's cohort (other campaigns mapping at least one
+  // of the same products) so the drawer can render a side-by-side
+  // comparison + ranking chip.
+  //
+  // Metrics per cohort member: aggregated from campaignsData.rows.
+  // We use ROAS Shopify-allocated when possible — but allocating
+  // revenue requires the full pipeline (products + orders + allocator)
+  // which the drawer doesn't run for non-current campaigns. So we
+  // use a SIMPLER proxy here: ROAS = conversionValue / spend
+  // (platform-reported). This is the same number the campaigns-table
+  // "ROAS" column shows, and it's adequate for relative ranking
+  // within the cohort. The drawer for each member (when opened
+  // individually) will show the full Shopify allocation in its own
+  // panels — the cohort view is a relative-comparison shortcut.
+  const cohortAggregated = useMemo(() => {
+    type CohortAgg = {
+      key: string;
+      storeId: string;
+      storeName: string;
+      platform: string;
+      campaignId: string;
+      campaignName: string;
+      spend: number;
+      conversions: number;
+      conversionValue: number;
+      effectiveStatus: string | null;
+    };
+    const acc = new Map<string, CohortAgg>();
+    for (const r of campaignsData?.rows ?? []) {
+      if (r.storeId !== storeId) continue;
+      const k = campaignKey(r.storeId, r.platform, r.campaignId);
+      const existing = acc.get(k);
+      if (existing) {
+        existing.spend += r.spend;
+        existing.conversions += r.conversions;
+        existing.conversionValue += r.conversionValue;
+        if (!existing.effectiveStatus && r.effectiveStatus) {
+          existing.effectiveStatus = r.effectiveStatus;
+        }
+      } else {
+        acc.set(k, {
+          key: k,
+          storeId: r.storeId,
+          storeName: r.storeName,
+          platform: r.platform,
+          campaignId: r.campaignId,
+          campaignName: r.campaignName || '—',
+          spend: r.spend,
+          conversions: r.conversions,
+          conversionValue: r.conversionValue,
+          effectiveStatus: r.effectiveStatus ?? null,
+        });
+      }
+    }
+    return Array.from(acc.values());
+  }, [campaignsData, storeId]);
+
+  const cohort = useMemo(() => {
+    if (!summary) return null;
+    // Build the ROAS maps from the same aggregated source. ROAS proxy:
+    // conversionValue / spend (platform-reported). Both maps use the
+    // same value for now — when we plumb the parent's trueRevenueByKey
+    // here in a follow-up, the secondary map will diverge to
+    // deterministic-only.
+    const roasByKey = new Map<string, number>();
+    for (const a of cohortAggregated) {
+      roasByKey.set(a.key, a.spend > 0 ? a.conversionValue / a.spend : 0);
+    }
+    return computeMultiMappingCohort({
+      currentCampaignKey,
+      productMap,
+      // Shape the cohortAggregated into the Aggregated[] type the
+      // cohort logic expects. Missing fields (budgets, lastActiveDate)
+      // are not used by the cohort module — safe to default.
+      aggregated: cohortAggregated.map(a => ({
+        ...a,
+        impressions: 0,
+        clicks: 0,
+        campaignBudgetCad: null,
+        adSetBudgetCad: null,
+        budgetType: '' as const,
+        lastActiveDate: null,
+      })),
+      roasShopifyByKey: roasByKey,
+      roasShopifyPlatformByKey: roasByKey,
+    });
+  }, [summary, currentCampaignKey, productMap, cohortAggregated]);
 
   // Per-product channel breakdown (Phase 1). Triple-gate (Meta-only,
   // mapped products, ≥3 mapped-product orders) is concentrated here so
@@ -1032,6 +1123,33 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                   </p>
                 )}
             </section>
+          )}
+
+          {/* Phase 05.7.x (2026-05-23) — multi-mapping cohort panel.
+              Renders only when this campaign shares a mapped product
+              with at least one other campaign in the same store. The
+              panel shows side-by-side comparison of the current
+              campaign vs the others sharing its products, split by
+              intra-platform (competing) vs cross-platform (parallel
+              channels). Includes a 🥇/🥈/🥉 ranking chip so the
+              operator gets immediate context for sizing decisions. */}
+          {cohort && (
+            <CohortComparisonPanel
+              cohort={cohort}
+              onDrillCampaign={(targetCampaignId, targetPlatform) => {
+                // Stay within the same drawer surface — switch to the
+                // clicked campaign in-place. The parent component
+                // (CampaignsTable) owns drillCampaignId / drillPlatform
+                // state; we can't reach it from here, so we close + the
+                // user clicks the target in the table. Future iteration
+                // could thread a setter through. For now this prints
+                // a hint until we hook it up properly.
+                console.info(
+                  `cohort drill: ${targetPlatform} / ${targetCampaignId} — ` +
+                    `(click on the row in the campaigns table to open its drawer)`,
+                );
+              }}
+            />
           )}
 
           {analysis && (
