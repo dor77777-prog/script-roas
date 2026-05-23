@@ -1218,6 +1218,15 @@ export function generateAiReport({
     );
     out.push('');
     out.push(
+      '> ⚠️ **הערה (audit 2026-05-23 CR-03)**: הציון בדוח הזה נשען על קלט מפושט ' +
+        '(coverage = det/metaClaim בלבד) בלי analyzers מלאים — לכן ייתכן שיהיה ' +
+        '**שונה במעט מהציון בטבלת הקמפיינים בדשבורד**, שמשתמש ב-analyzeAttribution ' +
+        'המלא (window-stability, outlier detection, refund-adjusted coverage). ' +
+        '**הטבלה בדשבורד היא מקור האמת**; הדוח כאן נועד לתת ל-AI תמונה רחבה ' +
+        'לסקירה — לא להחליף את הטבלה בהחלטות סקייל/עצירה.',
+    );
+    out.push('');
+    out.push(
       `| קמפיין | פלטפ׳ | חנות | הוצאה | ציון | רווחיות | נפח | מומנטום | Attribution | אופ׳ | סטטוס |`,
     );
     out.push(
