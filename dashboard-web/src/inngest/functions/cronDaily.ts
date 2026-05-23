@@ -87,6 +87,39 @@ const STORES_WITH_TIKTOK: Set<StoreId> = new Set(['uzoshop']);
 
 const COGS_RATE_OF_REVENUE = 0.25;
 
+/**
+ * Audit fix 2026-05-23 (MR-01 health-and-conclusions): per-store COGS rate.
+ *
+ * The single global 0.25 (= 25% of revenue) was calibrated for one store's
+ * margin profile but applied to all 3 (uzoshop, Zol Plus, 360usmile) that
+ * carry very different product categories. Net-profit headlines were wrong
+ * for at least 2 of 3 stores; "pause if below profitability" decisions
+ * were made against a fake threshold.
+ *
+ * Env-var convention: `${STORE_UPPERCASE}_COGS_RATE` overrides the default
+ * for that store. Operator can set e.g.:
+ *   UZOSHOP_COGS_RATE=0.25
+ *   ZOLPLUS_COGS_RATE=0.30
+ *   360USMILE_COGS_RATE=0.18
+ * Unset → fallback to 0.25 (no behavior change).
+ *
+ * Reads at cron-write time so a Vercel env-var update takes effect on the
+ * next cron-daily run.
+ */
+function getCogsRateForStore(storeId: StoreId): number {
+  const envKey = `${String(storeId).toUpperCase()}_COGS_RATE`;
+  const raw = process.env[envKey];
+  if (!raw) return COGS_RATE_OF_REVENUE;
+  const parsed = parseFloat(raw);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
+    console.warn(
+      `cron-daily: ${envKey}=${raw} is not a valid 0..1 rate — falling back to default ${COGS_RATE_OF_REVENUE}.`,
+    );
+    return COGS_RATE_OF_REVENUE;
+  }
+  return parsed;
+}
+
 // ---------------------------------------------------------------------------
 // yesterdayJerusalem — mirrors Apps Script's yesterdayStr_() in Config.gs.
 // Returns YYYY-MM-DD for "yesterday" in Asia/Jerusalem. Used at cron-fire
@@ -378,7 +411,11 @@ export async function runDailyForStore(
     const roas =
       totalSpendCadAll > 0 ? shopify.revenueCad / totalSpendCadAll : 0;
     const grossProfitCad = shopify.revenueCad - totalSpendCadAll;
-    const cogsCad = shopify.revenueCad * COGS_RATE_OF_REVENUE;
+    // Audit fix 2026-05-23 (MR-01): per-store COGS rate replaces the
+    // hardcoded 0.25 default. See `getCogsRateForStore` for the env-var
+    // convention.
+    const cogsRate = getCogsRateForStore(storeId);
+    const cogsCad = shopify.revenueCad * cogsRate;
     const netProfitCad = grossProfitCad - cogsCad;
 
     // 2026-05-21 fix: per-row Meta FX conversion.
@@ -878,7 +915,8 @@ export async function runDailyForStore(
   const roas =
     merged.totalSpendCad > 0 ? shopify.revenueCad / merged.totalSpendCad : 0;
   const grossProfitCad = shopify.revenueCad - merged.totalSpendCad;
-  const cogsCad = shopify.revenueCad * COGS_RATE_OF_REVENUE;
+  // Audit fix 2026-05-23 (MR-01): per-store COGS rate for the return-summary too.
+  const cogsCad = shopify.revenueCad * getCogsRateForStore(storeId);
   const netProfitCad = grossProfitCad - cogsCad;
 
   return {
