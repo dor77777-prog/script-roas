@@ -26,7 +26,13 @@ import { pushCloudKey, type StateKey } from './cloudSync';
 import type { DailyRow } from './types';
 import type { ProductRow } from './products';
 import type { CampaignRow } from './campaigns';
-import { COGS_RATE_OF_REVENUE } from './analytics';
+import {
+  COGS_RATE_OF_REVENUE,
+  aggregate,
+  getTransactionFeesRateForStore,
+} from './analytics';
+import { billingForRange } from './billing';
+import { TRANSACTION_FEES_RATE } from './costs';
 
 export type Severity = 'critical' | 'warning' | 'opportunity' | 'positive' | 'info';
 
@@ -467,16 +473,22 @@ export function forecastMonthEnd(rows: DailyRow[]): {
   const daysElapsed = todayDay;
   const daysRemaining = daysInMonth - daysElapsed;
 
-  // Month-to-date totals across all stores
-  let mtdRev = 0, mtdSpend = 0, mtdCogs = 0;
-  for (const r of rows) {
-    if (r.date >= monthStart && r.date <= today) {
-      mtdRev += r.revenue;
-      mtdSpend += r.totalSpend;
-      mtdCogs += r.cogs;
-    }
-  }
-  const mtdNet = mtdRev - mtdSpend - mtdCogs;
+  // Month-to-date totals across all stores.
+  //
+  // Audit fix 2026-05-23 (HIGH-NEW-2 / Codex): delegate MTD true-net to
+  // `aggregate()` so `mtdNet` matches the dashboard's true-net definition
+  // (revenue − spend − cogs − transaction fees − prorated fixed costs).
+  // Before this, the pre-fix formula `mtdRev - mtdSpend - mtdCogs` omitted
+  // transaction fees (~6.5% of revenue) AND fixed costs entirely — so the
+  // GoalTracker's projection appeared to over-state take-home by a
+  // chunky margin. Using aggregate() automatically threads per-store
+  // transaction-fee rates AND billingForRange's All-row split (CRIT-1).
+  const mtdRows = rows.filter(r => r.date >= monthStart && r.date <= today);
+  const mtdAgg = aggregate(mtdRows, { from: monthStart, to: today });
+  const mtdRev = mtdAgg.revenue;
+  const mtdSpend = mtdAgg.spend;
+  const mtdCogs = mtdAgg.cogs;
+  const mtdNet = mtdAgg.trueNetProfit;
 
   // 7-day average for projection.
   //
@@ -491,14 +503,23 @@ export function forecastMonthEnd(rows: DailyRow[]): {
   const baselineFrom = addDays(today, -7);
   const baselineTo = addDays(today, -1);
   let last7Rev = 0, last7Spend = 0, last7Cogs = 0;
+  // Audit fix 2026-05-23 (HIGH-NEW-2 / Codex): also accumulate the
+  // observed revenue-weighted transaction-fees rate over the same
+  // baseline window, so the projection's fee allocation tracks per-store
+  // calibration the same way COGS does. The store set is derived from
+  // baseline rows (matches the aggregate(...).transactionFees logic).
+  let last7Fees = 0;
   let last7DaysCount = 0;
   const datesSeen = new Set<string>();
+  const baselineStores = new Set<string>();
   for (const r of rows) {
     if (r.date >= baselineFrom && r.date <= baselineTo) {
       last7Rev += r.revenue;
       last7Spend += r.totalSpend;
       last7Cogs += r.cogs;
+      last7Fees += r.revenue * getTransactionFeesRateForStore(r.storeId);
       datesSeen.add(r.date);
+      baselineStores.add(r.storeName);
     }
   }
   last7DaysCount = Math.max(1, datesSeen.size);
@@ -517,7 +538,42 @@ export function forecastMonthEnd(rows: DailyRow[]): {
   // last-7 window had zero revenue (no signal to derive from).
   const observedCogsRate =
     last7Rev > 0 ? last7Cogs / last7Rev : COGS_RATE_OF_REVENUE;
-  const projectedNet = projectedRev - projectedSpend - projectedRev * observedCogsRate;
+  // Audit fix 2026-05-23 (HIGH-NEW-2 / Codex): observed transaction-fee
+  // rate from the same baseline window. Fall back to the global default
+  // (TRANSACTION_FEES_RATE) when there's no signal.
+  const observedFeesRate =
+    last7Rev > 0 ? last7Fees / last7Rev : TRANSACTION_FEES_RATE;
+  // Audit fix 2026-05-23 (HIGH-NEW-2 / Codex): fixed costs for the full
+  // month from billingForRange. Fixed costs are monthly allocations that
+  // do NOT scale with daily revenue — projecting them via the 7-day
+  // dailyAvg would inflate/deflate them with rev fluctuations. Calling
+  // billingForRange with the full month range gives the correct total
+  // for the projected month-end value. Use the row-derived store set
+  // (matches the aggregate() global-path behavior). When there are no
+  // rows at all (rare — fresh dashboard), fall back to the baseline-
+  // derived set so a single-row "preview" projection still allocates
+  // its store's fixed costs.
+  const monthEnd = `${yStr}-${mStr}-${String(daysInMonth).padStart(2, '0')}`;
+  const storesForBilling = (() => {
+    const set = new Set<string>();
+    for (const r of rows) set.add(r.storeName);
+    if (set.size === 0) for (const s of baselineStores) set.add(s);
+    return Array.from(set);
+  })();
+  const projectedFixedCosts =
+    storesForBilling.length > 0
+      ? billingForRange({
+          from: monthStart,
+          to: monthEnd,
+          storeNames: storesForBilling,
+        }).total
+      : 0;
+  const projectedNet =
+    projectedRev
+    - projectedSpend
+    - projectedRev * observedCogsRate
+    - projectedRev * observedFeesRate
+    - projectedFixedCosts;
   const projectedRoas = projectedSpend > 0 ? projectedRev / projectedSpend : 0;
 
   return {

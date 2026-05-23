@@ -82,11 +82,23 @@ describe('forecastMonthEnd projection COGS rate (HIGH-9 / O3-HI-01)', () => {
     const f = forecastMonthEnd(rows);
     // dailyAvgRev = 7000/7 = 1000; dailyAvgSpend = 1400/7 = 200.
     // Observed cogs rate = 1260/7000 = 0.18.
-    // Expected projectedNet uses 0.18, NOT 0.25.
+    //
+    // Note (HIGH-NEW-2): projection now also subtracts transaction fees
+    // (default rate 0.065 since no env var set) AND projected fixed
+    // costs from billingForRange (0 here — no billing rows seeded in
+    // localStorage; vitest runs node so window is undefined → safeRead
+    // returns []). The COGS-rate assertion below isolates the COGS line
+    // by comparing two formulas that differ ONLY in the COGS rate.
     const expectedNetAt18 =
-      f.projectedRevenue - f.projectedSpend - f.projectedRevenue * 0.18;
+      f.projectedRevenue
+      - f.projectedSpend
+      - f.projectedRevenue * 0.18
+      - f.projectedRevenue * 0.065;
     const wrongNetAt25 =
-      f.projectedRevenue - f.projectedSpend - f.projectedRevenue * 0.25;
+      f.projectedRevenue
+      - f.projectedSpend
+      - f.projectedRevenue * 0.25
+      - f.projectedRevenue * 0.065;
     expect(f.projectedNet).toBeCloseTo(expectedNetAt18, 6);
     // Pre-fix value was wrongNetAt25 — pin so a refactor can't quietly
     // re-introduce the global rate.
@@ -114,13 +126,14 @@ describe('forecastMonthEnd projection COGS rate (HIGH-9 / O3-HI-01)', () => {
       row({ date: earlyMtdDate, revenue: 500, totalSpend: 100, cogs: 90 }),
     ];
     const f = forecastMonthEnd(rows);
-    // last7Rev === 0 → observedCogsRate falls back to 0.25.
+    // last7Rev === 0 → observedCogsRate falls back to 0.25 AND
+    // observedFeesRate falls back to TRANSACTION_FEES_RATE (0.065).
     // projectedRev = mtdRev (500) + 0 * daysRemaining = 500; same for spend.
-    // projectedNet = 500 - 100 - 500 * 0.25 = 275.
+    // projectedNet = 500 - 100 - 500 * 0.25 - 500 * 0.065 = 500 - 100 - 125 - 32.5 = 242.5.
     // The KEY assertion is that the function doesn't NaN/Infinity out
     // when the window is empty.
     expect(Number.isFinite(f.projectedNet)).toBe(true);
-    expect(f.projectedNet).toBeCloseTo(275, 6);
+    expect(f.projectedNet).toBeCloseTo(242.5, 6);
   });
 
   it('mixed rates across the 7-day window blend into the projection naturally', () => {
@@ -151,8 +164,12 @@ describe('forecastMonthEnd projection COGS rate (HIGH-9 / O3-HI-01)', () => {
     }
     const f = forecastMonthEnd(rows);
     const blended = 1500 / 7000;
+    // HIGH-NEW-2: subtract fees (default 0.065 rate, no fixed costs).
     const expectedNet =
-      f.projectedRevenue - f.projectedSpend - f.projectedRevenue * blended;
+      f.projectedRevenue
+      - f.projectedSpend
+      - f.projectedRevenue * blended
+      - f.projectedRevenue * 0.065;
     expect(f.projectedNet).toBeCloseTo(expectedNet, 4);
   });
 });
