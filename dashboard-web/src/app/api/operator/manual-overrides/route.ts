@@ -33,6 +33,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { userFacingError } from '@/lib/apiErrors';
+import { isDate } from '@/lib/dateValidation';
 
 export const dynamic = 'force-dynamic';
 // NOTE: revalidate is intentionally NOT exported here — see Pitfall 11.
@@ -51,9 +52,10 @@ type PostBody = {
   notes?: string | null;
 };
 
-function isDate(v: unknown): v is string {
-  return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v);
-}
+// Strict YYYY-MM-DD calendar-day validation lives in `@/lib/dateValidation`
+// — shared with `/api/operator/backfill`. See that file for the rationale
+// (regex + Date.UTC round-trip rejects normalized impossible dates so
+// `2026-99-99` doesn't silently become a real downstream date).
 
 /**
  * Validate + normalise a POST body. Returns the normalised body on success,

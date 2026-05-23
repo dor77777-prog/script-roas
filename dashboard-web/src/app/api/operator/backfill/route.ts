@@ -48,6 +48,7 @@
 import { NextResponse } from 'next/server';
 import { inngest } from '@/inngest/client';
 import { userFacingError } from '@/lib/apiErrors';
+import { isDate } from '@/lib/dateValidation';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,17 +67,17 @@ type Payload = {
   storeIds: string[];
 };
 
-/**
- * Strict YYYY-MM-DD shape check. We do NOT parse with `new Date(s)`
- * because that accepts a much wider grammar (ISO timestamps, RFC 2822,
- * etc.) and we want exact calendar-day strings — they flow into
- * eventBackfill.ts's dateRange() generator unchanged and into Supabase
- * DATE columns downstream. A "2026-13-99" passes Date but is nonsense;
- * the regex rejects it without requiring extra range guards.
- */
-function isDate(s: unknown): s is string {
-  return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
-}
+// Strict YYYY-MM-DD calendar-day validation lives in `@/lib/dateValidation`
+// — shared with `/api/operator/manual-overrides`. The validator does a
+// regex shape check + Date.UTC round-trip so `2026-99-99`, `2026-13-01`,
+// `2026-02-30`, etc. are rejected at the HTTP boundary instead of getting
+// normalized into a different (silently-corrupted) date by downstream
+// Date.UTC math. See `@/lib/dateValidation` for the full rationale.
+//
+// The validator must live in a normal lib/ module rather than a route.ts
+// because Next.js App Router restricts route-file exports to specific
+// names (GET/POST/PATCH/DELETE/dynamic/etc.); arbitrary helper exports
+// trigger a `.next/types` build error.
 
 export async function POST(req: Request) {
   try {

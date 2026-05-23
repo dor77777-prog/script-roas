@@ -225,6 +225,7 @@ describe('cronLive refresh-effective-status — HIGH-12 + HIGH-NEW-4 resilience'
           lifetimeBudget: 0,
           bidStrategy: null,
           effectiveStatus: 'ACTIVE',
+          name: null,
         },
       },
       adSets: {
@@ -233,18 +234,21 @@ describe('cronLive refresh-effective-status — HIGH-12 + HIGH-NEW-4 resilience'
           lifetimeBudget: 0,
           campaignId: 'c1',
           effectiveStatus: 'ACTIVE',
+          name: null,
         },
         'mas-B': {
           dailyBudget: 0,
           lifetimeBudget: 0,
           campaignId: 'c1',
           effectiveStatus: 'PAUSED',
+          name: null,
         },
         'mas-C': {
           dailyBudget: 0,
           lifetimeBudget: 0,
           campaignId: 'c1',
           effectiveStatus: 'ACTIVE',
+          name: null,
         },
       },
     });
@@ -305,6 +309,7 @@ describe('cronLive refresh-effective-status — HIGH-12 + HIGH-NEW-4 resilience'
           lifetimeBudget: 0,
           bidStrategy: null,
           effectiveStatus: 'ACTIVE',
+          name: null,
         },
       },
       adSets: {
@@ -313,12 +318,14 @@ describe('cronLive refresh-effective-status — HIGH-12 + HIGH-NEW-4 resilience'
           lifetimeBudget: 0,
           campaignId: 'c1',
           effectiveStatus: 'ACTIVE',
+          name: null,
         },
         'mas-B': {
           dailyBudget: 0,
           lifetimeBudget: 0,
           campaignId: 'c1',
           effectiveStatus: 'PAUSED',
+          name: null,
         },
       },
     });
@@ -368,6 +375,7 @@ describe('cronLive refresh-effective-status — HIGH-12 + HIGH-NEW-4 resilience'
           lifetimeBudget: 0,
           bidStrategy: null,
           effectiveStatus: 'ACTIVE',
+          name: null,
         },
       },
       adSets: {
@@ -376,18 +384,21 @@ describe('cronLive refresh-effective-status — HIGH-12 + HIGH-NEW-4 resilience'
           lifetimeBudget: 0,
           campaignId: 'c1',
           effectiveStatus: 'ACTIVE',
+          name: null,
         },
         'mas-2': {
           dailyBudget: 0,
           lifetimeBudget: 0,
           campaignId: 'c1',
           effectiveStatus: 'PAUSED',
+          name: null,
         },
         'mas-3': {
           dailyBudget: 0,
           lifetimeBudget: 0,
           campaignId: 'c1',
           effectiveStatus: 'PAUSED',
+          name: null,
         },
       },
     });
