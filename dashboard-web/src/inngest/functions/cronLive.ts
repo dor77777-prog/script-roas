@@ -1005,6 +1005,28 @@ export async function runLiveForStore(
     //    campaign yesterday morning — yesterday's row should reflect that
     //    even though today is a fresh row". UPDATE-only (no INSERT) on
     //    past dates — we never invent activity that wasn't there.
+    //
+    // Audit fix 2026-05-23 (HIGH-12 / O4-HI-01 + HIGH-NEW-4): replaced
+    // Promise.all with sequential `for...of await` + per-iteration try/catch
+    // AND explicit `result.error` check on each Supabase response.
+    //
+    // Pre-fix had two failure modes:
+    //   (1) Promise.all rejects the whole batch on ANY single ad-set's
+    //       update rejection — one ad-set's update failure aborted the
+    //       step BEFORE the others ran (Inngest then retried 4× and
+    //       dead-lettered after the 4th throw).
+    //   (2) Supabase often resolves with `{ error: {...} }` rather than
+    //       rejecting (e.g. RLS denied, schema mismatch). The previous
+    //       code never destructured the result → silent corruption: the
+    //       step "succeeded" but no status update landed for some
+    //       ad-sets, leaving stale "active/off" chips with no operator
+    //       signal.
+    //
+    // Fix: sequential for-of so each update is its own try-block. Both
+    // throw-path and error-result path are logged via console.warn but
+    // we CONTINUE iterating so a single ad-set's failure cannot prevent
+    // the others from landing. No throw escapes this section — Inngest
+    // never dead-letters the whole step due to one bad row.
     const platforms: Array<'meta' | 'google' | 'tiktok'> = [
       'meta',
       'google',
@@ -1017,18 +1039,39 @@ export async function runLiveForStore(
     for (const platform of platforms) {
       const platformEnrollments = enrollments.filter((e) => e.platform === platform);
       if (platformEnrollments.length === 0) continue;
-      await Promise.all(
-        platformEnrollments.map(({ adSetId, status }) =>
-          admin
+      for (const { adSetId, status } of platformEnrollments) {
+        try {
+          const result = await admin
             .from('campaigns_daily')
             .update({ effective_status: status })
             .eq('store_id', storeId)
             .eq('platform', platform)
             .eq('ad_set_id', adSetId)
             .gte('date', lookbackFrom)
-            .lt('date', today), // UPSERT above already handled today
-        ),
-      );
+            .lt('date', today); // UPSERT above already handled today
+          // Supabase shape: result is `{ error: PostgrestError | null }`
+          // (the chain returns the response object directly when not
+          // awaiting `.select()`). RLS denials + schema errors come back
+          // here, NOT as a rejected promise.
+          const errResult = (result as { error?: { message?: string } | null })
+            ?.error;
+          if (errResult) {
+            console.warn(
+              `cron-live: campaigns_daily status UPDATE failed (${platform}/${adSetId}) for ${storeId}: ${
+                errResult.message ?? String(errResult)
+              }`,
+            );
+          }
+        } catch (e) {
+          // Rejection path (network drop, abort, runtime error). Log +
+          // continue — other ad-sets must still get their status update.
+          console.warn(
+            `cron-live: campaigns_daily status UPDATE threw (${platform}/${adSetId}) for ${storeId}: ${
+              e instanceof Error ? e.message : String(e)
+            }`,
+          );
+        }
+      }
     }
   });
 
