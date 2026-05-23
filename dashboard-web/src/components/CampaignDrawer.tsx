@@ -26,6 +26,7 @@ import {
 } from 'recharts';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
+import type { ProductsResponse } from '@/app/api/products/route';
 import {
   analyzeAttribution,
   analyzeProductChannel,
@@ -52,6 +53,7 @@ import {
 import { ProductChannelBreakdown } from './ProductChannelBreakdown';
 import { CohortComparisonPanel } from './CohortComparisonPanel';
 import { computeMultiMappingCohort } from '@/lib/multiMappingCohort';
+import { detectProductCannibalization } from '@/lib/cannibalizationDetection';
 import {
   AdSetTable,
   type AdSetSortKey,
@@ -167,6 +169,21 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
   // SWR dedupes against CampaignsTable's identical key so no extra network call.
   const { data: campaignsData } = useSWR<CampaignsResponse>(
     open ? buildDateRangeKey('/api/campaigns', drawerRange) : null,
+    async (url: string) => {
+      const r = await fetch(url);
+      if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
+      return r.json();
+    },
+    { revalidateOnFocus: false, dedupingInterval: 60_000 },
+  );
+  // Phase 05.7.x (2026-05-23) — products_daily fetch. Used ONLY by the
+  // cannibalization detector inside the cohort panel — when the current
+  // campaign has no shared products, the detector returns an empty
+  // list and the panel skips the cannibalization banner. SWR dedupes
+  // against any parent fetch on the same range. Range-keyed so a
+  // window change triggers a refetch.
+  const { data: productsData } = useSWR<ProductsResponse>(
+    open ? buildDateRangeKey('/api/products', drawerRange) : null,
     async (url: string) => {
       const r = await fetch(url);
       if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
@@ -427,6 +444,39 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
     }
     return Array.from(acc.values());
   }, [campaignsData, storeId]);
+
+  // Phase 05.7.x (2026-05-23) — cannibalization verdicts per
+  // multi-mapped product. Pure function over the available daily rows
+  // + productMap; renders one verdict per qualifying product. The
+  // cohort panel surfaces high/medium/low verdicts as a warning
+  // banner above its comparison tables.
+  //
+  // Inputs are passed AS-IS — the detector filters by storeId and the
+  // range halves internally, so no pre-filtering needed here.
+  const cannibalizationVerdicts = useMemo(() => {
+    if (!summary) return [];
+    return detectProductCannibalization({
+      range: { from: rangeFrom, to: rangeTo },
+      storeId,
+      productMap,
+      campaignsDaily: (campaignsData?.rows ?? []).map(r => ({
+        date: r.date,
+        storeId: r.storeId,
+        platform: r.platform,
+        campaignId: r.campaignId,
+        spend: r.spend,
+      })),
+      productsDaily: (productsData?.rows ?? []).map(r => ({
+        date: r.date,
+        storeId: r.storeId,
+        productId: r.productId,
+        productTitle: r.productTitle,
+        // products_daily uses `netRevenue` in this API shape — confirm
+        // the field name. If the field is `revenue` rename here.
+        netRevenue: r.netRevenue ?? 0,
+      })),
+    });
+  }, [summary, rangeFrom, rangeTo, storeId, productMap, campaignsData, productsData]);
 
   const cohort = useMemo(() => {
     if (!summary) return null;
@@ -1136,6 +1186,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
           {cohort && (
             <CohortComparisonPanel
               cohort={cohort}
+              cannibalizationVerdicts={cannibalizationVerdicts}
               onDrillCampaign={(targetCampaignId, targetPlatform) => {
                 // Stay within the same drawer surface — switch to the
                 // clicked campaign in-place. The parent component

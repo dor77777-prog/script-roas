@@ -26,12 +26,19 @@
  * Other members sort by ROAS Shopify desc.
  */
 
-import { Trophy, AlertCircle, Equal, Package } from 'lucide-react';
+import { Trophy, AlertCircle, Equal, Package, TrendingDown } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import type { CohortMember, MultiMappingCohort } from '@/lib/multiMappingCohort';
+import type { CannibalizationVerdict } from '@/lib/cannibalizationDetection';
 
 type Props = {
   cohort: MultiMappingCohort;
+  /** Phase 05.7.x (2026-05-23) — cannibalization verdicts for the
+   *  cohort's shared products (one per multi-mapped product). When
+   *  any verdict is `high` or `medium`, the panel renders a warning
+   *  banner above the comparison tables. Empty / undefined → no
+   *  banner; the panel keeps working as a pure comparison view. */
+  cannibalizationVerdicts?: CannibalizationVerdict[];
   /** When the operator clicks a non-current member, the drawer can open
    *  that campaign in place. Optional — passes (campaignId, platform). */
   onDrillCampaign?: (campaignId: string, platform: string) => void;
@@ -47,6 +54,14 @@ function MedalIcon({ rank }: { rank: number }) {
 function fmtRoas(n: number | undefined | null): string {
   if (n === undefined || n === null || !Number.isFinite(n) || n <= 0) return '—';
   return n.toFixed(2);
+}
+
+/** Format a fraction as percentage with sign. 0.25 → "+25%", -0.10 → "−10%". */
+function fmtPct(n: number): string {
+  if (!Number.isFinite(n)) return '∞';
+  const pct = Math.round(n * 100);
+  if (pct === 0) return '0%';
+  return pct > 0 ? `+${pct}%` : `−${Math.abs(pct)}%`;
 }
 
 function StatusBadge({ status }: { status: string | null }) {
@@ -201,7 +216,23 @@ function CohortSection({ title, subtitle, members, tone, onDrillCampaign }: Sect
   );
 }
 
-export function CohortComparisonPanel({ cohort, onDrillCampaign }: Props) {
+export function CohortComparisonPanel({
+  cohort,
+  cannibalizationVerdicts,
+  onDrillCampaign,
+}: Props) {
+  // Phase 05.7.x (2026-05-23) — surface high/medium cannibalization
+  // verdicts as a banner above the comparison tables. Sorted by
+  // severity then by absolute spend growth so the worst offender is
+  // first.
+  const cannibalizationAlerts = (cannibalizationVerdicts ?? [])
+    .filter(v => v.risk === 'high' || v.risk === 'medium' || v.risk === 'low')
+    .sort((a, b) => {
+      const order = { high: 0, medium: 1, low: 2, none: 3, insufficient: 4 };
+      const sevDiff = order[a.risk] - order[b.risk];
+      if (sevDiff !== 0) return sevDiff;
+      return b.metrics.spendGrowthPct - a.metrics.spendGrowthPct;
+    });
   // Build per-section ranked lists. Each section's ranking is INTERNAL —
   // ranking #1 in the intra-platform table doesn't necessarily mean #1
   // overall (a cross-platform member with higher ROAS could be overall
@@ -269,6 +300,77 @@ export function CohortComparisonPanel({ cohort, onDrillCampaign }: Props) {
           </span>
         )}
       </div>
+
+      {/* Phase 05.7.x (2026-05-23) — cannibalization warning banner.
+          Renders when at least one shared product shows a non-trivial
+          cannibalization signal. Color-coded by worst severity (red =
+          high, amber = medium, blue = low). Each product is its own
+          line so the operator can see exactly which mapping is the
+          risk. */}
+      {cannibalizationAlerts.length > 0 && (
+        <div
+          className={cn(
+            'rounded-lg border px-3 py-2.5 space-y-2',
+            cannibalizationAlerts[0].risk === 'high'
+              ? 'bg-roas-redBg/60 border-roas-red/40'
+              : cannibalizationAlerts[0].risk === 'medium'
+                ? 'bg-amber-100 border-amber-300'
+                : 'bg-primary/10 border-primary/30',
+          )}
+        >
+          <div className="flex items-center gap-2 text-xs font-semibold">
+            <TrendingDown
+              size={14}
+              className={cn(
+                cannibalizationAlerts[0].risk === 'high'
+                  ? 'text-roas-red'
+                  : cannibalizationAlerts[0].risk === 'medium'
+                    ? 'text-amber-800'
+                    : 'text-primary',
+              )}
+            />
+            <span className="text-text-primary">
+              ⚠️ סימני קניבליזציה — הוצאה גדלה בלי שההכנסה תלך אחריה
+            </span>
+          </div>
+          <ul className="space-y-1.5">
+            {cannibalizationAlerts.map(v => (
+              <li
+                key={v.productId}
+                className="text-[11px] text-text-secondary leading-relaxed"
+              >
+                <strong className="text-text-primary">{v.productTitle}</strong>{' '}
+                <span
+                  className={cn(
+                    'inline-block px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider align-middle',
+                    v.risk === 'high'
+                      ? 'bg-roas-red/30 text-roas-red'
+                      : v.risk === 'medium'
+                        ? 'bg-amber-300 text-amber-900'
+                        : 'bg-primary/25 text-primary',
+                  )}
+                >
+                  {v.risk === 'high' ? 'גבוה' : v.risk === 'medium' ? 'בינוני' : 'נמוך'}
+                </span>
+                <br />
+                <span className="text-text-muted">
+                  הוצאת קבוצה: CAD {formatCurrency(v.metrics.earlyHalfSpend)} →{' '}
+                  CAD {formatCurrency(v.metrics.lateHalfSpend)} ({fmtPct(v.metrics.spendGrowthPct)}) ·
+                  הכנסת מוצר: CAD {formatCurrency(v.metrics.earlyHalfRevenue)} →{' '}
+                  CAD {formatCurrency(v.metrics.lateHalfRevenue)} ({fmtPct(v.metrics.revenueGrowthPct)})
+                  {v.metrics.marginalRoas !== null && (
+                    <>
+                      {' '}· ROAS שולי: {v.metrics.marginalRoas.toFixed(2)}
+                    </>
+                  )}
+                </span>
+                <br />
+                <span className="text-text-secondary">{v.reason}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <CohortSection
         title={`קמפיינים מאותה פלטפורמה (${currentPlatform})`}
