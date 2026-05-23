@@ -108,7 +108,26 @@ export function filterRows(
   });
 }
 
-export function aggregate(rows: DailyRow[], range?: DateRange): Aggregate {
+export function aggregate(
+  rows: DailyRow[],
+  range?: DateRange,
+  /**
+   * Audit fix 2026-05-23 (CRIT-1 / O3-CR-01): optional in-scope store list.
+   * When provided, `billingForRange` is called with this list rather than the
+   * row-derived set — so the per-store call path (`aggregateByStore`) can
+   * give the FULL store universe to billingForRange even though each
+   * bucket's rows belong to just one store. Without it, an "All"-scoped
+   * billing row would be charged in full to each per-store bucket
+   * (because singleton `storeNames.length === 1` defeats the fair-share
+   * split inside billingForRange). Sum of per-store True-Net-Profit cards
+   * then inflated 2-3× over the global card.
+   *
+   * When `scopedStoreNames` is omitted, behavior is unchanged: billing
+   * proration uses the set derived from the rows themselves (matches the
+   * historical global-aggregate semantics).
+   */
+  scopedStoreNames?: string[],
+): Aggregate {
   let revenue = 0, spend = 0, fbSpend = 0, gaSpend = 0, ttSpend = 0, cogs = 0;
   // Audit fix 2026-05-23 (d/HI-02): per-store rates. Transaction fees are
   // accumulated per row using the row's own store rate so an "All"-view
@@ -145,7 +164,15 @@ export function aggregate(rows: DailyRow[], range?: DateRange): Aggregate {
   // entries the user manages via the BillingSettings UI). When the user
   // hasn't entered any data yet, the layer returns 0 and the seed UI
   // prompts them to set it up.
-  const storeNames = Array.from(stores);
+  const rowStoreNames = Array.from(stores);
+  // Audit fix 2026-05-23 (CRIT-1): for `billingForRange` use the explicit
+  // scoped store list when the caller supplied one (per-store path from
+  // `aggregateByStore`), otherwise fall back to the row-derived set
+  // (global aggregate path). The `storeCount` shown on cards still
+  // reflects the rows themselves (rowStoreNames) so a single-store
+  // bucket reports storeCount=1 even though billing prorated against
+  // the full universe.
+  const billingStoreNames = scopedStoreNames ?? rowStoreNames;
   const daysCovered = dates.size;
   // Phase 05.7.8 — when caller hands in a request range, prefer it over
   // data-derived min/maxDate so the prorated fixed-cost slice matches what
@@ -155,9 +182,27 @@ export function aggregate(rows: DailyRow[], range?: DateRange): Aggregate {
   const billingFrom = range?.from ?? minDate;
   const billingTo = range?.to ?? maxDate;
   const billing = billingFrom && billingTo
-    ? billingForRange({ from: billingFrom, to: billingTo, storeNames })
-    : { total: 0 };
-  const fixedCosts = billing.total;
+    ? billingForRange({
+        from: billingFrom,
+        to: billingTo,
+        storeNames: billingStoreNames,
+      })
+    : { total: 0, byStore: {} as Record<string, number> };
+  // Audit fix 2026-05-23 (CRIT-1): when running the per-store path, the
+  // per-store bucket should only carry ITS share of the period's
+  // fixed costs — not the global total. `billingForRange` returns a
+  // `byStore` breakdown that splits "All"-scoped rows evenly across the
+  // in-scope universe. Picking the bucket's own share keeps the global
+  // invariant: sum(per-store fixedCosts) == global fixedCosts.
+  let fixedCosts: number;
+  if (scopedStoreNames && rowStoreNames.length === 1) {
+    const bucketStore = rowStoreNames[0];
+    const byStore =
+      (billing as { byStore?: Record<string, number> }).byStore ?? {};
+    fixedCosts = byStore[bucketStore] ?? 0;
+  } else {
+    fixedCosts = billing.total;
+  }
   const trueNetProfit = revenue - spend - cogs - transactionFees - fixedCosts;
   return {
     revenue,
@@ -171,7 +216,7 @@ export function aggregate(rows: DailyRow[], range?: DateRange): Aggregate {
     netProfit: revenue - spend - cogs,
     transactionFees,
     fixedCosts,
-    storeCount: storeNames.length,
+    storeCount: rowStoreNames.length,
     daysCovered,
     trueNetProfit,
     trueMargin: revenue > 0 ? trueNetProfit / revenue : 0,
@@ -214,9 +259,18 @@ export function aggregateByStore(
     if (!map.has(r.storeName)) map.set(r.storeName, []);
     map.get(r.storeName)!.push(r);
   }
+  // Audit fix 2026-05-23 (CRIT-1 / O3-CR-01): pass the FULL in-scope store
+  // universe to each per-store `aggregate` call. Without it each call's
+  // billingForRange sees `storeNames.length === 1` (the singleton bucket)
+  // and the "All"-row fair-share split degrades to "the whole amount per
+  // store" — inflating every per-store True-Net-Profit card. The new
+  // third arg lets `aggregate` itself ask billingForRange to split across
+  // the same universe the global aggregate would, then attribute only
+  // this bucket's share to the StoreAgg.
+  const scopedStoreNames = Array.from(map.keys());
   const out: StoreAgg[] = [];
   for (const [store, list] of map) {
-    out.push({ store, ...aggregate(list, range) });
+    out.push({ store, ...aggregate(list, range, scopedStoreNames) });
   }
   return out.sort((a, b) => b.roas - a.roas);
 }

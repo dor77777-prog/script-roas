@@ -1,0 +1,260 @@
+// dashboard-web/src/lib/__tests__/aggregateByStoreAllRowSplit.test.ts
+//
+// CRIT-1 / O3-CR-01 regression: per-store aggregate must pre-split
+// "All"-scoped recurring + one-time billing costs across the full in-scope
+// store universe BEFORE the per-store loop. Otherwise each per-store
+// `aggregate()` invocation sees `storeNames.length === 1` (the singleton
+// bucket) and `billingForRange` charges the whole "All" amount to every
+// store — inflating every per-store True-Net-Profit card 2-3× over the
+// global card.
+//
+// Strategy (mirrors billing.test.ts):
+//   1. Stub `window.localStorage` so `readRecurring` / `readOneTime`
+//      pick up the test-seeded billing rows. vitest runs node, so we
+//      synthesize a minimal `MinimalWindow` and assign it to globalThis.
+//   2. Build production-shaped DailyRow fixtures for 3 stores.
+//   3. Compute the global aggregate (current) and the per-store list
+//      (aggregateByStore). Assert the to-the-cent invariant:
+//        sum(perStore[i].fixedCosts) ≈ global.fixedCosts
+//        sum(perStore[i].trueNetProfit) ≈ global.trueNetProfit
+//   4. Cover edge cases: single-store + only an All-row (no double-count);
+//      zero All-rows (regression-safe).
+//
+// Pinning the pre-fix failure as `not.toBe(WRONG_VALUE)` makes a silent
+// regression visible: the moment the singleton path returns each store's
+// share = full amount again, both invariant assertions break AND the
+// "not equal to triple" guards trip.
+
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { DailyRow, DateRange } from '../types';
+import { aggregate, aggregateByStore } from '../analytics';
+import type { RecurringCost, OneTimeCost } from '../billing';
+
+// ---------------------------------------------------------------------------
+// Minimal window stub (lifted from billing.test.ts pattern)
+// ---------------------------------------------------------------------------
+type MinimalWindow = {
+  localStorage: Storage;
+  dispatchEvent: (ev: Event) => boolean;
+};
+
+function installWindow(): { teardown: () => void; mem: Map<string, string> } {
+  const mem = new Map<string, string>();
+  const localStorage: Storage = {
+    length: 0,
+    clear: () => mem.clear(),
+    getItem: (k: string) => mem.get(k) ?? null,
+    key: (i: number) => Array.from(mem.keys())[i] ?? null,
+    removeItem: (k: string) => mem.delete(k),
+    setItem: (k: string, v: string) => mem.set(k, v),
+  };
+  const g = globalThis as unknown as { window?: MinimalWindow };
+  const prior = g.window;
+  g.window = { localStorage, dispatchEvent: () => true };
+  return {
+    teardown: () => {
+      g.window = prior;
+    },
+    mem,
+  };
+}
+
+function seedRecurring(mem: Map<string, string>, items: RecurringCost[]) {
+  mem.set('roas-dashboard:billing-recurring', JSON.stringify(items));
+}
+
+function seedOneTime(mem: Map<string, string>, items: OneTimeCost[]) {
+  mem.set('roas-dashboard:billing-onetime', JSON.stringify(items));
+}
+
+let teardown: () => void = () => {};
+let mem: Map<string, string> = new Map();
+
+beforeEach(() => {
+  const w = installWindow();
+  teardown = w.teardown;
+  mem = w.mem;
+});
+
+afterEach(() => {
+  teardown();
+});
+
+// ---------------------------------------------------------------------------
+// Production-shaped DailyRow builder
+// ---------------------------------------------------------------------------
+function row(overrides: Partial<DailyRow> = {}): DailyRow {
+  return {
+    date: '2026-05-15',
+    storeId: 'uzoshop',
+    storeName: 'uzoshop',
+    fbSpend: 0,
+    gaSpend: 0,
+    ttSpend: 0,
+    totalSpend: 0,
+    revenue: 0,
+    roas: 0,
+    grossProfit: 0,
+    cogs: 0,
+    netProfit: 0,
+    hasCogs: true,
+    grossRevenue: null,
+    refundDeduction: null,
+    ...overrides,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// CRIT-1 / O3-CR-01 — All-row split invariants
+// ---------------------------------------------------------------------------
+
+describe('aggregateByStore pre-splits All-scoped billing (CRIT-1 / O3-CR-01)', () => {
+  const RANGE: DateRange = { from: '2026-05-01', to: '2026-05-30' };
+
+  it('sum of per-store fixedCosts == global fixedCosts when an All row is present (to the cent)', () => {
+    // Production-shape: 3 store-specific recurring rows + 1 All-scoped row.
+    // 30-day window → 30/30 multiplier on each monthly amount.
+    seedRecurring(mem, [
+      { id: 'r1', store: 'uzoshop',   name: 'Shopify Plan A', source: 'shopify-plan',  monthlyCAD: 105, active: true },
+      { id: 'r2', store: 'Zol Plus',  name: 'Shopify Plan B', source: 'shopify-plan',  monthlyCAD: 105, active: true },
+      { id: 'r3', store: '360usmile', name: 'Shopify Plan C', source: 'shopify-plan',  monthlyCAD: 105, active: true },
+      // All-scoped Klaviyo: in the GLOBAL aggregate this should contribute
+      // $60 (split evenly: $20 per store). In each per-store aggregate the
+      // bucket gets just its $20 share.
+      { id: 'r4', store: 'All',       name: 'Klaviyo',        source: 'email',         monthlyCAD: 60,  active: true },
+    ]);
+    // One-time All-scoped charge: same split rule.
+    seedOneTime(mem, [
+      { id: 'o1', date: '2026-05-15', store: 'All', description: 'Migration setup', source: 'one-off', amountCAD: 300 },
+    ]);
+
+    // 3 stores, 1 day each — enough to make the per-store path build 3 buckets.
+    const rows: DailyRow[] = [
+      row({ storeName: 'uzoshop',   storeId: 'uzoshop',   revenue: 1000, totalSpend: 200 }),
+      row({ storeName: 'Zol Plus',  storeId: 'zolplus',   revenue: 2000, totalSpend: 400 }),
+      row({ storeName: '360usmile', storeId: 'usmile360', revenue: 3000, totalSpend: 600 }),
+    ];
+
+    const global = aggregate(rows, RANGE);
+    const perStore = aggregateByStore(rows, RANGE);
+
+    // Global expected: 3 store-specific @ 105 + All Klaviyo 60 + All one-time 300 = 675.
+    // (30-day range × 30/30 multiplier = full monthly amounts.)
+    expect(global.fixedCosts).toBeCloseTo(675, 6);
+
+    // Sum-of-per-store invariant — the hammer that pins the fix:
+    const sumPerStore = perStore.reduce((s, x) => s + x.fixedCosts, 0);
+    expect(sumPerStore).toBeCloseTo(global.fixedCosts, 6);
+
+    // Pre-fix behavior: each per-store bucket got the FULL All amount.
+    // Pre-fix sumPerStore would be: 105*3 + (60+300)*3 = 315 + 1080 = 1395
+    // (each bucket "saw" storeNames.length === 1 in billingForRange so the
+    // singleton's fair-share split collapsed to the whole amount.)
+    expect(sumPerStore).not.toBeCloseTo(1395, 0);
+
+    // Same invariant on trueNetProfit (downstream of fixedCosts):
+    const sumPerStoreTrueNet = perStore.reduce(
+      (s, x) => s + x.trueNetProfit,
+      0,
+    );
+    expect(sumPerStoreTrueNet).toBeCloseTo(global.trueNetProfit, 6);
+
+    // And on transactionFees + cogs (orthogonal to the fix, but cross-check
+    // the invariant doesn't accidentally break the other cost lines).
+    const sumPerStoreCogs = perStore.reduce((s, x) => s + x.cogs, 0);
+    expect(sumPerStoreCogs).toBeCloseTo(global.cogs, 6);
+    const sumPerStoreFees = perStore.reduce(
+      (s, x) => s + x.transactionFees,
+      0,
+    );
+    expect(sumPerStoreFees).toBeCloseTo(global.transactionFees, 6);
+
+    // Each per-store bucket's All-row share is the same ($20 from Klaviyo
+    // + $100 from the migration one-time) on top of $105 Shopify-plan-each:
+    //   uzoshop / Zol Plus / 360usmile: 105 + 20 + 100 = 225.
+    for (const s of perStore) {
+      expect(s.fixedCosts).toBeCloseTo(225, 6);
+    }
+  });
+
+  it('single-store window + only an All-scoped row — full amount once, no double-count', () => {
+    // Edge case: only one store actually has rows in the window. The
+    // All-scoped row's "in-scope universe" then degenerates to that one
+    // store, so it gets the full amount (correct — there's nothing to split
+    // between). Both global and per-store should agree.
+    seedRecurring(mem, [
+      { id: 'r1', store: 'All', name: 'Klaviyo', source: 'email', monthlyCAD: 60, active: true },
+    ]);
+    const rows: DailyRow[] = [
+      row({ storeName: 'uzoshop', storeId: 'uzoshop', revenue: 1000, totalSpend: 200 }),
+    ];
+
+    const global = aggregate(rows, RANGE);
+    const perStore = aggregateByStore(rows, RANGE);
+
+    expect(global.fixedCosts).toBeCloseTo(60, 6);
+    expect(perStore).toHaveLength(1);
+    expect(perStore[0].fixedCosts).toBeCloseTo(60, 6);
+    // No double-count: the global got 60 and the per-store also got 60 —
+    // exactly the same source row, not summed twice.
+    expect(perStore[0].fixedCosts).toBeCloseTo(global.fixedCosts, 6);
+  });
+
+  it('zero All-scoped rows — store-specific only — unchanged behavior', () => {
+    // Regression-safety: when there are no All-scoped billing rows the
+    // per-store path should behave identically to the pre-fix code. Each
+    // store-specific recurring is charged exactly once to its store; sum
+    // equals the global.
+    seedRecurring(mem, [
+      { id: 'r1', store: 'uzoshop',  name: 'Shopify', source: 'shopify-plan', monthlyCAD: 105, active: true },
+      { id: 'r2', store: 'Zol Plus', name: 'Shopify', source: 'shopify-plan', monthlyCAD: 105, active: true },
+    ]);
+    const rows: DailyRow[] = [
+      row({ storeName: 'uzoshop',  storeId: 'uzoshop',  revenue: 1000 }),
+      row({ storeName: 'Zol Plus', storeId: 'zolplus',  revenue: 2000 }),
+    ];
+
+    const global = aggregate(rows, RANGE);
+    const perStore = aggregateByStore(rows, RANGE);
+
+    expect(global.fixedCosts).toBeCloseTo(210, 6);
+    const sumPerStore = perStore.reduce((s, x) => s + x.fixedCosts, 0);
+    expect(sumPerStore).toBeCloseTo(210, 6);
+
+    // Each bucket sees ITS own store's recurring row only.
+    const uzo = perStore.find(s => s.store === 'uzoshop');
+    const zol = perStore.find(s => s.store === 'Zol Plus');
+    expect(uzo?.fixedCosts).toBeCloseTo(105, 6);
+    expect(zol?.fixedCosts).toBeCloseTo(105, 6);
+  });
+
+  it('empty rows — both global and per-store collapse to zero', () => {
+    seedRecurring(mem, [
+      { id: 'r1', store: 'All', name: 'Klaviyo', source: 'email', monthlyCAD: 60, active: true },
+    ]);
+    const global = aggregate([], RANGE);
+    const perStore = aggregateByStore([], RANGE);
+    expect(global.fixedCosts).toBe(0);
+    expect(perStore).toHaveLength(0);
+  });
+
+  it('global aggregate path is UNCHANGED — no scopedStoreNames arg means row-derived store set', () => {
+    // Pin that the new third arg is opt-in: a call with no third arg uses
+    // the row-derived set (same as pre-fix). The global aggregate path
+    // continues to call `aggregate(rows, range)` only — never the singleton
+    // path that the per-store loop uses.
+    seedRecurring(mem, [
+      { id: 'r1', store: 'All', name: 'Klaviyo', source: 'email', monthlyCAD: 60, active: true },
+    ]);
+    const rows: DailyRow[] = [
+      row({ storeName: 'uzoshop', storeId: 'uzoshop', revenue: 1000 }),
+      row({ storeName: 'Zol Plus', storeId: 'zolplus', revenue: 2000 }),
+    ];
+    // Two-arg signature (matches Dashboard.tsx call site).
+    const noScopeArg = aggregate(rows, RANGE);
+    // Three-arg same value matches the implicit row-derived behavior.
+    const withScopeArg = aggregate(rows, RANGE, ['uzoshop', 'Zol Plus']);
+    expect(noScopeArg.fixedCosts).toBeCloseTo(withScopeArg.fixedCosts, 10);
+    expect(noScopeArg.trueNetProfit).toBeCloseTo(withScopeArg.trueNetProfit, 10);
+  });
+});
