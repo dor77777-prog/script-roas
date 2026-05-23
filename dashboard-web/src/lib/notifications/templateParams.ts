@@ -128,7 +128,23 @@ export function buildTemplateParameters(
   title: string,
 ): string[] {
   const params: string[] = [title];
-  const storeIds = summary && summary.stores ? Object.keys(summary.stores) : [];
+  // Audit fix 2026-05-23 (CR-02 health-and-conclusions): the previous
+  // `Object.keys(summary.stores)` returned insertion order from the
+  // upstream Supabase query (`summary.ts:99` — no ORDER BY clause).
+  // Supabase's planner may pick different physical-storage orders across
+  // days (after writes/vacuums), so the same store would land in {2} on
+  // Monday and {3} on Tuesday. Operator glancing at the WhatsApp message
+  // would mis-attribute spend to the wrong store.
+  //
+  // Sort by storeName so the position of each store is deterministic and
+  // explainable. localeCompare keeps Hebrew/English mixed names sane.
+  const storeIds = summary && summary.stores
+    ? Object.keys(summary.stores).sort((a, b) =>
+        (summary.stores[a]?.storeName ?? a).localeCompare(
+          summary.stores[b]?.storeName ?? b,
+        ),
+      )
+    : [];
   for (let i = 0; i < 3; i++) {
     const sid = storeIds[i];
     if (sid && summary) {
