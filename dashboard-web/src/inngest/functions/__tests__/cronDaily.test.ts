@@ -755,4 +755,123 @@ describe('cronDaily — factory + handler', () => {
     const { step: step3 } = makeMockStep();
     await expect(runDailyForStore('uzoshop', '2026-05-20', { step: step3 })).rejects.toThrow(/upsert/);
   });
+
+  // ===========================================================================
+  // Audit fix 2026-05-23 a/WARN-1 — platform-throw SOFT-FAIL regression tests.
+  //
+  // Commit 11161e8 added try/catch around fetch-meta / fetch-google /
+  // fetch-tiktok so a single token expiry on one platform no longer kills
+  // runDailyForStore (which previously rolled back Shopify + the OTHER
+  // platforms too). The throw branches had no regression tests; this block
+  // pins them. For each platform we assert:
+  //   (a) runDailyForStore does NOT throw.
+  //   (b) data_daily UPSERT was called (persist-batch still ran).
+  //   (c) the failed platform's spend column landed as 0 (zero sentinel),
+  //       while the other platforms' values survived intact.
+  // ===========================================================================
+
+  describe('Test 10 (a/WARN-1): platform-throw soft-fail', () => {
+    function getDataDailyRow(): Record<string, unknown> | undefined {
+      const call = mockState.upserts.find((u) => u.table === 'data_daily');
+      if (!call) return undefined;
+      // data_daily upsert always passes a single row object.
+      return call.rows as Record<string, unknown>;
+    }
+
+    it('Meta fetch throw → runDailyForStore completes, data_daily persists, fb_spend_cad = 0', async () => {
+      // Seed Google + TikTok with non-zero spend so we can prove they
+      // survived while Meta zeroed out. ttSpendResult of 0 USD would still
+      // be 0 CAD; bump it to 10 USD so a TikTok survival assertion is
+      // possible. Google fixture is already CAD 50.
+      mockState.tiktokSpendResult = {
+        storeId: 'uzoshop',
+        date: '2026-05-20',
+        spend: 10,
+        currency: 'USD',
+      };
+      // mergeResult currently has fbSpendCad=36 — but mergeOverridesFromSupabase
+      // is mocked and ALWAYS returns mockState.mergeResult regardless of the
+      // meta.spend input. To make the test reflect what really happens in
+      // production (Meta throws → meta.spend = 0 → merger returns
+      // fbSpendCad=0), tighten the mock to zero-out fb when meta zeroed.
+      // The throw above already returns spend=0 to merger; we just need the
+      // merge mock to honour that. Override mergeResult so the assertion
+      // pin is meaningful.
+      mockState.mergeResult = {
+        fbSpendCad: 0, // simulates the merger seeing meta.spend=0
+        gaSpendCad: 50, // Google survived
+        totalSpendCad: 50,
+        overridesApplied: { meta: false, google: false },
+      };
+      mockState.throwIn = 'meta';
+
+      const { step } = makeMockStep();
+      // (a) Must NOT throw.
+      await expect(
+        runDailyForStore('uzoshop', '2026-05-20', { step }),
+      ).resolves.toBeDefined();
+
+      // (b) data_daily UPSERT was called.
+      const row = getDataDailyRow();
+      expect(row).toBeDefined();
+
+      // (c) fb_spend_cad is 0 (Meta zero sentinel), while Google and TikTok
+      //     spend survived.
+      expect(row?.fb_spend_cad).toBe(0);
+      expect(row?.ga_spend_cad).toBe(50);
+      expect(Number(row?.tt_spend_cad)).toBeGreaterThan(0);
+    });
+
+    it('Google fetch throw → runDailyForStore completes, data_daily persists, ga_spend_cad = 0', async () => {
+      mockState.tiktokSpendResult = {
+        storeId: 'uzoshop',
+        date: '2026-05-20',
+        spend: 10,
+        currency: 'USD',
+      };
+      // Merger sees google.spend = 0 → gaSpendCad = 0. Meta survives.
+      mockState.mergeResult = {
+        fbSpendCad: 36,
+        gaSpendCad: 0,
+        totalSpendCad: 36,
+        overridesApplied: { meta: false, google: false },
+      };
+      mockState.throwIn = 'google';
+
+      const { step } = makeMockStep();
+      await expect(
+        runDailyForStore('uzoshop', '2026-05-20', { step }),
+      ).resolves.toBeDefined();
+
+      const row = getDataDailyRow();
+      expect(row).toBeDefined();
+      expect(row?.ga_spend_cad).toBe(0);
+      expect(row?.fb_spend_cad).toBe(36);
+      expect(Number(row?.tt_spend_cad)).toBeGreaterThan(0);
+    });
+
+    it('TikTok fetch throw → runDailyForStore completes, data_daily persists, tt_spend_cad = 0', async () => {
+      mockState.mergeResult = {
+        fbSpendCad: 36,
+        gaSpendCad: 50,
+        totalSpendCad: 86,
+        overridesApplied: { meta: false, google: false },
+      };
+      mockState.throwIn = 'tiktok';
+
+      const { step } = makeMockStep();
+      await expect(
+        runDailyForStore('uzoshop', '2026-05-20', { step }),
+      ).resolves.toBeDefined();
+
+      const row = getDataDailyRow();
+      expect(row).toBeDefined();
+      // TikTok zero sentinel: tt_spend_cad lands as 0 (cadFor short-circuits
+      // when spend === 0).
+      expect(row?.tt_spend_cad).toBe(0);
+      // Meta + Google unaffected.
+      expect(row?.fb_spend_cad).toBe(36);
+      expect(row?.ga_spend_cad).toBe(50);
+    });
+  });
 });
