@@ -533,7 +533,7 @@ export async function runLiveForStore(
   storeId: StoreId;
   rollingDates: string[];
   perDayRevenue: Record<string, number>;
-  todaySpendCad: { fb: number; ga: number };
+  todaySpendCad: { fb: number; ga: number; tt: number };
 }> {
   const { step } = ctx;
   const dates = rollingWindowDates(ROLLING_WINDOW_DAYS);
@@ -1146,6 +1146,14 @@ export async function runLiveForStore(
     todaySpendCad: {
       fb: todaySpendEntry.fbSpendCad ?? 0,
       ga: todaySpendEntry.gaSpendCad ?? 0,
+      // Audit fix 2026-05-24 (B-01): TikTok spend was previously dropped
+      // from this summary, which meant any operator-console consumer
+      // reading `runLiveForStore(...).todaySpendCad` underreported the
+      // TikTok amount for uzoshop. On-disk data (data_daily) was always
+      // correct — the row writer at the persist step already handled
+      // tt_spend_cad. This fix surfaces TikTok to the in-memory return
+      // value to match the writer.
+      tt: todaySpendEntry.ttSpendCad ?? 0,
     },
   };
 }

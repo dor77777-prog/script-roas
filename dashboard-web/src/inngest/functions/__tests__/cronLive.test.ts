@@ -490,4 +490,72 @@ describe('cronLive — runLiveForStore handler (Shopify-only, rolling 3-day)', (
     const warnMessages = warnSpy.mock.calls.map((c) => String(c[0]));
     expect(warnMessages.some((m) => /FX.*failed|FX.*skip/i.test(m))).toBe(true);
   });
+
+  it('Test 8 (audit B-01, 2026-05-24): todaySpendCad return value includes tt (TikTok) — was silently dropped', async () => {
+    // Pre-fix (audit B-01): the handler's RETURN value at cronLive.ts:1146
+    // only exposed { fb, ga } — TikTok spend was missing from the in-memory
+    // summary even though the persist step wrote tt_spend_cad correctly
+    // to data_daily. Any operator-console consumer that read
+    // `runLiveForStore(...).todaySpendCad` underreported the TikTok amount
+    // for uzoshop (the TikTok-enabled store).
+    //
+    // This test mocks today's TikTok spend to 12.34 CAD (a value chosen
+    // to be obviously non-zero and not a power of 10, so a regression that
+    // silently zeroes it would not collide with a generic default). The
+    // assertion: result.todaySpendCad.tt === 12.34.
+    const mod = await import('../cronLive');
+
+    vi.spyOn(shopifyFetcher, 'fetchShopifyDayRows').mockImplementation(
+      async (storeId, date) => ({
+        storeId,
+        date,
+        storeName: 'uzoshop',
+        revenueCad: 0,
+        productRows: [],
+        customItemRefundCad: 0,
+        grossRevenueCad: 0,
+        refundDeductionCad: 0,
+      }),
+    );
+    vi.spyOn(metaFetcher, 'fetchMetaSpendForDayLight').mockResolvedValue({
+      storeId: 'uzoshop',
+      date: 'placeholder',
+      spend: 0,
+      currency: 'CAD',
+    });
+    vi.spyOn(googleAdsFetcher, 'fetchGoogleAdsSpendForDay').mockResolvedValue({
+      storeId: 'uzoshop',
+      date: 'placeholder',
+      spend: 0,
+      currency: 'CAD',
+    });
+    // TikTok returns CAD-denominated spend (12.34) for EVERY day in the
+    // rolling window. The handler will pick `spendByDate[today]` (=dates[0])
+    // and place its ttSpendCad into the return-value todaySpendCad.tt.
+    // Currency=CAD short-circuits cadConvert (no FX lookup needed).
+    vi.spyOn(tiktokFetcher, 'fetchTikTokSpendForDay').mockImplementation(
+      async (storeId, date) => ({
+        storeId,
+        date,
+        spend: 12.34,
+        currency: 'CAD',
+      }),
+    );
+
+    const { admin } = makeSupabaseAdminMock();
+    vi.spyOn(supabaseAdminMod, 'getSupabaseAdmin').mockReturnValue(
+      admin as unknown as ReturnType<typeof supabaseAdminMod.getSupabaseAdmin>,
+    );
+
+    const { step } = makeStepStub();
+    const result = await mod.runLiveForStore('uzoshop', { step });
+
+    // B-01 assertion: tt is present in the return-value summary AND equals
+    // the mocked TikTok spend (12.34 CAD).
+    expect(result.todaySpendCad).toHaveProperty('tt');
+    expect(result.todaySpendCad.tt).toBe(12.34);
+    // Sanity: fb + ga still default to 0 (no Meta/Google spend mocked above).
+    expect(result.todaySpendCad.fb).toBe(0);
+    expect(result.todaySpendCad.ga).toBe(0);
+  });
 });
