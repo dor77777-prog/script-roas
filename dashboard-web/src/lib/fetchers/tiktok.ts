@@ -335,10 +335,25 @@ const TIKTOK_PAGINATION_CAP = 50;
  * as the report endpoint. 50-page cap (1000 ad-groups max for this
  * advertiser, way above realistic counts).
  */
+/**
+ * Phase 05.7.x (2026-05-23) — extended return value: each entry now
+ * carries `campaignId`, names, and the status. cron-live consumes this
+ * to write placeholder rows for ad-groups that haven't yet served any
+ * impressions — so newly-created ad-groups show up in the dashboard
+ * within 10 min instead of waiting for the report endpoint to start
+ * carrying their metrics.
+ */
+export type TikTokAdGroupMeta = {
+  campaignId: string;
+  campaignName: string;
+  adGroupName: string;
+  status: string;
+};
+
 export async function fetchTikTokAdGroupStatuses(
   storeId: string,
-): Promise<Map<string, string>> {
-  const out = new Map<string, string>();
+): Promise<Map<string, TikTokAdGroupMeta>> {
+  const out = new Map<string, TikTokAdGroupMeta>();
   let advertiserId: string;
   let accessToken: string;
   try {
@@ -351,6 +366,9 @@ export async function fetchTikTokAdGroupStatuses(
 
   type AdGroupRow = {
     adgroup_id?: string | number;
+    adgroup_name?: string;
+    campaign_id?: string | number;
+    campaign_name?: string;
     secondary_status?: string;
     operation_status?: string;
   };
@@ -365,7 +383,13 @@ export async function fetchTikTokAdGroupStatuses(
     try {
       data = await tiktokGet<ListPayload>('/adgroup/get/', accessToken, {
         advertiser_id: advertiserId,
-        fields: '["adgroup_id","secondary_status","operation_status"]',
+        // Phase 05.7.x (2026-05-23) — added campaign_id + campaign_name +
+        // adgroup_name so the writer can create placeholder rows with
+        // proper labels (operator sees the actual campaign name, not just
+        // a numeric ID, even before the ad-group has spent its first $).
+        fields:
+          '["adgroup_id","adgroup_name","campaign_id","campaign_name",' +
+          '"secondary_status","operation_status"]',
         page_size: '200',
         page: String(page),
       });
@@ -382,8 +406,14 @@ export async function fetchTikTokAdGroupStatuses(
       if (!id) continue;
       // Prefer secondary_status (granular delivery state); fall back to
       // operation_status (operator-set enable/disable, less specific).
-      const status = (r.secondary_status || r.operation_status || '').trim() || null;
-      if (status) out.set(id, status);
+      const status = (r.secondary_status || r.operation_status || '').trim();
+      if (!status) continue;
+      out.set(id, {
+        campaignId: String(r.campaign_id ?? '').trim(),
+        campaignName: (r.campaign_name || '').trim(),
+        adGroupName: (r.adgroup_name || '').trim(),
+        status,
+      });
     }
 
     const totalPages = Number(data.page_info?.total_page ?? 1);
@@ -542,8 +572,8 @@ export async function fetchTikTokAdInsights(
   const statuses = await statusesPromise;
   if (statuses.size > 0) {
     for (const row of out) {
-      const s = statuses.get(row.adGroupId);
-      if (s) row.effectiveStatus = s;
+      const meta = statuses.get(row.adGroupId);
+      if (meta?.status) row.effectiveStatus = meta.status;
     }
   }
 

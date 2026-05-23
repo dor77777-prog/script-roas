@@ -583,7 +583,26 @@ export async function fetchCampaignsFromPostgres(
     const spend = toNumber(r.spend_cad);
     const impressions = toNumber(r.impressions);
     const conversions = toNumber(r.conversions);
-    if (spend === 0 && impressions === 0 && conversions === 0) continue;
+    // Phase 05.7.x (2026-05-23) — placeholder rows from cron-live's
+    // refresh-effective-status step carry effective_status + zero metrics
+    // for brand-new campaigns that haven't yet served impressions. Keep
+    // them so the operator sees newly-created campaigns within 10 min
+    // (with "—" metrics until the first impression lands), instead of
+    // waiting 24h for cron-daily. Rows with NO status AND no activity
+    // are still filtered out — those are truly empty noise.
+    const effectiveStatusRaw = (r as { effective_status?: unknown }).effective_status;
+    const hasStatus =
+      effectiveStatusRaw !== null &&
+      effectiveStatusRaw !== undefined &&
+      String(effectiveStatusRaw).trim() !== '';
+    if (
+      spend === 0 &&
+      impressions === 0 &&
+      conversions === 0 &&
+      !hasStatus
+    ) {
+      continue;
+    }
 
     const storeId = String(r.store_id);
     const cbRaw = r.campaign_budget_cad;

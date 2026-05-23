@@ -163,6 +163,12 @@ export type MetaBudgets = {
        *  was missing the field on the wire (rare; the API always returns
        *  it on /campaigns). */
       effectiveStatus: string | null;
+      /** Phase 05.7.x (2026-05-23) — campaign name from the same /campaigns
+       *  response. Lets cron-live write placeholder rows for brand-new
+       *  campaigns that don't yet have insights (so they appear in the
+       *  dashboard within 10 min of creation instead of waiting 24h for
+       *  cron-daily). null when the API omitted it (defensive). */
+      name: string | null;
     }
   >;
   /** adSetId → budgets + campaign membership. */
@@ -182,6 +188,8 @@ export type MetaBudgets = {
        *  ad-sets is ADSET_PAUSED, and the operator's "this campaign is
        *  off" intuition usually maps to ad-set state. */
       effectiveStatus: string | null;
+      /** Phase 05.7.x (2026-05-23) — ad-set name. See `campaigns[].name`. */
+      name: string | null;
     }
   >;
 };
@@ -579,6 +587,7 @@ export async function fetchMetaAdInsights(
 // ---------------------------------------------------------------------------
 type MetaCampaignWireRow = {
   id?: string;
+  name?: string;
   daily_budget?: string;
   lifetime_budget?: string;
   bid_strategy?: string;
@@ -587,6 +596,7 @@ type MetaCampaignWireRow = {
 };
 type MetaAdSetWireRow = {
   id?: string;
+  name?: string;
   campaign_id?: string;
   daily_budget?: string;
   lifetime_budget?: string;
@@ -695,7 +705,7 @@ export async function fetchMetaBudgets(storeId: string): Promise<MetaBudgets> {
   const campaigns: MetaBudgets['campaigns'] = {};
   let curl: string | null =
     `https://graph.facebook.com/${META_API_VERSION}/act_${adAccountId}/campaigns` +
-    `?fields=id,daily_budget,lifetime_budget,bid_strategy,status,effective_status` +
+    `?fields=id,name,daily_budget,lifetime_budget,bid_strategy,status,effective_status` +
     `&limit=500&access_token=${encodeURIComponent(token)}`;
   let safety = 0;
   while (curl && safety < 50) {
@@ -723,6 +733,7 @@ export async function fetchMetaBudgets(storeId: string): Promise<MetaBudgets> {
         // lastActiveDate heuristic. Empty string normalised to null so
         // downstream consumers can use a single nullish check.
         effectiveStatus: (c.effective_status || '').trim() || null,
+        name: (c.name || '').trim() || null,
       };
     }
     curl = body.paging?.next ?? null;
@@ -739,7 +750,7 @@ export async function fetchMetaBudgets(storeId: string): Promise<MetaBudgets> {
   const adSets: MetaBudgets['adSets'] = {};
   let aurl: string | null =
     `https://graph.facebook.com/${META_API_VERSION}/act_${adAccountId}/adsets` +
-    `?fields=id,campaign_id,daily_budget,lifetime_budget,status,effective_status` +
+    `?fields=id,name,campaign_id,daily_budget,lifetime_budget,status,effective_status` +
     `&limit=500&access_token=${encodeURIComponent(token)}`;
   safety = 0;
   while (aurl && safety < 50) {
@@ -765,6 +776,7 @@ export async function fetchMetaBudgets(storeId: string): Promise<MetaBudgets> {
         // record both granularities; cronDaily picks ad-set first and
         // falls back to campaign when missing.
         effectiveStatus: (a.effective_status || '').trim() || null,
+        name: (a.name || '').trim() || null,
       };
     }
     aurl = body.paging?.next ?? null;

@@ -798,12 +798,14 @@ describe('Phase 05.7.2 — meta.ts fetchMetaBudgets (port of MetaAds.gs getMetaB
       // fetcher normalises it to null. (Real responses include
       // ACTIVE/PAUSED/CAMPAIGN_PAUSED here.)
       effectiveStatus: null,
+      name: null,
     });
     expect(out.campaigns['c-abo']).toEqual({
       dailyBudget: 0,
       lifetimeBudget: 0,
       bidStrategy: null,
       effectiveStatus: null,
+      name: null,
     });
     // AdSet minor→major: 3000 → 30.00; 12000 → 120.00.
     expect(out.adSets['as-1']).toEqual({
@@ -811,18 +813,21 @@ describe('Phase 05.7.2 — meta.ts fetchMetaBudgets (port of MetaAds.gs getMetaB
       lifetimeBudget: 0,
       campaignId: 'c-cbo',
       effectiveStatus: null,
+      name: null,
     });
     expect(out.adSets['as-2']).toEqual({
       dailyBudget: 30,
       lifetimeBudget: 0,
       campaignId: 'c-abo',
       effectiveStatus: null,
+      name: null,
     });
     expect(out.adSets['as-3']).toEqual({
       dailyBudget: 0,
       lifetimeBudget: 120,
       campaignId: 'c-abo',
       effectiveStatus: null,
+      name: null,
     });
 
     // URL invariants — all 3 calls use the META_API_VERSION constant and target
@@ -906,18 +911,21 @@ describe('Phase 05.7.2 — meta.ts fetchMetaBudgets (port of MetaAds.gs getMetaB
       lifetimeBudget: 0,
       bidStrategy: null,
       effectiveStatus: null,
+      name: null,
     });
     expect(out.campaigns['c-empty-str']).toEqual({
       dailyBudget: 0,
       lifetimeBudget: 0,
       bidStrategy: null,
       effectiveStatus: null,
+      name: null,
     });
     expect(out.adSets['as-empty']).toEqual({
       dailyBudget: 0,
       lifetimeBudget: 0,
       campaignId: '',
       effectiveStatus: null,
+      name: null,
     });
     // Missing id ⇒ no row created (we don't want '' as a real key).
     expect(out.adSets['']).toBeUndefined();

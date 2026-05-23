@@ -638,3 +638,93 @@ export async function fetchGoogleAdsAdInsights(
 
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// Phase 05.7.x (2026-05-23) — fetchGoogleAdsAdGroupStatuses
+//
+// Returns the CURRENT status + metadata of every ad-group (ENABLED + PAUSED)
+// for the store, with NO date filter. Used by cron-live to write placeholder
+// rows into campaigns_daily for ad-groups that haven't yet served any
+// impressions — so brand-new ad-groups appear in the dashboard within 10 min
+// of creation instead of waiting 24h for cron-daily.
+//
+// Why a separate function (vs reusing fetchGoogleAdsAdGroupInsights):
+//   The existing insights fetcher filters with `WHERE segments.date = 'YYYY-MM-DD'`
+//   which collapses to "ad-groups with insights on this date". A brand-new
+//   ad-group that hasn't served yet returns ZERO rows. The new fetcher
+//   queries the `ad_group` resource directly with NO date predicate, so we
+//   see every ENABLED/PAUSED ad-group regardless of activity.
+//
+// Why we still include PAUSED (not just ENABLED):
+//   An operator pausing an ad-group should also surface as "off" in the
+//   dashboard chip — we need the status of paused ad-groups too. REMOVED
+//   ad-groups are excluded (they're deleted; not relevant to the operator).
+// ---------------------------------------------------------------------------
+
+export type GoogleAdsAdGroupStatus = {
+  campaignId: string;
+  campaignName: string;
+  adGroupId: string;
+  adGroupName: string;
+  /** Composite status — ad-group status takes precedence over campaign status.
+   *  Possible values: ENABLED / PAUSED. (REMOVED is filtered out by the query
+   *  WHERE clause; we never write a row for a deleted ad-group.) */
+  status: string;
+};
+
+export async function fetchGoogleAdsAdGroupStatuses(
+  storeId: string,
+): Promise<GoogleAdsAdGroupStatus[]> {
+  if (!STORES_WITH_GOOGLE_ADS.has(storeId)) {
+    return [];
+  }
+
+  const customerId = getCustomerIdOrThrow(storeId);
+  const accessToken = await getAccessToken(storeId);
+
+  const query =
+    'SELECT campaign.id, campaign.name, campaign.status, ' +
+    'ad_group.id, ad_group.name, ad_group.status ' +
+    "FROM ad_group WHERE ad_group.status IN ('ENABLED', 'PAUSED')";
+
+  const results = await runGaqlQuery(
+    storeId,
+    customerId,
+    accessToken,
+    query,
+    'status-only',
+  );
+
+  const out: GoogleAdsAdGroupStatus[] = [];
+  for (const r of results) {
+    const campaign = (r.campaign ?? {}) as {
+      id?: string | number;
+      name?: string;
+      status?: string;
+    };
+    const adGroup = (r.adGroup ?? {}) as {
+      id?: string | number;
+      name?: string;
+      status?: string;
+    };
+    const cid = String(campaign.id ?? '');
+    const agid = String(adGroup.id ?? '');
+    if (!cid || !agid) continue;
+
+    // Prefer ad-group status (more specific) → fall back to campaign status.
+    // Matches the precedence used by fetchGoogleAdsAdGroupInsights so the
+    // dashboard's off-chip behaves identically whether the row came from
+    // cron-daily's insights write or cron-live's placeholder UPSERT.
+    const status = (adGroup.status || campaign.status || '').trim();
+    if (!status) continue;
+
+    out.push({
+      campaignId: cid,
+      campaignName: campaign.name ?? '',
+      adGroupId: agid,
+      adGroupName: adGroup.name ?? '',
+      status,
+    });
+  }
+  return out;
+}
