@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildProductCentricView } from '@/lib/productCentricView';
+import { allocateProductRevenue } from '@/lib/campaignProductMap';
 import type { Aggregated } from '@/lib/campaignsAggregator';
 import type { ProductMap } from '@/lib/campaignProductMap';
 
@@ -364,5 +365,155 @@ describe('buildProductCentricView — platform grouping + sort', () => {
     expect(rows[0].productTitle).toBe('p2'); // no title → id
     expect(rows[1].productId).toBe('p1');
     expect(rows[1].productTitle).toBe('Cute Hat');
+  });
+});
+
+describe('buildProductCentricView — b/HI-05 zero-spend cohort fallback', () => {
+  it('zero-spend cohort with positive revenue → revenue split equally across platforms (not zeroed)', () => {
+    // Audit fix 2026-05-23 (b/HI-05): when totalCohortSpend === 0 the
+    // previous fallback emitted 0 for every per-platform allocated
+    // revenue — silently dropping 100% of the product's Shopify
+    // revenue from the per-platform breakdown. Operator saw a product
+    // worth $1000 displayed as "Meta: $0 / TikTok: $0" even though
+    // the product had real sales.
+    const rows = buildProductCentricView({
+      storeId: STORE,
+      productMap: {
+        [k('Meta', 'c1')]: ['p1'],
+        [k('TikTok', 't1')]: ['p1'],
+      },
+      aggregated: [
+        // Both campaigns have a row (so the cohort exists) but ZERO spend
+        // in the visible range (impressions/conversions populated by some
+        // other path). Operator pattern: backfilled product but campaign
+        // paused mid-range.
+        makeAgg({ key: k('Meta', 'c1'), spend: 0, impressions: 1, conversions: 0, conversionValue: 0 }),
+        makeAgg({ key: k('TikTok', 't1'), campaignId: 't1', platform: 'TikTok', spend: 0, impressions: 1, conversions: 0, conversionValue: 0 }),
+      ],
+      productNetRevenue: new Map([['p1', 1000]]),
+    });
+    expect(rows).toHaveLength(1);
+    const platformGroups = rows[0].byPlatform;
+    expect(platformGroups).toHaveLength(2);
+    // 1000 / 2 platforms = 500 each (equal-share fallback).
+    for (const g of platformGroups) {
+      expect(g.intraAllocatedRevenue).toBe(500);
+    }
+    // Sum still equals total revenue (no leakage).
+    const totalAlloc = platformGroups.reduce((s, g) => s + g.intraAllocatedRevenue, 0);
+    expect(totalAlloc).toBe(1000);
+  });
+
+  it('zero-spend cohort with positive revenue on a single platform → all revenue allocated', () => {
+    const rows = buildProductCentricView({
+      storeId: STORE,
+      productMap: {
+        [k('Meta', 'c1')]: ['p1'],
+      },
+      aggregated: [
+        makeAgg({ key: k('Meta', 'c1'), spend: 0, impressions: 1, conversions: 0, conversionValue: 0 }),
+      ],
+      productNetRevenue: new Map([['p1', 500]]),
+    });
+    expect(rows[0].byPlatform[0].intraAllocatedRevenue).toBe(500);
+  });
+});
+
+describe('buildProductCentricView — b/HI-03 allocator parity with campaign-centric drawer', () => {
+  it('with orders threaded, per-campaign revenue matches allocateProductRevenue output exactly', () => {
+    // Audit fix 2026-05-23 (b/HI-03): the product-centric view used a
+    // simplified per-platform × intra-share split that ignored the
+    // deterministic per-platform attribution the campaign-centric drawer
+    // performs via allocateProductRevenue. Same product + same campaign
+    // would show DIFFERENT revenue numbers in the two views.
+    //
+    // Now the view delegates to allocateProductRevenue when orders are
+    // provided, so the two views agree on every (product, campaign) tuple.
+    const productMap: ProductMap = {
+      [k('Meta', 'm1')]: ['p1'],
+      [k('TikTok', 't1')]: ['p1'],
+    };
+    const aggregated = [
+      makeAgg({ key: k('Meta', 'm1'), spend: 200 }),
+      makeAgg({ key: k('TikTok', 't1'), campaignId: 't1', platform: 'TikTok', spend: 300 }),
+    ];
+    // Construct an order set where 2 of 3 orders carry a deterministic
+    // TikTok signal — TikTok should get the deterministic revenue
+    // credited explicitly (not just by spend share).
+    const orders = [
+      {
+        storeId: STORE,
+        source: 'tiktok-paid',
+        fbclidPresent: false,
+        gclidPresent: false,
+        lineItems: [{ productId: 'p1', units: 1, revenueCad: 100 }],
+      },
+      {
+        storeId: STORE,
+        source: 'tiktok-paid',
+        fbclidPresent: false,
+        gclidPresent: false,
+        lineItems: [{ productId: 'p1', units: 1, revenueCad: 100 }],
+      },
+      {
+        storeId: STORE,
+        source: 'direct',
+        fbclidPresent: false,
+        gclidPresent: false,
+        lineItems: [{ productId: 'p1', units: 1, revenueCad: 100 }],
+      },
+    ];
+    const productNetRevenue = new Map([['p1', 300]]);
+    const productUnits = new Map([['p1', 3]]);
+
+    const rows = buildProductCentricView({
+      storeId: STORE,
+      productMap,
+      aggregated,
+      productNetRevenue,
+      productUnits,
+      orders,
+    });
+
+    // Compute the canonical answer directly via allocateProductRevenue.
+    const campaignSpend = new Map<string, number>();
+    for (const a of aggregated) campaignSpend.set(a.key, a.spend);
+    const canonical = allocateProductRevenue({
+      storeId: STORE,
+      map: productMap,
+      productRevenue: [{ productId: 'p1', netRevenueCad: 300, units: 3 }],
+      campaignSpend,
+      orders,
+    });
+
+    // Each member's allocatedRevenueEstimate must equal the allocator's
+    // output for the same campaignKey.
+    expect(rows).toHaveLength(1);
+    for (const m of rows[0].members) {
+      const canonicalRev = canonical.get(m.campaignKey)?.revenue ?? 0;
+      expect(m.allocatedRevenueEstimate).toBeCloseTo(canonicalRev, 5);
+    }
+  });
+
+  it('without orders, falls back to simplified split (backwards compat)', () => {
+    // No `orders` provided → uses the pre-fix spend-proportional split.
+    // Tests + tools that don't have orders still work.
+    const rows = buildProductCentricView({
+      storeId: STORE,
+      productMap: {
+        [k('Meta', 'c1')]: ['p1'],
+        [k('Meta', 'c2')]: ['p1'],
+      },
+      aggregated: [
+        makeAgg({ key: k('Meta', 'c1'), spend: 100 }),
+        makeAgg({ key: k('Meta', 'c2'), campaignId: 'c2', spend: 300 }),
+      ],
+      productNetRevenue: new Map([['p1', 400]]),
+    });
+    const sumAlloc = rows[0].members.reduce(
+      (s, m) => s + m.allocatedRevenueEstimate,
+      0,
+    );
+    expect(sumAlloc).toBeCloseTo(400, 1);
   });
 });

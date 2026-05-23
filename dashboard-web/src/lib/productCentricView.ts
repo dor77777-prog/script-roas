@@ -20,7 +20,7 @@
  */
 
 import type { Aggregated } from './campaignsAggregator';
-import type { ProductMap } from './campaignProductMap';
+import { allocateProductRevenue, type ProductMap } from './campaignProductMap';
 
 // =============================================================================
 // Types
@@ -95,6 +95,31 @@ export type ProductCentricInputs = {
   /** Per-product Shopify title. Optional — if missing, we fall back to
    *  the productId. */
   productTitles?: Map<string, string>;
+  /** Per-product units sold (Phase b/HI-03 — needed by allocateProductRevenue
+   *  when orders are threaded through for the deterministic-first path).
+   *  Optional for back-compat; without it the allocator can't run and we
+   *  fall back to the simplified per-platform split. */
+  productUnits?: Map<string, number>;
+  /**
+   * Audit fix 2026-05-23 (b/HI-03) — order rows for the same (store, range).
+   * When provided, buildProductCentricView calls `allocateProductRevenue`
+   * per product so the per-campaign + per-platform revenue numbers match
+   * EXACTLY the campaign-centric drawer (deterministic per-platform first,
+   * then spend-proportional fallback). Without this the simplified spend-
+   * share split differed from the drawer's number for the same product +
+   * campaign.
+   *
+   * Optional — when omitted (e.g., older callers, tests), the function
+   * falls back to the simplified split (correct in expectation, exact
+   * only when no orders carry platform signals).
+   */
+  orders?: Array<{
+    storeId: string;
+    source: string;
+    fbclidPresent: boolean;
+    gclidPresent: boolean;
+    lineItems: Array<{ productId: string; units: number; revenueCad: number }>;
+  }>;
 };
 
 // =============================================================================
@@ -104,7 +129,10 @@ export type ProductCentricInputs = {
 export function buildProductCentricView(
   inputs: ProductCentricInputs,
 ): ProductCohortRow[] {
-  const { storeId, productMap, aggregated, productNetRevenue, productTitles } = inputs;
+  const {
+    storeId, productMap, aggregated, productNetRevenue, productTitles,
+    productUnits, orders,
+  } = inputs;
 
   // 1. Pre-index aggregated rows by campaignKey for O(1) lookup.
   const aggByKey = new Map<string, Aggregated>();
@@ -122,6 +150,25 @@ export function buildProductCentricView(
       if (!cohortByProduct.has(pid)) cohortByProduct.set(pid, []);
       cohortByProduct.get(pid)!.push(key);
     }
+  }
+
+  // Audit fix 2026-05-23 (b/HI-03): when orders are threaded through,
+  // delegate the per-campaign revenue allocation to the canonical
+  // `allocateProductRevenue` per product, so the product-centric view's
+  // numbers match the campaign-centric drawer EXACTLY. Build the
+  // campaignSpend map once (cheap O(N)) and call the allocator once per
+  // product below — the allocator was designed for batch but works
+  // correctly with a single-product `productRevenue` array.
+  let allocatorReady = false;
+  const campaignSpendForAllocator = new Map<string, number>();
+  if (orders && orders.length > 0) {
+    for (const a of aggregated) {
+      campaignSpendForAllocator.set(
+        a.key,
+        (campaignSpendForAllocator.get(a.key) ?? 0) + a.spend,
+      );
+    }
+    allocatorReady = true;
   }
 
   // 3. Build one row per product.
@@ -167,18 +214,75 @@ export function buildProductCentricView(
       );
     }
 
+    // ── b/HI-03 preferred path: per-product allocateProductRevenue ──
+    // When orders are provided we call the canonical allocator (same one
+    // the campaign-centric drawer uses) on a single-product input, then
+    // read the per-campaign output. This guarantees the product-centric
+    // view and the campaign-centric view agree on every revenue number
+    // for the same (product, campaign, range) tuple — eliminating the
+    // pre-fix divergence where deterministic per-platform attribution
+    // was ignored here.
+    let allocByCampaign: Map<string, number> | null = null;
+    if (allocatorReady) {
+      const productUnitsCount = productUnits?.get(productId) ?? 0;
+      const allocOutput = allocateProductRevenue({
+        storeId,
+        map: productMap,
+        productRevenue: [
+          {
+            productId,
+            netRevenueCad: totalNetRevenue,
+            units: productUnitsCount,
+          },
+        ],
+        campaignSpend: campaignSpendForAllocator,
+        orders,
+      });
+      allocByCampaign = new Map();
+      for (const [k, alloc] of allocOutput.entries()) {
+        allocByCampaign.set(k, alloc.revenue);
+      }
+    }
+
     // For each platform, estimate the platform's intra-allocated revenue.
-    // We don't have orders-attribution here (would require threading
-    // through), so we use a simplified split: each platform's allocated
-    // revenue ≈ totalNetRevenue × platformSpend/totalCohortSpend.
-    // The true `allocateProductRevenue` is more nuanced (deterministic
-    // first, then proportional) but it requires orders data this
-    // module doesn't take. The simplified version is correct in
-    // expectation and exactly correct when all orders are non-attributed.
+    //
+    // Default path (no `orders` threaded through): simplified split —
+    // each platform's allocated revenue ≈ totalNetRevenue × platformSpend
+    // / totalCohortSpend. Matches the per-campaign allocator IN EXPECTATION
+    // and is exactly correct when all orders are non-attributed.
+    //
+    // Audit fix 2026-05-23 (b/HI-05): when totalCohortSpend === 0 (all
+    // cohort campaigns are dormant in the range, but the product has
+    // revenue) the previous `: 0` fallback silently dropped 100% of the
+    // product's revenue from the per-platform breakdown. Now we fall back
+    // to equal-share across the platforms that have at least one mapped
+    // campaign — operator sees "$X allocated to Meta + $X to TikTok" instead
+    // of the misleading "$0 everywhere with $1000 revenue floating".
     const platformAllocatedRevenue = new Map<string, number>();
-    for (const [platform, spend] of platformSpend.entries()) {
-      const share = totalCohortSpend > 0 ? spend / totalCohortSpend : 0;
-      platformAllocatedRevenue.set(platform, totalNetRevenue * share);
+    const platformCount = platformGroups.size;
+    if (allocByCampaign) {
+      // Sum the allocator's per-campaign output up to platform totals so
+      // the byPlatform.intraAllocatedRevenue field stays consistent with
+      // the per-member allocatedRevenueEstimate.
+      for (const platform of platformGroups.keys()) {
+        platformAllocatedRevenue.set(platform, 0);
+      }
+      for (const [campaignKey, rev] of allocByCampaign.entries()) {
+        const member = raw.find(r => r.campaignKey === campaignKey);
+        if (!member?.agg) continue;
+        const platform = member.agg.platform;
+        platformAllocatedRevenue.set(
+          platform,
+          (platformAllocatedRevenue.get(platform) ?? 0) + rev,
+        );
+      }
+    } else {
+      for (const [platform, spend] of platformSpend.entries()) {
+        const share = totalCohortSpend > 0
+          ? spend / totalCohortSpend
+          : (platformCount > 0 ? 1 / platformCount : 0);
+        platformAllocatedRevenue.set(platform, totalNetRevenue * share);
+      }
     }
 
     // Build the final member rows with the share + allocation fields.
@@ -189,9 +293,12 @@ export function buildProductCentricView(
         const intraTotal = platformSpend.get(a.platform) ?? 0;
         const intraShare = intraTotal > 0 ? a.spend / intraTotal : 0;
         const totalShare = totalCohortSpend > 0 ? a.spend / totalCohortSpend : 0;
-        // Member allocated revenue = platform's allocated revenue × intra share.
+        // Audit fix 2026-05-23 (b/HI-03): when the allocator ran, read the
+        // exact per-campaign revenue from its output. Falls back to the
+        // simplified split (platform revenue × intra share) when orders
+        // weren't provided.
         const platformRev = platformAllocatedRevenue.get(a.platform) ?? 0;
-        const allocatedRev = platformRev * intraShare;
+        const allocatedRev = allocByCampaign?.get(a.key) ?? (platformRev * intraShare);
         return {
           campaignKey: a.key,
           campaignId: a.campaignId,
