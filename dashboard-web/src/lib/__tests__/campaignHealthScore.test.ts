@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { computeCampaignHealth, type HealthScoreInputs } from '@/lib/campaignHealthScore';
+import {
+  computeCampaignHealth,
+  applyCohortHealthAdjustment,
+  type HealthScoreInputs,
+  type CampaignHealth,
+} from '@/lib/campaignHealthScore';
 import type { Aggregated } from '@/lib/campaignsAggregator';
 import type { TrueRevenueInfo } from '@/lib/hooks/useCampaignTrueRevenue';
 import type { CpmRoasAnalysis } from '@/lib/cpmRoasAnalysis';
@@ -544,5 +549,236 @@ describe('reasons strings', () => {
   it('reason 1 references the spend and tier', () => {
     const out = computeCampaignHealth(buildInputs());
     expect(out.reasons[1]).toMatch(/הוצאה|CAD/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+// Phase 05.7.x (2026-05-23) — Cohort-aware adjustment.
+//
+// applyCohortHealthAdjustment(base, inputs) → CampaignHealth' with:
+//   - new components.cohortAdjustment captured
+//   - score adjusted + clamped to [0,100]
+//   - grade re-derived
+//   - reasons appended with per-adjustment Hebrew sentence
+// ─────────────────────────────────────────────────────────────────────────
+
+function makeBaseHealth(score = 70): CampaignHealth {
+  return {
+    score,
+    grade: score >= 75 ? 'A' : score >= 60 ? 'B' : score >= 45 ? 'C' : score >= 30 ? 'D' : 'F',
+    components: {
+      profitability: 80,
+      volume: 70,
+      trajectory: 60,
+      attributionClarity: 65,
+      operatorAdjustment: 0,
+      cohortAdjustment: 0,
+    },
+    reasons: ['r1', 'r2', 'r3', 'r4'],
+    insufficient: false,
+  };
+}
+
+describe('applyCohortHealthAdjustment — solo cases', () => {
+  it('returns base unchanged when cohortSize < 2', () => {
+    const base = makeBaseHealth(70);
+    const out = applyCohortHealthAdjustment(base, {
+      isLeader: false,
+      isWeakest: false,
+      cohortSize: 1,
+      cannibalizationRisk: 'high',
+    });
+    expect(out).toBe(base); // same reference
+  });
+
+  it('returns base unchanged when base is insufficient/unknown', () => {
+    const base: CampaignHealth = {
+      ...makeBaseHealth(0),
+      grade: 'unknown',
+      insufficient: true,
+    };
+    const out = applyCohortHealthAdjustment(base, {
+      isLeader: false,
+      isWeakest: true,
+      cohortSize: 5,
+      cannibalizationRisk: 'high',
+    });
+    expect(out).toBe(base);
+  });
+
+  it('returns base unchanged when no adjustment fires (delta == 0)', () => {
+    const base = makeBaseHealth(70);
+    const out = applyCohortHealthAdjustment(base, {
+      isLeader: false,
+      isWeakest: false,
+      cohortSize: 4,
+      cannibalizationRisk: 'none',
+    });
+    expect(out).toBe(base);
+  });
+});
+
+describe('applyCohortHealthAdjustment — leader / weakest', () => {
+  it('+3 when leader (no cannibalization)', () => {
+    const out = applyCohortHealthAdjustment(makeBaseHealth(70), {
+      isLeader: true,
+      isWeakest: false,
+      cohortSize: 4,
+      cannibalizationRisk: 'none',
+    });
+    expect(out.score).toBe(73);
+    expect(out.components.cohortAdjustment).toBe(3);
+    expect(out.reasons.some(r => r.includes('+3'))).toBe(true);
+  });
+
+  it('−5 when weakest in cohort of 3+', () => {
+    const out = applyCohortHealthAdjustment(makeBaseHealth(70), {
+      isLeader: false,
+      isWeakest: true,
+      cohortSize: 3,
+      cannibalizationRisk: 'none',
+    });
+    expect(out.score).toBe(65);
+    expect(out.components.cohortAdjustment).toBe(-5);
+    expect(out.reasons.some(r => r.includes('−5'))).toBe(true);
+  });
+
+  it('NO weakest penalty for 2-member cohorts (someone has to be lower)', () => {
+    const out = applyCohortHealthAdjustment(makeBaseHealth(70), {
+      isLeader: false,
+      isWeakest: true,
+      cohortSize: 2, // floor: penalty only kicks at >=3
+      cannibalizationRisk: 'none',
+    });
+    expect(out).toEqual(makeBaseHealth(70));
+  });
+
+  it('cannot be both leader AND weakest simultaneously (defensive: leader wins)', () => {
+    // If a caller passes both, we credit leader and skip weakest because
+    // isLeader is checked first (independent +3) and isWeakest's >=3 floor
+    // doesn't gate against isLeader directly. Both ADDITIVELY apply.
+    const out = applyCohortHealthAdjustment(makeBaseHealth(70), {
+      isLeader: true,
+      isWeakest: true,
+      cohortSize: 3,
+      cannibalizationRisk: 'none',
+    });
+    // +3 (leader) + (-5) (weakest with cohortSize>=3) = -2
+    expect(out.components.cohortAdjustment).toBe(-2);
+  });
+});
+
+describe('applyCohortHealthAdjustment — cannibalization', () => {
+  it('−10 for high cannibalization', () => {
+    const out = applyCohortHealthAdjustment(makeBaseHealth(70), {
+      isLeader: false,
+      isWeakest: false,
+      cohortSize: 4,
+      cannibalizationRisk: 'high',
+    });
+    expect(out.score).toBe(60);
+    expect(out.components.cohortAdjustment).toBe(-10);
+  });
+
+  it('−5 for medium cannibalization', () => {
+    const out = applyCohortHealthAdjustment(makeBaseHealth(70), {
+      isLeader: false,
+      isWeakest: false,
+      cohortSize: 4,
+      cannibalizationRisk: 'medium',
+    });
+    expect(out.components.cohortAdjustment).toBe(-5);
+  });
+
+  it('−2 for low cannibalization', () => {
+    const out = applyCohortHealthAdjustment(makeBaseHealth(70), {
+      isLeader: false,
+      isWeakest: false,
+      cohortSize: 4,
+      cannibalizationRisk: 'low',
+    });
+    expect(out.components.cohortAdjustment).toBe(-2);
+  });
+
+  it('0 for insufficient (no signal — no adjustment)', () => {
+    const base = makeBaseHealth(70);
+    const out = applyCohortHealthAdjustment(base, {
+      isLeader: false,
+      isWeakest: false,
+      cohortSize: 4,
+      cannibalizationRisk: 'insufficient',
+    });
+    // When delta == 0 the function short-circuits and returns the base
+    // reference unchanged.
+    expect(out).toBe(base);
+  });
+});
+
+describe('applyCohortHealthAdjustment — stacking', () => {
+  it('weakest + high cannibalization = −15 (max negative)', () => {
+    const out = applyCohortHealthAdjustment(makeBaseHealth(70), {
+      isLeader: false,
+      isWeakest: true,
+      cohortSize: 5,
+      cannibalizationRisk: 'high',
+    });
+    expect(out.components.cohortAdjustment).toBe(-15);
+    expect(out.score).toBe(55);
+  });
+
+  it('clamps at 0 when stacked adjustment would drag below', () => {
+    const out = applyCohortHealthAdjustment(makeBaseHealth(10), {
+      isLeader: false,
+      isWeakest: true,
+      cohortSize: 5,
+      cannibalizationRisk: 'high',
+    });
+    expect(out.score).toBe(0); // 10 - 15 = -5 → clamped to 0
+  });
+
+  it('clamps at 100 when leader adjustment would push above', () => {
+    const out = applyCohortHealthAdjustment(makeBaseHealth(99), {
+      isLeader: true,
+      isWeakest: false,
+      cohortSize: 3,
+      cannibalizationRisk: 'none',
+    });
+    expect(out.score).toBe(100);
+  });
+
+  it('re-derives grade after the adjustment', () => {
+    // 70 starts as B. -15 → 55 should be C.
+    const out = applyCohortHealthAdjustment(makeBaseHealth(70), {
+      isLeader: false,
+      isWeakest: true,
+      cohortSize: 5,
+      cannibalizationRisk: 'high',
+    });
+    expect(out.grade).toBe('C');
+  });
+
+  it('does not mutate the base input', () => {
+    const base = makeBaseHealth(70);
+    const snapshot = JSON.stringify(base);
+    applyCohortHealthAdjustment(base, {
+      isLeader: false,
+      isWeakest: true,
+      cohortSize: 5,
+      cannibalizationRisk: 'high',
+    });
+    expect(JSON.stringify(base)).toBe(snapshot);
+  });
+
+  it('appends reasons (does not replace)', () => {
+    const base = makeBaseHealth(70);
+    const out = applyCohortHealthAdjustment(base, {
+      isLeader: false,
+      isWeakest: true,
+      cohortSize: 5,
+      cannibalizationRisk: 'high',
+    });
+    expect(out.reasons.length).toBe(base.reasons.length + 2); // +weakest +high
+    // First 4 base reasons preserved verbatim
+    expect(out.reasons.slice(0, 4)).toEqual(base.reasons);
   });
 });

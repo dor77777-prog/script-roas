@@ -32,8 +32,11 @@ import {
 import { aggregate, type Aggregated } from '@/lib/campaignsAggregator';
 import {
   computeCampaignHealth,
+  applyCohortHealthAdjustment,
   type CampaignHealth,
 } from '@/lib/campaignHealthScore';
+import { computeMultiMappingCohort } from '@/lib/multiMappingCohort';
+import { detectProductCannibalization } from '@/lib/cannibalizationDetection';
 import {
   readCampaignsColumnPrefs,
   buildHiddenColumnsCss,
@@ -491,8 +494,24 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   // signals previously rendered as independent chips (trust / off-day /
   // CPM trajectory / multiple ROAS values) into one 0..100 score + grade.
   // See `src/lib/campaignHealthScore.ts` for the algorithm + weights.
+  //
+  // Phase 05.7.x (2026-05-23): after the base score is computed,
+  // apply the cohort adjustment so the score reflects multi-mapping
+  // context (weakest in cohort → −5; high cannibalization → −10;
+  // leader → +3; etc). See campaignHealthScore.ts:applyCohortHealthAdjustment.
+  // The cohort + cannibalization computations run on the full
+  // aggregated + productMap so each campaign's adjustment is consistent
+  // with what its drawer shows.
   const healthByKey = useMemo(() => {
     const out = new Map<string, CampaignHealth>();
+
+    // Build a per-key roasShopify lookup from trueRevenueByKey so the
+    // cohort module can rank without re-computing.
+    const roasShopifyByKey = new Map<string, number>();
+    for (const [k, info] of trueRevenueByKey.entries()) {
+      roasShopifyByKey.set(k, info.spend > 0 ? info.trueRevenue / info.spend : 0);
+    }
+
     for (const a of aggregated) {
       const info = trueRevenueByKey.get(campaignKey(a.storeId, a.platform, a.campaignId));
       const series = dailyByCampaign.get(a.key);
@@ -504,19 +523,74 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       // the chip always agree on whether a campaign is "currently off".
       const isOff = isCampaignOff(a.effectiveStatus, a.platform, a.lastActiveDate, today);
       const isOpt = optimized.has(a.key);
-      out.set(
-        a.key,
-        computeCampaignHealth({
-          aggregated: a,
-          trueRevenueInfo: info,
-          cpmRoasAnalysis: trajectory,
-          optimized: isOpt,
-          isCurrentlyOff: isOff,
-        }),
-      );
+      const base = computeCampaignHealth({
+        aggregated: a,
+        trueRevenueInfo: info,
+        cpmRoasAnalysis: trajectory,
+        optimized: isOpt,
+        isCurrentlyOff: isOff,
+      });
+
+      // Cohort adjustment — only fires when this campaign actually has
+      // a cohort (>= 2 members sharing a product). For solo campaigns
+      // (no shared products), cohort is null and we keep the base.
+      const cohort = computeMultiMappingCohort({
+        currentCampaignKey: a.key,
+        productMap,
+        aggregated,
+        roasShopifyByKey,
+        roasShopifyPlatformByKey: roasShopifyByKey, // same proxy for now
+      });
+      // Take the WORST cannibalization risk across this campaign's
+      // mapped products in the visible range. We already compute the
+      // full verdict list per drawer-open in CampaignDrawer; here in
+      // the table-level memo we recompute against the same inputs.
+      // It's cheap (O(products × campaigns)), bounded, runs once per
+      // aggregated change.
+      let worstRisk: 'none' | 'low' | 'medium' | 'high' | 'insufficient' = 'none';
+      if (cohort) {
+        const verdicts = detectProductCannibalization({
+          range: localRange,
+          storeId: a.storeId,
+          productMap,
+          campaignsDaily: (data?.rows ?? []).map(r => ({
+            date: r.date,
+            storeId: r.storeId,
+            platform: r.platform,
+            campaignId: r.campaignId,
+            spend: r.spend,
+          })),
+          productsDaily: (productsResp?.rows ?? []).map(r => ({
+            date: r.date,
+            storeId: r.storeId,
+            productId: r.productId,
+            productTitle: r.productTitle,
+            netRevenue: r.netRevenue ?? 0,
+          })),
+        });
+        // Filter verdicts to products this specific campaign maps —
+        // adjustment is per-campaign, not store-wide.
+        const myProducts = new Set(productMap[a.key] ?? []);
+        const myVerdicts = verdicts.filter(v => myProducts.has(v.productId));
+        for (const v of myVerdicts) {
+          // Severity order: high > medium > low > insufficient > none.
+          if (v.risk === 'high') worstRisk = 'high';
+          else if (v.risk === 'medium' && worstRisk !== 'high') worstRisk = 'medium';
+          else if (v.risk === 'low' && worstRisk !== 'high' && worstRisk !== 'medium') worstRisk = 'low';
+        }
+      }
+      const adjusted = cohort
+        ? applyCohortHealthAdjustment(base, {
+            isLeader: cohort.isLeader,
+            isWeakest: cohort.isWeakest,
+            cohortSize: cohort.totalMembers,
+            cannibalizationRisk: worstRisk,
+          })
+        : base;
+      out.set(a.key, adjusted);
     }
     return out;
-  }, [aggregated, trueRevenueByKey, dailyByCampaign, today, optimized]);
+  }, [aggregated, trueRevenueByKey, dailyByCampaign, today, optimized, productMap, data, productsResp, localRange]);
 
   const totals = useMemo(() => {
     let spend = 0, conv = 0, val = 0, clicks = 0, imps = 0;

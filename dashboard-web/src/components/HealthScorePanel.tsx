@@ -33,14 +33,16 @@ const GRADE_STYLES: Record<HealthGrade, { chip: string; ring: string; label: str
   unknown: { chip: 'bg-surfaceMuted text-text-muted', ring: 'ring-borderSubtle', label: 'מוקדם מדי', tone: 'text-text-muted' },
 };
 
-const COMPONENT_LABELS: Record<keyof Omit<HealthScoreComponents, 'operatorAdjustment'>, { label: string; weight: string }> = {
+type WeightedComponentKey = 'profitability' | 'volume' | 'trajectory' | 'attributionClarity';
+
+const COMPONENT_LABELS: Record<WeightedComponentKey, { label: string; weight: string }> = {
   profitability:       { label: 'רווחיות',           weight: '40%' },
   volume:              { label: 'נפח',                weight: '15%' },
   trajectory:          { label: 'מומנטום',            weight: '25%' },
   attributionClarity:  { label: 'אמינות attribution', weight: '20%' },
 };
 
-const COMPONENT_ORDER: ReadonlyArray<keyof Omit<HealthScoreComponents, 'operatorAdjustment'>> = [
+const COMPONENT_ORDER: ReadonlyArray<WeightedComponentKey> = [
   'profitability',
   'volume',
   'trajectory',

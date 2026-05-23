@@ -54,6 +54,13 @@ export type HealthScoreComponents = {
   /** Net operator adjustment applied after the weighted sum: +15 if
    *  optimized, −30 if currently off (can stack). NOT a 0..100 score. */
   operatorAdjustment: number;
+  /** Phase 05.7.x (2026-05-23) — Net cohort adjustment applied AFTER
+   *  the operator adjustment by `applyCohortHealthAdjustment`. Default
+   *  0 when no cohort exists or the campaign is solo on its products.
+   *  Negative when the campaign is the weakest in a saturated cohort
+   *  OR when a shared product shows cannibalization signals; small
+   *  positive when the campaign is the dominant leader in its cohort. */
+  cohortAdjustment: number;
 };
 
 export type CampaignHealth = {
@@ -320,6 +327,7 @@ export function computeCampaignHealth(inputs: HealthScoreInputs): CampaignHealth
         trajectory: 0,
         attributionClarity: 0,
         operatorAdjustment: 0,
+        cohortAdjustment: 0,
       },
       reasons: [
         `הוצאה $${aggregated.spend.toFixed(0)} CAD ${
@@ -353,8 +361,98 @@ export function computeCampaignHealth(inputs: HealthScoreInputs): CampaignHealth
       trajectory: trajectory.score,
       attributionClarity: attribution.score,
       operatorAdjustment: op.delta,
+      cohortAdjustment: 0,
     },
     reasons: [profitability.reason, volume.reason, trajectory.reason, attribution.reason, ...op.reasons],
     insufficient: false,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Phase 05.7.x (2026-05-23) — Cohort-aware adjustment.
+//
+// Applied AFTER computeCampaignHealth, as a separate function so the
+// base scorer stays pure-per-campaign (the existing 39 tests don't
+// regress) and the cohort logic is a clean opt-in for callers that
+// have computed cohort + cannibalization info.
+//
+// Adjustments stack additively (capped at the [0, 100] clamp):
+//
+//   isLeader (rank 1 in cohort AND has highest-tier spend):  +3
+//     Slight nudge to "yes, you ARE the natural scale candidate".
+//
+//   isWeakest (rank N of N, when N >= 3):                    −5
+//     Real signal: you're losing the share war. Investigate or pause.
+//     N >= 3 floor prevents penalizing the loser of a 2-cohort just
+//     because someone had to be lower.
+//
+//   cannibalizationRisk:
+//     high:    −10  (a shared product is showing diminishing returns —
+//                    you shouldn't be scaled further; cohort is saturated)
+//     medium:  −5
+//     low:     −2
+//     none / insufficient: 0
+//
+// Maximum cumulative negative: −15 (weakest + high cannibalization).
+// Maximum cumulative positive: +3 (leader, no cannibalization).
+// ─────────────────────────────────────────────────────────────────────────
+
+export type CohortAdjustmentInputs = {
+  isLeader: boolean;
+  isWeakest: boolean;
+  cohortSize: number; // total members incl. current; >=2 means cohort exists
+  /** Highest cannibalization risk across this campaign's shared products. */
+  cannibalizationRisk: 'none' | 'low' | 'medium' | 'high' | 'insufficient';
+};
+
+export function applyCohortHealthAdjustment(
+  base: CampaignHealth,
+  inputs: CohortAdjustmentInputs,
+): CampaignHealth {
+  // Unknown-grade campaigns aren't touched — they need data, not cohort
+  // context. Same for solo campaigns.
+  if (base.insufficient) return base;
+  if (inputs.cohortSize < 2) return base;
+
+  let delta = 0;
+  const reasons: string[] = [];
+
+  if (inputs.isLeader) {
+    delta += 3;
+    reasons.push(`+3 — אתה הקמפיין החזק בקבוצת המיפוי (${inputs.cohortSize} חברים).`);
+  }
+  if (inputs.isWeakest && inputs.cohortSize >= 3) {
+    delta -= 5;
+    reasons.push(`−5 — אתה הקמפיין החלש בקבוצת המיפוי (${inputs.cohortSize} חברים). מומלץ לבחון רענון או הפסקה.`);
+  }
+  switch (inputs.cannibalizationRisk) {
+    case 'high':
+      delta -= 10;
+      reasons.push('−10 — מוצר משותף מציג קניבליזציה גבוהה (הוצאה גדלה, ההכנסה לא). לא לסקייל.');
+      break;
+    case 'medium':
+      delta -= 5;
+      reasons.push('−5 — מוצר משותף מציג סימני קניבליזציה בינוניים.');
+      break;
+    case 'low':
+      delta -= 2;
+      reasons.push('−2 — מוצר משותף מציג סימן מוקדם של תשואה הולכת ופוחתת.');
+      break;
+    default:
+      break;
+  }
+
+  if (delta === 0) return base;
+
+  const adjustedScore = Math.round(Math.max(0, Math.min(100, base.score + delta)));
+  return {
+    ...base,
+    score: adjustedScore,
+    grade: gradeFor(adjustedScore),
+    components: {
+      ...base.components,
+      cohortAdjustment: delta,
+    },
+    reasons: [...base.reasons, ...reasons],
   };
 }
