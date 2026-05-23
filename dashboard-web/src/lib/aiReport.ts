@@ -27,7 +27,25 @@ import type { Aggregated } from './campaignsAggregator';
  */
 
 type Params = {
-  storeName: string;          // "All" or specific
+  storeName: string;          // "All" or specific (display name)
+  /**
+   * Audit fix 2026-05-23 (a/WARN-4) — the operator's selected store as
+   * the STABLE INTERNAL ID (e.g. "zolplus") rather than the display
+   * name (e.g. "Zol Plus"). Used to filter all row sets by `r.storeId`
+   * instead of the fragile `r.storeName === storeName` comparison.
+   * Stores whose displayName differs from id (zolplus → "Zol Plus",
+   * usmile360 → "360usmile") were silently mis-filtered before this
+   * fix: the daily/campaign/orders filters would correctly use the
+   * display name, BUT the productMap multi-mapping section compared
+   * `storeName` to a value the caller treated as an ID and so dropped
+   * legitimate multi-mapping rows for those stores.
+   *
+   * Optional for back-compat with older callers — when omitted, we fall
+   * back to the legacy storeName comparison (still uses display name
+   * everywhere, which works for storeId === storeName stores like
+   * uzoshop but silently mis-filters Zol Plus / 360usmile).
+   */
+  storeId?: string | null;
   range: { from: string; to: string };
   dailyRows: DailyRow[];      // filtered by store + range upstream OR full set
   productRows: ProductRow[];
@@ -85,6 +103,7 @@ function inRange(d: string, r: { from: string; to: string }) {
 
 export function generateAiReport({
   storeName,
+  storeId,
   range,
   dailyRows,
   productRows,
@@ -96,26 +115,28 @@ export function generateAiReport({
   const out: string[] = [];
 
   // Pre-filter all four datasets by range + store.
+  //
+  // Audit fix 2026-05-23 (a/WARN-4): prefer storeId-based comparison
+  // when the caller threaded it through. storeName is a display label
+  // that can diverge from the internal id (e.g. "Zol Plus" displayName
+  // for id "zolplus"); filtering by id is correct regardless of any
+  // future rename. Falls back to storeName comparison when storeId is
+  // null/undefined (legacy callers).
   const storeFilter = storeName === 'All' ? null : storeName;
-  const daily = dailyRows.filter(
-    r => inRange(r.date, range) && (!storeFilter || r.storeName === storeFilter),
-  );
-  const products = productRows.filter(
-    r => inRange(r.date, range) && (!storeFilter || r.storeName === storeFilter),
-  );
-  const campaigns = campaignRows.filter(
-    r => inRange(r.date, range) && (!storeFilter || r.storeName === storeFilter),
-  );
-  const orders = (ordersRows ?? []).filter(
-    r => inRange(r.date, range) && (!storeFilter || r.storeName === storeFilter),
-  );
+  const storeIdFilter = storeName === 'All' ? null : (storeId ?? null);
+  const matchesStore = (r: { storeId: string; storeName: string }): boolean => {
+    if (!storeFilter) return true;
+    return storeIdFilter ? r.storeId === storeIdFilter : r.storeName === storeFilter;
+  };
+  const daily = dailyRows.filter(r => inRange(r.date, range) && matchesStore(r));
+  const products = productRows.filter(r => inRange(r.date, range) && matchesStore(r));
+  const campaigns = campaignRows.filter(r => inRange(r.date, range) && matchesStore(r));
+  const orders = (ordersRows ?? []).filter(r => inRange(r.date, range) && matchesStore(r));
   // Phase 05.7.x — ad-level rows for creative drill-down. Meta-only in
   // practice (Google PMax / Shopping don't expose ad granularity), but
   // we don't filter by platform here — let the downstream section
   // handle "no ads" gracefully.
-  const ads = (adsRows ?? []).filter(
-    r => inRange(r.date, range) && (!storeFilter || r.storeName === storeFilter),
-  );
+  const ads = (adsRows ?? []).filter(r => inRange(r.date, range) && matchesStore(r));
 
   // ===== Header =====
   out.push(`# דוח ביצועים — ${storeName === 'All' ? 'כל החנויות' : storeName}`);
@@ -1693,7 +1714,6 @@ export function generateAiReport({
       }>;
       totalNetRevenue: number;
     };
-    const storeFilterId = storeFilter; // closure-captured for readability
     // Reverse index: campaignKey → (name, platform, spend, storeId). Spend is
     // the per-campaign sum across the date range.
     type CampaignBucket = {
@@ -1774,11 +1794,23 @@ export function generateAiReport({
       const parts = campaignKey.split('::');
       if (parts.length !== 3) continue;
       const [keyStoreId] = parts;
-      if (storeFilterId) {
-        const sampleCampaign = campaignLookup.get(campaignKey);
-        if (!sampleCampaign) continue;
+      // Audit fix 2026-05-23 (a/WARN-4): productMap keys are
+      // `${storeId}::${platform}::${campaignId}`, so the "scope to the
+      // selected store" check belongs in storeId-space. Pre-fix the
+      // closure mis-named storeFilter (a display NAME) as
+      // `storeFilterId` and then compared it against `c.storeName` —
+      // correct for stores where displayName === id (uzoshop) but a
+      // silent miss for stores where they diverge (zolplus → "Zol
+      // Plus", usmile360 → "360usmile"), dropping all multi-mapping
+      // entries for those stores. Now: when the caller provided
+      // storeIdFilter, compare id-to-id directly (no campaign-scan
+      // needed); otherwise fall back to the legacy name-via-campaign-
+      // scan lookup.
+      if (storeIdFilter) {
+        if (keyStoreId !== storeIdFilter) continue;
+      } else if (storeFilter) {
         const storeMatches = campaigns.some(
-          c => c.storeId === keyStoreId && c.storeName === storeFilterId,
+          c => c.storeId === keyStoreId && c.storeName === storeFilter,
         );
         if (!storeMatches) continue;
       }

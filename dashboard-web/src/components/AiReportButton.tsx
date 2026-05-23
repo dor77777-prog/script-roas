@@ -86,8 +86,22 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
       // productMap so the report can build the "🔗 מוצרים משותפים"
       // section. readProductMap is sync (localStorage) so no await
       // needed; the map is small (<KB).
+      //
+      // Audit fix 2026-05-23 (a/WARN-4): also resolve the operator's
+      // selected store NAME (filters.store) into the stable storeId via
+      // data.rows lookup. The aiReport function uses storeId for
+      // row-filtering when provided (fall back to storeName for back-
+      // compat). data.rows is guaranteed to have at least one row per
+      // selected store in the current range — when none match (operator
+      // picked a store with zero activity), storeId is null and the
+      // report falls back to the storeName path.
+      const resolvedStoreId =
+        filters.store === 'All'
+          ? null
+          : (data.rows.find(r => r.storeName === filters.store)?.storeId ?? null);
       const md = generateAiReport({
         storeName: filters.store,
+        storeId: resolvedStoreId,
         range: filters.range,
         dailyRows: data.rows,
         productRows: products?.rows ?? [],
