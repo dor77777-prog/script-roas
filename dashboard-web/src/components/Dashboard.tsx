@@ -28,6 +28,7 @@ import { MonthlyTables } from './MonthlyTables';
 import { DetailTable } from './DetailTable';
 import { TodayLive } from './TodayLive';
 import { ProductsTable } from './ProductsTable';
+import { ProductCentricView } from './ProductCentricView';
 import { CampaignsTable } from './CampaignsTable';
 import { InsightsBoard } from './InsightsBoard';
 import { GoalTracker } from './GoalTracker';
@@ -529,6 +530,14 @@ function ProductsTab({
           stores={data.stores}
         />
       </div>
+
+      {/* Phase 05.7.x (2026-05-23) — Product-centric pivot view. Shows
+          each product expandable to all campaigns mapping it, grouped
+          by platform with intra-platform spend share + allocated
+          revenue. Defaults to multi-mapped products only; operator
+          can toggle to see solo too. Renders a "select a store" hint
+          when filters.store === 'All' (mappings are per-store). */}
+      <ProductCentricView storeId={filters.store} range={filters.range} />
     </div>
   );
 }
