@@ -478,13 +478,23 @@ export function forecastMonthEnd(rows: DailyRow[]): {
   }
   const mtdNet = mtdRev - mtdSpend - mtdCogs;
 
-  // 7-day average for projection
-  const sevenDaysAgo = addDays(today, -6);
+  // 7-day average for projection.
+  //
+  // Audit fix 2026-05-23 (HIGH-10 / O3-HI-02): EXCLUDE today. The previous
+  // window [today-6, today] included the current (incomplete) day in the
+  // baseline — at an 11:00 snapshot that day might have 1/3 of its
+  // eventual revenue, dragging the daily-avg down by ~10% and giving an
+  // optimistic-by-omission projection. Use [today-7, today-1] so the
+  // baseline is 7 COMPLETED days. The trade-off (today's row never
+  // contributes to the projection) is preferable because the row would
+  // be either incomplete or a duplicate of MTD's same-day amount.
+  const baselineFrom = addDays(today, -7);
+  const baselineTo = addDays(today, -1);
   let last7Rev = 0, last7Spend = 0, last7Cogs = 0;
   let last7DaysCount = 0;
   const datesSeen = new Set<string>();
   for (const r of rows) {
-    if (r.date >= sevenDaysAgo && r.date <= today) {
+    if (r.date >= baselineFrom && r.date <= baselineTo) {
       last7Rev += r.revenue;
       last7Spend += r.totalSpend;
       last7Cogs += r.cogs;

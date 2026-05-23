@@ -61,9 +61,12 @@ describe('forecastMonthEnd projection COGS rate (HIGH-9 / O3-HI-01)', () => {
     // Build 7 days of rows with r.cogs == 18% × revenue (writer-provided
     // per-store calibration). 18% is the same effective rate MTD will see.
     // The fix must produce a projection consistent with that — NOT 25%.
+    //
+    // Note (HIGH-10 / O3-HI-02): the baseline window is [today-7, today-1]
+    // — exclude today. We place all 7 rows in that window.
     const today = todayInIsrael();
     const rows: DailyRow[] = [];
-    for (let d = -6; d <= 0; d++) {
+    for (let d = -7; d <= -1; d++) {
       const date = addDays(today, d);
       rows.push(
         row({
@@ -121,13 +124,14 @@ describe('forecastMonthEnd projection COGS rate (HIGH-9 / O3-HI-01)', () => {
   });
 
   it('mixed rates across the 7-day window blend into the projection naturally', () => {
-    // 5 days at 18% + 2 days at 30% in the last-7 window.
-    // Total rev: 5*1000 + 2*1000 = 7000.
+    // 5 days at 18% + 2 days at 30% — all placed inside the
+    // [today-7, today-1] baseline window (HIGH-10).
+    // Total rev: 7 × 1000 = 7000.
     // Total cogs: 5*180 + 2*300 = 900 + 600 = 1500.
     // Effective rate: 1500/7000 ≈ 21.43%.
     const today = todayInIsrael();
     const rows: DailyRow[] = [];
-    for (let d = -6; d <= -2; d++) {
+    for (let d = -7; d <= -3; d++) {
       rows.push(
         row({
           date: addDays(today, d),
@@ -136,7 +140,7 @@ describe('forecastMonthEnd projection COGS rate (HIGH-9 / O3-HI-01)', () => {
         }),
       );
     }
-    for (let d = -1; d <= 0; d++) {
+    for (let d = -2; d <= -1; d++) {
       rows.push(
         row({
           date: addDays(today, d),
