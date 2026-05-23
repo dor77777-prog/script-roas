@@ -44,6 +44,18 @@ type Props = {
   campaignName: string;
   /** Currently-mapped product IDs for this campaign. */
   initial: string[];
+  /**
+   * Phase 05.7.x (2026-05-23) — for each productId, the list of OTHER
+   * campaign NAMES (in this same store) that already have it mapped.
+   * Surfaces multi-mapping in the picker: the operator sees "🔗 גם
+   * ב-N קמפיינים" next to the product so they know the same product
+   * is advertised by another campaign. Multi-mapping is intentional
+   * (a product can be promoted by multiple campaigns with different
+   * audiences / creatives); the chip just makes it visible so the
+   * operator doesn't think they accidentally double-mapped.
+   * Map missing or empty → no chip rendered.
+   */
+  otherCampaignsByProduct?: Map<string, string[]>;
   onSave: (productIds: string[]) => void;
 };
 
@@ -63,6 +75,7 @@ export function ProductPickerModal({
   storeName,
   campaignName,
   initial,
+  otherCampaignsByProduct,
   onSave,
 }: Props) {
   // Full catalog from <storeId>-products-catalog → drives the picker list.
@@ -333,6 +346,28 @@ export function ProductPickerModal({
                             <span className="text-text-muted/80">עדיין לא בוצעו מכירות</span>
                           )}
                         </div>
+                        {(() => {
+                          // Phase 05.7.x (2026-05-23) — multi-mapping
+                          // visibility. Show a chip listing the OTHER
+                          // campaigns (in this store) that already have
+                          // this product. Multi-mapping is by design —
+                          // a product can be promoted by multiple
+                          // campaigns (different audiences / creatives).
+                          // The chip just makes it visible so the
+                          // operator knows.
+                          const others = otherCampaignsByProduct?.get(p.productId) ?? [];
+                          if (others.length === 0) return null;
+                          const preview = others.slice(0, 2).join(' · ');
+                          const more = others.length > 2 ? ` +${others.length - 2}` : '';
+                          return (
+                            <div
+                              className="text-[10px] mt-0.5 inline-flex items-center gap-1 text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5"
+                              title={`גם ממופה ל: ${others.join(', ')}`}
+                            >
+                              🔗 גם ב-{others.length} קמפיינים: {preview}{more}
+                            </div>
+                          );
+                        })()}
                       </div>
                     </button>
                   </li>

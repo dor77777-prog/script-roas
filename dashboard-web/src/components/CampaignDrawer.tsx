@@ -330,6 +330,44 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
     [productMap, rows, summary?.platform, storeId, campaignId],
   );
 
+  // Phase 05.7.x (2026-05-23) — for each product in the catalog, list
+  // the OTHER campaign names (in THIS store) that already have it
+  // mapped. Feeds:
+  //   1. ProductPickerModal — chip "🔗 גם ב-N קמפיינים" next to each item.
+  //   2. The "Mapped products" panel in the drawer header — chip next
+  //      to each currently-mapped product showing where else it lives.
+  // Multi-mapping is intentional (a product can be promoted by several
+  // campaigns with different creatives/audiences). The chip makes that
+  // sharing visible so the operator never thinks they double-mapped by
+  // accident.
+  const currentCampaignKey = useMemo(
+    () => campaignKey(storeId, summary?.platform ?? '', campaignId),
+    [storeId, summary?.platform, campaignId],
+  );
+  const campaignNameByKey = useMemo(() => {
+    const out = new Map<string, string>();
+    for (const r of campaignsData?.rows ?? []) {
+      if (r.storeId !== storeId) continue;
+      const k = campaignKey(r.storeId, r.platform, r.campaignId);
+      if (!out.has(k)) out.set(k, r.campaignName || '—');
+    }
+    return out;
+  }, [campaignsData, storeId]);
+  const otherCampaignsByProduct = useMemo(() => {
+    const out = new Map<string, string[]>();
+    const storePrefix = `${storeId}::`;
+    for (const [k, pids] of Object.entries(productMap)) {
+      if (!k.startsWith(storePrefix)) continue;
+      if (k === currentCampaignKey) continue; // exclude this campaign — operator wants OTHER mappings
+      const name = campaignNameByKey.get(k) ?? '(לא ידוע)';
+      for (const pid of pids) {
+        if (!out.has(pid)) out.set(pid, []);
+        out.get(pid)!.push(name);
+      }
+    }
+    return out;
+  }, [productMap, storeId, currentCampaignKey, campaignNameByKey]);
+
   // Per-product channel breakdown (Phase 1). Triple-gate (Meta-only,
   // mapped products, ≥3 mapped-product orders) is concentrated here so
   // the JSX guard is a single truthy check. Range uses rangeFrom/rangeTo
@@ -952,14 +990,47 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                 </p>
               ) : (
                 <ul className="flex flex-wrap gap-1.5">
-                  {mappedIds.map(id => (
-                    <li key={id} title={id} className="inline-flex items-center gap-1 text-[11px] bg-primary/8 text-primary px-2 py-0.5 rounded-md font-mono">
-                      <Package size={10} />
-                      <span className="truncate max-w-[120px]">{id}</span>
-                    </li>
-                  ))}
+                  {mappedIds.map(id => {
+                    const others = otherCampaignsByProduct.get(id) ?? [];
+                    return (
+                      <li
+                        key={id}
+                        title={
+                          others.length > 0
+                            ? `${id}\nגם משויך ל: ${others.join(', ')}`
+                            : id
+                        }
+                        className="inline-flex items-center gap-1 text-[11px] bg-primary/8 text-primary px-2 py-0.5 rounded-md font-mono"
+                      >
+                        <Package size={10} />
+                        <span className="truncate max-w-[120px]">{id}</span>
+                        {others.length > 0 && (
+                          <span
+                            className="text-amber-700 text-[9px] font-sans ms-1"
+                            aria-label={`גם משויך ל-${others.length} קמפיינים אחרים`}
+                          >
+                            🔗 +{others.length}
+                          </span>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
+              {/* Phase 05.7.x (2026-05-23) — if ANY of this campaign's
+                  mapped products are also mapped to other campaigns,
+                  show a short hint so the operator understands the
+                  revenue-split implication. Multi-mapping is intentional
+                  but its consequence (Shopify revenue split by spend
+                  share) isn't obvious without this note. */}
+              {mappedIds.length > 0 &&
+                mappedIds.some(id => (otherCampaignsByProduct.get(id) ?? []).length > 0) && (
+                  <p className="text-[10px] text-text-muted leading-relaxed mt-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+                    🔗 חלק מהמוצרים גם משויכים לקמפיינים אחרים. ה-ROAS Shopify
+                    של הקמפיין הזה מחושב לפי <strong>חלקו של הקמפיין בהוצאה</strong>{' '}
+                    (חלוקה פרופורציונלית) — לא לפי כל ההכנסה של המוצר.
+                  </p>
+                )}
             </section>
           )}
 
@@ -997,6 +1068,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
         storeName={summary.storeName}
         campaignName={summary.campaignName}
         initial={productMap[campaignKey(storeId, summary.platform, campaignId)] ?? []}
+        otherCampaignsByProduct={otherCampaignsByProduct}
         onSave={(productIds) => {
           setMappedProducts(storeId, summary.platform, campaignId, productIds);
         }}
