@@ -480,13 +480,14 @@ export function forecastMonthEnd(rows: DailyRow[]): {
 
   // 7-day average for projection
   const sevenDaysAgo = addDays(today, -6);
-  let last7Rev = 0, last7Spend = 0;
+  let last7Rev = 0, last7Spend = 0, last7Cogs = 0;
   let last7DaysCount = 0;
   const datesSeen = new Set<string>();
   for (const r of rows) {
     if (r.date >= sevenDaysAgo && r.date <= today) {
       last7Rev += r.revenue;
       last7Spend += r.totalSpend;
+      last7Cogs += r.cogs;
       datesSeen.add(r.date);
     }
   }
@@ -496,9 +497,17 @@ export function forecastMonthEnd(rows: DailyRow[]): {
   const dailyAvgSpend = last7Spend / last7DaysCount;
   const projectedRev = mtdRev + dailyAvgRev * daysRemaining;
   const projectedSpend = mtdSpend + dailyAvgSpend * daysRemaining;
-  // COGS_RATE_OF_REVENUE is the single source of truth for COGS-as-% of
-  // revenue, mirrored in Apps Script Config.gs (see analytics.ts docstring).
-  const projectedNet = projectedRev - projectedSpend - projectedRev * COGS_RATE_OF_REVENUE;
+  // Audit fix 2026-05-23 (HIGH-9 / O3-HI-01): derive the projection's COGS
+  // rate from the observed last-7 window so MTD (which uses per-store
+  // `r.cogs` from the writer) and the projection use the same effective
+  // rate. Before this, MTD reflected per-store calibration (e.g.
+  // usmile360 at 18%) but the projection multiplied projectedRev by the
+  // global 25% — guaranteeing a wedge between the two halves of the
+  // same forecast card. Fall back to the global constant only when the
+  // last-7 window had zero revenue (no signal to derive from).
+  const observedCogsRate =
+    last7Rev > 0 ? last7Cogs / last7Rev : COGS_RATE_OF_REVENUE;
+  const projectedNet = projectedRev - projectedSpend - projectedRev * observedCogsRate;
   const projectedRoas = projectedSpend > 0 ? projectedRev / projectedSpend : 0;
 
   return {
