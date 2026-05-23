@@ -536,12 +536,20 @@ export function readGoal(): number | null {
 export function writeGoal(value: number | null) {
   if (typeof window === 'undefined') return;
   try {
+    // Audit fix 2026-05-23 (CC-01): writeGoal is always invoked from an
+    // explicit "שמור" button click — there is no debounced typing path
+    // for the monthly goal. Pass `immediate: true` so pushCloudKey fires
+    // the POST synchronously instead of the 400ms debounce. Without this,
+    // an operator who saves the goal and refreshes the tab within the
+    // debounce window would lose the value: the timer was scheduled but
+    // never fired before unload, and the next hydrate (after refresh)
+    // overwrites localStorage with the still-stale cloud value.
     if (value === null || value <= 0) {
       window.localStorage.removeItem(GOAL_STORAGE_KEY);
-      pushCloudKey(GOAL_STORAGE_KEY, null);
+      pushCloudKey(GOAL_STORAGE_KEY, null, { immediate: true });
     } else {
       window.localStorage.setItem(GOAL_STORAGE_KEY, String(value));
-      pushCloudKey(GOAL_STORAGE_KEY, value);
+      pushCloudKey(GOAL_STORAGE_KEY, value, { immediate: true });
     }
     window.dispatchEvent(new CustomEvent('roas-goal-changed'));
   } catch {
