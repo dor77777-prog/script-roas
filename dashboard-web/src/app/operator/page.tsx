@@ -32,6 +32,7 @@ import { BackfillPicker } from '@/components/operator/BackfillPicker';
 import { SyncNowButtons } from '@/components/operator/SyncNowButtons';
 import { ResetData } from '@/components/operator/ResetData';
 import { WhatsappTestButtons } from '@/components/operator/WhatsappTestButtons';
+import { TokenFailuresTable } from '@/components/operator/TokenFailuresTable';
 
 export const metadata = {
   title: 'ניהול — ROAS Dashboard',
@@ -56,6 +57,23 @@ export default function OperatorPage() {
             server-side in /api/operator/sync-now/route.ts; this client
             component never references it. */}
         <SyncNowButtons />
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+          <span>בעיות טוקן</span>
+          <span className="text-text-secondary text-xs font-normal">
+            (אישורים שפגו / API tokens שצריך לחדש)
+          </span>
+        </h2>
+        {/* Phase 05.7.x (2026-05-23) — TokenFailuresTable surfaces every
+            upstream auth/API failure detected by the fetchers (Google,
+            Meta, TikTok, WhatsApp, Shopify, FX). Wiring on the fetcher
+            side ships once the `token_failure_alert` WhatsApp template
+            is approved by Meta — until then this section stays empty.
+            Resolve button clears the alert cycle so the next failure
+            re-alerts immediately. */}
+        <TokenFailuresTable />
       </section>
 
       <section>

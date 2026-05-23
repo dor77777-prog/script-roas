@@ -61,6 +61,17 @@ type Props = {
   mode: 'campaign' | 'adset';
   trueRevenueByKey: Map<string, TrueRevenueInfo>;
   /**
+   * Phase 05.7.x (2026-05-23) — set of campaignKeys that DO have at least
+   * one product mapped. Used to render the "🏷️ לא ממופה" chip next to
+   * the campaign name for Meta + TikTok campaigns that the operator
+   * hasn't mapped yet. The chip persists until the operator opens the
+   * drawer and assigns at least one product, then disappears
+   * automatically (the parent re-derives this Set from productMap on
+   * every render). Google campaigns never get this chip (Google
+   * PMax/Shopping doesn't support per-campaign mapping).
+   */
+  mappedCampaignKeys: Set<string>;
+  /**
    * Phase 05.7.x — pre-computed Campaign Health Score for this row.
    * Computed once in the parent (`CampaignsTable.tsx healthByKey` memo)
    * so each row doesn't repeat the per-campaign trajectory analysis.
@@ -184,6 +195,7 @@ export function CampaignsTableRow({
   i,
   mode,
   trueRevenueByKey,
+  mappedCampaignKeys,
   health,
   columnOrder,
   adAccounts,
@@ -341,6 +353,26 @@ export function CampaignsTableRow({
                   ⏸ כבוי · {formatLastActiveDate(a.lastActiveDate)}
                 </span>
               )}
+              {/* Phase 05.7.x (2026-05-23) — "unmapped" chip. Meta + TikTok
+                  campaigns get a flagged warning until the operator opens
+                  the drawer and assigns at least one product. The chip
+                  helps the operator catch newly-launched campaigns that
+                  slipped past their mapping workflow (so the dashboard's
+                  Shopify ROAS columns don't sit stuck at "—"). Google is
+                  intentionally excluded — Google PMax/Shopping doesn't
+                  expose ad-set structure consistently, so per-campaign
+                  product mapping isn't supported there. */}
+              {(a.platform === 'Meta' || a.platform === 'TikTok') &&
+                !mappedCampaignKeys.has(
+                  campaignKey(a.storeId, a.platform, a.campaignId),
+                ) && (
+                  <span
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-amber-100 text-amber-800 border border-amber-300"
+                    title="הקמפיין הזה עדיין לא ממופה למוצרי Shopify. פתח את המגירה (קליק על שם הקמפיין) ובחר את המוצרים הרלוונטיים כדי שהדאשבורד יחשב ROAS Shopify אמיתי."
+                  >
+                    🏷️ לא ממופה
+                  </span>
+                )}
             </div>
             <div
               className="text-[10px] sm:text-[11px] text-text-muted truncate"

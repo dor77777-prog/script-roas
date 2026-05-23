@@ -423,6 +423,19 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     localRange,
   });
 
+  // Phase 05.7.x (2026-05-23) — set of campaignKeys that have at least one
+  // product mapped. Derived from productMap so the row's "🏷️ לא ממופה"
+  // chip flips off the moment the operator adds a product (productMap
+  // updates via cloud-sync → this memo re-runs → row re-renders without
+  // the chip). Same key shape as productMap (`storeId::platform::campaignId`).
+  const mappedCampaignKeys = useMemo(() => {
+    const set = new Set<string>();
+    for (const [key, productIds] of Object.entries(productMap)) {
+      if (Array.isArray(productIds) && productIds.length > 0) set.add(key);
+    }
+    return set;
+  }, [productMap]);
+
   // Phase 05.7.x — per-campaign daily CPM/ROAS series, used by the unified
   // Health Score's `trajectory` component. Built ONCE per data refresh from
   // the same range/store/platform filter as `aggregated`, then handed to
@@ -1622,6 +1635,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     i={i}
                     mode={mode}
                     trueRevenueByKey={trueRevenueByKey}
+                    mappedCampaignKeys={mappedCampaignKeys}
                     health={healthByKey.get(a.key)}
                     columnOrder={columnOrder}
                     adAccounts={adAccounts}
