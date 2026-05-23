@@ -129,8 +129,14 @@ export function RoasChart({ data, stores, bare = false }: Props) {
                               style={{ backgroundColor: entry.color }}
                             />
                             <span className="text-white/85">{String(entry.dataKey)}</span>
+                            {/* c/HI-04: prefix the value with the unit label
+                                ("ROAS") so the tooltip is self-describing.
+                                Previously the tooltip rendered a bare number
+                                like "2.85" which an operator briefly hovering
+                                could mistake for CAD or another metric.
+                                Matches HeroOverview's pattern. */}
                             <bdi dir="ltr" className="font-semibold ms-auto">
-                              {formatNumber(v)}
+                              ROAS {formatNumber(v)}
                             </bdi>
                           </li>
                         );
