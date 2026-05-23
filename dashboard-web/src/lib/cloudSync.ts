@@ -404,13 +404,56 @@ export async function hydrateFromCloud(): Promise<boolean> {
       // localStorage. CRITICAL: without this branch, a deleted goal would
       // resurrect from a partner's localStorage every poll cycle.
       removeLocal(lsKey);
-      dispatchChange(lsKey);
+      // Audit fix 2026-05-23 (d/CR-07-soft): a partner-induced clear can
+      // silently destroy the operator's draft on this device. Notify the
+      // UI via a dedicated event so SyncIndicator (or any listener) can
+      // surface a toast/banner. The auto-merge contract itself is
+      // unchanged — we still mirror the deletion locally — but the
+      // operator at least sees that an outside change just landed.
+      if (typeof window !== 'undefined') {
+        try {
+          window.dispatchEvent(
+            new CustomEvent('roas-cloud-clear-conflict', {
+              detail: { key: lsKey },
+            }),
+          );
+        } catch (e) {
+          console.warn(
+            `cloudSync: clear-conflict dispatch failed for ${lsKey}:`,
+            e instanceof Error ? e.message : e,
+          );
+        }
+        console.warn(
+          `cloudSync: partner-induced clear arrived for ${lsKey} — local value removed`,
+        );
+      }
+      // Audit fix 2026-05-23 (d/MD-01): wrap dispatchChange so one broken
+      // listener (e.g. throws synchronously on the change event) doesn't
+      // abort the rest of the hydrate loop and leave the remaining keys
+      // un-hydrated. The CustomEvent dispatch itself is synchronous —
+      // listener exceptions propagate to the caller.
+      try {
+        dispatchChange(lsKey);
+      } catch (e) {
+        console.warn(
+          `cloudSync: dispatchChange failed for ${lsKey}:`,
+          e instanceof Error ? e.message : e,
+        );
+      }
       continue;
     }
 
     // Cloud wins on the regular path.
     writeLocal(lsKey, cloudVal);
-    dispatchChange(lsKey);
+    // Audit fix 2026-05-23 (d/MD-01): same protection as above.
+    try {
+      dispatchChange(lsKey);
+    } catch (e) {
+      console.warn(
+        `cloudSync: dispatchChange failed for ${lsKey}:`,
+        e instanceof Error ? e.message : e,
+      );
+    }
   }
 
   // Pulled cleanly. If we had a prior error and no writes are pending, clear it.
