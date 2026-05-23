@@ -393,30 +393,60 @@ export async function runDailyForStore(
     // Phase 05.7.7: TikTok spend → CAD. Other stores have tt.spend=0 from
     // the short-circuit in the fetch-tiktok step above, so this is a no-op
     // FX call for them (cadFor returns 0 when amount is 0).
-    const ttSpendCad =
-      tiktok.spend.spend > 0
-        ? await (async () => {
-            // Local FX (closure below builds fxCache); inline here so we
-            // can compute total_spend_cad before the broader cadFor closure
-            // is defined. Using getFxRate directly is OK since this fires
-            // once per cron-daily and per-currency caching isn't needed for
-            // a single value.
-            const cur = (tiktok.spend.currency || 'USD').toUpperCase();
-            if (cur === 'CAD') return tiktok.spend.spend;
-            const rate = await getFxRate(cur, 'CAD', dateStr);
-            return tiktok.spend.spend * rate;
-          })()
-        : 0;
-    const totalSpendCadAll = merged.totalSpendCad + ttSpendCad;
+    //
+    // Audit fix 2026-05-23 (CRIT-5 / O4-CR-01): TikTok FX failure must not
+    // crash the entire persist-batch step. Pre-fix, a Frankfurter outage
+    // here threw BEFORE any DB write, rolling back the whole daily run —
+    // Shopify revenue + Meta + Google + orders + catalog all lost for that
+    // (store, day). Now: on FX failure, `ttSpendCad` stays `null` and the
+    // data_daily payload omits `tt_spend_cad` → Supabase ON CONFLICT
+    // preserves the prior value. Mirrors v2 cron-LIVE a/WARN-3 pattern.
+    //
+    // The other 5 columns (revenue_cad, gross_revenue_cad, etc.) are still
+    // written, so refunds and revenue updates still land. The total_spend_cad
+    // recomputation also skips the failed platform so it stays consistent
+    // with whichever spend columns were actually persisted this tick.
+    let ttSpendCad: number | null = null;
+    if (tiktok.spend.spend > 0) {
+      try {
+        const cur = (tiktok.spend.currency || 'USD').toUpperCase();
+        if (cur === 'CAD') {
+          ttSpendCad = tiktok.spend.spend;
+        } else {
+          const rate = await getFxRate(cur, 'CAD', dateStr);
+          ttSpendCad = tiktok.spend.spend * rate;
+        }
+      } catch (e) {
+        console.warn(
+          `cron-daily ${storeId} ${dateStr}: TikTok FX failed — omitting tt_spend_cad from data_daily upsert; ON CONFLICT preserves prior value. Error: ${
+            e instanceof Error ? e.message : String(e)
+          }`,
+        );
+        ttSpendCad = null;
+      }
+    } else {
+      ttSpendCad = 0;
+    }
+    // total_spend_cad consistency: only include TikTok in the rolled-up
+    // total when its CAD value was successfully computed. If TikTok FX
+    // failed (ttSpendCad === null), we omit total_spend_cad from the upsert
+    // payload too — preserving the prior consistent value rather than
+    // writing a fb+ga sum that contradicts the (untouched) tt column.
+    const totalSpendCadAll =
+      ttSpendCad === null ? null : merged.totalSpendCad + ttSpendCad;
     const roas =
-      totalSpendCadAll > 0 ? shopify.revenueCad / totalSpendCadAll : 0;
-    const grossProfitCad = shopify.revenueCad - totalSpendCadAll;
+      totalSpendCadAll !== null && totalSpendCadAll > 0
+        ? shopify.revenueCad / totalSpendCadAll
+        : 0;
+    const grossProfitCad =
+      totalSpendCadAll === null ? 0 : shopify.revenueCad - totalSpendCadAll;
     // Audit fix 2026-05-23 (MR-01): per-store COGS rate replaces the
     // hardcoded 0.25 default. See `getCogsRateForStore` for the env-var
     // convention.
     const cogsRate = getCogsRateForStore(storeId);
     const cogsCad = shopify.revenueCad * cogsRate;
-    const netProfitCad = grossProfitCad - cogsCad;
+    const netProfitCad =
+      totalSpendCadAll === null ? 0 : grossProfitCad - cogsCad;
 
     // 2026-05-21 fix: per-row Meta FX conversion.
     //
@@ -437,16 +467,43 @@ export async function runDailyForStore(
     // call per unique currency. For the dominant case (all ILS), that's
     // exactly 1 extra HTTP call per cron-daily, inside the existing
     // persist-batch step.run — exec budget unchanged.
-    const fxCache = new Map<string, number>();
-    const cadFor = async (amount: number, currency: string): Promise<number> => {
+    //
+    // Audit fix 2026-05-23 (CRIT-5 / O4-CR-01): cadFor returns `null` on
+    // FX failure instead of throwing. Per-row builders detect `null` and
+    // OMIT the spend_cad / conversion_value_cad / budget_cad keys from
+    // the upsert payload; Supabase ON CONFLICT only updates payload keys
+    // → prior CAD value preserved. The previous behavior (throwing from
+    // cadFor) corrupted every persist-batch run that touched a single
+    // failed FX row: data_daily + products_daily had ALREADY been
+    // committed before the throw, leaving partial-state writes
+    // (Shopify revenue persisted, Meta/Google/TikTok campaigns rolled
+    // back via the throw). Mirrors v2 cron-LIVE a/WARN-3 pattern.
+    //
+    // Cache failures too (null sentinel) so we don't hammer Frankfurter
+    // with retries inside the same persist-batch.
+    const fxCache = new Map<string, number | null>();
+    const cadFor = async (
+      amount: number,
+      currency: string,
+    ): Promise<number | null> => {
       if (!Number.isFinite(amount) || amount === 0) return 0;
       const cur = (currency || 'ILS').toUpperCase();
       if (cur === 'CAD') return amount;
       let rate = fxCache.get(cur);
       if (rate === undefined) {
-        rate = await getFxRate(cur, 'CAD', dateStr);
+        try {
+          rate = await getFxRate(cur, 'CAD', dateStr);
+        } catch (e) {
+          console.warn(
+            `cron-daily ${storeId} ${dateStr}: FX ${cur}→CAD failed — omitting CAD-denominated columns this tick; ON CONFLICT preserves prior values. Error: ${
+              e instanceof Error ? e.message : String(e)
+            }`,
+          );
+          rate = null;
+        }
         fxCache.set(cur, rate);
       }
+      if (rate === null || !Number.isFinite(rate) || rate <= 0) return null;
       return amount * rate;
     };
 
@@ -455,26 +512,53 @@ export async function runDailyForStore(
     // refund_deduction_cad so the dashboard can show "before/after refunds"
     // and the refund-day indicator chip + tooltip. Invariant:
     // revenue_cad = gross_revenue_cad − refund_deduction_cad.
+    //
+    // Audit fix 2026-05-23 (CRIT-5 / O4-CR-01): tt_spend_cad and
+    // total_spend_cad / roas / gross_profit_cad / net_profit_cad are
+    // ABSENT from the payload when TikTok FX failed (`ttSpendCad === null`)
+    // so ON CONFLICT preserves the prior consistent values. revenue_cad +
+    // gross_revenue_cad + refund_deduction_cad + fb_spend_cad +
+    // ga_spend_cad still update (their FX path either succeeded or used
+    // already-CAD values from the merger). cogs_cad still updates because
+    // it's a function of revenue_cad alone (no FX involved).
     {
-      const { error } = await admin.from('data_daily').upsert(
-        {
-          date: dateStr,
-          store_id: storeId,
-          store_name: shopify.storeName,
-          fb_spend_cad: merged.fbSpendCad,
-          ga_spend_cad: merged.gaSpendCad,
-          tt_spend_cad: ttSpendCad,
-          total_spend_cad: totalSpendCadAll,
-          revenue_cad: shopify.revenueCad,
-          gross_revenue_cad: shopify.grossRevenueCad,
-          refund_deduction_cad: shopify.refundDeductionCad,
-          roas,
-          gross_profit_cad: grossProfitCad,
-          cogs_cad: cogsCad,
-          net_profit_cad: netProfitCad,
-        },
-        { onConflict: 'date,store_id' },
-      );
+      type DataDailyRow = {
+        date: string;
+        store_id: string;
+        store_name: string;
+        fb_spend_cad: number;
+        ga_spend_cad: number;
+        revenue_cad: number;
+        gross_revenue_cad: number;
+        refund_deduction_cad: number;
+        cogs_cad: number;
+        tt_spend_cad?: number;
+        total_spend_cad?: number;
+        roas?: number;
+        gross_profit_cad?: number;
+        net_profit_cad?: number;
+      };
+      const dataDailyRow: DataDailyRow = {
+        date: dateStr,
+        store_id: storeId,
+        store_name: shopify.storeName,
+        fb_spend_cad: merged.fbSpendCad,
+        ga_spend_cad: merged.gaSpendCad,
+        revenue_cad: shopify.revenueCad,
+        gross_revenue_cad: shopify.grossRevenueCad,
+        refund_deduction_cad: shopify.refundDeductionCad,
+        cogs_cad: cogsCad,
+      };
+      if (ttSpendCad !== null && totalSpendCadAll !== null) {
+        dataDailyRow.tt_spend_cad = ttSpendCad;
+        dataDailyRow.total_spend_cad = totalSpendCadAll;
+        dataDailyRow.roas = roas;
+        dataDailyRow.gross_profit_cad = grossProfitCad;
+        dataDailyRow.net_profit_cad = netProfitCad;
+      }
+      const { error } = await admin.from('data_daily').upsert(dataDailyRow, {
+        onConflict: 'date,store_id',
+      });
       if (error) {
         throw new Error(
           `data_daily upsert for ${storeId} ${dateStr}: ${error.message}`,
@@ -547,6 +631,10 @@ export async function runDailyForStore(
       // Apps Script semantics. The dashboard renders ONE number per row;
       // operators reading it understand "daily" or "lifetime" by the
       // budgetType chip on the row (CBO/ABO).
+      // Audit fix 2026-05-23 (CRIT-5 / O4-CR-01): cadFor returns `null` on
+      // FX failure. Build the per-row payload conditionally: when a CAD
+      // conversion failed, OMIT that key so ON CONFLICT preserves the
+      // prior value rather than NULL-ing it out.
       const metaCampaignRows = await Promise.all(
         meta.adsetRows.map(async (r) => {
           const cBud = meta.budgets.campaigns[r.campaignId];
@@ -572,7 +660,39 @@ export async function runDailyForStore(
           const adSetStatus = aBud?.effectiveStatus ?? null;
           const campaignStatus = cBud?.effectiveStatus ?? null;
           const effectiveStatus = adSetStatus ?? campaignStatus;
-          return {
+          const spendCad = await cadFor(r.spend, r.currency);
+          const convValueCad = await cadFor(r.conversionValue, r.currency);
+          const campaignBudgetCad =
+            campaignBudgetRaw > 0
+              ? await cadFor(campaignBudgetRaw, meta.budgets.currency)
+              : null;
+          const adSetBudgetCad =
+            adSetBudgetRaw > 0
+              ? await cadFor(adSetBudgetRaw, meta.budgets.currency)
+              : null;
+          type MetaCampaignRow = {
+            date: string;
+            store_id: string;
+            platform: 'meta';
+            campaign_id: string;
+            campaign_name: string;
+            ad_set_id: string;
+            ad_set_name: string;
+            impressions: number;
+            clicks: number;
+            conversions: number;
+            roas: null;
+            budget_type: 'CBO' | 'ABO' | '';
+            effective_status: string | null;
+            spend_cad?: number;
+            conversion_value_cad?: number;
+            // Budget columns are always present (null is the legitimate
+            // "no budget set" value); we just don't write a wrong CAD value
+            // when FX failed for a non-CAD budget.
+            campaign_budget_cad?: number | null;
+            ad_set_budget_cad?: number | null;
+          };
+          const row: MetaCampaignRow = {
             date: dateStr,
             store_id: storeId,
             platform: 'meta',
@@ -580,25 +700,10 @@ export async function runDailyForStore(
             campaign_name: r.campaignName,
             ad_set_id: r.adSetId,
             ad_set_name: r.adSetName,
-            spend_cad: await cadFor(r.spend, r.currency),
             impressions: Math.round(r.impressions),
             clicks: Math.round(r.clicks),
             conversions: Math.round(r.conversions),
-            conversion_value_cad: await cadFor(r.conversionValue, r.currency),
             roas: null,
-            // Budgets are denominated in `meta.budgets.currency` (the account
-            // currency from the act_{id}?fields=currency one-shot). Pass it
-            // through `cadFor` so the column lands in CAD on disk — the
-            // dashboard's CampaignsTableRow renders this value as `C$X.XX`
-            // and assumes CAD.
-            campaign_budget_cad:
-              campaignBudgetRaw > 0
-                ? await cadFor(campaignBudgetRaw, meta.budgets.currency)
-                : null,
-            ad_set_budget_cad:
-              adSetBudgetRaw > 0
-                ? await cadFor(adSetBudgetRaw, meta.budgets.currency)
-                : null,
             // Empty string '' stays in the DB; `postgresReaders.fetchCampaigns`
             // already normalizes '' / null / undefined → '' (campaigns.ts:135).
             budget_type: bt,
@@ -607,6 +712,22 @@ export async function runDailyForStore(
             // budgets fetch soft-failed.
             effective_status: effectiveStatus,
           };
+          if (spendCad !== null) row.spend_cad = spendCad;
+          if (convValueCad !== null) row.conversion_value_cad = convValueCad;
+          // For budget columns, distinguish "no budget configured" (raw=0,
+          // write null) from "FX failed" (raw>0 but cad=null, omit key so
+          // prior value is preserved).
+          if (campaignBudgetRaw === 0) {
+            row.campaign_budget_cad = null;
+          } else if (campaignBudgetCad !== null) {
+            row.campaign_budget_cad = campaignBudgetCad;
+          }
+          if (adSetBudgetRaw === 0) {
+            row.ad_set_budget_cad = null;
+          } else if (adSetBudgetCad !== null) {
+            row.ad_set_budget_cad = adSetBudgetCad;
+          }
+          return row;
         }),
       );
       const { error } = await admin.from('campaigns_daily').upsert(metaCampaignRows, {
@@ -676,25 +797,50 @@ export async function runDailyForStore(
     {
       // 2026-05-21: populate spend_cad + conversion_value_cad via FX
       // (was hardcoded null — see cadFor() comment above).
-      const metaAdsRows = await Promise.all(
-        meta.adRows.map(async (r) => ({
-          date: r.date,
-          store_id: r.storeId,
-          platform: r.platform, // 'meta'
-          campaign_id: r.campaignId,
-          campaign_name: r.campaignName,
-          ad_set_id: r.adSetId,
-          ad_set_name: r.adSetName,
-          ad_id: r.adId,
-          ad_name: r.adName,
-          spend_cad: await cadFor(r.spend, r.currency),
-          // BIGINT-safe: see comment on metaCampaignRows above.
-          impressions: Math.round(r.impressions),
-          clicks: Math.round(r.clicks),
-          conversions: Math.round(r.conversions),
-          conversion_value_cad: await cadFor(r.conversionValue, r.currency),
-          roas: null,
-        })),
+      // Audit fix 2026-05-23 (CRIT-5 / O4-CR-01): omit spend_cad /
+      // conversion_value_cad when cadFor returned `null` (FX failed) so
+      // ON CONFLICT preserves the prior CAD values.
+      type MetaAdRow = {
+        date: string;
+        store_id: string;
+        platform: 'meta';
+        campaign_id: string;
+        campaign_name: string;
+        ad_set_id: string;
+        ad_set_name: string;
+        ad_id: string;
+        ad_name: string;
+        impressions: number;
+        clicks: number;
+        conversions: number;
+        roas: null;
+        spend_cad?: number;
+        conversion_value_cad?: number;
+      };
+      const metaAdsRows: MetaAdRow[] = await Promise.all(
+        meta.adRows.map(async (r) => {
+          const spendCad = await cadFor(r.spend, r.currency);
+          const convValueCad = await cadFor(r.conversionValue, r.currency);
+          const row: MetaAdRow = {
+            date: r.date,
+            store_id: r.storeId,
+            platform: r.platform, // 'meta'
+            campaign_id: r.campaignId,
+            campaign_name: r.campaignName,
+            ad_set_id: r.adSetId,
+            ad_set_name: r.adSetName,
+            ad_id: r.adId,
+            ad_name: r.adName,
+            // BIGINT-safe: see comment on metaCampaignRows above.
+            impressions: Math.round(r.impressions),
+            clicks: Math.round(r.clicks),
+            conversions: Math.round(r.conversions),
+            roas: null,
+          };
+          if (spendCad !== null) row.spend_cad = spendCad;
+          if (convValueCad !== null) row.conversion_value_cad = convValueCad;
+          return row;
+        }),
       );
       const googleAdsRows = google.adRows.map((r) => ({
         date: r.date,
@@ -717,24 +863,48 @@ export async function runDailyForStore(
       // Phase 05.7.7: TikTok rows. Same shape as Meta/Google but flagged
       // platform='tiktok'. TikTok ads return per-ad spend in account
       // currency (USD for uzoshop), so we FX-convert via cadFor.
-      const tiktokAdsRows = await Promise.all(
-        tiktok.adRows.map(async (r) => ({
-          date: dateStr,
-          store_id: storeId,
-          platform: 'tiktok',
-          campaign_id: r.campaignId,
-          campaign_name: r.campaignName,
-          ad_set_id: r.adGroupId,
-          ad_set_name: r.adGroupName,
-          ad_id: r.adId,
-          ad_name: r.adName,
-          spend_cad: await cadFor(r.spend, r.currency),
-          impressions: Math.round(r.impressions),
-          clicks: Math.round(r.clicks),
-          conversions: Math.round(r.conversions),
-          conversion_value_cad: await cadFor(r.conversionValue, r.currency),
-          roas: null,
-        })),
+      // Audit fix 2026-05-23 (CRIT-5): cadFor omits CAD keys on FX failure
+      // → ON CONFLICT preserves prior values.
+      type TiktokAdRowShape = {
+        date: string;
+        store_id: string;
+        platform: 'tiktok';
+        campaign_id: string;
+        campaign_name: string;
+        ad_set_id: string;
+        ad_set_name: string;
+        ad_id: string;
+        ad_name: string;
+        impressions: number;
+        clicks: number;
+        conversions: number;
+        roas: null;
+        spend_cad?: number;
+        conversion_value_cad?: number;
+      };
+      const tiktokAdsRows: TiktokAdRowShape[] = await Promise.all(
+        tiktok.adRows.map(async (r) => {
+          const spendCad = await cadFor(r.spend, r.currency);
+          const convValueCad = await cadFor(r.conversionValue, r.currency);
+          const row: TiktokAdRowShape = {
+            date: dateStr,
+            store_id: storeId,
+            platform: 'tiktok',
+            campaign_id: r.campaignId,
+            campaign_name: r.campaignName,
+            ad_set_id: r.adGroupId,
+            ad_set_name: r.adGroupName,
+            ad_id: r.adId,
+            ad_name: r.adName,
+            impressions: Math.round(r.impressions),
+            clicks: Math.round(r.clicks),
+            conversions: Math.round(r.conversions),
+            roas: null,
+          };
+          if (spendCad !== null) row.spend_cad = spendCad;
+          if (convValueCad !== null) row.conversion_value_cad = convValueCad;
+          return row;
+        }),
       );
       const adsRows = [...metaAdsRows, ...googleAdsRows, ...tiktokAdsRows];
       if (adsRows.length > 0) {
@@ -804,32 +974,54 @@ export async function runDailyForStore(
           });
         }
       }
-      const tiktokCampaignRows = await Promise.all(
-        Array.from(byCampaign.values()).map(async (agg) => ({
-          date: dateStr,
-          store_id: storeId,
-          platform: 'tiktok',
-          campaign_id: agg.campaign_id,
-          campaign_name: agg.campaign_name,
-          ad_set_id: agg.ad_set_id,
-          ad_set_name: agg.ad_set_name,
-          spend_cad: await cadFor(agg.spend, agg.currency),
-          impressions: Math.round(agg.impressions),
-          clicks: Math.round(agg.clicks),
-          conversions: Math.round(agg.conversions),
-          conversion_value_cad: await cadFor(
-            agg.conversionValue,
-            agg.currency,
-          ),
-          roas: null,
-          campaign_budget_cad: null,
-          ad_set_budget_cad: null,
-          budget_type: null,
-          // Phase 05.7.x — TikTok ad-group status (ADGROUP_STATUS_DISABLE,
-          // ADGROUP_STATUS_DELIVERY_OK, etc). Source: /open_api/v1.3/adgroup/get/
-          // via fetchTikTokAdGroupStatuses, merged into TikTokAdRow by adGroupId.
-          effective_status: agg.effectiveStatus,
-        })),
+      // Audit fix 2026-05-23 (CRIT-5): omit CAD keys on FX failure.
+      type TiktokCampaignRow = {
+        date: string;
+        store_id: string;
+        platform: 'tiktok';
+        campaign_id: string;
+        campaign_name: string;
+        ad_set_id: string;
+        ad_set_name: string;
+        impressions: number;
+        clicks: number;
+        conversions: number;
+        roas: null;
+        campaign_budget_cad: null;
+        ad_set_budget_cad: null;
+        budget_type: null;
+        effective_status: string | null;
+        spend_cad?: number;
+        conversion_value_cad?: number;
+      };
+      const tiktokCampaignRows: TiktokCampaignRow[] = await Promise.all(
+        Array.from(byCampaign.values()).map(async (agg) => {
+          const spendCad = await cadFor(agg.spend, agg.currency);
+          const convValueCad = await cadFor(agg.conversionValue, agg.currency);
+          const row: TiktokCampaignRow = {
+            date: dateStr,
+            store_id: storeId,
+            platform: 'tiktok',
+            campaign_id: agg.campaign_id,
+            campaign_name: agg.campaign_name,
+            ad_set_id: agg.ad_set_id,
+            ad_set_name: agg.ad_set_name,
+            impressions: Math.round(agg.impressions),
+            clicks: Math.round(agg.clicks),
+            conversions: Math.round(agg.conversions),
+            roas: null,
+            campaign_budget_cad: null,
+            ad_set_budget_cad: null,
+            budget_type: null,
+            // Phase 05.7.x — TikTok ad-group status (ADGROUP_STATUS_DISABLE,
+            // ADGROUP_STATUS_DELIVERY_OK, etc). Source: /open_api/v1.3/adgroup/get/
+            // via fetchTikTokAdGroupStatuses, merged into TikTokAdRow by adGroupId.
+            effective_status: agg.effectiveStatus,
+          };
+          if (spendCad !== null) row.spend_cad = spendCad;
+          if (convValueCad !== null) row.conversion_value_cad = convValueCad;
+          return row;
+        }),
       );
       const { error } = await admin
         .from('campaigns_daily')
