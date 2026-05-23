@@ -64,6 +64,7 @@ import {
   readProductMap,
   campaignKey,
   setMappedProducts,
+  allocateProductRevenue,
   type ProductMap,
 } from '@/lib/campaignProductMap';
 import { CHART_COLORS } from '@/lib/chartColors';
@@ -480,14 +481,93 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
 
   const cohort = useMemo(() => {
     if (!summary) return null;
-    // Build the ROAS maps from the same aggregated source. ROAS proxy:
-    // conversionValue / spend (platform-reported). Both maps use the
-    // same value for now — when we plumb the parent's trueRevenueByKey
-    // here in a follow-up, the secondary map will diverge to
-    // deterministic-only.
-    const roasByKey = new Map<string, number>();
+    // Audit fix 2026-05-23 (CRITICAL-01 + HIGH-01 multi-mapping):
+    //
+    // Prior versions passed `conversionValue / spend` (the platform-Pixel
+    // claim) into BOTH `roasShopifyByKey` AND `roasShopifyPlatformByKey`.
+    // Result: the column labeled "ROAS Shopify" inside CohortComparisonPanel
+    // actually showed Pixel ROAS, AND the secondary tie-breaker was a no-op
+    // (same map fed in twice). Operator validated the "you are weakest"
+    // chip against the displayed column — both wrong together.
+    //
+    // Fix: run `allocateProductRevenue` (the same allocator the parent
+    // CampaignsTable uses) here over the drawer's own SWR data
+    // (productsData + ordersAttrData are already fetched for cannibalization
+    // + per-product breakdown). Use the returned `revenue` (full deter+
+    // proportional allocation) for the primary, and `deterministicRevenue`
+    // (platform-attributed only) for the secondary.
+    //
+    // Cost: one extra allocator call per drawer open. The allocator is a
+    // pure CPU pass over data already in memory — negligible vs the SWR
+    // network round-trips that triggered the memo refresh.
+    const productRevenue: Array<{
+      productId: string;
+      netRevenueCad: number;
+      units: number;
+    }> = [];
+    for (const p of productsData?.rows ?? []) {
+      if (p.storeId !== storeId) continue;
+      if (p.date < rangeFrom || p.date > rangeTo) continue;
+      if (!p.productId) continue;
+      const net = p.netRevenue ?? p.revenue;
+      // Match the same productsByStore aggregation policy the parent
+      // useCampaignTrueRevenue hook uses — skip true-empty rows but
+      // keep refund-only ones so the allocator gets to deduct.
+      if (net === 0 && p.units === 0) continue;
+      const existing = productRevenue.find(x => x.productId === p.productId);
+      if (existing) {
+        existing.netRevenueCad += net;
+        existing.units += p.units;
+      } else {
+        productRevenue.push({
+          productId: p.productId,
+          netRevenueCad: net,
+          units: p.units,
+        });
+      }
+    }
+    const campaignSpend = new Map<string, number>();
     for (const a of cohortAggregated) {
-      roasByKey.set(a.key, a.spend > 0 ? a.conversionValue / a.spend : 0);
+      campaignSpend.set(a.key, a.spend);
+    }
+    const ordersForAllocator = (ordersAttrData?.rows ?? [])
+      .filter(o => o.storeId === storeId)
+      .filter(o => o.date >= rangeFrom && o.date <= rangeTo)
+      .map(o => ({
+        storeId: o.storeId,
+        source: o.source,
+        fbclidPresent: o.fbclidPresent,
+        gclidPresent: o.gclidPresent,
+        lineItems: o.lineItems ?? [],
+      }));
+    const alloc = allocateProductRevenue({
+      storeId,
+      map: productMap,
+      productRevenue,
+      campaignSpend,
+      orders: ordersForAllocator,
+    });
+
+    // Combined Shopify ROAS (deterministic + spend-proportional fallback).
+    // Same number the table's "ROAS Shopify (כללי)" column shows for
+    // mapped campaigns.
+    const roasShopifyByKey = new Map<string, number>();
+    // Deterministic-only ROAS (platform-attributed orders only, no
+    // fallback). The audit-recommended secondary discriminator. Different
+    // from the primary, so the tie-breaker actually breaks ties on
+    // strength-of-platform-signal.
+    const roasShopifyPlatformByKey = new Map<string, number>();
+    for (const a of cohortAggregated) {
+      const info = alloc.get(a.key);
+      const spend = a.spend;
+      roasShopifyByKey.set(
+        a.key,
+        info && spend > 0 ? info.revenue / spend : 0,
+      );
+      roasShopifyPlatformByKey.set(
+        a.key,
+        info && spend > 0 ? info.deterministicRevenue / spend : 0,
+      );
     }
     return computeMultiMappingCohort({
       currentCampaignKey,
@@ -504,10 +584,10 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
         budgetType: '' as const,
         lastActiveDate: null,
       })),
-      roasShopifyByKey: roasByKey,
-      roasShopifyPlatformByKey: roasByKey,
+      roasShopifyByKey,
+      roasShopifyPlatformByKey,
     });
-  }, [summary, currentCampaignKey, productMap, cohortAggregated]);
+  }, [summary, currentCampaignKey, productMap, cohortAggregated, productsData, ordersAttrData, storeId, rangeFrom, rangeTo]);
 
   // Per-product channel breakdown (Phase 1). Triple-gate (Meta-only,
   // mapped products, ≥3 mapped-product orders) is concentrated here so
