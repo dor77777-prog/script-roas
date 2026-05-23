@@ -3,7 +3,7 @@ import type { ProductRow } from './products';
 import type { CampaignRow } from './campaigns';
 import type { OrderAttributionRow } from './ordersAttribution';
 import type { AdRow } from './ads';
-import type { ProductMap } from './campaignProductMap';
+import { allocateProductRevenue, type ProductMap } from './campaignProductMap';
 import {
   computeCampaignHealth,
   type CampaignHealth,
@@ -1657,28 +1657,43 @@ export function generateAiReport({
   // The section is operator-side only (productMap lives in localStorage,
   // sent via the prop) — when missing or empty, skip.
   if (productMap && Object.keys(productMap).length > 0) {
+    // Audit fix 2026-05-23 (CR-01 health-and-conclusions): the section
+    // previously displayed `allocatedRev = totalNetRevenue * c.sharePct`
+    // — a naive spend-share split that exactly the double-counting the
+    // operator was warned about. Now we call `allocateProductRevenue`
+    // (the same allocator the dashboard's per-row "ROAS Shopify" column
+    // uses) so the AI gets per-(store, product, campaign) allocated
+    // revenue with deterministic per-platform attribution, plus the
+    // proportional fallback only for the unattributed orders.
     type SharedProduct = {
       productId: string;
       productTitle: string;
+      storeId: string;
       sharingCampaigns: Array<{
         name: string;
         platform: string;
         spend: number;
-        sharePct: number;
+        intraPlatformSpend: number;
+        /** Real allocator output: full deter+fallback revenue credited
+         *  to this campaign FOR THIS PRODUCT. */
+        allocatedRevenue: number;
+        /** Real allocator output: ONLY the platform-deterministic share
+         *  (orders with fbclid/gclid/tt-source). 0 when no provable
+         *  click-id traffic matched this campaign's platform. */
+        deterministicRevenue: number;
       }>;
       totalNetRevenue: number;
     };
     const storeFilterId = storeFilter; // closure-captured for readability
-    // Reverse index: productId → list of (campaignKey, name, platform, spend).
+    // Reverse index: campaignKey → (name, platform, spend, storeId). Spend is
+    // the per-campaign sum across the date range.
     type CampaignBucket = {
       key: string;
       name: string;
       platform: string;
+      storeId: string;
       spend: number;
     };
-    const productToCampaigns = new Map<string, CampaignBucket[]>();
-
-    // Build campaign lookup: storeId::platform::campaignId → {name, platform, spend}
     const campaignLookup = new Map<string, CampaignBucket>();
     for (const c of campaigns) {
       const key = `${c.storeId}::${c.platform}::${c.campaignId}`;
@@ -1690,26 +1705,68 @@ export function generateAiReport({
           key,
           name: c.campaignName || '—',
           platform: c.platform,
+          storeId: c.storeId,
           spend: c.spend,
         });
       }
     }
 
-    // Walk productMap (filtered to current store if storeFilter set)
+    // Per-store data structures the allocator needs. Built once, reused for
+    // every multi-mapped product within that store.
+    const productsByStore = new Map<string, Map<string, { netRevenueCad: number; units: number }>>();
+    for (const p of products) {
+      if (!p.productId) continue;
+      const net = p.netRevenue ?? p.revenue;
+      // Same true-empty skip the parent useCampaignTrueRevenue applies — drop
+      // zero-zero rows but keep refund-only (units=0, net<0).
+      if (net === 0 && p.units === 0) continue;
+      let storeBucket = productsByStore.get(p.storeId);
+      if (!storeBucket) {
+        storeBucket = new Map();
+        productsByStore.set(p.storeId, storeBucket);
+      }
+      const existing = storeBucket.get(p.productId);
+      if (existing) {
+        existing.netRevenueCad += net;
+        existing.units += p.units;
+      } else {
+        storeBucket.set(p.productId, { netRevenueCad: net, units: p.units });
+      }
+    }
+
+    const ordersByStore = new Map<string, Array<{
+      storeId: string;
+      source: string;
+      fbclidPresent: boolean;
+      gclidPresent: boolean;
+      lineItems: Array<{ productId: string; units: number; revenueCad: number }>;
+    }>>();
+    for (const o of ordersRows ?? []) {
+      if (!inRange(o.date, range)) continue;
+      let bucket = ordersByStore.get(o.storeId);
+      if (!bucket) {
+        bucket = [];
+        ordersByStore.set(o.storeId, bucket);
+      }
+      bucket.push({
+        storeId: o.storeId,
+        source: o.source,
+        fbclidPresent: o.fbclidPresent,
+        gclidPresent: o.gclidPresent,
+        lineItems: o.lineItems ?? [],
+      });
+    }
+
+    // Group campaigns by (storeId, productId) — mirrors the parent's
+    // store-scoped allocator semantics. A product appearing in two stores
+    // counts as two separate multi-mapped entries.
+    const productCampaignsByStore = new Map<string, Map<string, CampaignBucket[]>>();
     for (const [campaignKey, productIds] of Object.entries(productMap)) {
       const parts = campaignKey.split('::');
       if (parts.length !== 3) continue;
       const [keyStoreId] = parts;
-      // Store filter: report scoped to one store → skip other stores' mappings.
-      // The storeFilter from the top of the function is a NAME; we need
-      // to match by storeId. dailyRows have both name and id; use a
-      // lookup if filtering by name. For simplicity, when filtering by
-      // store name, only include mappings where ANY campaign in this
-      // map entry's store matches.
       if (storeFilterId) {
         const sampleCampaign = campaignLookup.get(campaignKey);
-        // If we have campaign data for this key, check the storeName
-        // matches. If we don't, drop it conservatively.
         if (!sampleCampaign) continue;
         const storeMatches = campaigns.some(
           c => c.storeId === keyStoreId && c.storeName === storeFilterId,
@@ -1717,42 +1774,81 @@ export function generateAiReport({
         if (!storeMatches) continue;
       }
       const campaign = campaignLookup.get(campaignKey);
-      if (!campaign) continue; // campaign not in range — skip
+      if (!campaign) continue;
+      let storeIdx = productCampaignsByStore.get(keyStoreId);
+      if (!storeIdx) {
+        storeIdx = new Map();
+        productCampaignsByStore.set(keyStoreId, storeIdx);
+      }
       for (const pid of productIds) {
-        if (!productToCampaigns.has(pid)) productToCampaigns.set(pid, []);
-        productToCampaigns.get(pid)!.push(campaign);
+        if (!storeIdx.has(pid)) storeIdx.set(pid, []);
+        storeIdx.get(pid)!.push(campaign);
       }
     }
 
-    // Keep only products mapped to 2+ campaigns.
+    // Keep only products mapped to 2+ campaigns within a single store.
     const shared: SharedProduct[] = [];
-    const productTitleById = new Map<string, string>();
+    const productTitleByStoreAndId = new Map<string, string>();
     for (const p of products) {
-      // productRow has productId + productTitle; build lookup.
-      productTitleById.set(p.productId, p.productTitle);
-    }
-    const netRevByProduct = new Map<string, number>();
-    for (const p of products) {
-      netRevByProduct.set(
-        p.productId,
-        (netRevByProduct.get(p.productId) ?? 0) + (p.netRevenue ?? 0),
-      );
+      productTitleByStoreAndId.set(`${p.storeId}::${p.productId}`, p.productTitle);
     }
 
-    for (const [productId, campaignList] of productToCampaigns.entries()) {
-      if (campaignList.length < 2) continue;
-      const totalSpend = campaignList.reduce((s, c) => s + c.spend, 0);
-      shared.push({
-        productId,
-        productTitle: productTitleById.get(productId) || productId,
-        sharingCampaigns: campaignList.map(c => ({
-          name: c.name,
-          platform: c.platform,
-          spend: c.spend,
-          sharePct: totalSpend > 0 ? c.spend / totalSpend : 1 / campaignList.length,
-        })),
-        totalNetRevenue: netRevByProduct.get(productId) ?? 0,
-      });
+    for (const [storeId, perProduct] of productCampaignsByStore.entries()) {
+      const storeProductsMap = productsByStore.get(storeId);
+      if (!storeProductsMap) continue;
+      const storeOrders = ordersByStore.get(storeId) ?? [];
+      const storeCampaignSpend = new Map<string, number>();
+      for (const c of campaignLookup.values()) {
+        if (c.storeId === storeId) storeCampaignSpend.set(c.key, c.spend);
+      }
+      for (const [productId, campaignList] of perProduct.entries()) {
+        if (campaignList.length < 2) continue;
+        const productInfo = storeProductsMap.get(productId);
+        if (!productInfo) continue; // no Shopify sales for this product in range
+
+        // Allocate THIS one product's revenue across the campaigns that
+        // map to it (within this store). Single-product input ensures the
+        // returned map's `revenue` field is per-(campaign, product) — what
+        // we need to display in the table.
+        const alloc = allocateProductRevenue({
+          storeId,
+          map: productMap,
+          productRevenue: [{
+            productId,
+            netRevenueCad: productInfo.netRevenueCad,
+            units: productInfo.units,
+          }],
+          campaignSpend: storeCampaignSpend,
+          orders: storeOrders,
+        });
+
+        const intraSpendByPlatform = new Map<string, number>();
+        for (const c of campaignList) {
+          intraSpendByPlatform.set(
+            c.platform,
+            (intraSpendByPlatform.get(c.platform) ?? 0) + c.spend,
+          );
+        }
+
+        shared.push({
+          productId,
+          productTitle:
+            productTitleByStoreAndId.get(`${storeId}::${productId}`) || productId,
+          storeId,
+          sharingCampaigns: campaignList.map(c => {
+            const info = alloc.get(c.key);
+            return {
+              name: c.name,
+              platform: c.platform,
+              spend: c.spend,
+              intraPlatformSpend: intraSpendByPlatform.get(c.platform) ?? c.spend,
+              allocatedRevenue: info?.revenue ?? 0,
+              deterministicRevenue: info?.deterministicRevenue ?? 0,
+            };
+          }),
+          totalNetRevenue: productInfo.netRevenueCad,
+        });
+      }
     }
 
     if (shared.length > 0) {
@@ -1805,15 +1901,19 @@ export function generateAiReport({
             `**${platform}** — ${platformCampaigns.length} קמפיינים, סך הוצאה: ${fmtCad(intraSpend)}`,
           );
           out.push('');
-          out.push(`| קמפיין | הוצאה | חלק מההוצאה (פנים-פלטפורמי) | חלק מכלל המוצר | הכנסה משוערת |`);
+          out.push(`| קמפיין | הוצאה | חלק מההוצאה (פנים-פלטפורמי) | הכנסה דטרמיניסטית | הכנסה מוקצית (סה"כ) |`);
           out.push(`|---|---|---|---|---|`);
           const sortedCampaigns = [...platformCampaigns].sort((a, b) => b.spend - a.spend);
           for (const c of sortedCampaigns) {
             const intraPct = intraSpend > 0 ? c.spend / intraSpend : 1 / platformCampaigns.length;
-            const allocatedRev = sp.totalNetRevenue * c.sharePct;
+            // Audit fix 2026-05-23 (CR-01): real allocator output replaces
+            // the naive `totalNetRevenue * sharePct` split. `deterministicRevenue`
+            // is the platform-attributed portion (provable from this platform's
+            // click-id traffic); `allocatedRevenue` adds the spend-proportional
+            // share of the remaining unattributed orders.
             out.push(
               `| ${escapeMd(c.name)} | ${fmtCad(c.spend)} | ${fmtPct(intraPct)} | ` +
-                `${fmtPct(c.sharePct)} | ${fmtCad(allocatedRev)} |`,
+                `${fmtCad(c.deterministicRevenue)} | ${fmtCad(c.allocatedRevenue)} |`,
             );
           }
           out.push('');
