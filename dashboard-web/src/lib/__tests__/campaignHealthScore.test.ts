@@ -446,6 +446,47 @@ describe('trajectory — CPM↔ROAS momentum', () => {
     );
     expect(out2.components.trajectory).toBe(60);
   });
+
+  it('no-trajectory-data renormalizes weights (audit fix HR-03 2026-05-23)', () => {
+    // Build a campaign with strong profitability + volume + attribution but
+    // NO trajectory data (just-launched, < 5 active days). Pre-fix,
+    // trajectory contributed +15 from a neutral 60 — campaign graded A
+    // on week-1 ROAS alone. Post-fix, trajectory's weight redistributes
+    // to the other 3 components.
+    const strongTr = makeTrueRevenue({
+      deterministicRevenue: 1500,
+      spend: 500,
+      attribution: {
+        ...makeTrueRevenue().attribution,
+        trust: { level: 'high', label: 'אמין', score: 100 },
+      } as TrueRevenueInfo['attribution'],
+    });
+    const withTraj = computeCampaignHealth(
+      buildInputs({
+        trueRevenueInfo: strongTr,
+        cpmRoasAnalysis: makeCpmRoasAnalysis({ hasData: true, tone: 'neutral' }),
+      }),
+    );
+    const noTraj = computeCampaignHealth(
+      buildInputs({
+        trueRevenueInfo: strongTr,
+        cpmRoasAnalysis: makeCpmRoasAnalysis({ hasData: false }),
+      }),
+    );
+    // With trajectory neutral=60 included: subtotal = 0.4*100 + 0.15*100
+    //   + 0.25*60 + 0.20*100 = 40 + 15 + 15 + 20 = 90.
+    expect(withTraj.score).toBe(90);
+    // Without trajectory (renormalized over the remaining 0.75 weight):
+    //   subtotal = (0.4*100 + 0.15*100 + 0.20*100) / 0.75 = 75 / 0.75 = 100.
+    // True signal: every component we DO have is at the cap, so the
+    // overall score should be at the cap too — not pulled down to 90 by
+    // a non-signal neutral 60.
+    expect(noTraj.score).toBe(100);
+    // BUT trajectory component itself reports 60 (for UI display) — the
+    // renormalization happens at the weighted-subtotal level, not at the
+    // sub-component level.
+    expect(noTraj.components.trajectory).toBe(60);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────

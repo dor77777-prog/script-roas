@@ -408,11 +408,37 @@ export function computeCampaignHealth(inputs: HealthScoreInputs): CampaignHealth
   const trajectory = scoreTrajectory(cpmRoasAnalysis);
   const attribution = scoreAttributionClarity(trueRevenueInfo);
 
-  const weightedSubtotal =
-    profitability.score * WEIGHTS.profitability +
-    volume.score * WEIGHTS.volume +
-    trajectory.score * WEIGHTS.trajectory +
-    attribution.score * WEIGHTS.attributionClarity;
+  // Audit fix 2026-05-23 (HR-03 health-and-conclusions): renormalize
+  // weights when trajectory has no data.
+  //
+  // Pre-fix: `scoreTrajectory` returned 60 (neutral) when < 5 active days,
+  // and the weighted formula multiplied by WEIGHTS.trajectory = 0.25,
+  // contributing +15 points to the final from a non-signal. A just-launched
+  // campaign with ROAS 3 + trust 90 + 4 days of data graded A (~84) on
+  // strength of week-1 ROAS alone — exactly what the trajectory component
+  // was supposed to prevent.
+  //
+  // Post-fix: when trajectory is "no data" (hasData=false), drop its
+  // contribution AND renormalize the other 3 weights so they still sum to
+  // 1.0. The unknown signal contributes 0 (truly neutral) instead of +15.
+  const hasTrajectoryData = !!(cpmRoasAnalysis && cpmRoasAnalysis.hasData);
+  let weightedSubtotal: number;
+  if (hasTrajectoryData) {
+    weightedSubtotal =
+      profitability.score * WEIGHTS.profitability +
+      volume.score * WEIGHTS.volume +
+      trajectory.score * WEIGHTS.trajectory +
+      attribution.score * WEIGHTS.attributionClarity;
+  } else {
+    // Renormalize the 3 known components over their own subtotal weight.
+    const knownWeightSum =
+      WEIGHTS.profitability + WEIGHTS.volume + WEIGHTS.attributionClarity;
+    const scaleFactor = 1.0 / knownWeightSum;
+    weightedSubtotal =
+      profitability.score * WEIGHTS.profitability * scaleFactor +
+      volume.score * WEIGHTS.volume * scaleFactor +
+      attribution.score * WEIGHTS.attributionClarity * scaleFactor;
+  }
 
   const op = applyOperatorAdjustment(optimized, isCurrentlyOff);
   const finalScore = Math.round(Math.max(0, Math.min(100, weightedSubtotal + op.delta)));
