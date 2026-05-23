@@ -189,8 +189,15 @@ export function KpiCards({ current, previous, series }: Props) {
         spark={{ values: sparkData.grossProfit }}
       />
       <KpiCard
+        // Audit fix 2026-05-23 (Codex-NEW-1): dropped the hardcoded
+        // `labelSuffix="(25%)"`. Live rows can use a per-store
+        // ${STORE_UPPERCASE}_COGS_RATE that differs from 25% (e.g.,
+        // usmile360 at 18%), and a multi-store aggregate's effective
+        // rate is a revenue-weighted blend. The big-number itself is
+        // correct from `aggregate()`; only the label lied — and
+        // operator trust in the card suffered for it. The MetricHelp
+        // popover already explains the formula in plain language.
         label="עלות סחורה"
-        labelSuffix="(25%)"
         help={METRIC_HELP.cogs}
         rawValue={current.cogs}
         format={n => formatCurrency(n)}
