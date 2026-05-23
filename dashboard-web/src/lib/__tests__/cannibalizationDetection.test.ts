@@ -547,12 +547,16 @@ describe('detectProductCannibalization — edge revenue', () => {
       ],
       productsDaily: [
         // No revenue in early half — but spend exists, so we can compute.
-        // revenueGrowthPct → Infinity → not cannibalization.
+        // Audit fix 2026-05-23 (HIGH-11): revenueGrowthPct → null
+        // (pre-fix Infinity) → not cannibalization, an explicit
+        // incrementality verdict.
         ...buildProductDaysHalf('p1', 0, 1, 7),
         ...buildProductDaysHalf('p1', 200, 8, 14),
       ],
     });
     expect(result[0].risk).toBe('none'); // revenue grew from 0 → 200, no cannibalization
+    // Pin the new null sentinel — pre-fix this was Infinity.
+    expect(result[0].metrics.revenueGrowthPct).toBeNull();
   });
 });
 

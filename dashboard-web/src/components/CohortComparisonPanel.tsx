@@ -56,8 +56,17 @@ function fmtRoas(n: number | undefined | null): string {
   return n.toFixed(2);
 }
 
-/** Format a fraction as percentage with sign. 0.25 → "+25%", -0.10 → "−10%". */
-function fmtPct(n: number): string {
+/**
+ * Format a fraction as percentage with sign. 0.25 → "+25%", -0.10 → "−10%".
+ *
+ * Audit fix 2026-05-23 (HIGH-11 / O3-HI-03): accept `number | null` and
+ * render the missing-value case as "n/a" (Hebrew "לא מוגדר"). The
+ * cannibalization detector now emits `null` instead of `Infinity` when
+ * early revenue is 0 with positive late revenue — see
+ * `revenueGrowthPct` in `cannibalizationDetection.ts`.
+ */
+function fmtPct(n: number | null | undefined): string {
+  if (n === null || n === undefined) return 'לא מוגדר';
   if (!Number.isFinite(n)) return '∞';
   const pct = Math.round(n * 100);
   if (pct === 0) return '0%';

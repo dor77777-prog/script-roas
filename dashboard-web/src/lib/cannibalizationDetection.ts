@@ -62,8 +62,21 @@ export type CannibalizationVerdict = {
     lateHalfRevenue: number;
     /** (late - early) / early. Positive = scaled up, negative = scaled down. */
     spendGrowthPct: number;
-    /** Same for revenue. */
-    revenueGrowthPct: number;
+    /**
+     * (late - early) / |early|.
+     *
+     * Audit fix 2026-05-23 (HIGH-11 / O3-HI-03): when both early and late
+     * revenue are present but `early === 0`, the ratio is mathematically
+     * undefined (divide-by-zero with a positive numerator). The pre-fix
+     * code emitted the literal `Infinity`, which JSON.stringify renders
+     * as `null` silently — corrupting cloudSync payloads and any AI-
+     * report consumer that round-trips JSON. The contract is now
+     * `number | null`: emit `null` explicitly when the ratio is
+     * undefined or non-finite, and require all consumers to handle
+     * the missing-value case (UI shows "n/a", sorting drops null to
+     * the end).
+     */
+    revenueGrowthPct: number | null;
     /** Marginal ROAS = (Δrevenue) / (Δspend). Defined only when both
      *  deltas are non-zero AND spend GREW (negative spend delta is a
      *  scale-down, not cannibalization). null otherwise. */
@@ -428,7 +441,11 @@ export function detectProductCannibalization(args: {
           revenueGrowthPct:
             earlyRev !== 0
               ? (lateRev - earlyRev) / Math.abs(earlyRev)
-              : lateRev > 0 ? Infinity : 0,
+              // Audit fix 2026-05-23 (HIGH-11 / O3-HI-03): emit explicit
+              // null when early revenue is 0 with positive late revenue
+              // (growth is mathematically undefined). lateRev === 0 stays
+              // as 0 (flat).
+              : lateRev > 0 ? null : 0,
           marginalRoas: null,
         },
       });
@@ -436,11 +453,18 @@ export function detectProductCannibalization(args: {
     }
 
     const spendGrowthPct = (lateSpend - earlySpend) / earlySpend;
-    const revenueGrowthPct =
+    // Audit fix 2026-05-23 (HIGH-11 / O3-HI-03): null sentinel for the
+    // undefined-growth case. The previous `Infinity` value JSON-serialized
+    // as `null` silently — but the value carried through to consumers as
+    // a real Infinity in-memory, leading to display formatters that
+    // special-cased "∞" branching unpredictably from the JSON-round-tripped
+    // null. Standardize on `null` everywhere so cloudSync + AI-report
+    // payloads agree with what the UI receives in-memory.
+    const revenueGrowthPct: number | null =
       earlyRev !== 0
         ? (lateRev - earlyRev) / Math.abs(earlyRev)
         : lateRev > 0
-          ? Infinity // grew from 0 → some — undefined growth %, but not cannibalization
+          ? null // grew from 0 → some — undefined growth %, but not cannibalization
           : 0;
     const deltaSpend = lateSpend - earlySpend;
     const deltaRev = lateRev - earlyRev;
@@ -448,17 +472,37 @@ export function detectProductCannibalization(args: {
 
     // Classify. Only flag when spend GREW (>= 10%) — shrinking spend
     // doesn't cause cannibalization in any direction.
+    //
+    // Audit fix 2026-05-23 (HIGH-11 / O3-HI-03): `revenueGrowthPct === null`
+    // means early revenue was 0 with positive late revenue — undefined
+    // growth ratio mathematically (Infinity pre-fix). Semantically this
+    // is "revenue surged from nothing to something", the OPPOSITE of
+    // cannibalization — emit `none` with an explanatory reason rather
+    // than letting any threshold comparison short-circuit on a null
+    // operand.
     let risk: CannibalizationRisk = 'none';
     let reason: string;
+    // Hebrew-formatted percent display: shows "n/a" when null.
+    const revPctText =
+      revenueGrowthPct === null
+        ? 'לא מוגדר'
+        : `${(revenueGrowthPct * 100).toFixed(0)}%`;
     if (spendGrowthPct < 0.1) {
       risk = 'none';
       reason = `ההוצאה גדלה רק ${(spendGrowthPct * 100).toFixed(0)}% (סף 10%) — אין הסקייל המספק כדי לזהות קניבליזציה.`;
+    } else if (revenueGrowthPct === null) {
+      // Special-case the undefined-growth path. The cohort scaled (spend
+      // is past the +10% noise floor) AND the product's revenue went
+      // from zero to non-zero — definitionally not cannibalization, it's
+      // pure incrementality.
+      risk = 'none';
+      reason = `הכנסת המוצר בחצי הראשון הייתה אפס וזינקה בחצי השני — צמיחה לא מוגדרת באחוזים אבל ברורות אינקרמנטלית. אין קניבליזציה.`;
     } else if (spendGrowthPct >= 0.25 && revenueGrowthPct < 0.05) {
       risk = 'high';
-      reason = `הוצאת הקבוצה גדלה ${(spendGrowthPct * 100).toFixed(0)}% אבל ההכנסה של המוצר גדלה רק ${(revenueGrowthPct * 100).toFixed(0)}%. סקייל לא הניב כמעט כלום — קניבליזציה גבוהה או רוויה. שווה לעצור את הקמפיין החלש בקבוצה במקום לסקייל עוד.`;
+      reason = `הוצאת הקבוצה גדלה ${(spendGrowthPct * 100).toFixed(0)}% אבל ההכנסה של המוצר גדלה רק ${revPctText}. סקייל לא הניב כמעט כלום — קניבליזציה גבוהה או רוויה. שווה לעצור את הקמפיין החלש בקבוצה במקום לסקייל עוד.`;
     } else if (spendGrowthPct >= 0.15 && revenueGrowthPct < spendGrowthPct / 2) {
       risk = 'medium';
-      reason = `הוצאה +${(spendGrowthPct * 100).toFixed(0)}% מול הכנסה +${(revenueGrowthPct * 100).toFixed(0)}%. הסקייל גורר תשואה הולכת ופוחתת — חלק מהדולרים החדשים כנראה גונבים מקמפיינים אחרים בקבוצה.`;
+      reason = `הוצאה +${(spendGrowthPct * 100).toFixed(0)}% מול הכנסה +${revPctText}. הסקייל גורר תשואה הולכת ופוחתת — חלק מהדולרים החדשים כנראה גונבים מקמפיינים אחרים בקבוצה.`;
     } else if (
       // Audit fix 2026-05-23 (HIGH-04 multi-mapping): LOW threshold
       // raised from +10% spend → +20% spend (and add an absolute delta
@@ -473,10 +517,10 @@ export function detectProductCannibalization(args: {
       (lateSpend - earlySpend) >= 50
     ) {
       risk = 'low';
-      reason = `סימן מוקדם: הוצאה +${(spendGrowthPct * 100).toFixed(0)}% מול הכנסה +${(revenueGrowthPct * 100).toFixed(0)}%. תשואה הולכת ופוחתת אבל עדיין חיובית — שווה לעקוב בסקייל הבא.`;
+      reason = `סימן מוקדם: הוצאה +${(spendGrowthPct * 100).toFixed(0)}% מול הכנסה +${revPctText}. תשואה הולכת ופוחתת אבל עדיין חיובית — שווה לעקוב בסקייל הבא.`;
     } else {
       risk = 'none';
-      reason = `הוצאה +${(spendGrowthPct * 100).toFixed(0)}% והכנסה +${(revenueGrowthPct * 100).toFixed(0)}% — צמיחה פרופורציונלית או טובה יותר. אין סימני קניבליזציה.`;
+      reason = `הוצאה +${(spendGrowthPct * 100).toFixed(0)}% והכנסה +${revPctText} — צמיחה פרופורציונלית או טובה יותר. אין סימני קניבליזציה.`;
     }
 
     verdicts.push({
