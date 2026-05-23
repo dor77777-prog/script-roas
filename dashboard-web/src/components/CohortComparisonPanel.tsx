@@ -57,6 +57,46 @@ function fmtRoas(n: number | undefined | null): string {
 }
 
 /**
+ * Lexicographic comparator for `intraSection` cohort members. Sort order:
+ *   1. roasShopify desc           (the primary signal — combined ROAS)
+ *   2. roasShopifyPlatform desc   (secondary tiebreak — deterministic ROAS)
+ *   3. spend desc                 (tertiary tiebreak — bigger spender first)
+ * Missing-metrics rows sink to the bottom (return positive for `a` missing).
+ *
+ * HIGH-6 audit fix (2026-05-23): replaces the pre-fix composite key
+ * `roasShopify * 1e6 + roasShopifyPlatform * 1e3 + spend` which silently
+ * overflowed the 1e6/1e3 weight bands when `roasShopifyPlatform` reached
+ * extreme values (e.g. micro-spend cohorts where a tiny denominator
+ * inflated `roasShopifyPlatform` to ~5000). In that case the secondary
+ * key overruled the primary — the panel showed a noise-driven winner
+ * instead of the actual best-performing campaign by combined ROAS.
+ *
+ * Example regression: roasShopify=2 + roasShopifyPlatform=5000 + spend=10
+ *   composite = 2*1e6 + 5000*1e3 + 10  = 7,000,010
+ * vs. roasShopify=3 + roasShopifyPlatform=4 + spend=10
+ *   composite = 3*1e6 + 4*1e3 + 10     = 3,004,010
+ * Composite flipped the winner; lexicographic correctly picks the
+ * roasShopify=3 cohort.
+ *
+ * Exported so the regression suite can pin this exact behavior.
+ */
+export function compareIntraSectionMembers(
+  a: CohortMember,
+  b: CohortMember,
+): number {
+  const am = a.metrics;
+  const bm = b.metrics;
+  if (!am && !bm) return 0;
+  if (!am) return 1;
+  if (!bm) return -1;
+  if (am.roasShopify !== bm.roasShopify) return bm.roasShopify - am.roasShopify;
+  if (am.roasShopifyPlatform !== bm.roasShopifyPlatform) {
+    return bm.roasShopifyPlatform - am.roasShopifyPlatform;
+  }
+  return bm.spend - am.spend;
+}
+
+/**
  * Format a fraction as percentage with sign. 0.25 → "+25%", -0.10 → "−10%".
  *
  * Audit fix 2026-05-23 (HIGH-11 / O3-HI-03): accept `number | null` and
@@ -267,11 +307,11 @@ export function CohortComparisonPanel({
     { ...cohort.current, isCurrent: true },
     ...cohort.intraPlatformOthers.map(o => ({ ...o, isCurrent: false })),
   ];
-  intraSection.sort((a, b) => {
-    const sa = a.metrics ? a.metrics.roasShopify * 1e6 + a.metrics.roasShopifyPlatform * 1e3 + a.metrics.spend : -Infinity;
-    const sb = b.metrics ? b.metrics.roasShopify * 1e6 + b.metrics.roasShopifyPlatform * 1e3 + b.metrics.spend : -Infinity;
-    return sb - sa;
-  });
+  // HIGH-6 audit fix (2026-05-23): explicit lexicographic compare on
+  // (roasShopify desc, roasShopifyPlatform desc, spend desc). Extracted
+  // into `compareIntraSectionMembers` (exported) so the regression suite
+  // can pin the contract without standing up the full component tree.
+  intraSection.sort(compareIntraSectionMembers);
 
   const crossSection: Array<CohortMember & { isCurrent: boolean }> = cohort.crossPlatformOthers.length > 0
     ? cohort.crossPlatformOthers.map(o => ({ ...o, isCurrent: false }))
