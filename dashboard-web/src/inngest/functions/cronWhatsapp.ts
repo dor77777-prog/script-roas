@@ -9,7 +9,8 @@
 //
 //       12:00 IL → "today so far" snapshot
 //       18:00 IL → "today so far" snapshot
-//       00:10 IL → "yesterday full-day" summary (was 00:00-01:00 in Apps Script)
+//       00:30 IL → "yesterday full-day" summary (was 00:00-01:00 in Apps
+//                  Script; pre-audit it was 00:10 — see HIGH-13 fix below)
 //
 // Cron timezone (RESEARCH §Pitfall 1):
 //   `TZ=Asia/Jerusalem M H * * *` runs at local Asia/Jerusalem time
@@ -77,21 +78,30 @@ export const whatsappEvening = inngest.createFunction(
 );
 
 /**
- * 00:10 Asia/Jerusalem — end-of-day summary (YESTERDAY full day).
+ * 00:30 Asia/Jerusalem — end-of-day summary (YESTERDAY full day).
  *
- * Why 00:10 and not 00:00 sharp:
- *   - The cron-daily job at 00:05 IL upserts the prior-day data_daily row
- *     (Phase 05.6 Plan 08). Reading at 00:10 ensures we always see the
- *     fresh row, not a stale partial.
- *   - Operator chose 00:10 exactly per Phase 05.7.4 question 3 (vs Apps
- *     Script's loose 00:00-01:00 window).
+ * Why 00:30 and not 00:10:
+ *   - cron-daily fires at 00:05 IL (cronDaily.ts:966). Its handler has 4
+ *     retries × exponential backoff (Inngest D-B6); the worst-case finish
+ *     time is ~00:12.5 (5 min + 7.5 min retry envelope). At 00:10, the
+ *     EOD WhatsApp summary would race that retry budget — when cron-daily
+ *     hit a transient Meta 5xx and was on retry #3, `data_daily` for
+ *     yesterday hadn't landed yet, and `buildStoreSummary` returned null
+ *     → `buildTemplateParameters` rendered the no-data totals string. The
+ *     operator got a "no data" WhatsApp despite revenue having happened.
+ *   - Audit fix 2026-05-23 (HIGH-13 / O4-HI-02): move to 00:30. That
+ *     gives cron-daily a clear ~25-min runway before the reader fires,
+ *     well beyond the 7.5-min retry budget. Worst-case retry storms can
+ *     still complete in time.
+ *   - Operator chose strict cron expression per Phase 05.7.4 question 3
+ *     (vs Apps Script's loose 00:00-01:00 window).
  */
 export const whatsappEod = inngest.createFunction(
   {
     id: 'whatsapp-eod',
-    name: 'WhatsApp daily summary — 00:10 (yesterday EOD)',
+    name: 'WhatsApp daily summary — 00:30 (yesterday EOD)',
     retries: 3,
-    triggers: [{ cron: 'TZ=Asia/Jerusalem 10 0 * * *' }],
+    triggers: [{ cron: 'TZ=Asia/Jerusalem 30 0 * * *' }],
   },
   async ({ step }: { step: StepTools }) => {
     return await step.run('send', async () => {
