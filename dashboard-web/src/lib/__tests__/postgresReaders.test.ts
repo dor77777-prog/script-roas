@@ -335,6 +335,95 @@ describe('postgresReaders — additional shape coverage for plan-19 routes', () 
     expect(fromCalls).toContain('campaigns_daily');
   });
 
+  it('fetchCampaignsFromPostgres surfaces TikTok BUDGET_EXCEED with hasActivity=false (AUDIT U-01)', async () => {
+    // AUDIT U-01 (2026-05-24) — the regression this test prevents:
+    //
+    //   Pre-fix, postgresReaders.ts:608 inlined
+    //   `statusNorm === 'ADGROUP_STATUS_DELIVERY_OK'` as the ONLY TikTok
+    //   "currently active" status. A row with effective_status=
+    //   ADGROUP_STATUS_BUDGET_EXCEED AND zero spend/impressions/conversions
+    //   (typical mid-day BUDGET_EXCEED placeholder UPSERTed by cron-live
+    //   right after the daily cap was hit) was silently dropped because
+    //   hasActivity=false AND isCurrentlyActive=false.
+    //
+    //   Result: the operator saw the row vanish from the dashboard mid-day
+    //   even though TikTok Ads Manager still painted it as Active. The
+    //   row would reappear tomorrow once spend > 0 in the new day.
+    //
+    // Post-fix the reader consults the shared TIKTOK_ACTIVE_ENOUGH set,
+    // which includes BUDGET_EXCEED. The row now surfaces correctly.
+    setSupabaseRows([
+      {
+        date: '2026-05-15',
+        store_id: 'uzoshop',
+        store_name: 'uzoshop',
+        platform: 'tiktok',
+        campaign_id: 'tt-c-1',
+        campaign_name: 'TikTok Spring Promo',
+        ad_set_id: 'tt-as-1',
+        ad_set_name: 'AdGroup BE',
+        // hasActivity = false (zero spend AND zero impressions AND zero conversions).
+        spend_cad: 0,
+        impressions: 0,
+        clicks: 0,
+        conversions: 0,
+        conversion_value_cad: 0,
+        campaign_budget_cad: null,
+        ad_set_budget_cad: 50,
+        budget_type: 'ABO',
+        // The U-01 trigger: TikTok daily cap hit, paused TODAY, resumes
+        // tomorrow. Pre-fix this status alone would NOT count as
+        // currently-active so the row would drop.
+        effective_status: 'ADGROUP_STATUS_BUDGET_EXCEED',
+      },
+    ]);
+
+    const rows = await fetchCampaignsFromPostgres();
+
+    // Post-fix expectation: the row SURFACES (isCurrentlyActive=true via
+    // TIKTOK_ACTIVE_ENOUGH membership).
+    expect(rows.length).toBe(1);
+    expect(rows[0].platform).toBe('TikTok');
+    expect(rows[0].campaignId).toBe('tt-c-1');
+    expect(rows[0].effectiveStatus).toBe('ADGROUP_STATUS_BUDGET_EXCEED');
+    expect(rows[0].spend).toBe(0);
+    expect(rows[0].impressions).toBe(0);
+  });
+
+  it('fetchCampaignsFromPostgres still drops TikTok DISABLE rows with hasActivity=false (AUDIT U-01 negative)', async () => {
+    // Symmetry partner to the test above: an ad-group in a true OFF
+    // status (DISABLE) with zero activity in the range MUST NOT surface.
+    // This prevents the U-01 fix from being over-broad (e.g. mistakenly
+    // including the OFF half of the TikTok taxonomy).
+    setSupabaseRows([
+      {
+        date: '2026-05-15',
+        store_id: 'uzoshop',
+        store_name: 'uzoshop',
+        platform: 'tiktok',
+        campaign_id: 'tt-c-2',
+        campaign_name: 'TikTok Paused Promo',
+        ad_set_id: 'tt-as-2',
+        ad_set_name: 'AdGroup DISABLE',
+        spend_cad: 0,
+        impressions: 0,
+        clicks: 0,
+        conversions: 0,
+        conversion_value_cad: 0,
+        campaign_budget_cad: null,
+        ad_set_budget_cad: 50,
+        budget_type: 'ABO',
+        // DISABLE = truly paused, NOT in TIKTOK_ACTIVE_ENOUGH.
+        effective_status: 'ADGROUP_STATUS_DISABLE',
+      },
+    ]);
+
+    const rows = await fetchCampaignsFromPostgres();
+
+    // Dropped — hasActivity=false AND isCurrentlyActive=false.
+    expect(rows.length).toBe(0);
+  });
+
   it('fetchAdsFromPostgres maps to AdRow shape and TitleCases platform', async () => {
     setSupabaseRows([
       {

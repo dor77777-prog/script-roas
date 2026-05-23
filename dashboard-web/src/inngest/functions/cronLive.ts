@@ -106,6 +106,7 @@ import {
 } from '@/lib/fetchers/tiktok';
 import { getFxRate } from '@/lib/fetchers/fx';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { TIKTOK_ACTIVE_ENOUGH } from '@/lib/platformConfig';
 
 // =============================================================================
 // Constants
@@ -230,23 +231,20 @@ function dayInJerusalem(instantMs: number): string {
 // campaigns showing in TikTok Ads Manager as Active were missing from the
 // dashboard's placeholder-enrollment step.
 //
-// The TIKTOK_ACTIVE_ENOUGH set below mirrors the dashboard chip helper
-// `CampaignsTableRow.isCampaignOff`'s TIKTOK_ACTIVE_ENOUGH (the full
-// off vs. active taxonomy + a more verbose JSDoc lives there — this
-// cron only needs the "is delivering / preparing" half because the OFF
-// path here just returns false from `isActiveForPlatform`). Both helpers
-// MUST agree — otherwise an ad-set in BUDGET_EXCEED could be UPSERTed
-// here as "active" while the row chip simultaneously paints it "off".
+// Audit fix 2026-05-24 (U-01): the set previously lived inline here; it
+// was duplicated as a single-value inline check in postgresReaders.ts:608
+// (`statusNorm === 'ADGROUP_STATUS_DELIVERY_OK'`), so an ad-group in
+// BUDGET_EXCEED with hasActivity=false was enrolled by the writer but
+// dropped by the reader. Both writer + reader now consume the shared
+// `TIKTOK_ACTIVE_ENOUGH` from `@/lib/platformConfig` — one source of
+// truth, no drift possible. The full off-vs-active taxonomy (+ chip
+// JSDoc) still lives in `CampaignsTableRow.isCampaignOff`; the chip
+// has the same set + an OFF set, while the writer/reader pair only
+// needs the active half because anything outside it falls through to
+// "not delivering" → not enrolled / not surfaced.
 //
 // Source: TikTok Business API `/adgroup/get/` `operation_status` field.
 // https://business-api.tiktok.com/portal/docs?id=1739561631127553
-const TIKTOK_ACTIVE_ENOUGH = new Set([
-  'ADGROUP_STATUS_DELIVERY_OK',
-  'ADGROUP_STATUS_BUDGET_EXCEED',
-  'ADGROUP_STATUS_AUDIT',
-  'ADGROUP_STATUS_REVIEWING',
-  'ADGROUP_STATUS_NOT_START',
-]);
 
 /**
  * Should an ad-set's current `status` qualify for placeholder enrollment

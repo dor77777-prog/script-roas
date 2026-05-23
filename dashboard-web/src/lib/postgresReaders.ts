@@ -42,6 +42,7 @@ import type { CampaignRow } from './campaigns';
 import type { AdRow } from './ads';
 import type { OrderAttributionRow, OrderLineItem } from './ordersAttribution';
 import type { CatalogProduct } from './productCatalog';
+import { TIKTOK_ACTIVE_ENOUGH } from './platformConfig';
 
 /**
  * Generic row type. Without a generated `Database` schema, supabase-js's
@@ -593,8 +594,21 @@ export async function fetchCampaignsFromPostgres(
     //
     // (a) hasActivity → real metric data, regardless of status.
     // (b) isCurrentlyActive → cron-live placeholder rows for ad-sets
-    //     in the platform's "on" state (Meta=ACTIVE, Google=ENABLED,
-    //     TikTok=ADGROUP_STATUS_DELIVERY_OK).
+    //     in the platform's "on" state.
+    //       Meta:   'ACTIVE'
+    //       Google: 'ENABLED'
+    //       TikTok: any value in TIKTOK_ACTIVE_ENOUGH (DELIVERY_OK,
+    //               BUDGET_EXCEED, AUDIT, REVIEWING, NOT_START).
+    //
+    // Audit fix 2026-05-24 (U-01): the TikTok branch previously checked
+    // only `ADGROUP_STATUS_DELIVERY_OK` — out of step with the writer
+    // (`cronLive.ts:isActiveForPlatform`) which already used the full
+    // 5-status active set. Effect: an ad-group in BUDGET_EXCEED with
+    // hasActivity=false was UPSERTed as a placeholder by cron-live but
+    // silently dropped by this reader, so the operator saw the row vanish
+    // from the dashboard mid-day even though TikTok Ads Manager still
+    // painted it as Active. Both helpers now import the shared
+    // `TIKTOK_ACTIVE_ENOUGH` set from `@/lib/platformConfig`.
     const hasActivity = spend > 0 || impressions > 0 || conversions > 0;
     const effectiveStatusRaw = (r as { effective_status?: unknown }).effective_status;
     const statusNorm =
@@ -605,7 +619,7 @@ export async function fetchCampaignsFromPostgres(
     const isCurrentlyActive =
       (platformNorm === 'meta' && statusNorm === 'ACTIVE') ||
       (platformNorm === 'google' && statusNorm === 'ENABLED') ||
-      (platformNorm === 'tiktok' && statusNorm === 'ADGROUP_STATUS_DELIVERY_OK');
+      (platformNorm === 'tiktok' && TIKTOK_ACTIVE_ENOUGH.has(statusNorm));
     if (!hasActivity && !isCurrentlyActive) {
       continue;
     }
