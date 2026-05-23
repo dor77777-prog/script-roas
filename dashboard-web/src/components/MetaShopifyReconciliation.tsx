@@ -645,7 +645,16 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 tick={{ fontSize: 9, fill: CHART_COLORS.reconciliationAxis }}
                 tickLine={false}
                 axisLine={false}
-                tickFormatter={v => `C$${formatCurrency(Number(v))}`}
+                // c/HI-02: pick decimal precision per magnitude. The old
+                // `formatCurrency(v)` defaulted to 0 decimals, so for a
+                // chart spanning $0–$3 Recharts auto-picked ticks at 0.5,
+                // 1.0, 1.5, 2.0 which all rounded to C$0/C$1/C$2 with
+                // duplicate-adjacent labels. >=100 keep integer, otherwise
+                // show 2 decimals so each tick has a unique label.
+                tickFormatter={v => {
+                  const n = Number(v);
+                  return `C$${formatCurrency(n, n >= 100 ? 0 : 2)}`;
+                }}
                 width={56}
                 domain={[0, 'auto']}
               />
