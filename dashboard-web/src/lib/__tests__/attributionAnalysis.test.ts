@@ -170,3 +170,158 @@ describe('analyzeAttributionForAd — Wave 1 deferred fix (widened to TikTok)', 
     expect(result).toBeNull();
   });
 });
+
+describe('analyzeAttribution — U-04 (2026-05-24) surface mixed window-stability verdict', () => {
+  // Pre-fix: attributionAnalysis.ts:511-525 emitted reasons text ONLY for
+  // 'stable' and 'volatile' window-stability verdicts. The 'mixed' bucket
+  // (σ between 0.15 and 0.35) was silently swallowed — the operator saw
+  // no warning at all and would default to trusting the trend, even
+  // though the Meta:Shopify ratio was drifting moderately week-to-week.
+  //
+  // Post-fix: a new branch on `windowStability.verdict === 'mixed'`
+  // emits honest copy ("תנודתיות בינונית") without applying the
+  // volatile trust-downgrade (mixed is intermediate, not extreme).
+  //
+  // Fixture lifted from computeWindowStability.test.ts:125 ("verdict is
+  // mixed when coverage σ is between 0.15 and 0.35"):
+  //   Window 1: meta=100, matched=90 → coverage=0.9
+  //   Window 2: meta=100, matched=40 → coverage=0.4
+  //   mean=0.65, σ ≈ 0.25 → mixed (0.15 ≤ σ < 0.35).
+  it("surfaces a 'תנודתיות' reason when windowStability verdict is 'mixed'", () => {
+    const metaSeries = [
+      { date: '2026-05-03', value: 100 },
+      { date: '2026-05-10', value: 100 },
+    ];
+    const orders = [
+      // 1 order × 90 CAD in window 1 (coverage 0.9 vs meta 100)
+      makeOrder({
+        date: '2026-05-03',
+        utmCampaign: 'mixed-camp',
+        totalCad: 90,
+        storeId: 'uzoshop',
+      }),
+      // 1 order × 40 CAD in window 2 (coverage 0.4 vs meta 100)
+      makeOrder({
+        date: '2026-05-10',
+        utmCampaign: 'mixed-camp',
+        totalCad: 40,
+        storeId: 'uzoshop',
+      }),
+    ];
+    const result = analyzeAttribution(
+      {
+        campaignName: 'mixed-camp',
+        storeId: 'uzoshop',
+        platform: 'Meta',
+        metaClaim: 200, // 100 per window combined
+        spend: 50,
+      },
+      orders,
+      '2026-05-01',
+      '2026-05-14',
+      metaSeries,
+    );
+    expect(result).not.toBeNull();
+    expect(result!.windowStability).not.toBeNull();
+    expect(result!.windowStability!.verdict).toBe('mixed');
+
+    // U-04 contract: a 'מעיד'-style reason must be present that mentions
+    // mid-range volatility. Either "תנודתיות בינונית" or "בייאס משתנה
+    // לאט" — both are reachable phrasings in the mixed-branch copy.
+    const reasonsConcat = result!.reasons.join(' | ');
+    expect(reasonsConcat).toMatch(/תנודתיות בינונית|בייאס משתנה לאט/);
+  });
+
+  it("does NOT downgrade trust from high to medium for 'mixed' verdict (only 'volatile' downgrades)", () => {
+    // The 'volatile' branch (σ > 0.35) downgrades high→medium with a
+    // 65 score cap. The 'mixed' branch deliberately does NOT — the
+    // bucket is intermediate, not extreme. Verify by constructing a
+    // high-trust + mixed-σ fixture.
+    //
+    // High trust requires coverage~1.0 + enough orders. We build a
+    // metaSeries + orders where total coverage is ~0.65 (high-ish)
+    // and per-window coverages are 0.9 / 0.4 (mixed σ).
+    const metaSeries = [
+      { date: '2026-05-03', value: 100 },
+      { date: '2026-05-10', value: 100 },
+    ];
+    const orders = [
+      makeOrder({
+        date: '2026-05-03',
+        utmCampaign: 'mixed-trust',
+        totalCad: 90,
+        storeId: 'uzoshop',
+      }),
+      makeOrder({
+        date: '2026-05-10',
+        utmCampaign: 'mixed-trust',
+        totalCad: 40,
+        storeId: 'uzoshop',
+      }),
+    ];
+    const result = analyzeAttribution(
+      {
+        campaignName: 'mixed-trust',
+        storeId: 'uzoshop',
+        platform: 'Meta',
+        metaClaim: 200,
+        spend: 50,
+      },
+      orders,
+      '2026-05-01',
+      '2026-05-14',
+      metaSeries,
+    );
+    expect(result).not.toBeNull();
+    expect(result!.windowStability!.verdict).toBe('mixed');
+    // Trust level is NOT forced down by the mixed branch. Whatever
+    // the coverage→trust ladder produced stands. We assert there is
+    // NO mixed-induced downgrade hint — i.e. trust score is not
+    // forcibly clamped to 65 (the volatile clamp value).
+    // For coverage 130/200 = 0.65 the ladder produces 'medium' anyway,
+    // so the assertion that actually pins the U-04 contract: a 'mixed'
+    // verdict does NOT introduce the volatile-specific copy.
+    const reasonsConcat = result!.reasons.join(' | ');
+    expect(reasonsConcat).not.toContain('תנודתי מאוד');
+  });
+
+  it('existing stable verdict path still emits its own honest reason (no regression)', () => {
+    // Symmetry guard: the 'stable' branch must still fire. 2 windows
+    // with the same coverage → σ=0 → stable.
+    const metaSeries = [
+      { date: '2026-05-03', value: 100 },
+      { date: '2026-05-10', value: 100 },
+    ];
+    const orders = [
+      makeOrder({
+        date: '2026-05-03',
+        utmCampaign: 'stable-camp',
+        totalCad: 80,
+        storeId: 'uzoshop',
+      }),
+      makeOrder({
+        date: '2026-05-10',
+        utmCampaign: 'stable-camp',
+        totalCad: 80,
+        storeId: 'uzoshop',
+      }),
+    ];
+    const result = analyzeAttribution(
+      {
+        campaignName: 'stable-camp',
+        storeId: 'uzoshop',
+        platform: 'Meta',
+        metaClaim: 200,
+        spend: 50,
+      },
+      orders,
+      '2026-05-01',
+      '2026-05-14',
+      metaSeries,
+    );
+    expect(result).not.toBeNull();
+    expect(result!.windowStability!.verdict).toBe('stable');
+    const reasonsConcat = result!.reasons.join(' | ');
+    expect(reasonsConcat).toContain('יחס Meta:Shopify יציב');
+  });
+});

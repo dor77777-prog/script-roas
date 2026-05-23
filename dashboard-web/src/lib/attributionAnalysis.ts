@@ -508,6 +508,16 @@ export function analyzeAttribution(
   }
 
   // Augment reasons + recommendation with the new signals.
+  //
+  // Audit fix 2026-05-24 (U-04): the 'mixed' verdict was previously
+  // never surfaced to the operator — only 'stable' and 'volatile'
+  // emitted tooltip text. The 'mixed' bucket (σ in 0.15-0.35) was
+  // therefore silently swallowed: an operator looking at a Meta:Shopify
+  // ratio that drifted moderately week-to-week saw no warning at all
+  // and would default to trusting the trend. The fix adds a 'mixed'
+  // branch that emits honest copy ("תנודתיות בינונית בחלון") without
+  // applying the volatile trust-downgrade (the bucket is intermediate;
+  // the σ isn't extreme enough to force the high→medium drop).
   if (windowStability && windowStability.windowCountWithData >= 2) {
     if (windowStability.verdict === 'stable') {
       reasons.push(
@@ -521,6 +531,14 @@ export function analyzeAttribution(
       if (trust.level === 'high') {
         trust = { level: 'medium', label: 'חלקי', score: Math.min(trust.score, 65) };
       }
+    } else if (windowStability.verdict === 'mixed') {
+      // AUDIT U-04 (2026-05-24): intermediate σ (0.15 ≤ σ < 0.35) gets
+      // its own honest tooltip line. We do NOT downgrade trust here —
+      // 'mixed' is not extreme enough to flip a high read to medium,
+      // but the operator deserves to know the ratio is drifting.
+      reasons.push(
+        `יחס Meta:Shopify מציג תנודתיות בינונית בחלון של ${windowStability.windowCountWithData} שבועות (σ=${(windowStability.stdDev * 100).toFixed(0)}%) — בייאס משתנה לאט; אפשר להסתמך על המגמה הכללית אבל לא על המספר היחיד`,
+      );
     }
   }
   if (outlierDays.length > 0) {
