@@ -3,8 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Target, Edit3, Check, X, TrendingUp, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { DashboardData, Filters as F } from '@/lib/types';
-import { filterRows } from '@/lib/analytics';
+import type { DashboardData } from '@/lib/types';
 import {
   computePacing,
   forecastMonthEnd,
@@ -24,20 +23,23 @@ import {
 
 type Props = {
   data: DashboardData;
-  /**
-   * Global dashboard filters. d/CR-04 (audit 2026-05-23): the goal tracker
-   * must scope month-to-date revenue + forecast to the operator's selected
-   * store; without it, "X% מהיעד" rendered the all-stores total even when
-   * the dashboard was filtered to a single store, contradicting every other
-   * KPI on the same screen. `filters.range` is intentionally NOT used here
-   * — the widget is always month-anchored (forecastMonthEnd derives its
-   * own monthStart/today). Only `filters.store` matters for filtering the
-   * rows fed into the forecaster.
-   */
-  filters: F;
 };
 
-export function GoalTracker({ data, filters }: Props) {
+/**
+ * The monthly goal is intentionally GLOBAL — one business-wide target the
+ * operator sets once for "all stores combined", with neither the store
+ * filter nor the date range affecting it. Two consequences:
+ *
+ *  - The widget feeds `data.rows` (every store) straight to
+ *    `forecastMonthEnd`; the function does its own month-anchored slice
+ *    so date filtering also wouldn't help.
+ *  - It does NOT accept `filters` as a prop. An earlier revision (audit
+ *    d/CR-04, 2026-05-23) wired in `filters.store` so the panel scoped
+ *    MTD per store; the operator corrected that on 2026-05-23 — the
+ *    intent is a single goal across the whole business, not per-store
+ *    sub-goals.
+ */
+export function GoalTracker({ data }: Props) {
   const [goal, setGoal] = useState<number | null>(null);
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -55,31 +57,12 @@ export function GoalTracker({ data, filters }: Props) {
     return () => window.removeEventListener('roas-goal-changed', onChange);
   }, []);
 
-  // d/CR-04 (audit 2026-05-23): filter rows by the global store selection
-  // before forecasting. Pass a full-month range so filterRows' date guard
-  // doesn't accidentally trim out today's data — forecastMonthEnd does its
-  // OWN month-window slicing internally (rows outside the month are simply
-  // ignored), so the range here just needs to be permissive. Using the
-  // operator's selected range would clip MTD when they picked a historical
-  // window like "last month".
-  const FULL_RANGE = useMemo(
-    () => ({ from: '0000-01-01', to: '9999-12-31' }),
-    [],
-  );
-  const scopedRows = useMemo(
-    () => filterRows(data.rows, FULL_RANGE, filters.store),
-    [data.rows, filters.store, FULL_RANGE],
-  );
-  const forecast = useMemo(() => forecastMonthEnd(scopedRows), [scopedRows]);
+  // Always all-stores, always month-anchored — see the component docstring.
+  const forecast = useMemo(() => forecastMonthEnd(data.rows), [data.rows]);
   const daysInMonth = useMemo(
     () => forecast.daysElapsedThisMonth + forecast.daysRemainingThisMonth,
     [forecast],
   );
-  // Header suffix surfaces the active scope so the operator sees at a
-  // glance whether the goal panel matches the rest of the (filtered)
-  // dashboard. When store === 'All', no suffix — the default "יעד חודשי"
-  // already communicates "all stores".
-  const headerSuffix = filters.store === 'All' ? '' : ` · ${filters.store}`;
 
   const pacing = useMemo(
     () => computePacing(
@@ -271,7 +254,7 @@ export function GoalTracker({ data, filters }: Props) {
               <Target size={14} />
             </span>
             <h2 className="text-sm sm:text-base font-semibold text-text-primary tracking-tight">
-              יעד חודשי{headerSuffix}
+              יעד חודשי
             </h2>
             <span className={cn(
               'inline-flex items-center px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold rounded',

@@ -1,24 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { filterRows } from '@/lib/analytics';
 import { forecastMonthEnd } from '@/lib/insights';
 import type { DailyRow } from '@/lib/types';
 
 /**
- * d/CR-04 (audit 2026-05-23) — locks the GoalTracker store-scoping fix.
+ * Operator correction (2026-05-23) — supersedes the original d/CR-04 fix.
  *
- * The component used to pass `data.rows` (every row, every store) directly
- * to `forecastMonthEnd`, so "X% מהיעד" stayed the all-stores total even
- * when the dashboard's global store filter narrowed every other KPI to a
- * single store. The fix runs `filterRows(rows, range, filters.store)`
- * BEFORE `forecastMonthEnd` so the panel scopes correctly.
+ * The monthly revenue goal is a single business-wide target. It must NOT
+ * change with the dashboard's store filter or its date range. The earlier
+ * audit-fix wired `filterRows(rows, FULL_RANGE, filters.store)` into the
+ * GoalTracker so MTD scoped per store; the operator rejected that — the
+ * intent is one goal across the whole business, not a per-store sub-goal.
  *
- * This suite tests the exact pipeline the component now uses:
- *   filterRows(rows, FULL_RANGE, store) -> forecastMonthEnd(scopedRows)
- *
- * The test is independent of "today" — we build a month-anchored fixture
- * around whatever today's Israel-tz YYYY-MM is. forecastMonthEnd's
- * `r.date >= monthStart && r.date <= today` slice will accept all of our
- * fixture rows (we put them on today's date) so the math is deterministic.
+ * This suite locks the new contract:
+ *   - forecastMonthEnd(data.rows) is fed the unfiltered row set
+ *   - MTD revenue always equals the sum across every store
+ *   - No store-specific subset is ever computed by the panel
  */
 
 function todayInIsrael(): string {
@@ -49,59 +45,31 @@ function makeRow(overrides: Partial<DailyRow> = {}): DailyRow {
   };
 }
 
-// Permissive range that mirrors what GoalTracker passes to filterRows so
-// rows in the current month always survive the date guard. The component
-// uses '0000-01-01'..'9999-12-31' for the same reason.
-const FULL_RANGE = { from: '0000-01-01', to: '9999-12-31' };
-
-describe('GoalTracker scoping pipeline — locks d/CR-04', () => {
-  it('All-stores view sums every row regardless of storeName', () => {
+describe('GoalTracker is global — locks operator correction (2026-05-23)', () => {
+  it('MTD revenue is the sum across every store, regardless of storeName', () => {
     const rows: DailyRow[] = [
       makeRow({ storeName: 'uzoshop',   revenue: 1000 }),
       makeRow({ storeName: 'Zol Plus',  revenue: 2000 }),
       makeRow({ storeName: '360usmile', revenue: 3000 }),
     ];
-    const scoped = filterRows(rows, FULL_RANGE, 'All');
-    const forecast = forecastMonthEnd(scoped);
+    // Component now feeds data.rows directly (no filterRows call).
+    const forecast = forecastMonthEnd(rows);
     expect(forecast.monthToDateRevenue).toBe(6000);
   });
 
-  it('Filtered to uzoshop returns ONLY uzoshop revenue, ignoring siblings', () => {
-    const rows: DailyRow[] = [
-      makeRow({ storeName: 'uzoshop',   revenue: 1000 }),
-      makeRow({ storeName: 'Zol Plus',  revenue: 2000 }),
-      makeRow({ storeName: '360usmile', revenue: 3000 }),
-    ];
-    const scoped = filterRows(rows, FULL_RANGE, 'uzoshop');
-    const forecast = forecastMonthEnd(scoped);
-    // Pre-fix: would have returned 6000 (the unfiltered total) — the
-    // operator's complaint. Post-fix: 1000 (uzoshop only).
-    expect(forecast.monthToDateRevenue).toBe(1000);
-  });
-
-  it('Filtered store with NO matching rows returns 0 (not the all-stores total)', () => {
-    const rows: DailyRow[] = [
-      makeRow({ storeName: 'uzoshop',   revenue: 1000 }),
-      makeRow({ storeName: 'Zol Plus',  revenue: 2000 }),
-    ];
-    const scoped = filterRows(rows, FULL_RANGE, '360usmile');
-    const forecast = forecastMonthEnd(scoped);
-    expect(forecast.monthToDateRevenue).toBe(0);
-  });
-
-  it('Filtered store with matching rows: spend is also scoped', () => {
+  it('MTD spend is also the unfiltered cross-store total', () => {
     const rows: DailyRow[] = [
       makeRow({ storeName: 'uzoshop',  revenue: 1000, totalSpend: 100 }),
       makeRow({ storeName: 'Zol Plus', revenue: 2000, totalSpend: 500 }),
     ];
-    const scopedAll = filterRows(rows, FULL_RANGE, 'All');
-    const scopedUzo = filterRows(rows, FULL_RANGE, 'uzoshop');
-    const all = forecastMonthEnd(scopedAll);
-    const uzo = forecastMonthEnd(scopedUzo);
-    expect(all.monthToDateSpend).toBe(600);
-    expect(uzo.monthToDateSpend).toBe(100);
-    // And revenue moves in lockstep — both numbers belong to the same
-    // store after filtering.
-    expect(uzo.monthToDateRevenue).toBe(1000);
+    const forecast = forecastMonthEnd(rows);
+    expect(forecast.monthToDateRevenue).toBe(3000);
+    expect(forecast.monthToDateSpend).toBe(600);
+  });
+
+  it('Empty row set produces zeros, never a per-store fallback', () => {
+    const forecast = forecastMonthEnd([]);
+    expect(forecast.monthToDateRevenue).toBe(0);
+    expect(forecast.monthToDateSpend).toBe(0);
   });
 });
