@@ -242,32 +242,73 @@ export function TodayLive({
     return Object.values(ordersByStoreToday).reduce((a, b) => a + b, 0);
   }, [ordersByStoreToday]);
 
-  // Aggregate impressions + spend overall and per store from today's
-  // campaign rows. Per-store is keyed by storeName so it joins cleanly
-  // with the existing storeAggs from analytics.
+  // Aggregate impressions + spend overall, per store, AND per
+  // (store, platform) from today's campaign rows. Per-store is keyed by
+  // storeName so it joins cleanly with the existing storeAggs from
+  // analytics. Per-(store, platform) lets each live card show CPM
+  // broken down by Meta / Google / TikTok separately — operator request
+  // 2026-05-23, "ה-CPM ייהיה מחולק לכל פלטפורמה בכל חנות".
+  type PlatformBucket = { meta: number; google: number; tiktok: number };
   const cpmData = useMemo(() => {
     const rows = campaignsToday?.rows ?? [];
     let totalSpend = 0;
     let totalImpressions = 0;
     const byStore = new Map<string, { spend: number; impressions: number }>();
+    // (storeName) → per-platform spend/impressions buckets. Platforms not
+    // present for a store keep zero, which the renderer surfaces as "—".
+    const spendByStoreByPlatform = new Map<string, PlatformBucket>();
+    const impressionsByStoreByPlatform = new Map<string, PlatformBucket>();
+    function platformKey(p: string): keyof PlatformBucket | null {
+      // CampaignRow.platform comes from postgresReaders.titleCasePlatform —
+      // always 'Meta' | 'Google' | 'TikTok' for our three platforms.
+      // Anything else (legacy, future) is silently dropped from the
+      // per-platform CPM breakdown but still counts toward the per-store
+      // average above. We don't want unknown platforms to crash or hide
+      // numbers that the average already includes.
+      if (p === 'Meta') return 'meta';
+      if (p === 'Google') return 'google';
+      if (p === 'TikTok') return 'tiktok';
+      return null;
+    }
     for (const r of rows) {
       if (r.date !== today) continue;
       totalSpend += r.spend;
       totalImpressions += r.impressions;
-      const key = r.storeName;
-      if (!byStore.has(key)) byStore.set(key, { spend: 0, impressions: 0 });
-      const s = byStore.get(key)!;
+      const sn = r.storeName;
+      if (!byStore.has(sn)) byStore.set(sn, { spend: 0, impressions: 0 });
+      const s = byStore.get(sn)!;
       s.spend += r.spend;
       s.impressions += r.impressions;
+      const pk = platformKey(r.platform);
+      if (pk) {
+        if (!spendByStoreByPlatform.has(sn)) {
+          spendByStoreByPlatform.set(sn, { meta: 0, google: 0, tiktok: 0 });
+          impressionsByStoreByPlatform.set(sn, { meta: 0, google: 0, tiktok: 0 });
+        }
+        spendByStoreByPlatform.get(sn)![pk] += r.spend;
+        impressionsByStoreByPlatform.get(sn)![pk] += r.impressions;
+      }
     }
     const cpmByStore = new Map<string, number>();
     for (const [store, v] of byStore) {
       cpmByStore.set(store, v.impressions > 0 ? (v.spend / v.impressions) * 1000 : 0);
     }
+    // Per-(store, platform) CPM: 0 when impressions===0 so the renderer
+    // can disambiguate "no impressions yet today" from a real CPM of 0.
+    const cpmByStoreByPlatform = new Map<string, PlatformBucket>();
+    for (const [store, spends] of spendByStoreByPlatform) {
+      const imps = impressionsByStoreByPlatform.get(store)!;
+      cpmByStoreByPlatform.set(store, {
+        meta:   imps.meta   > 0 ? (spends.meta   / imps.meta)   * 1000 : 0,
+        google: imps.google > 0 ? (spends.google / imps.google) * 1000 : 0,
+        tiktok: imps.tiktok > 0 ? (spends.tiktok / imps.tiktok) * 1000 : 0,
+      });
+    }
     return {
       cpm: totalImpressions > 0 ? (totalSpend / totalImpressions) * 1000 : 0,
       impressions: totalImpressions,
       cpmByStore,
+      cpmByStoreByPlatform,
     };
   }, [campaignsToday, today]);
 
@@ -382,6 +423,12 @@ export function TodayLive({
               // store doesn't have TikTok at all".
               const hasTikTok = storeHasTikTok(s.store);
               const storeCpm = cpmData.cpmByStore.get(s.store) ?? 0;
+              // Per-platform CPM breakdown for this store (operator request
+              // 2026-05-23): "ה-CPM יהיה מחולק לכל פלטפורמה בכל חנות ואז
+              // יהיה גם cpm ממוצע". Defaults to zero buckets when the
+              // store has no campaign rows yet today.
+              const storeCpmByPlatform = cpmData.cpmByStoreByPlatform.get(s.store)
+                ?? { meta: 0, google: 0, tiktok: 0 };
               const storeOrders = ordersByStoreToday[s.store];
               return (
                 <div
@@ -449,11 +496,41 @@ export function TodayLive({
                         {ordersToday === undefined ? '…' : formatNumber(storeOrders ?? 0, 0)}
                       </span>
                     </div>
+                    {/* CPM block: row 1 shows the cross-platform average
+                        for the store (same field as before, label clarified
+                        to "ממוצע"). Row 2 is an indented per-platform
+                        breakdown mirroring the "סך הוצאה" pattern so the
+                        operator can spot a single misbehaving platform's
+                        CPM without leaving the live card. Operator request
+                        2026-05-23. */}
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-text-muted">CPM</span>
+                      <span className="text-text-muted">CPM ממוצע</span>
                       <span className="text-text-primary font-semibold">
                         {storeCpm > 0 ? `CAD ${formatCurrency(storeCpm, 2)}` : '—'}
                       </span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2 ps-3 text-[11px] text-text-muted flex-wrap">
+                      <span>
+                        Meta: <span className="text-text-secondary tabular-nums">
+                          {storeCpmByPlatform.meta > 0 ? formatCurrency(storeCpmByPlatform.meta, 2) : '—'}
+                        </span>
+                      </span>
+                      <span>·</span>
+                      <span>
+                        Google: <span className="text-text-secondary tabular-nums">
+                          {hasGoogle && storeCpmByPlatform.google > 0 ? formatCurrency(storeCpmByPlatform.google, 2) : '—'}
+                        </span>
+                      </span>
+                      {hasTikTok && (
+                        <>
+                          <span>·</span>
+                          <span>
+                            TikTok: <span className="text-text-secondary tabular-nums">
+                              {storeCpmByPlatform.tiktok > 0 ? formatCurrency(storeCpmByPlatform.tiktok, 2) : '—'}
+                            </span>
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
