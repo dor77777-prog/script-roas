@@ -1,11 +1,25 @@
 // TEST-06 (5.2.2.1): single source of truth for chart hex literals.
 // Values mirror the Tailwind theme/default utility colors used by these charts.
+//
+// c/HI-01 (audit-2026-05-23-v2): colorblind-aware palette notes.
+//   - TikTok was previously `#ec4899` (pink) which sat ~340° on the hue
+//     wheel, only ~60° from Organic purple (`#9333ea`, ~280°). For
+//     protanopia / deuteranopia (~8% of male viewers) the two collapsed
+//     into nearly identical magenta-ish lines. Replaced with slate-700
+//     (`#374151`) — semantically the "non-magenta neutral" channel and
+//     maximally hue-separated from purple. Grayscale parsing also wins:
+//     slate is the darkest line on the chart, easy to anchor on.
+//   - Meta amber (`#d97706`) vs Shopify green (`#15803d`) is the most
+//     common red-green confusion pair, but Shopify is rendered with a
+//     6-3 dashed pattern + 2.5px stroke (vs Meta's 1.5px solid), so the
+//     pattern channel disambiguates without color. Do not "fix" Meta's
+//     hue without also rethinking the dash/solid contract.
 export const CHART_COLORS = {
   axis: '#7a8a9a',
   reconciliationAxis: '#64748b',
   meta: '#d97706',
   google: '#2563eb',
-  tiktok: '#ec4899',
+  tiktok: '#374151',
   organic: '#9333ea',
   shopify: '#15803d',
   cpm: '#d97706',

@@ -672,7 +672,10 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                         <span>Google: CAD {formatCurrency(d.google)}</span>
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
-                        <span className="inline-block w-2 h-2 rounded-full bg-pink-500" />
+                        {/* c/HI-01: slate-700 swatch matches CHART_COLORS.tiktok
+                            (was pink-500, too close in hue to organic purple
+                            for colorblind viewers). */}
+                        <span className="inline-block w-2 h-2 rounded-full bg-slate-700" />
                         <span>TikTok: CAD {formatCurrency(d.tiktok)}</span>
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
@@ -721,7 +724,10 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
             <span className="text-text-secondary">Google (מדווח)</span>
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block w-3 h-[2px] bg-pink-500" />
+            {/* c/HI-01: slate-700 swatch matches CHART_COLORS.tiktok (was
+                pink-500, too close in hue to organic purple for colorblind
+                viewers). */}
+            <span className="inline-block w-3 h-[2px] bg-slate-700" />
             <span className="text-text-secondary">TikTok (מדווח)</span>
           </span>
           <span className="inline-flex items-center gap-1.5">
