@@ -77,8 +77,23 @@ export function useCampaignAttribution(opts: {
   // tick. Keyed by the same `adSetId || adSetName || '(אחר)'` formula the
   // summary aggregation uses, so a.id (which may be '') reliably maps back.
   const dailyMetaByAdSet = useMemo(() => {
-    // FIX-21 (5.2.2.1): early exit for null summary or non-Meta platform — analyzer is never called in those cases.
-    if (!summary || summary.platform !== 'Meta') return new Map<string, Array<{ date: string; value: number }>>();
+    // d/CR-06 (audit 2026-05-23): the Meta-only gate here used to short-
+    // circuit the entire pipeline for TikTok ad-sets, so the "ROAS Shopify"
+    // column rendered "—" for every TikTok row even though AdSetTable now
+    // permits TikTok drill-down (Phase 05.7.9c extended attribution to
+    // TikTok at the CAMPAIGN level via analyzeAttribution → see line ~310
+    // in lib/attributionAnalysis.ts). The hook now only short-circuits on
+    // null summary; per-platform fan-out happens inside the analyzer.
+    //
+    // NOTE — DEFERRED WORK: `analyzeAttributionForAdSet` and
+    // `analyzeAttributionForAd` (lib/attributionAnalysis.ts:717, :767) STILL
+    // hard-return null for non-Meta platforms. That file is owned by Wave 2
+    // (Agent owning lib/attributionAnalysis.ts), so the platform widening
+    // there is a follow-up. With this hook-level fix the architecture
+    // already supports TikTok end-to-end; only the analyzer line needs to
+    // be widened to `platform !== 'Meta' && platform !== 'TikTok'` for the
+    // chip to start showing real numbers on TikTok ad-sets.
+    if (!summary) return new Map<string, Array<{ date: string; value: number }>>();
     const buckets = new Map<string, Map<string, number>>();
     for (const r of rows) {
       const key = r.adSetId || r.adSetName || '(אחר)';
@@ -101,7 +116,15 @@ export function useCampaignAttribution(opts: {
   // full orders array per cell × per render before. (IN5-01)
   return useMemo(() => {
     const out = new Map<string, AttributionAnalysis | null>();
-    if (!summary || summary.platform !== 'Meta') return out;
+    // d/CR-06 (audit 2026-05-23): platform gate removed. See the comment in
+    // dailyMetaByAdSet above for context — short version: this hook now
+    // lets the analyzer decide what to do per platform. For TikTok, today
+    // the analyzer still returns null (deferred to a Wave 2 / analyzer
+    // owner edit), so the user-visible behaviour is unchanged for TikTok;
+    // but the architectural gate is in the right place now, and a one-line
+    // change in analyzeAttributionForAdSet/ForAd will light up the chip
+    // without touching this hook again.
+    if (!summary) return out;
     const ordersRows = ordersAttrData?.rows ?? [];
     if (ordersRows.length === 0 || rows.length === 0) return out;
     if (!rangeFrom || !rangeTo) return out;
