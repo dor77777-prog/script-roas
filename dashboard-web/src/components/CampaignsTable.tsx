@@ -1558,7 +1558,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     align="center"
                     className="px-3 py-2 w-[92px]"
                     dataColId="roasShopify"
-                    tooltip={'ROAS לפי המכירות בפועל ב-Shopify של המוצרים המשויכים לקמפיין. נוסחה: (revenue דטרמיניסטי + הקצאה פרופורציונלית של נותר) ÷ הוצאה. זהו ה-ROAS האמיתי ביותר — מבוסס על מה ש-Shopify רושם, לא על מה שה-Pixel מדווח. דורש שהקמפיין ימופה למוצרים (לחץ על השורה כדי למפות).'}
+                    tooltip={'ROAS לפי המכירות בפועל ב-Shopify של המוצרים המשויכים לקמפיין. נוסחה: (revenue דטרמיניסטי + הקצאה פרופורציונלית של נותר) ÷ הוצאה. זהו ה-ROAS האמיתי ביותר — מבוסס על מה ש-Shopify רושם, לא על מה שה-Pixel מדווח. דורש שהקמפיין ימופה למוצרים (לחץ על השורה כדי למפות).\n\n🔗 מיפוי משותף: אם המוצר ממופה ל-2+ קמפיינים, ההכנסה מתחלקת ביניהם פרופורציונלית להוצאה (intra-platform spend share). כלומר ROAS Shopify של קמפיין יחיד בקבוצה הוא חלקו, לא כל ההכנסה של המוצר. ראה גם פאנל ההשוואה במגירת הקמפיין.'}
                   />
                 ),
                 roasShopifyPlatform: (
@@ -1577,7 +1577,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     align="center"
                     className="px-3 py-2 w-[100px]"
                     dataColId="roasShopifyPlatform"
-                    tooltip="ROAS Shopify מבוסס רק על הזמנות שסווגו דטרמיניסטית לפלטפורמה הזו דרך source / click-id (ttclid, fbclid, gclid, utm_source). נוסחה: deterministicRevenue ÷ הוצאה. אין fallback פרופורציונלי — רק מה שאנחנו יכולים להוכיח. ROAS גבוה כאן = הקמפיין מייצר מכירות שאפשר לייחס אליו בוודאות."
+                    tooltip={'ROAS Shopify מבוסס רק על הזמנות שסווגו דטרמיניסטית לפלטפורמה הזו דרך source / click-id (ttclid, fbclid, gclid, utm_source). נוסחה: deterministicRevenue ÷ הוצאה. אין fallback פרופורציונלי — רק מה שאנחנו יכולים להוכיח. ROAS גבוה כאן = הקמפיין מייצר מכירות שאפשר לייחס אליו בוודאות.\n\n🔗 מיפוי משותף intra-platform: אם 4 קמפיינים של Meta מקדמים את אותו מוצר, ההכנסה הדטרמיניסטית של Meta מתחלקת ביניהם לפי spend share. הקמפיין שהוצאתו 50% מקבל 50% מההכנסה הדטרמיניסטית; הקמפיין שהוצאתו 10% מקבל 10%.'}
                   />
                 ),
                 shopifyValuePlatform: (
