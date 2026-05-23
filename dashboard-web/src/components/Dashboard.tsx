@@ -167,7 +167,14 @@ export function Dashboard() {
       // the top-level aggregate above. Without this they prorate over the
       // data-derived min/max date — per-store and top-level numbers diverge.
       storeAggs: aggregateByStore(cur, filters.range),
-      series: dailySeries(cur, stores),
+      // Audit fix 2026-05-23 (CRIT-3 + HIGH-8): pass the operator's selected
+      // range so `dailySeries` walks every calendar day. Without it, a
+      // mid-range data outage was rendered as a 1-day step between the
+      // surrounding active points on RoasChart's categorical X-axis
+      // (CRIT-3), and missing per-store cells on partially-covered days
+      // appeared as ROAS=0 dots (HIGH-8). With it, gap days emit `null`
+      // per-store and RoasChart's `connectNulls={false}` shows the gap.
+      series: dailySeries(cur, stores, filters.range),
       visibleStores: stores,
     };
     // billingTick: re-aggregate on billing edits so live values stay in sync.

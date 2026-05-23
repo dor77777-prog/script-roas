@@ -1,6 +1,7 @@
 import type { DailyRow, DateRange } from './types';
 import { TRANSACTION_FEES_RATE } from './costs';
 import { billingForRange } from './billing';
+import { enumerateDateRange } from './dateRange';
 
 /**
  * הערכת עלות סחורה (COGS) — אחוז קבוע מההכנסה היומית.
@@ -277,14 +278,57 @@ export function aggregateByStore(
 
 export type DailySeries = {
   date: string;
-  byStore: Record<string, number>; // store -> roas
+  /**
+   * Per-store ROAS for the day. `null` means "no data for that store on
+   * that day" — distinct from `0` (which is a real "spent but earned
+   * nothing" outcome). Charts that bind to these values must use
+   * `connectNulls={false}` so the visual gap is preserved.
+   *
+   * Audit fix 2026-05-23 (CRIT-3 + HIGH-8): previously this was
+   * `Record<string, number>` and the function back-filled missing
+   * (store, day) cells with `0`. That made a temporary data outage look
+   * like a catastrophic ROAS=0 day on the chart instead of a true gap.
+   */
+  byStore: Record<string, number | null>;
   totalRoas: number;
   totalRevenue: number;
   totalSpend: number;
 };
 
-export function dailySeries(rows: DailyRow[], stores: string[]): DailySeries[] {
+/**
+ * Build the per-day series for the RoasChart.
+ *
+ * Audit fix 2026-05-23 (CRIT-3 + HIGH-8):
+ *
+ *   - When `range` is provided, the result walks EVERY calendar day in
+ *     `[range.from, range.to]` (inclusive). Days with no data emit a row
+ *     whose per-store values are all `null` and whose totals are 0.
+ *     Pre-fix behavior skipped missing days entirely — combined with the
+ *     RoasChart's categorical X-axis, a 5-day outage in a 30-day window
+ *     was rendered as a single 1-day step between the surrounding active
+ *     points, visually compressing reality (CRIT-3).
+ *
+ *   - Missing per-store cells on a day where SOME store has data emit
+ *     `null` (not `0`). Previously they were forced to `0`, which the
+ *     RoasChart drew as a real ROAS=0 dot — indistinguishable from a
+ *     legitimate "spent without earning" disaster (HIGH-8).
+ *
+ *   - When `range` is omitted, behavior is unchanged from the legacy
+ *     contract: rows present in `rows` become rows in the result; missing
+ *     per-store cells become `null` (the safer default for charts that
+ *     opt in to gap rendering).
+ *
+ * Callers MUST render with `connectNulls={false}` on every per-store
+ * <Line> for the gap visualization to be honest.
+ */
+export function dailySeries(
+  rows: DailyRow[],
+  stores: string[],
+  range?: DateRange,
+): DailySeries[] {
   const map = new Map<string, DailySeries>();
+
+  // First pass — accumulate everything from the rows themselves.
   for (const r of rows) {
     if (!map.has(r.date)) {
       map.set(r.date, {
@@ -300,14 +344,37 @@ export function dailySeries(rows: DailyRow[], stores: string[]): DailySeries[] {
     entry.totalRevenue += r.revenue;
     entry.totalSpend += r.totalSpend;
   }
-  for (const e of map.values()) {
-    e.totalRoas = e.totalSpend > 0 ? e.totalRevenue / e.totalSpend : 0;
-    // Fill missing stores with 0 for chart continuity
+
+  // Determine the date universe. When `range` is supplied, every day in
+  // [range.from, range.to] gets a row (with `null` per-store values where
+  // no data exists). Otherwise, only the dates already present in `rows`
+  // get a row (legacy behavior).
+  const dateList = range
+    ? enumerateDateRange(range.from, range.to)
+    : Array.from(map.keys()).sort((a, b) => a.localeCompare(b));
+
+  // Ensure a row exists for every date in scope, then fill missing per-store
+  // cells with `null` (NOT 0 — the chart needs to distinguish "no data" from
+  // "spent without earning").
+  for (const date of dateList) {
+    if (!map.has(date)) {
+      map.set(date, {
+        date,
+        byStore: {},
+        totalRoas: 0,
+        totalRevenue: 0,
+        totalSpend: 0,
+      });
+    }
+    const entry = map.get(date)!;
+    entry.totalRoas = entry.totalSpend > 0 ? entry.totalRevenue / entry.totalSpend : 0;
     for (const s of stores) {
-      if (!(s in e.byStore)) e.byStore[s] = 0;
+      if (!(s in entry.byStore)) entry.byStore[s] = null;
     }
   }
-  return Array.from(map.values()).sort((a, b) => a.date.localeCompare(b.date));
+
+  // Sort to the date universe order (chronological for both branches).
+  return dateList.map((date) => map.get(date)!);
 }
 
 export function roasLabel(roas: number): { text: string; tone: 'red' | 'orange' | 'green' | 'blue' | 'gray' } {

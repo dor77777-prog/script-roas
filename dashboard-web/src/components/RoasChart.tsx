@@ -160,7 +160,12 @@ export function RoasChart({ data, stores, bare = false }: Props) {
                   strokeWidth={isPrimary ? 2.75 : 2}
                   dot={false}
                   activeDot={{ r: isPrimary ? 5 : 4, strokeWidth: 0 }}
-                  connectNulls
+                  // Audit fix 2026-05-23 (CRIT-3 + HIGH-8): missing
+                  // (store, day) cells now flow through as `null` from
+                  // `dailySeries`. We must NOT bridge those nulls — the
+                  // gap IS the honest signal. Same pattern as HeroOverview's
+                  // RoasTrendChart (v2 c/CR-03).
+                  connectNulls={false}
                 />
               );
             })}
