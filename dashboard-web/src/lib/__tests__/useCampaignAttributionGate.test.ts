@@ -79,11 +79,12 @@ describe('useCampaignAttribution platform gate — locks d/CR-06', () => {
     expect(result).toBeNull();
   });
 
-  it('analyzeAttributionForAdSet still returns null for TikTok (deferred follow-up)', () => {
-    // DOCUMENTS the deferred analyzer-level fix. When this test starts
-    // failing, the analyzer was widened to accept TikTok — at that point,
-    // update this expectation to non-null and remove the documenting
-    // comment in lib/hooks/useCampaignAttribution.ts.
+  it('analyzeAttributionForAdSet now accepts TikTok (Wave 2 deferred follow-up landed)', () => {
+    // Wave 2 fix 2026-05-23 (b/HI-01 commit): the analyzer at
+    // lib/attributionAnalysis.ts:~717 was widened to accept TikTok
+    // (utm_term={{adgroup_id}}). The hook-level d/CR-06 fix was already
+    // forwarding the platform; now the analyzer no longer bails and
+    // TikTok ad-set ROAS-Shopify chips render with real numbers.
     const result = analyzeAttributionForAdSet(
       {
         adSetId: 'tt-adset-1',
@@ -93,15 +94,12 @@ describe('useCampaignAttribution platform gate — locks d/CR-06', () => {
         metaClaim: 100,
         spend: 50,
       },
-      [makeOrder({ utmTerm: 'tt-adset-1' })],
+      [makeOrder({ utmTerm: 'tt-adset-1', totalCad: 100 })],
       range.from,
       range.to,
     );
-    // Deferred: until lib/attributionAnalysis.ts:717 is widened, TikTok
-    // ad-set analysis stays null. The hook-level fix (d/CR-06) is still
-    // correct — it removes the duplicate gate so the analyzer becomes the
-    // sole source of truth for platform support.
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+    expect(result!.deterministicOrders).toBe(1);
   });
 
   it('analyzeAttributionForAdSet accepts Meta (baseline still works)', () => {
