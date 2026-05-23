@@ -115,6 +115,56 @@ const VOLUME_TIERS: ReadonlyArray<{ min: number; score: number }> = [
   { min: 0, score: 10 },
 ] as const;
 
+/**
+ * Audit fix 2026-05-23 (HR-02 health-and-conclusions): per-platform ROAS
+ * pivot for the profitability score.
+ *
+ * Pre-fix, all platforms used `(roas-1)/2 * 100` — pivot at ROAS 3.0 (= 100).
+ * That single global threshold ignored the very real fact that:
+ *   - Meta retargeting → typical "great" 3-5x
+ *   - Meta prospecting → typical "great" 2-3x (lower bar; cold audience)
+ *   - Google Shopping/Search → typical "great" 3-5x (direct intent)
+ *   - TikTok prospecting → typical "great" 1.5-2.5x (similar to Meta TOF)
+ *
+ * Pivot below means a TikTok prospecting campaign at ROAS 2.0 lands at the
+ * platform's "great" tier (~95-100) instead of being penalized vs Meta's
+ * baseline. Same campaign behavior judged against same-platform peers.
+ *
+ * Numbers are defaults — operator can tune per-store later if needed.
+ * Tracked as a knob in the JSDoc for tuneability.
+ */
+const PLATFORM_ROAS_PIVOT: Record<string, number> = {
+  Meta: 3.0,
+  Google: 3.5,
+  TikTok: 2.0,
+} as const;
+const DEFAULT_ROAS_PIVOT = 3.0;
+
+/**
+ * Audit fix 2026-05-23 (HR-01 health-and-conclusions): per-platform trust
+ * modulator for the fallback "no info" path of `scoreProfitability`.
+ *
+ * Pre-fix, every fallback got a fixed 0.5 trust mod. For Google PMax (which
+ * has no per-product attribution wired up so info.attribution is always
+ * null), this meant every Google PMax campaign was systematically scored
+ * ~16 points LOWER than an equivalent-ROAS Meta campaign — operator would
+ * under-scale Google purely as a platform-bias artifact.
+ *
+ * Google's `conversions_value` from purchase events is generally reliable
+ * (gclid-attributed direct intent). The platform-side numbers are closer
+ * to truth than Meta's Pixel claims (iOS 14+, view-through, modeled
+ * conversions). TikTok is similar to Meta — newer platform, less verified.
+ *
+ * Numbers are defaults — replace with per-account confidence once we plumb
+ * Google PMax distinction (PMax may warrant lower than Search/Shopping).
+ */
+const PLATFORM_FALLBACK_TRUST: Record<string, number> = {
+  Meta: 0.5,    // Pixel claims commonly inflated
+  Google: 0.7,  // gclid + purchase event reliable; PMax slightly less so
+  TikTok: 0.5,  // similar to Meta
+} as const;
+const DEFAULT_FALLBACK_TRUST = 0.5;
+
 // Grade ladder. A starts at 75 (not 90) because the weighted formula caps
 // out lower than 100 in practice (perfect attribution AND perfect trajectory
 // is rare). Tuned so a healthy campaign with ROAS 3 + high trust lands
@@ -180,16 +230,31 @@ function scoreProfitability(
     sourceLabel = 'Shopify משולב (מיפוי + פרופורציונלי)';
   } else {
     baseRoas = aggregated.conversionValue / spend;
-    trustModulator = 0.5;
-    sourceLabel = 'הצהרת פלטפורמה (לא מאומת)';
+    // Audit fix 2026-05-23 (HR-01): per-platform fallback trust mod
+    // replaces the previous fixed 0.5 — Google's platform-claimed
+    // ROAS is more reliable than Meta's, so penalizing both identically
+    // was a systematic anti-Google bias (~16 points on the weighted final).
+    trustModulator =
+      PLATFORM_FALLBACK_TRUST[aggregated.platform] ?? DEFAULT_FALLBACK_TRUST;
+    sourceLabel = `הצהרת פלטפורמה (${aggregated.platform}, לא מאומת)`;
   }
 
-  const rawRoasScore = Math.max(0, Math.min(100, ((baseRoas - 1.0) / 2.0) * 100));
+  // Audit fix 2026-05-23 (HR-02): per-platform ROAS pivot. The previous
+  // single pivot at ROAS 3.0 unfairly penalized platforms with naturally
+  // lower baseline (e.g., TikTok prospecting at ROAS 2.0 used to score 50;
+  // now scores 100 against its own platform's "great" threshold).
+  const pivot =
+    PLATFORM_ROAS_PIVOT[aggregated.platform] ?? DEFAULT_ROAS_PIVOT;
+  // Formula: linearly scale [1.0, pivot] → [0, 100]; clamp outside.
+  const rawRoasScore = Math.max(
+    0,
+    Math.min(100, ((baseRoas - 1.0) / (pivot - 1.0)) * 100),
+  );
   const modulated = rawRoasScore * trustModulator;
   return {
     score: Math.round(modulated),
     reason:
-      `ROAS ${baseRoas.toFixed(2)} (${sourceLabel}) × אמינות ${Math.round(trustModulator * 100)}% ` +
+      `ROAS ${baseRoas.toFixed(2)} (${sourceLabel}, יעד ${pivot.toFixed(1)}) × אמינות ${Math.round(trustModulator * 100)}% ` +
       `→ ${Math.round(modulated)}/100`,
   };
 }

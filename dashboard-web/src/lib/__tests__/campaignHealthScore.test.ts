@@ -251,6 +251,112 @@ describe('profitability — source-of-truth priority', () => {
   });
 });
 
+describe('profitability — per-platform calibration (audit fix HR-01/HR-02 2026-05-23)', () => {
+  it('per-platform ROAS pivot: TikTok ROAS 2.0 scores 100 (its pivot)', () => {
+    // Pre-fix: ROAS 2.0 scored 50 across all platforms (pivot at 3.0).
+    // Post-fix: TikTok pivot is 2.0 → ROAS 2.0 = 100 raw (before trust mod).
+    const out = computeCampaignHealth(
+      buildInputs({
+        aggregated: makeAggregated({
+          platform: 'TikTok',
+          spend: 500,
+          conversionValue: 1000,
+        }),
+        trueRevenueInfo: makeTrueRevenue({
+          deterministicRevenue: 1000,
+          spend: 500,
+          attribution: {
+            ...makeTrueRevenue().attribution,
+            trust: { level: 'high', label: 'אמין', score: 100 },
+          } as TrueRevenueInfo['attribution'],
+        }),
+      }),
+    );
+    // ROAS = 2.0, TikTok pivot = 2.0 → raw 100, trust 100% → 100.
+    expect(out.components.profitability).toBe(100);
+    expect(out.reasons[0]).toMatch(/יעד 2\.0/);
+  });
+
+  it('per-platform ROAS pivot: Meta ROAS 2.0 still scores 50 (pivot 3.0)', () => {
+    const out = computeCampaignHealth(
+      buildInputs({
+        aggregated: makeAggregated({
+          platform: 'Meta',
+          spend: 500,
+          conversionValue: 1000,
+        }),
+        trueRevenueInfo: makeTrueRevenue({
+          deterministicRevenue: 1000,
+          spend: 500,
+          attribution: {
+            ...makeTrueRevenue().attribution,
+            trust: { level: 'high', label: 'אמין', score: 100 },
+          } as TrueRevenueInfo['attribution'],
+        }),
+      }),
+    );
+    // ROAS = 2.0, Meta pivot = 3.0 → raw 50, trust 100% → 50.
+    expect(out.components.profitability).toBe(50);
+    expect(out.reasons[0]).toMatch(/יעד 3\.0/);
+  });
+
+  it('per-platform ROAS pivot: Google ROAS 3.0 scores 80 (pivot 3.5)', () => {
+    const out = computeCampaignHealth(
+      buildInputs({
+        aggregated: makeAggregated({
+          platform: 'Google',
+          spend: 500,
+          conversionValue: 1500,
+        }),
+        trueRevenueInfo: makeTrueRevenue({
+          deterministicRevenue: 1500,
+          spend: 500,
+          attribution: {
+            ...makeTrueRevenue().attribution,
+            trust: { level: 'high', label: 'אמין', score: 100 },
+          } as TrueRevenueInfo['attribution'],
+        }),
+      }),
+    );
+    // ROAS = 3.0, Google pivot = 3.5 → (3.0-1)/(3.5-1)*100 = 80.
+    expect(out.components.profitability).toBe(80);
+    expect(out.reasons[0]).toMatch(/יעד 3\.5/);
+  });
+
+  it('per-platform fallback trust: Google gets 70% (vs Meta 50%) when no info', () => {
+    // No trueRevenueInfo at all → falls back to platform-claimed ROAS.
+    // Pre-fix: every platform got 0.5 trust → systematic anti-Google bias.
+    // Post-fix: Google = 0.7, Meta = 0.5, TikTok = 0.5.
+    const googleOut = computeCampaignHealth(
+      buildInputs({
+        aggregated: makeAggregated({
+          platform: 'Google',
+          spend: 500,
+          conversionValue: 1750, // ROAS 3.5 = pivot → 100 raw
+        }),
+        trueRevenueInfo: undefined,
+      }),
+    );
+    // ROAS 3.5 × Google fallback trust 0.7 = 70.
+    expect(googleOut.components.profitability).toBe(70);
+    expect(googleOut.reasons[0]).toMatch(/אמינות 70%/);
+
+    const metaOut = computeCampaignHealth(
+      buildInputs({
+        aggregated: makeAggregated({
+          platform: 'Meta',
+          spend: 500,
+          conversionValue: 1500, // ROAS 3.0 = pivot → 100 raw
+        }),
+        trueRevenueInfo: undefined,
+      }),
+    );
+    // ROAS 3.0 × Meta fallback trust 0.5 = 50.
+    expect(metaOut.components.profitability).toBe(50);
+    expect(metaOut.reasons[0]).toMatch(/אמינות 50%/);
+  });
+});
+
 describe('profitability — trust modulation', () => {
   it('halves profitability when attribution trust score is 50', () => {
     const tr = makeTrueRevenue({
