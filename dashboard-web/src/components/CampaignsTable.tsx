@@ -607,7 +607,15 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       // the table-level memo we recompute against the same inputs.
       // It's cheap (O(products × campaigns)), bounded, runs once per
       // aggregated change.
-      let worstRisk: 'none' | 'low' | 'medium' | 'high' | 'insufficient' = 'none';
+      // Audit fix 2026-05-23 (a/WARN-6): `composition_changed` added to
+      // the union so the assignment from `detectProductCannibalization`'s
+      // `CannibalizationRisk` is type-correct without an implicit cast.
+      // composition_changed is informational only — it doesn't get bumped
+      // up the severity ladder below (the `if (v.risk === ...)` chain only
+      // matches low/medium/high), and applyCohortHealthAdjustment's switch
+      // lets it fall through to zero delta. Net effect: composition_changed
+      // never silently overwrites a worse risk that's already been seen.
+      let worstRisk: 'none' | 'low' | 'medium' | 'high' | 'insufficient' | 'composition_changed' = 'none';
       if (cohort) {
         const verdicts = detectProductCannibalization({
           range: localRange,

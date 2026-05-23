@@ -859,6 +859,25 @@ describe('applyCohortHealthAdjustment — cannibalization', () => {
     // reference unchanged.
     expect(out).toBe(base);
   });
+
+  it('0 for composition_changed (informational — no adjustment) — audit a/WARN-6', () => {
+    // Audit fix 2026-05-23 (a/WARN-6): `composition_changed` is part of
+    // the cannibalizationRisk union now, and the switch in
+    // applyCohortHealthAdjustment intentionally lets it fall through
+    // `default` → zero delta. The verdict means "we can't fairly compare
+    // halves because cohort composition shifted mid-range" — abstain,
+    // don't penalize. The cannibalization banner in the drawer surfaces
+    // it visually so the operator knows to investigate before scaling.
+    const base = makeBaseHealth(70);
+    const out = applyCohortHealthAdjustment(base, {
+      isLeader: false,
+      isWeakest: false,
+      cohortSize: 4,
+      cannibalizationRisk: 'composition_changed',
+    });
+    // Same short-circuit as 'insufficient' — base returned by reference.
+    expect(out).toBe(base);
+  });
 });
 
 describe('applyCohortHealthAdjustment — stacking', () => {

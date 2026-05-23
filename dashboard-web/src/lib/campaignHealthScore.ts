@@ -492,8 +492,21 @@ export type CohortAdjustmentInputs = {
   isLeader: boolean;
   isWeakest: boolean;
   cohortSize: number; // total members incl. current; >=2 means cohort exists
-  /** Highest cannibalization risk across this campaign's shared products. */
-  cannibalizationRisk: 'none' | 'low' | 'medium' | 'high' | 'insufficient';
+  /**
+   * Highest cannibalization risk across this campaign's shared products.
+   *
+   * Audit fix 2026-05-23 (a/WARN-6): `composition_changed` added to the
+   * union to match `CannibalizationRisk` in cannibalizationDetection.ts.
+   * It's an INFORMATIONAL verdict, not a score penalty: when the cohort's
+   * composition shifted inside the visible range (a material member
+   * paused/launched mid-range), the half-over-half scale-vs-revenue
+   * comparison is unfair, so we abstain from a low/medium/high judgment.
+   * The switch in `applyCohortHealthAdjustment` deliberately lets it
+   * fall through `default` → zero delta → no health adjustment fires.
+   * The UI surfaces the verdict to the operator separately so they know
+   * to investigate before scaling.
+   */
+  cannibalizationRisk: 'none' | 'low' | 'medium' | 'high' | 'insufficient' | 'composition_changed';
 };
 
 export function applyCohortHealthAdjustment(
