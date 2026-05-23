@@ -4,6 +4,11 @@ node_modules/
 .clasprc.json
 dashboard-web/node_modules
 
+# .claude/ contains agent state + ad-hoc operator notes (incl. tokens.md
+# where the operator pastes secrets for short-lived workflows like
+# OAuth re-auth). NEVER commit — local-only.
+.claude/
+
 # Secrets — never commit. The .env file at the project root is the
 # canonical store for Script Properties exported from Apps Script
 # (Shopify / Meta / Google Ads tokens + per-store domains + spreadsheet

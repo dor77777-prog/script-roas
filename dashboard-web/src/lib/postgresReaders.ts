@@ -583,24 +583,30 @@ export async function fetchCampaignsFromPostgres(
     const spend = toNumber(r.spend_cad);
     const impressions = toNumber(r.impressions);
     const conversions = toNumber(r.conversions);
-    // Phase 05.7.x (2026-05-23) — placeholder rows from cron-live's
-    // refresh-effective-status step carry effective_status + zero metrics
-    // for brand-new campaigns that haven't yet served impressions. Keep
-    // them so the operator sees newly-created campaigns within 10 min
-    // (with "—" metrics until the first impression lands), instead of
-    // waiting 24h for cron-daily. Rows with NO status AND no activity
-    // are still filtered out — those are truly empty noise.
+    // Phase 05.7.x (2026-05-23) — operator spec:
+    //   Show campaign if EITHER (a) it had activity in the range, OR
+    //   (b) it is CURRENTLY active on its platform (so brand-new
+    //   active campaigns appear within 10 min, before they spend).
+    //   Paused / archived campaigns with no activity in the range are
+    //   dropped — they'd be visual noise (operator would ask "why is
+    //   this paused campaign showing up?").
+    //
+    // (a) hasActivity → real metric data, regardless of status.
+    // (b) isCurrentlyActive → cron-live placeholder rows for ad-sets
+    //     in the platform's "on" state (Meta=ACTIVE, Google=ENABLED,
+    //     TikTok=ADGROUP_STATUS_DELIVERY_OK).
+    const hasActivity = spend > 0 || impressions > 0 || conversions > 0;
     const effectiveStatusRaw = (r as { effective_status?: unknown }).effective_status;
-    const hasStatus =
-      effectiveStatusRaw !== null &&
-      effectiveStatusRaw !== undefined &&
-      String(effectiveStatusRaw).trim() !== '';
-    if (
-      spend === 0 &&
-      impressions === 0 &&
-      conversions === 0 &&
-      !hasStatus
-    ) {
+    const statusNorm =
+      effectiveStatusRaw === null || effectiveStatusRaw === undefined
+        ? ''
+        : String(effectiveStatusRaw).trim().toUpperCase();
+    const platformNorm = String(r.platform || '').toLowerCase();
+    const isCurrentlyActive =
+      (platformNorm === 'meta' && statusNorm === 'ACTIVE') ||
+      (platformNorm === 'google' && statusNorm === 'ENABLED') ||
+      (platformNorm === 'tiktok' && statusNorm === 'ADGROUP_STATUS_DELIVERY_OK');
+    if (!hasActivity && !isCurrentlyActive) {
       continue;
     }
 

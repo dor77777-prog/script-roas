@@ -846,11 +846,20 @@ export async function runLiveForStore(
       }
     }
 
-    // 2. UPSERT a row for TODAY for every enrolled ad-set. Existing rows
-    //    get their effective_status (+ name) refreshed; brand-new rows
-    //    appear with zero metrics + the live status — the dashboard's
-    //    reader is relaxed to keep these placeholder rows so the operator
-    //    sees newly-created campaigns within 10 min.
+    // 2. UPSERT a row for TODAY — but ONLY for ad-sets whose CURRENT status
+    //    is "active" for their platform (Meta=ACTIVE, Google=ENABLED,
+    //    TikTok=ADGROUP_STATUS_DELIVERY_OK). Paused ad-sets are NOT
+    //    placeholder-enrolled — they'd just be visual noise in the
+    //    dashboard ("why is this paused campaign showing up?"). Operator
+    //    spec (2026-05-23):
+    //      "Active campaigns appear immediately. Paused campaigns only
+    //       appear if they had spend in the range."
+    //
+    //    For PAUSED ad-sets we still want their status reflected on
+    //    HISTORICAL rows (so an ad-set paused this morning shows the
+    //    off-chip on yesterday's row) — that's the UPDATE step below
+    //    (#3), which runs on existing rows only without creating new
+    //    placeholder rows.
     //
     //    UPSERT payload OMITS the metric columns (spend_cad, impressions,
     //    clicks, conversions, conversion_value_cad). When a row already
@@ -858,9 +867,26 @@ export async function runLiveForStore(
     //    leaves those columns untouched (Supabase JS only puts payload
     //    keys in the SET clause). When the row doesn't exist yet, the
     //    INSERT path uses the schema defaults (0) for the missing
-    //    metrics — exactly the "placeholder" state we want.
-    if (enrollments.length > 0) {
-      const upsertRows = enrollments.map((e) => ({
+    //    metrics — exactly the "placeholder" state we want for a
+    //    just-launched, not-yet-spent campaign.
+    function isActiveForPlatform(platform: string, status: string): boolean {
+      const norm = status.trim().toUpperCase();
+      switch (platform) {
+        case 'meta':
+          return norm === 'ACTIVE';
+        case 'google':
+          return norm === 'ENABLED';
+        case 'tiktok':
+          return norm === 'ADGROUP_STATUS_DELIVERY_OK';
+        default:
+          return false;
+      }
+    }
+    const activeEnrollments = enrollments.filter((e) =>
+      isActiveForPlatform(e.platform, e.status),
+    );
+    if (activeEnrollments.length > 0) {
+      const upsertRows = activeEnrollments.map((e) => ({
         date: today,
         store_id: storeId,
         platform: e.platform,
