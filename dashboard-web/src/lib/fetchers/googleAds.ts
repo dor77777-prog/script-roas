@@ -275,12 +275,23 @@ function buildGoogleAdsHeaders(accessToken: string): Record<string, string> {
 }
 
 /**
- * Issues a single GAQL search request and returns the `results` array.
+ * Issues a GAQL search request and returns the FULL `results` array,
+ * following `nextPageToken` until the API stops paginating.
+ *
+ * Audit fix 2026-05-23 (CR-01 pipeline): the previous implementation
+ * read only `body.results` from a single POST and silently dropped any
+ * row past ~10K (the implicit per-response cap). With 3 stores and
+ * growing campaign volumes, that's a silent-data-loss landmine. Now
+ * iterates `nextPageToken` with a safety cap of 50 pages × ~10K rows =
+ * 500K rows headroom; logs `console.warn` if the cap is hit so the
+ * operator can investigate upstream before the loss becomes invisible.
  *
  * Throws on non-200 responses; Inngest's default 4-retry exponential backoff
  * handles transient failures upstream (RESEARCH Pattern 2 — "throw + let
  * Inngest retry").
  */
+const GAQL_PAGE_CAP = 50;
+
 async function runGaqlQuery(
   storeId: string,
   customerId: string,
@@ -292,19 +303,40 @@ async function runGaqlQuery(
     `https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}` +
     `/customers/${customerId}/googleAds:search`;
   const headers = buildGoogleAdsHeaders(accessToken);
-  const res = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ query }),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(
-      `Google Ads GAQL query failed for ${storeId} ${dateStr} (HTTP ${res.status}): ${text}`,
+  const all: Array<Record<string, unknown>> = [];
+  let pageToken: string | undefined;
+  let pages = 0;
+  while (pages < GAQL_PAGE_CAP) {
+    const reqBody: { query: string; pageToken?: string } = { query };
+    if (pageToken) reqBody.pageToken = pageToken;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(reqBody),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(
+        `Google Ads GAQL query failed for ${storeId} ${dateStr} (HTTP ${res.status}): ${text}`,
+      );
+    }
+    const body = (await res.json()) as {
+      results?: Array<Record<string, unknown>>;
+      nextPageToken?: string;
+    };
+    if (body.results && body.results.length > 0) all.push(...body.results);
+    pages++;
+    if (!body.nextPageToken) break;
+    pageToken = body.nextPageToken;
+  }
+  if (pages >= GAQL_PAGE_CAP && pageToken) {
+    console.warn(
+      `Google Ads GAQL ${storeId} ${dateStr}: hit pagination cap of ${GAQL_PAGE_CAP} pages ` +
+        `(${all.length} rows collected). Additional results may be silently dropped — ` +
+        `consider narrowing the query or raising the cap.`,
     );
   }
-  const body = (await res.json()) as { results?: Array<Record<string, unknown>> };
-  return body.results ?? [];
+  return all;
 }
 
 /**
