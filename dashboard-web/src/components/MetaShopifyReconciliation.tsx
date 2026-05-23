@@ -354,7 +354,17 @@ export function buildReconciliation(opts: {
   }
 
   // Dark traffic: if channels account for < 80% of Shopify actual, flag the gap
-  const sumChannels = series.reduce((acc, s) => acc + s.meta + s.google + s.organic, 0);
+  //
+  // Audit fix 2026-05-23 (FIND-02 display): TikTok was added to the chart
+  // and rCombined in Phase 05.7.9 but missed here — silently excluding it
+  // from sumChannels overstated darkTraffic on uzoshop's TikTok-active days
+  // (operator saw a false "פער 50%" chip when real figure was ~20% and below
+  // the 0.8 threshold). The bullet copy already promises "Σ של 4 הערוצים" —
+  // make the math match.
+  const sumChannels = series.reduce(
+    (acc, s) => acc + s.meta + s.google + s.tiktok + s.organic,
+    0,
+  );
   const sumShopify = series.reduce((acc, s) => acc + s.shopify, 0);
   const darkTrafficPercent =
     sumShopify > 0 && sumChannels / sumShopify < 0.8
@@ -770,6 +780,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                   <th className="px-2 py-1.5 text-start font-medium">תאריך</th>
                   <th className="px-2 py-1.5 text-end font-medium">Meta</th>
                   <th className="px-2 py-1.5 text-end font-medium">Google</th>
+                  <th className="px-2 py-1.5 text-end font-medium">TikTok</th>
                   <th className="px-2 py-1.5 text-end font-medium">Organic</th>
                   <th className="px-2 py-1.5 text-end font-medium">Shopify</th>
                   <th className="px-2 py-1.5 text-center font-medium">פער</th>
@@ -777,7 +788,10 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
               </thead>
               <tbody>
                 {reconciliation.series.map(s => {
-                  const channelTotal = s.meta + s.google + s.organic;
+                  // Audit fix 2026-05-23 (FIND-02 display): include TikTok
+                  // in channelTotal so the per-day פער agrees with the
+                  // "Σ של 4 הערוצים" copy + the dark-traffic chip.
+                  const channelTotal = s.meta + s.google + s.tiktok + s.organic;
                   // FIX-16 (5.2.2.1): three distinct cases for per-day-table delta. Operationally different signals.
                   const { label: deltaLabel, tone: deltaTone } = computeDayDelta(channelTotal, s.shopify);
                   const deltaClass = {
@@ -790,6 +804,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                       <td className="px-2 py-1 text-text-secondary tabular-nums">{s.date.slice(5)}</td>
                       <td className="px-2 py-1 text-end tabular-nums">{formatCurrency(s.meta)}</td>
                       <td className="px-2 py-1 text-end tabular-nums">{formatCurrency(s.google)}</td>
+                      <td className="px-2 py-1 text-end tabular-nums">{formatCurrency(s.tiktok)}</td>
                       <td className="px-2 py-1 text-end tabular-nums">{formatCurrency(s.organic)}</td>
                       <td className="px-2 py-1 text-end tabular-nums">{formatCurrency(s.shopify)}</td>
                       <td className={cn('px-2 py-1 text-center tabular-nums font-medium', deltaClass)}>
