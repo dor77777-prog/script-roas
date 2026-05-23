@@ -88,6 +88,10 @@ function makeCpmRoasAnalysis(patch: Partial<CpmRoasAnalysis> = {}): CpmRoasAnaly
     tone: 'positive',
     hasData: true,
     mode: 'half-over-half',
+    // AUDIT U-02 (2026-05-24): all default-fixture instances represent a
+    // normal up/down/flat read; the 'no-baseline' verdict is exercised
+    // explicitly in cpmRoasAnalysis.test.ts.
+    verdict: 'normal',
     details: { n: 14, cpmDeltaPct: -10, roasDeltaPct: 12, pearson: -0.7 },
     ...patch,
   };

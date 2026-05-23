@@ -208,6 +208,115 @@ describe('analyzeCpmVsRoas', () => {
     expect(result.mode).toBe('half-over-half');
   });
 
+  // ─────────────────────────────────────────────────────────────────────
+  // AUDIT U-02 (2026-05-24) — 'no-baseline' verdict surfaces when the
+  // caller toggled "השוואה: תקופה קודמת" but the prev-period series
+  // had no usable values (typical launch-week scenario: campaign in
+  // its first active period, prev window had cpm=0 across every day).
+  //
+  // Pre-fix the analyzer silently degraded to half-over-half mode and
+  // emitted "יציבות מלאה — הקמפיין במצב סטדי" copy when both deltas
+  // came back null. The operator never knew their "prev" toggle had
+  // nothing to compare against; the half-over-half result LOOKED like
+  // a previous-period read.
+  //
+  // The fix exposes verdict='no-baseline' on CpmRoasAnalysis with
+  // honest "אין בסיס השוואה" copy + neutral tone.
+  // ─────────────────────────────────────────────────────────────────────
+  describe('AUDIT U-02: no-baseline verdict', () => {
+    it("launch-week scenario: cur 5 days of healthy CPM, prev all-zero CPM → verdict='no-baseline'", () => {
+      // Operator's exact production scenario: a campaign in its first
+      // week. They toggle "השוואה: תקופה קודמת" → caller queries the
+      // matching window and passes options.prev. But that window has
+      // 7 days with cpm=0 (campaign wasn't running yet). Pre-fix the
+      // filter stripped all 7, havePrev=false, mode degraded to
+      // half-over-half SILENTLY. The operator saw "comparing halves
+      // of current range" with no warning.
+      //
+      // Post-fix: prevWasQueriedButEmpty=true → verdict='no-baseline'
+      // → honest "אין בסיס השוואה" copy.
+      const current = makeSeries({ cpm: 5, roas: 3 });
+      const prev = makeSeries({ cpm: 0, roas: 0 }); // 7 days, all zero
+      const result = analyzeCpmVsRoas(current, { prev });
+      expect(result.verdict).toBe('no-baseline');
+      expect(result.tone).toBe('neutral');
+      expect(result.text).toContain('אין בסיס השוואה');
+      // mode degraded to half-over-half (prevSeries filtered to 0
+      // length), but verdict is the authoritative signal.
+      expect(result.mode).toBe('half-over-half');
+      // Deltas surfaced as null (we have no baseline to compute against).
+      expect(result.details.cpmDeltaPct).toBeNull();
+      expect(result.details.roasDeltaPct).toBeNull();
+    });
+
+    it('partial-empty launch week: prev had ONE valid day (< PREV_PERIOD_MIN_DAYS) → verdict=no-baseline', () => {
+      // The U-02 trigger fires for any case where prev was queried
+      // but didn't pass the 3-day threshold. The pre-existing test
+      // "falls back to half-over-half when prev has fewer than 3
+      // valid days" pinned mode='half-over-half'; that mode is still
+      // correct here, but the VERDICT is the new honest signal.
+      const current = makeSeries({ cpm: 5, roas: 3 });
+      const prev = makeSeries({ cpm: 4, roas: 2 }, [
+        {}, { cpm: 0, roas: 0 }, { cpm: 0, roas: 0 }, { cpm: 0, roas: 0 },
+        { cpm: 0, roas: 0 }, { cpm: 0, roas: 0 }, { cpm: 0, roas: 0 },
+      ]);
+      const result = analyzeCpmVsRoas(current, { prev });
+      // Only 1 cpm>0 day survived → havePrev=false but prev was queried.
+      expect(result.mode).toBe('half-over-half');
+      // U-02 contract: this is no-baseline, NOT a normal flat read.
+      expect(result.verdict).toBe('no-baseline');
+      expect(result.text).toContain('אין בסיס השוואה');
+    });
+
+    it('normal stable (prev=10, cur=10.1) → verdict=normal + "סטדי" copy (NOT no-baseline)', () => {
+      // Symmetry guard: a real stable campaign with a real prev
+      // baseline must NOT trip the no-baseline branch. Verdict stays
+      // 'normal' and the existing FLAT+FLAT "סטדי" copy fires.
+      const current = makeSeries({ cpm: 10.1, roas: 3 });
+      const prev = makeSeries({ cpm: 10, roas: 3 });
+      const result = analyzeCpmVsRoas(current, { prev });
+      expect(result.verdict).toBe('normal');
+      expect(result.mode).toBe('previous-period');
+      expect(result.text).toContain('סטדי');
+      expect(result.tone).toBe('neutral');
+      // deltas are real (small but non-null)
+      expect(result.details.cpmDeltaPct).not.toBeNull();
+      expect(result.details.roasDeltaPct).not.toBeNull();
+    });
+
+    it('no prev passed at all → verdict=normal (prevWasQueriedButEmpty=false; toggle never engaged)', () => {
+      // When the caller never passes options.prev, the toggle was
+      // never engaged — so no-baseline does NOT fire. Mode falls
+      // back to half-over-half naturally and the rest of the analyzer
+      // runs as before. Pre-fix === post-fix behaviour here.
+      const current = makeSeries({ cpm: 5, roas: 3 });
+      const result = analyzeCpmVsRoas(current);
+      expect(result.verdict).toBe('normal');
+      expect(result.mode).toBe('half-over-half');
+    });
+
+    it("hasData=false short-circuit also sets verdict='normal' (not undefined)", () => {
+      // The n<5 early return must include verdict='normal' so the
+      // type contract holds (verdict is a required field, not optional).
+      const series = makeSeries({ cpm: 5, roas: 2 }).slice(0, 3);
+      const result = analyzeCpmVsRoas(series);
+      expect(result.hasData).toBe(false);
+      expect(result.verdict).toBe('normal');
+    });
+
+    it('FLAT+FLAT normal path → verdict=normal (regression guard for the most common steady-state case)', () => {
+      // The PRE-FIX bug-case copy "יציבות מלאה — הקמפיין במצב סטדי"
+      // was the trigger for the audit. When deltas ARE computed and
+      // both land near zero, the analyzer correctly emits this stable
+      // copy with verdict='normal'. Only when the deltas are NULL
+      // (no-baseline) does the U-02 branch override the copy.
+      const series = makeSeries({ cpm: 5, roas: 3 });
+      const result = analyzeCpmVsRoas(series);
+      expect(result.verdict).toBe('normal');
+      expect(result.text).toContain('סטדי');
+    });
+  });
+
   it('computes previous-period delta = (curMean - prevMean) / prevMean', () => {
     // Current: 5 days, all CPM=10. Mean current = 10.
     const current = [

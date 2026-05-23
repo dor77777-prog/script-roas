@@ -85,6 +85,20 @@ export function dayOffsetFromRangeStart(date: string, rangeFrom: string): number
   );
 }
 
+export type CpmRoasVerdict =
+  /** CPM trend × ROAS trend produced a normal up/down/flat read. */
+  | 'normal'
+  /**
+   * Audit fix 2026-05-24 (U-02): havePrev=true but the prev period
+   * had no usable baseline (all-zero CPMs after filtering, or means
+   * that landed at 0). Pre-fix the analyzer silently mapped both
+   * null deltas to 'flat' → "יציבות מלאה" copy, which lied to the
+   * operator (the campaign had no comparison baseline, not a stable
+   * one). Now we surface this as an explicit verdict and emit
+   * "אין בסיס השוואה" copy with neutral tone.
+   */
+  | 'no-baseline';
+
 export type CpmRoasAnalysis = {
   /** Short Hebrew summary sentence the UI renders verbatim. */
   text: string;
@@ -97,6 +111,13 @@ export type CpmRoasAnalysis = {
   /** Which baseline the analysis compared against — drives the small
    *  "השוואה: ..." label the UI shows above the analysis box. */
   mode: 'half-over-half' | 'previous-period';
+  /**
+   * Verdict the analyzer reached. Most calls land at 'normal' — only
+   * the U-02 "queried-but-no-baseline" edge case returns 'no-baseline'.
+   * Surfaced so downstream tooltips can render verdict-specific copy
+   * without parsing the text field.
+   */
+  verdict: CpmRoasVerdict;
   /** Diagnostics for tooltips / debugging — not surfaced in production
    *  UI by default. */
   details: {
@@ -202,6 +223,21 @@ export function analyzeCpmVsRoas(
   const prevSeries = (options?.prev ?? []).filter(d => d.cpm > 0);
   const havePrev = prevSeries.length >= PREV_PERIOD_MIN_DAYS;
   const mode: 'half-over-half' | 'previous-period' = havePrev ? 'previous-period' : 'half-over-half';
+  // Audit fix 2026-05-24 (U-02): the caller queried a baseline but it
+  // came back empty/short. Common operator scenario: a campaign in its
+  // launch week. The prev-period series exists in the caller's data
+  // (it queried Postgres for the matching window) but every row has
+  // cpm=0 (the campaign wasn't running yet), so the cpm>0 filter strips
+  // it. Pre-fix the analyzer silently degraded to half-over-half mode
+  // and the operator never knew their "השוואה: תקופה קודמת" toggle had
+  // nothing to compare against — the half-over-half result LOOKED like
+  // a previous-period read. We track the intent here so the no-baseline
+  // verdict below can fire even when the filter has already dropped all
+  // prev rows. `prevWasQueriedButEmpty` distinguishes "caller passed
+  // nothing" (no toggle was used) from "caller passed a prev but it
+  // was empty" (the case we surface).
+  const prevWasQueriedButEmpty =
+    Array.isArray(options?.prev) && options!.prev!.length > 0 && !havePrev;
 
   // Not enough data → return a "neutral" placeholder.
   if (n < 5) {
@@ -210,6 +246,7 @@ export function analyzeCpmVsRoas(
       tone: 'neutral',
       hasData: false,
       mode,
+      verdict: 'normal',
       details: { n, cpmDeltaPct: null, roasDeltaPct: null, pearson: null },
     };
   }
@@ -241,6 +278,47 @@ export function analyzeCpmVsRoas(
   } else {
     cpmDelta = halfOverHalfDelta_(cpms);
     roasDelta = halfOverHalfDelta_(roases);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Audit fix 2026-05-24 (U-02): emit 'no-baseline' verdict instead of
+  // silently degrading the read.
+  //
+  // Two reachable triggers:
+  //
+  //   (1) prevWasQueriedButEmpty — the caller PASSED options.prev
+  //       (toggled "השוואה: תקופה קודמת") but every row had cpm=0, so
+  //       the filter stripped all of it. Common launch-week scenario:
+  //       campaign in its first active period, prev window has 0
+  //       impressions because the campaign hadn't started yet. Pre-fix
+  //       the analyzer silently downgraded mode to half-over-half and
+  //       the operator never knew their "prev" toggle had nothing to
+  //       compare against — the half-over-half result LOOKED like a
+  //       previous-period read.
+  //
+  //   (2) havePrev && both deltas null — the prev series survived the
+  //       filter but means / divisor math collapsed (e.g. a future
+  //       meanOrNull_ refactor makes this reachable, or the cpm filter
+  //       changes). Defensive: emit honest copy instead of the
+  //       categorize() default of 'flat' which would trip the
+  //       FLAT+FLAT branch with the misleading "יציבות מלאה" copy.
+  //
+  // The mode field shows 'previous-period' in case (2) (havePrev=true)
+  // and 'half-over-half' in case (1) (prev got filtered out). The
+  // verdict is the truthful signal — downstream consumers (tooltips,
+  // the operator-facing copy) should branch on verdict rather than mode.
+  if (
+    prevWasQueriedButEmpty ||
+    (havePrev && cpmDelta === null && roasDelta === null)
+  ) {
+    return {
+      text: 'אין בסיס השוואה — לתקופה הקודמת אין נתונים תקפים להשוואה. הקמפיין כנראה לא רץ אז (או לא היו לו חשיפות), אז לא ניתן לסיק מגמה.',
+      tone: 'neutral',
+      hasData: true,
+      mode,
+      verdict: 'no-baseline',
+      details: { n, cpmDeltaPct: null, roasDeltaPct: null, pearson: null },
+    };
   }
 
   function categorize(delta: number | null): 'up' | 'down' | 'flat' {
@@ -317,6 +395,7 @@ export function analyzeCpmVsRoas(
     tone,
     hasData: true,
     mode,
+    verdict: 'normal',
     details: { n, cpmDeltaPct: cpmDelta, roasDeltaPct: roasDelta, pearson: r },
   };
 }
