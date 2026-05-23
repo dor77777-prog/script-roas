@@ -157,7 +157,9 @@ function StoreCard({
                 הזמנות
               </span>
             }
-            value={orderCount === undefined ? '—' : formatNumber(orderCount, 0)}
+            // Audit fix 2026-05-23 (FIND-05 dashboard-fidelity): "…" for
+            // loading, "0" for genuine zero orders. Mirrors TodayLive.
+            value={orderCount === undefined ? '…' : formatNumber(orderCount, 0)}
           />
           <Row label="רווח גולמי" value={`CAD ${formatCurrency(agg.grossProfit)}`} bold />
         </div>

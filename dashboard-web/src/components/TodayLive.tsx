@@ -306,7 +306,11 @@ export function TodayLive({
           <LiveStat
             icon={<ShoppingBag size={13} />}
             label="הזמנות (היום)"
-            value={ordersToday === undefined ? '—' : formatNumber(totalOrdersToday, 0)}
+            // Audit fix 2026-05-23 (FIND-05 dashboard-fidelity): distinguish
+            // "still loading" from "zero orders so far". Both used to render
+            // "—" so the operator couldn't tell whether to wait or to act.
+            // "…" universally signals in-progress.
+            value={ordersToday === undefined ? '…' : formatNumber(totalOrdersToday, 0)}
           />
           <LiveStat
             icon={<Eye size={13} />}
@@ -393,7 +397,9 @@ export function TodayLive({
                         הזמנות
                       </span>
                       <span className="text-text-primary font-semibold">
-                        {ordersToday === undefined ? '—' : formatNumber(storeOrders ?? 0, 0)}
+                        {/* Audit fix 2026-05-23 (FIND-05): "…" for loading,
+                            "0" for genuine zero orders. */}
+                        {ordersToday === undefined ? '…' : formatNumber(storeOrders ?? 0, 0)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-2">
