@@ -85,6 +85,7 @@ type SortKey =
   | 'shopifyUnitsPlatform'     // deterministic per-platform Shopify units
   | 'shopifyValueTotal'        // total Shopify revenue (across all platforms) of mapped products
   | 'shopifyUnitsTotal'        // total Shopify units (across all platforms) of mapped products
+  | 'shopifyOrdersTotal'       // Phase 05.7.x (2026-05-23) — total Shopify orders (across all platforms) of mapped products
   | 'health'                   // unified Campaign Health Score (Phase 05.7.x)
   | 'conversions'
   | 'ctr'
@@ -155,7 +156,8 @@ function sortAggregated(
       case 'shopifyValuePlatform':
       case 'shopifyUnitsPlatform':
       case 'shopifyValueTotal':
-      case 'shopifyUnitsTotal': {
+      case 'shopifyUnitsTotal':
+      case 'shopifyOrdersTotal': {
         // Phase 05.7.x — same pattern as shopifyRoas: comparator falls
         // back to Meta ROAS, real sort runs in `displaySource` where
         // `trueRevenueByKey` is in scope.
@@ -400,6 +402,13 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   const isCustomRange =
     localRange.from !== range.from || localRange.to !== range.to;
 
+  // Phase 05.7.x (2026-05-23) — operator filter "show only multi-mapped
+  // campaigns". When ON, the table is filtered down to rows whose
+  // campaignKey shares at least one product with another campaign in
+  // the same store. Useful for spotting cannibalization risk + comparing
+  // co-mapped campaigns side by side.
+  const [showOnlyMultiMapped, setShowOnlyMultiMapped] = useState(false);
+
   const aggregated = useMemo(() => {
     if (!data) return [];
     const list = aggregate(data.rows, mode, localStore, platform, localRange);
@@ -425,6 +434,39 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     allCampaignRows,
     localRange,
   });
+
+  // Phase 05.7.x (2026-05-23) — Set of campaign keys whose product
+  // mapping is SHARED with at least one other campaign in the same
+  // store. Built once from productMap so the multi-mapped filter is O(1)
+  // lookup. Same shape used by mappedCampaignKeys (below) and the
+  // "🏷️ לא ממופה" chip.
+  const multiMappedCampaignKeys = useMemo(() => {
+    const set = new Set<string>();
+    // Build reverse index: productId → campaignKey[]
+    const byProduct = new Map<string, string[]>();
+    for (const [k, pids] of Object.entries(productMap)) {
+      if (!Array.isArray(pids)) continue;
+      const parts = k.split('::');
+      if (parts.length !== 3) continue;
+      const storeId = parts[0];
+      for (const pid of pids) {
+        const composite = `${storeId}::${pid}`; // store-scoped product key
+        if (!byProduct.has(composite)) byProduct.set(composite, []);
+        byProduct.get(composite)!.push(k);
+      }
+    }
+    // Mark every campaignKey that shares a product with at least one OTHER campaign.
+    for (const keys of byProduct.values()) {
+      if (keys.length >= 2) for (const k of keys) set.add(k);
+    }
+    return set;
+  }, [productMap]);
+
+  // Apply the multi-mapped filter on top of the base aggregate.
+  const aggregatedFiltered = useMemo(() => {
+    if (!showOnlyMultiMapped) return aggregated;
+    return aggregated.filter(a => multiMappedCampaignKeys.has(a.key));
+  }, [aggregated, showOnlyMultiMapped, multiMappedCampaignKeys]);
 
   // Phase 05.7.x (2026-05-23) — set of campaignKeys that have at least one
   // product mapped. Derived from productMap so the row's "🏷️ לא ממופה"
@@ -719,9 +761,13 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   // from `healthByKey`. Insufficient / unknown grades sort to the bottom
   // regardless of direction so they don't dominate the worklist.
   const displaySource = useMemo(() => {
+    // Phase 05.7.x (2026-05-23) — use the filtered aggregated when the
+    // "multi-mapped only" toggle is on. All sort branches below operate
+    // on this filtered list so the row count + sort order are consistent.
+    const source = aggregatedFiltered;
     if (sortKey === 'shopifyRoas' && trueRevenueByKey.size > 0) {
       const sign = sortDir === 'asc' ? 1 : -1;
-      const withRoas = aggregated.map(a => {
+      const withRoas = source.map(a => {
         const info = trueRevenueByKey.get(campaignKey(a.storeId, a.platform, a.campaignId));
         const roas = info && a.spend > 0 ? info.trueRevenue / a.spend : 0;
         return { a, roas, mapped: !!info };
@@ -742,7 +788,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     }
     if (sortKey === 'health' && healthByKey.size > 0) {
       const sign = sortDir === 'asc' ? 1 : -1;
-      const withHealth = aggregated.map(a => {
+      const withHealth = source.map(a => {
         const h = healthByKey.get(a.key);
         return { a, score: h?.score ?? 0, ready: !!h && !h.insufficient };
       });
@@ -766,10 +812,11 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       'shopifyUnitsPlatform',
       'shopifyValueTotal',
       'shopifyUnitsTotal',
+      'shopifyOrdersTotal',
     ] as const;
     if ((shopifyCols as readonly string[]).includes(sortKey) && trueRevenueByKey.size > 0) {
       const sign = sortDir === 'asc' ? 1 : -1;
-      const withVal = aggregated.map(a => {
+      const withVal = source.map(a => {
         const info = trueRevenueByKey.get(campaignKey(a.storeId, a.platform, a.campaignId));
         let v = 0;
         if (info) {
@@ -789,6 +836,9 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
             case 'shopifyUnitsTotal':
               v = info.productTotals.units;
               break;
+            case 'shopifyOrdersTotal':
+              v = info.productTotals.orders;
+              break;
           }
         }
         return { a, v, mapped: !!info };
@@ -799,8 +849,8 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       });
       return withVal.map(w => w.a);
     }
-    return aggregated;
-  }, [aggregated, sortKey, sortDir, trueRevenueByKey, healthByKey]);
+    return source;
+  }, [aggregatedFiltered, sortKey, sortDir, trueRevenueByKey, healthByKey]);
   const display = showAll ? displaySource : displaySource.slice(0, TOP_N_DEFAULT);
   const remaining = displaySource.length - display.length;
 
@@ -968,6 +1018,27 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
+      </div>
+
+      {/* Phase 05.7.x (2026-05-23) — multi-mapped only filter. When ON,
+          only campaigns sharing a product with another campaign in the
+          same store are shown. Useful for inspecting cohort behaviour
+          + spotting cannibalization risk at a glance. */}
+      <div className="flex items-center gap-2">
+        <label className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs text-text-secondary cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={showOnlyMultiMapped}
+            onChange={e => setShowOnlyMultiMapped(e.target.checked)}
+            className="rounded border-border accent-primary"
+          />
+          <span>🔗 רק קמפיינים עם מיפוי משותף</span>
+          {showOnlyMultiMapped && (
+            <span className="text-text-muted text-[10px] tabular-nums">
+              ({aggregatedFiltered.length} מתוך {aggregated.length})
+            </span>
+          )}
+        </label>
       </div>
 
       {/* Date range */}
@@ -1583,6 +1654,25 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     className="px-3 py-2 w-[78px]"
                     dataColId="shopifyUnitsTotal"
                     tooltip="סך היחידות שנמכרו ב-Shopify של המוצרים המשויכים בטווח הנבחר, בלי קשר לפלטפורמה. ה״מכנה״ ל-יח׳ פלטפורמה ממש כמו ש-ערך סה״כ הוא המכנה ל-ערך פלטפורמה."
+                  />
+                ),
+                shopifyOrdersTotal: (
+                  <SortHeader
+                    key="shopifyOrdersTotal"
+                    label={
+                      <span className="inline-flex flex-col items-end leading-tight">
+                        <span>הזמ&apos; Shopify</span>
+                        <span className="text-[9px] text-text-muted font-normal">סה&quot;כ</span>
+                      </span>
+                    }
+                    sortKey="shopifyOrdersTotal"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[78px]"
+                    dataColId="shopifyOrdersTotal"
+                    tooltip="סך ההזמנות ב-Shopify שכללו את המוצרים המשויכים בטווח הנבחר, מכל הערוצים. מוצר מרובה הזמנות נספר פעם להזמנה. הזמנה אחת עם 2 מוצרים מסוכמת פר-מוצר."
                   />
                 ),
                 conversions: (

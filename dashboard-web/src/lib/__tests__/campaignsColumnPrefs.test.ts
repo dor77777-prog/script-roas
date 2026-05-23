@@ -122,8 +122,9 @@ afterEach(() => {
 });
 
 describe('REORDERABLE_COLUMN_IDS — schema sanity', () => {
-  it('contains exactly the 15 metric columns documented in the manual', () => {
-    expect(REORDERABLE_COLUMN_IDS).toHaveLength(15);
+  it('contains exactly the 16 metric columns documented in the manual', () => {
+    // 15 base columns + 1 new (shopifyOrdersTotal, 2026-05-23)
+    expect(REORDERABLE_COLUMN_IDS).toHaveLength(16);
   });
 
   it('every reorderable ID exists in CAMPAIGNS_COLUMNS', () => {
@@ -160,8 +161,8 @@ describe('resolveCampaignsColumnOrder — pure merge contract', () => {
     // Operator dragged ROAS first, then spend, then everything else default.
     const saved = ['roas', 'spend', 'budget', 'conversionValue', 'roasShopify',
                    'roasShopifyPlatform', 'shopifyValuePlatform', 'shopifyUnitsPlatform',
-                   'shopifyValueTotal', 'shopifyUnitsTotal', 'conversions', 'ctr',
-                   'cpc', 'cpm', 'cpa'];
+                   'shopifyValueTotal', 'shopifyUnitsTotal', 'shopifyOrdersTotal',
+                   'conversions', 'ctr', 'cpc', 'cpm', 'cpa'];
     expect(resolveCampaignsColumnOrder(saved)).toEqual(saved);
   });
 

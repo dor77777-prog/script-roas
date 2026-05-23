@@ -42,10 +42,17 @@ export type TrueRevenueInfo = {
   attribution: AttributionAnalysis | null;
   /** Phase 05.7.9b — product TOTALS across ALL platforms for this
    *  campaign's mapped products in the date range. Used for the "ערך/יח'
-   *  Shopify · סה"כ" columns. */
+   *  Shopify · סה"כ" columns.
+   *  Phase 05.7.x (2026-05-23) — added `orders` so the new "הזמנות
+   *  Shopify" column can show the order count for the campaign's mapped
+   *  products. Sum across mapped products = total orders that contained
+   *  ANY of them; conservative — an order with 2 mapped products counts
+   *  once per product (so the sum may be > distinct orders). Operators
+   *  read this as "total product-orders" not "distinct orders". */
   productTotals: {
     revenue: number;
     units: number;
+    orders: number;
   };
   /** Phase 05.7.9b — deterministic-only share. Orders with an explicit
    *  platform signal (source='X-paid' OR fbclid/gclid) classified to this
@@ -260,7 +267,7 @@ export function useCampaignTrueRevenue(opts: {
     // same date range. We iterate products by store because allocation is
     // scoped to one store at a time (campaigns can't sell products from
     // another store).
-    const productsByStore = new Map<string, Array<{ productId: string; netRevenueCad: number; units: number }>>();
+    const productsByStore = new Map<string, Array<{ productId: string; netRevenueCad: number; units: number; orders: number }>>();
     for (const p of productsResp.rows) {
       if (p.date < localRange.from || p.date > localRange.to) continue;
       if (!p.productId) continue;
@@ -269,12 +276,20 @@ export function useCampaignTrueRevenue(opts: {
       if (!productsByStore.has(p.storeId)) productsByStore.set(p.storeId, []);
       const arr = productsByStore.get(p.storeId)!;
       // Dedupe: sum the multi-day rows into a single per-product total.
+      // Phase 05.7.x (2026-05-23) — `orders` accumulated too so the new
+      // "הזמנות Shopify" column has a value per product.
       const existing = arr.find(x => x.productId === p.productId);
       if (existing) {
         existing.netRevenueCad += net;
         existing.units += p.units;
+        existing.orders += p.orders ?? 0;
       } else {
-        arr.push({ productId: p.productId, netRevenueCad: net, units: p.units });
+        arr.push({
+          productId: p.productId,
+          netRevenueCad: net,
+          units: p.units,
+          orders: p.orders ?? 0,
+        });
       }
     }
 
@@ -341,13 +356,14 @@ export function useCampaignTrueRevenue(opts: {
     // tooltip summation happens in the loop below.
     const productTotalsByStoreProduct = new Map<
       string,
-      { revenue: number; units: number }
+      { revenue: number; units: number; orders: number }
     >();
     for (const [storeId, productRev] of productsByStore) {
       for (const p of productRev) {
         productTotalsByStoreProduct.set(`${storeId}::${p.productId}`, {
           revenue: p.netRevenueCad,
           units: p.units,
+          orders: p.orders,
         });
       }
     }
@@ -470,12 +486,13 @@ export function useCampaignTrueRevenue(opts: {
       // Phase 05.7.9 — sum the totals across this campaign's mapped
       // products. A campaign mapped to [P1, P2] gets `productTotals =
       // P1.totals + P2.totals`. Provides the tooltip denominator.
-      const productTotals = { revenue: 0, units: 0 };
+      const productTotals = { revenue: 0, units: 0, orders: 0 };
       for (const pid of mappedIds) {
         const t = productTotalsByStoreProduct.get(`${a.storeId}::${pid}`);
         if (!t) continue;
         productTotals.revenue += t.revenue;
         productTotals.units += t.units;
+        productTotals.orders += t.orders;
       }
       out.set(k, {
         trueRevenue,

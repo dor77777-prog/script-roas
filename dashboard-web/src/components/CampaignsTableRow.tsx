@@ -699,6 +699,33 @@ export function CampaignsTableRow({
         })()}
       </td>
       ),
+      // [5] Phase 05.7.x (2026-05-23) — הזמנות Shopify · סה"כ.
+      // Number of orders that contained the campaign's mapped product(s)
+      // in the range, summed across all mapped products. Conservative:
+      // an order with 2 mapped products counts once per product (so the
+      // sum may exceed distinct orders); operator reads this as
+      // "product-orders" — same semantics as Shopify's own per-product
+      // report. Hidden when no mapping exists.
+      shopifyOrdersTotal: (
+      <td data-col-id="shopifyOrdersTotal" className="px-3 py-2 text-end tabular-nums">
+        {(() => {
+          const key = campaignKey(a.storeId, a.platform, a.campaignId);
+          const info = trueRevenueByKey.get(key);
+          if (!info || info.productTotals.orders <= 0) {
+            return <span className="text-text-muted">—</span>;
+          }
+          const total = Math.round(info.productTotals.orders);
+          return (
+            <span
+              className="font-medium text-text-secondary"
+              title="סך ההזמנות ב-Shopify שכללו את המוצרים המשויכים, בטווח שנבחר, מכל הערוצים. מוצר שמופיע בכמה הזמנות נספר פעם להזמנה; מוצרים מרובים באותה הזמנה מסוכמים פר-מוצר."
+            >
+              {total}
+            </span>
+          );
+        })()}
+      </td>
+      ),
       conversions: (
         <td data-col-id="conversions" className="px-3 py-2 text-end tabular-nums">{formatNumber(a.conversions, 0)}</td>
       ),

@@ -75,7 +75,7 @@ function makeTrueRevenue(patch: Partial<TrueRevenueInfo> = {}): TrueRevenueInfo 
       interpretation: '',
       recommendations: [],
     } as unknown as TrueRevenueInfo['attribution'],
-    productTotals: { revenue: 1800, units: 40 },
+    productTotals: { revenue: 1800, units: 40, orders: 30 },
     deterministicRevenue: 1200,
     deterministicUnits: 24,
     ...patch,
