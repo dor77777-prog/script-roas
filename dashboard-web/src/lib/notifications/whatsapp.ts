@@ -70,6 +70,43 @@ export function getWhatsAppCredsFromEnv(): {
  * Inngest's retry layer (4 retries, exponential backoff) handles
  * transient 5xx and rate-limit 429s.
  */
+/**
+ * Audit fix 2026-05-23 (HR-05 health-and-conclusions): recipient allowlist.
+ *
+ * Daily summary + (eventually) token-failure alerts both flow through
+ * `sendWhatsAppTemplate`. The destinations come from `notification_config`
+ * rows in Postgres — i.e., editable from the /operator UI. A typo in the
+ * operator UI would have silently fanned out daily summaries to a
+ * stranger's WhatsApp 3 times/day until someone noticed.
+ *
+ * Env-var allowlist (`NOTIFICATION_RECIPIENT_ALLOWLIST`):
+ *   Comma-separated phone numbers (with or without leading `+`, with
+ *   or without dashes). When set, sendWhatsAppTemplate REJECTS any
+ *   destination not in the list — logged loudly so the operator notices.
+ *   When NOT set, no allowlist enforcement (back-compat for instances
+ *   that don't want it).
+ *
+ * Project-memory contract: operator's token-failure alerts go ONLY to
+ * +972524809540. Operator should set NOTIFICATION_RECIPIENT_ALLOWLIST
+ * to that value to enforce the contract across all WhatsApp sends.
+ */
+function recipientAllowed(toDigitsOnly: string): { allowed: boolean; reason?: string } {
+  const raw = process.env.NOTIFICATION_RECIPIENT_ALLOWLIST;
+  if (!raw || raw.trim() === '') {
+    // No allowlist configured → permissive (backwards-compat).
+    return { allowed: true };
+  }
+  const allowed = raw
+    .split(',')
+    .map(s => s.trim().replace(/^\+/, '').replace(/[^0-9]/g, ''))
+    .filter(s => s.length > 0);
+  if (allowed.includes(toDigitsOnly)) return { allowed: true };
+  return {
+    allowed: false,
+    reason: `recipient ${toDigitsOnly} not in NOTIFICATION_RECIPIENT_ALLOWLIST (${allowed.length} numbers configured)`,
+  };
+}
+
 export async function sendWhatsAppTemplate(args: {
   toNumber: string;
   templateName: string;
@@ -80,6 +117,17 @@ export async function sendWhatsAppTemplate(args: {
   const { toNumber, templateName, templateLang, templateParams } = args;
 
   const to = String(toNumber).replace(/^\+/, '').replace(/[^0-9]/g, '');
+
+  // Allowlist gate (HR-05). Throwing here means sendDailySummary's
+  // per-recipient try/catch (T3.5) reports the rejection in
+  // recipientsFailed and the operator sees it surfaced as a failed run.
+  const check = recipientAllowed(to);
+  if (!check.allowed) {
+    throw new Error(
+      `Refused to send WhatsApp template "${templateName}" — ${check.reason}. ` +
+        `Add ${to} to NOTIFICATION_RECIPIENT_ALLOWLIST env var if intentional.`,
+    );
+  }
   const url = `https://graph.facebook.com/${META_API_VERSION}/${phoneNumberId}/messages`;
   const payload = {
     messaging_product: 'whatsapp',

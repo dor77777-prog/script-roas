@@ -87,6 +87,39 @@ export async function sendDailySummary(
     }
   }
 
+  // Audit fix 2026-05-23 (HR-04 health-and-conclusions): make
+  // partial-recipient failures visible to Inngest.
+  //
+  // Pre-fix: per-recipient `try/catch` swallowed the exception and
+  // appended to `result.recipientsFailed`. The function then returned
+  // successfully — Inngest marked the run as a SUCCESS and the failure
+  // never surfaced anywhere (no retry, no alert, no operator signal).
+  // The operator only noticed when they realized they hadn't gotten
+  // their noon summary in 3 days.
+  //
+  // Post-fix: if ANY recipient succeeded, keep the run "success" but
+  // throw an explicit error AFTER the loop when ALL recipients failed
+  // (no successes). Inngest then marks the run as failed → operator
+  // sees a red entry in the Inngest dashboard + can wire an alert
+  // function on `inngest/function.failed` events.
+  //
+  // We still don't throw on partial-success (e.g., phone1 sent OK but
+  // phone2 failed) because that would mask the success in Inngest. The
+  // partial failure is visible via result.recipientsFailed in the run
+  // output for the operator to inspect manually.
+  if (
+    result.recipientsAttempted.length > 0 &&
+    result.recipientsSucceeded.length === 0 &&
+    result.recipientsFailed.length > 0
+  ) {
+    const summary = result.recipientsFailed
+      .map(f => `${f.to}: ${f.error}`)
+      .join(' | ');
+    throw new Error(
+      `All ${result.recipientsFailed.length} WhatsApp recipient(s) failed for ${title}. ${summary}`,
+    );
+  }
+
   return result;
 }
 
