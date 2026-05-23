@@ -547,11 +547,23 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   const healthByKey = useMemo(() => {
     const out = new Map<string, CampaignHealth>();
 
-    // Build a per-key roasShopify lookup from trueRevenueByKey so the
-    // cohort module can rank without re-computing.
+    // Build per-key ROAS lookups from trueRevenueByKey so the cohort
+    // module can rank without re-computing.
+    //
+    // Audit fix 2026-05-23 (HIGH-01 multi-mapping): the secondary
+    // `roasShopifyPlatformByKey` MUST differ from the primary so the
+    // tie-breaker actually tie-breaks. Pre-fix, both maps were fed the
+    // same `roasShopifyByKey` — secondary contributed zero discrimination.
+    // Use `deterministicRevenue / spend` for the platform-only signal
+    // (the same number rendered by the "ROAS Shopify · פלטפורמה" column).
     const roasShopifyByKey = new Map<string, number>();
+    const roasShopifyPlatformByKey = new Map<string, number>();
     for (const [k, info] of trueRevenueByKey.entries()) {
       roasShopifyByKey.set(k, info.spend > 0 ? info.trueRevenue / info.spend : 0);
+      roasShopifyPlatformByKey.set(
+        k,
+        info.spend > 0 ? info.deterministicRevenue / info.spend : 0,
+      );
     }
 
     for (const a of aggregated) {
@@ -581,7 +593,11 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         productMap,
         aggregated,
         roasShopifyByKey,
-        roasShopifyPlatformByKey: roasShopifyByKey, // same proxy for now
+        // Audit fix 2026-05-23 (HIGH-01): real platform-deterministic
+        // ROAS as the secondary tie-breaker. Pre-fix this also passed
+        // `roasShopifyByKey`, making the tertiary `spend` the de-facto
+        // secondary (and the documented secondary a no-op).
+        roasShopifyPlatformByKey,
       });
       // Take the WORST cannibalization risk across this campaign's
       // mapped products in the visible range. We already compute the
