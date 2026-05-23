@@ -53,7 +53,7 @@ type Props = {
 };
 
 /** Build a per-day total for a metric across the current rows. */
-function dailyTotals(rows: DailyRow[], pick: (r: DailyRow) => number): number[] {
+export function dailyTotals(rows: DailyRow[], pick: (r: DailyRow) => number): number[] {
   if (!rows || rows.length === 0) return [];
   const byDate = new Map<string, number>();
   for (const r of rows) {
@@ -65,7 +65,7 @@ function dailyTotals(rows: DailyRow[], pick: (r: DailyRow) => number): number[] 
 }
 
 /** Per-day ROAS = sum(revenue) / sum(spend) for that day (weighted). */
-function dailyRoas(rows: DailyRow[]): number[] {
+export function dailyRoas(rows: DailyRow[]): number[] {
   if (!rows || rows.length === 0) return [];
   const map = new Map<string, { rev: number; spend: number }>();
   for (const r of rows) {
@@ -77,6 +77,47 @@ function dailyRoas(rows: DailyRow[]): number[] {
   return Array.from(map.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
     .map(([, v]) => (v.spend > 0 ? v.rev / v.spend : 0));
+}
+
+/**
+ * Per-card sparkline series. Pure function — exported so the regression
+ * tests can pin its shape without rendering JSX (vitest runs node).
+ *
+ * Audit fix 2026-05-23 (CRIT-4 / O2-CR-03): NO `netProfit` field. The
+ * previous implementation built it as `revenue - spend - cogs(global 25%)`
+ * per day, while the big-number on the same card displayed
+ * `current.trueNetProfit` which also subtracts transaction fees AND
+ * prorated fixed costs. The two shapes never matched — a card could show
+ * a $400/day net while the sparkline implied $600/day. Codex's preferred
+ * fix: drop the sparkline rather than fake a daily allocation of fees +
+ * fixed costs that billing.ts doesn't currently prorate per day.
+ */
+export function computeKpiSparkData(series: DailyRow[]): {
+  roas: number[];
+  revenue: number[];
+  spend: number[];
+  grossProfit: number[];
+  cogs: number[];
+} {
+  if (!series || series.length === 0) {
+    return {
+      roas: [],
+      revenue: [],
+      spend: [],
+      grossProfit: [],
+      cogs: [],
+    };
+  }
+  return {
+    roas: dailyRoas(series),
+    revenue: dailyTotals(series, r => r.revenue),
+    spend: dailyTotals(series, r => r.totalSpend),
+    grossProfit: dailyTotals(series, r => r.grossProfit),
+    // COGS sparkline rate is addressed by HIGH-7 in a follow-up commit;
+    // keep the global-rate path here so the CRIT-4-only diff stays
+    // minimal and reviewable.
+    cogs: dailyTotals(series, r => r.revenue * COGS_RATE_OF_REVENUE),
+  };
 }
 
 export function KpiCards({ current, previous, series }: Props) {
@@ -93,33 +134,10 @@ export function KpiCards({ current, previous, series }: Props) {
   // "before fixed costs" comparison later.
   void dNet;
 
-  // Pre-compute the per-day series for each metric once. useMemo because
-  // dailyTotals walks the whole rows array per call.
-  const sparkData = useMemo(() => {
-    if (!series || series.length === 0) {
-      return {
-        roas: [] as number[],
-        revenue: [] as number[],
-        spend: [] as number[],
-        grossProfit: [] as number[],
-        cogs: [] as number[],
-        netProfit: [] as number[],
-      };
-    }
-    const revenue = dailyTotals(series, r => r.revenue);
-    const spend = dailyTotals(series, r => r.totalSpend);
-    const grossProfit = dailyTotals(series, r => r.grossProfit);
-    const cogs = dailyTotals(series, r => r.revenue * COGS_RATE_OF_REVENUE);
-    const netProfit = revenue.map((rev, i) => rev - (spend[i] ?? 0) - (cogs[i] ?? 0));
-    return {
-      roas: dailyRoas(series),
-      revenue,
-      spend,
-      grossProfit,
-      cogs,
-      netProfit,
-    };
-  }, [series]);
+  // Audit fix 2026-05-23 (CRIT-4): delegated to the pure
+  // `computeKpiSparkData` helper exported above. The helper no longer
+  // emits `netProfit` — see its docstring.
+  const sparkData = useMemo(() => computeKpiSparkData(series ?? []), [series]);
 
   return (
     <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -177,6 +195,14 @@ export function KpiCards({ current, previous, series }: Props) {
         spark={{ values: sparkData.cogs }}
       />
       <KpiCard
+        // Audit fix 2026-05-23 (CRIT-4 / O2-CR-03): no `spark` prop. The
+        // previous sparkline plotted `revenue - spend - cogs` per day
+        // while the big-number renders `trueNetProfit` which subtracts
+        // transaction fees AND prorated fixed costs too — the shapes
+        // disagreed. Showing a wrong sparkline is worse than no sparkline;
+        // a faithful series would require per-day fee + fixed-cost
+        // proration in billing.ts (out of scope here). Big-number stays;
+        // sparkline removed.
         label="רווח נטו"
         help={METRIC_HELP.netProfit}
         rawValue={current.trueNetProfit}
@@ -185,7 +211,6 @@ export function KpiCards({ current, previous, series }: Props) {
         delta={dTrueNet}
         icon={<Wallet size={14} />}
         accent={current.trueNetProfit >= 0 ? 'pos' : 'neg'}
-        spark={{ values: sparkData.netProfit }}
       />
     </div>
   );
