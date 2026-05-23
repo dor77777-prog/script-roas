@@ -38,16 +38,42 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
   // returns 0 after its own filtering). Returning null here is the safe
   // floor — the parent's surface still renders cleanly without us.
   if (total <= 0) return null;
-  const fb = breakdown.facebookOrders;
+  // Audit fix 2026-05-23 (CRIT-2 / O2-CR-01): exclusive source attribution.
+  //
+  // Pre-fix, `fb` used `breakdown.facebookOrders` (broad OR predicate:
+  // source in {meta-paid, meta-organic} OR fbclidPresent=true). A
+  // google-paid order with a stale fbclid cookie was double-counted in
+  // both `fb` and `google`, so segments summed to >100% and the
+  // residual `other` (email / affiliate / unknown surfaces) was clamped
+  // to 0 — silently dropping legitimate revenue from the bar.
+  //
+  // Now every segment is derived from `bySource` only (mutually-exclusive
+  // buckets). `other` becomes everything not explicitly placed in one of
+  // the four named buckets, including email/affiliate/other-paid/
+  // other-referral plus any residual unknown source.
+  const fb = (breakdown.bySource['meta-paid']?.orders ?? 0)
+           + (breakdown.bySource['meta-organic']?.orders ?? 0);
   const google = (breakdown.bySource['google-paid']?.orders ?? 0)
               + (breakdown.bySource['google-organic']?.orders ?? 0);
   // Phase 05.7.9 — TikTok bucket. tiktok-paid is currently the only TikTok
   // source classification (organic TikTok referrers fall through to
   // 'other-referral' per shopify.ts:classifyOrderAttribution line 900-906).
-  const tiktok = breakdown.tiktokOrders;
+  // Read from bySource so the math stays exclusive with all other segments.
+  const tiktok = breakdown.bySource['tiktok-paid']?.orders ?? 0;
   const direct = breakdown.bySource['direct']?.orders ?? 0;
-  const other = Math.max(0, total - fb - google - tiktok - direct);
-  const fbPct = Math.round(breakdown.facebookShare * 100);
+  const knownExplicit = fb + google + tiktok + direct;
+  // `other` now naturally sums-to-total because the explicit buckets are
+  // exclusive. The `Math.max(0, ...)` guard stays as defense-in-depth
+  // against future bugs where a bucket count could exceed `total`.
+  const other = Math.max(0, total - knownExplicit);
+  // Audit fix 2026-05-23 (CRIT-2, Codex caveat): chip recommendations also
+  // derive their Facebook share from the exclusive Meta count — NOT from
+  // `breakdown.facebookShare` (which is OR-inflated by fbclid-tagged
+  // non-Meta orders). Otherwise a campaign with 40% real Meta + 20% Google
+  // (where some Google orders have fbclid) would trip the "≥60% Facebook"
+  // green chip on a falsely-inflated signal.
+  const exclusiveFacebookShare = fb / total;
+  const fbPct = Math.round(exclusiveFacebookShare * 100);
   return (
     <section>
       <h3 className="text-sm font-semibold text-text-primary inline-flex items-center gap-1.5 mb-2">
@@ -107,8 +133,17 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
             ≥5-orders floor is plan-level; a brand-new campaign
             with 0% on only 3 orders is noise, not signal —
             RESEARCH.md Open Question 2).
-            Between 30% and 60%: no chip per CONTEXT. */}
-        {breakdown.facebookShare >= 0.6 && (
+            Between 30% and 60%: no chip per CONTEXT.
+
+            Audit fix 2026-05-23 (CRIT-2 Codex caveat): both thresholds
+            now read `exclusiveFacebookShare` (Meta-only count / total)
+            instead of `breakdown.facebookShare` (which is OR-inflated
+            by fbclid-tagged orders whose true source is Google/email/
+            other). Without this, a 40%-real-Meta + 20%-Google campaign
+            with stale fbclid cookies on the Google traffic could trip
+            the green ≥60% chip on a phantom signal — recommending
+            budget increase off attribution noise. */}
+        {exclusiveFacebookShare >= 0.6 && (
           <div className="rounded-md bg-roas-greenBg/50 border border-roas-green/30 text-roas-green px-2.5 py-2 text-[11px] leading-relaxed">
             <strong>💡 </strong>
             {fbPct}% מהמכירות הגיעו מפייסבוק
@@ -116,7 +151,7 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
             ביטחון להעלאת תקציב הקמפיין
           </div>
         )}
-        {breakdown.facebookShare < 0.3 && total >= 5 && (
+        {exclusiveFacebookShare < 0.3 && total >= 5 && (
           <div className="rounded-md bg-amber-50 border border-amber-300 text-amber-800 px-2.5 py-2 text-[11px] leading-relaxed">
             <strong>⚠️ </strong>
             רק {fbPct}% מהמכירות הגיעו מפייסבוק

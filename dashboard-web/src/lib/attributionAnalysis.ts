@@ -1006,13 +1006,35 @@ export type ProductChannelBreakdown = {
    *  by the OrderSource union plus 'direct'. Missing keys mean zero — the
    *  caller should default-coalesce when reading. */
   bySource: Partial<Record<OrderSource | 'direct', { orders: number; revenue: number; units: number }>>;
-  /** Orders qualifying as "Facebook" by the locked CONTEXT predicate:
-   *  source ∈ {meta-paid, meta-organic} OR fbclidPresent === true. */
+  /**
+   * Orders qualifying as "Facebook" by the BROAD OR predicate:
+   *   source ∈ {meta-paid, meta-organic} OR fbclidPresent === true.
+   *
+   * Audit fix 2026-05-23 (CRIT-2 / O2-CR-01): this count is NON-EXCLUSIVE
+   * with `bySource` buckets — a `google-paid` order with a stale `fbclid`
+   * cookie hits both this counter AND the `google-paid` bucket. Do NOT
+   * subtract this from `totalOrders` in segment-width math: it inflates
+   * Facebook + Google jointly past 100% and clamps the residual "other"
+   * (email / affiliate / unknown) to 0.
+   *
+   * Use as a SECONDARY directional signal only ("how many orders had any
+   * Facebook surface touchpoint?"). For mutually-exclusive segment math
+   * the renderer computes Meta from `bySource['meta-paid'] +
+   * bySource['meta-organic']` directly.
+   */
   facebookOrders: number;
   facebookRevenue: number;
-  /** facebookOrders / totalOrders. 0 when totalOrders === 0 — never NaN
-   *  (RESEARCH.md Pitfall 3). The caller is still responsible for the
-   *  ≥3 orders gate before rendering. */
+  /**
+   * facebookOrders / totalOrders. 0 when totalOrders === 0 — never NaN
+   * (RESEARCH.md Pitfall 3). The caller is still responsible for the
+   * ≥3 orders gate before rendering.
+   *
+   * Audit fix 2026-05-23 (CRIT-2): like `facebookOrders`, this share is
+   * inflated by fbclid-tagged Google/email orders. Renderers that compose
+   * exclusive segment widths or chip-recommendation thresholds must
+   * derive their own share from the `bySource` buckets — NOT from this
+   * field — so the residual "other" bucket is not silently clamped.
+   */
   facebookShare: number;
   /** Phase 05.7.9 — TikTok bucket. Counts orders with source === 'tiktok-paid'
    *  (set when ttclid is in the landing URL or source_name === 'tiktok').
