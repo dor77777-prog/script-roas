@@ -1759,33 +1759,65 @@ export function generateAiReport({
       out.push('## 🔗 מוצרים משותפים בין כמה קמפיינים');
       out.push('');
       out.push(
-        '_מוצרים שהמפעיל מיפה ל-2+ קמפיינים. ה-ROAS Shopify של כל קמפיין ' +
-          'במוצר הזה מבוסס על **חלקו של הקמפיין בהוצאה** (חלוקה פרופורציונלית) — ' +
-          'לא על כל ההכנסה של המוצר. אזהרה ל-AI: בהמלצה פר-קמפיין, אל ' +
-          'תייחס למוצר משותף 100% מההכנסה — קמפיינים אחרים תרמו גם הם._',
+        '_מוצרים שהמפעיל מיפה ל-2+ קמפיינים. שני סוגי תחרות שונים בתוך מוצר ' +
+          'משותף — חשוב להבדיל ביניהם בהמלצה:_',
+      );
+      out.push('');
+      out.push(
+        '- **תחרות פנים-פלטפורמית** (לדוגמה 4 קמפיינים ב-Meta על אותו מוצר): ' +
+          'אסטרטגיות שונות באותה זירה. ההכנסה הדטרמיניסטית של פלטפורמה זו ' +
+          '(הזמנות עם click-id רלוונטי) מתחלקת בין הקמפיינים *של אותה הפלטפורמה* ' +
+          'לפי spend share. סקייל של אחד עלול לגנוב נתח מהאחרים אם הקהל רווי.',
+      );
+      out.push(
+        '- **תחרות בין-פלטפורמית** (לדוגמה 4 קמפיינים ב-Meta + 3 ב-TikTok): ' +
+          'ערוצים מקבילים. כל פלטפורמה תופסת את ההכנסה הדטרמיניסטית שלה ' +
+          'בנפרד (Meta מקבל את ההזמנות עם fbclid, TikTok מקבל את ההזמנות עם ' +
+          'tiktok-UTM, וכו׳). השארית הלא-מסווגת מתחלקת לפי spend share על פני ' +
+          'הכל. סקייל בין פלטפורמות בדרך כלל לא קניבליסטי — קהלים שונים.',
       );
       out.push('');
       // Sort by total net revenue descending — focus on the products that
       // matter most to the bottom line.
       shared.sort((a, b) => b.totalNetRevenue - a.totalNetRevenue);
       for (const sp of shared.slice(0, 15)) {
+        // Group by platform for clearer per-platform competition signal.
+        const byPlatform = new Map<string, typeof sp.sharingCampaigns>();
+        for (const c of sp.sharingCampaigns) {
+          if (!byPlatform.has(c.platform)) byPlatform.set(c.platform, []);
+          byPlatform.get(c.platform)!.push(c);
+        }
+        const platformCount = byPlatform.size;
+        const competitionType =
+          platformCount === 1
+            ? `תחרות פנים-פלטפורמית בלבד (${sp.sharingCampaigns.length} קמפיינים)`
+            : `מעורב — ${platformCount} פלטפורמות`;
         out.push(
-          `### ${escapeMd(sp.productTitle)} (${sp.sharingCampaigns.length} קמפיינים, ` +
-            `סך מכירות נטו: ${fmtCad(sp.totalNetRevenue)})`,
+          `### ${escapeMd(sp.productTitle)} · ${competitionType} · ` +
+            `סך נטו: ${fmtCad(sp.totalNetRevenue)}`,
         );
         out.push('');
-        out.push(`| קמפיין | פלטפורמה | הוצאה בטווח | חלק מההוצאה | הכנסה משוערת מהמוצר |`);
-        out.push(`|---|---|---|---|---|`);
-        // Sort by spend desc within the product so the dominant campaign is first.
-        const sortedCampaigns = [...sp.sharingCampaigns].sort((a, b) => b.spend - a.spend);
-        for (const c of sortedCampaigns) {
-          const allocatedRev = sp.totalNetRevenue * c.sharePct;
+        // Render one mini-table per platform so intra-platform rivalry
+        // is visually separate from cross-platform parallel channels.
+        for (const [platform, platformCampaigns] of byPlatform.entries()) {
+          const intraSpend = platformCampaigns.reduce((s, c) => s + c.spend, 0);
           out.push(
-            `| ${escapeMd(c.name)} | ${c.platform} | ${fmtCad(c.spend)} | ` +
-              `${fmtPct(c.sharePct)} | ${fmtCad(allocatedRev)} |`,
+            `**${platform}** — ${platformCampaigns.length} קמפיינים, סך הוצאה: ${fmtCad(intraSpend)}`,
           );
+          out.push('');
+          out.push(`| קמפיין | הוצאה | חלק מההוצאה (פנים-פלטפורמי) | חלק מכלל המוצר | הכנסה משוערת |`);
+          out.push(`|---|---|---|---|---|`);
+          const sortedCampaigns = [...platformCampaigns].sort((a, b) => b.spend - a.spend);
+          for (const c of sortedCampaigns) {
+            const intraPct = intraSpend > 0 ? c.spend / intraSpend : 1 / platformCampaigns.length;
+            const allocatedRev = sp.totalNetRevenue * c.sharePct;
+            out.push(
+              `| ${escapeMd(c.name)} | ${fmtCad(c.spend)} | ${fmtPct(intraPct)} | ` +
+                `${fmtPct(c.sharePct)} | ${fmtCad(allocatedRev)} |`,
+            );
+          }
+          out.push('');
         }
-        out.push('');
       }
       if (shared.length > 15) {
         out.push(`_(מוצגים 15 מתוך ${shared.length} מוצרים משותפים — ממוין לפי הכנסה יורדת.)_`);
@@ -1967,14 +1999,27 @@ export function generateAiReport({
       '+ הצדקה במספרים.',
   );
   out.push(
-    '**2.1a חשוב על מיפויים משותפים**: לפני שאתה ממליץ "לסקייל את קמפיין X", ' +
-      'בדוק בטבלת "🔗 מוצרים משותפים בין כמה קמפיינים" אם המוצר הראשי שלו משויך ' +
-      'גם לקמפיינים אחרים. אם כן — ה-ROAS Shopify של X *כבר מנוכה* על-בסיס ' +
-      'חלקו בהוצאה (חלוקה פרופורציונלית). זה לא דבר רע — זה אומר שכשתסקייל ' +
-      'את X, חלקו ב-Σspend יגדל וההכנסה המוקצית אליו תגדל אוטומטית. אבל זה ' +
-      '*כן* אומר שאם הצמד (X + קמפיין-משותף-Y) ביחד כבר רווי (כל הקהל ' +
-      'הרלוונטי כבר נחשף), הסקייל של X יגנוב נתח מ-Y בלי שינוי בסך הכולל. ' +
-      'במקרה הזה ההמלצה צריכה להיות "סקייל X **או** Y, לא שניהם" עם נימוק.',
+    '**2.1a חשוב על מיפויים משותפים — שני סוגי תחרות שונים**:',
+  );
+  out.push(
+    '   **(a) פנים-פלטפורמית** (4 קמפיינים ב-Meta על אותו מוצר): כל הקמפיינים ' +
+      'באותה זירה מתחרים על אותו קהל. ה-ROAS של כל אחד מהם *כבר מנוכה* לפי ' +
+      '"חלק מההוצאה (פנים-פלטפורמי)" (טבלת "🔗 מוצרים משותפים"). סקייל קמפיין ' +
+      'אחד בקבוצה הזו עלול לגנוב נתח מהאחרים אם הקהל באותה פלטפורמה רווי. ' +
+      'המלצה צריכה להיות "סקייל המנצח בקבוצה, סגור את החלשים" — לא "סקייל ' +
+      'כל הקבוצה". כשהקמפיינים בקבוצה כן מבדילים אסטרטגיות (LAL vs Interest ' +
+      'vs Retargeting) ו-CPM של כל אחד יציב — סקייל מקבילי בסדר.',
+  );
+  out.push(
+    '   **(b) בין-פלטפורמית** (4 ב-Meta + 3 ב-TikTok על אותו מוצר): ערוצים ' +
+      'מקבילים. ההזמנות עם fbclid הולכות לקבוצת Meta, הזמנות עם tiktok-UTM ' +
+      'הולכות לקבוצת TikTok — קהלים שונים. ROAS פר-קבוצה (Meta vs TikTok) הם ' +
+      'אותות *עצמאיים*. אפשר לסקייל את הפלטפורמה שמובילה ב-ROAS Shopify ' +
+      'דטרמיניסטי בלי לגנוב מהשנייה. **אזהרה**: השארית הלא-מסווגת ' +
+      '(direct/organic של אותו מוצר) מתחלקת לפי spend share על פני הכל — ' +
+      'סקייל ערני שמכפיל הוצאה יגדיל את חלק של הפלטפורמה הזו בשארית גם אם ' +
+      'התרומה הדטרמיניסטית של הפלטפורמה בפועל לא צמחה. השווה ROAS Shopify ' +
+      'פלטפורמה ל-ROAS Shopify כללי כדי לזהות זאת.',
   );
   out.push(
     '**2.2 קמפיינים לעצור / לרענן (Pause/Investigate)**: רשום 1-3 קמפיינים שמבזבזים. ' +
