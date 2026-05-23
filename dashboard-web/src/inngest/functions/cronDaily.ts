@@ -599,11 +599,25 @@ export async function runDailyForStore(
     // 5c. campaigns_daily UPSERT (Meta rows) — PK (date, store_id,
     //                                             platform, campaign_id,
     //                                             ad_set_id)
-    // spend_cad is null for Meta here because the FX rate (ILS→CAD) is
-    // resolved inside mergeOverridesFromSupabase only for the store-level
-    // total — per-adset CAD conversion is left to plan 09 (cron-live) or
-    // a future enhancement. The other metrics are platform-neutral
-    // (impressions, clicks, conversions) and persist verbatim.
+    //
+    // 2026-05-23 comment refresh (Codex-NEW-3): the prior paragraph here
+    // said "spend_cad is null for Meta because per-adset FX is deferred"
+    // — that was true through 2026-05-20 but the 2026-05-21 FX fix made
+    // it stale and dangerous (future fixes might "restore" the obsolete
+    // null-write thinking they were preserving intent).
+    //
+    // CURRENT behavior: per-row spend_cad + conversion_value_cad (plus
+    // campaign_budget_cad + ad_set_budget_cad when budget > 0) are
+    // FX-converted in-place via the `cadFor` closure defined a few lines
+    // above. cadFor caches one Frankfurter call per (store, date, currency)
+    // tuple inside this single persist-batch step.
+    //
+    // Audit 2026-05-23 (CRIT-5 / O4-CR-01): cadFor returns `null` on FX
+    // outage and the per-row builder OMITS the affected CAD key from the
+    // payload → Supabase ON CONFLICT preserves the prior CAD value (only
+    // payload keys go into the SET clause). The other columns
+    // (impressions, clicks, conversions, budget_type, effective_status)
+    // are FX-independent and always update.
     //
     // Bug fix 2026-05-21 (Postgres bigint coercion): campaigns_daily +
     // ads_daily have BIGINT columns for impressions/clicks/conversions,
