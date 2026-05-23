@@ -241,7 +241,40 @@ describe('detectProductCannibalization — risk thresholds', () => {
     expect(result[0].risk).toBe('none');
   });
 
-  it('LOW — spend +15%, revenue +8% (just over the threshold)', () => {
+  it('LOW — spend +25%, revenue +14% (audit HIGH-04: lands in LOW tier post-raise)', () => {
+    // Audit fix 2026-05-23 (HIGH-04 multi-mapping): LOW threshold raised
+    // from +10% to +20% spend growth to clear day-of-week noise.
+    // The LOW tier sits in the window:
+    //   spend ≥ +20%  AND  spend/2 ≤ rev < spend*0.75  AND  abs delta ≥ $50
+    // i.e., between MEDIUM (rev < spend/2) and HIGH (rev < 5%).
+    // Scenario: spend +25% / revenue +14% — rev (14%) is ABOVE spend/2 (12.5%)
+    // so NOT MEDIUM, and BELOW spend*0.75 (18.75%) so LOW. Absolute delta
+    // $250 > $50 floor.
+    const result = detectProductCannibalization({
+      range: FULL_RANGE,
+      storeId: STORE,
+      productMap: map,
+      campaignsDaily: [
+        ...buildCampaignDaysHalf('c1', 1000, 1, 7),
+        ...buildCampaignDaysHalf('c2', 0, 1, 7),
+        ...buildCampaignDaysHalf('c1', 1250, 8, 14), // +25%, $250 delta
+        ...buildCampaignDaysHalf('c2', 0, 8, 14),
+      ],
+      productsDaily: [
+        ...buildProductDaysHalf('p1', 3000, 1, 7),
+        ...buildProductDaysHalf('p1', 3420, 8, 14), // +14%
+      ],
+    });
+    expect(result[0].risk).toBe('low');
+  });
+
+  it('NONE — spend +15% (below new LOW floor of +20%) — audit HIGH-04', () => {
+    // Pin the new threshold's lower edge — used to fire LOW pre-fix.
+    // Post-fix: +15% is between MEDIUM's range start (15%) and LOW's
+    // new floor (20%). Revenue +8% qualifies as MEDIUM by underperform
+    // (8% < 15%/2 = 7.5%? NO, 8>=7.5) → revGrowth ≥ spend/2 → not MEDIUM.
+    // Also revGrowth ≥ spend*0.75 = 11.25%? NO, 8<11.25 → would have been
+    // LOW under old threshold. Now blocked by +20% floor → NONE.
     const result = detectProductCannibalization({
       range: FULL_RANGE,
       storeId: STORE,
@@ -257,9 +290,32 @@ describe('detectProductCannibalization — risk thresholds', () => {
         ...buildProductDaysHalf('p1', 324, 8, 14), // +8%
       ],
     });
-    // 8% < 15% * 0.75 = 11.25%, so LOW or worse fires.
-    // But 8% is NOT < 15%/2=7.5%, so not medium.
-    expect(['low', 'medium']).toContain(result[0].risk);
+    expect(result[0].risk).toBe('none');
+  });
+
+  it('NONE — LOW threshold blocked by $50 absolute delta floor (audit HIGH-04)', () => {
+    // Scenario designed to trigger LOW (spendGrowth≥20%, revGrowth<spend*0.75,
+    // revGrowth≥spend/2) but with absolute spend delta < $50.
+    // Spend $100 → $125 = +25%, $25 delta. Revenue $300 → $345 = +15%.
+    // - spend/2 = 12.5%, 15% > 12.5% → NOT MEDIUM ✓
+    // - spend*0.75 = 18.75%, 15% < 18.75% → would be LOW
+    // - $25 absolute delta < $50 floor → blocked → NONE.
+    const result = detectProductCannibalization({
+      range: FULL_RANGE,
+      storeId: STORE,
+      productMap: map,
+      campaignsDaily: [
+        ...buildCampaignDaysHalf('c1', 100, 1, 7),
+        ...buildCampaignDaysHalf('c2', 0, 1, 7),
+        ...buildCampaignDaysHalf('c1', 125, 8, 14), // +25%, $25 delta
+        ...buildCampaignDaysHalf('c2', 0, 8, 14),
+      ],
+      productsDaily: [
+        ...buildProductDaysHalf('p1', 300, 1, 7),
+        ...buildProductDaysHalf('p1', 345, 8, 14), // +15%
+      ],
+    });
+    expect(result[0].risk).toBe('none');
   });
 
   it('MEDIUM — spend +30%, revenue +10% (less than half the spend growth)', () => {

@@ -424,7 +424,19 @@ export function detectProductCannibalization(args: {
     } else if (spendGrowthPct >= 0.15 && revenueGrowthPct < spendGrowthPct / 2) {
       risk = 'medium';
       reason = `הוצאה +${(spendGrowthPct * 100).toFixed(0)}% מול הכנסה +${(revenueGrowthPct * 100).toFixed(0)}%. הסקייל גורר תשואה הולכת ופוחתת — חלק מהדולרים החדשים כנראה גונבים מקמפיינים אחרים בקבוצה.`;
-    } else if (spendGrowthPct >= 0.10 && revenueGrowthPct < spendGrowthPct * 0.75) {
+    } else if (
+      // Audit fix 2026-05-23 (HIGH-04 multi-mapping): LOW threshold
+      // raised from +10% spend → +20% spend (and add an absolute delta
+      // floor of $50 CAD). The previous +10% / `rev < spend*0.75` rule
+      // triggered on day-of-week composition shifts in 13-day / 7-day
+      // windows split into halves with different weekend mix — false-
+      // positive noise that eroded trust in the cannibalization banner.
+      // The MEDIUM and HIGH thresholds (above) are unchanged because
+      // they're already above DOW-noise levels.
+      spendGrowthPct >= 0.20 &&
+      revenueGrowthPct < spendGrowthPct * 0.75 &&
+      (lateSpend - earlySpend) >= 50
+    ) {
       risk = 'low';
       reason = `סימן מוקדם: הוצאה +${(spendGrowthPct * 100).toFixed(0)}% מול הכנסה +${(revenueGrowthPct * 100).toFixed(0)}%. תשואה הולכת ופוחתת אבל עדיין חיובית — שווה לעקוב בסקייל הבא.`;
     } else {
