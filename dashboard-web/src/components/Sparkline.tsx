@@ -11,6 +11,7 @@
  */
 
 import { cn } from '@/lib/utils';
+import { computeSparklineGeometry } from '@/lib/sparklineGeometry';
 
 type Props = {
   /** Time-ordered values (oldest → newest). */
@@ -45,26 +46,16 @@ export function Sparkline({
   }
 
   const pad = 2; // px breathing room so the stroke doesn't kiss the edges
-  const innerW = width - pad * 2;
-  const innerH = height - pad * 2;
 
-  const min = Math.min(...values, target ?? Infinity);
-  const max = Math.max(...values, target ?? -Infinity);
-  const range = max - min || 1;
-
-  const xStep = innerW / (values.length - 1);
-  const points = values.map((v, i) => {
-    const x = pad + i * xStep;
-    const y = pad + (1 - (v - min) / range) * innerH;
-    return { x, y };
-  });
+  // c/HI-05: delegate geometry to the pure helper in lib/. When all values
+  // (and target, if present) are equal, the helper centers the line at
+  // `pad + innerH / 2` instead of pinning it to the bottom — the old
+  // bug rendered "constant ROAS = target" as a crash-to-zero line.
+  const { points, targetY } = computeSparklineGeometry(values, width, height, pad, target);
 
   const pathD = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ');
   // Closed path for fill: down to baseline, back to start.
   const areaD = `${pathD} L ${points[points.length - 1].x.toFixed(2)} ${(height - pad).toFixed(2)} L ${points[0].x.toFixed(2)} ${(height - pad).toFixed(2)} Z`;
-
-  const targetY =
-    target !== undefined ? pad + (1 - (target - min) / range) * innerH : null;
 
   const last = points[points.length - 1];
 
