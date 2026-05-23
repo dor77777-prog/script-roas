@@ -7,8 +7,64 @@ import { billingForRange } from './billing';
  * משמש גם להיסטוריה (תאריכים שעוד לא נכתבו עם הערך החדש ב-data-daily).
  *
  * אם משנים את הערך, יש לעדכן גם את COGS_RATE_OF_REVENUE ב-Config.gs (Apps Script).
+ *
+ * Note: at the read side this default is only used to back-fill historical
+ * rows where `r.cogs` is missing (`hasCogs === false`). Live writers
+ * (cron-daily, cron-live) now use the per-store rate from
+ * `getCogsRateForStore`, mirroring the same helper in the cron functions.
  */
 export const COGS_RATE_OF_REVENUE = 0.25;
+
+/**
+ * Audit fix 2026-05-23 (d/HI-02): per-store COGS rate at the read side.
+ *
+ * Mirrors `getCogsRateForStore` in cronDaily.ts + cronLive.ts so the
+ * dashboard and the underlying `r.cogs` column agree per store. The env-var
+ * key is identical (`${STORE_UPPERCASE}_COGS_RATE`) — a single env-var
+ * update flows through both the writers AND this back-fill path.
+ *
+ * Only consulted when a row's `cogs` is missing (legacy / pre-migration
+ * historical rows). Live rows already carry the correct per-store value
+ * from the cron writer.
+ */
+export function getCogsRateForStore(storeId: string | undefined | null): number {
+  if (!storeId) return COGS_RATE_OF_REVENUE;
+  const envKey = `${String(storeId).toUpperCase()}_COGS_RATE`;
+  const raw =
+    typeof process !== 'undefined' ? process.env?.[envKey] : undefined;
+  if (!raw) return COGS_RATE_OF_REVENUE;
+  const parsed = parseFloat(raw);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
+    return COGS_RATE_OF_REVENUE;
+  }
+  return parsed;
+}
+
+/**
+ * Audit fix 2026-05-23 (d/HI-02): per-store transaction-fees rate.
+ *
+ * Transaction fees ARE computed at read time (no cron column for it), so
+ * the per-store rate lookup must live here. Env-var convention:
+ * `${STORE_UPPERCASE}_TX_FEES_RATE`. Fallback: 0.065 (the historical
+ * project-wide constant), preserving prior behavior for un-calibrated
+ * stores. Stores with very different processor mixes (e.g. one is mostly
+ * PayPal at 5.9%, another is mostly Visa direct at ~2.7%) can now
+ * calibrate independently.
+ */
+export function getTransactionFeesRateForStore(
+  storeId: string | undefined | null,
+): number {
+  if (!storeId) return TRANSACTION_FEES_RATE;
+  const envKey = `${String(storeId).toUpperCase()}_TX_FEES_RATE`;
+  const raw =
+    typeof process !== 'undefined' ? process.env?.[envKey] : undefined;
+  if (!raw) return TRANSACTION_FEES_RATE;
+  const parsed = parseFloat(raw);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
+    return TRANSACTION_FEES_RATE;
+  }
+  return parsed;
+}
 
 export type Aggregate = {
   revenue: number;
@@ -54,6 +110,14 @@ export function filterRows(
 
 export function aggregate(rows: DailyRow[], range?: DateRange): Aggregate {
   let revenue = 0, spend = 0, fbSpend = 0, gaSpend = 0, ttSpend = 0, cogs = 0;
+  // Audit fix 2026-05-23 (d/HI-02): per-store rates. Transaction fees are
+  // accumulated per row using the row's own store rate so an "All"-view
+  // aggregate naturally becomes a revenue-weighted sum (high-AOV stores
+  // with high fee rates contribute proportionally more). For COGS we only
+  // back-fill the rate when a row has hasCogs === false (legacy rows that
+  // pre-date the per-store-COGS write); live rows carry r.cogs already
+  // computed by the cron writer with the correct per-store rate.
+  let transactionFees = 0;
   const stores = new Set<string>();
   const dates = new Set<string>();
   let minDate: string | null = null;
@@ -64,14 +128,19 @@ export function aggregate(rows: DailyRow[], range?: DateRange): Aggregate {
     fbSpend += r.fbSpend;
     gaSpend += r.gaSpend;
     ttSpend += r.ttSpend ?? 0;
-    cogs += r.cogs;
+    // Back-fill COGS only when the row's column was empty (hasCogs false).
+    // For live rows r.cogs is already the correct per-store value.
+    const rowCogs = r.hasCogs
+      ? r.cogs
+      : r.revenue * getCogsRateForStore(r.storeId);
+    cogs += rowCogs;
+    transactionFees += r.revenue * getTransactionFeesRateForStore(r.storeId);
     stores.add(r.storeName);
     dates.add(r.date);
     if (!minDate || r.date < minDate) minDate = r.date;
     if (!maxDate || r.date > maxDate) maxDate = r.date;
   }
   const roas = spend > 0 ? revenue / spend : 0;
-  const transactionFees = revenue * TRANSACTION_FEES_RATE;
   // Fixed costs now come from the billing data layer (recurring + one-time
   // entries the user manages via the BillingSettings UI). When the user
   // hasn't entered any data yet, the layer returns 0 and the seed UI
@@ -112,7 +181,34 @@ export function aggregate(rows: DailyRow[], range?: DateRange): Aggregate {
 
 export type StoreAgg = Aggregate & { store: string };
 
-export function aggregateByStore(rows: DailyRow[]): StoreAgg[] {
+/**
+ * Sibling of `aggregate` that splits a row collection into per-store buckets
+ * and aggregates each bucket independently.
+ *
+ * Audit fix 2026-05-23 (d/CR-02): the inner `aggregate(list)` call now also
+ * receives the caller's `range` (when supplied). Without it, each per-store
+ * bucket's fixed-cost proration was anchored to that bucket's own min/max
+ * date — which is shorter than the operator's selected range whenever a
+ * store had no rows on the boundary days. Per-store cards therefore
+ * understated fixed costs vs the global aggregate card, breaking the
+ * invariant `sum(perStoreFixedCosts) ≈ globalFixedCosts` on multi-store
+ * windows.
+ *
+ * The `range` arg is intentionally optional so existing callers that pre-date
+ * the Phase 05.7.8 range plumbing continue to compile; consumers should pass
+ * `filters.range` whenever it's available. TodayLive (which only ever holds
+ * one day's rows) is fine without it — the bucket's min/max date IS that one
+ * day. Dashboard.tsx:166 SHOULD pass `filters.range`.
+ *
+ * COORDINATION NOTE (audit-v2 Wave 1): Dashboard.tsx is owned by Agent B for
+ * a separate change (GoalTracker prop wiring). Adding the `, filters.range`
+ * argument at the call site is a 1-line wire-up Agent B can pick up — the
+ * default behaviour stays correct (just sub-optimal) until they do.
+ */
+export function aggregateByStore(
+  rows: DailyRow[],
+  range?: DateRange,
+): StoreAgg[] {
   const map = new Map<string, DailyRow[]>();
   for (const r of rows) {
     if (!map.has(r.storeName)) map.set(r.storeName, []);
@@ -120,7 +216,7 @@ export function aggregateByStore(rows: DailyRow[]): StoreAgg[] {
   }
   const out: StoreAgg[] = [];
   for (const [store, list] of map) {
-    out.push({ store, ...aggregate(list) });
+    out.push({ store, ...aggregate(list, range) });
   }
   return out.sort((a, b) => b.roas - a.roas);
 }

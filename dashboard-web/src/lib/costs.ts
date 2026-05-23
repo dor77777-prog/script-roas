@@ -6,19 +6,31 @@
  * are:
  *
  *   1. Ad spend         — Meta + Google, already in data-daily
- *   2. COGS             — 25% of revenue (CONFIRMED estimate based on 25-26%
- *                         historical inventory ratio across all 3 stores)
- *   3. Transaction fees — 6.5% of revenue (PayPal + currency conversion).
- *                         Accurate to ±0.5%.
- *   4. Email service    — fixed $20/store/month
- *   5. Shopify plan + apps — per-store fixed monthly, set in STORE_FIXED_COSTS.
- *                         Updatable via the GoalTracker-style edit UI later;
- *                         autofetch from Shopify Billing API is a Phase 2.
+ *   2. COGS             — per-store calibration via `${STORE}_COGS_RATE`
+ *                         env var, default 0.25. Set both at the write side
+ *                         (cron-daily / cron-live) and the read side
+ *                         (analytics.ts:getCogsRateForStore) so the dashboard
+ *                         and the underlying rows agree on every store.
+ *   3. Transaction fees — per-store calibration via `${STORE}_TX_FEES_RATE`
+ *                         env var, default 0.065 (PayPal + currency conv).
+ *                         Computed at the read side (analytics.ts) since the
+ *                         cron-daily write doesn't persist a fees column.
+ *   4. Recurring billing entries — managed by the operator via the
+ *                         BillingSettings UI (billing.ts:billingForRange).
+ *                         Replaces the legacy hardcoded STORE_FIXED_COSTS.
  *
  * Shipping is NOT a separate cost — confirmed it's already embedded in the
  * product price across all 3 stores.
  *
  * All values in CAD (the dashboard's reporting currency).
+ *
+ * Audit fix 2026-05-23 (d/HI-01): deleted the unused STORE_FIXED_COSTS map +
+ * `monthlyFixedCostsForStore` + `prorateFixedCosts`. These were superseded by
+ * the BillingSettings UI (Phase 4 — billing.ts) but the dead module-scope
+ * declarations remained, fooling new readers into thinking the dashboard had
+ * a fallback hardcoded per-store fixed-cost table (it doesn't — the seed
+ * billing data covers the gap when the operator hasn't entered anything).
+ * Verified via grep before deletion: no callers anywhere in src/.
  */
 
 /** Transaction processing fee as a fraction of revenue. */
@@ -26,56 +38,6 @@ export const TRANSACTION_FEES_RATE = 0.065;
 
 /** Email service (Klaviyo / similar) fixed monthly cost per store, in CAD. */
 export const EMAIL_COST_PER_STORE_MONTHLY = 20;
-
-/**
- * Per-store fixed monthly costs. Edit in code OR via the dashboard
- * "Cost Settings" UI (planned). Auto-fetching from Shopify Billing API is
- * Phase 2 — for now, manually keyed in based on each store's actual bill.
- *
- * `shopifyPlan` covers the base Shopify subscription (Basic/Shopify/Advanced/Plus).
- * `apps` is the sum of all recurring app subscriptions on that store.
- */
-export type StoreFixedCosts = {
-  shopifyPlan: number;
-  apps: number;
-};
-
-export const STORE_FIXED_COSTS: Record<string, StoreFixedCosts> = {
-  uzoshop:     { shopifyPlan: 0, apps: 0 },
-  'Zol Plus':  { shopifyPlan: 0, apps: 0 },
-  '360usmile': { shopifyPlan: 0, apps: 0 },
-};
-
-/**
- * Total monthly fixed cost for a single store: subscription + apps + email.
- * If the store name isn't in our map, returns just the email cost as a sane
- * fallback so newly-added stores don't disappear from the P&L.
- */
-export function monthlyFixedCostsForStore(storeName: string): number {
-  const overrides = STORE_FIXED_COSTS[storeName];
-  const base = overrides ? overrides.shopifyPlan + overrides.apps : 0;
-  return base + EMAIL_COST_PER_STORE_MONTHLY;
-}
-
-/**
- * Prorate a list of stores' monthly fixed costs to the number of days in the
- * reporting period. Example: 16 days of "All stores" returns the daily share
- * × 16 × 3 stores.
- */
-export function prorateFixedCosts(
-  storeNames: string[],
-  daysInPeriod: number,
-): number {
-  if (daysInPeriod <= 0) return 0;
-  const monthlyTotal = storeNames.reduce(
-    (sum, s) => sum + monthlyFixedCostsForStore(s),
-    0,
-  );
-  // Use 30 as the canonical month length — the difference vs. exact days-in-
-  // month is < 5% and avoids edge cases around February / 31-day months that
-  // would only matter for an enterprise auditor.
-  return (monthlyTotal / 30) * daysInPeriod;
-}
 
 /**
  * Compute the full P&L line items for a single aggregate of rows.
