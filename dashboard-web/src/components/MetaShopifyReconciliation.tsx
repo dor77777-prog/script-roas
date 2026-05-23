@@ -669,31 +669,41 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                     organic: number;
                     shopify: number;
                   };
+                  // c/HI-06: pick precision per magnitude. Tooltips are the
+                  // operator's high-precision view of a chart point — the
+                  // old default `formatCurrency(d.meta)` (0 decimals) showed
+                  // every sub-dollar value as CAD 0. For a $1.99 product
+                  // every tooltip read "CAD 0" unless the day had >=$0.50.
+                  // Operator hovered, saw zero, concluded "no data" —
+                  // incorrect. >=100 keep integer (cents are noise), >0 but
+                  // <100 show 2 decimals, exactly 0 stays "0".
+                  const fmt = (n: number) =>
+                    formatCurrency(n, n < 100 && n > 0 ? 2 : 0);
                   return (
                     <div dir="rtl" className="rounded-lg bg-text-primary/95 text-white px-3 py-2 text-xs shadow-elevated tabular-nums">
                       <div className="text-white/65 mb-1 text-[10px]">{formatDate(d.date)}</div>
                       <div className="flex items-center gap-2">
                         <span className="inline-block w-2 h-2 rounded-full bg-amber-400" />
-                        <span>Meta: CAD {formatCurrency(d.meta)}</span>
+                        <span>Meta: CAD {fmt(d.meta)}</span>
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="inline-block w-2 h-2 rounded-full bg-blue-600" />
-                        <span>Google: CAD {formatCurrency(d.google)}</span>
+                        <span>Google: CAD {fmt(d.google)}</span>
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
                         {/* c/HI-01: slate-700 swatch matches CHART_COLORS.tiktok
                             (was pink-500, too close in hue to organic purple
                             for colorblind viewers). */}
                         <span className="inline-block w-2 h-2 rounded-full bg-slate-700" />
-                        <span>TikTok: CAD {formatCurrency(d.tiktok)}</span>
+                        <span>TikTok: CAD {fmt(d.tiktok)}</span>
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="inline-block w-2 h-2 rounded-full bg-purple-600" />
-                        <span>Organic: CAD {formatCurrency(d.organic)}</span>
+                        <span>Organic: CAD {fmt(d.organic)}</span>
                       </div>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="inline-block w-2 h-2 rounded-full bg-roas-green" />
-                        <span>Shopify: CAD {formatCurrency(d.shopify)}</span>
+                        <span>Shopify: CAD {fmt(d.shopify)}</span>
                       </div>
                     </div>
                   );
