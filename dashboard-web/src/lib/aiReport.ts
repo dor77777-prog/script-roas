@@ -3,6 +3,7 @@ import type { ProductRow } from './products';
 import type { CampaignRow } from './campaigns';
 import type { OrderAttributionRow } from './ordersAttribution';
 import type { AdRow } from './ads';
+import type { ProductMap } from './campaignProductMap';
 import {
   computeCampaignHealth,
   type CampaignHealth,
@@ -48,6 +49,21 @@ type Params = {
    * for now; Google PMax doesn't expose ad granularity). Empty acceptable.
    */
   adsRows?: AdRow[];
+  /**
+   * Phase 05.7.x (2026-05-23) — operator's product↔campaign mapping
+   * (Meta + TikTok only; Google PMax doesn't support mapping). Used to
+   * surface multi-mapped products in the report so the AI's per-campaign
+   * recommendations understand that a product's Shopify revenue is
+   * split across all campaigns that have it mapped (proportional to
+   * spend share, per allocateProductRevenue). Without this, the AI
+   * could say "Scale Campaign A — it owns product X" when in fact
+   * Campaign A shares product X with Campaign B and the revenue is
+   * split, so "scale A" would over-credit it.
+   *
+   * Optional for backwards-compat. When omitted or empty, the
+   * multi-mapped section is skipped.
+   */
+  productMap?: ProductMap;
 };
 
 const fmtNum = (n: number, d = 0) =>
@@ -75,6 +91,7 @@ export function generateAiReport({
   campaignRows,
   ordersRows,
   adsRows,
+  productMap,
 }: Params): string {
   const out: string[] = [];
 
@@ -1626,6 +1643,157 @@ export function generateAiReport({
     }
   }
 
+  // ===== Multi-mapped products (Phase 05.7.x — 2026-05-23) =====
+  //
+  // Operator can map a product to multiple campaigns (different audiences,
+  // creatives, platforms). Shopify revenue from that product is then split
+  // across the campaigns proportionally to spend share (see
+  // allocateProductRevenue in campaignProductMap.ts).
+  //
+  // Without surfacing this to the AI, a per-campaign recommendation could
+  // over-credit one campaign for revenue it actually shares with others
+  // ("Scale A — it owns product X" when A and B both have X mapped).
+  //
+  // The section is operator-side only (productMap lives in localStorage,
+  // sent via the prop) — when missing or empty, skip.
+  if (productMap && Object.keys(productMap).length > 0) {
+    type SharedProduct = {
+      productId: string;
+      productTitle: string;
+      sharingCampaigns: Array<{
+        name: string;
+        platform: string;
+        spend: number;
+        sharePct: number;
+      }>;
+      totalNetRevenue: number;
+    };
+    const storeFilterId = storeFilter; // closure-captured for readability
+    // Reverse index: productId → list of (campaignKey, name, platform, spend).
+    type CampaignBucket = {
+      key: string;
+      name: string;
+      platform: string;
+      spend: number;
+    };
+    const productToCampaigns = new Map<string, CampaignBucket[]>();
+
+    // Build campaign lookup: storeId::platform::campaignId → {name, platform, spend}
+    const campaignLookup = new Map<string, CampaignBucket>();
+    for (const c of campaigns) {
+      const key = `${c.storeId}::${c.platform}::${c.campaignId}`;
+      const existing = campaignLookup.get(key);
+      if (existing) {
+        existing.spend += c.spend;
+      } else {
+        campaignLookup.set(key, {
+          key,
+          name: c.campaignName || '—',
+          platform: c.platform,
+          spend: c.spend,
+        });
+      }
+    }
+
+    // Walk productMap (filtered to current store if storeFilter set)
+    for (const [campaignKey, productIds] of Object.entries(productMap)) {
+      const parts = campaignKey.split('::');
+      if (parts.length !== 3) continue;
+      const [keyStoreId] = parts;
+      // Store filter: report scoped to one store → skip other stores' mappings.
+      // The storeFilter from the top of the function is a NAME; we need
+      // to match by storeId. dailyRows have both name and id; use a
+      // lookup if filtering by name. For simplicity, when filtering by
+      // store name, only include mappings where ANY campaign in this
+      // map entry's store matches.
+      if (storeFilterId) {
+        const sampleCampaign = campaignLookup.get(campaignKey);
+        // If we have campaign data for this key, check the storeName
+        // matches. If we don't, drop it conservatively.
+        if (!sampleCampaign) continue;
+        const storeMatches = campaigns.some(
+          c => c.storeId === keyStoreId && c.storeName === storeFilterId,
+        );
+        if (!storeMatches) continue;
+      }
+      const campaign = campaignLookup.get(campaignKey);
+      if (!campaign) continue; // campaign not in range — skip
+      for (const pid of productIds) {
+        if (!productToCampaigns.has(pid)) productToCampaigns.set(pid, []);
+        productToCampaigns.get(pid)!.push(campaign);
+      }
+    }
+
+    // Keep only products mapped to 2+ campaigns.
+    const shared: SharedProduct[] = [];
+    const productTitleById = new Map<string, string>();
+    for (const p of products) {
+      // productRow has productId + productTitle; build lookup.
+      productTitleById.set(p.productId, p.productTitle);
+    }
+    const netRevByProduct = new Map<string, number>();
+    for (const p of products) {
+      netRevByProduct.set(
+        p.productId,
+        (netRevByProduct.get(p.productId) ?? 0) + (p.netRevenue ?? 0),
+      );
+    }
+
+    for (const [productId, campaignList] of productToCampaigns.entries()) {
+      if (campaignList.length < 2) continue;
+      const totalSpend = campaignList.reduce((s, c) => s + c.spend, 0);
+      shared.push({
+        productId,
+        productTitle: productTitleById.get(productId) || productId,
+        sharingCampaigns: campaignList.map(c => ({
+          name: c.name,
+          platform: c.platform,
+          spend: c.spend,
+          sharePct: totalSpend > 0 ? c.spend / totalSpend : 1 / campaignList.length,
+        })),
+        totalNetRevenue: netRevByProduct.get(productId) ?? 0,
+      });
+    }
+
+    if (shared.length > 0) {
+      out.push('## 🔗 מוצרים משותפים בין כמה קמפיינים');
+      out.push('');
+      out.push(
+        '_מוצרים שהמפעיל מיפה ל-2+ קמפיינים. ה-ROAS Shopify של כל קמפיין ' +
+          'במוצר הזה מבוסס על **חלקו של הקמפיין בהוצאה** (חלוקה פרופורציונלית) — ' +
+          'לא על כל ההכנסה של המוצר. אזהרה ל-AI: בהמלצה פר-קמפיין, אל ' +
+          'תייחס למוצר משותף 100% מההכנסה — קמפיינים אחרים תרמו גם הם._',
+      );
+      out.push('');
+      // Sort by total net revenue descending — focus on the products that
+      // matter most to the bottom line.
+      shared.sort((a, b) => b.totalNetRevenue - a.totalNetRevenue);
+      for (const sp of shared.slice(0, 15)) {
+        out.push(
+          `### ${escapeMd(sp.productTitle)} (${sp.sharingCampaigns.length} קמפיינים, ` +
+            `סך מכירות נטו: ${fmtCad(sp.totalNetRevenue)})`,
+        );
+        out.push('');
+        out.push(`| קמפיין | פלטפורמה | הוצאה בטווח | חלק מההוצאה | הכנסה משוערת מהמוצר |`);
+        out.push(`|---|---|---|---|---|`);
+        // Sort by spend desc within the product so the dominant campaign is first.
+        const sortedCampaigns = [...sp.sharingCampaigns].sort((a, b) => b.spend - a.spend);
+        for (const c of sortedCampaigns) {
+          const allocatedRev = sp.totalNetRevenue * c.sharePct;
+          out.push(
+            `| ${escapeMd(c.name)} | ${c.platform} | ${fmtCad(c.spend)} | ` +
+              `${fmtPct(c.sharePct)} | ${fmtCad(allocatedRev)} |`,
+          );
+        }
+        out.push('');
+      }
+      if (shared.length > 15) {
+        out.push(`_(מוצגים 15 מתוך ${shared.length} מוצרים משותפים — ממוין לפי הכנסה יורדת.)_`);
+        out.push('');
+      }
+    }
+  }
+
   // ===== Day-of-week breakdown =====
   out.push('## ביצועים לפי יום בשבוע');
   out.push('');
@@ -1797,6 +1965,16 @@ export function generateAiReport({
       '**מאיץ** או **יציב** בטבלת מומנטום (ה) הוצאה ≥ $200 בטווח (ו) **לא ' +
       'מופיע בטבלת "קמפיינים כבויים כעת"**. לכל קמפיין: שם + תקציב חדש מומלץ ' +
       '+ הצדקה במספרים.',
+  );
+  out.push(
+    '**2.1a חשוב על מיפויים משותפים**: לפני שאתה ממליץ "לסקייל את קמפיין X", ' +
+      'בדוק בטבלת "🔗 מוצרים משותפים בין כמה קמפיינים" אם המוצר הראשי שלו משויך ' +
+      'גם לקמפיינים אחרים. אם כן — ה-ROAS Shopify של X *כבר מנוכה* על-בסיס ' +
+      'חלקו בהוצאה (חלוקה פרופורציונלית). זה לא דבר רע — זה אומר שכשתסקייל ' +
+      'את X, חלקו ב-Σspend יגדל וההכנסה המוקצית אליו תגדל אוטומטית. אבל זה ' +
+      '*כן* אומר שאם הצמד (X + קמפיין-משותף-Y) ביחד כבר רווי (כל הקהל ' +
+      'הרלוונטי כבר נחשף), הסקייל של X יגנוב נתח מ-Y בלי שינוי בסך הכולל. ' +
+      'במקרה הזה ההמלצה צריכה להיות "סקייל X **או** Y, לא שניהם" עם נימוק.',
   );
   out.push(
     '**2.2 קמפיינים לעצור / לרענן (Pause/Investigate)**: רשום 1-3 קמפיינים שמבזבזים. ' +

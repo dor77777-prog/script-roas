@@ -11,6 +11,7 @@ import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
 import type { AdsResponse } from '@/app/api/ads/route';
 import { buildDateRangeKey } from '@/lib/dateRange';
+import { readProductMap } from '@/lib/campaignProductMap';
 
 const fetcher = (url: string) => fetch(url).then(r => r.ok ? r.json() : null);
 
@@ -81,6 +82,10 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
     try {
       // Defer to next tick so the loading spinner has a chance to render.
       await new Promise(r => setTimeout(r, 50));
+      // Phase 05.7.x (2026-05-23) — pass the operator's local
+      // productMap so the report can build the "🔗 מוצרים משותפים"
+      // section. readProductMap is sync (localStorage) so no await
+      // needed; the map is small (<KB).
       const md = generateAiReport({
         storeName: filters.store,
         range: filters.range,
@@ -89,6 +94,7 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
         campaignRows: campaigns?.rows ?? [],
         ordersRows: orders?.rows ?? [],
         adsRows: ads?.rows ?? [],
+        productMap: readProductMap(),
       });
       setReport(md);
     } finally {
