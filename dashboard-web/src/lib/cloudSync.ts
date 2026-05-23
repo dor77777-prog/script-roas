@@ -70,6 +70,38 @@ const CHANGE_EVENTS: Record<StateKey, string> = {
 
 /** ms epoch of the last push we sent for each key. Used to skip stomping
  *  our own value when a poll round comes back. */
+// Phase 05.7.x (2026-05-23) — `lastPushAt` is now persisted to localStorage
+// (with a `:lastPushAt` suffix per key) so the hydrate-grace check survives
+// page reload. Previously this was in-memory only and a refresh between
+// "operator clicked Save" and "POST finished" would reset it → the next
+// hydrate would treat the cloud value as authoritative and silently
+// overwrite the just-saved local value. The lsKey suffix avoids collisions
+// with the actual stored values and is filtered out of the canonical keys
+// list, so STATE_KEYS / pushCloudKey / hydrateFromCloud iteration is
+// unaffected.
+const LAST_PUSH_AT_SUFFIX = ':lastPushAt';
+
+function getLastPushAt(lsKey: string): number {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const raw = window.localStorage.getItem(lsKey + LAST_PUSH_AT_SUFFIX);
+    if (!raw) return 0;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function setLastPushAt(lsKey: string, ts: number): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(lsKey + LAST_PUSH_AT_SUFFIX, String(ts));
+  } catch {
+    /* quota / private mode — fall back to in-memory only */
+  }
+}
+
 const lastPushAt: Record<string, number> = {};
 /** Pending debounce timers per key (keyed by lsKey, e.g. `roas-dashboard:goal`). */
 const pendingTimers: Record<string, ReturnType<typeof setTimeout> | undefined> = {};
@@ -181,8 +213,13 @@ export function pushCloudKey(
   }
 
   // Mark immediately so concurrent hydrates inside the debounce window
-  // recognize this key as locally dirty and skip the overwrite.
-  lastPushAt[localStorageKey] = Date.now();
+  // recognize this key as locally dirty and skip the overwrite. Also
+  // persist to localStorage so the grace check survives page reload —
+  // an operator who clicks Save and refreshes within seconds would
+  // otherwise lose the just-saved value to the next hydrate.
+  const nowMs = Date.now();
+  lastPushAt[localStorageKey] = nowMs;
+  setLastPushAt(localStorageKey, nowMs);
 
   // Phase 05.7.x (2026-05-23) — `immediate: true` bypasses the 400ms
   // debounce and fires the POST synchronously. Used by explicit
@@ -204,7 +241,9 @@ export function pushCloudKey(
     pendingTimers[localStorageKey] = undefined;
     // Refresh the marker on actual send so the post-send grace window
     // (HYDRATE_GRACE_MS) measures from the send, not from the edit.
-    lastPushAt[localStorageKey] = Date.now();
+    const sendTs = Date.now();
+    lastPushAt[localStorageKey] = sendTs;
+    setLastPushAt(localStorageKey, sendTs);
     void postWithRetry(cloudKey, value);
   }, 400);
 }
@@ -225,6 +264,19 @@ async function postWithRetry(key: string, value: unknown, attempt = 1): Promise<
       const body = await res.json().catch(() => ({}));
       const msg = (body && body.error) || `HTTP ${res.status}`;
       throw new Error(msg);
+    }
+    // Phase 05.7.x (2026-05-23) — bump lastPushAt on SUCCESS so the
+    // grace window resets at the moment the cloud actually has the new
+    // value. Without this, a slow POST (e.g. ~3s due to network spike)
+    // would leave only ~5s of grace before the next hydrate could
+    // overwrite, even though the cloud value IS the new one by then —
+    // tight but correct. With this, the grace measures from confirmed
+    // persistence instead.
+    const successTs = Date.now();
+    const lsKey = STATE_KEYS.find(k => stripPrefix(k) === key);
+    if (lsKey) {
+      lastPushAt[lsKey] = successTs;
+      setLastPushAt(lsKey, successTs);
     }
     // Functional update so the decrement reads the freshest pendingKeys
     // count (defensive — JS's single-threaded scheduler already prevents
@@ -303,7 +355,18 @@ export async function hydrateFromCloud(): Promise<boolean> {
     if (pendingTimers[lsKey]) {
       continue;
     }
-    if (lastPushAt[lsKey] && Date.now() - lastPushAt[lsKey] < HYDRATE_GRACE_MS) {
+    // Read lastPushAt from BOTH the in-memory map AND localStorage. The
+    // localStorage variant is set in pushCloudKey() and survives page
+    // reload, so a refresh between "operator clicks Save" and "POST
+    // succeeds" no longer drops the local value. Without this, the prior
+    // in-memory-only check reset to 0 on every reload and the cloud value
+    // (still stale from before the user's edit) would overwrite the just-
+    // saved local mapping.
+    const lastPushTs = Math.max(
+      lastPushAt[lsKey] ?? 0,
+      getLastPushAt(lsKey),
+    );
+    if (lastPushTs && Date.now() - lastPushTs < HYDRATE_GRACE_MS) {
       continue;
     }
 
