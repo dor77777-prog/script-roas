@@ -525,7 +525,11 @@ export function analyzeAttribution(
   }
   if (outlierDays.length > 0) {
     reasons.push(
-      `${outlierDays.length} ימים שבהם ${campaign.platform} דיווח >2.5σ מעל הממוצע שלו (modeled spikes): ${outlierDays.slice(0, 3).join(', ')}${outlierDays.length > 3 ? '…' : ''}`,
+      // Audit fix 2026-05-23 (b/HI-01): honest label. The detector uses
+      // robust median + MAD with multiplier MAD_OUTLIER_MULTIPLIER (=3), not
+      // a Gaussian 2.5σ. The previous "2.5σ" string lied to the operator
+      // about both the metric (MAD vs σ) and the multiplier (3 vs 2.5).
+      `${outlierDays.length} ימים שבהם ${campaign.platform} דיווח מעל ${MAD_OUTLIER_MULTIPLIER}× MAD מעל החציון שלו (modeled spikes): ${outlierDays.slice(0, 3).join(', ')}${outlierDays.length > 3 ? '…' : ''}`,
     );
   }
   if (roasInterval) {
@@ -714,7 +718,12 @@ export function analyzeAttributionForAdSet(
   dateTo: string,
   dailyMeta?: Array<{ date: string; value: number }>,
 ): AttributionAnalysis | null {
-  if (adSet.platform !== 'Meta') return null;
+  // Wave 2 deferred fix (2026-05-23): widen the platform gate to match
+  // the campaign-level analyzer + Wave 1's useCampaignAttribution hook
+  // fix. TikTok ad-sets also support utm_term={{adgroup_id}}; only Google
+  // remains excluded because Google's GAQL flow exposes ad-group
+  // structure but the click → utm mapping is unreliable for PMax/Shopping.
+  if (adSet.platform !== 'Meta' && adSet.platform !== 'TikTok') return null;
   if (!orders || orders.length === 0) return null;
   if (!adSet.adSetId) return null;
 
@@ -764,7 +773,11 @@ export function analyzeAttributionForAd(
   dateTo: string,
   dailyMeta?: Array<{ date: string; value: number }>,
 ): AttributionAnalysis | null {
-  if (ad.platform !== 'Meta') return null;
+  // Wave 2 deferred fix (2026-05-23): widen the platform gate to match the
+  // ad-set + campaign-level analyzers. TikTok ads support
+  // utm_content={{ad.id}} just like Meta. Google still excluded (PMax
+  // utm-tracking unreliable).
+  if (ad.platform !== 'Meta' && ad.platform !== 'TikTok') return null;
   if (!orders || orders.length === 0) return null;
   if (!ad.adId) return null;
 
