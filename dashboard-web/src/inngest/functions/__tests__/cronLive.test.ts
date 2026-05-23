@@ -38,6 +38,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as shopifyFetcher from '@/lib/fetchers/shopify';
 import * as metaFetcher from '@/lib/fetchers/meta';
 import * as googleAdsFetcher from '@/lib/fetchers/googleAds';
+import * as tiktokFetcher from '@/lib/fetchers/tiktok';
+import * as fxFetcher from '@/lib/fetchers/fx';
 import * as supabaseAdminMod from '@/lib/supabaseAdmin';
 
 // ---------------------------------------------------------------------------
@@ -301,6 +303,17 @@ describe('cronLive — runLiveForStore handler (Shopify-only, rolling 3-day)', (
     const googleSpy = vi
       .spyOn(googleAdsFetcher, 'fetchGoogleAdsSpendForDay')
       .mockResolvedValue({ storeId: 'uzoshop', date: '2026-05-22', spend: 0, currency: 'CAD' });
+    // Audit fix 2026-05-23 (a/WARN-5): pin TikTok parity to Meta + Google.
+    // Pre-fix, this test silently let TikTok fall through to the real
+    // creds-check path (which throws "Missing TikTok creds" and gets
+    // swallowed by the .catch). That hid a regression where the rolling-
+    // window count for TikTok could drift from 3 without anyone noticing.
+    // Now the spy resolves successfully, so the call-count assertion
+    // below has teeth: TikTok MUST be called 3× per cron-live tick on
+    // a TikTok-enabled store (uzoshop), matching Meta + Google cadence.
+    const tiktokSpy = vi
+      .spyOn(tiktokFetcher, 'fetchTikTokSpendForDay')
+      .mockResolvedValue({ storeId: 'uzoshop', date: '2026-05-22', spend: 0, currency: 'CAD' });
 
     const { admin } = makeSupabaseAdminMock();
     vi.spyOn(supabaseAdminMod, 'getSupabaseAdmin').mockReturnValue(
@@ -317,6 +330,8 @@ describe('cronLive — runLiveForStore handler (Shopify-only, rolling 3-day)', (
     // it must be exactly 3 (one per date in ROLLING_WINDOW_DAYS=3).
     expect(lightMetaSpy).toHaveBeenCalledTimes(3);
     expect(googleSpy).toHaveBeenCalledTimes(3);
+    // Audit fix 2026-05-23 (a/WARN-5): TikTok parity — same 3× cadence.
+    expect(tiktokSpy).toHaveBeenCalledTimes(3);
     // Heavy fetcher MUST NOT be called — it stalls the cron.
     expect(heavyMetaSpy).not.toHaveBeenCalled();
     // First positional arg = storeId; second = a valid ISO date.
@@ -325,6 +340,9 @@ describe('cronLive — runLiveForStore handler (Shopify-only, rolling 3-day)', (
     // The 3 calls cover 3 distinct dates (the rolling window).
     const lightMetaDates = new Set(lightMetaSpy.mock.calls.map(c => c[1]));
     expect(lightMetaDates.size).toBe(3);
+    // TikTok also covers all 3 distinct dates.
+    const tiktokDates = new Set(tiktokSpy.mock.calls.map(c => c[1]));
+    expect(tiktokDates.size).toBe(3);
   });
 
   it('Test 6 (Phase 05.7.6): fetcher errors are CAUGHT (cron always completes, never stalls)', async () => {
@@ -378,5 +396,98 @@ describe('cronLive — runLiveForStore handler (Shopify-only, rolling 3-day)', (
     expect(warnMessages.some((m) => /Shopify.*503|service unavailable/i.test(m))).toBe(
       true,
     );
+  });
+
+  it('Test 7 (audit a/WARN-3): FX failure skips spend update — does NOT corrupt CAD column with raw USD', async () => {
+    // Pre-fix (audit a/WARN-3): cron-live's cadConvert did
+    // `.catch(() => 1)` on FX failure, treating 1 USD as 1 CAD. With
+    // a foreign-currency platform (Meta on ILS account or Google on
+    // USD account), this overwrote today's CAD spend column with
+    // raw foreign-currency numbers — typically ~25-30% low. Amplified
+    // by the rolling 3-day refresh, a single FX outage corrupted 3
+    // dates × 3 stores × 3 platforms in one tick.
+    //
+    // New behavior: FX failure → cadConvert returns null → the
+    // per-platform preserve in persist keeps the prior-day value.
+    // Operator sees stale data (surfaced by the freshness chip)
+    // instead of wrong data.
+    //
+    // Test scenario: Meta returns spend in USD, FX getFxRate throws,
+    // and we assert NO upsert/update is called on data_daily for the
+    // spend columns (the haveAnySpend guard short-circuits because
+    // fbSpendCad is null, gaSpendCad is null, ttSpendCad is null).
+    // Shopify (CAD) is allowed through so Shopify cols still write.
+    const mod = await import('../cronLive');
+
+    vi.spyOn(shopifyFetcher, 'fetchShopifyDayRows').mockImplementation(async (storeId, date) => ({
+      storeId,
+      date,
+      storeName: 'uzoshop',
+      revenueCad: 1000,
+      productRows: [],
+      customItemRefundCad: 0,
+      grossRevenueCad: 1000,
+      refundDeductionCad: 0,
+    }));
+    // All three ad-platform fetchers return SUCCESS in a non-CAD
+    // currency — so cadConvert is forced to call getFxRate.
+    vi.spyOn(metaFetcher, 'fetchMetaSpendForDayLight').mockResolvedValue({
+      storeId: 'uzoshop',
+      date: '2026-05-22',
+      spend: 100,
+      currency: 'USD',
+    });
+    vi.spyOn(googleAdsFetcher, 'fetchGoogleAdsSpendForDay').mockResolvedValue({
+      storeId: 'uzoshop',
+      date: '2026-05-22',
+      spend: 50,
+      currency: 'USD',
+    });
+    vi.spyOn(tiktokFetcher, 'fetchTikTokSpendForDay').mockResolvedValue({
+      storeId: 'uzoshop',
+      date: '2026-05-22',
+      spend: 25,
+      currency: 'USD',
+    });
+    // FX rate lookup THROWS for every call — simulates ECB outage,
+    // fixer.io quota exceeded, or transient network failure.
+    const fxSpy = vi
+      .spyOn(fxFetcher, 'getFxRate')
+      .mockRejectedValue(new Error('FX provider 503 — upstream timeout'));
+
+    const { admin, upsertCalls } = makeSupabaseAdminMock();
+    vi.spyOn(supabaseAdminMod, 'getSupabaseAdmin').mockReturnValue(
+      admin as unknown as ReturnType<typeof supabaseAdminMod.getSupabaseAdmin>,
+    );
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+
+    const { step } = makeStepStub();
+    const result = await mod.runLiveForStore('uzoshop', { step });
+
+    // Handler completes successfully.
+    expect(result.storeId).toBe('uzoshop');
+    // FX was attempted (proof we exercised the failing code path).
+    expect(fxSpy).toHaveBeenCalled();
+    // Pre-fix behavior assertion (the one this test prevents from
+    // regressing): NO data_daily upsert should carry a non-zero
+    // spend column written from the raw USD value. Specifically, we
+    // assert no upserted row contains spend equal to the raw USD spend
+    // (100, 50, or 25 — these would only appear if FX defaulted to 1).
+    const dataDailyUpserts = upsertCalls.filter((c) => c.table === 'data_daily');
+    for (const call of dataDailyUpserts) {
+      const rows = Array.isArray(call.rows) ? call.rows : [call.rows];
+      for (const row of rows) {
+        const r = row as Record<string, unknown>;
+        // The raw USD spend numbers (100/50/25) must NEVER appear in
+        // the CAD column. If they do, the FX-defaults-to-1 bug returned.
+        expect(r.fb_spend_cad).not.toBe(100);
+        expect(r.ga_spend_cad).not.toBe(50);
+        expect(r.tt_spend_cad).not.toBe(25);
+      }
+    }
+    // A warning was emitted explaining the FX skip (helps
+    // operator-side debugging when the freshness chip goes stale).
+    const warnMessages = warnSpy.mock.calls.map((c) => String(c[0]));
+    expect(warnMessages.some((m) => /FX.*failed|FX.*skip/i.test(m))).toBe(true);
   });
 });

@@ -547,10 +547,25 @@ export async function runLiveForStore(
   // stores short-circuit to null without hitting the API.
   type DateSpend = { fbSpendCad: number | null; gaSpendCad: number | null; ttSpendCad: number | null };
   const spendByDate = await step.run('fetch-meta-google-tiktok-spend-light-3day', async () => {
+    // Audit fix 2026-05-23 (a/WARN-3): FX failure must NOT silently
+    // convert at 1×. Pre-fix, when getFxRate timed-out or 5xx'd, the
+    // `.catch(() => 1)` treated 1 USD as 1 CAD — overwriting today's
+    // CAD spend column with raw USD numbers (~30% low). Amplified by
+    // the rolling 3-day refresh, a single FX outage could corrupt 3
+    // dates × 3 stores × 3 platforms simultaneously.
+    //
+    // New behavior: FX failure returns null from cadConvert. The
+    // caller's null check (below in the .then) propagates null all
+    // the way to the per-platform preserve in the persist step,
+    // which keeps the prior-day's column value. Net result: if FX
+    // fails today, the CAD spend column shows the prior-day value
+    // until FX recovers — a less-bad failure than overwriting USD
+    // spend with garbage. The operator sees stale data (which is
+    // surfaced by the freshness chip) instead of wrong data.
     const cadConvert = async (
       value: { spend: number; currency: string } | null,
       dateStr: string,
-    ): Promise<number> => {
+    ): Promise<number | null> => {
       if (!value || !Number.isFinite(value.spend) || value.spend === 0) return 0;
       const currency = (value.currency || 'CAD').toUpperCase();
       if (currency === 'CAD') return value.spend;
@@ -558,7 +573,13 @@ export async function runLiveForStore(
         getFxRate(currency, 'CAD', dateStr),
         5_000,
         'FX',
-      ).catch(() => 1);
+      ).catch(() => null);
+      if (rate === null || !Number.isFinite(rate) || rate <= 0) {
+        console.warn(
+          `cron-live: FX ${currency}→CAD on ${dateStr} failed — skipping spend update for this date/platform (per-platform preserve keeps prior value).`,
+        );
+        return null;
+      }
       return value.spend * rate;
     };
     const out: Record<string, DateSpend> = {};
