@@ -111,6 +111,22 @@ export function CommandPalette({
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        // Audit fix 2026-05-23 (d/HI-10): don't hijack Cmd+K when the user
+        // is typing inside an input, textarea, or contenteditable element.
+        // The previous handler intercepted Cmd+K everywhere — operator
+        // hitting Cmd+K while editing the campaign-mapping search box,
+        // the AI-report textarea, or any /operator form would lose their
+        // current text and have the palette modal flash over the page.
+        // Guard is Cmd+K-scoped (NOT Escape) so the palette's own search
+        // input can still receive Escape to close the modal.
+        const t = e.target as HTMLElement | null;
+        const isEditable =
+          !!t && (
+            t.tagName === 'INPUT' ||
+            t.tagName === 'TEXTAREA' ||
+            t.isContentEditable
+          );
+        if (isEditable) return;
         e.preventDefault();
         setOpen(o => !o);
         setWarmCache(true);
