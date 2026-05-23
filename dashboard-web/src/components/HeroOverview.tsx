@@ -455,28 +455,47 @@ function RoasTrendChart({
               strokeDasharray="4 4"
               strokeWidth={1}
             />
-            {/* Annotation pins — one vertical line per logged event, only
-                if its date appears in the visible series. Label = emoji of
-                the annotation kind. Color follows the kind palette. */}
-            {annotations.map(a => {
-              if (!series.some(d => d.date === a.date)) return null;
-              const color = ANNOTATION_KIND_COLOR[a.kind];
-              return (
-                <ReferenceLine
-                  key={a.id}
-                  x={a.date}
-                  stroke={color}
-                  strokeOpacity={0.85}
-                  strokeWidth={1.5}
-                  label={{
-                    value: ANNOTATION_KIND_EMOJI[a.kind],
-                    position: 'top',
-                    fill: color,
-                    fontSize: 13,
-                  }}
-                />
-              );
-            })}
+            {/* Annotation pins — one vertical line per DATE, not per event.
+                c/HI-03: when 3 events fall on the same day (e.g., launch +
+                budget + creative refresh — a common operational pattern),
+                rendering 3 ReferenceLines at the same X stacked 3 emoji
+                labels on top of each other at the same Y position, producing
+                an unreadable smudge. Group by date, render the first
+                kind's emoji + a small "+N" indicator when there's more than
+                one; the operator can drill into the full list via the
+                AnnotationsPanel below. */}
+            {(() => {
+              const validDates = new Set(activeSeries.map(d => d.date));
+              const byDate = new Map<string, Annotation[]>();
+              for (const a of annotations) {
+                if (!validDates.has(a.date)) continue;
+                const bucket = byDate.get(a.date);
+                if (bucket) bucket.push(a);
+                else byDate.set(a.date, [a]);
+              }
+              return Array.from(byDate.entries()).map(([date, bucket]) => {
+                const head = bucket[0];
+                const color = ANNOTATION_KIND_COLOR[head.kind];
+                const label = bucket.length > 1
+                  ? `${ANNOTATION_KIND_EMOJI[head.kind]} +${bucket.length - 1}`
+                  : ANNOTATION_KIND_EMOJI[head.kind];
+                return (
+                  <ReferenceLine
+                    key={date}
+                    x={date}
+                    stroke={color}
+                    strokeOpacity={0.85}
+                    strokeWidth={1.5}
+                    label={{
+                      value: label,
+                      position: 'top',
+                      fill: color,
+                      fontSize: 13,
+                    }}
+                  />
+                );
+              });
+            })()}
             <Line
               type="monotone"
               dataKey="roas"
