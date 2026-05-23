@@ -137,11 +137,44 @@ function parseKey(
  */
 const ROAS_SHRINKAGE_ANCHOR_CAD = 500;
 
-/** Shrink raw ROAS toward 1.0 (break-even) based on sample size (spend).
- *  Returns the ROAS estimate to use for ranking — NOT for display. */
-function shrinkRoas(roas: number, spend: number): number {
-  if (spend <= 0) return 1.0; // unspendable sample → break-even neutral
-  const w = spend / (spend + ROAS_SHRINKAGE_ANCHOR_CAD);
+/**
+ * Orders-axis shrinkage anchor.
+ *
+ * Audit fix 2026-05-23 (b/HI-02): the CAD-only shrinkage above had a
+ * blind spot — a 1-order / $500-AOV cohort scored IDENTICALLY to a
+ * 50-orders / $10-AOV cohort because both had the same total CAD spend.
+ * Statistically the 50-orders cohort is far more trustworthy (sample size
+ * is the dominant source of ROAS noise). Adding an orders-axis anchor at
+ * 10 conversions and taking the BETTER-OF weight means:
+ *   - 1-order $500 spend  → w_spend ≈ 0.50, w_orders ≈ 0.09 → max 0.50
+ *   - 50-orders $500 spend → w_spend ≈ 0.50, w_orders ≈ 0.83 → max 0.83
+ *   - 50-orders $50 spend  → w_spend ≈ 0.09, w_orders ≈ 0.83 → max 0.83
+ *
+ * The "better-of" choice — vs averaging or a product — means a cohort
+ * that's strong on EITHER axis (lots of conversions OR lots of CAD)
+ * gets preserved signal, and only cohorts weak on BOTH get shrunk
+ * aggressively. Matches the operator's intuition: "I trust the campaign
+ * with 50 orders even if cheap, and I trust the campaign with $20K
+ * spend even if only one big-ticket purchase."
+ *
+ * Tuning: 10 conversions is the operator's typical threshold for "I
+ * believe this ROAS." Below that one refund flips the verdict.
+ */
+const ROAS_SHRINKAGE_ANCHOR_ORDERS = 10;
+
+/** Shrink raw ROAS toward 1.0 (break-even) based on sample size.
+ *  Uses the BETTER-OF spend-axis and orders-axis weights so a cohort
+ *  strong on EITHER axis keeps its signal. Returns the ROAS estimate
+ *  to use for ranking — NOT for display.
+ *
+ *  Audit fix 2026-05-23 (b/HI-02): orders axis added. See the
+ *  ROAS_SHRINKAGE_ANCHOR_ORDERS docstring above for the before/after
+ *  numerical examples. */
+function shrinkRoas(roas: number, spend: number, orders: number): number {
+  if (spend <= 0 && orders <= 0) return 1.0; // truly unspendable → break-even neutral
+  const wSpend = spend > 0 ? spend / (spend + ROAS_SHRINKAGE_ANCHOR_CAD) : 0;
+  const wOrders = orders > 0 ? orders / (orders + ROAS_SHRINKAGE_ANCHOR_ORDERS) : 0;
+  const w = Math.max(wSpend, wOrders);
   return roas * w + 1.0 * (1 - w);
 }
 
@@ -160,8 +193,11 @@ function shrinkRoas(roas: number, spend: number): number {
  *  sample anomalies dominate. See `ROAS_SHRINKAGE_ANCHOR_CAD` above. */
 function rankingScore(m: CohortMember): number {
   if (!m.metrics) return -Infinity;
-  const shrunk = shrinkRoas(m.metrics.roasShopify, m.metrics.spend);
-  const shrunkPlat = shrinkRoas(m.metrics.roasShopifyPlatform, m.metrics.spend);
+  // Audit fix 2026-05-23 (b/HI-02): pass `conversions` so shrinkRoas can
+  // use the orders-axis when spend is small but conversion volume is
+  // meaningful (or vice-versa).
+  const shrunk = shrinkRoas(m.metrics.roasShopify, m.metrics.spend, m.metrics.conversions);
+  const shrunkPlat = shrinkRoas(m.metrics.roasShopifyPlatform, m.metrics.spend, m.metrics.conversions);
   return (
     shrunk * 1_000_000 +
     shrunkPlat * 1_000 +

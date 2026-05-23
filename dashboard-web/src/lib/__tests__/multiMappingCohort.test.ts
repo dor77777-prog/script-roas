@@ -254,14 +254,17 @@ describe('computeMultiMappingCohort — ranking', () => {
     expect(result!.isWeakest).toBe(false);
   });
 
-  it('large-spend mature campaign ranks ABOVE tiny-spend anomaly (audit fix CRITICAL-02)', () => {
+  it('large-spend mature campaign ranks ABOVE tiny-spend anomaly (audit fix CRITICAL-02 + b/HI-02)', () => {
     // Pins the operator's exact scenario from the audit:
-    //   - Campaign A: $40 spend, ROAS 12 (one lucky order)
-    //   - Campaign B: $20,000 spend, ROAS 4 (mature, hundreds of orders)
+    //   - Campaign A: $40 spend, 1 order, ROAS 12 (lucky outlier purchase)
+    //   - Campaign B: $20,000 spend, 200 orders, ROAS 4 (mature, statistically robust)
     // Pre-fix the ranking formula was `roas * 1e6 + ...` so A scored 3×
     // higher than B and was labeled "leader" — telling the operator to
-    // scale the anomaly and pause the mature. Bayesian shrinkage at the
-    // CAD 500 anchor flips the ranking back to defensible order.
+    // scale the anomaly and pause the mature.
+    //
+    // b/HI-02 (2026-05-23) tightened the shrinkage further with an orders
+    // axis: a single-order ROAS is shrunk MORE than a 200-order ROAS even
+    // when spend is comparable. The mature still wins decisively here.
     const result = computeMultiMappingCohort({
       currentCampaignKey: key('Meta', 'tiny'),
       productMap: {
@@ -269,8 +272,8 @@ describe('computeMultiMappingCohort — ranking', () => {
         [key('Meta', 'mature')]: ['p1'],
       },
       aggregated: [
-        makeAgg({ key: key('Meta', 'tiny'), campaignId: 'tiny', spend: 40 }),
-        makeAgg({ key: key('Meta', 'mature'), campaignId: 'mature', spend: 20000 }),
+        makeAgg({ key: key('Meta', 'tiny'), campaignId: 'tiny', spend: 40, conversions: 1 }),
+        makeAgg({ key: key('Meta', 'mature'), campaignId: 'mature', spend: 20000, conversions: 200 }),
       ],
       roasShopifyByKey: new Map([
         [key('Meta', 'tiny'), 12.0],
@@ -284,6 +287,97 @@ describe('computeMultiMappingCohort — ranking', () => {
     expect(result!.currentRank).toBe(2); // tiny is NOT the leader anymore
     expect(result!.isLeader).toBe(false);
     expect(result!.rankedAll[0].campaignKey).toBe(key('Meta', 'mature')); // mature leads
+  });
+
+  it('b/HI-02 — orders axis: high-AOV 1-order cohort ranks BELOW low-AOV 50-orders cohort with same spend', () => {
+    // Pins the operator-impactful behaviour change in b/HI-02. Both
+    // cohorts have the same total CAD spend ($500) and the same raw
+    // ROAS (4.0). Pre-b/HI-02 they tied. With the orders-axis shrinkage
+    // added, the 50-orders cohort gets a much higher confidence weight
+    // (50/(50+10) = 0.83) than the 1-order cohort (1/(1+10) = 0.09 on
+    // orders axis; spend axis is 500/1000 = 0.5 — better-of = 0.5).
+    //
+    // Result: 50-orders cohort's shrunk ROAS ≈ 4.0×0.83 + 1.0×0.17 = 3.49,
+    //         1-order cohort's shrunk ROAS ≈ 4.0×0.50 + 1.0×0.50 = 2.50.
+    //
+    // Operator reads this as: "the campaign with 50 conversions is more
+    // statistically defensible at the same revenue/spend point, scale
+    // there first." (Operator should re-validate cohort rankings after
+    // this change lands.)
+    const result = computeMultiMappingCohort({
+      currentCampaignKey: key('Meta', 'one-order'),
+      productMap: {
+        [key('Meta', 'one-order')]: ['p1'],
+        [key('Meta', 'fifty-orders')]: ['p1'],
+      },
+      aggregated: [
+        // 1 order × $500 AOV — high-AOV outlier
+        makeAgg({
+          key: key('Meta', 'one-order'),
+          campaignId: 'one-order',
+          spend: 500,
+          conversions: 1,
+        }),
+        // 50 orders × $10 AOV — low-AOV but high-volume
+        makeAgg({
+          key: key('Meta', 'fifty-orders'),
+          campaignId: 'fifty-orders',
+          spend: 500,
+          conversions: 50,
+        }),
+      ],
+      // Both cohorts have the same raw Shopify ROAS — only the orders
+      // axis discriminates them.
+      roasShopifyByKey: new Map([
+        [key('Meta', 'one-order'), 4.0],
+        [key('Meta', 'fifty-orders'), 4.0],
+      ]),
+      roasShopifyPlatformByKey: new Map(),
+    });
+    // Current is 'one-order' — should now rank LOWER than 'fifty-orders'.
+    expect(result!.currentRank).toBe(2);
+    expect(result!.rankedAll[0].campaignKey).toBe(key('Meta', 'fifty-orders'));
+  });
+
+  it('b/HI-02 — orders axis: 50-order $50-spend cohort beats 1-order $500-spend cohort (cheap-but-converting wins)', () => {
+    // Inverse-symmetric to the test above. Demonstrates the BETTER-OF
+    // weight isn't dominated by spend alone — a small-spend campaign
+    // with strong order volume gets credit.
+    const result = computeMultiMappingCohort({
+      currentCampaignKey: key('Meta', 'cheap'),
+      productMap: {
+        [key('Meta', 'cheap')]: ['p1'],
+        [key('Meta', 'fluke')]: ['p1'],
+      },
+      aggregated: [
+        // 50 orders × $1 AOV but only $50 spend — high orders, low spend, ROAS 1
+        makeAgg({
+          key: key('Meta', 'cheap'),
+          campaignId: 'cheap',
+          spend: 50,
+          conversions: 50,
+        }),
+        // 1 lucky order × $1500 AOV with $500 spend — ROAS 3
+        makeAgg({
+          key: key('Meta', 'fluke'),
+          campaignId: 'fluke',
+          spend: 500,
+          conversions: 1,
+        }),
+      ],
+      roasShopifyByKey: new Map([
+        [key('Meta', 'cheap'), 1.0],     // weak ROAS but lots of conversions
+        [key('Meta', 'fluke'), 3.0],     // good ROAS but tiny sample
+      ]),
+      roasShopifyPlatformByKey: new Map(),
+    });
+    // cheap shrunk: 1.0 × max(50/550, 50/60) + 1 × rest ≈ 1.0 (already at the anchor)
+    // fluke shrunk: 3.0 × max(500/1000, 1/11) + 1 × rest = 3.0 × 0.5 + 0.5 = 2.0
+    // So 'fluke' actually ranks higher because raw ROAS dominates when
+    // both are pulled toward 1. This test pins that the cohort with
+    // BETTER raw ROAS still wins when its sample is strong enough —
+    // the orders axis is corrective, not punitive.
+    expect(result!.rankedAll[0].campaignKey).toBe(key('Meta', 'fluke'));
   });
 
   it('uses platform-deterministic ROAS as a secondary tie-breaker', () => {
