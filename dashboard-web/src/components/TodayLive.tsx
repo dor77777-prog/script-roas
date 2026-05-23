@@ -6,7 +6,7 @@ import { Radio, TrendingUp, DollarSign, ShoppingCart, Target, Eye, ShoppingBag }
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { aggregate, aggregateByStore, roasLabel } from '@/lib/analytics';
 import { storeHasTikTok } from '@/lib/platformsByStore';
-import type { DailyRow } from '@/lib/types';
+import type { DailyRow, DashboardData } from '@/lib/types';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
 
@@ -26,6 +26,21 @@ const ordersFetcher = async (url: string): Promise<OrdersAttributionResponse> =>
     throw new Error(body?.error || `HTTP ${r.status}`);
   }
   return r.json() as Promise<OrdersAttributionResponse>;
+};
+
+// Operator-reported fix 2026-05-23 — TodayLive must show real-time data
+// for TODAY regardless of the parent's filtered range. Pre-fix the widget
+// re-used the parent's `rows` prop which was already filtered by
+// filters.range; selecting "last month" (no overlap with today) zeroed
+// out every live card. Fetching today-to-today here keeps the live
+// widget decoupled from the operator's historical-window choice.
+const dataFetcher = async (url: string): Promise<DashboardData> => {
+  const r = await fetch(url);
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    throw new Error(body?.error || `HTTP ${r.status}`);
+  }
+  return r.json() as Promise<DashboardData>;
 };
 
 const TONE_BG: Record<string, string> = {
@@ -141,12 +156,29 @@ function nowInIsrael(): string {
 }
 
 export function TodayLive({
-  rows,
+  rows: _parentRows,
   fxIlsToCad,
 }: {
+  /**
+   * Parent dashboard's row set. Kept in the prop signature for back-compat
+   * with existing call sites but UNUSED inside the component as of the
+   * 2026-05-23 operator-reported fix: TodayLive must always show real-
+   * time today data regardless of the operator's date-range selection.
+   * Pre-fix the widget filtered these rows to `r.date === today` — but
+   * `_parentRows` is already narrowed to filters.range by the parent, so
+   * picking "last month" / any historical window emptied the live widget.
+   *
+   * The component now fetches its own today-to-today /api/data slice via
+   * useSWR below, so live cards are decoupled from the parent's
+   * historical-window choice.
+   */
   rows: DailyRow[];
   fxIlsToCad: number | null;
 }) {
+  // Mark _parentRows as intentionally unused so the lint pass doesn't
+  // flag it; we keep the prop in the type so existing call sites compile
+  // without churn during the audit-v2 wave.
+  void _parentRows;
   const [now, setNow] = useState(nowInIsrael());
   useEffect(() => {
     const t = setInterval(() => setNow(nowInIsrael()), 30_000);
@@ -154,7 +186,22 @@ export function TodayLive({
   }, []);
 
   const today = todayInIsrael();
-  const todayRows = rows.filter(r => r.date === today);
+
+  // Operator-reported fix 2026-05-23: own SWR fetch for today-to-today so
+  // the live widget is independent of the parent's range filter. Mirrors
+  // the parent Dashboard's /api/data fetcher (60s refreshInterval matches
+  // the other live data calls below). Returns a DashboardData; we slice
+  // its rows to today inside the memo (defensive — the server should
+  // already narrow but a wider response doesn't break this view).
+  const { data: liveDataResp } = useSWR<DashboardData>(
+    `/api/data?from=${today}&to=${today}`,
+    dataFetcher,
+    { refreshInterval: 60_000, revalidateOnFocus: true },
+  );
+  const todayRows = useMemo(() => {
+    const rs = liveDataResp?.rows ?? [];
+    return rs.filter(r => r.date === today);
+  }, [liveDataResp, today]);
   const agg = aggregate(todayRows);
   const storeAggs = aggregateByStore(todayRows);
   const roas = roasLabel(agg.roas);
