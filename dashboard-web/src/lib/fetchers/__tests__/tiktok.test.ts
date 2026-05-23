@@ -292,3 +292,194 @@ describe('tiktok fetcher — fetchTikTokAdInsights row shape', () => {
     expect(lateRow?.effectiveStatus).toBe('ADGROUP_STATUS_DISABLE');
   });
 });
+
+// ===========================================================================
+// AUDIT C-04 backfill — code !== 0 envelope surface area
+// ===========================================================================
+//
+// Per .planning/AUDIT.md surface 7: TikTok was the thinnest-tested
+// fetcher (only 5 happy-path tests pre-backfill) AND is the most
+// operator-volatile platform (BUDGET_EXCEED daily, AUDIT on every
+// creative change, account-level auth expiries). The single existing
+// envelope error test (Test 3) covered ONE failure code on ONE entry
+// point.
+//
+// Pre-fix coverage gap: any future change that swallowed the throw
+// (e.g. wrapping tiktokGet's envelope check in a try/catch that
+// returned 0) would silently revert the dashboard to the
+// Phase 05.7.8 root-cause bug — TikTok spend stuck at 0 for every
+// day, with no operator-visible signal.
+//
+// These additional tests pin:
+//   - 40002 (Missing data — common in API contract drift) throws.
+//   - 50000 (Server error — TikTok's 5xx envelope class) throws.
+//   - The throw surfaces from BOTH entry points the cron pipeline
+//     calls: fetchTikTokAdvertiserInfo (used first to cache currency)
+//     AND fetchTikTokSpendForDay (where the report fetch can also
+//     return code !== 0 after the info call succeeds).
+//   - code: 0 with empty data.list returns the "success path with no
+//     rows" shape — spend=0, currency populated from advertiser/info.
+
+describe('tiktok fetcher — code !== 0 envelope surface (AUDIT C-04)', () => {
+  beforeEach(() => {
+    _resetAdvertiserInfoCacheForTesting();
+    vi.stubEnv('UZOSHOP_TIKTOK_ADVERTISER_ID', '7012345678901234567');
+    vi.stubEnv('UZOSHOP_TIKTOK_ACCESS_TOKEN', 'tok');
+  });
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it('Test 6: fetchTikTokAdvertiserInfo throws on code=40002 "Missing data"', async () => {
+    const { fn } = makeFetchMock([
+      {
+        body: {
+          code: 40002,
+          message: 'Missing data',
+          request_id: 'req-40002',
+          data: null,
+        },
+      },
+    ]);
+    vi.stubGlobal('fetch', fn);
+
+    // Pin: envelope error surfaces as a thrown Error (NOT silently
+    // returning 0). Message must include the code, the API message, AND
+    // the request_id for operator triage.
+    await expect(fetchTikTokAdvertiserInfo(STORE)).rejects.toThrow(
+      /TikTok \/advertiser\/info\/ code=40002.*Missing data.*request_id=req-40002/,
+    );
+  });
+
+  it('Test 7: fetchTikTokAdvertiserInfo throws on code=50000 "Server error"', async () => {
+    // 5xx-range envelope codes are TikTok's "server problem" surface —
+    // these MUST throw so cron-live's outer .catch(() => null) can
+    // gracefully soft-fail the TikTok day while letting Meta + Google
+    // succeed. If the throw were swallowed, the day would write a
+    // bogus spend=0 row instead of skipping the TikTok pillar.
+    const { fn } = makeFetchMock([
+      {
+        body: {
+          code: 50000,
+          message: 'Server error',
+          request_id: 'req-50000',
+          data: null,
+        },
+      },
+    ]);
+    vi.stubGlobal('fetch', fn);
+
+    await expect(fetchTikTokAdvertiserInfo(STORE)).rejects.toThrow(
+      /TikTok \/advertiser\/info\/ code=50000.*Server error.*request_id=req-50000/,
+    );
+  });
+
+  it('Test 8: fetchTikTokSpendForDay throws when the REPORT call returns code !== 0 (info call succeeded first)', async () => {
+    // Two-hop scenario: info call returns code=0 (cached cleanly), but
+    // the subsequent report call returns code=40002. Pre-fix the report
+    // failure could have been masked by a 0-spend fallback because the
+    // cache contained valid currency data. Pin that the report path
+    // ALSO surfaces the envelope error as a throw.
+    const { fn } = makeFetchMock([
+      // Hop 1: advertiser/info — success.
+      {
+        body: {
+          code: 0,
+          message: 'OK',
+          data: {
+            list: [
+              {
+                advertiser_id: '7012345678901234567',
+                name: 'uzoshop',
+                currency: 'USD',
+                timezone: 'UTC',
+              },
+            ],
+          },
+        },
+      },
+      // Hop 2: report/integrated/get — FAIL with code !== 0.
+      {
+        body: {
+          code: 40002,
+          message: 'Invalid date range',
+          request_id: 'req-report-40002',
+          data: null,
+        },
+      },
+    ]);
+    vi.stubGlobal('fetch', fn);
+
+    await expect(fetchTikTokSpendForDay(STORE, DATE_STR)).rejects.toThrow(
+      /TikTok \/report\/integrated\/get\/ code=40002.*Invalid date range.*request_id=req-report-40002/,
+    );
+  });
+
+  it('Test 9: fetchTikTokAdvertiserInfo throws when code=0 but data is missing (envelope-shape contract)', async () => {
+    // Edge: TikTok returned code=0 (signaling success) but omitted the
+    // data payload. tiktokGet throws a distinct "no data" error so the
+    // caller can distinguish "auth failed" from "auth succeeded but
+    // the response was malformed".
+    const { fn } = makeFetchMock([
+      {
+        body: {
+          code: 0,
+          message: 'OK',
+          // data omitted entirely.
+        },
+      },
+    ]);
+    vi.stubGlobal('fetch', fn);
+
+    await expect(fetchTikTokAdvertiserInfo(STORE)).rejects.toThrow(
+      /TikTok \/advertiser\/info\/ returned envelope with code=0 but no data/,
+    );
+  });
+
+  it('Test 10: fetchTikTokSpendForDay returns spend=0 on the empty-list success path (code=0, data.list=[])', async () => {
+    // Distinct from Test 8 — here the SPEND report endpoint succeeds at
+    // the envelope level (code=0, data present) but reports zero rows
+    // for the day. The expected behavior is a clean { spend: 0,
+    // currency: <from-info> } result — NOT a throw. Pins that empty
+    // success is correctly distinguished from envelope failure.
+    const { fn } = makeFetchMock([
+      // Hop 1: advertiser/info — success, currency=USD.
+      {
+        body: {
+          code: 0,
+          message: 'OK',
+          data: {
+            list: [
+              {
+                advertiser_id: '7012345678901234567',
+                name: 'uzoshop',
+                currency: 'USD',
+                timezone: 'UTC',
+              },
+            ],
+          },
+        },
+      },
+      // Hop 2: report — success with empty list (no spend on this day).
+      {
+        body: {
+          code: 0,
+          message: 'OK',
+          data: { list: [] },
+        },
+      },
+    ]);
+    vi.stubGlobal('fetch', fn);
+
+    const result = await fetchTikTokSpendForDay(STORE, DATE_STR);
+
+    // Clean success: spend=0 (no row to parse), currency inherited
+    // from the advertiser/info hop. Pins the "no rows but no error"
+    // path — must NOT throw despite the empty list.
+    expect(result.spend).toBe(0);
+    expect(result.currency).toBe('USD');
+    expect(result.storeId).toBe(STORE);
+    expect(result.date).toBe(DATE_STR);
+  });
+});
