@@ -153,16 +153,45 @@ const TZ = 'Asia/Jerusalem';
 const ROLLING_WINDOW_DAYS = 3;
 
 /**
- * COGS rate — fixed 25% of revenue per existing dashboard convention
- * (matches `dashboard-web/src/lib/sheets.ts` consumers + Apps Script's
- * `DailyUpdate.gs` rendering). Daily cron also uses 0.25; keeping the
- * constant aligned across cron-live and cron-daily prevents drift in the
- * `cogs_cad` column when the two crons interleave.
+ * Default COGS rate when no per-store env override is set. Kept as a private
+ * fallback for `getCogsRateForStore`; callers MUST go through that helper so
+ * cron-live and cron-daily land identical `cogs_cad` values per store.
  *
  * NOTE: when stores receive an updated COGS ratio (per-store-per-product
  * via `product_cogs` table), Phase 05.7+ migrates this to a per-row lookup.
  */
-const COGS_RATE = 0.25;
+const DEFAULT_COGS_RATE = 0.25;
+
+/**
+ * Audit fix 2026-05-23 (BL-COGS): per-store COGS rate, mirroring the same
+ * helper in cronDaily.ts. Without this, cron-live's hardcoded 0.25 silently
+ * OVERWROTE cron-daily's per-store `cogs_cad` value every 10 minutes — so
+ * stores that calibrate their COGS via env vars saw the right number for
+ * ~10 min at 00:05 IL, then drifted back to 25% for the rest of the day.
+ *
+ * Env-var convention (must stay byte-identical to cronDaily.ts so a single
+ * env-var update flows through both writers):
+ *   `${STORE_UPPERCASE}_COGS_RATE` — e.g. UZOSHOP_COGS_RATE=0.25,
+ *   ZOLPLUS_COGS_RATE=0.30, USMILE360_COGS_RATE=0.18. Unset → fallback to
+ *   DEFAULT_COGS_RATE (0.25), preserving the pre-fix behavior for any store
+ *   that hasn't been calibrated yet.
+ *
+ * Read at write time (NOT module load) so a Vercel env-var update takes
+ * effect on the next cron-live tick (~10 min) without a redeploy.
+ */
+function getCogsRateForStore(storeId: StoreId): number {
+  const envKey = `${String(storeId).toUpperCase()}_COGS_RATE`;
+  const raw = process.env[envKey];
+  if (!raw) return DEFAULT_COGS_RATE;
+  const parsed = parseFloat(raw);
+  if (!Number.isFinite(parsed) || parsed < 0 || parsed > 1) {
+    console.warn(
+      `cron-live: ${envKey}=${raw} is not a valid 0..1 rate — falling back to default ${DEFAULT_COGS_RATE}.`,
+    );
+    return DEFAULT_COGS_RATE;
+  }
+  return parsed;
+}
 
 // =============================================================================
 // Date helpers
@@ -289,7 +318,10 @@ async function persistDayForStore(
       : Number(existing?.total_spend_cad ?? 0) || 0;
 
   const revenueCad = shopify.revenueCad;
-  const cogs = revenueCad * COGS_RATE;
+  // Audit fix 2026-05-23 (BL-COGS): use the per-store rate (matches
+  // cronDaily's writer). Previously a hardcoded 0.25 here clobbered
+  // cronDaily's correct value within 10 min of the daily cron landing.
+  const cogs = revenueCad * getCogsRateForStore(storeId);
   const grossProfit = revenueCad - totalSpendCad;
   const netProfit = grossProfit - cogs;
   const roas = totalSpendCad > 0 ? revenueCad / totalSpendCad : 0;

@@ -100,7 +100,7 @@ const COGS_RATE_OF_REVENUE = 0.25;
  * for that store. Operator can set e.g.:
  *   UZOSHOP_COGS_RATE=0.25
  *   ZOLPLUS_COGS_RATE=0.30
- *   360USMILE_COGS_RATE=0.18
+ *   USMILE360_COGS_RATE=0.18
  * Unset → fallback to 0.25 (no behavior change).
  *
  * Reads at cron-write time so a Vercel env-var update takes effect on the
