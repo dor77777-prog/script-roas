@@ -493,76 +493,94 @@ export async function runLiveForStore(
     return map;
   });
 
-  // ----- STEP 2: fetch today's Meta + Google + TikTok spend (LIGHT + timed-out) -----
-  // Phase 05.7.7: TikTok added alongside Meta + Google. Each fetcher is
-  // timeout-wrapped + .catch'd independently — if one platform is slow or
-  // 401's the cron tick still completes and the other platforms still
-  // write. TikTok is uzoshop-only via STORES_WITH_TIKTOK; other stores
-  // short-circuit to null without hitting the API.
-  const todaySpend = await step.run('fetch-meta-google-tiktok-spend-light', async () => {
-    const tiktokPromise = STORES_WITH_TIKTOK.has(storeId)
-      ? withTimeout(fetchTikTokSpendForDay(storeId, today), 12_000, 'TikTok').catch(
-          (e) => {
-            console.warn(
-              `cron-live: TikTok spend ${storeId} ${today} failed/timed-out: ${e instanceof Error ? e.message : e}`,
-            );
-            return null;
-          },
-        )
-      : Promise.resolve(null);
-
-    const [metaToday, googleToday, tiktokToday] = await Promise.all([
-      withTimeout(fetchMetaSpendForDayLight(storeId, today), 12_000, 'Meta').catch(
-        (e) => {
-          console.warn(
-            `cron-live: Meta light spend ${storeId} ${today} failed/timed-out: ${e instanceof Error ? e.message : e}`,
-          );
-          return null;
-        },
-      ),
-      withTimeout(fetchGoogleAdsSpendForDay(storeId, today), 12_000, 'Google').catch(
-        (e) => {
-          console.warn(
-            `cron-live: Google spend ${storeId} ${today} failed/timed-out: ${e instanceof Error ? e.message : e}`,
-          );
-          return null;
-        },
-      ),
-      tiktokPromise,
-    ]);
+  // ----- STEP 2: fetch Meta + Google + TikTok spend for the FULL rolling
+  //              window (LIGHT + timed-out per date × per platform) -----
+  //
+  // Audit fix 2026-05-23 (CR-02 pipeline / BLOCKER): previously cron-live
+  // only fetched ad-spend for `today` (idx 0). Yesterday + day-before-yesterday
+  // spend depended ENTIRELY on cron-daily's 00:05 IL run — when that failed
+  // its 4× retry burst, those dates would stay stale for up to 24h with
+  // NO operator-visible signal (the freshness chip bumped `updated_at` from
+  // the Shopify revenue refresh, so it falsely read "fresh" while spend
+  // sat stale).
+  //
+  // Fix: fetch all 3 platforms × all 3 dates per tick (9 calls). Each
+  // fetcher independently timeout-wrapped + .catch'd; null on failure
+  // → per-platform preserve in the persist step. Quota envelope: 54
+  // calls/hour per platform × 3 stores ≈ negligible vs each platform's
+  // rate limits (Meta ~1/s, Google 15K/day, TikTok 600/min).
+  //
+  // Phase 05.7.7: TikTok added alongside Meta + Google. Same per-fetcher
+  // soft-fail policy. TikTok is uzoshop-only via STORES_WITH_TIKTOK; other
+  // stores short-circuit to null without hitting the API.
+  type DateSpend = { fbSpendCad: number | null; gaSpendCad: number | null; ttSpendCad: number | null };
+  const spendByDate = await step.run('fetch-meta-google-tiktok-spend-light-3day', async () => {
     const cadConvert = async (
       value: { spend: number; currency: string } | null,
+      dateStr: string,
     ): Promise<number> => {
       if (!value || !Number.isFinite(value.spend) || value.spend === 0) return 0;
       const currency = (value.currency || 'CAD').toUpperCase();
       if (currency === 'CAD') return value.spend;
       const rate = await withTimeout(
-        getFxRate(currency, 'CAD', today),
+        getFxRate(currency, 'CAD', dateStr),
         5_000,
         'FX',
       ).catch(() => 1);
       return value.spend * rate;
     };
-    // If ALL fetchers (that we attempted) returned null, no new spend data
-    // — signal the persist step to preserve existing values.
-    const attemptedAds =
-      metaToday !== null ||
-      googleToday !== null ||
-      (STORES_WITH_TIKTOK.has(storeId) && tiktokToday !== null);
-    if (!attemptedAds) {
-      return { fbSpendCad: null, gaSpendCad: null, ttSpendCad: null };
+    const out: Record<string, DateSpend> = {};
+    // Fetch all 3 platforms × all 3 dates in parallel. Each platform/date
+    // pair is independent (no cross-dependency) so a single Promise.all
+    // is fine for both throughput and per-call timeout isolation.
+    const tasks: Array<Promise<{ date: string; key: 'fb' | 'ga' | 'tt'; cad: number | null }>> = [];
+    for (const d of dates) {
+      tasks.push(
+        withTimeout(fetchMetaSpendForDayLight(storeId, d), 12_000, 'Meta')
+          .catch((e) => {
+            console.warn(
+              `cron-live: Meta light spend ${storeId} ${d} failed/timed-out: ${e instanceof Error ? e.message : e}`,
+            );
+            return null;
+          })
+          .then(async (v) => ({ date: d, key: 'fb' as const, cad: v === null ? null : await cadConvert(v, d) })),
+      );
+      tasks.push(
+        withTimeout(fetchGoogleAdsSpendForDay(storeId, d), 12_000, 'Google')
+          .catch((e) => {
+            console.warn(
+              `cron-live: Google spend ${storeId} ${d} failed/timed-out: ${e instanceof Error ? e.message : e}`,
+            );
+            return null;
+          })
+          .then(async (v) => ({ date: d, key: 'ga' as const, cad: v === null ? null : await cadConvert(v, d) })),
+      );
+      if (STORES_WITH_TIKTOK.has(storeId)) {
+        tasks.push(
+          withTimeout(fetchTikTokSpendForDay(storeId, d), 12_000, 'TikTok')
+            .catch((e) => {
+              console.warn(
+                `cron-live: TikTok spend ${storeId} ${d} failed/timed-out: ${e instanceof Error ? e.message : e}`,
+              );
+              return null;
+            })
+            .then(async (v) => ({ date: d, key: 'tt' as const, cad: v === null ? null : await cadConvert(v, d) })),
+        );
+      }
     }
-    return {
-      fbSpendCad: metaToday ? await cadConvert(metaToday) : null,
-      gaSpendCad: googleToday ? await cadConvert(googleToday) : null,
-      ttSpendCad: tiktokToday ? await cadConvert(tiktokToday) : null,
-    };
-  });
-  const { fbSpendCad, gaSpendCad, ttSpendCad } = todaySpend as {
-    fbSpendCad: number | null;
-    gaSpendCad: number | null;
-    ttSpendCad: number | null;
-  };
+    const results = await Promise.all(tasks);
+    for (const d of dates) {
+      out[d] = { fbSpendCad: null, gaSpendCad: null, ttSpendCad: null };
+    }
+    for (const r of results) {
+      const slot = out[r.date];
+      if (!slot) continue;
+      if (r.key === 'fb') slot.fbSpendCad = r.cad;
+      else if (r.key === 'ga') slot.gaSpendCad = r.cad;
+      else slot.ttSpendCad = r.cad;
+    }
+    return out;
+  }) as Record<string, DateSpend>;
 
   // ----- STEP 3: fetch today's orders_attribution (for WhatsApp summary) -----
   //
@@ -608,7 +626,8 @@ export async function runLiveForStore(
     for (let i = 0; i < dates.length; i++) {
       const date = dates[i];
       const shopify = shopifyByDate[date];
-      const isToday = i === 0;
+      // Audit fix 2026-05-23 (CR-02): `isToday` removed — every date in
+      // the rolling window now refreshes ad-spend, not just today.
       const shopifyOk = !(shopify as { __shopifyFailed?: boolean }).__shopifyFailed;
 
       if (!shopifyOk) {
@@ -640,10 +659,21 @@ export async function runLiveForStore(
       // of the three platforms (network down at the worker) — in that case
       // there's nothing fresh to write and we let cron-daily handle today's
       // spend at 00:05 IL tomorrow.
+      // Audit fix 2026-05-23 (CR-02 pipeline): per-date spend lookup
+      // replaces the previous single `fbSpendCad/gaSpendCad/ttSpendCad`
+      // closure variables (which only held "today"'s values). Now
+      // yesterday + day-before-yesterday also benefit from the cron-live
+      // refresh — operator no longer loses 24h of ad-spend recovery when
+      // cron-daily's 00:05 IL run fails.
+      const dateSpend = spendByDate[date] ?? { fbSpendCad: null, gaSpendCad: null, ttSpendCad: null };
       const haveAnySpend =
-        fbSpendCad !== null || gaSpendCad !== null || ttSpendCad !== null;
+        dateSpend.fbSpendCad !== null ||
+        dateSpend.gaSpendCad !== null ||
+        dateSpend.ttSpendCad !== null;
 
-      if (isToday && haveAnySpend) {
+      // (Removed `isToday` gate: cron-live now overrides spend for every
+      //  date in the rolling window when ad-platform data is fresh.)
+      if (haveAnySpend) {
         // Read the existing row's spend columns so we can fall back for
         // platforms that returned null on this tick. This is a fresh SELECT
         // because persistDayForStore does its own SELECT internally, but
@@ -660,10 +690,10 @@ export async function runLiveForStore(
         const priorGa = Number(prior?.ga_spend_cad ?? 0) || 0;
         const priorTt = Number(prior?.tt_spend_cad ?? 0) || 0;
         await persistDayForStore(storeId, date, shopify, {
-          fbSpendCad: fbSpendCad ?? priorFb,
-          gaSpendCad: gaSpendCad ?? priorGa,
+          fbSpendCad: dateSpend.fbSpendCad ?? priorFb,
+          gaSpendCad: dateSpend.gaSpendCad ?? priorGa,
           ttSpendCad: STORES_WITH_TIKTOK.has(storeId)
-            ? (ttSpendCad ?? priorTt)
+            ? (dateSpend.ttSpendCad ?? priorTt)
             : 0,
         });
       } else {
@@ -953,11 +983,17 @@ export async function runLiveForStore(
   for (const date of dates) {
     perDayRevenue[date] = shopifyByDate[date].revenueCad;
   }
+  // Audit fix 2026-05-23 (CR-02 pipeline): today's spend now comes
+  // from spendByDate[today] rather than the deprecated closure vars.
+  const todaySpendEntry = spendByDate[today] ?? { fbSpendCad: null, gaSpendCad: null, ttSpendCad: null };
   return {
     storeId,
     rollingDates: dates,
     perDayRevenue,
-    todaySpendCad: { fb: fbSpendCad ?? 0, ga: gaSpendCad ?? 0 },
+    todaySpendCad: {
+      fb: todaySpendEntry.fbSpendCad ?? 0,
+      ga: todaySpendEntry.gaSpendCad ?? 0,
+    },
   };
 }
 

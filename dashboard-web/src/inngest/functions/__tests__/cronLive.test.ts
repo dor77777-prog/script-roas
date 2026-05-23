@@ -310,14 +310,21 @@ describe('cronLive — runLiveForStore handler (Shopify-only, rolling 3-day)', (
     const { step } = makeStepStub();
     await mod.runLiveForStore('uzoshop', { step });
 
-    // Light fetchers MUST be called once (for today).
-    expect(lightMetaSpy).toHaveBeenCalledTimes(1);
-    expect(googleSpy).toHaveBeenCalledTimes(1);
+    // Audit fix 2026-05-23 (CR-02 pipeline): cron-live now refreshes
+    // ad-spend for the FULL rolling 3-day window so yesterday +
+    // day-before-yesterday recover from any cron-daily failure within
+    // the next live-tick (10 min). Pre-fix the count was 1; post-fix
+    // it must be exactly 3 (one per date in ROLLING_WINDOW_DAYS=3).
+    expect(lightMetaSpy).toHaveBeenCalledTimes(3);
+    expect(googleSpy).toHaveBeenCalledTimes(3);
     // Heavy fetcher MUST NOT be called — it stalls the cron.
     expect(heavyMetaSpy).not.toHaveBeenCalled();
-    // First positional arg = storeId; second = today's dateStr.
+    // First positional arg = storeId; second = a valid ISO date.
     expect(lightMetaSpy.mock.calls[0][0]).toBe('uzoshop');
     expect(lightMetaSpy.mock.calls[0][1]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    // The 3 calls cover 3 distinct dates (the rolling window).
+    const lightMetaDates = new Set(lightMetaSpy.mock.calls.map(c => c[1]));
+    expect(lightMetaDates.size).toBe(3);
   });
 
   it('Test 6 (Phase 05.7.6): fetcher errors are CAUGHT (cron always completes, never stalls)', async () => {
