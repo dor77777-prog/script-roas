@@ -97,26 +97,24 @@ export async function sendDailySummary(
   // The operator only noticed when they realized they hadn't gotten
   // their noon summary in 3 days.
   //
-  // Post-fix: if ANY recipient succeeded, keep the run "success" but
-  // throw an explicit error AFTER the loop when ALL recipients failed
-  // (no successes). Inngest then marks the run as failed → operator
-  // sees a red entry in the Inngest dashboard + can wire an alert
-  // function on `inngest/function.failed` events.
-  //
-  // We still don't throw on partial-success (e.g., phone1 sent OK but
-  // phone2 failed) because that would mask the success in Inngest. The
-  // partial failure is visible via result.recipientsFailed in the run
-  // output for the operator to inspect manually.
-  if (
-    result.recipientsAttempted.length > 0 &&
-    result.recipientsSucceeded.length === 0 &&
-    result.recipientsFailed.length > 0
-  ) {
+  // Audit fix 2026-05-23 (a/WARN-2 sharpening): originally we threw only
+  // when ALL recipients failed, preserving "success" status when some
+  // succeeded. The operator's actual deployment is single-recipient
+  // (+972524809540 — see project_token_failure_alerts_pending note), so
+  // "any failure = the failure" — and the recipientsFailed list never
+  // gets large enough for partial-success to be meaningful. Tighten the
+  // gate to throw on ANY failure: Inngest now retries the function for
+  // a flaky network blip, and the partial-success bookkeeping
+  // (recipientsSucceeded vs recipientsFailed) is still visible in the
+  // SendResult for any future multi-recipient deployment. Throwing here
+  // is preferable to the silent partial-failure that prompted the
+  // original HR-04 fix.
+  if (result.recipientsFailed.length > 0) {
     const summary = result.recipientsFailed
       .map(f => `${f.to}: ${f.error}`)
       .join(' | ');
     throw new Error(
-      `All ${result.recipientsFailed.length} WhatsApp recipient(s) failed for ${title}. ${summary}`,
+      `${result.recipientsFailed.length}/${result.recipientsAttempted.length} WhatsApp recipient(s) failed for ${title}. ${summary}`,
     );
   }
 
