@@ -162,7 +162,11 @@ export function Dashboard() {
       // the user-selected window, not the data-derived min/max date.
       curAgg: aggregate(cur, filters.range),
       prevAgg: aggregate(prev, prevR),
-      storeAggs: aggregateByStore(cur),
+      // Audit fix 2026-05-23 (d/CR-02): forward filters.range so per-store
+      // cards prorate fixed costs over the user's selected window, matching
+      // the top-level aggregate above. Without this they prorate over the
+      // data-derived min/max date — per-store and top-level numbers diverge.
+      storeAggs: aggregateByStore(cur, filters.range),
       series: dailySeries(cur, stores),
       visibleStores: stores,
     };
