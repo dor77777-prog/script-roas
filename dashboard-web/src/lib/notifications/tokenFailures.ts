@@ -204,30 +204,30 @@ export async function notifyTokenFailure(
   if (shouldAlert) {
     try {
       // 4-placeholder template `token_failure_alert` — submit this body
-      // to Meta WhatsApp Manager (see docs in this module's header
-      // comment). Until Meta approves it, this send will throw 132001
-      // ("Template name does not exist") — the DB row still records the
-      // failure for /operator and we'll auto-start delivering alerts the
-      // moment the approval lands. No code change needed.
+      // to Meta WhatsApp Manager (English / `en` language code). Until
+      // Meta approves it, this send will throw 132001 ("Template name
+      // does not exist") — the DB row still records the failure for
+      // /operator and we'll auto-start delivering alerts the moment
+      // the approval lands. No code change needed.
       //
-      // Slot mapping (matches the approved body):
+      // Slot mapping (matches the approved body, all English):
       //   {{1}} = `GOOGLE · uzoshop · oauth_refresh @ 23/05 11:30`
       //   {{2}} = error message (truncated)
       //   {{3}} = advice
-      //   {{4}} = `נראה 5 פעמים. התראה #2.`
+      //   {{4}} = `Seen 5 times. Alert #2.`
       const header = sanitizeForWhatsApp(
         `${provider.toUpperCase()} · ${storeId} · ${operation} @ ${formatTimestamp()}`,
       );
       const errorBlock = sanitizeForWhatsApp(errorMsg);
       const adviceBlock = sanitizeForWhatsApp(advice ?? '—');
       const countBlock = sanitizeForWhatsApp(
-        `נראה ${(existing?.seen_count ?? 0) + 1} פעמים. התראה #${(existing?.alerts_sent_count ?? 0) + 1}.`,
+        `Seen ${(existing?.seen_count ?? 0) + 1} times. Alert #${(existing?.alerts_sent_count ?? 0) + 1}.`,
       );
 
       await sendWhatsAppTemplate({
         toNumber: ALERT_PHONE,
         templateName: 'token_failure_alert',
-        templateLang: 'he',
+        templateLang: 'en',
         templateParams: [header, errorBlock, adviceBlock, countBlock],
       });
       result.alerted = true;
