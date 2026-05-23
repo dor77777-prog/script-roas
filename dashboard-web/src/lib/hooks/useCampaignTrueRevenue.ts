@@ -272,7 +272,13 @@ export function useCampaignTrueRevenue(opts: {
       if (p.date < localRange.from || p.date > localRange.to) continue;
       if (!p.productId) continue;
       const net = p.netRevenue ?? p.revenue; // net wins when available
-      if (net <= 0 && p.units <= 0) continue;
+      // Audit fix 2026-05-23 (CR-02 revenue): the previous `<= 0` filter
+      // silently dropped refund-only `products_daily` rows (units=0,
+      // net<0) — cross-day refunds disappeared from per-campaign ROAS,
+      // inflating ROAS Shopify for refund-heavy products. Only skip
+      // genuinely empty rows now; let negative-net refund rows propagate
+      // so the allocator can correctly drag campaign revenue down.
+      if (net === 0 && p.units === 0) continue;
       if (!productsByStore.has(p.storeId)) productsByStore.set(p.storeId, []);
       const arr = productsByStore.get(p.storeId)!;
       // Dedupe: sum the multi-day rows into a single per-product total.

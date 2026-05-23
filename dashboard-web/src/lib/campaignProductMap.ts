@@ -312,7 +312,11 @@ export function allocateProductRevenue(args: {
 
   for (const p of productRevenue) {
     if (!p.productId) continue;
-    if (p.netRevenueCad <= 0 && p.units <= 0) continue;
+    // Audit fix 2026-05-23 (CR-03 revenue): the previous `<= 0` filter
+    // dropped refund-heavy products (units > 0 but netRevenue < 0 after
+    // cross-day refund deduction) — those campaigns never got their
+    // refund penalty applied to ROAS. Only skip genuinely empty rows.
+    if (p.netRevenueCad === 0 && p.units === 0) continue;
     const mappedKeys = campaignsForProductInStore(storeId, p.productId, map);
     if (mappedKeys.length === 0) continue; // orphan — skip
 
@@ -341,10 +345,20 @@ export function allocateProductRevenue(args: {
       }
       // Cap each platform at the product's Shopify totals — guards against
       // attribution double-counting (e.g., a single order tagged twice).
+      //
+      // Audit fix 2026-05-23 (HI-03/CR-01 revenue): only apply the revenue
+      // cap when `p.netRevenueCad >= 0`. When net is negative (refund-heavy
+      // product), the original cap converted a positive deterministic
+      // value into a negative one ($100 capped at $-500 → -$500) AND broke
+      // the units/revenue symmetry (cap of revenue was directional, cap
+      // of units was magnitude). For negative-net rows the deterministic
+      // contribution stands; the negative remainder distribution below
+      // pulls all mapped campaigns down proportionally.
       for (const k of ['Meta', 'Google', 'TikTok'] as const) {
-        if (detByPlatform[k].revenue > p.netRevenueCad) {
+        if (p.netRevenueCad >= 0 && detByPlatform[k].revenue > p.netRevenueCad) {
           detByPlatform[k].revenue = p.netRevenueCad;
         }
+        // Units always non-negative — cap unconditionally.
         if (detByPlatform[k].units > p.units) {
           detByPlatform[k].units = p.units;
         }
@@ -360,7 +374,8 @@ export function allocateProductRevenue(args: {
         detByPlatform.Meta.units +
         detByPlatform.Google.units +
         detByPlatform.TikTok.units;
-      if (sumDetRev > p.netRevenueCad && sumDetRev > 0) {
+      // Same `p.netRevenueCad >= 0` gate as the per-platform cap above.
+      if (p.netRevenueCad >= 0 && sumDetRev > p.netRevenueCad && sumDetRev > 0) {
         const ratio = p.netRevenueCad / sumDetRev;
         detByPlatform.Meta.revenue *= ratio;
         detByPlatform.Google.revenue *= ratio;
@@ -434,9 +449,20 @@ export function allocateProductRevenue(args: {
       detByPlatform.Meta.units +
       detByPlatform.Google.units +
       detByPlatform.TikTok.units;
-    const remRev = Math.max(0, p.netRevenueCad - totalDetRev);
+    // Audit fix 2026-05-23 (CR-01 revenue): drop the `Math.max(0, ...)`
+    // clamp on remainder revenue. The clamp silently absorbed negative
+    // remainder — when deterministic attribution exceeded the product's
+    // net (refund-heavy product), the negative correction never got
+    // distributed and ROAS Shopify silently over-reported. Now the
+    // negative remainder pulls all mapped campaigns down proportionally,
+    // which is mass-conserving + the operator-correct semantic.
+    //
+    // Units stays `Math.max(0, ...)` because products_daily.units is
+    // always non-negative (refund algorithm deducts only revenue, never
+    // units — gap-closure-08 invariant).
+    const remRev = p.netRevenueCad - totalDetRev;
     const remUnits = Math.max(0, p.units - totalDetUnits);
-    if (remRev > 0 || remUnits > 0) {
+    if (remRev !== 0 || remUnits > 0) {
       const spendsForProduct = mappedKeys.map(k => campaignSpend.get(k) ?? 0);
       const totalSpend = spendsForProduct.reduce((s, x) => s + x, 0);
       for (let i = 0; i < mappedKeys.length; i++) {
@@ -448,6 +474,7 @@ export function allocateProductRevenue(args: {
         const cur = out.get(k) ?? emptyAlloc();
         // Fallback contribution: NOT deterministic, so it only updates
         // the full revenue/units fields, NOT the deterministic-only ones.
+        // Negative remRev correctly subtracts from cur.revenue.
         cur.revenue += remRev * share;
         cur.units += remUnits * share;
         out.set(k, cur);
