@@ -12,7 +12,7 @@ import {
   Wallet,
 } from 'lucide-react';
 import { cn, formatCurrency, formatNumber, formatPct } from '@/lib/utils';
-import { roasLabel, type Aggregate, deltaPct, COGS_RATE_OF_REVENUE } from '@/lib/analytics';
+import { roasLabel, type Aggregate, deltaPct, getCogsRateForStore } from '@/lib/analytics';
 import { RollingNumber } from './RollingNumber';
 import { Sparkline } from './Sparkline';
 import { MetricHelp, METRIC_HELP, type MetricHelpContent } from './MetricHelp';
@@ -113,10 +113,16 @@ export function computeKpiSparkData(series: DailyRow[]): {
     revenue: dailyTotals(series, r => r.revenue),
     spend: dailyTotals(series, r => r.totalSpend),
     grossProfit: dailyTotals(series, r => r.grossProfit),
-    // COGS sparkline rate is addressed by HIGH-7 in a follow-up commit;
-    // keep the global-rate path here so the CRIT-4-only diff stays
-    // minimal and reviewable.
-    cogs: dailyTotals(series, r => r.revenue * COGS_RATE_OF_REVENUE),
+    // Audit fix 2026-05-23 (HIGH-7 / O2-HI-04): use the row's `r.cogs`
+    // (the cron-writer's value at the per-store ${STORE}_COGS_RATE), with
+    // a legacy-row fallback that matches `aggregate()` in analytics.ts.
+    // Before this fix the sparkline multiplied `r.revenue * 0.25` flat —
+    // a $1000-rev day at a store with a calibrated 18% COGS rate showed
+    // $250 on the sparkline while the big-number's $180 reflected the
+    // actual rate, breaking the card's internal consistency.
+    cogs: dailyTotals(series, r =>
+      r.hasCogs ? r.cogs : r.revenue * getCogsRateForStore(r.storeId),
+    ),
   };
 }
 
