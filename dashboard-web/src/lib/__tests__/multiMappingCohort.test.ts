@@ -515,7 +515,63 @@ describe('computeMultiMappingCohort — edge cases + invariants', () => {
     expect(result!.others[0].metrics).toBeDefined();
     // Current sinks to last (no metrics → -Infinity score)
     expect(result!.currentRank).toBe(2);
-    expect(result!.isWeakest).toBe(true);
+    // Audit fix 2026-05-23 (HIGH-02): isWeakest now requires totalMembers >= 3.
+    // 2-cohort losers no longer auto-flag as "weakest" — matches the
+    // applyCohortHealthAdjustment floor and prevents the loud red UI chip
+    // for "someone had to be second" cases.
+    expect(result!.totalMembers).toBe(2);
+    expect(result!.isWeakest).toBe(false);
+  });
+
+  it('isWeakest=true only when totalMembers >= 3 AND currentRank === totalMembers', () => {
+    // Audit fix 2026-05-23 (HIGH-02) — pins the new floor.
+    // 3-cohort, current=worst → isWeakest=true.
+    const threeCohortLoser = computeMultiMappingCohort({
+      currentCampaignKey: key('Meta', 'c1'),
+      productMap: {
+        [key('Meta', 'c1')]: ['p1'],
+        [key('Meta', 'c2')]: ['p1'],
+        [key('Meta', 'c3')]: ['p1'],
+      },
+      aggregated: [
+        makeAgg({ key: key('Meta', 'c1') }),
+        makeAgg({ key: key('Meta', 'c2'), campaignId: 'c2' }),
+        makeAgg({ key: key('Meta', 'c3'), campaignId: 'c3' }),
+      ],
+      roasShopifyByKey: new Map([
+        [key('Meta', 'c1'), 1.0], // worst
+        [key('Meta', 'c2'), 2.0],
+        [key('Meta', 'c3'), 3.0],
+      ]),
+      roasShopifyPlatformByKey: new Map(),
+    });
+    expect(threeCohortLoser!.totalMembers).toBe(3);
+    expect(threeCohortLoser!.currentRank).toBe(3);
+    expect(threeCohortLoser!.isWeakest).toBe(true);
+
+    // 2-cohort, current=worst → isWeakest=false (under-floor).
+    const twoCohortLoser = computeMultiMappingCohort({
+      currentCampaignKey: key('Meta', 'c1'),
+      productMap: {
+        [key('Meta', 'c1')]: ['p1'],
+        [key('Meta', 'c2')]: ['p1'],
+      },
+      aggregated: [
+        makeAgg({ key: key('Meta', 'c1') }),
+        makeAgg({ key: key('Meta', 'c2'), campaignId: 'c2' }),
+      ],
+      roasShopifyByKey: new Map([
+        [key('Meta', 'c1'), 1.0], // worst
+        [key('Meta', 'c2'), 3.0],
+      ]),
+      roasShopifyPlatformByKey: new Map(),
+    });
+    expect(twoCohortLoser!.totalMembers).toBe(2);
+    expect(twoCohortLoser!.currentRank).toBe(2);
+    expect(twoCohortLoser!.isWeakest).toBe(false);
+
+    // 2-cohort, current=leader → isLeader=true (no floor change).
+    expect(twoCohortLoser!.isLeader).toBe(false);
   });
 
   it('does not mutate input productMap or aggregated', () => {
@@ -605,6 +661,7 @@ describe('computeMultiMappingCohort — edge cases + invariants', () => {
     expect(r.currentRank).toBeGreaterThanOrEqual(1);
     expect(r.currentRank).toBeLessThanOrEqual(r.totalMembers);
     expect(r.isLeader === (r.currentRank === 1)).toBe(true);
-    expect(r.isWeakest === (r.currentRank === r.totalMembers)).toBe(true);
+    // Audit fix 2026-05-23 (HIGH-02): isWeakest gated on totalMembers >= 3.
+    expect(r.isWeakest === (r.totalMembers >= 3 && r.currentRank === r.totalMembers)).toBe(true);
   });
 });

@@ -82,7 +82,15 @@ export type MultiMappingCohort = {
   totalMembers: number;
   /** True when current is rank 1 (highest roasShopify). */
   isLeader: boolean;
-  /** True when current is rank N (worst roasShopify). */
+  /** True when current is the rank-N (lowest) member of a cohort of >= 3.
+   *
+   *  Audit fix 2026-05-23 (HIGH-02 multi-mapping): the floor
+   *  `totalMembers >= 3` prevents auto-flagging the loser of a 2-member
+   *  cohort just because someone had to be lower. The companion
+   *  health-score adjustment in `applyCohortHealthAdjustment` already
+   *  enforces the same `cohortSize >= 3` floor (campaignHealthScore.ts:424)
+   *  — pulling the gate up to the source so the UI chip and the score
+   *  adjustment agree on the definition of "weakest". */
   isWeakest: boolean;
   /** All distinct product IDs shared between the current campaign and
    *  at least one other member of the cohort. Used by the AI report
@@ -232,7 +240,11 @@ export function computeMultiMappingCohort(args: {
   const currentRank = rankedAll.findIndex(m => m.isCurrent) + 1; // 1-based
   const totalMembers = rankedAll.length;
   const isLeader = currentRank === 1;
-  const isWeakest = currentRank === totalMembers;
+  // Audit fix 2026-05-23 (HIGH-02): require cohortSize >= 3 before flagging
+  // "weakest". For a 2-cohort, the loser by 1% is mathematically rank-N
+  // but is not actionable signal ("someone had to be second"). Matches the
+  // floor already present in applyCohortHealthAdjustment.
+  const isWeakest = totalMembers >= 3 && currentRank === totalMembers;
 
   // Split others by platform.
   const intraPlatformOthers = others.filter(o => o.platform === currentParts.platform);

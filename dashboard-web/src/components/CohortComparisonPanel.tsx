@@ -283,16 +283,22 @@ export function CohortComparisonPanel({
               'inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold shrink-0 border',
               currentRankIntra === 1
                 ? 'bg-roas-greenBg/60 text-roas-green border-roas-green/30'
-                : currentRankIntra === intraCount
+                // Audit fix 2026-05-23 (HIGH-02 multi-mapping): only paint
+                // the loud red "weakest" tone when the cohort is large
+                // enough for the verdict to mean something (>= 3 members).
+                // For a 2-cohort the loser is automatically "weakest" by
+                // construction — not actionable signal. Matches the
+                // floor in `applyCohortHealthAdjustment`.
+                : intraCount >= 3 && currentRankIntra === intraCount
                   ? 'bg-roas-redBg/60 text-roas-red border-roas-red/30'
                   : 'bg-amber-100 text-amber-800 border-amber-300',
             )}
             title={
               currentRankIntra === 1
                 ? 'אתה מוביל בקבוצת המיפוי באותה פלטפורמה'
-                : currentRankIntra === intraCount
+                : intraCount >= 3 && currentRankIntra === intraCount
                   ? 'אתה החלש בקבוצת המיפוי באותה פלטפורמה'
-                  : 'אתה באמצע הקבוצה באותה פלטפורמה'
+                  : 'אתה במיפוי משותף — דירוג בלבד'
             }
           >
             <MedalIcon rank={currentRankIntra} />
