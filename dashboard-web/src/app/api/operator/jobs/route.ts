@@ -144,27 +144,53 @@ export async function GET(req: Request) {
     //    requested. We continue on individual fetch failures so a single
     //    sick event doesn't blank the entire table; failed events just
     //    contribute zero rows.
+    //
+    // AUDIT API-23 (2026-05-24, Phase 12.3): parallel fan-out via
+    // Promise.allSettled. Pre-fix: sequential for-await loop took ~50 ×
+    // 200ms = 10s p50 on a full 50-event window — close to the SWR
+    // poll cycle (15s) so the cache often missed the rebuild and the
+    // "live jobs" panel felt laggy. Post-fix: 50 concurrent /v1/events/{id}/runs
+    // requests; wall-clock drops to ~200ms = max(per-call latency).
+    // Per-event isolation preserved — a single 401 / non-ok still logs +
+    // contributes zero rows, matching the pre-fix swallow semantics.
+    // NO concurrency cap added in 12.3 since MAX_LIMIT=50 is already the
+    // upper bound and Inngest REST is not known to rate-limit at 50
+    // concurrent. If future production telemetry shows 429s from the
+    // fan-out, a follow-up phase can add a p-limit batcher.
+    // Evidence: .planning/phases/12-codebase-audit-baseline/raw-returns/
+    //   api_operator_jobs.json (API-23).
     const events = (evBody.data ?? []).slice(0, MAX_LIMIT);
-    const runs: Array<InngestRun & { event_name?: string }> = [];
-    for (const ev of events) {
-      const r = await fetch(
-        `https://api.inngest.com/v1/events/${ev.internal_id}/runs`,
-        { headers: { Authorization: `Bearer ${key}` } },
-      );
-      if (!r.ok) {
-        // Swallow per-event failures — log to ops, skip to next event.
-        // The threat-model mitigation T-05.6-13-I4 also applies: do NOT
-        // bubble the raw upstream error string to the client.
-        console.error(
-          `Inngest events/${ev.internal_id}/runs failed:`,
-          r.status,
-          await r.text().catch(() => '<unreadable>'),
+    const fanoutResults = await Promise.allSettled(
+      events.map(async (ev) => {
+        const r = await fetch(
+          `https://api.inngest.com/v1/events/${ev.internal_id}/runs`,
+          { headers: { Authorization: `Bearer ${key}` } },
         );
-        continue;
-      }
-      const rb = (await r.json()) as { data: InngestRun[] };
-      for (const run of rb.data ?? []) {
-        runs.push({ ...run, event_name: ev.name });
+        if (!r.ok) {
+          // Swallow per-event failures — log to ops, skip to next event.
+          // The threat-model mitigation T-05.6-13-I4 also applies: do NOT
+          // bubble the raw upstream error string to the client.
+          console.error(
+            `Inngest events/${ev.internal_id}/runs failed:`,
+            r.status,
+            await r.text().catch(() => '<unreadable>'),
+          );
+          return { event_name: ev.name, runs: [] as InngestRun[] };
+        }
+        const rb = (await r.json()) as { data: InngestRun[] };
+        return { event_name: ev.name, runs: rb.data ?? [] };
+      }),
+    );
+    const runs: Array<InngestRun & { event_name?: string }> = [];
+    for (const result of fanoutResults) {
+      if (result.status === 'fulfilled') {
+        for (const run of result.value.runs) {
+          runs.push({ ...run, event_name: result.value.event_name });
+        }
+      } else {
+        // Rejected promise (network throw, not an HTTP non-ok response).
+        // Log + skip; matches the pre-fix per-event isolation semantics.
+        console.error('Inngest fan-out promise rejected:', result.reason);
       }
     }
 
