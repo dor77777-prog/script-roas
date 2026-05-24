@@ -285,20 +285,55 @@ export function buildProductCentricView(
       }
     }
 
+    // AUDIT ALG-01 (2026-05-24, Phase 12.1.3): per-platform member count
+    // so the simplified-split branch can fall back to equal-share when
+    // intraTotal === 0 (the zero-spend cohort scenario that the b/HI-05
+    // platform-level fix already handles one level up).
+    //
+    // Pre-fix: intraShare = a.spend / intraTotal = 0/0 = 0 → per-member
+    // allocatedRev = platformRev * 0 = 0, even though byPlatform.intra
+    // AllocatedRevenue = 500. Operator saw CAD 0 rows under a CAD 500
+    // platform header.
+    //
+    // Evidence: .planning/phases/12-codebase-audit-baseline/raw-returns/
+    //   lib_algorithm_productCentricView.json (ALG-01).
+    const platformMemberCount = new Map<string, number>();
+    for (const r of raw) {
+      if (!r.agg) continue;
+      platformMemberCount.set(
+        r.agg.platform,
+        (platformMemberCount.get(r.agg.platform) ?? 0) + 1,
+      );
+    }
+
     // Build the final member rows with the share + allocation fields.
     const members: ProductCohortMember[] = raw
       .filter(r => r.agg !== undefined)
       .map(r => {
         const a = r.agg!;
         const intraTotal = platformSpend.get(a.platform) ?? 0;
-        const intraShare = intraTotal > 0 ? a.spend / intraTotal : 0;
+        // UI-spend-share for rendering — when intraTotal=0, spend share IS
+        // zero (operator-correct: a zero-spend campaign occupies 0% of a
+        // zero-spend cohort's spend). Same value as pre-fix.
+        const intraSpendShare = intraTotal > 0 ? a.spend / intraTotal : 0;
+        // AUDIT ALG-01 (2026-05-24, Phase 12.1.3): SEPARATE revenue-
+        // allocation-share. When intraTotal === 0 fall back to 1/N across
+        // the platform's members so per-member allocatedRev sums to
+        // platformRev. Aligns with the b/HI-05 equal-platform semantic
+        // applied one level up (the platform total uses 1/platformCount;
+        // we extend that to the member level).
+        const platformMembers = platformMemberCount.get(a.platform) ?? 1;
+        const intraRevShare = intraTotal > 0
+          ? a.spend / intraTotal
+          : (platformMembers > 0 ? 1 / platformMembers : 0);
         const totalShare = totalCohortSpend > 0 ? a.spend / totalCohortSpend : 0;
         // Audit fix 2026-05-23 (b/HI-03): when the allocator ran, read the
         // exact per-campaign revenue from its output. Falls back to the
-        // simplified split (platform revenue × intra share) when orders
-        // weren't provided.
+        // simplified split (platform revenue × intra REVENUE share) when
+        // orders weren't provided — uses intraRevShare so the zero-spend
+        // cohort scenario produces platformRev/N instead of 0.
         const platformRev = platformAllocatedRevenue.get(a.platform) ?? 0;
-        const allocatedRev = allocByCampaign?.get(a.key) ?? (platformRev * intraShare);
+        const allocatedRev = allocByCampaign?.get(a.key) ?? (platformRev * intraRevShare);
         return {
           campaignKey: a.key,
           campaignId: a.campaignId,
@@ -308,7 +343,7 @@ export function buildProductCentricView(
           storeName: a.storeName,
           spend: a.spend,
           conversionValue: a.conversionValue,
-          intraPlatformSpendShare: intraShare,
+          intraPlatformSpendShare: intraSpendShare,
           totalSpendShare: totalShare,
           allocatedRevenueEstimate: allocatedRev,
           platformRoas: a.spend > 0 ? a.conversionValue / a.spend : 0,
