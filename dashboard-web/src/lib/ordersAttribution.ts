@@ -211,7 +211,21 @@ export async function fetchOrdersAttribution(opts?: {
   // each row but set to [] for backwards-compat (consumers can forEach safely).
   const includeLI = opts?.includeLineItems === true;
   const lastCol = includeLI ? 'N' : 'M';
-  const ranges = STORE_TAB_CONFIG.map(s => `${s.id}-orders-attribution!A2:${lastCol}100000`);
+  // AUDIT ordersAttribution ALG-01 (2026-05-24, Phase 12.2.2): open-ended
+  // sheet range. Pre-fix the hardcoded row-100000 cap (`...A2:${lastCol}100000`)
+  // silently truncated rows beyond row 100000 from the returned dataset.
+  // STORE_TAB_CONFIG projects ~330k attribution rows total — uzoshop alone
+  // can exceed 100k after a year of operation. Open-ended range lets
+  // Sheets return through last row with data (per googleapis docs); no
+  // manual paging required for typical store sizes (Sheets' hard cap is
+  // ~10M cells per spreadsheet).
+  //
+  // Note: this is a legacy Sheets-reader path (the Phase 11 transition
+  // moved live consumers to fetchOrdersAttributionFromPostgres in
+  // lib/postgresReaders.ts) but still active per the audit operator-
+  // directive — must not silently truncate.
+  // Evidence: raw-returns/lib_algorithm_ordersAttribution.json (ALG-01).
+  const ranges = STORE_TAB_CONFIG.map(s => `${s.id}-orders-attribution!A2:${lastCol}`);
   let res;
   try {
     res = await sheets.spreadsheets.values.batchGet({
