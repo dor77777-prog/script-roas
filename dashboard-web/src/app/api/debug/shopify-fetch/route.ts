@@ -100,7 +100,17 @@ export async function GET(req: Request) {
     date,
     timestamp: new Date().toISOString(),
     domain,
-    tokenPrefix: token.slice(0, 10) + '...',
+    // AUDIT API-10 (2026-05-24, Phase 12.3): never expose any bytes of
+    // the Shopify Admin token. Pre-fix `tokenPrefix: token.slice(0, 10)`
+    // leaked `shpat_` scheme prefix plus the first 4 secret chars to any
+    // caller and persisted in any logged copy (browser dev-tools, deploy
+    // logs, screenshots). Replaced with a boolean flag — the operator
+    // still gets the diagnostic signal ("is a token configured?") without
+    // any secret material on the wire. hasDomain + domainVal preserved
+    // (domain identifiers, not secrets).
+    // Evidence: .planning/phases/12-codebase-audit-baseline/raw-returns/
+    //   api_debug_shopifyFetch.json (API-10).
+    hasToken: true,
     windowAUrl,
     dayStartA,
     dayEndA,
