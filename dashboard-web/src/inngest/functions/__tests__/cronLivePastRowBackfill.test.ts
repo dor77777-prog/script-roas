@@ -1,32 +1,29 @@
 // dashboard-web/src/inngest/functions/__tests__/cronLivePastRowBackfill.test.ts
 //
-// AUDIT C-03 backfill — date-boundary fixture for cron-live's
-// refresh-effective-status step's past-row UPDATE loop
-// (cronLive.ts:~1060-1132).
+// Phase 12.5 (2026-05-24) — off-chip backend root-cause fix.
 //
-// Pre-fix surface (per AGENT-B-REPORT.md surface 6 + AUDIT.md C-03):
-//   The loop runs `UPDATE campaigns_daily SET effective_status = X
-//   WHERE store_id = ... AND platform = ... AND ad_set_id = ...
-//   AND date >= lookbackFrom AND date < today`
-//   with `lookbackDays = 7` → `lookbackFrom = today - 6 days` in
-//   Asia/Jerusalem time. There was NO direct test asserting that the
-//   .gte('date', lookbackFrom) and .lt('date', today) calls fire with
-//   the expected dates. An off-by-one (e.g. `lookbackDays - 1` math
-//   bug, or `<= today` instead of `< today`) would silently corrupt
-//   the off-chip "effective_status" truth source on either yesterday's
-//   row OR the row N+1 days back.
+// Previously this file pinned a 7-day lookback (`lookbackDays = 7`,
+// `.gte('date', lookbackFrom)`) on the past-row UPDATE loop in
+// cronLive's refresh-effective-status step. That bound turned out to
+// be the source of the off-chip drift bug: any campaign paused >7 days
+// ago kept its historical rows tagged 'ACTIVE' (cron-daily's
+// write-time value), so the aggregator's "chronologically-latest
+// status in range" pick returned ACTIVE on operator views longer than
+// a week and the chip silently disappeared.
 //
-// This file pins:
-//   1. Lookback bound: when today is 2026-05-24, lookbackFrom is
-//      EXACTLY '2026-05-18' (today - 6).
-//   2. Today bound: `.lt('date', today)` is called with the EXACT
-//      string '2026-05-24' (today itself is handled by the UPSERT
-//      step above the loop — the loop must NOT touch it).
-//   3. Off-by-one: the lookback window is [today-6, today-1] inclusive
-//      — today-7 is excluded (older), today (== '2026-05-24') is
-//      excluded (handled by UPSERT).
-//   4. The chain (.update → .eq*3 → .gte → .lt) fires once per
-//      enrolled ad-set; we assert call counts + per-call args.
+// The fix removes the lower date bound entirely — the UPDATE now
+// covers EVERY existing row for each enrolled ad-set. effective_status
+// was always meant to be a "current as of last refresh" snapshot on
+// every row, never a per-day historical record, so this matches the
+// original design intent (see the architectural comment on
+// cronLive.ts's `refresh-effective-status` step).
+//
+// This file now pins:
+//   1. The UPDATE chain calls NO `.gte('date', ...)` — the lower bound
+//      was removed.
+//   2. The upper bound stays `.lt('date', today)` so today's row is
+//      handled by the UPSERT above the loop (no double-write race).
+//   3. Per-ad-set call counts + payload still hold.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import * as shopifyFetcher from '@/lib/fetchers/shopify';
@@ -54,17 +51,16 @@ function makeStepStub() {
 }
 
 /**
- * Build a Supabase admin mock that captures EVERY .gte() and .lt() call
- * on the UPDATE chain for campaigns_daily — keyed by ad-set so per-ad-set
- * bounds are assertable.
+ * Build a Supabase admin mock that captures EVERY `.lt()` call on the
+ * UPDATE chain for campaigns_daily, keyed by ad-set. Also flags any
+ * `.gte()` call so the test can assert the lower bound is GONE.
  *
- * Chain shape (cron-live's actual code):
+ * Chain shape (cron-live's actual code, post-fix):
  *   admin.from('campaigns_daily')
  *     .update({ effective_status: status })
  *     .eq('store_id', storeId)
  *     .eq('platform', platform)
  *     .eq('ad_set_id', adSetId)
- *     .gte('date', lookbackFrom)
  *     .lt('date', today)
  */
 function makeSupabaseAdminMock() {
@@ -73,16 +69,15 @@ function makeSupabaseAdminMock() {
     storeId: string;
     platform: string;
     adSetId: string;
-    gteCol: string;
-    gteValue: string;
     ltCol: string;
     ltValue: string;
+    gteCalled: boolean;
   };
   const updateCalls: UpdateCall[] = [];
   const upsertCalls: Array<{ table: string; rows: unknown }> = [];
 
   function makeUpdateChain(payload: Record<string, unknown>) {
-    const ctx: Partial<UpdateCall> = { payload };
+    const ctx: Partial<UpdateCall> = { payload, gteCalled: false };
 
     const chain = {
       eq: vi.fn((col: string, val: string) => {
@@ -91,17 +86,18 @@ function makeSupabaseAdminMock() {
         else if (col === 'ad_set_id') ctx.adSetId = val;
         return chain;
       }),
-      gte: vi.fn((col: string, val: string) => {
-        ctx.gteCol = col;
-        ctx.gteValue = val;
-        return {
-          lt: vi.fn((ltCol: string, ltVal: string) => {
-            ctx.ltCol = ltCol;
-            ctx.ltValue = ltVal;
-            updateCalls.push(ctx as UpdateCall);
-            return Promise.resolve({ error: null });
-          }),
-        };
+      // gte SHOULD NOT be called post-fix. We still expose it (in case a
+      // regression reintroduces a lower bound) so the call is captured
+      // and the assertion can fail loudly instead of silently.
+      gte: vi.fn(() => {
+        ctx.gteCalled = true;
+        return chain;
+      }),
+      lt: vi.fn((ltCol: string, ltVal: string) => {
+        ctx.ltCol = ltCol;
+        ctx.ltValue = ltVal;
+        updateCalls.push(ctx as UpdateCall);
+        return Promise.resolve({ error: null });
       }),
     };
     return chain;
@@ -181,7 +177,6 @@ beforeEach(() => {
   vi.restoreAllMocks();
   // Pin "now" to 2026-05-24T12:00:00Z. In Asia/Jerusalem (UTC+3 in
   // May/IDT) this is 2026-05-24 15:00 → calendar day '2026-05-24'.
-  // With lookbackDays = 7, lookbackFrom = today - 6 = '2026-05-18'.
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-05-24T12:00:00Z'));
 });
@@ -192,11 +187,11 @@ afterEach(() => {
 });
 
 // ===========================================================================
-// SUT: refresh-effective-status's past-row UPDATE bounds.
+// SUT: refresh-effective-status's past-row UPDATE bounds (post Phase 12.5).
 // ===========================================================================
 
-describe('cronLive refresh-effective-status — past-row backfill date boundary (AUDIT C-03)', () => {
-  it('Test 1: .gte("date", lookbackFrom) uses today − 6 days when lookbackDays=7 (today 2026-05-24 → 2026-05-18)', async () => {
+describe('cronLive refresh-effective-status — past-row UPDATE bounds (Phase 12.5)', () => {
+  it('Test 1: UPDATE chain does NOT apply a lower date bound — every existing row gets the refresh', async () => {
     stubAllFetchers();
 
     // One Meta ad-set enrolled — minimal enrollment so the UPDATE chain
@@ -241,9 +236,9 @@ describe('cronLive refresh-effective-status — past-row backfill date boundary 
     expect(updateCalls).toHaveLength(1);
     const call = updateCalls[0];
 
-    // Lower bound: .gte('date', '2026-05-18')
-    expect(call.gteCol).toBe('date');
-    expect(call.gteValue).toBe('2026-05-18');
+    // The CRITICAL invariant: no `.gte('date', ...)` call on the chain.
+    // The pre-fix 7-day lookback would have set this to true.
+    expect(call.gteCalled).toBe(false);
 
     // The matcher chain landed on the right ad-set.
     expect(call.storeId).toBe('uzoshop');
@@ -308,69 +303,7 @@ describe('cronLive refresh-effective-status — past-row backfill date boundary 
     expect(call.ltValue).not.toBe('2026-05-23');
   });
 
-  it('Test 3: window [today-6, today-1] inclusive — a row at lookbackFrom IS included, a row at today is NOT', async () => {
-    // This is a property assertion on string ordering using the SAME
-    // semantics Postgres's date range filter applies:
-    //   row.date >= lookbackFrom  &&  row.date < today
-    // Pin the inclusive vs exclusive boundaries by string compare on the
-    // actual values the loop will pass.
-    stubAllFetchers();
-
-    vi.spyOn(metaFetcher, 'fetchMetaBudgets').mockResolvedValue({
-      currency: 'ILS',
-      campaigns: {
-        c1: {
-          dailyBudget: 0,
-          lifetimeBudget: 0,
-          bidStrategy: null,
-          effectiveStatus: 'ACTIVE',
-          name: null,
-        },
-      },
-      adSets: {
-        'mas-A': {
-          dailyBudget: 0,
-          lifetimeBudget: 0,
-          campaignId: 'c1',
-          effectiveStatus: 'ACTIVE',
-          name: null,
-        },
-      },
-    });
-    vi.spyOn(googleAdsFetcher, 'fetchGoogleAdsAdGroupStatuses').mockResolvedValue([]);
-    vi.spyOn(tiktokFetcher, 'fetchTikTokAdGroupStatuses').mockResolvedValue(
-      new Map(),
-    );
-
-    const { admin, updateCalls } = makeSupabaseAdminMock();
-    vi.spyOn(supabaseAdminMod, 'getSupabaseAdmin').mockReturnValue(
-      admin as unknown as ReturnType<typeof supabaseAdminMod.getSupabaseAdmin>,
-    );
-
-    const mod = await import('../cronLive');
-    const { step } = makeStepStub();
-
-    await mod.runLiveForStore('uzoshop', { step });
-
-    expect(updateCalls).toHaveLength(1);
-    const { gteValue, ltValue } = updateCalls[0];
-    // The exact values we expect for today = 2026-05-24.
-    expect(gteValue).toBe('2026-05-18');
-    expect(ltValue).toBe('2026-05-24');
-
-    // INCLUSIVE lower: row at lookbackFrom is in-range.
-    expect('2026-05-18' >= gteValue).toBe(true);
-    expect('2026-05-18' < ltValue).toBe(true);
-    // EXCLUSIVE upper: row at today is OUT.
-    expect('2026-05-24' < ltValue).toBe(false);
-    // EXCLUSIVE lower-buffer: row at lookbackFrom - 1 is OUT.
-    expect('2026-05-17' >= gteValue).toBe(false);
-    // INCLUSIVE upper: row at today - 1 is IN.
-    expect('2026-05-23' >= gteValue).toBe(true);
-    expect('2026-05-23' < ltValue).toBe(true);
-  });
-
-  it('Test 4: the UPSERT (today) and UPDATE (past rows) are disjoint — today goes only through UPSERT', async () => {
+  it('Test 3: UPSERT (today) and UPDATE (past rows) stay disjoint — today goes only through UPSERT', async () => {
     // Pin the architectural invariant: TODAY is only written via the
     // UPSERT step (above the loop), and the past-row loop's `.lt(today)`
     // bound guarantees the UPDATE never touches today. A bug that swapped
@@ -429,11 +362,10 @@ describe('cronLive refresh-effective-status — past-row backfill date boundary 
     }
   });
 
-  it('Test 5: each enrolled ad-set produces its own UPDATE call — bounds are identical per call', async () => {
-    // Multiple ad-sets share the same lookbackFrom + today bounds
-    // (computed once per step, not per ad-set). Pin that every call sees
-    // the same bounds — a regression that recomputed bounds per iteration
-    // (introducing per-iteration timing drift) would show up here.
+  it('Test 4: each enrolled ad-set produces its own UPDATE call — upper bound is identical per call, no lower bound on any', async () => {
+    // Multiple ad-sets share the same `today` upper bound (computed once
+    // per step, not per ad-set). Pin that every call sees the same upper
+    // bound AND that no call introduced a lower bound (regression guard).
     stubAllFetchers();
 
     vi.spyOn(metaFetcher, 'fetchMetaBudgets').mockResolvedValue({
@@ -507,10 +439,10 @@ describe('cronLive refresh-effective-status — past-row backfill date boundary 
     // 3 Meta + 1 Google + 1 TikTok = 5 ad-sets enrolled → 5 UPDATE calls.
     expect(updateCalls).toHaveLength(5);
 
-    // Every call uses the same lower + upper bound.
+    // Every call uses the same upper bound and NO lower bound.
     for (const c of updateCalls) {
-      expect(c.gteValue).toBe('2026-05-18');
       expect(c.ltValue).toBe('2026-05-24');
+      expect(c.gteCalled).toBe(false);
     }
 
     // The UPDATE chain attempted each ad-set across all three platforms.
@@ -524,7 +456,7 @@ describe('cronLive refresh-effective-status — past-row backfill date boundary 
     ]);
   });
 
-  it('Test 6: update payload carries the per-ad-set status (so the UPDATE writes the right effective_status)', async () => {
+  it('Test 5: update payload carries the per-ad-set status (so the UPDATE writes the right effective_status)', async () => {
     // Pins that the UPDATE payload's effective_status matches the
     // enrollment's status — a swap (e.g. always sending 'ACTIVE') would
     // corrupt the off-chip.

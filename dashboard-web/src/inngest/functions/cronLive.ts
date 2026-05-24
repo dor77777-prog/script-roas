@@ -1017,11 +1017,18 @@ export async function runLiveForStore(
   // platform doesn't block the others. The previous status + the
   // existing rows survive until the next tick.
   await step.run('refresh-effective-status', async () => {
-    const lookbackDays = 7;
-    const lookbackFrom = (() => {
-      const tick = Date.now() - (lookbackDays - 1) * 86400_000;
-      return dayInJerusalem(tick);
-    })();
+    // Phase 12.5 (2026-05-24): UPDATE pass below has NO lower date bound —
+    // it covers every existing row for each ad-set. Previously a 7-day
+    // lookback was applied here, which caused off-chip drift for any
+    // operator view longer than a week: a campaign paused >7 days ago
+    // had its historical rows still tagged 'ACTIVE' (the last value
+    // cron-daily wrote when the campaign was live), so the aggregator's
+    // "chronologically-latest status in range" pick returned ACTIVE and
+    // the chip silently disappeared on "last month" / "last 90 days"
+    // views. effective_status was always meant to be a "current as of
+    // last refresh" snapshot on every row, never a per-day historical
+    // record — there's nothing to preserve. The UPDATE only touches
+    // EXISTING rows (no INSERT), so historical activity is not invented.
     const today = dates[0];
     const admin = getSupabaseAdmin();
 
@@ -1180,11 +1187,14 @@ export async function runLiveForStore(
       }
     }
 
-    // 3. ALSO update effective_status on past rows in the lookback window
-    //    (yesterday + back N days). Operator-side use case: "I paused this
+    // 3. ALSO update effective_status on EVERY existing past row for each
+    //    enrolled ad-set (Phase 12.5 — was 7-day lookback, see header
+    //    comment on this step.run). Operator-side use case: "I paused this
     //    campaign yesterday morning — yesterday's row should reflect that
-    //    even though today is a fresh row". UPDATE-only (no INSERT) on
-    //    past dates — we never invent activity that wasn't there.
+    //    even though today is a fresh row" AND the broader case: "I paused
+    //    this 30 days ago — last-month view should show it off, not on".
+    //    UPDATE-only (no INSERT) on past dates — we never invent activity
+    //    that wasn't there.
     //
     // Audit fix 2026-05-23 (HIGH-12 / O4-HI-01 + HIGH-NEW-4): replaced
     // Promise.all with sequential `for...of await` + per-iteration try/catch
@@ -1227,7 +1237,6 @@ export async function runLiveForStore(
             .eq('store_id', storeId)
             .eq('platform', platform)
             .eq('ad_set_id', adSetId)
-            .gte('date', lookbackFrom)
             .lt('date', today); // UPSERT above already handled today
           // Supabase shape: result is `{ error: PostgrestError | null }`
           // (the chain returns the response object directly when not

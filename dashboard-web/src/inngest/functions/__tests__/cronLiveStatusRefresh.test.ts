@@ -97,26 +97,27 @@ function makeSupabaseAdminMock(
         else if (col === 'ad_set_id') adSetId = val;
         return eqChain;
       }),
-      gte: vi.fn(() => ({
-        lt: vi.fn(() => {
-          // Terminal — emit the configured outcome for this ad-set.
-          const outcome = updateOutcomes[adSetId] ?? 'success';
-          updateLog.push({
-            adSetId,
-            payload,
-            outcome: typeof outcome === 'string' ? outcome : 'error-result',
-          });
-          if (outcome === 'throw') {
-            return Promise.reject(
-              new Error(`mock-rejection for ${adSetId}`),
-            );
-          }
-          if (typeof outcome === 'object' && outcome.error) {
-            return Promise.resolve({ error: outcome.error });
-          }
-          return Promise.resolve({ error: null });
-        }),
-      })),
+      // Phase 12.5: chain is now `.eq*3 → .lt` (the .gte lookback was
+      // removed — every existing row gets the refresh, see cronLive.ts
+      // refresh-effective-status step's header comment).
+      lt: vi.fn(() => {
+        // Terminal — emit the configured outcome for this ad-set.
+        const outcome = updateOutcomes[adSetId] ?? 'success';
+        updateLog.push({
+          adSetId,
+          payload,
+          outcome: typeof outcome === 'string' ? outcome : 'error-result',
+        });
+        if (outcome === 'throw') {
+          return Promise.reject(
+            new Error(`mock-rejection for ${adSetId}`),
+          );
+        }
+        if (typeof outcome === 'object' && outcome.error) {
+          return Promise.resolve({ error: outcome.error });
+        }
+        return Promise.resolve({ error: null });
+      }),
     };
     return eqChain;
   }
