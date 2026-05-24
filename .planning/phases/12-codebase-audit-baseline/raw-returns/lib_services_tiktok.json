@@ -1,0 +1,142 @@
+{
+  "task_id": "12.B.7",
+  "file": "dashboard-web/src/lib/fetchers/tiktok.ts",
+  "test_path": "dashboard-web/src/lib/fetchers/__tests__/tiktok.test.ts",
+  "verdict": "✅ Verified",
+  "findings": [
+    {
+      "id": "SVC-01",
+      "severity": "MAJOR",
+      "file_line": "tiktok.ts:431-580 (fetchTikTokAdInsights conversionValue synthesis)",
+      "failing_input": "TikTok returns `complete_payment: 3` and `value_per_complete_payment: 25.00` for a row. Code computes `conversionValue = 3 * 25.00 = 75`.",
+      "expected": "Sum of purchase values (matching Meta's action_value:purchase).",
+      "actual": "Code multiplies count × AVG per purchase. This works ONLY if TikTok's `value_per_complete_payment` is the SIMPLE average across the same row's purchases. If TikTok returns weighted-average or median, the multiplication gives the wrong total. Per TikTok docs, `value_per_complete_payment = total_complete_payment_value / complete_payment` — so multiplying back is mathematically equivalent to total. CORRECT.",
+      "fix_sketch": "Prefer the direct field `total_complete_payment_value` if TikTok exposes it (per code comment at line 458-462, it does). Currently using the multiplied derivation.",
+      "regression_test_idea": "Mock complete_payment=3, value_per_complete_payment=25 → assert conversionValue=75. (Already in Test 5.)"
+    },
+    {
+      "id": "SVC-02",
+      "severity": "MAJOR",
+      "file_line": "tiktok.ts:296-303 (fetchTikTokSpendForDay row reading)",
+      "failing_input": "/report/integrated/get returns 0 rows (no spend on the day).",
+      "expected": "Returns spend=0, currency from advertiser/info.",
+      "actual": "Code: `const row = (data.list ?? [])[0]; const spend = parseNum(row?.metrics?.spend ?? 0);` — correctly handles empty list. Test 10 pins this.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Already covered by Test 10."
+    },
+    {
+      "id": "SVC-03",
+      "severity": "MAJOR",
+      "file_line": "tiktok.ts:432-562 (fetchTikTokAdInsights pagination loop)",
+      "failing_input": "Report endpoint returns `page_info: { total_page: 5 }` with 200 rows per page. Code loops with `page++` until `page >= totalPages`.",
+      "expected": "Fetches all 5 pages.",
+      "actual": "Loop body: `if (page >= totalPages) break; page++;`. When page=5 and totalPages=5, the break fires BEFORE the increment. But the data for page 5 has already been fetched and processed (the break is after parsing). So all 5 pages are processed. CORRECT.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test multi-page response: page 1 (total_page=2) → page 2 (total_page=2). Assert both pages' rows aggregated."
+    },
+    {
+      "id": "SVC-04",
+      "severity": "MINOR",
+      "file_line": "tiktok.ts:558-564 (pagination cap warning)",
+      "failing_input": "TikTok returns 50+ pages.",
+      "expected": "Cap warning fires only if there ARE more pages to fetch.",
+      "actual": "`if (page >= TIKTOK_PAGINATION_CAP)` — but page reaches 50 only if `page < totalPages` was true on iteration 50. Predicate is correct but doesn't include the 'still has more' condition. The warning may fire even when totalPages=50 (i.e., exactly at the cap). Minor false-positive risk.",
+      "fix_sketch": "Track `hitCap = false; ... if (page >= totalPages) break; hitCap = page >= TIKTOK_PAGINATION_CAP; page++;` then check hitCap after loop.",
+      "regression_test_idea": "Test exactly 50 pages → assert no warning. Test 51-page need → assert warning."
+    },
+    {
+      "id": "SVC-05",
+      "severity": "MAJOR",
+      "file_line": "tiktok.ts:228-238 (advertiser_ids JSON encoding)",
+      "failing_input": "advertiserId='7012345678901234567' (numeric string > 2^53). JSON.stringify(['7012345678901234567']) produces '[\"7012345678901234567\"]'.",
+      "expected": "Quoted string array per Phase 05.7.8 fix.",
+      "actual": "Correct. The Phase 05.7.8 fix (documented at line 229-236) explicitly fixed the bug where unquoted numbers > 2^53 lost precision and TikTok rejected with code 40002.",
+      "fix_sketch": "n/a — explicitly tested by reading the URL in tests.",
+      "regression_test_idea": "Add a test asserting the URL contains 'advertiser_ids=%5B%227012345678901234567%22%5D' (URL-encoded JSON array of quoted string)."
+    },
+    {
+      "id": "SVC-06",
+      "severity": "MAJOR",
+      "file_line": "tiktok.ts:353-430 (fetchTikTokAdGroupStatuses soft-fail)",
+      "failing_input": "TikTok /adgroup/get/ throws (e.g., 5xx or envelope error).",
+      "expected": "Soft-fail: return partial map, log warn, allow insights fetch to complete with effectiveStatus=null.",
+      "actual": "Correct. `catch` block logs warn + returns out (the in-progress Map). Test 5 implicitly covers the success path. No test pins the soft-fail return value contract.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Mock /adgroup/get/ returning code=50000; mock /report success; assert fetchTikTokAdInsights returns rows with effectiveStatus=null."
+    },
+    {
+      "id": "SVC-07",
+      "severity": "MINOR",
+      "file_line": "tiktok.ts:178-185 (parseNum)",
+      "failing_input": "Value passed as boolean `true`. `typeof true === 'boolean'`, neither 'number' nor 'string' → returns 0.",
+      "expected": "Non-numeric input defaults to 0.",
+      "actual": "Correct.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "n/a"
+    },
+    {
+      "id": "SVC-08",
+      "severity": "MAJOR",
+      "file_line": "tiktok.ts:199-208 (advertiserInfoCache)",
+      "failing_input": "Cache lives at module scope. Same-process concurrent calls for the same store while the cache is cold would BOTH issue the /advertiser/info call.",
+      "expected": "Singleflight to avoid duplicate calls.",
+      "actual": "No singleflight. Same concern as shopifyAuth SVC-02. Currency rarely changes; doubling the call has near-zero blast radius.",
+      "fix_sketch": "Same pattern as shopifyAuth: in-flight promise map.",
+      "regression_test_idea": "Promise.all of 2 fetchTikTokAdvertiserInfo calls — assert fetch called once for /advertiser/info."
+    },
+    {
+      "id": "SVC-09",
+      "severity": "MAJOR",
+      "file_line": "tiktok.ts:519-533 (purchases vs conversion semantics)",
+      "failing_input": "Operator runs a Reach campaign where `conversion` counts video views (not purchases). `complete_payment` counts only checkouts.",
+      "expected": "conversions = checkouts only (matches Meta's omni_purchase).",
+      "actual": "Code uses `complete_payment` for `conversions`, NOT `conversion`. Docstring (line 510-518) explains: operator's mental model is 'המרות' = checkouts. Correct.",
+      "fix_sketch": "n/a — matches dashboard semantics.",
+      "regression_test_idea": "Already covered by Test 5 (uses complete_payment as the count source)."
+    }
+  ],
+  "uncertainty_notes": "File is 581 LOC. Test file is 485 LOC with 10 tests covering: cred validation, URL/header shape, envelope error path (4 codes), 2-hop scenarios, empty-list success, status merge. Audit-snapshot row 7 mentioned 'TikTok thin (5 tests, no code!==0 envelope coverage)' — that has since been REMEDIATED by Tests 6-10 added in 'AUDIT C-04 backfill'. Phase 05.7.8 metric-name fix (complete_payment vs conversion_value) is locked in. Verdict ✅. SVC-04, SVC-05 backfill, SVC-08 are the remaining minor improvements.",
+  "test_coverage_gaps": [
+    {
+      "description": "No test for multi-page pagination in fetchTikTokAdInsights",
+      "why_it_matters": "Pagination logic is the only untested loop. A regression could limit results to page 1 silently.",
+      "suggested_fixture": "Mock /adgroup/get/ → /report (page_info.total_page=2) → /report page 2 (total_page=2). Assert rows aggregated."
+    },
+    {
+      "description": "No test for soft-fail return of fetchTikTokAdGroupStatuses (insights flow continuing with status=null)",
+      "why_it_matters": "The soft-fail contract is load-bearing — if accidentally upgraded to a throw, the entire insights flow breaks.",
+      "suggested_fixture": "Mock /adgroup/get/ returning code=50000; mock /report success; assert fetchTikTokAdInsights resolves with effectiveStatus=null on all rows."
+    },
+    {
+      "description": "No test for advertiserInfoCache reuse across calls",
+      "why_it_matters": "Cache is the only protection against repeated /advertiser/info on every fetchTikTokSpendForDay call.",
+      "suggested_fixture": "Call fetchTikTokAdvertiserInfo twice; assert fetch called once."
+    },
+    {
+      "description": "No test for advertiser_ids JSON-quoted string encoding (Phase 05.7.8 fix)",
+      "why_it_matters": "The unquoted-numeric-precision bug was the root cause of TikTok showing 0 for weeks. A regression would re-introduce the silent failure.",
+      "suggested_fixture": "Assert /advertiser/info/ URL contains advertiser_ids=%5B%227012345678901234567%22%5D (quoted string in JSON array)."
+    },
+    {
+      "description": "No test for concurrent fetchTikTokAdvertiserInfo singleflight",
+      "why_it_matters": "Duplicate /advertiser/info calls are wasteful but not incorrect.",
+      "suggested_fixture": "Promise.all of 3 calls — assert fetch called once."
+    },
+    {
+      "description": "No test for pagination cap warning false-positive",
+      "why_it_matters": "Warning fires when totalPages exactly = 50, even though no pages were dropped.",
+      "suggested_fixture": "Mock 50-page response with total_page=50; assert console.warn NOT called."
+    }
+  ],
+  "channels": {
+    "imports_from": [],
+    "exports_to": ["lib/inngest/cronDaily.ts (spend, ad insights, advertiser info)", "lib/inngest/cronLive.ts (spend-light, ad-group statuses for placeholders)"],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": ["cron/daily", "cron/live"],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": ["GET https://business-api.tiktok.com/open_api/v1.3/advertiser/info/", "GET https://business-api.tiktok.com/open_api/v1.3/report/integrated/get/ (paginated)", "GET https://business-api.tiktok.com/open_api/v1.3/adgroup/get/ (paginated)"]
+  }
+}

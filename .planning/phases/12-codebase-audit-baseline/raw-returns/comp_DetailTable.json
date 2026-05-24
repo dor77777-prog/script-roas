@@ -1,0 +1,59 @@
+{
+  "task_id": "12.G.06",
+  "file": "dashboard-web/src/components/DetailTable.tsx",
+  "test_path": "NONE — no DetailTable.test.* found",
+  "verdict": "Per-row display table with inline business logic in roasCellStyle helper. `rows` is sorted by `b.date.localeCompare(a.date)` (lex desc — correct for ISO YYYY-MM-DD). `display.slice(0, 100)` caps at 100 rows. `showTikTok` and `showCogs` conditionally render columns based on data presence. 1 HIGH finding: roasCellStyle has a 3-state handling (rev=0 & spend>0 → black '0', rev=0 & spend=0 → empty, default → roasLabel) but DOES NOT handle `revenue>0 && totalSpend===0` — falls through to the default branch with `roas` value undefined/Infinity depending on upstream computation. If a row ever has revenue without spend (e.g., organic-only day with refund offset), the cell would render 'NaN' or 'Infinity'. 1 LOW finding: `cell.text` from roasCellStyle for rev=0/spend=0 case is empty string — visually a blank ROAS column which is ambiguous with 'no data' vs '0'.",
+  "findings": [
+    {
+      "id": "CMB-15",
+      "severity": "HIGH",
+      "file_line": "dashboard-web/src/components/DetailTable.tsx:17-21",
+      "failing_input": "DailyRow with `revenue > 0` and `totalSpend === 0` (e.g., organic-only day, refund-only day with negative spend zeroed by upstream)",
+      "expected": "Explicit handling — either render '∞' with a 'no spend' tooltip, render '—', or assert upstream invariant prevents this",
+      "actual": "Falls through to `ROAS_BG[roasLabel(roas).tone]` with `text: formatNumber(roas)`. If `roas` was computed upstream as `revenue / 0 = Infinity`, formatNumber(Infinity) likely renders '∞' or 'NaN'. If `roas` was computed as `revenue / max(spend, 0.01)` upstream, it would be a huge non-meaningful number rendered as e.g. '100,000.00'.",
+      "fix_sketch": "Add a fourth branch in roasCellStyle: `if (totalSpend === 0 && revenue > 0) return { className: 'bg-surfaceMuted text-text-muted', text: '—' };` BEFORE the rev=0/spend=0 check. Document the invariant that ROAS is undefined without spend.",
+      "regression_test_idea": "Unit test roasCellStyle directly with 4 input combinations: (0,0) (0,100) (1000,0) (1000,100). Pin returned className+text strings."
+    },
+    {
+      "id": "CMB-16",
+      "severity": "LOW",
+      "file_line": "dashboard-web/src/components/DetailTable.tsx:19",
+      "failing_input": "Row where revenue=0 AND totalSpend=0 (both pipelines silent for that day)",
+      "expected": "Visually distinct from 'data error'",
+      "actual": "Returns `{ className: '', text: '' }` — blank cell. Adjacent fbSpend/gaSpend cells also show 0 (formatted as '0' not '—'), so the row visually reads as 'all-zero day' which is correct but the empty ROAS cell vs a '—' would be clearer.",
+      "fix_sketch": "Return `text: '—'` instead of empty string for consistency with the cell convention elsewhere.",
+      "regression_test_idea": "Same unit test as CMB-15."
+    },
+    {
+      "id": "CMB-17",
+      "severity": "INFO",
+      "file_line": "dashboard-web/src/components/DetailTable.tsx:30",
+      "failing_input": "More than 100 days of data",
+      "expected": "User-visible signal that data is truncated",
+      "actual": "Silently slices to 100. Meta text at line 119 says '({display.length} שורות אחרונות)' = '({display.length} latest rows)' — this DOES signal truncation but doesn't say 'of N total' so user doesn't know what was hidden.",
+      "fix_sketch": "Change meta to '({display.length} מתוך {sorted.length} שורות)' = '({display.length} of {sorted.length} rows)' when sorted.length > 100. Minor UX clarity improvement.",
+      "regression_test_idea": "Test the meta string with 50 rows (no truncation) and 150 rows (truncated)."
+    }
+  ],
+  "uncertainty_notes": "Did not verify upstream how `roas` is computed when totalSpend=0. Spot-check of types.ts:DailyRow showed roas is a number — formula lives in lib/analytics.ts. If upstream guards `roas = totalSpend > 0 ? revenue/totalSpend : 0`, then CMB-15 reduces to a LOW (renders as roas=0 → red 'דורש בחינה' chip, which is wrong but not Infinity). Either way, the missing branch is a latent bug awaiting an upstream change.",
+  "test_coverage_gaps": [
+    "Zero test coverage for this 144-line component",
+    "No test for roasCellStyle (4 input quadrants — CMB-15)",
+    "No test for showTikTok visibility logic (renders column iff at least one row has ttSpend > 0)",
+    "No test for showCogs visibility logic",
+    "No test for the 100-row slice cap",
+    "No test for sort order (b.date.localeCompare(a.date) — correct only because ISO format; lex-sort assumption should be pinned)",
+    "No test for empty-rows branch (renders 'אין נתונים בטווח שבחרת')"
+  ],
+  "channels": {
+    "imports_from": ["lucide-react", "@/lib/types", "@/lib/utils", "@/lib/analytics", "./RefundIndicator"],
+    "exports_to": ["./Dashboard.tsx (DetailTable)"],
+    "events_emitted": [],
+    "events_consumed": ["rows prop changes (Dashboard SWR)"],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

@@ -1,0 +1,112 @@
+{
+  "task_id": "12.A.4.codex",
+  "verdicts": [
+    {
+      "opus_finding_id": "ALG-01",
+      "codex_verdict": "VERIFY",
+      "reasoning": "aiReport.ts has two local TikTok status classifiers that return off for every status except ADGROUP_STATUS_DELIVERY_OK (lines 1101-1108 and 1289-1296). The broader project taxonomy explicitly treats BUDGET_EXCEED, AUDIT, REVIEWING, and NOT_START as active-enough/preparing states in platformConfig.ts and CampaignsTableRow.tsx, so the report can incorrectly list those campaigns as currently off and apply the health-score -30 operator adjustment."
+    },
+    {
+      "opus_finding_id": "ALG-02",
+      "codex_verdict": "VERIFY",
+      "reasoning": "The budget split section only accumulates fbSpend and gaSpend, computes totalSpendAll as meta+google, and renders only Meta/Google rows (lines 2034-2044). TikTok spend is included in top-level spend/ROAS (lines 180-187) and daily rows, so this section misstates percentages whenever ttSpend is non-zero."
+    },
+    {
+      "opus_finding_id": "ALG-03",
+      "codex_verdict": "VERIFY",
+      "reasoning": "Both status maps use iteration-order last-write-wins rather than date-latest-wins: Health Score statusByKey at lines 1095-1099 and Currently Off statusByCampaign at lines 1298-1302. The canonical aggregator tracks latestEffectiveStatusDate by r.date, confirming the intended semantics are chronological latest, not array order."
+    },
+    {
+      "opus_finding_id": "ALG-04",
+      "codex_verdict": "VERIFY",
+      "reasoning": "campaignAgg is keyed by storeId::platform::campaignId (line 778), but the Currently Off status map and lookup drop storeId (lines 1301 and 1305). In an All-stores report, same platform+campaignId collisions across stores will share one status, so one store can inherit another store's effectiveStatus."
+    },
+    {
+      "opus_finding_id": "ALG-05",
+      "codex_verdict": "VERIFY",
+      "reasoning": "ordersByCampaignId and ordersByCampaignName are keyed only by campaignId/name (lines 842-852), and campaign lookup uses only c.campaignId/c.name (lines 871-873). In All view, orders from one store with the same UTM id/name can be attributed to another store's campaign; the same unscoped maps are duplicated for Health Score at lines 1081-1091 and 1145-1148."
+    },
+    {
+      "opus_finding_id": "ALG-06",
+      "codex_verdict": "VERIFY",
+      "reasoning": "campaignsList drops storeId, then Health Score, ad-set drilldown, and creative drilldown recover related data by suffix scans over keys ending in ::platform::campaignId (lines 1124-1126, 1492-1494, and 1588-1589). With cross-store campaignId collisions, Array.find/filter can attach the wrong store's daily series, status, ad sets, or creatives."
+    },
+    {
+      "opus_finding_id": "ALG-07",
+      "codex_verdict": "REJECT",
+      "reasoning": "The finding's proposed symmetric absolute-gap trust model conflicts with the existing attributionAnalysis contract: coverage is deterministicRevenue / metaClaim, where >=0.8 is high trust and det > metaClaim is halo/under-reporting, not a low-coverage condition. aiReport's clamp to 1 loses the high-halo warning nuance, but the specific claim that over-reporting is not a low-coverage signal is backwards for this codebase's documented coverage semantics."
+    },
+    {
+      "opus_finding_id": "ALG-08",
+      "codex_verdict": "VERIFY-WITH-CAVEAT",
+      "reasoning": "The unsafe casts are real (lines 1167-1169 and 1200), and productTotals also omits the orders field required by TrueRevenueInfo. Caveat: this is not currently proven to produce NaN or wrong runtime output because computeCampaignHealth presently reads only deterministicRevenue, trueRevenue, confidence.level, attribution.trust, spend/conversion fields, and those fields are present. It is a type-safety/contract-drift bug rather than an observed current math failure."
+    },
+    {
+      "opus_finding_id": "ALG-09",
+      "codex_verdict": "VERIFY",
+      "reasoning": "The cKey local at line 1490 is both semantically dead and unused; the conditional always returns an empty prefix. This is not an operator-facing algorithm failure by itself, but it is a real stale-refactor artifact adjacent to the storeId suffix-scan bug."
+    },
+    {
+      "opus_finding_id": "ALG-10",
+      "codex_verdict": "VERIFY-WITH-CAVEAT",
+      "reasoning": "The gate uses raw daily.length >= 5 (line 443), but the statistics are computed after collapsing to distinct dates (lines 446-469). Opus's one-day example is mostly latent because MAD becomes 0 and nothing renders, but the underlying bug is real and observable with, for example, five store-day rows spanning only three dates: the section can run and flag anomalies with fewer than five statistical observations."
+    },
+    {
+      "opus_finding_id": "ALG-11",
+      "codex_verdict": "VERIFY",
+      "reasoning": "The report header uses new Date().toISOString().slice(0, 10) (line 152), which is UTC. Project conventions require Asia/Jerusalem for today-style boundaries, and .planning/codebase/CONVENTIONS.md explicitly says not to use this UTC pattern for today because it is wrong for the early Israeli morning window."
+    }
+  ],
+  "new_findings": [
+    {
+      "id": "CODEX-01",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/lib/aiReport.ts:842-873 and 1081-1148",
+      "failing_input": "Single-store report with two campaigns named Brand: Meta campaignId='m1', platform='Meta'; TikTok campaignId='t1', platform='TikTok'. ordersRows contains one order with source='tiktok-paid', utmCampaign='Brand', totalCad=300, and no utmId.",
+      "expected": "The TikTok order should contribute deterministic revenue only to the TikTok Brand campaign, or at minimum the fallback match should be platform/source scoped so Meta Brand does not inherit TikTok-paid revenue.",
+      "actual": "ordersByCampaignName is keyed only by lowercase campaign name, so both Meta Brand and TikTok Brand read detRevenue=300. The same unscoped fallback also feeds Health Score trust/profitability.",
+      "fix_sketch": "Carry platform/source into the order buckets. For name fallback, key by storeId plus platform-derived source plus normalized campaign name, and lookup with the campaign's storeId/platform/name. Use utmId where present, but still scope ambiguous name fallback by platform/source.",
+      "regression_test_idea": "Fixture with Meta and TikTok campaigns sharing campaignName='Brand' and a tiktok-paid order tagged utm_campaign=Brand; assert the Pixel-Shopify table and Health Score give deterministic revenue/trust only to the TikTok row."
+    },
+    {
+      "id": "CODEX-02",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/lib/aiReport.ts:200-210 and 714-735",
+      "failing_input": "storeName='Zol Plus', storeId='zolplus'; two productRows in range have the same storeId='zolplus' and productId='p1', but one row has storeName='Zol Plus' and a later row has storeName='zol-display-renamed'.",
+      "expected": "Because the selected store is matched by storeId, the product summary should treat both rows as the same product: one distinct product and one product table row with summed units/orders/revenue.",
+      "actual": "Product identity still keys on storeName::productId, so the same storeId/productId is split into two products and the distinct product count is inflated.",
+      "fix_sketch": "Key productKeys and productAgg by `${p.storeId}::${p.productId || p.productTitle}` while keeping display storeName as an output label. If display names differ within the bucket, prefer the latest row's storeName or the selected display name.",
+      "regression_test_idea": "Extend aiReportStoreId.test.ts with two product rows sharing storeId/productId but different storeName values; assert only one product row appears and the distinct-products metric is 1."
+    },
+    {
+      "id": "CODEX-03",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/lib/aiReport.ts:443-500",
+      "failing_input": "All-stores report with five daily rows across only three distinct dates, e.g. aggregated per-date revenues [10, 20, 1000] after collapsing multiple stores into those dates.",
+      "expected": "The anomaly section should not run until there are at least five distinct date observations, because the robust median/MAD z-score is being computed over datesSorted, not raw store-day rows.",
+      "actual": "daily.length >= 5 passes even though datesSorted.length is 3. medianMad then computes a robust z-score over only three observations and can render an anomaly row, creating statistical confidence from too few date buckets.",
+      "fix_sketch": "Build byDate before the gate and require datesSorted.length >= 5. Keep the existing MAD=0 short-circuit for constant series.",
+      "regression_test_idea": "Create five daily rows spanning three dates and assert the anomaly section header is absent even if one date is an extreme revenue outlier."
+    },
+    {
+      "id": "CODEX-04",
+      "severity": "MINOR",
+      "file_line": "dashboard-web/src/lib/aiReport.ts:2003-2023",
+      "failing_input": "range={from:'2026-05-01', to:'2026-05-14'} with daily rows on every date.",
+      "expected": "The week-over-week table labels should match the bucket predicate: half 1 is 2026-05-01 through 2026-05-07; half 2 is 2026-05-08 through 2026-05-14.",
+      "actual": "Rows are bucketed with r.date < mid for half 1 and r.date >= mid for half 2, where mid is 2026-05-08, but the table labels half 1 as 01/05/2026–08/05/2026 and half 2 as 08/05/2026–14/05/2026. The boundary date appears in both labels while only belonging to half 2.",
+      "fix_sketch": "Compute firstHalfTo as the day before mid and render half 1 as range.from-firstHalfTo, half 2 as mid-range.to. Reuse a date-add helper to avoid timezone surprises.",
+      "regression_test_idea": "Generate a 14-day report and assert the comparison header contains 01/05/2026–07/05/2026 for half 1 and 08/05/2026–14/05/2026 for half 2."
+    },
+    {
+      "id": "CODEX-05",
+      "severity": "MINOR",
+      "file_line": "dashboard-web/src/lib/aiReport.ts:1978-1996",
+      "failing_input": "storeName='All' with two stores on the same Monday: store A revenue=100 spend=100, store B revenue=300 spend=100.",
+      "expected": "A section labeled 'ביצועים לפי יום בשבוע' / 'מספר ימים' should aggregate calendar days first, so that Monday count is 1, average revenue is CAD 400, average spend is CAD 200, and weighted ROAS is 2.0.",
+      "actual": "dowAgg.count increments per store-day row, so Monday count is 2, average revenue is CAD 200, average spend is CAD 100, while weighted ROAS remains 2.0. The displayed count and averages are store-row averages, not day-of-week averages.",
+      "fix_sketch": "Aggregate daily rows by date first across stores, then bucket those date totals by day-of-week. Alternatively relabel the section as store-day averages, but the surrounding copy says weekly day patterns, so calendar-date aggregation is more consistent.",
+      "regression_test_idea": "All-stores fixture with two stores on the same date; assert the day-of-week row count is 1 and averages use the cross-store daily total."
+    }
+  ]
+}

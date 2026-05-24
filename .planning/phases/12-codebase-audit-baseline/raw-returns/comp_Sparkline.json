@@ -1,0 +1,44 @@
+{
+  "task_id": "12.G.04",
+  "file": "dashboard-web/src/components/Sparkline.tsx",
+  "test_path": "dashboard-web/src/lib/__tests__/sparklineGeometry.test.ts",
+  "verdict": "Thin presentation component (99 lines). c/HI-05 fix verified — all geometry math is delegated to pure helper computeSparklineGeometry (lib/sparklineGeometry.ts) which is exhaustively tested (10 cases including degenerate inputs, all-zero, target alignment, even X spacing, centered Y for flat lines). The component itself only renders SVG. 1 LOW finding: `areaD` (filled mode) constructs the close path using points[0] and points[length-1], which works for any n>=2 but produces a degenerate zero-width area when n=1 (unreachable per `values.length < 2` early return). 1 INFO finding: no aria-label on SVG when ariaLabel prop is undefined and role is 'presentation' — accessible default.",
+  "findings": [
+    {
+      "id": "CMB-10",
+      "severity": "LOW",
+      "file_line": "dashboard-web/src/components/Sparkline.tsx:58",
+      "failing_input": "Sparkline rendered with `filled=true` and degenerate values (all equal)",
+      "expected": "Fill region is non-zero or explicitly suppressed",
+      "actual": "When degenerate=true (geometry helper returns centerY for every point), the areaD path is a thin horizontal strip from centerY down to (height-pad). This is visually valid but the helper exposes a `degenerate` flag the component never uses — could suppress the fill (or render a tinted full-height background) when degenerate.",
+      "fix_sketch": "Read `degenerate` from computeSparklineGeometry's return (currently destructured as `{points, targetY}` — add `degenerate`). If true and filled, either skip the fill or render a subtle full-box background. Cosmetic; defer.",
+      "regression_test_idea": "Visual regression (not unit-test material). The current behavior is correct, just under-leveraged."
+    },
+    {
+      "id": "CMB-11",
+      "severity": "INFO",
+      "file_line": "dashboard-web/src/components/Sparkline.tsx:68-70",
+      "failing_input": "Screen reader navigating a Sparkline without ariaLabel",
+      "expected": "Either role='presentation' with aria-hidden, or role='img' with mandatory aria-label",
+      "actual": "Defaults to role='presentation' when ariaLabel is undefined — screen readers correctly skip the SVG. Correctly handled.",
+      "fix_sketch": "No action needed; accessibility is correct.",
+      "regression_test_idea": "Test (jsdom render) that Sparkline without ariaLabel has role='presentation'."
+    }
+  ],
+  "uncertainty_notes": "Component logic is straightforward; reviewed pure helper + tests. No edge cases missed.",
+  "test_coverage_gaps": [
+    "No test of the Sparkline component itself (only the underlying geometry helper). A render test would assert SVG output structure (path d attribute, target line, endpoint circle visibility).",
+    "No test for ariaLabel propagation to the SVG role attribute"
+  ],
+  "channels": {
+    "imports_from": ["@/lib/utils", "@/lib/sparklineGeometry"],
+    "exports_to": ["./KpiCards.tsx (Sparkline)"],
+    "events_emitted": [],
+    "events_consumed": ["values prop changes"],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

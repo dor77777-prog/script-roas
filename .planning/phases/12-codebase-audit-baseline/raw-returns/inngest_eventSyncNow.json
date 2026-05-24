@@ -1,0 +1,77 @@
+{
+  "task_id": "12.D.6",
+  "file": "dashboard-web/src/inngest/functions/eventSyncNow.ts",
+  "test_path": "dashboard-web/src/inngest/functions/__tests__/events.test.ts (closest — covers Test 1-3)",
+  "verdict": "Verified",
+  "findings": [
+    {
+      "id": "INN-17",
+      "severity": "MINOR",
+      "file_line": "dashboard-web/src/inngest/functions/eventSyncNow.ts:81-89 (todayJerusalem default date)",
+      "failing_input": "Operator clicks 'Sync now' at 23:55 IL on May 23, 2026. The /api/operator/sync-now route fires the event. The Inngest dispatch + worker pickup typically adds a few seconds of latency — so the handler might execute at 23:55:08 IL OR (if the worker is slow / queued) at 00:00:15 IL on May 24. The `todayJerusalem()` call at line 112 evaluates at WORKER EXECUTION TIME (per the file comment at line 65-68 'resolves at function-execution time, not send time'), so a near-midnight click could resolve to either May 23 OR May 24 depending on the dispatch latency.",
+      "expected": "This is documented intent (file comment line 65-68 explicitly says 'so the value reflects the moment the worker picks up the event'). The operator's mental model 'refresh today's numbers right now' is consistent — if they're clicking at 00:00:15, they probably mean May 24 (the calendar date they're now in).",
+      "actual": "Behavior is correct per intent. Not a bug.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "n/a — accepted behavior, but worth documenting in a comment near the operator console call site so future operators understand the date-resolution semantics."
+    },
+    {
+      "id": "INN-18",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/inngest/functions/eventSyncNow.ts:111-122 (no runtime validation of storeId)",
+      "failing_input": "/api/operator/sync-now POST body contains `{storeId: 'usmile360_typo'}`. The route dispatches `inngest.send('event/sync-now', {data: {storeId: 'usmile360_typo'}})`. The handler at line 111 destructures `storeId` from event.data — TypeScript's StoreId discriminated union is a COMPILE-time check only. At runtime, the typed cast at line 112 (`event.data as SyncNowPayload`) is a no-op. The handler invokes `runDailyForStore('usmile360_typo', ...)`.\n\nrunDailyForStore in cronDaily.ts uses storeId as: (1) a label in step.run IDs (e.g. 'fetch-shopify' — same for all stores, no IDs here), (2) the first arg to fetchShopifyDayRows / fetchMetaSpendForDay / etc. Each of those fetchers reads per-store credentials via process.env['SHOPIFY_TOKEN_USMILE360_TYPO'] (or similar). The missing env var → fetcher throws 'Missing credentials' → step.run propagates → runDailyForStore throws → Inngest retries 4× → deadletter.\n\nProduction shape: operator typo in a curl call or a future operator-console bug that doesn't validate storeIds before dispatch would burn 4 retries × 6 step.runs = ~24 wasted execs per typo. The 5xx in Inngest dashboard is the only signal.",
+      "expected": "Validate storeId against the canonical STORES const before invoking runDailyForStore. Throw a clear 'Invalid storeId: X' error so Inngest doesn't retry an unrecoverable input error.",
+      "actual": "The file comment at line 21-26 explicitly delegates runtime payload validation to 'the API route's job (plan 14) — event/sync-now itself trusts the payload it receives'. So the design intent is to NOT validate. But the trust assumption is wrong if the API route's validation has a bug or is bypassed (e.g. via direct inngest.send from a future debug tool).",
+      "fix_sketch": "Add `if (!STORE_IDS.has(storeId)) throw new Error(`event/sync-now: invalid storeId ${storeId}`)` before line 119. The check costs nothing at runtime and protects against caller-side bugs. Mirror the validation pattern in eventBackfill.ts:187-200.",
+      "regression_test_idea": "Add Test: handler({event: {data: {storeId: 'usmile360_typo'}}, step}) should reject WITHOUT calling runDailyForStore. Currently it would call runDailyForStore and the call would fail downstream (potentially with a less clear error message)."
+    }
+  ],
+  "uncertainty_notes": "Module is intentionally minimal (single-store sync-now wrapper around runDailyForStore). The file comment is explicit about the design decisions (trust the route, default to today, use the same step.run subset as cronDaily). INN-18 is a defense-in-depth concern: the upstream route DOES validate (per the comment at line 21-26) but layered validation is cheap and the cost-of-failure (wasted retry budget + unclear error) is real. INN-17 is documented intent. No correctness bugs in the date/dispatch/payload paths.",
+  "test_coverage_gaps": [
+    {
+      "description": "No test for invalid storeId (INN-18). Test 2 + Test 3 only exercise valid storeIds ('uzoshop'). A typo or undefined storeId would propagate to runDailyForStore unchecked.",
+      "why_it_matters": "Defense-in-depth — the API route is supposed to validate but a single typo in a future refactor that bypasses the route would silently waste retry budget.",
+      "suggested_fixture": "handler({event: {data: {storeId: 'invalid'}}, step}) should reject; runDailyForStoreMock should not be called."
+    },
+    {
+      "description": "No test for missing storeId (event.data omitted entirely or event.data.storeId === undefined). The current code destructures `{ storeId, date = todayJerusalem() }` — if storeId is undefined, runDailyForStore receives undefined.",
+      "why_it_matters": "Same as INN-18 — defense-in-depth.",
+      "suggested_fixture": "handler({event: {data: {}}, step}) should reject with a clear 'storeId required' error."
+    },
+    {
+      "description": "No test for date format validation. The `date?` field is optional but if provided is taken as-is. A malformed date like '2026-13-99' or '15/05/2026' would be passed unchanged to runDailyForStore → which would pass to Shopify / Supabase → eventual error in a downstream layer.",
+      "why_it_matters": "Same defense-in-depth pattern. Clear early-error vs unclear late-error.",
+      "suggested_fixture": "handler with date='2026-13-99' should reject with 'Invalid date format' (YYYY-MM-DD regex match)."
+    },
+    {
+      "description": "No test asserting the date default actually evaluates at handler-execution time (vs at module-load time). The current code calls todayJerusalem() inside the destructure default — which DOES evaluate at handler call time. A regression that hoisted the call to module scope would silently freeze the default date at deployment time.",
+      "why_it_matters": "Would cause 'Sync now' to always use the deployment-date instead of today.",
+      "suggested_fixture": "Use vi.useFakeTimers + setSystemTime to advance time between two handler invocations; assert each call passed a different default date."
+    }
+  ],
+  "channels": {
+    "imports_from": [
+      "@/inngest/client",
+      "./cronDaily (runDailyForStore, StoreId)"
+    ],
+    "exports_to": [
+      "serve() route (eventSyncNow)"
+    ],
+    "events_emitted": [],
+    "events_consumed": [
+      "event/sync-now (from /api/operator/sync-now POST handler per file comment)"
+    ],
+    "swr_keys": [],
+    "inngest_triggers": [
+      "Event: event/sync-now"
+    ],
+    "supabase_writes": [
+      "(via runDailyForStore — same set as cronDaily)"
+    ],
+    "supabase_reads": [
+      "(via runDailyForStore — same set as cronDaily)"
+    ],
+    "api_calls": [
+      "(via runDailyForStore — Shopify, Meta, Google, TikTok, Frankfurter)"
+    ]
+  }
+}

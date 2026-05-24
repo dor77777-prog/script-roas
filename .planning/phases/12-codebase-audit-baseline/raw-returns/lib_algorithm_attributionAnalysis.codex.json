@@ -1,0 +1,56 @@
+{
+  "task_id": "12.A.3.codex",
+  "verdicts": [],
+  "new_findings": [
+    {
+      "id": "COD-A3-01",
+      "severity": "medium",
+      "file_line": "dashboard-web/src/lib/attributionAnalysis.ts:367",
+      "failing_input": "analyzeAttribution({ platform:'Meta', storeId:'uzoshop', campaignName:'Summer Sale', campaignId:'camp-1', metaClaim:200, spend:100 }, [orders with totalCad 0 and 200, both utmId:'camp-1'], '2026-05-01', '2026-05-02')",
+      "expected": "A 95% interval for n=2 should not use a fixed normal 1.96 multiplier as if variance were known. Either return null until sample size is large enough or use a small-sample interval (for example Student-t / Bayesian posterior predictive) and label it honestly.",
+      "actual": "roasInterval is computed with NORMAL_QUANTILE_95=1.96, producing a narrow high around 3.96x for the two-order fixture. A t(1) 95% interval would be far wider, so the current tooltip materially overstates precision for small samples.",
+      "fix_sketch": "Replace the fixed normal multiplier with a degrees-of-freedom-aware t critical value or suppress roasInterval below a configured n. If this is intentionally a normal approximation, remove the Bayesian wording from shared-engine comments and UI copy.",
+      "regression_test_idea": "Add parameterized ROAS interval tests for n=2, n=3, n=5, and n>=30 against an independent t/Bayesian oracle, plus an assertion that n below the chosen threshold returns null if suppression is chosen."
+    },
+    {
+      "id": "COD-A3-02",
+      "severity": "medium",
+      "file_line": "dashboard-web/src/lib/attributionAnalysis.ts:666",
+      "failing_input": "computeWindowStability([order 50 on 2026-05-03, order 78 on 2026-05-10], [{date:'2026-05-03',value:100},{date:'2026-05-10',value:100}], '2026-05-01', '2026-05-14')",
+      "expected": "With two observed weekly coverage samples [0.50, 0.78], use sample variance because these windows estimate period instability. stdDev should be sqrt(((0.14^2 + 0.14^2)/(2-1))) ~= 0.198, yielding 'mixed'.",
+      "actual": "Variance divides by coverages.length, giving population stdDev 0.14 and verdict 'stable'. Borderline two-window drift is understated and can suppress the warning copy.",
+      "fix_sketch": "Use Bessel correction for window coverage variance: divide by coverages.length - 1. Keep the existing coverages.length < 2 guard.",
+      "regression_test_idea": "Add a two-window fixture with coverages 0.50 and 0.78 and assert stdDev ~= 0.198 and verdict 'mixed'."
+    },
+    {
+      "id": "COD-A3-03",
+      "severity": "medium",
+      "file_line": "dashboard-web/src/lib/attributionAnalysis.ts:700",
+      "failing_input": "detectOutlierDays([{2026-05-01..2026-05-07 values [90,110,95,105,100,90,110]}, {date:'2026-05-08', value:0}])",
+      "expected": "No outlier day for a downward drop if the feature is specifically detecting Meta modeled spikes above the trailing median, as stated by the comments and operator reason text.",
+      "actual": "The detector uses Math.abs(value - median), so a sharp drop below the median is emitted as an outlier and later described as a modeled spike above 3x MAD.",
+      "fix_sketch": "For this spike detector, replace abs-difference with one-sided positive deviation: diff = sorted[i].value - med; only flag when diff > threshold. If downward anomalies are desired, return a typed outlier direction and change the reason copy.",
+      "regression_test_idea": "Add a fixture with a normal 7-day baseline followed by value 0 and assert it is not returned, plus a symmetric high spike fixture that still is returned."
+    },
+    {
+      "id": "COD-A3-04",
+      "severity": "medium",
+      "file_line": "dashboard-web/src/lib/attributionAnalysis.ts:367",
+      "failing_input": "analyzeAttribution({ platform:'Meta', storeId:'uzoshop', campaignName:'Summer Sale', campaignId:'camp-1', metaClaim:100, spend:100 }, [orders totalCad 100 and -200, both utmId:'camp-1'], '2026-05-01', '2026-05-15')",
+      "expected": "Refund-heavy signed revenue should not produce a positive-looking 95% ROAS interval. With deterministicRevenue <= 0, roasInterval should be null or explicitly signed with ordered bounds that include the negative mid.",
+      "actual": "The AOV CI includes negative refunds as observations, clamps only revLow to 0, and returns low=0, mid=-1, high>0. The interval violates the low <= mid <= high shape and appends a misleading positive confidence range to a net-loss attribution result.",
+      "fix_sketch": "Before building roasInterval, require deterministicRevenue > 0 and meanAov > 0, or compute a signed interval without clamping revLow to zero and normalize/sort bounds. Mirror the fix in buildAnalysis.",
+      "regression_test_idea": "Add campaign, ad-set, and ad tests where refunds exceed sales and assert roasInterval is null (or, if signed intervals are kept, that low <= mid <= high and the reason copy mentions refunds)."
+    },
+    {
+      "id": "COD-A3-05",
+      "severity": "medium",
+      "file_line": "dashboard-web/src/lib/attributionAnalysis.ts:163",
+      "failing_input": "analyzeAttribution({ platform:'Meta', storeId:'uzoshop', campaignName:'Summer Sale', campaignId:'camp-1', metaClaim:0, spend:100 }, [one matched order totalCad 500], '2026-05-01', '2026-05-15')",
+      "expected": "After Phase 12 removed the display coverage clamp to expose extreme halo/pixel problems, a positive deterministic total with zero Meta claim should surface as undefined/infinite underclaim and should trip the halo warning path (or return unknown with explicit 'Meta claimed zero' copy).",
+      "actual": "computeCoverage falls back to 1.0 when metaClaim === 0 and deterministicRevenue > 0. The result is high trust with coverageExceedsClamp=false, hiding the most extreme possible Meta underclaim from the Phase 12 warning chip.",
+      "fix_sketch": "Change zero-claim positive-deterministic semantics to Infinity or a separate undefined-coverage state, and derive coverageExceedsClamp from deterministicRevenue > 0 && metaClaim <= 0 as well as raw coverage > 2. Update trust/reasons to avoid calling this merely normal halo.",
+      "regression_test_idea": "Add computeCoverage/analyzeAttribution/buildAnalysis tests for metaClaim=0 with positive deterministicRevenue; assert the warning flag fires or an explicit unknown/underclaim state is returned."
+    }
+  ]
+}

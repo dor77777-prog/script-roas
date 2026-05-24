@@ -1,0 +1,58 @@
+{
+  "task_id": "12.G.05",
+  "file": "dashboard-web/src/components/AdSetTable.tsx",
+  "test_path": "NONE — no direct AdSetTable.test.* file exists. Sort logic lives in parent CampaignDrawer.",
+  "verdict": "Borderline component with per-row math (roas, tight-budget detection, deterministic ROAS chip). Sort headers emit onSort events but the actual sort is in the parent — this component only renders rows in the order provided. The 4-level trust ladder (high/medium/unknown/fallback) is BYTE-IDENTICAL with the same ladder in CampaignsTableRow's roasShopify cell (per JSDoc preservation contract). 1 MEDIUM finding: trust chip ladder is duplicated rather than imported from computeTrustTone (which CampaignsTableRow already exports). 1 LOW finding: `canDrillToAds` uses `!!()` boolean coercion correctly but a future change adding Google PMax ad-rows would require parallel edits here AND in CampaignsTableRow. 1 INFO finding: no test pinning the trust tone ladder OR the canDrillToAds boolean coercion contract.",
+  "findings": [
+    {
+      "id": "CMB-12",
+      "severity": "MEDIUM",
+      "file_line": "dashboard-web/src/components/AdSetTable.tsx:211-214",
+      "failing_input": "computeTrustTone refactor in CampaignsTableRow.tsx that changes the 'high'/'medium'/'low' tone mapping",
+      "expected": "Single source of truth for trust-level → tone mapping",
+      "actual": "AdSetTable's 4-level ladder (lines 211-214) is BYTE-IDENTICAL with CampaignsTableRow's ladder for high/medium/low but adds an `unknown` branch (bg-surfaceMuted text-text-secondary). Per JSDoc this is intentional ('preservation contract'). However, computeTrustTone is now exported from CampaignsTableRow and could be reused — only the 'unknown' branch needs local handling.",
+      "fix_sketch": "Import computeTrustTone from @/components/CampaignsTableRow. Inline the 'unknown' branch as a pre-check: `const tone = adsetAttr.trust.level === 'unknown' ? 'bg-surfaceMuted text-text-secondary' : computeTrustTone(adsetAttr.trust.level);`. Removes duplication and the JSDoc preservation contract.",
+      "regression_test_idea": "Already covered by campaignsTableRowTrustLevel.test.ts after refactor (the same computeTrustTone is now used). Add 1 test for the 'unknown' branch in AdSetTable specifically."
+    },
+    {
+      "id": "CMB-13",
+      "severity": "LOW",
+      "file_line": "dashboard-web/src/components/AdSetTable.tsx:136",
+      "failing_input": "Future Google PMax ad-row support",
+      "expected": "Single platform-eligibility check shared with CampaignsTableRow",
+      "actual": "`(a.platform === 'Meta' || a.platform === 'TikTok') && a.id` is repeated in CampaignsTableRow line 311. Adding/removing a platform requires parallel edits.",
+      "fix_sketch": "Export `canDrillToAds(platform, adSetId)` helper from @/lib/platformsByStore.ts or a new @/lib/adDrillEligibility.ts. Defer until 4th platform onboards.",
+      "regression_test_idea": "Single test on the helper covers both call sites."
+    },
+    {
+      "id": "CMB-14",
+      "severity": "INFO",
+      "file_line": "dashboard-web/src/components/AdSetTable.tsx:56-62",
+      "failing_input": "TONE_BG third copy across CampaignsTableRow / CampaignsTable / AdSetTable",
+      "expected": "Shared constant",
+      "actual": "Acknowledged in JSDoc per PATTERNS.md §CampaignsTableRow recommendation (deferred per smaller-diff cost analysis).",
+      "fix_sketch": "Defer per existing architectural decision.",
+      "regression_test_idea": "None"
+    }
+  ],
+  "uncertainty_notes": "Did not load CampaignDrawer.tsx to verify the actual sort implementation lives there + that AdSetTable just renders. Confirmed via JSDoc preservation contract at lines 16-29. The sort headers emit onSort callbacks; parent handles state.",
+  "test_coverage_gaps": [
+    "No test for the trust chip ladder rendering (4 cases: high/medium/unknown/fallback)",
+    "No test for canDrillToAds boolean coercion (CRITICAL preservation contract per JSDoc — UI-SPEC §IN-06 violation would render `disabled='123'` in future code)",
+    "No test for the `tight` budget threshold (spend > budget * 0.95)",
+    "No test for sticky thead behavior",
+    "No test that attributionByAdSet Map lookup uses the right key when adSetId is empty/undefined (falls back to a.name then '(אחר)')",
+    "AdSetSortHeader render + aria-sort attribute coverage missing"
+  ],
+  "channels": {
+    "imports_from": ["lucide-react", "@/lib/utils", "@/lib/analytics", "@/lib/attributionAnalysis"],
+    "exports_to": ["./CampaignDrawer.tsx (AdSetTable + AdSetSortKey/Dir types)"],
+    "events_emitted": ["onSort(key)", "onToggleOptimized(markKey)", "onDrillAds({storeId, campaignId, adSetId, adSetName})"],
+    "events_consumed": ["sortKey/sortDir prop changes (parent state)", "adSets prop changes (parent SWR)"],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

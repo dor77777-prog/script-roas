@@ -1,0 +1,42 @@
+{
+  "task_id": "12.D.1",
+  "file": "dashboard-web/src/inngest/client.ts",
+  "test_path": "(no dedicated test — module is a trivial singleton; consumed by every inngest/functions/__tests__/*.test.ts)",
+  "verdict": "Verified",
+  "findings": [],
+  "uncertainty_notes": "Module is a 21-line Inngest singleton: `new Inngest({ id: 'roas-dashboard' })`. INNGEST_EVENT_KEY is read automatically from process.env by the SDK when not passed explicitly (Vercel Marketplace integration injects it per the inline comment). The id 'roas-dashboard' matches Inngest's lowercase-with-dash convention and is used as the routing key in Inngest Cloud UI. No mutable state, no environment-dependent branching, no externally observable behavior beyond Inngest.send(...) calls in downstream functions. Indirect coverage is comprehensive: every inngest/functions/__tests__/*.test.ts imports a module that imports `inngest` from here. If the singleton were misconfigured (e.g. wrong id, throwing constructor), all of cronDaily/cronLive/cronWhatsapp/events test suites would fail at module import time. No bug found.",
+  "test_coverage_gaps": [
+    {
+      "description": "No explicit test pinning `inngest.id === 'roas-dashboard'`. A typo (e.g. 'road-dashboard') would still let all sibling tests pass because they mock the SDK or call inner handlers directly; only the production webhook route at /api/inngest would silently route to the wrong Inngest Cloud app.",
+      "why_it_matters": "Inngest's serve() endpoint uses the client's id as the routing key. A drift between this id and what's configured in the Inngest Cloud dashboard would cause production cron triggers to silently route nowhere — operator would see green Inngest dev console but zero firings.",
+      "suggested_fixture": "Add tiny test: `import { inngest } from '@/inngest/client'; expect(inngest.id).toBe('roas-dashboard');` — single assertion guards against typo refactors."
+    },
+    {
+      "description": "No test for the absence/presence of eventKey wiring. If a future refactor passes `eventKey: undefined` explicitly (rather than omitting), the SDK behavior changes (Inngest treats explicit undefined as 'no key', not 'read from env').",
+      "why_it_matters": "Subtle — but inngest.send() in production would fail authentication silently if eventKey wiring regressed.",
+      "suggested_fixture": "Snapshot test on `(inngest as any).options` shape, or assert that no `eventKey` key appears in the constructor args literal (AST-style)."
+    }
+  ],
+  "channels": {
+    "imports_from": [
+      "inngest (npm package)"
+    ],
+    "exports_to": [
+      "dashboard-web/src/inngest/functions/cronDaily.ts",
+      "dashboard-web/src/inngest/functions/cronLive.ts",
+      "dashboard-web/src/inngest/functions/cronWhatsapp.ts",
+      "dashboard-web/src/inngest/functions/eventBackfill.ts",
+      "dashboard-web/src/inngest/functions/eventSyncNow.ts",
+      "dashboard-web/src/app/api/inngest/route.ts (per file comment)",
+      "dashboard-web/src/app/api/operator/sync-now/route.ts (per file comment)",
+      "dashboard-web/src/app/api/operator/backfill/route.ts (per file comment)"
+    ],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

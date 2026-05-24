@@ -1,0 +1,45 @@
+{
+  "task_id": "12.E.04",
+  "file": "dashboard-web/src/app/api/data/route.ts",
+  "test_path": "(no dedicated unit test) — covered indirectly via Dashboard.tsx integration + dailySeriesRangeFill.test.ts. fetchTodayFx is local-only with no test.",
+  "verdict": "Verified correct",
+  "findings": [
+    {
+      "id": "API-08",
+      "severity": "Minor",
+      "file_line": "dashboard-web/src/app/api/data/route.ts:19-30",
+      "failing_input": "Frankfurter API returns 200 with malformed JSON or a 5xx with a JSON body lacking `rates.CAD`.",
+      "expected": "Distinguishable failure mode — log at console.warn at least so ops can spot persistent FX outages.",
+      "actual": "Silent swallow (catch returns null with no log). On Frankfurter outage, fxIlsToCad permanently null and dashboard shows no CAD column conversion until next deploy. Same family as cron-live silent-swallow finding (HIGH-NEW-4 from Phase 10) — this catch site has no rethrow/log/store. Matches SPEC §Requirement 5 try/catch sweep.",
+      "fix_sketch": "Add console.warn('/api/data fetchTodayFx failed:', err) to the catch branch. Optionally bump to tokenFailures.upsert with provider='fx'.",
+      "regression_test_idea": "Mock fetch to throw; assert console.warn called and fxIlsToCad === null."
+    },
+    {
+      "id": "API-09",
+      "severity": "Cosmetic",
+      "file_line": "dashboard-web/src/app/api/data/route.ts:17",
+      "failing_input": "Same cache-literal drift as API-01.",
+      "expected": "Regression test.",
+      "actual": "Not pinned.",
+      "fix_sketch": "Cross-reference API-01.",
+      "regression_test_idea": "Cross-reference API-01."
+    }
+  ],
+  "uncertainty_notes": "Route is well-structured. The silent FX swallow is the only real issue — moderate operational risk because the cron-live silent-swallow pattern is on the SPEC §Requirement 5 sweep list. WR-02 / WR-06 / IN-06 cache+error patterns correctly applied.",
+  "test_coverage_gaps": [
+    "fetchTodayFx has zero test coverage (Frankfurter outage, malformed JSON, missing CAD key paths).",
+    "No test that the stores array is correctly derived + deduplicated from row.storeName.",
+    "No assertion that the degraded 200 response has Cache-Control: no-store (already implemented but not pinned)."
+  ],
+  "channels": {
+    "imports_from": ["@/lib/postgresReaders (fetchDailyDataFromPostgres, fetchDataDailyLastWriteAt)", "@/lib/types (DashboardData)", "@/lib/cacheConfig (cacheControl)", "@/lib/apiErrors (userFacingError)", "@/lib/dateRange (parseRangeParams)"],
+    "exports_to": ["DashboardData → Dashboard.tsx, KpiCards, GoalTracker, ForecastMonthEnd, MonthlyTables"],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": ["/api/data?from=YYYY-MM-DD&to=YYYY-MM-DD"],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": ["data_daily"],
+    "api_calls": ["GET https://api.frankfurter.dev/v1/latest?base=ILS&symbols=CAD (with next.revalidate=3600)"]
+  }
+}

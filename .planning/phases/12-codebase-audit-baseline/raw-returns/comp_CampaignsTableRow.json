@@ -1,0 +1,55 @@
+{
+  "task_id": "12.G.01",
+  "file": "dashboard-web/src/components/CampaignsTableRow.tsx",
+  "test_path": "dashboard-web/src/lib/__tests__/campaignsTableRowOffChip.test.ts + campaignsTableRowTrustLevel.test.ts",
+  "verdict": "Borderline component with significant inline business logic. OPERATOR-1 TikTok off-chip fix (TIKTOK_OFF_STATUSES / TIKTOK_ACTIVE_ENOUGH sets, isCampaignOff with platform-aware classification + date-heuristic fallback) is correctly implemented and pinned by exhaustive tests (all 10 TikTok statuses + Meta/Google variants). WR-02 trustLevel narrowing + computeTrustTone helper are exported and tested. Inline derivation in render (roas/ctr/cpc/cpm/cpa/info, mappedCampaignKeys check, isCurrentlyOff) is mostly pure formula. 1 LOW finding (variable shadow on `info` inside roasShopify cell — block-scoped so safe but confusing). 1 LOW finding (TONE_BG duplicated across 3 files per JSDoc — accepted target-soft-cap tradeoff, flagged as accepted-debt). No new HIGH/CRIT issues beyond the already-fixed audit items.",
+  "findings": [
+    {
+      "id": "CMB-01",
+      "severity": "LOW",
+      "file_line": "dashboard-web/src/components/CampaignsTableRow.tsx:285,499",
+      "failing_input": "Reader scanning the roasShopify cell IIFE",
+      "expected": "Outer `info` (line 285, roasLabel result) and inner `info` (line 499, trueRevenueByKey.get result) should have distinct names to avoid lexical shadowing",
+      "actual": "Both use `info`; the inner is block-scoped to the IIFE so behavior is correct, but a future maintainer adding code that needs the outer roasLabel info inside that cell would silently get the wrong object",
+      "fix_sketch": "Rename inner to `trueInfo` (matches the type TrueRevenueInfo) at line 499. Type-only change, no behavior diff.",
+      "regression_test_idea": "Not test-worthy — pure readability; lint rule `no-shadow` would catch this class of issue."
+    },
+    {
+      "id": "CMB-02",
+      "severity": "INFO",
+      "file_line": "dashboard-web/src/components/CampaignsTableRow.tsx:46-56",
+      "failing_input": "Three byte-identical copies of TONE_BG across CampaignsTableRow / CampaignsTable / AdSetTable",
+      "expected": "Single shared constant in @/lib/format or @/lib/roasColors",
+      "actual": "Duplication is acknowledged in the JSDoc per D-04 target-soft cap. Maintenance burden: any new tone bucket requires 3 simultaneous edits",
+      "fix_sketch": "Defer per existing architectural decision; promote when a 4th consumer appears or when tone palette changes",
+      "regression_test_idea": "None — accepted debt"
+    },
+    {
+      "id": "CMB-03",
+      "severity": "INFO",
+      "file_line": "dashboard-web/src/components/CampaignsTableRow.tsx:605-607",
+      "failing_input": "`void trustLabel; void trustLevel; void confTone;` block",
+      "expected": "Compute on demand or remove if unused",
+      "actual": "Three local variables are computed but only the trust chip's variables are now unused per JSDoc note (chip retired 2026-05-22). Code declares + voids them to preserve narrowing semantics for the tooltip text. Working but increases cognitive load.",
+      "fix_sketch": "Inline the narrowing into the tooltip's `useAttr` branch directly; remove the standalone variables and the `void` statements.",
+      "regression_test_idea": "TypeScript type-check passes after refactor (no `unused-locals` warning); existing trustLevel tests still pass."
+    }
+  ],
+  "uncertainty_notes": "Did not exhaustively trace every JSX cell tooltip string for Hebrew-string correctness; spot-checked 4 tooltips (off-chip, unmapped chip, ROAS Shopify tooltip, shopifyOrdersTotal). The render is large (~580 lines of JSX) but logic is mostly threaded from props.",
+  "test_coverage_gaps": [
+    "No test exercises `formatLastActiveDate` (line 252) — trivial slice but uncovered",
+    "No render-level integration test verifies columnOrder threading (parent test ensures order matches thead order is implicit — could regress silently if a future column id is missing from metricCells map and silently drops)",
+    "shopifyOrdersTotal cell (line 772-790) has no test for `info.productTotals.orders <= 0` vs > 0 visibility path"
+  ],
+  "channels": {
+    "imports_from": ["react", "lucide-react", "@/lib/utils", "@/lib/campaignProductMap", "@/lib/campaignsLinks", "@/lib/analytics", "@/lib/campaignsAggregator", "@/lib/hooks/useCampaignTrueRevenue", "@/lib/attributionAnalysis", "@/lib/campaignHealthScore", "./HealthScoreBadge"],
+    "exports_to": ["./CampaignsTable.tsx (CampaignsTableRow, isCampaignOff)", "lib/__tests__/campaignsTableRowOffChip.test.ts (isCampaignOff, isCampaignCurrentlyOff, OFF_RECENCY_DAYS)", "lib/__tests__/campaignsTableRowTrustLevel.test.ts (computeTrustTone, CampaignsTableRowTrustLevel)"],
+    "events_emitted": ["onClick→onDrillCampaign or onDrillAd (parent handler)", "onClick→onToggleOptimized"],
+    "events_consumed": ["render-time prop changes (a, health, mappedCampaignKeys, columnOrder, optimized, today)"],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": ["External anchor href=buildAdsManagerLink result opens Meta/Google/TikTok Ads Manager UI in new tab"]
+  }
+}

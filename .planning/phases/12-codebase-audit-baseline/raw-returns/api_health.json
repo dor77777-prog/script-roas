@@ -1,0 +1,43 @@
+{
+  "task_id": "12.E.06",
+  "file": "dashboard-web/src/app/api/health/route.ts",
+  "test_path": "dashboard-web/src/lib/__tests__/healthRouteRevalidateSync.test.ts (literal-vs-config sync only).",
+  "verdict": "Verified correct",
+  "findings": [
+    {
+      "id": "API-14",
+      "severity": "Minor",
+      "file_line": "dashboard-web/src/app/api/health/route.ts:42-47",
+      "failing_input": "Supabase responds with a partial degradation (e.g. rate-limit 429 with body but no `error` field).",
+      "expected": "pingSupabase distinguishes auth/quota failures from 'down' (the SyncIndicator amber UI is per-condition).",
+      "actual": "Any non-null `error.message` collapses to status='down'. Operator console can't tell 'service-role key revoked' from 'connection timeout'. Sanitized userFacingError() then further collapses these. For HEALTH endpoint specifically, more granularity is useful since SyncIndicator's whole purpose is operator triage.",
+      "fix_sketch": "Add a coarse classifier: if /quota|429|rate/i.test(error.message) → status='quota'; else 'down'. Extend HealthStatus type.",
+      "regression_test_idea": "Mock supabase select() to return { error: { message: 'rate limit exceeded' } }; assert status==='quota'."
+    },
+    {
+      "id": "API-15",
+      "severity": "Cosmetic",
+      "file_line": "dashboard-web/src/app/api/health/route.ts:68-72",
+      "failing_input": "Health response shape.",
+      "expected": "The Phase 05.7 'sheets always ok' field is documented for backward-compat. A v2 deprecation timeline would be useful.",
+      "actual": "Field stays in the response indefinitely. Future readers may think Sheets is actually still pinged.",
+      "fix_sketch": "Comment is already clear. Optionally schedule deprecation via a follow-up Phase 12.x backlog item.",
+      "regression_test_idea": "N/A (cosmetic)."
+    }
+  ],
+  "uncertainty_notes": "Route is the most-tested API route in scope (literal-vs-config sync test). The Sheets backward-compat field is explicitly justified in the file-level comment. status=200 always is the documented soft-fail convention.",
+  "test_coverage_gaps": [
+    "No test of the actual GET handler — only the revalidate literal sync. Add tests for: (a) success path returns sheets='ok'+supabase='ok', (b) Supabase ping throws → supabase='down'+errors.supabase set, (c) Cache-Control header set."
+  ],
+  "channels": {
+    "imports_from": ["@/lib/supabase (getSupabase)", "@/lib/cacheConfig (cacheControl)", "@/lib/apiErrors (userFacingError)"],
+    "exports_to": ["HealthResponse → SyncIndicator.tsx (SWR polled every 30s)", "revalidate constant → healthRouteRevalidateSync.test.ts"],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": ["/api/health"],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": ["stores via .select('id', { count: 'exact', head: true })"],
+    "api_calls": []
+  }
+}

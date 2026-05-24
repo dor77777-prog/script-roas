@@ -1,0 +1,55 @@
+{
+  "task_id": "12.G.03",
+  "file": "dashboard-web/src/components/RoasChart.tsx",
+  "test_path": "dashboard-web/src/lib/__tests__/dailySeriesRangeFill.test.ts",
+  "verdict": "Display component with very little inline derivation. CRIT-3 + HIGH-8 null-gap fix verified — `connectNulls={false}` on every Line (line 168), and dailySeries upstream now correctly emits null for missing per-store cells (verified by 30-day-outage regression test that asserts chart-data round-trip preserves null). Color palette has fallback to 5 hues by index. 1 MEDIUM finding: cross-year DD/MM collisions in dateLabel (line 52) — when range spans Jan 2026 → Jan 2027, two `15/01` labels would collide on the categorical X-axis. 1 LOW finding: tooltip uses `entry.color` but Line's `stroke` may differ if Recharts injects a default — currently safe but brittle if Recharts version changes default-color semantics.",
+  "findings": [
+    {
+      "id": "CMB-07",
+      "severity": "MEDIUM",
+      "file_line": "dashboard-web/src/components/RoasChart.tsx:50-54",
+      "failing_input": "Range spanning a year boundary (e.g., 2025-12-15 → 2026-01-15)",
+      "expected": "Each calendar day produces a unique X-axis category",
+      "actual": "`dateLabel = formatDate(d.date).slice(0, 5)` → 'DD/MM' format. When the range spans Dec→Jan, two `15/01` labels (one from 2025, one from 2026) would render under the same category. Recharts uses categorical X-axis with `dataKey='dateLabel'` — duplicate keys would overwrite or render visually overlapped points. Practical impact today: range presets are 7/14/30/90 days (per CONTEXT) so collision only occurs at >365 day ranges — unlikely but not gated.",
+      "fix_sketch": "Either (a) change dateLabel to 'DD/MM/YY' for ranges >180 days, (b) use the full ISO date as the dataKey and only the formatted label as a tickFormatter, or (c) document the 365-day cap in the dailySeries contract.",
+      "regression_test_idea": "Test: dailySeries with range from 2025-12-30 to 2026-01-02 → chartData has 4 entries with distinct dateLabels (after fix) OR document the cap and add `expect(Math.abs(daysBetween(from, to))).toBeLessThan(365)` guard."
+    },
+    {
+      "id": "CMB-08",
+      "severity": "LOW",
+      "file_line": "dashboard-web/src/components/RoasChart.tsx:110-148",
+      "failing_input": "Tooltip render path",
+      "expected": "`entry.color` reliably matches Line.stroke",
+      "actual": "Recharts populates entry.color from Line stroke by default, but if a future Recharts API change inverts that or adds prop precedence, the legend swatch could desync from the tooltip swatch. Currently safe.",
+      "fix_sketch": "Defensive: pass `stroke={color}` AND explicitly compute color via the same colorFor() helper inside the tooltip render rather than relying on `entry.color`.",
+      "regression_test_idea": "Visual regression test (out of scope for unit tests); add a comment noting the Recharts version dependency."
+    },
+    {
+      "id": "CMB-09",
+      "severity": "INFO",
+      "file_line": "dashboard-web/src/components/RoasChart.tsx:30-34",
+      "failing_input": "STORE_COLORS hardcoded for 3 store names",
+      "expected": "Future-proof for new store onboarding",
+      "actual": "Adding a 4th store requires hand-editing this file. Operator already controls store names via Apps Script config — UI shouldn't need a code change to render a new store with a sensible color.",
+      "fix_sketch": "Centralize STORE_COLORS into @/lib/storeColors.ts shared with PerStoreCards.tsx (which has a parallel hardcoded map). Defer until 4th store actually onboards.",
+      "regression_test_idea": "None — accepted-debt single-operator project."
+    }
+  ],
+  "uncertainty_notes": "Did not validate the YAxis `tickFormatter` against fractional ROAS edge cases (e.g., 0.5x — renders as '0.5', which is correct). The chart heights (h-64 sm:h-80) and ResponsiveContainer behavior were not stress-tested at extreme container widths.",
+  "test_coverage_gaps": [
+    "No test for the chart-shaped `chartData` transformation at line 50-54 (the `dailySeriesRangeFill` test exercises this via a parallel reshape, not the production binding)",
+    "No test for the legend `isPrimary` styling (font-semibold vs text-secondary based on color === navy)",
+    "No test for tooltip rendering when payload has a non-finite value (currently filtered via `Number.isFinite(v)` check at line 123, but no regression test pins this)"
+  ],
+  "channels": {
+    "imports_from": ["recharts", "lucide-react", "@/lib/analytics", "@/lib/utils"],
+    "exports_to": ["./Dashboard.tsx (RoasChart)"],
+    "events_emitted": [],
+    "events_consumed": ["data prop changes (Dashboard SWR)"],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

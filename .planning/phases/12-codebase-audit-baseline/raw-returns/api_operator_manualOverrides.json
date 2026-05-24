@@ -1,0 +1,66 @@
+{
+  "task_id": "12.E.11",
+  "file": "dashboard-web/src/app/api/operator/manual-overrides/route.ts",
+  "test_path": "dashboard-web/src/lib/__tests__/operatorRoutesDateValidation.test.ts (covers isDate UTC round-trip for both backfill + manual-overrides shared validator).",
+  "verdict": "Has bug",
+  "findings": [
+    {
+      "id": "API-26",
+      "severity": "Major",
+      "file_line": "dashboard-web/src/app/api/operator/manual-overrides/route.ts:84-85",
+      "failing_input": "POST { date: '2026-05-22', store_id: 'uzoshop', platform: 'meta', spend: 'NaN', currency: 'ILS' }.",
+      "expected": "400 'spend must be numeric'.",
+      "actual": "parseFloat('NaN') → NaN; Number.isFinite(NaN) → false → returns 400 correctly. BUT parseFloat('1.5xyz') → 1.5 (silently truncates); Number.isFinite(1.5) → true → INSERTS spend=1.5 with garbage suffix discarded. Operator may submit '1500NIS' as a typo, server inserts 1500 with no warning. Same family as Codex-NEW-5 (silent normalization).",
+      "fix_sketch": "Replace `parseFloat(String(b.spend))` with `typeof b.spend === 'number' ? b.spend : (typeof b.spend === 'string' && /^-?\\d+(\\.\\d+)?$/.test(b.spend.trim()) ? Number(b.spend) : NaN)`. Reject anything that doesn't match the strict numeric regex.",
+      "regression_test_idea": "POST with spend='1500NIS'; expect 400. POST with spend=1500 (number); expect 201. POST with spend='1500'; expect 201."
+    },
+    {
+      "id": "API-27",
+      "severity": "Minor",
+      "file_line": "dashboard-web/src/app/api/operator/manual-overrides/route.ts:177",
+      "failing_input": "PATCH with body.id === Number.MAX_SAFE_INTEGER + 1 (Float64-precision boundary).",
+      "expected": "400 'id required' (treating values beyond safe-int as invalid).",
+      "actual": "Number.isFinite(9007199254740993) → true; PATCH proceeds with .eq('id', 9007199254740993). Postgres BIGINT accepts but row likely doesn't exist; returns empty array → 200 with row: null (no-op). Edge case but inconsistent with the strict validation elsewhere.",
+      "fix_sketch": "Use Number.isSafeInteger(body.id) instead of Number.isFinite(body.id).",
+      "regression_test_idea": "PATCH with id=Number.MAX_SAFE_INTEGER+1; expect 400."
+    },
+    {
+      "id": "API-28",
+      "severity": "Minor",
+      "file_line": "dashboard-web/src/app/api/operator/manual-overrides/route.ts:218-219",
+      "failing_input": "PATCH with body { id: 5, notes: undefined } (caller explicitly sets notes to undefined to clear it).",
+      "expected": "Either: error 'use null to clear notes' OR set notes to null.",
+      "actual": "rest.notes === undefined branch is skipped; patch object has NO notes key; Object.keys(patch).length === 0 → returns 400 'no fields to update'. Caller may be confused: 'I PATCHed notes!' Workaround is to send notes: null explicitly, but the error message doesn't guide the operator.",
+      "fix_sketch": "Either expand the error message to clarify 'use null to clear notes' OR distinguish undefined (omit) vs null (clear) in the PATCH semantics docs. Cosmetic-leaning.",
+      "regression_test_idea": "PATCH with body { id: 5, notes: undefined }; expect 400 with message mentioning 'null'."
+    },
+    {
+      "id": "API-29",
+      "severity": "Cosmetic",
+      "file_line": "dashboard-web/src/app/api/operator/manual-overrides/route.ts:251-281",
+      "failing_input": "Standard DELETE.",
+      "expected": "Returns count of deleted rows for operator confirmation.",
+      "actual": "Returns {ok: true} only. Operator can't see whether the DELETE actually affected a row (e.g., wrong id silently no-ops).",
+      "fix_sketch": "Use `{ count: 'exact' }` like operator/reset/route.ts:131 and return { ok: true, deletedCount: count }.",
+      "regression_test_idea": "DELETE with id=999999 (nonexistent); expect 200 { ok: true, deletedCount: 0 }."
+    }
+  ],
+  "uncertainty_notes": "HIGH-14 + Codex-NEW-5 isDate UTC round-trip fix is pinned by tests. Platform/currency normalization documented + sound. service_role usage correctly server-only-isolated. The spend parsing issue (API-26) is the audit blocker.",
+  "test_coverage_gaps": [
+    "Date validation: covered.",
+    "Spend validation: NOT covered (recommend ≥3 cases: number, numeric string, garbage suffix).",
+    "Upsert semantics: NOT covered (same triple twice should update, not insert duplicate).",
+    "PATCH partial update: NOT covered (only id+spend should not blank other fields)."
+  ],
+  "channels": {
+    "imports_from": ["@/lib/supabaseAdmin (getSupabaseAdmin)", "@/lib/apiErrors (userFacingError)", "@/lib/dateValidation (isDate)"],
+    "exports_to": ["GET/POST/PATCH/DELETE → consumed by ManualOverridesCrud.tsx"],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": ["/api/operator/manual-overrides"],
+    "inngest_triggers": [],
+    "supabase_writes": ["manual_overrides via upsert/update/delete (service_role)"],
+    "supabase_reads": ["manual_overrides via select"],
+    "api_calls": []
+  }
+}

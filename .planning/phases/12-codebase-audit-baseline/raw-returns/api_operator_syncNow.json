@@ -1,0 +1,43 @@
+{
+  "task_id": "12.E.14",
+  "file": "dashboard-web/src/app/api/operator/sync-now/route.ts",
+  "test_path": "(no dedicated unit test). Consumer: components/operator/SyncNowButtons.tsx.",
+  "verdict": "Verified correct",
+  "findings": [
+    {
+      "id": "API-35",
+      "severity": "Minor",
+      "file_line": "dashboard-web/src/app/api/operator/sync-now/route.ts:63",
+      "failing_input": "POST with malformed JSON body.",
+      "expected": "400 'invalid JSON body'.",
+      "actual": "req.json() throws → catch returns 500 'הטעינה נכשלה: שגיאה לא צפויה.' Same as API-21 (backfill). Inconsistent with operator/notifications/send which uses `.catch(() => ({}))`.",
+      "fix_sketch": "Wrap req.json() in `.catch(() => null)` and return 400 if null.",
+      "regression_test_idea": "POST with body 'not-json'; expect 400."
+    },
+    {
+      "id": "API-36",
+      "severity": "Cosmetic",
+      "file_line": "dashboard-web/src/app/api/operator/sync-now/route.ts:71-76",
+      "failing_input": "POST { scope: 'store', storeId: 'uzoshop' } (lowercase).",
+      "expected": "202 accepted.",
+      "actual": "VALID_STORES is a Set<string> built from ['uzoshop','zolplus','usmile360']. body.storeId === 'UZOSHOP' (uppercase) → not in set → 400. Per operator constraint (storeIds always lowercase canonical), this is correct. NOT a bug.",
+      "fix_sketch": "N/A.",
+      "regression_test_idea": "N/A."
+    }
+  ],
+  "uncertainty_notes": "scope validation is rigorous (allowlist + structural check). The 202 async pattern matches operator/backfill + operator/notifications/send for symmetry.",
+  "test_coverage_gaps": [
+    "Zero coverage. Recommend: (a) scope='all' fires 3 events, (b) scope='store' with valid storeId fires 1 event, (c) scope='store' with invalid storeId returns 400, (d) malformed JSON returns 500 (current — should be 400 per API-35)."
+  ],
+  "channels": {
+    "imports_from": ["@/inngest/client (inngest)", "@/lib/apiErrors (userFacingError)"],
+    "exports_to": ["POST → consumed by SyncNowButtons.tsx"],
+    "events_emitted": ["event/sync-now × 1-3 (via inngest.send)"],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": ["event/sync-now → eventSyncNow function"],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

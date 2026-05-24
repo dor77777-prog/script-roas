@@ -1,0 +1,162 @@
+{
+  "task_id": "12.B.15",
+  "file": "dashboard-web/src/lib/notifications/tokenFailures.ts",
+  "test_path": "dashboard-web/src/lib/notifications/__tests__/tokenFailures.test.ts",
+  "verdict": "✅ Verified",
+  "findings": [
+    {
+      "id": "SVC-01",
+      "severity": "MAJOR",
+      "file_line": "tokenFailures.ts:288-290 (d/CR-09 throttle clock bump)",
+      "failing_input": "WhatsApp send throws (template not approved 132001).",
+      "expected": "last_alert_sent_at advances on ATTEMPT, not just on success — prevents tight retry loop.",
+      "actual": "Correct: `if (shouldAlert) payload.last_alert_sent_at = ...;` — gated on shouldAlert (i.e., 'we tried'), not on result.alerted. Test 'bumps last_alert_sent_at when the WhatsApp send throws' pins this.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Already covered."
+    },
+    {
+      "id": "SVC-02",
+      "severity": "MAJOR",
+      "file_line": "tokenFailures.ts:85 (ALERT_PHONE constant)",
+      "failing_input": "Alert goes to +972524809540.",
+      "expected": "Operator constraint: WhatsApp alerts ONLY to +972524809540.",
+      "actual": "Correct — hardcoded. Matches the documented project constraint.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test asserts sendMock.mock.calls[0][0].toNumber === '+972524809540'."
+    },
+    {
+      "id": "SVC-03",
+      "severity": "MAJOR",
+      "file_line": "tokenFailures.ts:117-123 (sanitizeForWhatsApp)",
+      "failing_input": "errorMsg with newlines: 'Error\\n400\\nBad token\\n'.",
+      "expected": "Single-line output with no 5+ spaces, truncated to 500.",
+      "actual": "Correct: replace [\\r\\n\\t]+ with space, then collapse 5+ spaces, trim, slice(0,500).",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test sanitizeForWhatsApp('a\\nb\\n\\nc')='a b c'."
+    },
+    {
+      "id": "SVC-04",
+      "severity": "MAJOR",
+      "file_line": "tokenFailures.ts:127-140 (formatTimestamp)",
+      "failing_input": "Test in Asia/Jerusalem TZ.",
+      "expected": "DD/MM HH:MM format.",
+      "actual": "Correct via Intl.DateTimeFormat with timeZone='Asia/Jerusalem'.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test with mocked Date — assert format."
+    },
+    {
+      "id": "SVC-05",
+      "severity": "MAJOR",
+      "file_line": "tokenFailures.ts:101-114 (admin client soft-fail)",
+      "failing_input": "SUPABASE_URL missing.",
+      "expected": "console.warn, return null — caller's result stays {alerted:false, throttled:false, dbWritten:false}.",
+      "actual": "Correct soft-fail.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test with no env vars → assert returns default result, no throw."
+    },
+    {
+      "id": "SVC-06",
+      "severity": "MAJOR",
+      "file_line": "tokenFailures.ts:199 (throttle decision)",
+      "failing_input": "lastAlertMs=0 (no previous alert). shouldAlert = !0 || now-0 >= 6h = true.",
+      "expected": "First-ever alert sends immediately.",
+      "actual": "Correct.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test fresh row (no last_alert_sent_at) → shouldAlert=true."
+    },
+    {
+      "id": "SVC-07",
+      "severity": "MAJOR",
+      "file_line": "tokenFailures.ts:194-200 (throttle ALERT_THROTTLE_MS)",
+      "failing_input": "lastAlertMs = 5 hours ago. now - lastAlertMs < 6h → shouldAlert=false (throttled).",
+      "expected": "Throttled.",
+      "actual": "Correct.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test 5h-old alert → throttled=true; 7h-old → throttled=false."
+    },
+    {
+      "id": "SVC-08",
+      "severity": "MAJOR",
+      "file_line": "tokenFailures.ts:262-274 (upsert payload)",
+      "failing_input": "First-time failure (no existing row). payload.first_seen_at populated. seen_count=1. alerts_sent_count = 0 + (alerted ? 1 : 0).",
+      "expected": "Correct increments.",
+      "actual": "Correct.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Already covered by test 'still bumps... on successful send'."
+    },
+    {
+      "id": "SVC-09",
+      "severity": "MAJOR",
+      "file_line": "tokenFailures.ts:317-333 (resolveTokenFailure)",
+      "failing_input": "Operator clicks 'Resolved' button.",
+      "expected": "resolved_at populated, last_alert_sent_at reset to null (so next failure alerts immediately).",
+      "actual": "Correct.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test resolveTokenFailure call shape (assert update payload includes resolved_at and last_alert_sent_at=null)."
+    },
+    {
+      "id": "SVC-10",
+      "severity": "MAJOR",
+      "file_line": "tokenFailures.ts:209-232 (WhatsApp template construction)",
+      "failing_input": "Template body has 4 placeholders {{1}}..{{4}}; code sends 4-element templateParams.",
+      "expected": "Match Meta's approved template (token_failure_alert, en, 4 placeholders).",
+      "actual": "Correct shape. Template approval is pending per docstring; the soft-fail allows the DB row to still be written.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Already covered."
+    },
+    {
+      "id": "SVC-11",
+      "severity": "MAJOR",
+      "file_line": "tokenFailures.ts:154-310 (notifyTokenFailure never throws)",
+      "failing_input": "All internal operations wrapped in try/catch; sb returns null → return early.",
+      "expected": "Soft-fail contract: never throws.",
+      "actual": "Correct.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test all error paths (sb null, select threw, upsert threw, send threw) — assert no throw."
+    }
+  ],
+  "uncertainty_notes": "File is 333 LOC. Test file is 112 LOC with 2 tests covering the d/CR-09 throttle clock bump and successful-send path. Several invariants (resolve, throttle window, ALERT_PHONE constant) are uncovered but the load-bearing behavior is pinned. Verdict ✅. The hardcoded ALERT_PHONE '+972524809540' matches operator constraint.",
+  "test_coverage_gaps": [
+    {
+      "description": "No test asserts ALERT_PHONE is '+972524809540'",
+      "why_it_matters": "Operator-critical constant; could regress in refactor.",
+      "suggested_fixture": "Trigger notifyTokenFailure; assert sendMock.mock.calls[0][0].toNumber === '+972524809540'."
+    },
+    {
+      "description": "No test for throttle window (5h-old vs 7h-old)",
+      "why_it_matters": "6h throttle is the load-bearing rate limit; regression could cause alert flood.",
+      "suggested_fixture": "Mock existing row with last_alert_sent_at=5h ago; assert throttled=true. Then 7h ago; assert throttled=false."
+    },
+    {
+      "description": "No test for resolveTokenFailure",
+      "why_it_matters": "Operator workflow depends on this; regression could prevent re-alerting after resolve.",
+      "suggested_fixture": "Mock update; call resolveTokenFailure; assert update payload has resolved_at + last_alert_sent_at=null."
+    },
+    {
+      "description": "No test for sanitizeForWhatsApp edge cases (\\n, \\t, 5+ spaces, 500-char truncation)",
+      "why_it_matters": "Meta 132018 rejects entire send on these; sanitization is the only protection.",
+      "suggested_fixture": "Test sanitize('a\\n\\nb')='a b'; sanitize('a     b')='a b'; sanitize('x'.repeat(600)).length=500."
+    },
+    {
+      "description": "No test for soft-fail on missing env vars",
+      "why_it_matters": "Notifier MUST NEVER throw; missing env vars are the most likely real-world failure.",
+      "suggested_fixture": "Unset SUPABASE_URL; call notifyTokenFailure; assert no throw, result={alerted:false,throttled:false,dbWritten:false}."
+    },
+    {
+      "description": "No test for throttled path (shouldAlert=false)",
+      "why_it_matters": "When throttled, no send AND no last_alert_sent_at bump (existing one retained); regression could leak alerts.",
+      "suggested_fixture": "Mock existing row with last_alert_sent_at=1h ago; assert sendMock NOT called; assert payload.last_alert_sent_at NOT in payload (so old value retained)."
+    }
+  ],
+  "channels": {
+    "imports_from": ["@supabase/supabase-js", "lib/notifications/whatsapp.ts (sendWhatsAppTemplate)"],
+    "exports_to": ["lib/fetchers/* (catch-block callers — pending Phase 06 wiring per project note)", "components/OperatorTokenFailures.tsx (likely consumer for resolveTokenFailure)"],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": ["token_failures (upsert + update on resolve)"],
+    "supabase_reads": ["token_failures (select for throttle decision)"],
+    "api_calls": ["POST WhatsApp template (via sendWhatsAppTemplate)"]
+  }
+}

@@ -1,0 +1,92 @@
+{
+  "task_id": "12.B.6",
+  "file": "dashboard-web/src/lib/fetchers/shopifyAuth.ts",
+  "test_path": "dashboard-web/src/lib/fetchers/__tests__/shopifyAuth.test.ts",
+  "verdict": "✅ Verified",
+  "findings": [
+    {
+      "id": "SVC-01",
+      "severity": "MINOR",
+      "file_line": "shopifyAuth.ts:88-92 (error message body excerpt)",
+      "failing_input": "OAuth response body contains a long error payload (>400 chars). Code truncates to body.slice(0, 400).",
+      "expected": "Truncated body in error message.",
+      "actual": "Correct truncation. However, if the body contains the actual client_secret echoed back by Shopify (defensive against bug in Shopify), this would leak. Shopify does NOT echo client_secret in OAuth responses, so this is safe.",
+      "fix_sketch": "Defensive: strip any 'client_secret=' substrings from errBody before logging.",
+      "regression_test_idea": "Test that error message does not contain the client_secret value (currently uncovered)."
+    },
+    {
+      "id": "SVC-02",
+      "severity": "MAJOR",
+      "file_line": "shopifyAuth.ts:104-108 (cache entry creation)",
+      "failing_input": "Concurrent invocations of getShopifyAccessToken for the same storeId when the cache is cold. Both await the same OAuth POST; both succeed and write the cache. Race condition: 2 OAuth calls happen instead of 1.",
+      "expected": "Only one OAuth call should be in-flight per storeId at a time (singleflight pattern).",
+      "actual": "No mutex / in-flight promise. Two concurrent callers will both hit the OAuth endpoint. Cost: one extra OAuth call (~300ms each). Shopify likely tolerates duplicates. Not a correctness bug, but wasteful.",
+      "fix_sketch": "Add an in-flight promise map: `const inFlight = new Map<string, Promise<string>>(); ... if (inFlight.has(storeId)) return inFlight.get(storeId); const p = doFetch(); inFlight.set(storeId, p); try { return await p; } finally { inFlight.delete(storeId); }`",
+      "regression_test_idea": "Concurrent Promise.all of 5 getShopifyAccessToken calls — assert fetch was called only once."
+    },
+    {
+      "id": "SVC-03",
+      "severity": "MAJOR",
+      "file_line": "shopifyAuth.ts:55-58 (60-second refresh window)",
+      "failing_input": "Token issued with expires_in=86399 (24h). At second 86340 (60s before expiry), code re-exchanges. Inside a long-running cron call that started at second 86341 and reads the token mid-execution — refresh happens.",
+      "expected": "60s margin prevents expired-token 401s during in-flight calls.",
+      "actual": "Correct. Test 5 covers the cache hit path but not the expiry path explicitly.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test that mocking Date.now to expiresAt - 30000 (within margin) causes a re-fetch."
+    },
+    {
+      "id": "SVC-04",
+      "severity": "MAJOR",
+      "file_line": "shopifyAuth.ts:99-103 (response validation)",
+      "failing_input": "Shopify returns 200 with `{ access_token: 'foo' }` but no `expires_in` field.",
+      "expected": "Throws clear error with response shape.",
+      "actual": "Correct: `if (!data.access_token || !data.expires_in)` throws. However, `expires_in: 0` would also trigger this (falsy). For Shopify's 24h tokens, this is never 0 in practice, but the check is overly strict.",
+      "fix_sketch": "Change to `if (!data.access_token || typeof data.expires_in !== 'number')`.",
+      "regression_test_idea": "Mock OAuth returning { access_token: 'x', expires_in: 0 } — assert throws OR is accepted (whichever is desired)."
+    },
+    {
+      "id": "SVC-05",
+      "severity": "COSMETIC",
+      "file_line": "shopifyAuth.ts:91 (errBody.slice(0, 400))",
+      "failing_input": "Body of length exactly 400.",
+      "expected": "Full body included.",
+      "actual": "Correct (.slice(0, 400) returns full string if length <= 400).",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "n/a"
+    }
+  ],
+  "uncertainty_notes": "File is 110 LOC. Tests are 7 comprehensive cases covering: missing each env var, OAuth POST body, cache hit, cache miss after expiry (implicitly), error response, multi-store isolation. The concurrent-call singleflight pattern is not implemented but is the main MAJOR gap. Verdict ✅ overall — correctness is solid; SVC-02 is a perf/efficiency concern not a correctness bug.",
+  "test_coverage_gaps": [
+    {
+      "description": "No test for concurrent calls (singleflight behavior)",
+      "why_it_matters": "When 3 stores each fire a cron simultaneously and the cache is cold, each store fires its OAuth call. But within one store's flow, if multiple parts of a single Inngest function call getShopifyAccessToken in parallel (Promise.all), 2 OAuth calls happen.",
+      "suggested_fixture": "Promise.all([getShopifyAccessToken('uzoshop'), getShopifyAccessToken('uzoshop')]) — assert fetchMock called exactly once."
+    },
+    {
+      "description": "No test for expiry-driven re-exchange",
+      "why_it_matters": "60s margin is the runtime invariant; if a refactor changed the predicate, no test would catch it.",
+      "suggested_fixture": "First call sets cache with expires_in=120. Advance time (vi.setSystemTime) past expiresAt - 60s. Second call should re-fetch."
+    },
+    {
+      "description": "No test that error messages do not leak client_secret",
+      "why_it_matters": "T-equivalent of T-05.6-05-I2 for Shopify. Worth pinning.",
+      "suggested_fixture": "Set client_secret to 'SECRET-XYZ'. Mock OAuth to return 401 with body 'invalid'. Assert thrown error message does NOT contain 'SECRET-XYZ'."
+    },
+    {
+      "description": "No test for malformed JSON in OAuth response",
+      "why_it_matters": "If Shopify returns 200 with non-JSON, res.json() throws TypeError uncaught.",
+      "suggested_fixture": "Mock fetch returning Response('not json', { status: 200 }) — assert getShopifyAccessToken throws."
+    }
+  ],
+  "channels": {
+    "imports_from": [],
+    "exports_to": ["lib/fetchers/shopify.ts (getShopifyAccessToken)"],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": ["POST https://{domain}/admin/oauth/access_token (grant_type=client_credentials)"]
+  }
+}

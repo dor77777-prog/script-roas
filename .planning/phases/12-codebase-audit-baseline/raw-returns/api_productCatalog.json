@@ -1,0 +1,43 @@
+{
+  "task_id": "12.E.17",
+  "file": "dashboard-web/src/app/api/product-catalog/route.ts",
+  "test_path": "(no dedicated unit test). Tested indirectly via consumer ProductPickerModal + product-catalog seeding tests.",
+  "verdict": "Verified correct",
+  "findings": [
+    {
+      "id": "API-43",
+      "severity": "Cosmetic",
+      "file_line": "dashboard-web/src/app/api/product-catalog/route.ts:41",
+      "failing_input": "fetchProductCatalogFromPostgres throws.",
+      "expected": "Cache-Control: no-store on degraded response (mirrors WR-02 fixes in /api/data + /api/orders-attribution + /api/products + /api/campaigns).",
+      "actual": "Missing — same family as API-03 (ads route). A transient Supabase blip could pin a 200-with-empty-rows in the CDN for 60 seconds (route revalidate=60).",
+      "fix_sketch": "Add `headers: { 'Cache-Control': 'no-store' }` to the catch-path NextResponse.json call.",
+      "regression_test_idea": "Mock postgresReader to throw; assert response.headers.get('Cache-Control') === 'no-store'."
+    },
+    {
+      "id": "API-44",
+      "severity": "Cosmetic",
+      "file_line": "dashboard-web/src/app/api/product-catalog/route.ts:11",
+      "failing_input": "Cache literal drift (API-01 family).",
+      "expected": "Pinning test.",
+      "actual": "Not pinned.",
+      "fix_sketch": "Cross-reference API-01.",
+      "regression_test_idea": "Cross-reference API-01."
+    }
+  ],
+  "uncertainty_notes": "Route is minimal — no range params (catalog is global). Documented degrade-gracefully behavior is sound. ProductCatalogResponse type lacks the `error?: string` field that the catch path populates (similar to API-02 ads route).",
+  "test_coverage_gaps": [
+    "Zero coverage. Recommend ONE smoke test for success path + ONE for degraded path with Cache-Control header pinned."
+  ],
+  "channels": {
+    "imports_from": ["@/lib/productCatalog (CatalogProduct type)", "@/lib/postgresReaders (fetchProductCatalogFromPostgres)", "@/lib/cacheConfig (cacheControl)", "@/lib/apiErrors (userFacingError)"],
+    "exports_to": ["ProductCatalogResponse → ProductPickerModal.tsx, productCatalog.ts consumers"],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": ["/api/product-catalog"],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": ["product_catalog"],
+    "api_calls": []
+  }
+}

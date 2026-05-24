@@ -1,0 +1,45 @@
+{
+  "task_id": "12.E.16",
+  "file": "dashboard-web/src/app/api/orders-attribution/route.ts",
+  "test_path": "(no dedicated unit test). Tested indirectly via analyzeAttribution.test.ts + analyzeAttributionForAd.test.ts + analyzeAttributionForAdSet.test.ts + orderSourceContract.test.ts (consumers of the underlying lib).",
+  "verdict": "Verified correct",
+  "findings": [
+    {
+      "id": "API-41",
+      "severity": "Minor",
+      "file_line": "dashboard-web/src/app/api/orders-attribution/route.ts:44",
+      "failing_input": "?lineItems='True' (capital T) or '?lineItems=1' or '?lineItems' (no value).",
+      "expected": "Documented strict opt-in via 'true' only. Correct.",
+      "actual": "Strict === 'true' comparison per T-05-03-01. Works as documented. NOT a bug.",
+      "fix_sketch": "N/A.",
+      "regression_test_idea": "N/A (already documented)."
+    },
+    {
+      "id": "API-42",
+      "severity": "Cosmetic",
+      "file_line": "dashboard-web/src/app/api/orders-attribution/route.ts:10",
+      "failing_input": "Cache literal drift (same as API-01 family).",
+      "expected": "Pinning test.",
+      "actual": "Not pinned. Cross-reference API-01.",
+      "fix_sketch": "Cross-reference API-01.",
+      "regression_test_idea": "Cross-reference API-01."
+    }
+  ],
+  "uncertainty_notes": "Route is idiomatic and matches sibling patterns. WR-02 Cache-Control:no-store on degraded path correctly applied. lineItems opt-in design is sound.",
+  "test_coverage_gaps": [
+    "lineItems=true vs default response shape difference: NOT covered.",
+    "50k-row warning trigger: NOT covered.",
+    "Degraded 200 path with Cache-Control:no-store: NOT pinned by test."
+  ],
+  "channels": {
+    "imports_from": ["@/lib/ordersAttribution (OrderAttributionRow type)", "@/lib/postgresReaders (fetchOrdersAttributionFromPostgres)", "@/lib/cacheConfig (cacheControl)", "@/lib/apiErrors (userFacingError)", "@/lib/dateRange (parseRangeParams, RangeParamError)"],
+    "exports_to": ["OrdersAttributionResponse → AttributionAnalysisPanel, ProductChannelBreakdown, CampaignDrawer"],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": ["/api/orders-attribution?from=&to=", "/api/orders-attribution?from=&to=&lineItems=true"],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": ["orders_attribution"],
+    "api_calls": []
+  }
+}

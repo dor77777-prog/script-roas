@@ -1,0 +1,43 @@
+{
+  "task_id": "12.E.19",
+  "file": "dashboard-web/src/app/api/store-meta/route.ts",
+  "test_path": "(no dedicated unit test). Consumer: BillingSettings.tsx + store-meta auto-detect.",
+  "verdict": "Verified correct",
+  "findings": [
+    {
+      "id": "API-46",
+      "severity": "Cosmetic",
+      "file_line": "dashboard-web/src/app/api/store-meta/route.ts:33",
+      "failing_input": "fetchStoreMetaFromPostgres throws.",
+      "expected": "Cache-Control: no-store on degraded response (mirrors WR-02 family).",
+      "actual": "Missing — same family as API-03 (ads) + API-43 (product-catalog). Route revalidate=3600 means a transient blip pins empty rows in the CDN for an hour, which is bad for BillingSettings fallback semantics.",
+      "fix_sketch": "Add `headers: { 'Cache-Control': 'no-store' }` to the catch-path NextResponse.json call.",
+      "regression_test_idea": "Mock postgresReader to throw; assert Cache-Control:no-store on error response."
+    },
+    {
+      "id": "API-47",
+      "severity": "Cosmetic",
+      "file_line": "dashboard-web/src/app/api/store-meta/route.ts:10",
+      "failing_input": "Cache literal drift (API-01 family).",
+      "expected": "Pinning test.",
+      "actual": "Not pinned.",
+      "fix_sketch": "Cross-reference API-01.",
+      "regression_test_idea": "Cross-reference API-01."
+    }
+  ],
+  "uncertainty_notes": "Route is minimal. Degraded-empty-on-failure is documented + correct. The 1-hour cache TTL is appropriate for rarely-changing store config.",
+  "test_coverage_gaps": [
+    "Zero coverage. Recommend success path + degraded path (Cache-Control:no-store after API-46 fix)."
+  ],
+  "channels": {
+    "imports_from": ["@/lib/postgresReaders (fetchStoreMetaFromPostgres)", "@/lib/cacheConfig (cacheControl)", "@/lib/apiErrors (userFacingError)"],
+    "exports_to": ["GET → consumed by BillingSettings.tsx (store auto-detect)"],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": ["/api/store-meta"],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": ["stores"],
+    "api_calls": []
+  }
+}

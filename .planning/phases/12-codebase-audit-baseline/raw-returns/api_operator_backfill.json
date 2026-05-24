@@ -1,0 +1,45 @@
+{
+  "task_id": "12.E.09",
+  "file": "dashboard-web/src/app/api/operator/backfill/route.ts",
+  "test_path": "dashboard-web/src/lib/__tests__/operatorRoutesDateValidation.test.ts (covers isDate UTC round-trip).",
+  "verdict": "Verified correct",
+  "findings": [
+    {
+      "id": "API-21",
+      "severity": "Minor",
+      "file_line": "dashboard-web/src/app/api/operator/backfill/route.ts:84",
+      "failing_input": "POST with body that fails req.json() (malformed JSON, e.g. trailing comma) — req.json() throws SyntaxError.",
+      "expected": "400 with 'invalid JSON body'.",
+      "actual": "Lands in the catch on line 155 → returns 500 'הטעינה נכשלה: שגיאה לא צפויה.' Same pattern as the other operator routes (sync-now, notifications). Mirrors API-19-family. Sync-now route at sync-now/route.ts:63 has identical issue. notifications/send/route.ts:28 correctly uses `.catch(() => ({}))` — inconsistent.",
+      "fix_sketch": "Wrap req.json() in `.catch(() => null)` and return 400 if result is null. Match the pattern in operator/reset/route.ts:110.",
+      "regression_test_idea": "POST /api/operator/backfill with body 'not-json'; expect 400."
+    },
+    {
+      "id": "API-22",
+      "severity": "Cosmetic",
+      "file_line": "dashboard-web/src/app/api/operator/backfill/route.ts:55-56",
+      "failing_input": "HISTORY_BOUNDARY duplicated across 3 files (per the file-level comment).",
+      "expected": "Comment acknowledges + justifies the duplication — accepted.",
+      "actual": "Accepted via documented decision.",
+      "fix_sketch": "N/A.",
+      "regression_test_idea": "N/A."
+    }
+  ],
+  "uncertainty_notes": "HIGH-14 + Codex-NEW-5 (isDate UTC round-trip) already fixed in Phase 10/11 — pinned by operatorRoutesDateValidation.test.ts. Per cross-reference instructions, NOT re-flagging. Range validation is sound (HISTORY_BOUNDARY + from<=to + storeIds allowlist).",
+  "test_coverage_gaps": [
+    "isDate covered via shared validator test.",
+    "Missing: end-to-end test that confirms HTTP 202 response shape (eventIds + accepted + range echo) on success.",
+    "Missing: test that storeIds with empty array / mixed-type elements / unknown store returns 400."
+  ],
+  "channels": {
+    "imports_from": ["@/inngest/client (inngest)", "@/lib/apiErrors (userFacingError)", "@/lib/dateValidation (isDate)"],
+    "exports_to": [],
+    "events_emitted": ["event/backfill (via inngest.send)"],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": ["event/backfill → eventBackfill function"],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

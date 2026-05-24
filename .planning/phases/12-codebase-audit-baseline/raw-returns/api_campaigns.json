@@ -1,0 +1,34 @@
+{
+  "task_id": "12.E.02",
+  "file": "dashboard-web/src/app/api/campaigns/route.ts",
+  "test_path": "(no dedicated unit test) — covered indirectly via campaignsAggregator.test.ts + campaignsTableRowTrustLevel.test.ts. Cache literal not pinned to CACHE_CONFIG.campaigns.revalidate.",
+  "verdict": "Verified correct",
+  "findings": [
+    {
+      "id": "API-04",
+      "severity": "Minor",
+      "file_line": "dashboard-web/src/app/api/campaigns/route.ts:13",
+      "failing_input": "Operator changes CACHE_CONFIG.campaigns.revalidate from 60 → 120 but the literal stays at 60.",
+      "expected": "Regression test enforces the literal mirrors CACHE_CONFIG (same as healthRouteRevalidateSync.test.ts).",
+      "actual": "No such test. Drift between literal and config not caught.",
+      "fix_sketch": "Same fix as API-01 (parametrized cache-sync test).",
+      "regression_test_idea": "Cross-reference API-01."
+    }
+  ],
+  "uncertainty_notes": "Route is correct and idiomatic. Type declaration includes optional error field (unlike API-02 in /api/ads). The Cache-Control: no-store on catch path is correctly applied.",
+  "test_coverage_gaps": [
+    "No dedicated route unit test for 400 RangeParamError + 200 degraded path.",
+    "No assertion that 50k-row warn threshold matches Vercel response-size limits (4.5MB) — current warn is purely advisory."
+  ],
+  "channels": {
+    "imports_from": ["@/lib/campaigns (CampaignRow type)", "@/lib/postgresReaders (fetchCampaignsFromPostgres, fetchCampaignsDailyLastWriteAt)", "@/lib/cacheConfig (cacheControl)", "@/lib/apiErrors (userFacingError)", "@/lib/dateRange (parseRangeParams, RangeParamError)"],
+    "exports_to": ["CampaignsResponse type → CampaignsTable.tsx, CampaignDrawer.tsx, useCampaignTrueRevenue.ts"],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": ["/api/campaigns?from=YYYY-MM-DD&to=YYYY-MM-DD"],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": ["campaigns_daily via postgresReaders"],
+    "api_calls": []
+  }
+}

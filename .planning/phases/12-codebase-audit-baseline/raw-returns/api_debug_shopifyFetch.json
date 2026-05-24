@@ -1,0 +1,64 @@
+{
+  "task_id": "12.E.05",
+  "file": "dashboard-web/src/app/api/debug/shopify-fetch/route.ts",
+  "test_path": "(no dedicated unit test — debug endpoint). isoLocalMidnight / formatLocalIso are duplicates of fetchers/shopify.ts helpers but not covered by shopify.test.ts.",
+  "verdict": "Has bug",
+  "findings": [
+    {
+      "id": "API-10",
+      "severity": "Major",
+      "file_line": "dashboard-web/src/app/api/debug/shopify-fetch/route.ts:96-114",
+      "failing_input": "Operator GETs /api/debug/shopify-fetch?storeId=uzoshop&date=2026-05-01.",
+      "expected": "Debug response that does not leak Shopify Admin token characters to the browser network panel.",
+      "actual": "Response body includes `tokenPrefix: token.slice(0, 10) + '...'` (line 103). A 10-char prefix of a Shopify Admin API token (which is typically `shpat_xxxxxxxxxxxxxxxxxxxxxxxxxxxx` — 38 chars total) leaks the `shpat_` scheme prefix + first 4 secret chars. Even though the operator is single-user (URL-obscurity), this endpoint has NO operator-only gate, and any logged JSON copy (browser dev-tools / Vercel deploy logs / accidental screenshot) preserves that prefix. For audit-baseline: a debug endpoint should reveal `hasToken: true/false` ONLY, never any token bytes. Phase 9 audit's INFO-3 (cannibalization detection) flagged a similar information-leak pattern.",
+      "fix_sketch": "Replace `tokenPrefix: token.slice(0, 10) + '...'` with `hasToken: true`. Keep `hasDomain` + `domainVal: domain.slice(0, 15) + '...'` — those are domain identifiers, not secrets.",
+      "regression_test_idea": "GET /api/debug/shopify-fetch?storeId=uzoshop&date=2026-05-22; assert response.tokenPrefix === undefined and !JSON.stringify(response).includes('shpat_')."
+    },
+    {
+      "id": "API-11",
+      "severity": "Minor",
+      "file_line": "dashboard-web/src/app/api/debug/shopify-fetch/route.ts:62-71 (no auth gate)",
+      "failing_input": "Adversary discovers /api/debug/shopify-fetch URL (URL-obscurity is the only defense).",
+      "expected": "URL obscurity is the documented single-operator trust model (see operator constraints) — so this is NOT a flag. However, the operator constraints DO mandate token-redaction in any response payload (cross-reference operator/jobs:107 which hard-codes 'הטעינה נכשלה: משתני סביבה חסרים' rather than the env-var values themselves).",
+      "actual": "See API-10 — token characters leak.",
+      "fix_sketch": "API-10 fix covers this.",
+      "regression_test_idea": "Same as API-10."
+    },
+    {
+      "id": "API-12",
+      "severity": "Cosmetic",
+      "file_line": "dashboard-web/src/app/api/debug/shopify-fetch/route.ts:34-38",
+      "failing_input": "Hand-crafted dateStr that the regex on line 19 accepts.",
+      "expected": "Validates with shared isDate from @/lib/dateValidation (rejects 2026-99-99 / 2026-02-30 — Codex-NEW-5 / HIGH-14 fix).",
+      "actual": "Uses regex-only check on line 19 + line 66 — the SAME pre-fix pattern that HIGH-14 + Codex-NEW-5 corrected for operator/backfill + operator/manual-overrides. 2026-13-01 would propagate to Date.UTC and silently normalize. Lower severity here because endpoint is debug-only.",
+      "fix_sketch": "Replace the inline regex with `import { isDate } from '@/lib/dateValidation'; if (!isDate(date)) return 400`.",
+      "regression_test_idea": "GET /api/debug/shopify-fetch?storeId=uzoshop&date=2026-13-01 should 400."
+    },
+    {
+      "id": "API-13",
+      "severity": "Minor",
+      "file_line": "dashboard-web/src/app/api/debug/shopify-fetch/route.ts:18-54 (isoLocalMidnight + formatLocalIso)",
+      "failing_input": "Same TZ edge cases that fetchers/shopify.ts hits.",
+      "expected": "Helper imported from a shared TZ module so debug + production stay in sync.",
+      "actual": "Duplicated copy of fetchers/shopify.ts helpers (Asia/Jerusalem TZ math). If shopify.ts ever fixes a TZ edge (DST near 02:00), the debug endpoint reports the OLD behavior and the operator's debugging signal becomes misleading.",
+      "fix_sketch": "Export isoLocalMidnight + formatLocalIso from fetchers/shopify.ts and import here.",
+      "regression_test_idea": "Compare debug endpoint's dayStartA against the production fetcher's dayStartA for a DST-edge date (e.g. 2026-03-27 Israel spring-forward)."
+    }
+  ],
+  "uncertainty_notes": "Debug endpoint dated 2026-05-22, flagged in comments as 'one-time' but still deployed. API-10 token leak is the audit blocker.",
+  "test_coverage_gaps": [
+    "Zero test coverage. Recommend adding ONE smoke test that validates the no-token-leak invariant if the endpoint stays in production.",
+    "TZ math duplicated; should be tested once at the shared helper, not 0 times at the duplicate."
+  ],
+  "channels": {
+    "imports_from": ["next/server (NextResponse)"],
+    "exports_to": [],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": ["GET https://{domain}/admin/api/2026-04/orders.json (Shopify Admin)"]
+  }
+}

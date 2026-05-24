@@ -1,0 +1,48 @@
+{
+  "task_id": "12.H1",
+  "generated_at": "2026-05-24",
+  "scanned_files": 36,
+  "catch_sites_found": 134,
+  "intentional": 133,
+  "suspicious": 1,
+  "cross_validated_audit_findings": ["INN-16"],
+  "findings": [
+    {
+      "id": "CAT-29",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/inngest/functions/eventBackfill.ts:225",
+      "caught_var": "err",
+      "what_happens": "Records {date, storeId, ok:false, error:message} in results array; NO console log; swallows the throw before Inngest's retry/deadletter machinery can see it; loop marches forward through all remaining pairs (default 63 for 21d×3 stores).",
+      "verdict": "SUSPICIOUS",
+      "reasoning": "Cross-validates INN-16. Pattern is acceptable for one-off per-pair failures but pathological for systemic failures (schema-level RLS denial, missing migration, broken env var): the loop burns the entire exec budget on identical failures without escalation.",
+      "fix_sketch": "(a) Add console.warn inside the catch so per-pair failure is visible in Inngest run logs. (b) Add 'systemic-failure abort' guard: if first 3 consecutive pairs fail with same error message, throw to let Inngest retry the whole event.",
+      "cross_ref_audit_finding": "INN-16"
+    }
+  ],
+  "intentional_summary": {
+    "api_route_S2_soft_fail_GET": 10,
+    "api_route_mutation_500_sanitized": 10,
+    "parseRangeParams_typed_error_400": 5,
+    "cronDaily_per_platform_HG01": 3,
+    "cronDaily_FX_null_sentinel_CRIT5": 2,
+    "cronLive_HIGH12_sequential_status_update": 1,
+    "cronLive_per_fetcher_catch_to_null_CR02": 9,
+    "operator_reset_per_table_catch": 1,
+    "legacy_sheets_missing_tab_empty_array": 5,
+    "postgresReaders_rethrow_with_prefix": 6,
+    "postgresReaders_freshness_typed_null": 1,
+    "cloudSync_quota_private_mode_dispatch": 11,
+    "tokenFailures_log_continue_typed_result": 3,
+    "sendDailySummary_per_recipient_HR04": 1,
+    "fetchers_soft_fail_non_critical_subfetch": 3,
+    "defensive_resJsonOrText_arrow_catch": 25,
+    "component_setError_UI_surface": 6,
+    "localStorage_quota_typed_sentinel": 21,
+    "decodeURIComponent_raw_fallback": 2,
+    "polling_loop_tolerant": 2,
+    "debug_only_route": 1
+  },
+  "operator_directives_applied": [
+    "Sweep covered BOTH grep shapes (catch ( + catch {) per D-12 spirit, not just the regex literal."
+  ]
+}

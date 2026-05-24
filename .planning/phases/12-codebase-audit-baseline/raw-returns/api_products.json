@@ -1,0 +1,33 @@
+{
+  "task_id": "12.E.18",
+  "file": "dashboard-web/src/app/api/products/route.ts",
+  "test_path": "(no dedicated unit test). Consumer: ProductsTable.tsx + analyzeProductChannel.test.ts (indirect).",
+  "verdict": "Verified correct",
+  "findings": [
+    {
+      "id": "API-45",
+      "severity": "Cosmetic",
+      "file_line": "dashboard-web/src/app/api/products/route.ts:15",
+      "failing_input": "Cache literal drift (API-01 family).",
+      "expected": "Pinning test.",
+      "actual": "Not pinned.",
+      "fix_sketch": "Cross-reference API-01.",
+      "regression_test_idea": "Cross-reference API-01."
+    }
+  ],
+  "uncertainty_notes": "Route is correct and idiomatic. Matches /api/campaigns pattern exactly. WR-02 Cache-Control:no-store on degraded path correctly applied. ProductsResponse type includes optional error field (unlike API-02 ads route).",
+  "test_coverage_gaps": [
+    "Zero dedicated route coverage. Recommend: success path + 400 RangeParamError + 200 degraded path (with Cache-Control:no-store pin)."
+  ],
+  "channels": {
+    "imports_from": ["@/lib/products (ProductRow type)", "@/lib/postgresReaders (fetchProductsFromPostgres, fetchProductsDailyLastWriteAt)", "@/lib/cacheConfig (cacheControl)", "@/lib/apiErrors (userFacingError)", "@/lib/dateRange (parseRangeParams, RangeParamError)"],
+    "exports_to": ["ProductsResponse → ProductsTable.tsx, ProductCentricView.tsx"],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": ["/api/products?from=&to="],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": ["products_daily"],
+    "api_calls": []
+  }
+}

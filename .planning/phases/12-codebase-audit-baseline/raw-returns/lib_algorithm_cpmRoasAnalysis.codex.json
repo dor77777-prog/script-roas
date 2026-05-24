@@ -1,0 +1,87 @@
+{
+  "task_id": "12.A.8",
+  "file": "dashboard-web/src/lib/cpmRoasAnalysis.ts",
+  "test_path": "dashboard-web/src/lib/__tests__/cpmRoasAnalysis.test.ts + cpmPrevAlignment.test.ts",
+  "verdict": "Findings",
+  "findings": [
+    {
+      "id": "CR-CODEX-01",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/lib/cpmRoasAnalysis.ts:239-240",
+      "failing_input": "analyzeCpmVsRoas(currentWith5PlusActiveDays, { prev: [] }) after the user selected previous-period comparison and the previous-period query returned no rows. CampaignDrawer reaches the same state by converting an empty matched prev row set to undefined before calling analyzeCpmVsRoas.",
+      "expected": "The Phase 10 U-02 no-baseline contract should fire whenever the caller attempted a previous-period baseline but there are no usable previous-period days, including the truly empty query result. Result should be verdict='no-baseline', neutral tone, and copy containing 'אין בסיס השוואה'.",
+      "actual": "prevWasQueriedButEmpty requires options.prev.length > 0, so an explicit empty prev array is treated the same as no prev option. The analyzer falls back to half-over-half and returns verdict='normal', which can render normal stable/momentum copy even though the requested previous-period baseline did not exist.",
+      "fix_sketch": "Represent baseline intent separately from row count, e.g. options?: { prev?: DailyCpmRoasPoint[]; prevQueried?: boolean }, or treat Array.isArray(options?.prev) && !havePrev as no-baseline. Then update CampaignDrawer to pass the intent instead of dropping empty prevDaily to undefined when rows.length === 0.",
+      "regression_test_idea": "it('U-02: empty queried prev array returns no-baseline', () => { const current = makeSeries({ cpm: 5, roas: 3 }); const result = analyzeCpmVsRoas(current, { prev: [] }); expect(result.verdict).toBe('no-baseline'); expect(result.text).toContain('אין בסיס השוואה'); });"
+    },
+    {
+      "id": "CR-CODEX-02",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/lib/cpmRoasAnalysis.ts:221-256, 324-340",
+      "failing_input": "analyzeCpmVsRoas([{date:'2026-05-01', cpm:5, roas:2}, ..., {date:'2026-05-07', cpm:5, roas:Number.NaN}]) or any current/prev row with cpm=Infinity / roas=Infinity.",
+      "expected": "Non-finite numeric inputs should be rejected or filtered before delta/correlation math, and diagnostics should remain number|null. The analyzer should not emit a confident flat/up/down narrative from NaN arithmetic.",
+      "actual": "validRows only checks d.cpm > 0, so NaN/Infinity ROAS survives and Infinity CPM can survive. pearsonForCpmRoas and halfOverHalfDelta_/meanOrNull_ then produce NaN. categorize(NaN) falls through to 'flat', Math.abs(NaN) checks suppress corrLabel only by accident, and details can expose cpmDeltaPct/roasDeltaPct/pearson as NaN despite the public type saying number|null.",
+      "fix_sketch": "Filter current and prev rows with Number.isFinite(d.cpm) && Number.isFinite(d.roas) && d.cpm > 0 before computing n. Add finite guards in pearsonForCpmRoas for standalone callers, and make categorize treat non-finite deltas as null/no-signal rather than flat.",
+      "regression_test_idea": "it('filters or rejects non-finite cpm/roas without NaN diagnostics', () => { const series = makeSeries({ cpm: 5, roas: 2 }, [{ roas: Number.NaN }]); const result = analyzeCpmVsRoas(series); expect(result.details.roasDeltaPct === null || Number.isFinite(result.details.roasDeltaPct)).toBe(true); expect(result.details.pearson === null || Number.isFinite(result.details.pearson)).toBe(true); });"
+    },
+    {
+      "id": "CR-CODEX-03",
+      "severity": "MINOR",
+      "file_line": "dashboard-web/src/lib/cpmRoasAnalysis.ts:136-158",
+      "failing_input": "pearsonForCpmRoas(Array(7).fill(5.1), Array(7).fill(2.2))",
+      "expected": "A constant CPM series and constant ROAS series have zero variance, so pearsonForCpmRoas should return null.",
+      "actual": "The zero-variance guard uses exact varA === 0 / varB === 0. Floating-point summation can give tiny non-zero variances for constant decimal values, so the function can return +1 or -1 for two perfectly flat series. analyzeCpmVsRoas can then append a strong correlation label to otherwise flat copy.",
+      "fix_sketch": "Use a small variance epsilon scaled to input magnitude, or compute variance with a stable equality/constant-series check before correlation. Example: if Math.sqrt(varA / n) <= EPS * maxAbsA or Math.sqrt(varB / n) <= EPS * maxAbsB, return null.",
+      "regression_test_idea": "expect(pearsonForCpmRoas(Array(7).fill(5.1), Array(7).fill(2.2))).toBeNull();"
+    },
+    {
+      "id": "CR-CODEX-04",
+      "severity": "MINOR",
+      "file_line": "dashboard-web/src/lib/cpmRoasAnalysis.ts:178-179, 324-328",
+      "failing_input": "A previous-period comparison where prev ROAS mean is 2.00 and current ROAS mean is 2.10 exactly, with CPM unchanged.",
+      "expected": "The inline contract says changes smaller than 5% are stable, so an exact +5.0% change should cross the FLAT/UP boundary and produce the FLAT+UP positive optimization branch.",
+      "actual": "categorize uses delta > 0.05 and delta < -0.05, so exactly +5.0% and -5.0% are classified as flat. The boundary contradicts the documented threshold wording and can emit FLAT+FLAT steady copy for the first value at the stated action threshold.",
+      "fix_sketch": "Choose and document one boundary policy. If the comment is the intended contract, change comparisons to delta >= STABLE_THRESHOLD and delta <= -STABLE_THRESHOLD, with a small epsilon if needed for decimal math.",
+      "regression_test_idea": "Use current [{cpm:10, roas:2.1} x5] and prev [{cpm:10, roas:2.0} x5]; expect result.tone='positive' and text to contain the FLAT+UP optimization wording."
+    }
+  ],
+  "uncertainty_notes": "CR-CODEX-01 partly depends on preserving caller intent: cpmRoasAnalysis.ts cannot distinguish 'no prev requested' from 'prev requested and returned zero rows' using the current options shape. The function comments explicitly claim it tracks that distinction, and CampaignDrawer currently drops the empty queried case before the helper call. CR-CODEX-04 assumes the line 178 wording ('changes smaller than this') is the intended threshold contract; if the product wants exactly 5% to remain stable, update the comment and tests instead.",
+  "test_coverage_gaps": [
+    {
+      "description": "No test for an explicitly empty previous-period array ({ prev: [] }) after the previous-period baseline was requested.",
+      "why_it_matters": "This is the exact empty-query launch-week case U-02 says should produce no-baseline copy, but the current tests only cover all-zero rows and one-valid-day rows.",
+      "suggested_fixture": "Five or seven current active days plus { prev: [] }; assert verdict='no-baseline' once the options contract can express queried intent."
+    },
+    {
+      "description": "No non-finite input tests for NaN/Infinity in cpm or roas.",
+      "why_it_matters": "NaN currently propagates into diagnostics and is categorized as flat, creating a misleading normal verdict from malformed numeric data.",
+      "suggested_fixture": "Rows with Number.NaN roas, Number.POSITIVE_INFINITY cpm, and finite neighboring days; assert output contains only finite numbers or nulls in details."
+    },
+    {
+      "description": "No Pearson zero-variance test using repeated decimal values.",
+      "why_it_matters": "Integer constants hit var===0, but repeated decimals can produce tiny floating variance and a bogus +/-1 correlation.",
+      "suggested_fixture": "expect(pearsonForCpmRoas(Array(7).fill(5.1), Array(7).fill(2.2))).toBeNull()."
+    },
+    {
+      "description": "No exact +/-5% threshold tests for FLAT/UP and FLAT/DOWN boundaries.",
+      "why_it_matters": "The implementation and threshold comment disagree at the boundary; explicit tests would force the product policy to be pinned.",
+      "suggested_fixture": "Previous-period fixtures with exactly +5.0% ROAS and exactly -5.0% ROAS while CPM is unchanged."
+    }
+  ],
+  "channels": {
+    "imports_from": [],
+    "exports_to": [
+      "consumed by dashboard-web/src/components/CampaignDrawer.tsx via analyzeCpmVsRoas(), indexPrevByDateOffset(), dayOffsetFromRangeStart(), PREV_PERIOD_MIN_DAYS",
+      "consumed by dashboard-web/src/components/CampaignsTable.tsx via analyzeCpmVsRoas(), indexPrevByDateOffset(), dayOffsetFromRangeStart(), PREV_PERIOD_MIN_DAYS, DailyCpmRoasPoint",
+      "consumed by dashboard-web/src/lib/aiReport.ts via analyzeCpmVsRoas() and DailyCpmRoasPoint",
+      "consumed by dashboard-web/src/lib/campaignHealthScore.ts via CpmRoasAnalysis type and analysis.tone/hasData"
+    ],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

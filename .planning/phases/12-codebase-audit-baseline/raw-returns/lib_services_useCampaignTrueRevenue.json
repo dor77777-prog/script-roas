@@ -1,0 +1,232 @@
+{
+  "task_id": "12.B.11",
+  "file": "dashboard-web/src/lib/hooks/useCampaignTrueRevenue.ts",
+  "test_path": "(none — no direct test exists for this hook, but downstream allocator + analyzer are EDGE_RICH/well-tested per AUDIT-phase9-snapshot)",
+  "verdict": "✅ Verified",
+  "audit_trail": [
+    "Re-research pass (2026-05-24) traced every closure, dep-array, filter, and shape contract end-to-end. No concrete bug introduced by the hook itself.",
+    "Downstream pure helpers audited ✅ in AUDIT-phase9-snapshot: allocateProductRevenue (#4, EDGE_RICH 17 tests), attributionAnalysis (#1, EDGE_RICH 71 tests). The hook is genuinely thin orchestration.",
+    "Re-verified filter wiring (storeId vs storeName), memo dep arrays, loading/race states, attribution shape, productMap key format, and the 2026-05-22 two-method trust upgrade math.",
+    "12 micro-findings from the first review were all 'Correct, n/a' confirmations of edge-case handling — re-validated, none flipped."
+  ],
+  "findings": [
+    {
+      "id": "SVC-01",
+      "severity": "MAJOR",
+      "file_line": "useCampaignTrueRevenue.ts:101-103 (gap denominator)",
+      "failing_input": "metaClaim=0, trueRevenue=0 (campaign with mapping but no revenue/claims). Code: gap = (0||0 > 0) → false branch, gap = 0.",
+      "expected": "Gap is 0 when both are 0.",
+      "actual": "Correct: `metaClaim > 0 || trueRevenue > 0` is false, gap = 0. No division by zero.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test a campaign with metaClaim=0 and trueRevenue=0; assert no NaN in gap or confidence."
+    },
+    {
+      "id": "SVC-02",
+      "severity": "MAJOR",
+      "file_line": "useCampaignTrueRevenue.ts:281 (productsByStore filter)",
+      "failing_input": "products_daily row with net=0 AND units=0 (truly empty placeholder).",
+      "expected": "Skipped (not contributing to allocation).",
+      "actual": "Correct: `if (net === 0 && p.units === 0) continue;`. The audit-fix CR-02 comment at lines 275-280 explicitly explains why the previous `<= 0` was wrong (dropped refund-only rows with net<0). Now refund rows propagate.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test with products [{net:-50,units:0}, {net:0,units:0}, {net:100,units:1}]; assert only the {net:0,units:0} row dropped."
+    },
+    {
+      "id": "SVC-03",
+      "severity": "MAJOR",
+      "file_line": "useCampaignTrueRevenue.ts:260-264 (campaignSpend computation)",
+      "failing_input": "allCampaignRows contains a row outside [localRange.from, localRange.to]. Filter skips it.",
+      "expected": "Spend total is range-scoped.",
+      "actual": "Correct. Re-verified: allCampaignRows IS pre-filtered to range+store by the caller (CampaignsTable.tsx:420-427), but the hook re-filters on date defensively. Belt + suspenders, no harm.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Already implicit via downstream tests."
+    },
+    {
+      "id": "SVC-04",
+      "severity": "MAJOR",
+      "file_line": "useCampaignTrueRevenue.ts:209-222 (dailyMetaByCampaign)",
+      "failing_input": "allCampaignRows with row.platform='Google'.",
+      "expected": "Excluded (only Meta + TikTok included).",
+      "actual": "Correct: `if (r.platform !== 'Meta' && r.platform !== 'TikTok') continue;`. Re-verified: matches analyzeAttribution's gate at attributionAnalysis.ts:330 exactly. Same platform set on both sides — no mismatch where the hook would feed Google daily series to a function that rejects Google.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test Google row excluded from dailyMeta."
+    },
+    {
+      "id": "SVC-05",
+      "severity": "MAJOR",
+      "file_line": "useCampaignTrueRevenue.ts:226-249 (productToCampaigns index)",
+      "failing_input": "productMap with malformed key (not 3 parts when split by '::').",
+      "expected": "Malformed keys skipped: `if (parts.length !== 3) continue;`.",
+      "actual": "Correct.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "n/a"
+    },
+    {
+      "id": "SVC-06",
+      "severity": "MAJOR",
+      "file_line": "useCampaignTrueRevenue.ts:400-411 (shared campaign Set #WR-02)",
+      "failing_input": "Campaigns A=[P1,P2] and B=[P1,P2]. For A, sharedKeys should contain {B}; size=1.",
+      "expected": "1 (count each other-campaign once).",
+      "actual": "Correct: Set guarantees uniqueness. Re-traced: for A's perspective, P1 maps to Set([keyA,keyB]) → self-drop keyA, add keyB. P2 maps to Set([keyA,keyB]) → self-drop, add keyB (no-op). sharedKeys={keyB}, size=1. Matches WR-02 documented semantics.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test scenario A=[P1,P2], B=[P1,P2]; assert sharedCampaigns=1 for A."
+    },
+    {
+      "id": "SVC-07",
+      "severity": "MAJOR",
+      "file_line": "useCampaignTrueRevenue.ts:458-491 (two-method agreement trust upgrade)",
+      "failing_input": "attribution.trust.level='low', trueRevenue=100, metaClaim=105. gap = 5/105 ≈ 4.76%.",
+      "expected": "Upgrade to 'high' (gap < 10%).",
+      "actual": "Correct. Re-verified: the gate `attribution && a.conversionValue > 0 && trueRevenue > 0` correctly excludes the edge cases (zero or negative trueRevenue from refund-heavy windows), so the gap denominator (Math.max(a.conversionValue, trueRevenue)) is always strictly > 0 — no div-by-zero. Score math (line 470: 100 - gap*100) always ≥ 90 in the high branch by construction.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test gap=0.05 → assert attribution.trust.level='high'."
+    },
+    {
+      "id": "SVC-08",
+      "severity": "MINOR",
+      "file_line": "useCampaignTrueRevenue.ts:518 (useMemo dep array)",
+      "failing_input": "Add a new variable to the closure without adding to dep array.",
+      "expected": "All closed-over variables listed.",
+      "actual": "Re-audited closure-by-closure: deps are [mode, data, productsResp, ordersAttrResp, productMap, aggregated, allCampaignRows, localRange, dailyMetaByCampaign, productToCampaigns]. Every closed-over variable in the useMemo body (lines 252-517) appears. Module-stable references (analyzeAttribution, allocateProductRevenue, campaignKey, computeConfidence) correctly omitted. Note: listing both `allCampaignRows` AND `dailyMetaByCampaign` is technically redundant (the latter is a pure function of the former), but harmless — React shallow-compares; both refs change together. Same for productMap + productToCampaigns.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "n/a"
+    },
+    {
+      "id": "SVC-09",
+      "severity": "MAJOR",
+      "file_line": "useCampaignTrueRevenue.ts:101 (gap denominator with Math.max(1))",
+      "failing_input": "metaClaim=0.1, trueRevenue=0.1. gap = 0 / Math.max(0.1, 0.1, 1) = 0 / 1 = 0.",
+      "expected": "Tiny but non-zero values agree → gap should be 0.",
+      "actual": "Correct (0/1=0). The Math.max(1) floor prevents pathological divides at very small magnitudes. NOTE: the trust-upgrade gap calc at line 461 LACKS this floor (`Math.max(a.conversionValue, trueRevenue)` only). Since the upgrade gate requires both > 0, denom is strictly > 0 → no div-zero; but tiny matching values (e.g. both = 0.5) would upgrade to 'high' on essentially noise. Edge case; not a defect because spend<200 separately gates confidence downstream.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "n/a"
+    },
+    {
+      "id": "SVC-10",
+      "severity": "MAJOR",
+      "file_line": "useCampaignTrueRevenue.ts:177-186 (WR-05 localRange reference contract)",
+      "failing_input": "Caller mutates localRange in place: setLocalRange(prev => { prev.from = newFrom; return prev; }).",
+      "expected": "Documented as forbidden (WR-05 docstring lines 176-186).",
+      "actual": "Documented but not enforced at runtime. A mistake here would silently freeze the memo. Re-verified caller usage in CampaignsTable.tsx — uses `setLocalRange({ from, to })` pattern, contract respected.",
+      "fix_sketch": "Could add a runtime sanity check (Object.freeze the range in dev), or rely on the comment.",
+      "regression_test_idea": "Test: mutate localRange in place across re-renders; verify memo does NOT update (pinning the documented anti-pattern as a known footgun)."
+    },
+    {
+      "id": "SVC-11",
+      "severity": "MAJOR",
+      "file_line": "useCampaignTrueRevenue.ts:289-299 (existing.orders += p.orders ?? 0)",
+      "failing_input": "p.orders is undefined (old row shape without orders field).",
+      "expected": "Treated as 0.",
+      "actual": "Correct via `?? 0`. Same for the else-branch initialization. Per products.ts ProductRow contract `orders: number` is always defined (writer defaults to 0 for historical rows) — the `?? 0` is purely defensive but harmless.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "n/a"
+    },
+    {
+      "id": "SVC-12",
+      "severity": "MAJOR",
+      "file_line": "useCampaignTrueRevenue.ts:332-352 (allocation accumulation)",
+      "failing_input": "Same campaign-key returned from multiple stores (impossible — campaignKey includes storeId).",
+      "expected": "Each (storeId, platform, campaignId) is unique; accumulation per loop iteration is per-store; cur initialization is correct.",
+      "actual": "Correct. Re-verified: productsByStore is keyed by storeId, allocator runs per-store, output keys are `${storeId}::${platform}::${campaignId}` — collision-free across stores.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "n/a"
+    },
+    {
+      "id": "SVC-13",
+      "severity": "INFO",
+      "file_line": "useCampaignTrueRevenue.ts:316 (lineItems.map without nullish guard)",
+      "failing_input": "ordersAttrResp row with `lineItems: undefined` (malformed payload, would violate API contract).",
+      "expected": "Defensive guard or trust contract.",
+      "actual": "No runtime guard; `o.lineItems.map(...)` would TypeError if lineItems is undefined. However per OrderAttributionRow contract (ordersAttribution.ts:44) and the route writer (line 260: `lineItems: includeLI ? parseLineItems(row[13]) : []`), lineItems is GUARANTEED to be an array (empty when col-N migration absent). Contract is enforced upstream; no realistic failure path.",
+      "fix_sketch": "Optional: `o.lineItems?.map(...) ?? []` for defense in depth. Current behaviour matches contract.",
+      "regression_test_idea": "Inject malformed row with lineItems=undefined; assert hook either throws clearly or recovers."
+    },
+    {
+      "id": "SVC-14",
+      "severity": "INFO",
+      "file_line": "useCampaignTrueRevenue.ts:462-491 (trust upgrade with attribution.trust.level='unknown')",
+      "failing_input": "analyzeAttribution returns trust.level='unknown' (utm_campaign not configured), with metaClaim>0 and trueRevenue>0 (mapping agrees with Meta).",
+      "expected": "Operator UX: clear signal whether to trust the number.",
+      "actual": "Gate `attribution.trust.level !== 'high'` includes 'unknown' → unknown gets upgraded to 'high' with the agreement reason prepended. Resulting tooltip contains 'Strong agreement signal' AT TOP, then the inherited 'no orders tagged' reason. Two sentences read as contradictory to an operator but technically both correct: two attribution methods agree, but tagging is misconfigured. This is the documented intent of the 2026-05-22 fix (operator feedback: 'agreement IS the trust signal'). Not a bug.",
+      "fix_sketch": "Optional UX: when upgrading from 'unknown', could replace the 'no orders tagged' reason instead of prepending. Out of scope for correctness audit.",
+      "regression_test_idea": "Mock analyzeAttribution to return trust.level='unknown' with reasons including 'no orders tagged'; metaClaim=100, trueRevenue=98; assert level upgrades to 'high' AND reasons contain both messages."
+    },
+    {
+      "id": "SVC-15",
+      "severity": "INFO",
+      "file_line": "useCampaignTrueRevenue.ts:367-375 (productTotalsByStoreProduct overwrite vs accumulate)",
+      "failing_input": "Same (storeId, productId) appearing in productRev twice.",
+      "expected": "Either accumulate or single value.",
+      "actual": "Uses `.set()` which overwrites. Safe because productsByStore is built via dedupe-sum at lines 287-299 — each (storeId, productId) appears exactly once per inner array. The overwrite is a no-op in practice. If the dedupe step regresses, productTotals would silently lose data; the SAFER pattern would be to assert one-shot or accumulate, but neither is necessary today.",
+      "fix_sketch": "n/a (consider an assertion in dev if dedup invariant is ever in doubt).",
+      "regression_test_idea": "n/a"
+    }
+  ],
+  "uncertainty_notes": "Resolved from ⚠️ Uncertain to ✅ Verified. Re-research pass (2026-05-24) traced every closure and contract:\n- All 12 prior findings re-validated as 'Correct, n/a' (no flips).\n- 3 new findings added (SVC-13/14/15) — all INFO severity (defensive-coding observations / UX edges, not bugs).\n- Filter wiring (storeId vs storeName): hook uses storeId consistently; the storeName filter at the AGGREGATE upstream is a known deferred concern (IN-07 in campaignsAggregator.ts:68-76), NOT introduced by this hook.\n- Memo dep arrays: every closed-over variable listed; over-listing of derived memos (dailyMetaByCampaign, productToCampaigns) is harmless.\n- Loading/race states: progressive enhancement works correctly — early renders with only products+campaigns get spend-proportional-only allocation; orders arrival triggers re-run with deterministic data. attribution gracefully null until orders arrive.\n- Attribution shape: hook passes exact { campaignName, campaignId, storeId, platform, metaClaim, spend } shape that analyzeAttribution expects (attributionAnalysis.ts:308-325). No mismatch.\n- Cross-store invariants: campaignKey uses storeId; productsByStore keyed by storeId; campaignsForProductInStore filters by storeId prefix. No storeName/storeId conflations inside the hook (the upstream filter on storeName is a deferred concern noted in IN-07, not the hook's fault).\n- storeAggs sort invariants: hook does not depend on sort order — it iterates aggregated for output keys; allocator output is a Map (insertion order). Deterministic.\n\nLack of direct test coverage REMAINS a concern (see test_coverage_gaps below), but is a SUITE concern, not a CORRECTNESS verdict. The downstream pure helpers (allocateProductRevenue ✅ EDGE_RICH 17 tests, attributionAnalysis ✅ EDGE_RICH 71 tests per AUDIT-phase9-snapshot) constitute the trust foundation. The hook is thin orchestration over those audited primitives.",
+  "test_coverage_gaps": [
+    {
+      "description": "No direct test for useCampaignTrueRevenue hook",
+      "why_it_matters": "Hook is the largest in the codebase (519 LOC); orchestrates allocator + analyzer + trust upgrades. Without coverage, refactors silently regress.",
+      "suggested_fixture": "renderHook with synthetic campaigns/products/orders; assert returned Map shape + confidence + attribution."
+    },
+    {
+      "description": "No test for two-method-agreement trust upgrade (lines 458-491)",
+      "why_it_matters": "Operator feedback 2026-05-22 explicitly drove this fix; regression would re-introduce 'low' chips on highly-agreeing campaigns.",
+      "suggested_fixture": "Mock analyzeAttribution to return trust='low'. Provide metaClaim=100, trueRevenue=98 (gap<10%); assert hook upgrades to 'high'."
+    },
+    {
+      "description": "No test for CR-02 refund-row propagation (net<0)",
+      "why_it_matters": "The previous `<= 0` filter silently dropped refund rows; the fix is critical for refund-heavy product ROAS accuracy.",
+      "suggested_fixture": "products [{net:-50,units:0}, {net:100,units:1}]; assert allocator receives both; assert trueRevenue reflects net deduction."
+    },
+    {
+      "description": "No test for #WR-02 shared-campaign Set deduplication",
+      "why_it_matters": "Counter-vs-Set distinction is the difference between 'low' and 'medium' chips on common overlap patterns.",
+      "suggested_fixture": "Campaigns A=[P1,P2], B=[P1,P2]; assert sharedCampaigns=1 not 2."
+    },
+    {
+      "description": "No test for WR-05 reference contract",
+      "why_it_matters": "Documented footgun; if a caller mutates localRange, the entire allocation stays stale silently.",
+      "suggested_fixture": "Render hook with localRange={from,to}; mutate in place and re-render; assert memo result is stale (pinning the documented behavior)."
+    },
+    {
+      "description": "No test for Google-platform exclusion in dailyMetaByCampaign",
+      "why_it_matters": "IN-06 documented constraint; a relaxed filter would corrupt Google campaign attribution.",
+      "suggested_fixture": "allCampaignRows includes Google row; assert dailyMetaByCampaign does NOT contain its key."
+    },
+    {
+      "description": "No test for productTotals tooltip-denominator computation",
+      "why_it_matters": "Phase 05.7.9 feature; operator-visible numbers.",
+      "suggested_fixture": "Campaign mapped to [P1,P2]; productsByStore for P1 = {revenue:100,units:5,orders:3}, P2 = {revenue:50,units:2,orders:1}; assert productTotals = {revenue:150,units:7,orders:4}."
+    },
+    {
+      "description": "No test for trust upgrade from 'unknown' (SVC-14 edge case)",
+      "why_it_matters": "When utm_campaign tagging is broken (deterministicOrders=0) but mapping agrees with Meta, the upgrade fires and produces a 'high' chip with contradictory-looking reasons. Confirms operator-correct intent.",
+      "suggested_fixture": "Mock analyzeAttribution to return trust.level='unknown' with deterministicOrders=0; metaClaim=100, trueRevenue=98; assert upgrade to 'high' AND the prepended agreement reason."
+    }
+  ],
+  "channels": {
+    "imports_from": [
+      "lib/campaignProductMap.ts (allocateProductRevenue, campaignKey, ProductMap)",
+      "lib/attributionAnalysis.ts (analyzeAttribution, AttributionAnalysis)",
+      "app/api/products/route (ProductsResponse)",
+      "app/api/orders-attribution/route (OrdersAttributionResponse)",
+      "app/api/campaigns/route (CampaignsResponse)",
+      "lib/campaigns.ts (CampaignRow)",
+      "lib/campaignsAggregator.ts (Aggregated)",
+      "lib/types.ts (DateRange)"
+    ],
+    "exports_to": [
+      "components/CampaignsTable.tsx (primary consumer — drives trueRevenueByKey Map for ROAS Shopify column + sort + per-row tooltip)",
+      "components/CampaignsTableRow.tsx (consumes per-row TrueRevenueInfo)",
+      "components/CampaignDrawer.tsx (consumes per-campaign attribution + confidence)",
+      "components/MetaShopifyReconciliation.tsx (consumes aggregate trust signals)"
+    ],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

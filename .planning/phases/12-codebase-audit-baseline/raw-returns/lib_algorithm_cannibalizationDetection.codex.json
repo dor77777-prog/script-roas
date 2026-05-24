@@ -1,0 +1,77 @@
+{
+  "task_id": "12.A.6.codex",
+  "file": "dashboard-web/src/lib/cannibalizationDetection.ts",
+  "test_path": "dashboard-web/src/lib/__tests__/cannibalizationNullSentinel.test.ts + dashboard-web/src/lib/__tests__/cannibalizationDetection.test.ts",
+  "opus_review_path": ".planning/phases/12-codebase-audit-baseline/raw-returns/lib_algorithm_cannibalizationDetection.json",
+  "opus_verdict": "Verified",
+  "opus_findings_verdicts": [],
+  "verdict": "VERIFY-WITH-CAVEAT",
+  "findings": [
+    {
+      "id": "CODEX-CANN-01",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/lib/cannibalizationDetection.ts:326-345",
+      "failing_input": "A multi-mapped product where the cohort is insufficient because one half has <3 active spend days, with product revenue earlyRev=0 and lateRev>0. Example: 14-day range, c1/c2 mapped to p1, only two late active campaign days, productsDaily p1 totals 0 in early half and 200 in late half.",
+      "expected": "Even for an `insufficient` verdict, metrics.revenueGrowthPct should respect the HIGH-11 contract: early revenue 0 with non-zero late revenue is undefined/non-finite and should be emitted as null, so in-memory consumers and JSON-round-tripped consumers agree.",
+      "actual": "The insufficient branch hard-codes `revenueGrowthPct: 0` and `spendGrowthPct: 0` for every insufficient verdict. The same 0 -> positive revenue case that the normal and composition_changed branches now serialize as null is reported as finite 0% here.",
+      "fix_sketch": "Compute shared metric helpers before branching, e.g. `computeRevenueGrowthPct(earlyRev, lateRev)` returning null for earlyRev===0 && lateRev!==0 and 0 only for 0 -> 0. Use it in insufficient, composition_changed, and normal verdict construction.",
+      "regression_test_idea": "Add a `cannibalizationNullSentinel.test.ts` case that forces `risk === 'insufficient'` with earlyRev=0 and lateRev=200, then assert `metrics.revenueGrowthPct === null` after JSON stringify/parse."
+    },
+    {
+      "id": "CODEX-CANN-02",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/lib/cannibalizationDetection.ts:441-448 and 463-468",
+      "failing_input": "A stable multi-mapped cohort with earlyRev=0, lateRev=-50, earlySpend=100, lateSpend=150. This is plausible on refund-heavy product days: the product had no net sales in the early half and net-negative revenue in the late half.",
+      "expected": "Revenue growth from 0 to a negative number is also undefined/non-finite under the `(late - early) / early` math. The metric should not be reported as finite 0%. Classification should still treat zero-to-negative revenue under spend growth as severe cannibalization/refund drag rather than the positive-incrementality null path.",
+      "actual": "Both the composition_changed branch and normal branch use `lateRev > 0 ? null : 0` when `earlyRev === 0`, so 0 -> negative revenue is serialized as `revenueGrowthPct: 0`. In the normal branch this can still fall into HIGH because 0 < 5%, but the metrics and Hebrew reason say revenue grew only 0%, hiding that product revenue actually went negative.",
+      "fix_sketch": "Do not overload null to mean only positive incrementality. Return null for earlyRev===0 && lateRev!==0, and classify the sign separately: lateRev>0 => none/incrementality reason; lateRev<0 with spend growth => high/severe reason with `revPctText` as n/a/undefined.",
+      "regression_test_idea": "Add normal-branch and composition_changed fixtures with earlyRev=0 and lateRev=-50. Assert `revenueGrowthPct === null`, no finite `0%` text in the reason, and the normal stable-cohort case remains HIGH when spend scaled."
+    },
+    {
+      "id": "CODEX-CANN-03",
+      "severity": "MINOR",
+      "file_line": "dashboard-web/src/lib/cannibalizationDetection.ts:211-220 and 250-276",
+      "failing_input": "A productMap containing duplicate product IDs inside one campaign entry, e.g. `{ 'uzoshop::Meta::c1': ['p1', 'p1'] }`, plus ordinary campaign/product daily rows for c1 only.",
+      "expected": "A product mapped to only one distinct campaign should be skipped because it is not multi-mapped. Duplicate product IDs in one campaign array should not manufacture a two-member cohort.",
+      "actual": "The reverse index pushes the campaign key once per product ID occurrence and later gates only on `cohortKeys.length < 2`. Duplicate IDs create `cohortKeys=['uzoshop::Meta::c1','uzoshop::Meta::c1']`, so the detector emits a cannibalization verdict for a single-campaign product. The memberStats Map dedupes the spend later, which makes the output internally inconsistent: duplicate cohortKeys but single-campaign spend.",
+      "fix_sketch": "Build `cohortByProduct` as `Map<string, Set<string>>` or dedupe `pids` per key before pushing. Convert to arrays only after the distinct-campaign check.",
+      "regression_test_idea": "Add a fixture with one campaign key mapped to ['p1','p1'] and valid campaign/product rows, then assert `detectProductCannibalization(...)` returns [] or a single distinct cohort member is skipped."
+    }
+  ],
+  "uncertainty_notes": "The Phase 10 b/HI-04 share-ratio flip math itself appears correct for the documented `>=2` doubled/halved threshold with a 5% smaller-side noise gate. CODEX-CANN-03 depends on whether all productMap writes are guaranteed to pass through `setMappedProducts`; `readProductMap` and cloud/legacy data do not dedupe, so the detector should still defend its public input.",
+  "test_coverage_gaps": [
+    {
+      "description": "Null-sentinel tests cover normal and composition_changed `0 -> positive` paths, but not the insufficient branch.",
+      "why_it_matters": "The detector exposes metrics even for insufficient verdicts; JSON consumers and UI formatting can drift if the sentinel is branch-dependent.",
+      "suggested_fixture": "Force `<3` active days in one half with earlyRev=0 and lateRev>0; assert `risk === 'insufficient'` and `revenueGrowthPct === null` through JSON round-trip."
+    },
+    {
+      "description": "No test covers zero-to-negative net revenue with earlyRev=0.",
+      "why_it_matters": "Refund-heavy product windows are explicitly allowed by the input type. The current `lateRev > 0 ? null : 0` branch treats `0 -> -50` as finite flat growth.",
+      "suggested_fixture": "Stable cohort, spend +50%, product revenue 0 -> -50; assert undefined metric handling and a HIGH/severe verdict reason that does not display `0%` revenue growth."
+    },
+    {
+      "description": "No fixture for duplicate product IDs inside a single campaign's productMap array.",
+      "why_it_matters": "Historical/cloud productMap values can bypass `setMappedProducts` dedupe and should not create false multi-campaign cohorts.",
+      "suggested_fixture": "Use `{ 'uzoshop::Meta::c1': ['p1', 'p1'] }` and assert the detector skips p1 as single-mapped."
+    }
+  ],
+  "channels": {
+    "imports_from": [
+      "dashboard-web/src/lib/campaignProductMap.ts"
+    ],
+    "exports_to": [
+      "dashboard-web/src/components/CampaignsTable.tsx via detectProductCannibalization()",
+      "dashboard-web/src/components/CampaignDrawer.tsx via detectProductCannibalization()",
+      "dashboard-web/src/components/CohortComparisonPanel.tsx via CannibalizationVerdict rendering",
+      "dashboard-web/src/lib/campaignHealthScore.ts via CannibalizationRisk-compatible health adjustment input"
+    ],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

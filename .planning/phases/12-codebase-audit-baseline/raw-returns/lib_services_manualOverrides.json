@@ -1,0 +1,67 @@
+{
+  "task_id": "12.B.3",
+  "file": "dashboard-web/src/lib/fetchers/manualOverrides.ts",
+  "test_path": "dashboard-web/src/lib/fetchers/__tests__/manualOverrides.test.ts",
+  "verdict": "✅ Verified",
+  "findings": [
+    {
+      "id": "SVC-01",
+      "severity": "MINOR",
+      "file_line": "manualOverrides.ts:130-136",
+      "failing_input": "manual_overrides row with platform = 'tiktok' (or any unexpected value). Test 5 covers this.",
+      "expected": "Row is skipped with a console.warn but original spend pass-through is preserved.",
+      "actual": "Code correctly skips the row (find() never matches 'meta'/'google' so the pass-through branches run), and the for-loop at 130-136 fires console.warn. Behavior is correct, but the warning fires AFTER the calculations are done, and the warning text does not include the spend value or whether any platform was overridden — making operator debugging slightly harder.",
+      "fix_sketch": "Move the warning loop above the find() calls so operators see the warning before any state mutation. Optionally include the spend value in the warning.",
+      "regression_test_idea": "Existing test 5 already pins this. Could add an assertion that the warning includes 'spend=999' for context."
+    },
+    {
+      "id": "SVC-02",
+      "severity": "MINOR",
+      "file_line": "manualOverrides.ts:75-85 (overrideToCad)",
+      "failing_input": "manual_overrides row where `spend` is null in Postgres but supabase-js decodes it as null. `typeof null === 'object'` so the ternary takes the `parseFloat(null)` branch → NaN → throws 'spend not numeric'. Correct behavior.",
+      "expected": "Throw with clear message naming store/date/platform.",
+      "actual": "Throws 'manual_overrides spend not numeric for {store} {date} {platform}'. This is correct but there is no test for null/undefined spend or for parseFloat returning NaN.",
+      "fix_sketch": "None needed — guard is correct. Add a test.",
+      "regression_test_idea": "Add a test with mockRows containing { spend: null, currency: 'CAD', ... } and assert thrown message includes 'spend not numeric'."
+    },
+    {
+      "id": "SVC-03",
+      "severity": "COSMETIC",
+      "file_line": "manualOverrides.ts:107-108",
+      "failing_input": "n/a",
+      "expected": "Comment says 'at most one row per (date, store_id, platform) thanks to the UNIQUE constraint' — assumes the migration enforced it.",
+      "actual": "If the UNIQUE constraint were ever dropped (or never applied to the table), `.find()` would silently pick the first row and discard later ones — leading to user-visible nondeterminism for partial duplicate rows. Defensive: assert rows.filter(p=='meta').length <= 1.",
+      "fix_sketch": "Add a defensive check or assume DB invariant. The current code is fine if the schema invariant holds.",
+      "regression_test_idea": "n/a (DB-level invariant)."
+    }
+  ],
+  "uncertainty_notes": "File is 140 LOC with 6 tests covering all branches: no-overrides pass-through, meta-only override with FX, both overrides, CAD override skips FX, unexpected platform warning, Supabase error. The supabase chain mock is convincing. Verdict ✅. Audit snapshot does not list manualOverrides in the fetcher rows.",
+  "test_coverage_gaps": [
+    {
+      "description": "No test for spend = null / undefined in override row (parseFloat NaN throw path)",
+      "why_it_matters": "Production data shape allows numeric NULL in NUMERIC columns; the throw path at line 77-80 is uncovered.",
+      "suggested_fixture": "mockState.rows = [{ ..., spend: null as unknown as number, currency: 'CAD' }] — assert /spend not numeric/."
+    },
+    {
+      "description": "No test for FX-conversion of Google override with non-CAD currency (e.g., USD→CAD)",
+      "why_it_matters": "Tests cover Meta=ILS→CAD and Google=CAD passthrough only. The symmetric Google-currency path is uncovered.",
+      "suggested_fixture": "mockState.rows = [{ platform: 'google', spend: 50, currency: 'USD' }]; fxResponder returns 1.35; assert gaSpendCad = 67.5."
+    },
+    {
+      "description": "No test for when FX call itself throws (Frankfurter down, getFxRate rejects)",
+      "why_it_matters": "Network failure during merge should propagate to caller (Inngest retries) — no test pins this contract.",
+      "suggested_fixture": "mockState.fxResponder = () => { throw new Error('Network'); }; assert mergeOverridesFromSupabase rejects."
+    }
+  ],
+  "channels": {
+    "imports_from": ["lib/supabaseAdmin.ts (getSupabaseAdmin)", "lib/fetchers/fx.ts (getFxRate)"],
+    "exports_to": ["lib/inngest/cronDaily.ts", "lib/inngest/cronLive.ts (potentially)"],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": ["manual_overrides (date, store_id, platform, spend, currency) — filtered by store_id + date"],
+    "api_calls": []
+  }
+}

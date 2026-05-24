@@ -1,0 +1,115 @@
+{
+  "task_id": "12.A.3",
+  "file": "dashboard-web/src/lib/attributionAnalysis.ts",
+  "test_path": "dashboard-web/src/lib/__tests__/{analyzeAttribution,attributionAnalysis,computeWindowStability,detectOutlierDays,analyzeAttributionForAd,analyzeAttributionForAdSet,orderMatchesCampaign,analyzeProductChannel}.test.ts",
+  "verdict": "issues_found",
+  "findings": [
+    {
+      "id": "ALG-01",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/lib/attributionAnalysis.ts:442, 453, 458-460, 469, 473, 483, 495, 522, 525 (analyzeAttribution); 795, 798, 849, 852 (buildAnalysis advice strings)",
+      "failing_input": "campaign.platform === 'TikTok' (now permitted by platform gate at line 330 since Phase 05.7.9c TikTok widening, commits 7c4261a + efd628c). Any TikTok campaign analyzed through analyzeAttribution hitting the zero-on-both-sides branch (line 434), the misconfigured branch (line 450), low coverage (line 501), medium coverage (line 475), or high-coverage halo (line 461). Same for any TikTok ad-set / ad analyzed through buildAnalysis (line 862).",
+      "expected": "Hebrew operator copy (`reasons[]` + `recommendation`) should reference the actual platform when the analyzed campaign/ad-set/ad is TikTok. The function already correctly interpolates `${campaign.platform}` in the misconfigured branch (line 456) and the high-coverage reason (line 465) — that contract should be uniform across all branches and propagate into buildAnalysis's advice strings.",
+      "actual": "Multiple branches hard-code the literal string 'Meta' in operator-facing copy after the TikTok widening: line 442 ('Meta או מ-Shopify'), line 453 ('Meta Ads Manager'), line 458-459 ('הוסף URL Parameters לקמפיין ב-Meta'), line 469 ('ה\"modeled\" של Meta'), line 473 ('מעבר למה ש-Meta מדווח'), line 483 ('Meta מייחס בלי click-id'), line 495 ('ROAS לפי Meta'), lines 522/525 ('Meta מייחס' / 'Meta מנפח דיווחים'). buildAnalysis advice strings hardcode the same (lines 795, 798 for ad-set; 849, 852 for ad). For a TikTok campaign with low coverage, the operator reads 'Meta מנפח דיווחים לקמפיין הזה' on a TikTok campaign — factually wrong attribution that misleads operator action (they'd troubleshoot the Meta Pixel/CAPI for a TikTok issue, possibly disable the wrong campaign).",
+      "fix_sketch": "Hoist `const platformLabel = campaign.platform` once near line 432 (mirroring the correct pattern already at lines 456, 465) and substitute everywhere 'Meta' appears in operator copy. For buildAnalysis (line 862), add `platform: string` to the `opts` type and propagate it from analyzeAttributionForAdSet (line 783) and analyzeAttributionForAd (line 837); update the `advice` template strings to take a platform parameter (e.g. `goodHalo: (platform) => \\`ה-ad-set מבצע מעבר למה ש-${platform} דיווח...\\``) so each call-site can render the correct label. Document the contract in the docstring at line 308 ('the per-platform Hebrew copy must reference the actual platform').",
+      "regression_test_idea": "Add a TikTok scenario to analyzeAttribution.test.ts: build a TikTok campaign with low coverage (1 small order vs metaClaim 500); assert that `result.reasons.join(' ')` AND `result.recommendation` MATCH /TikTok/ and do NOT MATCH /Meta/ in the low-trust path. Add parallel cases for high-coverage halo, medium-coverage, and zero-conv-on-both-sides. Repeat for analyzeAttributionForAdSet (TikTok ad-set, low coverage) and analyzeAttributionForAd (TikTok ad, halo)."
+    },
+    {
+      "id": "ALG-02",
+      "severity": "MINOR",
+      "file_line": "dashboard-web/src/lib/attributionAnalysis.ts:138-169 (computeCoverage JSDoc, especially line 145)",
+      "failing_input": "Reader/maintainer of computeCoverage JSDoc. AUDIT U-05 (commit b846ae7) removed the hard upper clamp at 2 from the implementation but did not update the docstring describing the contract.",
+      "expected": "Docstring should describe actual behaviour: `metaClaim > 0` → raw `det / claim` with NO upper clamp; extreme halo is intentionally visible; the `coverageExceedsClamp` flag set by callers signals when raw value exceeds COVERAGE_WARNING_THRESHOLD.",
+      "actual": "Line 145 still claims 'ratio = det / claim, clamped to [-∞, 2]. Upper clamp prevents halo (det >> claim) from blowing the trust ladder'. The clamp no longer exists in the code at lines 163-169; tests at analyzeAttribution.test.ts:301-309 explicitly assert that 5x and 10x coverage pass through unclamped. The stale doc claim contradicts the actual contract and contradicts the (correct) comment block at lines 80-92. A future caller reading just computeCoverage's JSDoc could write code assuming a 2x ceiling that no longer exists (e.g. a downstream `trust.score = coverage * 50` calculation that assumed coverage ∈ [0, 2]).",
+      "fix_sketch": "Rewrite the `metaClaim > 0` bullet at line 145 to: 'ratio = det / claim. NO upper clamp — extreme halo (e.g. 5x, 10x) is intentionally visible so the operator detects broken pixels / ad-blocker storms via the coverageExceedsClamp flag set by callers. Callers that need a clamp for variance-stability (computeWindowStability uses one to keep stdDev robust to one freak window) re-apply it locally. Lower bound preserved — negative coverage carries semantic info (\"refunds exceeded sales\", WR-03).'",
+      "regression_test_idea": "Doc-only drift; no runtime test needed. A CI grep guard for 'clamped to [-' near the computeCoverage definition would catch future drift."
+    },
+    {
+      "id": "ALG-03",
+      "severity": "MINOR",
+      "file_line": "dashboard-web/src/lib/attributionAnalysis.ts:1146-1188 (analyzeProductChannel line-items + revenue loop)",
+      "failing_input": "OrderAttributionRow with at least one lineItem whose `revenueCad` is NaN or non-finite (Apps Script writer glitch, upstream divide-by-zero in proportional allocation, or an Inf produced when an order's `current_total_price` is 0 but a line carries qty>0). Order has at least one mapped product so it enters the hitMapped branch.",
+      "expected": "A single malformed line-item should be skipped (matching the `Number.isFinite(o.totalCad)` defence applied at analyzeAttribution line 343, analyzeAttributionForAdSet line 779, analyzeAttributionForAd line 833, and buildAnalysis line 887). Remaining valid line items would still accumulate; totalRevenue, facebookRevenue, tiktokRevenue, and bySource[*].revenue would stay finite.",
+      "actual": "Lines 1149-1154 sum `li.revenueCad` and `li.units` into `orderMappedRevenue` / `orderMappedUnits` with NO Number.isFinite guard. A single NaN line item propagates to `totalRevenue` (line 1158), `facebookRevenue` (line 1177), `tiktokRevenue` (line 1186), and `bySource[sourceKey].revenue` (line 1166). The breakdown's `facebookShare`/`tiktokShare` are computed as facebookOrders / totalOrders (still real counts) so they stay finite, but every revenue number on the returned ProductChannelBreakdown becomes NaN — invisible to JSON serializers (NaN→null) and breaks any downstream UI segment-width math.",
+      "fix_sketch": "Add `if (!Number.isFinite(li.revenueCad) || !Number.isFinite(li.units)) continue;` inside the for-loop at line 1149-1154. Single-line defence mirroring the cleanliness contract applied to o.totalCad elsewhere in the file.",
+      "regression_test_idea": "Add to analyzeProductChannel.test.ts: an order with two line items, both productId mapped, one with `revenueCad: NaN` and one with `revenueCad: 50`. Assert `result.totalRevenue === 50` (NOT NaN), `result.bySource['meta-paid']?.revenue === 50`, and `Number.isFinite(result.totalRevenue) === true`."
+    },
+    {
+      "id": "ALG-04",
+      "severity": "MINOR",
+      "file_line": "dashboard-web/src/lib/attributionAnalysis.ts:683-709 (detectOutlierDays MAD fallback when med=0); surfaced in operator copy at line 570",
+      "failing_input": "Daily series whose trailing-7 lookback has `median = 0` AND `MAD = 0` (all baseline days literally 0 conversion value — common for a newly-launched campaign, a paused-then-revived campaign, or a brand-awareness campaign that only occasionally converts). The day under test has a small positive spike (e.g. 0.50 CAD modeled conversion).",
+      "expected": "A trivially small modeled conversion on a dead baseline should NOT be flagged as a 'spike' alongside legitimate $500 spikes — the operator's tooltip at line 570 would otherwise show useless dates and dilute the signal that justifies the chip's existence.",
+      "actual": "When `deviation === 0` (line 703) the threshold falls back to `Math.max(1e-9, Math.abs(med) * MAD_FALLBACK_FRACTION)` (line 705). With `med === 0` this evaluates to `Math.max(1e-9, 0) = 1e-9`. ANY non-zero `sorted[i].value` exceeds 1e-9 and is flagged. A noise day of 0.01 CAD will appear in `outlierDays` and the operator's reason text reads `${MAD_OUTLIER_MULTIPLIER}× MAD מעל החציון` (line 570) — but the actual MAD threshold was 1e-9, not 3× MAD.",
+      "fix_sketch": "Add a minimum-spike floor to the dead-baseline fallback: `const threshold = deviation > 0 ? MAD_OUTLIER_MULTIPLIER * deviation : Math.max(DEAD_BASELINE_MIN_SPIKE_CAD, Math.abs(med) * MAD_FALLBACK_FRACTION);` where `DEAD_BASELINE_MIN_SPIKE_CAD` is a new hoisted constant (suggest 1.0 CAD — below which spikes are too small to matter to the operator). Document the trade-off at lines 53-56.",
+      "regression_test_idea": "Add to detectOutlierDays.test.ts: series of 8 days [0,0,0,0,0,0,0, 0.50]; assert with the new floor that the 0.50 day is NOT flagged. Counter-test: same baseline + [0,0,0,0,0,0,0, 500] (real spike) IS flagged. Pin DEAD_BASELINE_MIN_SPIKE_CAD value via a constant export."
+    },
+    {
+      "id": "ALG-05",
+      "severity": "COSMETIC",
+      "file_line": "dashboard-web/src/lib/attributionAnalysis.ts:759 (analyzeAttributionForAdSet param doc), :814 (analyzeAttributionForAd, no comment)",
+      "failing_input": "Reader/maintainer of the JSDoc for the platform-widened ad-set / ad analyzers.",
+      "expected": "Parameter doc should describe `metaClaim` as platform-agnostic (named historically but semantically holds the PLATFORM's conversion_value), matching the contract at the campaign-level analyzer's docstring at lines 328-329.",
+      "actual": "Line 759: `metaClaim: number;       // CAD — Meta's conversion_value for this ad-set` — stale after Wave 2 TikTok widening (line 772). Line 814 has no comment but the misnomer persists. Combined with ALG-01 this makes the TikTok story confusing for a new maintainer.",
+      "fix_sketch": "Line 759: replace comment with '// CAD — PLATFORM\\'s conversion_value (Meta or TikTok) for this ad-set; named historically'. Apply the same comment to line 814. Optional follow-up: rename `metaClaim` → `platformClaim` across attribution analyzers in a cross-cutting refactor (requires type changes to AttributionAnalysis consumers).",
+      "regression_test_idea": "Doc-only; no runtime test needed."
+    }
+  ],
+  "uncertainty_notes": "ALG-01 is the highest-impact finding — the TikTok widening (commits 7c4261a + efd628c + Wave 1 hook change) successfully reached the matching code but never propagated through to the operator-facing Hebrew copy. Risk if not fixed: operator-misleading attribution recommendations for TikTok campaigns/ad-sets/ads, with concrete potential for wrong-platform troubleshooting actions. Did NOT re-flag AUDIT-phase9-snapshot.md's three surface-1 concerns: U-04 (mixed verdict silently swallowed) is now resolved by analyzeAttribution.ts:554-562 + tested at analyzeAttribution.test.ts/attributionAnalysis.test.ts:174-326; U-05 (hard clamp masks halo) is resolved by removing the clamp from computeCoverage + adding coverageExceedsClamp flag + tested at analyzeAttribution.test.ts:345-383; the Bayesian CI n-sweep gap is reported under test_coverage_gaps below. Bessel correction (lines 376, 907), MAD outlier detection (lines 700-705), refund-signed coverage (lines 351, 167-168), the storeId boundary guard at line 341, and the trim-tolerant utm matching all check out against the test suite. The bucketIdx upper-bound in computeWindowStability silently drops orders falling in a tail bucket of <3 days even when those orders are inside [dateFrom, dateTo] — but this is documented design (TAIL_DAYS_MIN_FOR_PARTIAL_BUCKET = 3 justification at lines 38-39, 617-619) so not flagged. The COVERAGE_WARNING_THRESHOLD cap kept inside computeWindowStability is intentional and documented (lines 654-660) but lacks regression-test pinning (see test_coverage_gaps).",
+  "test_coverage_gaps": [
+    {
+      "description": "pearson() (line 178) and pearsonWithLag() (line 214) are exported public API but have ZERO direct unit-test coverage in the __tests__ directory. Production use is in MetaShopifyReconciliation.tsx (lines 321-325, 349) and consumers null-check the result, so a regression to the null-safety guards (NaN/Infinity pair-filter at line 184, zero-variance early return at line 201, [-1,1] clamp at line 205) would slip through with the panel either rendering empty or showing a bogus coefficient.",
+      "why_it_matters": "MAJOR — these functions drive the channel-correlation chart the operator uses to assess Meta:Shopify trust. A regression that returned a malformed coefficient would render as a broken correlation panel in production with no test signal.",
+      "suggested_fixture": "New pearson.test.ts covering: (1) perfect positive `pearson([1,2,3], [2,4,6]) === 1`; (2) perfect negative `pearson([1,2,3], [3,2,1]) === -1`; (3) zero-variance LHS `pearson([5,5,5], [1,2,3]) === null`; (4) zero-variance RHS `pearson([1,2,3], [5,5,5]) === null`; (5) NaN pairs filtered `pearson([1,NaN,3], [2,4,6]) === pearson([1,3],[2,6])`; (6) too-few-pairs `pearson([1], [2]) === null`; (7) positive lag `pearsonWithLag([1,2,3,4], [2,4,6,8], 1)` shifts ys forward, paired [(1,4),(2,6),(3,8)] → coefficient = 1; (8) negative lag `pearsonWithLag([1,2,3,4], [2,4,6,8], -1)` → paired [(2,2),(3,4),(4,6)] → coefficient = 1; (9) lag=0 fast-path equivalence to pearson()."
+    },
+    {
+      "description": "The COVERAGE_WARNING_THRESHOLD = 2 cap inside computeWindowStability (line 663) is documented at lines 654-660 as 'INTENTIONALLY kept here even though it was removed from displayed computeCoverage'. No test pins this behaviour. A future maintainer reading the U-05 audit fix could remove the cap from line 663 too, and the variance/verdict would silently shift on outlier-window data — exactly the case the cap was kept for.",
+      "why_it_matters": "MINOR-to-MAJOR — without a regression test pinning the verdict on a 'sea of stable + one extreme' fixture, removing the cap looks safe in code review. The verdict would shift from 'stable' to 'volatile' on a single freak window, downgrading every halo campaign's trust unnecessarily.",
+      "suggested_fixture": "Add to computeWindowStability.test.ts: 4 windows with meta=100 each and matched=[100, 105, 95, 1000] (raw coverages [1.0, 1.05, 0.95, 10.0]). Assert `result.verdict === 'mixed'` (with cap converting 10.0→2.0) and stdDev is bounded. Add a parallel test asserting that analyzeAttribution returns the raw uncapped coverage on the analysis object even when a sub-window was capped for variance purposes (already partly covered by coverageExceedsClamp tests; worth a cross-check)."
+    },
+    {
+      "description": "The Bayesian CI math is asserted against ONE specific 5-AOV fixture at analyzeAttribution.test.ts:135-136 (`low ≈ 2.1535, high ≈ 2.8465`). No n-sweep, no comparison to a closed-form Student-t or normal-approx oracle. A regression that swapped NORMAL_QUANTILE_95 = 1.96 for 2.0 (or the Bessel divisor for the population divisor) on a different sample-size path would not be caught.",
+      "why_it_matters": "MINOR — the normal approximation is documented as 'directional, not strict statistical' at line 364. But a 1.96 → 2.0 drift would push every displayed CI ~2% wider invisibly.",
+      "suggested_fixture": "Parameterized test sweeping n ∈ {2, 3, 5, 10, 30} with AOVs drawn from a known distribution; assert that `revHigh - revLow ≈ 2 × 1.96 × sampleStdDev × sqrt(n)` (closed-form normal width with Bessel divisor). Separate sanity check for n=2: assert sample variance uses divisor (n-1)=1, NOT n=2 (this would catch the Bessel regression independently)."
+    },
+    {
+      "description": "No test pins the contract that `outlierDays` returned by analyzeAttribution stays inside [dateFrom, dateTo] when the caller passes a `dailyMetaSeries` extending beyond the analysis window. detectOutlierDays does not slice by date (line 686-688 sorts but doesn't filter). Current callers (e.g. CampaignDrawer.tsx:644) happen to pass pre-filtered series via summary.dailyArr, but a future caller (e.g. a wider series for stability context) could surface out-of-range dates in the operator's tooltip at line 570.",
+      "why_it_matters": "MINOR — fragile contract not enforced by either the function or any test. Easy to break inadvertently.",
+      "suggested_fixture": "Test fixture in attributionAnalysis.test.ts: dailyMetaSeries spans 2026-04-01..2026-06-01 with a spike on 2026-04-05; analyze a window 2026-05-01..2026-05-15. Document the actual behaviour (current: outlier date IS included even though out of range) and pin with an assertion. If the design changes to require in-range outliers, modify the assertion and add a slice inside detectOutlierDays."
+    },
+    {
+      "description": "No test for analyzeProductChannel with NaN/Infinite revenueCad in a line item (paired with ALG-03 finding). The full-OrderSource-sweep at analyzeProductChannel.test.ts:198-241 only exercises clean line items.",
+      "why_it_matters": "MAJOR (paired with ALG-03 fix) — without a regression test, the defensive guard could be removed by a future maintainer, returning the silent NaN-propagation bug.",
+      "suggested_fixture": "See ALG-03 regression_test_idea."
+    },
+    {
+      "description": "No test covers the platform-agnostic operator copy contract that ALG-01 introduces. After the TikTok-Hebrew-copy fix, the regression risk is a copy-paste introducing 'Meta' back into a new branch.",
+      "why_it_matters": "MAJOR — pins the contract introduced by the ALG-01 fix.",
+      "suggested_fixture": "See ALG-01 regression_test_idea."
+    }
+  ],
+  "channels": {
+    "imports_from": [
+      "dashboard-web/src/lib/ordersAttribution.ts (OrderAttributionRow type, OrderSource type)"
+    ],
+    "exports_to": [
+      "dashboard-web/src/components/AttributionAnalysisPanel.tsx (AttributionAnalysis type)",
+      "dashboard-web/src/components/AdSetTable.tsx (AttributionAnalysis type)",
+      "dashboard-web/src/components/CampaignsTableRow.tsx (AttributionTrust type)",
+      "dashboard-web/src/components/ProductChannelBreakdown.tsx (ProductChannelBreakdown type)",
+      "dashboard-web/src/components/MetaShopifyReconciliation.tsx (pearson, pearsonWithLag)",
+      "dashboard-web/src/components/AdsDrawer.tsx (analyzeAttributionForAd)",
+      "dashboard-web/src/components/CampaignDrawer.tsx (analyzeAttribution, analyzeProductChannel, types)",
+      "dashboard-web/src/lib/hooks/useCampaignAttribution.ts (analyzeAttributionForAdSet, analyzeAttributionForAd)",
+      "dashboard-web/src/lib/hooks/useCampaignTrueRevenue.ts (analyzeAttribution + types)",
+      "dashboard-web/src/lib/aiReport.ts (referenced in operator copy fixture string)"
+    ],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

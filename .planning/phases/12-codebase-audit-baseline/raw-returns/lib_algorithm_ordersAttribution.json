@@ -1,0 +1,60 @@
+{
+  "task_id": "12.A.10",
+  "file": "dashboard-web/src/lib/ordersAttribution.ts",
+  "test_path": "dashboard-web/src/lib/__tests__/orderSourceContract.test.ts",
+  "verdict": "Has bug",
+  "findings": [
+    {
+      "id": "ALG-01",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/lib/ordersAttribution.ts:214",
+      "failing_input": "A real store tab with data beyond spreadsheet row 100000, e.g. uzoshop-orders-attribution row 100001 containing a valid 2026-05-24 Shopify order. This is realistic at scale because the file comment projects 330k attribution rows and the reader fans out by only three store tabs.",
+      "expected": "fetchOrdersAttribution() includes every valid row in each <storeId>-orders-attribution tab, including rows after sheet row 100000, then applies date/orderId filtering.",
+      "actual": "Rows after sheet row 100000 are never fetched because the reader hard-codes `const ranges = STORE_TAB_CONFIG.map(s => `${s.id}-orders-attribution!A2:${lastCol}100000`);`, so revenue/orders beyond that boundary disappear from downstream attribution if this Sheets reader is used.",
+      "fix_sketch": "Use an open-ended Sheets range such as `${s.id}-orders-attribution!A2:${lastCol}` or page/chunk reads until exhaustion; add a boundary test proving rows at and after sheet row 100001 are included.",
+      "regression_test_idea": "Mock google.sheets().spreadsheets.values.batchGet and assert requested ranges are open-ended A2:M/A2:N, or simulate a valueRange containing a sentinel order beyond the old cap and verify it is returned."
+    }
+  ],
+  "uncertainty_notes": "",
+  "test_coverage_gaps": [
+    {
+      "description": "The existing contract test only exercises parseSource passthrough, whitespace, null/undefined, and a hard-coded writer label list.",
+      "why_it_matters": "It does not exercise fetchOrdersAttribution row mapping, date filtering, boolean parsing, numeric parsing, missing-tab behavior, or includeLineItems behavior, where output-impacting reader bugs can hide.",
+      "suggested_fixture": "Mock Sheets batchGet with one row per store including numeric date, comma-formatted total, TRUE/true booleans, utmId/utmTerm, range outside/inside, and includeLineItems both false and true."
+    },
+    {
+      "description": "WRITER_EMITS in orderSourceContract.test.ts omits the first-class OrderSource value tiktok-paid even though the source union includes it and Shopify fetcher tests indicate the writer can emit it.",
+      "why_it_matters": "parseSource still passes tiktok-paid through via the permissive unknown-label test, but the explicit writer-to-reader contract is stale and would not catch accidental removal from the documented emitted labels.",
+      "suggested_fixture": "Add `tiktok-paid` to WRITER_EMITS and keep a dedicated assertion that parseSource('tiktok-paid') round-trips as a known emitted source."
+    },
+    {
+      "description": "parseLineItems has no direct tests in the specified test file.",
+      "why_it_matters": "Malformed JSON, non-array JSON, non-string product IDs, empty product IDs, non-finite units/revenue, and whitespace normalization directly affect product-channel attribution when includeLineItems=true.",
+      "suggested_fixture": "Call parseLineItems with valid `[{'p':' 123 ','u':2,'r':49.5}]` JSON, malformed JSON, object JSON, `{p:[1,2]}`, `{p:''}`, `{p:'123',u:'NaN',r:1}`, and assert only normalized valid items survive."
+    }
+  ],
+  "channels": {
+    "imports_from": [
+      "googleapis",
+      "dashboard-web/src/lib/dateRange.ts"
+    ],
+    "exports_to": [
+      "OrderAttributionRow type consumed by dashboard-web/src/app/api/orders-attribution/route.ts",
+      "OrderAttributionRow and OrderSource types consumed by dashboard-web/src/lib/attributionAnalysis.ts",
+      "OrderAttributionRow type consumed by dashboard-web/src/lib/aiReport.ts",
+      "OrderAttributionRow and OrderLineItem types consumed by dashboard-web/src/lib/postgresReaders.ts",
+      "OrderAttributionRow and OrderSource types consumed by dashboard-web/src/components/MetaShopifyReconciliation.tsx",
+      "parseSource consumed by dashboard-web/src/lib/__tests__/orderSourceContract.test.ts",
+      "fetchOrdersAttribution has no direct dashboard-web/src imports found; /api/orders-attribution currently reads via fetchOrdersAttributionFromPostgres"
+    ],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": [
+      "Google Sheets API spreadsheets.values.batchGet"
+    ]
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "task_id": "12.B.8",
+  "file": "dashboard-web/src/lib/hooks/useBillingOneTime.ts",
+  "test_path": "(none — no test exists for this hook)",
+  "verdict": "⚠️ Uncertain",
+  "findings": [
+    {
+      "id": "SVC-01",
+      "severity": "MINOR",
+      "file_line": "useBillingOneTime.ts:27-39 (useEffect)",
+      "failing_input": "Hook mounts after a write has already fired. The mount-time setOneTime(readOneTime()) seeds from localStorage; the event listener registers AFTER. A second write that happens BEFORE this useEffect runs (impossible due to React's sync useEffect) would be missed.",
+      "expected": "Standard React lifecycle: useEffect runs after mount, listener attached.",
+      "actual": "Standard pattern. No issue.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "n/a"
+    },
+    {
+      "id": "SVC-02",
+      "severity": "MAJOR",
+      "file_line": "useBillingOneTime.ts:25-35 (selfWritePending ref)",
+      "failing_input": "Two writes fire in rapid succession from the same hook instance: persist(A) → safeWrite dispatches 'roas-billing-changed' (listener sees selfWritePending=true, sets to false). Now another component fires writeOneTime(B) → event dispatched. selfWritePending is already false, listener re-reads. Correct.",
+      "expected": "Cross-hook re-reads should not be suppressed.",
+      "actual": "Correct. The ref flips at first event and remains false until next persist() call. Cross-component writes are caught.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Pin: persist(A) followed by another component's writeOneTime(B) — assert this hook's state ends up = B."
+    },
+    {
+      "id": "SVC-03",
+      "severity": "MAJOR",
+      "file_line": "useBillingOneTime.ts:45-49 (persist setter)",
+      "failing_input": "persist(next) sets local state synchronously THEN flips ref THEN calls writeOneTime which fires event. Listener observes the ref AS-IS (true), clears it, skips re-read.",
+      "expected": "Self-write does not double-render.",
+      "actual": "Correct. The ref-flip happens between setOneTime and writeOneTime. The event dispatch from writeOneTime is synchronous, so the listener runs on the same call stack — sees ref=true, clears it.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Unit test: spy on setOneTime, assert called once per persist(); assert no extra re-read on the listener path."
+    },
+    {
+      "id": "SVC-04",
+      "severity": "MINOR",
+      "file_line": "useBillingOneTime.ts:45 (persist with useCallback empty dep array)",
+      "failing_input": "writeOneTime is a module-scoped function (imported from lib/billing). React expects all closed-over values in the dep array; lint rule react-hooks/exhaustive-deps would flag this without a comment.",
+      "expected": "Lint OK with comment explanation.",
+      "actual": "Documented (WR-01 comment on line 42-44).",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "n/a"
+    },
+    {
+      "id": "SVC-05",
+      "severity": "MAJOR",
+      "file_line": "useBillingOneTime.ts:N/A",
+      "failing_input": "Hook is rendered in an SSR context (Next.js server component, or hydration mismatch).",
+      "expected": "Window-based useEffect runs only client-side; SSR returns empty oneTime array.",
+      "actual": "useState initializer is []; useEffect (with window.addEventListener) only runs on client. SSR returns empty. Correct.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "n/a"
+    }
+  ],
+  "uncertainty_notes": "File is 52 LOC. NO TEST FILE EXISTS. The hook depends on lib/billing's readOneTime + writeOneTime, and on the 'roas-billing-changed' custom event. Hook logic looks correct but is uncovered. The WR-03 self-bounce suppression is a behavioral subtlety worth testing. Verdict ⚠️ Uncertain due to zero test coverage.",
+  "test_coverage_gaps": [
+    {
+      "description": "No test exists for useBillingOneTime entirely",
+      "why_it_matters": "Hook is untestable in production; a regression in the event listener or ref logic would not be caught.",
+      "suggested_fixture": "renderHook(() => useBillingOneTime()); mock readOneTime/writeOneTime; assert mount calls readOneTime; assert persist calls writeOneTime + setOneTime."
+    },
+    {
+      "description": "No test for self-bounce suppression (WR-03)",
+      "why_it_matters": "The selfWritePending ref is the load-bearing mechanism preventing double-renders on self-writes; an inverted check would re-introduce the bug.",
+      "suggested_fixture": "renderHook → call persist(A) → assert state is A; spy on setOneTime to count re-renders (should be 1)."
+    },
+    {
+      "description": "No test for cross-component write propagation",
+      "why_it_matters": "Cross-hook updates rely on the shared event; if a refactor renamed the event constant, both hooks would silently desync.",
+      "suggested_fixture": "renderHook → another component fires writeOneTime(B) → assert hook's state ends up = B."
+    },
+    {
+      "description": "No test for cleanup (removeEventListener on unmount)",
+      "why_it_matters": "If cleanup is dropped, memory leaks accumulate per dashboard navigation.",
+      "suggested_fixture": "spy on window.removeEventListener; renderHook → unmount → assert removeEventListener called with 'roas-billing-changed'."
+    },
+    {
+      "description": "No test for SSR safety (no window crash)",
+      "why_it_matters": "Importing the hook from a server component would crash if window were referenced at module scope. useEffect guards this, but no test pins it.",
+      "suggested_fixture": "n/a (architectural, hard to unit-test in vitest; could use jsdom env vs node env)."
+    }
+  ],
+  "channels": {
+    "imports_from": ["lib/billing.ts (readOneTime, writeOneTime, OneTimeCost)"],
+    "exports_to": ["components/BillingSettings.tsx (consumer)"],
+    "events_emitted": [],
+    "events_consumed": ["window 'roas-billing-changed'"],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

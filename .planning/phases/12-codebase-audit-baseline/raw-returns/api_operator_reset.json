@@ -1,0 +1,55 @@
+{
+  "task_id": "12.E.13",
+  "file": "dashboard-web/src/app/api/operator/reset/route.ts",
+  "test_path": "dashboard-web/src/lib/__tests__/operatorReset.test.ts (DATA_TABLES/EXCEPT_MANUAL_TABLES/PROTECTED_TABLES + confirm tokens + validateResetBody — solid coverage).",
+  "verdict": "Has bug",
+  "findings": [
+    {
+      "id": "API-32",
+      "severity": "Major",
+      "file_line": "dashboard-web/src/app/api/operator/reset/route.ts:123-152 (sequential delete loop)",
+      "failing_input": "Operator POSTs scope='all'; 7 DATA_TABLES need DELETE.",
+      "expected": "Parallel deletes (Promise.allSettled) — 7 independent table deletes can fire concurrently; sequential adds 6× latency for no semantic gain.",
+      "actual": "Sequential for-loop; each table delete awaits the previous. On large datasets (≥100k orders_attribution rows), each delete can take seconds → total 30s+ wall time. The operator UI shows a spinner that may even time out the 60s maxDuration. Same family as API-23 (operator/jobs N+1).",
+      "fix_sketch": "Replace the for loop with `const results = await Promise.allSettled(tables.map(table => supabase.from(table).delete({count: 'exact'}).not('store_id', 'is', null)))`. Map each result into `deleted` / `errors`.",
+      "regression_test_idea": "Mock 7 deletes with 200ms each; assert handler returns in <500ms (parallel) rather than >1.4s (sequential)."
+    },
+    {
+      "id": "API-33",
+      "severity": "Minor",
+      "file_line": "dashboard-web/src/app/api/operator/reset/route.ts:129-132 (.not('store_id', 'is', null))",
+      "failing_input": "Future migration adds a row to data_daily with store_id intentionally NULL (e.g. cross-store aggregate sentinel).",
+      "expected": "The reset filter must still match every row.",
+      "actual": "The store_id NOT NULL constraint on all 7 tables makes the filter universal TODAY. But the comment on line 51-66 explicitly documents this brittle assumption. A future schema change that adds a nullable store_id would silently leak rows past the reset without test failure.",
+      "fix_sketch": "Replace .not('store_id', 'is', null) with a more robust always-true filter: .or('store_id.is.null,store_id.not.is.null') — verbose but TRULY universal. OR pin the assumption with a migration-time test that fails CI if any DATA_TABLES gains a nullable store_id.",
+      "regression_test_idea": "Add a migration linter (or test) that introspects pg_catalog and asserts every DATA_TABLES.store_id has NOT NULL."
+    },
+    {
+      "id": "API-34",
+      "severity": "Cosmetic",
+      "file_line": "dashboard-web/src/app/api/operator/reset/route.ts:154-158",
+      "failing_input": "All 7 deletes succeed with count=0 (already empty).",
+      "expected": "total=0, scope+deleted populated.",
+      "actual": "Works correctly. No issue.",
+      "fix_sketch": "N/A.",
+      "regression_test_idea": "N/A."
+    }
+  ],
+  "uncertainty_notes": "Confirm-token defense-in-depth is well-tested. Per-table try/catch isolation is good. The sequential loop (API-32) is the only real issue for operator UX.",
+  "test_coverage_gaps": [
+    "validateResetBody + token literals: covered.",
+    "POST handler: NOT covered (mock supabase + assert delete called for each table, total counts).",
+    "Partial-failure path: NOT covered (one table throws, others succeed → response.errors populated)."
+  ],
+  "channels": {
+    "imports_from": ["@/lib/supabaseAdmin (getSupabaseAdmin)", "@/lib/apiErrors (userFacingError)", "@/lib/operatorReset (DATA_TABLES, EXCEPT_MANUAL_TABLES, ResetScope, validateResetBody)"],
+    "exports_to": ["POST → consumed by components/operator/ResetData.tsx"],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": ["data_daily, products_daily, campaigns_daily, ads_daily, orders_attribution, product_catalog, manual_overrides (service_role DELETE)"],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

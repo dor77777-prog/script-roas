@@ -1,0 +1,89 @@
+{
+  "task_id": "12.A.5-codex",
+  "file": "dashboard-web/src/lib/multiMappingCohort.ts",
+  "test_path": "dashboard-web/src/lib/__tests__/multiMappingCohort.test.ts",
+  "verdict": "Has bug",
+  "findings": [
+    {
+      "id": "CODEX-MM-01",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/lib/multiMappingCohort.ts:196-200 and 355-360",
+      "failing_input": "Two mapped campaigns with the same Shopify ROAS and spend, but one has one real Shopify order and 50 platform-reported/modelled conversions while the other has many real Shopify orders and a lower or equal platform conversion count.",
+      "expected": "The orders-axis shrinkage should be based on Shopify order/sample count for the revenue being ranked, or the axis should be omitted when Shopify order count is unavailable. Platform conversions are not a reliable sample-size proxy for Shopify ROAS confidence.",
+      "actual": "`buildMember` stores `agg.conversions`, and `rankingScore` passes that value as the `orders` argument to `shrinkRoas`. `Aggregated.conversions` is platform-native purchase/conversion count, which can include modelled/view-through/fractional conversions and can diverge materially from Shopify orders. A campaign can therefore receive high statistical confidence from platform-reported conversions even when Shopify evidence is a tiny cohort.",
+      "fix_sketch": "Thread a Shopify order count (or deterministic+allocated Shopify order/sample count) into `computeMultiMappingCohort` and use that for the orders-axis weight. If that count is unavailable, use spend-only shrinkage rather than platform conversions for the Shopify ROAS confidence term.",
+      "regression_test_idea": "Create a fixture where two campaigns both have spend=500 and Shopify ROAS=4, but campaign A has ShopifyOrders=1/platformConversions=50 and campaign B has ShopifyOrders=50/platformConversions=1. Assert B ranks first once the shrinkage axis uses Shopify order count."
+    },
+    {
+      "id": "CODEX-MM-02",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/lib/multiMappingCohort.ts:181-205 and 312",
+      "failing_input": "Campaign A: spend=500, conversions=50, roasShopify=3.0, roasShopifyPlatform=0. Campaign B: spend=20000, conversions=200, roasShopify=2.7, roasShopifyPlatform=0. Both share the current product.",
+      "expected": "Because the documented primary key is shrunk Shopify ROAS, A should rank above B: A's shrunk primary is about 2.667 while B's is about 2.659. Spend should only break true ties after primary and secondary equality.",
+      "actual": "`rankingScore` encodes lexicographic ranking as `shrunk * 1_000_000 + shrunkPlat * 1_000 + spend`. B's CAD 20,000 spend term more than offsets A's higher primary score, so the lower-primary campaign ranks first. The same issue can let a secondary difference override a small primary difference.",
+      "fix_sketch": "Sort lexicographically instead of using a weighted sum: compare finite shrunk primary desc, then finite shrunk deterministic desc, then spend desc, then stable insertion order. Keep the current stable-sort intent by returning 0 only after all ranking keys are equal.",
+      "regression_test_idea": "Add a test with the A/B values above and assert A is first. Add a second near-tie test where a secondary ROAS gap cannot override a strictly higher primary ROAS."
+    },
+    {
+      "id": "CODEX-MM-03",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/lib/multiMappingCohort.ts:173-178 and 194-205",
+      "failing_input": "Current campaign has an aggregated row with spend=0, conversions=0, and roasShopify=0; the only other shared campaign has spend=500, conversions=1, and roasShopify=0.5.",
+      "expected": "A campaign with zero spend and zero order evidence in the selected window should be treated as insufficient/no-signal for ranking leadership, or at least should not outrank an active campaign solely because the shrinkage anchor returns break-even.",
+      "actual": "`shrinkRoas` returns 1.0 whenever `spend <= 0 && orders <= 0`. Because aggregate rows can exist with zero spend from impressions/conversions/value-only rows, that zero-evidence member receives a neutral break-even score and can become `isLeader=true` over an actively spending low-ROAS member. This is especially misleading in two-member tiny cohorts.",
+      "fix_sketch": "Distinguish no-signal rows from neutral performance. For ranking, treat `spend <= 0 && orders <= 0` as `-Infinity`/insufficient or add a `hasRankingSignal` guard so leadership and weakest chips are not emitted from zero-evidence rows.",
+      "regression_test_idea": "Add a two-member cohort where current has spend=0/conversions=0 and another member has spend=500/ROAS=0.5. Assert current is not leader, or assert the cohort marks current as insufficient depending on the chosen contract."
+    },
+    {
+      "id": "CODEX-MM-04",
+      "severity": "MINOR",
+      "file_line": "dashboard-web/src/lib/multiMappingCohort.ts:173-178, 194-205, and 312",
+      "failing_input": "A caller-provided `roasShopifyByKey` contains `NaN` for the current campaign while another cohort member has finite spend and ROAS.",
+      "expected": "Non-finite ROAS/spend/conversion values should be sanitized or explicitly sunk so malformed upstream data cannot create a leader/weakest verdict.",
+      "actual": "`shrinkRoas` and `rankingScore` do not check `Number.isFinite`. A `NaN` score makes the sort comparator return `NaN`, which `Array.sort` treats like equality; because `rankedAll` inserts current first, the malformed current campaign can remain rank 1 and set `isLeader=true`. `Infinity` can similarly dominate the ranking.",
+      "fix_sketch": "Normalize all ranking inputs with finite guards before shrinkage. Treat non-finite ROAS as 0 or missing, non-finite/negative spend and order counts as 0, and make the comparator deterministic for non-finite scores.",
+      "regression_test_idea": "Pass `NaN`, `Infinity`, and finite ROAS values through the two ROAS maps and assert finite campaigns rank deterministically above malformed metrics."
+    }
+  ],
+  "uncertainty_notes": "This pass did not flag the operator's chosen anchor constants or the better-of policy itself. Findings are limited to implementation/semantic issues: using platform conversions as an order-count proxy, weighted-sum rank inversion, zero-evidence leadership, and non-finite input handling.",
+  "test_coverage_gaps": [
+    {
+      "description": "No fixture separates Shopify order count from platform-reported conversions for the orders-axis shrinkage.",
+      "why_it_matters": "The current tests label `conversions` as orders, so they cannot catch modelled/fractional platform conversions inflating confidence in Shopify ROAS.",
+      "suggested_fixture": "Add a test with same spend and ROAS but divergent ShopifyOrders vs platformConversions, once the API accepts the Shopify sample count."
+    },
+    {
+      "description": "No test proves ranking is lexicographic when primary shrunk ROAS differs by a small amount.",
+      "why_it_matters": "The weighted score can let spend or secondary ROAS override the documented primary ranking metric.",
+      "suggested_fixture": "Use spend=500/conversions=50/ROAS=3.0 versus spend=20000/conversions=200/ROAS=2.7 and assert the higher shrunk primary wins."
+    },
+    {
+      "description": "No edge-case regression for zero-spend, zero-conversion aggregate rows that still have metrics.",
+      "why_it_matters": "Those rows do not take the existing no-metrics sink path and can be ranked as break-even leaders in tiny cohorts.",
+      "suggested_fixture": "Current campaign with spend=0/conversions=0 sharing a product with an active low-ROAS campaign; assert no leadership chip or a deterministic insufficient rank."
+    },
+    {
+      "description": "No defensive coverage for non-finite ROAS map values.",
+      "why_it_matters": "NaN/Infinity can make ranking order implementation-dependent or dominate the cohort.",
+      "suggested_fixture": "Pass NaN and Infinity in `roasShopifyByKey`/`roasShopifyPlatformByKey` and assert deterministic finite-safe ordering."
+    }
+  ],
+  "channels": {
+    "imports_from": [
+      "dashboard-web/src/lib/campaignProductMap.ts",
+      "dashboard-web/src/lib/campaignsAggregator.ts"
+    ],
+    "exports_to": [
+      "consumed by dashboard-web/src/components/CampaignsTable.tsx (computeMultiMappingCohort feeds applyCohortAdjustmentOnce)",
+      "consumed by dashboard-web/src/components/CampaignDrawer.tsx (computeMultiMappingCohort builds drawer cohort model)",
+      "consumed by dashboard-web/src/components/CohortComparisonPanel.tsx (CohortMember and MultiMappingCohort types)"
+    ],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

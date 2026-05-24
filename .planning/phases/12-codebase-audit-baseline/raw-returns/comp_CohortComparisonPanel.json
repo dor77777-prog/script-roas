@@ -1,0 +1,55 @@
+{
+  "task_id": "12.G.02",
+  "file": "dashboard-web/src/components/CohortComparisonPanel.tsx",
+  "test_path": "dashboard-web/src/lib/__tests__/cohortComparisonSortKey.test.ts",
+  "verdict": "Borderline component with embedded sort + verdict-classification logic. HIGH-6 lex sort fix (compareIntraSectionMembers exported + tested with 9 cases including operator scenario) is correctly implemented. cannibalization risk sort (lines 277-294) uses `order` Record keyed by risk enum — extensible and correct, including post-fix `composition_changed` exclusion from alerts (surfaced separately as info banner). 1 MEDIUM finding: crossSection sort silently treats missing metrics as 0 (asymmetric with intraSection which sinks them to bottom via compareIntraSectionMembers). 1 LOW finding: `currentRankIntra >= intraCount` weakest threshold (lines 356-358) uses `intraCount >= 3` — matches `applyCohortAdjustmentOnce` floor per JSDoc but the constant is duplicated.",
+  "findings": [
+    {
+      "id": "CMB-04",
+      "severity": "MEDIUM",
+      "file_line": "dashboard-web/src/components/CohortComparisonPanel.tsx:319-323",
+      "failing_input": "Cross-platform cohort where a member has `metrics === undefined` (still-loading SWR fetch or upstream error)",
+      "expected": "Missing-metrics members sink to the bottom (same behavior as compareIntraSectionMembers' explicit null handling)",
+      "actual": "`sa = a.metrics ? a.metrics.roasShopify : 0` and `sb = b.metrics ? b.metrics.roasShopify : 0` — a missing-metrics member is treated as roasShopify=0 and competes with legitimately-zero-ROAS members. With 2 members both missing, undefined sort order. With 1 missing + 1 legit-zero, the missing one may rank above or below depending on stable-sort behavior.",
+      "fix_sketch": "Reuse compareIntraSectionMembers for crossSection (same lex contract; both sections want best-first with missing sunk). Or inline an explicit `if (!a.metrics && !b.metrics) return 0; if (!a.metrics) return 1; if (!b.metrics) return -1;` guard at the top of the crossSection comparator.",
+      "regression_test_idea": "Add test case: `cohort.crossPlatformOthers = [{...withMetrics, roasShopify:0}, {...missingMetrics}]` → sorted result must place the missing one last. Pair with `[{...missing}, {...missing}]` returning order-preserving (comparator returns 0)."
+    },
+    {
+      "id": "CMB-05",
+      "severity": "LOW",
+      "file_line": "dashboard-web/src/components/CohortComparisonPanel.tsx:354-358",
+      "failing_input": "Cohort with 3 intra-platform members where current ranks #3 (last)",
+      "expected": "Magic constant `3` (the cohort-size floor for 'weakest' visual treatment) should be sourced from a shared constant alongside applyCohortAdjustmentOnce's floor, so the two stay in lock-step",
+      "actual": "`intraCount >= 3` is hardcoded both here AND in lib/campaignHealthScore.ts:applyCohortAdjustmentOnce. JSDoc cross-references but no compile-time link.",
+      "fix_sketch": "Export `COHORT_WEAKEST_FLOOR = 3` from lib/campaignHealthScore.ts; import here. One-line change preserves behavior, prevents silent drift.",
+      "regression_test_idea": "Already covered indirectly by HI-02 (cohort-adjustment floor) tests in campaignHealthScore.test.ts; no new UI test needed."
+    },
+    {
+      "id": "CMB-06",
+      "severity": "INFO",
+      "file_line": "dashboard-web/src/components/CohortComparisonPanel.tsx:108-114",
+      "failing_input": "fmtPct(Infinity) — edge case if cannibalization detector ever produces non-null Infinity",
+      "expected": "Either guaranteed-finite by upstream contract OR explicit handling",
+      "actual": "Renders '∞' character. JSDoc states detector now emits null instead of Infinity post-HIGH-11 fix, so this branch is defensive but should be unreachable.",
+      "fix_sketch": "Defensive — leave as-is or add an assertion log if it fires.",
+      "regression_test_idea": "Test fmtPct(Infinity) returns '∞' and fmtPct(-Infinity) returns '∞' (current behavior: !isFinite catches both)."
+    }
+  ],
+  "uncertainty_notes": "Did not load lib/cannibalizationDetection.ts to confirm `composition_changed` is the only new risk added post-HIGH-11; relied on JSDoc + the `order` Record covering 6 enum values. The `CannibalizationVerdict['risk']` type union should be cross-checked if a new severity is ever added (the `order` Record would need a new entry or TypeScript would error — defensive).",
+  "test_coverage_gaps": [
+    "No test for cross-section sort with mixed missing/present metrics (the CMB-04 gap)",
+    "No test for cannibalization alert banner rendering (severity → color mapping at lines 384-388)",
+    "No test for composition_changed banner suppression behavior (alerts.length === 0 + compositionChangedAlerts.length > 0 = render only the info banner, not the warning)"
+  ],
+  "channels": {
+    "imports_from": ["lucide-react", "@/lib/utils", "@/lib/multiMappingCohort", "@/lib/cannibalizationDetection"],
+    "exports_to": ["./CampaignDrawer.tsx (CohortComparisonPanel)", "lib/__tests__/cohortComparisonSortKey.test.ts (compareIntraSectionMembers)"],
+    "events_emitted": ["onClick MemberRow → onDrillCampaign(campaignId, platform)"],
+    "events_consumed": ["cohort prop changes (drawer-driven)"],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

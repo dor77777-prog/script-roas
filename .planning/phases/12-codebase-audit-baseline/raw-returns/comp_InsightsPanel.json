@@ -1,0 +1,58 @@
+{
+  "task_id": "12.G.08",
+  "file": "dashboard-web/src/components/InsightsPanel.tsx",
+  "test_path": "NONE — no InsightsPanel.test.* found",
+  "verdict": "Borderline component with inline business logic (best-day calculation). Despite being only 94 lines, it contains a Map iteration that computes per-date ROAS aggregates and selects the 'best day' by max ROAS. 1 HIGH finding: best-day tie-breaking is non-deterministic — when two dates have identical bestRoas, the iteration retains the FIRST occurrence (`if (roas > bestRoas)`, strict greater than), but the Map's iteration order is INSERTION ORDER, which depends on the upstream rows[] order. If rows arrives sorted ascending by date, the earlier date wins; if descending, the later date wins; if shuffled, undefined. 1 MEDIUM finding: `top = storeAggs[0]` and `bottom = bottomList[0]` both assume storeAggs is pre-sorted descending by ROAS — UNDOCUMENTED invariant. 1 LOW finding: `bestRevenue` is captured but `bestSpend` is not — operator can't sanity-check the ROAS by seeing both numerator and denominator.",
+  "findings": [
+    {
+      "id": "CMB-21",
+      "severity": "HIGH",
+      "file_line": "dashboard-web/src/components/InsightsPanel.tsx:21-39",
+      "failing_input": "rows[] containing two dates with the SAME total ROAS (e.g., both days hit exactly 3.0) but different revenue values",
+      "expected": "Deterministic tie-breaker (e.g., latest date wins, OR highest revenue wins, OR document the contract)",
+      "actual": "`if (roas > bestRoas)` strict > means the FIRST-seen date wins. Map insertion order depends on rows[] order, which is not guaranteed by upstream (filterRows in lib/analytics.ts doesn't sort). Operator sees a different 'best day' depending on whether they refresh during a period when rows arrived in different order from the cache.",
+      "fix_sketch": "Either (a) change to `if (roas > bestRoas || (roas === bestRoas && date > bestDate))` to deterministically prefer the LATER date, or (b) change to `roas >= bestRoas` to prefer the LAST-seen (still order-dependent), or (c) sort by [-roas, date] explicitly. Document the chosen rule.",
+      "regression_test_idea": "Unit test extracts the best-day function (currently inline) and asserts: given 2 rows with same date and same ROAS-after-aggregation, the result is deterministic regardless of input order. Construct fixture with 5 dates, 2 of which tie on ROAS, in 2 different shuffles → assert same bestDate output."
+    },
+    {
+      "id": "CMB-22",
+      "severity": "MEDIUM",
+      "file_line": "dashboard-web/src/components/InsightsPanel.tsx:15-18",
+      "failing_input": "storeAggs passed in unsorted (e.g., from a future caller that bypasses aggregateByStore)",
+      "expected": "Sort defensively here OR assert the sort invariant at the API boundary",
+      "actual": "`top = storeAggs[0]` assumes index 0 is the highest-ROAS store. Today this is true because Dashboard.tsx feeds aggregateByStore output (which sorts), but the contract is undocumented. A refactor that changes feed order would silently change which store is marked 'leader'.",
+      "fix_sketch": "Either (a) sort defensively: `const top = [...storeAggs].sort((a,b) => b.roas - a.roas)[0];`, or (b) add a JSDoc precondition on Props.storeAggs documenting the sort requirement, or (c) add a runtime assertion in dev mode: `if (process.env.NODE_ENV !== 'production') { for (let i = 1; i < storeAggs.length; i++) console.assert(storeAggs[i-1].roas >= storeAggs[i].roas); }`.",
+      "regression_test_idea": "Test InsightsPanel with storeAggs in 2 orders (sorted vs reverse) — same 'top' output."
+    },
+    {
+      "id": "CMB-23",
+      "severity": "LOW",
+      "file_line": "dashboard-web/src/components/InsightsPanel.tsx:64-70",
+      "failing_input": "Best day with high ROAS but tiny revenue (e.g., $50 revenue on $15 spend = ROAS 3.33)",
+      "expected": "Operator can distinguish 'best ROAS day' from 'best volume day'",
+      "actual": "Renders only `ROAS X.XX • הכנסות CAD Y` without spend or note that the day was low-volume. A degenerate $50/$15 day would be picked as 'best' over a $50000/$20000 day.",
+      "fix_sketch": "Either (a) require minimum spend (e.g., > $100) for a date to qualify for 'best day', or (b) show spend in secondary text so operator can sanity-check, or (c) rank by revenue instead of pure ROAS.",
+      "regression_test_idea": "Test that a 3-day fixture with [(spend=10, rev=33), (spend=2000, rev=5500), (spend=1500, rev=4000)] picks day 2 as best (highest revenue with healthy ROAS), not day 1 (highest ROAS but trivial volume)."
+    }
+  ],
+  "uncertainty_notes": "Did not load aggregateByStore to verify the sort invariant. Verified storeAggs has a `roas` field (line 17 filter uses it).",
+  "test_coverage_gaps": [
+    "Zero test coverage for this 94-line component",
+    "No test for best-day calculation (CMB-21 tie-break, also: zero-spend dates skip correctly via `if (!agg.spend) continue`)",
+    "No test for top/bottom logic (CMB-22 invariant + bottom filtering of roas>0)",
+    "No test for bottom===top suppression (line 57: `bottom.store !== top?.store`)",
+    "No test for the no-data path (line 41 early return when storeAggs.length === 0)",
+    "No test for InsightRow render (icon/primary/secondary props)"
+  ],
+  "channels": {
+    "imports_from": ["lucide-react", "@/lib/utils", "@/lib/types", "@/lib/analytics"],
+    "exports_to": ["./Dashboard.tsx (InsightsPanel) — though grep shows only Dashboard imports from /components, double-check via dashboard listing"],
+    "events_emitted": [],
+    "events_consumed": ["storeAggs + rows prop changes (Dashboard SWR)"],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

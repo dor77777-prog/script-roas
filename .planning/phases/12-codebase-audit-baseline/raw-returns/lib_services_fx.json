@@ -1,0 +1,57 @@
+{
+  "task_id": "12.B.1",
+  "file": "dashboard-web/src/lib/fetchers/fx.ts",
+  "test_path": "dashboard-web/src/lib/fetchers/__tests__/fx.test.ts",
+  "verdict": "✅ Verified",
+  "findings": [
+    {
+      "id": "SVC-01",
+      "severity": "MINOR",
+      "file_line": "fx.ts:67",
+      "failing_input": "Frankfurter returns rates[to] = 0 (theoretically possible for an exotic peg = 0, or a malformed response with rate 0)",
+      "expected": "Treat 0 as an invalid rate and throw (current behavior) OR explicitly document that 0 is treated as missing",
+      "actual": "`if (!rate || !Number.isFinite(rate))` rejects 0 via falsy check. This is correct for our currency set (ILS→CAD→USD), but the test 'throws when rates[to] is missing' only exercises an empty rates object. There is no negative-rate or zero-rate test.",
+      "fix_sketch": "None required at runtime. Optional: tighten predicate to `rate == null || !Number.isFinite(rate) || rate <= 0` to be explicit about why zero/negative is rejected.",
+      "regression_test_idea": "Add test 'throws when rate is 0 or negative' that mocks `rates: { CAD: 0 }` and asserts /No FX rate/."
+    },
+    {
+      "id": "SVC-02",
+      "severity": "COSMETIC",
+      "file_line": "fx.ts:52",
+      "failing_input": "URL constructed by string interpolation; if `from` or `to` ever contained '&' or '?' (it shouldn't — ISO 4217 is 3 letters), the URL would break.",
+      "expected": "encodeURIComponent on user-controlled inputs",
+      "actual": "Direct interpolation. Acceptable because callers pass hardcoded ISO codes from the dashboard config, never operator-controlled text.",
+      "fix_sketch": "No fix needed. Document caller-contract or add `encodeURIComponent` defensively.",
+      "regression_test_idea": "n/a"
+    }
+  ],
+  "uncertainty_notes": "File is 72 LOC and exercised by 5 tests covering the documented contract (same-currency shortcut, OK path, weekend shift, non-OK error, missing rate). Audit-snapshot row 7 listed fx as 'solid'. No prior bugs flagged in Phase 9 audit for fx. Verdict is high-confidence ✅.",
+  "test_coverage_gaps": [
+    {
+      "description": "No test for zero or negative rate from Frankfurter",
+      "why_it_matters": "Defensive predicate would reject `0` (via falsy) but a malformed `rates: { CAD: -0.5 }` or `rates: { CAD: 0 }` is not asserted. If Frankfurter ever returns 0 (e.g., deprecated currency), behavior is currently 'throw No FX rate' but not pinned by a test.",
+      "suggested_fixture": "mockResolvedValueOnce(new Response(JSON.stringify({ rates: { CAD: 0 } }), { status: 200 }))"
+    },
+    {
+      "description": "No test for network-level fetch rejection (timeout, DNS failure, abort)",
+      "why_it_matters": "Inngest steps retry, but a rejected promise propagates uncaught to the caller's try/catch. There is no test for `fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))`.",
+      "suggested_fixture": "fetchMock.mockRejectedValueOnce(new TypeError('Network failure'))"
+    },
+    {
+      "description": "No test for malformed JSON body",
+      "why_it_matters": "If Frankfurter returns 200 with non-JSON, `res.json()` throws TypeError. Behavior in production is acceptable (Inngest retries) but uncontracted.",
+      "suggested_fixture": "mockResolvedValueOnce(new Response('not json', { status: 200 }))"
+    }
+  ],
+  "channels": {
+    "imports_from": [],
+    "exports_to": ["lib/fetchers/shopify.ts (CAD/USD line-item conversion)", "lib/fetchers/meta.ts (ILS→CAD spend conversion)", "lib/fetchers/manualOverrides.ts (operator FX normalization)"],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": ["GET https://api.frankfurter.dev/v1/{date}?base={from}&symbols={to}"]
+  }
+}

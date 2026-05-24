@@ -1,0 +1,41 @@
+{
+  "task_id": "12.A.8",
+  "file": "dashboard-web/src/lib/cpmRoasAnalysis.ts",
+  "test_path": "dashboard-web/src/lib/__tests__/cpmRoasAnalysis.test.ts + cpmPrevAlignment.test.ts",
+  "verdict": "Verified",
+  "findings": [],
+  "uncertainty_notes": "",
+  "test_coverage_gaps": [
+    {
+      "description": "No explicit FLAT/UP verdict test in cpmRoasAnalysis.test.ts.",
+      "why_it_matters": "One of the 9 CPM trend x ROAS trend copy/tone branches is only indirectly covered by code review, so a text/tone regression there could slip.",
+      "suggested_fixture": "Seven active days with cpm fixed at 5 and roas increasing from 2.0 to 3.0; expect tone positive and text containing \"שיפור באופטימיזציה\"."
+    },
+    {
+      "description": "No boundary test for exactly 5 active current days.",
+      "why_it_matters": "The public contract says 5 active days is the minimum; tests cover fewer than 5 and many 7-day cases, but not the exact threshold.",
+      "suggested_fixture": "Five rows with cpm > 0 and mixed roas including 0; expect hasData true and details.n = 5."
+    },
+    {
+      "description": "No non-finite numeric input guard tests for NaN or Infinity in cpm/roas.",
+      "why_it_matters": "Current production call sites derive finite numbers, but malformed upstream rows could turn details or categorization into misleading flat reads.",
+      "suggested_fixture": "Series containing Number.NaN roas or Number.POSITIVE_INFINITY cpm; define whether the analyzer should filter, return hasData false, or throw."
+    }
+  ],
+  "channels": {
+    "imports_from": [],
+    "exports_to": [
+      "consumed by dashboard-web/src/components/CampaignDrawer.tsx via analyzeCpmVsRoas(), indexPrevByDateOffset(), dayOffsetFromRangeStart(), PREV_PERIOD_MIN_DAYS",
+      "consumed by dashboard-web/src/components/CampaignsTable.tsx via analyzeCpmVsRoas(), indexPrevByDateOffset(), dayOffsetFromRangeStart(), PREV_PERIOD_MIN_DAYS, DailyCpmRoasPoint",
+      "consumed by dashboard-web/src/lib/aiReport.ts via analyzeCpmVsRoas() and DailyCpmRoasPoint",
+      "consumed by dashboard-web/src/lib/campaignHealthScore.ts via CpmRoasAnalysis type and analysis.tone/hasData"
+    ],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

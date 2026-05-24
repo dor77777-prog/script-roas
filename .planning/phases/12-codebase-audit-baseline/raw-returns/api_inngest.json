@@ -1,0 +1,44 @@
+{
+  "task_id": "12.E.07",
+  "file": "dashboard-web/src/app/api/inngest/route.ts",
+  "test_path": "(no dedicated unit test — Inngest serve() shim). Function registration verified indirectly by inngest_client.json + inngest_cronDaily.json + inngest_cronLive.json + inngest_cronWhatsapp.json + inngest_eventBackfill.json + inngest_eventSyncNow.json.",
+  "verdict": "Verified correct",
+  "findings": [
+    {
+      "id": "API-16",
+      "severity": "Minor",
+      "file_line": "dashboard-web/src/app/api/inngest/route.ts:112-125",
+      "failing_input": "A new Inngest function is added in src/inngest/functions/ but its export is forgotten in the serve() functions array.",
+      "expected": "A test (or graphify check) flags the orphan.",
+      "actual": "No test pins the registered set. The phase 12 channel sweep (CHANNELS.md) is the implicit safety net. Manual review only.",
+      "fix_sketch": "Add a test that imports every src/inngest/functions/**/* default-export + spread-export and asserts they all appear in serve()'s functions array. Alternative: a build-time graphify check.",
+      "regression_test_idea": "describe('all Inngest functions registered'): import.meta.glob('@/inngest/functions/**/*.ts') → flat-map → expect serve config to include each."
+    },
+    {
+      "id": "API-17",
+      "severity": "Cosmetic",
+      "file_line": "dashboard-web/src/app/api/inngest/route.ts:110",
+      "failing_input": "Vercel plan downgrades from Pro to Hobby.",
+      "expected": "Operator alert if maxDuration=60 is silently ignored.",
+      "actual": "The 60s ceiling depends on the Vercel plan; the comment notes this on lines 36-41 but there's no runtime check. Large-day Shopify fetches would silently truncate.",
+      "fix_sketch": "Optional — runtime cap detection requires Vercel API call. Not worth the complexity for an internal tool with operator-known plan.",
+      "regression_test_idea": "N/A (cosmetic)."
+    }
+  ],
+  "uncertainty_notes": "Route is a thin shim — all complexity sits in the imported function modules. Signing-key validation is automatic via serve(). The dynamic-opt-in absence is intentional per RESEARCH §Pitfall 11 (well-documented in the file-level comment).",
+  "test_coverage_gaps": [
+    "No test that the registered functions match the file system (orphan-detection).",
+    "No test for the env-var assertion (INNGEST_SIGNING_KEY required for serve() validation). The serve() helper handles this internally but missing env should fail loud at startup, not lazily on first POST."
+  ],
+  "channels": {
+    "imports_from": ["inngest/next (serve)", "@/inngest/client (inngest)", "@/inngest/functions/cronDaily (cronDailyFunctions)", "@/inngest/functions/cronLive (cronLiveFunctions)", "@/inngest/functions/eventSyncNow (eventSyncNow)", "@/inngest/functions/eventBackfill (eventBackfill)", "@/inngest/functions/cronWhatsapp (whatsappCronFunctions, eventWhatsappSendNow)"],
+    "exports_to": ["GET/POST/PUT handlers → Inngest cloud invokes them"],
+    "events_emitted": [],
+    "events_consumed": ["event/sync-now (via eventSyncNow)", "event/backfill (via eventBackfill)", "notifications/whatsapp.send-now (via eventWhatsappSendNow)"],
+    "swr_keys": [],
+    "inngest_triggers": ["3× cron-daily (TZ=Asia/Jerusalem 5 0 * * *)", "3× cron-live (TZ=Asia/Jerusalem */15 * * * *)", "3× cron-whatsapp (12:00, 18:00, 00:10 IL)"],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

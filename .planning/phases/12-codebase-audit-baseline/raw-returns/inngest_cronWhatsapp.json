@@ -1,0 +1,83 @@
+{
+  "task_id": "12.D.4",
+  "file": "dashboard-web/src/inngest/functions/cronWhatsapp.ts",
+  "test_path": "dashboard-web/src/inngest/functions/__tests__/cronWhatsapp.test.ts",
+  "verdict": "Verified",
+  "findings": [
+    {
+      "id": "INN-11",
+      "severity": "MINOR",
+      "file_line": "dashboard-web/src/inngest/functions/cronWhatsapp.ts:47-60 + 65-78 + 99-112 (whatsappNoon/Evening/Eod retries:3)",
+      "failing_input": "All three cron functions set `retries: 3` (line 51, 69, 103). On a transient WhatsApp API outage at 12:00 IL, the noon summary will retry up to 3 times with Inngest's exponential backoff. Per Inngest defaults the backoff is exponential starting at ~30 sec — total retry envelope is ~5-10 min. If WhatsApp is down for ALL retries, the message is dropped silently (no operator alert for the WhatsApp summary itself).",
+      "expected": "Either lower the retry count to 1 (fail-fast — operator gets a deadletter signal in the Inngest dashboard sooner) or wire a notifyTokenFailure call on final failure (analogous to the WhatsApp token-failure infrastructure mentioned in PROJECT.md). Current behavior accepts silent message-drop on multi-retry failure.",
+      "actual": "Documented operator behavior is 'WhatsApp summaries ONLY to +972524809540' (per memory project_token_failure_alerts_pending). The operator IS the recipient — if WhatsApp is down for the operator's number, the operator wouldn't get a 'WhatsApp failed' WhatsApp anyway. Best path is the in-dashboard Inngest deadletter signal (which the operator monitors). Current code is fine if the operator monitors the Inngest dashboard.",
+      "fix_sketch": "Add an inline comment documenting 'WhatsApp transport failure → Inngest deadletter; operator-monitored via the Inngest Cloud UI; no recursive WhatsApp alert needed (alert path would itself fail).' No code change required.",
+      "regression_test_idea": "n/a — accepted behavior."
+    },
+    {
+      "id": "INN-12",
+      "severity": "MINOR",
+      "file_line": "dashboard-web/src/inngest/functions/cronWhatsapp.ts:128-147 (eventWhatsappSendNow retries:0)",
+      "failing_input": "The operator-triggered 'Send test' button (line 128-147) has `retries: 0` (line 132). If WhatsApp is down at the moment the operator clicks the button, the send fails permanently with no retry — operator sees an immediate failure but no signal of WHY (the catch is inside the function, the rejection bubbles to Inngest's deadletter).",
+      "expected": "retries:0 is intentional ('operator wants immediate feedback, not a 5-min retry storm'). Documented as such in the inline comment at line 125-127 implicitly. Acceptable.",
+      "actual": "n/a",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "n/a"
+    },
+    {
+      "id": "INN-13",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/inngest/functions/cronWhatsapp.ts:99-112 (whatsappEod timing vs cron-daily retry envelope)",
+      "failing_input": "The inline audit comment at line 84-95 documents: cron-daily fires at 00:05 IL, has 4 retries × exponential backoff = ~7.5 min envelope worst case = finish by ~00:12.5. EOD WhatsApp fires at 00:30 IL = 25-min runway. This is well-clear.\n\nBUT: cron-daily contains a `persist-batch` step that does ~8 sequential Supabase UPSERTs (data_daily, products_daily, 3× campaigns_daily for meta/google/tiktok, ads_daily, orders_attribution, product_catalog). At operator scale (~250 products × 3 stores), this can take 30-60s. The 5-min wall-clock step budget plus 4 retries means worst-case finish is closer to 00:30 — exactly when whatsappEod fires.\n\nProduction shape: cron-daily fires at 00:05; if Meta API has a 3-min latency spike (not uncommon for the /insights endpoint), each retry adds ~3 min + backoff. 4 retries × (3 min API + 1 min backoff) = 16 min retry envelope. Plus 1 min for the first attempt = 17 min. cron-daily finishes ~00:22 IL. whatsappEod fires at 00:30 IL → 8-min cushion, not 25-min.",
+      "expected": "Either widen the cushion to 1 hour (00:30 → 01:00 IL) for robust margin, OR have whatsappEod check the actual job state of cron-daily (e.g. `step.waitForEvent('cron-daily-completed-{date}', timeout: 30min)` then send).",
+      "actual": "The 25-min runway claim in the comment assumes cron-daily's worst-case finish is 00:12.5. That's the case if every retry is the MINIMUM backoff (~30s) and each attempt takes ~30s. Real-world API latency spikes can extend the worst-case finish to closer to 00:25-00:30.",
+      "fix_sketch": "Either move whatsappEod to 01:00 IL (operator only sees the EOD summary at breakfast anyway), or add a guard inside the handler that re-queries data_daily for yesterday and waits up to 30 min if the row hasn't landed yet.",
+      "regression_test_idea": "Production-shape simulation: assume cron-daily takes 17 min worst-case. Pin: whatsappEod fires at 00:30 IL → only 13-min cushion (not 25). Document this in the inline comment OR widen the cron expression."
+    }
+  ],
+  "uncertainty_notes": "INN-13 is the highest-confidence concern but is a soft-edged claim — it depends on the actual production API latency distribution, which I don't have access to. The audit fix from 00:10 → 00:30 was a real improvement; the question is whether 00:30 is sufficient or if 01:00 would be safer. The operator's behavior 'WhatsApp ONLY to +972524809540' (per memory) is respected throughout (no recipient logic in this file — recipients are owned by sendDailySummary in @/lib/notifications/sendDailySummary). All cron expressions are TZ=Asia/Jerusalem prefixed (DST-safe per RESEARCH §Pitfall 1). All three cron functions use sendDailySummary as the single sink → if WhatsApp delivery semantics need to change, one upstream module owns it.",
+  "test_coverage_gaps": [
+    {
+      "description": "No test asserting `sendDailySummary` is called with the right date string for each cron variant. The unit test at cronWhatsapp.test.ts pins cron expressions + function IDs but NOT the handler body's date computation (yesterdayJerusalem for EOD vs todayJerusalem for noon/evening).",
+      "why_it_matters": "A regression that swapped the two date helpers would silently send 'yesterday's totals' at noon (showing $0 because yesterday's data is fully written but the summary title says 'today') or 'today's partial totals' as the EOD summary (operator sees the wrong number).",
+      "suggested_fixture": "Mock sendDailySummary; invoke each handler's step.run callback; assert the date arg passed to sendDailySummary matches todayJerusalem() (noon, evening) vs yesterdayJerusalem() (EOD)."
+    },
+    {
+      "description": "No test for the eventWhatsappSendNow handler's trigger-switch logic (line 136-146). The 3 branches (noon / evening / eod) each compute a different date+title. A swap would silently send the wrong summary type.",
+      "why_it_matters": "Operator's 'Send test' button is the live verification path for the WhatsApp pipeline. If the operator clicks 'send test (eod)' but the handler runs noon logic, the operator's verification is meaningless.",
+      "suggested_fixture": "Mock sendDailySummary; invoke handler with each of the 3 trigger values; assert the (dateStr, title) tuple matches."
+    },
+    {
+      "description": "No test for the default `trigger ?? 'noon'` (line 136). If event.data is undefined or trigger is missing, the handler should default to noon.",
+      "why_it_matters": "An operator-console regression that fails to set the trigger field would silently default to noon. The current default is benign (noon-summary is always meaningful) but a future change to require explicit trigger would be silently bypassed.",
+      "suggested_fixture": "Invoke handler with event={} (no data); assert sendDailySummary called with todayJerusalem() + titleNoon."
+    }
+  ],
+  "channels": {
+    "imports_from": [
+      "@/inngest/client",
+      "@/lib/notifications/sendDailySummary (sendDailySummary, titleNoon, titleEvening, titleEod, todayJerusalem, yesterdayJerusalem)"
+    ],
+    "exports_to": [
+      "serve() route (whatsappCronFunctions array + eventWhatsappSendNow)"
+    ],
+    "events_emitted": [],
+    "events_consumed": [
+      "notifications/whatsapp.send-now (operator-triggered manual send from /operator/notifications)"
+    ],
+    "swr_keys": [],
+    "inngest_triggers": [
+      "TZ=Asia/Jerusalem 0 12 * * * (whatsappNoon — 12:00 IL daily)",
+      "TZ=Asia/Jerusalem 0 18 * * * (whatsappEvening — 18:00 IL daily)",
+      "TZ=Asia/Jerusalem 30 0 * * * (whatsappEod — 00:30 IL daily, fixed from 00:10 per HIGH-13)",
+      "Event: notifications/whatsapp.send-now (eventWhatsappSendNow)"
+    ],
+    "supabase_writes": [],
+    "supabase_reads": [
+      "(indirect via sendDailySummary → buildStoreSummary → likely data_daily SELECT)"
+    ],
+    "api_calls": [
+      "WhatsApp Cloud API (via sendDailySummary internals)"
+    ]
+  }
+}

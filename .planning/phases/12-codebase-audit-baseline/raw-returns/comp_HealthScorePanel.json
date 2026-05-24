@@ -1,0 +1,58 @@
+{
+  "task_id": "12.G.07",
+  "file": "dashboard-web/src/components/HealthScorePanel.tsx",
+  "test_path": "NONE — no HealthScorePanel.test.* found (campaignHealthScore.ts has 62 tests per AUDIT-phase9-snapshot, but the render layer is uncovered)",
+  "verdict": "Borderline component with significant inline derivation in buildRecommendations() helper. The algorithm-level CampaignHealth math is verified ✅ in phase 9 audit (62 FULL tests). However, this component contains its OWN derivation logic for choosing which recommendation string to emit, keyed on which weighted component is weakest. 1 HIGH finding: buildRecommendations uses exact equality on sentinel score values (`weakest.value === 0`, `weakest.value === 40`) — brittle coupling to specific score-formula outputs that aren't pinned by any test. 1 MEDIUM finding: COMPONENT_ORDER array is decoupled from the order in HealthScoreComponents type — a key addition would silently leave the new component out of the bars/reasons render. 1 LOW finding: operatorAdjustment row uses `health.reasons.slice(4)` — magic index 4 means 'after the 4 weighted-component reasons', brittle to reason-array structure changes.",
+  "findings": [
+    {
+      "id": "CMB-18",
+      "severity": "HIGH",
+      "file_line": "dashboard-web/src/components/HealthScorePanel.tsx:99,103",
+      "failing_input": "campaignHealthScore.ts produces trajectory score of 39 or 41 instead of exactly 40, or trajectory score of 1 instead of exactly 0",
+      "expected": "Score thresholds should be ranges, not exact equality",
+      "actual": "`if (weakest.value === 0) { /* CPM↑+ROAS↓ headline */ } else if (weakest.value === 40) { /* CPM+ROAS both up headline */ } else { /* neutral fallback */ }`. The 0 and 40 are sentinel scores emitted by lib/campaignHealthScore.ts:scoreTrajectory for specific scenarios (per JSDoc). If a future score-formula refactor produces 0.5 or 39.5, the operator silently gets the 'neutral fallback' message instead of the specific diagnostic. No test pins the sentinel values across the boundary.",
+      "fix_sketch": "Either (a) export named constants from campaignHealthScore.ts: `TRAJECTORY_SCORE_NEGATIVE = 0; TRAJECTORY_SCORE_WARNING = 40;` and import here, or (b) refactor to range thresholds: `if (weakest.value <= 5) { negative } else if (weakest.value <= 45) { warning } else { neutral }` with explicit comments.",
+      "regression_test_idea": "Add tests: (i) campaignHealthScore.test.ts pins exact sentinel values for the 'CPM rising ROAS falling' and 'both rising' scenarios. (ii) HealthScorePanel.test.tsx renders 3 health objects with trajectory=0, 40, 60 and asserts the correct headline string appears."
+    },
+    {
+      "id": "CMB-19",
+      "severity": "MEDIUM",
+      "file_line": "dashboard-web/src/components/HealthScorePanel.tsx:45-50",
+      "failing_input": "Adding a 5th weighted component to HealthScoreComponents type (e.g., 'creativeFatigue')",
+      "expected": "Compile error or visual indication the new component is unhandled",
+      "actual": "COMPONENT_ORDER hardcodes the 4 weighted keys. New key would silently not appear in the bars/reasons render. COMPONENT_LABELS is also hardcoded (would render undefined.label / undefined.weight).",
+      "fix_sketch": "Derive COMPONENT_ORDER from a const object keyed by WeightedComponentKey. Use `satisfies Record<WeightedComponentKey, {...}>` so TypeScript errors when the type union grows.",
+      "regression_test_idea": "TypeScript test (not runtime): adding a key to WeightedComponentKey type should error in HealthScorePanel.tsx."
+    },
+    {
+      "id": "CMB-20",
+      "severity": "LOW",
+      "file_line": "dashboard-web/src/components/HealthScorePanel.tsx:215",
+      "failing_input": "campaignHealthScore.ts changes the structure of reasons[] (e.g., reorders or removes the 4 weighted-component reasons before the operatorAdjustment ones)",
+      "expected": "Index-free access to operatorAdjustment-related reasons",
+      "actual": "`health.reasons.slice(4)` magic-numbers 4 (= count of weighted components). Drift if a 5th component is added to COMPONENT_ORDER (already covered by CMB-19) or if reasons[] reorders.",
+      "fix_sketch": "Use `health.reasons.slice(COMPONENT_ORDER.length)` to keep them in sync. Or restructure CampaignHealth to expose `reasons: { weighted: string[4]; operator: string[] }` so the panel reads named buckets.",
+      "regression_test_idea": "Add test: CampaignHealth with operatorAdjustment > 0 produces a reasons[] where slice(4) returns exactly the operator-adjustment messages."
+    }
+  ],
+  "uncertainty_notes": "Did not verify the actual sentinel values (0, 40) in lib/campaignHealthScore.ts — relied on JSDoc and the comment '/* sentinel for CPM rising ROAS falling */'. CMB-18 may be a LOW if those sentinels are stable + tested, but the panel-level coupling itself is HIGH because no test enforces the contract end-to-end.",
+  "test_coverage_gaps": [
+    "Zero test coverage for HealthScorePanel.tsx (265 lines, including buildRecommendations 65 lines of branching logic)",
+    "No test for buildRecommendations weakest-component selection (4 cases × 2 sub-cases each = 8 branches)",
+    "No test for the COMPONENT_ORDER → bars rendering",
+    "No test for operatorAdjustment-row rendering (positive/negative/zero)",
+    "No test for the 'insufficient' short-circuit path",
+    "No test for the score-formula footer rendering"
+  ],
+  "channels": {
+    "imports_from": ["@/lib/utils", "@/lib/campaignHealthScore"],
+    "exports_to": ["./CampaignDrawer.tsx (HealthScorePanel)"],
+    "events_emitted": [],
+    "events_consumed": ["health prop changes (drawer SWR)"],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

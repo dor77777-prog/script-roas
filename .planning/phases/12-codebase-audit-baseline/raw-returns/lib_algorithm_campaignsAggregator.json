@@ -1,0 +1,62 @@
+{
+  "task_id": "12.A.12",
+  "file": "dashboard-web/src/lib/campaignsAggregator.ts",
+  "test_path": "dashboard-web/src/lib/__tests__/campaignsAggregator.test.ts + aggregateByStoreAllRowSplit.test.ts",
+  "verdict": "Verified",
+  "findings": [],
+  "uncertainty_notes": "Traced FIX-26 lastActiveDate gating (spend>0 only), FIX-13 strict-> tie policy, FIX-06 second-pass budget normalization, and #IN-02 chronologically-latest budget/effectiveStatus selection. All four invariants hold under same-date duplicates, null-then-non-null sequences, out-of-order date arrivals (backfills), and mode='campaign' vs mode='adset'. The seed/update coordination (lines 84-110 seed + 111-167 update on the SAME first row) correctly does not double-count because (a) numeric accumulators are seeded to 0 before the += on line 112-116, and (b) every budget/status update guards `r.date > prev` where prev was just set to r.date by the seed, evaluating false. storeFilter being matched by display name (line 76) is an explicit deferred-refactor documented inline (IN-07); not flagged. Lexicographic string date comparison on line 67/124/138 etc. relies on ISO YYYY-MM-DD format from the upstream CampaignRow contract; safe today.",
+  "test_coverage_gaps": [
+    {
+      "description": "No direct regression for effectiveStatus latest-date selection and duplicate-date tie policy.",
+      "why_it_matters": "The off-chip in CampaignsTableRow depends on aggregate().effectiveStatus; same-day duplicate rows with ACTIVE/PAUSED could silently change which UI status renders if the strict-> tie policy drifts. The seed-then-update coordination is particularly subtle (line 104 seeds unconditionally, line 109 only sets the date tracker if truthy, line 161 only updates if truthy).",
+      "suggested_fixture": "Two rows for one campaign on the same date with effectiveStatus ACTIVE then PAUSED (assert first-write 'ACTIVE' wins). Add an older non-null status (PAUSED, 2026-05-10) and a newer null status (2026-05-15) and assert the non-null PAUSED survives (late-arriving NULL must not clobber per line 161 gating)."
+    },
+    {
+      "description": "No direct coverage for a latest-date row whose campaignBudgetCad is null while an earlier row's value is non-null.",
+      "why_it_matters": "aggregate() intentionally keeps the latest-NON-NULL budget (lines 136-142 gate on `r.campaignBudgetCad != null`). A newer null value must NOT clobber an older non-null. Without this regression the gating could be relaxed accidentally to `r.campaignBudgetCad !== undefined` (which would let null overwrite), silently flipping budget displays to '—' for currently-active campaigns whose latest backfilled row had a null budget cell.",
+      "suggested_fixture": "Older CBO row with campaignBudgetCad 50 at 2026-05-10, newer CBO row with campaignBudgetCad null at 2026-05-15. Assert row.campaignBudgetCad === 50. Mirror for ABO adSetBudgetCad."
+    },
+    {
+      "description": "No coverage for storeFilter being a display name versus storeId.",
+      "why_it_matters": "Line 76 filters by r.storeName, not r.storeId. Current STORE_TAB_CONFIG keeps display names unique ('uzoshop', 'Zol Plus', '360usmile') so the contract works today. If a caller passes 'zolplus' (the id) the filter silently returns zero rows. The IN-07 inline comment documents this as a deferred refactor; a contract-pinning test makes the regression visible the day STORE_TAB_CONFIG grows a duplicate name.",
+      "suggested_fixture": "Rows with storeId 'zolplus' and storeName 'Zol Plus'. Assert aggregate(rows, 'campaign', 'Zol Plus', 'all', range) returns the rows and aggregate(rows, 'campaign', 'zolplus', 'all', range) returns []."
+    },
+    {
+      "description": "No coverage for empty/missing adSetId in adset mode.",
+      "why_it_matters": "Line 82 constructs the adset key as `${storeId}::${platform}::${campaignId}::${adSetId}`. Google campaign-level fallback rows and any malformed source rows with adSetId='' would collapse to the same key suffix, causing distinct conceptual rows to aggregate together. CampaignRow.adSetId is typed as plain `string` (no `| undefined`), so the empty-string case is real.",
+      "suggested_fixture": "Two distinct rows in adset mode with the same storeId/platform/campaignId but blank adSetId, differing campaignName or spend. Assert and document the expected grouping behavior (currently: a single row collapsing both)."
+    },
+    {
+      "description": "No coverage for the date-range filter on line 67 (out-of-range rows excluded).",
+      "why_it_matters": "Lexicographic comparison `r.date < range.from || r.date > range.to` is only safe for ISO YYYY-MM-DD. A regression that lets pre-range or post-range rows slip in would silently inflate spend/conversion totals for the selected window.",
+      "suggested_fixture": "Rows on 2026-04-30, 2026-05-01, 2026-05-31, 2026-06-01 with the same key. Range {from:'2026-05-01', to:'2026-05-31'}. Assert aggregated spend equals exactly the sum of rows on 05-01 and 05-31."
+    },
+    {
+      "description": "No coverage for budgetType='' (unknown) preserving both campaignBudgetCad and adSetBudgetCad through the FIX-06 second pass.",
+      "why_it_matters": "The FIX-06 normalization on lines 172-175 only clears budgets when budgetType is 'CBO' or 'ABO'. If budgetType resolves to '' (paused / lifetime-only / Google), both budget fields are emitted as-is — possibly with mixed-source values. Pinning this prevents a future 'normalize to null on unknown' refactor from silently dropping the visible budgets.",
+      "suggested_fixture": "Single row with budgetType='', campaignBudgetCad 50, adSetBudgetCad 25. Assert both survive in the output unchanged."
+    }
+  ],
+  "channels": {
+    "imports_from": [
+      "dashboard-web/src/lib/campaigns.ts",
+      "dashboard-web/src/lib/dateRange.ts"
+    ],
+    "exports_to": [
+      "dashboard-web/src/components/CampaignsTable.tsx consumes aggregate() and Aggregated for the campaigns/adsets table",
+      "dashboard-web/src/components/ProductCentricView.tsx consumes aggregate() for product-centric campaign cohorts",
+      "dashboard-web/src/components/CampaignsTableRow.tsx consumes Aggregated type for row rendering/off-chip/budget display",
+      "dashboard-web/src/lib/campaignHealthScore.ts consumes Aggregated type",
+      "dashboard-web/src/lib/aiReport.ts consumes Aggregated type",
+      "dashboard-web/src/lib/multiMappingCohort.ts consumes Aggregated type",
+      "dashboard-web/src/lib/productCentricView.ts consumes Aggregated type",
+      "dashboard-web/src/lib/hooks/useCampaignTrueRevenue.ts consumes Aggregated type"
+    ],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": []
+  }
+}

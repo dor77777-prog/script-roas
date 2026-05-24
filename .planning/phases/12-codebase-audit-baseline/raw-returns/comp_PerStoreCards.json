@@ -1,0 +1,69 @@
+{
+  "task_id": "12.G.09",
+  "file": "dashboard-web/src/components/PerStoreCards.tsx",
+  "test_path": "NONE — no PerStoreCards.test.* found",
+  "verdict": "Per-store rendering component with inline top/risky derivation. The sort invariant (storeAggs sorted desc by ROAS) is again ASSUMED without documentation — `withRoas[0]` is taken as 'leader' (same issue class as InsightsPanel CMB-22). The 'risky' classification correctly checks both `withRoas.length >= 2` (skip 1-store views) AND `sortedAsc[0].roas < 2` (red zone). 1 MEDIUM finding: top-store derivation shares CMB-22's sort-invariant assumption. 1 LOW finding: STORE_COLORS is hardcoded with 3 stores + 5 fallback hues — adding a 4th store requires manual color or it falls to fallback (silent UX degradation). 1 LOW finding: `ttSpend` rendered conditionally based on storeHasTikTok() — but Meta/Google never check eligibility, so a store with Google integration disabled would render '0 CAD' for Google. 1 INFO finding: FIND-05 dashboard-fidelity fix ('…' for loading, '0' for zero orders) is correctly applied.",
+  "findings": [
+    {
+      "id": "CMB-24",
+      "severity": "MEDIUM",
+      "file_line": "dashboard-web/src/components/PerStoreCards.tsx:45-49",
+      "failing_input": "storeAggs passed unsorted (future caller bypassing aggregateByStore)",
+      "expected": "Defensive sort or documented precondition",
+      "actual": "`withRoas[0].store` assumes index 0 is the highest-ROAS store (same as InsightsPanel CMB-22). Today aggregateByStore guarantees this; future refactor could silently break the 'leader' trophy.",
+      "fix_sketch": "Same as CMB-22 — either defensive sort, documented precondition, or runtime assertion in dev mode.",
+      "regression_test_idea": "Test PerStoreCards with 3 stores in 2 input orders → same 'top' decoration on same store."
+    },
+    {
+      "id": "CMB-25",
+      "severity": "LOW",
+      "file_line": "dashboard-web/src/components/PerStoreCards.tsx:9-17",
+      "failing_input": "Operator adds a 4th store via Apps Script config",
+      "expected": "Sensible auto-assigned color without code change",
+      "actual": "Falls to `['#1c4587', '#ea4335', '#34a853', '#fbbc04', '#9c27b0'][idx % 5]` fallback — works but the same store name might cycle to different colors across renders if storeAggs order is unstable.",
+      "fix_sketch": "Hash the store name to a stable color: `const color = STORE_COLORS[name] || hashedColor(name);` where hashedColor uses a string-to-hash → palette index function. Centralize with RoasChart (which has the same 3-store map).",
+      "regression_test_idea": "Test colorFor returns the same color for the same name across multiple invocations regardless of idx."
+    },
+    {
+      "id": "CMB-26",
+      "severity": "LOW",
+      "file_line": "dashboard-web/src/components/PerStoreCards.tsx:143-148",
+      "failing_input": "Store with Google integration disabled (e.g., a Shopify-only store with no Google Ads spend ever)",
+      "expected": "Either hide the Google row entirely (matching TikTok's pattern via storeHasTikTok) or render with consistent 'integration disabled' indication",
+      "actual": "Meta is always rendered; Google is always rendered (with '—' when 0); TikTok is conditional on storeHasTikTok. Inconsistent — a Shopify store with only Meta would show 'Google: —' permanently which is misleading.",
+      "fix_sketch": "Add `storeHasMeta`/`storeHasGoogle` helpers or refactor to a `STORE_PLATFORMS: Record<string, Platform[]>` config. Render only platforms in the store's enabled set.",
+      "regression_test_idea": "Test PerStoreCards with a store that has only Meta enabled → renders only Meta breakdown row, not Google/TikTok."
+    },
+    {
+      "id": "CMB-27",
+      "severity": "INFO",
+      "file_line": "dashboard-web/src/components/PerStoreCards.tsx:160-162",
+      "failing_input": "orderCount in loading state",
+      "expected": "'…' for loading vs '0' for genuine zero",
+      "actual": "FIND-05 fix correctly applied — `orderCount === undefined ? '…' : formatNumber(orderCount, 0)`. Working as designed.",
+      "fix_sketch": "No change needed.",
+      "regression_test_idea": "Test rendering with orderCount=undefined → '…' vs orderCount=0 → '0' vs orderCount=5 → '5'."
+    }
+  ],
+  "uncertainty_notes": "Did not load storeHasTikTok implementation to confirm the per-store eligibility config — relied on JSDoc + the function signature. The 'risky' threshold of 2.0 ROAS matches the roasLabel red-zone threshold (also 2.0) — implicit coupling that should be a shared constant.",
+  "test_coverage_gaps": [
+    "Zero test coverage for this 185-line component",
+    "No test for top/risky derivation (CMB-24 invariant + the 2.0 risky threshold)",
+    "No test for the `withRoas.length >= 2` gate (single-store view should NOT get trophy)",
+    "No test for StoreCard rendering with various color/isTop/isRisky/orderCount combinations",
+    "No test for storeHasTikTok integration (CMB-26 inconsistency)",
+    "No test for the 'risky' badge rendering when both isTop=false AND isRisky=true",
+    "No test for the FIND-05 orderCount loading vs zero distinction"
+  ],
+  "channels": {
+    "imports_from": ["react", "lucide-react", "@/lib/utils", "@/lib/analytics", "@/lib/platformsByStore"],
+    "exports_to": ["./Dashboard.tsx (PerStoreCards)"],
+    "events_emitted": [],
+    "events_consumed": ["data + ordersByStore prop changes (Dashboard SWR)"],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

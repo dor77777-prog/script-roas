@@ -1,0 +1,112 @@
+{
+  "task_id": "12.D.2",
+  "file": "dashboard-web/src/inngest/functions/cronDaily.ts",
+  "test_path": "dashboard-web/src/inngest/functions/__tests__/cronDaily.test.ts + cronDailyFxFailure.test.ts",
+  "verdict": "Uncertain",
+  "findings": [
+    {
+      "id": "INN-01",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/inngest/functions/cronDaily.ts:441-449 + 1121-1126",
+      "failing_input": "TikTok FX succeeds (ttSpendCad !== null) but the daily run's return value path (line 1121-1126) computes `roas = revenueCad / merged.totalSpendCad` using merged.totalSpendCad — which EXCLUDES TikTok. The persisted data_daily row at line 437-439 correctly uses `totalSpendCadAll = merged.totalSpendCad + ttSpendCad`. So the DB row and the return value disagree for TikTok-enabled stores.",
+      "expected": "Both the persisted data_daily.roas/grossProfit/netProfit AND the returned RunDailyResult.roas/grossProfit/netProfit should use the SAME total-spend basis (i.e. include TikTok when ttSpendCad is non-null).",
+      "actual": "Lines 1121-1126 build the return value from `merged.totalSpendCad` (no TikTok), but lines 437-449 write to disk a row that DOES include TikTok in roas/gross_profit/net_profit. For uzoshop (the only TikTok store) the returned roas underreports total spend in the denominator, so the returned roas > the dashboard roas.",
+      "fix_sketch": "After persist-batch completes, compute the return value using the same `totalSpendCadAll` logic (handling the FX-failed null branch). E.g. read the per-store fxCache + ttSpendCad from a top-level let, or recompute consistently. Simplest fix: hoist `ttSpendCad`/`totalSpendCadAll`/`roas`/`grossProfitCad`/`netProfitCad` out of the persist-batch closure into outer variables, and use them in the return.",
+      "regression_test_idea": "Pin: with tiktokSpend.spend=40 USD + fxRate=1.35 + merged.totalSpendCad=86 CAD + revenueCad=1234 CAD: `result.roas` should equal `1234 / (86 + 40*1.35) = 8.79`, NOT `1234 / 86 = 14.35`. Pre-fix the test asserting `result.roas === 1234/86` would pass; post-fix it should be 1234/(86+54) ≈ 8.79."
+    },
+    {
+      "id": "INN-02",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/inngest/functions/cronDaily.ts:559-566 (data_daily upsert error handling)",
+      "failing_input": "Supabase `.upsert(...)` resolves with `{ error: PostgrestError | null }` — it does NOT reject on RLS/schema errors. The mock in cronDaily.test.ts:438-441 sets `throwIn === 'upsert' → return Promise.resolve({ error: { message: 'upsert-failed' } })` and the writer DOES check `if (error) throw`. Good. BUT: many of the persist-batch sub-upserts (orders_attribution, product_catalog, etc.) also check `error`. Looks consistent across all the explicit calls — VERIFIED. NOT a bug. Withdrawn.",
+      "expected": "n/a",
+      "actual": "n/a",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "n/a"
+    },
+    {
+      "id": "INN-03",
+      "severity": "MINOR",
+      "file_line": "dashboard-web/src/inngest/functions/cronDaily.ts:484-508 (cadFor cache)",
+      "failing_input": "cadFor's fxCache is keyed only by currency code (`cur`). Within a single persist-batch step.run, multiple FX retries against the SAME currency that all transiently failed would all be cached as `null` after the first failure. If the FIRST cadFor call for ILS happens to hit a transient Frankfurter 5xx, every subsequent ILS row in the SAME step skips its CAD update — even if a retry 200ms later would have succeeded. The cache turns one transient blip into a full per-platform persist skip for that tick.",
+      "expected": "Either (a) don't cache `null` (re-attempt per row), or (b) cache with a short expiry, or (c) accept the trade-off but document it.",
+      "actual": "Cache caches `null` for the lifetime of the persist-batch step. The Inline comment at 482-483 explicitly documents this as intentional ('Cache failures too (null sentinel) so we don't hammer Frankfurter with retries inside the same persist-batch'). So it's a deliberate trade-off — but at the operator scale (3 stores × 1 daily run + a few sync-now clicks/month) the 'don't hammer' concern is essentially zero, and the cost is potentially losing a full day of FX-denominated columns to one transient blip.",
+      "fix_sketch": "Either retry once on null, or remove the null caching: `if (rate === null) { fxCache.delete(cur); }` — next row's cadFor call would re-attempt the rate fetch. At the daily cadence (one persist-batch per cron-daily run per store) the Frankfurter hammer-fear is unfounded.",
+      "regression_test_idea": "Mock getFxRate to fail on the first call and succeed on the second. Pin: in a single persist-batch, expect the second ILS row to land with `spend_cad` populated (rate retried), not omitted (rate=null still cached)."
+    },
+    {
+      "id": "INN-04",
+      "severity": "MINOR",
+      "file_line": "dashboard-web/src/inngest/functions/cronDaily.ts:583-586 (products_daily.units / orders rounding)",
+      "failing_input": "Shopify product row with fractional units (e.g. a partial refund of 0.5 units after gift-card payment dust). `units: Math.round(p.units)` and `orders: Math.round(p.orders)` will round 0.5 → 0 (banker's rounding) or 1 (half-away-from-zero) depending on JS engine. Lost precision for the dashboard's per-product unit count.",
+      "expected": "Document the rounding rationale OR migrate the BIGINT columns to NUMERIC. The same TODO already exists for the BIGINT campaigns_daily columns at lines 622-631.",
+      "actual": "Silent loss of <1 unit precision per row. At operator scale (~50 products/day) this is negligible — but the rounding could legitimately flip a 0.6 unit refund display to 1 (overstating refund count) or 0 (understating).",
+      "fix_sketch": "Same as the BIGINT comment at 622-631 — long-term fix is a NUMERIC schema migration. Short-term: document the loss in the inline comment so future devs know not to expect sub-unit fidelity.",
+      "regression_test_idea": "n/a — accepted limitation."
+    }
+  ],
+  "uncertainty_notes": "Finding INN-01 is the highest-confidence concern: the return-value vs persisted-row mismatch is concrete and reproducible. INN-03 is a deliberate trade-off per the inline comment but the operator's actual usage pattern makes the trade-off lopsided. INN-02 was investigated and withdrawn — every Supabase call in persist-batch explicitly destructures `{ error }` and throws on truthy error.",
+  "test_coverage_gaps": [
+    {
+      "description": "No test asserting the equivalence of `RunDailyResult.roas` and the persisted `data_daily.roas`. The two flows compute roas separately (lines 437-440 vs 1121-1122) and use different totalSpend bases when TikTok is non-zero.",
+      "why_it_matters": "Operator console (plan 12 jobs table per inline comment at 182-186) renders the return value as a 'what just got written' summary. If the return roas drifts from the dashboard roas, the operator sees two different numbers from the same job — a confusing debug experience.",
+      "suggested_fixture": "Set tiktokSpendResult.spend > 0; assert `result.roas === dataDailyUpsertedRow.roas` (within FP epsilon)."
+    },
+    {
+      "description": "No test for getCogsRateForStore env-var parsing edge cases — e.g. UZOSHOP_COGS_RATE='abc' (NaN), '-0.5' (negative), '1.5' (>1), '' (empty string falsy). The function has guards (lines 113-118) but they're untested.",
+      "why_it_matters": "Operator misconfiguration is the leading source of COGS drift bugs. A typo like UZOSHOP_COGS_RATE='.25' (leading dot, parses to 0.25 — good) vs 'point 25' (NaN, falls back to 0.25 — also OK) vs '25' (parses to 25, FAILS the 0..1 guard, falls back to 0.25) should all be pinned.",
+      "suggested_fixture": "Parameterized test over ['abc', '-0.5', '1.5', '', '25'] → all should fall back to 0.25 with a console.warn."
+    },
+    {
+      "description": "No test for the Meta budgets 'effective_status fallback' chain (lines 670-676): adset status → campaign status → null. A regression that swaps the precedence would silently flip dashboard chip semantics on every Meta row.",
+      "why_it_matters": "The audit fix 2026-05-23 specifically documents 'an ACTIVE Meta campaign can hold an ADSET_PAUSED ad-set; the operator's intuition tracks the ad-set state' — but no test pins it.",
+      "suggested_fixture": "metaBudgets fixture with campaign.effectiveStatus='ACTIVE' + adSet.effectiveStatus='ADSET_PAUSED' → asserting the persisted row's effective_status is 'ADSET_PAUSED'."
+    },
+    {
+      "description": "Test 4 enforces step IDs in a specific order via `expect(ids).toEqual([...])`. The persist-batch step inside lines 391-1119 also does multi-table upserts but they're not exercised as separate steps. If a future refactor splits persist-batch into per-table sub-steps, free-tier budget breaks (currently ≤7 execs/run guard at test line 558). The guard catches it — good.",
+      "why_it_matters": "n/a — already covered.",
+      "suggested_fixture": "n/a"
+    }
+  ],
+  "channels": {
+    "imports_from": [
+      "@/inngest/client",
+      "@/lib/fetchers/shopify (fetchShopifyDayRows, fetchShopifyOrdersAttribution, fetchShopifyProductsCatalog)",
+      "@/lib/fetchers/meta (fetchMetaAdSetInsights, fetchMetaAdInsights, fetchMetaSpendForDay, fetchMetaBudgets)",
+      "@/lib/fetchers/googleAds (fetchGoogleAdsSpendForDay, fetchGoogleAdsAdGroupInsights, fetchGoogleAdsAdInsights)",
+      "@/lib/fetchers/tiktok (fetchTikTokSpendForDay, fetchTikTokAdInsights, types TikTokDaySpend + TikTokAdRow)",
+      "@/lib/fetchers/manualOverrides (mergeOverridesFromSupabase)",
+      "@/lib/fetchers/fx (getFxRate)",
+      "@/lib/supabaseAdmin (getSupabaseAdmin)"
+    ],
+    "exports_to": [
+      "dashboard-web/src/inngest/functions/eventSyncNow.ts (runDailyForStore, StoreId)",
+      "dashboard-web/src/inngest/functions/eventBackfill.ts (runDailyForStore, StoreId)",
+      "serve() route (cronDailyFunctions array)"
+    ],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [
+      "TZ=Asia/Jerusalem 5 0 * * * (00:05 IL daily — 3 functions, one per store: cron-daily-uzoshop, cron-daily-zolplus, cron-daily-usmile360)"
+    ],
+    "supabase_writes": [
+      "data_daily (UPSERT onConflict 'date,store_id')",
+      "products_daily (UPSERT onConflict 'date,store_id,product_id')",
+      "campaigns_daily (UPSERT onConflict 'date,store_id,platform,campaign_id,ad_set_id' — Meta, Google, TikTok)",
+      "ads_daily (UPSERT onConflict 'date,store_id,ad_id' — combined Meta + Google + TikTok rows)",
+      "orders_attribution (UPSERT onConflict 'store_id,order_id')",
+      "product_catalog (UPSERT onConflict 'store_id,product_id')"
+    ],
+    "supabase_reads": [
+      "(indirect via mergeOverridesFromSupabase → manual_overrides)"
+    ],
+    "api_calls": [
+      "Shopify REST orders.json (×2 windows + line items + catalog)",
+      "Meta Graph /insights (adset + ad level + spend) + /act_<id>/campaigns + /act_<id>/adsets (budgets)",
+      "Google Ads API GAQL (spend + ad-group insights + ad insights)",
+      "TikTok Business API /report/integrated/get (spend + ad insights)",
+      "Frankfurter FX (ILS→CAD, USD→CAD, etc.)"
+    ]
+  }
+}

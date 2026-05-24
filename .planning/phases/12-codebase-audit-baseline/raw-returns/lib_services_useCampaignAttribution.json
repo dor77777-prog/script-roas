@@ -1,0 +1,102 @@
+{
+  "task_id": "12.B.10",
+  "file": "dashboard-web/src/lib/hooks/useCampaignAttribution.ts",
+  "test_path": "dashboard-web/src/lib/__tests__/useCampaignAttribution.test.ts",
+  "verdict": "✅ Verified",
+  "findings": [
+    {
+      "id": "SVC-01",
+      "severity": "MAJOR",
+      "file_line": "useCampaignAttribution.ts:79-112 (dailyMetaByAdSet memo)",
+      "failing_input": "rows = [] (no campaign rows). Hook returns empty Map.",
+      "expected": "Empty input → empty Map.",
+      "actual": "Correct. The outer useMemo at line 117-149 also handles ordersRows.length === 0 || rows.length === 0 → returns empty Map.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test already covers via implicit empty paths."
+    },
+    {
+      "id": "SVC-02",
+      "severity": "MAJOR",
+      "file_line": "useCampaignAttribution.ts:96-112 (bucket key collision)",
+      "failing_input": "Two different ad-sets with the SAME adSetId but DIFFERENT names (rename mid-stream) or vice versa.",
+      "expected": "Key is `r.adSetId || r.adSetName || '(אחר)'` — so adSetId='X' rows collapse into key 'X' regardless of name.",
+      "actual": "Correct under the assumption adSetId is unique. If two rows have adSetId='X' but different names, they correctly merge into one bucket. This matches the summary.adSets key formula. Cross-platform collisions (Meta adSetId='123' and TikTok adSetId='123') would also merge — but in practice IDs are platform-specific (Meta numeric, TikTok long, Google ad-group ID format).",
+      "fix_sketch": "If cross-platform collision risk, include platform in key.",
+      "regression_test_idea": "Test with two rows same adSetId different platform — assert separate or merged behavior."
+    },
+    {
+      "id": "SVC-03",
+      "severity": "MINOR",
+      "file_line": "useCampaignAttribution.ts:98-106 (running sum of conversionValue per (key, date))",
+      "failing_input": "Multiple rows for same (adSetId, date) — e.g., row from cron-daily refresh after cron-live wrote already.",
+      "expected": "Sum is correct (Map.set(date, prev+new)).",
+      "actual": "Correct.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "n/a"
+    },
+    {
+      "id": "SVC-04",
+      "severity": "MAJOR",
+      "file_line": "useCampaignAttribution.ts:79-149 (useMemo dep arrays)",
+      "failing_input": "rangeFrom changes but summary doesn't — outer memo recomputes (depends on rangeFrom). dailyMetaByAdSet doesn't recompute (depends only on rows, summary). Correct.",
+      "expected": "Memos recompute on relevant input changes only.",
+      "actual": "Correct dependency tracking. dailyMetaByAdSet depends on [rows, summary]; outer memo depends on [summary, ordersAttrData, rows, rangeFrom, rangeTo, dailyMetaByAdSet] — proper.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "n/a"
+    },
+    {
+      "id": "SVC-05",
+      "severity": "MAJOR",
+      "file_line": "useCampaignAttribution.ts:127 (early return for null summary)",
+      "failing_input": "summary = null (drawer closed). Returns empty Map.",
+      "expected": "No analysis when drawer is closed.",
+      "actual": "Correct.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Already implicit."
+    },
+    {
+      "id": "SVC-06",
+      "severity": "MAJOR",
+      "file_line": "useCampaignAttribution.ts:131-147 (TikTok analyzer call)",
+      "failing_input": "TikTok ad-set. Hook calls analyzeAttributionForAdSet which (per comment) returns null for non-Meta.",
+      "expected": "Per the d/CR-06 audit note, the platform gate was moved into the analyzer. Hook still calls it for all platforms; analyzer returns null for non-Meta.",
+      "actual": "Correct per documented architecture. The hook is correct; the gap is in attributionAnalysis.ts (deferred work).",
+      "fix_sketch": "Track the deferred work in attributionAnalysis owner.",
+      "regression_test_idea": "Test verifies Google ad-set returns null (Test 3 in test file)."
+    }
+  ],
+  "uncertainty_notes": "File is 150 LOC. Test file is 119 LOC with 3 tests covering cross-store isolation, range source-of-truth (FIX-09), non-Meta short-circuit. Hook logic delegates to analyzeAttributionForAdSet so most behavior is tested through the pure analyzer; the hook-specific bucket-building is implicitly covered. The d/CR-06 audit note documents a platform-gate refactor in this hook (correct fix applied). Verdict ✅. The hook is correct; analyzer-side deferred work is tracked elsewhere.",
+  "test_coverage_gaps": [
+    {
+      "description": "No test for the dailyMetaByAdSet bucket building",
+      "why_it_matters": "The bucket is required for analyzeAttributionForAdSet's window-stability + outlier detection; without a test, a key formula change could silently break those features.",
+      "suggested_fixture": "renderHook with rows: [{ adSetId:'A', date:'2026-05-10', conversionValue:100 }, { adSetId:'A', date:'2026-05-11', conversionValue:50 }]; assert analyzer received dailyMeta of length 2 with correct values."
+    },
+    {
+      "description": "No test for memo recomputation on rangeFrom/rangeTo change",
+      "why_it_matters": "FIX-09 contract; if dep array dropped rangeFrom/rangeTo, the analysis would freeze on first range.",
+      "suggested_fixture": "renderHook with rangeFrom=A → re-render with rangeFrom=B; assert analyzer called with new range."
+    },
+    {
+      "description": "No test for ordersAttrData undefined",
+      "why_it_matters": "Initial render before SWR resolves; hook should return empty Map without throwing.",
+      "suggested_fixture": "renderHook with ordersAttrData=undefined → assert returns empty Map."
+    },
+    {
+      "description": "No test for cross-hook platform behavior on TikTok",
+      "why_it_matters": "The d/CR-06 fix removed the hook-side gate; the architectural assertion 'analyzer decides per platform' should be pinned.",
+      "suggested_fixture": "renderHook with a TikTok ad-set; assert hook calls analyzeAttributionForAdSet (does NOT short-circuit at hook level)."
+    }
+  ],
+  "channels": {
+    "imports_from": ["lib/attributionAnalysis.ts (analyzeAttributionForAdSet, AttributionAnalysis)", "lib/campaigns.ts (CampaignRow)", "app/api/orders-attribution/route (OrdersAttributionResponse)"],
+    "exports_to": ["components/CampaignDrawer.tsx (consumer)"],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

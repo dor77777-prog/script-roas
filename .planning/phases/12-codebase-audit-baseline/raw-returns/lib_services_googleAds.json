@@ -1,0 +1,102 @@
+{
+  "task_id": "12.B.2",
+  "file": "dashboard-web/src/lib/fetchers/googleAds.ts",
+  "test_path": "dashboard-web/src/lib/fetchers/__tests__/googleAds.test.ts",
+  "verdict": "⚠️ Uncertain",
+  "findings": [
+    {
+      "id": "SVC-01",
+      "severity": "MAJOR",
+      "file_line": "googleAds.ts:309-340 (runGaqlQuery)",
+      "failing_input": "GAQL query returns `nextPageToken` on the LAST page (i.e., the page that also returns `results: []` or partial results AND a non-empty `nextPageToken` that, when followed, returns empty `results` and no `nextPageToken`).",
+      "expected": "Cap-warning fires only when there are truly more results to fetch — i.e., on the page that had a `nextPageToken` and we stopped before consuming it.",
+      "actual": "The `pages` counter increments on every page including the final one. After loop exit, `pages >= GAQL_PAGE_CAP && pageToken` checks the LAST captured pageToken. If page 50 returns BOTH results AND a nextPageToken, the warning fires correctly. But for a normal query with exactly 49 pages where the 49th page has a nextPageToken and the 50th page returns 0 results + no nextPageToken, after page 50, `pageToken` is still set to the value from page 49 (it's only re-assigned BEFORE the break, see line 330: `pageToken = body.nextPageToken;` runs only when nextPageToken IS set, meaning after a break-causing iteration, pageToken retains the previous value). Then `pages` is 50 and `pageToken` is truthy → false positive warning. Not data loss, but operator-confusing alarm.",
+      "fix_sketch": "Refactor pagination: `if (!body.nextPageToken) { pageToken = undefined; break; }` — clear the local on break. OR track 'we stopped because cap was hit' as an explicit boolean.",
+      "regression_test_idea": "Mock GAQL responses for 50 pages where page 50 has results but no nextPageToken; assert no console.warn was emitted."
+    },
+    {
+      "id": "SVC-02",
+      "severity": "MINOR",
+      "file_line": "googleAds.ts:386 (fetchGoogleAdsSpendForDay)",
+      "failing_input": "Sum across multiple result rows where customer.currency_code differs row-to-row (impossible in practice — single customer per query — but the code blindly overwrites `currency` on each row).",
+      "expected": "Currency is single-valued per customer per query; rows agree.",
+      "actual": "Code overwrites `currency` per row (line 379) and the LAST row wins. Harmless because Google Ads GAQL returns the same customer.currencyCode for every row of a customer-level query, but the code is unnecessarily mutable.",
+      "fix_sketch": "Capture currency on the first row only: `if (currency === 'CAD' && customer.currencyCode) currency = customer.currencyCode;` — actually no, simpler: capture from results[0].",
+      "regression_test_idea": "n/a (defensive only)."
+    },
+    {
+      "id": "SVC-03",
+      "severity": "MINOR",
+      "file_line": "googleAds.ts:484-487 (fetchGoogleAdsAdGroupInsights bucket population)",
+      "failing_input": "An ad-group row whose `metrics.impressions` is a very large string like '99999999999' (>2^31). `parseInt` correctly handles this, but `bucket.activity += spend + impressions` mixes a small float (spend) with a potentially huge int — the float is dwarfed.",
+      "expected": "Activity is meaningfully checked as 'did this ad-group do anything' (spend > 0 OR impressions > 0).",
+      "actual": "The mixed-precision sum is asymmetric: when spend is 0 and impressions is 0, sum is 0 (passes the activity = 0 check correctly). When either is nonzero, sum is > 0 (triggers fallback correctly). Functionally correct, but conceptually a heuristic OR would be cleaner.",
+      "fix_sketch": "Replace activity += spend + impressions with `bucket.hasActivity = bucket.hasActivity || spend > 0 || impressions > 0;` — clearer intent.",
+      "regression_test_idea": "Test campaign with one ad-group of spend=0 imp=0 conv=2 (post-attributed conversion on paused ad) — current code drops it from the fallback because activity = 0. This is the documented behavior matching GoogleAds.gs:124 — but worth a test pinning it."
+    },
+    {
+      "id": "SVC-04",
+      "severity": "MINOR",
+      "file_line": "googleAds.ts:295-301 (runGaqlQuery)",
+      "failing_input": "GAQL query that takes >60 seconds to execute (extremely large account spanning the page cap, slow Google response).",
+      "expected": "Token validity is checked at the START of each runGaqlQuery call, not refreshed mid-pagination.",
+      "actual": "Token is fetched once via getAccessToken() before runGaqlQuery is called, then the same token is used for all 50 paginated requests. If the token expires mid-pagination (>3540s elapsed during pagination), pages 49+ will get 401. Unlikely with 1h tokens + 60s margin, but possible on stalled networks.",
+      "fix_sketch": "Refresh token inside loop if Date.now() crosses expiresAt; OR catch 401 and retry once with a fresh token.",
+      "regression_test_idea": "Mock 49 fast page responses, then a 401 on page 50; assert no implicit retry (current behavior) so test pins the contract."
+    },
+    {
+      "id": "SVC-05",
+      "severity": "MAJOR",
+      "file_line": "googleAds.ts:368-370 (GAQL date interpolation)",
+      "failing_input": "dateStr that contains a single quote, e.g., \"2026-05-19'); DROP TABLE--\" (operator-controlled via cron parameters in a future API).",
+      "expected": "dateStr should be validated as YYYY-MM-DD before being interpolated into GAQL.",
+      "actual": "`WHERE segments.date = '${dateStr}'` is a raw template-string interpolation. Google's GAQL parser will reject malformed dates, but if dateStr ever flows from operator input (e.g., a backfill endpoint), this is a GAQL-injection vector. Currently dateStr always comes from internal cron callers (always YYYY-MM-DD), so no live exposure.",
+      "fix_sketch": "Add a guard: `if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(dateStr)) throw new Error('Invalid dateStr');`",
+      "regression_test_idea": "Test that fetchGoogleAdsSpendForDay('uzoshop', \"2026-05-19' OR '1'='1\") throws (or has a defense)."
+    }
+  ],
+  "uncertainty_notes": "File is 762 LOC with 4 exported fetchers (spend-only, ad-group insights, ad insights, ad-group statuses). Test file covers 4 of these in 8 tests. Audit-snapshot row 7 said 'meta/google/fx solid' but tests don't cover: campaign-level fallback for Shopping/PMax (mentioned only by inspection of source), nextPageToken pagination (no test mocks more than 1 page), OAuth refresh failure (no 401 from oauth2.googleapis.com test), token cache invalidation after expiry, fetchGoogleAdsAdGroupStatuses (entire function untested). Verdict ⚠️ Uncertain because the pagination logic + 4 untested functions outweigh the prior 'solid' rating.",
+  "test_coverage_gaps": [
+    {
+      "description": "No test for multi-page GAQL pagination via nextPageToken",
+      "why_it_matters": "Audit fix CR-01 (2026-05-23) added pagination loop; without a test, the loop can silently revert in a refactor and we lose the 'no more 10K-row silent drops' guarantee.",
+      "suggested_fixture": "Mock 3 GAQL responses where pages 1+2 have nextPageToken and page 3 does not; assert all 3 pages' results are concatenated."
+    },
+    {
+      "description": "No test for pagination cap warning (50 pages hit)",
+      "why_it_matters": "The console.warn on cap-hit is the operator's only signal that data may be dropped; without a test, it could be dropped by accident in a refactor.",
+      "suggested_fixture": "Mock 50 GAQL responses each with nextPageToken; assert console.warn is called with a 'pagination cap' message."
+    },
+    {
+      "description": "No test for fetchGoogleAdsAdGroupInsights Shopping/PMax fallback path",
+      "why_it_matters": "The Shopping/PMax campaign-level synthesis (lines 503-554) including 'רמת קמפיין' label is core to dashboard behavior; without a test, a refactor could break the campaign-id reuse for adSetId or drop the Hebrew label.",
+      "suggested_fixture": "Mock ad_group GAQL returning empty results for campaign 'C1' AND campaign GAQL returning a non-zero row for 'C1'; assert one row emitted with adSetId === 'C1' and adSetName === '(רמת קמפיין)'."
+    },
+    {
+      "description": "No test for fetchGoogleAdsAdGroupStatuses (entire function uncovered)",
+      "why_it_matters": "Phase 05.7.x added this to surface paused-status placeholders within 10 min; an untested write path can drift.",
+      "suggested_fixture": "Mock GAQL ad_group response with status mix (ENABLED + PAUSED + missing) and assert REMOVED is filtered, missing status row is dropped, ad_group.status wins over campaign.status."
+    },
+    {
+      "description": "No test for OAuth refresh failure (non-OK from oauth2.googleapis.com)",
+      "why_it_matters": "T-05.6-05-I2 mitigation says error message includes Google's response text — without a test, we cannot pin that the refresh-token VALUE is never echoed.",
+      "suggested_fixture": "Mock oauth2.googleapis.com returning 400 with body 'invalid_grant'; assert thrown error includes 'invalid_grant' and does NOT include the refresh token value."
+    },
+    {
+      "description": "No test for token cache expiry triggering refresh",
+      "why_it_matters": "60-second safety margin (expires_in - 60) is the only protection against clock-skew 401s; a refactor that drops the margin would not be caught.",
+      "suggested_fixture": "Mock OAuth → set expires_in to 60 (so expiresAt = Date.now()). Second call should re-refresh. Currently test 'caches the access token' uses expires_in: 3600 — does not exercise expiry."
+    }
+  ],
+  "channels": {
+    "imports_from": [],
+    "exports_to": ["lib/inngest/cronDaily.ts", "lib/inngest/cronLive.ts (status placeholders)", "lib/postgresReaders.ts (consumes GoogleAdsAdRow shape downstream)"],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": ["cron/daily (Google Ads spend + ad-group insights + ad insights)", "cron/live (ad-group statuses for placeholder UPSERT)"],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": ["POST https://oauth2.googleapis.com/token (OAuth refresh)", "POST https://googleads.googleapis.com/v24/customers/{customerId}/googleAds:search (GAQL)"]
+  }
+}

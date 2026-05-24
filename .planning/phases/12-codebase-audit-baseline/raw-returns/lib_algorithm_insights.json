@@ -1,0 +1,68 @@
+{
+  "task_id": "12.A.2",
+  "file": "dashboard-web/src/lib/insights.ts",
+  "test_path": "dashboard-web/src/lib/__tests__/forecastMonthEndBaselineExcludesToday.test.ts + forecastMonthEndProjectionCogs.test.ts + forecastMonthEndTrueNet.test.ts",
+  "verdict": "Has bug",
+  "findings": [
+    {
+      "id": "ALG-01",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/lib/insights.ts:539",
+      "failing_input": "On 2026-05-24 Asia/Jerusalem, rows include one early MTD completed day 2026-05-03 with revenue 10000, spend 0, cogs 2500, hasCogs true, plus seven completed baseline days 2026-05-17..2026-05-23 with revenue 1000/day, spend 0, cogs 100/day, hasCogs true, no fixed costs. This is realistic when early-month store/product mix had 25% COGS and the last completed week has 10% COGS.",
+      "expected": "projectedNet should preserve actual MTD costs and only extrapolate remaining days from the completed-day baseline: projectedRevenue 24000, projected COGS 3900 (actual MTD 3200 + remaining 700), fees 1560, projectedNet 18540.",
+      "actual": "projectedNet is 20040 because the code applies the last-7 COGS rate to the entire projected month total, rewriting actual early-MTD COGS: \"const observedCogsRate = last7Rev > 0 ? last7Cogs / last7Rev : COGS_RATE_OF_REVENUE;\" and \"const projectedNet = projectedRev - projectedSpend - projectedRev * observedCogsRate - projectedRev * observedFeesRate - projectedFixedCosts;\"",
+      "fix_sketch": "Project variable costs as actual MTD totals plus remaining-day extrapolation: projectedCogs = mtdCogs + (last7Rev > 0 ? (last7Cogs / last7DaysCount) * daysRemaining : projectedRemainingRevenue * COGS_RATE_OF_REVENUE). Do the same for transaction fees if store fee mix can change. Then projectedNet = projectedRev - projectedSpend - projectedCogs - projectedFees - projectedFixedCosts.",
+      "regression_test_idea": "Add a forecastMonthEnd test with high-COGS early MTD rows outside [today-7,today-1] and low-COGS baseline rows; assert projectedNet uses actual MTD COGS plus baseline COGS for remaining days, not projectedRevenue * last7CogsRate."
+    }
+  ],
+  "uncertainty_notes": "",
+  "test_coverage_gaps": [
+    {
+      "description": "No test covers projectedNet when early MTD COGS/fee mix differs from the last completed week.",
+      "why_it_matters": "The current tests only use homogeneous baseline-shaped data or reconstruct the current last7Rate formula, so they miss projection errors that rewrite already-realized MTD cost history.",
+      "suggested_fixture": "One high-COGS row near month start plus seven low-COGS completed baseline rows, with expected projected cost = actual MTD cost + baseline daily cost * daysRemaining."
+    },
+    {
+      "description": "No tests cover detectAnomalies, generateRecommendations, insight state visibility, or cloud-synced goal/insight writes in this file.",
+      "why_it_matters": "Algorithm changes outside forecastMonthEnd could emit or hide wrong insight cards without failing the current specified tests.",
+      "suggested_fixture": "Fixtures for flat-baseline anomaly detection, zero-conversion campaign recommendations, store underperformance, done/ignored TTL visibility, and writeGoal immediate push behavior."
+    },
+    {
+      "description": "Forecast tests do not pin full-month projected fixed-cost behavior for multi-store All-scoped billing rows.",
+      "why_it_matters": "GoalTracker is intentionally global; a regression in billing storeNames could double-count or under-count shared fixed costs in projectedNet.",
+      "suggested_fixture": "Seed an All recurring cost and two stores in rows, then assert projectedFixedCosts is charged once and split semantics match billingForRange."
+    }
+  ],
+  "channels": {
+    "imports_from": [
+      "dashboard-web/src/lib/cloudSync.ts",
+      "dashboard-web/src/lib/types.ts",
+      "dashboard-web/src/lib/products.ts",
+      "dashboard-web/src/lib/campaigns.ts",
+      "dashboard-web/src/lib/analytics.ts",
+      "dashboard-web/src/lib/billing.ts",
+      "dashboard-web/src/lib/costs.ts"
+    ],
+    "exports_to": [
+      "dashboard-web/src/components/GoalTracker.tsx consumes forecastMonthEnd, readGoal, writeGoal, computePacing",
+      "dashboard-web/src/components/InsightsBoard.tsx consumes buildAllInsights, isInsightVisible, readInsightStates, writeInsightStates, and Insight types",
+      "dashboard-web/src/lib/__tests__/forecastMonthEndBaselineExcludesToday.test.ts consumes forecastMonthEnd",
+      "dashboard-web/src/lib/__tests__/forecastMonthEndProjectionCogs.test.ts consumes forecastMonthEnd",
+      "dashboard-web/src/lib/__tests__/forecastMonthEndTrueNet.test.ts consumes forecastMonthEnd",
+      "dashboard-web/src/lib/__tests__/goalTrackerScope.test.ts consumes forecastMonthEnd"
+    ],
+    "events_emitted": [
+      "roas-goal-changed",
+      "roas-insight-states-changed"
+    ],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": [
+      "pushCloudKey for roas-dashboard:monthly-revenue-goal",
+      "pushCloudKey for roas-dashboard:insight-states"
+    ]
+  }
+}

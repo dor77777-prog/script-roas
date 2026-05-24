@@ -1,0 +1,130 @@
+{
+  "task_id": "12.D.3",
+  "file": "dashboard-web/src/inngest/functions/cronLive.ts",
+  "test_path": "dashboard-web/src/inngest/functions/__tests__/cronLive.test.ts + cronLiveIsActiveForPlatform.test.ts + cronLivePastRowBackfill.test.ts + cronLiveStatusRefresh.test.ts",
+  "verdict": "Has bug",
+  "findings": [
+    {
+      "id": "INN-05",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/inngest/functions/cronLive.ts:803-819 (per-platform-preserve SELECT inside persist-rolling-3day step)",
+      "failing_input": "Two cron-live ticks fire 10 min apart (the */10 cadence). Tick #1 fetches Meta+Google+TikTok spend for today successfully (all three CAD numbers fresh). Tick #1's persistDayForStore call (line 813-819) writes data_daily with fresh values via the spendOverride branch. Tick #2 starts 10 min later. Meta API call times out (the .catch returns null at line 661-666). Google + TikTok succeed.",
+      "expected": "Tick #2: fb_spend_cad falls back to tick #1's PRIOR value (the per-platform-preserve semantics described in comments 762-782). Total_spend_cad = priorFb + freshGa + freshTt.",
+      "actual": "The prior-SELECT at line 803-809 happens INSIDE the `persist-rolling-3day` step.run callback. Inngest step.run callbacks must be idempotent because Inngest may RE-EXECUTE them on retry. On a retry of persist-rolling-3day, the prior SELECT happens AFTER a partial UPSERT has already been committed by the first attempt — meaning the SELECT will read the freshly-written 'fresh' value, not the original prior value. If the retry then also fails partway through, the next retry's SELECT reads a value that was 'preserved from itself'. This is subtle but real: the SELECT inside persist-rolling-3day is NOT idempotent across retries because the writes from this same step have already landed.",
+      "fix_sketch": "Move the SELECT (lines 803-809) to a SEPARATE step.run('select-prior-spend-...', ...) BEFORE persist-rolling-3day. Inngest memoizes step.run results across retries — the prior values become stable across retries. Alternative: don't preserve via SELECT at all; pass through `null` for failed platforms and let persistDayForStore's own SELECT (line 361-369) do the preservation via the no-spendOverride branch. The current code is essentially fighting persistDayForStore's existing logic.",
+      "regression_test_idea": "Mock: tick 1 writes fb=100, ga=200, tt=50. Tick 2 has Meta fetch fail (returns null), Google + TikTok succeed (300, 60). Pin first attempt + 1 retry of persist-rolling-3day: assert `fb_spend_cad === 100` (prior preserved), not the value that would be written had the retry's SELECT read its own first-attempt write."
+    },
+    {
+      "id": "INN-06",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/inngest/functions/cronLive.ts:482-502 (productRows always UPSERT even on Shopify-failed sentinel? — no, gated by line 481)",
+      "failing_input": "Inspected lines 481-502. `if (shopify.productRows.length > 0) { ... }` gates the products_daily UPSERT, and the Shopify-failed sentinel at lines 574-585 sets `productRows: []` — so the gate prevents an UPSERT of zero rows. Withdrawn. Not a bug.",
+      "expected": "n/a",
+      "actual": "n/a",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "n/a"
+    },
+    {
+      "id": "INN-07",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/inngest/functions/cronLive.ts:393-394 + 449-453 (Shopify-failed but spendOverride present persist-data-daily semantics)",
+      "failing_input": "Shopify failed for date D-1 (sentinel revenueCad=0, __shopifyFailed=true). The line 754-759 guard short-circuits the entire iteration with `continue` BEFORE persistDayForStore is called for D-1 — so a Shopify failure for D-1 means NEITHER revenue NOR spend updates for D-1 land this tick. The audit fix comment at line 738-739 documents this as 'Shopify FAILED → write NOTHING for this date'. But the audit fix (CR-02) at line 599-605 specifically wanted ad-platform refreshes for ALL 3 rolling-window dates. With this Shopify-coupled gating, a stale-Shopify-row for D-1 also blocks ad-spend recovery for D-1. ",
+      "expected": "If the operator's goal is 'cron-live recovers from cron-daily failure within 10 min for ALL 3 dates' (per the CR-02 fix comment), then a Shopify outage for one date in the rolling window should NOT also block ad-platform spend recovery for that same date. The two failure modes are independent and should be decoupled.",
+      "actual": "Line 754-759 unconditionally skips the entire persist for the date when Shopify failed. If a Meta token expired at 00:05 IL (cron-daily failed for Meta), AND Shopify has a transient 503 at 12:00 IL (cron-live tick fails for Shopify), then the 12:10 cron-live tick (Meta retry now succeeds, but Shopify still 503) won't write the recovered Meta spend either.",
+      "fix_sketch": "Decouple: if shopifyOk is false, skip the SHOPIFY-COLUMN writes but still run a 'spend-only' persist for the date (a new branch of persistDayForStore that writes only the spend cols when spendOverride is present, leaving Shopify cols untouched). Alternative: split the write into two halves and let each succeed independently.",
+      "regression_test_idea": "Mock Shopify failing for D-1 only (D-0 + D-2 succeed). Mock Meta + Google + TikTok all succeed for all 3 dates. Pin: data_daily for D-1 should have fresh fb/ga/tt_spend_cad (recovered from the cron-live spend fetch) even though revenue_cad / gross_revenue_cad / refund_deduction_cad were not updated."
+    },
+    {
+      "id": "INN-08",
+      "severity": "MINOR",
+      "file_line": "dashboard-web/src/inngest/functions/cronLive.ts:1094-1130 (sequential UPDATE loop blocks on per-row latency)",
+      "failing_input": "Operator has ~100 Meta ad-sets + ~30 Google ad-groups + ~10 TikTok ad-groups = 140 enrollments. Each one calls `admin.from('campaigns_daily').update(...).eq().eq().eq().gte().lt()` SEQUENTIALLY (line 1094-1130). Supabase round-trip is typically 100-200ms each. 140 × 150ms = ~21 seconds. cron-live tick must complete in under 5 min (Inngest step budget) so this is fine in absolute terms, but it's a tight budget. Pre-fix this was Promise.all (parallel, ~200ms total). The audit fix correctly traded parallelism for per-iteration error isolation (HIGH-12), but the trade-off is real.",
+      "expected": "Either accept the 21s cost (documented) or use bounded concurrency (e.g. p-limit with concurrency: 10).",
+      "actual": "Pure sequential. Documented in inline comment as deliberate for error isolation. Not a bug per se.",
+      "fix_sketch": "Hybrid: chunk into batches of N=10, run each batch with Promise.allSettled, log+continue per failure. Same error-isolation properties, 10× throughput.",
+      "regression_test_idea": "Pin: with 100+ enrollments, the step completes in <60s wall clock (currently ~15-21s, but could spike on Supabase latency)."
+    },
+    {
+      "id": "INN-09",
+      "severity": "MINOR",
+      "file_line": "dashboard-web/src/inngest/functions/cronLive.ts:903-1130 (refresh-effective-status step duplicates work)",
+      "failing_input": "Step 5 (refresh-effective-status) re-fetches fetchMetaBudgets/fetchGoogleAdsAdGroupStatuses/fetchTikTokAdGroupStatuses (line 903-941). Step 2 (fetch-meta-google-tiktok-spend-light-3day) already did the corresponding /insights calls. These are DIFFERENT endpoints (status fetcher uses /act_<id>/campaigns + /act_<id>/adsets per the inline comment at line 871-874), but the data overlap is significant: the status fetcher returns campaign+adset names AND status, and the spend fetcher returns spend.",
+      "expected": "Could be one round-trip per platform to a single endpoint that returns both spend + status (Meta's /insights with fields=adset_id,spend can be combined with /act_<id>/adsets in a single batched request).",
+      "actual": "Two separate fetch passes per tick × 144 ticks/day × 3 stores ≈ 864 redundant Meta API calls/day. Within Meta's rate limit but contributes to the quota burn.",
+      "fix_sketch": "Consolidate into a single 'fetch-platform-data' step that returns both spend+status arrays. Or, since the operator scale is small, accept the duplication and document.",
+      "regression_test_idea": "n/a — performance optimization, not a correctness bug."
+    },
+    {
+      "id": "INN-10",
+      "severity": "CRITICAL",
+      "file_line": "dashboard-web/src/inngest/functions/cronLive.ts:746-823 (persist-rolling-3day is one large step.run with non-idempotent SELECT-then-WRITE)",
+      "failing_input": "cron-live runs every 10 min (144 ticks/day × 3 stores = 432 ticks/day). Each tick's persist-rolling-3day step at line 746-858 does: (1) SELECT prior spend, (2) compute merged spend, (3) UPSERT data_daily, (4) UPSERT products_daily, all inside ONE step.run callback. If Inngest retries this step (e.g. on a transient Supabase 500), the entire callback re-executes. On retry: the SELECT at line 803-809 reads the spend value WRITTEN by the previous attempt's UPSERT (committed before the failure). The per-platform-preserve fallback at line 814-818 then 'preserves' a value that was already overwritten — masking the original prior value entirely.",
+      "expected": "Each step.run callback should be idempotent across retries: re-executing it should produce the same final DB state. The current pattern (SELECT-then-UPSERT in one step) violates this when the SELECT is intended to read 'the state BEFORE this step ran'.",
+      "actual": "On retry, persist-rolling-3day's SELECT reads the in-progress state of itself. The 'prior' fallback values are no longer the original cron-daily values — they're the cron-live values written by the first attempt of the same retry. Net result: if a fetcher genuinely failed (null) on this tick AND Inngest retries persist-rolling-3day for any reason, the retry's preserve will lock in 'cron-live's own zero/empty' rather than 'cron-daily's authoritative value'. PRODUCTION shape: 432 persist runs/day × low retry rate (~1%) = ~4 retries/day where this bug could fire. Each fired retry causes a single date's spend column to be incorrectly preserved at the cron-live first-attempt value rather than the cron-daily authoritative value. Operator sees stale data with no signal.",
+      "fix_sketch": "Move the SELECT to a SEPARATE step.run BEFORE persist-rolling-3day (e.g. `step.run('select-prior-spend', () => admin.from('data_daily').select(...))`). Inngest memoizes step.run results — across retries, the SELECT result is stable (it's read from Inngest's run state, not re-executed against the DB). Then persist-rolling-3day consumes the memoized prior-spend map.",
+      "regression_test_idea": "Mock: tick T1 writes fb_spend_cad=100 (from cron-daily, prior to test). Tick T2 fires; persist-rolling-3day's SELECT reads 100. Meta fetcher returns null (failed). persist-rolling-3day's UPSERT writes fb_spend_cad=100 (preserved). Now SIMULATE A RETRY: persist-rolling-3day re-runs. Its SELECT should still return 100 (from the prior persist), not the value that was just UPSERTed. Currently the test mock at cronLive.test.ts doesn't model Inngest retries; would need a custom step.run mock that re-invokes the callback to expose this."
+    }
+  ],
+  "uncertainty_notes": "INN-10 is the highest-confidence concern — it's a fundamental violation of Inngest's idempotency contract (D-B5 per the inline comment) that the existing tests cannot catch because the makeStepStub at cronLive.test.ts:58-67 runs each step.run callback exactly once. The bug only manifests on actual Inngest retries. Operator scale (~432 ticks/day) means even a 1% retry rate produces several silent corruptions per day. INN-05 is a milder version of the same problem. INN-07 is a design question — the comment 'Shopify FAILED → write NOTHING' is explicit but the operator's stated goal (CR-02: 'recover ad-spend within 10 min for ALL 3 dates') is in tension with it. INN-08+INN-09 are perf, not correctness.",
+  "test_coverage_gaps": [
+    {
+      "description": "No test that exercises step.run RETRY behavior. The makeStepStub at cronLive.test.ts:58-67 executes each callback exactly once. The persist-rolling-3day step's SELECT-then-UPSERT pattern (INN-10) needs a retry-aware test fixture.",
+      "why_it_matters": "Inngest retries are real production paths. Per D-B6 the default retry policy is 4× exponential. Any step.run callback that contains both a SELECT-of-prior-state and a write-of-new-state will hit this bug on retry.",
+      "suggested_fixture": "Custom step stub: `step.run = async (id, cb) => { try { return await cb(); } catch (e) { return await cb(); /* simulate one retry */ } }`. Use it in a test scenario where the first UPSERT succeeds but a downstream call throws, forcing persist-rolling-3day to retry; assert the second SELECT still returns the pre-first-attempt value."
+    },
+    {
+      "description": "No test for the Shopify-failed + ad-platform-succeeded scenario for the same date (INN-07). The existing tests cover 'all Shopify fail' (Test 6, all dates fall through to revenue=0) but not 'Shopify fail for D-1 only + Meta/Google succeed for D-1'.",
+      "why_it_matters": "This is the exact failure mode CR-02 was supposed to fix: ad-platform spend recovery for ALL rolling-window dates. The current Shopify-coupled gating partially undoes the CR-02 intent.",
+      "suggested_fixture": "Mock fetchShopifyDayRows to throw only for dates[1]; Meta/Google/TikTok succeed for all 3 dates. Pin: data_daily UPSERT for dates[1] should have fresh fb/ga/tt_spend_cad."
+    },
+    {
+      "description": "No test asserting the exec-budget invariant (≤5 step.runs per cron-live tick). cronLive.test.ts:273-274 asserts labels.length is in [1,5] but doesn't pin it to the actual current decomposition (fetch-shopify-rolling-3day, fetch-meta-google-tiktok-spend-light-3day, fetch-shopify-orders-attribution-today, persist-rolling-3day, refresh-effective-status = 5).",
+      "why_it_matters": "Free-tier budget per the comment at line 18-25: 25.9K execs/month from cron-live. A future refactor that adds a 6th step pushes execs/month past 30K — still under 50K cap but eats into the headroom.",
+      "suggested_fixture": "Assert `expect(labels).toEqual(['fetch-shopify-rolling-3day', 'fetch-meta-google-tiktok-spend-light-3day', 'fetch-shopify-orders-attribution-today', 'persist-rolling-3day', 'refresh-effective-status'])` instead of the open-range bound."
+    },
+    {
+      "description": "No test for sequential UPDATE loop ordering. The audit comment at line 1064-1093 documents 'sequential for-of' as the fix for HIGH-12 (Promise.all fail-fast). cronLiveStatusRefresh.test.ts Scenario A confirms one failure doesn't block siblings, but it doesn't pin the SEQUENTIAL ordering — a future refactor to bounded-concurrency might silently regress to fail-fast on certain orderings.",
+      "why_it_matters": "Mostly catches future refactors. The audit fix is correct as-is.",
+      "suggested_fixture": "Add an array of `[startTimestamp, endTimestamp]` per UPDATE in the mock; assert that for any two updates, end[i] <= start[i+1] (strict sequencing)."
+    }
+  ],
+  "channels": {
+    "imports_from": [
+      "@/inngest/client",
+      "@/lib/fetchers/shopify (fetchShopifyDayRows, fetchShopifyOrdersAttribution + types ShopifyDayRows, ShopifyOrderRow)",
+      "@/lib/fetchers/meta (fetchMetaBudgets, fetchMetaSpendForDayLight)",
+      "@/lib/fetchers/googleAds (fetchGoogleAdsAdGroupStatuses, fetchGoogleAdsSpendForDay)",
+      "@/lib/fetchers/tiktok (fetchTikTokAdGroupStatuses, fetchTikTokSpendForDay)",
+      "@/lib/fetchers/fx (getFxRate)",
+      "@/lib/supabaseAdmin (getSupabaseAdmin)",
+      "@/lib/platformConfig (TIKTOK_ACTIVE_ENOUGH)"
+    ],
+    "exports_to": [
+      "serve() route (cronLiveFunctions array)",
+      "cronLiveIsActiveForPlatform.test.ts (isActiveForPlatform — exported for testability)"
+    ],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [
+      "TZ=Asia/Jerusalem */10 * * * * (every 10 min — 3 functions: cron-live-uzoshop, cron-live-zolplus, cron-live-usmile360)"
+    ],
+    "supabase_writes": [
+      "data_daily (UPSERT onConflict 'date,store_id' — rolling 3-day refresh)",
+      "products_daily (UPSERT onConflict 'date,store_id,product_id' — rolling 3-day refresh)",
+      "orders_attribution (UPSERT onConflict 'store_id,order_id' — today only)",
+      "campaigns_daily (UPSERT onConflict 'date,store_id,platform,campaign_id,ad_set_id' — today placeholder enrollment)",
+      "campaigns_daily (UPDATE effective_status only — past dates in lookback window [today-6, today-1])"
+    ],
+    "supabase_reads": [
+      "data_daily (SELECT fb_spend_cad/ga_spend_cad/tt_spend_cad/total_spend_cad inside persistDayForStore + a duplicate SELECT inside persist-rolling-3day for the per-platform preserve fallback)"
+    ],
+    "api_calls": [
+      "Shopify REST orders.json (×3 dates rolling + ×1 today orders-attribution)",
+      "Meta Graph /insights (level=account, light) ×3 + /act_<id>/campaigns + /act_<id>/adsets (status refresh)",
+      "Google Ads API GAQL (spend ×3 + ad-group statuses ×1)",
+      "TikTok Business API /report/integrated/get (spend ×3) + /adgroup/get (statuses ×1, uzoshop only)",
+      "Frankfurter FX (per-currency per-date, cached in spendByDate closure)"
+    ]
+  }
+}

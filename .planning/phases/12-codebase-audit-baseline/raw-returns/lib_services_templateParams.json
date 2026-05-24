@@ -1,0 +1,112 @@
+{
+  "task_id": "12.B.14",
+  "file": "dashboard-web/src/lib/notifications/templateParams.ts",
+  "test_path": "dashboard-web/src/lib/notifications/__tests__/templateParams.test.ts",
+  "verdict": "✅ Verified",
+  "findings": [
+    {
+      "id": "SVC-01",
+      "severity": "MAJOR",
+      "file_line": "templateParams.ts:126-162 (buildTemplateParameters null-safe)",
+      "failing_input": "summary=null. params=['title', '—', '—', '—', 'אין נתונים זמינים'].",
+      "expected": "Always 5 parameters.",
+      "actual": "Correct. SVC-02 in summary.json is RESOLVED — templateParams correctly handles null summary and won't crash sendDailySummary.",
+      "fix_sketch": "n/a — well-designed null handling.",
+      "regression_test_idea": "Already covered by test 'handles null summary'."
+    },
+    {
+      "id": "SVC-02",
+      "severity": "MAJOR",
+      "file_line": "templateParams.ts:141-147 (storeIds sort)",
+      "failing_input": "Three stores with names '360usmile', 'Zol Plus', 'uzoshop'. localeCompare typically: digits before letters, case-insensitive base letter compare.",
+      "expected": "Deterministic order regardless of Supabase insertion order.",
+      "actual": "Correct per CR-02 audit fix. Test 'orders stores deterministically by storeName' confirms.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Already covered."
+    },
+    {
+      "id": "SVC-03",
+      "severity": "MAJOR",
+      "file_line": "templateParams.ts:64-66 (combinedOther)",
+      "failing_input": "other=5, tiktok=3 → returns 8.",
+      "expected": "Tiktok merged into 'אחרים' bucket per the documented Phase 05.7.5 workaround.",
+      "actual": "Correct.",
+      "fix_sketch": "n/a — to be replaced when Phase D template ships with 4 source slots.",
+      "regression_test_idea": "Test storeBlock output contains 'אחרים: 8' when other=5, tiktok=3."
+    },
+    {
+      "id": "SVC-04",
+      "severity": "MAJOR",
+      "file_line": "templateParams.ts:13-14 + 68-94 (no newlines/tabs/5+spaces)",
+      "failing_input": "storeBlock output must have NO \\n, \\t, or 5+ consecutive spaces (Meta error 132018).",
+      "expected": "All separators are ' • ' or '  (' (2 spaces before paren).",
+      "actual": "Correct. The 2-space before '(' is the maximum. No newlines in any block.",
+      "fix_sketch": "Add a unit test asserting the output strings do not contain \\n, \\t, or /  {5,}/.",
+      "regression_test_idea": "Test storeBlock output passes /^[^\\n\\t]*$/ AND does not match /  {5,}/."
+    },
+    {
+      "id": "SVC-05",
+      "severity": "MAJOR",
+      "file_line": "templateParams.ts:35-43 (formatRoas / formatCad)",
+      "failing_input": "roas=Infinity (divide-by-zero earlier). formatRoas returns '—'.",
+      "expected": "Infinite or NaN ROAS renders as '—'.",
+      "actual": "Correct: `if (!Number.isFinite(roas) || roas === 0) return '—'`. Note: negative ROAS (revenue<0 from refunds + spend>0) would render normally as e.g. '-0.50'. Acceptable.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test formatRoas(Infinity)='—', formatRoas(NaN)='—', formatRoas(-0.5)='-0.50'."
+    },
+    {
+      "id": "SVC-06",
+      "severity": "MAJOR",
+      "file_line": "templateParams.ts:52-55 (formatCpm)",
+      "failing_input": "cpm=0 → returns '—'. cpm=NaN → returns '—'.",
+      "expected": "0 or invalid renders as '—'.",
+      "actual": "Correct.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "n/a"
+    },
+    {
+      "id": "SVC-07",
+      "severity": "MAJOR",
+      "file_line": "templateParams.ts:148-155 (loop fills 3 slots)",
+      "failing_input": "summary with 5 stores; only first 3 (alphabetically) are included.",
+      "expected": "Always 3 slots; extras dropped.",
+      "actual": "Correct — loop runs 3 times.",
+      "fix_sketch": "n/a; could log a warning if storeIds.length > 3.",
+      "regression_test_idea": "Test summary with 5 stores → assert only 3 in output."
+    }
+  ],
+  "uncertainty_notes": "File is 162 LOC. Test file is 111 LOC with 5 tests covering: 5-parameter count, deterministic store ordering (CR-02 audit fix), alphabetical placement, padding when <3 stores, null summary fallback. Verdict ✅. Combined with summary.ts's null return path being handled here (SVC-01), no critical risk remains.",
+  "test_coverage_gaps": [
+    {
+      "description": "No test verifying NO \\n / \\t / 5+ spaces in output strings",
+      "why_it_matters": "Meta's 132018 error rejects the entire send if any param violates this; the 2026-05-21 incident burned the operator once.",
+      "suggested_fixture": "For each storeBlock + totalsBlock output, assert /^[^\\n\\t]*$/ and does NOT match /  {5,}/."
+    },
+    {
+      "description": "No test for formatRoas / formatCad / formatCpm edge cases",
+      "why_it_matters": "These helpers handle Infinity, NaN, negatives — silent regressions would render '$NaN' in operator messages.",
+      "suggested_fixture": "formatRoas(Infinity)='—'; formatCad(NaN)='C$0'; formatCpm(0)='—'."
+    },
+    {
+      "description": "No test for >3 stores edge case",
+      "why_it_matters": "Operator could add a 4th store; current behavior drops it silently. Worth pinning.",
+      "suggested_fixture": "summary with 5 stores; assert only 3 in output; consider asserting warn."
+    },
+    {
+      "description": "No test for tiktok+other merging in storeBlock output",
+      "why_it_matters": "combinedOther is the workaround for the Phase D template upgrade pending; regression would mis-count.",
+      "suggested_fixture": "Store with other=5, tiktok=3; assert storeBlock contains 'אחרים: 8'."
+    }
+  ],
+  "channels": {
+    "imports_from": ["lib/notifications/summary.ts (DaySummary, StoreSummary)"],
+    "exports_to": ["lib/notifications/sendDailySummary.ts (buildTemplateParameters)"],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

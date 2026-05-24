@@ -1,0 +1,54 @@
+{
+  "task_id": "12.E.10",
+  "file": "dashboard-web/src/app/api/operator/jobs/route.ts",
+  "test_path": "(no dedicated unit test). Consumer: components/operator/JobsTable.tsx (UI integration only).",
+  "verdict": "Has bug",
+  "findings": [
+    {
+      "id": "API-23",
+      "severity": "Major",
+      "file_line": "dashboard-web/src/app/api/operator/jobs/route.ts:149-169 (sequential fan-out loop)",
+      "failing_input": "50 recent Inngest events, each requiring a separate /v1/events/{id}/runs fetch.",
+      "expected": "Concurrent fan-out (Promise.all) or batched fan-out with a sensible concurrency cap (e.g. 10 parallel).",
+      "actual": "Sequential `for ... await fetch(...)` — 50 events × ~200ms average Inngest REST latency = ~10s p50 latency for the operator. The 5s revalidate window means each polling cycle (15s on client) often misses the cache and rebuilds from scratch. Operator's 'live jobs' view feels laggy on busy days.",
+      "fix_sketch": "Replace the for loop with `const results = await Promise.allSettled(events.map(ev => fetch(...).then(r => r.ok ? r.json() : null)))`. Cap with a Promise.all chunking helper if Inngest rate-limits the proxy at >20 concurrent.",
+      "regression_test_idea": "Mock fetch with 200ms delay; assert handler completes in <500ms for 10 events (parallel) rather than >2s (sequential)."
+    },
+    {
+      "id": "API-24",
+      "severity": "Minor",
+      "file_line": "dashboard-web/src/app/api/operator/jobs/route.ts:155-163",
+      "failing_input": "Per-event runs fetch returns 401 Unauthorized (signing-key revoked mid-flight).",
+      "expected": "First 401 short-circuits the fan-out (no point hammering 50 endpoints with a bad key).",
+      "actual": "Each per-event 401 is logged + skipped, continuing all 50 sequential fetches. Wastes 10 seconds + Inngest quota on a confirmed-failed credential.",
+      "fix_sketch": "On 401/403, break out of the loop and return 200 with error='auth failed'.",
+      "regression_test_idea": "Mock 401 from first per-event fetch; assert fetch only called twice (events list + first per-event)."
+    },
+    {
+      "id": "API-25",
+      "severity": "Cosmetic",
+      "file_line": "dashboard-web/src/app/api/operator/jobs/route.ts:121",
+      "failing_input": "?limit=abc (non-numeric).",
+      "expected": "Clamped to MAX_LIMIT (50) per comment.",
+      "actual": "parseInt('', 10) → NaN → falls back to MAX_LIMIT. Works correctly. No issue.",
+      "fix_sketch": "N/A.",
+      "regression_test_idea": "N/A."
+    }
+  ],
+  "uncertainty_notes": "Signing-key handling correctly server-side-only. URL-obscurity trust model accepted. Soft-fail 200 pattern consistent with sibling operator routes. The N+1 latency is the only real issue — flagged Major because it directly degrades operator UX. Phase 11 fix candidate.",
+  "test_coverage_gaps": [
+    "Zero coverage. Recommend: (a) success path with 3 events → 5 runs total, (b) missing INNGEST_SIGNING_KEY → 200 soft-fail with config-error message, (c) limit clamping (limit=10000 → fetches 50).",
+    "No test that pagination cursor works (currently not implemented — gap for future 24h+ history)."
+  ],
+  "channels": {
+    "imports_from": ["@/lib/cacheConfig (cacheControl)", "@/lib/apiErrors (userFacingError)"],
+    "exports_to": ["GET handler → consumed by JobsTable.tsx (SWR poll every 15s)"],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": ["/api/operator/jobs?limit=50"],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": ["GET https://api.inngest.com/v1/events (Bearer auth)", "GET https://api.inngest.com/v1/events/{id}/runs (Bearer auth, fan-out)"]
+  }
+}

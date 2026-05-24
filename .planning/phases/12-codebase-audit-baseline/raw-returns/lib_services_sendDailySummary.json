@@ -1,0 +1,127 @@
+{
+  "task_id": "12.B.12",
+  "file": "dashboard-web/src/lib/notifications/sendDailySummary.ts",
+  "test_path": "dashboard-web/src/lib/notifications/__tests__/sendDailySummary.test.ts",
+  "verdict": "✅ Verified",
+  "findings": [
+    {
+      "id": "SVC-01",
+      "severity": "MAJOR",
+      "file_line": "sendDailySummary.ts:112-119 (throw on any failure)",
+      "failing_input": "phone1 sends OK, phone2 fails. Per-recipient loop adds phone1 to succeeded, phone2 to failed, continues. After loop, recipientsFailed.length > 0 → throws.",
+      "expected": "Throw on any failure so Inngest retries.",
+      "actual": "Correct per the audit fix 2026-05-23 (a/WARN-2 sharpening). Documented at lines 100-111.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Already covered by tests 'throws when phone1 succeeds but phone2 fails' and 'throws when both recipients fail'."
+    },
+    {
+      "id": "SVC-02",
+      "severity": "MAJOR",
+      "file_line": "sendDailySummary.ts:61-68 (recipient filter)",
+      "failing_input": "cfg.phone1='' (empty string), cfg.phone2='+972524809540'.",
+      "expected": "Only phone2 is attempted.",
+      "actual": "Correct: filter drops empty/whitespace.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test with phone1='' and phone2 valid — assert only 1 sendMock call."
+    },
+    {
+      "id": "SVC-03",
+      "severity": "MAJOR",
+      "file_line": "sendDailySummary.ts:50-54 (no active config skip)",
+      "failing_input": "loadActiveMetacloudConfig returns null.",
+      "expected": "Skipped with reason, no throw.",
+      "actual": "Correct.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Add test for null config (currently uncovered)."
+    },
+    {
+      "id": "SVC-04",
+      "severity": "MAJOR",
+      "file_line": "sendDailySummary.ts:56-60 (empty templateName skip)",
+      "failing_input": "cfg.templateName=''.",
+      "expected": "Skipped with reason.",
+      "actual": "Correct.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Add test for empty templateName."
+    },
+    {
+      "id": "SVC-05",
+      "severity": "MINOR",
+      "file_line": "sendDailySummary.ts:79 (templateLang default)",
+      "failing_input": "cfg.templateLang undefined.",
+      "expected": "Default 'he'.",
+      "actual": "Correct via `cfg.templateLang || 'he'`.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "n/a"
+    },
+    {
+      "id": "SVC-06",
+      "severity": "MAJOR",
+      "file_line": "sendDailySummary.ts:163-181 (fmtJerusalemDay TZ handling)",
+      "failing_input": "Asia/Jerusalem during DST transition. `fmtJerusalemDay` uses Intl.DateTimeFormat with timeZone='Asia/Jerusalem'.",
+      "expected": "Correct day string regardless of DST.",
+      "actual": "Correct. en-CA formatter outputs YYYY-MM-DD; TZ option handles DST.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test todayJerusalem near midnight UTC during DST transition."
+    },
+    {
+      "id": "SVC-07",
+      "severity": "MAJOR",
+      "file_line": "sendDailySummary.ts:128-140 (fmtTimeAndDate / fmtDateOnly)",
+      "failing_input": "dateStr='2026-05-23' → split('-') → ['2026','05','23']. fmtTimeAndDate('12', ...) returns '12:00, 23/05/2026'.",
+      "expected": "DD/MM/YYYY format with leading zeros preserved.",
+      "actual": "Correct — split returns strings (not numbers), so '05' stays '05'.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test titleNoon('2026-01-01') → '12:00, 01/01/2026'."
+    },
+    {
+      "id": "SVC-08",
+      "severity": "MAJOR",
+      "file_line": "sendDailySummary.ts:73-88 (per-recipient try/catch)",
+      "failing_input": "phone1 throws 'XYZ', phone2 throws 'ABC'. Both errors captured in recipientsFailed.",
+      "expected": "Both recipients attempted; both failures recorded.",
+      "actual": "Correct.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Covered by 'throws when both recipients fail' test."
+    }
+  ],
+  "uncertainty_notes": "File is 181 LOC. Test file is 85 LOC with 3 tests covering the load-bearing throw-on-any-failure contract (a/WARN-2). The skip paths (null config, empty templateName, empty recipients) and the date helpers are uncovered by tests but logic is straightforward. Verdict ✅. Operator constraint 'WhatsApp alerts ONLY to +972524809540' is respected — recipients come from notification_config.phone1/phone2 set by the operator.",
+  "test_coverage_gaps": [
+    {
+      "description": "No test for loadActiveMetacloudConfig returning null",
+      "why_it_matters": "Skip path is the operator's default state when notification_config is empty; regression could throw instead of skip.",
+      "suggested_fixture": "Mock loadActiveMetacloudConfig to return null; assert result.skipped=true."
+    },
+    {
+      "description": "No test for empty templateName skip",
+      "why_it_matters": "Same as above — skip path uncovered.",
+      "suggested_fixture": "Mock config with templateName=''; assert skipped."
+    },
+    {
+      "description": "No test for empty recipients (phone1 + phone2 both null)",
+      "why_it_matters": "Skip path uncovered.",
+      "suggested_fixture": "Mock config with phone1=null, phone2=null; assert skipped with reason 'no recipients configured'."
+    },
+    {
+      "description": "No test for date helper formatting",
+      "why_it_matters": "titleNoon/Evening/Eod produce operator-visible strings; format regressions would be visible in WhatsApp messages.",
+      "suggested_fixture": "Test titleNoon('2026-05-23')='12:00, 23/05/2026'; titleEod('2026-05-23')='סיכום יום מלא — 23/05/2026'."
+    },
+    {
+      "description": "No test for todayJerusalem/yesterdayJerusalem DST behavior",
+      "why_it_matters": "TZ handling is load-bearing; a regression could shift the wrong day's data into a notification.",
+      "suggested_fixture": "vi.setSystemTime to UTC midnight on DST-transition day; assert returned day string."
+    }
+  ],
+  "channels": {
+    "imports_from": ["lib/notifications/summary.ts (buildStoreSummary)", "lib/notifications/templateParams.ts (buildTemplateParameters)", "lib/notifications/whatsapp.ts (loadActiveMetacloudConfig, sendWhatsAppTemplate)"],
+    "exports_to": ["lib/inngest/cronNotifications.ts (likely consumer)"],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": ["cron/noon (12:00 IL)", "cron/evening (18:00 IL)", "cron/eod (00:10 IL — yesterday's summary)"],
+    "supabase_writes": [],
+    "supabase_reads": ["notification_config (via loadActiveMetacloudConfig)"],
+    "api_calls": ["POST https://graph.facebook.com/{ver}/{phone-number-id}/messages (via sendWhatsAppTemplate)"]
+  }
+}

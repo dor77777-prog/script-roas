@@ -1,0 +1,174 @@
+{
+  "task_id": "12.A.4",
+  "file": "dashboard-web/src/lib/aiReport.ts",
+  "test_path": "dashboard-web/src/lib/__tests__/aiReportStoreId.test.ts + aiReportStatistics.test.ts",
+  "verdict": "Has bug",
+  "findings": [
+    {
+      "id": "ALG-01",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/lib/aiReport.ts:1101-1109 (Health Score) and 1289-1297 (Currently Off)",
+      "failing_input": "TikTok campaign row in range with effectiveStatus='BUDGET_EXCEED' (or 'AUDIT', 'REVIEWING', 'ADGROUP_STATUS_NOT_START') and spend >= CAD 50.",
+      "expected": "Per the project's broader TikTok status taxonomy, multiple states represent active-enough delivery/prep. The campaign should not be marked off and Health Score should not apply the -30 'isCurrentlyOff' penalty.",
+      "actual": "Both helpers hard-code a single allowlist: `if (p === 'tiktok') return norm !== 'ADGROUP_STATUS_DELIVERY_OK';`. Every other TikTok status (including delivery-OK variants and budget-paused states) gets flagged as off, listed in 'קמפיינים כבויים כעת', AND penalized by computeCampaignHealth via isCurrentlyOff=true.",
+      "fix_sketch": "Replace the hard-coded ADGROUP_STATUS_DELIVERY_OK check with the shared TikTok active-status classifier used elsewhere in the codebase (platformConfig or campaigns.ts off-chip logic). Apply the same classifier to BOTH the Health Score isStatusOff function (line 1101) and the Currently-Off isOff function (line 1289).",
+      "regression_test_idea": "Add aiReport test with a TikTok campaign effectiveStatus='BUDGET_EXCEED', spend=200, conversionValue=500 and assert (a) the 'קמפיינים כבויים כעת' section header is absent (or the campaign is not listed) and (b) the Health Score row for the campaign does not include the operator -30 adjustment."
+    },
+    {
+      "id": "ALG-02",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/lib/aiReport.ts:2032-2048",
+      "failing_input": "Daily rows for uzoshop (or any store with TikTok delivery) where fbSpend=100, gaSpend=100, ttSpend=300, totalSpend=500.",
+      "expected": "The 'חלוקת תקציב לפי פלטפורמה' section should render three rows: Meta 20%, Google 20%, TikTok 60% (computed against fb+ga+tt).",
+      "actual": "The section accumulates only `metaSpend` and `googleSpend`. `totalSpendAll = metaSpend + googleSpend` excludes TikTok entirely. Output renders Meta 50% / Google 50% — hiding 60% of the actual spend mix on a store that uses TikTok. This contradicts every other section in the same report (Per-platform CPM, Top summary, TikTok deep-dive) which all include TikTok.",
+      "fix_sketch": "Accumulate `ttSpend += r.ttSpend ?? 0;` inside the loop, add it to `totalSpendAll`, and emit a TikTok row gated on `ttSpend > 0` mirroring the conditional already used in the Top Summary at line 240.",
+      "regression_test_idea": "Add an aiReport test with `ttSpend > 0` on every daily row and assert the budget-split table contains a TikTok row whose percentage is computed over fb+ga+tt."
+    },
+    {
+      "id": "ALG-03",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/lib/aiReport.ts:1099 (acknowledged in comment), 1095-1100, 1299-1303",
+      "failing_input": "Two campaign rows for the same (storeId, platform, campaignId): row A dated 2026-05-01 with effectiveStatus='ACTIVE', row B dated 2026-05-15 with effectiveStatus='PAUSED'. Input rows are passed in arbitrary order from the fetcher (no documented sort guarantee).",
+      "expected": "The 'currently off' verdict should reflect the LATEST status in the range — PAUSED.",
+      "actual": "Both Currently-Off (line 1301-1303) and Health Score (line 1095-1100) use 'last write wins' over an unordered iteration. The in-code comment at line 1099 explicitly admits the limitation: 'last write wins (sorted iteration would be ideal, but campaigns is unordered — close enough for status)'. If the fetcher returns row A after row B, the status emitted is ACTIVE — the operator sees the campaign as live, when in fact it is paused. Drives wrong scale/pause guidance.",
+      "fix_sketch": "Sort `campaigns` by `c.date` ascending (or iterate sorted by date) before building `statusByKey` / `statusByCampaign`, so the latest non-null status always wins. Alternatively, track `lastSeenDate` per key and only overwrite when the new row's date is later.",
+      "regression_test_idea": "Build a campaigns array where the same (storeId, platform, campaignId) appears twice, with effectiveStatus='PAUSED' on the later date and 'ACTIVE' on the earlier date, in the WRONG order (later row first, earlier row second). Assert the Currently-Off section flags the campaign as PAUSED."
+    },
+    {
+      "id": "ALG-04",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/lib/aiReport.ts:1299-1303 (vs 778 for the consistent key)",
+      "failing_input": "storeName='All' selected; two stores each have a campaign with the same `campaignId` and same `platform` (e.g. duplicated Meta template across uzoshop and Zol Plus, plausible when an account is copied).",
+      "expected": "Each (store, platform, campaignId) tuple has its own status. Two distinct rows in the table; status from store A does not bleed into store B.",
+      "actual": "`statusByCampaign` is keyed by `${c.platform}::${c.campaignId}` (line 1301) — NO storeId. The earlier `campaignAgg` correctly keys by `${c.storeId}::${c.platform}::${c.campaignId}` (line 778). The campaign list therefore has TWO entries but the status lookup collapses to ONE — whichever store's row was written last wins for both campaigns. The Currently-Off section silently mislabels one store's campaign with the other store's status.",
+      "fix_sketch": "Add storeId to the key: `const key = \\`${c.storeId}::${c.platform}::${c.campaignId}\\`;` and `statusByCampaign.get(\\`${campaignAggKey}\\`)`. Since `campaignsList` does not currently surface storeId in each row (line 800-808 spreads c but the aggregated object only has `store` = storeName), this requires also adding `storeId` to the aggregated shape — small surgical change.",
+      "regression_test_idea": "Build campaigns with two stores (zolplus and uzoshop) both having `campaignId='123'`, `platform='Meta'`; one ACTIVE, one PAUSED. Generate the report with storeName='All' and assert both stores' rows are present and each carries its own status."
+    },
+    {
+      "id": "ALG-05",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/lib/aiReport.ts:842-853 (Pixel↔Shopify) and 1083-1092 (Health Score deterministic input)",
+      "failing_input": "storeName='All' selected; two different stores each have a campaign named 'BAU - Brand' or with the same utm_id used across stores (operator-managed UTM templates collide).",
+      "expected": "Each campaign's deterministic revenue should be the sum of orders matched to THAT campaign IN THAT store.",
+      "actual": "`ordersByCampaignId.set(id, ...)` and `ordersByCampaignName.set(name.toLowerCase(), ...)` are keyed without storeId. When storeName='All', orders from store A and store B with the same utmId or utmCampaign aggregate into one bucket. The per-campaign lookup then attributes the COMBINED revenue to EACH campaign in EACH store, double-counting at the row level. Feeds into the Pixel↔Shopify table (line 871-874) — `gap` and `verdict` columns are wrong — AND into the Health Score deterministic input (line 1146-1149) — coverage/trust scores are inflated.",
+      "fix_sketch": "Key both maps by storeId-scoped composite: `ordersByCampaignId.set(\\`${o.storeId}::${id}\\`, ...)` and `ordersByCampaignName.set(\\`${o.storeId}::${name.toLowerCase()}\\`, ...)`. Lookup with the matching storeId of the campaign row. For the All view, the campaignsList shape currently drops storeId on aggregation — surface storeId through the aggregated row (same fix as ALG-04).",
+      "regression_test_idea": "Two stores, each with a Meta campaign named 'Brand', each with an order utm_campaign='Brand'. Assert each campaign row's `detRevenue` equals only its own store's order total, not the combined."
+    },
+    {
+      "id": "ALG-06",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/lib/aiReport.ts:1124-1131, 1492-1494, 1588-1589",
+      "failing_input": "storeName='All' with two stores having identical `campaignId` + `platform` (same scenario as ALG-04/05).",
+      "expected": "Each campaign in `campaignsList` should look up its OWN store's daily series, status, and ads.",
+      "actual": "All three suffix-match lookups use `Array.from(map.keys()).find(k => k.endsWith(\\`::${c.platform}::${c.campaignId}\\`))`. `.find` returns the FIRST match — for collisions across stores, one campaign silently receives the other's data. Affects (a) Campaign Health Score trajectory + status, (b) Ad-set drill-down rows, (c) Creative drill-down rows.",
+      "fix_sketch": "Carry `storeId` on `campaignsList` rows (re-use the fix from ALG-04) and switch all three lookups to direct key construction: `dailyByKey.get(\\`${c.storeId}::${c.platform}::${c.campaignId}\\`)`. Removes the O(N²) suffix scan as a bonus.",
+      "regression_test_idea": "Cross-store collision fixture asserting each store's drill-down section contains its own ad-sets/ads only."
+    },
+    {
+      "id": "ALG-07",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/lib/aiReport.ts:1148-1149",
+      "failing_input": "Campaign with `det = 100` (Shopify deterministic revenue), `c.value = 50` (Meta-reported conversion_value) — Meta is under-reporting.",
+      "expected": "Coverage in this report represents 'how much of the platform-reported value is also seen by Shopify' — under-reporting is a TRUST positive (Shopify sees more) but cannot exceed 100%.",
+      "actual": "`coverage = c.value > 0 ? Math.min(1, det / c.value) : det > 0 ? 1 : 0;` — when Meta under-reports, ratio is clamped to 1 (correctly capped) — OK. When Meta OVER-reports (`det = 50, c.value = 100`), ratio = 0.5 → trustScore = 50 → trustLevel = 'medium'. But over-reporting is NOT a low-coverage signal — it's a different kind of attribution problem (modeled/view-through). The synthesized trust score conflates two opposite failure modes into the same low coverage signal, then feeds it into computeCampaignHealth as the attribution-clarity component. Operator may see a 'medium trust' label for a campaign with great deterministic revenue and inflated Meta claims — a misleading verdict.",
+      "fix_sketch": "Use a symmetric absolute-gap signal: `const gap = c.value > 0 ? Math.abs(det - c.value) / Math.max(det, c.value) : 0; const coverage = 1 - Math.min(1, gap);` so both over- and under-reporting reduce trust symmetrically. Or distinguish the two cases explicitly in the trust label.",
+      "regression_test_idea": "Test fixture with det=50 c.value=100 vs det=100 c.value=50 — assert trust label / score reflects 'attribution disagrees by 50%' in both, not 'good coverage' in one and 'medium coverage' in the other."
+    },
+    {
+      "id": "ALG-08",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/lib/aiReport.ts:1163-1174",
+      "failing_input": "Any campaign with det > 0 (always, when orders exist).",
+      "expected": "The trueRevenueInfo passed to computeCampaignHealth should match the contract that the dashboard's full TrueRevenueInfo provides.",
+      "actual": "The synthesized `trueRevenueInfo.attribution` is typed `as unknown as ReturnType<typeof analyzeCpmVsRoas>['details'] extends infer X ? X : never` — a no-op type cast that erases all type safety on the object. Combined with `trueRevenueInfo as never` at line 1200, the entire object bypasses TS type checking. If computeCampaignHealth ever reads a field absent from the stub (e.g. `attribution.coverage.deterministic`, `attribution.windowStability`, `confidence.refundAdjusted`), it silently returns undefined → NaN math → wrong score. The in-code disclaimer at lines 1242-1248 explicitly admits scores in the report differ from the dashboard's, but the root cause (incomplete + untyped synthetic input) is buried.",
+      "fix_sketch": "Either (a) extract a real TrueRevenueInfo builder from useCampaignTrueRevenue and reuse it, or (b) explicitly type the synthetic stub and document which computeCampaignHealth code paths it does/does not satisfy, with a runtime assertion at the boundary.",
+      "regression_test_idea": "Add a contract test: assert that the synthetic trueRevenueInfo passed in matches the FULL TrueRevenueInfo type at TS-compile time (remove the `as unknown as ... as never` casts and let tsc surface the mismatches)."
+    },
+    {
+      "id": "ALG-09",
+      "severity": "MINOR",
+      "file_line": "dashboard-web/src/lib/aiReport.ts:1490",
+      "failing_input": "Always.",
+      "expected": "Either use a meaningful key or remove the dead variable.",
+      "actual": "`const cKey = \\`${c.store === c.platform ? '' : ''}${c.platform}::${c.campaignId}\\`;` — the conditional `c.store === c.platform ? '' : ''` always returns empty string regardless of the comparison, making the conditional dead. The resulting `cKey` is then never used — the next line does the suffix-scan via `Array.from(...).find(...)` instead. Looks like a half-removed refactor that lost its intent (probably should have used `c.storeId` but storeId was dropped from the aggregated shape).",
+      "fix_sketch": "Remove the dead line. If the original intent was to use storeId in the key, fix it together with ALG-04/05/06 by surfacing storeId on the aggregated row and constructing `cKey = \\`${c.storeId}::${c.platform}::${c.campaignId}\\``.",
+      "regression_test_idea": "Lint rule to fail on unused locals would catch this. No behavior test needed."
+    },
+    {
+      "id": "ALG-10",
+      "severity": "MINOR",
+      "file_line": "dashboard-web/src/lib/aiReport.ts:443, 446-452",
+      "failing_input": "storeName='All' selected; 5 stores × 1 distinct date with daily rows in the range (e.g. only one day of data exists, multi-store). `daily.length = 5` passes the gate but `byDate.size = 1`.",
+      "expected": "The anomaly section gate should reflect the number of statistical observations (distinct dates after aggregation), not raw row count.",
+      "actual": "Gate is `if (daily.length >= 5)`. The downstream `byDate` Map collapses to N distinct dates, where N may be far less than `daily.length`. With N=1, `medianMad` over a length-1 array returns median=value, mad=0; all z-scores short-circuit to 0; the inner `anomalies.length > 0` check then prevents rendering. So the worst-case output is silent computation of meaningless stats with NO observable bug. But the gate is semantically wrong and would be a latent correctness bug if any future change drops the empty-anomaly guard.",
+      "fix_sketch": "Gate on `if (byDate.size >= 5)` instead, or compute `byDate` before the gate and check `datesSorted.length >= 5`. Cleanly aligns the threshold with the statistical contract.",
+      "regression_test_idea": "Single-day, multi-store fixture asserting the anomaly section header does NOT appear (already covered indirectly by the empty-anomaly guard but worth a direct test)."
+    },
+    {
+      "id": "ALG-11",
+      "severity": "MINOR",
+      "file_line": "dashboard-web/src/lib/aiReport.ts:152",
+      "failing_input": "Operator generates a report at 01:00 Asia/Jerusalem (UTC-2 in winter, UTC-3 in summer).",
+      "expected": "Per CLAUDE.md / project memory, the dashboard's authoritative timezone is Asia/Jerusalem. The 'יוצר' field should display today's date in Asia/Jerusalem.",
+      "actual": "`new Date().toISOString().slice(0, 10)` uses UTC. At 01:00 Asia/Jerusalem, UTC is 23:00 of the previous day → the report header shows YESTERDAY's date. Cosmetic but contradicts the project's stated TZ rule.",
+      "fix_sketch": "Use `Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' }).format(new Date())` which produces ISO-style YYYY-MM-DD in the target TZ.",
+      "regression_test_idea": "Mock Date to 2026-05-22T23:30:00Z (which is 2026-05-23 02:30 Asia/Jerusalem) and assert the header reads '2026-05-23'."
+    }
+  ],
+  "uncertainty_notes": "ALG-08 severity could be CRITICAL if computeCampaignHealth reads fields absent from the stub — verifying would require tracing computeCampaignHealth code paths; classified MAJOR because the in-code disclaimer at lines 1242-1248 confirms scores already drift from the dashboard's, suggesting the stub is at least partially compatible today. ALG-07 reasoning depends on whether operator interprets 'medium trust' as 'attribution disagrees' or 'data is partial' — both produce wrong scale/pause decisions, just for different reasons. ALG-04/05/06 only fire under storeName='All' with cross-store id/name collisions; severity assumes such collisions occur in the operator's actual data (UTM templates and copied account structures are common in this codebase).",
+  "test_coverage_gaps": [
+    {
+      "description": "No tests for TikTok status taxonomy in the Currently-Off section or Health Score isStatusOff branch.",
+      "why_it_matters": "The hard-coded ADGROUP_STATUS_DELIVERY_OK allowlist (ALG-01) diverges from the project's broader TikTok status treatment and produces wrong pause/scale guidance for any TikTok campaign in BUDGET_EXCEED / AUDIT / REVIEWING / NOT_START states.",
+      "suggested_fixture": "Three TikTok campaigns with effectiveStatus ∈ {ADGROUP_STATUS_DELIVERY_OK, BUDGET_EXCEED, ADGROUP_STATUS_DISABLE}; assert which appear in 'קמפיינים כבויים כעת' and which trigger the Health Score -30 penalty."
+    },
+    {
+      "description": "No tests for the cross-store collision modes (ALG-04/05/06): two stores sharing campaignId/platform/utmCampaign on storeName='All'.",
+      "why_it_matters": "The three suffix-match and three storeId-less keys silently mis-attribute data across stores in the operator's default 'All' view. Every operator-facing section using these keys (Health Score, Currently-Off, Pixel↔Shopify, ad-set drill-down, creative drill-down) is affected.",
+      "suggested_fixture": "Two stores (zolplus + uzoshop) each with a Meta campaign sharing campaignId='c1' and campaignName='Brand'; orders for each store tagged utm_campaign='Brand'. Assert each store's row receives only its own data."
+    },
+    {
+      "description": "No tests for the TikTok-inclusive budget allocation section (ALG-02).",
+      "why_it_matters": "The 'חלוקת תקציב לפי פלטפורמה' currently hides TikTok and misstates Meta/Google %. Operator decisions on inter-platform budget shifts are based on wrong percentages.",
+      "suggested_fixture": "Daily rows with ttSpend > 0; assert TikTok row is rendered and percentages sum to 100% over fb+ga+tt."
+    },
+    {
+      "description": "No tests for status freshness / 'latest wins' semantics (ALG-03).",
+      "why_it_matters": "Both status helpers depend on input row order; the unordered iteration is acknowledged in-code as 'close enough'. A fetcher change that alters row order could silently flip operator-facing pause verdicts.",
+      "suggested_fixture": "Same (storeId, platform, campaignId) appearing twice in `campaigns` with different effectiveStatus on different dates, in non-chronological order; assert the latest status wins."
+    },
+    {
+      "description": "Statistics tests cover CPM CV and MAD anomaly math (Phase 10 C-01 backfill) but not campaign momentum (h1↔h2 ROAS), day-of-week aggregation, Pixel-vs-Shopify matching, creative winner/loser cutoffs, or multi-mapped product rendering.",
+      "why_it_matters": "Those sections feed direct operator recommendations (scale / pause / refresh creative); they can drift without failing the current focused tests.",
+      "suggested_fixture": "A multi-section golden fixture with two stores, two campaigns each, ordersRows with mixed utmId/utmCampaign, adsRows for creative slices, and productMap entries; snapshot the full markdown output and pin to a regression baseline."
+    },
+    {
+      "description": "No tests for synthetic trueRevenueInfo type compatibility with computeCampaignHealth (ALG-08).",
+      "why_it_matters": "The stub uses `as unknown as ... as never` to bypass TS — any future field added to TrueRevenueInfo or read by computeCampaignHealth will silently produce NaN/undefined math in the report's Health Score, divergent from the dashboard column.",
+      "suggested_fixture": "Remove the type casts in the stub builder and let tsc enforce structural compatibility; for runtime, add a fixture where the synthesized stub is compared field-by-field against a real TrueRevenueInfo built by useCampaignTrueRevenue."
+    }
+  ],
+  "channels": {
+    "imports_from": [
+      "dashboard-web/src/lib/types.ts",
+      "dashboard-web/src/lib/products.ts",
+      "dashboard-web/src/lib/campaigns.ts",
+      "dashboard-web/src/lib/ordersAttribution.ts",
+      "dashboard-web/src/lib/ads.ts",
+      "dashboard-web/src/lib/campaignProductMap.ts",
+      "dashboard-web/src/lib/campaignHealthScore.ts",
+      "dashboard-web/src/lib/cpmRoasAnalysis.ts",
+      "dashboard-web/src/lib/campaignsAggregator.ts"
+    ],
+    "exports_to": [
+      "consumed by dashboard-web/src/components/AiReportButton.tsx via generateAiReport()"
+    ],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

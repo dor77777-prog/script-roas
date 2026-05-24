@@ -1,0 +1,87 @@
+{
+  "task_id": "12.B.9",
+  "file": "dashboard-web/src/lib/hooks/useBillingRecurring.ts",
+  "test_path": "(none — no test exists for this hook)",
+  "verdict": "⚠️ Uncertain",
+  "findings": [
+    {
+      "id": "SVC-01",
+      "severity": "MAJOR",
+      "file_line": "useBillingRecurring.ts:57-60 (totalMonthly memo)",
+      "failing_input": "recurring = [{ active: true, monthlyCAD: NaN }, { active: true, monthlyCAD: 100 }]. Sum = NaN + 100 = NaN.",
+      "expected": "totalMonthly is a finite number; defensive guard against NaN.",
+      "actual": "If any active recurring cost has NaN monthlyCAD (malformed cloud-sync data, schema corruption), totalMonthly becomes NaN and propagates to UI as $NaN.",
+      "fix_sketch": "Filter to finite: `recurring.filter(r => r.active && Number.isFinite(r.monthlyCAD)).reduce(...)` or default with `|| 0`.",
+      "regression_test_idea": "Test totalMonthly with mixed valid + NaN entries; assert totalMonthly is finite."
+    },
+    {
+      "id": "SVC-02",
+      "severity": "MINOR",
+      "file_line": "useBillingRecurring.ts:42 (selfWritePending ref)",
+      "failing_input": "Same as useBillingOneTime SVC-02. Self-bounce suppression contract is identical.",
+      "expected": "Self-write doesn't double-render.",
+      "actual": "Same correct pattern.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Pin: persist(A) → state is A; spy on setRecurring re-renders should be 1."
+    },
+    {
+      "id": "SVC-03",
+      "severity": "MAJOR",
+      "file_line": "useBillingRecurring.ts:69-76 (persist with useCallback)",
+      "failing_input": "persist sets state, flips ref, then calls writeRecurring which fires event synchronously. Listener sees ref=true.",
+      "expected": "Same self-bounce suppression as useBillingOneTime.",
+      "actual": "Correct.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Same as useBillingOneTime SVC-03."
+    },
+    {
+      "id": "SVC-04",
+      "severity": "MAJOR",
+      "file_line": "useBillingRecurring.ts:57 (useMemo dep on recurring)",
+      "failing_input": "totalMonthly recomputes only when recurring array reference changes. If writeRecurring returns the SAME array reference (no copy), totalMonthly stays stale.",
+      "expected": "writeRecurring passes a new array (lib/billing convention).",
+      "actual": "Assumes writeRecurring callers always pass new array refs. If they pass the mutated original, totalMonthly is stale. Defer to lib/billing.ts.",
+      "fix_sketch": "Document the array-immutability contract; or compute totalMonthly without useMemo (cheap for small arrays).",
+      "regression_test_idea": "Test persist with mutated-in-place array; assert totalMonthly updates."
+    }
+  ],
+  "uncertainty_notes": "File is 79 LOC. NO TEST FILE EXISTS for this hook. Logic mirrors useBillingOneTime (shared pattern). The totalMonthly memo's NaN-tolerance is the main correctness concern. Verdict ⚠️ Uncertain due to zero test coverage.",
+  "test_coverage_gaps": [
+    {
+      "description": "No test exists for useBillingRecurring entirely",
+      "why_it_matters": "Same as useBillingOneTime — load-bearing hook with zero coverage.",
+      "suggested_fixture": "renderHook(() => useBillingRecurring()); mock readRecurring/writeRecurring; assert mount/persist behavior."
+    },
+    {
+      "description": "No test for totalMonthly with NaN entries",
+      "why_it_matters": "Cloud-sync corruption or malformed CSV import could put NaN in monthlyCAD; UI would render $NaN.",
+      "suggested_fixture": "Mock readRecurring returning [{active:true,monthlyCAD:NaN}]; assert totalMonthly is 0 or finite (decide policy)."
+    },
+    {
+      "description": "No test for totalMonthly with inactive entries (filter)",
+      "why_it_matters": "Active filter is part of the contract; a regression would inflate totals.",
+      "suggested_fixture": "Mock readRecurring [{active:false,monthlyCAD:100},{active:true,monthlyCAD:50}]; assert totalMonthly=50."
+    },
+    {
+      "description": "No test for self-bounce suppression",
+      "why_it_matters": "Same as useBillingOneTime.",
+      "suggested_fixture": "Same pattern as useBillingOneTime."
+    },
+    {
+      "description": "No test for shared event with useBillingOneTime",
+      "why_it_matters": "Both hooks listen to the same 'roas-billing-changed' event — cross-hook re-reads are intentional; regressions could break this.",
+      "suggested_fixture": "Render both hooks; fire writeOneTime in one; assert useBillingRecurring's listener fires (but re-read returns same recurring → no change)."
+    }
+  ],
+  "channels": {
+    "imports_from": ["lib/billing.ts (readRecurring, writeRecurring, RecurringCost)"],
+    "exports_to": ["components/BillingSettings.tsx (consumer)"],
+    "events_emitted": [],
+    "events_consumed": ["window 'roas-billing-changed'"],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

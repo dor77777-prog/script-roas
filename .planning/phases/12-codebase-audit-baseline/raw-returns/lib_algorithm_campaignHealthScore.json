@@ -1,0 +1,47 @@
+{
+  "task_id": "12.A.7",
+  "file": "dashboard-web/src/lib/campaignHealthScore.ts",
+  "test_path": "dashboard-web/src/lib/__tests__/campaignHealthScore.test.ts",
+  "verdict": "Verified",
+  "findings": [],
+  "uncertainty_notes": "",
+  "test_coverage_gaps": [
+    {
+      "description": "No explicit threshold table test for every grade boundary at scores 75, 60, 45, 30, and below 30.",
+      "why_it_matters": "A future ladder edit could shift operator-facing A/B/C/D/F labels while component scoring still passes broad scenario tests.",
+      "suggested_fixture": "Construct CampaignHealth scores around each threshold via applyCohortAdjustmentOnce or export/test grade behavior through deterministic computeCampaignHealth fixtures."
+    },
+    {
+      "description": "No fixture for unknown platform strings using DEFAULT_ROAS_PIVOT and DEFAULT_FALLBACK_TRUST.",
+      "why_it_matters": "New ad platforms should degrade predictably instead of inheriting a broken pivot/trust path.",
+      "suggested_fixture": "Aggregated fixture with platform \"Pinterest\", spend 500, conversionValue 1500, trueRevenueInfo undefined; expect Meta-like default pivot 3.0 and fallback trust 50%."
+    },
+    {
+      "description": "No direct test for negative or malformed numeric inputs from upstream aggregation.",
+      "why_it_matters": "The scorer assumes production aggregation emits non-negative spend, revenue, and conversion counts; a parser regression upstream could produce misleading scores instead of failing clearly.",
+      "suggested_fixture": "Aggregated fixtures with negative spend, negative conversionValue, or NaN-like values at the aggregator boundary."
+    }
+  ],
+  "channels": {
+    "imports_from": [
+      "dashboard-web/src/lib/campaignsAggregator.ts",
+      "dashboard-web/src/lib/hooks/useCampaignTrueRevenue.ts",
+      "dashboard-web/src/lib/cpmRoasAnalysis.ts"
+    ],
+    "exports_to": [
+      "consumed by dashboard-web/src/components/CampaignsTable.tsx via computeCampaignHealth() and applyCohortAdjustmentOnce() for visible campaign health scores",
+      "consumed by dashboard-web/src/lib/aiReport.ts via computeCampaignHealth() for report health rows",
+      "consumed by dashboard-web/src/components/HealthScorePanel.tsx via CampaignHealth type for drilldown display",
+      "consumed by dashboard-web/src/components/HealthScoreBadge.tsx via CampaignHealth and HealthGrade types for badge rendering",
+      "consumed by dashboard-web/src/components/CampaignsTableRow.tsx via CampaignHealth type",
+      "consumed by dashboard-web/src/components/CampaignDrawer.tsx via CampaignHealth type"
+    ],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

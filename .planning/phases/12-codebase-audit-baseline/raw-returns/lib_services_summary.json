@@ -1,0 +1,137 @@
+{
+  "task_id": "12.B.13",
+  "file": "dashboard-web/src/lib/notifications/summary.ts",
+  "test_path": "(none — no test exists for this file)",
+  "verdict": "⚠️ Uncertain",
+  "findings": [
+    {
+      "id": "SVC-01",
+      "severity": "MAJOR",
+      "file_line": "summary.ts:62-71 (admin client)",
+      "failing_input": "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY at runtime.",
+      "expected": "Throws clear error.",
+      "actual": "Correct.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test missing env throws."
+    },
+    {
+      "id": "SVC-02",
+      "severity": "MAJOR",
+      "file_line": "summary.ts:131-132 (empty data_daily → return null)",
+      "failing_input": "data_daily has zero rows for dateStr.",
+      "expected": "Returns null; caller (sendDailySummary) handles.",
+      "actual": "Returns null. However, sendDailySummary's buildStoreSummary call (line 70 of sendDailySummary.ts) does NOT check for null — it passes the result directly to buildTemplateParameters. If summary is null, templateParams may crash. CRITICAL bug if data_daily is empty.",
+      "fix_sketch": "Either sendDailySummary should check `if (!summary)` and skip, OR summary.ts should return an empty-but-non-null DaySummary.",
+      "regression_test_idea": "Test buildStoreSummary returning null → assert sendDailySummary handles gracefully."
+    },
+    {
+      "id": "SVC-03",
+      "severity": "MAJOR",
+      "file_line": "summary.ts:222 (per-store ROAS division)",
+      "failing_input": "totalSpend=0, revenue=100. ROAS branch: `totalSpend > 0 ? revenue / totalSpend : 0`.",
+      "expected": "ROAS=0 when no spend (avoids divide-by-zero infinite ROAS).",
+      "actual": "Correct.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test store with revenue but no spend → ROAS=0."
+    },
+    {
+      "id": "SVC-04",
+      "severity": "MAJOR",
+      "file_line": "summary.ts:200-205 (totalSpend fallback)",
+      "failing_input": "data_daily.total_spend_cad is NULL in DB (old row); fb_spend_cad=10, ga_spend_cad=5, tt_spend_cad=2.",
+      "expected": "totalSpend = 10+5+2 = 17.",
+      "actual": "Correct: `totalSpendRaw === null || undefined ? fbSpend+gaSpend+ttSpend : Number(totalSpendRaw) || fbSpend+gaSpend+ttSpend`. If Number(totalSpendRaw) is 0, falls back to fb+ga+tt sum. Slight quirk: if total_spend_cad is genuinely 0 (legitimate zero spend day) AND fb+ga+tt are also 0, totalSpend=0. Correct.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test with total_spend_cad=null, fb=10, ga=5 → totalSpend=15."
+    },
+    {
+      "id": "SVC-05",
+      "severity": "MAJOR",
+      "file_line": "summary.ts:232 (per-store CPM)",
+      "failing_input": "impressions=0, totalSpend=50. CPM = 0 (divide-by-zero avoided).",
+      "expected": "0 when impressions=0; template renders '—'.",
+      "actual": "Correct.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test cpm=0 when impressions=0."
+    },
+    {
+      "id": "SVC-06",
+      "severity": "MAJOR",
+      "file_line": "summary.ts:249 (blended CPM)",
+      "failing_input": "totals.impressions=1000, totals.spend=50. CPM=(50/1000)*1000=50.",
+      "expected": "Correct blended formula.",
+      "actual": "Correct.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test blended CPM across 3 stores."
+    },
+    {
+      "id": "SVC-07",
+      "severity": "MAJOR",
+      "file_line": "summary.ts:170-173 (orders bucketing — only meta-paid/google-paid/tiktok-paid)",
+      "failing_input": "orders_attribution row with source='other-paid' or 'meta-organic' or 'direct'.",
+      "expected": "Falls to 'other' bucket.",
+      "actual": "Correct: explicit if/elseif/elseif/else.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test orders with mixed sources — assert correct bucketing."
+    },
+    {
+      "id": "SVC-08",
+      "severity": "MAJOR",
+      "file_line": "summary.ts:123-130 (campaigns_daily soft-fail)",
+      "failing_input": "campaigns_daily query errors.",
+      "expected": "console.warn, then continue with empty campaign data → CPM renders as '—'.",
+      "actual": "Correct. impressionsByStore stays empty; per-store cpm=0; totals.cpm=0.",
+      "fix_sketch": "n/a",
+      "regression_test_idea": "Test campaigns_daily error → assert CPM=0 in result."
+    },
+    {
+      "id": "SVC-09",
+      "severity": "MINOR",
+      "file_line": "summary.ts:93-111 (Promise.all of 3 queries)",
+      "failing_input": "data_daily query fails. The whole Promise.all rejects.",
+      "expected": "Throws with the data_daily error (checked first at line 113).",
+      "actual": "Correct via the error check after the await. However, the throw uses the first checked error (data_daily); orders/campaigns errors only surface if data_daily succeeded.",
+      "fix_sketch": "n/a — current ordering is intentional (data_daily is load-bearing).",
+      "regression_test_idea": "n/a"
+    }
+  ],
+  "uncertainty_notes": "File is 252 LOC. NO TEST FILE EXISTS. SVC-02 is the most concerning: if buildStoreSummary returns null on empty data_daily, the caller (sendDailySummary.ts:70) passes null to buildTemplateParameters without checking — potentially crashing the orchestrator. Need to verify templateParams handles null. Verdict ⚠️ Uncertain due to zero test coverage + SVC-02 risk.",
+  "test_coverage_gaps": [
+    {
+      "description": "No test for buildStoreSummary at all (entire file uncovered)",
+      "why_it_matters": "Notification accuracy depends on this; silent regressions in bucketing/CPM would mis-report to the operator.",
+      "suggested_fixture": "Mock Supabase client with canned data_daily + orders_attribution + campaigns_daily; assert per-store + totals shape."
+    },
+    {
+      "description": "No test for null return path (empty data_daily)",
+      "why_it_matters": "Critical — caller may crash if null isn't handled.",
+      "suggested_fixture": "Mock empty data_daily; assert returns null; assert sendDailySummary handles null without crashing templateParams."
+    },
+    {
+      "description": "No test for CPM blending vs per-store",
+      "why_it_matters": "Blended formula (sum / sum × 1000) differs from per-store average; regression to per-store average would mis-report.",
+      "suggested_fixture": "3 stores with [spend:10,imp:100], [spend:20,imp:50], [spend:30,imp:1000]; assert totals.cpm correctly blended."
+    },
+    {
+      "description": "No test for tiktok-paid bucket",
+      "why_it_matters": "Phase 05.7.5 added; an inverted check could revert TikTok orders to 'other'.",
+      "suggested_fixture": "Orders [source:'tiktok-paid'×3]; assert stores[X].tiktok=3, totals.tiktok=3."
+    },
+    {
+      "description": "No test for campaigns_daily soft-fail (CPM=0 fallback)",
+      "why_it_matters": "Soft-fail contract; if upgraded to throw, the whole summary would fail when ad-platform fetchers had issues.",
+      "suggested_fixture": "Mock campaigns_daily returning error; assert cpm=0 for all stores; assert function still returns valid summary."
+    }
+  ],
+  "channels": {
+    "imports_from": ["@supabase/supabase-js"],
+    "exports_to": ["lib/notifications/sendDailySummary.ts (buildStoreSummary)"],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": ["data_daily (store_id, store_name, fb_spend_cad, ga_spend_cad, tt_spend_cad, total_spend_cad, revenue_cad)", "orders_attribution (store_id, source)", "campaigns_daily (store_id, impressions)"],
+    "api_calls": []
+  }
+}

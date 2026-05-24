@@ -1,0 +1,43 @@
+{
+  "task_id": "12.A.6",
+  "file": "dashboard-web/src/lib/cannibalizationDetection.ts",
+  "test_path": "dashboard-web/src/lib/__tests__/cannibalizationNullSentinel.test.ts + cannibalizationDetection.test.ts",
+  "verdict": "Verified",
+  "findings": [],
+  "uncertainty_notes": "",
+  "test_coverage_gaps": [
+    {
+      "description": "No fixture for malformed or legacy productMap keys such as store::campaignId still present after a failed migration.",
+      "why_it_matters": "The detector expects campaign keys shaped as store::platform::campaignId; legacy keys can be retained by migration when platform cannot be inferred, so a regression could count an orphaned legacy mapping as a cohort member.",
+      "suggested_fixture": "Map p1 to uzoshop::Meta::c1 plus uzoshop::c2 with daily rows only for c1; assert the legacy key does not create a false multi-mapped verdict, or document the intended composition_changed/insufficient behavior."
+    },
+    {
+      "description": "No fixture for duplicate product IDs inside a single campaign's productMap array.",
+      "why_it_matters": "readProductMap validates string arrays but does not dedupe historical/cloud data; duplicates should not make one campaign look like a two-member cohort.",
+      "suggested_fixture": "Use {\"uzoshop::Meta::c1\":[\"p1\",\"p1\"]} with normal campaign/product rows and assert detectProductCannibalization returns [] because there is only one distinct campaign."
+    },
+    {
+      "description": "Consumer contract for revenueGrowthPct=null is covered at detector level, but not at the CohortComparisonPanel rendering/sort boundary.",
+      "why_it_matters": "The null sentinel fix depends on UI and JSON consumers treating null consistently; a future formatter/sort regression could reintroduce operator-visible drift without breaking detector tests.",
+      "suggested_fixture": "Render CohortComparisonPanel with one verdict whose metrics.revenueGrowthPct is null and assert the displayed percent is n/a/לא מוגדר-equivalent and sorting remains stable."
+    }
+  ],
+  "channels": {
+    "imports_from": [
+      "dashboard-web/src/lib/campaignProductMap.ts"
+    ],
+    "exports_to": [
+      "consumed by dashboard-web/src/components/CampaignsTable.tsx via detectProductCannibalization() for table health-score cohort adjustment",
+      "consumed by dashboard-web/src/components/CampaignDrawer.tsx via detectProductCannibalization() for drawer cohort verdicts",
+      "consumed by dashboard-web/src/components/CohortComparisonPanel.tsx via CannibalizationVerdict prop rendering",
+      "mirrored by dashboard-web/src/lib/campaignHealthScore.ts via CannibalizationRisk-compatible input union"
+    ],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

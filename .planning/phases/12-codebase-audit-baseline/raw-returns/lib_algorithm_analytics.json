@@ -1,0 +1,89 @@
+{
+  "task_id": "12.A.1",
+  "file": "dashboard-web/src/lib/analytics.ts",
+  "test_path": "dashboard-web/src/lib/__tests__/analytics.test.ts",
+  "verdict": "✅ Verified",
+  "findings": [
+    {
+      "id": "ALG-01",
+      "severity": "MINOR",
+      "file_line": "lib/analytics.ts:324-378",
+      "failing_input": "dailySeries(rows, stores, range) where rows contain dates OUTSIDE [range.from, range.to]. E.g. rows include 2026-05-25 but range is 2026-05-10..2026-05-20.",
+      "expected": "Documented behavior for out-of-range rows: either filter them silently or throw. The contract is currently ambiguous.",
+      "actual": "First pass accumulates ALL rows into the date-keyed Map (including dates outside range). Second pass only walks dateList = enumerateDateRange(range.from, range.to). Out-of-range entries remain in the Map but are never returned — silently dropped. In-range output is correct because each row's totals go to its own date's entry, so out-of-range rows don't pollute in-range entries. But the contract is undocumented: a caller forgetting to pre-filter via filterRows() will see silent data loss without warning.",
+      "fix_sketch": "Update JSDoc at lines 298-323 to explicitly state: 'When `range` is provided, rows outside the range are silently dropped — callers must pre-filter via filterRows() if they want a warning or different behavior.' Alternative: add a development-mode warning when rows contain dates outside the provided range. Dashboard.tsx:155 currently pre-filters via filterRows so today's call sites are safe; this is purely a future-caller footgun.",
+      "regression_test_idea": "it('rows outside the provided range are silently dropped (caller must pre-filter)', () => { const range = { from: '2026-05-10', to: '2026-05-20' }; const rows = [row({ date: '2026-05-15', revenue: 1000, totalSpend: 400 }), row({ date: '2026-05-25', revenue: 5000, totalSpend: 1000 })]; const series = dailySeries(rows, ['uzoshop'], range); expect(series).toHaveLength(11); expect(series.some(d => d.date === '2026-05-25')).toBe(false); expect(series.find(d => d.date === '2026-05-15')?.totalRevenue).toBe(1000); });"
+    },
+    {
+      "id": "ALG-02",
+      "severity": "MINOR",
+      "file_line": "lib/analytics.ts:88-90, 177, 220",
+      "failing_input": "aggregate(rowsForSparse30DayWindow, { from: '2026-05-01', to: '2026-05-30' }) where rowsForSparse30DayWindow has data on only 5 of the 30 days.",
+      "expected": "If daysCovered represents 'Span the aggregate covers, in calendar days' (per JSDoc line 88-90) AND fixedCosts is prorated over that span, the two should be consistent. Currently fixedCosts is computed over the FULL range (30 days) but daysCovered = dates.size = 5.",
+      "actual": "JSDoc/semantics drift: daysCovered = unique data-date count (5), but fixedCosts is prorated by billingForRange over the full operator-selected range (30 days). A downstream consumer computing fixedCosts/daysCovered (e.g. 'cost per active day') would get 30-days-of-fixed-costs divided by 5-data-days → 6x overstatement. No current consumer does this math, but the JSDoc 'Span the aggregate covers' suggests calendar span (30), not data-date count (5).",
+      "fix_sketch": "Either (a) rename to dataDaysCovered + rewrite JSDoc to clarify 'unique data dates, NOT range span', or (b) when range is provided, compute daysCovered from enumerateDateRange(range.from, range.to).length so it matches the proration window. Option (b) preserves the JSDoc contract and is safer for future cost-per-day style consumers. Today the field appears unused in cards (grep for `.daysCovered` returned no consumer math), so the rename is the lower-risk choice.",
+      "regression_test_idea": "it('daysCovered consistency with range-aware fixedCosts (document chosen semantic)', () => { const range = { from: '2026-05-01', to: '2026-05-30' }; const rows = [row({ date: '2026-05-15', revenue: 100 })]; const agg = aggregate(rows, range); expect(agg.daysCovered).toBe(1); /* OR if changed to range-span: expect(agg.daysCovered).toBe(30); */ });"
+    },
+    {
+      "id": "ALG-03",
+      "severity": "COSMETIC",
+      "file_line": "lib/analytics.ts:34-42, 60-68",
+      "failing_input": "process.env.UZOSHOP_COGS_RATE = '0.18garbage'",
+      "expected": "Strict parsing rejects values with trailing non-numeric content (returns default 0.25).",
+      "actual": "parseFloat('0.18garbage') returns 0.18 — silent acceptance. Operator typo in the env-var value would be applied without warning. Bounds check (0..1) catches gross out-of-range values but not trailing garbage. The existing test at line 110 uses 'not-a-number' which parseFloat returns NaN for — so this failure mode is uncovered.",
+      "fix_sketch": "Replace parseFloat(raw) with Number(raw) for strict parsing — Number('0.18garbage') returns NaN, which the existing isFinite guard would reject. Same change in getTransactionFeesRateForStore (line 63). Pin with a regression test for the 'trailing garbage' case.",
+      "regression_test_idea": "it('rejects env vars with trailing garbage (strict parse)', () => { process.env.UZOSHOP_COGS_RATE = '0.18garbage'; process.env.UZOSHOP_TX_FEES_RATE = '0.065extra'; expect(getCogsRateForStore('uzoshop')).toBe(0.25); expect(getTransactionFeesRateForStore('uzoshop')).toBe(0.065); });"
+    }
+  ],
+  "uncertainty_notes": "",
+  "test_coverage_gaps": [
+    {
+      "description": "filterRows() has zero direct unit tests — covered only transitively by Dashboard.tsx integration. Edge cases untested: range.from > range.to (returns empty? or all? — depends on lexicographic comparison), store === 'All' literal vs storeName === 'All' clash (a store literally named 'All' would always match — pre-existing quirk).",
+      "why_it_matters": "filterRows is the gate that every aggregate-/dailySeries-/aggregateByStore-fed analysis flows through. A regression in its range or store-match semantics would silently widen/narrow EVERY KPI card.",
+      "suggested_fixture": "describe('filterRows', () => { it('inclusive range bounds', () => { ... }); it('inverted range returns empty', () => { ... }); it('store === \"All\" passes through every store', () => { ... }); it('store-literal-named-All edge case', () => { ... }); });"
+    },
+    {
+      "description": "deltaPct() (lines 388-404) has zero direct unit tests. The function has subtle behavior: direction by signed change (NOT signed percent), denominator uses |prev|, falls back to max(|cur|, 1) when prev is zero, < 0.1% threshold collapses to 'flat'. The commit message (1f39cc3) describes the contract but no test pins any edge.",
+      "why_it_matters": "deltaPct is rendered on every card with a prev-vs-cur arrow. A regression in the cur=0/prev=-200 case (improvement should show 'up' arrow) would mis-direct every netProfit recovery story shown to the operator.",
+      "suggested_fixture": "describe('deltaPct', () => { it('cur == prev returns flat', () => { ... }); it('cur > 0 and prev < 0 returns up direction', () => expect(deltaPct(500, -200).direction).toBe('up')); it('|prev| denominator when prev negative', () => expect(deltaPct(0, -200).value).toBeCloseTo(1, 6)); it('prev == 0 falls back to max(|cur|, 1)', () => expect(deltaPct(5, 0).value).toBeCloseTo(1, 6)); it('< 0.1% threshold collapses to flat', () => { ... }); });"
+    },
+    {
+      "description": "roasLabel() boundary cases untested directly. Boundaries: 0 / 2 / 2.7 / 3. The < 2 vs < 2.7 vs <= 3 transitions all need explicit pin tests (especially the inclusive 3.0 boundary and the exclusive 2.7).",
+      "why_it_matters": "Hebrew RTL labels drive the operator's at-a-glance health perception. A drift in any threshold silently re-categorizes performance.",
+      "suggested_fixture": "describe('roasLabel boundaries', () => { it.each([[0, 'gray'], [1.99, 'red'], [2, 'orange'], [2.69, 'orange'], [2.7, 'green'], [3, 'green'], [3.01, 'blue']])('roas=%s tone=%s', (r, t) => expect(roasLabel(r).tone).toBe(t)); });"
+    },
+    {
+      "description": "aggregate() with rows where r.storeId differs from r.storeName (legacy data inconsistency). getTransactionFeesRateForStore uses r.storeId — if it's null/empty but storeName is set, fees fall back to default 0.065 while the bucket's identity is the storeName. No test pins this edge.",
+      "why_it_matters": "Pre-Phase 05.7.0 historical rows may have storeId='' or null. Today they fall back to the global default rate, but a subtle producer regression that emits empty storeId on NEW rows would silently bypass the per-store override.",
+      "suggested_fixture": "it('falls back to default rate when storeId is missing on a row with storeName set', () => { process.env.UZOSHOP_TX_FEES_RATE = '0.029'; const rows = [row({ storeId: '', storeName: 'uzoshop', revenue: 1000 })]; const agg = aggregate(rows); expect(agg.transactionFees).toBeCloseTo(65, 10); /* default 0.065, NOT 0.029 — pins that storeId-empty disables the override */ });"
+    },
+    {
+      "description": "dailySeries() totalRoas calculation when only legacy rows (single-store path) have totalSpend=0 but revenue>0. The output emits totalRoas=0 even though there's revenue. Worth pinning so a future change doesn't accidentally start emitting Infinity or NaN.",
+      "why_it_matters": "Edge that's already conventionally handled by the producer (sets r.roas=0 when spend=0), but the dailySeries layer's totalRoas formula could drift independently if anyone modifies the second-pass division.",
+      "suggested_fixture": "it('totalRoas is 0 when totalSpend is 0 (even with positive totalRevenue)', () => { const rows = [row({ date: '2026-05-15', revenue: 1000, totalSpend: 0, roas: 0 })]; const series = dailySeries(rows, ['uzoshop']); expect(series[0].totalRoas).toBe(0); expect(Number.isFinite(series[0].totalRoas)).toBe(true); });"
+    }
+  ],
+  "channels": {
+    "imports_from": [
+      "./types (DailyRow, DateRange)",
+      "./costs (TRANSACTION_FEES_RATE)",
+      "./billing (billingForRange)",
+      "./dateRange (enumerateDateRange)"
+    ],
+    "exports_to": [
+      "components/Dashboard.tsx (aggregate, aggregateByStore, dailySeries, filterRows)",
+      "components/HeroOverview.tsx (aggregate, dailySeries, filterRows, roasLabel)",
+      "components/TodayLive.tsx (aggregate, aggregateByStore, roasLabel)",
+      "components/KpiCards.tsx (Aggregate type)",
+      "components/RoasChart.tsx (DailySeries type)",
+      "components/insights/* (deltaPct via re-exports)"
+    ],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

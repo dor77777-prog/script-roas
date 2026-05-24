@@ -1,0 +1,60 @@
+{
+  "task_id": "12.A.11",
+  "file": "dashboard-web/src/lib/campaignProductMap.ts",
+  "test_path": "dashboard-web/src/lib/__tests__/campaignProductMap.test.ts",
+  "verdict": "Verified",
+  "findings": [],
+  "uncertainty_notes": "",
+  "test_coverage_gaps": [
+    {
+      "description": "No direct tests for readProductMap/writeProductMap localStorage sanitization, CustomEvent dispatch, or immediate cloud-sync call.",
+      "why_it_matters": "The allocator math is covered, but persistence regressions could make valid mappings disappear or fail to notify table/drawer consumers.",
+      "suggested_fixture": "Seed localStorage with malformed values and valid arrays; assert readProductMap drops invalid entries. Spy on dispatchEvent and pushCloudKey when writeProductMap runs."
+    },
+    {
+      "description": "No direct tests for setMappedProducts dedupe/removal or campaignsForProduct platform scoping.",
+      "why_it_matters": "These helpers gate which campaigns enter allocation; a scoping regression would show wrong products for same-store cross-platform campaign keys.",
+      "suggested_fixture": "Use Meta and TikTok keys for the same store/product, duplicate product IDs, and an empty update; assert dedupe, deletion, and platform-specific lookup."
+    },
+    {
+      "description": "Allocator lacks explicit all-zero spend tests with non-empty deterministic orders across multiple campaigns.",
+      "why_it_matters": "The code intentionally falls back to equal split when spend totals are zero; this is a realistic launch/day-zero condition and should stay stable.",
+      "suggested_fixture": "Map one product to two same-platform campaigns and two cross-platform campaigns, pass campaignSpend entries of 0, and assert deterministic intra-platform and remainder equal-split behavior."
+    },
+    {
+      "description": "No sum-to-target conservation assertion over mixed positive deterministic revenue plus negative refund remainder across multiple mapped campaigns.",
+      "why_it_matters": "Phase 10 fixed refund-heavy mass conservation; a broad epsilon assertion would catch future rounding or clamp regressions without re-flagging the fixed bug.",
+      "suggested_fixture": "Product netRevenueCad -150 with one positive Meta order and Meta/TikTok mapped campaigns; assert sum(result.revenue) equals -150 and sum(result.units) equals product units within epsilon."
+    }
+  ],
+  "channels": {
+    "imports_from": [
+      "dashboard-web/src/lib/cloudSync.ts"
+    ],
+    "exports_to": [
+      "dashboard-web/src/lib/aiReport.ts consumes allocateProductRevenue and ProductMap",
+      "dashboard-web/src/lib/productCentricView.ts consumes allocateProductRevenue and ProductMap",
+      "dashboard-web/src/lib/hooks/useCampaignTrueRevenue.ts consumes allocateProductRevenue, campaignKey, and ProductMap",
+      "dashboard-web/src/components/CampaignDrawer.tsx consumes readProductMap, setMappedProducts, allocateProductRevenue, campaignKey, and ProductMap",
+      "dashboard-web/src/components/CampaignsTable.tsx consumes migrateProductMapKeys, readProductMap, campaignKey, and ProductMap",
+      "dashboard-web/src/components/ProductCentricView.tsx consumes readProductMap and ProductMap",
+      "dashboard-web/src/components/MetaShopifyReconciliation.tsx consumes campaignKey and ProductMap",
+      "dashboard-web/src/components/CampaignsTableRow.tsx consumes campaignKey",
+      "dashboard-web/src/components/AiReportButton.tsx consumes readProductMap",
+      "dashboard-web/src/lib/cannibalizationDetection.ts consumes ProductMap",
+      "dashboard-web/src/lib/multiMappingCohort.ts consumes ProductMap",
+      "dashboard-web/src/lib/__tests__/*.test.ts consume campaignKey, ProductMap, and allocateProductRevenue"
+    ],
+    "events_emitted": [
+      "window event roas-campaign-product-map-changed"
+    ],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": [
+      "pushCloudKey(STORAGE_KEY, map, { immediate: true }) via dashboard-web/src/lib/cloudSync.ts"
+    ]
+  }
+}

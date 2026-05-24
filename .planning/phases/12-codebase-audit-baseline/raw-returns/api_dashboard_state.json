@@ -1,0 +1,55 @@
+{
+  "task_id": "12.E.03",
+  "file": "dashboard-web/src/app/api/dashboard-state/route.ts",
+  "test_path": "(no dedicated unit test) — cloudSyncHydrate.test.ts exercises the consumer. ALLOWED_STATE_KEYS pinned via dashboardStateKeys (no tests file).",
+  "verdict": "Verified correct",
+  "findings": [
+    {
+      "id": "API-05",
+      "severity": "Minor",
+      "file_line": "dashboard-web/src/app/api/dashboard-state/route.ts:94",
+      "failing_input": "POST with body { key: 'annotations', value: { circular: ref } } where value contains a BigInt or a circular reference.",
+      "expected": "400 with a clear message: 'value must be JSON-serializable'.",
+      "actual": "JSON.stringify throws TypeError → lands in catch on line 104 → returns 500 with sanitized 'הטעינה נכשלה: שגיאה לא צפויה.' Caller can't distinguish 'value too large' from 'value contains a BigInt' from 'Supabase down'.",
+      "fix_sketch": "Wrap JSON.stringify(body.value ?? null) in a try/catch; on stringify error return 400 with a specific message.",
+      "regression_test_idea": "POST { key: 'annotations', value: { a: BigInt(1) } } → expect 400 with body.error matching /JSON/."
+    },
+    {
+      "id": "API-06",
+      "severity": "Cosmetic",
+      "file_line": "dashboard-web/src/app/api/dashboard-state/route.ts:108",
+      "failing_input": "POST when upsertDashboardStateKeyPostgres throws.",
+      "expected": "Cache-Control: no-store on the 500 response (defensive against any future caching layer).",
+      "actual": "No Cache-Control header on POST error response. POST is non-cacheable by default at the HTTP semantics layer, so this is purely defensive.",
+      "fix_sketch": "Add `headers: { 'Cache-Control': 'no-store' }` to the catch-path response.",
+      "regression_test_idea": "N/A (cosmetic)."
+    },
+    {
+      "id": "API-07",
+      "severity": "Cosmetic",
+      "file_line": "dashboard-web/src/app/api/dashboard-state/route.ts:15",
+      "failing_input": "Same cache-literal drift scenario as API-01.",
+      "expected": "Regression test pinning literal to CACHE_CONFIG.dashboardState.revalidate.",
+      "actual": "Not pinned. Same family as API-01.",
+      "fix_sketch": "Cross-reference API-01.",
+      "regression_test_idea": "Cross-reference API-01."
+    }
+  ],
+  "uncertainty_notes": "ALLOWED_STATE_KEYS allowlist + Object.create(null) in reader = proper prototype-pollution defense. VALUE_MAX_BYTES guard sound. Error sanitization shared with siblings.",
+  "test_coverage_gaps": [
+    "No test that POST with key='__proto__' returns 400 (the documented prototype-pollution defense is unverified).",
+    "No test that POST with value of exactly VALUE_MAX_BYTES bytes succeeds and VALUE_MAX_BYTES+1 fails.",
+    "No test that GET error path returns ALL fields the success path declares (kv: {}, updatedAtByKey: {}, lastUpdated, error)."
+  ],
+  "channels": {
+    "imports_from": ["@/lib/dashboardStateKeys (isAllowedStateKey)", "@/lib/postgresReaders (fetchDashboardStateFromPostgres, upsertDashboardStateKeyPostgres)", "@/lib/cacheConfig (cacheControl)", "@/lib/apiErrors (userFacingError)"],
+    "exports_to": ["GET/POST handlers → consumed by cloudSync.ts via fetch('/api/dashboard-state')"],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": ["/api/dashboard-state"],
+    "inngest_triggers": [],
+    "supabase_writes": ["dashboard_state via upsertDashboardStateKeyPostgres (POST)"],
+    "supabase_reads": ["dashboard_state via fetchDashboardStateFromPostgres (GET)"],
+    "api_calls": []
+  }
+}

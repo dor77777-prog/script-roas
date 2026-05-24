@@ -1,0 +1,87 @@
+{
+  "task_id": "12.D.5",
+  "file": "dashboard-web/src/inngest/functions/eventBackfill.ts",
+  "test_path": "dashboard-web/src/inngest/functions/__tests__/events.test.ts (closest — covers Test 4-7)",
+  "verdict": "Has bug",
+  "findings": [
+    {
+      "id": "INN-14",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/inngest/functions/eventBackfill.ts:140-148 (dateRange UTC arithmetic vs persisted Asia/Jerusalem calendar days)",
+      "failing_input": "Operator calls backfill with `from='2026-03-29', to='2026-03-30'` (the Asia/Jerusalem DST IDT⇄IST transition typically happens on the last Friday of March). dateRange computes the day stream by mapping the input strings into Date.UTC and stepping by 24h × ms. For from='2026-03-29': start = Date.UTC(2026, 2, 29) = midnight UTC on March 29. Adding 24h = midnight UTC March 30. `.toISOString().slice(0, 10)` = '2026-03-30'. Looks correct for UTC.\n\nBUT: cron-daily processes dates in ASIA/JERUSALEM (per yesterdayJerusalem at cronDaily.ts:131-140). The backfill iterates date strings as-if-UTC, then runDailyForStore treats them as Asia/Jerusalem calendar days (it passes the dateStr directly into Shopify orders.json's date filter and into Supabase DATE columns). If the operator's mental model is 'backfill 2026-03-29 IL' but UTC March 29 = IL March 29 21:00 → March 30 21:00, the backfilled 'March 29' actually pulls IL-March 29 data — looks correct in this case.\n\nThe actual gotcha: the LOOP increment at line 145 uses `+ 24 * 60 * 60 * 1000` from start.getTime(). Over a DST transition day in Asia/Jerusalem, IL local calendar day boundaries are 23 OR 25 hours apart (IDT→IST = +1 hour back at 02:00 IL local = clocks turn back, so a 'day' is 25 hours long; IST→IDT = 23 hours). UTC arithmetic doesn't care (always 24h). The output strings are always +1 UTC day → exactly one IL calendar day forward EXCEPT around the IDT⇄IST transition where a single UTC day might span two IL calendar days OR vice versa.",
+      "expected": "Since the backfill is operator-initiated and they think in IL calendar days, the iteration should produce IL calendar days. Use the same Intl.DateTimeFormat('en-CA', {timeZone: 'Asia/Jerusalem'}) pattern as yesterdayJerusalem.",
+      "actual": "Current code's `start.getTime() + 24h` stepping in UTC: across the IDT⇄IST boundary, the IL local calendar day skips or repeats. For an operator backfilling 'IL March 27 → IL April 02' across the late-March 2026 DST flip, the output stream could miss one IL calendar day OR repeat one. Manifest: at the time of writing (May 2026) we are past the spring DST transition, so retroactive backfills crossing March 28-29 2026 would hit this. Operator scale (1-2 backfills/month per the file comment) means this fires rarely but is silent when it does.",
+      "fix_sketch": "Rewrite dateRange using the Intl.DateTimeFormat('en-CA', {timeZone: 'Asia/Jerusalem'}) pattern: parse start as midnight-IL-as-UTC, increment by 24h, but reformat with the IL TZ formatter at each step. Or simpler: parse YYYY-MM-DD into year/month/day components, increment day-only, and re-format — avoids ms arithmetic entirely. This is what cronLive.ts:298-308 already does for the rolling window.",
+      "regression_test_idea": "Pin: dateRange('2026-03-27', '2026-04-02') should yield ['2026-03-27', '2026-03-28', '2026-03-29', '2026-03-30', '2026-03-31', '2026-04-01', '2026-04-02'] — exactly 7 strings, all IL calendar days. Current implementation: would yield 7 UTC strings that may or may not align with IL days depending on the DST transition date."
+    },
+    {
+      "id": "INN-15",
+      "severity": "MAJOR",
+      "file_line": "dashboard-web/src/inngest/functions/eventBackfill.ts:215-234 (sequential iteration but step.run callback memoization)",
+      "failing_input": "63-pair backfill (21 days × 3 stores per the inline budget comment at line 57-61). Each pair calls runDailyForStore, which internally calls 5 step.runs (fetch-shopify, fetch-meta, fetch-google, fetch-tiktok, apply-manual-overrides, persist-batch — actually 6 per cronDaily test line 547-554). The prefixedStep at line 159-164 wraps each id with `${date}-${storeId}-` prefix. So total step.runs across one backfill = 6 × 63 = 378 inner steps + 1 outer function = 379 execs.\n\nBUT: the file comment at line 57-61 claims '5 step.run per (date, store) pair = 316 execs'. Actual is 6 step.runs per pair (the cronDaily test count) = 379, not 316. The inline budget comment is stale; the budget envelope is still well within free-tier but the documentation is wrong.",
+      "expected": "Either update the comment to '6 step.run per pair = 379 execs/backfill' or drop the specific number ('roughly 6 inner steps per pair × 63 pairs = ~380 execs').",
+      "actual": "Stale documentation — not a correctness bug but a future maintainer reading the comment would underestimate the exec cost.",
+      "fix_sketch": "Update the inline comment at line 57-61 to reflect the current 6-step inner decomposition (TikTok was added in Phase 05.7.7 per cronDaily.ts line 331-371).",
+      "regression_test_idea": "Optional: pin the exec count by counting step.run calls in a one-pair backfill test."
+    },
+    {
+      "id": "INN-16",
+      "severity": "CRITICAL",
+      "file_line": "dashboard-web/src/inngest/functions/eventBackfill.ts:215-234 (per-pair catch swallows error inside the loop)",
+      "failing_input": "Backfill of 63 pairs. The 5th pair (e.g. date=2026-05-15, store=zolplus) hits a Supabase RLS error inside persist-batch. cronDaily.ts:559-566 throws on the error. The throw propagates up through runDailyForStore. eventBackfill.ts:225-232 catches the error, records `{ok: false, error: message}` in results, and CONTINUES to the next pair.\n\nProduction shape: a SCHEMA-LEVEL bug (e.g. a NOT NULL constraint added to data_daily without a corresponding migration to the writer) would throw on EVERY pair. The backfill iterates all 63 pairs, each one throws and is caught silently, the final result shows 0 successes / 63 failures. Operator sees the failure count but cannot SEE the actual error messages without reading the Inngest dashboard line-by-line. WORSE: Inngest's own retry mechanism (4× exponential per D-B6) DOES NOT FIRE because the catch swallows the throw before it reaches Inngest's machinery. The 63 failures are wasted exec budget that should have triggered Inngest retries.",
+      "expected": "Either (a) let the first error propagate and fail-fast (giving Inngest a chance to retry the entire backfill), OR (b) wrap each pair in its OWN step.run so each pair gets its own Inngest retry envelope. Option (b) matches the W6 step-ID prefix shim intent — each pair is conceptually a sub-step.",
+      "actual": "Current code: catch swallows the error, runs through all 63 pairs even when every one fails for the same root cause, and returns a results array. The operator's jobs-table render of `failureCount` shows '63 failed' but the underlying error is buried in `results[i].error` strings that don't propagate to Inngest's deadletter or alert mechanisms.",
+      "fix_sketch": "Wrap each pair in `step.run('backfill-${date}-${storeId}', async () => runDailyForStore(...))` — Inngest will then retry each pair independently (per its retry policy) and only catch+continue if Inngest's retries are exhausted. Note the W6 documentation in the file comment (line 30-48) explicitly rejected this approach due to step.run nesting incompatibility — but the documented alternative (the prefixing shim) still drops the per-pair Inngest retry. Option (c) is to use step.invoke (mentioned at line 64-73 and rejected for plan-10 scope reasons). At Phase 12 audit time, those reasons may not still apply.",
+      "regression_test_idea": "Mock runDailyForStore to throw 'simulated-rls-failure' on every call. Run handler with from='2026-05-01', to='2026-05-21', storeIds=['uzoshop','zolplus','usmile360']. Pin: the handler should EITHER throw (so Inngest retries) OR call runDailyForStore exactly once (fail-fast). Currently it calls runDailyForStore 63 times, wasting 63 × 6 step.runs = 378 execs on what's known to be a deterministic failure."
+    }
+  ],
+  "uncertainty_notes": "INN-16 is the highest-confidence bug — the catch-and-continue pattern is too lenient for cases where the failure is systemic rather than per-pair. INN-14 is real but bounded (manifests only in DST-transition backfills). INN-15 is doc-only. The W6 collision handling (prefixing shim at line 159-164) is correct and the test pins it (Test 5 at events.test.ts:187-218). Validation logic (HISTORY_BOUNDARY check, empty storeIds check, from>to check) is correct and pinned by Test 6 + Test 7.",
+  "test_coverage_gaps": [
+    {
+      "description": "No test for the catch-and-continue behavior when runDailyForStore throws (INN-16). The existing test (Test 5 at events.test.ts:187-218) only exercises the happy path — every pair succeeds.",
+      "why_it_matters": "Reveals the silent-swallow bug. Without this test, the regression risk of changing the catch behavior is low (no test would notice) but the production failure mode is hidden.",
+      "suggested_fixture": "Mock runDailyForStore to throw 'simulated' on pair index 2 of 6 (e.g. (2026-05-16, uzoshop)). Pin: `result.successCount === 5`, `result.failureCount === 1`, `result.results[2] === { date: '2026-05-16', storeId: 'uzoshop', ok: false, error: 'simulated' }`. AND: pin that the OUTER function does NOT throw (Inngest retries not exercised). This pinning DOCUMENTS the catch-and-continue trade-off so it's a deliberate choice."
+    },
+    {
+      "description": "No test for the dateRange iteration across DST transitions (INN-14). Currently dateRange uses pure UTC arithmetic which is correct UTC but drifts from Asia/Jerusalem calendar days across DST boundaries.",
+      "why_it_matters": "DST transitions happen twice/year in IL. A backfill spanning the transition would silently miss or duplicate one date.",
+      "suggested_fixture": "Pin: dateRange('2026-10-23', '2026-10-31') (around IL autumn DST transition) should yield exactly 9 distinct IL calendar days. Verify no skips/duplicates against the IL calendar."
+    },
+    {
+      "description": "No test asserting the actual count of step.runs per pair (INN-15 — the 'inner step count'). Test 5 pins runDailyForStore call count (6) but not the inner step decomposition (6 step.run per call × 6 calls = 36 inner steps).",
+      "why_it_matters": "Free-tier budget exhaustion would catch a future refactor that doubles the inner step count.",
+      "suggested_fixture": "Count step.run calls received by the prefixedStep stub during a 2-day × 1-store backfill; pin expected count (12 = 2 × 6)."
+    },
+    {
+      "description": "No test for from === to (single-date backfill). dateRange should yield exactly 1 string. The from > to check at line 198-200 rejects inverted ranges, but from === to is allowed — pin the boundary.",
+      "why_it_matters": "Operators occasionally re-run a single failed date via backfill rather than sync-now (e.g. to use the prefixed step IDs for jobs-table grouping). A regression that off-by-ones the loop to skip the start-of-range would silently no-op.",
+      "suggested_fixture": "Pin: handler({event: {data: {from: '2026-05-20', to: '2026-05-20', storeIds: ['uzoshop']}}, step}) → runDailyForStoreMock.mock.calls.length === 1."
+    }
+  ],
+  "channels": {
+    "imports_from": [
+      "@/inngest/client",
+      "./cronDaily (runDailyForStore, StoreId)"
+    ],
+    "exports_to": [
+      "serve() route (eventBackfill)"
+    ],
+    "events_emitted": [],
+    "events_consumed": [
+      "event/backfill (from /api/operator/backfill POST handler per file comment)"
+    ],
+    "swr_keys": [],
+    "inngest_triggers": [
+      "Event: event/backfill"
+    ],
+    "supabase_writes": [
+      "(via runDailyForStore — same set as cronDaily)"
+    ],
+    "supabase_reads": [
+      "(via runDailyForStore — same set as cronDaily)"
+    ],
+    "api_calls": [
+      "(via runDailyForStore — Shopify, Meta, Google, TikTok, Frankfurter)"
+    ]
+  }
+}

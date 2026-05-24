@@ -1,0 +1,120 @@
+{
+  "phase": 12,
+  "checkpoint_completed_at": "2026-05-24",
+  "total_uncertain_resolved": 17,
+  "summary": {
+    "verified": 15,
+    "has_bug": 2
+  },
+  "resolutions": [
+    {
+      "raw_return": "inngest_cronDaily.json",
+      "original_verdict": "⚠️ Uncertain",
+      "operator_resolution": "🔴 Has bug",
+      "operator_note": "INN-01 return-roas vs persisted-roas TikTok mismatch is a concrete bug — inconsistent data + wrong dashboard output. Not a test gap."
+    },
+    {
+      "raw_return": "lib_services_summary.json",
+      "original_verdict": "⚠️ Uncertain",
+      "operator_resolution": "✅ Verified",
+      "operator_note": "buildStoreSummary returns null on empty data_daily but downstream templateParams handles null cleanly. Risk not materialized. Test gap → 12-tests-needed.md."
+    },
+    {
+      "raw_return": "lib_services_googleAds.json",
+      "original_verdict": "⚠️ Uncertain",
+      "operator_resolution": "✅ Verified",
+      "operator_note": "762 LOC + 4 fetchers + only 1 tested = test gap, no specific bug suspicion. pagination/helpers/fetchers untested → 12-tests-needed.md."
+    },
+    {
+      "raw_return": "lib_services_useBillingOneTime.json",
+      "original_verdict": "⚠️ Uncertain",
+      "operator_resolution": "✅ Verified",
+      "operator_note": "52 LOC thin hook over billing.ts (audited). Logic lives in billing.ts. Test gap → 12-tests-needed.md."
+    },
+    {
+      "raw_return": "lib_services_useBillingRecurring.json",
+      "original_verdict": "⚠️ Uncertain",
+      "operator_resolution": "✅ Verified",
+      "operator_note": "79 LOC thin hook over billing.ts (audited). totalMonthly is straightforward sum. Test gap → 12-tests-needed.md."
+    },
+    {
+      "raw_return": "lib_services_useCampaignTrueRevenue.json",
+      "original_verdict": "⚠️ Uncertain → Re-research",
+      "operator_resolution": "✅ Verified",
+      "operator_note": "Re-research pass (2026-05-24) confirmed thin orchestration over audited pure helpers (allocateProductRevenue + analyzeAttribution). Every contract boundary traced correctly. Test-suite gap remains real but is a coverage concern, not a correctness verdict."
+    },
+    {
+      "raw_return": "lib_services_whatsapp.json",
+      "original_verdict": "⚠️ Uncertain → Re-research",
+      "operator_resolution": "✅ Verified",
+      "operator_note": "Re-research pass (2026-05-24) confirmed single chokepoint + airtight allowlist + symmetric normalization + no env-var override bypass. Operator decision (2026-05-24): SVC-02 deployment-env-var caveat is NOT a blocker for this audit — runbook concern only. Do not include as blocker in AUDIT.md."
+    },
+    {
+      "raw_return": "lib_state_ads.json",
+      "original_verdict": "⚠️ Uncertain",
+      "operator_resolution": "✅ Verified",
+      "operator_note": "Code itself correct. IN-05 fix verified, range filter inline, soft-fail on missing tab. Sheets-tier-remained-post-Phase-11 is cleanup concern, not active bug."
+    },
+    {
+      "raw_return": "lib_state_annotations.json",
+      "original_verdict": "⚠️ Uncertain",
+      "operator_resolution": "✅ Verified",
+      "operator_note": "Standard cloudSync pattern. Parallel arrays sound. annotationsInScope is pure. Missing CC-01 immediate-flag → test gap → 12-tests-needed.md."
+    },
+    {
+      "raw_return": "lib_state_campaigns.json",
+      "original_verdict": "⚠️ Uncertain",
+      "operator_resolution": "✅ Verified",
+      "operator_note": "Code correct. range filter via isInRange, missing tab soft-fail, budget columns verified. Sheets-tier-dead-code concern is separate from bug verdict."
+    },
+    {
+      "raw_return": "lib_state_campaignsLinks.json",
+      "original_verdict": "⚠️ Uncertain",
+      "operator_resolution": "✅ Verified",
+      "operator_note": "Clean separation from server-side campaigns.ts. Deep-link builders only. No business-logic risk."
+    },
+    {
+      "raw_return": "lib_state_cloudSync.json",
+      "original_verdict": "⚠️ Uncertain",
+      "operator_resolution": "✅ Verified",
+      "operator_note": "All Phase 10/11 fixes verified intact (CC-01 immediate flag, d/MD-01 dispatchChange guards, d/CR-07-soft conflict event, WR2-01 pendingRetries cancellation). 3 minors are test gaps."
+    },
+    {
+      "raw_return": "lib_state_dateRange.json",
+      "original_verdict": "⚠️ Uncertain",
+      "operator_resolution": "✅ Verified",
+      "operator_note": "Comprehensive module covering all Phase 9 + WR-NN fixes. 4 perf/edge MINORs, not output-correctness bugs."
+    },
+    {
+      "raw_return": "lib_state_postgresReaders.json",
+      "original_verdict": "⚠️ Uncertain",
+      "operator_resolution": "✅ Verified",
+      "operator_note": "Phase 9 concerns resolved (C-02 newest-row dedup tested, U-01 TikTok writer↔reader symmetry). 4 minors are risks-of-drift, not concrete bugs. STA-05 MAX_CHUNKS silent truncation → priority test/backlog item in 12-tests-needed.md but NOT a bug today (no proof it materializes on current prod data)."
+    },
+    {
+      "raw_return": "lib_state_productCatalog.json",
+      "original_verdict": "⚠️ Uncertain",
+      "operator_resolution": "✅ Verified",
+      "operator_note": "Code clean. Sheets-tier-remained-post-Phase-11 is dead-code/cleanup concern, not a bug. No concrete divergence vs Postgres reader."
+    },
+    {
+      "raw_return": "lib_state_products.json",
+      "original_verdict": "⚠️ Uncertain",
+      "operator_resolution": "🔴 Has bug",
+      "operator_note": "Two concrete latent bugs: STA-46 inline parseDate bypasses WR-04 calendar validation; STA-47 filter asymmetry vs Postgres reader. Both can materialize today. Mark as bugs. If proven later that Sheets reader is truly unconsumed, can downgrade to cleanup/backlog."
+    },
+    {
+      "raw_return": "lib_state_urlState.json",
+      "original_verdict": "⚠️ Uncertain",
+      "operator_resolution": "✅ Verified",
+      "operator_note": "Fundamental contract correct (symmetric R/W, no history pollution). STA-21 (selectAll/selectAllNone) + STA-22 (preset name normalization) are MINOR edge cases → 12-tests-needed.md / backlog."
+    }
+  ],
+  "operator_directives_for_synthesis": [
+    "WhatsApp SVC-02 deployment env-var caveat: do NOT include as blocker in AUDIT.md. Runbook concern only.",
+    "STA-05 postgresReaders MAX_CHUNKS silent truncation: priority test/backlog item in 12-tests-needed.md, not a bug.",
+    "Sheets-side readers (ads, campaigns, productCatalog, products) that survived Phase 11: products.ts has concrete bugs (🔴); ads/campaigns/productCatalog are dead-code cleanup concerns (still ✅ for THIS audit, separate cleanup phase if operator wants).",
+    "useBilling* hooks: thin pass-through. Logic lives in billing.ts (already audited). Test gaps documented separately.",
+    "Final AUDIT.md MUST have zero ⚠️ entries per D-08 + DP-02. Apply resolutions above to per-file verdicts."
+  ]
+}

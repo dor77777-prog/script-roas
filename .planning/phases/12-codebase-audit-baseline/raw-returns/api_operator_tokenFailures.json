@@ -1,0 +1,67 @@
+{
+  "task_id": "12.E.15",
+  "file": "dashboard-web/src/app/api/operator/token-failures/route.ts",
+  "test_path": "(no dedicated route unit test). lib/notifications/__tests__/tokenFailures.test.ts covers resolveTokenFailure helper.",
+  "verdict": "Has bug",
+  "findings": [
+    {
+      "id": "API-37",
+      "severity": "Major",
+      "file_line": "dashboard-web/src/app/api/operator/token-failures/route.ts:93-98",
+      "failing_input": "Supabase select on token_failures returns { error: { message: 'SUPABASE_SERVICE_ROLE_KEY: invalid jwt: foo.bar.baz' } } — env-related error.",
+      "expected": "Sanitized via userFacingError so the JWT or service-role hint never reaches the browser.",
+      "actual": "Line 95: `{ error: error.message, ... }` — RAW Supabase error message leaked to the browser. Sibling routes (operator/jobs, dashboard-state, store-meta, manual-overrides) all use userFacingError() to redact. Same family as the CR-01 fix the apiErrors module was created to address. Information-disclosure on the GET error path.",
+      "fix_sketch": "Wrap: `{ error: userFacingError(error.message), ... }`. Also log raw to console.error so ops can see it server-side.",
+      "regression_test_idea": "Mock supabase to return error.message containing 'SUPABASE_SERVICE_ROLE_KEY'; assert response.error does NOT contain that substring."
+    },
+    {
+      "id": "API-38",
+      "severity": "Major",
+      "file_line": "dashboard-web/src/app/api/operator/token-failures/route.ts:116-125 + 170-174",
+      "failing_input": "Catch path (admin() throws because env vars missing).",
+      "expected": "Sanitized error per the operator-constraint convention.",
+      "actual": "Line 119 + 172: `e instanceof Error ? e.message : String(e)` — RAW error returned. admin() throws with literal 'missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY' — that text leaks to the browser. Same family as API-37.",
+      "fix_sketch": "Wrap with userFacingError(). Add console.error('/api/operator/token-failures', e.message) for ops.",
+      "regression_test_idea": "Unset SUPABASE_URL, GET the endpoint; assert response.error does not contain 'SUPABASE_URL' literal string."
+    },
+    {
+      "id": "API-39",
+      "severity": "Minor",
+      "file_line": "dashboard-web/src/app/api/operator/token-failures/route.ts:64",
+      "failing_input": "Comment says '30-day window' but code says 7-day.",
+      "expected": "Consistency.",
+      "actual": "File-level docstring line 6: 'Includes 30-day window so resolved items stay visible'. Implementation line 66: `Date.now() - 7 * 24 * 60 * 60 * 1000` (7 days). Operator using the comment as spec sees a different number than the code. Per SPEC §Requirement 4 test-coverage gaps.",
+      "fix_sketch": "Update the docstring to say '7-day window' (assuming 7 is the intended value).",
+      "regression_test_idea": "Add a comment-vs-literal check OR add a test that pins the lookback constant."
+    },
+    {
+      "id": "API-40",
+      "severity": "Minor",
+      "file_line": "dashboard-web/src/app/api/operator/token-failures/route.ts:31-40",
+      "failing_input": "admin() called multiple times in rapid succession (GET + POST overlap).",
+      "expected": "Cached supabase client (matches @/lib/supabaseAdmin pattern).",
+      "actual": "Creates a fresh client on every call. supabaseAdmin.ts (the shared module) explicitly uses a `let cached` pattern. This route duplicates the createClient logic — should use getSupabaseAdmin() from supabaseAdmin.ts for consistency and to inherit any future caching improvements.",
+      "fix_sketch": "Replace local admin() function with `import { getSupabaseAdmin } from '@/lib/supabaseAdmin'`.",
+      "regression_test_idea": "After fix: assert createClient called only once across 3 sequential GET calls (cached)."
+    }
+  ],
+  "uncertainty_notes": "Provider/store validation is sound. Resolve action correctly delegated. The raw error leaks (API-37 + API-38) are real CR-01-family information-disclosure bugs that the apiErrors module was specifically designed to prevent.",
+  "test_coverage_gaps": [
+    "GET success path: NOT covered.",
+    "GET Supabase error path: NOT covered (would have caught API-37).",
+    "POST invalid action/provider/store_id: NOT covered.",
+    "POST success → resolveTokenFailure called with correct args: covered via tokenFailures.test.ts.",
+    "admin() env-missing path: NOT covered."
+  ],
+  "channels": {
+    "imports_from": ["@supabase/supabase-js (createClient)", "@/lib/notifications/tokenFailures (resolveTokenFailure, TokenFailureProvider, TokenFailureStore)"],
+    "exports_to": ["GET/POST → consumed by components/operator/TokenFailuresTable.tsx"],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": ["/api/operator/token-failures"],
+    "inngest_triggers": [],
+    "supabase_writes": ["token_failures via resolveTokenFailure (POST)"],
+    "supabase_reads": ["token_failures via select (GET)"],
+    "api_calls": []
+  }
+}

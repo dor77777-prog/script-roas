@@ -1,0 +1,43 @@
+{
+  "task_id": "12.E.12",
+  "file": "dashboard-web/src/app/api/operator/notifications/send/route.ts",
+  "test_path": "(no dedicated unit test). Consumer: components/operator/WhatsappTestButtons.tsx.",
+  "verdict": "Verified correct",
+  "findings": [
+    {
+      "id": "API-30",
+      "severity": "Cosmetic",
+      "file_line": "dashboard-web/src/app/api/operator/notifications/send/route.ts:29",
+      "failing_input": "POST with body { trigger: undefined } (caller explicitly sets undefined).",
+      "expected": "Either accept (default to 'noon') or reject with 400.",
+      "actual": "trigger ?? 'noon' → 'noon' (accepted with default). Semantics-correct because the type allows it. No issue.",
+      "fix_sketch": "N/A.",
+      "regression_test_idea": "N/A."
+    },
+    {
+      "id": "API-31",
+      "severity": "Minor",
+      "file_line": "dashboard-web/src/app/api/operator/notifications/send/route.ts:28",
+      "failing_input": "POST with body { trigger: 'noon' } twice in rapid succession (operator double-clicks).",
+      "expected": "Idempotency / debounce — WhatsApp template-send is billable.",
+      "actual": "Each click fires a separate Inngest event → two billable WhatsApp sends. The +972524809540 recipient gets duplicate messages. Per operator constraint (WhatsApp ONLY to +972524809540), the duplication is annoying but not a privacy issue.",
+      "fix_sketch": "Client-side: disable button + show loading state on the 202 response. Server-side: optional — Inngest event_id allows idempotency keys if needed for billing protection.",
+      "regression_test_idea": "Two consecutive POSTs within 500ms with same trigger; current behavior: both succeed. Desired: client UI disables. Server unchanged."
+    }
+  ],
+  "uncertainty_notes": "Route is minimal and correct. The WhatsApp constraint to single recipient is enforced downstream in the worker (eventWhatsappSendNow); this route just enqueues. URL-obscurity trust model accepted.",
+  "test_coverage_gaps": [
+    "Zero coverage. Recommend: (a) invalid trigger returns 400, (b) valid trigger returns 202 with eventIds, (c) inngest.send failure returns 500 with sanitized error."
+  ],
+  "channels": {
+    "imports_from": ["@/inngest/client (inngest)", "@/lib/apiErrors (userFacingError)"],
+    "exports_to": ["POST → consumed by WhatsappTestButtons.tsx"],
+    "events_emitted": ["notifications/whatsapp.send-now (via inngest.send)"],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": ["notifications/whatsapp.send-now → eventWhatsappSendNow function"],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

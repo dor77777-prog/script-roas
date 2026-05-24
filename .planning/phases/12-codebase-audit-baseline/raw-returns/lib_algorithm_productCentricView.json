@@ -1,0 +1,152 @@
+{
+  "task_id": "12.A.9",
+  "file": "dashboard-web/src/lib/productCentricView.ts",
+  "test_path": "dashboard-web/src/lib/__tests__/productCentricView.test.ts",
+  "verdict": "Has bug",
+  "findings": [
+    {
+      "id": "ALG-01",
+      "severity": "BLOCKER",
+      "file_line": "dashboard-web/src/lib/productCentricView.ts:289-301",
+      "failing_input": "No orders passed; product p1 mapped to uzoshop::Meta::c1 and uzoshop::TikTok::t1; both aggregated rows exist with spend=0 (impressions=1 keeps the rows alive); productNetRevenue p1=1000.",
+      "expected": "Sum of row.members[].allocatedRevenueEstimate equals row.totalNetRevenue (1000), matching the per-platform byPlatform.intraAllocatedRevenue (500/500 by the b/HI-05 equal-platform fallback).",
+      "actual": "byPlatform.intraAllocatedRevenue is 500 per platform (b/HI-05 fix applied via platformAllocatedRevenue map), but each member's allocatedRevenueEstimate is 0. Reason: line 294 computes `intraShare = intraTotal > 0 ? a.spend / intraTotal : 0` (intraTotal=0 → intraShare=0), then line 301 computes `allocatedRev = allocByCampaign?.get(a.key) ?? (platformRev * intraShare)` = 500 * 0 = 0. The per-platform total says 500; every member under it says 0. UI under a CAD 500 platform header renders CAD 0 rows.",
+      "fix_sketch": "In the no-allocator (simplified-split) path when platform spend is 0 and platformRev > 0, distribute platformRev equally across the platform's members: `intraShare = intraTotal > 0 ? a.spend / intraTotal : 1 / platformMembers.length`. Keep intraPlatformSpendShare as 0 (UI-correct: spend share IS zero) but use the equal-share for revenue allocation. Apply the same fix as b/HI-05 did one level up, at the member level.",
+      "regression_test_idea": "Extend the b/HI-05 zero-spend positive-revenue test to assert sum(row.members[].allocatedRevenueEstimate) === row.totalNetRevenue, AND that each single-member platform's member receives exactly that platform's intraAllocatedRevenue."
+    },
+    {
+      "id": "ALG-02",
+      "severity": "BLOCKER",
+      "file_line": "dashboard-web/src/lib/productCentricView.ts:263-291",
+      "failing_input": "Orders threaded (allocator branch taken). Product p1 mapped to 3 campaigns: uzoshop::Meta::c1 (active, spend=100), uzoshop::Meta::c2 (active, spend=200), uzoshop::TikTok::t_stale (paused — NOT in aggregated[]). productNetRevenue p1=1500. Orders include 1 tiktok-paid order on p1 with revenueCad=300.",
+      "expected": "Either: (a) the stale-mapped TikTok campaign is emitted as a zero-metrics member with its allocator-assigned revenue, preserving the invariant sum(member.allocatedRevenueEstimate) ≈ totalNetRevenue; or (b) the surviving members are re-normalized after filtering, again preserving the invariant.",
+      "actual": "Neither happens. The allocator's Step-2 deterministic split credits the TikTok deterministic 300 to t_stale (sole TikTok mapped key, equal-share over `platformKeys.length=1`). Then the product-centric view: line 271 `if (!member?.agg) continue;` drops 300 from `platformAllocatedRevenue` (TikTok platform isn't in `platformGroups` because no agg). Line 290 `.filter(r => r.agg !== undefined)` drops the t_stale member entirely. Net: sum of member.allocatedRevenueEstimate = 1200 (Meta c1+c2 share of remainder 1200), missing 300. The product's `totalNetRevenue` displayed as 1500 but only 1200 visible across cohort campaigns — operator sees a 300 leak.",
+      "fix_sketch": "Same fix shape as ALG-01: when allocator branch is taken AND `allocByCampaign` contains a key whose raw member has no agg, EITHER emit a zero-spend member row carrying that allocator-assigned revenue (matches the docstring on lines 178-181 which already promises 'Members with no aggregated row are kept with zero metrics — operator may want to see campaign X was mapped but didn't spend'), OR redistribute the dropped revenue proportionally across surviving members. Option (a) is preferable — the docstring already claims this behaviour but the code does the opposite.",
+      "regression_test_idea": "Add test: cohort with one stale-mapped campaign on its own platform + orders that classify deterministically to that platform. Assert sum(row.members[].allocatedRevenueEstimate) ≈ row.totalNetRevenue AND sum(row.byPlatform[].intraAllocatedRevenue) ≈ row.totalNetRevenue."
+    },
+    {
+      "id": "ALG-03",
+      "severity": "BLOCKER",
+      "file_line": "dashboard-web/src/lib/productCentricView.ts:178-181 (docstring) vs :289-291 (code)",
+      "failing_input": "Product p1 mapped to two campaigns; only one has an aggregated row in the visible range.",
+      "expected": "Per the docstring on lines 178-181: 'Members with no aggregated row (campaign paused throughout the range) are kept with zero metrics — operator may want to see \"campaign X was mapped but didn't spend in this window\"'. Both members emitted; the dormant one shows zero metrics.",
+      "actual": "Line 290 `.filter(r => r.agg !== undefined)` removes the dormant member silently. The KEEPS-products-with-at-least-one-active test at line 88-103 explicitly asserts members.length === 1, confirming the code drops the dormant one — directly contradicting the docstring. Operator never sees dormant cohort campaigns in the per-product view, even though that's a legitimate cleanup question ('which mappings have gone cold?').",
+      "fix_sketch": "Either (a) keep the filter and update the docstring to say 'Members with no aggregated row are filtered out of the displayed cohort' OR (b) keep the docstring and remove the filter, emitting a zero-metrics member for dormant mappings. Option (b) also fixes ALG-02. Update the line 88-103 test accordingly.",
+      "regression_test_idea": "Add explicit test: 'dormant cohort campaign is emitted with zero metrics + correct campaignName/storeId from the productMap' (requires storing the campaignKey-to-metadata link at mapping time, since aggregated lookup misses it). OR if dropping intentional: add assertion + add docstring fix to the existing test."
+    },
+    {
+      "id": "ALG-04",
+      "severity": "WARNING",
+      "file_line": "dashboard-web/src/lib/productCentricView.ts:227",
+      "failing_input": "Caller threads `orders` but omits `productUnits` (or has no entry for productId). E.g., currently the production component ProductCentricView.tsx omits both — but a partial wiring (orders yes, units no) is a real failure mode during incremental rollout.",
+      "expected": "Either (a) `productUnits` is required when `orders` is provided (TS discriminated union), or (b) allocator branch is skipped with a logged fallback to simplified split.",
+      "actual": "`const productUnitsCount = productUnits?.get(productId) ?? 0;` silently passes 0 to `allocateProductRevenue`. Inside the allocator: the units-cap on campaignProductMap.ts line 362-364 (`if (detByPlatform[k].units > p.units)`) clamps deterministic per-platform units to 0; the remRev/remUnits calculation on line 463-464 starts with `Math.max(0, 0 - totalDetUnits) = 0`. Revenue numbers may still be correct (the revenue cap is gated on `p.netRevenueCad >= 0`) but unit-derived downstream (deterministicUnits, units fields) is silently corrupted. ProductCohortMember doesn't expose units today, so user-invisible — but the silent default is a footgun for the next caller that does.",
+      "fix_sketch": "Guard: `if (orders && orders.length > 0 && !productUnits) { console.warn('productCentricView: productUnits required when orders provided; falling back to simplified split'); allocatorReady = false; }`. Alternatively, type-level: split ProductCentricInputs into discriminated union so TS enforces 'orders implies productUnits'.",
+      "regression_test_idea": "Test: orders provided + productUnits omitted → assert either (a) warning + simplified-split output, or (b) error thrown. Currently the silent corruption is uncovered."
+    },
+    {
+      "id": "ALG-05",
+      "severity": "WARNING",
+      "file_line": "dashboard-web/src/lib/productCentricView.ts:263-285",
+      "failing_input": "Cohort: 2 Meta campaigns + 1 TikTok campaign, all spend=0, productNetRevenue=1000, orders=[] passed (length 0).",
+      "expected": "Identical operator semantics whether orders=[] (allocator branch SHOULD trigger by length check) or orders is undefined (allocator branch skipped): equal split across PLATFORMS (b/HI-05 semantic) yielding Meta:500, TikTok:500.",
+      "actual": "Line 164 checks `if (orders && orders.length > 0)` so orders=[] correctly bypasses the allocator (allocatorReady=false), and the b/HI-05 fallback fires giving Meta:500/TikTok:500. BUT once any caller passes non-empty orders for an unrelated product, the allocator branch is taken for THIS product too, and the allocator's Step-3 fallback (campaignProductMap.ts:470-473) splits equally over `mappedKeys.length` (3 campaigns) = ~333 per CAMPAIGN, summing to Meta:~667 / TikTok:~333. The same zero-spend cohort yields different per-platform allocations based on whether ANY order exists in the broader call. This is inconsistent with the b/HI-05 fix's documented operator-correct semantic on lines 254-260.",
+      "fix_sketch": "When allocator branch is taken AND totalCohortSpend === 0, post-process: override platformAllocatedRevenue to use equal-share across platforms (matching b/HI-05). Member-level allocation then re-derived from platform value (see ALG-01 fix).",
+      "regression_test_idea": "Test: zero-spend cohort + non-empty orders array (even if orders don't reference this product) → assert b/HI-05 equal-platform semantic holds."
+    },
+    {
+      "id": "ALG-06",
+      "severity": "WARNING",
+      "file_line": "dashboard-web/src/lib/productCentricView.ts:344",
+      "failing_input": "Product p1 mapped to 3 campaigns; only 1 has aggregated data in range (the other 2 dormant).",
+      "expected": "`isMultiMapped` semantics aligned with field name + docstring (lines 75-77: '2+ members (multi-mapped product)'). The product IS configured as multi-mapped (mapping count=3). But the docstring's '2+ members' wording is ambiguous — does 'members' mean configured cohort members or active-in-range members?",
+      "actual": "Code uses `members.length >= 2` (post-filter), so a product mapped to 3 campaigns where 2 are dormant gets `isMultiMapped=false`. Downstream filters that hide non-multi-mapped products will hide p1 even though the operator's mental model is that p1 IS multi-mapped (they explicitly tagged 3 campaigns). Field name + docstring ambiguous; behaviour conflates 'multi-mapped' with 'multi-actively-spending'.",
+      "fix_sketch": "Pick a semantic: either `isMultiMapped: campaignKeys.length >= 2` (mapping-config) OR rename to `hasMultipleActiveMembers` (activity-based). Document the choice. If filtering 'multi-mapped only' is intended for the cohort UI, the mapping-config semantic is operator-correct.",
+      "regression_test_idea": "Test: 3 mapped campaigns + 1 active → assert isMultiMapped is whichever the new semantic dictates, document with comment."
+    },
+    {
+      "id": "ALG-07",
+      "severity": "WARNING",
+      "file_line": "dashboard-web/src/lib/productCentricView.ts:228-244",
+      "failing_input": "Two products (p1, p2) both mapped to the same campaign uzoshop::Meta::c1. One order contains both products as line items with revenueCad split as p1:100 + p2:50, source=tiktok-paid (deterministic TikTok). Each product has its own TikTok cohort campaign too.",
+      "expected": "Cross-product allocator consistency: calling `buildProductCentricView` (which calls allocateProductRevenue once per product) should yield per-campaign revenue numbers that match a single `allocateProductRevenue` call with BOTH products in `productRevenue[]`.",
+      "actual": "Unverified. The per-product allocator call independently processes the full orders array, filtering line items by productId. Per-product results may be correct individually, but no test confirms that the SUM across products matches a batched single call. If the allocator caps platform revenue at p.netRevenueCad per product, and both products share an order, the totals across products may or may not preserve the order's gross revenue.",
+      "fix_sketch": "Either (a) add a batched allocator call (build productRevenue[] for ALL cohort products once, call allocateProductRevenue once, then distribute) — eliminates the per-product correctness question AND reduces O(N_products × N_orders) to O(N_orders); OR (b) add a test that pins the cross-product behaviour.",
+      "regression_test_idea": "Test: two products + shared campaign + one multi-line-item order. Build product-centric view → assert per-product allocated revenue matches a single batched allocateProductRevenue call."
+    },
+    {
+      "id": "ALG-08",
+      "severity": "MINOR",
+      "file_line": "dashboard-web/src/lib/productCentricView.ts:271",
+      "failing_input": "Cohort with 200 campaigns (large multi-mapped product).",
+      "expected": "O(K) aggregation of allocator output to platform totals.",
+      "actual": "Inside the loop over `allocByCampaign.entries()`, each iteration does `raw.find(r => r.campaignKey === campaignKey)` — linear scan of `raw` per iteration. Total cost: O(K²) where K = cohort size. Trivial perf bug; per workflow this is out of v1 scope, but fixing alongside ALG-02 is cheap.",
+      "fix_sketch": "Build `const rawByKey = new Map(raw.map(r => [r.campaignKey, r]));` before the loop, replace `.find(...)` with `rawByKey.get(campaignKey)`.",
+      "regression_test_idea": "n/a — perf only."
+    },
+    {
+      "id": "ALG-09",
+      "severity": "MINOR",
+      "file_line": "dashboard-web/src/lib/productCentricView.ts:151, 205",
+      "failing_input": "Refactor moves the `set`/`has` check away from the non-null assertion.",
+      "expected": "Defensive get-or-create idiom that doesn't require !.",
+      "actual": "Two sites use `cohortByProduct.get(pid)!.push(key)` and `platformGroups.get(platform)!.push(r)` immediately after has-check + set. Safe today, but the assertion is brittle to refactor.",
+      "fix_sketch": "Replace with fetch-or-create: `let arr = cohortByProduct.get(pid); if (!arr) { arr = []; cohortByProduct.set(pid, arr); } arr.push(key);` — removes assertion.",
+      "regression_test_idea": "n/a — defensive style."
+    }
+  ],
+  "uncertainty_notes": "ALG-05 hinges on whether the operator semantic for zero-spend cohort + orders should match the no-orders b/HI-05 path. Both are defensible; the bug is the divergence. ALG-04 dormant only if all production callers thread productUnits with orders — partial wiring (orders yes, units no) makes it fire silently. ALG-07 is a hypothesis pending a multi-product-order test to confirm or refute cross-product double-counting.",
+  "test_coverage_gaps": [
+    {
+      "description": "Member-level allocatedRevenueEstimate sum-conservation invariant is unasserted in the b/HI-05 zero-spend tests. Only byPlatform.intraAllocatedRevenue is checked, masking ALG-01.",
+      "why_it_matters": "Production UI renders member allocated revenue from allocatedRevenueEstimate, so operators see CAD 0 rows under a CAD 500 platform header in the exact zero-spend-cohort scenario b/HI-05 was supposed to fix.",
+      "suggested_fixture": "Reuse the existing p1 Meta/TikTok zero-spend fixture (line 372-405); add `expect(sum(rows[0].members.map(m => m.allocatedRevenueEstimate))).toBe(1000);` and `expect(rows[0].members.find(m => m.platform === 'Meta').allocatedRevenueEstimate).toBe(500);`."
+    },
+    {
+      "description": "Allocator branch never tested with a cohort that contains a stale-mapped (no aggregated row) campaign. The b/HI-03 parity test (line 422) uses only active-mapped campaigns.",
+      "why_it_matters": "ALG-02 revenue leak goes undetected. Real production cohorts WILL contain stale mappings (operator tagged a campaign months ago, it was later paused).",
+      "suggested_fixture": "Two-platform cohort with TikTok campaign in productMap but missing from aggregated[]; orders contain a deterministic tiktok-paid order for the product. Assert sum(members[].allocatedRevenueEstimate) ≈ totalNetRevenue."
+    },
+    {
+      "description": "Allocator branch never tested with productUnits omitted. The b/HI-03 test always supplies productUnits.",
+      "why_it_matters": "ALG-04 silent units=0 corruption goes undetected. A future caller that wires orders but forgets productUnits gets degraded allocator output with no warning.",
+      "suggested_fixture": "Same b/HI-03 setup but drop the productUnits map; assert either a warning was logged + simplified-split output, or that units fields in downstream allocator output are not silently zeroed."
+    },
+    {
+      "description": "Zero-spend cohort + non-empty orders (orders unrelated to the zero-spend product) is not tested. The b/HI-05 tests use orders=undefined; the b/HI-03 tests use spend>0.",
+      "why_it_matters": "ALG-05 divergence between b/HI-05 equal-platform semantic and allocator equal-per-campaign semantic goes undetected.",
+      "suggested_fixture": "Zero-spend cohort fixture from b/HI-05 + a stub orders array containing one order for a DIFFERENT product. Assert b/HI-05 platform-equal-share is still in force (Meta:500 / TikTok:500), not allocator-derived per-campaign split."
+    },
+    {
+      "description": "Cross-product allocator independence not tested. The b/HI-03 parity test uses one product.",
+      "why_it_matters": "ALG-07 hypothesis (cross-product double-counting or undercounting via shared campaigns + multi-line-item orders) unverified.",
+      "suggested_fixture": "Two products + shared campaign + one multi-line-item order. Assert per-product allocated revenue from buildProductCentricView matches a single batched allocateProductRevenue call's distribution."
+    },
+    {
+      "description": "Allocator parity is tested at the unit boundary, but ProductCentricView.tsx currently calls buildProductCentricView WITHOUT orders/productUnits (per prior reviewer note). The production path takes the simplified split.",
+      "why_it_matters": "Even after fixing the unit-level findings here, production users see the legacy (pre-b/HI-03) numbers. Integration test would surface the wiring gap.",
+      "suggested_fixture": "Component or hook-level integration with /api/orders-attribution wired through; assert buildProductCentricView is called with orders + productUnits and the rendered numbers match the campaign-centric drawer."
+    },
+    {
+      "description": "isMultiMapped semantics not tested with mapping-count > active-member-count. Only tested with all-active scenarios.",
+      "why_it_matters": "ALG-06 ambiguity (mapping-config vs activity-based) undetected; downstream filter behaviour may surprise operators.",
+      "suggested_fixture": "3 mapped campaigns where only 1 has aggregated data; assert and document the chosen semantic for isMultiMapped."
+    }
+  ],
+  "channels": {
+    "imports_from": [
+      "dashboard-web/src/lib/campaignsAggregator.ts",
+      "dashboard-web/src/lib/campaignProductMap.ts"
+    ],
+    "exports_to": [
+      "consumed by dashboard-web/src/components/ProductCentricView.tsx (via buildProductCentricView() and ProductCohortRow)"
+    ],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "task_id": "12.E.01",
+  "file": "dashboard-web/src/app/api/ads/route.ts",
+  "test_path": "(no dedicated unit test) — exercised indirectly via lib/__tests__/adsDrawer.test.ts + lib/__tests__/adsDrawerFilterSymmetry.test.ts (consumer tests). Cache literal not pinned to CACHE_CONFIG.ads.revalidate.",
+  "verdict": "Verified correct",
+  "findings": [
+    {
+      "id": "API-01",
+      "severity": "Minor",
+      "file_line": "dashboard-web/src/app/api/ads/route.ts:11 + dashboard-web/src/lib/cacheConfig.ts:16",
+      "failing_input": "Operator bumps CACHE_CONFIG.ads.revalidate from 300 to 600 but forgets to update the literal in route.ts.",
+      "expected": "A regression test (like healthRouteRevalidateSync.test.ts) catches the drift.",
+      "actual": "No such test for /api/ads (or /api/campaigns, /api/products, /api/data, /api/ordersAttribution, /api/storeMeta, /api/productCatalog, /api/operatorJobs). Health route is the ONLY one pinned. Cache contracts silently drift.",
+      "fix_sketch": "Add a parametrized test that imports `revalidate` from each route module and asserts equality with CACHE_CONFIG[key].revalidate.",
+      "regression_test_idea": "describe('cache literal sync') iterates [['ads', adsRoute], ['campaigns', campaignsRoute], ...] and expects each route's literal to match CACHE_CONFIG."
+    },
+    {
+      "id": "API-02",
+      "severity": "Cosmetic",
+      "file_line": "dashboard-web/src/app/api/ads/route.ts:42-51",
+      "failing_input": "Successful response.",
+      "expected": "AdsResponse.error optional field declared for symmetry with /api/campaigns + /api/products (those declare `error?: string`).",
+      "actual": "AdsResponse type does NOT declare error?: string yet the catch path adds it on line 60. Consumers reading data.error get a runtime field with no type-system guarantee.",
+      "fix_sketch": "Add `error?: string` to AdsResponse on line 18.",
+      "regression_test_idea": "type-only test: assertType<AdsResponse>({ rows: [], lastUpdated: '', dataLastWriteAt: null, error: 'x' })."
+    },
+    {
+      "id": "API-03",
+      "severity": "Cosmetic",
+      "file_line": "dashboard-web/src/app/api/ads/route.ts:62",
+      "failing_input": "Supabase error in the catch path.",
+      "expected": "Cache-Control: no-store on the degraded response (mirrors /api/data:94 + /api/orders-attribution:77 + /api/products:66 + /api/campaigns:70).",
+      "actual": "Missing — a transient upstream blip gets pinned in the CDN for 5 min (route revalidate=300). Sibling routes added this header for exactly the WR-02 scenario.",
+      "fix_sketch": "Add `headers: { 'Cache-Control': 'no-store' }` to the catch-path NextResponse.json call.",
+      "regression_test_idea": "Mock fetchAdsFromPostgres to throw; assert response.headers.get('Cache-Control') === 'no-store'."
+    }
+  ],
+  "uncertainty_notes": "No security or correctness blockers. Route correctly delegates range parsing + caching to shared helpers. 50k row warn-only guard is consistent with siblings.",
+  "test_coverage_gaps": [
+    "No dedicated route unit test (success + 400 RangeParamError + 200 degraded path).",
+    "No assertion that AdsResponse rows + dataLastWriteAt come from the same range (drift between fetchAdsFromPostgres and fetchAdsDailyLastWriteAt could silently misalign chip vs table)."
+  ],
+  "channels": {
+    "imports_from": ["@/lib/ads (AdRow type)", "@/lib/postgresReaders (fetchAdsFromPostgres, fetchAdsDailyLastWriteAt)", "@/lib/cacheConfig (cacheControl)", "@/lib/apiErrors (userFacingError)", "@/lib/dateRange (parseRangeParams, RangeParamError)"],
+    "exports_to": ["AdsResponse type → consumed by AdsDrawer.tsx", "GET handler → invoked via /api/ads HTTP"],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": ["/api/ads?from=YYYY-MM-DD&to=YYYY-MM-DD via buildDateRangeKey"],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": ["ads_daily via fetchAdsFromPostgres + fetchAdsDailyLastWriteAt"],
+    "api_calls": []
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "task_id": "12.E.08",
+  "file": "dashboard-web/src/app/api/oauth/tiktok/callback/route.ts",
+  "test_path": "(no dedicated unit test). One-time OAuth scaffold; htmlEscape is custom (not shared).",
+  "verdict": "Has bug",
+  "findings": [
+    {
+      "id": "API-18",
+      "severity": "Major",
+      "file_line": "dashboard-web/src/app/api/oauth/tiktok/callback/route.ts:50-57 (htmlEscape) + line 222/270/103/104 (htmlEscape usage)",
+      "failing_input": "Adversary crafts URL: GET /api/oauth/tiktok/callback?state=javascript:alert(1) (or other novel injection vectors).",
+      "expected": "Defense against XSS in BOTH attribute contexts AND text contexts; ideally use a vetted helper or CSP.",
+      "actual": "Custom htmlEscape covers the 5 basic chars (ampersand, lt, gt, double-quote, single-quote) BUT the auth_code + state + error + errorDesc params are interpolated into both text content AND attribute contexts (e.g. inside a code tag or inside a style attribute value followed by greater-than). For attribute context the escaping is sufficient. However: no Content-Security-Policy header on any of the 4 HTML response paths. Combined with the lack of an X-Content-Type-Options: nosniff header and no Referrer-Policy, a successful injection via a TikTok-side bug or DOM clobbering on a future change is unmitigated. Severity Major because OAuth callback endpoints are universally hardened with CSP per OWASP ASVS 5.0 V14.",
+      "fix_sketch": "Add response headers: `'Content-Security-Policy': \"default-src 'none'; style-src 'unsafe-inline'\", 'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer'`. Inline styles are needed for the existing layout — `style-src 'unsafe-inline'` permits them while blocking script execution. Consider also `X-Frame-Options: DENY`.",
+      "regression_test_idea": "GET /api/oauth/tiktok/callback?error=x; assert response.headers.get('Content-Security-Policy') matches /default-src 'none'/."
+    },
+    {
+      "id": "API-19",
+      "severity": "Minor",
+      "file_line": "dashboard-web/src/app/api/oauth/tiktok/callback/route.ts:60-64",
+      "failing_input": "Adversary GETs /api/oauth/tiktok/callback?auth_code=BENIGN&state=$(...crafted...) with no actual OAuth handshake.",
+      "expected": "Endpoint validates state against a server-stored CSRF nonce (or rejects if state empty / malformed).",
+      "actual": "state is reflected verbatim with no server-side verification. Comment says 'caller should set it to a CSRF nonce when constructing the auth URL and verify it matches in the rendered output' — but the verification is the OPERATOR'S manual eyeball check (Hebrew text on line 271). This is the documented OAuth scaffold pattern; URL-obscurity + manual exchange flow mitigates. NOT a flag under operator constraints (single-operator URL-obscurity), but should be documented in the audit.",
+      "fix_sketch": "Acknowledged limitation. If TikTok production OAuth is wired in a follow-up phase, store nonce server-side and compare here.",
+      "regression_test_idea": "N/A under current trust model."
+    },
+    {
+      "id": "API-20",
+      "severity": "Cosmetic",
+      "file_line": "dashboard-web/src/app/api/oauth/tiktok/callback/route.ts:195-197",
+      "failing_input": "Operator copies the curl command verbatim and runs it.",
+      "expected": "Placeholders are unmistakable.",
+      "actual": "<YOUR_APP_ID> and <YOUR_APP_SECRET> placeholders use angle-brackets that render correctly. No issue.",
+      "fix_sketch": "N/A.",
+      "regression_test_idea": "N/A."
+    }
+  ],
+  "uncertainty_notes": "Endpoint is documented Phase 05.7.5-B scaffold. URL-obscurity trust model accepted for inner routes, but OAuth callbacks are external-facing by definition (TikTok cloud redirects browser here). CSP/security headers gap is genuine; under operator-baseline this is Major.",
+  "test_coverage_gaps": [
+    "Zero coverage. Recommend ONE smoke test for the security headers (CSP + nosniff + Referrer-Policy) + ONE test that htmlEscape correctly escapes & < > \" ' in attribute context.",
+    "htmlEscape duplicated (only call site) — fine as-is."
+  ],
+  "channels": {
+    "imports_from": ["next/server (NextResponse)"],
+    "exports_to": [],
+    "events_emitted": [],
+    "events_consumed": [],
+    "swr_keys": [],
+    "inngest_triggers": [],
+    "supabase_writes": [],
+    "supabase_reads": [],
+    "api_calls": []
+  }
+}
