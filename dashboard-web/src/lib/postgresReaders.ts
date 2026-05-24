@@ -716,6 +716,13 @@ export async function fetchCampaignsFromPostgres(
 // ────────────────────────────────────────────────────────────────────────
 
 /**
+ * Map value shape: `{ status, updatedAt }`. The `updatedAt` is the trigger-
+ * managed `updated_at` of the row that supplied this status (Supabase trigger
+ * `trg_campaigns_daily_updated_at`, migration 20260522015042). The aggregator
+ * uses it to pick the FRESHEST status across a campaign's ad-sets — handles
+ * the partial-failure case where one ad-set's cron-live UPDATE silently
+ * fails and its row keeps an older status that's no longer current.
+ *
  * Map key shape: `storeId::Platform::campaignId::adSetId`. Platform is
  * TitleCase to match `CampaignRow.platform` so the aggregator can look up
  * by the same key it already builds.
@@ -724,8 +731,15 @@ export async function fetchCampaignsFromPostgres(
  * in-range logic still produces a status — this helper is an enhancement,
  * not a hard dependency.
  */
-export async function fetchCurrentCampaignStatuses(): Promise<Record<string, string>> {
-  const out: Record<string, string> = {};
+export type CurrentEffectiveStatusEntry = {
+  status: string;
+  updatedAt: string; // ISO timestamp
+};
+
+export async function fetchCurrentCampaignStatuses(): Promise<
+  Record<string, CurrentEffectiveStatusEntry>
+> {
+  const out: Record<string, CurrentEffectiveStatusEntry> = {};
   const sinceMs = Date.now() - 60 * 86_400_000;
   const since = new Date(sinceMs).toISOString().slice(0, 10);
   let data: DbRow[];
@@ -733,10 +747,20 @@ export async function fetchCurrentCampaignStatuses(): Promise<Record<string, str
     data = await paginate<DbRow>(() => {
       return getSupabase()
         .from('campaigns_daily')
-        .select('store_id, platform, campaign_id, ad_set_id, effective_status, date')
+        .select(
+          'store_id, platform, campaign_id, ad_set_id, effective_status, date, updated_at',
+        )
         .not('effective_status', 'is', null)
         .gte('date', since)
-        .order('date', { ascending: false });
+        // Phase 12.5.x (2026-05-24, operator robustness) — order by
+        // `updated_at` DESC so the FIRST row per key is the one cron-live
+        // wrote last. Previously we ordered by `date` (the day the row
+        // represents), which silently picked an OLDER cron-live write
+        // whenever cron-live's UPDATE pass rewrote the same row multiple
+        // times across ticks. `updated_at` is trigger-managed
+        // (migration 20260522015042) and bumps on every write — the
+        // canonical "freshness" signal for partial-failure resilience.
+        .order('updated_at', { ascending: false });
     });
   } catch (e) {
     console.warn(`postgresReaders.fetchCurrentCampaignStatuses: ${(e as Error).message}`);
@@ -753,8 +777,14 @@ export async function fetchCurrentCampaignStatuses(): Promise<Record<string, str
     if (seen.has(key)) continue;
     const status = String(r.effective_status ?? '').trim();
     if (!status) continue;
+    const updatedAtRaw = r.updated_at;
+    const updatedAt =
+      updatedAtRaw === null || updatedAtRaw === undefined
+        ? ''
+        : String(updatedAtRaw);
+    if (!updatedAt) continue;
     seen.add(key);
-    out[key] = status;
+    out[key] = { status, updatedAt };
   }
   return out;
 }

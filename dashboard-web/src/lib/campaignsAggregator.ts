@@ -7,6 +7,24 @@ export type AggregateMode = 'campaign' | 'adset';
 export type AggregatePlatformFilter = 'all' | 'Meta' | 'Google' | 'TikTok';
 
 /**
+ * Phase 12.5.x (2026-05-24, operator resume-detection robustness):
+ * each ad-set's current status is paired with its `updated_at` so the
+ * aggregator can pick the FRESHEST status across the campaign's children.
+ *
+ * Why it matters: cron-live's UPDATE pass can fail partially (one ad-set
+ * out of N times out / RLS-denies / 4xx). Without a freshness signal,
+ * "any parent-disabled wins" would incorrectly keep the off-chip ON after
+ * the operator RESUMES the campaign — one stale CAMPAIGN_PAUSED row from
+ * before the resume would beat the N-1 fresh ACTIVE rows. Picking the
+ * latest `updated_at` solves it symmetrically (pause AND resume).
+ */
+export type CurrentStatusEntry = {
+  status: string;
+  /** ISO timestamp from `campaigns_daily.updated_at`. Trigger-managed. */
+  updatedAt: string;
+};
+
+/**
  * Phase 12.5.x (2026-05-24) — "parent-disabled" marker statuses. These can
  * ONLY appear on an ad-set when its parent CAMPAIGN is paused / disabled at
  * the parent level. Even a single ad-set showing this status is authoritative:
@@ -100,15 +118,14 @@ export function aggregate(
    * Phase 12.5.x (2026-05-24) — optional map of CURRENT platform-native
    * statuses, keyed by `${storeId}::${Platform}::${campaignId}::${adSetId}`.
    * Returned by /api/campaigns (`fetchCurrentCampaignStatuses`) and reflects
-   * the absolute-latest status DB-wide, NOT bounded by `range`. When supplied,
-   * the post-pass below overrides each aggregate's `effectiveStatus` with
-   * this map's value. Decouples the "כבוי" chip from cron-live latency: a
-   * campaign paused yesterday shows the chip even on last-month views,
-   * regardless of whether cron-live has refreshed the in-range historical
-   * rows yet. Omitted → existing in-range-latest behavior, fully backwards
-   * compatible.
+   * the absolute-latest status DB-wide, NOT bounded by `range`. Each entry
+   * carries `updatedAt` so the campaign-mode roll-up can pick the freshest
+   * status across a campaign's ad-sets (handles partial cron-live failure
+   * on the resume path — see CurrentStatusEntry JSDoc). When supplied, the
+   * post-pass below overrides each aggregate's `effectiveStatus`. Omitted →
+   * existing in-range-latest behavior, fully backwards compatible.
    */
-  currentEffectiveStatus?: Record<string, string>,
+  currentEffectiveStatus?: Record<string, CurrentStatusEntry>,
 ): Aggregated[] {
   const map = new Map<string, Aggregated>();
   // Per-key "latest budget date" trackers so overwrite depends on the row's
@@ -250,13 +267,15 @@ export function aggregate(
       for (const a of map.values()) {
         const key = `${a.storeId}::${a.platform}::${a.campaignId}::${a.adSetId ?? ''}`;
         const cur = currentEffectiveStatus[key];
-        if (cur) a.effectiveStatus = cur;
+        if (cur) a.effectiveStatus = cur.status;
       }
     } else {
       // Index the map by campaign prefix so each campaign rolls up in O(M)
-      // total rather than O(N×M) per-aggregate scans.
-      const byCampaign = new Map<string, string[]>();
-      for (const [k, status] of Object.entries(currentEffectiveStatus)) {
+      // total rather than O(N×M) per-aggregate scans. Each entry carries
+      // `updatedAt` so the roll-up can pick the freshest status (resume
+      // robustness — see below).
+      const byCampaign = new Map<string, CurrentStatusEntry[]>();
+      for (const [k, entry] of Object.entries(currentEffectiveStatus)) {
         const parts = k.split('::');
         if (parts.length !== 4) continue;
         const campKey = `${parts[0]}::${parts[1]}::${parts[2]}`;
@@ -265,42 +284,46 @@ export function aggregate(
           bucket = [];
           byCampaign.set(campKey, bucket);
         }
-        bucket.push(status);
+        bucket.push(entry);
       }
       for (const a of map.values()) {
         const campKey = `${a.storeId}::${a.platform}::${a.campaignId}`;
-        const statuses = byCampaign.get(campKey);
-        if (!statuses || statuses.length === 0) continue;
-        // Phase 12.5.x (2026-05-24, operator clarification):
-        //   "Ad-set off ≠ campaign off. Even if an ad-set is on, a paused
-        //    PARENT is stronger and forces no delivery."
+        const entries = byCampaign.get(campKey);
+        if (!entries || entries.length === 0) continue;
+        // Phase 12.5.x (2026-05-24, operator clarifications — two rounds):
         //
-        // The off chip on a CAMPAIGN row reflects the parent campaign's
-        // pause state — NOT an aggregate of its ad-sets' states. Rule:
+        // Round 1 ("ad-set off ≠ campaign off"): the off chip on a CAMPAIGN
+        // row reflects the parent campaign's pause state only — not an
+        // aggregate of its ad-sets' individual states. Parent-disabled
+        // markers (Meta: CAMPAIGN_PAUSED, TikTok: ADGROUP_STATUS_CAMPAIGN_DISABLE)
+        // are the only signal that's authoritative for the parent.
         //
-        //   1. ANY child has a "parent-disabled" status (Meta:
-        //      CAMPAIGN_PAUSED, TikTok: ADGROUP_STATUS_CAMPAIGN_DISABLE)
-        //      → operator paused at the campaign level → off chip.
-        //      Authoritative even if other children still report ACTIVE
-        //      (cron-live's UPDATE pass propagates ad-set-by-ad-set;
-        //      one stale ACTIVE child should not mask the campaign pause).
+        // Round 2 ("what about resume?"): "any parent-disabled wins" was
+        // asymmetric — correct for pause (cron-live propagates a few ad-
+        // sets at a time, so one CAMPAIGN_PAUSED among many ACTIVE is a
+        // fresh pause that should fire the chip), incorrect for resume
+        // (one stale CAMPAIGN_PAUSED among many ACTIVE is an old row
+        // cron-live failed to UPDATE, and the chip should NOT linger).
         //
-        //   2. Otherwise → campaign is RUNNING (per the platform). Some
-        //      ad-sets might be individually paused (status='PAUSED' on
-        //      Meta, 'ADGROUP_STATUS_DISABLE' on TikTok), but that does
-        //      not mean the campaign is off — the operator paused those
-        //      ad-sets, not the campaign. Force an active marker so the
-        //      off chip does not fire in campaign mode.
-        //
-        // In ad-set mode each row has its OWN status (not rolled up), so
-        // the off chip there continues to reflect the ad-set's own pause
-        // — that's the right level of granularity for that view.
-        const parentDisabled = statuses.find(s => isParentDisabled(a.platform, s));
-        if (parentDisabled) {
-          a.effectiveStatus = parentDisabled;
+        // Symmetric rule: pick the FRESHEST status across the children
+        // (max `updatedAt`). cron-live writes the current status to ALL
+        // ad-sets each tick; the row with the latest `updated_at` IS the
+        // platform's latest "verdict". Decide off/active from that single
+        // freshest row using the platform's own off-detection (parent-
+        // disabled marker OR no active marker).
+        let freshest = entries[0];
+        for (const e of entries) {
+          if (e.updatedAt > freshest.updatedAt) freshest = e;
+        }
+        // If the freshest status is a parent-disabled marker → campaign is
+        // off (cron-live's latest read from the platform). Else → force
+        // the platform's active marker so the off chip does not fire even
+        // if other children are individually paused (per Round 1).
+        if (isParentDisabled(a.platform, freshest.status)) {
+          a.effectiveStatus = freshest.status;
         } else {
           const activeMarker = activeMarkerForPlatform(a.platform);
-          if (activeMarker) a.effectiveStatus = activeMarker;
+          a.effectiveStatus = activeMarker ?? freshest.status;
         }
       }
     }

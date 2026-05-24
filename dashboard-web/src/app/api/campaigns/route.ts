@@ -4,6 +4,7 @@ import {
   fetchCampaignsFromPostgres,
   fetchCampaignsDailyLastWriteAt,
   fetchCurrentCampaignStatuses,
+  type CurrentEffectiveStatusEntry,
 } from '@/lib/postgresReaders';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
@@ -26,14 +27,16 @@ export type CampaignsResponse = {
    * Phase 12.5.x (2026-05-24) — current platform-native status per
    * (store, platform, campaign, ad_set) key. Map key shape:
    *   `${storeId}::${Platform}::${campaignId}::${adSetId}`
-   * "Current" = chronologically latest non-null effective_status in
+   * "Current" = the row with the most-recent `updated_at` in
    * campaigns_daily across the last 60 days, REGARDLESS of the operator's
    * selected range. The aggregator uses this to override the stale
    * in-range status when a campaign was active in-range but is now off.
-   * Empty object on the soft-fail path (the chip falls back to in-range
-   * latest, same behavior as before this map was added).
+   * Each entry carries `updatedAt` so the aggregator can pick the freshest
+   * status across a campaign's ad-sets (resume-detection robustness:
+   * partial cron-live failure leaves one ad-set's status stale; latest
+   * `updatedAt` wins). Empty object on the soft-fail path.
    */
-  currentEffectiveStatus: Record<string, string>;
+  currentEffectiveStatus: Record<string, CurrentEffectiveStatusEntry>;
   /** Present only on the degraded-error path (rows: []). Consumers that
    *  surface "synced N min ago" should treat the response as data-less when
    *  this is set, even though rows + lastUpdated still satisfy the type. */
