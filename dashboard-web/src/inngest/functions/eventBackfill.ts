@@ -212,6 +212,24 @@ export const eventBackfill = inngest.createFunction(
     // the Google Ads token-refresh race (RESEARCH §Pitfall 8). Sequential
     // also keeps the Inngest step graph linear for operator readability
     // in the jobs table.
+    //
+    // Audit fix 2026-05-24 (AUDIT INN-16, Phase 12.1.1): console.warn
+    // on per-pair failure for operator visibility in Inngest run logs,
+    // and abort the whole event after 3 consecutive identical error
+    // messages so Inngest's retry/DLQ machinery sees the throw. Pre-fix
+    // the loop swallowed every error and burned 63 pairs × 6 step.runs
+    // on systemic failures (RLS denial, missing migration) without ever
+    // escalating to Inngest. Evidence: .planning/phases/12-codebase-
+    //   audit-baseline/raw-returns/inngest_eventBackfill.json (INN-16).
+    //
+    // The counter resets on each different message AND on each success,
+    // so transient per-pair flakes (different errors per pair) still
+    // run the full backfill — only TRULY systemic (same error N times
+    // in a row) triggers the abort.
+    let consecutiveIdenticalErrorCount = 0;
+    let lastErrorMessage: string | null = null;
+    const SYSTEMIC_FAILURE_THRESHOLD = 3;
+
     for (const date of dateRange(from, to)) {
       for (const storeId of storeIds) {
         // W6 mitigation — prefix every inner step.run id with
@@ -222,13 +240,31 @@ export const eventBackfill = inngest.createFunction(
         try {
           await runDailyForStore(storeId, date, { step: prefixedStep });
           results.push({ date, storeId, ok: true });
+          // Reset the systemic-failure counter on any successful pair.
+          consecutiveIdenticalErrorCount = 0;
+          lastErrorMessage = null;
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           results.push({ date, storeId, ok: false, error: message });
-          // Continue to the next pair. Inngest's own retry policy
-          // already exhausted before this catch fires; we keep
-          // marching so the operator can see partial progress on
-          // the jobs table rather than abort the whole backfill.
+          console.warn(
+            `[backfill] pair ${date}/${storeId} failed: ${message}`,
+          );
+          if (message === lastErrorMessage) {
+            consecutiveIdenticalErrorCount += 1;
+          } else {
+            consecutiveIdenticalErrorCount = 1;
+            lastErrorMessage = message;
+          }
+          if (consecutiveIdenticalErrorCount >= SYSTEMIC_FAILURE_THRESHOLD) {
+            throw new Error(
+              `systemic failure (${SYSTEMIC_FAILURE_THRESHOLD} consecutive identical errors): ${message}`,
+            );
+          }
+          // Otherwise continue to the next pair. Inngest's own retry
+          // policy already exhausted before this catch fires; we keep
+          // marching so the operator can see partial progress on the
+          // jobs table rather than abort the whole backfill for a
+          // single transient per-pair flake.
         }
       }
     }
