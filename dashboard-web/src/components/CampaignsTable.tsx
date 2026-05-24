@@ -344,7 +344,13 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     return () => window.removeEventListener('roas-campaign-product-map-changed', onChange);
   }, [data]);
 
-  const [mode, setMode] = useState<Mode>('campaign');
+  // Phase 12.5.x (2026-05-24) — mode hydrated from URL `c_mode`. Survives
+  // refresh + bookmark so an operator parked on the ad-set view stays there.
+  const [mode, setMode] = useState<Mode>(() => {
+    if (typeof window === 'undefined') return 'campaign';
+    const url = readTabLocalState('campaigns', window.location.search);
+    return url.mode ?? 'campaign';
+  });
   // Phase 12.x — platform filter hydrated from URL `c_platform` param. Allows
   // refresh / bookmark to preserve the "show only Meta" view.
   const [platform, setPlatform] = useState<Platform>(() => {
@@ -373,8 +379,18 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   }
 
   // Sort state. Same column → toggle dir; different column → switch + dir=desc.
-  const [sortKey, setSortKey] = useState<SortKey>('roas');
-  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  // Phase 12.5.x (2026-05-24) — hydrated from URL so refresh keeps the column
+  // sort the operator chose.
+  const [sortKey, setSortKey] = useState<SortKey>(() => {
+    if (typeof window === 'undefined') return 'roas';
+    const url = readTabLocalState('campaigns', window.location.search);
+    return (url.sortKey as SortKey | undefined) ?? 'roas';
+  });
+  const [sortDir, setSortDir] = useState<SortDir>(() => {
+    if (typeof window === 'undefined') return 'desc';
+    const url = readTabLocalState('campaigns', window.location.search);
+    return url.sortDir ?? 'desc';
+  });
   function handleSort(key: SortKey) {
     if (key === sortKey) {
       setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
@@ -405,27 +421,6 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     setLocalStore(globalStore);
   }, [globalStore]);
 
-  // Push CampaignsTable's tab-local state into the URL whenever it changes so
-  // refresh / bookmark / share keeps the operator on the same view.
-  // (`syncTabLocalUrl` only updates the `c_*` params — preserves global state.)
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const platformParam =
-      platform === 'all' ? 'all' :
-      platform === 'Meta' ? 'meta' :
-      platform === 'Google' ? 'google' :
-      platform === 'TikTok' ? 'tiktok' : 'all';
-    // Encode localRange as a custom preset (the picker doesn't track preset
-    // names — the URL just remembers the raw from/to so refresh restores
-    // exactly what the operator was looking at).
-    syncTabLocalUrl('campaigns', {
-      store: localStore,
-      platform: platformParam,
-      preset: 'custom',
-      range: localRange,
-    }, globalStore);
-  }, [localStore, platform, localRange.from, localRange.to, globalStore]);
-
   // Phase 05.7.9d / 05.7.x — column visibility + order prefs.
   // Subscribes to the cloud-sync event so a toggle on another device
   // applies here on the next poll without a manual refresh.
@@ -449,17 +444,118 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   }, []);
 
   // Drill-down drawer state — set when the user clicks a row.
-  const [drillCampaignId, setDrillCampaignId] = useState<string | null>(null);
-  const [drillPlatform, setDrillPlatform] = useState<string | null>(null);
-  const [drillStoreId, setDrillStoreId] = useState<string | null>(null);   // FIX-03 (5.2.2.1): drilldown namespace must carry storeId to prevent cross-store merges
+  // Phase 12.5.x (2026-05-24) — hydrated from URL `c_drill` so refresh keeps
+  // the CampaignDrawer open on the same campaign. (adSetName is not in the
+  // URL; the drawer re-reads it from `data.rows` once the IDs match.)
+  const [drillCampaignId, setDrillCampaignId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return readTabLocalState('campaigns', window.location.search).drill?.campaignId ?? null;
+  });
+  const [drillPlatform, setDrillPlatform] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return readTabLocalState('campaigns', window.location.search).drill?.platform ?? null;
+  });
+  const [drillStoreId, setDrillStoreId] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return readTabLocalState('campaigns', window.location.search).drill?.storeId ?? null;
+  });
   // Ad-level drilldown: when set, opens the AdsDrawer scoped to one ad-set.
+  // Phase 12.5.x (2026-05-24) — hydrated from URL `c_adDrill`. adSetName is
+  // re-resolved from data.rows once the IDs match (avoids URL-encoding free
+  // text). Falls back to empty string until the row loads; the drawer just
+  // shows the IDs in its header for the brief loading window.
   const [adDrill, setAdDrill] = useState<{
     storeId: string;
     campaignId: string;
     adSetId: string;
     adSetName: string;
     platform: 'Meta' | 'Google' | 'TikTok';
-  } | null>(null);
+  } | null>(() => {
+    if (typeof window === 'undefined') return null;
+    const urlAdDrill = readTabLocalState('campaigns', window.location.search).adDrill;
+    if (!urlAdDrill) return null;
+    return {
+      storeId: urlAdDrill.storeId,
+      campaignId: urlAdDrill.campaignId,
+      adSetId: urlAdDrill.adSetId,
+      adSetName: '',
+      platform: urlAdDrill.platform,
+    };
+  });
+
+  // Phase 12.5.x (2026-05-24) — resolve adDrill.adSetName from data.rows once
+  // it loads. URL-hydrated adDrill starts with '' (we don't put free text in
+  // the URL); the drawer header shows a placeholder until this fires.
+  useEffect(() => {
+    if (!adDrill || adDrill.adSetName || !data) return;
+    const match = data.rows.find(
+      r =>
+        r.storeId === adDrill.storeId &&
+        r.platform === adDrill.platform &&
+        r.campaignId === adDrill.campaignId &&
+        r.adSetId === adDrill.adSetId,
+    );
+    if (match?.adSetName) {
+      setAdDrill({ ...adDrill, adSetName: match.adSetName });
+    }
+  }, [adDrill, data]);
+
+  // Push CampaignsTable's tab-local state into the URL whenever it changes so
+  // refresh / bookmark / share keeps the operator on the same view.
+  // (`syncTabLocalUrl` only updates the `c_*` params — preserves global state.)
+  // Phase 12.5.x (2026-05-24) — also serialize mode, sort, drill, and adDrill
+  // so refresh restores the full view (not just filters). adDrill is only
+  // serialized for Meta/TikTok (Google ad-drill is not a valid state per the
+  // row click handler — CampaignsTableRow.tsx guards it).
+  // Effect placed AFTER the drill-state declarations to avoid TDZ — moved here
+  // from above for that reason.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const platformParam =
+      platform === 'all' ? 'all' :
+      platform === 'Meta' ? 'meta' :
+      platform === 'Google' ? 'google' :
+      platform === 'TikTok' ? 'tiktok' : 'all';
+    syncTabLocalUrl('campaigns', {
+      store: localStore,
+      platform: platformParam,
+      preset: 'custom',
+      range: localRange,
+      mode,
+      sortKey,
+      sortDir,
+      drill:
+        drillCampaignId && drillPlatform && drillStoreId
+          ? {
+              storeId: drillStoreId,
+              platform: drillPlatform,
+              campaignId: drillCampaignId,
+            }
+          : undefined,
+      adDrill:
+        adDrill && (adDrill.platform === 'Meta' || adDrill.platform === 'TikTok')
+          ? {
+              storeId: adDrill.storeId,
+              platform: adDrill.platform,
+              campaignId: adDrill.campaignId,
+              adSetId: adDrill.adSetId,
+            }
+          : undefined,
+    }, globalStore);
+  }, [
+    localStore,
+    platform,
+    localRange.from,
+    localRange.to,
+    globalStore,
+    mode,
+    sortKey,
+    sortDir,
+    drillCampaignId,
+    drillPlatform,
+    drillStoreId,
+    adDrill,
+  ]);
   // (localRange and its sync-effect moved above the useSWR calls — see CR-02.)
 
   const today = todayInIsrael();

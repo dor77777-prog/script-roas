@@ -78,12 +78,29 @@ export function readDashboardState(
   };
 }
 
+/** Param names this module owns. Anything else in the URL is preserved
+ *  (per-tab `c_*` / `p_*` written by syncTabLocalUrl, drill state, etc.). */
+const GLOBAL_PARAMS = new Set(['tab', 'preset', 'from', 'to', 'store']);
+
 /**
  * Build a search string for the current state, omitting defaults so the URL
  * stays clean ("/" not "/?tab=home&preset=yesterday&store=All").
+ *
+ * Phase 12.5.x (2026-05-24) — `existingSearch` is the current URL query so
+ * we PRESERVE params not in GLOBAL_PARAMS. Previously this function built a
+ * fresh URLSearchParams() and silently wiped per-tab params written by
+ * `syncTabLocalUrl` (c_*, p_*) — refresh then read defaults because the
+ * params Dashboard's parent effect had stripped were no longer in the URL.
  */
-export function writeDashboardState(state: DashboardState): string {
-  const params = new URLSearchParams();
+export function writeDashboardState(
+  state: DashboardState,
+  existingSearch: string = '',
+): string {
+  const raw = existingSearch.startsWith('?') ? existingSearch.slice(1) : existingSearch;
+  const params = new URLSearchParams(raw);
+  // Reset only the params this module owns; leave c_* / p_* and any future
+  // per-component params alone.
+  for (const k of GLOBAL_PARAMS) params.delete(k);
   if (state.tab !== 'home') params.set('tab', state.tab);
   if (state.filters.preset !== 'this_month') params.set('preset', state.filters.preset);
   if (state.filters.preset === 'custom') {
@@ -102,8 +119,8 @@ export function writeDashboardState(state: DashboardState): string {
  */
 export function syncUrl(state: DashboardState) {
   if (typeof window === 'undefined') return;
-  const next = writeDashboardState(state);
   const current = window.location.search;
+  const next = writeDashboardState(state, current);
   if (current === next) return;
   const url = window.location.pathname + next + window.location.hash;
   window.history.replaceState(null, '', url);
@@ -120,6 +137,30 @@ export function syncUrl(state: DashboardState) {
  * the URL so the query string stays short.
  */
 
+/**
+ * CampaignDrawer drill-down identity (mode='campaign' → click row).
+ * Encoded in URL as `c_drill=storeId::Platform::campaignId`.
+ */
+export type CampaignDrillState = {
+  storeId: string;
+  platform: string;
+  campaignId: string;
+};
+
+/**
+ * AdsDrawer drill-down identity (mode='adset' → click row).
+ * Encoded in URL as `c_adDrill=storeId::Platform::campaignId::adSetId`.
+ * adSetName is intentionally NOT in the URL — the drawer re-reads it from
+ * `data.rows` once the IDs match (avoids URL-encoding free-text + keeps
+ * the param short).
+ */
+export type AdDrillState = {
+  storeId: string;
+  campaignId: string;
+  adSetId: string;
+  platform: 'Meta' | 'TikTok';
+};
+
 export type TabLocalState = {
   /** Per-tab store override (defaults to the global store filter). */
   store?: string;
@@ -129,6 +170,27 @@ export type TabLocalState = {
   preset?: PresetKey;
   /** Per-tab custom range. Only honored when preset === 'custom'. */
   range?: DateRange;
+  /**
+   * Phase 12.5.x (2026-05-24) — campaigns tab only. View mode (campaign /
+   * adset). Default 'campaign' is omitted from the URL to keep it tidy.
+   */
+  mode?: 'campaign' | 'adset';
+  /**
+   * Phase 12.5.x (2026-05-24) — campaigns tab only. Sort key + direction.
+   * Default ('roas' / 'desc') is omitted from the URL.
+   */
+  sortKey?: string;
+  sortDir?: 'asc' | 'desc';
+  /**
+   * Phase 12.5.x (2026-05-24) — campaigns tab only. Opened CampaignDrawer
+   * identity. Set when the operator clicked a campaign row.
+   */
+  drill?: CampaignDrillState;
+  /**
+   * Phase 12.5.x (2026-05-24) — campaigns tab only. Opened AdsDrawer
+   * identity. Set when the operator clicked an ad-set row (mode='adset').
+   */
+  adDrill?: AdDrillState;
 };
 
 const TAB_PREFIX: Record<'campaigns' | 'products', string> = {
@@ -174,6 +236,50 @@ export function readTabLocalState(
       // for "last_7_days" reflects the *current* last-7-days, not the
       // window it was saved.
       out.range = computePresetRange(out.preset);
+    }
+  }
+
+  // Phase 12.5.x (2026-05-24) — campaigns-tab-only extras: mode, sort,
+  // drill, adDrill. Each is silently ignored when malformed (no throw —
+  // we never want a stale URL to break the dashboard on load).
+  if (tab === 'campaigns') {
+    const mode = params.get(`${prefix}_mode`);
+    if (mode === 'campaign' || mode === 'adset') out.mode = mode;
+
+    const sortKey = params.get(`${prefix}_sort`);
+    if (sortKey && sortKey.trim().length > 0) out.sortKey = sortKey;
+    const sortDir = params.get(`${prefix}_sortDir`);
+    if (sortDir === 'asc' || sortDir === 'desc') out.sortDir = sortDir;
+
+    const drillRaw = params.get(`${prefix}_drill`);
+    if (drillRaw) {
+      const parts = drillRaw.split('::');
+      if (parts.length === 3 && parts[0] && parts[1] && parts[2]) {
+        out.drill = {
+          storeId: parts[0],
+          platform: parts[1],
+          campaignId: parts[2],
+        };
+      }
+    }
+
+    const adDrillRaw = params.get(`${prefix}_adDrill`);
+    if (adDrillRaw) {
+      const parts = adDrillRaw.split('::');
+      if (
+        parts.length === 4 &&
+        parts[0] &&
+        (parts[1] === 'Meta' || parts[1] === 'TikTok') &&
+        parts[2] &&
+        parts[3]
+      ) {
+        out.adDrill = {
+          storeId: parts[0],
+          platform: parts[1] as 'Meta' | 'TikTok',
+          campaignId: parts[2],
+          adSetId: parts[3],
+        };
+      }
     }
   }
 
@@ -236,6 +342,35 @@ export function syncTabLocalUrl(
     existing.delete(`${prefix}_preset`);
     existing.delete(`${prefix}_from`);
     existing.delete(`${prefix}_to`);
+  }
+
+  // Phase 12.5.x (2026-05-24) — campaigns-tab-only extras.
+  if (tab === 'campaigns') {
+    writeOrDelete(
+      `${prefix}_mode`,
+      state.mode && state.mode !== 'campaign' ? state.mode : undefined,
+    );
+    // Default sort = roas DESC. Only serialize deviations.
+    writeOrDelete(
+      `${prefix}_sort`,
+      state.sortKey && state.sortKey !== 'roas' ? state.sortKey : undefined,
+    );
+    writeOrDelete(
+      `${prefix}_sortDir`,
+      state.sortDir && state.sortDir !== 'desc' ? state.sortDir : undefined,
+    );
+    writeOrDelete(
+      `${prefix}_drill`,
+      state.drill
+        ? `${state.drill.storeId}::${state.drill.platform}::${state.drill.campaignId}`
+        : undefined,
+    );
+    writeOrDelete(
+      `${prefix}_adDrill`,
+      state.adDrill
+        ? `${state.adDrill.storeId}::${state.adDrill.platform}::${state.adDrill.campaignId}::${state.adDrill.adSetId}`
+        : undefined,
+    );
   }
 
   const next = existing.toString();
