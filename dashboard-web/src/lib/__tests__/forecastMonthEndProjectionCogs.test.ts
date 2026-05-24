@@ -126,14 +126,20 @@ describe('forecastMonthEnd projection COGS rate (HIGH-9 / O3-HI-01)', () => {
       row({ date: earlyMtdDate, revenue: 500, totalSpend: 100, cogs: 90 }),
     ];
     const f = forecastMonthEnd(rows);
-    // last7Rev === 0 → observedCogsRate falls back to 0.25 AND
-    // observedFeesRate falls back to TRANSACTION_FEES_RATE (0.065).
-    // projectedRev = mtdRev (500) + 0 * daysRemaining = 500; same for spend.
-    // projectedNet = 500 - 100 - 500 * 0.25 - 500 * 0.065 = 500 - 100 - 125 - 32.5 = 242.5.
-    // The KEY assertion is that the function doesn't NaN/Infinity out
-    // when the window is empty.
+    // Updated 2026-05-24 (AUDIT insights ALG-01, Phase 12.2.2):
+    // projectedNet now preserves actual MTD COGS (90, not 500*0.25=125)
+    // and extrapolates ONLY the remaining days. With last-7 empty,
+    // dailyAvgCogs falls back to dailyAvgRev * 0.25 = 0 * 0.25 = 0,
+    // so projectedCogs = mtdCogs + 0 * daysRemaining = 90 (NOT 125).
+    // Similarly projectedFees = mtdFees + 0 = 500 * 0.065 = 32.5
+    // (NOT 500 * 0.065 freshly applied — same value here by
+    // coincidence because no remaining-day rate to add).
+    // projectedNet = 500 - 100 - 90 - 32.5 = 277.5.
+    // Pre-fix 242.5 was the BUGGY value (rewrote 90 → 125 by applying
+    // 25% to the WHOLE projectedRev including MTD). Evidence:
+    // raw-returns/lib_algorithm_insights.json (ALG-01).
     expect(Number.isFinite(f.projectedNet)).toBe(true);
-    expect(f.projectedNet).toBeCloseTo(242.5, 6);
+    expect(f.projectedNet).toBeCloseTo(277.5, 6);
   });
 
   it('mixed rates across the 7-day window blend into the projection naturally', () => {

@@ -528,21 +528,44 @@ export function forecastMonthEnd(rows: DailyRow[]): {
   const dailyAvgSpend = last7Spend / last7DaysCount;
   const projectedRev = mtdRev + dailyAvgRev * daysRemaining;
   const projectedSpend = mtdSpend + dailyAvgSpend * daysRemaining;
-  // Audit fix 2026-05-23 (HIGH-9 / O3-HI-01): derive the projection's COGS
-  // rate from the observed last-7 window so MTD (which uses per-store
-  // `r.cogs` from the writer) and the projection use the same effective
-  // rate. Before this, MTD reflected per-store calibration (e.g.
-  // usmile360 at 18%) but the projection multiplied projectedRev by the
-  // global 25% — guaranteeing a wedge between the two halves of the
-  // same forecast card. Fall back to the global constant only when the
-  // last-7 window had zero revenue (no signal to derive from).
-  const observedCogsRate =
-    last7Rev > 0 ? last7Cogs / last7Rev : COGS_RATE_OF_REVENUE;
-  // Audit fix 2026-05-23 (HIGH-NEW-2 / Codex): observed transaction-fee
-  // rate from the same baseline window. Fall back to the global default
-  // (TRANSACTION_FEES_RATE) when there's no signal.
-  const observedFeesRate =
-    last7Rev > 0 ? last7Fees / last7Rev : TRANSACTION_FEES_RATE;
+  // AUDIT insights ALG-01 (2026-05-24, Phase 12.2.2): projectedNet
+  // preserves actual MTD COGS + fees, only extrapolates the REMAINING
+  // days using the last-7-window daily-average rate. Pre-fix
+  // `projectedRev * observedCogsRate` applied the last-7 rate to the
+  // WHOLE projected month — including the MTD portion that already
+  // happened at a (potentially different) rate. So an early-MTD day
+  // with 25% COGS got rewritten to the baseline's 10% in the
+  // projection, producing a projectedNet that contradicted what
+  // already happened.
+  //
+  // Composes with the Phase 12.1's HIGH-9 / O3-HI-01 fix (which switched
+  // from the global COGS_RATE_OF_REVENUE to the observed last-7 rate):
+  // the MTD totals still come from the per-row writer values
+  // (`mtdAgg.cogs` includes per-store calibration), and the REMAINING-
+  // days extrapolation still uses the observed last-7 daily average.
+  // The only behavioral change vs HIGH-9 is the formula's anchor: it
+  // pivots around mtdCogs (actual) instead of projectedRev (which
+  // includes mtdRev and thus would re-apply the rate to it).
+  //
+  // Fallback for zero-baseline windows: dailyAvgCogs uses
+  // `dailyAvgRev * COGS_RATE_OF_REVENUE` (same constant as pre-fix
+  // fallback). dailyAvgFees similarly falls back to
+  // `dailyAvgRev * TRANSACTION_FEES_RATE`. mtdCogs is preserved
+  // regardless of baseline state — never zeroed.
+  //
+  // Evidence: raw-returns/lib_algorithm_insights.json (ALG-01).
+  const dailyAvgCogs =
+    last7Rev > 0 ? last7Cogs / last7DaysCount : dailyAvgRev * COGS_RATE_OF_REVENUE;
+  const dailyAvgFees =
+    last7Rev > 0 ? last7Fees / last7DaysCount : dailyAvgRev * TRANSACTION_FEES_RATE;
+  // mtdFees mirrors the aggregate() global-path behavior used by
+  // mtdNet (see HIGH-NEW-2 / Codex). We re-derive it here from the
+  // per-row sum so that mtdCogs and mtdFees use parallel construction
+  // for the projection anchor.
+  let mtdFees = 0;
+  for (const r of mtdRows) {
+    mtdFees += r.revenue * getTransactionFeesRateForStore(r.storeId);
+  }
   // Audit fix 2026-05-23 (HIGH-NEW-2 / Codex): fixed costs for the full
   // month from billingForRange. Fixed costs are monthly allocations that
   // do NOT scale with daily revenue — projecting them via the 7-day
@@ -568,11 +591,15 @@ export function forecastMonthEnd(rows: DailyRow[]): {
           storeNames: storesForBilling,
         }).total
       : 0;
+  // INSIGHTS-ALG-01 (Phase 12.2.2): preserve MTD costs, extrapolate only
+  // the remaining days. See block comment above for the full rationale.
+  const projectedCogs = mtdCogs + dailyAvgCogs * daysRemaining;
+  const projectedFees = mtdFees + dailyAvgFees * daysRemaining;
   const projectedNet =
     projectedRev
     - projectedSpend
-    - projectedRev * observedCogsRate
-    - projectedRev * observedFeesRate
+    - projectedCogs
+    - projectedFees
     - projectedFixedCosts;
   const projectedRoas = projectedSpend > 0 ? projectedRev / projectedSpend : 0;
 
