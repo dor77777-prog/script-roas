@@ -85,7 +85,17 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
   // Aggregate campaigns → Aggregated[] for the pure function.
   const aggregated = useMemo(() => {
     if (isAllStores || !campaignsData?.rows) return [];
-    return aggregate(campaignsData.rows, 'campaign', storeId, 'all', range);
+    // Phase 12.5.x (2026-05-24) — pass currentEffectiveStatus so the
+    // product-centric view's "כבוי" indicators reflect the current platform
+    // state, not the in-range stale status. Same fix as CampaignsTable.
+    return aggregate(
+      campaignsData.rows,
+      'campaign',
+      storeId,
+      'all',
+      range,
+      campaignsData.currentEffectiveStatus,
+    );
   }, [campaignsData, storeId, range, isAllStores]);
 
   // Sum net revenue per product (across days) + collect titles.

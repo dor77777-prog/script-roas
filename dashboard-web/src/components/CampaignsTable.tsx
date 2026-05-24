@@ -475,7 +475,18 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
 
   const aggregated = useMemo(() => {
     if (!data) return [];
-    const list = aggregate(data.rows, mode, localStore, platform, localRange);
+    // Phase 12.5.x (2026-05-24) — pass `currentEffectiveStatus` so the
+    // aggregator can override stale in-range status with the absolute-latest
+    // DB snapshot. Fixes the "כבוי" chip not appearing for TikTok campaigns
+    // paused after the operator's viewing range ended.
+    const list = aggregate(
+      data.rows,
+      mode,
+      localStore,
+      platform,
+      localRange,
+      data.currentEffectiveStatus,
+    );
     return sortAggregated(list, mode, sortKey, sortDir);
   }, [data, mode, localStore, platform, localRange, sortKey, sortDir]);
 

@@ -690,6 +690,76 @@ export async function fetchCampaignsFromPostgres(
 }
 
 // ────────────────────────────────────────────────────────────────────────
+// 5b. fetchCurrentCampaignStatuses — latest non-null effective_status per
+//     (store, platform, campaign, ad_set) across the last 60 days, regardless
+//     of any operator-selected range.
+//
+//     Phase 12.5.x (2026-05-24): the dashboard's "כבוי" chip used to derive
+//     off-state from the chronologically-latest row INSIDE the operator's
+//     selected range. That worked iff cron-live's UPDATE pass had refreshed
+//     in-range historical rows to the platform's current status. When that
+//     refresh lagged (or soft-failed for TikTok, which has the most
+//     fragile fetcher), the chip stayed silent on a paused campaign.
+//
+//     This helper decouples the chip from the in-range data: it returns the
+//     ABSOLUTE-latest status the DB has seen for each key. Aggregator uses it
+//     to override the (possibly stale) in-range latest. cron-live still
+//     keeps the rows in sync, but the chip is now correct even if cron-live
+//     lags by hours.
+//
+//     60-day lookback is plenty: cron-live updates EVERY historical row
+//     every ~10 min (Phase 12.5, see cronLive.ts:1019), so any enrolled
+//     ad-set has a fresh-status row within minutes. Older rows would be
+//     redundant — the latest one always wins in the dedup loop below.
+//     Campaigns that haven't been touched in >60 days fall back to the
+//     in-range latest (existing behavior).
+// ────────────────────────────────────────────────────────────────────────
+
+/**
+ * Map key shape: `storeId::Platform::campaignId::adSetId`. Platform is
+ * TitleCase to match `CampaignRow.platform` so the aggregator can look up
+ * by the same key it already builds.
+ *
+ * Soft-fail: a query error returns an empty map. The aggregator's existing
+ * in-range logic still produces a status — this helper is an enhancement,
+ * not a hard dependency.
+ */
+export async function fetchCurrentCampaignStatuses(): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  const sinceMs = Date.now() - 60 * 86_400_000;
+  const since = new Date(sinceMs).toISOString().slice(0, 10);
+  let data: DbRow[];
+  try {
+    data = await paginate<DbRow>(() => {
+      return getSupabase()
+        .from('campaigns_daily')
+        .select('store_id, platform, campaign_id, ad_set_id, effective_status, date')
+        .not('effective_status', 'is', null)
+        .gte('date', since)
+        .order('date', { ascending: false });
+    });
+  } catch (e) {
+    console.warn(`postgresReaders.fetchCurrentCampaignStatuses: ${(e as Error).message}`);
+    return out;
+  }
+  const seen = new Set<string>();
+  for (const r of data) {
+    const platform = titleCasePlatform(r.platform);
+    const storeId = String(r.store_id ?? '');
+    const campaignId = String(r.campaign_id ?? '');
+    const adSetId = String(r.ad_set_id ?? '');
+    if (!storeId || !campaignId) continue;
+    const key = `${storeId}::${platform}::${campaignId}::${adSetId}`;
+    if (seen.has(key)) continue;
+    const status = String(r.effective_status ?? '').trim();
+    if (!status) continue;
+    seen.add(key);
+    out[key] = status;
+  }
+  return out;
+}
+
+// ────────────────────────────────────────────────────────────────────────
 // 6. fetchAdsFromPostgres — ads_daily → AdRow[]
 //    Mirrors ads.ts:fetchAdsData (line 71)
 // ────────────────────────────────────────────────────────────────────────

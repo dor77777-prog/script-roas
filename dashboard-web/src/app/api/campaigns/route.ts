@@ -3,6 +3,7 @@ import type { CampaignRow } from '@/lib/campaigns';
 import {
   fetchCampaignsFromPostgres,
   fetchCampaignsDailyLastWriteAt,
+  fetchCurrentCampaignStatuses,
 } from '@/lib/postgresReaders';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
@@ -21,6 +22,18 @@ export type CampaignsResponse = {
    * (server fetch time). Used by the per-tab freshness chip.
    */
   dataLastWriteAt: string | null;
+  /**
+   * Phase 12.5.x (2026-05-24) — current platform-native status per
+   * (store, platform, campaign, ad_set) key. Map key shape:
+   *   `${storeId}::${Platform}::${campaignId}::${adSetId}`
+   * "Current" = chronologically latest non-null effective_status in
+   * campaigns_daily across the last 60 days, REGARDLESS of the operator's
+   * selected range. The aggregator uses this to override the stale
+   * in-range status when a campaign was active in-range but is now off.
+   * Empty object on the soft-fail path (the chip falls back to in-range
+   * latest, same behavior as before this map was added).
+   */
+  currentEffectiveStatus: Record<string, string>;
   /** Present only on the degraded-error path (rows: []). Consumers that
    *  surface "synced N min ago" should treat the response as data-less when
    *  this is set, even though rows + lastUpdated still satisfy the type. */
@@ -42,9 +55,13 @@ export async function GET(req: Request) {
   }
 
   try {
-    const [rows, dataLastWriteAt] = await Promise.all([
+    // Phase 12.5.x (2026-05-24): fan out 3 parallel reads. `fetchCurrentCampaignStatuses`
+    // is independent of `range` — it scans the last 60 days globally — so it
+    // runs alongside the in-range reads without blocking them.
+    const [rows, dataLastWriteAt, currentEffectiveStatus] = await Promise.all([
       fetchCampaignsFromPostgres({ range }),
       fetchCampaignsDailyLastWriteAt({ range }),
+      fetchCurrentCampaignStatuses(),
     ]);
     if (rows.length > 50000) {
       console.warn(`/api/campaigns: large response (${rows.length} rows) — consider pagination`);
@@ -53,6 +70,7 @@ export async function GET(req: Request) {
       rows,
       lastUpdated: new Date().toISOString(),
       dataLastWriteAt,
+      currentEffectiveStatus,
     };
     return NextResponse.json(body, {
       headers: { 'Cache-Control': cacheControl('campaigns') },
@@ -65,6 +83,7 @@ export async function GET(req: Request) {
         rows: [],
         lastUpdated: new Date().toISOString(),
         dataLastWriteAt: null,
+        currentEffectiveStatus: {},
         error: userFacingError(message),
       } satisfies CampaignsResponse,
       { status: 200, headers: { 'Cache-Control': 'no-store' } },

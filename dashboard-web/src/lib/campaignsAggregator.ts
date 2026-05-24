@@ -2,9 +2,33 @@
 // Preserve the existing FIX-06 second-pass normalization and FIX-13 strict > policy.
 import type { CampaignRow } from './campaigns';
 import type { DateRange } from './dateRange';
+import { TIKTOK_ACTIVE_ENOUGH } from './platformConfig';
 
 export type AggregateMode = 'campaign' | 'adset';
 export type AggregatePlatformFilter = 'all' | 'Meta' | 'Google' | 'TikTok';
+
+/**
+ * Phase 12.5.x (2026-05-24) — does this `effectiveStatus` value mean the
+ * campaign/ad-set is CURRENTLY delivering (or about to deliver)?
+ *
+ * Mirrors the "active half" of `CampaignsTableRow.isCampaignOff` but inverted:
+ *   - Meta:   'ACTIVE'
+ *   - Google: 'ENABLED'
+ *   - TikTok: anything in TIKTOK_ACTIVE_ENOUGH (delivering / preparing)
+ *
+ * Used by the campaign-mode roll-up below to pick the "most active" status
+ * across a campaign's ad-sets. We can't import from CampaignsTableRow.tsx
+ * (it's a "use client" component); the OFF set lives there only because the
+ * row chip imports it.
+ */
+function isStatusActive(platform: string, status: string): boolean {
+  const platformNorm = platform.toLowerCase();
+  const norm = status.trim().toUpperCase();
+  if (platformNorm === 'meta') return norm === 'ACTIVE';
+  if (platformNorm === 'google') return norm === 'ENABLED';
+  if (platformNorm === 'tiktok') return TIKTOK_ACTIVE_ENOUGH.has(norm);
+  return false;
+}
 
 export type Aggregated = {
   key: string;
@@ -51,6 +75,19 @@ export function aggregate(
   storeFilter: string,
   platformFilter: AggregatePlatformFilter,
   range: DateRange,
+  /**
+   * Phase 12.5.x (2026-05-24) — optional map of CURRENT platform-native
+   * statuses, keyed by `${storeId}::${Platform}::${campaignId}::${adSetId}`.
+   * Returned by /api/campaigns (`fetchCurrentCampaignStatuses`) and reflects
+   * the absolute-latest status DB-wide, NOT bounded by `range`. When supplied,
+   * the post-pass below overrides each aggregate's `effectiveStatus` with
+   * this map's value. Decouples the "כבוי" chip from cron-live latency: a
+   * campaign paused yesterday shows the chip even on last-month views,
+   * regardless of whether cron-live has refreshed the in-range historical
+   * rows yet. Omitted → existing in-range-latest behavior, fully backwards
+   * compatible.
+   */
+  currentEffectiveStatus?: Record<string, string>,
 ): Aggregated[] {
   const map = new Map<string, Aggregated>();
   // Per-key "latest budget date" trackers so overwrite depends on the row's
@@ -172,6 +209,56 @@ export function aggregate(
   for (const a of map.values()) {
     if (a.budgetType === 'ABO') a.campaignBudgetCad = null;
     if (a.budgetType === 'CBO') a.adSetBudgetCad = null;
+  }
+  // Phase 12.5.x (2026-05-24) — override effectiveStatus with the absolute-
+  // latest DB status (per `currentEffectiveStatus`), so the "כבוי" chip
+  // reflects "currently off in the platform", not "the in-range status as
+  // of when the rows were last written". See param JSDoc above for the
+  // operator-reported TikTok case this fixes.
+  //
+  // Mode handling:
+  //   - 'adset': direct lookup by `storeId::Platform::campaignId::adSetId`.
+  //   - 'campaign': roll up the campaign's ad-sets. The campaign is "active"
+  //     if ANY ad-set is currently delivering; otherwise "off" (use the
+  //     first non-null status as the off-marker for the chip).
+  //
+  // If no entry exists for the key/campaign, we leave the in-range
+  // status unchanged (handles 60-day-old paused campaigns + soft-fail).
+  if (currentEffectiveStatus && Object.keys(currentEffectiveStatus).length > 0) {
+    if (mode === 'adset') {
+      for (const a of map.values()) {
+        const key = `${a.storeId}::${a.platform}::${a.campaignId}::${a.adSetId ?? ''}`;
+        const cur = currentEffectiveStatus[key];
+        if (cur) a.effectiveStatus = cur;
+      }
+    } else {
+      // Index the map by campaign prefix so each campaign rolls up in O(M)
+      // total rather than O(N×M) per-aggregate scans.
+      const byCampaign = new Map<string, string[]>();
+      for (const [k, status] of Object.entries(currentEffectiveStatus)) {
+        const parts = k.split('::');
+        if (parts.length !== 4) continue;
+        const campKey = `${parts[0]}::${parts[1]}::${parts[2]}`;
+        let bucket = byCampaign.get(campKey);
+        if (!bucket) {
+          bucket = [];
+          byCampaign.set(campKey, bucket);
+        }
+        bucket.push(status);
+      }
+      for (const a of map.values()) {
+        const campKey = `${a.storeId}::${a.platform}::${a.campaignId}`;
+        const statuses = byCampaign.get(campKey);
+        if (!statuses || statuses.length === 0) continue;
+        // Prefer any "currently active" status across the campaign's ad-sets;
+        // fall back to the first (off) status. This matches the platform's
+        // own roll-up semantics — Meta/Google/TikTok all show a campaign
+        // as "Active" in their managers as long as one child entity is
+        // delivering.
+        const active = statuses.find(s => isStatusActive(a.platform, s));
+        a.effectiveStatus = active ?? statuses[0];
+      }
+    }
   }
   return Array.from(map.values());
 }
