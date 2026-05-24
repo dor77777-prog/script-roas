@@ -104,3 +104,5 @@ utm_source=meta&utm_medium=paid_social&utm_campaign={{campaign.name}}
 ## Historical note
 
 עד Phase 11 (2026-05-24) המערכת רצה ב-2 שכבות — Apps Script (Google Sheets writer) + Next.js (Sheets reader). ההגירה ל-Supabase Postgres הושלמה ב-Phase 05.7.0 (`READ_FROM=postgres` permanent), ו-Phase 11 הסירה את שכבת ה-Apps Script לחלוטין. SYSTEM_OVERVIEW.md מכיל note היסטורי בראש שמסביר את הארכיטקטורה הישנה.
+
+<!-- Phase 13.3 auto-deploy verification 2026-05-24 -->
