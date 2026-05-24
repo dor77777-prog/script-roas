@@ -2,33 +2,9 @@
 // Preserve the existing FIX-06 second-pass normalization and FIX-13 strict > policy.
 import type { CampaignRow } from './campaigns';
 import type { DateRange } from './dateRange';
-import { TIKTOK_ACTIVE_ENOUGH } from './platformConfig';
 
 export type AggregateMode = 'campaign' | 'adset';
 export type AggregatePlatformFilter = 'all' | 'Meta' | 'Google' | 'TikTok';
-
-/**
- * Phase 12.5.x (2026-05-24) — does this `effectiveStatus` value mean the
- * campaign/ad-set is CURRENTLY delivering (or about to deliver)?
- *
- * Mirrors the "active half" of `CampaignsTableRow.isCampaignOff` but inverted:
- *   - Meta:   'ACTIVE'
- *   - Google: 'ENABLED'
- *   - TikTok: anything in TIKTOK_ACTIVE_ENOUGH (delivering / preparing)
- *
- * Used by the campaign-mode roll-up below to pick the "most active" status
- * across a campaign's ad-sets. We can't import from CampaignsTableRow.tsx
- * (it's a "use client" component); the OFF set lives there only because the
- * row chip imports it.
- */
-function isStatusActive(platform: string, status: string): boolean {
-  const platformNorm = platform.toLowerCase();
-  const norm = status.trim().toUpperCase();
-  if (platformNorm === 'meta') return norm === 'ACTIVE';
-  if (platformNorm === 'google') return norm === 'ENABLED';
-  if (platformNorm === 'tiktok') return TIKTOK_ACTIVE_ENOUGH.has(norm);
-  return false;
-}
 
 /**
  * Phase 12.5.x (2026-05-24) — "parent-disabled" marker statuses. These can
@@ -59,6 +35,20 @@ function isParentDisabled(platform: string, status: string): boolean {
   if (platformNorm === 'meta') return norm === 'CAMPAIGN_PAUSED';
   if (platformNorm === 'tiktok') return norm === 'ADGROUP_STATUS_CAMPAIGN_DISABLE';
   return false;
+}
+
+/**
+ * Phase 12.5.x (2026-05-24, operator clarification) — platform-canonical
+ * "active" status, used to force the campaign-mode off-chip OFF when no
+ * parent-disabled marker is present. Returns null for unknown platforms
+ * (caller leaves the in-range latest value untouched).
+ */
+function activeMarkerForPlatform(platform: string): string | null {
+  const platformNorm = platform.toLowerCase();
+  if (platformNorm === 'meta') return 'ACTIVE';
+  if (platformNorm === 'google') return 'ENABLED';
+  if (platformNorm === 'tiktok') return 'ADGROUP_STATUS_DELIVERY_OK';
+  return null;
 }
 
 export type Aggregated = {
@@ -281,24 +271,37 @@ export function aggregate(
         const campKey = `${a.storeId}::${a.platform}::${a.campaignId}`;
         const statuses = byCampaign.get(campKey);
         if (!statuses || statuses.length === 0) continue;
-        // Priority order (Phase 12.5.x — 2026-05-24):
-        //   1. Any "parent-disabled" status → campaign is OFF. This beats
-        //      a single stale ACTIVE child during cron-live's UPDATE
-        //      propagation window (e.g. one ad-set out of 30 still says
-        //      ACTIVE while the rest say CAMPAIGN_PAUSED — the campaign
-        //      IS paused; surfacing ACTIVE would be a lie).
-        //   2. Any active status → campaign is ACTIVE. Matches the
-        //      platform's own roll-up ("any child delivering → parent
-        //      delivering").
-        //   3. Fall back to the first off status — all children paused
-        //      individually but not at parent level (rare).
+        // Phase 12.5.x (2026-05-24, operator clarification):
+        //   "Ad-set off ≠ campaign off. Even if an ad-set is on, a paused
+        //    PARENT is stronger and forces no delivery."
+        //
+        // The off chip on a CAMPAIGN row reflects the parent campaign's
+        // pause state — NOT an aggregate of its ad-sets' states. Rule:
+        //
+        //   1. ANY child has a "parent-disabled" status (Meta:
+        //      CAMPAIGN_PAUSED, TikTok: ADGROUP_STATUS_CAMPAIGN_DISABLE)
+        //      → operator paused at the campaign level → off chip.
+        //      Authoritative even if other children still report ACTIVE
+        //      (cron-live's UPDATE pass propagates ad-set-by-ad-set;
+        //      one stale ACTIVE child should not mask the campaign pause).
+        //
+        //   2. Otherwise → campaign is RUNNING (per the platform). Some
+        //      ad-sets might be individually paused (status='PAUSED' on
+        //      Meta, 'ADGROUP_STATUS_DISABLE' on TikTok), but that does
+        //      not mean the campaign is off — the operator paused those
+        //      ad-sets, not the campaign. Force an active marker so the
+        //      off chip does not fire in campaign mode.
+        //
+        // In ad-set mode each row has its OWN status (not rolled up), so
+        // the off chip there continues to reflect the ad-set's own pause
+        // — that's the right level of granularity for that view.
         const parentDisabled = statuses.find(s => isParentDisabled(a.platform, s));
         if (parentDisabled) {
           a.effectiveStatus = parentDisabled;
-          continue;
+        } else {
+          const activeMarker = activeMarkerForPlatform(a.platform);
+          if (activeMarker) a.effectiveStatus = activeMarker;
         }
-        const active = statuses.find(s => isStatusActive(a.platform, s));
-        a.effectiveStatus = active ?? statuses[0];
       }
     }
   }
