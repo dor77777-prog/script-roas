@@ -760,9 +760,20 @@ export function generateAiReport({
   // ===== Top campaigns =====
   out.push('## קמפיינים — מובילים לפי ROAS');
   out.push('');
+  // AUDIT ALG-04 + ALG-05 + ALG-06 (2026-05-24, Phase 12.1.2): surface
+  // storeId on the aggregated value shape so every downstream key
+  // construction (statusByCampaign, ordersByCampaignId, detById,
+  // adsetsByCampaign drill-down, adAgg drill-down) is storeId-scoped.
+  // Pre-fix the value object dropped storeId, forcing downstream
+  // consumers to use suffix-scan find() / `${platform}::${campaignId}`
+  // keys that silently merged data across stores in the operator's
+  // default 'All' view. Evidence:
+  // .planning/phases/12-codebase-audit-baseline/raw-returns/lib_algorithm_aiReport.json
+  // (ALG-04 lines 38-44, ALG-05 lines 47-53, ALG-06 lines 56-63)
   const campaignAgg = new Map<
     string,
     {
+      storeId: string;
       name: string;
       store: string;
       platform: string;
@@ -778,6 +789,7 @@ export function generateAiReport({
     const k = `${c.storeId}::${c.platform}::${c.campaignId}`;
     if (!campaignAgg.has(k)) {
       campaignAgg.set(k, {
+        storeId: c.storeId,
         name: c.campaignName,
         store: c.storeName,
         platform: c.platform,
@@ -836,6 +848,14 @@ export function generateAiReport({
   // view-through) vs UNDER-reporting (iOS 14 ATT) — the operator's
   // actual "should I trust this ROAS?" calibration per campaign.
   if (orders.length > 0 && campaigns.length > 0) {
+    // AUDIT ALG-05 (2026-05-24, Phase 12.1.2): storeId-scoped composite key
+    // (`${o.storeId}::${id}` / `${o.storeId}::${name.toLowerCase()}`) so two
+    // stores sharing utm_id or utm_campaign='Brand' don't merge revenue in
+    // the operator's default storeName='All' view. Pre-fix: same id/name
+    // across stores double-counted at the row level, inflating Pixel↔Shopify
+    // trust and Health Score deterministic coverage. Evidence:
+    // .planning/phases/12-codebase-audit-baseline/raw-returns/lib_algorithm_aiReport.json (ALG-05)
+    //
     // Pre-bucket orders by their utmId / utmCampaign so the per-campaign
     // lookup is O(1). utmId wins when present (immutable platform ID);
     // utmCampaign by name is the legacy fallback.
@@ -844,12 +864,14 @@ export function generateAiReport({
     for (const o of orders) {
       const id = (o.utmId ?? '').trim();
       const name = (o.utmCampaign ?? '').trim();
-      if (id) ordersByCampaignId.set(id, (ordersByCampaignId.get(id) ?? 0) + o.totalCad);
-      if (name)
-        ordersByCampaignName.set(
-          name.toLowerCase(),
-          (ordersByCampaignName.get(name.toLowerCase()) ?? 0) + o.totalCad,
-        );
+      if (id) {
+        const k = `${o.storeId}::${id}`;
+        ordersByCampaignId.set(k, (ordersByCampaignId.get(k) ?? 0) + o.totalCad);
+      }
+      if (name) {
+        const k = `${o.storeId}::${name.toLowerCase()}`;
+        ordersByCampaignName.set(k, (ordersByCampaignName.get(k) ?? 0) + o.totalCad);
+      }
     }
 
     type CompareRow = {
@@ -866,11 +888,12 @@ export function generateAiReport({
     };
     const rows: CompareRow[] = [];
     for (const c of campaignsList) {
-      // Match by ID first (deterministic), fall back to name. Skip
-      // anything with no campaign ID at all.
+      // AUDIT ALG-05 (2026-05-24, Phase 12.1.2): lookup keyed by storeId
+      // so each campaign's det revenue is its OWN store's matched orders
+      // only — not the merged cross-store sum.
       const det =
-        ordersByCampaignId.get(c.campaignId) ??
-        ordersByCampaignName.get(c.name.toLowerCase()) ??
+        ordersByCampaignId.get(`${c.storeId}::${c.campaignId}`) ??
+        ordersByCampaignName.get(`${c.storeId}::${c.name.toLowerCase()}`) ??
         0;
       const detRoas = c.spend > 0 ? det / c.spend : 0;
       const platformRoas = c.spend > 0 ? c.value / c.spend : 0;
@@ -1076,6 +1099,16 @@ export function generateAiReport({
       e.value += c.conversionValue;
       m.set(c.date, e);
     }
+    // AUDIT ALG-05 (2026-05-24, Phase 12.1.2): parallel det maps —
+    // same storeId-scoped composite key as ordersByCampaignId above
+    // so the synthetic trueRevenueInfo passed into computeCampaignHealth
+    // gets each store's OWN deterministic revenue, not the merged
+    // cross-store sum. Pre-fix this drove Pixel↔Shopify trust scores
+    // and Health Score attribution clarity to the same inflated value
+    // across both stores. Evidence: same raw-returns file as the
+    // ordersByCampaignId fix above (ALG-05 cites BOTH 842-853 AND
+    // 1083-1092).
+    //
     // Order-matching for deterministic revenue (reuse the buckets from
     // the Pixel↔Shopify comparison if orders are present).
     const detById = new Map<string, number>();
@@ -1083,12 +1116,14 @@ export function generateAiReport({
     for (const o of orders) {
       const id = (o.utmId ?? '').trim();
       const name = (o.utmCampaign ?? '').trim();
-      if (id) detById.set(id, (detById.get(id) ?? 0) + o.totalCad);
-      if (name)
-        detByName.set(
-          name.toLowerCase(),
-          (detByName.get(name.toLowerCase()) ?? 0) + o.totalCad,
-        );
+      if (id) {
+        const k = `${o.storeId}::${id}`;
+        detById.set(k, (detById.get(k) ?? 0) + o.totalCad);
+      }
+      if (name) {
+        const k = `${o.storeId}::${name.toLowerCase()}`;
+        detByName.set(k, (detByName.get(k) ?? 0) + o.totalCad);
+      }
     }
 
     // Effective-status lookup — latest non-null per campaign.
@@ -1118,17 +1153,22 @@ export function generateAiReport({
     };
     const healthRows: HealthRow[] = [];
     for (const c of campaignsList.slice(0, 25)) {
-      // We don't have a clean storeId in campaignsList (the aggregation
-      // collapses store name only) — find the matching status by
-      // scanning the dailyByKey map prefix.
-      const matchingDailyKey = Array.from(dailyByKey.keys()).find(k =>
-        k.endsWith(`::${c.platform}::${c.campaignId}`),
-      );
-      const status = matchingDailyKey ? (statusByKey.get(matchingDailyKey) ?? null) : null;
+      // AUDIT ALG-06 (2026-05-24, Phase 12.1.2): direct map.get on the
+      // storeId-scoped composite key. Pre-fix Array.from(...).find(k =>
+      // k.endsWith(::${platform}::${campaignId})) returned the FIRST
+      // match across stores, silently giving one store's campaign the
+      // other store's daily series + status. Bonus: removes the O(N²)
+      // suffix scan. Evidence: same raw-returns file (ALG-06 site #1,
+      // lines 1124-1131 of pre-fix aiReport.ts).
+      //
+      // campaignsList rows now carry storeId (foundation fix above), so
+      // the lookup is exact.
+      const composedKey = `${c.storeId}::${c.platform}::${c.campaignId}`;
+      const status = statusByKey.get(composedKey) ?? null;
       const isOff = isStatusOff(status ?? undefined, c.platform);
 
       // Daily series → trajectory.
-      const dailyMap = matchingDailyKey ? dailyByKey.get(matchingDailyKey) : null;
+      const dailyMap = dailyByKey.get(composedKey) ?? null;
       const series: DailyCpmRoasPoint[] = dailyMap
         ? Array.from(dailyMap.entries())
             .filter(([, v]) => v.spend > 0 || v.impressions > 0)
@@ -1141,10 +1181,12 @@ export function generateAiReport({
         : [];
       const trajectory = series.length >= 5 ? analyzeCpmVsRoas(series) : undefined;
 
-      // Deterministic revenue + synthetic trust info.
+      // AUDIT ALG-05 (2026-05-24, Phase 12.1.2): lookup keyed by storeId
+      // so each Health Score row's deterministic revenue input is its
+      // OWN store's matched orders only.
       const det =
-        detById.get(c.campaignId) ??
-        detByName.get(c.name.toLowerCase()) ??
+        detById.get(`${c.storeId}::${c.campaignId}`) ??
+        detByName.get(`${c.storeId}::${c.name.toLowerCase()}`) ??
         0;
       const coverage = c.value > 0 ? Math.min(1, det / c.value) : det > 0 ? 1 : 0;
       const trustScore = Math.round(coverage * 100);
@@ -1175,9 +1217,13 @@ export function generateAiReport({
 
       // Build Aggregated shape — partial OK because computeCampaignHealth
       // only reads spend / conversionValue / conversions for fallbacks.
+      // AUDIT ALG-04/05/06 (2026-05-24, Phase 12.1.2): pass the real
+      // storeId-scoped key + storeId now that the foundation surfaces
+      // them, instead of the pre-fix '' storeId placeholder and
+      // suffix-derived key.
       const agg: Aggregated = {
-        key: matchingDailyKey ?? `${c.platform}::${c.campaignId}`,
-        storeId: '',
+        key: composedKey,
+        storeId: c.storeId,
         storeName: c.store,
         platform: c.platform,
         campaignId: c.campaignId,
@@ -1295,14 +1341,25 @@ export function generateAiReport({
       if (p === 'tiktok') return norm !== 'ADGROUP_STATUS_DELIVERY_OK';
       return false;
     }
+    // AUDIT ALG-04 (2026-05-24, Phase 12.1.2): statusByCampaign keyed
+    // with storeId-scoped composite (`${storeId}::${platform}::${campaignId}`)
+    // so two stores sharing the same (platform, campaignId) don't
+    // overwrite each other's effective_status. Pre-fix: last-write-wins
+    // across stores in the operator's default 'All' view silently
+    // mislabeled one store's campaign with the other's status (e.g.
+    // uzoshop's ACTIVE campaign would show as PAUSED because zolplus's
+    // PAUSED row was written last to the same un-storeId-scoped key).
+    // Evidence: .planning/phases/12-codebase-audit-baseline/
+    //   raw-returns/lib_algorithm_aiReport.json (ALG-04 lines 38-44)
+    //
     // Need to find effective_status per campaign — pull latest from campaigns array.
     const statusByCampaign = new Map<string, string | null>();
     for (const c of campaigns) {
-      const key = `${c.platform}::${c.campaignId}`;
+      const key = `${c.storeId}::${c.platform}::${c.campaignId}`;
       if (c.effectiveStatus) statusByCampaign.set(key, c.effectiveStatus);
     }
     for (const c of campaignsList) {
-      const status = statusByCampaign.get(`${c.platform}::${c.campaignId}`) ?? null;
+      const status = statusByCampaign.get(`${c.storeId}::${c.platform}::${c.campaignId}`) ?? null;
       if (status && isOff(status, c.platform)) {
         offCampaigns.push({
           name: c.name,
@@ -1487,12 +1544,17 @@ export function generateAiReport({
     out.push('## אד-סטים בתוך 5 הקמפיינים עם ההוצאה הגבוהה');
     out.push('');
     for (const c of topCampaignsForDrill) {
-      const cKey = `${c.store === c.platform ? '' : ''}${c.platform}::${c.campaignId}`;
-      // The map key in adsetsByCampaign uses storeId, not storeName. Find it.
-      const matchingKey = Array.from(adsetsByCampaign.keys()).find(k =>
-        k.endsWith(`::${c.platform}::${c.campaignId}`),
-      );
-      const bucket = matchingKey ? adsetsByCampaign.get(matchingKey) : null;
+      // AUDIT ALG-06 + ALG-09 (2026-05-24, Phase 12.1.2): direct map.get
+      // on the storeId-scoped composite key. Pre-fix the matchingKey
+      // suffix scan returned the FIRST match across stores, so two
+      // stores sharing the same (platform, campaignId) both got the
+      // FIRST store's adsets in their drill-down. Also removes the
+      // ALG-09 dead conditional `c.store === c.platform ? '' : ''`
+      // (always-empty cKey that was never read anyway). Evidence:
+      // raw-returns/lib_algorithm_aiReport.json (ALG-06 site #2,
+      // ALG-09).
+      const adsetKey = `${c.storeId}::${c.platform}::${c.campaignId}`;
+      const bucket = adsetsByCampaign.get(adsetKey) ?? null;
       if (!bucket) continue;
 
       out.push(`### ${c.platform} — ${escapeMd(c.name)} (${c.store})`);
@@ -1582,11 +1644,15 @@ export function generateAiReport({
       );
       out.push('');
       for (const c of topCampaignsForDrill) {
-        // The map key in adAgg uses storeId, not storeName. Find it by
-        // matching the suffix (platform::campaignId) — same trick the
-        // ad-set drill-down uses above.
+        // AUDIT ALG-06 (2026-05-24, Phase 12.1.2): filter by exact
+        // storeId-scoped composite key. Pre-fix suffix endsWith()
+        // matched ANY store's ads under (platform, campaignId),
+        // silently merging cross-store creatives into one drill-down.
+        // adAgg.campaignKey is set to `${storeId}::${platform}::${campaignId}`
+        // (no ad-set / ad-id suffix), so === is the correct comparison.
+        const adKey = `${c.storeId}::${c.platform}::${c.campaignId}`;
         const matchingAds = Array.from(adAgg.values())
-          .filter(a => a.campaignKey.endsWith(`::${c.platform}::${c.campaignId}`))
+          .filter(a => a.campaignKey === adKey)
           .map(a => ({
             ...a,
             roas: a.spend > 0 ? a.conversionValue / a.spend : 0,
