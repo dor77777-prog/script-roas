@@ -107,6 +107,12 @@ import {
 import { getFxRate } from '@/lib/fetchers/fx';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { TIKTOK_ACTIVE_ENOUGH } from '@/lib/platformConfig';
+// Phase 12.5.x (2026-05-24) — token-failure alerts. Same wiring as cronDaily;
+// cron-live catches see token expiry first (every 10 min), so the operator
+// gets the alert within ~10 min of the token going dead. notifyTokenFailure
+// is soft-fail + throttled to 1 alert per 6h per (provider, store, operation).
+import { notifyTokenFailure } from '@/lib/notifications/tokenFailures';
+import { isAuthError } from '@/lib/notifications/detectAuthError';
 
 // =============================================================================
 // Constants
@@ -621,9 +627,21 @@ export async function runLiveForStore(
       dates.map((d) =>
         withTimeout(fetchShopifyDayRows(storeId, d), 12_000, `Shopify ${d}`).catch(
           (e) => {
+            const errMsg = e instanceof Error ? e.message : String(e);
             console.warn(
-              `cron-live: Shopify ${storeId} ${d} failed/timed-out: ${e instanceof Error ? e.message : e}`,
+              `cron-live: Shopify ${storeId} ${d} failed/timed-out: ${errMsg}`,
             );
+            if (isAuthError('shopify', errMsg)) {
+              notifyTokenFailure({
+                provider: 'shopify',
+                storeId: storeId as 'uzoshop' | 'zolplus' | 'usmile360',
+                operation: 'fetch_day_rows',
+                errorMsg: errMsg,
+                advice:
+                  'Re-mint the Shopify Admin API access token and update ' +
+                  `${storeId.toUpperCase()}_SHOPIFY_ACCESS_TOKEN in Vercel + redeploy.`,
+              }).catch(() => {});
+            }
             // Sentinel: canonical store_name (NOT 'unknown'), and we
             // mark __shopifyFailed so the persister can short-circuit.
             return {
@@ -714,9 +732,22 @@ export async function runLiveForStore(
       tasks.push(
         withTimeout(fetchMetaSpendForDayLight(storeId, d), 12_000, 'Meta')
           .catch((e) => {
+            const errMsg = e instanceof Error ? e.message : String(e);
             console.warn(
-              `cron-live: Meta light spend ${storeId} ${d} failed/timed-out: ${e instanceof Error ? e.message : e}`,
+              `cron-live: Meta light spend ${storeId} ${d} failed/timed-out: ${errMsg}`,
             );
+            if (isAuthError('meta', errMsg)) {
+              notifyTokenFailure({
+                provider: 'meta',
+                storeId: storeId as 'uzoshop' | 'zolplus' | 'usmile360',
+                operation: 'fetch_spend',
+                errorMsg: errMsg,
+                advice:
+                  'Refresh the Meta access token in Vercel (' +
+                  `${storeId.toUpperCase()}_META_ACCESS_TOKEN`.replace(/`/g, '') +
+                  ') and redeploy.',
+              }).catch(() => {});
+            }
             return null;
           })
           .then(async (v) => ({ date: d, key: 'fb' as const, cad: v === null ? null : await cadConvert(v, d) })),
@@ -724,9 +755,21 @@ export async function runLiveForStore(
       tasks.push(
         withTimeout(fetchGoogleAdsSpendForDay(storeId, d), 12_000, 'Google')
           .catch((e) => {
+            const errMsg = e instanceof Error ? e.message : String(e);
             console.warn(
-              `cron-live: Google spend ${storeId} ${d} failed/timed-out: ${e instanceof Error ? e.message : e}`,
+              `cron-live: Google spend ${storeId} ${d} failed/timed-out: ${errMsg}`,
             );
+            if (isAuthError('google', errMsg)) {
+              notifyTokenFailure({
+                provider: 'google',
+                storeId: storeId as 'uzoshop' | 'zolplus' | 'usmile360',
+                operation: 'fetch_spend',
+                errorMsg: errMsg,
+                advice:
+                  'Re-run the OAuth Playground flow to mint a fresh GOOGLEADS_REFRESH_TOKEN. ' +
+                  'Update Vercel env vars + redeploy. See docs/PROPS-MAP.md rows 28-32.',
+              }).catch(() => {});
+            }
             return null;
           })
           .then(async (v) => ({ date: d, key: 'ga' as const, cad: v === null ? null : await cadConvert(v, d) })),
@@ -735,9 +778,21 @@ export async function runLiveForStore(
         tasks.push(
           withTimeout(fetchTikTokSpendForDay(storeId, d), 12_000, 'TikTok')
             .catch((e) => {
+              const errMsg = e instanceof Error ? e.message : String(e);
               console.warn(
-                `cron-live: TikTok spend ${storeId} ${d} failed/timed-out: ${e instanceof Error ? e.message : e}`,
+                `cron-live: TikTok spend ${storeId} ${d} failed/timed-out: ${errMsg}`,
               );
+              if (isAuthError('tiktok', errMsg)) {
+                notifyTokenFailure({
+                  provider: 'tiktok',
+                  storeId: storeId as 'uzoshop' | 'zolplus' | 'usmile360',
+                  operation: 'fetch_spend',
+                  errorMsg: errMsg,
+                  advice:
+                    'Re-authorize TikTok via /api/oauth/tiktok/callback to refresh the ' +
+                    `${storeId.toUpperCase()}_TIKTOK_ACCESS_TOKEN. Update Vercel env + redeploy.`,
+                }).catch(() => {});
+              }
               return null;
             })
             .then(async (v) => ({ date: d, key: 'tt' as const, cad: v === null ? null : await cadConvert(v, d) })),

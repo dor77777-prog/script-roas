@@ -65,6 +65,13 @@ import {
 import { mergeOverridesFromSupabase } from '@/lib/fetchers/manualOverrides';
 import { getFxRate } from '@/lib/fetchers/fx';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+// Phase 12.5.x (2026-05-24) — token-failure alerts. `notifyTokenFailure` is
+// soft-fail (never throws); we wrap each platform's catch with an auth-shape
+// detector + alert call. The DB row is always written; the WhatsApp template
+// `token_failure_alert` was approved by Meta on 2026-05-24, so alerts now
+// actually reach +972524809540 (operator's primary number).
+import { notifyTokenFailure } from '@/lib/notifications/tokenFailures';
+import { isAuthError } from '@/lib/notifications/detectAuthError';
 
 // ---------------------------------------------------------------------------
 // STORES — single source of truth for the 3 stores. Aligns with:
@@ -230,12 +237,35 @@ export async function runDailyForStore(
   //      two daily runs, the next-day snapshot reflects it (Apps Script
   //      behavior parity — Shopify.gs:537 is also called per daily run).
   const shopify = (await step.run('fetch-shopify', async () => {
-    const [day, orders, catalog] = await Promise.all([
-      fetchShopifyDayRows(storeId, dateStr),
-      fetchShopifyOrdersAttribution(storeId, dateStr),
-      fetchShopifyProductsCatalog(storeId),
-    ]);
-    return { ...day, orders, catalog };
+    try {
+      const [day, orders, catalog] = await Promise.all([
+        fetchShopifyDayRows(storeId, dateStr),
+        fetchShopifyOrdersAttribution(storeId, dateStr),
+        fetchShopifyProductsCatalog(storeId),
+      ]);
+      return { ...day, orders, catalog };
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      // Phase 12.5.x (2026-05-24) — Shopify is the primary data source so we
+      // RE-THROW (preserve Inngest retry semantics). Just fire-and-forget
+      // an auth alert on the way out so the operator knows why the cron
+      // is dead-lettering. notifyTokenFailure is soft-fail; .catch() is
+      // belt-and-suspenders for the absurd case where the alert path
+      // itself throws.
+      if (isAuthError('shopify', errMsg)) {
+        await notifyTokenFailure({
+          provider: 'shopify',
+          storeId: storeId as 'uzoshop' | 'zolplus' | 'usmile360',
+          operation: 'fetch_day_rows',
+          errorMsg: errMsg,
+          advice:
+            'Re-mint the Shopify Admin API access token (Shopify Partners → ' +
+            'app → revoke + reinstall) and update ' +
+            `${storeId.toUpperCase()}_SHOPIFY_ACCESS_TOKEN in Vercel + redeploy.`,
+        }).catch(() => {});
+      }
+      throw e;
+    }
   })) as Awaited<ReturnType<typeof fetchShopifyDayRows>> & {
     orders: Awaited<ReturnType<typeof fetchShopifyOrdersAttribution>>;
     catalog: Awaited<ReturnType<typeof fetchShopifyProductsCatalog>>;
@@ -276,11 +306,26 @@ export async function runDailyForStore(
       ]);
       return { spend, adsetRows, adRows, budgets };
     } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
       console.warn(
-        `cron-daily ${storeId} ${dateStr}: Meta fetch failed — zeroing Meta contribution to allow other platforms + Shopify to persist. Error: ${
-          e instanceof Error ? e.message : String(e)
-        }`,
+        `cron-daily ${storeId} ${dateStr}: Meta fetch failed — zeroing Meta contribution to allow other platforms + Shopify to persist. Error: ${errMsg}`,
       );
+      // Phase 12.5.x (2026-05-24) — alert on auth-shaped failures only.
+      // Generic 500s / network blips warn but don't ping the operator.
+      if (isAuthError('meta', errMsg)) {
+        await notifyTokenFailure({
+          provider: 'meta',
+          storeId: storeId as 'uzoshop' | 'zolplus' | 'usmile360',
+          operation: 'fetch_insights',
+          errorMsg: errMsg,
+          advice:
+            'Refresh the Meta access token in Vercel (' +
+            `${storeId.toUpperCase()}_META_ACCESS_TOKEN`.replace(/`/g, '') +
+            ') and redeploy.',
+        }).catch(() => {
+          /* notifyTokenFailure is soft-fail by contract; .catch keeps belt-and-suspenders */
+        });
+      }
       return {
         spend: { storeId, date: dateStr, spend: 0, currency: 'ILS' },
         adsetRows: [],
@@ -311,11 +356,21 @@ export async function runDailyForStore(
       ]);
       return { spend, adGroupRows, adRows };
     } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
       console.warn(
-        `cron-daily ${storeId} ${dateStr}: Google Ads fetch failed — zeroing Google contribution. Error: ${
-          e instanceof Error ? e.message : String(e)
-        }`,
+        `cron-daily ${storeId} ${dateStr}: Google Ads fetch failed — zeroing Google contribution. Error: ${errMsg}`,
       );
+      if (isAuthError('google', errMsg)) {
+        await notifyTokenFailure({
+          provider: 'google',
+          storeId: storeId as 'uzoshop' | 'zolplus' | 'usmile360',
+          operation: 'fetch_insights',
+          errorMsg: errMsg,
+          advice:
+            'Re-run the OAuth Playground flow to mint a fresh GOOGLEADS_REFRESH_TOKEN. ' +
+            'Update Vercel env vars + redeploy. See docs/PROPS-MAP.md rows 28-32.',
+        }).catch(() => {});
+      }
       return {
         spend: { storeId, date: dateStr, spend: 0, currency: 'CAD' },
         adGroupRows: [],
@@ -355,11 +410,21 @@ export async function runDailyForStore(
       ]);
       return { spend, adRows };
     } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
       console.warn(
-        `cron-daily ${storeId} ${dateStr}: TikTok fetch failed — zeroing TikTok contribution. Error: ${
-          e instanceof Error ? e.message : String(e)
-        }`,
+        `cron-daily ${storeId} ${dateStr}: TikTok fetch failed — zeroing TikTok contribution. Error: ${errMsg}`,
       );
+      if (isAuthError('tiktok', errMsg)) {
+        await notifyTokenFailure({
+          provider: 'tiktok',
+          storeId: storeId as 'uzoshop' | 'zolplus' | 'usmile360',
+          operation: 'fetch_insights',
+          errorMsg: errMsg,
+          advice:
+            'Re-authorize TikTok via /api/oauth/tiktok/callback to refresh the ' +
+            `${storeId.toUpperCase()}_TIKTOK_ACCESS_TOKEN. Update Vercel env + redeploy.`,
+        }).catch(() => {});
+      }
       return {
         spend: { storeId, date: dateStr, spend: 0, currency: 'USD' } as TikTokDaySpend,
         adRows: [] as TikTokAdRow[],
