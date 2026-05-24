@@ -1296,49 +1296,72 @@ async function runLiveForStoreInner(
     // we CONTINUE iterating so a single ad-set's failure cannot prevent
     // the others from landing. No throw escapes this section — Inngest
     // never dead-letters the whole step due to one bad row.
+    // INCIDENT FIX 2026-05-25 (Phase 13.4-emergency / cron-live-uzoshop 60s
+    // timeout): the previous implementation issued one UPDATE per
+    // (platform, ad_set_id) SEQUENTIALLY. uzoshop's ad-set count (Meta +
+    // Google + TikTok combined ≈300+) drove the per-tick wall time past
+    // 60s, hitting Vercel's function timeout. The Phase 12.5 removal of the
+    // 7-day lower bound (.gt('date', addDays(today,-7))) made each UPDATE
+    // scan more rows too, compounding the slowdown.
+    //
+    // Fix: keep the per-(platform, ad_set_id) UPDATE shape — including the
+    // per-row try/catch — but issue them in BOUNDED-PARALLEL chunks via
+    // Promise.all. Wall time drops from O(N × latency) to O((N/chunk) ×
+    // latency). At chunk=20 and ~150ms/req, 300 ad-sets ≈ 2.25s instead of
+    // ~45-60s. Semantics preserved: each ad-set is its own request, each
+    // has its own try/catch, the per-row mock chain (eq×3 → lt) in
+    // cronLiveStatusRefresh.test.ts continues to match. HIGH-12 +
+    // HIGH-NEW-4 resilience invariant preserved (one ad-set's failure
+    // doesn't block siblings, including siblings IN THE SAME chunk because
+    // Promise.all awaits all settled outcomes from individual try/catch
+    // wrappers that never reject).
     const platforms: Array<'meta' | 'google' | 'tiktok'> = [
       'meta',
       'google',
       'tiktok',
     ];
-    const enrollmentsByPlatformAdSet = new Map<string, string>();
-    for (const e of enrollments) {
-      enrollmentsByPlatformAdSet.set(`${e.platform}::${e.adSetId}`, e.status);
-    }
+    const PARALLEL_CHUNK = 20;
     for (const platform of platforms) {
       const platformEnrollments = enrollments.filter((e) => e.platform === platform);
       if (platformEnrollments.length === 0) continue;
-      for (const { adSetId, status } of platformEnrollments) {
-        try {
-          const result = await admin
-            .from('campaigns_daily')
-            .update({ effective_status: status })
-            .eq('store_id', storeId)
-            .eq('platform', platform)
-            .eq('ad_set_id', adSetId)
-            .lt('date', today); // UPSERT above already handled today
-          // Supabase shape: result is `{ error: PostgrestError | null }`
-          // (the chain returns the response object directly when not
-          // awaiting `.select()`). RLS denials + schema errors come back
-          // here, NOT as a rejected promise.
-          const errResult = (result as { error?: { message?: string } | null })
-            ?.error;
-          if (errResult) {
-            console.warn(
-              `cron-live: campaigns_daily status UPDATE failed (${platform}/${adSetId}) for ${storeId}: ${
-                errResult.message ?? String(errResult)
-              }`,
-            );
-          }
-        } catch (e) {
-          // Rejection path (network drop, abort, runtime error). Log +
-          // continue — other ad-sets must still get their status update.
-          console.warn(
-            `cron-live: campaigns_daily status UPDATE threw (${platform}/${adSetId}) for ${storeId}: ${
-              e instanceof Error ? e.message : String(e)
-            }`,
-          );
-        }
+      for (let i = 0; i < platformEnrollments.length; i += PARALLEL_CHUNK) {
+        const slice = platformEnrollments.slice(i, i + PARALLEL_CHUNK);
+        await Promise.all(
+          slice.map(async ({ adSetId, status }) => {
+            try {
+              const result = await admin
+                .from('campaigns_daily')
+                .update({ effective_status: status })
+                .eq('store_id', storeId)
+                .eq('platform', platform)
+                .eq('ad_set_id', adSetId)
+                .lt('date', today); // UPSERT above already handled today
+              // Supabase shape: result is `{ error: PostgrestError | null }`
+              // (the chain returns the response object directly when not
+              // awaiting `.select()`). RLS denials + schema errors come back
+              // here, NOT as a rejected promise.
+              const errResult = (result as { error?: { message?: string } | null })
+                ?.error;
+              if (errResult) {
+                console.warn(
+                  `cron-live: campaigns_daily status UPDATE failed (${platform}/${adSetId}) for ${storeId}: ${
+                    errResult.message ?? String(errResult)
+                  }`,
+                );
+              }
+            } catch (e) {
+              // Rejection path (network drop, abort, runtime error). Log +
+              // continue — other ad-sets must still get their status update.
+              // The catch is inside the map callback so Promise.all's
+              // all-settled semantics fall out for free.
+              console.warn(
+                `cron-live: campaigns_daily status UPDATE threw (${platform}/${adSetId}) for ${storeId}: ${
+                  e instanceof Error ? e.message : String(e)
+                }`,
+              );
+            }
+          }),
+        );
       }
     }
   });
