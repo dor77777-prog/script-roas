@@ -388,6 +388,20 @@ export async function runDailyForStore(
   // Batched per RESEARCH §Pitfall 4: one step.run for all writes keeps the
   // exec count low. ON CONFLICT idempotency means a retry re-runs all
   // writes safely (D-B5).
+  //
+  // Audit fix 2026-05-24 (AUDIT INN-01, Phase 12.1.1): capture the persisted
+  // row values so RunDailyResult.roas/grossProfitCad/netProfitCad/totalSpendCad
+  // match what was actually written to disk (including TikTok). Pre-fix the
+  // return value used merged.totalSpendCad which EXCLUDES TikTok — for uzoshop
+  // (the TikTok store) operator saw inconsistent numbers in jobs table vs
+  // dashboard. Evidence: .planning/phases/12-codebase-audit-baseline/raw-returns/
+  //   inngest_cronDaily.json (INN-01).
+  let persistedTotalSpendCad: number | null = null;
+  let persistedRoas = 0;
+  let persistedGrossProfitCad = 0;
+  let persistedNetProfitCad = 0;
+  let persistedCogsCad = 0;
+
   await step.run('persist-batch', async () => {
     const admin = getSupabaseAdmin();
     // Phase 05.7.7: TikTok spend → CAD. Other stores have tt.spend=0 from
@@ -447,6 +461,16 @@ export async function runDailyForStore(
     const cogsCad = shopify.revenueCad * cogsRate;
     const netProfitCad =
       totalSpendCadAll === null ? 0 : grossProfitCad - cogsCad;
+
+    // Audit fix 2026-05-24 (AUDIT INN-01, Phase 12.1.1): mirror the
+    // computed values into the outer-scope captured vars so the
+    // RunDailyResult return value (built after this step.run completes)
+    // uses the SAME numbers actually persisted to data_daily.
+    persistedTotalSpendCad = totalSpendCadAll;
+    persistedRoas = roas;
+    persistedGrossProfitCad = grossProfitCad;
+    persistedNetProfitCad = netProfitCad;
+    persistedCogsCad = cogsCad;
 
     // 2026-05-21 fix: per-row Meta FX conversion.
     //
@@ -1118,24 +1142,27 @@ export async function runDailyForStore(
     }
   });
 
-  const roas =
-    merged.totalSpendCad > 0 ? shopify.revenueCad / merged.totalSpendCad : 0;
-  const grossProfitCad = shopify.revenueCad - merged.totalSpendCad;
-  // Audit fix 2026-05-23 (MR-01): per-store COGS rate for the return-summary too.
-  const cogsCad = shopify.revenueCad * getCogsRateForStore(storeId);
-  const netProfitCad = grossProfitCad - cogsCad;
-
+  // Audit fix 2026-05-24 (AUDIT INN-01, Phase 12.1.1): return value now
+  // mirrors the persisted data_daily row (which INCLUDES TikTok when
+  // ttSpendCad was successfully computed). Pre-fix the return used
+  // merged.totalSpendCad which EXCLUDES TikTok — for uzoshop (the only
+  // TikTok store) operator saw inconsistent ROAS in the jobs table vs
+  // the dashboard. When TikTok FX fails (persistedTotalSpendCad === null
+  // because cronDaily.ts:435-436 set it to null), fall back to
+  // merged.totalSpendCad in the return shape so the operator still sees
+  // a non-null usable number — but roas/grossProfit/netProfit stay at
+  // their persisted 0-fallback so they match what the dashboard renders.
   return {
     storeId,
     date: dateStr,
     shopifyRevenueCad: shopify.revenueCad,
     fbSpendCad: merged.fbSpendCad,
     gaSpendCad: merged.gaSpendCad,
-    totalSpendCad: merged.totalSpendCad,
-    roas,
-    grossProfitCad,
-    cogsCad,
-    netProfitCad,
+    totalSpendCad: persistedTotalSpendCad ?? merged.totalSpendCad,
+    roas: persistedRoas,
+    grossProfitCad: persistedGrossProfitCad,
+    cogsCad: persistedCogsCad,
+    netProfitCad: persistedNetProfitCad,
     overridesApplied: merged.overridesApplied,
     productRowCount: shopify.productRows.length,
     metaCampaignRowCount: meta.adsetRows.length,
