@@ -286,6 +286,7 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo }: Props)
                     <tr className="text-[10px] uppercase text-text-muted tracking-wide">
                       <th className="text-start font-medium pb-1.5">קטגוריה</th>
                       <th className="text-end font-medium pb-1.5">סכום (יחסי לטווח)</th>
+                      <th className="text-end font-medium pb-1.5">% מההכנסה</th>
                       <th className="text-end font-medium pb-1.5">% מהקבועים</th>
                     </tr>
                   </thead>
@@ -296,6 +297,10 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo }: Props)
                       .map(s => {
                         const amt = billing.bySource[s];
                         const sharePct = billing.total > 0 ? (amt / billing.total) * 100 : 0;
+                        // Phase 12.5 — % of revenue is range-invariant: amt
+                        // and revenue scale together, so a $100/mo Klaviyo
+                        // on $5K/mo revenue reads as 2% on any view length.
+                        const revPct = revenue > 0 ? (amt / revenue) * 100 : 0;
                         return (
                           <tr key={s} className="border-t border-borderSubtle/60">
                             <td className={cn('py-1 font-medium', SOURCE_COLOR[s])}>
@@ -303,6 +308,9 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo }: Props)
                             </td>
                             <td className="py-1 text-end text-text-primary">
                               {formatCurrency(amt)}
+                            </td>
+                            <td className="py-1 text-end text-text-secondary font-medium">
+                              {revenue > 0 ? `${revPct.toFixed(1)}%` : '—'}
                             </td>
                             <td className="py-1 text-end text-text-muted">
                               {sharePct.toFixed(0)}%
@@ -313,13 +321,22 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo }: Props)
                     <tr className="border-t-2 border-text-primary/20 font-bold">
                       <td className="py-1.5">סך הכל</td>
                       <td className="py-1.5 text-end">{formatCurrency(billing.total)}</td>
+                      <td className="py-1.5 text-end text-text-primary">
+                        {revenue > 0
+                          ? `${((billing.total / revenue) * 100).toFixed(1)}%`
+                          : '—'}
+                      </td>
                       <td className="py-1.5 text-end">100%</td>
                     </tr>
                   </tbody>
                 </table>
                 <div className="mt-2 text-[10px] text-text-muted leading-relaxed">
                   עורכים את הנתונים דרך הכפתור <span className="font-semibold">עלויות חודשיות</span>{' '}
-                  מעל ה-P&amp;L. כל שינוי מתעדכן מיד בכל החישובים.
+                  מעל ה-P&amp;L. כל שינוי מתעדכן מיד בכל החישובים.{' '}
+                  <span className="text-text-secondary">
+                    עמודת <strong>% מההכנסה</strong> זהה בכל אורך טווח (סכום ההוצאה והכנסות
+                    מתפרסים יחד) — מודד כמה כל שירות &quot;עולה&quot; ביחס לנפח העסק.
+                  </span>
                 </div>
               </div>
             </details>
