@@ -183,6 +183,19 @@ const TIKTOK_OFF_STATUSES = new Set([
   'ADGROUP_STATUS_FROZEN',
   'ADGROUP_STATUS_ARCHIVED',
   'ADGROUP_STATUS_DELETE',
+  // Phase 12.5.x (2026-05-24) — operator-reported: TikTok ad-groups under a
+  // campaign-level pause report `ADGROUP_STATUS_CAMPAIGN_DISABLE` (parent
+  // disabled) on every child. Previously this fell through to the date
+  // heuristic and the off-chip didn't fire on operator-paused campaigns.
+  'ADGROUP_STATUS_CAMPAIGN_DISABLE',
+  // Parent / advertiser-level disable variants — same operator-visible
+  // meaning ("campaign not delivering"). Added defensively so a future
+  // advertiser-level freeze surfaces correctly.
+  'ADGROUP_STATUS_ADVERTISER_AUDIT_DENY',
+  'ADGROUP_STATUS_ADVERTISER_FROZEN',
+  'ADGROUP_STATUS_ADVERTISER_BUDGET_EXCEED',
+  'ADGROUP_STATUS_BALANCE_EXCEED',
+  'ADGROUP_STATUS_AUDIT_DENY',
 ]);
 
 const TIKTOK_ACTIVE_ENOUGH = new Set([

@@ -30,6 +30,37 @@ function isStatusActive(platform: string, status: string): boolean {
   return false;
 }
 
+/**
+ * Phase 12.5.x (2026-05-24) — "parent-disabled" marker statuses. These can
+ * ONLY appear on an ad-set when its parent CAMPAIGN is paused / disabled at
+ * the parent level. Even a single ad-set showing this status is authoritative:
+ * the parent is paused, period.
+ *
+ * Operator-reported (2026-05-24): when an operator pauses a Meta campaign at
+ * the campaign level, cron-live's UPDATE pass refreshes the ad-set rows over
+ * a few ticks. During the transient, some ad-sets show `CAMPAIGN_PAUSED` and
+ * others still show stale `ACTIVE`. The campaign-mode roll-up was picking
+ * `ACTIVE` ("any active wins"), missing the operator's intent. Same pattern
+ * on TikTok with `ADGROUP_STATUS_CAMPAIGN_DISABLE`.
+ *
+ * Fix: when ANY ad-set has a parent-disabled status, surface that status as
+ * the campaign-level effectiveStatus (so the off-chip fires). This beats the
+ * "any active wins" rule because parent-disabled is platform-authoritative
+ * — Meta/TikTok would NOT emit it unless the parent is actually paused.
+ *
+ * Google doesn't have an analogous child marker (ad-group `status` stays
+ * ENABLED even when the parent campaign is paused — Google requires a
+ * separate campaign-level fetch). For now Google's campaign-level off is
+ * detected only when the ad-group itself is paused.
+ */
+function isParentDisabled(platform: string, status: string): boolean {
+  const platformNorm = platform.toLowerCase();
+  const norm = status.trim().toUpperCase();
+  if (platformNorm === 'meta') return norm === 'CAMPAIGN_PAUSED';
+  if (platformNorm === 'tiktok') return norm === 'ADGROUP_STATUS_CAMPAIGN_DISABLE';
+  return false;
+}
+
 export type Aggregated = {
   key: string;
   storeId: string;
@@ -250,11 +281,22 @@ export function aggregate(
         const campKey = `${a.storeId}::${a.platform}::${a.campaignId}`;
         const statuses = byCampaign.get(campKey);
         if (!statuses || statuses.length === 0) continue;
-        // Prefer any "currently active" status across the campaign's ad-sets;
-        // fall back to the first (off) status. This matches the platform's
-        // own roll-up semantics — Meta/Google/TikTok all show a campaign
-        // as "Active" in their managers as long as one child entity is
-        // delivering.
+        // Priority order (Phase 12.5.x — 2026-05-24):
+        //   1. Any "parent-disabled" status → campaign is OFF. This beats
+        //      a single stale ACTIVE child during cron-live's UPDATE
+        //      propagation window (e.g. one ad-set out of 30 still says
+        //      ACTIVE while the rest say CAMPAIGN_PAUSED — the campaign
+        //      IS paused; surfacing ACTIVE would be a lie).
+        //   2. Any active status → campaign is ACTIVE. Matches the
+        //      platform's own roll-up ("any child delivering → parent
+        //      delivering").
+        //   3. Fall back to the first off status — all children paused
+        //      individually but not at parent level (rare).
+        const parentDisabled = statuses.find(s => isParentDisabled(a.platform, s));
+        if (parentDisabled) {
+          a.effectiveStatus = parentDisabled;
+          continue;
+        }
         const active = statuses.find(s => isStatusActive(a.platform, s));
         a.effectiveStatus = active ?? statuses[0];
       }
