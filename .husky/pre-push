@@ -1,0 +1,24 @@
+#!/usr/bin/env sh
+# Phase 13.3 — pre-push gate: tsc + vitest + lint + docs-currency.
+#
+# Bypass with `git push --no-verify` ONLY when the change is intentionally
+# excluded from the gate (e.g. a no-rules refactor that demonstrably has
+# no UX/architecture impact). The project memory rule discourages routine
+# use; if you find yourself bypassing often, the gate's tripwire paths
+# need re-tuning, not the gate's existence.
+
+set -e
+
+echo "▶ tsc (no emit)"
+( cd dashboard-web && npx tsc --noEmit )
+
+echo "▶ vitest"
+( cd dashboard-web && npm test )
+
+echo "▶ lint"
+( cd dashboard-web && npm run lint )
+
+echo "▶ docs currency"
+node scripts/docs-currency.mjs
+
+echo "✓ pre-push gates passed"
