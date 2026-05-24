@@ -86,11 +86,11 @@ Supabase Security Advisor יראה 10 אזהרות `0013_rls_disabled_in_public`
 
 ## 4. Inngest Functions
 
-### 4.1 8 פונקציות הליבה
+### 4.1 9 פונקציות הליבה (כולל OAuth canary של Phase 13.4)
 
 | Function ID | תזמון | תוכן |
 |---|---|---|
-| `cron-daily-uzoshop` | `5 0 * * *` IL | Shopify + Meta + Google + TikTok + FX לכל ה-yesterday |
+| `cron-daily-uzoshop` | `5 0 * * *` IL | Shopify + Meta + Google + TikTok + FX לכל ה-yesterday (fetch-shopify split ל-day/orders/catalog בparallel — Phase 13.4) |
 | `cron-daily-zolplus` | `5 0 * * *` IL | אותו דבר ל-zolplus |
 | `cron-daily-usmile360` | `5 0 * * *` IL | אותו דבר ל-usmile360 |
 | `cron-live-uzoshop` | `*/10 * * * *` | rolling 3-day Shopify + Meta + Google + TikTok spend + orders_attribution של היום + refresh effective_status (כל השורות הקיימות per ad-set, ללא lookback — Phase 12.5 fix; bulk UPDATE per (platform, status) — incident fix 2026-05-25) |
@@ -98,6 +98,7 @@ Supabase Security Advisor יראה 10 אזהרות `0013_rls_disabled_in_public`
 | `cron-live-usmile360` | `*/10 * * * *` | אותו דבר |
 | `event-sync-now` | event-triggered (`event/sync-now`) | זהה ל-cron-live, ידני מ-`/operator` |
 | `event-backfill` | event-triggered (`event/backfill`) | טווח תאריכים נבחר × חנויות נבחרות |
+| `cron-oauth-canary` | `0 0 * * *` IL | פעם ביום פינג ל-fetchGoogleAdsSpendForDay('uzoshop', yesterday) כcanary לרענון refresh-token; failure → Sentry + Inngest dead-letter (Phase 13.4) |
 
 ### 4.2 3 פונקציות WhatsApp (Phase 05.7.4)
 
