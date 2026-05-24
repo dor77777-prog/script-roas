@@ -370,3 +370,33 @@ Plans:
   3. `npm run build` passes (TypeScript catches any missing key)
   4. Manual smoke: dashboard renders identically before/after (no missed translations)
   5. Adding a new key requires editing `strings.he.ts` (the type system enforces this — no inline literals possible)
+
+### Phase 9: Pre-Conversion Algorithmic Audit
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 8
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 9 to break down)
+
+### Phase 10: Pre-Conversion Algorithmic Fixes
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 9
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 10 to break down)
+
+### Phase 11: Decommission Apps Script tier
+
+**Goal:** [To be planned]
+**Requirements**: TBD
+**Depends on:** Phase 10
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 11 to break down)
