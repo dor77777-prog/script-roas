@@ -92,7 +92,15 @@ describe('topology — single chokepoint enforcement (CC-02)', () => {
     // The pattern matches `graph.facebook.com/<version>/<phone-id>/messages`.
     // Single fetch chokepoint → the WhatsApp allowlist + sanitisation cannot
     // be silently bypassed. AUDIT.md CHN-05 invariant.
-    const matches = gitGrepFiles('graph\\.facebook\\.com/.*/messages');
+    //
+    // Phase 12.5.x fix (2026-05-24) — exclude `__tests__/` so this test
+    // file's own grep-pattern doesn't self-match. The invariant only
+    // applies to production code paths; tests legitimately reference the
+    // URL literal in mocks + comments. Same approach as the Frankfurter
+    // test below.
+    const matches = gitGrepFiles('graph\\.facebook\\.com/.*/messages').filter(
+      p => !p.includes('__tests__/'),
+    );
     expect(matches).toEqual(['src/lib/notifications/whatsapp.ts']);
   });
 
@@ -102,7 +110,13 @@ describe('topology — single chokepoint enforcement (CC-02)', () => {
     // getSupabaseAdmin` would mean two callers can drift on cache /
     // env-var handling. Callers (Inngest functions, API routes) use the
     // import, never re-declare.
-    const matches = gitGrepFiles('export function getSupabaseAdmin');
+    //
+    // Phase 12.5.x fix (2026-05-24) — same `__tests__/` exclusion as
+    // above; this test file contains the literal `export function
+    // getSupabaseAdmin` in its comment + grep pattern.
+    const matches = gitGrepFiles('export function getSupabaseAdmin').filter(
+      p => !p.includes('__tests__/'),
+    );
     expect(matches).toEqual(['src/lib/supabaseAdmin.ts']);
   });
 
