@@ -178,31 +178,80 @@ function shrinkRoas(roas: number, spend: number, orders: number): number {
   return roas * w + 1.0 * (1 - w);
 }
 
-/** Rank-by score for cohort members. Higher = better.
+// AUDIT MMC-BLOCKER-01 (2026-05-24, Phase 12.1.3): replace the composite-
+// key rankingScore (shrunk*1_000_000 + shrunkPlat*1_000 + spend) with a
+// tuple-lex comparator. The composite score overflowed when
+// roasShopifyPlatform exceeded ~2500 (plausible at tiny-spend
+// deterministic-ROAS calculations), FLIPPING the winner — see the
+// IDENTICAL pathology already fixed in CohortComparisonPanel's
+// compareIntraSectionMembers (HIGH-6, 2026-05-23). This fix brings the
+// source ranking (which drives currentRank/isLeader/isWeakest and the
+// cohort health adjustment) into parity with the panel's section sort.
+//
+// Folded-in fixes (same file, naturally addressed by BLOCKER-01 fix):
+//   MMC-WARN-01: others array sorted (was insertion-order)
+//   MMC-WARN-03: safeFinite guard on NaN/Infinity ROAS inputs
+//   MMC-WARN-04: result.current shares ref with rankedAll[currentRank-1]
+//   MMC-WARN-05: terminal lex tiebreaker on campaignKey
+//
+// Evidence: .planning/phases/12-codebase-audit-baseline/raw-returns/
+//   lib_algorithm_multiMappingCohort.json (MMC-BLOCKER-01).
+
+/** Defensive coercion — sinks NaN/Infinity to 0 so the sort comparator
+ *  never sees non-finite values. The `?? 0` guard at buildMember catches
+ *  null/undefined but NOT NaN; this fixes MMC-WARN-03. */
+function safeFinite(v: number): number {
+  return Number.isFinite(v) ? v : 0;
+}
+
+/** Tuple-lexicographic comparator for cohort members. Sort order:
+ *    1. shrunk roasShopify desc           (primary — combined ROAS)
+ *    2. shrunk roasShopifyPlatform desc   (secondary — deterministic ROAS)
+ *    3. spend desc                        (tertiary — bigger spender wins)
+ *    4. campaignKey lex asc               (terminal — deterministic tiebreak)
  *
- *  Primary: shrunk roasShopify (combined Shopify ROAS, sample-size weighted).
- *  Secondary: shrunk roasShopifyPlatform (deterministic-only — when wired,
- *  this discriminates among same-combined-ROAS members based on platform-
- *  attributed orders).
- *  Tertiary: spend (more invested = more "weight" in true ties).
+ *  Members without metrics sink to the bottom (preserves pre-fix
+ *  -Infinity sentinel behaviour). Members with metrics use shrinkRoas
+ *  with safeFinite-guarded inputs so non-finite ROAS sinks to 0 rather
+ *  than producing NaN comparator output.
  *
- *  Members without metrics (campaign had no spend in the range) sink to
- *  the bottom but don't get NaN-treated.
- *
- *  Audit fix 2026-05-23 (CRITICAL-02): the raw-ROAS version let small-
- *  sample anomalies dominate. See `ROAS_SHRINKAGE_ANCHOR_CAD` above. */
-function rankingScore(m: CohortMember): number {
-  if (!m.metrics) return -Infinity;
-  // Audit fix 2026-05-23 (b/HI-02): pass `conversions` so shrinkRoas can
-  // use the orders-axis when spend is small but conversion volume is
-  // meaningful (or vice-versa).
-  const shrunk = shrinkRoas(m.metrics.roasShopify, m.metrics.spend, m.metrics.conversions);
-  const shrunkPlat = shrinkRoas(m.metrics.roasShopifyPlatform, m.metrics.spend, m.metrics.conversions);
-  return (
-    shrunk * 1_000_000 +
-    shrunkPlat * 1_000 +
-    m.metrics.spend
+ *  Audit fix 2026-05-23 (CRITICAL-02 + b/HI-02): shrinkage applied to both
+ *  ROAS axes with conversions threading. See `ROAS_SHRINKAGE_ANCHOR_CAD`
+ *  + `ROAS_SHRINKAGE_ANCHOR_ORDERS` for the before/after rationale. */
+function compareCohortMembers(a: CohortMember, b: CohortMember): number {
+  const am = a.metrics;
+  const bm = b.metrics;
+  // Members without metrics sink to the bottom (preserve -Infinity sentinel
+  // semantics from the pre-fix rankingScore). Among two missing-metrics
+  // members, lex on campaignKey for stable order.
+  if (!am && !bm) return a.campaignKey.localeCompare(b.campaignKey);
+  if (!am) return 1;
+  if (!bm) return -1;
+
+  // Primary: shrunk roasShopify desc.
+  const primaryA = shrinkRoas(safeFinite(am.roasShopify), am.spend, am.conversions);
+  const primaryB = shrinkRoas(safeFinite(bm.roasShopify), bm.spend, bm.conversions);
+  if (primaryA !== primaryB) return primaryB - primaryA;
+
+  // Secondary: shrunk roasShopifyPlatform desc.
+  const secondaryA = shrinkRoas(
+    safeFinite(am.roasShopifyPlatform),
+    am.spend,
+    am.conversions,
   );
+  const secondaryB = shrinkRoas(
+    safeFinite(bm.roasShopifyPlatform),
+    bm.spend,
+    bm.conversions,
+  );
+  if (secondaryA !== secondaryB) return secondaryB - secondaryA;
+
+  // Tertiary: spend desc.
+  if (am.spend !== bm.spend) return bm.spend - am.spend;
+
+  // Terminal: campaignKey lex asc (MMC-WARN-05 — deterministic tie-break
+  // independent of productMap insertion order).
+  return a.campaignKey.localeCompare(b.campaignKey);
 }
 
 // =============================================================================
@@ -291,6 +340,12 @@ export function computeMultiMappingCohort(args: {
   // No co-mapped campaigns — no cohort.
   if (others.length === 0) return null;
 
+  // AUDIT MMC-WARN-01 (2026-05-24, Phase 12.1.3): sort others by the same
+  // comparator so iteration order matches the docstring claim (line 73:
+  // "Sorted by ranking score descending."). Pre-fix the array was appended
+  // in productMap iteration order and never sorted — doc-vs-impl drift.
+  others.sort(compareCohortMembers);
+
   // Build the current member entry.
   const currentMemberBase = buildMember(
     currentCampaignKey,
@@ -302,14 +357,24 @@ export function computeMultiMappingCohort(args: {
     roasShopifyPlatformByKey,
   );
 
-  // Rank all members (current + others) by score desc, stable for ties.
-  // Stable sort keeps the natural-order tie-breaker deterministic across
-  // renders (operator-visible chip won't bounce 🥇 ↔ 🥈 on each refresh).
-  const rankedAll = [
-    { ...currentMemberBase, isCurrent: true },
-    ...others.map(o => ({ ...o, isCurrent: false })),
+  // AUDIT MMC-WARN-04 (2026-05-24, Phase 12.1.3): build the current entry
+  // ONCE and use the same reference at both rankedAll[currentIdx] and
+  // result.current. Pre-fix the two were built via separate spreads —
+  // consumer mutation patterns silently failed because the references
+  // diverged. The regression test asserts identity:
+  //   result.current === result.rankedAll[currentRank - 1]
+  const currentWithFlag = { ...currentMemberBase, isCurrent: true as const };
+
+  // AUDIT MMC-BLOCKER-01 + WARN-05 (2026-05-24, Phase 12.1.3): rank all
+  // members (current + others) via the tuple-lex compareCohortMembers
+  // comparator. Terminal lex tiebreaker on campaignKey makes the order
+  // deterministic regardless of productMap insertion sequence — operator-
+  // visible chip won't bounce 🥇 ↔ 🥈 across cloud-sync rehydration cycles.
+  const rankedAll: Array<CohortMember & { isCurrent: boolean }> = [
+    currentWithFlag,
+    ...others.map(o => ({ ...o, isCurrent: false as const })),
   ];
-  rankedAll.sort((a, b) => rankingScore(b) - rankingScore(a));
+  rankedAll.sort(compareCohortMembers);
 
   const currentRank = rankedAll.findIndex(m => m.isCurrent) + 1; // 1-based
   const totalMembers = rankedAll.length;
@@ -320,12 +385,13 @@ export function computeMultiMappingCohort(args: {
   // floor already present in applyCohortAdjustmentOnce.
   const isWeakest = totalMembers >= 3 && currentRank === totalMembers;
 
-  // Split others by platform.
+  // Split others by platform. Inherits the new sorted order from `others`.
   const intraPlatformOthers = others.filter(o => o.platform === currentParts.platform);
   const crossPlatformOthers = others.filter(o => o.platform !== currentParts.platform);
 
   return {
-    current: { ...currentMemberBase, isCurrent: true },
+    // AUDIT MMC-WARN-04: SAME reference as rankedAll[currentRank - 1].
+    current: currentWithFlag,
     others,
     rankedAll,
     currentRank,
@@ -355,8 +421,18 @@ function buildMember(
   const metrics = agg
     ? {
         spend: agg.spend,
-        roasShopify: roasShopifyByKey.get(campaignKey) ?? 0,
-        roasShopifyPlatform: roasShopifyPlatformByKey.get(campaignKey) ?? 0,
+        // AUDIT MMC-WARN-03 (2026-05-24, Phase 12.1.3): explicit
+        // Number.isFinite guard at the SOURCE. The `?? 0` catches null /
+        // undefined but NOT NaN (NaN is neither null nor undefined). Without
+        // this guard NaN ROAS inputs propagate through shrinkRoas →
+        // compareCohortMembers and produce non-deterministic Array.sort
+        // output (V8 TimSort behavior with NaN comparator returns is
+        // implementation-defined). Belt-and-suspenders with the safeFinite
+        // calls inside the comparator itself.
+        roasShopify: safeFinite(roasShopifyByKey.get(campaignKey) ?? 0),
+        roasShopifyPlatform: safeFinite(
+          roasShopifyPlatformByKey.get(campaignKey) ?? 0,
+        ),
         conversions: agg.conversions,
         effectiveStatus: agg.effectiveStatus,
       }
