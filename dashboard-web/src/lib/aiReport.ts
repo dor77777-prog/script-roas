@@ -11,6 +11,7 @@ import {
 } from './campaignHealthScore';
 import { analyzeCpmVsRoas, type DailyCpmRoasPoint } from './cpmRoasAnalysis';
 import type { Aggregated } from './campaignsAggregator';
+import { TIKTOK_ACTIVE_ENOUGH } from './platformConfig';
 
 /**
  * Generates an AI-friendly markdown report for a store × date range.
@@ -1139,7 +1140,16 @@ export function generateAiReport({
       const p = platform.toLowerCase();
       if (p === 'meta') return norm !== 'ACTIVE';
       if (p === 'google') return norm !== 'ENABLED';
-      if (p === 'tiktok') return norm !== 'ADGROUP_STATUS_DELIVERY_OK';
+      // AUDIT ALG-01 (2026-05-24, Phase 12.2.1): TikTok "active enough"
+      // taxonomy via shared TIKTOK_ACTIVE_ENOUGH set (5 statuses incl.
+      // BUDGET_EXCEED, AUDIT, REVIEWING, NOT_START — not just
+      // DELIVERY_OK). Same rule cronLive.isActiveForPlatform +
+      // postgresReaders already use per AUDIT U-01 symmetry. Pre-fix:
+      // BUDGET_EXCEED campaigns wrongly listed as "currently off" +
+      // penalized -30 in Health Score.
+      // Evidence: .planning/phases/12-codebase-audit-baseline/raw-returns/
+      //   lib_algorithm_aiReport.json (ALG-01).
+      if (p === 'tiktok') return !TIKTOK_ACTIVE_ENOUGH.has(norm);
       return false;
     }
 
@@ -1188,7 +1198,18 @@ export function generateAiReport({
         detById.get(`${c.storeId}::${c.campaignId}`) ??
         detByName.get(`${c.storeId}::${c.name.toLowerCase()}`) ??
         0;
-      const coverage = c.value > 0 ? Math.min(1, det / c.value) : det > 0 ? 1 : 0;
+      // AUDIT ALG-07 (2026-05-24, Phase 12.2.1): raw coverage — no upper
+      // clamp. Mirrors `attributionAnalysis.computeCoverage`'s post-AUDIT
+      // U-05 semantic (commit b846ae7): halo (det >> claim) is an
+      // operator-visible signal for broken pixel / ad-blocker storm /
+      // ATT opt-out spike, NOT a value to suppress. Pre-fix Math.min(1,
+      // det/c.value) clamped halo to 1.0, stuck trustScore at the 100
+      // ceiling and starved the U-05 halo-warning chip of its input.
+      // The `det > 0 ? 1 : 0` fallback for c.value=0 is preserved
+      // (Infinity-guard).
+      // Evidence: .planning/phases/12-codebase-audit-baseline/raw-returns/
+      //   lib_algorithm_aiReport.json (ALG-07).
+      const coverage = c.value > 0 ? det / c.value : det > 0 ? 1 : 0;
       const trustScore = Math.round(coverage * 100);
       const trustLevel =
         trustScore >= 80 ? 'high' : trustScore >= 40 ? 'medium' : 'low';
@@ -1338,7 +1359,14 @@ export function generateAiReport({
       const p = platform.toLowerCase();
       if (p === 'meta') return norm !== 'ACTIVE';
       if (p === 'google') return norm !== 'ENABLED';
-      if (p === 'tiktok') return norm !== 'ADGROUP_STATUS_DELIVERY_OK';
+      // AUDIT ALG-01 (2026-05-24, Phase 12.2.1): TikTok "active enough"
+      // taxonomy via shared TIKTOK_ACTIVE_ENOUGH set (mirrors isStatusOff
+      // above per AUDIT U-01 symmetry — same predicate, two call sites).
+      // Pre-fix: TikTok BUDGET_EXCEED / AUDIT / REVIEWING / NOT_START
+      // were wrongly listed in 'קמפיינים כבויים כעת'.
+      // Evidence: .planning/phases/12-codebase-audit-baseline/raw-returns/
+      //   lib_algorithm_aiReport.json (ALG-01).
+      if (p === 'tiktok') return !TIKTOK_ACTIVE_ENOUGH.has(norm);
       return false;
     }
     // AUDIT ALG-04 (2026-05-24, Phase 12.1.2): statusByCampaign keyed
@@ -2095,19 +2123,39 @@ export function generateAiReport({
   }
 
   // ===== Ad-spend efficiency by platform =====
+  // AUDIT ALG-02 (2026-05-24, Phase 12.2.1): budget allocation includes
+  // TikTok in totalSpendAll. Pre-fix: totalSpendAll = metaSpend +
+  // googleSpend excluded TikTok entirely, so TikTok-heavy stores
+  // (uzoshop) saw Meta 50% / Google 50% even when TikTok was 60% of
+  // actual spend. Contradicted every other section in the report (Top
+  // summary, per-platform CPM, TikTok deep-dive) which all include
+  // TikTok. TikTok row is gated on `ttSpend > 0` mirroring the
+  // conditional already used in the Top Summary at line 240.
+  // Evidence: .planning/phases/12-codebase-audit-baseline/raw-returns/
+  //   lib_algorithm_aiReport.json (ALG-02 lines 19-27).
   out.push('## חלוקת תקציב לפי פלטפורמה');
   out.push('');
-  let metaSpend = 0, googleSpend = 0;
+  // Local accumulators (`metaSpendBA` / `googleSpendBA` / `ttSpendBA`) are
+  // disambiguated from the file-scope `fbSpend` / `gaSpend` / `ttSpend`
+  // computed in the Summary KPIs block (line ~175-186). Same values, but
+  // keeping the names distinct avoids shadowing the outer block-scoped
+  // `ttSpend` and makes the budget-allocation hunk self-contained.
+  let metaSpendBA = 0, googleSpendBA = 0;
+  let ttSpendBA = 0;
   for (const r of daily) {
-    metaSpend += r.fbSpend;
-    googleSpend += r.gaSpend;
+    metaSpendBA += r.fbSpend;
+    googleSpendBA += r.gaSpend;
+    ttSpendBA += r.ttSpend ?? 0;
   }
-  const totalSpendAll = metaSpend + googleSpend;
+  const totalSpendAll = metaSpendBA + googleSpendBA + ttSpendBA;
   if (totalSpendAll > 0) {
     out.push(`| פלטפורמה | הוצאה | % מסך תקציב |`);
     out.push(`|---|---|---|`);
-    out.push(`| Meta | ${fmtCad(metaSpend)} | ${(metaSpend / totalSpendAll * 100).toFixed(0)}% |`);
-    out.push(`| Google | ${fmtCad(googleSpend)} | ${(googleSpend / totalSpendAll * 100).toFixed(0)}% |`);
+    out.push(`| Meta | ${fmtCad(metaSpendBA)} | ${(metaSpendBA / totalSpendAll * 100).toFixed(0)}% |`);
+    out.push(`| Google | ${fmtCad(googleSpendBA)} | ${(googleSpendBA / totalSpendAll * 100).toFixed(0)}% |`);
+    if (ttSpendBA > 0) {
+      out.push(`| TikTok | ${fmtCad(ttSpendBA)} | ${(ttSpendBA / totalSpendAll * 100).toFixed(0)}% |`);
+    }
     out.push('');
     out.push('_שווה לבדוק אם החלוקה הזו אופטימלית. אם פלטפורמה אחת מספקת ROAS גבוה משמעותית יותר ברמת חנות (ראה Shopify revenue), שווה לשקול הסטת תקציב._');
     out.push('');
