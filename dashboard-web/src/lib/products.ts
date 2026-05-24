@@ -1,5 +1,6 @@
 import { google } from 'googleapis';
 import { type DateRange, isInRange } from './dateRange';
+import { isDate } from './dateValidation';
 
 const PRODUCTS_TAB = 'products-daily';
 
@@ -47,22 +48,38 @@ function parseNumber(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+// AUDIT STA-46 (2026-05-24, Phase 12.2.3): all date format branches now
+// run through `isDate` round-trip calendar validation. Pre-fix the DMY
+// branch produced silent corruption — `31/02/2026` → `2026-02-31`,
+// which then passed downstream lexicographic comparison and persisted
+// to consumers. Same bug class WR-04 already fixed for the operator
+// routes via lib/dateValidation.isDate; this brings the Sheets reader
+// to parity. ISO + numeric branches also gated to defend in depth.
+// Evidence: raw-returns/lib_state_products.json (STA-46).
 function parseDate(v: unknown): string | null {
   if (!v) return null;
   if (typeof v === 'number') {
     const ms = (v - 25569) * 86400 * 1000;
     const d = new Date(ms);
     if (Number.isNaN(d.getTime())) return null;
-    return d.toISOString().slice(0, 10);
+    const iso = d.toISOString().slice(0, 10);
+    return isDate(iso) ? iso : null;
   }
   const s = String(v).trim();
-  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) {
+    const sliced = s.slice(0, 10);
+    return isDate(sliced) ? sliced : null;
+  }
   if (/^\d{1,2}\/\d{1,2}\/\d{4}$/.test(s)) {
     const [d, m, y] = s.split('/').map(Number);
-    return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const iso = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    return isDate(iso) ? iso : null;
   }
   const d = new Date(s);
-  if (!Number.isNaN(d.getTime())) return d.toISOString().slice(0, 10);
+  if (!Number.isNaN(d.getTime())) {
+    const iso = d.toISOString().slice(0, 10);
+    return isDate(iso) ? iso : null;
+  }
   return null;
 }
 
@@ -107,7 +124,15 @@ export async function fetchProductsData(opts?: { range?: DateRange }): Promise<P
       netRaw === undefined || netRaw === null || netRaw === ''
         ? null
         : parseNumber(netRaw);
-    if (units <= 0 && revenue <= 0) continue;
+    // AUDIT STA-47 (2026-05-24, Phase 12.2.3): align filter with
+    // postgresReaders.fetchProductsFromPostgres line 529 — keep rows
+    // with any non-zero revenue surface (units, gross, or net). Pre-fix
+    // the `if (units <= 0 && revenue <= 0) continue;` dropped refund-
+    // correction rows (units=0, revenue=0, netRevenue>0) that the
+    // Postgres reader retains. Sheets reader was silently shedding
+    // signal vs Postgres reader — asymmetry across the cut-over.
+    // Evidence: raw-returns/lib_state_products.json (STA-47).
+    if (units <= 0 && revenue <= 0 && (netRevenue ?? 0) <= 0) continue;
 
     out.push({
       date: dateStr,
