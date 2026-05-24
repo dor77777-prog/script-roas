@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { validatePost } from '@/app/api/operator/manual-overrides/route';
+import { validatePost } from '@/lib/operatorManualOverrides';
 
 /**
  * AUDIT regression (Phase 12.3 / 2026-05-24) — API-26:

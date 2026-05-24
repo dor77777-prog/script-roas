@@ -34,80 +34,27 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { userFacingError } from '@/lib/apiErrors';
 import { isDate } from '@/lib/dateValidation';
+// AUDIT API-26 (Phase 12.3): pure validators extracted to a sibling
+// lib module so they can be `export`ed for unit tests. Next 14 forbids
+// non-HTTP-verb exports from app/**/route.ts modules (typed via the
+// generated OmitWithTag<typeof routeModule, GET | POST | ...>
+// constraint that materializes during `next build` / `tsc --noEmit`).
+import {
+  parseStrictNumeric,
+  validatePost,
+  VALID_STORES,
+  VALID_PLATFORMS,
+  VALID_CURRENCIES,
+} from '@/lib/operatorManualOverrides';
 
 export const dynamic = 'force-dynamic';
 // NOTE: revalidate is intentionally NOT exported here — see Pitfall 11.
 // force-dynamic is the sole cache directive on CRUD routes.
 
-const VALID_STORES = new Set(['uzoshop', 'zolplus', 'usmile360']);
-const VALID_PLATFORMS = new Set(['meta', 'google']);
-const VALID_CURRENCIES = new Set(['ILS', 'CAD', 'USD']);
-
-// AUDIT API-26 (2026-05-24, Phase 12.3): strict numeric coercion.
-// parseFloat('1500NIS') returns 1500 (silently truncates trailing
-// garbage); Number('1500NIS') returns NaN. Combined with a regex
-// pre-check on string inputs we reject anything that isn't a clean
-// signed decimal. Numbers pass through unchanged for backward compat
-// with callers that already typed b.spend as number.
-// Evidence: .planning/phases/12-codebase-audit-baseline/raw-returns/
-//   api_operator_manualOverrides.json (API-26).
-function parseStrictNumeric(value: unknown): number {
-  if (typeof value === 'number') return value;
-  if (typeof value !== 'string') return NaN;
-  if (!/^-?\d+(\.\d+)?$/.test(value.trim())) return NaN;
-  return Number(value);
-}
-
-type PostBody = {
-  date: string;
-  store_id: string;
-  platform: string;
-  spend: number;
-  currency: string;
-  notes?: string | null;
-};
-
 // Strict YYYY-MM-DD calendar-day validation lives in `@/lib/dateValidation`
 // — shared with `/api/operator/backfill`. See that file for the rationale
 // (regex + Date.UTC round-trip rejects normalized impossible dates so
 // `2026-99-99` doesn't silently become a real downstream date).
-
-/**
- * Validate + normalise a POST body. Returns the normalised body on success,
- * or a human-readable error string on failure. The string form is rendered
- * verbatim to the operator UI — keep it Hebrew-light & ASCII-safe so it
- * round-trips through any console / log without mojibake.
- *
- * The same shape is used by PATCH for partial updates (every field there
- * is optional, but if present it must clear the same validation as POST).
- */
-export function validatePost(body: unknown): PostBody | string {
-  if (!body || typeof body !== 'object') return 'body must be a JSON object';
-  const b = body as Record<string, unknown>;
-  if (!isDate(b.date)) return 'date must be YYYY-MM-DD';
-  if (typeof b.store_id !== 'string' || !VALID_STORES.has(b.store_id)) {
-    return `unknown store_id: ${String(b.store_id)}`;
-  }
-  const platform = String(b.platform ?? '').toLowerCase();
-  if (!VALID_PLATFORMS.has(platform)) {
-    return "platform must be 'meta' or 'google'";
-  }
-  const currency = String(b.currency ?? '').toUpperCase();
-  if (!VALID_CURRENCIES.has(currency)) {
-    return 'currency must be ILS/CAD/USD';
-  }
-  const spend = parseStrictNumeric(b.spend);
-  if (!Number.isFinite(spend)) return 'spend must be numeric';
-  const notes = b.notes === undefined || b.notes === null ? null : String(b.notes);
-  return {
-    date: b.date,
-    store_id: b.store_id,
-    platform,
-    spend,
-    currency,
-    notes,
-  };
-}
 
 /**
  * GET — list all overrides, newest-first by date, then store. anon could
