@@ -1,9 +1,21 @@
-import { google } from 'googleapis';
-import { parseDate, type DateRange, isInRange } from './dateRange';
+/**
+ * Order attribution types + parse utilities.
+ *
+ * Phase 12.4 cleanup: the Google Sheets reader (`fetchOrdersAttribution`)
+ * was deleted as dead-at-runtime code post-Phase-11 (READ_FROM=postgres
+ * permanent). The type exports + `parseSource`/`parseLineItems` parsers
+ * remain — they're still consumed by tests + by postgresReaders (which
+ * has its own internal `parseLineItems` copy used at runtime).
+ *
+ * Authoritative runtime reader: `lib/postgresReaders.fetchOrdersAttributionFromPostgres`.
+ *
+ * Phase 12.2's ordersAttribution ALG-01 paging cap fix lived inside the
+ * deleted reader; the fix is now permanently moot.
+ */
 
 /**
- * Per-order attribution row. One per Shopify order, sourced from the
- * <storeId>-orders-attribution tab that Apps Script writes daily.
+ * Per-order attribution row. One per Shopify order, sourced from
+ * orders_attribution table (Postgres tier).
  *
  * The big deal: `source` is *deterministic* for paid clicks (fbclid /
  * gclid). Meta can't fake this — fbclid is generated client-side when
@@ -45,8 +57,8 @@ export type OrderAttributionRow = {
 };
 
 /**
- * One physical line item inside a Shopify order. Captured by Apps Script
- * from `order.line_items[]` and proportionally allocated against the
+ * One physical line item inside a Shopify order. Captured from
+ * `order.line_items[]` and proportionally allocated against the
  * order's `current_total_price` so the sum of `revenueCad` across an
  * order's items equals (within rounding) `totalCad`. Items with a null /
  * empty `product_id` (custom items, deleted products) are filtered out
@@ -54,7 +66,7 @@ export type OrderAttributionRow = {
  */
 export type OrderLineItem = {
   /** Shopify numeric product ID as string. Guaranteed non-empty (the
-   *  Apps Script writer skips items without a product_id). */
+   *  writer skips items without a product_id). */
   productId: string;
   /** Units sold for this line. */
   units: number;
@@ -75,44 +87,11 @@ export type OrderSource =
   | 'direct'           // no UTM, no referrer
   | '';                // unknown / missing
 
-const STORE_TAB_CONFIG = [
-  { id: 'uzoshop',   name: 'uzoshop' },
-  { id: 'zolplus',   name: 'Zol Plus' },
-  { id: 'usmile360', name: '360usmile' },
-];
-
-function getAuth() {
-  const clientEmail = process.env.GOOGLE_CLIENT_EMAIL;
-  const privateKeyRaw = process.env.GOOGLE_PRIVATE_KEY;
-  if (!clientEmail || !privateKeyRaw) {
-    throw new Error('Missing GOOGLE_CLIENT_EMAIL / GOOGLE_PRIVATE_KEY env vars.');
-  }
-  return new google.auth.GoogleAuth({
-    credentials: {
-      client_email: clientEmail,
-      private_key: privateKeyRaw.replace(/\\n/g, '\n'),
-    },
-    scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
-  });
-}
-function getSpreadsheetId(): string {
-  const id = process.env.SPREADSHEET_ID;
-  if (!id) throw new Error('Missing SPREADSHEET_ID env var.');
-  return id;
-}
-function parseNumber(v: unknown): number {
-  if (v === null || v === undefined || v === '') return 0;
-  const n = typeof v === 'number' ? v : parseFloat(String(v).replace(/,/g, ''));
-  return Number.isFinite(n) ? n : 0;
-}
 /**
- * Source kinds the Apps Script `classifyOrderAttribution_` is known to
- * emit at the time of writing. Kept as a documented contract — the type
- * union in OrderSource doubles as the canonical list. When Apps Script
- * adds a new bucket (e.g. 'tiktok-paid'), it'll pass through this parser
- * via the type-cast fallback below (rather than being silently coerced
- * to '' as the previous whitelist did). Downstream code that pattern-
- * matches on specific values won't recognise the new kind, but the data
+ * Permissive source-string normalizer. A new writer label like
+ * 'tiktok-paid' passes through unchanged via the type-cast fallback
+ * (rather than being silently coerced to '' as an old whitelist would).
+ * Downstream pattern-matching won't recognise the new kind, but the data
  * survives — the dashboard stops going blind on new categories. (IN5-06)
  */
 export function parseSource(v: unknown): OrderSource {
@@ -122,18 +101,20 @@ export function parseSource(v: unknown): OrderSource {
 }
 
 /**
- * Permissive JSON parser for col-N (`Line Items (JSON)`). Mirrors the
- * `parseSource` design (line 109 above): be tolerant — a malformed cell
- * on one row should NEVER take down the whole tab. Returns `[]` for:
+ * Permissive JSON parser for line_items column. Be tolerant — a malformed
+ * cell on one row should NEVER take down the whole batch. Returns `[]` for:
  *   - missing cell (`undefined` / `null` / `''` — old pre-migration rows)
  *   - non-JSON strings
  *   - JSON that decodes to a non-array
  *   - non-object array elements
  *   - elements with empty productId or non-finite units / revenueCad
  *
- * Phase 1 (added 2026-05-18). Defaults to `[]` rather than `null` so
- * consumer code can always iterate without a null-guard — matches the
- * "Claude's Discretion" call in RESEARCH.md.
+ * Defaults to `[]` rather than `null` so consumer code can always iterate
+ * without a null-guard.
+ *
+ * Note: `lib/postgresReaders.ts:157` defines its own internal copy used
+ * at runtime. This export is retained for test fixtures + the
+ * `orderSourceContract.test.ts` parity contract.
  */
 export function parseLineItems(v: unknown): OrderLineItem[] {
   if (v === null || v === undefined || v === '') return [];
@@ -146,16 +127,14 @@ export function parseLineItems(v: unknown): OrderLineItem[] {
       // Require it.p to be a non-empty string (WR-08). Without this,
       // String(it.p ?? '') would happily accept e.g. {p: [1,2,3]} and
       // emit productId="1,2,3" — a synthetic ID that never appears in
-      // the catalog. Phase 1's writer guarantees p is a string per-row,
-      // but a malformed sheet edit could slip in a non-string and the
-      // dashboard would silently consume it.
+      // the catalog.
       .filter((it): it is { p: string; u: unknown; r: unknown } =>
         it !== null && typeof it === 'object' &&
         typeof (it as { p?: unknown }).p === 'string' &&
         (it as { p: string }).p.trim().length > 0,
       )
       .map(it => ({
-        productId: String(it.p ?? '').trim(),   // FIX-18 (5.2.2.1): normalize at parse boundary; downstream Set.has comparisons benefit.
+        productId: String(it.p ?? '').trim(),
         units: Number(it.u ?? 0),
         revenueCad: Number(it.r ?? 0),
       }))
@@ -166,114 +145,4 @@ export function parseLineItems(v: unknown): OrderLineItem[] {
   } catch {
     return [];
   }
-}
-
-/**
- * Reads every <storeId>-orders-attribution tab and merges. Tolerates
- * missing tabs (first-deploy case): returns empty array if the batch
- * fails on a 'not found' / 'unable to parse range' error.
- * When `opts.range` is provided, rows outside [from, to] are filtered out
- * server-side (Phase 5 pagination).
- *
- * @param opts.includeLineItems - When true, includes the heavy `lineItems`
- *   JSON column (col N) in the response. Default false: callers that only
- *   need order-level fields (CampaignsTable for the trust chip) get a
- *   smaller, faster payload. CampaignDrawer's productChannelBreakdown is
- *   the only caller that needs the line-items breakdown — it explicitly opts
- *   in. Performance: requesting only A:M instead of A:N saves ~30-50% of
- *   the Sheets API bandwidth and dramatically reduces JSON parsing cost in
- *   the dashboard. With 330k rows projected at scale, this is the single
- *   biggest payload optimization in the phase.
- */
-export async function fetchOrdersAttribution(opts?: {
-  range?: DateRange;
-  /**
-   * When true, includes the heavy `lineItems` JSON column (col N) in the
-   * response. Default false: callers that only need order-level fields
-   * (CampaignsTable for the trust chip) get a smaller, faster payload.
-   * CampaignDrawer's productChannelBreakdown is the only caller that
-   * needs the line-items breakdown — it explicitly opts in.
-   *
-   * Performance: requesting only A:M instead of A:N saves ~30-50% of
-   * the Sheets API bandwidth and dramatically reduces JSON parsing
-   * cost in the dashboard. With 330k rows projected at scale, this is
-   * the single biggest payload optimization in the phase.
-   */
-  includeLineItems?: boolean;
-}): Promise<OrderAttributionRow[]> {
-  const auth = getAuth();
-  const sheets = google.sheets({ version: 'v4', auth });
-  const spreadsheetId = getSpreadsheetId();
-
-  // When includeLineItems=true: read A:N (includes heavy line-items JSON col).
-  // When includeLineItems=false (default): read A:M only — skips col N entirely,
-  // saving ~30-50% Sheets API bandwidth. lineItems field is always present on
-  // each row but set to [] for backwards-compat (consumers can forEach safely).
-  const includeLI = opts?.includeLineItems === true;
-  const lastCol = includeLI ? 'N' : 'M';
-  // AUDIT ordersAttribution ALG-01 (2026-05-24, Phase 12.2.2): open-ended
-  // sheet range. Pre-fix the hardcoded row-100000 cap (`...A2:${lastCol}100000`)
-  // silently truncated rows beyond row 100000 from the returned dataset.
-  // STORE_TAB_CONFIG projects ~330k attribution rows total — uzoshop alone
-  // can exceed 100k after a year of operation. Open-ended range lets
-  // Sheets return through last row with data (per googleapis docs); no
-  // manual paging required for typical store sizes (Sheets' hard cap is
-  // ~10M cells per spreadsheet).
-  //
-  // Note: this is a legacy Sheets-reader path (the Phase 11 transition
-  // moved live consumers to fetchOrdersAttributionFromPostgres in
-  // lib/postgresReaders.ts) but still active per the audit operator-
-  // directive — must not silently truncate.
-  // Evidence: raw-returns/lib_algorithm_ordersAttribution.json (ALG-01).
-  const ranges = STORE_TAB_CONFIG.map(s => `${s.id}-orders-attribution!A2:${lastCol}`);
-  let res;
-  try {
-    res = await sheets.spreadsheets.values.batchGet({
-      spreadsheetId,
-      ranges,
-      valueRenderOption: 'UNFORMATTED_VALUE',
-      dateTimeRenderOption: 'FORMATTED_STRING',
-    });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes('Unable to parse range') || msg.toLowerCase().includes('not found')) {
-      return [];
-    }
-    throw err;
-  }
-
-  const out: OrderAttributionRow[] = [];
-  const valueRanges = res.data.valueRanges ?? [];
-  for (let i = 0; i < STORE_TAB_CONFIG.length; i++) {
-    const store = STORE_TAB_CONFIG[i];
-    const values = valueRanges[i]?.values ?? [];
-    for (const row of values) {
-      const date = parseDate(row[0]);
-      if (!date) continue;
-      if (opts?.range && !isInRange(date, opts.range)) continue;
-      const orderId = String(row[1] ?? '').trim();
-      if (!orderId) continue;
-      out.push({
-        date,
-        storeId: store.id,
-        storeName: store.name,
-        orderId,
-        totalCad: parseNumber(row[2]),
-        source: parseSource(row[3]),
-        utmSource: String(row[4] ?? '').trim(),
-        utmMedium: String(row[5] ?? '').trim(),
-        utmCampaign: String(row[6] ?? '').trim(),
-        utmContent: String(row[7] ?? '').trim(),
-        fbclidPresent: row[8] === true || String(row[8] ?? '').toUpperCase() === 'TRUE',
-        gclidPresent: row[9] === true || String(row[9] ?? '').toUpperCase() === 'TRUE',
-        referringSite: String(row[10] ?? '').trim(),
-        utmId: String(row[11] ?? '').trim(),
-        utmTerm: String(row[12] ?? '').trim(),
-        // Empty array when includeLineItems=false — preserves backwards-compat
-        // for consumers that iterate .lineItems without a null-guard.
-        lineItems: includeLI ? parseLineItems(row[13]) : [],
-      });
-    }
-  }
-  return out;
 }
