@@ -1,9 +1,9 @@
 # COGS (Cost of Goods Sold) — שיטת חישוב
 
-החל ממאי 2026, **COGS מחושב כ-25% מההכנסה היומית** של כל חנות. זוהי הערכה שמרנית שמשקפת את הממוצע ההיסטורי בכל שלוש החנויות.
+COGS מחושב כ-**אחוז קבוע מההכנסה היומית** של כל חנות (לא דרך Shopify cost-per-item). ברירת המחדל: **25%**, עם אפשרות לדריסה פר-חנות.
 
 > **למה לא דרך Shopify cost-per-item?**
-> ניסינו את זה והיו בעיות: לחלק מהמוצרים אין `cost` מוגדר ב-Shopify, ולחלק יש ערכים לא מעודכנים, מה שגרם לחישוב לא מדויק. החישוב הקבוע של 25% נותן מספר אמין שאפשר לסמוך עליו.
+> לחלק מהמוצרים אין `cost` מוגדר ב-Shopify ולחלק יש ערכים לא מעודכנים — חישוב לא מדויק. אחוז קבוע נותן מספר אמין שאפשר לסמוך עליו.
 
 > **השפעה על ROAS**: אין. ROAS = Revenue / Ad Spend בלבד.
 > COGS משפיע רק על **רווח גולמי** = Revenue − COGS, ועל **רווח נטו** = Revenue − Ad Spend − COGS − Transaction Fees − Fixed Costs.
@@ -12,39 +12,50 @@
 
 ## איפה הערך מוגדר
 
-הערך מוגדר בשני מקומות במקביל — חייבים להיות עקביים כדי שהדשבורד יסכים עם הנתונים שהסקריפט כותב:
+מאז Phase 11 (2026-05-24), כל הקוד רץ ב-tier אחד: Next.js dashboard + Inngest crons שכותבים ל-Supabase Postgres. ה-COGS rate נקרא משני מקורות בסדר העדיפות הבא:
 
-- **Apps Script** ([Config.gs](Config.gs)): `COGS_RATE_OF_REVENUE = 0.25`
-  - בשימוש ב-[DailyUpdate.gs](DailyUpdate.gs) → `updateStoreForDate_` בעת חישוב `cogsCad = revenueCad × COGS_RATE_OF_REVENUE`
-  - הערך נכתב ל-`data-daily` עמודה J (COGS CAD)
-- **Dashboard** ([dashboard-web/src/lib/analytics.ts](dashboard-web/src/lib/analytics.ts)): `COGS_RATE_OF_REVENUE = 0.25`
-  - בשימוש ב-[`KpiCards`](dashboard-web/src/components/KpiCards.tsx), [`PnLBreakdown`](dashboard-web/src/components/PnLBreakdown.tsx), [`DetailTable`](dashboard-web/src/components/DetailTable.tsx) ועוד
+1. **Per-store env var** (מומלץ) — `${STORE_UPPERCASE}_COGS_RATE` ב-Vercel env vars. דוגמה:
+   ```
+   UZOSHOP_COGS_RATE=0.22
+   ZOLPLUS_COGS_RATE=0.28
+   USMILE360_COGS_RATE=0.18
+   ```
+   השם מתבסס על `storeId` (uzoshop / zolplus / usmile360) באותיות גדולות, ועם `_COGS_RATE`.
+2. **Fallback גלובלי** — `COGS_RATE_OF_REVENUE = 0.25` ב-[dashboard-web/src/lib/analytics.ts](dashboard-web/src/lib/analytics.ts). משמש כש-אין env var ספציפי לחנות.
 
-לשינוי האחוז (למשל ל-20% או 30%):
-1. ערוך את שני הקבצים — שניהם צריכים אותו ערך כדי שהשורות החדשות וההיסטוריות יהיו עקביות
-2. דחוף ל-git (Vercel ידפלוי דשבורד אוטומטית)
-3. העתק את `Config.gs` המעודכן ל-Apps Script
-4. (אופציונלי) ב-Apps Script: הרץ `backfillRange('YYYY-MM-DD', 'YYYY-MM-DD')` כדי שהעמודה ב-`data-daily` תעודכן רטרואקטיבית
+ה-helper `getCogsRateForStore(storeId)` ב-[dashboard-web/src/lib/costs.ts](dashboard-web/src/lib/costs.ts) הוא נקודת הקריאה היחידה — כל המשנה הזה זורם דרכו: cron-daily (כתיבה לטבלת `data_daily.cogs_cad`), cron-live (כתיבת LIVE-day), וקוד הדשבורד (KpiCards, PnLBreakdown, DetailTable, forecastMonthEnd).
 
-הדשבורד יציג את הערך החדש מיד גם בלי backfill (כי הוא מחשב מ-revenue × rate בזמן ריצה), אבל ה-Sheet עצמו יישאר עם הערכים הישנים עד שתריץ backfill.
+## לשינוי האחוז
+
+לחנות בודדת:
+1. ב-Vercel Project Settings → Environment Variables → הוסף/עדכן `${STORE}_COGS_RATE` (למשל `UZOSHOP_COGS_RATE=0.20`)
+2. הפעל מחדש את ה-deployment האחרון (Vercel → Deployments → ⋯ → Redeploy)
+3. cron-daily הבא (00:05 IL) יכתוב את הערך החדש ל-`data_daily.cogs_cad` עבור היום ההוא והלאה
+4. ערכים היסטוריים נשארים כפי שהיו אלא אם תפעיל backfill ידני (Operator → Backfill range)
+
+לכל החנויות (שינוי גלובלי):
+- ערוך את `COGS_RATE_OF_REVENUE` ב-[dashboard-web/src/lib/analytics.ts](dashboard-web/src/lib/analytics.ts)
+- הדשבורד יציג את הערך החדש מיד לכל הימים — בלי backfill (חישוב on-the-fly מ-`revenue × rate`)
+- שורות ב-DB יישארו בערכים הישנים עד הריצה הבאה של cron-daily / backfill ידני
 
 ---
 
 ## איפה זה מופיע
 
-### בטאב `data-daily` (מקור האמת)
-- **J: COGS (CAD)** — `revenue * 0.25` נכתב אוטומטית בכל ריצה של `runDailyUpdate`
-- **K: Net Profit (CAD)** — נוסחה: `=G-F-IF(J="",0,J)` → Revenue − Spend − COGS
+### בטבלת `data_daily` (מקור האמת שהדשבורד קורא ממנה)
+- **`cogs_cad`** — `revenue_cad × rate` נכתב אוטומטית בכל ריצה של cron-daily (לפי per-store rate)
+- **`net_profit_cad`** — מחושב on-the-fly בדשבורד: `revenue − ad_spend − cogs`. לא נכתב לטבלה.
 
 ### בדשבורד
 - **KPI cards** (טאב בית): כרטיס "רווח גולמי" = Revenue − COGS
-- **P&L Waterfall** (טאב P&L): COGS מופיע כאחד הצעדים בwaterfall (Revenue → -Ad Spend → **-COGS** → -Transaction Fees → -Fixed → True Net)
+- **P&L Waterfall** (טאב P&L): COGS מופיע כצעד בwaterfall (Revenue → -Ad Spend → **-COGS** → -Transaction Fees → -Fixed → True Net)
 - **PnLBreakdown Hero strip**: סך עלויות = Ad Spend + COGS + Transaction Fees + Fixed Costs
 - **DetailTable**: עמודה COGS מאוכלסת לכל יום + עמודת Net Profit
 - **TodayLive**: לא מציג COGS ישירות, אבל "רווח גולמי" עוטף אותו
+- **GoalTracker** (יעד חודשי): forecast כולל COGS בחישוב trueNetProfit + projectedNet (החל מ-AUDIT HIGH-9 + HIGH-NEW-2 — הקבוע 0.25 הוחלף ב-rate שמופק מ-`last7Cogs/last7Rev`)
 
 ### Transaction Fees
-לידה ל-COGS, ה-dashboard מנכה גם **Transaction Fees = 6.5% מהכנסות** (PayPal + FX overhead). מוגדר ב-[dashboard-web/src/lib/costs.ts](dashboard-web/src/lib/costs.ts) כקבוע `TRANSACTION_FEES_RATE`. רק בדשבורד — לא נכתב ל-Sheet.
+לידה ל-COGS, הדשבורד מנכה גם **Transaction Fees** (PayPal + FX overhead). מוגדר ב-[dashboard-web/src/lib/costs.ts](dashboard-web/src/lib/costs.ts) דרך `getTransactionFeesRateForStore(storeId)` — env var `${STORE}_TX_FEES_RATE` (fallback `TRANSACTION_FEES_RATE = 0.065`). מחושב on-the-fly בדשבורד; לא נכתב לטבלה.
 
 ### Fixed Costs
-המשתמש מגדיר ב-[BillingSettings](dashboard-web/src/components/BillingSettings.tsx) (recurring monthly subs + one-time charges). מסונכרן בענן תחת `roas-dashboard:billing-recurring` ו-`billing-onetime`. ה-dashboard עושה prorate לטווח הנבחר.
+האופרטור מגדיר ב-[BillingSettings](dashboard-web/src/components/BillingSettings.tsx) (recurring monthly subs + one-time charges). מסונכרן בענן תחת `roas-dashboard:billing-recurring` ו-`billing-onetime`. הדשבורד עושה prorate לטווח הנבחר.

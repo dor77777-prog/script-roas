@@ -1,5 +1,18 @@
 # ROAS Tracker — אפיון מערכת מלא
 
+> ⚠️ **תיעוד היסטורי — Phase 11 (2026-05-24) הסירה את שכבת ה-Apps Script לחלוטין.**
+>
+> המסמך הזה תועד במאי 2026 ומתאר את הארכיטקטורה הדו-שכבתית הישנה: Apps Script writer (Google Sheets) + Next.js reader (sheets-backed). הסכמת ה-cut-over ל-Supabase Postgres הושלמה ב-Phase 05.7.0, ו-Phase 11 הסירה את כל קבצי ה-`.gs` + `appsscript.json` + `.clasp.json` + `lib/sheets.ts` + `readFrom()`.
+>
+> **המצב כיום (post-Phase 11):**
+> - שכבת writer: Inngest crons (cron-daily-{store} × 3, cron-live-{store} × 3) שכותבים ל-Supabase Postgres
+> - שכבת reader: Next.js API routes שקוראים מ-`postgresReaders.ts` בלבד
+> - אין Google Sheets בזרימה. אין `.gs` files בריפו.
+>
+> סעיפי "Apps Script" / "Google Sheets" / "SheetBuilder" / "Config.gs" שמופיעים למטה משקפים את המצב הישן בלבד, ושומרים על ערך כתיעוד היסטורי של נקודת ההתחלה. לתיעוד עכשווי קצר ראה [README.md](README.md).
+>
+> ---
+
 מסמך מקיף שמתעד את המערכת במצבה הנוכחי: ארכיטקטורה, רכיבים, זרימת נתונים, פיצ'רים, ותפעול שוטף. **עודכן: מאי 2026** — משקף את הקוד עד `6d9df13` (סוף Round 5 — attribution pipeline + 13 תיקוני code-review).
 
 ---
