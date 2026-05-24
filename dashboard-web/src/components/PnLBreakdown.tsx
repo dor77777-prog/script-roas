@@ -83,6 +83,15 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo }: Props)
   // Phase 12.5.x (2026-05-24) — pass `revenue` so % of revenue recurring
   // rows contribute the same amount here as in the upstream `aggregate()`
   // call (keeps the per-source totals reconciling to `current.fixedCosts`).
+  //
+  // Phase 12.5.x bugfix (2026-05-24, operator-reported): the dep array used
+  // to miss `recurring` + `oneTime`. `billingForRange` reads them via
+  // `readRecurring()` / `readOneTime()` from localStorage at execution time,
+  // so the underlying values WERE fresh after the `'roas-billing-changed'`
+  // event fired — but useMemo never re-ran because no listed dep had
+  // changed. Adding `recurring` and `oneTime` (which DO update via the
+  // useEffect above on the same event) forces the memo to recompute, so
+  // the breakdown table reflects the new entry without a manual refresh.
   const billing = useMemo(() => {
     if (!rangeFrom || !rangeTo) return null;
     return billingForRange({
@@ -91,7 +100,7 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo }: Props)
       storeNames,
       revenue: current.revenue,
     });
-  }, [rangeFrom, rangeTo, storeNames, current.revenue]);
+  }, [rangeFrom, rangeTo, storeNames, current.revenue, recurring, oneTime]);
 
   // Active recurring entries scoped to the visible stores (or "All").
   const activeForScope = useMemo(() => {
