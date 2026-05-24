@@ -85,21 +85,38 @@ describe('buildProductCentricView — empty + edge', () => {
     expect(rows).toEqual([]);
   });
 
-  it('KEEPS products with at least one active cohort campaign (even if others dormant)', () => {
+  it('KEEPS products with at least one active cohort campaign + emits dormant members with zero metrics', () => {
+    // AUDIT ALG-03 (Phase 12.2.3, Option A): per the JSDoc at
+    // lib/productCentricView.ts:178-181 ("Members with no aggregated row
+    // (campaign paused throughout the range) are kept with zero metrics"),
+    // dormant cohort members MUST appear in the output. Pre-fix the line
+    // 311 `.filter(r => r.agg !== undefined)` silently dropped them,
+    // contradicting the docstring. Post-fix both members are emitted —
+    // dormant one with spend/conversionValue/allocatedRev all 0.
     const rows = buildProductCentricView({
       storeId: STORE,
       productMap: {
         [k('Meta', 'c1')]: ['p1'],
-        [k('Meta', 'c2')]: ['p1'], // c2 has no aggregated row
+        [k('Meta', 'c2')]: ['p1'], // c2 has no aggregated row (dormant)
       },
       aggregated: [makeAgg({ key: k('Meta', 'c1') })],
       productNetRevenue: new Map([['p1', 500]]),
     });
     expect(rows).toHaveLength(1);
     expect(rows[0].productId).toBe('p1');
-    // Only c1 has metrics → only one member in the output
-    expect(rows[0].members).toHaveLength(1);
-    expect(rows[0].members[0].campaignKey).toBe(k('Meta', 'c1'));
+    // Both members emitted per JSDoc contract (ALG-03 Option A fix).
+    expect(rows[0].members).toHaveLength(2);
+    const active = rows[0].members.find(m => m.campaignKey === k('Meta', 'c1'));
+    const dormant = rows[0].members.find(m => m.campaignKey === k('Meta', 'c2'));
+    expect(active).toBeDefined();
+    expect(dormant).toBeDefined();
+    // Dormant member has zero metrics; active member has the full
+    // cohort revenue (sole active on Meta → 100% of platform).
+    expect(dormant!.spend).toBe(0);
+    expect(dormant!.conversionValue).toBe(0);
+    expect(dormant!.allocatedRevenueEstimate).toBe(0);
+    expect(active!.spend).toBeGreaterThan(0);
+    expect(active!.allocatedRevenueEstimate).toBeCloseTo(500, 1);
   });
 });
 

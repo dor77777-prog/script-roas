@@ -174,6 +174,22 @@ export function buildProductCentricView(
   // 3. Build one row per product.
   const rows: ProductCohortRow[] = [];
   for (const [productId, campaignKeys] of cohortByProduct.entries()) {
+    // AUDIT ALG-02 + ALG-03 (2026-05-24, Phase 12.2.3): preserve stale-
+    // mapped cohort members + emit dormant members with zero metrics
+    // per the JSDoc contract below. Pre-fix:
+    //   - ALG-02 (line ~272 `if (!member?.agg) continue;`) dropped
+    //     allocator-assigned revenue for stale-mapped campaigns →
+    //     operator saw $1200 visible vs $1500 totalNetRevenue (300 leak).
+    //   - ALG-03 (line ~311 dormant-member filter) dropped dormant
+    //     members entirely, contradicting the docstring at line 178-181.
+    // Fix (Option A per evidence pack): carry platform/storeId/campaignId
+    // metadata derived from the campaignKey on each raw member, then
+    // emit dormant members with zero metrics in the final array. The
+    // allocator-assigned revenue (if any) is read from allocByCampaign
+    // by campaignKey lookup — works for dormant + active alike.
+    // Evidence: raw-returns/lib_algorithm_productCentricView.json
+    //   (ALG-02 + ALG-03).
+    //
     // Collect cohort members (resolved aggregated rows). Members with
     // no aggregated row (campaign paused throughout the range) are kept
     // with zero metrics — operator may want to see "campaign X was
@@ -181,11 +197,30 @@ export function buildProductCentricView(
     type RawMember = {
       campaignKey: string;
       agg: Aggregated | undefined;
+      /** Platform parsed from campaignKey (`${storeId}::${platform}::${campaignId}`).
+       *  Used for ALG-02 fix: when `agg` is missing (dormant campaign),
+       *  the platform attribution still needs a value to credit allocator
+       *  revenue to. */
+      platformFromKey: string;
+      /** storeId parsed from campaignKey. Same rationale as platformFromKey. */
+      storeIdFromKey: string;
+      /** campaignId parsed from campaignKey. Same rationale. */
+      campaignIdFromKey: string;
     };
-    const raw: RawMember[] = campaignKeys.map(k => ({
-      campaignKey: k,
-      agg: aggByKey.get(k),
-    }));
+    const raw: RawMember[] = campaignKeys.map(key => {
+      // campaignKey format: `${storeId}::${platform}::${campaignId}`.
+      // Split on '::' to recover metadata for dormant campaigns. The
+      // productMap key is the canonical source of identity — same shape
+      // as `campaignKey()` in lib/campaignProductMap.ts.
+      const parts = key.split('::');
+      return {
+        campaignKey: key,
+        agg: aggByKey.get(key),
+        storeIdFromKey: parts[0] ?? '',
+        platformFromKey: parts[1] ?? '',
+        campaignIdFromKey: parts.slice(2).join('::'), // tolerate campaignIds with '::'
+      };
+    });
 
     // Skip products where NO cohort campaign has any aggregated row at
     // all — those are stale mappings on dormant campaigns and add only
@@ -197,10 +232,17 @@ export function buildProductCentricView(
     const blendedRoas = totalCohortSpend > 0 ? totalNetRevenue / totalCohortSpend : 0;
 
     // Group by platform for intra-platform calculations.
+    //
+    // ALG-02 + ALG-03 (Phase 12.2.3): include DORMANT members too so the
+    // stale-mapped platform shows up in byPlatform (otherwise allocator-
+    // assigned revenue for a stale TikTok campaign would be silently
+    // dropped from `platformAllocatedRevenue`). Platform is read from
+    // `agg.platform` when present (canonical) else from `platformFromKey`
+    // (parsed from the campaignKey) for dormant members.
     const platformGroups = new Map<string, RawMember[]>();
     for (const r of raw) {
-      if (!r.agg) continue;
-      const platform = r.agg.platform;
+      const platform = r.agg?.platform ?? r.platformFromKey;
+      if (!platform) continue; // malformed campaignKey — skip defensively
       if (!platformGroups.has(platform)) platformGroups.set(platform, []);
       platformGroups.get(platform)!.push(r);
     }
@@ -269,8 +311,12 @@ export function buildProductCentricView(
       }
       for (const [campaignKey, rev] of allocByCampaign.entries()) {
         const member = raw.find(r => r.campaignKey === campaignKey);
-        if (!member?.agg) continue;
-        const platform = member.agg.platform;
+        // ALG-02 (Phase 12.2.3): use platformFromKey fallback when the
+        // member has no agg (stale-mapped paused campaign). Pre-fix the
+        // `if (!member?.agg) continue;` here silently dropped the
+        // allocator-assigned revenue → 300 leak vs totalNetRevenue.
+        const platform = member?.agg?.platform ?? member?.platformFromKey;
+        if (!platform) continue;
         platformAllocatedRevenue.set(
           platform,
           (platformAllocatedRevenue.get(platform) ?? 0) + rev,
@@ -297,6 +343,13 @@ export function buildProductCentricView(
     //
     // Evidence: .planning/phases/12-codebase-audit-baseline/raw-returns/
     //   lib_algorithm_productCentricView.json (ALG-01).
+    //
+    // ALG-03 + Phase 12.1.3 ALG-01: platformMemberCount counts ONLY active
+    // members (those with `r.agg` present). This preserves the 12.1.3
+    // intraRevShare = 1/N fallback semantic where active members on a
+    // zero-spend platform split the platform revenue equally. Dormant
+    // members get their allocation from the allocator path (via
+    // allocByCampaign.get) — they don't dilute the active members' share.
     const platformMemberCount = new Map<string, number>();
     for (const r of raw) {
       if (!r.agg) continue;
@@ -307,56 +360,93 @@ export function buildProductCentricView(
     }
 
     // Build the final member rows with the share + allocation fields.
-    const members: ProductCohortMember[] = raw
-      .filter(r => r.agg !== undefined)
-      .map(r => {
-        const a = r.agg!;
-        const intraTotal = platformSpend.get(a.platform) ?? 0;
-        // UI-spend-share for rendering — when intraTotal=0, spend share IS
-        // zero (operator-correct: a zero-spend campaign occupies 0% of a
-        // zero-spend cohort's spend). Same value as pre-fix.
-        const intraSpendShare = intraTotal > 0 ? a.spend / intraTotal : 0;
-        // AUDIT ALG-01 (2026-05-24, Phase 12.1.3): SEPARATE revenue-
-        // allocation-share. When intraTotal === 0 fall back to 1/N across
-        // the platform's members so per-member allocatedRev sums to
-        // platformRev. Aligns with the b/HI-05 equal-platform semantic
-        // applied one level up (the platform total uses 1/platformCount;
-        // we extend that to the member level).
-        const platformMembers = platformMemberCount.get(a.platform) ?? 1;
-        const intraRevShare = intraTotal > 0
-          ? a.spend / intraTotal
-          : (platformMembers > 0 ? 1 / platformMembers : 0);
-        const totalShare = totalCohortSpend > 0 ? a.spend / totalCohortSpend : 0;
-        // Audit fix 2026-05-23 (b/HI-03): when the allocator ran, read the
-        // exact per-campaign revenue from its output. Falls back to the
-        // simplified split (platform revenue × intra REVENUE share) when
-        // orders weren't provided — uses intraRevShare so the zero-spend
-        // cohort scenario produces platformRev/N instead of 0.
-        const platformRev = platformAllocatedRevenue.get(a.platform) ?? 0;
-        const allocatedRev = allocByCampaign?.get(a.key) ?? (platformRev * intraRevShare);
+    //
+    // ALG-03 (Phase 12.2.3): removed the pre-fix `.filter(r => r.agg !==
+    // undefined)` — dormant members are now emitted with zero metrics per
+    // the JSDoc contract above. Allocator-assigned revenue (if any) is
+    // read from allocByCampaign by campaignKey lookup — works for
+    // dormant + active alike (ALG-02 fix side-effect).
+    const members: ProductCohortMember[] = raw.map(r => {
+      if (!r.agg) {
+        // ALG-03 dormant member branch — emit with zero metrics. Display
+        // fields come from the campaignKey-parsed metadata.
+        //
+        // Revenue allocation policy for dormant members:
+        //   - Allocator branch (orders provided): read from allocByCampaign
+        //     by campaignKey. The allocator credits stale-mapped platforms
+        //     their deterministic order revenue → ALG-02 fix path.
+        //   - Simplified-split branch (no orders): zero. The active members
+        //     on the same platform already absorb the full platform share
+        //     via their intraRevShare; dormant members would double-count.
+        //     If the platform is dormant-only, the active platforms split
+        //     totalNetRevenue (via b/HI-05) and the dormant-only platform
+        //     gets nothing — operator's mental model is "dormant campaigns
+        //     on dormant platforms contribute zero in the visible range".
+        const platform = r.platformFromKey;
+        const allocatedRev = allocByCampaign?.get(r.campaignKey) ?? 0;
         return {
-          campaignKey: a.key,
-          campaignId: a.campaignId,
-          campaignName: a.campaignName,
-          platform: a.platform,
-          storeId: a.storeId,
-          storeName: a.storeName,
-          spend: a.spend,
-          conversionValue: a.conversionValue,
-          intraPlatformSpendShare: intraSpendShare,
-          totalSpendShare: totalShare,
+          campaignKey: r.campaignKey,
+          campaignId: r.campaignIdFromKey,
+          campaignName: r.campaignIdFromKey, // no aggregated name available
+          platform,
+          storeId: r.storeIdFromKey,
+          storeName: r.storeIdFromKey, // no aggregated storeName available
+          spend: 0,
+          conversionValue: 0,
+          intraPlatformSpendShare: 0,
+          totalSpendShare: 0,
           allocatedRevenueEstimate: allocatedRev,
-          platformRoas: a.spend > 0 ? a.conversionValue / a.spend : 0,
-          effectiveStatus: a.effectiveStatus,
+          platformRoas: 0,
+          effectiveStatus: null,
         };
-      });
+      }
+      const a = r.agg;
+      const intraTotal = platformSpend.get(a.platform) ?? 0;
+      // UI-spend-share for rendering — when intraTotal=0, spend share IS
+      // zero (operator-correct: a zero-spend campaign occupies 0% of a
+      // zero-spend cohort's spend). Same value as pre-fix.
+      const intraSpendShare = intraTotal > 0 ? a.spend / intraTotal : 0;
+      // AUDIT ALG-01 (2026-05-24, Phase 12.1.3): SEPARATE revenue-
+      // allocation-share. When intraTotal === 0 fall back to 1/N across
+      // the platform's members so per-member allocatedRev sums to
+      // platformRev. Aligns with the b/HI-05 equal-platform semantic
+      // applied one level up (the platform total uses 1/platformCount;
+      // we extend that to the member level).
+      const platformMembers = platformMemberCount.get(a.platform) ?? 1;
+      const intraRevShare = intraTotal > 0
+        ? a.spend / intraTotal
+        : (platformMembers > 0 ? 1 / platformMembers : 0);
+      const totalShare = totalCohortSpend > 0 ? a.spend / totalCohortSpend : 0;
+      // Audit fix 2026-05-23 (b/HI-03): when the allocator ran, read the
+      // exact per-campaign revenue from its output. Falls back to the
+      // simplified split (platform revenue × intra REVENUE share) when
+      // orders weren't provided — uses intraRevShare so the zero-spend
+      // cohort scenario produces platformRev/N instead of 0.
+      const platformRev = platformAllocatedRevenue.get(a.platform) ?? 0;
+      const allocatedRev = allocByCampaign?.get(a.key) ?? (platformRev * intraRevShare);
+      return {
+        campaignKey: a.key,
+        campaignId: a.campaignId,
+        campaignName: a.campaignName,
+        platform: a.platform,
+        storeId: a.storeId,
+        storeName: a.storeName,
+        spend: a.spend,
+        conversionValue: a.conversionValue,
+        intraPlatformSpendShare: intraSpendShare,
+        totalSpendShare: totalShare,
+        allocatedRevenueEstimate: allocatedRev,
+        platformRoas: a.spend > 0 ? a.conversionValue / a.spend : 0,
+        effectiveStatus: a.effectiveStatus,
+      };
+    });
 
     // Sort members by spend desc.
     members.sort((a, b) => b.spend - a.spend);
 
     // Build the per-platform groups for the UI.
-    const byPlatform = Array.from(platformGroups.entries())
-      .map(([platform, raws]) => {
+    const byPlatform = Array.from(platformGroups.keys())
+      .map(platform => {
         const platformMembers = members.filter(m => m.platform === platform);
         return {
           platform,
