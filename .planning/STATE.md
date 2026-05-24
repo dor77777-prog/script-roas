@@ -2,23 +2,23 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: audit-baseline
-status: completed
-last_updated: "2026-05-24T09:48:35.412Z"
-last_activity: "2026-05-24 — Phase 12 atomic AUDIT.md synthesis written. Awaiting operator decision on Phase 12.1 (P0 fixes: INN-10, INN-16, INN-01, ALG-04/05/06, MMC-BLOCKER-01, ProductCentricView ALG-01)."
+status: phase-12.1-complete
+last_updated: "2026-05-24T13:55:00.000Z"
+last_activity: "2026-05-24 — Phase 12.1 complete: 8 P0 fixes shipped (6 atomic commits + 1 composite). Verification PASS. 971/971 tests. Awaiting operator decision on Phase 12.2 (11 P1 fixes) / 12.3 (8 P2 fixes)."
 progress:
-  total_phases: 28
-  completed_phases: 10
-  total_plans: 70
-  completed_plans: 54
-  percent: 77
+  total_phases: 29
+  completed_phases: 11
+  total_plans: 74
+  completed_plans: 58
+  percent: 78
 ---
 
 ## Current Position
 
-Phase: 12.1 (P0 Audit Fixes) — INSERTED, awaiting plan
-Plan: Not started.
-Status: Phase 12 complete + committed (`3287cff`). Phase 12.1 directory created (`.planning/phases/12.1-p0-audit-fixes/`). Ready for `/gsd-plan-phase 12.1`.
-Last activity: 2026-05-24 — Phase 12.1 inserted (3 sub-plans: Inngest retry, aiReport cross-store, Cohort/Allocator math).
+Phase: 12.1 (P0 Audit Fixes) — COMPLETE
+Plan: 4 PLAN files executed in 3 waves. 8 fixes + 17 regression tests landed.
+Status: All 8 P0 audit fixes shipped + verified. 971/971 tests passing (was 946 baseline). VERIFICATION = PASS. Ready for `/gsd-phase --insert 12.1 "12.2 — P1 Audit Fixes"` (or operator decides to defer/skip).
+Last activity: 2026-05-24 — Phase 12.1 commits: 1f4b75c (INN-10), f1bc76a (INN-16), 55e709c (INN-01), 51c0de4 (ALG-04/05/06 composite), cb87464 (MMC-BLOCKER-01 + WARN-01/03/04/05 freebies), 4f328d3 (ProductCentricView ALG-01).
 
 ## Accumulated Context
 
@@ -34,3 +34,4 @@ Last activity: 2026-05-24 — Phase 12.1 inserted (3 sub-plans: Inngest retry, a
 - 2026-05-24: **Milestone v2.0 started — audit-baseline**. Goal: produce documented baseline of "verified correct" for every algorithm, component, and inter-component channel. Operator explicitly abandoned remaining v1.0 backlog (Phases 2, 4, 5, 5.4, 6, 7, 8) — marked DEFERRED in ROADMAP. Phase 12 = the audit (documentation only). Phase 12.x = conditional fix phases if 🔴 critical findings surface. v2.0 also bootstrapped: PROJECT.md created (was missing — workflow expected it), `.planning/codebase/` regenerated post-Phase-11, `.planning/graphs/` built via graphify (7,625 nodes / 9,107 edges / 564 communities). Note: the "U-05 halo-warning chip" was shipped as a single commit `b846ae7` without going through `gsd-phase add`, so it does NOT consume a phase number — the audit reuses Phase 12.
 - 2026-05-24: **Phase 12 COMPLETE**. 7 reviewer waves (A–G) ran 139 Opus subagents + 5 Codex cross-AI critiques in parallel → 302 findings (6 CRITICAL / 116 MAJOR / 115 MINOR / 32 COSMETIC) across 144 raw-return JSONs. Mid-execution operator checkpoint resolved 17/17 ⚠️ → 15 ✅ + 2 🔴 (DP-02). 3 cross-cutting Plan-agents produced `12-trycatch-sweep.{md,json}`, `12-tests-needed.md` (88 ranked gaps), `12-CHANNELS.md` (428 import edges + 10 channel-driven findings). Atomic AUDIT.md synthesized (DP-04): **123 ✅ Verified / 16 🔴 Has Bug / 0 ⚠️**. Recommended Phase 12.1 P0 scope: 8 fixes (INN-10, INN-16, INN-01, ALG-04/05/06 + storeId threading through campaignsAggregator.ts, MMC-BLOCKER-01, ProductCentricView ALG-01).
 - Phase 12.1 inserted after Phase 12: P0 Audit Fixes (8 fixes from AUDIT.md, 3 sub-plans: Inngest retry + aiReport cross-store + Cohort/Allocator math) (URGENT)
+- 2026-05-24: **Phase 12.1 COMPLETE**. 8/8 P0 audit fixes shipped as 6 atomic commits (operator-approved composite for aiReport ALG-04/05/06 since they share root cause + file + test). Wave structure honored: Wave 0 pre-flight (946 baseline) → Wave 1 Inngest (3 commits: INN-10/16/01, 9 regression tests) → Wave 2 parallel aiReport + Cohort/Allocator (3 commits: ALG-04/05/06 composite + MMC-BLOCKER-01 + PCV ALG-01, 16 new tests). Freebies folded in: ALG-09 (aiReport dead conditional, same hunk) + MMC-WARN-01/03/04/05 (same fix). Final: 971/971 tests, tsc clean, VERIFICATION = PASS via independent revert-sanity check on INN-10 + MMC-BLOCKER-01. Zero scope-creep into 12.2/12.3 surface.

@@ -13,7 +13,7 @@ Multi-store Shopify ROAS dashboard with deterministic per-order attribution. The
 
 **Phases:**
 - [x] **Phase 12: Codebase Audit Baseline** — Documentation only, no source-code changes. Spawned gsd-code-reviewer per file in 7 parallel waves (A–G) + cross-cutting sweep + test-gap survey + operator-checkpoint for ⚠️ triage. Output: `.planning/AUDIT.md` (139 files, 123 ✅ / 16 🔴 / 0 ⚠️) + `.planning/phases/12-codebase-audit-baseline/{12-tests-needed.md, 12-CHANNELS.md, 12-trycatch-sweep.md}`. Atomic synthesis commit `3287cff`. Decisions D-01..D-17 + DP-01..DP-04.
-- [ ] **Phase 12.1: P0 Audit Fixes (INSERTED)** — 8 ship-stopping fixes from AUDIT.md. 3 sub-plans: (a) Inngest retry + idempotency (INN-10, INN-16, INN-01); (b) aiReport cross-store cleanup (ALG-04/05/06 + storeId threading through campaignsAggregator.ts); (c) Cohort + Allocator math (MMC-BLOCKER-01 + ProductCentricView ALG-01). Each fix lands with regression_test_idea from raw-returns/. NO new features. Source of truth: `.planning/AUDIT.md` §Recommended Phase 12.1 Scope.
+- [x] **Phase 12.1: P0 Audit Fixes** — 8/8 shipped 2026-05-24. Commits: 1f4b75c (INN-10), f1bc76a (INN-16), 55e709c (INN-01), 51c0de4 (ALG-04/05/06 composite), cb87464 (MMC-BLOCKER-01 + WARN freebies), 4f328d3 (PCV ALG-01). 17 regression tests added (946 → 971). VERIFICATION = PASS.
 - [ ] **Phase 12.2/12.3: P1 + P2 fix phases (conditional)** — Operator-decided after 12.1 lands.
 
 ## Milestone v1.0: Implemented phases (historical — kept for traceability)
@@ -431,17 +431,16 @@ Plans:
 
 Result: 139 files audited, 123 ✅ / 16 🔴 / 0 ⚠️. 2 CRITICAL + 25 MAJOR bugs catalogued. Triage table in AUDIT.md maps each 🔴 to Phase 12.1 / 12.2 / 12.3 / backlog.
 
-### Phase 12.1: P0 Audit Fixes (INSERTED 2026-05-24)
+### Phase 12.1: P0 Audit Fixes — COMPLETE 2026-05-24
 
 **Goal:** Ship the 8 ship-stopping fixes from Phase 12's AUDIT.md.
-**Requirements**: TBD (run /gsd-plan-phase 12.1).
-**Depends on:** Phase 12 (consumes `.planning/AUDIT.md` + `raw-returns/*.json` for fix-level evidence + regression_test_idea per finding).
-**Plans:** 3 sub-plans planned (one per logical cluster).
+**Requirements**: 8 P0 findings (INN-10/16/01, ALG-04/05/06, MMC-BLOCKER-01, ProductCentricView ALG-01).
+**Depends on:** Phase 12 (consumed `.planning/AUDIT.md` + `raw-returns/*.json` for fix-level evidence + regression_test_idea per finding).
+**Plans:** 4 PLAN files (master + 3 sub-plans) — all complete.
+
+Result: 8/8 shipped + 17 regression tests added (946 → 971). VERIFICATION = PASS.
 
 Sub-plans:
-- [ ] 12.1.1 — Inngest retry + idempotency (INN-10 cronLive persist-rolling-3day SELECT separation + INN-16 eventBackfill systemic-failure abort + INN-01 cronDaily return-value uses persisted row)
-- [ ] 12.1.2 — aiReport cross-store cleanup (ALG-04/05/06 storeId-scoped keys in aiReport.ts + thread storeId through `Aggregated` in campaignsAggregator.ts → update ~10 consumers)
-- [ ] 12.1.3 — Cohort + Allocator math (MMC-BLOCKER-01 multiMappingCohort ranking score under shrinkage + ProductCentricView ALG-01 sum-conservation)
-
-Source of truth: `.planning/AUDIT.md` §Recommended Phase 12.1 Scope + `raw-returns/<file>.json` per finding.
-NO new features. Bugs only.
+- [x] 12.1.1 — Inngest retry + idempotency: INN-10 cronLive persist-rolling-3day SELECT moved to separate step.run (1f4b75c) + INN-16 eventBackfill systemic-failure abort + console.warn (f1bc76a) + INN-01 cronDaily return value reads persisted row (55e709c). 9 regression tests added.
+- [x] 12.1.2 — aiReport cross-store cleanup: composite commit 51c0de4 — ALG-04 (statusByCampaign) + ALG-05 (ordersByCampaignId/Name) + ALG-06 (3 suffix-match drill-down lookups) all keyed by `${storeId}::${platform}::${campaignId}`. Discovered storeId already on Aggregated → fix purely additive (no downstream cascade). ALG-09 dead conditional folded in as freebie. 5 regression tests added.
+- [x] 12.1.3 — Cohort + Allocator math: MMC-BLOCKER-01 tuple-lex comparator + non-finite guard (cb87464) — folded in MMC-WARN-01/03/04/05 as freebies (same file). ProductCentricView ALG-01 sum-conservation via `intraRevShare` fallback to `1/platformMembers.length` (4f328d3). 11 regression tests added (6 MMC + 5 PCV).
