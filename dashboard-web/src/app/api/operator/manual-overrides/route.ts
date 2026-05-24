@@ -43,6 +43,21 @@ const VALID_STORES = new Set(['uzoshop', 'zolplus', 'usmile360']);
 const VALID_PLATFORMS = new Set(['meta', 'google']);
 const VALID_CURRENCIES = new Set(['ILS', 'CAD', 'USD']);
 
+// AUDIT API-26 (2026-05-24, Phase 12.3): strict numeric coercion.
+// parseFloat('1500NIS') returns 1500 (silently truncates trailing
+// garbage); Number('1500NIS') returns NaN. Combined with a regex
+// pre-check on string inputs we reject anything that isn't a clean
+// signed decimal. Numbers pass through unchanged for backward compat
+// with callers that already typed b.spend as number.
+// Evidence: .planning/phases/12-codebase-audit-baseline/raw-returns/
+//   api_operator_manualOverrides.json (API-26).
+function parseStrictNumeric(value: unknown): number {
+  if (typeof value === 'number') return value;
+  if (typeof value !== 'string') return NaN;
+  if (!/^-?\d+(\.\d+)?$/.test(value.trim())) return NaN;
+  return Number(value);
+}
+
 type PostBody = {
   date: string;
   store_id: string;
@@ -66,7 +81,7 @@ type PostBody = {
  * The same shape is used by PATCH for partial updates (every field there
  * is optional, but if present it must clear the same validation as POST).
  */
-function validatePost(body: unknown): PostBody | string {
+export function validatePost(body: unknown): PostBody | string {
   if (!body || typeof body !== 'object') return 'body must be a JSON object';
   const b = body as Record<string, unknown>;
   if (!isDate(b.date)) return 'date must be YYYY-MM-DD';
@@ -81,7 +96,7 @@ function validatePost(body: unknown): PostBody | string {
   if (!VALID_CURRENCIES.has(currency)) {
     return 'currency must be ILS/CAD/USD';
   }
-  const spend = parseFloat(String(b.spend));
+  const spend = parseStrictNumeric(b.spend);
   if (!Number.isFinite(spend)) return 'spend must be numeric';
   const notes = b.notes === undefined || b.notes === null ? null : String(b.notes);
   return {
@@ -206,7 +221,10 @@ export async function PATCH(req: Request) {
       patch.currency = currency;
     }
     if (rest.spend !== undefined) {
-      const spend = parseFloat(String(rest.spend));
+      // AUDIT API-26 (Phase 12.3): strict regex via parseStrictNumeric
+      // (mirrors POST validatePost). Pre-fix used parseFloat which
+      // silently truncated trailing garbage ('1500NIS' → 1500).
+      const spend = parseStrictNumeric(rest.spend);
       if (!Number.isFinite(spend)) {
         return NextResponse.json({ error: 'spend must be numeric' }, { status: 400 });
       }
