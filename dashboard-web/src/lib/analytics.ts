@@ -128,6 +128,18 @@ export function aggregate(
    * historical global-aggregate semantics).
    */
   scopedStoreNames?: string[],
+  /**
+   * Phase 13.1 (2026-05-24) — per-store revenue split, supplied by
+   * `aggregateByStore` so the per-store path can hand `billingForRange`
+   * the FULL period revenue (sum of map values) for percent-of-revenue
+   * "All" rows, AND the per-store breakdown for store-specific percent
+   * rows. Without this, each bucket's `aggregate` call used the bucket's
+   * own revenue as the "global", and the All-row percent contribution
+   * collapsed to global / storeCount (Σ per-store = global / N instead
+   * of global). When omitted (global aggregate path), the call uses the
+   * row-derived `revenue` exactly as before.
+   */
+  revenueByStore?: Record<string, number>,
 ): Aggregate {
   let revenue = 0, spend = 0, fbSpend = 0, gaSpend = 0, ttSpend = 0, cogs = 0;
   // Audit fix 2026-05-23 (d/HI-02): per-store rates. Transaction fees are
@@ -186,12 +198,27 @@ export function aggregate(
   // recurring rows can compute their contribution to fixedCosts. Without
   // this thread, a recurring row marked as "5% of revenue" silently
   // contributed 0 to the P&L, breaking the True Net Profit math.
+  //
+  // Phase 13.1 (2026-05-24) — when `revenueByStore` is supplied (per-store
+  // path from `aggregateByStore`), derive the GLOBAL revenue from its
+  // values rather than from the bucket's own rows. Otherwise the All-row
+  // percent calc would use storeA_rev instead of totalRev, collapsing
+  // Σ per-store to global / N. Also forward `revenueByStore` itself so
+  // store-specific percent rows charge against THEIR store's revenue.
   const billing = billingFrom && billingTo
     ? billingForRange({
         from: billingFrom,
         to: billingTo,
         storeNames: billingStoreNames,
-        revenue,
+        ...(revenueByStore
+          ? {
+              revenue: Object.values(revenueByStore).reduce(
+                (a, b) => a + b,
+                0,
+              ),
+              revenueByStore,
+            }
+          : { revenue }),
       })
     : { total: 0, byStore: {} as Record<string, number> };
   // Audit fix 2026-05-23 (CRIT-1): when running the per-store path, the
@@ -261,9 +288,17 @@ export function aggregateByStore(
   range?: DateRange,
 ): StoreAgg[] {
   const map = new Map<string, DailyRow[]>();
+  // Phase 13.1 (2026-05-24) — precompute per-store revenue once in the same
+  // pass that buckets rows. Threaded into each per-store `aggregate` call so
+  // its `billingForRange` invocation can compute the GLOBAL revenue (sum of
+  // values) for All-scoped percent rows AND the per-store slice for store-
+  // specific percent rows. Without this, Σ per-store fixedCosts collapsed
+  // to global / storeCount for percent-of-revenue rows (Phase 13.1 P0-A).
+  const revenueByStore: Record<string, number> = {};
   for (const r of rows) {
     if (!map.has(r.storeName)) map.set(r.storeName, []);
     map.get(r.storeName)!.push(r);
+    revenueByStore[r.storeName] = (revenueByStore[r.storeName] ?? 0) + r.revenue;
   }
   // Audit fix 2026-05-23 (CRIT-1 / O3-CR-01): pass the FULL in-scope store
   // universe to each per-store `aggregate` call. Without it each call's
@@ -276,7 +311,10 @@ export function aggregateByStore(
   const scopedStoreNames = Array.from(map.keys());
   const out: StoreAgg[] = [];
   for (const [store, list] of map) {
-    out.push({ store, ...aggregate(list, range, scopedStoreNames) });
+    out.push({
+      store,
+      ...aggregate(list, range, scopedStoreNames, revenueByStore),
+    });
   }
   return out.sort((a, b) => b.roas - a.roas);
 }

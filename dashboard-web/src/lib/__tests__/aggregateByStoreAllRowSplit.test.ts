@@ -257,4 +257,89 @@ describe('aggregateByStore pre-splits All-scoped billing (CRIT-1 / O3-CR-01)', (
     expect(noScopeArg.fixedCosts).toBeCloseTo(withScopeArg.fixedCosts, 10);
     expect(noScopeArg.trueNetProfit).toBeCloseTo(withScopeArg.trueNetProfit, 10);
   });
+
+  // -------------------------------------------------------------------------
+  // Phase 13.1 P0-A — percent-of-revenue All rows preserve the invariant
+  // -------------------------------------------------------------------------
+  it('Σ per-store ≈ global fixedCosts when an All row uses percentOfRevenue (Phase 13.1 P0-A)', () => {
+    // 1 All-scoped recurring row at 5% of revenue (no fixed CAD amount).
+    // Phase 12.5.x added the percent path; pre-13.1 the per-store call to
+    // aggregate computed `revenue` from each bucket's own rows ONLY, so the
+    // percent calc used storeA_rev instead of totalRev — Σ per-store landed
+    // at global / N. This test pins the post-13.1 behavior.
+    seedRecurring(mem, [
+      {
+        id: 'r1',
+        store: 'All',
+        name: 'Markets Pro',
+        source: 'external-app',
+        monthlyCAD: 0,
+        percentOfRevenue: 5,
+        active: true,
+      },
+    ]);
+
+    // 3 stores × $100k revenue each → totalRev = $300k.
+    // Expected global percent contribution: 5% × $300k = $15,000.
+    const rows: DailyRow[] = [
+      row({ storeName: 'uzoshop',   storeId: 'uzoshop',   revenue: 100_000, totalSpend: 200 }),
+      row({ storeName: 'Zol Plus',  storeId: 'zolplus',   revenue: 100_000, totalSpend: 400 }),
+      row({ storeName: '360usmile', storeId: 'usmile360', revenue: 100_000, totalSpend: 600 }),
+    ];
+
+    const global = aggregate(rows, RANGE);
+    const perStore = aggregateByStore(rows, RANGE);
+
+    // Global side: 5% × 300k = 15000.
+    expect(global.fixedCosts).toBeCloseTo(15_000, 6);
+
+    // The hammer: Σ per-store must reconcile to the global within fp eps.
+    const sumPerStore = perStore.reduce((s, x) => s + x.fixedCosts, 0);
+    expect(sumPerStore).toBeCloseTo(global.fixedCosts, 6);
+
+    // Pre-13.1 behavior pin: Σ per-store collapsed to global / 3 = 5000.
+    // If a future refactor regresses the wiring, this guard trips.
+    expect(sumPerStore).not.toBeCloseTo(5_000, 0);
+
+    // trueNetProfit is downstream of fixedCosts — confirm same invariant
+    // holds end-to-end on the P&L number actually shown on the cards.
+    const sumPerStoreTrueNet = perStore.reduce(
+      (s, x) => s + x.trueNetProfit,
+      0,
+    );
+    expect(sumPerStoreTrueNet).toBeCloseTo(global.trueNetProfit, 6);
+
+    // Each bucket's share of the All-percent row: 15000 / 3 = 5000.
+    for (const s of perStore) {
+      expect(s.fixedCosts).toBeCloseTo(5_000, 6);
+    }
+  });
+
+  it('Σ per-store ≈ global fixedCosts for MIXED fixed-CAD + percent-of-revenue All rows (Phase 13.1 P0-A)', () => {
+    // Two All-scoped recurring rows: one fixed $60/mo + one 5% of revenue.
+    // The fix must compose: fixed-CAD path already worked (d/CR-01); the
+    // new percent-of-revenue path must add on top with the same invariant.
+    seedRecurring(mem, [
+      { id: 'r1', store: 'All', name: 'Klaviyo',    source: 'email',        monthlyCAD: 60, active: true },
+      { id: 'r2', store: 'All', name: 'Markets Pro', source: 'external-app', monthlyCAD: 0,  percentOfRevenue: 5, active: true },
+    ]);
+    const rows: DailyRow[] = [
+      row({ storeName: 'uzoshop',   storeId: 'uzoshop',   revenue: 100_000 }),
+      row({ storeName: 'Zol Plus',  storeId: 'zolplus',   revenue: 100_000 }),
+      row({ storeName: '360usmile', storeId: 'usmile360', revenue: 100_000 }),
+    ];
+
+    const global = aggregate(rows, RANGE);
+    const perStore = aggregateByStore(rows, RANGE);
+
+    // Global: fixed 60 × (30/30) + percent 5% × 300k = 60 + 15000 = 15060.
+    expect(global.fixedCosts).toBeCloseTo(15_060, 6);
+
+    const sumPerStore = perStore.reduce((s, x) => s + x.fixedCosts, 0);
+    expect(sumPerStore).toBeCloseTo(global.fixedCosts, 6);
+    // Each bucket: (60 + 15000) / 3 = 5020.
+    for (const s of perStore) {
+      expect(s.fixedCosts).toBeCloseTo(5_020, 6);
+    }
+  });
 });

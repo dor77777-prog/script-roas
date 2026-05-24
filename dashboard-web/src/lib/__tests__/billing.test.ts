@@ -339,3 +339,63 @@ b1,2026-05-15,CAD,42.5,Some App,42.5`;
     expect(parsed[0].amountCAD).toBe(42.5);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Phase 13.1 (2026-05-24) — billingForRange `revenueByStore` plumbing
+// ---------------------------------------------------------------------------
+
+describe('billingForRange (Phase 13.1 — revenueByStore for percent-of-revenue rows)', () => {
+  it('uses revenueByStore[s] for a store-specific percent row when provided', () => {
+    // 3% commission against uzoshop's slice only. With revenueByStore the
+    // store-specific row should bill against its own revenue ($70k), not
+    // an even split.
+    seedRecurring(mem, [
+      {
+        id: 'r1',
+        store: 'uzoshop',
+        name: 'Affiliate',
+        source: 'external-app',
+        monthlyCAD: 0,
+        percentOfRevenue: 3,
+        active: true,
+      },
+    ]);
+    const result = billingForRange({
+      from: '2026-05-01',
+      to: '2026-05-30',
+      storeNames: ['uzoshop', 'Zol Plus'],
+      revenue: 100_000,
+      revenueByStore: { uzoshop: 70_000, 'Zol Plus': 30_000 },
+    });
+    // 3% × 70k = 2100, charged solely to uzoshop.
+    expect(result.byStore.uzoshop).toBeCloseTo(2_100, 6);
+    expect(result.byStore['Zol Plus']).toBeCloseTo(0, 6);
+    expect(result.recurringInPeriod).toBeCloseTo(2_100, 6);
+  });
+
+  it('falls back to an even split of `revenue` when revenueByStore is omitted', () => {
+    // Same store-specific row, but no revenueByStore — the helper falls
+    // back to revenue / storeNames.length per the documented contract,
+    // so uzoshop sees 3% × ($100k / 2) = $1500 instead of $2100.
+    seedRecurring(mem, [
+      {
+        id: 'r1',
+        store: 'uzoshop',
+        name: 'Affiliate',
+        source: 'external-app',
+        monthlyCAD: 0,
+        percentOfRevenue: 3,
+        active: true,
+      },
+    ]);
+    const result = billingForRange({
+      from: '2026-05-01',
+      to: '2026-05-30',
+      storeNames: ['uzoshop', 'Zol Plus'],
+      revenue: 100_000,
+      // no revenueByStore
+    });
+    expect(result.byStore.uzoshop).toBeCloseTo(1_500, 6);
+    expect(result.byStore['Zol Plus']).toBeCloseTo(0, 6);
+  });
+});

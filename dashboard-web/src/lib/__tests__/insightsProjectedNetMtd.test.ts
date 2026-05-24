@@ -32,9 +32,40 @@
  *   3. Zero-baseline fallback — last-7 window has 0 revenue; mtdCogs
  *      is still preserved (not zeroed) and the formula doesn't NaN.
  */
-import { describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect } from 'vitest';
 import { forecastMonthEnd } from '@/lib/insights';
 import type { DailyRow } from '@/lib/types';
+import type { RecurringCost } from '@/lib/billing';
+
+// ---------------------------------------------------------------------------
+// Phase 13.1 (2026-05-24) — window stub for the percent-of-revenue test.
+// The existing tests don't need this because forecastMonthEnd's billing
+// path returns 0 when window is undefined (safeReadArray short-circuits).
+// The Phase 13.1 P0-B test below needs to seed an active recurring row.
+// Lifted from billing.test.ts's pattern.
+// ---------------------------------------------------------------------------
+type MinimalWindow = {
+  localStorage: Storage;
+  dispatchEvent: (ev: Event) => boolean;
+};
+function installWindow(): { teardown: () => void; mem: Map<string, string> } {
+  const mem = new Map<string, string>();
+  const localStorage: Storage = {
+    length: 0,
+    clear: () => mem.clear(),
+    getItem: (k: string) => mem.get(k) ?? null,
+    key: (i: number) => Array.from(mem.keys())[i] ?? null,
+    removeItem: (k: string) => mem.delete(k),
+    setItem: (k: string, v: string) => mem.set(k, v),
+  };
+  const g = globalThis as unknown as { window?: MinimalWindow };
+  const prior = g.window;
+  g.window = { localStorage, dispatchEvent: () => true };
+  return { teardown: () => { g.window = prior; }, mem };
+}
+function seedRecurring(mem: Map<string, string>, items: RecurringCost[]) {
+  mem.set('roas-dashboard:billing-recurring', JSON.stringify(items));
+}
 
 function todayInIsrael(): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -239,5 +270,88 @@ describe('forecastMonthEnd projectedNet preserves MTD COGS (insights ALG-01)', (
     // 500 * 0.065 = 32.5. projectedSpend = 100 + 0 = 100.
     // projectedNet = 500 - 100 - 90 - 32.5 = 277.5.
     expect(f.projectedNet).toBeCloseTo(277.5, 4);
+  });
+});
+
+describe('forecastMonthEnd includes percent-of-revenue billing in projectedFixedCosts (Phase 13.1 P0-B)', () => {
+  let teardown: () => void = () => {};
+  let mem: Map<string, string> = new Map();
+
+  beforeEach(() => {
+    const w = installWindow();
+    teardown = w.teardown;
+    mem = w.mem;
+  });
+  afterEach(() => {
+    teardown();
+  });
+
+  it('5% All-row contributes 5% × projectedRev to projectedFixedCosts; projectedNet lower by that amount', () => {
+    // The bug: forecastMonthEnd's `projectedFixedCosts` call to billingForRange
+    // omitted `revenue`, so every active percent-of-revenue row contributed 0
+    // (`Math.max(0, 0) × pct / 100 === 0`). projectedNet over-stated take-home
+    // by `projectedRev × pct / 100` for any operator with a percent row.
+    //
+    // Strategy: monthDay-independent comparison. Run forecastMonthEnd twice
+    // with identical rows but different billing seeds — once WITH the percent
+    // row, once WITHOUT. The delta in projectedNet isolates the bug's effect.
+    // Pre-fix: delta = 0 (both runs see projectedFixedCosts = 0 because the
+    // revenue arg is missing). Post-fix: delta ≈ 5% × projectedRev.
+    const today = todayInIsrael();
+    const rows: DailyRow[] = [];
+    for (let d = -7; d <= -1; d++) {
+      rows.push(
+        row({
+          date: addDays(today, d),
+          revenue: 1000,
+          totalSpend: 100,
+          cogs: 250,
+          hasCogs: true,
+        }),
+      );
+    }
+
+    // Run 1: with the 5% All-scoped recurring row.
+    seedRecurring(mem, [
+      {
+        id: 'r1',
+        store: 'All',
+        name: 'Markets Pro',
+        source: 'external-app',
+        monthlyCAD: 0,
+        percentOfRevenue: 5,
+        active: true,
+      },
+    ]);
+    const fWithPercent = forecastMonthEnd(rows);
+
+    // Run 2: same rows, no recurring billing.
+    seedRecurring(mem, []);
+    const fWithoutPercent = forecastMonthEnd(rows);
+
+    // Sanity: the revenue projections are identical between runs (only the
+    // billing seed differs). If this fails, something other than billing is
+    // mixing into projectedRevenue.
+    expect(fWithPercent.projectedRevenue).toBeCloseTo(
+      fWithoutPercent.projectedRevenue,
+      6,
+    );
+
+    // Core assertion: the only mathematical difference is projectedFixedCosts.
+    // Post-fix: fWithPercent.projectedFixedCosts = 5% × projectedRev.
+    //           fWithoutPercent.projectedFixedCosts = 0.
+    // → fWithoutPercent.projectedNet − fWithPercent.projectedNet
+    //   = (proj.. − 0) − (proj.. − 5%×rev) = 5% × projectedRev.
+    const projectedRev = fWithPercent.projectedRevenue;
+    const expectedDiff = 0.05 * projectedRev;
+    const actualDiff =
+      fWithoutPercent.projectedNet - fWithPercent.projectedNet;
+    expect(actualDiff).toBeCloseTo(expectedDiff, 4);
+
+    // Pre-fix pin: actualDiff would have been 0 (both runs identical because
+    // billingForRange got no revenue arg → percent row contributed 0 in both).
+    // Requiring >$10 guards against the test silently passing pre-fix even on
+    // tiny projections (e.g. a 1-day month).
+    expect(actualDiff).toBeGreaterThan(10);
   });
 });

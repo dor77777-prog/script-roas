@@ -583,12 +583,26 @@ export function forecastMonthEnd(rows: DailyRow[]): {
     if (set.size === 0) for (const s of baselineStores) set.add(s);
     return Array.from(set);
   })();
+  // Phase 13.1 P0-B (2026-05-24) — pass `revenue: projectedRev` so that
+  // active percent-of-revenue recurring rows contribute to the projection.
+  // Pre-fix this call omitted `revenue` → billingForRange defaulted to 0 →
+  // every percent row's `amount = 0 × pct / 100 = 0` → projectedNet
+  // over-stated take-home by `projectedRev × pct / 100` for any operator
+  // with a percent-of-revenue cost line (e.g. Shopify Markets Pro 5%).
+  //
+  // Known limitation: we don't pass `revenueByStore` here — store-specific
+  // percent rows in the FORECAST still use the even-split fallback inside
+  // billingForRange. Affects the `byStore` granularity but NOT the total.
+  // Deferred to a P1 follow-up because the dominant operator setup is
+  // "All"-scoped percent rows. See docs/superpowers/specs/2026-05-24-billing-hotfix-design.md
+  // "Known limitation" section.
   const projectedFixedCosts =
     storesForBilling.length > 0
       ? billingForRange({
           from: monthStart,
           to: monthEnd,
           storeNames: storesForBilling,
+          revenue: projectedRev,
         }).total
       : 0;
   // INSIGHTS-ALG-01 (Phase 12.2.2): preserve MTD costs, extrapolate only
