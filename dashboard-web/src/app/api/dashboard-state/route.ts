@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { isAllowedStateKey } from '@/lib/sheets';
+import { isAllowedStateKey } from '@/lib/dashboardStateKeys';
 import {
   fetchDashboardStateFromPostgres,
   upsertDashboardStateKeyPostgres,
@@ -8,18 +8,9 @@ import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
 
 // Phase 05.7: cut-over to Postgres for BOTH read + write paths.
-//
-// Before 05.7 (05.6 branch flag):
-//   - GET branched on `readFrom()` between fetchDashboardState (Sheets) and
-//     fetchDashboardStateFromPostgres.
-//   - POST always wrote to Sheets via upsertDashboardStateKey (write-side
-//     branching was deferred per 05.6-19 plan).
-//
-// 05.7 changes both halves to Postgres-only. The Sheets functions
-// (fetchDashboardState, upsertDashboardStateKey, the ALLOWED_STATE_KEYS
-// allowlist) remain in sheets.ts because `isAllowedStateKey` is still the
-// shared validator at the API boundary — moving it to a Sheets-independent
-// module is a follow-up cleanup, not a blocker for the cut-over.
+// Phase 11 (2026-05-24): Apps Script tier decommissioned. `isAllowedStateKey`
+// moved from the legacy `lib/sheets.ts` into the neutral `lib/dashboardStateKeys.ts`
+// so the route no longer depends on any Sheets-named module.
 
 export const revalidate = 30; // matches CACHE_CONFIG.dashboardState.revalidate; literal required by Next.js
 

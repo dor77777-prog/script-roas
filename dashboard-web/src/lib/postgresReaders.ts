@@ -36,7 +36,6 @@ import type { DailyRow } from './types';
 import type { DateRange } from './dateRange';
 import { isInRange } from './dateRange';
 import { COGS_RATE_OF_REVENUE } from './analytics';
-import type { StoreMetaRow } from './sheets';
 import type { ProductRow } from './products';
 import type { CampaignRow } from './campaigns';
 import type { AdRow } from './ads';
@@ -350,12 +349,38 @@ export async function fetchDailyDataFromPostgres(
 
 // ────────────────────────────────────────────────────────────────────────
 // 2. fetchStoreMetaFromPostgres — stores → StoreMetaRow[]
-//    Mirrors sheets.ts:fetchStoreMeta (line 239)
 // ────────────────────────────────────────────────────────────────────────
 
 /**
- * Postgres equivalent of sheets.ts:fetchStoreMeta. Returns the SAME
- * StoreMetaRow[] shape.
+ * Shape of a single row in the `stores` table after normalization.
+ *
+ * Relocated from `lib/sheets.ts` in Phase 11 (Apps Script decommission). The
+ * type originally lived alongside the now-deleted `fetchStoreMeta` Sheets
+ * reader; `postgresReaders.ts` is the sole remaining consumer.
+ */
+export type StoreMetaRow = {
+  storeId: string;
+  storeName: string;
+  planDisplayName: string;
+  shopifyPlus: boolean;
+  partnerDevelopment: boolean;
+  updatedAt: string | null;
+  /** When the GraphQL plan-detection call failed (missing scope, expired
+   *  token, GraphQL errors), the writer persists the error message so the
+   *  dashboard can show the real reason auto-detect isn't working. Empty
+   *  string / null means the last refresh succeeded. */
+  lastError: string | null;
+  /** Meta ad account ID (numeric, no act_ prefix). Used by CampaignsTable +
+   *  CampaignDrawer to build correct deep links to Ads Manager. null if the
+   *  store has no Meta account configured. */
+  metaAdAccountId: string | null;
+  /** Google Ads customer ID (numeric, no dashes). Same role as the Meta one
+   *  for the Google Ads deep link. null when not configured. */
+  googleAdsCustomerId: string | null;
+};
+
+/**
+ * Returns one normalized row per store from the `stores` table.
  *
  * Field mapping (DB column → StoreMetaRow):
  *   id                       → storeId
@@ -368,9 +393,8 @@ export async function fetchDailyDataFromPostgres(
  *   meta_ad_account_id       → metaAdAccountId (strip 'act_' prefix; null if blank)
  *   google_ads_customer_id   → googleAdsCustomerId (strip dashes; null if blank)
  *
- * The 'act_' prefix strip and dash strip mirror sheets.ts:275-276 — that's
- * the canonical shape; consumers (CampaignsTable, CampaignDrawer) build deep
- * links from these normalized IDs.
+ * The 'act_' prefix strip and dash strip are the canonical shape; consumers
+ * (CampaignsTable, CampaignDrawer) build deep links from these normalized IDs.
  */
 export async function fetchStoreMetaFromPostgres(): Promise<StoreMetaRow[]> {
   const { data, error } = await getSupabase()
