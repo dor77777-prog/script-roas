@@ -431,6 +431,16 @@ export function analyzeAttribution(
   const reasons: string[] = [];
   let recommendation = '';
 
+  // AUDIT attributionAnalysis ALG-01 (2026-05-24, Phase 12.2.2): platform-
+  // agnostic operator copy. Pre-fix 10+ operator-facing strings hardcoded
+  // 'Meta' literal, mismatching TikTok-platform campaigns after Phase
+  // 05.7.9c widening. The operator would read 'Meta מייחס בלי click-id'
+  // for a TikTok campaign and troubleshoot the wrong platform / wrong
+  // Ads Manager. Single-source `platformLabel` makes the substitution
+  // grep-friendly and easy to extend (e.g. when Google PMax is added).
+  // Evidence: raw-returns/lib_algorithm_attributionAnalysis.json (ALG-01).
+  const platformLabel = campaign.platform;
+
   if (campaign.metaClaim === 0 && deterministicOrders === 0) {
     // No conversions on either side — common for brand-awareness / reach
     // campaigns, paused campaigns with no activity in the range, or genuinely
@@ -439,7 +449,7 @@ export function analyzeAttribution(
     // 0/100 "untrusted" badge on every zero-conversion campaign.
     trust = { level: 'unknown', label: 'אין המרות', score: 0 };
     if (campaign.spend > 0) {
-      reasons.push(`הוצאה CAD ${campaign.spend.toFixed(0)} ללא המרות מ-Meta או מ-Shopify`);
+      reasons.push(`הוצאה CAD ${campaign.spend.toFixed(0)} ללא המרות מ-${platformLabel} או מ-Shopify`);
       recommendation =
         'אין המרות לניתוח. אם זה קמפיין brand-awareness/reach — סבבה. ' +
         'אחרת בדוק שה-Pixel/CAPI עובדים והקמפיין מכוון להמרות.';
@@ -450,27 +460,27 @@ export function analyzeAttribution(
   } else if (deterministicOrders === 0 && campaign.metaClaim > 0) {
     trust = { level: 'unknown', label: 'לא ניתן לקבוע', score: 30 };
     reasons.push(
-      'אף הזמנה לא תויגה לקמפיין הזה — סביר ש-utm_campaign לא מוגדר ב-URL Parameters ב-Meta Ads Manager',
+      `אף הזמנה לא תויגה לקמפיין הזה — סביר ש-utm_campaign לא מוגדר ב-URL Parameters ב-${platformLabel} Ads Manager`,
     );
     reasons.push(
-      `${campaign.platform} דיווח על CAD ${campaign.metaClaim.toFixed(0)} המרות בלי שום click-id מתאים`,
+      `${platformLabel} דיווח על CAD ${campaign.metaClaim.toFixed(0)} המרות בלי שום click-id מתאים`,
     );
     recommendation =
-      'הוסף URL Parameters לקמפיין ב-Meta: utm_source=facebook&utm_medium=cpc&utm_campaign={{campaign.name}}. ' +
+      `הוסף URL Parameters לקמפיין ב-${platformLabel}: utm_source=facebook&utm_medium=cpc&utm_campaign={{campaign.name}}. ` +
       'תוך 24 שעות מההשמעה הבאה תראה כאן את ההזמנות האמיתיות.';
   } else if (coverage >= 0.8) {
     const pct = Math.round(coverage * 100);
     trust = { level: 'high', label: 'אמין', score: Math.min(100, 70 + pct / 5) };
     reasons.push(
-      `${deterministicOrders} הזמנות תויגו לקמפיין (CAD ${deterministicRevenue.toFixed(0)} מתוך CAD ${campaign.metaClaim.toFixed(0)} ש-${campaign.platform} דיווח — ${pct}% coverage)`,
+      `${deterministicOrders} הזמנות תויגו לקמפיין (CAD ${deterministicRevenue.toFixed(0)} מתוך CAD ${campaign.metaClaim.toFixed(0)} ש-${platformLabel} דיווח — ${pct}% coverage)`,
     );
     if (modeledRevenue > 0) {
       reasons.push(
-        `CAD ${modeledRevenue.toFixed(0)} ה"modeled" של Meta (view-through / cross-device) — סביר`,
+        `CAD ${modeledRevenue.toFixed(0)} ה"modeled" של ${platformLabel} (view-through / cross-device) — סביר`,
       );
     }
     recommendation = coverage >= 1.0
-      ? 'הקמפיין מבצע מעבר למה ש-Meta מדווח (halo). שקול גידול תקציב 20-40%.'
+      ? `הקמפיין מבצע מעבר למה ש-${platformLabel} מדווח (halo). שקול גידול תקציב 20-40%.`
       : 'מספרי הקמפיין אמינים. אופטימיזציה רגילה לפי ROAS.';
   } else if (coverage >= 0.4) {
     const pct = Math.round(coverage * 100);
@@ -480,7 +490,7 @@ export function analyzeAttribution(
       `${pct}% מההמרות תויגו (${deterministicOrders} הזמנות, CAD ${deterministicRevenue.toFixed(0)})`,
     );
     reasons.push(
-      `${modeledPct}% modeled — Meta מייחס בלי click-id (view-through, cross-device, סטטיסטי)`,
+      `${modeledPct}% modeled — ${platformLabel} מייחס בלי click-id (view-through, cross-device, סטטיסטי)`,
     );
     if (campaign.spend < 200) {
       reasons.push(`הוצאה נמוכה (CAD ${campaign.spend.toFixed(0)}) — מדגם קטן מגדיל אי-ודאות`);
@@ -492,7 +502,7 @@ export function analyzeAttribution(
     if (campaign.spend > 0) {
       recommendation =
         `ROAS אמיתי לפי click-id: ${(deterministicRevenue / campaign.spend).toFixed(2)}x. ` +
-        `ROAS לפי Meta: ${(campaign.metaClaim / campaign.spend).toFixed(2)}x. ` +
+        `ROAS לפי ${platformLabel}: ${(campaign.metaClaim / campaign.spend).toFixed(2)}x. ` +
         `הפער מעיד על modeled — הימנע מהחלטות אגרסיביות; הסתכל גם על הטרנד.`;
     } else {
       recommendation =
@@ -519,10 +529,10 @@ export function analyzeAttribution(
       );
     }
     reasons.push(
-      `Meta מייחס CAD ${campaign.metaClaim.toFixed(0)} אבל רק CAD ${deterministicRevenue.toFixed(0)} בפועל יש להם click-id`,
+      `${platformLabel} מייחס CAD ${campaign.metaClaim.toFixed(0)} אבל רק CAD ${deterministicRevenue.toFixed(0)} בפועל יש להם click-id`,
     );
     recommendation =
-      'Meta מנפח דיווחים לקמפיין הזה. ' +
+      `${platformLabel} מנפח דיווחים לקמפיין הזה. ` +
       'אל תקבל החלטות "להגדיל" על בסיס ה-ROAS שלו. ' +
       'בדוק: (1) האם utm_campaign מוגדר נכון, (2) האם CAPI/Pixel מתוקנים, (3) האם הקמפיין באמת מביא מכירות.';
   }
@@ -541,11 +551,11 @@ export function analyzeAttribution(
   if (windowStability && windowStability.windowCountWithData >= 2) {
     if (windowStability.verdict === 'stable') {
       reasons.push(
-        `יחס Meta:Shopify יציב לאורך ${windowStability.windowCountWithData} שבועות (σ=${(windowStability.stdDev * 100).toFixed(0)}%) — ביאס קבוע, ניתן להסתמך על המגמה`,
+        `יחס ${platformLabel}:Shopify יציב לאורך ${windowStability.windowCountWithData} שבועות (σ=${(windowStability.stdDev * 100).toFixed(0)}%) — ביאס קבוע, ניתן להסתמך על המגמה`,
       );
     } else if (windowStability.verdict === 'volatile') {
       reasons.push(
-        `יחס Meta:Shopify תנודתי מאוד בין שבועות (σ=${(windowStability.stdDev * 100).toFixed(0)}%) — מספרי תקופה לא יציבים`,
+        `יחס ${platformLabel}:Shopify תנודתי מאוד בין שבועות (σ=${(windowStability.stdDev * 100).toFixed(0)}%) — מספרי תקופה לא יציבים`,
       );
       // Downgrade trust if volatile and we were saying 'high'.
       if (trust.level === 'high') {
@@ -557,7 +567,7 @@ export function analyzeAttribution(
       // 'mixed' is not extreme enough to flip a high read to medium,
       // but the operator deserves to know the ratio is drifting.
       reasons.push(
-        `יחס Meta:Shopify מציג תנודתיות בינונית בחלון של ${windowStability.windowCountWithData} שבועות (σ=${(windowStability.stdDev * 100).toFixed(0)}%) — בייאס משתנה לאט; אפשר להסתמך על המגמה הכללית אבל לא על המספר היחיד`,
+        `יחס ${platformLabel}:Shopify מציג תנודתיות בינונית בחלון של ${windowStability.windowCountWithData} שבועות (σ=${(windowStability.stdDev * 100).toFixed(0)}%) — בייאס משתנה לאט; אפשר להסתמך על המגמה הכללית אבל לא על המספר היחיד`,
       );
     }
   }
@@ -780,9 +790,15 @@ export function analyzeAttributionForAdSet(
     return o.utmTerm && o.utmTerm.trim() === adSet.adSetId.trim();
   });
 
+  // AUDIT attributionAnalysis ALG-01 (2026-05-24, Phase 12.2.2): thread
+  // platform label into advice strings so TikTok ad-sets read 'TikTok
+  // מנפח' instead of 'Meta מנפח'. Evidence: raw-returns/
+  // lib_algorithm_attributionAnalysis.json (ALG-01).
+  const platformLabel = adSet.platform;
   return buildAnalysis({
     label: 'ad-set',
     name: adSet.adSetName,
+    platform: platformLabel,
     metaClaim: adSet.metaClaim,
     spend: adSet.spend,
     matchedOrders,
@@ -792,10 +808,10 @@ export function analyzeAttributionForAdSet(
     advice: {
       misconfigured:
         'אף הזמנה לא תויגה ל-ad-set הזה — סביר ש-utm_term לא מוגדר ב-URL Parameters (צריך {{adset.id}}).',
-      goodHalo: 'ה-ad-set מבצע מעבר למה ש-Meta דיווח — שקול גידול תקציב או פתיחת ad-set דומה.',
+      goodHalo: `ה-ad-set מבצע מעבר למה ש-${platformLabel} דיווח — שקול גידול תקציב או פתיחת ad-set דומה.`,
       goodSteady: 'מספרי ה-ad-set אמינים, אופטימיזציה רגילה לפי ROAS.',
       partial: 'modeled portion גדול ב-ad-set הזה — בדוק אם הוא באמת מביא מכירות או רק חשיפות שמיוחסות לו.',
-      bad: 'Meta מנפח דיווחים ל-ad-set הזה. שקול לכבות אותו ולחלק את התקציב ל-ad-sets שיש להם click-id אמיתי.',
+      bad: `${platformLabel} מנפח דיווחים ל-ad-set הזה. שקול לכבות אותו ולחלק את התקציב ל-ad-sets שיש להם click-id אמיתי.`,
     },
   });
 }
@@ -834,9 +850,14 @@ export function analyzeAttributionForAd(
     return o.utmContent && o.utmContent.trim() === ad.adId.trim();
   });
 
+  // AUDIT attributionAnalysis ALG-01 (2026-05-24, Phase 12.2.2): thread
+  // platform label into advice strings so TikTok ads read 'TikTok מנפח'
+  // instead of 'Meta מנפח'.
+  const platformLabel = ad.platform;
   return buildAnalysis({
     label: 'ad',
     name: ad.adName,
+    platform: platformLabel,
     metaClaim: ad.metaClaim,
     spend: ad.spend,
     matchedOrders,
@@ -846,10 +867,10 @@ export function analyzeAttributionForAd(
     advice: {
       misconfigured:
         'אף הזמנה לא תויגה למודעה הזאת — סביר ש-utm_content לא מוגדר ב-URL Parameters (צריך {{ad.id}}).',
-      goodHalo: 'המודעה מבצעת מעבר למה ש-Meta דיווח — שקול הרחבת ה-creative הזה ל-ad-sets נוספים.',
+      goodHalo: `המודעה מבצעת מעבר למה ש-${platformLabel} דיווח — שקול הרחבת ה-creative הזה ל-ad-sets נוספים.`,
       goodSteady: 'מספרי המודעה אמינים. אם זה ה-top-performer ב-ad-set, שקול לבודד אותו ל-ad-set משלו.',
       partial: 'modeled portion גדול במודעה הזאת — ייתכן שהקריאייטיב מקבל view-through אבל לא קליקים.',
-      bad: 'Meta מנפח דיווחים למודעה הזאת בלי click-id מתאים. שקול לכבות אותה.',
+      bad: `${platformLabel} מנפח דיווחים למודעה הזאת בלי click-id מתאים. שקול לכבות אותה.`,
     },
   });
 }
@@ -862,6 +883,16 @@ export function analyzeAttributionForAd(
 function buildAnalysis(opts: {
   label: 'campaign' | 'ad-set' | 'ad';
   name: string;
+  /**
+   * AUDIT attributionAnalysis ALG-01 (2026-05-24, Phase 12.2.2): the
+   * source-platform label ('Meta' / 'TikTok' / 'Google'). Threaded from
+   * the per-level callers (analyzeAttributionForAdSet,
+   * analyzeAttributionForAd) and used in the dynamic copy strings that
+   * the audit found hardcoded to 'Meta'. Optional with a 'Meta' default
+   * for back-compat with any future caller that pre-dates the threading.
+   * Evidence: raw-returns/lib_algorithm_attributionAnalysis.json (ALG-01).
+   */
+  platform?: string;
   metaClaim: number;
   spend: number;
   matchedOrders: OrderAttributionRow[];
@@ -877,6 +908,7 @@ function buildAnalysis(opts: {
   };
 }): AttributionAnalysis {
   const { metaClaim, spend, matchedOrders: rawMatched, dailyMeta, dateFrom, dateTo, advice } = opts;
+  const platformLabel = opts.platform ?? 'Meta';
 
   // Defensive guard: even though analyzeAttributionForAdSet / *ForAd filter
   // non-finite totalCad upstream, a future caller of buildAnalysis might not.
@@ -943,7 +975,7 @@ function buildAnalysis(opts: {
     // brand the row as "untrusted" with a 0/100 score.
     trust = { level: 'unknown', label: 'אין המרות', score: 0 };
     if (spend > 0) {
-      reasons.push(`הוצאה CAD ${spend.toFixed(0)} ללא המרות מ-Meta או מ-Shopify`);
+      reasons.push(`הוצאה CAD ${spend.toFixed(0)} ללא המרות מ-${platformLabel} או מ-Shopify`);
       recommendation = `אין המרות לניתוח. אם זה brand/reach — סבבה. אחרת בדוק שה-${hebLabel} מכוון להמרות וה-Pixel/CAPI עובדים.`;
     } else {
       reasons.push('אין הוצאה ואין המרות בטווח הזה');
@@ -968,7 +1000,7 @@ function buildAnalysis(opts: {
     // this, spend === 0 produces "ROAS אמיתי: Infinityx" tooltips.
     if (spend > 0) {
       recommendation =
-        `ROAS אמיתי: ${(deterministicRevenue / spend).toFixed(2)}x  |  ROAS לפי Meta: ${(metaClaim / spend).toFixed(2)}x. ` +
+        `ROAS אמיתי: ${(deterministicRevenue / spend).toFixed(2)}x  |  ROAS לפי ${platformLabel}: ${(metaClaim / spend).toFixed(2)}x. ` +
         advice.partial;
     } else {
       recommendation =
@@ -1002,7 +1034,7 @@ function buildAnalysis(opts: {
     }
   }
   if (outlierDays.length > 0) {
-    reasons.push(`${outlierDays.length} ימי spike מ-Meta (modeled)`);
+    reasons.push(`${outlierDays.length} ימי spike מ-${platformLabel} (modeled)`);
   }
   if (roasInterval) {
     reasons.push(`טווח 95%: ${roasInterval.low.toFixed(2)} – ${roasInterval.high.toFixed(2)}`);
