@@ -47,6 +47,31 @@ import { NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
+// AUDIT API-18 (2026-05-24, Phase 12.3): security headers on every HTML
+// response from this OAuth callback.
+// - Content-Security-Policy default-src 'none' blocks ALL external
+//   resources except inline styles needed by the existing layout
+//   (style-src 'unsafe-inline'). script-src is NOT permitted at all —
+//   this endpoint renders zero JS by design, so any future regression
+//   that injects a <script> tag (via htmlEscape bypass or template
+//   mutation) is neutralized at the browser layer.
+// - X-Content-Type-Options nosniff: browsers must honor text/html and
+//   never sniff to e.g. application/javascript (defense vs old IE
+//   content-sniffing XSS chains; still recommended for modern Chrome).
+// - Referrer-Policy no-referrer: query-string contents (auth_code,
+//   state) are NOT leaked to any third-party link the operator
+//   subsequently clicks from this page.
+// - X-Frame-Options DENY: cannot be iframed (defense vs clickjacking).
+// Evidence: .planning/phases/12-codebase-audit-baseline/raw-returns/
+//   api_oauth_tiktokCallback.json (API-18).
+const SECURITY_HEADERS = {
+  'Content-Type': 'text/html; charset=utf-8',
+  'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'",
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'no-referrer',
+  'X-Frame-Options': 'DENY',
+} as const;
+
 function htmlEscape(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -107,7 +132,7 @@ to retry, or verify the redirect URL on the App matches this endpoint.</p>
 </section>
 
 </body></html>`,
-      { status: 400, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+      { status: 400, headers: SECURITY_HEADERS },
     );
   }
 
@@ -184,7 +209,7 @@ credentials בשרת; לא קורא ל-TikTok API בכלל. רק מציג הור
 </section>
 
 </body></html>`,
-      { status: 200, headers: { 'Content-Type': 'text/html; charset=utf-8' } },
+      { status: 200, headers: SECURITY_HEADERS },
     );
   }
 
@@ -302,6 +327,6 @@ ${state ? `<p><b>state:</b> <code>${htmlEscape(state)}</code> &nbsp; <span style
 
   return new NextResponse(html, {
     status: 200,
-    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    headers: SECURITY_HEADERS,
   });
 }
