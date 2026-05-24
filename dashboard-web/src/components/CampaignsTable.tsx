@@ -69,6 +69,7 @@ import { useCampaignTrueRevenue } from '@/lib/hooks/useCampaignTrueRevenue';
 import { CampaignsTableRow, isCampaignOff } from './CampaignsTableRow';
 import { CampaignDrawer } from './CampaignDrawer';
 import { AdsDrawer } from './AdsDrawer';
+import { readTabLocalState, syncTabLocalUrl } from '@/lib/urlState';
 
 type Mode = 'campaign' | 'adset';
 type Platform = 'all' | 'Meta' | 'Google' | 'TikTok';
@@ -236,8 +237,24 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   // localRange but the fetch is keyed on the GLOBAL range — any
   // localRange.from earlier than range.from (or .to later than range.to)
   // would silently filter against dates that were never fetched.
-  const [localRange, setLocalRange] = useState<DateRange>(range);
+  //
+  // Phase 12.x — initial value is hydrated from the URL (c_preset + c_from/c_to
+  // params). Survives refresh + bookmarkable. When the global range changes,
+  // we still reset to it (operator's explicit Filters change should override
+  // the per-tab local override).
+  const [localRange, setLocalRange] = useState<DateRange>(() => {
+    if (typeof window === 'undefined') return range;
+    const url = readTabLocalState('campaigns', window.location.search);
+    return url.range ?? range;
+  });
+  // Track whether we've already hydrated from URL so the first global-range
+  // change (immediately after mount) doesn't overwrite the URL-restored value.
+  const hydratedFromUrlRef = useRef(false);
   useEffect(() => {
+    if (!hydratedFromUrlRef.current) {
+      hydratedFromUrlRef.current = true;
+      return; // skip first global sync — preserve URL-hydrated value
+    }
     setLocalRange(range);
   }, [range.from, range.to]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -328,7 +345,16 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   }, [data]);
 
   const [mode, setMode] = useState<Mode>('campaign');
-  const [platform, setPlatform] = useState<Platform>('all');
+  // Phase 12.x — platform filter hydrated from URL `c_platform` param. Allows
+  // refresh / bookmark to preserve the "show only Meta" view.
+  const [platform, setPlatform] = useState<Platform>(() => {
+    if (typeof window === 'undefined') return 'all';
+    const url = readTabLocalState('campaigns', window.location.search);
+    if (url.platform === 'meta') return 'Meta';
+    if (url.platform === 'google') return 'Google';
+    if (url.platform === 'tiktok') return 'TikTok';
+    return 'all';
+  });
   const [showAll, setShowAll] = useState(false);
 
   // "Optimized" marks (UX helper). Cloud-synced via 'campaign-optimized' key.
@@ -361,8 +387,44 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   }
 
   // Sync to global filters but allow local override.
-  const [localStore, setLocalStore] = useState(globalStore);
-  useEffect(() => { setLocalStore(globalStore); }, [globalStore]);
+  // Phase 12.x — initial value hydrated from URL `c_store` param. If the URL
+  // override is present we use it instead of the global default. When the
+  // global store changes after mount, we still reset to it (operator's
+  // explicit Filters change should override the per-tab override).
+  const [localStore, setLocalStore] = useState(() => {
+    if (typeof window === 'undefined') return globalStore;
+    const url = readTabLocalState('campaigns', window.location.search);
+    return url.store ?? globalStore;
+  });
+  const hydratedStoreFromUrlRef = useRef(false);
+  useEffect(() => {
+    if (!hydratedStoreFromUrlRef.current) {
+      hydratedStoreFromUrlRef.current = true;
+      return;
+    }
+    setLocalStore(globalStore);
+  }, [globalStore]);
+
+  // Push CampaignsTable's tab-local state into the URL whenever it changes so
+  // refresh / bookmark / share keeps the operator on the same view.
+  // (`syncTabLocalUrl` only updates the `c_*` params — preserves global state.)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const platformParam =
+      platform === 'all' ? 'all' :
+      platform === 'Meta' ? 'meta' :
+      platform === 'Google' ? 'google' :
+      platform === 'TikTok' ? 'tiktok' : 'all';
+    // Encode localRange as a custom preset (the picker doesn't track preset
+    // names — the URL just remembers the raw from/to so refresh restores
+    // exactly what the operator was looking at).
+    syncTabLocalUrl('campaigns', {
+      store: localStore,
+      platform: platformParam,
+      preset: 'custom',
+      range: localRange,
+    }, globalStore);
+  }, [localStore, platform, localRange.from, localRange.to, globalStore]);
 
   // Phase 05.7.9d / 05.7.x — column visibility + order prefs.
   // Subscribes to the cloud-sync event so a toggle on another device

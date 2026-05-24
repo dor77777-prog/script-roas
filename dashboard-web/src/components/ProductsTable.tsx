@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import useSWR from 'swr';
 import {
   ChevronDown,
@@ -16,6 +16,7 @@ import type { ProductRow } from '@/lib/products';
 import type { ProductsResponse } from '@/app/api/products/route';
 import type { DateRange } from '@/lib/types';
 import { buildDateRangeKey } from '@/lib/dateRange';
+import { readTabLocalState, syncTabLocalUrl } from '@/lib/urlState';
 
 type Period = 'day' | 'week' | 'month' | 'half_year' | 'year';
 
@@ -260,8 +261,20 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
 
   // Local store filter — defaults to global, syncs when global changes, but
   // user can override per-section without affecting the rest of the page.
-  const [localStore, setLocalStore] = useState(globalStore);
+  // Phase 12.5 — initial value hydrated from URL `p_store` param. When the
+  // global store changes after mount, we still reset to it (operator's
+  // explicit Filters change should override the per-tab override).
+  const [localStore, setLocalStore] = useState(() => {
+    if (typeof window === 'undefined') return globalStore;
+    const url = readTabLocalState('products', window.location.search);
+    return url.store ?? globalStore;
+  });
+  const hydratedStoreFromUrlRef = useRef(false);
   useEffect(() => {
+    if (!hydratedStoreFromUrlRef.current) {
+      hydratedStoreFromUrlRef.current = true;
+      return;
+    }
     setLocalStore(globalStore);
   }, [globalStore]);
 
@@ -270,10 +283,33 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
   // NOTE: declared before useSWR so buildDateRangeKey can use localRange as
   // the SWR key (Phase 5 — range-keyed pagination). Changing localRange
   // triggers a fresh SWR fetch (new key = new request, no stale-cache shadow).
-  const [localRange, setLocalRange] = useState<DateRange>(range);
+  // Phase 12.5 — initial value hydrated from URL `p_preset` + `p_from`/`p_to`.
+  const [localRange, setLocalRange] = useState<DateRange>(() => {
+    if (typeof window === 'undefined') return range;
+    const url = readTabLocalState('products', window.location.search);
+    return url.range ?? range;
+  });
+  const hydratedRangeFromUrlRef = useRef(false);
   useEffect(() => {
+    if (!hydratedRangeFromUrlRef.current) {
+      hydratedRangeFromUrlRef.current = true;
+      return; // skip first global sync — preserve URL-hydrated value
+    }
     setLocalRange(range);
   }, [range.from, range.to]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Push ProductsTable's tab-local state into the URL whenever it changes.
+  // `syncTabLocalUrl` only updates the `p_*` params — global state preserved.
+  // The picker here doesn't track preset names, so we encode the raw from/to
+  // as `preset: 'custom'` so refresh restores exactly what the operator saw.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    syncTabLocalUrl('products', {
+      store: localStore,
+      preset: 'custom',
+      range: localRange,
+    }, globalStore);
+  }, [localStore, localRange.from, localRange.to, globalStore]);
 
   const { data, error, isLoading } = useSWR<ProductsResponse>(
     buildDateRangeKey('/api/products', localRange),
