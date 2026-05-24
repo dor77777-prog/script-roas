@@ -54,8 +54,17 @@ export function useBillingRecurring(): {
     return () => window.removeEventListener('roas-billing-changed', onChange);
   }, []);
 
+  // Phase 12.5.x (2026-05-24) — exclude percent-of-revenue rows from this
+  // sum because their CAD contribution depends on the period's revenue,
+  // which the hook can't see. The button label that surfaces this number
+  // ("X פעילות · CAD Y") shows the fixed-only total; percent rows still
+  // count toward "X פעילות" since they're real subscriptions.
   const totalMonthly = useMemo(
-    () => recurring.filter(r => r.active).reduce((s, r) => s + r.monthlyCAD, 0),
+    () =>
+      recurring
+        .filter(r => r.active)
+        .filter(r => !(typeof r.percentOfRevenue === 'number' && r.percentOfRevenue > 0))
+        .reduce((s, r) => s + r.monthlyCAD, 0),
     [recurring],
   );
 

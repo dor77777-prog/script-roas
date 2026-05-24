@@ -29,6 +29,23 @@ export type RecurringCost = {
   monthlyCAD: number;
   active: boolean;
   notes?: string;
+  /**
+   * Phase 12.5.x (2026-05-24) — Treat the cost as a percentage of the
+   * period's revenue instead of a fixed CAD amount. When set (>0), the
+   * row contributes `(revenue × percentOfRevenue / 100)` to the period,
+   * not prorated by days — revenue is already a period aggregate. The
+   * `monthlyCAD` field is ignored.
+   *
+   * Operator use case (2026-05-24): "I want to add an expense that's a %
+   * of revenue, not a fixed price." Common for revenue-share apps (Shopify
+   * Markets Pro, affiliate commission, etc.) where the bill scales with
+   * sales rather than being a flat subscription.
+   *
+   * Backwards compat: undefined / 0 / negative = fixed CAD (legacy
+   * behavior). Range 0 < x ≤ 100 (clamp display, but math survives any
+   * positive value gracefully).
+   */
+  percentOfRevenue?: number;
 };
 
 export type OneTimeCost = {
@@ -148,11 +165,23 @@ export function seedBillingIfEmpty(storeNames: string[]) {
  * Prorate active recurring costs + one-time costs to a date range, scoped to
  * the stores in `storeNames`. Returns a breakdown so the UI can show source
  * categories, not just a single number.
+ *
+ * Phase 12.5.x (2026-05-24): the optional `revenue` param drives the
+ * percent-of-revenue branch on recurring rows. When omitted, percent rows
+ * contribute 0 — safe fallback for callers that don't compute revenue yet.
+ * The breakdown of revenue across the stores is provided as `revenueByStore`
+ * so per-store cards charge against their OWN revenue, not the period total
+ * (e.g. a store-specific row charges X% of just that store's slice). When
+ * omitted, falls back to an even split of `revenue` across `storeNames`.
  */
 export function billingForRange(input: {
   from: string;        // YYYY-MM-DD inclusive
   to: string;          // YYYY-MM-DD inclusive
   storeNames: string[];
+  /** Period total revenue in CAD, for percent-of-revenue rows. Omitted → 0. */
+  revenue?: number;
+  /** Optional per-store revenue split. Omitted → even split of `revenue`. */
+  revenueByStore?: Record<string, number>;
 }): {
   total: number;
   bySource: Record<CostSource, number>;
@@ -160,7 +189,7 @@ export function billingForRange(input: {
   recurringInPeriod: number;
   oneTimeInPeriod: number;
 } {
-  const { from, to, storeNames } = input;
+  const { from, to, storeNames, revenue = 0, revenueByStore } = input;
   const fromMs = new Date(from + 'T00:00:00Z').getTime();
   const toMs = new Date(to + 'T00:00:00Z').getTime();
   if (!Number.isFinite(fromMs) || !Number.isFinite(toMs) || toMs < fromMs) {
@@ -185,19 +214,38 @@ export function billingForRange(input: {
   // back to the period total. Before the fix, a $60/mo Klaviyo "All" row
   // with 3 stores reported $180 to recurringInPeriod (3× the truth) —
   // tripling the net-cost line on the dashboard.
+  //
+  // Phase 12.5.x (2026-05-24): percent-of-revenue branch. When the row
+  // has a positive `percentOfRevenue`, the amount derives from the period's
+  // revenue (not from monthlyCAD × days/30). "All" rows charge against the
+  // total period revenue; store-specific rows charge against that store's
+  // revenue slice (from `revenueByStore`, fallback even split).
   let recurringInPeriod = 0;
   const bySource = emptySourceMap();
   const byStore: Record<string, number> = Object.fromEntries(
     storeNames.map(s => [s, 0]),
   );
+  // Helper: revenue attributable to a single store. Prefers the caller's
+  // explicit per-store split; falls back to even division so a missing
+  // `revenueByStore` doesn't crash the math.
+  const revenueForStore = (s: string): number => {
+    if (revenueByStore && Number.isFinite(revenueByStore[s])) {
+      return Math.max(0, revenueByStore[s]);
+    }
+    return storeNames.length > 0 ? Math.max(0, revenue) / storeNames.length : 0;
+  };
   for (const r of readRecurring()) {
     if (!r.active) continue;
-    const amount = (r.monthlyCAD * days) / 30;
+    const pct = typeof r.percentOfRevenue === 'number' ? r.percentOfRevenue : 0;
+    const isPercent = pct > 0;
     if (r.store === 'All') {
       // "All" rows are one subscription that covers every store; charge
       // the total once, then split the per-store attribution evenly so
       // sum(byStore) == recurringInPeriod (within floating-point eps).
       if (storeNames.length === 0) continue;
+      const amount = isPercent
+        ? (Math.max(0, revenue) * pct) / 100
+        : (r.monthlyCAD * days) / 30;
       recurringInPeriod += amount;
       bySource[r.source] = (bySource[r.source] ?? 0) + amount;
       const perStoreShare = amount / storeNames.length;
@@ -205,7 +253,12 @@ export function billingForRange(input: {
         byStore[s] = (byStore[s] ?? 0) + perStoreShare;
       }
     } else if (storeSet.has(r.store)) {
-      // Store-specific row: charge once to its store.
+      // Store-specific row: charge once to its store. Percent rows charge
+      // against THAT store's revenue (not the period total) so per-store
+      // P&L cards reflect the real per-store burden.
+      const amount = isPercent
+        ? (revenueForStore(r.store) * pct) / 100
+        : (r.monthlyCAD * days) / 30;
       recurringInPeriod += amount;
       bySource[r.source] = (bySource[r.source] ?? 0) + amount;
       byStore[r.store] = (byStore[r.store] ?? 0) + amount;

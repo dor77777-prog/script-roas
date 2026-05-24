@@ -565,11 +565,22 @@ function RecurringTab({
                     )}
                   </div>
                   <div className="text-end shrink-0">
-                    <div className="text-sm font-bold tabular-nums text-text-primary">
-                      <span className="text-[10px] text-text-muted font-medium ml-1">CAD</span>
-                      {formatCurrency(r.monthlyCAD)}
-                    </div>
-                    <div className="text-[10px] text-text-muted">/חודש</div>
+                    {typeof r.percentOfRevenue === 'number' && r.percentOfRevenue > 0 ? (
+                      <>
+                        <div className="text-sm font-bold tabular-nums text-text-primary">
+                          {r.percentOfRevenue}%
+                        </div>
+                        <div className="text-[10px] text-text-muted">מהמחזור</div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="text-sm font-bold tabular-nums text-text-primary">
+                          <span className="text-[10px] text-text-muted font-medium ml-1">CAD</span>
+                          {formatCurrency(r.monthlyCAD)}
+                        </div>
+                        <div className="text-[10px] text-text-muted">/חודש</div>
+                      </>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
                     <button
@@ -613,13 +624,47 @@ function RecurringEditForm({
   const [name, setName] = useState(item.name);
   const [store, setStore] = useState(item.store);
   const [source, setSource] = useState<CostSource>(item.source);
+  // Phase 12.5.x (2026-05-24) — two cost shapes: fixed CAD per month, or
+  // % of revenue. Hydrated from the existing item — a positive
+  // percentOfRevenue means the row was saved as a percent row, otherwise
+  // fixed (backwards compat with rows that pre-date this feature).
+  const initialKind: 'fixed' | 'percent' =
+    typeof item.percentOfRevenue === 'number' && item.percentOfRevenue > 0
+      ? 'percent'
+      : 'fixed';
+  const [kind, setKind] = useState<'fixed' | 'percent'>(initialKind);
   const [monthlyCAD, setMonthlyCAD] = useState(String(item.monthlyCAD));
+  const [percentInput, setPercentInput] = useState(
+    initialKind === 'percent' ? String(item.percentOfRevenue ?? '') : '',
+  );
   const [notes, setNotes] = useState(item.notes ?? '');
   // Audit fix 2026-05-23 (d/MD-07): inline validation error so invalid
   // numeric input does not silently commit as 0.
   const [editError, setEditError] = useState<string | null>(null);
 
   function commit() {
+    if (kind === 'percent') {
+      const pct = parseFloat(percentInput.replace(/,/g, ''));
+      // 0 < pct ≤ 100 — anything outside is operator error. We don't clamp:
+      // 110% would silently persist as a 110% charge; surface the validation
+      // error so the user fixes it instead.
+      if (!Number.isFinite(pct) || pct <= 0 || pct > 100) {
+        setEditError('הזן אחוז בין 0 ל-100 (לדוגמה: 5)');
+        return;
+      }
+      setEditError(null);
+      onSave({
+        name: name.trim() || '(ללא שם)',
+        store,
+        source,
+        // monthlyCAD irrelevant for percent rows but kept as 0 to avoid
+        // showing stale CAD next to the % chip in the list view.
+        monthlyCAD: 0,
+        percentOfRevenue: pct,
+        notes: notes.trim() || undefined,
+      });
+      return;
+    }
     const amount = parseFloat(monthlyCAD.replace(/,/g, ''));
     // Audit fix 2026-05-23 (d/MD-07): block commit when the amount is not
     // a real positive number. Previously a typo (e.g. "five", " ", "abc")
@@ -637,6 +682,8 @@ function RecurringEditForm({
       store,
       source,
       monthlyCAD: amount,
+      // Clear any prior percent so the row flips back to fixed cleanly.
+      percentOfRevenue: undefined,
       notes: notes.trim() || undefined,
     });
   }
@@ -688,26 +735,50 @@ function RecurringEditForm({
           </select>
         </div>
         <div>
-          <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium">סכום חודשי (CAD)</label>
-          <input
-            value={monthlyCAD}
-            onChange={e => {
-              setMonthlyCAD(e.target.value.replace(/[^\d.,]/g, ''));
-              if (editError) setEditError(null);
-            }}
-            inputMode="numeric"
-            placeholder="60"
-            onKeyDown={e => {
-              if (e.key === 'Enter') commit();
-              if (e.key === 'Escape') cancel();
-            }}
-            className={cn(
-              'w-full rounded-lg border bg-surface px-2.5 py-1.5 text-sm focus:outline-none tabular-nums',
-              editError
-                ? 'border-roas-red focus:border-roas-red focus:shadow-[0_0_0_2px_rgba(220,38,38,0.15)]'
-                : 'border-border focus:border-primary focus:shadow-focus',
-            )}
-          />
+          <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium">
+            {kind === 'percent' ? 'אחוז מהמחזור (%)' : 'סכום חודשי (CAD)'}
+          </label>
+          {kind === 'percent' ? (
+            <input
+              value={percentInput}
+              onChange={e => {
+                setPercentInput(e.target.value.replace(/[^\d.,]/g, ''));
+                if (editError) setEditError(null);
+              }}
+              inputMode="decimal"
+              placeholder="5"
+              onKeyDown={e => {
+                if (e.key === 'Enter') commit();
+                if (e.key === 'Escape') cancel();
+              }}
+              className={cn(
+                'w-full rounded-lg border bg-surface px-2.5 py-1.5 text-sm focus:outline-none tabular-nums',
+                editError
+                  ? 'border-roas-red focus:border-roas-red focus:shadow-[0_0_0_2px_rgba(220,38,38,0.15)]'
+                  : 'border-border focus:border-primary focus:shadow-focus',
+              )}
+            />
+          ) : (
+            <input
+              value={monthlyCAD}
+              onChange={e => {
+                setMonthlyCAD(e.target.value.replace(/[^\d.,]/g, ''));
+                if (editError) setEditError(null);
+              }}
+              inputMode="numeric"
+              placeholder="60"
+              onKeyDown={e => {
+                if (e.key === 'Enter') commit();
+                if (e.key === 'Escape') cancel();
+              }}
+              className={cn(
+                'w-full rounded-lg border bg-surface px-2.5 py-1.5 text-sm focus:outline-none tabular-nums',
+                editError
+                  ? 'border-roas-red focus:border-roas-red focus:shadow-[0_0_0_2px_rgba(220,38,38,0.15)]'
+                  : 'border-border focus:border-primary focus:shadow-focus',
+              )}
+            />
+          )}
           {editError && (
             <div
               role="alert"
@@ -717,6 +788,49 @@ function RecurringEditForm({
             </div>
           )}
         </div>
+      </div>
+      {/* Phase 12.5.x (2026-05-24) — type toggle: fixed CAD vs % of revenue. */}
+      <div>
+        <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium">
+          חישוב
+        </label>
+        <div className="flex items-center gap-1 mt-1">
+          <button
+            type="button"
+            onClick={() => {
+              setKind('fixed');
+              if (editError) setEditError(null);
+            }}
+            className={cn(
+              'flex-1 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors border',
+              kind === 'fixed'
+                ? 'bg-primary text-white border-primary'
+                : 'bg-surface text-text-secondary hover:bg-surfaceMuted border-border',
+            )}
+          >
+            סכום קבוע (CAD)
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setKind('percent');
+              if (editError) setEditError(null);
+            }}
+            className={cn(
+              'flex-1 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors border',
+              kind === 'percent'
+                ? 'bg-primary text-white border-primary'
+                : 'bg-surface text-text-secondary hover:bg-surfaceMuted border-border',
+            )}
+          >
+            % מהמחזור
+          </button>
+        </div>
+        <p className="text-[10px] text-text-muted mt-1 leading-relaxed">
+          {kind === 'percent'
+            ? 'ההוצאה מחושבת כאחוז מהכנסות התקופה (לא חודשי × ימים).'
+            : 'הסכום מצוטט חודשי וייפרס ביחס לאורך התקופה.'}
+        </p>
       </div>
       <div>
         <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium">הערות (אופציונלי)</label>

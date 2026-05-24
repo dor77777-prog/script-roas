@@ -80,10 +80,18 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo }: Props)
 
   // Per-source breakdown for the inside-the-card display. Use the same range
   // the aggregate covers so the totals line up exactly with `current.fixedCosts`.
+  // Phase 12.5.x (2026-05-24) — pass `revenue` so % of revenue recurring
+  // rows contribute the same amount here as in the upstream `aggregate()`
+  // call (keeps the per-source totals reconciling to `current.fixedCosts`).
   const billing = useMemo(() => {
     if (!rangeFrom || !rangeTo) return null;
-    return billingForRange({ from: rangeFrom, to: rangeTo, storeNames });
-  }, [rangeFrom, rangeTo, storeNames]);
+    return billingForRange({
+      from: rangeFrom,
+      to: rangeTo,
+      storeNames,
+      revenue: current.revenue,
+    });
+  }, [rangeFrom, rangeTo, storeNames, current.revenue]);
 
   // Active recurring entries scoped to the visible stores (or "All").
   const activeForScope = useMemo(() => {

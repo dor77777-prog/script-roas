@@ -182,11 +182,16 @@ export function aggregate(
   // days only — silently overstating trueNetProfit.
   const billingFrom = range?.from ?? minDate;
   const billingTo = range?.to ?? maxDate;
+  // Phase 12.5.x (2026-05-24) — pass `revenue` so percent-of-revenue
+  // recurring rows can compute their contribution to fixedCosts. Without
+  // this thread, a recurring row marked as "5% of revenue" silently
+  // contributed 0 to the P&L, breaking the True Net Profit math.
   const billing = billingFrom && billingTo
     ? billingForRange({
         from: billingFrom,
         to: billingTo,
         storeNames: billingStoreNames,
+        revenue,
       })
     : { total: 0, byStore: {} as Record<string, number> };
   // Audit fix 2026-05-23 (CRIT-1): when running the per-store path, the
