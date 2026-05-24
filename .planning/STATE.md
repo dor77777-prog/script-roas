@@ -17,8 +17,8 @@ progress:
 
 Phase: 12.1 (P0 Audit Fixes) — COMPLETE
 Plan: 4 PLAN files executed in 3 waves. 8 fixes + 17 regression tests landed.
-Status: 12.1 COMPLETE. 12.2 + 12.3 scaffolded (operator chose comprehensive sweep). CONTEXT.md committed for both. Ready for `/gsd-plan-phase 12.2 --skip-research` + `/gsd-plan-phase 12.3 --skip-research` (parallel-safe planning).
-Last activity: 2026-05-24 — Phase 12.2 (11 P1) + 12.3 (8 P2) inserted with CONTEXT.md anchored to AUDIT.md + raw-returns. Sub-plan splits: 12.2 has 3 sub-plans by file cluster; 12.3 single PLAN.
+Status: 12.1 + 12.2 COMPLETE (19/19 P0+P1 fixes shipped). 12.3 plan ready (10 tasks, single PLAN). Executing 12.3 next.
+Last activity: 2026-05-24 — Phase 12.2 VERIFICATION = PASS. 11/11 P1 fixes shipped as 8 commits (3 composite per CONTEXT D-04). 1017/1017 tests (was 971 baseline; +46). Ready to execute 12.3 P2 (operator-route security/perf hardening).
 
 ## Accumulated Context
 

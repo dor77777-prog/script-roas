@@ -14,7 +14,7 @@ Multi-store Shopify ROAS dashboard with deterministic per-order attribution. The
 **Phases:**
 - [x] **Phase 12: Codebase Audit Baseline** — Documentation only, no source-code changes. Spawned gsd-code-reviewer per file in 7 parallel waves (A–G) + cross-cutting sweep + test-gap survey + operator-checkpoint for ⚠️ triage. Output: `.planning/AUDIT.md` (139 files, 123 ✅ / 16 🔴 / 0 ⚠️) + `.planning/phases/12-codebase-audit-baseline/{12-tests-needed.md, 12-CHANNELS.md, 12-trycatch-sweep.md}`. Atomic synthesis commit `3287cff`. Decisions D-01..D-17 + DP-01..DP-04.
 - [x] **Phase 12.1: P0 Audit Fixes** — 8/8 shipped 2026-05-24. Commits: 1f4b75c (INN-10), f1bc76a (INN-16), 55e709c (INN-01), 51c0de4 (ALG-04/05/06 composite), cb87464 (MMC-BLOCKER-01 + WARN freebies), 4f328d3 (PCV ALG-01). 17 regression tests added (946 → 971). VERIFICATION = PASS.
-- [ ] **Phase 12.2: P1 Audit Fixes (INSERTED 2026-05-24)** — 11 operator-visible bugs from AUDIT.md: ALG-01 (TikTok status), ALG-02 (TikTok budget), ALG-07 (coverage clamp), INN-07 (cronLive Shopify-coupled gating), INN-14 (DST drift), attributionAnalysis ALG-01 ("Meta" literal), insights.ts ALG-01 (projectedNet), ordersAttribution paging cap, ProductCentricView ALG-02 + ALG-03, products.ts STA-46 + STA-47.
+- [x] **Phase 12.2: P1 Audit Fixes** — 11/11 shipped 2026-05-24. 8 fix commits (3 composite per CONTEXT D-04): db1212a (aiReport ALG-01/02/07), a45a302 (INN-07), d1f5c31 (INN-14), 99c30e2 (attributionAnalysis), c0a7a34 (insights MTD), 7596482 (ordersAttribution), 2a5dabd (PCV ALG-02/03), 296ba36 (products STA-46/47). 46 new regression tests (971 → 1017). VERIFICATION = PASS.
 - [ ] **Phase 12.3: P2 Audit Fixes (INSERTED 2026-05-24)** — 8 operator-route + secondary hardening fixes: API-10 (token leak), API-18 (htmlEscape), API-23 (sequential fan-out), API-26 (parseFloat), API-32 (sequential delete), API-37 + API-38 (Supabase error leak), INN-05 (subsidiary of INN-10 — may already land with 12.1.1), ALG-03 (aiReport last-write-wins, may already cascade from 12.1.2).
 
 ## Milestone v1.0: Implemented phases (historical — kept for traceability)
@@ -437,7 +437,10 @@ Result: 139 files audited, 123 ✅ / 16 🔴 / 0 ⚠️. 2 CRITICAL + 25 MAJOR b
 **Goal:** Ship operator-route security/perf hardening + any subsidiary fixes that didn't already cascade from 12.1/12.2.
 **Requirements**: 8 P2 findings (API-10/18/23/26/32/37/38, INN-05 if not already covered by 12.1.1, ALG-03 if not already covered by 12.1.2).
 **Depends on:** Phase 12.2 (sequential — 12.2 + 12.3 can also run in parallel since they touch disjoint surfaces).
-**Plans:** TBD (run /gsd-plan-phase 12.3).
+**Plans:** 1 plan (single PLAN per CONTEXT D-01 — 8 fixes have low coupling and fit one plan)
+
+Plans:
+- [ ] 12.3-01-PLAN.md (filename: 12.3-PLAN.md) — 10 tasks across 2 waves: pre-flight + INN-05 subsidiary verify (cascade-resolved by 12.1.1) + ALG-03 belt-and-suspenders sort + 6 P2 API route fixes (API-10/18/23/26/32/37+38 composite) + post-sweep verification
 
 Source of truth: `.planning/AUDIT.md` §Phase 12.3 (P2 — operator-route security/perf hardening).
 NO new features. Defensive only. Single-operator URL-obscurity trust model still applies — fixes are belt-and-suspenders.
