@@ -1,4 +1,5 @@
 import * as Sentry from '@sentry/nextjs';
+import { buildBeforeSend } from './src/lib/sentry/scrub';
 
 const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
 if (dsn) {
@@ -6,6 +7,7 @@ if (dsn) {
     dsn,
     tracesSampleRate: 0.1, // 10% — enough for debugging, conserves quota
     environment: process.env.NODE_ENV,
+    beforeSend: buildBeforeSend(),
     // No replay integration — error context comes from breadcrumbs only.
     // Session replay would capture DOM mutations, click coordinates, scroll
     // behaviour, and full URL paths (UTM identifiers, store IDs, date ranges),

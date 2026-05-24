@@ -87,6 +87,7 @@
 import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { userFacingError } from '@/lib/apiErrors';
+import { captureRouteError } from '@/lib/sentry/capture';
 import {
   DATA_TABLES,
   EXCEPT_MANUAL_TABLES,
@@ -196,6 +197,7 @@ export async function POST(req: Request) {
     // `errors` to amber-flag the partial-failure case.
     return NextResponse.json(body);
   } catch (err) {
+    captureRouteError('operator/reset', err);
     const message = err instanceof Error ? err.message : String(err);
     console.error('/api/operator/reset POST threw:', message);
     return NextResponse.json(

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { fetchStoreMetaFromPostgres } from '@/lib/postgresReaders';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
+import { captureRouteError } from '@/lib/sentry/capture';
 
 // store-meta changes rarely (only when a store's Shopify plan changes), so
 // a longer cache is fine. cronDaily refreshes the underlying `stores` table
@@ -24,6 +25,7 @@ export async function GET() {
       },
     );
   } catch (err) {
+    captureRouteError('store-meta', err);
     const message = err instanceof Error ? err.message : String(err);
     console.error('store-meta fetch failed:', message);
     // Return empty rows on failure so the dashboard renders without the

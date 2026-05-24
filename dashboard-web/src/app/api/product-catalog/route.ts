@@ -3,6 +3,7 @@ import type { CatalogProduct } from '@/lib/productCatalog';
 import { fetchProductCatalogFromPostgres } from '@/lib/postgresReaders';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
+import { captureRouteError } from '@/lib/sentry/capture';
 
 // 60 seconds — short enough that after a cronDaily catalog refresh, the
 // user sees fresh data within a minute (instead of waiting out a 1-hour
@@ -35,6 +36,7 @@ export async function GET() {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     // Raw message logged server-side for ops; sanitized message returned to client.
+    captureRouteError('product-catalog', err);
     console.error('product-catalog fetch failed:', message);
     // Degrade gracefully — picker falls back to /api/products list when this
     // route returns empty.

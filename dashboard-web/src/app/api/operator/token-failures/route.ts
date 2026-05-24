@@ -24,6 +24,7 @@ import {
   type TokenFailureStore,
 } from '@/lib/notifications/tokenFailures';
 import { userFacingError } from '@/lib/apiErrors';
+import { captureRouteError } from '@/lib/sentry/capture';
 
 export const runtime = 'nodejs';
 // No cache — operator wants live state.
@@ -136,6 +137,7 @@ export async function GET() {
     // Hebrew message; raw still flows to console.error for ops.
     // Evidence: raw-returns/api_operator_tokenFailures.json (API-38).
     const rawMessage = e instanceof Error ? e.message : String(e);
+    captureRouteError('operator/token-failures', e);
     console.error('/api/operator/token-failures GET threw:', rawMessage);
     return NextResponse.json(
       {

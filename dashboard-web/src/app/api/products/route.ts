@@ -7,6 +7,7 @@ import {
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
 import { parseRangeParams, RangeParamError } from '@/lib/dateRange';
+import { captureRouteError } from '@/lib/sentry/capture';
 
 // `ProductRow` type kept as a re-export contract only.
 //
@@ -54,6 +55,7 @@ export async function GET(req: Request) {
       headers: { 'Cache-Control': cacheControl('products') },
     });
   } catch (err) {
+    captureRouteError('products', err);
     const message = err instanceof Error ? err.message : String(err);
     console.error('Products fetch failed:', message);
     return NextResponse.json(

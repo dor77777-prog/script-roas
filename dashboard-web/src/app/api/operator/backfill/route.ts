@@ -49,6 +49,7 @@ import { NextResponse } from 'next/server';
 import { inngest } from '@/inngest/client';
 import { userFacingError } from '@/lib/apiErrors';
 import { isDate } from '@/lib/dateValidation';
+import { captureRouteError } from '@/lib/sentry/capture';
 
 export const dynamic = 'force-dynamic';
 
@@ -156,6 +157,7 @@ export async function POST(req: Request) {
     const message = err instanceof Error ? err.message : String(err);
     // Threat T-05.6-14-I4 mitigation — never leak raw inngest.send
     // errors (could embed event-key fragments in network exceptions).
+    captureRouteError('operator/backfill', err);
     console.error('/api/operator/backfill POST failed:', message);
     return NextResponse.json(
       { error: userFacingError(message) },

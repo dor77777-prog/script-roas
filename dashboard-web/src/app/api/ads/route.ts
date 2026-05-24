@@ -7,6 +7,7 @@ import {
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
 import { parseRangeParams, RangeParamError } from '@/lib/dateRange';
+import { captureRouteError } from '@/lib/sentry/capture';
 
 export const revalidate = 300; // matches CACHE_CONFIG.ads.revalidate; 5 min — literal required by Next.js
 
@@ -50,6 +51,7 @@ export async function GET(req: Request) {
       },
     );
   } catch (err) {
+    captureRouteError('ads', err);
     const message = err instanceof Error ? err.message : String(err);
     console.error('ads fetch failed:', message);
     return NextResponse.json(

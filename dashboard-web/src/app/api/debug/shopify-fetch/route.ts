@@ -60,6 +60,14 @@ function nextDayStr(dateStr: string): string {
 }
 
 export async function GET(req: Request) {
+  // Phase 13.2 P1-02 — env-gated. Unauthenticated debug route shipped to
+  // prod by mistake; cross-track audit findings (T1 security + T8 perf/obs).
+  // Returns 404 unless ENABLE_DEBUG_ROUTES=1 is explicitly set in Vercel.
+  // To re-enable for incident debugging: set ENABLE_DEBUG_ROUTES=1 in
+  // Vercel env vars and redeploy. UNSET it once the incident is resolved.
+  if (process.env.ENABLE_DEBUG_ROUTES !== '1') {
+    return new NextResponse('Not Found', { status: 404 });
+  }
   const url = new URL(req.url);
   const storeId = url.searchParams.get('storeId') ?? 'uzoshop';
   const date = url.searchParams.get('date') ?? '';

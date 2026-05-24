@@ -8,6 +8,7 @@ import {
 } from '@/lib/postgresReaders';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
+import { captureRouteError } from '@/lib/sentry/capture';
 import { parseRangeParams, RangeParamError } from '@/lib/dateRange';
 
 // No `force-dynamic` — it would override `revalidate` and the Cache-Control
@@ -79,6 +80,7 @@ export async function GET(req: Request) {
       headers: { 'Cache-Control': cacheControl('campaigns') },
     });
   } catch (err) {
+    captureRouteError('campaigns', err);
     const message = err instanceof Error ? err.message : String(err);
     console.error('Campaigns fetch failed:', message);
     return NextResponse.json(

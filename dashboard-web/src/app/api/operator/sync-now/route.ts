@@ -44,6 +44,7 @@
 import { NextResponse } from 'next/server';
 import { inngest } from '@/inngest/client';
 import { userFacingError } from '@/lib/apiErrors';
+import { captureRouteError } from '@/lib/sentry/capture';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,6 +100,7 @@ export async function POST(req: Request) {
     const message = err instanceof Error ? err.message : String(err);
     // Log raw error server-side (env-var names, internal hostnames, etc.)
     // but never leak it to the client. Threat T-05.6-14-I4 mitigation.
+    captureRouteError('operator/sync-now', err);
     console.error('/api/operator/sync-now POST failed:', message);
     return NextResponse.json(
       { error: userFacingError(message) },

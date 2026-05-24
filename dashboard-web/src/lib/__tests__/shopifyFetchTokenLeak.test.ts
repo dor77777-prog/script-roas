@@ -26,9 +26,14 @@ describe('/api/debug/shopify-fetch — token leak (Phase 12.3 / API-10)', () => 
   const originalFetch = global.fetch;
   const originalDomain = process.env.UZOSHOP_SHOPIFY_DOMAIN;
   const originalToken = process.env.UZOSHOP_SHOPIFY_TOKEN;
+  const originalDebugFlag = process.env.ENABLE_DEBUG_ROUTES;
 
   beforeEach(() => {
     vi.resetModules();
+    // Phase 13.2 P1-02 — the route is now env-gated (returns 404 unless
+    // ENABLE_DEBUG_ROUTES=1). Enable it for these regression tests since
+    // they verify the response body content, not the gate itself.
+    process.env.ENABLE_DEBUG_ROUTES = '1';
   });
 
   afterEach(() => {
@@ -37,6 +42,8 @@ describe('/api/debug/shopify-fetch — token leak (Phase 12.3 / API-10)', () => 
     else process.env.UZOSHOP_SHOPIFY_DOMAIN = originalDomain;
     if (originalToken === undefined) delete process.env.UZOSHOP_SHOPIFY_TOKEN;
     else process.env.UZOSHOP_SHOPIFY_TOKEN = originalToken;
+    if (originalDebugFlag === undefined) delete process.env.ENABLE_DEBUG_ROUTES;
+    else process.env.ENABLE_DEBUG_ROUTES = originalDebugFlag;
   });
 
   it('Test 1: response body MUST NOT contain `tokenPrefix` field or any `shpat_` substring', async () => {

@@ -6,6 +6,7 @@ import {
 } from '@/lib/postgresReaders';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
+import { captureRouteError } from '@/lib/sentry/capture';
 
 // Phase 05.7: cut-over to Postgres for BOTH read + write paths.
 // Phase 11 (2026-05-24): Apps Script tier decommissioned. `isAllowedStateKey`
@@ -44,6 +45,7 @@ export async function GET() {
     const message = err instanceof Error ? err.message : String(err);
     // Log the raw message server-side so ops can see spreadsheet ID, service
     // account email, etc. — but don't leak those to the client UI.
+    captureRouteError('dashboard-state-get', err);
     console.error('dashboard-state GET failed:', message);
     // Include lastUpdated + updatedAtByKey so the response shape matches the
     // success path. Without these, a consumer reading `data.lastUpdated`
@@ -102,6 +104,7 @@ export async function POST(req: Request) {
     await upsertDashboardStateKeyPostgres(body.key, body.value ?? null);
     return NextResponse.json({ ok: true });
   } catch (err) {
+    captureRouteError('dashboard-state-post', err);
     const message = err instanceof Error ? err.message : String(err);
     console.error('dashboard-state POST failed:', message);
     return NextResponse.json({ error: userFacingError(message) }, { status: 500 });

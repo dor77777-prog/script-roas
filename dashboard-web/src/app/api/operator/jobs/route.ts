@@ -56,6 +56,7 @@
 import { NextResponse } from 'next/server';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
+import { captureRouteError } from '@/lib/sentry/capture';
 
 // Literal mirror of CACHE_CONFIG.operatorJobs.revalidate (5). Next.js's
 // static analyzer rejects MemberExpression here per Pitfall 12 — if
@@ -208,6 +209,7 @@ export async function GET(req: Request) {
     // client. Without sanitization, an Inngest 401/403 error message
     // could embed the signing-key fingerprint or workspace URL into
     // the wire payload visible in the browser network tab.
+    captureRouteError('operator/jobs', err);
     console.error('Inngest jobs proxy failed:', message);
     return NextResponse.json(
       {

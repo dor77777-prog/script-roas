@@ -72,6 +72,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 // actually reach +972524809540 (operator's primary number).
 import { notifyTokenFailure } from '@/lib/notifications/tokenFailures';
 import { isAuthError } from '@/lib/notifications/detectAuthError';
+import { captureCronFetchError, captureStepError } from '@/lib/sentry/capture';
 
 // ---------------------------------------------------------------------------
 // STORES — single source of truth for the 3 stores. Aligns with:
@@ -221,6 +222,28 @@ export async function runDailyForStore(
   dateStr: string,
   ctx: { step: RunDailyStep },
 ): Promise<RunDailyResult> {
+  // Phase 13.2 P0-D — in-memory dedup for fetcher-error alerts. Scoped to
+  // this single Inngest invocation; one WhatsApp alert per (platform, storeId)
+  // per cron run. The existing 1/6h per-provider throttle in tokenFailures.ts
+  // is the second-line dedupe across runs.
+  const fetchErrorDedup = new Set<string>();
+  try {
+    return await runDailyForStoreInner(storeId, dateStr, ctx, fetchErrorDedup);
+  } catch (e) {
+    // Phase 13.2 P0-C — capture any error escaping the handler to Sentry
+    // before Inngest's retry/dead-letter takes over. Re-throw preserves
+    // existing retry semantics.
+    captureStepError({ fnId: 'cron-daily', stepName: 'top-level', storeId }, e);
+    throw e;
+  }
+}
+
+async function runDailyForStoreInner(
+  storeId: StoreId,
+  dateStr: string,
+  ctx: { step: RunDailyStep },
+  fetchErrorDedup: Set<string>,
+): Promise<RunDailyResult> {
   const { step } = ctx;
 
   // ---- Step 1: Shopify (orders × 2 windows, dedup, refund-aware net rev) --
@@ -306,26 +329,20 @@ export async function runDailyForStore(
       ]);
       return { spend, adsetRows, adRows, budgets };
     } catch (e) {
-      const errMsg = e instanceof Error ? e.message : String(e);
-      console.warn(
-        `cron-daily ${storeId} ${dateStr}: Meta fetch failed — zeroing Meta contribution to allow other platforms + Shopify to persist. Error: ${errMsg}`,
-      );
-      // Phase 12.5.x (2026-05-24) — alert on auth-shaped failures only.
-      // Generic 500s / network blips warn but don't ping the operator.
-      if (isAuthError('meta', errMsg)) {
-        await notifyTokenFailure({
-          provider: 'meta',
+      // Phase 13.2 P0-D — capture to Sentry + dedup-throttled WhatsApp.
+      // Replaces the prior isAuthError-only branch — ANY non-auth Meta error
+      // (5xx, network, parse) now fires both signals. Dedup Set scoped to
+      // this cron invocation; existing 1/6h throttle in tokenFailures.ts is
+      // the second-line dedupe across runs.
+      await captureCronFetchError(
+        {
           storeId: storeId as 'uzoshop' | 'zolplus' | 'usmile360',
-          operation: 'fetch_insights',
-          errorMsg: errMsg,
-          advice:
-            'Refresh the Meta access token in Vercel (' +
-            `${storeId.toUpperCase()}_META_ACCESS_TOKEN`.replace(/`/g, '') +
-            ') and redeploy.',
-        }).catch(() => {
-          /* notifyTokenFailure is soft-fail by contract; .catch keeps belt-and-suspenders */
-        });
-      }
+          platform: 'meta',
+          dedup: fetchErrorDedup,
+        },
+        e,
+        `Refresh the Meta access token in Vercel (${storeId.toUpperCase()}_META_ACCESS_TOKEN) and redeploy, OR check Meta's status page if recurrent.`,
+      );
       return {
         spend: { storeId, date: dateStr, spend: 0, currency: 'ILS' },
         adsetRows: [],
@@ -356,21 +373,17 @@ export async function runDailyForStore(
       ]);
       return { spend, adGroupRows, adRows };
     } catch (e) {
-      const errMsg = e instanceof Error ? e.message : String(e);
-      console.warn(
-        `cron-daily ${storeId} ${dateStr}: Google Ads fetch failed — zeroing Google contribution. Error: ${errMsg}`,
-      );
-      if (isAuthError('google', errMsg)) {
-        await notifyTokenFailure({
-          provider: 'google',
+      // Phase 13.2 P0-D — same dedup-throttled capture+alert for Google Ads.
+      await captureCronFetchError(
+        {
           storeId: storeId as 'uzoshop' | 'zolplus' | 'usmile360',
-          operation: 'fetch_insights',
-          errorMsg: errMsg,
-          advice:
-            'Re-run the OAuth Playground flow to mint a fresh GOOGLEADS_REFRESH_TOKEN. ' +
-            'Update Vercel env vars + redeploy. See docs/PROPS-MAP.md rows 28-32.',
-        }).catch(() => {});
-      }
+          platform: 'google',
+          dedup: fetchErrorDedup,
+        },
+        e,
+        'Re-run the OAuth Playground flow to mint a fresh GOOGLEADS_REFRESH_TOKEN. ' +
+          'Update Vercel env vars + redeploy. See docs/PROPS-MAP.md rows 28-32.',
+      );
       return {
         spend: { storeId, date: dateStr, spend: 0, currency: 'CAD' },
         adGroupRows: [],
@@ -410,21 +423,17 @@ export async function runDailyForStore(
       ]);
       return { spend, adRows };
     } catch (e) {
-      const errMsg = e instanceof Error ? e.message : String(e);
-      console.warn(
-        `cron-daily ${storeId} ${dateStr}: TikTok fetch failed — zeroing TikTok contribution. Error: ${errMsg}`,
-      );
-      if (isAuthError('tiktok', errMsg)) {
-        await notifyTokenFailure({
-          provider: 'tiktok',
+      // Phase 13.2 P0-D — same dedup-throttled capture+alert for TikTok.
+      await captureCronFetchError(
+        {
           storeId: storeId as 'uzoshop' | 'zolplus' | 'usmile360',
-          operation: 'fetch_insights',
-          errorMsg: errMsg,
-          advice:
-            'Re-authorize TikTok via /api/oauth/tiktok/callback to refresh the ' +
-            `${storeId.toUpperCase()}_TIKTOK_ACCESS_TOKEN. Update Vercel env + redeploy.`,
-        }).catch(() => {});
-      }
+          platform: 'tiktok',
+          dedup: fetchErrorDedup,
+        },
+        e,
+        'Re-authorize TikTok via /api/oauth/tiktok/callback to refresh the ' +
+          `${storeId.toUpperCase()}_TIKTOK_ACCESS_TOKEN. Update Vercel env + redeploy.`,
+      );
       return {
         spend: { storeId, date: dateStr, spend: 0, currency: 'USD' } as TikTokDaySpend,
         adRows: [] as TikTokAdRow[],

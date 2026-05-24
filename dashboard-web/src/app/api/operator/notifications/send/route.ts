@@ -14,6 +14,7 @@
 import { NextResponse } from 'next/server';
 import { inngest } from '@/inngest/client';
 import { userFacingError } from '@/lib/apiErrors';
+import { captureRouteError } from '@/lib/sentry/capture';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,6 +52,7 @@ export async function POST(req: Request) {
       { status: 202 },
     );
   } catch (err) {
+    captureRouteError('operator/notifications-send', err);
     const message = err instanceof Error ? err.message : String(err);
     console.error('/api/operator/notifications/send POST failed:', message);
     return NextResponse.json(

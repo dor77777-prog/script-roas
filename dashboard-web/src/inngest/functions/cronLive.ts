@@ -113,6 +113,7 @@ import { TIKTOK_ACTIVE_ENOUGH } from '@/lib/platformConfig';
 // is soft-fail + throttled to 1 alert per 6h per (provider, store, operation).
 import { notifyTokenFailure } from '@/lib/notifications/tokenFailures';
 import { isAuthError } from '@/lib/notifications/detectAuthError';
+import { captureStepError } from '@/lib/sentry/capture';
 
 // =============================================================================
 // Constants
@@ -586,6 +587,29 @@ type StepRunner = {
  * rev=${...} on {date1, date2, date3}".
  */
 export async function runLiveForStore(
+  storeId: StoreId,
+  ctx: { step: StepRunner },
+): Promise<{
+  storeId: StoreId;
+  rollingDates: string[];
+  perDayRevenue: Record<string, number>;
+  todaySpendCad: { fb: number; ga: number; tt: number };
+}> {
+  try {
+    return await runLiveForStoreInner(storeId, ctx);
+  } catch (e) {
+    // Phase 13.2 P0-C — capture top-level errors before re-throwing so
+    // Inngest's retry/dead-letter remains the source of truth for retries.
+    // cron-live runs every 10min; we deliberately do NOT use
+    // captureCronFetchError for per-platform alerts here (cadence × 4
+    // platforms × 3 stores would over-alert). Per-platform alerting
+    // remains isAuthError-gated below; only top-level escapes alert.
+    captureStepError({ fnId: 'cron-live', stepName: 'top-level', storeId }, e);
+    throw e;
+  }
+}
+
+async function runLiveForStoreInner(
   storeId: StoreId,
   ctx: { step: StepRunner },
 ): Promise<{

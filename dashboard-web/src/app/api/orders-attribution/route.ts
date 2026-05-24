@@ -4,6 +4,7 @@ import { fetchOrdersAttributionFromPostgres } from '@/lib/postgresReaders';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
 import { parseRangeParams, RangeParamError } from '@/lib/dateRange';
+import { captureRouteError } from '@/lib/sentry/capture';
 
 // 5-minute cache. Attribution rows are written daily; refreshing more often
 // doesn't help the analysis but does burn Supabase request quota.
@@ -59,6 +60,7 @@ export async function GET(req: Request) {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     // Raw message logged server-side for ops; sanitized message returned to client.
+    captureRouteError('orders-attribution', err);
     console.error('orders-attribution fetch failed:', message);
     // Degrade gracefully — empty array lets dashboards render without the
     // deterministic-confidence column instead of breaking. lastUpdated is

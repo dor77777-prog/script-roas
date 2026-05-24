@@ -34,6 +34,7 @@ import { NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { userFacingError } from '@/lib/apiErrors';
 import { isDate } from '@/lib/dateValidation';
+import { captureRouteError } from '@/lib/sentry/capture';
 // AUDIT API-26 (Phase 12.3): pure validators extracted to a sibling
 // lib module so they can be `export`ed for unit tests. Next 14 forbids
 // non-HTTP-verb exports from app/**/route.ts modules (typed via the
@@ -80,6 +81,7 @@ export async function GET() {
     return NextResponse.json({ rows: data ?? [] });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    captureRouteError('operator/manual-overrides-get', err);
     console.error('/api/operator/manual-overrides GET threw:', message);
     return NextResponse.json(
       { rows: [], error: userFacingError(message) },
@@ -115,6 +117,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ row: data?.[0] ?? null }, { status: 201 });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
+    captureRouteError('operator/manual-overrides-post', err);
     console.error('/api/operator/manual-overrides POST threw:', message);
     return NextResponse.json(
       { error: userFacingError(message) },

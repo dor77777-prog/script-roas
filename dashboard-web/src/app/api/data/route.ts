@@ -7,6 +7,7 @@ import type { DashboardData } from '@/lib/types';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
 import { parseRangeParams, RangeParamError } from '@/lib/dateRange';
+import { captureRouteError } from '@/lib/sentry/capture';
 
 // Revalidate the underlying data every 60 seconds (server-side cache).
 // Client SWR will poll us; this prevents hammering Supabase on every request.
@@ -66,6 +67,7 @@ export async function GET(req: Request) {
       },
     });
   } catch (err) {
+    captureRouteError('data', err, { range });
     const message = err instanceof Error ? err.message : String(err);
     // Log the raw message server-side so ops can see Postgres error details
     // (table, column, constraint, etc.) — but don't leak any of that to the
