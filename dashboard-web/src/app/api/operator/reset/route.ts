@@ -120,34 +120,57 @@ export async function POST(req: Request) {
     const deleted: Record<string, number> = {};
     const errors: Record<string, string> = {};
 
-    for (const table of tables) {
-      try {
-        // Universal always-true filter: every table in DATA_TABLES has
-        // store_id NOT NULL, so `.not('store_id', 'is', null)` matches
-        // every row. See file-level comment for why store_id rather than
-        // id / updated_at.
-        const { count, error } = await supabase
-          .from(table)
-          .delete({ count: 'exact' })
-          .not('store_id', 'is', null);
-        if (error) {
+    // AUDIT API-32 (2026-05-24, Phase 12.3): parallel per-table deletes
+    // via Promise.allSettled. Pre-fix sequential for-loop took >30s on
+    // large datasets (100k+ rows × 7 tables) — close to Inngest's 60s
+    // budget AND the operator-UI spinner timeout, with a single slow
+    // table blocking all the others. Now fires all 7 concurrently;
+    // wall-clock = max(per-table) not sum(per-table). Per-table error
+    // isolation preserved: a single FK or RLS failure on one table still
+    // produces a useful response with the successful tables' counts and
+    // a userFacingError-sanitized message per failed table.
+    // Evidence: .planning/phases/12-codebase-audit-baseline/raw-returns/
+    //   api_operator_reset.json (API-32).
+    const deleteResults = await Promise.allSettled(
+      tables.map(async (table) => {
+        try {
+          // Universal always-true filter: every table in DATA_TABLES has
+          // store_id NOT NULL, so `.not('store_id', 'is', null)` matches
+          // every row. See file-level comment for why store_id rather
+          // than id / updated_at.
+          const { count, error } = await supabase
+            .from(table)
+            .delete({ count: 'exact' })
+            .not('store_id', 'is', null);
+          if (error) {
+            return { table, count: -1, errorMsg: error.message };
+          }
+          return { table, count: count ?? 0, errorMsg: null as string | null };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          return { table, count: -1, errorMsg: message };
+        }
+      }),
+    );
+    for (const result of deleteResults) {
+      if (result.status === 'fulfilled') {
+        const { table, count, errorMsg } = result.value;
+        deleted[table] = count;
+        if (errorMsg) {
           console.error(
             `/api/operator/reset DELETE ${table} failed:`,
-            error.message,
+            errorMsg,
           );
-          deleted[table] = -1;
-          errors[table] = userFacingError(error.message);
-          continue;
+          errors[table] = userFacingError(errorMsg);
         }
-        deleted[table] = count ?? 0;
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
+      } else {
+        // Promise rejected (extremely rare since the inner async catches
+        // its own throws above). Log + synthesize a sentinel — no table
+        // name to attach since the rejection lost the binding context.
         console.error(
-          `/api/operator/reset DELETE ${table} threw:`,
-          message,
+          '/api/operator/reset DELETE promise rejected:',
+          result.reason,
         );
-        deleted[table] = -1;
-        errors[table] = userFacingError(message);
       }
     }
 
