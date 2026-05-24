@@ -1,3 +1,5 @@
+import { fetchWithBackoff } from './withBackoff';
+
 /**
  * dashboard-web/src/lib/fetchers/googleAds.ts — TS port of GoogleAds.gs.
  *
@@ -309,11 +311,11 @@ async function runGaqlQuery(
   while (pages < GAQL_PAGE_CAP) {
     const reqBody: { query: string; pageToken?: string } = { query };
     if (pageToken) reqBody.pageToken = pageToken;
-    const res = await fetch(url, {
+    const res = await fetchWithBackoff(url, {
       method: 'POST',
       headers,
       body: JSON.stringify(reqBody),
-    });
+    }, { provider: 'google' });
     if (!res.ok) {
       const text = await res.text();
       throw new Error(

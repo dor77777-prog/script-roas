@@ -259,22 +259,21 @@ async function runDailyForStoreInner(
   //   2) Operator drift detection: if a product is archived/deleted between
   //      two daily runs, the next-day snapshot reflects it (Apps Script
   //      behavior parity — Shopify.gs:537 is also called per daily run).
-  const shopify = (await step.run('fetch-shopify', async () => {
+  // Phase 13.4 — split the monolithic fetch-shopify step into 3 smaller
+  // steps that run in parallel. Each retries independently; Inngest
+  // memoizes per step so a retry doesn't have to refetch siblings that
+  // already succeeded. Step count: 6 → 8 (still well under free-tier).
+  // The Shopify auth-alert wrapping is preserved on the day-rows fetcher
+  // — day-rows is what calls the heavy Admin REST orders endpoint where
+  // Shopify enforces tokens most strictly, so an auth failure there is
+  // the canonical signal. orders-attribution and catalog use the same
+  // token; a separate auth failure on those alone is rare and would be
+  // subsumed by the day-rows alert anyway.
+  async function fetchShopifyDayWithAuthAlert(): Promise<Awaited<ReturnType<typeof fetchShopifyDayRows>>> {
     try {
-      const [day, orders, catalog] = await Promise.all([
-        fetchShopifyDayRows(storeId, dateStr),
-        fetchShopifyOrdersAttribution(storeId, dateStr),
-        fetchShopifyProductsCatalog(storeId),
-      ]);
-      return { ...day, orders, catalog };
+      return await fetchShopifyDayRows(storeId, dateStr);
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : String(e);
-      // Phase 12.5.x (2026-05-24) — Shopify is the primary data source so we
-      // RE-THROW (preserve Inngest retry semantics). Just fire-and-forget
-      // an auth alert on the way out so the operator knows why the cron
-      // is dead-lettering. notifyTokenFailure is soft-fail; .catch() is
-      // belt-and-suspenders for the absurd case where the alert path
-      // itself throws.
       if (isAuthError('shopify', errMsg)) {
         await notifyTokenFailure({
           provider: 'shopify',
@@ -289,10 +288,22 @@ async function runDailyForStoreInner(
       }
       throw e;
     }
-  })) as Awaited<ReturnType<typeof fetchShopifyDayRows>> & {
-    orders: Awaited<ReturnType<typeof fetchShopifyOrdersAttribution>>;
-    catalog: Awaited<ReturnType<typeof fetchShopifyProductsCatalog>>;
-  };
+  }
+
+  // Explicit per-step types: step.run<T> inference through Promise.all's
+  // tuple sometimes degrades to `unknown` (depends on the @inngest types
+  // version). Cast each result to its source-function's return type so the
+  // downstream code (productRows.map, orders.map, catalog.map) sees the
+  // proper shape.
+  const [dayUnk, ordersUnk, catalogUnk] = await Promise.all([
+    step.run('fetch-shopify-day', () => fetchShopifyDayWithAuthAlert()),
+    step.run('fetch-shopify-orders', () => fetchShopifyOrdersAttribution(storeId, dateStr)),
+    step.run('fetch-shopify-catalog', () => fetchShopifyProductsCatalog(storeId)),
+  ]);
+  const day = dayUnk as Awaited<ReturnType<typeof fetchShopifyDayRows>>;
+  const orders = ordersUnk as Awaited<ReturnType<typeof fetchShopifyOrdersAttribution>>;
+  const catalog = catalogUnk as Awaited<ReturnType<typeof fetchShopifyProductsCatalog>>;
+  const shopify = { ...day, orders, catalog };
 
   // ---- Step 2: Meta (adset + ad-level insights + store-level spend sum + budgets) ---
   // Phase 05.6.1: extended Promise.all to fetch ad-level insights alongside

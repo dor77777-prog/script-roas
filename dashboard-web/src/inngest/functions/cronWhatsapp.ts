@@ -52,10 +52,13 @@ export const whatsappNoon = inngest.createFunction(
     triggers: [{ cron: 'TZ=Asia/Jerusalem 0 12 * * *' }],
   },
   async ({ step }: { step: StepTools }) => {
-    return await step.run('send', async () => {
-      const dateStr = todayJerusalem();
-      return await sendDailySummary(dateStr, titleNoon(dateStr));
-    });
+    // Phase 13.4 — removed the outer `step.run('send', ...)` wrapper so
+    // sendDailySummary can issue its own per-recipient step.run calls
+    // (Inngest forbids nested step.run). The per-recipient memoization
+    // prevents duplicate WhatsApp sends to recipients that already
+    // succeeded when a function-level retry kicks in.
+    const dateStr = todayJerusalem();
+    return await sendDailySummary(dateStr, titleNoon(dateStr), { step });
   },
 );
 
@@ -70,10 +73,9 @@ export const whatsappEvening = inngest.createFunction(
     triggers: [{ cron: 'TZ=Asia/Jerusalem 0 18 * * *' }],
   },
   async ({ step }: { step: StepTools }) => {
-    return await step.run('send', async () => {
-      const dateStr = todayJerusalem();
-      return await sendDailySummary(dateStr, titleEvening(dateStr));
-    });
+    // Phase 13.4 — see whatsappNoon for rationale on removing the outer step.run.
+    const dateStr = todayJerusalem();
+    return await sendDailySummary(dateStr, titleEvening(dateStr), { step });
   },
 );
 
@@ -104,10 +106,9 @@ export const whatsappEod = inngest.createFunction(
     triggers: [{ cron: 'TZ=Asia/Jerusalem 30 0 * * *' }],
   },
   async ({ step }: { step: StepTools }) => {
-    return await step.run('send', async () => {
-      const dateStr = yesterdayJerusalem();
-      return await sendDailySummary(dateStr, titleEod(dateStr));
-    });
+    // Phase 13.4 — see whatsappNoon for rationale on removing the outer step.run.
+    const dateStr = yesterdayJerusalem();
+    return await sendDailySummary(dateStr, titleEod(dateStr), { step });
   },
 );
 

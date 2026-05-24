@@ -34,9 +34,23 @@ export type SendResult = {
   skipReason?: string;
 };
 
+/**
+ * Phase 13.4 — minimal step.run shape used by the Inngest handler. When
+ * the cron handler passes its `step` here, each recipient send is wrapped
+ * in its own `step.run('send-whatsapp-<sanitized>', ...)`. Inngest then
+ * memoizes succeeded recipients across function-level retries, so a
+ * single recipient failure doesn't cause re-sends to the already-
+ * succeeded ones (no duplicate WhatsApp messages). Direct callers (tests,
+ * ad-hoc invocations) omit the ctx and get the original inline behavior.
+ */
+export type StepRunner = {
+  run<T>(id: string, fn: () => Promise<T>): Promise<T>;
+};
+
 export async function sendDailySummary(
   dateStr: string,
   title: string,
+  ctx?: { step: StepRunner },
 ): Promise<SendResult> {
   const result: SendResult = {
     dateStr,
@@ -72,13 +86,23 @@ export async function sendDailySummary(
 
   for (const to of recipients) {
     result.recipientsAttempted.push(to);
-    try {
-      await sendWhatsAppTemplate({
+    const stepKey = `send-whatsapp-${to.replace(/[^a-zA-Z0-9]/g, '_')}`;
+    const send = () =>
+      sendWhatsAppTemplate({
         toNumber: to,
         templateName: cfg.templateName,
         templateLang: cfg.templateLang || 'he',
         templateParams,
       });
+    try {
+      // Phase 13.4 — wrap each recipient send in step.run when ctx.step is
+      // provided. Inngest memoizes succeeded sends per recipient so a
+      // function-level retry doesn't re-send to the already-succeeded ones.
+      if (ctx?.step) {
+        await ctx.step.run(stepKey, send);
+      } else {
+        await send();
+      }
       result.recipientsSucceeded.push(to);
     } catch (e) {
       const error = e instanceof Error ? e.message : String(e);

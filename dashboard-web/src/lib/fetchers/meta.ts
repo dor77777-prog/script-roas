@@ -38,6 +38,8 @@
  * TypeScript types only.
  */
 
+import { fetchWithBackoff } from './withBackoff';
+
 /**
  * Meta Graph API version. Bumped 2026-05-22 from v23.0 → v25.0 ahead of the
  * 2026-06-09 deprecation cliff (every version <v24.0 stops working that day).
@@ -338,7 +340,7 @@ export async function fetchMetaAdSetInsights(
   const out: MetaAdSetRow[] = [];
   let safety = 0;
   while (url && safety < 50) {
-    const res = await fetch(url);
+    const res = await fetchWithBackoff(url, {}, { provider: 'meta' });
     if (!res.ok) {
       const body = await res.text();
       throw new Error(
@@ -447,7 +449,7 @@ export async function fetchMetaSpendForDayLight(
     `&level=account` +
     `&access_token=${encodeURIComponent(token)}`;
 
-  const res = await fetch(url);
+  const res = await fetchWithBackoff(url, {}, { provider: 'meta' });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
     throw new Error(
@@ -527,7 +529,7 @@ export async function fetchMetaAdInsights(
   const out: MetaAdRow[] = [];
   let safety = 0;
   while (url && safety < 50) {
-    const res = await fetch(url);
+    const res = await fetchWithBackoff(url, {}, { provider: 'meta' });
     if (!res.ok) {
       const body = await res.text();
       throw new Error(
@@ -671,7 +673,7 @@ export async function fetchMetaBudgets(storeId: string): Promise<MetaBudgets> {
     const acctUrl =
       `https://graph.facebook.com/${META_API_VERSION}/act_${adAccountId}` +
       `?fields=currency&access_token=${encodeURIComponent(token)}`;
-    const acctRes = await fetch(acctUrl);
+    const acctRes = await fetchWithBackoff(acctUrl, {}, { provider: 'meta' });
     if (acctRes.ok) {
       const acctBody = (await acctRes.json()) as { currency?: string };
       if (acctBody.currency) {
@@ -707,7 +709,7 @@ export async function fetchMetaBudgets(storeId: string): Promise<MetaBudgets> {
     `&limit=500&access_token=${encodeURIComponent(token)}`;
   let safety = 0;
   while (curl && safety < 50) {
-    const res = await fetch(curl);
+    const res = await fetchWithBackoff(curl, {}, { provider: 'meta' });
     if (!res.ok) {
       const body = await res.text();
       // SOFT-FAIL per MetaAds.gs:218-221 — partial map > throw on a
@@ -752,7 +754,7 @@ export async function fetchMetaBudgets(storeId: string): Promise<MetaBudgets> {
     `&limit=500&access_token=${encodeURIComponent(token)}`;
   safety = 0;
   while (aurl && safety < 50) {
-    const res = await fetch(aurl);
+    const res = await fetchWithBackoff(aurl, {}, { provider: 'meta' });
     if (!res.ok) {
       const body = await res.text();
       console.warn(

@@ -1,3 +1,5 @@
+import { fetchWithBackoff } from './withBackoff';
+
 /**
  * Phase 05.7.5-B (scaffold) — TikTok Marketing API fetcher.
  *
@@ -147,7 +149,7 @@ async function tiktokGet<T>(
 ): Promise<T> {
   const qs = new URLSearchParams(params).toString();
   const url = `${TIKTOK_API_BASE}${path}?${qs}`;
-  const res = await fetch(url, {
+  const res = await fetchWithBackoff(url, {
     method: 'GET',
     headers: {
       'Access-Token': accessToken,

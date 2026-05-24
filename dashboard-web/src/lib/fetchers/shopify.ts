@@ -61,6 +61,7 @@ import {
   type ShopifyOrderInput,
 } from '@/lib/shopifyRevenueRefunds';
 import { getShopifyAccessToken } from '@/lib/fetchers/shopifyAuth';
+import { fetchWithBackoff } from './withBackoff';
 
 // =============================================================================
 // Constants
@@ -468,13 +469,13 @@ async function fetchWindow(
   let pages = 0;
 
   while (url && pages < PAGINATION_CAP) {
-    const res = await fetch(url, {
+    const res = await fetchWithBackoff(url, {
       method: 'GET',
       headers: {
         'X-Shopify-Access-Token': token,
         Accept: 'application/json',
       },
-    });
+    }, { provider: 'shopify' });
 
     if (!res.ok) {
       const bodyTxt = await res.text().catch(() => '');
@@ -700,13 +701,13 @@ export async function fetchShopifyProductsCatalog(
   };
 
   while (url && pages < PAGINATION_CAP) {
-    const res = await fetch(url, {
+    const res = await fetchWithBackoff(url, {
       method: 'GET',
       headers: {
         'X-Shopify-Access-Token': token,
         Accept: 'application/json',
       },
-    });
+    }, { provider: 'shopify' });
 
     if (!res.ok) {
       const bodyTxt = await res.text().catch(() => '');
@@ -1029,13 +1030,13 @@ export async function fetchShopifyOrdersAttribution(
   let pages = 0;
 
   while (url && pages < PAGINATION_CAP) {
-    const res = await fetch(url, {
+    const res = await fetchWithBackoff(url, {
       method: 'GET',
       headers: {
         'X-Shopify-Access-Token': token,
         Accept: 'application/json',
       },
-    });
+    }, { provider: 'shopify' });
 
     if (!res.ok) {
       const bodyTxt = await res.text().catch(() => '');

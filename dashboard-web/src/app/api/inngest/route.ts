@@ -99,6 +99,7 @@ import { cronDailyFunctions } from '@/inngest/functions/cronDaily';
 import { cronLiveFunctions } from '@/inngest/functions/cronLive';
 import { eventSyncNow } from '@/inngest/functions/eventSyncNow';
 import { eventBackfill } from '@/inngest/functions/eventBackfill';
+import { cronOauthCanary } from '@/inngest/functions/cronOauthCanary';
 import {
   whatsappCronFunctions,
   eventWhatsappSendNow,
@@ -116,6 +117,7 @@ export const { GET, POST, PUT } = serve({
     ...cronLiveFunctions, // 3 functions (uzoshop / zolplus / usmile360)
     eventSyncNow, // 1 function (operator "Sync now" button)
     eventBackfill, // 1 function (operator backfill range picker)
+    cronOauthCanary, // 1 function (Phase 13.4 — Google OAuth refresh-token canary, 00:00 IL daily)
     ...whatsappCronFunctions, // 3 functions (12:00, 18:00, 00:10 IL)
     eventWhatsappSendNow, // 1 function (operator "send WhatsApp now")
   ],

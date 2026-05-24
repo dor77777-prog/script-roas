@@ -539,23 +539,25 @@ describe('cronDaily — factory + handler', () => {
     const { step, ids } = makeMockStep();
     await runDailyForStore('uzoshop', '2026-05-20', { step });
 
-    // Per RESEARCH §Pitfall 4 recommended decomposition (≤7 steps/run
-    // for free-tier budget). Phase 05.7.7 added fetch-tiktok as a 6th
-    // step:
-    //   fetch-shopify, fetch-meta, fetch-google, fetch-tiktok,
-    //   apply-manual-overrides, persist-batch = 6 step.run calls.
+    // Per RESEARCH §Pitfall 4 recommended decomposition. Phase 05.7.7
+    // added fetch-tiktok. Phase 13.4 (2026-05-25) split fetch-shopify
+    // into 3 parallel sub-steps (day / orders / catalog) so each retries
+    // independently and Inngest doesn't have to refetch the whole bundle
+    // when one half fails. Step count: 6 → 8.
     expect(ids).toEqual([
-      'fetch-shopify',
+      'fetch-shopify-day',
+      'fetch-shopify-orders',
+      'fetch-shopify-catalog',
       'fetch-meta',
       'fetch-google',
       'fetch-tiktok',
       'apply-manual-overrides',
       'persist-batch',
     ]);
-    // Free-tier guard: total step count must stay ≤ 7 (1 function + 6
-    // steps = 7 execs/run; × 3 stores × 1 run/day × 30 days = 630
+    // Free-tier guard: total step count must stay ≤ 9 (1 function + 8
+    // steps = 9 execs/run; × 3 stores × 1 run/day × 30 days = 810
     // execs/month from cron-daily — still well under 50K/mo free-tier).
-    expect(ids.length).toBeLessThanOrEqual(7);
+    expect(ids.length).toBeLessThanOrEqual(9);
   });
 
   it('Test 5: persist-batch upserts use the correct `onConflict` strings (match migration PK/UNIQUE)', async () => {
@@ -745,7 +747,11 @@ describe('cronDaily — factory + handler', () => {
   it('Test 6: an error inside any step propagates out of `runDailyForStore` (D-B6 retry-on-throw)', async () => {
     mockState.throwIn = 'shopify';
     const { step } = makeMockStep();
-    await expect(runDailyForStore('uzoshop', '2026-05-20', { step })).rejects.toThrow(/shopify-failed/);
+    // Phase 13.4: fetch-shopify split into 3 parallel steps means Promise.all
+    // races and any of the 3 mocks (day/orders/catalog) can reject first.
+    // The contract — "an error from Shopify propagates" — still holds; we
+    // just match whichever of the 3 error messages bubbles up.
+    await expect(runDailyForStore('uzoshop', '2026-05-20', { step })).rejects.toThrow(/shopify(-orders|-catalog)?-failed/);
 
     mockState.throwIn = 'merge';
     const { step: step2 } = makeMockStep();

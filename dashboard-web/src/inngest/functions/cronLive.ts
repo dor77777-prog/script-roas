@@ -376,6 +376,17 @@ async function persistDayForStore(
    * Evidence: raw-returns/inngest_cronLive.json (INN-07).
    */
   opts?: { spendOnly?: boolean },
+  /**
+   * Phase 13.4 (2026-05-25) — memoized prior spend values from the
+   * `select-prior-spend-{date}-{storeId}` step. When provided AND
+   * spendOverride is undefined, use these instead of the inline SELECT
+   * below. Skipping the inline SELECT removes a non-idempotent read that
+   * could race the per-platform-preserve fallback on Inngest retry.
+   *
+   * Backward compat: when prior is undefined, fall back to the inline
+   * SELECT (preserves the original behaviour for tests + ad-hoc callers).
+   */
+  prior?: { priorFb: number; priorGa: number; priorTt: number; priorTotal: number },
 ): Promise<void> {
   const admin = getSupabaseAdmin();
 
@@ -418,34 +429,54 @@ async function persistDayForStore(
   }
 
   // -----------------------------------------------------------------
-  // data_daily — SELECT existing spend, then UPSERT preserving them
+  // data_daily — resolve existing spend (for preserve path), then UPSERT.
+  //
+  // Phase 13.4: prefer the memoized `prior` values from the caller (which
+  // came from the `select-prior-spend-{date}-{storeId}` step.run). When
+  // prior is provided AND spendOverride is undefined, skip the inline
+  // SELECT entirely — that removes a non-idempotent read that previously
+  // raced the per-platform-preserve fallback on Inngest retry. Fall back
+  // to the inline SELECT when neither spendOverride nor prior is provided
+  // (test / ad-hoc callers).
   // -----------------------------------------------------------------
-  const { data: existing, error: selErr } = await admin
-    .from('data_daily')
-    .select('fb_spend_cad, ga_spend_cad, tt_spend_cad, total_spend_cad')
-    .eq('date', date)
-    .eq('store_id', storeId)
-    .maybeSingle();
-  if (selErr) {
-    throw new Error(`data_daily select for ${storeId} ${date}: ${selErr.message}`);
+  let existing: { fb_spend_cad?: unknown; ga_spend_cad?: unknown; tt_spend_cad?: unknown; total_spend_cad?: unknown } | null = null;
+  if (spendOverride === undefined && prior === undefined) {
+    const { data, error: selErr } = await admin
+      .from('data_daily')
+      .select('fb_spend_cad, ga_spend_cad, tt_spend_cad, total_spend_cad')
+      .eq('date', date)
+      .eq('store_id', storeId)
+      .maybeSingle();
+    if (selErr) {
+      throw new Error(`data_daily select for ${storeId} ${date}: ${selErr.message}`);
+    }
+    existing = data;
   }
 
   const fbSpendCad =
     spendOverride !== undefined
       ? spendOverride.fbSpendCad
-      : Number(existing?.fb_spend_cad ?? 0) || 0;
+      : prior !== undefined
+        ? prior.priorFb
+        : Number(existing?.fb_spend_cad ?? 0) || 0;
   const gaSpendCad =
     spendOverride !== undefined
       ? spendOverride.gaSpendCad
-      : Number(existing?.ga_spend_cad ?? 0) || 0;
+      : prior !== undefined
+        ? prior.priorGa
+        : Number(existing?.ga_spend_cad ?? 0) || 0;
   const ttSpendCad =
     spendOverride !== undefined
       ? spendOverride.ttSpendCad
-      : Number(existing?.tt_spend_cad ?? 0) || 0;
+      : prior !== undefined
+        ? prior.priorTt
+        : Number(existing?.tt_spend_cad ?? 0) || 0;
   const totalSpendCad =
     spendOverride !== undefined
       ? fbSpendCad + gaSpendCad + ttSpendCad
-      : Number(existing?.total_spend_cad ?? 0) || 0;
+      : prior !== undefined
+        ? prior.priorTotal
+        : Number(existing?.total_spend_cad ?? 0) || 0;
 
   const revenueCad = shopify.revenueCad;
   // Audit fix 2026-05-23 (BL-COGS): use the per-store rate (matches
@@ -890,7 +921,20 @@ async function runLiveForStoreInner(
   // Inngest exec budget: +3/tick (one per date in the rolling window).
   // cron-live budget rises from ~25.9K/month → ~38.9K/month (free-tier
   // cap 50K). 22% headroom retained.
-  const priorSpendByDate: Record<string, { priorFb: number; priorGa: number; priorTt: number }> = {};
+  // Phase 13.4 — extend priorSpendByDate to also read total_spend_cad so
+  // persistDayForStore's no-override path (the one where every platform
+  // fetch returned null and we preserve the existing row's spend) can use
+  // the memoized value instead of its own inline SELECT. Pre-13.4 the
+  // inline SELECT inside persistDayForStore (data_daily.fb/ga/tt/total)
+  // ran AFTER the priorSpend step's UPSERT during retries — non-idempotent
+  // and racing the per-platform-preserve fallback. Reading total here means
+  // persistDayForStore can be fed the prior values via a parameter and the
+  // inline SELECT becomes a defensive fallback only (when no caller has
+  // memoized values to hand in).
+  const priorSpendByDate: Record<
+    string,
+    { priorFb: number; priorGa: number; priorTt: number; priorTotal: number }
+  > = {};
   for (const date of dates) {
     priorSpendByDate[date] = await step.run(
       `select-prior-spend-${date}-${storeId}`,
@@ -898,7 +942,7 @@ async function runLiveForStoreInner(
         const admin = getSupabaseAdmin();
         const { data: prior } = await admin
           .from('data_daily')
-          .select('fb_spend_cad, ga_spend_cad, tt_spend_cad')
+          .select('fb_spend_cad, ga_spend_cad, tt_spend_cad, total_spend_cad')
           .eq('date', date)
           .eq('store_id', storeId)
           .maybeSingle();
@@ -906,6 +950,7 @@ async function runLiveForStoreInner(
           priorFb: Number(prior?.fb_spend_cad ?? 0) || 0,
           priorGa: Number(prior?.ga_spend_cad ?? 0) || 0,
           priorTt: Number(prior?.tt_spend_cad ?? 0) || 0,
+          priorTotal: Number(prior?.total_spend_cad ?? 0) || 0,
         };
       },
     );
@@ -1022,7 +1067,17 @@ async function runLiveForStoreInner(
             : 0,
         });
       } else {
-        await persistDayForStore(storeId, date, shopify, undefined);
+        // Phase 13.4: pass the memoized prior so persistDayForStore can
+        // skip its inline SELECT (which was the last non-idempotent read
+        // in the persist path).
+        await persistDayForStore(
+          storeId,
+          date,
+          shopify,
+          undefined,
+          undefined,
+          priorSpendByDate[date],
+        );
       }
     }
 
