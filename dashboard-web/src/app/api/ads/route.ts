@@ -7,7 +7,6 @@ import {
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
 import { parseRangeParams, RangeParamError } from '@/lib/dateRange';
-// Phase 05.7: removed `fetchAdsData` (Sheets path) + `readFrom`.
 
 export const revalidate = 300; // matches CACHE_CONFIG.ads.revalidate; 5 min — literal required by Next.js
 

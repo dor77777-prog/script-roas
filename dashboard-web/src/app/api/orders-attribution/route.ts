@@ -4,10 +4,9 @@ import { fetchOrdersAttributionFromPostgres } from '@/lib/postgresReaders';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
 import { parseRangeParams, RangeParamError } from '@/lib/dateRange';
-// Phase 05.7: removed `fetchOrdersAttribution` (Sheets path) + `readFrom`.
 
 // 5-minute cache. Attribution rows are written daily; refreshing more often
-// doesn't help the analysis but does burn Sheets quota.
+// doesn't help the analysis but does burn Supabase request quota.
 export const revalidate = 300; // matches CACHE_CONFIG.ordersAttribution.revalidate; literal required by Next.js
 
 export type OrdersAttributionResponse = {
@@ -21,7 +20,7 @@ export type OrdersAttributionResponse = {
 
 export async function GET(req: Request) {
   // RangeParamError (malformed ?from=&to=) → 400 with no-store.
-  // All other errors (Sheets API failures) → 200 + empty rows (degraded path).
+  // All other errors (Supabase failures) → 200 + empty rows (degraded path).
   const searchParams = new URL(req.url).searchParams;
   let range;
   try {
@@ -45,8 +44,6 @@ export async function GET(req: Request) {
   const includeLineItems = searchParams.get('lineItems') === 'true';
 
   try {
-    // Phase 05.7: Postgres-only — readFrom() branch removed.
-    // includeLineItems parity is preserved in postgresReaders.ts.
     const rows = await fetchOrdersAttributionFromPostgres({ range, includeLineItems });
     if (rows.length > 50000) {
       console.warn(`/api/orders-attribution: large response (${rows.length} rows) — consider pagination`);

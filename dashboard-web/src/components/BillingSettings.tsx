@@ -36,9 +36,9 @@ type StoreMetaRow = {
   shopifyPlus: boolean;
   partnerDevelopment: boolean;
   updatedAt: string | null;
-  /** When Apps Script's Shopify GraphQL call failed (missing scope, expired
-   *  token, etc.), refreshAllStoreMeta writes the reason into the store-meta
-   *  tab. We surface this so the user understands why auto-detect isn't
+  /** When the Shopify GraphQL plan-detection call failed (missing scope,
+   *  expired token, etc.), the writer persists the reason into the `stores`
+   *  table. We surface this so the user understands why auto-detect isn't
    *  populating plans rather than silently showing nothing. */
   lastError?: string | null;
 };
@@ -99,9 +99,9 @@ export function BillingSettings({ storeNames }: Props) {
   const { recurring, setRecurring: persistRecurring, totalMonthly } = useBillingRecurring();
   const { oneTime, setOneTime: persistOneTime } = useBillingOneTime();
 
-  // Auto-detected Shopify plan per store (from Apps Script writing to the
-  // `store-meta` tab). Only fetched after the panel opens — no point pinging
-  // Sheets if the user never opens the settings.
+  // Auto-detected Shopify plan per store (read from the `stores` table via
+  // /api/store-meta). Only fetched after the panel opens — no point pinging
+  // Supabase if the user never opens the settings.
   const { data: meta } = useSWR<StoreMetaResponse>(
     open ? '/api/store-meta' : null,
     metaFetcher,
@@ -312,9 +312,9 @@ function RecurringTab({
     });
   }, [detectedPlans, items, storeNames]);
 
-  // Stores whose Apps Script auto-detect call failed (missing scope, expired
-  // token, GraphQL error). We surface these so the user can fix the root
-  // cause instead of wondering why auto-detect isn't suggesting anything.
+  // Stores whose plan auto-detect call failed (missing scope, expired token,
+  // GraphQL error). We surface these so the user can fix the root cause
+  // instead of wondering why auto-detect isn't suggesting anything.
   const planErrorStores = useMemo(() => {
     return detectedPlans.filter(
       m => !!m.lastError && storeNames.includes(m.storeName),
@@ -391,10 +391,10 @@ function RecurringTab({
                 זיהוי אוטומטי של תוכניות Shopify נכשל
               </div>
               <p className="text-[11px] sm:text-xs text-amber-900/85 mt-0.5 leading-relaxed">
-                Apps Script נכשל בקריאת ה-plan דרך GraphQL Admin API. סיבות
+                הקריאה ל-plan דרך Shopify GraphQL Admin API נכשלה. סיבות
                 נפוצות: ה-token לא כולל את ה-scope <code>read_shop</code>,
-                ה-token פג, או החנות חסומה. תיקון נדרש בצד Apps Script
-                (Script Properties). עד אז ניתן להוסיף את התוכניות ידנית.
+                ה-token פג, או החנות חסומה. תיקון נדרש בצד ה-token של החנות
+                ב-Vercel. עד אז ניתן להוסיף את התוכניות ידנית.
               </p>
               <ul className="mt-2 space-y-1">
                 {planErrorStores.map(m => (

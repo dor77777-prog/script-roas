@@ -390,16 +390,13 @@ function parseNextLink(headers: Headers): string | undefined {
  * depth (~250 orders/day for these stores), bounded by PAGINATION_CAP (50
  * pages = 12,500 orders), which covers ~50 days of typical store volume.
  *
- * NOTE: this is a TS-only fix. Apps Script (`Shopify.gs:644-648`) has the
- * same bug but is no longer the source of truth (READ_FROM=postgres
- * permanent as of Phase 05.7.0). The two implementations have legitimately
- * diverged on this point; the load-bearing-invariants header in
- * `shopifyRevenueRefunds.ts` (the ALGORITHM) is still in sync — only the
- * I/O wrapper changed.
+ * The load-bearing-invariants header in `shopifyRevenueRefunds.ts` (the
+ * ALGORITHM) documents the refund-window semantics; only the I/O wrapper
+ * lives here.
  *
- * Fields list mirrors `Shopify.gs:222` (the more-inclusive product-sales
- * variant) — it's a superset of what `getShopifyRevenue` requests, so a
- * single fetch satisfies both store-level + per-product algorithm needs.
+ * Fields list is the more-inclusive product-sales variant — it's a superset
+ * of what the store-level revenue fetch needs, so a single round-trip
+ * satisfies both store-level + per-product algorithm needs.
  */
 function buildWindowUrl(
   domain: string,

@@ -7,7 +7,6 @@ import {
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
 import { parseRangeParams, RangeParamError } from '@/lib/dateRange';
-// Phase 05.7: removed `fetchCampaignsData` (Sheets path) + `readFrom`.
 
 // No `force-dynamic` — it would override `revalidate` and the Cache-Control
 // header, defeating ISR. (IN-06)
@@ -43,7 +42,6 @@ export async function GET(req: Request) {
   }
 
   try {
-    // Phase 05.7: Postgres-only — readFrom() branch removed.
     const [rows, dataLastWriteAt] = await Promise.all([
       fetchCampaignsFromPostgres({ range }),
       fetchCampaignsDailyLastWriteAt({ range }),

@@ -3,12 +3,11 @@ import type { CatalogProduct } from '@/lib/productCatalog';
 import { fetchProductCatalogFromPostgres } from '@/lib/postgresReaders';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
-// Phase 05.7: removed `fetchProductCatalog` (Sheets path) + `readFrom`.
 
-// 60 seconds — short enough that after running refreshAllProductCatalogs in
-// Apps Script, the user sees fresh data within a minute (instead of waiting
-// out a 1-hour CDN cache). The catalog is small (≤1k rows across all stores)
-// so the underlying Sheets read is cheap; no real cost to a tighter TTL.
+// 60 seconds — short enough that after a cronDaily catalog refresh, the
+// user sees fresh data within a minute (instead of waiting out a 1-hour
+// CDN cache). The catalog is small (≤1k rows across all stores) so the
+// underlying Supabase read is cheap; no real cost to a tighter TTL.
 export const revalidate = 60; // matches CACHE_CONFIG.productCatalog.revalidate; literal required by Next.js
 
 export type ProductCatalogResponse = {
@@ -18,7 +17,6 @@ export type ProductCatalogResponse = {
 
 export async function GET() {
   try {
-    // Phase 05.7: Postgres-only — readFrom() branch removed.
     const rows = await fetchProductCatalogFromPostgres();
     if (rows.length > 50000) {
       console.warn(`/api/product-catalog: large response (${rows.length} rows) — consider pagination`);
@@ -28,8 +26,8 @@ export async function GET() {
       {
         headers: {
           // Match the route-level revalidate. 60s CDN cache + 5min stale
-          // gives a snappy "refresh after Apps Script run" experience while
-          // still de-duping the routes between concurrent partners.
+          // gives a snappy "refresh after cron run" experience while still
+          // de-duping the routes between concurrent partners.
           'Cache-Control': cacheControl('productCatalog'),
         },
       },

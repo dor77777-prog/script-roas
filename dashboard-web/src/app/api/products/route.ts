@@ -7,9 +7,9 @@ import {
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
 import { parseRangeParams, RangeParamError } from '@/lib/dateRange';
-// Phase 05.7: removed `fetchProductsData` (Sheets path) + `readFrom`.
-// `ProductRow` type kept as a re-export contract only.
 
+// `ProductRow` type kept as a re-export contract only.
+//
 // No `force-dynamic` — it would override `revalidate` and the Cache-Control
 // header, defeating ISR. (IN-06)
 export const revalidate = 60; // matches CACHE_CONFIG.products.revalidate; literal required by Next.js

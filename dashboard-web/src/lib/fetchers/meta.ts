@@ -24,9 +24,7 @@
  * Version bump (2026-05-22):
  *   META_API_VERSION = 'v25.0' (current latest). Previously v23.0 — every
  *   Marketing API version <v24.0 deprecates 2026-06-09; bumped ahead of that
- *   cliff. Apps Script side (`MetaAds.gs`) is still on v20.0 since
- *   READ_FROM=postgres is permanent and the .gs codepath is dormant
- *   (Phase 05.7.0). v24/v25 changes are write-side only — read-side fields
+ *   cliff. v24/v25 changes are write-side only — read-side fields
  *   (spend, impressions, clicks, actions, action_values, daily_budget,
  *   lifetime_budget, bid_strategy, status, effective_status) are unchanged.
  *

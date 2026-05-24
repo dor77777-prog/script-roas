@@ -7,11 +7,9 @@ import type { DashboardData } from '@/lib/types';
 import { cacheControl } from '@/lib/cacheConfig';
 import { userFacingError } from '@/lib/apiErrors';
 import { parseRangeParams, RangeParamError } from '@/lib/dateRange';
-// Phase 05.7: removed `fetchDailyData` from '@/lib/sheets' + `readFrom` from
-// '@/lib/featureFlags'. All eight data routes now read Postgres exclusively.
 
 // Revalidate the underlying data every 60 seconds (server-side cache).
-// Client SWR will poll us; this prevents hammering the Sheets API.
+// Client SWR will poll us; this prevents hammering Supabase on every request.
 //
 // No `force-dynamic` — it overrides `revalidate` and the explicit
 // `Cache-Control` header on the response, defeating the caching this
@@ -46,8 +44,6 @@ export async function GET(req: Request) {
   }
 
   try {
-    // Phase 05.7: Postgres-only. The readFrom() branch was removed; the
-    // dashboard reads exclusively from Supabase now.
     const [rows, fxIlsToCad, dataLastWriteAt] = await Promise.all([
       fetchDailyDataFromPostgres({ range }),
       fetchTodayFx(),
@@ -73,8 +69,7 @@ export async function GET(req: Request) {
     const message = err instanceof Error ? err.message : String(err);
     // Log the raw message server-side so ops can see Postgres error details
     // (table, column, constraint, etc.) — but don't leak any of that to the
-    // client. Phase 05.7 changed the underlying source from Sheets → Postgres;
-    // the sanitised user-facing message is unchanged.
+    // client.
     console.error('data fetch failed:', message);
     // Degrade gracefully with status 200 + empty rows — matches /api/ads,
     // /api/orders-attribution, /api/store-meta, /api/product-catalog. The
