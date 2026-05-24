@@ -268,10 +268,14 @@ describe('cronLive — runLiveForStore handler (Shopify-only, rolling 3-day)', (
     // added the meta/google/tiktok spend step; 05.7.8 added the
     // orders-attribution-today step; Phase 05.7.x added refresh-effective-status
     // so the off-chip flips within 10 min of a pause instead of waiting 24h
-    // for cron-daily. Budget is now 5 (fetch-shopify + fetch-spend-light +
-    // fetch-orders-attribution + persist + refresh-effective-status).
+    // for cron-daily. Audit fix 2026-05-24 (AUDIT INN-10, Phase 12.1.1)
+    // added 3 select-prior-spend-{date}-{storeId} steps (one per rolling-
+    // window date) so the SELECT-of-prior-spend is memoized across Inngest
+    // retries instead of re-executing inside persist-rolling-3day. Budget
+    // is now 8 (fetch-shopify + fetch-spend-light + fetch-orders-attribution
+    // + 3× select-prior-spend + persist + refresh-effective-status).
     expect(labels.length).toBeGreaterThanOrEqual(1);
-    expect(labels.length).toBeLessThanOrEqual(5);
+    expect(labels.length).toBeLessThanOrEqual(8);
   });
 
   it('Test 5 (Phase 05.7.6): cron-live calls LIGHT Meta + Google fetchers — NOT the heavy fetchMetaSpendForDay', async () => {

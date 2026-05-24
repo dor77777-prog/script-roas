@@ -743,6 +743,40 @@ export async function runLiveForStore(
   // the override (so total_spend stays correct), without ever calling the
   // TikTok API. For uzoshop with a failed TikTok fetch, we treat it like
   // any other platform failure — preserve whatever was last written.
+  //
+  // Audit fix 2026-05-24 (AUDIT INN-10, Phase 12.1.1): SELECT prior spend
+  // in a separate step.run per date so its result is MEMOIZED across
+  // Inngest retries. Pre-fix the SELECT lived INSIDE persist-rolling-3day's
+  // callback; on retry it read the first attempt's freshly-written UPSERT
+  // instead of the original prior, silently corrupting the per-platform-
+  // preserve fallback (~4/day at 1% retry rate across 432 ticks/day).
+  // Evidence: .planning/phases/12-codebase-audit-baseline/raw-returns/
+  //   inngest_cronLive.json finding INN-10.
+  //
+  // Inngest exec budget: +3/tick (one per date in the rolling window).
+  // cron-live budget rises from ~25.9K/month → ~38.9K/month (free-tier
+  // cap 50K). 22% headroom retained.
+  const priorSpendByDate: Record<string, { priorFb: number; priorGa: number; priorTt: number }> = {};
+  for (const date of dates) {
+    priorSpendByDate[date] = await step.run(
+      `select-prior-spend-${date}-${storeId}`,
+      async () => {
+        const admin = getSupabaseAdmin();
+        const { data: prior } = await admin
+          .from('data_daily')
+          .select('fb_spend_cad, ga_spend_cad, tt_spend_cad')
+          .eq('date', date)
+          .eq('store_id', storeId)
+          .maybeSingle();
+        return {
+          priorFb: Number(prior?.fb_spend_cad ?? 0) || 0,
+          priorGa: Number(prior?.ga_spend_cad ?? 0) || 0,
+          priorTt: Number(prior?.tt_spend_cad ?? 0) || 0,
+        };
+      },
+    );
+  }
+
   await step.run('persist-rolling-3day', async () => {
     for (let i = 0; i < dates.length; i++) {
       const date = dates[i];
@@ -795,21 +829,13 @@ export async function runLiveForStore(
       // (Removed `isToday` gate: cron-live now overrides spend for every
       //  date in the rolling window when ad-platform data is fresh.)
       if (haveAnySpend) {
-        // Read the existing row's spend columns so we can fall back for
-        // platforms that returned null on this tick. This is a fresh SELECT
-        // because persistDayForStore does its own SELECT internally, but
-        // doing it here keeps the "merge with existing" logic explicit at
-        // the call site.
-        const admin = getSupabaseAdmin();
-        const { data: prior } = await admin
-          .from('data_daily')
-          .select('fb_spend_cad, ga_spend_cad, tt_spend_cad')
-          .eq('date', date)
-          .eq('store_id', storeId)
-          .maybeSingle();
-        const priorFb = Number(prior?.fb_spend_cad ?? 0) || 0;
-        const priorGa = Number(prior?.ga_spend_cad ?? 0) || 0;
-        const priorTt = Number(prior?.tt_spend_cad ?? 0) || 0;
+        // Audit fix 2026-05-24 (AUDIT INN-10): read the per-date prior
+        // values from the MEMOIZED priorSpendByDate map populated by
+        // the select-prior-spend-* step.runs above. Pre-fix this was
+        // an inline SELECT inside persist-rolling-3day — non-idempotent
+        // on Inngest retry because the SELECT would re-execute AFTER
+        // the first attempt's UPSERT had landed.
+        const { priorFb, priorGa, priorTt } = priorSpendByDate[date];
         await persistDayForStore(storeId, date, shopify, {
           fbSpendCad: dateSpend.fbSpendCad ?? priorFb,
           gaSpendCad: dateSpend.gaSpendCad ?? priorGa,
