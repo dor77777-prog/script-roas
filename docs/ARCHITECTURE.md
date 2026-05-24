@@ -204,6 +204,46 @@ cron-live's `refresh-effective-status` step UPSERTs a placeholder row for TODAY 
 
 **הפתרון**: הסרת ה-`.gte('date', lookbackFrom)` — כעת ה-UPDATE מכסה כל שורה קיימת לכל ad-set שמופיע ב-enumeration של הפלטפורמה. `effective_status` מעולם לא נועד להיות רשומה היסטורית "per-day"; הוא תמיד נחשב snapshot "current-as-of-last-refresh" על כל שורה. עומס: ~30 ad-sets × 3 חנויות × ~90 שורות לכל אחד × 96 ריצות/יום ≈ 770K row touches/day — סביר ל-Postgres עם אינדקס על `(store_id, platform, ad_set_id)`. ראה `cronLive.ts:1019-1024` ו-`cronLivePastRowBackfill.test.ts` לעדכון הטסטים.
 
+### 6.3b Defensive current-status fallback (Phase 12.5.x — 2026-05-24)
+ה-cron-live UPDATE pass (6.3a) מסונכרן רק כל 10 דקות, ועלול לכשול חלקית (TikTok credit error, partial enumeration, וכו'). כדי שהצ'יפ "כבוי" יהיה עמיד בפני עיכובי cron, התווסף נתיב defensive נוסף:
+
+- **`postgresReaders.ts:fetchCurrentCampaignStatuses`** — שאילתה אחת על `campaigns_daily` ב-60 הימים האחרונים, מסוננת ל-`effective_status IS NOT NULL`, ordered by date DESC. dedup ב-JS לפי key (`storeId::Platform::campaignId::adSetId`) → המופע הראשון שורה הכי חדשה.
+- **`/api/campaigns` response** — שדה חדש `currentEffectiveStatus: Record<string, string>` שמועבר ל-client. soft-fail (empty map) ב-error path.
+- **`campaignsAggregator.aggregate`** — פרמטר חדש `currentEffectiveStatus?`. post-pass שעוטף את ה-`effectiveStatus` של כל aggregate עם הסטטוס מה-map הזה. ב-mode='campaign' רולאפ של ad-sets לפי הכלל "any active → active; else first off" (מתאים ל-roll-up של Meta/Google/TikTok בעצמן).
+- **תוצאה**: גם אם ה-cron-live UPDATE pass נכשל ל-TikTok, הצ'יפ "כבוי" עדיין עובד כל עוד קיימת שורה בטבלה ב-60 הימים האחרונים עם הסטטוס הנוכחי (כל cron-live tick שהצליח עבור הקמפיין הזה).
+
+עומס: שאילתה אחת לכל GET של `/api/campaigns`, ~30K שורות ב-60 ימים × revalidate=60s = השאילתה נתפסת ב-ISR cache. אינדקס קיים על `(store_id, platform, campaign_id, ad_set_id)`.
+
+### 6.3c URL state — drill-down + mode + sort persistence (Phase 12.5.x — 2026-05-24)
+ה-URL state הפנימי של טאב הקמפיינים הורחב לכלול:
+- `c_mode` — `campaign` / `adset` (default `campaign` מושמט).
+- `c_sort`, `c_sortDir` — מיון העמודות (default `roas` / `desc` מושמטים).
+- `c_drill=storeId::Platform::campaignId` — CampaignDrawer פתוח על קמפיין מסוים.
+- `c_adDrill=storeId::Platform::campaignId::adSetId` — AdsDrawer פתוח על ad-set. ה-`adSetName` לא נכנס ל-URL — נפתר מ-`data.rows` ב-effect לאחר שה-SWR טוען (drawer header מציג ID לרגע ההמתנה).
+
+**תיקון חוצה**: `writeDashboardState` (`urlState.ts`) בנה בעבר `URLSearchParams` ריק מאפס בכל קריאה, ומחק ב-side-effect את ה-`c_*`/`p_*` שה-children writers (CampaignsTable / ProductsTable) שמרו. סדר ה-effects ב-React (ילדים קודם הורים) גרם לכך שה-write של הילד תמיד נדרס ע"י הקריאה של ההורה — וברענון, הפרמטרים הפנימיים של הטאב חזרו לדיפולט. עכשיו `writeDashboardState` מקבל את ה-`existingSearch` הנוכחי ומוחק רק את ה-`GLOBAL_PARAMS` (`tab`, `preset`, `from`, `to`, `store`), משאיר כל היתר נגיע.
+
+### 6.4 PnL — percent-of-revenue expenses (Phase 12.5.x — 2026-05-24)
+
+עד 12.5.x כל הוצאה חודשית הוגדרה כסכום CAD קבוע (`monthlyCAD`). עכשיו `RecurringCost` קיבל שדה optional חדש `percentOfRevenue?: number` (0–100). כששדה זה מאוכלס וחיובי, השורה נחשבת "% מהמחזור" ו-`monthlyCAD` מתעלמים ממנו.
+
+**שינויים ב-`billing.ts:billingForRange`**:
+- 2 פרמטרים אופציונליים חדשים: `revenue?: number`, `revenueByStore?: Record<string, number>`.
+- בלולאה על recurring rows: אם `percentOfRevenue > 0` → `amount = revenue × percentOfRevenue / 100` (ללא day-proration; המחזור כבר אגרגציה תקופתית). אחרת → fallback ל-formula הקיימת.
+- per-store split: שורה ספציפית-לחנות חישבת מול ה-`revenueByStore[store]` (fallback: split שווה של `revenue` בין החנויות). שורת "All" חישבת מול `revenue` הכולל, ואז מתחלקת שווה בשווה כמו לפני.
+
+**call sites**:
+- `analytics.ts:aggregate` מעביר את ה-`revenue` המחושב במקום.
+- `PnLBreakdown.tsx` מעביר את `current.revenue` כדי שהפירוט בסעיף 5.4a יתאזן עם ה-`fixedCosts` שב-`Aggregate`.
+- `aggregateByStore` לא מעביר `revenueByStore` במפורש — `aggregate` בכל bucket מקבל רק את הכנסות החנות הזו ב-`revenue`. שורות "% מהמחזור" ב-scope של חנות ספציפית מקבלות נכון; ב-scope של "All" החלוקה השווה (fallback) מתפקדת.
+
+**UI** (`BillingSettings.tsx:RecurringEditForm`):
+- 2 כפתורים: "סכום קבוע (CAD)" / "% מהמחזור". בוחר את ה-`kind` של הטופס.
+- שדה הקלט משתנה בהתאם (% input מציין range 0-100 ב-validation; CAD input ללא תקרה).
+- list view: אם `percentOfRevenue > 0`, מוצג "X%" + "מהמחזור"; אחרת CAD + "/חודש".
+
+**`useBillingRecurring.totalMonthly`**: מסנן החוצה שורות % כי הסכום שלהן תלוי בהכנסה. הסכומון בכפתור "עלויות חודשיות (...)" משקף את ה-CAD הקבוע בלבד; שורות % נכנסות בכל זאת ל-`X פעילות` (הן מנויים אמיתיים).
+
 ---
 
 ## 7. Campaign Health Score (Phase 05.7.x)
@@ -327,12 +367,12 @@ UPDATE notification_config SET active = FALSE WHERE provider = 'metacloud';
 
 ---
 
-## 9.5 Token Failure Alerts (Phase 05.7.x — 2026-05-23)
+## 9.5 Token Failure Alerts (Phase 05.7.x — 2026-05-23, fully wired 2026-05-24)
 
 Detect + persist + alert on upstream auth/API failures across all
-providers. Two-phase rollout:
-- ✅ **Shipped now**: persistence + throttle + notifier function + /operator UI.
-- ⏳ **Waiting**: WhatsApp template approval from Meta, then fetcher wiring.
+providers. Now fully end-to-end:
+- ✅ **Shipped 2026-05-23**: persistence + throttle + notifier function + /operator UI.
+- ✅ **Shipped 2026-05-24 (Phase 12.5.x)**: WhatsApp template approved by Meta + fetcher wiring in `cronDaily.ts` + `cronLive.ts`. Operator alerts now reach `+972524809540` within ~10 min of a token going dead.
 
 ### 9.5.1 Schema
 - Migration `supabase/migrations/20260523080000_add_token_failures.sql`.
