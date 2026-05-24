@@ -1,0 +1,4 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "ignoreCommand": "cd .. && git diff HEAD^ HEAD --quiet -- dashboard-web/ supabase/migrations/ vercel.json"
+}
