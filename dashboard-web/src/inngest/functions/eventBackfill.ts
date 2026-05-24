@@ -119,31 +119,57 @@ type StepRunner = {
 };
 
 /**
- * Inclusive YYYY-MM-DD date generator.
+ * Inclusive YYYY-MM-DD date generator (component-based arithmetic).
  *
- * Uses Date.UTC + millisecond arithmetic to traverse the range — avoids
- * timezone drift from local-tz Date constructors. The output strings
- * are exact ISO-8601 calendar days (YYYY-MM-DD), matching the format
- * Supabase DATE columns expect.
+ * Audit fix 2026-05-24 (AUDIT INN-14, Phase 12.2.2): rewritten to use
+ * component-based arithmetic on the YYYY-MM-DD fields. Pre-fix the
+ * generator stepped `d = new Date(d.getTime() + 24h)` (UTC ms-stepping)
+ * and rendered via `d.toISOString().slice(0, 10)` — that's safe in UTC
+ * but the IL operator's mental model is Asia/Jerusalem calendar days.
+ * Across IL DST transitions (IDT⇄IST, last Friday of March + last Sunday
+ * of October) a 24h UTC step can land on the wrong local calendar day,
+ * silently skipping or duplicating a date. Component arithmetic is
+ * timezone-agnostic and matches the operator's mental model exactly.
+ *
+ * Note: `new Date(Date.UTC(y, m, 0)).getUTCDate()` is used ONLY for the
+ * days-in-month lookup (returns the last day of month `m`). This is
+ * DST-immune — the calendar-month length is identical in every timezone.
+ *
+ * Evidence: raw-returns/inngest_eventBackfill.json (INN-14).
  *
  * Edge cases:
  *   - from === to → yields exactly one date
- *   - from > to   → caller must reject before calling (the loop would
- *                   yield nothing and the function would no-op, but
- *                   that masks a malformed payload — we reject upstream
- *                   in the handler)
- *   - DST boundaries → millisecond arithmetic on UTC is unaffected by
- *                      Asia/Jerusalem's IDT/IST flip (only display
- *                      formatting cares, and we use .toISOString().slice
- *                      which always reports UTC)
+ *   - from > to   → yields nothing (caller validates upstream)
+ *   - DST boundaries → component arithmetic ignores them entirely
+ *
+ * Exported so the audit's regression tests can pin the DST contract
+ * without standing up a full Inngest dev server.
  */
-function* dateRange(from: string, to: string): Generator<string> {
+export function* dateRange(from: string, to: string): Generator<string> {
   const [fy, fm, fd] = from.split('-').map(Number);
   const [ty, tm, td] = to.split('-').map(Number);
-  const start = new Date(Date.UTC(fy, fm - 1, fd));
-  const end = new Date(Date.UTC(ty, tm - 1, td));
-  for (let d = start; d <= end; d = new Date(d.getTime() + 24 * 60 * 60 * 1000)) {
-    yield d.toISOString().slice(0, 10);
+  let y = fy;
+  let m = fm;
+  let d = fd;
+  while (y < ty || (y === ty && m < tm) || (y === ty && m === tm && d <= td)) {
+    const yyyy = String(y).padStart(4, '0');
+    const mm = String(m).padStart(2, '0');
+    const dd = String(d).padStart(2, '0');
+    yield `${yyyy}-${mm}-${dd}`;
+    // Increment by 1 calendar day (component-based, DST-immune).
+    d += 1;
+    // `new Date(Date.UTC(y, m, 0)).getUTCDate()` returns the last day of
+    // month `m` (note: month is 1-based here, so we pass `m` not `m - 1`
+    // and use day 0 to roll back to the previous month's last day).
+    const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+    if (d > daysInMonth) {
+      d = 1;
+      m += 1;
+      if (m > 12) {
+        m = 1;
+        y += 1;
+      }
+    }
   }
 }
 
