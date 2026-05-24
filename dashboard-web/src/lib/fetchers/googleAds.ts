@@ -326,8 +326,13 @@ async function runGaqlQuery(
     };
     if (body.results && body.results.length > 0) all.push(...body.results);
     pages++;
-    if (!body.nextPageToken) break;
+    // Assign FIRST, then break — so after a terminal page (no nextPageToken)
+    // `pageToken` is undefined when the post-loop cap-warn check runs. Prior
+    // code assigned only when truthy, leaving the previous page's cursor in
+    // `pageToken` and producing a false-positive warn at exact-last-page (50
+    // pages with the 50th being terminal). Phase 12.5 fix.
     pageToken = body.nextPageToken;
+    if (!pageToken) break;
   }
   if (pages >= GAQL_PAGE_CAP && pageToken) {
     console.warn(
