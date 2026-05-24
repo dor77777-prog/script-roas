@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import useSWR from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 import { Bot, Copy, Check, Download, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { generateAiReport } from '@/lib/aiReport';
@@ -49,33 +49,45 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
     }
   }, [openSignal]);
 
-  const { data: products } = useSWR<ProductsResponse | null>(
-    open ? '/api/products' : null,
-    fetcher,
-    { revalidateOnFocus: false },
-  );
-  const { data: campaigns } = useSWR<CampaignsResponse | null>(
-    open ? '/api/campaigns' : null,
-    fetcher,
-    { revalidateOnFocus: false },
-  );
-  // Phase 05.7.x — orders-attribution feeds the new "תנועה לפי מקור" section
-  // (per-source AOV + click-id coverage). Range-keyed so the SWR cache lines
-  // up with the user's selected date window — same pattern the campaigns
-  // table uses.
-  const { data: orders } = useSWR<OrdersAttributionResponse | null>(
-    open ? buildDateRangeKey('/api/orders-attribution', filters.range) : null,
-    fetcher,
-    { revalidateOnFocus: false },
-  );
-  // Phase 05.7.x — ads feeds the new ad-level (creative) drill-down section.
-  // Range-keyed so the SWR cache matches the user's selected window. Same
-  // pattern as orders-attribution.
-  const { data: ads } = useSWR<AdsResponse | null>(
-    open ? buildDateRangeKey('/api/ads', filters.range) : null,
-    fetcher,
-    { revalidateOnFocus: false },
-  );
+  // Phase 12.5.x audit fix (2026-05-24, HIGH+MEDIUM #1,#4) — range-key
+  // ALL four SWR fetchers consistently. Before this fix, /api/products and
+  // /api/campaigns used static keys → changing the global range or store
+  // wouldn't invalidate the cache, so the report was sometimes generated
+  // against the WRONG range's data. The orders + ads keys were already
+  // range-keyed; this brings products + campaigns into line.
+  const productsKey = open ? buildDateRangeKey('/api/products', filters.range) : null;
+  const campaignsKey = open ? buildDateRangeKey('/api/campaigns', filters.range) : null;
+  const ordersKey = open ? buildDateRangeKey('/api/orders-attribution', filters.range) : null;
+  const adsKey = open ? buildDateRangeKey('/api/ads', filters.range) : null;
+  const { data: products } = useSWR<ProductsResponse | null>(productsKey, fetcher, {
+    revalidateOnFocus: false,
+  });
+  const { data: campaigns } = useSWR<CampaignsResponse | null>(campaignsKey, fetcher, {
+    revalidateOnFocus: false,
+  });
+  const { data: orders } = useSWR<OrdersAttributionResponse | null>(ordersKey, fetcher, {
+    revalidateOnFocus: false,
+  });
+  const { data: ads } = useSWR<AdsResponse | null>(adsKey, fetcher, {
+    revalidateOnFocus: false,
+  });
+
+  // Phase 12.5.x audit fix (2026-05-24, HIGH #1) — when the operator edits
+  // the product-map (CampaignDrawer / picker), invalidate the SWR caches the
+  // report depends on so the next "Generate" picks up the fresh mapping.
+  // Without this, /api/campaigns response was cached for the full session
+  // and the report still showed the OLD mapping until a manual page
+  // refresh. Cache invalidation is idempotent + cheap (just marks stale,
+  // doesn't fetch until next access).
+  const { mutate } = useSWRConfig();
+  useEffect(() => {
+    function invalidate() {
+      if (productsKey) mutate(productsKey);
+      if (campaignsKey) mutate(campaignsKey);
+    }
+    window.addEventListener('roas-campaign-product-map-changed', invalidate);
+    return () => window.removeEventListener('roas-campaign-product-map-changed', invalidate);
+  }, [productsKey, campaignsKey, mutate]);
 
   async function handleGenerate() {
     setGenerating(true);

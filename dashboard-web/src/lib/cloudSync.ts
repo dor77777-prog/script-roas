@@ -248,6 +248,25 @@ export function pushCloudKey(
   }, 400);
 }
 
+/**
+ * Phase 12.5.x audit fix (2026-05-24, MEDIUM #5) — retry schedule.
+ *
+ * Pre-fix: 2 attempts total (initial + one retry after 5s). On a brief
+ * network blip > 5s the second attempt would also fail and the push was
+ * silently dropped, leaving partner devices out of sync indefinitely.
+ *
+ * Post-fix: 4 attempts with exponential backoff so a transient outage
+ * up to ~3 min has multiple chances to succeed before we give up. The
+ * cap is intentional: forever-retry could pile up pending callbacks
+ * across page sessions; 4 attempts is enough for real-world ISP/WiFi
+ * blips while still surfacing a persistent error to the user's
+ * SyncIndicator within a reasonable window.
+ *
+ * Delays (ms): 5_000, 15_000, 45_000.
+ */
+const RETRY_DELAYS_MS = [5_000, 15_000, 45_000] as const;
+const MAX_ATTEMPTS = RETRY_DELAYS_MS.length + 1;
+
 async function postWithRetry(key: string, value: unknown, attempt = 1): Promise<void> {
   // This fire is no longer "pending" — clear the slot so a concurrent
   // pushCloudKey doesn't redundantly cancel-and-decrement.
@@ -292,9 +311,12 @@ async function postWithRetry(key: string, value: unknown, attempt = 1): Promise<
       };
     });
   } catch (err) {
-    if (attempt >= 2) {
+    if (attempt >= MAX_ATTEMPTS) {
       const message = err instanceof Error ? err.message : String(err);
-      console.warn(`cloudSync push failed (${key}):`, message);
+      console.warn(
+        `cloudSync push failed (${key}) after ${MAX_ATTEMPTS} attempts:`,
+        message,
+      );
       updateSyncState(prev => ({
         status: 'error',
         lastError: `כתיבה ל-${key} נכשלה: ${message}`,
@@ -302,14 +324,15 @@ async function postWithRetry(key: string, value: unknown, attempt = 1): Promise<
       }));
       return;
     }
-    // Schedule a single retry. Track the timer in pendingRetries so a
-    // newer pushCloudKey(key, ...) can cancel it BEFORE it fires (WR2-01).
-    // Without this tracking, the retry's closure captures the old `value`
-    // and can overwrite cloud with the stale value after the newer push
-    // has already succeeded.
+    // Schedule next retry with exponential backoff. Track the timer in
+    // pendingRetries so a newer pushCloudKey(key, ...) can cancel it
+    // BEFORE it fires (WR2-01). Without this tracking, the retry's
+    // closure captures the old `value` and can overwrite cloud with the
+    // stale value after the newer push has already succeeded.
+    const delay = RETRY_DELAYS_MS[attempt - 1];
     pendingRetries[key] = setTimeout(
       () => void postWithRetry(key, value, attempt + 1),
-      5000,
+      delay,
     );
   }
 }

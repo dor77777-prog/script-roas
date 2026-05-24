@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import useSWR from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 import {
   AlertCircle,
   Home,
@@ -137,12 +137,26 @@ export function Dashboard() {
   // wouldn't refresh KPI / PnL / per-store totals until the page reloaded.
   // This tick increments on every 'roas-billing-changed' dispatch and is
   // included in the memo deps to force a re-aggregate.
+  //
+  // Phase 12.5.x audit fix (2026-05-24, MEDIUM #3) — also invalidate the
+  // SWR cache for /api/data on the same event. The client-side aggregate
+  // above re-runs immediately via billingTick, which handles KPI/PnL/per-
+  // store cards correctly. But components that consume `data.rows` directly
+  // (DetailTable, MonthlyTables) still see the stale response until the
+  // 60s refreshInterval fires. mutate() marks the entry stale; SWR
+  // re-fetches on next access — cheap (idempotent) and keeps the whole
+  // dashboard in sync after a billing edit.
   const [billingTick, setBillingTick] = useState(0);
+  const { mutate: swrMutate } = useSWRConfig();
   useEffect(() => {
-    const bump = () => setBillingTick(t => t + 1);
+    const dataKey = buildDateRangeKey('/api/data', filters.range);
+    const bump = () => {
+      setBillingTick(t => t + 1);
+      if (dataKey) swrMutate(dataKey);
+    };
     window.addEventListener('roas-billing-changed', bump);
     return () => window.removeEventListener('roas-billing-changed', bump);
-  }, []);
+  }, [filters.range, swrMutate]);
 
   // Mirror state into the URL so refresh / bookmark / share survive. Uses
   // replaceState so we don't pollute the back-button stack.

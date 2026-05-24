@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import useSWR from 'swr';
+import useSWR, { useSWRConfig } from 'swr';
 import {
   AlertCircle,
   ArrowDown,
@@ -318,6 +318,19 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
   const [productMap, setProductMap] = useState<ProductMap>(() => ({}));
+  // Phase 12.5.x audit fix (2026-05-24, HIGH #2) — when the operator edits
+  // the product-map (CampaignDrawer / picker), invalidate the SWR caches
+  // that feed `useCampaignTrueRevenue` so the Shopify-ROAS columns reflect
+  // the new mapping immediately. Without this, /api/products and
+  // /api/orders-attribution kept their 60s-deduped responses and the ROAS
+  // columns lagged 0-60s (sometimes showing 0 / — while the column WAS
+  // technically derivable from the local productMap state).
+  //
+  // mutate() is idempotent and cheap: marks the entry stale, SWR re-fetches
+  // on the next render. No-op if the key is null.
+  const { mutate: swrMutate } = useSWRConfig();
+  const productsKey = buildDateRangeKey('/api/products', localRange);
+  const ordersAttrKeyForMutate = ordersAttrKeyBase ? `${ordersAttrKeyBase}&lineItems=true` : null;
   useEffect(() => {
     // WR-02: Migration runs on EVERY change to `data`, not once per session.
     // The previous useRef-guarded "one-shot" implementation only inspected
@@ -339,10 +352,17 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     } else {
       setProductMap(readProductMap());
     }
-    const onChange = () => setProductMap(readProductMap());
+    const onChange = () => {
+      setProductMap(readProductMap());
+      // Invalidate the SWR caches the ROAS columns depend on. SWR will
+      // re-fetch on next access; the table re-renders with the new
+      // numbers when the new responses land.
+      if (productsKey) swrMutate(productsKey);
+      if (ordersAttrKeyForMutate) swrMutate(ordersAttrKeyForMutate);
+    };
     window.addEventListener('roas-campaign-product-map-changed', onChange);
     return () => window.removeEventListener('roas-campaign-product-map-changed', onChange);
-  }, [data]);
+  }, [data, productsKey, ordersAttrKeyForMutate, swrMutate]);
 
   // Phase 12.5.x (2026-05-24) — mode hydrated from URL `c_mode`. Survives
   // refresh + bookmark so an operator parked on the ad-set view stays there.
