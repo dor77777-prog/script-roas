@@ -352,8 +352,63 @@ async function persistDayForStore(
     gaSpendCad: number;
     ttSpendCad: number;
   },
+  /**
+   * Audit fix 2026-05-24 (AUDIT INN-07, Phase 12.2.2): when set with
+   * `spendOnly: true`, the payload OMITS all Shopify-owned columns
+   * (revenue_cad, gross_revenue_cad, refund_deduction_cad, roas,
+   * gross_profit_cad, cogs_cad, net_profit_cad) so the ON CONFLICT DO
+   * UPDATE preserves the last good Shopify values when Shopify fetch
+   * failed but ad-platform fetchers succeeded for this date.
+   *
+   * Pre-fix: persist-rolling-3day's `if (!shopifyOk) continue;`
+   * short-circuit blocked spend recovery for D-1 even when Meta /
+   * Google / TikTok had successfully returned fresh CAD values, so a
+   * single Shopify 503 froze ad-platform spend reporting for that
+   * date until the next daily cron tick (potentially 24h later).
+   *
+   * Evidence: raw-returns/inngest_cronLive.json (INN-07).
+   */
+  opts?: { spendOnly?: boolean },
 ): Promise<void> {
   const admin = getSupabaseAdmin();
+
+  // INN-07 spend-only branch — early return after a minimal UPSERT that
+  // touches ONLY the per-platform spend columns. We deliberately skip
+  // the SELECT-then-preserve dance (no need to read existing Shopify
+  // cols — we're not writing them) AND skip the products_daily branch
+  // entirely (products_daily is Shopify-derived; with no Shopify rows
+  // for this tick there's nothing to write).
+  if (opts?.spendOnly === true) {
+    if (!spendOverride) {
+      // Defensive: caller MUST pass spendOverride when requesting
+      // spendOnly. Without spend values there's literally nothing to
+      // write; bail silently rather than UPSERT a row with only PK
+      // columns (which would create a phantom data_daily row with
+      // NULL Shopify cols).
+      return;
+    }
+    const spendOnlyPayload = {
+      date,
+      store_id: storeId,
+      store_name: shopify.storeName,
+      fb_spend_cad: spendOverride.fbSpendCad,
+      ga_spend_cad: spendOverride.gaSpendCad,
+      tt_spend_cad: spendOverride.ttSpendCad,
+      total_spend_cad:
+        spendOverride.fbSpendCad +
+        spendOverride.gaSpendCad +
+        spendOverride.ttSpendCad,
+    };
+    const { error: spendOnlyErr } = await admin
+      .from('data_daily')
+      .upsert(spendOnlyPayload, { onConflict: 'date,store_id' });
+    if (spendOnlyErr) {
+      throw new Error(
+        `data_daily spend-only upsert for ${storeId} ${date}: ${spendOnlyErr.message}`,
+      );
+    }
+    return;
+  }
 
   // -----------------------------------------------------------------
   // data_daily — SELECT existing spend, then UPSERT preserving them
@@ -786,9 +841,53 @@ export async function runLiveForStore(
       const shopifyOk = !(shopify as { __shopifyFailed?: boolean }).__shopifyFailed;
 
       if (!shopifyOk) {
-        console.warn(
-          `cron-live ${storeId} ${date}: Shopify failed — skipping persist to preserve last good row.`,
-        );
+        // Audit fix 2026-05-24 (AUDIT INN-07, Phase 12.2.2): decouple
+        // Shopify-coupled gating. Pre-fix the early `continue;` here
+        // blocked ad-platform spend recovery for the date even when
+        // Meta / Google / TikTok had successfully returned fresh CAD
+        // values. Now, if any ad-platform value is fresh for this date,
+        // we run a SPEND-ONLY persist (Option A — see PLAN 12.2-02
+        // open question) that UPSERTs ONLY the spend columns; ON
+        // CONFLICT DO UPDATE preserves whatever Shopify values were
+        // last successfully written.
+        //
+        // Composes safely with the Phase 12.1.1 INN-10 memoized SELECT:
+        // priorSpendByDate is already populated above this loop, so the
+        // per-platform null→prior fallback still works for the spend-only
+        // path. Evidence: raw-returns/inngest_cronLive.json (INN-07).
+        const dateSpend =
+          spendByDate[date] ?? {
+            fbSpendCad: null,
+            gaSpendCad: null,
+            ttSpendCad: null,
+          };
+        const haveAnySpend =
+          dateSpend.fbSpendCad !== null ||
+          dateSpend.gaSpendCad !== null ||
+          dateSpend.ttSpendCad !== null;
+        if (haveAnySpend) {
+          const { priorFb, priorGa, priorTt } = priorSpendByDate[date];
+          console.warn(
+            `cron-live ${storeId} ${date}: Shopify failed — running spend-only persist to recover ad-platform columns (Shopify cols preserved via ON CONFLICT).`,
+          );
+          await persistDayForStore(
+            storeId,
+            date,
+            shopify,
+            {
+              fbSpendCad: dateSpend.fbSpendCad ?? priorFb,
+              gaSpendCad: dateSpend.gaSpendCad ?? priorGa,
+              ttSpendCad: STORES_WITH_TIKTOK.has(storeId)
+                ? (dateSpend.ttSpendCad ?? priorTt)
+                : 0,
+            },
+            { spendOnly: true },
+          );
+        } else {
+          console.warn(
+            `cron-live ${storeId} ${date}: Shopify failed AND no fresh ad-platform spend — skipping persist to preserve last good row.`,
+          );
+        }
         continue;
       }
 
