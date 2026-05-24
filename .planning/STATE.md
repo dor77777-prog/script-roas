@@ -2,22 +2,23 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: audit-baseline
-status: phase-12-complete
-last_updated: "2026-05-24T22:00:00.000Z"
+status: completed
+last_updated: "2026-05-24T09:48:35.412Z"
+last_activity: "2026-05-24 — Phase 12 atomic AUDIT.md synthesis written. Awaiting operator decision on Phase 12.1 (P0 fixes: INN-10, INN-16, INN-01, ALG-04/05/06, MMC-BLOCKER-01, ProductCentricView ALG-01)."
 progress:
-  total_phases: 1
-  completed_phases: 1
-  total_plans: 11
-  completed_plans: 11
-  percent: 100
+  total_phases: 28
+  completed_phases: 10
+  total_plans: 70
+  completed_plans: 54
+  percent: 77
 ---
 
 ## Current Position
 
-Phase: 12 (Codebase Audit Baseline) — COMPLETE
-Plan: All 10 sub-plans + 1 master PLAN executed. 145 tasks complete.
-Status: Audit baseline established. 139 files audited (123 ✅ / 16 🔴 / 0 ⚠️). AUDIT.md atomic write per DP-04 completed.
-Last activity: 2026-05-24 — Phase 12 atomic AUDIT.md synthesis written. Awaiting operator decision on Phase 12.1 (P0 fixes: INN-10, INN-16, INN-01, ALG-04/05/06, MMC-BLOCKER-01, ProductCentricView ALG-01).
+Phase: 12.1 (P0 Audit Fixes) — INSERTED, awaiting plan
+Plan: Not started.
+Status: Phase 12 complete + committed (`3287cff`). Phase 12.1 directory created (`.planning/phases/12.1-p0-audit-fixes/`). Ready for `/gsd-plan-phase 12.1`.
+Last activity: 2026-05-24 — Phase 12.1 inserted (3 sub-plans: Inngest retry, aiReport cross-store, Cohort/Allocator math).
 
 ## Accumulated Context
 
@@ -32,3 +33,4 @@ Last activity: 2026-05-24 — Phase 12 atomic AUDIT.md synthesis written. Awaiti
 - 2026-05-24: Phase 12 added — U-05 halo-warning chip. Removes COVERAGE_UPPER_CLAMP hard cap from displayed coverage; introduces `coverageExceedsClamp: boolean` flag on `AttributionAnalysis`; renders prominent warning banner in `AttributionAnalysisPanel` when coverage > 2× (broken pixel / ad-blocker storm signal). 1 commit pushed.
 - 2026-05-24: **Milestone v2.0 started — audit-baseline**. Goal: produce documented baseline of "verified correct" for every algorithm, component, and inter-component channel. Operator explicitly abandoned remaining v1.0 backlog (Phases 2, 4, 5, 5.4, 6, 7, 8) — marked DEFERRED in ROADMAP. Phase 12 = the audit (documentation only). Phase 12.x = conditional fix phases if 🔴 critical findings surface. v2.0 also bootstrapped: PROJECT.md created (was missing — workflow expected it), `.planning/codebase/` regenerated post-Phase-11, `.planning/graphs/` built via graphify (7,625 nodes / 9,107 edges / 564 communities). Note: the "U-05 halo-warning chip" was shipped as a single commit `b846ae7` without going through `gsd-phase add`, so it does NOT consume a phase number — the audit reuses Phase 12.
 - 2026-05-24: **Phase 12 COMPLETE**. 7 reviewer waves (A–G) ran 139 Opus subagents + 5 Codex cross-AI critiques in parallel → 302 findings (6 CRITICAL / 116 MAJOR / 115 MINOR / 32 COSMETIC) across 144 raw-return JSONs. Mid-execution operator checkpoint resolved 17/17 ⚠️ → 15 ✅ + 2 🔴 (DP-02). 3 cross-cutting Plan-agents produced `12-trycatch-sweep.{md,json}`, `12-tests-needed.md` (88 ranked gaps), `12-CHANNELS.md` (428 import edges + 10 channel-driven findings). Atomic AUDIT.md synthesized (DP-04): **123 ✅ Verified / 16 🔴 Has Bug / 0 ⚠️**. Recommended Phase 12.1 P0 scope: 8 fixes (INN-10, INN-16, INN-01, ALG-04/05/06 + storeId threading through campaignsAggregator.ts, MMC-BLOCKER-01, ProductCentricView ALG-01).
+- Phase 12.1 inserted after Phase 12: P0 Audit Fixes (8 fixes from AUDIT.md, 3 sub-plans: Inngest retry + aiReport cross-store + Cohort/Allocator math) (URGENT)

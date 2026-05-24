@@ -2,24 +2,45 @@
 
 ## Overview
 
-Multi-store Shopify ROAS dashboard with deterministic per-order attribution. The roadmap below tracks the GSD-managed work. Phase 0 (foundation) was retroactive — captured the work done in ad-hoc mode before formal GSD adoption. Phase 1 added channel-level product attribution. Phases 2–8 are the "tech-debt cleanup + scalability" wave, derived from `.planning/codebase/CONCERNS.md`.
+Multi-store Shopify ROAS dashboard with deterministic per-order attribution. The roadmap below tracks the GSD-managed work across milestones.
 
-## Phases
+- **v1.0** — initial dashboard + Apps Script tier + 11 GSD-tracked phases of bug fixes and feature work (Phases 0–11) + 1 informal single-commit task (the "U-05 halo-warning chip" — commit `b846ae7`, not tracked as a gsd-phase). Several pre-Phase-9 phases were never implemented and have been abandoned per operator decision 2026-05-24 — see "Deferred / Out of Scope" section.
+- **v2.0** (current) — `audit-baseline` milestone: one comprehensive evidence-backed audit of the active codebase before further significant work. Starts with Phase 12.
+
+## Milestone v2.0: Audit Baseline (current — started 2026-05-24)
+
+**Goal:** Produce a documented baseline of "verified correct" for every algorithm, component, and inter-component channel in the active codebase, so future planning/execution does not inherit or hide existing bugs.
+
+**Phases:**
+- [x] **Phase 12: Codebase Audit Baseline** — Documentation only, no source-code changes. Spawned gsd-code-reviewer per file in 7 parallel waves (A–G) + cross-cutting sweep + test-gap survey + operator-checkpoint for ⚠️ triage. Output: `.planning/AUDIT.md` (139 files, 123 ✅ / 16 🔴 / 0 ⚠️) + `.planning/phases/12-codebase-audit-baseline/{12-tests-needed.md, 12-CHANNELS.md, 12-trycatch-sweep.md}`. Atomic synthesis commit `3287cff`. Decisions D-01..D-17 + DP-01..DP-04.
+- [ ] **Phase 12.1: P0 Audit Fixes (INSERTED)** — 8 ship-stopping fixes from AUDIT.md. 3 sub-plans: (a) Inngest retry + idempotency (INN-10, INN-16, INN-01); (b) aiReport cross-store cleanup (ALG-04/05/06 + storeId threading through campaignsAggregator.ts); (c) Cohort + Allocator math (MMC-BLOCKER-01 + ProductCentricView ALG-01). Each fix lands with regression_test_idea from raw-returns/. NO new features. Source of truth: `.planning/AUDIT.md` §Recommended Phase 12.1 Scope.
+- [ ] **Phase 12.2/12.3: P1 + P2 fix phases (conditional)** — Operator-decided after 12.1 lands.
+
+## Milestone v1.0: Implemented phases (historical — kept for traceability)
 
 - [x] **Phase 0: Foundation (retroactive)** — Apps Script collection + Next.js dashboard + 4 rounds of code review + orders-attribution pipeline + Round 5 fix-ups
 - [x] **Phase 1: Channel-Level Product Attribution** — Per-product "came from Facebook" signal via order line items
-- [ ] **Phase 2: Foundations** — Vitest + 09-50 unit tests for attributionAnalysis + Sentry/ErrorBoundary + cacheConfig + row-count guards + safeDecode utility
-- [x] **Phase 3: CI/CD for Apps Script** — clasp setup + GitHub Action for auto-deploy of `.gs` files
-- [ ] **Phase 4: Component Decomposition** — Split CampaignsTable / CampaignDrawer / BillingSettings to ≤500 lines each via hooks + sub-components
-- [ ] **Phase 5: Scalability** — API pagination, per-store Apps Script triggers (6-min cap fix), data-daily / products-daily retention, lazy line-items
-- [x] **Phase 05.2.3.0: Shopify revenue net-of-refunds** — URGENT bug-fix: store-level revenue across the dashboard is inflated when refunds happen on prior-day orders. Initial 7 plans shipped 2026-05-20; 2026-05-21 code review surfaced structural double-deduction bug (CR-01) — 3 gap-closure plans (08/09/10) pending: model change from current_total_price → total_price, drop cross-day filter, test gate + docs revision (INSERTED) (completed 2026-05-20)
-- [ ] **Phase 05.4: Unmapped Active Campaigns Indicator** — Per-ad-manager (Meta/Google) chip in Campaigns view showing count of currently-active campaigns with no product mapping, drill-down to the list, green "all mapped" indicator when clean (INSERTED — FROZEN pending 05.2.3.0)
-- [x] **Phase 05.5: v2.0 — Supabase Foundation + PROPS-MAP** — Stand up Supabase Postgres, classify all 40 env properties (SECRET / CONFIG / DATA), seed Vercel env vars + Supabase `stores` / `notification_config` tables, write `docs/PROPS-MAP.md` as the operator checklist gating cut-over. No fetcher work yet; Apps Script unchanged. (INSERTED 2026-05-21 — see `.planning/notes/v2-migration-exploration-2026-05-21.md`) (completed 2026-05-21)
-- [x] **Phase 05.6: v2.0 — TS Port + Inngest + Operator Console** — Port 5 fetchers (Shopify / Meta / Google Ads / FX / ManualOverrides) from `.gs` to TS; set up Inngest cloud (daily cron + 15-min cron + sync-now + backfill events); new "ניהול" tab in dashboard with jobs table + backfill range picker + manual_overrides CRUD; one-off importer of 38 manual-spend rows; feature flag `READ_FROM=sheets|postgres` defaulting to sheets. (INSERTED 2026-05-21) (completed 2026-05-21)
-- [ ] **Phase 05.7: v2.0 — Cut-over + Apps Script Decommission** — Verification harness (diff Sheets vs Postgres 14 days); flip dashboard flag to postgres; disable Apps Script triggers; monitor 7 days; delete `clasp` CI workflow; archive Sheets read-only. (INSERTED 2026-05-21)
-- [ ] **Phase 6: Security & Cloud-Sync** — Service-account split (reader/writer), rate limiting on POST, audit log, cloud-sync If-Match + adaptive polling — **NEEDS RESCOPE post-v2.0** (current goals are Sheets-architecture-specific; reconsider after Phase 05.7 ships)
-- [ ] **Phase 7: Observability** — Logs tab + structured logging, quota approach alerts, phantom-spreadsheet daily assertion, reconciliation date toggle, productId retroactive fix script
-- [ ] **Phase 8: i18n** — Externalize Hebrew strings to `strings.he.ts` with type-safe key map
+- [x] **Phase 3: CI/CD for Apps Script** — clasp setup + GitHub Action for auto-deploy of `.gs` files (subsequently DECOMMISSIONED in Phase 11)
+- [x] **Phase 05.2.3.0: Shopify revenue net-of-refunds** — URGENT bug-fix: store-level revenue across the dashboard is inflated when refunds happen on prior-day orders.
+- [x] **Phase 05.5: v2.0 — Supabase Foundation + PROPS-MAP** — Stand up Supabase Postgres, classify all 40 env properties, seed Vercel env vars + Supabase tables. (completed 2026-05-21)
+- [x] **Phase 05.6: v2.0 — TS Port + Inngest + Operator Console** — Port 5 fetchers to TS; set up Inngest cloud; new "ניהול" tab; manual_overrides CRUD; feature flag `READ_FROM`. (completed 2026-05-21)
+- [x] **Phase 9: Pre-Conversion Algorithmic Audit** — Report-only phase. Output: `.planning/audit-2026-05-23-v3/AUDIT-phase9-snapshot.md` (archived).
+- [x] **Phase 10: Pre-Conversion Algorithmic Fixes** — 9 commits. CRIT-5 cronDaily FX, U-01..U-06 resolutions, C-01..C-04 test backfills.
+- [x] **Phase 11: Decommission Apps Script tier** — Removed 10 .gs files + clasp + lib/sheets.ts + readFrom() + featureFlags test + algorithm-parity test + docs cleanup. 7 commits.
+- [x] **Informal: U-05 halo-warning chip** — Shipped 2026-05-24 as a single commit (`b846ae7`) without going through `gsd-phase add` — so it does NOT consume a phase number. `coverageExceedsClamp` flag + warning banner in `AttributionAnalysisPanel`. Cross-reference for traceability only.
+
+## Deferred / Out of Scope (per operator 2026-05-24)
+
+These v1.0 backlog phases were never implemented. Operator confirmed 2026-05-24 they are NOT happening — the system is at a state the operator considers acceptable. Marked DEFERRED to clear the active roadmap. Re-open only if the operator explicitly revives.
+
+- ~~**Phase 2: Foundations**~~ — Vitest + tests for attributionAnalysis + Sentry/ErrorBoundary + cacheConfig + row-count guards + safeDecode utility. DEFERRED. Some of this work shipped under different phases (vitest is installed, tests grew from 0 to 946; ErrorBoundary exists).
+- ~~**Phase 4: Component Decomposition**~~ — Split CampaignsTable / CampaignDrawer / BillingSettings. DEFERRED. Operator accepts large components as-is.
+- ~~**Phase 5: Scalability**~~ — API pagination, per-store triggers (6-min cap fix already partially shipped in Phase 05.1), retention, lazy line-items. DEFERRED.
+- ~~**Phase 05.4: Unmapped Active Campaigns Indicator**~~ — DEFERRED (was FROZEN pending 05.2.3.0, never resumed).
+- ~~**Phase 05.7: Cut-over + Apps Script Decommission**~~ — DEFERRED as scoped; actual cut-over happened informally + final tier removal landed via Phase 11 instead.
+- ~~**Phase 6: Security & Cloud-Sync**~~ — Service-account split, rate limiting, audit log, cloud-sync If-Match. DEFERRED. Per operator-confirmed URL-obscurity trust model + the scope was Sheets-architecture-specific (Sheets tier no longer exists).
+- ~~**Phase 7: Observability**~~ — Logs tab + structured logging + quota alerts + reconciliation toggle + productId retroactive fix. DEFERRED.
+- ~~**Phase 8: i18n**~~ — Externalize Hebrew strings to `strings.he.ts`. DEFERRED. Operator accepts inline Hebrew.
 
 ## Phase Details
 
@@ -400,3 +421,27 @@ Plans:
 
 Plans:
 - [ ] TBD (run /gsd-plan-phase 11 to break down)
+
+### Phase 12: Codebase Audit Baseline — COMPLETE 2026-05-24 (`3287cff`)
+
+**Goal:** Produce documented baseline of "verified correct" per algorithm, component, and inter-component channel.
+**Requirements**: 8 falsifiable requirements (SPEC.md `4b77df1`).
+**Depends on:** Phase 11
+**Plans:** 11 (10 sub-plans + 1 master) — all complete.
+
+Result: 139 files audited, 123 ✅ / 16 🔴 / 0 ⚠️. 2 CRITICAL + 25 MAJOR bugs catalogued. Triage table in AUDIT.md maps each 🔴 to Phase 12.1 / 12.2 / 12.3 / backlog.
+
+### Phase 12.1: P0 Audit Fixes (INSERTED 2026-05-24)
+
+**Goal:** Ship the 8 ship-stopping fixes from Phase 12's AUDIT.md.
+**Requirements**: TBD (run /gsd-plan-phase 12.1).
+**Depends on:** Phase 12 (consumes `.planning/AUDIT.md` + `raw-returns/*.json` for fix-level evidence + regression_test_idea per finding).
+**Plans:** 3 sub-plans planned (one per logical cluster).
+
+Sub-plans:
+- [ ] 12.1.1 — Inngest retry + idempotency (INN-10 cronLive persist-rolling-3day SELECT separation + INN-16 eventBackfill systemic-failure abort + INN-01 cronDaily return-value uses persisted row)
+- [ ] 12.1.2 — aiReport cross-store cleanup (ALG-04/05/06 storeId-scoped keys in aiReport.ts + thread storeId through `Aggregated` in campaignsAggregator.ts → update ~10 consumers)
+- [ ] 12.1.3 — Cohort + Allocator math (MMC-BLOCKER-01 multiMappingCohort ranking score under shrinkage + ProductCentricView ALG-01 sum-conservation)
+
+Source of truth: `.planning/AUDIT.md` §Recommended Phase 12.1 Scope + `raw-returns/<file>.json` per finding.
+NO new features. Bugs only.
