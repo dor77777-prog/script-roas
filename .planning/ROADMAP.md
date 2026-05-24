@@ -14,7 +14,8 @@ Multi-store Shopify ROAS dashboard with deterministic per-order attribution. The
 **Phases:**
 - [x] **Phase 12: Codebase Audit Baseline** — Documentation only, no source-code changes. Spawned gsd-code-reviewer per file in 7 parallel waves (A–G) + cross-cutting sweep + test-gap survey + operator-checkpoint for ⚠️ triage. Output: `.planning/AUDIT.md` (139 files, 123 ✅ / 16 🔴 / 0 ⚠️) + `.planning/phases/12-codebase-audit-baseline/{12-tests-needed.md, 12-CHANNELS.md, 12-trycatch-sweep.md}`. Atomic synthesis commit `3287cff`. Decisions D-01..D-17 + DP-01..DP-04.
 - [x] **Phase 12.1: P0 Audit Fixes** — 8/8 shipped 2026-05-24. Commits: 1f4b75c (INN-10), f1bc76a (INN-16), 55e709c (INN-01), 51c0de4 (ALG-04/05/06 composite), cb87464 (MMC-BLOCKER-01 + WARN freebies), 4f328d3 (PCV ALG-01). 17 regression tests added (946 → 971). VERIFICATION = PASS.
-- [ ] **Phase 12.2/12.3: P1 + P2 fix phases (conditional)** — Operator-decided after 12.1 lands.
+- [ ] **Phase 12.2: P1 Audit Fixes (INSERTED 2026-05-24)** — 11 operator-visible bugs from AUDIT.md: ALG-01 (TikTok status), ALG-02 (TikTok budget), ALG-07 (coverage clamp), INN-07 (cronLive Shopify-coupled gating), INN-14 (DST drift), attributionAnalysis ALG-01 ("Meta" literal), insights.ts ALG-01 (projectedNet), ordersAttribution paging cap, ProductCentricView ALG-02 + ALG-03, products.ts STA-46 + STA-47.
+- [ ] **Phase 12.3: P2 Audit Fixes (INSERTED 2026-05-24)** — 8 operator-route + secondary hardening fixes: API-10 (token leak), API-18 (htmlEscape), API-23 (sequential fan-out), API-26 (parseFloat), API-32 (sequential delete), API-37 + API-38 (Supabase error leak), INN-05 (subsidiary of INN-10 — may already land with 12.1.1), ALG-03 (aiReport last-write-wins, may already cascade from 12.1.2).
 
 ## Milestone v1.0: Implemented phases (historical — kept for traceability)
 
@@ -430,6 +431,26 @@ Plans:
 **Plans:** 11 (10 sub-plans + 1 master) — all complete.
 
 Result: 139 files audited, 123 ✅ / 16 🔴 / 0 ⚠️. 2 CRITICAL + 25 MAJOR bugs catalogued. Triage table in AUDIT.md maps each 🔴 to Phase 12.1 / 12.2 / 12.3 / backlog.
+
+### Phase 12.3: P2 Audit Fixes (INSERTED 2026-05-24)
+
+**Goal:** Ship operator-route security/perf hardening + any subsidiary fixes that didn't already cascade from 12.1/12.2.
+**Requirements**: 8 P2 findings (API-10/18/23/26/32/37/38, INN-05 if not already covered by 12.1.1, ALG-03 if not already covered by 12.1.2).
+**Depends on:** Phase 12.2 (sequential — 12.2 + 12.3 can also run in parallel since they touch disjoint surfaces).
+**Plans:** TBD (run /gsd-plan-phase 12.3).
+
+Source of truth: `.planning/AUDIT.md` §Phase 12.3 (P2 — operator-route security/perf hardening).
+NO new features. Defensive only. Single-operator URL-obscurity trust model still applies — fixes are belt-and-suspenders.
+
+### Phase 12.2: P1 Audit Fixes (INSERTED 2026-05-24)
+
+**Goal:** Ship 11 operator-visible bugs that are not safety-critical but degrade output quality.
+**Requirements**: 11 P1 findings — see Phase 12.2 checklist above.
+**Depends on:** Phase 12.1 (consumes the same `.planning/AUDIT.md` + `raw-returns/*.json` evidence packs).
+**Plans:** TBD (run /gsd-plan-phase 12.2).
+
+Source of truth: `.planning/AUDIT.md` §Phase 12.2 (P1 — operator-visible bugs, not safety-critical) + `raw-returns/<file>.json` per finding.
+NO new features. Bugs only. Each fix lands with regression test per CONTEXT D-03 pattern (TDD).
 
 ### Phase 12.1: P0 Audit Fixes — COMPLETE 2026-05-24
 

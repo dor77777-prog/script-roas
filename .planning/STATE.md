@@ -17,8 +17,8 @@ progress:
 
 Phase: 12.1 (P0 Audit Fixes) — COMPLETE
 Plan: 4 PLAN files executed in 3 waves. 8 fixes + 17 regression tests landed.
-Status: All 8 P0 audit fixes shipped + verified. 971/971 tests passing (was 946 baseline). VERIFICATION = PASS. Ready for `/gsd-phase --insert 12.1 "12.2 — P1 Audit Fixes"` (or operator decides to defer/skip).
-Last activity: 2026-05-24 — Phase 12.1 commits: 1f4b75c (INN-10), f1bc76a (INN-16), 55e709c (INN-01), 51c0de4 (ALG-04/05/06 composite), cb87464 (MMC-BLOCKER-01 + WARN-01/03/04/05 freebies), 4f328d3 (ProductCentricView ALG-01).
+Status: 12.1 COMPLETE. 12.2 + 12.3 scaffolded (operator chose comprehensive sweep). CONTEXT.md committed for both. Ready for `/gsd-plan-phase 12.2 --skip-research` + `/gsd-plan-phase 12.3 --skip-research` (parallel-safe planning).
+Last activity: 2026-05-24 — Phase 12.2 (11 P1) + 12.3 (8 P2) inserted with CONTEXT.md anchored to AUDIT.md + raw-returns. Sub-plan splits: 12.2 has 3 sub-plans by file cluster; 12.3 single PLAN.
 
 ## Accumulated Context
 
