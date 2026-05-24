@@ -54,10 +54,22 @@ const MAD_OUTLIER_MULTIPLIER = 3;
 /** Outlier detection: when MAD == 0 (constant baseline), fall back to this
  *  fraction of |median| as the threshold so we don't divide by zero. */
 const MAD_FALLBACK_FRACTION = 0.05;
-/** Coverage upper clamp. Halo (det >> claim) above this is collapsed back to
- *  this constant; the upper clamp prevents one freak day from blowing the
- *  trust ladder. */
-const COVERAGE_UPPER_CLAMP = 2;
+/** Coverage warning threshold. Coverage = deterministicRevenue / metaClaim;
+ *  > 1.0 is normal halo (Shopify saw more orders than Meta's pixel matched).
+ *  > 2.0 is suspicious — usually a broken/missing pixel, ad-blocker storm,
+ *  or attribution-window drift; the operator must be alerted.
+ *
+ *  Prior to 2026-05-24 (AUDIT U-05) this constant was used as a HARD CLAMP
+ *  inside computeCoverage — extreme halo was silently capped at 2× and the
+ *  operator never saw the true value. The clamp is now removed for the
+ *  displayed coverage (computeCoverage) but kept inside the
+ *  window-stability variance calculation (computeWindowStability) to
+ *  prevent one freak day from polluting the stdDev verdict.
+ *
+ *  The threshold's new role: when `coverage > COVERAGE_WARNING_THRESHOLD`,
+ *  the AttributionAnalysis.coverageExceedsClamp flag fires, and the UI
+ *  surfaces a "halo exceeded — check the pixel" chip. */
+const COVERAGE_WARNING_THRESHOLD = 2;
 
 export type AttributionAnalysis = {
   /** Sum of order totals where the order is provably from this campaign. */
@@ -66,10 +78,18 @@ export type AttributionAnalysis = {
   deterministicOrders: number;
   /** Meta's claim minus deterministic. >0 = modeled / view-through. */
   modeledRevenue: number;
-  /** deterministicRevenue / metaClaim, clamped to [0, 2]. >1.0 means Shopify
-   *  picked up more than Meta — usually halo from organic / other channels
-   *  spilling into the mapping. */
+  /** deterministicRevenue / metaClaim. >1.0 means Shopify picked up more
+   *  than Meta — usually halo from organic / other channels spilling into
+   *  the mapping. Prior to 2026-05-24 (AUDIT U-05) this was clamped to
+   *  [0, 2]; the clamp was removed so extreme halo (e.g. 5×, 10×) is
+   *  visible to the operator — those are usually a sign of a broken pixel
+   *  that the operator must know about. When coverage > 2 the
+   *  `coverageExceedsClamp` flag fires so the UI can surface a warning
+   *  without the operator having to read the raw number. */
   coverage: number;
+  /** True when coverage > COVERAGE_WARNING_THRESHOLD (2.0). The UI shows
+   *  a "halo exceeded — check the pixel" chip when this fires. */
+  coverageExceedsClamp: boolean;
   /** Confidence verdict, derived from coverage + sample size + stability +
    *  outlier presence. Replaces the old heuristic chip with something
    *  defensible. */
@@ -142,7 +162,7 @@ export type AttributionTrust = {
  */
 export function computeCoverage(deterministicRevenue: number, metaClaim: number): number {
   return metaClaim > 0
-    ? Math.min(COVERAGE_UPPER_CLAMP, deterministicRevenue / metaClaim)
+    ? deterministicRevenue / metaClaim
     : metaClaim < 0
       ? 0
       : (deterministicRevenue > 0 ? 1 : 0);
@@ -561,6 +581,7 @@ export function analyzeAttribution(
     deterministicOrders,
     modeledRevenue,
     coverage,
+    coverageExceedsClamp: coverage > COVERAGE_WARNING_THRESHOLD,
     trust,
     reasons,
     recommendation,
@@ -629,10 +650,17 @@ export function computeWindowStability(
   }
 
   // Per-window coverage; drop windows where Meta claim was zero (no
-  // signal to compute from).
+  // signal to compute from). The cap at COVERAGE_WARNING_THRESHOLD is
+  // INTENTIONALLY kept here even though it was removed from the displayed
+  // `computeCoverage` (AUDIT U-05, 2026-05-24). Reason: stdDev is not
+  // robust to outliers — one window with 10× coverage (pixel outage)
+  // would push every campaign into 'volatile' even when 19 of 20 windows
+  // are at 1.3×. The displayed coverage on the trust panel shows the
+  // raw value with a warning chip; the variance-driven stability verdict
+  // uses the bounded value to stay representative of typical behavior.
   const coverages = buckets
     .filter(b => b.meta > 0)
-    .map(b => Math.min(COVERAGE_UPPER_CLAMP, b.matched / b.meta));
+    .map(b => Math.min(COVERAGE_WARNING_THRESHOLD, b.matched / b.meta));
   if (coverages.length < 2) return null;
 
   const mean = coverages.reduce((s, x) => s + x, 0) / coverages.length;
@@ -985,6 +1013,7 @@ function buildAnalysis(opts: {
     deterministicOrders,
     modeledRevenue,
     coverage,
+    coverageExceedsClamp: coverage > COVERAGE_WARNING_THRESHOLD,
     trust,
     reasons,
     recommendation,

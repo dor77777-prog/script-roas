@@ -298,11 +298,14 @@ describe('analyzeAttribution', () => {
   // ----------------------------------------------------------------
 
   describe('computeCoverage shared helper', () => {
-    it('positive claim: returns det/claim clamped to upper bound 2', () => {
+    it('positive claim: returns raw det/claim (no upper clamp, AUDIT U-05)', () => {
       expect(computeCoverage(50, 100)).toBeCloseTo(0.5, 4);
       expect(computeCoverage(80, 100)).toBeCloseTo(0.8, 4);
-      // Upper clamp at 2.
-      expect(computeCoverage(500, 100)).toBeCloseTo(2, 4);
+      // AUDIT U-05 (2026-05-24): the legacy hard clamp at 2× was removed.
+      // Extreme halo is now visible to the operator (with a UI warning
+      // chip surfaced via the coverageExceedsClamp flag).
+      expect(computeCoverage(500, 100)).toBeCloseTo(5, 4);
+      expect(computeCoverage(1000, 100)).toBeCloseTo(10, 4);
     });
 
     it('positive claim: preserves negative coverage when det < 0 (refund-heavy day)', () => {
@@ -329,6 +332,53 @@ describe('analyzeAttribution', () => {
       expect(computeCoverage(50, -100)).toBe(0);
       expect(computeCoverage(-50, -100)).toBe(0);
       expect(computeCoverage(0, -100)).toBe(0);
+    });
+  });
+
+  // ----------------------------------------------------------------
+  // AUDIT U-05 (2026-05-24) — coverageExceedsClamp flag
+  // ----------------------------------------------------------------
+  // The flag replaces the legacy hard clamp at 2× inside computeCoverage.
+  // analyzeAttribution must set it true when raw coverage > 2 (broken
+  // pixel / ad-blocker storm signal) so the UI can show a warning chip.
+
+  describe('coverageExceedsClamp flag (AUDIT U-05)', () => {
+    it('fires when raw coverage > 2', () => {
+      // Meta claims $100; Shopify sees $500 worth of click-id-tagged orders
+      // → coverage = 5.0 → flag MUST fire.
+      const campaign = makeCampaign({ metaClaim: 100, spend: 100 });
+      const orders = Array.from({ length: 5 }, (_, i) =>
+        makeOrder({ orderId: `o-${i}`, totalCad: 100, date: '2026-05-10' }),
+      );
+      const result = analyzeAttribution(campaign, orders, DATE_FROM, DATE_TO);
+      expect(result).not.toBeNull();
+      expect(result!.coverage).toBeCloseTo(5, 4);
+      expect(result!.coverageExceedsClamp).toBe(true);
+    });
+
+    it('does NOT fire for normal halo (coverage ≤ 2)', () => {
+      // Meta claims $100; Shopify sees $130 — typical halo, not a pixel
+      // crisis. Flag stays false.
+      const campaign = makeCampaign({ metaClaim: 100, spend: 100 });
+      const orders = Array.from({ length: 2 }, (_, i) =>
+        makeOrder({ orderId: `o-${i}`, totalCad: 65, date: '2026-05-10' }),
+      );
+      const result = analyzeAttribution(campaign, orders, DATE_FROM, DATE_TO);
+      expect(result).not.toBeNull();
+      expect(result!.coverage).toBeCloseTo(1.3, 4);
+      expect(result!.coverageExceedsClamp).toBe(false);
+    });
+
+    it('does NOT fire at the exact 2.0 boundary (strict >)', () => {
+      // Coverage == 2.0 → flag false (we want "exceeded", not "reached").
+      const campaign = makeCampaign({ metaClaim: 100, spend: 100 });
+      const orders = Array.from({ length: 2 }, (_, i) =>
+        makeOrder({ orderId: `o-${i}`, totalCad: 100, date: '2026-05-10' }),
+      );
+      const result = analyzeAttribution(campaign, orders, DATE_FROM, DATE_TO);
+      expect(result).not.toBeNull();
+      expect(result!.coverage).toBeCloseTo(2, 4);
+      expect(result!.coverageExceedsClamp).toBe(false);
     });
   });
 

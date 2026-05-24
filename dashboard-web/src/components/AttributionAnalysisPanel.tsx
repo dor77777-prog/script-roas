@@ -1,6 +1,6 @@
 'use client';
 
-import { TrendingUp } from 'lucide-react';
+import { TrendingUp, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AttributionAnalysis } from '@/lib/attributionAnalysis';
 
@@ -41,6 +41,29 @@ export function AttributionAnalysisPanel({ analysis, spend, value }: Props) {
         ניתוח attribution
       </h3>
       <div className={cn('rounded-xl border p-3 space-y-3', trustBg)}>
+        {/* AUDIT U-05 (2026-05-24): pixel-broken warning chip. When
+            deterministicRevenue exceeds 2× of Meta's claim, the pixel is
+            almost certainly missing conversions wholesale (iOS 14 silent
+            failure, ad-blocker storm, attribution-window drift). Pre-fix,
+            the coverage field was hard-clamped to 2.0 and the operator
+            never knew. Now we show the raw value AND surface a banner so
+            it's impossible to miss. */}
+        {analysis.coverageExceedsClamp && (
+          <div
+            role="alert"
+            className="rounded-md bg-roas-redBg border border-roas-red/40 text-roas-red px-3 py-2 flex items-start gap-2 text-[11px] leading-relaxed"
+          >
+            <AlertTriangle size={14} className="shrink-0 mt-px" />
+            <div>
+              <strong className="block font-semibold">⚠ הילה חריגה ({(analysis.coverage * 100).toFixed(0)}%) — בדוק את הפיקסל</strong>
+              <span className="opacity-80">
+                Shopify רואה יותר מפי-2 הזמנות ממה ש-Meta דיווחה — סימן לפיקסל
+                שבור / חסום, לדריפט של חלון הייחוס, או לקמפיינים אחרים שמושכים
+                הזמנות לתוך המיפוי.
+              </span>
+            </div>
+          </div>
+        )}
         {/* Header: trust verdict + score */}
         <div className="flex items-start gap-3 flex-wrap">
           <div className="shrink-0">
