@@ -93,7 +93,7 @@ Supabase Security Advisor יראה 10 אזהרות `0013_rls_disabled_in_public`
 | `cron-daily-uzoshop` | `5 0 * * *` IL | Shopify + Meta + Google + TikTok + FX לכל ה-yesterday |
 | `cron-daily-zolplus` | `5 0 * * *` IL | אותו דבר ל-zolplus |
 | `cron-daily-usmile360` | `5 0 * * *` IL | אותו דבר ל-usmile360 |
-| `cron-live-uzoshop` | `*/10 * * * *` | rolling 3-day Shopify + Meta + Google + TikTok spend + orders_attribution של היום + refresh effective_status (lookback 7 ימים) |
+| `cron-live-uzoshop` | `*/10 * * * *` | rolling 3-day Shopify + Meta + Google + TikTok spend + orders_attribution של היום + refresh effective_status (כל השורות הקיימות per ad-set, ללא lookback — Phase 12.5 fix) |
 | `cron-live-zolplus` | `*/10 * * * *` | אותו דבר |
 | `cron-live-usmile360` | `*/10 * * * *` | אותו דבר |
 | `event-sync-now` | event-triggered (`event/sync-now`) | זהה ל-cron-live, ידני מ-`/operator` |
@@ -191,13 +191,18 @@ cron-live's `refresh-effective-status` step UPSERTs a placeholder row for TODAY 
 
 ### 6.3 Freshness
 - cron-daily רץ ב-00:05 IL — כותב את ה-status כחלק מהשורה היומית המלאה (יחד עם spend / impressions / etc).
-- **cron-live רץ כל 10 דקות** וגם הוא מרענן `effective_status` בלבד (Phase 05.7.x). הצעד החדש `refresh-effective-status`:
-  1. שולף במקביל את ה-statuses מ-Meta (`fetchMetaBudgets`), Google (`fetchGoogleAdsAdGroupInsights` ליום אתמול), ו-TikTok (`fetchTikTokAdGroupStatuses`) — כל אחד עם timeout 15s ו-soft-fail.
-  2. עבור כל פלטפורמה, מריץ `UPDATE campaigns_daily SET effective_status = ?` לפי `(store_id, platform, ad_set_id)` עם תנאי `date >= today - 6` (לאחור של 7 ימים).
+- **cron-live רץ כל 10 דקות** וגם הוא מרענן `effective_status` בלבד (Phase 05.7.x). הצעד `refresh-effective-status`:
+  1. שולף במקביל את ה-statuses מ-Meta (`fetchMetaBudgets`), Google (`fetchGoogleAdsAdGroupStatuses`), ו-TikTok (`fetchTikTokAdGroupStatuses`) — כל אחד עם timeout 15s ו-soft-fail.
+  2. עבור כל פלטפורמה, מריץ `UPDATE campaigns_daily SET effective_status = ?` לפי `(store_id, platform, ad_set_id)` על **כל השורות הקיימות** עם `date < today` (Phase 12.5 — היה lookback של 7 ימים, ראה למטה).
   3. UPDATE (לא UPSERT) — לא יוצרים שורות phantom עם spend=0 על קמפיינים שכבר לא רצים.
 - "רענן הכל" בכותרת טאב הקמפיינים מטריגר `event-sync-now` שמריץ את אותה לוגיקה של cron-live → effective_status מתעדכן מיד.
 
-**Aggregator behaviour** (`campaignsAggregator.ts`): כשהדשבורד מציג קמפיין על פני טווח תאריכים, הוא בוחר את ה-`effective_status` של ה-**שורה הכי חדשה** (max date) שיש בה לקמפיין הזה. עדכון על כל 7 הימים האחרונים מבטיח שהשורה הכי חדשה — בדרך כלל אתמול — תקבל את הסטטוס הטרי.
+**Aggregator behaviour** (`campaignsAggregator.ts`): כשהדשבורד מציג קמפיין על פני טווח תאריכים, הוא בוחר את ה-`effective_status` של ה-**שורה הכי חדשה** (max date) שיש בה לקמפיין הזה.
+
+### 6.3a Off-chip drift fix (Phase 12.5 — 2026-05-24)
+ה-UPDATE היה מוגבל ל-7 ימים אחורה (`lookbackDays = 7`). זה גרם לבאג: קמפיין שהושהה לפני יותר משבוע שמר את הסטטוס הישן (ACTIVE) בשורות מחוץ ל-lookback, ולכן בטווחי תצוגה ארוכים (last-month / last-90-days) ה-aggregator בחר ACTIVE והצ'יפ "כבוי" נעלם בשתיקה.
+
+**הפתרון**: הסרת ה-`.gte('date', lookbackFrom)` — כעת ה-UPDATE מכסה כל שורה קיימת לכל ad-set שמופיע ב-enumeration של הפלטפורמה. `effective_status` מעולם לא נועד להיות רשומה היסטורית "per-day"; הוא תמיד נחשב snapshot "current-as-of-last-refresh" על כל שורה. עומס: ~30 ad-sets × 3 חנויות × ~90 שורות לכל אחד × 96 ריצות/יום ≈ 770K row touches/day — סביר ל-Postgres עם אינדקס על `(store_id, platform, ad_set_id)`. ראה `cronLive.ts:1019-1024` ו-`cronLivePastRowBackfill.test.ts` לעדכון הטסטים.
 
 ---
 
