@@ -23,6 +23,7 @@ import {
   type TokenFailureProvider,
   type TokenFailureStore,
 } from '@/lib/notifications/tokenFailures';
+import { userFacingError } from '@/lib/apiErrors';
 
 export const runtime = 'nodejs';
 // No cache — operator wants live state.
@@ -91,8 +92,22 @@ export async function GET() {
       error: { message: string } | null;
     };
     if (error) {
+      // AUDIT API-37 (2026-05-24, Phase 12.3): userFacingError redacts
+      // Supabase error.message strings that could embed RLS hints,
+      // table names, or JWT fragments. Raw message still flows to
+      // console.error for server-side ops triage. Evidence:
+      // .planning/phases/12-codebase-audit-baseline/raw-returns/
+      //   api_operator_tokenFailures.json (API-37).
+      console.error(
+        '/api/operator/token-failures GET supabase error:',
+        error.message,
+      );
       return NextResponse.json(
-        { error: error.message, rows: [], lastUpdated: new Date().toISOString() },
+        {
+          error: userFacingError(error.message),
+          rows: [],
+          lastUpdated: new Date().toISOString(),
+        },
         { status: 200 },
       );
     }
@@ -114,9 +129,17 @@ export async function GET() {
       lastUpdated: new Date().toISOString(),
     } satisfies TokenFailuresResponse);
   } catch (e) {
+    // AUDIT API-38 (2026-05-24, Phase 12.3): catch-path redaction. The
+    // local admin() helper throws with the literal 'missing SUPABASE_URL
+    // / SUPABASE_SERVICE_ROLE_KEY' message — pre-fix that text would leak
+    // to the browser response. userFacingError maps it to a generic
+    // Hebrew message; raw still flows to console.error for ops.
+    // Evidence: raw-returns/api_operator_tokenFailures.json (API-38).
+    const rawMessage = e instanceof Error ? e.message : String(e);
+    console.error('/api/operator/token-failures GET threw:', rawMessage);
     return NextResponse.json(
       {
-        error: e instanceof Error ? e.message : String(e),
+        error: userFacingError(rawMessage),
         rows: [],
         lastUpdated: new Date().toISOString(),
       },
@@ -168,8 +191,14 @@ export async function POST(req: Request) {
     await resolveTokenFailure(provider, storeId, operation);
     return NextResponse.json({ ok: true });
   } catch (e) {
+    // AUDIT API-38 (2026-05-24, Phase 12.3): same redaction posture as
+    // GET catch — resolveTokenFailure throws with raw Supabase
+    // SUPABASE_SERVICE_ROLE_KEY / JWT fragments that must not leak to
+    // the browser. Raw still logs to console.error.
+    const rawMessage = e instanceof Error ? e.message : String(e);
+    console.error('/api/operator/token-failures POST threw:', rawMessage);
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : String(e) },
+      { error: userFacingError(rawMessage) },
       { status: 500 },
     );
   }
