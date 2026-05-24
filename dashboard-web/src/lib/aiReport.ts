@@ -1380,9 +1380,23 @@ export function generateAiReport({
     // Evidence: .planning/phases/12-codebase-audit-baseline/
     //   raw-returns/lib_algorithm_aiReport.json (ALG-04 lines 38-44)
     //
+    // AUDIT ALG-03 (2026-05-24, Phase 12.3): chronological sort BEFORE
+    // the last-write-wins loop so the chronologically LATEST
+    // effectiveStatus per (storeId, platform, campaignId) deterministically
+    // wins, regardless of fetcher input order. Belt-and-suspenders
+    // alongside the storeId-scoped key above (ALG-04) which only fixed
+    // CROSS-STORE collisions, not WITHIN-STORE input-order dependency
+    // when the same campaign appears on multiple dates with different
+    // statuses (e.g. a campaign paused mid-window then re-activated).
+    // Evidence: .planning/phases/12-codebase-audit-baseline/
+    //   raw-returns/lib_algorithm_aiReport.json (ALG-03 lines 28-34).
+    //
     // Need to find effective_status per campaign — pull latest from campaigns array.
     const statusByCampaign = new Map<string, string | null>();
-    for (const c of campaigns) {
+    const campaignsSortedByDate = [...campaigns].sort((a, b) =>
+      a.date.localeCompare(b.date),
+    );
+    for (const c of campaignsSortedByDate) {
       const key = `${c.storeId}::${c.platform}::${c.campaignId}`;
       if (c.effectiveStatus) statusByCampaign.set(key, c.effectiveStatus);
     }
