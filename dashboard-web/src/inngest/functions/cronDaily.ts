@@ -354,11 +354,17 @@ async function runDailyForStoreInner(
         e,
         `Refresh the Meta access token in Vercel (${storeId.toUpperCase()}_META_ACCESS_TOKEN) and redeploy, OR check Meta's status page if recurrent.`,
       );
+      // Phase 13.4.1 — Fallback shape must match the real fetchMetaBudgets
+      // return shape (Record-of-id, not Map). Map crosses the step.run
+      // boundary and Inngest JSON-serializes it to `{}` after memoization,
+      // so downstream `meta.budgets.campaigns[id]` reads were structurally
+      // empty regardless. Now an honest `{}` + currency the cadFor path
+      // can safely consume (no-op since campaigns/adSets are empty).
       return {
         spend: { storeId, date: dateStr, spend: 0, currency: 'ILS' },
         adsetRows: [],
         adRows: [],
-        budgets: { campaigns: new Map(), adSets: new Map() },
+        budgets: { currency: 'ILS', campaigns: {}, adSets: {} },
       };
     }
   })) as {

@@ -134,6 +134,13 @@ Supabase Security Advisor יראה 10 אזהרות `0013_rls_disabled_in_public`
 
 **Fingerprint dedupe (13.2.3):** `captureCronFetchError` ב-cron-live מקבל fingerprint יציב = `['inngest-fetcher', platform, storeId]`. כל 96 הריצות היומיות של (platform, store) שנכשלות → **issue אחד** ב-inbox של Sentry במקום 96. במקביל, `quietWhatsapp:true` מונע WhatsApp ספאם (auth-errors שומרים על ה-WhatsApp דרך הנתיב המקורי, עם 6h throttle).
 
+### 4.7 step.run JSON-safety contract (Phase 13.4.1)
+Inngest מ-serialize את ה-return של כל `step.run` callback דרך JSON. **אסור להחזיר `Map` או `Set`** — הם הופכים ל-`{}`/`[]` ב-deserialize, בלי שגיאת runtime. הצרכן רואה מבנה ריק, ו-TS casts יכולים להסתיר את אי-ההתאמה.
+
+**כלל:** כל data שעובר step boundary חייב להיות JSON-roundtrippable (`Record` במקום `Map`, `array` במקום `Set`). הטסט החדש `cronDaily.test.ts > Test 10b` מקבע — מ-snoop על ה-return של fetch-meta ומאשר ש-`JSON.parse(JSON.stringify(x))` שווה ל-`x` ושאין `Map`/`Set` בעץ.
+
+**תיקון 13.4.1:** ב-`cronDaily.ts:361` fallback של `fetch-meta` החזיר `{ campaigns: new Map(), adSets: new Map() }` בעת כשל Meta — TS cast הסתיר את ה-mismatch מול ה-type הראשי (`Record`). אחרי 13.4.1 ה-fallback מחזיר `{}` ו-`currency: 'ILS'` (matches `MetaBudgets`).
+
 ---
 
 ## 5. Data Source APIs

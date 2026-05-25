@@ -828,6 +828,43 @@ describe('cronDaily — factory + handler', () => {
       expect(Number(row?.tt_spend_cad)).toBeGreaterThan(0);
     });
 
+    // Phase 13.4.1 — regression pin. The pre-13.4.1 meta-throw fallback used
+    // `new Map()` for budgets.campaigns / budgets.adSets. Inngest serializes
+    // step.run return values via JSON, which loses Map contents — `{}` —
+    // and the type cast on the step return hides the mismatch from tsc.
+    // After 13.4.1 the fallback returns plain objects ({}) + currency.
+    // This test pins the JSON-roundtrip contract: nothing in the step return
+    // can be a Map (would silently serialize to {} and break downstream
+    // bracket-access reads).
+    it('Test 10b (Phase 13.4.1): meta-throw fallback returns JSON-roundtrippable budgets (no Map)', async () => {
+      mockState.throwIn = 'meta';
+
+      // Snoop on what the fetch-meta step.run returns by replacing the
+      // StepRunner with one that captures callback return values.
+      const stepReturns = new Map<string, unknown>();
+      const step = {
+        run: async (id: string, fn: () => Promise<unknown>): Promise<unknown> => {
+          const result = await fn();
+          stepReturns.set(id, result);
+          return result;
+        },
+      };
+
+      await runDailyForStore('uzoshop', '2026-05-20', { step });
+
+      const metaReturn = stepReturns.get('fetch-meta') as {
+        budgets: { campaigns: unknown; adSets: unknown; currency: unknown };
+      };
+      // No Map at any level — Map's serialization loses entries.
+      expect(metaReturn.budgets.campaigns).not.toBeInstanceOf(Map);
+      expect(metaReturn.budgets.adSets).not.toBeInstanceOf(Map);
+      // The whole budgets object survives a JSON roundtrip unchanged.
+      const roundtripped = JSON.parse(JSON.stringify(metaReturn.budgets));
+      expect(roundtripped).toEqual(metaReturn.budgets);
+      // currency is required (cadFor consumers read it).
+      expect(typeof roundtripped.currency).toBe('string');
+    });
+
     it('Google fetch throw → runDailyForStore completes, data_daily persists, ga_spend_cad = 0', async () => {
       mockState.tiktokSpendResult = {
         storeId: 'uzoshop',
