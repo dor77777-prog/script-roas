@@ -91,6 +91,7 @@
 
 import { inngest } from '@/inngest/client';
 import { runDailyForStore, type StoreId } from './cronDaily';
+import { captureStepError } from '@/lib/sentry/capture';
 
 // ---------------------------------------------------------------------------
 // Payload type — matches the contract emitted by plan 14's API route.
@@ -209,6 +210,35 @@ export const eventBackfill = inngest.createFunction(
   async ({ event, step }) => {
     const { from, to, storeIds } = event.data as BackfillPayload;
 
+    try {
+      return await runEventBackfill({ from, to, storeIds, step });
+    } catch (e) {
+      // Phase 13.2.2 — top-level wrap. Captures validation throws AND the
+      // systemic-failure throw from the per-pair loop below. Per-pair
+      // transient errors stay in console.warn + results[] (not captured
+      // individually here to avoid spam from the SYSTEMIC_FAILURE_THRESHOLD
+      // logic that already groups them).
+      captureStepError(
+        { fnId: 'event-backfill', stepName: 'top-level' },
+        e,
+        { from, to, storeIds },
+      );
+      throw e;
+    }
+  },
+);
+
+async function runEventBackfill({
+  from,
+  to,
+  storeIds,
+  step,
+}: {
+  from: string;
+  to: string;
+  storeIds: StoreId[];
+  step: unknown;
+}) {
     // ---- Validation (throw → Inngest retry-then-deadletter) -----------
     if (!storeIds || storeIds.length === 0) {
       throw new Error(
@@ -306,5 +336,4 @@ export const eventBackfill = inngest.createFunction(
       // table) renders this as a matrix.
       results,
     };
-  },
-);
+}

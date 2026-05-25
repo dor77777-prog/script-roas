@@ -55,6 +55,7 @@
 
 import { inngest } from '@/inngest/client';
 import { runDailyForStore, type StoreId } from './cronDaily';
+import { captureStepError } from '@/lib/sentry/capture';
 
 // ---------------------------------------------------------------------------
 // Payload type — matches the contract emitted by plan 14's API route.
@@ -111,13 +112,22 @@ export const eventSyncNow = inngest.createFunction(
   async ({ event, step }) => {
     const { storeId, date = todayJerusalem() } = event.data as SyncNowPayload;
 
-    // Cast narrows Inngest's full step API to the StepRunner subset
-    // runDailyForStore consumes. See plan 08 deviation #3 + cronLive.ts
-    // line 410 for the same cast precedent — sound because the handler's
-    // payloads (StoreId, dateStr) and runDailyForStore's return type are
-    // primitive/plain-object (Jsonify<T> ≡ T for these shapes).
-    return runDailyForStore(storeId, date, {
-      step: step as unknown as StepRunner,
-    });
+    try {
+      // Cast narrows Inngest's full step API to the StepRunner subset
+      // runDailyForStore consumes. See plan 08 deviation #3 + cronLive.ts
+      // line 410 for the same cast precedent — sound because the handler's
+      // payloads (StoreId, dateStr) and runDailyForStore's return type are
+      // primitive/plain-object (Jsonify<T> ≡ T for these shapes).
+      return await runDailyForStore(storeId, date, {
+        step: step as unknown as StepRunner,
+      });
+    } catch (e) {
+      captureStepError(
+        { fnId: 'event-sync-now', stepName: 'top-level', storeId },
+        e,
+        { date },
+      );
+      throw e;
+    }
   },
 );

@@ -37,7 +37,7 @@ export function captureRouteError(
 }
 
 export function captureStepError(
-  opts: { fnId: string; stepName: string; storeId?: string },
+  opts: { fnId: string; stepName: string; storeId?: string; fingerprint?: string[] },
   err: unknown,
   extra?: Record<string, unknown>,
 ): void {
@@ -48,6 +48,7 @@ export function captureStepError(
       stepName: opts.stepName,
       storeId: opts.storeId ?? 'n/a',
     },
+    ...(opts.fingerprint ? { fingerprint: opts.fingerprint } : {}),
     ...(extra ? { extra } : {}),
   });
 }
@@ -57,6 +58,13 @@ export async function captureCronFetchError(
     storeId: 'uzoshop' | 'zolplus' | 'usmile360';
     platform: 'meta' | 'google' | 'tiktok' | 'shopify';
     dedup: Set<string>;
+    // Phase 13.2.3 — when true (high-cadence callers like cron-live),
+    // capture to Sentry with a stable fingerprint (groups all events of
+    // the same (platform, storeId) into ONE Sentry issue) and SKIP the
+    // notifyTokenFailure WhatsApp send. WhatsApp throttling is 1/6h
+    // which still floods at 15-min cadence × 9 issues; auth errors keep
+    // their own notifyTokenFailure path in the caller's catch block.
+    quietWhatsapp?: boolean;
   },
   err: unknown,
   advice?: string,
@@ -68,10 +76,15 @@ export async function captureCronFetchError(
       platform: opts.platform,
       storeId: opts.storeId,
     },
+    // Stable fingerprint groups all 96 daily failures of (platform, store)
+    // into ONE Sentry issue. Cron-daily callers (1/day) get the same
+    // grouping for free; cron-live callers (96/day) benefit most.
+    fingerprint: ['inngest-fetcher', opts.platform, opts.storeId],
   });
   const key = `${opts.platform}:${opts.storeId}`;
   if (opts.dedup.has(key)) return;
   opts.dedup.add(key);
+  if (opts.quietWhatsapp) return;
   await notifyTokenFailure({
     provider: opts.platform,
     storeId: opts.storeId,

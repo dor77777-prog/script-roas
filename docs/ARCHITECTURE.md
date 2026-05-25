@@ -119,6 +119,21 @@ Supabase Security Advisor יראה 10 אזהרות `0013_rls_disabled_in_public`
 - Inngest Dashboard: `https://app.inngest.com`.
 - בתוך הדשבורד: `/operator > ריצות אחרונות` → קורא `/api/operator/jobs` שמ-proxy ל-Inngest REST v1 (`/v1/events` + `/v1/events/{id}/runs`).
 
+### 4.6 Sentry capture per פונקציה (Phase 13.2 + 13.2.2 + 13.2.3)
+כל פונקציית Inngest עוטפת את ה-top-level שלה ב-`captureStepError({fnId, stepName:'top-level', storeId?}, err)` ואז `throw e` — שומרת על Inngest retry/dead-letter, ובמקביל מטעינה ל-Sentry לטריאז'.
+
+| פונקציה | Phase שהוסיף Wrap | הערות |
+|---|---|---|
+| `cron-daily-*` × 3 | 13.2 | 5 capture-sites פנימיים + top-level |
+| `cron-live-*` × 3 | 13.2 + 13.2.3 | top-level + per-platform Sentry capture (quietWhatsapp + fingerprint dedupe) |
+| `cron-oauth-canary` | 13.4 | step-level capture סביב ה-canary fetch |
+| `whatsapp-noon/evening/eod` | 13.2.2 | top-level wrap מעל `sendDailySummary` |
+| `event-whatsapp-send-now` | 13.2.2 | top-level wrap עם trigger extra |
+| `event-backfill` | 13.2.2 | top-level wrap (extracted to `runEventBackfill`); per-pair נשמרים ב-results[] + `console.warn` (לא ב-Sentry — systemic-failure threshold כבר מגן) |
+| `event-sync-now` | 13.2.2 | top-level wrap עם date extra |
+
+**Fingerprint dedupe (13.2.3):** `captureCronFetchError` ב-cron-live מקבל fingerprint יציב = `['inngest-fetcher', platform, storeId]`. כל 96 הריצות היומיות של (platform, store) שנכשלות → **issue אחד** ב-inbox של Sentry במקום 96. במקביל, `quietWhatsapp:true` מונע WhatsApp ספאם (auth-errors שומרים על ה-WhatsApp דרך הנתיב המקורי, עם 6h throttle).
+
 ---
 
 ## 5. Data Source APIs

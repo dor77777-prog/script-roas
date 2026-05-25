@@ -36,6 +36,7 @@ import {
   todayJerusalem,
   yesterdayJerusalem,
 } from '@/lib/notifications/sendDailySummary';
+import { captureStepError } from '@/lib/sentry/capture';
 
 type StepTools = {
   run: <T>(label: string, fn: () => Promise<T>) => Promise<T>;
@@ -57,8 +58,13 @@ export const whatsappNoon = inngest.createFunction(
     // (Inngest forbids nested step.run). The per-recipient memoization
     // prevents duplicate WhatsApp sends to recipients that already
     // succeeded when a function-level retry kicks in.
-    const dateStr = todayJerusalem();
-    return await sendDailySummary(dateStr, titleNoon(dateStr), { step });
+    try {
+      const dateStr = todayJerusalem();
+      return await sendDailySummary(dateStr, titleNoon(dateStr), { step });
+    } catch (e) {
+      captureStepError({ fnId: 'whatsapp-noon', stepName: 'top-level' }, e);
+      throw e;
+    }
   },
 );
 
@@ -74,8 +80,13 @@ export const whatsappEvening = inngest.createFunction(
   },
   async ({ step }: { step: StepTools }) => {
     // Phase 13.4 — see whatsappNoon for rationale on removing the outer step.run.
-    const dateStr = todayJerusalem();
-    return await sendDailySummary(dateStr, titleEvening(dateStr), { step });
+    try {
+      const dateStr = todayJerusalem();
+      return await sendDailySummary(dateStr, titleEvening(dateStr), { step });
+    } catch (e) {
+      captureStepError({ fnId: 'whatsapp-evening', stepName: 'top-level' }, e);
+      throw e;
+    }
   },
 );
 
@@ -107,8 +118,13 @@ export const whatsappEod = inngest.createFunction(
   },
   async ({ step }: { step: StepTools }) => {
     // Phase 13.4 — see whatsappNoon for rationale on removing the outer step.run.
-    const dateStr = yesterdayJerusalem();
-    return await sendDailySummary(dateStr, titleEod(dateStr), { step });
+    try {
+      const dateStr = yesterdayJerusalem();
+      return await sendDailySummary(dateStr, titleEod(dateStr), { step });
+    } catch (e) {
+      captureStepError({ fnId: 'whatsapp-eod', stepName: 'top-level' }, e);
+      throw e;
+    }
   },
 );
 
@@ -135,15 +151,24 @@ export const eventWhatsappSendNow = inngest.createFunction(
   },
   async ({ event, step }: { event: { data?: SendNowEventData }; step: StepTools }) => {
     const trigger = event?.data?.trigger ?? 'noon';
-    return await step.run('send', async () => {
-      if (trigger === 'eod') {
-        const dateStr = yesterdayJerusalem();
-        return await sendDailySummary(dateStr, titleEod(dateStr));
-      }
-      const dateStr = todayJerusalem();
-      const title = trigger === 'evening' ? titleEvening(dateStr) : titleNoon(dateStr);
-      return await sendDailySummary(dateStr, title);
-    });
+    try {
+      return await step.run('send', async () => {
+        if (trigger === 'eod') {
+          const dateStr = yesterdayJerusalem();
+          return await sendDailySummary(dateStr, titleEod(dateStr));
+        }
+        const dateStr = todayJerusalem();
+        const title = trigger === 'evening' ? titleEvening(dateStr) : titleNoon(dateStr);
+        return await sendDailySummary(dateStr, title);
+      });
+    } catch (e) {
+      captureStepError(
+        { fnId: 'event-whatsapp-send-now', stepName: 'top-level' },
+        e,
+        { trigger },
+      );
+      throw e;
+    }
   },
 );
 

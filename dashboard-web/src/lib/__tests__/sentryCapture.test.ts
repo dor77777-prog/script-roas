@@ -60,6 +60,22 @@ describe('captureStepError', () => {
     const [, ctx] = captureExceptionMock.mock.calls[0] as [unknown, { tags?: Record<string, string> }];
     expect(ctx.tags?.storeId).toBe('n/a');
   });
+
+  // Phase 13.2.3 — fingerprint groups recurring failures into ONE Sentry issue.
+  it('forwards fingerprint to Sentry when provided', () => {
+    captureStepError(
+      { fnId: 'cron-live', stepName: 'fetch-meta', storeId: 'uzoshop', fingerprint: ['cron-live-fetch', 'meta', 'uzoshop'] },
+      new Error('y'),
+    );
+    const [, ctx] = captureExceptionMock.mock.calls[0] as [unknown, { fingerprint?: string[] }];
+    expect(ctx.fingerprint).toEqual(['cron-live-fetch', 'meta', 'uzoshop']);
+  });
+
+  it('omits fingerprint when not provided (backward-compat)', () => {
+    captureStepError({ fnId: 'cron-daily', stepName: 'persist' }, new Error('z'));
+    const [, ctx] = captureExceptionMock.mock.calls[0] as [unknown, { fingerprint?: string[] }];
+    expect(ctx.fingerprint).toBeUndefined();
+  });
 });
 
 describe('captureCronFetchError (P0-D dedup-throttled alert)', () => {
@@ -112,5 +128,43 @@ describe('captureCronFetchError (P0-D dedup-throttled alert)', () => {
     await expect(
       captureCronFetchError({ storeId: 'uzoshop', platform: 'meta', dedup }, new Error('x')),
     ).resolves.toBeUndefined();
+  });
+
+  // Phase 13.2.3 — Sentry fingerprint groups all events of (platform, store)
+  // into ONE inbox issue. Without grouping, cron-live's 96 daily events per
+  // failure would each show as a separate inbox item.
+  it('sets a stable Sentry fingerprint of [layer, platform, storeId]', async () => {
+    const dedup = new Set<string>();
+    await captureCronFetchError({ storeId: 'uzoshop', platform: 'meta', dedup }, new Error('x'));
+    const [, ctx] = captureExceptionMock.mock.calls[0] as [unknown, { fingerprint?: string[] }];
+    expect(ctx.fingerprint).toEqual(['inngest-fetcher', 'meta', 'uzoshop']);
+  });
+
+  // Phase 13.2.3 — quietWhatsapp suppresses WhatsApp for high-cadence callers
+  // (cron-live, 96/day) while still capturing to Sentry. Auth-error paths in
+  // the caller keep their own notifyTokenFailure invocation (with 6h throttle).
+  it('skips notifyTokenFailure when quietWhatsapp:true', async () => {
+    const dedup = new Set<string>();
+    await captureCronFetchError(
+      { storeId: 'uzoshop', platform: 'meta', dedup, quietWhatsapp: true },
+      new Error('x'),
+    );
+    expect(captureExceptionMock).toHaveBeenCalledTimes(1);
+    expect(notifyTokenFailureMock).not.toHaveBeenCalled();
+  });
+
+  it('still respects dedup Set when quietWhatsapp:true', async () => {
+    const dedup = new Set<string>();
+    await captureCronFetchError(
+      { storeId: 'uzoshop', platform: 'meta', dedup, quietWhatsapp: true },
+      new Error('first'),
+    );
+    await captureCronFetchError(
+      { storeId: 'uzoshop', platform: 'meta', dedup, quietWhatsapp: true },
+      new Error('second'),
+    );
+    expect(captureExceptionMock).toHaveBeenCalledTimes(2);
+    expect(dedup.has('meta:uzoshop')).toBe(true);
+    expect(notifyTokenFailureMock).not.toHaveBeenCalled();
   });
 });

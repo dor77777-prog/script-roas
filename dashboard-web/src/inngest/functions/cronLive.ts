@@ -113,7 +113,7 @@ import { TIKTOK_ACTIVE_ENOUGH } from '@/lib/platformConfig';
 // is soft-fail + throttled to 1 alert per 6h per (provider, store, operation).
 import { notifyTokenFailure } from '@/lib/notifications/tokenFailures';
 import { isAuthError } from '@/lib/notifications/detectAuthError';
-import { captureStepError } from '@/lib/sentry/capture';
+import { captureStepError, captureCronFetchError } from '@/lib/sentry/capture';
 
 // =============================================================================
 // Constants
@@ -677,6 +677,13 @@ async function runLiveForStoreInner(
   // type assertion) so the persist step knows NOT to overwrite revenue /
   // gross / refund_deduction columns on a Shopify failure — preserve
   // whatever was last successfully written.
+  // Phase 13.2.3 — Sentry dedup Set scoped to this tick's fetch step.
+  // Each (platform, storeId) captured at most once per tick. Combined
+  // with the fingerprint inside captureCronFetchError, all events of
+  // (platform, storeId) across the entire day group into ONE Sentry
+  // issue — so 96 ticks/day × full failure caps at 9 issues, not 9 × 96.
+  const sentryDedup = new Set<string>();
+
   const shopifyByDate = await step.run('fetch-shopify-rolling-3day', async () => {
     const results = await Promise.all(
       dates.map((d) =>
@@ -696,6 +703,11 @@ async function runLiveForStoreInner(
                   'Re-mint the Shopify Admin API access token and update ' +
                   `${storeId.toUpperCase()}_SHOPIFY_ACCESS_TOKEN in Vercel + redeploy.`,
               }).catch(() => {});
+            } else {
+              captureCronFetchError(
+                { storeId, platform: 'shopify', dedup: sentryDedup, quietWhatsapp: true },
+                e,
+              ).catch(() => {});
             }
             // Sentinel: canonical store_name (NOT 'unknown'), and we
             // mark __shopifyFailed so the persister can short-circuit.
@@ -802,6 +814,11 @@ async function runLiveForStoreInner(
                   `${storeId.toUpperCase()}_META_ACCESS_TOKEN`.replace(/`/g, '') +
                   ') and redeploy.',
               }).catch(() => {});
+            } else {
+              captureCronFetchError(
+                { storeId, platform: 'meta', dedup: sentryDedup, quietWhatsapp: true },
+                e,
+              ).catch(() => {});
             }
             return null;
           })
@@ -824,6 +841,11 @@ async function runLiveForStoreInner(
                   'Re-run the OAuth Playground flow to mint a fresh GOOGLEADS_REFRESH_TOKEN. ' +
                   'Update Vercel env vars + redeploy. See docs/PROPS-MAP.md rows 28-32.',
               }).catch(() => {});
+            } else {
+              captureCronFetchError(
+                { storeId, platform: 'google', dedup: sentryDedup, quietWhatsapp: true },
+                e,
+              ).catch(() => {});
             }
             return null;
           })
@@ -847,6 +869,11 @@ async function runLiveForStoreInner(
                     'Re-authorize TikTok via /api/oauth/tiktok/callback to refresh the ' +
                     `${storeId.toUpperCase()}_TIKTOK_ACCESS_TOKEN. Update Vercel env + redeploy.`,
                 }).catch(() => {});
+              } else {
+                captureCronFetchError(
+                  { storeId, platform: 'tiktok', dedup: sentryDedup, quietWhatsapp: true },
+                  e,
+                ).catch(() => {});
               }
               return null;
             })
