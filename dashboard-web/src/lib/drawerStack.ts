@@ -85,6 +85,5 @@ export function useDrawerEsc(open: boolean, onClose: () => void) {
     return pop;
     // Intentional: do NOT depend on `onClose`. The getter pattern keeps the
     // latest callback live without re-pushing on every parent render. (CC-02)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 }

@@ -25,7 +25,6 @@ vi.mock('@/lib/cloudSync', () => ({
 // writeProductMap evaluate to `false`.
 function installWindowShim() {
   const store = new Map<string, string>();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (globalThis as any).window = {
     localStorage: {
       getItem: (key: string) => store.get(key) ?? null,
@@ -39,7 +38,6 @@ function installWindowShim() {
     addEventListener: () => undefined,
     removeEventListener: () => undefined,
   };
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (globalThis as any).CustomEvent = class {
     constructor(public type: string) {}
   };
@@ -48,13 +46,11 @@ function installWindowShim() {
 installWindowShim();
 
 // Import AFTER the shim so the module-level checks see `window`.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const mod = await import('@/lib/campaignProductMap');
 const { campaignKey, migrateProductMapKeys, writeProductMap } = mod;
 type ProductMap = ReturnType<typeof mod.readProductMap>;
 
 beforeEach(() => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   ((globalThis as any).window.localStorage as { clear(): void }).clear();
 });
 

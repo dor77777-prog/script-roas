@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { CalendarDays, ChevronDown, ChevronUp } from 'lucide-react';
 import type { DailyRow, DashboardData } from '@/lib/types';
-import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
+import { cn, formatDate, formatNumber } from '@/lib/utils';
 import { RefundIndicator } from './RefundIndicator';
 import { roasLabel } from '@/lib/analytics';
 import { buildDateRangeKey } from '@/lib/dateRange';

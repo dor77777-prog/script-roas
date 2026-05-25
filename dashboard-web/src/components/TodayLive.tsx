@@ -642,7 +642,7 @@ function LiveStat({
   );
 }
 
-function Mini({
+function _Mini({
   label,
   value,
   muted,

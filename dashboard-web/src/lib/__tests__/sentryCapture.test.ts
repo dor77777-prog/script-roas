@@ -1,7 +1,7 @@
 // dashboard-web/src/lib/__tests__/sentryCapture.test.ts
 // Phase 13.2 — unit tests for the server-only capture helpers.
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // Mock @sentry/nextjs BEFORE importing the module under test.
 const captureExceptionMock = vi.fn();

@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import {
   Area,
-  AreaChart,
   ComposedChart,
   Line,
   ReferenceLine,
@@ -18,7 +17,6 @@ import {
   annotationsInScope,
   ANNOTATION_KIND_COLOR,
   ANNOTATION_KIND_EMOJI,
-  ANNOTATION_KIND_LABEL,
   readAnnotations,
   type Annotation,
 } from '@/lib/annotations';

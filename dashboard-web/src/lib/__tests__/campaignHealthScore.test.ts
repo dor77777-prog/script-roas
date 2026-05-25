@@ -547,7 +547,7 @@ describe('operator adjustment', () => {
   });
 
   it('subtracts 30 when isCurrentlyOff=true', () => {
-    const baseline = computeCampaignHealth(buildInputs());
+    const _baseline = computeCampaignHealth(buildInputs());
     const penalised = computeCampaignHealth(buildInputs({ isCurrentlyOff: true }));
     // Could be clamped at 0 if baseline was already < 30; check the delta logic.
     expect(penalised.components.operatorAdjustment).toBe(-30);

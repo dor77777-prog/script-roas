@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { roasLabel } from '@/lib/analytics';
-import type { AdRow } from '@/lib/ads';
 import type { AdsResponse } from '@/app/api/ads/route';
 import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
 import { analyzeAttributionForAd } from '@/lib/attributionAnalysis';

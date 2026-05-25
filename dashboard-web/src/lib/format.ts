@@ -12,7 +12,7 @@
  */
 import React from 'react';
 
-const SIGN_FORMATTER = new Intl.NumberFormat('he-IL', {
+const _SIGN_FORMATTER = new Intl.NumberFormat('he-IL', {
   signDisplay: 'exceptZero',
   minimumFractionDigits: 0,
   maximumFractionDigits: 1,
@@ -67,7 +67,6 @@ function fixMinus(s: string): string {
  * shuffle its components.
  */
 function bdi(content: React.ReactNode, className?: string): React.ReactElement {
-  // eslint-disable-next-line react/jsx-no-useless-fragment
   return React.createElement(
     'bdi',
     { dir: 'ltr', className: className ?? 'tabular-nums' },

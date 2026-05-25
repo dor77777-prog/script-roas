@@ -651,7 +651,7 @@ export function CampaignsTableRow({
           const detUnits = Math.round(info.deterministicUnits);
           const tooltip =
             `ROAS Shopify · פלטפורמה = ${detRoas.toFixed(2)}x\n` +
-            `  (${formatCurrency(info.deterministicRevenue)} / ${formatCurrency(a.spend)})\n\n` +
+            `  (${formatCurrency(info.deterministicRevenue)} / ${formatCurrency(a.spend)})\n\n` +
             `מבוסס על ${detUnits} מתוך ${totalUnits} יחידות שנמכרו (רק הזמנות עם source='${a.platform === 'Meta' ? 'meta-paid' : a.platform === 'Google' ? 'google-paid' : 'tiktok-paid'}' או click-id מזוהה). ` +
             `השאר עברו דרך direct / organic / פלטפורמות אחרות.`;
           return (

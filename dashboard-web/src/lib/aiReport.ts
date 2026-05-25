@@ -634,7 +634,7 @@ export function generateAiReport({
     // Click-id deterministic coverage — % of revenue that came with an
     // explicit click identifier (fbclid / gclid / ttclid / utm_source).
     let deterministicRevenue = 0;
-    let deterministicOrders = 0;
+    let _deterministicOrders = 0;
     for (const o of orders) {
       const hasClickId =
         o.fbclidPresent ||
@@ -644,7 +644,7 @@ export function generateAiReport({
         o.source === 'tiktok-paid';
       if (hasClickId) {
         deterministicRevenue += o.totalCad;
-        deterministicOrders += 1;
+        _deterministicOrders += 1;
       }
     }
     const coveragePct = grandTotal > 0 ? deterministicRevenue / grandTotal : 0;

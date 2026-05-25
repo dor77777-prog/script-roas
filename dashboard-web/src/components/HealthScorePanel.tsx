@@ -4,7 +4,6 @@ import { cn } from '@/lib/utils';
 import type {
   CampaignHealth,
   HealthGrade,
-  HealthScoreComponents,
 } from '@/lib/campaignHealthScore';
 
 /**

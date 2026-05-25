@@ -442,7 +442,7 @@ export function parseShopifyBillsCsv(
       const bn = parseInt(slashMatch[2], 10);
       if (an <= 12 && bn <= 12 && an !== bn) ambiguousSlashCount++;
     }
-    const amount = parseFloat((amountRaw ?? '').replace(/[^\d.\-]/g, ''));
+    const amount = parseFloat((amountRaw ?? '').replace(/[^\d.-]/g, ''));
     if (!Number.isFinite(amount) || amount === 0) continue;
 
     const classification = classifyBillLine(desc ?? '');

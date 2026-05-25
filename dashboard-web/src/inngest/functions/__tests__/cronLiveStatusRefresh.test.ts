@@ -86,14 +86,14 @@ function makeSupabaseAdminMock(
   }> = [];
 
   function makeUpdateChain(payload: Record<string, unknown>) {
-    let storeId = '';
-    let platform = '';
+    let _storeId = '';
+    let _platform = '';
     let adSetId = '';
 
     const eqChain = {
       eq: vi.fn((col: string, val: string) => {
-        if (col === 'store_id') storeId = val;
-        else if (col === 'platform') platform = val;
+        if (col === 'store_id') _storeId = val;
+        else if (col === 'platform') _platform = val;
         else if (col === 'ad_set_id') adSetId = val;
         return eqChain;
       }),

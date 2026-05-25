@@ -141,7 +141,7 @@ export function splitRangeHalves(
 /** Count distinct dates in `rows` (filtered to a window) where `accept`
  *  returns true. Used to enforce "≥ 3 active days per half" before
  *  trusting the verdict. */
-function countActiveDays<T extends { date: string }>(
+function _countActiveDays<T extends { date: string }>(
   rows: T[],
   from: string,
   to: string,

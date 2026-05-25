@@ -1,42 +1,142 @@
 // dashboard-web/eslint.config.js
 //
-// Phase 13.3 — minimal ESLint v9 flat-config so `npm run lint` works.
+// Phase 13.3.1 — real ESLint v9 flat-config.
 //
-// Why no-op rules:
-//   eslint-config-next ^15.5 still ships its old @rushstack/eslint-patch
-//   wrapper which is incompatible with ESLint v9's flat-config loader
-//   ("Failed to patch ESLint because the calling module was not recognized").
-//   `next lint` is also deprecated as of Next 16.
+// Replaces the Phase-13.3 no-op stub. Rationale:
+//   - eslint-config-next ^15.5 still ships the @rushstack/eslint-patch
+//     wrapper which is incompatible with ESLint v9's flat-config loader
+//     ("Failed to patch ESLint because the calling module was not
+//     recognized"). `next lint` is also deprecated as of Next 16.
+//   - Skip eslint-config-next entirely; import @next/eslint-plugin-next
+//     directly (it ships flat-config exports), plus typescript-eslint's
+//     flat-config recommended preset.
 //
-// MVP target (Phase 13.3): satisfy the audit gate that `npm run lint`
-//   exits 0 non-interactively (was opening the v9 interactive setup wizard).
-//
-// Phase 13.3.1 will re-introduce real rules — most likely the
-// @next/eslint-plugin-next direct import + typescript-eslint flat-config
-// preset (skipping eslint-config-next entirely).
+// Severity policy (Internal-tool, single-operator):
+//   - error  → catches genuine bugs (no-unused-vars, no-empty-pattern, etc.)
+//   - warn   → style / future-proofing (no-explicit-any, prefer-const)
+//   - off    → noise that hurts more than it helps for this codebase
+//             (e.g. @next/next/no-html-link-for-pages — we use App Router)
 
-export default [
-  {
-    // Lint ONLY the eslint config itself (which has no errors). This
-    // satisfies the audit-mandated gate "npm run lint exits 0
-    // non-interactively" while we wait for 13.3.1 to re-introduce real
-    // rules. The ignores block below silences everything else.
-    files: ['eslint.config.js'],
-    rules: {},
-  },
+import eslint from '@eslint/js';
+import tseslint from 'typescript-eslint';
+import nextPlugin from '@next/eslint-plugin-next';
+import reactPlugin from 'eslint-plugin-react';
+import reactHooksPlugin from 'eslint-plugin-react-hooks';
+import globals from 'globals';
+
+export default tseslint.config(
+  // 1. Default ignores — anything we don't lint.
   {
     ignores: [
       '.next/**',
       'node_modules/**',
       'coverage/**',
-      'src/**',
-      'sentry.*.config.ts',
-      'instrumentation.ts',
-      'next.config.ts',
-      'postcss.config.mjs',
-      'tailwind.config.ts',
-      'vitest.config.ts',
       'next-env.d.ts',
+      'public/**',
     ],
   },
-];
+
+  // 2. JS recommended + TS recommended (flat config) on src/.
+  eslint.configs.recommended,
+  ...tseslint.configs.recommended,
+
+  // 3. Project-wide TS settings.
+  {
+    files: ['src/**/*.{ts,tsx}', '*.ts', '*.tsx'],
+    languageOptions: {
+      ecmaVersion: 2022,
+      sourceType: 'module',
+      globals: {
+        ...globals.browser,
+        ...globals.node,
+      },
+    },
+    plugins: {
+      '@next/next': nextPlugin,
+      react: reactPlugin,
+      'react-hooks': reactHooksPlugin,
+    },
+    settings: {
+      react: { version: 'detect' },
+    },
+    rules: {
+      // Next.js core-web-vitals + recommended (hand-picked subset since
+      // we skip eslint-config-next).
+      ...nextPlugin.configs.recommended.rules,
+      ...nextPlugin.configs['core-web-vitals'].rules,
+      ...reactPlugin.configs.recommended.rules,
+      // React 17+ JSX transform — no need for `import React` in scope.
+      'react/react-in-jsx-scope': 'off',
+      // App Router does not require prop-types — TS types are authoritative.
+      'react/prop-types': 'off',
+      // Single-user internal tool — unescaped quotes in JSX text are fine.
+      'react/no-unescaped-entities': 'off',
+      // The codebase intentionally renders a few fragments as a styling
+      // hook; warn (not error) is enough.
+      'react/jsx-no-useless-fragment': 'warn',
+      // react-hooks: pick the two bug-catching rules. Skip the v5
+      // recommendation rules (`set-state-in-effect`, `refs`, …) which are
+      // aspirational best-practices, not bug catchers — they'd add ~30
+      // false positives for state-hydration patterns this codebase uses.
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
+
+      // App Router uses <Link> for navigation; the no-html-link-for-pages
+      // rule was designed for the pages/ router and produces false positives.
+      '@next/next/no-html-link-for-pages': 'off',
+
+      // We use `any` deliberately in a few narrow shim spots (Inngest step
+      // type erasure). Downgrade from default error to warn so 13.3.1 lands
+      // green; a future phase can drive the count to zero.
+      '@typescript-eslint/no-explicit-any': 'warn',
+
+      // `_unused` prefix opts out of the unused-vars check (catches typos
+      // without forcing rename gymnastics on intentional placeholders).
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
+      // Default rule is fine but conflicts with the customized version above.
+      'no-unused-vars': 'off',
+
+      // Allow ts-expect-error / ts-ignore with description (we use it in
+      // shim casts where the type erasure is documented inline).
+      '@typescript-eslint/ban-ts-comment': [
+        'error',
+        {
+          'ts-expect-error': 'allow-with-description',
+          'ts-ignore': 'allow-with-description',
+          'ts-nocheck': true,
+          'ts-check': false,
+        },
+      ],
+    },
+  },
+
+  // 4. Test files: relax a couple of rules that over-fire in vitest.
+  {
+    files: ['**/__tests__/**/*.{ts,tsx}', '**/*.test.{ts,tsx}'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-unused-expressions': 'off',
+      // Tests call hooks via `runHook()` helpers; the linter's
+      // function-name heuristic flags these as "not a custom hook".
+      'react-hooks/rules-of-hooks': 'off',
+    },
+  },
+
+  // 5. Config files (root JS / mjs / cjs) — relax module-resolution rules.
+  {
+    files: ['*.{js,mjs,cjs}', 'eslint.config.js'],
+    languageOptions: {
+      globals: { ...globals.node },
+    },
+    rules: {
+      '@typescript-eslint/no-require-imports': 'off',
+    },
+  },
+);

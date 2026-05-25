@@ -27,9 +27,7 @@
 import { describe, expect, it } from 'vitest';
 import { generateAiReport } from '@/lib/aiReport';
 import type { DailyRow } from '@/lib/types';
-import type { ProductRow } from '@/lib/products';
 import type { CampaignRow } from '@/lib/campaigns';
-import type { OrderAttributionRow } from '@/lib/ordersAttribution';
 
 const STORE_ID = 'uzoshop';
 const STORE_NAME = 'uzoshop';

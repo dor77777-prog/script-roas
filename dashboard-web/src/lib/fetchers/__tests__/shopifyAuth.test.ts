@@ -10,7 +10,7 @@
  *   - Cache expiry: a stale entry triggers a re-exchange.
  *   - Non-2xx OAuth response throws with HTTP status + body excerpt.
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   getShopifyAccessToken,
   _resetShopifyAuthCacheForTesting,

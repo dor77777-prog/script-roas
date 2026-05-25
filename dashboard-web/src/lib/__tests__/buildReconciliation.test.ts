@@ -411,7 +411,7 @@ describe('buildReconciliation', () => {
       const googleValues = [40, 50, 35, 45, 38];
       const shopifyValues = [80, 90, 70, 85, 75];
 
-      const productsData = {
+      const _productsData = {
         rows: DATES.map((date, i) => makeProductRow({ date, netRevenue: shopifyValues[i] })),
         lastUpdated: new Date().toISOString(),
       };
@@ -481,7 +481,7 @@ describe('buildReconciliation', () => {
       const googleValues = [40, 50, 35, 45, 38];
       const shopifyValues = [80, 100, 70, 90, 76];   // strongly correlated with google
 
-      const productsData = {
+      const _productsData = {
         rows: DATES.map((date, i) => makeProductRow({ date, netRevenue: shopifyValues[i] })),
         lastUpdated: new Date().toISOString(),
       };
@@ -530,7 +530,7 @@ describe('buildReconciliation', () => {
       // by ensuring no Meta campaign rows exist. Pre-FIX-07 pearson()
       // returned 0 for zero-variance inputs ("no signal" misread as
       // "no correlation"). Post-FIX-07 it returns null.
-      const productsData = {
+      const _productsData = {
         rows: DATES.map(date => makeProductRow({ date, netRevenue: 100 })),
         lastUpdated: new Date().toISOString(),
       };
