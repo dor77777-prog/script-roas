@@ -60,6 +60,7 @@ export type DateRange = {
 };
 
 export type PresetKey =
+  | 'today'
   | 'yesterday'
   | 'this_month'
   | 'this_week'

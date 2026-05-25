@@ -25,7 +25,7 @@ export type TabKey = 'home' | 'pnl' | 'analysis' | 'campaigns' | 'products' | 'd
 
 const TAB_VALUES = new Set<TabKey>(['home', 'pnl', 'analysis', 'campaigns', 'products', 'detail']);
 const PRESET_VALUES = new Set<PresetKey>([
-  'yesterday', 'this_month', 'this_week',
+  'today', 'yesterday', 'this_month', 'this_week',
   'last_7_days', 'last_month', 'last_30_days', 'custom',
 ]);
 

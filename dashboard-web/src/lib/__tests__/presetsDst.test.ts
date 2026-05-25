@@ -68,6 +68,24 @@ describe('presets — DST-stable boundaries (d/HI-09)', () => {
     expect(r).toEqual({ from: '2026-05-17', to: '2026-05-20' });
   });
 
+  // Phase 13.7 — quick range `today` (single-day window).
+  it('today — winter morning returns the current IL calendar day', () => {
+    const r = _computePresetRangeForIlToday('today', { y: 2026, m: 1, d: 21 });
+    expect(r).toEqual({ from: '2026-01-21', to: '2026-01-21' });
+  });
+
+  it('today — summer evening returns the current IL calendar day (DST-immune)', () => {
+    const r = _computePresetRangeForIlToday('today', { y: 2026, m: 7, d: 15 });
+    expect(r).toEqual({ from: '2026-07-15', to: '2026-07-15' });
+  });
+
+  // Phase 13.7 — pin the "includes today" contract of last_7_days against
+  // the alternative "trailing 7" reading (which would return today-7 → today-1).
+  it('last_7_days — includes today AND 6 prior days (7-day window total)', () => {
+    const r = _computePresetRangeForIlToday('last_7_days', { y: 2026, m: 5, d: 20 });
+    expect(r).toEqual({ from: '2026-05-14', to: '2026-05-20' });
+  });
+
   it('deterministic — same input → same output independent of system zone', () => {
     // Regression guard: pure function. If anyone reintroduces a
     // `new Date()` call inside computePresetRange's hot path, this test

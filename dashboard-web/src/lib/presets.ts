@@ -43,6 +43,7 @@ function todayLocalFromParts(parts: { y: number; m: number; d: number }): Date {
 }
 
 export const PRESET_LABELS: Record<PresetKey, string> = {
+  today: 'היום',
   yesterday: 'אתמול',
   this_month: 'מתחילת החודש',
   this_week: 'השבוע',
@@ -52,11 +53,15 @@ export const PRESET_LABELS: Record<PresetKey, string> = {
   custom: 'מותאם אישית',
 };
 
-/** הצגה ראשונה ומודגשת: אתמול ומתחילת החודש (השאלות הכי נפוצות). */
-export const PRESET_FEATURED: PresetKey[] = ['yesterday', 'this_month'];
+/** הצגה ראשונה ומודגשת: 4 הטווחים השימושיים ביותר. */
+export const PRESET_FEATURED: PresetKey[] = [
+  'today',
+  'yesterday',
+  'last_7_days',
+  'this_month',
+];
 export const PRESET_SECONDARY: PresetKey[] = [
   'this_week',
-  'last_7_days',
   'last_month',
   'last_30_days',
   'custom',
@@ -82,6 +87,9 @@ export function _computePresetRangeForIlToday(
   const today = todayLocalFromParts(todayParts);
 
   switch (preset) {
+    case 'today': {
+      return { from: fmt(today), to: fmt(today) };
+    }
     case 'yesterday': {
       const y = addDays(today, -1);
       return { from: fmt(y), to: fmt(y) };
