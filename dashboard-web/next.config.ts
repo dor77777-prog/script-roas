@@ -17,6 +17,6 @@ export default withSentryConfig(nextConfig, {
   project: process.env.SENTRY_PROJECT,
   silent: !process.env.CI, // Show logs in CI; silent in localhost
   widenClientFileUpload: true,
-  hideSourceMaps: true,
+  sourcemaps: { deleteSourcemapsAfterUpload: true },
   disableLogger: true,
 });
