@@ -114,6 +114,13 @@ import { TIKTOK_ACTIVE_ENOUGH } from '@/lib/platformConfig';
 import { notifyTokenFailure } from '@/lib/notifications/tokenFailures';
 import { isAuthError } from '@/lib/notifications/detectAuthError';
 import { captureStepError, captureCronFetchError } from '@/lib/sentry/capture';
+// Phase 13.6 consolidation — single source of truth for backend store
+// constants. Aliases preserve the historical local names at the use sites
+// (minimizes diff churn).
+import {
+  STORE_ID_TO_NAME as STORE_NAMES,
+  STORES_WITH_TIKTOK_IDS as STORES_WITH_TIKTOK,
+} from '@/lib/platformsByStore';
 
 // =============================================================================
 // Constants
@@ -126,24 +133,14 @@ import { captureStepError, captureCronFetchError } from '@/lib/sentry/capture';
 const STORES = ['uzoshop', 'zolplus', 'usmile360'] as const;
 type StoreId = (typeof STORES)[number];
 
-/**
- * Canonical store-name map. Used by the Shopify-fetch .catch fallback so a
- * 401 / timeout never overwrites the row's store_name with the literal
- * 'unknown' string. Matches shopify.ts:STORE_NAMES verbatim.
- */
-const STORE_NAMES: Record<StoreId, string> = {
-  uzoshop: 'uzoshop',
-  zolplus: 'Zol Plus',
-  usmile360: '360usmile',
-};
-
-/**
- * Phase 05.7.7 — Per-store TikTok activation flag. Currently uzoshop only.
- * Used by cron-live to short-circuit TikTok fetches for stores that don't
- * have TikTok creds — avoids hitting the OAuth-token-helper error path
- * on every tick for the 2 stores that legitimately have no TikTok integration.
- */
-const STORES_WITH_TIKTOK: Set<StoreId> = new Set(['uzoshop']);
+// Canonical store-name map + per-store TikTok activation flag.
+// Phase 13.6: both live in `@/lib/platformsByStore` (single source of
+// truth) and are imported above under their historical aliases
+// (`STORE_NAMES`, `STORES_WITH_TIKTOK`). STORE_NAMES used by the
+// Shopify-fetch .catch fallback so a 401 / timeout never overwrites
+// the row's store_name with the literal 'unknown' string. TikTok flag
+// short-circuits TikTok fetches for stores without creds, avoiding the
+// OAuth-token-helper error path on every 15-min tick.
 
 /**
  * Project TZ. Matches `Config.gs:6` + `dashboard-web/src/lib/fetchers/shopify.ts:77`.

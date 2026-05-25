@@ -131,7 +131,18 @@ export function SyncIndicator() {
         )}
       >
         {icon}
-        <span className="hidden sm:inline">{label}</span>
+        {/* a11y: announce sync-state transitions (syncing → ok → error /
+            supabase-down) to screen readers. `polite` (not `assertive`)
+            because status changes are informational, not urgent enough to
+            interrupt other speech. `aria-atomic` ensures the full new label
+            is read rather than just the diff. */}
+        <span
+          aria-live="polite"
+          aria-atomic="true"
+          className="hidden sm:inline"
+        >
+          {label}
+        </span>
       </button>
       {expanded && status === 'error' && (
         <div

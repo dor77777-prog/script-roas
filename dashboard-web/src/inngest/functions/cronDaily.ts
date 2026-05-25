@@ -73,6 +73,10 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { notifyTokenFailure } from '@/lib/notifications/tokenFailures';
 import { isAuthError } from '@/lib/notifications/detectAuthError';
 import { captureCronFetchError, captureStepError } from '@/lib/sentry/capture';
+// Phase 13.6 consolidation — single source of truth for backend store
+// constants. Aliased to `STORES_WITH_TIKTOK` to preserve the historical
+// local name at the use sites (minimizes diff churn).
+import { STORES_WITH_TIKTOK_IDS as STORES_WITH_TIKTOK } from '@/lib/platformsByStore';
 
 // ---------------------------------------------------------------------------
 // STORES — single source of truth for the 3 stores. Aligns with:
@@ -85,13 +89,13 @@ import { captureCronFetchError, captureStepError } from '@/lib/sentry/capture';
 const STORES = ['uzoshop', 'zolplus', 'usmile360'] as const;
 export type StoreId = typeof STORES[number];
 
-/**
- * Phase 05.7.7 — Per-store TikTok activation flag. Currently uzoshop only.
- * Non-TikTok stores short-circuit to zero spend + empty insights without
- * hitting the TikTok API. Matches the same constant in cronLive.ts; if a
- * second store gains a TikTok account, update BOTH files.
- */
-const STORES_WITH_TIKTOK: Set<StoreId> = new Set(['uzoshop']);
+// Phase 05.7.7 — Per-store TikTok activation flag (currently uzoshop only).
+// Non-TikTok stores short-circuit to zero spend + empty insights without
+// hitting the TikTok API. The constant lives in
+// `@/lib/platformsByStore` (Phase 13.6 single-source-of-truth); imported
+// above as `STORES_WITH_TIKTOK` (aliased from STORES_WITH_TIKTOK_IDS).
+// If a second store gains a TikTok account, update platformsByStore.ts —
+// every consumer (cronDaily, cronLive, components) picks it up.
 
 const COGS_RATE_OF_REVENUE = 0.25;
 

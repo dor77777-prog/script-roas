@@ -61,6 +61,7 @@ import {
   type ShopifyOrderInput,
 } from '@/lib/shopifyRevenueRefunds';
 import { getShopifyAccessToken } from '@/lib/fetchers/shopifyAuth';
+import { STORE_ID_TO_NAME } from '@/lib/platformsByStore';
 import { fetchWithBackoff } from './withBackoff';
 
 // =============================================================================
@@ -104,19 +105,12 @@ const SHOPIFY_TZ = 'Asia/Jerusalem';
  */
 const PAGINATION_CAP = 50;
 
-/**
- * Hard-coded store-name map. Avoids a Supabase round-trip per fetch for a
- * near-immutable display string. Matches the Phase 05.5-01 stores seed.
- * If a store name ever changes, the operator console's stores-CRUD UI
- * (plan 13) is the right place to update it — out of scope for 05.6-03.
- *
- * Source: `Config.gs:STORES` (uzoshop / zolplus / usmile360).
- */
-const STORE_NAMES: Record<string, string> = {
-  uzoshop: 'uzoshop',
-  zolplus: 'Zol Plus',
-  usmile360: '360usmile',
-};
+// Hard-coded store-name map lives in `@/lib/platformsByStore` as
+// `STORE_ID_TO_NAME` (Phase 13.6 single source of truth — was duplicated
+// in cronLive.ts + shopify.ts). Avoids a Supabase round-trip per fetch
+// for a near-immutable display string. Source: `Config.gs:STORES`
+// (uzoshop / zolplus / usmile360). If a store name ever changes, update
+// platformsByStore.ts — every consumer picks it up.
 
 // =============================================================================
 // Types
@@ -607,7 +601,12 @@ export async function fetchShopifyDayRows(
     storeRefundDeductionCad,
   } = computeRevenueWithCrossDayRefunds(orders, dateStr, SHOPIFY_TZ);
 
-  const storeName = STORE_NAMES[storeId] ?? storeId;
+  // Cast through `keyof` because `storeId` is `string` at this call-site
+  // (the fetcher is intentionally type-loose so non-canonical IDs fall
+  // back to the literal id below). Same behavior as the previous
+  // `Record<string, string>` table.
+  const storeName =
+    (STORE_ID_TO_NAME as Record<string, string>)[storeId] ?? storeId;
 
   return {
     storeId,

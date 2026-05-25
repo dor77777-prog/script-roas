@@ -27,6 +27,7 @@ import { isHydrated } from '@/lib/cloudSync';
 import { FROZEN_USD_TO_CAD } from '@/lib/constants';
 import { useBillingRecurring } from '@/lib/hooks/useBillingRecurring';
 import { useBillingOneTime } from '@/lib/hooks/useBillingOneTime';
+import { useDrawerEsc } from '@/lib/drawerStack';
 import { BillingCsvImport } from './BillingCsvImport';
 
 type StoreMetaRow = {
@@ -92,6 +93,9 @@ export const SOURCE_COLOR: Record<CostSource, string> = {
 export function BillingSettings({ storeNames }: Props) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>('recurring');
+  // a11y: ESC-to-close via the shared drawer stack so this modal cooperates
+  // with any open drilldown drawers (only the topmost responds to Escape).
+  useDrawerEsc(open, () => setOpen(false));
   // Cloud-synced billing state lives in two custom hooks. Both subscribe to
   // the SAME `'roas-billing-changed'` event (cloudSync.ts:58-66 maps both
   // billing keys to one event). The hooks' returned setters write through
@@ -189,6 +193,9 @@ export function BillingSettings({ storeNames }: Props) {
         >
           <div
             dir="rtl"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="billing-settings-title"
             className="bg-surface w-full sm:max-w-3xl sm:mx-4 rounded-t-2xl sm:rounded-2xl shadow-elevated border border-borderSubtle max-h-[92vh] flex flex-col"
             onClick={e => e.stopPropagation()}
           >
@@ -199,7 +206,7 @@ export function BillingSettings({ storeNames }: Props) {
                   <Receipt size={16} />
                 </span>
                 <div className="min-w-0">
-                  <h2 className="text-sm sm:text-base font-semibold text-text-primary tracking-tight truncate">
+                  <h2 id="billing-settings-title" className="text-sm sm:text-base font-semibold text-text-primary tracking-tight truncate">
                     עלויות חודשיות
                   </h2>
                   <p className="text-[10px] sm:text-xs text-text-muted mt-0.5 truncate">

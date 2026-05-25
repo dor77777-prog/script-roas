@@ -112,13 +112,20 @@ type Props = {
 
 /**
  * FIX-26: how many days of inactivity (zero spend) before a row is
- * considered "currently off". 2 days is the safety buffer for Apps Script
- * collection latency — at 10:00 IL the data-daily row for "today−1" is
- * already populated, but "today" itself is in flight via the live probe
- * until 04:15 the next morning. A campaign that ran yesterday is almost
- * certainly still active; a campaign that hasn't run in 2+ days is the
- * earliest point we can call "paused" without false-positives on the
- * delivery cadence.
+ * considered "currently off". The 2-day buffer absorbs the in-flight
+ * window between cron-daily (00:05 IL, materialises "today−1") and
+ * cron-live (every 10 min IL, rolling 3-day refresh for "today").
+ * A campaign that ran yesterday is almost certainly still active; a
+ * campaign that hasn't run in 2+ days is the earliest point we can call
+ * "paused" without false-positives from a between-ticks live cadence
+ * gap or a delayed Meta/Google insights aggregation.
+ *
+ * Phase 11 (2026-05-25): comment originally referenced Apps Script
+ * collection latency. The buffer was preserved on conversion because
+ * the new Inngest pipeline has the same in-flight window shape (live
+ * probe lags real-time by up to one 10-min tick, plus upstream insights
+ * aggregate hourly). Revisit if cron-live proves reliable enough to
+ * tighten to 1 day.
  */
 export const OFF_RECENCY_DAYS = 2;
 

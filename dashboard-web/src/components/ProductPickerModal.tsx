@@ -262,10 +262,9 @@ export function ProductPickerModal({
           {!isLoading && !usingCatalog && (
             <div className="mb-2.5 rounded-md bg-amber-50 border border-amber-200 px-2.5 py-2 text-[11px] text-amber-900 leading-relaxed">
               <strong>הקטלוג עוד לא סונכרן.</strong> מוצגים רק מוצרים שכבר ביצעו
-              מכירה. כדי לראות את כל המוצרים בחנות (כולל חדשים בלי הזמנות):
-              ב-Apps Script הרץ פעם אחת את{' '}
-              <code className="font-mono bg-amber-100 px-1 rounded">refreshAllProductCatalogs</code>{' '}
-              (קובץ <code className="font-mono">SheetBuilder.gs</code>).
+              מכירה. כדי לראות את כל המוצרים בחנות (כולל חדשים בלי הזמנות),
+              לחץ על <code className="font-mono bg-amber-100 px-1 rounded">Sync now</code>{' '}
+              בקונסולת האופרטור — או המתן לריצת ה-cron היומית הבאה (00:05 שעון ישראל).
             </div>
           )}
           <p className="text-[11px] sm:text-xs text-text-secondary leading-relaxed mb-2.5">

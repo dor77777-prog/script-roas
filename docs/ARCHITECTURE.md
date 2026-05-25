@@ -141,6 +141,13 @@ Inngest מ-serialize את ה-return של כל `step.run` callback דרך JSON. *
 
 **תיקון 13.4.1:** ב-`cronDaily.ts:361` fallback של `fetch-meta` החזיר `{ campaigns: new Map(), adSets: new Map() }` בעת כשל Meta — TS cast הסתיר את ה-mismatch מול ה-type הראשי (`Record`). אחרי 13.4.1 ה-fallback מחזיר `{}` ו-`currency: 'ILS'` (matches `MetaBudgets`).
 
+### 4.8 Constants source of truth (Phase 13.6)
+`src/lib/platformsByStore.ts` הוא המקור היחיד לעובדות-חנות. מכיל את שני הווריאנטים שצרכנים שונים צריכים:
+- **StoreName form** (`'uzoshop' | 'Zol Plus' | '360usmile'`) — לקומפוננטות, ערכי `storeName` מ-`DailyRow`. ייצוא: `STORE_NAMES`, `STORES_WITH_TIKTOK`, `storeHasTikTok()`.
+- **StoreId form** (`'uzoshop' | 'zolplus' | 'usmile360'`) — ל-backend (Inngest crons, Shopify fetcher), ערכי `storeId` ב-Vercel envs. ייצוא: `type StoreId`, `STORE_ID_TO_NAME`, `STORES_WITH_TIKTOK_IDS`.
+
+**חוק:** הוספת חנות רביעית = עריכה במקום אחד (`platformsByStore.ts`). לפני 13.6 היה צריך 4 מקומות (cronDaily, cronLive, shopify, platformsByStore) ושינוי באחד מהם בלי השאר → באג.
+
 ---
 
 ## 5. Data Source APIs

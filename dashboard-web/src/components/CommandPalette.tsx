@@ -27,6 +27,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useDrawerEsc } from '@/lib/drawerStack';
 import type { DashboardData, Filters as F, PresetKey } from '@/lib/types';
 import { PRESET_LABELS, computePresetRange } from '@/lib/presets';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
@@ -108,6 +109,11 @@ export function CommandPalette({
   );
 
   // Open / close handlers
+  //
+  // ESC is delegated to the shared drawer stack (`useDrawerEsc` below) so the
+  // palette cooperates with any open drilldown drawer — only the topmost
+  // listener fires, preventing the whole stack from collapsing on one
+  // keystroke. This local handler keeps ONLY the global Cmd+K toggle.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -117,8 +123,6 @@ export function CommandPalette({
         // hitting Cmd+K while editing the campaign-mapping search box,
         // the AI-report textarea, or any /operator form would lose their
         // current text and have the palette modal flash over the page.
-        // Guard is Cmd+K-scoped (NOT Escape) so the palette's own search
-        // input can still receive Escape to close the modal.
         const t = e.target as HTMLElement | null;
         const isEditable =
           !!t && (
@@ -130,14 +134,15 @@ export function CommandPalette({
         e.preventDefault();
         setOpen(o => !o);
         setWarmCache(true);
-      } else if (e.key === 'Escape' && open) {
-        e.preventDefault();
-        setOpen(false);
       }
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open]);
+  }, []);
+
+  // a11y + drawer-stack coordination: route ESC through the shared stack so
+  // closing the palette never collapses an open drilldown below it.
+  useDrawerEsc(open, () => setOpen(false));
 
   useEffect(() => {
     if (open) {
@@ -466,6 +471,9 @@ export function CommandPalette({
         >
           <div
             dir="rtl"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Command Palette"
             className="w-full max-w-xl bg-surface rounded-2xl shadow-elevated border border-borderSubtle overflow-hidden animate-fade-in-up"
             onClick={e => e.stopPropagation()}
           >
