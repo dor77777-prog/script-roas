@@ -128,7 +128,13 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
     return storeId.toLowerCase();
   }, [campaignsData, storeId]);
 
-  const [showSolo, setShowSolo] = useState(false);
+  // Operator-reported 2026-05-26: default-hiding solo-mapped products meant
+  // a store with only solo mappings (e.g. Zol Plus had 7 solos, 0 multi)
+  // rendered an empty "אין מוצרים עם 2+ קמפיינים" message — looked like
+  // the panel was broken even when mappings were present. Default to
+  // showing everything; the checkbox now opts INTO the multi-only filter
+  // when the operator specifically wants the cohort lens.
+  const [showSolo, setShowSolo] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
 
   const allRows = useMemo(
@@ -222,7 +228,7 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
 
       {rows.length === 0 ? (
         <div className="text-sm text-text-muted text-center py-6">
-          אין מוצרים עם 2+ קמפיינים בטווח שנבחר. סמן את התיבה למעלה כדי לראות גם solo.
+          אין מוצרים עם 2+ קמפיינים בטווח שנבחר. בטל את הסימון של התיבה למעלה כדי לראות גם מוצרים עם קמפיין אחד.
         </div>
       ) : (
         <ul className="space-y-2">
