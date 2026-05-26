@@ -50,6 +50,75 @@ function fmtRoas(n: number): string {
   return n.toFixed(2);
 }
 
+// Pixel-vs-Shopify attribution delta — answers "does Meta/Google/TikTok see
+// reality the way Shopify does?". A big negative means the platform's pixel
+// missed sales that Shopify recorded (classic iOS14+ / Safari ITP attribution
+// loss). A big positive means the platform over-counts (view-through, dupe
+// pixel firing, or revenue attributed to a campaign that didn't really drive
+// it). Near zero is the healthy state.
+//
+// `platformValue` is `conversionValue` (what Meta/Google/TikTok claims).
+// `shopifyValue` is `allocatedRevenueEstimate` (Shopify ground-truth allocated
+// to this campaign by the cohort allocator). Both already in CAD via the
+// existing fetcher → upstream conversion path.
+function pixelShopifyDelta(
+  platformValue: number,
+  shopifyValue: number,
+): { text: string; tone: 'good' | 'warn' | 'bad' | 'neutral'; tooltip: string } {
+  const platformValid = Number.isFinite(platformValue) && platformValue > 0;
+  const shopifyValid = Number.isFinite(shopifyValue) && shopifyValue > 0;
+
+  if (!platformValid && !shopifyValid) {
+    return {
+      text: '—',
+      tone: 'neutral',
+      tooltip: 'אין נתונים — לא ב-pixel ולא ב-Shopify הזמנות מיוחסות לקמפיין הזה בטווח שנבחר.',
+    };
+  }
+  if (!platformValid && shopifyValid) {
+    // Pixel reported nothing while Shopify has real revenue. Classic iOS14+
+    // attribution loss — the most operationally important state to surface.
+    return {
+      text: 'pixel ריק',
+      tone: 'bad',
+      tooltip:
+        `ה-pixel דיווח על 0 הכנסות, אבל Shopify רשם CAD ${shopifyValue.toFixed(0)} שיוחס לקמפיין הזה ` +
+        'דרך ה-allocator. סימן קלאסי של iOS14+ / Safari ITP / ad-blocker. ' +
+        'אל תאמין למספרים ב-Ads Manager עבור הקמפיין הזה — סמוך על ROAS משוקלל בסיכום.',
+    };
+  }
+  if (platformValid && !shopifyValid) {
+    // Platform claims revenue but Shopify has none allocated. Could mean the
+    // product didn't actually sell (platform attributing the wrong product) or
+    // sales went to other products that aren't mapped to this campaign.
+    return {
+      text: 'Meta בלבד',
+      tone: 'warn',
+      tooltip:
+        `ה-pixel דיווח CAD ${platformValue.toFixed(0)} אבל Shopify לא הקצה הכנסה למוצר הזה דרך הקמפיין הזה. ` +
+        'או שהפלטפורמה משייכת לקמפיין מכירות של מוצרים אחרים, או שהמיפוי שלך לא תופס את המוצר האמיתי שנמכר.',
+    };
+  }
+
+  // Both sides have positive values — compute relative delta.
+  const delta = (platformValue - shopifyValue) / shopifyValue;
+  const absPct = Math.round(Math.abs(delta) * 100);
+  const sign = delta > 0 ? '+' : '−';
+  const text = `${sign}${absPct}%`;
+  const tooltip =
+    `ה-pixel מדווח CAD ${platformValue.toFixed(0)} · Shopify מקצה CAD ${shopifyValue.toFixed(0)} ` +
+    `(${sign}${absPct}%). ` +
+    (delta > 0
+      ? 'הפלטפורמה מדווחת יותר ממה שבאמת קרה — לרוב view-through או dedup לקוי.'
+      : 'הפלטפורמה מדווחת פחות ממה שבאמת קרה — attribution loss של pixel.');
+
+  let tone: 'good' | 'warn' | 'bad' = 'good';
+  if (absPct >= 30) tone = 'bad';
+  else if (absPct >= 10) tone = 'warn';
+
+  return { text, tone, tooltip };
+}
+
 export function ProductCentricView({ storeId, range, productMap: propMap }: Props) {
   const [productMap, setProductMap] = useState<ProductMap>(() => propMap ?? readProductMap());
 
@@ -314,6 +383,12 @@ function ProductRow({
                     <th className="px-2 py-1 text-end font-medium text-[10px]">חלק (כללי)</th>
                     <th className="px-2 py-1 text-end font-medium text-[10px]">הכנסה מוקצית</th>
                     <th className="px-2 py-1 text-end font-medium text-[10px]">ROAS פלטפ.</th>
+                    <th
+                      className="px-2 py-1 text-end font-medium text-[10px]"
+                      title="(pixel revenue − Shopify allocated) ÷ Shopify allocated. נמוך/אדום = ה-pixel פספס מכירות שקרו (iOS attribution loss). גבוה/אדום = הפלטפורמה מדווחת יותר ממה שבאמת קרה. ירוק = ה-pixel תואם ל-Shopify."
+                    >
+                      פער pixel↔Shopify
+                    </th>
                     <th className="px-2 py-1 text-end font-medium text-[10px]">סטטוס</th>
                   </tr>
                 </thead>
@@ -350,6 +425,32 @@ function ProductRow({
                         </td>
                         <td className="px-2 py-1.5 text-end tabular-nums font-semibold">
                           {fmtRoas(m.platformRoas)}
+                        </td>
+                        <td className="px-2 py-1.5 text-end">
+                          {(() => {
+                            const d = pixelShopifyDelta(
+                              m.conversionValue,
+                              m.allocatedRevenueEstimate,
+                            );
+                            return (
+                              <span
+                                title={d.tooltip}
+                                className={cn(
+                                  'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold tabular-nums border',
+                                  d.tone === 'good' &&
+                                    'bg-roas-greenBg/40 text-roas-green border-roas-green/30',
+                                  d.tone === 'warn' &&
+                                    'bg-roas-orangeBg/60 text-roas-orange border-roas-orange/30',
+                                  d.tone === 'bad' &&
+                                    'bg-roas-redBg/60 text-roas-red border-roas-red/30',
+                                  d.tone === 'neutral' &&
+                                    'bg-surfaceMuted text-text-muted border-borderSubtle',
+                                )}
+                              >
+                                {d.text}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="px-2 py-1.5 text-end">
                           <span
