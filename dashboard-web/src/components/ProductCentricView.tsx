@@ -16,7 +16,7 @@
  * no duplicate network cost.
  */
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
 import { ChevronDown, ChevronLeft, Info, Package, Trophy } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
@@ -61,10 +61,43 @@ function fmtRoas(n: number): string {
 // `shopifyValue` is `allocatedRevenueEstimate` (Shopify ground-truth allocated
 // to this campaign by the cohort allocator). Both already in CAD via the
 // existing fetcher → upstream conversion path.
+//
+// The tooltip body returns a structured ReactNode (not a string) because a
+// single-paragraph mix of Hebrew + LTR CAD numbers + percentages breaks the
+// browser's bidi algorithm visually (numbers can render in unexpected order
+// and the eye stumbles). The body is laid out as a small stat block + a
+// one-line conclusion so each side reads cleanly in its own direction.
+function fmtCad(n: number): string {
+  // Right-to-left thousand-separator formatting suitable for inline Hebrew —
+  // pair it with `<bdi dir="ltr">` at the render site so the bidi algorithm
+  // doesn't re-order it when neighboring Hebrew runs.
+  return `CAD ${Math.round(n).toLocaleString('en-CA')}`;
+}
+
+function statBlock(rows: Array<{ label: string; value: string; emphasis?: boolean }>): ReactNode {
+  return (
+    <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 my-2 text-[11px]">
+      {rows.map((r) => (
+        <Fragment key={r.label}>
+          <dt className="text-white/55">{r.label}</dt>
+          <dd
+            className={cn(
+              'text-end tabular-nums',
+              r.emphasis ? 'text-white font-semibold' : 'text-white/90',
+            )}
+          >
+            <bdi dir="ltr">{r.value}</bdi>
+          </dd>
+        </Fragment>
+      ))}
+    </dl>
+  );
+}
+
 function pixelShopifyDelta(
   platformValue: number,
   shopifyValue: number,
-): { text: string; tone: 'good' | 'warn' | 'bad' | 'neutral'; tooltip: string } {
+): { text: string; tone: 'good' | 'warn' | 'bad' | 'neutral'; tooltip: ReactNode } {
   const platformValid = Number.isFinite(platformValue) && platformValue > 0;
   const shopifyValid = Number.isFinite(shopifyValue) && shopifyValue > 0;
 
@@ -72,7 +105,9 @@ function pixelShopifyDelta(
     return {
       text: '—',
       tone: 'neutral',
-      tooltip: 'אין נתונים — לא ב-pixel ולא ב-Shopify הזמנות מיוחסות לקמפיין הזה בטווח שנבחר.',
+      tooltip: (
+        <div>אין נתונים: לא ה-pixel ולא Shopify מייחסים הזמנות לקמפיין הזה בטווח שנבחר.</div>
+      ),
     };
   }
   if (!platformValid && shopifyValid) {
@@ -81,10 +116,16 @@ function pixelShopifyDelta(
     return {
       text: 'pixel ריק',
       tone: 'bad',
-      tooltip:
-        `ה-pixel דיווח על 0 הכנסות, אבל Shopify רשם CAD ${shopifyValue.toFixed(0)} שיוחס לקמפיין הזה ` +
-        'דרך ה-allocator. סימן קלאסי של iOS14+ / Safari ITP / ad-blocker. ' +
-        'אל תאמין למספרים ב-Ads Manager עבור הקמפיין הזה — סמוך על ROAS משוקלל בסיכום.',
+      tooltip: (
+        <div>
+          <div>ה-pixel דיווח על 0 הכנסות, אבל ב-Shopify יש מכירות אמיתיות שהקמפיין הביא:</div>
+          {statBlock([
+            { label: 'pixel', value: fmtCad(0) },
+            { label: 'Shopify', value: fmtCad(shopifyValue), emphasis: true },
+          ])}
+          <div>סימן קלאסי של iOS14+ / Safari ITP / ad-blocker — אל תאמין למספרים ב-Ads Manager לקמפיין הזה.</div>
+        </div>
+      ),
     };
   }
   if (platformValid && !shopifyValid) {
@@ -94,9 +135,16 @@ function pixelShopifyDelta(
     return {
       text: 'Meta בלבד',
       tone: 'warn',
-      tooltip:
-        `ה-pixel דיווח CAD ${platformValue.toFixed(0)} אבל Shopify לא הקצה הכנסה למוצר הזה דרך הקמפיין הזה. ` +
-        'או שהפלטפורמה משייכת לקמפיין מכירות של מוצרים אחרים, או שהמיפוי שלך לא תופס את המוצר האמיתי שנמכר.',
+      tooltip: (
+        <div>
+          <div>הפלטפורמה דיווחה הכנסות, אבל Shopify לא הקצה למוצר הזה דרך הקמפיין:</div>
+          {statBlock([
+            { label: 'pixel', value: fmtCad(platformValue), emphasis: true },
+            { label: 'Shopify', value: fmtCad(0) },
+          ])}
+          <div>או שהפלטפורמה מייחסת לקמפיין מכירות של מוצרים אחרים, או שהמיפוי לא תופס את המוצר האמיתי שנמכר.</div>
+        </div>
+      ),
     };
   }
 
@@ -104,34 +152,46 @@ function pixelShopifyDelta(
   const delta = (platformValue - shopifyValue) / shopifyValue;
   const absPct = Math.round(Math.abs(delta) * 100);
   const sign = delta > 0 ? '+' : '−';
+  const pctStr = `${sign}${absPct}%`;
 
   // Thresholds calibrated to attribution noise:
-  // - |delta| < 10%: normal variance (iOS ITP, FX rounding, dedup window
-  //   drift). NOT actionable. Render as "תואם" — a quiet "this campaign's
-  //   pixel matches Shopify within healthy tolerance" signal instead of a
-  //   numeric chip that reads like an alarm.
-  // - 10% ≤ |delta| < 25%: mild drift — surface the number with amber so
-  //   the operator can decide if it's worth investigating.
-  // - |delta| ≥ 25%: meaningful attribution issue — red with the number.
+  // - |delta| < 10%: normal variance — render as "תואם", quiet OK signal.
+  // - 10% ≤ |delta| < 25%: mild drift, amber + number.
+  // - |delta| ≥ 25%: meaningful attribution issue, red + number.
   if (absPct < 10) {
     return {
       text: 'תואם',
       tone: 'good',
-      tooltip:
-        `ה-pixel מדווח CAD ${platformValue.toFixed(0)} · Shopify מקצה CAD ${shopifyValue.toFixed(0)} ` +
-        `(${sign}${absPct}% — בתוך טווח רעש סביר). ה-attribution של הקמפיין הזה תקינה.`,
+      tooltip: (
+        <div>
+          <div>ה-attribution של הקמפיין תקינה — הפער בתוך טווח רעש סביר:</div>
+          {statBlock([
+            { label: 'pixel', value: fmtCad(platformValue) },
+            { label: 'Shopify', value: fmtCad(shopifyValue) },
+            { label: 'פער', value: pctStr },
+          ])}
+        </div>
+      ),
     };
   }
-  const text = `${sign}${absPct}%`;
-  const tooltip =
-    `ה-pixel מדווח CAD ${platformValue.toFixed(0)} · Shopify מקצה CAD ${shopifyValue.toFixed(0)} ` +
-    `(${sign}${absPct}%). ` +
-    (delta > 0
-      ? 'הפלטפורמה מדווחת יותר ממה שבאמת קרה — לרוב view-through או dedup לקוי.'
-      : 'הפלטפורמה מדווחת פחות ממה שבאמת קרה — attribution loss של pixel.');
   const tone: 'warn' | 'bad' = absPct >= 25 ? 'bad' : 'warn';
-
-  return { text, tone, tooltip };
+  const conclusion = delta > 0
+    ? 'הפלטפורמה מדווחת יותר ממה שבאמת קרה — לרוב view-through או dedup לקוי.'
+    : 'הפלטפורמה מדווחת פחות ממה שבאמת קרה — attribution loss של ה-pixel.';
+  return {
+    text: pctStr,
+    tone,
+    tooltip: (
+      <div>
+        {statBlock([
+          { label: 'pixel', value: fmtCad(platformValue), emphasis: delta > 0 },
+          { label: 'Shopify', value: fmtCad(shopifyValue), emphasis: delta < 0 },
+          { label: 'פער', value: pctStr, emphasis: true },
+        ])}
+        <div>{conclusion}</div>
+      </div>
+    ),
+  };
 }
 
 export function ProductCentricView({ storeId, range, productMap: propMap }: Props) {
