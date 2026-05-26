@@ -43,6 +43,15 @@ const campaignsFetcher = async (url: string): Promise<CampaignsResponse> => {
   return r.json() as Promise<CampaignsResponse>;
 };
 
+const dashboardDataFetcher = async (url: string): Promise<DashboardData> => {
+  const r = await fetch(url);
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    throw new Error(body?.error || `HTTP ${r.status}`);
+  }
+  return r.json() as Promise<DashboardData>;
+};
+
 /**
  * Hero block for the Home tab. Inspired by Robinhood (chart-as-background),
  * Stripe ("editorial sentence" summary), and Apple Health (algorithm picks
@@ -96,6 +105,19 @@ export function HeroOverview({ data, filters }: Props) {
     { revalidateOnFocus: false },
   );
 
+  // The `data` prop only carries rows for the CURRENT range — /api/data
+  // server-side filters by `range`, so `data.rows` cannot answer "what
+  // happened in the previous period." Fetch the previous range separately
+  // (parallel to the campaigns-prev fetch above) so the revenue / spend /
+  // net / ROAS deltas have an actual baseline. Without this, every delta
+  // collapses to 0 and the hero sentence falls through to
+  // "הביצועים יציבים" regardless of true performance change.
+  const { data: dataPrev } = useSWR<DashboardData>(
+    buildDateRangeKey('/api/data', prevRange),
+    dashboardDataFetcher,
+    { revalidateOnFocus: false },
+  );
+
   function aggregateCpm_(
     rows: CampaignsResponse['rows'] | undefined,
     from: string,
@@ -136,7 +158,10 @@ export function HeroOverview({ data, filters }: Props) {
 
   const { story, kpis, chartData } = useMemo(() => {
     const cur = filterRows(data.rows, filters.range, filters.store);
-    const prev = filterRows(data.rows, previousRange(filters.range), filters.store);
+    // Pull prev from the dedicated prev-range fetch above — the `data` prop
+    // only contains current-range rows, so filterRows(data.rows, prevRange)
+    // would always return [] and silently null every delta.
+    const prev = filterRows(dataPrev?.rows ?? [], prevRange, filters.store);
     const curAgg = aggregate(cur);
     const prevAgg = aggregate(prev);
     const stores = filters.store === 'All' ? data.stores : [filters.store];
@@ -158,9 +183,18 @@ export function HeroOverview({ data, filters }: Props) {
     const dNet = prevAgg.netProfit !== 0
       ? (curAgg.netProfit - prevAgg.netProfit) / Math.abs(prevAgg.netProfit)
       : 0;
+    // "Baseline empty" guard: when the previous period has no spend AND no
+    // revenue, every delta above defaults to 0 — which would silently fall
+    // through to the "הביצועים יציבים" branch and mislabel a no-comparison
+    // case as stability. Detect it explicitly and surface the raw values
+    // without claiming stability.
+    const prevEmpty = prevAgg.spend === 0 && prevAgg.revenue === 0;
+    const netStr = `${curAgg.netProfit >= 0 ? '' : 'מינוס '}CAD ${Math.abs(Math.round(curAgg.netProfit)).toLocaleString('he-IL')}`;
     let story: string;
     if (curAgg.spend === 0 && curAgg.revenue === 0) {
       story = 'אין עדיין נתונים לטווח הזה.';
+    } else if (prevEmpty) {
+      story = `אין נתוני השוואה לתקופה הקודמת. ROAS ${curAgg.roas.toFixed(2)}, רווח נטו של ${netStr}.`;
     } else if (Math.abs(dRev) >= 0.05) {
       const verb = dRev > 0 ? 'עלו' : 'ירדו';
       // Phase 05.7.8 — pull the ROAS label from the canonical roasLabel()
@@ -176,7 +210,7 @@ export function HeroOverview({ data, filters }: Props) {
       const verb = dNet > 0 ? 'עלה' : 'ירד';
       story = `רווח נטו ${verb} ב-${Math.abs(dNet * 100).toFixed(0)}%, ROAS יציב על ${curAgg.roas.toFixed(2)}.`;
     } else {
-      story = `הביצועים יציבים. ROAS ${curAgg.roas.toFixed(2)}, רווח נטו של ${curAgg.netProfit >= 0 ? '' : 'מינוס '}CAD ${Math.abs(Math.round(curAgg.netProfit)).toLocaleString('he-IL')}.`;
+      story = `הביצועים יציבים. ROAS ${curAgg.roas.toFixed(2)}, רווח נטו של ${netStr}.`;
     }
 
     const kpis = {
@@ -186,10 +220,11 @@ export function HeroOverview({ data, filters }: Props) {
       dRoas,
       dSpend: prevAgg.spend > 0 ? (curAgg.spend - prevAgg.spend) / prevAgg.spend : 0,
       dNet,
+      prevEmpty,
     };
 
     return { story, kpis, chartData };
-  }, [data, filters]);
+  }, [data, dataPrev, prevRange, filters]);
 
   const daysInRange =
     Math.round(
@@ -259,7 +294,7 @@ export function HeroOverview({ data, filters }: Props) {
             label="הכנסות"
             value={fmtMoneyBare(kpis.curAgg.revenue)}
             valuePrefix="CAD"
-            delta={kpis.dRev}
+            delta={kpis.prevEmpty ? null : kpis.dRev}
           />
           <div className="lg:border-s lg:border-white/12 lg:ps-7">
             <FloatingKpi
@@ -267,7 +302,7 @@ export function HeroOverview({ data, filters }: Props) {
               value={fmtNum2(kpis.curAgg.roas)}
               chip={{ text: roasInfo.text, tone: roasInfo.tone }}
               delta={null}
-              rawDelta={kpis.dRoas}
+              rawDelta={kpis.prevEmpty ? undefined : kpis.dRoas}
             />
           </div>
           <div className="lg:border-s lg:border-white/12 lg:ps-7">
@@ -275,7 +310,7 @@ export function HeroOverview({ data, filters }: Props) {
               label="הוצאות פרסום"
               value={fmtMoneyBare(kpis.curAgg.spend)}
               valuePrefix="CAD"
-              delta={kpis.dSpend}
+              delta={kpis.prevEmpty ? null : kpis.dSpend}
               inverseDelta
             />
           </div>
@@ -284,7 +319,7 @@ export function HeroOverview({ data, filters }: Props) {
               label="רווח נטו"
               value={fmtMoneyBare(kpis.curAgg.netProfit)}
               valuePrefix="CAD"
-              delta={kpis.dNet}
+              delta={kpis.prevEmpty ? null : kpis.dNet}
               accent={kpis.curAgg.netProfit >= 0 ? 'positive' : 'negative'}
             />
           </div>

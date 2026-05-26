@@ -581,6 +581,9 @@ for (const table of tables) {
 - `isAllowedStateKey` נשאר ב-`sheets.ts` בשימוש כ-validator ב-`/api/dashboard-state`.
 - `featureFlags.ts` נשאר כ-safety net אבל לא בשימוש.
 
+### 13.4 Previous-period dual fetch (HeroOverview)
+`/api/data` is range-filtered server-side (`fetchDailyDataFromPostgres({ range })`) — `data.rows` only contains rows for the CURRENT range. To compute previous-period deltas the hero strip uses a **second SWR fetch** keyed on `previousRange(filters.range)` and aggregates that response separately. Same pattern as the existing dual `/api/campaigns` fetch that powers the CPM delta. Filtering current-range rows by previous-range dates always returns `[]` and silently zeros every delta — that bug was the source of the always-stable hero sentence before 2026-05-26.
+
 ---
 
 ## 14. Refund handling (Phase 05.2.3.0)
