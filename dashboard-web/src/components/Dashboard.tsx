@@ -20,6 +20,7 @@ import {
 import type { DashboardData, Filters as F } from '@/lib/types';
 import { computePresetRange, previousRange } from '@/lib/presets';
 import { aggregate, aggregateByStore, dailySeries, filterRows } from '@/lib/analytics';
+import { cn } from '@/lib/utils';
 import { Filters } from './Filters';
 import { KpiCards } from './KpiCards';
 import { PerStoreCards } from './PerStoreCards';
@@ -531,6 +532,21 @@ function CampaignsTab({
 // ============================================================================
 // Tab: PRODUCTS — products sold breakdown with its own scope.
 // ============================================================================
+type ProductsSubTab = 'table' | 'pivot';
+
+const PRODUCTS_SUBTABS: { key: ProductsSubTab; label: string; description: string }[] = [
+  {
+    key: 'table',
+    label: 'מוצרים שנמכרו',
+    description: 'כל פריט שנמכר בחנויות שלך — הזמנות, יחידות, ברוטו ונטו, מקובץ לפי תקופה.',
+  },
+  {
+    key: 'pivot',
+    label: 'מוצרים → קמפיינים',
+    description: 'פיבוט הפוך: לכל מוצר ממופה, אילו קמפיינים מקדמים אותו ומה ה-ROAS האמיתי שלהם.',
+  },
+];
+
 function ProductsTab({
   data,
   filters,
@@ -540,25 +556,65 @@ function ProductsTab({
   filters: F;
   setFilters: (next: F) => void;
 }) {
+  // Operator-reported 2026-05-26: scrolling past a 30-day ProductsTable to
+  // reach the bottom-of-page pivot was painful. Split the two views into
+  // sub-tabs — operator picks "טבלה" or "פיבוט" up front, each tab renders
+  // a single full-height view. Sub-tab state is local (not URL-persisted)
+  // because it's an in-page nav, not part of the shareable dashboard state.
+  const [subTab, setSubTab] = useState<ProductsSubTab>('table');
+  const active = PRODUCTS_SUBTABS.find((t) => t.key === subTab) ?? PRODUCTS_SUBTABS[0];
+
   return (
     <div className="space-y-4 sm:space-y-5">
       <SectionIntro
         icon={<Package size={20} />}
-        title="מוצרים שנמכרו"
-        description="כל פריט שנמכר בחנויות שלך, מקובץ לפי תקופה. אפשר לראות יום ספציפי, שבוע, חודש, חצי-שנה, או שנה. הסינון מימין משלים את הסינון הגלובלי — בחר חנות בודדת או יום בודד כדי להתמקד. מוצג לכל מוצר: הזמנות, יחידות, ברוטו ונטו."
-        formula="ברוטו = מחיר × כמות   •   נטו = ברוטו − הנחות − החזרים"
+        title={active.label}
+        description={active.description}
+        formula={subTab === 'table' ? 'ברוטו = מחיר × כמות   •   נטו = ברוטו − הנחות − החזרים' : undefined}
       />
 
       {/* Show global filter too so user knows what date range is active */}
       <Filters filters={filters} stores={data.stores} onChange={setFilters} />
 
-      <div className="rounded-xl bg-surface border border-border shadow-card overflow-hidden">
-        <ProductsTable
-          range={filters.range}
-          store={filters.store}
-          stores={data.stores}
-        />
+      {/* Sub-tab segmented control — same visual pattern as ProductsTable's
+          period switcher so it feels native to the tab. dir="ltr" on the
+          rail keeps the divide-x borders consistent under RTL. */}
+      <div className="flex justify-center">
+        <div
+          role="tablist"
+          aria-label="תצוגות בטאב מוצרים"
+          className="inline-flex rounded-lg border border-border bg-surface overflow-hidden divide-x divide-border"
+          dir="ltr"
+        >
+          {PRODUCTS_SUBTABS.map((t) => (
+            <button
+              key={t.key}
+              role="tab"
+              aria-selected={subTab === t.key}
+              onClick={() => setSubTab(t.key)}
+              className={cn(
+                'px-4 sm:px-5 py-2 text-xs sm:text-sm font-medium transition-colors min-w-[140px]',
+                subTab === t.key
+                  ? 'bg-primary text-white'
+                  : 'bg-surface text-text-secondary hover:bg-surfaceMuted',
+              )}
+              dir="rtl"
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {subTab === 'table' && (
+        <div className="rounded-xl bg-surface border border-border shadow-card overflow-hidden">
+          <ProductsTable
+            range={filters.range}
+            store={filters.store}
+            stores={data.stores}
+          />
+        </div>
+      )}
 
       {/* Phase 05.7.x (2026-05-23) — Product-centric pivot view. Shows
           each product expandable to all campaigns mapping it, grouped
@@ -566,7 +622,9 @@ function ProductsTab({
           revenue. Defaults to multi-mapped products only; operator
           can toggle to see solo too. Renders a "select a store" hint
           when filters.store === 'All' (mappings are per-store). */}
-      <ProductCentricView storeId={filters.store} range={filters.range} />
+      {subTab === 'pivot' && (
+        <ProductCentricView storeId={filters.store} range={filters.range} />
+      )}
     </div>
   );
 }
