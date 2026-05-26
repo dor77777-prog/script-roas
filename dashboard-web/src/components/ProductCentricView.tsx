@@ -519,14 +519,28 @@ function ProductRow({
                         label="הכנסה מוקצית"
                         body={
                           <>
-                            כמה הקמפיין הזה הביא בפועל מהמוצר לפי Shopify, אחרי שה-allocator
-                            מחלק את ההכנסות בין הקמפיינים בקוהורט. הסדר: קודם ההזמנות שיוחסו
-                            דטרמיניסטית (fbclid/gclid/ttclid), אז השאר מתחלק פרופורציונלית
-                            ל-spend. נוסחה מקורבת:{' '}
+                            כמה הקמפיין הזה הביא בפועל מהמוצר <strong>לפי Shopify</strong>, אחרי
+                            שה-allocator מחלק את ההכנסות בין הקמפיינים בקוהורט. הסדר: קודם
+                            ההזמנות שיוחסו דטרמיניסטית (fbclid/gclid/ttclid), אז השאר מתחלק
+                            פרופורציונלית ל-spend. נוסחה מקורבת:{' '}
                             <code dir="ltr" className="text-white/95">
                               Shopify net × intra-platform spend share
                             </code>
                             .
+                          </>
+                        }
+                      />
+                    </th>
+                    <th className="px-2 py-1 text-end font-medium text-[10px]">
+                      <ColHelp
+                        label="הכנסה פלטפ."
+                        body={
+                          <>
+                            ה-<strong>conversionValue</strong> ש-Meta/Google/TikTok דיווחו
+                            לקמפיין בפיקסל שלהם, ב-CAD. זה מה שתראה ב-Ads Manager של הפלטפורמה.
+                            לרוב <strong>שונה</strong> מ-"הכנסה מוקצית" כי ה-pixel מאבד הזמנות
+                            של גולשי iOS14+ / Safari ITP / ad-blockers. ההפרש המספרי בין השתי
+                            העמודות הזו מגיע בעמודת "פער pixel↔Shopify" משמאל.
                           </>
                         }
                       />
@@ -615,6 +629,9 @@ function ProductRow({
                         </td>
                         <td className="px-2 py-1.5 text-end tabular-nums">
                           CAD {formatCurrency(m.allocatedRevenueEstimate)}
+                        </td>
+                        <td className="px-2 py-1.5 text-end tabular-nums text-text-secondary">
+                          {m.conversionValue > 0 ? `CAD ${formatCurrency(m.conversionValue)}` : '—'}
                         </td>
                         <td className="px-2 py-1.5 text-end tabular-nums font-semibold">
                           {fmtRoas(m.platformRoas)}
