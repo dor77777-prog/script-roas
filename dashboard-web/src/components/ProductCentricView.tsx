@@ -339,12 +339,19 @@ function ProductRow({
   expanded: boolean;
   onToggle: () => void;
 }) {
+  // overflow:hidden removed (2026-05-26): it was clipping the column-help
+  // tooltips inside the expanded section. We compensate by adding matching
+  // rounded corners directly to the inner button + expanded panel so the
+  // hover bg / panel bg honors the rounded outer border.
   return (
-    <li className="rounded-lg border border-borderSubtle overflow-hidden">
+    <li className="rounded-lg border border-borderSubtle">
       <button
         type="button"
         onClick={onToggle}
-        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-surfaceMuted/40 transition-colors text-start"
+        className={cn(
+          'w-full flex items-center gap-3 px-3 py-2.5 hover:bg-surfaceMuted/40 transition-colors text-start',
+          expanded ? 'rounded-t-lg' : 'rounded-lg',
+        )}
       >
         <span className="shrink-0 text-text-muted">
           {expanded ? <ChevronDown size={14} /> : <ChevronLeft size={14} />}
@@ -376,7 +383,7 @@ function ProductRow({
       </button>
 
       {expanded && (
-        <div className="px-3 pb-3 pt-1 space-y-3 bg-surfaceMuted/20">
+        <div className="px-3 pb-3 pt-1 space-y-3 bg-surfaceMuted/20 rounded-b-lg">
           {row.byPlatform.map(platformGroup => (
             <div key={platformGroup.platform}>
               <div className="flex items-center justify-between gap-2 mb-1.5 text-[11px]">
