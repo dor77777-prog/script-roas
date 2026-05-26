@@ -16,9 +16,9 @@
  * no duplicate network cost.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
-import { ChevronDown, ChevronLeft, Package, Trophy } from 'lucide-react';
+import { ChevronDown, ChevronLeft, Info, Package, Trophy } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import { buildProductCentricView, type ProductCohortRow } from '@/lib/productCentricView';
 import { aggregate } from '@/lib/campaignsAggregator';
@@ -104,6 +104,24 @@ function pixelShopifyDelta(
   const delta = (platformValue - shopifyValue) / shopifyValue;
   const absPct = Math.round(Math.abs(delta) * 100);
   const sign = delta > 0 ? '+' : '−';
+
+  // Thresholds calibrated to attribution noise:
+  // - |delta| < 10%: normal variance (iOS ITP, FX rounding, dedup window
+  //   drift). NOT actionable. Render as "תואם" — a quiet "this campaign's
+  //   pixel matches Shopify within healthy tolerance" signal instead of a
+  //   numeric chip that reads like an alarm.
+  // - 10% ≤ |delta| < 25%: mild drift — surface the number with amber so
+  //   the operator can decide if it's worth investigating.
+  // - |delta| ≥ 25%: meaningful attribution issue — red with the number.
+  if (absPct < 10) {
+    return {
+      text: 'תואם',
+      tone: 'good',
+      tooltip:
+        `ה-pixel מדווח CAD ${platformValue.toFixed(0)} · Shopify מקצה CAD ${shopifyValue.toFixed(0)} ` +
+        `(${sign}${absPct}% — בתוך טווח רעש סביר). ה-attribution של הקמפיין הזה תקינה.`,
+    };
+  }
   const text = `${sign}${absPct}%`;
   const tooltip =
     `ה-pixel מדווח CAD ${platformValue.toFixed(0)} · Shopify מקצה CAD ${shopifyValue.toFixed(0)} ` +
@@ -111,10 +129,7 @@ function pixelShopifyDelta(
     (delta > 0
       ? 'הפלטפורמה מדווחת יותר ממה שבאמת קרה — לרוב view-through או dedup לקוי.'
       : 'הפלטפורמה מדווחת פחות ממה שבאמת קרה — attribution loss של pixel.');
-
-  let tone: 'good' | 'warn' | 'bad' = 'good';
-  if (absPct >= 30) tone = 'bad';
-  else if (absPct >= 10) tone = 'warn';
+  const tone: 'warn' | 'bad' = absPct >= 25 ? 'bad' : 'warn';
 
   return { text, tone, tooltip };
 }
@@ -377,19 +392,130 @@ function ProductRow({
               <table className="w-full text-xs">
                 <thead className="bg-surfaceMuted/60 text-text-muted">
                   <tr>
-                    <th className="px-2 py-1 text-start font-medium text-[10px]">קמפיין</th>
-                    <th className="px-2 py-1 text-end font-medium text-[10px]">הוצאה</th>
-                    <th className="px-2 py-1 text-end font-medium text-[10px]">חלק (פנים-פלטפ.)</th>
-                    <th className="px-2 py-1 text-end font-medium text-[10px]">חלק (כללי)</th>
-                    <th className="px-2 py-1 text-end font-medium text-[10px]">הכנסה מוקצית</th>
-                    <th className="px-2 py-1 text-end font-medium text-[10px]">ROAS פלטפ.</th>
-                    <th
-                      className="px-2 py-1 text-end font-medium text-[10px]"
-                      title="(pixel revenue − Shopify allocated) ÷ Shopify allocated. נמוך/אדום = ה-pixel פספס מכירות שקרו (iOS attribution loss). גבוה/אדום = הפלטפורמה מדווחת יותר ממה שבאמת קרה. ירוק = ה-pixel תואם ל-Shopify."
-                    >
-                      פער pixel↔Shopify
+                    <th className="px-2 py-1 text-start font-medium text-[10px]">
+                      <ColHelp
+                        label="קמפיין"
+                        align="start"
+                        body={
+                          <>
+                            שם הקמפיין שמקדם את המוצר הזה בפלטפורמה הזו. אייקון 🥇 = הקמפיין עם
+                            ההוצאה הגבוהה ביותר בתוך הקבוצה (cohort) של המוצר.
+                          </>
+                        }
+                      />
                     </th>
-                    <th className="px-2 py-1 text-end font-medium text-[10px]">סטטוס</th>
+                    <th className="px-2 py-1 text-end font-medium text-[10px]">
+                      <ColHelp
+                        label="הוצאה"
+                        body={
+                          <>
+                            סך מה שהוצאת על הקמפיין הזה בטווח שנבחר, ב-CAD לאחר המרה מהמטבע
+                            המקורי של הפלטפורמה. מקור: <code dir="ltr" className="text-white/95">data_daily</code>.
+                          </>
+                        }
+                      />
+                    </th>
+                    <th className="px-2 py-1 text-end font-medium text-[10px]">
+                      <ColHelp
+                        label="חלק (פנים-פלטפ.)"
+                        body={
+                          <>
+                            איזה אחוז מהוצאת המוצר <strong>באותה פלטפורמה</strong> שייך לקמפיין
+                            הזה. דוגמה: 60% ב-Meta אומר שהקמפיין הוא 60% מסך הוצאת Meta על המוצר.
+                            נוסחה:{' '}
+                            <code dir="ltr" className="text-white/95">
+                              spend / Σ spend (same platform, same product)
+                            </code>
+                            .
+                          </>
+                        }
+                      />
+                    </th>
+                    <th className="px-2 py-1 text-end font-medium text-[10px]">
+                      <ColHelp
+                        label="חלק (כללי)"
+                        body={
+                          <>
+                            איזה אחוז מסך ההוצאה <strong>של כל הקמפיינים</strong> על המוצר (כל
+                            הפלטפורמות יחד) שייך לקמפיין הזה. מאפשר השוואה cross-platform.
+                            נוסחה:{' '}
+                            <code dir="ltr" className="text-white/95">
+                              spend / cohort total spend
+                            </code>
+                            .
+                          </>
+                        }
+                      />
+                    </th>
+                    <th className="px-2 py-1 text-end font-medium text-[10px]">
+                      <ColHelp
+                        label="הכנסה מוקצית"
+                        body={
+                          <>
+                            כמה הקמפיין הזה הביא בפועל מהמוצר לפי Shopify, אחרי שה-allocator
+                            מחלק את ההכנסות בין הקמפיינים בקוהורט. הסדר: קודם ההזמנות שיוחסו
+                            דטרמיניסטית (fbclid/gclid/ttclid), אז השאר מתחלק פרופורציונלית
+                            ל-spend. נוסחה מקורבת:{' '}
+                            <code dir="ltr" className="text-white/95">
+                              Shopify net × intra-platform spend share
+                            </code>
+                            .
+                          </>
+                        }
+                      />
+                    </th>
+                    <th className="px-2 py-1 text-end font-medium text-[10px]">
+                      <ColHelp
+                        label="ROAS פלטפ."
+                        body={
+                          <>
+                            ה-ROAS לפי <strong>ה-pixel של הפלטפורמה</strong> (Meta/Google/TikTok)
+                            — לא לפי Shopify. נוסחה:{' '}
+                            <code dir="ltr" className="text-white/95">
+                              conversionValue / spend
+                            </code>
+                            . שונה מ-ROAS משוקלל בסיכום (שמבוסס Shopify אמיתי). פער גדול בין
+                            השניים = ה-pixel לא תופס את כל המכירות (iOS14+, ITP, ad-blocker).
+                          </>
+                        }
+                      />
+                    </th>
+                    <th className="px-2 py-1 text-end font-medium text-[10px]">
+                      <ColHelp
+                        label="פער pixel↔Shopify"
+                        body={
+                          <>
+                            ההפרש היחסי בין ההכנסה ש-pixel דיווח להכנסה המוקצית מ-Shopify.
+                            נוסחה:{' '}
+                            <code dir="ltr" className="text-white/95">
+                              (pixel − Shopify) / Shopify
+                            </code>
+                            .
+                            <span className="block mt-2">
+                              <span className="text-emerald-300">תואם</span> = פער &lt; 10%
+                              (תקין).{' '}
+                              <span className="text-orange-300">±10–25%</span> = סטייה
+                              בינונית.{' '}
+                              <span className="text-red-300">±25%+</span> /{' '}
+                              <span className="text-red-300">pixel ריק</span> = הקמפיין הזה
+                              לא משקף נכון את המכירות, סמוך על ROAS משוקלל.
+                            </span>
+                          </>
+                        }
+                      />
+                    </th>
+                    <th className="px-2 py-1 text-end font-medium text-[10px]">
+                      <ColHelp
+                        label="סטטוס"
+                        body={
+                          <>
+                            המצב הנוכחי של הקמפיין ב-Ads Manager של הפלטפורמה. ✓ פעיל =
+                            מתפרסם כעת. ✗ כבוי = השהית/הוסר. הסטטוס מתעדכן ב-cron-live כל
+                            ~10 דקות, גם על שורות היסטוריות.
+                          </>
+                        }
+                      />
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -432,11 +558,10 @@ function ProductRow({
                               m.conversionValue,
                               m.allocatedRevenueEstimate,
                             );
-                            return (
+                            const chip = (
                               <span
-                                title={d.tooltip}
                                 className={cn(
-                                  'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold tabular-nums border',
+                                  'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold tabular-nums border cursor-help',
                                   d.tone === 'good' &&
                                     'bg-roas-greenBg/40 text-roas-green border-roas-green/30',
                                   d.tone === 'warn' &&
@@ -449,6 +574,13 @@ function ProductRow({
                               >
                                 {d.text}
                               </span>
+                            );
+                            return (
+                              <HoverTooltip
+                                trigger={chip}
+                                title="פער pixel↔Shopify"
+                                body={d.tooltip}
+                              />
                             );
                           })()}
                         </td>
@@ -474,5 +606,167 @@ function ProductRow({
         </div>
       )}
     </li>
+  );
+}
+
+// =============================================================================
+// Tooltip primitives — replace native `title` attribute with a styled popover.
+// Pattern mirrors MetricHelp.tsx (HIGH-5 grace timer included so the cursor
+// can travel from trigger to popover without flicker).
+// =============================================================================
+
+const HIDE_GRACE_MS = 200;
+
+function useHoverTimer() {
+  const [open, setOpen] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function cancelHide() {
+    if (timerRef.current !== null) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+  }
+  function scheduleHide() {
+    cancelHide();
+    timerRef.current = setTimeout(() => {
+      setOpen(false);
+      timerRef.current = null;
+    }, HIDE_GRACE_MS);
+  }
+  useEffect(() => () => cancelHide(), []);
+  return { open, setOpen, cancelHide, scheduleHide };
+}
+
+/**
+ * Generic hover popover used for the pixel↔Shopify chip. The trigger is
+ * rendered inline; on hover/focus we open a styled tooltip beside it. Same
+ * grace-timer mechanics as MetricHelp so the cursor can travel from trigger
+ * to popover without dismissing.
+ */
+function HoverTooltip({
+  trigger,
+  title,
+  body,
+}: {
+  trigger: ReactNode;
+  title?: string;
+  body: ReactNode;
+}) {
+  const { open, setOpen, cancelHide, scheduleHide } = useHoverTimer();
+  return (
+    <span className="relative inline-flex">
+      <span
+        tabIndex={0}
+        onMouseEnter={() => {
+          cancelHide();
+          setOpen(true);
+        }}
+        onMouseLeave={scheduleHide}
+        onFocus={() => {
+          cancelHide();
+          setOpen(true);
+        }}
+        onBlur={scheduleHide}
+        className="inline-flex"
+      >
+        {trigger}
+      </span>
+      {open && (
+        <div
+          role="tooltip"
+          dir="rtl"
+          onMouseEnter={cancelHide}
+          onMouseLeave={scheduleHide}
+          className={cn(
+            'absolute z-50 top-full mt-2 end-0',
+            'w-[260px] sm:w-[300px] max-w-[min(90vw,320px)]',
+            'rounded-xl bg-text-primary text-white p-3 shadow-elevated',
+            'text-xs leading-relaxed pointer-events-auto',
+          )}
+        >
+          {title && <div className="font-semibold text-white mb-1.5">{title}</div>}
+          <div className="text-white/85">{body}</div>
+          <div
+            aria-hidden
+            className="absolute -top-1.5 end-3 w-2.5 h-2.5 bg-text-primary rotate-45"
+          />
+        </div>
+      )}
+    </span>
+  );
+}
+
+/**
+ * Column-header help. Renders the label inline with a small "?" affordance
+ * that opens a styled popover explaining what the column shows and how it's
+ * calculated. Sits inside a `<th>`.
+ */
+function ColHelp({
+  label,
+  body,
+  align = 'end',
+}: {
+  label: string;
+  body: ReactNode;
+  align?: 'start' | 'end';
+}) {
+  const { open, setOpen, cancelHide, scheduleHide } = useHoverTimer();
+  return (
+    <span
+      className={cn(
+        'group relative inline-flex items-center gap-1',
+        align === 'start' ? 'justify-start' : 'justify-end',
+      )}
+    >
+      <span>{label}</span>
+      <button
+        type="button"
+        onMouseEnter={() => {
+          cancelHide();
+          setOpen(true);
+        }}
+        onMouseLeave={scheduleHide}
+        onFocus={() => {
+          cancelHide();
+          setOpen(true);
+        }}
+        onBlur={scheduleHide}
+        onClick={(e) => {
+          e.stopPropagation();
+          cancelHide();
+          setOpen((o) => !o);
+        }}
+        aria-label={`הסבר על ${label}`}
+        className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-text-subtle hover:text-text-secondary opacity-60 hover:opacity-100 transition-colors"
+      >
+        <Info size={10} />
+      </button>
+      {open && (
+        <div
+          role="tooltip"
+          dir="rtl"
+          onMouseEnter={cancelHide}
+          onMouseLeave={scheduleHide}
+          className={cn(
+            'absolute z-50 top-full mt-2',
+            align === 'start' ? 'start-0' : 'end-0',
+            'w-[260px] sm:w-[300px] max-w-[min(90vw,320px)]',
+            'rounded-xl bg-text-primary text-white p-3 shadow-elevated',
+            'text-xs leading-relaxed pointer-events-auto',
+            'font-normal text-start',
+          )}
+        >
+          <div className="font-semibold text-white mb-1.5">{label}</div>
+          <div className="text-white/85">{body}</div>
+          <div
+            aria-hidden
+            className={cn(
+              'absolute -top-1.5 w-2.5 h-2.5 bg-text-primary rotate-45',
+              align === 'start' ? 'start-3' : 'end-3',
+            )}
+          />
+        </div>
+      )}
+    </span>
   );
 }
