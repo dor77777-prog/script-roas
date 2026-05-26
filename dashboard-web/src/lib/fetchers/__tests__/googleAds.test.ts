@@ -142,6 +142,7 @@ describe('googleAds fetcher — short-circuit for non-Google-Ads stores', () => 
       date: '2026-05-19',
       spend: 0,
       currency: 'CAD',
+      impressions: 0,
     });
     expect(fetchSpy).not.toHaveBeenCalled();
   });
@@ -158,6 +159,7 @@ describe('googleAds fetcher — short-circuit for non-Google-Ads stores', () => 
       date: '2026-05-19',
       spend: 0,
       currency: 'CAD',
+      impressions: 0,
     });
 
     // Ad-group fetcher also short-circuits to an empty array (no API call).

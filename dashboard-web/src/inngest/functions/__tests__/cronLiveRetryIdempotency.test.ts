@@ -215,12 +215,14 @@ describe('cronLive persist-rolling-3day retry idempotency (INN-10)', () => {
       date: '2026-05-22',
       spend: 300,
       currency: 'CAD',
+    impressions: 0,
     });
     vi.spyOn(tiktokFetcher, 'fetchTikTokSpendForDay').mockResolvedValue({
       storeId: 'uzoshop',
       date: '2026-05-22',
       spend: 60,
       currency: 'CAD',
+    impressions: 0,
     });
     // Status fetchers (for refresh-effective-status step) — empty results
     // so the loop short-circuits without touching campaigns_daily.
@@ -326,18 +328,21 @@ describe('cronLive persist-rolling-3day retry idempotency (INN-10)', () => {
       date: '2026-05-22',
       spend: 0,
       currency: 'CAD',
+    impressions: 0,
     });
     vi.spyOn(googleAdsFetcher, 'fetchGoogleAdsSpendForDay').mockResolvedValue({
       storeId: 'uzoshop',
       date: '2026-05-22',
       spend: 0,
       currency: 'CAD',
+    impressions: 0,
     });
     vi.spyOn(tiktokFetcher, 'fetchTikTokSpendForDay').mockResolvedValue({
       storeId: 'uzoshop',
       date: '2026-05-22',
       spend: 0,
       currency: 'CAD',
+    impressions: 0,
     });
     vi.spyOn(metaFetcher, 'fetchMetaBudgets').mockResolvedValue({
       currency: 'ILS',
@@ -397,18 +402,21 @@ describe('cronLive persist-rolling-3day retry idempotency (INN-10)', () => {
       date: '2026-05-22',
       spend: 0,
       currency: 'CAD',
+    impressions: 0,
     });
     vi.spyOn(googleAdsFetcher, 'fetchGoogleAdsSpendForDay').mockResolvedValue({
       storeId: 'uzoshop',
       date: '2026-05-22',
       spend: 0,
       currency: 'CAD',
+    impressions: 0,
     });
     vi.spyOn(tiktokFetcher, 'fetchTikTokSpendForDay').mockResolvedValue({
       storeId: 'uzoshop',
       date: '2026-05-22',
       spend: 0,
       currency: 'CAD',
+    impressions: 0,
     });
     vi.spyOn(metaFetcher, 'fetchMetaBudgets').mockResolvedValue({
       currency: 'ILS',

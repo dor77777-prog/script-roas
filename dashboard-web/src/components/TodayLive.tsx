@@ -7,17 +7,7 @@ import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { aggregate, aggregateByStore, roasLabel } from '@/lib/analytics';
 import { storeHasTikTok } from '@/lib/platformsByStore';
 import type { DailyRow, DashboardData } from '@/lib/types';
-import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
-
-const campaignsFetcher = async (url: string): Promise<CampaignsResponse> => {
-  const r = await fetch(url);
-  if (!r.ok) {
-    const body = await r.json().catch(() => ({}));
-    throw new Error(body?.error || `HTTP ${r.status}`);
-  }
-  return r.json() as Promise<CampaignsResponse>;
-};
 
 const ordersFetcher = async (url: string): Promise<OrdersAttributionResponse> => {
   const r = await fetch(url);
@@ -207,15 +197,15 @@ export function TodayLive({
   const roas = roasLabel(agg.roas);
   const hasAnyData = agg.revenue > 0 || agg.spend > 0;
 
-  // Fetch today's campaign rows to compute CPM (data-daily doesn't carry
-  // impressions). Range key is today-to-today so SWR caches a single
-  // narrow response; navigating to the Campaigns tab triggers a separate
-  // wider-range fetch — both coexist.
-  const { data: campaignsToday } = useSWR<CampaignsResponse>(
-    `/api/campaigns?from=${today}&to=${today}`,
-    campaignsFetcher,
-    { refreshInterval: 60_000, revalidateOnFocus: false },
-  );
+  // Phase 13.8 (2026-05-26) — CPM now sources impressions directly from
+  // data_daily (via the liveDataResp fetch above) instead of campaigns_daily.
+  // cron-live writes per-platform impressions to data_daily.fb/ga/tt_impressions
+  // on every ~10-min tick using the same light fetcher that already supplied
+  // spend — so today's CPM updates in real time. The campaigns_daily-backed
+  // computation that lived here previously could only ever show 0 because
+  // cron-live writes enrollment placeholder rows to campaigns_daily without
+  // metric data; impressions only landed in campaigns_daily after the
+  // overnight cron-daily run.
 
   // Phase 05.7.8 — fetch today's orders so each live store card can show
   // "X הזמנות עד עכשיו". cron-live now refreshes orders_attribution for
@@ -242,52 +232,50 @@ export function TodayLive({
     return Object.values(ordersByStoreToday).reduce((a, b) => a + b, 0);
   }, [ordersByStoreToday]);
 
-  // Aggregate impressions + spend overall, per store, AND per
-  // (store, platform) from today's campaign rows. Per-store is keyed by
-  // storeName so it joins cleanly with the existing storeAggs from
-  // analytics. Per-(store, platform) lets each live card show CPM
-  // broken down by Meta / Google / TikTok separately — operator request
-  // 2026-05-23, "ה-CPM ייהיה מחולק לכל פלטפורמה בכל חנות".
+  // Aggregate impressions + spend overall, per store, AND per (store, platform)
+  // from today's data_daily rows. Per-store is keyed by storeName so it joins
+  // cleanly with the existing storeAggs from analytics. Per-(store, platform)
+  // lets each live card show CPM broken down by Meta / Google / TikTok
+  // separately — operator request 2026-05-23, "ה-CPM ייהיה מחולק לכל
+  // פלטפורמה בכל חנות".
+  //
+  // Phase 13.8 (2026-05-26): data_daily rows now carry fb/ga/tt_impressions
+  // alongside fb/ga/tt_spend, so the per-platform CPM has a real basis
+  // every ~10 min. Historical rows that pre-date the migration have null
+  // impressions — coerced to 0 here; the renderer treats 0 as "no data yet"
+  // and shows "—".
   type PlatformBucket = { meta: number; google: number; tiktok: number };
   const cpmData = useMemo(() => {
-    const rows = campaignsToday?.rows ?? [];
     let totalSpend = 0;
     let totalImpressions = 0;
     const byStore = new Map<string, { spend: number; impressions: number }>();
-    // (storeName) → per-platform spend/impressions buckets. Platforms not
-    // present for a store keep zero, which the renderer surfaces as "—".
     const spendByStoreByPlatform = new Map<string, PlatformBucket>();
     const impressionsByStoreByPlatform = new Map<string, PlatformBucket>();
-    function platformKey(p: string): keyof PlatformBucket | null {
-      // CampaignRow.platform comes from postgresReaders.titleCasePlatform —
-      // always 'Meta' | 'Google' | 'TikTok' for our three platforms.
-      // Anything else (legacy, future) is silently dropped from the
-      // per-platform CPM breakdown but still counts toward the per-store
-      // average above. We don't want unknown platforms to crash or hide
-      // numbers that the average already includes.
-      if (p === 'Meta') return 'meta';
-      if (p === 'Google') return 'google';
-      if (p === 'TikTok') return 'tiktok';
-      return null;
-    }
-    for (const r of rows) {
-      if (r.date !== today) continue;
-      totalSpend += r.spend;
-      totalImpressions += r.impressions;
+    for (const r of todayRows) {
       const sn = r.storeName;
+      const fbImp = r.fbImpressions ?? 0;
+      const gaImp = r.gaImpressions ?? 0;
+      const ttImp = r.ttImpressions ?? 0;
+      const storeImp = fbImp + gaImp + ttImp;
+      const storeSpend = r.fbSpend + r.gaSpend + r.ttSpend;
+      totalSpend += storeSpend;
+      totalImpressions += storeImp;
       if (!byStore.has(sn)) byStore.set(sn, { spend: 0, impressions: 0 });
       const s = byStore.get(sn)!;
-      s.spend += r.spend;
-      s.impressions += r.impressions;
-      const pk = platformKey(r.platform);
-      if (pk) {
-        if (!spendByStoreByPlatform.has(sn)) {
-          spendByStoreByPlatform.set(sn, { meta: 0, google: 0, tiktok: 0 });
-          impressionsByStoreByPlatform.set(sn, { meta: 0, google: 0, tiktok: 0 });
-        }
-        spendByStoreByPlatform.get(sn)![pk] += r.spend;
-        impressionsByStoreByPlatform.get(sn)![pk] += r.impressions;
+      s.spend += storeSpend;
+      s.impressions += storeImp;
+      if (!spendByStoreByPlatform.has(sn)) {
+        spendByStoreByPlatform.set(sn, { meta: 0, google: 0, tiktok: 0 });
+        impressionsByStoreByPlatform.set(sn, { meta: 0, google: 0, tiktok: 0 });
       }
+      const ps = spendByStoreByPlatform.get(sn)!;
+      const pi = impressionsByStoreByPlatform.get(sn)!;
+      ps.meta += r.fbSpend;
+      ps.google += r.gaSpend;
+      ps.tiktok += r.ttSpend;
+      pi.meta += fbImp;
+      pi.google += gaImp;
+      pi.tiktok += ttImp;
     }
     const cpmByStore = new Map<string, number>();
     for (const [store, v] of byStore) {
@@ -310,7 +298,7 @@ export function TodayLive({
       cpmByStore,
       cpmByStoreByPlatform,
     };
-  }, [campaignsToday, today]);
+  }, [todayRows]);
 
   // Phase 05.7.x — live ROAS-driven hero tint. Replaces the fixed green
   // gradient that used to wear the same colour regardless of whether the

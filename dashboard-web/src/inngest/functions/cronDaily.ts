@@ -365,7 +365,7 @@ async function runDailyForStoreInner(
       // empty regardless. Now an honest `{}` + currency the cadFor path
       // can safely consume (no-op since campaigns/adSets are empty).
       return {
-        spend: { storeId, date: dateStr, spend: 0, currency: 'ILS' },
+        spend: { storeId, date: dateStr, spend: 0, currency: 'ILS', impressions: 0 },
         adsetRows: [],
         adRows: [],
         budgets: { currency: 'ILS', campaigns: {}, adSets: {} },
@@ -406,7 +406,7 @@ async function runDailyForStoreInner(
           'Update Vercel env vars + redeploy. See docs/PROPS-MAP.md rows 28-32.',
       );
       return {
-        spend: { storeId, date: dateStr, spend: 0, currency: 'CAD' },
+        spend: { storeId, date: dateStr, spend: 0, currency: 'CAD', impressions: 0 },
         adGroupRows: [],
         adRows: [],
       };
@@ -433,6 +433,7 @@ async function runDailyForStoreInner(
           date: dateStr,
           spend: 0,
           currency: 'USD',
+          impressions: 0,
         } as TikTokDaySpend,
         adRows: [] as TikTokAdRow[],
       };
@@ -456,7 +457,7 @@ async function runDailyForStoreInner(
           `${storeId.toUpperCase()}_TIKTOK_ACCESS_TOKEN. Update Vercel env + redeploy.`,
       );
       return {
-        spend: { storeId, date: dateStr, spend: 0, currency: 'USD' } as TikTokDaySpend,
+        spend: { storeId, date: dateStr, spend: 0, currency: 'USD', impressions: 0 } as TikTokDaySpend,
         adRows: [] as TikTokAdRow[],
       };
     }
@@ -656,6 +657,12 @@ async function runDailyForStoreInner(
         roas?: number;
         gross_profit_cad?: number;
         net_profit_cad?: number;
+        // Phase 13.8 (2026-05-26) — per-platform impressions, written here
+        // by the nightly run so historical days carry the full per-platform
+        // (spend, impressions) pair. cron-live tops this off live.
+        fb_impressions?: number;
+        ga_impressions?: number;
+        tt_impressions?: number;
       };
       const dataDailyRow: DataDailyRow = {
         date: dateStr,
@@ -667,6 +674,13 @@ async function runDailyForStoreInner(
         gross_revenue_cad: shopify.grossRevenueCad,
         refund_deduction_cad: shopify.refundDeductionCad,
         cogs_cad: cogsCad,
+        // Phase 13.8 — impressions come directly from the platform fetcher
+        // (manual overrides only affect spend, not reach). Always written
+        // — even on the Meta/Google/TikTok soft-fail path the fallback
+        // shape carries `impressions: 0` so the column resets rather than
+        // hanging onto a stale prior value.
+        fb_impressions: meta.spend.impressions,
+        ga_impressions: google.spend.impressions,
       };
       if (ttSpendCad !== null && totalSpendCadAll !== null) {
         dataDailyRow.tt_spend_cad = ttSpendCad;
@@ -674,6 +688,11 @@ async function runDailyForStoreInner(
         dataDailyRow.roas = roas;
         dataDailyRow.gross_profit_cad = grossProfitCad;
         dataDailyRow.net_profit_cad = netProfitCad;
+        // Mirror the tt_spend_cad gating: when TikTok FX failed (above) we
+        // can't write a tt_impressions count either, so we leave it absent
+        // and ON CONFLICT preserves whatever cron-live or the prior nightly
+        // run already had.
+        dataDailyRow.tt_impressions = tiktok.spend.impressions;
       }
       const { error } = await admin.from('data_daily').upsert(dataDailyRow, {
         onConflict: 'date,store_id',

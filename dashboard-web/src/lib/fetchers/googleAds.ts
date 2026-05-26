@@ -97,6 +97,12 @@ export type GoogleAdsSpend = {
   date: string;
   spend: number;
   currency: string;
+  /**
+   * Phase 13.8 (2026-05-26) — customer-level impressions for the day, so
+   * cron-live can write a live per-store CPM to data_daily without paying
+   * for the per-ad-group fetch. Same row that already carries spend.
+   */
+  impressions: number;
 };
 
 export type GoogleAdsAdGroupRow = {
@@ -366,23 +372,27 @@ export async function fetchGoogleAdsSpendForDay(
 ): Promise<GoogleAdsSpend> {
   // ---- Short-circuit FIRST: 2 of 3 stores skip the API entirely.
   if (!STORES_WITH_GOOGLE_ADS.has(storeId)) {
-    return { storeId, date: dateStr, spend: 0, currency: 'CAD' };
+    return { storeId, date: dateStr, spend: 0, currency: 'CAD', impressions: 0 };
   }
 
   const customerId = getCustomerIdOrThrow(storeId);
   const accessToken = await getAccessToken(storeId);
+  // Phase 13.8 (2026-05-26) — added `metrics.impressions` to the GAQL so
+  // cron-live can populate data_daily.ga_impressions in the same call.
   const query =
-    "SELECT metrics.cost_micros, customer.currency_code " +
+    "SELECT metrics.cost_micros, metrics.impressions, customer.currency_code " +
     "FROM customer " +
     `WHERE segments.date = '${dateStr}'`;
   const results = await runGaqlQuery(storeId, customerId, accessToken, query, dateStr);
 
   let micros = 0;
+  let impressions = 0;
   let currency = 'CAD';
   for (const r of results) {
-    const metrics = (r.metrics ?? {}) as { costMicros?: string };
+    const metrics = (r.metrics ?? {}) as { costMicros?: string; impressions?: string };
     const customer = (r.customer ?? {}) as { currencyCode?: string };
     micros += parseFloat(metrics.costMicros ?? '0') || 0;
+    impressions += parseInt(metrics.impressions ?? '0', 10) || 0;
     if (customer.currencyCode) currency = customer.currencyCode;
   }
   // No negative-spend clamping anywhere — policy is "report what the API says"
@@ -390,7 +400,7 @@ export async function fetchGoogleAdsSpendForDay(
   // Do not reintroduce a max-zero idiom for "safety" in a refactor; the
   // plan's grep gate (see SUMMARY) enforces zero clamping in the file.
   const spend = micros / 1_000_000;
-  return { storeId, date: dateStr, spend, currency };
+  return { storeId, date: dateStr, spend, currency, impressions };
 }
 
 /**

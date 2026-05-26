@@ -178,18 +178,21 @@ describe('cronLive Shopify-coupled gating decouple (INN-07)', () => {
       date: '2026-05-22',
       spend: 100,
       currency: 'CAD',
+    impressions: 0,
     });
     vi.spyOn(googleAdsFetcher, 'fetchGoogleAdsSpendForDay').mockResolvedValue({
       storeId: 'uzoshop',
       date: '2026-05-22',
       spend: 200,
       currency: 'CAD',
+    impressions: 0,
     });
     vi.spyOn(tiktokFetcher, 'fetchTikTokSpendForDay').mockResolvedValue({
       storeId: 'uzoshop',
       date: '2026-05-22',
       spend: 50,
       currency: 'CAD',
+    impressions: 0,
     });
 
     // Status fetchers — empty results so the loop short-circuits.
@@ -309,18 +312,21 @@ describe('cronLive Shopify-coupled gating decouple (INN-07)', () => {
       date: '2026-05-22',
       spend: 75,
       currency: 'CAD',
+    impressions: 0,
     });
     vi.spyOn(googleAdsFetcher, 'fetchGoogleAdsSpendForDay').mockResolvedValue({
       storeId: 'uzoshop',
       date: '2026-05-22',
       spend: 125,
       currency: 'CAD',
+    impressions: 0,
     });
     vi.spyOn(tiktokFetcher, 'fetchTikTokSpendForDay').mockResolvedValue({
       storeId: 'uzoshop',
       date: '2026-05-22',
       spend: 25,
       currency: 'CAD',
+    impressions: 0,
     });
     vi.spyOn(metaFetcher, 'fetchMetaBudgets').mockResolvedValue({
       currency: 'ILS',
@@ -388,18 +394,21 @@ describe('cronLive Shopify-coupled gating decouple (INN-07)', () => {
       date: '2026-05-22',
       spend: 80,
       currency: 'CAD',
+    impressions: 0,
     });
     vi.spyOn(googleAdsFetcher, 'fetchGoogleAdsSpendForDay').mockResolvedValue({
       storeId: 'uzoshop',
       date: '2026-05-22',
       spend: 160,
       currency: 'CAD',
+    impressions: 0,
     });
     vi.spyOn(tiktokFetcher, 'fetchTikTokSpendForDay').mockResolvedValue({
       storeId: 'uzoshop',
       date: '2026-05-22',
       spend: 40,
       currency: 'CAD',
+    impressions: 0,
     });
     vi.spyOn(metaFetcher, 'fetchMetaBudgets').mockResolvedValue({
       currency: 'ILS',

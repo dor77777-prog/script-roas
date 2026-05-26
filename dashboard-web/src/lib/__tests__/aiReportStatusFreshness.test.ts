@@ -56,6 +56,9 @@ function makeDaily(overrides: Partial<DailyRow>): DailyRow {
     hasCogs: true,
     grossRevenue: null,
     refundDeduction: null,
+    fbImpressions: null,
+    gaImpressions: null,
+    ttImpressions: null,
     ...overrides,
   };
 }

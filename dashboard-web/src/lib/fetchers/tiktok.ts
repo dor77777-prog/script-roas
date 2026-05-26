@@ -98,6 +98,12 @@ export type TikTokDaySpend = {
   date: string;
   spend: number;
   currency: string;
+  /**
+   * Phase 13.8 (2026-05-26) — advertiser-level impressions for the day, so
+   * cron-live can write a live per-store CPM to data_daily without paying
+   * for the per-ad fetch. Same row that already carries spend.
+   */
+  impressions: number;
 };
 
 export type TikTokAdvertiserInfo = {
@@ -275,11 +281,13 @@ export async function fetchTikTokSpendForDay(
 
   type ReportPayload = {
     list?: Array<{
-      metrics?: { spend?: string | number };
+      metrics?: { spend?: string | number; impressions?: string | number };
       dimensions?: { advertiser_id?: string | number };
     }>;
   };
 
+  // Phase 13.8 (2026-05-26) — added "impressions" to the metrics list so
+  // cron-live can populate data_daily.tt_impressions in the same call.
   const data = await tiktokGet<ReportPayload>(
     '/report/integrated/get/',
     accessToken,
@@ -288,7 +296,7 @@ export async function fetchTikTokSpendForDay(
       report_type: 'BASIC',
       data_level: 'AUCTION_ADVERTISER',
       dimensions: '["advertiser_id"]',
-      metrics: '["spend"]',
+      metrics: '["spend","impressions"]',
       start_date: dateStr,
       end_date: dateStr,
       page_size: '1',
@@ -297,11 +305,13 @@ export async function fetchTikTokSpendForDay(
 
   const row = (data.list ?? [])[0];
   const spend = parseNum(row?.metrics?.spend ?? 0);
+  const impressions = parseNum(row?.metrics?.impressions ?? 0);
   return {
     storeId,
     date: dateStr,
     spend,
     currency: info.currency,
+    impressions,
   };
 }
 

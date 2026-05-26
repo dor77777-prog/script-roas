@@ -300,13 +300,13 @@ describe('cronLive — runLiveForStore handler (Shopify-only, rolling 3-day)', (
     }));
     const lightMetaSpy = vi
       .spyOn(metaFetcher, 'fetchMetaSpendForDayLight')
-      .mockResolvedValue({ storeId: 'uzoshop', date: '2026-05-22', spend: 0, currency: 'ILS' });
+      .mockResolvedValue({ storeId: 'uzoshop', date: '2026-05-22', spend: 0, currency: 'ILS', impressions: 0 });
     const heavyMetaSpy = vi
       .spyOn(metaFetcher, 'fetchMetaSpendForDay')
-      .mockResolvedValue({ storeId: 'uzoshop', date: '2026-05-22', spend: 0, currency: 'ILS' });
+      .mockResolvedValue({ storeId: 'uzoshop', date: '2026-05-22', spend: 0, currency: 'ILS', impressions: 0 });
     const googleSpy = vi
       .spyOn(googleAdsFetcher, 'fetchGoogleAdsSpendForDay')
-      .mockResolvedValue({ storeId: 'uzoshop', date: '2026-05-22', spend: 0, currency: 'CAD' });
+      .mockResolvedValue({ storeId: 'uzoshop', date: '2026-05-22', spend: 0, currency: 'CAD', impressions: 0 });
     // Audit fix 2026-05-23 (a/WARN-5): pin TikTok parity to Meta + Google.
     // Pre-fix, this test silently let TikTok fall through to the real
     // creds-check path (which throws "Missing TikTok creds" and gets
@@ -317,7 +317,7 @@ describe('cronLive — runLiveForStore handler (Shopify-only, rolling 3-day)', (
     // a TikTok-enabled store (uzoshop), matching Meta + Google cadence.
     const tiktokSpy = vi
       .spyOn(tiktokFetcher, 'fetchTikTokSpendForDay')
-      .mockResolvedValue({ storeId: 'uzoshop', date: '2026-05-22', spend: 0, currency: 'CAD' });
+      .mockResolvedValue({ storeId: 'uzoshop', date: '2026-05-22', spend: 0, currency: 'CAD', impressions: 0 });
 
     const { admin } = makeSupabaseAdminMock();
     vi.spyOn(supabaseAdminMod, 'getSupabaseAdmin').mockReturnValue(
@@ -369,12 +369,14 @@ describe('cronLive — runLiveForStore handler (Shopify-only, rolling 3-day)', (
       date: '2026-05-22',
       spend: 0,
       currency: 'ILS',
+    impressions: 0,
     });
     vi.spyOn(googleAdsFetcher, 'fetchGoogleAdsSpendForDay').mockResolvedValue({
       storeId: 'uzoshop',
       date: '2026-05-22',
       spend: 0,
       currency: 'CAD',
+    impressions: 0,
     });
 
     const { admin } = makeSupabaseAdminMock();
@@ -440,18 +442,21 @@ describe('cronLive — runLiveForStore handler (Shopify-only, rolling 3-day)', (
       date: '2026-05-22',
       spend: 100,
       currency: 'USD',
+    impressions: 0,
     });
     vi.spyOn(googleAdsFetcher, 'fetchGoogleAdsSpendForDay').mockResolvedValue({
       storeId: 'uzoshop',
       date: '2026-05-22',
       spend: 50,
       currency: 'USD',
+    impressions: 0,
     });
     vi.spyOn(tiktokFetcher, 'fetchTikTokSpendForDay').mockResolvedValue({
       storeId: 'uzoshop',
       date: '2026-05-22',
       spend: 25,
       currency: 'USD',
+    impressions: 0,
     });
     // FX rate lookup THROWS for every call — simulates ECB outage,
     // fixer.io quota exceeded, or transient network failure.
@@ -526,12 +531,14 @@ describe('cronLive — runLiveForStore handler (Shopify-only, rolling 3-day)', (
       date: 'placeholder',
       spend: 0,
       currency: 'CAD',
+    impressions: 0,
     });
     vi.spyOn(googleAdsFetcher, 'fetchGoogleAdsSpendForDay').mockResolvedValue({
       storeId: 'uzoshop',
       date: 'placeholder',
       spend: 0,
       currency: 'CAD',
+    impressions: 0,
     });
     // TikTok returns CAD-denominated spend (12.34) for EVERY day in the
     // rolling window. The handler will pick `spendByDate[today]` (=dates[0])
@@ -543,6 +550,7 @@ describe('cronLive — runLiveForStore handler (Shopify-only, rolling 3-day)', (
         date,
         spend: 12.34,
         currency: 'CAD',
+      impressions: 0,
       }),
     );
 

@@ -154,6 +154,7 @@ function stubAllFetchers() {
     date: '2026-05-24',
     spend: 100,
     currency: 'ILS',
+  impressions: 0,
   });
 
   vi.spyOn(googleAdsFetcher, 'fetchGoogleAdsSpendForDay').mockResolvedValue({
@@ -161,6 +162,7 @@ function stubAllFetchers() {
     date: '2026-05-24',
     spend: 50,
     currency: 'CAD',
+  impressions: 0,
   });
 
   vi.spyOn(tiktokFetcher, 'fetchTikTokSpendForDay').mockResolvedValue({
@@ -168,6 +170,7 @@ function stubAllFetchers() {
     date: '2026-05-24',
     spend: 0,
     currency: 'USD',
+  impressions: 0,
   });
 
   vi.spyOn(fxFetcher, 'getFxRate').mockResolvedValue(0.36);

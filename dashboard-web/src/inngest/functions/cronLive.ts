@@ -355,6 +355,17 @@ async function persistDayForStore(
     fbSpendCad: number;
     gaSpendCad: number;
     ttSpendCad: number;
+    /**
+     * Phase 13.8 (2026-05-26) — per-platform impressions, written to
+     * data_daily.fb/ga/tt_impressions alongside the spend columns. Same
+     * null→prior per-platform preserve semantics as the spend fields:
+     * the caller resolves nullish-coalesce against priorSpendByDate
+     * before handing the override in, so this function always sees a
+     * concrete number.
+     */
+    fbImpressions: number;
+    gaImpressions: number;
+    ttImpressions: number;
   },
   /**
    * Audit fix 2026-05-24 (AUDIT INN-07, Phase 12.2.2): when set with
@@ -383,7 +394,21 @@ async function persistDayForStore(
    * Backward compat: when prior is undefined, fall back to the inline
    * SELECT (preserves the original behaviour for tests + ad-hoc callers).
    */
-  prior?: { priorFb: number; priorGa: number; priorTt: number; priorTotal: number },
+  prior?: {
+    priorFb: number;
+    priorGa: number;
+    priorTt: number;
+    priorTotal: number;
+    /**
+     * Phase 13.8 (2026-05-26) — memoized prior impressions per platform,
+     * same purpose as the priorFb / priorGa / priorTt above: preserve
+     * existing data_daily.fb/ga/tt_impressions when this tick's fetcher
+     * returned null (per-platform preserve).
+     */
+    priorFbImp: number;
+    priorGaImp: number;
+    priorTtImp: number;
+  },
 ): Promise<void> {
   const admin = getSupabaseAdmin();
 
@@ -413,6 +438,12 @@ async function persistDayForStore(
         spendOverride.fbSpendCad +
         spendOverride.gaSpendCad +
         spendOverride.ttSpendCad,
+      // Phase 13.8 (2026-05-26) — impressions ride along with spend; same
+      // ON CONFLICT preserve semantics if a future caller passes 0 for a
+      // platform that genuinely had no impressions today.
+      fb_impressions: spendOverride.fbImpressions,
+      ga_impressions: spendOverride.gaImpressions,
+      tt_impressions: spendOverride.ttImpressions,
     };
     const { error: spendOnlyErr } = await admin
       .from('data_daily')
@@ -436,11 +467,19 @@ async function persistDayForStore(
   // to the inline SELECT when neither spendOverride nor prior is provided
   // (test / ad-hoc callers).
   // -----------------------------------------------------------------
-  let existing: { fb_spend_cad?: unknown; ga_spend_cad?: unknown; tt_spend_cad?: unknown; total_spend_cad?: unknown } | null = null;
+  let existing: {
+    fb_spend_cad?: unknown;
+    ga_spend_cad?: unknown;
+    tt_spend_cad?: unknown;
+    total_spend_cad?: unknown;
+    fb_impressions?: unknown;
+    ga_impressions?: unknown;
+    tt_impressions?: unknown;
+  } | null = null;
   if (spendOverride === undefined && prior === undefined) {
     const { data, error: selErr } = await admin
       .from('data_daily')
-      .select('fb_spend_cad, ga_spend_cad, tt_spend_cad, total_spend_cad')
+      .select('fb_spend_cad, ga_spend_cad, tt_spend_cad, total_spend_cad, fb_impressions, ga_impressions, tt_impressions')
       .eq('date', date)
       .eq('store_id', storeId)
       .maybeSingle();
@@ -474,6 +513,30 @@ async function persistDayForStore(
       : prior !== undefined
         ? prior.priorTotal
         : Number(existing?.total_spend_cad ?? 0) || 0;
+
+  // Phase 13.8 (2026-05-26) — per-platform impressions follow the same
+  // preserve cascade as spend above: override → memoized prior → inline
+  // SELECT fallback → 0. NULL in the SELECT result coerces to 0 via
+  // `?? 0` so historical rows (which pre-date this phase) don't drag the
+  // payload into a phantom NULL write.
+  const fbImpressions =
+    spendOverride !== undefined
+      ? spendOverride.fbImpressions
+      : prior !== undefined
+        ? prior.priorFbImp
+        : Number(existing?.fb_impressions ?? 0) || 0;
+  const gaImpressions =
+    spendOverride !== undefined
+      ? spendOverride.gaImpressions
+      : prior !== undefined
+        ? prior.priorGaImp
+        : Number(existing?.ga_impressions ?? 0) || 0;
+  const ttImpressions =
+    spendOverride !== undefined
+      ? spendOverride.ttImpressions
+      : prior !== undefined
+        ? prior.priorTtImp
+        : Number(existing?.tt_impressions ?? 0) || 0;
 
   const revenueCad = shopify.revenueCad;
   // Audit fix 2026-05-23 (BL-COGS): use the per-store rate (matches
@@ -513,6 +576,9 @@ async function persistDayForStore(
     ga_spend_cad?: number;
     tt_spend_cad?: number;
     total_spend_cad?: number;
+    fb_impressions?: number;
+    ga_impressions?: number;
+    tt_impressions?: number;
   };
   const dataDailyPayload: DataDailyUpsertRow = {
     date,
@@ -536,11 +602,22 @@ async function persistDayForStore(
     dataDailyPayload.ga_spend_cad = gaSpendCad;
     dataDailyPayload.tt_spend_cad = ttSpendCad;
     dataDailyPayload.total_spend_cad = totalSpendCad;
+    // Phase 13.8 (2026-05-26) — impressions move in lockstep with spend:
+    // they ride along on the same "fresh from this tick" path so a
+    // store-level CPM in data_daily stays internally consistent (a 5-min
+    // window where spend was updated but impressions weren't would yield
+    // a misleading CPM).
+    dataDailyPayload.fb_impressions = fbImpressions;
+    dataDailyPayload.ga_impressions = gaImpressions;
+    dataDailyPayload.tt_impressions = ttImpressions;
   } else if (!existing) {
     dataDailyPayload.fb_spend_cad = 0;
     dataDailyPayload.ga_spend_cad = 0;
     dataDailyPayload.tt_spend_cad = 0;
     dataDailyPayload.total_spend_cad = 0;
+    dataDailyPayload.fb_impressions = 0;
+    dataDailyPayload.ga_impressions = 0;
+    dataDailyPayload.tt_impressions = 0;
   }
 
   const { error: dataErr } = await admin
@@ -750,7 +827,18 @@ async function runLiveForStoreInner(
   // Phase 05.7.7: TikTok added alongside Meta + Google. Same per-fetcher
   // soft-fail policy. TikTok is uzoshop-only via STORES_WITH_TIKTOK; other
   // stores short-circuit to null without hitting the API.
-  type DateSpend = { fbSpendCad: number | null; gaSpendCad: number | null; ttSpendCad: number | null };
+  type DateSpend = {
+    fbSpendCad: number | null;
+    gaSpendCad: number | null;
+    ttSpendCad: number | null;
+    // Phase 13.8 (2026-05-26) — per-platform impressions tracked alongside
+    // CAD spend. No FX conversion needed (impressions are platform-agnostic
+    // counts). null follows the same "fetcher failed/skipped" convention as
+    // the spend fields so the persist step can apply per-platform preserve.
+    fbImpressions: number | null;
+    gaImpressions: number | null;
+    ttImpressions: number | null;
+  };
   const spendByDate = await step.run('fetch-meta-google-tiktok-spend-light-3day', async () => {
     // Audit fix 2026-05-23 (a/WARN-3): FX failure must NOT silently
     // convert at 1×. Pre-fix, when getFxRate timed-out or 5xx'd, the
@@ -791,7 +879,11 @@ async function runLiveForStoreInner(
     // Fetch all 3 platforms × all 3 dates in parallel. Each platform/date
     // pair is independent (no cross-dependency) so a single Promise.all
     // is fine for both throughput and per-call timeout isolation.
-    const tasks: Array<Promise<{ date: string; key: 'fb' | 'ga' | 'tt'; cad: number | null }>> = [];
+    // Phase 13.8 (2026-05-26) — each task now reports `impressions` alongside
+    // CAD-converted spend. Impressions are platform-agnostic counts so they
+    // skip the FX-conversion step entirely; they propagate as-is from the
+    // fetcher to the persist step.
+    const tasks: Array<Promise<{ date: string; key: 'fb' | 'ga' | 'tt'; cad: number | null; impressions: number | null }>> = [];
     for (const d of dates) {
       tasks.push(
         withTimeout(fetchMetaSpendForDayLight(storeId, d), 12_000, 'Meta')
@@ -819,7 +911,7 @@ async function runLiveForStoreInner(
             }
             return null;
           })
-          .then(async (v) => ({ date: d, key: 'fb' as const, cad: v === null ? null : await cadConvert(v, d) })),
+          .then(async (v) => ({ date: d, key: 'fb' as const, cad: v === null ? null : await cadConvert(v, d), impressions: v === null ? null : v.impressions })),
       );
       tasks.push(
         withTimeout(fetchGoogleAdsSpendForDay(storeId, d), 12_000, 'Google')
@@ -846,7 +938,7 @@ async function runLiveForStoreInner(
             }
             return null;
           })
-          .then(async (v) => ({ date: d, key: 'ga' as const, cad: v === null ? null : await cadConvert(v, d) })),
+          .then(async (v) => ({ date: d, key: 'ga' as const, cad: v === null ? null : await cadConvert(v, d), impressions: v === null ? null : v.impressions })),
       );
       if (STORES_WITH_TIKTOK.has(storeId)) {
         tasks.push(
@@ -874,20 +966,34 @@ async function runLiveForStoreInner(
               }
               return null;
             })
-            .then(async (v) => ({ date: d, key: 'tt' as const, cad: v === null ? null : await cadConvert(v, d) })),
+            .then(async (v) => ({ date: d, key: 'tt' as const, cad: v === null ? null : await cadConvert(v, d), impressions: v === null ? null : v.impressions })),
         );
       }
     }
     const results = await Promise.all(tasks);
     for (const d of dates) {
-      out[d] = { fbSpendCad: null, gaSpendCad: null, ttSpendCad: null };
+      out[d] = {
+        fbSpendCad: null,
+        gaSpendCad: null,
+        ttSpendCad: null,
+        fbImpressions: null,
+        gaImpressions: null,
+        ttImpressions: null,
+      };
     }
     for (const r of results) {
       const slot = out[r.date];
       if (!slot) continue;
-      if (r.key === 'fb') slot.fbSpendCad = r.cad;
-      else if (r.key === 'ga') slot.gaSpendCad = r.cad;
-      else slot.ttSpendCad = r.cad;
+      if (r.key === 'fb') {
+        slot.fbSpendCad = r.cad;
+        slot.fbImpressions = r.impressions;
+      } else if (r.key === 'ga') {
+        slot.gaSpendCad = r.cad;
+        slot.gaImpressions = r.impressions;
+      } else {
+        slot.ttSpendCad = r.cad;
+        slot.ttImpressions = r.impressions;
+      }
     }
     return out;
   }) as Record<string, DateSpend>;
@@ -957,7 +1063,20 @@ async function runLiveForStoreInner(
   // memoized values to hand in).
   const priorSpendByDate: Record<
     string,
-    { priorFb: number; priorGa: number; priorTt: number; priorTotal: number }
+    {
+      priorFb: number;
+      priorGa: number;
+      priorTt: number;
+      priorTotal: number;
+      // Phase 13.8 (2026-05-26) — also memoize the prior impressions per
+      // platform so per-platform preserve applies symmetrically to spend
+      // and impressions. Without this, a single null impressions value
+      // from a flaky fetcher could overwrite a freshly-written non-zero
+      // impressions count.
+      priorFbImp: number;
+      priorGaImp: number;
+      priorTtImp: number;
+    }
   > = {};
   for (const date of dates) {
     priorSpendByDate[date] = await step.run(
@@ -966,7 +1085,7 @@ async function runLiveForStoreInner(
         const admin = getSupabaseAdmin();
         const { data: prior } = await admin
           .from('data_daily')
-          .select('fb_spend_cad, ga_spend_cad, tt_spend_cad, total_spend_cad')
+          .select('fb_spend_cad, ga_spend_cad, tt_spend_cad, total_spend_cad, fb_impressions, ga_impressions, tt_impressions')
           .eq('date', date)
           .eq('store_id', storeId)
           .maybeSingle();
@@ -975,6 +1094,9 @@ async function runLiveForStoreInner(
           priorGa: Number(prior?.ga_spend_cad ?? 0) || 0,
           priorTt: Number(prior?.tt_spend_cad ?? 0) || 0,
           priorTotal: Number(prior?.total_spend_cad ?? 0) || 0,
+          priorFbImp: Number(prior?.fb_impressions ?? 0) || 0,
+          priorGaImp: Number(prior?.ga_impressions ?? 0) || 0,
+          priorTtImp: Number(prior?.tt_impressions ?? 0) || 0,
         };
       },
     );
@@ -1008,13 +1130,16 @@ async function runLiveForStoreInner(
             fbSpendCad: null,
             gaSpendCad: null,
             ttSpendCad: null,
+            fbImpressions: null,
+            gaImpressions: null,
+            ttImpressions: null,
           };
         const haveAnySpend =
           dateSpend.fbSpendCad !== null ||
           dateSpend.gaSpendCad !== null ||
           dateSpend.ttSpendCad !== null;
         if (haveAnySpend) {
-          const { priorFb, priorGa, priorTt } = priorSpendByDate[date];
+          const { priorFb, priorGa, priorTt, priorFbImp, priorGaImp, priorTtImp } = priorSpendByDate[date];
           console.warn(
             `cron-live ${storeId} ${date}: Shopify failed — running spend-only persist to recover ad-platform columns (Shopify cols preserved via ON CONFLICT).`,
           );
@@ -1027,6 +1152,11 @@ async function runLiveForStoreInner(
               gaSpendCad: dateSpend.gaSpendCad ?? priorGa,
               ttSpendCad: STORES_WITH_TIKTOK.has(storeId)
                 ? (dateSpend.ttSpendCad ?? priorTt)
+                : 0,
+              fbImpressions: dateSpend.fbImpressions ?? priorFbImp,
+              gaImpressions: dateSpend.gaImpressions ?? priorGaImp,
+              ttImpressions: STORES_WITH_TIKTOK.has(storeId)
+                ? (dateSpend.ttImpressions ?? priorTtImp)
                 : 0,
             },
             { spendOnly: true },
@@ -1067,7 +1197,14 @@ async function runLiveForStoreInner(
       // yesterday + day-before-yesterday also benefit from the cron-live
       // refresh — operator no longer loses 24h of ad-spend recovery when
       // cron-daily's 00:05 IL run fails.
-      const dateSpend = spendByDate[date] ?? { fbSpendCad: null, gaSpendCad: null, ttSpendCad: null };
+      const dateSpend = spendByDate[date] ?? {
+        fbSpendCad: null,
+        gaSpendCad: null,
+        ttSpendCad: null,
+        fbImpressions: null,
+        gaImpressions: null,
+        ttImpressions: null,
+      };
       const haveAnySpend =
         dateSpend.fbSpendCad !== null ||
         dateSpend.gaSpendCad !== null ||
@@ -1082,12 +1219,17 @@ async function runLiveForStoreInner(
         // an inline SELECT inside persist-rolling-3day — non-idempotent
         // on Inngest retry because the SELECT would re-execute AFTER
         // the first attempt's UPSERT had landed.
-        const { priorFb, priorGa, priorTt } = priorSpendByDate[date];
+        const { priorFb, priorGa, priorTt, priorFbImp, priorGaImp, priorTtImp } = priorSpendByDate[date];
         await persistDayForStore(storeId, date, shopify, {
           fbSpendCad: dateSpend.fbSpendCad ?? priorFb,
           gaSpendCad: dateSpend.gaSpendCad ?? priorGa,
           ttSpendCad: STORES_WITH_TIKTOK.has(storeId)
             ? (dateSpend.ttSpendCad ?? priorTt)
+            : 0,
+          fbImpressions: dateSpend.fbImpressions ?? priorFbImp,
+          gaImpressions: dateSpend.gaImpressions ?? priorGaImp,
+          ttImpressions: STORES_WITH_TIKTOK.has(storeId)
+            ? (dateSpend.ttImpressions ?? priorTtImp)
             : 0,
         });
       } else {
@@ -1451,7 +1593,14 @@ async function runLiveForStoreInner(
   }
   // Audit fix 2026-05-23 (CR-02 pipeline): today's spend now comes
   // from spendByDate[today] rather than the deprecated closure vars.
-  const todaySpendEntry = spendByDate[today] ?? { fbSpendCad: null, gaSpendCad: null, ttSpendCad: null };
+  const todaySpendEntry = spendByDate[today] ?? {
+    fbSpendCad: null,
+    gaSpendCad: null,
+    ttSpendCad: null,
+    fbImpressions: null,
+    gaImpressions: null,
+    ttImpressions: null,
+  };
   return {
     storeId,
     rollingDates: dates,

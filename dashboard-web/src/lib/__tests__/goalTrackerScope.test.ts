@@ -41,6 +41,9 @@ function makeRow(overrides: Partial<DailyRow> = {}): DailyRow {
     hasCogs: false,
     grossRevenue: null,
     refundDeduction: null,
+    fbImpressions: null,
+    gaImpressions: null,
+    ttImpressions: null,
     ...overrides,
   };
 }

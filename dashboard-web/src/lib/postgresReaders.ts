@@ -274,7 +274,9 @@ export async function fetchDailyDataFromPostgres(
         .select(
           'date, store_id, store_name, fb_spend_cad, ga_spend_cad, tt_spend_cad, total_spend_cad, ' +
             'revenue_cad, roas, gross_profit_cad, cogs_cad, net_profit_cad, ' +
-            'gross_revenue_cad, refund_deduction_cad',
+            'gross_revenue_cad, refund_deduction_cad, ' +
+            // Phase 13.8 (2026-05-26) — per-platform impressions for live CPM.
+            'fb_impressions, ga_impressions, tt_impressions',
         );
       if (opts?.range) {
         q = q.gte('date', opts.range.from).lte('date', opts.range.to);
@@ -326,6 +328,20 @@ export async function fetchDailyDataFromPostgres(
     const refundDeduction =
       refundRaw === null || refundRaw === undefined ? null : toNumber(refundRaw);
 
+    // Phase 13.8 (2026-05-26) — per-platform impressions; null on rows that
+    // pre-date the column (before the migration ran), 0 on rows where the
+    // platform reported no impressions yet. The dashboard treats null as
+    // "no data" (renders "—") and 0 as a real measurement.
+    const fbImpRaw = r.fb_impressions;
+    const gaImpRaw = r.ga_impressions;
+    const ttImpRaw = r.tt_impressions;
+    const fbImpressions =
+      fbImpRaw === null || fbImpRaw === undefined ? null : Number(fbImpRaw) || 0;
+    const gaImpressions =
+      gaImpRaw === null || gaImpRaw === undefined ? null : Number(gaImpRaw) || 0;
+    const ttImpressions =
+      ttImpRaw === null || ttImpRaw === undefined ? null : Number(ttImpRaw) || 0;
+
     rows.push({
       date: dateStr,
       storeId: String(r.store_id),
@@ -342,6 +358,9 @@ export async function fetchDailyDataFromPostgres(
       hasCogs: true,
       grossRevenue,
       refundDeduction,
+      fbImpressions,
+      gaImpressions,
+      ttImpressions,
     });
   }
   return rows;

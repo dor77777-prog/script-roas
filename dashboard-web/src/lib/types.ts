@@ -31,6 +31,17 @@ export type DailyRow = {
    * (gross) amount alongside the net.
    */
   refundDeduction: number | null;
+  /**
+   * Phase 13.8 (2026-05-26) — per-platform impressions for the day,
+   * populated by cron-live every ~10 min (light fetcher) and by
+   * cron-daily overnight (heavy fetcher). 0 when the platform reported
+   * no impressions yet; `null` for historical rows that pre-date this
+   * phase (the dashboard treats `null` like "no data" and falls back to
+   * "—" rather than computing CPM against a 0 baseline).
+   */
+  fbImpressions: number | null;
+  gaImpressions: number | null;
+  ttImpressions: number | null;
 };
 
 export type DashboardData = {

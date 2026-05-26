@@ -66,7 +66,7 @@ Apps Script triggers יורדים ידנית במהלך 28.4 cutover.
 | טבלה | תוכן | מי כותב | מי קורא |
 |---|---|---|---|
 | `stores` | 3 שורות חנות + FK target | seed migration | כל route |
-| `data_daily` | פר (date, store): `fb_spend_cad`, `ga_spend_cad`, `tt_spend_cad`, `total_spend_cad`, `revenue_cad`, `gross_revenue_cad`, `refund_deduction_cad` | Inngest cron-daily + cron-live | `/api/data` |
+| `data_daily` | פר (date, store): `fb_spend_cad`, `ga_spend_cad`, `tt_spend_cad`, `total_spend_cad`, `fb_impressions`, `ga_impressions`, `tt_impressions`, `revenue_cad`, `gross_revenue_cad`, `refund_deduction_cad` | Inngest cron-daily + cron-live | `/api/data` |
 | `campaigns_daily` | פר (date, store, platform, campaign, ad_set): `spend`, `impressions`, `clicks`, `conversions`, `conversion_value`, `budget`, `effective_status` | Inngest cron-daily + cron-live | `/api/campaigns` |
 | `ads_daily` | פר (date, store, platform, campaign, ad_set, ad): spend/impressions/etc | Inngest cron-live (Meta-only) | `/api/ads` |
 | `products_daily` | פר (date, store, product): units/orders/revenue/refunds | Inngest cron-daily | `/api/products` |
@@ -583,6 +583,9 @@ for (const table of tables) {
 
 ### 13.4 Previous-period dual fetch (HeroOverview)
 `/api/data` is range-filtered server-side (`fetchDailyDataFromPostgres({ range })`) — `data.rows` only contains rows for the CURRENT range. To compute previous-period deltas the hero strip uses a **second SWR fetch** keyed on `previousRange(filters.range)` and aggregates that response separately. Same pattern as the existing dual `/api/campaigns` fetch that powers the CPM delta. Filtering current-range rows by previous-range dates always returns `[]` and silently zeros every delta — that bug was the source of the always-stable hero sentence before 2026-05-26.
+
+### 13.5 Live CPM (Phase 13.8 — 2026-05-26)
+The TodayLive card (היום — חי) computes CPM from `data_daily.fb/ga/tt_impressions` rather than from `campaigns_daily`. cron-live's light fetchers — Meta `level=account` + `?fields=spend,impressions`, Google GAQL `SELECT metrics.cost_micros, metrics.impressions FROM customer`, TikTok `data_level=AUCTION_ADVERTISER` with `metrics=["spend","impressions"]` — now return impressions alongside spend in the same single API call, and the persist step writes them to data_daily on every ~10-min tick. Before this phase the LIVE CPM widget read from `campaigns_daily`, but cron-live writes only enrollment placeholder rows to that table (no metric columns), so the widget rendered "—" all day long until the overnight cron-daily run repopulated impressions per campaign. The data_daily columns are nullable; rows that pre-date the migration coerce to `null` in the reader and the renderer treats `null` like "no data yet" (renders "—") to avoid dividing by zero.
 
 ---
 

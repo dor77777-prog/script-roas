@@ -91,6 +91,7 @@ function row(overrides: Partial<DailyRow> = {}): DailyRow {
     grossProfit: 0, cogs: 0, netProfit: 0,
     hasCogs: true,
     grossRevenue: null, refundDeduction: null,
+    fbImpressions: null, gaImpressions: null, ttImpressions: null,
     ...overrides,
   };
 }

@@ -484,6 +484,7 @@ describe('Phase 05.6-04 — meta.ts fetchMetaSpendForDay (per-day store-level ag
       date: DATE,
       spend: 19.75,
       currency: 'ILS',
+      impressions: 150,
     });
   });
 

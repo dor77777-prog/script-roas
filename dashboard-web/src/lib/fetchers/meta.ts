@@ -127,6 +127,12 @@ export type MetaDailyStoreSpend = {
   spend: number;
   /** account currency (from the first row, defaults to ILS) */
   currency: string;
+  /**
+   * Phase 13.8 (2026-05-26) — account-level impressions for the day, so
+   * cron-live can write a live per-store CPM to data_daily without paying
+   * for a per-campaign fetch. Same row that already carries `spend`.
+   */
+  impressions: number;
 };
 
 /**
@@ -407,8 +413,9 @@ export async function fetchMetaSpendForDay(
 ): Promise<MetaDailyStoreSpend> {
   const rows = await fetchMetaAdSetInsights(storeId, dateStr);
   const spend = rows.reduce((acc, r) => acc + r.spend, 0);
+  const impressions = rows.reduce((acc, r) => acc + r.impressions, 0);
   const currency = rows[0]?.currency ?? 'ILS';
-  return { storeId, date: dateStr, spend, currency };
+  return { storeId, date: dateStr, spend, currency, impressions };
 }
 
 /**
@@ -440,11 +447,12 @@ export async function fetchMetaSpendForDayLight(
   const adAccountId = getMetaAdAccountId(storeId);
 
   // level=account returns a single row aggregating the entire ad-account.
-  // No pagination needed (1 row max). Field list is minimal — just spend +
-  // currency, which is all the cron-live writer needs for fb_spend_cad.
+  // No pagination needed (1 row max). Phase 13.8 (2026-05-26) — added
+  // `impressions` to the fields list so cron-live can write a live CPM
+  // signal to data_daily. Same single call, just one extra field.
   const url =
     `https://graph.facebook.com/${META_API_VERSION}/act_${adAccountId}/insights` +
-    `?fields=spend,account_currency` +
+    `?fields=spend,impressions,account_currency` +
     `&time_range=${encodeURIComponent(JSON.stringify({ since: dateStr, until: dateStr }))}` +
     `&level=account` +
     `&access_token=${encodeURIComponent(token)}`;
@@ -460,11 +468,12 @@ export async function fetchMetaSpendForDayLight(
   const row = body.data?.[0];
   if (!row) {
     // No spend reported for this day yet (e.g. very early in the day).
-    return { storeId, date: dateStr, spend: 0, currency: 'ILS' };
+    return { storeId, date: dateStr, spend: 0, currency: 'ILS', impressions: 0 };
   }
   const spend = parseFloat(row.spend ?? '0') || 0;
+  const impressions = parseInt(row.impressions ?? '0', 10) || 0;
   const currency = row.account_currency ?? 'ILS';
-  return { storeId, date: dateStr, spend, currency };
+  return { storeId, date: dateStr, spend, currency, impressions };
 }
 
 /**
