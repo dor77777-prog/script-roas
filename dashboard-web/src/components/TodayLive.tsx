@@ -8,6 +8,7 @@ import { aggregate, aggregateByStore, roasLabel } from '@/lib/analytics';
 import { storeHasTikTok } from '@/lib/platformsByStore';
 import type { DailyRow, DashboardData } from '@/lib/types';
 import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
+import { storeColor } from '@/lib/storeColors';
 
 const ordersFetcher = async (url: string): Promise<OrdersAttributionResponse> => {
   const r = await fetch(url);
@@ -135,12 +136,7 @@ function liveToneFromRoas(roas: number, hasAnyData: boolean): LiveTone {
   return LIVE_TONE_STYLES[tone] ?? LIVE_TONE_STYLES.gray;
 }
 
-// Per-store accent dot. Kept saturated since it's a tiny element.
-const STORE_COLORS: Record<string, string> = {
-  uzoshop:     '#1e3a8a',
-  'Zol Plus':  '#dc2626',
-  '360usmile': '#15803d',
-};
+// Per-store accent dot — color sourced from canonical storeColors module.
 
 function todayInIsrael(): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -411,7 +407,7 @@ export function TodayLive({
         {storeAggs.length > 0 && hasAnyData && (
           <div className="mt-3 sm:mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
             {storeAggs.map(s => {
-              const color = STORE_COLORS[s.store] || '#0d3680';
+              const color = storeColor(s.store);
               const info = roasLabel(s.roas);
               const hasGoogle = s.gaSpend > 0;
               // Phase 05.7.x — TikTok is rendered for every store that

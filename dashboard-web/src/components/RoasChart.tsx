@@ -4,37 +4,15 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { TrendingUp } from 'lucide-react';
 import type { DailySeries } from '@/lib/analytics';
 import { formatDate, formatNumber } from '@/lib/utils';
+import { storeColor, STORE_COLORS } from '@/lib/storeColors';
 
-/**
- * Series palette: distinct hues, one anchored as the dominant primary.
- *
- * Earlier iteration tried "primary + 2 slate neutrals" — but slate-400 vs
- * slate-500 are visually indistinguishable in a line chart, defeating the
- * whole point of separating the stores. We now use three different hue
- * families (navy / amber / teal) so each store is identifiable at a glance,
- * and keep the hierarchy via stroke weight + opacity on the primary line
- * (so the eye still anchors instead of bouncing).
- *
- * Colors are picked for:
- *   - distinct hue separation in the HSL wheel (~120° apart)
- *   - sufficient lightness contrast against the white card background
- *   - graceful pairing with the dashboard's navy primary
- */
-const SERIES_PALETTE = [
-  '#1c4587', // navy   — primary store (dominant)
-  '#d97706', // amber  — warm hue, very distinct from navy
-  '#0d9488', // teal   — cool hue, distinct from both
-  '#a855f7', // violet — fallback if 4 stores
-  '#dc2626', // red    — fallback if 5 stores
-];
-const STORE_COLORS: Record<string, string> = {
-  uzoshop: SERIES_PALETTE[0],
-  'Zol Plus': SERIES_PALETTE[1],
-  '360usmile': SERIES_PALETTE[2],
-};
+// The navy primary color is the visual anchor — the first store's line
+// gets bold label treatment to guide the eye. Using STORE_COLORS directly
+// keeps this sentinel value in sync with the canonical palette.
+const PRIMARY_COLOR = STORE_COLORS.uzoshop; // '#1c4587' navy
 
 function colorFor(name: string, idx: number) {
-  return STORE_COLORS[name] || SERIES_PALETTE[idx % SERIES_PALETTE.length];
+  return storeColor(name, idx);
 }
 
 type Props = {
@@ -61,7 +39,7 @@ export function RoasChart({ data, stores, bare = false }: Props) {
       <div className="flex items-center justify-end gap-3 sm:gap-4 flex-wrap text-[11px] sm:text-xs">
         {stores.map((s, i) => {
           const color = colorFor(s, i);
-          const isPrimary = color === SERIES_PALETTE[0];
+          const isPrimary = color === PRIMARY_COLOR;
           return (
             <span key={s} className="inline-flex items-center gap-1.5">
               <span
@@ -148,7 +126,7 @@ export function RoasChart({ data, stores, bare = false }: Props) {
             />
             {stores.map((s, i) => {
               const color = colorFor(s, i);
-              const isPrimary = color === SERIES_PALETTE[0];
+              const isPrimary = color === PRIMARY_COLOR;
               return (
                 <Line
                   key={s}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { CalendarDays, ChevronDown, ChevronUp } from 'lucide-react';
 import type { DailyRow, DashboardData } from '@/lib/types';
@@ -15,6 +15,13 @@ type Mode = 'per-store' | 'summary';
 
 type Props = {
   stores: string[];
+  /**
+   * The global store filter from the Dashboard (filters.store).
+   * When set to a specific store (not "All"), MonthlyTables initialises its
+   * local dropdown to that store and stays in sync when the global filter
+   * changes. The operator can still override locally after that.
+   */
+  globalStore?: string;
   /** When true, omit the outer title/header — used inside CollapsibleSection. */
   bare?: boolean;
 };
@@ -106,9 +113,25 @@ function roasCell(roas: number, revenue: number, totalSpend: number): { classNam
   return { className: ROAS_BG[roasLabel(roas).tone], text: formatNumber(roas) };
 }
 
-export function MonthlyTables({ stores, bare = false }: Props) {
+export function MonthlyTables({ stores, globalStore, bare = false }: Props) {
   const [mode, setMode] = useState<Mode>('per-store');
-  const [storeFilter, setStoreFilter] = useState<string>(stores[0] || 'All');
+
+  // Initialise the local store dropdown from the global filter when it names a
+  // specific store; otherwise fall back to the first available store.
+  // A useEffect keeps the two in sync when the operator changes the global
+  // filter — but still allows a local override once the component is mounted.
+  const initialStore =
+    globalStore && globalStore !== 'All' && stores.includes(globalStore)
+      ? globalStore
+      : stores[0] || 'All';
+  const [storeFilter, setStoreFilter] = useState<string>(initialStore);
+
+  useEffect(() => {
+    if (!globalStore || globalStore === 'All') return;
+    if (stores.includes(globalStore)) {
+      setStoreFilter(globalStore);
+    }
+  }, [globalStore, stores]);
 
   const historyRange = useMemo(
     () => ({ from: isoMonthsAgo(MONTHLY_TABLES_HISTORY_MONTHS), to: isoToday() }),

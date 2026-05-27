@@ -5,15 +5,10 @@ import { Trophy, AlertTriangle, ShoppingBag } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { roasLabel, type StoreAgg } from '@/lib/analytics';
 import { storeHasTikTok } from '@/lib/platformsByStore';
-
-const STORE_COLORS: Record<string, string> = {
-  uzoshop: '#1c4587',
-  'Zol Plus': '#ea4335',
-  '360usmile': '#34a853',
-};
+import { storeColor } from '@/lib/storeColors';
 
 function colorFor(name: string, idx: number) {
-  return STORE_COLORS[name] || ['#1c4587', '#ea4335', '#34a853', '#fbbc04', '#9c27b0'][idx % 5];
+  return storeColor(name, idx);
 }
 
 const TONE_BG: Record<string, string> = {

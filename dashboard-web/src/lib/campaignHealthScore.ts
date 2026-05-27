@@ -21,7 +21,7 @@
  * Weights (tuned so a declining-trajectory mature campaign can't grade A
  * even if profitability + attribution look healthy — momentum matters for
  * the *next* dollar's expected return):
- *   - profitability:        40%   ROAS × trust modulation
+ *   - profitability:        40%   ROAS × trust modulation   (WEIGHTS.profitability = 0.40)
  *   - volume:               15%   spend tier (sample-size weighting)
  *   - trajectory:           25%   CPM↔ROAS momentum (heavy: forward-looking)
  *   - attribution clarity:  20%   deterministic % of revenue
@@ -43,7 +43,7 @@ import type { CpmRoasAnalysis } from '@/lib/cpmRoasAnalysis';
 export type HealthGrade = 'A' | 'B' | 'C' | 'D' | 'F' | 'unknown';
 
 export type HealthScoreComponents = {
-  /** ROAS × trust modulation, 0..100. The dominant signal (45% weight). */
+  /** ROAS × trust modulation, 0..100. The dominant signal (40% weight). */
   profitability: number;
   /** Spend-tier score, 0..100. Small spend = small sample = lower score. */
   volume: number;

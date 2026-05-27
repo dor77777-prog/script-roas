@@ -239,7 +239,7 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo }: Props)
               amount={-current.cogs}
               pct={-pct(current.cogs)}
               tone="cost"
-              note="הערכה: 25% מההכנסה (ממוצע היסטורי 25-26%)"
+              note={revenue > 0 ? `הערכה: ${(current.cogs / revenue * 100).toFixed(1)}% מההכנסה` : 'הערכה: COGS לפי שיעור לכל חנות'}
               running={afterCogs}
             />
             <PnLLine

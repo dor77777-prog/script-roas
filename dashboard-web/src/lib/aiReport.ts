@@ -243,7 +243,8 @@ export function generateAiReport({
   }
   out.push(`| ROAS משוקלל | ${roas > 0 ? fmtNum(roas, 2) : '—'} |`);
   out.push(`| רווח גולמי (Revenue − Spend) | ${fmtCad(grossProfit)} |`);
-  out.push(`| COGS (25% מההכנסה) | ${fmtCad(cogs)} |`);
+  const cogsRatePct = revenue > 0 ? (cogs / revenue * 100).toFixed(1) : '—';
+  out.push(`| COGS (${cogsRatePct}% מההכנסה) | ${fmtCad(cogs)} |`);
   out.push(`| **רווח תפעולי** | **${fmtCad(netProfit)}** |`);
   if (hasOrdersData) {
     out.push(`| מספר הזמנות (לפי מוצר) | ${fmtNum(totalOrders)} |`);
@@ -2268,7 +2269,7 @@ export function generateAiReport({
     '- **יעד ROAS פנימי**: 3.0+ (כתום מעל 2.5, ירוק מעל 2.7, כחול מעל 3.0).' +
       ' מתחת ל-2.0 = הפסד.',
   );
-  out.push('- **COGS משוער**: 25% מההכנסה. רווח תפעולי = הכנסות − פרסום − 25% מההכנסה.');
+  out.push('- **COGS משוער**: לפי שיעור לכל חנות (השיעור המוגדר לכל חנות). רווח תפעולי = הכנסות − פרסום − COGS.');
   out.push(
     '- **שלוש חנויות**: uzoshop, Zol Plus, 360usmile. כל אחת קהל ומוצרים שונים — ' +
       'אל תאחד מסקנות אם המספרים לכל חנות מספרים סיפור שונה.',
