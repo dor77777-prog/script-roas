@@ -17,7 +17,7 @@ export function withinTolerance(
   return diff / denom <= pctTol;
 }
 
-/** Same-source (L1): every value must match within float epsilon. */
+/** Same-source (L1): every value must match within an accounting tolerance — spread ≤ max(1¢, 1ppm of the largest magnitude). */
 export function agree(
   values: number[],
   { label = 'value', eps = 0.01 }: { label?: string; eps?: number } = {},
@@ -25,7 +25,7 @@ export function agree(
   if (values.length < 2) return [];
   const max = Math.max(...values);
   const min = Math.min(...values);
-  const tol = Math.max(eps, 1e-6 * Math.abs(max));
+  const tol = Math.max(eps, 1e-6 * Math.max(...values.map(Math.abs)));
   if (max - min <= tol) return [];
   return [{ label, detail: `spread ${(max - min).toFixed(4)} > tol ${tol.toFixed(4)}`, values: Object.fromEntries(values.map((v, i) => [`src${i}`, v])) }];
 }

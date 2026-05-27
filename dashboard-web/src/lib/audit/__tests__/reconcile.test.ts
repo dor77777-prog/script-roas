@@ -26,3 +26,23 @@ describe('agree (same-source L1: exact within epsilon)', () => {
     expect(v[0].label).toBe('revenue');
   });
 });
+
+describe('boundary cases', () => {
+  it('withinTolerance passes at the $1 floor and fails just past both thresholds', () => {
+    expect(withinTolerance(100, 101)).toBe(true);   // exactly $1 → within abs floor
+    expect(withinTolerance(100, 102)).toBe(false);  // $2 and 2% → fails both
+  });
+  it('withinTolerance handles one-side-zero via the non-zero denominator', () => {
+    expect(withinTolerance(0, 0.99)).toBe(true);    // ≤ $1
+    expect(withinTolerance(0, 1.01)).toBe(false);   // > $1 and 100%
+  });
+  it('agree returns [] for a single-element array', () => {
+    expect(agree([42])).toEqual([]);
+  });
+  it('agree detects an outlier regardless of position', () => {
+    expect(agree([100, 137, 100], { label: 'mid' }).length).toBe(1);
+  });
+  it('agree tolerates a tiny spread on all-negative values', () => {
+    expect(agree([-1000.00, -1000.005]).length).toBe(0); // spread 0.005 ≤ 1¢ floor
+  });
+});
