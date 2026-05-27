@@ -404,6 +404,13 @@ export function ManualOverridesCrud() {
       <p className="text-text-secondary text-xs">
         סה״כ {rows.length} שורות. שינויים נכנסים לתוקף בריצת ה-Inngest הבאה (cron-daily, sync-now, או backfill).
       </p>
+      {/* A8-F4 (2026-05-27): the manual_overrides CHECK constraint allows
+          only meta|google. TikTok spend cannot be corrected here — this is a
+          known schema limitation, not a bug. */}
+      <p className="text-text-secondary text-xs">
+        הערה: ניתן לתקן הוצאה ידנית עבור Meta ו-Google בלבד. TikTok אינו נתמך
+        כרגע במנגנון התיקונים הידני (מגבלת סכמה).
+      </p>
     </div>
   );
 }

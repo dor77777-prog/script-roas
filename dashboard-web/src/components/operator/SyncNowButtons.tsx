@@ -56,6 +56,7 @@
 
 import { useState } from 'react';
 import { RefreshCw, Loader2 } from 'lucide-react';
+import { STORE_ID_TO_NAME } from '@/lib/platformsByStore';
 
 // Source of truth — mirrors the route's VALID_STORES allowlist
 // (api/operator/sync-now/route.ts:58). Keeping the literal here rather
@@ -63,6 +64,12 @@ import { RefreshCw, Loader2 } from 'lucide-react';
 // server-only modules that route.ts pulls in (inngest client, apiErrors).
 const STORES = ['uzoshop', 'zolplus', 'usmile360'] as const;
 type StoreId = (typeof STORES)[number];
+
+// A8-F3 (2026-05-27): show human display names (zolplus → "Zol Plus",
+// usmile360 → "360usmile") on the buttons. DISPLAY ONLY — the POSTed
+// `storeId` payload stays the internal id. STORE_ID_TO_NAME is the
+// canonical id→name map (platformsByStore.ts).
+const storeLabel = (id: StoreId): string => STORE_ID_TO_NAME[id] ?? id;
 
 type SyncPayload =
   | { scope: 'all' }
@@ -139,7 +146,7 @@ export function SyncNowButtons() {
             key={storeId}
             type="button"
             onClick={() =>
-              sync({ scope: 'store', storeId }, `Sync ${storeId}`)
+              sync({ scope: 'store', storeId }, `Sync ${storeLabel(storeId)}`)
             }
             disabled={pendingKey !== null}
             className="flex items-center gap-1 bg-blue-700/70 hover:bg-blue-600/70 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm px-3 py-2 rounded"
@@ -149,7 +156,7 @@ export function SyncNowButtons() {
             ) : (
               <RefreshCw className="w-4 h-4" />
             )}
-            {storeId}
+            {storeLabel(storeId)}
           </button>
         ))}
       </div>

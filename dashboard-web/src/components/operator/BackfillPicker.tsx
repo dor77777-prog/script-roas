@@ -47,9 +47,17 @@
 
 import { useState } from 'react';
 import { CalendarDays, Loader2 } from 'lucide-react';
+import { STORE_ID_TO_NAME } from '@/lib/platformsByStore';
 
 // Source of truth — mirrors the route's VALID_STORES allowlist.
 const ALL_STORES = ['uzoshop', 'zolplus', 'usmile360'] as const;
+
+// A8-F3 (2026-05-27): show human display names on the checkboxes
+// (zolplus → "Zol Plus", usmile360 → "360usmile"). DISPLAY ONLY — the
+// POSTed `storeIds` payload keeps the internal ids. STORE_ID_TO_NAME is the
+// canonical id→name map (platformsByStore.ts).
+const storeLabel = (id: string): string =>
+  STORE_ID_TO_NAME[id as keyof typeof STORE_ID_TO_NAME] ?? id;
 
 // D-A3 history boundary. Same value as eventBackfill.ts:111 +
 // /api/operator/backfill/route.ts (HISTORY_BOUNDARY). UX hint only;
@@ -187,7 +195,7 @@ export function BackfillPicker() {
                   checked={storeIds.has(s)}
                   onChange={() => toggleStore(s)}
                 />
-                <span>{s}</span>
+                <span>{storeLabel(s)}</span>
               </label>
             ))}
           </div>

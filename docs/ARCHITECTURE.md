@@ -529,6 +529,8 @@ Open /operator for details: https://roas-dashboard-smoky.vercel.app/operator
 | ריצות אחרונות | GET `/api/operator/jobs` (poll 15s) | Inngest REST v1 proxy |
 | Backfill טווח | POST `/api/operator/backfill` `{from,to,storeIds}` | Inngest `event/backfill` |
 | manual_overrides CRUD | `/api/operator/manual-overrides` GET/POST/DELETE | ישיר ל-Supabase admin client |
+
+> **מגבלת `manual_overrides` (A8-F4, 2026-05-27):** ה-CHECK constraint על `platform` מתיר `meta` ו-`google` בלבד. תיקון הוצאה ידנית עבור TikTok **אינו נתמך** דרך ה-CRUD — מגבלת סכמה מכוונת, לא באג. שינוי תצריך migration על ה-constraint.
 | WhatsApp test | POST `/api/operator/whatsapp/send-now` | Inngest `event-whatsapp-send-now` |
 | Reset Data | POST `/api/operator/reset` `{scope,confirm}` | ישיר ל-Supabase admin client |
 

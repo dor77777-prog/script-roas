@@ -39,36 +39,10 @@ export const TRANSACTION_FEES_RATE = 0.065;
 /** Email service (Klaviyo / similar) fixed monthly cost per store, in CAD. */
 export const EMAIL_COST_PER_STORE_MONTHLY = 20;
 
-/**
- * Compute the full P&L line items for a single aggregate of rows.
- * Pure function — no React, no fetching.
- */
-export function buildPnLBreakdown(input: {
-  revenue: number;
-  adSpend: number;
-  cogs: number;
-  fixedCostsForPeriod: number;
-}): {
-  revenue: number;
-  adSpend: number;
-  cogs: number;
-  transactionFees: number;
-  fixedCosts: number;
-  trueNetProfit: number;
-  margin: number;
-} {
-  const { revenue, adSpend, cogs, fixedCostsForPeriod } = input;
-  const transactionFees = revenue * TRANSACTION_FEES_RATE;
-  const trueNetProfit =
-    revenue - adSpend - cogs - transactionFees - fixedCostsForPeriod;
-  const margin = revenue > 0 ? trueNetProfit / revenue : 0;
-  return {
-    revenue,
-    adSpend,
-    cogs,
-    transactionFees,
-    fixedCosts: fixedCostsForPeriod,
-    trueNetProfit,
-    margin,
-  };
-}
+// Audit fix 2026-05-27 (A2-07): removed the unused `buildPnLBreakdown`
+// helper. It had ZERO callers (verified via grep across src/) and
+// hardcoded the 6.5% transaction-fees rate, ignoring the per-store
+// `${STORE}_TX_FEES_RATE` calibration that `analytics.ts` threads through
+// the real P&L path (`getTransactionFeesRateForStore`). Keeping it risked
+// a future caller silently bypassing per-store calibration. The live P&L
+// breakdown is computed in `analytics.ts` / `PnLBreakdown.tsx`.
