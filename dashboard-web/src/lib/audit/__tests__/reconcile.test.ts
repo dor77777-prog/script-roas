@@ -61,17 +61,63 @@ const ordersRows = [{ date: '2026-05-02', storeName: 'uzoshop', totalCad: 6736.1
 
 describe('reconcileWindow', () => {
   it('reports no violations for a self-consistent window', () => {
-    const v = reconcileWindow({ dataRows, productRows, campaignRows, ordersRows });
-    expect(v).toEqual([]);
+    expect(reconcileWindow({ dataRows, productRows, campaignRows, ordersRows })).toEqual([]);
   });
   it('flags ROAS that disagrees with revenue/spend (INV-3)', () => {
     const bad = [{ ...dataRows[0], roas: 99 }];
     const v = reconcileWindow({ dataRows: bad, productRows, campaignRows, ordersRows });
-    expect(v.some(x => x.label.includes('ROAS'))).toBe(true);
+    expect(v.some(x => x.label.includes('INV-3 ROAS'))).toBe(true);
+  });
+  it('flags totalSpend that disagrees with platform sum (INV-6)', () => {
+    const bad = [{ ...dataRows[0], totalSpend: 9999 }];
+    const v = reconcileWindow({ dataRows: bad, productRows, campaignRows, ordersRows });
+    expect(v.some(x => x.label.includes('INV-6 platform-sum'))).toBe(true);
   });
   it('flags campaigns_daily Meta spend off by >1% and >$1 vs data_daily (INV-7)', () => {
     const badCamp = [{ date: '2026-05-02', storeName: 'uzoshop', platform: 'Meta', spend: 3000 }, campaignRows[1]];
     const v = reconcileWindow({ dataRows, productRows, campaignRows: badCamp, ordersRows });
-    expect(v.some(x => x.label.includes('Meta spend'))).toBe(true);
+    expect(v.some(x => x.label.includes('INV-7 Meta spend'))).toBe(true);
+  });
+  it('uses products NET revenue for INV-9 — a gross>net refund gap on net match does not falsely fire', () => {
+    // gross 8000 but net 6736.19 matches data → no INV-9 violation
+    const refundProducts = [{ date: '2026-05-02', storeName: 'uzoshop', revenue: 8000, netRevenue: 6736.19, orders: 12 }];
+    const v = reconcileWindow({ dataRows, productRows: refundProducts, campaignRows, ordersRows });
+    expect(v.some(x => x.label.includes('INV-9'))).toBe(false);
+  });
+  it('flags products NET revenue that disagrees with data revenue (INV-9)', () => {
+    const badProd = [{ date: '2026-05-02', storeName: 'uzoshop', revenue: 9000, netRevenue: 9000, orders: 12 }];
+    const v = reconcileWindow({ dataRows, productRows: badProd, campaignRows, ordersRows });
+    expect(v.some(x => x.label.includes('INV-9'))).toBe(true);
+  });
+  it('flags orders_attribution total that disagrees with data revenue (INV-10)', () => {
+    const badOrders = [{ date: '2026-05-02', storeName: 'uzoshop', totalCad: 9000 }];
+    const v = reconcileWindow({ dataRows, productRows, campaignRows, ordersRows: badOrders });
+    expect(v.some(x => x.label.includes('INV-10'))).toBe(true);
+  });
+  it('flags a non-finite value in any source row (INV-14)', () => {
+    const badData = [{ ...dataRows[0], roas: Infinity }];
+    const v = reconcileWindow({ dataRows: badData, productRows, campaignRows, ordersRows });
+    expect(v.some(x => x.label.includes('INV-14'))).toBe(true);
+  });
+  it('does NOT let per-store discrepancies cancel across stores (INV-7 per-cell)', () => {
+    // store A over-reports Meta by 1000, store B under-reports by 1000; window totals cancel.
+    const d = [
+      { date: '2026-05-02', storeName: 'A', fbSpend: 1000, gaSpend: 0, ttSpend: 0, totalSpend: 1000, revenue: 2000, roas: 2 },
+      { date: '2026-05-02', storeName: 'B', fbSpend: 1000, gaSpend: 0, ttSpend: 0, totalSpend: 1000, revenue: 2000, roas: 2 },
+    ];
+    const c = [
+      { date: '2026-05-02', storeName: 'A', platform: 'Meta', spend: 2000 },
+      { date: '2026-05-02', storeName: 'B', platform: 'Meta', spend: 0 },
+    ];
+    const p = [
+      { date: '2026-05-02', storeName: 'A', revenue: 2000, netRevenue: 2000, orders: 1 },
+      { date: '2026-05-02', storeName: 'B', revenue: 2000, netRevenue: 2000, orders: 1 },
+    ];
+    const o = [
+      { date: '2026-05-02', storeName: 'A', totalCad: 2000 },
+      { date: '2026-05-02', storeName: 'B', totalCad: 2000 },
+    ];
+    const v = reconcileWindow({ dataRows: d, productRows: p, campaignRows: c, ordersRows: o });
+    expect(v.filter(x => x.label.includes('INV-7 Meta spend')).length).toBe(2); // both A and B fire
   });
 });
