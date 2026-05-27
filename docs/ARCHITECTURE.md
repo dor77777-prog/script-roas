@@ -86,7 +86,7 @@ Supabase Security Advisor יראה 10 אזהרות `0013_rls_disabled_in_public`
 
 ## 4. Inngest Functions
 
-### 4.1 9 פונקציות הליבה (כולל OAuth canary של Phase 13.4)
+### 4.1 12 פונקציות הליבה (כולל OAuth canary של Phase 13.4 + cron-live-heavy של Phase 13.9)
 
 | Function ID | תזמון | תוכן |
 |---|---|---|
@@ -96,9 +96,14 @@ Supabase Security Advisor יראה 10 אזהרות `0013_rls_disabled_in_public`
 | `cron-live-uzoshop` | `*/10 * * * *` | rolling 3-day Shopify + Meta + Google + TikTok spend + orders_attribution של היום + refresh effective_status (כל השורות הקיימות per ad-set, ללא lookback — Phase 12.5 fix; bulk UPDATE per (platform, status) — incident fix 2026-05-25) |
 | `cron-live-zolplus` | `*/10 * * * *` | אותו דבר |
 | `cron-live-usmile360` | `*/10 * * * *` | אותו דבר |
+| `cron-live-heavy-uzoshop` | `*/30 * * * *` IL | Phase 13.9 — Meta adset+ad insights + budgets, Google ad-group+ad insights, TikTok ad insights → `persistCampaignsLive()` UPSERT ל-`campaigns_daily` + `ads_daily` בטווח [היום, אתמול] |
+| `cron-live-heavy-zolplus` | `*/30 * * * *` IL | אותו דבר ל-zolplus |
+| `cron-live-heavy-usmile360` | `*/30 * * * *` IL | אותו דבר ל-usmile360 |
 | `event-sync-now` | event-triggered (`event/sync-now`) | זהה ל-cron-live, ידני מ-`/operator` |
 | `event-backfill` | event-triggered (`event/backfill`) | טווח תאריכים נבחר × חנויות נבחרות |
 | `cron-oauth-canary` | `0 0 * * *` IL | פעם ביום פינג ל-fetchGoogleAdsSpendForDay('uzoshop', yesterday) כcanary לרענון refresh-token; failure → Sentry + Inngest dead-letter (Phase 13.4) |
+
+**`cron-live-heavy-{store}`** (Phase 13.9 — 2026-05-27). Cron `TZ=Asia/Jerusalem */30 * * * *`. For each store × each date in [today, yesterday]: fetches Meta adset+ad insights + budgets, Google ad-group+ad insights, TikTok ad insights; calls `persistCampaignsLive()` to UPSERT `campaigns_daily` + `ads_daily`. Co-exists with cron-daily (01:00 nightly full run) and cron-live (10-min light spend + status). All three writers UPSERT the same PKs so `ON CONFLICT DO UPDATE` reconciles per-column; the latest write wins for the columns it touches. Rate-limit (429) and auth failures soft-fail per-platform → throttled WhatsApp alert via `notifyTokenFailure` → next tick retries.
 
 ### 4.2 3 פונקציות WhatsApp (Phase 05.7.4)
 
