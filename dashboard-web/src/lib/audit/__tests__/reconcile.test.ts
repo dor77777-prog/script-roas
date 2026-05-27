@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { withinTolerance, agree, type Violation } from '../reconcile';
+import { withinTolerance, agree, type Violation, reconcileWindow } from '../reconcile';
 
 describe('withinTolerance (cross-source L2: ≤1% OR ≤$1)', () => {
   it('passes when absolute diff ≤ $1 even if pct large', () => {
@@ -44,5 +44,34 @@ describe('boundary cases', () => {
   });
   it('agree tolerates a tiny spread on all-negative values', () => {
     expect(agree([-1000.00, -1000.005]).length).toBe(0); // spread 0.005 ≤ 1¢ floor
+  });
+});
+
+const dataRows = [
+  { date: '2026-05-02', storeName: 'uzoshop', fbSpend: 1972, gaSpend: 150, ttSpend: 0, totalSpend: 2122, revenue: 6736.19, roas: 6736.19 / 2122 },
+];
+const productRows = [
+  { date: '2026-05-02', storeName: 'uzoshop', revenue: 6736.19, netRevenue: 6736.19, orders: 12 },
+];
+const campaignRows = [
+  { date: '2026-05-02', storeName: 'uzoshop', platform: 'Meta', spend: 1972 },
+  { date: '2026-05-02', storeName: 'uzoshop', platform: 'Google', spend: 150 },
+];
+const ordersRows = [{ date: '2026-05-02', storeName: 'uzoshop', totalCad: 6736.19 }];
+
+describe('reconcileWindow', () => {
+  it('reports no violations for a self-consistent window', () => {
+    const v = reconcileWindow({ dataRows, productRows, campaignRows, ordersRows });
+    expect(v).toEqual([]);
+  });
+  it('flags ROAS that disagrees with revenue/spend (INV-3)', () => {
+    const bad = [{ ...dataRows[0], roas: 99 }];
+    const v = reconcileWindow({ dataRows: bad, productRows, campaignRows, ordersRows });
+    expect(v.some(x => x.label.includes('ROAS'))).toBe(true);
+  });
+  it('flags campaigns_daily Meta spend off by >1% and >$1 vs data_daily (INV-7)', () => {
+    const badCamp = [{ date: '2026-05-02', storeName: 'uzoshop', platform: 'Meta', spend: 3000 }, campaignRows[1]];
+    const v = reconcileWindow({ dataRows, productRows, campaignRows: badCamp, ordersRows });
+    expect(v.some(x => x.label.includes('Meta spend'))).toBe(true);
   });
 });
