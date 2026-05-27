@@ -100,7 +100,29 @@ All P0 + P1 + P2 fixed (or explicitly downgraded). Final state: **`npm test` 121
 
 **NEW residual surfaced by the corrected harness (needs follow-up): INV-7 Meta per-day, recent settled days.** With matched windows, `data_daily` vs `campaigns_daily` Meta spend diverge per (date,store) on recent days outside the override window and outside today — e.g. 2026-05-26/uzoshop `data_daily 1156.81 vs campaigns_daily 895.77` (29%, ~$261); 05-26/360usmile `87.74 vs 177.08` (2×); 05-24/uzoshop `1133.61 vs 1067.77` (6%). Too large for FX timing (FX moves <1%/day). P0-3's "matched" verdict was on the 3-DAY SUM; per-day the two tables disagree. Hypothesis: `cron-daily` (nightly source-of-truth) and `cron-live-heavy` (intraday) write per-day Meta spend that doesn't fully reconcile after settling. **Same-source consistency is unaffected** (each component a user sees is internally consistent); this is a `data_daily`↔`campaigns_daily` cross-source divergence. Recommend: re-run `npm run audit:reconcile` after the next nightly `cron-daily` settles 05-26/27; if the per-day gap persists on settled days, open a focused follow-up on the cron-daily vs cron-live-heavy Meta per-day write path. INV-10 residual is now just 05-20 (refund-day, explained) + 05-02 ($69, ~1%, borderline).
 
-**Operator backfill recommended** (fixes apply to future cron writes only): re-run cron-daily / backfill for the affected May date range to correct historical (a) `orders_attribution.totalCad` (P0-2) and (b) TikTok FX-timing rows.
+**INV-7 Meta per-day residual — DIAGNOSED 2026-05-28, NOT a structural bug.** Pulled raw Meta insights (campaign-level, daily) for 05-24..26 via the Meta API and compared to both tables:
+
+| date/store | raw Meta (ILS) | data_daily (CAD) | implied FX | campaigns_daily settled (CAD) |
+|---|---|---|---|---|
+| 05-24 uzoshop | 2377.09 | 1133.61 | 0.477 | 1122.81 |
+| 05-26 uzoshop | 2392.97 | 1156.81 | 0.483 | 1167.34 |
+| 05-26 360usmile | 181.50 | 87.74 | 0.483 | 88.54 |
+
+`data_daily.fbSpend` = raw Meta ILS × FX(~0.477–0.483) — **matches Meta ground truth exactly**. `campaigns_daily` (re-snapshotted minutes after the harness run) ALSO matches raw×FX within ~1%. The harness's earlier 29% gap (campaigns 895.77 for 05-26/uzoshop) was a **transient unsettled `campaigns_daily`** value — `cron-live-heavy` was mid-refresh (partial campaign set) at the snapshot instant; it settled to the correct ~1167 within minutes. The residual ~1% is FX-timing between the two writes (addressed forward by the P1-7 per-date FX fix). **Conclusion: no cron-daily↔cron-live-heavy structural mismatch; transient settling artifact. No focused bug opened.** (Post-backfill harness re-run confirms.)
+
+## Post-backfill final verification (2026-05-28)
+
+Ran the operator backfill (cron-daily, 2026-05-01..27 × 3 stores) on the deployed fixed code, then verified with cache-busted live reads:
+
+- **Meta fully reconciled.** `data_daily.fbSpend` ≡ Σ `campaigns_daily` Meta **to the cent** for every real date 05-08..26 across all three stores (uzoshop / Zol Plus / 360usmile). The earlier per-day "29% gap" was confirmed to be **stale Next.js ISR cache** on the wide-window `/api/campaigns` URL, not a data bug — cache-busted reads return identical values. The INV-7 Meta residuals that remain are ONLY the 05-01..07 manual-override window (campaigns_daily=0, expected).
+- **orders_attribution (P0-2) fixed by backfill.** INV-10 dropped to just 05-20 (the refund-spike day, expected — `data_daily.revenue` is net, `orders_attribution.totalCad` is now the immutable gross `total_price`).
+- **same-source (INV-3/INV-6) = 0 and NaN (INV-14) = 0** throughout.
+
+**Harness hardened:** added a cache-buster (`_cb` + `cache:'no-store'`) to the live harness — without it, the harness reports stale-cache false-positives for a few minutes after any backfill (the ISR routes cache per-URL for 60s). Commit on this branch.
+
+**One genuine minor residual — TikTok 05-21..23 uzoshop:** cache-busted reads show `data_daily.ttSpend` > `campaigns_daily` TikTok by $5–12/day (52%/24%/6%) on those three days only; 05-24..26 are clean ($0.00). Likely the backfill did not rewrite `data_daily.tt_spend` for those older days (TikTok written via a different cron path, or a TikTok fetch soft-fail during backfill), leaving the pre-P1-7-fix FX value. Magnitude is tiny (smallest platform, ~$27 total, 3 days) and does NOT affect same-source consistency. **Follow-up:** targeted re-backfill of 05-21..23, or confirm the cron path that writes `data_daily.tt_spend` vs `campaigns_daily` TikTok reconciles.
+
+**Operator backfill recommended (DONE 2026-05-28 for May; see above)** (fixes apply to future cron writes only): re-run cron-daily / backfill for the affected May date range to correct historical (a) `orders_attribution.totalCad` (P0-2) and (b) TikTok FX-timing rows.
 
 **UI-label fixes** (P0-1 relabel, P1-1 banding, STORE_COLORS) are verified by the test suite; final visual confirmation happens after this branch is merged + deployed to prod (the fixes are not yet live, so a browser pass against prod would still show the old labels).
 

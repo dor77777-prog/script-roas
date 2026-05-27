@@ -11,8 +11,18 @@ const WINDOWS = [
 // 'All' is a virtual sentinel — rows are filtered client-side by byStore().
 const STORES = ['All', 'uzoshop', 'Zol Plus', '360usmile'];
 
+// Cache-buster: the API routes use Next.js ISR (`revalidate=60`) keyed by full
+// URL. Right after a backfill, the same URL can serve a stale snapshot (cached
+// mid-write), producing false cross-source violations. A unique `_cb` param per
+// run forces a cache miss → fresh Supabase read. Without this the harness can
+// report stale-cache false-positives for minutes after any write.
+const CB = `_cb=${Date.now()}-${Math.random().toString(36).slice(2)}`;
+function bust(path: string): string {
+  return path.includes('?') ? `${path}&${CB}` : `${path}?${CB}`;
+}
+
 async function getJson(path: string): Promise<{ rows?: unknown[]; [k: string]: unknown }> {
-  const r = await fetch(`${BASE}${path}`);
+  const r = await fetch(`${BASE}${bust(path)}`, { cache: 'no-store' });
   if (!r.ok) throw new Error(`${path} → ${r.status}`);
   return r.json() as Promise<{ rows?: unknown[] }>;
 }
