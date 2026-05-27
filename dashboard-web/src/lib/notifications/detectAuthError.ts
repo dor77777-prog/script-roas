@@ -94,3 +94,53 @@ export function isAuthError(provider: TokenFailureProvider, errMsg: unknown): bo
   }
   return false;
 }
+
+/**
+ * Phase 13.9 (2026-05-27) — classifier for rate-limit / quota-exhaustion
+ * errors from ad platforms. Distinct from `isAuthError` because the
+ * operator's mitigation is different: auth = "refresh the token", rate-
+ * limit = "wait, no action needed, the system retries next tick".
+ *
+ * Pattern sources:
+ *   - Meta:    HTTP 429 + body `{ "error": { "code": 4 | 17 | 32, ... } }` ("User request limit reached", "Application request limit").
+ *   - Google:  GAQL `RESOURCE_EXHAUSTED` (code 8) or `QUOTA_EXCEEDED`.
+ *   - TikTok:  code 40100 ("rate limit exceeded").
+ *   - All:     fetchWithBackoff exhausts retries → returns the final 429
+ *              whose body is replaced with the literal string "exhausted".
+ *
+ * Tight matching by substring to avoid false-positives on non-rate-limit
+ * fetches; conservative because the consequence of misclassifying is
+ * sending a noisy WhatsApp alert.
+ */
+export function isRateLimitError(
+  provider: 'meta' | 'google' | 'tiktok' | 'shopify',
+  errorMsg: string,
+): boolean {
+  if (!errorMsg) return false;
+  const m = errorMsg.toLowerCase();
+  // Universal: HTTP 429 in any provider's wrapped message OR the
+  // withBackoff "exhausted" sentinel.
+  if (m.includes('(429)') || m.includes(' 429 ') || m.includes('exhausted')) return true;
+  if (provider === 'meta') {
+    return (
+      m.includes('user request limit reached') ||
+      m.includes('application request limit') ||
+      m.includes('"code": 4') ||
+      m.includes('"code": 17') ||
+      m.includes('"code": 32')
+    );
+  }
+  if (provider === 'google') {
+    return (
+      m.includes('resource_exhausted') ||
+      m.includes('resource has been exhausted') ||
+      m.includes('quota_exceeded') ||
+      m.includes('quota exceeded') ||
+      /gaql error 8\b/.test(m)
+    );
+  }
+  if (provider === 'tiktok') {
+    return m.includes('40100') || m.includes('rate limit exceeded');
+  }
+  return false;
+}
