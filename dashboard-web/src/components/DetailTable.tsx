@@ -60,7 +60,7 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
               <th className="px-3 py-2.5 text-center font-medium">ROAS</th>
               <th className="px-3 py-2.5 text-end font-medium">רווח גולמי</th>
               {showCogs && <th className="px-3 py-2.5 text-end font-medium">COGS</th>}
-              {showCogs && <th className="px-3 py-2.5 text-end font-medium">רווח נטו</th>}
+              {showCogs && <th className="px-3 py-2.5 text-end font-medium">רווח תפעולי</th>}
             </tr>
           </thead>
           <tbody>

@@ -1341,7 +1341,7 @@ KPIs מצרפיים של הקמפיין:
 - **Total Spend** = FB + GA
 - **Gross Profit** = Revenue − Total Spend
 - **COGS** = Revenue × 0.25 (ברירת מחדל)
-- **Net Profit** = Gross Profit − COGS
+- **רווח תפעולי** (Operating Profit) = Gross Profit − COGS
 
 ### 11.2 תא שחור עם "0" — דגל חיוני
 **תא ROAS שחור + טקסט "0"** = Spend > 0 + Revenue = 0.
@@ -2019,8 +2019,8 @@ Backfill על אותו טווח שוב ושוב הוא בטוח — לא יוצ�
 | CPA | `spend / conversions` | CAD | להמרה |
 | Gross Profit | `revenue − spend` | CAD | לפני COGS |
 | COGS | `revenue × 0.25` (ברירת מחדל) | CAD | ניתן לכוון |
-| רווח תפעולי (Operating Profit) | `revenue − spend − COGS` | CAD | לפני עמלות ועלויות קבועות — מוצג ב-HeroOverview וב-AI Report |
-| Net Profit | `gross profit − COGS` | CAD | לפני עמלות |
+| רווח תפעולי (Operating Profit) | `revenue − spend − COGS` | CAD | לפני עמלות ועלויות קבועות — מוצג ב-HeroOverview, טאב פירוט וב-AI Report |
+| רווח תפעולי (Operating Profit / DetailTable) | `gross profit − COGS` | CAD | עמודת "רווח תפעולי" בטאב פירוט; לפני עמלות |
 | Transaction Fees | `revenue × 0.065` | CAD | משוער |
 | Fixed Costs | סכום recurring + פרורטה של one-time | CAD | מ-BillingSettings |
 | True Net Profit / רווח נטו | `revenue − spend − COGS − fees − fixed` | CAD | החישוב המלא — מוצג ב-KpiCards |

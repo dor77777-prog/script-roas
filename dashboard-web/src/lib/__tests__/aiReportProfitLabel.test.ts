@@ -7,9 +7,16 @@
  *
  * The test is intentionally minimal — it feeds a known revenue/spend/cogs
  * triple through generateAiReport() and pins the bold table row label.
+ *
+ * Also guards the DetailTable column header (rev−spend−cogs → "רווח תפעולי")
+ * and the Dashboard.tsx KpiCards SectionIntro formula via source-file string
+ * assertions. This avoids needing @testing-library/react while still failing
+ * on accidental label reversions.
  */
 
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { generateAiReport } from '@/lib/aiReport';
 import type { DailyRow } from '@/lib/types';
 
@@ -105,5 +112,44 @@ describe('aiReport profit label — P0-1', () => {
 
     // The AI context line that defines the formula must use "רווח תפעולי"
     expect(md).toMatch(/רווח תפעולי\s*=\s*הכנסות − פרסום/);
+  });
+});
+
+// ============================================================================
+// Source-file label guards (no React renderer needed)
+//
+// DetailTable.tsx and Dashboard.tsx are React components; without
+// @testing-library/react we cannot render them. Instead we read the source
+// as a string and assert the key label literals. These tests fail immediately
+// if anyone reverts "רווח תפעולי" back to "רווח נטו" in the wrong slot.
+// ============================================================================
+describe('P0-1 label guard — source-file string assertions', () => {
+  const root = resolve(__dirname, '../../../');
+
+  it('DetailTable.tsx COGS column header is "רווח תפעולי", not "רווח נטו"', () => {
+    const src = readFileSync(
+      resolve(root, 'src/components/DetailTable.tsx'),
+      'utf8',
+    );
+    expect(src).toMatch(/showCogs.*רווח תפעולי/s);
+    expect(src).not.toMatch(/showCogs.*רווח נטו/s);
+  });
+
+  it('Dashboard.tsx KpiCards SectionIntro formula describes the full trueNetProfit formula', () => {
+    const src = readFileSync(
+      resolve(root, 'src/components/Dashboard.tsx'),
+      'utf8',
+    );
+    expect(src).toMatch(/רווח נטו = הכנסות − הוצאות − COGS − עמלות − עלויות קבועות/);
+    expect(src).not.toMatch(/רווח נטו = הכנסות − הוצאות − COGS \(25%\)/);
+  });
+
+  it('aiReport.ts section 1.2 uses "רווח תפעולי", not "רווח נטו בפועל"', () => {
+    const src = readFileSync(
+      resolve(root, 'src/lib/aiReport.ts'),
+      'utf8',
+    );
+    expect(src).toMatch(/1\.2 רווחיות.*רווח תפעולי/s);
+    expect(src).not.toMatch(/רווח נטו בפועל/);
   });
 });

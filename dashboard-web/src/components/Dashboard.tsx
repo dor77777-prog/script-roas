@@ -392,7 +392,7 @@ function HomeTab({
         icon={<Target size={18} />}
         title="מדדים מסכמים לתקופה"
         description="הסיכום של כל החנויות הנבחרות בטווח שבחרת. כל מספר מושווה לתקופה הקודמת באותו אורך."
-        formula="ROAS = הכנסות / סך הוצאות פרסום   •   רווח נטו = הכנסות − הוצאות − COGS (25%)"
+        formula="ROAS = הכנסות / סך הוצאות פרסום   •   רווח נטו = הכנסות − הוצאות − COGS − עמלות − עלויות קבועות"
       />
       <KpiCards current={filtered.curAgg} previous={filtered.prevAgg} series={filtered.cur} />
 
