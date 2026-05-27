@@ -226,6 +226,18 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
 
+  // Phase 13.10 (2026-05-27) — also pull the catalog so the title fallback
+  // works for products that haven't sold yet. products_daily only contains
+  // rows for products that had at least one order in the range; mapping a
+  // fresh campaign to a brand-new product would otherwise render the bare
+  // numeric productId. /api/product-catalog has every Shopify product
+  // (active + draft), so it bridges the gap.
+  const { data: catalogData } = useSWR<{ rows: Array<{ productId: string; storeName: string; title: string }> } | null>(
+    !isAllStores ? '/api/product-catalog' : null,
+    fetcher,
+    { revalidateOnFocus: false, dedupingInterval: 60_000 },
+  );
+
   // Aggregate campaigns → Aggregated[] for the pure function.
   const aggregated = useMemo(() => {
     if (isAllStores || !campaignsData?.rows) return [];
@@ -255,13 +267,22 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
 
   const productTitles = useMemo(() => {
     const out = new Map<string, string>();
-    if (isAllStores || !productsData?.rows) return out;
-    for (const r of productsData.rows) {
+    if (isAllStores) return out;
+    // Phase 13.10 (2026-05-27) — products_daily titles take priority (they
+    // reflect the title at sale-time, which can differ from the live
+    // catalog title if the operator renamed the product mid-range). Fall
+    // back to the catalog for products that have a mapping but haven't
+    // sold yet — otherwise the UI renders the raw numeric productId.
+    for (const r of productsData?.rows ?? []) {
       if (r.storeName !== storeId) continue;
       if (!out.has(r.productId) && r.productTitle) out.set(r.productId, r.productTitle);
     }
+    for (const r of catalogData?.rows ?? []) {
+      if (r.storeName !== storeId) continue;
+      if (!out.has(r.productId) && r.title) out.set(r.productId, r.title);
+    }
     return out;
-  }, [productsData, storeId, isAllStores]);
+  }, [productsData, catalogData, storeId, isAllStores]);
 
   // Resolve storeId from storeName via the campaigns response (campaigns
   // rows carry both storeId + storeName). Falls back to lowercased
