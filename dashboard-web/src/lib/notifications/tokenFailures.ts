@@ -313,6 +313,16 @@ export async function notifyTokenFailure(
  * Mark a (provider, storeId, operation) failure as resolved. Used by the
  * operator console "✓ סומן כתוקן" button. The next failure for the same
  * key will start a fresh alert cycle (last_alert_sent_at = NULL).
+ *
+ * P1-8 (data-consistency audit 2026-05-27): now checks and throws on
+ * Supabase update errors. Previously the error was silently ignored (the
+ * `.update()` return value was discarded with `await` and no capture),
+ * so the route's POST handler returned `{ ok: true }` even when the DB
+ * update failed due to RLS, network issues, or missing row. The operator-
+ * console "סמן כתוקן" button appeared to succeed while nothing was written.
+ *
+ * Post-fix: throws so the route's catch block returns HTTP 500 and the
+ * component shows `alert()` with the error, making the failure visible.
  */
 export async function resolveTokenFailure(
   provider: TokenFailureProvider,
@@ -320,8 +330,12 @@ export async function resolveTokenFailure(
   operation: string,
 ): Promise<void> {
   const sb = admin();
-  if (!sb) return;
-  await sb
+  if (!sb) {
+    throw new Error(
+      'resolveTokenFailure: SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY missing — cannot mark failure resolved',
+    );
+  }
+  const { error } = await sb
     .from('token_failures')
     .update({
       resolved_at: new Date().toISOString(),
@@ -330,4 +344,9 @@ export async function resolveTokenFailure(
     .eq('provider', provider)
     .eq('store_id', storeId)
     .eq('operation', operation);
+  if (error) {
+    throw new Error(
+      `resolveTokenFailure: failed to mark ${provider}/${storeId}/${operation} resolved: ${error.message}`,
+    );
+  }
 }

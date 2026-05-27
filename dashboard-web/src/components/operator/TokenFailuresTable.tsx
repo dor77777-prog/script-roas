@@ -25,15 +25,29 @@ import type {
 
 const ENDPOINT = '/api/operator/token-failures';
 
+// P1-8 (data-consistency audit 2026-05-27): fetcher now throws on any error
+// response so SWR places the component into the `error` branch (amber alert),
+// instead of returning {rows:[]} which made the UI show "הכל ירוק" even when
+// the endpoint was returning HTTP 500 or a 200+{error} Supabase failure.
+//
+// Two cases that were previously false-green:
+//   1. !r.ok (HTTP 4xx/5xx) → now throws; SWR error → amber "שגיאת רענון"
+//   2. r.ok + data.error (200 + Supabase error) → now throws; same branch
+//
+// The legitimate "zero failures" case is HTTP 200 + {rows:[], no error field}.
 const fetcher = async (url: string): Promise<TokenFailuresResponse> => {
   const r = await fetch(url);
   if (!r.ok) {
-    return {
-      rows: [],
-      lastUpdated: new Date().toISOString(),
-    };
+    const body = await r.json().catch(() => ({})) as Record<string, unknown>;
+    throw new Error(String(body?.error ?? `HTTP ${r.status}`));
   }
-  return r.json();
+  const data = (await r.json()) as TokenFailuresResponse & { error?: string };
+  if (data.error) {
+    // Server-side Supabase error — surface as an error state, not as
+    // "zero failures". The operator needs to know the panel couldn't load.
+    throw new Error(data.error);
+  }
+  return data;
 };
 
 /** "12 דק׳ לפני" / "3 שעות לפני" — short relative Hebrew. */
