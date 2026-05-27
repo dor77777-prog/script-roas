@@ -602,6 +602,7 @@ The TodayLive card (היום — חי) computes CPM from `data_daily.fb/ga/tt_im
 ### 14.2 Source-of-truth field
 - **משתמשים**: `order.total_price` (קבוע במטבע הזמנה, לא משתנה אחרי החזר).
 - **לא משתמשים**: `order.current_total_price` (חי — משתנה כשהחזר נכנס) — זה היה הבאג לפני 05.2.3.0.
+- **חל גם על `orders_attribution.totalCad`**: גם הפטשר של `fetchShopifyOrdersAttribution` חייב לקרוא `total_price`, לא `current_total_price`. שימוש ב-`current_total_price` כאן יגרום לכך שסכומי ייחוס היסטוריים יצטמצמו בכל פעם שיופעל cron מחדש (P0-2, תוקן 2026-05-28).
 
 ### 14.3 Deduction field
 **משתמשים**: `refund_line_items[].subtotal` (סחורה במטבע הזמנה). Shopify משתמש בזה פנימית לחישוב `current_total_price`.
