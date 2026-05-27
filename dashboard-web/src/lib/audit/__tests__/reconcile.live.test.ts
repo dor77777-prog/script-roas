@@ -27,10 +27,13 @@ describe.skipIf(!process.env.AUDIT_LIVE)('LIVE reconciliation against production
         // /api/data does not support store filtering — all stores are always returned;
         // byStore() handles per-store slicing client-side.
         const [data, campaigns, products, orders] = await Promise.all([
+          // All four routes parse `from`/`to` via parseRangeParams (NOT range.from/range.to).
+          // Using range.from previously fell through to a silent default 90-day window — since the
+          // P1-2 fix those routes now return 400, which is why correct param names are required here.
           getJson(`/api/data?from=${w.from}&to=${w.to}`),
-          getJson(`/api/campaigns?range.from=${w.from}&range.to=${w.to}${storeQ}`),
-          getJson(`/api/products?range.from=${w.from}&range.to=${w.to}${storeQ}`),
-          getJson(`/api/orders-attribution?range.from=${w.from}&range.to=${w.to}${storeQ}`),
+          getJson(`/api/campaigns?from=${w.from}&to=${w.to}${storeQ}`),
+          getJson(`/api/products?from=${w.from}&to=${w.to}${storeQ}`),
+          getJson(`/api/orders-attribution?from=${w.from}&to=${w.to}${storeQ}`),
         ]);
         const byStore = <T extends { storeName?: string }>(rows: T[]): T[] =>
           store === 'All' ? rows : rows.filter(r => r.storeName === store);
