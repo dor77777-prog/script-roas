@@ -175,10 +175,12 @@ describe('cannibalization revenueGrowthPct negative early revenue (P1-4)', () =>
     expect(result[0].risk).toBe('none'); // genuine incrementality — unchanged
   });
 
-  it('earlyRev<0 lateRev>0 genuine recovery: revenueGrowthPct is null (undefined ratio)', () => {
+  it('earlyRev<0 lateRev>0 genuine recovery: revenueGrowthPct is null, verdict is insufficient (abstain pin)', () => {
     // negative-to-positive: growth % is not calculable with a negative base.
-    // The null path emits 'none' (incrementality verdict), consistent with
-    // the earlyRev=0 path treatment.
+    // The code correctly abstains: earlyRev < 0 → risk = 'insufficient'.
+    // This is intentional — you cannot compute % growth from a negative base,
+    // so the algorithm declines to judge cannibalization rather than emitting
+    // a false-positive NONE that masks a refund-heavy early half.
     const result = detectProductCannibalization({
       range: FULL_RANGE,
       storeId: STORE,
@@ -195,5 +197,35 @@ describe('cannibalization revenueGrowthPct negative early revenue (P1-4)', () =>
       ],
     });
     expect(result[0].metrics.revenueGrowthPct).toBeNull();
+    // Pin the abstain verdict: earlyRev<0 → 'insufficient' (not 'none', not 'high').
+    expect(result[0].risk).toBe('insufficient');
+  });
+
+  it('earlyRev=0 lateRev=0 (both zero): verdict is none, reason does NOT claim revenue surged/grew', () => {
+    // When both halves have zero revenue, the earlyRev===0 branch fires.
+    // The reason string must NOT say the revenue "surged" or "grew" (zinkah/tsamkhah)
+    // — that would be factually wrong when late half is also zero.
+    // Correct: a neutral "no revenue in either period" message.
+    const result = detectProductCannibalization({
+      range: FULL_RANGE,
+      storeId: STORE,
+      productMap: MAP,
+      campaignsDaily: [
+        ...buildCampaignDaysHalf('c1', 100, 1, 7),
+        ...buildCampaignDaysHalf('c2', 0, 1, 7),
+        ...buildCampaignDaysHalf('c1', 150, 8, 14), // spend grew
+        ...buildCampaignDaysHalf('c2', 0, 8, 14),
+      ],
+      productsDaily: [
+        ...buildProductDaysHalf('p1', 0, 1, 7),  // zero early
+        ...buildProductDaysHalf('p1', 0, 8, 14), // zero late
+      ],
+    });
+    // Verdict: still 'none' (earlyRev===0 path, not cannibalization)
+    expect(result[0].risk).toBe('none');
+    // The reason must NOT contain surge/growth wording when both are zero.
+    // Hebrew surge word: "זינקה", Hebrew grew word: "צמח"
+    expect(result[0].reason).not.toMatch(/זינקה/);
+    expect(result[0].reason).not.toMatch(/וזינקה/);
   });
 });

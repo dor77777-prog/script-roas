@@ -512,8 +512,14 @@ export function detectProductCannibalization(args: {
         risk = 'insufficient';
         reason = `הכנסת המוצר בחצי הראשון הייתה שלילית (החזרות גבוהות מהמכירות) — אחוז הצמיחה אינו מוגדר עם בסיס שלילי. לא ניתן להשוות חצי-לחצי באופן הוגן.`;
       } else {
+        // earlyRev === 0. Two sub-cases:
+        // - lateRev > 0: genuine incrementality (revenue appeared from nothing).
+        // - lateRev === 0: no revenue in either period (both zero). In this case
+        //   claiming the revenue "surged" is factually wrong, so emit a neutral message.
         risk = 'none';
-        reason = `הכנסת המוצר בחצי הראשון הייתה אפס וזינקה בחצי השני — צמיחה לא מוגדרת באחוזים אבל ברורות אינקרמנטלית. אין קניבליזציה.`;
+        reason = lateRev > 0
+          ? `הכנסת המוצר בחצי הראשון הייתה אפס — הכנסה בחצי השני ברורות אינקרמנטלית. אין קניבליזציה.`
+          : `אין הכנסה בשתי התקופות — לא ניתן לזהות קניבליזציה.`;
       }
     } else if (spendGrowthPct >= 0.25 && revenueGrowthPct < 0.05) {
       risk = 'high';
