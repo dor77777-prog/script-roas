@@ -31,6 +31,11 @@ async function fetchTodayFx(): Promise<number | null> {
 }
 
 export async function GET(req: Request) {
+  // API contract note (P1-2, 2026-05-27):
+  // ?store= is intentionally NOT parsed here. This route returns ALL stores'
+  // rows for the date range; the client (Dashboard.tsx / filters.store) slices
+  // by store client-side. This is by design: the "All Stores" aggregate view
+  // needs the full dataset to compute cross-store totals accurately.
   let range;
   try {
     range = parseRangeParams(new URL(req.url).searchParams);

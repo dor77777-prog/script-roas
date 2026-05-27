@@ -49,7 +49,18 @@ export function parseRangeParams(searchParams: URLSearchParams): DateRange {
   const from = searchParams.get('from');
   const to = searchParams.get('to');
 
-  if (!from && !to) return defaultRange();
+  // P1-2 (data-consistency audit 2026-05-27): treat "both absent" as an
+  // error instead of silently returning the 90-day default. A caller with
+  // a misnamed param (e.g. ?range.from= instead of ?from=) would have
+  // previously received HTTP 200 with the wrong window — indistinguishable
+  // from a correct response. Fail loud so callers know the request is wrong.
+  //
+  // SPA safety: buildDateRangeKey always emits both params (or returns null
+  // so SWR doesn't fire at all). TodayLive always constructs ?from=…&to=…
+  // explicitly. No legitimate caller intentionally omits both params.
+  if (!from && !to) {
+    throw new RangeParamError('Both ?from and ?to are required.');
+  }
 
   if (!from || !to) {
     throw new RangeParamError('Both ?from and ?to are required when either is provided.');

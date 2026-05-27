@@ -22,6 +22,13 @@ export type OrdersAttributionResponse = {
 export async function GET(req: Request) {
   // RangeParamError (malformed ?from=&to=) → 400 with no-store.
   // All other errors (Supabase failures) → 200 + empty rows (degraded path).
+  //
+  // API contract note (P1-2, 2026-05-27):
+  // ?store= is intentionally NOT parsed here. This route returns all stores'
+  // attribution rows for the date range; client-side code (Dashboard.tsx,
+  // CampaignsTable) slices by store after receiving the full dataset. This is
+  // by design: attribution analysis requires cross-store context to correctly
+  // attribute orders that span multiple stores.
   const searchParams = new URL(req.url).searchParams;
   let range;
   try {

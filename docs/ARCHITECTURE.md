@@ -897,6 +897,34 @@ dashboard-web/
 
 ---
 
+## 23.5 API Parameter Contract (P1-2, 2026-05-27)
+
+### Date parameters (?from / ?to)
+All telemetry routes (`/api/data`, `/api/campaigns`, `/api/products`,
+`/api/ads`, `/api/orders-attribution`) require both `?from=YYYY-MM-DD`
+and `?to=YYYY-MM-DD`. Since 2026-05-28, `parseRangeParams` throws
+`RangeParamError` (→ HTTP 400) when **both** params are absent, instead
+of silently returning the 90-day default. A request with misnamed params
+(e.g. `?range.from=`) now receives HTTP 400, making the error visible.
+
+Client-side safety: `buildDateRangeKey` returns `null` when either date
+is missing, so SWR never fires a request without both params. All SPA
+call sites always emit a full `?from=…&to=…` pair.
+
+### Store filtering (?store=)
+`?store=` is intentionally **not parsed on the server** for `/api/data`
+and `/api/orders-attribution`. These routes return **all stores** for the
+date range; the client slices by store after receiving the full dataset.
+Rationale:
+- The "All Stores" aggregate needs cross-store totals computed server-side.
+- Attribution analysis requires cross-store context.
+- Server-side store filtering would require cache-busting per store, multiplying ISR slots.
+
+Other routes (`/api/campaigns`, `/api/products`, `/api/ads`) DO accept
+`?store=` for per-store scoping (see their respective route handlers).
+
+---
+
 ## 24. קישורים חשובים
 
 - **Production**: `https://roas-dashboard-smoky.vercel.app`
