@@ -660,7 +660,8 @@ export function computeWindowStability(
   }
 
   // Per-window coverage; drop windows where Meta claim was zero (no
-  // signal to compute from). The cap at COVERAGE_WARNING_THRESHOLD is
+  // signal to compute from) OR where matched revenue is non-positive
+  // (refund-heavy weeks). The cap at COVERAGE_WARNING_THRESHOLD is
   // INTENTIONALLY kept here even though it was removed from the displayed
   // `computeCoverage` (AUDIT U-05, 2026-05-24). Reason: stdDev is not
   // robust to outliers — one window with 10× coverage (pixel outage)
@@ -668,8 +669,16 @@ export function computeWindowStability(
   // are at 1.3×. The displayed coverage on the trust panel shows the
   // raw value with a warning chip; the variance-driven stability verdict
   // uses the bounded value to stay representative of typical behavior.
+  //
+  // Audit fix 2026-05-28 (P1-5): the existing filter was upper-side only
+  // (Math.min cap). A refund-heavy week where net matched revenue < 0
+  // produced a negative coverage (e.g. −1.5) that flowed unbounded into
+  // the variance, falsely pushing the verdict to 'volatile'. The correct
+  // treatment mirrors the meta=0 gate: a window with matched ≤ 0 contains
+  // no usable incrementality signal → drop it from the σ calculation. This
+  // mirrors the principle that meta=0 windows are already dropped.
   const coverages = buckets
-    .filter(b => b.meta > 0)
+    .filter(b => b.meta > 0 && b.matched > 0)
     .map(b => Math.min(COVERAGE_WARNING_THRESHOLD, b.matched / b.meta));
   if (coverages.length < 2) return null;
 
