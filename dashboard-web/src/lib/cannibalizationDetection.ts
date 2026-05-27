@@ -439,13 +439,15 @@ export function detectProductCannibalization(args: {
           lateHalfRevenue: lateRev,
           spendGrowthPct: earlySpend > 0 ? (lateSpend - earlySpend) / earlySpend : 0,
           revenueGrowthPct:
-            earlyRev !== 0
-              ? (lateRev - earlyRev) / Math.abs(earlyRev)
-              // Audit fix 2026-05-23 (HIGH-11 / O3-HI-03): emit explicit
-              // null when early revenue is 0 with positive late revenue
-              // (growth is mathematically undefined). lateRev === 0 stays
-              // as 0 (flat).
-              : lateRev > 0 ? null : 0,
+            // Audit fix 2026-05-28 (P1-4): when earlyRev <= 0, growth % is
+            // undefined (non-positive base). Emitting Math.abs(earlyRev) as
+            // denominator would report false-positive growth when the product
+            // was loss-making in both halves (e.g. −300→−100 reads as +67%).
+            // Return null so the UI shows "N/A" and the verdict ladder uses
+            // the null-branch (incrementality / abstain).
+            earlyRev > 0
+              ? (lateRev - earlyRev) / earlyRev
+              : null,
           marginalRoas: null,
         },
       });
@@ -460,12 +462,20 @@ export function detectProductCannibalization(args: {
     // special-cased "∞" branching unpredictably from the JSON-round-tripped
     // null. Standardize on `null` everywhere so cloudSync + AI-report
     // payloads agree with what the UI receives in-memory.
+    // Audit fix 2026-05-28 (P1-4): when earlyRev <= 0, growth % is undefined
+    // (non-positive base makes the ratio meaningless and misleading). The
+    // pre-fix code used Math.abs(earlyRev) as denominator — this caused a
+    // refund-heavy early half (earlyRev negative) with a less-negative late
+    // half to report false-positive growth (e.g. −300→−100 with +50% spend
+    // returned +67%, no cannibalization). Now: earlyRev <= 0 → null.
+    // The null-branch below emits an incrementality/abstain verdict.
+    // Note: earlyRev === 0 previously split between null (lateRev>0) and 0
+    // (lateRev===0); the new rule collapses both to null, which is the
+    // cleaner contract — "N/A" rather than "flat" when we have no valid base.
     const revenueGrowthPct: number | null =
-      earlyRev !== 0
-        ? (lateRev - earlyRev) / Math.abs(earlyRev)
-        : lateRev > 0
-          ? null // grew from 0 → some — undefined growth %, but not cannibalization
-          : 0;
+      earlyRev > 0
+        ? (lateRev - earlyRev) / earlyRev
+        : null;
     const deltaSpend = lateSpend - earlySpend;
     const deltaRev = lateRev - earlyRev;
     const marginalRoas = deltaSpend > 0 ? deltaRev / deltaSpend : null;
@@ -474,12 +484,10 @@ export function detectProductCannibalization(args: {
     // doesn't cause cannibalization in any direction.
     //
     // Audit fix 2026-05-23 (HIGH-11 / O3-HI-03): `revenueGrowthPct === null`
-    // means early revenue was 0 with positive late revenue — undefined
-    // growth ratio mathematically (Infinity pre-fix). Semantically this
-    // is "revenue surged from nothing to something", the OPPOSITE of
-    // cannibalization — emit `none` with an explanatory reason rather
-    // than letting any threshold comparison short-circuit on a null
-    // operand.
+    // means earlyRev <= 0 — growth ratio is undefined (non-positive base).
+    // Audit fix 2026-05-28 (P1-4): expanded from earlyRev===0 to earlyRev<=0;
+    // negative earlyRev with Math.abs denominator was producing false-positive
+    // growth signals. Now all non-positive early revenue paths land here.
     let risk: CannibalizationRisk = 'none';
     let reason: string;
     // Hebrew-formatted percent display: shows "n/a" when null.
@@ -491,12 +499,22 @@ export function detectProductCannibalization(args: {
       risk = 'none';
       reason = `ההוצאה גדלה רק ${(spendGrowthPct * 100).toFixed(0)}% (סף 10%) — אין הסקייל המספק כדי לזהות קניבליזציה.`;
     } else if (revenueGrowthPct === null) {
-      // Special-case the undefined-growth path. The cohort scaled (spend
-      // is past the +10% noise floor) AND the product's revenue went
-      // from zero to non-zero — definitionally not cannibalization, it's
-      // pure incrementality.
-      risk = 'none';
-      reason = `הכנסת המוצר בחצי הראשון הייתה אפס וזינקה בחצי השני — צמיחה לא מוגדרת באחוזים אבל ברורות אינקרמנטלית. אין קניבליזציה.`;
+      // Non-positive earlyRev: growth ratio is undefined.
+      //
+      // Sub-case A: earlyRev === 0 — revenue appeared from nothing.
+      //   Definitionally incrementality (not cannibalization). Emit none.
+      //
+      // Sub-case B: earlyRev < 0 (refund-heavy early half).
+      //   The ratio is not a meaningful incrementality signal when the base
+      //   is negative. Emit 'insufficient' to signal "can't measure" rather
+      //   than a false-positive NONE that masks a money-losing cohort.
+      if (earlyRev < 0) {
+        risk = 'insufficient';
+        reason = `הכנסת המוצר בחצי הראשון הייתה שלילית (החזרות גבוהות מהמכירות) — אחוז הצמיחה אינו מוגדר עם בסיס שלילי. לא ניתן להשוות חצי-לחצי באופן הוגן.`;
+      } else {
+        risk = 'none';
+        reason = `הכנסת המוצר בחצי הראשון הייתה אפס וזינקה בחצי השני — צמיחה לא מוגדרת באחוזים אבל ברורות אינקרמנטלית. אין קניבליזציה.`;
+      }
     } else if (spendGrowthPct >= 0.25 && revenueGrowthPct < 0.05) {
       risk = 'high';
       reason = `הוצאת הקבוצה גדלה ${(spendGrowthPct * 100).toFixed(0)}% אבל ההכנסה של המוצר גדלה רק ${revPctText}. סקייל לא הניב כמעט כלום — קניבליזציה גבוהה או רוויה. שווה לעצור את הקמפיין החלש בקבוצה במקום לסקייל עוד.`;
