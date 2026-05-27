@@ -246,16 +246,22 @@ export function billingForRange(input: {
       // an equal share of the subscription cost (e.g. $60/mo Klaviyo → $20
       // each across 3 stores). Unchanged from the d/CR-01 fix.
       //
-      // For PERCENT-OF-REVENUE rows: split REVENUE-WEIGHTED (P1-6, 2026-05-28).
-      // Each store pays pct% of ITS OWN revenue, not an equal slice of the
-      // total. This matches the semantics of the single-store filter path
-      // (which already charges the store's actual % of its own revenue) and
-      // ensures per-store P&L cards are internally consistent.
+      // For PERCENT-OF-REVENUE rows: allocate the GLOBAL amount proportionally
+      // by each store's clamped revenue weight (FIX A, 2026-05-28).
       //
-      // The GLOBAL Σ invariant (sum(byStore) == recurringInPeriod) is
-      // preserved for both branches because the sum of revenue-weighted
-      // per-store amounts equals the total-revenue-based amount exactly:
-      //   Σ (revenueForStore(s) * pct/100) = totalRevenue * pct/100 = amount
+      // WHY the old "each store pays pct% of its own revenue" approach breaks:
+      // when any store has negative revenue, max(0, revenueByStore[s]) clamps
+      // it to 0, but the global `amount` = max(0, totalRevenue) * pct/100 is
+      // computed from totalRevenue which INCLUDES the negative store. Result:
+      //   Σ per-store (clamped) > global amount → P0-A invariant violated.
+      //
+      // CORRECT APPROACH — proportional weight allocation (Σ == amount by construction):
+      //   weight_s = max(0, revenueByStore[s])
+      //   W = Σ weight_s
+      //   if W > 0: byStore[s] = amount * (weight_s / W)
+      //   else (all zero/negative): even split amount / N
+      //
+      // For FLAT recurring (monthlyCAD): even split (unchanged from d/CR-01 fix).
       if (storeNames.length === 0) continue;
       const amount = isPercent
         ? (Math.max(0, revenue) * pct) / 100
@@ -263,9 +269,19 @@ export function billingForRange(input: {
       recurringInPeriod += amount;
       bySource[r.source] = (bySource[r.source] ?? 0) + amount;
       if (isPercent) {
-        // Revenue-weighted per-store split.
-        for (const s of storeNames) {
-          const storeShare = (revenueForStore(s) * pct) / 100;
+        // Proportional weight-based allocation — guarantees Σ byStore == amount
+        // for any revenue sign mix.
+        const weights = storeNames.map(s =>
+          revenueByStore && Number.isFinite(revenueByStore[s])
+            ? Math.max(0, revenueByStore[s])
+            : 0,
+        );
+        const W = weights.reduce((a, b) => a + b, 0);
+        for (let i = 0; i < storeNames.length; i++) {
+          const s = storeNames[i];
+          const storeShare = W > 0
+            ? amount * (weights[i] / W)
+            : amount / storeNames.length; // even split when all weights are 0
           byStore[s] = (byStore[s] ?? 0) + storeShare;
         }
       } else {
