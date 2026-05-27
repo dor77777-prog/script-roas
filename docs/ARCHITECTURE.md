@@ -621,6 +621,24 @@ The TodayLive card (היום — חי) computes CPM from `data_daily.fb/ga/tt_im
 ### 14.6 Validation
 מול Shopify Admin > Reports > **Net sales** (לא Gross/Total). פערים מותרים: עד ±0.50 CAD ביום ועד 5 CAD ב-30 ימים, בשל עיגול ו-FX.
 
+### 14.7 Reconciliation gap: `data_daily.revenue` vs `Σ products_daily.netRevenue` (A4-01 / P1-3)
+
+**Expected semantic divergence — not a bug.**
+
+`data_daily.revenue_cad` (= `storeNetCad`) deducts ALL `refund_line_items[].subtotal` from store-level gross, including line items where `product_id` is null or missing (custom items, manual adjustments, service charges). These null-product-id refunds cannot be attributed to any product bucket.
+
+`Σ products_daily.netRevenue` across a (date, store) is built from `byProduct[pid].netRevenueCad` — only line items with a valid product_id are tracked per-product. Null-pid refunds flow into the diagnostic-only `customItemRefundCad` field and are NOT subtracted from any product bucket.
+
+**Consequence:**
+```
+Σ products_daily.netRevenue  =  data_daily.revenue_cad + customItemRefundCad
+```
+The gap equals `customItemRefundCad`, which at uzoshop can range from $1,500 to $5,400 per day depending on manual refund activity. This is internally consistent: both values are correct for their respective definitions; they simply measure different things.
+
+**INV-9 (audit harness):** The reconciliation check in `reconcile.ts` compares these two figures and may fire when `customItemRefundCad > 0`. This is a known, expected gap. See the INV-9 comment in `audit/reconcile.ts` for the annotation.
+
+**A4-05 corollary:** `products_daily.grossRevenue == netRevenue` for a given product on a given day is CORRECT whenever all refunds that day had null product_ids (custom items). In that case, the product itself had no refund deduction — its net equals its gross. The refund appears only in `data_daily.revenue` (store-level) via `customItemRefundCad`. This is not a writer bug.
+
 ---
 
 ## 15. Frontend stacking & z-index ladder

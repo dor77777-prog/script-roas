@@ -107,8 +107,20 @@ export function reconcileWindow(input: {
     if (!withinTolerance(dataTikTok, campTikTok)) out.push({ label: `INV-7 TikTok spend ${tag}`, detail: `data_daily ${dataTikTok} vs campaigns_daily ${campTikTok}` });
 
     // INV-9: Σ products NET revenue ≈ data_daily revenue (both net of refunds). Fall back to gross only when net is absent.
+    //
+    // KNOWN EXPECTED GAP (A4-01 / P1-3): when the store has refund line items
+    // with a null product_id (custom items, manual adjustments), those refunds
+    // are deducted from data_daily.revenue_cad (store-level) but CANNOT be
+    // attributed to any product bucket — they flow into the diagnostic-only
+    // `customItemRefundCad` field instead. This means:
+    //   Σ products_daily.netRevenue  =  data_daily.revenue_cad + customItemRefundCad
+    // The gap equals customItemRefundCad (can be $1,500–$5,400/day at uzoshop).
+    // Both values are internally correct; they measure different things.
+    // An INV-9 violation here is expected on any day with null-pid refunds —
+    // it is NOT a pipeline bug. See docs/ARCHITECTURE.md §14.7 for the full
+    // semantic explanation.
     const prodNetRev = sum(pRows.map(p => p.netRevenue ?? p.revenue));
-    if (!withinTolerance(dataRev, prodNetRev)) out.push({ label: `INV-9 product vs data revenue ${tag}`, detail: `data_daily ${dataRev} vs products_daily(net) ${prodNetRev}` });
+    if (!withinTolerance(dataRev, prodNetRev)) out.push({ label: `INV-9 product vs data revenue ${tag}`, detail: `data_daily ${dataRev} vs products_daily(net) ${prodNetRev} — note: gap may be explained by null-product-id (custom-item) refunds; see ARCHITECTURE.md §14.7` });
 
     // INV-10: Σ orders_attribution total ≈ data_daily revenue.
     const orderRev = sum(oRows.map(o => o.totalCad));
