@@ -240,17 +240,40 @@ export function billingForRange(input: {
     const isPercent = pct > 0;
     if (r.store === 'All') {
       // "All" rows are one subscription that covers every store; charge
-      // the total once, then split the per-store attribution evenly so
-      // sum(byStore) == recurringInPeriod (within floating-point eps).
+      // the total once and attribute to each store.
+      //
+      // For FLAT recurring (monthlyCAD): split evenly — each store carries
+      // an equal share of the subscription cost (e.g. $60/mo Klaviyo → $20
+      // each across 3 stores). Unchanged from the d/CR-01 fix.
+      //
+      // For PERCENT-OF-REVENUE rows: split REVENUE-WEIGHTED (P1-6, 2026-05-28).
+      // Each store pays pct% of ITS OWN revenue, not an equal slice of the
+      // total. This matches the semantics of the single-store filter path
+      // (which already charges the store's actual % of its own revenue) and
+      // ensures per-store P&L cards are internally consistent.
+      //
+      // The GLOBAL Σ invariant (sum(byStore) == recurringInPeriod) is
+      // preserved for both branches because the sum of revenue-weighted
+      // per-store amounts equals the total-revenue-based amount exactly:
+      //   Σ (revenueForStore(s) * pct/100) = totalRevenue * pct/100 = amount
       if (storeNames.length === 0) continue;
       const amount = isPercent
         ? (Math.max(0, revenue) * pct) / 100
         : (r.monthlyCAD * days) / 30;
       recurringInPeriod += amount;
       bySource[r.source] = (bySource[r.source] ?? 0) + amount;
-      const perStoreShare = amount / storeNames.length;
-      for (const s of storeNames) {
-        byStore[s] = (byStore[s] ?? 0) + perStoreShare;
+      if (isPercent) {
+        // Revenue-weighted per-store split.
+        for (const s of storeNames) {
+          const storeShare = (revenueForStore(s) * pct) / 100;
+          byStore[s] = (byStore[s] ?? 0) + storeShare;
+        }
+      } else {
+        // Flat-CAD: even split (unchanged).
+        const perStoreShare = amount / storeNames.length;
+        for (const s of storeNames) {
+          byStore[s] = (byStore[s] ?? 0) + perStoreShare;
+        }
       }
     } else if (storeSet.has(r.store)) {
       // Store-specific row: charge once to its store. Percent rows charge
