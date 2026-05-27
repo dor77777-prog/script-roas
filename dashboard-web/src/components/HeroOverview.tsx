@@ -64,7 +64,7 @@ const dashboardDataFetcher = async (url: string): Promise<DashboardData> => {
  *   │ ★ Editorial sentence ★                                            │
  *   │                                                                   │
  *   │  CAD 142,318     ROAS 2.85    CAD 49,830    CAD 13,200            │
- *   │  הכנסות           [chip]      הוצאות         רווח נטו              │
+ *   │  הכנסות           [chip]      הוצאות         רווח תפעולי           │
  *   │  +12.4%          +0.18        −4.2%         +18.0%                │
  *   │                                                                   │
  *   │ ╱╲    ▁ ▂ ▃ ▄ ▅ ▆ ▇  (area chart, soft, sits at the bottom)        │
@@ -194,7 +194,7 @@ export function HeroOverview({ data, filters }: Props) {
     if (curAgg.spend === 0 && curAgg.revenue === 0) {
       story = 'אין עדיין נתונים לטווח הזה.';
     } else if (prevEmpty) {
-      story = `אין נתוני השוואה לתקופה הקודמת. ROAS ${curAgg.roas.toFixed(2)}, רווח נטו של ${netStr}.`;
+      story = `אין נתוני השוואה לתקופה הקודמת. ROAS ${curAgg.roas.toFixed(2)}, רווח תפעולי של ${netStr}.`;
     } else if (Math.abs(dRev) >= 0.05) {
       const verb = dRev > 0 ? 'עלו' : 'ירדו';
       // Phase 05.7.8 — pull the ROAS label from the canonical roasLabel()
@@ -208,9 +208,9 @@ export function HeroOverview({ data, filters }: Props) {
       story = `ROAS ${verb} ב-${Math.abs(dRoas).toFixed(2)} נקודות, מ-${prevAgg.roas.toFixed(2)} ל-${curAgg.roas.toFixed(2)}.`;
     } else if (Math.abs(dNet) >= 0.1) {
       const verb = dNet > 0 ? 'עלה' : 'ירד';
-      story = `רווח נטו ${verb} ב-${Math.abs(dNet * 100).toFixed(0)}%, ROAS יציב על ${curAgg.roas.toFixed(2)}.`;
+      story = `רווח תפעולי ${verb} ב-${Math.abs(dNet * 100).toFixed(0)}%, ROAS יציב על ${curAgg.roas.toFixed(2)}.`;
     } else {
-      story = `הביצועים יציבים. ROAS ${curAgg.roas.toFixed(2)}, רווח נטו של ${netStr}.`;
+      story = `הביצועים יציבים. ROAS ${curAgg.roas.toFixed(2)}, רווח תפעולי של ${netStr}.`;
     }
 
     const kpis = {
@@ -316,7 +316,7 @@ export function HeroOverview({ data, filters }: Props) {
           </div>
           <div className="lg:border-s lg:border-white/12 lg:ps-7">
             <FloatingKpi
-              label="רווח נטו"
+              label="רווח תפעולי"
               value={fmtMoneyBare(kpis.curAgg.netProfit)}
               valuePrefix="CAD"
               delta={kpis.prevEmpty ? null : kpis.dNet}

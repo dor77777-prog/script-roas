@@ -328,12 +328,13 @@ ROAS ירד פתאום?
 חמישה כרטיסים אחד ליד השני:
 
 ```
-┌──────────┬──────────┬──────────┬─────────────┬──────────┐
-│ Revenue  │ ROAS chip│ Spend    │ Net Profit  │ CPM      │
-│ $12,400  │  🟢 2.85 │ $4,100   │ $3,200      │ $12.40   │
-│ ↑ 18%    │          │ ↑ 22%    │ ↑ 14%       │ ↓ 5%     │
-└──────────┴──────────┴──────────┴─────────────┴──────────┘
+┌──────────┬──────────┬──────────┬──────────────────┬──────────┐
+│ Revenue  │ ROAS chip│ Spend    │ רווח תפעולי      │ CPM      │
+│ $12,400  │  🟢 2.85 │ $4,100   │ $3,200           │ $12.40   │
+│ ↑ 18%    │          │ ↑ 22%    │ ↑ 14%            │ ↓ 5%     │
+└──────────┴──────────┴──────────┴──────────────────┴──────────┘
 ```
+**הערה:** "רווח תפעולי" = הכנסות − הוצאות פרסום − COGS (לפני עמלות ועלויות קבועות). "רווח נטו" האמיתי (אחרי הכל) מוצג בכרטיסי ה-KpiCards מתחת.
 
 **ROAS Chip — קוד הצבעים:**
 - 🔴 **אדום** = ROAS < 2.0 (לא רווחי)
@@ -2018,10 +2019,11 @@ Backfill על אותו טווח שוב ושוב הוא בטוח — לא יוצ�
 | CPA | `spend / conversions` | CAD | להמרה |
 | Gross Profit | `revenue − spend` | CAD | לפני COGS |
 | COGS | `revenue × 0.25` (ברירת מחדל) | CAD | ניתן לכוון |
+| רווח תפעולי (Operating Profit) | `revenue − spend − COGS` | CAD | לפני עמלות ועלויות קבועות — מוצג ב-HeroOverview וב-AI Report |
 | Net Profit | `gross profit − COGS` | CAD | לפני עמלות |
 | Transaction Fees | `revenue × 0.065` | CAD | משוער |
 | Fixed Costs | סכום recurring + פרורטה של one-time | CAD | מ-BillingSettings |
-| True Net Profit | `revenue − spend − COGS − fees − fixed` | CAD | החישוב המלא |
+| True Net Profit / רווח נטו | `revenue − spend − COGS − fees − fixed` | CAD | החישוב המלא — מוצג ב-KpiCards |
 | True Margin | `true net profit / revenue × 100` | % | רווחיות אמיתית |
 | Attribution Gap | `(shopifyValue − pixelValue) / shopifyValue × 100` | % | פער דיווח |
 | Pearson Correlation r | סטטיסטית | מספר [-1..1] | קורלציה Pixel-Shopify |
