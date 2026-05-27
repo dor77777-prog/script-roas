@@ -6,13 +6,20 @@
  * and UPSERTs into `campaigns_daily` + `ads_daily` via
  * `persistCampaignsLive()`.
  *
- * Covers (4 tests):
+ * Covers (6 tests):
  *   1. Success path — both dates persist with non-empty Meta payload.
  *   2. Meta 429 rate-limit — soft-fail, persist still runs with empty
  *      Meta arrays, WhatsApp alert fires via notifyTokenFailure.
  *   3. Meta auth failure (190) — same soft-fail behavior + alert.
  *   4. Generic network error — soft-fail WITHOUT WhatsApp alert (only
  *      auth/rate-limit failures escalate to operator).
+ *   5. (P1-7 / A7-F2) fetch and persist use SEPARATE named step.run labels
+ *      per (store, date) — ensures Inngest memoizes fetch results across
+ *      retries rather than re-fetching fresh platform data each time.
+ *   6. (FX-date artifact / P0-3) getFxRate is called with each date's own
+ *      date string — yesterday's campaigns use yesterday's FX rate, not
+ *      today's. Prevents per-day CAD variance between cron-live-heavy and
+ *      cron-daily for the same historical row.
  *
  * NOTE: lives under `src/inngest/functions/__tests__/` — vitest's default
  * glob (`src/lib/**`) doesn't pick this up, so it must be invoked explicitly
@@ -142,5 +149,92 @@ describe('cron-live-heavy runHeavyForStore', () => {
     const { step } = makeStepStub();
     await runHeavyForStore(STORE, { step });
     expect(notifyTokenFailure).not.toHaveBeenCalled();
+  });
+
+  it('(P1-7 / A7-F2) fetch and persist use separate named step.run labels per (store, date)', async () => {
+    // Post-fix invariant: for each (store, date) pair, there must be a
+    // distinct "fetch-{store}-{date}" step label AND a distinct
+    // "persist-{store}-{date}" step label. This ensures Inngest memoizes
+    // the fetched data across retries (the fetch step result is replayed,
+    // not re-fetched), preventing subtle data-drift when a persist step
+    // fails mid-way and Inngest retries.
+    //
+    // Pre-fix: a single "fetch-and-persist-{store}-{date}" step combines
+    // fetch + persist, so a retry always re-fetches fresher platform data
+    // (non-idempotent).
+    const labels: string[] = [];
+    const step = {
+      async run<T>(id: string, cb: () => Promise<T>): Promise<T> {
+        labels.push(id);
+        return cb();
+      },
+    };
+    const { runHeavyForStore } = await import('../cronLiveHeavy');
+    await runHeavyForStore(STORE, { step });
+
+    // There should be NO combined "fetch-and-persist-*" labels.
+    const combined = labels.filter(l => l.startsWith('fetch-and-persist-'));
+    expect(combined, `Combined fetch-and-persist steps found: ${combined.join(', ')} — should be split into separate fetch + persist steps`).toHaveLength(0);
+
+    // For each date, expect a dedicated fetch label and a dedicated persist label.
+    for (const date of [TODAY, YESTERDAY]) {
+      const fetchLabel = `fetch-${STORE}-${date}`;
+      const persistLabel = `persist-${STORE}-${date}`;
+      expect(labels, `Missing fetch step label "${fetchLabel}"`).toContain(fetchLabel);
+      expect(labels, `Missing persist step label "${persistLabel}"`).toContain(persistLabel);
+
+      // fetch must precede persist for the same date (so memoized data flows to persist).
+      const fetchIdx = labels.indexOf(fetchLabel);
+      const persistIdx = labels.indexOf(persistLabel);
+      expect(fetchIdx, `fetch step "${fetchLabel}" must appear before persist step "${persistLabel}"`).toBeLessThan(persistIdx);
+    }
+  });
+
+  it('(FX-date artifact / P0-3) getFxRate is called with each date\'s own date string, not always today', async () => {
+    // Pre-fix: cronLiveHeavy.ts:191 calls getFxRate(currency, 'CAD', today)
+    // for BOTH today AND yesterday — yesterday's campaigns_daily row is
+    // therefore FX-converted with today's ILS rate rather than yesterday's.
+    // This produces a ~$10 CAD per-day discrepancy vs cron-daily's nightly
+    // write (which correctly uses yesterday's rate for yesterday's row).
+    //
+    // Post-fix: the getFx closure must pass the row's own `date` argument
+    // rather than the captured `today` constant.
+    //
+    // Test strategy: mock getFxRate to return different values for today vs
+    // yesterday. Verify that when persistCampaignsLive is called for
+    // yesterday, the getFx argument passed for a non-CAD currency resolves
+    // to YESTERDAY's rate (not today's). We do this by capturing the `getFx`
+    // function passed to persistCampaignsLive and calling it with a non-CAD
+    // currency, asserting the returned rate corresponds to the date being processed.
+    const fxMod = await import('@/lib/fetchers/fx');
+    (fxMod.getFxRate as ReturnType<typeof vi.fn>).mockImplementation(
+      async (_from: string, _to: string, date: string) => {
+        // Return a deterministic rate per date so we can verify which was used.
+        return date === TODAY ? 999 : date === YESTERDAY ? 777 : 1;
+      },
+    );
+
+    const { runHeavyForStore } = await import('../cronLiveHeavy');
+    const { persistCampaignsLive } = await import('@/lib/inngest/persistCampaignsLive');
+
+    const { step } = makeStepStub();
+    await runHeavyForStore(STORE, { step });
+
+    // Collect calls grouped by dateStr.
+    const calls = (persistCampaignsLive as ReturnType<typeof vi.fn>).mock.calls as Array<
+      [{ dateStr: string; getFx: (amount: number, currency: string) => Promise<number | null> }]
+    >;
+    expect(calls.length).toBe(2);
+
+    for (const [arg] of calls) {
+      const { dateStr, getFx } = arg;
+      // Ask for an ILS→CAD rate via the getFx closure the handler passed.
+      const rate = await getFx(100, 'ILS');
+      if (dateStr === TODAY) {
+        expect(rate, `getFx for today (${TODAY}) should use today's FX rate (999), got ${rate}`).toBe(999);
+      } else if (dateStr === YESTERDAY) {
+        expect(rate, `getFx for yesterday (${YESTERDAY}) should use yesterday's FX rate (777), got ${rate} — indicates today's rate was used instead`).toBe(777);
+      }
+    }
   });
 });

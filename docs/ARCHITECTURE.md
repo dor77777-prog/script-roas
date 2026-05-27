@@ -105,6 +105,12 @@ Supabase Security Advisor יראה 10 אזהרות `0013_rls_disabled_in_public`
 
 **`cron-live-heavy-{store}`** (Phase 13.9 — 2026-05-27). Cron `TZ=Asia/Jerusalem */30 * * * *`. For each store × each date in [today, yesterday]: fetches Meta adset+ad insights + budgets, Google ad-group+ad insights, TikTok ad insights; calls `persistCampaignsLive()` to UPSERT `campaigns_daily` + `ads_daily`. Co-exists with cron-daily (01:00 nightly full run) and cron-live (10-min light spend + status). All three writers UPSERT the same PKs so `ON CONFLICT DO UPDATE` reconciles per-column; the latest write wins for the columns it touches. Rate-limit (429) and auth failures soft-fail per-platform → throttled WhatsApp alert via `notifyTokenFailure` → next tick retries.
 
+Step structure per (store, date) (2026-05-28 fix — P1-7 / A7-F2):
+- `fetch-{store}-{date}` — fetches all three platforms; result is memoized by Inngest across retries.
+- `persist-{store}-{date}` — fires alerts then calls `persistCampaignsLive()` using the memoized fetch result; non-idempotent re-fetch is prevented.
+
+FX-rate correctness (2026-05-28 fix — FX-date artifact / P0-3): each date's `getFx` closure calls `getFxRate(currency, 'CAD', date)` where `date` is the date being processed (today or yesterday), not the function invocation's `today`. This ensures yesterday's campaigns_daily row is FX-converted with yesterday's ILS→CAD rate, matching cron-daily's nightly authoritative write.
+
 ### 4.2 3 פונקציות WhatsApp (Phase 05.7.4)
 
 | Function ID | תזמון | תוכן |

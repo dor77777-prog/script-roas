@@ -182,22 +182,50 @@ export async function runHeavyForStore(
   const yesterday = addDaysIso(today, -1);
   const dates = [today, yesterday];
 
-  // FX closure shared across all dates / currencies for this tick.
-  // Returns the RATE (not the converted amount) — persistCampaignsLive's
-  // local `cadFor` then multiplies amount × rate. This matches Task 2's
-  // contract (persistCampaignsLive.ts:154-164).
-  async function getFx(_amount: number, currency: string): Promise<number | null> {
-    try {
-      const rate = await getFxRate(currency.toUpperCase(), 'CAD', today);
-      if (rate === null || !Number.isFinite(rate) || rate <= 0) return null;
-      return rate;
-    } catch {
-      return null;
-    }
-  }
-
   for (const date of dates) {
-    await step.run(`fetch-and-persist-${storeId}-${date}`, async () => {
+    // P1-7 / A7-F2 (2026-05-28): split fetch and persist into separate
+    // step.run calls so Inngest memoizes the fetched data across retries.
+    // Pre-fix: a combined "fetch-and-persist-{store}-{date}" step re-fetched
+    // fresh platform data on every Inngest retry, producing subtle data-drift
+    // (the retried persist used newer impressions/spend numbers than the first
+    // attempt). Splitting into two steps means the fetch step result is
+    // memoized — on retry, Inngest replays the memoized fetch result rather
+    // than re-executing the fetch callback.
+
+    // FX-date artifact (P0-3, 2026-05-28): pass each date's own date to
+    // getFxRate instead of the captured `today`. Pre-fix: both today and
+    // yesterday used today's ILS→CAD rate, causing per-day ~$10 CAD variance
+    // vs cron-daily's nightly write (which correctly uses yesterday's rate
+    // for yesterday's row). cron-daily corrects the yesterday row at 00:05 IL
+    // but this fix prevents the intraday drift from accumulating.
+    function makeFxForDate(dateStr: string) {
+      return async function getFx(_amount: number, currency: string): Promise<number | null> {
+        try {
+          const rate = await getFxRate(currency.toUpperCase(), 'CAD', dateStr);
+          if (rate === null || !Number.isFinite(rate) || rate <= 0) return null;
+          return rate;
+        } catch {
+          return null;
+        }
+      };
+    }
+
+    type FetchedPlatformData = {
+      meta: {
+        adsetRows: MetaAdSetRow[];
+        adRows: MetaAdLiveRow[];
+        budgets: MetaBudgets;
+      };
+      google: {
+        adGroupRows: GoogleAdGroupLiveRow[];
+        adRows: GoogleAdLiveRow[];
+      };
+      tiktok: { adRows: TikTokAdLiveRow[] };
+      failures: PlatformFailure[];
+    };
+
+    // Step A: fetch all platforms for this date (memoized by Inngest on retry).
+    const fetched = (await step.run(`fetch-${storeId}-${date}`, async () => {
       const failures: PlatformFailure[] = [];
 
       // Per-platform empty sentinels — used when the fetcher throws so
@@ -258,6 +286,14 @@ export async function runHeavyForStore(
         }
       })();
 
+      return { meta, google, tiktok, failures } satisfies FetchedPlatformData;
+    })) as FetchedPlatformData;
+
+    // Step B: persist whatever did succeed (memoized fetch result is used,
+    // not re-fetched on retry).
+    await step.run(`persist-${storeId}-${date}`, async () => {
+      const { meta, google, tiktok, failures } = fetched;
+
       // Fire per-platform alerts BEFORE persist — even if persist fails
       // the operator still sees the upstream cause.
       for (const f of failures) {
@@ -296,7 +332,7 @@ export async function runHeavyForStore(
         storeId,
         dateStr: date,
         admin: getSupabaseAdmin(),
-        getFx,
+        getFx: makeFxForDate(date),
         meta,
         google,
         tiktok,
