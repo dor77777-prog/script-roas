@@ -83,6 +83,23 @@ INV-1/2/3/4/6 cross-component sums exact; FX once; Asia/Jerusalem uniform; all d
 - Live verification: harness ~70 raw violations triaged to root causes; agents pulled prod numbers for every confirmed finding.
 - Prior-audit regressions confirmed unfixed: 2× (cannibalization denom, stability clamp). Prior P0-A/P0-B confirmed fixed.
 
+## Post-fix verification (2026-05-28)
+
+All P0 + P1 + P2 fixed (or explicitly downgraded). Final state: **`npm test` 1216 passed / 1 skipped, `tsc --noEmit` clean.** Branch `audit/data-consistency-2026-05-27`, 26 commits.
+
+**Live harness (`npm run audit:reconcile`) after fixes — every remaining violation is in an EXPECTED/EXPLAINED category; zero new or unexplained:**
+- **No same-source violations** (INV-3 ROAS, INV-6 platform-sum) — the invariants that MUST be exact all pass.
+- **No NaN/Infinity** (INV-14) anywhere.
+- INV-7 Meta/Google May 1–8 uzoshop (`campaigns_daily 0`) → manual-override window (account outage); expected.
+- INV-9 product>data on most cells → custom-item (null-product-id) refund gap; documented ARCHITECTURE.md §14.7; harness now annotates these inline.
+- INV-7/9/10 May 27–28 `data_daily 0` → today/yesterday before the nightly cron-daily; cadence artifact, expected.
+- INV-9/10 May 20 → refund-spike day (A1-F3); expected.
+- INV-7 TikTok small (~$10/day) gaps May 21–24 → FX-timing artifact, **fixed for future writes** (P1-7 FX-date); historical needs backfill.
+
+**Operator backfill recommended** (fixes apply to future cron writes only): re-run cron-daily / backfill for the affected May date range to correct historical (a) `orders_attribution.totalCad` (P0-2) and (b) TikTok FX-timing rows.
+
+**UI-label fixes** (P0-1 relabel, P1-1 banding, STORE_COLORS) are verified by the test suite; final visual confirmation happens after this branch is merged + deployed to prod (the fixes are not yet live, so a browser pass against prod would still show the old labels).
+
 ## Operator context (resolves part of P0-3)
 
 **May 1–8, 2026 — uzoshop Google + Facebook spend was entered as MANUAL OVERRIDES** because the ad accounts were down / not connected to the dashboard during that window. Consequence for the audit: for those dates, `data_daily` carries the override spend but `campaigns_daily`/`ads_daily` have no campaign-level rows (a manual override has no per-campaign breakdown). So the INV-7/INV-8 gaps for uzoshop May 1–8 are **expected and correct**, not pipeline bugs. Any future re-audit should exclude the manual-override window from cross-source campaign reconciliation, or reconcile only the override total against data_daily.
