@@ -240,17 +240,56 @@ export function billingForRange(input: {
     const isPercent = pct > 0;
     if (r.store === 'All') {
       // "All" rows are one subscription that covers every store; charge
-      // the total once, then split the per-store attribution evenly so
-      // sum(byStore) == recurringInPeriod (within floating-point eps).
+      // the total once and attribute to each store.
+      //
+      // For FLAT recurring (monthlyCAD): split evenly — each store carries
+      // an equal share of the subscription cost (e.g. $60/mo Klaviyo → $20
+      // each across 3 stores). Unchanged from the d/CR-01 fix.
+      //
+      // For PERCENT-OF-REVENUE rows: allocate the GLOBAL amount proportionally
+      // by each store's clamped revenue weight (FIX A, 2026-05-28).
+      //
+      // WHY the old "each store pays pct% of its own revenue" approach breaks:
+      // when any store has negative revenue, max(0, revenueByStore[s]) clamps
+      // it to 0, but the global `amount` = max(0, totalRevenue) * pct/100 is
+      // computed from totalRevenue which INCLUDES the negative store. Result:
+      //   Σ per-store (clamped) > global amount → P0-A invariant violated.
+      //
+      // CORRECT APPROACH — proportional weight allocation (Σ == amount by construction):
+      //   weight_s = max(0, revenueByStore[s])
+      //   W = Σ weight_s
+      //   if W > 0: byStore[s] = amount * (weight_s / W)
+      //   else (all zero/negative): even split amount / N
+      //
+      // For FLAT recurring (monthlyCAD): even split (unchanged from d/CR-01 fix).
       if (storeNames.length === 0) continue;
       const amount = isPercent
         ? (Math.max(0, revenue) * pct) / 100
         : (r.monthlyCAD * days) / 30;
       recurringInPeriod += amount;
       bySource[r.source] = (bySource[r.source] ?? 0) + amount;
-      const perStoreShare = amount / storeNames.length;
-      for (const s of storeNames) {
-        byStore[s] = (byStore[s] ?? 0) + perStoreShare;
+      if (isPercent) {
+        // Proportional weight-based allocation — guarantees Σ byStore == amount
+        // for any revenue sign mix.
+        const weights = storeNames.map(s =>
+          revenueByStore && Number.isFinite(revenueByStore[s])
+            ? Math.max(0, revenueByStore[s])
+            : 0,
+        );
+        const W = weights.reduce((a, b) => a + b, 0);
+        for (let i = 0; i < storeNames.length; i++) {
+          const s = storeNames[i];
+          const storeShare = W > 0
+            ? amount * (weights[i] / W)
+            : amount / storeNames.length; // even split when all weights are 0
+          byStore[s] = (byStore[s] ?? 0) + storeShare;
+        }
+      } else {
+        // Flat-CAD: even split (unchanged).
+        const perStoreShare = amount / storeNames.length;
+        for (const s of storeNames) {
+          byStore[s] = (byStore[s] ?? 0) + perStoreShare;
+        }
       }
     } else if (storeSet.has(r.store)) {
       // Store-specific row: charge once to its store. Percent rows charge

@@ -200,10 +200,12 @@ describe('cannibalization revenueGrowthPct null sentinel (HIGH-11 / O3-HI-03)', 
     expect(result[0].metrics.revenueGrowthPct).not.toBe(Infinity);
   });
 
-  it('still emits 0 (not null) when both halves have 0 revenue', () => {
-    // Edge: both early AND late revenue are 0. The earlier semantics
-    // was that 0/0 returned 0 (flat). Pin that this path is unchanged
-    // by HIGH-11 — null is reserved for the "grew from nothing" case.
+  it('emits null when both halves have 0 revenue (P1-4 updated contract)', () => {
+    // Audit fix 2026-05-28 (P1-4): earlyRev <= 0 → null across the board.
+    // Pre-P1-4 the both-zero case emitted 0 ("flat"). With the unified
+    // earlyRev <= 0 → null contract, both-zero also returns null (the base
+    // is non-positive so the ratio is undefined). The UI renders "N/A"
+    // consistently for any non-positive early revenue.
     const result = detectProductCannibalization({
       range: FULL_RANGE,
       storeId: STORE,
@@ -219,7 +221,7 @@ describe('cannibalization revenueGrowthPct null sentinel (HIGH-11 / O3-HI-03)', 
         ...buildProductDaysHalf('p1', 0, 8, 14),
       ],
     });
-    expect(result[0].metrics.revenueGrowthPct).toBe(0);
+    expect(result[0].metrics.revenueGrowthPct).toBeNull();
   });
 
   it('non-zero early revenue still produces a finite ratio', () => {

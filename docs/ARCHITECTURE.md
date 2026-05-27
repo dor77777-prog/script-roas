@@ -105,6 +105,12 @@ Supabase Security Advisor יראה 10 אזהרות `0013_rls_disabled_in_public`
 
 **`cron-live-heavy-{store}`** (Phase 13.9 — 2026-05-27). Cron `TZ=Asia/Jerusalem */30 * * * *`. For each store × each date in [today, yesterday]: fetches Meta adset+ad insights + budgets, Google ad-group+ad insights, TikTok ad insights; calls `persistCampaignsLive()` to UPSERT `campaigns_daily` + `ads_daily`. Co-exists with cron-daily (01:00 nightly full run) and cron-live (10-min light spend + status). All three writers UPSERT the same PKs so `ON CONFLICT DO UPDATE` reconciles per-column; the latest write wins for the columns it touches. Rate-limit (429) and auth failures soft-fail per-platform → throttled WhatsApp alert via `notifyTokenFailure` → next tick retries.
 
+Step structure per (store, date) (2026-05-28 fix — P1-7 / A7-F2):
+- `fetch-{store}-{date}` — fetches all three platforms; result is memoized by Inngest across retries.
+- `persist-{store}-{date}` — fires alerts then calls `persistCampaignsLive()` using the memoized fetch result; non-idempotent re-fetch is prevented.
+
+FX-rate correctness (2026-05-28 fix — FX-date artifact / P0-3): each date's `getFx` closure calls `getFxRate(currency, 'CAD', date)` where `date` is the date being processed (today or yesterday), not the function invocation's `today`. This ensures yesterday's campaigns_daily row is FX-converted with yesterday's ILS→CAD rate, matching cron-daily's nightly authoritative write.
+
 ### 4.2 3 פונקציות WhatsApp (Phase 05.7.4)
 
 | Function ID | תזמון | תוכן |
@@ -523,6 +529,8 @@ Open /operator for details: https://roas-dashboard-smoky.vercel.app/operator
 | ריצות אחרונות | GET `/api/operator/jobs` (poll 15s) | Inngest REST v1 proxy |
 | Backfill טווח | POST `/api/operator/backfill` `{from,to,storeIds}` | Inngest `event/backfill` |
 | manual_overrides CRUD | `/api/operator/manual-overrides` GET/POST/DELETE | ישיר ל-Supabase admin client |
+
+> **מגבלת `manual_overrides` (A8-F4, 2026-05-27):** ה-CHECK constraint על `platform` מתיר `meta` ו-`google` בלבד. תיקון הוצאה ידנית עבור TikTok **אינו נתמך** דרך ה-CRUD — מגבלת סכמה מכוונת, לא באג. שינוי תצריך migration על ה-constraint.
 | WhatsApp test | POST `/api/operator/whatsapp/send-now` | Inngest `event-whatsapp-send-now` |
 | Reset Data | POST `/api/operator/reset` `{scope,confirm}` | ישיר ל-Supabase admin client |
 
@@ -602,6 +610,7 @@ The TodayLive card (היום — חי) computes CPM from `data_daily.fb/ga/tt_im
 ### 14.2 Source-of-truth field
 - **משתמשים**: `order.total_price` (קבוע במטבע הזמנה, לא משתנה אחרי החזר).
 - **לא משתמשים**: `order.current_total_price` (חי — משתנה כשהחזר נכנס) — זה היה הבאג לפני 05.2.3.0.
+- **חל גם על `orders_attribution.totalCad`**: גם הפטשר של `fetchShopifyOrdersAttribution` חייב לקרוא `total_price`, לא `current_total_price`. שימוש ב-`current_total_price` כאן יגרום לכך שסכומי ייחוס היסטוריים יצטמצמו בכל פעם שיופעל cron מחדש (P0-2, תוקן 2026-05-28).
 
 ### 14.3 Deduction field
 **משתמשים**: `refund_line_items[].subtotal` (סחורה במטבע הזמנה). Shopify משתמש בזה פנימית לחישוב `current_total_price`.
@@ -619,6 +628,24 @@ The TodayLive card (היום — חי) computes CPM from `data_daily.fb/ga/tt_im
 
 ### 14.6 Validation
 מול Shopify Admin > Reports > **Net sales** (לא Gross/Total). פערים מותרים: עד ±0.50 CAD ביום ועד 5 CAD ב-30 ימים, בשל עיגול ו-FX.
+
+### 14.7 Reconciliation gap: `data_daily.revenue` vs `Σ products_daily.netRevenue` (A4-01 / P1-3)
+
+**Expected semantic divergence — not a bug.**
+
+`data_daily.revenue_cad` (= `storeNetCad`) deducts ALL `refund_line_items[].subtotal` from store-level gross, including line items where `product_id` is null or missing (custom items, manual adjustments, service charges). These null-product-id refunds cannot be attributed to any product bucket.
+
+`Σ products_daily.netRevenue` across a (date, store) is built from `byProduct[pid].netRevenueCad` — only line items with a valid product_id are tracked per-product. Null-pid refunds flow into the diagnostic-only `customItemRefundCad` field and are NOT subtracted from any product bucket.
+
+**Consequence:**
+```
+Σ products_daily.netRevenue  =  data_daily.revenue_cad + customItemRefundCad
+```
+The gap equals `customItemRefundCad`, which at uzoshop can range from $1,500 to $5,400 per day depending on manual refund activity. This is internally consistent: both values are correct for their respective definitions; they simply measure different things.
+
+**INV-9 (audit harness):** The reconciliation check in `reconcile.ts` compares these two figures and may fire when `customItemRefundCad > 0`. This is a known, expected gap. See the INV-9 comment in `audit/reconcile.ts` for the annotation.
+
+**A4-05 corollary:** `products_daily.grossRevenue == netRevenue` for a given product on a given day is CORRECT whenever all refunds that day had null product_ids (custom items). In that case, the product itself had no refund deduction — its net equals its gross. The refund appears only in `data_daily.revenue` (store-level) via `customItemRefundCad`. This is not a writer bug.
 
 ---
 
@@ -893,6 +920,34 @@ dashboard-web/
 - **Ad-level analysis ב-AI report**: דרישה לצרוך מ-`ads_daily` (קיים, רק לקרוא + לעבד).
 - **Snapchat / Klaviyo attribution**: יצריך bucket חדש ב-`orders_attribution.source` enum.
 - **Multi-user / Auth**: יצריך RLS על כל 10 הטבלאות + Supabase Auth + policies. כיום אין צורך (URL-obscurity מספיק).
+
+---
+
+## 23.5 API Parameter Contract (P1-2, 2026-05-27)
+
+### Date parameters (?from / ?to)
+All telemetry routes (`/api/data`, `/api/campaigns`, `/api/products`,
+`/api/ads`, `/api/orders-attribution`) require both `?from=YYYY-MM-DD`
+and `?to=YYYY-MM-DD`. Since 2026-05-28, `parseRangeParams` throws
+`RangeParamError` (→ HTTP 400) when **both** params are absent, instead
+of silently returning the 90-day default. A request with misnamed params
+(e.g. `?range.from=`) now receives HTTP 400, making the error visible.
+
+Client-side safety: `buildDateRangeKey` returns `null` when either date
+is missing, so SWR never fires a request without both params. All SPA
+call sites always emit a full `?from=…&to=…` pair.
+
+### Store filtering (?store=)
+`?store=` is intentionally **not parsed on the server** for `/api/data`
+and `/api/orders-attribution`. These routes return **all stores** for the
+date range; the client slices by store after receiving the full dataset.
+Rationale:
+- The "All Stores" aggregate needs cross-store totals computed server-side.
+- Attribution analysis requires cross-store context.
+- Server-side store filtering would require cache-busting per store, multiplying ISR slots.
+
+Other routes (`/api/campaigns`, `/api/products`, `/api/ads`) DO accept
+`?store=` for per-store scoping (see their respective route handlers).
 
 ---
 

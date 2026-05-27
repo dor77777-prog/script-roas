@@ -5,15 +5,38 @@ import { Trophy, AlertTriangle, ShoppingBag } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { roasLabel, type StoreAgg } from '@/lib/analytics';
 import { storeHasTikTok } from '@/lib/platformsByStore';
-
-const STORE_COLORS: Record<string, string> = {
-  uzoshop: '#1c4587',
-  'Zol Plus': '#ea4335',
-  '360usmile': '#34a853',
-};
+import { storeColor } from '@/lib/storeColors';
 
 function colorFor(name: string, idx: number) {
-  return STORE_COLORS[name] || ['#1c4587', '#ea4335', '#34a853', '#fbbc04', '#9c27b0'][idx % 5];
+  return storeColor(name, idx);
+}
+
+/**
+ * A9-06 + A9-07 (2026-05-27) — pure leader/risk selection.
+ *
+ *  - Leader is the EXPLICIT max-by-ROAS (A9-06), not `withRoas[0]` which
+ *    relied on an implicit upstream desc-sort that could silently break.
+ *  - The trophy only shows when the leader's ROAS ≥ 2.0 (A9-07). When ALL
+ *    stores sit in the red zone (< 2.0), celebrating a "leader" contradicts
+ *    the risk warning shown on the lowest store — so we suppress the trophy.
+ *  - Risk flags the LOWEST store when its ROAS < 2.0 (unchanged).
+ *  - Both decorations require ≥ 2 stores with positive ROAS; a single-store
+ *    view gets no trophy/risk badge.
+ */
+export function selectLeaderAndRisk(
+  data: Pick<StoreAgg, 'store' | 'roas'>[],
+): { topStore: string | null; riskyStore: string | null } {
+  const withRoas = data.filter((s) => s.roas > 0);
+  if (withRoas.length < 2) return { topStore: null, riskyStore: null };
+
+  const leader = withRoas.reduce((best, s) => (s.roas > best.roas ? s : best));
+  const lowest = withRoas.reduce((worst, s) => (s.roas < worst.roas ? s : worst));
+
+  return {
+    // Gate the trophy on the leader clearing the red-zone threshold.
+    topStore: leader.roas >= 2 ? leader.store : null,
+    riskyStore: lowest.roas < 2 ? lowest.store : null,
+  };
 }
 
 const TONE_BG: Record<string, string> = {
@@ -40,13 +63,10 @@ export function PerStoreCards({ data, ordersByStore, bare = false }: Props) {
   if (!data.length) return null;
 
   // Identify top/bottom by ROAS so we can decorate the cards inline.
-  // Only mark "top" when there are >= 2 stores with positive ROAS — otherwise
-  // a single-store view shouldn't get a "leader" trophy on the only card.
-  const withRoas = data.filter(s => s.roas > 0);
-  const topStore = withRoas.length >= 2 ? withRoas[0].store : null;
-  const sortedAsc = [...withRoas].sort((a, b) => a.roas - b.roas);
-  // Mark "needs attention" only if the lowest has ROAS < 2 (red zone).
-  const riskyStore = withRoas.length >= 2 && sortedAsc[0].roas < 2 ? sortedAsc[0].store : null;
+  // selectLeaderAndRisk uses an explicit max (A9-06) and gates the trophy on
+  // the leader clearing ROAS 2.0 (A9-07) so an all-red-zone view doesn't show
+  // a celebratory leader. See the helper for the full rationale.
+  const { topStore, riskyStore } = selectLeaderAndRisk(data);
 
   const grid = (
     <div className={cn('grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4', !bare && 'mt-3')}>

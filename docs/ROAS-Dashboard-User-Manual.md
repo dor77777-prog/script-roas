@@ -317,23 +317,24 @@ ROAS ירד פתאום?
 | ROAS | רקע + פלס + אייקון | משמעות |
 |---|---|---|
 | < 2.0 | 🔴 אדום | מפסידים |
-| 2.0–2.5 | 🟠 כתום | גבולי |
-| 2.5–3.0 | 🟢 ירוק | בריא |
-| ≥ 3.0 | 🔵 כחול | מצוין |
+| 2.0–2.7 | 🟠 כתום | גבולי |
+| 2.7–3.0 | 🟢 ירוק | בריא |
+| > 3.0 | 🔵 כחול | מצוין |
 | אין נתונים | ⚪ אפור עמום | עוד לא נצברה הוצאה היום |
 
-המעבר בין הצבעים מתחלק 500ms — חלקה ולא מבליטה. אותם sephre של ROAS משמשים בעמודת ה-ROAS בכל הטבלאות, כך שהדאשבורד מדבר באותה שפה צבעונית.
+המעבר בין הצבעים מתחלק 500ms — חלקה ולא מבליטה. אותם ספי ROAS משמשים בעמודת ה-ROAS בכל הטבלאות (ראה §4.2 ROAS Chip), כך שהדאשבורד מדבר באותה שפה צבעונית. הסף האמין הוא `roasLabel` ב-`analytics.ts` — נקודת האמת היחידה (SSOT).
 
 ### 4.2 HeroOverview — KPI Strip + ROAS Chart
 חמישה כרטיסים אחד ליד השני:
 
 ```
-┌──────────┬──────────┬──────────┬─────────────┬──────────┐
-│ Revenue  │ ROAS chip│ Spend    │ Net Profit  │ CPM      │
-│ $12,400  │  🟢 2.85 │ $4,100   │ $3,200      │ $12.40   │
-│ ↑ 18%    │          │ ↑ 22%    │ ↑ 14%       │ ↓ 5%     │
-└──────────┴──────────┴──────────┴─────────────┴──────────┘
+┌──────────┬──────────┬──────────┬──────────────────┬──────────┐
+│ Revenue  │ ROAS chip│ Spend    │ רווח תפעולי      │ CPM      │
+│ $12,400  │  🟢 2.85 │ $4,100   │ $3,200           │ $12.40   │
+│ ↑ 18%    │          │ ↑ 22%    │ ↑ 14%            │ ↓ 5%     │
+└──────────┴──────────┴──────────┴──────────────────┴──────────┘
 ```
+**הערה:** "רווח תפעולי" = הכנסות − הוצאות פרסום − COGS (לפני עמלות ועלויות קבועות). "רווח נטו" האמיתי (אחרי הכל) מוצג בכרטיסי ה-KpiCards מתחת.
 
 **ROAS Chip — קוד הצבעים:**
 - 🔴 **אדום** = ROAS < 2.0 (לא רווחי)
@@ -567,6 +568,8 @@ ROAS
 
 ### 6.2 MonthlyTables — טבלאות חודשיות
 עד 17 חודשים אחורה. שתי תצוגות:
+
+> **Store filter sync (A5-F5-02):** כשה-Store Filter הגלובלי מסנן חנות ספציפית, הדרופדאון ב-MonthlyTables מתעדכן אוטומטית לאותה חנות. ניתן לשנות ידנית אחר-כך בלי להשפיע על הפילטר הגלובלי. (תנאי: עלות 17 חודשים תמיד מוצגת ללא תלות בטווח הגלובלי — ראה 6.2 סעיף טווח.)
 
 **מצב א: לפי חנות**
 ```
@@ -1340,7 +1343,7 @@ KPIs מצרפיים של הקמפיין:
 - **Total Spend** = FB + GA
 - **Gross Profit** = Revenue − Total Spend
 - **COGS** = Revenue × 0.25 (ברירת מחדל)
-- **Net Profit** = Gross Profit − COGS
+- **רווח תפעולי** (Operating Profit) = Gross Profit − COGS
 
 ### 11.2 תא שחור עם "0" — דגל חיוני
 **תא ROAS שחור + טקסט "0"** = Spend > 0 + Revenue = 0.
@@ -2018,10 +2021,11 @@ Backfill על אותו טווח שוב ושוב הוא בטוח — לא יוצ�
 | CPA | `spend / conversions` | CAD | להמרה |
 | Gross Profit | `revenue − spend` | CAD | לפני COGS |
 | COGS | `revenue × 0.25` (ברירת מחדל) | CAD | ניתן לכוון |
-| Net Profit | `gross profit − COGS` | CAD | לפני עמלות |
+| רווח תפעולי (Operating Profit) | `revenue − spend − COGS` | CAD | לפני עמלות ועלויות קבועות — מוצג ב-HeroOverview, טאב פירוט וב-AI Report |
+| רווח תפעולי (Operating Profit / DetailTable) | `gross profit − COGS` | CAD | עמודת "רווח תפעולי" בטאב פירוט; לפני עמלות |
 | Transaction Fees | `revenue × 0.065` | CAD | משוער |
 | Fixed Costs | סכום recurring + פרורטה של one-time | CAD | מ-BillingSettings |
-| True Net Profit | `revenue − spend − COGS − fees − fixed` | CAD | החישוב המלא |
+| True Net Profit / רווח נטו | `revenue − spend − COGS − fees − fixed` | CAD | החישוב המלא — מוצג ב-KpiCards |
 | True Margin | `true net profit / revenue × 100` | % | רווחיות אמיתית |
 | Attribution Gap | `(shopifyValue − pixelValue) / shopifyValue × 100` | % | פער דיווח |
 | Pearson Correlation r | סטטיסטית | מספר [-1..1] | קורלציה Pixel-Shopify |

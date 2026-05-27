@@ -21,7 +21,7 @@
  * Weights (tuned so a declining-trajectory mature campaign can't grade A
  * even if profitability + attribution look healthy — momentum matters for
  * the *next* dollar's expected return):
- *   - profitability:        40%   ROAS × trust modulation
+ *   - profitability:        40%   ROAS × trust modulation   (WEIGHTS.profitability = 0.40)
  *   - volume:               15%   spend tier (sample-size weighting)
  *   - trajectory:           25%   CPM↔ROAS momentum (heavy: forward-looking)
  *   - attribution clarity:  20%   deterministic % of revenue
@@ -43,7 +43,7 @@ import type { CpmRoasAnalysis } from '@/lib/cpmRoasAnalysis';
 export type HealthGrade = 'A' | 'B' | 'C' | 'D' | 'F' | 'unknown';
 
 export type HealthScoreComponents = {
-  /** ROAS × trust modulation, 0..100. The dominant signal (45% weight). */
+  /** ROAS × trust modulation, 0..100. The dominant signal (40% weight). */
   profitability: number;
   /** Spend-tier score, 0..100. Small spend = small sample = lower score. */
   volume: number;
@@ -144,6 +144,21 @@ const PLATFORM_ROAS_PIVOT: Record<string, number> = {
   TikTok: 2.0,
 } as const;
 const DEFAULT_ROAS_PIVOT = 3.0;
+
+/**
+ * Linearly map a ROAS onto a 0..100 profitability score: [1.0, pivot] → [0, 100],
+ * clamped outside that band.
+ *
+ * Audit fix 2026-05-27 (A6 latent ÷0 guard): the denominator is `(pivot - 1.0)`.
+ * All configured pivots today are ≥ 2.0 so this can't divide by zero, but a
+ * future pivot of exactly 1.0 (break-even threshold) would produce Infinity/NaN.
+ * `Math.max(1.01, pivot)` floors the pivot so the denominator is always ≥ 0.01,
+ * guaranteeing a finite score regardless of the configured value.
+ */
+export function roasToScore(baseRoas: number, pivot: number): number {
+  const safePivot = Math.max(1.01, pivot);
+  return Math.max(0, Math.min(100, ((baseRoas - 1.0) / (safePivot - 1.0)) * 100));
+}
 
 /**
  * Audit fix 2026-05-23 (HR-01 health-and-conclusions): per-platform trust
@@ -251,10 +266,9 @@ function scoreProfitability(
   const pivot =
     PLATFORM_ROAS_PIVOT[aggregated.platform] ?? DEFAULT_ROAS_PIVOT;
   // Formula: linearly scale [1.0, pivot] → [0, 100]; clamp outside.
-  const rawRoasScore = Math.max(
-    0,
-    Math.min(100, ((baseRoas - 1.0) / (pivot - 1.0)) * 100),
-  );
+  // `roasToScore` floors the pivot at 1.01 to guard the (pivot - 1.0)
+  // denominator from a ÷0 → Infinity/NaN (A6 latent guard).
+  const rawRoasScore = roasToScore(baseRoas, pivot);
   const modulated = rawRoasScore * trustModulator;
   return {
     score: Math.round(modulated),

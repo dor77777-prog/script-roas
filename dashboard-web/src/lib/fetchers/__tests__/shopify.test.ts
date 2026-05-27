@@ -523,7 +523,7 @@ describe('shopify fetcher — fetchShopifyOrdersAttribution', () => {
           orders: [
             {
               id: 'O-1',
-              current_total_price: '150.00',
+              total_price: '150.00',
               financial_status: 'paid',
               test: false,
               landing_site:
@@ -557,7 +557,7 @@ describe('shopify fetcher — fetchShopifyOrdersAttribution', () => {
           orders: [
             {
               id: 'O-fb',
-              current_total_price: '50.00',
+              total_price: '50.00',
               landing_site: '/products/widget', // no UTM tail
               referring_site: '',
               note_attributes: [],
@@ -566,7 +566,7 @@ describe('shopify fetcher — fetchShopifyOrdersAttribution', () => {
             },
             {
               id: 'O-google',
-              current_total_price: '75.00',
+              total_price: '75.00',
               landing_site: '/',
               referring_site: '',
               note_attributes: [],
@@ -592,7 +592,7 @@ describe('shopify fetcher — fetchShopifyOrdersAttribution', () => {
           orders: [
             {
               id: 'tiktok',
-              current_total_price: '10',
+              total_price: '10',
               landing_site: '/?utm_source=tiktok&utm_medium=paid',
               referring_site: '',
               note_attributes: [],
@@ -601,7 +601,7 @@ describe('shopify fetcher — fetchShopifyOrdersAttribution', () => {
             },
             {
               id: 'org-fb',
-              current_total_price: '10',
+              total_price: '10',
               landing_site: '/',
               referring_site: 'https://www.facebook.com/something',
               note_attributes: [],
@@ -610,7 +610,7 @@ describe('shopify fetcher — fetchShopifyOrdersAttribution', () => {
             },
             {
               id: 'direct',
-              current_total_price: '10',
+              total_price: '10',
               landing_site: '/',
               referring_site: '',
               note_attributes: [],
@@ -642,7 +642,7 @@ describe('shopify fetcher — fetchShopifyOrdersAttribution', () => {
           orders: [
             {
               id: 'tt-clickid',
-              current_total_price: '50',
+              total_price: '50',
               landing_site:
                 '/products/widget?ttclid=E.C.P.AbCdEf123&utm_source=somethingelse',
               referring_site: '',
@@ -652,7 +652,7 @@ describe('shopify fetcher — fetchShopifyOrdersAttribution', () => {
             },
             {
               id: 'tt-source-name',
-              current_total_price: '60',
+              total_price: '60',
               landing_site: '/products/widget', // no UTM tail
               referring_site: '',
               note_attributes: [],
@@ -661,7 +661,7 @@ describe('shopify fetcher — fetchShopifyOrdersAttribution', () => {
             },
             {
               id: 'tt-utm-cpc',
-              current_total_price: '70',
+              total_price: '70',
               landing_site: '/?utm_source=tiktok&utm_medium=cpc&utm_campaign=tt_spring',
               referring_site: '',
               note_attributes: [],
@@ -670,7 +670,7 @@ describe('shopify fetcher — fetchShopifyOrdersAttribution', () => {
             },
             {
               id: 'tt-utm-no-medium',
-              current_total_price: '80',
+              total_price: '80',
               // utm_source=tiktok but no utm_medium — still tiktok-paid per
               // the dedicated fallback branch (creators sometimes set source
               // but omit medium).
@@ -682,7 +682,7 @@ describe('shopify fetcher — fetchShopifyOrdersAttribution', () => {
             },
             {
               id: 'tt-organic-referral',
-              current_total_price: '90',
+              total_price: '90',
               // Referrer-only tiktok.com (organic share) — must NOT classify
               // as tiktok-paid. Keep tiktok-paid for ad-attributed only.
               landing_site: '/',
@@ -714,7 +714,7 @@ describe('shopify fetcher — fetchShopifyOrdersAttribution', () => {
           orders: [
             {
               id: 'real',
-              current_total_price: '100',
+              total_price: '100',
               test: false,
               financial_status: 'paid',
               landing_site: '/',
@@ -725,7 +725,7 @@ describe('shopify fetcher — fetchShopifyOrdersAttribution', () => {
             },
             {
               id: 'test',
-              current_total_price: '99',
+              total_price: '99',
               test: true, // Shopify test mode
               financial_status: 'paid',
               landing_site: '/',
@@ -736,7 +736,7 @@ describe('shopify fetcher — fetchShopifyOrdersAttribution', () => {
             },
             {
               id: 'voided',
-              current_total_price: '88',
+              total_price: '88',
               test: false,
               financial_status: 'voided',
               landing_site: '/',
@@ -763,7 +763,7 @@ describe('shopify fetcher — fetchShopifyOrdersAttribution', () => {
           orders: [
             {
               id: 'O-li',
-              current_total_price: '100.00', // store-level total (incl. tax/shipping)
+              total_price: '100.00', // immutable order total (incl. tax/shipping) — P0-2
               test: false,
               financial_status: 'paid',
               landing_site: '/',
@@ -802,7 +802,7 @@ describe('shopify fetcher — fetchShopifyOrdersAttribution', () => {
           orders: [
             {
               id: 'O-fbc',
-              current_total_price: '25.00',
+              total_price: '25.00',
               test: false,
               financial_status: 'paid',
               landing_site: '/products/x',

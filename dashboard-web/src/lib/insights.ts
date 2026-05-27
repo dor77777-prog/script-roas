@@ -176,8 +176,16 @@ function detectMetricAnomalies(
     }
   }
 
-  // Zero-revenue day with non-zero spend — a wasted day
-  if (today.totalSpend > 50 && today.revenue === 0) {
+  // Zero-revenue day with non-zero spend — a wasted day.
+  // A9-04 (2026-05-27): exclude the CURRENT Israel day. Mid-morning, the
+  // day's revenue is legitimately 0 before orders attribute, so firing a
+  // CRITICAL "dead day" against the still-loading current day is a false
+  // alarm every morning. Only flag COMPLETED past days.
+  if (
+    todayDate !== todayInIsrael() &&
+    today.totalSpend > 50 &&
+    today.revenue === 0
+  ) {
     insights.push({
       id: `${scope}-dead-day-${todayDate}`,
       severity: 'critical',

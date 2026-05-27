@@ -45,7 +45,7 @@ import { CloudSync } from './CloudSync';
 import { SyncIndicator } from './SyncIndicator';
 import { FreshnessChip } from './FreshnessChip';
 import { TabFreshnessHeader } from './TabFreshnessHeader';
-import { readDashboardState, syncUrl } from '@/lib/urlState';
+import { readDashboardState, syncUrl, type TabKey } from '@/lib/urlState';
 import { buildDateRangeKey } from '@/lib/dateRange';
 
 const fetcher = async (url: string) => {
@@ -75,8 +75,6 @@ const ordersFetcher = async (url: string): Promise<OrdersResponseShape> => {
 };
 
 const initialPreset = 'this_month';
-
-type TabKey = 'home' | 'pnl' | 'analysis' | 'campaigns' | 'products' | 'detail';
 
 const TABS: TabDef<TabKey>[] = [
   { key: 'home',      label: 'בית',     icon: <Home size={16} /> },
@@ -392,7 +390,7 @@ function HomeTab({
         icon={<Target size={18} />}
         title="מדדים מסכמים לתקופה"
         description="הסיכום של כל החנויות הנבחרות בטווח שבחרת. כל מספר מושווה לתקופה הקודמת באותו אורך."
-        formula="ROAS = הכנסות / סך הוצאות פרסום   •   רווח נטו = הכנסות − הוצאות − COGS (25%)"
+        formula="ROAS = הכנסות / סך הוצאות פרסום   •   רווח נטו = הכנסות − הוצאות − COGS − עמלות − עלויות קבועות"
       />
       <KpiCards current={filtered.curAgg} previous={filtered.prevAgg} series={filtered.cur} />
 
@@ -490,7 +488,7 @@ function AnalysisTab({
         description="טבלה לכל חודש עם שורה לכל יום, עד 17 חודשים אחורה. ROAS צבוע: אדום (<2), כתום (2-2.7), ירוק (2.7-3), כחול (>3). יום עם הוצאה אך ללא מכירה מסומן בשחור עם '0'."
       />
       <div className="rounded-xl bg-surface border border-border shadow-card overflow-hidden">
-        <MonthlyTables stores={data.stores} bare />
+        <MonthlyTables stores={data.stores} globalStore={filters.store} bare />
       </div>
     </div>
   );

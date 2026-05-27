@@ -31,6 +31,11 @@ async function fetchTodayFx(): Promise<number | null> {
 }
 
 export async function GET(req: Request) {
+  // API contract note (P1-2, 2026-05-27):
+  // ?store= is intentionally NOT parsed here. This route returns ALL stores'
+  // rows for the date range; the client (Dashboard.tsx / filters.store) slices
+  // by store client-side. This is by design: the "All Stores" aggregate view
+  // needs the full dataset to compute cross-store totals accurately.
   let range;
   try {
     range = parseRangeParams(new URL(req.url).searchParams);
@@ -48,7 +53,13 @@ export async function GET(req: Request) {
     const [rows, fxIlsToCad, dataLastWriteAt] = await Promise.all([
       fetchDailyDataFromPostgres({ range }),
       fetchTodayFx(),
-      fetchDataDailyLastWriteAt({ range }),
+      // A7-F1 (2026-05-27): the freshness chip ("synced N min ago") must
+      // reflect the GLOBAL most-recent write to data_daily, NOT the max
+      // within the selected range. Scoping it to `range` meant picking a
+      // historical range showed a false-red stale chip even while the live
+      // cron was writing today's rows every ~10 min. The data fetch above
+      // stays range-scoped; only the freshness signal goes global.
+      fetchDataDailyLastWriteAt(),
     ]);
     if (rows.length > 50000) {
       console.warn(`/api/data: large response (${rows.length} rows) — consider pagination`);

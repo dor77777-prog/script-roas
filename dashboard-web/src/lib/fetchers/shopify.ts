@@ -791,7 +791,8 @@ export async function fetchShopifyProductsCatalog(
  */
 type ShopifyOrderPayload = {
   id?: number | string;
-  current_total_price?: string | number;
+  total_price?: string | number;           // immutable — used for attribution totalCad (P0-2)
+  current_total_price?: string | number;   // mutable (net of refunds) — only read by buildWindowUrl fields list
   financial_status?: string;
   test?: boolean;
   landing_site?: string;
@@ -993,9 +994,9 @@ function computeLineItemsCad(
  *
  * Port of `Shopify.gs:757` (`getShopifyOrdersAttribution`). Returns one row
  * per non-test, non-voided order created on `dateStr`. Each row carries:
- *   - the order's CAD total (`current_total_price` — D-A1 already deducts
- *     same-day refunds; cross-day refunds are NOT subtracted here because the
- *     `orders_attribution` table is order-level, not net-revenue)
+ *   - the order's CAD total (`total_price` — immutable, set at order creation
+ *     per Invariant 1; `current_total_price` mutates downward as refunds post
+ *     and MUST NOT be used here — P0-2 fix 2026-05-28)
  *   - the classified attribution source (see `classifyOrderAttribution`)
  *   - UTM params + fbclid/gclid presence flags
  *   - per-line-item CAD breakdown (compact `{p,u,r}` JSON for storage; the
@@ -1015,7 +1016,7 @@ export async function fetchShopifyOrdersAttribution(
   const dayStart = isoLocalMidnight(dateStr, SHOPIFY_TZ);
   const dayEnd = isoLocalMidnight(nextDayStr(dateStr), SHOPIFY_TZ);
   const fields =
-    'id,current_total_price,financial_status,test,landing_site,referring_site,' +
+    'id,total_price,financial_status,test,landing_site,referring_site,' +
     'note_attributes,source_name,line_items';
 
   let url: string | undefined =
@@ -1052,7 +1053,7 @@ export async function fetchShopifyOrdersAttribution(
       if (o.test) continue;
       if (o.financial_status === 'voided') continue;
 
-      const totalCad = parseFloat(String(o.current_total_price ?? '0')) || 0;
+      const totalCad = parseFloat(String(o.total_price ?? '0')) || 0;
       const classified = classifyOrderAttribution(o);
 
       out.push({

@@ -8,6 +8,7 @@ import { aggregate, aggregateByStore, roasLabel } from '@/lib/analytics';
 import { storeHasTikTok } from '@/lib/platformsByStore';
 import type { DailyRow, DashboardData } from '@/lib/types';
 import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
+import { storeColor } from '@/lib/storeColors';
 
 const ordersFetcher = async (url: string): Promise<OrdersAttributionResponse> => {
   const r = await fetch(url);
@@ -46,12 +47,19 @@ const TONE_BG: Record<string, string> = {
  * section. The hero card on the home page used to wear a fixed green
  * tint regardless of whether the day was actually profitable; the
  * operator's complaint was that the green became visual noise once you
- * knew it was always green. These bands match the same thresholds the
- * campaigns table uses for the per-row ROAS chip (roasLabel in analytics.ts):
+ * knew it was always green.
+ *
+ * P1-1 fix (data-consistency audit 2026-05-27): band thresholds are now
+ * sourced exclusively from `roasLabel` in analytics.ts (SSOT). The
+ * previous inline thresholds (orange 2.0–2.5 / green 2.5–3.0) diverged
+ * from roasLabel (orange 2.0–2.7 / green 2.7–3.0), causing ROAS=2.6 to
+ * show green here while the campaigns table and ROAS chip showed orange.
+ *
+ *   roasLabel bands (authoritative):
  *   - red:    < 2.0   (losing money)
- *   - orange: 2.0–2.5 (borderline)
- *   - green:  2.5–3.0 (healthy)
- *   - blue:   ≥ 3.0   (excellent)
+ *   - orange: 2.0–2.7 (borderline)
+ *   - green:  2.7–3.0 (healthy)
+ *   - blue:   > 3.0   (excellent)
  *   - gray:   no spend/value at all
  *
  * Returned tokens drive the gradient, border, glow blob, accent pulse,
@@ -72,64 +80,63 @@ type LiveTone = {
   iconColor: string;
 };
 
-function liveToneFromRoas(roas: number, hasAnyData: boolean): LiveTone {
-  if (!hasAnyData || roas <= 0) {
-    return {
-      cardBg: 'bg-gradient-to-br from-surfaceMuted/60 via-surface to-surface',
-      cardBorder: 'border-borderSubtle',
-      blob: 'bg-text-muted/10',
-      pulse: 'bg-text-muted',
-      pill: 'bg-text-muted text-white',
-      iconColor: 'text-text-muted',
-    };
-  }
-  if (roas < 2.0) {
-    return {
-      cardBg: 'bg-gradient-to-br from-roas-redBg/60 via-surface to-surface',
-      cardBorder: 'border-roas-red/35',
-      blob: 'bg-roas-red/12',
-      pulse: 'bg-roas-red',
-      pill: 'bg-roas-red text-white',
-      iconColor: 'text-roas-red',
-    };
-  }
-  if (roas < 2.5) {
-    return {
-      cardBg: 'bg-gradient-to-br from-roas-orangeBg/60 via-surface to-surface',
-      cardBorder: 'border-roas-orange/35',
-      blob: 'bg-roas-orange/12',
-      pulse: 'bg-roas-orange',
-      pill: 'bg-roas-orange text-white',
-      iconColor: 'text-roas-orange',
-    };
-  }
-  if (roas < 3.0) {
-    return {
-      cardBg: 'bg-gradient-to-br from-roas-greenBg/50 via-surface to-surface',
-      cardBorder: 'border-roas-green/30',
-      blob: 'bg-roas-green/10',
-      pulse: 'bg-roas-green',
-      pill: 'bg-roas-green text-white',
-      iconColor: 'text-roas-green',
-    };
-  }
-  // roas >= 3.0
-  return {
+/** Styling tokens keyed by the tone name from roasLabel. */
+const LIVE_TONE_STYLES: Record<string, LiveTone> = {
+  gray: {
+    cardBg: 'bg-gradient-to-br from-surfaceMuted/60 via-surface to-surface',
+    cardBorder: 'border-borderSubtle',
+    blob: 'bg-text-muted/10',
+    pulse: 'bg-text-muted',
+    pill: 'bg-text-muted text-white',
+    iconColor: 'text-text-muted',
+  },
+  red: {
+    cardBg: 'bg-gradient-to-br from-roas-redBg/60 via-surface to-surface',
+    cardBorder: 'border-roas-red/35',
+    blob: 'bg-roas-red/12',
+    pulse: 'bg-roas-red',
+    pill: 'bg-roas-red text-white',
+    iconColor: 'text-roas-red',
+  },
+  orange: {
+    cardBg: 'bg-gradient-to-br from-roas-orangeBg/60 via-surface to-surface',
+    cardBorder: 'border-roas-orange/35',
+    blob: 'bg-roas-orange/12',
+    pulse: 'bg-roas-orange',
+    pill: 'bg-roas-orange text-white',
+    iconColor: 'text-roas-orange',
+  },
+  green: {
+    cardBg: 'bg-gradient-to-br from-roas-greenBg/50 via-surface to-surface',
+    cardBorder: 'border-roas-green/30',
+    blob: 'bg-roas-green/10',
+    pulse: 'bg-roas-green',
+    pill: 'bg-roas-green text-white',
+    iconColor: 'text-roas-green',
+  },
+  blue: {
     cardBg: 'bg-gradient-to-br from-roas-blueBg/55 via-surface to-surface',
     cardBorder: 'border-roas-blue/30',
     blob: 'bg-roas-blue/12',
     pulse: 'bg-roas-blue',
     pill: 'bg-roas-blue text-white',
     iconColor: 'text-roas-blue',
-  };
+  },
+};
+
+/**
+ * P1-1 (2026-05-27): delegates band selection to `roasLabel` (SSOT in
+ * analytics.ts) instead of maintaining local thresholds. Previously the
+ * local thresholds (2.5) differed from roasLabel (2.7), making ROAS=2.6
+ * appear green on this card while showing orange everywhere else.
+ */
+function liveToneFromRoas(roas: number, hasAnyData: boolean): LiveTone {
+  if (!hasAnyData || roas <= 0) return LIVE_TONE_STYLES.gray;
+  const tone = roasLabel(roas).tone;
+  return LIVE_TONE_STYLES[tone] ?? LIVE_TONE_STYLES.gray;
 }
 
-// Per-store accent dot. Kept saturated since it's a tiny element.
-const STORE_COLORS: Record<string, string> = {
-  uzoshop:     '#1e3a8a',
-  'Zol Plus':  '#dc2626',
-  '360usmile': '#15803d',
-};
+// Per-store accent dot — color sourced from canonical storeColors module.
 
 function todayInIsrael(): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -400,7 +407,7 @@ export function TodayLive({
         {storeAggs.length > 0 && hasAnyData && (
           <div className="mt-3 sm:mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
             {storeAggs.map(s => {
-              const color = STORE_COLORS[s.store] || '#0d3680';
+              const color = storeColor(s.store);
               const info = roasLabel(s.roas);
               const hasGoogle = s.gaSpend > 0;
               // Phase 05.7.x — TikTok is rendered for every store that
