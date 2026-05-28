@@ -5,7 +5,6 @@ import { Info, TrendingUp, X } from 'lucide-react';
 import {
   ComposedChart,
   Line,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -18,6 +17,13 @@ import { CHART_COLORS } from '@/lib/chartColors';
 import { enumerateDateRange } from '@/lib/dateRange';
 import { PRODUCT_MAP_CHIP_KEY } from '@/lib/sessionKeys';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
+import { ChartContainer } from '@/components/ui/chart/ChartContainer';
+import {
+  ChartTooltip,
+  ChartTooltipLabel,
+  ChartTooltipRow,
+  ChartTooltipValue,
+} from '@/components/ui/chart/ChartTooltip';
 export { pearson, pearsonWithLag };
 
 const LAG_IMPROVEMENT_THRESHOLD = 0.05;
@@ -409,10 +415,10 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
       : reconciliation.rCombined;
   const primaryAbsR = primaryR === null ? null : Math.abs(primaryR);
   const primaryRClass =
-    primaryAbsR === null ? 'text-text-muted'
-      : primaryAbsR >= 0.7 ? 'text-roas-green'
+    primaryAbsR === null ? 'text-ink-muted'
+      : primaryAbsR >= 0.7 ? 'text-status-green'
       : primaryAbsR >= 0.3 ? 'text-amber-600'
-      : 'text-roas-red';
+      : 'text-status-red';
   const noSignalTitle = 'אין שונות בסדרה — לא ניתן לחשב';
   const formatR = (value: number | null) => (
     value === null ? '—' : value.toFixed(2)
@@ -420,7 +426,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
   const renderR = (label: string, value: number | null) => (
     <span
       title={value === null ? noSignalTitle : undefined}
-      className={cn(value === null && 'text-text-subtle')}
+      className={cn(value === null && 'text-ink-subtle')}
     >
       {label}={formatR(value)}
     </span>
@@ -428,17 +434,17 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
 
   return (
     <section>
-      <h3 className="text-sm font-semibold text-text-primary inline-flex items-center gap-1.5 mb-2">
-        <TrendingUp size={14} className="text-text-secondary" />
+      <h3 className="text-sm font-semibold text-ink inline-flex items-center gap-1.5 mb-2">
+        <TrendingUp size={14} className="text-ink-secondary" />
         ערוצים מול Shopify — מתאם יומי
       </h3>
-      <div className="rounded-xl border border-borderSubtle bg-surfaceMuted/30 p-3 space-y-3">
+      <div className="rounded-xl border border-line-subtle bg-elevated2/30 p-3 space-y-3">
         {!chipHidden && (
           <div
             title="current state, not date-versioned"
-            className="rounded-md bg-gray-50 border border-gray-200 px-2.5 py-1.5 text-[11px] text-text-muted flex items-center gap-1.5"
+            className="rounded-md bg-gray-50 border border-gray-200 px-2.5 py-1.5 text-[11px] text-ink-muted flex items-center gap-1.5"
           >
-            <Info size={12} className="shrink-0 text-text-subtle" />
+            <Info size={12} className="shrink-0 text-ink-subtle" />
             <span className="leading-relaxed">
               ה-product↔campaign mapping מבוסס על המיפוי הנוכחי שלך. שינוי המיפוי משפיע על נתונים היסטוריים בדיעבד.
             </span>
@@ -449,7 +455,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 window.sessionStorage.setItem(PRODUCT_MAP_CHIP_KEY, '1');
                 setChipHidden(true);
               }}
-              className="ms-auto shrink-0 rounded p-0.5 text-text-subtle hover:bg-gray-100 hover:text-text-secondary transition-colors"
+              className="ms-auto shrink-0 rounded p-0.5 text-ink-subtle hover:bg-gray-100 hover:text-ink-secondary transition-colors"
             >
               <X size={12} />
             </button>
@@ -466,7 +472,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
 
         <div className="flex items-start gap-3 flex-wrap">
           <div className="shrink-0">
-            <div className="text-[10px] text-text-muted uppercase tracking-wide">
+            <div className="text-[10px] text-ink-muted uppercase tracking-wide">
               מתאם (Pearson r) · {primaryChannel}
             </div>
             <div className={cn(
@@ -476,12 +482,12 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
               {primaryR === null ? '—' : `${primaryR >= 0 ? '+' : ''}${primaryR.toFixed(2)}`}
             </div>
           </div>
-          <div className="flex-1 min-w-[200px] text-[11px] sm:text-xs text-text-secondary leading-relaxed">
+          <div className="flex-1 min-w-[200px] text-[11px] sm:text-xs text-ink-secondary leading-relaxed">
             {(() => {
               if (primaryAbsR === null) {
                 return (
                   <>
-                    <strong className="text-text-muted">אין שונות בסדרה.</strong>{' '}
+                    <strong className="text-ink-muted">אין שונות בסדרה.</strong>{' '}
                     אין מספיק שינוי יומי בערוץ הזה מול Shopify, ולכן לא ניתן לחשב מתאם אמין.
                   </>
                 );
@@ -490,7 +496,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 if (primaryChannel === 'Google') {
                   return (
                     <>
-                      <strong className="text-roas-green">מתאם גבוה.</strong>{' '}
+                      <strong className="text-status-green">מתאם גבוה.</strong>{' '}
                       Google תופס את הטרנדים נכון. אם יש פער במספרים — סביר שזה{' '}
                       <strong>bias קבוע</strong> (חלון attribution, modeled conversions, halo).{' '}
                       החלטות גידול תקציב על בסיס מגמות Google אמינות.
@@ -500,7 +506,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 if (primaryChannel === 'TikTok') {
                   return (
                     <>
-                      <strong className="text-roas-green">מתאם גבוה.</strong>{' '}
+                      <strong className="text-status-green">מתאם גבוה.</strong>{' '}
                       TikTok תופס את הטרנדים נכון. אם יש פער במספרים — סביר שזה{' '}
                       <strong>bias קבוע</strong> (TikTok pixel + modeled conversions).{' '}
                       החלטות גידול תקציב על בסיס מגמות TikTok אמינות.
@@ -510,7 +516,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 if (primaryChannel === 'Combined') {
                   return (
                     <>
-                      <strong className="text-roas-green">מתאם גבוה.</strong>{' '}
+                      <strong className="text-status-green">מתאם גבוה.</strong>{' '}
                       Σ של 4 הערוצים מול Shopify תופס את הטרנדים נכון. פער קבוע במספרים{' '}
                       מעיד בדרך כלל על bias בערוצי הדיווח, לא על שבירת המגמה.
                     </>
@@ -518,7 +524,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 }
                 return (
                   <>
-                    <strong className="text-roas-green">מתאם גבוה.</strong>{' '}
+                    <strong className="text-status-green">מתאם גבוה.</strong>{' '}
                     Meta תופס את הטרנדים נכון. אם יש פער במספרים — סביר שזה{' '}
                     <strong>bias קבוע</strong> (view-through credit, halo).{' '}
                     החלטות גידול תקציב על בסיס מגמות Meta אמינות.
@@ -564,7 +570,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
               if (primaryChannel === 'Google') {
                 return (
                   <>
-                    <strong className="text-roas-red">אין מתאם.</strong>{' '}
+                    <strong className="text-status-red">אין מתאם.</strong>{' '}
                     Google מדווח על המרות שלא מופיעות ב-Shopify. או שהמיפוי לא מלא{' '}
                     (חסרים מוצרים), או שיש over-attribution אגרסיבי. אל תקבל החלטות{' '}
                     על בסיס המרות Google של הקמפיין הזה.
@@ -574,7 +580,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
               if (primaryChannel === 'TikTok') {
                 return (
                   <>
-                    <strong className="text-roas-red">אין מתאם.</strong>{' '}
+                    <strong className="text-status-red">אין מתאם.</strong>{' '}
                     TikTok מדווח על המרות שלא מופיעות ב-Shopify. או שהמיפוי לא מלא{' '}
                     (חסרים מוצרים), או שיש over-attribution אגרסיבי (TikTok pixel
                     + view-through). אל תקבל החלטות על בסיס המרות TikTok של הקמפיין הזה.
@@ -584,7 +590,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
               if (primaryChannel === 'Combined') {
                 return (
                   <>
-                    <strong className="text-roas-red">אין מתאם.</strong>{' '}
+                    <strong className="text-status-red">אין מתאם.</strong>{' '}
                     Σ של 4 הערוצים מול Shopify לא מסביר את מכירות Shopify בפועל.{' '}
                     בדוק אם חסרים מוצרים במיפוי, UTMs, או ערוצי מכירה שלא מסווגים.
                   </>
@@ -592,7 +598,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
               }
               return (
                 <>
-                  <strong className="text-roas-red">אין מתאם.</strong>{' '}
+                  <strong className="text-status-red">אין מתאם.</strong>{' '}
                   Meta מדווח על המרות שלא מופיעות ב-Shopify. או שהמיפוי לא מלא{' '}
                   (חסרים מוצרים), או שיש over-attribution אגרסיבי. אל תקבל החלטות{' '}
                   על בסיס המרות Meta של הקמפיין הזה.
@@ -603,7 +609,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
         </div>
 
         {/* Pearson values for all 5 channels (Phase 05.7.9 — added TikTok). */}
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-text-muted tabular-nums">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-ink-muted tabular-nums">
           {renderR('r(Meta)', reconciliation.r)}
           {renderR('r(Google)', reconciliation.rGoogle)}
           {renderR('r(TikTok)', reconciliation.rTiktok)}
@@ -624,9 +630,8 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
           </div>
         )}
 
-        <div className="h-32">
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={reconciliation.series} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+        <ChartContainer className="h-32" height="100%">
+          <ComposedChart data={reconciliation.series} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
               <XAxis
                 dataKey="date"
                 tick={{ fontSize: 9, fill: CHART_COLORS.reconciliationAxis }}
@@ -680,32 +685,32 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                   const fmt = (n: number) =>
                     formatCurrency(n, n < 100 && n > 0 ? 2 : 0);
                   return (
-                    <div dir="rtl" className="rounded-lg bg-text-primary/95 text-white px-3 py-2 text-xs shadow-elevated tabular-nums">
-                      <div className="text-white/65 mb-1 text-[10px]">{formatDate(d.date)}</div>
-                      <div className="flex items-center gap-2">
-                        <span className="inline-block w-2 h-2 rounded-full bg-amber-400" />
-                        <span>Meta: CAD {fmt(d.meta)}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="inline-block w-2 h-2 rounded-full bg-blue-600" />
-                        <span>Google: CAD {fmt(d.google)}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        {/* c/HI-01: slate-700 swatch matches CHART_COLORS.tiktok
-                            (was pink-500, too close in hue to organic purple
-                            for colorblind viewers). */}
-                        <span className="inline-block w-2 h-2 rounded-full bg-slate-700" />
-                        <span>TikTok: CAD {fmt(d.tiktok)}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="inline-block w-2 h-2 rounded-full bg-purple-600" />
-                        <span>Organic: CAD {fmt(d.organic)}</span>
-                      </div>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className="inline-block w-2 h-2 rounded-full bg-roas-green" />
-                        <span>Shopify: CAD {fmt(d.shopify)}</span>
-                      </div>
-                    </div>
+                    <ChartTooltip className="tabular-nums">
+                      <ChartTooltipLabel>{formatDate(d.date)}</ChartTooltipLabel>
+                      <ChartTooltipRow color={CHART_COLORS.meta} label="Meta">
+                        CAD{' '}
+                        <ChartTooltipValue>{fmt(d.meta)}</ChartTooltipValue>
+                      </ChartTooltipRow>
+                      <ChartTooltipRow color={CHART_COLORS.google} label="Google">
+                        CAD{' '}
+                        <ChartTooltipValue>{fmt(d.google)}</ChartTooltipValue>
+                      </ChartTooltipRow>
+                      {/* c/HI-01: slate-700 swatch matches CHART_COLORS.tiktok
+                          (was pink-500, too close in hue to organic purple
+                          for colorblind viewers). */}
+                      <ChartTooltipRow color={CHART_COLORS.tiktok} label="TikTok">
+                        CAD{' '}
+                        <ChartTooltipValue>{fmt(d.tiktok)}</ChartTooltipValue>
+                      </ChartTooltipRow>
+                      <ChartTooltipRow color={CHART_COLORS.organic} label="Organic">
+                        CAD{' '}
+                        <ChartTooltipValue>{fmt(d.organic)}</ChartTooltipValue>
+                      </ChartTooltipRow>
+                      <ChartTooltipRow color={CHART_COLORS.shopify} label="Shopify">
+                        CAD{' '}
+                        <ChartTooltipValue>{fmt(d.shopify)}</ChartTooltipValue>
+                      </ChartTooltipRow>
+                    </ChartTooltip>
                   );
                 }}
               />
@@ -728,30 +733,29 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 dot={{ r: 2.5, fill: CHART_COLORS.shopify, strokeWidth: 0 }}
                 activeDot={{ r: 4 }}
               />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
+          </ComposedChart>
+        </ChartContainer>
 
         {/* 5-entry legend (Phase 05.7.9 — added TikTok) */}
         <div className="flex items-center justify-center flex-wrap gap-3 text-[10px] sm:text-[11px]">
           <span className="inline-flex items-center gap-1.5">
             <span className="inline-block w-3 h-[2px] bg-amber-600" />
-            <span className="text-text-secondary">Meta (מדווח)</span>
+            <span className="text-ink-secondary">Meta (מדווח)</span>
           </span>
           <span className="inline-flex items-center gap-1.5">
             <span className="inline-block w-3 h-[2px] bg-blue-600" />
-            <span className="text-text-secondary">Google (מדווח)</span>
+            <span className="text-ink-secondary">Google (מדווח)</span>
           </span>
           <span className="inline-flex items-center gap-1.5">
             {/* c/HI-01: slate-700 swatch matches CHART_COLORS.tiktok (was
                 pink-500, too close in hue to organic purple for colorblind
                 viewers). */}
             <span className="inline-block w-3 h-[2px] bg-slate-700" />
-            <span className="text-text-secondary">TikTok (מדווח)</span>
+            <span className="text-ink-secondary">TikTok (מדווח)</span>
           </span>
           <span className="inline-flex items-center gap-1.5">
             <span className="inline-block w-3 h-[2px] bg-purple-600" />
-            <span className="text-text-secondary">Organic</span>
+            <span className="text-ink-secondary">Organic</span>
           </span>
           {/* Shopify legend entry — dashed pattern matches the chart's
               dashed stroke (Phase 05.7.9). Bold typography communicates
@@ -768,10 +772,10 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 stroke="currentColor"
                 strokeWidth="2.5"
                 strokeDasharray="4 2"
-                className="text-roas-green"
+                className="text-status-green"
               />
             </svg>
-            <span className="text-text-primary font-semibold">Shopify (בפועל)</span>
+            <span className="text-ink font-semibold">Shopify (בפועל)</span>
           </span>
         </div>
 
@@ -784,24 +788,24 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
             were on the same basis, which they are not. The percentage
             is directional ("platforms over- or under-claim vs
             Shopify"), not a strict accounting reconciliation. */}
-        <p className="text-[10px] text-text-muted leading-relaxed text-center">
+        <p className="text-[10px] text-ink-muted leading-relaxed text-center">
           <strong>שים לב למשמעות:</strong>{' '}
           Meta ו-Google מציגים את ה-<em>דיווח</em> שלהם (conversionValue, יכול לכלול modeled/view-through).{' '}
           Organic ו-Shopify מציגים מכירות Shopify <em>בפועל</em> (revenueCad של פריטי המוצרים המשויכים).{' '}
           הפער בין הסכימה לבין Shopify מעיד על under/over-claim של הפלטפורמות, לא על reconciliation חשבונאי מדויק.
         </p>
-        <p className="text-[10px] text-text-muted leading-relaxed text-center">
+        <p className="text-[10px] text-ink-muted leading-relaxed text-center">
           <strong>בסיס המתאם:</strong> Pearson r מחושב על ימים פעילים בלבד (לפחות ערוץ אחד או Shopify ≠ 0). תקופות עצירה לא משפיעות על r כדי שלא יצרו &quot;הסכמה&quot; מלאכותית של אפס-אפס.
         </p>
 
         <details className="text-[11px]">
-          <summary className="cursor-pointer text-text-secondary hover:text-text-primary select-none py-1">
+          <summary className="cursor-pointer text-ink-secondary hover:text-ink select-none py-1">
             יום-לפי-יום ↓
           </summary>
-          <div className="mt-2 max-h-48 overflow-y-auto rounded-md border border-borderSubtle">
+          <div className="mt-2 max-h-48 overflow-y-auto rounded-md border border-line-subtle">
             <table className="w-full text-[11px]">
-              <thead className="bg-surfaceMuted/60 sticky top-0 z-[5]">
-                <tr className="text-text-muted">
+              <thead className="bg-elevated2/60 sticky top-0 z-[5]">
+                <tr className="text-ink-muted">
                   <th className="px-2 py-1.5 text-start font-medium">תאריך</th>
                   <th className="px-2 py-1.5 text-end font-medium">Meta</th>
                   <th className="px-2 py-1.5 text-end font-medium">Google</th>
@@ -820,13 +824,13 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                   // FIX-16 (5.2.2.1): three distinct cases for per-day-table delta. Operationally different signals.
                   const { label: deltaLabel, tone: deltaTone } = computeDayDelta(channelTotal, s.shopify);
                   const deltaClass = {
-                    neutral: 'text-text-muted',
-                    green: 'text-roas-green',
-                    red: 'text-roas-red',
+                    neutral: 'text-ink-muted',
+                    green: 'text-status-green',
+                    red: 'text-status-red',
                   }[deltaTone];
                   return (
-                    <tr key={s.date} className="border-t border-borderSubtle">
-                      <td className="px-2 py-1 text-text-secondary tabular-nums">{s.date.slice(5)}</td>
+                    <tr key={s.date} className="border-t border-line-subtle">
+                      <td className="px-2 py-1 text-ink-secondary tabular-nums">{s.date.slice(5)}</td>
                       <td className="px-2 py-1 text-end tabular-nums">{formatCurrency(s.meta)}</td>
                       <td className="px-2 py-1 text-end tabular-nums">{formatCurrency(s.google)}</td>
                       <td className="px-2 py-1 text-end tabular-nums">{formatCurrency(s.tiktok)}</td>
