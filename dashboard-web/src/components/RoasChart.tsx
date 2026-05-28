@@ -137,14 +137,13 @@ export function RoasChart({ data, stores, rows, bare = false }: Props) {
                       })}
                     </ul>
                     {(() => {
-                      const tooltipDate = payload[0].payload.date as string;
                       let refundSum = 0;
                       let anyHeavy = false;
                       for (const entry of payload) {
                         const storeName = entry.dataKey as string;
-                        const row = rows.find(r => r.date === tooltipDate && r.storeName === storeName);
+                        const row = rows.find(r => r.date === date && r.storeName === storeName);
                         if (row?.refundDeduction) refundSum += row.refundDeduction;
-                        if (row && isHeavyRefundDay(row)) anyHeavy = true;
+                        if (refundDayKeys.has(`${date}|${storeName}`)) anyHeavy = true;
                       }
                       if (!anyHeavy || refundSum <= 0) return null;
                       return (
@@ -169,13 +168,13 @@ export function RoasChart({ data, stores, rows, bare = false }: Props) {
                   // Mild hierarchy via stroke weight only — opacity stays full
                   // for every line so each store stays clearly visible.
                   strokeWidth={isPrimary ? 2.75 : 2}
-                  dot={(props: { cx?: number; cy?: number; payload?: { date?: string } }) => {
+                  dot={(props: { cx?: number; cy?: number; payload?: { date?: string }; key?: string | number }) => {
                     const date = props.payload?.date;
-                    if (!date || props.cx == null || props.cy == null) return <g />;
+                    if (!date || props.cx == null || props.cy == null) return <g key={props.key} />;
                     const isHeavy = refundDayKeys.has(`${date}|${s}`);
-                    if (!isHeavy) return <g />;
+                    if (!isHeavy) return <g key={props.key} />;
                     return (
-                      <g key={`dot-${date}-${s}`}>
+                      <g key={props.key}>
                         <circle cx={props.cx} cy={props.cy} r={5} fill={color} />
                         <circle
                           cx={props.cx}
