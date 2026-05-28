@@ -101,11 +101,11 @@ const fetcher = async (url: string) => {
 };
 
 const TONE_BG: Record<string, string> = {
-  red:    'bg-roas-redBg text-roas-red',
-  orange: 'bg-roas-orangeBg text-roas-orange',
-  green:  'bg-roas-greenBg text-roas-green',
-  blue:   'bg-roas-blueBg text-roas-blue',
-  gray:   'bg-surfaceMuted text-text-muted',
+  red:    'bg-status-redBg text-status-red',
+  orange: 'bg-status-orangeBg text-status-orange',
+  green:  'bg-status-greenBg text-status-green',
+  blue:   'bg-status-blueBg text-status-blue',
+  gray:   'bg-elevated2 text-ink-muted',
 };
 
 function todayInIsrael(): string {
@@ -1082,15 +1082,15 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
 
   // ----- Toolbar -----
   const toolbar = (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2 sm:gap-3 px-4 sm:px-5 py-3 bg-surfaceMuted/40 border-b border-borderSubtle">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2 sm:gap-3 px-4 sm:px-5 py-3 bg-elevated2/40 border-b border-line-subtle">
       {/* Mode selector: campaign or ad-set */}
       <div className="flex items-center gap-2">
-        <span className="text-[11px] sm:text-xs text-text-secondary font-medium shrink-0">
+        <span className="text-[11px] sm:text-xs text-ink-secondary font-medium shrink-0">
           תצוגה:
         </span>
         <div
           role="tablist"
-          className="inline-flex rounded-lg border border-border bg-surface overflow-hidden divide-x divide-border"
+          className="inline-flex rounded-lg border border-line bg-elevated overflow-hidden divide-x divide-line"
           dir="ltr"
         >
           {(['campaign', 'adset'] as Mode[]).map(m => (
@@ -1102,8 +1102,8 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
               className={cn(
                 'px-2.5 sm:px-3.5 py-1.5 text-[11px] sm:text-xs font-medium transition-colors min-w-[64px] sm:min-w-[80px]',
                 mode === m
-                  ? 'bg-primary text-white'
-                  : 'bg-surface text-text-secondary hover:bg-surfaceMuted',
+                  ? 'bg-accent text-white'
+                  : 'bg-elevated text-ink-secondary hover:bg-elevated2',
               )}
             >
               {m === 'campaign' ? 'קמפיינים' : 'אד-סטים'}
@@ -1116,7 +1116,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       <div className="flex items-center gap-2">
         <div
           role="tablist"
-          className="inline-flex rounded-lg border border-border bg-surface overflow-hidden divide-x divide-border"
+          className="inline-flex rounded-lg border border-line bg-elevated overflow-hidden divide-x divide-line"
           dir="ltr"
         >
           {(['all', 'Meta', 'Google', 'TikTok'] as Platform[]).map(p => (
@@ -1128,8 +1128,8 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
               className={cn(
                 'px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-medium transition-colors min-w-[48px] sm:min-w-[58px]',
                 platform === p
-                  ? 'bg-primary text-white'
-                  : 'bg-surface text-text-secondary hover:bg-surfaceMuted',
+                  ? 'bg-accent text-white'
+                  : 'bg-elevated text-ink-secondary hover:bg-elevated2',
               )}
             >
               {p === 'all' ? 'כולם' : p}
@@ -1140,11 +1140,11 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
 
       {/* Store filter */}
       <div className="flex items-center gap-2">
-        <StoreIcon size={14} className="text-text-muted shrink-0" />
+        <StoreIcon size={14} className="text-ink-muted shrink-0" />
         <select
           value={localStore}
           onChange={e => setLocalStore(e.target.value)}
-          className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30 min-w-[120px]"
+          className="rounded-lg border border-line bg-elevated px-2.5 py-1.5 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/30 min-w-[120px]"
         >
           <option value="All">כל החנויות</option>
           {stores.map(s => (
@@ -1158,16 +1158,16 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
           same store are shown. Useful for inspecting cohort behaviour
           + spotting cannibalization risk at a glance. */}
       <div className="flex items-center gap-2">
-        <label className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs text-text-secondary cursor-pointer select-none">
+        <label className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs text-ink-secondary cursor-pointer select-none">
           <input
             type="checkbox"
             checked={showOnlyMultiMapped}
             onChange={e => setShowOnlyMultiMapped(e.target.checked)}
-            className="rounded border-border accent-primary"
+            className="rounded border-line accent-accent"
           />
           <span>🔗 רק קמפיינים עם מיפוי משותף</span>
           {showOnlyMultiMapped && (
-            <span className="text-text-muted text-[10px] tabular-nums">
+            <span className="text-ink-muted text-[10px] tabular-nums">
               ({aggregatedFiltered.length} מתוך {aggregated.length})
             </span>
           )}
@@ -1176,7 +1176,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
 
       {/* Date range */}
       <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-        <Calendar size={14} className="text-text-muted shrink-0" />
+        <Calendar size={14} className="text-ink-muted shrink-0" />
         <input
           type="date"
           value={localRange.from}
@@ -1190,11 +1190,11 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
             );
           }}
           className={cn(
-            'rounded-lg border bg-surface px-2 py-1.5 text-xs sm:text-sm font-medium',
-            isCustomRange ? 'border-primary text-primary' : 'border-border text-text-secondary',
+            'rounded-lg border bg-elevated px-2 py-1.5 text-xs sm:text-sm font-medium',
+            isCustomRange ? 'border-accent text-accent' : 'border-line text-ink-secondary',
           )}
         />
-        <span className="text-text-muted text-xs">—</span>
+        <span className="text-ink-muted text-xs">—</span>
         <input
           type="date"
           value={localRange.to}
@@ -1208,15 +1208,15 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
             );
           }}
           className={cn(
-            'rounded-lg border bg-surface px-2 py-1.5 text-xs sm:text-sm font-medium',
-            isCustomRange ? 'border-primary text-primary' : 'border-border text-text-secondary',
+            'rounded-lg border bg-elevated px-2 py-1.5 text-xs sm:text-sm font-medium',
+            isCustomRange ? 'border-accent text-accent' : 'border-line text-ink-secondary',
           )}
         />
         {isCustomRange && (
           <button
             type="button"
             onClick={() => setLocalRange(range)}
-            className="p-1 rounded hover:bg-surfaceMuted text-text-muted hover:text-text-primary"
+            className="p-1 rounded hover:bg-elevated2 text-ink-muted hover:text-ink"
             title="חזור לטווח הגלובלי"
           >
             <X size={14} />
@@ -1227,14 +1227,14 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       {/* Optimized-mark counter + bulk-clear (only renders when something marked). */}
       {optimized.size > 0 && (
         <div className="flex items-center gap-1.5 text-[11px] sm:text-xs">
-          <CheckCircle2 size={13} className="text-roas-green shrink-0" />
-          <span className="font-medium text-text-secondary tabular-nums">
+          <CheckCircle2 size={13} className="text-status-green shrink-0" />
+          <span className="font-medium text-ink-secondary tabular-nums">
             {optimized.size} מסומנים
           </span>
           <button
             type="button"
             onClick={onClearAll}
-            className="font-semibold text-text-muted hover:text-roas-red transition-colors px-1.5 py-0.5 rounded hover:bg-roas-redBg/40"
+            className="font-semibold text-ink-muted hover:text-status-red transition-colors px-1.5 py-0.5 rounded hover:bg-status-redBg/40"
             title="הסר את כל הסימונים"
           >
             נקה הכל
@@ -1242,7 +1242,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         </div>
       )}
 
-      <span className="text-[10px] sm:text-xs text-text-muted tabular-nums sm:mr-auto">
+      <span className="text-[10px] sm:text-xs text-ink-muted tabular-nums sm:mr-auto">
         {/* Audit fix 2026-05-23 (FIND-14): when the multi-mapped filter is
             on, show the visible-row count instead of the pre-filter total so
             this headline number doesn't disagree with the table body. The
@@ -1259,7 +1259,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   // ----- Summary -----
   const roasInfo = roasLabel(totals.roas);
   const summary = aggregated.length > 0 && (
-    <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gradient-to-l from-primary/5 to-surface border-b border-borderSubtle">
+    <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gradient-to-l from-accent/5 to-elevated border-b border-line-subtle">
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3">
         <Stat label="ROAS" value={totals.roas > 0 ? formatNumber(totals.roas) : '—'} chip={{ text: roasInfo.text, tone: roasInfo.tone }} />
         <Stat label="הוצאה" value={formatCurrency(totals.spend)} prefix="CAD" />
@@ -1286,10 +1286,10 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
           cpmAnalysisMode === 'prev' && cpmDailyPrev ? { prev: cpmDailyPrev } : undefined,
         );
         const toneBg: Record<typeof analysis.tone, string> = {
-          positive: 'bg-roas-greenBg/40 border-roas-green/30 text-roas-green',
+          positive: 'bg-status-greenBg/40 border-status-green/30 text-status-green',
           warning:  'bg-amber-50 border-amber-300 text-amber-800',
-          negative: 'bg-roas-redBg/40 border-roas-red/30 text-roas-red',
-          neutral:  'bg-surfaceMuted border-borderSubtle text-text-secondary',
+          negative: 'bg-status-redBg/40 border-status-red/30 text-status-red',
+          neutral:  'bg-elevated2 border-line-subtle text-ink-secondary',
         };
         // Build an explicit baseline label with the actual date windows so
         // the user knows exactly what's being compared. Format MM-DD/DD →
@@ -1334,11 +1334,11 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         });
         const showPrevLine = cpmAnalysisMode === 'prev' && !isLoadingPrev && (cpmDailyPrev?.length ?? 0) > 0;
         return (
-        <div className="mt-3 rounded-lg bg-surface border border-borderSubtle p-3">
+        <div className="mt-3 rounded-lg bg-elevated border border-line-subtle p-3">
           <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-            <h3 className="text-xs sm:text-sm font-semibold text-text-primary inline-flex items-center gap-1.5">
+            <h3 className="text-xs sm:text-sm font-semibold text-ink inline-flex items-center gap-1.5">
               CPM לאורך זמן
-              <span className="text-[10px] font-medium text-text-muted">
+              <span className="text-[10px] font-medium text-ink-muted">
                 ({localStore === 'All' ? 'כל החנויות' : localStore}
                 {platform !== 'all' ? ` · ${platform}` : ''}
                 {', CAD'})
@@ -1348,15 +1348,15 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
               {/* Analysis baseline toggle — picks what the smart-analysis
                   box compares against. Two modes: half-over-half (within
                   range) vs previous-period (same-length window before). */}
-              <div className="inline-flex items-center gap-0.5 rounded-md border border-borderSubtle bg-surface p-0.5 text-[10px]">
+              <div className="inline-flex items-center gap-0.5 rounded-md border border-line-subtle bg-elevated p-0.5 text-[10px]">
                 <button
                   type="button"
                   onClick={() => setCpmAnalysisMode('half')}
                   className={cn(
                     'px-2 py-0.5 rounded transition-colors',
                     cpmAnalysisMode === 'half'
-                      ? 'bg-primary/10 text-primary font-medium'
-                      : 'text-text-muted hover:text-text-primary',
+                      ? 'bg-accent/10 text-accent font-medium'
+                      : 'text-ink-muted hover:text-ink',
                   )}
                 >
                   חצי-חצי
@@ -1367,26 +1367,26 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                   className={cn(
                     'px-2 py-0.5 rounded transition-colors',
                     cpmAnalysisMode === 'prev'
-                      ? 'bg-primary/10 text-primary font-medium'
-                      : 'text-text-muted hover:text-text-primary',
+                      ? 'bg-accent/10 text-accent font-medium'
+                      : 'text-ink-muted hover:text-ink',
                   )}
                 >
                   vs תקופה קודמת
                 </button>
               </div>
-              <label className="inline-flex items-center gap-1.5 text-[11px] text-text-secondary cursor-pointer select-none">
+              <label className="inline-flex items-center gap-1.5 text-[11px] text-ink-secondary cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={cpmShowRoas}
                   onChange={e => setCpmShowRoas(e.target.checked)}
-                  className="rounded border-borderSubtle text-primary focus:ring-primary/30 cursor-pointer"
+                  className="rounded border-line-subtle text-accent focus:ring-accent/30 cursor-pointer"
                 />
                 הוסף ROAS לגרף
               </label>
               <button
                 type="button"
                 onClick={() => setCpmExpanded(false)}
-                className="text-[11px] text-text-muted hover:text-text-primary transition-colors"
+                className="text-[11px] text-ink-muted hover:text-ink transition-colors"
                 aria-label="סגור"
               >
                 ✕
@@ -1452,7 +1452,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                       ? ((d.cpm - d.prevCpm) / d.prevCpm) * 100
                       : null;
                     return (
-                      <div dir="rtl" className="rounded-lg bg-text-primary text-white px-3 py-2 text-xs shadow-elevated tabular-nums">
+                      <div dir="rtl" className="rounded-lg bg-ink text-white px-3 py-2 text-xs shadow-elevated tabular-nums">
                         <div className="text-white/70 mb-1 text-[10px]">{formatDate(d.date)}</div>
                         <div>CPM: <span className="font-semibold text-amber-200">CAD {formatCurrency(d.cpm, 2)}</span></div>
                         {cpmShowRoas && (
@@ -1523,7 +1523,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
             </ResponsiveContainer>
           </div>
           {(cpmShowRoas || showPrevLine) && (
-            <div className="flex items-center justify-center gap-4 text-[10px] text-text-muted mt-1.5 flex-wrap">
+            <div className="flex items-center justify-center gap-4 text-[10px] text-ink-muted mt-1.5 flex-wrap">
               <span className="inline-flex items-center gap-1.5">
                 <span className="inline-block w-3 h-[2px] bg-amber-600" />
                 CPM {cpmShowRoas ? '(ציר שמאל)' : ''}
@@ -1536,7 +1536,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
               )}
               {cpmShowRoas && (
                 <span className="inline-flex items-center gap-1.5">
-                  <span className="inline-block w-3 border-t-2 border-dashed border-roas-green" />
+                  <span className="inline-block w-3 border-t-2 border-dashed border-status-green" />
                   ROAS (ציר ימין)
                 </span>
               )}
@@ -1575,12 +1575,12 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         );
       })()}
       {totals.spend > 0 && (
-        <div className="mt-3 pt-3 border-t border-borderSubtle text-[10px] sm:text-xs text-text-muted tabular-nums flex flex-wrap gap-x-3 gap-y-1">
-          <span>CPC: <span className="text-text-secondary font-medium">CAD {formatCurrency(totals.cpc, 2)}</span></span>
-          <span className="text-text-subtle">·</span>
-          <span>CPA: <span className="text-text-secondary font-medium">CAD {totals.conversions > 0 ? formatCurrency(totals.cpa, 2) : '—'}</span></span>
-          <span className="text-text-subtle">·</span>
-          <span>חשיפות: <span className="text-text-secondary font-medium">{formatNumber(totals.impressions, 0)}</span></span>
+        <div className="mt-3 pt-3 border-t border-line-subtle text-[10px] sm:text-xs text-ink-muted tabular-nums flex flex-wrap gap-x-3 gap-y-1">
+          <span>CPC: <span className="text-ink-secondary font-medium">CAD {formatCurrency(totals.cpc, 2)}</span></span>
+          <span className="text-ink-subtle">·</span>
+          <span>CPA: <span className="text-ink-secondary font-medium">CAD {totals.conversions > 0 ? formatCurrency(totals.cpa, 2) : '—'}</span></span>
+          <span className="text-ink-subtle">·</span>
+          <span>חשיפות: <span className="text-ink-secondary font-medium">{formatNumber(totals.impressions, 0)}</span></span>
         </div>
       )}
     </div>
@@ -1595,11 +1595,11 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
 
       {/* Both SWR-thrown errors and the 200+data.error degraded path (#WR-06). */}
       {(error || data?.error) && (
-        <div className="m-4 rounded-lg bg-roas-redBg border border-roas-red/30 p-3 flex items-start gap-2 text-sm">
-          <AlertCircle className="text-roas-red shrink-0" size={18} />
+        <div className="m-4 rounded-lg bg-status-redBg border border-status-red/30 p-3 flex items-start gap-2 text-sm">
+          <AlertCircle className="text-status-red shrink-0" size={18} />
           <div>
-            <div className="font-semibold text-roas-red">שגיאה בטעינת קמפיינים</div>
-            <div className="text-text-secondary text-xs mt-1">
+            <div className="font-semibold text-status-red">שגיאה בטעינת קמפיינים</div>
+            <div className="text-ink-secondary text-xs mt-1">
               {error ? (error as Error).message : data?.error}
             </div>
           </div>
@@ -1607,12 +1607,12 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       )}
 
       {isLoading && (
-        <div className="p-8 text-center text-text-muted text-sm">טוען נתוני קמפיינים…</div>
+        <div className="p-8 text-center text-ink-muted text-sm">טוען נתוני קמפיינים…</div>
       )}
 
       {data && !error && !data.error && aggregated.length === 0 && (
-        <div className="p-8 text-center text-text-muted text-sm">
-          <Megaphone className="mx-auto mb-2 text-text-muted/60" size={28} />
+        <div className="p-8 text-center text-ink-muted text-sm">
+          <Megaphone className="mx-auto mb-2 text-ink-muted/60" size={28} />
           <div>אין קמפיינים פעילים בטווח הזה.</div>
           <div className="text-[11px] mt-1">נסה להרחיב את טווח התאריכים או לשנות פלטפורמה.</div>
         </div>
@@ -1712,7 +1712,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     label={
                       <span className="inline-flex flex-col items-center leading-tight">
                         <span>ROAS Shopify</span>
-                        <span className="text-[9px] text-text-muted font-normal">פלטפורמה</span>
+                        <span className="text-[9px] text-ink-muted font-normal">פלטפורמה</span>
                       </span>
                     }
                     sortKey="roasShopifyPlatform"
@@ -1731,7 +1731,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     label={
                       <span className="inline-flex flex-col items-end leading-tight">
                         <span>ערך Shopify</span>
-                        <span className="text-[9px] text-text-muted font-normal">פלטפורמה</span>
+                        <span className="text-[9px] text-ink-muted font-normal">פלטפורמה</span>
                       </span>
                     }
                     sortKey="shopifyValuePlatform"
@@ -1739,7 +1739,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     dir={sortDir}
                     onClick={handleSort}
                     align="end"
-                    className="px-3 py-2 w-[92px] border-e border-borderSubtle"
+                    className="px-3 py-2 w-[92px] border-e border-line-subtle"
                     dataColId="shopifyValuePlatform"
                     tooltip="ערך המכירות (CAD) שסווגו דטרמיניסטית לפלטפורמה הזו דרך source / click-id ב-Shopify (utm_source, ttclid, fbclid, gclid). רק הזמנות שאנחנו 100% בטוחים שהן מהפלטפורמה הזו — בלי הקצאה פרופורציונלית. זה מה שאפשר להוכיח."
                   />
@@ -1750,7 +1750,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     label={
                       <span className="inline-flex flex-col items-end leading-tight">
                         <span>יח&apos; Shopify</span>
-                        <span className="text-[9px] text-text-muted font-normal">פלטפורמה</span>
+                        <span className="text-[9px] text-ink-muted font-normal">פלטפורמה</span>
                       </span>
                     }
                     sortKey="shopifyUnitsPlatform"
@@ -1758,7 +1758,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     dir={sortDir}
                     onClick={handleSort}
                     align="end"
-                    className="px-3 py-2 w-[78px] border-e border-borderSubtle"
+                    className="px-3 py-2 w-[78px] border-e border-line-subtle"
                     dataColId="shopifyUnitsPlatform"
                     tooltip="מספר היחידות שנמכרו ב-Shopify מהזמנות שסווגו דטרמיניסטית לפלטפורמה הזו. סופר units (line_items.quantity) — לא orders. רק הזמנות עם source / click-id ברור."
                   />
@@ -1769,7 +1769,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     label={
                       <span className="inline-flex flex-col items-end leading-tight">
                         <span>ערך Shopify</span>
-                        <span className="text-[9px] text-text-muted font-normal">סה&quot;כ</span>
+                        <span className="text-[9px] text-ink-muted font-normal">סה&quot;כ</span>
                       </span>
                     }
                     sortKey="shopifyValueTotal"
@@ -1788,7 +1788,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     label={
                       <span className="inline-flex flex-col items-end leading-tight">
                         <span>יח&apos; Shopify</span>
-                        <span className="text-[9px] text-text-muted font-normal">סה&quot;כ</span>
+                        <span className="text-[9px] text-ink-muted font-normal">סה&quot;כ</span>
                       </span>
                     }
                     sortKey="shopifyUnitsTotal"
@@ -1807,7 +1807,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     label={
                       <span className="inline-flex flex-col items-end leading-tight">
                         <span>הזמ&apos; Shopify</span>
-                        <span className="text-[9px] text-text-muted font-normal">סה&quot;כ</span>
+                        <span className="text-[9px] text-ink-muted font-normal">סה&quot;כ</span>
                       </span>
                     }
                     sortKey="shopifyOrdersTotal"
@@ -1893,8 +1893,8 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
               };
               return (
             <table className="w-full text-xs sm:text-sm min-w-[1340px]">
-              <thead className="sticky top-0 z-[5] bg-surface">
-                <tr className="text-text-secondary border-b border-borderSubtle bg-surfaceMuted/40">
+              <thead className="sticky top-0 z-[5] bg-elevated">
+                <tr className="text-ink-secondary border-b border-line-subtle bg-elevated2/40">
                   <ColumnHeaderTh
                     className="px-3 py-2 w-[36px]"
                     ariaLabel="סימון אופטימיזציה"
@@ -1966,10 +1966,10 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
           </div>
 
           {aggregated.length > TOP_N_DEFAULT && (
-            <div className="px-4 sm:px-5 py-2.5 bg-surfaceMuted/30 border-t border-borderSubtle">
+            <div className="px-4 sm:px-5 py-2.5 bg-elevated2/30 border-t border-line-subtle">
               <button
                 onClick={() => setShowAll(v => !v)}
-                className="text-xs sm:text-sm text-primary hover:text-primary-dark font-medium inline-flex items-center gap-1.5 transition-colors"
+                className="text-xs sm:text-sm text-accent hover:text-accent font-medium inline-flex items-center gap-1.5 transition-colors"
               >
                 {showAll ? (
                   <>
@@ -2053,8 +2053,8 @@ function AttributionGapPanel({
   };
 }) {
   const toneClass = {
-    good: 'border-roas-green/30 bg-roas-greenBg/40',
-    flag: 'border-roas-red/30 bg-roas-redBg/40',
+    good: 'border-status-green/30 bg-status-greenBg/40',
+    flag: 'border-status-red/30 bg-status-redBg/40',
   }[gap.tone];
 
   const arrow = gap.gapPct > 0 ? '↗' : gap.gapPct < 0 ? '↘' : '=';
@@ -2062,63 +2062,63 @@ function AttributionGapPanel({
   return (
     <section
       className={cn(
-        'px-4 sm:px-5 py-3 sm:py-4 border-b border-borderSubtle',
+        'px-4 sm:px-5 py-3 sm:py-4 border-b border-line-subtle',
         toneClass,
       )}
     >
       <div className="flex items-center gap-2 mb-2">
-        <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-text-secondary">
+        <span className="text-[10px] sm:text-xs font-bold uppercase tracking-wider text-ink-secondary">
           התאמת שיוך · Meta &amp; Google &amp; TikTok ↔ Shopify
         </span>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
         <div>
-          <div className="text-[10px] text-text-muted uppercase tracking-wide">
+          <div className="text-[10px] text-ink-muted uppercase tracking-wide">
             פלטפורמות מדווחות
           </div>
-          <div className="text-base sm:text-lg font-semibold tabular-nums text-text-primary mt-0.5">
-            <span className="text-[10px] text-text-muted font-medium ml-1">CAD</span>
+          <div className="text-base sm:text-lg font-semibold tabular-nums text-ink mt-0.5">
+            <span className="text-[10px] text-ink-muted font-medium ml-1">CAD</span>
             {formatCurrency(gap.platformClaimed)}
           </div>
-          <div className="text-[10px] text-text-muted tabular-nums">
+          <div className="text-[10px] text-ink-muted tabular-nums">
             ROAS: {gap.platformRoas > 0 ? gap.platformRoas.toFixed(2) : '—'}
           </div>
         </div>
 
         <div>
-          <div className="text-[10px] text-text-muted uppercase tracking-wide">
+          <div className="text-[10px] text-ink-muted uppercase tracking-wide">
             Shopify בפועל
           </div>
-          <div className="text-base sm:text-lg font-bold tabular-nums text-text-primary mt-0.5">
-            <span className="text-[10px] text-text-muted font-medium ml-1">CAD</span>
+          <div className="text-base sm:text-lg font-bold tabular-nums text-ink mt-0.5">
+            <span className="text-[10px] text-ink-muted font-medium ml-1">CAD</span>
             {formatCurrency(gap.shopifyRevenue)}
           </div>
-          <div className="text-[10px] text-text-muted tabular-nums">
+          <div className="text-[10px] text-ink-muted tabular-nums">
             ROAS: {gap.storeRoas > 0 ? gap.storeRoas.toFixed(2) : '—'}
           </div>
         </div>
 
         <div>
-          <div className="text-[10px] text-text-muted uppercase tracking-wide">
+          <div className="text-[10px] text-ink-muted uppercase tracking-wide">
             פער (Shopify − Platforms)
           </div>
           <div
             className={cn(
               'text-base sm:text-lg font-bold tabular-nums mt-0.5',
-              gap.absGap >= 0 ? 'text-roas-green' : 'text-roas-red',
+              gap.absGap >= 0 ? 'text-status-green' : 'text-status-red',
             )}
           >
-            <span className="text-[10px] text-text-muted font-medium ml-1">CAD</span>
+            <span className="text-[10px] text-ink-muted font-medium ml-1">CAD</span>
             {gap.absGap >= 0 ? '+' : ''}{formatCurrency(gap.absGap)}
           </div>
-          <div className="text-[10px] text-text-muted tabular-nums">
+          <div className="text-[10px] text-ink-muted tabular-nums">
             {arrow} {(gap.gapPct * 100).toFixed(1)}%
           </div>
         </div>
 
         <div>
-          <div className="text-[10px] text-text-muted uppercase tracking-wide">
+          <div className="text-[10px] text-ink-muted uppercase tracking-wide">
             יחס אמינות
           </div>
           <div className="text-base sm:text-lg font-semibold tabular-nums mt-0.5">
@@ -2126,14 +2126,14 @@ function AttributionGapPanel({
               ? (gap.platformClaimed / gap.shopifyRevenue * 100).toFixed(0) + '%'
               : '—'}
           </div>
-          <div className="text-[10px] text-text-muted">
+          <div className="text-[10px] text-ink-muted">
             Platforms ÷ Shopify
           </div>
         </div>
       </div>
 
-      <p className="mt-3 text-[11px] sm:text-xs text-text-secondary leading-relaxed">
-        <strong className="text-text-primary">משמעות:</strong> {gap.interpretation}
+      <p className="mt-3 text-[11px] sm:text-xs text-ink-secondary leading-relaxed">
+        <strong className="text-ink">משמעות:</strong> {gap.interpretation}
       </p>
     </section>
   );
@@ -2212,7 +2212,7 @@ function ColumnHeaderTh({
           className={cn(
             'absolute z-[15] top-full mt-2 end-0',
             'w-[260px] sm:w-[280px] max-w-[min(85vw,300px)]',
-            'rounded-xl bg-text-primary text-white px-3 py-2.5',
+            'rounded-xl bg-ink text-white px-3 py-2.5',
             'shadow-elevated text-[11px] sm:text-[12px] leading-relaxed',
             'pointer-events-none animate-fade-in font-normal text-start whitespace-normal',
           )}
@@ -2220,7 +2220,7 @@ function ColumnHeaderTh({
           {tooltip}
           <span
             aria-hidden
-            className="absolute -top-1 end-4 w-2 h-2 bg-text-primary rotate-45"
+            className="absolute -top-1 end-4 w-2 h-2 bg-ink rotate-45"
           />
         </span>
       )}
@@ -2281,20 +2281,20 @@ function SortHeader({
           'select-none cursor-pointer',
           justify,
           isActive
-            ? 'text-primary font-semibold'
-            : 'text-text-secondary hover:text-text-primary',
+            ? 'text-accent font-semibold'
+            : 'text-ink-secondary hover:text-ink',
         )}
         aria-sort={isActive ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
       >
         <span>{label}</span>
         {isActive ? (
           dir === 'asc' ? (
-            <ArrowUp size={12} className="text-primary" />
+            <ArrowUp size={12} className="text-accent" />
           ) : (
-            <ArrowDown size={12} className="text-primary" />
+            <ArrowDown size={12} className="text-accent" />
           )
         ) : (
-          <ArrowUpDown size={12} className="text-text-subtle opacity-0 group-hover:opacity-100 transition-opacity" />
+          <ArrowUpDown size={12} className="text-ink-subtle opacity-0 group-hover:opacity-100 transition-opacity" />
         )}
       </button>
     </ColumnHeaderTh>
@@ -2325,23 +2325,23 @@ function Stat({
   const interactive = !!onClick;
   const className = cn(
     'rounded-lg border px-2.5 sm:px-3 py-1.5 sm:py-2 text-start',
-    !interactive && 'bg-surface border-borderSubtle',
-    interactive && !active && 'bg-surface border-borderSubtle hover:border-primary/40 hover:bg-primary/[0.02] transition-colors cursor-pointer',
-    interactive && active && 'bg-primary/[0.04] border-primary/40 ring-1 ring-primary/20 cursor-pointer',
+    !interactive && 'bg-elevated border-line-subtle',
+    interactive && !active && 'bg-elevated border-line-subtle hover:border-accent/40 hover:bg-accent/[0.02] transition-colors cursor-pointer',
+    interactive && active && 'bg-accent/[0.04] border-accent/40 ring-1 ring-accent/20 cursor-pointer',
   );
   const content = (
     <>
-      <div className="text-[10px] sm:text-xs text-text-muted leading-tight">{label}</div>
+      <div className="text-[10px] sm:text-xs text-ink-muted leading-tight">{label}</div>
       <div className="flex items-baseline gap-1 mt-0.5">
         {prefix && (
-          <span className="text-[10px] text-text-muted font-medium shrink-0">{prefix}</span>
+          <span className="text-[10px] text-ink-muted font-medium shrink-0">{prefix}</span>
         )}
         <span
           className={cn(
             'font-semibold tabular-nums leading-tight',
             'text-sm sm:text-base',
-            accent === 'green' && 'text-roas-green',
-            !accent && 'text-text-primary',
+            accent === 'green' && 'text-status-green',
+            !accent && 'text-ink',
           )}
         >
           {value}
