@@ -19,3 +19,7 @@ dashboard-web/node_modules
 .env.*.local
 *.env
 !.env.example
+
+# graphify-out/ holds output from the local /graphify skill (knowledge-graph
+# artifacts, transient per-run). Re-generated on demand; not source-of-truth.
+graphify-out/
