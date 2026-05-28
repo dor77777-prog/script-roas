@@ -110,7 +110,7 @@ function buildInputs(patch: Partial<HealthScoreInputs> = {}): HealthScoreInputs 
 // ─────────────────────────────────────────────────────────────────────────
 
 describe('computeCampaignHealth — output shape', () => {
-  it('returns score in [0, 100] and all 5 components present', () => {
+  it('returns score in [0, 100] with all data-derived components populated', () => {
     const out = computeCampaignHealth(buildInputs());
     expect(out.score).toBeGreaterThanOrEqual(0);
     expect(out.score).toBeLessThanOrEqual(100);

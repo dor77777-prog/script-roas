@@ -62,14 +62,16 @@ export type HealthScoreComponents = {
 };
 
 export type CampaignHealth = {
-  /** Final 0..100 score after weighted sum + operator adjustment + clamp. */
+  /** Final 0..100 score: weighted sum of data-derived components, clamped to [0, 100].
+   *  Cohort adjustments are applied separately via `applyCohortAdjustmentOnce` after
+   *  this function returns. */
   score: number;
   /** Letter grade derived from `score` — easier to scan in a column. */
   grade: HealthGrade;
   /** Per-component breakdown for the drilldown popover. */
   components: HealthScoreComponents;
   /** One Hebrew sentence per component explaining WHY it scored that way.
-   *  Order: profitability, volume, trajectory, attribution, operator.
+   *  Order: profitability, volume, trajectory, attribution.
    *  Use these verbatim in the drilldown — keeps the UI dumb. */
   reasons: string[];
   /** True when the campaign hasn't accumulated enough data to score
@@ -85,7 +87,8 @@ export type HealthScoreInputs = {
 };
 
 // ─────────────────────────────────────────────────────────────────────────
-// Weights — sum to 1.0. Operator adjustment is applied separately.
+// Weights — sum to 1.0. Cohort adjustment (if any) is applied separately by
+// applyCohortAdjustmentOnce after computeCampaignHealth returns.
 // ─────────────────────────────────────────────────────────────────────────
 
 const WEIGHTS = {
