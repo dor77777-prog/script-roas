@@ -157,7 +157,7 @@ export function HeroOverview({ data, filters }: Props) {
     ? (cpmAgg.cpm - cpmAggPrev.cpm) / cpmAggPrev.cpm
     : null;
 
-  const { story, kpis, chartData, heavyDates, refundsTotal } = useMemo(() => {
+  const { story, kpis, chartData, heavyDates } = useMemo(() => {
     const cur = filterRows(data.rows, filters.range, filters.store);
     // Pull prev from the dedicated prev-range fetch above — the `data` prop
     // only contains current-range rows, so filterRows(data.rows, prevRange)
@@ -234,15 +234,15 @@ export function HeroOverview({ data, filters }: Props) {
     if (refundsTotal > 0) {
       const refundStr = `CAD ${Math.round(refundsTotal).toLocaleString('he-IL')}`;
       if (heavyDates.length === 1) {
-        story += ` מתוך הירידה, כ-${refundStr} הם החזרים מעובדים ב-${fmtDateShort(heavyDates[0])}.`;
+        story += ` בתקופה זו עובדו ${refundStr} בהחזרים ב-${fmtDateShort(heavyDates[0])}.`;
       } else if (heavyDates.length > 1) {
-        story += ` מתוך הירידה, ${refundStr} בהחזרים מעובדים על פני ${heavyDates.length} ימים בתקופה.`;
+        story += ` בתקופה זו עובדו ${refundStr} בהחזרים על פני ${heavyDates.length} ימים.`;
       } else {
         story += ` (כולל ${refundStr} בהחזרים מעובדים בתקופה.)`;
       }
     }
 
-    return { story, kpis, chartData, heavyDates, refundsTotal };
+    return { story, kpis, chartData, heavyDates };
   }, [data, dataPrev, prevRange, filters]);
 
   const daysInRange =
@@ -319,7 +319,7 @@ export function HeroOverview({ data, filters }: Props) {
             {heavyDates.length > 0 && (
               <div
                 className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-500/15 border border-amber-400/30 px-2 py-0.5 text-xs text-amber-300 font-medium"
-                title={`${heavyDates.length} ימי החזרים בתקופה — ${heavyDates.join(', ')}`}
+                title={`${heavyDates.length === 1 ? 'יום רפאנד כבד' : `${heavyDates.length} ימי רפאנד כבדים`} בתקופה — ${heavyDates.map(d => fmtDateShort(d)).join(', ')}`}
               >
                 <RotateCcw className="h-3 w-3" aria-hidden="true" />
                 {heavyDates.length === 1

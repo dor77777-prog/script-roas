@@ -22,7 +22,7 @@ describe('HeroOverview — refund-visibility strings', () => {
     expect(SRC).toMatch(/ימי רפאנד כבדים/);
   });
   it('appends a refund clause to the story when sumRefundsInRange > 0', () => {
-    expect(SRC).toMatch(/החזרים מעובדים/);
+    expect(SRC).toMatch(/(החזרים מעובדים|עובדו .* בהחזרים)/);
   });
   it('uses the amber palette (matches existing RefundIndicator)', () => {
     expect(SRC).toMatch(/amber-/);
