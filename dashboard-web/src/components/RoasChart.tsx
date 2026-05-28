@@ -1,10 +1,13 @@
 'use client';
 
+import { useMemo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { TrendingUp } from 'lucide-react';
 import type { DailySeries } from '@/lib/analytics';
 import { formatDate, formatNumber } from '@/lib/utils';
 import { storeColor, STORE_COLORS } from '@/lib/storeColors';
+import { isHeavyRefundDay } from '@/lib/refundDayHeuristic';
+import type { DailyRow } from '@/lib/types';
 
 // The navy primary color is the visual anchor — the first store's line
 // gets bold label treatment to guide the eye. Using STORE_COLORS directly
@@ -18,12 +21,25 @@ function colorFor(name: string, idx: number) {
 type Props = {
   data: DailySeries[];
   stores: string[];
+  /** Raw DailyRow array (same slice that produced `data`). Used to surface
+   *  heavy-refund days with an amber dot ring and tooltip refund line. */
+  rows: DailyRow[];
   /** When true, render only the chart with no surrounding card/title.
    *  Used when wrapped in a CollapsibleSection that already provides the title. */
   bare?: boolean;
 };
 
-export function RoasChart({ data, stores, bare = false }: Props) {
+export function RoasChart({ data, stores, rows, bare = false }: Props) {
+  // Build an O(1) lookup Set for heavy-refund (date|store) keys so the
+  // dot renderer and tooltip body can check cheaply without filtering.
+  const refundDayKeys = useMemo(() => {
+    const set = new Set<string>(); // key: "YYYY-MM-DD|storeName"
+    for (const r of rows) {
+      if (isHeavyRefundDay(r)) set.add(`${r.date}|${r.storeName}`);
+    }
+    return set;
+  }, [rows]);
+
   if (!data.length) return null;
   const chartData = data.map(d => ({
     date: d.date,
@@ -120,6 +136,22 @@ export function RoasChart({ data, stores, bare = false }: Props) {
                         );
                       })}
                     </ul>
+                    {(() => {
+                      let refundSum = 0;
+                      let anyHeavy = false;
+                      for (const entry of payload) {
+                        const storeName = entry.dataKey as string;
+                        const row = rows.find(r => r.date === date && r.storeName === storeName);
+                        if (row?.refundDeduction) refundSum += row.refundDeduction;
+                        if (refundDayKeys.has(`${date}|${storeName}`)) anyHeavy = true;
+                      }
+                      if (!anyHeavy || refundSum <= 0) return null;
+                      return (
+                        <div className="mt-1 pt-1 border-t border-amber-400/30 text-xs text-amber-300">
+                          ↩ יום רפאנד כבד — החזרים: -CAD {Math.round(refundSum).toLocaleString('he-IL')}. ה-ROAS משקף את הנטו.
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               }}
@@ -136,7 +168,25 @@ export function RoasChart({ data, stores, bare = false }: Props) {
                   // Mild hierarchy via stroke weight only — opacity stays full
                   // for every line so each store stays clearly visible.
                   strokeWidth={isPrimary ? 2.75 : 2}
-                  dot={false}
+                  dot={(props: { cx?: number; cy?: number; payload?: { date?: string }; key?: string | number }) => {
+                    const date = props.payload?.date;
+                    if (!date || props.cx == null || props.cy == null) return <g key={props.key} />;
+                    const isHeavy = refundDayKeys.has(`${date}|${s}`);
+                    if (!isHeavy) return <g key={props.key} />;
+                    return (
+                      <g key={props.key}>
+                        <circle cx={props.cx} cy={props.cy} r={5} fill={color} />
+                        <circle
+                          cx={props.cx}
+                          cy={props.cy}
+                          r={8}
+                          fill="transparent"
+                          stroke="rgb(245, 158, 11)" /* amber-500 */
+                          strokeWidth={2}
+                        />
+                      </g>
+                    );
+                  }}
                   activeDot={{ r: isPrimary ? 5 : 4, strokeWidth: 0 }}
                   // Audit fix 2026-05-23 (CRIT-3 + HIGH-8): missing
                   // (store, day) cells now flow through as `null` from

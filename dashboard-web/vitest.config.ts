@@ -32,9 +32,15 @@ export default defineConfig({
     // are picked up alongside the lib fetcher suites. Same rationale as the
     // plan-03 widening: a new top-level source directory means the include
     // glob must explicitly enumerate it or its tests silently skip.
+    //
+    // refund-visibility UX (Task 2) adds source-string lock tests under
+    // src/components/__tests__/ — same Node environment, no DOM needed,
+    // so no second vitest config required. Widening the glob here is the
+    // correct approach (same rationale as plan-03 and plan-08 above).
     include: [
       'src/lib/**/__tests__/**/*.test.{ts,tsx}',
       'src/inngest/**/__tests__/**/*.test.{ts,tsx}',
+      'src/components/**/__tests__/**/*.test.{ts,tsx}',
     ],
     globals: false, // explicit imports — not relying on describe/it globals
   },

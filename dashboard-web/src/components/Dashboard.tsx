@@ -441,6 +441,7 @@ function PnLTab({
           storeNames={filtered.visibleStores}
           rangeFrom={filters.range.from}
           rangeTo={filters.range.to}
+          rows={filtered.cur}
         />
       </div>
     </div>
@@ -460,6 +461,7 @@ function AnalysisTab({
   filtered: {
     series: ReturnType<typeof dailySeries>;
     visibleStores: string[];
+    cur: DashboardData['rows'];
   };
   filters: F;
   setFilters: (next: F) => void;
@@ -479,7 +481,7 @@ function AnalysisTab({
         description="קו לכל חנות. הקו האדום-מקווקו מציין את היעד הפנימי שלך — ROAS 3.0. רוצה לראות חנות אחת? סנן למעלה."
       />
       <div className="rounded-xl bg-surface border border-border shadow-card overflow-hidden">
-        <RoasChart data={filtered.series} stores={filtered.visibleStores} bare />
+        <RoasChart data={filtered.series} stores={filtered.visibleStores} rows={filtered.cur} bare />
       </div>
 
       <SectionIntro

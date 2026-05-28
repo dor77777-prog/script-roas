@@ -662,6 +662,26 @@ The gap equals `customItemRefundCad`, which at uzoshop can range from $1,500 to 
 
 **A4-05 corollary:** `products_daily.grossRevenue == netRevenue` for a given product on a given day is CORRECT whenever all refunds that day had null product_ids (custom items). In that case, the product itself had no refund deduction — its net equals its gross. The refund appears only in `data_daily.revenue` (store-level) via `customItemRefundCad`. This is not a writer bug.
 
+### 14.8 Surfaces (Phase: refund-visibility UX — 2026-05-28)
+
+The cross-day-refund algorithm has been correct since Phase 05.2.3.0, but until
+this phase the operator could only see the result on Detail / Monthly tables
+via `RefundIndicator`. The refund-visibility UX adds three additional surfaces,
+all reading the already-exposed `DailyRow.refundDeduction` + `grossRevenue`:
+
+- **`HeroOverview.tsx`** — amber chip below the revenue tile when ≥1 heavy-refund
+  day exists in the selected range; story-sentence clause when any refunds exist
+  at all.
+- **`RoasChart.tsx`** — amber ring drawn around the line's dot on heavy-refund
+  dates; tooltip body extended with the refund total for that date.
+- **`PnLBreakdown.tsx`** — new "החזרים בתקופה" cascade row between revenue (now
+  labelled `הכנסות (נטו)`) and ad-spend, presentational only (`running=null`
+  renders an em-dash in the "נשאר" column so the cascade contract is preserved);
+  running total is unchanged.
+
+Single threshold (`refundDeduction ≥ 20% × grossRevenue` OR `≥ $500`) lives in
+`src/lib/refundDayHeuristic.ts` to keep the three surfaces in lockstep.
+
 ---
 
 ## 15. Frontend stacking & z-index ladder

@@ -5,6 +5,8 @@ import { Receipt, ChevronDown, ChevronUp, AlertCircle, Settings as SettingsIcon 
 import { cn, formatCurrency } from '@/lib/utils';
 import type { Aggregate } from '@/lib/analytics';
 import { TRANSACTION_FEES_RATE } from '@/lib/costs';
+import { sumRefundsInRange } from '@/lib/refundDayHeuristic';
+import type { DailyRow } from '@/lib/types';
 import {
   billingForRange,
   readOneTime,
@@ -36,6 +38,8 @@ type Props = {
   /** First/last day of the aggregate — used to scope the billing data. */
   rangeFrom?: string;
   rangeTo?: string;
+  /** Scoped DailyRow[] for the current period — used to compute refund total. */
+  rows?: readonly DailyRow[];
 };
 
 const SOURCE_LABEL: Record<CostSource, string> = {
@@ -58,7 +62,7 @@ const SOURCE_COLOR: Record<CostSource, string> = {
   other:          'text-text-secondary',
 };
 
-export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo }: Props) {
+export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [] }: Props) {
   // Default open: P&L is the "am I making money" question — too important to
   // hide behind a click. User can still collapse if they want a quieter view.
   const [open, setOpen] = useState(true);
@@ -128,6 +132,12 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo }: Props)
   }, [oneTime, rangeFrom, rangeTo, storeNames]);
 
   const hasConfiguredFixed = activeForScope.length > 0 || oneTimeInScope.length > 0;
+
+  // Refund total for the period — sourced from the raw DailyRow[] so it
+  // matches the cross-day-refund data_daily values exactly. PRESENTATIONAL
+  // ONLY: does not alter the running-total cascade (the refunds are already
+  // deducted from `revenue`).
+  const refundTotalInPeriod = sumRefundsInRange(rows);
 
   // Total costs displayed in the hero strip (everything between revenue and
   // net profit). Used to size the relative bars side-by-side.
@@ -219,13 +229,23 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo }: Props)
 
           <ol className="space-y-px">
             <PnLLine
-              label="הכנסות"
+              label="הכנסות (נטו)"
               amount={revenue}
               pct={100}
               tone="positive"
-              note="כולל החזרות שכבר מוקזזות (current_total_price)"
+              note="נטו אחרי החזרים — הברוטו לפני החזרים מוצג בשורה הבאה"
               running={revenue}
             />
+            {refundTotalInPeriod > 0 && (
+              <PnLLine
+                label="החזרים בתקופה"
+                amount={-refundTotalInPeriod}
+                pct={revenue > 0 ? -(refundTotalInPeriod / revenue) * 100 : 0}
+                tone="cost"
+                note="כבר מנוכים מההכנסות מעל — מוצג להבהרה"
+                running={null}
+              />
+            )}
             <PnLLine
               label="הוצאות פרסום"
               amount={-current.spend}
@@ -429,7 +449,10 @@ function PnLLine({
   pct: number;
   tone: 'positive' | 'cost';
   note?: string;
-  running: number;
+  /** Pass `null` to suppress the "running total" column (e.g. for presentational
+   * rows that annotate but do NOT advance the cascade — see the "החזרים בתקופה"
+   * row in the main cascade for the canonical example). */
+  running: number | null;
 }) {
   return (
     <li className="flex items-center gap-3 py-2 border-b border-borderSubtle/40 last:border-b-0">
@@ -462,14 +485,23 @@ function PnLLine({
         <div className="text-[10px] text-text-muted uppercase tracking-wide leading-tight">
           נשאר
         </div>
-        <div
-          className={cn(
-            'text-xs font-semibold tabular-nums leading-tight mt-0.5',
-            running >= 0 ? 'text-text-primary' : 'text-roas-red',
-          )}
-        >
-          {formatCurrency(running)}
-        </div>
+        {running === null ? (
+          <span
+            className="text-xs text-text-secondary opacity-50"
+            aria-label="הערה — לא משפיע על הסכום הרץ"
+          >
+            —
+          </span>
+        ) : (
+          <div
+            className={cn(
+              'text-xs font-semibold tabular-nums leading-tight mt-0.5',
+              running >= 0 ? 'text-text-primary' : 'text-roas-red',
+            )}
+          >
+            {formatCurrency(running)}
+          </div>
+        )}
       </div>
     </li>
   );
