@@ -223,42 +223,42 @@ export function ProductPickerModal({
       aria-labelledby="product-picker-title"
     >
       <div
-        className="absolute inset-0 bg-text-primary/45 backdrop-blur-sm"
+        className="absolute inset-0 bg-ink/45 backdrop-blur-sm"
         onClick={onClose}
         aria-hidden
       />
       <div
         dir="rtl"
-        className="relative m-auto w-full sm:max-w-[560px] max-h-[88vh] bg-surface rounded-2xl shadow-elevated border border-borderSubtle flex flex-col"
+        className="relative m-auto w-full sm:max-w-[560px] max-h-[88vh] bg-elevated rounded-2xl shadow-elevated border border-line-subtle flex flex-col"
       >
-        <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-borderSubtle">
+        <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-line-subtle">
           <div className="min-w-0 flex items-center gap-2.5">
-            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary shrink-0">
+            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent/10 text-accent shrink-0">
               <Package size={16} />
             </span>
             <div className="min-w-0">
-              <div className="text-[10px] uppercase tracking-[0.12em] font-semibold text-text-muted">
+              <div className="text-[10px] uppercase tracking-[0.12em] font-semibold text-ink-muted">
                 שייך מוצרי {storeName} לקמפיין
               </div>
-              <h2 id="product-picker-title" className="text-sm sm:text-base font-bold text-text-primary tracking-tight truncate" title={campaignName}>
+              <h2 id="product-picker-title" className="text-sm sm:text-base font-bold text-ink tracking-tight truncate" title={campaignName}>
                 {campaignName}
               </h2>
-              <div className="text-[10px] text-text-muted mt-0.5 inline-flex items-center gap-1">
+              <div className="text-[10px] text-ink-muted mt-0.5 inline-flex items-center gap-1">
                 <span>מוצגים רק מוצרים מחנות:</span>
-                <span className="font-semibold text-primary">{storeName}</span>
+                <span className="font-semibold text-accent">{storeName}</span>
               </div>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded hover:bg-surfaceMuted text-text-muted hover:text-text-primary shrink-0"
+            className="p-1.5 rounded hover:bg-elevated2 text-ink-muted hover:text-ink shrink-0"
             aria-label="סגור"
           >
             <X size={18} />
           </button>
         </header>
 
-        <div className="px-4 sm:px-5 py-3 border-b border-borderSubtle">
+        <div className="px-4 sm:px-5 py-3 border-b border-line-subtle">
           {!isLoading && !usingCatalog && (
             <div className="mb-2.5 rounded-md bg-amber-50 border border-amber-200 px-2.5 py-2 text-[11px] text-amber-900 leading-relaxed">
               <strong>הקטלוג עוד לא סונכרן.</strong> מוצגים רק מוצרים שכבר ביצעו
@@ -267,10 +267,10 @@ export function ProductPickerModal({
               בקונסולת האופרטור — או המתן לריצת ה-cron היומית הבאה (00:05 שעון ישראל).
             </div>
           )}
-          <p className="text-[11px] sm:text-xs text-text-secondary leading-relaxed mb-2.5">
+          <p className="text-[11px] sm:text-xs text-ink-secondary leading-relaxed mb-2.5">
             בחר את המוצרים שהקמפיין מקדם. ה-ROAS יחושב מחדש לפי מכירות
             Shopify אמיתיות במקום ערך ההמרה ש-Meta דיווח.{' '}
-            <span className="text-text-muted">
+            <span className="text-ink-muted">
               אם יותר מקמפיין משויך לאותו מוצר, ההכנסה מחולקת ביניהם פרופורציונלית
               להוצאה.
             </span>
@@ -284,13 +284,13 @@ export function ProductPickerModal({
               The icon now anchors next to the input's `pe-9` padded
               edge in BOTH directions: RTL → visually right, LTR → left.
             */}
-            <Search size={14} className="absolute end-2.5 top-1/2 -translate-y-1/2 text-text-muted pointer-events-none" />
+            <Search size={14} className="absolute end-2.5 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />
             <input
               type="text"
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="חפש מוצר…"
-              className="w-full rounded-lg border border-border bg-surface ps-3 pe-9 py-2 text-sm focus:outline-none focus:border-primary focus:shadow-focus"
+              className="w-full rounded-lg border border-line bg-elevated ps-3 pe-9 py-2 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
               autoFocus
             />
           </div>
@@ -298,13 +298,13 @@ export function ProductPickerModal({
 
         <div className="flex-1 overflow-y-auto px-2 sm:px-3 py-2">
           {isLoading && (
-            <div className="text-center text-sm text-text-muted py-10">
+            <div className="text-center text-sm text-ink-muted py-10">
               טוען מוצרים…
             </div>
           )}
           {!isLoading && filtered.length === 0 && (
-            <div className="text-center text-sm text-text-muted py-10">
-              <Package size={28} className="mx-auto mb-2 text-text-muted/60" />
+            <div className="text-center text-sm text-ink-muted py-10">
+              <Package size={28} className="mx-auto mb-2 text-ink-muted/60" />
               {query
                 ? 'אין מוצרים שמתאימים לחיפוש.'
                 : 'אין מוצרים זמינים לחנות הזאת. ודא ש-products-daily מאוכלס.'}
@@ -322,8 +322,8 @@ export function ProductPickerModal({
                       className={cn(
                         'w-full text-start rounded-lg px-3 py-2 flex items-center gap-3 transition-colors',
                         isOn
-                          ? 'bg-primary/10 hover:bg-primary/15'
-                          : 'hover:bg-surfaceMuted',
+                          ? 'bg-accent/10 hover:bg-accent/15'
+                          : 'hover:bg-elevated2',
                       )}
                       aria-pressed={isOn}
                     >
@@ -331,8 +331,8 @@ export function ProductPickerModal({
                         className={cn(
                           'inline-flex items-center justify-center w-5 h-5 rounded border-2 shrink-0 transition-colors',
                           isOn
-                            ? 'bg-primary border-primary text-white'
-                            : 'border-border bg-surface',
+                            ? 'bg-accent border-accent text-white'
+                            : 'border-line bg-elevated',
                         )}
                       >
                         {isOn && <Check size={12} strokeWidth={3} />}
@@ -340,17 +340,17 @@ export function ProductPickerModal({
                       <div className="min-w-0 flex-1">
                         <div className={cn(
                           'text-sm truncate',
-                          isOn ? 'font-semibold text-text-primary' : 'text-text-primary',
+                          isOn ? 'font-semibold text-ink' : 'text-ink',
                         )} title={p.title}>
                           {p.title}
                         </div>
-                        <div className="text-[10px] sm:text-[11px] text-text-muted tabular-nums">
+                        <div className="text-[10px] sm:text-[11px] text-ink-muted tabular-nums">
                           {p.totalUnits > 0 ? (
                             <>
                               {formatNumber(p.totalUnits, 0)} יח&apos; · CAD {formatCurrency(p.totalRevenue)}
                             </>
                           ) : (
-                            <span className="text-text-muted/80">עדיין לא בוצעו מכירות</span>
+                            <span className="text-ink-muted/80">עדיין לא בוצעו מכירות</span>
                           )}
                         </div>
                         {(() => {
@@ -384,20 +384,20 @@ export function ProductPickerModal({
           )}
         </div>
 
-        <footer className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-t border-borderSubtle bg-surfaceMuted/30">
-          <span className="text-[11px] sm:text-xs text-text-secondary tabular-nums">
-            <strong className="text-text-primary">{selected.size}</strong> נבחרו
+        <footer className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-t border-line-subtle bg-elevated2/30">
+          <span className="text-[11px] sm:text-xs text-ink-secondary tabular-nums">
+            <strong className="text-ink">{selected.size}</strong> נבחרו
           </span>
           <div className="flex items-center gap-2">
             <button
               onClick={onClose}
-              className="rounded-lg border border-border text-text-secondary hover:text-text-primary px-3 py-1.5 text-xs sm:text-sm"
+              className="rounded-lg border border-line text-ink-secondary hover:text-ink px-3 py-1.5 text-xs sm:text-sm"
             >
               ביטול
             </button>
             <button
               onClick={save}
-              className="inline-flex items-center gap-1 rounded-lg bg-primary text-white px-3 py-1.5 text-xs sm:text-sm font-semibold hover:bg-primary-dark"
+              className="inline-flex items-center gap-1 rounded-lg bg-accent text-white px-3 py-1.5 text-xs sm:text-sm font-semibold hover:bg-accent"
             >
               <Check size={13} />
               שמור
