@@ -507,7 +507,7 @@ function AnalysisTab({
         title="מגמת ROAS לאורך זמן"
         description="קו לכל חנות. הקו האדום-מקווקו מציין את היעד הפנימי שלך — ROAS 3.0. רוצה לראות חנות אחת? סנן למעלה."
       />
-      <div className="rounded-xl bg-surface border border-border shadow-card overflow-hidden">
+      <div className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
         <RoasChart data={filtered.series} stores={filtered.visibleStores} rows={filtered.cur} bare />
       </div>
 
@@ -516,7 +516,7 @@ function AnalysisTab({
         title="טבלאות חודשיות"
         description="טבלה לכל חודש עם שורה לכל יום, עד 17 חודשים אחורה. ROAS צבוע: אדום (<2), כתום (2-2.7), ירוק (2.7-3), כחול (>3). יום עם הוצאה אך ללא מכירה מסומן בשחור עם '0'."
       />
-      <div className="rounded-xl bg-surface border border-border shadow-card overflow-hidden">
+      <div className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
         <MonthlyTables stores={data.stores} globalStore={filters.store} bare />
       </div>
     </div>
