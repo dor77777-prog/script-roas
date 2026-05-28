@@ -48,6 +48,7 @@
 import useSWR from 'swr';
 import { useState } from 'react';
 import { Loader2, CheckCircle2, XCircle, Clock, AlertCircle } from 'lucide-react';
+import { operatorFetch } from '@/lib/operatorClient';
 
 // Wire-shape of the /api/operator/jobs proxy response. Mirrors the
 // narrowed type in route.ts — we deliberately do NOT import the type
@@ -71,7 +72,7 @@ type JobsResponse = {
 };
 
 async function fetcher(url: string): Promise<JobsResponse> {
-  const res = await fetch(url);
+  const res = await operatorFetch(url);
   // The proxy always returns HTTP 200 (S-2 soft-fail). If it ever
   // returns 4xx/5xx that's a true infrastructure failure — let SWR
   // surface it via the `error` branch in the hook below. We don't

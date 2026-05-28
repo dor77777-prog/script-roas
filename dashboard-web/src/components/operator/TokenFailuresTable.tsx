@@ -22,6 +22,7 @@ import type {
   TokenFailuresResponse,
   TokenFailureRow,
 } from '@/app/api/operator/token-failures/route';
+import { operatorFetch } from '@/lib/operatorClient';
 
 const ENDPOINT = '/api/operator/token-failures';
 
@@ -36,7 +37,7 @@ const ENDPOINT = '/api/operator/token-failures';
 //
 // The legitimate "zero failures" case is HTTP 200 + {rows:[], no error field}.
 const fetcher = async (url: string): Promise<TokenFailuresResponse> => {
-  const r = await fetch(url);
+  const r = await operatorFetch(url);
   if (!r.ok) {
     const body = await r.json().catch(() => ({})) as Record<string, unknown>;
     throw new Error(String(body?.error ?? `HTTP ${r.status}`));
@@ -96,7 +97,7 @@ export function TokenFailuresTable() {
     const key = `${row.provider}::${row.storeId}::${row.operation}`;
     setResolving(key);
     try {
-      const r = await fetch(ENDPOINT, {
+      const r = await operatorFetch(ENDPOINT, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

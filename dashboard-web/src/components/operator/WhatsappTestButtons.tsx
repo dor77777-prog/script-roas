@@ -15,6 +15,7 @@
 
 import { useState } from 'react';
 import { Send, Loader2 } from 'lucide-react';
+import { operatorFetch } from '@/lib/operatorClient';
 
 type Trigger = 'noon' | 'evening' | 'eod';
 
@@ -34,7 +35,7 @@ export function WhatsappTestButtons() {
     setMessage(null);
     setError(null);
     try {
-      const res = await fetch('/api/operator/notifications/send', {
+      const res = await operatorFetch('/api/operator/notifications/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ trigger }),

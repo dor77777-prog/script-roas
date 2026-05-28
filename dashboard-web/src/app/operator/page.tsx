@@ -33,6 +33,7 @@ import { SyncNowButtons } from '@/components/operator/SyncNowButtons';
 import { ResetData } from '@/components/operator/ResetData';
 import { WhatsappTestButtons } from '@/components/operator/WhatsappTestButtons';
 import { TokenFailuresTable } from '@/components/operator/TokenFailuresTable';
+import { OperatorSecretBanner } from '@/components/operator/OperatorSecretBanner';
 
 export const metadata = {
   title: 'ניהול — ROAS Dashboard',
@@ -47,6 +48,14 @@ export default function OperatorPage() {
           ניהול אוטומציה: ריצות Inngest, backfill, החלפות ידניות, ו-Sync.
         </p>
       </header>
+
+      {/* Security hardening FIX 3: operator-secret entry/management.
+          Renders when OPERATOR_SECRET env var is configured on the server.
+          When env var is unset this banner is harmless — the gate is inactive
+          and all /api/operator/* calls pass through without the header.
+          The banner is always visible so the operator can manage the stored
+          secret even when the gate is not enforced. */}
+      <OperatorSecretBanner />
 
       <section>
         <h2 className="text-lg font-semibold mb-3">סנכרון עכשיו</h2>

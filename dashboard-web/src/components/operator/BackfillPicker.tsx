@@ -48,6 +48,7 @@
 import { useState } from 'react';
 import { CalendarDays, Loader2 } from 'lucide-react';
 import { STORE_ID_TO_NAME } from '@/lib/platformsByStore';
+import { operatorFetch } from '@/lib/operatorClient';
 
 // Source of truth — mirrors the route's VALID_STORES allowlist.
 const ALL_STORES = ['uzoshop', 'zolplus', 'usmile360'] as const;
@@ -104,7 +105,7 @@ export function BackfillPicker() {
     setMessage(null);
     setError(null);
     try {
-      const res = await fetch('/api/operator/backfill', {
+      const res = await operatorFetch('/api/operator/backfill', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

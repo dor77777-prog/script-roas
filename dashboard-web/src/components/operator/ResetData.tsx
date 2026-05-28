@@ -61,6 +61,7 @@ import {
   PROTECTED_TABLES,
   type ResetScope,
 } from '@/lib/operatorReset';
+import { operatorFetch } from '@/lib/operatorClient';
 
 // Wire-shape of the /api/operator/reset 200 response. Mirrored locally
 // rather than imported across the server/client boundary to keep the
@@ -165,7 +166,7 @@ export function ResetData() {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch('/api/operator/reset', {
+      const res = await operatorFetch('/api/operator/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scope: active.scope, confirm: required }),
