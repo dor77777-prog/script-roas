@@ -333,12 +333,12 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
 
   if (isAllStores) {
     return (
-      <section className="rounded-2xl bg-surface border border-borderSubtle shadow-card p-4 sm:p-5">
-        <h2 className="text-base font-semibold text-text-primary inline-flex items-center gap-2 mb-1.5">
-          <Package size={16} className="text-text-secondary" />
+      <section className="rounded-2xl bg-elevated border border-line-subtle shadow-sm p-4 sm:p-5">
+        <h2 className="text-base font-semibold text-ink inline-flex items-center gap-2 mb-1.5">
+          <Package size={16} className="text-ink-secondary" />
           מוצרים → קמפיינים
         </h2>
-        <div className="text-sm text-text-muted">
+        <div className="text-sm text-ink-muted">
           בחר חנות ספציפית בפילטר העליון כדי לראות את הפיבוט. (מיפויים הם לפי
           חנות; ב-"All" אין דרך לאחד.)
         </div>
@@ -348,20 +348,20 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
 
   if (!campaignsData || !productsData) {
     return (
-      <section className="rounded-2xl bg-surface border border-borderSubtle shadow-card p-4 sm:p-5">
-        <div className="text-sm text-text-muted">טוען…</div>
+      <section className="rounded-2xl bg-elevated border border-line-subtle shadow-sm p-4 sm:p-5">
+        <div className="text-sm text-ink-muted">טוען…</div>
       </section>
     );
   }
 
   if (allRows.length === 0) {
     return (
-      <section className="rounded-2xl bg-surface border border-borderSubtle shadow-card p-4 sm:p-5">
-        <h2 className="text-base font-semibold text-text-primary inline-flex items-center gap-2 mb-1.5">
-          <Package size={16} className="text-text-secondary" />
+      <section className="rounded-2xl bg-elevated border border-line-subtle shadow-sm p-4 sm:p-5">
+        <h2 className="text-base font-semibold text-ink inline-flex items-center gap-2 mb-1.5">
+          <Package size={16} className="text-ink-secondary" />
           מוצרים → קמפיינים
         </h2>
-        <div className="text-sm text-text-muted">
+        <div className="text-sm text-ink-muted">
           אין מיפויים פעילים. ברגע שתוסיף מיפוי דרך מגירת הקמפיין, הוא יופיע כאן.
         </div>
       </section>
@@ -369,22 +369,22 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
   }
 
   return (
-    <section className="rounded-2xl bg-surface border border-borderSubtle shadow-card p-4 sm:p-5">
+    <section className="rounded-2xl bg-elevated border border-line-subtle shadow-sm p-4 sm:p-5">
       <div className="flex items-center justify-between gap-3 mb-3">
-        <h2 className="text-base font-semibold text-text-primary inline-flex items-center gap-2">
-          <Package size={16} className="text-text-secondary" />
+        <h2 className="text-base font-semibold text-ink inline-flex items-center gap-2">
+          <Package size={16} className="text-ink-secondary" />
           מוצרים → קמפיינים
-          <span className="text-[11px] font-normal text-text-muted">
+          <span className="text-[11px] font-normal text-ink-muted">
             ({multiCount} עם 2+ קמפיינים{soloCount > 0 ? ` · ${soloCount} עם קמפיין אחד` : ''})
           </span>
         </h2>
         {soloCount > 0 && (
-          <label className="inline-flex items-center gap-1.5 text-xs text-text-secondary cursor-pointer">
+          <label className="inline-flex items-center gap-1.5 text-xs text-ink-secondary cursor-pointer">
             <input
               type="checkbox"
               checked={showSolo}
               onChange={e => setShowSolo(e.target.checked)}
-              className="rounded border-border"
+              className="rounded border-line"
             />
             הצג גם מוצרים עם קמפיין אחד
           </label>
@@ -392,7 +392,7 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
       </div>
 
       {rows.length === 0 ? (
-        <div className="text-sm text-text-muted text-center py-6">
+        <div className="text-sm text-ink-muted text-center py-6">
           אין מוצרים עם 2+ קמפיינים בטווח שנבחר. בטל את הסימון של התיבה למעלה כדי לראות גם מוצרים עם קמפיין אחד.
         </div>
       ) : (
@@ -425,20 +425,20 @@ function ProductRow({
   // rounded corners directly to the inner button + expanded panel so the
   // hover bg / panel bg honors the rounded outer border.
   return (
-    <li className="rounded-lg border border-borderSubtle">
+    <li className="rounded-lg border border-line-subtle">
       <button
         type="button"
         onClick={onToggle}
         className={cn(
-          'w-full flex items-center gap-3 px-3 py-2.5 hover:bg-surfaceMuted/40 transition-colors text-start',
+          'w-full flex items-center gap-3 px-3 py-2.5 hover:bg-elevated2/40 transition-colors text-start',
           expanded ? 'rounded-t-lg' : 'rounded-lg',
         )}
       >
-        <span className="shrink-0 text-text-muted">
+        <span className="shrink-0 text-ink-muted">
           {expanded ? <ChevronDown size={14} /> : <ChevronLeft size={14} />}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-text-primary truncate" title={row.productTitle}>
+          <div className="text-sm font-semibold text-ink truncate" title={row.productTitle}>
             {row.productTitle}
             {row.isMultiMapped && (
               <span className="inline-block text-[10px] font-bold tracking-wider align-middle bg-amber-100 text-amber-800 border border-amber-300 px-1.5 py-0.5 rounded ms-2">
@@ -446,16 +446,16 @@ function ProductRow({
               </span>
             )}
           </div>
-          <div className="text-[11px] text-text-muted tabular-nums">
+          <div className="text-[11px] text-ink-muted tabular-nums">
             הוצאת קבוצה: CAD {formatCurrency(row.totalCohortSpend)} · הכנסות נטו:{' '}
             CAD {formatCurrency(row.totalNetRevenue)} · ROAS משוקלל:{' '}
-            <strong className="text-text-secondary">{fmtRoas(row.blendedRoas)}</strong>
+            <strong className="text-ink-secondary">{fmtRoas(row.blendedRoas)}</strong>
           </div>
         </div>
         {row.byPlatform.length > 0 && (
-          <div className="hidden sm:flex items-center gap-1.5 text-[10px] text-text-muted shrink-0">
+          <div className="hidden sm:flex items-center gap-1.5 text-[10px] text-ink-muted shrink-0">
             {row.byPlatform.map(p => (
-              <span key={p.platform} className="bg-surfaceMuted px-1.5 py-0.5 rounded">
+              <span key={p.platform} className="bg-elevated2 px-1.5 py-0.5 rounded">
                 {p.platform}: {p.members.length}
               </span>
             ))}
@@ -464,21 +464,21 @@ function ProductRow({
       </button>
 
       {expanded && (
-        <div className="px-3 pb-3 pt-1 space-y-3 bg-surfaceMuted/20 rounded-b-lg">
+        <div className="px-3 pb-3 pt-1 space-y-3 bg-elevated2/20 rounded-b-lg">
           {row.byPlatform.map(platformGroup => (
             <div key={platformGroup.platform}>
               <div className="flex items-center justify-between gap-2 mb-1.5 text-[11px]">
-                <span className="font-semibold text-text-primary inline-flex items-center gap-1.5">
-                  <Trophy size={12} className="text-text-muted" />
+                <span className="font-semibold text-ink inline-flex items-center gap-1.5">
+                  <Trophy size={12} className="text-ink-muted" />
                   {platformGroup.platform} ({platformGroup.members.length})
                 </span>
-                <span className="text-text-muted tabular-nums">
+                <span className="text-ink-muted tabular-nums">
                   הוצאת פלטפ.: CAD {formatCurrency(platformGroup.intraSpend)} · הכנסה מוקצית:
                   {' '}CAD {formatCurrency(platformGroup.intraAllocatedRevenue)}
                 </span>
               </div>
               <table className="w-full text-xs">
-                <thead className="bg-surfaceMuted/60 text-text-muted">
+                <thead className="bg-elevated2/60 text-ink-muted">
                   <tr>
                     <th className="px-2 py-1 text-start font-medium text-[10px]">
                       <ColHelp
@@ -631,8 +631,8 @@ function ProductRow({
                       <tr
                         key={m.campaignKey}
                         className={cn(
-                          'border-b border-borderSubtle/50 last:border-0',
-                          isLeader && 'bg-primary/5',
+                          'border-b border-line-subtle/50 last:border-0',
+                          isLeader && 'bg-accent/5',
                         )}
                       >
                         <td className="px-2 py-1.5 truncate max-w-[200px]" title={m.campaignName}>
@@ -642,16 +642,16 @@ function ProductRow({
                         <td className="px-2 py-1.5 text-end tabular-nums">
                           CAD {formatCurrency(m.spend)}
                         </td>
-                        <td className="px-2 py-1.5 text-end tabular-nums text-text-muted">
+                        <td className="px-2 py-1.5 text-end tabular-nums text-ink-muted">
                           {fmtPct(m.intraPlatformSpendShare)}
                         </td>
-                        <td className="px-2 py-1.5 text-end tabular-nums text-text-muted">
+                        <td className="px-2 py-1.5 text-end tabular-nums text-ink-muted">
                           {fmtPct(m.totalSpendShare)}
                         </td>
                         <td className="px-2 py-1.5 text-end tabular-nums">
                           CAD {formatCurrency(m.allocatedRevenueEstimate)}
                         </td>
-                        <td className="px-2 py-1.5 text-end tabular-nums text-text-secondary">
+                        <td className="px-2 py-1.5 text-end tabular-nums text-ink-secondary">
                           {m.conversionValue > 0 ? `CAD ${formatCurrency(m.conversionValue)}` : '—'}
                         </td>
                         <td className="px-2 py-1.5 text-end tabular-nums font-semibold">
@@ -668,13 +668,13 @@ function ProductRow({
                                 className={cn(
                                   'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold tabular-nums border cursor-help',
                                   d.tone === 'good' &&
-                                    'bg-roas-greenBg/40 text-roas-green border-roas-green/30',
+                                    'bg-status-greenBg/40 text-status-green border-status-green/30',
                                   d.tone === 'warn' &&
-                                    'bg-roas-orangeBg/60 text-roas-orange border-roas-orange/30',
+                                    'bg-status-orangeBg/60 text-status-orange border-status-orange/30',
                                   d.tone === 'bad' &&
-                                    'bg-roas-redBg/60 text-roas-red border-roas-red/30',
+                                    'bg-status-redBg/60 text-status-red border-status-red/30',
                                   d.tone === 'neutral' &&
-                                    'bg-surfaceMuted text-text-muted border-borderSubtle',
+                                    'bg-elevated2 text-ink-muted border-line-subtle',
                                 )}
                               >
                                 {d.text}
@@ -694,8 +694,8 @@ function ProductRow({
                             className={cn(
                               'inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium border',
                               isActive
-                                ? 'bg-roas-greenBg/40 text-roas-green border-roas-green/30'
-                                : 'bg-surfaceMuted text-text-muted border-borderSubtle',
+                                ? 'bg-status-greenBg/40 text-status-green border-status-green/30'
+                                : 'bg-elevated2 text-ink-muted border-line-subtle',
                             )}
                           >
                             {isActive ? 'פעיל' : 'כבוי'}
@@ -785,7 +785,7 @@ function HoverTooltip({
           className={cn(
             'absolute z-50 top-full mt-2 end-0',
             'w-[260px] sm:w-[300px] max-w-[min(90vw,320px)]',
-            'rounded-xl bg-text-primary text-white p-3 shadow-elevated',
+            'rounded-xl bg-ink text-white p-3 shadow-elevated',
             'text-xs leading-relaxed pointer-events-auto',
           )}
         >
@@ -793,7 +793,7 @@ function HoverTooltip({
           <div className="text-white/85">{body}</div>
           <div
             aria-hidden
-            className="absolute -top-1.5 end-3 w-2.5 h-2.5 bg-text-primary rotate-45"
+            className="absolute -top-1.5 end-3 w-2.5 h-2.5 bg-ink rotate-45"
           />
         </div>
       )}
@@ -842,7 +842,7 @@ function ColHelp({
           setOpen((o) => !o);
         }}
         aria-label={`הסבר על ${label}`}
-        className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-text-subtle hover:text-text-secondary opacity-60 hover:opacity-100 transition-colors"
+        className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-ink-subtle hover:text-ink-secondary opacity-60 hover:opacity-100 transition-colors"
       >
         <Info size={10} />
       </button>
@@ -856,7 +856,7 @@ function ColHelp({
             'absolute z-50 top-full mt-2',
             align === 'start' ? 'start-0' : 'end-0',
             'w-[260px] sm:w-[300px] max-w-[min(90vw,320px)]',
-            'rounded-xl bg-text-primary text-white p-3 shadow-elevated',
+            'rounded-xl bg-ink text-white p-3 shadow-elevated',
             'text-xs leading-relaxed pointer-events-auto',
             'font-normal text-start',
           )}
@@ -866,7 +866,7 @@ function ColHelp({
           <div
             aria-hidden
             className={cn(
-              'absolute -top-1.5 w-2.5 h-2.5 bg-text-primary rotate-45',
+              'absolute -top-1.5 w-2.5 h-2.5 bg-ink rotate-45',
               align === 'start' ? 'start-3' : 'end-3',
             )}
           />
