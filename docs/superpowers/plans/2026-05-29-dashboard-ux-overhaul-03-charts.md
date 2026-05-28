@@ -50,17 +50,26 @@ These literals are inside Recharts JSX (`stroke=`, `fill=`, `tick={{ fill: ... }
 
 | Legacy literal | New token reference | Source |
 |----------------|---------------------|--------|
-| `#e5e7eb` (grid stroke) | `var(--line-subtle)` | RoasChart:81 |
-| `#64748b` (axis tick fill) | `var(--ink-muted)` | RoasChart:84, 90 |
+| `#e5e7eb` (grid stroke) | `var(--border-subtle)` | RoasChart:81 |
+| `#64748b` (axis tick fill) | `var(--text-muted)` | RoasChart:84, 90 |
 | `#16a34a` (ROAS target ReferenceLine) | `var(--status-green)` | RoasChart:99 |
-| `#94a3b8` (tooltip cursor stroke) | `var(--line-strong)` | RoasChart:105 |
-| `rgb(245, 158, 11)` (amber refund ring) | `var(--accent-amber)` *or* keep as `rgb(245,158,11)` | RoasChart:184 — Tailwind's `amber-500` palette stays per Plan 2's non-negotiables. Recharts SVG needs a literal here. **Decision: keep the rgb literal** — it's a Tailwind base palette color, not a project semantic token. |
-| `#bfdbfe` (hero area gradient stops) | `var(--accent-soft)` | HeroOverview:503, 504 |
+| `#94a3b8` (tooltip cursor stroke) | `var(--border-strong)` | RoasChart:105 |
+| `rgb(245, 158, 11)` (amber refund ring) | KEEP — Tailwind's `amber-500` palette stays per Plan 2's non-negotiables. Recharts SVG needs a literal here. | RoasChart:184 |
+| `#bfdbfe` (hero area gradient stops) | N/A — hero card is always dark navy; switch to `#ffffff` with `stopOpacity={0.15}` (Task 5 Step 4 handles this) | HeroOverview:503, 504 |
 | `rgba(255,255,255,0.45)` (target line on dark hero card) | `rgba(255,255,255,0.45)` — KEEP. The hero card has its OWN dark navy background that does not theme-swap; white-on-navy ReferenceLine is correct in both themes. | HeroOverview:519 |
 | `#ffffff` (line stroke + dot fill on dark hero) | `#ffffff` — KEEP for the same reason | HeroOverview:567, 569 |
-| `#0d3680` (active-dot stroke on dark hero) | `var(--accent)` *or* keep — Plan 1's `--accent` is the same navy. Use `var(--accent)`. | HeroOverview:570 |
+| `#0d3680` (active-dot stroke on dark hero) | `var(--accent)` — Plan 1's `--accent` is the same navy | HeroOverview:570 |
 
-**Token availability check (verify in Task 1):** `tailwind.config.ts` after Plan 1 must define CSS variables for `--line-subtle`, `--ink-muted`, `--status-green`, `--line-strong`, `--accent-soft`, `--accent`. If any are missing, the implementer must report BLOCKED — those variables are Foundation territory and out of scope for Plan 3 to add.
+**Pre-flight result (2026-05-29):** All CSS variables referenced in this map were verified against `dashboard-web/src/app/globals.css`. Plan 1's foundation defines:
+- `--border-subtle` (light: `globals.css:28`, dark: `globals.css:74`)
+- `--text-muted` (light: `globals.css:23`, dark: `globals.css:68`)
+- `--status-green` (light: `globals.css:44`, dark: `globals.css:92`)
+- `--border-strong` (light: `globals.css:29`, dark: `globals.css:76`)
+- `--accent` (light: `globals.css:32`, dark: `globals.css:79`)
+
+There is NO `--accent-soft` token — the hero gradient uses `#ffffff` with low alpha instead (see Task 5 Step 4).
+
+**Naming convention reminder:** Tailwind utility class names (e.g. `bg-elevated`, `text-ink-muted`, `border-line`) use a different semantic vocabulary than the underlying CSS variables (e.g. `--surface-elevated-1`, `--text-muted`, `--border-default`). The Tailwind config maps utility names to CSS-var values. When writing Recharts SVG props (which need a literal CSS-var reference like `stroke="var(--border-subtle)"`), use the CSS-VAR name, NOT the Tailwind utility name. When writing Tailwind classes on HTML elements (className="border-line-subtle"), use the utility name.
 
 **`bg-text-primary/95 shadow-elevated` in RoasChart's tooltip body** (RoasChart:112): this is a Tailwind class string, not a Recharts SVG color. The new `ChartTooltip` primitive owns the chrome (background, border, shadow), so this className disappears from RoasChart's tooltip body when we swap in `<ChartTooltip>` — no migration needed for the legacy `text-primary` token here.
 
@@ -111,6 +120,8 @@ Edit `dashboard-web/package.json` — change the `recharts` line in `dependencie
 ```json
 "recharts": "^3.0.0",
 ```
+
+(Pre-flight check 2026-05-29 confirmed that `^3.0.0` resolves to the latest published `3.1.1`. This is expected — `package-lock.json` will show `3.1.1`.)
 
 - [ ] **Step 2: Install + lockfile update**
 
@@ -299,9 +310,13 @@ export function ChartContainer({
     // Defined on the wrapper so the chart theme can be overridden locally
     // (e.g. HeroOverview's chart sits on a dark navy card and overrides
     // these to white-ish via its own className).
-    ['--chart-grid' as never]: 'var(--line-subtle)',
-    ['--chart-axis' as never]: 'var(--ink-muted)',
-    ['--chart-cursor' as never]: 'var(--line-strong)',
+    // NOTE — the right side of each entry must be a real CSS-var NAME
+    // (defined in globals.css), NOT a Tailwind utility name. The Plan-1
+    // CSS vars in scope here are --border-subtle, --text-muted,
+    // --border-strong, --status-green, --accent (verified pre-flight).
+    ['--chart-grid' as never]: 'var(--border-subtle)',
+    ['--chart-axis' as never]: 'var(--text-muted)',
+    ['--chart-cursor' as never]: 'var(--border-strong)',
     ['--chart-target' as never]: 'var(--status-green)',
   };
 
