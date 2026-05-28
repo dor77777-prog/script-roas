@@ -120,7 +120,7 @@ export function GoalTracker({ data }: Props) {
   // Two modes: goal set vs goal not set.
   if (goal == null && !editing) {
     return (
-      <section className="rounded-2xl bg-gradient-to-br from-primary-dark/95 via-primary to-primary-light/95 text-white shadow-sm overflow-hidden">
+      <section className="rounded-2xl bg-gradient-to-br from-accent/95 via-accent to-accent/80 text-white shadow-sm overflow-hidden">
         <div className="p-4 sm:p-5">
           <div className="flex items-center gap-2.5 mb-3">
             <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-white/12 text-white shrink-0">
@@ -136,7 +136,7 @@ export function GoalTracker({ data }: Props) {
           </p>
           <button
             onClick={startEdit}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-white text-primary-dark hover:bg-white/95 px-3 py-2 text-xs sm:text-sm font-semibold transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-white text-accent hover:bg-white/95 px-3 py-2 text-xs sm:text-sm font-semibold transition-colors"
           >
             <Edit3 size={13} />
             קבע יעד
@@ -193,7 +193,7 @@ export function GoalTracker({ data }: Props) {
               'inline-flex items-center gap-1 rounded-lg text-white px-3 py-2 text-xs sm:text-sm font-semibold',
               draftIsInvalid
                 ? 'bg-accent/40 cursor-not-allowed'
-                : 'bg-accent hover:bg-primary-dark',
+                : 'bg-accent hover:bg-accent/80',
             )}
           >
             <Check size={13} />
