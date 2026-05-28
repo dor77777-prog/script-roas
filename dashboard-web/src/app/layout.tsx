@@ -2,6 +2,7 @@ import './globals.css';
 import type { Metadata, Viewport } from 'next';
 import { Heebo, Rubik, Geist_Mono } from 'next/font/google';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
+import { ThemeProvider } from '@/components/ThemeProvider';
 
 // Heebo is the de-facto Hebrew sans-serif for product UIs: clean, readable,
 // supports the full set of weights we use (300 for big numbers, 600 for
@@ -49,8 +50,29 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="he" dir="rtl" className={`${heebo.variable} ${rubik.variable} ${geistMono.variable}`}>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+(function () {
+  try {
+    var k = 'roas-theme';
+    var v = localStorage.getItem(k);
+    var c = (v === 'light' || v === 'dark' || v === 'system') ? v : 'system';
+    var d = c === 'dark' || (c === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    document.documentElement.setAttribute('data-theme', d ? 'dark' : 'light');
+  } catch (e) {
+    document.documentElement.setAttribute('data-theme', 'light');
+  }
+})();
+            `.trim(),
+          }}
+        />
+      </head>
       <body className="font-sans antialiased text-text-primary bg-background">
-        <ErrorBoundary>{children}</ErrorBoundary>
+        <ThemeProvider>
+          <ErrorBoundary>{children}</ErrorBoundary>
+        </ThemeProvider>
       </body>
     </html>
   );
