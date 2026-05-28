@@ -1,21 +1,23 @@
 'use client';
 
+import { useMemo } from 'react';
 import { Table } from 'lucide-react';
 import type { DailyRow } from '@/lib/types';
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import { roasLabel } from '@/lib/analytics';
 import { RefundIndicator } from './RefundIndicator';
+import { Sparkline } from './ui/Sparkline';
 
 const ROAS_BG: Record<string, string> = {
-  red: 'bg-roas-redBg',
-  orange: 'bg-roas-orangeBg',
-  green: 'bg-roas-greenBg',
-  blue: 'bg-roas-blueBg',
+  red: 'bg-status-redBg',
+  orange: 'bg-status-orangeBg',
+  green: 'bg-status-greenBg',
+  blue: 'bg-status-blueBg',
   gray: '',
 };
 
 function roasCellStyle(roas: number, revenue: number, totalSpend: number) {
-  if (revenue === 0 && totalSpend > 0) return { className: 'bg-black text-white', text: '0' };
+  if (revenue === 0 && totalSpend > 0) return { className: 'bg-status-red text-white', text: '0' };
   if (revenue === 0 && totalSpend === 0) return { className: '', text: '' };
   return { className: ROAS_BG[roasLabel(roas).tone], text: formatNumber(roas) };
 }
@@ -34,12 +36,30 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
   // stores without TikTok (zolplus, 360usmile).
   const showTikTok = display.some(r => (r.ttSpend ?? 0) > 0);
 
+  // Plan 5c — per-store ROAS micro-trend over the visible range, used by the
+  // "מגמת חנות" sparkline column. Computed once per render, then sliced per row
+  // by storeName so the row JSX stays cheap.
+  const storeSeriesByStore = useMemo(() => {
+    const out = new Map<string, number[]>();
+    const byStore = new Map<string, DailyRow[]>();
+    for (const r of rows) {
+      const arr = byStore.get(r.storeName) ?? [];
+      arr.push(r);
+      byStore.set(r.storeName, arr);
+    }
+    for (const [store, arr] of byStore) {
+      const sorted = [...arr].sort((a, b) => (a.date < b.date ? -1 : 1));
+      out.set(store, sorted.map(r => (Number.isFinite(r.roas) ? r.roas : 0)));
+    }
+    return out;
+  }, [rows]);
+
   if (!display.length) {
     if (bare) {
-      return <div className="p-8 text-center text-text-muted text-sm">אין נתונים בטווח שבחרת</div>;
+      return <div className="p-8 text-center text-ink-muted text-sm">אין נתונים בטווח שבחרת</div>;
     }
     return (
-      <section className="rounded-xl bg-surface border border-border p-8 text-center text-text-muted shadow-card">
+      <section className="rounded-xl bg-elevated border border-line p-8 text-center text-ink-muted shadow-sm">
         אין נתונים בטווח שבחרת
       </section>
     );
@@ -48,10 +68,13 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
   const tableContent = (
     <div className="overflow-auto max-h-[70vh]">
         <table className="w-full text-xs sm:text-sm min-w-[700px]">
-          <thead className="bg-surfaceMuted sticky top-0 z-[5]">
-            <tr className="text-text-secondary">
+          <thead className="bg-elevated2 sticky top-0 z-[5]">
+            <tr className="text-ink-secondary">
               <th className="px-3 py-2.5 text-start font-medium">תאריך</th>
               <th className="px-3 py-2.5 text-start font-medium">חנות</th>
+              <th className="px-2 py-2 text-center text-[10px] uppercase tracking-wide text-ink-muted font-medium w-[80px]">
+                מגמת חנות
+              </th>
               <th className="px-3 py-2.5 text-end font-medium">פייסבוק</th>
               <th className="px-3 py-2.5 text-end font-medium">גוגל</th>
               {showTikTok && <th className="px-3 py-2.5 text-end font-medium">טיקטוק</th>}
@@ -67,9 +90,19 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
             {display.map((r, i) => {
               const cell = roasCellStyle(r.roas, r.revenue, r.totalSpend);
               return (
-                <tr key={i} className="border-t border-border hover:bg-surfaceMuted/50">
+                <tr key={i} className="border-t border-line hover:bg-elevated2/50">
                   <td className="px-3 py-2 tabular-nums">{formatDate(r.date)}</td>
                   <td className="px-3 py-2 font-medium">{r.storeName}</td>
+                  <td className="px-2 py-2 text-center align-middle">
+                    {(() => {
+                      const series = storeSeriesByStore.get(r.storeName) ?? [];
+                      return series.length >= 2 ? (
+                        <Sparkline data={series} tone="blue" width={64} height={20} className="inline-block" />
+                      ) : (
+                        <span className="text-ink-muted">—</span>
+                      );
+                    })()}
+                  </td>
                   <td className="px-3 py-2 text-end tabular-nums">{formatNumber(r.fbSpend)}</td>
                   <td className="px-3 py-2 text-end tabular-nums">{formatNumber(r.gaSpend)}</td>
                   {showTikTok && (
@@ -90,7 +123,7 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
                   </td>
                   <td className="px-3 py-2 text-end tabular-nums">{formatNumber(r.grossProfit)}</td>
                   {showCogs && (
-                    <td className="px-3 py-2 text-end tabular-nums text-text-secondary">
+                    <td className="px-3 py-2 text-end tabular-nums text-ink-secondary">
                       {r.hasCogs ? formatNumber(r.cogs) : '—'}
                     </td>
                   )}
@@ -98,9 +131,9 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
                     <td
                       className={cn(
                         'px-3 py-2 text-end tabular-nums font-medium',
-                        r.hasCogs && r.netProfit >= 0 && 'text-roas-green',
-                        r.hasCogs && r.netProfit < 0 && 'text-roas-red',
-                        !r.hasCogs && 'text-text-muted',
+                        r.hasCogs && r.netProfit >= 0 && 'text-status-green',
+                        r.hasCogs && r.netProfit < 0 && 'text-status-red',
+                        !r.hasCogs && 'text-ink-muted',
                       )}
                     >
                       {r.hasCogs ? formatCurrency(r.netProfit) : '—'}
@@ -115,7 +148,7 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
   );
 
   const meta = (
-    <span className="text-xs text-text-muted font-normal">
+    <span className="text-xs text-ink-muted font-normal">
       ({display.length} שורות אחרונות)
     </span>
   );
@@ -123,7 +156,7 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
   if (bare) {
     return (
       <div>
-        <div className="px-4 sm:px-5 py-3 bg-surfaceMuted/40 border-b border-border text-xs text-text-secondary">
+        <div className="px-4 sm:px-5 py-3 bg-elevated2/40 border-b border-line text-xs text-ink-secondary">
           {meta}
         </div>
         {tableContent}
@@ -132,9 +165,9 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
   }
 
   return (
-    <section className="rounded-xl bg-surface border border-border shadow-card overflow-hidden">
-      <h2 className="flex items-center gap-2 text-base font-semibold text-text-primary px-5 py-4 border-b border-border">
-        <Table size={18} className="text-text-secondary" />
+    <section className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
+      <h2 className="flex items-center gap-2 text-base font-semibold text-ink px-5 py-4 border-b border-line">
+        <Table size={18} className="text-ink-secondary" />
         פירוט יומי
         {meta}
       </h2>
