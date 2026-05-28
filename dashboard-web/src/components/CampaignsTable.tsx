@@ -1927,6 +1927,19 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                         : 'שם האד-סט כפי שמוגדר בפלטפורמה. לחיצה ממיינת אלפבתית.'
                     }
                   />
+                  {/* Plan 4a Task 5 (2026-05-29) — fixed (non-reorderable)
+                      "מגמה" column for the per-row ROAS sparkline. Sits
+                      outside the columnOrder map so the operator can't
+                      hide it (the trend is always-on, on par with the
+                      ציון / health badge). Mirrors the matching <td>
+                      in CampaignsTableRow. */}
+                  <ColumnHeaderTh
+                    className="px-2 py-2 text-center font-medium w-[80px] text-[11px] text-ink-secondary"
+                    dataColId="roasTrend"
+                    tooltip="מגמת ROAS היומית בטווח המסונן (כל יום מציג ROAS = ערך / הוצאה). הקו עוזר לזהות במבט אחד אם הקמפיין במגמת עלייה, ירידה או יציבות, בלי לפתוח את המגירה. מינימום 2 ימים — פחות מזה לא ניתן לצייר טרנד."
+                  >
+                    מגמה
+                  </ColumnHeaderTh>
                   {columnOrder.map(id => metricHeaders[id] ?? null)}
                   <ColumnHeaderTh
                     className="px-2 py-2 text-center font-medium w-[40px]"
@@ -1947,6 +1960,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     mappedCampaignKeys={mappedCampaignKeys}
                     health={healthByKey.get(a.key)}
                     columnOrder={columnOrder}
+                    dailySeries={dailyByCampaign.get(a.key)}
                     adAccounts={adAccounts}
                     optimized={optimized}
                     today={today}

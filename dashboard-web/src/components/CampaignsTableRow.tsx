@@ -10,7 +10,9 @@ import type { Aggregated } from '@/lib/campaignsAggregator';
 import type { ConfidenceLevel, TrueRevenueInfo } from '@/lib/hooks/useCampaignTrueRevenue';
 import type { AttributionTrust } from '@/lib/attributionAnalysis';
 import type { CampaignHealth } from '@/lib/campaignHealthScore';
+import type { DailyCpmRoasPoint } from '@/lib/cpmRoasAnalysis';
 import { HealthScoreBadge } from './HealthScoreBadge';
+import { Sparkline } from './ui/Sparkline';
 
 /**
  * The narrowed trust-level union actually used by CampaignsTableRow's
@@ -90,6 +92,20 @@ type Props = {
    * cells under the wrong columns).
    */
   columnOrder: string[];
+  /**
+   * Plan 4a Task 5 (2026-05-29) — pre-computed daily CPM/ROAS series for
+   * this row, ordered ascending by date. Sourced from the parent's
+   * `dailyByCampaign` Map (same memo that feeds the Health Score's
+   * trajectory analysis), so each row gets its own series without
+   * recomputing in the row. Renders as an inline ROAS Sparkline column
+   * between the campaign name and the reorderable metric columns.
+   *
+   * Undefined when the parent has no series for this key yet (initial
+   * render before SWR resolves) or when the series has < 2 points (not
+   * visually meaningful) — the row renders an em-dash placeholder in
+   * both cases.
+   */
+  dailySeries?: DailyCpmRoasPoint[];
   adAccounts: AdAccountMap;
   optimized: Set<string>;
   /**
@@ -281,6 +297,7 @@ export function CampaignsTableRow({
   mappedCampaignKeys,
   health,
   columnOrder,
+  dailySeries,
   adAccounts,
   optimized,
   today,
@@ -472,6 +489,28 @@ export function CampaignsTableRow({
             </div>
           </div>
         </div>
+      </td>
+      {/* Plan 4a Task 5 (2026-05-29) — inline ROAS trend sparkline. Sits
+          OUTSIDE the reorderable columnOrder block (right after the fixed
+          campaign-name column, before the operator-orderable metric
+          block) so the trend is always visible regardless of column
+          prefs. Mirrors the matching <th> in CampaignsTable.tsx. The
+          Sparkline primitive hardcodes aria-label="טרנד" so we don't
+          pass one here. Cell stays empty (em-dash) when the parent's
+          dailyByCampaign hasn't built a series yet, or when the series
+          has < 2 points (a single point isn't a meaningful trend). */}
+      <td data-col-id="roasTrend" className="px-2 py-2 text-center align-middle">
+        {dailySeries && dailySeries.length >= 2 ? (
+          <Sparkline
+            data={dailySeries.map(p => p.roas)}
+            tone="blue"
+            width={64}
+            height={20}
+            className="inline-block"
+          />
+        ) : (
+          <span className="text-ink-muted">—</span>
+        )}
       </td>
       {(() => {
       // Phase 05.7.x — Build the 15 reorderable metric <td> cells into a
