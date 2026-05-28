@@ -455,47 +455,44 @@ function PnLLine({
   running: number | null;
 }) {
   return (
-    <li className="flex items-center gap-3 py-2 border-b border-line-subtle/40 last:border-b-0">
-      <div className="min-w-0 flex-1">
-        <div className="text-sm text-ink font-medium leading-snug">
-          {label}
-        </div>
-        {note && (
-          <div className="text-[10px] sm:text-[11px] text-ink-muted mt-0.5 leading-snug">
-            {note}
-          </div>
-        )}
+    <li
+      className={cn(
+        'grid items-center gap-x-3 py-2 border-b border-line-subtle/40 last:border-b-0',
+        'grid-cols-[1fr_120px] sm:grid-cols-[1fr_120px_140px]',
+      )}
+    >
+      {/* Column 1: label + optional note */}
+      <div className="min-w-0">
+        <div className="text-sm text-ink font-medium leading-snug">{label}</div>
+        {note && <div className="text-[10px] sm:text-[11px] text-ink-muted mt-0.5 leading-snug">{note}</div>}
       </div>
-      <div className="text-end shrink-0 min-w-[110px]">
+
+      {/* Column 2: amount + percentage */}
+      <div className="text-end">
         <div
           className={cn(
-            'text-sm font-semibold tabular-nums leading-tight',
+            'text-sm font-semibold tabular-nums leading-tight font-mono',
             tone === 'positive' && 'text-ink',
             tone === 'cost' && 'text-ink-secondary',
           )}
         >
-          <span className="text-[10px] text-ink-muted font-medium ml-1">CAD</span>
+          <span className="text-[10px] text-ink-muted font-medium me-1 font-sans">CAD</span>
           {formatCurrency(amount)}
         </div>
-        <div className="text-[10px] text-ink-muted tabular-nums mt-0.5">
+        <div className="text-[10px] text-ink-muted tabular-nums mt-0.5 font-mono">
           {pct > 0 && tone === 'positive' ? '100%' : `${pct.toFixed(1)}%`}
         </div>
       </div>
-      <div className="text-end shrink-0 hidden sm:block min-w-[110px] border-s border-line-subtle ps-3">
-        <div className="text-[10px] text-ink-muted uppercase tracking-wide leading-tight">
-          נשאר
-        </div>
+
+      {/* Column 3: running total — desktop only */}
+      <div className="text-end hidden sm:block border-s border-line-subtle ps-3">
+        <div className="text-[10px] text-ink-muted uppercase tracking-wide leading-tight">נשאר</div>
         {running === null ? (
-          <span
-            className="text-xs text-ink-secondary opacity-50"
-            aria-label="הערה — לא משפיע על הסכום הרץ"
-          >
-            —
-          </span>
+          <span className="text-xs text-ink-secondary opacity-50" aria-label="הערה — לא משפיע על הסכום הרץ">—</span>
         ) : (
           <div
             className={cn(
-              'text-xs font-semibold tabular-nums leading-tight mt-0.5',
+              'text-xs font-semibold tabular-nums leading-tight mt-0.5 font-mono',
               running >= 0 ? 'text-ink' : 'text-status-red',
             )}
           >
