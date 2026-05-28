@@ -25,8 +25,12 @@ import {
   Command as CmdIcon,
   Receipt,
   X,
+  Sun,
+  Moon,
+  Monitor,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useTheme } from './ThemeProvider';
 import { useDrawerEsc } from '@/lib/drawerStack';
 import type { DashboardData, Filters as F, PresetKey } from '@/lib/types';
 import { PRESET_LABELS, computePresetRange } from '@/lib/presets';
@@ -94,6 +98,8 @@ export function CommandPalette({
   const [activeIdx, setActiveIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+
+  const { setChoice: setThemeChoice } = useTheme();
 
   // Fetch enriched data lazily (only after the palette has been opened once).
   const [warmCache, setWarmCache] = useState(false);
@@ -368,8 +374,37 @@ export function CommandPalette({
       },
     });
 
+    // Theme toggles
+    cmds.push({
+      id: 'theme-light',
+      kind: 'action',
+      label: 'מעבר למצב בהיר',
+      subtitle: 'Light theme',
+      icon: <Sun size={14} />,
+      search: 'theme light בהיר אור day',
+      perform: () => setThemeChoice('light'),
+    });
+    cmds.push({
+      id: 'theme-dark',
+      kind: 'action',
+      label: 'מעבר למצב כהה',
+      subtitle: 'Dark theme',
+      icon: <Moon size={14} />,
+      search: 'theme dark כהה לילה night',
+      perform: () => setThemeChoice('dark'),
+    });
+    cmds.push({
+      id: 'theme-system',
+      kind: 'action',
+      label: 'עקוב אחר העדפת המערכת',
+      subtitle: 'Follow system',
+      icon: <Monitor size={14} />,
+      search: 'theme system auto אוטומטי מערכת',
+      perform: () => setThemeChoice('system'),
+    });
+
     return cmds;
-  }, [data, filters, setFilters, setActiveTab, products, campaigns, onRefresh, onOpenAiReport, close]);
+  }, [data, filters, setFilters, setActiveTab, products, campaigns, onRefresh, onOpenAiReport, close, setThemeChoice]);
 
   // ---- Filtering -----------------------------------------------------------
   const filtered = useMemo(() => {
@@ -496,6 +531,15 @@ export function CommandPalette({
                 <X size={14} />
               </button>
             </div>
+
+            {/* NL query placeholder slot (wired in Plan 2) */}
+            {query.length > 0 && (
+              <div className="px-3 py-2 border-b border-line-subtle text-xs text-ink-muted">
+                <Sparkles size={12} className="inline-block me-1" />
+                שאלת AI: <span className="text-ink">{query}</span>
+                <span className="opacity-50">{' '}— יזמין ב-Plan 2</span>
+              </div>
+            )}
 
             {/* Results */}
             <div
