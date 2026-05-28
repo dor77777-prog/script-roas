@@ -12,7 +12,14 @@
 //   constantTimeEqual(a, b)          — timing-safe string comparison
 //   checkOperatorSecret(path, header, envSecret) → { pass } | { pass, status }
 
-import crypto from 'crypto';
+// NOTE on runtime: this module is imported by `src/middleware.ts`, which Next.js
+// executes in the Edge Runtime. Node's `crypto` module and `Buffer` are NOT
+// available in Edge. We therefore implement the constant-time compare in
+// pure JavaScript (charCodeAt + XOR-OR), which works identically in Edge and
+// Node and remains timing-safe for ASCII secrets of equal length. For
+// non-ASCII secrets (Unicode code points > 0xFFFF), charCodeAt yields the
+// UTF-16 code unit — which still compares byte-equal strings byte-equal,
+// just like the original Buffer comparison did.
 
 /**
  * Returns true if the pathname is an /api/operator/* API path.
@@ -31,25 +38,22 @@ export function shouldEnforceSecret(envSecret: string | undefined): boolean {
 }
 
 /**
- * Constant-time string comparison using crypto.timingSafeEqual.
+ * Constant-time string comparison — Edge-runtime safe.
  *
- * - If lengths differ, returns false immediately WITHOUT calling
- *   timingSafeEqual (a length difference is already public info and the
- *   early exit avoids the buffer allocation overhead on invalid tokens).
- * - If lengths are equal, delegates to timingSafeEqual to prevent
- *   timing-based secret extraction.
+ * - If lengths differ, returns false immediately. The length itself is not
+ *   a secret (it cannot help an attacker narrow down the content), and the
+ *   early return avoids work on garbage-length input.
+ * - If lengths match, XORs each character-code pair and accumulates the
+ *   result. No branches inside the loop → constant time per character.
+ *   Result is 0 iff every pair matched.
  */
 export function constantTimeEqual(a: string, b: string): boolean {
-  // Length-equality guard — strings of different lengths cannot match.
-  // Checking length first is safe because the length of a valid secret
-  // is not itself secret (it doesn't help an attacker narrow down the
-  // content). This guard prevents the buffer allocation below when the
-  // attacker sends a garbage-length header.
   if (a.length !== b.length) return false;
-
-  const bufA = Buffer.from(a, 'utf8');
-  const bufB = Buffer.from(b, 'utf8');
-  return crypto.timingSafeEqual(bufA, bufB);
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
 }
 
 type GateResult = { pass: true } | { pass: false; status: 404 };

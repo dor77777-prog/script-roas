@@ -163,30 +163,41 @@ describe('checkOperatorSecret', () => {
   });
 });
 
-describe('constantTimeEqual — length-guard prevents timing leak', () => {
-  it('returns false immediately (no compare) when lengths differ', () => {
-    // We spy on Buffer.from to verify it is NOT called for different-length inputs.
-    // This confirms the length guard short-circuits before crypto.timingSafeEqual.
-    const bufferFromSpy = vi.spyOn(Buffer, 'from');
-
-    // Different lengths — should short-circuit
+describe('constantTimeEqual — Edge-runtime-safe pure-JS implementation', () => {
+  it('returns false immediately (no per-char compare) when lengths differ', () => {
+    // Length-guard short-circuit: a different-length input never enters the
+    // per-character loop. We verify by spying on String.prototype.charCodeAt
+    // — the impl's only branch-inside-loop touchpoint — and asserting it is
+    // not called at all when lengths mismatch.
+    const charCodeSpy = vi.spyOn(String.prototype, 'charCodeAt');
     const result = constantTimeEqual('short', 'muchlonger');
-
-    // Buffer.from should NOT have been called (length guard fired first)
-    expect(bufferFromSpy).not.toHaveBeenCalled();
+    expect(charCodeSpy).not.toHaveBeenCalled();
     expect(result).toBe(false);
-
-    bufferFromSpy.mockRestore();
+    charCodeSpy.mockRestore();
   });
 
-  it('DOES call Buffer.from (for crypto.timingSafeEqual) when lengths are equal', () => {
-    const bufferFromSpy = vi.spyOn(Buffer, 'from');
+  it('enters the per-char compare loop when lengths are equal', () => {
+    const charCodeSpy = vi.spyOn(String.prototype, 'charCodeAt');
+    constantTimeEqual('sameLength1', 'sameLength2'); // length 11 each
+    // 11 chars per string × 2 strings = 22 charCodeAt calls expected.
+    expect(charCodeSpy).toHaveBeenCalled();
+    expect(charCodeSpy.mock.calls.length).toBeGreaterThanOrEqual(22);
+    charCodeSpy.mockRestore();
+  });
 
-    constantTimeEqual('sameLength1', 'sameLength2');
-
-    // Buffer.from should have been called since lengths match
-    expect(bufferFromSpy).toHaveBeenCalled();
-
-    bufferFromSpy.mockRestore();
+  it('does NOT depend on Node-only globals (Buffer / crypto) — Edge-runtime safe', async () => {
+    // Smoke check: importing middlewareHelpers must not pull in Node's
+    // crypto module. If it did, importing under an Edge-simulating
+    // environment would fail. Vitest runs in Node so we can't fully
+    // simulate Edge, but we can at least assert the source file has no
+    // crypto/buffer reference left.
+    const fs = await import('fs');
+    const src = fs.readFileSync(
+      new URL('../middlewareHelpers.ts', import.meta.url),
+      'utf8',
+    );
+    expect(src).not.toMatch(/from\s+['"]crypto['"]/);
+    expect(src).not.toMatch(/Buffer\.from/);
+    expect(src).not.toMatch(/timingSafeEqual/);
   });
 });
