@@ -28,6 +28,9 @@ import { TodayLive } from './TodayLive';
 import { ProductsTable } from './ProductsTable';
 import { ProductCentricView } from './ProductCentricView';
 import { CampaignsTable } from './CampaignsTable';
+import { QuadrantScatter, type QuadrantPoint } from './QuadrantScatter';
+import { aggregate as aggregateCampaigns } from '@/lib/campaignsAggregator';
+import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import { InsightsBoard } from './InsightsBoard';
 import { GoalTracker } from './GoalTracker';
 import { AiReportButton } from './AiReportButton';
@@ -523,6 +526,49 @@ function AnalysisTab({
 // ============================================================================
 // Tab: CAMPAIGNS — campaign + ad-set performance with ROAS / CTR / CPC / CPA.
 // ============================================================================
+const campaignsFetcher = async (url: string): Promise<CampaignsResponse> => {
+  const r = await fetch(url);
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    throw new Error(body?.error || `HTTP ${r.status}`);
+  }
+  return r.json() as Promise<CampaignsResponse>;
+};
+
+function QuadrantScatterCard({
+  filters,
+}: {
+  filters: { store: string; range: { from: string; to: string } };
+}) {
+  const { data: swrData } = useSWR<CampaignsResponse>(
+    buildDateRangeKey('/api/campaigns', filters.range),
+    campaignsFetcher,
+    { refreshInterval: 120_000, revalidateOnFocus: false },
+  );
+
+  const points = useMemo<QuadrantPoint[]>(() => {
+    if (!swrData) return [];
+    const aggregated = aggregateCampaigns(
+      swrData.rows,
+      'campaign',
+      filters.store,
+      'all',
+      filters.range,
+      swrData.currentEffectiveStatus,
+    );
+    return aggregated
+      .filter((a) => a.spend > 0 && a.conversions > 0)
+      .map((a) => ({
+        name: a.campaignName,
+        roas: a.conversionValue / a.spend,
+        cac: a.spend / a.conversions,
+        spend: a.spend,
+      }));
+  }, [swrData, filters.store, filters.range]);
+
+  return <QuadrantScatter data={points} title="ROAS × CAC לקמפיינים פעילים" />;
+}
+
 function CampaignsTab({
   data,
   filters,
@@ -541,6 +587,7 @@ function CampaignsTab({
         formula="ROAS = ערך המרות / הוצאה · CTR = קליקים / חשיפות · CPA = הוצאה / המרות"
       />
       <Filters filters={filters} stores={data.stores} onChange={setFilters} />
+      <QuadrantScatterCard filters={filters} />
       <div className="rounded-xl bg-elevated border border-line-subtle shadow-sm overflow-hidden">
         <CampaignsTable
           range={filters.range}
