@@ -50,10 +50,10 @@ const SEVERITY_META: Record<
   critical: {
     label: 'דורש פעולה מיידית',
     icon: <AlertOctagon size={16} />,
-    color: 'text-roas-red',
-    bg: 'bg-roas-redBg/40',
-    border: 'border-roas-red/20',
-    badge: 'bg-roas-red text-white',
+    color: 'text-status-red',
+    bg: 'bg-status-redBg/40',
+    border: 'border-status-red/20',
+    badge: 'bg-status-red text-white',
   },
   warning: {
     label: 'אזהרות',
@@ -66,26 +66,26 @@ const SEVERITY_META: Record<
   opportunity: {
     label: 'הזדמנויות',
     icon: <Lightbulb size={16} />,
-    color: 'text-primary',
-    bg: 'bg-primary/5',
-    border: 'border-primary/15',
-    badge: 'bg-primary text-white',
+    color: 'text-accent',
+    bg: 'bg-accent/5',
+    border: 'border-accent/15',
+    badge: 'bg-accent text-white',
   },
   positive: {
     label: 'חיובי',
     icon: <Trophy size={16} />,
-    color: 'text-roas-green',
-    bg: 'bg-roas-greenBg/40',
-    border: 'border-roas-green/15',
-    badge: 'bg-roas-green text-white',
+    color: 'text-status-green',
+    bg: 'bg-status-greenBg/40',
+    border: 'border-status-green/15',
+    badge: 'bg-status-green text-white',
   },
   info: {
     label: 'מידע',
     icon: <Info size={16} />,
-    color: 'text-text-secondary',
-    bg: 'bg-surfaceMuted',
-    border: 'border-borderSubtle',
-    badge: 'bg-text-muted text-white',
+    color: 'text-ink-secondary',
+    bg: 'bg-elevated2',
+    border: 'border-line-subtle',
+    badge: 'bg-ink-muted text-white',
   },
 };
 
@@ -216,7 +216,7 @@ export function InsightsBoard({ data }: Props) {
   }, [grouped]);
 
   return (
-    <section className="rounded-2xl bg-surface border border-borderSubtle shadow-card overflow-hidden">
+    <section className="rounded-2xl bg-elevated border border-line-subtle shadow-sm overflow-hidden">
       {/* Clickable header — toggles the whole board open/closed. */}
       <button
         type="button"
@@ -225,21 +225,21 @@ export function InsightsBoard({ data }: Props) {
         className={cn(
           'w-full text-start',
           'px-4 sm:px-6 py-4 sm:py-5',
-          'border-b border-borderSubtle',
-          'bg-gradient-to-l from-primary/5 via-surface to-surface',
-          'hover:from-primary/8 hover:to-surfaceMuted/40 transition-colors',
+          'border-b border-line-subtle',
+          'bg-gradient-to-l from-accent/5 via-elevated to-elevated',
+          'hover:from-accent/8 hover:to-elevated2/40 transition-colors',
         )}
       >
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <span className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary/10 text-primary shrink-0">
+            <span className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-accent/10 text-accent shrink-0">
               <Sparkles size={18} />
             </span>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-xl font-bold text-text-primary tracking-tight leading-tight">
+              <h2 className="text-base sm:text-xl font-bold text-ink tracking-tight leading-tight">
                 תובנות חכמות
               </h2>
-              <div className="text-[11px] sm:text-xs text-text-muted mt-0.5 leading-tight">
+              <div className="text-[11px] sm:text-xs text-ink-muted mt-0.5 leading-tight">
                 {loading && (
                   <span className="inline-flex items-center gap-1 mr-2">
                     <RefreshCw size={11} className="animate-spin" />
@@ -261,7 +261,7 @@ export function InsightsBoard({ data }: Props) {
             <ChevronDown
               size={20}
               className={cn(
-                'text-text-muted transition-transform duration-DEFAULT',
+                'text-ink-muted transition-transform duration-DEFAULT',
                 boardExpanded && 'rotate-180',
               )}
               aria-hidden
@@ -288,19 +288,19 @@ export function InsightsBoard({ data }: Props) {
       {!boardExpanded && hiddenCount === 0 && totalCount === 0 && !loading && (
         <div className="px-5 sm:px-6 py-5 flex items-center gap-3">
           <span className="relative inline-flex w-2.5 h-2.5 shrink-0">
-            <span className="absolute inset-0 rounded-full bg-roas-green/40 animate-ping" />
-            <span className="relative inline-flex w-full h-full rounded-full bg-roas-green" />
+            <span className="absolute inset-0 rounded-full bg-status-green/40 animate-ping" />
+            <span className="relative inline-flex w-full h-full rounded-full bg-status-green" />
           </span>
-          <div className="text-[12px] sm:text-sm text-text-secondary">
-            <span className="text-text-primary font-semibold">הכל רגוע.</span>{' '}
-            <span className="text-text-muted">המערכת לא זיהתה אנומליות או הזדמנויות פעילות.</span>
+          <div className="text-[12px] sm:text-sm text-ink-secondary">
+            <span className="text-ink font-semibold">הכל רגוע.</span>{' '}
+            <span className="text-ink-muted">המערכת לא זיהתה אנומליות או הזדמנויות פעילות.</span>
           </div>
         </div>
       )}
 
       {boardExpanded && !loading && totalCount === 0 && hiddenCount === 0 && (
-        <div className="px-4 sm:px-5 py-10 text-center text-text-muted">
-          <Sparkles size={28} className="mx-auto mb-2 text-text-muted/60" />
+        <div className="px-4 sm:px-5 py-10 text-center text-ink-muted">
+          <Sparkles size={28} className="mx-auto mb-2 text-ink-muted/60" />
           <div className="text-sm">אין תובנות חדשות לרגע זה.</div>
           <div className="text-[11px] mt-1">
             המערכת תזהה אנומליות והזדמנויות ברגע שייווצרו.
@@ -329,31 +329,31 @@ export function InsightsBoard({ data }: Props) {
       )}
 
       {boardExpanded && loading && totalCount === 0 && (
-        <div className="px-4 py-8 text-center text-sm text-text-muted">
+        <div className="px-4 py-8 text-center text-sm text-ink-muted">
           מנתח נתונים…
         </div>
       )}
 
       {/* Hidden / muted insights — only meaningful when the board is open */}
       {boardExpanded && hiddenCount > 0 && (
-        <div className="border-t border-borderSubtle bg-surfaceMuted/30">
+        <div className="border-t border-line-subtle bg-elevated2/30">
           <button
             onClick={() => setShowHidden(v => !v)}
-            className="w-full px-4 sm:px-5 py-2.5 flex items-center justify-between gap-2 text-text-secondary hover:text-text-primary hover:bg-surfaceMuted transition-colors"
+            className="w-full px-4 sm:px-5 py-2.5 flex items-center justify-between gap-2 text-ink-secondary hover:text-ink hover:bg-elevated2 transition-colors"
           >
             <span className="inline-flex items-center gap-2 text-xs sm:text-sm">
               {showHidden ? <Eye size={14} /> : <EyeOff size={14} />}
               <span className="font-medium">
                 {hiddenCount} תובנות מוסתרות
               </span>
-              <span className="text-text-muted text-[10px] sm:text-[11px]">
+              <span className="text-ink-muted text-[10px] sm:text-[11px]">
                 (סומנו כבוצעו או הוסתרו ידנית)
               </span>
             </span>
             {showHidden ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </button>
           {showHidden && (
-            <ul className="divide-y divide-borderSubtle/70 animate-fade-in">
+            <ul className="divide-y divide-line-subtle/70 animate-fade-in">
               {hidden.map(ins => {
                 const st = states[ins.id];
                 const meta = SEVERITY_META[ins.severity];
@@ -363,22 +363,22 @@ export function InsightsBoard({ data }: Props) {
                     <span
                       className={cn(
                         'inline-flex items-center justify-center w-6 h-6 rounded-md shrink-0 mt-0.5 opacity-60',
-                        meta.color, 'bg-surface ring-1 ring-inset', meta.border,
+                        meta.color, 'bg-elevated ring-1 ring-inset', meta.border,
                       )}
                     >
                       {meta.icon}
                     </span>
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-text-secondary leading-snug truncate">
+                      <div className="text-sm font-medium text-ink-secondary leading-snug truncate">
                         {ins.title}
                       </div>
-                      <div className="text-[10px] sm:text-[11px] text-text-muted mt-0.5">
+                      <div className="text-[10px] sm:text-[11px] text-ink-muted mt-0.5">
                         {stateLabel}{st?.at ? ` · ${relativeTime(st.at)}` : ''}
                       </div>
                     </div>
                     <button
                       onClick={() => restoreInsight(ins.id)}
-                      className="inline-flex items-center gap-1 px-2 py-1 text-[10px] sm:text-[11px] font-semibold text-primary hover:bg-primary/10 rounded transition-colors shrink-0"
+                      className="inline-flex items-center gap-1 px-2 py-1 text-[10px] sm:text-[11px] font-semibold text-accent hover:bg-accent/10 rounded transition-colors shrink-0"
                       title="שחזר תובנה לרשימה הראשית"
                     >
                       <Undo2 size={11} />
@@ -416,17 +416,17 @@ function InsightHero({
   // reads at full strength against the white surface (border-opacity is too
   // muted for the kind of vertical-rule moment we want here).
   const ACCENT_BG: Record<Severity, string> = {
-    critical:    'bg-roas-red',
+    critical:    'bg-status-red',
     warning:     'bg-amber-500',
-    opportunity: 'bg-primary',
-    positive:    'bg-roas-green',
-    info:        'bg-text-muted',
+    opportunity: 'bg-accent',
+    positive:    'bg-status-green',
+    info:        'bg-ink-muted',
   };
   return (
     <button
       type="button"
       onClick={onClick}
-      className="w-full text-start group flex items-stretch gap-4 sm:gap-5 px-4 sm:px-6 py-4 sm:py-5 hover:bg-surfaceMuted/40 transition-colors"
+      className="w-full text-start group flex items-stretch gap-4 sm:gap-5 px-4 sm:px-6 py-4 sm:py-5 hover:bg-elevated2/40 transition-colors"
       aria-label={`פתח לוח תובנות (${insight.title})`}
     >
       {/* Vertical accent bar — anchors the typographic moment and signals
@@ -443,20 +443,20 @@ function InsightHero({
         <div className="flex items-center gap-2 text-[10px] sm:text-[11px] uppercase tracking-[0.12em] font-semibold">
           <span className={meta.color}>{meta.label}</span>
           {otherCount > 0 && (
-            <span className="text-text-muted normal-case tracking-normal font-normal">
+            <span className="text-ink-muted normal-case tracking-normal font-normal">
               · עוד {otherCount} {otherCount === 1 ? 'תובנה' : 'תובנות'}
             </span>
           )}
         </div>
-        <div className="text-base sm:text-lg md:text-xl font-semibold text-text-primary leading-snug tracking-tight">
+        <div className="text-base sm:text-lg md:text-xl font-semibold text-ink leading-snug tracking-tight">
           {insight.title}
         </div>
         {insight.detail && (
-          <p className="text-[12px] sm:text-sm text-text-secondary leading-relaxed line-clamp-2 max-w-2xl">
+          <p className="text-[12px] sm:text-sm text-ink-secondary leading-relaxed line-clamp-2 max-w-2xl">
             {insight.detail}
           </p>
         )}
-        <div className="pt-1 text-[11px] text-text-muted opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="pt-1 text-[11px] text-ink-muted opacity-0 group-hover:opacity-100 transition-opacity">
           לחץ לפרטים ולכל התובנות ←
         </div>
       </div>
@@ -481,7 +481,7 @@ function SeverityGroup({
   const remaining = items.length - visible.length;
 
   return (
-    <div className={cn('border-b border-borderSubtle last:border-b-0', meta.bg)}>
+    <div className={cn('border-b border-line-subtle last:border-b-0', meta.bg)}>
       <div className={cn('px-4 sm:px-5 py-2.5 sm:py-3 flex items-center gap-2', meta.color)}>
         <span className="shrink-0">{meta.icon}</span>
         <span className="text-xs sm:text-sm font-semibold tracking-wide">{meta.label}</span>
@@ -541,15 +541,15 @@ function InsightRow({
     <li
       className={cn(
         'group/insight px-4 sm:px-5 py-2.5 sm:py-3',
-        'hover:bg-surface/60 transition-colors',
-        'border-t border-borderSubtle/50',
+        'hover:bg-elevated/60 transition-colors',
+        'border-t border-line-subtle/50',
       )}
     >
       <div className="flex items-start gap-3">
         <span
           className={cn(
             'inline-flex items-center justify-center w-6 h-6 rounded-md shrink-0 mt-0.5',
-            meta.color, 'bg-surface/80 ring-1 ring-inset',
+            meta.color, 'bg-elevated/80 ring-1 ring-inset',
             meta.border,
           )}
         >
@@ -558,15 +558,15 @@ function InsightRow({
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2 flex-wrap">
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold text-text-primary leading-snug">
+              <div className="text-sm font-semibold text-ink leading-snug">
                 {insight.title}
               </div>
-              <div className="text-xs sm:text-[13px] text-text-secondary mt-0.5 leading-relaxed">
+              <div className="text-xs sm:text-[13px] text-ink-secondary mt-0.5 leading-relaxed">
                 {insight.detail}
               </div>
             </div>
             {insight.scope && (
-              <span className="inline-block text-[10px] sm:text-[11px] font-medium text-text-muted bg-surface/80 border border-borderSubtle px-1.5 py-0.5 rounded shrink-0">
+              <span className="inline-block text-[10px] sm:text-[11px] font-medium text-ink-muted bg-elevated/80 border border-line-subtle px-1.5 py-0.5 rounded shrink-0">
                 {insight.scope}
               </span>
             )}
@@ -581,8 +581,8 @@ function InsightRow({
               onClick={() => onMark(insight, 'done')}
               className={cn(
                 'inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium',
-                'border border-borderSubtle bg-surface',
-                'text-text-secondary hover:text-roas-green hover:border-roas-green/40 hover:bg-roas-greenBg/40',
+                'border border-line-subtle bg-elevated',
+                'text-ink-secondary hover:text-status-green hover:border-status-green/40 hover:bg-status-greenBg/40',
                 'transition-colors',
               )}
               title="סמן שטיפלתי בזה — יוסתר ל-7 ימים, יחזור אם הבעיה תחזור"
@@ -596,7 +596,7 @@ function InsightRow({
               className={cn(
                 'inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium',
                 'border border-transparent bg-transparent',
-                'text-text-muted hover:text-text-primary hover:bg-surfaceMuted',
+                'text-ink-muted hover:text-ink hover:bg-elevated2',
                 'transition-colors',
               )}
               title="הסתר — לא יחזור עד שתשחזר ידנית"
@@ -615,7 +615,7 @@ function InsightRow({
                   'inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold',
                   'border border-transparent',
                   meta.color,
-                  'hover:bg-surface/80 hover:border-borderSubtle',
+                  'hover:bg-elevated/80 hover:border-line-subtle',
                   'transition-colors',
                 )}
               >
@@ -628,7 +628,7 @@ function InsightRow({
             {hasDetail && (
               <button
                 onClick={() => setExpanded(v => !v)}
-                className="text-[11px] text-text-muted hover:text-text-primary inline-flex items-center gap-1 transition-colors ml-auto px-2 py-1"
+                className="text-[11px] text-ink-muted hover:text-ink inline-flex items-center gap-1 transition-colors ml-auto px-2 py-1"
               >
                 {expanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
                 {expanded ? 'הסתר הסבר' : 'למה?'}
@@ -637,7 +637,7 @@ function InsightRow({
           </div>
 
           {expanded && hasDetail && (
-            <div className="mt-2 px-2.5 py-1.5 text-[11px] sm:text-xs text-text-secondary bg-surface/60 border-s-2 border-borderSubtle rounded animate-fade-in leading-relaxed">
+            <div className="mt-2 px-2.5 py-1.5 text-[11px] sm:text-xs text-ink-secondary bg-elevated/60 border-s-2 border-line-subtle rounded animate-fade-in leading-relaxed">
               {insight.why}
             </div>
           )}
