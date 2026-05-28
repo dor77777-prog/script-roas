@@ -32,13 +32,7 @@ import {
   type DailyCpmRoasPoint,
 } from '@/lib/cpmRoasAnalysis';
 import { aggregate, type Aggregated } from '@/lib/campaignsAggregator';
-import {
-  computeCampaignHealth,
-  applyCohortAdjustmentOnce,
-  type CampaignHealth,
-} from '@/lib/campaignHealthScore';
-import { computeMultiMappingCohort } from '@/lib/multiMappingCohort';
-import { detectProductCannibalization } from '@/lib/cannibalizationDetection';
+import { buildHealthByKey } from '@/lib/campaignsIntelligence';
 import {
   readCampaignsColumnPrefs,
   buildHiddenColumnsCss,
@@ -735,111 +729,31 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   // The cohort + cannibalization computations run on the full
   // aggregated + productMap so each campaign's adjustment is consistent
   // with what its drawer shows.
-  const healthByKey = useMemo(() => {
-    const out = new Map<string, CampaignHealth>();
-
-    // Build per-key ROAS lookups from trueRevenueByKey so the cohort
-    // module can rank without re-computing.
-    //
-    // Audit fix 2026-05-23 (HIGH-01 multi-mapping): the secondary
-    // `roasShopifyPlatformByKey` MUST differ from the primary so the
-    // tie-breaker actually tie-breaks. Pre-fix, both maps were fed the
-    // same `roasShopifyByKey` — secondary contributed zero discrimination.
-    // Use `deterministicRevenue / spend` for the platform-only signal
-    // (the same number rendered by the "ROAS Shopify · פלטפורמה" column).
-    const roasShopifyByKey = new Map<string, number>();
-    const roasShopifyPlatformByKey = new Map<string, number>();
-    for (const [k, info] of trueRevenueByKey.entries()) {
-      roasShopifyByKey.set(k, info.spend > 0 ? info.trueRevenue / info.spend : 0);
-      roasShopifyPlatformByKey.set(
-        k,
-        info.spend > 0 ? info.deterministicRevenue / info.spend : 0,
-      );
-    }
-
-    for (const a of aggregated) {
-      const info = trueRevenueByKey.get(campaignKey(a.storeId, a.platform, a.campaignId));
-      const series = dailyByCampaign.get(a.key);
-      const trajectory =
-        series && series.length >= 5 ? analyzeCpmVsRoas(series) : undefined;
-      const base = computeCampaignHealth({
-        aggregated: a,
-        trueRevenueInfo: info,
-        cpmRoasAnalysis: trajectory,
-      });
-
-      // Cohort adjustment — only fires when this campaign actually has
-      // a cohort (>= 2 members sharing a product). For solo campaigns
-      // (no shared products), cohort is null and we keep the base.
-      const cohort = computeMultiMappingCohort({
-        currentCampaignKey: a.key,
-        productMap,
+  const healthByKey = useMemo(
+    () =>
+      buildHealthByKey({
         aggregated,
-        roasShopifyByKey,
-        // Audit fix 2026-05-23 (HIGH-01): real platform-deterministic
-        // ROAS as the secondary tie-breaker. Pre-fix this also passed
-        // `roasShopifyByKey`, making the tertiary `spend` the de-facto
-        // secondary (and the documented secondary a no-op).
-        roasShopifyPlatformByKey,
-      });
-      // Take the WORST cannibalization risk across this campaign's
-      // mapped products in the visible range. We already compute the
-      // full verdict list per drawer-open in CampaignDrawer; here in
-      // the table-level memo we recompute against the same inputs.
-      // It's cheap (O(products × campaigns)), bounded, runs once per
-      // aggregated change.
-      // Audit fix 2026-05-23 (a/WARN-6): `composition_changed` added to
-      // the union so the assignment from `detectProductCannibalization`'s
-      // `CannibalizationRisk` is type-correct without an implicit cast.
-      // composition_changed is informational only — it doesn't get bumped
-      // up the severity ladder below (the `if (v.risk === ...)` chain only
-      // matches low/medium/high), and applyCohortAdjustmentOnce's switch
-      // lets it fall through to zero delta. Net effect: composition_changed
-      // never silently overwrites a worse risk that's already been seen.
-      let worstRisk: 'none' | 'low' | 'medium' | 'high' | 'insufficient' | 'composition_changed' = 'none';
-      if (cohort) {
-        const verdicts = detectProductCannibalization({
-          range: localRange,
-          storeId: a.storeId,
-          productMap,
-          campaignsDaily: (data?.rows ?? []).map(r => ({
-            date: r.date,
-            storeId: r.storeId,
-            platform: r.platform,
-            campaignId: r.campaignId,
-            spend: r.spend,
-          })),
-          productsDaily: (productsResp?.rows ?? []).map(r => ({
-            date: r.date,
-            storeId: r.storeId,
-            productId: r.productId,
-            productTitle: r.productTitle,
-            netRevenue: r.netRevenue ?? 0,
-          })),
-        });
-        // Filter verdicts to products this specific campaign maps —
-        // adjustment is per-campaign, not store-wide.
-        const myProducts = new Set(productMap[a.key] ?? []);
-        const myVerdicts = verdicts.filter(v => myProducts.has(v.productId));
-        for (const v of myVerdicts) {
-          // Severity order: high > medium > low > insufficient > none.
-          if (v.risk === 'high') worstRisk = 'high';
-          else if (v.risk === 'medium' && worstRisk !== 'high') worstRisk = 'medium';
-          else if (v.risk === 'low' && worstRisk !== 'high' && worstRisk !== 'medium') worstRisk = 'low';
-        }
-      }
-      const adjusted = cohort
-        ? applyCohortAdjustmentOnce(base, {
-            isLeader: cohort.isLeader,
-            isWeakest: cohort.isWeakest,
-            cohortSize: cohort.totalMembers,
-            cannibalizationRisk: worstRisk,
-          })
-        : base;
-      out.set(a.key, adjusted);
-    }
-    return out;
-  }, [aggregated, trueRevenueByKey, dailyByCampaign, today, optimized, productMap, data, productsResp, localRange]);
+        trueRevenueByKey,
+        dailyByCampaign,
+        productMap,
+        campaignsDaily: (data?.rows ?? []).map(r => ({
+          date: r.date,
+          storeId: r.storeId,
+          platform: r.platform,
+          campaignId: r.campaignId,
+          spend: r.spend,
+        })),
+        productsDaily: (productsResp?.rows ?? []).map(r => ({
+          date: r.date,
+          storeId: r.storeId,
+          productId: r.productId,
+          productTitle: r.productTitle,
+          netRevenue: r.netRevenue ?? 0,
+        })),
+        localRange,
+      }),
+    [aggregated, trueRevenueByKey, dailyByCampaign, productMap, data, productsResp, localRange],
+  );
 
   const totals = useMemo(() => {
     // Audit fix 2026-05-23 (FIND-01): summary cards must track what's
