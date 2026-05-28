@@ -762,18 +762,10 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       const series = dailyByCampaign.get(a.key);
       const trajectory =
         series && series.length >= 5 ? analyzeCpmVsRoas(series) : undefined;
-      // Phase 05.7.x — feeds the Health Score's operator-flag component.
-      // Uses real effective_status when available, lastActiveDate fallback
-      // when not — same precedence as the row's off-chip so the score and
-      // the chip always agree on whether a campaign is "currently off".
-      const isOff = isCampaignOff(a.effectiveStatus, a.platform, a.lastActiveDate, today);
-      const isOpt = optimized.has(a.key);
       const base = computeCampaignHealth({
         aggregated: a,
         trueRevenueInfo: info,
         cpmRoasAnalysis: trajectory,
-        optimized: isOpt,
-        isCurrentlyOff: isOff,
       });
 
       // Cohort adjustment — only fires when this campaign actually has
