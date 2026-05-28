@@ -94,25 +94,6 @@ function extractOffSection(md: string): string {
     : afterOff;
 }
 
-/**
- * Extract the Health Score table row for a given campaign name. Returns the
- * raw markdown line. Used to assert the operator-adjustment (-30) column.
- */
-function extractHealthRow(md: string, campaignName: string): string | null {
-  const healthIdx = md.indexOf('Campaign Health Score');
-  if (healthIdx < 0) return null;
-  const afterHealth = md.slice(healthIdx);
-  const nextSectionMatch = afterHealth.match(/\n## /);
-  const section = nextSectionMatch
-    ? afterHealth.slice(0, nextSectionMatch.index)
-    : afterHealth;
-  for (const line of section.split('\n')) {
-    if (line.startsWith('| ') && line.includes(campaignName) && line.includes('TikTok')) {
-      return line;
-    }
-  }
-  return null;
-}
 
 describe('aiReport TikTok status taxonomy (Phase 12.2.1 — ALG-01)', () => {
   // ---------- Test 1: BUDGET_EXCEED is NOT off ----------

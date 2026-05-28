@@ -1176,7 +1176,7 @@ export function generateAiReport({
       // the lookup is exact.
       const composedKey = `${c.storeId}::${c.platform}::${c.campaignId}`;
       const status = statusByKey.get(composedKey) ?? null;
-      const isOff = isStatusOff(status ?? undefined, c.platform);
+      const _isOff = isStatusOff(status ?? undefined, c.platform); // retained for future reference — not used in score
 
       // Daily series → trajectory.
       const dailyMap = dailyByKey.get(composedKey) ?? null;

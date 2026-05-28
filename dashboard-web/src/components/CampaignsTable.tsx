@@ -66,7 +66,7 @@ import type { DateRange } from '@/lib/types';
 import { buildDateRangeKey, getPreviousPeriod } from '@/lib/dateRange';
 import { roasLabel } from '@/lib/analytics';
 import { useCampaignTrueRevenue } from '@/lib/hooks/useCampaignTrueRevenue';
-import { CampaignsTableRow, isCampaignOff } from './CampaignsTableRow';
+import { CampaignsTableRow } from './CampaignsTableRow';
 import { CampaignDrawer } from './CampaignDrawer';
 import { AdsDrawer } from './AdsDrawer';
 import { readTabLocalState, syncTabLocalUrl } from '@/lib/urlState';
