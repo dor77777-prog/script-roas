@@ -24,8 +24,8 @@ export function ChartContainer({
   children: ReactElement;
   className?: string;
   style?: CSSProperties;
-  /** Chart pixel height OR the string "100%" for fluid sizing. */
-  height: number | string;
+  /** Chart pixel height OR "100%" for fluid sizing (template-literal type matches Recharts v3). */
+  height: number | `${number}%`;
 } & Omit<React.HTMLAttributes<HTMLDivElement>, 'style' | 'children'>) {
   const cssVars: CSSProperties = {
     // shadcn chart token surface. The right side must be a REAL CSS-var
