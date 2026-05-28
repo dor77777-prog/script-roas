@@ -113,12 +113,15 @@ html, body {
   text-rendering: optimizeLegibility;
 }
 
-/* Tabular numbers ON anywhere we tag with .tabular-nums (Tailwind's class)
-   PLUS for inputs by default — number alignment matters in this app. */
+/* Tabular numbers — uses the Rubik-first numeric chain so the tnum
+   feature actually resolves. Previously declared against Heebo
+   (which has no tnum) — columns lined up only because Heebo's digits
+   are coincidentally near-monowidth. */
 .tabular-nums,
 input[type="date"],
 input[type="number"] {
-  font-feature-settings: 'tnum', 'kern';
+  font-family: var(--font-rubik), var(--font-heebo), system-ui, sans-serif;
+  font-feature-settings: 'tnum', 'kern', 'zero', 'case';
   font-variant-numeric: tabular-nums;
 }
 

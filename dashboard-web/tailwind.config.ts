@@ -111,7 +111,8 @@ const config: Config = {
 
       fontFamily: {
         sans: [
-          'Heebo',
+          'var(--font-heebo)',
+          'var(--font-rubik)',
           'system-ui',
           '-apple-system',
           'BlinkMacSystemFont',
@@ -119,7 +120,23 @@ const config: Config = {
           'Arial',
           'sans-serif',
         ],
-        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+        // `font-numeric` is the new utility used by .tabular-nums. Heebo lacks
+        // a real `tnum` feature; Rubik has it. By giving the numeric class a
+        // Rubik-first chain we make the tnum declaration actually resolve to
+        // a tabular substitution instead of silently no-op-ing.
+        numeric: [
+          'var(--font-rubik)',
+          'var(--font-heebo)',
+          'system-ui',
+          'sans-serif',
+        ],
+        mono: [
+          'var(--font-geist-mono)',
+          'ui-monospace',
+          'SFMono-Regular',
+          'Menlo',
+          'monospace',
+        ],
       },
 
       fontSize: {
