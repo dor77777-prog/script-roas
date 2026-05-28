@@ -183,6 +183,18 @@ export function TodayLive({
     return () => clearInterval(t);
   }, []);
 
+  // Force a re-render when the operator changes the monthly goal in GoalTracker.
+  // GoalTracker writes to localStorage and dispatches `roas-goal-changed`; without
+  // listening here, the narrative line would stay stale until the next SWR poll
+  // (up to 60 seconds). This keeps it instantaneous.
+  const [, bumpGoalVersion] = useState(0);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handler = () => bumpGoalVersion(v => v + 1);
+    window.addEventListener('roas-goal-changed', handler);
+    return () => window.removeEventListener('roas-goal-changed', handler);
+  }, []);
+
   const today = todayInIsrael();
 
   // Operator-reported fix 2026-05-23: own SWR fetch for today-to-today so
