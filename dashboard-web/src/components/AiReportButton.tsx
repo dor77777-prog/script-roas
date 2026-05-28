@@ -174,7 +174,7 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
         >
           <div
             dir="rtl"
-            className="bg-elevated w-full sm:max-w-3xl sm:mx-4 rounded-t-2xl sm:rounded-2xl shadow-lg border border-line-subtle max-h-[90vh] flex flex-col"
+            className="bg-elevated w-full sm:max-w-3xl sm:mx-4 rounded-t-2xl sm:rounded-2xl shadow-elevated border border-line-subtle max-h-[90vh] flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}

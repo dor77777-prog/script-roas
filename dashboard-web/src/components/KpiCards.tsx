@@ -276,7 +276,7 @@ function KpiCard({
     <div
       className={cn(
         'group relative rounded-xl bg-elevated border border-line-subtle p-3.5 sm:p-5',
-        'shadow-sm hover:shadow-md hover:border-line',
+        'shadow-sm hover:shadow-cardHover hover:border-line',
         'transition-all duration-DEFAULT ease-out',
       )}
     >

@@ -260,7 +260,7 @@ export function HeroOverview({ data, filters }: Props) {
       className={cn(
         'relative overflow-hidden rounded-2xl',
         'bg-gradient-to-br from-primary-dark via-primary to-primary-light text-white',
-        'shadow-lg',
+        'shadow-elevated',
       )}
       style={{
         backgroundImage:
@@ -589,7 +589,7 @@ function RoasTrendChart({
                 return (
                   <div
                     dir="rtl"
-                    className="rounded-lg bg-ink/95 text-white px-3 py-2 text-xs shadow-lg tabular-nums"
+                    className="rounded-lg bg-ink/95 text-white px-3 py-2 text-xs shadow-elevated tabular-nums"
                   >
                     <div className="text-white/65 mb-1 text-[10px]">{fmtDateShort(d.date)}</div>
                     <div className="font-semibold">
