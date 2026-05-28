@@ -256,7 +256,7 @@ export function Dashboard() {
               filters={filters}
               setFilters={setFilters}
               activeTab={activeTab}
-              setActiveTab={setActiveTab}
+              setActiveTab={handleTabChange}
               onRefresh={() => mutate()}
               onOpenAiReport={() => setAiReportSignal(n => n + 1)}
             />

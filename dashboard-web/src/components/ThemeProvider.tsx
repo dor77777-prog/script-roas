@@ -2,6 +2,7 @@
 
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -50,10 +51,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     document.documentElement.setAttribute('data-theme', resolved);
   }, [resolved]);
 
-  const setChoice = (next: ThemeChoice) => {
+  const setChoice = useCallback((next: ThemeChoice) => {
     setChoiceState(next);
     writeStoredTheme(next);
-  };
+  }, []);
 
   const value = useMemo<ThemeContextValue>(
     () => ({ choice, resolved, setChoice }),

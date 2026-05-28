@@ -106,7 +106,7 @@
    Base — body styles, font features, selection.
    =========================================================================== */
 html, body {
-  background: #f6f9fc;
+  background: var(--surface-canvas);
   font-feature-settings: 'kern', 'ss01';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

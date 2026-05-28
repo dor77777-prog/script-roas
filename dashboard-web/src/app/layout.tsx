@@ -69,7 +69,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}
         />
       </head>
-      <body className="font-sans antialiased text-text-primary bg-background">
+      <body className="font-sans antialiased text-ink bg-canvas">
         <ThemeProvider>
           <ErrorBoundary>{children}</ErrorBoundary>
         </ThemeProvider>
