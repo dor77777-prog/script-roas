@@ -149,7 +149,7 @@ import { computeCampaignHealth, applyCohortAdjustmentOnce, type CampaignHealth }
 import { computeMultiMappingCohort } from './multiMappingCohort';
 import { detectProductCannibalization } from './cannibalizationDetection';
 import { analyzeCpmVsRoas, type DailyCpmRoasPoint } from './cpmRoasAnalysis';
-import { campaignKey } from './campaignKey';
+import { campaignKey } from './campaignProductMap';
 import type { Aggregated } from './campaignsAggregator';
 import type { DateRange } from './types';
 
@@ -304,7 +304,14 @@ export function buildHealthByKey(inputs: BuildHealthByKeyInputs): Map<string, Ca
 }
 ```
 
-**Important — the import paths.** `campaignKey` lives in `@/lib/campaignKey` (verify before writing — if it's instead exported from `campaignsAggregator`, adapt the import accordingly). All other imports are existing, verified Plan-1-and-earlier lib modules.
+**Pre-flight verified (2026-05-29):** All imports resolved.
+- `campaignKey` → `'./campaignProductMap'` (NOT `'./campaignKey'` — there is no such file)
+- `computeCampaignHealth`, `applyCohortAdjustmentOnce`, `CampaignHealth` → `'./campaignHealthScore'`
+- `computeMultiMappingCohort` → `'./multiMappingCohort'`
+- `detectProductCannibalization` → `'./cannibalizationDetection'`
+- `analyzeCpmVsRoas`, `DailyCpmRoasPoint` → `'./cpmRoasAnalysis'`
+- `Aggregated` → `'./campaignsAggregator'`
+- `DateRange` → `'./types'` (NOT `'./dateRange'` — CampaignsTable consistently imports from `./types`)
 
 - [ ] **Step 4: Run → pass (4/4)**
 
@@ -536,7 +543,6 @@ Locate the column-rendering loop in CampaignsTableRow. Each column is typically 
       width={64}
       height={20}
       className="inline-block"
-      ariaLabel={`ROAS trend for ${name}`}
     />
   ) : (
     <span className="text-ink-muted">—</span>
@@ -544,7 +550,7 @@ Locate the column-rendering loop in CampaignsTableRow. Each column is typically 
 </td>
 ```
 
-(Substitute `name` for whatever prop holds the campaign name. `Sparkline` lives at `dashboard-web/src/components/ui/Sparkline.tsx` — verify the exact prop names from its definition. The Plan-3 recon noted: `data: number[]`, `tone?: 'green'|'red'|'orange'|'blue'|'gray'`, `width?: number`, `height?: number`, `className?: string`.)
+**Pre-flight verified (2026-05-29):** `Sparkline` has exactly these props: `data: number[]`, `tone?: 'green'|'red'|'orange'|'blue'|'gray'`, `width?: number`, `height?: number`, `className?: string`. There is NO `ariaLabel` prop — the component hardcodes `aria-label="טרנד"` internally. Do NOT add an `ariaLabel` prop to the call site; if per-row labels are wanted later, that's a follow-up enhancement to the `Sparkline` primitive (out of scope for Plan 4a).
 
 Also add a matching `<th>` header in the table's header row inside CampaignsTable. Find the existing `<th>`s (or equivalent header cells) and insert a new one labeled "מגמת ROAS" (or just leave blank for an icon-style header — operator preference).
 
