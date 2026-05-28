@@ -309,10 +309,10 @@ cron-live's `refresh-effective-status` step UPSERTs a placeholder row for TODAY 
 | **attributionClarity** | 20% | `trust.score` (0-100) של click-id coverage. Google ללא attribution → 50 (neutral). |
 
 ### 7.4 Operator adjustment
-`+15` אם מסומן optimized; `−30` אם `effective_status` = כבוי.
+~~`+15` אם מסומן optimized; `−30` אם `effective_status` = כבוי.~~ **הוסר ב-Phase 14** — ראה §7.8.
 
 ### 7.5 ציון סופי + grade
-`score = Σ(component × weight) + operatorAdj` clamped ל-[0,100].
+`score = Σ(component × weight)` clamped ל-[0,100].
 - A ≥ 75
 - B ≥ 60
 - C ≥ 45
@@ -321,6 +321,23 @@ cron-live's `refresh-effective-status` step UPSERTs a placeholder row for TODAY 
 
 ### 7.6 Tests
 39 vitest tests ב-`dashboard-web/src/lib/__tests__/campaignHealthScore.test.ts`. מכסים: shape, insufficient gate, source-of-truth priority, trust modulation, volume tiers, trajectory mapping, attribution clarity, operator adjustments, realistic scenarios.
+
+### Score purity — Phase 14 (2026-05-28)
+
+`computeCampaignHealth` is a pure function of campaign data. Two flags that
+previously biased the score were removed:
+- `optimized=true` previously added +15 — REMOVED.
+- `isCurrentlyOff=true` previously subtracted 30 — REMOVED.
+
+Both flags survive as visual annotations on each `CampaignsTable` row (the
+"סמן כאופטימיזציה" checkbox + cloud-sync via `roas-campaign-optimized-changed`
+event, and the off-chip from `isCampaignOff(...)`). They no longer feed into
+`HealthScoreInputs` or `HealthScoreComponents`; ticking the operator mark is
+now a passive annotation that does not move the score number.
+
+The cohort adjustment (`applyCohortAdjustmentOnce`) is data-derived
+(rank, cannibalization risk) and continues to apply downstream of
+`computeCampaignHealth` exactly as before.
 
 ### 7.7 צריכה ב-UI
 - `CampaignsTableRow` (עמודה "ציון") — באמצעות `HealthScoreBadge` (popover drilldown).
