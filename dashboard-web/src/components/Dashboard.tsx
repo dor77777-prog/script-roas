@@ -31,6 +31,7 @@ import { CampaignsTable } from './CampaignsTable';
 import { InsightsBoard } from './InsightsBoard';
 import { GoalTracker } from './GoalTracker';
 import { AiReportButton } from './AiReportButton';
+import { TabHeader } from './TabHeader';
 import { HeroOverview } from './HeroOverview';
 import { PnLBreakdown } from './PnLBreakdown';
 import { BillingSettings } from './BillingSettings';
@@ -388,15 +389,12 @@ function HomeTab({
       {/* ===== Hero — editorial story + chart-as-background + floating KPIs ===== */}
       <HeroOverview data={data} filters={filters} />
 
-      {/* ===== Filters — quiet, just controls. AI-report button on the right. ===== */}
-      <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
-        <div className="flex items-center gap-2 text-xs sm:text-sm text-text-secondary">
-          <CalendarDays size={14} className="text-text-muted" />
-          <span>שנה טווח או חנות לעדכון כל המסך</span>
-        </div>
-        <AiReportButton data={data} filters={filters} openSignal={aiReportSignal} />
-      </div>
-      <Filters filters={filters} stores={data.stores} onChange={setFilters} />
+      <TabHeader
+        title="בית"
+        description="שנה טווח או חנות לעדכון כל המסך."
+        filterSlot={<Filters filters={filters} stores={data.stores} onChange={setFilters} />}
+        actionSlot={<AiReportButton data={data} filters={filters} openSignal={aiReportSignal} />}
+      />
 
       {/* ===== Goal tracker — monthly revenue target with pacing + forecast.
                 Intentionally GLOBAL: ignores both `filters.store` and
