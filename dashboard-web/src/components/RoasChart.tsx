@@ -69,15 +69,15 @@ export function RoasChart({ data, stores, rows, bare = false }: Props) {
                 className="inline-block w-3.5 h-[3px] rounded-sm shrink-0"
                 style={{ backgroundColor: color }}
               />
-              <span className={isPrimary ? 'font-semibold text-text-primary' : 'text-text-secondary'}>
+              <span className={isPrimary ? 'font-semibold text-ink' : 'text-ink-secondary'}>
                 {s}
               </span>
             </span>
           );
         })}
         <span className="inline-flex items-center gap-1.5 ms-auto sm:ms-2">
-          <span className="inline-block w-3 h-[2px] border-t border-dashed border-roas-green/70 shrink-0" />
-          <span className="text-text-muted">יעד 3.0</span>
+          <span className="inline-block w-3 h-[2px] border-t border-dashed border-status-green/70 shrink-0" />
+          <span className="text-ink-muted">יעד 3.0</span>
         </span>
       </div>
 
@@ -208,9 +208,9 @@ export function RoasChart({ data, stores, rows, bare = false }: Props) {
   if (bare) return <div className="p-3 sm:p-5">{chart}</div>;
 
   return (
-    <section className="rounded-xl bg-surface border border-border p-3 sm:p-5 shadow-card">
-      <h2 className="flex items-center gap-2 text-sm sm:text-base font-semibold text-text-primary mb-3 sm:mb-4">
-        <TrendingUp size={18} className="text-text-secondary" />
+    <section className="rounded-xl bg-elevated border border-line p-3 sm:p-5 shadow-sm">
+      <h2 className="flex items-center gap-2 text-sm sm:text-base font-semibold text-ink mb-3 sm:mb-4">
+        <TrendingUp size={18} className="text-ink-secondary" />
         מגמת ROAS לאורך זמן
       </h2>
       {chart}
