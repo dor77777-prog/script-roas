@@ -69,9 +69,11 @@
   --text-subtle:    oklch(45% 0.015 240);
 
   /* Borders */
-  --border-default: oklch(30% 0.01 240);
-  --border-subtle:  oklch(25% 0.01 240);
-  --border-strong:  oklch(40% 0.01 240);
+  /* --border-subtle is decorative-only in dark mode (fails WCAG 1.4.11).
+     Use --border-default for interactive element outlines. */
+  --border-subtle:  oklch(28% 0.01 240);
+  --border-default: oklch(35% 0.01 240);
+  --border-strong:  oklch(45% 0.01 240);
 
   /* Accent — slightly desaturated for dark */
   --accent:    oklch(65% 0.16 260);

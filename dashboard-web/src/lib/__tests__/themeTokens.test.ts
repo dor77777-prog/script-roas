@@ -68,7 +68,7 @@ describe('OKLCH theme tokens — light + dark parity', () => {
     ];
     for (const block of blocks) {
       for (const tok of REQUIRED_TOKENS) {
-        const re = new RegExp(`${tok}\\s*:\\s*([^;]+);`);
+        const re = new RegExp(`(?<![\\w-])${tok}\\s*:\\s*([^;]+);`);
         const m = block.match(re);
         expect(m, `value missing for ${tok}`).not.toBeNull();
         expect(m![1], `${tok} should use oklch()`).toMatch(/oklch\s*\(/);
