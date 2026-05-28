@@ -703,10 +703,11 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
       />
       <aside
         dir="rtl"
+        style={{ viewTransitionName: 'drawer-panel' as never }}
         className={cn(
           'relative bg-elevated max-w-full',
           'h-full overflow-y-auto',
-          'shadow-elevated animate-fade-in-up',
+          'shadow-elevated',
           // Side-drawer mode: 640px panel anchored to the start (right in RTL)
           // Fullscreen mode: stretches edge-to-edge so charts + tables breathe
           !isFullscreen && 'w-full sm:w-[min(640px,100vw)] ml-0 sm:ms-auto',

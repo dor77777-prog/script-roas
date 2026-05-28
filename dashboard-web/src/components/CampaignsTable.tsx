@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import {
   AlertCircle,
@@ -1966,9 +1966,22 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     today={today}
                     onToggleOptimized={onToggleOptimized}
                     onDrillCampaign={(campaignId, platform, storeId) => {
-                      setDrillCampaignId(campaignId);
-                      setDrillPlatform(platform);
-                      setDrillStoreId(storeId);   // FIX-03 (5.2.2.1)
+                      const doc = document as typeof document & {
+                        startViewTransition?: (cb: () => void) => { finished: Promise<void> };
+                      };
+                      if (typeof doc.startViewTransition === 'function') {
+                        doc.startViewTransition(() => {
+                          startTransition(() => {
+                            setDrillCampaignId(campaignId);
+                            setDrillPlatform(platform);
+                            setDrillStoreId(storeId);   // FIX-03 (5.2.2.1)
+                          });
+                        });
+                      } else {
+                        setDrillCampaignId(campaignId);
+                        setDrillPlatform(platform);
+                        setDrillStoreId(storeId);   // FIX-03 (5.2.2.1)
+                      }
                     }}
                     onDrillAd={(set) => setAdDrill(set)}
                   />

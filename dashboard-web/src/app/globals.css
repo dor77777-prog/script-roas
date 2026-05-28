@@ -226,3 +226,15 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   animation-duration: 180ms;
   animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }
+
+/* Drawer entrance morph — used by the View Transitions API call in
+   CampaignsTable when opening CampaignDrawer. The fixed overlay
+   inherits the default cross-fade; the panel itself gets the matched
+   element transition via view-transition-name. */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(drawer-panel),
+  ::view-transition-new(drawer-panel) {
+    animation-duration: 220ms;
+    animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+}
