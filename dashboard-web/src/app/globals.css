@@ -208,3 +208,13 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Focus Mode — dims chrome for client screen-shares. Toggled by Cmd+\. */
+[data-focus-mode="on"] aside[aria-label="ניווט ראשי"],
+[data-focus-mode="on"] header[role="banner"] {
+  opacity: 0.3;
+  transition: opacity 200ms ease-out;
+}
+[data-focus-mode="on"] [data-focus-hide="true"] {
+  display: none;
+}
