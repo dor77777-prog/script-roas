@@ -218,3 +218,11 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 [data-focus-mode="on"] [data-focus-hide="true"] {
   display: none;
 }
+
+/* View Transition tuning for tab switches. The default VT animation
+   is a cross-fade; we shorten it so transitions feel snappy. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 180ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}

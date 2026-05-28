@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { startTransition, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import useSWR, { useSWRConfig } from 'swr';
 import {
@@ -85,6 +85,29 @@ const TABS: TabDef<TabKey>[] = [
   { key: 'detail',    label: 'פירוט',    icon: <Table size={16} /> },
 ];
 
+/**
+ * Wraps tab-switch state updates in the browser's native View Transitions
+ * API (Chromium 111+, Firefox 132+, Safari 18+ — ~78% global support as of
+ * 2026-05). Falls back to a plain state update on unsupported browsers so
+ * the dashboard never breaks. Inside the VT callback the React state
+ * update is wrapped in startTransition so React doesn't tear during the
+ * snapshot the browser takes for the cross-fade.
+ */
+function useTabTransition() {
+  return (next: TabKey, setActiveTab: (k: TabKey) => void) => {
+    const doc = document as typeof document & {
+      startViewTransition?: (cb: () => void) => { finished: Promise<void> };
+    };
+    if (typeof doc.startViewTransition === 'function') {
+      doc.startViewTransition(() => {
+        startTransition(() => setActiveTab(next));
+      });
+    } else {
+      setActiveTab(next);
+    }
+  };
+}
+
 export function Dashboard() {
   // Initial state — read from URL search params on first mount so a refresh
   // or bookmark restores the user's view. Falls back to defaults when no
@@ -101,6 +124,8 @@ export function Dashboard() {
       window.location.search,
     ).tab;
   });
+  const startTabTransition = useTabTransition();
+  const handleTabChange = (next: TabKey) => startTabTransition(next, setActiveTab);
   const [filters, setFilters] = useState<F>(() => {
     const defaults = {
       preset: initialPreset,
@@ -237,7 +262,7 @@ export function Dashboard() {
       />
 
       {/* Tabs only render once data is in — keeps initial paint clean */}
-      {data && <TabNav tabs={TABS} active={activeTab} onChange={setActiveTab} />}
+      {data && <TabNav tabs={TABS} active={activeTab} onChange={handleTabChange} />}
 
       <main className="max-w-7xl mx-auto px-3 sm:px-4 md:px-8 py-4 sm:py-6 md:py-8 space-y-4 sm:space-y-5">
         {/* Two error sources: (a) SWR threw (network failure, malformed JSON),
