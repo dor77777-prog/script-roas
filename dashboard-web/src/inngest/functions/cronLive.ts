@@ -16,16 +16,16 @@
  *   2. **Free-tier execution budget (05.6-RESEARCH.md §Pitfall 4).** Meta
  *      Marketing Insights aggregates hourly upstream — polling every 15min
  *      for the same data wastes 4× the API calls and inflates Inngest's
- *      run-and-step counter. Total budget with this skip:
- *
- *        cron-live: 2 step.run + 1 function = 3 execs/run
- *        × 3 stores × 96 runs/day × 30 days  = 25,920/month
- *        + cron-daily forecast               =  ~  540/month
- *        + event triggers (sync-now/backfill) ~  500/month
- *        = ~ 27,000/month = 54% of 50K free tier (46% headroom).
- *
- *      If we also polled Meta + Google on live, that doubles to ≥50K/month —
- *      blowing the cap inside 30 days.
+ *      run-and-step counter. Original budget assumed 2 step.run + 1 function
+ *      = 3 execs/run. After Phase 13.4 (memoised SELECTs for non-idempotent
+ *      reads — see lines 1082-1102) and Phase 13.9 (cron-live-heavy split),
+ *      the actual cron-live shape is ~7 step.run + 1 function ≈ 8 execs/run.
+ *      Combined with cron-live-heavy + cron-daily + event triggers we sit
+ *      above the original 50K free-tier ceiling; the per-step pattern is
+ *      retained because non-idempotent reads inside one big step.run are
+ *      the sharper risk (P0-E in the 2026-05-24 audit). Re-tightening
+ *      should target step.run count per cron-live run, not adding more
+ *      "atomic" mega-steps.
  *
  *   3. **Cross-day refunds (Phase 05.2.3.0).** Shopify revenue is the variable
  *      signal — orders and refunds within a 72h cross-day window mutate the
