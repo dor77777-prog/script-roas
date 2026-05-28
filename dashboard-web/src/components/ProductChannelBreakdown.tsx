@@ -76,19 +76,19 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
   const fbPct = Math.round(exclusiveFacebookShare * 100);
   return (
     <section>
-      <h3 className="text-sm font-semibold text-text-primary inline-flex items-center gap-1.5 mb-2">
-        <Package size={14} className="text-text-secondary" />
+      <h3 className="text-sm font-semibold text-ink inline-flex items-center gap-1.5 mb-2">
+        <Package size={14} className="text-ink-secondary" />
         <span title="סיגנל זה משלים את ה-trust chip. הוא מודד 'מאיפה הגיעו הקונים של המוצרים המשויכים' גם כש-utm_id חסר.">
           מכירות לפי ערוץ של המוצרים המשויכים
         </span>
       </h3>
-      <div className="rounded-xl border border-borderSubtle bg-surfaceMuted/30 p-3 space-y-3">
+      <div className="rounded-xl border border-line-subtle bg-elevated2/30 p-3 space-y-3">
         {!chipHidden && (
           <div
             title="current state, not date-versioned"
-            className="rounded-md bg-gray-50 border border-gray-200 px-2.5 py-1.5 text-[11px] text-text-muted flex items-center gap-1.5"
+            className="rounded-md bg-gray-50 border border-gray-200 px-2.5 py-1.5 text-[11px] text-ink-muted flex items-center gap-1.5"
           >
-            <Info size={12} className="shrink-0 text-text-subtle" />
+            <Info size={12} className="shrink-0 text-ink-subtle" />
             <span className="leading-relaxed">
               ה-product↔campaign mapping מבוסס על המיפוי הנוכחי שלך. שינוי המיפוי משפיע על נתונים היסטוריים בדיעבד.
             </span>
@@ -99,7 +99,7 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
                 window.sessionStorage.setItem(PRODUCT_MAP_CHIP_KEY, '1');
                 setChipHidden(true);
               }}
-              className="ms-auto shrink-0 rounded p-0.5 text-text-subtle hover:bg-gray-100 hover:text-text-secondary transition-colors"
+              className="ms-auto shrink-0 rounded p-0.5 text-ink-subtle hover:bg-gray-100 hover:text-ink-secondary transition-colors"
             >
               <X size={12} />
             </button>
@@ -107,19 +107,19 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
         )}
 
         {/* Summary line — total orders + CAD */}
-        <div className="text-[12px] text-text-secondary tabular-nums">
+        <div className="text-[12px] text-ink-secondary tabular-nums">
           {total} הזמנות של מוצרים משויכים · CAD {breakdown.totalRevenue.toFixed(0)} סה&quot;כ
         </div>
 
         {/* 5-segment source breakdown bar (Phase 05.7.9 — added TikTok). */}
         <div className="space-y-1">
-          <div className="flex justify-between text-[11px] text-text-secondary tabular-nums">
+          <div className="flex justify-between text-[11px] text-ink-secondary tabular-nums">
             <span>
               פייסבוק: {fb} · גוגל: {google} · טיקטוק: {tiktok} · ישיר: {direct} · אחר: {other}
             </span>
           </div>
-          <div className="h-2.5 rounded-full bg-surfaceMuted overflow-hidden flex">
-            <div className="h-full bg-roas-blue"   style={{ width: `${(fb / total) * 100}%` }} />
+          <div className="h-2.5 rounded-full bg-elevated2 overflow-hidden flex">
+            <div className="h-full bg-status-blue"   style={{ width: `${(fb / total) * 100}%` }} />
             <div className="h-full bg-amber-500"   style={{ width: `${(google / total) * 100}%` }} />
             <div className="h-full bg-pink-500"    style={{ width: `${(tiktok / total) * 100}%` }} />
             <div className="h-full bg-text-muted"  style={{ width: `${(direct / total) * 100}%` }} />
@@ -144,7 +144,7 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
             the green ≥60% chip on a phantom signal — recommending
             budget increase off attribution noise. */}
         {exclusiveFacebookShare >= 0.6 && (
-          <div className="rounded-md bg-roas-greenBg/50 border border-roas-green/30 text-roas-green px-2.5 py-2 text-[11px] leading-relaxed">
+          <div className="rounded-md bg-status-greenBg/50 border border-status-green/30 text-status-green px-2.5 py-2 text-[11px] leading-relaxed">
             <strong>💡 </strong>
             {fbPct}% מהמכירות הגיעו מפייסבוק
             {' → '}
