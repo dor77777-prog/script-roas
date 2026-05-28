@@ -78,11 +78,11 @@ type Props = {
 };
 
 const TONE_CHIP: Record<string, string> = {
-  red:    'bg-roas-redBg text-roas-red',
-  orange: 'bg-roas-orangeBg text-roas-orange',
-  green:  'bg-roas-greenBg text-roas-green',
-  blue:   'bg-roas-blueBg text-roas-blue',
-  gray:   'bg-surfaceMuted text-text-muted',
+  red:    'bg-status-redBg text-status-red',
+  orange: 'bg-status-orangeBg text-status-orange',
+  green:  'bg-status-greenBg text-status-green',
+  blue:   'bg-status-blueBg text-status-blue',
+  gray:   'bg-elevated2 text-ink-muted',
 };
 
 export function HeroOverview({ data, filters }: Props) {
@@ -260,7 +260,7 @@ export function HeroOverview({ data, filters }: Props) {
       className={cn(
         'relative overflow-hidden rounded-2xl',
         'bg-gradient-to-br from-primary-dark via-primary to-primary-light text-white',
-        'shadow-elevated',
+        'shadow-lg',
       )}
       style={{
         backgroundImage:
@@ -589,7 +589,7 @@ function RoasTrendChart({
                 return (
                   <div
                     dir="rtl"
-                    className="rounded-lg bg-text-primary/95 text-white px-3 py-2 text-xs shadow-elevated tabular-nums"
+                    className="rounded-lg bg-ink/95 text-white px-3 py-2 text-xs shadow-lg tabular-nums"
                   >
                     <div className="text-white/65 mb-1 text-[10px]">{fmtDateShort(d.date)}</div>
                     <div className="font-semibold">
