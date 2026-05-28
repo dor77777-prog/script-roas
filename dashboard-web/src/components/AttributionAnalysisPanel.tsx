@@ -22,10 +22,10 @@ type Props = {
 
 export function AttributionAnalysisPanel({ analysis, spend, value }: Props) {
   const trustBg =
-    analysis.trust.level === 'high'    ? 'bg-roas-greenBg/50 border-roas-green/30 text-roas-green'
+    analysis.trust.level === 'high'    ? 'bg-status-greenBg/50 border-status-green/30 text-status-green'
   : analysis.trust.level === 'medium'  ? 'bg-amber-50 border-amber-300 text-amber-800'
-  : analysis.trust.level === 'unknown' ? 'bg-surfaceMuted border-borderSubtle text-text-secondary'
-  :                                      'bg-roas-redBg/50 border-roas-red/30 text-roas-red';
+  : analysis.trust.level === 'unknown' ? 'bg-elevated2 border-line-subtle text-ink-secondary'
+  :                                      'bg-status-redBg/50 border-status-red/30 text-status-red';
 
   const detRoas = spend > 0
     ? analysis.deterministicRevenue / spend
@@ -36,8 +36,8 @@ export function AttributionAnalysisPanel({ analysis, spend, value }: Props) {
 
   return (
     <section>
-      <h3 className="text-sm font-semibold text-text-primary inline-flex items-center gap-1.5 mb-2">
-        <TrendingUp size={14} className="text-text-secondary" />
+      <h3 className="text-sm font-semibold text-ink inline-flex items-center gap-1.5 mb-2">
+        <TrendingUp size={14} className="text-ink-secondary" />
         ניתוח attribution
       </h3>
       <div className={cn('rounded-xl border p-3 space-y-3', trustBg)}>
@@ -51,7 +51,7 @@ export function AttributionAnalysisPanel({ analysis, spend, value }: Props) {
         {analysis.coverageExceedsClamp && (
           <div
             role="alert"
-            className="rounded-md bg-roas-redBg border border-roas-red/40 text-roas-red px-3 py-2 flex items-start gap-2 text-[11px] leading-relaxed"
+            className="rounded-md bg-status-redBg border border-status-red/40 text-status-red px-3 py-2 flex items-start gap-2 text-[11px] leading-relaxed"
           >
             <AlertTriangle size={14} className="shrink-0 mt-px" />
             <div>
