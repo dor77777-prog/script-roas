@@ -102,9 +102,18 @@ export function reconcileWindow(input: {
     const campMeta = sum(cRows.filter(c => c.platform === 'Meta').map(c => c.spend));
     const campGoogle = sum(cRows.filter(c => c.platform === 'Google').map(c => c.spend));
     const campTikTok = sum(cRows.filter(c => c.platform === 'TikTok').map(c => c.spend));
+    // Meta/Google: data_daily platform spend is the campaign-sum (the per-campaign
+    // breakdown is complete), so a two-sided match is required.
     if (!withinTolerance(dataMeta, campMeta)) out.push({ label: `INV-7 Meta spend ${tag}`, detail: `data_daily ${dataMeta} vs campaigns_daily ${campMeta}` });
     if (!withinTolerance(dataGoogle, campGoogle)) out.push({ label: `INV-7 Google spend ${tag}`, detail: `data_daily ${dataGoogle} vs campaigns_daily ${campGoogle}` });
-    if (!withinTolerance(dataTikTok, campTikTok)) out.push({ label: `INV-7 TikTok spend ${tag}`, detail: `data_daily ${dataTikTok} vs campaigns_daily ${campTikTok}` });
+    // TikTok: data_daily.tt_spend is the AUTHORITATIVE account-level total (what TikTok
+    // billed); campaigns_daily is a per-campaign breakdown that TikTok systematically
+    // UNDER-reports (spend on deleted/unattributed campaigns lands in the account total
+    // but not the per-campaign report — e.g. 2026-05-21 uzoshop: account 23.46 vs 1
+    // campaign 11.10). So `Σcampaigns ≤ data_daily` is EXPECTED for TikTok and must NOT
+    // flag. Only flag when campaigns EXCEED data_daily beyond tolerance (over-report /
+    // double-count — a genuine bug). data_daily stays the source of truth for ROAS/profit.
+    if (campTikTok > dataTikTok && !withinTolerance(dataTikTok, campTikTok)) out.push({ label: `INV-7 TikTok spend ${tag}`, detail: `data_daily(account-level) ${dataTikTok} vs campaigns_daily(per-campaign) ${campTikTok} — campaigns exceed account total (over-report)` });
 
     // INV-9: Σ products NET revenue ≈ data_daily revenue (both net of refunds). Fall back to gross only when net is absent.
     //

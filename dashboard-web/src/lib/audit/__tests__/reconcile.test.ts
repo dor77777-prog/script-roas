@@ -120,4 +120,17 @@ describe('reconcileWindow', () => {
     const v = reconcileWindow({ dataRows: d, productRows: p, campaignRows: c, ordersRows: o });
     expect(v.filter(x => x.label.includes('INV-7 Meta spend')).length).toBe(2); // both A and B fire
   });
+  it('does NOT flag TikTok when campaigns_daily is below data_daily (incomplete per-campaign breakdown)', () => {
+    // data_daily.tt = account-level 23.46; campaigns = per-campaign 11.10 (TikTok under-reports). Expected, no flag.
+    const d = [{ date: '2026-05-21', storeName: 'uzoshop', fbSpend: 0, gaSpend: 0, ttSpend: 23.46, totalSpend: 23.46, revenue: 100, roas: 100 / 23.46 }];
+    const c = [{ date: '2026-05-21', storeName: 'uzoshop', platform: 'TikTok', spend: 11.1 }];
+    const v = reconcileWindow({ dataRows: d, productRows: [], campaignRows: c, ordersRows: [] });
+    expect(v.some(x => x.label.includes('INV-7 TikTok'))).toBe(false);
+  });
+  it('DOES flag TikTok when campaigns_daily EXCEEDS data_daily (over-report / double-count)', () => {
+    const d = [{ date: '2026-05-21', storeName: 'uzoshop', fbSpend: 0, gaSpend: 0, ttSpend: 11.1, totalSpend: 11.1, revenue: 100, roas: 100 / 11.1 }];
+    const c = [{ date: '2026-05-21', storeName: 'uzoshop', platform: 'TikTok', spend: 23.46 }];
+    const v = reconcileWindow({ dataRows: d, productRows: [], campaignRows: c, ordersRows: [] });
+    expect(v.some(x => x.label.includes('INV-7 TikTok'))).toBe(true);
+  });
 });
