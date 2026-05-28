@@ -60,15 +60,20 @@ This is `from-primary` with an arbitrary opacity `/[0.06]` in bracket notation �
 + className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4 bg-gradient-to-br from-accent/[0.06] via-elevated to-elevated relative"
 ```
 
-**Special handling — `SOURCE_COLOR` map (lines 55-62)**
+**Special handling — `SOURCE_COLOR` map (lines 55-63)**
 
-```ts
-const SOURCE_COLOR: Record<CostSource, string> = {
-  // text-blue-700, text-purple-700, text-amber-700 — raw Tailwind palette
-};
-```
+Pre-flight (2026-05-29) verified the map has 6 entries. **3 are Tailwind base palette (KEEP), 3 are legacy tokens (MIGRATE)**:
 
-These are intentional categorical colors for cost sources (not legacy tokens). LEAVE AS-IS. Per Plan 2 SSOT non-negotiables: Tailwind base palette (`text-blue-*`, `text-purple-*`, `text-amber-*`, `text-emerald-*`, etc.) stays.
+| Entry | Current value | Action |
+|-------|---------------|--------|
+| (one of meta/google/tiktok) | `text-blue-700` | KEEP (Tailwind base) |
+| (one of meta/google/tiktok) | `text-purple-700` | KEEP (Tailwind base) |
+| (one of meta/google/tiktok) | `text-amber-700` | KEEP (Tailwind base) |
+| `'shopify-plan'` | `text-primary` | MIGRATE → `text-accent` |
+| `'usage'` | `text-roas-orange` | MIGRATE → `text-status-orange` |
+| `'one-off'` / `'other'` | `text-text-secondary` | MIGRATE → `text-ink-secondary` |
+
+The 3 base-palette entries are intentional categorical colors for platforms; the 3 legacy-token entries follow Plan 2 SSOT. Migrate the latter; leave the former.
 
 ---
 
@@ -233,7 +238,7 @@ What changed:
 
 - [ ] **Step 2: Apply migration map** ONLY within that function body. Don't touch AnalysisTab/DetailTab/HomeTab/CampaignsTab/ProductsTab.
 
-  Expected: ~2 token edits.
+  Pre-flight (2026-05-29) noted: the PnLTab region contains 0 legacy tokens — the wrapper uses utility classes only (`space-y-4 sm:space-y-5 animate-fade-in-up`, etc.) and delegates all chrome to its children. Task 4 may be a no-op. Confirm by pre-scan; if 0 matches, skip Steps 3+4 (no commit) and note in Task 5's report.
 
 - [ ] **Step 3: Verify region clean grep + tsc + tests + build.**
 

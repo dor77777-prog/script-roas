@@ -126,7 +126,11 @@ In the row JSX:
 
 Place the new column right after the store-name column and before the spend columns — matches the CampaignsTable Sparkline column placement from Plan 4a.
 
-If `useMemo` isn't already imported in DetailTable, add it from React.
+**Pre-flight (2026-05-29):** DetailTable currently has ZERO React imports — it uses Next.js implicit JSX. The `useMemo` import must be added explicitly as the first or second import line:
+
+```tsx
+import { useMemo } from 'react';
+```
 
 ### Step 5 — Verify
 
@@ -160,13 +164,25 @@ git commit -m "feat(detail): DetailTable tokens + theme-aware spend-without-reve
 
   Expected: ~4 edits — typically the inline wrapper `rounded-xl bg-surface border border-border shadow-card overflow-hidden` around `<DetailTable bare />`.
 
-- [ ] **Step 3: Verify region clean + tsc + tests + build.**
+- [ ] **Step 3: Update the SectionIntro description text**
 
-- [ ] **Step 4: Commit**
+Pre-flight (2026-05-29) noted: the DetailTab region's `<SectionIntro description="...">` currently includes the string `"ROAS שחור עם '0'"` (literally "black ROAS with '0'") — this describes the OLD `bg-black` alarm cell. After Task 1 swaps to `bg-status-red`, that copy is stale.
+
+Update the description to say `"ROAS אדום עם '0'"` (red instead of black). Use Bash to find the exact context:
+
+```bash
+grep -n "ROAS שחור\|שחור עם" /Users/dorperetz/script-roas/dashboard-web/src/components/Dashboard.tsx
+```
+
+Apply the literal substitution `שחור` → `אדום` in the matched line.
+
+- [ ] **Step 4: Verify region clean + tsc + tests + build.**
+
+- [ ] **Step 5: Commit**
   ```bash
   cd /Users/dorperetz/script-roas
   git add dashboard-web/src/components/Dashboard.tsx
-  git commit -m "refactor(detail): Dashboard.tsx DetailTab wrapper token migration"
+  git commit -m "refactor(detail): Dashboard.tsx DetailTab wrapper tokens + SectionIntro red-alarm copy"
   ```
 
 ---
