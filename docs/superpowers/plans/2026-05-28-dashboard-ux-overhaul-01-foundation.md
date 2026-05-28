@@ -513,7 +513,7 @@ git commit -m "feat(foundation): wire OKLCH CSS-var tokens into tailwind.config 
 
 - [ ] **Step 1: Add the three fonts to layout.tsx**
 
-Find the existing `next/font/google` import in `dashboard-web/src/app/layout.tsx`. Add Rubik and Geist Mono alongside Heebo.
+Find the existing `next/font/google` import in `dashboard-web/src/app/layout.tsx`. Add Rubik and Geist_Mono alongside Heebo.
 
 If today's layout.tsx loads Heebo like:
 
@@ -525,8 +525,7 @@ const heebo = Heebo({ subsets: ['hebrew', 'latin'], variable: '--font-heebo' });
 Change it to:
 
 ```ts
-import { Heebo, Rubik } from 'next/font/google';
-import localFont from 'next/font/local';
+import { Heebo, Rubik, Geist_Mono } from 'next/font/google';
 
 const heebo = Heebo({
   subsets: ['hebrew', 'latin'],
@@ -547,14 +546,12 @@ const rubik = Rubik({
   display: 'swap',
 });
 
-// Geist Mono — for IDs, hashes, technical strings. Self-hosted via
-// `next/font/local` because Vercel doesn't ship it on Google Fonts.
-const geistMono = localFont({
-  src: [
-    { path: '../fonts/GeistMono-Regular.woff2', weight: '400', style: 'normal' },
-    { path: '../fonts/GeistMono-Medium.woff2',  weight: '500', style: 'normal' },
-    { path: '../fonts/GeistMono-SemiBold.woff2', weight: '600', style: 'normal' },
-  ],
+const geistMono = Geist_Mono({
+  // Geist Mono is on Google Fonts (added in 2024). next/font/google
+  // handles subset loading, hashing, and CSS variable wiring just like
+  // Heebo and Rubik above. No manual woff2 vendoring needed.
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
   variable: '--font-geist-mono',
   display: 'swap',
 });
@@ -566,22 +563,9 @@ Apply the variables to the root element. Find the `<html>` tag in the layout's r
 <html lang="he" dir="rtl" className={`${heebo.variable} ${rubik.variable} ${geistMono.variable}`}>
 ```
 
-- [ ] **Step 2: Drop the Geist Mono files into the repo**
+- [ ] **Step 2: (no-op — Google-hosted, no vendoring needed)**
 
-```bash
-mkdir -p dashboard-web/src/fonts
-# Download from https://github.com/vercel/geist-font/releases or vendor
-# the woff2 files manually. Three weights required:
-#   GeistMono-Regular.woff2
-#   GeistMono-Medium.woff2
-#   GeistMono-SemiBold.woff2
-```
-
-Verify the three files exist:
-
-```bash
-ls -la dashboard-web/src/fonts/GeistMono-*.woff2
-```
+Earlier drafts of this plan called for manually downloading Geist Mono woff2 files into `dashboard-web/src/fonts/`. That's no longer necessary — `next/font/google` ships Geist Mono. Step 1 is sufficient on its own; skip this step.
 
 - [ ] **Step 3: Update tailwind.config.ts font chain**
 
@@ -657,8 +641,8 @@ Expected: dashboard renders, numeric cells use Rubik.
 
 ```bash
 git add dashboard-web/src/app/layout.tsx dashboard-web/tailwind.config.ts \
-        dashboard-web/src/app/globals.css dashboard-web/src/fonts/
-git commit -m "feat(foundation): add Rubik (real tnum) + Geist Mono; .tabular-nums now resolves to a real tabular substitution"
+        dashboard-web/src/app/globals.css
+git commit -m "feat(foundation): add Rubik (real tnum) + Geist Mono via next/font/google; .tabular-nums now resolves to a real tabular substitution"
 ```
 
 ---
