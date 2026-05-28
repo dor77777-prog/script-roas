@@ -96,7 +96,7 @@ type ScopeDescriptor = {
 const SCOPE_ALL: ScopeDescriptor = {
   scope: 'all',
   buttonLabel: 'איפוס מלא — מחק את כל הנתונים כולל הוצאות ידניות',
-  buttonClass: 'bg-red-600 hover:bg-red-500 disabled:bg-red-800',
+  buttonClass: 'bg-status-red hover:bg-status-red/90 disabled:bg-status-red/40',
   modalTitle: 'איפוס מלא של כל הנתונים',
   modalWarning:
     'פעולה זו תמחק את כל נתוני הדשבורד, כולל ההוצאות הידניות שהוזנו ידנית. אין צעד אחורה.',
@@ -114,7 +114,7 @@ const SCOPE_ALL: ScopeDescriptor = {
 const SCOPE_EXCEPT_MANUAL: ScopeDescriptor = {
   scope: 'except-manual',
   buttonLabel: 'איפוס חלקי — מחק הכל פרט להוצאות ידניות',
-  buttonClass: 'bg-orange-600 hover:bg-orange-500 disabled:bg-orange-800',
+  buttonClass: 'bg-status-orange hover:bg-status-orange/90 disabled:bg-status-orange/40',
   modalTitle: 'איפוס חלקי — מחק הכל פרט להוצאות ידניות',
   modalWarning:
     'פעולה זו תמחק את נתוני ה-fetch (Shopify / Meta / Google / מוצרים / קמפיינים), אך תשמור על טבלת manual_overrides. ניתן לרוץ backfill מחדש.',
@@ -220,27 +220,27 @@ export function ResetData() {
         // confirmation that no toast library is needed for.
         <div
           role="status"
-          className="rounded border border-green-500/30 bg-green-500/10 p-3 text-sm space-y-1"
+          className="rounded border border-status-green/30 bg-status-greenBg p-3 text-sm space-y-1"
         >
-          <p className="text-green-300 font-semibold">
+          <p className="text-status-green font-semibold">
             איפוס הושלם ({lastResult.scope === 'all' ? 'מלא' : 'חלקי'}) —
             סה״כ {lastResult.total} שורות נמחקו (
             <span dir="ltr">{lastResult.durationMs}ms</span>).
           </p>
-          <ul className="text-text-secondary text-xs space-y-0.5">
+          <ul className="text-ink-secondary text-xs space-y-0.5">
             {Object.entries(lastResult.deleted).map(([table, count]) => (
               <li key={table} dir="ltr">
                 <code>{table}</code>:{' '}
                 {count >= 0 ? (
                   <span>{count} rows</span>
                 ) : (
-                  <span className="text-red-400">failed</span>
+                  <span className="text-status-red">failed</span>
                 )}
               </li>
             ))}
           </ul>
           {lastResult.errors && (
-            <p className="text-amber-300 text-xs">
+            <p className="text-status-orange text-xs">
               חלק מהטבלאות נכשלו — ראה פירוט מעל. ייתכן שצריך לרוץ שוב.
             </p>
           )}
@@ -254,13 +254,13 @@ export function ResetData() {
           aria-modal="true"
           aria-labelledby="reset-confirm-title"
         >
-          <div className="bg-background border border-white/10 rounded p-4 max-w-md w-full mx-4">
+          <div className="bg-elevated border border-line rounded p-4 max-w-md w-full mx-4">
             <div className="flex items-start justify-between mb-3">
               <h3
                 id="reset-confirm-title"
                 className="text-lg font-semibold flex items-center gap-2"
               >
-                <AlertTriangle className="w-5 h-5 text-red-400" />
+                <AlertTriangle className="w-5 h-5 text-status-red" />
                 {active.modalTitle}
               </h3>
               <button
@@ -276,35 +276,35 @@ export function ResetData() {
             <p className="text-sm mb-3">{active.modalWarning}</p>
 
             <div className="mb-3">
-              <p className="text-text-secondary text-xs mb-1">
+              <p className="text-ink-secondary text-xs mb-1">
                 טבלאות שיימחקו:
               </p>
               <ul className="text-xs space-y-0.5">
                 {active.tablesShown.map((t) => (
                   <li key={t} dir="ltr">
-                    <code className="text-red-400">{t}</code>
+                    <code className="text-status-red">{t}</code>
                   </li>
                 ))}
               </ul>
-              <p className="text-text-secondary text-xs mt-3 mb-1">
+              <p className="text-ink-secondary text-xs mt-3 mb-1">
                 טבלאות שתמיד מוגנות (לעולם לא נמחקות):
               </p>
               <ul className="text-xs space-y-0.5">
                 {PROTECTED_TABLES.map((t) => (
                   <li key={t} dir="ltr">
-                    <code className="text-green-400">{t}</code>
+                    <code className="text-status-green">{t}</code>
                     {t === 'stores' && (
-                      <span className="text-text-secondary" dir="rtl">
+                      <span className="text-ink-secondary" dir="rtl">
                         {' '}— 3 החנויות שלך
                       </span>
                     )}
                     {t === 'notification_config' && (
-                      <span className="text-text-secondary" dir="rtl">
+                      <span className="text-ink-secondary" dir="rtl">
                         {' '}— הגדרות התראות (לא נמשך מ-API)
                       </span>
                     )}
                     {t === 'dashboard_state' && (
-                      <span className="text-text-secondary" dir="rtl">
+                      <span className="text-ink-secondary" dir="rtl">
                         {' '}— הגדרות UI (annotations, billing, monthly goal, product mapping)
                       </span>
                     )}
@@ -312,8 +312,8 @@ export function ResetData() {
                 ))}
                 {active.preserves && (
                   <li dir="ltr">
-                    <code className="text-green-400">{active.preserves}</code>
-                    <span className="text-text-secondary" dir="rtl">
+                    <code className="text-status-green">{active.preserves}</code>
+                    <span className="text-ink-secondary" dir="rtl">
                       {' '}— הוצאות ידניות (במצב חלקי)
                     </span>
                   </li>
@@ -322,11 +322,11 @@ export function ResetData() {
             </div>
 
             <label className="block mb-2">
-              <span className="text-xs text-text-secondary block mb-1">
+              <span className="text-xs text-ink-secondary block mb-1">
                 הקלד את הטוקן הבא בדיוק כדי לאשר:
               </span>
               <code
-                className="block bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-amber-300 mb-2"
+                className="block bg-canvas border border-line-subtle rounded px-2 py-1 text-xs text-status-orange mb-2"
                 dir="ltr"
               >
                 {CONFIRM_TOKEN_FOR_SCOPE[active.scope]}
@@ -335,7 +335,7 @@ export function ResetData() {
                 type="text"
                 value={typed}
                 onChange={(e) => setTyped(e.target.value)}
-                className="w-full bg-black/30 border border-white/10 rounded px-2 py-1 text-sm text-foreground"
+                className="w-full bg-canvas border border-line-subtle rounded px-2 py-1 text-sm text-ink"
                 dir="ltr"
                 placeholder="הקלד כאן…"
                 autoFocus
@@ -344,7 +344,7 @@ export function ResetData() {
             </label>
 
             {error && (
-              <p className="text-red-400 text-sm mb-3" role="alert">
+              <p className="text-status-red text-sm mb-3" role="alert">
                 {error}
               </p>
             )}
@@ -354,7 +354,7 @@ export function ResetData() {
                 type="button"
                 onClick={closeModal}
                 disabled={submitting}
-                className="bg-gray-600 hover:bg-gray-500 disabled:bg-gray-700 text-white text-sm px-3 py-1 rounded"
+                className="bg-elevated2 hover:bg-elevated2/90 disabled:bg-elevated2/70 text-ink text-sm px-3 py-1 rounded"
               >
                 ביטול
               </button>
@@ -365,7 +365,7 @@ export function ResetData() {
                   submitting ||
                   typed !== CONFIRM_TOKEN_FOR_SCOPE[active.scope]
                 }
-                className="flex items-center gap-1 bg-red-600 hover:bg-red-500 disabled:bg-red-800 disabled:cursor-not-allowed text-white text-sm px-3 py-1 rounded"
+                className="flex items-center gap-1 bg-status-red hover:bg-status-red/90 disabled:bg-status-red/40 disabled:cursor-not-allowed text-white text-sm px-3 py-1 rounded"
               >
                 {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
                 {submitting ? 'מוחק…' : 'אשר ומחק'}
@@ -375,7 +375,7 @@ export function ResetData() {
         </div>
       )}
 
-      <p className="text-text-secondary text-xs">
+      <p className="text-ink-secondary text-xs">
         * הפעולה משתמשת ב-service_role של Supabase (server-side). הקריאה
         ל-API מסתיימת רק לאחר ש-DELETE הסתיים — אין asynchronous queue.
       </p>
