@@ -441,6 +441,7 @@ function PnLTab({
           storeNames={filtered.visibleStores}
           rangeFrom={filters.range.from}
           rangeTo={filters.range.to}
+          rows={filtered.cur}
         />
       </div>
     </div>
