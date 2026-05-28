@@ -272,10 +272,12 @@ export function InsightsBoard({ data }: Props) {
       </button>
 
       {/* AI-insight pill — surfaces the headline insight title as a one-line
-          context cue next to the section header. Visible in both collapsed and
-          expanded states so the user always has a sense of what's inside.
+          context cue inside the expanded board where the editorial InsightHero
+          is absent. In the collapsed state, InsightHero already serves as the
+          hero-summary slot, so hiding the pill there avoids duplicating the
+          same title twice in the same viewport.
           AiInsightPill renders nothing when topInsight is null so no guard needed. */}
-      {!loading && topInsight && (
+      {!loading && topInsight && boardExpanded && (
         <div className="px-4 sm:px-6 pb-0 pt-3">
           <AiInsightPill>{topInsight.title}</AiInsightPill>
         </div>
