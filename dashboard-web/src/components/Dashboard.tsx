@@ -541,7 +541,7 @@ function CampaignsTab({
         formula="ROAS = ערך המרות / הוצאה · CTR = קליקים / חשיפות · CPA = הוצאה / המרות"
       />
       <Filters filters={filters} stores={data.stores} onChange={setFilters} />
-      <div className="rounded-xl bg-surface border border-borderSubtle shadow-card overflow-hidden">
+      <div className="rounded-xl bg-elevated border border-line-subtle shadow-sm overflow-hidden">
         <CampaignsTable
           range={filters.range}
           store={filters.store}
@@ -607,7 +607,7 @@ function ProductsTab({
         <div
           role="tablist"
           aria-label="תצוגות בטאב מוצרים"
-          className="inline-flex rounded-lg border border-border bg-surface overflow-hidden divide-x divide-border"
+          className="inline-flex rounded-lg border border-line bg-elevated overflow-hidden divide-x divide-line"
           dir="ltr"
         >
           {PRODUCTS_SUBTABS.map((t) => (
@@ -619,8 +619,8 @@ function ProductsTab({
               className={cn(
                 'px-4 sm:px-5 py-2 text-xs sm:text-sm font-medium transition-colors min-w-[140px]',
                 subTab === t.key
-                  ? 'bg-primary text-white'
-                  : 'bg-surface text-text-secondary hover:bg-surfaceMuted',
+                  ? 'bg-accent text-white'
+                  : 'bg-elevated text-ink-secondary hover:bg-elevated2',
               )}
               dir="rtl"
             >
@@ -631,7 +631,7 @@ function ProductsTab({
       </div>
 
       {subTab === 'table' && (
-        <div className="rounded-xl bg-surface border border-border shadow-card overflow-hidden">
+        <div className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
           <ProductsTable
             range={filters.range}
             store={filters.store}
