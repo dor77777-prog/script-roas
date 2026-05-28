@@ -51,8 +51,10 @@ describe('isHeavyRefundDay', () => {
   it('falls back to revenue+refundDeduction when grossRevenue is null (legacy row)', () => {
     expect(isHeavyRefundDay(row({ refundDeduction: 200, revenue: 800, grossRevenue: null }))).toBe(true);
   });
-  it('false when both grossRevenue and revenue are 0 (no signal)', () => {
+  it('false when refund is below abs threshold AND there is no gross signal (revenue=0, grossRevenue=null)', () => {
     expect(isHeavyRefundDay(row({ refundDeduction: 1, revenue: 0, grossRevenue: null }))).toBe(false);
+  });
+  it('true when refund hits abs threshold even with no gross signal — abs short-circuit fires first', () => {
     expect(isHeavyRefundDay(row({ refundDeduction: 500, revenue: 0, grossRevenue: null }))).toBe(true);
   });
 });
