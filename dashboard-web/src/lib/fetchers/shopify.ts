@@ -278,8 +278,9 @@ function isoLocalMidnight(dateStr: string, tz: string): string {
   // every store since this codepath went live; backfill on prior days hid
   // it because re-fetches just overwrote already-correct values until the
   // 2026-05-22 day rollover when nothing was queued to backfill the new
-  // day. See debug endpoint /api/debug/shopify-fetch for the diagnostic
-  // that surfaced this.
+  // day. The /api/debug/shopify-fetch diagnostic route that originally
+  // surfaced this was deleted in Phase 14 (security hardening — unauth
+  // attack surface); reproduce by calling fetchShopifyDayRows directly.
   const offsetMatch = formatLocalIso(instantMs, tz).match(
     /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})$/,
   );

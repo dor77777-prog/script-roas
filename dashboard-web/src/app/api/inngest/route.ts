@@ -111,6 +111,25 @@ import {
 // RESEARCH §Pitfall 12). 60 = Vercel Pro plan ceiling.
 export const maxDuration = 60;
 
+// Phase 14 — boot-time prod assert on the signing key.
+// serve() reads INNGEST_SIGNING_KEY implicitly from process.env (its public
+// ServeHandlerOptions type doesn't expose a `signingKey` field). The 2026-05-24
+// audit (T1) flagged that a missing env var in a preview/prod deploy would
+// silently leave the webhook unauthenticated — Inngest would still respond
+// to POSTs without verifying X-Inngest-Signature. We fail-fast at module
+// load if running on Vercel production without the key set, so the
+// deployment refuses to start instead of running unauthenticated.
+// Preview / dev / test deploys with no key still work (Inngest SDK falls
+// back to its unsigned mode, which is safe outside production).
+if (process.env.VERCEL_ENV === 'production' && !process.env.INNGEST_SIGNING_KEY) {
+  throw new Error(
+    'INNGEST_SIGNING_KEY is required in production (VERCEL_ENV=production). ' +
+      'Set it in Vercel → Settings → Environment Variables → Production. ' +
+      'Without it, the /api/inngest webhook accepts unsigned POSTs from anyone ' +
+      'who discovers the URL.',
+  );
+}
+
 export const { GET, POST, PUT } = serve({
   client: inngest,
   functions: [
@@ -119,11 +138,8 @@ export const { GET, POST, PUT } = serve({
     ...cronLiveHeavyFunctions, // Phase 13.9 — 3 functions (per-store, 30-min cadence) refreshing campaigns_daily + ads_daily metrics for today + yesterday.
     eventSyncNow, // 1 function (operator "Sync now" button)
     eventBackfill, // 1 function (operator backfill range picker)
-    cronOauthCanary, // 1 function (Phase 13.4 — Google OAuth refresh-token canary, 00:00 IL daily)
+    cronOauthCanary, // 1 function (Phase 13.4/14 — Google + Meta + TikTok token canary, 00:00 IL daily)
     ...whatsappCronFunctions, // 3 functions (12:00, 18:00, 00:10 IL)
     eventWhatsappSendNow, // 1 function (operator "send WhatsApp now")
   ],
-  // INNGEST_SIGNING_KEY auto-read from process.env at request time;
-  // serve() validates X-Inngest-Signature on every POST and rejects
-  // requests with bad / missing signatures (Threat T-05.6-11-S1).
 });
