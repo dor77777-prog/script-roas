@@ -26,10 +26,6 @@
  *   - trajectory:           25%   CPM↔ROAS momentum (heavy: forward-looking)
  *   - attribution clarity:  20%   deterministic % of revenue
  *
- * Plus a separate ±adjustment applied after the weighted sum:
- *   - optimized=true:  +15  (operator vouches for it; small boost)
- *   - isCurrentlyOff:  −30  (historical numbers only; not forward-looking)
- *
  * Insufficient-data short-circuit: campaigns with spend < $30 OR
  * (spend < $100 AND conversions === 0) are flagged `insufficient` and the
  * UI renders them as ⏳ Early rather than F so the operator knows to wait
@@ -51,11 +47,8 @@ export type HealthScoreComponents = {
   trajectory: number;
   /** Click-ID coverage / deterministic %, 0..100. 50 = unknown (e.g. Google). */
   attributionClarity: number;
-  /** Net operator adjustment applied after the weighted sum: +15 if
-   *  optimized, −30 if currently off (can stack). NOT a 0..100 score. */
-  operatorAdjustment: number;
   /** Phase 05.7.x (2026-05-23) — Net cohort adjustment applied AFTER
-   *  the operator adjustment by `applyCohortAdjustmentOnce`. Default
+   *  the weighted sum by `applyCohortAdjustmentOnce`. Default
    *  0 when no cohort exists or the campaign is solo on its products.
    *  Negative when the campaign is the weakest in a saturated cohort
    *  OR when a shared product shows cannibalization signals; small
@@ -69,14 +62,16 @@ export type HealthScoreComponents = {
 };
 
 export type CampaignHealth = {
-  /** Final 0..100 score after weighted sum + operator adjustment + clamp. */
+  /** Final 0..100 score: weighted sum of data-derived components, clamped to [0, 100].
+   *  Cohort adjustments are applied separately via `applyCohortAdjustmentOnce` after
+   *  this function returns. */
   score: number;
   /** Letter grade derived from `score` — easier to scan in a column. */
   grade: HealthGrade;
   /** Per-component breakdown for the drilldown popover. */
   components: HealthScoreComponents;
   /** One Hebrew sentence per component explaining WHY it scored that way.
-   *  Order: profitability, volume, trajectory, attribution, operator.
+   *  Order: profitability, volume, trajectory, attribution.
    *  Use these verbatim in the drilldown — keeps the UI dumb. */
   reasons: string[];
   /** True when the campaign hasn't accumulated enough data to score
@@ -89,12 +84,11 @@ export type HealthScoreInputs = {
   aggregated: Aggregated;
   trueRevenueInfo: TrueRevenueInfo | undefined;
   cpmRoasAnalysis: CpmRoasAnalysis | undefined;
-  optimized: boolean;
-  isCurrentlyOff: boolean;
 };
 
 // ─────────────────────────────────────────────────────────────────────────
-// Weights — sum to 1.0. Operator adjustment is applied separately.
+// Weights — sum to 1.0. Cohort adjustment (if any) is applied separately by
+// applyCohortAdjustmentOnce after computeCampaignHealth returns.
 // ─────────────────────────────────────────────────────────────────────────
 
 const WEIGHTS = {
@@ -349,23 +343,6 @@ function scoreAttributionClarity(info: TrueRevenueInfo | undefined): {
   };
 }
 
-function applyOperatorAdjustment(
-  optimized: boolean,
-  isCurrentlyOff: boolean,
-): { delta: number; reasons: string[] } {
-  let delta = 0;
-  const reasons: string[] = [];
-  if (optimized) {
-    delta += 15;
-    reasons.push('+15 — מסומן כאופטימיזציה פעילה (האופרטור ערב לקמפיין)');
-  }
-  if (isCurrentlyOff) {
-    delta -= 30;
-    reasons.push('−30 — קמפיין כבוי כעת (הנתונים היסטוריים בלבד)');
-  }
-  return { delta, reasons };
-}
-
 function gradeFor(score: number): Exclude<HealthGrade, 'unknown'> {
   for (const tier of GRADE_LADDER) {
     if (score >= tier.min) return tier.grade;
@@ -399,7 +376,7 @@ function isInsufficient(aggregated: Aggregated): boolean {
 // ─────────────────────────────────────────────────────────────────────────
 
 export function computeCampaignHealth(inputs: HealthScoreInputs): CampaignHealth {
-  const { aggregated, trueRevenueInfo, cpmRoasAnalysis, optimized, isCurrentlyOff } = inputs;
+  const { aggregated, trueRevenueInfo, cpmRoasAnalysis } = inputs;
 
   if (isInsufficient(aggregated)) {
     return {
@@ -410,7 +387,6 @@ export function computeCampaignHealth(inputs: HealthScoreInputs): CampaignHealth
         volume: 0,
         trajectory: 0,
         attributionClarity: 0,
-        operatorAdjustment: 0,
         cohortAdjustment: 0,
       },
       reasons: [
@@ -427,19 +403,8 @@ export function computeCampaignHealth(inputs: HealthScoreInputs): CampaignHealth
   const trajectory = scoreTrajectory(cpmRoasAnalysis);
   const attribution = scoreAttributionClarity(trueRevenueInfo);
 
-  // Audit fix 2026-05-23 (HR-03 health-and-conclusions): renormalize
-  // weights when trajectory has no data.
-  //
-  // Pre-fix: `scoreTrajectory` returned 60 (neutral) when < 5 active days,
-  // and the weighted formula multiplied by WEIGHTS.trajectory = 0.25,
-  // contributing +15 points to the final from a non-signal. A just-launched
-  // campaign with ROAS 3 + trust 90 + 4 days of data graded A (~84) on
-  // strength of week-1 ROAS alone — exactly what the trajectory component
-  // was supposed to prevent.
-  //
-  // Post-fix: when trajectory is "no data" (hasData=false), drop its
-  // contribution AND renormalize the other 3 weights so they still sum to
-  // 1.0. The unknown signal contributes 0 (truly neutral) instead of +15.
+  // Audit fix 2026-05-23 (HR-03) — renormalize weights when trajectory has
+  // no data. Kept as-is.
   const hasTrajectoryData = !!(cpmRoasAnalysis && cpmRoasAnalysis.hasData);
   let weightedSubtotal: number;
   if (hasTrajectoryData) {
@@ -449,7 +414,6 @@ export function computeCampaignHealth(inputs: HealthScoreInputs): CampaignHealth
       trajectory.score * WEIGHTS.trajectory +
       attribution.score * WEIGHTS.attributionClarity;
   } else {
-    // Renormalize the 3 known components over their own subtotal weight.
     const knownWeightSum =
       WEIGHTS.profitability + WEIGHTS.volume + WEIGHTS.attributionClarity;
     const scaleFactor = 1.0 / knownWeightSum;
@@ -459,8 +423,11 @@ export function computeCampaignHealth(inputs: HealthScoreInputs): CampaignHealth
       attribution.score * WEIGHTS.attributionClarity * scaleFactor;
   }
 
-  const op = applyOperatorAdjustment(optimized, isCurrentlyOff);
-  const finalScore = Math.round(Math.max(0, Math.min(100, weightedSubtotal + op.delta)));
+  // Phase 14 (2026-05-28) — operator flags (optimized / isCurrentlyOff)
+  // no longer affect the score. They survive as row badges. Score = pure
+  // weighted sum of data-derived components; cohort adjustment may still
+  // apply downstream of this function via applyCohortAdjustmentOnce.
+  const finalScore = Math.round(Math.max(0, Math.min(100, weightedSubtotal)));
 
   return {
     score: finalScore,
@@ -470,10 +437,9 @@ export function computeCampaignHealth(inputs: HealthScoreInputs): CampaignHealth
       volume: volume.score,
       trajectory: trajectory.score,
       attributionClarity: attribution.score,
-      operatorAdjustment: op.delta,
       cohortAdjustment: 0,
     },
-    reasons: [profitability.reason, volume.reason, trajectory.reason, attribution.reason, ...op.reasons],
+    reasons: [profitability.reason, volume.reason, trajectory.reason, attribution.reason],
     insufficient: false,
   };
 }

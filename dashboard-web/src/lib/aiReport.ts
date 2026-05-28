@@ -1267,8 +1267,6 @@ export function generateAiReport({
         aggregated: agg,
         trueRevenueInfo: trueRevenueInfo as never,
         cpmRoasAnalysis: trajectory,
-        optimized: false,
-        isCurrentlyOff: isOff,
       });
       healthRows.push({
         name: c.name,
@@ -1316,24 +1314,20 @@ export function generateAiReport({
     );
     out.push('');
     out.push(
-      `| קמפיין | פלטפ׳ | חנות | הוצאה | ציון | רווחיות | נפח | מומנטום | Attribution | אופ׳ | סטטוס |`,
+      `| קמפיין | פלטפ׳ | חנות | הוצאה | ציון | רווחיות | נפח | מומנטום | Attribution | סטטוס |`,
     );
     out.push(
-      `|---|---|---|---|---|---|---|---|---|---|---|`,
+      `|---|---|---|---|---|---|---|---|---|---|`,
     );
     for (const r of healthRows) {
       const comp = r.health.components;
-      const opAdj =
-        comp.operatorAdjustment === 0
-          ? '—'
-          : (comp.operatorAdjustment > 0 ? '+' : '') + comp.operatorAdjustment;
       const statusLabel = r.effectiveStatus
         ? r.effectiveStatus.replace(/^ADGROUP_STATUS_/, '')
         : '—';
       out.push(
         `| ${escapeMd(r.name)} | ${r.platform} | ${r.store} | ${fmtCad(
           r.spend,
-        )} | **${gradeIcon[r.health.grade]} ${r.health.insufficient ? '' : r.health.score}** | ${comp.profitability} | ${comp.volume} | ${comp.trajectory} | ${comp.attributionClarity} | ${opAdj} | ${statusLabel} |`,
+        )} | **${gradeIcon[r.health.grade]} ${r.health.insufficient ? '' : r.health.score}** | ${comp.profitability} | ${comp.volume} | ${comp.trajectory} | ${comp.attributionClarity} | ${statusLabel} |`,
       );
     }
     out.push('');

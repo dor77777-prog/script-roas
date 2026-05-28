@@ -102,8 +102,6 @@ function buildInputs(patch: Partial<HealthScoreInputs> = {}): HealthScoreInputs 
     aggregated: patch.aggregated ?? makeAggregated(),
     trueRevenueInfo: 'trueRevenueInfo' in patch ? patch.trueRevenueInfo : makeTrueRevenue(),
     cpmRoasAnalysis: 'cpmRoasAnalysis' in patch ? patch.cpmRoasAnalysis : makeCpmRoasAnalysis(),
-    optimized: patch.optimized ?? false,
-    isCurrentlyOff: patch.isCurrentlyOff ?? false,
   };
 }
 
@@ -112,7 +110,7 @@ function buildInputs(patch: Partial<HealthScoreInputs> = {}): HealthScoreInputs 
 // ─────────────────────────────────────────────────────────────────────────
 
 describe('computeCampaignHealth — output shape', () => {
-  it('returns score in [0, 100] and all 5 components present', () => {
+  it('returns score in [0, 100] with all data-derived components populated', () => {
     const out = computeCampaignHealth(buildInputs());
     expect(out.score).toBeGreaterThanOrEqual(0);
     expect(out.score).toBeLessThanOrEqual(100);
@@ -121,7 +119,6 @@ describe('computeCampaignHealth — output shape', () => {
       volume: expect.any(Number),
       trajectory: expect.any(Number),
       attributionClarity: expect.any(Number),
-      operatorAdjustment: expect.any(Number),
     });
     expect(out.reasons.length).toBeGreaterThanOrEqual(4);
   });
@@ -533,47 +530,6 @@ describe('attribution clarity', () => {
   });
 });
 
-// ─────────────────────────────────────────────────────────────────────────
-// Operator adjustment
-// ─────────────────────────────────────────────────────────────────────────
-
-describe('operator adjustment', () => {
-  it('adds +15 when optimized=true', () => {
-    const baseline = computeCampaignHealth(buildInputs());
-    const boosted = computeCampaignHealth(buildInputs({ optimized: true }));
-    expect(boosted.score - baseline.score).toBeGreaterThanOrEqual(14);
-    expect(boosted.score - baseline.score).toBeLessThanOrEqual(16);
-    expect(boosted.components.operatorAdjustment).toBe(15);
-  });
-
-  it('subtracts 30 when isCurrentlyOff=true', () => {
-    const _baseline = computeCampaignHealth(buildInputs());
-    const penalised = computeCampaignHealth(buildInputs({ isCurrentlyOff: true }));
-    // Could be clamped at 0 if baseline was already < 30; check the delta logic.
-    expect(penalised.components.operatorAdjustment).toBe(-30);
-  });
-
-  it('stacks +15 and -30 to net -15 when both flags are set', () => {
-    const out = computeCampaignHealth(
-      buildInputs({ optimized: true, isCurrentlyOff: true }),
-    );
-    expect(out.components.operatorAdjustment).toBe(-15);
-  });
-
-  it('clamps final score to [0, 100] after adjustment', () => {
-    // Make a F campaign and apply isOff → should clamp to 0, not go negative.
-    const out = computeCampaignHealth(
-      buildInputs({
-        aggregated: makeAggregated({ spend: 500, conversionValue: 0, conversions: 1 }),
-        trueRevenueInfo: makeTrueRevenue({ deterministicRevenue: 0, trueRevenue: 0 }),
-        cpmRoasAnalysis: makeCpmRoasAnalysis({ tone: 'negative' }),
-        isCurrentlyOff: true,
-      }),
-    );
-    expect(out.score).toBeGreaterThanOrEqual(0);
-    expect(out.score).toBeLessThanOrEqual(100);
-  });
-});
 
 // ─────────────────────────────────────────────────────────────────────────
 // Realistic scenarios — the ones the operator will encounter most often.
@@ -660,24 +616,25 @@ describe('realistic scenarios', () => {
     expect(out.grade).toBe('unknown');
   });
 
-  it('Off campaign that was previously strong: -30 penalty drops grade', () => {
-    const inputsActive = buildInputs({
-      aggregated: makeAggregated({ spend: 800, conversionValue: 2400 }),
-      trueRevenueInfo: makeTrueRevenue({
-        spend: 800,
-        metaClaim: 2400,
-        trueRevenue: 2400,
-        deterministicRevenue: 2200,
-        attribution: {
-          ...makeTrueRevenue().attribution,
-          trust: { level: 'high', label: 'אמין', score: 90 },
-        } as TrueRevenueInfo['attribution'],
+  it('Strong campaign with positive momentum scores high', () => {
+    const out = computeCampaignHealth(
+      buildInputs({
+        aggregated: makeAggregated({ spend: 800, conversionValue: 2400 }),
+        trueRevenueInfo: makeTrueRevenue({
+          spend: 800,
+          metaClaim: 2400,
+          trueRevenue: 2400,
+          deterministicRevenue: 2200,
+          attribution: {
+            ...makeTrueRevenue().attribution,
+            trust: { level: 'high', label: 'אמין', score: 90 },
+          } as TrueRevenueInfo['attribution'],
+        }),
+        cpmRoasAnalysis: makeCpmRoasAnalysis({ tone: 'positive' }),
       }),
-      cpmRoasAnalysis: makeCpmRoasAnalysis({ tone: 'positive' }),
-    });
-    const activeOut = computeCampaignHealth(inputsActive);
-    const offOut = computeCampaignHealth({ ...inputsActive, isCurrentlyOff: true });
-    expect(offOut.score).toBe(Math.max(0, activeOut.score - 30));
+    );
+    expect(out.score).toBeGreaterThanOrEqual(60);
+    expect(['A', 'B']).toContain(out.grade);
   });
 });
 
@@ -686,10 +643,10 @@ describe('realistic scenarios', () => {
 // ─────────────────────────────────────────────────────────────────────────
 
 describe('reasons strings', () => {
-  it('returns exactly one reason per non-empty component (and operator reasons when applicable)', () => {
-    const out = computeCampaignHealth(buildInputs({ optimized: true, isCurrentlyOff: true }));
-    // 4 sub-component reasons + 2 operator (optimized + off)
-    expect(out.reasons.length).toBe(6);
+  it('returns exactly 4 reasons for 4 data-derived components', () => {
+    const out = computeCampaignHealth(buildInputs());
+    // 4 sub-component reasons: profitability, volume, trajectory, attribution
+    expect(out.reasons.length).toBe(4);
   });
 
   it('reason 0 references the ROAS value and source', () => {
@@ -722,7 +679,6 @@ function makeBaseHealth(score = 70): CampaignHealth {
       volume: 70,
       trajectory: 60,
       attributionClarity: 65,
-      operatorAdjustment: 0,
       cohortAdjustment: 0,
     },
     reasons: ['r1', 'r2', 'r3', 'r4'],

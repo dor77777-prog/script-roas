@@ -116,16 +116,6 @@ function buildRecommendations(health: CampaignHealth): string[] {
       break;
   }
 
-  // Operator-adjustment context.
-  if (components.operatorAdjustment > 0) {
-    out.push('הציון כולל בונוס +15 כי סימנת את הקמפיין כאופטימיזציה פעילה.');
-  }
-  if (components.operatorAdjustment < 0) {
-    out.push(
-      'הציון כולל קנס −30 כי הקמפיין כבוי ברגע זה — הנתונים היסטוריים. החלטה על חידוש דורשת לשקול את המגמה בזמן ההפסקה.',
-    );
-  }
-
   return out;
 }
 
@@ -208,27 +198,6 @@ export function HealthScorePanel({ health }: { health: CampaignHealth }) {
             })}
           </div>
 
-          {/* Operator adjustment row when non-zero */}
-          {health.components.operatorAdjustment !== 0 && (
-            <div className="pt-2 border-t border-borderSubtle space-y-1">
-              {health.reasons.slice(4).map((r, idx) => (
-                <div
-                  key={idx}
-                  className={cn(
-                    'text-[12px] leading-snug',
-                    r.startsWith('+')
-                      ? 'text-roas-green'
-                      : r.startsWith('−') || r.startsWith('-')
-                        ? 'text-roas-red'
-                        : 'text-text-secondary',
-                  )}
-                >
-                  {r}
-                </div>
-              ))}
-            </div>
-          )}
-
           {/* Recommendations — derived from the SAME numbers that drove
               the grade, so the verdict and the action live in the same
               voice (vs. the old world where 5 separate chips suggested
@@ -255,7 +224,7 @@ export function HealthScorePanel({ health }: { health: CampaignHealth }) {
           {/* Footer formula reference — keep tiny, just so a curious
               operator can verify how the score was assembled. */}
           <div className="pt-2 border-t border-borderSubtle text-[10.5px] sm:text-[11px] text-text-muted leading-snug">
-            ציון = (רווחיות×0.40) + (נפח×0.15) + (מומנטום×0.25) + (attribution×0.20) ± התאמת אופרטור
+            ציון = (רווחיות×0.40) + (נפח×0.15) + (מומנטום×0.25) + (attribution×0.20)
           </div>
         </>
       )}
