@@ -1,13 +1,20 @@
 'use client';
 
 import { useMemo, type Key } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
 import { TrendingUp } from 'lucide-react';
 import type { DailySeries } from '@/lib/analytics';
 import { formatDate, formatNumber } from '@/lib/utils';
 import { storeColor, STORE_COLORS } from '@/lib/storeColors';
 import { isHeavyRefundDay } from '@/lib/refundDayHeuristic';
 import type { DailyRow } from '@/lib/types';
+import { ChartContainer } from '@/components/ui/chart/ChartContainer';
+import {
+  ChartTooltip,
+  ChartTooltipLabel,
+  ChartTooltipRow,
+  ChartTooltipValue,
+} from '@/components/ui/chart/ChartTooltip';
 
 // The navy primary color is the visual anchor — the first store's line
 // gets bold label treatment to guide the eye. Using STORE_COLORS directly
@@ -74,20 +81,19 @@ export function RoasChart({ data, stores, rows, bare = false }: Props) {
         </span>
       </div>
 
-      <div className="h-64 sm:h-80">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={chartData} margin={{ top: 10, right: 12, left: 8, bottom: 0 }}>
+      <ChartContainer className="h-64 sm:h-80" height="100%">
+        <LineChart data={chartData} margin={{ top: 10, right: 12, left: 8, bottom: 0 }}>
             {/* Very quiet grid — guidance, not decoration. */}
-            <CartesianGrid strokeDasharray="2 4" stroke="#e5e7eb" strokeOpacity={0.55} vertical={false} />
+            <CartesianGrid strokeDasharray="2 4" stroke="var(--chart-grid)" strokeOpacity={0.55} vertical={false} />
             <XAxis
               dataKey="dateLabel"
-              tick={{ fontSize: 11, fill: '#64748b', fontVariant: 'tabular-nums' }}
+              tick={{ fontSize: 11, fill: 'var(--chart-axis)', fontVariant: 'tabular-nums' }}
               axisLine={false}
               tickLine={false}
               tickMargin={6}
             />
             <YAxis
-              tick={{ fontSize: 11, fill: '#64748b', fontVariant: 'tabular-nums' }}
+              tick={{ fontSize: 11, fill: 'var(--chart-axis)', fontVariant: 'tabular-nums' }}
               axisLine={false}
               tickLine={false}
               domain={[0, 'auto']}
@@ -96,42 +102,35 @@ export function RoasChart({ data, stores, rows, bare = false }: Props) {
             />
             <ReferenceLine
               y={3}
-              stroke="#16a34a"
+              stroke="var(--chart-target)"
               strokeDasharray="4 4"
               strokeOpacity={0.55}
               strokeWidth={1.5}
             />
             <Tooltip
-              cursor={{ stroke: '#94a3b8', strokeWidth: 1, strokeDasharray: '3 3' }}
+              cursor={{ stroke: 'var(--chart-cursor)', strokeWidth: 1, strokeDasharray: '3 3' }}
               content={({ active, payload }) => {
                 if (!active || !payload || payload.length === 0) return null;
                 const date = payload[0].payload.date as string;
                 return (
-                  <div
-                    dir="rtl"
-                    className="rounded-lg bg-text-primary/95 text-white px-3 py-2 text-xs shadow-elevated tabular-nums backdrop-blur-sm"
-                  >
-                    <div className="text-white/65 mb-1 text-[10px]">{formatDate(date)}</div>
+                  <ChartTooltip>
+                    <ChartTooltipLabel>{formatDate(date)}</ChartTooltipLabel>
                     <ul className="space-y-0.5">
                       {payload.map(entry => {
                         const v = Number(entry.value);
                         if (!Number.isFinite(v)) return null;
                         return (
-                          <li key={String(entry.dataKey)} className="flex items-center gap-2">
-                            <span
-                              className="inline-block w-2 h-2 rounded-full shrink-0"
-                              style={{ backgroundColor: entry.color }}
-                            />
-                            <span className="text-white/85">{String(entry.dataKey)}</span>
+                          <li key={String(entry.dataKey)}>
                             {/* c/HI-04: prefix the value with the unit label
                                 ("ROAS") so the tooltip is self-describing.
                                 Previously the tooltip rendered a bare number
                                 like "2.85" which an operator briefly hovering
                                 could mistake for CAD or another metric.
                                 Matches HeroOverview's pattern. */}
-                            <bdi dir="ltr" className="font-semibold ms-auto">
-                              ROAS {formatNumber(v)}
-                            </bdi>
+                            <ChartTooltipRow color={entry.color as string} label={String(entry.dataKey)}>
+                              ROAS{' '}
+                              <ChartTooltipValue>{formatNumber(v)}</ChartTooltipValue>
+                            </ChartTooltipRow>
                           </li>
                         );
                       })}
@@ -147,12 +146,16 @@ export function RoasChart({ data, stores, rows, bare = false }: Props) {
                       }
                       if (!anyHeavy || refundSum <= 0) return null;
                       return (
-                        <div className="mt-1 pt-1 border-t border-amber-400/30 text-xs text-amber-300">
-                          ↩ יום רפאנד כבד — החזרים: -CAD {Math.round(refundSum).toLocaleString('he-IL')}. ה-ROAS משקף את הנטו.
+                        <div className="mt-1 pt-1 border-t border-status-orange/30 text-xs text-status-orange">
+                          ↩ יום רפאנד כבד — החזרים: -CAD{' '}
+                          <ChartTooltipValue className="font-normal text-status-orange">
+                            {Math.round(refundSum).toLocaleString('he-IL')}
+                          </ChartTooltipValue>
+                          . ה-ROAS משקף את הנטו.
                         </div>
                       );
                     })()}
-                  </div>
+                  </ChartTooltip>
                 );
               }}
             />
@@ -197,9 +200,8 @@ export function RoasChart({ data, stores, rows, bare = false }: Props) {
                 />
               );
             })}
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
+        </LineChart>
+      </ChartContainer>
     </div>
   );
 
