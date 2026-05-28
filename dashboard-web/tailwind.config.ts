@@ -12,9 +12,54 @@ import type { Config } from 'tailwindcss';
  */
 const config: Config = {
   content: ['./src/**/*.{js,ts,jsx,tsx,mdx}'],
+  darkMode: ['selector', '[data-theme="dark"]'],
   theme: {
     extend: {
       colors: {
+        // New token-driven colors (OKLCH, light/dark aware). Consumed by
+        // components/ui/* primitives and progressively by migrated
+        // legacy components. The hex/literal color block below is kept
+        // intact during the migration so unmigrated components don't
+        // visually break — deleted in Plan 7 (polish) once nothing uses
+        // them.
+        canvas:        'var(--surface-canvas)',
+        elevated:      'var(--surface-elevated-1)',
+        elevated2:     'var(--surface-elevated-2)',
+        overlay:       'var(--surface-overlay)',
+        ink: {
+          DEFAULT:   'var(--text-primary)',
+          secondary: 'var(--text-secondary)',
+          muted:     'var(--text-muted)',
+          subtle:    'var(--text-subtle)',
+        },
+        line: {
+          DEFAULT: 'var(--border-default)',
+          subtle:  'var(--border-subtle)',
+          strong:  'var(--border-strong)',
+        },
+        accent: {
+          DEFAULT: 'var(--accent)',
+          fg:      'var(--accent-fg)',
+        },
+        status: {
+          red:        'var(--status-red)',
+          redBg:      'var(--status-red-bg)',
+          redFg:      'var(--status-red-fg)',
+          orange:     'var(--status-orange)',
+          orangeBg:   'var(--status-orange-bg)',
+          orangeFg:   'var(--status-orange-fg)',
+          green:      'var(--status-green)',
+          greenBg:    'var(--status-green-bg)',
+          greenFg:    'var(--status-green-fg)',
+          blue:       'var(--status-blue)',
+          blueBg:     'var(--status-blue-bg)',
+          blueFg:     'var(--status-blue-fg)',
+          gray:       'var(--status-gray)',
+          grayBg:     'var(--status-gray-bg)',
+          grayFg:     'var(--status-gray-fg)',
+        },
+
+        // ===== LEGACY (kept during migration; removed in Plan 7) =====
         // Cool-tinted surface stack — pure white feels harsh next to data.
         background:    '#f6f9fc',
         surface:       '#ffffff',
