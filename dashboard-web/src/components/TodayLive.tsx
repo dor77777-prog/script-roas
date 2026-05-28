@@ -200,21 +200,19 @@ export function TodayLive({
     const rs = liveDataResp?.rows ?? [];
     return rs.filter(r => r.date === today);
   }, [liveDataResp, today]);
-  const agg = aggregate(todayRows);
-  const storeAggs = aggregateByStore(todayRows);
+  const agg = useMemo(() => aggregate(todayRows), [todayRows]);
+  const storeAggs = useMemo(() => aggregateByStore(todayRows), [todayRows]);
   const roas = roasLabel(agg.roas);
   const hasAnyData = agg.revenue > 0 || agg.spend > 0;
 
-  // Read the monthly goal that GoalTracker maintains in localStorage. Re-reads
-  // on every render — cheap, and a focus event / cloud-sync update would
-  // trigger a re-render anyway via the existing `roas-goal-changed` event
-  // listened to elsewhere. Returns null if not set.
-  const monthlyGoal: number | null = useMemo(() => {
+  // Read the monthly goal that GoalTracker maintains in localStorage.
+  // Inline (not memoized) so the value re-picks-up if any sibling triggers a re-render.
+  const monthlyGoal: number | null = (() => {
     if (typeof window === 'undefined') return null;
     const raw = window.localStorage.getItem('roas-monthly-goal');
     const n = raw != null ? Number(raw) : NaN;
     return Number.isFinite(n) && n > 0 ? n : null;
-  }, []);
+  })();
 
   // Month-to-date revenue + day-of-month for pace calculation. The
   // liveDataResp slice TodayLive fetches is today-only; for MTD we look at
@@ -222,19 +220,26 @@ export function TodayLive({
   // than today). If the parent's range doesn't cover the month-to-date span
   // (e.g. operator chose "last 7 days" before today), the sum is whatever
   // MTD is reachable inside the slice — the narrative still renders.
-  const todayDate = new Date(today + 'T00:00:00');
-  const dayOfMonth = todayDate.getDate();
-  const daysInMonth = new Date(todayDate.getFullYear(), todayDate.getMonth() + 1, 0).getDate();
+  //
+  // Timezone-safe: parse `today` (ISO YYYY-MM-DD for Israel TZ) as strings
+  // and construct `monthStart` via string concatenation. Avoids the previous
+  // `new Date('YYYY-MM-DDT00:00:00')` form which the JS spec treats as local
+  // time — west-of-Israel browsers around midnight could shift the day by one.
+  const [todayYear, todayMonth, todayDay] = today.split('-').map(Number);
+  const dayOfMonth = todayDay;
+  // `new Date(year, monthIndex, 0)` is TZ-safe: passing day=0 of the next
+  // month returns the last day of THIS month, and `.getDate()` is read off
+  // the local-time fields which match the numeric components we passed in.
+  const daysInMonth = new Date(todayYear, todayMonth, 0).getDate();
+  const monthStart = `${todayYear}-${String(todayMonth).padStart(2, '0')}-01`;
   const monthToDateRevenue = useMemo(() => {
     if (monthlyGoal == null) return 0;
-    const monthStart = new Date(todayDate.getFullYear(), todayDate.getMonth(), 1)
-      .toISOString().slice(0, 10);
     let sum = 0;
     for (const r of _parentRows) {
       if (r.date >= monthStart && r.date < today) sum += r.revenue;
     }
     return sum;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- todayDate is stable per render; _parentRows from props
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- monthStart derived from today (already in deps)
   }, [_parentRows, today, monthlyGoal]);
 
   const narrative = useMemo(

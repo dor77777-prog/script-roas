@@ -55,7 +55,7 @@ export function buildTodayNarrative(inputs: NarrativeInputs): string {
   }
 
   // Lead clause — always present.
-  const lead = `היום עשית ₪${fmtCurrency(revenue)} מכירות ב-ROAS של ${fmtRoas(roas)}x`;
+  const lead = `היום עשית CAD ${fmtCurrency(revenue)} מכירות ב-ROAS של ${fmtRoas(roas)}x`;
 
   // Pace clause — present iff a monthly goal is set.
   let paceClause = '';
