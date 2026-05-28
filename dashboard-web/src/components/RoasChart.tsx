@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, type Key } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { TrendingUp } from 'lucide-react';
 import type { DailySeries } from '@/lib/analytics';
@@ -168,7 +168,7 @@ export function RoasChart({ data, stores, rows, bare = false }: Props) {
                   // Mild hierarchy via stroke weight only — opacity stays full
                   // for every line so each store stays clearly visible.
                   strokeWidth={isPrimary ? 2.75 : 2}
-                  dot={(props: { cx?: number; cy?: number; payload?: { date?: string }; key?: string | number }) => {
+                  dot={(props: { cx?: number; cy?: number; payload?: { date?: string }; key?: Key | null }) => {
                     const date = props.payload?.date;
                     if (!date || props.cx == null || props.cy == null) return <g key={props.key} />;
                     const isHeavy = refundDayKeys.has(`${date}|${s}`);
