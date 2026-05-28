@@ -101,7 +101,7 @@ Supabase Security Advisor יראה 10 אזהרות `0013_rls_disabled_in_public`
 | `cron-live-heavy-usmile360` | `*/30 * * * *` IL | אותו דבר ל-usmile360 |
 | `event-sync-now` | event-triggered (`event/sync-now`) | זהה ל-cron-live, ידני מ-`/operator` |
 | `event-backfill` | event-triggered (`event/backfill`) | טווח תאריכים נבחר × חנויות נבחרות |
-| `cron-oauth-canary` | `0 0 * * *` IL | פעם ביום פינג ל-fetchGoogleAdsSpendForDay('uzoshop', yesterday) כcanary לרענון refresh-token; failure → Sentry + Inngest dead-letter (Phase 13.4) |
+| `cron-oauth-canary` | `0 0 * * *` IL | פעם ביום 5 בדיקות פינג מקבילות לטוקנים של פלטפורמות מתחלפות: Google×uzoshop + Meta×3-stores + TikTok×uzoshop. כל בדיקה ב-step.run עצמאי עם try/catch; כשל בודד → `notifyTokenFailure` (throttled WhatsApp 1/6h) + `captureStepError` (Sentry) + ממשיך לסיבלינגים. הפונקציה לעולם לא זורקת — מסתיימת ב-`{ status: ok\|partial, passed, failed[] }`. הורחב מ-Google-בלבד ב-Phase 14 (Phase 13.4 origins). |
 
 **`cron-live-heavy-{store}`** (Phase 13.9 — 2026-05-27). Cron `TZ=Asia/Jerusalem */30 * * * *`. For each store × each date in [today, yesterday]: fetches Meta adset+ad insights + budgets, Google ad-group+ad insights, TikTok ad insights; calls `persistCampaignsLive()` to UPSERT `campaigns_daily` + `ads_daily`. Co-exists with cron-daily (01:00 nightly full run) and cron-live (10-min light spend + status). All three writers UPSERT the same PKs so `ON CONFLICT DO UPDATE` reconciles per-column; the latest write wins for the columns it touches. Rate-limit (429) and auth failures soft-fail per-platform → throttled WhatsApp alert via `notifyTokenFailure` → next tick retries.
 

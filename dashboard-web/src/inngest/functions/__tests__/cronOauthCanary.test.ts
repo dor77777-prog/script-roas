@@ -1,8 +1,9 @@
 // dashboard-web/src/inngest/functions/__tests__/cronOauthCanary.test.ts
 //
-// Phase 13.4 — OAuth canary daily cron. Pings Google Ads at 00:00 IL to
-// surface refresh-token expiry the moment it happens, rather than at the
-// next failing cron-daily run.
+// Phase 13.4 — Google-only canary.
+// Phase 14   — expanded to Google×1 + Meta×3 + TikTok×1. A failure in one
+// platform must NOT abort sibling checks; each failure must fire
+// notifyTokenFailure once.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,9 +12,24 @@ vi.mock('@/lib/sentry/capture', () => ({
   captureStepError: (...args: unknown[]) => captureStepErrorMock(...args),
 }));
 
+const notifyTokenFailureMock = vi.fn();
+vi.mock('@/lib/notifications/tokenFailures', () => ({
+  notifyTokenFailure: (...args: unknown[]) => notifyTokenFailureMock(...args),
+}));
+
 const fetchGoogleAdsSpendForDayMock = vi.fn();
 vi.mock('@/lib/fetchers/googleAds', () => ({
   fetchGoogleAdsSpendForDay: (...args: unknown[]) => fetchGoogleAdsSpendForDayMock(...args),
+}));
+
+const fetchMetaSpendForDayLightMock = vi.fn();
+vi.mock('@/lib/fetchers/meta', () => ({
+  fetchMetaSpendForDayLight: (...args: unknown[]) => fetchMetaSpendForDayLightMock(...args),
+}));
+
+const fetchTikTokAdvertiserInfoMock = vi.fn();
+vi.mock('@/lib/fetchers/tiktok', () => ({
+  fetchTikTokAdvertiserInfo: (...args: unknown[]) => fetchTikTokAdvertiserInfoMock(...args),
 }));
 
 import { cronOauthCanary } from '../cronOauthCanary';
@@ -33,9 +49,22 @@ function makeMockStep(): { step: StepStub; ids: string[] } {
   return { step, ids };
 }
 
+// Default-success values for the three probes so tests can override per case.
+const okGoogle = { storeId: 'uzoshop', date: '2026-05-28', spend: 50, currency: 'CAD' };
+const okMeta = { storeId: 'uzoshop', date: '2026-05-28', spend: 100, currency: 'ILS' };
+const okTikTok = { advertiserId: 'x', currency: 'ILS' };
+
 beforeEach(() => {
   captureStepErrorMock.mockClear();
+  notifyTokenFailureMock.mockReset();
+  notifyTokenFailureMock.mockResolvedValue({ alerted: true, throttled: false, dbWritten: true });
   fetchGoogleAdsSpendForDayMock.mockReset();
+  fetchMetaSpendForDayLightMock.mockReset();
+  fetchTikTokAdvertiserInfoMock.mockReset();
+  // Default: all 5 checks succeed.
+  fetchGoogleAdsSpendForDayMock.mockResolvedValue(okGoogle);
+  fetchMetaSpendForDayLightMock.mockResolvedValue(okMeta);
+  fetchTikTokAdvertiserInfoMock.mockResolvedValue(okTikTok);
 });
 
 afterEach(() => {
@@ -43,44 +72,65 @@ afterEach(() => {
 });
 
 describe('cronOauthCanary', () => {
-  it('Test 1: cronOauthCanary is registered with cron TZ=Asia/Jerusalem 0 0 * * *', () => {
+  it('Test 1: registered with id "cron-oauth-canary" and cron TZ=Asia/Jerusalem 0 0 * * *', () => {
     const opts = (cronOauthCanary as unknown as { opts: { triggers: Array<{ cron: string }>; id: string } }).opts;
     expect(opts.id).toBe('cron-oauth-canary');
     expect(opts.triggers).toEqual([{ cron: 'TZ=Asia/Jerusalem 0 0 * * *' }]);
   });
 
-  it('Test 2: happy path — fetchGoogleAdsSpendForDay succeeds → no Sentry capture, no throw', async () => {
-    fetchGoogleAdsSpendForDayMock.mockResolvedValueOnce({
-      storeId: 'uzoshop',
-      date: '2026-05-24',
-      spend: 50,
-      currency: 'CAD',
-    });
+  it('Test 2: happy path — all 5 checks succeed, status ok, correct step names + order', async () => {
     const { step, ids } = makeMockStep();
     const handler = (cronOauthCanary as unknown as { fn: (ctx: { step: StepStub }) => Promise<unknown> }).fn;
     const result = await handler({ step });
-    expect(result).toEqual({ status: 'ok' });
-    expect(ids).toEqual(['check-google-uzoshop']);
+    expect(result).toEqual({ status: 'ok', checks: 5, passed: 5, failed: [] });
+    expect(ids).toEqual([
+      'check-google-uzoshop',
+      'check-meta-uzoshop',
+      'check-meta-zolplus',
+      'check-meta-usmile360',
+      'check-tiktok-uzoshop',
+    ]);
     expect(captureStepErrorMock).not.toHaveBeenCalled();
+    expect(notifyTokenFailureMock).not.toHaveBeenCalled();
+    // Lightest probe each: Google = spend-for-day, Meta = spend-for-day-light, TikTok = advertiser-info.
     expect(fetchGoogleAdsSpendForDayMock).toHaveBeenCalledTimes(1);
-    const [storeIdArg, dateArg] = fetchGoogleAdsSpendForDayMock.mock.calls[0] as [string, string];
-    expect(storeIdArg).toBe('uzoshop');
-    expect(dateArg).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(fetchMetaSpendForDayLightMock).toHaveBeenCalledTimes(3);
+    expect(fetchTikTokAdvertiserInfoMock).toHaveBeenCalledTimes(1);
   });
 
-  it('Test 3: failure → captureStepError called with right tags + handler rethrows', async () => {
-    fetchGoogleAdsSpendForDayMock.mockRejectedValueOnce(new Error('OAuth token expired'));
+  it('Test 3: one Meta store fails — other 4 still pass, function returns partial, single notifyTokenFailure', async () => {
+    fetchMetaSpendForDayLightMock.mockImplementation((storeId: string) => {
+      if (storeId === 'zolplus') return Promise.reject(new Error('Meta token expired'));
+      return Promise.resolve(okMeta);
+    });
     const { step } = makeMockStep();
     const handler = (cronOauthCanary as unknown as { fn: (ctx: { step: StepStub }) => Promise<unknown> }).fn;
-    await expect(handler({ step })).rejects.toThrow(/OAuth token expired/);
+    const result = (await handler({ step })) as { status: string; passed: number; failed: string[] };
+    expect(result.status).toBe('partial');
+    expect(result.passed).toBe(4);
+    expect(result.failed).toEqual(['meta/zolplus']);
+    expect(notifyTokenFailureMock).toHaveBeenCalledTimes(1);
+    const call = notifyTokenFailureMock.mock.calls[0][0] as { provider: string; storeId: string; operation: string; errorMsg: string };
+    expect(call.provider).toBe('meta');
+    expect(call.storeId).toBe('zolplus');
+    expect(call.operation).toBe('canary');
+    expect(call.errorMsg).toMatch(/Meta token expired/);
     expect(captureStepErrorMock).toHaveBeenCalledTimes(1);
-    const [opts, err] = captureStepErrorMock.mock.calls[0] as [
-      { fnId: string; stepName: string; storeId: string },
-      Error,
-    ];
-    expect(opts.fnId).toBe('cron-oauth-canary');
-    expect(opts.stepName).toBe('check-google-uzoshop');
-    expect(opts.storeId).toBe('uzoshop');
-    expect(err.message).toMatch(/OAuth token expired/);
+  });
+
+  it('Test 4: handler NEVER throws — all 5 fail, returns partial summary with all listed failures', async () => {
+    fetchGoogleAdsSpendForDayMock.mockRejectedValue(new Error('google dead'));
+    fetchMetaSpendForDayLightMock.mockRejectedValue(new Error('meta dead'));
+    fetchTikTokAdvertiserInfoMock.mockRejectedValue(new Error('tiktok dead'));
+    const { step } = makeMockStep();
+    const handler = (cronOauthCanary as unknown as { fn: (ctx: { step: StepStub }) => Promise<unknown> }).fn;
+    const result = (await handler({ step })) as { status: string; passed: number; failed: string[] };
+    expect(result.status).toBe('partial');
+    expect(result.passed).toBe(0);
+    expect(result.failed.sort()).toEqual(
+      ['google/uzoshop', 'meta/uzoshop', 'meta/zolplus', 'meta/usmile360', 'tiktok/uzoshop'].sort(),
+    );
+    expect(notifyTokenFailureMock).toHaveBeenCalledTimes(5);
+    expect(captureStepErrorMock).toHaveBeenCalledTimes(5);
   });
 });
