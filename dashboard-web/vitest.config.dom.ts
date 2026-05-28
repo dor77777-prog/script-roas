@@ -17,6 +17,15 @@ export default defineConfig({
     setupFiles: ['./src/test/setup-dom.ts'],
     globals: false,
   },
+  esbuild: {
+    // Use React's automatic JSX runtime so test files don't need to import
+    // React manually. Without @vitejs/plugin-react, vitest falls back to
+    // esbuild for TSX transforms; jsxImportSource wires it to
+    // react/jsx-runtime exactly as `"jsxImportSource": "react"` in tsconfig
+    // would for tsc. This is the minimal change needed — no extra deps.
+    jsx: 'automatic',
+    jsxImportSource: 'react',
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
