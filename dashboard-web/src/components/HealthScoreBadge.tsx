@@ -188,30 +188,9 @@ export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
                 )}
               </div>
 
-              {/* Operator adjustment row */}
-              {health.components.operatorAdjustment !== 0 && (
-                <div className="mt-2.5 pt-2 border-t border-borderSubtle">
-                  {health.reasons.slice(4).map((r, idx) => (
-                    <div
-                      key={idx}
-                      className={cn(
-                        'text-[11.5px] leading-snug',
-                        r.startsWith('+')
-                          ? 'text-roas-green'
-                          : r.startsWith('−') || r.startsWith('-')
-                            ? 'text-roas-red'
-                            : 'text-text-secondary',
-                      )}
-                    >
-                      {r}
-                    </div>
-                  ))}
-                </div>
-              )}
-
               {/* Footer with formula note */}
               <div className="mt-2.5 pt-2 border-t border-borderSubtle text-[10.5px] text-text-muted leading-snug">
-                ציון = (רווחיות×0.40) + (נפח×0.15) + (מומנטום×0.25) + (attribution×0.20) ± התאמת אופרטור
+                ציון = (רווחיות×0.40) + (נפח×0.15) + (מומנטום×0.25) + (attribution×0.20)
               </div>
             </>
           )}
