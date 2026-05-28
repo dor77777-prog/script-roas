@@ -4,7 +4,7 @@
 
 **Goal:** Build the new `QuadrantScatter` component (ROAS × CAC scatter for the קמפיינים tab — a Northbeam-style quadrant card), migrate the 3 products-tab components to OKLCH tokens (ProductsTable, ProductCentricView, ProductPickerModal — 143 legacy tokens total), wire QuadrantScatter into Dashboard.tsx's `CampaignsTab`, and token-migrate the `ProductsTab` sub-tab nav in Dashboard.tsx.
 
-**Architecture:** `QuadrantScatter` is a new `components/QuadrantScatter.tsx` component using Recharts v3 `ScatterChart` + the Plan 3 chart primitives. It receives `data: { name: string; roas: number; cac: number; spend: number }[]` and renders a 2-axis scatter with quadrant dividers (median lines). Per-campaign points colored by the dashboard's existing storeColors SSOT. The 3 token migrations are mechanical via Plan 2's SSOT map (identical to Plans 2, 4a, 4b).
+**Architecture:** `QuadrantScatter` is a new `components/QuadrantScatter.tsx` component using Recharts v3 `ScatterChart` + the Plan 3 chart primitives. It receives `data: { name: string; roas: number; cac: number; spend: number }[]` and renders a 2-axis scatter with quadrant dividers (median lines). For v1, all points use a single `var(--accent)` fill (simpler, ships faster). Per-store coloring via `storeColors.ts` is deferred to Plan 7 polish if the operator requests it — extending the primitive to accept `color: string` per point would be a small follow-up. The 3 token migrations are mechanical via Plan 2's SSOT map (identical to Plans 2, 4a, 4b).
 
 **Tech Stack:** Uses Plan 3's `ChartContainer` + `ChartTooltip` primitives. No new deps.
 
@@ -429,19 +429,67 @@ function CampaignsTab({ data, filters, setFilters }: { ... }) {
 }
 ```
 
-Implement `QuadrantScatterCard` as a small wrapper inside Dashboard.tsx (or a new tiny file `components/QuadrantScatterCard.tsx`) that:
+**Pre-flight finding (2026-05-29):** CampaignsTable's SWR uses `buildDateRangeKey('/api/campaigns', localRange)` where `localRange` is the table's INTERNAL state (URL-hydrated). Store + platform filtering happens client-side inside `aggregate(rows, mode, store, platform, range, currentEffectiveStatus)` — a 6-arg call. The standalone scatter card uses the GLOBAL `filters.range` (no localRange override) so it always reflects the dashboard's primary range.
 
-1. Calls the same SWR endpoint CampaignsTable uses (search CampaignsTable for `useSWR(...campaigns...)` — copy the same key).
-2. Aggregates the SWR rows the same way (most likely via the existing `aggregate(...)` helper from `@/lib/campaignsAggregator`).
-3. Derives `QuadrantPoint[]` from the aggregated rows:
-   - `name = a.campaignName`
-   - `roas = a.spend > 0 ? a.conversionValue / a.spend : 0`
-   - `cac = a.conversions > 0 ? a.spend / a.conversions : 0`
-   - `spend = a.spend`
-4. Filters out rows with `cac <= 0` or `roas <= 0` (can't plot meaningfully).
-5. Passes to `<QuadrantScatter data={points} title="ROAS × CAC לקמפיינים פעילים" />`.
+Implement `QuadrantScatterCard` as a wrapper inside Dashboard.tsx (or a new file `components/QuadrantScatterCard.tsx`):
 
-This wrapper is ~30-50 lines. If the CampaignsTable SWR key construction is intricate (e.g. involves localRange or a per-store key), the wrapper may need ~5 extra lines to mirror.
+```tsx
+import useSWR from 'swr';
+import { useMemo } from 'react';
+import { aggregate } from '@/lib/campaignsAggregator';
+import { buildDateRangeKey } from '@/lib/dateRange';
+import { QuadrantScatter, type QuadrantPoint } from './QuadrantScatter';
+import type { CampaignsResponse } from '@/app/api/campaigns/route';
+import type { DashboardData } from '@/lib/types';
+// Reuse the project's standard fetcher — grep for `export.*fetcher` in lib/.
+import { fetcher } from '@/lib/fetcher';
+
+function QuadrantScatterCard({
+  data: _data,                       // accepted for symmetry; not consumed
+  filters,
+}: {
+  data: DashboardData;
+  filters: { store: string; range: { from: string; to: string } };
+}) {
+  const { data: swrData } = useSWR<CampaignsResponse>(
+    buildDateRangeKey('/api/campaigns', filters.range),
+    fetcher,
+    { refreshInterval: 120_000, revalidateOnFocus: false },
+  );
+
+  const points = useMemo<QuadrantPoint[]>(() => {
+    if (!swrData) return [];
+    // 6-arg call MUST match CampaignsTable's call so store/platform/range
+    // filtering produces the same campaign set. currentEffectiveStatus from
+    // the SWR response avoids the Phase 12.5.x stale-status bug.
+    const aggregated = aggregate(
+      swrData.rows,
+      'campaign',
+      filters.store,                 // 'All' OR a specific store name
+      'All',                         // all platforms
+      filters.range,
+      swrData.currentEffectiveStatus,
+    );
+    return aggregated
+      .filter(a => a.spend > 0 && a.conversions > 0)
+      .map(a => ({
+        name: a.campaignName,
+        roas: a.conversionValue / a.spend,
+        cac: a.spend / a.conversions,
+        spend: a.spend,
+      }));
+  }, [swrData, filters.store, filters.range]);
+
+  return <QuadrantScatter data={points} title="ROAS × CAC לקמפיינים פעילים" />;
+}
+```
+
+Important notes (from pre-flight):
+- SWR dedupes with CampaignsTable's existing fetch of the same key → no double-fetch cost.
+- The `aggregate()` call uses `'All'` for platform (the scatter doesn't filter by platform — it shows the operator's full picture).
+- The `currentEffectiveStatus` field is passed through to avoid showing campaigns whose status changed between the SWR fetch and the aggregate call.
+- The `_data` prop is accepted but not consumed — present for symmetry so this wrapper has the same call signature as future tab-level data consumers.
+- If the `fetcher` import path differs in this codebase, grep `/Users/dorperetz/script-roas/dashboard-web/src/lib/` for the export and adjust the path.
 
 - [ ] **Step 4: Verify**
 

@@ -302,31 +302,49 @@ git commit -m "refactor(drawer): CampaignDrawer tokens + 2 Recharts → ChartCon
 
 Mirror the existing `useTabTransition` pattern (Dashboard.tsx lines 86-99). The drawer is opened by `setDrawerCampaign(...)` in CampaignsTable. Wrap that state setter with `document.startViewTransition` so the entrance becomes a CSS-driven morph.
 
-### Step 1 — Find the drawer-open state setter
+### Step 1 — Find the drawer-open state setters
 
-In `dashboard-web/src/components/CampaignsTable.tsx`, find the `useState` for `drawerCampaign` (or whatever holds the drawer open state). Then find every call site of `setDrawerCampaign(...)` that OPENS the drawer (i.e. sets a non-null value). Typical site: the `onDrillCampaign` handler.
+**Pre-flight verified (2026-05-29):** CampaignsTable uses THREE separate state vars (not a single `drawerCampaign`):
+- `drillCampaignId` / `setDrillCampaignId` at line 464
+- `drillPlatform` / `setDrillPlatform` at line 468
+- `drillStoreId` / `setDrillStoreId` at line 472
 
-### Step 2 — Add `startViewTransition` wrapper
+The single open call site is in the `onDrillCampaign` inline callback around line 1954-1958 (line numbers may shift after Plan 4a's token migrations land — grep for `onDrillCampaign={(`).
 
-Replace direct calls like:
+The close site is around line 1997 (`onClose={() => { setDrillCampaignId(null); ... }}`).
+
+### Step 2 — Add `startViewTransition` + `startTransition` wrapper
+
+Mirror the existing `useTabTransition` pattern (Dashboard.tsx lines 86-99): wrap React's `startTransition` inside `document.startViewTransition`. Both are needed — the inner `startTransition` keeps the state update non-blocking so the view-transition snapshot completes cleanly.
+
+First, add `startTransition` to the React import in CampaignsTable (currently `useEffect, useMemo, useRef, useState` — add `startTransition`).
+
+Then replace the `onDrillCampaign` body:
 
 ```tsx
-setDrawerCampaign({ campaignId, platform, storeId });
+onDrillCampaign={(campaignId, platform, storeId) => {
+  const doc = document as typeof document & {
+    startViewTransition?: (cb: () => void) => { finished: Promise<void> };
+  };
+  if (typeof doc.startViewTransition === 'function') {
+    doc.startViewTransition(() => {
+      startTransition(() => {
+        setDrillCampaignId(campaignId);
+        setDrillPlatform(platform);
+        setDrillStoreId(storeId);
+      });
+    });
+  } else {
+    setDrillCampaignId(campaignId);
+    setDrillPlatform(platform);
+    setDrillStoreId(storeId);
+  }
+}}
 ```
 
-With:
+All three state setters wrap in ONE atomic `startTransition` callback so React batches them into a single re-render (which the view-transition then snapshots).
 
-```tsx
-if (typeof document !== 'undefined' && 'startViewTransition' in document) {
-  document.startViewTransition(() => {
-    setDrawerCampaign({ campaignId, platform, storeId });
-  });
-} else {
-  setDrawerCampaign({ campaignId, platform, storeId });
-}
-```
-
-Or, if there are multiple call sites, extract a helper `openDrawer(args)` inside the component.
+Close handler (`onClose={...}`) does NOT get the view-transition wrap — exit animation is governed by the existing CSS keyframe + the panel's `view-transition-name`.
 
 ### Step 3 — Add `view-transition-name` rules to globals.css
 
@@ -348,11 +366,13 @@ In `dashboard-web/src/app/globals.css`, add a small block:
 
 ### Step 4 — Tag the drawer panel with `view-transition-name`
 
-In `dashboard-web/src/components/CampaignDrawer.tsx`, find the `<aside>` element (around line 703 per recon). Add the `view-transition-name` inline style:
+In `dashboard-web/src/components/CampaignDrawer.tsx`, find the `<aside>` element (grep for `<aside` — there's exactly one in the file; pre-flight found it at line 698, but line numbers shift after Plan 4b Tasks 5-6 chart migrations).
+
+Add the `view-transition-name` inline style AND remove the conflicting `animate-fade-in-up` class (view-transition's morph supersedes the keyframe animation in browsers that support it; the keyframe stays as the no-VT fallback when `startViewTransition` is unavailable in the parent component — the `else` branch in Step 2 still triggers the existing CSS animation):
 
 ```tsx
 <aside
-  className="..."
+  className="..."  // remove 'animate-fade-in-up' from this string
   style={{ viewTransitionName: 'drawer-panel' as never }}
 >
   ...
@@ -360,6 +380,8 @@ In `dashboard-web/src/components/CampaignDrawer.tsx`, find the `<aside>` element
 ```
 
 (The `as never` cast is the existing project pattern for declaring custom CSS properties via the `style` prop without a TypeScript complaint.)
+
+**About removing `animate-fade-in-up`:** With View Transitions API, the browser snapshots both states and morphs between them. The keyframe animation would fire simultaneously, producing visible double-animation. The trade-off: in browsers without View Transitions support (Safari < 18), the panel will appear with no animation. That's acceptable — the panel content is the important payload, not the entrance flourish. Plan 7 can add a `@supports not (view-transition-name: foo)` fallback if the lack of animation in legacy Safari is noticed.
 
 ### Step 5 — Verify
 
