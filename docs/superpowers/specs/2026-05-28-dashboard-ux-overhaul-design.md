@@ -48,6 +48,7 @@ These are constraints. They cannot be relaxed during implementation without an e
 6. **Operator-secret middleware stays in place** (recent security hardening, commit `76449de`). Operator console is redesigned visually but its auth gate, BillingSettings logic, manual-override CRUD, and token-failure surface continue working byte-for-byte.
 7. **RTL is primary, not a flag.** Hebrew is the default language; Latin numerics/labels are first-class within RTL. All new primitives must be RTL-correct by construction (`ms-`/`me-`/`text-start`/`text-end`/`<bdi>`).
 8. **GoalTracker remains global.** It ignores `filters.store` and `filters.range`. See `feedback_monthly_goal_is_global.md`.
+9. **MonthlyTables is critical and stays — explicitly.** The "טבלאות חודשיות" section in the ניתוח tab — a table per month with a row per day going back 17 months, with ROAS color coding (red/orange/green/blue + black-with-'0' for spend-without-revenue) — is the operator's primary historical-context tool. It does not move tabs, it does not lose any column, it does not collapse months, and it does not shrink its 17-month horizon. The TZ-stable helper `_isoMonthsAgoFromIlParts` (tested in `monthlyTablesIsoMonths*.test.ts`) is part of this guarantee.
 
 ## Locked Decisions
 
@@ -141,22 +142,24 @@ These are introduced *additively*. Existing domain components (TodayLive, Campai
 
 Top-level navigation moves from **horizontal tabs** to a **resizable vertical sidebar** on the start-side (right in RTL). This is the Linear-March-2026 + Vercel-Feb-2026 pattern.
 
-### Sidebar items (default order, top to bottom)
+**The existing 6-tab structure is preserved 1-to-1** in the sidebar. No tabs are added, removed, renamed, or merged. The current `TabKey` union (`home | pnl | analysis | campaigns | products | detail`) is the SSOT — the sidebar items map exactly to it.
 
-| Position | Label | Icon | Tab destination | Notes |
-|----------|-------|------|-----------------|-------|
-| Top | Logo / brand | — | / (Home) | New: subtle brand mark |
-| 1 | היום (Home) | `Home` | Today/Home tab | First on muscle memory |
-| 2 | קמפיינים | `LayoutGrid` | Campaigns | |
-| 3 | תובנות | `Sparkles` | Insights | Now includes WhatsWorking + AttributionAnalysis |
-| 4 | קבוצות (Cohorts) | `Layers` | Cohorts | CohortComparisonPanel as primary |
-| 5 | בריאות | `HeartPulse` | Health Score | HealthScorePanel + AiReport |
-| 6 | מוצרים | `Package` | Products | NEW position — was inside Insights; surface as own tab |
+### Sidebar items (default order, top to bottom — matches today's `TABS` array in `Dashboard.tsx`)
+
+| Position | Label | Icon | Tab key | Maps to today's |
+|----------|-------|------|---------|-----------------|
+| Top | Logo / brand | — | n/a | New: subtle brand mark |
+| 1 | בית | `Home` | `home` | HomeTab |
+| 2 | P&L | `Receipt` | `pnl` | PnLTab |
+| 3 | ניתוח | `TrendingUp` | `analysis` | AnalysisTab (RoasChart + **MonthlyTables**) |
+| 4 | קמפיינים | `Megaphone` | `campaigns` | CampaignsTab |
+| 5 | מוצרים | `Package` | `products` | ProductsTab (sub-tabs: table / pivot) |
+| 6 | פירוט | `Table` | `detail` | DetailTab |
 | Divider | | | | |
-| 7 | מטרות | `Target` | Goals (NEW tab) | GoalTracker promoted (currently a Home widget); keeps global no-filter behavior |
-| Divider | | | | |
-| Bottom | אופרטור | `Settings2` | Operator | Always last; secret-gated |
+| Bottom | ניהול | `Cog` | n/a | Link to `/operator` route (sibling) |
 | Footer | Theme toggle + ⌘K hint | — | — | Always visible |
+
+The Header strip (Logo + freshness chip + ⌘K trigger + sync indicators + Cog link to /operator) collapses into the sidebar; the existing `Header.tsx` content reorganizes around the sidebar instead of being a top strip.
 
 Sidebar is **collapsible** (`Cmd+B`) and **resizable** (drag handle). Collapsed state: icons only, 64px wide. Expanded: 240px with labels.
 
@@ -179,141 +182,193 @@ New: dims the sidebar and top chrome to 30% opacity, hides operator-only badges,
 
 The existing global filter row (`Filters.tsx`) moves from a separate full-width bar above tabs to **inline within each tab's header strip** (Northbeam's global-filter pattern). The filter contract (URL params) is unchanged; only the layout moves. `Filters` becomes a single-line component that renders inside the new `<TabHeader />` primitive.
 
-**GoalTracker monthly goal** continues to ignore filters per `feedback_monthly_goal_is_global.md`. The Goals tab makes this explicit by NOT showing the global filter at all.
+**GoalTracker** (rendered as a section inside the בית tab) continues to ignore `filters.store` and `filters.range` per `feedback_monthly_goal_is_global.md`. It is not promoted to its own tab; it remains a Home-tab section with the eyebrow clarifying "מטרה גלובלית — לא מסוננת".
 
 ## Per-Tab Redesign Summary
 
-Every existing component is classified **STAYS / MOVES / NEW**. No existing component is REMOVED. Full per-component plan is encoded in the implementation plan that follows this spec.
+Every existing component is classified **STAYS / MOVES / NEW**. No existing component is REMOVED. The actual 6-tab structure (from `TABS` in `Dashboard.tsx`) is preserved 1-to-1. Full per-component plan is encoded in the implementation plan that follows this spec.
 
-### Tab 1 — היום / Home
+### Tab 1 — בית / `home`
+
+The "at a glance" view. Today's `HomeTab` is a long-scroll surface; the overhaul preserves every section.
 
 **STAYS (1-to-1, content + structure preserved):**
-- `TodayLive.tsx` — entire ROAS-gradient hero, including all 4 tone variants, pulse, blob, 6 stat cards, 3 per-store cards with per-platform CPM, FX footer, refresh note
-- `HeroOverview.tsx` chart — multi-store area chart over `range`
-- `RoasChart.tsx` line chart — per-store ROAS trend
-- `KpiCards.tsx` — historical-range KPIs (separate from TodayLive's today-only cards)
-- `PerStoreCards.tsx` — range view per-store summary
-- `DetailTable.tsx` — daily breakdown
-- `MonthlyTables.tsx` — month view
-- `SyncIndicator.tsx`, `FreshnessChip.tsx`
-- `GoalTracker.tsx` — moves to dedicated Goals tab (see MOVES below) but stays as Home widget too
-- `RefundIndicator.tsx`, `AnnotationsPanel.tsx`, `PnLBreakdown.tsx`
-- `AiReportButton.tsx` — entry to the AI day summary
+- `TodayLive.tsx` — the ROAS-gradient hero, including all 4 tone variants (red/orange/green/blue from `roasLabel` SSOT), pulse animation, blur blob, 6 LiveStat cards, per-store breakdown with per-platform CPM, FX footer, 10-min refresh note
+- `HeroOverview.tsx` — editorial story + chart-as-background + floating KPIs
+- `AiReportButton.tsx` — entry to AI day summary (header position preserved)
+- `GoalTracker.tsx` — monthly goal section; remains GLOBAL (ignores filters)
+- `InsightsBoard.tsx` — anomalies, recommendations, opportunities
+- `AnnotationsPanel.tsx` — activity log overlay
+- `KpiCards.tsx` — detailed range KPIs ("מדדים מסכמים לתקופה")
+- `PerStoreCards.tsx` — per-store cards for the selected range
+- `SectionIntro` headers between each section (with their `formula` annotations)
+- The Home tab's order: `TodayLive → HeroOverview → AiReport + filter row → Filters → GoalTracker → InsightsBoard → AnnotationsPanel → KpiCards → PerStoreCards`
 
 **MOVES (relocated, content identical):**
-- Top tabs → sidebar (Vercel pattern)
-- Global `Filters.tsx` → inline `<TabHeader />` strip per tab
-- The 6-column KPI grid that *used* to compete with TodayLive — relocated below the chart row as historical-range supporting context. TodayLive's 6 stat cards remain the live numbers; the historical KpiCards become "for the selected range" context.
+- Top tabs → sidebar (sidebar item 1)
+- Global `Filters.tsx` strip → inline `<TabHeader />` row
+- `AiReportButton` migrates from "row above Filters" into the TabHeader itself (right side)
 
 **NEW (additive only):**
-- **Narrative line inside TodayLive** — a single sentence between header and stat grid, e.g., "היום עשית ₪48,250 ב-ROAS 2.42x — 18% מעל היעד; Uzoshop מוביל". Generated from existing `aiReport` data — no new API.
-- **Sparklines inside DetailTable rows** — a new column showing 7-day ROAS trend per row.
-- **View Transitions** between Home and other tabs.
+- **Narrative line inside TodayLive** — a single sentence between header and 6 stat cards, e.g., "היום עשית ₪48,250 ב-ROAS 2.42x — 18% מעל היעד; Uzoshop מוביל". Generated from the existing `aiReport` data — no new API.
+- **Inline AI insight pills** — a sentence or two of context next to each section's `SectionIntro` (replaces the standalone `AiReportButton` modal popup pattern by surfacing the same content inline; the button stays for the full report).
+- **View Transitions** when switching between tabs.
 
-### Tab 2 — קמפיינים / Campaigns
+### Tab 2 — P&L / `pnl`
+
+Profit & loss deep-dive.
 
 **STAYS:**
-- `CampaignsTable.tsx` (2456L) — every column, every sort, every filter, cohort-mapping intelligence, cannibalization detection, Health Score column
-- `CampaignsTableRow.tsx` (857L) — cohort + cannibalization logic
-- `CampaignsColumnsMenu.tsx` — column visibility
-- `CampaignDrawer.tsx` (1413L) — full campaign detail
-- `AdSetTable.tsx`, `AdsDrawer.tsx`
-- `CampaignsDailyDetail` (the per-day breakdown inside the drawer)
+- `PnLBreakdown.tsx` (508L) — the full line-item P&L (Revenue → −COGS → −Transaction Fees → −Fixed Costs → Net)
+- `BillingSettings.tsx` access button (the gear that opens the full CRUD modal)
+- `RefundIndicator.tsx` integration if currently rendered here
+- `SectionIntro` with the formula annotation
 
 **MOVES:**
-- `Filters.tsx` inline at top of tab
-- `CampaignsTable` body split into `CampaignsTable.tsx` (shell + state) + `CampaignsTableRow.tsx` (row) + extracted hooks for cohort/cannibalization detection. **The file is 2456L today — a structural split is non-optional even from a maintenance angle**; the content shown to the user is byte-identical.
+- Global `Filters.tsx` strip → inline `<TabHeader />`
 
 **NEW:**
-- **Sparkline column** in CampaignsTable — 7-day ROAS trend visible inline per campaign row, no drilldown required.
-- **Campaign drawer view-transition** — opening the drawer animates from the row's position rather than fading in (View Transitions API).
+- **Income-statement typesetting** for `PnLBreakdown` (Lifetimely pattern — research-identified category gap). Same numbers, same line items, same math; rendered with serif eyebrows + right-aligned tabular columns + visible running subtotal. This is a presentation upgrade only.
 
-### Tab 3 — תובנות / Insights
+### Tab 3 — ניתוח / `analysis`
 
-**STAYS:**
-- `InsightsBoard.tsx`, `WhatsWorking.tsx`
-- `AttributionAnalysisPanel.tsx`
-- `ProductCentricView.tsx` (877L) — moves to Products tab; in Insights it stays accessible via a "view in Products tab" link, but the component lives in Products now
-- `ProductChannelBreakdown.tsx`
-- `CohortComparisonPanel.tsx` — moves to Cohorts tab as primary, but a summary card remains in Insights linking through
+**This tab contains `MonthlyTables` — the most operator-critical historical surface.** The 17-month rolling history with per-day ROAS color coding is unchanged in content, columns, color logic, or horizon.
+
+**STAYS (every detail of MonthlyTables is non-negotiable, see Non-Negotiable #9):**
+- `RoasChart.tsx` — multi-store line chart, dashed red ROAS=3.0 target reference, the existing per-store color mapping from `storeColors.ts`
+- `MonthlyTables.tsx` — one table per month with one row per day, up to 17 months back. ROAS color band: red `<2`, orange `2–2.7`, green `2.7–3`, blue `>3`, black-with-`0` for spend-without-revenue
+- The TZ-stable helper `_isoMonthsAgoFromIlParts` and its tests in `lib/__tests__/monthlyTablesIsoMonths*.test.ts`
+- Both `SectionIntro` headers ("מגמת ROAS לאורך זמן" and "טבלאות חודשיות") with their description text and formula annotations
 
 **MOVES:**
-- `Filters.tsx` inline
-- Layout reflows to a 2-column on lg screens, single column on md and below
+- Global `Filters.tsx` strip → inline `<TabHeader />`
+- `SectionIntro` for the filter explainer ("הסינון מטה משפיע על גרף המגמה בלבד…") moves to a subtitle line under the TabHeader so the explanation that "filters affect chart but not monthly tables" stays visible at the top of the tab
 
-**NEW:**
-- **Northbeam-style quadrant scatter** — ROAS × CAC plotted on two axes, color-coded by quadrant (good/grow/cut/diagnose). Bubble size = spend. Surfaces as a new card on the Insights board. This is a research-identified category gap — no competitor does it well; cheap differentiator.
-- **AI summary card at the top** — same content as `AiReportButton` but inline-rendered (not a button-to-popup), one paragraph.
+**NEW (additive only):**
+- **Theme-aware ROAS color bands** in MonthlyTables — same hues, dark-mode-correct backgrounds via the OKLCH token migration. The boundaries (2.0 / 2.7 / 3.0) and the SSOT (`roasLabel`) are unchanged
+- **Optional column-header sparklines** above each month's revenue column — 30-day mini trend for that store, no extra row, no displacement of data
 
-### Tab 4 — קבוצות / Cohorts
+### Tab 4 — קמפיינים / `campaigns`
 
 **STAYS:**
-- `CohortComparisonPanel.tsx` as primary
-- Multi-mapping intelligence (Steps 1–3 shipped per `project_multi_mapping_intelligence_progress.md`)
-- All cohort math (cannibalization detection, cohort-aware Health Score scoring)
+- `CampaignsTable.tsx` (2456L) — every column, every sort, every filter, cohort-mapping intelligence, cannibalization detection, Health Score column, current row selection and column visibility behavior
+- `CampaignsTableRow.tsx` (857L) — cohort + cannibalization rendering logic
+- `CampaignsColumnsMenu.tsx` — column visibility controls
+- `CampaignDrawer.tsx` (1413L) — full campaign detail, including the embedded panels: `HealthScorePanel`, `CohortComparisonPanel`, `AttributionAnalysisPanel`, `ProductChannelBreakdown`, `CampaignsDailyDetail`
+- `AdSetTable.tsx`, `AdsDrawer.tsx` — ad-set level surfaces under the drawer
 
 **MOVES:**
-- Cohort comparison is the tab's hero (not embedded in Insights)
-- `Filters.tsx` inline
+- Global `Filters.tsx` strip → inline `<TabHeader />`
+- `CampaignsTable.tsx` body is structurally split for maintenance (current 2456L is hard to evolve safely): shell + state in `CampaignsTable.tsx`, row in `CampaignsTableRow.tsx`, cohort+cannibalization detection extracted to `lib/campaignsIntelligence.ts`. **Rendered output is byte-equivalent** — split is a maintenance move, not a content change
 
 **NEW:**
-- **Cumulative-revenue cohort heatmap** (Lifetimely-pattern) — alongside the existing comparison panel.
+- **Inline sparkline column** in CampaignsTable — 7-day ROAS trend per row, no drilldown required
+- **View-transition open** for `CampaignDrawer` — animates from the row position rather than fade-in (View Transitions API)
+- **Northbeam-style quadrant scatter card** above the table — ROAS × CAC plotted on two axes, color-coded by quadrant (good/grow/cut/diagnose), bubble size = spend. This is a research-identified category gap; surfaces as a collapsed-by-default card at the top of the tab so it doesn't displace the table for operators who want to skip to it
 
-### Tab 5 — בריאות / Health Score
+### Tab 5 — מוצרים / `products`
 
-**STAYS:**
-- `HealthScorePanel.tsx` — pure-function rendering (no operator flags, per `5cf5dac` refactor)
-- `AiReportButton.tsx` and its full report view
-
-**MOVES:**
-- `Filters.tsx` inline
-- `HealthScorePanel` becomes the tab hero rather than an embedded widget
-
-**NEW:**
-- **Per-campaign Health Score histogram** — distribution view showing how many campaigns are in each Health bucket. Helps operator spot whether a low overall health is one bad campaign or many medium ones.
-
-### Tab 6 — מוצרים / Products (promoted from Insights)
+Existing tab with two sub-tabs ("מוצרים שנמכרו" / "מוצרים → קמפיינים"). Sub-tab structure preserved.
 
 **STAYS:**
-- `ProductsTable.tsx` (933L) — every column
-- `ProductCentricView.tsx` (877L) — moves here as the primary view
-- `ProductChannelBreakdown.tsx`
+- Sub-tab segmented control with both options
+- `ProductsTable.tsx` (933L) — every column, period switcher, mapping intelligence
+- `ProductCentricView.tsx` (877L) — pivot view with multi-mapping intelligence, "select a store" hint for `filters.store === 'All'`
+- `ProductChannelBreakdown.tsx` (rendered inside drawer flows where applicable)
 - `ProductPickerModal.tsx`
 
 **MOVES:**
-- Promoted from being a sub-section of Insights to its own top-level tab
-- `Filters.tsx` inline
+- Global `Filters.tsx` strip → inline `<TabHeader />`
+- Sub-tab control redesigned as a Radix `Tabs` primitive with the same two options and same label text
 
 **NEW:**
-- **Sparklines inside ProductsTable rows** — 14-day units-sold trend per SKU.
+- **Inline sparkline column** in `ProductsTable` — 14-day units-sold trend per SKU
 
-### Tab 7 — מטרות / Goals (NEW tab)
+### Tab 6 — פירוט / `detail`
+
+Raw daily log. Power-user view.
 
 **STAYS:**
-- `GoalTracker.tsx` — ignores filters (global), per `feedback_monthly_goal_is_global.md`. Continues to be ALSO available as a Home widget.
+- `DetailTable.tsx` — every column (date × store, FB/Google spend, revenue, ROAS, profit), last 100 rows in selected range, the "ROAS שחור עם '0' = יום שהוצאת בו כסף אבל לא היו מכירות" color rule
+- `SectionIntro` with the failure-day explainer
 
 **MOVES:**
-- Promoted to its own tab so monthly-goal context has room to breathe; eyebrow-text clarifies "מטרה גלובלית — לא מסוננת".
+- Global `Filters.tsx` strip → inline `<TabHeader />`
 
 **NEW:**
-- **Goal timeline** — visualizes progress across the month with daily contribution bars.
-- **Goal adjustment UI** (operator-only, behind same secret gate as Operator) for editing the monthly target.
+- **Inline sparkline column** in `DetailTable` — 7-day ROAS trend for the row's store
+- **Theme-aware "spend without revenue"** styling — currently `bg-black text-white`; in dark mode this needs an inverse treatment to remain visible. Token-driven, content unchanged
 
-### Tab 8 — אופרטור / Operator
+### Sibling — ניהול / `/operator` route
 
-**STAYS:**
-- Every operator component: `BillingSettings.tsx` (1171L), `JobsTable`, `ManualOverridesCrud`, `BackfillPicker`, `SyncNowButtons`, `ResetData`, `TokenFailuresTable`, `WhatsappTestButtons`, `OperatorSecretBanner`
-- Operator-secret middleware (commit `76449de`) untouched
-- `MetaShopifyReconciliation.tsx` (848L)
-- `CloudSync.tsx`
-- `BackfillPicker.tsx`
+Separate Next.js route at `/operator`, sibling to `/`. Operator console; secret-gated by middleware. Live contents (per `app/operator/page.tsx`, in render order):
+
+**STAYS (every operator surface, byte-for-byte):**
+- `OperatorSecretBanner.tsx`
+- `SyncNowButtons.tsx` — fire sync-now per store / all-stores
+- `TokenFailuresTable.tsx` — recent token failures with resolve
+- `JobsTable.tsx` — recent cron / sync jobs
+- `BackfillPicker.tsx` — historical backfill window picker
+- `ManualOverridesCrud.tsx` — manual spend / revenue overrides
+- `WhatsappTestButtons.tsx`
+- `ResetData.tsx`
+- Operator-secret middleware (commits `76449de` and `1513197`) untouched
 
 **MOVES:**
-- Top tab nav → sidebar (icon at bottom — `Settings2`)
-- Filter bar continues to be hidden here (operator screens have their own controls)
+- The Header `Cog` link → sidebar bottom item ("ניהול"), still pointing at `/operator`
+- Operator screens get the new tokens applied so they're consistent in dark mode, but layout is unchanged
 
 **NEW:**
-- **Visual chrome upgrade only.** Operator tab gets the new tokens, fonts, primitives, sidebar position, and dark/light theme. It does **not** get a hero, narrative card, sparkline columns, or AI summaries — those are user-facing patterns. The operator console is a workhorse and stays that way.
+- **Visual chrome upgrade only.** Operator surfaces get new tokens, fonts, primitives, and dark/light theme. They do NOT get hero treatments, narrative cards, sparkline columns, or AI summaries — those are user-facing patterns. The operator console is a workhorse and stays that way
+
+### Where every component actually lives (verified against the code on 2026-05-28)
+
+Authoritative map. Implementation plan must validate against this map before any component-level work.
+
+| Component | File | Lives in | Rendered by |
+|-----------|------|----------|-------------|
+| `TodayLive` | `TodayLive.tsx` | **בית tab** | `HomeTab` |
+| `HeroOverview` | `HeroOverview.tsx` | **בית tab** | `HomeTab` |
+| `GoalTracker` | `GoalTracker.tsx` | **בית tab** (global, ignores filters) | `HomeTab` |
+| `InsightsBoard` | `InsightsBoard.tsx` | **בית tab** | `HomeTab` |
+| `AnnotationsPanel` | `AnnotationsPanel.tsx` | **בית tab** | `HomeTab` |
+| `KpiCards` | `KpiCards.tsx` | **בית tab** | `HomeTab` |
+| `PerStoreCards` | `PerStoreCards.tsx` | **בית tab** | `HomeTab` |
+| `AiReportButton` | `AiReportButton.tsx` | **בית tab** (row above Filters) | `HomeTab` + opens via `CommandPalette` signal |
+| `PnLBreakdown` | `PnLBreakdown.tsx` | **P&L tab** | `PnLTab` |
+| `BillingSettings` | `BillingSettings.tsx` | **P&L tab** (gear → modal CRUD) | `PnLTab` |
+| `BillingCsvImport` | `BillingCsvImport.tsx` | sub-component of `BillingSettings` | `BillingSettings` |
+| `RoasChart` | `RoasChart.tsx` | **ניתוח tab** | `AnalysisTab` |
+| `MonthlyTables` | `MonthlyTables.tsx` | **ניתוח tab** | `AnalysisTab` |
+| `CampaignsTable` | `CampaignsTable.tsx` (2456L) | **קמפיינים tab** | `CampaignsTab` |
+| `CampaignsTableRow` | `CampaignsTableRow.tsx` (857L) | inside `CampaignsTable` | `CampaignsTable` |
+| `CampaignsColumnsMenu` | `CampaignsColumnsMenu.tsx` | inside `CampaignsTable` | `CampaignsTable` |
+| `CampaignDrawer` | `CampaignDrawer.tsx` (1413L) | drawer overlay from **קמפיינים tab** | row click in `CampaignsTable` |
+| `HealthScorePanel` | `HealthScorePanel.tsx` | inside `CampaignDrawer` | `CampaignDrawer` |
+| `HealthScoreBadge` | `HealthScoreBadge.tsx` | inside `CampaignsTableRow` | `CampaignsTableRow` |
+| `CohortComparisonPanel` | `CohortComparisonPanel.tsx` | inside `CampaignDrawer` | `CampaignDrawer` |
+| `AttributionAnalysisPanel` | `AttributionAnalysisPanel.tsx` | inside `CampaignDrawer` | `CampaignDrawer` |
+| `ProductChannelBreakdown` | `ProductChannelBreakdown.tsx` | inside `CampaignDrawer` | `CampaignDrawer` |
+| `MetaShopifyReconciliation` | `MetaShopifyReconciliation.tsx` (848L) | inside `CampaignDrawer` (NOT operator) | `CampaignDrawer` |
+| `AdSetTable` | `AdSetTable.tsx` | inside `CampaignDrawer` | `CampaignDrawer` |
+| `AdsDrawer` | `AdsDrawer.tsx` (635L) | nested drawer from `CampaignDrawer` | `AdSetTable` row |
+| `ProductPickerModal` | `ProductPickerModal.tsx` | modal from `CampaignDrawer` | `CampaignDrawer` map-products flow |
+| `ProductsTable` | `ProductsTable.tsx` (933L) | **מוצרים tab** (sub-tab 'table') | `ProductsTab` |
+| `ProductCentricView` | `ProductCentricView.tsx` (877L) | **מוצרים tab** (sub-tab 'pivot') | `ProductsTab` |
+| `DetailTable` | `DetailTable.tsx` | **פירוט tab** | `DetailTab` |
+| `RefundIndicator` | `RefundIndicator.tsx` | inside `DetailTable` AND `MonthlyTables` | both tables |
+| `Filters` | `Filters.tsx` | every tab (rendered per tab) | every tab body |
+| `TabFreshnessHeader` | `TabFreshnessHeader.tsx` | global, above every tab | `Dashboard` |
+| `TabNav` | `TabNav.tsx` | global header | `Dashboard` (will be replaced by `Sidebar`) |
+| `CommandPalette` | `CommandPalette.tsx` (650L) | global, ⌘K trigger in Header | `Dashboard.Header` |
+| `Header` (Dashboard's) | `Dashboard.tsx` inline | global | `Dashboard` (content collapses into `Sidebar`) |
+| `FreshnessChip` | `FreshnessChip.tsx` | inside `Header` + `TabFreshnessHeader` | both |
+| `SyncIndicator` | `SyncIndicator.tsx` | inside `Header` | `Header` |
+| `CloudSync` | `CloudSync.tsx` | invisible, top of `Dashboard` | `Dashboard` |
+| `OperatorSecretBanner`, `SyncNowButtons`, `TokenFailuresTable`, `JobsTable`, `BackfillPicker`, `ManualOverridesCrud`, `WhatsappTestButtons`, `ResetData` | `components/operator/*.tsx` | **`/operator` route** | `app/operator/page.tsx` |
+| `WhatsWorking` | `WhatsWorking.tsx` | **No wired usage found in the JSX** — likely dead code or behind a flag | needs validation in implementation plan before STAYS commitment |
+
+`SectionIntro`, `MetricHelp`, `RollingNumber`, `CollapsibleSection`, `Sparkline` are shared utility components used across multiple tabs; all STAY and migrate to new tokens like everything else.
 
 ## Charts Strategy
 
@@ -333,7 +388,7 @@ Upgrade Recharts 2.15 → 3.x and adopt shadcn chart-component wrappers.
    - Live crosshair on hover with mono-font tooltip values
    - Dashed reference gridlines at low opacity (continues today's pattern; just OKLCH now)
    - Per-store colors continue from `storeColors.ts` SSOT (no change — already 120° hue-separated for accessibility)
-5. **Add Northbeam-style scatter** for the new Insights tab quadrant view — uses Recharts `ScatterChart`.
+5. **Add Northbeam-style scatter** for the new quadrant card on the קמפיינים tab — uses Recharts `ScatterChart`.
 
 **No tremor, no visx adoption** — staying within Recharts keeps maintenance simple and preserves existing chart logic.
 
@@ -361,7 +416,7 @@ Every component touched must comply with this checklist. New `components/ui/` pr
 
 ## Migration Strategy
 
-**Pre-overhaul capture (before branch):** screenshot the 4 ROAS-tone states of TodayLive (red/orange/green/blue) on a representative day for each. Screenshots are the visual baseline for "did we preserve the signature gradient" at merge time. Also capture: Home tab full scroll, Campaigns table at default sort, Cohorts comparison panel, Health Score panel, Operator console main view. Save under `.planning/dashboard-ux-overhaul-2026-05-28/before/`.
+**Pre-overhaul capture (before branch):** screenshot the 4 ROAS-tone states of TodayLive (red/orange/green/blue) on a representative day for each. Screenshots are the visual baseline for "did we preserve the signature gradient" at merge time. Also capture: full scroll of each tab (בית / P&L / ניתוח / קמפיינים / מוצרים / פירוט), CampaignDrawer with its embedded panels (HealthScorePanel, CohortComparisonPanel, AttributionAnalysisPanel, ProductChannelBreakdown) open on a representative campaign, MonthlyTables at all 17 months of history, Operator console main view. Save under `.planning/dashboard-ux-overhaul-2026-05-28/before/`.
 
 **Single feature branch** `dashboard-ux-overhaul-2026-05-28`. No incremental deploys. Merge to main when:
 - All STAYS components verified byte-identical in their data outputs (snapshot tests on data, visual diff acceptable)
@@ -373,45 +428,60 @@ Every component touched must comply with this checklist. New `components/ui/` pr
 
 **Phasing of WORK (not deploys)** during the branch:
 
-1. **Foundation week (1)** — design tokens, fonts, primitives in `components/ui/`, sidebar shell, theme toggle, ⌘K NL upgrade. No tab visible yet.
-2. **TodayLive + Home tab (2)** — most visible surface; defines the visual language for everything else.
-3. **Charts upgrade (½ of week 2)** — Recharts v3 + shadcn wrappers.
-4. **Campaigns + Products tabs (3)** — largest by component complexity (CampaignsTable split included).
-5. **Insights + Cohorts + Health + Goals tabs (early week 4)**.
-6. **Operator tab visual upgrade (½ of week 4)** — chrome-only.
-7. **Polish, RTL audit, theme audit, accessibility audit, docs (rest of week 4)**.
+1. **Plan 1 — Foundation** (~5-7 days). Design tokens (OKLCH), font stack (Heebo+Rubik+Geist Mono), theme system + no-FOUC, `components/ui/` primitives, Sidebar shell, TabHeader, FocusMode, View-Transitions root, ⌘K NL upgrade. Tab-agnostic; nothing user-visible yet.
+2. **Plan 2 — בית tab** (~4-5 days). TodayLive narrative line, token migration of HomeTab + every section component (TodayLive, HeroOverview, GoalTracker, InsightsBoard, AnnotationsPanel, KpiCards, PerStoreCards, AiReportButton). Inline AI insight pills.
+3. **Plan 3 — Charts upgrade** (~2-3 days). Recharts v3, ChartContainer/Tooltip/Legend wrappers, migration of HeroOverview, RoasChart, Sparkline, and every chart in panels.
+4. **Plan 4 — קמפיינים + מוצרים tabs** (~5-7 days). CampaignsTable structural split, CampaignsTableRow + CampaignDrawer token migration, embedded panels (HealthScorePanel, CohortComparisonPanel, AttributionAnalysisPanel, ProductChannelBreakdown) migrated. Sparkline columns. QuadrantScatter card. View-transition drawer open. ProductsTab sub-tab redesign and ProductCentricView migration.
+5. **Plan 5 — ניתוח + P&L + פירוט tabs** (~4-5 days). RoasChart + **MonthlyTables (no horizon/column changes)** token migration. PnLBreakdown income-statement typesetting. DetailTable theme-aware spend-without-revenue rule + sparkline column.
+6. **Plan 6 — Operator** (~1-2 days). Chrome-only token migration across all operator components.
+7. **Plan 7 — Polish** (~2-3 days). RTL audit pass, a11y, motion vocabulary review, after-screenshots, User Manual + Architecture Doc update.
 
-Detailed file-by-file plan is generated by the `superpowers:writing-plans` skill that runs after this spec is approved.
+Detailed file-by-file plan is generated by the `superpowers:writing-plans` skill, one plan per phase above.
 
 ## Files Affected (high-level inventory)
 
 **New files:**
-- `dashboard-web/src/components/ui/{Card,Button,Badge,Tooltip,Dialog,Sheet,Tabs,Input,Select,Switch,Toggle,Sparkline}.tsx`
-- `dashboard-web/src/components/ui/chart/{ChartContainer,ChartTooltip,ChartLegend}.tsx`
-- `dashboard-web/src/components/Sidebar.tsx`
-- `dashboard-web/src/components/TabHeader.tsx`
-- `dashboard-web/src/components/FocusMode.tsx`
+- `dashboard-web/src/components/ui/{Card,Button,Badge,Tooltip,Dialog,Sheet,Tabs,Input,Select,Switch,Toggle,Sparkline}.tsx` (primitives)
+- `dashboard-web/src/components/ui/chart/{ChartContainer,ChartTooltip,ChartLegend}.tsx` (shadcn chart wrappers)
+- `dashboard-web/src/components/Sidebar.tsx` (NEW navigation chrome — replaces top TabNav)
+- `dashboard-web/src/components/TabHeader.tsx` (NEW per-tab title+filter strip)
+- `dashboard-web/src/components/FocusMode.tsx` (NEW `⌘\\` chrome-dim component)
 - `dashboard-web/src/components/ThemeProvider.tsx` + `useTheme` hook
-- `dashboard-web/src/components/QuadrantScatter.tsx` (new Insights card)
-- `dashboard-web/src/components/CohortHeatmap.tsx` (new Cohorts card)
-- `dashboard-web/src/components/HealthScoreHistogram.tsx` (new Health card)
-- `dashboard-web/src/components/GoalsTimeline.tsx` (new Goals tab content)
-- `dashboard-web/src/app/goals/page.tsx` (NEW tab route)
-- `dashboard-web/src/app/products/page.tsx` (PROMOTED tab route)
+- `dashboard-web/src/components/QuadrantScatter.tsx` (NEW Campaigns-tab card — ROAS × CAC scatter)
 - `dashboard-web/src/lib/theme.ts` (theme persistence helpers)
+- `dashboard-web/src/lib/campaignsIntelligence.ts` (extracted cohort + cannibalization detection from CampaignsTable split)
+
+No new tabs (`/goals`, `/products`, `/cohorts`, `/health`) — the existing 6-tab structure is preserved.
 
 **Heavily modified files:**
-- `tailwind.config.ts` — OKLCH token migration, new font chain, dark mode preset
+- `dashboard-web/tailwind.config.ts` — OKLCH token migration, new font chain, dark mode preset
 - `dashboard-web/src/app/globals.css` — theme variables, `tabular-nums` font-family swap, focus-mode utilities
-- `dashboard-web/src/app/layout.tsx` — load Heebo + Rubik + Geist Mono, theme `<script>` for no-FOUC
-- `dashboard-web/src/components/Dashboard.tsx` (747L) — top-level: replaces tab nav with sidebar, wraps content in View Transition root
-- `dashboard-web/src/components/TodayLive.tsx` (667L) — narrative line added; existing structure preserved; tokens migrated
-- `dashboard-web/src/components/CampaignsTable.tsx` (2456L) — structural split into shell + extracted hooks (cohort + cannibalization), tokens migrated, sparkline column added
+- `dashboard-web/src/app/layout.tsx` — load Heebo + Rubik + Geist Mono via `next/font`, theme `<script>` for no-FOUC
+- `dashboard-web/src/components/Dashboard.tsx` (747L) — replaces `TabNav` with `Sidebar`, integrates `TabHeader`, wraps tab content in View Transition root, inlines per-tab `Filters` placement
+- `dashboard-web/src/components/Header.tsx` content — collapsed into Sidebar
+- `dashboard-web/src/components/TabNav.tsx` — removed (replaced by Sidebar); the `TabDef` type and tab keys SSOT remain
+- `dashboard-web/src/components/TodayLive.tsx` (667L) — narrative line added between header and stat grid; existing structure preserved; tokens migrated
+- `dashboard-web/src/components/HeroOverview.tsx` (738L) — token migration; structure preserved
+- `dashboard-web/src/components/MonthlyTables.tsx` — token migration only (color bands → theme tokens); columns + 17-month horizon + helpers unchanged
+- `dashboard-web/src/components/RoasChart.tsx` — Recharts v3 + ChartContainer migration; multi-store color logic unchanged
+- `dashboard-web/src/components/PnLBreakdown.tsx` (508L) — income-statement typesetting; line items and math preserved
+- `dashboard-web/src/components/CampaignsTable.tsx` (2456L) — structural split into shell + extracted intelligence (cohort + cannibalization), tokens migrated, sparkline column added
 - `dashboard-web/src/components/CampaignsTableRow.tsx` (857L) — token migration, sparkline cell
-- `dashboard-web/src/components/CampaignDrawer.tsx` (1413L) — token migration, view-transition open animation
+- `dashboard-web/src/components/CampaignDrawer.tsx` (1413L) — token migration, view-transition open animation; embedded HealthScorePanel + CohortComparisonPanel + AttributionAnalysisPanel + ProductChannelBreakdown reach by tokens
+- `dashboard-web/src/components/HealthScorePanel.tsx` — token migration only; logic untouched (post-`d5c134b` data-pure)
+- `dashboard-web/src/components/CohortComparisonPanel.tsx` — token migration; cohort math unchanged
+- `dashboard-web/src/components/AttributionAnalysisPanel.tsx` — token migration
+- `dashboard-web/src/components/InsightsBoard.tsx`, `WhatsWorking.tsx`, `AnnotationsPanel.tsx` — token migration
+- `dashboard-web/src/components/GoalTracker.tsx` — token migration; global-filter behavior preserved
+- `dashboard-web/src/components/KpiCards.tsx`, `PerStoreCards.tsx`, `DetailTable.tsx` — token migration + sparkline columns where noted
+- `dashboard-web/src/components/ProductsTable.tsx` (933L), `ProductCentricView.tsx` (877L), `ProductChannelBreakdown.tsx`, `ProductPickerModal.tsx` — token migration
 - `dashboard-web/src/components/Filters.tsx` — restyled as inline `<TabHeader />` child
 - `dashboard-web/src/components/CommandPalette.tsx` (650L) — NL query support + theme toggle entries
-- `dashboard-web/src/components/BillingSettings.tsx` (1171L) — chrome refresh only (no logic)
+- `dashboard-web/src/components/AiReportButton.tsx` — token migration; surfaces optionally as inline AI insight pills in addition to existing modal
+- `dashboard-web/src/components/BillingSettings.tsx` (1171L) — chrome refresh only (no CRUD logic)
+- `dashboard-web/src/components/operator/*` — token migration pass only; auth + CRUD untouched
+- `dashboard-web/src/components/MetaShopifyReconciliation.tsx` (848L) — token migration; lives inside CampaignDrawer (קמפיינים tab), NOT operator
+- `dashboard-web/src/components/CloudSync.tsx` — invisible state sync; token migration not needed (no visible UI)
 - Every other component file under `dashboard-web/src/components/` — token migration pass (Tailwind classes adjusted to new tokens; structure unchanged)
 
 **Untouched:**
@@ -465,6 +535,14 @@ These came up in research and were deferred to stay within budget:
 | OAuth Google refresh-token expires mid-overhaul (~2026-05-30 per `project_google_oauth_refresh_token_pending.md`) | Operator publishes the consent screen *before* starting this overhaul. |
 | Cumulative session count of LIVE refresh + theme `<script>` + ⌘K NL inflates bundle | Audit final bundle in CI; budget +25 KB gzipped max. |
 
+## Open Questions for Implementation Plan to Verify
+
+The implementation plan must verify these against the live code before committing to the listed treatment:
+
+1. **`WhatsWorking.tsx` wiring.** A grep on 2026-05-28 found no JSX usage of this component. The implementation plan's audit step must confirm one of: (a) it's behind a feature flag, (b) it's truly dead code (in which case `git rm` may be appropriate but only with explicit operator approval — the no-info-loss principle protects user-visible info, not unused files), or (c) it's wired in a way the grep missed. STAYS or remove-decision happens in the plan, not here.
+2. **CampaignDrawer's full embedded panel list.** The drawer renders `HealthScorePanel`, `CohortComparisonPanel`, `AttributionAnalysisPanel`, `ProductChannelBreakdown`, `MetaShopifyReconciliation`, `AdSetTable`, `AdsDrawer`, and `ProductPickerModal` — all of which must be visually consistent under the new tokens. Plan audits each.
+3. **Sub-component sprawl inside large files.** `CampaignsTable` (2456L), `CampaignDrawer` (1413L), `BillingSettings` (1171L), `ProductsTable` (933L), `ProductCentricView` (877L), `CampaignsTableRow` (857L), `MetaShopifyReconciliation` (848L), `HeroOverview` (738L), `TodayLive` (667L), `CommandPalette` (650L), `AdsDrawer` (635L), `PnLBreakdown` (508L) each get a "structural decomposition?" check during the plan. Decomposition only happens where it makes the migration safer — never for its own sake.
+
 ## Open Questions Resolved by Implementation Plan
 
 These are decisions that belong in the implementation plan (the `superpowers:writing-plans` output), not this spec:
@@ -491,7 +569,7 @@ These are decisions that belong in the implementation plan (the `superpowers:wri
   - `.superpowers/brainstorm/9584-1779985439/content/todaylive-as-hero.html`
 - Memory references:
   - `feedback_no_info_loss_across_tabs.md` — non-negotiable #1
-  - `feedback_monthly_goal_is_global.md` — Goals tab carve-out
+  - `feedback_monthly_goal_is_global.md` — GoalTracker stays a בית tab section and ignores filters
   - `feedback_keep_user_manual_current.md` — doc gate
   - `project_script_roas_dashboard.md` — architecture context
   - `project_audit_2026_05_28_data_consistency.md` — recent data-correctness work to not undo
