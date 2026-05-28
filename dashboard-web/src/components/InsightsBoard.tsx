@@ -33,6 +33,7 @@ import {
   type Severity,
 } from '@/lib/insights';
 import { cn } from '@/lib/utils';
+import { AiInsightPill } from '@/components/ui/AiInsightPill';
 
 const fetcher = (url: string) => fetch(url).then(r => (r.ok ? r.json() : null));
 
@@ -269,6 +270,16 @@ export function InsightsBoard({ data }: Props) {
           </div>
         </div>
       </button>
+
+      {/* AI-insight pill — surfaces the headline insight title as a one-line
+          context cue next to the section header. Visible in both collapsed and
+          expanded states so the user always has a sense of what's inside.
+          AiInsightPill renders nothing when topInsight is null so no guard needed. */}
+      {!loading && topInsight && (
+        <div className="px-4 sm:px-6 pb-0 pt-3">
+          <AiInsightPill>{topInsight.title}</AiInsightPill>
+        </div>
+      )}
 
       {/* Memorable headline: when the board is collapsed AND we have something
           to say, surface the top insight as an editorial moment — large title,
