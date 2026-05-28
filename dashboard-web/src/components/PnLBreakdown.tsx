@@ -243,7 +243,7 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
                 pct={revenue > 0 ? -(refundTotalInPeriod / revenue) * 100 : 0}
                 tone="cost"
                 note="כבר מנוכים מההכנסות מעל — מוצג להבהרה"
-                running={revenue}
+                running={null}
               />
             )}
             <PnLLine
@@ -449,7 +449,10 @@ function PnLLine({
   pct: number;
   tone: 'positive' | 'cost';
   note?: string;
-  running: number;
+  /** Pass `null` to suppress the "running total" column (e.g. for presentational
+   * rows that annotate but do NOT advance the cascade — see the "החזרים בתקופה"
+   * row in the main cascade for the canonical example). */
+  running: number | null;
 }) {
   return (
     <li className="flex items-center gap-3 py-2 border-b border-borderSubtle/40 last:border-b-0">
@@ -482,14 +485,23 @@ function PnLLine({
         <div className="text-[10px] text-text-muted uppercase tracking-wide leading-tight">
           נשאר
         </div>
-        <div
-          className={cn(
-            'text-xs font-semibold tabular-nums leading-tight mt-0.5',
-            running >= 0 ? 'text-text-primary' : 'text-roas-red',
-          )}
-        >
-          {formatCurrency(running)}
-        </div>
+        {running === null ? (
+          <span
+            className="text-xs text-text-secondary opacity-50"
+            aria-label="הערה — לא משפיע על הסכום הרץ"
+          >
+            —
+          </span>
+        ) : (
+          <div
+            className={cn(
+              'text-xs font-semibold tabular-nums leading-tight mt-0.5',
+              running >= 0 ? 'text-text-primary' : 'text-roas-red',
+            )}
+          >
+            {formatCurrency(running)}
+          </div>
+        )}
       </div>
     </li>
   );
