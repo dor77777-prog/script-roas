@@ -719,10 +719,10 @@ function DetailTab({
       <SectionIntro
         icon={<Table size={20} />}
         title="פירוט יומי"
-        description="כל שורה בטבלה היא (יום × חנות) — הוצאות פייסבוק, גוגל, הכנסות, ROAS, ורווח. עד 100 שורות אחרונות בטווח הנבחר. ROAS שחור עם '0' = יום שהוצאת בו כסף אבל לא היו מכירות (כשל)."
+        description="כל שורה בטבלה היא (יום × חנות) — הוצאות פייסבוק, גוגל, הכנסות, ROAS, ורווח. עד 100 שורות אחרונות בטווח הנבחר. ROAS אדום עם '0' = יום שהוצאת בו כסף אבל לא היו מכירות (כשל)."
       />
       <Filters filters={filters} stores={stores} onChange={setFilters} />
-      <div className="rounded-xl bg-surface border border-border shadow-card overflow-hidden">
+      <div className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
         <DetailTable rows={filtered.cur} bare />
       </div>
     </div>
