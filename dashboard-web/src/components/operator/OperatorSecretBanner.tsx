@@ -129,8 +129,6 @@ export function OperatorSecretBanner() {
                 className="bg-black/30 border border-white/15 rounded px-2 py-0.5 text-xs text-foreground pr-7"
                 dir="ltr"
                 autoComplete="off"
-                // eslint-disable-next-line jsx-a11y/no-autofocus
-                autoFocus
               />
               <button
                 type="button"
