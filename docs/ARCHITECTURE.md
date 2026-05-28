@@ -535,10 +535,25 @@ Open /operator for details: https://roas-dashboard-smoky.vercel.app/operator
 | Reset Data | POST `/api/operator/reset` `{scope,confirm}` | ישיר ל-Supabase admin client |
 
 ### 11.2 Auth
-**אין auth.** מודל URL-obscurity — אל תשלח את ה-URL.
+**מודל ברירת מחדל: URL-obscurity** — אל תשלח את ה-URL. אופציה מתקדמת: **OPERATOR_SECRET gate** (Security hardening FIX 3, 2026-05-28) — ראה סעיף 11.2.1.
+
+#### 11.2.1 OPERATOR_SECRET — שכבת הגנה אופציונלית
+**ברירת מחדל: כבוי.** אין צורך לשנות התנהגות קיימת — ה-gate לא פעיל כאשר env var לא מוגדר.
+
+**הפעלה:** הגדר `OPERATOR_SECRET=<strong-random-token>` ב-Vercel (Project Settings → Environment Variables).
+
+**מנגנון:**
+- Next.js Middleware (`dashboard-web/middleware.ts`) רץ על כל בקשה לנתיבים `/api/operator/*` ו-`/operator`.
+- `X-Robots-Tag: noindex, nofollow` מוגדר תמיד (גם ללא secret) — מונע אינדוקס של URL אם יתגלה.
+- על נתיבי `/api/operator/*` בלבד: אם `OPERATOR_SECRET` מוגדר, כל בקשה חייבת לכלול header `x-operator-secret` שמתאים בדיוק (השוואה constant-time ע"י `crypto.timingSafeEqual`). אי-התאמה → **404** (לא 401/403 — 404 לא חושף שהנתיב קיים).
+- עמוד `/operator` עצמו תמיד זמין (הוא מציג את טופס הכנסת ה-secret).
+
+**SPA integration:** כל קריאות ה-API מ-SPA מבוצעות דרך `operatorFetch()` (src/lib/operatorClient.ts) — wrapper סביב `fetch()` שמוסיף את ה-header אוטומטית כאשר ה-secret שמור ב-localStorage. המפעיל שומר את ה-secret דרך הטופס ב-`/operator` (OperatorSecretBanner component); הוא נשמר ב-localStorage של הדפדפן.
+
+**היעדר secret ב-env:** ה-header שמגיע מ-SPA מתעלם ממנו (harmless); כל הבקשות עוברות. תאימות מלאה לאחור.
 
 ### 11.3 Secrets handling
-`INNGEST_SIGNING_KEY` + `INNGEST_EVENT_KEY` + `SUPABASE_SERVICE_ROLE_KEY` — server-side בלבד. 0 התאמות ב-`.next/static/` לאחר build (bundle scan).
+`INNGEST_SIGNING_KEY` + `INNGEST_EVENT_KEY` + `SUPABASE_SERVICE_ROLE_KEY` + `OPERATOR_SECRET` — server-side בלבד. 0 התאמות ב-`.next/static/` לאחר build (bundle scan). `OPERATOR_SECRET` לא נשלח ל-client בשום צורה; הלקוח רק שולח אותו כ-header.
 
 ### 11.4 Sync-now semantics
 POST מחזיר 202 + eventIds. לא ממתין לסיום. עקוב אחרי `/operator > ריצות אחרונות` (ריצה טיפוסית: 30-90 שניות לחנות).

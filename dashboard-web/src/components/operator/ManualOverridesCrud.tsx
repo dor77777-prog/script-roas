@@ -48,6 +48,7 @@
 import useSWR from 'swr';
 import { useState } from 'react';
 import { Plus, Trash2, X } from 'lucide-react';
+import { operatorFetch } from '@/lib/operatorClient';
 
 type Row = {
   id: number;
@@ -75,7 +76,7 @@ const ALL_PLATFORMS = ['meta', 'google'] as const;
 const ALL_CURRENCIES = ['ILS', 'CAD', 'USD'] as const;
 
 async function fetcher(url: string): Promise<ListResponse> {
-  const res = await fetch(url);
+  const res = await operatorFetch(url);
   return (await res.json()) as ListResponse;
 }
 
@@ -141,7 +142,7 @@ export function ManualOverridesCrud() {
       if (!Number.isFinite(spendNum)) {
         throw new Error('סכום אינו מספרי');
       }
-      const res = await fetch('/api/operator/manual-overrides', {
+      const res = await operatorFetch('/api/operator/manual-overrides', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -174,7 +175,7 @@ export function ManualOverridesCrud() {
     setDeleting(true);
     setDeleteError(null);
     try {
-      const res = await fetch('/api/operator/manual-overrides', {
+      const res = await operatorFetch('/api/operator/manual-overrides', {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
