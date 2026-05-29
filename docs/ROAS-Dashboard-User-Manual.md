@@ -121,6 +121,10 @@ Plan 6 פיספס 25 רכיבים שיתופיים (`Filters`/Quick Range, `Sect
 
 4. **Tables + Charts deep mobile sweep** (Worker B): `MonthlyTables` collapse buttons `min-h-[44px]` + truncate; `PnLBreakdown` sub-table overflow wrapper + `min-w-[420px]`; `DetailTable` `min-w` 700→900 + `-mx-2` bleed; `QuadrantScatter` margins tightened + Y-axis width 32→44 + tick fontSize 11→10 + label offset adjusted; `ProductsTable` + `AdSetTable` + `RoasChart` + `HeroOverview` area chart + `ChartContainer` — כבר היו mobile-OK.
 
+5. **P2 polish** (Worker C, 21 קבצים): KpiCards `sm:grid-cols-3` (3-col על 640px במקום 2-col), HeroOverview eyebrow `text-[10px]` → `text-[11px] sm:text-xs`, Sidebar theme buttons `p-1.5` → `p-2.5` (44×44 tap targets), tap-target sweep ב-15 כפתורים (modal close, drawer close+fullscreen, edit/delete pairs), `text-[10px]` UI labels → `text-[11px]` mobile-first ב-12 קבצים (HeroOverview, AdsDrawer, GoalTracker, InsightsBoard, PnLBreakdown, TodayLive, AttributionAnalysisPanel, BillingSettings, BillingCsvImport).
+
+6. **QuadrantScatter explanations** — משתמש דיווח "לא ברורה בעליל לא מבין מה אני רואה שם". הוסף caption מפורש מתחת לכותרת: "כל נקודה = קמפיין. גודל הנקודה ∝ הוצאה. ROAS גבוה ימינה = רווחי יותר. CAC נמוך למעלה = יעיל יותר. הקו המקווקו = חציון הקבוצה (חוצה ל-4 רביעונים)." הצירים קיבלו תוויות יותר תיאוריות בעברית: "ROAS (ערך ÷ הוצאה) — ימינה = רווחי יותר" + "CAC (CAD/לקוח) — למעלה = יעיל יותר".
+
 מסמכים נלווים מתעדכנים בנפרד: ארכיטקטורה ב-`docs/ARCHITECTURE.md`, עבודה ביצועית של ה-overhaul ב-`docs/superpowers/plans/2026-05-{28,29}-dashboard-ux-overhaul-*.md` (7 plans, Plans 1–6 IMPLEMENTED; Plan 7 polish + a11y + RTL audit pending).
 
 ---

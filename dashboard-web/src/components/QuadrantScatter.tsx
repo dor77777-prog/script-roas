@@ -68,10 +68,21 @@ export function QuadrantScatter({
   return (
     <div className={cn('rounded-xl bg-elevated border border-line p-3 sm:p-5', className)}>
       {title && (
-        <h3 className="text-sm sm:text-base font-semibold text-ink mb-3">{title}</h3>
+        <h3 className="text-sm sm:text-base font-semibold text-ink mb-1">{title}</h3>
       )}
+      {/* Hotfix-6: legend caption explaining the visualization. User reported
+          "לא ברורה בעליל לא מבין מה אני רואה שם" — without context, scatter
+          plots are abstract. The caption maps each visual encoding to its
+          meaning in plain Hebrew. */}
+      <p className="text-[11px] sm:text-xs text-ink-secondary mb-3 leading-relaxed">
+        כל נקודה = קמפיין. <span className="text-ink-muted">גודל</span> הנקודה ∝ הוצאה.
+        <br className="sm:hidden" />
+        <span className="text-status-green font-medium">ROAS גבוה ימינה</span> = רווחי יותר ·
+        <span className="text-status-blue font-medium"> CAC נמוך למעלה</span> = יעיל יותר.
+        הקו המקווקו = חציון הקבוצה (חוצה ל-4 רביעונים).
+      </p>
       <ChartContainer height={height}>
-        <ScatterChart margin={{ top: 12, right: 12, left: 8, bottom: 28 }}>
+        <ScatterChart margin={{ top: 12, right: 16, left: 8, bottom: 36 }}>
           <CartesianGrid strokeDasharray="2 4" stroke="var(--chart-grid)" strokeOpacity={0.55} />
           <XAxis
             type="number"
@@ -82,19 +93,19 @@ export function QuadrantScatter({
             tickLine={false}
             tickMargin={4}
             domain={['auto', 'auto']}
-            label={{ value: 'ROAS →', position: 'insideBottom', offset: -14, fontSize: 10, fill: 'var(--chart-axis)' }}
+            label={{ value: 'ROAS (ערך ÷ הוצאה) — ימינה = רווחי יותר', position: 'insideBottom', offset: -22, fontSize: 11, fill: 'var(--chart-axis)' }}
           />
           <YAxis
             type="number"
             dataKey="cac"
             name="CAC"
-            width={44}
+            width={52}
             tick={{ fontSize: 10, fill: 'var(--chart-axis)', fontVariant: 'tabular-nums' }}
             axisLine={false}
             tickLine={false}
             tickMargin={4}
             domain={['auto', 'auto']}
-            label={{ value: 'CAD CAC →', angle: -90, position: 'insideLeft', offset: 16, fontSize: 10, fill: 'var(--chart-axis)' }}
+            label={{ value: 'CAC (CAD/לקוח) — למעלה = יעיל יותר', angle: -90, position: 'insideLeft', offset: 12, fontSize: 11, fill: 'var(--chart-axis)' }}
             reversed
           />
           <ReferenceLine x={medRoas} stroke="var(--chart-cursor)" strokeDasharray="3 5" strokeOpacity={0.55} />
