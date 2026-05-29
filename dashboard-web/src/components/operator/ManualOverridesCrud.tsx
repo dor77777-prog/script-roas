@@ -350,13 +350,13 @@ export function ManualOverridesCrud() {
       {/* Delete-confirmation modal (RESEARCH §Open Question 5) */}
       {confirmDelete && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-black/60"
           role="dialog"
           aria-modal="true"
           aria-labelledby="confirm-delete-title"
         >
-          <div className="bg-elevated border border-line rounded p-4 max-w-md w-full mx-4">
-            <div className="flex items-start justify-between mb-3">
+          <div className="bg-elevated border-0 sm:border sm:border-line rounded-none sm:rounded p-4 w-full h-full sm:h-auto sm:max-w-md sm:mx-4 flex flex-col">
+            <div className="flex items-start justify-between mb-3 shrink-0">
               <h3 id="confirm-delete-title" className="text-lg font-semibold">
                 אישור מחיקה
               </h3>
@@ -364,28 +364,31 @@ export function ManualOverridesCrud() {
                 type="button"
                 onClick={closeDeleteModal}
                 aria-label="סגור"
+                className="inline-flex items-center justify-center w-11 h-11 sm:w-auto sm:h-auto sm:p-1 rounded hover:bg-elevated2"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <p className="text-sm mb-3">
-              למחוק את ההחלפה הידנית של <strong>{confirmDelete.store_id}</strong> בתאריך{' '}
-              <span dir="ltr">{confirmDelete.date}</span> (פלטפורמה {confirmDelete.platform})?
-            </p>
-            <p className="text-ink-secondary text-xs mb-3">
-              סכום: <span dir="ltr">{Number(confirmDelete.spend).toFixed(2)} {confirmDelete.currency}</span>
-            </p>
-            {deleteError && (
-              <p className="text-status-red text-sm mb-3" role="alert">
-                {deleteError}
+            <div className="flex-1 overflow-y-auto -mx-4 px-4">
+              <p className="text-sm mb-3">
+                למחוק את ההחלפה הידנית של <strong>{confirmDelete.store_id}</strong> בתאריך{' '}
+                <span dir="ltr">{confirmDelete.date}</span> (פלטפורמה {confirmDelete.platform})?
               </p>
-            )}
-            <div className="flex justify-end gap-2">
+              <p className="text-ink-secondary text-xs mb-3">
+                סכום: <span dir="ltr">{Number(confirmDelete.spend).toFixed(2)} {confirmDelete.currency}</span>
+              </p>
+              {deleteError && (
+                <p className="text-status-red text-sm mb-3" role="alert">
+                  {deleteError}
+                </p>
+              )}
+            </div>
+            <div className="sticky bottom-0 bg-elevated pt-2 flex justify-end gap-2 shrink-0 border-t border-line-subtle sm:border-t-0 -mx-4 px-4 sm:mx-0 sm:px-0">
               <button
                 type="button"
                 onClick={closeDeleteModal}
                 disabled={deleting}
-                className="bg-elevated2 hover:bg-elevated2/90 disabled:bg-elevated2 disabled:text-ink-muted disabled:cursor-not-allowed text-ink text-sm px-3 py-1 rounded"
+                className="bg-elevated2 hover:bg-elevated2/90 disabled:bg-elevated2 disabled:text-ink-muted disabled:cursor-not-allowed text-ink text-sm px-3 py-2 sm:py-1 rounded min-h-[44px] sm:min-h-0"
               >
                 ביטול
               </button>
@@ -393,7 +396,7 @@ export function ManualOverridesCrud() {
                 type="button"
                 onClick={() => deleteRow(confirmDelete.id)}
                 disabled={deleting}
-                className="bg-status-red hover:bg-status-red/90 disabled:bg-status-red/40 text-white text-sm px-3 py-1 rounded"
+                className="bg-status-red hover:bg-status-red/90 disabled:bg-status-red/40 text-white text-sm px-3 py-2 sm:py-1 rounded min-h-[44px] sm:min-h-0"
               >
                 {deleting ? 'מוחק…' : 'מחק'}
               </button>

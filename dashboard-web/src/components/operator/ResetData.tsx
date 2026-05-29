@@ -249,13 +249,13 @@ export function ResetData() {
 
       {active && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-black/60"
           role="dialog"
           aria-modal="true"
           aria-labelledby="reset-confirm-title"
         >
-          <div className="bg-elevated border border-line rounded p-4 max-w-md w-full mx-4">
-            <div className="flex items-start justify-between mb-3">
+          <div className="bg-elevated border-0 sm:border sm:border-line rounded-none sm:rounded p-4 w-full h-full sm:h-auto sm:max-w-md sm:mx-4 flex flex-col">
+            <div className="flex items-start justify-between mb-3 shrink-0">
               <h3
                 id="reset-confirm-title"
                 className="text-lg font-semibold flex items-center gap-2"
@@ -268,93 +268,96 @@ export function ResetData() {
                 onClick={closeModal}
                 disabled={submitting}
                 aria-label="סגור"
+                className="inline-flex items-center justify-center w-11 h-11 sm:w-auto sm:h-auto sm:p-1 rounded hover:bg-elevated2"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <p className="text-sm mb-3">{active.modalWarning}</p>
+            <div className="flex-1 overflow-y-auto -mx-4 px-4">
+              <p className="text-sm mb-3">{active.modalWarning}</p>
 
-            <div className="mb-3">
-              <p className="text-ink-secondary text-xs mb-1">
-                טבלאות שיימחקו:
-              </p>
-              <ul className="text-xs space-y-0.5">
-                {active.tablesShown.map((t) => (
-                  <li key={t} dir="ltr">
-                    <code className="text-status-red">{t}</code>
-                  </li>
-                ))}
-              </ul>
-              <p className="text-ink-secondary text-xs mt-3 mb-1">
-                טבלאות שתמיד מוגנות (לעולם לא נמחקות):
-              </p>
-              <ul className="text-xs space-y-0.5">
-                {PROTECTED_TABLES.map((t) => (
-                  <li key={t} dir="ltr">
-                    <code className="text-status-green">{t}</code>
-                    {t === 'stores' && (
+              <div className="mb-3">
+                <p className="text-ink-secondary text-xs mb-1">
+                  טבלאות שיימחקו:
+                </p>
+                <ul className="text-xs space-y-0.5">
+                  {active.tablesShown.map((t) => (
+                    <li key={t} dir="ltr">
+                      <code className="text-status-red">{t}</code>
+                    </li>
+                  ))}
+                </ul>
+                <p className="text-ink-secondary text-xs mt-3 mb-1">
+                  טבלאות שתמיד מוגנות (לעולם לא נמחקות):
+                </p>
+                <ul className="text-xs space-y-0.5">
+                  {PROTECTED_TABLES.map((t) => (
+                    <li key={t} dir="ltr">
+                      <code className="text-status-green">{t}</code>
+                      {t === 'stores' && (
+                        <span className="text-ink-secondary" dir="rtl">
+                          {' '}— 3 החנויות שלך
+                        </span>
+                      )}
+                      {t === 'notification_config' && (
+                        <span className="text-ink-secondary" dir="rtl">
+                          {' '}— הגדרות התראות (לא נמשך מ-API)
+                        </span>
+                      )}
+                      {t === 'dashboard_state' && (
+                        <span className="text-ink-secondary" dir="rtl">
+                          {' '}— הגדרות UI (annotations, billing, monthly goal, product mapping)
+                        </span>
+                      )}
+                    </li>
+                  ))}
+                  {active.preserves && (
+                    <li dir="ltr">
+                      <code className="text-status-green">{active.preserves}</code>
                       <span className="text-ink-secondary" dir="rtl">
-                        {' '}— 3 החנויות שלך
+                        {' '}— הוצאות ידניות (במצב חלקי)
                       </span>
-                    )}
-                    {t === 'notification_config' && (
-                      <span className="text-ink-secondary" dir="rtl">
-                        {' '}— הגדרות התראות (לא נמשך מ-API)
-                      </span>
-                    )}
-                    {t === 'dashboard_state' && (
-                      <span className="text-ink-secondary" dir="rtl">
-                        {' '}— הגדרות UI (annotations, billing, monthly goal, product mapping)
-                      </span>
-                    )}
-                  </li>
-                ))}
-                {active.preserves && (
-                  <li dir="ltr">
-                    <code className="text-status-green">{active.preserves}</code>
-                    <span className="text-ink-secondary" dir="rtl">
-                      {' '}— הוצאות ידניות (במצב חלקי)
-                    </span>
-                  </li>
-                )}
-              </ul>
+                    </li>
+                  )}
+                </ul>
+              </div>
+
+              <label className="block mb-2">
+                <span className="text-xs text-ink-secondary block mb-1">
+                  הקלד את הטוקן הבא בדיוק כדי לאשר:
+                </span>
+                <code
+                  className="block bg-canvas border border-line-subtle rounded px-2 py-1 text-xs text-status-orange mb-2"
+                  dir="ltr"
+                >
+                  {CONFIRM_TOKEN_FOR_SCOPE[active.scope]}
+                </code>
+                <input
+                  type="text"
+                  value={typed}
+                  onChange={(e) => setTyped(e.target.value)}
+                  className="w-full bg-canvas border border-line-subtle rounded px-2 py-1 text-sm text-ink"
+                  dir="ltr"
+                  placeholder="הקלד כאן…"
+                  autoFocus
+                  disabled={submitting}
+                />
+              </label>
+
+              {error && (
+                <p className="text-status-red text-sm mb-3" role="alert">
+                  {error}
+                </p>
+              )}
             </div>
 
-            <label className="block mb-2">
-              <span className="text-xs text-ink-secondary block mb-1">
-                הקלד את הטוקן הבא בדיוק כדי לאשר:
-              </span>
-              <code
-                className="block bg-canvas border border-line-subtle rounded px-2 py-1 text-xs text-status-orange mb-2"
-                dir="ltr"
-              >
-                {CONFIRM_TOKEN_FOR_SCOPE[active.scope]}
-              </code>
-              <input
-                type="text"
-                value={typed}
-                onChange={(e) => setTyped(e.target.value)}
-                className="w-full bg-canvas border border-line-subtle rounded px-2 py-1 text-sm text-ink"
-                dir="ltr"
-                placeholder="הקלד כאן…"
-                autoFocus
-                disabled={submitting}
-              />
-            </label>
-
-            {error && (
-              <p className="text-status-red text-sm mb-3" role="alert">
-                {error}
-              </p>
-            )}
-
-            <div className="flex justify-end gap-2">
+            <div className="sticky bottom-0 bg-elevated pt-2 flex justify-end gap-2 shrink-0 border-t border-line-subtle sm:border-t-0 -mx-4 px-4 sm:mx-0 sm:px-0">
               <button
                 type="button"
                 onClick={closeModal}
                 disabled={submitting}
-                className="bg-elevated2 hover:bg-elevated2/90 disabled:bg-elevated2/70 text-ink text-sm px-3 py-1 rounded"
+                className="bg-elevated2 hover:bg-elevated2/90 disabled:bg-elevated2/70 text-ink text-sm px-3 py-2 sm:py-1 rounded min-h-[44px] sm:min-h-0"
               >
                 ביטול
               </button>
@@ -365,7 +368,7 @@ export function ResetData() {
                   submitting ||
                   typed !== CONFIRM_TOKEN_FOR_SCOPE[active.scope]
                 }
-                className="flex items-center gap-1 bg-status-red hover:bg-status-red/90 disabled:bg-status-red/40 disabled:cursor-not-allowed text-white text-sm px-3 py-1 rounded"
+                className="flex items-center gap-1 bg-status-red hover:bg-status-red/90 disabled:bg-status-red/40 disabled:cursor-not-allowed text-white text-sm px-3 py-2 sm:py-1 rounded min-h-[44px] sm:min-h-0"
               >
                 {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
                 {submitting ? 'מוחק…' : 'אשר ומחק'}
