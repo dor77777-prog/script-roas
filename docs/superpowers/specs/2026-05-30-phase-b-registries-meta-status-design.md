@@ -74,6 +74,49 @@ Schema is copied verbatim from the umbrella spec §"NEW tables" (lines 175–342
 
 5. **`cron_tick_snapshots.tick_id`** = ISO `YYYY-MM-DDTHH:MM` floored to the 10-min bucket. Critically, the floor must use `Math.floor(Date.now() / TEN_MIN_MS) * TEN_MIN_MS` — NOT `slice(0, 16)` which gives a 1-minute bucket and would generate a different `tick_id` on retry 90 seconds later, defeating idempotency.
 
+## Dynamic threshold strategy
+
+Phase B does NOT use a single static `BUC_SKIP_THRESHOLD = 80%`. The static value would behave correctly only when Meta's underlying ceiling stays fixed; in practice Meta dynamically adjusts per-account limits based on account standing, spend velocity, and BM tier. The system adapts in three layers:
+
+### Layer 1 — ETA-driven immediate skip (hard gate)
+
+Every Meta response carries `estimated_time_to_regain_access` (minutes) in the BUC header. Meta is **explicitly telling us** "back off for N minutes". The orchestrator and worker both honor it:
+
+```
+if buc.ads_insights_eta_minutes > 0
+   OR buc.ads_management_eta_minutes > 0
+   OR max(call_count, total_cputime, total_time) >= 95
+then skip immediately (no Meta call).
+```
+
+`pct >= 95` is the burst safety net — Meta may not have emitted ETA yet but we're one tick away from 429.
+
+### Layer 2 — Tier-based cooldown (soft adaptation)
+
+The minimum-time-between-status-ticks `STATUS_COOLDOWN_SECONDS` is no longer a fixed 480. Computed per store from the most-recent observed `pct`:
+
+| max BUC pct (insights ∪ management) | Cooldown seconds |
+|---|---|
+| `< 30%` | 300 (5 min — aggressive; Meta has headroom) |
+| `30%–60%` | 480 (8 min — standard) |
+| `60%–80%` | 900 (15 min — conservative; close to ceiling) |
+| `>= 80%` | Infinite (= skip) |
+
+If Meta later raises the account's underlying limit (we observe lower `pct`), the cooldown shortens automatically and we naturally make more calls. No code changes required. If Meta lowers it, cooldown extends.
+
+### Layer 3 — Inngest throttle as safety net (not the primary regulator)
+
+`metaWorker`'s Inngest throttle config is set to `900/h` per store — **a hard ceiling that should never bind under normal operation**. Layers 1 + 2 are the primary regulators. The throttle exists only as a defense against a runaway-fan-out bug (e.g., orchestrator misfires several times in a minute). 90% of Meta's stated 600/h × headroom for the rare future case where Meta raises the limit.
+
+### Why this beats a static threshold
+
+| Scenario | Static 80% behavior | Dynamic behavior |
+|---|---|---|
+| Meta raises our account's limit | We stay at 80%-of-old-ceiling = wasted headroom | `pct` drops → cooldown shortens → we fan out more |
+| Meta lowers our limit | We might 429 before `pct` ever crosses 80% | `pct` rises → cooldown extends OR `eta > 0` → skip |
+| BUC pct flapping near 60% | Unstable behavior right around threshold | 60-80% tier is explicit; flapping yields consistent 15-min cadence |
+| Pre-warning from Meta (`eta > 0` at low pct) | Static path misses it — only looks at pct | Layer 1 catches it immediately |
+
 ## Meta worker — implementation contract
 
 **Concurrency:** `[{ key: 'ad_account_id', limit: 2 }, { key: 'store_id', limit: 1 }]`. The account-level cap protects the BUC; the store cap prevents two simultaneous events for the same store from racing the registry diff.

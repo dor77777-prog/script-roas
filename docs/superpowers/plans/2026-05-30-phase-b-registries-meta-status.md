@@ -479,9 +479,13 @@ git commit -m "feat(phase-b): tickIdForNow() with 10-min flooring + snapshot ups
 
 ---
 
-## Task 4: Priority builder
+## Task 4: Priority builder (dynamic thresholds)
 
-The orchestrator computes which `(store, scope)` tuples to fan out this tick based on `data_freshness` (staleness) + `meta_buc_usage` (budget). Stale + low budget → high priority; fresh OR budget-exceeded → skip.
+The orchestrator computes which `(store, scope)` tuples to fan out this tick based on `data_freshness` (staleness), `meta_buc_usage` (current pct + ETA). Three skip-or-cooldown layers per the spec's "Dynamic threshold strategy" section:
+
+1. **Layer 1 (hard gate):** ETA > 0 OR pct >= 95 → skip immediately.
+2. **Layer 2 (tiered cooldown):** cooldown depends on pct: <30% → 5min, 30-60% → 8min, 60-80% → 15min, ≥80% → skip.
+3. **Layer 3 (orchestrator emission):** event only if (time-since-last-success) >= cooldown.
 
 **Files:**
 - Create: `dashboard-web/src/lib/registries/priorityBuilder.ts`
@@ -493,7 +497,10 @@ Create `dashboard-web/src/lib/registries/__tests__/priorityBuilder.test.ts`:
 
 ```typescript
 import { describe, expect, it } from 'vitest';
-import { buildEvents } from '@/lib/registries/priorityBuilder';
+import {
+  buildEvents,
+  cooldownSecondsForPct,
+} from '@/lib/registries/priorityBuilder';
 import type { FreshnessRow } from '@/lib/inngest/freshness';
 
 const TICK_ID = '2026-05-29T14:30';
@@ -501,6 +508,9 @@ const NOW_MS = new Date('2026-05-29T14:30:42.000Z').getTime();
 
 const ALL_STORES: Array<'uzoshop' | 'zolplus' | 'usmile360'> =
   ['uzoshop', 'zolplus', 'usmile360'];
+
+type MetaBucState = { pct: number; etaMinutes: number };
+type BucByStore = Partial<Record<'uzoshop' | 'zolplus' | 'usmile360', MetaBucState>>;
 
 function freshness(over: Partial<FreshnessRow>): FreshnessRow {
   return {
@@ -520,71 +530,133 @@ function freshness(over: Partial<FreshnessRow>): FreshnessRow {
   };
 }
 
-describe('buildEvents()', () => {
-  it('emits one meta status event per store when all are stale + budget OK', () => {
+describe('cooldownSecondsForPct()', () => {
+  it('< 30% → 300s (aggressive)', () => {
+    expect(cooldownSecondsForPct(0)).toBe(300);
+    expect(cooldownSecondsForPct(29)).toBe(300);
+  });
+  it('30-60% → 480s (standard)', () => {
+    expect(cooldownSecondsForPct(30)).toBe(480);
+    expect(cooldownSecondsForPct(59)).toBe(480);
+  });
+  it('60-80% → 900s (conservative)', () => {
+    expect(cooldownSecondsForPct(60)).toBe(900);
+    expect(cooldownSecondsForPct(79)).toBe(900);
+  });
+  it('>= 80% → Infinity (skip)', () => {
+    expect(cooldownSecondsForPct(80)).toBe(Number.POSITIVE_INFINITY);
+    expect(cooldownSecondsForPct(99)).toBe(Number.POSITIVE_INFINITY);
+  });
+});
+
+describe('buildEvents() — dynamic thresholds', () => {
+  it('emits one meta status event per store when all stale + pct low', () => {
+    const buc: BucByStore = {
+      uzoshop: { pct: 10, etaMinutes: 0 },
+      zolplus: { pct: 5, etaMinutes: 0 },
+      usmile360: { pct: 0, etaMinutes: 0 },
+    };
     const events = buildEvents({
       stores: ALL_STORES,
-      freshness: [],   // no prior rows → infinite staleness
-      metaBucPctByStore: { uzoshop: 10, zolplus: 5, usmile360: 0 },
+      freshness: [],
+      metaBucStateByStore: buc,
       tickId: TICK_ID,
       nowMs: NOW_MS,
     });
     expect(events).toHaveLength(3);
     expect(events.every(e => e.name === 'meta/job.requested')).toBe(true);
     expect(events.every(e => e.data.scope === 'status')).toBe(true);
-    expect(events.map(e => e.data.store_id).sort()).toEqual(['usmile360', 'uzoshop', 'zolplus']);
   });
 
-  it('skips a store whose Meta BUC pct is >= 80', () => {
+  it('Layer 1: eta > 0 → skip regardless of pct or staleness', () => {
     const events = buildEvents({
       stores: ALL_STORES,
       freshness: [],
-      metaBucPctByStore: { uzoshop: 85, zolplus: 10, usmile360: 0 },
+      metaBucStateByStore: {
+        uzoshop: { pct: 5, etaMinutes: 3 }, // ETA set → skip
+        zolplus: { pct: 5, etaMinutes: 0 },
+        usmile360: { pct: 5, etaMinutes: 0 },
+      },
       tickId: TICK_ID,
       nowMs: NOW_MS,
     });
     expect(events.map(e => e.data.store_id).sort()).toEqual(['usmile360', 'zolplus']);
   });
 
-  it('skips a store whose last_success_at < 8 minutes ago (already fresh)', () => {
+  it('Layer 1: pct >= 95 → skip', () => {
     const events = buildEvents({
       stores: ALL_STORES,
-      freshness: [
-        freshness({
-          store_id: 'uzoshop',
-          scope: 'campaign_status',
-          last_success_at: '2026-05-29T14:26:00.000Z', // 4 min ago
-        }),
-      ],
-      metaBucPctByStore: { uzoshop: 10, zolplus: 5, usmile360: 0 },
+      freshness: [],
+      metaBucStateByStore: {
+        uzoshop: { pct: 95, etaMinutes: 0 },
+        zolplus: { pct: 5, etaMinutes: 0 },
+        usmile360: { pct: 5, etaMinutes: 0 },
+      },
       tickId: TICK_ID,
       nowMs: NOW_MS,
     });
     expect(events.map(e => e.data.store_id).sort()).toEqual(['usmile360', 'zolplus']);
+  });
+
+  it('Layer 2: 60-80% pct → 15-min cooldown — 10 min stale insufficient', () => {
+    const events = buildEvents({
+      stores: ['uzoshop'],
+      freshness: [
+        freshness({ store_id: 'uzoshop', last_success_at: '2026-05-29T14:20:42.000Z' }), // 10 min ago
+      ],
+      metaBucStateByStore: { uzoshop: { pct: 70, etaMinutes: 0 } }, // 15-min cooldown
+      tickId: TICK_ID,
+      nowMs: NOW_MS,
+    });
+    expect(events).toHaveLength(0);
+  });
+
+  it('Layer 2: < 30% pct → 5-min cooldown — 6 min stale sufficient', () => {
+    const events = buildEvents({
+      stores: ['uzoshop'],
+      freshness: [
+        freshness({ store_id: 'uzoshop', last_success_at: '2026-05-29T14:24:42.000Z' }), // 6 min ago
+      ],
+      metaBucStateByStore: { uzoshop: { pct: 10, etaMinutes: 0 } }, // 5-min cooldown
+      tickId: TICK_ID,
+      nowMs: NOW_MS,
+    });
+    expect(events).toHaveLength(1);
+  });
+
+  it('Layer 2: >= 80% pct → Infinite cooldown → skip', () => {
+    const events = buildEvents({
+      stores: ['uzoshop'],
+      freshness: [],
+      metaBucStateByStore: { uzoshop: { pct: 82, etaMinutes: 0 } },
+      tickId: TICK_ID,
+      nowMs: NOW_MS,
+    });
+    expect(events).toHaveLength(0);
   });
 
   it('event id encodes platform:store:scope:tick (idempotency)', () => {
     const events = buildEvents({
       stores: ['uzoshop'],
       freshness: [],
-      metaBucPctByStore: { uzoshop: 10 },
+      metaBucStateByStore: { uzoshop: { pct: 10, etaMinutes: 0 } },
       tickId: TICK_ID,
       nowMs: NOW_MS,
     });
     expect(events[0].id).toBe('meta:uzoshop:status:2026-05-29T14:30');
   });
 
-  it('staleness_seconds reflects time since last_success_at (or large value when never succeeded)', () => {
+  it('staleness_seconds reflects time since last_success_at', () => {
     const events = buildEvents({
       stores: ['uzoshop'],
       freshness: [
         freshness({ store_id: 'uzoshop', last_success_at: '2026-05-29T14:20:42.000Z' }),
       ],
-      metaBucPctByStore: { uzoshop: 0 },
+      metaBucStateByStore: { uzoshop: { pct: 10, etaMinutes: 0 } },
       tickId: TICK_ID,
       nowMs: NOW_MS,
     });
-    expect(events[0].data.staleness_seconds).toBe(600); // 10 min
+    expect(events[0].data.staleness_seconds).toBe(600);
   });
 });
 ```
@@ -608,11 +680,19 @@ Create `dashboard-web/src/lib/registries/priorityBuilder.ts`:
 // out each tick. Reads (snapshot of) data_freshness + meta_buc_usage,
 // returns the Inngest event payloads.
 //
-// Skip rules:
-//   1. Meta BUC pct (max of ads_insights / ads_management) >= 80 → skip.
-//   2. last_success_at for (store, scope='campaign_status') is younger than
-//      the per-scope cooldown (8 min for status) → skip; some other tick
-//      already touched it recently.
+// Skip layers (see spec §"Dynamic threshold strategy"):
+//
+// Layer 1 (hard gate):  eta_minutes > 0 OR pct >= 95 → skip immediately.
+//                       Meta is explicitly throttling us (ETA) or we're
+//                       one tick from 429 (95% safety net).
+//
+// Layer 2 (tiered cooldown):  cooldown derived from observed pct.
+//                              < 30%  → 300s (5 min, aggressive)
+//                              30-60% → 480s (8 min, standard)
+//                              60-80% → 900s (15 min, conservative)
+//                              >= 80% → Infinity (skip)
+//
+// Layer 3 (orchestrator):  emit only if (now - last_success_at) >= cooldown.
 //
 // Otherwise emit `meta/job.requested` with scope='status'. Phase C extends
 // this builder with scope='hot_metrics'.
@@ -624,8 +704,9 @@ import {
 } from './eventNames';
 import type { JobRequestedEvent, StoreId } from './types';
 
-const STATUS_COOLDOWN_SECONDS = 8 * 60;     // skip if last success < 8 min ago
-const BUC_SKIP_THRESHOLD = 80;
+const HARD_SKIP_PCT = 95;
+
+export type MetaBucState = { pct: number; etaMinutes: number };
 
 type InngestEventPayload = {
   name: typeof META_JOB_REQUESTED;
@@ -633,24 +714,39 @@ type InngestEventPayload = {
   data: JobRequestedEvent;
 };
 
+export function cooldownSecondsForPct(pct: number): number {
+  if (pct >= 80) return Number.POSITIVE_INFINITY;
+  if (pct >= 60) return 900;
+  if (pct >= 30) return 480;
+  return 300;
+}
+
 export function buildEvents(input: {
   stores: StoreId[];
   freshness: FreshnessRow[];
-  metaBucPctByStore: Partial<Record<StoreId, number>>;
+  metaBucStateByStore: Partial<Record<StoreId, MetaBucState>>;
   tickId: string;
   nowMs: number;
 }): InngestEventPayload[] {
-  const { stores, freshness, metaBucPctByStore, tickId, nowMs } = input;
+  const { stores, freshness, metaBucStateByStore, tickId, nowMs } = input;
   const events: InngestEventPayload[] = [];
 
   for (const storeId of stores) {
-    const bucPct = metaBucPctByStore[storeId] ?? 0;
-    if (bucPct >= BUC_SKIP_THRESHOLD) continue;
+    const state = metaBucStateByStore[storeId] ?? { pct: 0, etaMinutes: 0 };
 
+    // Layer 1 — hard gate
+    if (state.etaMinutes > 0) continue;
+    if (state.pct >= HARD_SKIP_PCT) continue;
+
+    // Layer 2 — tiered cooldown
+    const cooldownSeconds = cooldownSecondsForPct(state.pct);
+    if (!Number.isFinite(cooldownSeconds)) continue;
+
+    // Layer 3 — staleness vs cooldown
     const stalenessSeconds = freshnessSecondsFor(freshness, storeId, 'campaign_status', nowMs);
-    if (stalenessSeconds < STATUS_COOLDOWN_SECONDS) continue;
+    if (stalenessSeconds < cooldownSeconds) continue;
 
-    events.push(makeEvent(storeId, 'status', tickId, stalenessSeconds, bucPct));
+    events.push(makeEvent(storeId, 'status', tickId, stalenessSeconds, state.pct));
   }
 
   return events;
@@ -688,7 +784,7 @@ function makeEvent(
 }
 ```
 
-- [ ] **Step 4: Run — expect PASS (5/5)**
+- [ ] **Step 4: Run — expect PASS (12/12)**
 
 ```bash
 npx vitest run src/lib/registries/__tests__/priorityBuilder.test.ts
@@ -699,7 +795,7 @@ npx vitest run src/lib/registries/__tests__/priorityBuilder.test.ts
 ```bash
 git add dashboard-web/src/lib/registries/priorityBuilder.ts \
         dashboard-web/src/lib/registries/__tests__/priorityBuilder.test.ts
-git commit -m "feat(phase-b): priority builder — skip on BUC>=80% or status<8min stale"
+git commit -m "feat(phase-b): dynamic-threshold priority builder (ETA + tiered cooldown)"
 ```
 
 ---
@@ -1566,12 +1662,17 @@ describe('runTickOnce()', () => {
     const loadMetaBuc = vi.fn().mockResolvedValue({
       uzoshop: 5, zolplus: 5, usmile360: 0,
     });
+    const loadMetaBucState = async () => ({
+      uzoshop: { pct: 5, etaMinutes: 0 },
+      zolplus: { pct: 5, etaMinutes: 0 },
+      usmile360: { pct: 0, etaMinutes: 0 },
+    });
     const result = await runTickOnce({
       nowMs: new Date('2026-05-29T14:30:42.000Z').getTime(),
       sendEvent,
       upsertSnapshot,
       loadFreshness,
-      loadMetaBuc,
+      loadMetaBuc: loadMetaBucState,
     });
     expect(result.tickId).toBe('2026-05-29T14:30');
     expect(result.fanOutCount).toBe(3);
@@ -1585,7 +1686,7 @@ describe('runTickOnce()', () => {
     }));
   });
 
-  it('emits no events when all 3 stores are BUC-skipped', async () => {
+  it('emits no events when all 3 stores are BUC-skipped (pct >= 80 → infinite cooldown)', async () => {
     const sendEvent = vi.fn();
     const upsertSnapshot = vi.fn();
     const result = await runTickOnce({
@@ -1593,7 +1694,11 @@ describe('runTickOnce()', () => {
       sendEvent,
       upsertSnapshot,
       loadFreshness: async () => [],
-      loadMetaBuc: async () => ({ uzoshop: 90, zolplus: 95, usmile360: 80 }),
+      loadMetaBuc: async () => ({
+        uzoshop: { pct: 90, etaMinutes: 0 },
+        zolplus: { pct: 95, etaMinutes: 0 },
+        usmile360: { pct: 80, etaMinutes: 0 },
+      }),
     });
     expect(result.fanOutCount).toBe(0);
     expect(sendEvent).not.toHaveBeenCalled();
@@ -1635,26 +1740,27 @@ const STORES: StoreId[] = ['uzoshop', 'zolplus', 'usmile360'];
 
 type SendEventFn = (events: Array<{ name: string; id: string; data: unknown }>) => Promise<{ ids: string[] }>;
 type UpsertSnapshotFn = (row: { tick_id: string; started_at: string; finished_at: string; fan_out_count: number }) => Promise<void>;
+type MetaBucState = { pct: number; etaMinutes: number };
 
 export async function runTickOnce(input: {
   nowMs: number;
   sendEvent: SendEventFn;
   upsertSnapshot: UpsertSnapshotFn;
   loadFreshness: typeof getFreshness;
-  loadMetaBuc: () => Promise<Partial<Record<StoreId, number>>>;
+  loadMetaBuc: () => Promise<Partial<Record<StoreId, MetaBucState>>>;
 }): Promise<{ tickId: string; fanOutCount: number }> {
   const { nowMs, sendEvent, upsertSnapshot, loadFreshness, loadMetaBuc } = input;
   const tickId = tickIdForNow(nowMs);
   const startedAt = new Date(nowMs).toISOString();
 
-  const [freshness, metaBucPctByStore] = await Promise.all([
+  const [freshness, metaBucStateByStore] = await Promise.all([
     loadFreshness('campaign_status'),
     loadMetaBuc(),
   ]);
   const events = buildEvents({
     stores: STORES,
     freshness,
-    metaBucPctByStore,
+    metaBucStateByStore,
     tickId,
     nowMs,
   });
@@ -1687,25 +1793,38 @@ export const cronTickOrchestrator = inngest.createFunction(
         },
         upsertSnapshot: insertCronTickSnapshot,
         loadFreshness: getFreshness,
-        loadMetaBuc: loadMetaBucPctByStore,
+        loadMetaBuc: loadMetaBucStateByStore,
       });
     });
   },
 );
 
-async function loadMetaBucPctByStore(): Promise<Partial<Record<StoreId, number>>> {
+async function loadMetaBucStateByStore(): Promise<Partial<Record<StoreId, { pct: number; etaMinutes: number }>>> {
   const sb = getSupabaseAdmin();
   const { data } = await sb
     .from('meta_buc_usage')
-    .select('store_id, ads_insights_call_pct, ads_management_call_pct');
-  const out: Partial<Record<StoreId, number>> = {};
+    .select('store_id, ads_insights_call_pct, ads_insights_cputime_pct, ads_insights_time_pct, ads_insights_eta_minutes, ads_management_call_pct, ads_management_cputime_pct, ads_management_time_pct, ads_management_eta_minutes');
+  const out: Partial<Record<StoreId, { pct: number; etaMinutes: number }>> = {};
   for (const row of data ?? []) {
-    const max = Math.max(
-      Number((row as { ads_insights_call_pct?: number }).ads_insights_call_pct ?? 0),
-      Number((row as { ads_management_call_pct?: number }).ads_management_call_pct ?? 0),
+    const r = row as Record<string, number | string | undefined>;
+    const pct = Math.max(
+      Number(r.ads_insights_call_pct ?? 0),
+      Number(r.ads_insights_cputime_pct ?? 0),
+      Number(r.ads_insights_time_pct ?? 0),
+      Number(r.ads_management_call_pct ?? 0),
+      Number(r.ads_management_cputime_pct ?? 0),
+      Number(r.ads_management_time_pct ?? 0),
     );
-    const sid = (row as { store_id: StoreId }).store_id;
-    out[sid] = Math.max(out[sid] ?? 0, max);
+    const etaMinutes = Math.max(
+      Number(r.ads_insights_eta_minutes ?? 0),
+      Number(r.ads_management_eta_minutes ?? 0),
+    );
+    const sid = r.store_id as StoreId;
+    const prior = out[sid];
+    out[sid] = {
+      pct: Math.max(prior?.pct ?? 0, pct),
+      etaMinutes: Math.max(prior?.etaMinutes ?? 0, etaMinutes),
+    };
   }
   return out;
 }
@@ -1761,12 +1880,12 @@ function freshCampaign(id: string, configured: string): CampaignRegistryRow {
 }
 
 describe('runMetaWorkerJob()', () => {
-  it('budget skip path: BUC pct >= 80 → mark freshness budget_skip, no fetch', async () => {
+  it('budget skip path: BUC pct >= 95 → mark freshness budget_skip, no fetch', async () => {
     const fetcher = vi.fn();
     const recordFreshness = vi.fn();
     await runMetaWorkerJob({
-      jobData: { store_id: 'uzoshop', scope: 'status', tick_id: 'T', staleness_seconds: 0, budget_pct_estimate: 85 },
-      bucProbe: async () => ({ pct: 85 }),
+      jobData: { store_id: 'uzoshop', scope: 'status', tick_id: 'T', staleness_seconds: 0, budget_pct_estimate: 96 },
+      bucProbe: async () => ({ pct: 96, etaMinutes: 0 }),
       fetchStatus: fetcher,
       loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
       upsertRegistry: vi.fn(),
@@ -1780,6 +1899,24 @@ describe('runMetaWorkerJob()', () => {
       status: 'budget_skip',
       scope: 'campaign_status',
     }));
+  });
+
+  it('ETA gate: eta_minutes > 0 → skip even with low pct', async () => {
+    const fetcher = vi.fn();
+    const recordFreshness = vi.fn();
+    await runMetaWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'status', tick_id: 'T', staleness_seconds: 0, budget_pct_estimate: 5 },
+      bucProbe: async () => ({ pct: 5, etaMinutes: 3 }),
+      fetchStatus: fetcher,
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(),
+      insertStatusEvents: vi.fn(),
+      recordFreshness,
+      upsertBuc: vi.fn(),
+      nowIso: NOW_ISO,
+    });
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({ status: 'budget_skip' }));
   });
 
   it('happy path: fetch → diff → upsert registries → insert status events → mark success', async () => {
@@ -1798,7 +1935,7 @@ describe('runMetaWorkerJob()', () => {
     const upsertBuc = vi.fn();
     await runMetaWorkerJob({
       jobData: { store_id: 'uzoshop', scope: 'status', tick_id: 'T', staleness_seconds: 900, budget_pct_estimate: 12 },
-      bucProbe: async () => ({ pct: 12 }),
+      bucProbe: async () => ({ pct: 12, etaMinutes: 0 }),
       fetchStatus: fetcher,
       loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
       upsertRegistry,
@@ -1822,7 +1959,7 @@ describe('runMetaWorkerJob()', () => {
     const fetcher = vi.fn();
     await runMetaWorkerJob({
       jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 0, budget_pct_estimate: 0 },
-      bucProbe: async () => ({ pct: 0 }),
+      bucProbe: async () => ({ pct: 0, etaMinutes: 0 }),
       fetchStatus: fetcher,
       loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
       upsertRegistry: vi.fn(),
@@ -1876,7 +2013,7 @@ import type {
   StoreId,
 } from '@/lib/registries/types';
 
-const BUC_SKIP_THRESHOLD = 80;
+const HARD_SKIP_PCT = 95;
 
 type PriorMaps = {
   campaigns: Map<string, CampaignRegistryRow>;
@@ -1886,7 +2023,7 @@ type PriorMaps = {
 
 export type RunMetaWorkerJobInput = {
   jobData: JobRequestedEvent;
-  bucProbe: (storeId: StoreId) => Promise<{ pct: number }>;
+  bucProbe: (storeId: StoreId) => Promise<{ pct: number; etaMinutes: number }>;
   fetchStatus: typeof fetchMetaStatusForStore;
   loadPriorRegistry: (storeId: StoreId) => Promise<PriorMaps>;
   upsertRegistry: (input: { table: 'campaign_registry' | 'adset_registry' | 'ad_registry'; rows: unknown[] }) => Promise<void>;
@@ -1902,11 +2039,18 @@ export async function runMetaWorkerJob(input: RunMetaWorkerJobInput): Promise<vo
 
   if (scope !== 'status') return;
 
-  // 1. BUC pre-flight
+  // 1. BUC pre-flight — Layer 1 hard gate (ETA > 0 or pct >= 95)
   const buc = await bucProbe(storeId);
-  if (buc.pct >= BUC_SKIP_THRESHOLD) {
+  if (buc.etaMinutes > 0 || buc.pct >= HARD_SKIP_PCT) {
     for (const s of ['campaign_status', 'adset_status', 'ad_status'] as const) {
-      await rec({ storeId, platform: 'meta', scope: s, tableName: registryNameForScope(s), status: 'budget_skip' });
+      await rec({
+        storeId, platform: 'meta', scope: s,
+        tableName: registryNameForScope(s),
+        status: 'budget_skip',
+        errorMessage: buc.etaMinutes > 0
+          ? `Meta ETA=${buc.etaMinutes}min`
+          : `pct=${buc.pct}>=${HARD_SKIP_PCT}`,
+      });
     }
     return;
   }
@@ -1980,7 +2124,7 @@ export const metaWorker = inngest.createFunction(
     concurrency: [
       { key: 'event.data.store_id', limit: 1 },
     ],
-    throttle: { limit: 540, period: '1h', key: 'event.data.store_id' },
+    throttle: { limit: 900, period: '1h', key: 'event.data.store_id' },
   },
   { event: META_JOB_REQUESTED },
   async ({ event, step }) => {
@@ -1993,11 +2137,23 @@ export const metaWorker = inngest.createFunction(
       const bucProbe = async () => {
         const { data: row } = await sb
           .from('meta_buc_usage')
-          .select('ads_insights_call_pct, ads_management_call_pct')
+          .select('ads_insights_call_pct, ads_insights_cputime_pct, ads_insights_time_pct, ads_insights_eta_minutes, ads_management_call_pct, ads_management_cputime_pct, ads_management_time_pct, ads_management_eta_minutes')
           .eq('store_id', storeId)
           .maybeSingle();
-        const r = (row as { ads_insights_call_pct?: number; ads_management_call_pct?: number } | null) ?? {};
-        return { pct: Math.max(Number(r.ads_insights_call_pct ?? 0), Number(r.ads_management_call_pct ?? 0)) };
+        const r = (row as Record<string, number | undefined> | null) ?? {};
+        const pct = Math.max(
+          Number(r.ads_insights_call_pct ?? 0),
+          Number(r.ads_insights_cputime_pct ?? 0),
+          Number(r.ads_insights_time_pct ?? 0),
+          Number(r.ads_management_call_pct ?? 0),
+          Number(r.ads_management_cputime_pct ?? 0),
+          Number(r.ads_management_time_pct ?? 0),
+        );
+        const etaMinutes = Math.max(
+          Number(r.ads_insights_eta_minutes ?? 0),
+          Number(r.ads_management_eta_minutes ?? 0),
+        );
+        return { pct, etaMinutes };
       };
 
       const loadPriorRegistry = async (): Promise<PriorMaps> => {
@@ -2034,7 +2190,7 @@ export const metaWorker = inngest.createFunction(
 
 > **Note for the implementer:** `getAdAccountIdForStore`, `getMetaAccessTokenForStore`, `getFxCadAdapterForStore` are placeholder names — locate the existing equivalents in `dashboard-web/src/lib/fetchers/` (likely in `fetchMeta.ts` / `metaConfig.ts`) and import them. If a single-store-arg variant doesn't exist, add a thin wrapper in `dashboard-web/src/lib/fetchers/metaAccountConfig.ts` that maps `storeId → { adAccountId, accessToken, fxAdapter }` and export it before this task can compile.
 
-- [ ] **Step 4: Run — expect PASS (3/3)**
+- [ ] **Step 4: Run — expect PASS (4/4)**
 
 ```bash
 npx vitest run src/inngest/functions/__tests__/metaWorker.test.ts
