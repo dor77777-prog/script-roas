@@ -52,7 +52,7 @@ export function TabFreshnessHeader(props: {
   return (
     <div className="flex items-center justify-between gap-3 mb-3">
       <div className="flex items-center gap-2 flex-wrap">
-        <FreshnessChip dataLastWriteAt={dataLastWriteAt} variant="light" />
+        <FreshnessChip dataLastWriteAt={dataLastWriteAt} />
         {isRefreshing && (
           <span
             className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md ring-1 ring-amber-300 bg-amber-100 text-amber-800 text-[11px] sm:text-xs"

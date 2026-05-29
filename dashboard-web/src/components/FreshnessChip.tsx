@@ -25,16 +25,8 @@ import { AlertCircle } from 'lucide-react';
  */
 export function FreshnessChip(props: {
   dataLastWriteAt: string | null;
-  /**
-   * 'dark' = soft-on-dark palette for the navy header (default).
-   * 'light' = readable-on-white palette for use inside tab bodies.
-   * Phase 05.7.6 follow-up — user reported the chip text was invisible
-   * on white tab bodies because the original palette uses light pastels
-   * on transparent backgrounds, designed for the dark header.
-   */
-  variant?: 'dark' | 'light';
 }) {
-  const { dataLastWriteAt, variant = 'dark' } = props;
+  const { dataLastWriteAt } = props;
   // Re-render every 30s so "X minutes ago" updates without a server hit.
   const [tick, setTick] = useState(0);
   useEffect(() => {
@@ -45,24 +37,19 @@ export function FreshnessChip(props: {
 
   const { label, tone, warning } = formatTimeAgo(dataLastWriteAt);
 
-  // Two palettes:
-  //   - dark (header, navy bg): light tones, transparent bg
-  //   - light (tab body, white bg): SOLID light bg + dark text — same
-  //     contrast level as the existing 'סביר' / 'מעולה' pills on the
-  //     leaderboard cards (matched to user's visual expectation).
-  const darkPalette = {
-    green: 'bg-emerald-500/15 text-emerald-200 ring-emerald-400/30',
-    yellow: 'bg-amber-500/20 text-amber-100 ring-amber-300/40',
-    red: 'bg-red-500/25 text-red-100 ring-red-300/50',
-    gray: 'bg-white/10 text-white/80 ring-white/15',
-  } as const;
-  const lightPalette = {
+  // Single theme-aware OKLCH palette. The `status-*Bg` / `status-*Fg` tokens
+  // auto-flip per theme (light vs dark mode), so one palette works on both
+  // the dark navy header AND the lighter tab bodies. Previously this
+  // component shipped two manual palettes (`darkPalette` + `lightPalette`)
+  // gated by a `variant` prop — consolidated into one palette as part of
+  // the dashboard token overhaul (2026-05-29).
+  const palette = {
     green: 'bg-status-greenBg text-status-greenFg ring-status-green/30',
     yellow: 'bg-status-orangeBg text-status-orangeFg ring-status-orange/30',
     red: 'bg-status-redBg text-status-redFg ring-status-red/30',
     gray: 'bg-elevated2 text-ink-secondary ring-line',
   } as const;
-  const toneClass = (variant === 'light' ? lightPalette : darkPalette)[tone];
+  const toneClass = palette[tone];
 
   return (
     <span
