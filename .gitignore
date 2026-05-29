@@ -23,3 +23,7 @@ dashboard-web/node_modules
 # graphify-out/ holds output from the local /graphify skill (knowledge-graph
 # artifacts, transient per-run). Re-generated on demand; not source-of-truth.
 graphify-out/
+
+# .superpowers/ holds local brainstorm + visual-companion artifacts
+# (mockups, state). Local-only; regenerated per session.
+.superpowers/
