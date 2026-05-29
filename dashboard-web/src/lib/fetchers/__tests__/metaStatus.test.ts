@@ -35,7 +35,7 @@ const BATCH_RESPONSE_BODY = JSON.stringify([
 ]);
 
 function mockFetch(body: string, bucHeader: string) {
-  return vi.fn(async () => new Response(body, {
+  return vi.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => new Response(body, {
     status: 200,
     headers: { 'x-business-use-case-usage': bucHeader },
   }));
