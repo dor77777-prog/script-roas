@@ -57,15 +57,15 @@ export function OperatorSecretBanner() {
   // No secret stored → show the entry form
   if (!stored) {
     return (
-      <div className="rounded border border-amber-500/30 bg-amber-500/10 p-3 space-y-2 text-sm">
-        <div className="flex items-center gap-2 text-amber-300 font-medium">
+      <div className="rounded border border-status-orange/30 bg-status-orangeBg p-3 space-y-2 text-sm">
+        <div className="flex items-center gap-2 text-status-orange font-medium">
           <KeyRound className="w-4 h-4 shrink-0" />
           <span>הגדרת Operator Secret</span>
         </div>
-        <p className="text-text-secondary text-xs">
-          נדרש כאשר <code className="text-amber-200">OPERATOR_SECRET</code> מוגדר
+        <p className="text-ink-secondary text-xs">
+          נדרש כאשר <code className="text-status-orange">OPERATOR_SECRET</code> מוגדר
           ב-Vercel; נשמר ב-localStorage של הדפדפן הזה. כל קריאות ה-API ל-
-          <code className="text-amber-200">/api/operator/*</code> יכלול את ה-secret
+          <code className="text-status-orange">/api/operator/*</code> יכלול את ה-secret
           אוטומטית.
         </p>
         <div className="flex items-center gap-2">
@@ -76,14 +76,14 @@ export function OperatorSecretBanner() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
               placeholder="הזן את ה-secret…"
-              className="w-full bg-black/30 border border-white/15 rounded px-2 py-1 text-sm text-foreground pr-8"
+              className="w-full bg-canvas border border-line-subtle rounded px-2 py-1 text-sm text-ink pr-8 focus:border-accent focus:outline-none"
               dir="ltr"
               autoComplete="off"
             />
             <button
               type="button"
               onClick={() => setShowPassword((v) => !v)}
-              className="absolute inset-y-0 right-2 flex items-center text-text-secondary hover:text-foreground"
+              className="absolute inset-y-0 right-2 flex items-center text-ink-secondary hover:text-ink"
               aria-label={showPassword ? 'הסתר secret' : 'הצג secret'}
             >
               {showPassword ? (
@@ -97,7 +97,7 @@ export function OperatorSecretBanner() {
             type="button"
             onClick={handleSave}
             disabled={!input.trim()}
-            className="bg-amber-600 hover:bg-amber-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm px-3 py-1 rounded"
+            className="bg-status-orange hover:bg-status-orange/90 disabled:bg-elevated2 disabled:text-ink-muted disabled:cursor-not-allowed text-white text-sm px-3 py-1 rounded"
           >
             שמור
           </button>
@@ -108,12 +108,12 @@ export function OperatorSecretBanner() {
 
   // Secret IS stored → show a subtle affordance to change or clear it
   return (
-    <div className="rounded border border-white/10 bg-black/20 px-3 py-2 flex items-center justify-between text-xs text-text-secondary">
+    <div className="rounded border border-line-subtle bg-canvas px-3 py-2 flex items-center justify-between text-xs text-ink-secondary">
       <div className="flex items-center gap-1.5">
-        <CheckCircle2 className="w-3.5 h-3.5 text-green-400 shrink-0" />
+        <CheckCircle2 className="w-3.5 h-3.5 text-status-green shrink-0" />
         <span>Operator secret מוגדר ב-localStorage.</span>
         {saved && (
-          <span className="text-green-400 font-medium">נשמר!</span>
+          <span className="text-status-green font-medium">נשמר!</span>
         )}
       </div>
       <div className="flex items-center gap-3">
@@ -126,14 +126,14 @@ export function OperatorSecretBanner() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
                 placeholder="secret חדש…"
-                className="bg-black/30 border border-white/15 rounded px-2 py-0.5 text-xs text-foreground pr-7"
+                className="bg-canvas border border-line-subtle rounded px-2 py-0.5 text-xs text-ink pr-7 focus:border-accent focus:outline-none"
                 dir="ltr"
                 autoComplete="off"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                className="absolute inset-y-0 right-1.5 flex items-center text-text-secondary"
+                className="absolute inset-y-0 right-1.5 flex items-center text-ink-secondary"
                 aria-label={showPassword ? 'הסתר' : 'הצג'}
               >
                 {showPassword ? (
@@ -147,14 +147,14 @@ export function OperatorSecretBanner() {
               type="button"
               onClick={handleSave}
               disabled={!input.trim()}
-              className="text-amber-400 hover:text-amber-300 disabled:text-gray-500 disabled:cursor-not-allowed"
+              className="text-status-orange hover:text-status-orange/90 disabled:text-ink-muted disabled:cursor-not-allowed"
             >
               שמור
             </button>
             <button
               type="button"
               onClick={() => { setShowInput(false); setInput(''); }}
-              className="text-text-secondary hover:text-foreground"
+              className="text-ink-secondary hover:text-ink"
             >
               ביטול
             </button>
@@ -164,14 +164,14 @@ export function OperatorSecretBanner() {
             <button
               type="button"
               onClick={() => setShowInput(true)}
-              className="text-amber-400 hover:text-amber-300"
+              className="text-status-orange hover:text-status-orange/90"
             >
               החלף secret
             </button>
             <button
               type="button"
               onClick={handleClear}
-              className="text-red-400 hover:text-red-300"
+              className="text-status-red hover:text-status-red/90"
             >
               נקה
             </button>

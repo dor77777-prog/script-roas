@@ -10,7 +10,9 @@ import type { Aggregated } from '@/lib/campaignsAggregator';
 import type { ConfidenceLevel, TrueRevenueInfo } from '@/lib/hooks/useCampaignTrueRevenue';
 import type { AttributionTrust } from '@/lib/attributionAnalysis';
 import type { CampaignHealth } from '@/lib/campaignHealthScore';
+import type { DailyCpmRoasPoint } from '@/lib/cpmRoasAnalysis';
 import { HealthScoreBadge } from './HealthScoreBadge';
+import { Sparkline } from './ui/Sparkline';
 
 /**
  * The narrowed trust-level union actually used by CampaignsTableRow's
@@ -38,9 +40,9 @@ export type CampaignsTableRowTrustLevel =
  * to before calling here.
  */
 export function computeTrustTone(level: CampaignsTableRowTrustLevel): string {
-  return level === 'high'   ? 'bg-roas-greenBg/60 text-roas-green'
+  return level === 'high'   ? 'bg-status-greenBg/60 text-status-green'
        : level === 'medium' ? 'bg-amber-50 text-amber-700'
-       :                      'bg-roas-redBg/60 text-roas-red';
+       :                      'bg-status-redBg/60 text-status-red';
 }
 
 // Duplicated from CampaignsTable.tsx:199-205 per D-04 (target-soft cap) —
@@ -48,11 +50,11 @@ export function computeTrustTone(level: CampaignsTableRowTrustLevel): string {
 // avoids creating a wrapper module for 6 lines. Same 5-entry shape as
 // the parent's copy + AdSetTable's copy (both are byte-identical).
 const TONE_BG: Record<string, string> = {
-  red:    'bg-roas-redBg text-roas-red',
-  orange: 'bg-roas-orangeBg text-roas-orange',
-  green:  'bg-roas-greenBg text-roas-green',
-  blue:   'bg-roas-blueBg text-roas-blue',
-  gray:   'bg-surfaceMuted text-text-muted',
+  red:    'bg-status-redBg text-status-red',
+  orange: 'bg-status-orangeBg text-status-orange',
+  green:  'bg-status-greenBg text-status-green',
+  blue:   'bg-status-blueBg text-status-blue',
+  gray:   'bg-elevated2 text-ink-muted',
 };
 
 type Props = {
@@ -90,6 +92,20 @@ type Props = {
    * cells under the wrong columns).
    */
   columnOrder: string[];
+  /**
+   * Plan 4a Task 5 (2026-05-29) — pre-computed daily CPM/ROAS series for
+   * this row, ordered ascending by date. Sourced from the parent's
+   * `dailyByCampaign` Map (same memo that feeds the Health Score's
+   * trajectory analysis), so each row gets its own series without
+   * recomputing in the row. Renders as an inline ROAS Sparkline column
+   * between the campaign name and the reorderable metric columns.
+   *
+   * Undefined when the parent has no series for this key yet (initial
+   * render before SWR resolves) or when the series has < 2 points (not
+   * visually meaningful) — the row renders an em-dash placeholder in
+   * both cases.
+   */
+  dailySeries?: DailyCpmRoasPoint[];
   adAccounts: AdAccountMap;
   optimized: Set<string>;
   /**
@@ -281,6 +297,7 @@ export function CampaignsTableRow({
   mappedCampaignKeys,
   health,
   columnOrder,
+  dailySeries,
   adAccounts,
   optimized,
   today,
@@ -314,7 +331,7 @@ export function CampaignsTableRow({
   return (
     <tr
       className={cn(
-        'border-b border-borderSubtle hover:bg-surfaceMuted/40 cursor-pointer transition-opacity',
+        'border-b border-line-subtle hover:bg-elevated2/40 cursor-pointer transition-opacity',
         // Marked rows visually retreat so the user's eye
         // anchors on the un-marked work-list. Hovering brings
         // them back to full opacity so re-reading details
@@ -365,8 +382,8 @@ export function CampaignsTableRow({
           className={cn(
             'inline-flex items-center justify-center w-7 h-7 rounded-full transition-colors',
             isOptimized
-              ? 'text-roas-green hover:bg-roas-greenBg/60'
-              : 'text-text-muted hover:text-roas-green hover:bg-roas-greenBg/40',
+              ? 'text-status-green hover:bg-status-greenBg/60'
+              : 'text-ink-muted hover:text-status-green hover:bg-status-greenBg/40',
           )}
           title={isOptimized ? 'לחץ להסרת הסימון' : 'סמן כאופטימיזציה בוצעה'}
           aria-label={isOptimized ? 'בטל סימון אופטימיזציה' : 'סמן כאופטימיזציה בוצעה'}
@@ -390,11 +407,11 @@ export function CampaignsTableRow({
       </td>
       <td data-col-id="campaignName" className="px-3 sm:px-5 py-2 max-w-[280px] sm:max-w-[400px]">
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-surfaceMuted text-[10px] font-bold text-text-secondary tabular-nums shrink-0">
+          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-elevated2 text-[10px] font-bold text-ink-secondary tabular-nums shrink-0">
             {i + 1}
           </span>
           <div className="min-w-0 flex-1">
-            <div className="font-medium text-text-primary truncate flex items-center gap-1.5">
+            <div className="font-medium text-ink truncate flex items-center gap-1.5">
               {/* Native tooltip on hover when the name overflows.
                   Browsers automatically show `title` after
                   a short delay, which is the lowest-friction
@@ -415,7 +432,7 @@ export function CampaignsTableRow({
                   className={cn(
                     'inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0',
                     a.budgetType === 'CBO'
-                      ? 'bg-primary/10 text-primary'
+                      ? 'bg-accent/10 text-accent'
                       : 'bg-purple-100 text-purple-700',
                   )}
                   title={a.budgetType === 'CBO' ? 'Campaign Budget Optimization — תקציב ברמת קמפיין' : 'Ad-Set Budget Optimization — תקציב ברמת ad-set'}
@@ -430,7 +447,7 @@ export function CampaignsTableRow({
                   active one. */}
               {isCurrentlyOff && a.lastActiveDate && (
                 <span
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-surfaceMuted text-text-muted border border-borderSubtle"
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-elevated2 text-ink-muted border border-line-subtle"
                   title={`קמפיין כבוי כרגע. הריצה האחרונה: ${formatLastActiveDate(a.lastActiveDate)}. הנתונים בשורה הם היסטוריים בלבד.`}
                 >
                   ⏸ כבוי · {formatLastActiveDate(a.lastActiveDate)}
@@ -458,7 +475,7 @@ export function CampaignsTableRow({
                 )}
             </div>
             <div
-              className="text-[10px] sm:text-[11px] text-text-muted truncate"
+              className="text-[10px] sm:text-[11px] text-ink-muted truncate"
               title={
                 mode === 'adset' && a.campaignName
                   ? `${a.platform} · ${a.storeName} · קמפיין: ${a.campaignName}`
@@ -472,6 +489,28 @@ export function CampaignsTableRow({
             </div>
           </div>
         </div>
+      </td>
+      {/* Plan 4a Task 5 (2026-05-29) — inline ROAS trend sparkline. Sits
+          OUTSIDE the reorderable columnOrder block (right after the fixed
+          campaign-name column, before the operator-orderable metric
+          block) so the trend is always visible regardless of column
+          prefs. Mirrors the matching <th> in CampaignsTable.tsx. The
+          Sparkline primitive hardcodes aria-label="טרנד" so we don't
+          pass one here. Cell stays empty (em-dash) when the parent's
+          dailyByCampaign hasn't built a series yet, or when the series
+          has < 2 points (a single point isn't a meaningful trend). */}
+      <td data-col-id="roasTrend" className="px-2 py-2 text-center align-middle">
+        {dailySeries && dailySeries.length >= 2 ? (
+          <Sparkline
+            data={dailySeries.map(p => p.roas)}
+            tone="blue"
+            width={64}
+            height={20}
+            className="inline-block"
+          />
+        ) : (
+          <span className="text-ink-muted">—</span>
+        )}
       </td>
       {(() => {
       // Phase 05.7.x — Build the 15 reorderable metric <td> cells into a
@@ -489,7 +528,7 @@ export function CampaignsTableRow({
         {(() => {
           const budget = mode === 'campaign' ? a.campaignBudgetCad : a.adSetBudgetCad;
           if (!budget || budget <= 0) {
-            return <span className="text-text-muted">—</span>;
+            return <span className="text-ink-muted">—</span>;
           }
           // Color hint: when daily spend exceeds 95% of daily
           // budget, flag amber — useful "pacing" signal.
@@ -503,7 +542,7 @@ export function CampaignsTableRow({
         </td>
       ),
       conversionValue: (
-        <td data-col-id="conversionValue" className={cn('px-3 py-2 text-end tabular-nums font-medium', a.conversionValue > a.spend && 'text-roas-green')}>
+        <td data-col-id="conversionValue" className={cn('px-3 py-2 text-end tabular-nums font-medium', a.conversionValue > a.spend && 'text-status-green')}>
         {formatCurrency(a.conversionValue)}
         </td>
       ),
@@ -520,7 +559,7 @@ export function CampaignsTableRow({
           if (!info) {
             return (
               <span
-                className="text-text-muted text-xs"
+                className="text-ink-muted text-xs"
                 title={
                   a.platform === 'Google'
                     ? 'Google PMax לא תומך במיפוי לפי מוצר — הפיד מנהל את ההצגה'
@@ -627,7 +666,7 @@ export function CampaignsTableRow({
           void confTone;
           return (
             <div className="inline-flex flex-col items-center gap-0.5" title={tooltip}>
-              <span className="font-semibold tabular-nums text-text-primary">
+              <span className="font-semibold tabular-nums text-ink">
                 {trueRoas > 0 ? formatNumber(trueRoas) : '—'}
               </span>
             </div>
@@ -646,7 +685,7 @@ export function CampaignsTableRow({
           if (!info || a.spend <= 0 || info.deterministicRevenue <= 0) {
             return (
               <span
-                className="text-text-muted"
+                className="text-ink-muted"
                 title={`אין הזמנות שסווגו דטרמיניסטית ל-${a.platform} עבור המוצרים המשויכים בטווח. כדי לראות ROAS פלטפורמה — צריך ש-Shopify יראה את ה-source/click-id של ההזמנות.`}
               >
                 —
@@ -679,14 +718,14 @@ export function CampaignsTableRow({
       // useCampaignTrueRevenue.ts (deterministicRevenue/Units +
       // productTotals).
       shopifyValuePlatform: (
-      <td data-col-id="shopifyValuePlatform" className="px-3 py-2 text-end tabular-nums border-e border-borderSubtle/40">
+      <td data-col-id="shopifyValuePlatform" className="px-3 py-2 text-end tabular-nums border-e border-line-subtle/40">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);
           if (!info || info.deterministicRevenue <= 0) {
             return (
               <span
-                className="text-text-muted"
+                className="text-ink-muted"
                 title={`אין הזמנות שסווגו דטרמיניסטית ל-${a.platform} עבור המוצרים המשויכים בטווח הנבחר.`}
               >
                 —
@@ -706,14 +745,14 @@ export function CampaignsTableRow({
       ),
       // [2] יח' Shopify · פלטפורמה — deterministic units
       shopifyUnitsPlatform: (
-      <td data-col-id="shopifyUnitsPlatform" className="px-3 py-2 text-end tabular-nums border-e border-borderSubtle/40">
+      <td data-col-id="shopifyUnitsPlatform" className="px-3 py-2 text-end tabular-nums border-e border-line-subtle/40">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);
           if (!info || info.deterministicUnits <= 0) {
             return (
               <span
-                className="text-text-muted"
+                className="text-ink-muted"
                 title={`אין הזמנות שסווגו דטרמיניסטית ל-${a.platform} עבור המוצרים המשויכים בטווח הנבחר.`}
               >
                 —
@@ -734,7 +773,7 @@ export function CampaignsTableRow({
             >
               <span>{display}</span>
               {isFractional && (
-                <span aria-hidden="true" className="text-[8px] text-text-muted">*</span>
+                <span aria-hidden="true" className="text-[8px] text-ink-muted">*</span>
               )}
             </span>
           );
@@ -748,11 +787,11 @@ export function CampaignsTableRow({
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);
           if (!info || info.productTotals.revenue <= 0) {
-            return <span className="text-text-muted">—</span>;
+            return <span className="text-ink-muted">—</span>;
           }
           return (
             <span
-              className="font-medium text-text-secondary"
+              className="font-medium text-ink-secondary"
               title={`סך ערך המכירות ב-Shopify של המוצרים המשויכים בטווח הנבחר, מכל הערוצים יחד (paid + organic + direct).`}
             >
               {formatCurrency(info.productTotals.revenue)}
@@ -768,12 +807,12 @@ export function CampaignsTableRow({
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);
           if (!info || info.productTotals.units <= 0) {
-            return <span className="text-text-muted">—</span>;
+            return <span className="text-ink-muted">—</span>;
           }
           const total = Math.round(info.productTotals.units);
           return (
             <span
-              className="font-medium text-text-secondary"
+              className="font-medium text-ink-secondary"
               title={`סך היחידות שנמכרו ב-Shopify של המוצרים המשויכים בטווח הנבחר, מכל הערוצים יחד.`}
             >
               {total}
@@ -795,12 +834,12 @@ export function CampaignsTableRow({
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);
           if (!info || info.productTotals.orders <= 0) {
-            return <span className="text-text-muted">—</span>;
+            return <span className="text-ink-muted">—</span>;
           }
           const total = Math.round(info.productTotals.orders);
           return (
             <span
-              className="font-medium text-text-secondary"
+              className="font-medium text-ink-secondary"
               title="סך ההזמנות ב-Shopify שכללו את המוצרים המשויכים, בטווח שנבחר, מכל הערוצים. מוצר שמופיע בכמה הזמנות נספר פעם להזמנה; מוצרים מרובים באותה הזמנה מסוכמים פר-מוצר."
             >
               {total}
@@ -813,22 +852,22 @@ export function CampaignsTableRow({
         <td data-col-id="conversions" className="px-3 py-2 text-end tabular-nums">{formatNumber(a.conversions, 0)}</td>
       ),
       ctr: (
-        <td data-col-id="ctr" className="px-3 py-2 text-end tabular-nums text-text-secondary">
+        <td data-col-id="ctr" className="px-3 py-2 text-end tabular-nums text-ink-secondary">
           {a.impressions > 0 ? `${(ctr * 100).toFixed(2)}%` : '—'}
         </td>
       ),
       cpc: (
-        <td data-col-id="cpc" className="px-3 py-2 text-end tabular-nums text-text-secondary">
+        <td data-col-id="cpc" className="px-3 py-2 text-end tabular-nums text-ink-secondary">
           {a.clicks > 0 ? formatCurrency(cpc, 2) : '—'}
         </td>
       ),
       cpm: (
-        <td data-col-id="cpm" className="px-3 py-2 text-end tabular-nums text-text-secondary">
+        <td data-col-id="cpm" className="px-3 py-2 text-end tabular-nums text-ink-secondary">
           {a.impressions > 0 ? formatCurrency(cpm, 2) : '—'}
         </td>
       ),
       cpa: (
-        <td data-col-id="cpa" className="px-3 py-2 text-end tabular-nums text-text-secondary">
+        <td data-col-id="cpa" className="px-3 py-2 text-end tabular-nums text-ink-secondary">
           {a.conversions > 0 ? formatCurrency(cpa, 2) : '—'}
         </td>
       ),
@@ -844,7 +883,7 @@ export function CampaignsTableRow({
             target="_blank"
             rel="noopener noreferrer"
             onClick={e => e.stopPropagation()}
-            className="inline-flex items-center justify-center w-7 h-7 rounded text-text-muted hover:text-primary hover:bg-primary/8 transition-colors"
+            className="inline-flex items-center justify-center w-7 h-7 rounded text-ink-muted hover:text-accent hover:bg-accent/8 transition-colors"
             title={`פתח ב-${a.platform} Ads Manager`}
             aria-label="פתח ב-Ads Manager"
           >

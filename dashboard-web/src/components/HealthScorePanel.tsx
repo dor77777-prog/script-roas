@@ -24,12 +24,12 @@ import type {
  */
 
 const GRADE_STYLES: Record<HealthGrade, { chip: string; ring: string; label: string; tone: string }> = {
-  A: { chip: 'bg-roas-greenBg text-roas-green', ring: 'ring-roas-green/30', label: 'מצוין', tone: 'text-roas-green' },
-  B: { chip: 'bg-roas-blueBg text-roas-blue', ring: 'ring-roas-blue/30', label: 'בריא', tone: 'text-roas-blue' },
-  C: { chip: 'bg-roas-orangeBg text-roas-orange', ring: 'ring-roas-orange/30', label: 'גבולי', tone: 'text-roas-orange' },
-  D: { chip: 'bg-roas-redBg text-roas-red', ring: 'ring-roas-red/30', label: 'בעייתי', tone: 'text-roas-red' },
-  F: { chip: 'bg-roas-redBg text-roas-red', ring: 'ring-roas-red/40', label: 'כשל', tone: 'text-roas-red' },
-  unknown: { chip: 'bg-surfaceMuted text-text-muted', ring: 'ring-borderSubtle', label: 'מוקדם מדי', tone: 'text-text-muted' },
+  A: { chip: 'bg-status-greenBg text-status-green', ring: 'ring-status-green/30', label: 'מצוין', tone: 'text-status-green' },
+  B: { chip: 'bg-status-blueBg text-status-blue', ring: 'ring-status-blue/30', label: 'בריא', tone: 'text-status-blue' },
+  C: { chip: 'bg-status-orangeBg text-status-orange', ring: 'ring-status-orange/30', label: 'גבולי', tone: 'text-status-orange' },
+  D: { chip: 'bg-status-redBg text-status-red', ring: 'ring-status-red/30', label: 'בעייתי', tone: 'text-status-red' },
+  F: { chip: 'bg-status-redBg text-status-red', ring: 'ring-status-red/40', label: 'כשל', tone: 'text-status-red' },
+  unknown: { chip: 'bg-elevated2 text-ink-muted', ring: 'ring-line-subtle', label: 'מוקדם מדי', tone: 'text-ink-muted' },
 };
 
 type WeightedComponentKey = 'profitability' | 'volume' | 'trajectory' | 'attributionClarity';
@@ -49,10 +49,10 @@ const COMPONENT_ORDER: ReadonlyArray<WeightedComponentKey> = [
 ];
 
 function barColor(value: number): string {
-  if (value >= 75) return 'bg-roas-green';
-  if (value >= 50) return 'bg-roas-blue';
-  if (value >= 30) return 'bg-roas-orange';
-  return 'bg-roas-red';
+  if (value >= 75) return 'bg-status-green';
+  if (value >= 50) return 'bg-status-blue';
+  if (value >= 30) return 'bg-status-orange';
+  return 'bg-status-red';
 }
 
 /**
@@ -128,7 +128,7 @@ export function HealthScorePanel({ health }: { health: CampaignHealth }) {
     <section
       dir="rtl"
       aria-label="ציון בריאות הקמפיין"
-      className="rounded-2xl bg-surface border border-borderSubtle shadow-card p-4 sm:p-5 space-y-4"
+      className="rounded-2xl bg-elevated border border-line-subtle shadow-sm p-4 sm:p-5 space-y-4"
     >
       {/* Top row: grade badge + label + score */}
       <div className="flex items-start gap-3 sm:gap-4">
@@ -149,13 +149,13 @@ export function HealthScorePanel({ health }: { health: CampaignHealth }) {
               {styles.label}
             </div>
             {!isUnknown && (
-              <div className="text-sm text-text-muted tabular-nums">
-                ציון <span className="font-semibold text-text-primary">{health.score}</span>
-                <span className="text-text-subtle"> / 100</span>
+              <div className="text-sm text-ink-muted tabular-nums">
+                ציון <span className="font-semibold text-ink">{health.score}</span>
+                <span className="text-ink-subtle"> / 100</span>
               </div>
             )}
           </div>
-          <div className="text-[11px] sm:text-xs text-text-secondary mt-1 leading-relaxed">
+          <div className="text-[11px] sm:text-xs text-ink-secondary mt-1 leading-relaxed">
             ציון מאוחד שמשקלל את 4 הרכיבים הקיימים בדשבורד לכדי תמונה אחת. שאר הסקציות בעמוד מציגות את המרכיבים בפירוט.
           </div>
         </div>
@@ -163,7 +163,7 @@ export function HealthScorePanel({ health }: { health: CampaignHealth }) {
 
       {/* Insufficient short-circuit — render reasons only */}
       {health.insufficient ? (
-        <div className="rounded-lg bg-surfaceMuted/40 border border-borderSubtle px-3 py-2.5 text-[12px] text-text-secondary leading-relaxed">
+        <div className="rounded-lg bg-elevated2/40 border border-line-subtle px-3 py-2.5 text-[12px] text-ink-secondary leading-relaxed">
           {health.reasons[0]}
         </div>
       ) : (
@@ -176,21 +176,21 @@ export function HealthScorePanel({ health }: { health: CampaignHealth }) {
               return (
                 <div key={key}>
                   <div className="flex items-center justify-between text-[12px] sm:text-[13px] mb-1">
-                    <span className="font-medium text-text-primary">
+                    <span className="font-medium text-ink">
                       {meta.label}
-                      <span className="text-text-muted font-normal ms-1.5">({meta.weight})</span>
+                      <span className="text-ink-muted font-normal ms-1.5">({meta.weight})</span>
                     </span>
-                    <span className="tabular-nums text-text-secondary font-semibold">
+                    <span className="tabular-nums text-ink-secondary font-semibold">
                       {value}/100
                     </span>
                   </div>
-                  <div className="h-2 rounded-full bg-surfaceMuted overflow-hidden">
+                  <div className="h-2 rounded-full bg-elevated2 overflow-hidden">
                     <div
                       className={cn('h-full rounded-full transition-all', barColor(value))}
                       style={{ width: `${Math.max(2, value)}%` }}
                     />
                   </div>
-                  <div className="text-[11px] sm:text-[12px] text-text-muted leading-snug mt-1">
+                  <div className="text-[11px] sm:text-[12px] text-ink-muted leading-snug mt-1">
                     {health.reasons[idx]}
                   </div>
                 </div>
@@ -203,17 +203,17 @@ export function HealthScorePanel({ health }: { health: CampaignHealth }) {
               voice (vs. the old world where 5 separate chips suggested
               5 separate things). */}
           {recommendations.length > 0 && (
-            <div className="pt-3 border-t border-borderSubtle">
-              <div className="text-[11px] sm:text-xs font-semibold text-text-primary mb-1.5 uppercase tracking-wide">
+            <div className="pt-3 border-t border-line-subtle">
+              <div className="text-[11px] sm:text-xs font-semibold text-ink mb-1.5 uppercase tracking-wide">
                 המלצה
               </div>
               <ul className="space-y-1.5">
                 {recommendations.map((r, idx) => (
                   <li
                     key={idx}
-                    className="text-[12px] sm:text-[13px] text-text-secondary leading-relaxed flex gap-1.5"
+                    className="text-[12px] sm:text-[13px] text-ink-secondary leading-relaxed flex gap-1.5"
                   >
-                    <span className="text-text-muted shrink-0">←</span>
+                    <span className="text-ink-muted shrink-0">←</span>
                     <span>{r}</span>
                   </li>
                 ))}
@@ -223,7 +223,7 @@ export function HealthScorePanel({ health }: { health: CampaignHealth }) {
 
           {/* Footer formula reference — keep tiny, just so a curious
               operator can verify how the score was assembled. */}
-          <div className="pt-2 border-t border-borderSubtle text-[10.5px] sm:text-[11px] text-text-muted leading-snug">
+          <div className="pt-2 border-t border-line-subtle text-[10.5px] sm:text-[11px] text-ink-muted leading-snug">
             ציון = (רווחיות×0.40) + (נפח×0.15) + (מומנטום×0.25) + (attribution×0.20)
           </div>
         </>

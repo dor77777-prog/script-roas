@@ -1,11 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+import { startTransition, useEffect, useMemo, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import {
   AlertCircle,
-  Home,
   TrendingUp,
   Package,
   Table,
@@ -15,7 +13,6 @@ import {
   CalendarDays,
   Megaphone,
   Receipt,
-  Cog,
 } from 'lucide-react';
 import type { DashboardData, Filters as F } from '@/lib/types';
 import { computePresetRange, previousRange } from '@/lib/presets';
@@ -31,15 +28,20 @@ import { TodayLive } from './TodayLive';
 import { ProductsTable } from './ProductsTable';
 import { ProductCentricView } from './ProductCentricView';
 import { CampaignsTable } from './CampaignsTable';
+import { QuadrantScatter, type QuadrantPoint } from './QuadrantScatter';
+import { aggregate as aggregateCampaigns } from '@/lib/campaignsAggregator';
+import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import { InsightsBoard } from './InsightsBoard';
 import { GoalTracker } from './GoalTracker';
 import { AiReportButton } from './AiReportButton';
+import { TabHeader } from './TabHeader';
 import { HeroOverview } from './HeroOverview';
 import { PnLBreakdown } from './PnLBreakdown';
 import { BillingSettings } from './BillingSettings';
 import { AnnotationsPanel } from './AnnotationsPanel';
 import { CommandPalette } from './CommandPalette';
-import { TabNav, type TabDef } from './TabNav';
+import { Sidebar } from './Sidebar';
+import { FocusMode } from './FocusMode';
 import { SectionIntro } from './SectionIntro';
 import { CloudSync } from './CloudSync';
 import { SyncIndicator } from './SyncIndicator';
@@ -76,14 +78,28 @@ const ordersFetcher = async (url: string): Promise<OrdersResponseShape> => {
 
 const initialPreset = 'this_month';
 
-const TABS: TabDef<TabKey>[] = [
-  { key: 'home',      label: 'בית',     icon: <Home size={16} /> },
-  { key: 'pnl',       label: 'P&L',     icon: <Receipt size={16} /> },
-  { key: 'analysis',  label: 'ניתוח',    icon: <TrendingUp size={16} /> },
-  { key: 'campaigns', label: 'קמפיינים', icon: <Megaphone size={16} /> },
-  { key: 'products',  label: 'מוצרים',   icon: <Package size={16} /> },
-  { key: 'detail',    label: 'פירוט',    icon: <Table size={16} /> },
-];
+/**
+ * Wraps tab-switch state updates in the browser's native View Transitions
+ * API (Chromium 111+, Firefox 132+, Safari 18+ — ~78% global support as of
+ * 2026-05). Falls back to a plain state update on unsupported browsers so
+ * the dashboard never breaks. Inside the VT callback the React state
+ * update is wrapped in startTransition so React doesn't tear during the
+ * snapshot the browser takes for the cross-fade.
+ */
+function useTabTransition() {
+  return (next: TabKey, setActiveTab: (k: TabKey) => void) => {
+    const doc = document as typeof document & {
+      startViewTransition?: (cb: () => void) => { finished: Promise<void> };
+    };
+    if (typeof doc.startViewTransition === 'function') {
+      doc.startViewTransition(() => {
+        startTransition(() => setActiveTab(next));
+      });
+    } else {
+      setActiveTab(next);
+    }
+  };
+}
 
 export function Dashboard() {
   // Initial state — read from URL search params on first mount so a refresh
@@ -101,6 +117,8 @@ export function Dashboard() {
       window.location.search,
     ).tab;
   });
+  const startTabTransition = useTabTransition();
+  const handleTabChange = (next: TabKey) => startTabTransition(next, setActiveTab);
   const [filters, setFilters] = useState<F>(() => {
     const defaults = {
       preset: initialPreset,
@@ -215,104 +233,116 @@ export function Dashboard() {
   }, [ordersData, data, filters.store]);
 
   return (
-    <div dir="rtl" className="min-h-screen bg-background">
-      {/* Keeps billing / annotations / goal / insight-states in sync across
-          devices and partners by mirroring localStorage to Google Sheets. */}
-      <CloudSync />
-      <Header
-        dataLastWriteAt={data?.dataLastWriteAt ?? null}
-        commandPalette={
-          data ? (
+    <div dir="rtl" className="min-h-screen bg-canvas flex">
+      {/* Sidebar on the start-side (right in RTL) */}
+      <Sidebar activeTab={activeTab} onTabChange={handleTabChange} />
+
+      {/* Main column — header strip + tab content */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* Keeps billing / annotations / goal / insight-states in sync across
+            devices and partners by mirroring localStorage to Google Sheets. */}
+        <CloudSync />
+        <FocusMode />
+
+        {/* Top strip — freshness chip, command palette, sync indicator.
+            The full <Header> (logo, brand, deep navy gradient) is no
+            longer needed since the Sidebar carries the brand. We keep a
+            slim, theme-aware top strip so the chips that used to live
+            inside <Header> have a home. */}
+        <header
+          role="banner"
+          className="sticky top-0 z-30 bg-elevated/85 backdrop-blur-xl border-b border-line-subtle px-4 py-2 flex items-center justify-end gap-2"
+        >
+          <FreshnessChip dataLastWriteAt={data?.dataLastWriteAt ?? null} />
+          {data && (
             <CommandPalette
               data={data}
               filters={filters}
               setFilters={setFilters}
               activeTab={activeTab}
-              setActiveTab={setActiveTab}
+              setActiveTab={handleTabChange}
               onRefresh={() => mutate()}
               onOpenAiReport={() => setAiReportSignal(n => n + 1)}
             />
-          ) : null
-        }
-      />
+          )}
+          <SyncIndicator />
+        </header>
 
-      {/* Tabs only render once data is in — keeps initial paint clean */}
-      {data && <TabNav tabs={TABS} active={activeTab} onChange={setActiveTab} />}
-
-      <main className="max-w-7xl mx-auto px-3 sm:px-4 md:px-8 py-4 sm:py-6 md:py-8 space-y-4 sm:space-y-5">
-        {/* Two error sources: (a) SWR threw (network failure, malformed JSON),
-          * (b) /api/data returned 200 + empty rows + error field (WR-06 degraded
-          * path — preferred over status 500 so SWR consumers downstream stay
-          * consistent across /api/data, /api/campaigns, /api/products, /api/ads,
-          * /api/orders-attribution, etc.). Either surfaces in the same banner. */}
-        {(error || data?.error) && (
-          <div className="rounded-xl bg-roas-redBg border border-roas-red/30 p-4 flex items-start gap-3">
-            <AlertCircle className="text-roas-red shrink-0" size={20} />
-            <div>
-              <div className="font-semibold text-roas-red">שגיאה בטעינת הנתונים</div>
-              <div className="text-sm text-text-secondary mt-1">
-                {error ? (error as Error).message : data?.error}
+        <main className="max-w-7xl mx-auto w-full px-3 sm:px-4 md:px-8 py-4 sm:py-6 md:py-8 space-y-4 sm:space-y-5">
+          {/* Two error sources: (a) SWR threw (network failure, malformed JSON),
+            * (b) /api/data returned 200 + empty rows + error field (WR-06 degraded
+            * path — preferred over status 500 so SWR consumers downstream stay
+            * consistent across /api/data, /api/campaigns, /api/products, /api/ads,
+            * /api/orders-attribution, etc.). Either surfaces in the same banner. */}
+          {(error || data?.error) && (
+            <div className="rounded-xl bg-roas-redBg border border-roas-red/30 p-4 flex items-start gap-3">
+              <AlertCircle className="text-roas-red shrink-0" size={20} />
+              <div>
+                <div className="font-semibold text-roas-red">שגיאה בטעינת הנתונים</div>
+                <div className="text-sm text-text-secondary mt-1">
+                  {error ? (error as Error).message : data?.error}
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {isLoading && (
-          <div className="space-y-4 animate-fade-in">
-            <div className="skeleton h-40 sm:h-48 rounded-2xl" aria-hidden />
-            <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="skeleton h-28 sm:h-36 rounded-xl" aria-hidden />
-              ))}
+          {isLoading && (
+            <div className="space-y-4 animate-fade-in">
+              <div className="skeleton h-40 sm:h-48 rounded-2xl" aria-hidden />
+              <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 sm:gap-4">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="skeleton h-28 sm:h-36 rounded-xl" aria-hidden />
+                ))}
+              </div>
+              <div className="sr-only">טוען נתונים…</div>
             </div>
-            <div className="sr-only">טוען נתונים…</div>
-          </div>
-        )}
+          )}
 
-        {data && filtered && (
-          <>
-            {/* Phase 05.7.6 — per-tab freshness chip + global refresh button.
-                Rendered once at the top so it appears on every tab. The
-                chip reflects data_daily.updated_at which is a good proxy
-                for all 4 daily tables (they all bump on the same cron tick).
-                The refresh button fires sync-now for all 3 stores +
-                polls until backend is done + SWR-mutates every key. */}
-            <TabFreshnessHeader dataLastWriteAt={data.dataLastWriteAt ?? null} />
-            {activeTab === 'home' && (
-              <HomeTab
-                data={data}
-                filtered={filtered}
-                filters={filters}
-                setFilters={setFilters}
-                aiReportSignal={aiReportSignal}
-                ordersByStore={ordersByStore}
-              />
-            )}
-            {activeTab === 'pnl' && (
-              <PnLTab
-                data={data}
-                filtered={filtered}
-                filters={filters}
-                setFilters={setFilters}
-              />
-            )}
-            {activeTab === 'analysis' && (
-              <AnalysisTab data={data} filtered={filtered} filters={filters} setFilters={setFilters} />
-            )}
-            {activeTab === 'campaigns' && (
-              <CampaignsTab data={data} filters={filters} setFilters={setFilters} />
-            )}
-            {activeTab === 'products' && (
-              <ProductsTab data={data} filters={filters} setFilters={setFilters} />
-            )}
-            {activeTab === 'detail' && (
-              <DetailTab filtered={filtered} filters={filters} setFilters={setFilters} stores={data.stores} />
-            )}
+          {data && filtered && (
+            <>
+              {/* Phase 05.7.6 — per-tab freshness chip + global refresh button.
+                  Rendered once at the top so it appears on every tab. The
+                  chip reflects data_daily.updated_at which is a good proxy
+                  for all 4 daily tables (they all bump on the same cron tick).
+                  The refresh button fires sync-now for all 3 stores +
+                  polls until backend is done + SWR-mutates every key. */}
+              <TabFreshnessHeader dataLastWriteAt={data.dataLastWriteAt ?? null} />
+              {activeTab === 'home' && (
+                <HomeTab
+                  data={data}
+                  filtered={filtered}
+                  filters={filters}
+                  setFilters={setFilters}
+                  aiReportSignal={aiReportSignal}
+                  ordersByStore={ordersByStore}
+                />
+              )}
+              {activeTab === 'pnl' && (
+                <PnLTab
+                  data={data}
+                  filtered={filtered}
+                  filters={filters}
+                  setFilters={setFilters}
+                />
+              )}
+              {activeTab === 'analysis' && (
+                <AnalysisTab data={data} filtered={filtered} filters={filters} setFilters={setFilters} />
+              )}
+              {activeTab === 'campaigns' && (
+                <CampaignsTab data={data} filters={filters} setFilters={setFilters} />
+              )}
+              {activeTab === 'products' && (
+                <ProductsTab data={data} filters={filters} setFilters={setFilters} />
+              )}
+              {activeTab === 'detail' && (
+                <DetailTab filtered={filtered} filters={filters} setFilters={setFilters} stores={data.stores} />
+              )}
 
-            <Footer lastUpdated={data.lastUpdated} />
-          </>
-        )}
-      </main>
+              <Footer lastUpdated={data.lastUpdated} />
+            </>
+          )}
+        </main>
+      </div>
     </div>
   );
 }
@@ -362,15 +392,12 @@ function HomeTab({
       {/* ===== Hero — editorial story + chart-as-background + floating KPIs ===== */}
       <HeroOverview data={data} filters={filters} />
 
-      {/* ===== Filters — quiet, just controls. AI-report button on the right. ===== */}
-      <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
-        <div className="flex items-center gap-2 text-xs sm:text-sm text-text-secondary">
-          <CalendarDays size={14} className="text-text-muted" />
-          <span>שנה טווח או חנות לעדכון כל המסך</span>
-        </div>
-        <AiReportButton data={data} filters={filters} openSignal={aiReportSignal} />
-      </div>
-      <Filters filters={filters} stores={data.stores} onChange={setFilters} />
+      <TabHeader
+        title="בית"
+        description="שנה טווח או חנות לעדכון כל המסך."
+        filterSlot={<Filters filters={filters} stores={data.stores} onChange={setFilters} />}
+        actionSlot={<AiReportButton data={data} filters={filters} openSignal={aiReportSignal} />}
+      />
 
       {/* ===== Goal tracker — monthly revenue target with pacing + forecast.
                 Intentionally GLOBAL: ignores both `filters.store` and
@@ -480,7 +507,7 @@ function AnalysisTab({
         title="מגמת ROAS לאורך זמן"
         description="קו לכל חנות. הקו האדום-מקווקו מציין את היעד הפנימי שלך — ROAS 3.0. רוצה לראות חנות אחת? סנן למעלה."
       />
-      <div className="rounded-xl bg-surface border border-border shadow-card overflow-hidden">
+      <div className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
         <RoasChart data={filtered.series} stores={filtered.visibleStores} rows={filtered.cur} bare />
       </div>
 
@@ -489,7 +516,7 @@ function AnalysisTab({
         title="טבלאות חודשיות"
         description="טבלה לכל חודש עם שורה לכל יום, עד 17 חודשים אחורה. ROAS צבוע: אדום (<2), כתום (2-2.7), ירוק (2.7-3), כחול (>3). יום עם הוצאה אך ללא מכירה מסומן בשחור עם '0'."
       />
-      <div className="rounded-xl bg-surface border border-border shadow-card overflow-hidden">
+      <div className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
         <MonthlyTables stores={data.stores} globalStore={filters.store} bare />
       </div>
     </div>
@@ -499,6 +526,49 @@ function AnalysisTab({
 // ============================================================================
 // Tab: CAMPAIGNS — campaign + ad-set performance with ROAS / CTR / CPC / CPA.
 // ============================================================================
+const campaignsFetcher = async (url: string): Promise<CampaignsResponse> => {
+  const r = await fetch(url);
+  if (!r.ok) {
+    const body = await r.json().catch(() => ({}));
+    throw new Error(body?.error || `HTTP ${r.status}`);
+  }
+  return r.json() as Promise<CampaignsResponse>;
+};
+
+function QuadrantScatterCard({
+  filters,
+}: {
+  filters: { store: string; range: { from: string; to: string } };
+}) {
+  const { data: swrData } = useSWR<CampaignsResponse>(
+    buildDateRangeKey('/api/campaigns', filters.range),
+    campaignsFetcher,
+    { refreshInterval: 120_000, revalidateOnFocus: false },
+  );
+
+  const points = useMemo<QuadrantPoint[]>(() => {
+    if (!swrData) return [];
+    const aggregated = aggregateCampaigns(
+      swrData.rows,
+      'campaign',
+      filters.store,
+      'all',
+      filters.range,
+      swrData.currentEffectiveStatus,
+    );
+    return aggregated
+      .filter((a) => a.spend > 0 && a.conversions > 0)
+      .map((a) => ({
+        name: a.campaignName,
+        roas: a.conversionValue / a.spend,
+        cac: a.spend / a.conversions,
+        spend: a.spend,
+      }));
+  }, [swrData, filters.store, filters.range]);
+
+  return <QuadrantScatter data={points} title="ROAS × CAC לקמפיינים פעילים" />;
+}
+
 function CampaignsTab({
   data,
   filters,
@@ -517,7 +587,8 @@ function CampaignsTab({
         formula="ROAS = ערך המרות / הוצאה · CTR = קליקים / חשיפות · CPA = הוצאה / המרות"
       />
       <Filters filters={filters} stores={data.stores} onChange={setFilters} />
-      <div className="rounded-xl bg-surface border border-borderSubtle shadow-card overflow-hidden">
+      <QuadrantScatterCard filters={filters} />
+      <div className="rounded-xl bg-elevated border border-line-subtle shadow-sm overflow-hidden">
         <CampaignsTable
           range={filters.range}
           store={filters.store}
@@ -583,7 +654,7 @@ function ProductsTab({
         <div
           role="tablist"
           aria-label="תצוגות בטאב מוצרים"
-          className="inline-flex rounded-lg border border-border bg-surface overflow-hidden divide-x divide-border"
+          className="inline-flex rounded-lg border border-line bg-elevated overflow-hidden divide-x divide-line"
           dir="ltr"
         >
           {PRODUCTS_SUBTABS.map((t) => (
@@ -595,8 +666,8 @@ function ProductsTab({
               className={cn(
                 'px-4 sm:px-5 py-2 text-xs sm:text-sm font-medium transition-colors min-w-[140px]',
                 subTab === t.key
-                  ? 'bg-primary text-white'
-                  : 'bg-surface text-text-secondary hover:bg-surfaceMuted',
+                  ? 'bg-accent text-white'
+                  : 'bg-elevated text-ink-secondary hover:bg-elevated2',
               )}
               dir="rtl"
             >
@@ -607,7 +678,7 @@ function ProductsTab({
       </div>
 
       {subTab === 'table' && (
-        <div className="rounded-xl bg-surface border border-border shadow-card overflow-hidden">
+        <div className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
           <ProductsTable
             range={filters.range}
             store={filters.store}
@@ -648,10 +719,10 @@ function DetailTab({
       <SectionIntro
         icon={<Table size={20} />}
         title="פירוט יומי"
-        description="כל שורה בטבלה היא (יום × חנות) — הוצאות פייסבוק, גוגל, הכנסות, ROAS, ורווח. עד 100 שורות אחרונות בטווח הנבחר. ROAS שחור עם '0' = יום שהוצאת בו כסף אבל לא היו מכירות (כשל)."
+        description="כל שורה בטבלה היא (יום × חנות) — הוצאות פייסבוק, גוגל, הכנסות, ROAS, ורווח. עד 100 שורות אחרונות בטווח הנבחר. ROAS אדום עם '0' = יום שהוצאת בו כסף אבל לא היו מכירות (כשל)."
       />
       <Filters filters={filters} stores={stores} onChange={setFilters} />
-      <div className="rounded-xl bg-surface border border-border shadow-card overflow-hidden">
+      <div className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
         <DetailTable rows={filtered.cur} bare />
       </div>
     </div>
@@ -659,78 +730,8 @@ function DetailTab({
 }
 
 // ============================================================================
-// Header + Footer
+// Footer
 // ============================================================================
-function Header({
-  commandPalette,
-  dataLastWriteAt,
-}: {
-  /** The Cmd-K trigger pill is rendered inside the header so it's always
-   *  reachable, no matter which tab the user is on. */
-  commandPalette?: React.ReactNode;
-  /**
-   * Phase 05.7.6 — ISO timestamp of the most-recent data_daily row write
-   * (cron-live / cron-daily / event-sync-now). Surfaced as a chip in the
-   * header so the operator can see when data was last refreshed without
-   * jumping to /operator > Jobs.
-   */
-  dataLastWriteAt: string | null;
-}) {
-  return (
-    <header className="sticky top-0 z-30 bg-primary-dark text-white shadow-sm">
-      {/* Deep navy gradient with a subtle inner highlight; closer to Stripe/Linear than the
-          previous flat-ish gradient. */}
-      <div
-        className="relative bg-gradient-to-br from-primary-dark via-primary to-primary-light"
-        style={{
-          backgroundImage:
-            'linear-gradient(120deg, #091c4a 0%, #0d3680 55%, #1d4ed8 110%)',
-        }}
-      >
-        <div className="absolute inset-0 bg-[radial-gradient(at_top_left,_rgba(255,255,255,0.08),_transparent_50%)] pointer-events-none" />
-        <div className="relative max-w-7xl mx-auto px-3 sm:px-4 md:px-8 py-3 sm:py-4 flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-base sm:text-lg md:text-xl font-semibold tracking-tight truncate flex items-center gap-2">
-              <span aria-hidden>📊</span>
-              <span>דשבורד ROAS</span>
-            </h1>
-            <p className="text-[10px] sm:text-xs text-white/65 mt-0.5 hidden sm:block tracking-wide">
-              מעקב הוצאות ↔ הכנסות לכל החנויות
-            </p>
-          </div>
-          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
-            {/* Phase 05.7.6: freshness chip. Hidden on the smallest screens
-                so the header doesn't wrap; on sm+ it sits left of the
-                command-palette + sync indicators. */}
-            <span className="hidden sm:inline-flex">
-              <FreshnessChip dataLastWriteAt={dataLastWriteAt} />
-            </span>
-            {commandPalette}
-            <SyncIndicator />
-            {/* Operator console (D-D1) — sibling Next.js route at /operator.
-                NOT a TabKey: stays out of the in-page TabNav so the main
-                dashboard's tab semantics don't drift. Sub-views land in
-                plans 13-16. */}
-            <Link
-              href="/operator"
-              className="inline-flex items-center gap-1.5 sm:gap-2 rounded-lg bg-white/12 hover:bg-white/20 active:bg-white/25 px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium transition-colors ring-1 ring-white/10"
-              aria-label="ניהול"
-            >
-              <Cog size={14} />
-              <span className="hidden sm:inline">ניהול</span>
-            </Link>
-            {/* Phase 05.7.9 — header "Refresh" button removed per operator
-                request. It only called SWR mutate() (local cache revalidate),
-                which the auto-poll already does every 60s, and visually it
-                competed with the real "רענן הכל" button in TabFreshnessHeader
-                (which fires a full Inngest sync). Removing avoids confusion. */}
-          </div>
-        </div>
-      </div>
-    </header>
-  );
-}
-
 function Footer({ lastUpdated }: { lastUpdated: string }) {
   return (
     <footer className="text-center text-[11px] sm:text-xs text-text-muted py-6 tabular-nums">

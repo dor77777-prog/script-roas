@@ -9,6 +9,7 @@ import { storeHasTikTok } from '@/lib/platformsByStore';
 import type { DailyRow, DashboardData } from '@/lib/types';
 import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
 import { storeColor } from '@/lib/storeColors';
+import { buildTodayNarrative } from '@/lib/todayNarrative';
 
 const ordersFetcher = async (url: string): Promise<OrdersAttributionResponse> => {
   const r = await fetch(url);
@@ -35,11 +36,11 @@ const dataFetcher = async (url: string): Promise<DashboardData> => {
 };
 
 const TONE_BG: Record<string, string> = {
-  red:    'bg-roas-redBg text-roas-red',
-  orange: 'bg-roas-orangeBg text-roas-orange',
-  green:  'bg-roas-greenBg text-roas-green',
-  blue:   'bg-roas-blueBg text-roas-blue',
-  gray:   'bg-surfaceMuted text-text-muted',
+  red:    'bg-status-redBg text-status-red',
+  orange: 'bg-status-orangeBg text-status-orange',
+  green:  'bg-status-greenBg text-status-green',
+  blue:   'bg-status-blueBg text-status-blue',
+  gray:   'bg-elevated2 text-ink-muted',
 };
 
 /**
@@ -83,44 +84,44 @@ type LiveTone = {
 /** Styling tokens keyed by the tone name from roasLabel. */
 const LIVE_TONE_STYLES: Record<string, LiveTone> = {
   gray: {
-    cardBg: 'bg-gradient-to-br from-surfaceMuted/60 via-surface to-surface',
-    cardBorder: 'border-borderSubtle',
-    blob: 'bg-text-muted/10',
-    pulse: 'bg-text-muted',
-    pill: 'bg-text-muted text-white',
-    iconColor: 'text-text-muted',
+    cardBg: 'bg-gradient-to-br from-status-grayBg/60 via-elevated to-elevated',
+    cardBorder: 'border-line',
+    blob: 'bg-status-gray/10',
+    pulse: 'bg-status-gray',
+    pill: 'bg-status-gray text-white',
+    iconColor: 'text-status-gray',
   },
   red: {
-    cardBg: 'bg-gradient-to-br from-roas-redBg/60 via-surface to-surface',
-    cardBorder: 'border-roas-red/35',
-    blob: 'bg-roas-red/12',
-    pulse: 'bg-roas-red',
-    pill: 'bg-roas-red text-white',
-    iconColor: 'text-roas-red',
+    cardBg: 'bg-gradient-to-br from-status-redBg/60 via-elevated to-elevated',
+    cardBorder: 'border-status-red/35',
+    blob: 'bg-status-red/12',
+    pulse: 'bg-status-red',
+    pill: 'bg-status-red text-white',
+    iconColor: 'text-status-red',
   },
   orange: {
-    cardBg: 'bg-gradient-to-br from-roas-orangeBg/60 via-surface to-surface',
-    cardBorder: 'border-roas-orange/35',
-    blob: 'bg-roas-orange/12',
-    pulse: 'bg-roas-orange',
-    pill: 'bg-roas-orange text-white',
-    iconColor: 'text-roas-orange',
+    cardBg: 'bg-gradient-to-br from-status-orangeBg/60 via-elevated to-elevated',
+    cardBorder: 'border-status-orange/35',
+    blob: 'bg-status-orange/12',
+    pulse: 'bg-status-orange',
+    pill: 'bg-status-orange text-white',
+    iconColor: 'text-status-orange',
   },
   green: {
-    cardBg: 'bg-gradient-to-br from-roas-greenBg/50 via-surface to-surface',
-    cardBorder: 'border-roas-green/30',
-    blob: 'bg-roas-green/10',
-    pulse: 'bg-roas-green',
-    pill: 'bg-roas-green text-white',
-    iconColor: 'text-roas-green',
+    cardBg: 'bg-gradient-to-br from-status-greenBg/50 via-elevated to-elevated',
+    cardBorder: 'border-status-green/30',
+    blob: 'bg-status-green/10',
+    pulse: 'bg-status-green',
+    pill: 'bg-status-green text-white',
+    iconColor: 'text-status-green',
   },
   blue: {
-    cardBg: 'bg-gradient-to-br from-roas-blueBg/55 via-surface to-surface',
-    cardBorder: 'border-roas-blue/30',
-    blob: 'bg-roas-blue/12',
-    pulse: 'bg-roas-blue',
-    pill: 'bg-roas-blue text-white',
-    iconColor: 'text-roas-blue',
+    cardBg: 'bg-gradient-to-br from-status-blueBg/55 via-elevated to-elevated',
+    cardBorder: 'border-status-blue/30',
+    blob: 'bg-status-blue/12',
+    pulse: 'bg-status-blue',
+    pill: 'bg-status-blue text-white',
+    iconColor: 'text-status-blue',
   },
 };
 
@@ -157,29 +158,41 @@ export function TodayLive({
   fxIlsToCad,
 }: {
   /**
-   * Parent dashboard's row set. Kept in the prop signature for back-compat
-   * with existing call sites but UNUSED inside the component as of the
-   * 2026-05-23 operator-reported fix: TodayLive must always show real-
-   * time today data regardless of the operator's date-range selection.
-   * Pre-fix the widget filtered these rows to `r.date === today` — but
-   * `_parentRows` is already narrowed to filters.range by the parent, so
-   * picking "last month" / any historical window emptied the live widget.
+   * Parent dashboard's row set, already narrowed to the operator's
+   * selected filters.range. The live-snapshot logic for today's stats
+   * (revenue, ROAS, CPM, orders, per-store cards) intentionally does
+   * NOT consume this — it fetches its own today-to-today /api/data slice
+   * via the useSWR call below so the live widget stays decoupled from
+   * the operator's historical-window choice (operator-reported fix
+   * 2026-05-23).
    *
-   * The component now fetches its own today-to-today /api/data slice via
-   * useSWR below, so live cards are decoupled from the parent's
-   * historical-window choice.
+   * As of Plan 2 (2026-05-28) we DO consume `_parentRows` for one
+   * specific purpose: the month-to-date revenue sum that feeds the
+   * narrative line's pace clause. The parent's range is typically wide
+   * enough to cover MTD (default range, "last 30 days", etc.); when it
+   * isn't (e.g. operator picked "last 7 days") the MTD sum is whatever
+   * portion of the month is reachable inside the slice, and the
+   * narrative still renders gracefully.
    */
   rows: DailyRow[];
   fxIlsToCad: number | null;
 }) {
-  // Mark _parentRows as intentionally unused so the lint pass doesn't
-  // flag it; we keep the prop in the type so existing call sites compile
-  // without churn during the audit-v2 wave.
-  void _parentRows;
   const [now, setNow] = useState(nowInIsrael());
   useEffect(() => {
     const t = setInterval(() => setNow(nowInIsrael()), 30_000);
     return () => clearInterval(t);
+  }, []);
+
+  // Force a re-render when the operator changes the monthly goal in GoalTracker.
+  // GoalTracker writes to localStorage and dispatches `roas-goal-changed`; without
+  // listening here, the narrative line would stay stale until the next SWR poll
+  // (up to 60 seconds). This keeps it instantaneous.
+  const [, bumpGoalVersion] = useState(0);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handler = () => bumpGoalVersion(v => v + 1);
+    window.addEventListener('roas-goal-changed', handler);
+    return () => window.removeEventListener('roas-goal-changed', handler);
   }, []);
 
   const today = todayInIsrael();
@@ -199,10 +212,60 @@ export function TodayLive({
     const rs = liveDataResp?.rows ?? [];
     return rs.filter(r => r.date === today);
   }, [liveDataResp, today]);
-  const agg = aggregate(todayRows);
-  const storeAggs = aggregateByStore(todayRows);
+  const agg = useMemo(() => aggregate(todayRows), [todayRows]);
+  const storeAggs = useMemo(() => aggregateByStore(todayRows), [todayRows]);
   const roas = roasLabel(agg.roas);
   const hasAnyData = agg.revenue > 0 || agg.spend > 0;
+
+  // Read the monthly goal that GoalTracker maintains in localStorage.
+  // Inline (not memoized) so the value re-picks-up if any sibling triggers a re-render.
+  const monthlyGoal: number | null = (() => {
+    if (typeof window === 'undefined') return null;
+    const raw = window.localStorage.getItem('roas-monthly-goal');
+    const n = raw != null ? Number(raw) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : null;
+  })();
+
+  // Month-to-date revenue + day-of-month for pace calculation. The
+  // liveDataResp slice TodayLive fetches is today-only; for MTD we look at
+  // the parent's `_parentRows` (range data passed via props, broader window
+  // than today). If the parent's range doesn't cover the month-to-date span
+  // (e.g. operator chose "last 7 days" before today), the sum is whatever
+  // MTD is reachable inside the slice — the narrative still renders.
+  //
+  // Timezone-safe: parse `today` (ISO YYYY-MM-DD for Israel TZ) as strings
+  // and construct `monthStart` via string concatenation. Avoids the previous
+  // `new Date('YYYY-MM-DDT00:00:00')` form which the JS spec treats as local
+  // time — west-of-Israel browsers around midnight could shift the day by one.
+  const [todayYear, todayMonth, todayDay] = today.split('-').map(Number);
+  const dayOfMonth = todayDay;
+  // `new Date(year, monthIndex, 0)` is TZ-safe: passing day=0 of the next
+  // month returns the last day of THIS month, and `.getDate()` is read off
+  // the local-time fields which match the numeric components we passed in.
+  const daysInMonth = new Date(todayYear, todayMonth, 0).getDate();
+  const monthStart = `${todayYear}-${String(todayMonth).padStart(2, '0')}-01`;
+  const monthToDateRevenue = useMemo(() => {
+    if (monthlyGoal == null) return 0;
+    let sum = 0;
+    for (const r of _parentRows) {
+      if (r.date >= monthStart && r.date < today) sum += r.revenue;
+    }
+    return sum;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- monthStart derived from today (already in deps)
+  }, [_parentRows, today, monthlyGoal]);
+
+  const narrative = useMemo(
+    () => buildTodayNarrative({
+      revenue: agg.revenue,
+      roas: agg.roas,
+      storeAggs: storeAggs.map(s => ({ store: s.store, revenue: s.revenue, roas: s.roas })),
+      monthlyGoal,
+      monthToDateRevenue,
+      dayOfMonth,
+      daysInMonth,
+    }),
+    [agg.revenue, agg.roas, storeAggs, monthlyGoal, monthToDateRevenue, dayOfMonth, daysInMonth],
+  );
 
   // Phase 13.8 (2026-05-26) — CPM now sources impressions directly from
   // data_daily (via the liveDataResp fetch above) instead of campaigns_daily.
@@ -320,7 +383,7 @@ export function TodayLive({
         'relative overflow-hidden rounded-2xl border transition-colors duration-500',
         liveTone.cardBg,
         liveTone.cardBorder,
-        'shadow-card animate-fade-in',
+        'shadow-sm animate-fade-in',
       )}
     >
       {/* Decorative corner blob — tinted to match the current ROAS band so
@@ -344,7 +407,7 @@ export function TodayLive({
               <span className={cn('animate-ping absolute inline-flex h-full w-full rounded-full opacity-75', liveTone.pulse)} />
               <span className={cn('relative inline-flex rounded-full h-2.5 w-2.5', liveTone.pulse)} />
             </span>
-            <h2 className="flex items-center gap-2 text-sm sm:text-base font-semibold text-text-primary truncate">
+            <h2 className="flex items-center gap-2 text-sm sm:text-base font-semibold text-ink truncate">
               <Radio size={16} className={cn('shrink-0 transition-colors duration-500', liveTone.iconColor)} />
               היום — חי
             </h2>
@@ -352,11 +415,23 @@ export function TodayLive({
               LIVE
             </span>
           </div>
-          <div className="text-[10px] sm:text-xs text-text-secondary text-left tabular-nums shrink-0">
+          <div className="text-[10px] sm:text-xs text-ink-secondary text-left tabular-nums shrink-0">
             <div className="font-medium">{today}</div>
-            <div className="text-text-muted">עודכן {now}</div>
+            <div className="text-ink-muted">עודכן {now}</div>
           </div>
         </header>
+
+        {/* Narrative line — single sentence summarising today's revenue, ROAS,
+            pace vs monthly goal, and top store. Sits between LIVE header and
+            the 6 stat cards. */}
+        {hasAnyData && (
+          <div
+            className="mt-3 sm:mt-4 mb-3 sm:mb-4 px-3 sm:px-4 py-2.5 rounded-lg bg-canvas/40 border-s-2 border-status-green/60 text-xs sm:text-sm leading-relaxed text-ink-secondary tabular-nums"
+            data-testid="today-narrative"
+          >
+            {narrative}
+          </div>
+        )}
 
         {/* Stats grid */}
         <div className="grid grid-cols-2 lg:grid-cols-6 gap-2.5 sm:gap-3">
@@ -428,7 +503,7 @@ export function TodayLive({
               return (
                 <div
                   key={s.store}
-                  className="rounded-xl bg-surface/90 backdrop-blur-sm border border-borderSubtle p-3 shadow-xs"
+                  className="rounded-xl bg-elevated/90 backdrop-blur-sm border border-line-subtle p-3 shadow-xs"
                 >
                   {/* Header: store name + larger ROAS chip — keeps ROAS the
                       headline metric of the card. Chip text bumped from
@@ -439,7 +514,7 @@ export function TodayLive({
                         className="inline-block w-2 h-2 rounded-full shrink-0"
                         style={{ background: color }}
                       />
-                      <span className="text-xs sm:text-sm font-semibold text-text-primary truncate">
+                      <span className="text-xs sm:text-sm font-semibold text-ink truncate">
                         {s.store}
                       </span>
                     </div>
@@ -458,34 +533,34 @@ export function TodayLive({
                       cost-per-reach. */}
                   <div className="space-y-1.5 text-xs tabular-nums">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-text-muted">סך הוצאה</span>
-                      <span className="text-text-primary font-semibold">
+                      <span className="text-ink-muted">סך הוצאה</span>
+                      <span className="text-ink font-semibold">
                         CAD {formatCurrency(s.spend)}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between gap-2 ps-3 text-[11px] text-text-muted flex-wrap">
-                      <span>Meta: <span className="text-text-secondary tabular-nums">{formatCurrency(s.fbSpend)}</span></span>
+                    <div className="flex items-center justify-between gap-2 ps-3 text-[11px] text-ink-muted flex-wrap">
+                      <span>Meta: <span className="text-ink-secondary tabular-nums">{formatCurrency(s.fbSpend)}</span></span>
                       <span>·</span>
-                      <span>Google: <span className="text-text-secondary tabular-nums">{hasGoogle ? formatCurrency(s.gaSpend) : '—'}</span></span>
+                      <span>Google: <span className="text-ink-secondary tabular-nums">{hasGoogle ? formatCurrency(s.gaSpend) : '—'}</span></span>
                       {hasTikTok && (
                         <>
                           <span>·</span>
-                          <span>TikTok: <span className="text-text-secondary tabular-nums">{(s.ttSpend ?? 0) > 0 ? formatCurrency(s.ttSpend ?? 0) : '—'}</span></span>
+                          <span>TikTok: <span className="text-ink-secondary tabular-nums">{(s.ttSpend ?? 0) > 0 ? formatCurrency(s.ttSpend ?? 0) : '—'}</span></span>
                         </>
                       )}
                     </div>
-                    <div className="flex items-center justify-between gap-2 rounded-md bg-roas-greenBg/40 px-2 py-1.5 mt-1.5">
-                      <span className="text-roas-green/80 font-medium">הכנסה</span>
-                      <span className="text-roas-green text-sm sm:text-base font-bold">
+                    <div className="flex items-center justify-between gap-2 rounded-md bg-status-greenBg/40 px-2 py-1.5 mt-1.5">
+                      <span className="text-status-green/80 font-medium">הכנסה</span>
+                      <span className="text-status-green text-sm sm:text-base font-bold">
                         CAD {formatCurrency(s.revenue)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-2 pt-1">
-                      <span className="text-text-muted inline-flex items-center gap-1">
-                        <ShoppingBag size={11} className="text-text-muted" />
+                      <span className="text-ink-muted inline-flex items-center gap-1">
+                        <ShoppingBag size={11} className="text-ink-muted" />
                         הזמנות
                       </span>
-                      <span className="text-text-primary font-semibold">
+                      <span className="text-ink font-semibold">
                         {/* Audit fix 2026-05-23 (FIND-05): "…" for loading,
                             "0" for genuine zero orders. */}
                         {ordersToday === undefined ? '…' : formatNumber(storeOrders ?? 0, 0)}
@@ -499,20 +574,20 @@ export function TodayLive({
                         CPM without leaving the live card. Operator request
                         2026-05-23. */}
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-text-muted">CPM ממוצע</span>
-                      <span className="text-text-primary font-semibold">
+                      <span className="text-ink-muted">CPM ממוצע</span>
+                      <span className="text-ink font-semibold">
                         {storeCpm > 0 ? `CAD ${formatCurrency(storeCpm, 2)}` : '—'}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between gap-2 ps-3 text-[11px] text-text-muted flex-wrap">
+                    <div className="flex items-center justify-between gap-2 ps-3 text-[11px] text-ink-muted flex-wrap">
                       <span>
-                        Meta: <span className="text-text-secondary tabular-nums">
+                        Meta: <span className="text-ink-secondary tabular-nums">
                           {storeCpmByPlatform.meta > 0 ? formatCurrency(storeCpmByPlatform.meta, 2) : '—'}
                         </span>
                       </span>
                       <span>·</span>
                       <span>
-                        Google: <span className="text-text-secondary tabular-nums">
+                        Google: <span className="text-ink-secondary tabular-nums">
                           {hasGoogle && storeCpmByPlatform.google > 0 ? formatCurrency(storeCpmByPlatform.google, 2) : '—'}
                         </span>
                       </span>
@@ -520,7 +595,7 @@ export function TodayLive({
                         <>
                           <span>·</span>
                           <span>
-                            TikTok: <span className="text-text-secondary tabular-nums">
+                            TikTok: <span className="text-ink-secondary tabular-nums">
                               {storeCpmByPlatform.tiktok > 0 ? formatCurrency(storeCpmByPlatform.tiktok, 2) : '—'}
                             </span>
                           </span>
@@ -535,31 +610,31 @@ export function TodayLive({
         )}
 
         {!hasAnyData && (
-          <div className="mt-3 text-center text-xs text-text-muted">
+          <div className="mt-3 text-center text-xs text-ink-muted">
             עוד אין נתוני היום. הטריגר ה-Live ירוץ אוטומטית כל 10 דקות.
           </div>
         )}
 
         {/* Footer — FX + currencies */}
-        <div className="mt-4 sm:mt-5 pt-3 sm:pt-4 border-t border-roas-green/15 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[10px] sm:text-xs text-text-muted">
+        <div className="mt-4 sm:mt-5 pt-3 sm:pt-4 border-t border-status-green/15 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-[10px] sm:text-xs text-ink-muted">
           {fxIlsToCad !== null && (
             <span className="inline-flex items-center gap-1 tabular-nums">
               <span>שער המרה:</span>
-              <span className="font-medium text-text-secondary">
+              <span className="font-medium text-ink-secondary">
                 1 ILS = {fxIlsToCad.toFixed(4)} CAD
               </span>
             </span>
           )}
-          <span className="text-text-subtle">·</span>
+          <span className="text-ink-subtle">·</span>
           <span>Meta: ILS</span>
-          <span className="text-text-subtle">·</span>
+          <span className="text-ink-subtle">·</span>
           <span>Google: CAD</span>
-          <span className="text-text-subtle">·</span>
+          <span className="text-ink-subtle">·</span>
           <span>TikTok: USD</span>
-          <span className="text-text-subtle">·</span>
+          <span className="text-ink-subtle">·</span>
           <span>Shopify: CAD</span>
         </div>
-        <div className="mt-1.5 text-[10px] sm:text-xs text-text-muted/80 text-center leading-relaxed">
+        <div className="mt-1.5 text-[10px] sm:text-xs text-ink-muted/80 text-center leading-relaxed">
           רענון אוטומטי כל 10 דקות. Shopify + הזמנות ב-real-time;
           Meta/Google/TikTok עם פיגור של ~20 דק' מצד הפלטפורמה.
         </div>
@@ -598,16 +673,16 @@ function LiveStat({
   accent?: 'pos' | 'neg';
 }) {
   return (
-    <div className="rounded-xl bg-surface border border-borderSubtle p-2.5 sm:p-4 shadow-xs">
+    <div className="rounded-xl bg-elevated border border-line-subtle p-2.5 sm:p-4 shadow-xs">
       <div className="flex items-center justify-between mb-1 sm:mb-1.5">
-        <span className="text-[10px] sm:text-xs font-medium text-text-secondary tracking-wide truncate">
+        <span className="text-[10px] sm:text-xs font-medium text-ink-secondary tracking-wide truncate">
           {label}
         </span>
-        <span className="text-text-muted/70 shrink-0">{icon}</span>
+        <span className="text-ink-muted/70 shrink-0">{icon}</span>
       </div>
       <div className="flex items-baseline gap-1 min-w-0">
         {valuePrefix && (
-          <span className="text-[10px] sm:text-xs text-text-muted font-medium shrink-0">
+          <span className="text-[10px] sm:text-xs text-ink-muted font-medium shrink-0">
             {valuePrefix}
           </span>
         )}
@@ -615,9 +690,9 @@ function LiveStat({
           className={cn(
             'font-light tabular-nums tracking-tight leading-none whitespace-nowrap',
             liveValueSizeClass(value),
-            accent === 'pos' && 'text-roas-green',
-            accent === 'neg' && 'text-roas-red',
-            !accent && 'text-text-primary',
+            accent === 'pos' && 'text-status-green',
+            accent === 'neg' && 'text-status-red',
+            !accent && 'text-ink',
           )}
         >
           {value}
@@ -650,13 +725,13 @@ function _Mini({
 }) {
   return (
     <div className="flex items-center justify-between gap-1">
-      <span className="text-text-muted">{label}</span>
+      <span className="text-ink-muted">{label}</span>
       <span
         className={cn(
           'font-semibold',
-          accent === 'green' && 'text-roas-green',
-          !accent && !muted && 'text-text-primary',
-          muted && 'text-text-secondary',
+          accent === 'green' && 'text-status-green',
+          !accent && !muted && 'text-ink',
+          muted && 'text-ink-secondary',
         )}
       >
         {value}

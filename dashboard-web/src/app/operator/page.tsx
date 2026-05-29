@@ -23,7 +23,7 @@
 // per D-D2). Plan 22 owns the matching User Manual section + the
 // post-deploy smoke battery for all four sub-views.
 //
-// Design tokens (`max-w-7xl`, `text-text-secondary`, etc.) follow S-8 (RTL +
+// Design tokens (`max-w-7xl`, `text-ink-secondary`, etc.) follow S-8 (RTL +
 // Hebrew) and D-D4 (match existing dashboard styling — no new tokens).
 
 import { ManualOverridesCrud } from '@/components/operator/ManualOverridesCrud';
@@ -44,7 +44,7 @@ export default function OperatorPage() {
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-8">
       <header>
         <h1 className="text-2xl font-bold">ניהול</h1>
-        <p className="text-text-secondary text-sm mt-1">
+        <p className="text-ink-secondary text-sm mt-1">
           ניהול אוטומציה: ריצות Inngest, backfill, החלפות ידניות, ו-Sync.
         </p>
       </header>
@@ -71,7 +71,7 @@ export default function OperatorPage() {
       <section>
         <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
           <span>בעיות טוקן</span>
-          <span className="text-text-secondary text-xs font-normal">
+          <span className="text-ink-secondary text-xs font-normal">
             (אישורים שפגו / API tokens שצריך לחדש)
           </span>
         </h2>
@@ -115,11 +115,11 @@ export default function OperatorPage() {
       <section>
         <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
           <span>התראות WhatsApp</span>
-          <span className="text-text-secondary text-xs font-normal">
+          <span className="text-ink-secondary text-xs font-normal">
             (3 הודעות אוטומטיות ביום — 12:00, 18:00, 00:10)
           </span>
         </h2>
-        <p className="text-text-secondary text-sm mb-3">
+        <p className="text-ink-secondary text-sm mb-3">
           הקרון של Inngest שולח דוח ROAS יומי ב-WhatsApp ל-2 מספרים מוגדרים
           (notification_config). הכפתורים למטה מאפשרים לשלוח ידנית את אותה
           הודעה בדיוק — לבדיקה לאחר שינוי env vars (WHATSAPP_*), רוטציית
@@ -134,15 +134,15 @@ export default function OperatorPage() {
           heading 'ניקוי וריסט' (cleanup & reset) signals the read-this-
           carefully nature; the component itself enforces a typed-token
           confirmation before any DELETE fires. */}
-      <hr className="border-white/10" />
+      <hr className="border-line-subtle" />
       <section>
         <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
           <span>ניקוי וריסט</span>
-          <span className="text-text-secondary text-xs font-normal">
+          <span className="text-ink-secondary text-xs font-normal">
             (destructive — איפוס נתונים)
           </span>
         </h2>
-        <p className="text-text-secondary text-sm mb-3">
+        <p className="text-ink-secondary text-sm mb-3">
           מחיקה רבת-טבלאות של נתוני הדשבורד ב-Supabase, על מנת להריץ
           backfill מאפס ולוודא שהדשבורד מתמלא מחדש כראוי. הפעולה מתאשרת
           על-ידי הקלדת טוקן ייחודי לכל מצב.

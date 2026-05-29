@@ -3,22 +3,125 @@
 @tailwind utilities;
 
 /* ===========================================================================
+   Design Tokens — OKLCH-based. Defined in :root (light) and overridden
+   under [data-theme="dark"]. Tailwind reads these via the CSS-variable
+   color strategy in tailwind.config.ts. ROAS status tokens map 1-to-1
+   to the existing roasLabel() tones (red < 2.0, orange 2.0–2.7,
+   green 2.7–3.0, blue > 3.0, gray for no-data) — color logic itself
+   does not move.
+   =========================================================================== */
+:root {
+  /* Surfaces — warm off-white scale */
+  --surface-canvas:    oklch(99% 0.005 80);
+  --surface-elevated-1: oklch(100% 0 0);
+  --surface-elevated-2: oklch(97% 0.005 80);
+  --surface-overlay:   oklch(95% 0.005 80 / 0.92);
+
+  /* Text */
+  --text-primary:   oklch(20% 0.02 250);
+  --text-secondary: oklch(40% 0.02 250);
+  --text-muted:     oklch(60% 0.015 250);
+  --text-subtle:    oklch(75% 0.01 250);
+
+  /* Borders */
+  --border-default: oklch(90% 0.01 250);
+  --border-subtle:  oklch(94% 0.005 250);
+  --border-strong:  oklch(80% 0.015 250);
+
+  /* Accent — single cool indigo */
+  --accent:    oklch(55% 0.18 260);
+  --accent-fg: oklch(99% 0 0);
+
+  /* ROAS status — all at uniform L=60% for perceptual balance */
+  --status-red:    oklch(60% 0.18 25);
+  --status-red-bg: oklch(96% 0.04 25);
+  --status-red-fg: oklch(35% 0.18 25);
+
+  --status-orange:    oklch(70% 0.16 55);
+  --status-orange-bg: oklch(96% 0.05 55);
+  --status-orange-fg: oklch(40% 0.15 55);
+
+  --status-green:    oklch(60% 0.16 145);
+  --status-green-bg: oklch(95% 0.05 145);
+  --status-green-fg: oklch(35% 0.16 145);
+
+  --status-blue:    oklch(60% 0.16 240);
+  --status-blue-bg: oklch(95% 0.04 240);
+  --status-blue-fg: oklch(35% 0.16 240);
+
+  --status-gray:    oklch(60% 0 0);
+  --status-gray-bg: oklch(95% 0 0);
+  --status-gray-fg: oklch(40% 0 0);
+}
+
+[data-theme="dark"] {
+  /* Surfaces — soft dark, NOT pure #000 (modern dark standard).
+     Highest contrast against text-primary, lowest against text-subtle. */
+  --surface-canvas:    oklch(15% 0.01 240);
+  --surface-elevated-1: oklch(19% 0.01 240);
+  --surface-elevated-2: oklch(23% 0.01 240);
+  --surface-overlay:   oklch(15% 0.01 240 / 0.85);
+
+  /* Text — inverted scale */
+  --text-primary:   oklch(95% 0.01 240);
+  --text-secondary: oklch(78% 0.01 240);
+  --text-muted:     oklch(60% 0.015 240);
+  --text-subtle:    oklch(45% 0.015 240);
+
+  /* Borders */
+  /* --border-subtle is decorative-only in dark mode (fails WCAG 1.4.11).
+     Use --border-default for interactive element outlines. */
+  --border-subtle:  oklch(28% 0.01 240);
+  --border-default: oklch(35% 0.01 240);
+  --border-strong:  oklch(45% 0.01 240);
+
+  /* Accent — slightly desaturated for dark */
+  --accent:    oklch(65% 0.16 260);
+  --accent-fg: oklch(15% 0.01 240);
+
+  /* ROAS status — hue locked, luminance bumped so colors stay legible
+     against dark surfaces. The 4 tones still map to roasLabel() 1-to-1. */
+  --status-red:    oklch(65% 0.18 25);
+  --status-red-bg: oklch(25% 0.06 25);
+  --status-red-fg: oklch(85% 0.10 25);
+
+  --status-orange:    oklch(73% 0.16 55);
+  --status-orange-bg: oklch(25% 0.06 55);
+  --status-orange-fg: oklch(85% 0.10 55);
+
+  --status-green:    oklch(65% 0.16 145);
+  --status-green-bg: oklch(25% 0.06 145);
+  --status-green-fg: oklch(85% 0.10 145);
+
+  --status-blue:    oklch(65% 0.16 240);
+  --status-blue-bg: oklch(25% 0.05 240);
+  --status-blue-fg: oklch(85% 0.08 240);
+
+  --status-gray:    oklch(65% 0 0);
+  --status-gray-bg: oklch(25% 0 0);
+  --status-gray-fg: oklch(85% 0 0);
+}
+
+/* ===========================================================================
    Base — body styles, font features, selection.
    =========================================================================== */
 html, body {
-  background: #f6f9fc;
+  background: var(--surface-canvas);
   font-feature-settings: 'kern', 'ss01';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
 }
 
-/* Tabular numbers ON anywhere we tag with .tabular-nums (Tailwind's class)
-   PLUS for inputs by default — number alignment matters in this app. */
+/* Tabular numbers — uses the Rubik-first numeric chain so the tnum
+   feature actually resolves. Previously declared against Heebo
+   (which has no tnum) — columns lined up only because Heebo's digits
+   are coincidentally near-monowidth. */
 .tabular-nums,
 input[type="date"],
 input[type="number"] {
-  font-feature-settings: 'tnum', 'kern';
+  font-family: var(--font-rubik), var(--font-heebo), system-ui, sans-serif;
+  font-feature-settings: 'tnum', 'kern', 'zero', 'case';
   font-variant-numeric: tabular-nums;
 }
 
@@ -103,5 +206,35 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/* Focus Mode — dims chrome for client screen-shares. Toggled by Cmd+\. */
+[data-focus-mode="on"] aside[aria-label="ניווט ראשי"],
+[data-focus-mode="on"] header[role="banner"] {
+  opacity: 0.3;
+  transition: opacity 200ms ease-out;
+}
+[data-focus-mode="on"] [data-focus-hide="true"] {
+  display: none;
+}
+
+/* View Transition tuning for tab switches. The default VT animation
+   is a cross-fade; we shorten it so transitions feel snappy. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 180ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Drawer entrance morph — used by the View Transitions API call in
+   CampaignsTable when opening CampaignDrawer. The fixed overlay
+   inherits the default cross-fade; the panel itself gets the matched
+   element transition via view-transition-name. */
+@media (prefers-reduced-motion: no-preference) {
+  ::view-transition-old(drawer-panel),
+  ::view-transition-new(drawer-panel) {
+    animation-duration: 220ms;
+    animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 }

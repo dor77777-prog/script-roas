@@ -65,7 +65,7 @@ export function WhatsappTestButtons() {
             type="button"
             onClick={() => send(trigger)}
             disabled={pendingKey !== null}
-            className="flex items-center gap-1 bg-emerald-700 hover:bg-emerald-600 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm px-3 py-2 rounded"
+            className="flex items-center gap-1 bg-status-green hover:bg-status-green/90 disabled:bg-elevated2 disabled:text-ink-muted disabled:cursor-not-allowed text-white text-sm px-3 py-2 rounded"
           >
             {pendingKey === trigger ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -78,17 +78,17 @@ export function WhatsappTestButtons() {
       </div>
 
       {message && (
-        <p className="text-green-400 text-sm" role="status">
+        <p className="text-status-green text-sm" role="status">
           {message}
         </p>
       )}
       {error && (
-        <p className="text-red-400 text-sm" role="alert">
+        <p className="text-status-red text-sm" role="alert">
           שגיאה: {error}
         </p>
       )}
 
-      <p className="text-text-secondary text-xs">
+      <p className="text-ink-secondary text-xs">
         * הקרון האוטומטי שולח 3 הודעות ביום: 12:00 / 18:00 / 00:10
         (Asia/Jerusalem). הכפתורים כאן שולחים אירוע ידני באותה לוגיקה
         בדיוק — לבדיקות מהירות ולסניטי-צ&apos;ק לאחר שינויי קונפיג

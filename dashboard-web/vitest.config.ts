@@ -37,12 +37,46 @@ export default defineConfig({
     // src/components/__tests__/ — same Node environment, no DOM needed,
     // so no second vitest config required. Widening the glob here is the
     // correct approach (same rationale as plan-03 and plan-08 above).
+    //
+    // Excludes (added 2026-05-28): dom-config glob patterns are explicitly
+    // excluded so a file at src/components/ui/__tests__/Badge.test.tsx
+    // (created by Plan 1 Foundation Task 9+) doesn't run twice — once under
+    // node here and once under jsdom in vitest.config.dom.ts.
     include: [
       'src/lib/**/__tests__/**/*.test.{ts,tsx}',
       'src/inngest/**/__tests__/**/*.test.{ts,tsx}',
       'src/components/**/__tests__/**/*.test.{ts,tsx}',
     ],
+    exclude: [
+      // Vitest's defaults — must be repeated when we set `exclude` explicitly,
+      // because `exclude` replaces the defaults rather than extending them.
+      '**/node_modules/**',
+      '**/dist/**',
+      '**/.{idea,git,cache,output,temp}/**',
+      // Test files owned by the jsdom config (vitest.config.dom.ts). Without
+      // these excludes, every component test would be picked up by both
+      // configs and fail under node env (no DOM). Added 2026-05-28 alongside
+      // the introduction of vitest.config.dom.ts.
+      'src/components/**/__tests__/*.dom.test.{ts,tsx}',
+      'src/components/ui/**/__tests__/*.test.{ts,tsx}',
+    ],
     globals: false, // explicit imports — not relying on describe/it globals
+    // Provide a URL for jsdom so localStorage is fully functional when a
+    // test file uses the // @vitest-environment jsdom per-file directive.
+    // Without a URL, jsdom stubs localStorage without a working .clear().
+    environmentOptions: {
+      jsdom: {
+        url: 'http://localhost/',
+      },
+    },
+    // Node 25 ships a built-in `localStorage` stub (requires --localstorage-file
+    // to actually work). When a test file uses // @vitest-environment jsdom,
+    // vitest sets up jsdom but cannot override `localStorage` because Node's
+    // broken stub is already present and `localStorage` is not in vitest's
+    // KEYS allowlist for `populateGlobal`. The setup file below replaces the
+    // stub with a fully-functional Map-backed implementation before any test
+    // file runs, so per-file jsdom tests have working localStorage.
+    setupFiles: ['./src/test/setup-node.ts'],
   },
   resolve: {
     alias: {

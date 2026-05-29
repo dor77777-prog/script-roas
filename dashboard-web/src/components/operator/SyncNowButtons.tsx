@@ -133,7 +133,7 @@ export function SyncNowButtons() {
           type="button"
           onClick={() => sync({ scope: 'all' }, 'Sync all stores')}
           disabled={pendingKey !== null}
-          className="flex items-center gap-1 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm px-3 py-2 rounded"
+          className="flex items-center gap-1 bg-accent hover:bg-accent/90 disabled:bg-elevated2 disabled:text-ink-muted disabled:cursor-not-allowed text-white text-sm px-3 py-2 rounded"
         >
           {pendingKey === 'all' ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -150,7 +150,7 @@ export function SyncNowButtons() {
               sync({ scope: 'store', storeId }, `Sync ${storeLabel(storeId)}`)
             }
             disabled={pendingKey !== null}
-            className="flex items-center gap-1 bg-blue-700/70 hover:bg-blue-600/70 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm px-3 py-2 rounded"
+            className="flex items-center gap-1 bg-accent/70 hover:bg-accent/80 disabled:bg-elevated2 disabled:text-ink-muted disabled:cursor-not-allowed text-white text-sm px-3 py-2 rounded"
           >
             {pendingKey === storeId ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -163,17 +163,17 @@ export function SyncNowButtons() {
       </div>
 
       {message && (
-        <p className="text-green-400 text-sm" role="status">
+        <p className="text-status-green text-sm" role="status">
           {message}
         </p>
       )}
       {error && (
-        <p className="text-red-400 text-sm" role="alert">
+        <p className="text-status-red text-sm" role="alert">
           שגיאה: {error}
         </p>
       )}
 
-      <p className="text-text-secondary text-xs">
+      <p className="text-ink-secondary text-xs">
         * &quot;Sync now&quot; מפעיל את אותו handler של ה-cron היומי לתאריך
         הנוכחי (Asia/Jerusalem). כל לחיצה ≈ 6 ביצועי Inngest לחנות.
       </p>

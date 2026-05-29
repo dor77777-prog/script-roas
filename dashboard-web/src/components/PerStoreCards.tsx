@@ -40,11 +40,11 @@ export function selectLeaderAndRisk(
 }
 
 const TONE_BG: Record<string, string> = {
-  red: 'bg-roas-redBg text-roas-red',
-  orange: 'bg-roas-orangeBg text-roas-orange',
-  green: 'bg-roas-greenBg text-roas-green',
-  blue: 'bg-roas-blueBg text-roas-blue',
-  gray: 'bg-surfaceMuted text-text-muted',
+  red: 'bg-status-redBg text-status-red',
+  orange: 'bg-status-orangeBg text-status-orange',
+  green: 'bg-status-greenBg text-status-green',
+  blue: 'bg-status-blueBg text-status-blue',
+  gray: 'bg-elevated2 text-ink-muted',
 };
 
 type Props = {
@@ -87,7 +87,7 @@ export function PerStoreCards({ data, ordersByStore, bare = false }: Props) {
 
   return (
     <section className="space-y-3">
-      <h2 className="flex items-center gap-2 text-base font-semibold text-text-primary">
+      <h2 className="flex items-center gap-2 text-base font-semibold text-ink">
         ביצועים לפי חנות
       </h2>
       {grid}
@@ -110,7 +110,7 @@ function StoreCard({
 }) {
   const info = roasLabel(agg.roas);
   return (
-    <div className="rounded-xl bg-surface border border-border shadow-card overflow-hidden">
+    <div className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
       {/* Color bar header */}
       <div
         className="px-4 sm:px-5 py-2.5 sm:py-3 text-white font-semibold flex items-center justify-between gap-2"
@@ -136,7 +136,7 @@ function StoreCard({
       </div>
       <div className="p-4 sm:p-5 space-y-3">
         <div className="text-center">
-          <div className="text-3xl sm:text-4xl font-bold text-text-primary tabular-nums">
+          <div className="text-3xl sm:text-4xl font-bold text-ink tabular-nums">
             {formatNumber(agg.roas)}
           </div>
           <span
@@ -148,7 +148,7 @@ function StoreCard({
             {info.text}
           </span>
         </div>
-        <div className="grid grid-cols-1 gap-1.5 text-sm pt-2 border-t border-border">
+        <div className="grid grid-cols-1 gap-1.5 text-sm pt-2 border-t border-line">
           <Row label="הכנסות" value={`CAD ${formatCurrency(agg.revenue)}`} />
           <Row label="הוצאות" value={`CAD ${formatCurrency(agg.spend)}`} />
           {/* Phase 05.7.7 — surface Meta / Google / TikTok breakdown so each
@@ -159,11 +159,11 @@ function StoreCard({
               expected to see "TikTok: —" on a zero-spend day, not a missing
               column ("did the integration break? am I looking at the wrong
               store?"). */}
-          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-[11px] text-text-muted ps-3">
-            <span>Meta: <span className="text-text-secondary tabular-nums">{formatCurrency(agg.fbSpend)}</span></span>
-            <span>Google: <span className="text-text-secondary tabular-nums">{agg.gaSpend > 0 ? formatCurrency(agg.gaSpend) : '—'}</span></span>
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5 text-[11px] text-ink-muted ps-3">
+            <span>Meta: <span className="text-ink-secondary tabular-nums">{formatCurrency(agg.fbSpend)}</span></span>
+            <span>Google: <span className="text-ink-secondary tabular-nums">{agg.gaSpend > 0 ? formatCurrency(agg.gaSpend) : '—'}</span></span>
             {storeHasTikTok(agg.store) && (
-              <span>TikTok: <span className="text-text-secondary tabular-nums">{(agg.ttSpend ?? 0) > 0 ? formatCurrency(agg.ttSpend ?? 0) : '—'}</span></span>
+              <span>TikTok: <span className="text-ink-secondary tabular-nums">{(agg.ttSpend ?? 0) > 0 ? formatCurrency(agg.ttSpend ?? 0) : '—'}</span></span>
             )}
           </div>
           {/* Phase 05.7.8 — order count for the range. `undefined` means the
@@ -173,7 +173,7 @@ function StoreCard({
           <Row
             label={
               <span className="inline-flex items-center gap-1">
-                <ShoppingBag size={12} className="text-text-muted" />
+                <ShoppingBag size={12} className="text-ink-muted" />
                 הזמנות
               </span>
             }
@@ -191,11 +191,11 @@ function StoreCard({
 function Row({ label, value, bold = false }: { label: ReactNode; value: string; bold?: boolean }) {
   return (
     <div className="flex justify-between">
-      <span className="text-text-secondary">{label}:</span>
+      <span className="text-ink-secondary">{label}:</span>
       <span
         className={cn(
           'tabular-nums',
-          bold ? 'font-semibold text-text-primary' : 'text-text-primary',
+          bold ? 'font-semibold text-ink' : 'text-ink',
         )}
       >
         {value}

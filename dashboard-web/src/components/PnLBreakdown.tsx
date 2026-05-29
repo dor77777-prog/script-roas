@@ -53,13 +53,13 @@ const SOURCE_LABEL: Record<CostSource, string> = {
 };
 
 const SOURCE_COLOR: Record<CostSource, string> = {
-  'shopify-plan': 'text-primary',
+  'shopify-plan': 'text-accent',
   'shopify-app':  'text-blue-700',
   'external-app': 'text-purple-700',
   email:          'text-amber-700',
-  usage:          'text-roas-orange',
-  'one-off':      'text-text-secondary',
-  other:          'text-text-secondary',
+  usage:          'text-status-orange',
+  'one-off':      'text-ink-secondary',
+  other:          'text-ink-secondary',
 };
 
 export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [] }: Props) {
@@ -145,23 +145,23 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
   const maxAmount = Math.max(revenue, totalCosts, Math.abs(finalProfit), 1);
 
   return (
-    <section className="rounded-2xl bg-surface border border-borderSubtle shadow-elevated overflow-hidden">
+    <section className="rounded-2xl bg-elevated border border-line-subtle shadow-elevated overflow-hidden">
       {/* Hero strip — always visible. Three big numbers side-by-side with
           proportional bars so a glance answers "did I make money?" without
           expanding anything. */}
       <div
-        className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4 bg-gradient-to-br from-primary/[0.06] via-surface to-surface relative"
+        className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4 bg-gradient-to-br from-accent/[0.06] via-elevated to-elevated relative"
       >
         <div className="flex items-start justify-between gap-3 mb-4">
           <div className="flex items-center gap-2.5 min-w-0">
-            <span className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary text-white shrink-0 shadow-sm">
+            <span className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-accent text-white shrink-0 shadow-sm">
               <Receipt size={17} />
             </span>
             <div className="min-w-0">
-              <div className="text-[10px] sm:text-[11px] uppercase tracking-[0.12em] font-semibold text-text-muted">
+              <div className="text-[10px] sm:text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-muted">
                 Profit &amp; Loss
               </div>
-              <h2 className="text-base sm:text-xl font-bold text-text-primary tracking-tight leading-tight">
+              <h2 className="text-base sm:text-xl font-bold text-ink tracking-tight leading-tight">
                 כמה נשאר ביד?
               </h2>
             </div>
@@ -170,7 +170,7 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
             type="button"
             onClick={() => setOpen(v => !v)}
             aria-expanded={open}
-            className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-medium text-text-secondary hover:text-text-primary px-2 py-1 rounded-md hover:bg-surfaceMuted transition-colors shrink-0"
+            className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-medium text-ink-secondary hover:text-ink px-2 py-1 rounded-md hover:bg-elevated2 transition-colors shrink-0"
           >
             {open ? 'הסתר פירוט' : 'הצג פירוט מלא'}
             {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
@@ -211,7 +211,7 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
       </div>
 
       {open && (
-        <div className="p-4 sm:p-5 border-t border-borderSubtle animate-fade-in">
+        <div className="p-4 sm:p-5 border-t border-line-subtle animate-fade-in">
           {!hasConfiguredFixed && (
             <div className="mb-4 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 flex items-start gap-2">
               <AlertCircle size={14} className="text-amber-700 shrink-0 mt-0.5" />
@@ -287,24 +287,24 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
             <li
               className={cn(
                 'flex items-center justify-between gap-3 px-1 py-3 mt-1.5',
-                'border-t-2 border-text-primary/20',
+                'border-t-2 border-ink/20',
               )}
             >
               <div className="flex items-center gap-2 min-w-0">
-                <span className="text-sm font-bold text-text-primary">
+                <span className="text-sm font-bold text-ink">
                   רווח נטו אמיתי
                 </span>
-                <span className="text-[10px] text-text-muted">
+                <span className="text-[10px] text-ink-muted">
                   ({(current.trueMargin * 100).toFixed(1)}% מרג&apos;ין)
                 </span>
               </div>
               <span
                 className={cn(
                   'text-base sm:text-lg font-bold tabular-nums',
-                  finalProfit >= 0 ? 'text-roas-green' : 'text-roas-red',
+                  finalProfit >= 0 ? 'text-status-green' : 'text-status-red',
                 )}
               >
-                <span className="text-[10px] text-text-muted font-medium ml-1">CAD</span>
+                <span className="text-[10px] text-ink-muted font-medium ml-1">CAD</span>
                 {formatCurrency(finalProfit)}
               </span>
             </li>
@@ -313,14 +313,14 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
           {/* By-source breakdown */}
           {billing && hasConfiguredFixed && (
             <details className="mt-4 group">
-              <summary className="cursor-pointer text-[11px] sm:text-xs text-text-secondary hover:text-text-primary inline-flex items-center gap-1 select-none">
+              <summary className="cursor-pointer text-[11px] sm:text-xs text-ink-secondary hover:text-ink inline-flex items-center gap-1 select-none">
                 <ChevronUp size={11} className="transition-transform group-open:rotate-180" />
                 פירוט עלויות קבועות לפי קטגוריה
               </summary>
-              <div className="mt-2 rounded-lg bg-surfaceMuted/40 border border-borderSubtle p-3">
+              <div className="mt-2 rounded-lg bg-elevated2/40 border border-line-subtle p-3">
                 <table className="w-full text-xs tabular-nums">
-                  <thead className="sticky top-0 z-[5] bg-surfaceMuted/40">
-                    <tr className="text-[10px] uppercase text-text-muted tracking-wide">
+                  <thead className="sticky top-0 z-[5] bg-elevated2/40">
+                    <tr className="text-[10px] uppercase text-ink-muted tracking-wide">
                       <th className="text-start font-medium pb-1.5">קטגוריה</th>
                       <th className="text-end font-medium pb-1.5">סכום (יחסי לטווח)</th>
                       <th className="text-end font-medium pb-1.5">% מההכנסה</th>
@@ -339,26 +339,26 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
                         // on $5K/mo revenue reads as 2% on any view length.
                         const revPct = revenue > 0 ? (amt / revenue) * 100 : 0;
                         return (
-                          <tr key={s} className="border-t border-borderSubtle/60">
+                          <tr key={s} className="border-t border-line-subtle/60">
                             <td className={cn('py-1 font-medium', SOURCE_COLOR[s])}>
                               {SOURCE_LABEL[s]}
                             </td>
-                            <td className="py-1 text-end text-text-primary">
+                            <td className="py-1 text-end text-ink">
                               {formatCurrency(amt)}
                             </td>
-                            <td className="py-1 text-end text-text-secondary font-medium">
+                            <td className="py-1 text-end text-ink-secondary font-medium">
                               {revenue > 0 ? `${revPct.toFixed(1)}%` : '—'}
                             </td>
-                            <td className="py-1 text-end text-text-muted">
+                            <td className="py-1 text-end text-ink-muted">
                               {sharePct.toFixed(0)}%
                             </td>
                           </tr>
                         );
                       })}
-                    <tr className="border-t-2 border-text-primary/20 font-bold">
+                    <tr className="border-t-2 border-ink/20 font-bold">
                       <td className="py-1.5">סך הכל</td>
                       <td className="py-1.5 text-end">{formatCurrency(billing.total)}</td>
-                      <td className="py-1.5 text-end text-text-primary">
+                      <td className="py-1.5 text-end text-ink">
                         {revenue > 0
                           ? `${((billing.total / revenue) * 100).toFixed(1)}%`
                           : '—'}
@@ -367,10 +367,10 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
                     </tr>
                   </tbody>
                 </table>
-                <div className="mt-2 text-[10px] text-text-muted leading-relaxed">
+                <div className="mt-2 text-[10px] text-ink-muted leading-relaxed">
                   עורכים את הנתונים דרך הכפתור <span className="font-semibold">עלויות חודשיות</span>{' '}
                   מעל ה-P&amp;L. כל שינוי מתעדכן מיד בכל החישובים.{' '}
-                  <span className="text-text-secondary">
+                  <span className="text-ink-secondary">
                     עמודת <strong>% מההכנסה</strong> זהה בכל אורך טווח (סכום ההוצאה והכנסות
                     מתפרסים יחד) — מודד כמה כל שירות &quot;עולה&quot; ביחס לנפח העסק.
                   </span>
@@ -403,34 +403,34 @@ function HeroStat({
   sub?: string;
 }) {
   const amountColor =
-    tone === 'positive' ? 'text-text-primary'
-    : tone === 'negative' ? 'text-text-primary'
-    : tone === 'profit' ? 'text-roas-green'
-    : 'text-roas-red';
+    tone === 'positive' ? 'text-ink'
+    : tone === 'negative' ? 'text-ink'
+    : tone === 'profit' ? 'text-status-green'
+    : 'text-status-red';
   const barColor =
-    tone === 'positive' ? 'bg-primary'
-    : tone === 'negative' ? 'bg-text-muted/55'
-    : tone === 'profit' ? 'bg-roas-green'
-    : 'bg-roas-red';
+    tone === 'positive' ? 'bg-accent'
+    : tone === 'negative' ? 'bg-ink-muted/55'
+    : tone === 'profit' ? 'bg-status-green'
+    : 'bg-status-red';
   return (
     <div className="space-y-1.5">
-      <div className="text-[10px] sm:text-[11px] uppercase tracking-[0.1em] font-semibold text-text-muted">
+      <div className="text-[10px] sm:text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-muted">
         {label}
       </div>
       <div className={cn('text-xl sm:text-3xl font-bold tabular-nums leading-none', amountColor)}>
-        <span className="text-[10px] sm:text-xs text-text-muted font-medium ml-1.5 align-baseline">
+        <span className="text-[10px] sm:text-xs text-ink-muted font-medium ml-1.5 align-baseline">
           CAD
         </span>
         {formatCurrency(amount)}
       </div>
-      <div className="h-1.5 sm:h-2 rounded-full bg-text-muted/15 overflow-hidden">
+      <div className="h-1.5 sm:h-2 rounded-full bg-ink-muted/15 overflow-hidden">
         <div
           className={cn('h-full rounded-full transition-all duration-500 ease-out', barColor)}
           style={{ width: `${Math.max(2, Math.min(100, barWidthPct))}%` }}
         />
       </div>
       {sub && (
-        <div className="text-[10px] sm:text-[11px] text-text-muted tabular-nums">{sub}</div>
+        <div className="text-[10px] sm:text-[11px] text-ink-muted tabular-nums">{sub}</div>
       )}
     </div>
   );
@@ -455,48 +455,45 @@ function PnLLine({
   running: number | null;
 }) {
   return (
-    <li className="flex items-center gap-3 py-2 border-b border-borderSubtle/40 last:border-b-0">
-      <div className="min-w-0 flex-1">
-        <div className="text-sm text-text-primary font-medium leading-snug">
-          {label}
-        </div>
-        {note && (
-          <div className="text-[10px] sm:text-[11px] text-text-muted mt-0.5 leading-snug">
-            {note}
-          </div>
-        )}
+    <li
+      className={cn(
+        'grid items-center gap-x-3 py-2 border-b border-line-subtle/40 last:border-b-0',
+        'grid-cols-[1fr_120px] sm:grid-cols-[1fr_120px_140px]',
+      )}
+    >
+      {/* Column 1: label + optional note */}
+      <div className="min-w-0">
+        <div className="text-sm text-ink font-medium leading-snug">{label}</div>
+        {note && <div className="text-[10px] sm:text-[11px] text-ink-muted mt-0.5 leading-snug">{note}</div>}
       </div>
-      <div className="text-end shrink-0 min-w-[110px]">
+
+      {/* Column 2: amount + percentage */}
+      <div className="text-end">
         <div
           className={cn(
-            'text-sm font-semibold tabular-nums leading-tight',
-            tone === 'positive' && 'text-text-primary',
-            tone === 'cost' && 'text-text-secondary',
+            'text-sm font-semibold tabular-nums leading-tight font-mono',
+            tone === 'positive' && 'text-ink',
+            tone === 'cost' && 'text-ink-secondary',
           )}
         >
-          <span className="text-[10px] text-text-muted font-medium ml-1">CAD</span>
+          <span className="text-[10px] text-ink-muted font-medium me-1 font-sans">CAD</span>
           {formatCurrency(amount)}
         </div>
-        <div className="text-[10px] text-text-muted tabular-nums mt-0.5">
+        <div className="text-[10px] text-ink-muted tabular-nums mt-0.5 font-mono">
           {pct > 0 && tone === 'positive' ? '100%' : `${pct.toFixed(1)}%`}
         </div>
       </div>
-      <div className="text-end shrink-0 hidden sm:block min-w-[110px] border-s border-borderSubtle ps-3">
-        <div className="text-[10px] text-text-muted uppercase tracking-wide leading-tight">
-          נשאר
-        </div>
+
+      {/* Column 3: running total — desktop only */}
+      <div className="text-end hidden sm:block border-s border-line-subtle ps-3">
+        <div className="text-[10px] text-ink-muted uppercase tracking-wide leading-tight">נשאר</div>
         {running === null ? (
-          <span
-            className="text-xs text-text-secondary opacity-50"
-            aria-label="הערה — לא משפיע על הסכום הרץ"
-          >
-            —
-          </span>
+          <span className="text-xs text-ink-secondary opacity-50" aria-label="הערה — לא משפיע על הסכום הרץ">—</span>
         ) : (
           <div
             className={cn(
-              'text-xs font-semibold tabular-nums leading-tight mt-0.5',
-              running >= 0 ? 'text-text-primary' : 'text-roas-red',
+              'text-xs font-semibold tabular-nums leading-tight mt-0.5 font-mono',
+              running >= 0 ? 'text-ink' : 'text-status-red',
             )}
           >
             {formatCurrency(running)}

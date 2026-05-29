@@ -19,11 +19,11 @@ import { MetricHelp, METRIC_HELP, type MetricHelpContent } from './MetricHelp';
 import type { DailyRow } from '@/lib/types';
 
 const TONE_BG: Record<string, string> = {
-  red:    'bg-roas-redBg text-roas-red',
-  orange: 'bg-roas-orangeBg text-roas-orange',
-  green:  'bg-roas-greenBg text-roas-green',
-  blue:   'bg-roas-blueBg text-roas-blue',
-  gray:   'bg-surfaceMuted text-text-muted',
+  red:    'bg-status-redBg text-status-red',
+  orange: 'bg-status-orangeBg text-status-orange',
+  green:  'bg-status-greenBg text-status-green',
+  blue:   'bg-status-blueBg text-status-blue',
+  gray:   'bg-elevated2 text-ink-muted',
 };
 
 /** Length-aware sizing so long numbers don't get truncated. */
@@ -275,20 +275,20 @@ function KpiCard({
   return (
     <div
       className={cn(
-        'group relative rounded-xl bg-surface border border-borderSubtle p-3.5 sm:p-5',
-        'shadow-card hover:shadow-cardHover hover:border-border',
+        'group relative rounded-xl bg-elevated border border-line-subtle p-3.5 sm:p-5',
+        'shadow-sm hover:shadow-cardHover hover:border-line',
         'transition-all duration-DEFAULT ease-out',
       )}
     >
       <div className="flex items-center justify-between gap-2 mb-2.5 sm:mb-3">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="text-text-muted shrink-0 opacity-70 group-hover:opacity-100 transition-opacity">
+          <span className="text-ink-muted shrink-0 opacity-70 group-hover:opacity-100 transition-opacity">
             {icon}
           </span>
-          <span className="text-[11px] sm:text-xs font-medium text-text-secondary tracking-wide truncate">
+          <span className="text-[11px] sm:text-xs font-medium text-ink-secondary tracking-wide truncate">
             {label}
             {labelSuffix && (
-              <span className="text-text-muted font-normal ml-1">{labelSuffix}</span>
+              <span className="text-ink-muted font-normal ml-1">{labelSuffix}</span>
             )}
           </span>
           {help && <MetricHelp content={help} />}
@@ -297,7 +297,7 @@ function KpiCard({
 
       <div className="flex items-baseline gap-1.5 mb-2 sm:mb-2.5 min-w-0">
         {valuePrefix && (
-          <span className="text-[11px] sm:text-xs font-medium text-text-muted shrink-0">
+          <span className="text-[11px] sm:text-xs font-medium text-ink-muted shrink-0">
             {valuePrefix}
           </span>
         )}
@@ -307,9 +307,9 @@ function KpiCard({
           className={cn(
             'font-light tracking-tight leading-none whitespace-nowrap',
             valueSizeClass(settledValueString),
-            accent === 'pos' && 'text-roas-green',
-            accent === 'neg' && 'text-roas-red',
-            !accent && 'text-text-primary',
+            accent === 'pos' && 'text-status-green',
+            accent === 'neg' && 'text-status-red',
+            !accent && 'text-ink',
           )}
         />
       </div>
@@ -329,8 +329,8 @@ function KpiCard({
         <div
           className={cn(
             'flex items-center gap-1 text-[10px] sm:text-[11px] font-medium',
-            delta.direction === 'flat' && 'text-text-muted',
-            isGood && 'text-roas-green',
+            delta.direction === 'flat' && 'text-ink-muted',
+            isGood && 'text-status-green',
             isBad  && 'text-amber-600',
           )}
         >

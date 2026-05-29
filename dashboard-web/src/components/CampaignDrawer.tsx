@@ -19,7 +19,6 @@ import {
   AreaChart,
   Line,
   LineChart,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
@@ -74,6 +73,13 @@ import {
 } from '@/lib/campaignProductMap';
 import { CHART_COLORS } from '@/lib/chartColors';
 import { buildDateRangeKey, getPreviousPeriod } from '@/lib/dateRange';
+import { ChartContainer } from '@/components/ui/chart/ChartContainer';
+import {
+  ChartTooltip,
+  ChartTooltipLabel,
+  ChartTooltipRow,
+  ChartTooltipValue,
+} from '@/components/ui/chart/ChartTooltip';
 
 /**
  * Slide-in campaign drilldown drawer. Linear/Vercel-style: full context
@@ -107,11 +113,11 @@ type Props = {
 };
 
 const TONE_BG: Record<string, string> = {
-  red:    'bg-roas-redBg text-roas-red',
-  orange: 'bg-roas-orangeBg text-roas-orange',
-  green:  'bg-roas-greenBg text-roas-green',
-  blue:   'bg-roas-blueBg text-roas-blue',
-  gray:   'bg-surfaceMuted text-text-muted',
+  red:    'bg-status-redBg text-status-red',
+  orange: 'bg-status-orangeBg text-status-orange',
+  green:  'bg-status-greenBg text-status-green',
+  blue:   'bg-status-blueBg text-status-blue',
+  gray:   'bg-elevated2 text-ink-muted',
 };
 
 export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAccounts, rangeFrom, rangeTo, health }: Props) {
@@ -691,38 +697,39 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
       aria-labelledby="campaign-drawer-title"
     >
       <div
-        className="absolute inset-0 bg-text-primary/35 backdrop-blur-sm"
+        className="absolute inset-0 bg-ink/35 backdrop-blur-sm"
         onClick={onClose}
         aria-hidden
       />
       <aside
         dir="rtl"
+        style={{ viewTransitionName: 'drawer-panel' as never }}
         className={cn(
-          'relative bg-surface max-w-full',
+          'relative bg-elevated max-w-full',
           'h-full overflow-y-auto',
-          'shadow-elevated animate-fade-in-up',
+          'shadow-elevated',
           // Side-drawer mode: 640px panel anchored to the start (right in RTL)
           // Fullscreen mode: stretches edge-to-edge so charts + tables breathe
           !isFullscreen && 'w-full sm:w-[min(640px,100vw)] ml-0 sm:ms-auto',
           isFullscreen && 'w-full',
         )}
       >
-        <header className="sticky top-0 bg-surface/95 backdrop-blur-md z-10 px-4 sm:px-6 py-4 border-b border-borderSubtle">
+        <header className="sticky top-0 bg-elevated/95 backdrop-blur-md z-10 px-4 sm:px-6 py-4 border-b border-line-subtle">
           <div className="flex items-start justify-between gap-3 mb-2">
             <div className="flex items-center gap-2 min-w-0 flex-1">
-              <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-primary/8 text-primary shrink-0">
+              <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent/8 text-accent shrink-0">
                 <Megaphone size={16} />
               </span>
               <div className="min-w-0">
-                <h2 id="campaign-drawer-title" className="text-base sm:text-lg font-semibold text-text-primary tracking-tight truncate">
+                <h2 id="campaign-drawer-title" className="text-base sm:text-lg font-semibold text-ink tracking-tight truncate">
                   {summary.campaignName || '(ללא שם)'}
                 </h2>
-                <div className="text-[11px] sm:text-xs text-text-muted flex items-center gap-1.5 mt-0.5">
+                <div className="text-[11px] sm:text-xs text-ink-muted flex items-center gap-1.5 mt-0.5">
                   <StoreIcon size={11} />
                   <span>{summary.storeName}</span>
-                  <span className="text-text-subtle">·</span>
+                  <span className="text-ink-subtle">·</span>
                   <span>{summary.platform}</span>
-                  <span className="text-text-subtle">·</span>
+                  <span className="text-ink-subtle">·</span>
                   <Calendar size={11} />
                   <span className="tabular-nums">{summary.activeDays} ימים פעילים</span>
                 </div>
@@ -733,17 +740,17 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                 onClick={() => setIsFullscreen(v => !v)}
                 aria-label={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
                 title={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
-                className="p-1.5 rounded hover:bg-surfaceMuted text-text-muted hover:text-text-primary transition-colors"
+                className="p-1.5 rounded hover:bg-elevated2 text-ink-muted hover:text-ink transition-colors"
               >
                 {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
               </button>
-              <button onClick={onClose} aria-label="סגור" className="p-1.5 rounded hover:bg-surfaceMuted text-text-muted hover:text-text-primary transition-colors">
+              <button onClick={onClose} aria-label="סגור" className="p-1.5 rounded hover:bg-elevated2 text-ink-muted hover:text-ink transition-colors">
                 <X size={18} />
               </button>
             </div>
           </div>
           {link && (
-            <a href={link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-primary hover:text-primary-dark font-medium">
+            <a href={link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-accent hover:text-accent/80 font-medium">
               <ExternalLink size={13} />
               פתח ב-{summary.platform} Ads Manager
             </a>
@@ -774,71 +781,73 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
           {summary.dailyArr.length >= 2 && (
             <section>
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold text-text-primary inline-flex items-center gap-1.5">
-                  <TrendingUp size={14} className="text-text-secondary" />
+                <h3 className="text-sm font-semibold text-ink inline-flex items-center gap-1.5">
+                  <TrendingUp size={14} className="text-ink-secondary" />
                   הוצאה ↔ ערך המרות לאורך הזמן
                 </h3>
               </div>
-              <div className="h-40 sm:h-44 rounded-xl bg-surfaceMuted/40 border border-borderSubtle p-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={summary.dailyArr} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="drawer-spend" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={CHART_COLORS.spend} stopOpacity={0.35} />
-                        <stop offset="100%" stopColor={CHART_COLORS.spend} stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="drawer-value" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={CHART_COLORS.value} stopOpacity={0.35} />
-                        <stop offset="100%" stopColor={CHART_COLORS.value} stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <XAxis
-                      dataKey="date"
-                      tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
-                      tickLine={false}
-                      axisLine={false}
-                      tickFormatter={d => {
-                        const m = String(d).match(/^\d{4}-(\d{2})-(\d{2})/);
-                        return m ? `${m[2]}/${m[1]}` : String(d);
-                      }}
-                    />
-                    {/* Phase 05.7.x — show the Y axis with CAD labels so the
-                        operator can read the spend / value magnitudes at a
-                        glance. Was `hide` previously which left the chart
-                        ambiguous (peaks indistinguishable from troughs). */}
-                    <YAxis
-                      tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
-                      tickLine={false}
-                      axisLine={false}
-                      tickFormatter={v => `C$${formatCurrency(Number(v))}`}
-                      width={60}
-                      domain={[0, 'auto']}
-                    />
-                    <Tooltip
-                      content={({ active, payload }) => {
-                        if (!active || !payload || payload.length === 0) return null;
-                        const d = payload[0].payload as { date: string; spend: number; value: number };
-                        return (
-                          <div dir="rtl" className="rounded-lg bg-text-primary text-white px-3 py-2 text-xs shadow-elevated tabular-nums">
-                            <div className="text-white/70 mb-1 text-[10px]">{formatDate(d.date)}</div>
-                            <div>הוצאה: <span className="font-semibold">CAD {formatCurrency(d.spend)}</span></div>
-                            <div>ערך המרות: <span className="font-semibold text-emerald-300">CAD {formatCurrency(d.value)}</span></div>
-                          </div>
-                        );
-                      }}
-                    />
-                    <Area type="monotone" dataKey="value" stroke={CHART_COLORS.value} strokeWidth={1.5} fill="url(#drawer-value)" />
-                    <Area type="monotone" dataKey="spend" stroke={CHART_COLORS.spend} strokeWidth={1.5} fill="url(#drawer-spend)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="flex items-center gap-3 text-[10px] text-text-muted mt-1.5">
+              <ChartContainer className="h-40 sm:h-44 rounded-xl bg-elevated2/40 border border-line-subtle p-2" height="100%">
+                <AreaChart data={summary.dailyArr} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="drawer-spend" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={CHART_COLORS.spend} stopOpacity={0.35} />
+                      <stop offset="100%" stopColor={CHART_COLORS.spend} stopOpacity={0} />
+                    </linearGradient>
+                    <linearGradient id="drawer-value" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={CHART_COLORS.value} stopOpacity={0.35} />
+                      <stop offset="100%" stopColor={CHART_COLORS.value} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={d => {
+                      const m = String(d).match(/^\d{4}-(\d{2})-(\d{2})/);
+                      return m ? `${m[2]}/${m[1]}` : String(d);
+                    }}
+                  />
+                  {/* Phase 05.7.x — show the Y axis with CAD labels so the
+                      operator can read the spend / value magnitudes at a
+                      glance. Was `hide` previously which left the chart
+                      ambiguous (peaks indistinguishable from troughs). */}
+                  <YAxis
+                    tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
+                    tickLine={false}
+                    axisLine={false}
+                    tickFormatter={v => `C$${formatCurrency(Number(v))}`}
+                    width={60}
+                    domain={[0, 'auto']}
+                  />
+                  <Tooltip
+                    content={({ active, payload }) => {
+                      if (!active || !payload || payload.length === 0) return null;
+                      const d = payload[0].payload as { date: string; spend: number; value: number };
+                      return (
+                        <ChartTooltip className="tabular-nums">
+                          <ChartTooltipLabel>{formatDate(d.date)}</ChartTooltipLabel>
+                          <ChartTooltipRow color={CHART_COLORS.spend} label="הוצאה">
+                            CAD <ChartTooltipValue>{formatCurrency(d.spend)}</ChartTooltipValue>
+                          </ChartTooltipRow>
+                          <ChartTooltipRow color={CHART_COLORS.value} label="ערך המרות">
+                            CAD <ChartTooltipValue>{formatCurrency(d.value)}</ChartTooltipValue>
+                          </ChartTooltipRow>
+                        </ChartTooltip>
+                      );
+                    }}
+                  />
+                  <Area type="monotone" dataKey="value" stroke={CHART_COLORS.value} strokeWidth={1.5} fill="url(#drawer-value)" />
+                  <Area type="monotone" dataKey="spend" stroke={CHART_COLORS.spend} strokeWidth={1.5} fill="url(#drawer-spend)" />
+                </AreaChart>
+              </ChartContainer>
+              <div className="flex items-center gap-3 text-[10px] text-ink-muted mt-1.5">
                 <span className="inline-flex items-center gap-1">
-                  <span className="inline-block w-2 h-2 rounded-full bg-roas-green" />
+                  <span className="inline-block w-2 h-2 rounded-full bg-status-green" />
                   ערך המרות
                 </span>
                 <span className="inline-flex items-center gap-1">
-                  <span className="inline-block w-2 h-2 rounded-full bg-roas-red" />
+                  <span className="inline-block w-2 h-2 rounded-full bg-status-red" />
                   הוצאה
                 </span>
               </div>
@@ -943,32 +952,32 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
               ? `השוואה: חצי שני (${secondHalfDates}) מול חצי ראשון (${firstHalfDates})`
               : 'השוואה: חצי שני vs חצי ראשון של הטווח';
             const toneBg: Record<typeof analysis.tone, string> = {
-              positive: 'bg-roas-greenBg/40 border-roas-green/30 text-roas-green',
+              positive: 'bg-status-greenBg/40 border-status-green/30 text-status-green',
               warning:  'bg-amber-50 border-amber-300 text-amber-800',
-              negative: 'bg-roas-redBg/40 border-roas-red/30 text-roas-red',
-              neutral:  'bg-surfaceMuted border-borderSubtle text-text-secondary',
+              negative: 'bg-status-redBg/40 border-status-red/30 text-status-red',
+              neutral:  'bg-elevated2 border-line-subtle text-ink-secondary',
             };
             return (
               <section>
                 <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-                  <h3 className="text-sm font-semibold text-text-primary inline-flex items-center gap-1.5">
-                    <TrendingUp size={14} className="text-text-secondary" />
+                  <h3 className="text-sm font-semibold text-ink inline-flex items-center gap-1.5">
+                    <TrendingUp size={14} className="text-ink-secondary" />
                     CPM לאורך זמן
-                    <span className="text-[10px] font-medium text-text-muted">
+                    <span className="text-[10px] font-medium text-ink-muted">
                       (עלות ל-1000 חשיפות, CAD)
                     </span>
                   </h3>
                   <div className="flex items-center gap-3 flex-wrap">
                     {/* Analysis baseline toggle — same UX as CampaignsTable. */}
-                    <div className="inline-flex items-center gap-0.5 rounded-md border border-borderSubtle bg-surface p-0.5 text-[10px]">
+                    <div className="inline-flex items-center gap-0.5 rounded-md border border-line-subtle bg-elevated p-0.5 text-[10px]">
                       <button
                         type="button"
                         onClick={() => setCpmAnalysisMode('half')}
                         className={cn(
                           'px-2 py-0.5 rounded transition-colors',
                           cpmAnalysisMode === 'half'
-                            ? 'bg-primary/10 text-primary font-medium'
-                            : 'text-text-muted hover:text-text-primary',
+                            ? 'bg-accent/10 text-accent font-medium'
+                            : 'text-ink-muted hover:text-ink',
                         )}
                       >
                         חצי-חצי
@@ -979,8 +988,8 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                         className={cn(
                           'px-2 py-0.5 rounded transition-colors',
                           cpmAnalysisMode === 'prev'
-                            ? 'bg-primary/10 text-primary font-medium'
-                            : 'text-text-muted hover:text-text-primary',
+                            ? 'bg-accent/10 text-accent font-medium'
+                            : 'text-ink-muted hover:text-ink',
                         )}
                       >
                         vs תקופה קודמת
@@ -989,154 +998,156 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                     {/* ROAS overlay toggle — a tiny switch that adds a second
                         line + right Y-axis for ROAS so the user can compare
                         auction cost vs return-on-spend at a glance. */}
-                    <label className="inline-flex items-center gap-1.5 text-[11px] text-text-secondary cursor-pointer select-none">
+                    <label className="inline-flex items-center gap-1.5 text-[11px] text-ink-secondary cursor-pointer select-none">
                       <input
                         type="checkbox"
                         checked={showRoasOverlay}
                         onChange={e => setShowRoasOverlay(e.target.checked)}
-                        className="rounded border-borderSubtle text-primary focus:ring-primary/30 cursor-pointer"
+                        className="rounded border-line-subtle text-accent focus:ring-accent/30 cursor-pointer"
                       />
                       הוסף ROAS לגרף
                     </label>
                   </div>
                 </div>
-                <div className="h-40 sm:h-44 rounded-xl bg-surfaceMuted/40 border border-borderSubtle p-2" dir="ltr">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={chartData} margin={{ top: 8, right: showRoasOverlay ? 56 : 16, left: 4, bottom: 0 }}>
-                      <XAxis
-                        dataKey="date"
-                        tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
-                        tickLine={false}
-                        axisLine={false}
-                        tickFormatter={d => {
-                          const m = String(d).match(/^\d{4}-(\d{2})-(\d{2})/);
-                          return m ? `${m[2]}/${m[1]}` : String(d);
-                        }}
-                        padding={{ left: 12, right: 12 }}
-                      />
+                <ChartContainer className="h-40 sm:h-44 rounded-xl bg-elevated2/40 border border-line-subtle p-2" dir="ltr" height="100%">
+                  <LineChart data={chartData} margin={{ top: 8, right: showRoasOverlay ? 56 : 16, left: 4, bottom: 0 }}>
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={d => {
+                        const m = String(d).match(/^\d{4}-(\d{2})-(\d{2})/);
+                        return m ? `${m[2]}/${m[1]}` : String(d);
+                      }}
+                      padding={{ left: 12, right: 12 }}
+                    />
+                    <YAxis
+                      yAxisId="cpm"
+                      tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
+                      tickLine={false}
+                      axisLine={false}
+                      tickFormatter={v => `C$${Number(v).toFixed(2)}`}
+                      width={68}
+                      // c/CR-02: zero-anchored Y axis. The previous
+                      // `[dataMin * 0.88, dataMax * 1.12]` suppression turned
+                      // a 3% CPM change into a chart-height-spanning curve —
+                      // the textbook misleading-axis pattern. Operator
+                      // dashboards should show the true magnitude; CPM is
+                      // always >= 0.
+                      domain={[0, (dataMax: number) => dataMax * 1.12]}
+                      allowDecimals
+                    />
+                    {showRoasOverlay && (
                       <YAxis
-                        yAxisId="cpm"
-                        tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
+                        yAxisId="roas"
+                        orientation="right"
+                        tick={{ fontSize: 10, fill: CHART_COLORS.roas }}
                         tickLine={false}
                         axisLine={false}
-                        tickFormatter={v => `C$${Number(v).toFixed(2)}`}
-                        width={68}
-                        // c/CR-02: zero-anchored Y axis. The previous
-                        // `[dataMin * 0.88, dataMax * 1.12]` suppression turned
-                        // a 3% CPM change into a chart-height-spanning curve —
-                        // the textbook misleading-axis pattern. Operator
-                        // dashboards should show the true magnitude; CPM is
-                        // always >= 0.
+                        tickFormatter={v => Number(v).toFixed(2)}
+                        width={42}
+                        // c/CR-02: same zero-anchor rule for the ROAS overlay.
                         domain={[0, (dataMax: number) => dataMax * 1.12]}
                         allowDecimals
                       />
-                      {showRoasOverlay && (
-                        <YAxis
-                          yAxisId="roas"
-                          orientation="right"
-                          tick={{ fontSize: 10, fill: CHART_COLORS.roas }}
-                          tickLine={false}
-                          axisLine={false}
-                          tickFormatter={v => Number(v).toFixed(2)}
-                          width={42}
-                          // c/CR-02: same zero-anchor rule for the ROAS overlay.
-                          domain={[0, (dataMax: number) => dataMax * 1.12]}
-                          allowDecimals
-                        />
-                      )}
-                      <Tooltip
-                        content={({ active, payload }) => {
-                          if (!active || !payload || payload.length === 0) return null;
-                          const d = payload[0].payload as {
-                            date: string;
-                            cpm: number;
-                            impressions: number;
-                            spend: number;
-                            roas: number;
-                            prevCpm: number | null;
-                            prevDate: string | null;
-                          };
-                          // Δ% — sign convention: negative = CPM went DOWN
-                          // vs. previous period (good for the operator).
-                          // Guard against prevCpm===0 to avoid Infinity.
-                          const prevDeltaPct = (showPrevLine && d.prevCpm != null && d.prevCpm > 0)
-                            ? ((d.cpm - d.prevCpm) / d.prevCpm) * 100
-                            : null;
-                          return (
-                            <div dir="rtl" className="rounded-lg bg-text-primary text-white px-3 py-2 text-xs shadow-elevated tabular-nums">
-                              <div className="text-white/70 mb-1 text-[10px]">{formatDate(d.date)}</div>
-                              <div>CPM: <span className="font-semibold text-amber-200">CAD {formatCurrency(d.cpm, 2)}</span></div>
-                              {showRoasOverlay && (
-                                <div>ROAS: <span className="font-semibold text-emerald-300">{formatNumber(d.roas, 2)}</span></div>
-                              )}
-                              {showPrevLine && d.prevCpm != null && (
-                                <div className="mt-1 pt-1 border-t border-white/10">
-                                  <div className="text-white/60 text-[10px]">
-                                    תקופה קודמת{d.prevDate ? ` (${formatDate(d.prevDate)})` : ''}:
-                                  </div>
-                                  <div>
-                                    CPM: <span className="font-semibold text-amber-100/80">CAD {formatCurrency(d.prevCpm, 2)}</span>
-                                    {prevDeltaPct != null && (
-                                      <span className={cn(
-                                        'ms-1.5 text-[10px] font-semibold',
-                                        prevDeltaPct < 0 ? 'text-emerald-300' : prevDeltaPct > 0 ? 'text-rose-300' : 'text-white/60',
-                                      )}>
-                                        ({prevDeltaPct > 0 ? '+' : ''}{prevDeltaPct.toFixed(1)}%)
-                                      </span>
-                                    )}
-                                  </div>
+                    )}
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (!active || !payload || payload.length === 0) return null;
+                        const d = payload[0].payload as {
+                          date: string;
+                          cpm: number;
+                          impressions: number;
+                          spend: number;
+                          roas: number;
+                          prevCpm: number | null;
+                          prevDate: string | null;
+                        };
+                        // Δ% — sign convention: negative = CPM went DOWN
+                        // vs. previous period (good for the operator).
+                        // Guard against prevCpm===0 to avoid Infinity.
+                        const prevDeltaPct = (showPrevLine && d.prevCpm != null && d.prevCpm > 0)
+                          ? ((d.cpm - d.prevCpm) / d.prevCpm) * 100
+                          : null;
+                        return (
+                          <ChartTooltip className="tabular-nums">
+                            <ChartTooltipLabel>{formatDate(d.date)}</ChartTooltipLabel>
+                            <ChartTooltipRow color={CHART_COLORS.cpm} label="CPM">
+                              CAD <ChartTooltipValue>{formatCurrency(d.cpm, 2)}</ChartTooltipValue>
+                            </ChartTooltipRow>
+                            {showRoasOverlay && (
+                              <ChartTooltipRow color={CHART_COLORS.roas} label="ROAS">
+                                <ChartTooltipValue>{formatNumber(d.roas, 2)}</ChartTooltipValue>
+                              </ChartTooltipRow>
+                            )}
+                            {showPrevLine && d.prevCpm != null && (
+                              <div className="mt-1 pt-1 border-t border-line-subtle">
+                                <div className="text-ink-muted text-[10px] mb-0.5">
+                                  תקופה קודמת{d.prevDate ? ` (${formatDate(d.prevDate)})` : ''}:
                                 </div>
-                              )}
-                              <div className="text-white/70 text-[10px] mt-0.5">
-                                {formatNumber(d.impressions, 0)} חשיפות · CAD {formatCurrency(d.spend, 2)}
+                                <ChartTooltipRow color={CHART_COLORS.cpmPrev} label="CPM">
+                                  CAD <ChartTooltipValue>{formatCurrency(d.prevCpm, 2)}</ChartTooltipValue>
+                                  {prevDeltaPct != null && (
+                                    <span className={cn(
+                                      'ms-1.5 text-[10px] font-semibold',
+                                      prevDeltaPct < 0 ? 'text-status-green' : prevDeltaPct > 0 ? 'text-status-red' : 'text-ink-muted',
+                                    )}>
+                                      ({prevDeltaPct > 0 ? '+' : ''}{prevDeltaPct.toFixed(1)}%)
+                                    </span>
+                                  )}
+                                </ChartTooltipRow>
                               </div>
+                            )}
+                            <div className="text-ink-muted text-[10px] mt-1">
+                              {formatNumber(d.impressions, 0)} חשיפות · CAD {formatCurrency(d.spend, 2)}
                             </div>
-                          );
-                        }}
-                      />
+                          </ChartTooltip>
+                        );
+                      }}
+                    />
+                    <Line
+                      yAxisId="cpm"
+                      type="monotone"
+                      dataKey="cpm"
+                      stroke={CHART_COLORS.cpm}
+                      strokeWidth={1.75}
+                      dot={{ r: 2.5, fill: CHART_COLORS.cpm, stroke: 'none' }}
+                      activeDot={{ r: 4, fill: CHART_COLORS.cpm, stroke: 'white', strokeWidth: 1.5 }}
+                    />
+                    {showPrevLine && (
                       <Line
                         yAxisId="cpm"
                         type="monotone"
-                        dataKey="cpm"
-                        stroke={CHART_COLORS.cpm}
-                        strokeWidth={1.75}
-                        dot={{ r: 2.5, fill: CHART_COLORS.cpm, stroke: 'none' }}
-                        activeDot={{ r: 4, fill: CHART_COLORS.cpm, stroke: 'white', strokeWidth: 1.5 }}
+                        dataKey="prevCpm"
+                        stroke={CHART_COLORS.cpmPrev}
+                        strokeWidth={1.5}
+                        strokeDasharray="5 3"
+                        strokeOpacity={0.85}
+                        dot={{ r: 2, fill: CHART_COLORS.cpmPrev, stroke: 'none', fillOpacity: 0.7 }}
+                        activeDot={{ r: 3.5, fill: CHART_COLORS.cpmPrev, stroke: 'white', strokeWidth: 1.5 }}
+                        connectNulls={false}
+                        isAnimationActive={false}
                       />
-                      {showPrevLine && (
-                        <Line
-                          yAxisId="cpm"
-                          type="monotone"
-                          dataKey="prevCpm"
-                          stroke={CHART_COLORS.cpmPrev}
-                          strokeWidth={1.5}
-                          strokeDasharray="5 3"
-                          strokeOpacity={0.85}
-                          dot={{ r: 2, fill: CHART_COLORS.cpmPrev, stroke: 'none', fillOpacity: 0.7 }}
-                          activeDot={{ r: 3.5, fill: CHART_COLORS.cpmPrev, stroke: 'white', strokeWidth: 1.5 }}
-                          connectNulls={false}
-                          isAnimationActive={false}
-                        />
-                      )}
-                      {showRoasOverlay && (
-                        <Line
-                          yAxisId="roas"
-                          type="monotone"
-                          dataKey="roas"
-                          stroke={CHART_COLORS.roas}
-                          strokeWidth={1.75}
-                          strokeDasharray="5 3"
-                          dot={{ r: 2.5, fill: CHART_COLORS.roas, stroke: 'none' }}
-                          activeDot={{ r: 4, fill: CHART_COLORS.roas, stroke: 'white', strokeWidth: 1.5 }}
-                        />
-                      )}
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
+                    )}
+                    {showRoasOverlay && (
+                      <Line
+                        yAxisId="roas"
+                        type="monotone"
+                        dataKey="roas"
+                        stroke={CHART_COLORS.roas}
+                        strokeWidth={1.75}
+                        strokeDasharray="5 3"
+                        dot={{ r: 2.5, fill: CHART_COLORS.roas, stroke: 'none' }}
+                        activeDot={{ r: 4, fill: CHART_COLORS.roas, stroke: 'white', strokeWidth: 1.5 }}
+                      />
+                    )}
+                  </LineChart>
+                </ChartContainer>
                 {/* Mini legend — appears whenever there is more than one line
                     on the chart (ROAS overlay OR previous-period overlay). */}
                 {(showRoasOverlay || showPrevLine) && (
-                  <div className="flex items-center justify-center gap-4 text-[10px] text-text-muted mt-1.5 flex-wrap">
+                  <div className="flex items-center justify-center gap-4 text-[10px] text-ink-muted mt-1.5 flex-wrap">
                     <span className="inline-flex items-center gap-1.5">
                       <span className="inline-block w-3 h-[2px] bg-amber-600" />
                       CPM {showRoasOverlay ? '(ציר שמאל)' : ''}
@@ -1149,7 +1160,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                     )}
                     {showRoasOverlay && (
                       <span className="inline-flex items-center gap-1.5">
-                        <span className="inline-block w-3 border-t-2 border-dashed border-roas-green" />
+                        <span className="inline-block w-3 border-t-2 border-dashed border-status-green" />
                         ROAS (ציר ימין)
                       </span>
                     )}
@@ -1199,11 +1210,11 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
           {(summary.platform === 'Meta' || summary.platform === 'TikTok') && (
             <section>
               <div className="flex items-center justify-between gap-2 mb-2">
-                <h3 className="text-sm font-semibold text-text-primary inline-flex items-center gap-1.5">
-                  <Package size={14} className="text-text-secondary" />
+                <h3 className="text-sm font-semibold text-ink inline-flex items-center gap-1.5">
+                  <Package size={14} className="text-ink-secondary" />
                   מוצרי Shopify משויכים
                   {mappedIds.length > 0 && (
-                    <span className="text-[10px] font-medium text-text-muted">
+                    <span className="text-[10px] font-medium text-ink-muted">
                       ({mappedIds.length})
                     </span>
                   )}
@@ -1211,14 +1222,14 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                 <button
                   type="button"
                   onClick={() => setPickerOpen(true)}
-                  className="inline-flex items-center gap-1 rounded-md bg-surface border border-border hover:border-primary/40 px-2 py-1 text-[11px] font-medium text-text-secondary hover:text-primary transition-colors"
+                  className="inline-flex items-center gap-1 rounded-md bg-elevated border border-line hover:border-accent/40 px-2 py-1 text-[11px] font-medium text-ink-secondary hover:text-accent transition-colors"
                 >
                   <Edit3 size={12} />
                   {mappedIds.length > 0 ? 'ערוך מיפוי' : 'שייך מוצרים'}
                 </button>
               </div>
               {mappedIds.length === 0 ? (
-                <p className="text-[11px] text-text-muted leading-relaxed bg-surfaceMuted/40 rounded-lg px-3 py-2">
+                <p className="text-[11px] text-ink-muted leading-relaxed bg-elevated2/40 rounded-lg px-3 py-2">
                   לא משויכים מוצרים. לאחר שיוך, ה-ROAS יחושב מחדש לפי מכירות{' '}
                   Shopify אמיתיות במקום ערך ההמרה ש-{summary.platform} דיווחה
                   (לרוב מנופח).
@@ -1235,7 +1246,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                             ? `${id}\nגם משויך ל: ${others.join(', ')}`
                             : id
                         }
-                        className="inline-flex items-center gap-1 text-[11px] bg-primary/8 text-primary px-2 py-0.5 rounded-md font-mono"
+                        className="inline-flex items-center gap-1 text-[11px] bg-accent/8 text-accent px-2 py-0.5 rounded-md font-mono"
                       >
                         <Package size={10} />
                         <span className="truncate max-w-[120px]">{id}</span>
@@ -1260,7 +1271,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                   share) isn't obvious without this note. */}
               {mappedIds.length > 0 &&
                 mappedIds.some(id => (otherCampaignsByProduct.get(id) ?? []).length > 0) && (
-                  <p className="text-[10px] text-text-muted leading-relaxed mt-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+                  <p className="text-[10px] text-ink-muted leading-relaxed mt-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
                     🔗 חלק מהמוצרים גם משויכים לקמפיינים אחרים. ה-ROAS Shopify
                     של הקמפיין הזה מחושב לפי <strong>חלקו של הקמפיין בהוצאה</strong>{' '}
                     (חלוקה פרופורציונלית) — לא לפי כל ההכנסה של המוצר.
@@ -1318,7 +1329,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
             />
           )}
 
-          <div className="text-[10px] text-text-muted text-center pt-2">
+          <div className="text-[10px] text-ink-muted text-center pt-2">
             לחץ Esc או על הרקע לסגירה
           </div>
         </div>
@@ -1378,21 +1389,21 @@ function DrawerStat({ label, value, prefix, chip, primary, compact, accent }: {
   return (
     <div
       className={cn(
-        'rounded-lg border border-borderSubtle bg-surfaceMuted/30',
+        'rounded-lg border border-line-subtle bg-elevated2/30',
         compact ? 'px-2.5 py-2' : 'px-3 py-2.5 sm:px-3.5 sm:py-3',
       )}
     >
-      <div className="text-[10px] sm:text-[11px] text-text-muted leading-tight uppercase tracking-wide">{label}</div>
+      <div className="text-[10px] sm:text-[11px] text-ink-muted leading-tight uppercase tracking-wide">{label}</div>
       <div className="flex items-baseline gap-1 mt-0.5">
         {prefix && (
-          <span className="text-[10px] text-text-muted font-medium shrink-0">{prefix}</span>
+          <span className="text-[10px] text-ink-muted font-medium shrink-0">{prefix}</span>
         )}
         <span
           className={cn(
             'font-semibold tabular-nums leading-tight',
             primary ? 'text-base sm:text-lg' : 'text-sm sm:text-base',
-            accent === 'green' && 'text-roas-green',
-            !accent && 'text-text-primary',
+            accent === 'green' && 'text-status-green',
+            !accent && 'text-ink',
           )}
         >
           {value}

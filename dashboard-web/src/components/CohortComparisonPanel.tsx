@@ -48,7 +48,7 @@ function MedalIcon({ rank }: { rank: number }) {
   if (rank === 1) return <span className="text-base">🥇</span>;
   if (rank === 2) return <span className="text-base">🥈</span>;
   if (rank === 3) return <span className="text-base">🥉</span>;
-  return <span className="text-xs text-text-muted tabular-nums">#{rank}</span>;
+  return <span className="text-xs text-ink-muted tabular-nums">#{rank}</span>;
 }
 
 function fmtRoas(n: number | undefined | null): string {
@@ -124,8 +124,8 @@ function StatusBadge({ status }: { status: string | null }) {
       className={cn(
         'inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium border',
         isActive
-          ? 'bg-roas-greenBg/40 text-roas-green border-roas-green/30'
-          : 'bg-surfaceMuted text-text-muted border-borderSubtle',
+          ? 'bg-status-greenBg/40 text-status-green border-status-green/30'
+          : 'bg-elevated2 text-ink-muted border-line-subtle',
       )}
       title={status}
     >
@@ -147,9 +147,9 @@ function MemberRow({ member, rank, isCurrent, onDrill }: MemberRowProps) {
   return (
     <tr
       className={cn(
-        'border-b border-borderSubtle/60 last:border-0',
-        isCurrent && 'bg-primary/8 font-semibold',
-        !isCurrent && onDrill && 'hover:bg-surfaceMuted/60 cursor-pointer',
+        'border-b border-line-subtle/60 last:border-0',
+        isCurrent && 'bg-accent/8 font-semibold',
+        !isCurrent && onDrill && 'hover:bg-elevated2/60 cursor-pointer',
       )}
       onClick={!isCurrent && onDrill ? onDrill : undefined}
     >
@@ -157,7 +157,7 @@ function MemberRow({ member, rank, isCurrent, onDrill }: MemberRowProps) {
         <span className="inline-flex items-center gap-1.5">
           <MedalIcon rank={rank} />
           {isCurrent && (
-            <span className="text-[9px] uppercase tracking-wider text-primary font-bold">
+            <span className="text-[9px] uppercase tracking-wider text-accent font-bold">
               את/ה כאן
             </span>
           )}
@@ -166,13 +166,13 @@ function MemberRow({ member, rank, isCurrent, onDrill }: MemberRowProps) {
       <td
         className={cn(
           'px-2 py-1.5 text-xs max-w-[200px] truncate',
-          isCurrent ? 'text-text-primary' : 'text-text-secondary',
+          isCurrent ? 'text-ink' : 'text-ink-secondary',
         )}
         title={member.campaignName}
       >
         {member.campaignName}
       </td>
-      <td className="px-2 py-1.5 text-xs text-text-muted tabular-nums">
+      <td className="px-2 py-1.5 text-xs text-ink-muted tabular-nums">
         {member.sharedProductIds.length}
       </td>
       <td className="px-2 py-1.5 text-xs tabular-nums text-end">
@@ -181,10 +181,10 @@ function MemberRow({ member, rank, isCurrent, onDrill }: MemberRowProps) {
       <td className="px-2 py-1.5 text-xs tabular-nums text-end font-semibold">
         {fmtRoas(metrics?.roasShopify)}
       </td>
-      <td className="px-2 py-1.5 text-xs tabular-nums text-end text-text-muted">
+      <td className="px-2 py-1.5 text-xs tabular-nums text-end text-ink-muted">
         {fmtRoas(metrics?.roasShopifyPlatform)}
       </td>
-      <td className="px-2 py-1.5 text-xs tabular-nums text-end text-text-muted">
+      <td className="px-2 py-1.5 text-xs tabular-nums text-end text-ink-muted">
         {metrics ? formatNumber(metrics.conversions, 0) : '—'}
       </td>
       <td className="px-2 py-1.5 text-xs text-end">
@@ -211,25 +211,25 @@ function CohortSection({ title, subtitle, members, tone, onDrillCampaign }: Sect
         'rounded-lg border overflow-hidden',
         tone === 'intra'
           ? 'border-amber-200 bg-amber-50/30'
-          : 'border-borderSubtle bg-surfaceMuted/30',
+          : 'border-line-subtle bg-elevated2/30',
       )}
     >
-      <div className="px-3 py-2 border-b border-borderSubtle/60 flex items-center gap-2">
+      <div className="px-3 py-2 border-b border-line-subtle/60 flex items-center gap-2">
         <span
           className={cn(
             'inline-flex items-center justify-center w-6 h-6 rounded',
-            tone === 'intra' ? 'bg-amber-200/70 text-amber-900' : 'bg-primary/15 text-primary',
+            tone === 'intra' ? 'bg-amber-200/70 text-amber-900' : 'bg-accent/15 text-accent',
           )}
         >
           {tone === 'intra' ? <AlertCircle size={13} /> : <Equal size={13} />}
         </span>
         <div className="min-w-0">
-          <div className="text-xs font-semibold text-text-primary">{title}</div>
-          <div className="text-[10px] text-text-muted leading-tight">{subtitle}</div>
+          <div className="text-xs font-semibold text-ink">{title}</div>
+          <div className="text-[10px] text-ink-muted leading-tight">{subtitle}</div>
         </div>
       </div>
       <table className="w-full">
-        <thead className="bg-surfaceMuted/50 text-text-muted">
+        <thead className="bg-elevated2/50 text-ink-muted">
           <tr>
             <th className="px-2 py-1 text-start font-medium text-[10px]">דירוג</th>
             <th className="px-2 py-1 text-start font-medium text-[10px]">קמפיין</th>
@@ -329,11 +329,11 @@ export function CohortComparisonPanel({
     <section className="space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h3 className="text-sm font-semibold text-text-primary inline-flex items-center gap-1.5">
-            <Trophy size={14} className="text-text-secondary" />
+          <h3 className="text-sm font-semibold text-ink inline-flex items-center gap-1.5">
+            <Trophy size={14} className="text-ink-secondary" />
             השוואה לקמפיינים שמקדמים את אותם מוצרים
           </h3>
-          <p className="text-[11px] text-text-muted mt-0.5 leading-relaxed">
+          <p className="text-[11px] text-ink-muted mt-0.5 leading-relaxed">
             הקמפיין הזה חולק מיפוי עם {cohort.others.length} קמפיינים אחרים בסך
             הכל ({cohort.sharedProductIds.length} מוצרים משותפים). ה-ROAS Shopify
             של כל קמפיין כבר מנוכה ל<strong>חלקו בהוצאה</strong> בתוך הקבוצה.
@@ -346,7 +346,7 @@ export function CohortComparisonPanel({
             className={cn(
               'inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold shrink-0 border',
               currentRankIntra === 1
-                ? 'bg-roas-greenBg/60 text-roas-green border-roas-green/30'
+                ? 'bg-status-greenBg/60 text-status-green border-status-green/30'
                 // Audit fix 2026-05-23 (HIGH-02 multi-mapping): only paint
                 // the loud red "weakest" tone when the cohort is large
                 // enough for the verdict to mean something (>= 3 members).
@@ -354,7 +354,7 @@ export function CohortComparisonPanel({
                 // construction — not actionable signal. Matches the
                 // floor in `applyCohortAdjustmentOnce`.
                 : intraCount >= 3 && currentRankIntra === intraCount
-                  ? 'bg-roas-redBg/60 text-roas-red border-roas-red/30'
+                  ? 'bg-status-redBg/60 text-status-red border-status-red/30'
                   : 'bg-amber-100 text-amber-800 border-amber-300',
             )}
             title={
@@ -382,10 +382,10 @@ export function CohortComparisonPanel({
           className={cn(
             'rounded-lg border px-3 py-2.5 space-y-2',
             cannibalizationAlerts[0].risk === 'high'
-              ? 'bg-roas-redBg/60 border-roas-red/40'
+              ? 'bg-status-redBg/60 border-status-red/40'
               : cannibalizationAlerts[0].risk === 'medium'
                 ? 'bg-amber-100 border-amber-300'
-                : 'bg-primary/10 border-primary/30',
+                : 'bg-accent/10 border-accent/30',
           )}
         >
           <div className="flex items-center gap-2 text-xs font-semibold">
@@ -393,13 +393,13 @@ export function CohortComparisonPanel({
               size={14}
               className={cn(
                 cannibalizationAlerts[0].risk === 'high'
-                  ? 'text-roas-red'
+                  ? 'text-status-red'
                   : cannibalizationAlerts[0].risk === 'medium'
                     ? 'text-amber-800'
-                    : 'text-primary',
+                    : 'text-accent',
               )}
             />
-            <span className="text-text-primary">
+            <span className="text-ink">
               ⚠️ סימני קניבליזציה — הוצאה גדלה בלי שההכנסה תלך אחריה
             </span>
           </div>
@@ -407,23 +407,23 @@ export function CohortComparisonPanel({
             {cannibalizationAlerts.map(v => (
               <li
                 key={v.productId}
-                className="text-[11px] text-text-secondary leading-relaxed"
+                className="text-[11px] text-ink-secondary leading-relaxed"
               >
-                <strong className="text-text-primary">{v.productTitle}</strong>{' '}
+                <strong className="text-ink">{v.productTitle}</strong>{' '}
                 <span
                   className={cn(
                     'inline-block px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider align-middle',
                     v.risk === 'high'
-                      ? 'bg-roas-red/30 text-roas-red'
+                      ? 'bg-status-red/30 text-status-red'
                       : v.risk === 'medium'
                         ? 'bg-amber-300 text-amber-900'
-                        : 'bg-primary/25 text-primary',
+                        : 'bg-accent/25 text-accent',
                   )}
                 >
                   {v.risk === 'high' ? 'גבוה' : v.risk === 'medium' ? 'בינוני' : 'נמוך'}
                 </span>
                 <br />
-                <span className="text-text-muted">
+                <span className="text-ink-muted">
                   הוצאת קבוצה: CAD {formatCurrency(v.metrics.earlyHalfSpend)} →{' '}
                   CAD {formatCurrency(v.metrics.lateHalfSpend)} ({fmtPct(v.metrics.spendGrowthPct)}) ·
                   הכנסת מוצר: CAD {formatCurrency(v.metrics.earlyHalfRevenue)} →{' '}
@@ -435,7 +435,7 @@ export function CohortComparisonPanel({
                   )}
                 </span>
                 <br />
-                <span className="text-text-secondary">{v.reason}</span>
+                <span className="text-ink-secondary">{v.reason}</span>
               </li>
             ))}
           </ul>
@@ -450,20 +450,20 @@ export function CohortComparisonPanel({
           well". Distinct visual treatment (neutral surfaceMuted, not the
           red/amber/blue severity tones) so it doesn't read as an alarm. */}
       {compositionChangedAlerts.length > 0 && (
-        <div className="rounded-lg border border-borderSubtle bg-surfaceMuted/40 px-3 py-2.5 space-y-2">
-          <div className="flex items-center gap-2 text-xs font-semibold text-text-secondary">
-            <TrendingDown size={14} className="text-text-muted" />
+        <div className="rounded-lg border border-line-subtle bg-elevated2/40 px-3 py-2.5 space-y-2">
+          <div className="flex items-center gap-2 text-xs font-semibold text-ink-secondary">
+            <TrendingDown size={14} className="text-ink-muted" />
             <span>ניתוח קניבליזציה מושהה — הרכב הקבוצה השתנה בתוך הטווח</span>
           </div>
           <ul className="space-y-1.5">
             {compositionChangedAlerts.map(v => (
               <li
                 key={v.productId}
-                className="text-[11px] text-text-secondary leading-relaxed"
+                className="text-[11px] text-ink-secondary leading-relaxed"
               >
-                <strong className="text-text-primary">{v.productTitle}</strong>
+                <strong className="text-ink">{v.productTitle}</strong>
                 <br />
-                <span className="text-text-muted">{v.reason}</span>
+                <span className="text-ink-muted">{v.reason}</span>
               </li>
             ))}
           </ul>
@@ -496,8 +496,8 @@ export function CohortComparisonPanel({
 
       {/* Educational footer — explains the ranking + revenue split so the
           operator understands what the table means and what action to take. */}
-      <div className="rounded-lg bg-surfaceMuted/40 border border-borderSubtle px-3 py-2 text-[10px] text-text-secondary leading-relaxed inline-flex items-start gap-1.5">
-        <Package size={11} className="text-text-muted mt-0.5 shrink-0" />
+      <div className="rounded-lg bg-elevated2/40 border border-line-subtle px-3 py-2 text-[10px] text-ink-secondary leading-relaxed inline-flex items-start gap-1.5">
+        <Package size={11} className="text-ink-muted mt-0.5 shrink-0" />
         <span>
           <strong>איך לקרוא:</strong> ROAS Shopify של כל קמפיין מבוסס על חלקו
           בהוצאה בתוך הקבוצה (אם 4 קמפיינים מקדמים אותו מוצר וכל אחד הוציא 25%

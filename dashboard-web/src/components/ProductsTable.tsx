@@ -385,15 +385,15 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
   }
 
   const toolbar = (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2 sm:gap-3 px-4 sm:px-5 py-3 bg-surfaceMuted/40 border-b border-border">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2 sm:gap-3 px-4 sm:px-5 py-3 bg-elevated2/40 border-b border-line">
       {/* Period selector */}
       <div className="flex items-center gap-2">
-        <span className="text-[11px] sm:text-xs text-text-secondary font-medium shrink-0">
+        <span className="text-[11px] sm:text-xs text-ink-secondary font-medium shrink-0">
           תצוגה:
         </span>
         <div
           role="tablist"
-          className="inline-flex rounded-lg border border-border bg-surface overflow-hidden divide-x divide-border"
+          className="inline-flex rounded-lg border border-line bg-elevated overflow-hidden divide-x divide-line"
           dir="ltr"
         >
           {(Object.keys(PERIOD_LABELS) as Period[]).map(p => (
@@ -405,8 +405,8 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
               className={cn(
                 'px-2.5 sm:px-3 py-1.5 sm:py-1.5 text-[11px] sm:text-xs font-medium transition-colors min-w-[54px] sm:min-w-[64px]',
                 period === p
-                  ? 'bg-primary text-white'
-                  : 'bg-surface text-text-secondary hover:bg-surfaceMuted',
+                  ? 'bg-accent text-white'
+                  : 'bg-elevated text-ink-secondary hover:bg-elevated2',
               )}
             >
               {PERIOD_LABELS[p]}
@@ -417,11 +417,11 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
 
       {/* Store filter — independent from global */}
       <div className="flex items-center gap-2">
-        <Store size={14} className="text-text-muted shrink-0" />
+        <Store size={14} className="text-ink-muted shrink-0" />
         <select
           value={localStore}
           onChange={e => setLocalStore(e.target.value)}
-          className="rounded-lg border border-border bg-surface px-2.5 py-1.5 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30 min-w-[140px]"
+          className="rounded-lg border border-line bg-elevated px-2.5 py-1.5 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/30 min-w-[140px]"
         >
           <option value="All">כל החנויות</option>
           {stores.map(s => (
@@ -438,7 +438,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
           push "from" to today when "to" was previously yesterday. Instead
           we auto-swap on the way in if needed. */}
       <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-        <Calendar size={14} className="text-text-muted shrink-0" />
+        <Calendar size={14} className="text-ink-muted shrink-0" />
         <input
           type="date"
           value={localRange.from}
@@ -455,11 +455,11 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
           }}
           aria-label="מתאריך"
           className={cn(
-            'rounded-lg border bg-surface px-2 py-1.5 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30',
-            isCustomRange ? 'border-primary text-primary' : 'border-border text-text-secondary',
+            'rounded-lg border bg-elevated px-2 py-1.5 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/30',
+            isCustomRange ? 'border-accent text-accent' : 'border-line text-ink-secondary',
           )}
         />
-        <span className="text-text-muted text-xs">—</span>
+        <span className="text-ink-muted text-xs">—</span>
         <input
           type="date"
           value={localRange.to}
@@ -474,14 +474,14 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
           }}
           aria-label="עד תאריך"
           className={cn(
-            'rounded-lg border bg-surface px-2 py-1.5 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/30',
-            isCustomRange ? 'border-primary text-primary' : 'border-border text-text-secondary',
+            'rounded-lg border bg-elevated px-2 py-1.5 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/30',
+            isCustomRange ? 'border-accent text-accent' : 'border-line text-ink-secondary',
           )}
         />
         <button
           type="button"
           onClick={() => setLocalRange({ from: today, to: today })}
-          className="rounded-lg border border-roas-green/40 bg-roas-greenBg/60 text-roas-green hover:bg-roas-greenBg px-2 py-1.5 text-xs font-semibold transition-colors"
+          className="rounded-lg border border-status-green/40 bg-status-greenBg/60 text-status-green hover:bg-status-greenBg px-2 py-1.5 text-xs font-semibold transition-colors"
           title="קפוץ ליום הנוכחי (live)"
         >
           היום
@@ -490,7 +490,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
           <button
             type="button"
             onClick={() => setLocalRange(range)}
-            className="p-1 rounded hover:bg-surfaceMuted text-text-muted hover:text-text-primary transition-colors"
+            className="p-1 rounded hover:bg-elevated2 text-ink-muted hover:text-ink transition-colors"
             aria-label="חזור לטווח הגלובלי"
             title="חזור לטווח שנבחר בסינון העליון"
           >
@@ -499,7 +499,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
         )}
       </div>
 
-      <span className="text-[10px] sm:text-xs text-text-muted tabular-nums sm:mr-auto">
+      <span className="text-[10px] sm:text-xs text-ink-muted tabular-nums sm:mr-auto">
         {summary.days === 1
           ? `יום אחד · ${formatDate(localRange.from)}`
           : `${summary.days} ימים · ${buckets.length} ${period === 'day' ? 'ימים' : 'תקופות'}`}
@@ -525,11 +525,11 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
         * path (data.error). After WR-06, /api/products returns 200 with
         * rows: [] + error on failure so SWR consumers stay consistent. */}
       {(error || data?.error) && (
-        <div className="m-4 rounded-lg bg-roas-redBg border border-roas-red/30 p-3 flex items-start gap-2 text-sm">
-          <AlertCircle className="text-roas-red shrink-0" size={18} />
+        <div className="m-4 rounded-lg bg-status-redBg border border-status-red/30 p-3 flex items-start gap-2 text-sm">
+          <AlertCircle className="text-status-red shrink-0" size={18} />
           <div>
-            <div className="font-semibold text-roas-red">שגיאה בטעינת המוצרים</div>
-            <div className="text-text-secondary text-xs mt-1">
+            <div className="font-semibold text-status-red">שגיאה בטעינת המוצרים</div>
+            <div className="text-ink-secondary text-xs mt-1">
               {error ? (error as Error).message : data?.error}
             </div>
           </div>
@@ -537,19 +537,19 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
       )}
 
       {isLoading && (
-        <div className="p-8 text-center text-text-muted text-sm">טוען נתוני מוצרים…</div>
+        <div className="p-8 text-center text-ink-muted text-sm">טוען נתוני מוצרים…</div>
       )}
 
       {data && !error && !data.error && buckets.length === 0 && (
-        <div className="p-8 text-center text-text-muted text-sm">
-          <Calendar className="mx-auto mb-2 text-text-muted/60" size={28} />
+        <div className="p-8 text-center text-ink-muted text-sm">
+          <Calendar className="mx-auto mb-2 text-ink-muted/60" size={28} />
           <div>אין מוצרים שנמכרו בטווח הזה.</div>
           <div className="text-[11px] mt-1">נסה לבחור טווח תאריכים רחב יותר בסינון למעלה.</div>
         </div>
       )}
 
       {data && buckets.length > 0 && (
-        <div className="divide-y divide-border">
+        <div className="divide-y divide-line">
           {buckets.map(bucket => {
             const isExpanded = expanded.has(bucket.key);
             const shouldCollapse = bucket.products.length > TOP_N_DEFAULT;
@@ -565,7 +565,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
               <div
                 key={bucket.key}
                 className={cn(
-                  isLive && 'bg-gradient-to-r from-roas-greenBg/30 to-transparent',
+                  isLive && 'bg-gradient-to-r from-status-greenBg/30 to-transparent',
                 )}
               >
                 {/* Bucket header */}
@@ -573,16 +573,16 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                   <div className="flex items-center gap-2 min-w-0">
                     {isLive && (
                       <span className="relative inline-flex h-2.5 w-2.5 shrink-0">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-roas-green opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-roas-green"></span>
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-status-green opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-status-green"></span>
                       </span>
                     )}
-                    <span className="font-semibold text-text-primary truncate">
+                    <span className="font-semibold text-ink truncate">
                       {bucket.label}
                     </span>
                     {isLive && (
                       <span
-                        className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-roas-green bg-roas-greenBg/80 px-1.5 py-0.5 rounded"
+                        className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-status-green bg-status-greenBg/80 px-1.5 py-0.5 rounded"
                         title="עד לרגע זה - יתעדכן עוד עד חצות"
                       >
                         <Radio size={11} /> חי · {nowLabel}
@@ -592,28 +592,28 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                   <div className="flex items-center gap-3 sm:gap-5 text-xs sm:text-sm tabular-nums">
                     {bucket.hasOrders && (
                       <div>
-                        <span className="text-text-muted text-[10px] sm:text-xs me-1">הזמנות</span>
-                        <span className="font-semibold text-text-primary">
+                        <span className="text-ink-muted text-[10px] sm:text-xs me-1">הזמנות</span>
+                        <span className="font-semibold text-ink">
                           {formatNumber(bucket.totalOrders, 0)}
                         </span>
                       </div>
                     )}
                     <div>
-                      <span className="text-text-muted text-[10px] sm:text-xs me-1">יחידות</span>
-                      <span className="font-semibold text-text-primary">
+                      <span className="text-ink-muted text-[10px] sm:text-xs me-1">יחידות</span>
+                      <span className="font-semibold text-ink">
                         {formatNumber(bucket.totalUnits, 0)}
                       </span>
                     </div>
                     <div className="hidden sm:block">
-                      <span className="text-text-muted text-[10px] sm:text-xs me-1">ברוטו</span>
-                      <span className="font-semibold text-text-primary">
+                      <span className="text-ink-muted text-[10px] sm:text-xs me-1">ברוטו</span>
+                      <span className="font-semibold text-ink">
                         CAD {formatCurrency(bucket.totalRevenue)}
                       </span>
                     </div>
                     {bucket.hasNet && bucket.totalNetRevenue !== null && (
                       <div className="hidden md:block" title="הכנסה אחרי הנחות והחזרים">
-                        <span className="text-text-muted text-[10px] sm:text-xs me-1">נטו</span>
-                        <span className="font-semibold text-roas-green">
+                        <span className="text-ink-muted text-[10px] sm:text-xs me-1">נטו</span>
+                        <span className="font-semibold text-status-green">
                           CAD {formatCurrency(bucket.totalNetRevenue)}
                         </span>
                       </div>
@@ -623,7 +623,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
 
                 {/* Live bucket empty state — explain that data is on the way */}
                 {isLive && isEmpty && (
-                  <div className="px-4 sm:px-5 py-4 text-center text-xs sm:text-sm text-text-secondary border-t border-roas-green/20 bg-roas-greenBg/20">
+                  <div className="px-4 sm:px-5 py-4 text-center text-xs sm:text-sm text-ink-secondary border-t border-status-green/20 bg-status-greenBg/20">
                     עוד לא נמכרו מוצרים היום. הסקריפט החי מרענן את הטאב כל 15 דקות —
                     שורה זו תמשיך להתעדכן עד חצות.
                   </div>
@@ -633,8 +633,8 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                 {!isEmpty && (
                   <div className="overflow-auto max-h-[70vh]">
                     <table className="w-full text-xs sm:text-sm min-w-[680px]">
-                      <thead className="sticky top-0 z-[5] bg-surface">
-                        <tr className="text-text-secondary border-y border-border bg-surfaceMuted/40">
+                      <thead className="sticky top-0 z-[5] bg-elevated">
+                        <tr className="text-ink-secondary border-y border-line bg-elevated2/40">
                           <th className="px-4 sm:px-5 py-2 text-start font-medium">מוצר</th>
                           {bucket.hasOrders && (
                             <th className="px-3 py-2 text-end font-medium w-[80px]">
@@ -677,11 +677,11 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                           return (
                             <tr
                               key={`${bucket.key}-${p.productId}-${i}`}
-                              className="border-b border-border/60 hover:bg-surfaceMuted/40"
+                              className="border-b border-line/60 hover:bg-elevated2/40"
                             >
-                              <td className="px-4 sm:px-5 py-2 text-text-primary">
+                              <td className="px-4 sm:px-5 py-2 text-ink">
                                 <div className="flex items-center gap-2">
-                                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-surfaceMuted text-[10px] font-bold text-text-secondary tabular-nums shrink-0">
+                                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-elevated2 text-[10px] font-bold text-ink-secondary tabular-nums shrink-0">
                                     {i + 1}
                                   </span>
                                   <span className="truncate">{p.productTitle}</span>
@@ -689,12 +689,12 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                               </td>
                               {bucket.hasOrders && (
                                 <td className="px-3 py-2 text-end tabular-nums">
-                                  <span className="font-semibold text-text-primary">
+                                  <span className="font-semibold text-ink">
                                     {p.orders > 0 ? formatNumber(p.orders, 0) : '—'}
                                   </span>
                                   {upo !== null && upo > 1.05 && (
                                     <span
-                                      className="block text-[9px] sm:text-[10px] text-text-muted leading-tight"
+                                      className="block text-[9px] sm:text-[10px] text-ink-muted leading-tight"
                                       title={`ממוצע ${upo.toFixed(2)} יחידות להזמנה`}
                                     >
                                       ×{upo.toFixed(1)}
@@ -715,14 +715,14 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                                       className={cn(
                                         'font-medium',
                                         p.netRevenue < p.revenue
-                                          ? 'text-roas-green'
-                                          : 'text-text-primary',
+                                          ? 'text-status-green'
+                                          : 'text-ink',
                                       )}
                                     >
                                       {formatCurrency(p.netRevenue)}
                                     </span>
                                   ) : (
-                                    <span className="text-text-muted">—</span>
+                                    <span className="text-ink-muted">—</span>
                                   )}
                                 </td>
                               )}
@@ -736,10 +736,10 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                                         <span
                                           className={cn(
                                             'font-medium',
-                                            margin >= 0.95 && 'text-roas-green',
-                                            margin >= 0.8 && margin < 0.95 && 'text-text-primary',
-                                            margin < 0.8 && 'text-roas-orange',
-                                            margin < 0.5 && 'text-roas-red',
+                                            margin >= 0.95 && 'text-status-green',
+                                            margin >= 0.8 && margin < 0.95 && 'text-ink',
+                                            margin < 0.8 && 'text-status-orange',
+                                            margin < 0.5 && 'text-status-red',
                                           )}
                                           title={
                                             margin < 0.8
@@ -752,11 +752,11 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                                       );
                                     })()
                                   ) : (
-                                    <span className="text-text-muted">—</span>
+                                    <span className="text-ink-muted">—</span>
                                   )}
                                 </td>
                               )}
-                              <td className="px-3 sm:px-5 py-2 text-end tabular-nums text-text-muted">
+                              <td className="px-3 sm:px-5 py-2 text-end tabular-nums text-ink-muted">
                                 {(pct * 100).toFixed(1)}%
                               </td>
                             </tr>
@@ -769,10 +769,10 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
 
                 {/* Show more / show less */}
                 {shouldCollapse && (
-                  <div className="px-4 sm:px-5 py-2 bg-surfaceMuted/30 border-t border-border/60">
+                  <div className="px-4 sm:px-5 py-2 bg-elevated2/30 border-t border-line/60">
                     <button
                       onClick={() => toggle(bucket.key)}
-                      className="text-xs sm:text-sm text-primary hover:text-primary-dark font-medium inline-flex items-center gap-1.5 transition-colors"
+                      className="text-xs sm:text-sm text-accent hover:text-accent font-medium inline-flex items-center gap-1.5 transition-colors"
                     >
                       {isExpanded ? (
                         <>
@@ -833,17 +833,17 @@ function SummaryCard({
       : null;
 
   return (
-    <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gradient-to-l from-primary/5 to-surface border-b border-border">
+    <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gradient-to-l from-accent/5 to-elevated border-b border-line">
       <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-base sm:text-lg font-bold text-text-primary truncate">
+          <span className="text-base sm:text-lg font-bold text-ink truncate">
             🏪 {storeLabel}
           </span>
-          <span className="text-xs sm:text-sm text-text-muted tabular-nums">·</span>
-          <span className="text-xs sm:text-sm text-text-secondary tabular-nums">
+          <span className="text-xs sm:text-sm text-ink-muted tabular-nums">·</span>
+          <span className="text-xs sm:text-sm text-ink-secondary tabular-nums">
             {dateLabel}
           </span>
-          <span className="text-[10px] sm:text-xs text-text-muted">({summary.days} ימים)</span>
+          <span className="text-[10px] sm:text-xs text-ink-muted">({summary.days} ימים)</span>
         </div>
       </div>
 
@@ -872,14 +872,14 @@ function SummaryCard({
       </div>
 
       {summary.days > 1 && (
-        <div className="mt-3 pt-3 border-t border-border/60 flex items-center justify-between gap-3 flex-wrap text-[10px] sm:text-xs text-text-muted tabular-nums">
+        <div className="mt-3 pt-3 border-t border-line/60 flex items-center justify-between gap-3 flex-wrap text-[10px] sm:text-xs text-ink-muted tabular-nums">
           <span>
             ממוצע ליום:
-            <span className="text-text-secondary font-medium ms-1">
+            <span className="text-ink-secondary font-medium ms-1">
               {formatNumber(summary.avgUnitsPerDay, 1)}
             </span>
             יחידות ·
-            <span className="text-text-secondary font-medium ms-1">
+            <span className="text-ink-secondary font-medium ms-1">
               CAD {formatCurrency(summary.avgGrossPerDay)}
             </span>
             ברוטו
@@ -908,23 +908,23 @@ function Stat({
   return (
     <div
       className={cn(
-        'rounded-lg bg-surface border border-border px-2.5 sm:px-3 py-1.5 sm:py-2',
+        'rounded-lg bg-elevated border border-line px-2.5 sm:px-3 py-1.5 sm:py-2',
         className,
       )}
     >
-      <div className="text-[10px] sm:text-xs text-text-muted leading-tight">{label}</div>
+      <div className="text-[10px] sm:text-xs text-ink-muted leading-tight">{label}</div>
       <div
         className={cn(
           'text-sm sm:text-base lg:text-lg font-bold tabular-nums leading-tight mt-0.5',
-          primary && 'text-primary',
-          accent === 'green' && 'text-roas-green',
-          !primary && !accent && 'text-text-primary',
+          primary && 'text-accent',
+          accent === 'green' && 'text-status-green',
+          !primary && !accent && 'text-ink',
         )}
       >
         {value}
       </div>
       {subtitle && (
-        <div className="text-[9px] sm:text-[10px] text-text-muted leading-tight mt-0.5">
+        <div className="text-[9px] sm:text-[10px] text-ink-muted leading-tight mt-0.5">
           {subtitle}
         </div>
       )}

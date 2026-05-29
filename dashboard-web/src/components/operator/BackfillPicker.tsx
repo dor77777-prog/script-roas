@@ -162,29 +162,29 @@ export function BackfillPicker() {
     <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col text-sm">
-          <span className="text-text-secondary mb-1">מתאריך</span>
+          <span className="text-ink-secondary mb-1">מתאריך</span>
           <input
             type="date"
             value={from}
             min={HISTORY_BOUNDARY}
             onChange={(e) => setFrom(e.target.value)}
-            className="bg-black/30 border border-white/10 rounded px-2 py-1 text-sm text-foreground"
+            className="bg-canvas border border-line-subtle rounded px-2 py-1 text-sm text-ink focus:border-accent"
             dir="ltr"
           />
         </label>
         <label className="flex flex-col text-sm">
-          <span className="text-text-secondary mb-1">עד תאריך</span>
+          <span className="text-ink-secondary mb-1">עד תאריך</span>
           <input
             type="date"
             value={to}
             min={from}
             onChange={(e) => setTo(e.target.value)}
-            className="bg-black/30 border border-white/10 rounded px-2 py-1 text-sm text-foreground"
+            className="bg-canvas border border-line-subtle rounded px-2 py-1 text-sm text-ink focus:border-accent"
             dir="ltr"
           />
         </label>
         <div className="flex flex-col text-sm">
-          <span className="text-text-secondary mb-1">חנויות</span>
+          <span className="text-ink-secondary mb-1">חנויות</span>
           <div className="flex gap-3">
             {ALL_STORES.map((s) => (
               <label
@@ -205,7 +205,7 @@ export function BackfillPicker() {
           type="button"
           onClick={submit}
           disabled={submitDisabled}
-          className="flex items-center gap-1 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 disabled:cursor-not-allowed text-white text-sm px-3 py-1 rounded h-[30px]"
+          className="flex items-center gap-1 bg-accent hover:bg-accent/90 disabled:bg-elevated2 disabled:text-ink-muted disabled:cursor-not-allowed text-white text-sm px-3 py-1 rounded h-[30px]"
         >
           {submitting ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -217,17 +217,17 @@ export function BackfillPicker() {
       </div>
 
       {message && (
-        <p className="text-green-400 text-sm" role="status">
+        <p className="text-status-green text-sm" role="status">
           {message}
         </p>
       )}
       {error && (
-        <p className="text-red-400 text-sm" role="alert">
+        <p className="text-status-red text-sm" role="alert">
           שגיאה: {error}
         </p>
       )}
 
-      <p className="text-text-secondary text-xs">
+      <p className="text-ink-secondary text-xs">
         Backfill מקצה ~6 step.runs לכל יום-חנות. טווח של 21 ימים × 3 חנויות ≈
         380 ביצועים (פחות מ-1% מתקרת Inngest). תאריך מינימלי:{' '}
         <span dir="ltr">{HISTORY_BOUNDARY}</span> (D-A3 history boundary).

@@ -120,7 +120,7 @@ export function GoalTracker({ data }: Props) {
   // Two modes: goal set vs goal not set.
   if (goal == null && !editing) {
     return (
-      <section className="rounded-2xl bg-gradient-to-br from-primary-dark/95 via-primary to-primary-light/95 text-white shadow-card overflow-hidden">
+      <section className="rounded-2xl bg-gradient-to-br from-accent/95 via-accent to-accent/80 text-white shadow-sm overflow-hidden">
         <div className="p-4 sm:p-5">
           <div className="flex items-center gap-2.5 mb-3">
             <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-white/12 text-white shrink-0">
@@ -136,7 +136,7 @@ export function GoalTracker({ data }: Props) {
           </p>
           <button
             onClick={startEdit}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-white text-primary-dark hover:bg-white/95 px-3 py-2 text-xs sm:text-sm font-semibold transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-white text-accent hover:bg-white/95 px-3 py-2 text-xs sm:text-sm font-semibold transition-colors"
           >
             <Edit3 size={13} />
             קבע יעד
@@ -148,18 +148,18 @@ export function GoalTracker({ data }: Props) {
 
   if (editing) {
     return (
-      <section className="rounded-2xl bg-surface border border-borderSubtle shadow-card p-4 sm:p-5">
+      <section className="rounded-2xl bg-elevated border border-line-subtle shadow-sm p-4 sm:p-5">
         <div className="flex items-center gap-2.5 mb-3">
-          <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10 text-primary shrink-0">
+          <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-accent/10 text-accent shrink-0">
             <Target size={14} />
           </span>
-          <h2 className="text-sm sm:text-base font-semibold text-text-primary">
+          <h2 className="text-sm sm:text-base font-semibold text-ink">
             הזן יעד הכנסות חודשי
           </h2>
         </div>
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
-            <span className="absolute start-3 top-1/2 -translate-y-1/2 text-xs text-text-muted font-medium">
+            <span className="absolute start-3 top-1/2 -translate-y-1/2 text-xs text-ink-muted font-medium">
               CAD
             </span>
             <input
@@ -179,10 +179,10 @@ export function GoalTracker({ data }: Props) {
               autoFocus
               aria-invalid={editError != null || draftIsInvalid}
               className={cn(
-                'w-full rounded-lg border bg-surface pe-3 ps-12 py-2 text-sm focus:outline-none focus:shadow-focus',
+                'w-full rounded-lg border bg-elevated pe-3 ps-12 py-2 text-sm focus:outline-none focus:shadow-focus',
                 editError != null || draftIsInvalid
                   ? 'border-amber-500 focus:border-amber-600'
-                  : 'border-border focus:border-primary',
+                  : 'border-line focus:border-accent',
               )}
             />
           </div>
@@ -192,8 +192,8 @@ export function GoalTracker({ data }: Props) {
             className={cn(
               'inline-flex items-center gap-1 rounded-lg text-white px-3 py-2 text-xs sm:text-sm font-semibold',
               draftIsInvalid
-                ? 'bg-primary/40 cursor-not-allowed'
-                : 'bg-primary hover:bg-primary-dark',
+                ? 'bg-accent/40 cursor-not-allowed'
+                : 'bg-accent hover:bg-accent/80',
             )}
           >
             <Check size={13} />
@@ -201,7 +201,7 @@ export function GoalTracker({ data }: Props) {
           </button>
           <button
             onClick={cancelEdit}
-            className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-border text-text-muted hover:text-text-primary"
+            className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-line text-ink-muted hover:text-ink"
             aria-label="בטל"
           >
             <X size={14} />
@@ -212,7 +212,7 @@ export function GoalTracker({ data }: Props) {
             {editError}
           </p>
         )}
-        <p className="text-[11px] text-text-muted mt-2">
+        <p className="text-[11px] text-ink-muted mt-2">
           {/* d/CR-04 (audit 2026-05-23): copy used to say "נשמר רק בדפדפן
               הזה (localStorage)" — but writeGoal() in lib/insights.ts ALSO
               calls pushCloudKey(GOAL_STORAGE_KEY, value) which mirrors to
@@ -231,29 +231,29 @@ export function GoalTracker({ data }: Props) {
     typeof pacing.status,
     { label: string; bg: string; color: string }
   > = {
-    ahead: { label: 'מקדים את היעד', bg: 'bg-roas-greenBg', color: 'text-roas-green' },
-    'on-pace': { label: 'בקצב הנכון', bg: 'bg-primary/10', color: 'text-primary' },
+    ahead: { label: 'מקדים את היעד', bg: 'bg-status-greenBg', color: 'text-status-green' },
+    'on-pace': { label: 'בקצב הנכון', bg: 'bg-accent/10', color: 'text-accent' },
     behind: { label: 'מפגר מהיעד', bg: 'bg-amber-100', color: 'text-amber-700' },
-    unknown: { label: '—', bg: 'bg-surfaceMuted', color: 'text-text-muted' },
+    unknown: { label: '—', bg: 'bg-elevated2', color: 'text-ink-muted' },
   };
   const sMeta = statusMeta[pacing.status];
 
   // Color of the fill bar depends on status.
   const barColor =
-    pacing.status === 'ahead' ? 'bg-roas-green'
-    : pacing.status === 'on-pace' ? 'bg-primary'
+    pacing.status === 'ahead' ? 'bg-status-green'
+    : pacing.status === 'on-pace' ? 'bg-accent'
     : pacing.status === 'behind' ? 'bg-amber-500'
-    : 'bg-text-muted';
+    : 'bg-ink-muted';
 
   return (
-    <section className="rounded-2xl bg-surface border border-borderSubtle shadow-card overflow-hidden">
+    <section className="rounded-2xl bg-elevated border border-line-subtle shadow-sm overflow-hidden">
       <div className="p-4 sm:p-5">
         <div className="flex items-center justify-between gap-3 mb-3">
           <div className="flex items-center gap-2.5 min-w-0">
-            <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10 text-primary shrink-0">
+            <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-accent/10 text-accent shrink-0">
               <Target size={14} />
             </span>
-            <h2 className="text-sm sm:text-base font-semibold text-text-primary tracking-tight">
+            <h2 className="text-sm sm:text-base font-semibold text-ink tracking-tight">
               יעד חודשי
             </h2>
             <span className={cn(
@@ -265,7 +265,7 @@ export function GoalTracker({ data }: Props) {
           </div>
           <button
             onClick={startEdit}
-            className="p-1.5 rounded text-text-muted hover:text-text-primary hover:bg-surfaceMuted transition-colors"
+            className="p-1.5 rounded text-ink-muted hover:text-ink hover:bg-elevated2 transition-colors"
             aria-label="ערוך יעד"
             title="ערוך יעד"
           >
@@ -276,39 +276,39 @@ export function GoalTracker({ data }: Props) {
         {/* Numbers row */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-3">
           <div>
-            <div className="text-[10px] sm:text-xs text-text-muted uppercase tracking-wide">
+            <div className="text-[10px] sm:text-xs text-ink-muted uppercase tracking-wide">
               נצבר עד כה
             </div>
-            <div className="text-base sm:text-lg font-bold tabular-nums text-text-primary mt-0.5">
-              <span className="text-[10px] text-text-muted font-medium me-1">CAD</span>
+            <div className="text-base sm:text-lg font-bold tabular-nums text-ink mt-0.5">
+              <span className="text-[10px] text-ink-muted font-medium me-1">CAD</span>
               {Math.round(forecast.monthToDateRevenue).toLocaleString('he-IL')}
             </div>
-            <div className="text-[10px] sm:text-[11px] text-text-muted tabular-nums mt-0.5">
+            <div className="text-[10px] sm:text-[11px] text-ink-muted tabular-nums mt-0.5">
               {(pacing.progress * 100).toFixed(1)}% מהיעד
             </div>
           </div>
           <div>
-            <div className="text-[10px] sm:text-xs text-text-muted uppercase tracking-wide">
+            <div className="text-[10px] sm:text-xs text-ink-muted uppercase tracking-wide">
               יעד החודש
             </div>
-            <div className="text-base sm:text-lg font-bold tabular-nums text-text-primary mt-0.5">
-              <span className="text-[10px] text-text-muted font-medium me-1">CAD</span>
+            <div className="text-base sm:text-lg font-bold tabular-nums text-ink mt-0.5">
+              <span className="text-[10px] text-ink-muted font-medium me-1">CAD</span>
               {goal!.toLocaleString('he-IL')}
             </div>
-            <div className="text-[10px] sm:text-[11px] text-text-muted tabular-nums mt-0.5">
+            <div className="text-[10px] sm:text-[11px] text-ink-muted tabular-nums mt-0.5">
               חסרים CAD {Math.max(0, Math.round(goal! - forecast.monthToDateRevenue)).toLocaleString('he-IL')}
             </div>
           </div>
           <div className="col-span-2 sm:col-span-1">
-            <div className="text-[10px] sm:text-xs text-text-muted uppercase tracking-wide inline-flex items-center gap-1">
+            <div className="text-[10px] sm:text-xs text-ink-muted uppercase tracking-wide inline-flex items-center gap-1">
               <TrendingUp size={11} />
               חיזוי סוף חודש
             </div>
-            <div className="text-base sm:text-lg font-bold tabular-nums text-text-primary mt-0.5">
-              <span className="text-[10px] text-text-muted font-medium me-1">CAD</span>
+            <div className="text-base sm:text-lg font-bold tabular-nums text-ink mt-0.5">
+              <span className="text-[10px] text-ink-muted font-medium me-1">CAD</span>
               {Math.round(forecast.projectedRevenue).toLocaleString('he-IL')}
             </div>
-            <div className="text-[10px] sm:text-[11px] text-text-muted tabular-nums mt-0.5">
+            <div className="text-[10px] sm:text-[11px] text-ink-muted tabular-nums mt-0.5">
               {forecast.projectedRevenue >= goal!
                 ? `מעל היעד ב-${(((forecast.projectedRevenue - goal!) / goal!) * 100).toFixed(1)}%`
                 : `מתחת ליעד ב-${(((goal! - forecast.projectedRevenue) / goal!) * 100).toFixed(1)}%`}
@@ -317,7 +317,7 @@ export function GoalTracker({ data }: Props) {
         </div>
 
         {/* Progress bar with expected-pacing marker */}
-        <div className="relative h-2.5 bg-surfaceMuted rounded-full overflow-hidden">
+        <div className="relative h-2.5 bg-elevated2 rounded-full overflow-hidden">
           <div
             className={cn('h-full rounded-full transition-all duration-slow ease-out', barColor)}
             style={{ width: `${progressPct * 100}%` }}
@@ -325,7 +325,7 @@ export function GoalTracker({ data }: Props) {
           {/* Expected pacing marker — vertical tick */}
           {expectedPct > 0 && expectedPct < 1 && (
             <div
-              className="absolute top-0 bottom-0 w-0.5 bg-text-primary/40"
+              className="absolute top-0 bottom-0 w-0.5 bg-ink/40"
               style={{
                 // In RTL flow, "right" is the start. Position from start = right
                 // of the container.
@@ -336,7 +336,7 @@ export function GoalTracker({ data }: Props) {
           )}
         </div>
 
-        <div className="flex items-center justify-between mt-2 text-[10px] sm:text-[11px] text-text-muted tabular-nums">
+        <div className="flex items-center justify-between mt-2 text-[10px] sm:text-[11px] text-ink-muted tabular-nums">
           <span className="inline-flex items-center gap-1">
             <Calendar size={11} />
             יום {forecast.daysElapsedThisMonth} מתוך {daysInMonth}
@@ -345,7 +345,7 @@ export function GoalTracker({ data }: Props) {
             נשארו {forecast.daysRemainingThisMonth} ימים
           </span>
           <span className="inline-flex items-center gap-1">
-            <span className="inline-block w-0.5 h-2.5 bg-text-primary/40 align-middle" />
+            <span className="inline-block w-0.5 h-2.5 bg-ink/40 align-middle" />
             יעד יומי: {(pacing.expectedPct * 100).toFixed(0)}%
           </span>
         </div>

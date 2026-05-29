@@ -7,12 +7,17 @@ import {
   ComposedChart,
   Line,
   ReferenceLine,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
 import { TrendingUp, TrendingDown, Minus, LineChart, RotateCcw } from 'lucide-react';
+import { ChartContainer } from '@/components/ui/chart/ChartContainer';
+import {
+  ChartTooltip,
+  ChartTooltipLabel,
+  ChartTooltipValue,
+} from '@/components/ui/chart/ChartTooltip';
 import { heavyRefundDates, sumRefundsInRange } from '@/lib/refundDayHeuristic';
 import {
   annotationsInScope,
@@ -78,11 +83,11 @@ type Props = {
 };
 
 const TONE_CHIP: Record<string, string> = {
-  red:    'bg-roas-redBg text-roas-red',
-  orange: 'bg-roas-orangeBg text-roas-orange',
-  green:  'bg-roas-greenBg text-roas-green',
-  blue:   'bg-roas-blueBg text-roas-blue',
-  gray:   'bg-surfaceMuted text-text-muted',
+  red:    'bg-status-redBg text-status-red',
+  orange: 'bg-status-orangeBg text-status-orange',
+  green:  'bg-status-greenBg text-status-green',
+  blue:   'bg-status-blueBg text-status-blue',
+  gray:   'bg-elevated2 text-ink-muted',
 };
 
 export function HeroOverview({ data, filters }: Props) {
@@ -491,122 +496,137 @@ function RoasTrendChart({
       </div>
 
       {/* Chart */}
-      <div className="h-32 sm:h-36">
-        <ResponsiveContainer width="100%" height="100%">
-          {/* top margin of 28 (not 8) so annotation emoji labels — positioned
-              'top' on the ReferenceLines — get the vertical room they need.
-              An emoji at fontSize 13 takes ~18-22 px; an 8 px margin clipped
-              all but a sliver, which is what the user saw. */}
-          <ComposedChart data={series} margin={{ top: 28, right: 12, left: 12, bottom: 0 }}>
-            <defs>
-              <linearGradient id="hero-roas-fill" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%"   stopColor="#bfdbfe" stopOpacity={0.45} />
-                <stop offset="100%" stopColor="#bfdbfe" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <XAxis dataKey="date" hide />
-            <YAxis hide domain={[0, maxRoas]} />
-            <Area
-              type="monotone"
-              dataKey="roas"
-              stroke="transparent"
-              fill="url(#hero-roas-fill)"
-              isAnimationActive
-              animationDuration={500}
-            />
-            <ReferenceLine
-              y={3}
-              stroke="rgba(255,255,255,0.45)"
-              strokeDasharray="4 4"
-              strokeWidth={1}
-            />
-            {/* Annotation pins — one vertical line per DATE, not per event.
-                c/HI-03: when 3 events fall on the same day (e.g., launch +
-                budget + creative refresh — a common operational pattern),
-                rendering 3 ReferenceLines at the same X stacked 3 emoji
-                labels on top of each other at the same Y position, producing
-                an unreadable smudge. Group by date, render the first
-                kind's emoji + a small "+N" indicator when there's more than
-                one; the operator can drill into the full list via the
-                AnnotationsPanel below. */}
-            {(() => {
-              const validDates = new Set(activeSeries.map(d => d.date));
-              const byDate = new Map<string, Annotation[]>();
-              for (const a of annotations) {
-                if (!validDates.has(a.date)) continue;
-                const bucket = byDate.get(a.date);
-                if (bucket) bucket.push(a);
-                else byDate.set(a.date, [a]);
-              }
-              return Array.from(byDate.entries()).map(([date, bucket]) => {
-                const head = bucket[0];
-                const color = ANNOTATION_KIND_COLOR[head.kind];
-                const label = bucket.length > 1
-                  ? `${ANNOTATION_KIND_EMOJI[head.kind]} +${bucket.length - 1}`
-                  : ANNOTATION_KIND_EMOJI[head.kind];
-                return (
-                  <ReferenceLine
-                    key={date}
-                    x={date}
-                    stroke={color}
-                    strokeOpacity={0.85}
-                    strokeWidth={1.5}
-                    label={{
-                      value: label,
-                      position: 'top',
-                      fill: color,
-                      fontSize: 13,
-                    }}
-                  />
-                );
-              });
-            })()}
-            <Line
-              type="monotone"
-              dataKey="roas"
-              stroke="#ffffff"
-              strokeWidth={2}
-              dot={{ r: 2.5, fill: '#ffffff', stroke: 'transparent' }}
-              activeDot={{ r: 5, fill: '#ffffff', stroke: '#0d3680', strokeWidth: 3 }}
-              // c/CR-03: explicitly DO NOT bridge paused days. The gap in
-              // the line is the operator's visual signal that the campaign
-              // was off — interpolating would mask that.
-              connectNulls={false}
-              isAnimationActive
-              animationDuration={500}
-            />
-            <Tooltip
-              content={({ active, payload }) => {
-                if (!active || !payload || payload.length === 0) return null;
-                const d = payload[0].payload as {
-                  date: string;
-                  revenue: number;
-                  spend: number;
-                  // c/CR-03: paused days now carry null so the Recharts
-                  // Line breaks at the gap instead of interpolating.
-                  roas: number | null;
-                };
-                return (
-                  <div
-                    dir="rtl"
-                    className="rounded-lg bg-text-primary/95 text-white px-3 py-2 text-xs shadow-elevated tabular-nums"
-                  >
-                    <div className="text-white/65 mb-1 text-[10px]">{fmtDateShort(d.date)}</div>
-                    <div className="font-semibold">
-                      ROAS <bdi dir="ltr">{d.roas !== null ? d.roas.toFixed(2) : '—'}</bdi>
-                    </div>
-                    <div className="text-white/75 text-[11px] mt-0.5">
-                      הכנסות <bdi dir="ltr">{Math.round(d.revenue).toLocaleString('he-IL')}</bdi>
-                      {' · '}
-                      הוצאה <bdi dir="ltr">{Math.round(d.spend).toLocaleString('he-IL')}</bdi>
-                    </div>
+      <ChartContainer
+        className="h-32 sm:h-36"
+        height="100%"
+        style={{
+          // Hero card has its own dark navy background that does NOT theme-swap.
+          // Override the chart-surface CSS vars to white-with-alpha so gridlines
+          // and the ROAS target line read correctly on the dark bg.
+          ['--chart-grid' as never]: 'rgba(255,255,255,0.20)',
+          ['--chart-axis' as never]: 'rgba(255,255,255,0.55)',
+          ['--chart-target' as never]: 'rgba(255,255,255,0.45)',
+        }}
+      >
+        {/* top margin of 28 (not 8) so annotation emoji labels — positioned
+            'top' on the ReferenceLines — get the vertical room they need.
+            An emoji at fontSize 13 takes ~18-22 px; an 8 px margin clipped
+            all but a sliver, which is what the user saw. */}
+        <ComposedChart data={series} margin={{ top: 28, right: 12, left: 12, bottom: 0 }}>
+          <defs>
+            <linearGradient id="hero-roas-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%"   stopColor="#ffffff" stopOpacity={0.15} />
+              <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <XAxis dataKey="date" hide />
+          <YAxis hide domain={[0, maxRoas]} />
+          <Area
+            type="monotone"
+            dataKey="roas"
+            stroke="transparent"
+            fill="url(#hero-roas-fill)"
+            isAnimationActive
+            animationDuration={500}
+          />
+          <ReferenceLine
+            y={3}
+            stroke="rgba(255,255,255,0.45)"
+            strokeDasharray="4 4"
+            strokeWidth={1}
+          />
+          {/* Annotation pins — one vertical line per DATE, not per event.
+              c/HI-03: when 3 events fall on the same day (e.g., launch +
+              budget + creative refresh — a common operational pattern),
+              rendering 3 ReferenceLines at the same X stacked 3 emoji
+              labels on top of each other at the same Y position, producing
+              an unreadable smudge. Group by date, render the first
+              kind's emoji + a small "+N" indicator when there's more than
+              one; the operator can drill into the full list via the
+              AnnotationsPanel below. */}
+          {(() => {
+            const validDates = new Set(activeSeries.map(d => d.date));
+            const byDate = new Map<string, Annotation[]>();
+            for (const a of annotations) {
+              if (!validDates.has(a.date)) continue;
+              const bucket = byDate.get(a.date);
+              if (bucket) bucket.push(a);
+              else byDate.set(a.date, [a]);
+            }
+            return Array.from(byDate.entries()).map(([date, bucket]) => {
+              const head = bucket[0];
+              const color = ANNOTATION_KIND_COLOR[head.kind];
+              const label = bucket.length > 1
+                ? `${ANNOTATION_KIND_EMOJI[head.kind]} +${bucket.length - 1}`
+                : ANNOTATION_KIND_EMOJI[head.kind];
+              return (
+                <ReferenceLine
+                  key={date}
+                  x={date}
+                  stroke={color}
+                  strokeOpacity={0.85}
+                  strokeWidth={1.5}
+                  label={{
+                    value: label,
+                    position: 'top',
+                    fill: color,
+                    fontSize: 13,
+                  }}
+                />
+              );
+            });
+          })()}
+          <Line
+            type="monotone"
+            dataKey="roas"
+            stroke="#ffffff"
+            strokeWidth={2}
+            dot={{ r: 2.5, fill: '#ffffff', stroke: 'transparent' }}
+            activeDot={{ r: 5, fill: '#ffffff', stroke: 'var(--accent)', strokeWidth: 3 }}
+            // c/CR-03: explicitly DO NOT bridge paused days. The gap in
+            // the line is the operator's visual signal that the campaign
+            // was off — interpolating would mask that.
+            connectNulls={false}
+            isAnimationActive
+            animationDuration={500}
+          />
+          <Tooltip
+            content={({ active, payload }) => {
+              if (!active || !payload || payload.length === 0) return null;
+              const d = payload[0].payload as {
+                date: string;
+                revenue: number;
+                spend: number;
+                // c/CR-03: paused days now carry null so the Recharts
+                // Line breaks at the gap instead of interpolating.
+                roas: number | null;
+              };
+              return (
+                <ChartTooltip>
+                  <ChartTooltipLabel>{fmtDateShort(d.date)}</ChartTooltipLabel>
+                  <div className="font-semibold mb-0.5">
+                    ROAS{' '}
+                    <ChartTooltipValue>
+                      {d.roas !== null ? d.roas.toFixed(2) : '—'}
+                    </ChartTooltipValue>
                   </div>
-                );
-              }}
-            />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </div>
+                  <div className="text-ink-muted text-[11px]">
+                    הכנסות{' '}
+                    <ChartTooltipValue className="text-ink-secondary text-[11px] font-normal">
+                      {Math.round(d.revenue).toLocaleString('he-IL')}
+                    </ChartTooltipValue>
+                    {' · '}
+                    הוצאה{' '}
+                    <ChartTooltipValue className="text-ink-secondary text-[11px] font-normal">
+                      {Math.round(d.spend).toLocaleString('he-IL')}
+                    </ChartTooltipValue>
+                  </div>
+                </ChartTooltip>
+              );
+            }}
+          />
+        </ComposedChart>
+      </ChartContainer>
 
       {/* Date axis labels — c/CR-03: report the full calendar day count
           (matches the eyebrow above) rather than the post-filter active-day

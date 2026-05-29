@@ -80,7 +80,7 @@ export function AnnotationsPanel({ range, store }: Props) {
   }
 
   return (
-    <section className="rounded-2xl bg-surface border border-borderSubtle shadow-card overflow-hidden">
+    <section className="rounded-2xl bg-elevated border border-line-subtle shadow-sm overflow-hidden">
       {/* Clickable header */}
       <button
         type="button"
@@ -88,21 +88,21 @@ export function AnnotationsPanel({ range, store }: Props) {
         aria-expanded={open}
         className={cn(
           'w-full text-start px-4 sm:px-5 py-3',
-          'border-b border-borderSubtle',
-          'bg-gradient-to-l from-primary/4 to-surface',
-          'hover:from-primary/8 hover:to-surfaceMuted/40 transition-colors',
+          'border-b border-line-subtle',
+          'bg-gradient-to-l from-accent/4 to-elevated',
+          'hover:from-accent/8 hover:to-elevated2/40 transition-colors',
         )}
       >
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
-            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary shrink-0">
+            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent/10 text-accent shrink-0">
               <Pin size={15} />
             </span>
             <div className="min-w-0">
-              <h2 className="text-sm sm:text-base font-bold text-text-primary tracking-tight leading-tight">
+              <h2 className="text-sm sm:text-base font-bold text-ink tracking-tight leading-tight">
                 יומן אירועים
               </h2>
-              <div className="text-[11px] sm:text-xs text-text-muted mt-0.5 leading-tight">
+              <div className="text-[11px] sm:text-xs text-ink-muted mt-0.5 leading-tight">
                 {inScope.length === 0
                   ? 'תיעד שינויים שהוצעו (השקות, מבצעים, שינויי תקציב) — יוצגו על הגרף'
                   : `${inScope.length} ${inScope.length === 1 ? 'אירוע' : 'אירועים'} בטווח שבחרת`}
@@ -110,7 +110,7 @@ export function AnnotationsPanel({ range, store }: Props) {
             </div>
           </div>
           <span
-            className="text-text-muted text-[10px] sm:text-xs tabular-nums shrink-0"
+            className="text-ink-muted text-[10px] sm:text-xs tabular-nums shrink-0"
             aria-hidden
           >
             {open ? '▼' : '◀'}
@@ -124,7 +124,7 @@ export function AnnotationsPanel({ range, store }: Props) {
           {!adding ? (
             <button
               onClick={() => setAdding(true)}
-              className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-border bg-surfaceMuted/40 hover:bg-surfaceMuted hover:border-primary/40 px-3 py-2 text-xs sm:text-sm font-medium text-text-secondary hover:text-text-primary transition-colors"
+              className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-line bg-elevated2/40 hover:bg-elevated2 hover:border-accent/40 px-3 py-2 text-xs sm:text-sm font-medium text-ink-secondary hover:text-ink transition-colors"
             >
               <Plus size={14} />
               תעד אירוע חדש
@@ -139,7 +139,7 @@ export function AnnotationsPanel({ range, store }: Props) {
 
           {/* List of in-scope annotations */}
           {inScope.length === 0 ? (
-            <div className="text-center py-6 text-text-muted text-xs">
+            <div className="text-center py-6 text-ink-muted text-xs">
               אין אירועים בטווח הזה.
             </div>
           ) : (
@@ -147,7 +147,7 @@ export function AnnotationsPanel({ range, store }: Props) {
               {inScope.map(a => (
                 <li
                   key={a.id}
-                  className="rounded-lg border border-borderSubtle bg-surface hover:bg-surfaceMuted/30 transition-colors"
+                  className="rounded-lg border border-line-subtle bg-elevated hover:bg-elevated2/30 transition-colors"
                 >
                   {editing === a.id ? (
                     <AnnotationForm
@@ -171,20 +171,20 @@ export function AnnotationsPanel({ range, store }: Props) {
                       </span>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-semibold text-text-primary truncate">
+                          <span className="text-sm font-semibold text-ink truncate">
                             {a.title}
                           </span>
-                          <span className="text-[10px] text-text-muted tabular-nums">
+                          <span className="text-[10px] text-ink-muted tabular-nums">
                             {formatDate(a.date)}
                           </span>
                           {a.store && (
-                            <span className="text-[10px] text-text-muted inline-flex items-center gap-0.5">
+                            <span className="text-[10px] text-ink-muted inline-flex items-center gap-0.5">
                               <StoreIcon size={9} /> {a.store}
                             </span>
                           )}
                         </div>
                         {a.notes && (
-                          <div className="text-[11px] text-text-secondary mt-0.5 leading-snug">
+                          <div className="text-[11px] text-ink-secondary mt-0.5 leading-snug">
                             {a.notes}
                           </div>
                         )}
@@ -192,14 +192,14 @@ export function AnnotationsPanel({ range, store }: Props) {
                       <div className="flex items-center gap-1 shrink-0">
                         <button
                           onClick={() => setEditing(a.id)}
-                          className="p-1.5 rounded text-text-muted hover:text-text-primary hover:bg-surfaceMuted"
+                          className="p-1.5 rounded text-ink-muted hover:text-ink hover:bg-elevated2"
                           aria-label="ערוך"
                         >
                           <Edit3 size={13} />
                         </button>
                         <button
                           onClick={() => remove(a.id)}
-                          className="p-1.5 rounded text-text-muted hover:text-roas-red hover:bg-roas-redBg"
+                          className="p-1.5 rounded text-ink-muted hover:text-status-red hover:bg-status-redBg"
                           aria-label="מחק"
                         >
                           <Trash2 size={13} />
@@ -250,14 +250,14 @@ function AnnotationForm({
   }
 
   return (
-    <div className="p-3 space-y-2 bg-surfaceMuted/40 rounded-lg border border-borderSubtle">
+    <div className="p-3 space-y-2 bg-elevated2/40 rounded-lg border border-line-subtle">
       <div className="grid grid-cols-[auto_1fr_auto] gap-2 items-end">
         <div>
-          <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium">סוג</label>
+          <label className="text-[10px] text-ink-muted uppercase tracking-wide font-medium">סוג</label>
           <select
             value={kind}
             onChange={e => setKind(e.target.value as AnnotationKind)}
-            className="block rounded-lg border border-border bg-surface px-2 py-1.5 text-sm focus:outline-none focus:border-primary"
+            className="block rounded-lg border border-line bg-elevated px-2 py-1.5 text-sm focus:outline-none focus:border-accent"
           >
             {(Object.keys(ANNOTATION_KIND_LABEL) as AnnotationKind[]).map(k => (
               <option key={k} value={k}>
@@ -267,7 +267,7 @@ function AnnotationForm({
           </select>
         </div>
         <div>
-          <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium">כותרת</label>
+          <label className="text-[10px] text-ink-muted uppercase tracking-wide font-medium">כותרת</label>
           <input
             value={title}
             onChange={e => setTitle(e.target.value)}
@@ -277,22 +277,22 @@ function AnnotationForm({
               if (e.key === 'Enter') commit();
               if (e.key === 'Escape') onCancel();
             }}
-            className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm focus:outline-none focus:border-primary focus:shadow-focus"
+            className="w-full rounded-lg border border-line bg-elevated px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
           />
         </div>
         <div>
-          <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium">תאריך</label>
+          <label className="text-[10px] text-ink-muted uppercase tracking-wide font-medium">תאריך</label>
           <input
             type="date"
             value={date}
             max={today}
             onChange={e => setDate(e.target.value)}
-            className="rounded-lg border border-border bg-surface px-2 py-1.5 text-sm tabular-nums focus:outline-none focus:border-primary"
+            className="rounded-lg border border-line bg-elevated px-2 py-1.5 text-sm tabular-nums focus:outline-none focus:border-accent"
           />
         </div>
       </div>
       <div>
-        <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium">הערות (אופציונלי)</label>
+        <label className="text-[10px] text-ink-muted uppercase tracking-wide font-medium">הערות (אופציונלי)</label>
         <input
           value={notes}
           onChange={e => setNotes(e.target.value)}
@@ -301,18 +301,18 @@ function AnnotationForm({
             if (e.key === 'Enter') commit();
             if (e.key === 'Escape') onCancel();
           }}
-          className="w-full rounded-lg border border-border bg-surface px-2.5 py-1.5 text-sm focus:outline-none focus:border-primary focus:shadow-focus"
+          className="w-full rounded-lg border border-line bg-elevated px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
         />
       </div>
       {storeOptions.length > 0 && (
         <div className="flex items-center gap-2">
-          <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium inline-flex items-center gap-1">
+          <label className="text-[10px] text-ink-muted uppercase tracking-wide font-medium inline-flex items-center gap-1">
             <StoreIcon size={11} /> שיוך לחנות
           </label>
           <select
             value={scopedStore}
             onChange={e => setScopedStore(e.target.value)}
-            className="rounded-lg border border-border bg-surface px-2 py-1 text-xs focus:outline-none focus:border-primary"
+            className="rounded-lg border border-line bg-elevated px-2 py-1 text-xs focus:outline-none focus:border-accent"
           >
             <option value="">כל החנויות</option>
             {storeOptions.map(s => (
@@ -325,19 +325,19 @@ function AnnotationForm({
         <button
           onClick={commit}
           disabled={!title.trim()}
-          className="inline-flex items-center gap-1 rounded-lg bg-primary text-white px-3 py-1.5 text-xs sm:text-sm font-semibold hover:bg-primary-dark disabled:bg-text-muted disabled:cursor-not-allowed"
+          className="inline-flex items-center gap-1 rounded-lg bg-accent text-white px-3 py-1.5 text-xs sm:text-sm font-semibold hover:bg-accent/80 disabled:bg-ink-muted disabled:cursor-not-allowed"
         >
           <Check size={13} />
           שמור
         </button>
         <button
           onClick={onCancel}
-          className="inline-flex items-center gap-1 rounded-lg border border-border text-text-secondary hover:text-text-primary px-3 py-1.5 text-xs sm:text-sm"
+          className="inline-flex items-center gap-1 rounded-lg border border-line text-ink-secondary hover:text-ink px-3 py-1.5 text-xs sm:text-sm"
         >
           <X size={13} />
           ביטול
         </button>
-        <span className="text-[10px] text-text-muted ml-auto inline-flex items-center gap-1">
+        <span className="text-[10px] text-ink-muted ml-auto inline-flex items-center gap-1">
           <Calendar size={10} />
           יסומן על הגרף
         </span>
