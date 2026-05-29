@@ -103,7 +103,7 @@ describe('persistCampaignsLive', () => {
         budgets: { currency: 'CAD', campaigns: {}, adSets: {} },
       },
       google: { adGroupRows: [], adRows: [{ campaignId: 'c', campaignName: '', adSetId: 'a', adSetName: '', adId: 'ad2', adName: 'G-ad', spend: 2, impressions: 2, clicks: 2, conversions: 2, conversionValue: 2, effectiveStatus: 'ENABLED' }] },
-      tiktok: { adRows: [{ campaignId: 'c', campaignName: '', adSetId: 'a', adSetName: '', adId: 'ad3', adName: 'T-ad', spend: 3, impressions: 3, clicks: 3, conversions: 3, conversionValue: 3, effectiveStatus: 'ADGROUP_STATUS_DELIVERY_OK' }] },
+      tiktok: { adRows: [{ storeId: STORE, campaignId: 'c', campaignName: '', adSetId: 'a', adSetName: '', adId: 'ad3', adName: 'T-ad', spend: 3, impressions: 3, clicks: 3, conversions: 3, conversionValue: 3, effectiveStatus: 'ADGROUP_STATUS_DELIVERY_OK' }] },
     });
     const adsUpsert = upserts.find(u => u.table === 'ads_daily');
     expect(adsUpsert).toBeTruthy();

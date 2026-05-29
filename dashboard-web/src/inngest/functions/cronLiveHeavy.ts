@@ -155,6 +155,9 @@ function mapGoogleAdRow(r: GoogleAdsAdRow): GoogleAdLiveRow {
 
 function mapTikTokAdRow(r: TikTokAdRow): TikTokAdLiveRow {
   return {
+    // Phase A.5 — propagate the fetcher-resolved storeId so persistCampaignsLive
+    // can upsert each row under the correct store_id for shared TikTok advertisers.
+    storeId: r.storeId,
     campaignId: r.campaignId,
     campaignName: r.campaignName,
     // TikTok's API calls them ad_group; the unified schema calls them

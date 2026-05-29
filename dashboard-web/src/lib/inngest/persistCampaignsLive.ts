@@ -107,6 +107,10 @@ export type GoogleAdLiveRow = {
  * currency this type will need a `currency` field.
  */
 export type TikTokAdLiveRow = {
+  /** Phase A.5 — store_id resolved from campaign-store-map by the fetcher.
+   *  persistCampaignsLive writes store_id: r.storeId ?? storeId (function-arg
+   *  fallback) so multi-store TikTok advertisers upsert under the correct store. */
+  storeId: string;
   campaignId: string;
   campaignName: string;
   adSetId: string;
@@ -272,6 +276,7 @@ export async function persistCampaignsLive(
   // Matches cron-daily's aggregation (TikTok doesn't have a level=adset
   // endpoint that returns budgets the same way Meta does).
   const ttGroups = new Map<string, {
+    storeId: string;
     campaignId: string; campaignName: string; adSetId: string; adSetName: string;
     spend: number; impressions: number; clicks: number; conversions: number; conversionValue: number;
     currency: string; effectiveStatus: string | null;
@@ -281,6 +286,7 @@ export async function persistCampaignsLive(
     let g = ttGroups.get(k);
     if (!g) {
       g = {
+        storeId: r.storeId ?? storeId,
         campaignId: r.campaignId, campaignName: r.campaignName,
         adSetId: r.adSetId, adSetName: r.adSetName,
         spend: 0, impressions: 0, clicks: 0, conversions: 0, conversionValue: 0,
@@ -300,7 +306,7 @@ export async function persistCampaignsLive(
     const convValueCad = await cadFor(g.conversionValue, g.currency);
     const row: TikTokCampaignRow = {
       date: dateStr,
-      store_id: storeId,
+      store_id: g.storeId,
       platform: 'tiktok',
       campaign_id: g.campaignId,
       campaign_name: g.campaignName,
@@ -389,7 +395,7 @@ export async function persistCampaignsLive(
       const convValueCad = await cadFor(r.conversionValue, 'USD');
       const row: Record<string, unknown> = {
         date: dateStr,
-        store_id: storeId,
+        store_id: r.storeId ?? storeId,
         platform: 'tiktok' as const,
         campaign_id: r.campaignId,
         campaign_name: r.campaignName,

@@ -272,6 +272,7 @@ describe('persistCampaignsLive — last_live_tick_at on campaigns_daily + ads_da
       tiktok: {
         adRows: [
           {
+            storeId: 'uzoshop',
             campaignId: 'tc1', campaignName: 'TikTok Camp', adSetId: 'ta1', adSetName: 'TikTok AG',
             adId: 'tiktok-ad-1', adName: 'TikTok Ad', spend: 40, impressions: 400, clicks: 20,
             conversions: 1, conversionValue: 100, effectiveStatus: null,
