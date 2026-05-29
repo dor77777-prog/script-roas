@@ -13,7 +13,8 @@
     "test:components:watch": "vitest --config vitest.config.dom.ts",
     "test:all": "npm run test && npm run test:components",
     "test:coverage": "vitest run --coverage",
-    "audit:reconcile": "AUDIT_LIVE=1 vitest run src/lib/audit/__tests__/reconcile.live.test.ts"
+    "audit:reconcile": "AUDIT_LIVE=1 vitest run src/lib/audit/__tests__/reconcile.live.test.ts",
+    "audit:reconcile:hot-vs-heavy": "AUDIT_LIVE=1 vitest run src/lib/audit/__tests__/reconcileHotMetricsVsHeavy.live.test.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
