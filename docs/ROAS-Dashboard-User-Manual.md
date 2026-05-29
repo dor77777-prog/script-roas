@@ -7,7 +7,7 @@
 │                                                  │
 │      מדריך הפעלה שוטף למפעיל הדשבורד            │
 │                                                  │
-│      גרסה:        2.1.6                          │
+│      גרסה:        2.1.7                          │
 │      תאריך:       2026-05-29                     │
 │      קהל יעד:     מפעיל יחיד · החלטות יומיות   │
 │                                                  │
@@ -124,6 +124,10 @@ Plan 6 פיספס 25 רכיבים שיתופיים (`Filters`/Quick Range, `Sect
 5. **P2 polish** (Worker C, 21 קבצים): KpiCards `sm:grid-cols-3` (3-col על 640px במקום 2-col), HeroOverview eyebrow `text-[10px]` → `text-[11px] sm:text-xs`, Sidebar theme buttons `p-1.5` → `p-2.5` (44×44 tap targets), tap-target sweep ב-15 כפתורים (modal close, drawer close+fullscreen, edit/delete pairs), `text-[10px]` UI labels → `text-[11px]` mobile-first ב-12 קבצים (HeroOverview, AdsDrawer, GoalTracker, InsightsBoard, PnLBreakdown, TodayLive, AttributionAnalysisPanel, BillingSettings, BillingCsvImport).
 
 6. **QuadrantScatter explanations** — משתמש דיווח "לא ברורה בעליל לא מבין מה אני רואה שם". הוסף caption מפורש מתחת לכותרת: "כל נקודה = קמפיין. גודל הנקודה ∝ הוצאה. ROAS גבוה ימינה = רווחי יותר. CAC נמוך למעלה = יעיל יותר. הקו המקווקו = חציון הקבוצה (חוצה ל-4 רביעונים)." הצירים קיבלו תוויות יותר תיאוריות בעברית: "ROAS (ערך ÷ הוצאה) — ימינה = רווחי יותר" + "CAC (CAD/לקוח) — למעלה = יעיל יותר".
+
+### Hotfix 2.1.7 (2026-05-29) — Mobile Sidebar close-X
+
+משתמש דיווח: "חסר לי תפריט המבורגר או משהו או חץ ברור במובייל בתפריט צד שיהיה ברור שאפשר לכווץ את התפריט בחזרה". ה-drawer מובייל היה ניתן לסגירה רק דרך backdrop-tap או auto-close בלחיצה על טאב — בלי כפתור close ויזואלי בתוך ה-drawer עצמו. הוסף כפתור X בשורת ה-brand של ה-drawer (variant='mobile' בלבד), 40×40 tap target, end-aligned (צמוד לקצה ה-drawer). Desktop variant לא מושפע.
 
 מסמכים נלווים מתעדכנים בנפרד: ארכיטקטורה ב-`docs/ARCHITECTURE.md`, עבודה ביצועית של ה-overhaul ב-`docs/superpowers/plans/2026-05-{28,29}-dashboard-ux-overhaul-*.md` (7 plans, Plans 1–6 IMPLEMENTED; Plan 7 polish + a11y + RTL audit pending).
 
@@ -2488,7 +2492,7 @@ Seen 5 times. Alert #2.
 
 ## סוף המסמך
 
-**גרסה:** 2.1.5 · **תאריך עדכון:** 2026-05-29
+**גרסה:** 2.1.7 · **תאריך עדכון:** 2026-05-29
 
 > מסמך זה מתעדכן עם כל שינוי שהמפעיל רואה במסך. אם משהו לא תואם למה שאתה רואה — דווח למפתח לעדכון.
 

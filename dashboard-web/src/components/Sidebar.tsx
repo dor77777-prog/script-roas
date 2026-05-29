@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import {
   Home, Receipt, TrendingUp, Megaphone, Package, Table,
-  Cog, Sun, Moon, Monitor, ChevronsLeft, ChevronsRight,
+  Cog, Sun, Moon, Monitor, ChevronsLeft, ChevronsRight, X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from './ThemeProvider';
@@ -33,6 +33,7 @@ function SidebarBody({
   collapsed,
   onToggleCollapsed,
   onItemClick,
+  onClose,
   variant,
 }: {
   activeTab: TabKey;
@@ -41,6 +42,8 @@ function SidebarBody({
   onToggleCollapsed: () => void;
   /** Called after a nav item or operator link is tapped (used by mobile to close drawer). */
   onItemClick?: () => void;
+  /** Mobile-only: explicit close-X handler. Renders the X button when set. */
+  onClose?: () => void;
   /** 'desktop' = honours collapsed; 'mobile' = always expanded, no collapse toggle. */
   variant: 'desktop' | 'mobile';
 }) {
@@ -49,11 +52,21 @@ function SidebarBody({
 
   return (
     <>
-      {/* Brand */}
-      <div className="px-3 py-4 border-b border-line-subtle flex items-center gap-2">
-        <div className="h-7 w-7 rounded-md bg-accent" aria-hidden />
+      {/* Brand + (mobile) close button */}
+      <div className="px-3 py-3 border-b border-line-subtle flex items-center gap-2">
+        <div className="h-7 w-7 rounded-md bg-accent shrink-0" aria-hidden />
         {!isCollapsed && (
-          <span className="text-sm font-semibold truncate">דשבורד ROAS</span>
+          <span className="text-sm font-semibold truncate flex-1">דשבורד ROAS</span>
+        )}
+        {variant === 'mobile' && onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="סגור תפריט"
+            className="inline-flex items-center justify-center w-10 h-10 -me-1 rounded-md text-ink-muted hover:text-ink hover:bg-elevated2 transition-colors shrink-0"
+          >
+            <X size={20} />
+          </button>
         )}
       </div>
 
@@ -229,6 +242,7 @@ export function Sidebar({
           collapsed={false}
           onToggleCollapsed={() => undefined}
           onItemClick={onMobileClose}
+          onClose={onMobileClose}
           variant="mobile"
         />
       </aside>
