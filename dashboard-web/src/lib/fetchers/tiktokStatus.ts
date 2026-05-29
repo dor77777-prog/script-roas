@@ -13,6 +13,12 @@ import type {
 const TT_BASE = 'https://business-api.tiktok.com/open_api/v1.3';
 const NULL_PLACEHOLDER = '__will_be_overwritten_by_upsert_layer__';
 
+// Safety cap mirrors `tiktok.ts:332` (TIKTOK_PAGINATION_CAP) — prevents
+// a buggy/malicious `total_page` value from looping indefinitely. At
+// page_size=1000 this still gives us up to 50k entities per endpoint
+// before we soft-warn and break.
+const TT_PAGINATION_CAP = 50;
+
 export type TikTokStatusInput = {
   storeId: StoreId;
   advertiserId: string;
@@ -35,6 +41,13 @@ export async function fetchTikTokStatusForStore(input: TikTokStatusInput): Promi
     let page = 1;
     let totalPages = 1;
     while (page <= totalPages) {
+      if (page > TT_PAGINATION_CAP) {
+        console.warn(
+          `TikTok ${endpoint} statuses ${storeId} (advertiser ${advertiserId}): ` +
+            `hit pagination cap of ${TT_PAGINATION_CAP} pages — some rows may be missing.`,
+        );
+        break;
+      }
       const url = `${TT_BASE}/${endpoint}/get/?advertiser_id=${advertiserId}&primary_status=STATUS_ALL&page=${page}&page_size=1000`;
       const res = await fetcher(url, { headers: { 'Access-Token': accessToken } });
       if (!res.ok) throw new Error(`TikTok ${endpoint} status ${res.status}: ${await res.text()}`);
