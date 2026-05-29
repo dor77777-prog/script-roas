@@ -23,6 +23,7 @@ function makeAdminMock() {
         return { error: null };
       },
     }),
+    rpc: async (_fn: string, _args: unknown) => ({ error: null }),
   };
 }
 

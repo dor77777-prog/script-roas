@@ -287,6 +287,7 @@ vi.mock('@/lib/supabaseAdmin', () => ({
         return Promise.resolve({ error: null });
       },
     }),
+    rpc: (_fn: string, _args: unknown) => Promise.resolve({ error: null }),
   }),
 }));
 

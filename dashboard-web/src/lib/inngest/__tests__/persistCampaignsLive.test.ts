@@ -15,6 +15,9 @@ function makeAdminMock() {
         },
       };
     },
+    rpc(_fn: string, _args: unknown) {
+      return Promise.resolve({ error: null });
+    },
   };
   return { admin, upserts };
 }

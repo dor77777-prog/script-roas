@@ -422,4 +422,17 @@ export async function persistCampaignsLive(
       throw new Error(`ads_daily upsert ${storeId} ${dateStr}: ${error.message}`);
     }
   }
+
+  // Phase A.5 — re-aggregate data_daily TikTok columns per store + recompute
+  // dependents from the freshly-written campaigns_daily slices. Without this,
+  // today's data_daily shows legacy single-store-arg TikTok values until
+  // tomorrow's cron-daily reconciliation.
+  try {
+    const { error: aggErr } = await admin.rpc('agg_tiktok_spend_per_store_for_date', { d: dateStr });
+    if (aggErr) {
+      console.warn(`persistCampaignsLive ${storeId} ${dateStr}: tt_spend_cad agg failed: ${aggErr.message}`);
+    }
+  } catch (e) {
+    console.warn(`persistCampaignsLive ${storeId} ${dateStr}: tt_spend_cad agg threw: ${e instanceof Error ? e.message : e}`);
+  }
 }

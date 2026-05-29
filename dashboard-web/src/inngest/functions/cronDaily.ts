@@ -1351,6 +1351,14 @@ async function runDailyForStoreInner(
           `campaigns_daily (tiktok) upsert for ${storeId} ${dateStr}: ${error.message}`,
         );
       }
+      // Phase A.5 — re-aggregate data_daily TikTok columns per store + recompute
+      // dependent total_spend_cad / roas / gross_profit_cad / net_profit_cad from
+      // the freshly-written per-row campaigns_daily slices. Soft-fail: the per-row
+      // data is correct; only the data_daily aggregate is stale on failure.
+      const { error: aggErr } = await admin.rpc('agg_tiktok_spend_per_store_for_date', { d: dateStr });
+      if (aggErr) {
+        console.warn(`cron-daily ${storeId} ${dateStr}: tt_spend_cad per-store agg failed: ${aggErr.message}`);
+      }
     }
 
     // Phase 05.6.1 — 5f. orders_attribution UPSERT.
