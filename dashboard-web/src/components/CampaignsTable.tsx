@@ -1260,7 +1260,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   const roasInfo = roasLabel(totals.roas);
   const summary = aggregated.length > 0 && (
     <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gradient-to-l from-accent/5 to-elevated border-b border-line-subtle">
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3">
+      <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3">
         <Stat label="ROAS" value={totals.roas > 0 ? formatNumber(totals.roas) : '—'} chip={{ text: roasInfo.text, tone: roasInfo.tone }} />
         <Stat label="הוצאה" value={formatCurrency(totals.spend)} prefix="CAD" />
         <Stat label="ערך המרות" value={formatCurrency(totals.conversionValue)} prefix="CAD" accent={totals.conversionValue >= totals.spend ? 'green' : undefined} />
@@ -1622,7 +1622,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         <>
           {/* overflow-auto + max-h makes wrapper the scroll context so sticky
               thead pins to the top of the box (not the page). */}
-          <div className="overflow-auto max-h-[calc(100vh-180px)] roas-campaigns-table">
+          <div className="overflow-auto max-h-[60vh] md:max-h-[calc(100vh-180px)] roas-campaigns-table">
             {/* Phase 05.7.9d — column visibility CSS. The roas-campaigns-table
                 class scopes the rules so they don't leak into other tables. */}
             {columnHiddenCss && (
@@ -2232,6 +2232,7 @@ function ColumnHeaderTh({
       onBlur={handleLeave}
     >
       {children}
+      {/* TODO mobile-fix: tooltip clipped by overflow-auto wrapper — needs Floating UI / portal for proper escape */}
       {open && tooltip && (
         <span
           role="tooltip"
