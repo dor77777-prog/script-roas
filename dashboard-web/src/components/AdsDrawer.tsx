@@ -351,13 +351,13 @@ export function AdsDrawer({
               onClick={() => setIsFullscreen(v => !v)}
               aria-label={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
               title={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
-              className="p-1.5 rounded hover:bg-elevated2 text-ink-muted hover:text-ink transition-colors"
+              className="inline-flex items-center justify-center w-11 h-11 sm:w-auto sm:h-auto sm:p-1.5 rounded hover:bg-elevated2 text-ink-muted hover:text-ink transition-colors"
             >
               {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
             </button>
             <button
               onClick={onClose}
-              className="p-1.5 rounded hover:bg-elevated2 text-ink-muted hover:text-ink"
+              className="inline-flex items-center justify-center w-11 h-11 sm:w-auto sm:h-auto sm:p-1.5 rounded hover:bg-elevated2 text-ink-muted hover:text-ink"
               aria-label="סגור"
             >
               <X size={18} />

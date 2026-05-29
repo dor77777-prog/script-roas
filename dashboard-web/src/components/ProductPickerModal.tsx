@@ -229,7 +229,7 @@ export function ProductPickerModal({
       />
       <div
         dir="rtl"
-        className="relative m-auto w-full sm:max-w-[560px] max-h-[88vh] bg-elevated rounded-2xl shadow-elevated border border-line-subtle flex flex-col"
+        className="relative w-full h-full m-0 sm:m-auto sm:w-auto sm:max-w-[560px] sm:max-h-[88vh] sm:h-auto bg-elevated rounded-none sm:rounded-2xl shadow-elevated border-0 sm:border sm:border-line-subtle flex flex-col"
       >
         <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-line-subtle">
           <div className="min-w-0 flex items-center gap-2.5">
@@ -251,7 +251,7 @@ export function ProductPickerModal({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded hover:bg-elevated2 text-ink-muted hover:text-ink shrink-0"
+            className="inline-flex items-center justify-center w-11 h-11 sm:w-auto sm:h-auto sm:p-1.5 rounded hover:bg-elevated2 text-ink-muted hover:text-ink shrink-0"
             aria-label="סגור"
           >
             <X size={18} />
