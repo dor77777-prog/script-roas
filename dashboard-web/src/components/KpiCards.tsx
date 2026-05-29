@@ -266,11 +266,15 @@ function KpiCard({
   const settledValueString = format(rawValue);
 
   // Sparkline color follows the card's tone: red for "bad" trend, green for
-  // "good" trend, primary for neutral.
+  // "good" trend, accent (dashboard primary) for neutral. All three resolve
+  // through theme-aware CSS vars so the sparkline brightens in dark mode
+  // without per-mode plumbing. Sparkline reads `color` via currentColor;
+  // the parent div sets `style.color = sparkColor`, so the var resolution
+  // cascades naturally.
   const sparkColor =
-    accent === 'pos' ? 'rgb(21, 128, 61)' // roas-green
-    : accent === 'neg' ? 'rgb(220, 38, 38)' // roas-red
-    : 'rgb(13, 54, 128)'; // primary
+    accent === 'pos' ? 'var(--status-green)'
+    : accent === 'neg' ? 'var(--status-red)'
+    : 'var(--accent)';
 
   return (
     <div
