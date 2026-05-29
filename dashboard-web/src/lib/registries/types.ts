@@ -72,6 +72,21 @@ export type CronTickSnapshotInsert = {
   events_failed_count?: number;
 };
 
+/**
+ * Payload of the `meta/job.requested` (and future `google/...`, `tiktok/...`)
+ * Inngest events emitted by `cron-tick-orchestrator`. The worker reads these
+ * fields to know which store + scope to refresh and to log the priority signals
+ * the orchestrator used to decide the fan-out.
+ *
+ * Fields:
+ *   - `staleness_seconds` — how long since the last successful refresh of this
+ *     (store, scope) pair. Used for observability / debugging; the worker
+ *     itself doesn't act on it.
+ *   - `budget_pct_estimate` — last-known max BUC pct snapshot from
+ *     `meta_buc_usage` at orchestrator emission time. The worker re-probes
+ *     in case the value drifted in the seconds between orchestrator and
+ *     consumer; this field is mainly for log/event auditing.
+ */
 export type JobRequestedEvent = {
   store_id: StoreId;
   scope: WorkerScope;

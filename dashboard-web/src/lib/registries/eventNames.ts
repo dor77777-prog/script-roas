@@ -13,4 +13,9 @@ export const META_BUDGET_EXCEEDED = 'meta/budget.exceeded' as const;
 // Phase D will add:
 //   SHOPIFY_JOB_REQUESTED = 'shopify/job.requested'
 
+/**
+ * Scopes a worker can be asked to refresh. Phase B uses `'status'` only;
+ * Phase C adds `'hot_metrics'`, Phase D adds `'kpi'` (cron-live KPI
+ * decommission) and `'products_live'`.
+ */
 export type WorkerScope = 'status' | 'hot_metrics' | 'kpi' | 'products_live';
