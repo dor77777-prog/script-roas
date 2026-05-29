@@ -50,11 +50,11 @@ export function computeTrustTone(level: CampaignsTableRowTrustLevel): string {
 // avoids creating a wrapper module for 6 lines. Same 5-entry shape as
 // the parent's copy + AdSetTable's copy (both are byte-identical).
 const TONE_BG: Record<string, string> = {
-  red:    'bg-status-redBg text-status-red',
-  orange: 'bg-status-orangeBg text-status-orange',
-  green:  'bg-status-greenBg text-status-green',
-  blue:   'bg-status-blueBg text-status-blue',
-  gray:   'bg-elevated2 text-ink-muted',
+  red:    'bg-status-redBg text-status-redFg',
+  orange: 'bg-status-orangeBg text-status-orangeFg',
+  green:  'bg-status-greenBg text-status-greenFg',
+  blue:   'bg-status-blueBg text-status-blueFg',
+  gray:   'bg-elevated2 text-ink',
 };
 
 type Props = {

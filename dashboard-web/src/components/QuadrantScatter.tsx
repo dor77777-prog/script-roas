@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   ScatterChart,
   Scatter,
@@ -66,12 +66,29 @@ export function QuadrantScatter({
   className?: string;
   height?: number;
 }) {
+  // Hotfix-9: "zoom to main cluster" toggle. User reported the chart
+  // looked left-skewed because rare high-ROAS outliers (ROAS 9+) stretched
+  // the X-axis, compressing the dense cluster of normal campaigns. When
+  // toggled on (default), axes clip to ~p90 of each dimension and outliers
+  // are listed below. When off, full range is shown.
+  const [zoomCluster, setZoomCluster] = useState(true);
+
   const { medRoas, medCac } = useMemo(() => {
     if (data.length === 0) return { medRoas: 0, medCac: 0 };
     const roasSorted = [...data].map(d => d.roas).sort((a, b) => a - b);
     const cacSorted = [...data].map(d => d.cac).sort((a, b) => a - b);
     const med = (arr: number[]) => arr[Math.floor(arr.length / 2)];
     return { medRoas: med(roasSorted), medCac: med(cacSorted) };
+  }, [data]);
+
+  // 90th percentile of each dimension — defines the "main cluster" boundary
+  // when zoom-to-cluster is active. Anything beyond p90 is an outlier.
+  const { p90Roas, p90Cac } = useMemo(() => {
+    if (data.length === 0) return { p90Roas: 0, p90Cac: 0 };
+    const roasSorted = [...data].map(d => d.roas).sort((a, b) => a - b);
+    const cacSorted = [...data].map(d => d.cac).sort((a, b) => a - b);
+    const p = (arr: number[], q: number) => arr[Math.min(arr.length - 1, Math.floor(arr.length * q))];
+    return { p90Roas: p(roasSorted, 0.9), p90Cac: p(cacSorted, 0.9) };
   }, [data]);
 
   const points = useMemo(
@@ -91,6 +108,24 @@ export function QuadrantScatter({
     return out;
   }, [points]);
 
+  // Identify outliers (points beyond p90 in either dimension when zoomed).
+  const outliers = useMemo(() => {
+    if (!zoomCluster) return [];
+    // Add small headroom so points right at p90 still render fully inside
+    // the chart area instead of getting clipped at the edge.
+    return data.filter(d => d.roas > p90Roas * 1.05 || d.cac > p90Cac * 1.05);
+  }, [data, zoomCluster, p90Roas, p90Cac]);
+
+  // Compute axis domains. When zoomed, clip to slightly above p90 so the
+  // cluster expands and the rare outlier doesn't dominate. When not zoomed,
+  // let Recharts auto-fit the full range.
+  const xDomain: [number | 'auto', number | 'auto'] = zoomCluster && outliers.length > 0
+    ? [0, Math.ceil(p90Roas * 1.15 * 10) / 10]
+    : ['auto', 'auto'];
+  const yDomain: [number | 'auto', number | 'auto'] = zoomCluster && outliers.length > 0
+    ? [0, Math.ceil(p90Cac * 1.15)]
+    : ['auto', 'auto'];
+
   if (data.length === 0) {
     return (
       <div className={cn('rounded-xl bg-elevated border border-line p-5', className)}>
@@ -106,18 +141,34 @@ export function QuadrantScatter({
 
   return (
     <div className={cn('rounded-xl bg-elevated border border-line p-3 sm:p-5', className)}>
-      {title && (
-        <h3 className="text-sm sm:text-base font-semibold text-ink mb-1">{title}</h3>
-      )}
-      {/* Hotfix-8: caption expanded to address user confusion about the
-          uneven distribution. The chart shows real performance — most
-          campaigns cluster in ROAS 1-3 (normal for paid ads), only a few
-          break into the high-ROAS "winner" zone. The dot color now flags
-          which quadrant each point falls in, making "who's winning"
-          immediately scannable instead of requiring the operator to
-          mentally compute the median lines. */}
+      <div className="flex items-start justify-between gap-2 mb-1 flex-wrap">
+        {title && (
+          <h3 className="text-sm sm:text-base font-semibold text-ink">{title}</h3>
+        )}
+        {/* Hotfix-9: zoom-to-cluster toggle. When ON (default), the chart
+            clips axes to ~p90 of each dimension and lists outliers below,
+            so the dense cluster of normal campaigns expands and is easier
+            to read. When OFF, the full range shows (including the 1-2
+            outliers that stretched the original chart). */}
+        {data.length > 4 && (
+          <label className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs text-ink-secondary cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={zoomCluster}
+              onChange={e => setZoomCluster(e.target.checked)}
+              className="accent-accent"
+            />
+            <span>התמקד בקבוצה הראשית</span>
+          </label>
+        )}
+      </div>
+      {/* Hotfix-8: caption explains the visualization. Hotfix-9: clarifies
+          the left-skew (most paid-ad campaigns cluster ROAS 1-3 — that's
+          the normal pattern) and points to the zoom toggle for outliers. */}
       <p className="text-[11px] sm:text-xs text-ink-secondary mb-3 leading-relaxed">
-        כל נקודה = קמפיין · גודל ∝ הוצאה · צבע = רביעון. החצי השמאלי = ROAS מתחת לחציון של הקבוצה (לרוב היכן שרוב הקמפיינים נופלים — זה רגיל); החצי הימני = ROAS מעל החציון (המנצחים).
+        כל נקודה = קמפיין · גודל ∝ הוצאה · צבע = רביעון · <span className="text-ink-muted">מעבר עם העכבר → שם הקמפיין</span>.
+        <br className="sm:hidden" />
+        רוב הקמפיינים בפרסום ממומן יושבים ב-ROAS 1-3 (זה רגיל); קמפיינים זוכים בROAS גבוה יותר הם המנצחים.
       </p>
       <ChartContainer height={height}>
         <ScatterChart margin={{ top: 12, right: 16, left: 8, bottom: 36 }}>
@@ -130,7 +181,8 @@ export function QuadrantScatter({
             axisLine={false}
             tickLine={false}
             tickMargin={4}
-            domain={['auto', 'auto']}
+            domain={xDomain}
+            allowDataOverflow
             label={{ value: 'ROAS (ערך ÷ הוצאה) — ימינה = רווחי יותר', position: 'insideBottom', offset: -22, fontSize: 11, fill: 'var(--chart-axis)' }}
           />
           <YAxis
@@ -142,7 +194,8 @@ export function QuadrantScatter({
             axisLine={false}
             tickLine={false}
             tickMargin={4}
-            domain={['auto', 'auto']}
+            domain={yDomain}
+            allowDataOverflow
             label={{ value: 'CAC (CAD/לקוח) — למעלה = יעיל יותר', angle: -90, position: 'insideLeft', offset: 12, fontSize: 11, fill: 'var(--chart-axis)' }}
             reversed
           />
@@ -240,6 +293,29 @@ export function QuadrantScatter({
           </span>
         </div>
       </div>
+      {outliers.length > 0 && (
+        <details className="mt-3 text-[11px] sm:text-xs text-ink-secondary">
+          <summary className="cursor-pointer hover:text-ink transition-colors">
+            <span className="font-medium">{outliers.length} קמפיינים אאוטליירים מחוץ לגרף</span>
+            {' '}— ROAS &gt; {(p90Roas * 1.05).toFixed(1)} או CAC &gt; CAD {Math.round(p90Cac * 1.05)}
+          </summary>
+          <ul className="mt-2 space-y-1 ps-3">
+            {outliers
+              .sort((a, b) => b.roas - a.roas)
+              .map(o => (
+                <li key={o.name} className="tabular-nums">
+                  <span className="text-ink">{o.name}</span>
+                  {' — '}
+                  <span className="text-status-green">ROAS {o.roas.toFixed(2)}</span>
+                  {' · '}
+                  <span className="text-status-orange">CAC CAD {Math.round(o.cac).toLocaleString('he-IL')}</span>
+                  {' · '}
+                  <span className="text-ink-muted">הוצאה CAD {Math.round(o.spend).toLocaleString('he-IL')}</span>
+                </li>
+              ))}
+          </ul>
+        </details>
+      )}
     </div>
   );
 }

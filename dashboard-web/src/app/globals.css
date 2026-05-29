@@ -33,35 +33,35 @@
   --accent-fg: oklch(99% 0 0);
   --accent-dark: oklch(45% 0.18 260);
 
-  /* ROAS status — LIGHT theme HOTFIX-6 2026-05-29.
-     User feedback: "הצבעים בטבלאות במוד הבהיר צריך גם אותם להיות צביעם
-     יותר נועזים" — the previous bg L=95-96% with chroma 0.04-0.05 were
-     wishy-washy pastels (barely visible tint on white). Bumping to
-     L=90% + chroma 0.10-0.11 gives clearly colored backgrounds while
-     still working as table-cell BG against dark text-fg variants
-     (contrast against fg L=30-40% stays ~6-7:1, well above AA).
-     Solid colors keep their saturation; hues unchanged from original
-     (25/55/145/240) since light theme has been visually stable for
-     users — only bg variants get the boost. */
+  /* ROAS status — LIGHT theme HOTFIX-9 2026-05-29.
+     User feedback iteratively pushed for clearer text-on-colored-bg in
+     table cells. The -fg variants are designed to pair with -bg cells;
+     this revision drops their chroma to near-zero so text reads as
+     near-black instead of "tinted-dark-color on tinted-light-color"
+     (which the user called "blue on blue, green on green" — same hue,
+     different L, low perceptual contrast).
+     - bg variants keep their L=90 + chroma 0.10-0.11 (clearly colored)
+     - fg variants now near-neutral dark (oklch 20-25% chroma 0.02-0.04)
+       for crisp black-on-color contrast (>=8:1 AAA) */
   --status-red:    oklch(60% 0.18 25);
   --status-red-bg: oklch(90% 0.10 25);
-  --status-red-fg: oklch(35% 0.18 25);
+  --status-red-fg: oklch(22% 0.04 25);
 
   --status-orange:    oklch(70% 0.16 55);
   --status-orange-bg: oklch(91% 0.11 55);
-  --status-orange-fg: oklch(40% 0.15 55);
+  --status-orange-fg: oklch(25% 0.04 55);
 
   --status-green:    oklch(60% 0.16 145);
   --status-green-bg: oklch(90% 0.10 145);
-  --status-green-fg: oklch(30% 0.16 145);
+  --status-green-fg: oklch(22% 0.04 145);
 
   --status-blue:    oklch(60% 0.16 240);
   --status-blue-bg: oklch(90% 0.10 240);
-  --status-blue-fg: oklch(30% 0.16 240);
+  --status-blue-fg: oklch(22% 0.04 240);
 
   --status-gray:    oklch(60% 0 0);
   --status-gray-bg: oklch(93% 0 0);
-  --status-gray-fg: oklch(35% 0 0);
+  --status-gray-fg: oklch(22% 0 0);
 }
 
 [data-theme="dark"] {
@@ -104,23 +104,23 @@
      (red↔orange = 65°, green↔blue = 110°). */
   --status-red:    oklch(72% 0.22 10);
   --status-red-bg: oklch(50% 0.22 10);
-  --status-red-fg: oklch(95% 0.10 10);
+  --status-red-fg: oklch(99% 0.01 10);
 
   --status-orange:    oklch(80% 0.18 75);
   --status-orange-bg: oklch(55% 0.20 75);
-  --status-orange-fg: oklch(95% 0.10 75);
+  --status-orange-fg: oklch(99% 0.01 75);
 
   --status-green:    oklch(72% 0.22 145);
   --status-green-bg: oklch(50% 0.22 145);
-  --status-green-fg: oklch(95% 0.10 145);
+  --status-green-fg: oklch(99% 0.01 145);
 
   --status-blue:    oklch(70% 0.22 255);
   --status-blue-bg: oklch(48% 0.22 255);
-  --status-blue-fg: oklch(95% 0.10 255);
+  --status-blue-fg: oklch(99% 0.01 255);
 
   --status-gray:    oklch(65% 0 0);
   --status-gray-bg: oklch(40% 0 0);
-  --status-gray-fg: oklch(92% 0 0);
+  --status-gray-fg: oklch(99% 0 0);
 }
 
 /* ===========================================================================
