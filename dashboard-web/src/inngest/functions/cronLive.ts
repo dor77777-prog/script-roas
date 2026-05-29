@@ -1,7 +1,7 @@
 /**
  * Phase 05.6 Plan 09 — `cron-live-{store}` Inngest functions (× 3 stores).
  *
- * Cadence: every 15 minutes in Asia/Jerusalem. Mirrors Apps Script's
+ * Cadence: every 10 minutes in Asia/Jerusalem. Mirrors Apps Script's
  * existing live trigger semantics (`DailyUpdate.gs` → live branch): refresh
  * Shopify revenue for a rolling 3-day window. Meta + Google Ads spend
  * insights are NOT refreshed on the live cadence — that's the daily cron's
@@ -14,8 +14,8 @@
  *      until Phase 05.7's cut-over.
  *
  *   2. **Free-tier execution budget (05.6-RESEARCH.md §Pitfall 4).** Meta
- *      Marketing Insights aggregates hourly upstream — polling every 15min
- *      for the same data wastes 4× the API calls and inflates Inngest's
+ *      Marketing Insights aggregates hourly upstream — polling every 10min
+ *      for the same data wastes 6× the API calls and inflates Inngest's
  *      run-and-step counter. Original budget assumed 2 step.run + 1 function
  *      = 3 execs/run. After Phase 13.4 (memoised SELECTs for non-idempotent
  *      reads — see lines 1082-1102) and Phase 13.9 (cron-live-heavy split),
@@ -140,7 +140,7 @@ type StoreId = (typeof STORES)[number];
 // Shopify-fetch .catch fallback so a 401 / timeout never overwrites
 // the row's store_name with the literal 'unknown' string. TikTok flag
 // short-circuits TikTok fetches for stores without creds, avoiding the
-// OAuth-token-helper error path on every 15-min tick.
+// OAuth-token-helper error path on every 10-min tick.
 
 /**
  * Project TZ. Matches `Config.gs:6` + `dashboard-web/src/lib/fetchers/shopify.ts:77`.
@@ -152,8 +152,8 @@ const TZ = 'Asia/Jerusalem';
  * Rolling window size. Mirrors Apps Script's `rollingBackfillDays = 3` —
  * a refund processed on day D can mutate the net of orders created on
  * D-2 or D-1 (within Shopify's typical 48h refund window + a 1-day safety
- * margin). Re-fetching the last 3 days every 15min catches all such
- * mutations within an hour.
+ * margin). Re-fetching the last 3 days every 10min catches all such
+ * mutations within ≤10 min of the upstream refund event.
  */
 const ROLLING_WINDOW_DAYS = 3;
 
@@ -1651,11 +1651,11 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
  * thin wrapper around `runLiveForStore` so unit tests can exercise the
  * shared logic without spinning up Inngest's dev server.
  *
- * Cron: `TZ=Asia/Jerusalem *\/15 * * * *` (every 15 minutes at the same
- * local clock face — :00, :15, :30, :45 Israel time). The `TZ=` prefix
- * matters less for `*\/15` (which collapses to the same set of UTC ticks)
- * but is preserved for consistency with cron-daily (plan 08) and to make
- * the timezone intent self-documenting.
+ * Cron: `TZ=Asia/Jerusalem *\/10 * * * *` (every 10 minutes at the same
+ * local clock face — :00, :10, :20, :30, :40, :50 Israel time). The `TZ=`
+ * prefix matters less for `*\/10` (which collapses to the same set of UTC
+ * ticks) but is preserved for consistency with cron-daily (plan 08) and to
+ * make the timezone intent self-documenting.
  *
  * NOTE on the Inngest SDK v4.4 signature: `inngest.createFunction(opts,
  * handler)` is the 2-arg form, with the trigger nested in

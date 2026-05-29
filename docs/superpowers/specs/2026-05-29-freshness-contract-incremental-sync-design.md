@@ -147,6 +147,30 @@ PHASE E — cron-weekly-reconcile (optional, lighter backfill)
 | Products with activity today | live ≤ 10 min | reconciled | finalized | "stale" |
 | /operator failed reconcile | — | flagged within 30 min of cron-daily failure | — | "reconcile failed: {store}/{platform}/{date}/{table}" + retry button |
 
+### Shopify scopes contract (clarification — added 2026-05-29 after operator review)
+
+The Shopify pipeline has **three distinct scopes**. They share one fetcher module (`lib/fetchers/shopify.ts`) but run at different cadences and write different `(source, is_finalized)` combinations.
+
+| Scope | Cadence | Window | Writes | Phase |
+|---|---|---|---|---|
+| **KPI / orders / refunds live** | `*/10` (cron-live) | Rolling **today + today-1 + today-2** (Asia/Jerusalem) | `data_daily` with `source='live_tick'`, `is_finalized=false`, `last_live_tick_at=now()` | A (already shipped — Task 14 only adds `last_live_tick_at`) |
+| **Hot products live** | `*/10` (new worker) | Hot set: products with orders today + revenue today + mapped to active campaigns + top-50 7-day revenue | `products_daily` with `source='live_tick'`, `is_finalized=false`, `last_live_tick_at=now()` | **D** (deferred — Phase A only adds the columns, not the worker) |
+| **Daily reconcile** | `00:05` (cron-daily) | Yesterday (full re-fetch) | `data_daily` + `products_daily` with `source='daily_reconcile'`, `is_finalized=true`, `reconciled_at=now()` | A (Task 13) |
+
+**Refund attribution (load-bearing invariant, unchanged from Phase 05.2.3.0):**
+
+Refunds attribute to their `processed_at` day, exactly once. **No cross-day filter** — a refund processed on day D for an order created on D-N lands on D's `data_daily` row, not D-N's. This means:
+
+- Yesterday's `data_daily` row is **immutable after cron-daily finalization** — no future refund will retroactively change it.
+- Today's row picks up any refund processed today across all prior orders (the 3-day rolling window is for **order-side** mutations: an order created at 23:55 yesterday but not yet visible in last night's reconcile, edge-case payment settlements, etc.).
+- `is_finalized=true` is therefore a **hard** state for `data_daily` — Phase E's rolling reconcile re-fetches T-2/T-3/T-7..T-14 only to catch upstream eventual consistency lag (Shopify analytics, Meta attribution windows), NOT refund mutations.
+
+**Why this matters for the dashboard UI (Phase D):**
+
+- "Today" row shows `(source='live_tick', is_finalized=false)` → live/provisional badge.
+- "Yesterday" row after 00:05+~5min shows `(source='daily_reconcile', is_finalized=true)` → reconciled/finalized badge.
+- A refund processed today on a 3-day-old order appears in TODAY's totals only — operator intuition matches cash-basis P&L. If the operator needs "what was that day really worth?" cohort analytics, that's a separate aggregate built on `orders_attribution`, not a mutation of `data_daily`.
+
 ## Schema changes
 
 ### NEW tables
@@ -1211,7 +1235,7 @@ This is a 1-day spike that gates Phase A code:
 
 ### Task 0.1: Log Meta `x-business-use-case-usage` headers from live traffic (4 hours)
 
-- Temporarily wrap an existing Meta fetcher (`fetchMetaAdSetInsights` from `cronLive` is a good candidate — runs every 15 min and hits `/insights`) so it logs **the full response headers** including `x-app-usage`, `x-business-use-case-usage`, `x-fb-ads-insights-throttle`, and `x-ad-account-usage`. Deploy this as a non-functional debug commit to production.
+- Temporarily wrap an existing Meta fetcher (`fetchMetaAdSetInsights` from `cronLive` is a good candidate — runs every 10 min and hits `/insights`) so it logs **the full response headers** including `x-app-usage`, `x-business-use-case-usage`, `x-fb-ads-insights-throttle`, and `x-ad-account-usage`. Deploy this as a non-functional debug commit to production.
 - After 4 hours of live traffic (covers both heavy and light periods), pull the Sentry / Vercel logs and extract 20+ actual header values across both `/insights` and `/campaigns` endpoints for all 3 stores.
 - Write a fixture file at `dashboard-web/src/lib/fetchers/__fixtures__/meta-buc-headers-real.json` containing the actual JSON shapes.
 - **Decision gate:** the spec's claim "ads_insights and ads_management are separate pools, x-business-use-case-usage reports per-BUC with `type` field" must hold in our real data. If our calls return ONLY `x-app-usage` and not `x-business-use-case-usage` for some reason (small accounts can have this), the spec must be adjusted to use `x-app-usage` as the primary signal.
