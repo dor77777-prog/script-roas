@@ -66,13 +66,13 @@ export function Filters({ filters, stores, onChange }: Props) {
   const showAdvanced = advancedOpen || activeIsSecondary || filters.preset === 'custom';
 
   return (
-    <div className="rounded-xl bg-surface border border-borderSubtle shadow-card overflow-hidden">
+    <div className="rounded-xl bg-elevated border border-line-subtle shadow-card overflow-hidden">
       <div className="p-4 sm:p-5 space-y-3.5 sm:space-y-4">
         {/* ===== Row 1: featured presets + store ===== */}
         <div className="flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-4">
           <div className="flex-1 min-w-0">
-            <label className="text-[11px] sm:text-xs font-medium text-text-secondary flex items-center gap-1.5 mb-1.5 sm:mb-2 tracking-wide">
-              <Zap size={12} className="text-amber-500 fill-amber-500" />
+            <label className="text-[11px] sm:text-xs font-medium text-ink-secondary flex items-center gap-1.5 mb-1.5 sm:mb-2 tracking-wide">
+              <Zap size={12} className="text-status-orange fill-status-orange" />
               טווח מהיר
             </label>
             <div className="grid grid-cols-2 gap-2">
@@ -82,10 +82,10 @@ export function Filters({ filters, stores, onChange }: Props) {
                   onClick={() => selectPreset(p)}
                   className={cn(
                     'rounded-lg px-3 py-2.5 text-sm font-semibold transition-all',
-                    'border ring-0 focus-visible:ring-2 focus-visible:ring-primary/30',
+                    'border ring-0 focus-visible:ring-2 focus-visible:ring-accent/30',
                     filters.preset === p
-                      ? 'bg-primary text-white border-primary shadow-sm'
-                      : 'bg-surface text-text-primary border-border hover:border-primary/40 hover:bg-surfaceMuted active:scale-[0.98]',
+                      ? 'bg-accent text-accent-fg border-accent shadow-sm'
+                      : 'bg-elevated text-ink border-line hover:border-accent/40 hover:bg-elevated2 active:scale-[0.98]',
                   )}
                 >
                   {PRESET_LABELS[p]}
@@ -95,7 +95,7 @@ export function Filters({ filters, stores, onChange }: Props) {
           </div>
 
           <div className="sm:w-[200px]">
-            <label className="text-[11px] sm:text-xs font-medium text-text-secondary flex items-center gap-1.5 mb-1.5 sm:mb-2 tracking-wide">
+            <label className="text-[11px] sm:text-xs font-medium text-ink-secondary flex items-center gap-1.5 mb-1.5 sm:mb-2 tracking-wide">
               <Store size={12} />
               חנות
             </label>
@@ -103,7 +103,7 @@ export function Filters({ filters, stores, onChange }: Props) {
               <select
                 value={filters.store}
                 onChange={e => onChange({ ...filters, store: e.target.value })}
-                className="w-full appearance-none rounded-lg border border-border bg-surface ps-3 pe-9 py-2.5 sm:py-2 text-sm font-medium text-text-primary hover:border-borderStrong focus:outline-none focus:border-primary focus:shadow-focus transition-colors cursor-pointer"
+                className="w-full appearance-none rounded-lg border border-line bg-elevated ps-3 pe-9 py-2.5 sm:py-2 text-sm font-medium text-ink hover:border-line-strong focus:outline-none focus:border-accent focus:shadow-focus transition-colors cursor-pointer"
               >
                 <option value="All">כל החנויות</option>
                 {stores.map(s => (
@@ -114,28 +114,28 @@ export function Filters({ filters, stores, onChange }: Props) {
               </select>
               <ChevronDown
                 size={14}
-                className="pointer-events-none absolute end-2.5 top-1/2 -translate-y-1/2 text-text-muted"
+                className="pointer-events-none absolute end-2.5 top-1/2 -translate-y-1/2 text-ink-muted"
               />
             </div>
           </div>
         </div>
 
         {/* ===== Selected range banner ===== */}
-        <div className="flex items-center justify-between rounded-lg bg-surfaceMuted px-3 py-2 text-xs sm:text-sm">
-          <div className="flex items-center gap-2 text-text-secondary">
-            <Calendar size={13} className="text-text-muted" />
+        <div className="flex items-center justify-between rounded-lg bg-elevated2 px-3 py-2 text-xs sm:text-sm">
+          <div className="flex items-center gap-2 text-ink-secondary">
+            <Calendar size={13} className="text-ink-muted" />
             <span className="tabular-nums">
               {formatDate(filters.range.from)} — {formatDate(filters.range.to)}
             </span>
           </div>
-          <span className="font-semibold text-text-primary tabular-nums">{days} ימים</span>
+          <span className="font-semibold text-ink tabular-nums">{days} ימים</span>
         </div>
 
         {/* ===== Advanced toggle ===== */}
         <button
           type="button"
           onClick={() => setAdvancedOpen(v => !v)}
-          className="text-[11px] sm:text-xs text-text-secondary hover:text-text-primary inline-flex items-center gap-1 transition-colors font-medium"
+          className="text-[11px] sm:text-xs text-ink-secondary hover:text-ink inline-flex items-center gap-1 transition-colors font-medium"
         >
           <ChevronDown
             size={13}
@@ -154,8 +154,8 @@ export function Filters({ filters, stores, onChange }: Props) {
                   className={cn(
                     'rounded-lg px-2.5 py-2 text-xs sm:text-sm font-medium transition-all border',
                     filters.preset === p
-                      ? 'bg-primary text-white border-primary shadow-sm'
-                      : 'bg-surface text-text-secondary border-border hover:border-primary/40 hover:text-text-primary active:scale-[0.98]',
+                      ? 'bg-accent text-accent-fg border-accent shadow-sm'
+                      : 'bg-elevated text-ink-secondary border-line hover:border-accent/40 hover:text-ink active:scale-[0.98]',
                   )}
                 >
                   {PRESET_LABELS[p]}
@@ -165,25 +165,6 @@ export function Filters({ filters, stores, onChange }: Props) {
 
             {filters.preset === 'custom' && (
               <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-2">
-                {/*
-                  HIGH-3 audit fix (2026-05-23): both inputs now go
-                  through the shared `applyFromCandidate` /
-                  `applyToCandidate` helpers from `lib/rangeClamp.ts`.
-                  Behavior:
-                    1. Empty input ('' on backspace through year) → no-op,
-                       state stays valid YYYY-MM-DD (was: cleared range
-                       to '', which 400'd 6 downstream SWR keys).
-                    2. Future date → clamped to todayInIsrael() (was:
-                       silently broke cohort comparisons that assume
-                       to <= today).
-                    3. from > to (or to < from) → swap to single-day
-                       range at the picked date (matches the operator's
-                       intuition "I picked this day"; same semantics as
-                       CampaignsTable.tsx's inline range input which has
-                       always done this).
-                  Both <input>s carry `max={today}` so the native picker
-                  also disables future days at the calendar widget layer.
-                */}
                 <input
                   type="date"
                   value={filters.range.from}
@@ -197,9 +178,9 @@ export function Filters({ filters, stores, onChange }: Props) {
                     if (next === null) return;
                     onChange({ ...filters, range: next });
                   }}
-                  className="rounded-lg border border-border bg-surface px-3 py-2 text-sm w-full focus:outline-none focus:border-primary focus:shadow-focus transition-colors"
+                  className="rounded-lg border border-line bg-elevated px-3 py-2 text-sm w-full text-ink focus:outline-none focus:border-accent focus:shadow-focus transition-colors"
                 />
-                <span className="text-text-secondary text-center hidden sm:inline">—</span>
+                <span className="text-ink-secondary text-center hidden sm:inline">—</span>
                 <input
                   type="date"
                   value={filters.range.to}
@@ -213,7 +194,7 @@ export function Filters({ filters, stores, onChange }: Props) {
                     if (next === null) return;
                     onChange({ ...filters, range: next });
                   }}
-                  className="rounded-lg border border-border bg-surface px-3 py-2 text-sm w-full focus:outline-none focus:border-primary focus:shadow-focus transition-colors"
+                  className="rounded-lg border border-line bg-elevated px-3 py-2 text-sm w-full text-ink focus:outline-none focus:border-accent focus:shadow-focus transition-colors"
                 />
               </div>
             )}

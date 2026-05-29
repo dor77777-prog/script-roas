@@ -18,12 +18,12 @@ import type { CampaignHealth, HealthGrade } from '@/lib/campaignHealthScore';
  */
 
 const GRADE_STYLES: Record<HealthGrade, { chip: string; ring: string; label: string }> = {
-  A: { chip: 'bg-roas-greenBg text-roas-green', ring: 'ring-roas-green/30', label: 'מצוין' },
-  B: { chip: 'bg-roas-blueBg text-roas-blue', ring: 'ring-roas-blue/30', label: 'בריא' },
-  C: { chip: 'bg-roas-orangeBg text-roas-orange', ring: 'ring-roas-orange/30', label: 'גבולי' },
-  D: { chip: 'bg-roas-redBg text-roas-red', ring: 'ring-roas-red/30', label: 'בעייתי' },
-  F: { chip: 'bg-roas-redBg text-roas-red', ring: 'ring-roas-red/40', label: 'כשל' },
-  unknown: { chip: 'bg-surfaceMuted text-text-muted', ring: 'ring-borderSubtle', label: 'מוקדם מדי' },
+  A: { chip: 'bg-status-greenBg text-status-green', ring: 'ring-status-green/30', label: 'מצוין' },
+  B: { chip: 'bg-status-blueBg text-status-blue', ring: 'ring-status-blue/30', label: 'בריא' },
+  C: { chip: 'bg-status-orangeBg text-status-orange', ring: 'ring-status-orange/30', label: 'גבולי' },
+  D: { chip: 'bg-status-redBg text-status-red', ring: 'ring-status-red/30', label: 'בעייתי' },
+  F: { chip: 'bg-status-redBg text-status-red', ring: 'ring-status-red/40', label: 'כשל' },
+  unknown: { chip: 'bg-elevated2 text-ink-muted', ring: 'ring-line-subtle', label: 'מוקדם מדי' },
 };
 
 const COMPONENT_LABELS = {
@@ -81,7 +81,7 @@ export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
       >
         {isUnknown ? '⏳' : health.grade}
         {!isUnknown && (
-          <span className="ms-1 text-[10px] font-medium text-text-secondary/90">
+          <span className="ms-1 text-[10px] font-medium text-ink-secondary/90">
             {health.score}
           </span>
         )}
@@ -100,14 +100,14 @@ export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
           className={cn(
             'absolute z-[15] top-full mt-2 start-0',
             'w-[320px] sm:w-[340px] max-w-[min(86vw,360px)]',
-            'rounded-xl bg-surface text-text-primary border border-borderSubtle',
+            'rounded-xl bg-elevated text-ink border border-line-subtle',
             'shadow-elevated p-3.5',
             'text-[12px] leading-relaxed text-start animate-fade-in',
           )}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between gap-2 mb-2.5 pb-2 border-b border-borderSubtle">
+          <div className="flex items-center justify-between gap-2 mb-2.5 pb-2 border-b border-line-subtle">
             <div className="flex items-center gap-2">
               <span
                 className={cn(
@@ -120,7 +120,7 @@ export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
               <div>
                 <div className="text-[13px] font-semibold leading-tight">{styles.label}</div>
                 {!isUnknown && (
-                  <div className="text-[11px] text-text-muted tabular-nums leading-tight">
+                  <div className="text-[11px] text-ink-muted tabular-nums leading-tight">
                     {health.score}/100
                   </div>
                 )}
@@ -130,7 +130,7 @@ export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
               type="button"
               onClick={() => setOpen(false)}
               aria-label="סגור"
-              className="text-text-muted hover:text-text-primary text-[16px] leading-none px-1"
+              className="text-ink-muted hover:text-ink text-[16px] leading-none px-1"
             >
               ×
             </button>
@@ -140,7 +140,7 @@ export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
           {health.insufficient ? (
             <div className="space-y-1.5">
               {health.reasons.map((r, idx) => (
-                <div key={idx} className="text-text-secondary text-[11.5px]">
+                <div key={idx} className="text-ink-secondary text-[11.5px]">
                   {r}
                 </div>
               ))}
@@ -156,30 +156,30 @@ export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
                     return (
                       <div key={key}>
                         <div className="flex items-center justify-between text-[11.5px] mb-0.5">
-                          <span className="font-medium text-text-primary">
+                          <span className="font-medium text-ink">
                             {meta.label}
-                            <span className="text-text-muted font-normal ms-1">({meta.weight})</span>
+                            <span className="text-ink-muted font-normal ms-1">({meta.weight})</span>
                           </span>
-                          <span className="tabular-nums text-text-secondary font-semibold">
+                          <span className="tabular-nums text-ink-secondary font-semibold">
                             {value}/100
                           </span>
                         </div>
-                        <div className="h-1.5 rounded-full bg-surfaceMuted overflow-hidden">
+                        <div className="h-1.5 rounded-full bg-elevated2 overflow-hidden">
                           <div
                             className={cn(
                               'h-full rounded-full transition-all',
                               value >= 75
-                                ? 'bg-roas-green'
+                                ? 'bg-status-green'
                                 : value >= 50
-                                  ? 'bg-roas-blue'
+                                  ? 'bg-status-blue'
                                   : value >= 30
-                                    ? 'bg-roas-orange'
-                                    : 'bg-roas-red',
+                                    ? 'bg-status-orange'
+                                    : 'bg-status-red',
                             )}
                             style={{ width: `${Math.max(2, value)}%` }}
                           />
                         </div>
-                        <div className="text-[11px] text-text-muted leading-snug mt-0.5">
+                        <div className="text-[11px] text-ink-muted leading-snug mt-0.5">
                           {health.reasons[idx]}
                         </div>
                       </div>
@@ -189,7 +189,7 @@ export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
               </div>
 
               {/* Footer with formula note */}
-              <div className="mt-2.5 pt-2 border-t border-borderSubtle text-[10.5px] text-text-muted leading-snug">
+              <div className="mt-2.5 pt-2 border-t border-line-subtle text-[10.5px] text-ink-muted leading-snug">
                 ציון = (רווחיות×0.40) + (נפח×0.15) + (מומנטום×0.25) + (attribution×0.20)
               </div>
             </>

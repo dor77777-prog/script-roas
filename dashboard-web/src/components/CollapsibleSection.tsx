@@ -57,21 +57,21 @@ export function CollapsibleSection({
   }
 
   return (
-    <section className="rounded-xl bg-surface border border-border shadow-card overflow-hidden">
+    <section className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
       <button
         type="button"
         onClick={toggle}
         aria-expanded={open}
-        className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-3 sm:py-3.5 hover:bg-surfaceMuted/50 active:bg-surfaceMuted transition-colors text-start"
+        className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-3 sm:py-3.5 hover:bg-elevated2/50 active:bg-elevated2 transition-colors text-start"
       >
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-          {icon && <span className="text-text-secondary shrink-0">{icon}</span>}
+          {icon && <span className="text-ink-secondary shrink-0">{icon}</span>}
           <div className="min-w-0">
-            <h2 className="text-sm sm:text-base font-semibold text-text-primary truncate">
+            <h2 className="text-sm sm:text-base font-semibold text-ink truncate">
               {title}
             </h2>
             {subtitle && (
-              <div className="text-[10px] sm:text-xs text-text-muted mt-0.5 truncate">
+              <div className="text-[10px] sm:text-xs text-ink-muted mt-0.5 truncate">
                 {subtitle}
               </div>
             )}
@@ -82,7 +82,7 @@ export function CollapsibleSection({
           <ChevronDown
             size={18}
             className={cn(
-              'text-text-muted transition-transform duration-200',
+              'text-ink-muted transition-transform duration-200',
               open && 'rotate-180',
             )}
           />
@@ -90,7 +90,7 @@ export function CollapsibleSection({
       </button>
       {/* Render children only after hydration so the persisted state applies
           on first paint without a layout jump. */}
-      {hydrated && open && <div className="border-t border-border">{children}</div>}
+      {hydrated && open && <div className="border-t border-line">{children}</div>}
     </section>
   );
 }

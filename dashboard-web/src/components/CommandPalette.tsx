@@ -501,7 +501,7 @@ export function CommandPalette({
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh] sm:pt-[12vh] px-3 bg-text-primary/30 backdrop-blur-md animate-fade-in"
+          className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh] sm:pt-[12vh] px-3 bg-ink/30 backdrop-blur-md animate-fade-in"
           onClick={close}
         >
           <div
@@ -509,23 +509,23 @@ export function CommandPalette({
             role="dialog"
             aria-modal="true"
             aria-label="Command Palette"
-            className="w-full max-w-xl bg-surface rounded-2xl shadow-elevated border border-borderSubtle overflow-hidden animate-fade-in-up"
+            className="w-full max-w-xl bg-elevated rounded-2xl shadow-elevated border border-line-subtle overflow-hidden animate-fade-in-up"
             onClick={e => e.stopPropagation()}
           >
             {/* Search input */}
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-borderSubtle">
-              <Search size={16} className="text-text-muted shrink-0" />
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-line-subtle">
+              <Search size={16} className="text-ink-muted shrink-0" />
               <input
                 ref={inputRef}
                 value={query}
                 onChange={e => setQuery(e.target.value)}
                 placeholder="חפש קמפיין, מוצר, חנות, פקודה…"
-                className="flex-1 bg-transparent border-0 outline-none text-sm text-text-primary placeholder:text-text-muted"
+                className="flex-1 bg-transparent border-0 outline-none text-sm text-ink placeholder:text-ink-muted"
                 autoFocus
               />
               <button
                 onClick={close}
-                className="p-1 rounded hover:bg-surfaceMuted text-text-muted hover:text-text-primary"
+                className="p-1 rounded hover:bg-elevated2 text-ink-muted hover:text-ink"
                 aria-label="סגור"
               >
                 <X size={14} />
@@ -547,7 +547,7 @@ export function CommandPalette({
               className="max-h-[55vh] sm:max-h-[60vh] overflow-y-auto py-1"
             >
               {indexedFlat.length === 0 && (
-                <div className="p-8 text-center text-sm text-text-muted">
+                <div className="p-8 text-center text-sm text-ink-muted">
                   אין תוצאות עבור &quot;{query}&quot;
                 </div>
               )}
@@ -601,18 +601,18 @@ export function CommandPalette({
             </div>
 
             {/* Footer hints */}
-            <div className="px-4 py-2 border-t border-borderSubtle flex items-center justify-between text-[10px] text-text-muted">
+            <div className="px-4 py-2 border-t border-line-subtle flex items-center justify-between text-[10px] text-ink-muted">
               <div className="flex items-center gap-3">
                 <span className="inline-flex items-center gap-1">
-                  <kbd className="px-1 py-0.5 bg-surfaceMuted rounded text-[9px] font-mono">↑↓</kbd>
+                  <kbd className="px-1 py-0.5 bg-elevated2 rounded text-[9px] font-mono">↑↓</kbd>
                   ניווט
                 </span>
                 <span className="inline-flex items-center gap-1">
-                  <kbd className="px-1 py-0.5 bg-surfaceMuted rounded text-[9px] font-mono">↵</kbd>
+                  <kbd className="px-1 py-0.5 bg-elevated2 rounded text-[9px] font-mono">↵</kbd>
                   בחר
                 </span>
                 <span className="inline-flex items-center gap-1">
-                  <kbd className="px-1 py-0.5 bg-surfaceMuted rounded text-[9px] font-mono">esc</kbd>
+                  <kbd className="px-1 py-0.5 bg-elevated2 rounded text-[9px] font-mono">esc</kbd>
                   סגור
                 </span>
               </div>
@@ -644,7 +644,7 @@ function GroupedSection({
   if (items.length === 0) return null;
   return (
     <div className="px-1 pb-1">
-      <div className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wider text-text-muted font-semibold">
+      <div className="px-3 pt-2 pb-1 text-[10px] uppercase tracking-wider text-ink-muted font-semibold">
         {title}
       </div>
       <div>
@@ -660,14 +660,14 @@ function GroupedSection({
               className={cn(
                 'w-full flex items-center gap-3 px-3 py-2 text-start transition-colors rounded-lg mx-1',
                 isActive
-                  ? 'bg-primary/8 text-text-primary'
-                  : 'text-text-secondary hover:bg-surfaceMuted',
+                  ? 'bg-accent/8 text-ink'
+                  : 'text-ink-secondary hover:bg-elevated2',
               )}
             >
               <span
                 className={cn(
                   'inline-flex items-center justify-center w-6 h-6 rounded-md shrink-0',
-                  isActive ? 'bg-primary/15 text-primary' : 'bg-surfaceMuted text-text-muted',
+                  isActive ? 'bg-accent/15 text-accent' : 'bg-elevated2 text-ink-muted',
                 )}
               >
                 {item.icon}
@@ -675,12 +675,12 @@ function GroupedSection({
               <div className="min-w-0 flex-1">
                 <div className={cn(
                   'text-sm truncate',
-                  isActive ? 'font-semibold text-text-primary' : 'font-medium',
+                  isActive ? 'font-semibold text-ink' : 'font-medium',
                 )}>
                   {item.label}
                 </div>
                 {item.subtitle && (
-                  <div className="text-[10px] text-text-muted truncate mt-0.5">
+                  <div className="text-[10px] text-ink-muted truncate mt-0.5">
                     {item.subtitle}
                   </div>
                 )}

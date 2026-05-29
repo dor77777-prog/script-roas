@@ -256,7 +256,7 @@ export function RefundIndicator(props: {
             // refund amount) doesn't dismiss.
             onMouseEnter={touch ? undefined : cancelHide}
             onMouseLeave={touch ? undefined : scheduleHide}
-            className="z-[9999] px-3 py-2 rounded-md shadow-xl bg-slate-900 text-white text-xs leading-relaxed text-start"
+            className="z-[9999] px-3 py-2 rounded-md shadow-xl bg-ink text-canvas text-xs leading-relaxed text-start"
             dir="rtl"
           >
             <span className="block font-semibold text-amber-300 mb-1">

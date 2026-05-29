@@ -147,18 +147,18 @@ export function SyncIndicator() {
       {expanded && status === 'error' && (
         <div
           dir="rtl"
-          className="absolute top-full end-0 mt-1 w-80 rounded-lg bg-surface text-text-primary shadow-elevated border border-borderSubtle p-3 z-50"
+          className="absolute top-full end-0 mt-1 w-80 rounded-lg bg-elevated text-ink shadow-elevated border border-line-subtle p-3 z-50"
         >
           <div className="flex items-start gap-2">
-            <span className="inline-flex w-7 h-7 rounded-md bg-roas-redBg text-roas-red items-center justify-center shrink-0">
+            <span className="inline-flex w-7 h-7 rounded-md bg-status-redBg text-status-red items-center justify-center shrink-0">
               <AlertTriangle size={14} />
             </span>
             <div className="min-w-0 flex-1">
               <div className="text-xs font-semibold mb-1">סנכרון לענן נכשל</div>
-              <div className="text-[11px] text-text-secondary leading-relaxed break-words font-mono">
+              <div className="text-[11px] text-ink-secondary leading-relaxed break-words font-mono">
                 {lastError ?? 'שגיאה לא ידועה'}
               </div>
-              <div className="mt-2 text-[11px] text-text-muted leading-relaxed">
+              <div className="mt-2 text-[11px] text-ink-muted leading-relaxed">
                 בדיקות מהירות:
                 <ul className="list-disc list-inside mt-1 space-y-0.5">
                   <li>
@@ -174,7 +174,7 @@ export function SyncIndicator() {
                   setExpanded(false);
                   void hydrateFromCloud();
                 }}
-                className="mt-2 text-[11px] font-semibold text-primary hover:text-primary-dark"
+                className="mt-2 text-[11px] font-semibold text-accent hover:text-accent"
               >
                 נסה שוב
               </button>

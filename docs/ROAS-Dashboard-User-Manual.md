@@ -7,7 +7,7 @@
 │                                                  │
 │      מדריך הפעלה שוטף למפעיל הדשבורד            │
 │                                                  │
-│      גרסה:        2.1                            │
+│      גרסה:        2.1.1                          │
 │      תאריך:       2026-05-29                     │
 │      קהל יעד:     מפעיל יחיד · החלטות יומיות   │
 │                                                  │
@@ -45,6 +45,12 @@
 - **TodayLive narrative line** — משפט אחד שמסכם את היום (סך הכנסות, ROAS, pace מול יעד, חנות מובילה) בין כותרת ה-LIVE לכרטיסיות הסטטיסטיקה.
 
 **שום נתון לא נמחק, שום סף לא השתנה.** אם מספר כלשהו נראה שונה ממה שהיה אתמול — דווח, זו תקלה.
+
+### Hotfix 2.1.1 (2026-05-29) — Dark-mode visual repair
+
+Plan 6 פיספס 25 רכיבים שיתופיים (`Filters`/Quick Range, `SectionIntro` כותרות, 4 tooltips, `MonthlyTables` month-headers, `FreshnessChip`, `RefundIndicator`, ועוד). אלה היו עם classes לא-theme-aware (`bg-surface` / `bg-text-primary` / `text-text-primary` / `bg-slate-800` / `bg-gray-50`) ולכן ב-dark mode הופיעו כ-"לבן על כהה" או הטקסט היה בלתי נראה. בנוסף: tooltips שהשתמשו ב-`bg-ink text-white` הציגו לבן-על-לבן ב-dark mode (כי `bg-ink` ב-dark theme הוא בהיר). וגרדיאנט ה-ROAS ב-TodayLive עבר מ-`status-{color}Bg/60` (שב-dark נמוג לרקע) ל-`status-{color}/22` (אלפא נמוכה של הצבע הרווי — נראה בשני ה-themes).
+
+תוקנו: ~172 legacy tokens + 4 בעיות `bg-ink+text-white` + 9 raw Tailwind palettes + הגרדיאנט. 25 קבצים, 0 שינויי לוגיקה.
 
 מסמכים נלווים מתעדכנים בנפרד: ארכיטקטורה ב-`docs/ARCHITECTURE.md`, עבודה ביצועית של ה-overhaul ב-`docs/superpowers/plans/2026-05-{28,29}-dashboard-ux-overhaul-*.md` (7 plans, Plans 1–6 IMPLEMENTED; Plan 7 polish + a11y + RTL audit pending).
 
@@ -2409,7 +2415,7 @@ Seen 5 times. Alert #2.
 
 ## סוף המסמך
 
-**גרסה:** 2.1 · **תאריך עדכון:** 2026-05-29
+**גרסה:** 2.1.1 · **תאריך עדכון:** 2026-05-29
 
 > מסמך זה מתעדכן עם כל שינוי שהמפעיל רואה במסך. אם משהו לא תואם למה שאתה רואה — דווח למפתח לעדכון.
 

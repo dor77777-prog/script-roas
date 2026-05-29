@@ -94,8 +94,8 @@ export function MetricHelp({ content, className, subtle = true }: Props) {
         className={cn(
           'inline-flex items-center justify-center w-4 h-4 rounded-full transition-colors',
           subtle
-            ? 'text-text-subtle hover:text-text-secondary opacity-60 hover:opacity-100'
-            : 'text-text-secondary hover:text-text-primary bg-surfaceMuted hover:bg-border',
+            ? 'text-ink-subtle hover:text-ink-secondary opacity-60 hover:opacity-100'
+            : 'text-ink-secondary hover:text-ink bg-elevated2 hover:bg-line',
         )}
       >
         <Info size={11} />
@@ -109,7 +109,7 @@ export function MetricHelp({ content, className, subtle = true }: Props) {
           className={cn(
             'absolute z-30 top-full mt-2 end-0',
             'w-[260px] sm:w-[300px] max-w-[min(90vw,320px)]',
-            'rounded-xl bg-text-primary text-white p-3 shadow-elevated',
+            'rounded-xl bg-ink text-white p-3 shadow-elevated',
             'text-xs leading-relaxed animate-fade-in',
             'pointer-events-auto',
           )}
@@ -143,7 +143,7 @@ export function MetricHelp({ content, className, subtle = true }: Props) {
           {/* Small triangle pointer to anchor the tooltip to the trigger */}
           <div
             aria-hidden
-            className="absolute -top-1.5 end-1.5 w-2.5 h-2.5 bg-text-primary rotate-45"
+            className="absolute -top-1.5 end-1.5 w-2.5 h-2.5 bg-ink rotate-45"
           />
         </div>
       )}

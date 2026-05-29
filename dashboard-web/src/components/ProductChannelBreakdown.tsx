@@ -86,7 +86,7 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
         {!chipHidden && (
           <div
             title="current state, not date-versioned"
-            className="rounded-md bg-gray-50 border border-gray-200 px-2.5 py-1.5 text-[11px] text-ink-muted flex items-center gap-1.5"
+            className="rounded-md bg-elevated2 border border-line-subtle px-2.5 py-1.5 text-[11px] text-ink-muted flex items-center gap-1.5"
           >
             <Info size={12} className="shrink-0 text-ink-subtle" />
             <span className="leading-relaxed">
@@ -99,7 +99,7 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
                 window.sessionStorage.setItem(PRODUCT_MAP_CHIP_KEY, '1');
                 setChipHidden(true);
               }}
-              className="ms-auto shrink-0 rounded p-0.5 text-ink-subtle hover:bg-gray-100 hover:text-ink-secondary transition-colors"
+              className="ms-auto shrink-0 rounded p-0.5 text-ink-subtle hover:bg-elevated2 hover:text-ink-secondary transition-colors"
             >
               <X size={12} />
             </button>

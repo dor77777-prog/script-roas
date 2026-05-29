@@ -134,7 +134,7 @@ export function CampaignsColumnsMenu({
           'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs sm:text-sm transition-colors',
           hiddenCount > 0
             ? 'border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100'
-            : 'border-border bg-surface text-text-secondary hover:bg-surfaceMuted',
+            : 'border-line bg-elevated text-ink-secondary hover:bg-elevated2',
         )}
         title={
           hiddenCount > 0
@@ -157,22 +157,22 @@ export function CampaignsColumnsMenu({
         <div
           role="dialog"
           aria-label="עריכת עמודות"
-          className="absolute end-0 top-full mt-1 z-30 w-[300px] rounded-xl border border-border bg-surface shadow-elevated p-3"
+          className="absolute end-0 top-full mt-1 z-30 w-[300px] rounded-xl border border-line bg-elevated shadow-elevated p-3"
         >
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-text-primary">
+            <h3 className="text-sm font-semibold text-ink">
               עמודות בטבלה
             </h3>
             <button
               type="button"
               onClick={() => setOpen(false)}
               aria-label="סגור"
-              className="text-text-muted hover:text-text-primary rounded p-1"
+              className="text-ink-muted hover:text-ink rounded p-1"
             >
               <X size={14} />
             </button>
           </div>
-          <p className="text-[10px] text-text-muted leading-relaxed mb-2">
+          <p className="text-[10px] text-ink-muted leading-relaxed mb-2">
             סמן/בטל סימון כדי להציג/להסתיר עמודות. ההגדרות שמורות בכל הדפדפנים שלך.
           </p>
           <ul className="space-y-1 max-h-[420px] overflow-auto">
@@ -197,7 +197,7 @@ export function CampaignsColumnsMenu({
                     <label
                       className={cn(
                         'flex items-start gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors flex-1 min-w-0',
-                        'hover:bg-surfaceMuted',
+                        'hover:bg-elevated2',
                       )}
                       title={col.description ?? ''}
                     >
@@ -208,9 +208,9 @@ export function CampaignsColumnsMenu({
                         className="mt-0.5 shrink-0"
                       />
                       <div className="min-w-0 flex-1">
-                        <div className="text-xs text-text-primary">{col.label}</div>
+                        <div className="text-xs text-ink">{col.label}</div>
                         {col.description && (
-                          <div className="text-[10px] text-text-muted leading-snug">
+                          <div className="text-[10px] text-ink-muted leading-snug">
                             {col.description}
                           </div>
                         )}
@@ -231,8 +231,8 @@ export function CampaignsColumnsMenu({
                           className={cn(
                             'inline-flex items-center justify-center w-5 h-4 rounded-sm transition-colors',
                             canUp
-                              ? 'text-text-secondary hover:text-text-primary hover:bg-surfaceMuted'
-                              : 'text-text-subtle/40 cursor-not-allowed',
+                              ? 'text-ink-secondary hover:text-ink hover:bg-elevated2'
+                              : 'text-ink-subtle/40 cursor-not-allowed',
                           )}
                         >
                           <ChevronUp size={12} />
@@ -246,8 +246,8 @@ export function CampaignsColumnsMenu({
                           className={cn(
                             'inline-flex items-center justify-center w-5 h-4 rounded-sm transition-colors',
                             canDown
-                              ? 'text-text-secondary hover:text-text-primary hover:bg-surfaceMuted'
-                              : 'text-text-subtle/40 cursor-not-allowed',
+                              ? 'text-ink-secondary hover:text-ink hover:bg-elevated2'
+                              : 'text-ink-subtle/40 cursor-not-allowed',
                           )}
                         >
                           <ChevronDown size={12} />
@@ -260,12 +260,12 @@ export function CampaignsColumnsMenu({
             })()}
           </ul>
           {(hiddenCount > 0 || hasCustomOrder) && (
-            <div className="mt-2 pt-2 border-t border-borderSubtle flex flex-col gap-1.5">
+            <div className="mt-2 pt-2 border-t border-line-subtle flex flex-col gap-1.5">
               {hiddenCount > 0 && (
                 <button
                   type="button"
                   onClick={restoreAll}
-                  className="inline-flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 font-medium"
+                  className="inline-flex items-center gap-1.5 text-xs text-accent hover:text-accent/80 font-medium"
                 >
                   <RotateCcw size={12} />
                   <span>השב את כל העמודות</span>
@@ -275,7 +275,7 @@ export function CampaignsColumnsMenu({
                 <button
                   type="button"
                   onClick={resetOrder}
-                  className="inline-flex items-center gap-1.5 text-xs text-primary hover:text-primary/80 font-medium"
+                  className="inline-flex items-center gap-1.5 text-xs text-accent hover:text-accent/80 font-medium"
                 >
                   <RotateCcw size={12} />
                   <span>אפס סדר עמודות</span>

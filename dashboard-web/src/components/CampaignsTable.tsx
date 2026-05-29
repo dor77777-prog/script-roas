@@ -1452,8 +1452,8 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                       ? ((d.cpm - d.prevCpm) / d.prevCpm) * 100
                       : null;
                     return (
-                      <div dir="rtl" className="rounded-lg bg-ink text-white px-3 py-2 text-xs shadow-elevated tabular-nums">
-                        <div className="text-white/70 mb-1 text-[10px]">{formatDate(d.date)}</div>
+                      <div dir="rtl" className="rounded-lg bg-ink text-canvas px-3 py-2 text-xs shadow-elevated tabular-nums">
+                        <div className="text-canvas/70 mb-1 text-[10px]">{formatDate(d.date)}</div>
                         <div>CPM: <span className="font-semibold text-amber-200">CAD {formatCurrency(d.cpm, 2)}</span></div>
                         {cpmShowRoas && (
                           <div>ROAS: <span className="font-semibold text-emerald-300">{formatNumber(d.roas, 2)}</span></div>
@@ -2239,7 +2239,7 @@ function ColumnHeaderTh({
           className={cn(
             'absolute z-[15] top-full mt-2 end-0',
             'w-[260px] sm:w-[280px] max-w-[min(85vw,300px)]',
-            'rounded-xl bg-ink text-white px-3 py-2.5',
+            'rounded-xl bg-ink text-canvas px-3 py-2.5',
             'shadow-elevated text-[11px] sm:text-[12px] leading-relaxed',
             'pointer-events-none animate-fade-in font-normal text-start whitespace-normal',
           )}

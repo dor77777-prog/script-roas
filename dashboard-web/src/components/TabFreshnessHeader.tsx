@@ -67,7 +67,7 @@ export function TabFreshnessHeader(props: {
         type="button"
         onClick={handleRefreshClick}
         disabled={isRefreshing}
-        className="inline-flex items-center gap-1.5 rounded-md border border-border bg-surface hover:bg-surfaceMuted disabled:opacity-50 disabled:cursor-not-allowed px-2.5 py-1.5 text-xs sm:text-sm text-text-secondary transition-colors"
+        className="inline-flex items-center gap-1.5 rounded-md border border-line bg-elevated hover:bg-elevated2 disabled:opacity-50 disabled:cursor-not-allowed px-2.5 py-1.5 text-xs sm:text-sm text-ink-secondary transition-colors"
         title="מרענן את כל הנתונים בדשבורד מ-Shopify, Meta, Google, TikTok. לוקח 30-60 שניות (יוצג אישור לפני ההפעלה)."
         aria-label="רענן את כל הדשבורד"
       >

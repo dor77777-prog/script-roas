@@ -187,14 +187,14 @@ export function WhatsWorking() {
   if (insights.length === 0) {
     // Loading or genuinely no data — show a placeholder rather than nothing.
     return (
-      <section className="rounded-xl bg-surface border border-borderSubtle shadow-card p-4 sm:p-5">
+      <section className="rounded-xl bg-elevated border border-line-subtle shadow-sm p-4 sm:p-5">
         <div className="flex items-center gap-2 mb-1">
           <Sparkles size={18} className="text-amber-500" />
-          <h2 className="text-sm sm:text-base font-semibold text-text-primary">
+          <h2 className="text-sm sm:text-base font-semibold text-ink">
             מה עובד השבוע
           </h2>
         </div>
-        <p className="text-xs text-text-muted">
+        <p className="text-xs text-ink-muted">
           ממתין לנתונים מהשבוע האחרון…
         </p>
       </section>
@@ -202,19 +202,19 @@ export function WhatsWorking() {
   }
 
   return (
-    <section className="rounded-xl bg-surface border border-borderSubtle shadow-card overflow-hidden">
-      <header className="px-4 sm:px-5 py-3 border-b border-borderSubtle bg-gradient-to-l from-amber-50/60 to-surface">
+    <section className="rounded-xl bg-elevated border border-line-subtle shadow-sm overflow-hidden">
+      <header className="px-4 sm:px-5 py-3 border-b border-line-subtle bg-gradient-to-l from-amber-50/60 to-elevated">
         <div className="flex items-center gap-2">
           <Sparkles size={18} className="text-amber-500" />
-          <h2 className="text-sm sm:text-base font-semibold text-text-primary">
+          <h2 className="text-sm sm:text-base font-semibold text-ink">
             מה עובד השבוע
           </h2>
-          <span className="text-[10px] sm:text-xs text-text-muted ml-auto">
+          <span className="text-[10px] sm:text-xs text-ink-muted ml-auto">
             השוואת 7 ימים אחרונים מול ה-7 שלפניהם
           </span>
         </div>
       </header>
-      <ul className="divide-y divide-borderSubtle">
+      <ul className="divide-y divide-line-subtle">
         {insights.map((ins, i) => (
           <InsightRow key={i} insight={ins} />
         ))}
@@ -235,24 +235,24 @@ const KIND_META: Record<
   'top-campaign': {
     icon: <Trophy size={16} />,
     label: 'קמפיין מוביל',
-    tone: 'text-primary bg-primary/8',
+    tone: 'text-accent bg-accent/8',
   },
   rising: {
     icon: <TrendingUp size={16} />,
     label: 'בעלייה',
-    tone: 'text-roas-green bg-roas-greenBg',
+    tone: 'text-status-green bg-status-greenBg',
   },
   falling: {
     icon: <TrendingDown size={16} />,
     label: 'בירידה',
-    tone: 'text-roas-red bg-roas-redBg',
+    tone: 'text-status-red bg-status-redBg',
   },
 };
 
 function InsightRow({ insight }: { insight: Insight }) {
   const meta = KIND_META[insight.kind];
   const content = (
-    <div className="flex items-center gap-3 px-4 sm:px-5 py-3 hover:bg-surfaceMuted/40 transition-colors">
+    <div className="flex items-center gap-3 px-4 sm:px-5 py-3 hover:bg-elevated2/40 transition-colors">
       <span
         className={cn(
           'inline-flex items-center justify-center w-8 h-8 rounded-lg shrink-0',
@@ -262,13 +262,13 @@ function InsightRow({ insight }: { insight: Insight }) {
         {meta.icon}
       </span>
       <div className="min-w-0 flex-1">
-        <div className="text-[10px] sm:text-xs font-medium text-text-secondary tracking-wide uppercase">
+        <div className="text-[10px] sm:text-xs font-medium text-ink-secondary tracking-wide uppercase">
           {meta.label}
         </div>
-        <div className="text-sm sm:text-base font-semibold text-text-primary truncate mt-0.5">
+        <div className="text-sm sm:text-base font-semibold text-ink truncate mt-0.5">
           {insight.primary}
         </div>
-        <div className="text-[11px] sm:text-xs text-text-muted truncate tabular-nums mt-0.5">
+        <div className="text-[11px] sm:text-xs text-ink-muted truncate tabular-nums mt-0.5">
           {insight.secondary}
         </div>
       </div>

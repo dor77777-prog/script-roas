@@ -30,8 +30,8 @@ export function SectionIntro({
 }: Props) {
   if (inline) {
     return (
-      <div className="flex items-start gap-2 text-xs sm:text-sm text-text-secondary">
-        <Info size={14} className="text-text-muted shrink-0 mt-0.5" />
+      <div className="flex items-start gap-2 text-xs sm:text-sm text-ink-secondary">
+        <Info size={14} className="text-ink-muted shrink-0 mt-0.5" />
         <span>{description}</span>
       </div>
     );
@@ -44,17 +44,17 @@ export function SectionIntro({
             className={cn(
               'shrink-0 mt-0.5 inline-flex items-center justify-center',
               'w-7 h-7 sm:w-8 sm:h-8 rounded-lg',
-              'bg-primary/8 text-primary',
+              'bg-accent/8 text-accent',
             )}
           >
             {icon}
           </span>
         )}
         <div className="min-w-0">
-          <h2 className="text-sm sm:text-base font-semibold text-text-primary tracking-tight">
+          <h2 className="text-sm sm:text-base font-semibold text-ink tracking-tight">
             {title}
           </h2>
-          <p className="text-[11px] sm:text-xs text-text-secondary mt-0.5 leading-relaxed">
+          <p className="text-[11px] sm:text-xs text-ink-secondary mt-0.5 leading-relaxed">
             {description}
           </p>
           {formula && (
@@ -62,7 +62,7 @@ export function SectionIntro({
               dir="ltr"
               className={cn(
                 'inline-block mt-1.5 px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] tabular-nums',
-                'bg-surfaceMuted border border-borderSubtle text-text-secondary',
+                'bg-elevated2 border border-line-subtle text-ink-secondary',
                 'font-mono',
               )}
             >

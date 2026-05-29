@@ -30,8 +30,8 @@ export function TabNav<K extends string>({ tabs, active, onChange }: Props<K>) {
     <nav
       className={cn(
         'sticky top-[52px] sm:top-[64px] z-20',
-        'bg-surface/85 backdrop-blur-xl supports-[backdrop-filter]:bg-surface/75',
-        'border-b border-borderSubtle',
+        'bg-elevated/85 backdrop-blur-xl supports-[backdrop-filter]:bg-elevated/75',
+        'border-b border-line-subtle',
       )}
       aria-label="ניווט בדשבורד"
     >
@@ -54,16 +54,16 @@ export function TabNav<K extends string>({ tabs, active, onChange }: Props<K>) {
                   'px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-medium',
                   'whitespace-nowrap transition-colors shrink-0',
                   isActive
-                    ? 'text-primary'
-                    : 'text-text-secondary hover:text-text-primary',
+                    ? 'text-accent'
+                    : 'text-ink-secondary hover:text-ink',
                 )}
               >
                 <span
                   className={cn(
                     'transition-transform duration-DEFAULT',
                     isActive
-                      ? 'text-primary scale-110'
-                      : 'text-text-muted group-hover:text-text-primary',
+                      ? 'text-accent scale-110'
+                      : 'text-ink-muted group-hover:text-ink',
                   )}
                 >
                   {tab.icon}
@@ -76,7 +76,7 @@ export function TabNav<K extends string>({ tabs, active, onChange }: Props<K>) {
                   aria-hidden
                   className={cn(
                     'absolute bottom-0 inset-x-3 h-[2px] rounded-t transition-all duration-DEFAULT',
-                    isActive ? 'bg-primary opacity-100' : 'opacity-0',
+                    isActive ? 'bg-accent opacity-100' : 'opacity-0',
                   )}
                 />
               </button>

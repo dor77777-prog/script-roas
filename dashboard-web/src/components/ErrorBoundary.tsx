@@ -30,10 +30,10 @@ export class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div className="min-h-screen flex items-center justify-center bg-background p-6">
-          <div className="max-w-md rounded-2xl border border-borderSubtle bg-surface p-6 shadow-lg space-y-4">
-            <h1 className="text-xl font-semibold text-text-primary">משהו השתבש</h1>
-            <p className="text-sm text-text-secondary">
+        <div className="min-h-screen flex items-center justify-center bg-canvas p-6">
+          <div className="max-w-md rounded-2xl border border-line-subtle bg-elevated p-6 shadow-lg space-y-4">
+            <h1 className="text-xl font-semibold text-ink">משהו השתבש</h1>
+            <p className="text-sm text-ink-secondary">
               הדשבורד נתקל בשגיאה בלתי צפויה. ניתן לרענן את הדף או לנסות שוב.
             </p>
             {/* In development we render the raw message to aid local debugging.
@@ -42,7 +42,7 @@ export class ErrorBoundary extends Component<Props, State> {
               * source-file names, and internal call sites that leak implementation
               * details into screenshots / support tickets. React's text-escape
               * protects against XSS but does NOT prevent information disclosure. */}
-            <p className="text-[11px] text-text-muted font-mono break-all">
+            <p className="text-[11px] text-ink-muted font-mono break-all">
               {process.env.NODE_ENV === 'development'
                 ? (this.state.error?.message ?? 'Unknown error')
                 : 'שגיאה פנימית. נסה לרענן את הדף.'}
@@ -50,13 +50,13 @@ export class ErrorBoundary extends Component<Props, State> {
             <div className="flex gap-2">
               <button
                 onClick={this.handleReset}
-                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary/90"
+                className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90"
               >
                 נסה שוב
               </button>
               <button
                 onClick={() => window.location.reload()}
-                className="rounded-lg border border-borderSubtle px-4 py-2 text-sm font-medium text-text-primary hover:bg-surfaceMuted"
+                className="rounded-lg border border-line-subtle px-4 py-2 text-sm font-medium text-ink hover:bg-elevated2"
               >
                 רענן דף
               </button>

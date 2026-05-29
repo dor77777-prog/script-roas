@@ -785,12 +785,12 @@ function HoverTooltip({
           className={cn(
             'absolute z-50 top-full mt-2 end-0',
             'w-[260px] sm:w-[300px] max-w-[min(90vw,320px)]',
-            'rounded-xl bg-ink text-white p-3 shadow-elevated',
+            'rounded-xl bg-ink text-canvas p-3 shadow-elevated',
             'text-xs leading-relaxed pointer-events-auto',
           )}
         >
-          {title && <div className="font-semibold text-white mb-1.5">{title}</div>}
-          <div className="text-white/85">{body}</div>
+          {title && <div className="font-semibold text-canvas mb-1.5">{title}</div>}
+          <div className="text-canvas/85">{body}</div>
           <div
             aria-hidden
             className="absolute -top-1.5 end-3 w-2.5 h-2.5 bg-ink rotate-45"
@@ -856,13 +856,13 @@ function ColHelp({
             'absolute z-50 top-full mt-2',
             align === 'start' ? 'start-0' : 'end-0',
             'w-[260px] sm:w-[300px] max-w-[min(90vw,320px)]',
-            'rounded-xl bg-ink text-white p-3 shadow-elevated',
+            'rounded-xl bg-ink text-canvas p-3 shadow-elevated',
             'text-xs leading-relaxed pointer-events-auto',
             'font-normal text-start',
           )}
         >
-          <div className="font-semibold text-white mb-1.5">{label}</div>
-          <div className="text-white/85">{body}</div>
+          <div className="font-semibold text-canvas mb-1.5">{label}</div>
+          <div className="text-canvas/85">{body}</div>
           <div
             aria-hidden
             className={cn(

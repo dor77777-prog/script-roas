@@ -275,11 +275,11 @@ export function Dashboard() {
             * consistent across /api/data, /api/campaigns, /api/products, /api/ads,
             * /api/orders-attribution, etc.). Either surfaces in the same banner. */}
           {(error || data?.error) && (
-            <div className="rounded-xl bg-roas-redBg border border-roas-red/30 p-4 flex items-start gap-3">
-              <AlertCircle className="text-roas-red shrink-0" size={20} />
+            <div className="rounded-xl bg-status-redBg border border-status-red/30 p-4 flex items-start gap-3">
+              <AlertCircle className="text-status-red shrink-0" size={20} />
               <div>
-                <div className="font-semibold text-roas-red">שגיאה בטעינת הנתונים</div>
-                <div className="text-sm text-text-secondary mt-1">
+                <div className="font-semibold text-status-red">שגיאה בטעינת הנתונים</div>
+                <div className="text-sm text-ink-secondary mt-1">
                   {error ? (error as Error).message : data?.error}
                 </div>
               </div>
@@ -734,14 +734,14 @@ function DetailTab({
 // ============================================================================
 function Footer({ lastUpdated }: { lastUpdated: string }) {
   return (
-    <footer className="text-center text-[11px] sm:text-xs text-text-muted py-6 tabular-nums">
+    <footer className="text-center text-[11px] sm:text-xs text-ink-muted py-6 tabular-nums">
       <span className="inline-block">
         עדכון אחרון:{' '}
-        <span className="text-text-secondary font-medium">
+        <span className="text-ink-secondary font-medium">
           {new Date(lastUpdated).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' })}
         </span>
       </span>
-      <span className="mx-2 text-text-subtle">·</span>
+      <span className="mx-2 text-ink-subtle">·</span>
       <span>מתעדכן אוטומטית כל דקה</span>
     </footer>
   );

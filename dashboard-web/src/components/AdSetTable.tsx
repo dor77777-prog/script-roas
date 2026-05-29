@@ -54,11 +54,11 @@ type AdSetItem = {
 // (smaller diff per PATTERNS.md §CampaignsTableRow recommendation —
 // hoisting to @/lib/format would expand the change surface).
 const TONE_BG: Record<string, string> = {
-  red:    'bg-roas-redBg text-roas-red',
-  orange: 'bg-roas-orangeBg text-roas-orange',
-  green:  'bg-roas-greenBg text-roas-green',
-  blue:   'bg-roas-blueBg text-roas-blue',
-  gray:   'bg-surfaceMuted text-text-muted',
+  red:    'bg-status-redBg text-status-red',
+  orange: 'bg-status-orangeBg text-status-orange',
+  green:  'bg-status-greenBg text-status-green',
+  blue:   'bg-status-blueBg text-status-blue',
+  gray:   'bg-elevated2 text-ink-muted',
 };
 
 type Props = {
@@ -84,8 +84,8 @@ export function AdSetTable({
 }: Props) {
   return (
     <section>
-      <h3 className="text-sm font-semibold text-text-primary inline-flex items-center gap-1.5 mb-2">
-        <Layers size={14} className="text-text-secondary" />
+      <h3 className="text-sm font-semibold text-ink inline-flex items-center gap-1.5 mb-2">
+        <Layers size={14} className="text-ink-secondary" />
         אד-סטים ({adSets.length})
       </h3>
       {/* Horizontal scroll mirrors the AdsDrawer pattern — the
@@ -96,10 +96,10 @@ export function AdSetTable({
       {/* Same pattern as AdsDrawer: a real vertical scroll context
           on the wrapper so the sticky thead pins correctly when
           scrolling rows. */}
-      <div className="rounded-xl border border-borderSubtle overflow-auto max-h-[50vh]">
+      <div className="rounded-xl border border-line-subtle overflow-auto max-h-[50vh]">
         <table className="w-full text-xs sm:text-sm min-w-[720px]">
-          <thead className="bg-surfaceMuted/60 sticky top-0 z-[5]">
-            <tr className="text-text-secondary">
+          <thead className="bg-elevated2/60 sticky top-0 z-[5]">
+            <tr className="text-ink-secondary">
               <th className="px-2 py-2 w-[36px]" aria-label="סימון" />
               <AdSetSortHeader label="שם"          col="name"        sortKey={sortKey} dir={sortDir} onClick={onSort} align="start"  />
               <AdSetSortHeader label="הוצאה"       col="spend"       sortKey={sortKey} dir={sortDir} onClick={onSort} align="end"    />
@@ -109,7 +109,7 @@ export function AdSetTable({
               {/* Per-ad-set deterministic attribution. Header doesn't
                   sort (the data is shape-inferred per row). Tooltip
                   on each cell explains the chip. */}
-              <th className="font-medium px-3 py-2 text-center text-text-secondary" title="ROAS אמיתי לפי click-id (utm_term)">
+              <th className="font-medium px-3 py-2 text-center text-ink-secondary" title="ROAS אמיתי לפי click-id (utm_term)">
                 ROAS Shopify
               </th>
               <AdSetSortHeader label="המרות"       col="conversions" sortKey={sortKey} dir={sortDir} onClick={onSort} align="end"    />
@@ -138,9 +138,9 @@ export function AdSetTable({
                 <tr
                   key={a.id || a.name || i}
                   className={cn(
-                    'border-t border-borderSubtle transition-opacity',
+                    'border-t border-line-subtle transition-opacity',
                     isOptimized && 'opacity-50 hover:opacity-100',
-                    canDrillToAds && 'cursor-pointer hover:bg-surfaceMuted/30',
+                    canDrillToAds && 'cursor-pointer hover:bg-elevated2/30',
                   )}
                   onClick={() => {
                     if (!canDrillToAds) return;
@@ -167,8 +167,8 @@ export function AdSetTable({
                       className={cn(
                         'inline-flex items-center justify-center w-7 h-7 rounded-full transition-colors',
                         isOptimized
-                          ? 'text-roas-green hover:bg-roas-greenBg/60'
-                          : 'text-text-muted hover:text-roas-green hover:bg-roas-greenBg/40',
+                          ? 'text-status-green hover:bg-status-greenBg/60'
+                          : 'text-ink-muted hover:text-status-green hover:bg-status-greenBg/40',
                       )}
                       title={isOptimized ? 'לחץ להסרת הסימון' : 'סמן כאופטימיזציה בוצעה'}
                       aria-label={isOptimized ? 'בטל סימון אופטימיזציה' : 'סמן כאופטימיזציה בוצעה'}
@@ -177,7 +177,7 @@ export function AdSetTable({
                       {isOptimized ? <CheckCircle2 size={16} /> : <Circle size={16} />}
                     </button>
                   </td>
-                  <td className="px-3 py-2 text-text-primary truncate max-w-[200px]" title={a.name}>{a.name}</td>
+                  <td className="px-3 py-2 text-ink truncate max-w-[200px]" title={a.name}>{a.name}</td>
                   <td className="px-3 py-2 text-end tabular-nums">{formatCurrency(a.spend)}</td>
                   <td className="px-3 py-2 text-end tabular-nums">
                     {a.adSetBudgetCad && a.adSetBudgetCad > 0 ? (
@@ -185,10 +185,10 @@ export function AdSetTable({
                         {formatCurrency(a.adSetBudgetCad)}
                       </span>
                     ) : (
-                      <span className="text-text-muted">—</span>
+                      <span className="text-ink-muted">—</span>
                     )}
                   </td>
-                  <td className={cn('px-3 py-2 text-end tabular-nums', a.value > a.spend && 'text-roas-green font-medium')}>
+                  <td className={cn('px-3 py-2 text-end tabular-nums', a.value > a.spend && 'text-status-green font-medium')}>
                     {formatCurrency(a.value)}
                   </td>
                   <td className={cn('px-3 py-2 text-center font-semibold tabular-nums rounded', TONE_BG[info.tone])}>
@@ -202,16 +202,16 @@ export function AdSetTable({
                       // stability per cell per render. (IN5-01)
                       const adsetAttr = attributionByAdSet.get(a.id || a.name || '(אחר)') ?? null;
                       if (!adsetAttr) {
-                        return <span className="text-text-muted text-xs">—</span>;
+                        return <span className="text-ink-muted text-xs">—</span>;
                       }
                       const detRoas = a.spend > 0
                         ? adsetAttr.deterministicRevenue / a.spend
                         : 0;
                       const tone =
-                        adsetAttr.trust.level === 'high'    ? 'bg-roas-greenBg/60 text-roas-green'
+                        adsetAttr.trust.level === 'high'    ? 'bg-status-greenBg/60 text-status-green'
                       : adsetAttr.trust.level === 'medium'  ? 'bg-amber-50 text-amber-700'
-                      : adsetAttr.trust.level === 'unknown' ? 'bg-surfaceMuted text-text-secondary'
-                      :                                       'bg-roas-redBg/60 text-roas-red';
+                      : adsetAttr.trust.level === 'unknown' ? 'bg-elevated2 text-ink-secondary'
+                      :                                       'bg-status-redBg/60 text-status-red';
                       const tooltip =
                         `ROAS אמיתי · ${adsetAttr.trust.label} (${adsetAttr.trust.score.toFixed(0)}/100)\n\n` +
                         `Meta דיווח: CAD ${a.value.toFixed(0)}\n` +
@@ -221,7 +221,7 @@ export function AdSetTable({
                         `\n\n💡 ${adsetAttr.recommendation}`;
                       return (
                         <div className="inline-flex flex-col items-center gap-0.5" title={tooltip}>
-                          <span className="font-semibold tabular-nums text-text-primary">
+                          <span className="font-semibold tabular-nums text-ink">
                             {detRoas > 0 ? formatNumber(detRoas) : '—'}
                           </span>
                           <span className={cn('inline-block text-[8px] font-bold px-1 py-0 rounded uppercase tracking-wider', tone)}>
@@ -276,17 +276,17 @@ function AdSetSortHeader({
           'inline-flex items-center gap-1 transition-colors group select-none cursor-pointer w-full',
           justify,
           isActive
-            ? 'text-primary font-semibold'
-            : 'text-text-secondary hover:text-text-primary',
+            ? 'text-accent font-semibold'
+            : 'text-ink-secondary hover:text-ink',
         )}
         aria-sort={isActive ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
       >
         <span>{label}</span>
         {isActive ? (
           dir === 'asc' ? (
-            <ArrowUp size={12} className="text-primary" />
+            <ArrowUp size={12} className="text-accent" />
           ) : (
-            <ArrowDown size={12} className="text-primary" />
+            <ArrowDown size={12} className="text-accent" />
           )
         ) : (
           <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-60 transition-opacity" />

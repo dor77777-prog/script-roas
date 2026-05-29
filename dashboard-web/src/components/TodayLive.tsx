@@ -81,10 +81,18 @@ type LiveTone = {
   iconColor: string;
 };
 
-/** Styling tokens keyed by the tone name from roasLabel. */
+/** Styling tokens keyed by the tone name from roasLabel.
+ *
+ * Gradient pattern uses the SATURATED status color (not the -Bg variant)
+ * at low alpha so the tint is visible in BOTH themes. The -Bg tokens are
+ * very pale in light mode (oklch ~96% L) and very dark in dark mode
+ * (oklch ~25% L) — in dark mode they essentially blend into bg-elevated,
+ * killing the ROAS-driven gradient. Using full-saturation status colors
+ * at /18-/25 alpha gives a perceptually similar tint in light mode and a
+ * visibly colored tint in dark mode. */
 const LIVE_TONE_STYLES: Record<string, LiveTone> = {
   gray: {
-    cardBg: 'bg-gradient-to-br from-status-grayBg/60 via-elevated to-elevated',
+    cardBg: 'bg-gradient-to-br from-status-gray/10 via-elevated to-elevated',
     cardBorder: 'border-line',
     blob: 'bg-status-gray/10',
     pulse: 'bg-status-gray',
@@ -92,7 +100,7 @@ const LIVE_TONE_STYLES: Record<string, LiveTone> = {
     iconColor: 'text-status-gray',
   },
   red: {
-    cardBg: 'bg-gradient-to-br from-status-redBg/60 via-elevated to-elevated',
+    cardBg: 'bg-gradient-to-br from-status-red/25 via-elevated to-elevated',
     cardBorder: 'border-status-red/35',
     blob: 'bg-status-red/12',
     pulse: 'bg-status-red',
@@ -100,7 +108,7 @@ const LIVE_TONE_STYLES: Record<string, LiveTone> = {
     iconColor: 'text-status-red',
   },
   orange: {
-    cardBg: 'bg-gradient-to-br from-status-orangeBg/60 via-elevated to-elevated',
+    cardBg: 'bg-gradient-to-br from-status-orange/25 via-elevated to-elevated',
     cardBorder: 'border-status-orange/35',
     blob: 'bg-status-orange/12',
     pulse: 'bg-status-orange',
@@ -108,7 +116,7 @@ const LIVE_TONE_STYLES: Record<string, LiveTone> = {
     iconColor: 'text-status-orange',
   },
   green: {
-    cardBg: 'bg-gradient-to-br from-status-greenBg/50 via-elevated to-elevated',
+    cardBg: 'bg-gradient-to-br from-status-green/22 via-elevated to-elevated',
     cardBorder: 'border-status-green/30',
     blob: 'bg-status-green/10',
     pulse: 'bg-status-green',
@@ -116,7 +124,7 @@ const LIVE_TONE_STYLES: Record<string, LiveTone> = {
     iconColor: 'text-status-green',
   },
   blue: {
-    cardBg: 'bg-gradient-to-br from-status-blueBg/55 via-elevated to-elevated',
+    cardBg: 'bg-gradient-to-br from-status-blue/22 via-elevated to-elevated',
     cardBorder: 'border-status-blue/30',
     blob: 'bg-status-blue/12',
     pulse: 'bg-status-blue',

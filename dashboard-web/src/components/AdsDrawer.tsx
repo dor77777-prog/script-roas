@@ -49,11 +49,11 @@ type Props = {
 };
 
 const TONE_BG: Record<string, string> = {
-  red:    'bg-roas-redBg text-roas-red',
-  orange: 'bg-roas-orangeBg text-roas-orange',
-  green:  'bg-roas-greenBg text-roas-green',
-  blue:   'bg-roas-blueBg text-roas-blue',
-  gray:   'bg-surfaceMuted text-text-muted',
+  red:    'bg-status-redBg text-status-red',
+  orange: 'bg-status-orangeBg text-status-orange',
+  green:  'bg-status-greenBg text-status-green',
+  blue:   'bg-status-blueBg text-status-blue',
+  gray:   'bg-elevated2 text-ink-muted',
 };
 
 type AdSortKey = 'name' | 'spend' | 'value' | 'roas' | 'conversions' | 'impressions' | 'clicks';
@@ -323,25 +323,25 @@ export function AdsDrawer({
       aria-modal="true"
       aria-labelledby="ads-drawer-title"
     >
-      <div className="absolute inset-0 bg-text-primary/35 backdrop-blur-sm" onClick={onClose} aria-hidden />
+      <div className="absolute inset-0 bg-ink/35 backdrop-blur-sm" onClick={onClose} aria-hidden />
       <aside
         dir="rtl"
         className={cn(
-          'relative h-full bg-surface shadow-elevated border-s border-borderSubtle flex flex-col animate-slide-in',
+          'relative h-full bg-elevated shadow-elevated border-s border-line-subtle flex flex-col animate-slide-in',
           !isFullscreen && 'ms-0 me-auto w-full sm:max-w-[640px]',
           isFullscreen && 'w-full max-w-full',
         )}
       >
-        <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-borderSubtle">
+        <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-line-subtle">
           <div className="min-w-0 flex items-center gap-2.5">
-            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-primary/10 text-primary shrink-0">
+            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent/10 text-accent shrink-0">
               <Layers size={16} />
             </span>
             <div className="min-w-0">
-              <div className="text-[10px] uppercase tracking-[0.12em] font-semibold text-text-muted">
+              <div className="text-[10px] uppercase tracking-[0.12em] font-semibold text-ink-muted">
                 מודעות ב-ad-set
               </div>
-              <h2 id="ads-drawer-title" className="text-sm sm:text-base font-bold text-text-primary tracking-tight truncate" title={adSetName}>
+              <h2 id="ads-drawer-title" className="text-sm sm:text-base font-bold text-ink tracking-tight truncate" title={adSetName}>
                 {adSetName}
               </h2>
             </div>
@@ -351,13 +351,13 @@ export function AdsDrawer({
               onClick={() => setIsFullscreen(v => !v)}
               aria-label={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
               title={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
-              className="p-1.5 rounded hover:bg-surfaceMuted text-text-muted hover:text-text-primary transition-colors"
+              className="p-1.5 rounded hover:bg-elevated2 text-ink-muted hover:text-ink transition-colors"
             >
               {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
             </button>
             <button
               onClick={onClose}
-              className="p-1.5 rounded hover:bg-surfaceMuted text-text-muted hover:text-text-primary"
+              className="p-1.5 rounded hover:bg-elevated2 text-ink-muted hover:text-ink"
               aria-label="סגור"
             >
               <X size={18} />
@@ -367,14 +367,14 @@ export function AdsDrawer({
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
           {isLoading && (
-            <div className="text-center text-sm text-text-muted py-10">
+            <div className="text-center text-sm text-ink-muted py-10">
               טוען נתוני מודעות…
             </div>
           )}
 
           {!isLoading && (!summary || summary.ads.length === 0) && (
-            <div className="text-center py-10 text-text-muted">
-              <Layers size={28} className="mx-auto mb-2 text-text-muted/60" />
+            <div className="text-center py-10 text-ink-muted">
+              <Layers size={28} className="mx-auto mb-2 text-ink-muted/60" />
               <div className="text-sm">אין נתוני מודעות לטווח הזה.</div>
               <div className="text-[11px] mt-1 leading-relaxed">
                 ודא ש-<code className="font-mono">runDailyUpdate</code>{' '}
@@ -404,16 +404,16 @@ export function AdsDrawer({
                   to stick within. Drawer body already scrolls, but the inner
                   overflow-x-auto we used to have here scoped sticky to a
                   wrapper that didn't scroll vertically. */}
-              <div className="rounded-xl border border-borderSubtle overflow-auto max-h-[60vh]">
+              <div className="rounded-xl border border-line-subtle overflow-auto max-h-[60vh]">
                 <table className="w-full text-xs sm:text-sm min-w-[720px]">
-                  <thead className="bg-surfaceMuted/60 sticky top-0 z-[5]">
-                    <tr className="text-text-secondary">
+                  <thead className="bg-elevated2/60 sticky top-0 z-[5]">
+                    <tr className="text-ink-secondary">
                       <th className="px-2 py-2 w-[36px]" aria-label="סימון" />
                       <AdSortHeader label="מודעה"     col="name"        sortKey={sortKey} dir={sortDir} onClick={handleSort} align="start"  />
                       <AdSortHeader label="הוצאה"     col="spend"       sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
                       <AdSortHeader label="ערך"       col="value"       sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
                       <AdSortHeader label="ROAS"      col="roas"        sortKey={sortKey} dir={sortDir} onClick={handleSort} align="center" />
-                      <th className="font-medium px-3 py-2 text-center text-text-secondary" title="ROAS אמיתי לפי click-id (utm_content={{ad.id}})">
+                      <th className="font-medium px-3 py-2 text-center text-ink-secondary" title="ROAS אמיתי לפי click-id (utm_content={{ad.id}})">
                         ROAS Shopify
                       </th>
                       <AdSortHeader label="המרות"     col="conversions" sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
@@ -441,7 +441,7 @@ export function AdsDrawer({
                         <tr
                           key={a.adId || a.adName || i}
                           className={cn(
-                            'border-t border-borderSubtle transition-opacity',
+                            'border-t border-line-subtle transition-opacity',
                             isOptimized && 'opacity-50 hover:opacity-100',
                           )}
                         >
@@ -459,8 +459,8 @@ export function AdsDrawer({
                               className={cn(
                                 'inline-flex items-center justify-center w-7 h-7 rounded-full transition-colors',
                                 isOptimized
-                                  ? 'text-roas-green hover:bg-roas-greenBg/60'
-                                  : 'text-text-muted hover:text-roas-green hover:bg-roas-greenBg/40',
+                                  ? 'text-status-green hover:bg-status-greenBg/60'
+                                  : 'text-ink-muted hover:text-status-green hover:bg-status-greenBg/40',
                               )}
                               title={isOptimized ? 'לחץ להסרת הסימון' : 'סמן כאופטימיזציה בוצעה'}
                               aria-pressed={isOptimized}
@@ -468,11 +468,11 @@ export function AdsDrawer({
                               {isOptimized ? <CheckCircle2 size={16} /> : <Circle size={16} />}
                             </button>
                           </td>
-                          <td className="px-3 py-2 text-text-primary truncate max-w-[220px]" title={a.adName}>
+                          <td className="px-3 py-2 text-ink truncate max-w-[220px]" title={a.adName}>
                             {a.adName}
                           </td>
                           <td className="px-3 py-2 text-end tabular-nums">{formatCurrency(a.spend)}</td>
-                          <td className={cn('px-3 py-2 text-end tabular-nums', a.value > a.spend && 'text-roas-green font-medium')}>
+                          <td className={cn('px-3 py-2 text-end tabular-nums', a.value > a.spend && 'text-status-green font-medium')}>
                             {formatCurrency(a.value)}
                           </td>
                           <td className={cn('px-3 py-2 text-center font-semibold tabular-nums rounded', TONE_BG[info.tone])}>
@@ -485,16 +485,16 @@ export function AdsDrawer({
                               // re-running per cell per render. (IN5-01)
                               const adAttr = attributionByAd.get(a.adId || a.adName) ?? null;
                               if (!adAttr) {
-                                return <span className="text-text-muted text-xs">—</span>;
+                                return <span className="text-ink-muted text-xs">—</span>;
                               }
                               const detRoas = a.spend > 0
                                 ? adAttr.deterministicRevenue / a.spend
                                 : 0;
                               const tone =
-                                adAttr.trust.level === 'high'    ? 'bg-roas-greenBg/60 text-roas-green'
+                                adAttr.trust.level === 'high'    ? 'bg-status-greenBg/60 text-status-green'
                               : adAttr.trust.level === 'medium'  ? 'bg-amber-50 text-amber-700'
-                              : adAttr.trust.level === 'unknown' ? 'bg-surfaceMuted text-text-secondary'
-                              :                                    'bg-roas-redBg/60 text-roas-red';
+                              : adAttr.trust.level === 'unknown' ? 'bg-elevated2 text-ink-secondary'
+                              :                                    'bg-status-redBg/60 text-status-red';
                               const tooltip =
                                 `ROAS אמיתי · ${adAttr.trust.label} (${adAttr.trust.score.toFixed(0)}/100)\n\n` +
                                 `Meta דיווח: CAD ${a.value.toFixed(0)}\n` +
@@ -504,7 +504,7 @@ export function AdsDrawer({
                                 `\n\n💡 ${adAttr.recommendation}`;
                               return (
                                 <div className="inline-flex flex-col items-center gap-0.5" title={tooltip}>
-                                  <span className="font-semibold tabular-nums text-text-primary">
+                                  <span className="font-semibold tabular-nums text-ink">
                                     {detRoas > 0 ? formatNumber(detRoas) : '—'}
                                   </span>
                                   <span className={cn('inline-block text-[8px] font-bold px-1 py-0 rounded uppercase tracking-wider', tone)}>
@@ -515,10 +515,10 @@ export function AdsDrawer({
                             })()}
                           </td>
                           <td className="px-3 py-2 text-end tabular-nums">{formatNumber(a.conversions, 0)}</td>
-                          <td className="px-3 py-2 text-end tabular-nums text-text-secondary">
+                          <td className="px-3 py-2 text-end tabular-nums text-ink-secondary">
                             {formatNumber(a.impressions, 0)}
                           </td>
-                          <td className="px-3 py-2 text-end tabular-nums text-text-secondary">
+                          <td className="px-3 py-2 text-end tabular-nums text-ink-secondary">
                             {formatNumber(a.clicks, 0)}
                           </td>
                           <td className="px-2 py-2 text-center w-[40px]">
@@ -527,7 +527,7 @@ export function AdsDrawer({
                                 href={link}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center justify-center w-7 h-7 rounded text-text-muted hover:text-primary hover:bg-primary/8 transition-colors"
+                                className="inline-flex items-center justify-center w-7 h-7 rounded text-ink-muted hover:text-accent hover:bg-accent/8 transition-colors"
                                 title="פתח את המודעה במנהל מודעות"
                                 aria-label="פתח את המודעה במנהל מודעות"
                               >
@@ -544,7 +544,7 @@ export function AdsDrawer({
             </>
           )}
 
-          <div className="text-[10px] text-text-muted text-center pt-2">
+          <div className="text-[10px] text-ink-muted text-center pt-2">
             לחץ Esc או על הרקע לסגירה
           </div>
         </div>
@@ -571,12 +571,12 @@ function Stat({
   accent?: 'green' | 'red';
 }) {
   return (
-    <div className="rounded-lg border border-borderSubtle bg-surfaceMuted/30 px-2.5 py-2">
-      <div className="text-[10px] text-text-muted uppercase tracking-wide leading-tight">{label}</div>
+    <div className="rounded-lg border border-line-subtle bg-elevated2/30 px-2.5 py-2">
+      <div className="text-[10px] text-ink-muted uppercase tracking-wide leading-tight">{label}</div>
       <div className={cn(
         'text-xs sm:text-sm font-semibold tabular-nums mt-0.5',
-        accent === 'green' && 'text-roas-green',
-        accent === 'red' && 'text-roas-red',
+        accent === 'green' && 'text-status-green',
+        accent === 'red' && 'text-status-red',
       )}>
         {value}
       </div>
@@ -618,14 +618,14 @@ function AdSortHeader({
           'inline-flex items-center gap-1 transition-colors group select-none cursor-pointer w-full',
           justify,
           isActive
-            ? 'text-primary font-semibold'
-            : 'text-text-secondary hover:text-text-primary',
+            ? 'text-accent font-semibold'
+            : 'text-ink-secondary hover:text-ink',
         )}
         aria-sort={isActive ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}
       >
         <span>{label}</span>
         {isActive ? (
-          dir === 'asc' ? <ArrowUp size={12} className="text-primary" /> : <ArrowDown size={12} className="text-primary" />
+          dir === 'asc' ? <ArrowUp size={12} className="text-accent" /> : <ArrowDown size={12} className="text-accent" />
         ) : (
           <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-60 transition-opacity" />
         )}

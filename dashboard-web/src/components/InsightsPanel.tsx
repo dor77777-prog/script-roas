@@ -42,8 +42,8 @@ export function InsightsPanel({ storeAggs, rows }: Props) {
 
   return (
     <section className="space-y-3">
-      <h2 className="flex items-center gap-2 text-base font-semibold text-text-primary">
-        <Lightbulb size={18} className="text-text-secondary" />
+      <h2 className="flex items-center gap-2 text-base font-semibold text-ink">
+        <Lightbulb size={18} className="text-ink-secondary" />
         תובנות מהירות
       </h2>
       <div className="rounded-xl bg-amber-50 border border-amber-200 divide-y divide-amber-200 overflow-hidden">
@@ -56,14 +56,14 @@ export function InsightsPanel({ storeAggs, rows }: Props) {
         )}
         {bottom && bottom.store !== top?.store && (
           <InsightRow
-            icon={<AlertTriangle className="text-roas-red" size={20} />}
+            icon={<AlertTriangle className="text-status-red" size={20} />}
             primary={`דורש תשומת לב: ${bottom.store}`}
             secondary={`ROAS ${formatNumber(bottom.roas)}`}
           />
         )}
         {bestDate && (
           <InsightRow
-            icon={<Calendar className="text-primary" size={20} />}
+            icon={<Calendar className="text-accent" size={20} />}
             primary={`יום הכי טוב בתקופה: ${formatDate(bestDate)}`}
             secondary={`ROAS ${formatNumber(bestRoas)}  •  הכנסות CAD ${formatCurrency(bestRevenue)}`}
           />
@@ -86,8 +86,8 @@ function InsightRow({
     <div className="flex items-center gap-3 px-5 py-3">
       <span className="shrink-0">{icon}</span>
       <div className="flex-1 min-w-0">
-        <div className={cn('text-sm font-semibold text-text-primary')}>{primary}</div>
-        <div className="text-xs text-text-secondary mt-0.5">{secondary}</div>
+        <div className={cn('text-sm font-semibold text-ink')}>{primary}</div>
+        <div className="text-xs text-ink-secondary mt-0.5">{secondary}</div>
       </div>
     </div>
   );

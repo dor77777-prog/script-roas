@@ -57,10 +57,10 @@ export function FreshnessChip(props: {
     gray: 'bg-white/10 text-white/80 ring-white/15',
   } as const;
   const lightPalette = {
-    green: 'bg-emerald-100 text-emerald-800 ring-emerald-300',
-    yellow: 'bg-amber-100 text-amber-800 ring-amber-300',
-    red: 'bg-red-100 text-red-800 ring-red-300',
-    gray: 'bg-gray-100 text-gray-700 ring-gray-300',
+    green: 'bg-status-greenBg text-status-greenFg ring-status-green/30',
+    yellow: 'bg-status-orangeBg text-status-orangeFg ring-status-orange/30',
+    red: 'bg-status-redBg text-status-redFg ring-status-red/30',
+    gray: 'bg-elevated2 text-ink-secondary ring-line',
   } as const;
   const toneClass = (variant === 'light' ? lightPalette : darkPalette)[tone];
 

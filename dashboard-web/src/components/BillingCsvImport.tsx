@@ -158,7 +158,7 @@ export function BillingCsvImport({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg bg-surfaceMuted/60 border border-borderSubtle p-3 text-xs sm:text-sm text-text-secondary leading-relaxed">
+      <div className="rounded-lg bg-elevated2/60 border border-line-subtle p-3 text-xs sm:text-sm text-ink-secondary leading-relaxed">
         <p className="mb-1">
           <strong>איך מוציאים CSV מ-Shopify:</strong>
         </p>
@@ -168,7 +168,7 @@ export function BillingCsvImport({
           <li>Shopify ישלח CSV למייל שלך</li>
           <li>הורד את הקובץ מהמייל → גרור לכאן או הדבק</li>
         </ol>
-        <p className="mt-2 text-text-muted leading-relaxed">
+        <p className="mt-2 text-ink-muted leading-relaxed">
           <strong>חכמה אוטומטית:</strong> שורות שנראות כמו מנוי חודשי (Shopify
           Plan, Klaviyo Pro וכו&apos;) יסומנו כ&quot;חודשי קבוע&quot;. שורות שנראות
           חד-פעמיות (overage, threshold, setup) יסומנו כ&quot;חד-פעמיות&quot;.
@@ -178,7 +178,7 @@ export function BillingCsvImport({
 
       <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-end">
         <div>
-          <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium">חנות יעד</label>
+          <label className="text-[10px] text-ink-muted uppercase tracking-wide font-medium">חנות יעד</label>
           <select
             value={defaultStore}
             onChange={e => {
@@ -201,7 +201,7 @@ export function BillingCsvImport({
                 };
               }));
             }}
-            className="w-full rounded-lg border border-border bg-surface px-2.5 py-2 text-sm focus:outline-none focus:border-primary focus:shadow-focus"
+            className="w-full rounded-lg border border-line bg-elevated px-2.5 py-2 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
           >
             {storeNames.map(s => (
               <option key={s} value={s}>{s}</option>
@@ -210,7 +210,7 @@ export function BillingCsvImport({
         </div>
         <button
           onClick={() => fileInput.current?.click()}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-primary text-white px-3 py-2 text-xs sm:text-sm font-semibold hover:bg-primary-dark"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-accent text-white px-3 py-2 text-xs sm:text-sm font-semibold hover:bg-accent"
         >
           <Upload size={14} />
           בחר קובץ
@@ -228,19 +228,19 @@ export function BillingCsvImport({
       </div>
 
       <div>
-        <label className="text-[10px] text-text-muted uppercase tracking-wide font-medium">או הדבק כאן את ה-CSV</label>
+        <label className="text-[10px] text-ink-muted uppercase tracking-wide font-medium">או הדבק כאן את ה-CSV</label>
         <textarea
           value={csv}
           onChange={e => setCsv(e.target.value)}
           placeholder="Bill number,Issue date,Currency,Total,..."
           rows={6}
           dir="ltr"
-          className="w-full rounded-lg border border-border bg-surface px-2.5 py-2 text-xs font-mono leading-relaxed focus:outline-none focus:border-primary focus:shadow-focus"
+          className="w-full rounded-lg border border-line bg-elevated px-2.5 py-2 text-xs font-mono leading-relaxed focus:outline-none focus:border-accent focus:shadow-focus"
         />
         <button
           onClick={parse}
           disabled={!csv.trim()}
-          className="mt-2 inline-flex items-center gap-1 rounded-lg bg-surface border border-border hover:border-primary/40 px-3 py-1.5 text-xs sm:text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="mt-2 inline-flex items-center gap-1 rounded-lg bg-elevated border border-line hover:border-accent/40 px-3 py-1.5 text-xs sm:text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           נתח
         </button>
@@ -256,17 +256,17 @@ export function BillingCsvImport({
       )}
 
       {preview.length > 0 && (
-        <div className="rounded-lg border border-borderSubtle overflow-hidden">
-          <header className="flex items-center justify-between gap-2 px-3 py-2 bg-surfaceMuted/60 border-b border-borderSubtle flex-wrap">
-            <div className="flex items-center gap-3 text-[11px] sm:text-xs text-text-secondary tabular-nums">
+        <div className="rounded-lg border border-line-subtle overflow-hidden">
+          <header className="flex items-center justify-between gap-2 px-3 py-2 bg-elevated2/60 border-b border-line-subtle flex-wrap">
+            <div className="flex items-center gap-3 text-[11px] sm:text-xs text-ink-secondary tabular-nums">
               <span>
-                <strong className="text-text-primary">{counts.rec}</strong> חודשיים
+                <strong className="text-ink">{counts.rec}</strong> חודשיים
               </span>
               <span>
-                <strong className="text-text-primary">{counts.ot}</strong> חד-פעמיים
+                <strong className="text-ink">{counts.ot}</strong> חד-פעמיים
               </span>
               {counts.skipped > 0 && (
-                <span className="text-text-muted">
+                <span className="text-ink-muted">
                   <strong>{counts.skipped}</strong> דילוגים
                 </span>
               )}
@@ -274,13 +274,13 @@ export function BillingCsvImport({
             <button
               onClick={confirm}
               disabled={counts.rec + counts.ot === 0}
-              className="inline-flex items-center gap-1 rounded-lg bg-primary text-white px-3 py-1.5 text-xs sm:text-sm font-semibold hover:bg-primary-dark disabled:bg-text-muted disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1 rounded-lg bg-accent text-white px-3 py-1.5 text-xs sm:text-sm font-semibold hover:bg-accent disabled:bg-ink-muted disabled:cursor-not-allowed"
             >
               <Check size={13} />
               ייבא ({counts.rec + counts.ot})
             </button>
           </header>
-          <ul className="divide-y divide-borderSubtle max-h-80 overflow-y-auto">
+          <ul className="divide-y divide-line-subtle max-h-80 overflow-y-auto">
             {preview.map(p => (
               <li
                 key={p.id}
@@ -296,11 +296,11 @@ export function BillingCsvImport({
                   className="w-3.5 h-3.5 rounded cursor-pointer shrink-0"
                   title={p.skip ? 'בחר כדי לייבא' : 'בטל כדי לדלג על שורה זו'}
                 />
-                <span className="text-[10px] text-text-muted tabular-nums min-w-[56px] shrink-0">
+                <span className="text-[10px] text-ink-muted tabular-nums min-w-[56px] shrink-0">
                   {p.date.slice(5)}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm text-text-primary truncate">
+                  <div className="text-sm text-ink truncate">
                     {p.description}
                   </div>
                   {p.duplicateOfId && (
@@ -311,7 +311,7 @@ export function BillingCsvImport({
                 </div>
                 {/* Type toggle — segmented control */}
                 <div
-                  className="inline-flex rounded-md border border-border bg-surface overflow-hidden text-[10px] shrink-0"
+                  className="inline-flex rounded-md border border-line bg-elevated overflow-hidden text-[10px] shrink-0"
                   dir="ltr"
                 >
                   <button
@@ -319,8 +319,8 @@ export function BillingCsvImport({
                     className={cn(
                       'px-1.5 py-0.5 transition-colors',
                       p.type === 'recurring'
-                        ? 'bg-primary text-white'
-                        : 'text-text-secondary hover:bg-surfaceMuted',
+                        ? 'bg-accent text-white'
+                        : 'text-ink-secondary hover:bg-elevated2',
                     )}
                   >
                     חודשי
@@ -328,10 +328,10 @@ export function BillingCsvImport({
                   <button
                     onClick={() => setRow(p.id, { type: 'onetime' })}
                     className={cn(
-                      'px-1.5 py-0.5 transition-colors border-e border-border',
+                      'px-1.5 py-0.5 transition-colors border-e border-line',
                       p.type === 'onetime'
-                        ? 'bg-primary text-white'
-                        : 'text-text-secondary hover:bg-surfaceMuted',
+                        ? 'bg-accent text-white'
+                        : 'text-ink-secondary hover:bg-elevated2',
                     )}
                   >
                     חד-פעמי

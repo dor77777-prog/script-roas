@@ -322,7 +322,7 @@ function MonthBlockPerStore({
     <div className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-5 py-3 bg-slate-800 text-white"
+        className="w-full flex items-center justify-between px-5 py-3 bg-ink text-canvas"
       >
         <span className="font-semibold">
           {monthTitle(ym)}  •  {storeName}
@@ -445,7 +445,7 @@ function MonthBlockSummary({
     <div className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-5 py-3 bg-slate-800 text-white"
+        className="w-full flex items-center justify-between px-5 py-3 bg-ink text-canvas"
       >
         <span className="font-semibold">
           {monthTitle(ym)}  •  סיכום כל החנויות ({stores.length})
