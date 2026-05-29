@@ -397,7 +397,7 @@ export function ProductPickerModal({
             </button>
             <button
               onClick={save}
-              className="inline-flex items-center gap-1 rounded-lg bg-accent text-white px-3 py-1.5 text-xs sm:text-sm font-semibold hover:bg-accent"
+              className="inline-flex items-center gap-1 rounded-lg bg-accent text-white px-3 py-1.5 text-xs sm:text-sm font-semibold hover:bg-accent-dark"
             >
               <Check size={13} />
               שמור

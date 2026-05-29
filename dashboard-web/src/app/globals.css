@@ -31,6 +31,7 @@
   /* Accent — single cool indigo */
   --accent:    oklch(55% 0.18 260);
   --accent-fg: oklch(99% 0 0);
+  --accent-dark: oklch(45% 0.18 260);
 
   /* ROAS status — all at uniform L=60% for perceptual balance */
   --status-red:    oklch(60% 0.18 25);
@@ -78,6 +79,7 @@
   /* Accent — slightly desaturated for dark */
   --accent:    oklch(65% 0.16 260);
   --accent-fg: oklch(15% 0.01 240);
+  --accent-dark: oklch(75% 0.16 260);
 
   /* ROAS status — dark theme HOTFIX-3 2026-05-29.
      User feedback after hotfix-2: red+orange still confused on table

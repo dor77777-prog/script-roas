@@ -41,6 +41,7 @@ const config: Config = {
         accent: {
           DEFAULT: 'var(--accent)',
           fg:      'var(--accent-fg)',
+          dark:    'var(--accent-dark)',
         },
         status: {
           red:        'var(--status-red)',

@@ -210,7 +210,7 @@ export function BillingCsvImport({
         </div>
         <button
           onClick={() => fileInput.current?.click()}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-accent text-white px-3 py-2 text-xs sm:text-sm font-semibold hover:bg-accent"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-accent text-white px-3 py-2 text-xs sm:text-sm font-semibold hover:bg-accent-dark"
         >
           <Upload size={14} />
           בחר קובץ
@@ -274,7 +274,7 @@ export function BillingCsvImport({
             <button
               onClick={confirm}
               disabled={counts.rec + counts.ot === 0}
-              className="inline-flex items-center gap-1 rounded-lg bg-accent text-white px-3 py-1.5 text-xs sm:text-sm font-semibold hover:bg-accent disabled:bg-ink-muted disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1 rounded-lg bg-accent text-white px-3 py-1.5 text-xs sm:text-sm font-semibold hover:bg-accent-dark disabled:bg-ink-muted disabled:cursor-not-allowed"
             >
               <Check size={13} />
               ייבא ({counts.rec + counts.ot})
