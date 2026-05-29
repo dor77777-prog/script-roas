@@ -100,6 +100,23 @@ CREATE INDEX IF NOT EXISTS idx_ad_registry_recent_status_change
   ON ad_registry (store_id, platform, status_changed_at DESC NULLS LAST);
 
 -- ---------------------------------------------------------------------------
+-- Helper: minute-bucket epoch (used by campaign_status_events.dedupe_key).
+-- Postgres conservatively marks `extract(epoch from timestamptz)` as STABLE
+-- across the board, even though the epoch value is semantically immutable
+-- for timestamptz (epoch is UTC-defined; timestamptz is internally UTC).
+-- STORED generated columns require IMMUTABLE expressions, so we wrap the
+-- expression in a SQL function declared IMMUTABLE. Safe: the function body
+-- depends only on the input value, not on any session GUC.
+-- ---------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.minute_bucket_epoch(ts timestamptz)
+RETURNS bigint
+LANGUAGE sql
+IMMUTABLE
+AS $$
+  SELECT (extract(epoch FROM ts)::bigint) / 60
+$$;
+
+-- ---------------------------------------------------------------------------
 -- 4. campaign_status_events (append-only audit log, deduped)
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS campaign_status_events (
@@ -113,19 +130,13 @@ CREATE TABLE IF NOT EXISTS campaign_status_events (
   to_status text NOT NULL,
   change_kind text NOT NULL,                    -- 'first_seen' | 'paused' | 'enabled' | 'archived' | 'removed' | 'effective_only' | 'delivery_only'
   raw_event jsonb,
-  -- Bucket occurred_at to minute-since-epoch (integer). STORED generated
-  -- columns require an IMMUTABLE expression; `extract(epoch from
-  -- timestamptz)` IS immutable (epoch is UTC-defined; timestamptz is
-  -- internally UTC). `to_char` was STABLE (depends on lc_time GUC) so the
-  -- previous YYYY-MM-DDTHH:MI string failed the IMMUTABLE check.
-  --
-  -- Semantically identical for dedupe purposes — collision granularity is
-  -- still 1 minute. The human-readable bucket is lost from the key text
-  -- but the StatusEventsFeed UI reads occurred_at directly.
+  -- See `minute_bucket_epoch()` above for why we wrap in a SQL function.
+  -- Bucket = integer minute-since-UTC-epoch. Collision granularity is
+  -- still 1 minute; flapping observations within the same minute coalesce.
   dedupe_key text GENERATED ALWAYS AS (
     store_id || ':' || platform || ':' || entity_type || ':' || entity_id || ':' ||
     COALESCE(from_status, 'NULL') || ':' || to_status || ':' ||
-    ((extract(epoch from occurred_at)::bigint) / 60)::text
+    public.minute_bucket_epoch(occurred_at)::text
   ) STORED,
   UNIQUE (dedupe_key)
 );
