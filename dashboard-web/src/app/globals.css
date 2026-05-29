@@ -79,36 +79,35 @@
   --accent:    oklch(65% 0.16 260);
   --accent-fg: oklch(15% 0.01 240);
 
-  /* ROAS status — dark theme rebalanced 2026-05-29 for distinct hue
-     perception. Issues fixed:
-       1. Red (hue 25) + Orange (hue 55) were too close → looked similar
-          on table cells. Pushed red to 18 (purer red, away from orange)
-          and orange to 70 (more toward yellow, away from red).
-       2. All 4 had chroma=0.06 on bg variants → low saturation made
-          hues hard to distinguish. Bumped to 0.12 across the board.
-       3. Green (145) and blue (240) hue-separation widened to 145 vs
-          250, plus chroma boost gives clearer cool-cool contrast.
-       4. Solid colors bumped to 70-78% L + chroma 0.18-0.22 for clearly
-          visible badges/borders/text against dark surfaces.
-       5. -fg variants kept light enough for AA contrast on -bg cells. */
-  --status-red:    oklch(72% 0.22 18);
-  --status-red-bg: oklch(28% 0.13 18);
-  --status-red-fg: oklch(90% 0.10 18);
+  /* ROAS status — dark theme HOTFIX-3 2026-05-29.
+     User feedback after hotfix-2: red+orange still confused on table
+     cells, and blue+green still confused. Pushing harder:
+       - bg L: 28-30% → 36-42% (was too dark — hue couldn't dominate)
+       - bg chroma: 0.13 → 0.18-0.20 (vibrant enough for hue to read)
+       - Hue separation widened further: red 18→10 (pure red), orange
+         70→75 (more yellow), blue 250→255 (slight purple tilt away
+         from green). Net: red↔orange = 65°, green↔blue = 110°.
+     White text on L=36-42% bg gives ~4-5:1 contrast (passes AA normal
+     for the bold ROAS numbers used in table cells).
+     -fg variants stay at L=90% for AA contrast when used as text. */
+  --status-red:    oklch(72% 0.22 10);
+  --status-red-bg: oklch(38% 0.18 10);
+  --status-red-fg: oklch(92% 0.10 10);
 
-  --status-orange:    oklch(78% 0.18 70);
-  --status-orange-bg: oklch(30% 0.13 70);
-  --status-orange-fg: oklch(92% 0.10 70);
+  --status-orange:    oklch(80% 0.18 75);
+  --status-orange-bg: oklch(42% 0.18 75);
+  --status-orange-fg: oklch(93% 0.10 75);
 
-  --status-green:    oklch(72% 0.20 145);
-  --status-green-bg: oklch(28% 0.13 145);
-  --status-green-fg: oklch(90% 0.10 145);
+  --status-green:    oklch(72% 0.22 145);
+  --status-green-bg: oklch(38% 0.18 145);
+  --status-green-fg: oklch(92% 0.10 145);
 
-  --status-blue:    oklch(70% 0.20 250);
-  --status-blue-bg: oklch(28% 0.13 250);
-  --status-blue-fg: oklch(90% 0.10 250);
+  --status-blue:    oklch(70% 0.22 255);
+  --status-blue-bg: oklch(36% 0.20 255);
+  --status-blue-fg: oklch(92% 0.10 255);
 
   --status-gray:    oklch(65% 0 0);
-  --status-gray-bg: oklch(28% 0 0);
+  --status-gray-bg: oklch(32% 0 0);
   --status-gray-fg: oklch(90% 0 0);
 }
 

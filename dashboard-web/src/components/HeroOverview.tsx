@@ -263,15 +263,14 @@ export function HeroOverview({ data, filters }: Props) {
   return (
     <section
       className={cn(
-        'relative overflow-hidden rounded-2xl',
-        // Theme-aware accent gradient via CSS variable. In light mode
-        // resolves to a cool indigo card (similar to the original navy
-        // brand color); in dark mode auto-shifts to the dark-theme accent
-        // (lighter, slightly desaturated indigo). All inner `text-white`
-        // values still read clearly because the gradient stays in the
-        // 35-55% L band (accent token + color-mix) in both themes.
-        'bg-gradient-to-br from-accent via-accent/85 to-accent/65 text-white',
-        'shadow-elevated',
+        'relative overflow-hidden rounded-2xl text-white shadow-elevated',
+        // LIGHT mode: bold navy brand gradient (per user preference — the
+        // dark indigo card stands out as the hero on a light page).
+        'bg-gradient-to-br from-[#091c4a] via-[#0d3680] to-[#1d4ed8]',
+        // DARK mode: theme-aware accent gradient (subtler — doesn't fight
+        // the dark page). The accent token shifts to a lighter indigo in
+        // dark theme so text-white stays readable.
+        'dark:from-accent dark:via-accent/80 dark:to-accent/55',
       )}
     >
       {/* Decorative dot grid + side glow */}

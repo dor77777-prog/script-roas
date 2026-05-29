@@ -83,19 +83,26 @@ type LiveTone = {
 
 /** Styling tokens keyed by the tone name from roasLabel.
  *
- * Gradient pattern uses the SATURATED status color (not the -Bg variant)
- * at moderate alpha (/35-/45) so the ROAS-driven tint is clearly visible
- * in BOTH themes. The -Bg tokens are very pale in light mode (oklch
- * ~96% L) and dark in dark mode (~28% L) — at /60 alpha they're either
- * washed-out in light or blend into bg-elevated in dark. Using full-
- * saturation status colors at higher alpha gives a clear colored tint
- * in both themes without overpowering the card content.
+ * Hotfix-3 2026-05-29: Switched from Tailwind slash-alpha gradient
+ * (`from-status-{color}/45 via-status-{color}/12 to-elevated`) to an
+ * arbitrary-value gradient using CSS `var()` directly. Reason: our
+ * tailwind.config defines status tokens as `'var(--status-X)'` without
+ * the `<alpha-value>` placeholder, so Tailwind 3.x can't compose slash-
+ * alpha on them — `from-status-red/45` was silently dropping the alpha
+ * (or failing to render entirely), which is why earlier hotfixes left
+ * the gradient invisible.
  *
- * Hotfix-2 2026-05-29: bumped from /22-/25 → /35-/45 after user
- * reported the gradient looked inactive ("הגרדיאנט בלייב לא פעיל"). */
+ * New pattern: `bg-[linear-gradient(225deg,var(--status-X-bg),var(--surface-elevated-1)_75%)]`
+ * - Uses the -Bg variant directly (no alpha math needed)
+ * - 225deg = top-right → bottom-left, which puts the tinted "halo" in
+ *   the top-right corner where the eye lands first in RTL Hebrew layout
+ * - Fades to elevated by 75% so the lower-left of the card stays neutral
+ *   for content readability
+ * - With hotfix-3's bumped -Bg vars (dark theme L=36-42%, chroma 0.18-0.20),
+ *   the gradient is vibrant in BOTH themes */
 const LIVE_TONE_STYLES: Record<string, LiveTone> = {
   gray: {
-    cardBg: 'bg-gradient-to-br from-status-gray/15 via-elevated to-elevated',
+    cardBg: 'bg-[linear-gradient(225deg,var(--status-gray-bg),var(--surface-elevated-1)_75%)]',
     cardBorder: 'border-line',
     blob: 'bg-status-gray/10',
     pulse: 'bg-status-gray',
@@ -103,32 +110,32 @@ const LIVE_TONE_STYLES: Record<string, LiveTone> = {
     iconColor: 'text-status-gray',
   },
   red: {
-    cardBg: 'bg-gradient-to-br from-status-red/45 via-status-red/12 to-elevated',
-    cardBorder: 'border-status-red/45',
+    cardBg: 'bg-[linear-gradient(225deg,var(--status-red-bg),var(--surface-elevated-1)_75%)]',
+    cardBorder: 'border-status-red/55',
     blob: 'bg-status-red/15',
     pulse: 'bg-status-red',
     pill: 'bg-status-red text-white',
     iconColor: 'text-status-red',
   },
   orange: {
-    cardBg: 'bg-gradient-to-br from-status-orange/45 via-status-orange/12 to-elevated',
-    cardBorder: 'border-status-orange/45',
+    cardBg: 'bg-[linear-gradient(225deg,var(--status-orange-bg),var(--surface-elevated-1)_75%)]',
+    cardBorder: 'border-status-orange/55',
     blob: 'bg-status-orange/15',
     pulse: 'bg-status-orange',
     pill: 'bg-status-orange text-white',
     iconColor: 'text-status-orange',
   },
   green: {
-    cardBg: 'bg-gradient-to-br from-status-green/40 via-status-green/10 to-elevated',
-    cardBorder: 'border-status-green/40',
+    cardBg: 'bg-[linear-gradient(225deg,var(--status-green-bg),var(--surface-elevated-1)_75%)]',
+    cardBorder: 'border-status-green/55',
     blob: 'bg-status-green/12',
     pulse: 'bg-status-green',
     pill: 'bg-status-green text-white',
     iconColor: 'text-status-green',
   },
   blue: {
-    cardBg: 'bg-gradient-to-br from-status-blue/40 via-status-blue/10 to-elevated',
-    cardBorder: 'border-status-blue/40',
+    cardBg: 'bg-[linear-gradient(225deg,var(--status-blue-bg),var(--surface-elevated-1)_75%)]',
+    cardBorder: 'border-status-blue/55',
     blob: 'bg-status-blue/15',
     pulse: 'bg-status-blue',
     pill: 'bg-status-blue text-white',

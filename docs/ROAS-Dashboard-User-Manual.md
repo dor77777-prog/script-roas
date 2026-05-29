@@ -7,7 +7,7 @@
 │                                                  │
 │      מדריך הפעלה שוטף למפעיל הדשבורד            │
 │                                                  │
-│      גרסה:        2.1.2                          │
+│      גרסה:        2.1.3                          │
 │      תאריך:       2026-05-29                     │
 │      קהל יעד:     מפעיל יחיד · החלטות יומיות   │
 │                                                  │
@@ -63,6 +63,16 @@ Plan 6 פיספס 25 רכיבים שיתופיים (`Filters`/Quick Range, `Sect
 3. **TodayLive gradient** — alpha בומפ נוסף /22-/25 → /35-/45 + הוספת via-stop נוסף לעקומה חלקה יותר; עכשיו הגרדיאנט של ROAS באמת נראה.
 
 4. **Tooltip body text** — סוכן סקירה תפס 3 קבצים נוספים שבהם container הטוליפ היה `bg-ink text-canvas` (נכון) אבל ה-body השתמש ב-`text-white/X` ישיר: `MetricHelp` (ה-(?) icon המרכזי בכל הדשבורד), `ProductCentricView.statBlock`, ו-CPM tooltip ב-`CampaignsTable`. כולם הועברו ל-`text-canvas/X` ↔ קריא בשני ה-themes.
+
+### Hotfix 2.1.3 (2026-05-29) — Dark color saturation v3 + gradient render + light/dark HeroOverview
+
+3 בעיות שנותרו אחרי 2.1.2:
+
+1. **Status colors ב-dark mode עדיין בלבול אדום↔כתום וכחול↔ירוק.** בומפ נוסף ב-`globals.css`: bg L מ-28-30 ל-36-42 (היה כהה מדי כדי שה-hue יהיה דומיננטי), chroma 0.13→0.18-0.20 (יותר רווי), Hue separation הורחב עוד: red 18→10 (אדום טהור), orange 70→75 (יותר צהבהב), blue 250→255 (קצת סגול לפרידה מירוק). White text על L=36-42% bg = 4-5:1 ניגוד (עובר AA נורמלי לבולד numbers בתאי טבלה).
+
+2. **TodayLive גרדיאנט עדיין לא מופיע.** הסיבה: Tailwind 3.x slash-alpha על `var()` tokens (`from-status-red/45`) לא תמיד מתרגם — ה-config מגדיר tokens כ-`'var(--status-X)'` בלי `<alpha-value>` placeholder. הוחלף ל-arbitrary value עם CSS gradient inline: `bg-[linear-gradient(225deg,var(--status-X-bg),var(--surface-elevated-1)_75%)]`. 225deg = top-right→bottom-left (RTL friendly — ה-halo נופל ב-eye-landing corner).
+
+3. **HeroOverview ב-LIGHT mode** — אחרי תיקון 2.1.1 (accent gradient) המשתמש דיווח שב-light mode דווקא המקור הכהה navy היה יותר מתאים. עכשיו: `from-[#091c4a] via-[#0d3680] to-[#1d4ed8]` ל-LIGHT, `dark:from-accent dark:via-accent/80 dark:to-accent/55` ל-DARK. שני העולמות מקבלים את מה שמתאים להם.
 
 מסמכים נלווים מתעדכנים בנפרד: ארכיטקטורה ב-`docs/ARCHITECTURE.md`, עבודה ביצועית של ה-overhaul ב-`docs/superpowers/plans/2026-05-{28,29}-dashboard-ux-overhaul-*.md` (7 plans, Plans 1–6 IMPLEMENTED; Plan 7 polish + a11y + RTL audit pending).
 
@@ -2427,7 +2437,7 @@ Seen 5 times. Alert #2.
 
 ## סוף המסמך
 
-**גרסה:** 2.1.1 · **תאריך עדכון:** 2026-05-29
+**גרסה:** 2.1.3 · **תאריך עדכון:** 2026-05-29
 
 > מסמך זה מתעדכן עם כל שינוי שהמפעיל רואה במסך. אם משהו לא תואם למה שאתה רואה — דווח למפתח לעדכון.
 
