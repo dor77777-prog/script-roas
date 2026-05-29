@@ -7,7 +7,7 @@
 │                                                  │
 │      מדריך הפעלה שוטף למפעיל הדשבורד            │
 │                                                  │
-│      גרסה:        2.1.17                         │
+│      גרסה:        2.1.18                         │
 │      תאריך:       2026-05-29                     │
 │      קהל יעד:     מפעיל יחיד · החלטות יומיות   │
 │                                                  │
@@ -180,6 +180,49 @@ Plan 6 פיספס 25 רכיבים שיתופיים (`Filters`/Quick Range, `Sect
 - **Caption מסביר ב-3 שורות:** "ה-5 המנצחים ביותר ו-5 שצריכים תשומת לב — לפי ROAS. כל קמפיין עם פלטפורמה, חנות, וההמלצה הקונקרטית. סה״כ X קמפיינים פעילים בטווח."
 
 הגרף ה-scatter נשמר בקובץ אבל לא מיובא יותר ב-Dashboard. אם יש בקשה עתידית, ניתן להחזיר כ-toggle "תצוגת גרף" ליד הרשימות.
+
+### 2.1.18 (2026-05-29) — Phase A.5 v2: TikTok campaign↔store mapping (fixed)
+
+Re-shipped Phase A.5 after the 2026-05-29 morning rollback (גרסה 2.1.17). The
+duplicate-row bug that forced v1's rollback is fixed at the database write
+layer: before every UPSERT batch for TikTok rows, `persistCampaignsLive` and
+`cronDaily` execute a `DELETE FROM campaigns_daily WHERE date=... AND
+platform='tiktok' AND campaign_id IN (...) AND store_id NOT IN (target_stores)`.
+Same for `ads_daily` keyed on `ad_id`. Result: campaigns_daily always has
+exactly one row per (date, platform, campaign_id, ad_set_id), regardless of
+how many times the operator re-tags a campaign.
+
+**Other v1 bugs fixed in v2:**
+
+- **Dropdown disabled**: `AdAccountMap.tiktokAdvertiserId` is now populated by
+  `/api/store-meta` (server-side env enrichment from `${STORE}_TIKTOK_ADVERTISER_ID`).
+- **Picker showed wrong store's products**: drawer computes `effectiveStoreId`
+  = `storeMap[key] ?? storeId` and passes it (not the data-side storeId) to
+  ProductPickerModal.
+- **Picker label "Map UZOSHOP products"**: drawer computes `effectiveStoreName`
+  from a `STORE_DISPLAY_NAMES` map (uzoshop / Zol Plus / 360usmile) and passes
+  it as `storeName` prop.
+- **Product map orphans on store change**: when operator changes the dropdown,
+  the drawer COPIES the productMap entry from `(oldStoreId, platform, campaignId)`
+  to `(newStoreId, platform, campaignId)` and clears the old entry.
+- **No column in CampaignsTable**: the tagging surface is in the drawer only
+  (the v1 "column" approach was confirmed as an anti-pattern by the operator).
+
+**Workflow** (the same one v1.16 promised — now actually working):
+
+1. Click campaign row in Campaigns tab → drawer opens.
+2. For TikTok campaigns: see the new "🏪 חנות בעלת הקמפיין" section at top.
+3. Pick store → save immediate (cloud-sync).
+4. Open "✎ שייך מוצרים" → picker shows the NEW store's products.
+5. Tag products → save.
+6. ≤30 min: next cron-live-heavy tick re-buckets campaigns_daily + ads_daily.
+7. Next morning: cron-daily reconcile finalizes yesterday under the correct store.
+
+**Other panels in the drawer** (Health Score, attribution, cohort comparison)
+still show the OLD store's data until cron-live-heavy migrates — there's an
+amber warning chip explaining this.
+
+---
 
 ### 2.1.17 (2026-05-29) — Phase A.5 ROLLBACK: TikTok store mapping disabled (DB corruption)
 

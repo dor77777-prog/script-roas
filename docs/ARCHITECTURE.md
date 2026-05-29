@@ -1162,6 +1162,12 @@ TikTok runs a single advertiser (`UZOSHOP_TIKTOK_ADVERTISER_ID`) שמשרת כי
 
 **Phase A.5 v2 דרישות עיצוב:** הPK של `campaigns_daily` חייב להשתנות ל-`(date, platform, campaign_id, ad_set_id)` ללא store_id (עם store_id כעמודה רגילה), או persistCampaignsLive חייב לבצע DELETE-then-UPSERT לכל מעבר store_id. צריך migration plan לשמירת היסטוריה של 5-7 חודשים.
 
+**Phase A.5 v2 SHIPPED 2026-05-29.** The duplicate-row bug is fixed at the persist layer (Tasks 3 + 4 in the v2 plan): every TikTok UPSERT batch is preceded by a `DELETE FROM campaigns_daily/ads_daily WHERE store_id NOT IN (target_stores) AND campaign_id|ad_id IN (rows_being_written)`. This guarantees the campaigns_daily PK `(date, store_id, platform, campaign_id, ad_set_id)` has exactly one row per `(date, platform, campaign_id, ad_set_id)` — the store_id column becomes effectively a "current attribution" tag rather than a discriminator. The SQL function `agg_tiktok_spend_per_store_for_date` (migration `20260530120000`) is re-enabled and recomputes `data_daily.tt_spend_cad` + 4 dependents per store from the now-clean campaigns_daily slices.
+
+**UI restored (CampaignDrawer):** the "🏪 חנות בעלת הקמפיין" section, `effectiveStoreId` resolution, `effectiveStoreName` from a 3-store display-name map, product-map migration on store change. Acceptance test [`persistCampaignsLiveRetagFlowV2.test.ts`](../dashboard-web/src/lib/inngest/__tests__/persistCampaignsLiveRetagFlowV2.test.ts) simulates tag → re-tag → re-tag and asserts campaigns_daily ends with exactly one row each time.
+
+**Plan reference:** [`docs/superpowers/plans/2026-05-29-phase-a5-v2-campaign-store-mapping.md`](superpowers/plans/2026-05-29-phase-a5-v2-campaign-store-mapping.md).
+
 **Historical attribution:** Rows ב-`campaigns_daily` / `ads_daily` שנכתבו לפני 2026-05-29 נשארים תחת `store_id='uzoshop'`. אין backfill. ה-`/operator` מציג chip תזכורת מעל פאנל ה-Meta BUC. ההיסטוריה תקינה תחת המודל הישן (כל ה-spend באמת מ-advertiser uzoshop); רק החלוקה ל-store_id האמיתי שונה במודל החדש.
 
 **MonthlyTables behavior:** הקומפוננטה [`MonthlyTables.tsx`](../dashboard-web/src/components/MonthlyTables.tsx) כבר עם `hasTt = rows.some(r => (r.ttSpend ?? 0) > 0)` — עמודת TikTok נחשפת אוטומטית כשrow כלשהו בחנות/חודש מקבל ערך > 0. סיכומי החודש (`totalTt`, `totalSpend`) משתמשים ב-`r.ttSpend` + `r.totalSpend` מ-`data_daily`, שעדכנו עכשיו דרך ה-RPC. שום שינוי לא נדרש ב-MonthlyTables עצמה.
