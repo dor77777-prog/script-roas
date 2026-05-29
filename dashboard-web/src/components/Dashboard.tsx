@@ -29,7 +29,7 @@ import { TodayLive } from './TodayLive';
 import { ProductsTable } from './ProductsTable';
 import { ProductCentricView } from './ProductCentricView';
 import { CampaignsTable } from './CampaignsTable';
-import { QuadrantScatter, type QuadrantPoint } from './QuadrantScatter';
+import { CampaignsTopList, type CampaignTopListPoint } from './CampaignsTopList';
 import { aggregate as aggregateCampaigns } from '@/lib/campaignsAggregator';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import { InsightsBoard } from './InsightsBoard';
@@ -575,7 +575,7 @@ function QuadrantScatterCard({
     { refreshInterval: 120_000, revalidateOnFocus: false },
   );
 
-  const points = useMemo<QuadrantPoint[]>(() => {
+  const points = useMemo<CampaignTopListPoint[]>(() => {
     if (!swrData) return [];
     const aggregated = aggregateCampaigns(
       swrData.rows,
@@ -589,13 +589,15 @@ function QuadrantScatterCard({
       .filter((a) => a.spend > 0 && a.conversions > 0)
       .map((a) => ({
         name: a.campaignName,
+        platform: a.platform,
+        storeName: a.storeName,
         roas: a.conversionValue / a.spend,
         cac: a.spend / a.conversions,
         spend: a.spend,
       }));
   }, [swrData, filters.store, filters.range]);
 
-  return <QuadrantScatter data={points} title="ROAS × CAC לקמפיינים פעילים" />;
+  return <CampaignsTopList data={points} title="הקמפיינים הבולטים — מנצחים ולתשומת לב" />;
 }
 
 function CampaignsTab({
