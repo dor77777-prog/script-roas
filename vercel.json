@@ -1,4 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "ignoreCommand": "cd .. && git diff ${VERCEL_GIT_PREVIOUS_SHA:-HEAD^} HEAD --quiet -- dashboard-web/ supabase/migrations/ vercel.json"
+  "ignoreCommand": "cd .. && (git diff ${VERCEL_GIT_PREVIOUS_SHA:-HEAD^} HEAD --quiet -- dashboard-web/ supabase/migrations/ vercel.json 2>/dev/null; if [ $? -eq 0 ]; then exit 0; else exit 1; fi)"
 }
