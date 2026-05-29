@@ -67,7 +67,7 @@ export function AttributionAnalysisPanel({ analysis, spend, value }: Props) {
         {/* Header: trust verdict + score */}
         <div className="flex items-start gap-3 flex-wrap">
           <div className="shrink-0">
-            <div className="text-[10px] uppercase tracking-wide opacity-70">
+            <div className="text-[11px] sm:text-[10px] uppercase tracking-wide opacity-70">
               ציון אמינות
             </div>
             <div className="text-2xl font-bold tabular-nums leading-tight">
@@ -78,7 +78,7 @@ export function AttributionAnalysisPanel({ analysis, spend, value }: Props) {
           <div className="flex-1 min-w-[200px]">
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <div className="text-[10px] uppercase opacity-60">ROAS אמיתי (click-id)</div>
+                <div className="text-[11px] sm:text-[10px] uppercase opacity-60">ROAS אמיתי (click-id)</div>
                 <div className="text-base font-semibold tabular-nums">
                   {detRoas > 0 ? `${detRoas.toFixed(2)}x` : '—'}
                 </div>
@@ -89,7 +89,7 @@ export function AttributionAnalysisPanel({ analysis, spend, value }: Props) {
                 )}
               </div>
               <div>
-                <div className="text-[10px] uppercase opacity-60">ROAS לפי Meta</div>
+                <div className="text-[11px] sm:text-[10px] uppercase opacity-60">ROAS לפי Meta</div>
                 <div className="text-base font-semibold tabular-nums">
                   {metaRoas > 0 ? `${metaRoas.toFixed(2)}x` : '—'}
                 </div>

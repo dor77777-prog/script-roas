@@ -295,7 +295,7 @@ export function HeroOverview({ data, filters }: Props) {
       {/* Content */}
       <div className="relative p-5 sm:p-7 md:p-9">
         {/* Eyebrow row */}
-        <div className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-xs uppercase tracking-[0.14em] text-white/65 mb-3 sm:mb-4">
+        <div className="flex items-center gap-2 sm:gap-3 text-[11px] sm:text-xs uppercase tracking-[0.14em] text-white/65 mb-3 sm:mb-4">
           <span className="font-semibold text-white">{storeLabel}</span>
           <span className="text-white/40">·</span>
           <span className="tabular-nums">
@@ -665,12 +665,12 @@ function FloatingKpi({
 }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="text-[10px] sm:text-xs uppercase tracking-[0.12em] font-semibold text-white/65">
+      <span className="text-[11px] sm:text-xs uppercase tracking-[0.12em] font-semibold text-white/65">
         {label}
       </span>
       <div className="flex items-baseline gap-1.5 sm:gap-2">
         {valuePrefix && (
-          <span className="text-[10px] sm:text-xs text-white/55 font-medium">{valuePrefix}</span>
+          <span className="text-[11px] sm:text-xs text-white/55 font-medium">{valuePrefix}</span>
         )}
         <span
           className={cn(

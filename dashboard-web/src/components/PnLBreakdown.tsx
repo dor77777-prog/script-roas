@@ -158,7 +158,7 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
               <Receipt size={17} />
             </span>
             <div className="min-w-0">
-              <div className="text-[10px] sm:text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-muted">
+              <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-muted">
                 Profit &amp; Loss
               </div>
               <h2 className="text-base sm:text-xl font-bold text-ink tracking-tight leading-tight">
@@ -414,7 +414,7 @@ function HeroStat({
     : 'bg-status-red';
   return (
     <div className="space-y-1.5">
-      <div className="text-[10px] sm:text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-muted">
+      <div className="text-[11px] uppercase tracking-[0.1em] font-semibold text-ink-muted">
         {label}
       </div>
       <div className={cn('text-xl sm:text-3xl font-bold tabular-nums leading-none', amountColor)}>

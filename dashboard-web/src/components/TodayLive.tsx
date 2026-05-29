@@ -433,7 +433,7 @@ export function TodayLive({
               LIVE
             </span>
           </div>
-          <div className="text-[10px] sm:text-xs text-ink-secondary text-left tabular-nums shrink-0">
+          <div className="text-[11px] sm:text-xs text-ink-secondary text-left tabular-nums shrink-0">
             <div className="font-medium">{today}</div>
             <div className="text-ink-muted">עודכן {now}</div>
           </div>
@@ -693,14 +693,14 @@ function LiveStat({
   return (
     <div className="rounded-xl bg-elevated border border-line-subtle p-2.5 sm:p-4 shadow-xs">
       <div className="flex items-center justify-between mb-1 sm:mb-1.5">
-        <span className="text-[10px] sm:text-xs font-medium text-ink-secondary tracking-wide truncate">
+        <span className="text-[11px] sm:text-xs font-medium text-ink-secondary tracking-wide truncate">
           {label}
         </span>
         <span className="text-ink-muted/70 shrink-0">{icon}</span>
       </div>
       <div className="flex items-baseline gap-1 min-w-0">
         {valuePrefix && (
-          <span className="text-[10px] sm:text-xs text-ink-muted font-medium shrink-0">
+          <span className="text-[11px] sm:text-xs text-ink-muted font-medium shrink-0">
             {valuePrefix}
           </span>
         )}

@@ -455,7 +455,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 window.sessionStorage.setItem(PRODUCT_MAP_CHIP_KEY, '1');
                 setChipHidden(true);
               }}
-              className="ms-auto shrink-0 rounded p-0.5 text-ink-subtle hover:bg-elevated2 hover:text-ink-secondary transition-colors"
+              className="ms-auto shrink-0 rounded p-2 text-ink-subtle hover:bg-elevated2 hover:text-ink-secondary transition-colors"
             >
               <X size={12} />
             </button>

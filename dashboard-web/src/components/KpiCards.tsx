@@ -146,7 +146,7 @@ export function KpiCards({ current, previous, series }: Props) {
   const sparkData = useMemo(() => computeKpiSparkData(series ?? []), [series]);
 
   return (
-    <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+    <div className="grid gap-3 sm:gap-4 grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-6">
       <KpiCard
         label="ROAS"
         help={METRIC_HELP.roas}

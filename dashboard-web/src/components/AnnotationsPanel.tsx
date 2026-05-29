@@ -192,14 +192,14 @@ export function AnnotationsPanel({ range, store }: Props) {
                       <div className="flex items-center gap-1 shrink-0">
                         <button
                           onClick={() => setEditing(a.id)}
-                          className="p-1.5 rounded text-ink-muted hover:text-ink hover:bg-elevated2"
+                          className="p-2 rounded text-ink-muted hover:text-ink hover:bg-elevated2"
                           aria-label="ערוך"
                         >
                           <Edit3 size={13} />
                         </button>
                         <button
                           onClick={() => remove(a.id)}
-                          className="p-1.5 rounded text-ink-muted hover:text-status-red hover:bg-status-redBg"
+                          className="p-2 rounded text-ink-muted hover:text-status-red hover:bg-status-redBg"
                           aria-label="מחק"
                         >
                           <Trash2 size={13} />

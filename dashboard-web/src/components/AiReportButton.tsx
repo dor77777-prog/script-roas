@@ -187,7 +187,7 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
               </div>
               <button
                 onClick={() => setOpen(false)}
-                className="p-1.5 rounded hover:bg-elevated2 text-ink-muted hover:text-ink transition-colors"
+                className="p-2 rounded hover:bg-elevated2 text-ink-muted hover:text-ink transition-colors"
                 aria-label="סגור"
               >
                 <X size={18} />

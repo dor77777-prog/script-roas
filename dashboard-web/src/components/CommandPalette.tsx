@@ -525,7 +525,7 @@ export function CommandPalette({
               />
               <button
                 onClick={close}
-                className="p-1 rounded hover:bg-elevated2 text-ink-muted hover:text-ink"
+                className="p-2 rounded hover:bg-elevated2 text-ink-muted hover:text-ink"
                 aria-label="סגור"
               >
                 <X size={14} />

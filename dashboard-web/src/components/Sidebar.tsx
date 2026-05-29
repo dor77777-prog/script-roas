@@ -107,7 +107,7 @@ function SidebarBody({
             aria-label="עקוב אחר ההעדפה של המערכת"
             onClick={() => setChoice('system')}
             className={cn(
-              'rounded-md p-1.5 text-ink-muted hover:bg-elevated2',
+              'rounded-md p-2.5 text-ink-muted hover:bg-elevated2',
               choice === 'system' && 'bg-elevated2 text-ink',
             )}
           >
@@ -118,7 +118,7 @@ function SidebarBody({
             aria-label="מצב בהיר"
             onClick={() => setChoice('light')}
             className={cn(
-              'rounded-md p-1.5 text-ink-muted hover:bg-elevated2',
+              'rounded-md p-2.5 text-ink-muted hover:bg-elevated2',
               choice === 'light' && 'bg-elevated2 text-ink',
             )}
           >
@@ -129,7 +129,7 @@ function SidebarBody({
             aria-label="מצב כהה"
             onClick={() => setChoice('dark')}
             className={cn(
-              'rounded-md p-1.5 text-ink-muted hover:bg-elevated2',
+              'rounded-md p-2.5 text-ink-muted hover:bg-elevated2',
               choice === 'dark' && 'bg-elevated2 text-ink',
             )}
           >

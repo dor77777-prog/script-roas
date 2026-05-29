@@ -1177,7 +1177,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
           <button
             type="button"
             onClick={() => setLocalRange(range)}
-            className="p-1 rounded hover:bg-elevated2 text-ink-muted hover:text-ink"
+            className="p-2 rounded hover:bg-elevated2 text-ink-muted hover:text-ink"
             title="חזור לטווח הגלובלי"
           >
             <X size={14} />
