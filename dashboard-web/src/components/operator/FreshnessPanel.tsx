@@ -83,7 +83,7 @@ export async function FreshnessPanel() {
   if (!rows.length) {
     return (
       <p className="text-ink-secondary text-sm">
-        אין נתוני freshness עדיין — נשמרים אחרי שכל cron מעדכן את מצבו.
+        אין רשומות freshness עדיין. ב-Phase A הטבלה מתעדת רק אירועי budget_skip ושגיאות; ה-happy path ייכתב כשcron-tick-orchestrator יעלה ב-Phase B.
       </p>
     );
   }

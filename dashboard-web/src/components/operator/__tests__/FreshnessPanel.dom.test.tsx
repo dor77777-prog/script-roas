@@ -57,7 +57,7 @@ describe('FreshnessPanel', () => {
     (getFreshness as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     const jsx = await FreshnessPanel();
     render(jsx);
-    expect(screen.getByText(/אין נתוני freshness עדיין/)).toBeDefined();
+    expect(screen.getByText(/אין רשומות freshness עדיין/)).toBeDefined();
   });
 
   it('renders one row per freshness entry', async () => {

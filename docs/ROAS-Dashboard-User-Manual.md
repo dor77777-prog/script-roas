@@ -189,7 +189,7 @@ Plan 6 פיספס 25 רכיבים שיתופיים (`Filters`/Quick Range, `Sect
 
 1. **תקציב Meta BUC** (חדש). כרטיס לכל (store × ad_account) עם 6 פסי-התקדמות (3 metrics × 2 BUCs: `ads_insights` + `ads_management`). אדום ≥80%, כתום ≥60%, ירוק אחרת. ETA לחזרה למצב פעיל מופיע כתג כשה-`estimated_time_to_regain_access` > 0. מתעדכן אחרי כל קריאת Meta API.
 
-2. **טריות נתונים** (חדש). מטריקס לכל (store × platform × scope × table_name) — סטטוס (`success`/`budget_skip`/`transient_error`/`auth_error`), `lag_minutes`, זמן ניסיון אחרון + זמן הצלחה אחרון. ממויין לפי lag יורד (הכי תקועים בראש).
+2. **טריות נתונים** (חדש). מטריקס לכל (store × platform × scope × table_name) — סטטוס (`success`/`budget_skip`/`transient_error`/`auth_error`), `lag_minutes`, זמן ניסיון אחרון + זמן הצלחה אחרון. ממויין לפי lag יורד (הכי תקועים בראש). **חשוב לדעת:** ב-Phase A הטבלה רושמת **רק** אירועי budget_skip ושגיאות; ה-happy path (כל הצלחה רגילה) ייכתב כשcron-tick-orchestrator יעלה ב-Phase B. עד אז הפאנל יראה ריק רוב הזמן — זה לא בעיה, זה מצב הטבלה.
 
 **מאחורי הקלעים (ארכיטקטורה — לפרטים מלאים `docs/ARCHITECTURE.md` §25):**
 
