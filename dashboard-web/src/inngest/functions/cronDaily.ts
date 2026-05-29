@@ -71,7 +71,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 // `token_failure_alert` was approved by Meta on 2026-05-24, so alerts now
 // actually reach +972524809540 (operator's primary number).
 import { notifyTokenFailure } from '@/lib/notifications/tokenFailures';
-import { isAuthError, isRateLimitError } from '@/lib/notifications/detectAuthError';
+import { isAuthError } from '@/lib/notifications/detectAuthError';
 import { captureCronFetchError, captureStepError } from '@/lib/sentry/capture';
 // Phase A 2026-05-29 (Task 13) — pre-flight Meta BUC gate + finalization writes.
 import { getMetaBucUsageForStore } from '@/lib/notifications/metaBucUsage';

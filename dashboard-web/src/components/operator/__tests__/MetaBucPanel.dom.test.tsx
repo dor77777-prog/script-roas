@@ -15,7 +15,6 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import React from 'react';
 
 // ---------------------------------------------------------------------------
 // Mocks — must be established before the module under test is imported.

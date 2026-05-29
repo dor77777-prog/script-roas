@@ -1012,3 +1012,124 @@ Other routes (`/api/campaigns`, `/api/products`, `/api/ads`) DO accept
 - **Repo**: `https://github.com/dor77777-prog/script-roas`
 - **Vercel Project**: `roas-dashboard-smoky`
 - **GSD docs (planning)**: `.planning/phases/`
+
+---
+
+## 25. Freshness Redesign — Phase A (2026-05-29)
+
+מענה ישיר לבעיית הייצור של `cron_live_heavy_rate_limit` panic WhatsApp — Meta BUC נגמרה ב-cron-live-heavy ושלחה התראה מיידית במקום קוד שדילג מראש. Phase A מניח את התשתית; Phases B-E יבנו עליה רישומי entity, hot-metrics, ו-rolling reconcile.
+
+**ספק מקור:** [`docs/superpowers/specs/2026-05-29-freshness-contract-incremental-sync-design.md`](superpowers/specs/2026-05-29-freshness-contract-incremental-sync-design.md). תוכנית מקור: [`docs/superpowers/plans/2026-05-29-freshness-redesign-phase-a.md`](superpowers/plans/2026-05-29-freshness-redesign-phase-a.md).
+
+### 25.1 חוזה ה-Freshness (per-scope)
+
+לכל משטח דשבורד יש SLA מפורש לטריות:
+- **KPI store-level (Hero, TodayLive, GoalTracker)**: live ≤ 10 דק׳ → reconciled (00:05+) → finalized
+- **Campaign / Adset / Ad status**: live ≤ 10 דק׳ דרך registry (Phase B) → reconciled → finalized
+- **Hot campaign/adset/ad metrics**: live ≤ 10 דק׳ (`source='live_tick'`) → reconciled (`source='daily_reconcile'`) → finalized
+- **Cold metrics**: provisional מ-reconcile האחרון → reconciled → finalized
+- **Products with activity today**: live ≤ 10 דק׳ (Phase D)
+- **`/operator` failed reconcile**: surfaced תוך 30 דק׳ מכשל cron-daily
+
+כשלא ניתן לעמוד ב-SLA, ה-UI מציג "stale: Meta budget" / "stale: token error" + last-fresh timestamp במקום נתון שיקרי-טרי.
+
+### 25.2 ה-3 טבלאות החדשות
+
+#### `meta_buc_usage` (per-(store, ad_account_id))
+טרקר חיים של Meta `x-business-use-case-usage` headers. PK מרכבת `(store_id, ad_account_id)` כדי לאפשר ad-accounts מרובים לאותו store בעתיד ללא שינוי schema. כתיבה: `recordMetaBucUsage` ב-`lib/notifications/metaBucUsage.ts` נקראת מ-`fetchMeta` אחרי כל קריאה. קריאה: `getMetaBucUsageForStore(storeId)` מחזירה MAX לכל 6 ה-pct fields חוצה ad_accounts (worker חונק על ה-account הכי גרוע — pessimistic but correct).
+
+#### `data_freshness` (per-(store, platform, scope, table_name))
+ledger לכל scope של freshness. כל cron tick קורא ל-`recordFreshness({storeId, platform, scope, tableName, status, errorCode?, errorMessage?, budgetSkip?})` ב-`lib/inngest/freshness.ts` כדי לתעד את התוצאה. `getFreshness(scope?)` מחזיר את כל השורות ממויינים לפי `lag_minutes DESC NULLS LAST` (תואם ל-partial index). statuses: `success`, `transient_error`, `auth_error`, `budget_skip`, `parse_error`.
+
+#### Provenance columns על 4 טבלאות יומיות
+מיגרציה `20260530100002_add_finalization_columns.sql` הוסיפה ל-`data_daily`, `campaigns_daily`, `ads_daily`, `products_daily`:
+- `source text NOT NULL DEFAULT 'live_tick'` — `live_tick` / `daily_reconcile` / `weekly_reconcile` / `backfill` / `manual_override`
+- `reconciled_at timestamptz` — חתימת זמן של cron-daily
+- `is_finalized boolean NOT NULL DEFAULT false`
+- `last_live_tick_at timestamptz`
+
+Backfill `20260530100003`: כל שורה קודמת ל-`CURRENT_DATE - 1` סומנה `source='daily_reconcile'` + `is_finalized=true`, כך שה-UI של Phase D מקבל היסטוריה מסומנת נכון מהיום הראשון.
+
+### 25.3 `fetchMeta` — wrapper עם defensive header parser
+
+`lib/fetchers/fetchMeta.ts` (Phase A — 2026-05-29) עוטף את `fetchWithBackoff` לכל קריאות Meta. הוא:
+
+1. קורא ל-`fetchWithBackoff(url, init, { provider: 'meta' })` כרגיל.
+2. בודק את ה-Response headers במאגר עדיפות: `x-business-use-case-usage` (preferred — per-BUC per-account) → `x-fb-ads-insights-throttle` (alternative for insights) → `x-app-usage` (app-wide fallback).
+3. אם אף אחד לא מזוהה — שולח Sentry warning עם כל ה-headers הגולמיים (Phase A.6 follow-up אם יופיע shape רביעי).
+4. ממשיך את ה-snapshot ל-`meta_buc_usage` דרך `recordMetaBucUsage` (fire-and-forget).
+5. אם relevant pct (לפי URL pattern: `/insights` → `ads_insights`, else → `ads_management`) ≥ 80 — זורק `MetaBudgetHighError` עם הודעה שמתחילה ב-`META_BUDGET_HIGH:`.
+
+הזריקה הזו זמינה ל-callers לקטוף ולנתב ל-budget_skip operation במקום rate_limit operation.
+
+ה-6 קריאות הקיימות ב-`lib/fetchers/meta.ts` הוחלפו ל-`fetchMeta` (Task 9). שום אזור אחר בקוד לא קורא ישירות ל-`fetchWithBackoff` עבור Meta.
+
+### 25.4 Pre-flight Meta budget gate
+
+`cron-live-heavy` ו-`cron-daily` בודקים `getMetaBucUsageForStore(storeId)` בתחילת כל סבב. אם MAX(insights pct) ≥ 80% AND `last_updated_at` בתוך 15 דק׳ אחרונות — Meta fetch block מקצר; Google + TikTok + Shopify ממשיכים. הדילוג מתועד ב-3 דרכים:
+
+- `failures.push({ provider: 'meta', errorMsg: 'META_BUDGET_HIGH: pre-flight skip; ...' })` שלאחר מכן ה-handler מנתב ל-`notifyTokenFailure({ operation: 'cron_*_budget_skip', ... })`
+- `recordFreshness` לכל Meta scope (`campaign_metrics`, `adset_metrics`, `ad_metrics`) עם `status: 'budget_skip'`
+- ב-`/operator` שני ה-panels מציגים את המצב
+
+`detectAuthError.isRateLimitError` (`lib/notifications/detectAuthError.ts`) הוסיפה את ה-substring `meta_budget_high` ל-meta branch כדי שה-classifier נשאר נכון לכל caller.
+
+`tokenFailures.notifyTokenFailure` (`lib/notifications/tokenFailures.ts`) הוסיפה gate: כש-`operation` תואם `/_budget_skip$/`, היא רושמת ב-DB אבל מדלגת על שליחת WhatsApp. `last_alert_sent_at` עדיין מתעדכן בכל ניסיון (שומר על invariant d/CR-09).
+
+### 25.5 Cron stagger
+
+`cron-live-heavy`: לפני Phase A, כל 3 ה-stores רצו ב-`*/30 * * * *` (כולם ב-:00 ו-:30 יחד). אחרי Phase A:
+- `uzoshop`: `0,30 * * * *`
+- `zolplus`: `10,40 * * * *`
+- `usmile360`: `20,50 * * * *`
+
+10 דק׳ של "Meta breathing room" בין ticks אחים מקטינים את הסיכוי שsupplit shared-app רייט-לימיט יתפוצץ.
+
+`cron-live` (`*/10`) ו-`cron-daily` (`5 0 * * *`) נשארו זהים.
+
+### 25.6 source/is_finalized/last_live_tick_at semantics
+
+- **cron-live** כותב `last_live_tick_at: now()` בכל upsert של `data_daily` + `products_daily`. **לא** כותב `source` (נשאר default `live_tick`) ולא `is_finalized` (נשאר default false).
+- **persistCampaignsLive** (נקרא מ-cron-live-heavy) כותב `last_live_tick_at: now()` בכל upsert של `campaigns_daily` + `ads_daily`. אותה גישה — defaults עושות את העבודה ל-`source` + `is_finalized`.
+- **cron-daily** כותב **שלושה השדות** בכל אחד מ-6 ה-upsert sites (data_daily, products_daily, ads_daily, campaigns_daily ×3 פלטפורמות): `source: 'daily_reconcile'`, `is_finalized: true`, `reconciled_at: <single-tick-timestamp>`. כל 6 הקריאות באותו סבב משתמשות באותו `reconciledAt` ל-auditability.
+
+מה ש-Phase D יקרא:
+- `is_finalized=true` → reconciled/authoritative
+- `is_finalized=false` AND `last_live_tick_at` בתוך 10 דק׳ → live/fresh
+- `is_finalized=false` AND `last_live_tick_at` ישן יותר → live/stale (cron-live פספס תור)
+
+### 25.7 Refund preservation invariant
+
+האלגוריתם של Phase 05.2.3.0 נשמר ללא שינוי: `shopifyRevenueRefunds.computeRevenueWithCrossDayRefunds` מצמיד refund ל-`processed_at` day, פעם אחת, ללא cross-day filter. משמע: שורת `data_daily` של אתמול לא משתנה אחרי `is_finalized=true`. ה-3-day rolling window של cron-live הוא ל-order-side mutations (eventual consistency של Shopify analytics, edge cases של תשלום) — לא refund mutations.
+
+Trade-off: סוחר ש-רוצה "כמה היום הזה שווה באמת" cohort analytics לא יכול לקבל את זה מ-`data_daily`. זה ייבנה מ-`orders_attribution` (טבלה נפרדת, לא finalization-tracked).
+
+### 25.8 `/operator` panels
+
+שני server components חדשים ב-`src/components/operator/`:
+
+- **`MetaBucPanel.tsx`** — קורא `meta_buc_usage` ישירות (server-side), מציג כרטיס לכל (store, ad_account_id) עם 6 progress bars (3 metrics × 2 BUCs) ו-ETA badge כש-`estimated_time_to_regain_access > 0`. צבעים מ-OKLCH tokens: `bg-status-red` ≥80%, `bg-status-orange` ≥60%, `bg-status-green` אחרת.
+- **`FreshnessPanel.tsx`** — קורא `data_freshness` דרך `getFreshness()`, מציג מטריקס ממויין לפי `lag_minutes DESC`. אייקוני סטטוס מ-lucide-react (CheckCircle2/AlertCircle/XCircle) בעקבות הקונבנציה של `TokenFailuresTable`.
+
+ה-2 mounted ב-`operator/page.tsx` בין `TokenFailuresTable` ל-`JobsTable`. ה-page קיבל `export const dynamic = 'force-dynamic'` כדי שהרענון יחזיר נתונים טריים.
+
+### 25.9 חוזה ה-Shopify scopes (תוספת ל-§5.1)
+
+Phase A הבהיר את 3 ה-scopes הנפרדים של Shopify (יוצרים שניהם דרך `lib/fetchers/shopify.ts` אבל ברצוי שונה):
+
+| Scope | Cadence | Window | Writes | Phase |
+|---|---|---|---|---|
+| **KPI / orders / refunds live** | `*/10` | rolling today + today-1 + today-2 | `data_daily` (`source='live_tick'`, `is_finalized=false`, `last_live_tick_at=now()`) | A (קוד כבר באוויר; Task 14 רק הוסיף את `last_live_tick_at`) |
+| **Hot products live** | `*/10` (worker חדש) | products with orders today + revenue today + mapped to active campaigns + top-50 7-day revenue | `products_daily` (`source='live_tick'`, `is_finalized=false`, `last_live_tick_at=now()`) | **D** (deferred — Phase A הוסיף רק את העמודות) |
+| **Daily reconcile** | `00:05` | yesterday (full re-fetch) | `data_daily` + `products_daily` (`source='daily_reconcile'`, `is_finalized=true`, `reconciled_at=now()`) | A (Task 13) |
+
+### 25.10 Phase A acceptance + הסטוריה
+
+הוקצה ב-16 משימות (Tasks 0-15 + Task 16 לפריסה). Tasks 0-3 (Pre-Phase A spike של real header capture) **דולגו** בהחלטת operator 2026-05-29 לטובת defensive parser ב-Task 8 שמטפל בכל 3 צורות ה-headers המתועדות. כל 13 ה-Tasks הנותרים נחתו ב-13 commits נפרדים על main. push לייצור: 2026-05-29.
+
+**מה לא ב-Phase A** (Phases B-E):
+- `campaign_registry` / `adset_registry` / `ad_registry` / `campaign_status_events` / `cron_tick_snapshots` (Phase B)
+- `cron-tick-orchestrator` + workers (Phase B)
+- Hot metrics SQL + decommission cron-live-heavy (Phase C)
+- Hot products live worker + dashboard live/reconciled UI (Phase D)
+- Rolling reconcile T-2/T-3/T-7..T-14 (Phase E)

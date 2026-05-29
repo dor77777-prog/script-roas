@@ -7,7 +7,7 @@
 │                                                  │
 │      מדריך הפעלה שוטף למפעיל הדשבורד            │
 │                                                  │
-│      גרסה:        2.1.14                         │
+│      גרסה:        2.1.15                         │
 │      תאריך:       2026-05-29                     │
 │      קהל יעד:     מפעיל יחיד · החלטות יומיות   │
 │                                                  │
@@ -180,6 +180,39 @@ Plan 6 פיספס 25 רכיבים שיתופיים (`Filters`/Quick Range, `Sect
 - **Caption מסביר ב-3 שורות:** "ה-5 המנצחים ביותר ו-5 שצריכים תשומת לב — לפי ROAS. כל קמפיין עם פלטפורמה, חנות, וההמלצה הקונקרטית. סה״כ X קמפיינים פעילים בטווח."
 
 הגרף ה-scatter נשמר בקובץ אבל לא מיובא יותר ב-Dashboard. אם יש בקשה עתידית, ניתן להחזיר כ-toggle "תצוגת גרף" ליד הרשימות.
+
+### 2.1.15 (2026-05-29) — Phase A: Meta budget tracking + /operator visibility + reconciliation finalization
+
+שדרוג ארכיטקטוני שמטפל בשורש של הבעיה ש-`cron_live_heavy_rate_limit` היה שולח התראות WhatsApp פאניק כשה-BUC של Meta נגמר. שינויים שהמפעיל רואה:
+
+**ב-`/operator` — שני panel-ים חדשים:**
+
+1. **תקציב Meta BUC** (חדש). כרטיס לכל (store × ad_account) עם 6 פסי-התקדמות (3 metrics × 2 BUCs: `ads_insights` + `ads_management`). אדום ≥80%, כתום ≥60%, ירוק אחרת. ETA לחזרה למצב פעיל מופיע כתג כשה-`estimated_time_to_regain_access` > 0. מתעדכן אחרי כל קריאת Meta API.
+
+2. **טריות נתונים** (חדש). מטריקס לכל (store × platform × scope × table_name) — סטטוס (`success`/`budget_skip`/`transient_error`/`auth_error`), `lag_minutes`, זמן ניסיון אחרון + זמן הצלחה אחרון. ממויין לפי lag יורד (הכי תקועים בראש).
+
+**מאחורי הקלעים (ארכיטקטורה — לפרטים מלאים `docs/ARCHITECTURE.md` §25):**
+
+- כל קריאת Meta API עכשיו עוברת דרך wrapper-`fetchMeta` שמנתח 3 צורות headers (BUC הוא ה-preferred; `x-fb-ads-insights-throttle` + `x-app-usage` הם fallbacks defensive). שינוי 4 רכיבי cron במקביל.
+- **Pre-flight gate**: `cron-live-heavy` ו-`cron-daily` בודקים את `meta_buc_usage` בתחילת כל סבב. אם BUC ≥ 80% בתוך 15 דק׳ אחרונות — דילוג על קריאות Meta בלבד; Google + TikTok + Shopify ממשיכים. הדילוג מקבל `operation='cron_*_budget_skip'` ש-`notifyTokenFailure` מזהה ומדלגת על שליחת WhatsApp (אבל עדיין רושמת ב-DB ל-`/operator`).
+- **Per-store cron stagger** ל-`cron-live-heavy`: uzoshop ב-:00/:30, zolplus ב-:10/:40, usmile360 ב-:20/:50. במקום שכולם יחבטו ב-Meta יחד.
+- **Provenance columns על 4 טבלאות יומיות** (`data_daily`, `campaigns_daily`, `ads_daily`, `products_daily`):
+  - `source` — `live_tick` / `daily_reconcile` / וכו׳
+  - `is_finalized` — `false` עד שcron-daily ב-00:05 רץ ומסיים את היום
+  - `reconciled_at` — חותמת זמן של הריצה ב-cron-daily
+  - `last_live_tick_at` — חותמת זמן של הסבב האחרון של cron-live ש-נגע בשורה
+- **Refund preservation**: אלגוריתם ה-`processed_at` נשמר — refund שמעובד היום על הזמנה מאתמול נכנס ל-`data_daily` של היום, לא של אתמול. `is_finalized=true` של אתמול נשאר תקף.
+
+**מה לא השתנה:**
+- כל נתון, כל KPI, כל חישוב — בייט-ביביט זהה.
+- ה-`/operator` קונסולה ממשיכה לשמור על כל הסעיפים הקיימים (סנכרון עכשיו / ריצות / WhatsApp / backfill / החלפות ידניות / Token Failures / Reset). שני ה-panels החדשים מתווספים בין Token Failures לבין JobsTable.
+
+**Acceptance check אחרי deploy:**
+1. ב-`/operator` יש קטעי `תקציב Meta BUC` ו-`טריות נתונים` נטענים תוך 10 דק׳.
+2. אחרי חצות + ~5 דק׳ — אתמול ב-`data_daily` מסומן `source='daily_reconcile'` + `is_finalized=true`.
+3. אין התראות `cron_live_heavy_rate_limit` ב-WhatsApp במשך 24 שעות (או לכל היותר 1 transient).
+
+---
 
 ### Hotfix 2.1.14 (2026-05-29) — Legend swatch consistency fix (2.1.13 follow-up)
 
