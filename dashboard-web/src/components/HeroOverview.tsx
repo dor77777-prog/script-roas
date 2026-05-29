@@ -264,13 +264,15 @@ export function HeroOverview({ data, filters }: Props) {
     <section
       className={cn(
         'relative overflow-hidden rounded-2xl',
-        'bg-gradient-to-br from-primary-dark via-primary to-primary-light text-white',
+        // Theme-aware accent gradient via CSS variable. In light mode
+        // resolves to a cool indigo card (similar to the original navy
+        // brand color); in dark mode auto-shifts to the dark-theme accent
+        // (lighter, slightly desaturated indigo). All inner `text-white`
+        // values still read clearly because the gradient stays in the
+        // 35-55% L band (accent token + color-mix) in both themes.
+        'bg-gradient-to-br from-accent via-accent/85 to-accent/65 text-white',
         'shadow-elevated',
       )}
-      style={{
-        backgroundImage:
-          'linear-gradient(135deg, #091c4a 0%, #0d3680 55%, #1d4ed8 105%)',
-      }}
     >
       {/* Decorative dot grid + side glow */}
       <div

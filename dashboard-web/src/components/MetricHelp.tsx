@@ -109,7 +109,7 @@ export function MetricHelp({ content, className, subtle = true }: Props) {
           className={cn(
             'absolute z-30 top-full mt-2 end-0',
             'w-[260px] sm:w-[300px] max-w-[min(90vw,320px)]',
-            'rounded-xl bg-ink text-white p-3 shadow-elevated',
+            'rounded-xl bg-ink text-canvas p-3 shadow-elevated',
             'text-xs leading-relaxed animate-fade-in',
             'pointer-events-auto',
           )}
@@ -119,24 +119,24 @@ export function MetricHelp({ content, className, subtle = true }: Props) {
           onMouseEnter={cancelHide}
           onMouseLeave={scheduleHide}
         >
-          <div className="font-semibold text-white mb-1.5">{content.name}</div>
-          <div className="text-white/80">{content.whatIs}</div>
+          <div className="font-semibold text-canvas mb-1.5">{content.name}</div>
+          <div className="text-canvas/80">{content.whatIs}</div>
           {content.formula && (
             <code
               dir="ltr"
-              className="inline-block mt-2 px-1.5 py-0.5 rounded text-[10px] bg-white/10 text-white/90 tabular-nums"
+              className="inline-block mt-2 px-1.5 py-0.5 rounded text-[10px] bg-canvas/10 text-canvas/90 tabular-nums"
             >
               {content.formula}
             </code>
           )}
           {content.good && (
-            <div className="mt-2 pt-2 border-t border-white/10">
+            <div className="mt-2 pt-2 border-t border-canvas/10">
               <span className="text-emerald-300 font-semibold">טוב:</span>{' '}
-              <span className="text-white/80">{content.good}</span>
+              <span className="text-canvas/80">{content.good}</span>
             </div>
           )}
           {content.context && (
-            <div className="mt-1.5 text-[10px] text-white/55">
+            <div className="mt-1.5 text-[10px] text-canvas/55">
               {content.context}
             </div>
           )}

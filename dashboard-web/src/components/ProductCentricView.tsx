@@ -79,11 +79,11 @@ function statBlock(rows: Array<{ label: string; value: string; emphasis?: boolea
     <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 my-2 text-[11px]">
       {rows.map((r) => (
         <Fragment key={r.label}>
-          <dt className="text-white/55">{r.label}</dt>
+          <dt className="text-canvas/55">{r.label}</dt>
           <dd
             className={cn(
               'text-end tabular-nums',
-              r.emphasis ? 'text-white font-semibold' : 'text-white/90',
+              r.emphasis ? 'text-canvas font-semibold' : 'text-canvas/90',
             )}
           >
             <bdi dir="ltr">{r.value}</bdi>
@@ -498,7 +498,7 @@ function ProductRow({
                         body={
                           <>
                             סך מה שהוצאת על הקמפיין הזה בטווח שנבחר, ב-CAD לאחר המרה מהמטבע
-                            המקורי של הפלטפורמה. מקור: <code dir="ltr" className="text-white/95">data_daily</code>.
+                            המקורי של הפלטפורמה. מקור: <code dir="ltr" className="text-canvas/95">data_daily</code>.
                           </>
                         }
                       />
@@ -511,7 +511,7 @@ function ProductRow({
                             איזה אחוז מהוצאת המוצר <strong>באותה פלטפורמה</strong> שייך לקמפיין
                             הזה. דוגמה: 60% ב-Meta אומר שהקמפיין הוא 60% מסך הוצאת Meta על המוצר.
                             נוסחה:{' '}
-                            <code dir="ltr" className="text-white/95">
+                            <code dir="ltr" className="text-canvas/95">
                               spend / Σ spend (same platform, same product)
                             </code>
                             .
@@ -527,7 +527,7 @@ function ProductRow({
                             איזה אחוז מסך ההוצאה <strong>של כל הקמפיינים</strong> על המוצר (כל
                             הפלטפורמות יחד) שייך לקמפיין הזה. מאפשר השוואה cross-platform.
                             נוסחה:{' '}
-                            <code dir="ltr" className="text-white/95">
+                            <code dir="ltr" className="text-canvas/95">
                               spend / cohort total spend
                             </code>
                             .
@@ -544,7 +544,7 @@ function ProductRow({
                             שה-allocator מחלק את ההכנסות בין הקמפיינים בקוהורט. הסדר: קודם
                             ההזמנות שיוחסו דטרמיניסטית (fbclid/gclid/ttclid), אז השאר מתחלק
                             פרופורציונלית ל-spend. נוסחה מקורבת:{' '}
-                            <code dir="ltr" className="text-white/95">
+                            <code dir="ltr" className="text-canvas/95">
                               Shopify net × intra-platform spend share
                             </code>
                             .
@@ -573,7 +573,7 @@ function ProductRow({
                           <>
                             ה-ROAS לפי <strong>ה-pixel של הפלטפורמה</strong> (Meta/Google/TikTok)
                             — לא לפי Shopify. נוסחה:{' '}
-                            <code dir="ltr" className="text-white/95">
+                            <code dir="ltr" className="text-canvas/95">
                               conversionValue / spend
                             </code>
                             . שונה מ-ROAS משוקלל בסיכום (שמבוסס Shopify אמיתי). פער גדול בין
@@ -589,7 +589,7 @@ function ProductRow({
                           <>
                             ההפרש היחסי בין ההכנסה ש-pixel דיווח להכנסה המוקצית מ-Shopify.
                             נוסחה:{' '}
-                            <code dir="ltr" className="text-white/95">
+                            <code dir="ltr" className="text-canvas/95">
                               (pixel − Shopify) / Shopify
                             </code>
                             .

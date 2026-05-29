@@ -84,15 +84,18 @@ type LiveTone = {
 /** Styling tokens keyed by the tone name from roasLabel.
  *
  * Gradient pattern uses the SATURATED status color (not the -Bg variant)
- * at low alpha so the tint is visible in BOTH themes. The -Bg tokens are
- * very pale in light mode (oklch ~96% L) and very dark in dark mode
- * (oklch ~25% L) — in dark mode they essentially blend into bg-elevated,
- * killing the ROAS-driven gradient. Using full-saturation status colors
- * at /18-/25 alpha gives a perceptually similar tint in light mode and a
- * visibly colored tint in dark mode. */
+ * at moderate alpha (/35-/45) so the ROAS-driven tint is clearly visible
+ * in BOTH themes. The -Bg tokens are very pale in light mode (oklch
+ * ~96% L) and dark in dark mode (~28% L) — at /60 alpha they're either
+ * washed-out in light or blend into bg-elevated in dark. Using full-
+ * saturation status colors at higher alpha gives a clear colored tint
+ * in both themes without overpowering the card content.
+ *
+ * Hotfix-2 2026-05-29: bumped from /22-/25 → /35-/45 after user
+ * reported the gradient looked inactive ("הגרדיאנט בלייב לא פעיל"). */
 const LIVE_TONE_STYLES: Record<string, LiveTone> = {
   gray: {
-    cardBg: 'bg-gradient-to-br from-status-gray/10 via-elevated to-elevated',
+    cardBg: 'bg-gradient-to-br from-status-gray/15 via-elevated to-elevated',
     cardBorder: 'border-line',
     blob: 'bg-status-gray/10',
     pulse: 'bg-status-gray',
@@ -100,33 +103,33 @@ const LIVE_TONE_STYLES: Record<string, LiveTone> = {
     iconColor: 'text-status-gray',
   },
   red: {
-    cardBg: 'bg-gradient-to-br from-status-red/25 via-elevated to-elevated',
-    cardBorder: 'border-status-red/35',
-    blob: 'bg-status-red/12',
+    cardBg: 'bg-gradient-to-br from-status-red/45 via-status-red/12 to-elevated',
+    cardBorder: 'border-status-red/45',
+    blob: 'bg-status-red/15',
     pulse: 'bg-status-red',
     pill: 'bg-status-red text-white',
     iconColor: 'text-status-red',
   },
   orange: {
-    cardBg: 'bg-gradient-to-br from-status-orange/25 via-elevated to-elevated',
-    cardBorder: 'border-status-orange/35',
-    blob: 'bg-status-orange/12',
+    cardBg: 'bg-gradient-to-br from-status-orange/45 via-status-orange/12 to-elevated',
+    cardBorder: 'border-status-orange/45',
+    blob: 'bg-status-orange/15',
     pulse: 'bg-status-orange',
     pill: 'bg-status-orange text-white',
     iconColor: 'text-status-orange',
   },
   green: {
-    cardBg: 'bg-gradient-to-br from-status-green/22 via-elevated to-elevated',
-    cardBorder: 'border-status-green/30',
-    blob: 'bg-status-green/10',
+    cardBg: 'bg-gradient-to-br from-status-green/40 via-status-green/10 to-elevated',
+    cardBorder: 'border-status-green/40',
+    blob: 'bg-status-green/12',
     pulse: 'bg-status-green',
     pill: 'bg-status-green text-white',
     iconColor: 'text-status-green',
   },
   blue: {
-    cardBg: 'bg-gradient-to-br from-status-blue/22 via-elevated to-elevated',
-    cardBorder: 'border-status-blue/30',
-    blob: 'bg-status-blue/12',
+    cardBg: 'bg-gradient-to-br from-status-blue/40 via-status-blue/10 to-elevated',
+    cardBorder: 'border-status-blue/40',
+    blob: 'bg-status-blue/15',
     pulse: 'bg-status-blue',
     pill: 'bg-status-blue text-white',
     iconColor: 'text-status-blue',

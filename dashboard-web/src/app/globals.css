@@ -79,27 +79,37 @@
   --accent:    oklch(65% 0.16 260);
   --accent-fg: oklch(15% 0.01 240);
 
-  /* ROAS status — hue locked, luminance bumped so colors stay legible
-     against dark surfaces. The 4 tones still map to roasLabel() 1-to-1. */
-  --status-red:    oklch(65% 0.18 25);
-  --status-red-bg: oklch(25% 0.06 25);
-  --status-red-fg: oklch(85% 0.10 25);
+  /* ROAS status — dark theme rebalanced 2026-05-29 for distinct hue
+     perception. Issues fixed:
+       1. Red (hue 25) + Orange (hue 55) were too close → looked similar
+          on table cells. Pushed red to 18 (purer red, away from orange)
+          and orange to 70 (more toward yellow, away from red).
+       2. All 4 had chroma=0.06 on bg variants → low saturation made
+          hues hard to distinguish. Bumped to 0.12 across the board.
+       3. Green (145) and blue (240) hue-separation widened to 145 vs
+          250, plus chroma boost gives clearer cool-cool contrast.
+       4. Solid colors bumped to 70-78% L + chroma 0.18-0.22 for clearly
+          visible badges/borders/text against dark surfaces.
+       5. -fg variants kept light enough for AA contrast on -bg cells. */
+  --status-red:    oklch(72% 0.22 18);
+  --status-red-bg: oklch(28% 0.13 18);
+  --status-red-fg: oklch(90% 0.10 18);
 
-  --status-orange:    oklch(73% 0.16 55);
-  --status-orange-bg: oklch(25% 0.06 55);
-  --status-orange-fg: oklch(85% 0.10 55);
+  --status-orange:    oklch(78% 0.18 70);
+  --status-orange-bg: oklch(30% 0.13 70);
+  --status-orange-fg: oklch(92% 0.10 70);
 
-  --status-green:    oklch(65% 0.16 145);
-  --status-green-bg: oklch(25% 0.06 145);
-  --status-green-fg: oklch(85% 0.10 145);
+  --status-green:    oklch(72% 0.20 145);
+  --status-green-bg: oklch(28% 0.13 145);
+  --status-green-fg: oklch(90% 0.10 145);
 
-  --status-blue:    oklch(65% 0.16 240);
-  --status-blue-bg: oklch(25% 0.05 240);
-  --status-blue-fg: oklch(85% 0.08 240);
+  --status-blue:    oklch(70% 0.20 250);
+  --status-blue-bg: oklch(28% 0.13 250);
+  --status-blue-fg: oklch(90% 0.10 250);
 
   --status-gray:    oklch(65% 0 0);
-  --status-gray-bg: oklch(25% 0 0);
-  --status-gray-fg: oklch(85% 0 0);
+  --status-gray-bg: oklch(28% 0 0);
+  --status-gray-fg: oklch(90% 0 0);
 }
 
 /* ===========================================================================

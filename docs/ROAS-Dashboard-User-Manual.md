@@ -7,7 +7,7 @@
 │                                                  │
 │      מדריך הפעלה שוטף למפעיל הדשבורד            │
 │                                                  │
-│      גרסה:        2.1.1                          │
+│      גרסה:        2.1.2                          │
 │      תאריך:       2026-05-29                     │
 │      קהל יעד:     מפעיל יחיד · החלטות יומיות   │
 │                                                  │
@@ -51,6 +51,18 @@
 Plan 6 פיספס 25 רכיבים שיתופיים (`Filters`/Quick Range, `SectionIntro` כותרות, 4 tooltips, `MonthlyTables` month-headers, `FreshnessChip`, `RefundIndicator`, ועוד). אלה היו עם classes לא-theme-aware (`bg-surface` / `bg-text-primary` / `text-text-primary` / `bg-slate-800` / `bg-gray-50`) ולכן ב-dark mode הופיעו כ-"לבן על כהה" או הטקסט היה בלתי נראה. בנוסף: tooltips שהשתמשו ב-`bg-ink text-white` הציגו לבן-על-לבן ב-dark mode (כי `bg-ink` ב-dark theme הוא בהיר). וגרדיאנט ה-ROAS ב-TodayLive עבר מ-`status-{color}Bg/60` (שב-dark נמוג לרקע) ל-`status-{color}/22` (אלפא נמוכה של הצבע הרווי — נראה בשני ה-themes).
 
 תוקנו: ~172 legacy tokens + 4 בעיות `bg-ink+text-white` + 9 raw Tailwind palettes + הגרדיאנט. 25 קבצים, 0 שינויי לוגיקה.
+
+### Hotfix 2.1.2 (2026-05-29) — Dark-mode color separation + tooltip text + HeroOverview
+
+המשך טיפול אחרי 2.1.1 — תפסנו 3 בעיות נוספות:
+
+1. **צבעי status ב-dark mode** (אדום/כתום/ירוק/כחול בטבלאות + health badges + chips) היו עם chroma נמוך (0.06) — בולים בעין כצבעים דומים. בומפ ל-chroma 0.12-0.13 + הרחבת הפרדת hue: red 25→18 (יותר אדום, רחוק מכתום), orange 55→70 (יותר צהבהב, רחוק מאדום), blue 240→250 (יותר ברור-קצת-סגול, רחוק מירוק). solid colors בומפ ל-L=70-78% עם chroma 0.18-0.22 ל-badges/borders/text. כל זה ב-`globals.css` בלבד — שום קומפוננטה לא הצריכה שינוי.
+
+2. **HeroOverview** (כרטיס ההשוואות הכחול מתחת ל-Live) — השתמש ב-gradient inline-style hardcoded navy (`#091c4a → #1d4ed8`), לא theme-aware. הוחלף ל-`bg-gradient-to-br from-accent via-accent/85 to-accent/65 text-white` שמתעדכן אוטומטית לפי ה-theme.
+
+3. **TodayLive gradient** — alpha בומפ נוסף /22-/25 → /35-/45 + הוספת via-stop נוסף לעקומה חלקה יותר; עכשיו הגרדיאנט של ROAS באמת נראה.
+
+4. **Tooltip body text** — סוכן סקירה תפס 3 קבצים נוספים שבהם container הטוליפ היה `bg-ink text-canvas` (נכון) אבל ה-body השתמש ב-`text-white/X` ישיר: `MetricHelp` (ה-(?) icon המרכזי בכל הדשבורד), `ProductCentricView.statBlock`, ו-CPM tooltip ב-`CampaignsTable`. כולם הועברו ל-`text-canvas/X` ↔ קריא בשני ה-themes.
 
 מסמכים נלווים מתעדכנים בנפרד: ארכיטקטורה ב-`docs/ARCHITECTURE.md`, עבודה ביצועית של ה-overhaul ב-`docs/superpowers/plans/2026-05-{28,29}-dashboard-ux-overhaul-*.md` (7 plans, Plans 1–6 IMPLEMENTED; Plan 7 polish + a11y + RTL audit pending).
 

@@ -1459,8 +1459,8 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                           <div>ROAS: <span className="font-semibold text-emerald-300">{formatNumber(d.roas, 2)}</span></div>
                         )}
                         {showPrevLine && d.prevCpm != null && (
-                          <div className="mt-1 pt-1 border-t border-white/10">
-                            <div className="text-white/60 text-[10px]">
+                          <div className="mt-1 pt-1 border-t border-canvas/10">
+                            <div className="text-canvas/60 text-[10px]">
                               תקופה קודמת{d.prevDate ? ` (${formatDate(d.prevDate)})` : ''}:
                             </div>
                             <div>
@@ -1468,7 +1468,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                               {prevDeltaPct != null && (
                                 <span className={cn(
                                   'ms-1.5 text-[10px] font-semibold',
-                                  prevDeltaPct < 0 ? 'text-emerald-300' : prevDeltaPct > 0 ? 'text-rose-300' : 'text-white/60',
+                                  prevDeltaPct < 0 ? 'text-emerald-300' : prevDeltaPct > 0 ? 'text-rose-300' : 'text-canvas/60',
                                 )}>
                                   ({prevDeltaPct > 0 ? '+' : ''}{prevDeltaPct.toFixed(1)}%)
                                 </span>
@@ -1476,7 +1476,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                             </div>
                           </div>
                         )}
-                        <div className="text-white/70 text-[10px] mt-0.5">
+                        <div className="text-canvas/70 text-[10px] mt-0.5">
                           {formatNumber(d.impressions, 0)} חשיפות · CAD {formatCurrency(d.spend, 2)}
                         </div>
                       </div>
