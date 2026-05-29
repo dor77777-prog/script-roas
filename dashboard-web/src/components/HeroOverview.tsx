@@ -314,7 +314,7 @@ export function HeroOverview({ data, filters }: Props) {
         </h2>
 
         {/* Floating KPI strip — no card chrome, just hairline dividers */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-x-6 sm:gap-x-8 gap-y-5 sm:gap-y-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-x-6 sm:gap-x-8 gap-y-5 sm:gap-y-6">
           <div className="flex flex-col">
             <FloatingKpi
               label="הכנסות"

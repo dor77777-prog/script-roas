@@ -386,7 +386,7 @@ export function AdsDrawer({
           {summary && summary.ads.length > 0 && (
             <>
               {/* Totals strip — quick reference vs the parent ad-set values */}
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <Stat label="הוצאה" value={`CAD ${formatCurrency(summary.totals.spend)}`} />
                 <Stat label="ערך" value={`CAD ${formatCurrency(summary.totals.value)}`} accent="green" />
                 <Stat
