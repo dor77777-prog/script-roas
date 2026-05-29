@@ -4,13 +4,17 @@ import { fetchGoogleStatusForStore } from '@/lib/fetchers/googleStatus';
 describe('fetchGoogleStatusForStore()', () => {
   it('returns campaigns + adgroups + ads with status from change_status + entity follow-up', async () => {
     const searchStream = vi.fn();
-    // First call: change_status query
+    // First call: change_status query.
+    // CRIT-C: response JSON uses camelCase keys (changeStatus,
+    // resourceType, resourceName, lastChangeDateTime).
     searchStream.mockResolvedValueOnce([
-      { campaign: { id: 'GC1' }, change_status: { resource_type: 'CAMPAIGN', resource_name: 'customers/123/campaigns/GC1', last_change_date_time: '2026-05-30 14:00:00' } },
+      { campaign: { id: 'GC1' }, changeStatus: { resourceType: 'CAMPAIGN', resourceName: 'customers/123/campaigns/GC1', lastChangeDateTime: '2026-05-30 14:00:00' } },
     ]);
-    // Second call: campaign entity follow-up
+    // Second call: campaign entity follow-up.
+    // CRIT-C: `servingStatus` (camelCase) — GAQL stays snake_case but the
+    // returned JSON object is camelCase.
     searchStream.mockResolvedValueOnce([
-      { campaign: { id: 'GC1', name: 'G Campaign 1', status: 'ENABLED', serving_status: 'SERVING' } },
+      { campaign: { id: 'GC1', name: 'G Campaign 1', status: 'ENABLED', servingStatus: 'SERVING' } },
     ]);
     const customer = { searchStream } as unknown as Parameters<typeof fetchGoogleStatusForStore>[0]['customer'];
     const out = await fetchGoogleStatusForStore({

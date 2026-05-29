@@ -72,21 +72,23 @@ function toCampaignRow(storeId: StoreId, r: Record<string, unknown>): CampaignDa
   const m = (r.metrics ?? {}) as Record<string, unknown>;
   const s = (r.segments ?? {}) as Record<string, unknown>;
   const c = (r.campaign ?? {}) as Record<string, unknown>;
+  // CRIT-C: JSON response uses camelCase keys — costMicros, conversionsValue.
   return {
     store_id: storeId,
     platform: 'google',
     campaign_id: String(c.id),
     date: String(s.date ?? ''),
-    spend_cad: Number(m.cost_micros ?? 0) / 1e6,
+    spend_cad: Number(m.costMicros ?? 0) / 1e6,
     impressions: Math.round(Number(m.impressions ?? 0)),
     clicks: Math.round(Number(m.clicks ?? 0)),
     conversions: Math.round(Number(m.conversions ?? 0)),
-    conversion_value_cad: Number(m.conversions_value ?? 0),
+    conversion_value_cad: Number(m.conversionsValue ?? 0),
   };
 }
 
 function toAdsetRow(storeId: StoreId, r: Record<string, unknown>): AdsetDailyRow {
-  const ag = (r.ad_group ?? {}) as Record<string, unknown>;
+  // CRIT-C: JSON uses camelCase key `adGroup`.
+  const ag = (r.adGroup ?? {}) as Record<string, unknown>;
   return {
     ...toCampaignRow(storeId, r),
     ad_set_id: String(ag.id),
@@ -94,8 +96,9 @@ function toAdsetRow(storeId: StoreId, r: Record<string, unknown>): AdsetDailyRow
 }
 
 function toAdRow(storeId: StoreId, r: Record<string, unknown>): AdDailyRow {
-  const ag = (r.ad_group ?? {}) as Record<string, unknown>;
-  const aga = (r.ad_group_ad ?? {}) as Record<string, unknown>;
+  // CRIT-C: JSON uses camelCase keys `adGroup` and `adGroupAd`.
+  const ag = (r.adGroup ?? {}) as Record<string, unknown>;
+  const aga = (r.adGroupAd ?? {}) as Record<string, unknown>;
   const adInner = (aga.ad ?? {}) as Record<string, unknown>;
   return {
     ...toCampaignRow(storeId, r),

@@ -2,6 +2,13 @@
 //
 // Phase C — Google Ads status discovery via change_status. Returns
 // changed campaign/adgroup/ad ids + full status rows for each.
+//
+// CRIT-C note: GAQL queries themselves remain snake_case (GAQL is
+// case-sensitive snake_case), but the Google Ads JSON API returns
+// camelCase keys — see googleAds.ts:479-489 for the canonical shape:
+//   r.changeStatus.resourceType / resourceName / lastChangeDateTime
+//   r.adGroup, r.adGroupAd.ad, metrics.costMicros, metrics.conversionsValue
+// Snake-case lookups silently return undefined → empty result sets.
 
 import type {
   AdRegistryRow,
@@ -44,11 +51,13 @@ export async function fetchGoogleStatusForStore(input: GoogleStatusInput): Promi
   const adgroupIds = new Set<string>();
   const adIds = new Set<string>();
   for (const r of changeRows) {
-    const cs = (r as { change_status?: Record<string, unknown> }).change_status;
+    // CRIT-C: JSON response uses camelCase keys (changeStatus, resourceType,
+    // resourceName). Snake-case here would silently return undefined.
+    const cs = (r as { changeStatus?: Record<string, unknown> }).changeStatus;
     if (!cs) continue;
-    const type = cs.resource_type as string;
-    const name = cs.resource_name as string;
-    const id = name.split('/').pop();
+    const type = cs.resourceType as string;
+    const name = cs.resourceName as string;
+    const id = name?.split('/').pop();
     if (!id) continue;
     if (type === 'CAMPAIGN') campaignIds.add(id);
     if (type === 'AD_GROUP') adgroupIds.add(id);
@@ -76,7 +85,9 @@ export async function fetchGoogleStatusForStore(input: GoogleStatusInput): Promi
       query: `SELECT ad_group.id, ad_group.campaign, ad_group.name, ad_group.status FROM ad_group WHERE ad_group.id IN (${ids})`,
     });
     for (const r of rows) {
-      const ag = (r as { ad_group?: Record<string, unknown> }).ad_group;
+      // CRIT-C: JSON uses camelCase key `adGroup` even though GAQL uses
+      // snake_case `ad_group`.
+      const ag = (r as { adGroup?: Record<string, unknown> }).adGroup;
       if (!ag) continue;
       adsets.push(toAdsetRow(storeId, ag));
     }
@@ -86,12 +97,17 @@ export async function fetchGoogleStatusForStore(input: GoogleStatusInput): Promi
   if (adIds.size > 0) {
     const ids = [...adIds].map(id => `'${id}'`).join(',');
     const rows = await customer.searchStream({
-      query: `SELECT ad_group_ad.ad.id, ad_group_ad.ad_group, ad_group_ad.status FROM ad_group_ad WHERE ad_group_ad.ad.id IN (${ids})`,
+      // IMP-B: include campaign.id so the ad-row gets a non-empty
+      // campaign_id (ad_registry.campaign_id is NOT NULL per Phase B).
+      query: `SELECT campaign.id, ad_group_ad.ad.id, ad_group_ad.ad_group, ad_group_ad.status FROM ad_group_ad WHERE ad_group_ad.ad.id IN (${ids})`,
     });
     for (const r of rows) {
-      const aga = (r as { ad_group_ad?: Record<string, unknown> }).ad_group_ad;
+      // CRIT-C: JSON uses camelCase key `adGroupAd` even though GAQL uses
+      // snake_case `ad_group_ad`. Same for the sibling `campaign` field.
+      const aga = (r as { adGroupAd?: Record<string, unknown> }).adGroupAd;
+      const camp = (r as { campaign?: Record<string, unknown> }).campaign;
       if (!aga) continue;
-      ads.push(toAdRow(storeId, aga));
+      ads.push(toAdRow(storeId, aga, camp));
     }
   }
 
@@ -100,7 +116,9 @@ export async function fetchGoogleStatusForStore(input: GoogleStatusInput): Promi
 
 function toCampaignRow(storeId: StoreId, c: Record<string, unknown>): CampaignRegistryRow {
   const configured = String(c.status ?? '');
-  const effective = String(c.serving_status ?? '');
+  // CRIT-C: JSON returns `servingStatus` (camelCase) even though GAQL uses
+  // snake_case `serving_status`.
+  const effective = String(c.servingStatus ?? '');
   return {
     store_id: storeId, platform: 'google',
     campaign_id: String(c.id), name: c.name as string ?? null,
@@ -118,23 +136,43 @@ function toCampaignRow(storeId: StoreId, c: Record<string, unknown>): CampaignRe
 }
 
 function toAdsetRow(storeId: StoreId, ag: Record<string, unknown>): AdsetRegistryRow {
-  const campaignName = ag.campaign as string ?? '';
-  const campaignId = campaignName.split('/').pop() ?? '';
+  const campaignResource = ag.campaign as string ?? '';
+  const campaignId = campaignResource.split('/').pop() ?? '';
+  const base = toCampaignRow(storeId, { ...ag, id: campaignId });
+  // IMP-D: Google's ad_group resource does NOT expose a serving_status field
+  // (only campaign-level does). Without an ad-group-level serving signal, we
+  // derive is_serving from is_enabled (ad_group.status === 'ENABLED' is the
+  // best proxy). Acknowledged limitation: a campaign-paused parent will not
+  // pull the adgroup's is_serving down here — Phase C scope keeps it simple.
+  const isEnabled = String(ag.status ?? '') === 'ENABLED';
   return {
-    ...toCampaignRow(storeId, { ...ag, id: campaignId }),
+    ...base,
     campaign_id: campaignId,
     adset_id: String(ag.id),
-    daily_budget_cad: null, lifetime_budget_cad: null,
+    is_serving: isEnabled,
+    daily_budget_cad: null,
+    lifetime_budget_cad: null,
   };
 }
 
-function toAdRow(storeId: StoreId, aga: Record<string, unknown>): AdRegistryRow {
-  const adgroupName = aga.ad_group as string ?? '';
-  const adgroupId = adgroupName.split('/').pop() ?? '';
+function toAdRow(
+  storeId: StoreId,
+  aga: Record<string, unknown>,
+  camp: Record<string, unknown> | undefined,
+): AdRegistryRow {
+  // CRIT-C: JSON uses camelCase key `adGroup` for the resource name field
+  // even though the GAQL select clause used `ad_group_ad.ad_group`.
+  const adgroupResource = (aga.adGroup as string) ?? '';
+  const adgroupId = adgroupResource.split('/').pop() ?? '';
   const adInner = aga.ad as Record<string, unknown> ?? {};
+  // IMP-B: campaign_id is sourced from the sibling `campaign` field returned
+  // by the same row (the GAQL query now includes `campaign.id`). Falls back
+  // to '' only if the row genuinely lacks the field (should not happen with
+  // the updated query).
+  const campaignId = String((camp ?? {}).id ?? '');
   return {
     ...toCampaignRow(storeId, aga),
-    campaign_id: '',
+    campaign_id: campaignId,
     adset_id: adgroupId,
     ad_id: String(adInner.id ?? ''),
   };

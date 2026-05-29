@@ -5,12 +5,14 @@ describe('fetchGoogleHotMetricsForStore()', () => {
   it('returns adset + ad metrics rows for hot ids (no campaign-level rows per CRIT-B)', async () => {
     const searchStream = vi.fn();
     // ad-group metrics
+    // CRIT-C: JSON keys are camelCase — adGroup, costMicros, conversionsValue.
     searchStream.mockResolvedValueOnce([
-      { campaign: { id: 'GC1' }, ad_group: { id: 'AG1' }, metrics: { impressions: '500', clicks: '10', cost_micros: '25000000', conversions: 0, conversions_value: '0' }, segments: { date: '2026-05-30' } },
+      { campaign: { id: 'GC1' }, adGroup: { id: 'AG1' }, metrics: { impressions: '500', clicks: '10', costMicros: '25000000', conversions: 0, conversionsValue: '0' }, segments: { date: '2026-05-30' } },
     ]);
     // ad metrics
+    // CRIT-C: JSON keys are camelCase — adGroup, adGroupAd.
     searchStream.mockResolvedValueOnce([
-      { campaign: { id: 'GC1' }, ad_group: { id: 'AG1' }, ad_group_ad: { ad: { id: 'AD1' } }, metrics: { impressions: '500', clicks: '10', cost_micros: '25000000', conversions: 0, conversions_value: '0' }, segments: { date: '2026-05-30' } },
+      { campaign: { id: 'GC1' }, adGroup: { id: 'AG1' }, adGroupAd: { ad: { id: 'AD1' } }, metrics: { impressions: '500', clicks: '10', costMicros: '25000000', conversions: 0, conversionsValue: '0' }, segments: { date: '2026-05-30' } },
     ]);
     const customer = { searchStream } as unknown as Parameters<typeof fetchGoogleHotMetricsForStore>[0]['customer'];
     const out = await fetchGoogleHotMetricsForStore({
@@ -23,6 +25,7 @@ describe('fetchGoogleHotMetricsForStore()', () => {
     expect(out.adsets[0].ad_set_id).toBe('AG1');
     expect(out.adsets[0]).toMatchObject({
       store_id: 'uzoshop', platform: 'google', campaign_id: 'GC1',
+      spend_cad: 25, impressions: 500, clicks: 10,
     });
     expect(out.ads).toHaveLength(1);
     expect(out.ads[0].ad_id).toBe('AD1');
