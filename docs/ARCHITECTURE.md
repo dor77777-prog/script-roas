@@ -1228,3 +1228,27 @@ Phase B introduces the new persistent layer for entity status, decoupled from `c
 - `campaign_registry` populated for all 3 stores' Meta campaigns within 10 min.
 - `campaign_status_events` shows `first_seen` entries from the initial tick.
 - `data_freshness` shows green dots (`lag_minutes < 15`) for the 3 status scopes per store.
+
+## Phase C (2026-05-30) — Hot metrics + Google/TikTok workers (IN PROGRESS — Tasks 1-6 of 15 shipped)
+
+Phase C adds the `scope='hot_metrics'` handler to the meta-worker, new `google-worker` + `tiktok-worker` Inngest functions (status + hot_metrics each), 3 Postgres hot-set functions (`get_hot_campaign_ids` / `get_hot_adset_ids` / `get_hot_ad_ids`, 5-branch UNION), and minimal UI changes (`CampaignFreshnessChip` + `CampaignDrawerStatusSection`). `cron-live-heavy` continues to run in parallel for a 3-day canary; **decommission ships in Phase C.5**, not Phase C.
+
+**Spec:** [`docs/superpowers/specs/2026-05-30-phase-c-hot-metrics-design.md`](superpowers/specs/2026-05-30-phase-c-hot-metrics-design.md).
+**Plan:** [`docs/superpowers/plans/2026-05-30-phase-c-hot-metrics.md`](superpowers/plans/2026-05-30-phase-c-hot-metrics.md).
+
+**Tasks 1-6 shipped to git (HEAD `8b8acab`, all commits LOCAL — not deployed to prod yet):**
+1. Migration `20260530240000_phase_c_hot_set_functions.sql` — 3 Postgres functions, 5-branch UNION (status-active ∪ recently status-changed ∪ recently first-seen ∪ activity-today ∪ yesterday-tail).
+2. `hotSet.ts` — TS wrappers `getHotCampaignIds` / `getHotAdsetIds` / `getHotAdIds` calling the RPCs.
+3. `fetchMetaHotMetricsForStore` — single-batch Graph API insights filtered by hot ids at campaign/adset/ad levels.
+4. `meta-worker` extended with `scope='hot_metrics'` branch — BUC pre-flight → hot ids → fetch → upsert `campaigns_daily` + `ads_daily` with `source='live_tick'` + `last_live_tick_at` → mark `campaign_metrics` freshness success.
+5. `fetchGoogleStatusForStore` — `change_status` GAQL query + entity follow-up.
+6. `fetchGoogleHotMetricsForStore` + widened `CampaignDailyRow.platform` literal type to `Platform` so Google and TikTok rows share the type.
+
+**Tasks 7-15 pending** (see plan for full content). Notable open items:
+- Task 7 needs an adapter that wraps the existing `lib/fetchers/googleAds.ts` raw-REST `runGaqlQuery` flow into a `{ searchStream }` interface (the Phase C Google fetchers expect that shape; the existing code doesn't use the SDK that natively exposes it).
+- Task 11 extends `buildEvents` to emit per-platform per-scope events (up to 6 max per tick × 3 stores).
+- Task 15 applies the migration to prod, pushes, and verifies acceptance.
+
+**Out of scope (Phase C.5 after 3-day canary):**
+- Decommission of `cron-live-heavy`.
+- Full `CampaignsTable` / `CampaignDrawer` registry-status wiring → Phase D.
