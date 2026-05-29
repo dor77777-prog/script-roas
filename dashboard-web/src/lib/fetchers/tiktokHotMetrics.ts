@@ -87,7 +87,12 @@ async function toCampaignRow(
   const purchaseValueCad = await getFx(purchaseValue, 'USD');
   return {
     store_id: resolveStore(cid), platform: 'tiktok',
-    campaign_id: cid, date: dateStr,
+    campaign_id: cid,
+    // IMP-A note: TikTok's BASIC report_type does NOT expose entity names.
+    // Name preservation for TikTok deferred — Phase D will revisit (likely
+    // requires a separate /campaign|adgroup|ad/get/ lookup keyed by ids).
+    campaign_name: null,
+    date: dateStr,
     spend_cad: spendCad,
     impressions: Math.round(Number(m.impressions ?? 0)),
     clicks: Math.round(Number(m.clicks ?? 0)),
@@ -104,6 +109,7 @@ async function toAdsetRow(
   return {
     ...(await toCampaignRow(resolveStore, dateStr, r, getFx)),
     ad_set_id: String(d.adgroup_id ?? ''),
+    ad_set_name: null,
   };
 }
 
@@ -115,5 +121,6 @@ async function toAdRow(
   return {
     ...(await toAdsetRow(resolveStore, dateStr, r, getFx)),
     ad_id: String(d.ad_id ?? ''),
+    ad_name: null,
   };
 }

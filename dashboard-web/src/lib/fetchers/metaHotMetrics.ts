@@ -14,14 +14,30 @@
 // the input shape so callers don't have to change; it is now ignored
 // by the fetcher.
 //
+// CRIT-D note: conversions are extracted using the canonical priority
+// chain `omni_purchase → purchase → offsite_conversion.fb_pixel_purchase`
+// (first match wins, NOT summed). Source of truth: meta.ts:280
+// (extractMetaPurchases). Duplicated here rather than exported to
+// preserve meta.ts's "exported for parity tests only" boundary.
+//
+// CRIT-E note: spend/value FX conversion uses the per-row
+// `account_currency` (Meta returns ILS for all 3 stores per the seed).
+// Hardcoded 'USD' inflated CAD by ~3.7x (USD→CAD 1.36 vs ILS→CAD 0.37).
+//
+// IMP-A note: `campaign_name`, `adset_name`, `ad_name` are preserved on
+// every hot-metrics upsert. Supabase upsert SETs every column; omitting
+// names would null them until nightly cron repopulates.
+//
 // Returns rows compatible with the existing campaigns_daily +
 // ads_daily shapes used by persistCampaignsLive.
 
 import type { Platform, StoreId } from '@/lib/registries/types';
 
 const GRAPH_VERSION = 'v22.0';
-const ADSET_INSIGHTS_FIELDS = 'campaign_id,adset_id,impressions,clicks,spend,actions,action_values';
-const AD_INSIGHTS_FIELDS = 'campaign_id,adset_id,ad_id,impressions,clicks,spend,actions,action_values';
+// IMP-A + CRIT-E: include campaign_name, adset_name (and ad_name on AD level)
+// + account_currency for per-row FX resolution.
+const ADSET_INSIGHTS_FIELDS = 'campaign_id,campaign_name,adset_id,adset_name,impressions,clicks,spend,actions,action_values,account_currency';
+const AD_INSIGHTS_FIELDS = 'campaign_id,campaign_name,adset_id,adset_name,ad_id,ad_name,impressions,clicks,spend,actions,action_values,account_currency';
 
 export type MetaHotMetricsInput = {
   storeId: StoreId;
@@ -39,6 +55,7 @@ export type CampaignDailyRow = {
   store_id: StoreId;
   platform: Platform;
   campaign_id: string;
+  campaign_name: string | null;
   date: string;
   spend_cad: number;
   impressions: number;
@@ -47,8 +64,14 @@ export type CampaignDailyRow = {
   conversion_value_cad: number;
 };
 
-export type AdsetDailyRow = CampaignDailyRow & { ad_set_id: string };
-export type AdDailyRow = AdsetDailyRow & { ad_id: string };
+export type AdsetDailyRow = CampaignDailyRow & {
+  ad_set_id: string;
+  ad_set_name: string | null;
+};
+export type AdDailyRow = AdsetDailyRow & {
+  ad_id: string;
+  ad_name: string | null;
+};
 
 export type MetaHotMetricsResult = {
   adsets: AdsetDailyRow[];
@@ -119,16 +142,25 @@ async function toCampaignRow(
   getFx: MetaHotMetricsInput['getFxCadFor'],
 ): Promise<CampaignDailyRow> {
   const spend = Number(r.spend ?? 0);
-  const spendCad = await getFx(spend, 'USD');
-  const conv = sumActions(r.actions, 'purchase');
-  const convValue = sumActionValues(r.action_values, 'purchase');
-  const convValueCad = await getFx(convValue, 'USD');
+  // CRIT-E: resolve FX per row from account_currency (Meta returns ILS
+  // for all 3 stores per the seed; hardcoded 'USD' inflated CAD ~3.7x).
+  const currency = normalizeCurrency(r.account_currency);
+  const spendCad = await getFx(spend, currency);
+  // CRIT-D: priority chain pick — first match wins, do NOT sum.
+  // Source of truth: meta.ts:280 (extractMetaPurchases).
+  const conv = extractMetaPurchasesHot(r.actions, r.action_values);
+  const convValueCad = await getFx(conv.value, currency);
   return {
-    store_id: storeId, platform: 'meta', campaign_id: String(r.campaign_id), date: dateStr,
+    store_id: storeId, platform: 'meta',
+    campaign_id: String(r.campaign_id),
+    // IMP-A: preserve campaign_name so upsert does not null the existing
+    // column (Supabase upsert SETs every column in the row).
+    campaign_name: (r.campaign_name as string | undefined) ?? null,
+    date: dateStr,
     spend_cad: spendCad,
     impressions: Math.round(Number(r.impressions ?? 0)),
     clicks: Math.round(Number(r.clicks ?? 0)),
-    conversions: Math.round(conv),
+    conversions: Math.round(conv.count),
     conversion_value_cad: convValueCad,
   };
 }
@@ -140,6 +172,8 @@ async function toAdsetRow(
   return {
     ...(await toCampaignRow(storeId, dateStr, r, getFx)),
     ad_set_id: String(r.adset_id),
+    // IMP-A: preserve adset_name (column is `ad_set_name` per schema).
+    ad_set_name: (r.adset_name as string | undefined) ?? null,
   };
 }
 
@@ -150,17 +184,55 @@ async function toAdRow(
   return {
     ...(await toAdsetRow(storeId, dateStr, r, getFx)),
     ad_id: String(r.ad_id),
+    // IMP-A: preserve ad_name (column is `ad_name` per schema).
+    ad_name: (r.ad_name as string | undefined) ?? null,
   };
 }
 
-function sumActions(actions: unknown, type: string): number {
-  if (!Array.isArray(actions)) return 0;
-  return actions
-    .filter((a): a is Record<string, unknown> => typeof a === 'object' && a !== null)
-    .filter((a) => a.action_type === type)
-    .reduce((acc, a) => acc + Number(a.value ?? 0), 0);
+/**
+ * CRIT-D — Pick a purchase metric value from the action arrays using the
+ * canonical priority chain. SOURCE OF TRUTH: `meta.ts:280`
+ * (extractMetaPurchases). Duplicated here rather than exported because
+ * meta.ts boundary comment says "exported for parity tests only — do
+ * not call from production code".
+ *
+ * Priority chain — DO NOT reorder. omni_purchase first because it
+ * captures offline conversions in addition to web/CAPI; purchase second
+ * because it matches both the pixel and the server-side CAPI deduped
+ * events; the legacy fb_pixel_purchase event last for accounts that
+ * have not migrated.
+ */
+// prettier-ignore
+const META_PURCHASE_PRIORITY = ['omni_purchase', 'purchase', 'offsite_conversion.fb_pixel_purchase'] as const;
+
+function extractMetaPurchasesHot(
+  actions: unknown,
+  values: unknown,
+): { count: number; value: number } {
+  const pick = (arr: unknown): number => {
+    if (!Array.isArray(arr)) return 0;
+    for (const t of META_PURCHASE_PRIORITY) {
+      const found = arr.find(
+        (a): a is { action_type?: string; value?: string | number } =>
+          typeof a === 'object' && a !== null && (a as { action_type?: string }).action_type === t,
+      );
+      if (found) return Number(found.value ?? 0) || 0;
+    }
+    return 0;
+  };
+  return { count: pick(actions), value: pick(values) };
 }
 
-function sumActionValues(values: unknown, type: string): number {
-  return sumActions(values, type);
+/**
+ * CRIT-E — Narrow Meta's `account_currency` (untyped string) to the
+ * union accepted by `getFxCadFor`. The 3 production stores are all ILS,
+ * but the type union also accepts USD/CAD for robustness against future
+ * accounts. Unknown codes fall back to ILS (the seed default) rather
+ * than throwing — better to use an approximate rate than to skip the
+ * row entirely.
+ */
+function normalizeCurrency(raw: unknown): 'USD' | 'CAD' | 'ILS' {
+  const s = String(raw ?? '').toUpperCase();
+  if (s === 'USD' || s === 'CAD' || s === 'ILS') return s;
+  return 'ILS';
 }

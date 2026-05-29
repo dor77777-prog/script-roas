@@ -41,8 +41,9 @@ describe('runGoogleWorkerJob() — status scope', () => {
 describe('runGoogleWorkerJob() — hot_metrics scope', () => {
   it('happy path: getHotIds → fetchMetrics → upsert daily (CRIT-B: adsets-only into campaigns_daily)', async () => {
     // CRIT-B: fetcher returns only adsets + ads (no campaign-level rows).
+    // IMP-A: row payloads include campaign_name / ad_set_name.
     const fetchMetrics = vi.fn().mockResolvedValue({
-      adsets: [{ store_id: 'uzoshop', platform: 'google', campaign_id: 'GC1', ad_set_id: 'AG1', date: '2026-05-30', spend_cad: 25, impressions: 500, clicks: 10, conversions: 1, conversion_value_cad: 30 }],
+      adsets: [{ store_id: 'uzoshop', platform: 'google', campaign_id: 'GC1', campaign_name: 'GC', ad_set_id: 'AG1', ad_set_name: 'AG', date: '2026-05-30', spend_cad: 25, impressions: 500, clicks: 10, conversions: 1, conversion_value_cad: 30 }],
       ads: [],
     });
     const upsertCampaignsDaily = vi.fn();

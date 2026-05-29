@@ -116,9 +116,10 @@ describe('runMetaWorkerJob() — hot_metrics scope', () => {
     const getHotAdset = vi.fn().mockResolvedValue(['AS1']);
     const getHotAd = vi.fn().mockResolvedValue(['AD1']);
     // CRIT-B: fetcher returns only adsets + ads (no campaign-level rows).
+    // IMP-A: row payloads include campaign_name / ad_set_name / ad_name.
     const fetcher = vi.fn().mockResolvedValue({
-      adsets: [{ store_id: 'uzoshop', platform: 'meta', campaign_id: 'C1', ad_set_id: 'AS1', date: '2026-05-30', spend_cad: 25, impressions: 500, clicks: 10, conversions: 0, conversion_value_cad: 0 }],
-      ads: [{ store_id: 'uzoshop', platform: 'meta', campaign_id: 'C1', ad_set_id: 'AS1', ad_id: 'AD1', date: '2026-05-30', spend_cad: 25, impressions: 500, clicks: 10, conversions: 0, conversion_value_cad: 0 }],
+      adsets: [{ store_id: 'uzoshop', platform: 'meta', campaign_id: 'C1', campaign_name: 'C', ad_set_id: 'AS1', ad_set_name: 'AS', date: '2026-05-30', spend_cad: 25, impressions: 500, clicks: 10, conversions: 0, conversion_value_cad: 0 }],
+      ads: [{ store_id: 'uzoshop', platform: 'meta', campaign_id: 'C1', campaign_name: 'C', ad_set_id: 'AS1', ad_set_name: 'AS', ad_id: 'AD1', ad_name: 'AD', date: '2026-05-30', spend_cad: 25, impressions: 500, clicks: 10, conversions: 0, conversion_value_cad: 0 }],
     });
     const upsertCampaignsDaily = vi.fn();
     const upsertAdsDaily = vi.fn();

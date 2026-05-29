@@ -46,8 +46,10 @@ export async function fetchGoogleHotMetricsForStore(input: GoogleHotMetricsInput
   const adsets: AdsetDailyRow[] = [];
   if (input.hotAdgroupIds.length > 0) {
     const ids = input.hotAdgroupIds.map(id => `'${id}'`).join(',');
+    // IMP-A: include campaign.name + ad_group.name so the upsert preserves
+    // existing name columns (Supabase upsert SETs every column).
     const rows = await customer.searchStream({
-      query: `SELECT campaign.id, ad_group.id, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value, segments.date FROM ad_group WHERE ad_group.id IN (${ids}) AND segments.date = ${dateLiteral}`,
+      query: `SELECT campaign.id, campaign.name, ad_group.id, ad_group.name, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value, segments.date FROM ad_group WHERE ad_group.id IN (${ids}) AND segments.date = ${dateLiteral}`,
     });
     for (const r of rows) {
       adsets.push(toAdsetRow(storeId, r));
@@ -57,8 +59,9 @@ export async function fetchGoogleHotMetricsForStore(input: GoogleHotMetricsInput
   const ads: AdDailyRow[] = [];
   if (input.hotAdIds.length > 0) {
     const ids = input.hotAdIds.map(id => `'${id}'`).join(',');
+    // IMP-A: include campaign.name + ad_group.name + ad_group_ad.ad.name.
     const rows = await customer.searchStream({
-      query: `SELECT campaign.id, ad_group.id, ad_group_ad.ad.id, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value, segments.date FROM ad_group_ad WHERE ad_group_ad.ad.id IN (${ids}) AND segments.date = ${dateLiteral}`,
+      query: `SELECT campaign.id, campaign.name, ad_group.id, ad_group.name, ad_group_ad.ad.id, ad_group_ad.ad.name, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value, segments.date FROM ad_group_ad WHERE ad_group_ad.ad.id IN (${ids}) AND segments.date = ${dateLiteral}`,
     });
     for (const r of rows) {
       ads.push(toAdRow(storeId, r));
@@ -77,6 +80,8 @@ function toCampaignRow(storeId: StoreId, r: Record<string, unknown>): CampaignDa
     store_id: storeId,
     platform: 'google',
     campaign_id: String(c.id),
+    // IMP-A: preserve campaign_name on every hot-metrics upsert.
+    campaign_name: (c.name as string | undefined) ?? null,
     date: String(s.date ?? ''),
     spend_cad: Number(m.costMicros ?? 0) / 1e6,
     impressions: Math.round(Number(m.impressions ?? 0)),
@@ -92,6 +97,8 @@ function toAdsetRow(storeId: StoreId, r: Record<string, unknown>): AdsetDailyRow
   return {
     ...toCampaignRow(storeId, r),
     ad_set_id: String(ag.id),
+    // IMP-A: preserve ad_set_name (sourced from ad_group.name).
+    ad_set_name: (ag.name as string | undefined) ?? null,
   };
 }
 
@@ -103,6 +110,9 @@ function toAdRow(storeId: StoreId, r: Record<string, unknown>): AdDailyRow {
   return {
     ...toCampaignRow(storeId, r),
     ad_set_id: String(ag.id),
+    ad_set_name: (ag.name as string | undefined) ?? null,
     ad_id: String(adInner.id),
+    // IMP-A: preserve ad_name (sourced from ad_group_ad.ad.name).
+    ad_name: (adInner.name as string | undefined) ?? null,
   };
 }
