@@ -1192,3 +1192,39 @@ After per-row execution, the runner re-runs `agg_tiktok_spend_per_store_for_date
 - Backfill היסטורי (rejected explicit).
 - Pixel-based auto-detection (revisit אחרי חודש אם operator מתלונן).
 - אותה מנגנון ל-Meta / Google (כיום הם 1:1; ה-helpers generic-keyed ולכן הוספה עתידית תהיה 1-2 שורות).
+
+## Phase B (2026-05-30) — Registries + Meta status discovery (backend-only)
+
+Phase B introduces the new persistent layer for entity status, decoupled from `campaigns_daily`'s spend-per-day shape. Five new tables + a 10-minute `cron-tick-orchestrator` + a `meta-worker` Inngest function that consumes orchestrator events and writes registries / status events.
+
+**New tables** (migration `20260530230000_phase_b_registries.sql`):
+- `campaign_registry` / `adset_registry` / `ad_registry` — one row per entity, perpetual. PK `(store_id, platform, entity_id)`. 4 timestamps per row distinguish observation vs status-change vs platform-edit cadence.
+- `campaign_status_events` — append-only audit log. `dedupe_key` is a STORED generated column bucketing `occurred_at` to the minute so flapping observations near review-state edges coalesce.
+- `cron_tick_snapshots` — one row per orchestrator run, keyed by 10-min-floored `tick_id`.
+
+**Inngest functions:**
+- [`cron-tick-orchestrator`](../dashboard-web/src/inngest/functions/cronTickOrchestrator.ts) — `*/10 * * * *`. Reads `data_freshness` + `meta_buc_usage`, fans out `meta/job.requested` events via the dynamic-threshold strategy below, writes a snapshot row.
+- [`meta-worker`](../dashboard-web/src/inngest/functions/metaWorker.ts) — event-triggered. BUC pre-flight (Layer 1 hard gate), Meta Graph API batch fetch, diff against registries, write status events with `ON CONFLICT (dedupe_key) DO NOTHING`, upsert registries, mark `data_freshness` success for the 3 status scopes.
+
+**Dynamic threshold strategy** — see also [`docs/superpowers/specs/2026-05-30-phase-b-registries-meta-status-design.md`](superpowers/specs/2026-05-30-phase-b-registries-meta-status-design.md) §"Dynamic threshold strategy". No static `BUC_SKIP_THRESHOLD = 80%`. Instead:
+- Layer 1 (orchestrator + worker, hard gate): `eta_minutes > 0` OR `pct >= 95` → skip.
+- Layer 2 (orchestrator, tiered cooldown): `pct < 30%` → 5 min; `30–60%` → 8 min; `60–80%` → 15 min; `≥80%` → skip. If Meta raises the underlying limit, observed pct drops → cooldown shortens → more calls. If Meta lowers, pct rises → cooldown extends.
+- Layer 3 (Inngest): throttle `900/h` per `event.data.store_id` — safety net that should never bind under normal operation.
+
+**Operator UI** ([`/operator`](../dashboard-web/src/app/operator/page.tsx)):
+- Existing [`FreshnessPanel`](../dashboard-web/src/components/operator/FreshnessPanel.tsx) auto-picks up the new `campaign_status` / `adset_status` / `ad_status` rows in `data_freshness`. No code change.
+- New [`StatusEventsFeed`](../dashboard-web/src/components/operator/StatusEventsFeed.tsx) — last 50 entries from `campaign_status_events`.
+- New [`CronTickSnapshotsViewer`](../dashboard-web/src/components/operator/CronTickSnapshotsViewer.tsx) — table of last 144 ticks (24h × 6).
+
+**Out of scope** (deferred):
+- Google / TikTok / Shopify workers → Phase C / D.
+- Hot-metrics scope on any worker → Phase C.
+- `CampaignsTable` / `CampaignDrawer` integration with registry-based status → Phase D.
+- Decommission of `cron-live-heavy` → Phase C.
+- Rolling reconcile T-2..T-14 + `cron-weekly-reconcile` → Phase E.
+
+**Acceptance (verified post-deploy):**
+- `cron_tick_snapshots` accumulates rows at ~6/h.
+- `campaign_registry` populated for all 3 stores' Meta campaigns within 10 min.
+- `campaign_status_events` shows `first_seen` entries from the initial tick.
+- `data_freshness` shows green dots (`lag_minutes < 15`) for the 3 status scopes per store.

@@ -7,7 +7,7 @@
 │                                                  │
 │      מדריך הפעלה שוטף למפעיל הדשבורד            │
 │                                                  │
-│      גרסה:        2.1.20                         │
+│      גרסה:        2.1.21                         │
 │      תאריך:       2026-05-29                     │
 │      קהל יעד:     מפעיל יחיד · החלטות יומיות   │
 │                                                  │
@@ -245,6 +245,22 @@ Meta ו-Google אינם מושפעים — אין campaign-store-map עבור פ
 **Sum invariant מובטח:** אחרי Hotfix 4, ה-SUM של data_daily.tt_spend_cad cross-stores לכל תאריך = סך כל ה-spend ב-campaigns_daily לאותו תאריך (אין duplication גם כשהקמפיין עובר חנות בתוך היום).
 
 **Hotfix 5 לערב — TodayLive per-store breakdown לא הציג TikTok ל-usmile360/zolplus:** הקומפוננטה `TodayLive` השתמשה ב-`storeHasTikTok(s.store)` שבודקת set סטטי `STORES_WITH_TIKTOK = {uzoshop}`. אחרי Phase A.5 v2, usmile360 ו-zolplus יכולות לקבל TikTok spend דרך המיפוי, אבל הbreakdown באר ההוצאה לא הציג את שורת TikTok. תוצאה: הסיכום היה $110 (Meta $66 + TikTok $43.49) אבל הbreakdown הציג רק "Meta: 66" → looked broken. תוקן: הchcck עכשיו `storeHasTikTok(s.store) || (s.ttSpend ?? 0) > 0`.
+
+---
+
+### 2.1.21 (2026-05-30) — Phase B: registries + Meta status discovery
+
+Phase B שיגר 5 טבלאות חדשות + Inngest pair חדש שמלגלה שינויי-סטטוס של Meta בכל 10 דקות:
+
+- **טבלאות חדשות:** `campaign_registry`, `adset_registry`, `ad_registry` (שורה אחת לכל ישות-meta, נמשכת לאורך זמן ולא תלויה ב-spend היומי), `campaign_status_events` (audit log append-only — כל שינוי של `ACTIVE → PAUSED`, `first_seen` וכו' נכנס כאן עם `dedupe_key` בדקה כדי לקפל flapping), `cron_tick_snapshots` (שורה אחת לכל ריצה של ה-orchestrator).
+- **`cron-tick-orchestrator` (cron `*/10`):** קורא `data_freshness` + `meta_buc_usage`, מחשב fan-out של `meta/job.requested`, ומכניס שורת snapshot.
+- **`meta-worker` (event):** קורא Meta Graph API ב-batch (campaigns + adsets + ads), משווה ל-registries הקיימים, כותב status events חדשים, ומעדכן את ה-registries + freshness.
+- **Dynamic thresholds:** במקום ערך קבוע `BUC_SKIP_THRESHOLD = 80`, יש 3 שכבות שמתאימות את עצמן ל-Meta. שכבה 1 (skip חמור): `ETA > 0` או `pct ≥ 95`. שכבה 2 (cooldown מוצב): `<30%` → 5 דק', `30–60%` → 8 דק', `60–80%` → 15 דק', `≥80%` → skip. שכבה 3 (safety net): Inngest throttle של 900/h. אם Meta מעלים לך את ה-limit — pct יורד אוטומטית → cooldown מתקצר → קוראים יותר. אם מורידים — pct עולה → cooldown מתארך. שום קוד לא צריך להשתנות.
+- **CampaignsTable / CampaignDrawer לא משתנים ב-Phase B.** האינטגרציה לdashboard הציבורי דוחה ל-Phase D.
+
+**איפה לראות:** `/operator` קיבל 3 פאנלים חדשים מתחת ל-`FreshnessPanel` — `StatusEventsFeed` (50 אחרונים) ו-`CronTickSnapshotsViewer` (טבלת 144 ticks אחרונים).
+
+**מה לא צריך לעשות:** שום פעולה ידנית אחרי הdeploy. Phase B אדיטיבי לחלוטין — `cron-live` ו-`cron-live-heavy` ממשיכים כרגיל; הצינור החדש פועל במקביל וכותב לטבלאות חדשות בלבד.
 
 ---
 
@@ -2788,7 +2804,7 @@ Seen 5 times. Alert #2.
 
 ## סוף המסמך
 
-**גרסה:** 2.1.20 · **תאריך עדכון:** 2026-05-29
+**גרסה:** 2.1.21 · **תאריך עדכון:** 2026-05-30
 
 > מסמך זה מתעדכן עם כל שינוי שהמפעיל רואה במסך. אם משהו לא תואם למה שאתה רואה — דווח למפתח לעדכון.
 
