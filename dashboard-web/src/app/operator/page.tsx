@@ -34,6 +34,13 @@ import { ResetData } from '@/components/operator/ResetData';
 import { WhatsappTestButtons } from '@/components/operator/WhatsappTestButtons';
 import { TokenFailuresTable } from '@/components/operator/TokenFailuresTable';
 import { OperatorSecretBanner } from '@/components/operator/OperatorSecretBanner';
+import { MetaBucPanel } from '@/components/operator/MetaBucPanel';
+import { FreshnessPanel } from '@/components/operator/FreshnessPanel';
+
+// Phase A (Task 15): MetaBucPanel + FreshnessPanel are async server components
+// that fetch at request time. force-dynamic ensures operator's hard-refresh
+// always re-runs the DB queries rather than serving a stale RSC payload.
+export const dynamic = 'force-dynamic';
 
 export const metadata = {
   title: 'ניהול — ROAS Dashboard',
@@ -83,6 +90,33 @@ export default function OperatorPage() {
             Resolve button clears the alert cycle so the next failure
             re-alerts immediately. */}
         <TokenFailuresTable />
+      </section>
+
+      {/* Phase A (Task 15): MetaBucPanel — per-(store, ad_account) BUC usage.
+          Server component; fetches meta_buc_usage at request time.
+          ≥80% triggers budget_skip guard in cron-live-heavy; operator can
+          see which accounts are near/over the threshold here. */}
+      <section>
+        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+          <span>תקציב Meta BUC</span>
+          <span className="text-ink-secondary text-xs font-normal">
+            (per ad-account; ≥80% מפעיל budget skip מונע)
+          </span>
+        </h2>
+        <MetaBucPanel />
+      </section>
+
+      {/* Phase A (Task 15): FreshnessPanel — (store, platform, scope, table)
+          lag matrix. Server component; fetches data_freshness at request time.
+          Sorted by lag_minutes DESC NULLS LAST so the stale rows float up. */}
+      <section>
+        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+          <span>טריות נתונים</span>
+          <span className="text-ink-secondary text-xs font-normal">
+            (לכל store × platform × scope × table — ממוין לפי lag יורד)
+          </span>
+        </h2>
+        <FreshnessPanel />
       </section>
 
       <section>
