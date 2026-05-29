@@ -444,6 +444,30 @@ vi.mock('@/lib/supabaseAdmin', () => ({
   }),
 }));
 
+// Phase A 2026-05-29 (Task 13) — mock the new BUC + freshness + alert
+// modules added to cronDaily.ts. Without these, the `step.run('pre-flight-
+// meta-buc-…')` callback tries to read from Supabase (no DB in tests).
+vi.mock('@/lib/notifications/metaBucUsage', () => ({
+  getMetaBucUsageForStore: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock('@/lib/inngest/freshness', () => ({
+  recordFreshness: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('@/lib/notifications/tokenFailures', () => ({
+  notifyTokenFailure: vi.fn().mockResolvedValue({ alerted: false, throttled: false, dbWritten: true }),
+}));
+
+vi.mock('@/lib/notifications/detectAuthError', async (orig) => ({
+  ...(await orig<typeof import('@/lib/notifications/detectAuthError')>()),
+}));
+
+vi.mock('@/lib/sentry/capture', () => ({
+  captureCronFetchError: vi.fn().mockResolvedValue(undefined),
+  captureStepError: vi.fn().mockResolvedValue(undefined),
+}));
+
 // ---- SUT import (after mocks) ----------------------------------------------
 
 import { cronDailyFunctions, runDailyForStore } from '../cronDaily';
@@ -544,7 +568,10 @@ describe('cronDaily — factory + handler', () => {
     // into 3 parallel sub-steps (day / orders / catalog) so each retries
     // independently and Inngest doesn't have to refetch the whole bundle
     // when one half fails. Step count: 6 → 8.
+    // Phase A 2026-05-29 (Task 13): added pre-flight-meta-buc step.
+    // Step count: 8 → 9.
     expect(ids).toEqual([
+      'pre-flight-meta-buc-uzoshop',
       'fetch-shopify-day',
       'fetch-shopify-orders',
       'fetch-shopify-catalog',
@@ -554,10 +581,10 @@ describe('cronDaily — factory + handler', () => {
       'apply-manual-overrides',
       'persist-batch',
     ]);
-    // Free-tier guard: total step count must stay ≤ 9 (1 function + 8
-    // steps = 9 execs/run; × 3 stores × 1 run/day × 30 days = 810
+    // Free-tier guard: total step count must stay ≤ 10 (1 function + 9
+    // steps = 10 execs/run; × 3 stores × 1 run/day × 30 days = 900
     // execs/month from cron-daily — still well under 50K/mo free-tier).
-    expect(ids.length).toBeLessThanOrEqual(9);
+    expect(ids.length).toBeLessThanOrEqual(10);
   });
 
   it('Test 5: persist-batch upserts use the correct `onConflict` strings (match migration PK/UNIQUE)', async () => {

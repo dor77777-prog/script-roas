@@ -71,8 +71,11 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 // `token_failure_alert` was approved by Meta on 2026-05-24, so alerts now
 // actually reach +972524809540 (operator's primary number).
 import { notifyTokenFailure } from '@/lib/notifications/tokenFailures';
-import { isAuthError } from '@/lib/notifications/detectAuthError';
+import { isAuthError, isRateLimitError } from '@/lib/notifications/detectAuthError';
 import { captureCronFetchError, captureStepError } from '@/lib/sentry/capture';
+// Phase A 2026-05-29 (Task 13) — pre-flight Meta BUC gate + finalization writes.
+import { getMetaBucUsageForStore } from '@/lib/notifications/metaBucUsage';
+import { recordFreshness } from '@/lib/inngest/freshness';
 // Phase 13.6 consolidation — single source of truth for backend store
 // constants. Aliased to `STORES_WITH_TIKTOK` to preserve the historical
 // local name at the use sites (minimizes diff churn).
@@ -242,6 +245,12 @@ export async function runDailyForStore(
   }
 }
 
+// ---------------------------------------------------------------------------
+// Pre-flight budget-gate constants (Phase A 2026-05-29, Task 13)
+// ---------------------------------------------------------------------------
+const META_BUDGET_THRESHOLD_PCT = 80;
+const BUC_FRESH_WINDOW_MIN = 15;
+
 async function runDailyForStoreInner(
   storeId: StoreId,
   dateStr: string,
@@ -249,6 +258,100 @@ async function runDailyForStoreInner(
   fetchErrorDedup: Set<string>,
 ): Promise<RunDailyResult> {
   const { step } = ctx;
+
+  // Phase A 2026-05-29 (Task 13): single reconciledAt timestamp for all 6
+  // finalization-tracked upserts in this tick. Captured once so every row
+  // persisted by this nightly reconcile run carries the exact same timestamp
+  // — an auditability invariant: "all rows reconciled in the same job run
+  // share the same reconciled_at".
+  const reconciledAt = new Date().toISOString();
+
+  // ------------------------------------------------------------------
+  // Pre-flight Meta BUC gate (Phase A 2026-05-29, Task 13)
+  //
+  // Read the most recent meta_buc_usage snapshot for this store. If any
+  // insights pct >= 80 AND the snapshot was written within the last 15
+  // min, short-circuit the entire Meta fetch block for this tick.
+  // Google + TikTok + Shopify still run. recordFreshness is called per
+  // Meta scope with status='budget_skip'.
+  // ------------------------------------------------------------------
+  const bucUsage = await step.run(`pre-flight-meta-buc-${storeId}`, async () =>
+    getMetaBucUsageForStore(storeId),
+  );
+
+  const metaSkipDueToBudget = (() => {
+    if (!bucUsage || !(bucUsage as { rows: unknown[] }).rows?.length) return false;
+    const newest = Math.max(
+      ...(bucUsage as { rows: Array<{ last_updated_at: string }> }).rows.map(
+        (r) => new Date(r.last_updated_at).getTime(),
+      ),
+    );
+    if ((Date.now() - newest) / 60_000 > BUC_FRESH_WINDOW_MIN) return false;
+    return (
+      (bucUsage as { max_ads_insights_call_pct: number }).max_ads_insights_call_pct >= META_BUDGET_THRESHOLD_PCT ||
+      (bucUsage as { max_ads_insights_cputime_pct: number }).max_ads_insights_cputime_pct >= META_BUDGET_THRESHOLD_PCT ||
+      (bucUsage as { max_ads_insights_time_pct: number }).max_ads_insights_time_pct >= META_BUDGET_THRESHOLD_PCT
+    );
+  })();
+
+  // If pre-flight gates Meta, record freshness for all 4 scopes and enqueue
+  // a synthetic failure for the routing logic below.
+  if (metaSkipDueToBudget) {
+    const skipMsg =
+      'cron-daily: Meta BUC ≥ 80% within last 15 min; deferred to next cron-daily tick';
+    await Promise.all([
+      recordFreshness({
+        storeId,
+        platform: 'meta',
+        scope: 'campaign_metrics',
+        tableName: 'campaigns_daily',
+        status: 'budget_skip',
+        errorCode: 'META_BUDGET_HIGH',
+        errorMessage: skipMsg,
+        budgetSkip: true,
+      }),
+      recordFreshness({
+        storeId,
+        platform: 'meta',
+        scope: 'adset_metrics',
+        tableName: 'campaigns_daily',
+        status: 'budget_skip',
+        errorCode: 'META_BUDGET_HIGH',
+        errorMessage: skipMsg,
+        budgetSkip: true,
+      }),
+      recordFreshness({
+        storeId,
+        platform: 'meta',
+        scope: 'ad_metrics',
+        tableName: 'ads_daily',
+        status: 'budget_skip',
+        errorCode: 'META_BUDGET_HIGH',
+        errorMessage: skipMsg,
+        budgetSkip: true,
+      }),
+      recordFreshness({
+        storeId,
+        platform: 'meta',
+        scope: 'kpi_daily',
+        tableName: 'data_daily',
+        status: 'budget_skip',
+        errorCode: 'META_BUDGET_HIGH',
+        errorMessage: skipMsg,
+        budgetSkip: true,
+      }),
+    ]);
+    // Notify operator via WhatsApp-suppressed budget_skip channel (Task 11).
+    await notifyTokenFailure({
+      provider: 'meta',
+      storeId: storeId as 'uzoshop' | 'zolplus' | 'usmile360',
+      operation: 'cron_daily_budget_skip',
+      errorMsg: 'META_BUDGET_HIGH: pre-flight skip; max BUC ≥ 80% within last 15 min',
+      advice:
+        'Meta BUC reached 80% threshold; cron-daily pre-flight gate skipped Meta fetch. ' +
+        'No operator action — cron-daily will retry next tick once usage decays.',
+    }).catch(() => {});
+  }
 
   // ---- Step 1: Shopify (orders × 2 windows, dedup, refund-aware net rev) --
   // Phase 05.6.1: extended to also fetch orders-attribution + product-catalog
@@ -335,6 +438,17 @@ async function runDailyForStoreInner(
   // and the fetchers call notifyTokenFailure, the warn below becomes
   // operator-visible. Until then it lands in Inngest run logs.
   const meta = (await step.run('fetch-meta', async () => {
+    // Phase A 2026-05-29 (Task 13): pre-flight gate — return empty sentinel
+    // without calling any Meta API when BUC >= 80% within last 15 min.
+    // The synthetic failure + recordFreshness calls were already made above.
+    if (metaSkipDueToBudget) {
+      return {
+        spend: { storeId, date: dateStr, spend: 0, currency: 'ILS', impressions: 0 },
+        adsetRows: [],
+        adRows: [],
+        budgets: { currency: 'ILS', campaigns: {}, adSets: {} },
+      };
+    }
     try {
       const [spend, adsetRows, adRows, budgets] = await Promise.all([
         fetchMetaSpendForDay(storeId, dateStr),
@@ -663,6 +777,10 @@ async function runDailyForStoreInner(
         fb_impressions?: number;
         ga_impressions?: number;
         tt_impressions?: number;
+        // Phase A 2026-05-29 (Task 13) — finalization fields.
+        source: string;
+        is_finalized: boolean;
+        reconciled_at: string;
       };
       const dataDailyRow: DataDailyRow = {
         date: dateStr,
@@ -681,6 +799,10 @@ async function runDailyForStoreInner(
         // hanging onto a stale prior value.
         fb_impressions: meta.spend.impressions,
         ga_impressions: google.spend.impressions,
+        // Phase A 2026-05-29 (Task 13) — finalization fields.
+        source: 'daily_reconcile',
+        is_finalized: true,
+        reconciled_at: reconciledAt,
       };
       if (ttSpendCad !== null && totalSpendCadAll !== null) {
         dataDailyRow.tt_spend_cad = ttSpendCad;
@@ -723,6 +845,10 @@ async function runDailyForStoreInner(
         gross_revenue_cad: p.gross_revenue_cad,
         orders: Math.round(p.orders),
         net_revenue_cad: p.net_revenue_cad,
+        // Phase A 2026-05-29 (Task 13) — finalization fields.
+        source: 'daily_reconcile',
+        is_finalized: true,
+        reconciled_at: reconciledAt,
       }));
       const { error } = await admin
         .from('products_daily')
@@ -843,6 +969,10 @@ async function runDailyForStoreInner(
             // when FX failed for a non-CAD budget.
             campaign_budget_cad?: number | null;
             ad_set_budget_cad?: number | null;
+            // Phase A 2026-05-29 (Task 13) — finalization fields.
+            source: string;
+            is_finalized: boolean;
+            reconciled_at: string;
           };
           const row: MetaCampaignRow = {
             date: dateStr,
@@ -863,6 +993,10 @@ async function runDailyForStoreInner(
             // Migration 20260522180000 added the column; NULL when the
             // budgets fetch soft-failed.
             effective_status: effectiveStatus,
+            // Phase A 2026-05-29 (Task 13) — finalization fields.
+            source: 'daily_reconcile',
+            is_finalized: true,
+            reconciled_at: reconciledAt,
           };
           if (spendCad !== null) row.spend_cad = spendCad;
           if (convValueCad !== null) row.conversion_value_cad = convValueCad;
@@ -921,6 +1055,10 @@ async function runDailyForStoreInner(
         // (for Shopping/PMax campaign-level aggregates). NULL only when
         // both fields were missing on the wire (defensive).
         effective_status: r.effectiveStatus ?? null,
+        // Phase A 2026-05-29 (Task 13) — finalization fields.
+        source: 'daily_reconcile',
+        is_finalized: true,
+        reconciled_at: reconciledAt,
       }));
       const { error } = await admin
         .from('campaigns_daily')
@@ -968,6 +1106,10 @@ async function runDailyForStoreInner(
         roas: null;
         spend_cad?: number;
         conversion_value_cad?: number;
+        // Phase A 2026-05-29 (Task 13) — finalization fields.
+        source: string;
+        is_finalized: boolean;
+        reconciled_at: string;
       };
       const metaAdsRows: MetaAdRow[] = await Promise.all(
         meta.adRows.map(async (r) => {
@@ -988,6 +1130,10 @@ async function runDailyForStoreInner(
             clicks: Math.round(r.clicks),
             conversions: Math.round(r.conversions),
             roas: null,
+            // Phase A 2026-05-29 (Task 13) — finalization fields.
+            source: 'daily_reconcile',
+            is_finalized: true,
+            reconciled_at: reconciledAt,
           };
           if (spendCad !== null) row.spend_cad = spendCad;
           if (convValueCad !== null) row.conversion_value_cad = convValueCad;
@@ -1011,6 +1157,10 @@ async function runDailyForStoreInner(
         conversions: Math.round(r.conversions),
         conversion_value_cad: r.conversionValueCad,
         roas: null,
+        // Phase A 2026-05-29 (Task 13) — finalization fields.
+        source: 'daily_reconcile',
+        is_finalized: true,
+        reconciled_at: reconciledAt,
       }));
       // Phase 05.7.7: TikTok rows. Same shape as Meta/Google but flagged
       // platform='tiktok'. TikTok ads return per-ad spend in account
@@ -1033,6 +1183,10 @@ async function runDailyForStoreInner(
         roas: null;
         spend_cad?: number;
         conversion_value_cad?: number;
+        // Phase A 2026-05-29 (Task 13) — finalization fields.
+        source: string;
+        is_finalized: boolean;
+        reconciled_at: string;
       };
       const tiktokAdsRows: TiktokAdRowShape[] = await Promise.all(
         tiktok.adRows.map(async (r) => {
@@ -1052,6 +1206,10 @@ async function runDailyForStoreInner(
             clicks: Math.round(r.clicks),
             conversions: Math.round(r.conversions),
             roas: null,
+            // Phase A 2026-05-29 (Task 13) — finalization fields.
+            source: 'daily_reconcile',
+            is_finalized: true,
+            reconciled_at: reconciledAt,
           };
           if (spendCad !== null) row.spend_cad = spendCad;
           if (convValueCad !== null) row.conversion_value_cad = convValueCad;
@@ -1145,6 +1303,10 @@ async function runDailyForStoreInner(
         effective_status: string | null;
         spend_cad?: number;
         conversion_value_cad?: number;
+        // Phase A 2026-05-29 (Task 13) — finalization fields.
+        source: string;
+        is_finalized: boolean;
+        reconciled_at: string;
       };
       const tiktokCampaignRows: TiktokCampaignRow[] = await Promise.all(
         Array.from(byCampaign.values()).map(async (agg) => {
@@ -1169,6 +1331,10 @@ async function runDailyForStoreInner(
             // ADGROUP_STATUS_DELIVERY_OK, etc). Source: /open_api/v1.3/adgroup/get/
             // via fetchTikTokAdGroupStatuses, merged into TikTokAdRow by adGroupId.
             effective_status: agg.effectiveStatus,
+            // Phase A 2026-05-29 (Task 13) — finalization fields.
+            source: 'daily_reconcile',
+            is_finalized: true,
+            reconciled_at: reconciledAt,
           };
           if (spendCad !== null) row.spend_cad = spendCad;
           if (convValueCad !== null) row.conversion_value_cad = convValueCad;
