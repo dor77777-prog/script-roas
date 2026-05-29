@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildEvents,
   cooldownSecondsForPct,
+  cooldownSecondsForHotMetrics,
 } from '@/lib/registries/priorityBuilder';
 import type { FreshnessRow } from '@/lib/inngest/freshness';
 
@@ -48,6 +49,25 @@ describe('cooldownSecondsForPct()', () => {
   it('>= 80% → Infinity (skip)', () => {
     expect(cooldownSecondsForPct(80)).toBe(Number.POSITIVE_INFINITY);
     expect(cooldownSecondsForPct(99)).toBe(Number.POSITIVE_INFINITY);
+  });
+});
+
+describe('cooldownSecondsForHotMetrics()', () => {
+  it('returns 180s when pct < 30', () => {
+    expect(cooldownSecondsForHotMetrics(0)).toBe(180);
+    expect(cooldownSecondsForHotMetrics(29)).toBe(180);
+  });
+  it('returns 300s when 30 <= pct < 60', () => {
+    expect(cooldownSecondsForHotMetrics(30)).toBe(300);
+    expect(cooldownSecondsForHotMetrics(59)).toBe(300);
+  });
+  it('returns 600s when 60 <= pct < 80', () => {
+    expect(cooldownSecondsForHotMetrics(60)).toBe(600);
+    expect(cooldownSecondsForHotMetrics(79)).toBe(600);
+  });
+  it('returns Infinity when pct >= 80', () => {
+    expect(cooldownSecondsForHotMetrics(80)).toBe(Number.POSITIVE_INFINITY);
+    expect(cooldownSecondsForHotMetrics(100)).toBe(Number.POSITIVE_INFINITY);
   });
 });
 
@@ -187,7 +207,7 @@ describe('buildEvents() — multi-platform Phase C', () => {
       tickId: '2026-05-29T14:30',
       nowMs: NOW_MS,
     });
-    expect(events.length).toBeGreaterThanOrEqual(3);
+    expect(events).toHaveLength(6);
     expect(events.map(e => e.name).sort()).toEqual(expect.arrayContaining([
       'meta/job.requested', 'google/job.requested', 'tiktok/job.requested',
     ]));

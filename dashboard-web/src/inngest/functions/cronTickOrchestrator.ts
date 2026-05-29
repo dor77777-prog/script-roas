@@ -31,10 +31,12 @@ export async function runTickOnce(input: {
   const tickId = tickIdForNow(nowMs);
   const startedAt = new Date(nowMs).toISOString();
 
-  const [freshness, metaBucStateByStore] = await Promise.all([
+  const [statusFreshness, metricsFreshness, metaBucStateByStore] = await Promise.all([
     loadFreshness('campaign_status'),
+    loadFreshness('campaign_metrics'),
     loadMetaBuc(),
   ]);
+  const freshness = [...statusFreshness, ...metricsFreshness];
   const events = buildEvents({
     stores: STORES,
     freshness,
@@ -70,10 +72,12 @@ export const cronTickOrchestrator = inngest.createFunction(
     // Compute fan-out events inside step.run — idempotent + retryable.
     const { tickId, events } = await step.run('compute-events', async () => {
       const tickIdInner = tickIdForNow(nowMs);
-      const [freshness, metaBucStateByStore] = await Promise.all([
+      const [statusFreshness, metricsFreshness, metaBucStateByStore] = await Promise.all([
         getFreshness('campaign_status'),
+        getFreshness('campaign_metrics'),
         loadMetaBucStateByStore(),
       ]);
+      const freshness = [...statusFreshness, ...metricsFreshness];
       const eventsInner = buildEvents({
         stores: STORES,
         freshness,
