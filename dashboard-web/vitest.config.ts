@@ -38,6 +38,10 @@ export default defineConfig({
     // so no second vitest config required. Widening the glob here is the
     // correct approach (same rationale as plan-03 and plan-08 above).
     //
+    // chart-palette rebrand (2026-05-29) adds a CSS parity test under
+    // src/app/__tests__/ (globals-chart-vars.test.ts). Same Node environment
+    // (reads CSS via fs.readFileSync), so same rationale applies.
+    //
     // Excludes (added 2026-05-28): dom-config glob patterns are explicitly
     // excluded so a file at src/components/ui/__tests__/Badge.test.tsx
     // (created by Plan 1 Foundation Task 9+) doesn't run twice — once under
@@ -46,6 +50,7 @@ export default defineConfig({
       'src/lib/**/__tests__/**/*.test.{ts,tsx}',
       'src/inngest/**/__tests__/**/*.test.{ts,tsx}',
       'src/components/**/__tests__/**/*.test.{ts,tsx}',
+      'src/app/**/__tests__/**/*.test.{ts,tsx}',
     ],
     exclude: [
       // Vitest's defaults — must be repeated when we set `exclude` explicitly,

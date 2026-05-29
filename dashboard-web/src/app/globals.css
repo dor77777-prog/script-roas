@@ -33,6 +33,22 @@
   --accent-fg: oklch(99% 0 0);
   --accent-dark: oklch(45% 0.18 260);
 
+  /* Chart categorical palette — brand-true platforms + non-platform store hues.
+     Light defaults below; dark overrides under [data-theme="dark"].
+     Spec: docs/superpowers/specs/2026-05-29-chart-line-colors-dark-mode-design.md
+     Replaces the prior "should NOT theme-swap" contract: hue families now reflect
+     real brand identity (Meta blue, Google amber, TikTok red, etc.), and colorblind
+     disambiguation is handled by stroke patterns + legend, not by hue separation. */
+  --chart-platform-meta:     #2563eb;
+  --chart-platform-google:   #d97706;
+  --chart-platform-tiktok:   #ef4444;
+  --chart-platform-organic:  #a855f7;
+  --chart-platform-shopify:  #10b981;
+
+  --chart-store-uzoshop:  #06b6d4;
+  --chart-store-zolplus:  #ec4899;
+  --chart-store-usmile:   #84cc16;
+
   /* ROAS status — LIGHT theme HOTFIX-9 2026-05-29.
      User feedback iteratively pushed for clearer text-on-colored-bg in
      table cells. The -fg variants are designed to pair with -bg cells;
@@ -89,6 +105,20 @@
   --accent:    oklch(65% 0.16 260);
   --accent-fg: oklch(15% 0.01 240);
   --accent-dark: oklch(75% 0.16 260);
+
+  /* Chart categorical palette — dark overrides.
+     Tuned to OKLCH L ~70-78% so every line sits ~5:1 against the dark canvas
+     (passes WCAG AA Large for stroke widths >=2px, which is the baseline for
+     all chart lines in this codebase). Hue preserved per series identity. */
+  --chart-platform-meta:     oklch(70% 0.18 260);
+  --chart-platform-google:   oklch(75% 0.16 60);
+  --chart-platform-tiktok:   oklch(72% 0.22 25);
+  --chart-platform-organic:  oklch(75% 0.18 305);
+  --chart-platform-shopify:  oklch(75% 0.18 155);
+
+  --chart-store-uzoshop:  oklch(75% 0.13 200);
+  --chart-store-zolplus:  oklch(72% 0.20 340);
+  --chart-store-usmile:   oklch(78% 0.20 130);
 
   /* ROAS status — dark theme HOTFIX-6 2026-05-29.
      User feedback iteratively pushed for brighter, more vibrant bg colors:
