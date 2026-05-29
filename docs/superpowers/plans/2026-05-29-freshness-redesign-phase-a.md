@@ -4,7 +4,9 @@
 
 **Goal:** Ship the foundation layer of the 10-min freshness redesign: header-aware Meta budget tracking (per-ad-account BUC), per-scope data_freshness, provenance columns (source / is_finalized / reconciled_at / last_live_tick_at) on the 4 daily tables, cron stagger for cron-live-heavy, and an /operator panel that surfaces all of this. After Phase A, the production `cron_live_heavy_rate_limit` panic WhatsApps stop firing, the dashboard's hidden staleness becomes visible, and the schema is ready for Phase B (registries + workers).
 
-**Architecture:** Pre-Phase A spike (Tasks 0-3) logs real headers from Meta / TikTok / Google in staging to verify spec claims hold against actual traffic. Phase A code (Tasks 4-15) adds the schema, wraps Meta fetches with `fetchMeta` (parses `x-business-use-case-usage`), adds pre-flight budget skip to cron-live-heavy + cron-daily, staggers the 3 store crons, marks cron-daily output as `daily_reconcile/is_finalized=true`, and surfaces everything in /operator. cron-live (already `*/10`) gets only one minor edit: write `last_live_tick_at` on touched rows.
+**Architecture:** Phase A code (Tasks 4-15) adds the schema, wraps Meta fetches with `fetchMeta` (parses `x-business-use-case-usage`), adds pre-flight budget skip to cron-live-heavy + cron-daily, staggers the 3 store crons, marks cron-daily output as `daily_reconcile/is_finalized=true`, and surfaces everything in /operator. cron-live (already `*/10`) gets only one minor edit: write `last_live_tick_at` on touched rows.
+
+> **⚠ Pre-Phase A spike (Tasks 0-3): SKIPPED** by operator decision 2026-05-29. The dashboard has been running in production for a week+; the only reason to instrument was to confirm the exact JSON shape of `x-business-use-case-usage`. Research agents already documented 3 canonical shapes (`x-app-usage`, `x-business-use-case-usage` BUC, `x-fb-ads-insights-throttle`). Instead of waiting for fixtures, the `fetchMeta` parser (Task 8) is built **defensive across all 3 documented shapes** with a runtime warning to Sentry if a 4th unknown shape appears in production. If anything is surprising post-deploy, a quick Phase A.6 follow-up adjusts the parser. Tasks 0-3 below remain in the plan for historical reference but are explicitly **NOT** required before Task 4 starts.
 
 **Tech Stack:** Next.js 15 + React 19, Inngest, Supabase Postgres + RPC functions, Vitest, OKLCH design tokens (reused from chart palette work).
 
@@ -52,7 +54,11 @@
 
 ---
 
-## Task 0: Pre-Phase A spike — Meta BUC + x-app-usage headers (4h)
+## Task 0: Pre-Phase A spike — Meta BUC + x-app-usage headers (4h) — SKIPPED
+
+> ⚠ Skipped. See plan header. Kept for historical reference.
+
+## ~~Task 0: Pre-Phase A spike~~ (skipped)
 
 **Files:**
 - Create: `dashboard-web/src/lib/fetchers/__fixtures__/meta-buc-headers-real.json`
