@@ -62,16 +62,40 @@ export const cronTickOrchestrator = inngest.createFunction(
     triggers: [{ cron: '*/10 * * * *' }],
   },
   async ({ step }) => {
-    await step.run('runTickOnce', async () => {
-      return runTickOnce({
-        nowMs: Date.now(),
-        sendEvent: async (events) => {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          return (await (step as any).sendEvent('fan-out', events)) as { ids: string[] };
-        },
-        upsertSnapshot: insertCronTickSnapshot,
-        loadFreshness: getFreshness,
-        loadMetaBuc: loadMetaBucStateByStore,
+    const nowMs = Date.now();
+    const startedAt = new Date(nowMs).toISOString();
+
+    // Compute fan-out events inside step.run — idempotent + retryable.
+    const { tickId, events } = await step.run('compute-events', async () => {
+      const tickIdInner = tickIdForNow(nowMs);
+      const [freshness, metaBucStateByStore] = await Promise.all([
+        getFreshness('campaign_status'),
+        loadMetaBucStateByStore(),
+      ]);
+      const eventsInner = buildEvents({
+        stores: STORES,
+        freshness,
+        metaBucStateByStore,
+        tickId: tickIdInner,
+        nowMs,
+      });
+      return { tickId: tickIdInner, events: eventsInner };
+    });
+
+    // step.sendEvent MUST be at the outer function level, NOT inside step.run.
+    // Inngest rejects nested step calls — that was the source of the 60s
+    // Vercel timeout the orchestrator hit in production on 2026-05-29 night.
+    if (events.length > 0) {
+      await step.sendEvent('fan-out', events.map(e => ({ name: e.name, id: e.id, data: e.data })));
+    }
+
+    // Snapshot is its own idempotent step.run.
+    await step.run('snapshot', async () => {
+      await insertCronTickSnapshot({
+        tick_id: tickId,
+        started_at: startedAt,
+        finished_at: new Date().toISOString(),
+        fan_out_count: events.length,
       });
     });
   },
