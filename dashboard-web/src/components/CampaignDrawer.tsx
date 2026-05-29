@@ -48,6 +48,7 @@ import {
 import { useDrawerEsc } from '@/lib/drawerStack';
 import { AdsDrawer } from './AdsDrawer';
 import { AttributionAnalysisPanel } from './AttributionAnalysisPanel';
+import { CampaignDrawerStatusSection } from './CampaignDrawerStatusSection';
 import { HealthScorePanel } from './HealthScorePanel';
 import type { CampaignHealth } from '@/lib/campaignHealthScore';
 import {
@@ -737,6 +738,31 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
   })();
   const roasInfo = roasLabel(summary.roas);
 
+  // Phase C Task 13 — minimal status + freshness section. Pulls
+  // effective_status + last_live_tick_at from the rows already in scope
+  // (CampaignRow already carries both — see campaigns.ts:52/67); takes
+  // the most-recent (latest-date) non-null value. The remaining
+  // registry fields (configured/delivery/first_seen/status_changed/
+  // metrics_lag) are intentionally null for the Phase C MVP — Phase D
+  // wires them from campaign_registry.
+  const statusSectionData = (() => {
+    let effectiveStatus: string | null = null;
+    let lastLiveTickAt: string | null = null;
+    let effectiveStatusDate = '';
+    let lastLiveTickDate = '';
+    for (const r of rows) {
+      if (r.effectiveStatus && r.date > effectiveStatusDate) {
+        effectiveStatus = r.effectiveStatus;
+        effectiveStatusDate = r.date;
+      }
+      if (r.lastLiveTickAt && r.date > lastLiveTickDate) {
+        lastLiveTickAt = r.lastLiveTickAt;
+        lastLiveTickDate = r.date;
+      }
+    }
+    return { effectiveStatus, lastLiveTickAt };
+  })();
+
   return (
     <div
       className="fixed inset-0 z-50 flex animate-fade-in"
@@ -810,6 +836,23 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
         </header>
 
         <div className="p-4 sm:p-6 space-y-5 sm:space-y-6">
+          {/* Phase C Task 13 — minimal status + freshness panel. Mounts
+              immediately below the header so the operator sees the
+              configured/effective/delivery + freshness metadata before any
+              metrics. effectiveStatus + lastLiveTickAt are derived from the
+              most-recent CampaignRow in scope (see derivation above); the
+              remaining registry-backed fields are intentionally null for
+              the Phase C MVP — Phase D wires them from campaign_registry. */}
+          <CampaignDrawerStatusSection
+            configuredStatus={null}
+            effectiveStatus={statusSectionData.effectiveStatus}
+            deliveryStatus={null}
+            firstSeenAt={null}
+            statusChangedAt={null}
+            lastLiveTickAt={statusSectionData.lastLiveTickAt}
+            metricsLagMinutes={null}
+          />
+
           {/* Phase 05.7.x — Health Score throughline. The same verdict the
               operator just clicked in the table, expanded inline. Sits
               ABOVE the raw stat cards so the synthesised conclusion is the
