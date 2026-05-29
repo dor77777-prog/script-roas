@@ -73,9 +73,10 @@ export type RunGoogleWorkerJobInput = {
   /**
    * fetchStatus signature matches `fetchGoogleStatusForStore`. The pure
    * core builds the input lazily — when vitest passes a `vi.fn()` the
-   * customer-adapter env-var lookups are never executed because we
-   * route through `safeCustomer` which swallows missing env vars in
-   * test environments.
+   * customer-adapter env-var lookups go through `safeCustomer`, which
+   * swallows missing-env-var errors ONLY when `process.env.VITEST` is
+   * set. In production those errors propagate so Inngest records a
+   * retryable failure instead of a false freshness-success.
    */
   fetchStatus: (input: GoogleStatusInput) => Promise<GoogleStatusResult>;
   fetchHotMetrics: (input: GoogleHotMetricsInput) => Promise<GoogleHotMetricsResult>;
@@ -120,12 +121,20 @@ async function safeCustomer(
   if (override) return override(storeId);
   try {
     return await getGoogleCustomerForStore(storeId);
-  } catch {
-    // Unit-test path: env vars not set. Tests pass a vi.fn() fetchStatus
-    // that ignores the customer shape, so a no-op stub is fine.
-    return {
-      searchStream: async () => [],
-    };
+  } catch (err) {
+    // In vitest, the test never exercises the customer (fetchStatus is
+    // mocked), so a no-op stub keeps tests free of OAuth env-var setup.
+    // In production, missing env vars are a real misconfig — rethrow so
+    // Inngest's retry machinery records the failure (and the next
+    // successful tick writes a freshness row). Swallowing here would
+    // mask misconfigured stores as freshness-success, which is worse
+    // than a loud transient error.
+    if (process.env.VITEST) {
+      return {
+        searchStream: async () => [],
+      };
+    }
+    throw err;
   }
 }
 
@@ -209,13 +218,13 @@ async function runGoogleStatusBranch(input: RunGoogleWorkerJobInput): Promise<vo
       storeId,
       platform: 'google',
       scope: s,
-      tableName: regNameForScope(s),
+      tableName: registryNameForScope(s),
       status: 'success',
     });
   }
 }
 
-function regNameForScope(scope: 'campaign_status' | 'adset_status' | 'ad_status'): string {
+function registryNameForScope(scope: 'campaign_status' | 'adset_status' | 'ad_status'): string {
   if (scope === 'campaign_status') return 'campaign_registry';
   if (scope === 'adset_status') return 'adset_registry';
   return 'ad_registry';

@@ -61,3 +61,49 @@ describe('runGoogleWorkerJob() — hot_metrics scope', () => {
     expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({ scope: 'campaign_metrics', status: 'success' }));
   });
 });
+
+describe('runGoogleWorkerJob() — hot_metrics with empty hot set', () => {
+  it('skips fetch but still records campaign_metrics success', async () => {
+    const fetchHotMetrics = vi.fn();
+    const upsertCampaignsDaily = vi.fn();
+    const recordFreshness = vi.fn();
+    await runGoogleWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
+      fetchStatus: vi.fn(), fetchHotMetrics,
+      getHotCampaignIds: async () => [], getHotAdgroupIds: async () => [], getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(), insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily, upsertAdsDaily: vi.fn(),
+      recordFreshness,
+      nowIso: NOW_ISO,
+    });
+    expect(fetchHotMetrics).not.toHaveBeenCalled();
+    expect(upsertCampaignsDaily).not.toHaveBeenCalled();
+    expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({ scope: 'campaign_metrics', status: 'success' }));
+  });
+});
+
+describe('runGoogleWorkerJob() — unknown scope', () => {
+  it('no-ops: no fetch, no upsert, no freshness write', async () => {
+    const fetchStatus = vi.fn();
+    const fetchHotMetrics = vi.fn();
+    const upsertRegistry = vi.fn();
+    const recordFreshness = vi.fn();
+    await runGoogleWorkerJob({
+      // @ts-expect-error — intentionally exercising a bogus scope to confirm
+      // the silent no-op branch (matches metaWorker precedent).
+      jobData: { store_id: 'uzoshop', scope: 'bogus_scope', tick_id: 'T', staleness_seconds: 0, budget_pct_estimate: 0 },
+      fetchStatus, fetchHotMetrics,
+      getHotCampaignIds: async () => [], getHotAdgroupIds: async () => [], getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry, insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(), upsertAdsDaily: vi.fn(),
+      recordFreshness,
+      nowIso: NOW_ISO,
+    });
+    expect(fetchStatus).not.toHaveBeenCalled();
+    expect(fetchHotMetrics).not.toHaveBeenCalled();
+    expect(upsertRegistry).not.toHaveBeenCalled();
+    expect(recordFreshness).not.toHaveBeenCalled();
+  });
+});

@@ -11,8 +11,20 @@
 //
 // We don't introduce a new HTTP client — we reuse the existing
 // `runGaqlQuery` + OAuth-refresh helpers in `googleAds.ts`. The closure
-// captures the per-store customerId + access token so callers can fire
-// multiple queries without re-resolving credentials each time.
+// captures the per-store customerId so callers can fire multiple queries
+// without re-resolving the customer-id env lookup each time.
+//
+// Token staleness — fetchGoogleStatusForStore can make up to 4 sequential
+// GAQL calls (change_status discovery + per-type entity follow-up). If we
+// captured `accessToken` once at construction time, a token resolved at
+// minute 0 could age out by minute 8 even though `getAccessToken` would
+// otherwise refresh from its module-level cache. By calling
+// `getAccessToken(storeId)` INSIDE the `searchStream` closure we let the
+// cache (60-second safety margin, see googleAds.ts:188-254) hand out a
+// fresh token whenever the cached one is about to expire, at near-zero
+// cost on warm hits (single Map lookup + Date.now compare). The customer-
+// id env-var check stays at construction time so misconfigured stores
+// throw early instead of after each searchStream call.
 //
 // Note on `dateStr`: `runGaqlQuery` only uses the dateStr param to
 // decorate its error message ("...failed for ${storeId} ${dateStr}…").
@@ -30,10 +42,15 @@ export type GoogleCustomer = {
 };
 
 export async function getGoogleCustomerForStore(storeId: string): Promise<GoogleCustomer> {
+  // Env-var check at construction time — fail fast on misconfig rather
+  // than after the first searchStream call.
   const customerId = getCustomerIdOrThrow(storeId);
-  const accessToken = await getAccessToken(storeId);
   return {
     searchStream: async ({ query }: { query: string }) => {
+      // Re-ask per call: cache-aware (see googleAds.ts:195-254). Avoids
+      // token staleness across the 4 sequential GAQL calls in the status
+      // branch while remaining cheap on warm hits.
+      const accessToken = await getAccessToken(storeId);
       const today = new Date().toISOString().slice(0, 10);
       return runGaqlQuery(storeId, customerId, accessToken, query, today);
     },
