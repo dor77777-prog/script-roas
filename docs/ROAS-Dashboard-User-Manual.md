@@ -7,7 +7,7 @@
 │                                                  │
 │      מדריך הפעלה שוטף למפעיל הדשבורד            │
 │                                                  │
-│      גרסה:        2.1.18                         │
+│      גרסה:        2.1.19                         │
 │      תאריך:       2026-05-29                     │
 │      קהל יעד:     מפעיל יחיד · החלטות יומיות   │
 │                                                  │
@@ -221,6 +221,16 @@ how many times the operator re-tags a campaign.
 **Other panels in the drawer** (Health Score, attribution, cohort comparison)
 still show the OLD store's data until cron-live-heavy migrates — there's an
 amber warning chip explaining this.
+
+### Hotfix 2.1.19 (2026-05-29 ערב) — Phase A.5 v2: store-label + chip stale after tagging
+
+שני באגים שדווחו על-ידי המפעיל אחרי ה-deploy של גרסה 2.1.18:
+
+1. **שם החנות בשורת הטבלה לא התעדכן מיד** — לאחר שתויג קמפיין TikTok לחנות שונה דרך ה-drawer, השורה ב-Campaigns tab המשיכה להציג את שם החנות הישן (לדוגמה "uzoshop") עד כ-30 דקות — עד ש-cron-live-heavy העביר את הנתונים ב-campaigns_daily. תוקן: CampaignsTable קורא עכשיו גם את campaign-store-map ו-adAccounts ובונה מפה של "effective store לכל שורה". השורה מציגה את שם החנות החדשה מיד עם השמירה.
+
+2. **צ'יפ "🏷️ לא ממופה" נשאר גלוי אחרי שיוך מוצרים** — לאחר שהמפעיל שייך מוצרים דרך ה-drawer, הצ'יפ נשאר גלוי כי ה-productMap נכתב תחת ה-effectiveStoreId (למשל `usmile360::TikTok::C1`) אבל הצ'יפ בשורה השתמש ב-storeId מה-DB (למשל `uzoshop`) → mismatch. תוקן: אותה החלפת storeId משלב 1 גורמת לצ'יפ להשתמש ב-effective key → מוסתר מיד לאחר השיוך.
+
+Meta ו-Google אינם מושפעים — אין campaign-store-map עבור פרסומאים שהם 1:1 עם חנות.
 
 ---
 
@@ -2746,7 +2756,7 @@ Seen 5 times. Alert #2.
 
 ## סוף המסמך
 
-**גרסה:** 2.1.14 · **תאריך עדכון:** 2026-05-29
+**גרסה:** 2.1.19 · **תאריך עדכון:** 2026-05-29
 
 > מסמך זה מתעדכן עם כל שינוי שהמפעיל רואה במסך. אם משהו לא תואם למה שאתה רואה — דווח למפתח לעדכון.
 

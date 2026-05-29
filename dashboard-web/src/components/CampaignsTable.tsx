@@ -60,6 +60,11 @@ import {
   readProductMap,
   type ProductMap,
 } from '@/lib/campaignProductMap';
+import {
+  readCampaignStoreMap,
+  campaignStoreKey,
+  type CampaignStoreMap,
+} from '@/lib/campaignStoreMap';
 import type { ProductsResponse } from '@/app/api/products/route';
 import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
@@ -323,6 +328,17 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
   );
   const [productMap, setProductMap] = useState<ProductMap>(() => ({}));
+
+  // Phase A.5 v2 post-deploy fix (2026-05-29) — campaign-store-map reader.
+  // Mirrors productMap pattern: localStorage + window event. Needed so the
+  // table can compute effectiveStoreByRowKey (below) without waiting for
+  // cron-live-heavy to migrate campaigns_daily (up to 30 min latency).
+  const [storeMap, setStoreMap] = useState<CampaignStoreMap>(() => readCampaignStoreMap());
+  useEffect(() => {
+    const refresh = () => setStoreMap(readCampaignStoreMap());
+    window.addEventListener('roas-campaign-store-map-changed', refresh);
+    return () => window.removeEventListener('roas-campaign-store-map-changed', refresh);
+  }, []);
   // Phase 12.5.x audit fix (2026-05-24, HIGH #2) — when the operator edits
   // the product-map (CampaignDrawer / picker), invalidate the SWR caches
   // that feed `useCampaignTrueRevenue` so the Shopify-ROAS columns reflect
@@ -669,11 +685,56 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     return aggregated.filter(a => multiMappedCampaignKeys.has(a.key));
   }, [aggregated, showOnlyMultiMapped, multiMappedCampaignKeys]);
 
+  // Phase A.5 v2 post-deploy fix (2026-05-29) — display name lookup used by
+  // effectiveStoreByRowKey below.  Stable object reference (no deps).
+  const STORE_DISPLAY_NAMES_MAP: Record<string, string> = useMemo(
+    () => ({ uzoshop: 'uzoshop', zolplus: 'Zol Plus', usmile360: '360usmile' }),
+    [],
+  );
+
+  // Phase A.5 v2 post-deploy fix (2026-05-29) — for TikTok rows that the
+  // operator has tagged to a different store via the campaign-store-map drawer,
+  // the row's storeId/storeName in `aggregated` (sourced from campaigns_daily)
+  // is still the OLD data-side store for up to 30 min until cron-live-heavy
+  // migrates the row.  This map lets the table override storeId + storeName
+  // on the row prop BEFORE passing it to CampaignsTableRow, so the display is
+  // correct immediately.
+  //
+  // Meta + Google rows are NEVER in this map: those advertisers are 1:1 with
+  // stores, so the campaign-store-map is never written for them, and
+  // effectiveStoreByRowKey never emits an entry for non-TikTok rows.
+  const effectiveStoreByRowKey = useMemo(() => {
+    const out = new Map<string, { storeId: string; storeName: string }>();
+    for (const a of aggregated) {
+      if (a.platform !== 'TikTok') continue;
+      const advertiserId = adAccounts[a.storeId]?.tiktokAdvertiserId ?? '';
+      if (!advertiserId) continue;
+      const mapKey = campaignStoreKey('tiktok', advertiserId, a.campaignId);
+      const mappedStore = storeMap[mapKey];
+      if (mappedStore && mappedStore !== a.storeId) {
+        out.set(a.key, {
+          storeId: mappedStore,
+          storeName: STORE_DISPLAY_NAMES_MAP[mappedStore] ?? mappedStore,
+        });
+      }
+    }
+    return out;
+  }, [aggregated, storeMap, adAccounts, STORE_DISPLAY_NAMES_MAP]);
+
   // Phase 05.7.x (2026-05-23) — set of campaignKeys that have at least one
   // product mapped. Derived from productMap so the row's "🏷️ לא ממופה"
   // chip flips off the moment the operator adds a product (productMap
   // updates via cloud-sync → this memo re-runs → row re-renders without
   // the chip). Same key shape as productMap (`storeId::platform::campaignId`).
+  //
+  // Phase A.5 v2 post-deploy fix (2026-05-29) — Bug B: for TikTok campaigns
+  // tagged to a different store, the drawer writes the productMap entry under
+  // effectiveStoreId (e.g. usmile360::TikTok::C1) but the row's storeId is
+  // still the data-side store (e.g. uzoshop) until cron-live-heavy migrates.
+  // Fix: since we swap a.storeId to the effective value at the row-prop level
+  // (Step 4 below), the chip's own lookup (`a.storeId::platform::campaignId`)
+  // will use the effective key — so the chip finds the productMap entry and
+  // hides correctly.  No additional set manipulation is needed here.
   const mappedCampaignKeys = useMemo(() => {
     const set = new Set<string>();
     for (const [key, productIds] of Object.entries(productMap)) {
@@ -1997,10 +2058,25 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                 </tr>
               </thead>
               <tbody>
-                {display.map((a, i) => (
+                {display.map((a, i) => {
+                  // Phase A.5 v2 post-deploy fix (2026-05-29) — Bug A + Bug B.
+                  // For TikTok campaigns tagged to a different store via the
+                  // drawer, swap storeId + storeName to the effective values so:
+                  //   A) The row shows the new store name immediately (not stale
+                  //      campaigns_daily data which takes up to 30 min to migrate).
+                  //   B) The chip's own lookup (`a.storeId::platform::campaignId`)
+                  //      uses the effective key, which matches the productMap entry
+                  //      written by the drawer — so the chip hides after mapping.
+                  // a.key is intentionally NOT swapped: it's the stable React key
+                  // and the aggregator dedup key; changing it would unmount rows.
+                  const eff = effectiveStoreByRowKey.get(a.key);
+                  const displayA = eff
+                    ? { ...a, storeId: eff.storeId, storeName: eff.storeName }
+                    : a;
+                  return (
                   <CampaignsTableRow
                     key={a.key}
-                    a={a}
+                    a={displayA}
                     i={i}
                     mode={mode}
                     trueRevenueByKey={trueRevenueByKey}
@@ -2032,7 +2108,8 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     }}
                     onDrillAd={(set) => setAdDrill(set)}
                   />
-                ))}
+                  );
+                })}
               </tbody>
             </table>
               );
