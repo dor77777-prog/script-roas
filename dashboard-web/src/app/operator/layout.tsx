@@ -9,8 +9,8 @@
 // correctly when previewed in isolation (e.g., Next.js dev RSC preview that
 // renders the segment outside of `RootLayout`).
 //
-// Visual style matches the existing dashboard per D-D4: same `bg-background`
-// + `text-foreground` tokens, no new design primitives.
+// Visual style matches the existing dashboard per D-D4: same `bg-canvas`
+// + `text-ink` tokens (Plan 6 token migration), no new design primitives.
 //
 // Phase 05.6 plan 12 — operator console UI shell.
 
@@ -22,7 +22,7 @@ export const metadata = {
 
 export default function OperatorLayout({ children }: { children: ReactNode }) {
   return (
-    <div dir="rtl" className="min-h-screen bg-background text-text-primary">
+    <div dir="rtl" className="min-h-screen bg-canvas text-ink">
       {children}
     </div>
   );
