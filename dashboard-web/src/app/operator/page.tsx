@@ -36,6 +36,8 @@ import { TokenFailuresTable } from '@/components/operator/TokenFailuresTable';
 import { OperatorSecretBanner } from '@/components/operator/OperatorSecretBanner';
 import { MetaBucPanel } from '@/components/operator/MetaBucPanel';
 import { FreshnessPanel } from '@/components/operator/FreshnessPanel';
+import { StatusEventsFeed } from '@/components/operator/StatusEventsFeed';
+import { CronTickSnapshotsViewer } from '@/components/operator/CronTickSnapshotsViewer';
 
 // Phase A (Task 15): MetaBucPanel + FreshnessPanel are async server components
 // that fetch at request time. force-dynamic ensures operator's hard-refresh
@@ -135,6 +137,32 @@ export default function OperatorPage() {
           </span>
         </h2>
         <FreshnessPanel />
+      </section>
+
+      {/* Phase B (Task 13): StatusEventsFeed — recent status_events stream
+          (tick/worker lifecycle, errors, budget_skip). Server component;
+          fetches at request time. */}
+      <section>
+        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+          <span>סטטוס אירועים</span>
+          <span className="text-ink-secondary text-xs font-normal">
+            (status_events — מחזור חיים של tick/worker, שגיאות, budget skip)
+          </span>
+        </h2>
+        <StatusEventsFeed />
+      </section>
+
+      {/* Phase B (Task 13): CronTickSnapshotsViewer — per-tick snapshot
+          history (per (store, platform) outcome of each orchestrator run).
+          Server component; fetches cron_tick_snapshots at request time. */}
+      <section>
+        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+          <span>סנפשוטים של cron ticks</span>
+          <span className="text-ink-secondary text-xs font-normal">
+            (cron_tick_snapshots — תוצאה לכל (store × platform) בכל ריצה)
+          </span>
+        </h2>
+        <CronTickSnapshotsViewer />
       </section>
 
       <section>

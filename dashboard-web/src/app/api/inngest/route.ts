@@ -98,6 +98,8 @@ import { inngest } from '@/inngest/client';
 import { cronDailyFunctions } from '@/inngest/functions/cronDaily';
 import { cronLiveFunctions } from '@/inngest/functions/cronLive';
 import { cronLiveHeavyFunctions } from '@/inngest/functions/cronLiveHeavy';
+import { cronTickOrchestrator } from '@/inngest/functions/cronTickOrchestrator';
+import { metaWorker } from '@/inngest/functions/metaWorker';
 import { eventSyncNow } from '@/inngest/functions/eventSyncNow';
 import { eventBackfill } from '@/inngest/functions/eventBackfill';
 import { cronOauthCanary } from '@/inngest/functions/cronOauthCanary';
@@ -136,6 +138,8 @@ export const { GET, POST, PUT } = serve({
     ...cronDailyFunctions, // 3 functions (uzoshop / zolplus / usmile360)
     ...cronLiveFunctions, // 3 functions (uzoshop / zolplus / usmile360)
     ...cronLiveHeavyFunctions, // Phase 13.9 — 3 functions (per-store, 30-min cadence) refreshing campaigns_daily + ads_daily metrics for today + yesterday.
+    cronTickOrchestrator, // Phase B — 1 function (Inngest tick orchestrator: scheduler + worker fan-out)
+    metaWorker, // Phase B — 1 function (Meta-platform worker invoked by orchestrator)
     eventSyncNow, // 1 function (operator "Sync now" button)
     eventBackfill, // 1 function (operator backfill range picker)
     cronOauthCanary, // 1 function (Phase 13.4/14 — Google + Meta + TikTok token canary, 00:00 IL daily)
