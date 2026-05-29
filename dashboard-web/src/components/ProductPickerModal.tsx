@@ -251,7 +251,7 @@ export function ProductPickerModal({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded hover:bg-elevated2 text-ink-muted hover:text-ink shrink-0"
+            className="p-2 rounded hover:bg-elevated2 text-ink-muted hover:text-ink shrink-0"
             aria-label="סגור"
           >
             <X size={18} />

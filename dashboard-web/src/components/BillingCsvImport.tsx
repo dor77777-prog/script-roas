@@ -178,7 +178,7 @@ export function BillingCsvImport({
 
       <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-end">
         <div>
-          <label className="text-[10px] text-ink-muted uppercase tracking-wide font-medium">חנות יעד</label>
+          <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">חנות יעד</label>
           <select
             value={defaultStore}
             onChange={e => {
@@ -228,7 +228,7 @@ export function BillingCsvImport({
       </div>
 
       <div>
-        <label className="text-[10px] text-ink-muted uppercase tracking-wide font-medium">או הדבק כאן את ה-CSV</label>
+        <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">או הדבק כאן את ה-CSV</label>
         <textarea
           value={csv}
           onChange={e => setCsv(e.target.value)}

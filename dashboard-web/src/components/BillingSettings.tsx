@@ -216,7 +216,7 @@ export function BillingSettings({ storeNames }: Props) {
               </div>
               <button
                 onClick={() => setOpen(false)}
-                className="p-1.5 rounded hover:bg-elevated2 text-ink-muted hover:text-ink"
+                className="p-2 rounded hover:bg-elevated2 text-ink-muted hover:text-ink"
                 aria-label="סגור"
               >
                 <X size={18} />
@@ -592,14 +592,14 @@ function RecurringTab({
                   <div className="flex items-center gap-1 shrink-0">
                     <button
                       onClick={() => setEditing(r.id)}
-                      className="p-1.5 rounded text-ink-muted hover:text-ink hover:bg-elevated2"
+                      className="p-2 rounded text-ink-muted hover:text-ink hover:bg-elevated2"
                       aria-label="ערוך"
                     >
                       <Edit3 size={14} />
                     </button>
                     <button
                       onClick={() => remove(r.id)}
-                      className="p-1.5 rounded text-ink-muted hover:text-status-red hover:bg-status-redBg"
+                      className="p-2 rounded text-ink-muted hover:text-status-red hover:bg-status-redBg"
                       aria-label="מחק"
                     >
                       <Trash2 size={14} />
@@ -703,7 +703,7 @@ function RecurringEditForm({
     <div className="p-3 space-y-2.5">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div>
-          <label className="text-[10px] text-ink-muted uppercase tracking-wide font-medium">שם</label>
+          <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">שם</label>
           <input
             value={name}
             onChange={e => setName(e.target.value)}
@@ -717,7 +717,7 @@ function RecurringEditForm({
           />
         </div>
         <div>
-          <label className="text-[10px] text-ink-muted uppercase tracking-wide font-medium">חנות</label>
+          <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">חנות</label>
           <select
             value={store}
             onChange={e => setStore(e.target.value)}
@@ -730,7 +730,7 @@ function RecurringEditForm({
           </select>
         </div>
         <div>
-          <label className="text-[10px] text-ink-muted uppercase tracking-wide font-medium">סוג</label>
+          <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">סוג</label>
           <select
             value={source}
             onChange={e => setSource(e.target.value as CostSource)}
@@ -742,7 +742,7 @@ function RecurringEditForm({
           </select>
         </div>
         <div>
-          <label className="text-[10px] text-ink-muted uppercase tracking-wide font-medium">
+          <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">
             {kind === 'percent' ? 'אחוז מהמחזור (%)' : 'סכום חודשי (CAD)'}
           </label>
           {kind === 'percent' ? (
@@ -798,7 +798,7 @@ function RecurringEditForm({
       </div>
       {/* Phase 12.5.x (2026-05-24) — type toggle: fixed CAD vs % of revenue. */}
       <div>
-        <label className="text-[10px] text-ink-muted uppercase tracking-wide font-medium">
+        <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">
           חישוב
         </label>
         <div className="flex items-center gap-1 mt-1">
@@ -840,7 +840,7 @@ function RecurringEditForm({
         </p>
       </div>
       <div>
-        <label className="text-[10px] text-ink-muted uppercase tracking-wide font-medium">הערות (אופציונלי)</label>
+        <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">הערות (אופציונלי)</label>
         <input
           value={notes}
           onChange={e => setNotes(e.target.value)}
@@ -988,14 +988,14 @@ function OneTimeTab({
                   <div className="flex items-center gap-1 shrink-0">
                     <button
                       onClick={() => setEditing(r.id)}
-                      className="p-1.5 rounded text-ink-muted hover:text-ink hover:bg-elevated2"
+                      className="p-2 rounded text-ink-muted hover:text-ink hover:bg-elevated2"
                       aria-label="ערוך"
                     >
                       <Edit3 size={14} />
                     </button>
                     <button
                       onClick={() => remove(r.id)}
-                      className="p-1.5 rounded text-ink-muted hover:text-status-red hover:bg-status-redBg"
+                      className="p-2 rounded text-ink-muted hover:text-status-red hover:bg-status-redBg"
                       aria-label="מחק"
                     >
                       <Trash2 size={14} />
@@ -1061,7 +1061,7 @@ function OneTimeEditForm({
     <div className="p-3 space-y-2.5">
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="text-[10px] text-ink-muted uppercase tracking-wide font-medium">תאריך</label>
+          <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">תאריך</label>
           <input
             type="date"
             value={date}
@@ -1070,7 +1070,7 @@ function OneTimeEditForm({
           />
         </div>
         <div>
-          <label className="text-[10px] text-ink-muted uppercase tracking-wide font-medium">חנות</label>
+          <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">חנות</label>
           <select
             value={store}
             onChange={e => setStore(e.target.value)}
@@ -1084,7 +1084,7 @@ function OneTimeEditForm({
         </div>
       </div>
       <div>
-        <label className="text-[10px] text-ink-muted uppercase tracking-wide font-medium">תיאור</label>
+        <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">תיאור</label>
         <input
           value={description}
           onChange={e => setDescription(e.target.value)}
@@ -1099,7 +1099,7 @@ function OneTimeEditForm({
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="text-[10px] text-ink-muted uppercase tracking-wide font-medium">סוג</label>
+          <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">סוג</label>
           <select
             value={source}
             onChange={e => setSource(e.target.value as CostSource)}
@@ -1111,7 +1111,7 @@ function OneTimeEditForm({
           </select>
         </div>
         <div>
-          <label className="text-[10px] text-ink-muted uppercase tracking-wide font-medium">סכום (CAD)</label>
+          <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">סכום (CAD)</label>
           <input
             value={amountCAD}
             onChange={e => {
@@ -1142,7 +1142,7 @@ function OneTimeEditForm({
         </div>
       </div>
       <div>
-        <label className="text-[10px] text-ink-muted uppercase tracking-wide font-medium">הערות (אופציונלי)</label>
+        <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">הערות (אופציונלי)</label>
         <input
           value={notes}
           onChange={e => setNotes(e.target.value)}

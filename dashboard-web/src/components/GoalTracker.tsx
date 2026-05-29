@@ -265,7 +265,7 @@ export function GoalTracker({ data }: Props) {
           </div>
           <button
             onClick={startEdit}
-            className="p-1.5 rounded text-ink-muted hover:text-ink hover:bg-elevated2 transition-colors"
+            className="p-2 rounded text-ink-muted hover:text-ink hover:bg-elevated2 transition-colors"
             aria-label="ערוך יעד"
             title="ערוך יעד"
           >
@@ -276,7 +276,7 @@ export function GoalTracker({ data }: Props) {
         {/* Numbers row */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 mb-3">
           <div>
-            <div className="text-[10px] sm:text-xs text-ink-muted uppercase tracking-wide">
+            <div className="text-[11px] sm:text-xs text-ink-muted uppercase tracking-wide">
               נצבר עד כה
             </div>
             <div className="text-base sm:text-lg font-bold tabular-nums text-ink mt-0.5">
@@ -288,7 +288,7 @@ export function GoalTracker({ data }: Props) {
             </div>
           </div>
           <div>
-            <div className="text-[10px] sm:text-xs text-ink-muted uppercase tracking-wide">
+            <div className="text-[11px] sm:text-xs text-ink-muted uppercase tracking-wide">
               יעד החודש
             </div>
             <div className="text-base sm:text-lg font-bold tabular-nums text-ink mt-0.5">
@@ -300,7 +300,7 @@ export function GoalTracker({ data }: Props) {
             </div>
           </div>
           <div className="col-span-2 sm:col-span-1">
-            <div className="text-[10px] sm:text-xs text-ink-muted uppercase tracking-wide inline-flex items-center gap-1">
+            <div className="text-[11px] sm:text-xs text-ink-muted uppercase tracking-wide inline-flex items-center gap-1">
               <TrendingUp size={11} />
               חיזוי סוף חודש
             </div>

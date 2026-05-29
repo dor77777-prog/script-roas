@@ -167,7 +167,7 @@ export function CampaignsColumnsMenu({
               type="button"
               onClick={() => setOpen(false)}
               aria-label="סגור"
-              className="text-ink-muted hover:text-ink rounded p-1"
+              className="text-ink-muted hover:text-ink rounded p-2"
             >
               <X size={14} />
             </button>

@@ -338,7 +338,7 @@ export function AdsDrawer({
               <Layers size={16} />
             </span>
             <div className="min-w-0">
-              <div className="text-[10px] uppercase tracking-[0.12em] font-semibold text-ink-muted">
+              <div className="text-[11px] sm:text-[10px] uppercase tracking-[0.12em] font-semibold text-ink-muted">
                 מודעות ב-ad-set
               </div>
               <h2 id="ads-drawer-title" className="text-sm sm:text-base font-bold text-ink tracking-tight truncate" title={adSetName}>
@@ -351,13 +351,13 @@ export function AdsDrawer({
               onClick={() => setIsFullscreen(v => !v)}
               aria-label={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
               title={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
-              className="p-1.5 rounded hover:bg-elevated2 text-ink-muted hover:text-ink transition-colors"
+              className="p-2 rounded hover:bg-elevated2 text-ink-muted hover:text-ink transition-colors"
             >
               {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
             </button>
             <button
               onClick={onClose}
-              className="p-1.5 rounded hover:bg-elevated2 text-ink-muted hover:text-ink"
+              className="p-2 rounded hover:bg-elevated2 text-ink-muted hover:text-ink"
               aria-label="סגור"
             >
               <X size={18} />
@@ -572,7 +572,7 @@ function Stat({
 }) {
   return (
     <div className="rounded-lg border border-line-subtle bg-elevated2/30 px-2.5 py-2">
-      <div className="text-[10px] text-ink-muted uppercase tracking-wide leading-tight">{label}</div>
+      <div className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide leading-tight">{label}</div>
       <div className={cn(
         'text-xs sm:text-sm font-semibold tabular-nums mt-0.5',
         accent === 'green' && 'text-status-green',

@@ -490,7 +490,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
           <button
             type="button"
             onClick={() => setLocalRange(range)}
-            className="p-1 rounded hover:bg-elevated2 text-ink-muted hover:text-ink transition-colors"
+            className="p-2 rounded hover:bg-elevated2 text-ink-muted hover:text-ink transition-colors"
             aria-label="חזור לטווח הגלובלי"
             title="חזור לטווח שנבחר בסינון העליון"
           >

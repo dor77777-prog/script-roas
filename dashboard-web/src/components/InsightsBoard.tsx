@@ -359,7 +359,7 @@ export function InsightsBoard({ data }: Props) {
               <span className="font-medium">
                 {hiddenCount} תובנות מוסתרות
               </span>
-              <span className="text-ink-muted text-[10px] sm:text-[11px]">
+              <span className="text-ink-muted text-[11px]">
                 (סומנו כבוצעו או הוסתרו ידנית)
               </span>
             </span>
@@ -385,13 +385,13 @@ export function InsightsBoard({ data }: Props) {
                       <div className="text-sm font-medium text-ink-secondary leading-snug truncate">
                         {ins.title}
                       </div>
-                      <div className="text-[10px] sm:text-[11px] text-ink-muted mt-0.5">
+                      <div className="text-[11px] text-ink-muted mt-0.5">
                         {stateLabel}{st?.at ? ` · ${relativeTime(st.at)}` : ''}
                       </div>
                     </div>
                     <button
                       onClick={() => restoreInsight(ins.id)}
-                      className="inline-flex items-center gap-1 px-2 py-1 text-[10px] sm:text-[11px] font-semibold text-accent hover:bg-accent/10 rounded transition-colors shrink-0"
+                      className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-accent hover:bg-accent/10 rounded transition-colors shrink-0"
                       title="שחזר תובנה לרשימה הראשית"
                     >
                       <Undo2 size={11} />
@@ -453,7 +453,7 @@ function InsightHero({
       />
 
       <div className="min-w-0 flex-1 space-y-1.5">
-        <div className="flex items-center gap-2 text-[10px] sm:text-[11px] uppercase tracking-[0.12em] font-semibold">
+        <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.12em] font-semibold">
           <span className={meta.color}>{meta.label}</span>
           {otherCount > 0 && (
             <span className="text-ink-muted normal-case tracking-normal font-normal">
