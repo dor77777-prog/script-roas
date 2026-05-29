@@ -7,7 +7,7 @@
 │                                                  │
 │      מדריך הפעלה שוטף למפעיל הדשבורד            │
 │                                                  │
-│      גרסה:        2.1.4                          │
+│      גרסה:        2.1.5                          │
 │      תאריך:       2026-05-29                     │
 │      קהל יעד:     מפעיל יחיד · החלטות יומיות   │
 │                                                  │
@@ -95,7 +95,17 @@ Plan 6 פיספס 25 רכיבים שיתופיים (`Filters`/Quick Range, `Sect
 
 5. **AnnotationsPanel labels** (P1-10): 5 form labels מ-`text-[10px]` ל-`text-[11px] sm:text-[10px]` (קריאות במובייל, קומפקטי בדסקטופ).
 
-**P2 polish + complex items (CampaignsTable toolbar collapse, column-tooltip portal, KpiCards density)** נדחים ל-Plan 7.
+**P2 polish + complex items (column-tooltip portal, KpiCards density)** נדחים ל-Plan 7.
+
+### Hotfix 2.1.5 (2026-05-29) — Plan 7 quick wins: accent-dark + FreshnessChip + CampaignsTable mobile toolbar
+
+המשך polish אחרי 2.1.4 — 3 carryover items הוצאו מהרשימה:
+
+1. **`accent-dark` token חדש** — Plan 6 פיספס את ה-hover-darker effect כשהמיר `hover:bg-primary-dark` → `hover:bg-accent` (אותו צבע = no visible hover). נוסף `--accent-dark` ב-globals.css עם תמיכת תמה: LIGHT `oklch(45% 0.18 260)` (יותר כהה), DARK `oklch(75% 0.16 260)` (יותר בהיר — darkening לא הגיוני על רקע כהה). 3 כפתורי "primary action" קיבלו `hover:bg-accent-dark` במקום `hover:bg-accent`: בחר קובץ + ייבא ב-BillingCsvImport, ושמור ב-ProductPickerModal.
+
+2. **FreshnessChip palette unification** — היה 2 פלטות נפרדות (darkPalette + lightPalette) שנשלטות ע"י `variant` prop. עם המעבר ל-OKLCH טוקנים, ה-`lightPalette` כבר היה theme-aware (status-*Bg/Fg מתחלפים אוטומטית), אז ה-darkPalette הפך מיותר. נמחק ה-darkPalette, ה-`variant` prop ירד מה-Props type, וכל callers (TabFreshnessHeader) עודכנו.
+
+3. **CampaignsTable mobile toolbar collapse** (P1-3 מ-mobile audit) — 6 קבוצות פילטר היו נערמות ב-flex-wrap על מובייל ודוחפות את הטבלה מתחת לקפל (~250px down). עכשיו: PRIMARY (Mode tabs / Store select / Date range) תמיד inline. SECONDARY (Platform tabs / Multi-mapped checkbox / Optimized counter) מוחבא במובייל מאחורי כפתור expander "סינון נוסף" עם state local. במסך sm ומעלה — התנהגות זהה (הכל inline). Pure layout — שום שינוי לוגיקה.
 
 מסמכים נלווים מתעדכנים בנפרד: ארכיטקטורה ב-`docs/ARCHITECTURE.md`, עבודה ביצועית של ה-overhaul ב-`docs/superpowers/plans/2026-05-{28,29}-dashboard-ux-overhaul-*.md` (7 plans, Plans 1–6 IMPLEMENTED; Plan 7 polish + a11y + RTL audit pending).
 
@@ -2460,7 +2470,7 @@ Seen 5 times. Alert #2.
 
 ## סוף המסמך
 
-**גרסה:** 2.1.4 · **תאריך עדכון:** 2026-05-29
+**גרסה:** 2.1.5 · **תאריך עדכון:** 2026-05-29
 
 > מסמך זה מתעדכן עם כל שינוי שהמפעיל רואה במסך. אם משהו לא תואם למה שאתה רואה — דווח למפתח לעדכון.
 
