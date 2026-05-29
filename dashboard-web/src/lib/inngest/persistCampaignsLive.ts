@@ -483,9 +483,20 @@ export async function persistCampaignsLive(
     }
   }
 
-  // Phase A.5 ROLLED BACK 2026-05-29 — the RPC call to
-  // agg_tiktok_spend_per_store_for_date was part of the per-store TikTok
-  // attribution path that turned out to corrupt campaigns_daily. The SQL
-  // function itself stays in the migration (no harm; unused) until Phase A.5
-  // is properly re-shipped with a per-campaign-id PK strategy.
+  // Phase A.5 v2 — re-aggregate data_daily TikTok columns per store from the
+  // freshly-written per-row campaigns_daily slices. The duplicate-row bug
+  // that forced v1's rollback is now fixed at the DELETE-then-UPSERT layer
+  // above (Task 3), so the RPC can run safely. Soft-fail: the per-row
+  // campaigns_daily data is correct on its own; only the data_daily
+  // aggregate is stale on failure (which the next tick fixes).
+  try {
+    const { error: aggErr } = await admin.rpc('agg_tiktok_spend_per_store_for_date', { d: dateStr });
+    if (aggErr) {
+      console.warn(`persistCampaignsLive ${storeId} ${dateStr}: tt agg RPC failed: ${aggErr.message}`);
+    }
+  } catch (e) {
+    console.warn(
+      `persistCampaignsLive ${storeId} ${dateStr}: tt agg RPC threw: ${e instanceof Error ? e.message : e}`,
+    );
+  }
 }
