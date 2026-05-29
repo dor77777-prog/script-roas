@@ -194,11 +194,11 @@ export function ManualOverridesCrud() {
   };
 
   if (isLoading) {
-    return <p className="text-text-secondary text-sm">טוען…</p>;
+    return <p className="text-ink-secondary text-sm">טוען…</p>;
   }
   if (error) {
     return (
-      <p className="text-red-400 text-sm">
+      <p className="text-status-red text-sm">
         שגיאה בטעינת הרשימה: {error instanceof Error ? error.message : String(error)}
       </p>
     );
@@ -206,7 +206,7 @@ export function ManualOverridesCrud() {
   // S-2 soft-fail surfaced as amber (non-blocking) — list is empty but the
   // page still renders. Same shape as SyncIndicator's degraded path.
   if (data?.error) {
-    return <p className="text-amber-400 text-sm">{data.error}</p>;
+    return <p className="text-status-orange text-sm">{data.error}</p>;
   }
 
   const rows = data?.rows ?? [];
@@ -214,23 +214,23 @@ export function ManualOverridesCrud() {
   return (
     <div className="space-y-3">
       {/* Add-row form — inline so the operator's eye never leaves the table. */}
-      <div className="flex flex-wrap items-end gap-2 p-3 bg-black/20 rounded">
-        <label className="flex flex-col text-xs text-text-secondary gap-1">
+      <div className="flex flex-wrap items-end gap-2 p-3 bg-elevated2 rounded">
+        <label className="flex flex-col text-xs text-ink-secondary gap-1">
           תאריך
           <input
             type="date"
             value={formState.date}
             onChange={(e) => setFormState((s) => ({ ...s, date: e.target.value }))}
-            className="bg-black/30 border border-white/10 rounded px-2 py-1 text-sm text-foreground"
+            className="bg-canvas border border-line-subtle rounded px-2 py-1 text-sm text-ink"
             dir="ltr"
           />
         </label>
-        <label className="flex flex-col text-xs text-text-secondary gap-1">
+        <label className="flex flex-col text-xs text-ink-secondary gap-1">
           חנות
           <select
             value={formState.store_id}
             onChange={(e) => setFormState((s) => ({ ...s, store_id: e.target.value }))}
-            className="bg-black/30 border border-white/10 rounded px-2 py-1 text-sm text-foreground"
+            className="bg-canvas border border-line-subtle rounded px-2 py-1 text-sm text-ink"
           >
             {ALL_STORES.map((s) => (
               <option key={s} value={s}>
@@ -239,12 +239,12 @@ export function ManualOverridesCrud() {
             ))}
           </select>
         </label>
-        <label className="flex flex-col text-xs text-text-secondary gap-1">
+        <label className="flex flex-col text-xs text-ink-secondary gap-1">
           פלטפורמה
           <select
             value={formState.platform}
             onChange={(e) => setFormState((s) => ({ ...s, platform: e.target.value }))}
-            className="bg-black/30 border border-white/10 rounded px-2 py-1 text-sm text-foreground"
+            className="bg-canvas border border-line-subtle rounded px-2 py-1 text-sm text-ink"
           >
             {ALL_PLATFORMS.map((p) => (
               <option key={p} value={p}>
@@ -253,24 +253,24 @@ export function ManualOverridesCrud() {
             ))}
           </select>
         </label>
-        <label className="flex flex-col text-xs text-text-secondary gap-1">
+        <label className="flex flex-col text-xs text-ink-secondary gap-1">
           סכום
           <input
             type="number"
             step="0.01"
             value={formState.spend}
             onChange={(e) => setFormState((s) => ({ ...s, spend: e.target.value }))}
-            className="bg-black/30 border border-white/10 rounded px-2 py-1 text-sm w-24 text-foreground"
+            className="bg-canvas border border-line-subtle rounded px-2 py-1 text-sm w-24 text-ink"
             dir="ltr"
             placeholder="0.00"
           />
         </label>
-        <label className="flex flex-col text-xs text-text-secondary gap-1">
+        <label className="flex flex-col text-xs text-ink-secondary gap-1">
           מטבע
           <select
             value={formState.currency}
             onChange={(e) => setFormState((s) => ({ ...s, currency: e.target.value }))}
-            className="bg-black/30 border border-white/10 rounded px-2 py-1 text-sm text-foreground"
+            className="bg-canvas border border-line-subtle rounded px-2 py-1 text-sm text-ink"
           >
             {ALL_CURRENCIES.map((c) => (
               <option key={c} value={c}>
@@ -279,13 +279,13 @@ export function ManualOverridesCrud() {
             ))}
           </select>
         </label>
-        <label className="flex flex-col text-xs text-text-secondary gap-1 flex-1 min-w-40">
+        <label className="flex flex-col text-xs text-ink-secondary gap-1 flex-1 min-w-40">
           הערות
           <input
             type="text"
             value={formState.notes}
             onChange={(e) => setFormState((s) => ({ ...s, notes: e.target.value }))}
-            className="bg-black/30 border border-white/10 rounded px-2 py-1 text-sm text-foreground"
+            className="bg-canvas border border-line-subtle rounded px-2 py-1 text-sm text-ink"
             placeholder="(אופציונלי)"
           />
         </label>
@@ -293,18 +293,18 @@ export function ManualOverridesCrud() {
           type="button"
           onClick={addRow}
           disabled={submitting}
-          className="flex items-center gap-1 bg-blue-600 hover:bg-blue-500 disabled:bg-gray-600 text-white text-sm px-3 py-1 rounded h-[30px]"
+          className="flex items-center gap-1 bg-accent hover:bg-accent/90 disabled:bg-elevated2 disabled:text-ink-muted disabled:cursor-not-allowed text-white text-sm px-3 py-1 rounded h-[30px]"
         >
           <Plus className="w-4 h-4" />
           {submitting ? 'מוסיף…' : 'הוסף'}
         </button>
       </div>
-      {addError && <p className="text-red-400 text-sm" role="alert">{addError}</p>}
+      {addError && <p className="text-status-red text-sm" role="alert">{addError}</p>}
 
       {/* Table view */}
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
-          <thead className="text-text-secondary text-xs uppercase tracking-wider">
+          <thead className="text-ink-secondary text-xs uppercase tracking-wider">
             <tr>
               <th className="text-right p-2">תאריך</th>
               <th className="text-right p-2">חנות</th>
@@ -318,24 +318,24 @@ export function ManualOverridesCrud() {
           <tbody>
             {rows.length === 0 && (
               <tr>
-                <td colSpan={7} className="p-3 text-center text-text-secondary text-xs">
+                <td colSpan={7} className="p-3 text-center text-ink-secondary text-xs">
                   אין רשומות. הוסף את הראשונה למעלה.
                 </td>
               </tr>
             )}
             {rows.map((r) => (
-              <tr key={r.id} className="border-t border-white/10">
+              <tr key={r.id} className="border-t border-line-subtle">
                 <td className="p-2" dir="ltr">{r.date}</td>
                 <td className="p-2">{r.store_id}</td>
                 <td className="p-2">{r.platform}</td>
                 <td className="p-2" dir="ltr">{Number(r.spend).toFixed(2)}</td>
                 <td className="p-2" dir="ltr">{r.currency}</td>
-                <td className="p-2 text-text-secondary">{r.notes ?? '—'}</td>
+                <td className="p-2 text-ink-secondary">{r.notes ?? '—'}</td>
                 <td className="p-2">
                   <button
                     type="button"
                     onClick={() => setConfirmDelete(r)}
-                    className="text-red-400 hover:text-red-300"
+                    className="text-status-red hover:text-status-red/80"
                     aria-label={`מחק שורה ${r.id}`}
                   >
                     <Trash2 className="w-4 h-4" />
@@ -355,7 +355,7 @@ export function ManualOverridesCrud() {
           aria-modal="true"
           aria-labelledby="confirm-delete-title"
         >
-          <div className="bg-background border border-white/10 rounded p-4 max-w-md w-full mx-4">
+          <div className="bg-elevated border border-line rounded p-4 max-w-md w-full mx-4">
             <div className="flex items-start justify-between mb-3">
               <h3 id="confirm-delete-title" className="text-lg font-semibold">
                 אישור מחיקה
@@ -372,11 +372,11 @@ export function ManualOverridesCrud() {
               למחוק את ההחלפה הידנית של <strong>{confirmDelete.store_id}</strong> בתאריך{' '}
               <span dir="ltr">{confirmDelete.date}</span> (פלטפורמה {confirmDelete.platform})?
             </p>
-            <p className="text-text-secondary text-xs mb-3">
+            <p className="text-ink-secondary text-xs mb-3">
               סכום: <span dir="ltr">{Number(confirmDelete.spend).toFixed(2)} {confirmDelete.currency}</span>
             </p>
             {deleteError && (
-              <p className="text-red-400 text-sm mb-3" role="alert">
+              <p className="text-status-red text-sm mb-3" role="alert">
                 {deleteError}
               </p>
             )}
@@ -385,7 +385,7 @@ export function ManualOverridesCrud() {
                 type="button"
                 onClick={closeDeleteModal}
                 disabled={deleting}
-                className="bg-gray-600 hover:bg-gray-500 disabled:bg-gray-700 text-white text-sm px-3 py-1 rounded"
+                className="bg-elevated2 hover:bg-elevated2/90 disabled:bg-elevated2 disabled:text-ink-muted disabled:cursor-not-allowed text-ink text-sm px-3 py-1 rounded"
               >
                 ביטול
               </button>
@@ -393,7 +393,7 @@ export function ManualOverridesCrud() {
                 type="button"
                 onClick={() => deleteRow(confirmDelete.id)}
                 disabled={deleting}
-                className="bg-red-600 hover:bg-red-500 disabled:bg-red-800 text-white text-sm px-3 py-1 rounded"
+                className="bg-status-red hover:bg-status-red/90 disabled:bg-status-red/40 text-white text-sm px-3 py-1 rounded"
               >
                 {deleting ? 'מוחק…' : 'מחק'}
               </button>
@@ -402,13 +402,13 @@ export function ManualOverridesCrud() {
         </div>
       )}
 
-      <p className="text-text-secondary text-xs">
+      <p className="text-ink-secondary text-xs">
         סה״כ {rows.length} שורות. שינויים נכנסים לתוקף בריצת ה-Inngest הבאה (cron-daily, sync-now, או backfill).
       </p>
       {/* A8-F4 (2026-05-27): the manual_overrides CHECK constraint allows
           only meta|google. TikTok spend cannot be corrected here — this is a
           known schema limitation, not a bug. */}
-      <p className="text-text-secondary text-xs">
+      <p className="text-ink-secondary text-xs">
         הערה: ניתן לתקן הוצאה ידנית עבור Meta ו-Google בלבד. TikTok אינו נתמך
         כרגע במנגנון התיקונים הידני (מגבלת סכמה).
       </p>
