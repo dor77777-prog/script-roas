@@ -26,6 +26,16 @@ export type TikTokHotMetricsInput = {
   hotAdIds: string[];
   dateStr: string;
   campaignStoreMap: Record<string, string>;
+  /**
+   * CRIT-E (TikTok parallel) — TikTok's report endpoint does NOT include
+   * `account_currency` in standard BASIC report_type metrics. The
+   * advertiser-level currency is resolved once per call via
+   * `/advertiser/info/get/` (see tiktok.ts:265). The future TikTok worker
+   * resolves it there and passes it down here. Tests can pass 'USD'
+   * directly. Hardcoding inside the fetcher would inflate CAD on
+   * non-USD TikTok accounts the same way the original Meta bug did.
+   */
+  accountCurrency: 'USD' | 'CAD' | 'ILS';
   fetcher?: typeof fetch;
   getFxCadFor: (amount: number, currency: 'USD' | 'CAD' | 'ILS') => Promise<number>;
 };
@@ -36,7 +46,7 @@ export type TikTokHotMetricsResult = {
 };
 
 export async function fetchTikTokHotMetricsForStore(input: TikTokHotMetricsInput): Promise<TikTokHotMetricsResult> {
-  const { storeId, advertiserId, accessToken, dateStr, campaignStoreMap, fetcher = fetch, getFxCadFor } = input;
+  const { storeId, advertiserId, accessToken, dateStr, campaignStoreMap, accountCurrency, fetcher = fetch, getFxCadFor } = input;
 
   // hotCampaignIds is intentionally ignored — see file-header CRIT-B note.
   if (input.hotAdgroupIds.length === 0 && input.hotAdIds.length === 0) {
@@ -67,24 +77,27 @@ export async function fetchTikTokHotMetricsForStore(input: TikTokHotMetricsInput
     fetchLevel('AUCTION_AD', 'ad_id', 'ad_ids', input.hotAdIds),
   ]);
 
-  const adsets = await Promise.all(adgroupRaw.map(r => toAdsetRow(resolveStore, dateStr, r, getFxCadFor)));
-  const ads = await Promise.all(adRaw.map(r => toAdRow(resolveStore, dateStr, r, getFxCadFor)));
+  const adsets = await Promise.all(adgroupRaw.map(r => toAdsetRow(resolveStore, dateStr, r, accountCurrency, getFxCadFor)));
+  const ads = await Promise.all(adRaw.map(r => toAdRow(resolveStore, dateStr, r, accountCurrency, getFxCadFor)));
 
   return { adsets, ads };
 }
 
 async function toCampaignRow(
   resolveStore: (cid: string) => StoreId, dateStr: string,
-  r: Record<string, unknown>, getFx: TikTokHotMetricsInput['getFxCadFor'],
+  r: Record<string, unknown>,
+  accountCurrency: TikTokHotMetricsInput['accountCurrency'],
+  getFx: TikTokHotMetricsInput['getFxCadFor'],
 ): Promise<CampaignDailyRow> {
   const d = (r.dimensions ?? {}) as Record<string, unknown>;
   const m = (r.metrics ?? {}) as Record<string, unknown>;
   const cid = String(d.campaign_id ?? '');
   const spend = Number(m.spend ?? 0);
-  const spendCad = await getFx(spend, 'USD');
+  // CRIT-E (TikTok parallel): use per-call accountCurrency, not hardcoded USD.
+  const spendCad = await getFx(spend, accountCurrency);
   const purchase = Number(m.purchase ?? 0);
   const purchaseValue = Number(m.total_purchase_value ?? 0);
-  const purchaseValueCad = await getFx(purchaseValue, 'USD');
+  const purchaseValueCad = await getFx(purchaseValue, accountCurrency);
   return {
     store_id: resolveStore(cid), platform: 'tiktok',
     campaign_id: cid,
@@ -103,11 +116,13 @@ async function toCampaignRow(
 
 async function toAdsetRow(
   resolveStore: (cid: string) => StoreId, dateStr: string,
-  r: Record<string, unknown>, getFx: TikTokHotMetricsInput['getFxCadFor'],
+  r: Record<string, unknown>,
+  accountCurrency: TikTokHotMetricsInput['accountCurrency'],
+  getFx: TikTokHotMetricsInput['getFxCadFor'],
 ): Promise<AdsetDailyRow> {
   const d = (r.dimensions ?? {}) as Record<string, unknown>;
   return {
-    ...(await toCampaignRow(resolveStore, dateStr, r, getFx)),
+    ...(await toCampaignRow(resolveStore, dateStr, r, accountCurrency, getFx)),
     ad_set_id: String(d.adgroup_id ?? ''),
     ad_set_name: null,
   };
@@ -115,11 +130,13 @@ async function toAdsetRow(
 
 async function toAdRow(
   resolveStore: (cid: string) => StoreId, dateStr: string,
-  r: Record<string, unknown>, getFx: TikTokHotMetricsInput['getFxCadFor'],
+  r: Record<string, unknown>,
+  accountCurrency: TikTokHotMetricsInput['accountCurrency'],
+  getFx: TikTokHotMetricsInput['getFxCadFor'],
 ): Promise<AdDailyRow> {
   const d = (r.dimensions ?? {}) as Record<string, unknown>;
   return {
-    ...(await toAdsetRow(resolveStore, dateStr, r, getFx)),
+    ...(await toAdsetRow(resolveStore, dateStr, r, accountCurrency, getFx)),
     ad_id: String(d.ad_id ?? ''),
     ad_name: null,
   };

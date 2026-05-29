@@ -19,6 +19,8 @@ describe('fetchTikTokHotMetricsForStore()', () => {
       storeId: 'uzoshop', advertiserId: '12345', accessToken: 'tok',
       hotCampaignIds: ['TC1'], hotAdgroupIds: ['TG1'], hotAdIds: [],
       dateStr: '2026-05-30', campaignStoreMap: {},
+      // CRIT-E (TikTok parallel): accountCurrency is now required input.
+      accountCurrency: 'USD',
       fetcher: fetchMock,
       getFxCadFor: async (amount, currency) => currency === 'USD' ? amount * 1.36 : amount,
     });
@@ -35,6 +37,7 @@ describe('fetchTikTokHotMetricsForStore()', () => {
       storeId: 'uzoshop', advertiserId: '12345', accessToken: 'tok',
       hotCampaignIds: [], hotAdgroupIds: [], hotAdIds: [],
       dateStr: '2026-05-30', campaignStoreMap: {},
+      accountCurrency: 'USD',
       fetcher: fetchMock,
       getFxCadFor: async () => 0,
     });
