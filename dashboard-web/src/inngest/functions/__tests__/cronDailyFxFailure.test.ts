@@ -286,6 +286,19 @@ vi.mock('@/lib/supabaseAdmin', () => ({
         mockState.upserts.push({ table, rows, opts });
         return Promise.resolve({ error: null });
       },
+      delete: () => {
+        // Phase A.5 v2 — stub the DELETE chain used by the TikTok
+        // DELETE-then-UPSERT path. Tests here don't assert on DELETE
+        // calls; we just need the chain to resolve without throwing.
+        const chain: Record<string, unknown> = {};
+        const c = {
+          eq: (_col: string, _v: unknown) => c,
+          in: (_col: string, _v: unknown[]) => c,
+          not: (_col: string, _op: string, _v: string) => Promise.resolve({ error: null }),
+        };
+        void chain;
+        return c;
+      },
     }),
     rpc: (_fn: string, _args: unknown) => Promise.resolve({ error: null }),
   }),

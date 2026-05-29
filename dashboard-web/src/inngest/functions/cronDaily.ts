@@ -1194,7 +1194,7 @@ async function runDailyForStoreInner(
           const convValueCad = await cadFor(r.conversionValue, r.currency);
           const row: TiktokAdRowShape = {
             date: dateStr,
-            store_id: storeId,
+            store_id: r.storeId ?? storeId,
             platform: 'tiktok',
             campaign_id: r.campaignId,
             campaign_name: r.campaignName,
@@ -1216,6 +1216,25 @@ async function runDailyForStoreInner(
           return row;
         }),
       );
+      // Phase A.5 v2 — DELETE other-store TikTok ads_daily rows for the ad_ids
+      // being written this tick. Mirrors the campaigns_daily DELETE pattern.
+      if (tiktokAdsRows.length > 0) {
+        const ttAdIds = [...new Set(tiktokAdsRows.map(r => r.ad_id as string))];
+        const ttTargetStoreIds = [...new Set(tiktokAdsRows.map(r => r.store_id as string))];
+        const { error: delErr } = await admin
+          .from('ads_daily')
+          .delete()
+          .eq('date', dateStr)
+          .eq('platform', 'tiktok')
+          .in('ad_id', ttAdIds)
+          .not('store_id', 'in', `(${ttTargetStoreIds.map(s => `"${s}"`).join(',')})`);
+        if (delErr) {
+          console.warn(
+            `cron-daily ${storeId} ${dateStr}: ads_daily tt DELETE failed: ${delErr.message}`,
+          );
+        }
+      }
+
       const adsRows = [...metaAdsRows, ...googleAdsRows, ...tiktokAdsRows];
       if (adsRows.length > 0) {
         const { error } = await admin
@@ -1251,6 +1270,8 @@ async function runDailyForStoreInner(
          *  the same ad-group carry the same status; we keep the first
          *  non-null seen while folding). */
         effectiveStatus: string | null;
+        /** Phase A.5 v2 — store_id resolved from campaign-store-map. */
+        storeId: string;
       };
       const byCampaign = new Map<CampaignAggKey, CampaignAgg>();
       for (const ad of tiktok.adRows) {
@@ -1281,6 +1302,7 @@ async function runDailyForStoreInner(
             conversionValue: ad.conversionValue,
             currency: ad.currency,
             effectiveStatus: ad.effectiveStatus,
+            storeId: ad.storeId,
           });
         }
       }
@@ -1314,7 +1336,7 @@ async function runDailyForStoreInner(
           const convValueCad = await cadFor(agg.conversionValue, agg.currency);
           const row: TiktokCampaignRow = {
             date: dateStr,
-            store_id: storeId,
+            store_id: agg.storeId ?? storeId,
             platform: 'tiktok',
             campaign_id: agg.campaign_id,
             campaign_name: agg.campaign_name,
@@ -1341,6 +1363,26 @@ async function runDailyForStoreInner(
           return row;
         }),
       );
+      // Phase A.5 v2 — DELETE other-store TikTok rows for the campaigns being
+      // written this tick. Mirrors persistCampaignsLive (Task 3); the same
+      // duplicate-row root cause applies to cron-daily's nightly reconcile.
+      if (tiktokCampaignRows.length > 0) {
+        const ttCampaignIds = [...new Set(tiktokCampaignRows.map(r => r.campaign_id as string))];
+        const ttTargetStoreIds = [...new Set(tiktokCampaignRows.map(r => r.store_id as string))];
+        const { error: delErr } = await admin
+          .from('campaigns_daily')
+          .delete()
+          .eq('date', dateStr)
+          .eq('platform', 'tiktok')
+          .in('campaign_id', ttCampaignIds)
+          .not('store_id', 'in', `(${ttTargetStoreIds.map(s => `"${s}"`).join(',')})`);
+        if (delErr) {
+          console.warn(
+            `cron-daily ${storeId} ${dateStr}: campaigns_daily tt DELETE failed: ${delErr.message}`,
+          );
+        }
+      }
+
       const { error } = await admin
         .from('campaigns_daily')
         .upsert(tiktokCampaignRows, {
@@ -1351,12 +1393,16 @@ async function runDailyForStoreInner(
           `campaigns_daily (tiktok) upsert for ${storeId} ${dateStr}: ${error.message}`,
         );
       }
-      // Phase A.5 ROLLED BACK 2026-05-29 — the agg_tiktok_spend_per_store_for_date
-      // RPC was part of the per-store TikTok attribution path that turned out to
-      // corrupt campaigns_daily (PK includes store_id, so mapped rows didn't
-      // overwrite legacy uzoshop rows — they coexisted, doubling the spend).
-      // The SQL function stays in the migration (unused) until Phase A.5 is
-      // properly re-designed with a per-campaign-id PK strategy.
+      // Phase A.5 v2 — re-aggregate data_daily TikTok columns per store from
+      // the freshly-written per-row campaigns_daily slices. The duplicate-row
+      // root cause is now prevented by the DELETE-then-UPSERT above, so the
+      // RPC can run safely. Soft-fail: the per-row campaigns_daily data is
+      // correct on its own; only the data_daily aggregate is stale on failure
+      // (which the next tick fixes).
+      const { error: aggErr } = await admin.rpc('agg_tiktok_spend_per_store_for_date', { d: dateStr });
+      if (aggErr) {
+        console.warn(`cron-daily ${storeId} ${dateStr}: tt agg RPC failed: ${aggErr.message}`);
+      }
     }
 
     // Phase 05.6.1 — 5f. orders_attribution UPSERT.
