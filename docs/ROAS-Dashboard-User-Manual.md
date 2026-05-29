@@ -7,7 +7,7 @@
 │                                                  │
 │      מדריך הפעלה שוטף למפעיל הדשבורד            │
 │                                                  │
-│      גרסה:        2.1.16                         │
+│      גרסה:        2.1.17                         │
 │      תאריך:       2026-05-29                     │
 │      קהל יעד:     מפעיל יחיד · החלטות יומיות   │
 │                                                  │
@@ -181,7 +181,45 @@ Plan 6 פיספס 25 רכיבים שיתופיים (`Filters`/Quick Range, `Sect
 
 הגרף ה-scatter נשמר בקובץ אבל לא מיובא יותר ב-Dashboard. אם יש בקשה עתידית, ניתן להחזיר כ-toggle "תצוגת גרף" ליד הרשימות.
 
-### 2.1.16 (2026-05-29) — Phase A.5: TikTok campaign↔store mapping
+### 2.1.17 (2026-05-29) — Phase A.5 ROLLBACK: TikTok store mapping disabled (DB corruption)
+
+Phase A.5 (גרסה 2.1.16) הוסר מהייצור ב-commit הזה. הסיבה: ה-PK של `campaigns_daily` הוא `(date, store_id, platform, campaign_id, ad_set_id)`, וכשpersistCampaignsLive החל לכתוב TikTok rows תחת ה-store_id החדש שהמפעיל בחר — השורה הישנה תחת uzoshop **נשארה** במקום להתעדכן (כי ה-PK שונה). תוצאה: שורות כפולות, שה-RPC `agg_tiktok_spend_per_store_for_date` סוכם את שתיהן ל-data_daily → ה-spend הוכפל.
+
+מה התגלה בייצור (קמפיין `1866443196508418`, "קרוסלות - usmile360"):
+
+| תאריך | store_id ישן | spend ישן | store_id חדש | spend חדש |
+|---|---|---|---|---|
+| 2026-05-28 | uzoshop | $25.92 | usmile360 | $25.92 (כפילות) |
+| 2026-05-29 | uzoshop | $18.72 | usmile360 | $19.66 (כפילות) |
+
+**מה החזרנו במצב המקורי:**
+- `persistCampaignsLive` חוזר לכתוב TikTok rows תחת ה-storeId-arg (uzoshop בלבד).
+- ה-RPC `agg_tiktok_spend_per_store_for_date` עוד קיים כפונקציית Postgres אבל לא נקראת.
+- ה-Store dropdown ב-CampaignDrawer הוסר.
+- ה-`effectiveStoreId` ו-`effectiveStoreName` הוסרו — הפיקר חוזר ל-`storeId`-prop ו-`summary.storeName`.
+
+**ניקיון DB שבוצע:**
+- `DELETE FROM campaigns_daily WHERE platform='tiktok' AND store_id != 'uzoshop'` → 2 שורות.
+- `DELETE FROM ads_daily WHERE store_id != 'uzoshop' AND ad_id IN (SELECT ... uzoshop)` → 12 שורות.
+- `UPDATE data_daily SET tt_spend_cad=0, total_spend_cad=fb+ga, roas/profit recompute WHERE store_id != 'uzoshop' AND tt_spend_cad > 0` → 2 שורות.
+- `DELETE FROM dashboard_state WHERE key='campaign-store-map'` → 1 שורה.
+
+**מה נשאר בקודבייס** (dormant — נשמר ל-future Phase A.5 v2):
+- `lib/campaignStoreMap.ts` (client helpers).
+- `lib/inngest/campaignStoreMap.ts` (server reader).
+- migration `20260530120000_add_tt_spend_agg_function.sql` (פונקציית SQL נשארת — לא בשימוש).
+- ה-allowlist entry `campaign-store-map` ב-dashboardStateKeys + cloudSync (לא מזיק).
+- ה-/operator disclaimer chip — *נשאר* כי הוא נכון תיאורית: TikTok שורות היסטוריות תחת uzoshop. אם תייצא mapping בעתיד — ההסבר נכון.
+
+**Phase A.5 v2 — הדרישות לעיצוב מחודש:**
+1. ה-PK של `campaigns_daily` חייב להשתנות ל-`(date, platform, campaign_id, ad_set_id)` *ללא* store_id, או:
+2. persistCampaignsLive חייב לבצע DELETE-then-UPSERT כאשר ה-store_id משתנה: `DELETE FROM campaigns_daily WHERE date=$1 AND platform='tiktok' AND campaign_id=$2 AND ad_set_id=$3 AND store_id != $4` לפני ה-UPSERT הרגיל.
+
+ה-מעצב צריך גם migration plan לשורות היסטוריות (היום: כולן תחת uzoshop — אם הPK משתנה, יש 5-7 חודשי היסטוריה לשמור).
+
+---
+
+### 2.1.16 (2026-05-29) — Phase A.5: TikTok campaign↔store mapping ⚠️ DEPRECATED — see 2.1.17
 
 עד היום ה-TikTok advertiser היחיד שלנו (של uzoshop) הריץ קמפיינים גם עבור usmile360 — אבל הדשבורד שייך את כל ההכנסות + ההוצאה ל-uzoshop. הסיבה: ההנחה הישנה (`STORES_WITH_TIKTOK = {'uzoshop'}`) אכפה bucket אחד על שתי החנויות. תוקן ב-Phase A.5.
 

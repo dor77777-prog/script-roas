@@ -286,7 +286,15 @@ export async function persistCampaignsLive(
     let g = ttGroups.get(k);
     if (!g) {
       g = {
-        storeId: r.storeId ?? storeId,
+        // Phase A.5 ROLLED BACK 2026-05-29 — using row.storeId here caused
+        // campaigns_daily PK (date, store_id, platform, campaign_id, ad_set_id)
+        // to NOT conflict between the legacy uzoshop row and the newly-mapped
+        // store row. Result: duplicate rows, doubled spend in data_daily after
+        // agg_tiktok_spend_per_store_for_date. Reverted to storeId-arg until a
+        // proper per-campaign migration strategy is designed (e.g. DELETE the
+        // old row's PK before UPSERTing the new one, or change the PK to
+        // (date, platform, campaign_id, ad_set_id) without store_id).
+        storeId,
         campaignId: r.campaignId, campaignName: r.campaignName,
         adSetId: r.adSetId, adSetName: r.adSetName,
         spend: 0, impressions: 0, clicks: 0, conversions: 0, conversionValue: 0,
@@ -395,7 +403,10 @@ export async function persistCampaignsLive(
       const convValueCad = await cadFor(r.conversionValue, 'USD');
       const row: Record<string, unknown> = {
         date: dateStr,
-        store_id: r.storeId ?? storeId,
+        // Phase A.5 ROLLED BACK 2026-05-29 — see ttGroups comment above for the
+        // PK duplication bug. Until a per-campaign-id migration strategy is
+        // designed, TikTok rows always write under the function-arg storeId.
+        store_id: storeId,
         platform: 'tiktok' as const,
         campaign_id: r.campaignId,
         campaign_name: r.campaignName,
@@ -423,16 +434,9 @@ export async function persistCampaignsLive(
     }
   }
 
-  // Phase A.5 — re-aggregate data_daily TikTok columns per store + recompute
-  // dependents from the freshly-written campaigns_daily slices. Without this,
-  // today's data_daily shows legacy single-store-arg TikTok values until
-  // tomorrow's cron-daily reconciliation.
-  try {
-    const { error: aggErr } = await admin.rpc('agg_tiktok_spend_per_store_for_date', { d: dateStr });
-    if (aggErr) {
-      console.warn(`persistCampaignsLive ${storeId} ${dateStr}: tt_spend_cad agg failed: ${aggErr.message}`);
-    }
-  } catch (e) {
-    console.warn(`persistCampaignsLive ${storeId} ${dateStr}: tt_spend_cad agg threw: ${e instanceof Error ? e.message : e}`);
-  }
+  // Phase A.5 ROLLED BACK 2026-05-29 — the RPC call to
+  // agg_tiktok_spend_per_store_for_date was part of the per-store TikTok
+  // attribution path that turned out to corrupt campaigns_daily. The SQL
+  // function itself stays in the migration (no harm; unused) until Phase A.5
+  // is properly re-shipped with a per-campaign-id PK strategy.
 }
