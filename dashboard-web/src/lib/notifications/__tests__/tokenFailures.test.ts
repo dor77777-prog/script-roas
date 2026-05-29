@@ -66,6 +66,72 @@ afterEach(() => {
   process.env = { ...ORIGINAL_ENV };
 });
 
+// Phase A 2026-05-29: _budget_skip operations must skip WhatsApp but still
+// write the DB row and bump last_alert_sent_at (d/CR-09 invariant preserved).
+describe('notifyTokenFailure (_budget_skip WhatsApp gate — Phase A 2026-05-29)', () => {
+  it('notifyTokenFailure with operation cron_live_heavy_budget_skip — skips WhatsApp but writes DB row + bumps last_alert_sent_at', async () => {
+    sendMock.mockResolvedValue(undefined);
+
+    const { notifyTokenFailure } = await import('../tokenFailures');
+    const result = await notifyTokenFailure({
+      provider: 'meta',
+      storeId: 'uzoshop',
+      operation: 'cron_live_heavy_budget_skip',
+      errorMsg: 'META_BUDGET_HIGH: relevant BUC reached 85% (threshold 80%)',
+    });
+
+    // WhatsApp must NOT be called for _budget_skip operations
+    expect(sendMock).not.toHaveBeenCalled();
+    // alerted=false (no WhatsApp sent), throttled=false (was not throttled — was intentionally suppressed)
+    expect(result.alerted).toBe(false);
+    expect(result.throttled).toBe(false);
+    // DB row is still written
+    expect(result.dbWritten).toBe(true);
+    // Throttle clock MUST still be bumped (d/CR-09 invariant)
+    expect(upsertCapture.payload).not.toBeNull();
+    expect(upsertCapture.payload?.last_alert_sent_at).toBeTruthy();
+    expect(typeof upsertCapture.payload?.last_alert_sent_at).toBe('string');
+    // Error message is recorded
+    expect(upsertCapture.payload?.last_error_msg).toContain('META_BUDGET_HIGH');
+  });
+
+  it('notifyTokenFailure with operation cron_daily_budget_skip — same skip behavior', async () => {
+    sendMock.mockResolvedValue(undefined);
+
+    const { notifyTokenFailure } = await import('../tokenFailures');
+    const result = await notifyTokenFailure({
+      provider: 'meta',
+      storeId: 'zolplus',
+      operation: 'cron_daily_budget_skip',
+      errorMsg: 'META_BUDGET_HIGH: relevant BUC reached 92% (threshold 80%)',
+    });
+
+    expect(sendMock).not.toHaveBeenCalled();
+    expect(result.alerted).toBe(false);
+    expect(result.throttled).toBe(false);
+    expect(result.dbWritten).toBe(true);
+    expect(upsertCapture.payload?.last_alert_sent_at).toBeTruthy();
+    expect(upsertCapture.payload?.last_error_msg).toContain('META_BUDGET_HIGH');
+  });
+
+  it('notifyTokenFailure with operation NOT ending _budget_skip — WhatsApp IS sent', async () => {
+    sendMock.mockResolvedValue(undefined);
+
+    const { notifyTokenFailure } = await import('../tokenFailures');
+    const result = await notifyTokenFailure({
+      provider: 'google',
+      storeId: 'usmile360',
+      operation: 'oauth_refresh',
+      errorMsg: 'invalid_grant',
+    });
+
+    // Sanity baseline: non-budget-skip operation should still send WhatsApp
+    expect(sendMock).toHaveBeenCalledTimes(1);
+    expect(result.alerted).toBe(true);
+    expect(result.dbWritten).toBe(true);
+  });
+});
+
 describe('notifyTokenFailure (d/CR-09 — throttle clock advances on send failure)', () => {
   it('bumps last_alert_sent_at when the WhatsApp send throws', async () => {
     sendMock.mockRejectedValue(

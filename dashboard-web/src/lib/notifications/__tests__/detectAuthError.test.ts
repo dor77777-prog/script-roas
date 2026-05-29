@@ -20,4 +20,14 @@ describe('isRateLimitError', () => {
   it('returns false for generic network failures', () => {
     expect(isRateLimitError('meta', 'fetch failed: ETIMEDOUT')).toBe(false);
   });
+
+  // Phase A 2026-05-29: MetaBudgetHighError classification
+  it('isRateLimitError returns true for meta MetaBudgetHighError message (META_BUDGET_HIGH substring, lowercased)', () => {
+    expect(isRateLimitError('meta', 'META_BUDGET_HIGH: relevant BUC reached 85% (threshold 80%)')).toBe(true);
+  });
+
+  it('isRateLimitError returns false for META_BUDGET_HIGH against non-meta provider', () => {
+    expect(isRateLimitError('google', 'META_BUDGET_HIGH: ...')).toBe(false);
+    expect(isRateLimitError('tiktok', 'META_BUDGET_HIGH: ...')).toBe(false);
+  });
 });

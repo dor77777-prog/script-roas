@@ -107,6 +107,11 @@ export function isAuthError(provider: TokenFailureProvider, errMsg: unknown): bo
  *   - TikTok:  code 40100 ("rate limit exceeded").
  *   - All:     fetchWithBackoff exhausts retries → returns the final 429
  *              whose body is replaced with the literal string "exhausted".
+ *   - Phase A 2026-05-29: `META_BUDGET_HIGH` is the proactive pre-emption
+ *              signal from fetchMeta.ts (MetaBudgetHighError) — distinct
+ *              from a reactive 429. It matches on the meta branch so callers
+ *              that branch on `isRateLimitError` route it to "wait, no
+ *              action needed" rather than prompting an auth-refresh.
  *
  * Tight matching by substring to avoid false-positives on non-rate-limit
  * fetches; conservative because the consequence of misclassifying is
@@ -127,7 +132,8 @@ export function isRateLimitError(
       m.includes('application request limit') ||
       m.includes('"code": 4') ||
       m.includes('"code": 17') ||
-      m.includes('"code": 32')
+      m.includes('"code": 32') ||
+      m.includes('meta_budget_high')
     );
   }
   if (provider === 'google') {

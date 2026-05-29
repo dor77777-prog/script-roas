@@ -89,6 +89,19 @@ const ALERT_PHONE = '+972524809540';
  *  unique failure, which is enough to notice but not spam. */
 const ALERT_THROTTLE_MS = 6 * 60 * 60 * 1000;
 
+/**
+ * Phase A 2026-05-29 — operations whose name ends with `_budget_skip` are
+ * proactive pre-emption events (MetaBudgetHighError from fetchMeta.ts): the
+ * system chose to skip fetching because BUC usage is already high, NOT
+ * because a token failed. We still write a DB row (so /operator panel sees
+ * the event) and still advance `last_alert_sent_at` (preserving d/CR-09
+ * throttle-clock invariant), but we intentionally suppress the WhatsApp send
+ * to avoid false-panic alerts.
+ *
+ * Spec: docs/superpowers/specs/2026-05-29-freshness-contract-incremental-sync-design.md
+ */
+const BUDGET_SKIP_OPERATION_RE = /_budget_skip$/;
+
 /** Maximum WhatsApp param length. Meta enforces 1024 chars per param but
  *  refuses 5+ consecutive spaces and \n. We stay well under to leave room
  *  for emojis + the operator's eyes. */
@@ -199,9 +212,16 @@ export async function notifyTokenFailure(
   const shouldAlert = !lastAlertMs || now - lastAlertMs >= ALERT_THROTTLE_MS;
   result.throttled = !shouldAlert;
 
-  // --------- 3. Send WhatsApp (if not throttled) ----------
+  // Phase A 2026-05-29: _budget_skip operations are proactive pre-emptions —
+  // suppress the WhatsApp send, but still attempt (so the throttle clock
+  // advances and the DB row is written). `attemptedAlert` captures "we were
+  // going to send"; `shouldSendWhatsapp` is the actual gate.
+  const attemptedAlert = shouldAlert;
+  const shouldSendWhatsapp = shouldAlert && !BUDGET_SKIP_OPERATION_RE.test(operation);
+
+  // --------- 3. Send WhatsApp (if not throttled and not budget_skip) ----------
   let sendError: string | null = null;
-  if (shouldAlert) {
+  if (shouldSendWhatsapp) {
     try {
       // 4-placeholder template `token_failure_alert` — submit this body
       // to Meta WhatsApp Manager (English / `en` language code). Until
@@ -285,7 +305,11 @@ export async function notifyTokenFailure(
     // here — the DB row records the failure and `/operator` surfaces it
     // — so advancing the clock on attempt prevents the loop while
     // preserving the original throttle semantics (one alert per 6h key).
-    if (shouldAlert) {
+    //
+    // Phase A 2026-05-29: use `attemptedAlert` (not `shouldSendWhatsapp`)
+    // so budget_skip operations also advance the clock. The send was
+    // intentionally suppressed — the attempt still counts for throttling.
+    if (attemptedAlert) {
       payload.last_alert_sent_at = new Date(now).toISOString();
     }
     const { error } = await sb
