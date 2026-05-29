@@ -39,6 +39,8 @@ export async function runTickOnce(input: {
     stores: STORES,
     freshness,
     metaBucStateByStore,
+    googleBucStateByStore: {},   // Phase C MVP — workers self-throttle
+    tiktokBucStateByStore: {},
     tickId,
     nowMs,
   });
@@ -76,6 +78,8 @@ export const cronTickOrchestrator = inngest.createFunction(
         stores: STORES,
         freshness,
         metaBucStateByStore,
+        googleBucStateByStore: {},   // Phase C MVP — workers self-throttle
+        tiktokBucStateByStore: {},
         tickId: tickIdInner,
         nowMs,
       });

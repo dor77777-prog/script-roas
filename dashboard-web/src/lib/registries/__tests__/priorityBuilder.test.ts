@@ -51,27 +51,34 @@ describe('cooldownSecondsForPct()', () => {
   });
 });
 
-describe('buildEvents() — dynamic thresholds', () => {
+describe('buildEvents() — dynamic thresholds (meta-only assertions)', () => {
+  // Phase B tests — assert Meta-platform fan-out behavior. Filter by
+  // 'meta/job.requested' so the new multi-platform default (Phase C —
+  // google + tiktok default to { pct: 0, etaMinutes: 0 } when their BUC
+  // input is omitted, so they too emit events) doesn't pollute the count.
+  // Also filter by scope='status' because Phase C added 'hot_metrics'.
+
   it('emits one meta status event per store when all stale + pct low', () => {
     const buc: BucByStore = {
       uzoshop: { pct: 10, etaMinutes: 0 },
       zolplus: { pct: 5, etaMinutes: 0 },
       usmile360: { pct: 0, etaMinutes: 0 },
     };
-    const events = buildEvents({
+    const all = buildEvents({
       stores: ALL_STORES,
       freshness: [],
       metaBucStateByStore: buc,
       tickId: TICK_ID,
       nowMs: NOW_MS,
     });
+    const events = all.filter(e => e.name === 'meta/job.requested' && e.data.scope === 'status');
     expect(events).toHaveLength(3);
     expect(events.every(e => e.name === 'meta/job.requested')).toBe(true);
     expect(events.every(e => e.data.scope === 'status')).toBe(true);
   });
 
   it('Layer 1: eta > 0 → skip regardless of pct or staleness', () => {
-    const events = buildEvents({
+    const all = buildEvents({
       stores: ALL_STORES,
       freshness: [],
       metaBucStateByStore: {
@@ -82,11 +89,12 @@ describe('buildEvents() — dynamic thresholds', () => {
       tickId: TICK_ID,
       nowMs: NOW_MS,
     });
+    const events = all.filter(e => e.name === 'meta/job.requested' && e.data.scope === 'status');
     expect(events.map(e => e.data.store_id).sort()).toEqual(['usmile360', 'zolplus']);
   });
 
   it('Layer 1: pct >= 95 → skip', () => {
-    const events = buildEvents({
+    const all = buildEvents({
       stores: ALL_STORES,
       freshness: [],
       metaBucStateByStore: {
@@ -97,11 +105,12 @@ describe('buildEvents() — dynamic thresholds', () => {
       tickId: TICK_ID,
       nowMs: NOW_MS,
     });
+    const events = all.filter(e => e.name === 'meta/job.requested' && e.data.scope === 'status');
     expect(events.map(e => e.data.store_id).sort()).toEqual(['usmile360', 'zolplus']);
   });
 
   it('Layer 2: 60-80% pct → 15-min cooldown — 10 min stale insufficient', () => {
-    const events = buildEvents({
+    const all = buildEvents({
       stores: ['uzoshop'],
       freshness: [
         freshness({ store_id: 'uzoshop', last_success_at: '2026-05-29T14:20:42.000Z' }),
@@ -110,11 +119,12 @@ describe('buildEvents() — dynamic thresholds', () => {
       tickId: TICK_ID,
       nowMs: NOW_MS,
     });
+    const events = all.filter(e => e.name === 'meta/job.requested' && e.data.scope === 'status');
     expect(events).toHaveLength(0);
   });
 
   it('Layer 2: < 30% pct → 5-min cooldown — 6 min stale sufficient', () => {
-    const events = buildEvents({
+    const all = buildEvents({
       stores: ['uzoshop'],
       freshness: [
         freshness({ store_id: 'uzoshop', last_success_at: '2026-05-29T14:24:42.000Z' }),
@@ -123,33 +133,36 @@ describe('buildEvents() — dynamic thresholds', () => {
       tickId: TICK_ID,
       nowMs: NOW_MS,
     });
+    const events = all.filter(e => e.name === 'meta/job.requested' && e.data.scope === 'status');
     expect(events).toHaveLength(1);
   });
 
   it('Layer 2: >= 80% pct → Infinite cooldown → skip', () => {
-    const events = buildEvents({
+    const all = buildEvents({
       stores: ['uzoshop'],
       freshness: [],
       metaBucStateByStore: { uzoshop: { pct: 82, etaMinutes: 0 } },
       tickId: TICK_ID,
       nowMs: NOW_MS,
     });
+    const events = all.filter(e => e.name === 'meta/job.requested' && e.data.scope === 'status');
     expect(events).toHaveLength(0);
   });
 
   it('event id encodes platform:store:scope:tick (idempotency)', () => {
-    const events = buildEvents({
+    const all = buildEvents({
       stores: ['uzoshop'],
       freshness: [],
       metaBucStateByStore: { uzoshop: { pct: 10, etaMinutes: 0 } },
       tickId: TICK_ID,
       nowMs: NOW_MS,
     });
+    const events = all.filter(e => e.name === 'meta/job.requested' && e.data.scope === 'status');
     expect(events[0].id).toBe('meta:uzoshop:status:2026-05-29T14:30');
   });
 
   it('staleness_seconds reflects time since last_success_at', () => {
-    const events = buildEvents({
+    const all = buildEvents({
       stores: ['uzoshop'],
       freshness: [
         freshness({ store_id: 'uzoshop', last_success_at: '2026-05-29T14:20:42.000Z' }),
@@ -158,6 +171,39 @@ describe('buildEvents() — dynamic thresholds', () => {
       tickId: TICK_ID,
       nowMs: NOW_MS,
     });
+    const events = all.filter(e => e.name === 'meta/job.requested' && e.data.scope === 'status');
     expect(events[0].data.staleness_seconds).toBe(600);
+  });
+});
+
+describe('buildEvents() — multi-platform Phase C', () => {
+  it('emits Meta + Google + TikTok events when all 3 are stale', () => {
+    const events = buildEvents({
+      stores: ['uzoshop'],
+      freshness: [],
+      metaBucStateByStore: { uzoshop: { pct: 5, etaMinutes: 0 } },
+      googleBucStateByStore: { uzoshop: { pct: 5, etaMinutes: 0 } },
+      tiktokBucStateByStore: { uzoshop: { pct: 5, etaMinutes: 0 } },
+      tickId: '2026-05-29T14:30',
+      nowMs: NOW_MS,
+    });
+    expect(events.length).toBeGreaterThanOrEqual(3);
+    expect(events.map(e => e.name).sort()).toEqual(expect.arrayContaining([
+      'meta/job.requested', 'google/job.requested', 'tiktok/job.requested',
+    ]));
+  });
+
+  it('emits both status and hot_metrics events for the same platform when both are stale', () => {
+    const events = buildEvents({
+      stores: ['uzoshop'],
+      freshness: [],
+      metaBucStateByStore: { uzoshop: { pct: 5, etaMinutes: 0 } },
+      googleBucStateByStore: {},
+      tiktokBucStateByStore: {},
+      tickId: '2026-05-29T14:30',
+      nowMs: NOW_MS,
+    });
+    const metaEvents = events.filter(e => e.name === 'meta/job.requested');
+    expect(metaEvents.map(e => e.data.scope).sort()).toEqual(['hot_metrics', 'status']);
   });
 });
