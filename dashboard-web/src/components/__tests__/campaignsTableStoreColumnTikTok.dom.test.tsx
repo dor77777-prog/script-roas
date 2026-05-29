@@ -8,6 +8,7 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import type { Aggregated } from '@/lib/campaignsAggregator';
 import type { CampaignStoreMap } from '@/lib/campaignStoreMap';
 import type { AdAccountMap } from '@/lib/campaignsLinks';
+import { CampaignsTableRow } from '../CampaignsTableRow';
 
 // --- Mocks -------------------------------------------------------------------
 
@@ -74,10 +75,6 @@ const TEST_AD_ACCOUNTS: AdAccountMap = {
     tiktokAdvertiserId: TEST_ADVERTISER_ID,
   },
 };
-
-// CampaignsTableRow is the implementation target — import AFTER mocks.
-// eslint-disable-next-line import/first
-import { CampaignsTableRow } from '../CampaignsTableRow';
 
 /** Wraps a row in a minimal <table><tbody> so the TR is valid DOM. */
 function renderRow(

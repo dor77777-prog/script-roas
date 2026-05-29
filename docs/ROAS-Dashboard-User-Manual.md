@@ -7,7 +7,7 @@
 │                                                  │
 │      מדריך הפעלה שוטף למפעיל הדשבורד            │
 │                                                  │
-│      גרסה:        2.1.15                         │
+│      גרסה:        2.1.16                         │
 │      תאריך:       2026-05-29                     │
 │      קהל יעד:     מפעיל יחיד · החלטות יומיות   │
 │                                                  │
@@ -180,6 +180,30 @@ Plan 6 פיספס 25 רכיבים שיתופיים (`Filters`/Quick Range, `Sect
 - **Caption מסביר ב-3 שורות:** "ה-5 המנצחים ביותר ו-5 שצריכים תשומת לב — לפי ROAS. כל קמפיין עם פלטפורמה, חנות, וההמלצה הקונקרטית. סה״כ X קמפיינים פעילים בטווח."
 
 הגרף ה-scatter נשמר בקובץ אבל לא מיובא יותר ב-Dashboard. אם יש בקשה עתידית, ניתן להחזיר כ-toggle "תצוגת גרף" ליד הרשימות.
+
+### 2.1.16 (2026-05-29) — Phase A.5: TikTok campaign↔store mapping
+
+עד היום ה-TikTok advertiser היחיד שלנו (של uzoshop) הריץ קמפיינים גם עבור usmile360 — אבל הדשבורד שייך את כל ההכנסות + ההוצאה ל-uzoshop. הסיבה: ההנחה הישנה (`STORES_WITH_TIKTOK = {'uzoshop'}`) אכפה bucket אחד על שתי החנויות. תוקן ב-Phase A.5.
+
+**מה שינית/תראה בפועל:**
+
+- **עמודת "חנות" חדשה ב-טאב קמפיינים** (TikTok בלבד; Meta + Google נשארו 1:1 ולא מקבלים עמודה). תפריט נפתח לכל קמפיין: `uzoshop` / `Zol Plus` / `360usmile` / `(לא ממופה)`. שינוי שומר ל-cloud (Supabase `dashboard_state`) מיידית; הסבב הבא של cron-live-heavy (כל 30 דק׳) כותב את ה-spend תחת החנות הנכונה ב-`campaigns_daily` + `ads_daily`.
+- **חיווי "(לא ממופה)"** באתום (כתום) מסמן קמפיינים שעדיין לא תויגו. ברירת המחדל היא `uzoshop` — תאימות לאחור: אם לא תתייג, הכל ממשיך לזרום ל-uzoshop כמו לפני.
+- **הטבלאות החודשיות** (טאב חודש) כבר עם לוגיקה `hasTt = rows.some(r => r.ttSpend > 0)` — ברגע שusmile360 תקבל ערך TikTok > 0 מתויג, עמודת TikTok תופיע אוטומטית. הסיכום של "סך הוצאות פרסום" בשתי הטבלאות (לכל חנות + כל החנויות יחד) ייכלל ה-TikTok המתויג.
+- **`/operator` קיבל chip חדש** מעל לפאנל Meta BUC: הסבר חד-שורתי על attribution היסטורי + הפניה לעמודת "חנות" החדשה.
+
+**שורות היסטוריות (לפני 2026-05-29) נשארות תחת uzoshop.** אין re-attribution אחורנית — האגרגציה ההיסטורית נכונה תחת המודל הישן (כל הספנד היה מ-advertiser uzoshop), פשוט לא pre-stage לפי קמפיין.
+
+**מאחורי הקלעים (פירוט מלא ב-`docs/ARCHITECTURE.md` §25.11):**
+
+- `lib/campaignStoreMap.ts` (client) + `lib/inngest/campaignStoreMap.ts` (server) מחזיקים את ה-JSONB blob ב-`dashboard_state` key `'campaign-store-map'`. אותה תבנית כמו `campaign-product-map` (cloud-sync + window event broadcast).
+- `fetchTikTokAdInsights` מצרף `storeId` לכל row לפי `resolveStoreForCampaign(map, 'tiktok', advertiserId, campaignId, defaultStoreId='uzoshop')`.
+- `persistCampaignsLive` עכשיו משתמש ב-`row.storeId` (לא בארג של הפונקציה) כשהוא כותב `campaigns_daily` + `ads_daily` עבור TikTok.
+- ב-cron-daily ובסוף `persistCampaignsLive`, נקראת פונקציית Postgres חדשה `agg_tiktok_spend_per_store_for_date(d)` שעושה 2 מעברים: (1) `UPDATE data_daily.tt_spend_cad` מ-SUM של `campaigns_daily` per-(date, store_id); (2) recompute של `total_spend_cad` + `roas` + `gross_profit_cad` + `net_profit_cad` לכל row באותו תאריך. בלי המעבר השני, "סך הוצאות פרסום" של usmile360 בטבלה החודשית היה נשאר בערך הישן.
+
+**שום נתון לא נמחק.** אם תייגת קמפיין חדש כ-usmile360, הטיק הבא של cron-live-heavy יכתוב את ה-spend תחת usmile360 + יעדכן את 5 עמודות `data_daily` בהתאם. cron-daily בלילה יסיים את היום.
+
+---
 
 ### 2.1.15 (2026-05-29) — Phase A: Meta budget tracking + /operator visibility + reconciliation finalization
 

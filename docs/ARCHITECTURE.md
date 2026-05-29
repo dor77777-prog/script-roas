@@ -1133,3 +1133,34 @@ Phase A הבהיר את 3 ה-scopes הנפרדים של Shopify (יוצרים ש
 - Hot metrics SQL + decommission cron-live-heavy (Phase C)
 - Hot products live worker + dashboard live/reconciled UI (Phase D)
 - Rolling reconcile T-2/T-3/T-7..T-14 (Phase E)
+
+### 25.11 Campaign↔Store mapping (Phase A.5 — 2026-05-29)
+
+TikTok runs a single advertiser (`UZOSHOP_TIKTOK_ADVERTISER_ID`) שמשרת כיום שתי חנויות פיזיות — uzoshop + usmile360. המודל הישן (`STORES_WITH_TIKTOK = {'uzoshop'}`) הכריח כל row TikTok ל-bucket `store_id='uzoshop'`, ולכן הדשבורד הציג את ההכנסה + ההוצאה של usmile360 כאילו היו של uzoshop.
+
+**Storage:** JSONB ב-`dashboard_state` תחת key `'campaign-store-map'`. Shape: `{ "<platform>::<advertiser_id>::<campaign_id>": "<store_id>" }`. אותו תבנית כמו `campaign-product-map` — `pushCloudKey` מ-localStorage → API → Supabase; `window` event broadcast לסנכרון cross-component.
+
+**Helpers:**
+- [`lib/campaignStoreMap.ts`](../dashboard-web/src/lib/campaignStoreMap.ts) — client-side: `readCampaignStoreMap()` / `writeCampaignStoreMap(map)` / `resolveStoreForCampaign(map, platform, advertiserId, campaignId, default)` / `campaignStoreKey(platform, advertiserId, campaignId)`.
+- [`lib/inngest/campaignStoreMap.ts`](../dashboard-web/src/lib/inngest/campaignStoreMap.ts) — server-side: `loadCampaignStoreMapFromSupabase()` — קוראת ישירות מ-Supabase ל-cron handlers (אין להם גישה ל-localStorage).
+
+**Data flow per cron tick:**
+
+1. **Fetcher** ([`fetchTikTokAdInsights`](../dashboard-web/src/lib/fetchers/tiktok.ts)) — אחרי שמושך rows מ-`/report/integrated/get/`, קורא ל-`loadCampaignStoreMapFromSupabase` ומצרף `storeId` לכל row דרך `resolveStoreForCampaign(map, 'tiktok', advertiserId, campaignId, storeId-arg-as-fallback)`. **שינוי טייפ additive:** `TikTokAdRow.storeId: string` עכשיו required (היה משתמע כ-storeId-arg).
+2. **Persister** ([`persistCampaignsLive`](../dashboard-web/src/lib/inngest/persistCampaignsLive.ts)) — TikTok rows ב-`campaigns_daily` + `ads_daily` עכשיו מקבלים `store_id: row.storeId ?? storeId` (fallback ל-arg כשהrow לא נושא value). Meta + Google נשארו `store_id: storeId-arg` (1:1 ולא צריך mapping).
+3. **Aggregator** — פונקציית Postgres חדשה [`agg_tiktok_spend_per_store_for_date(d)`](../supabase/migrations/20260530120000_add_tt_spend_agg_function.sql) רצה ב-2 מעברים:
+   - **Pass 1:** `UPDATE data_daily.tt_spend_cad = SUM(campaigns_daily.spend_cad)` per (date, store_id) WHERE platform='tiktok'. בלי זה — `tt_spend_cad` נשאר בערך הישן של `ttSpendCad-arg`.
+   - **Pass 2:** Recompute של `total_spend_cad` + `roas` + `gross_profit_cad` + `net_profit_cad` לכל row באותו תאריך. בלי המעבר הזה — 4 עמודות-תלויות נשארות בערך upsert-time (שחושב מ-`ttSpendCad` הישן) והטבלאות החודשיות מראות "סך הוצאות פרסום" שגוי ל-usmile360.
+   - שני callers משתמשים באותה פונקציה: `cron-daily` (אחרי TikTok upsert) ו-`persistCampaignsLive` (בסוף הפונקציה, אחרי upserts של campaigns_daily + ads_daily). הקריאה מ-`persistCampaignsLive` מבטיחה שטיק חי של cron-live-heavy מעדכן את `data_daily` של היום מיידית — לא רק אחרי cron-daily של למחרת.
+4. **UI** ([`CampaignsTable`](../dashboard-web/src/components/CampaignsTable.tsx)) — עמודת "חנות" מותנית (`hasTikTokRows = display.some(r => r.platform === 'TikTok')`) עם dropdown. שינויים פותחים את ה-window event `roas-campaign-store-map-changed` → ה-`useEffect` של הטבלה קורא מחדש את ה-map. ה-advertiser ID נשלף מ-`adAccounts[storeId].tiktokAdvertiserId` (כבר prop קיים לצורך deep-link building).
+
+**Historical attribution:** Rows ב-`campaigns_daily` / `ads_daily` שנכתבו לפני 2026-05-29 נשארים תחת `store_id='uzoshop'`. אין backfill. ה-`/operator` מציג chip תזכורת מעל פאנל ה-Meta BUC. ההיסטוריה תקינה תחת המודל הישן (כל ה-spend באמת מ-advertiser uzoshop); רק החלוקה ל-store_id האמיתי שונה במודל החדש.
+
+**MonthlyTables behavior:** הקומפוננטה [`MonthlyTables.tsx`](../dashboard-web/src/components/MonthlyTables.tsx) כבר עם `hasTt = rows.some(r => (r.ttSpend ?? 0) > 0)` — עמודת TikTok נחשפת אוטומטית כשrow כלשהו בחנות/חודש מקבל ערך > 0. סיכומי החודש (`totalTt`, `totalSpend`) משתמשים ב-`r.ttSpend` + `r.totalSpend` מ-`data_daily`, שעדכנו עכשיו דרך ה-RPC. שום שינוי לא נדרש ב-MonthlyTables עצמה.
+
+**Cron-live's data_daily writes:** [`cronLive.ts:614-615`](../dashboard-web/src/inngest/functions/cronLive.ts) ממשיכה לכתוב `tt_spend_cad` + `total_spend_cad` בריצה החיה, אבל היא משתמשת ב-`spendOverride` (sourced מ-cron-live-heavy). אחרי שcron-live-heavy סיים את batch ה-persists, ה-RPC משכתב את הערכים האלה לערך הנכון (per-store). יש חלון של עד 30 דקות בין tick של cron-live-heavy שבו ה-data_daily עשוי להציג ערך לא מסונכרן — מקובל ל-MVP.
+
+**Out of scope:**
+- Backfill היסטורי (rejected explicit).
+- Pixel-based auto-detection (revisit אחרי חודש אם operator מתלונן).
+- אותה מנגנון ל-Meta / Google (כיום הם 1:1; ה-helpers generic-keyed ולכן הוספה עתידית תהיה 1-2 שורות).
