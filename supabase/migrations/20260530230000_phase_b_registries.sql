@@ -5,7 +5,7 @@
 -- ---------------------------------------------------------------------------
 -- 1. campaign_registry
 -- ---------------------------------------------------------------------------
-CREATE TABLE campaign_registry (
+CREATE TABLE IF NOT EXISTS campaign_registry (
   store_id text NOT NULL,
   platform text NOT NULL,                       -- 'meta' | 'google' | 'tiktok'
   campaign_id text NOT NULL,
@@ -26,16 +26,16 @@ CREATE TABLE campaign_registry (
   is_removed boolean NOT NULL DEFAULT false,
   PRIMARY KEY (store_id, platform, campaign_id)
 );
-CREATE INDEX idx_campaign_registry_serving
+CREATE INDEX IF NOT EXISTS idx_campaign_registry_serving
   ON campaign_registry (store_id, platform, is_serving)
   WHERE is_serving = true AND is_removed = false;
-CREATE INDEX idx_campaign_registry_recent_status_change
+CREATE INDEX IF NOT EXISTS idx_campaign_registry_recent_status_change
   ON campaign_registry (store_id, platform, status_changed_at DESC NULLS LAST);
 
 -- ---------------------------------------------------------------------------
 -- 2. adset_registry
 -- ---------------------------------------------------------------------------
-CREATE TABLE adset_registry (
+CREATE TABLE IF NOT EXISTS adset_registry (
   store_id text NOT NULL,
   platform text NOT NULL,
   campaign_id text NOT NULL,
@@ -59,17 +59,17 @@ CREATE TABLE adset_registry (
   is_removed boolean NOT NULL DEFAULT false,
   PRIMARY KEY (store_id, platform, adset_id)
 );
-CREATE INDEX idx_adset_registry_campaign ON adset_registry (store_id, platform, campaign_id);
-CREATE INDEX idx_adset_registry_serving
+CREATE INDEX IF NOT EXISTS idx_adset_registry_campaign ON adset_registry (store_id, platform, campaign_id);
+CREATE INDEX IF NOT EXISTS idx_adset_registry_serving
   ON adset_registry (store_id, platform, is_serving)
   WHERE is_serving = true AND is_removed = false;
-CREATE INDEX idx_adset_registry_recent_status_change
+CREATE INDEX IF NOT EXISTS idx_adset_registry_recent_status_change
   ON adset_registry (store_id, platform, status_changed_at DESC NULLS LAST);
 
 -- ---------------------------------------------------------------------------
 -- 3. ad_registry
 -- ---------------------------------------------------------------------------
-CREATE TABLE ad_registry (
+CREATE TABLE IF NOT EXISTS ad_registry (
   store_id text NOT NULL,
   platform text NOT NULL,
   campaign_id text NOT NULL,
@@ -92,17 +92,17 @@ CREATE TABLE ad_registry (
   is_removed boolean NOT NULL DEFAULT false,
   PRIMARY KEY (store_id, platform, ad_id)
 );
-CREATE INDEX idx_ad_registry_adset ON ad_registry (store_id, platform, adset_id);
-CREATE INDEX idx_ad_registry_serving
+CREATE INDEX IF NOT EXISTS idx_ad_registry_adset ON ad_registry (store_id, platform, adset_id);
+CREATE INDEX IF NOT EXISTS idx_ad_registry_serving
   ON ad_registry (store_id, platform, is_serving)
   WHERE is_serving = true AND is_removed = false;
-CREATE INDEX idx_ad_registry_recent_status_change
+CREATE INDEX IF NOT EXISTS idx_ad_registry_recent_status_change
   ON ad_registry (store_id, platform, status_changed_at DESC NULLS LAST);
 
 -- ---------------------------------------------------------------------------
 -- 4. campaign_status_events (append-only audit log, deduped)
 -- ---------------------------------------------------------------------------
-CREATE TABLE campaign_status_events (
+CREATE TABLE IF NOT EXISTS campaign_status_events (
   id bigserial PRIMARY KEY,
   store_id text NOT NULL,
   platform text NOT NULL,
@@ -120,13 +120,13 @@ CREATE TABLE campaign_status_events (
   ) STORED,
   UNIQUE (dedupe_key)
 );
-CREATE INDEX idx_status_events_recent ON campaign_status_events (store_id, platform, occurred_at DESC);
-CREATE INDEX idx_status_events_entity ON campaign_status_events (entity_id, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_status_events_recent ON campaign_status_events (store_id, platform, occurred_at DESC);
+CREATE INDEX IF NOT EXISTS idx_status_events_entity ON campaign_status_events (entity_id, occurred_at DESC);
 
 -- ---------------------------------------------------------------------------
 -- 5. cron_tick_snapshots (one row per orchestrator run)
 -- ---------------------------------------------------------------------------
-CREATE TABLE cron_tick_snapshots (
+CREATE TABLE IF NOT EXISTS cron_tick_snapshots (
   tick_id text PRIMARY KEY,                     -- ISO YYYY-MM-DDTHH:MM, 10-min bucket
   started_at timestamptz NOT NULL,
   finished_at timestamptz,
@@ -135,7 +135,7 @@ CREATE TABLE cron_tick_snapshots (
   events_skipped_count integer,
   events_failed_count integer
 );
-CREATE INDEX idx_cron_tick_snapshots_started ON cron_tick_snapshots (started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_cron_tick_snapshots_started ON cron_tick_snapshots (started_at DESC);
 
 -- ---------------------------------------------------------------------------
 -- Grants — mirror existing pattern from 20260521075741_add_constraints_and_grants.sql.
