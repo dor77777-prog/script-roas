@@ -384,6 +384,21 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
     return storeMap[campaignStoreKey('tiktok', advertiserId, campaignId)] ?? storeId;
   }, [summary?.platform, storeMap, adAccounts, storeId, campaignId]);
 
+  // Phase A.5 Task 7 hotfix — derived display name for the effective store.
+  // summary.storeName comes from the campaign's data row which still carries
+  // the pre-migration storeId until cron-live-heavy re-attributes (~30 min).
+  // Without this derived name, the ProductPickerModal header says "Map UZOSHOP
+  // products to campaign" even when the products shown are usmile360's.
+  // Falls back to summary.storeName when the storeId isn't in our 3-store
+  // canonical set (defensive — should never hit for production data).
+  const STORE_DISPLAY_NAMES: Record<string, string> = useMemo(
+    () => ({ uzoshop: 'uzoshop', zolplus: 'Zol Plus', usmile360: '360usmile' }),
+    [],
+  );
+  const effectiveStoreName = useMemo(() => {
+    return STORE_DISPLAY_NAMES[effectiveStoreId] ?? summary?.storeName ?? effectiveStoreId;
+  }, [STORE_DISPLAY_NAMES, effectiveStoreId, summary?.storeName]);
+
   // Stabilize mappedIds reference (RESEARCH.md §7 caveat). Inline
   // `productMap[...] ?? []` would return a fresh [] every render and defeat
   // the productChannelBreakdown memo below.
@@ -1436,7 +1451,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
         storeId={effectiveStoreId}
-        storeName={summary.storeName}
+        storeName={effectiveStoreName}
         campaignName={summary.campaignName}
         initial={productMap[campaignKey(effectiveStoreId, summary.platform, campaignId)] ?? []}
         otherCampaignsByProduct={otherCampaignsByProduct}
