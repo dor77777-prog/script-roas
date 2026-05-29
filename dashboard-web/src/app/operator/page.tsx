@@ -92,6 +92,24 @@ export default function OperatorPage() {
         <TokenFailuresTable />
       </section>
 
+      {/* Phase A.5 Task 8 — historical TikTok attribution disclaimer.
+          Inline static chip; no dedicated component (YAGNI). The
+          campaign-store-map shipped on 2026-05-29; rows in campaigns_daily /
+          ads_daily before this date stay attributed to uzoshop because the
+          legacy STORES_WITH_TIKTOK = {'uzoshop'} bucketed everything there.
+          New rows from the next cron-live-heavy tick onward honor the
+          per-campaign Store dropdown in the Campaigns tab. */}
+      <section className="rounded-md border border-status-orange/30 bg-status-orange/8 px-4 py-3 text-sm">
+        <p className="text-ink-secondary">
+          <span className="font-semibold text-status-orange">שורות TikTok היסטוריות</span>
+          {' '}(לפני 2026-05-29) משויכות כולן ל-<code>uzoshop</code>. זו ההנחה הישנה
+          מלפני שמיפוי קמפיין↔חנות עלה ב-Phase A.5. השתמש בעמודת{' '}
+          <span className="font-semibold">חנות</span> ב-<code>קמפיינים</code> כדי לתייג
+          קמפיינים — נתונים חדשים יזרמו לחנות הנכונה מהtick הבא של cron-live-heavy
+          ויסונכרנו ל-<code>data_daily.tt_spend_cad</code> ב-cron-daily של חצות.
+        </p>
+      </section>
+
       {/* Phase A (Task 15): MetaBucPanel — per-(store, ad_account) BUC usage.
           Server component; fetches meta_buc_usage at request time.
           ≥80% triggers budget_skip guard in cron-live-heavy; operator can
