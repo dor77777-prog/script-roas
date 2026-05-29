@@ -54,8 +54,10 @@ const STATE_KEYS = [
   'roas-dashboard:campaign-product-map',
   // Phase 05.7.9d — per-table column visibility preferences (hide/show).
   'roas-dashboard:campaigns-column-visibility',
-  // Phase A.5 (2026-05-29) — TikTok campaign↔store mapping.
-  'roas-dashboard:campaign-store-map',
+  // Phase A.5 ROLLED BACK 2026-05-29 — 'roas-dashboard:campaign-store-map'
+  // was here. Removed from auto-sync so operator browsers stop pushing
+  // orphaned entries to Supabase. The dashboardStateKeys.ts allowlist
+  // entry stays so manual pushes don't 400 if anyone tries them.
 ] as const;
 export type StateKey = (typeof STATE_KEYS)[number];
 
@@ -68,7 +70,6 @@ const CHANGE_EVENTS: Record<StateKey, string> = {
   'roas-dashboard:campaign-optimized': 'roas-campaign-optimized-changed',
   'roas-dashboard:campaign-product-map': 'roas-campaign-product-map-changed',
   'roas-dashboard:campaigns-column-visibility': 'roas-campaigns-column-visibility-changed',
-  'roas-dashboard:campaign-store-map': 'roas-campaign-store-map-changed',
 };
 
 /** ms epoch of the last push we sent for each key. Used to skip stomping

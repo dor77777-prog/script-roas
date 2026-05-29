@@ -1,9 +1,9 @@
 // dashboard-web/src/lib/campaignStoreMap.ts
 //
-// Phase A.5 — TikTok campaign↔store mapping helpers (client-side).
-// Mirrors campaignProductMap.ts: localStorage + pushCloudKey + window event.
-
-import { pushCloudKey } from './cloudSync';
+// Phase A.5 ROLLED BACK 2026-05-29 — TikTok campaign↔store mapping helpers
+// (dormant). Originally mirrored campaignProductMap.ts. After rollback the
+// cloud-sync push was removed (the key is off the STATE_KEYS allowlist) so
+// only localStorage writes remain. Kept in the codebase for Phase A.5 v2.
 
 const STORAGE_KEY = 'roas-dashboard:campaign-store-map' as const;
 const CHANGE_EVENT = 'roas-campaign-store-map-changed' as const;
@@ -35,12 +35,16 @@ export function readCampaignStoreMap(): CampaignStoreMap {
   }
 }
 
+// Phase A.5 ROLLED BACK 2026-05-29 — pushCloudKey call removed because
+// 'roas-dashboard:campaign-store-map' is no longer in cloudSync.STATE_KEYS
+// (would type-fail). writeCampaignStoreMap still writes localStorage +
+// dispatches the window event so any open browser tab clears its state
+// without crashing if a stale caller exists.
 export function writeCampaignStoreMap(map: CampaignStoreMap): void {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(map));
     window.dispatchEvent(new CustomEvent(CHANGE_EVENT));
-    pushCloudKey(STORAGE_KEY, map, { immediate: true });
   } catch {
     // quota / private mode — ignore
   }
