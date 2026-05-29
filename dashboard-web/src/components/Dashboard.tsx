@@ -13,6 +13,7 @@ import {
   CalendarDays,
   Megaphone,
   Receipt,
+  Menu,
 } from 'lucide-react';
 import type { DashboardData, Filters as F } from '@/lib/types';
 import { computePresetRange, previousRange } from '@/lib/presets';
@@ -149,6 +150,12 @@ export function Dashboard() {
   // AI report modal. AiReportButton listens to this prop via useEffect.
   const [aiReportSignal, setAiReportSignal] = useState(0);
 
+  // Mobile (< md) drawer state for the off-canvas Sidebar. The hamburger in
+  // the top header strip toggles this open; tap-outside on the backdrop or
+  // any nav item closes it. On desktop (md and up) the Sidebar ignores
+  // this prop and renders as the usual right-rail.
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
   // `aggregate()` reads billing from localStorage to compute fixedCosts. The
   // `filtered` memo below doesn't know billing exists, so editing a cost
   // wouldn't refresh KPI / PnL / per-store totals until the page reloaded.
@@ -234,8 +241,15 @@ export function Dashboard() {
 
   return (
     <div dir="rtl" className="min-h-screen bg-canvas flex">
-      {/* Sidebar on the start-side (right in RTL) */}
-      <Sidebar activeTab={activeTab} onTabChange={handleTabChange} />
+      {/* Sidebar on the start-side (right in RTL). On mobile (< md) it
+          collapses to an off-canvas drawer triggered by the hamburger in
+          the top header strip below. */}
+      <Sidebar
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        isMobileOpen={mobileSidebarOpen}
+        onMobileClose={() => setMobileSidebarOpen(false)}
+      />
 
       {/* Main column — header strip + tab content */}
       <div className="flex-1 min-w-0 flex flex-col">
@@ -251,21 +265,36 @@ export function Dashboard() {
             inside <Header> have a home. */}
         <header
           role="banner"
-          className="sticky top-0 z-30 bg-elevated/85 backdrop-blur-xl border-b border-line-subtle px-4 py-2 flex items-center justify-end gap-2"
+          className="sticky top-0 z-30 bg-elevated/85 backdrop-blur-xl border-b border-line-subtle px-4 py-2 flex items-center justify-between md:justify-end gap-2"
         >
-          <FreshnessChip dataLastWriteAt={data?.dataLastWriteAt ?? null} />
-          {data && (
-            <CommandPalette
-              data={data}
-              filters={filters}
-              setFilters={setFilters}
-              activeTab={activeTab}
-              setActiveTab={handleTabChange}
-              onRefresh={() => mutate()}
-              onOpenAiReport={() => setAiReportSignal(n => n + 1)}
-            />
-          )}
-          <SyncIndicator />
+          {/* Mobile-only hamburger — opens the off-canvas Sidebar drawer.
+              On md and up the Sidebar is the persistent right-rail, so the
+              hamburger is hidden via `md:hidden`. Sits on the start side
+              (right in RTL) so it's reachable with the right thumb. */}
+          <button
+            type="button"
+            onClick={() => setMobileSidebarOpen(true)}
+            className="md:hidden inline-flex items-center justify-center w-11 h-11 rounded-lg bg-elevated2 text-ink hover:bg-elevated2/80 transition-colors"
+            aria-label="פתח תפריט"
+          >
+            <Menu size={20} />
+          </button>
+
+          <div className="flex items-center gap-2">
+            <FreshnessChip dataLastWriteAt={data?.dataLastWriteAt ?? null} />
+            {data && (
+              <CommandPalette
+                data={data}
+                filters={filters}
+                setFilters={setFilters}
+                activeTab={activeTab}
+                setActiveTab={handleTabChange}
+                onRefresh={() => mutate()}
+                onOpenAiReport={() => setAiReportSignal(n => n + 1)}
+              />
+            )}
+            <SyncIndicator />
+          </div>
         </header>
 
         <main className="max-w-7xl mx-auto w-full px-3 sm:px-4 md:px-8 py-4 sm:py-6 md:py-8 space-y-4 sm:space-y-5">
