@@ -1272,6 +1272,18 @@ This is a 1-day spike that gates Phase A code:
 5. cron-live writes last_live_tick_at on touched rows.
 6. All 5 new Phase A tests pass + existing 1,307 tests still pass.
 
+### Phase A.5 — Campaign↔Store mapping for shared-advertiser platforms
+
+**Duration:** 2-3 days
+**Slots between Phase A and Phase B.**
+**Sub-spec:** [2026-05-29-phase-a5-campaign-store-mapping-design.md](./2026-05-29-phase-a5-campaign-store-mapping-design.md)
+
+**Why this exists:** the current data model assumes 1:1 store↔advertiser. The operator's TikTok advertiser runs campaigns for multiple stores (uzoshop + usmile360). Without this phase, Phase B's registries would store the wrong `store_id` for half of the TikTok campaigns.
+
+**Deliverables:** `campaign-store-map` JSONB in dashboard_state + UI dropdown in CampaignsTable for TikTok rows + TikTok fetcher rewrite (single fetch + per-row store_id) + data_daily.tt_spend aggregation per store. Historical rows stay in uzoshop; only forward data flows to the correctly-tagged store.
+
+**Acceptance:** Operator can tag any TikTok campaign with a store. Next cron-live-heavy tick writes the row under the tagged store. `data_daily.tt_spend_cad` per store reflects the sum of tagged campaigns.
+
 ### Phase B — Registries + status discovery + Meta worker skeleton
 
 **Duration:** 5-7 days
