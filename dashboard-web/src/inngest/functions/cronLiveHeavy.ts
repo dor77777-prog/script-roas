@@ -58,6 +58,8 @@ import {
 } from '@/lib/inngest/persistCampaignsLive';
 import { isAuthError, isRateLimitError } from '@/lib/notifications/detectAuthError';
 import { notifyTokenFailure } from '@/lib/notifications/tokenFailures';
+import { getMetaBucUsageForStore } from '@/lib/notifications/metaBucUsage';
+import { recordFreshness } from '@/lib/inngest/freshness';
 
 type StoreId = 'uzoshop' | 'zolplus' | 'usmile360';
 const ALL_STORES: StoreId[] = ['uzoshop', 'zolplus', 'usmile360'];
@@ -174,6 +176,12 @@ function mapTikTokAdRow(r: TikTokAdRow): TikTokAdLiveRow {
 // Handler — exported for tests + the factory
 // =============================================================================
 
+// ---------------------------------------------------------------------------
+// Pre-flight budget-gate constants (Phase A 2026-05-29)
+// ---------------------------------------------------------------------------
+const META_BUDGET_THRESHOLD_PCT = 80;
+const BUC_FRESH_WINDOW_MIN = 15; // "Pre-flight read sees stale value, skips wrongly" mitigation
+
 export async function runHeavyForStore(
   storeId: StoreId,
   { step }: { step: StepRunner },
@@ -181,6 +189,72 @@ export async function runHeavyForStore(
   const today = todayInIsrael();
   const yesterday = addDaysIso(today, -1);
   const dates = [today, yesterday];
+
+  // ------------------------------------------------------------------
+  // Pre-flight Meta BUC gate (Phase A 2026-05-29)
+  //
+  // Read the most recent meta_buc_usage snapshot for this store. If
+  // any insights pct >= 80 AND the snapshot was written within the
+  // last 15 min, short-circuit the entire Meta fetch block for this
+  // tick. Google + TikTok still run. The skip is recorded in
+  // data_freshness for all three Meta scopes.
+  // ------------------------------------------------------------------
+  const bucUsage = await step.run(`pre-flight-meta-buc-${storeId}`, async () =>
+    getMetaBucUsageForStore(storeId),
+  );
+
+  const metaSkipDueToBudget = (() => {
+    if (!bucUsage || !bucUsage.rows.length) return false;
+    // Pick the most recent last_updated_at across rows (one row per ad-account)
+    const newest = Math.max(
+      ...bucUsage.rows.map((r) => new Date((r as { last_updated_at: string }).last_updated_at).getTime()),
+    );
+    const ageMin = (Date.now() - newest) / 60_000;
+    if (ageMin > BUC_FRESH_WINDOW_MIN) return false; // stale: proceed optimistically
+    return (
+      bucUsage.max_ads_insights_call_pct >= META_BUDGET_THRESHOLD_PCT ||
+      bucUsage.max_ads_insights_cputime_pct >= META_BUDGET_THRESHOLD_PCT ||
+      bucUsage.max_ads_insights_time_pct >= META_BUDGET_THRESHOLD_PCT
+    );
+  })();
+
+  // If pre-flight gates Meta, record freshness for all three scopes once
+  // (not per-date — a BUC-skip is a store-tick-level event, not date-scoped).
+  if (metaSkipDueToBudget) {
+    const skipMsg = 'META_BUDGET_HIGH: pre-flight skip; max BUC ≥ 80% within last 15 min';
+    await Promise.all([
+      recordFreshness({
+        storeId,
+        platform: 'meta',
+        scope: 'campaign_metrics',
+        tableName: 'campaigns_daily',
+        status: 'budget_skip',
+        errorCode: 'META_BUDGET_HIGH',
+        errorMessage: skipMsg,
+        budgetSkip: true,
+      }),
+      recordFreshness({
+        storeId,
+        platform: 'meta',
+        scope: 'adset_metrics',
+        tableName: 'campaigns_daily',
+        status: 'budget_skip',
+        errorCode: 'META_BUDGET_HIGH',
+        errorMessage: skipMsg,
+        budgetSkip: true,
+      }),
+      recordFreshness({
+        storeId,
+        platform: 'meta',
+        scope: 'ad_metrics',
+        tableName: 'ads_daily',
+        status: 'budget_skip',
+        errorCode: 'META_BUDGET_HIGH',
+        errorMessage: skipMsg,
+        budgetSkip: true,
+      }),
+    ]);
+  }
 
   for (const date of dates) {
     // P1-7 / A7-F2 (2026-05-28): split fetch and persist into separate
@@ -244,6 +318,15 @@ export async function runHeavyForStore(
       const tiktokEmpty = { adRows: [] as TikTokAdLiveRow[] };
 
       const meta = await (async () => {
+        // Pre-flight gate: skip Meta entirely if BUC is high + fresh
+        if (metaSkipDueToBudget) {
+          failures.push({
+            provider: 'meta',
+            errorMsg:
+              'META_BUDGET_HIGH: pre-flight skip; max BUC ≥ 80% within last 15 min',
+          });
+          return metaEmpty;
+        }
         try {
           const [adsetRows, adRowsRaw, budgets] = await Promise.all([
             fetchMetaAdSetInsights(storeId, date),
@@ -306,13 +389,22 @@ export async function runHeavyForStore(
             // Operation key is stable per (store, platform) so notifyTokenFailure's
             // (provider, storeId, operation) throttle dedupes across the rolling-window
             // dates within one tick — one alert per outage, not one-per-date.
+            //
+            // Phase A 2026-05-29: META_BUDGET_HIGH (both pre-flight synthetic
+            // failure and reactive MetaBudgetHighError thrown mid-fetch) routes
+            // to `cron_live_heavy_budget_skip` — this engages the Task 11
+            // WhatsApp-suppression gate (DB row written, no panic alert).
             operation: isRate
-              ? 'cron_live_heavy_rate_limit'
+              ? (f.errorMsg.includes('META_BUDGET_HIGH')
+                  ? 'cron_live_heavy_budget_skip'
+                  : 'cron_live_heavy_rate_limit')
               : 'cron_live_heavy_auth',
             errorMsg: f.errorMsg,
-            advice: isRate
-              ? 'Platform reported HTTP 429 / quota-exceeded. cron-live-heavy will retry on the next tick (30 min). No operator action needed unless this persists across multiple ticks.'
-              : 'Refresh the platform access token in Vercel and redeploy. See docs/PROPS-MAP.md for the per-platform env var name.',
+            advice: f.errorMsg.includes('META_BUDGET_HIGH')
+              ? 'Meta BUC reached 80% threshold; pre-flight gate skipped this tick. No operator action — cron-live-heavy will retry next tick once usage decays.'
+              : isRate
+                ? 'Platform reported HTTP 429 / quota-exceeded. cron-live-heavy will retry on the next tick (30 min). No operator action needed unless this persists across multiple ticks.'
+                : 'Refresh the platform access token in Vercel and redeploy. See docs/PROPS-MAP.md for the per-platform env var name.',
           }).catch((alertErr) => {
             console.warn(
               `cron-live-heavy: notifyTokenFailure threw for ${f.provider}/${storeId}/${date}: ${alertErr instanceof Error ? alertErr.message : alertErr}`,
@@ -345,16 +437,37 @@ export async function runHeavyForStore(
 // Factory — one Inngest function per store
 // =============================================================================
 
+/**
+ * Phase A 2026-05-29 — Per-store cron stagger.
+ *
+ * Previously all 3 stores fired at :00 and :30 (* /30), meaning Meta's shared
+ * app rate-limit budget got hit by 3 simultaneous batches of insights calls.
+ * Now each store gets a 10-min offset so the sibling ticks don't pile up:
+ *
+ *   uzoshop:    :00 and :30 (offset +0 min)
+ *   zolplus:    :10 and :40 (offset +10 min)
+ *   usmile360:  :20 and :50 (offset +20 min)
+ *
+ * Each store still runs the same 2-date rolling window [today, yesterday] per
+ * tick. The stagger is purely a scheduling change — runHeavyForStore is
+ * unchanged.
+ */
+const CRON_STAGGER: Record<StoreId, string> = {
+  uzoshop:   'TZ=Asia/Jerusalem 0,30 * * * *',
+  zolplus:   'TZ=Asia/Jerusalem 10,40 * * * *',
+  usmile360: 'TZ=Asia/Jerusalem 20,50 * * * *',
+};
+
 function makeCronLiveHeavy(storeId: StoreId) {
   return inngest.createFunction(
     {
       id: `cron-live-heavy-${storeId}`,
-      // Every 30 min, Asia/Jerusalem. Sits between cron-live (10 min,
-      // light) and cron-daily (01:00, full). The 30-min cadence is
-      // calibrated to stay under Meta's per-app rate limit for tier-2
-      // accounts (~600 calls/h) given 6 fetches × 2 dates × 3 stores per
-      // tick + Meta's standard insights paging.
-      triggers: [{ cron: 'TZ=Asia/Jerusalem */30 * * * *' }],
+      // Phase A 2026-05-29 — staggered per store so the 3 Meta accounts
+      // don't all hit /insights at :00 + :30 together. Each store gets
+      // 10 min of "Meta breathing room" between sibling ticks, reducing
+      // the chance of any one store tripping the pre-flight gate due to
+      // a shared-app rate-limit pileup.
+      triggers: [{ cron: CRON_STAGGER[storeId] }],
     },
     async ({ step }) =>
       runHeavyForStore(storeId, { step: step as unknown as StepRunner }),
