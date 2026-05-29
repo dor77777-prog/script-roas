@@ -42,6 +42,12 @@ import {
   getMetaAccessTokenForStore,
   getFxCadAdapterForStore,
 } from '@/lib/fetchers/metaAccountConfig';
+import { fetchMetaHotMetricsForStore } from '@/lib/fetchers/metaHotMetrics';
+import {
+  getHotCampaignIds as getHotCampaignIdsHelper,
+  getHotAdsetIds as getHotAdsetIdsHelper,
+  getHotAdIds as getHotAdIdsHelper,
+} from '@/lib/registries/hotSet';
 import type {
   AdRegistryRow,
   AdsetRegistryRow,
@@ -96,6 +102,17 @@ export type RunMetaWorkerJobInput = {
     accessToken: string;
     getFxCadFor: MetaStatusFetchInput['getFxCadFor'];
   }>;
+  // ---------------------------------------------------------------------------
+  // Phase C — hot_metrics scope optional injections. All optional so the
+  // existing Phase B unit tests (which only exercise scope='status') keep
+  // passing without supplying these fields.
+  // ---------------------------------------------------------------------------
+  fetchHotMetrics?: typeof fetchMetaHotMetricsForStore;
+  getHotCampaignIds?: (storeId: StoreId) => Promise<string[]>;
+  getHotAdsetIds?: (storeId: StoreId) => Promise<string[]>;
+  getHotAdIds?: (storeId: StoreId) => Promise<string[]>;
+  upsertCampaignsDaily?: (rows: Array<Record<string, unknown>>) => Promise<void>;
+  upsertAdsDaily?: (rows: Array<Record<string, unknown>>) => Promise<void>;
 };
 
 async function defaultCredentials(storeId: StoreId): Promise<{
@@ -144,6 +161,9 @@ export async function runMetaWorkerJob(input: RunMetaWorkerJobInput): Promise<vo
   } = input;
   const { store_id: storeId, scope } = jobData;
 
+  if (scope === 'hot_metrics') {
+    return await runMetaHotMetricsBranch(input);
+  }
   if (scope !== 'status') return;
 
   // 1. BUC pre-flight — Layer 1 hard gate (ETA > 0 or pct >= 95).
@@ -250,6 +270,130 @@ function registryNameForScope(scope: 'campaign_status' | 'adset_status' | 'ad_st
   if (scope === 'campaign_status') return 'campaign_registry';
   if (scope === 'adset_status') return 'adset_registry';
   return 'ad_registry';
+}
+
+// ---------------------------------------------------------------------------
+// Phase C — hot_metrics branch
+//
+// Flow per event:
+//   1. BUC pre-flight (same Layer-1 hard gate as status branch). On skip,
+//      mark data_freshness.campaign_metrics=budget_skip and return.
+//   2. Load hot ids via Phase C Task 2 helpers (campaigns + adsets + ads).
+//      Empty hot set → mark success and return (nothing to refresh today).
+//   3. Fetch via fetchMetaHotMetricsForStore (Task 3). Single batched Graph
+//      call returning campaigns/adsets/ads rows for `today` only.
+//   4. Upsert into campaigns_daily (campaigns + adsets) + ads_daily, stamping
+//      source='live_tick' + last_live_tick_at so the freshness chip in the UI
+//      reflects the latest refresh tick.
+//   5. Mark data_freshness.campaign_metrics=success.
+//
+// Empty hot set is a NORMAL state (e.g. all campaigns paused) — we mark
+// freshness success because the worker did its job; there was simply nothing
+// hot to refresh.
+// ---------------------------------------------------------------------------
+
+async function runMetaHotMetricsBranch(input: RunMetaWorkerJobInput): Promise<void> {
+  const {
+    jobData,
+    bucProbe,
+    recordFreshness: rec,
+    fetchHotMetrics,
+    getHotCampaignIds,
+    getHotAdsetIds,
+    getHotAdIds,
+    upsertCampaignsDaily,
+    upsertAdsDaily,
+    getCredentials,
+    nowIso,
+  } = input;
+  const storeId = jobData.store_id;
+
+  // 1. BUC pre-flight — same hard gate as status branch.
+  const buc = await bucProbe(storeId);
+  if (buc.etaMinutes > 0 || buc.pct >= HARD_SKIP_PCT) {
+    await rec({
+      storeId,
+      platform: 'meta',
+      scope: 'campaign_metrics',
+      tableName: 'campaigns_daily',
+      status: 'budget_skip',
+      errorMessage:
+        buc.etaMinutes > 0
+          ? `Meta ETA=${buc.etaMinutes}min`
+          : `pct=${buc.pct}>=${HARD_SKIP_PCT}`,
+    });
+    return;
+  }
+
+  // 2. Load hot ids in parallel — missing injections default to empty list.
+  const [hotCampaign, hotAdset, hotAd] = await Promise.all([
+    (getHotCampaignIds ?? (async () => []))(storeId),
+    (getHotAdsetIds ?? (async () => []))(storeId),
+    (getHotAdIds ?? (async () => []))(storeId),
+  ]);
+
+  if (hotCampaign.length + hotAdset.length + hotAd.length === 0) {
+    // Nothing hot to refresh today → freshness=success (worker ran cleanly).
+    await rec({
+      storeId,
+      platform: 'meta',
+      scope: 'campaign_metrics',
+      tableName: 'campaigns_daily',
+      status: 'success',
+    });
+    return;
+  }
+
+  // Wiring guard — Inngest binding must supply fetchHotMetrics for prod.
+  if (!fetchHotMetrics) {
+    await rec({
+      storeId,
+      platform: 'meta',
+      scope: 'campaign_metrics',
+      tableName: 'campaigns_daily',
+      status: 'transient_error',
+      errorMessage: 'fetchHotMetrics not wired',
+    });
+    return;
+  }
+
+  // 3. Resolve credentials + fetch — single batched insights call.
+  const creds = await safeCredentials(storeId, getCredentials);
+  const today = nowIso.slice(0, 10);
+  const metrics = await fetchHotMetrics({
+    storeId,
+    adAccountId: creds.adAccountId,
+    accessToken: creds.accessToken,
+    hotCampaignIds: hotCampaign,
+    hotAdsetIds: hotAdset,
+    hotAdIds: hotAd,
+    dateStr: today,
+    getFxCadFor: creds.getFxCadFor,
+  });
+
+  // 4. Upsert campaigns_daily (campaigns + adsets) and ads_daily, stamping
+  //    source='live_tick' + last_live_tick_at on every row.
+  if (upsertCampaignsDaily && metrics.campaigns.length + metrics.adsets.length > 0) {
+    const all: Array<Record<string, unknown>> = [
+      ...metrics.campaigns.map((c) => ({ ...c, source: 'live_tick', last_live_tick_at: nowIso })),
+      ...metrics.adsets.map((a) => ({ ...a, source: 'live_tick', last_live_tick_at: nowIso })),
+    ];
+    await upsertCampaignsDaily(all);
+  }
+  if (upsertAdsDaily && metrics.ads.length > 0) {
+    await upsertAdsDaily(
+      metrics.ads.map((a) => ({ ...a, source: 'live_tick', last_live_tick_at: nowIso })),
+    );
+  }
+
+  // 5. Mark freshness success.
+  await rec({
+    storeId,
+    platform: 'meta',
+    scope: 'campaign_metrics',
+    tableName: 'campaigns_daily',
+    status: 'success',
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -364,6 +508,30 @@ export const metaWorker = inngest.createFunction(
             ads_management_eta_minutes: r.ads_management_eta_minutes,
             last_url: 'meta-worker:status',
           });
+        },
+        // ---------------------------------------------------------------
+        // Phase C — hot_metrics scope wiring
+        // ---------------------------------------------------------------
+        fetchHotMetrics: fetchMetaHotMetricsForStore,
+        getHotCampaignIds: (sid: StoreId) =>
+          getHotCampaignIdsHelper({ admin: sb, storeId: sid, platform: 'meta' }),
+        getHotAdsetIds: (sid: StoreId) =>
+          getHotAdsetIdsHelper({ admin: sb, storeId: sid, platform: 'meta' }),
+        getHotAdIds: (sid: StoreId) =>
+          getHotAdIdsHelper({ admin: sb, storeId: sid, platform: 'meta' }),
+        upsertCampaignsDaily: async (rows) => {
+          if (rows.length === 0) return;
+          const { error } = await sb
+            .from('campaigns_daily')
+            .upsert(rows, { onConflict: 'date,store_id,platform,campaign_id,ad_set_id' });
+          if (error) throw new Error(`campaigns_daily upsert: ${error.message}`);
+        },
+        upsertAdsDaily: async (rows) => {
+          if (rows.length === 0) return;
+          const { error } = await sb
+            .from('ads_daily')
+            .upsert(rows, { onConflict: 'date,store_id,ad_id' });
+          if (error) throw new Error(`ads_daily upsert: ${error.message}`);
         },
         nowIso,
       });

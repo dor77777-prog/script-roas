@@ -109,3 +109,65 @@ describe('runMetaWorkerJob()', () => {
     expect(fetcher).not.toHaveBeenCalled();
   });
 });
+
+describe('runMetaWorkerJob() — hot_metrics scope', () => {
+  it('hot_metrics happy path: getHotIds → fetchMetrics → upsert campaigns_daily + ads_daily → mark freshness', async () => {
+    const getHotCampaign = vi.fn().mockResolvedValue(['C1']);
+    const getHotAdset = vi.fn().mockResolvedValue(['AS1']);
+    const getHotAd = vi.fn().mockResolvedValue(['AD1']);
+    const fetcher = vi.fn().mockResolvedValue({
+      campaigns: [{ store_id: 'uzoshop', platform: 'meta', campaign_id: 'C1', date: '2026-05-30', spend_cad: 50, impressions: 1000, clicks: 20, conversions: 3, conversion_value_cad: 150 }],
+      adsets: [{ store_id: 'uzoshop', platform: 'meta', campaign_id: 'C1', adset_id: 'AS1', date: '2026-05-30', spend_cad: 25, impressions: 500, clicks: 10, conversions: 0, conversion_value_cad: 0 }],
+      ads: [{ store_id: 'uzoshop', platform: 'meta', campaign_id: 'C1', adset_id: 'AS1', ad_id: 'AD1', date: '2026-05-30', spend_cad: 25, impressions: 500, clicks: 10, conversions: 0, conversion_value_cad: 0 }],
+    });
+    const upsertCampaignsDaily = vi.fn();
+    const upsertAdsDaily = vi.fn();
+    const recordFreshness = vi.fn();
+    await runMetaWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 12 },
+      bucProbe: async () => ({ pct: 12, etaMinutes: 0 }),
+      fetchStatus: vi.fn(),
+      fetchHotMetrics: fetcher,
+      getHotCampaignIds: getHotCampaign,
+      getHotAdsetIds: getHotAdset,
+      getHotAdIds: getHotAd,
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(),
+      insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily,
+      upsertAdsDaily,
+      recordFreshness,
+      upsertBuc: vi.fn(),
+      nowIso: NOW_ISO,
+    });
+    expect(getHotCampaign).toHaveBeenCalled();
+    expect(fetcher).toHaveBeenCalled();
+    expect(upsertCampaignsDaily).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ campaign_id: 'C1' })]));
+    expect(upsertAdsDaily).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ ad_id: 'AD1' })]));
+    expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({ scope: 'campaign_metrics', status: 'success' }));
+  });
+
+  it('hot_metrics with empty hot set: skip fetch, still mark freshness success', async () => {
+    const fetcher = vi.fn();
+    const recordFreshness = vi.fn();
+    await runMetaWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 12 },
+      bucProbe: async () => ({ pct: 12, etaMinutes: 0 }),
+      fetchStatus: vi.fn(),
+      fetchHotMetrics: fetcher,
+      getHotCampaignIds: async () => [],
+      getHotAdsetIds: async () => [],
+      getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(),
+      insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(),
+      upsertAdsDaily: vi.fn(),
+      recordFreshness,
+      upsertBuc: vi.fn(),
+      nowIso: NOW_ISO,
+    });
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({ scope: 'campaign_metrics', status: 'success' }));
+  });
+});
