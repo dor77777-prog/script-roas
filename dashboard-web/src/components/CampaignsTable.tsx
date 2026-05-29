@@ -50,6 +50,10 @@ import { CHART_COLORS } from '@/lib/chartColors';
 import { filterDrillRows } from '@/lib/drillFilter';
 import type { AdAccountMap } from '@/lib/campaignsLinks';
 import {
+  readCampaignStoreMap,
+  type CampaignStoreMap,
+} from '@/lib/campaignStoreMap';
+import {
   clearAllOptimized,
   readOptimized,
   toggleOptimized,
@@ -467,6 +471,16 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         'roas-campaigns-column-visibility-changed',
         apply,
       );
+  }, []);
+
+  // Phase A.5 Task 7 — campaign↔store mapping (currently TikTok-only).
+  // Read once at mount; re-read when writeCampaignStoreMap fires the
+  // `roas-campaign-store-map-changed` event (any tab, any component).
+  const [storeMap, setStoreMap] = useState<CampaignStoreMap>(() => readCampaignStoreMap());
+  useEffect(() => {
+    const refresh = () => setStoreMap(readCampaignStoreMap());
+    window.addEventListener('roas-campaign-store-map-changed', refresh);
+    return () => window.removeEventListener('roas-campaign-store-map-changed', refresh);
   }, []);
 
   // Drill-down drawer state — set when the user clicks a row.
@@ -991,6 +1005,11 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   }, [aggregatedFiltered, sortKey, sortDir, trueRevenueByKey, healthByKey]);
   const display = showAll ? displaySource : displaySource.slice(0, TOP_N_DEFAULT);
   const remaining = displaySource.length - display.length;
+
+  // Phase A.5 Task 7 — drives the conditional "חנות" column header + the
+  // CampaignsTableRow store cell. Computed against `display` (not `aggregated`)
+  // so toggling "show top N" / "show all" stays in sync with the visible rows.
+  const hasTikTokRows = useMemo(() => display.some(a => a.platform === 'TikTok'), [display]);
 
   // ----- Pixel-vs-Shopify attribution gap (top-of-table trust view) -------
   const attributionGap = useMemo(() => {
@@ -1984,6 +2003,21 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     מגמה
                   </ColumnHeaderTh>
                   {columnOrder.map(id => metricHeaders[id] ?? null)}
+                  {/* Phase A.5 Task 7 — "חנות" column for TikTok per-campaign
+                      store tagging. Header + cell render only when at least
+                      one row in the current display set is TikTok; for non-
+                      TikTok rows in a mixed view, CampaignsTableRow emits an
+                      empty <td> to keep the grid aligned. */}
+                  {hasTikTokRows && (
+                    <ColumnHeaderTh
+                      className="px-2 py-2 text-center font-medium w-[110px]"
+                      ariaLabel="חנות"
+                      dataColId="storeMapping"
+                      tooltip="התאמת קמפיין TikTok לחנות. ה-advertiser של TikTok משותף בין החנויות; בחר את החנות שאליה הקמפיין שייך, וה-ROAS/ההוצאה ייכתבו תחתיה. ברירת המחדל היא uzoshop."
+                    >
+                      חנות
+                    </ColumnHeaderTh>
+                  )}
                   <ColumnHeaderTh
                     className="px-2 py-2 text-center font-medium w-[40px]"
                     ariaLabel="פעולות"
@@ -2007,6 +2041,8 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     adAccounts={adAccounts}
                     optimized={optimized}
                     today={today}
+                    storeMap={storeMap}
+                    hasTikTokRows={hasTikTokRows}
                     onToggleOptimized={onToggleOptimized}
                     onDrillCampaign={(campaignId, platform, storeId) => {
                       const doc = document as typeof document & {

@@ -11,6 +11,11 @@ import type { ConfidenceLevel, TrueRevenueInfo } from '@/lib/hooks/useCampaignTr
 import type { AttributionTrust } from '@/lib/attributionAnalysis';
 import type { CampaignHealth } from '@/lib/campaignHealthScore';
 import type { DailyCpmRoasPoint } from '@/lib/cpmRoasAnalysis';
+import {
+  campaignStoreKey,
+  writeCampaignStoreMap,
+  type CampaignStoreMap,
+} from '@/lib/campaignStoreMap';
 import { HealthScoreBadge } from './HealthScoreBadge';
 import { Sparkline } from './ui/Sparkline';
 
@@ -124,6 +129,20 @@ type Props = {
     adSetName: string;
     platform: 'Meta' | 'Google' | 'TikTok';
   }) => void;
+  /**
+   * Phase A.5 Task 7 — current campaign→store mapping. Read from localStorage
+   * via readCampaignStoreMap() in CampaignsTable and passed down so each row
+   * doesn't do its own localStorage read. TikTok rows use this to render the
+   * Store dropdown; Meta/Google rows ignore it.
+   */
+  storeMap: CampaignStoreMap;
+  /**
+   * Phase A.5 Task 7 — true when at least one row in the current display set
+   * has platform === 'TikTok'. When false, no Store column exists in the thead
+   * and no Store td should be emitted (avoids a dangling empty cell that
+   * misaligns the grid).
+   */
+  hasTikTokRows: boolean;
 };
 
 /**
@@ -304,6 +323,8 @@ export function CampaignsTableRow({
   onToggleOptimized,
   onDrillCampaign,
   onDrillAd,
+  storeMap,
+  hasTikTokRows,
 }: Props) {
   // FIX-26: render a "currently off" chip when this row's last active day
   // is older than today − OFF_RECENCY_DAYS. The row still appears in the
@@ -875,6 +896,50 @@ export function CampaignsTableRow({
       return columnOrder.map(id => (
         <Fragment key={id}>{metricCells[id]}</Fragment>
       ));
+      })()}
+      {/* Phase A.5 Task 7 — Store dropdown for TikTok rows. Visible only
+          when at least one TikTok row exists in the current display set
+          (`hasTikTokRows`). Non-TikTok rows emit an empty <td> to keep
+          the table grid aligned. */}
+      {hasTikTokRows && (() => {
+        if (a.platform !== 'TikTok') {
+          return <td data-col-id="storeMapping" className="px-2 py-2" />;
+        }
+        const advertiserId = adAccounts[a.storeId]?.tiktokAdvertiserId ?? '';
+        const key = campaignStoreKey('tiktok', advertiserId, a.campaignId);
+        const currentValue = storeMap[key];
+        const isUnmapped = currentValue === undefined;
+        return (
+          <td
+            data-testid={`store-cell-${a.campaignId}`}
+            data-col-id="storeMapping"
+            className={cn(
+              'px-2 py-2',
+              isUnmapped ? 'text-status-orange' : 'text-ink-secondary',
+            )}
+            onClick={e => e.stopPropagation()}
+          >
+            <select
+              data-testid={`store-select-${a.campaignId}`}
+              value={currentValue ?? '__unmapped__'}
+              onChange={e => {
+                const next: CampaignStoreMap = { ...storeMap };
+                if (e.target.value === '__unmapped__') {
+                  delete next[key];
+                } else {
+                  next[key] = e.target.value;
+                }
+                writeCampaignStoreMap(next);
+              }}
+              className="text-xs bg-canvas border border-line-subtle rounded px-1 py-0.5"
+            >
+              <option value="__unmapped__">(לא ממופה)</option>
+              <option value="uzoshop">uzoshop</option>
+              <option value="zolplus">Zol Plus</option>
+              <option value="usmile360">360usmile</option>
+            </select>
+          </td>
+        );
       })()}
       <td data-col-id="deepLink" className="px-2 py-2 text-center">
         {link && (
