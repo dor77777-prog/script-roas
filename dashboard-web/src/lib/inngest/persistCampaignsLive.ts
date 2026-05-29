@@ -151,6 +151,12 @@ export async function persistCampaignsLive(
 ): Promise<void> {
   const { storeId, dateStr, admin, getFx, meta, google, tiktok } = input;
 
+  // Phase A Task 14 (2026-05-29): single timestamp for this call so all
+  // rows in the same upsert share the same last_live_tick_at value.
+  // Mirrors cron-daily's reconciled_at invariant: within one call, all
+  // rows in every table share the same timestamp for auditability.
+  const liveTickAt = new Date().toISOString();
+
   // FX adapter: passes through CAD currencies, calls getFx for the rest.
   // null result → caller skips writing the CAD column.
   async function cadFor(amount: number, currency: string): Promise<number | null> {
@@ -172,6 +178,7 @@ export async function persistCampaignsLive(
     roas: null;
     budget_type: 'CBO' | 'ABO' | '';
     effective_status: string | null;
+    last_live_tick_at: string;
     spend_cad?: number;
     conversion_value_cad?: number;
     campaign_budget_cad?: number | null;
@@ -213,6 +220,7 @@ export async function persistCampaignsLive(
       roas: null,
       budget_type: bt,
       effective_status: effectiveStatus,
+      last_live_tick_at: liveTickAt,
     };
     if (spendCad !== null) row.spend_cad = spendCad;
     if (convValueCad !== null) row.conversion_value_cad = convValueCad;
@@ -242,6 +250,7 @@ export async function persistCampaignsLive(
     ad_set_budget_cad: null,
     budget_type: null,
     effective_status: r.effectiveStatus ?? null,
+    last_live_tick_at: liveTickAt,
   }));
 
   // ---------- campaigns_daily — TikTok rows ----------
@@ -255,6 +264,7 @@ export async function persistCampaignsLive(
     campaign_budget_cad: null;
     ad_set_budget_cad: null;
     effective_status: string | null;
+    last_live_tick_at: string;
     spend_cad?: number;
     conversion_value_cad?: number;
   };
@@ -304,6 +314,7 @@ export async function persistCampaignsLive(
       campaign_budget_cad: null,
       ad_set_budget_cad: null,
       effective_status: g.effectiveStatus,
+      last_live_tick_at: liveTickAt,
     };
     if (spendCad !== null) row.spend_cad = spendCad;
     if (convValueCad !== null) row.conversion_value_cad = convValueCad;
@@ -328,6 +339,7 @@ export async function persistCampaignsLive(
     ad_set_id: string; ad_set_name: string;
     ad_id: string; ad_name: string;
     impressions: number; clicks: number; conversions: number;
+    last_live_tick_at: string;
     spend_cad?: number;
     conversion_value_cad?: number;
   };
@@ -348,6 +360,7 @@ export async function persistCampaignsLive(
       impressions: Math.round(r.impressions),
       clicks: Math.round(r.clicks),
       conversions: Math.round(r.conversions),
+      last_live_tick_at: liveTickAt,
     };
     if (spendCad !== null) row.spend_cad = spendCad;
     if (convValueCad !== null) row.conversion_value_cad = convValueCad;
@@ -368,6 +381,7 @@ export async function persistCampaignsLive(
     clicks: Math.round(r.clicks),
     conversions: Math.round(r.conversions),
     conversion_value_cad: r.conversionValue,
+    last_live_tick_at: liveTickAt,
   }));
   const tiktokAdRows = await Promise.all(
     tiktok.adRows.map(async (r) => {
@@ -386,6 +400,7 @@ export async function persistCampaignsLive(
         impressions: Math.round(r.impressions),
         clicks: Math.round(r.clicks),
         conversions: Math.round(r.conversions),
+        last_live_tick_at: liveTickAt,
       };
       if (spendCad !== null) row.spend_cad = spendCad;
       if (convValueCad !== null) row.conversion_value_cad = convValueCad;

@@ -412,6 +412,12 @@ async function persistDayForStore(
 ): Promise<void> {
   const admin = getSupabaseAdmin();
 
+  // Phase A Task 14 (2026-05-29): single timestamp for this persistDayForStore
+  // call so all upserts within one tick share the same last_live_tick_at.
+  // Mirrors cron-daily's reconciled_at invariant: within one call every
+  // touched row in data_daily / products_daily carries the same timestamp.
+  const liveTickAt = new Date().toISOString();
+
   // INN-07 spend-only branch — early return after a minimal UPSERT that
   // touches ONLY the per-platform spend columns. We deliberately skip
   // the SELECT-then-preserve dance (no need to read existing Shopify
@@ -444,6 +450,8 @@ async function persistDayForStore(
       fb_impressions: spendOverride.fbImpressions,
       ga_impressions: spendOverride.gaImpressions,
       tt_impressions: spendOverride.ttImpressions,
+      // Phase A Task 14 (2026-05-29) — freshness timestamp for Phase D badges.
+      last_live_tick_at: liveTickAt,
     };
     const { error: spendOnlyErr } = await admin
       .from('data_daily')
@@ -572,6 +580,7 @@ async function persistDayForStore(
     gross_profit_cad: number;
     cogs_cad: number;
     net_profit_cad: number;
+    last_live_tick_at: string;
     fb_spend_cad?: number;
     ga_spend_cad?: number;
     tt_spend_cad?: number;
@@ -591,6 +600,8 @@ async function persistDayForStore(
     gross_profit_cad: grossProfit,
     cogs_cad: cogs,
     net_profit_cad: netProfit,
+    // Phase A Task 14 (2026-05-29) — freshness timestamp for Phase D badges.
+    last_live_tick_at: liveTickAt,
   };
   // When spendOverride is supplied, include the spend columns in the payload
   // so the UPSERT updates them. When NOT supplied and the row exists, omit
@@ -656,6 +667,8 @@ async function persistDayForStore(
       orders: p.orders,
       gross_revenue_cad: p.gross_revenue_cad,
       net_revenue_cad: p.net_revenue_cad,
+      // Phase A Task 14 (2026-05-29) — freshness timestamp for Phase D badges.
+      last_live_tick_at: liveTickAt,
     }));
 
     const { error: prodErr } = await admin
