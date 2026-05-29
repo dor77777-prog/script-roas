@@ -244,6 +244,8 @@ Meta ו-Google אינם מושפעים — אין campaign-store-map עבור פ
 
 **Sum invariant מובטח:** אחרי Hotfix 4, ה-SUM של data_daily.tt_spend_cad cross-stores לכל תאריך = סך כל ה-spend ב-campaigns_daily לאותו תאריך (אין duplication גם כשהקמפיין עובר חנות בתוך היום).
 
+**Hotfix 5 לערב — TodayLive per-store breakdown לא הציג TikTok ל-usmile360/zolplus:** הקומפוננטה `TodayLive` השתמשה ב-`storeHasTikTok(s.store)` שבודקת set סטטי `STORES_WITH_TIKTOK = {uzoshop}`. אחרי Phase A.5 v2, usmile360 ו-zolplus יכולות לקבל TikTok spend דרך המיפוי, אבל הbreakdown באר ההוצאה לא הציג את שורת TikTok. תוצאה: הסיכום היה $110 (Meta $66 + TikTok $43.49) אבל הbreakdown הציג רק "Meta: 66" → looked broken. תוקן: הchcck עכשיו `storeHasTikTok(s.store) || (s.ttSpend ?? 0) > 0`.
+
 ---
 
 ### 2.1.17 (2026-05-29) — Phase A.5 ROLLBACK: TikTok store mapping disabled (DB corruption)

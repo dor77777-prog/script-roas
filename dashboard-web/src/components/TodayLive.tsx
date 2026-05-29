@@ -503,13 +503,15 @@ export function TodayLive({
               const color = storeColor(s.store);
               const info = roasLabel(s.roas);
               const hasGoogle = s.gaSpend > 0;
-              // Phase 05.7.x — TikTok is rendered for every store that
-              // has the integration wired (currently uzoshop only), even
-              // when ttSpend = 0 — same convention as Google above. This
-              // way the operator can tell at a glance "yes, TikTok is
-              // configured here, today just hasn't spent yet" vs "this
-              // store doesn't have TikTok at all".
-              const hasTikTok = storeHasTikTok(s.store);
+              // Phase A.5 v2 (2026-05-29) — TikTok is rendered for:
+              //   1. Stores with the integration wired natively (STORES_WITH_TIKTOK),
+              //      even when ttSpend = 0 (so operator can see "TikTok is configured
+              //      here, today just hasn't spent yet").
+              //   2. Stores that have ttSpend > 0 via campaign-store-map — usmile360
+              //      and zolplus can receive TikTok spend from tagged campaigns
+              //      under the shared uzoshop advertiser. Without this, the per-row
+              //      sum (Meta + Google + TikTok) wouldn't add up to the displayed total.
+              const hasTikTok = storeHasTikTok(s.store) || (s.ttSpend ?? 0) > 0;
               const storeCpm = cpmData.cpmByStore.get(s.store) ?? 0;
               // Per-platform CPM breakdown for this store (operator request
               // 2026-05-23): "ה-CPM יהיה מחולק לכל פלטפורמה בכל חנות ואז
