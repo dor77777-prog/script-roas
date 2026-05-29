@@ -433,23 +433,31 @@ async function persistDayForStore(
       // NULL Shopify cols).
       return;
     }
-    const spendOnlyPayload = {
+    // Phase A.5 v2 (2026-05-29 evening) — OMIT tt_spend_cad and tt_impressions
+    // from this payload. cron-live fetches the TikTok advertiser's full spend
+    // for the function-arg storeId (ignores the campaign-store-map), so its
+    // values would WRONGLY attribute the moved campaign's spend back to the
+    // pre-mapping store. The agg_tiktok_spend_per_store_for_date RPC (called
+    // from persistCampaignsLive + cronDaily after each cron-live-heavy tick)
+    // is the source of truth for tt_spend_cad. Omitting from the UPSERT
+    // payload means ON CONFLICT preserves the RPC-set value.
+    //
+    // Trade-off: Live CPM for TikTok updates every 30 min (cron-live-heavy
+    // interval) instead of 10 min (cron-live). Acceptable per the Phase 13.8
+    // (Live CPM) spec which already accepted similar trade-offs for accuracy.
+    //
+    // total_spend_cad is also omitted because it depends on tt_spend_cad;
+    // the agg RPC's Pass 2 recomputes it correctly.
+    const spendOnlyPayload: Record<string, unknown> = {
       date,
       store_id: storeId,
       store_name: shopify.storeName,
       fb_spend_cad: spendOverride.fbSpendCad,
       ga_spend_cad: spendOverride.gaSpendCad,
-      tt_spend_cad: spendOverride.ttSpendCad,
-      total_spend_cad:
-        spendOverride.fbSpendCad +
-        spendOverride.gaSpendCad +
-        spendOverride.ttSpendCad,
-      // Phase 13.8 (2026-05-26) — impressions ride along with spend; same
-      // ON CONFLICT preserve semantics if a future caller passes 0 for a
-      // platform that genuinely had no impressions today.
+      // Phase 13.8 (2026-05-26) — fb/ga impressions still ride along with
+      // spend for Live CPM. tt_impressions omitted alongside tt_spend_cad.
       fb_impressions: spendOverride.fbImpressions,
       ga_impressions: spendOverride.gaImpressions,
-      tt_impressions: spendOverride.ttImpressions,
       // Phase A Task 14 (2026-05-29) — freshness timestamp for Phase D badges.
       last_live_tick_at: liveTickAt,
     };
@@ -539,12 +547,18 @@ async function persistDayForStore(
       : prior !== undefined
         ? prior.priorGaImp
         : Number(existing?.ga_impressions ?? 0) || 0;
-  const ttImpressions =
+  // Phase A.5 v2 (2026-05-29 evening) — ttImpressions intentionally unused.
+  // cron-live no longer writes tt_spend_cad or tt_impressions to data_daily;
+  // both are owned by the agg RPC after each cron-live-heavy tick. The
+  // declaration is kept as `_` so the symmetry with fb/ga is documented but
+  // ESLint accepts the unused binding.
+  const _ttImpressions =
     spendOverride !== undefined
       ? spendOverride.ttImpressions
       : prior !== undefined
         ? prior.priorTtImp
         : Number(existing?.tt_impressions ?? 0) || 0;
+  void _ttImpressions;
 
   const revenueCad = shopify.revenueCad;
   // Audit fix 2026-05-23 (BL-COGS): use the per-store rate (matches
@@ -611,16 +625,15 @@ async function persistDayForStore(
   if (spendOverride !== undefined) {
     dataDailyPayload.fb_spend_cad = fbSpendCad;
     dataDailyPayload.ga_spend_cad = gaSpendCad;
-    dataDailyPayload.tt_spend_cad = ttSpendCad;
-    dataDailyPayload.total_spend_cad = totalSpendCad;
-    // Phase 13.8 (2026-05-26) — impressions move in lockstep with spend:
-    // they ride along on the same "fresh from this tick" path so a
-    // store-level CPM in data_daily stays internally consistent (a 5-min
-    // window where spend was updated but impressions weren't would yield
-    // a misleading CPM).
+    // Phase A.5 v2 (2026-05-29 evening) — OMIT tt_spend_cad and
+    // total_spend_cad here too (same reason as the spendOnly branch above).
+    // The agg_tiktok_spend_per_store_for_date RPC owns tt_spend_cad after
+    // each cron-live-heavy tick; cron-live writing the legacy non-mapping-
+    // aware value would oscillate the per-store TikTok display every 10 min.
+    // Phase 13.8 (2026-05-26) — fb/ga impressions still move in lockstep
+    // with spend for Live CPM. tt_impressions omitted alongside tt_spend_cad.
     dataDailyPayload.fb_impressions = fbImpressions;
     dataDailyPayload.ga_impressions = gaImpressions;
-    dataDailyPayload.tt_impressions = ttImpressions;
   } else if (!existing) {
     dataDailyPayload.fb_spend_cad = 0;
     dataDailyPayload.ga_spend_cad = 0;

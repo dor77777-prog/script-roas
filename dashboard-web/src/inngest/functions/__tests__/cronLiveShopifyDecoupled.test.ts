@@ -258,15 +258,17 @@ describe('cronLive Shopify-coupled gating decouple (INN-07)', () => {
 
     const failedRow = upsertsByDate.get(failedDate)!;
 
-    // Spend-only assertion: spend columns must be present, Shopify columns
-    // must be ABSENT (so ON CONFLICT preserves prior good values).
+    // Spend-only assertion: fb/ga spend columns must be present, Shopify
+    // columns must be ABSENT (so ON CONFLICT preserves prior good values).
+    // Phase A.5 v2 (2026-05-29 evening) — tt_spend_cad + total_spend_cad
+    // are intentionally OMITTED from cron-live's payload now; the agg
+    // RPC (agg_tiktok_spend_per_store_for_date) owns those columns.
     expect(failedRow.fb_spend_cad).toBeDefined();
     expect(failedRow.ga_spend_cad).toBeDefined();
-    expect(failedRow.tt_spend_cad).toBeDefined();
-    expect(failedRow.total_spend_cad).toBeDefined();
     expect(failedRow.fb_spend_cad).toBe(100);
     expect(failedRow.ga_spend_cad).toBe(200);
-    expect(failedRow.tt_spend_cad).toBe(50);
+    expect(failedRow).not.toHaveProperty('tt_spend_cad');
+    expect(failedRow).not.toHaveProperty('total_spend_cad');
 
     // Shopify-owned columns must NOT be in the spend-only payload.
     expect(failedRow).not.toHaveProperty('revenue_cad');
@@ -453,14 +455,15 @@ describe('cronLive Shopify-coupled gating decouple (INN-07)', () => {
     // Post-fix: 3 spend-only UPSERTs. Pre-fix: 0 UPSERTs (continue skips all).
     expect(upsertsByDate.size).toBe(3);
     for (const [, row] of upsertsByDate) {
-      // Spend cols present
+      // Spend cols present (fb/ga only — see comment above re: A.5 v2)
       expect(row).toHaveProperty('fb_spend_cad');
       expect(row).toHaveProperty('ga_spend_cad');
-      expect(row).toHaveProperty('tt_spend_cad');
-      expect(row).toHaveProperty('total_spend_cad');
       expect(row.fb_spend_cad).toBe(80);
       expect(row.ga_spend_cad).toBe(160);
-      expect(row.tt_spend_cad).toBe(40);
+      // Phase A.5 v2 (2026-05-29 evening) — tt_spend_cad + total_spend_cad
+      // omitted; agg RPC owns them.
+      expect(row).not.toHaveProperty('tt_spend_cad');
+      expect(row).not.toHaveProperty('total_spend_cad');
       // Shopify cols absent
       expect(row).not.toHaveProperty('revenue_cad');
       expect(row).not.toHaveProperty('gross_revenue_cad');

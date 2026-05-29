@@ -236,6 +236,14 @@ Meta ו-Google אינם מושפעים — אין campaign-store-map עבור פ
 
 **Hotfix 3 לערב — Header של ה-drawer מציג uzoshop גם אחרי tagging:** ה-header של ה-drawer (`StoreIcon · {storeName} · {platform} · {activeDays}`) השתמש ב-`summary.storeName` שמגיע מנתוני הקמפיין שעדיין לא הוגרו. אחרי tagging, המפעיל ראה "TikTok · uzoshop" אפילו שהקמפיין כבר מסומן ל-usmile360. תוקן: ה-header עכשיו מציג את `effectiveStoreName` (מ-Task 6 v2). עבור Meta/Google או TikTok-unmapped, `effectiveStoreName === summary.storeName`.
 
+**Hotfix 4 לערב — duplication ב-tt_spend_cad cross-stores (SQL function + cron-live):** המשתמש דווח דאגה ל"אין כפילות בסיכום של ההוצאות בין החנויות". בדיקה מצאה **2 baגים**:
+
+1. **SQL function `agg_tiktok_spend_per_store_for_date`**: ה-UPDATE רק נגע בשורות data_daily ש-(date, store_id) שלהן הופיע ב-subquery של campaigns_daily. אם חנות איבדה את כל ה-TikTok שלה (הקמפיין היחיד הועבר ל-usmile360), ה-subquery לא החזיר את uzoshop, ה-UPDATE לא נגע בה → ה-tt_spend_cad הישן נשאר. תוקן ב-migration `20260530200000`: Pass 1a חדש שמאפס tt_spend_cad לכל השורות של אותו תאריך לפני ה-aggregation.
+
+2. **cron-live היה דורס את ה-tt_spend_cad כל 10 דק׳ עם ערך לא-מיפוי-מודע** (TikTok API מחזיר את כל ה-spend של ה-advertiser, לא יודע על המיפוי). זה גרם לתופעת oscillation: אחרי שcron-live-heavy + agg RPC חישבו נכון, cron-live בא ב-10 דק׳ הבאות ודרס. תוקן: cron-live עכשיו מדלג על כתיבת `tt_spend_cad` + `tt_impressions` + `total_spend_cad` ל-data_daily. ה-agg RPC הוא מקור האמת. Trade-off: Live CPM של TikTok מתעדכן כל 30 דק׳ (cron-live-heavy) במקום כל 10 דק׳ (cron-live). מקובל לפי Phase 13.8.
+
+**Sum invariant מובטח:** אחרי Hotfix 4, ה-SUM של data_daily.tt_spend_cad cross-stores לכל תאריך = סך כל ה-spend ב-campaigns_daily לאותו תאריך (אין duplication גם כשהקמפיין עובר חנות בתוך היום).
+
 ---
 
 ### 2.1.17 (2026-05-29) — Phase A.5 ROLLBACK: TikTok store mapping disabled (DB corruption)
