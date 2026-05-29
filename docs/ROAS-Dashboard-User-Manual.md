@@ -7,7 +7,7 @@
 │                                                  │
 │      מדריך הפעלה שוטף למפעיל הדשבורד            │
 │                                                  │
-│      גרסה:        2.1.11                         │
+│      גרסה:        2.1.12                         │
 │      תאריך:       2026-05-29                     │
 │      קהל יעד:     מפעיל יחיד · החלטות יומיות   │
 │                                                  │
@@ -180,6 +180,25 @@ Plan 6 פיספס 25 רכיבים שיתופיים (`Filters`/Quick Range, `Sect
 - **Caption מסביר ב-3 שורות:** "ה-5 המנצחים ביותר ו-5 שצריכים תשומת לב — לפי ROAS. כל קמפיין עם פלטפורמה, חנות, וההמלצה הקונקרטית. סה״כ X קמפיינים פעילים בטווח."
 
 הגרף ה-scatter נשמר בקובץ אבל לא מיובא יותר ב-Dashboard. אם יש בקשה עתידית, ניתן להחזיר כ-toggle "תצוגת גרף" ליד הרשימות.
+
+### Hotfix 2.1.12 (2026-05-29) — Chart contrast sweep (dark-mode visibility)
+
+משתמש דיווח: "בדרק מוד לפעמים יש גרפים כההים על כההים... צריך לחפש כל מיני גרפים כאלה בדשבורד לכסות את הכל". sweep agent עבר על כל הגרפים בדשבורד ותפס ~12 problems באופן רוחבי.
+
+**הממצא הגדול:** `CHART_COLORS.axis = '#7a8a9a'` (slate hex hardcoded) היה single point of failure שהשפיע על ~8+ axes במספר גרפים בו זמנית — ניגוד ~1.5:1 על הקנבס הכהה (FAILS WCAG). תוקן ל-`var(--chart-axis)` (resolves through ChartContainer chain → `--text-muted`, oklch 60% L theme-aware).
+
+**שאר התיקונים (5 קבצים, commit 41f900b):**
+
+1. **`chartColors.ts`** — `axis` ו-`reconciliationAxis` מ-hex literals ל-`var(--chart-axis)`. Categorical platform colors (Meta amber, Google blue, TikTok slate, Organic purple, Shopify green) נשמרו כ-hex כי הם brand identities.
+2. **`CampaignsTable.tsx`** — CPM-chart tooltip קיבלה restructure: היה `bg-ink text-canvas` עם `text-amber-200`/`text-emerald-300` בפנים — בdark mode `bg-ink` הופך לבן + `text-amber-200` נשאר חיוור = pale-amber-on-near-white בלתי קריא. הוחלף ב-`<ChartTooltip>` primitive (theme-aware בייט-ביידיקט). גם chart wrapped ב-`<ChartContainer>` (היה bare `<ResponsiveContainer>`) כך ש-`--chart-axis` resolves כראוי. 3 `stroke: 'white'` activeDots → `var(--surface-elevated-1)`.
+3. **`CampaignDrawer.tsx`** — 3 `stroke: 'white'` activeDots → `var(--surface-elevated-1)` (לבן הופך אפור-כהה ב-dark).
+4. **`RoasChart.tsx`** — heavy-refund warning ring `rgb(245,158,11)` → `var(--status-orange)`.
+5. **`chartColors.test.ts`** — assert updated לערך החדש.
+
+**Flagged for Plan 7 (לא תוקן):**
+- TikTok `#374151` (slate-700) במצב כהה — ניגוד ~2:1 על קנבס. brand identity אסור לשנות; שקול theme-override pattern עתידי.
+- `--chart-*` CSS vars מוגדרים רק ב-ChartContainer style prop, לא ב-:root global — fragile אם משהו יחרוג מ-ChartContainer. recommend hoist לglobals.css.
+- Dead CSS `.recharts-default-tooltip` ב-globals.css (כל Tooltip עובר עם custom content). safe to delete.
 
 מסמכים נלווים מתעדכנים בנפרד: ארכיטקטורה ב-`docs/ARCHITECTURE.md`, עבודה ביצועית של ה-overhaul ב-`docs/superpowers/plans/2026-05-{28,29}-dashboard-ux-overhaul-*.md` (7 plans, Plans 1–6 IMPLEMENTED; Plan 7 polish + a11y + RTL audit pending).
 
@@ -2544,7 +2563,7 @@ Seen 5 times. Alert #2.
 
 ## סוף המסמך
 
-**גרסה:** 2.1.11 · **תאריך עדכון:** 2026-05-29
+**גרסה:** 2.1.12 · **תאריך עדכון:** 2026-05-29
 
 > מסמך זה מתעדכן עם כל שינוי שהמפעיל רואה במסך. אם משהו לא תואם למה שאתה רואה — דווח למפתח לעדכון.
 
