@@ -396,6 +396,11 @@ export type StoreMetaRow = {
   /** Google Ads customer ID (numeric, no dashes). Same role as the Meta one
    *  for the Google Ads deep link. null when not configured. */
   googleAdsCustomerId: string | null;
+  /** Phase A.5 — TikTok advertiser ID (numeric). Sourced from the env var
+   *  `${storeId.toUpperCase()}_TIKTOK_ADVERTISER_ID` by the /api/store-meta
+   *  route (the value isn't persisted in the `stores` table). null when the
+   *  store has no TikTok account configured. */
+  tiktokAdvertiserId: string | null;
 };
 
 /**
@@ -444,6 +449,11 @@ export async function fetchStoreMetaFromPostgres(): Promise<StoreMetaRow[]> {
           : String(lastErrorRaw),
       metaAdAccountId: metaRaw ? metaRaw.replace(/^act_/, '') : null,
       googleAdsCustomerId: googleRaw ? googleRaw.replace(/-/g, '') : null,
+      // Phase A.5 — populated server-side by /api/store-meta/route.ts from
+      // env var `${STORE.toUpperCase()}_TIKTOK_ADVERTISER_ID`. The reader
+      // stays pure (DB only); the route enriches before serving so the
+      // dashboard can build the campaign-store-map key.
+      tiktokAdvertiserId: null,
     });
   }
   return rows;

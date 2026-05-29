@@ -12,10 +12,18 @@ export const revalidate = 3600; // matches CACHE_CONFIG.storeMeta.revalidate; li
 
 export async function GET() {
   try {
-    const rows = await fetchStoreMetaFromPostgres();
-    if (rows.length > 50000) {
-      console.warn(`/api/store-meta: large response (${rows.length} rows) — consider pagination`);
+    const rawRows = await fetchStoreMetaFromPostgres();
+    if (rawRows.length > 50000) {
+      console.warn(`/api/store-meta: large response (${rawRows.length} rows) — consider pagination`);
     }
+    // Phase A.5 — enrich each row with tiktokAdvertiserId from env var
+    // (the value isn't persisted in the stores table). The drawer's
+    // campaign↔store mapping needs this to build the localStorage key.
+    const rows = rawRows.map((row) => ({
+      ...row,
+      tiktokAdvertiserId:
+        process.env[`${row.storeId.toUpperCase()}_TIKTOK_ADVERTISER_ID`]?.trim() || null,
+    }));
     return NextResponse.json(
       { rows, lastUpdated: new Date().toISOString() },
       {

@@ -222,6 +222,9 @@ describe('postgresReaders — shape parity with sheets.ts (D-E3)', () => {
       lastError: null,
       metaAdAccountId: '26442930835313109',
       googleAdsCustomerId: '4014537400',
+      // Phase A.5 — postgres reader stays pure (null); the route enriches
+      // from env var. The shape parity test asserts the reader's contract.
+      tiktokAdvertiserId: null,
     });
     // act_ prefix stripping matches sheets.ts:275 normalization
     expect(rows[1].metaAdAccountId).toBe('800776975668368');

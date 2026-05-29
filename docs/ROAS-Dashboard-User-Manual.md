@@ -193,6 +193,8 @@ Plan 6 פיספס 25 רכיבים שיתופיים (`Filters`/Quick Range, `Sect
 4. **מיפוי המוצרים שמתחת לסקציית החנות מתעדכן מיידית** לפי החנות החדשה — אם תייגת usmile360, ה-`✎ שייך מוצרים` יציג את מוצרי usmile360, לא את uzoshop. ⚠ תייג חנות **קודם**, מוצרים **אחר כך**.
 5. **שאר הפאנלים ב-drawer** (Health Score, attribution, cohort) יישארו עם הנתונים של החנות המקורית (uzoshop) עד שcron-live-heavy יסיים לכתוב מחדש (עד 30 דק׳). יש חיווי כתום קטן שמודיע על זה.
 
+**Hotfix קטן (2026-05-29 אחר הצהריים):** הפעם הראשונה שהוורקפלו נשלח (commit `f17c7ee`) ה-dropdown היה disabled כי AdAccountMap לא העביר את ה-`tiktokAdvertiserId`. תוקן ב-commit `e2b17f3`: `/api/store-meta` עכשיו מעשיר את התגובה מ-env var `UZOSHOP_TIKTOK_ADVERTISER_ID`, ה-AdAccountMap נושא את הערך, וה-dropdown ב-drawer פעיל. אם פתחת קמפיין לפני התיקון — hard-refresh.
+
 **מה קורה מאחורי הקלעים מהtick הבא:**
 
 - cron-live-heavy (כל 30 דק׳, staggered per store) קורא את ה-map דרך `loadCampaignStoreMapFromSupabase` ומצמיד לכל row של TikTok את ה-`storeId` הנכון

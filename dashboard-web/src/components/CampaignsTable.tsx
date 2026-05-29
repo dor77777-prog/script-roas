@@ -266,7 +266,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   );
 
   // store-meta → Meta ad-account ID / Google Ads customer ID for deep links.
-  const { data: storeMeta } = useSWR<{ rows: Array<{ storeId: string; metaAdAccountId: string | null; googleAdsCustomerId: string | null }> }>(
+  const { data: storeMeta } = useSWR<{ rows: Array<{ storeId: string; metaAdAccountId: string | null; googleAdsCustomerId: string | null; tiktokAdvertiserId: string | null }> }>(
     '/api/store-meta',
     async (url: string) => {
       const r = await fetch(url);
@@ -281,6 +281,10 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       out[row.storeId] = {
         metaAdAccountId: row.metaAdAccountId ?? null,
         googleAdsCustomerId: row.googleAdsCustomerId ?? null,
+        // Phase A.5 — tiktokAdvertiserId is enriched by /api/store-meta from
+        // env var (not persisted in `stores` table). Used by CampaignDrawer's
+        // store-mapping section to build the campaign-store-map key.
+        tiktokAdvertiserId: row.tiktokAdvertiserId ?? null,
       };
     }
     return out;
