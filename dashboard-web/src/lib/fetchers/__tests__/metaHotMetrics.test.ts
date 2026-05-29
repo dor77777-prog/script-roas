@@ -67,9 +67,9 @@ describe('fetchMetaHotMetricsForStore()', () => {
       clicks: 20,
     });
     expect(out.adsets).toHaveLength(1);
-    expect(out.adsets[0]).toMatchObject({ adset_id: 'AS1', campaign_id: 'C1' });
+    expect(out.adsets[0]).toMatchObject({ ad_set_id: 'AS1', campaign_id: 'C1' });
     expect(out.ads).toHaveLength(1);
-    expect(out.ads[0]).toMatchObject({ ad_id: 'AD1', adset_id: 'AS1', campaign_id: 'C1' });
+    expect(out.ads[0]).toMatchObject({ ad_id: 'AD1', ad_set_id: 'AS1', campaign_id: 'C1' });
   });
 
   it('returns empty rows for empty hot sets', async () => {

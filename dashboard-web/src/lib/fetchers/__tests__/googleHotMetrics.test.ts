@@ -29,7 +29,7 @@ describe('fetchGoogleHotMetricsForStore()', () => {
       spend_cad: 50, impressions: 1000, clicks: 20, conversions: 3, conversion_value_cad: 150,
     });
     expect(out.adsets).toHaveLength(1);
-    expect(out.adsets[0].adset_id).toBe('AG1');
+    expect(out.adsets[0].ad_set_id).toBe('AG1');
     expect(out.ads).toHaveLength(1);
     expect(out.ads[0].ad_id).toBe('AD1');
   });

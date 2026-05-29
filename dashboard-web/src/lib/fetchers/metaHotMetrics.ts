@@ -39,7 +39,7 @@ export type CampaignDailyRow = {
   conversion_value_cad: number;
 };
 
-export type AdsetDailyRow = CampaignDailyRow & { adset_id: string };
+export type AdsetDailyRow = CampaignDailyRow & { ad_set_id: string };
 export type AdDailyRow = AdsetDailyRow & { ad_id: string };
 
 export type MetaHotMetricsResult = {
@@ -139,7 +139,7 @@ async function toAdsetRow(
 ): Promise<AdsetDailyRow> {
   return {
     ...(await toCampaignRow(storeId, dateStr, r, getFx)),
-    adset_id: String(r.adset_id),
+    ad_set_id: String(r.adset_id),
   };
 }
 

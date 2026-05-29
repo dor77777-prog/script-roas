@@ -91,7 +91,7 @@ function toAdsetRow(storeId: StoreId, r: Record<string, unknown>): AdsetDailyRow
   const ag = (r.ad_group ?? {}) as Record<string, unknown>;
   return {
     ...toCampaignRow(storeId, r),
-    adset_id: String(ag.id),
+    ad_set_id: String(ag.id),
   };
 }
 
@@ -101,7 +101,7 @@ function toAdRow(storeId: StoreId, r: Record<string, unknown>): AdDailyRow {
   const adInner = (aga.ad ?? {}) as Record<string, unknown>;
   return {
     ...toCampaignRow(storeId, r),
-    adset_id: String(ag.id),
+    ad_set_id: String(ag.id),
     ad_id: String(adInner.id),
   };
 }

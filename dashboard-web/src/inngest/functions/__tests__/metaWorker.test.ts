@@ -117,8 +117,8 @@ describe('runMetaWorkerJob() — hot_metrics scope', () => {
     const getHotAd = vi.fn().mockResolvedValue(['AD1']);
     const fetcher = vi.fn().mockResolvedValue({
       campaigns: [{ store_id: 'uzoshop', platform: 'meta', campaign_id: 'C1', date: '2026-05-30', spend_cad: 50, impressions: 1000, clicks: 20, conversions: 3, conversion_value_cad: 150 }],
-      adsets: [{ store_id: 'uzoshop', platform: 'meta', campaign_id: 'C1', adset_id: 'AS1', date: '2026-05-30', spend_cad: 25, impressions: 500, clicks: 10, conversions: 0, conversion_value_cad: 0 }],
-      ads: [{ store_id: 'uzoshop', platform: 'meta', campaign_id: 'C1', adset_id: 'AS1', ad_id: 'AD1', date: '2026-05-30', spend_cad: 25, impressions: 500, clicks: 10, conversions: 0, conversion_value_cad: 0 }],
+      adsets: [{ store_id: 'uzoshop', platform: 'meta', campaign_id: 'C1', ad_set_id: 'AS1', date: '2026-05-30', spend_cad: 25, impressions: 500, clicks: 10, conversions: 0, conversion_value_cad: 0 }],
+      ads: [{ store_id: 'uzoshop', platform: 'meta', campaign_id: 'C1', ad_set_id: 'AS1', ad_id: 'AD1', date: '2026-05-30', spend_cad: 25, impressions: 500, clicks: 10, conversions: 0, conversion_value_cad: 0 }],
     });
     const upsertCampaignsDaily = vi.fn();
     const upsertAdsDaily = vi.fn();

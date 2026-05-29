@@ -97,7 +97,7 @@ async function toAdsetRow(
   const d = (r.dimensions ?? {}) as Record<string, unknown>;
   return {
     ...(await toCampaignRow(resolveStore, dateStr, r, getFx)),
-    adset_id: String(d.adgroup_id ?? ''),
+    ad_set_id: String(d.adgroup_id ?? ''),
   };
 }
 
