@@ -1,12 +1,16 @@
 # 10-minute freshness contract — incremental sync redesign
 
 **Date:** 2026-05-29
-**Status:** Approved (brainstorm complete, awaiting plan)
+**Status:** Approved v3 (architecture confirmed; awaiting Phase A plan)
 **Supersedes:** `2026-05-29-meta-api-budget-gating-design.md` (this spec absorbs the Meta budget gating piece as Phase A of a larger redesign)
+**Revisions:**
+- v1: initial architecture
+- v2: 9 operator refinements (SLA framing, ad_account composite key, Pre-Phase A spike, missed-poll, dedupe, hot-set explicit)
+- v3 (current): 7 cleanup items — per-account BUC aggregation, cron-live cadence correction (already at `*/10`), tick_id flooring, `first_seen_at` preservation, `platform_updated_at` ≠ `status_changed_at` separation, complete-listing precondition for missed_seen_count, `campaign-product-map` as canonical hot-products mapping source
 
 ## Predecessor context
 
-Phase 13.9 (commit `33d1fc2`, 2026-05-27) shipped `cron-live-heavy` — a 30-min Inngest cron that refreshes `campaigns_daily` + `ads_daily` for today + yesterday across 3 stores via per-store factory. All 3 store crons fire on `*/30 * * * *` with no inter-store coordination. The current `cron-live` is `*/15 * * * *` (Shopify rolling 3-day refresh + status snapshot via `fetchMetaBudgets`). `cron-daily` at 00:05 is the authoritative nightly reconcile.
+Phase 13.9 (commit `33d1fc2`, 2026-05-27) shipped `cron-live-heavy` — a 30-min Inngest cron that refreshes `campaigns_daily` + `ads_daily` for today + yesterday across 3 stores via per-store factory. All 3 store crons fire on `*/30 * * * *` with no inter-store coordination. The current `cron-live` is `TZ=Asia/Jerusalem */10 * * * *` (Shopify rolling 3-day refresh + status snapshot via `fetchMetaBudgets`) — **already at the 10-min cadence required by the new contract**, so no schedule change is needed for KPIs. `cron-daily` at 00:05 is the authoritative nightly reconcile.
 
 Today's pain points (production, 2026-05-29):
 
@@ -159,18 +163,19 @@ CREATE TABLE campaign_registry (
   delivery_status text,                         -- normalized: DELIVERING | PENDING_REVIEW | NOT_DELIVERING | LEARNING | LIMITED | REJECTED | UNKNOWN
   is_enabled boolean,                           -- derived: NOT (configured_status IN PAUSED/DELETED/ARCHIVED)
   is_serving boolean,                           -- derived: delivery_status == DELIVERING
-  first_seen_at timestamptz NOT NULL,
-  last_seen_at timestamptz NOT NULL,
-  status_updated_at timestamptz,                -- when status changed (not just re-observed)
+  first_seen_at timestamptz NOT NULL,           -- set on INSERT only, never overwritten
+  last_seen_at timestamptz NOT NULL,            -- bumped on every observation (whether status changed or not)
+  platform_updated_at timestamptz,              -- raw from platform (Meta updated_time, Google last_modified, TikTok modify_time); bumps on ANY edit (name/budget/creative/status)
+  status_changed_at timestamptz,                -- INTERNAL: bumped ONLY when configured_status OR effective_status differ from prior observation. Used by hot set branch (2) to detect real status changes — name/budget edits do NOT inflate the hot set
   last_metrics_success_at timestamptz,          -- bumped by hot_metrics scope on success
   last_status_success_at timestamptz,           -- bumped by status scope on success
   raw_status_payload jsonb,                     -- last full status payload, for debugging
-  missed_seen_count integer NOT NULL DEFAULT 0, -- consecutive status syncs where this entity was not in the response
-  is_removed boolean NOT NULL DEFAULT false,    -- marked true only after N>=3 misses OR explicit platform DELETE
+  missed_seen_count integer NOT NULL DEFAULT 0, -- consecutive COMPLETE status syncs where this entity was not in the response
+  is_removed boolean NOT NULL DEFAULT false,    -- marked true only after N>=3 misses on COMPLETE listings OR explicit platform DELETE
   PRIMARY KEY (store_id, platform, campaign_id)
 );
 CREATE INDEX idx_campaign_registry_serving ON campaign_registry (store_id, platform, is_serving) WHERE is_serving = true AND is_removed = false;
-CREATE INDEX idx_campaign_registry_recent_status_change ON campaign_registry (store_id, platform, status_updated_at DESC NULLS LAST);
+CREATE INDEX idx_campaign_registry_recent_status_change ON campaign_registry (store_id, platform, status_changed_at DESC NULLS LAST);
 
 CREATE TABLE adset_registry (
   store_id text NOT NULL,
@@ -187,7 +192,8 @@ CREATE TABLE adset_registry (
   lifetime_budget_cad numeric(14,4),
   first_seen_at timestamptz NOT NULL,
   last_seen_at timestamptz NOT NULL,
-  status_updated_at timestamptz,
+  platform_updated_at timestamptz,
+  status_changed_at timestamptz,
   last_metrics_success_at timestamptz,
   last_status_success_at timestamptz,
   raw_status_payload jsonb,
@@ -197,6 +203,7 @@ CREATE TABLE adset_registry (
 );
 CREATE INDEX idx_adset_registry_campaign ON adset_registry (store_id, platform, campaign_id);
 CREATE INDEX idx_adset_registry_serving ON adset_registry (store_id, platform, is_serving) WHERE is_serving = true AND is_removed = false;
+CREATE INDEX idx_adset_registry_recent_status_change ON adset_registry (store_id, platform, status_changed_at DESC NULLS LAST);
 
 CREATE TABLE ad_registry (
   store_id text NOT NULL,
@@ -212,7 +219,8 @@ CREATE TABLE ad_registry (
   is_serving boolean,
   first_seen_at timestamptz NOT NULL,
   last_seen_at timestamptz NOT NULL,
-  status_updated_at timestamptz,
+  platform_updated_at timestamptz,
+  status_changed_at timestamptz,
   last_metrics_success_at timestamptz,
   last_status_success_at timestamptz,
   raw_status_payload jsonb,
@@ -222,6 +230,7 @@ CREATE TABLE ad_registry (
 );
 CREATE INDEX idx_ad_registry_adset ON ad_registry (store_id, platform, adset_id);
 CREATE INDEX idx_ad_registry_serving ON ad_registry (store_id, platform, is_serving) WHERE is_serving = true AND is_removed = false;
+CREATE INDEX idx_ad_registry_recent_status_change ON ad_registry (store_id, platform, status_changed_at DESC NULLS LAST);
 
 -- 2. Status change audit log (append-only, deduped)
 CREATE TABLE campaign_status_events (
@@ -354,7 +363,7 @@ UPDATE products_daily   SET is_finalized = true, source = 'daily_reconcile', rec
 | `google-worker` (event-triggered) | event `google/job.requested` | NEW | Phase C |
 | `tiktok-worker` (event-triggered) | event `tiktok/job.requested` | NEW | Phase C |
 | `shopify-worker` (event-triggered) | event `shopify/job.requested` | NEW | Phase D (live products) |
-| `cron-live-{store}` (existing) | `*/15 * * * *` | TBD | Phase A (unchanged), Phase D (replaced by orchestrator) |
+| `cron-live-{store}` (existing) | `*/10 * * * *` | TBD | Phase A (unchanged — already at 10-min cadence), Phase D (replaced by orchestrator's KPI scope) |
 | `cron-live-heavy-{store}` (existing) | `*/30 7-18 * * *` | DECOMMISSIONED | Phase C (after 3-day canary) |
 | `cron-daily-{store}` (existing) | `5 0 * * *` | UNCHANGED | Phase A (adds source/is_finalized/reconciled_at writes) |
 | `cron-weekly-reconcile` | `0 2 * * 0` (Sundays 02:00) | NEW | Phase E |
@@ -367,10 +376,15 @@ export const cronTickOrchestrator = inngest.createFunction(
   { id: "cron-tick-orchestrator" },
   { cron: "*/10 * * * *" },
   async ({ step }) => {
-    // Stable 10-min bucket for idempotent fan-out
-    const tickId = await step.run("tick-id", async () =>
-      new Date().toISOString().slice(0, 16) // "2026-05-29T14:30"
-    );
+    // Stable 10-min bucket for idempotent fan-out. We must FLOOR to the
+    // bucket boundary — slice(0,16) gives a 1-minute bucket which is NOT
+    // safe for retry idempotency (a tick that retries 90 sec later would
+    // generate a different tick_id and re-fan-out).
+    const tickId = await step.run("tick-id", async () => {
+      const TEN_MIN_MS = 10 * 60 * 1000;
+      const flooredMs = Math.floor(Date.now() / TEN_MIN_MS) * TEN_MIN_MS;
+      return new Date(flooredMs).toISOString().slice(0, 16); // "2026-05-29T14:30"
+    });
 
     const stores = await step.run("load-stores", loadStores);
 
@@ -435,15 +449,20 @@ export const metaWorker = inngest.createFunction(
   async ({ event, step }) => {
     const { store_id, scope, tick_id } = event.data;
 
-    // 1. Budget probe — use BUC, not just x-app-usage
-    const usage = await step.run("budget-probe", () => getMetaBucUsage(store_id));
+    // 1. Budget probe — use BUC, not just x-app-usage.
+    // getMetaBucUsageForStore aggregates MAX(pct) across all ad_account rows
+    // for the store (today 1:1, tomorrow potentially multi-account). The
+    // worker treats the store as gated by its WORST ad-account budget — if
+    // any account is hot, we throttle the whole store rather than picking
+    // the lucky account.
+    const usage = await step.run("budget-probe", () => getMetaBucUsageForStore(store_id));
     const relevantPct = scope === "hot_metrics"
-      ? Math.max(usage?.ads_insights_call_pct ?? 0,
-                 usage?.ads_insights_cputime_pct ?? 0,
-                 usage?.ads_insights_time_pct ?? 0)
-      : Math.max(usage?.ads_management_call_pct ?? 0,
-                 usage?.ads_management_cputime_pct ?? 0,
-                 usage?.ads_management_time_pct ?? 0);
+      ? Math.max(usage?.max_ads_insights_call_pct ?? 0,
+                 usage?.max_ads_insights_cputime_pct ?? 0,
+                 usage?.max_ads_insights_time_pct ?? 0)
+      : Math.max(usage?.max_ads_management_call_pct ?? 0,
+                 usage?.max_ads_management_cputime_pct ?? 0,
+                 usage?.max_ads_management_time_pct ?? 0);
 
     if (relevantPct >= META_BUDGET_THRESHOLD_PCT) {
       await step.sendEvent("trip-budget", {
@@ -481,40 +500,135 @@ export const metaWorker = inngest.createFunction(
 
 ### Registry upsert logic — missed-poll handling
 
+Two-step pattern: (1) upsert observed entities preserving `first_seen_at` from original insert; (2) increment `missed_seen_count` for entities not in the response — but ONLY when the listing was complete (no platform errors, all pages fetched, all batch sub-requests succeeded).
+
 ```typescript
+type MetaStatusBatch = {
+  campaigns: MetaCampaign[];
+  adsets: MetaAdset[];
+  ads: MetaAd[];
+  /**
+   * True iff every sub-request in the batch returned 2xx, every paginated
+   * cursor was followed to completion, and no entity-level error was raised.
+   * If false, this listing is partial and MUST NOT be used to mark entities
+   * as missing — a partial listing isn't evidence of removal.
+   */
+  was_complete: boolean;
+};
+
 async function upsertRegistryFromMeta(storeId: string, batchResponse: MetaStatusBatch) {
+  const now = new Date().toISOString();
   const observedIds = new Set(batchResponse.campaigns.map(c => c.id));
 
   // Step 1: upsert observed entities (reset missed_seen_count to 0).
+  // Use raw SQL to control which columns get DO UPDATE vs preserved.
+  // first_seen_at is set on INSERT only and NEVER overwritten on conflict.
   for (const c of batchResponse.campaigns) {
-    await sb.from("campaign_registry").upsert({
-      store_id: storeId, platform: "meta", campaign_id: c.id,
-      name: c.name, configured_status: c.configured_status, effective_status: c.effective_status,
-      delivery_status: normalizeDeliveryStatus(c.effective_status, c.is_serving, c.issues_info),
-      is_enabled: !["DELETED", "ARCHIVED"].includes(c.configured_status),
-      is_serving: c.is_serving === true,
-      last_seen_at: new Date().toISOString(),
-      status_updated_at: c.updated_time,  // ISO from Meta
-      last_status_success_at: new Date().toISOString(),
-      raw_status_payload: c,
-      missed_seen_count: 0,                 // RESET on observation
-      is_removed: false,
-      // first_seen_at: ON CONFLICT DO NOT update — preserves original
-    }, { onConflict: "store_id,platform,campaign_id" });
+    await sb.rpc("upsert_campaign_registry_row", {
+      p_store_id: storeId,
+      p_platform: "meta",
+      p_campaign_id: c.id,
+      p_name: c.name,
+      p_configured_status: c.configured_status,
+      p_effective_status: c.effective_status,
+      p_delivery_status: normalizeDeliveryStatus(c.effective_status, c.is_serving, c.issues_info),
+      p_is_enabled: !["DELETED", "ARCHIVED"].includes(c.configured_status),
+      p_is_serving: c.is_serving === true,
+      p_platform_updated_at: c.updated_time,  // raw from Meta — any edit bumps this
+      p_raw_status_payload: c,
+      p_observed_at: now,
+    });
   }
 
-  // Step 2: increment missed_seen_count for entities NOT in the response.
-  // Only mark is_removed=true when count reaches 3.
-  await sb.rpc("increment_missed_seen_count", {
-    p_store_id: storeId,
-    p_platform: "meta",
-    p_observed_ids: Array.from(observedIds),
-    p_removal_threshold: 3,
-  });
+  // Step 2: increment missed_seen_count ONLY for complete listings.
+  // A partial response (one batch sub-request 500'd, a pagination cursor failed mid-way,
+  // a network timeout truncated the result) is NOT evidence that an entity was removed —
+  // it's evidence that we don't know its state. Treating it as a miss would falsely
+  // remove campaigns that simply weren't in the truncated slice.
+  if (batchResponse.was_complete) {
+    await sb.rpc("increment_missed_seen_count", {
+      p_store_id: storeId,
+      p_platform: "meta",
+      p_observed_ids: Array.from(observedIds),
+      p_removal_threshold: 3,
+    });
+  } else {
+    // Record the incomplete listing in data_freshness so /operator can see it
+    await recordFreshness(storeId, "meta", "campaign_status", "transient_error",
+      "Incomplete listing — missed_seen_count NOT incremented");
+  }
 }
 ```
 
-The RPC `increment_missed_seen_count` is defined as:
+The upsert RPC handles `first_seen_at` correctly via `ON CONFLICT DO UPDATE SET ... ` that **omits** `first_seen_at`:
+
+```sql
+CREATE OR REPLACE FUNCTION upsert_campaign_registry_row(
+  p_store_id text, p_platform text, p_campaign_id text,
+  p_name text, p_configured_status text, p_effective_status text,
+  p_delivery_status text, p_is_enabled boolean, p_is_serving boolean,
+  p_platform_updated_at timestamptz, p_raw_status_payload jsonb,
+  p_observed_at timestamptz
+) RETURNS void AS $$
+DECLARE
+  v_prev_effective_status text;
+  v_prev_configured_status text;
+  v_is_new_row boolean;
+BEGIN
+  -- Detect status change BEFORE the upsert so we know whether to bump
+  -- status_changed_at (vs platform_updated_at, which Meta bumps on ANY edit).
+  SELECT effective_status, configured_status
+    INTO v_prev_effective_status, v_prev_configured_status
+    FROM campaign_registry
+   WHERE store_id = p_store_id AND platform = p_platform AND campaign_id = p_campaign_id;
+
+  v_is_new_row := (v_prev_effective_status IS NULL AND v_prev_configured_status IS NULL);
+
+  INSERT INTO campaign_registry (
+    store_id, platform, campaign_id,
+    name, configured_status, effective_status, delivery_status,
+    is_enabled, is_serving,
+    first_seen_at, last_seen_at,
+    platform_updated_at, status_changed_at,
+    last_status_success_at, raw_status_payload,
+    missed_seen_count, is_removed
+  ) VALUES (
+    p_store_id, p_platform, p_campaign_id,
+    p_name, p_configured_status, p_effective_status, p_delivery_status,
+    p_is_enabled, p_is_serving,
+    p_observed_at, p_observed_at,                   -- first_seen_at = INSERT time
+    p_platform_updated_at, p_observed_at,           -- status_changed_at = INSERT time (first sighting)
+    p_observed_at, p_raw_status_payload,
+    0, false
+  )
+  ON CONFLICT (store_id, platform, campaign_id) DO UPDATE SET
+    name = EXCLUDED.name,
+    configured_status = EXCLUDED.configured_status,
+    effective_status = EXCLUDED.effective_status,
+    delivery_status = EXCLUDED.delivery_status,
+    is_enabled = EXCLUDED.is_enabled,
+    is_serving = EXCLUDED.is_serving,
+    last_seen_at = EXCLUDED.last_seen_at,
+    platform_updated_at = EXCLUDED.platform_updated_at,
+    -- status_changed_at: bump ONLY if effective_status OR configured_status actually changed.
+    -- Meta's platform_updated_at bumps on name/budget/creative edits too — those are
+    -- NOT status changes and should NOT inflate the hot set (branch 2).
+    status_changed_at = CASE
+      WHEN campaign_registry.effective_status IS DISTINCT FROM EXCLUDED.effective_status
+        OR campaign_registry.configured_status IS DISTINCT FROM EXCLUDED.configured_status
+      THEN EXCLUDED.last_seen_at
+      ELSE campaign_registry.status_changed_at
+    END,
+    last_status_success_at = EXCLUDED.last_status_success_at,
+    raw_status_payload = EXCLUDED.raw_status_payload,
+    missed_seen_count = 0,
+    is_removed = false;
+    -- first_seen_at intentionally NOT in SET — preserves original insert timestamp.
+END;
+$$ LANGUAGE plpgsql;
+```
+
+The miss-increment RPC (unchanged from v2):
 
 ```sql
 CREATE OR REPLACE FUNCTION increment_missed_seen_count(
@@ -522,7 +636,6 @@ CREATE OR REPLACE FUNCTION increment_missed_seen_count(
   p_observed_ids text[], p_removal_threshold int DEFAULT 3
 ) RETURNS void AS $$
 BEGIN
-  -- Increment count for entities not seen this tick
   UPDATE campaign_registry
      SET missed_seen_count = missed_seen_count + 1,
          is_removed = (missed_seen_count + 1 >= p_removal_threshold)
@@ -534,24 +647,33 @@ END;
 $$ LANGUAGE plpgsql;
 ```
 
-Rationale: a single API hiccup (Meta returns 500 for one of the 3 batch sub-requests, or `/campaigns` returns a truncated page) must NOT make the dashboard show a campaign as deleted. Three consecutive misses (=30 min of cron-tick) is the threshold for treating absence as a real removal. Same logic for adsets + ads with their own RPCs.
+Rationale layered:
+1. **Hiccup safety**: a single API hiccup (Meta returns 500 for one of 3 batch sub-requests, a `/campaigns` pagination cursor fails mid-way) sets `was_complete=false`, so no entity is touched. The next complete tick re-establishes ground truth.
+2. **Slow removal**: even on complete listings, three consecutive misses (= 30 min) is the threshold for treating absence as a real removal. Same logic for adsets + ads with their own RPCs.
+3. **`first_seen_at` integrity**: only set on the INSERT branch. Subsequent observations preserve it via the SET clause omitting it.
+4. **`status_changed_at` ≠ `platform_updated_at`**: the platform timestamp bumps on any edit (name, budget, creative). The hot set's branch-2 reads our internal `status_changed_at`, which only bumps when configured/effective status actually changed. Editing a campaign's name doesn't re-enter it into the hot set.
 
 ### Hot set SQL (per-store, per-platform)
 
 ```sql
 -- Hot campaigns = UNION of:
 --   1. Status-active in registry (effective_status IN delivering-ish enums) — explicit ON state
---   2. Recently status-changed (last 24h) — catches re-enabled even WITHOUT spend yet
+--   2. Recently STATUS-changed (last 24h) — catches re-enabled even WITHOUT spend yet
 --   3. Recently first-seen (last 72h) — catches NEWLY CREATED even WITHOUT spend yet
 --   4. Has activity today (spend|impressions|clicks|conversions > 0)
 --   5. Had spend yesterday tail (catches "paused this morning")
 --
 -- IMPORTANT: branches (2) and (3) explicitly DO NOT require spend > 0.
--- A campaign that was just enabled (status PAUSED → ACTIVE 5 minutes ago) MUST
--- enter the hot set so that hot_metrics fetches refresh its zeros into actuals
--- as soon as Meta reports any delivery. Without these branches, the dashboard
--- would show the campaign as ON but with stale-or-missing metrics, which is
--- exactly the "ON but no spend yet" gap requirement 8 in the spec brief.
+-- A campaign that was just enabled (configured_status PAUSED → ACTIVE 5 min ago)
+-- MUST enter the hot set so that hot_metrics fetches refresh its zeros into
+-- actuals as soon as Meta reports any delivery. Without these branches, the
+-- dashboard would show the campaign as ON but with stale-or-missing metrics.
+--
+-- IMPORTANT (item 5): branch (2) reads `status_changed_at`, NOT
+-- `platform_updated_at`. The platform timestamp bumps on ANY edit (name,
+-- budget, creative); we DON'T want a renamed campaign to re-enter the hot
+-- set if its status is stable. `status_changed_at` is bumped by our upsert
+-- RPC only when configured_status OR effective_status actually changed.
 WITH hot_campaigns AS (
   -- (1) Status-active (the standard case)
   SELECT campaign_id FROM campaign_registry
@@ -561,11 +683,13 @@ WITH hot_campaigns AS (
      AND is_enabled = true
 
   UNION
-  -- (2) Recently changed — INCLUDES recently-enabled with zero spend
+  -- (2) Recently STATUS-changed — INCLUDES recently-enabled with zero spend.
+  --     Reads status_changed_at, NOT platform_updated_at. Renaming a campaign
+  --     does not re-enter it into the hot set.
   SELECT campaign_id FROM campaign_registry
    WHERE store_id = $1 AND platform = $2
      AND is_removed = false
-     AND status_updated_at >= now() - INTERVAL '24 hours'
+     AND status_changed_at >= now() - INTERVAL '24 hours'
 
   UNION
   -- (3) Recently created — INCLUDES newly-created with zero spend
@@ -831,13 +955,65 @@ async function fetchTikTokHotMetricsForStore(storeId: string) {
 ```typescript
 async function fetchShopifyHotProductsForStore(storeId: string) {
   const hotProductIds = await getHotProductIds(storeId);
-  // hot products = products with orders today UNION products in active campaigns UNION top revenue 7d
   if (hotProductIds.length === 0) return [];
 
   // GraphQL bulk query: products[hot_set] -> orders today aggregated
   return fetchShopifyProductsLive(storeId, hotProductIds);
 }
 ```
+
+**Hot products SQL — three sources of truth, UNION'd**
+
+The operator already maintains a manual campaign↔product mapping (the `campaign-product-map` cloud-synced state at `dashboard_state.value` for key `'campaign-product-map'`, keyed as `{ "${storeId}::${platform}::${campaignId}": productId[] }` — see [campaignProductMap.ts](dashboard-web/src/lib/campaignProductMap.ts)). We reuse it as the canonical source for "which products are connected to which campaigns" — no new mapping table needed.
+
+```sql
+WITH active_campaign_keys AS (
+  -- Build "storeId::platform::campaignId" keys for currently-serving campaigns
+  SELECT (store_id || '::' || platform || '::' || campaign_id) AS campaign_key
+    FROM campaign_registry
+   WHERE store_id = $1
+     AND is_serving = true
+     AND is_removed = false
+),
+mapped_product_ids AS (
+  -- Extract product_ids from dashboard_state.campaign-product-map JSONB
+  -- (operator-maintained mapping; persisted by writeProductMap() via pushCloudKey)
+  SELECT DISTINCT jsonb_array_elements_text(value) AS product_id
+    FROM dashboard_state, jsonb_each(value) AS m(campaign_key, value)
+   WHERE key = 'campaign-product-map'
+     AND campaign_key IN (SELECT campaign_key FROM active_campaign_keys)
+),
+hot_products AS (
+  -- (1) Has orders today (Shopify-actual signal — strongest)
+  SELECT DISTINCT product_id FROM products_daily
+   WHERE store_id = $1 AND date = CURRENT_DATE AND (units > 0 OR gross_revenue_cad > 0)
+
+  UNION
+  -- (2) Top 50 revenue last 7 days (recency anchor)
+  SELECT product_id FROM (
+    SELECT product_id, SUM(net_revenue_cad) AS rev
+      FROM products_daily
+     WHERE store_id = $1 AND date >= CURRENT_DATE - 7
+     GROUP BY product_id
+     ORDER BY rev DESC
+     LIMIT 50
+  ) t
+
+  UNION
+  -- (3) Linked to currently-serving campaign via operator-maintained map
+  --     (campaign-product-map JSONB in dashboard_state)
+  SELECT product_id FROM mapped_product_ids
+
+  UNION
+  -- (4) Currently shown in ProductCentricView — handled by the dashboard
+  --     marking products as "viewed" via a transient signal. Not in MVP; defer
+  --     until we see a real need. (Otherwise: every product the operator
+  --     ever opened the drawer for would stay hot forever.)
+)
+SELECT array_agg(DISTINCT product_id) FROM hot_products;
+```
+
+⚠ **Edge case:** if `campaign-product-map` is empty (operator hasn't tagged any campaigns), source (3) returns zero. Sources (1) + (2) still cover all products with real activity, so the hot set still works — just doesn't include "campaign-linked but no sales yet" products. That's acceptable for an internal tool where the operator can manually tag interesting products.
 
 ## Dashboard UI changes
 
@@ -930,10 +1106,35 @@ type CampaignRow = {
 
 ### New panels
 
-1. **Meta BUC budget panel** (per-store)
-   - 3 progress bars per store × 2 BUCs (ads_insights + ads_management)
-   - Color: green <60%, amber 60-80%, red ≥80%
-   - "Last updated 2 min ago, ETA full budget recovery: 12 min"
+1. **Meta BUC budget panel** (per `(store, ad_account_id)` row)
+   - One row per ad-account (today 1:1 with store, tomorrow potentially N:1 — schema-ready).
+   - For each row: 3 progress bars per BUC (call/cputime/time) × 2 BUCs (ads_insights + ads_management) = 6 bars.
+   - Color: green <60%, amber 60-80%, red ≥80%.
+   - Sub-header per store summarizing the MAX across its ad-accounts: "uzoshop worst: ads_insights call_count 72%".
+   - Tooltip: "Last updated 2 min ago, ETA full budget recovery: 12 min" (per row, sourced from BUC `estimated_time_to_regain_access`).
+   - Backed by `getMetaBucUsageForStore()` which returns the MAX across rows:
+     ```typescript
+     async function getMetaBucUsageForStore(storeId: string) {
+       const { data } = await sb
+         .from("meta_buc_usage")
+         .select("*")
+         .eq("store_id", storeId);
+       if (!data?.length) return null;
+       return {
+         max_ads_insights_call_pct: Math.max(...data.map(r => r.ads_insights_call_pct)),
+         max_ads_insights_cputime_pct: Math.max(...data.map(r => r.ads_insights_cputime_pct)),
+         max_ads_insights_time_pct: Math.max(...data.map(r => r.ads_insights_time_pct)),
+         max_ads_management_call_pct: Math.max(...data.map(r => r.ads_management_call_pct)),
+         max_ads_management_cputime_pct: Math.max(...data.map(r => r.ads_management_cputime_pct)),
+         max_ads_management_time_pct: Math.max(...data.map(r => r.ads_management_time_pct)),
+         max_eta_minutes: Math.max(...data.map(r => Math.max(
+           r.ads_insights_eta_minutes ?? 0,
+           r.ads_management_eta_minutes ?? 0
+         ))),
+         rows: data, // for per-account drill-down in UI
+       };
+     }
+     ```
 
 2. **Freshness matrix**
    - Table with rows: (store × platform × scope), columns: status / lag / last_success / next_retry
@@ -968,8 +1169,12 @@ type CampaignRow = {
 - `metaWorkerCancelOnBudget.test.ts` — cancelOn triggers when sibling worker emits exceeded.
 - `registryUpsertIdempotency.test.ts` — discovery sync runs twice → same registry rows (missed_seen_count resets to 0).
 - `registryMissedSeenIncrement.test.ts` — campaign in tick 1 but absent in tick 2 → missed_seen_count = 1, is_removed = false.
-- `registryMissedSeenThreshold.test.ts` — 3 consecutive misses → is_removed = true; status_event with change_kind='removed'.
+- `registryMissedSeenThreshold.test.ts` — 3 consecutive misses on COMPLETE listings → is_removed = true; status_event with change_kind='removed'.
+- `registryMissedSeenSkippedOnIncompleteListing.test.ts` — when batch returns `was_complete=false`, missed_seen_count NOT incremented for absent entities; data_freshness gets transient_error row.
 - `registryReEmergence.test.ts` — is_removed=true campaign reappears in next discovery → is_removed reset to false; status_event change_kind='re_emerged'.
+- `registryFirstSeenAtPreserved.test.ts` — entity observed in tick 1 + tick 2 → first_seen_at unchanged across observations; last_seen_at bumped.
+- `registryStatusChangedAtVsPlatformUpdatedAt.test.ts` — campaign whose name changes (platform_updated_at bumps but status stays same) → status_changed_at NOT bumped; hot set does NOT include it.
+- `registryStatusChangedAtOnRealStatusChange.test.ts` — campaign whose effective_status changes ACTIVE → PAUSED → status_changed_at bumped to current tick time.
 - `statusEventsOnDelta.test.ts` — status change writes campaign_status_events.
 - `statusEventsFirstSeen.test.ts` — new campaign writes first_seen event.
 - `statusEventsReEnabled.test.ts` — PAUSED → ACTIVE writes re-enabled event.
@@ -981,8 +1186,11 @@ type CampaignRow = {
 - `hotSetBuilder.test.ts` — UNION returns active + recent + spending + paused-with-spend.
 - `hotSetIncludesRecentlyEnabledWithZeroSpend.test.ts` — campaign re-enabled 10 min ago with zero spend MUST appear in hot set (branch 2).
 - `hotSetIncludesNewlyCreatedWithZeroSpend.test.ts` — campaign first_seen 2 hours ago with zero spend MUST appear (branch 3).
-- `hotSetExcludesCold.test.ts` — long-paused campaign (status_updated_at > 24h ago, no recent spend) NOT in hot set.
+- `hotSetExcludesCold.test.ts` — long-paused campaign (status_changed_at > 24h ago, no recent spend) NOT in hot set.
+- `hotSetExcludesNameEdit.test.ts` — campaign that had only its NAME changed (platform_updated_at bumped, status_changed_at not bumped) NOT in hot set branch 2.
 - `hotSetExcludesRemoved.test.ts` — registry rows with is_removed=true filtered out.
+- `hotProductsFromOperatorMap.test.ts` — products tagged to a currently-serving campaign via campaign-product-map appear in hot products even if zero orders today.
+- `hotProductsEmptyMapStillReturnsByActivity.test.ts` — if campaign-product-map is empty, sources (1) and (2) still cover all products with real activity.
 - `cronHotMetricsCancelsHeavy.test.ts` — canary check: heavy + hot run in parallel, then heavy decommissioned.
 
 **Phase D:**
@@ -1144,6 +1352,12 @@ This is a 1-day spike that gates Phase A code:
 | Removed entities re-appear (campaign undeleted by operator) | `is_removed=true` rows still upsert on next observation (the upsert resets `missed_seen_count=0` AND `is_removed=false`). Status event emitted with `change_kind='re_emerged'`. |
 | Daily reconcile rolling window (Phase E) overwrites a `live_tick` row with stale `daily_reconcile` data when same-day Inngest retry runs after midnight crosses | cron-daily filters `WHERE date < CURRENT_DATE` so it never touches today's row. Phase E rolling re-checks T-2/T-3 only — those rows are >=2 days old, all in is_finalized=true territory. |
 | Pre-Phase A discovery (Task 0.1-0.4) takes longer than 1 day and blocks Phase A | The spike is intentionally read-only and adds zero production risk (just logging). If it spills into 2 days, that's still cheaper than building Phase A against wrong assumptions. |
+| Worker treats one store as gated by the wrong ad-account's BUC (today 1:1, tomorrow N:1) | `getMetaBucUsageForStore` aggregates MAX across all ad-account rows for the store. The worker throttles on the WORST account — pessimistic but correct. Per-account drill-down is exposed in the /operator panel for ops visibility. |
+| `tick_id` skew between cron retries fans out duplicate events | `Math.floor(Date.now() / 10*60*1000) * 10*60*1000` floors to the 10-min bucket boundary. Two retries within the same bucket emit identical event IDs; Inngest's 24h event-id dedup absorbs them. Test `tickIdFloorsToTenMinuteBucket` enforces this. |
+| `first_seen_at` accidentally overwritten on subsequent observations | `upsert_campaign_registry_row` RPC uses raw INSERT … ON CONFLICT DO UPDATE that **omits** `first_seen_at` from the SET clause. Test `registryFirstSeenAtPreserved` enforces this byte-for-byte. |
+| `platform_updated_at` (which bumps on name/budget/creative edits) inflates the hot set with non-status edits | Two separate columns: `platform_updated_at` (raw from API, stored for forensics) and `status_changed_at` (bumped only when configured_status OR effective_status actually changed). Hot set branch 2 reads `status_changed_at`. Test `hotSetExcludesNameEdit` enforces the separation. |
+| Partial Meta status listing (one batch sub-request 500'd, one pagination cursor failed) marks live campaigns as deleted | `MetaStatusBatch.was_complete` must be `true` for the missed_seen_count increment to fire. Partial listings record a `transient_error` in data_freshness instead of touching the registry. Test `registryMissedSeenSkippedOnIncompleteListing` enforces this. |
+| `campaign-product-map` operator hasn't tagged any campaigns → hot products misses campaign-linked products | Sources (1) and (2) of `hot_products` SQL still cover everything with real activity. The mapping (source 3) is purely additive — empty map degrades gracefully, doesn't break anything. Test `hotProductsEmptyMapStillReturnsByActivity` enforces this. |
 | Stagger gives uzoshop unfair advantage (always fetches first) | Operator approves the order. Recommend uzoshop first (highest traffic, most likely to push budget). |
 | Inngest cron-tick re-fires on retry → duplicate fan-out | Event id = `${platform}:${storeId}:${scope}:${tickId}` enforces 24h dedup. tick_id is the 10-min bucket. |
 | Hot set SQL too expensive at scale | Indexes on `(store_id, platform, is_serving)`, `(store_id, platform, status_updated_at)`, `(date, store_id, spend_cad)`. Hot set runs in <100ms on current data volume. |
