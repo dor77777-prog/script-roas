@@ -108,3 +108,130 @@ describe('aggregate() — locks FIX-05, FIX-06, FIX-13', () => {
     expect(row.lastActiveDate).toBeNull();
   });
 });
+
+describe('aggregate() — Phase A.5 v2 evening hotfix #7: effective-store collapse', () => {
+  // Bug scenario: operator maps a TikTok campaign from uzoshop to 360usmile
+  // mid-month. campaigns_daily holds historical rows under store_id='uzoshop'
+  // (from before the mapping) AND fresh rows under store_id='360usmile' (from
+  // after the per-tick DELETE-then-UPSERT in persistCampaignsLive). Before the
+  // fix, the aggregator grouped by storeId → two visible rows for the same
+  // campaign; the table's effective-store overlay then badged both as
+  // 360usmile, producing the operator-reported "4 rows where 2 are expected"
+  // pattern. Fix: pass an `effectiveStoreByCampaignId` map so the aggregator
+  // collapses historical + new rows into ONE entry under the effective store.
+
+  it('collapses historical (uzoshop) + new (360usmile) TikTok rows for the same campaign into ONE aggregate under 360usmile', () => {
+    const rows = [
+      makeRow({
+        storeId: 'uzoshop',
+        storeName: 'uzoshop',
+        platform: 'TikTok',
+        campaignId: 'tt-camp-1',
+        campaignName: 'usmile360 - קרוסלות',
+        date: '2026-05-10',
+        spend: 48,
+        impressions: 2000,
+        clicks: 30,
+        conversions: 1,
+        conversionValue: 50,
+      }),
+      makeRow({
+        storeId: '360usmile',
+        storeName: '360usmile',
+        platform: 'TikTok',
+        campaignId: 'tt-camp-1',
+        campaignName: 'usmile360 - קרוסלות',
+        date: '2026-05-29',
+        spend: 26,
+        impressions: 1500,
+        clicks: 20,
+        conversions: 0,
+        conversionValue: 0,
+      }),
+    ];
+
+    const effectiveStoreByCampaignId = new Map<string, string>([
+      ['tiktok::tt-camp-1', '360usmile'],
+    ]);
+    const storeDisplayNames: Record<string, string> = {
+      '360usmile': '360usmile',
+      uzoshop: 'uzoshop',
+    };
+
+    const out = aggregate(
+      rows,
+      'campaign',
+      'All',
+      'all',
+      RANGE,
+      undefined,
+      effectiveStoreByCampaignId,
+      storeDisplayNames,
+    );
+
+    expect(out).toHaveLength(1);
+    expect(out[0].storeId).toBe('360usmile');
+    expect(out[0].storeName).toBe('360usmile');
+    expect(out[0].spend).toBe(74);
+    expect(out[0].impressions).toBe(3500);
+    expect(out[0].clicks).toBe(50);
+    expect(out[0].key).toBe('360usmile::TikTok::tt-camp-1');
+  });
+
+  it('omitted effectiveStoreByCampaignId param → behaviour is unchanged (back-compat)', () => {
+    const rows = [
+      makeRow({
+        storeId: 'uzoshop',
+        storeName: 'uzoshop',
+        platform: 'TikTok',
+        campaignId: 'tt-camp-2',
+        date: '2026-05-10',
+        spend: 10,
+      }),
+      makeRow({
+        storeId: '360usmile',
+        storeName: '360usmile',
+        platform: 'TikTok',
+        campaignId: 'tt-camp-2',
+        date: '2026-05-29',
+        spend: 20,
+      }),
+    ];
+
+    const out = aggregate(rows, 'campaign', 'All', 'all', RANGE);
+
+    expect(out).toHaveLength(2);
+  });
+
+  it('rows whose campaignId has no mapping entry keep their original storeId', () => {
+    const rows = [
+      makeRow({
+        storeId: 'uzoshop',
+        storeName: 'uzoshop',
+        platform: 'TikTok',
+        campaignId: 'tt-unmapped',
+        date: '2026-05-10',
+        spend: 5,
+      }),
+    ];
+
+    const effectiveStoreByCampaignId = new Map<string, string>([
+      ['tiktok::tt-other', '360usmile'],
+    ]);
+
+    const out = aggregate(
+      rows,
+      'campaign',
+      'All',
+      'all',
+      RANGE,
+      undefined,
+      effectiveStoreByCampaignId,
+      { '360usmile': '360usmile', uzoshop: 'uzoshop' },
+    );
+
+    expect(out).toHaveLength(1);
+    expect(out[0].storeId).toBe('uzoshop');
+    expect(out[0].storeName).toBe('uzoshop');
+  });
+});

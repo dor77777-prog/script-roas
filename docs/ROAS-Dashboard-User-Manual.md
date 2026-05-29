@@ -7,7 +7,7 @@
 │                                                  │
 │      מדריך הפעלה שוטף למפעיל הדשבורד            │
 │                                                  │
-│      גרסה:        2.1.19                         │
+│      גרסה:        2.1.20                         │
 │      תאריך:       2026-05-29                     │
 │      קהל יעד:     מפעיל יחיד · החלטות יומיות   │
 │                                                  │
@@ -245,6 +245,24 @@ Meta ו-Google אינם מושפעים — אין campaign-store-map עבור פ
 **Sum invariant מובטח:** אחרי Hotfix 4, ה-SUM של data_daily.tt_spend_cad cross-stores לכל תאריך = סך כל ה-spend ב-campaigns_daily לאותו תאריך (אין duplication גם כשהקמפיין עובר חנות בתוך היום).
 
 **Hotfix 5 לערב — TodayLive per-store breakdown לא הציג TikTok ל-usmile360/zolplus:** הקומפוננטה `TodayLive` השתמשה ב-`storeHasTikTok(s.store)` שבודקת set סטטי `STORES_WITH_TIKTOK = {uzoshop}`. אחרי Phase A.5 v2, usmile360 ו-zolplus יכולות לקבל TikTok spend דרך המיפוי, אבל הbreakdown באר ההוצאה לא הציג את שורת TikTok. תוצאה: הסיכום היה $110 (Meta $66 + TikTok $43.49) אבל הbreakdown הציג רק "Meta: 66" → looked broken. תוקן: הchcck עכשיו `storeHasTikTok(s.store) || (s.ttSpend ?? 0) > 0`.
+
+---
+
+### 2.1.20 (2026-05-29 לילה) — Phase A.5 v2 hotfix #6 + #7: TikTok CPM + historical mapping backfill
+
+המפעיל דיווח על שני באגים חדשים שנותרו מ-Phase A.5 v2:
+
+**באג A — TikTok CPM ריק ב-TodayLive ובמונתלי לכל החנויות (כולל ה-mapped):** עמודת ה-CPM של TikTok הציגה "—" בכל מקום. הסיבה: ב-Hotfix 4 של הערב (`ef8dda7`) הסרנו את הכתיבה של `tt_impressions` מ-`cron-live` ל-`data_daily` במטרה למנוע double-count, בהנחה שה-RPC `agg_tiktok_spend_per_store_for_date` יטפל בעמודה הזו — אך ה-RPC לא נגע בה (טיפל רק ב-`tt_spend_cad`). תוצאה: `tt_impressions` נשאר ב-0/NULL → CPM = "—".
+
+**תיקון:** migration `20260530220000_agg_tt_impressions.sql` מרחיב את ה-RPC לכלול גם את `tt_impressions`. Pass 1a מאפס את שתי העמודות (`tt_spend_cad` + `tt_impressions`) לכל data_daily של התאריך, Pass 1b מסכם את שתי העמודות מ-campaigns_daily לפי `(date, store_id)`. אחרי ההפעלה ב-prod, הופעל ידנית ה-RPC ל-29/05 → אומת: usmile360 tt_impressions=15,579, CPM=$2.88. cron-live-heavy יחזיק את העמודה עדכנית כל 30 דק׳.
+
+**באג B — חודשי uzoshop הציג עדיין TikTok spend של קמפיינים שמופו ל-usmile360 (double-counting):** למרות שPhase A.5 v2 DELETE-then-UPSERT מתקן את היום ואת אתמול בכל tick, השורות ההיסטוריות תחת `uzoshop` (מלפני שהמיפוי הופעל) לא ניקו. בדוגמה: 28/05 uzoshop tt_spend_cad=$52.76, ו-usmile360 tt_spend_cad=$52.76 — אותו spend נחשב פעמיים בסכום-כל-החנויות. הסיבה: ה-DELETE ב-`persistCampaignsLive` רץ רק על `dateStr` הנוכחי, ואם TikTok API לא מחזיר את הקמפיין שוב לתאריך ההיסטורי (כי הקמפיין נכבה אחרי המיפוי), ה-DELETE לא נורה בכלל לאותה שורה ישנה.
+
+**תיקון:** script `dashboard-web/scripts/backfillTikTokMapping.ts` קורא את ה-`campaign-store-map` מ-`dashboard_state`, מסווג את השורות הסטיילית כ-`toDelete` (יש שורת יעד תחת ה-store_id הנכון — מחיקה בטוחה) או `toUpdate` (אין שורת יעד — להעביר את ה-store_id), ואז מריץ את ה-RPC לכל התאריכים הנגועים. הסקריפט תומך ב-`--dry-run` (ברירת מחדל) ו-`--apply`. הופעל פעם אחת בלילה (2026-05-29) על prod: 4 שורות `campaigns_daily` + 10 שורות `ads_daily` נמחקו (כולן duplicates), 2 תאריכים חושבו מחדש. אחרי הריצה: data_daily uzoshop 28/05 tt_spend_cad=0, usmile360 28/05 tt_spend_cad=$52.76 ✓.
+
+**הסקריפט נשאר ב-codebase לשימוש חוזר:** בכל פעם שהמפעיל משנה מיפוי לקמפיין שכבר רץ מספר ימים, ה-DELETE-then-UPSERT הסדיר רק יום ואתמול. כדי לתקן את ההיסטוריה — הריצו `npx tsx dashboard-web/scripts/backfillTikTokMapping.ts --apply` מ-repo root. **דורש**: גישה ל-`.env` ב-repo root (קורא את `supabase.url` ו-`supabase.service.role.key`).
+
+**שדה תוצאה:** `aggregator.ts` קיבל פרמטרים אופציונליים חדשים (`effectiveStoreByCampaignId` + `storeDisplayNames`) שמאפשרים ל-aggregator לקפל שורות היסטוריות עם store_id ישן לתוך ה-store האפקטיבי. הם אופציונליים — לא חיוטים עדיין מ-CampaignsTable.tsx (ה-backfill מספיק במצב הנוכחי). יהפכו לרלוונטיים לעתיד אם המפעיל ישנה מיפוי שוב לפני ריצת backfill.
 
 ---
 
@@ -2770,7 +2788,7 @@ Seen 5 times. Alert #2.
 
 ## סוף המסמך
 
-**גרסה:** 2.1.19 · **תאריך עדכון:** 2026-05-29
+**גרסה:** 2.1.20 · **תאריך עדכון:** 2026-05-29
 
 > מסמך זה מתעדכן עם כל שינוי שהמפעיל רואה במסך. אם משהו לא תואם למה שאתה רואה — דווח למפתח לעדכון.
 

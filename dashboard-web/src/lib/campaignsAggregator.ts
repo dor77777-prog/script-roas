@@ -126,6 +126,33 @@ export function aggregate(
    * existing in-range-latest behavior, fully backwards compatible.
    */
   currentEffectiveStatus?: Record<string, CurrentStatusEntry>,
+  /**
+   * Phase A.5 v2 evening hotfix #7 (2026-05-29 night) — optional map of
+   * `${platformLower}::${campaignId}` → effective storeId. Derived by the
+   * caller from the campaign-store-map blob in `dashboard_state`.
+   *
+   * When supplied, rows whose `campaignId` is in the map have their
+   * effective `storeId` and `storeName` swapped before key construction,
+   * so historical rows persisted under an old store_id (before the operator
+   * mapped the campaign) collapse with newer rows under the new store_id
+   * into ONE aggregate entry — instead of producing two visually-duplicate
+   * rows (Bug B of the 2026-05-29 night triage). Caller-side overlay is
+   * dropped because this is the only consumer of the storeMap.
+   *
+   * Why lookup is keyed by `platform::campaignId` (no advertiser):
+   * campaign_ids are platform-unique; including the advertiser would
+   * require the aggregator to know which store owns each platform's
+   * advertiser account, which is leaky from the dashboard's perspective.
+   */
+  effectiveStoreByCampaignId?: Map<string, string>,
+  /**
+   * Phase A.5 v2 evening hotfix #7 — `storeId` → display name lookup.
+   * Used only when `effectiveStoreByCampaignId` rewrites a row's storeId;
+   * the row's original `storeName` is wrong for the new store, so we need
+   * to look up the right display name. Falls back to keeping the original
+   * `storeName` if the new store has no entry in this map.
+   */
+  storeDisplayNames?: Record<string, string>,
 ): Aggregated[] {
   const map = new Map<string, Aggregated>();
   // Per-key "latest budget date" trackers so overwrite depends on the row's
@@ -151,16 +178,29 @@ export function aggregate(
     if (storeFilter !== 'All' && r.storeName !== storeFilter) continue;
     if (platformFilter !== 'all' && r.platform !== platformFilter) continue;
 
+    // Phase A.5 v2 evening hotfix #7 — resolve effective store BEFORE computing
+    // the key, so historical rows under an old store_id collapse with newer
+    // rows under the operator-applied target store.
+    let effectiveStoreId = r.storeId;
+    let effectiveStoreName = r.storeName;
+    if (effectiveStoreByCampaignId) {
+      const mapped = effectiveStoreByCampaignId.get(`${r.platform.toLowerCase()}::${r.campaignId}`);
+      if (mapped && mapped !== r.storeId) {
+        effectiveStoreId = mapped;
+        effectiveStoreName = storeDisplayNames?.[mapped] ?? r.storeName;
+      }
+    }
+
     const key =
       mode === 'campaign'
-        ? `${r.storeId}::${r.platform}::${r.campaignId}`
-        : `${r.storeId}::${r.platform}::${r.campaignId}::${r.adSetId}`;
+        ? `${effectiveStoreId}::${r.platform}::${r.campaignId}`
+        : `${effectiveStoreId}::${r.platform}::${r.campaignId}::${r.adSetId}`;
 
     if (!map.has(key)) {
       map.set(key, {
         key,
-        storeId: r.storeId,
-        storeName: r.storeName,
+        storeId: effectiveStoreId,
+        storeName: effectiveStoreName,
         platform: r.platform,
         campaignId: r.campaignId,
         campaignName: r.campaignName,
