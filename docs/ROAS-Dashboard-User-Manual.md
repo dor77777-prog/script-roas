@@ -7,7 +7,7 @@
 │                                                  │
 │      מדריך הפעלה שוטף למפעיל הדשבורד            │
 │                                                  │
-│      גרסה:        2.1.5                          │
+│      גרסה:        2.1.6                          │
 │      תאריך:       2026-05-29                     │
 │      קהל יעד:     מפעיל יחיד · החלטות יומיות   │
 │                                                  │
@@ -106,6 +106,20 @@ Plan 6 פיספס 25 רכיבים שיתופיים (`Filters`/Quick Range, `Sect
 2. **FreshnessChip palette unification** — היה 2 פלטות נפרדות (darkPalette + lightPalette) שנשלטות ע"י `variant` prop. עם המעבר ל-OKLCH טוקנים, ה-`lightPalette` כבר היה theme-aware (status-*Bg/Fg מתחלפים אוטומטית), אז ה-darkPalette הפך מיותר. נמחק ה-darkPalette, ה-`variant` prop ירד מה-Props type, וכל callers (TabFreshnessHeader) עודכנו.
 
 3. **CampaignsTable mobile toolbar collapse** (P1-3 מ-mobile audit) — 6 קבוצות פילטר היו נערמות ב-flex-wrap על מובייל ודוחפות את הטבלה מתחת לקפל (~250px down). עכשיו: PRIMARY (Mode tabs / Store select / Date range) תמיד inline. SECONDARY (Platform tabs / Multi-mapped checkbox / Optimized counter) מוחבא במובייל מאחורי כפתור expander "סינון נוסף" עם state local. במסך sm ומעלה — התנהגות זהה (הכל inline). Pure layout — שום שינוי לוגיקה.
+
+### Hotfix 2.1.6 (2026-05-29) — Sidebar drawer side + bolder status colors + modals fullscreen + tables/charts deep mobile sweep
+
+המשך mobile + dark refinement אחרי 2.1.5:
+
+1. **Sidebar mobile drawer BUG** — הופיע מהצד הלא נכון (משמאל ב-RTL במקום מימין, כי `end-0` ב-RTL = `left: 0`). תוקן ל-`start-0` כך שה-drawer בא מאותו צד שה-hamburger יושב (RIGHT ב-RTL). גם הוקטן ל-`w-64 max-w-[80vw]` (מ-`w-72 max-w-[85vw]`) כדי שיהיה פחות דומיננטי.
+
+2. **Status colors יותר נועזים בשני ה-themes**:
+   - DARK bg: L `36-42%` → `48-55%` + chroma `0.18-0.20` → `0.22` — ירוק/אדום/כתום/כחול עכשיו יותר בהירים ומובחנים על רקע כהה. White text עדיין עובר AA Large על L≤55%.
+   - LIGHT bg: L `95-96%` → `90%` + chroma `0.04-0.05` → `0.10-0.11` — פסטלים שהיו "ווישי ווישי" עכשיו נראים כצבעים אמיתיים. Dark text-fg עדיין עובר AA AAA.
+
+3. **Modals + Drawers fullscreen on mobile** (P2-5/6): `ProductPickerModal` + `ResetData` confirm + `ManualOverridesCrud` delete-confirm עכשיו `w-full h-full m-0 sm:m-auto sm:max-w-X sm:h-auto sm:rounded-xl rounded-none border-0 sm:border` — fullscreen במובייל, מרוכזות בדסקטופ. `CampaignDrawer` + `AdsDrawer` כבר היו `w-full sm:max-w-X` (OK). כפתורי X+fullscreen בדרוארים: `min-h-[44px]` tap target.
+
+4. **Tables + Charts deep mobile sweep** (Worker B): `MonthlyTables` collapse buttons `min-h-[44px]` + truncate; `PnLBreakdown` sub-table overflow wrapper + `min-w-[420px]`; `DetailTable` `min-w` 700→900 + `-mx-2` bleed; `QuadrantScatter` margins tightened + Y-axis width 32→44 + tick fontSize 11→10 + label offset adjusted; `ProductsTable` + `AdSetTable` + `RoasChart` + `HeroOverview` area chart + `ChartContainer` — כבר היו mobile-OK.
 
 מסמכים נלווים מתעדכנים בנפרד: ארכיטקטורה ב-`docs/ARCHITECTURE.md`, עבודה ביצועית של ה-overhaul ב-`docs/superpowers/plans/2026-05-{28,29}-dashboard-ux-overhaul-*.md` (7 plans, Plans 1–6 IMPLEMENTED; Plan 7 polish + a11y + RTL audit pending).
 

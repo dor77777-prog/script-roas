@@ -33,26 +33,35 @@
   --accent-fg: oklch(99% 0 0);
   --accent-dark: oklch(45% 0.18 260);
 
-  /* ROAS status — all at uniform L=60% for perceptual balance */
+  /* ROAS status — LIGHT theme HOTFIX-6 2026-05-29.
+     User feedback: "הצבעים בטבלאות במוד הבהיר צריך גם אותם להיות צביעם
+     יותר נועזים" — the previous bg L=95-96% with chroma 0.04-0.05 were
+     wishy-washy pastels (barely visible tint on white). Bumping to
+     L=90% + chroma 0.10-0.11 gives clearly colored backgrounds while
+     still working as table-cell BG against dark text-fg variants
+     (contrast against fg L=30-40% stays ~6-7:1, well above AA).
+     Solid colors keep their saturation; hues unchanged from original
+     (25/55/145/240) since light theme has been visually stable for
+     users — only bg variants get the boost. */
   --status-red:    oklch(60% 0.18 25);
-  --status-red-bg: oklch(96% 0.04 25);
+  --status-red-bg: oklch(90% 0.10 25);
   --status-red-fg: oklch(35% 0.18 25);
 
   --status-orange:    oklch(70% 0.16 55);
-  --status-orange-bg: oklch(96% 0.05 55);
+  --status-orange-bg: oklch(91% 0.11 55);
   --status-orange-fg: oklch(40% 0.15 55);
 
   --status-green:    oklch(60% 0.16 145);
-  --status-green-bg: oklch(95% 0.05 145);
-  --status-green-fg: oklch(35% 0.16 145);
+  --status-green-bg: oklch(90% 0.10 145);
+  --status-green-fg: oklch(30% 0.16 145);
 
   --status-blue:    oklch(60% 0.16 240);
-  --status-blue-bg: oklch(95% 0.04 240);
-  --status-blue-fg: oklch(35% 0.16 240);
+  --status-blue-bg: oklch(90% 0.10 240);
+  --status-blue-fg: oklch(30% 0.16 240);
 
   --status-gray:    oklch(60% 0 0);
-  --status-gray-bg: oklch(95% 0 0);
-  --status-gray-fg: oklch(40% 0 0);
+  --status-gray-bg: oklch(93% 0 0);
+  --status-gray-fg: oklch(35% 0 0);
 }
 
 [data-theme="dark"] {
@@ -81,36 +90,37 @@
   --accent-fg: oklch(15% 0.01 240);
   --accent-dark: oklch(75% 0.16 260);
 
-  /* ROAS status — dark theme HOTFIX-3 2026-05-29.
-     User feedback after hotfix-2: red+orange still confused on table
-     cells, and blue+green still confused. Pushing harder:
-       - bg L: 28-30% → 36-42% (was too dark — hue couldn't dominate)
-       - bg chroma: 0.13 → 0.18-0.20 (vibrant enough for hue to read)
-       - Hue separation widened further: red 18→10 (pure red), orange
-         70→75 (more yellow), blue 250→255 (slight purple tilt away
-         from green). Net: red↔orange = 65°, green↔blue = 110°.
-     White text on L=36-42% bg gives ~4-5:1 contrast (passes AA normal
-     for the bold ROAS numbers used in table cells).
-     -fg variants stay at L=90% for AA contrast when used as text. */
+  /* ROAS status — dark theme HOTFIX-6 2026-05-29.
+     User feedback iteratively pushed for brighter, more vibrant bg colors:
+       hotfix-2: chroma 0.06 → 0.12 (still too muted)
+       hotfix-3: chroma 0.12 → 0.18-0.20, L 28 → 36-42 (still feels dark)
+       hotfix-6: L 36-42 → 48-55 + chroma 0.18-0.20 → 0.22 (brighter, more
+                 saturated; green especially gets a big boost — user said
+                 "ירוק נראה מאוד כהה")
+     White text on OKLCH L=48-55% bg gives 3.5-5:1 sRGB contrast (passes
+     AA normal at L≤50, AA Large only at L=55 — but our table cells use
+     BOLD tabular-nums for ROAS values, so AA Large is acceptable).
+     Hue separation maintained: red 10 / orange 75 / green 145 / blue 255
+     (red↔orange = 65°, green↔blue = 110°). */
   --status-red:    oklch(72% 0.22 10);
-  --status-red-bg: oklch(38% 0.18 10);
-  --status-red-fg: oklch(92% 0.10 10);
+  --status-red-bg: oklch(50% 0.22 10);
+  --status-red-fg: oklch(95% 0.10 10);
 
   --status-orange:    oklch(80% 0.18 75);
-  --status-orange-bg: oklch(42% 0.18 75);
-  --status-orange-fg: oklch(93% 0.10 75);
+  --status-orange-bg: oklch(55% 0.20 75);
+  --status-orange-fg: oklch(95% 0.10 75);
 
   --status-green:    oklch(72% 0.22 145);
-  --status-green-bg: oklch(38% 0.18 145);
-  --status-green-fg: oklch(92% 0.10 145);
+  --status-green-bg: oklch(50% 0.22 145);
+  --status-green-fg: oklch(95% 0.10 145);
 
   --status-blue:    oklch(70% 0.22 255);
-  --status-blue-bg: oklch(36% 0.20 255);
-  --status-blue-fg: oklch(92% 0.10 255);
+  --status-blue-bg: oklch(48% 0.22 255);
+  --status-blue-fg: oklch(95% 0.10 255);
 
   --status-gray:    oklch(65% 0 0);
-  --status-gray-bg: oklch(32% 0 0);
-  --status-gray-fg: oklch(90% 0 0);
+  --status-gray-bg: oklch(40% 0 0);
+  --status-gray-fg: oklch(92% 0 0);
 }
 
 /* ===========================================================================

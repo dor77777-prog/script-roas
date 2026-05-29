@@ -189,10 +189,20 @@ export function Sidebar({
 
       {/* ===== Mobile off-canvas drawer (< md) =====
           Backdrop dims the page and closes the drawer when tapped. The
-          drawer panel slides in from the end (right in RTL). Both layers
-          remain mounted so the slide-out animation has something to
-          animate against; pointer-events disable interaction on backdrop
-          while closed so the page underneath stays interactive. */}
+          drawer panel slides in from the START side — RIGHT in RTL Hebrew
+          (matches where the hamburger button sits in the header strip;
+          taps reveal the menu from the same edge). Both layers remain
+          mounted so the slide-out animation has something to animate
+          against; pointer-events disable interaction on backdrop while
+          closed so the page underneath stays interactive.
+
+          Slide math: drawer is anchored at `start-0` (right edge in RTL).
+          Tailwind's `translate-x-full` is always `translateX(+100%)` which
+          is rightward — when the drawer is at the right edge, moving it
+          +100% pushes it OFF-screen to the right. So `translate-x-full`
+          = closed (off-screen right), `translate-x-0` = open (right edge).
+          In LTR (English) this would be off-screen left instead — fine,
+          but we're RTL-first here. */}
       <div
         onClick={onMobileClose}
         aria-hidden={!isMobileOpen}
@@ -207,7 +217,7 @@ export function Sidebar({
         aria-label="ניווט ראשי"
         aria-hidden={!isMobileOpen}
         className={cn(
-          'fixed inset-y-0 end-0 w-72 max-w-[85vw] z-50 md:hidden',
+          'fixed inset-y-0 start-0 w-64 max-w-[80vw] z-50 md:hidden',
           'bg-elevated text-ink shadow-elevated overflow-y-auto',
           'flex flex-col transition-transform duration-DEFAULT',
           isMobileOpen ? 'translate-x-0' : 'translate-x-full',
