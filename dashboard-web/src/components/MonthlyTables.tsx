@@ -265,7 +265,7 @@ function Tab({
       aria-selected={active}
       onClick={onClick}
       className={cn(
-        'px-3 sm:px-3.5 py-1.5 sm:py-2 text-xs sm:text-sm font-medium transition-colors',
+        'px-3 sm:px-3.5 py-2 sm:py-2 text-xs sm:text-sm font-medium transition-colors min-h-[44px] sm:min-h-0',
         active
           ? 'bg-accent text-white'
           : 'bg-elevated text-ink-secondary hover:bg-elevated2',
@@ -322,12 +322,12 @@ function MonthBlockPerStore({
     <div className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-5 py-3 bg-ink text-canvas"
+        className="w-full flex items-center justify-between gap-2 px-4 sm:px-5 py-3 min-h-[44px] bg-ink text-canvas"
       >
-        <span className="font-semibold">
+        <span className="font-semibold truncate min-w-0">
           {monthTitle(ym)}  •  {storeName}
         </span>
-        {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+        {open ? <ChevronUp size={18} className="shrink-0" /> : <ChevronDown size={18} className="shrink-0" />}
       </button>
       {open && (
         <div className="overflow-auto max-h-[60vh]">
@@ -445,12 +445,12 @@ function MonthBlockSummary({
     <div className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
       <button
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between px-5 py-3 bg-ink text-canvas"
+        className="w-full flex items-center justify-between gap-2 px-4 sm:px-5 py-3 min-h-[44px] bg-ink text-canvas"
       >
-        <span className="font-semibold">
+        <span className="font-semibold truncate min-w-0">
           {monthTitle(ym)}  •  סיכום כל החנויות ({stores.length})
         </span>
-        {open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+        {open ? <ChevronUp size={18} className="shrink-0" /> : <ChevronDown size={18} className="shrink-0" />}
       </button>
       {open && (
         <div className="overflow-auto max-h-[60vh]">

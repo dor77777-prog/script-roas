@@ -66,8 +66,8 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
   }
 
   const tableContent = (
-    <div className="overflow-auto max-h-[70vh]">
-        <table className="w-full text-xs sm:text-sm min-w-[700px]">
+    <div className="overflow-auto max-h-[70vh] -mx-2 sm:mx-0">
+        <table className="w-full text-xs sm:text-sm min-w-[900px]">
           <thead className="bg-elevated2 sticky top-0 z-[5]">
             <tr className="text-ink-secondary">
               <th className="px-3 py-2.5 text-start font-medium">תאריך</th>

@@ -317,14 +317,14 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
                 <ChevronUp size={11} className="transition-transform group-open:rotate-180" />
                 פירוט עלויות קבועות לפי קטגוריה
               </summary>
-              <div className="mt-2 rounded-lg bg-elevated2/40 border border-line-subtle p-3">
-                <table className="w-full text-xs tabular-nums">
+              <div className="mt-2 rounded-lg bg-elevated2/40 border border-line-subtle p-3 overflow-x-auto -mx-1 sm:mx-0">
+                <table className="w-full text-xs tabular-nums min-w-[420px]">
                   <thead className="sticky top-0 z-[5] bg-elevated2/40">
                     <tr className="text-[10px] uppercase text-ink-muted tracking-wide">
-                      <th className="text-start font-medium pb-1.5">קטגוריה</th>
-                      <th className="text-end font-medium pb-1.5">סכום (יחסי לטווח)</th>
-                      <th className="text-end font-medium pb-1.5">% מההכנסה</th>
-                      <th className="text-end font-medium pb-1.5">% מהקבועים</th>
+                      <th className="text-start font-medium pb-1.5 px-1">קטגוריה</th>
+                      <th className="text-end font-medium pb-1.5 px-1">סכום (יחסי לטווח)</th>
+                      <th className="text-end font-medium pb-1.5 px-1">% מההכנסה</th>
+                      <th className="text-end font-medium pb-1.5 px-1">% מהקבועים</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -340,30 +340,30 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
                         const revPct = revenue > 0 ? (amt / revenue) * 100 : 0;
                         return (
                           <tr key={s} className="border-t border-line-subtle/60">
-                            <td className={cn('py-1 font-medium', SOURCE_COLOR[s])}>
+                            <td className={cn('py-1 px-1 font-medium', SOURCE_COLOR[s])}>
                               {SOURCE_LABEL[s]}
                             </td>
-                            <td className="py-1 text-end text-ink">
+                            <td className="py-1 px-1 text-end text-ink">
                               {formatCurrency(amt)}
                             </td>
-                            <td className="py-1 text-end text-ink-secondary font-medium">
+                            <td className="py-1 px-1 text-end text-ink-secondary font-medium">
                               {revenue > 0 ? `${revPct.toFixed(1)}%` : '—'}
                             </td>
-                            <td className="py-1 text-end text-ink-muted">
+                            <td className="py-1 px-1 text-end text-ink-muted">
                               {sharePct.toFixed(0)}%
                             </td>
                           </tr>
                         );
                       })}
                     <tr className="border-t-2 border-ink/20 font-bold">
-                      <td className="py-1.5">סך הכל</td>
-                      <td className="py-1.5 text-end">{formatCurrency(billing.total)}</td>
-                      <td className="py-1.5 text-end text-ink">
+                      <td className="py-1.5 px-1">סך הכל</td>
+                      <td className="py-1.5 px-1 text-end">{formatCurrency(billing.total)}</td>
+                      <td className="py-1.5 px-1 text-end text-ink">
                         {revenue > 0
                           ? `${((billing.total / revenue) * 100).toFixed(1)}%`
                           : '—'}
                       </td>
-                      <td className="py-1.5 text-end">100%</td>
+                      <td className="py-1.5 px-1 text-end">100%</td>
                     </tr>
                   </tbody>
                 </table>
