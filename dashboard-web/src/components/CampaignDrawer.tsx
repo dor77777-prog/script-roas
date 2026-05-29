@@ -1113,7 +1113,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                       stroke={CHART_COLORS.cpm}
                       strokeWidth={1.75}
                       dot={{ r: 2.5, fill: CHART_COLORS.cpm, stroke: 'none' }}
-                      activeDot={{ r: 4, fill: CHART_COLORS.cpm, stroke: 'white', strokeWidth: 1.5 }}
+                      activeDot={{ r: 4, fill: CHART_COLORS.cpm, stroke: 'var(--surface-elevated-1)', strokeWidth: 1.5 }}
                     />
                     {showPrevLine && (
                       <Line
@@ -1125,7 +1125,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                         strokeDasharray="5 3"
                         strokeOpacity={0.85}
                         dot={{ r: 2, fill: CHART_COLORS.cpmPrev, stroke: 'none', fillOpacity: 0.7 }}
-                        activeDot={{ r: 3.5, fill: CHART_COLORS.cpmPrev, stroke: 'white', strokeWidth: 1.5 }}
+                        activeDot={{ r: 3.5, fill: CHART_COLORS.cpmPrev, stroke: 'var(--surface-elevated-1)', strokeWidth: 1.5 }}
                         connectNulls={false}
                         isAnimationActive={false}
                       />
@@ -1139,7 +1139,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                         strokeWidth={1.75}
                         strokeDasharray="5 3"
                         dot={{ r: 2.5, fill: CHART_COLORS.roas, stroke: 'none' }}
-                        activeDot={{ r: 4, fill: CHART_COLORS.roas, stroke: 'white', strokeWidth: 1.5 }}
+                        activeDot={{ r: 4, fill: CHART_COLORS.roas, stroke: 'var(--surface-elevated-1)', strokeWidth: 1.5 }}
                       />
                     )}
                   </LineChart>
