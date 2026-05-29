@@ -308,20 +308,41 @@ async function runMetaHotMetricsBranch(input: RunMetaWorkerJobInput): Promise<vo
   } = input;
   const storeId = jobData.store_id;
 
-  // 1. BUC pre-flight — same hard gate as status branch.
-  const buc = await bucProbe(storeId);
-  if (buc.etaMinutes > 0 || buc.pct >= HARD_SKIP_PCT) {
+  // IMP-C: every hot_metrics outcome records BOTH campaign_metrics
+  // (campaigns_daily lag) AND ad_metrics (ads_daily lag) freshness rows.
+  // Without the second write the ads_daily lag was invisible in the
+  // operator panel.
+  const recHotPair = async (
+    status: 'success' | 'budget_skip' | 'transient_error',
+    errorMessage?: string,
+  ): Promise<void> => {
     await rec({
       storeId,
       platform: 'meta',
       scope: 'campaign_metrics',
       tableName: 'campaigns_daily',
-      status: 'budget_skip',
-      errorMessage:
-        buc.etaMinutes > 0
-          ? `Meta ETA=${buc.etaMinutes}min`
-          : `pct=${buc.pct}>=${HARD_SKIP_PCT}`,
+      status,
+      errorMessage,
     });
+    await rec({
+      storeId,
+      platform: 'meta',
+      scope: 'ad_metrics',
+      tableName: 'ads_daily',
+      status,
+      errorMessage,
+    });
+  };
+
+  // 1. BUC pre-flight — same hard gate as status branch.
+  const buc = await bucProbe(storeId);
+  if (buc.etaMinutes > 0 || buc.pct >= HARD_SKIP_PCT) {
+    await recHotPair(
+      'budget_skip',
+      buc.etaMinutes > 0
+        ? `Meta ETA=${buc.etaMinutes}min`
+        : `pct=${buc.pct}>=${HARD_SKIP_PCT}`,
+    );
     return;
   }
 
@@ -334,26 +355,13 @@ async function runMetaHotMetricsBranch(input: RunMetaWorkerJobInput): Promise<vo
 
   if (hotCampaign.length + hotAdset.length + hotAd.length === 0) {
     // Nothing hot to refresh today → freshness=success (worker ran cleanly).
-    await rec({
-      storeId,
-      platform: 'meta',
-      scope: 'campaign_metrics',
-      tableName: 'campaigns_daily',
-      status: 'success',
-    });
+    await recHotPair('success');
     return;
   }
 
   // Wiring guard — Inngest binding must supply fetchHotMetrics for prod.
   if (!fetchHotMetrics) {
-    await rec({
-      storeId,
-      platform: 'meta',
-      scope: 'campaign_metrics',
-      tableName: 'campaigns_daily',
-      status: 'transient_error',
-      errorMessage: 'fetchHotMetrics not wired',
-    });
+    await recHotPair('transient_error', 'fetchHotMetrics not wired');
     return;
   }
 
@@ -391,14 +399,8 @@ async function runMetaHotMetricsBranch(input: RunMetaWorkerJobInput): Promise<vo
     );
   }
 
-  // 5. Mark freshness success.
-  await rec({
-    storeId,
-    platform: 'meta',
-    scope: 'campaign_metrics',
-    tableName: 'campaigns_daily',
-    status: 'success',
-  });
+  // 5. Mark freshness success for both campaign_metrics + ad_metrics.
+  await recHotPair('success');
 }
 
 // ---------------------------------------------------------------------------

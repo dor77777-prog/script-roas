@@ -245,6 +245,32 @@ async function runGoogleHotMetricsBranch(input: RunGoogleWorkerJobInput): Promis
   } = input;
   const storeId = jobData.store_id;
 
+  // IMP-C: every hot_metrics outcome records BOTH campaign_metrics
+  // (campaigns_daily lag) AND ad_metrics (ads_daily lag) freshness rows.
+  // Without the second write the ads_daily lag was invisible in the
+  // operator panel.
+  const recHotPair = async (
+    status: 'success' | 'budget_skip' | 'transient_error',
+    errorMessage?: string,
+  ): Promise<void> => {
+    await rec({
+      storeId,
+      platform: 'google',
+      scope: 'campaign_metrics',
+      tableName: 'campaigns_daily',
+      status,
+      errorMessage,
+    });
+    await rec({
+      storeId,
+      platform: 'google',
+      scope: 'ad_metrics',
+      tableName: 'ads_daily',
+      status,
+      errorMessage,
+    });
+  };
+
   // 1. Load hot ids in parallel.
   const [hotCampaign, hotAdgroup, hotAd] = await Promise.all([
     getHotCampaignIds(storeId),
@@ -256,13 +282,7 @@ async function runGoogleHotMetricsBranch(input: RunGoogleWorkerJobInput): Promis
   //    still mark freshness success because the worker did its job;
   //    there was simply nothing hot to refresh.
   if (hotCampaign.length + hotAdgroup.length + hotAd.length === 0) {
-    await rec({
-      storeId,
-      platform: 'google',
-      scope: 'campaign_metrics',
-      tableName: 'campaigns_daily',
-      status: 'success',
-    });
+    await recHotPair('success');
     return;
   }
 
@@ -298,14 +318,8 @@ async function runGoogleHotMetricsBranch(input: RunGoogleWorkerJobInput): Promis
     );
   }
 
-  // 5. Mark freshness success.
-  await rec({
-    storeId,
-    platform: 'google',
-    scope: 'campaign_metrics',
-    tableName: 'campaigns_daily',
-    status: 'success',
-  });
+  // 5. Mark freshness success for both campaign_metrics + ad_metrics.
+  await recHotPair('success');
 }
 
 // ---------------------------------------------------------------------------
