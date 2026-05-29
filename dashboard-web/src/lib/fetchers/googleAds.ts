@@ -173,7 +173,7 @@ export type GoogleAdsAdRow = {
  * (GOOGLE_ADS_${STORE}_*) was a fetcher-side bug that caused live cron-daily
  * runs to fail with "Missing GOOGLE_ADS_*" against properly-seeded Vercel env vars.
  */
-function getCustomerIdOrThrow(storeId: string): string {
+export function getCustomerIdOrThrow(storeId: string): string {
   const envName = `${storeId.toUpperCase()}_GOOGLEADS_CUSTOMER_ID`;
   const raw = process.env[envName];
   if (!raw) {
@@ -192,7 +192,7 @@ function getCustomerIdOrThrow(storeId: string): string {
  * Throws on missing env vars with the env-var NAME in the message (never
  * the value — T-05.6-05-I2 mitigation).
  */
-async function getAccessToken(storeId: string): Promise<string> {
+export async function getAccessToken(storeId: string): Promise<string> {
   const cached = tokenCache.get(storeId);
   if (cached && Date.now() < cached.expiresAt) return cached.token;
 
@@ -300,7 +300,7 @@ function buildGoogleAdsHeaders(accessToken: string): Record<string, string> {
  */
 const GAQL_PAGE_CAP = 50;
 
-async function runGaqlQuery(
+export async function runGaqlQuery(
   storeId: string,
   customerId: string,
   accessToken: string,

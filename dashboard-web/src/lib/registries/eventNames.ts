@@ -6,10 +6,9 @@
 
 export const META_JOB_REQUESTED = 'meta/job.requested' as const;
 export const META_BUDGET_EXCEEDED = 'meta/budget.exceeded' as const;
+export const GOOGLE_JOB_REQUESTED = 'google/job.requested' as const;
+export const TIKTOK_JOB_REQUESTED = 'tiktok/job.requested' as const;
 
-// Phase C will add:
-//   GOOGLE_JOB_REQUESTED  = 'google/job.requested'
-//   TIKTOK_JOB_REQUESTED  = 'tiktok/job.requested'
 // Phase D will add:
 //   SHOPIFY_JOB_REQUESTED = 'shopify/job.requested'
 
