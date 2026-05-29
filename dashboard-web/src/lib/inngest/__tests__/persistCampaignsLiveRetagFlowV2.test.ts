@@ -17,8 +17,8 @@ function parseStoreList(notInValue: string): string[] {
   // The production code passes the negated IN value as `("a","b")` or `("a")`.
   // Strip outer parens + quotes and split.
   return notInValue
-    .replace(/^[\("]+|[\)"]+$/g, '')
-    .split(/[\)"]*,[\("]*/)
+    .replace(/^[("]+|[)"]+$/g, '')
+    .split(/[)"]*,[("]*/)
     .filter(Boolean);
 }
 

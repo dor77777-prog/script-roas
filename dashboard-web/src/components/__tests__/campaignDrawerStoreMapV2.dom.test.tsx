@@ -71,7 +71,6 @@ vi.mock('@/lib/cloudSync', () => ({ pushCloudKey: vi.fn() }));
 // Import helpers AFTER mocks are registered.
 // ---------------------------------------------------------------------------
 import {
-  readCampaignStoreMap,
   writeCampaignStoreMap,
   campaignStoreKey,
   type CampaignStoreMap,
