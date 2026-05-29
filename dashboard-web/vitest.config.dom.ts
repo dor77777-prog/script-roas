@@ -13,6 +13,7 @@ export default defineConfig({
     include: [
       'src/components/**/__tests__/*.dom.test.{ts,tsx}',
       'src/components/ui/**/__tests__/*.test.{ts,tsx}',
+      'src/lib/**/__tests__/*.dom.test.{ts,tsx}',
     ],
     setupFiles: ['./src/test/setup-dom.ts'],
     globals: false,
