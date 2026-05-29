@@ -38,12 +38,22 @@ export async function fetchGoogleStatusForStore(input: GoogleStatusInput): Promi
   const { storeId, customer } = input;
 
   // 1. Discover changed entities via change_status (last 24h).
+  // CRIT-F: GAQL does NOT support `LAST_24_HOURS` as a date-range constant
+  // — only LAST_7_DAYS / LAST_14_DAYS / LAST_30_DAYS for the LAST_* family.
+  // For sub-day windows, compare last_change_date_time with a datetime
+  // literal formatted 'YYYY-MM-DD HH:MM:SS'. Per Google docs, change_status
+  // queries should also LIMIT 10000 and ORDER BY last_change_date_time
+  // DESC so the most recent changes are processed first.
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  const cutoffIso = formatGaqlDateTime(cutoff);
   const changeRows = await customer.searchStream({
     query: `
       SELECT change_status.resource_name, change_status.resource_type, change_status.last_change_date_time
         FROM change_status
-       WHERE change_status.last_change_date_time DURING LAST_24_HOURS
+       WHERE change_status.last_change_date_time > '${cutoffIso}'
          AND change_status.resource_type IN ('CAMPAIGN', 'AD_GROUP', 'AD_GROUP_AD')
+       ORDER BY change_status.last_change_date_time DESC
+       LIMIT 10000
     `,
   });
 
@@ -184,4 +194,20 @@ function deriveDelivery(effective: string): string | null {
   if (effective === 'ENDED' || effective === 'NONE') return 'NOT_DELIVERING';
   if (!effective) return null;
   return 'UNKNOWN';
+}
+
+/**
+ * CRIT-F — Format a JS Date as the GAQL datetime literal expected by
+ * change_status.last_change_date_time comparisons: 'YYYY-MM-DD HH:MM:SS'
+ * in UTC. Google's GAQL parser does not accept ISO-8601 with 'T' or 'Z'
+ * separators for this column type.
+ */
+function formatGaqlDateTime(d: Date): string {
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  const hh = String(d.getUTCHours()).padStart(2, '0');
+  const mi = String(d.getUTCMinutes()).padStart(2, '0');
+  const ss = String(d.getUTCSeconds()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss}`;
 }
