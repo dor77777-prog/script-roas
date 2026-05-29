@@ -1,42 +1,48 @@
-// TEST-06 (5.2.2.1): single source of truth for chart palette.
-// Categorical series colors use Tailwind theme hex literals — these are
-// platform identities (Meta amber, Google blue, TikTok slate, etc.) that
-// should NOT theme-swap; brand recognition is the whole point.
+// Single source of truth for the chart palette.
 //
-// Axis colors (axis, reconciliationAxis) switched to theme-aware CSS vars
-// 2026-05-29 — operator reported dark-on-dark charts in dark mode where
-// the previous slate hex literals (#7a8a9a / #64748b) had ~1.5:1 contrast
-// against the dark canvas (failing WCAG). The vars resolve through
-// ChartContainer's --chart-axis token chain → --text-muted, which is
-// oklch(60% L) in light and oklch(60% L on dark hue) in dark → always
-// readable. Recharts accepts CSS var strings for tick `fill` props.
+// All categorical line colors (per-platform + per-store) route through
+// theme-aware --chart-* CSS variables defined in globals.css. Light
+// defaults reflect true brand identity:
+//   - Meta:    blue   (#2563eb / oklch(70% 0.18 260) dark)
+//   - Google:  amber  (#d97706 / oklch(75% 0.16 60)  dark)
+//   - TikTok:  red    (#ef4444 / oklch(72% 0.22 25)  dark)
+//   - Organic: purple (#a855f7 / oklch(75% 0.18 305) dark)
+//   - Shopify: green  (#10b981 / oklch(75% 0.18 155) dark)
 //
-// c/HI-01 (audit-2026-05-23-v2): colorblind-aware palette notes.
-//   - TikTok was previously `#ec4899` (pink) which sat ~340° on the hue
-//     wheel, only ~60° from Organic purple (`#9333ea`, ~280°). For
-//     protanopia / deuteranopia (~8% of male viewers) the two collapsed
-//     into nearly identical magenta-ish lines. Replaced with slate-700
-//     (`#374151`) — semantically the "non-magenta neutral" channel and
-//     maximally hue-separated from purple. Grayscale parsing also wins:
-//     slate is the darkest line on the chart, easy to anchor on.
-//   - Meta amber (`#d97706`) vs Shopify green (`#15803d`) is the most
-//     common red-green confusion pair, but Shopify is rendered with a
-//     6-3 dashed pattern + 2.5px stroke (vs Meta's 1.5px solid), so the
-//     pattern channel disambiguates without color. Do not "fix" Meta's
-//     hue without also rethinking the dash/solid contract.
+// Per-store colors sit OUTSIDE every platform hue family (cyan / hot pink /
+// lime) so a chart that overlays per-store lines on per-platform lines
+// never reads as one channel echoing another. See lib/storeColors.ts.
+//
+// Status colors (cpm, roas, value, spend) route through the existing
+// --status-orange / --status-green / --status-red semantic tokens — they
+// are not brand identities, just channel labels keyed to the dashboard's
+// existing color language.
+//
+// Colorblind contract (revised 2026-05-29):
+//   The prior contract from audit-2026-05-23-v2 pinned TikTok outside the
+//   magenta/purple hue family for protanopia/deuteranopia separation from
+//   Organic purple. That contract was retired when TikTok moved to the
+//   brand-true neon red. Disambiguation channels that survive:
+//     1. Stroke pattern (Shopify rendered with a 6-3 dashed pattern + 2.5px
+//        stroke vs Meta's 1.5px solid). RoasChart owns this convention.
+//     2. Legend swatch + label. Every chart that uses categorical colors
+//        renders a visible legend; total hue collapse still leaves the
+//        textual label as a fallback identifier.
+//   The trade-off (brand identity > colorblind hue safety) is intentional
+//   and was approved by the operator on 2026-05-29.
 export const CHART_COLORS = {
   axis: 'var(--chart-axis)',
   reconciliationAxis: 'var(--chart-axis)',
-  meta: '#d97706',
-  google: '#2563eb',
-  tiktok: '#374151',
-  organic: '#9333ea',
-  shopify: '#15803d',
-  cpm: '#d97706',
+  meta:    'var(--chart-platform-meta)',
+  google:  'var(--chart-platform-google)',
+  tiktok:  'var(--chart-platform-tiktok)',
+  organic: 'var(--chart-platform-organic)',
+  shopify: 'var(--chart-platform-shopify)',
+  cpm:     'var(--status-orange)',
   cpmPrev: '#fbbf24',
-  roas: '#15803d',
-  value: '#15803d',
-  spend: '#dc2626',
+  roas:    'var(--status-green)',
+  value:   'var(--status-green)',
+  spend:   'var(--status-red)',
 } as const;
 
 export type ChartColorKey = keyof typeof CHART_COLORS;
