@@ -11,6 +11,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronUp,
+  Filter,
   Megaphone,
   Store as StoreIcon,
   X,
@@ -376,6 +377,11 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     return 'all';
   });
   const [showAll, setShowAll] = useState(false);
+
+  // P1-3 mobile audit (2026-05-29) — collapse secondary filters (platform,
+  // multi-mapped, optimized chip) behind an expander on < sm so the toolbar
+  // doesn't dominate the mobile viewport. Local-only state; no URL persist.
+  const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
 
   // "Optimized" marks (UX helper). Cloud-synced via 'campaign-optimized' key.
   const [optimized, setOptimized] = useState<Set<string>>(() => new Set());
@@ -1083,6 +1089,8 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   // ----- Toolbar -----
   const toolbar = (
     <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2 sm:gap-3 px-4 sm:px-5 py-3 bg-elevated2/40 border-b border-line-subtle">
+      {/* PRIMARY filters — always inline on every breakpoint.
+          Order: Mode → Store → Date range. */}
       {/* Mode selector: campaign or ad-set */}
       <div className="flex items-center gap-2">
         <span className="text-[11px] sm:text-xs text-ink-secondary font-medium shrink-0">
@@ -1112,32 +1120,6 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         </div>
       </div>
 
-      {/* Platform filter */}
-      <div className="flex items-center gap-2">
-        <div
-          role="tablist"
-          className="inline-flex rounded-lg border border-line bg-elevated overflow-hidden divide-x divide-line"
-          dir="ltr"
-        >
-          {(['all', 'Meta', 'Google', 'TikTok'] as Platform[]).map(p => (
-            <button
-              key={p}
-              role="tab"
-              aria-selected={platform === p}
-              onClick={() => setPlatform(p)}
-              className={cn(
-                'px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-medium transition-colors min-w-[48px] sm:min-w-[58px]',
-                platform === p
-                  ? 'bg-accent text-white'
-                  : 'bg-elevated text-ink-secondary hover:bg-elevated2',
-              )}
-            >
-              {p === 'all' ? 'כולם' : p}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* Store filter */}
       <div className="flex items-center gap-2">
         <StoreIcon size={14} className="text-ink-muted shrink-0" />
@@ -1151,27 +1133,6 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
-      </div>
-
-      {/* Phase 05.7.x (2026-05-23) — multi-mapped only filter. When ON,
-          only campaigns sharing a product with another campaign in the
-          same store are shown. Useful for inspecting cohort behaviour
-          + spotting cannibalization risk at a glance. */}
-      <div className="flex items-center gap-2">
-        <label className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs text-ink-secondary cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={showOnlyMultiMapped}
-            onChange={e => setShowOnlyMultiMapped(e.target.checked)}
-            className="rounded border-line accent-accent"
-          />
-          <span>🔗 רק קמפיינים עם מיפוי משותף</span>
-          {showOnlyMultiMapped && (
-            <span className="text-ink-muted text-[10px] tabular-nums">
-              ({aggregatedFiltered.length} מתוך {aggregated.length})
-            </span>
-          )}
-        </label>
       </div>
 
       {/* Date range */}
@@ -1224,23 +1185,94 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         )}
       </div>
 
-      {/* Optimized-mark counter + bulk-clear (only renders when something marked). */}
-      {optimized.size > 0 && (
-        <div className="flex items-center gap-1.5 text-[11px] sm:text-xs">
-          <CheckCircle2 size={13} className="text-status-green shrink-0" />
-          <span className="font-medium text-ink-secondary tabular-nums">
-            {optimized.size} מסומנים
-          </span>
-          <button
-            type="button"
-            onClick={onClearAll}
-            className="font-semibold text-ink-muted hover:text-status-red transition-colors px-1.5 py-0.5 rounded hover:bg-status-redBg/40"
-            title="הסר את כל הסימונים"
+      {/* P1-3 mobile audit (2026-05-29) — expander toggle for SECONDARY
+          filters. Visible only on < sm. On sm+ the secondary block is
+          always rendered inline so this button stays hidden. */}
+      <button
+        type="button"
+        onClick={() => setMobileFiltersOpen(v => !v)}
+        className="sm:hidden inline-flex items-center gap-1.5 rounded-md border border-line bg-elevated text-ink hover:bg-elevated2 px-2.5 py-1.5 text-xs font-medium transition-colors"
+        aria-expanded={mobileFiltersOpen}
+      >
+        <Filter size={13} />
+        {mobileFiltersOpen ? 'הסתר' : 'סינון נוסף'}
+      </button>
+
+      {/* SECONDARY filters — collapsed behind expander on mobile, always
+          inline on sm+. Wrapped in a single flex container so the expander
+          state controls all three at once. On sm+ the wrapper itself becomes
+          a flex group (`sm:flex`) that wraps with the other primary items. */}
+      <div
+        className={cn(
+          'w-full flex-wrap items-center gap-2 sm:gap-3 sm:w-auto sm:flex',
+          mobileFiltersOpen ? 'flex' : 'hidden',
+        )}
+      >
+        {/* Platform filter */}
+        <div className="flex items-center gap-2">
+          <div
+            role="tablist"
+            className="inline-flex rounded-lg border border-line bg-elevated overflow-hidden divide-x divide-line"
+            dir="ltr"
           >
-            נקה הכל
-          </button>
+            {(['all', 'Meta', 'Google', 'TikTok'] as Platform[]).map(p => (
+              <button
+                key={p}
+                role="tab"
+                aria-selected={platform === p}
+                onClick={() => setPlatform(p)}
+                className={cn(
+                  'px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-medium transition-colors min-w-[48px] sm:min-w-[58px]',
+                  platform === p
+                    ? 'bg-accent text-white'
+                    : 'bg-elevated text-ink-secondary hover:bg-elevated2',
+                )}
+              >
+                {p === 'all' ? 'כולם' : p}
+              </button>
+            ))}
+          </div>
         </div>
-      )}
+
+        {/* Phase 05.7.x (2026-05-23) — multi-mapped only filter. When ON,
+            only campaigns sharing a product with another campaign in the
+            same store are shown. Useful for inspecting cohort behaviour
+            + spotting cannibalization risk at a glance. */}
+        <div className="flex items-center gap-2">
+          <label className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs text-ink-secondary cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showOnlyMultiMapped}
+              onChange={e => setShowOnlyMultiMapped(e.target.checked)}
+              className="rounded border-line accent-accent"
+            />
+            <span>🔗 רק קמפיינים עם מיפוי משותף</span>
+            {showOnlyMultiMapped && (
+              <span className="text-ink-muted text-[10px] tabular-nums">
+                ({aggregatedFiltered.length} מתוך {aggregated.length})
+              </span>
+            )}
+          </label>
+        </div>
+
+        {/* Optimized-mark counter + bulk-clear (only renders when something marked). */}
+        {optimized.size > 0 && (
+          <div className="flex items-center gap-1.5 text-[11px] sm:text-xs">
+            <CheckCircle2 size={13} className="text-status-green shrink-0" />
+            <span className="font-medium text-ink-secondary tabular-nums">
+              {optimized.size} מסומנים
+            </span>
+            <button
+              type="button"
+              onClick={onClearAll}
+              className="font-semibold text-ink-muted hover:text-status-red transition-colors px-1.5 py-0.5 rounded hover:bg-status-redBg/40"
+              title="הסר את כל הסימונים"
+            >
+              נקה הכל
+            </button>
+          </div>
+        )}
+      </div>
 
       <span className="text-[10px] sm:text-xs text-ink-muted tabular-nums sm:mr-auto">
         {/* Audit fix 2026-05-23 (FIND-14): when the multi-mapped filter is
