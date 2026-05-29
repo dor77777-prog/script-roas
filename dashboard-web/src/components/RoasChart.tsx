@@ -184,7 +184,11 @@ export function RoasChart({ data, stores, rows, bare = false }: Props) {
                           cy={props.cy}
                           r={8}
                           fill="transparent"
-                          stroke="rgb(245, 158, 11)" /* amber-500 */
+                          // Heavy-refund-day warning ring. Uses the
+                          // theme-aware orange status token (was a raw
+                          // amber-500 RGB literal that didn't shift in
+                          // dark mode and got hard to spot on dark canvas).
+                          stroke="var(--status-orange)"
                           strokeWidth={2}
                         />
                       </g>

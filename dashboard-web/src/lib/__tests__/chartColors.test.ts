@@ -2,8 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { CHART_COLORS } from '@/lib/chartColors';
 
 const THEME_HEX = {
-  axis: '#7a8a9a',
-  reconciliationAxis: '#64748b',
   amber600: '#d97706',
   blue600: '#2563eb',
   purple600: '#9333ea',
@@ -47,8 +45,12 @@ describe('CHART_COLORS — locks TEST-06 (5.2.2.1)', () => {
     expect(CHART_COLORS.spend).toBe(THEME_HEX.roasRed);
   });
 
-  it('Axis colors match existing text/slate chart theme values', () => {
-    expect(CHART_COLORS.axis).toBe(THEME_HEX.axis);
-    expect(CHART_COLORS.reconciliationAxis).toBe(THEME_HEX.reconciliationAxis);
+  it('Axis colors resolve to the theme-aware --chart-axis var (dark-mode contrast fix 2026-05-29)', () => {
+    // The previous slate hex literals (#7a8a9a / #64748b) had ~1.5:1
+    // contrast against the dark canvas — failing WCAG entirely.
+    // They now route through ChartContainer's --chart-axis → --text-muted
+    // token chain, which is OKLCH(60% L) on the active theme's hue.
+    expect(CHART_COLORS.axis).toBe('var(--chart-axis)');
+    expect(CHART_COLORS.reconciliationAxis).toBe('var(--chart-axis)');
   });
 });

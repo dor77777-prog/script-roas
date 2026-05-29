@@ -19,11 +19,17 @@ import {
 import {
   Line,
   LineChart,
-  ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
+import { ChartContainer } from '@/components/ui/chart/ChartContainer';
+import {
+  ChartTooltip,
+  ChartTooltipLabel,
+  ChartTooltipRow,
+  ChartTooltipValue,
+} from '@/components/ui/chart/ChartTooltip';
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import {
   analyzeCpmVsRoas,
@@ -1425,8 +1431,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
               </button>
             </div>
           </div>
-          <div className="h-40 sm:h-48" dir="ltr">
-            <ResponsiveContainer width="100%" height="100%">
+          <ChartContainer className="h-40 sm:h-48" dir="ltr" height="100%">
               <LineChart data={cpmChartData} margin={{ top: 8, right: cpmShowRoas ? 56 : 16, left: 4, bottom: 0 }}>
                 <XAxis
                   dataKey="date"
@@ -1484,34 +1489,38 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                       ? ((d.cpm - d.prevCpm) / d.prevCpm) * 100
                       : null;
                     return (
-                      <div dir="rtl" className="rounded-lg bg-ink text-canvas px-3 py-2 text-xs shadow-elevated tabular-nums">
-                        <div className="text-canvas/70 mb-1 text-[10px]">{formatDate(d.date)}</div>
-                        <div>CPM: <span className="font-semibold text-amber-200">CAD {formatCurrency(d.cpm, 2)}</span></div>
+                      <ChartTooltip className="tabular-nums">
+                        <ChartTooltipLabel>{formatDate(d.date)}</ChartTooltipLabel>
+                        <ChartTooltipRow color={CHART_COLORS.cpm} label="CPM">
+                          CAD <ChartTooltipValue>{formatCurrency(d.cpm, 2)}</ChartTooltipValue>
+                        </ChartTooltipRow>
                         {cpmShowRoas && (
-                          <div>ROAS: <span className="font-semibold text-emerald-300">{formatNumber(d.roas, 2)}</span></div>
+                          <ChartTooltipRow color={CHART_COLORS.roas} label="ROAS">
+                            <ChartTooltipValue>{formatNumber(d.roas, 2)}</ChartTooltipValue>
+                          </ChartTooltipRow>
                         )}
                         {showPrevLine && d.prevCpm != null && (
-                          <div className="mt-1 pt-1 border-t border-canvas/10">
-                            <div className="text-canvas/60 text-[10px]">
+                          <div className="mt-1 pt-1 border-t border-line-subtle">
+                            <div className="text-ink-muted text-[10px] mb-0.5">
                               תקופה קודמת{d.prevDate ? ` (${formatDate(d.prevDate)})` : ''}:
                             </div>
-                            <div>
-                              CPM: <span className="font-semibold text-amber-100/80">CAD {formatCurrency(d.prevCpm, 2)}</span>
+                            <ChartTooltipRow color={CHART_COLORS.cpmPrev} label="CPM">
+                              CAD <ChartTooltipValue>{formatCurrency(d.prevCpm, 2)}</ChartTooltipValue>
                               {prevDeltaPct != null && (
                                 <span className={cn(
                                   'ms-1.5 text-[10px] font-semibold',
-                                  prevDeltaPct < 0 ? 'text-emerald-300' : prevDeltaPct > 0 ? 'text-rose-300' : 'text-canvas/60',
+                                  prevDeltaPct < 0 ? 'text-status-green' : prevDeltaPct > 0 ? 'text-status-red' : 'text-ink-muted',
                                 )}>
                                   ({prevDeltaPct > 0 ? '+' : ''}{prevDeltaPct.toFixed(1)}%)
                                 </span>
                               )}
-                            </div>
+                            </ChartTooltipRow>
                           </div>
                         )}
-                        <div className="text-canvas/70 text-[10px] mt-0.5">
+                        <div className="text-ink-muted text-[10px] mt-1">
                           {formatNumber(d.impressions, 0)} חשיפות · CAD {formatCurrency(d.spend, 2)}
                         </div>
-                      </div>
+                      </ChartTooltip>
                     );
                   }}
                 />
@@ -1522,7 +1531,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                   stroke={CHART_COLORS.cpm}
                   strokeWidth={1.75}
                   dot={{ r: 2.5, fill: CHART_COLORS.cpm, stroke: 'none' }}
-                  activeDot={{ r: 4, fill: CHART_COLORS.cpm, stroke: 'white', strokeWidth: 1.5 }}
+                  activeDot={{ r: 4, fill: CHART_COLORS.cpm, stroke: 'var(--surface-elevated-1)', strokeWidth: 1.5 }}
                 />
                 {showPrevLine && (
                   <Line
@@ -1534,7 +1543,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     strokeDasharray="5 3"
                     strokeOpacity={0.85}
                     dot={{ r: 2, fill: CHART_COLORS.cpmPrev, stroke: 'none', fillOpacity: 0.7 }}
-                    activeDot={{ r: 3.5, fill: CHART_COLORS.cpmPrev, stroke: 'white', strokeWidth: 1.5 }}
+                    activeDot={{ r: 3.5, fill: CHART_COLORS.cpmPrev, stroke: 'var(--surface-elevated-1)', strokeWidth: 1.5 }}
                     connectNulls={false}
                     isAnimationActive={false}
                   />
@@ -1548,12 +1557,11 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     strokeWidth={1.75}
                     strokeDasharray="5 3"
                     dot={{ r: 2.5, fill: CHART_COLORS.roas, stroke: 'none' }}
-                    activeDot={{ r: 4, fill: CHART_COLORS.roas, stroke: 'white', strokeWidth: 1.5 }}
+                    activeDot={{ r: 4, fill: CHART_COLORS.roas, stroke: 'var(--surface-elevated-1)', strokeWidth: 1.5 }}
                   />
                 )}
               </LineChart>
-            </ResponsiveContainer>
-          </div>
+          </ChartContainer>
           {(cpmShowRoas || showPrevLine) && (
             <div className="flex items-center justify-center gap-4 text-[10px] text-ink-muted mt-1.5 flex-wrap">
               <span className="inline-flex items-center gap-1.5">
