@@ -42,7 +42,7 @@ describe('runTikTokWorkerJob() — status scope', () => {
 describe('runTikTokWorkerJob() — hot_metrics scope', () => {
   it('happy path: getHotIds → fetchMetrics → upsert daily', async () => {
     const fetchHotMetrics = vi.fn().mockResolvedValue({
-      adsets: [{ store_id: 'uzoshop', platform: 'tiktok', campaign_id: 'TC1', ad_set_id: 'TG1', date: '2026-05-30', spend_cad: 25, impressions: 500, clicks: 10, conversions: 1, conversion_value_cad: 30, campaign_name: 'T1', ad_set_name: 'TG1', ad_name: null }],
+      adsets: [{ store_id: 'uzoshop', platform: 'tiktok', campaign_id: 'TC1', ad_set_id: 'TG1', date: '2026-05-30', spend_cad: 25, impressions: 500, clicks: 10, conversions: 1, conversion_value_cad: 30, campaign_name: 'T1', ad_set_name: 'TG1' }],
       ads: [],
     });
     const upsertCampaignsDaily = vi.fn();

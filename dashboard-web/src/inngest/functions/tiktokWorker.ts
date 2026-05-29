@@ -170,16 +170,18 @@ async function safeFxCadFor(
   if (override) return override(storeId);
   try {
     return await getTikTokFxCadAdapterForStore(storeId);
-  } catch {
-    // In vitest the fetch is stubbed; in production a Frankfurter
-    // outage at adapter-construction is unlikely (no I/O happens at
-    // construction — the closure does I/O lazily on each call), so
-    // hitting this catch is exceptional. Fall back to 0 to mirror the
-    // adapter's own internal soft-fail behaviour.
+  } catch (err) {
+    // In vitest the fetch is stubbed and the test never exercises FX, so
+    // a no-op stub keeps tests free of network setup. In production
+    // getTikTokFxCadAdapterForStore does no I/O at construction so
+    // hitting this catch is exceptional — but if it ever does throw, a
+    // real error should not be swallowed into an identity-zero rate.
+    // Rethrow so Inngest's retry machinery records the failure, mirroring
+    // safeCustomer in googleWorker.ts.
     if (process.env.VITEST) {
       return async () => 0;
     }
-    return async () => 0;
+    throw err;
   }
 }
 
