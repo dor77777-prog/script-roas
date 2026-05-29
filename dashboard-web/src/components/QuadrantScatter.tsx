@@ -71,25 +71,28 @@ export function QuadrantScatter({
         <h3 className="text-sm sm:text-base font-semibold text-ink mb-3">{title}</h3>
       )}
       <ChartContainer height={height}>
-        <ScatterChart margin={{ top: 12, right: 24, left: 24, bottom: 24 }}>
+        <ScatterChart margin={{ top: 12, right: 12, left: 8, bottom: 28 }}>
           <CartesianGrid strokeDasharray="2 4" stroke="var(--chart-grid)" strokeOpacity={0.55} />
           <XAxis
             type="number"
             dataKey="roas"
             name="ROAS"
-            tick={{ fontSize: 11, fill: 'var(--chart-axis)', fontVariant: 'tabular-nums' }}
+            tick={{ fontSize: 10, fill: 'var(--chart-axis)', fontVariant: 'tabular-nums' }}
             axisLine={false}
             tickLine={false}
+            tickMargin={4}
             domain={['auto', 'auto']}
-            label={{ value: 'ROAS →', position: 'insideBottom', offset: -10, fontSize: 10, fill: 'var(--chart-axis)' }}
+            label={{ value: 'ROAS →', position: 'insideBottom', offset: -14, fontSize: 10, fill: 'var(--chart-axis)' }}
           />
           <YAxis
             type="number"
             dataKey="cac"
             name="CAC"
-            tick={{ fontSize: 11, fill: 'var(--chart-axis)', fontVariant: 'tabular-nums' }}
+            width={44}
+            tick={{ fontSize: 10, fill: 'var(--chart-axis)', fontVariant: 'tabular-nums' }}
             axisLine={false}
             tickLine={false}
+            tickMargin={4}
             domain={['auto', 'auto']}
             label={{ value: 'CAD CAC →', angle: -90, position: 'insideLeft', offset: 16, fontSize: 10, fill: 'var(--chart-axis)' }}
             reversed
