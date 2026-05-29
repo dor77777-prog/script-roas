@@ -21,6 +21,14 @@
  * row in supabase/migrations/20260521063301_seed_stores.sql:7.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
+vi.mock('@sentry/nextjs', () => ({
+  captureMessage: vi.fn(),
+}));
+
+vi.mock('@/lib/notifications/metaBucUsage', () => ({
+  recordMetaBucUsage: vi.fn(),
+}));
 import {
   fetchMetaAdSetInsights,
   fetchMetaAdInsights,
@@ -49,6 +57,7 @@ function buildResponse(rows: MetaRow[], next?: string) {
   return {
     ok: true,
     status: 200,
+    headers: new Headers(),
     json: async () => body,
     text: async () => JSON.stringify(body),
   } as unknown as Response;
@@ -57,6 +66,7 @@ function buildErrorResponse(status: number, message: string) {
   return {
     ok: false,
     status,
+    headers: new Headers(),
     json: async () => ({ error: { message } }),
     text: async () => JSON.stringify({ error: { message } }),
   } as unknown as Response;
@@ -511,6 +521,7 @@ function buildAdResponse(rows: MetaAdRowWire[], next?: string) {
   return {
     ok: true,
     status: 200,
+    headers: new Headers(),
     json: async () => body,
     text: async () => JSON.stringify(body),
   } as unknown as Response;
@@ -715,6 +726,7 @@ function buildAccountCurrencyResponse(currency: string | undefined): Response {
   return {
     ok: true,
     status: 200,
+    headers: new Headers(),
     json: async () => body,
     text: async () => JSON.stringify(body),
   } as unknown as Response;
@@ -726,6 +738,7 @@ function buildCampaignsBudgetsResponse(rows: CampaignWireRow[], next?: string): 
   return {
     ok: true,
     status: 200,
+    headers: new Headers(),
     json: async () => body,
     text: async () => JSON.stringify(body),
   } as unknown as Response;
@@ -737,6 +750,7 @@ function buildAdSetsBudgetsResponse(rows: AdSetWireRow[], next?: string): Respon
   return {
     ok: true,
     status: 200,
+    headers: new Headers(),
     json: async () => body,
     text: async () => JSON.stringify(body),
   } as unknown as Response;
@@ -948,6 +962,7 @@ describe('Phase 05.7.2 — meta.ts fetchMetaBudgets (port of MetaAds.gs getMetaB
       .mockResolvedValueOnce({
         ok: false,
         status: 500,
+        headers: new Headers(),
         json: async () => ({ error: { message: 'server error' } }),
         text: async () => 'server error',
       } as unknown as Response)
@@ -993,6 +1008,7 @@ describe('Phase 05.7.2 — meta.ts fetchMetaBudgets (port of MetaAds.gs getMetaB
       .mockResolvedValueOnce({
         ok: false,
         status: 500,
+        headers: new Headers(),
         text: async () => 'oops',
         json: async () => ({}),
       } as unknown as Response)
