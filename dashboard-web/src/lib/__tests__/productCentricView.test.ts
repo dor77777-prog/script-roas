@@ -45,6 +45,7 @@ function makeAgg(overrides: Partial<Aggregated>): Aggregated {
     budgetType: '',
     lastActiveDate: '2026-05-20',
     effectiveStatus: 'ACTIVE',
+    lastLiveTickAt: null,
     ...overrides,
   };
 }

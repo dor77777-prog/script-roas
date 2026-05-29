@@ -50,4 +50,19 @@ export type CampaignRow = {
    *   cron tick backfills the field.
    */
   effectiveStatus: string | null;
+  /**
+   * Phase A (2026-05-29) / Phase C (2026-05-30) — ISO timestamp of the
+   * most recent live-tick that wrote this row. Populated by cron-live
+   * (`cronLive.ts:persistCampaignsLive`) and Phase C's meta/google/tiktok
+   * hot-metrics workers; NULL on rows persisted before the column was
+   * added (migration 20260530100002) or by writers that don't tag rows
+   * with a live tick (e.g. cron-daily nightly job).
+   *
+   * Consumed by the row's `CampaignFreshnessChip` to render an
+   * at-a-glance "data is X minutes old" indicator next to the campaign
+   * name. Optional on the type because every reader downstream of this
+   * shape works fine with `undefined`, but `fetchCampaignsFromPostgres`
+   * sets it explicitly to either the ISO string or null.
+   */
+  lastLiveTickAt?: string | null;
 };

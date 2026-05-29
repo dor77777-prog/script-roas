@@ -13,6 +13,7 @@ import type { CampaignHealth } from '@/lib/campaignHealthScore';
 import type { DailyCpmRoasPoint } from '@/lib/cpmRoasAnalysis';
 import { HealthScoreBadge } from './HealthScoreBadge';
 import { Sparkline } from './ui/Sparkline';
+import { CampaignFreshnessChip } from './CampaignFreshnessChip';
 
 /**
  * The narrowed trust-level union actually used by CampaignsTableRow's
@@ -473,6 +474,16 @@ export function CampaignsTableRow({
                     🏷️ לא ממופה
                   </span>
                 )}
+              {/* Phase C (2026-05-30) — freshness chip. Reads
+                  `last_live_tick_at` (max across the aggregate's per-day
+                  rows; see campaignsAggregator). Indicates how recently
+                  cron-live / Phase C hot-metrics worker last refreshed
+                  this row's data: green <15 min, orange 15-60 min, red
+                  >60 min, em-dash when null (no tick on file — typical
+                  for cron-daily-only writes). Sits last in the chip row
+                  so it doesn't compete with the more-important "כבוי" /
+                  "לא ממופה" warnings. */}
+              <CampaignFreshnessChip lastLiveTickAt={a.lastLiveTickAt ?? null} />
             </div>
             <div
               className="text-[10px] sm:text-[11px] text-ink-muted truncate"

@@ -641,6 +641,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
         adSetBudgetCad: null,
         budgetType: '' as const,
         lastActiveDate: null,
+        lastLiveTickAt: null,
       })),
       roasShopifyByKey,
       roasShopifyPlatformByKey,

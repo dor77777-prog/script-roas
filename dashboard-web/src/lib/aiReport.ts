@@ -1262,6 +1262,7 @@ export function generateAiReport({
         budgetType: '',
         lastActiveDate: null,
         effectiveStatus: status,
+        lastLiveTickAt: null,
       };
       const health = computeCampaignHealth({
         aggregated: agg,

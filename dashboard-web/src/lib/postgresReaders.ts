@@ -618,7 +618,13 @@ export async function fetchCampaignsFromPostgres(
             // 20260522180000. NULL for rows written before the migration; the
             // dashboard's CampaignsTableRow falls back to its 2-day
             // lastActiveDate heuristic when this is null.
-            'budget_type, effective_status',
+            'budget_type, effective_status, ' +
+            // Phase A (2026-05-29) — `last_live_tick_at` column added in
+            // migration 20260530100002. Populated by cron-live + Phase C
+            // hot-metrics workers; NULL on cron-daily writes. Surfaced into
+            // the row's CampaignFreshnessChip for an at-a-glance freshness
+            // indicator next to the campaign name.
+            'last_live_tick_at',
         );
       if (opts?.range) {
         q = q.gte('date', opts.range.from).lte('date', opts.range.to);
@@ -709,6 +715,16 @@ export async function fetchCampaignsFromPostgres(
       // so converting to a common enum here would lose information.
       effectiveStatus: (() => {
         const v = (r as { effective_status?: unknown }).effective_status;
+        if (v === null || v === undefined) return null;
+        const s = String(v).trim();
+        return s || null;
+      })(),
+      // Phase A (2026-05-29) — ISO timestamp of the freshest live-tick
+      // that wrote this row. PostgREST returns timestamptz as an ISO
+      // string already; we just normalise null/empty to null so the
+      // aggregator can max() across rows without ambiguity.
+      lastLiveTickAt: (() => {
+        const v = (r as { last_live_tick_at?: unknown }).last_live_tick_at;
         if (v === null || v === undefined) return null;
         const s = String(v).trim();
         return s || null;

@@ -106,6 +106,16 @@ export type Aggregated = {
    * heuristic when this is null (old data / fetcher soft-failed).
    */
   effectiveStatus: string | null;
+  /**
+   * Phase A / Phase C — ISO timestamp of the freshest live-tick that
+   * wrote ANY of the rows folded into this aggregate. Aggregated as the
+   * MAX across the per-day rows (most-recent tick wins) so the row's
+   * `CampaignFreshnessChip` reflects "how recently was this aggregate's
+   * data refreshed" rather than the staleness of the oldest in-range row.
+   * Null when no row in the aggregate has a tick (e.g. only cron-daily
+   * writes or pre-migration rows).
+   */
+  lastLiveTickAt: string | null;
 };
 
 export function aggregate(
@@ -217,6 +227,9 @@ export function aggregate(
         budgetType: r.budgetType,
         lastActiveDate: null,
         effectiveStatus: r.effectiveStatus,
+        // Phase A / Phase C — seed with this row's tick (or null). Loop
+        // below picks the MAX across the aggregate's per-day rows.
+        lastLiveTickAt: r.lastLiveTickAt ?? null,
       });
       if (r.campaignBudgetCad != null) latestBudgetDate.set(key, r.date);
       if (mode === 'adset' && r.adSetBudgetCad != null) latestAdSetBudgetDate.set(key, r.date);
@@ -278,6 +291,17 @@ export function aggregate(
       if (!prev || r.date > prev) {
         a.effectiveStatus = r.effectiveStatus;
         latestEffectiveStatusDate.set(key, r.date);
+      }
+    }
+    // Phase A / Phase C — pick the MAX last_live_tick_at across the
+    // aggregate's per-day rows. Direct ISO-8601 string compare is
+    // correct here because the timestamps are always UTC-Z with fixed
+    // width (no timezone or millisecond variance), so lex order matches
+    // chronological order. Skip null/empty rows so cron-daily writes
+    // (which don't tag a tick) can't clobber a fresher cron-live tick.
+    if (r.lastLiveTickAt) {
+      if (!a.lastLiveTickAt || r.lastLiveTickAt > a.lastLiveTickAt) {
+        a.lastLiveTickAt = r.lastLiveTickAt;
       }
     }
   }
