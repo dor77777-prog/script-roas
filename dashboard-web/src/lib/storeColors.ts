@@ -1,28 +1,25 @@
 /**
  * Canonical per-store color palette — single source of truth.
  *
- * Before this module STORE_COLORS was duplicated in three components
- * (PerStoreCards, TodayLive, RoasChart) with conflicting hex values:
- *   - RoasChart used navy / amber / teal (hue-separated for line charts)
- *   - PerStoreCards used navy / red / green (Google-brand-ish)
- *   - TodayLive used a slightly different navy / red / green trio
+ * Stores route through theme-aware CSS vars defined in globals.css
+ * (--chart-store-uzoshop / --chart-store-zolplus / --chart-store-usmile).
+ * Light defaults pin to bright Tailwind palette hexes; dark overrides
+ * land at OKLCH L ~72-78% so lines stay legible against the dark canvas.
  *
- * Canonical palette: RoasChart's navy/amber/teal family, chosen because
- *   1. Hues are ~120° apart on the HSL wheel — store lines are
- *      distinguishable even for common forms of color-vision deficiency.
- *   2. RoasChart is the primary view where store identity is established;
- *      per-store card dots / TodayLive accent dots should reinforce that
- *      association, not contradict it.
- *   3. The User Manual does not document specific per-store hex values,
- *      so there is no external contract to break.
+ * The three store hues — cyan / hot pink / lime — sit outside every
+ * platform color (Meta blue, Google amber, TikTok red, Organic purple,
+ * Shopify green) so a chart that overlays per-store lines on top of
+ * per-platform lines never reads as one channel echoing another.
  *
- * Fallback palette for future stores (same hue-separation principle).
+ * Fallback palette for unknown stores stays as hex literals — unknown-store
+ * lookup is an edge case (only triggers if a 4th store is added) and
+ * doesn't justify a dark-mode override path.
  */
 
 export const STORE_COLORS: Record<string, string> = {
-  uzoshop:    '#1c4587', // navy   — primary store
-  'Zol Plus': '#d97706', // amber  — warm, clearly distinct from navy
-  '360usmile':'#0d9488', // teal   — cool, distinct from both navy and amber
+  uzoshop:    'var(--chart-store-uzoshop)', // cyan (light) / bright cyan (dark)
+  'Zol Plus': 'var(--chart-store-zolplus)', // hot pink (light) / bright pink (dark)
+  '360usmile':'var(--chart-store-usmile)',  // lime (light) / bright lime (dark)
 };
 
 const FALLBACK_PALETTE = [

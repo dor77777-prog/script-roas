@@ -17,7 +17,7 @@ describe('storeColors — canonical single-source palette (A1-F5 / A6-S2)', () =
     for (const store of KNOWN_STORES) {
       expect(STORE_COLORS).toHaveProperty(store);
       expect(typeof STORE_COLORS[store]).toBe('string');
-      expect(STORE_COLORS[store]).toMatch(/^#[0-9a-fA-F]{6}$/);
+      expect(STORE_COLORS[store]).toMatch(/^var\(--chart-store-/);
     }
   });
 
@@ -30,16 +30,16 @@ describe('storeColors — canonical single-source palette (A1-F5 / A6-S2)', () =
     }
   });
 
-  it('uzoshop is navy (#1c4587) — the dominant primary store', () => {
-    expect(STORE_COLORS.uzoshop).toBe('#1c4587');
+  it('uzoshop is keyed to the cyan chart-store CSS var', () => {
+    expect(STORE_COLORS.uzoshop).toBe('var(--chart-store-uzoshop)');
   });
 
-  it('Zol Plus is amber (#d97706) — warm hue, distinct from navy', () => {
-    expect(STORE_COLORS['Zol Plus']).toBe('#d97706');
+  it('Zol Plus is keyed to the hot-pink chart-store CSS var', () => {
+    expect(STORE_COLORS['Zol Plus']).toBe('var(--chart-store-zolplus)');
   });
 
-  it('360usmile is teal (#0d9488) — cool hue, distinct from navy and amber', () => {
-    expect(STORE_COLORS['360usmile']).toBe('#0d9488');
+  it('360usmile is keyed to the lime chart-store CSS var', () => {
+    expect(STORE_COLORS['360usmile']).toBe('var(--chart-store-usmile)');
   });
 
   it('unknown store falls back to a non-empty hex string', () => {
