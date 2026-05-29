@@ -113,10 +113,16 @@ CREATE TABLE IF NOT EXISTS campaign_status_events (
   to_status text NOT NULL,
   change_kind text NOT NULL,                    -- 'first_seen' | 'paused' | 'enabled' | 'archived' | 'removed' | 'effective_only' | 'delivery_only'
   raw_event jsonb,
+  -- Cast occurred_at to UTC timestamp before date_trunc to make the
+  -- expression IMMUTABLE (timestamptz date_trunc is STABLE — depends on
+  -- session timezone — and STORED generated columns require IMMUTABLE).
+  -- Bucketing by UTC minute is semantically the same as local-time minute
+  -- for dedupe purposes (collision granularity is 1 minute regardless of
+  -- zone; only the human-readable suffix becomes UTC).
   dedupe_key text GENERATED ALWAYS AS (
     store_id || ':' || platform || ':' || entity_type || ':' || entity_id || ':' ||
     COALESCE(from_status, 'NULL') || ':' || to_status || ':' ||
-    to_char(date_trunc('minute', occurred_at), 'YYYY-MM-DD"T"HH24:MI')
+    to_char(date_trunc('minute', occurred_at AT TIME ZONE 'UTC'), 'YYYY-MM-DD"T"HH24:MI')
   ) STORED,
   UNIQUE (dedupe_key)
 );
