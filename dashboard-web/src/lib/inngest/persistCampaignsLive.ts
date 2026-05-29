@@ -286,15 +286,15 @@ export async function persistCampaignsLive(
     let g = ttGroups.get(k);
     if (!g) {
       g = {
-        // Phase A.5 ROLLED BACK 2026-05-29 — using row.storeId here caused
-        // campaigns_daily PK (date, store_id, platform, campaign_id, ad_set_id)
-        // to NOT conflict between the legacy uzoshop row and the newly-mapped
-        // store row. Result: duplicate rows, doubled spend in data_daily after
-        // agg_tiktok_spend_per_store_for_date. Reverted to storeId-arg until a
-        // proper per-campaign migration strategy is designed (e.g. DELETE the
-        // old row's PK before UPSERTing the new one, or change the PK to
-        // (date, platform, campaign_id, ad_set_id) without store_id).
-        storeId,
+        // Phase A.5 v2 (2026-05-29) — TikTok rows write under their resolved
+        // storeId (from the campaign-store-map; fetcher attaches it via
+        // resolveStoreForCampaign). v1 introduced this and caused PK
+        // duplicate-row bugs because UPSERT against the same campaign_id
+        // under a different store_id never conflicted. v2 fixes that via
+        // the batch DELETE below (before each UPSERT call) that wipes any
+        // row whose store_id is NOT in the target set before the UPSERT
+        // runs.
+        storeId: r.storeId ?? storeId,
         campaignId: r.campaignId, campaignName: r.campaignName,
         adSetId: r.adSetId, adSetName: r.adSetName,
         spend: 0, impressions: 0, clicks: 0, conversions: 0, conversionValue: 0,
@@ -338,6 +338,32 @@ export async function persistCampaignsLive(
   // ---------- campaigns_daily UPSERT (mixed-platform array; supabase handles it) ----------
   const allCampaignRows: unknown[] = [...metaRows, ...googleRows, ...ttRows];
   if (allCampaignRows.length > 0) {
+    // Phase A.5 v2 — DELETE other-store TikTok rows for the campaigns being
+    // written this tick. Without this, a campaign that the operator just
+    // re-tagged from uzoshop to usmile360 would leave the legacy uzoshop
+    // row in place (PK includes store_id, so UPSERT doesn't conflict) →
+    // duplicate rows → doubled spend after agg_tiktok_spend_per_store_for_date.
+    const ttCampaignRows = allCampaignRows.filter(
+      (r): r is Record<string, unknown> =>
+        typeof r === 'object' && r !== null && (r as Record<string, unknown>).platform === 'tiktok',
+    );
+    if (ttCampaignRows.length > 0) {
+      const ttCampaignIds = [...new Set(ttCampaignRows.map(r => r.campaign_id as string))];
+      const ttTargetStoreIds = [...new Set(ttCampaignRows.map(r => r.store_id as string))];
+      const { error: delErr } = await admin
+        .from('campaigns_daily')
+        .delete()
+        .eq('date', dateStr)
+        .eq('platform', 'tiktok')
+        .in('campaign_id', ttCampaignIds)
+        .not('store_id', 'in', `(${ttTargetStoreIds.map(s => `"${s}"`).join(',')})`);
+      if (delErr) {
+        console.warn(
+          `persistCampaignsLive ${storeId} ${dateStr}: campaigns_daily tt DELETE failed: ${delErr.message}`,
+        );
+      }
+    }
+
     const { error } = await admin
       .from('campaigns_daily')
       .upsert(allCampaignRows, { onConflict: 'date,store_id,platform,campaign_id,ad_set_id' });
@@ -403,10 +429,10 @@ export async function persistCampaignsLive(
       const convValueCad = await cadFor(r.conversionValue, 'USD');
       const row: Record<string, unknown> = {
         date: dateStr,
-        // Phase A.5 ROLLED BACK 2026-05-29 — see ttGroups comment above for the
-        // PK duplication bug. Until a per-campaign-id migration strategy is
-        // designed, TikTok rows always write under the function-arg storeId.
-        store_id: storeId,
+        // Phase A.5 v2 (2026-05-29) — store_id from each row (honors the
+        // campaign-store-map). The batch DELETE before the upsert wipes
+        // any legacy row under a different store_id.
+        store_id: r.storeId ?? storeId,
         platform: 'tiktok' as const,
         campaign_id: r.campaignId,
         campaign_name: r.campaignName,
@@ -426,6 +452,29 @@ export async function persistCampaignsLive(
   );
   const allAdRows: unknown[] = [...metaAdRows, ...googleAdRows, ...tiktokAdRows];
   if (allAdRows.length > 0) {
+    // Phase A.5 v2 — same DELETE-then-UPSERT as campaigns_daily but keyed on ad_id.
+    // ads_daily has a platform column so we include it for extra safety.
+    const ttAdRows = allAdRows.filter(
+      (r): r is Record<string, unknown> =>
+        typeof r === 'object' && r !== null && (r as Record<string, unknown>).platform === 'tiktok',
+    );
+    if (ttAdRows.length > 0) {
+      const ttAdIds = [...new Set(ttAdRows.map(r => r.ad_id as string))];
+      const ttTargetStoreIds = [...new Set(ttAdRows.map(r => r.store_id as string))];
+      const { error: delErr } = await admin
+        .from('ads_daily')
+        .delete()
+        .eq('date', dateStr)
+        .eq('platform', 'tiktok')
+        .in('ad_id', ttAdIds)
+        .not('store_id', 'in', `(${ttTargetStoreIds.map(s => `"${s}"`).join(',')})`);
+      if (delErr) {
+        console.warn(
+          `persistCampaignsLive ${storeId} ${dateStr}: ads_daily tt DELETE failed: ${delErr.message}`,
+        );
+      }
+    }
+
     const { error } = await admin
       .from('ads_daily')
       .upsert(allAdRows, { onConflict: 'date,store_id,ad_id' });

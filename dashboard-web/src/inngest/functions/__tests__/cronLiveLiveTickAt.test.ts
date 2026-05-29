@@ -284,8 +284,18 @@ describe('persistCampaignsLive — last_live_tick_at on campaigns_daily + ads_da
 
   function makeAdminMock() {
     const upsertsByTable: Record<string, unknown[][]> = {};
+    // no-op delete chain — Phase A.5 v2 added DELETE-then-UPSERT for TikTok rows
+    function makeNoOpDeleteChain() {
+      const chain: Record<string, unknown> = {
+        eq: () => chain,
+        in: () => chain,
+        not: () => Promise.resolve({ error: null }),
+      };
+      return chain;
+    }
     const admin = {
       from: vi.fn((table: string) => ({
+        delete: vi.fn(() => makeNoOpDeleteChain()),
         upsert: vi.fn((rows: unknown, _opts?: unknown) => {
           if (!upsertsByTable[table]) upsertsByTable[table] = [];
           upsertsByTable[table].push(Array.isArray(rows) ? (rows as unknown[]) : [rows]);

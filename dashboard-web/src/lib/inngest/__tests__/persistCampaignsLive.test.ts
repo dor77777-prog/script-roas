@@ -6,9 +6,19 @@ const DATE = '2026-05-27';
 
 function makeAdminMock() {
   const upserts: Array<{ table: string; rows: unknown[]; onConflict?: string }> = [];
+  // no-op delete chain — Phase A.5 v2 added DELETE-then-UPSERT for TikTok rows
+  function makeNoOpDeleteChain() {
+    const chain: Record<string, unknown> = {
+      eq: () => chain,
+      in: () => chain,
+      not: () => Promise.resolve({ error: null }),
+    };
+    return chain;
+  }
   const admin = {
     from(table: string) {
       return {
+        delete: () => makeNoOpDeleteChain(),
         upsert(rows: unknown[], opts?: { onConflict?: string }) {
           upserts.push({ table, rows: rows as unknown[], onConflict: opts?.onConflict });
           return Promise.resolve({ error: null });
