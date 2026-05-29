@@ -110,10 +110,10 @@ function formatRelative(iso: string): string {
 // the loader to give a "this row will change soon" signal.
 function StatusBadge({ status }: { status: InngestRun['status'] }) {
   const cls =
-    status === 'Completed' ? 'bg-green-500/20 text-green-300'
-      : status === 'Failed' ? 'bg-red-500/20 text-red-300'
-        : status === 'Running' ? 'bg-blue-500/20 text-blue-300'
-          : 'bg-gray-500/20 text-gray-300';
+    status === 'Completed' ? 'bg-status-greenBg text-status-green border border-status-green/30'
+      : status === 'Failed' ? 'bg-status-redBg text-status-red border border-status-red/30'
+        : status === 'Running' ? 'bg-status-blueBg text-status-blue border border-status-blue/30'
+          : 'bg-status-grayBg text-status-gray border border-status-gray/30';
   const Icon =
     status === 'Completed' ? CheckCircle2
       : status === 'Failed' ? XCircle
@@ -140,7 +140,7 @@ export function JobsTable() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   if (isLoading) {
-    return <p className="text-text-secondary text-sm">טוען ריצות…</p>;
+    return <p className="text-ink-secondary text-sm">טוען ריצות…</p>;
   }
   if (error) {
     // Hard SWR error — the proxy is supposed to soft-fail with 200, so
@@ -148,7 +148,7 @@ export function JobsTable() {
     // route module itself failed to load. Render the raw error string
     // (already client-side, no exfiltration concern) for ops triage.
     return (
-      <p className="text-red-400 text-sm">
+      <p className="text-status-red text-sm">
         שגיאה בטעינת ריצות: {error instanceof Error ? error.message : String(error)}
       </p>
     );
@@ -158,7 +158,7 @@ export function JobsTable() {
     // SyncIndicator degraded-state pattern — non-blocking, sanitized
     // Hebrew copy from userFacingError on the server.
     return (
-      <p className="text-amber-400 text-sm flex items-center gap-1">
+      <p className="text-status-orange text-sm flex items-center gap-1">
         <AlertCircle className="w-4 h-4" />
         {data.error}
       </p>
@@ -172,9 +172,9 @@ export function JobsTable() {
     // is alive even with zero rows.
     return (
       <div className="space-y-2">
-        <p className="text-text-secondary text-sm">אין ריצות אחרונות.</p>
+        <p className="text-ink-secondary text-sm">אין ריצות אחרונות.</p>
         {data?.lastUpdated && (
-          <p className="text-text-secondary text-xs">
+          <p className="text-ink-secondary text-xs">
             עודכן {formatRelative(data.lastUpdated)} · רענון אוטומטי כל 15 שנ׳
           </p>
         )}
@@ -185,7 +185,7 @@ export function JobsTable() {
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm">
-        <thead className="text-text-secondary text-xs uppercase tracking-wider">
+        <thead className="text-ink-secondary text-xs uppercase tracking-wider bg-canvas">
           <tr>
             <th className="text-right p-2">פונקציה</th>
             <th className="text-right p-2">סטטוס</th>
@@ -196,13 +196,13 @@ export function JobsTable() {
         </thead>
         <tbody>
           {data.runs.map((run) => (
-            <tr key={run.run_id} className="border-t border-white/10">
+            <tr key={run.run_id} className="border-t border-line-subtle">
               <td className="p-2 font-mono text-xs">{run.function_id}</td>
               <td className="p-2"><StatusBadge status={run.status} /></td>
-              <td className="p-2 text-text-secondary text-xs" title={run.run_started_at}>
+              <td className="p-2 text-ink-secondary text-xs" title={run.run_started_at}>
                 {formatRelative(run.run_started_at)}
               </td>
-              <td className="p-2 text-text-secondary text-xs" dir="ltr">
+              <td className="p-2 text-ink-secondary text-xs" dir="ltr">
                 {formatDuration(run.run_started_at, run.ended_at)}
               </td>
               <td className="p-2">
@@ -211,7 +211,7 @@ export function JobsTable() {
                   onClick={() =>
                     setExpandedId(expandedId === run.run_id ? null : run.run_id)
                   }
-                  className="text-xs text-blue-400 hover:underline"
+                  className="text-xs text-status-blue hover:underline"
                   aria-expanded={expandedId === run.run_id}
                   aria-controls={`run-output-${run.run_id}`}
                 >
@@ -228,7 +228,7 @@ export function JobsTable() {
         return (
           <pre
             id={`run-output-${run.run_id}`}
-            className="text-xs bg-black/30 p-3 mt-2 rounded overflow-x-auto"
+            className="text-xs bg-canvas text-ink-secondary p-3 mt-2 rounded overflow-x-auto"
             dir="ltr"
           >
             {JSON.stringify(
@@ -239,7 +239,7 @@ export function JobsTable() {
           </pre>
         );
       })()}
-      <p className="text-text-secondary text-xs mt-2">
+      <p className="text-ink-secondary text-xs mt-2">
         עודכן {data.lastUpdated ? formatRelative(data.lastUpdated) : '—'} · רענון אוטומטי כל 15 שנ׳
       </p>
     </div>
