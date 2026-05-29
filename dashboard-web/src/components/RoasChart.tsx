@@ -16,7 +16,7 @@ import {
   ChartTooltipValue,
 } from '@/components/ui/chart/ChartTooltip';
 
-// The navy primary color is the visual anchor — the first store's line
+// The cyan primary color is the visual anchor — the first store's line
 // gets bold label treatment to guide the eye. Using STORE_COLORS directly
 // keeps this sentinel value in sync with the canonical palette.
 const PRIMARY_COLOR = STORE_COLORS.uzoshop; // 'var(--chart-store-uzoshop)' — cyan (light) / bright cyan (dark)
