@@ -7,7 +7,7 @@
 │                                                  │
 │      מדריך הפעלה שוטף למפעיל הדשבורד            │
 │                                                  │
-│      גרסה:        2.1.3                          │
+│      גרסה:        2.1.4                          │
 │      תאריך:       2026-05-29                     │
 │      קהל יעד:     מפעיל יחיד · החלטות יומיות   │
 │                                                  │
@@ -73,6 +73,29 @@ Plan 6 פיספס 25 רכיבים שיתופיים (`Filters`/Quick Range, `Sect
 2. **TodayLive גרדיאנט עדיין לא מופיע.** הסיבה: Tailwind 3.x slash-alpha על `var()` tokens (`from-status-red/45`) לא תמיד מתרגם — ה-config מגדיר tokens כ-`'var(--status-X)'` בלי `<alpha-value>` placeholder. הוחלף ל-arbitrary value עם CSS gradient inline: `bg-[linear-gradient(225deg,var(--status-X-bg),var(--surface-elevated-1)_75%)]`. 225deg = top-right→bottom-left (RTL friendly — ה-halo נופל ב-eye-landing corner).
 
 3. **HeroOverview ב-LIGHT mode** — אחרי תיקון 2.1.1 (accent gradient) המשתמש דיווח שב-light mode דווקא המקור הכהה navy היה יותר מתאים. עכשיו: `from-[#091c4a] via-[#0d3680] to-[#1d4ed8]` ל-LIGHT, `dark:from-accent dark:via-accent/80 dark:to-accent/55` ל-DARK. שני העולמות מקבלים את מה שמתאים להם.
+
+### Hotfix 2.1.4 (2026-05-29) — Mobile responsive sweep (27 issues across 10 components)
+
+עד עכשיו הדשבורד היה desktop-first בלבד. אודיט מקיף תפס 27 בעיות רספונסיביות (6 P0 + 10 P1 + 11 P2). 4 implementers מקבילים תיקנו את ה-P0+P1 הקריטיים:
+
+1. **Sidebar mobile drawer** (P0-1, הגדול ביותר): היה תופס 64% מעמוד המובייל (`w-60` desktop rail). עכשיו: `hidden md:flex` ל-desktop, ב-mobile מופיע כ-off-canvas drawer (`fixed inset-y-0 end-0 w-72 max-w-[85vw] z-50`) עם backdrop (`bg-overlay/60 z-40`) ו-slide transform. נפתח דרך כפתור hamburger 44×44 חדש בראש הדף (`md:hidden`).
+
+2. **Grid stacking** (P0-3/4/5): כרטיסיות KPI שלא נערמו במובייל תוקנו:
+   - `PnLBreakdown` hero stats: `grid-cols-3` → `grid-cols-1 sm:grid-cols-3` (3 מספרי CAD גדולים לא נדחסים)
+   - `AdsDrawer` summary: `grid-cols-4` → `grid-cols-2 sm:grid-cols-4` (2×2 מובייל, 1×4 דסקטופ)
+   - `HeroOverview` 5-KPI strip: הוסף `sm:grid-cols-3` לרצף 2/2/1 → 3/2 → 1×5
+
+3. **Table overflow wrappers** (P1-5/6/7/8): טבלאות פנימיות שנדחסו במובייל:
+   - `MetaShopifyReconciliation` per-day: הוסף `overflow-auto` + `min-w-[480px]`
+   - `CohortComparisonPanel`: שינוי `overflow-hidden` → `overflow-x-auto` + `min-w-[640px]`
+   - `ProductCentricView` per-platform: עטיפת overflow + `min-w-[480px]` + `-mx-2 sm:mx-0` (bleed-past-padding)
+   - `SyncIndicator` tooltip: `w-80` → `w-80 max-w-[min(90vw,320px)]` (clamp לוויוופורט)
+
+4. **CampaignsTable** (P0-2 + P1-4): `max-h-[calc(100vh-180px)]` → `max-h-[60vh] md:max-h-[calc(100vh-180px)]` (וזה היה המקרה ש-table window נדחס ל-30% במובייל). Summary 7-KPI strip: `grid-cols-2 sm:grid-cols-4` → `grid-cols-3 sm:grid-cols-4` (3 שורות במקום 4 במובייל). הוסף TODO comment עבור column-header tooltip clipping (P1-9, נדחה ל-Plan 7 כי דורש Floating UI / portal).
+
+5. **AnnotationsPanel labels** (P1-10): 5 form labels מ-`text-[10px]` ל-`text-[11px] sm:text-[10px]` (קריאות במובייל, קומפקטי בדסקטופ).
+
+**P2 polish + complex items (CampaignsTable toolbar collapse, column-tooltip portal, KpiCards density)** נדחים ל-Plan 7.
 
 מסמכים נלווים מתעדכנים בנפרד: ארכיטקטורה ב-`docs/ARCHITECTURE.md`, עבודה ביצועית של ה-overhaul ב-`docs/superpowers/plans/2026-05-{28,29}-dashboard-ux-overhaul-*.md` (7 plans, Plans 1–6 IMPLEMENTED; Plan 7 polish + a11y + RTL audit pending).
 
@@ -2437,7 +2460,7 @@ Seen 5 times. Alert #2.
 
 ## סוף המסמך
 
-**גרסה:** 2.1.3 · **תאריך עדכון:** 2026-05-29
+**גרסה:** 2.1.4 · **תאריך עדכון:** 2026-05-29
 
 > מסמך זה מתעדכן עם כל שינוי שהמפעיל רואה במסך. אם משהו לא תואם למה שאתה רואה — דווח למפתח לעדכון.
 
