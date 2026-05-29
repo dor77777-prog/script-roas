@@ -7,7 +7,7 @@
 │                                                  │
 │      מדריך הפעלה שוטף למפעיל הדשבורד            │
 │                                                  │
-│      גרסה:        2.1.13                         │
+│      גרסה:        2.1.14                         │
 │      תאריך:       2026-05-29                     │
 │      קהל יעד:     מפעיל יחיד · החלטות יומיות   │
 │                                                  │
@@ -180,6 +180,17 @@ Plan 6 פיספס 25 רכיבים שיתופיים (`Filters`/Quick Range, `Sect
 - **Caption מסביר ב-3 שורות:** "ה-5 המנצחים ביותר ו-5 שצריכים תשומת לב — לפי ROAS. כל קמפיין עם פלטפורמה, חנות, וההמלצה הקונקרטית. סה״כ X קמפיינים פעילים בטווח."
 
 הגרף ה-scatter נשמר בקובץ אבל לא מיובא יותר ב-Dashboard. אם יש בקשה עתידית, ניתן להחזיר כ-toggle "תצוגת גרף" ליד הרשימות.
+
+### Hotfix 2.1.14 (2026-05-29) — Legend swatch consistency fix (2.1.13 follow-up)
+
+ב-2.1.13 צבעי הקווים בגרפים עודכנו ל-brand-true, אבל ב-4 רכיבים ה-**legend swatches** (הריבועים הקטנים מתחת לגרף שמתעדים איזה קו הוא איזו פלטפורמה) נשארו עם צבעי Tailwind ישנים. התוצאה: ב-`MetaShopifyReconciliation` ה-tooltip הציג Meta בכחול בעוד שה-legend הציג Meta בענבר — הפוך לחלוטין. תוקן ב-4 מקומות:
+
+- **MetaShopifyReconciliation** — 4 swatches (Meta / Google / TikTok / Organic) עברו לקרוא ישירות מ-`CHART_COLORS`.
+- **CampaignsTable** — ה-CPM legend swatch עבר מ-`bg-amber-600` ישן ל-`CHART_COLORS.cpm` שתואם את הקו עצמו.
+- **CampaignDrawer** — אותו תיקון לCPM swatch בתוך פאנל הקמפיין הבודד.
+- **ProductChannelBreakdown** — ה-5-segment source bar עכשיו משתמש בצבעי הברנד הנכונים ל-Facebook/Google/TikTok (Direct + Other נשארו אפורים ניטרליים).
+
+מכאן והלאה כל swatch בלגנדה אמור לקרוא דרך `CHART_COLORS` — אם הוא לא, זה bug, לא feature.
 
 ### Hotfix 2.1.13 (2026-05-29) — Brand-true chart palette + dark-mode readability
 
@@ -2581,7 +2592,7 @@ Seen 5 times. Alert #2.
 
 ## סוף המסמך
 
-**גרסה:** 2.1.13 · **תאריך עדכון:** 2026-05-29
+**גרסה:** 2.1.14 · **תאריך עדכון:** 2026-05-29
 
 > מסמך זה מתעדכן עם כל שינוי שהמפעיל רואה במסך. אם משהו לא תואם למה שאתה רואה — דווח למפתח לעדכון.
 

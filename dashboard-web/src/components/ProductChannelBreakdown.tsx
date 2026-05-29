@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Info, Package, X } from 'lucide-react';
 import type { ProductChannelBreakdown as ProductChannelBreakdownType } from '@/lib/attributionAnalysis';
 import { PRODUCT_MAP_CHIP_KEY } from '@/lib/sessionKeys';
+import { CHART_COLORS } from '@/lib/chartColors';
 
 /**
  * Phase 1 channel-level product attribution panel — answers "where did the
@@ -118,10 +119,14 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
               פייסבוק: {fb} · גוגל: {google} · טיקטוק: {tiktok} · ישיר: {direct} · אחר: {other}
             </span>
           </div>
+          {/* 5-segment source bar — paid platform segments (Facebook=Meta,
+              Google, TikTok) read CHART_COLORS for brand-true colors that
+              match the per-platform lines elsewhere in the dashboard.
+              Direct + Other stay neutral grays (they aren't paid identities). */}
           <div className="h-2.5 rounded-full bg-elevated2 overflow-hidden flex">
-            <div className="h-full bg-status-blue"   style={{ width: `${(fb / total) * 100}%` }} />
-            <div className="h-full bg-amber-500"   style={{ width: `${(google / total) * 100}%` }} />
-            <div className="h-full bg-pink-500"    style={{ width: `${(tiktok / total) * 100}%` }} />
+            <div className="h-full" style={{ width: `${(fb / total) * 100}%`,     background: CHART_COLORS.meta }} />
+            <div className="h-full" style={{ width: `${(google / total) * 100}%`, background: CHART_COLORS.google }} />
+            <div className="h-full" style={{ width: `${(tiktok / total) * 100}%`, background: CHART_COLORS.tiktok }} />
             <div className="h-full bg-text-muted"  style={{ width: `${(direct / total) * 100}%` }} />
             <div className="h-full bg-text-subtle" style={{ width: `${(other / total) * 100}%` }} />
           </div>

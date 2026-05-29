@@ -1145,11 +1145,12 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                   </LineChart>
                 </ChartContainer>
                 {/* Mini legend — appears whenever there is more than one line
-                    on the chart (ROAS overlay OR previous-period overlay). */}
+                    on the chart (ROAS overlay OR previous-period overlay).
+                    CPM swatch tracks CHART_COLORS.cpm (= var(--status-orange)). */}
                 {(showRoasOverlay || showPrevLine) && (
                   <div className="flex items-center justify-center gap-4 text-[10px] text-ink-muted mt-1.5 flex-wrap">
                     <span className="inline-flex items-center gap-1.5">
-                      <span className="inline-block w-3 h-[2px] bg-amber-600" />
+                      <span className="inline-block w-3 h-[2px]" style={{ background: CHART_COLORS.cpm }} />
                       CPM {showRoasOverlay ? '(ציר שמאל)' : ''}
                     </span>
                     {showPrevLine && (

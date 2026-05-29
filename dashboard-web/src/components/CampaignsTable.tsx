@@ -1565,7 +1565,10 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
           {(cpmShowRoas || showPrevLine) && (
             <div className="flex items-center justify-center gap-4 text-[10px] text-ink-muted mt-1.5 flex-wrap">
               <span className="inline-flex items-center gap-1.5">
-                <span className="inline-block w-3 h-[2px] bg-amber-600" />
+                {/* CPM swatch tracks CHART_COLORS.cpm (= var(--status-orange))
+                    so the legend stays in sync with the chart line in both
+                    light and dark mode. */}
+                <span className="inline-block w-3 h-[2px]" style={{ background: CHART_COLORS.cpm }} />
                 CPM {cpmShowRoas ? '(ציר שמאל)' : ''}
               </span>
               {showPrevLine && (

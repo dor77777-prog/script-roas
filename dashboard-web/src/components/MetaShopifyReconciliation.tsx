@@ -736,25 +736,25 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
           </ComposedChart>
         </ChartContainer>
 
-        {/* 5-entry legend (Phase 05.7.9 — added TikTok) */}
+        {/* 5-entry legend (Phase 05.7.9 — added TikTok).
+            All 4 platform swatches read CHART_COLORS via inline style so they
+            track the brand-true palette (Meta blue, Google amber, TikTok red,
+            Organic light purple) instead of stale Tailwind utility classes. */}
         <div className="flex items-center justify-center flex-wrap gap-3 text-[10px] sm:text-[11px]">
           <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block w-3 h-[2px] bg-amber-600" />
+            <span className="inline-block w-3 h-[2px]" style={{ background: CHART_COLORS.meta }} />
             <span className="text-ink-secondary">Meta (מדווח)</span>
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block w-3 h-[2px] bg-blue-600" />
+            <span className="inline-block w-3 h-[2px]" style={{ background: CHART_COLORS.google }} />
             <span className="text-ink-secondary">Google (מדווח)</span>
           </span>
           <span className="inline-flex items-center gap-1.5">
-            {/* c/HI-01: slate-700 swatch matches CHART_COLORS.tiktok (was
-                pink-500, too close in hue to organic purple for colorblind
-                viewers). */}
-            <span className="inline-block w-3 h-[2px] bg-ink" />
+            <span className="inline-block w-3 h-[2px]" style={{ background: CHART_COLORS.tiktok }} />
             <span className="text-ink-secondary">TikTok (מדווח)</span>
           </span>
           <span className="inline-flex items-center gap-1.5">
-            <span className="inline-block w-3 h-[2px] bg-purple-600" />
+            <span className="inline-block w-3 h-[2px]" style={{ background: CHART_COLORS.organic }} />
             <span className="text-ink-secondary">Organic</span>
           </span>
           {/* Shopify legend entry — dashed pattern matches the chart's
