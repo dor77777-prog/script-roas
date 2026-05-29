@@ -65,6 +65,12 @@ import {
 } from './AdSetTable';
 import { ProductPickerModal } from './ProductPickerModal';
 import {
+  readCampaignStoreMap,
+  writeCampaignStoreMap,
+  campaignStoreKey,
+  type CampaignStoreMap,
+} from '@/lib/campaignStoreMap';
+import {
   readProductMap,
   campaignKey,
   setMappedProducts,
@@ -161,6 +167,17 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
     const onChange = () => setProductMap(readProductMap());
     window.addEventListener('roas-campaign-product-map-changed', onChange);
     return () => window.removeEventListener('roas-campaign-product-map-changed', onChange);
+  }, []);
+
+  // Phase A.5 Task 7 — campaign↔store mapping (TikTok only). Same cloud-sync
+  // pattern as productMap. Initial state from localStorage; useEffect subscribes
+  // to writes from any tab/component.
+  const [storeMap, setStoreMap] = useState<CampaignStoreMap>(() => ({}));
+  useEffect(() => {
+    setStoreMap(readCampaignStoreMap());
+    const onChange = () => setStoreMap(readCampaignStoreMap());
+    window.addEventListener('roas-campaign-store-map-changed', onChange);
+    return () => window.removeEventListener('roas-campaign-store-map-changed', onChange);
   }, []);
 
   // SWR fetches — lazy while open, SWR-deduped per session.
@@ -350,15 +367,32 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
   // Per-ad-set attribution Map — hook preserves IN5-01 (no per-cell recompute).
   const attributionByAdSet = useCampaignAttribution({ summary, rows, ordersAttrData, rangeFrom, rangeTo });
 
+  // Phase A.5 Task 7 — effectiveStoreId resolves the operator's pending
+  // store re-tag for TikTok campaigns BEFORE cron-live-heavy re-buckets the
+  // underlying campaigns_daily rows. Once tagged via the drawer's store
+  // dropdown, the product picker + product-map writes immediately target
+  // the new store so the operator can complete "tag store → tag products"
+  // in one session without waiting 30 min for the cron tick.
+  //
+  // Non-TikTok campaigns: effectiveStoreId === storeId-prop (no mapping).
+  // TikTok unmapped: effectiveStoreId === storeId-prop (defaults to uzoshop).
+  // TikTok mapped: effectiveStoreId === storeMap[key] (the new store).
+  const effectiveStoreId = useMemo(() => {
+    if (summary?.platform !== 'TikTok') return storeId;
+    const advertiserId = adAccounts[storeId]?.tiktokAdvertiserId ?? '';
+    if (!advertiserId) return storeId;
+    return storeMap[campaignStoreKey('tiktok', advertiserId, campaignId)] ?? storeId;
+  }, [summary?.platform, storeMap, adAccounts, storeId, campaignId]);
+
   // Stabilize mappedIds reference (RESEARCH.md §7 caveat). Inline
   // `productMap[...] ?? []` would return a fresh [] every render and defeat
   // the productChannelBreakdown memo below.
   const mappedIds = useMemo(
     () => {
       const platformForCampaign = rows[0]?.platform ?? summary?.platform ?? '';
-      return productMap[campaignKey(storeId, platformForCampaign, campaignId)] ?? [];
+      return productMap[campaignKey(effectiveStoreId, platformForCampaign, campaignId)] ?? [];
     },
-    [productMap, rows, summary?.platform, storeId, campaignId],
+    [productMap, rows, summary?.platform, effectiveStoreId, campaignId],
   );
 
   // Phase 05.7.x (2026-05-23) — for each product in the catalog, list
@@ -1208,6 +1242,68 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
               products manually so manual mapping is meaningful — added
               2026-05-22 per operator request to look at "what's happening"
               on each platform. */}
+          {/* Phase A.5 Task 7 — TikTok campaign↔store mapping (drawer-based).
+              The TikTok advertiser is shared across stores; this section lets
+              the operator tag which store the campaign actually belongs to.
+              Tagging applies immediately to the product picker below (so the
+              "tag store → tag products" flow works in one session) and to the
+              next cron-live-heavy tick which re-buckets campaigns_daily +
+              ads_daily under the new store. */}
+          {summary.platform === 'TikTok' && (() => {
+            const advertiserId = adAccounts[storeId]?.tiktokAdvertiserId ?? '';
+            const key = advertiserId
+              ? campaignStoreKey('tiktok', advertiserId, campaignId)
+              : '';
+            const currentValue = key ? storeMap[key] : undefined;
+            const isUnmapped = currentValue === undefined;
+            return (
+              <section>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <h3 className="text-sm font-semibold text-ink inline-flex items-center gap-1.5">
+                    🏪 חנות בעלת הקמפיין
+                    {isUnmapped && (
+                      <span className="text-[10px] font-medium text-status-orange">
+                        (לא ממופה · ברירת מחדל uzoshop)
+                      </span>
+                    )}
+                  </h3>
+                </div>
+                <p className="text-[11px] text-ink-muted leading-relaxed bg-elevated2/40 rounded-lg px-3 py-2 mb-2">
+                  ה-TikTok advertiser שלנו (uzoshop) משרת מספר חנויות. בחר לאיזו חנות הקמפיין שייך —
+                  קודם תייג חנות, אח״כ שייך מוצרים. שינוי חל מיידית על מיפוי המוצרים למטה; הסבב הבא של cron-live-heavy (עד 30 דק׳)
+                  ירשום את ה-spend תחת החנות הנכונה ב-<code>campaigns_daily</code>. שורות היסטוריות נשארות תחת uzoshop.
+                </p>
+                <select
+                  data-testid="drawer-store-select"
+                  disabled={!advertiserId}
+                  value={currentValue ?? '__unmapped__'}
+                  onChange={(e) => {
+                    if (!key) return;
+                    const next: CampaignStoreMap = { ...storeMap };
+                    if (e.target.value === '__unmapped__') {
+                      delete next[key];
+                    } else {
+                      next[key] = e.target.value;
+                    }
+                    writeCampaignStoreMap(next);
+                    setStoreMap(next);
+                  }}
+                  className="w-full text-sm bg-elevated border border-line rounded px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <option value="__unmapped__">(לא ממופה · ברירת מחדל uzoshop)</option>
+                  <option value="uzoshop">uzoshop</option>
+                  <option value="zolplus">Zol Plus</option>
+                  <option value="usmile360">360usmile</option>
+                </select>
+                {!isUnmapped && currentValue !== storeId && (
+                  <p className="text-[11px] text-status-orange mt-2">
+                    ⚠ מיפוי המוצרים למטה כבר מציג את {currentValue}. שאר הפאנלים בכרטיסייה הזו עדיין מציגים נתונים של {storeId} עד שcron-live-heavy יכתוב מחדש (עד 30 דק׳).
+                  </p>
+                )}
+              </section>
+            );
+          })()}
+
           {(summary.platform === 'Meta' || summary.platform === 'TikTok') && (
             <section>
               <div className="flex items-center justify-between gap-2 mb-2">
@@ -1339,13 +1435,13 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
       <ProductPickerModal
         open={pickerOpen}
         onClose={() => setPickerOpen(false)}
-        storeId={storeId}
+        storeId={effectiveStoreId}
         storeName={summary.storeName}
         campaignName={summary.campaignName}
-        initial={productMap[campaignKey(storeId, summary.platform, campaignId)] ?? []}
+        initial={productMap[campaignKey(effectiveStoreId, summary.platform, campaignId)] ?? []}
         otherCampaignsByProduct={otherCampaignsByProduct}
         onSave={(productIds) => {
-          setMappedProducts(storeId, summary.platform, campaignId, productIds);
+          setMappedProducts(effectiveStoreId, summary.platform, campaignId, productIds);
         }}
       />
 

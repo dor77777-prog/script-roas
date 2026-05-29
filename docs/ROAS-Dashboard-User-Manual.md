@@ -185,12 +185,26 @@ Plan 6 פיספס 25 רכיבים שיתופיים (`Filters`/Quick Range, `Sect
 
 עד היום ה-TikTok advertiser היחיד שלנו (של uzoshop) הריץ קמפיינים גם עבור usmile360 — אבל הדשבורד שייך את כל ההכנסות + ההוצאה ל-uzoshop. הסיבה: ההנחה הישנה (`STORES_WITH_TIKTOK = {'uzoshop'}`) אכפה bucket אחד על שתי החנויות. תוקן ב-Phase A.5.
 
-**מה שינית/תראה בפועל:**
+**איך ממפים קמפיין TikTok לחנות (הוורקפלו המלא):**
 
-- **עמודת "חנות" חדשה ב-טאב קמפיינים** (TikTok בלבד; Meta + Google נשארו 1:1 ולא מקבלים עמודה). תפריט נפתח לכל קמפיין: `uzoshop` / `Zol Plus` / `360usmile` / `(לא ממופה)`. שינוי שומר ל-cloud (Supabase `dashboard_state`) מיידית; הסבב הבא של cron-live-heavy (כל 30 דק׳) כותב את ה-spend תחת החנות הנכונה ב-`campaigns_daily` + `ads_daily`.
-- **חיווי "(לא ממופה)"** באתום (כתום) מסמן קמפיינים שעדיין לא תויגו. ברירת המחדל היא `uzoshop` — תאימות לאחור: אם לא תתייג, הכל ממשיך לזרום ל-uzoshop כמו לפני.
+1. **לחץ על שורת הקמפיין** בטאב "קמפיינים" → ה-CampaignDrawer נפתח מימין.
+2. בראש ה-drawer יש סקציה חדשה **"🏪 חנות בעלת הקמפיין"** (גלויה רק לקמפייני TikTok; Meta + Google הם 1:1 ולא מקבלים את הסקציה).
+3. תפריט נפתח: `(לא ממופה · ברירת מחדל uzoshop)` / `uzoshop` / `Zol Plus` / `360usmile`. בחר את החנות הרצויה — השמירה מיידית ל-cloud (`dashboard_state`).
+4. **מיפוי המוצרים שמתחת לסקציית החנות מתעדכן מיידית** לפי החנות החדשה — אם תייגת usmile360, ה-`✎ שייך מוצרים` יציג את מוצרי usmile360, לא את uzoshop. ⚠ תייג חנות **קודם**, מוצרים **אחר כך**.
+5. **שאר הפאנלים ב-drawer** (Health Score, attribution, cohort) יישארו עם הנתונים של החנות המקורית (uzoshop) עד שcron-live-heavy יסיים לכתוב מחדש (עד 30 דק׳). יש חיווי כתום קטן שמודיע על זה.
+
+**מה קורה מאחורי הקלעים מהtick הבא:**
+
+- cron-live-heavy (כל 30 דק׳, staggered per store) קורא את ה-map דרך `loadCampaignStoreMapFromSupabase` ומצמיד לכל row של TikTok את ה-`storeId` הנכון
+- `campaigns_daily` + `ads_daily` נכתבים תחת החנות החדשה
+- פונקציית Postgres `agg_tiktok_spend_per_store_for_date(d)` מסכמת מחדש את `data_daily.tt_spend_cad` + `total_spend_cad` + `roas` + `gross_profit_cad` + `net_profit_cad` לכל החנויות
+- בלילה cron-daily מסיים את היום + מסמן `is_finalized=true`
+
+**עוד דברים שמופיעים:**
+
+- **חיווי "(לא ממופה)"** בכתום בסקציית החנות מסמן קמפיינים שעדיין לא תויגו. ברירת המחדל היא `uzoshop` — תאימות לאחור: אם לא תתייג, הכל ממשיך לזרום ל-uzoshop כמו לפני.
 - **הטבלאות החודשיות** (טאב חודש) כבר עם לוגיקה `hasTt = rows.some(r => r.ttSpend > 0)` — ברגע שusmile360 תקבל ערך TikTok > 0 מתויג, עמודת TikTok תופיע אוטומטית. הסיכום של "סך הוצאות פרסום" בשתי הטבלאות (לכל חנות + כל החנויות יחד) ייכלל ה-TikTok המתויג.
-- **`/operator` קיבל chip חדש** מעל לפאנל Meta BUC: הסבר חד-שורתי על attribution היסטורי + הפניה לעמודת "חנות" החדשה.
+- **`/operator` קיבל chip חדש** מעל לפאנל Meta BUC: הסבר חד-שורתי על attribution היסטורי.
 
 **שורות היסטוריות (לפני 2026-05-29) נשארות תחת uzoshop.** אין re-attribution אחורנית — האגרגציה ההיסטורית נכונה תחת המודל הישן (כל הספנד היה מ-advertiser uzoshop), פשוט לא pre-stage לפי קמפיין.
 
