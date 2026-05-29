@@ -802,8 +802,8 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
           <summary className="cursor-pointer text-ink-secondary hover:text-ink select-none py-1">
             יום-לפי-יום ↓
           </summary>
-          <div className="mt-2 max-h-48 overflow-y-auto rounded-md border border-line-subtle">
-            <table className="w-full text-[11px]">
+          <div className="mt-2 max-h-48 overflow-auto rounded-md border border-line-subtle">
+            <table className="w-full min-w-[480px] text-[11px]">
               <thead className="bg-elevated2/60 sticky top-0 z-[5]">
                 <tr className="text-ink-muted">
                   <th className="px-2 py-1.5 text-start font-medium">תאריך</th>

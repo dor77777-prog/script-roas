@@ -208,7 +208,7 @@ function CohortSection({ title, subtitle, members, tone, onDrillCampaign }: Sect
   return (
     <div
       className={cn(
-        'rounded-lg border overflow-hidden',
+        'rounded-lg border overflow-x-auto',
         tone === 'intra'
           ? 'border-amber-200 bg-amber-50/30'
           : 'border-line-subtle bg-elevated2/30',
@@ -228,7 +228,7 @@ function CohortSection({ title, subtitle, members, tone, onDrillCampaign }: Sect
           <div className="text-[10px] text-ink-muted leading-tight">{subtitle}</div>
         </div>
       </div>
-      <table className="w-full">
+      <table className="w-full min-w-[640px]">
         <thead className="bg-elevated2/50 text-ink-muted">
           <tr>
             <th className="px-2 py-1 text-start font-medium text-[10px]">דירוג</th>
