@@ -740,8 +740,29 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     for (const [key, productIds] of Object.entries(productMap)) {
       if (Array.isArray(productIds) && productIds.length > 0) set.add(key);
     }
+    // Phase A.5 v2 post-deploy fix (2026-05-29 evening) — for TikTok rows the
+    // operator has tagged, the productMap entry is written under the EFFECTIVE
+    // storeId (via the drawer's effectiveStoreId), but the row's a.storeId
+    // stays at the data-side store until cron-live-heavy migrates. Without
+    // this second pass, the "🏷️ לא ממופה" chip's lookup against the
+    // data-side row key misses the productMap entry → chip stays visible
+    // even after mapping.
+    //
+    // Why we don't swap a.storeId at the row-prop level: the row's storeId
+    // is also used by the drill-down click handler to find the campaign in
+    // data.rows (drawer fetches data filtered by storeId). Swapping it
+    // there opens the drawer with empty content because data.rows hasn't
+    // migrated yet — the drawer overlay traps clicks and the screen
+    // appears frozen.
+    for (const a of aggregated) {
+      const effective = effectiveStoreByRowKey.get(a.key);
+      if (!effective) continue;
+      const effProductKey = `${effective.storeId}::${a.platform}::${a.campaignId}`;
+      const rowProductKey = `${a.storeId}::${a.platform}::${a.campaignId}`;
+      if (set.has(effProductKey)) set.add(rowProductKey);
+    }
     return set;
-  }, [productMap]);
+  }, [productMap, aggregated, effectiveStoreByRowKey]);
 
   // Phase 05.7.x — per-campaign daily CPM/ROAS series, used by the unified
   // Health Score's `trajectory` component. Built ONCE per data refresh from
@@ -2069,9 +2090,17 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                   //      written by the drawer — so the chip hides after mapping.
                   // a.key is intentionally NOT swapped: it's the stable React key
                   // and the aggregator dedup key; changing it would unmount rows.
+                  // Phase A.5 v2 post-deploy fix (2026-05-29 evening) — only
+                  // swap storeName for display. DO NOT swap storeId: the
+                  // row's storeId flows into onDrillCampaign → setDrillStoreId
+                  // → the drawer's data lookup in data.rows. If we swap it to
+                  // the effective store, the drawer opens but finds no
+                  // matching campaign (data hasn't migrated yet) → empty
+                  // drawer + frozen-feeling modal overlay. The chip fix
+                  // lives in mappedCampaignKeys above (adds row-key alias).
                   const eff = effectiveStoreByRowKey.get(a.key);
                   const displayA = eff
-                    ? { ...a, storeId: eff.storeId, storeName: eff.storeName }
+                    ? { ...a, storeName: eff.storeName }
                     : a;
                   return (
                   <CampaignsTableRow

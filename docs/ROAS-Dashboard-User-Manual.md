@@ -232,6 +232,8 @@ amber warning chip explaining this.
 
 Meta ו-Google אינם מושפעים — אין campaign-store-map עבור פרסומאים שהם 1:1 עם חנות.
 
+**Hotfix 2 לערב — Drawer לא פותח אחרי שיוך:** ה-hotfix הראשון (commit `e5f2edb`) החליף גם את `a.storeId` בשורה כדי שה-chip יעבוד. אבל זה שבר את הclick על השורה: ה-drawer "נפתח" אבל ריק כי הlookup ב-data.rows משתמש ב-storeId לסינון, וה-campaigns_daily עוד לא הוגרה. תוקן ב-commit `d8cdbe6`: שומרים את `a.storeId` המקורי (שcale וה-click עובד), משחירים רק את `a.storeName` להצגה. ה-chip מקבל second-pass נפרד ב-`mappedCampaignKeys` שמוסיף alias לrow-key כשproductMap מכיל את ה-effective-key.
+
 ---
 
 ### 2.1.17 (2026-05-29) — Phase A.5 ROLLBACK: TikTok store mapping disabled (DB corruption)
