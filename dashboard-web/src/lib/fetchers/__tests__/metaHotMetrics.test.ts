@@ -2,15 +2,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fetchMetaHotMetricsForStore } from '@/lib/fetchers/metaHotMetrics';
 
-const CAMPAIGN_INSIGHTS_BODY = JSON.stringify({
-  data: [{
-    campaign_id: 'C1', impressions: '1000', clicks: '20',
-    spend: '50.5', actions: [{ action_type: 'purchase', value: '3' }],
-    action_values: [{ action_type: 'purchase', value: '150.0' }],
-    date_start: '2026-05-30', date_stop: '2026-05-30',
-  }],
-});
-
 const ADSET_INSIGHTS_BODY = JSON.stringify({
   data: [{
     campaign_id: 'C1', adset_id: 'AS1', impressions: '500', clicks: '10',
@@ -28,8 +19,8 @@ const AD_INSIGHTS_BODY = JSON.stringify({
   }],
 });
 
+// CRIT-B: campaign-level fetch is removed; batch now has only adset + ad entries.
 const BATCH_BODY = JSON.stringify([
-  { code: 200, body: CAMPAIGN_INSIGHTS_BODY },
   { code: 200, body: ADSET_INSIGHTS_BODY },
   { code: 200, body: AD_INSIGHTS_BODY },
 ]);
@@ -44,7 +35,7 @@ function mockFetch(body: string) {
 afterEach(() => { vi.restoreAllMocks(); });
 
 describe('fetchMetaHotMetricsForStore()', () => {
-  it('returns campaigns + adsets + ads with insights for the hot set', async () => {
+  it('returns adsets + ads with insights for the hot set (no campaign-level rows per CRIT-B)', async () => {
     const fetchMock = mockFetch(BATCH_BODY);
     const out = await fetchMetaHotMetricsForStore({
       storeId: 'uzoshop',
@@ -56,15 +47,6 @@ describe('fetchMetaHotMetricsForStore()', () => {
       dateStr: '2026-05-30',
       fetcher: fetchMock,
       getFxCadFor: async (amount, currency) => currency === 'USD' ? amount * 1.36 : amount,
-    });
-    expect(out.campaigns).toHaveLength(1);
-    expect(out.campaigns[0]).toMatchObject({
-      campaign_id: 'C1',
-      store_id: 'uzoshop',
-      platform: 'meta',
-      date: '2026-05-30',
-      impressions: 1000,
-      clicks: 20,
     });
     expect(out.adsets).toHaveLength(1);
     expect(out.adsets[0]).toMatchObject({ ad_set_id: 'AS1', campaign_id: 'C1' });
@@ -85,7 +67,6 @@ describe('fetchMetaHotMetricsForStore()', () => {
       fetcher: fetchMock,
       getFxCadFor: async () => 0,
     });
-    expect(out.campaigns).toHaveLength(0);
     expect(out.adsets).toHaveLength(0);
     expect(out.ads).toHaveLength(0);
     // Should NOT have called fetch since all hot sets are empty
@@ -106,7 +87,6 @@ describe('fetchMetaHotMetricsForStore()', () => {
     // then URLSearchParams.toString() encodes the whole batch JSON again.
     // Decode twice to assert the raw filter ids are present.
     const fullyDecoded = decodeURIComponent(decodeURIComponent(body));
-    expect(fullyDecoded).toContain('"C1"');
     expect(fullyDecoded).toContain('"AS1"');
   });
 });

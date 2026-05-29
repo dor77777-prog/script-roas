@@ -278,13 +278,18 @@ async function runGoogleHotMetricsBranch(input: RunGoogleWorkerJobInput): Promis
     dateStr: today,
   });
 
-  // 4. Upsert campaigns_daily (campaigns + adsets) and ads_daily, stamping
+  // 4. Upsert campaigns_daily (adsets only) and ads_daily, stamping
   //    source='live_tick' + last_live_tick_at on every row.
-  if (metrics.campaigns.length + metrics.adsets.length > 0) {
-    const all: Array<Record<string, unknown>> = [
-      ...metrics.campaigns.map((c) => ({ ...c, source: 'live_tick', last_live_tick_at: nowIso })),
-      ...metrics.adsets.map((a) => ({ ...a, source: 'live_tick', last_live_tick_at: nowIso })),
-    ];
+  //    CRIT-B: hot-metrics fetcher returns only adset + ad rows; the
+  //    campaign-level aggregate is computed at read time by the existing
+  //    aggregators (Today / Today-Live). campaigns_daily.ad_set_id is
+  //    NOT NULL so we cannot insert a campaign-only row.
+  if (metrics.adsets.length > 0) {
+    const all: Array<Record<string, unknown>> = metrics.adsets.map((a) => ({
+      ...a,
+      source: 'live_tick',
+      last_live_tick_at: nowIso,
+    }));
     await upsertCampaignsDaily(all);
   }
   if (metrics.ads.length > 0) {

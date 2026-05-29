@@ -1,17 +1,25 @@
 // dashboard-web/src/lib/fetchers/metaHotMetrics.ts
 //
-// Phase C — Meta Graph API batch fetch for insights at three levels
-// (campaign / adset / ad), filtered to the hot set ids passed in.
-// Time range = single day (the same day; intraday refresh is the
-// orchestrator's job to call back every 10 min).
+// Phase C — Meta Graph API batch fetch for insights at two levels
+// (adset / ad), filtered to the hot set ids passed in. Time range =
+// single day (the same day; intraday refresh is the orchestrator's job
+// to call back every 10 min).
 //
-// Returns rows compatible with the existing campaigns_daily + ads_daily
-// shapes used by persistCampaignsLive.
+// CRIT-B note: campaign-level rows are intentionally NOT fetched. The
+// campaigns_daily.ad_set_id column is NOT NULL — Meta `/insights?
+// level=campaign` returns no adset breakdown, so there's no source
+// value to satisfy the constraint. The campaign-aggregate value used
+// by Today / Today-Live is computed at read time by the existing
+// aggregators reading the per-adset rows. `hotCampaignIds` remains in
+// the input shape so callers don't have to change; it is now ignored
+// by the fetcher.
+//
+// Returns rows compatible with the existing campaigns_daily +
+// ads_daily shapes used by persistCampaignsLive.
 
 import type { Platform, StoreId } from '@/lib/registries/types';
 
 const GRAPH_VERSION = 'v22.0';
-const INSIGHTS_FIELDS = 'campaign_id,impressions,clicks,spend,actions,action_values';
 const ADSET_INSIGHTS_FIELDS = 'campaign_id,adset_id,impressions,clicks,spend,actions,action_values';
 const AD_INSIGHTS_FIELDS = 'campaign_id,adset_id,ad_id,impressions,clicks,spend,actions,action_values';
 
@@ -43,15 +51,15 @@ export type AdsetDailyRow = CampaignDailyRow & { ad_set_id: string };
 export type AdDailyRow = AdsetDailyRow & { ad_id: string };
 
 export type MetaHotMetricsResult = {
-  campaigns: CampaignDailyRow[];
   adsets: AdsetDailyRow[];
   ads: AdDailyRow[];
 };
 
 export async function fetchMetaHotMetricsForStore(input: MetaHotMetricsInput): Promise<MetaHotMetricsResult> {
   const { storeId, accessToken, dateStr, fetcher = fetch, getFxCadFor } = input;
-  if (input.hotCampaignIds.length === 0 && input.hotAdsetIds.length === 0 && input.hotAdIds.length === 0) {
-    return { campaigns: [], adsets: [], ads: [] };
+  // hotCampaignIds is intentionally ignored — see file-header CRIT-B note.
+  if (input.hotAdsetIds.length === 0 && input.hotAdIds.length === 0) {
+    return { adsets: [], ads: [] };
   }
   const adAccountId = input.adAccountId.startsWith('act_') ? input.adAccountId : `act_${input.adAccountId}`;
 
@@ -60,12 +68,6 @@ export async function fetchMetaHotMetricsForStore(input: MetaHotMetricsInput): P
   const timeRange = encodeURIComponent(JSON.stringify({ since: dateStr, until: dateStr }));
 
   const batch: Array<{ method: string; relative_url: string }> = [];
-  if (input.hotCampaignIds.length > 0) {
-    batch.push({
-      method: 'GET',
-      relative_url: `${adAccountId}/insights?level=campaign&fields=${INSIGHTS_FIELDS}&time_range=${timeRange}&filtering=${filtering('campaign.id', input.hotCampaignIds)}&limit=500`,
-    });
-  }
   if (input.hotAdsetIds.length > 0) {
     batch.push({
       method: 'GET',
@@ -93,15 +95,13 @@ export async function fetchMetaHotMetricsForStore(input: MetaHotMetricsInput): P
   const parts = (await res.json()) as Array<{ code: number; body: string }>;
 
   let cursor = 0;
-  const campaignRaw = input.hotCampaignIds.length > 0 ? asArray(parts[cursor++]) : [];
   const adsetRaw = input.hotAdsetIds.length > 0 ? asArray(parts[cursor++]) : [];
   const adRaw = input.hotAdIds.length > 0 ? asArray(parts[cursor++]) : [];
 
-  const campaigns = await Promise.all(campaignRaw.map((r) => toCampaignRow(storeId, dateStr, r, getFxCadFor)));
   const adsets = await Promise.all(adsetRaw.map((r) => toAdsetRow(storeId, dateStr, r, getFxCadFor)));
   const ads = await Promise.all(adRaw.map((r) => toAdRow(storeId, dateStr, r, getFxCadFor)));
 
-  return { campaigns, adsets, ads };
+  return { adsets, ads };
 }
 
 function asArray(part: { code: number; body: string } | undefined): Array<Record<string, unknown>> {

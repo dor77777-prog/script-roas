@@ -39,17 +39,18 @@ describe('runGoogleWorkerJob() — status scope', () => {
 });
 
 describe('runGoogleWorkerJob() — hot_metrics scope', () => {
-  it('happy path: getHotIds → fetchMetrics → upsert daily', async () => {
+  it('happy path: getHotIds → fetchMetrics → upsert daily (CRIT-B: adsets-only into campaigns_daily)', async () => {
+    // CRIT-B: fetcher returns only adsets + ads (no campaign-level rows).
     const fetchMetrics = vi.fn().mockResolvedValue({
-      campaigns: [{ store_id: 'uzoshop', platform: 'google', campaign_id: 'GC1', date: '2026-05-30', spend_cad: 25, impressions: 500, clicks: 10, conversions: 1, conversion_value_cad: 30 }],
-      adsets: [], ads: [],
+      adsets: [{ store_id: 'uzoshop', platform: 'google', campaign_id: 'GC1', ad_set_id: 'AG1', date: '2026-05-30', spend_cad: 25, impressions: 500, clicks: 10, conversions: 1, conversion_value_cad: 30 }],
+      ads: [],
     });
     const upsertCampaignsDaily = vi.fn();
     const recordFreshness = vi.fn();
     await runGoogleWorkerJob({
       jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
       fetchStatus: vi.fn(), fetchHotMetrics: fetchMetrics,
-      getHotCampaignIds: async () => ['GC1'], getHotAdgroupIds: async () => [], getHotAdIds: async () => [],
+      getHotCampaignIds: async () => ['GC1'], getHotAdgroupIds: async () => ['AG1'], getHotAdIds: async () => [],
       loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
       upsertRegistry: vi.fn(), insertStatusEvents: vi.fn(),
       upsertCampaignsDaily, upsertAdsDaily: vi.fn(),
@@ -57,7 +58,7 @@ describe('runGoogleWorkerJob() — hot_metrics scope', () => {
       nowIso: NOW_ISO,
     });
     expect(fetchMetrics).toHaveBeenCalled();
-    expect(upsertCampaignsDaily).toHaveBeenCalled();
+    expect(upsertCampaignsDaily).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ ad_set_id: 'AG1' })]));
     expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({ scope: 'campaign_metrics', status: 'success' }));
   });
 });

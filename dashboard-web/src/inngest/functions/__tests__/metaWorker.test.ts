@@ -115,8 +115,8 @@ describe('runMetaWorkerJob() — hot_metrics scope', () => {
     const getHotCampaign = vi.fn().mockResolvedValue(['C1']);
     const getHotAdset = vi.fn().mockResolvedValue(['AS1']);
     const getHotAd = vi.fn().mockResolvedValue(['AD1']);
+    // CRIT-B: fetcher returns only adsets + ads (no campaign-level rows).
     const fetcher = vi.fn().mockResolvedValue({
-      campaigns: [{ store_id: 'uzoshop', platform: 'meta', campaign_id: 'C1', date: '2026-05-30', spend_cad: 50, impressions: 1000, clicks: 20, conversions: 3, conversion_value_cad: 150 }],
       adsets: [{ store_id: 'uzoshop', platform: 'meta', campaign_id: 'C1', ad_set_id: 'AS1', date: '2026-05-30', spend_cad: 25, impressions: 500, clicks: 10, conversions: 0, conversion_value_cad: 0 }],
       ads: [{ store_id: 'uzoshop', platform: 'meta', campaign_id: 'C1', ad_set_id: 'AS1', ad_id: 'AD1', date: '2026-05-30', spend_cad: 25, impressions: 500, clicks: 10, conversions: 0, conversion_value_cad: 0 }],
     });
@@ -142,7 +142,7 @@ describe('runMetaWorkerJob() — hot_metrics scope', () => {
     });
     expect(getHotCampaign).toHaveBeenCalled();
     expect(fetcher).toHaveBeenCalled();
-    expect(upsertCampaignsDaily).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ campaign_id: 'C1' })]));
+    expect(upsertCampaignsDaily).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ ad_set_id: 'AS1' })]));
     expect(upsertAdsDaily).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ ad_id: 'AD1' })]));
     expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({ scope: 'campaign_metrics', status: 'success' }));
   });

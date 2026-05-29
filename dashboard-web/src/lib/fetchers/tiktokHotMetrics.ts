@@ -1,8 +1,16 @@
 // dashboard-web/src/lib/fetchers/tiktokHotMetrics.ts
 //
-// Phase C — TikTok report fetch for hot ids at campaign/adgroup/ad
-// levels. campaign-store-map resolves per-row store_id same as
-// tiktokStatus.ts.
+// Phase C — TikTok report fetch for hot ids at adgroup/ad levels.
+// campaign-store-map resolves per-row store_id same as tiktokStatus.ts.
+//
+// CRIT-B note: AUCTION_CAMPAIGN-level rows are intentionally NOT
+// fetched. The campaigns_daily.ad_set_id column is NOT NULL — the
+// TikTok report at AUCTION_CAMPAIGN provides no adgroup breakdown, so
+// there's no source value to satisfy the constraint. The
+// campaign-aggregate value used by Today / Today-Live is computed at
+// read time by the existing aggregators reading the per-adgroup rows.
+// `hotCampaignIds` remains in the input shape so callers don't have
+// to change; it is now ignored by the fetcher.
 
 import type { StoreId } from '@/lib/registries/types';
 import type { AdDailyRow, AdsetDailyRow, CampaignDailyRow } from './metaHotMetrics';
@@ -23,7 +31,6 @@ export type TikTokHotMetricsInput = {
 };
 
 export type TikTokHotMetricsResult = {
-  campaigns: CampaignDailyRow[];
   adsets: AdsetDailyRow[];
   ads: AdDailyRow[];
 };
@@ -31,8 +38,9 @@ export type TikTokHotMetricsResult = {
 export async function fetchTikTokHotMetricsForStore(input: TikTokHotMetricsInput): Promise<TikTokHotMetricsResult> {
   const { storeId, advertiserId, accessToken, dateStr, campaignStoreMap, fetcher = fetch, getFxCadFor } = input;
 
-  if (input.hotCampaignIds.length === 0 && input.hotAdgroupIds.length === 0 && input.hotAdIds.length === 0) {
-    return { campaigns: [], adsets: [], ads: [] };
+  // hotCampaignIds is intentionally ignored — see file-header CRIT-B note.
+  if (input.hotAdgroupIds.length === 0 && input.hotAdIds.length === 0) {
+    return { adsets: [], ads: [] };
   }
 
   const resolveStore = (campaignId: string): StoreId => {
@@ -41,9 +49,9 @@ export async function fetchTikTokHotMetricsForStore(input: TikTokHotMetricsInput
   };
 
   const fetchLevel = async (
-    dataLevel: 'AUCTION_CAMPAIGN' | 'AUCTION_ADGROUP' | 'AUCTION_AD',
-    dimensionName: 'campaign_id' | 'adgroup_id' | 'ad_id',
-    filterField: 'campaign_ids' | 'adgroup_ids' | 'ad_ids',
+    dataLevel: 'AUCTION_ADGROUP' | 'AUCTION_AD',
+    dimensionName: 'adgroup_id' | 'ad_id',
+    filterField: 'adgroup_ids' | 'ad_ids',
     ids: string[],
   ): Promise<Array<Record<string, unknown>>> => {
     if (ids.length === 0) return [];
@@ -54,17 +62,15 @@ export async function fetchTikTokHotMetricsForStore(input: TikTokHotMetricsInput
     return (body.data?.list as Array<Record<string, unknown>>) ?? [];
   };
 
-  const [campaignRaw, adgroupRaw, adRaw] = await Promise.all([
-    fetchLevel('AUCTION_CAMPAIGN', 'campaign_id', 'campaign_ids', input.hotCampaignIds),
+  const [adgroupRaw, adRaw] = await Promise.all([
     fetchLevel('AUCTION_ADGROUP', 'adgroup_id', 'adgroup_ids', input.hotAdgroupIds),
     fetchLevel('AUCTION_AD', 'ad_id', 'ad_ids', input.hotAdIds),
   ]);
 
-  const campaigns = await Promise.all(campaignRaw.map(r => toCampaignRow(resolveStore, dateStr, r, getFxCadFor)));
   const adsets = await Promise.all(adgroupRaw.map(r => toAdsetRow(resolveStore, dateStr, r, getFxCadFor)));
   const ads = await Promise.all(adRaw.map(r => toAdRow(resolveStore, dateStr, r, getFxCadFor)));
 
-  return { campaigns, adsets, ads };
+  return { adsets, ads };
 }
 
 async function toCampaignRow(
