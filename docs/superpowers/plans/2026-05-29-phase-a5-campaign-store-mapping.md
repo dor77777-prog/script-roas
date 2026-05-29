@@ -682,12 +682,25 @@ Plan: docs/superpowers/plans/2026-05-29-phase-a5-campaign-store-mapping.md (Task
 
 ---
 
-## Task 6: `cron-daily` aggregates `data_daily.tt_spend_cad` per-store
+## Task 6: `cron-daily` + `persistCampaignsLive` re-aggregate `data_daily` TikTok columns per-store
 
-After per-row writes land in `campaigns_daily`, the store-level aggregate must reflect the split. cron-daily's existing flow writes `data_daily.tt_spend_cad` from a single per-store TikTok fetch; we now need to SUM from the per-row `campaigns_daily` slices.
+**SCOPE EXTENDED 2026-05-29 (per operator review):** Originally just `tt_spend_cad`. After grepping cronDaily.ts + cronLive.ts confirmed:
+- `cronDaily.ts:659-674` writes `total_spend_cad` / `roas` / `gross_profit_cad` / `net_profit_cad` at upsert time from the per-store-arg TikTok fetch (legacy aggregation). If only `tt_spend_cad` is recomputed, the 4 dependent columns stay stale.
+- `cronLive.ts:614-615` writes `tt_spend_cad` + `total_spend_cad` to data_daily during the day. For the operator's monthly tables to show TODAY's TikTok per usmile360 (not just yesterday's), persistCampaignsLive must also call the agg function after live-path writes — otherwise today's value is wrong until tomorrow's cron-daily reconciliation.
+
+So Task 6 now does TWO integrations of ONE SQL function:
+
+| Caller | When | Scope |
+|---|---|---|
+| `cronDaily.persistDayForStore` | once per (date, store) in the nightly reconcile | yesterday's date |
+| `persistCampaignsLive` (called by cron-live-heavy stagger) | after every upsert batch, every 30 min | today + today-1 (the rolling window dates) |
+
+After per-row writes land in `campaigns_daily`, the SQL function recomputes 5 columns on `data_daily` for affected rows: `tt_spend_cad`, `total_spend_cad`, `roas`, `gross_profit_cad`, `net_profit_cad`.
 
 **Files:**
-- Modify: `dashboard-web/src/inngest/functions/cronDaily.ts` — after the TikTok branch's campaigns_daily upsert (~line 1180), add a per-(date, store_id) re-aggregation UPDATE on data_daily
+- Create: `supabase/migrations/20260530120000_add_tt_spend_agg_function.sql`
+- Modify: `dashboard-web/src/inngest/functions/cronDaily.ts` — after TikTok upsert (~line 1180), call the agg RPC
+- Modify: `dashboard-web/src/lib/inngest/persistCampaignsLive.ts` — at the end, call the agg RPC for `dateStr`
 - Create: `dashboard-web/src/inngest/functions/__tests__/dataDailyAggregatesTiktokPerStore.test.ts`
 
 - [ ] **Step 1: Write the failing test**
@@ -754,19 +767,34 @@ if (aggErr) {
 }
 ```
 
-This calls a Postgres function. Define it via a new migration:
+This calls a Postgres function. Define it via a new migration that **recomputes 5 columns** (the original tt_spend_cad + 4 dependents):
 
 `supabase/migrations/20260530120000_add_tt_spend_agg_function.sql`:
 
 ```sql
--- Phase A.5 — per-store TikTok spend aggregation, called by cron-daily after
--- per-row campaigns_daily writes complete. Idempotent: SUM(spend_cad) is
--- deterministic given the campaigns_daily slice for that date.
+-- Phase A.5 — per-store TikTok spend aggregation + dependent column recompute.
+-- Called by cron-daily AND persistCampaignsLive (live path) after per-row
+-- campaigns_daily writes complete. Two passes:
+--
+--   Pass 1: UPDATE data_daily.tt_spend_cad = SUM of per-store campaigns_daily
+--           slices (the Phase A.5 mapping makes this per-store split possible).
+--
+--   Pass 2: Recompute total_spend_cad, roas, gross_profit_cad, net_profit_cad
+--           for every row in `d` so dashboard reads stay consistent. Without
+--           this, dependents stay at the upsert-time value (computed from the
+--           legacy per-store-arg TikTok fetch).
+--
+-- Both passes are deterministic given the row state at the time of call;
+-- idempotent on retries.
 
 CREATE OR REPLACE FUNCTION agg_tiktok_spend_per_store_for_date(d date)
 RETURNS void
-LANGUAGE sql
+LANGUAGE plpgsql
 AS $$
+BEGIN
+  -- Pass 1: re-aggregate tt_spend_cad per (date, store_id) from campaigns_daily.
+  -- COALESCE(SUM, 0) ensures a store with previously-tagged campaigns getting
+  -- untagged correctly resets to 0.
   UPDATE data_daily dd
      SET tt_spend_cad = sub.s
     FROM (
@@ -776,8 +804,51 @@ AS $$
        GROUP BY date, store_id
     ) sub
    WHERE dd.date = sub.date AND dd.store_id = sub.store_id;
+
+  -- Pass 2: recompute the 4 columns derived from total_spend_cad for EVERY
+  -- data_daily row in `d`. We pass through all rows (not just TikTok-affected
+  -- ones) because the recompute is cheap and guarantees consistency even if a
+  -- bug elsewhere mis-set a derived column.
+  UPDATE data_daily
+     SET total_spend_cad =
+           COALESCE(fb_spend_cad, 0) + COALESCE(ga_spend_cad, 0) + COALESCE(tt_spend_cad, 0),
+         roas = CASE
+           WHEN COALESCE(fb_spend_cad, 0) + COALESCE(ga_spend_cad, 0) + COALESCE(tt_spend_cad, 0) > 0
+             THEN COALESCE(revenue_cad, 0) / (COALESCE(fb_spend_cad, 0) + COALESCE(ga_spend_cad, 0) + COALESCE(tt_spend_cad, 0))
+           ELSE 0
+         END,
+         gross_profit_cad =
+           COALESCE(revenue_cad, 0) - (COALESCE(fb_spend_cad, 0) + COALESCE(ga_spend_cad, 0) + COALESCE(tt_spend_cad, 0)),
+         net_profit_cad =
+           COALESCE(revenue_cad, 0)
+           - (COALESCE(fb_spend_cad, 0) + COALESCE(ga_spend_cad, 0) + COALESCE(tt_spend_cad, 0))
+           - COALESCE(cogs_cad, 0)
+   WHERE date = d;
+END;
 $$;
 ```
+
+**Verify the column list** matches the actual cron-daily formulas by reading `cronDaily.ts:659-674` before applying. If `cogs_cad` doesn't exist in the schema (it's recomputed at read time only), drop it from the net_profit formula. The current schema (per repo migrations) DOES carry `cogs_cad` on data_daily, so the formula above is correct — but verify before pushing.
+
+**Additionally — wire persistCampaignsLive** to call the same function so the live path stays consistent:
+
+In `dashboard-web/src/lib/inngest/persistCampaignsLive.ts`, after the campaigns_daily + ads_daily upserts complete (around line 400), add:
+
+```typescript
+// Phase A.5 — re-aggregate data_daily TikTok columns per store from the
+// freshly-written campaigns_daily slices. Without this, today's data_daily
+// shows legacy single-store-arg TikTok values until tomorrow's cron-daily.
+try {
+  const { error: aggErr } = await admin.rpc('agg_tiktok_spend_per_store_for_date', { d: dateStr });
+  if (aggErr) {
+    console.warn(`persistCampaignsLive ${storeId} ${dateStr}: tt agg failed: ${aggErr.message}`);
+  }
+} catch (e) {
+  console.warn(`persistCampaignsLive ${storeId} ${dateStr}: tt agg threw: ${e instanceof Error ? e.message : e}`);
+}
+```
+
+Soft-fail per the same logic as in cron-daily: the per-row campaigns_daily data is correct; only the data_daily aggregate is stale.
 
 - [ ] **Step 4: Apply the migration to production (manual, via the Phase A workaround)**
 
