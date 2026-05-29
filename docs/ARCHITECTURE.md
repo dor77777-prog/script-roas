@@ -1229,26 +1229,56 @@ Phase B introduces the new persistent layer for entity status, decoupled from `c
 - `campaign_status_events` shows `first_seen` entries from the initial tick.
 - `data_freshness` shows green dots (`lag_minutes < 15`) for the 3 status scopes per store.
 
-## Phase C (2026-05-30) — Hot metrics + Google/TikTok workers (IN PROGRESS — Tasks 1-6 of 15 shipped)
+## Phase C (2026-05-30) — Hot metrics + Google/TikTok workers (pre-decommission)
 
-Phase C adds the `scope='hot_metrics'` handler to the meta-worker, new `google-worker` + `tiktok-worker` Inngest functions (status + hot_metrics each), 3 Postgres hot-set functions (`get_hot_campaign_ids` / `get_hot_adset_ids` / `get_hot_ad_ids`, 5-branch UNION), and minimal UI changes (`CampaignFreshnessChip` + `CampaignDrawerStatusSection`). `cron-live-heavy` continues to run in parallel for a 3-day canary; **decommission ships in Phase C.5**, not Phase C.
+Phase C extends the orchestrator + single-platform worker pair of Phase B to all three ad platforms (Meta + Google + TikTok) and introduces a new `scope='hot_metrics'` that samples only the high-spend ("hot") entities of each store. This delivers sub-10-minute refresh on live KPIs without exhausting Meta/Google/TikTok API quotas. `cron-live-heavy` continues to run in parallel for a **3-day canary period** (decommission lands in Phase C.5).
 
 **Spec:** [`docs/superpowers/specs/2026-05-30-phase-c-hot-metrics-design.md`](superpowers/specs/2026-05-30-phase-c-hot-metrics-design.md).
 **Plan:** [`docs/superpowers/plans/2026-05-30-phase-c-hot-metrics.md`](superpowers/plans/2026-05-30-phase-c-hot-metrics.md).
 
-**Tasks 1-6 shipped to git (HEAD `8b8acab`, all commits LOCAL — not deployed to prod yet):**
-1. Migration `20260530240000_phase_c_hot_set_functions.sql` — 3 Postgres functions, 5-branch UNION (status-active ∪ recently status-changed ∪ recently first-seen ∪ activity-today ∪ yesterday-tail).
-2. `hotSet.ts` — TS wrappers `getHotCampaignIds` / `getHotAdsetIds` / `getHotAdIds` calling the RPCs.
-3. `fetchMetaHotMetricsForStore` — single-batch Graph API insights filtered by hot ids at campaign/adset/ad levels.
-4. `meta-worker` extended with `scope='hot_metrics'` branch — BUC pre-flight → hot ids → fetch → upsert `campaigns_daily` + `ads_daily` with `source='live_tick'` + `last_live_tick_at` → mark `campaign_metrics` freshness success.
-5. `fetchGoogleStatusForStore` — `change_status` GAQL query + entity follow-up.
-6. `fetchGoogleHotMetricsForStore` + widened `CampaignDailyRow.platform` literal type to `Platform` so Google and TikTok rows share the type.
+**3 Postgres hot-set functions** (migration `supabase/migrations/20260530240000_phase_c_hot_set_functions.sql`):
+- `get_hot_campaign_ids(store_id, platform)` / `get_hot_adset_ids(...)` / `get_hot_ad_ids(...)` — each returns the set of entity ids the workers should refresh on the current tick. 5-branch UNION: status-active ∪ recently status-changed ∪ recently first-seen ∪ activity-today ∪ yesterday-tail.
 
-**Tasks 7-15 pending** (see plan for full content). Notable open items:
-- Task 7 needs an adapter that wraps the existing `lib/fetchers/googleAds.ts` raw-REST `runGaqlQuery` flow into a `{ searchStream }` interface (the Phase C Google fetchers expect that shape; the existing code doesn't use the SDK that natively exposes it).
-- Task 11 extends `buildEvents` to emit per-platform per-scope events (up to 6 max per tick × 3 stores).
-- Task 15 applies the migration to prod, pushes, and verifies acceptance.
+**5 new fetchers** (all in `dashboard-web/src/lib/fetchers/`):
+- `fetchMetaHotMetricsForStore` — single-batch Graph Insights API call filtered by hot ids at adset + ad level.
+- `fetchGoogleStatusForStore` — `change_status` GAQL query with entity follow-up.
+- `fetchGoogleHotMetricsForStore` — GAQL Insights query against the hot adset/ad sets.
+- `fetchTikTokStatusForStore` — TikTok Marketing API status discovery.
+- `fetchTikTokHotMetricsForStore` — TikTok Insights API filtered by hot ids.
 
-**Out of scope (Phase C.5 after 3-day canary):**
-- Decommission of `cron-live-heavy`.
-- Full `CampaignsTable` / `CampaignDrawer` registry-status wiring → Phase D.
+All 5 fetchers return `{adsets, ads}` — **no campaign-level rows** (CRIT-B: the `campaigns_daily` table has NOT NULL on `ad_set_id` for these granularities; campaign aggregates are derived via SQL views at read time).
+
+**2 new Inngest workers** (registered in [`src/app/api/inngest/route.ts`](../dashboard-web/src/app/api/inngest/route.ts)):
+- [`google-worker`](../dashboard-web/src/inngest/functions/googleWorker.ts) — handles `scope='status'` and `scope='hot_metrics'`.
+- [`tiktok-worker`](../dashboard-web/src/inngest/functions/tiktokWorker.ts) — handles `scope='status'` and `scope='hot_metrics'`.
+
+Both follow the same flat `step.run` pattern as Phase B's `metaWorker` (no nested step calls — Phase B hotfix lesson).
+
+**meta-worker extended:** the existing [`meta-worker`](../dashboard-web/src/inngest/functions/metaWorker.ts) now handles `scope='hot_metrics'` in addition to the Phase B `scope='status'`. The hot_metrics branch: BUC pre-flight → resolve hot ids via the hot-set RPCs → `fetchMetaHotMetricsForStore` → upsert `campaigns_daily` (aggregated) + `adsets_daily` + `ads_daily` rows with `source='live_tick'` + `last_live_tick_at = NOW()` → mark `campaign_metrics` freshness success.
+
+**Orchestrator fan-out:** [`cronTickOrchestrator.ts`](../dashboard-web/src/inngest/functions/cronTickOrchestrator.ts) now emits **up to 6 events per tick** = 3 platforms (meta/google/tiktok) × 2 scopes (status/hot_metrics). Per-(platform, scope) cooldown is tiered.
+
+**Dynamic threshold cooldown tiers for `hot_metrics`:**
+- `pct < 30` → 180s cooldown
+- `pct 30–60` → 300s cooldown
+- `pct 60–80` → 600s cooldown
+- `pct ≥ 80` → skip
+
+This adapts Meta's bucket usage automatically — when usage drops, refresh frequency rises; when Meta raises rate limits, observed pct drops → cooldown shrinks → more refreshes.
+
+**6 critical bugs caught + fixed pre-deploy** (cross-cutting commits before Task 15):
+- **CRIT-A** — `ad_set_id` schema mismatch between fetcher output and `campaigns_daily` columns.
+- **CRIT-B** — Workers were upserting campaign-level rows; the destination tables enforce NOT NULL on `ad_set_id` at the granular levels. Fix: drop campaign-level rows; derive at read time.
+- **CRIT-C** — Google JSON response uses camelCase, not snake_case the GAQL query string suggests. Fixed in `fetchGoogleStatusForStore` + `fetchGoogleHotMetricsForStore`.
+- **CRIT-D** — Meta `omni_purchase` priority chain was incorrect for conversion-value reporting (was reading first-of-action_values; corrected to omni_purchase → omni_purchase_post_engagement → purchase priority chain).
+- **CRIT-E** — Meta `account_currency` is not always USD; the fetcher was hard-coding USD and bypassing the per-account currency lookup. Fixed via reading `account.currency` from the same Insights response.
+- **CRIT-F** — GAQL date literal syntax error (single vs double quotes) crashed the worker on first call.
+
+**4 IMP items also addressed** (see commit history for `cross-cutting` tag).
+
+**Audit reconcile script:** `npm run audit:reconcile:hot-vs-heavy` — new for Phase C.5 canary drift checks. Compares hot-metrics writes against the parallel cron-live-heavy writes for the 3-day overlap window.
+
+**Out of scope** (deferred to Phase C.5 / D):
+- `cron-live-heavy` decommission → Phase C.5 (after 3-day canary clean reconcile).
+- Full UI registry-status read path (CampaignsTable + CampaignDrawer fully wired to registries instead of legacy fields) → Phase D.
+- Shopify worker on the orchestrator → Phase D.

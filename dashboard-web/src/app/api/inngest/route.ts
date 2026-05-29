@@ -100,6 +100,8 @@ import { cronLiveFunctions } from '@/inngest/functions/cronLive';
 import { cronLiveHeavyFunctions } from '@/inngest/functions/cronLiveHeavy';
 import { cronTickOrchestrator } from '@/inngest/functions/cronTickOrchestrator';
 import { metaWorker } from '@/inngest/functions/metaWorker';
+import { googleWorker } from '@/inngest/functions/googleWorker';
+import { tiktokWorker } from '@/inngest/functions/tiktokWorker';
 import { eventSyncNow } from '@/inngest/functions/eventSyncNow';
 import { eventBackfill } from '@/inngest/functions/eventBackfill';
 import { cronOauthCanary } from '@/inngest/functions/cronOauthCanary';
@@ -139,7 +141,9 @@ export const { GET, POST, PUT } = serve({
     ...cronLiveFunctions, // 3 functions (uzoshop / zolplus / usmile360)
     ...cronLiveHeavyFunctions, // Phase 13.9 — 3 functions (per-store, 30-min cadence) refreshing campaigns_daily + ads_daily metrics for today + yesterday.
     cronTickOrchestrator, // Phase B — 1 function (Inngest tick orchestrator: scheduler + worker fan-out)
-    metaWorker, // Phase B — 1 function (Meta-platform worker invoked by orchestrator)
+    metaWorker, // Phase B — 1 function (Meta-platform worker invoked by orchestrator); Phase C extended with 'hot_metrics' scope
+    googleWorker, // Phase C — 1 function (Google-platform worker invoked by orchestrator; handles status + hot_metrics scopes)
+    tiktokWorker, // Phase C — 1 function (TikTok-platform worker invoked by orchestrator; handles status + hot_metrics scopes)
     eventSyncNow, // 1 function (operator "Sync now" button)
     eventBackfill, // 1 function (operator backfill range picker)
     cronOauthCanary, // 1 function (Phase 13.4/14 — Google + Meta + TikTok token canary, 00:00 IL daily)

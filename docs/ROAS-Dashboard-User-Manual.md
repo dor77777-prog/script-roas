@@ -7,8 +7,8 @@
 │                                                  │
 │      מדריך הפעלה שוטף למפעיל הדשבורד            │
 │                                                  │
-│      גרסה:        2.1.21                         │
-│      תאריך:       2026-05-29                     │
+│      גרסה:        2.1.22                         │
+│      תאריך:       2026-05-30                     │
 │      קהל יעד:     מפעיל יחיד · החלטות יומיות   │
 │                                                  │
 │      חנויות נתמכות:                              │
@@ -245,6 +245,23 @@ Meta ו-Google אינם מושפעים — אין campaign-store-map עבור פ
 **Sum invariant מובטח:** אחרי Hotfix 4, ה-SUM של data_daily.tt_spend_cad cross-stores לכל תאריך = סך כל ה-spend ב-campaigns_daily לאותו תאריך (אין duplication גם כשהקמפיין עובר חנות בתוך היום).
 
 **Hotfix 5 לערב — TodayLive per-store breakdown לא הציג TikTok ל-usmile360/zolplus:** הקומפוננטה `TodayLive` השתמשה ב-`storeHasTikTok(s.store)` שבודקת set סטטי `STORES_WITH_TIKTOK = {uzoshop}`. אחרי Phase A.5 v2, usmile360 ו-zolplus יכולות לקבל TikTok spend דרך המיפוי, אבל הbreakdown באר ההוצאה לא הציג את שורת TikTok. תוצאה: הסיכום היה $110 (Meta $66 + TikTok $43.49) אבל הbreakdown הציג רק "Meta: 66" → looked broken. תוקן: הchcck עכשיו `storeHasTikTok(s.store) || (s.ttSpend ?? 0) > 0`.
+
+---
+
+### 2.1.22 (2026-05-30) — Phase C: hot metrics + Google/TikTok workers (canary)
+
+Phase C מרחיב את ה-orchestrator + worker pair של Phase B לכלל הפלטפורמות (Meta + Google + TikTok) ומוסיף scope חדש `hot_metrics` שדוגם רק את הקמפיינים/adsets/ads "החמים" של כל חנות (אלה שאחראיים על רוב ה-spend היומי). זה מאפשר רענון Sub-10-minute של live KPIs בלי לרוקן את quota של ה-APIs.
+
+- **3 פונקציות Postgres חדשות לבחירת ה-hot-set** (`get_hot_campaign_ids`, `get_hot_adset_ids`, `get_hot_ad_ids`): כל פונקציה מקבלת `store_id` ו-`platform` ומחזירה רק את ה-IDs שעברו סף "חם" (top-K לפי spend מצטבר ב-data_daily של השבעה ימים האחרונים). ה-workers משתמשים בפונקציות האלה כדי להחליט מה לסקרק ולא להעמיס על Meta/Google/TikTok ב-batch מלא.
+- **meta-worker מטפל עכשיו ב-`scope='hot_metrics'`** בנוסף ל-`status` של Phase B. ה-`hot_metrics` branch קורא Insights API (filtered insights batch — campaign + adset + ad) ועושה upsert ל-`campaigns_daily` + `adsets_daily` + `ads_daily` עם `source='live_tick'`. שני workers חדשים — **`google-worker`** ו-**`tiktok-worker`** — שכל אחד מטפל בשני ה-scopes (`status` + `hot_metrics`), בדיוק כמו metaWorker.
+- **`cron-tick-orchestrator` שודרג** לפזר 6 events בכל tick: 3 פלטפורמות (meta/google/tiktok) × 2 scopes (status/hot_metrics). ה-cooldown של hot_metrics מתאים את עצמו דינמית לפי ה-bucket-usage של Meta — `pct < 30` → 180s, `30-60` → 300s, `60-80` → 600s, `≥ 80` → skip.
+- **CampaignsTable** מציג עכשיו **chip קטנטן של "טריות"** (ירוק/כתום/אדום) לכל שורה — מציין כמה זמן עבר מאז ה-live tick האחרון של אותה שורה. ירוק = פחות מ-15 דקות, כתום = 15–60 דקות, אדום = יותר משעה (זמן רחוק מדי מהנתון).
+- **CampaignDrawer** מקבל סקציה חדשה **"סטטוס + טריות"** שמראה את ה-status snapshot העדכני (ACTIVE/PAUSED/REMOVED) של הקמפיין יחד עם timestamp של ה-live tick האחרון. הסקציה מתעדכנת אוטומטית מתוך ה-registries של Phase B.
+- **`audit:reconcile:hot-vs-heavy` npm script חדש לתקופת ה-canary של Phase C.5**: בודק שהנתונים שה-hot-metrics workers כותבים תואמים את אלה שה-`cron-live-heavy` הותיק עדיין כותב במקביל. תפעיל מכל מכונה: `npm run audit:reconcile:hot-vs-heavy`.
+
+**תקופת canary של 3 ימים:** `cron-live-heavy` ממשיך לרוץ במקביל ל-Phase C עד 2026-06-02 כסייפטי-נט. אם reconciliation passes — Phase C.5 ידחה אותו ל-retirement.
+
+**6 באגים קריטיים נתפסו ותוקנו בקומיטים cross-cutting לפני ה-deploy:** (1) schema mismatch ב-`ad_set_id` (CRIT-A), (2) JSON camelCase של Google (CRIT-C), (3) currency handling של Meta (CRIT-D + CRIT-E), (4) priority chain של Meta omni_purchase (CRIT-D), (5) GAQL date literal (CRIT-F), (6) NOT NULL constraint ב-campaign-level rows — שום שורה ברמת campaign לא נכתבת יותר ב-Phase C, רק adset + ad (CRIT-B).
 
 ---
 
@@ -2804,7 +2821,7 @@ Seen 5 times. Alert #2.
 
 ## סוף המסמך
 
-**גרסה:** 2.1.21 · **תאריך עדכון:** 2026-05-30
+**גרסה:** 2.1.22 · **תאריך עדכון:** 2026-05-30
 
 > מסמך זה מתעדכן עם כל שינוי שהמפעיל רואה במסך. אם משהו לא תואם למה שאתה רואה — דווח למפתח לעדכון.
 
