@@ -253,7 +253,7 @@ function AnnotationForm({
     <div className="p-3 space-y-2 bg-elevated2/40 rounded-lg border border-line-subtle">
       <div className="grid grid-cols-[auto_1fr_auto] gap-2 items-end">
         <div>
-          <label className="text-[10px] text-ink-muted uppercase tracking-wide font-medium">סוג</label>
+          <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">סוג</label>
           <select
             value={kind}
             onChange={e => setKind(e.target.value as AnnotationKind)}
@@ -267,7 +267,7 @@ function AnnotationForm({
           </select>
         </div>
         <div>
-          <label className="text-[10px] text-ink-muted uppercase tracking-wide font-medium">כותרת</label>
+          <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">כותרת</label>
           <input
             value={title}
             onChange={e => setTitle(e.target.value)}
@@ -281,7 +281,7 @@ function AnnotationForm({
           />
         </div>
         <div>
-          <label className="text-[10px] text-ink-muted uppercase tracking-wide font-medium">תאריך</label>
+          <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">תאריך</label>
           <input
             type="date"
             value={date}
@@ -292,7 +292,7 @@ function AnnotationForm({
         </div>
       </div>
       <div>
-        <label className="text-[10px] text-ink-muted uppercase tracking-wide font-medium">הערות (אופציונלי)</label>
+        <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">הערות (אופציונלי)</label>
         <input
           value={notes}
           onChange={e => setNotes(e.target.value)}
@@ -306,7 +306,7 @@ function AnnotationForm({
       </div>
       {storeOptions.length > 0 && (
         <div className="flex items-center gap-2">
-          <label className="text-[10px] text-ink-muted uppercase tracking-wide font-medium inline-flex items-center gap-1">
+          <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium inline-flex items-center gap-1">
             <StoreIcon size={11} /> שיוך לחנות
           </label>
           <select
