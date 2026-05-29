@@ -773,7 +773,11 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                 </h2>
                 <div className="text-[11px] sm:text-xs text-ink-muted flex items-center gap-1.5 mt-0.5">
                   <StoreIcon size={11} />
-                  <span>{summary.storeName}</span>
+                  {/* Phase A.5 v2 (2026-05-29 evening) — show the effective
+                      store name so the drawer header reflects the operator's
+                      tagging immediately. For non-TikTok or unmapped TikTok
+                      campaigns, effectiveStoreName === summary.storeName. */}
+                  <span>{effectiveStoreName}</span>
                   <span className="text-ink-subtle">·</span>
                   <span>{summary.platform}</span>
                   <span className="text-ink-subtle">·</span>

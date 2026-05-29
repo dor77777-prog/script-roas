@@ -234,6 +234,8 @@ Meta ו-Google אינם מושפעים — אין campaign-store-map עבור פ
 
 **Hotfix 2 לערב — Drawer לא פותח אחרי שיוך:** ה-hotfix הראשון (commit `e5f2edb`) החליף גם את `a.storeId` בשורה כדי שה-chip יעבוד. אבל זה שבר את הclick על השורה: ה-drawer "נפתח" אבל ריק כי הlookup ב-data.rows משתמש ב-storeId לסינון, וה-campaigns_daily עוד לא הוגרה. תוקן ב-commit `d8cdbe6`: שומרים את `a.storeId` המקורי (שcale וה-click עובד), משחירים רק את `a.storeName` להצגה. ה-chip מקבל second-pass נפרד ב-`mappedCampaignKeys` שמוסיף alias לrow-key כשproductMap מכיל את ה-effective-key.
 
+**Hotfix 3 לערב — Header של ה-drawer מציג uzoshop גם אחרי tagging:** ה-header של ה-drawer (`StoreIcon · {storeName} · {platform} · {activeDays}`) השתמש ב-`summary.storeName` שמגיע מנתוני הקמפיין שעדיין לא הוגרו. אחרי tagging, המפעיל ראה "TikTok · uzoshop" אפילו שהקמפיין כבר מסומן ל-usmile360. תוקן: ה-header עכשיו מציג את `effectiveStoreName` (מ-Task 6 v2). עבור Meta/Google או TikTok-unmapped, `effectiveStoreName === summary.storeName`.
+
 ---
 
 ### 2.1.17 (2026-05-29) — Phase A.5 ROLLBACK: TikTok store mapping disabled (DB corruption)
