@@ -1,4 +1,6 @@
 import { fetchWithBackoff } from './withBackoff';
+import { loadCampaignStoreMapFromSupabase } from '@/lib/inngest/campaignStoreMap';
+import { resolveStoreForCampaign } from '@/lib/campaignStoreMap';
 
 /**
  * Phase 05.7.5-B (scaffold) — TikTok Marketing API fetcher.
@@ -87,6 +89,10 @@ export type TikTokAdRow = {
    *  /open_api/v1.3/adgroup/get/. Populated by fetchTikTokAdGroupStatuses
    *  inside fetchTikTokAdInsights — same call site, additional API hop. */
   effectiveStatus: string | null;
+
+  /** Phase A.5 — store_id from campaign-store-map (or fallback storeId arg).
+   *  Persisters use this instead of their function-arg storeId for TikTok rows. */
+  storeId: string;
 };
 
 /**
@@ -488,7 +494,8 @@ export async function fetchTikTokAdInsights(
     page_info?: { total_number?: number; total_page?: number; page?: number };
   };
 
-  const out: TikTokAdRow[] = [];
+  // storeId is resolved after the loop via campaign-store-map (Phase A.5).
+  const out: Omit<TikTokAdRow, 'storeId'>[] = [];
   let page = 1;
   while (page <= TIKTOK_PAGINATION_CAP) {
     const data = await tiktokGet<ReportPayload>(
@@ -589,5 +596,13 @@ export async function fetchTikTokAdInsights(
     }
   }
 
-  return out;
+  // Phase A.5 — resolve each row's storeId via the campaign-store-map.
+  // Mapped campaigns get their tagged store; unmapped campaigns fall back
+  // to the function-arg storeId. Map is loaded once per fetch call.
+  const storeMap = await loadCampaignStoreMapFromSupabase();
+  const rowsWithStoreId = out.map(r => ({
+    ...r,
+    storeId: resolveStoreForCampaign(storeMap, 'tiktok', advertiserId, r.campaignId, storeId),
+  }));
+  return rowsWithStoreId;
 }
