@@ -477,7 +477,8 @@ function ProductRow({
                   {' '}CAD {formatCurrency(platformGroup.intraAllocatedRevenue)}
                 </span>
               </div>
-              <table className="w-full text-xs">
+              <div className="overflow-x-auto -mx-2 sm:mx-0">
+              <table className="w-full min-w-[480px] text-xs">
                 <thead className="bg-elevated2/60 text-ink-muted">
                   <tr>
                     <th className="px-2 py-1 text-start font-medium text-[10px]">
@@ -706,6 +707,7 @@ function ProductRow({
                   })}
                 </tbody>
               </table>
+              </div>
             </div>
           ))}
         </div>
