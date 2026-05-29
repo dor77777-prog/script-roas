@@ -8,7 +8,7 @@
 // Returns rows compatible with the existing campaigns_daily + ads_daily
 // shapes used by persistCampaignsLive.
 
-import type { StoreId } from '@/lib/registries/types';
+import type { Platform, StoreId } from '@/lib/registries/types';
 
 const GRAPH_VERSION = 'v22.0';
 const INSIGHTS_FIELDS = 'campaign_id,impressions,clicks,spend,actions,action_values';
@@ -29,7 +29,7 @@ export type MetaHotMetricsInput = {
 
 export type CampaignDailyRow = {
   store_id: StoreId;
-  platform: 'meta';
+  platform: Platform;
   campaign_id: string;
   date: string;
   spend_cad: number;
