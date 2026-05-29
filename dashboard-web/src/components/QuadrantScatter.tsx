@@ -108,17 +108,26 @@ export function QuadrantScatter({
     return out;
   }, [points]);
 
-  // Identify outliers (points beyond p90 in either dimension when zoomed).
+  // Identify outliers (points beyond p90 in either dimension when zoomed)
+  // — they're listed below the chart instead of being shown clipped at
+  // the edges.
   const outliers = useMemo(() => {
     if (!zoomCluster) return [];
-    // Add small headroom so points right at p90 still render fully inside
-    // the chart area instead of getting clipped at the edge.
     return data.filter(d => d.roas > p90Roas * 1.05 || d.cac > p90Cac * 1.05);
   }, [data, zoomCluster, p90Roas, p90Cac]);
 
+  // Points actually rendered by the Scatter. When zoomed, drop the
+  // outliers entirely so they don't appear half-clipped at the chart
+  // edges (user reported "חלק מהנקודות נחתכות לי כזה"). The dropped
+  // points reappear in the <details> outlier list below the legend.
+  const renderedPoints = useMemo(() => {
+    if (!zoomCluster || outliers.length === 0) return points;
+    const outlierNames = new Set(outliers.map(o => o.name));
+    return points.filter(p => !outlierNames.has(p.name));
+  }, [points, outliers, zoomCluster]);
+
   // Compute axis domains. When zoomed, clip to slightly above p90 so the
-  // cluster expands and the rare outlier doesn't dominate. When not zoomed,
-  // let Recharts auto-fit the full range.
+  // cluster expands. When not zoomed, let Recharts auto-fit the full range.
   const xDomain: [number | 'auto', number | 'auto'] = zoomCluster && outliers.length > 0
     ? [0, Math.ceil(p90Roas * 1.15 * 10) / 10]
     : ['auto', 'auto'];
@@ -182,7 +191,6 @@ export function QuadrantScatter({
             tickLine={false}
             tickMargin={4}
             domain={xDomain}
-            allowDataOverflow
             label={{ value: 'ROAS (ערך ÷ הוצאה) — ימינה = רווחי יותר', position: 'insideBottom', offset: -22, fontSize: 11, fill: 'var(--chart-axis)' }}
           />
           <YAxis
@@ -195,7 +203,6 @@ export function QuadrantScatter({
             tickLine={false}
             tickMargin={4}
             domain={yDomain}
-            allowDataOverflow
             label={{ value: 'CAC (CAD/לקוח) — למעלה = יעיל יותר', angle: -90, position: 'insideLeft', offset: 12, fontSize: 11, fill: 'var(--chart-axis)' }}
             reversed
           />
@@ -245,7 +252,7 @@ export function QuadrantScatter({
             }}
           />
           <Scatter
-            data={points}
+            data={renderedPoints}
             shape={(props: { cx?: number; cy?: number; payload?: QuadrantPoint & { z: number; quadrant: QuadrantTone } }) => {
               const { cx, cy, payload } = props;
               if (cx == null || cy == null || !payload) return <g />;
