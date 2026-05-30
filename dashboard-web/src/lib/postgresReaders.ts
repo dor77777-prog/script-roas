@@ -609,7 +609,7 @@ export async function fetchCampaignsFromPostgres(
   try {
     data = await paginate<DbRow>(() => {
       let q = getSupabase()
-        .from('campaigns_daily')
+        .from('campaigns_enriched')
         .select(
           'date, store_id, platform, campaign_id, campaign_name, ' +
             'ad_set_id, ad_set_name, spend_cad, impressions, clicks, conversions, ' +
@@ -624,7 +624,14 @@ export async function fetchCampaignsFromPostgres(
             // hot-metrics workers; NULL on cron-daily writes. Surfaced into
             // the row's CampaignFreshnessChip for an at-a-glance freshness
             // indicator next to the campaign name.
-            'last_live_tick_at',
+            'last_live_tick_at, ' +
+            // Phase D (2026-05-30) — registry-backed status columns, joined
+            // server-side via the campaigns_enriched VIEW. The 11-column
+            // bundle from campaign_registry — we project only the 6 the UI
+            // consumes; the other 5 are reachable via SELECT * on the view
+            // if a future caller needs them.
+            'reg_configured_status, reg_effective_status, reg_delivery_status, ' +
+            'reg_first_seen_at, reg_status_changed_at, reg_last_status_success_at',
         );
       if (opts?.range) {
         q = q.gte('date', opts.range.from).lte('date', opts.range.to);
@@ -725,6 +732,42 @@ export async function fetchCampaignsFromPostgres(
       // aggregator can max() across rows without ambiguity.
       lastLiveTickAt: (() => {
         const v = (r as { last_live_tick_at?: unknown }).last_live_tick_at;
+        if (v === null || v === undefined) return null;
+        const s = String(v).trim();
+        return s || null;
+      })(),
+      regConfiguredStatus: ((): string | null => {
+        const v = (r as { reg_configured_status?: unknown }).reg_configured_status;
+        if (v === null || v === undefined) return null;
+        const s = String(v).trim();
+        return s || null;
+      })(),
+      regEffectiveStatus: ((): string | null => {
+        const v = (r as { reg_effective_status?: unknown }).reg_effective_status;
+        if (v === null || v === undefined) return null;
+        const s = String(v).trim();
+        return s || null;
+      })(),
+      regDeliveryStatus: ((): string | null => {
+        const v = (r as { reg_delivery_status?: unknown }).reg_delivery_status;
+        if (v === null || v === undefined) return null;
+        const s = String(v).trim();
+        return s || null;
+      })(),
+      regFirstSeenAt: ((): string | null => {
+        const v = (r as { reg_first_seen_at?: unknown }).reg_first_seen_at;
+        if (v === null || v === undefined) return null;
+        const s = String(v).trim();
+        return s || null;
+      })(),
+      regStatusChangedAt: ((): string | null => {
+        const v = (r as { reg_status_changed_at?: unknown }).reg_status_changed_at;
+        if (v === null || v === undefined) return null;
+        const s = String(v).trim();
+        return s || null;
+      })(),
+      regLastStatusSuccessAt: ((): string | null => {
+        const v = (r as { reg_last_status_success_at?: unknown }).reg_last_status_success_at;
         if (v === null || v === undefined) return null;
         const s = String(v).trim();
         return s || null;

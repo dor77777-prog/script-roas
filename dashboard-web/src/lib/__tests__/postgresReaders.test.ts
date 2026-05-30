@@ -335,7 +335,9 @@ describe('postgresReaders — additional shape coverage for plan-19 routes', () 
     expect(r.campaignBudgetCad).toBe(100);
     expect(r.adSetBudgetCad).toBeNull();
     expect(r.budgetType).toBe('CBO');
-    expect(fromCalls).toContain('campaigns_daily');
+    // Phase D Task 5 (2026-05-30) — the reader now SELECTs from the
+    // campaigns_enriched VIEW (campaigns_daily LEFT JOIN campaign_registry).
+    expect(fromCalls).toContain('campaigns_enriched');
   });
 
   it('fetchCampaignsFromPostgres surfaces TikTok BUDGET_EXCEED with hasActivity=false (AUDIT U-01)', async () => {

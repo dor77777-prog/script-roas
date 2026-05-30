@@ -65,4 +65,16 @@ export type CampaignRow = {
    * sets it explicitly to either the ISO string or null.
    */
   lastLiveTickAt?: string | null;
+  /**
+   * Phase D (2026-05-30) — registry-backed status fields. Joined server-side
+   * via the `campaigns_enriched` VIEW. Always non-null in production after
+   * Migration B's trigger guarantees coverage, but typed as nullable for
+   * defensive parsing.
+   */
+  regConfiguredStatus: string | null;
+  regEffectiveStatus: string | null;
+  regDeliveryStatus: string | null;
+  regFirstSeenAt: string | null;
+  regStatusChangedAt: string | null;
+  regLastStatusSuccessAt: string | null;
 };

@@ -74,6 +74,12 @@ function makeCampaign(overrides: Partial<CampaignRow>): CampaignRow {
     adSetBudgetCad: null,
     budgetType: '',
     effectiveStatus: 'ACTIVE',
+    regConfiguredStatus: null,
+    regEffectiveStatus: null,
+    regDeliveryStatus: null,
+    regFirstSeenAt: null,
+    regStatusChangedAt: null,
+    regLastStatusSuccessAt: null,
     ...overrides,
   };
 }
