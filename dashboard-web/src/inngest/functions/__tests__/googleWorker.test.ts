@@ -127,6 +127,69 @@ describe('runGoogleWorkerJob() — hot_metrics scope', () => {
   });
 });
 
+describe('runGoogleWorkerJob() — hot_metrics Phase E1.6 account-aggregate', () => {
+  it('after hot-ids upsert: fetches account-aggregate for 3 dates + writes each to data_daily', async () => {
+    const fetchAccountSpend = vi.fn().mockResolvedValue([
+      { date: '2026-05-27', spend: 100, currency: 'CAD', impressions: 1000 },
+      { date: '2026-05-28', spend: 200, currency: 'CAD', impressions: 2000 },
+      { date: '2026-05-29', spend:  50, currency: 'CAD', impressions:  500 },
+    ]);
+    const cadConvert = vi.fn().mockImplementation(async (n: number) => n);
+    const upsertDataDailySpend = vi.fn().mockResolvedValue(undefined);
+    await runGoogleWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
+      fetchStatus: vi.fn(),
+      fetchHotMetrics: vi.fn().mockResolvedValue({ adsets: [], ads: [] }),
+      getHotCampaignIds: async () => ['GC1'],
+      getHotAdgroupIds: async () => ['AG1'],
+      getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(),
+      insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(),
+      upsertAdsDaily: vi.fn(),
+      getCustomer: async () => ({ searchStream: async () => [] }),
+      recordFreshness: vi.fn(),
+      fetchAccountSpend,
+      cadConvert,
+      upsertDataDailySpend,
+      nowIso: '2026-05-29T16:00:00.000Z',
+      isGoogleConfigured: () => true,
+    });
+    expect(fetchAccountSpend).toHaveBeenCalledOnce();
+    expect(upsertDataDailySpend).toHaveBeenCalledTimes(3);
+    const written = upsertDataDailySpend.mock.calls.map(c => c[0]);
+    expect(written.find(w => w.date === '2026-05-27')).toMatchObject({
+      platform: 'google', storeId: 'uzoshop', spendCad: 100, impressions: 1000,
+    });
+  });
+
+  it('soft-fails on account-spend rejection — records success freshness anyway', async () => {
+    const fetchAccountSpend = vi.fn().mockRejectedValue(new Error('Google RESOURCE_EXHAUSTED'));
+    const recordFreshness = vi.fn();
+    await runGoogleWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
+      fetchStatus: vi.fn(),
+      fetchHotMetrics: vi.fn().mockResolvedValue({ adsets: [], ads: [] }),
+      getHotCampaignIds: async () => ['GC1'], getHotAdgroupIds: async () => [], getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(), insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(), upsertAdsDaily: vi.fn(),
+      getCustomer: async () => ({ searchStream: async () => [] }),
+      recordFreshness,
+      fetchAccountSpend,
+      cadConvert: vi.fn(),
+      upsertDataDailySpend: vi.fn(),
+      nowIso: '2026-05-29T16:00:00.000Z',
+      isGoogleConfigured: () => true,
+    });
+    expect(fetchAccountSpend).toHaveBeenCalledOnce();
+    expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({
+      scope: 'campaign_metrics', status: 'success',
+    }));
+  });
+});
+
 describe('runGoogleWorkerJob() — hot_metrics auth/rate alerts (Phase E1)', () => {
   it('rate-limit → notifyTokenFailure(google_hot_metrics_rate_limit)', async () => {
     const notifyTokenFailure = vi.fn().mockResolvedValue(undefined);

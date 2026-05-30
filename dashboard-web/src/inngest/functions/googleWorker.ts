@@ -53,6 +53,10 @@ import {
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { isAuthError, isRateLimitError } from '@/lib/notifications/detectAuthError';
 import { notifyTokenFailure } from '@/lib/notifications/tokenFailures';
+import { fetchGoogleAccountSpendForDates } from '@/lib/fetchers/googleAccountSpend';
+import { makeCadConvert } from '@/lib/inngest/cadConvert';
+import { upsertDataDailySpend } from '@/lib/inngest/upsertDataDailySpend';
+import { getFxRate } from '@/lib/fetchers/fx';
 import {
   getHotCampaignIds as getHotCampaignIdsHelper,
   getHotAdsetIds as getHotAdsetIdsHelper,
@@ -145,6 +149,19 @@ export type RunGoogleWorkerJobInput = {
     operation: string;
     errorMsg: string;
     advice?: string;
+  }) => Promise<void>;
+  /** Phase E1.6 (2026-05-30) — bulk-date Google account-level spend. */
+  fetchAccountSpend?: (input: {
+    customer: { searchStream: (q: { query: string }) => Promise<Array<Record<string, unknown>>> };
+    dates: string[];
+  }) => Promise<Array<{ date: string; spend: number; currency: string; impressions: number }>>;
+  cadConvert?: (amount: number, currency: string, dateStr: string) => Promise<number | null>;
+  upsertDataDailySpend?: (input: {
+    storeId: string;
+    date: string;
+    platform: 'meta' | 'google' | 'tiktok';
+    spendCad: number | null;
+    impressions: number | null;
   }) => Promise<void>;
 };
 
@@ -439,6 +456,38 @@ async function runGoogleHotMetricsBranch(input: RunGoogleWorkerJobInput): Promis
       );
     }
 
+    // Phase E1.6 (2026-05-30) — Google account-aggregate spend →
+    // data_daily. Same shape as metaWorker's E1.6 step. Google Ads
+    // account for uzoshop is CAD-native (per project memory
+    // ad-account-currencies); cadConvert passes through.
+    if (input.fetchAccountSpend && input.cadConvert && input.upsertDataDailySpend) {
+      try {
+        const todayDate = nowIso.slice(0, 10);
+        const oneDayMs = 24 * 60 * 60 * 1000;
+        const dates = [0, 1, 2].map((d) =>
+          new Date(new Date(todayDate + 'T00:00:00Z').getTime() - d * oneDayMs)
+            .toISOString().slice(0, 10),
+        );
+        const rows = await input.fetchAccountSpend({
+          customer,
+          dates,
+        });
+        for (const r of rows) {
+          const spendCad = await input.cadConvert(r.spend, r.currency, r.date);
+          await input.upsertDataDailySpend({
+            storeId,
+            date: r.date,
+            platform: 'google',
+            spendCad,
+            impressions: r.impressions,
+          });
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(`googleWorker account-aggregate-spend ${storeId}: ${message}`);
+      }
+    }
+
     // 5. Mark freshness success for both campaign_metrics + ad_metrics.
     await recHotPair('success');
   } catch (err) {
@@ -561,6 +610,12 @@ export const googleWorker = inngest.createFunction(
             advice: inp.advice,
           });
         },
+        // Phase E1.6 (2026-05-30) — bulk-date account-aggregate spend
+        // → data_daily via partial-column UPSERT.
+        fetchAccountSpend: fetchGoogleAccountSpendForDates,
+        cadConvert: makeCadConvert(getFxRate),
+        upsertDataDailySpend: async (inp) =>
+          upsertDataDailySpend({ admin: sb, ...inp }),
         nowIso,
       });
     });
