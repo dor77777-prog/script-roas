@@ -258,18 +258,19 @@ describe('cron-live-heavy — pre-flight Meta BUC gate', () => {
     expect(rateLimitCalls.length).toBe(0);
   });
 
-  it('4. stagger factory wires correct cron per store', async () => {
-    // The inngest client mock at module scope captures cron strings into
-    // capturedTriggers when cronLiveHeavy.ts runs ALL_STORES.map(makeCronLiveHeavy).
+  it('Phase E1 (2026-05-30): cronLiveHeavyFunctions disabled — zero Inngest registrations', async () => {
+    // Phase E1 decommissioned cron-live-heavy. The factory loop was
+    // removed; the export is now an empty array. runHeavyForStore +
+    // makeCronLiveHeavy + persistCampaignsLive source remain in the
+    // file for rollback + the other tests in this file (which drive
+    // runHeavyForStore directly via dynamic import).
     const { cronLiveHeavyFunctions } = await import('../cronLiveHeavy');
-
-    // 3 functions created
-    expect(cronLiveHeavyFunctions.length).toBe(3);
-
-    // Verify stagger cron strings per store
-    expect(capturedTriggers['cron-live-heavy-uzoshop']).toContain('0,30');
-    expect(capturedTriggers['cron-live-heavy-zolplus']).toContain('10,40');
-    expect(capturedTriggers['cron-live-heavy-usmile360']).toContain('20,50');
+    expect(cronLiveHeavyFunctions.length).toBe(0);
+    // capturedTriggers should NOT contain the cron-live-heavy-* entries
+    // because the factory loop no longer runs at module load.
+    expect(capturedTriggers['cron-live-heavy-uzoshop']).toBeUndefined();
+    expect(capturedTriggers['cron-live-heavy-zolplus']).toBeUndefined();
+    expect(capturedTriggers['cron-live-heavy-usmile360']).toBeUndefined();
   });
 
   it('5. BUC pct < 80 → proceed normally, no budget_skip recorded', async () => {

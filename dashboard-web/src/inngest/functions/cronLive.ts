@@ -95,15 +95,13 @@ import {
   type ShopifyDayRows,
   type ShopifyOrderRow,
 } from '@/lib/fetchers/shopify';
-import { fetchMetaBudgets, fetchMetaSpendForDayLight } from '@/lib/fetchers/meta';
-import {
-  fetchGoogleAdsAdGroupStatuses,
-  fetchGoogleAdsSpendForDay,
-} from '@/lib/fetchers/googleAds';
-import {
-  fetchTikTokAdGroupStatuses,
-  fetchTikTokSpendForDay,
-} from '@/lib/fetchers/tiktok';
+// Phase E1.5 (2026-05-30) — status fetchers removed; cron-live no
+// longer calls Meta/Google/TikTok status APIs. Status discovery +
+// enrollment placeholders moved to per-store workers via
+// cron-tick-orchestrator.
+import { fetchMetaSpendForDayLight } from '@/lib/fetchers/meta';
+import { fetchGoogleAdsSpendForDay } from '@/lib/fetchers/googleAds';
+import { fetchTikTokSpendForDay } from '@/lib/fetchers/tiktok';
 import { getFxRate } from '@/lib/fetchers/fx';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { TIKTOK_ACTIVE_ENOUGH } from '@/lib/platformConfig';
@@ -1308,325 +1306,31 @@ async function runLiveForStoreInner(
     }
   });
 
-  // ----- STEP 5: refresh effective_status + enroll new campaigns -----
+  // ----- STEP 5: REMOVED in Phase E1.5 (2026-05-30) -----
   //
-  // Phase 05.7.x (2026-05-22 → 2026-05-23):
-  //   First iteration (UPDATE-only) shipped 2026-05-22. It refreshed status
-  //   on EXISTING campaigns_daily rows within 10 min. BUT — a brand-new
-  //   campaign that hadn't yet served any impressions had NO row in
-  //   campaigns_daily (the insights-based writers filter empty rows), so
-  //   UPDATE was a no-op and the new campaign stayed invisible to the
-  //   dashboard until cron-daily ran 24h later.
+  // The "refresh-effective-status + enroll-active-ad-sets" step lived
+  // here from Phase 05.7.x through Phase D. It fetched per-platform
+  // statuses for Meta/Google/TikTok and UPSERTed placeholder rows into
+  // campaigns_daily + UPDATEd historical effective_status.
   //
-  // Iteration 2 (this commit, 2026-05-23): switch from UPDATE to UPSERT
-  //   for TODAY's row, using non-date-filtered enumeration endpoints:
-  //     - Meta:    /act_{id}/campaigns + /act_{id}/adsets  (already in fetchMetaBudgets)
-  //     - Google:  ad_group resource, no date filter      (new fetchGoogleAdsAdGroupStatuses)
-  //     - TikTok:  /adgroup/get/                          (already, now returns names)
-  //   For every (campaign, ad-set) the enumeration returns, we UPSERT a
-  //   row into campaigns_daily for TODAY. Existing rows get their
-  //   effective_status (+ name) refreshed; rows that don't exist yet get
-  //   created with zero metrics + the live status. The dashboard's
-  //   campaigns reader (postgresReaders.fetchCampaigns) is relaxed to keep
-  //   rows that have effective_status set even when all metrics are zero,
-  //   so the placeholder appears in the table.
+  // Phase E1.5 migrated this work to the per-store status workers
+  // (metaWorker.runMetaStatusBranch / googleWorker.runGoogleStatusBranch
+  // / tiktokWorker.runTikTokStatusBranch) via cron-tick-orchestrator
+  // (every 10 min). Those workers:
+  //   • write registry rows (campaign_registry / adset_registry / ad_registry)
+  //   • emit campaign_status_events on transitions
+  //   • UPSERT campaigns_daily placeholders for ACTIVE / ENABLED /
+  //     DELIVERY_OK adsets (Tasks 8/9/10 of the E1 plan)
   //
-  // We ONLY upsert TODAY (not the rolling lookback) because the lookback
-  // is for HISTORICAL data — past days where the campaign existed but
-  // we want fresh status. If a campaign exists in the enumeration but
-  // had no insights on day D-3, writing a placeholder row for D-3 would
-  // create a phantom "campaign existed and ran on D-3" history that
-  // never happened. Status-only UPDATE on existing past rows still
-  // happens (handles the "I paused yesterday" case).
+  // cron-live is now Shopify-only as the original 05.6 design intended.
+  // See:
+  //   docs/superpowers/specs/2026-05-30-phase-e1-decommission-cron-live-heavy-design.md
   //
-  // Soft-fail per platform: a 401 / timeout / quota error on one
-  // platform doesn't block the others. The previous status + the
-  // existing rows survive until the next tick.
-  await step.run('refresh-effective-status', async () => {
-    // Phase 12.5 (2026-05-24): UPDATE pass below has NO lower date bound —
-    // it covers every existing row for each ad-set. Previously a 7-day
-    // lookback was applied here, which caused off-chip drift for any
-    // operator view longer than a week: a campaign paused >7 days ago
-    // had its historical rows still tagged 'ACTIVE' (the last value
-    // cron-daily wrote when the campaign was live), so the aggregator's
-    // "chronologically-latest status in range" pick returned ACTIVE and
-    // the chip silently disappeared on "last month" / "last 90 days"
-    // views. effective_status was always meant to be a "current as of
-    // last refresh" snapshot on every row, never a per-day historical
-    // record — there's nothing to preserve. The UPDATE only touches
-    // EXISTING rows (no INSERT), so historical activity is not invented.
-    const today = dates[0];
-    const admin = getSupabaseAdmin();
-
-    // 1. Parallel fetch of all 3 platforms' enumerations with per-platform
-    //    timeout + soft-fail.
-    const metaPromise = withTimeout(
-      fetchMetaBudgets(storeId),
-      15_000,
-      'Meta budgets (status)',
-    ).catch((e) => {
-      console.warn(
-        `cron-live: Meta status refresh ${storeId} failed/timed-out: ${e instanceof Error ? e.message : e}`,
-      );
-      return null;
-    });
-    const googlePromise = withTimeout(
-      fetchGoogleAdsAdGroupStatuses(storeId),
-      15_000,
-      'Google ad-group statuses',
-    ).catch((e) => {
-      console.warn(
-        `cron-live: Google status refresh ${storeId} failed/timed-out: ${e instanceof Error ? e.message : e}`,
-      );
-      return null;
-    });
-    const tiktokPromise = STORES_WITH_TIKTOK.has(storeId)
-      ? withTimeout(
-          fetchTikTokAdGroupStatuses(storeId),
-          15_000,
-          'TikTok ad-group statuses',
-        ).catch((e) => {
-          console.warn(
-            `cron-live: TikTok status refresh ${storeId} failed/timed-out: ${e instanceof Error ? e.message : e}`,
-          );
-          return null;
-        })
-      : Promise.resolve(null);
-
-    const [metaBudgets, googleStatuses, tiktokStatuses] = await Promise.all([
-      metaPromise,
-      googlePromise,
-      tiktokPromise,
-    ]);
-
-    // Build a flat list of (platform, campaignId, campaignName, adSetId,
-    // adSetName, status) tuples — one per ad-set/ad-group enumeration row.
-    type Enrollment = {
-      platform: 'meta' | 'google' | 'tiktok';
-      campaignId: string;
-      campaignName: string;
-      adSetId: string;
-      adSetName: string;
-      status: string;
-    };
-    const enrollments: Enrollment[] = [];
-
-    if (metaBudgets) {
-      for (const [adSetId, bucket] of Object.entries(metaBudgets.adSets)) {
-        // Prefer ad-set status; fall back to campaign-level when ad-set is
-        // unknown. Matches cronDaily's precedence (cronDaily.ts:475-481).
-        const adSetStatus = bucket.effectiveStatus ?? null;
-        const campaignBucket = metaBudgets.campaigns[bucket.campaignId];
-        const campaignStatus = campaignBucket?.effectiveStatus ?? null;
-        const status = adSetStatus ?? campaignStatus;
-        if (!status) continue;
-        enrollments.push({
-          platform: 'meta',
-          campaignId: bucket.campaignId,
-          campaignName: campaignBucket?.name ?? '',
-          adSetId,
-          adSetName: bucket.name ?? '',
-          status,
-        });
-      }
-    }
-    if (googleStatuses) {
-      for (const r of googleStatuses) {
-        enrollments.push({
-          platform: 'google',
-          campaignId: r.campaignId,
-          campaignName: r.campaignName,
-          adSetId: r.adGroupId,
-          adSetName: r.adGroupName,
-          status: r.status,
-        });
-      }
-    }
-    if (tiktokStatuses) {
-      for (const [adSetId, meta] of tiktokStatuses.entries()) {
-        enrollments.push({
-          platform: 'tiktok',
-          campaignId: meta.campaignId,
-          campaignName: meta.campaignName,
-          adSetId,
-          adSetName: meta.adGroupName,
-          status: meta.status,
-        });
-      }
-    }
-
-    // 2. UPSERT a row for TODAY — but ONLY for ad-sets whose CURRENT status
-    //    is "active" for their platform (Meta=ACTIVE, Google=ENABLED,
-    //    TikTok=ADGROUP_STATUS_DELIVERY_OK). Paused ad-sets are NOT
-    //    placeholder-enrolled — they'd just be visual noise in the
-    //    dashboard ("why is this paused campaign showing up?"). Operator
-    //    spec (2026-05-23):
-    //      "Active campaigns appear immediately. Paused campaigns only
-    //       appear if they had spend in the range."
-    //
-    //    For PAUSED ad-sets we still want their status reflected on
-    //    HISTORICAL rows (so an ad-set paused this morning shows the
-    //    off-chip on yesterday's row) — that's the UPDATE step below
-    //    (#3), which runs on existing rows only without creating new
-    //    placeholder rows.
-    //
-    //    UPSERT payload OMITS the metric columns (spend_cad, impressions,
-    //    clicks, conversions, conversion_value_cad). When a row already
-    //    exists from cron-live's spend writer, ON CONFLICT DO UPDATE
-    //    leaves those columns untouched (Supabase JS only puts payload
-    //    keys in the SET clause). When the row doesn't exist yet, the
-    //    INSERT path uses the schema defaults (0) for the missing
-    //    metrics — exactly the "placeholder" state we want for a
-    //    just-launched, not-yet-spent campaign.
-    // Phase D soak (2026-05-30) — cron-live OMITS TikTok from the enrollment
-    // UPSERT for the same reason Phase A.5 v2 omits TikTok spend: cron-live
-    // attributes by the function-arg storeId (the cron-iteration's store) and
-    // does NOT consult campaign-store-map. For TikTok, where the ad account
-    // is owned by uzoshop but individual campaigns can be mapped to other
-    // stores, this writes uzoshop-attributed campaigns_daily rows for
-    // campaigns that should belong to (e.g.) usmile360 — which then poisons
-    // Phase D registry backfill with cross-attribution duplicates.
-    //
-    // TikTok enrollment is handled correctly by cron-live-heavy (every 30
-    // min via persistCampaignsLive, which resolves per-row store_id via the
-    // map) and the Phase C tiktokWorker (every 10 min via the hot_metrics
-    // fetcher). The UPDATE step #3 below still applies to TikTok because it
-    // only modifies effective_status on EXISTING rows — it can't create
-    // mis-attributed placeholder rows.
-    const activeEnrollments = enrollments.filter((e) =>
-      e.platform !== 'tiktok' && isActiveForPlatform(e.platform, e.status),
-    );
-    if (activeEnrollments.length > 0) {
-      const upsertRows = activeEnrollments.map((e) => ({
-        date: today,
-        store_id: storeId,
-        platform: e.platform,
-        campaign_id: e.campaignId,
-        campaign_name: e.campaignName || '—',
-        ad_set_id: e.adSetId,
-        ad_set_name: e.adSetName || '—',
-        effective_status: e.status,
-      }));
-      // Chunk to keep individual PostgREST payloads bounded. 200 rows per
-      // chunk is the same convention used by other UPSERTs in the
-      // codebase (e.g. orders_attribution writer).
-      const CHUNK = 200;
-      for (let i = 0; i < upsertRows.length; i += CHUNK) {
-        const slice = upsertRows.slice(i, i + CHUNK);
-        const { error } = await admin
-          .from('campaigns_daily')
-          .upsert(slice, {
-            onConflict: 'date,store_id,platform,campaign_id,ad_set_id',
-          });
-        if (error) {
-          console.warn(
-            `cron-live: campaigns_daily upsert (enrollment) ${storeId} chunk ${i}: ${error.message}`,
-          );
-          // Continue — partial enrollment is better than throwing the
-          // whole step (the OTHER enrollment rows still write).
-        }
-      }
-    }
-
-    // 3. ALSO update effective_status on EVERY existing past row for each
-    //    enrolled ad-set (Phase 12.5 — was 7-day lookback, see header
-    //    comment on this step.run). Operator-side use case: "I paused this
-    //    campaign yesterday morning — yesterday's row should reflect that
-    //    even though today is a fresh row" AND the broader case: "I paused
-    //    this 30 days ago — last-month view should show it off, not on".
-    //    UPDATE-only (no INSERT) on past dates — we never invent activity
-    //    that wasn't there.
-    //
-    // Audit fix 2026-05-23 (HIGH-12 / O4-HI-01 + HIGH-NEW-4): replaced
-    // Promise.all with sequential `for...of await` + per-iteration try/catch
-    // AND explicit `result.error` check on each Supabase response.
-    //
-    // Pre-fix had two failure modes:
-    //   (1) Promise.all rejects the whole batch on ANY single ad-set's
-    //       update rejection — one ad-set's update failure aborted the
-    //       step BEFORE the others ran (Inngest then retried 4× and
-    //       dead-lettered after the 4th throw).
-    //   (2) Supabase often resolves with `{ error: {...} }` rather than
-    //       rejecting (e.g. RLS denied, schema mismatch). The previous
-    //       code never destructured the result → silent corruption: the
-    //       step "succeeded" but no status update landed for some
-    //       ad-sets, leaving stale "active/off" chips with no operator
-    //       signal.
-    //
-    // Fix: sequential for-of so each update is its own try-block. Both
-    // throw-path and error-result path are logged via console.warn but
-    // we CONTINUE iterating so a single ad-set's failure cannot prevent
-    // the others from landing. No throw escapes this section — Inngest
-    // never dead-letters the whole step due to one bad row.
-    // INCIDENT FIX 2026-05-25 (Phase 13.4-emergency / cron-live-uzoshop 60s
-    // timeout): the previous implementation issued one UPDATE per
-    // (platform, ad_set_id) SEQUENTIALLY. uzoshop's ad-set count (Meta +
-    // Google + TikTok combined ≈300+) drove the per-tick wall time past
-    // 60s, hitting Vercel's function timeout. The Phase 12.5 removal of the
-    // 7-day lower bound (.gt('date', addDays(today,-7))) made each UPDATE
-    // scan more rows too, compounding the slowdown.
-    //
-    // Fix: keep the per-(platform, ad_set_id) UPDATE shape — including the
-    // per-row try/catch — but issue them in BOUNDED-PARALLEL chunks via
-    // Promise.all. Wall time drops from O(N × latency) to O((N/chunk) ×
-    // latency). At chunk=20 and ~150ms/req, 300 ad-sets ≈ 2.25s instead of
-    // ~45-60s. Semantics preserved: each ad-set is its own request, each
-    // has its own try/catch, the per-row mock chain (eq×3 → lt) in
-    // cronLiveStatusRefresh.test.ts continues to match. HIGH-12 +
-    // HIGH-NEW-4 resilience invariant preserved (one ad-set's failure
-    // doesn't block siblings, including siblings IN THE SAME chunk because
-    // Promise.all awaits all settled outcomes from individual try/catch
-    // wrappers that never reject).
-    const platforms: Array<'meta' | 'google' | 'tiktok'> = [
-      'meta',
-      'google',
-      'tiktok',
-    ];
-    const PARALLEL_CHUNK = 20;
-    for (const platform of platforms) {
-      const platformEnrollments = enrollments.filter((e) => e.platform === platform);
-      if (platformEnrollments.length === 0) continue;
-      for (let i = 0; i < platformEnrollments.length; i += PARALLEL_CHUNK) {
-        const slice = platformEnrollments.slice(i, i + PARALLEL_CHUNK);
-        await Promise.all(
-          slice.map(async ({ adSetId, status }) => {
-            try {
-              const result = await admin
-                .from('campaigns_daily')
-                .update({ effective_status: status })
-                .eq('store_id', storeId)
-                .eq('platform', platform)
-                .eq('ad_set_id', adSetId)
-                .lt('date', today); // UPSERT above already handled today
-              // Supabase shape: result is `{ error: PostgrestError | null }`
-              // (the chain returns the response object directly when not
-              // awaiting `.select()`). RLS denials + schema errors come back
-              // here, NOT as a rejected promise.
-              const errResult = (result as { error?: { message?: string } | null })
-                ?.error;
-              if (errResult) {
-                console.warn(
-                  `cron-live: campaigns_daily status UPDATE failed (${platform}/${adSetId}) for ${storeId}: ${
-                    errResult.message ?? String(errResult)
-                  }`,
-                );
-              }
-            } catch (e) {
-              // Rejection path (network drop, abort, runtime error). Log +
-              // continue — other ad-sets must still get their status update.
-              // The catch is inside the map callback so Promise.all's
-              // all-settled semantics fall out for free.
-              console.warn(
-                `cron-live: campaigns_daily status UPDATE threw (${platform}/${adSetId}) for ${storeId}: ${
-                  e instanceof Error ? e.message : String(e)
-                }`,
-              );
-            }
-          }),
-        );
-      }
-    }
-  });
+  // The "refresh historical effective_status" UPDATE pass is also gone
+  // — postgresReaders + UI now read reg_effective_status from the
+  // campaign_registry via the campaigns_enriched VIEW. The legacy
+  // campaigns_daily.effective_status field is fallback-only in
+  // statusClassification.ts and stays NULL-safe.
 
   const perDayRevenue: Record<string, number> = {};
   for (const date of dates) {

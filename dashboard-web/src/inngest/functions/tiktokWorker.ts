@@ -67,6 +67,7 @@ import {
 } from '@/lib/registries/upsert';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { isAuthError, isRateLimitError } from '@/lib/notifications/detectAuthError';
+import { notifyTokenFailure } from '@/lib/notifications/tokenFailures';
 
 // Phase E1.5 (2026-05-30) — TikTok's 5 "delivering / preparing" ad-group
 // statuses. Mirrors the local set in cronLive.ts (being removed in
@@ -671,6 +672,17 @@ export const tiktokWorker = inngest.createFunction(
             status: inp.status,
             errorMessage: inp.errorMessage,
           }),
+        // Phase E1 (2026-05-30) — fire operator WhatsApp on auth/rate
+        // errors from hot_metrics branch. See metaWorker for rationale.
+        notifyTokenFailure: async (inp) => {
+          await notifyTokenFailure({
+            provider: inp.provider,
+            storeId: inp.storeId as 'uzoshop' | 'zolplus' | 'usmile360' | 'global',
+            operation: inp.operation,
+            errorMsg: inp.errorMsg,
+            advice: inp.advice,
+          });
+        },
         nowIso,
       });
     });

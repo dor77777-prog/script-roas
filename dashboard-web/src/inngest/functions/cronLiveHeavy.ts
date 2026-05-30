@@ -478,8 +478,14 @@ function makeCronLiveHeavy(storeId: StoreId) {
 }
 
 /**
- * 3 cron-live-heavy functions — exported as an array so
- * `src/app/api/inngest/route.ts` can spread them into its `serve()` list
- * (mirrors the cronLiveFunctions / cronDailyFunctions pattern).
+ * Phase E1 (2026-05-30) — DISABLED. The 3 per-store cron-live-heavy
+ * Inngest functions are no longer registered. cron-tick-orchestrator
+ * (every 10 min) is the single source of live truth for
+ * campaigns_daily + ads_daily refreshes via the hot_metrics worker
+ * branches in metaWorker / googleWorker / tiktokWorker. The
+ * runHeavyForStore + makeCronLiveHeavy + persistCampaignsLive code is
+ * retained for (a) existing vitest fixtures and (b) potential
+ * rollback via git revert. See:
+ * docs/superpowers/specs/2026-05-30-phase-e1-decommission-cron-live-heavy-design.md
  */
-export const cronLiveHeavyFunctions = ALL_STORES.map(makeCronLiveHeavy);
+export const cronLiveHeavyFunctions: never[] = [];
