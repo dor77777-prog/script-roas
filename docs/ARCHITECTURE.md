@@ -1643,3 +1643,91 @@ match the longer per-tick runtime (3× per store).
 | `cronOauthCanary` | 1 | 00:00 daily | token canary |
 | `whatsappCronFunctions` + `eventWhatsappSendNow` | 2 | varies | operator WhatsApp queue |
 | `cronLiveHeavyFunctions` | **0** | — | DISABLED in E1 (empty array) |
+
+## Phase E1.6 — Account-level spend completes the cron-live → workers move (2026-05-30 evening)
+
+E1.5 claimed "cron-live → Shopify-only" but missed
+`fetch-meta-google-tiktok-spend-light-3day` — the account-level
+spend + impressions fetcher that populated
+`data_daily.fb/ga/tt_spend_cad` + `_impressions`. Operator observation
+2026-05-30 ~17:50 IL via the Inngest dashboard caught this. E1.6
+finishes the move.
+
+### Correction to §Phase E1.5
+The "cron-live → Shopify-only" claim from E1.5 was partial. E1.5
+removed the status fetches + enrollment + historical UPDATE; it left
+the account-level spend fetcher in place because no alternative path
+existed for `data_daily.fb/ga/tt_spend_cad`. E1.6 (below) closes that
+gap.
+
+### Architecture
+The 3 hot_metrics worker branches each get one new step running just
+before `recHotPair('success')`:
+
+  fetchAccountSpend(adAccount/customer/advertiser, [today, T-1, T-2])
+    → one bulk API call:
+        • Meta: `time_range={since,until}` + `time_increment=1`
+        • Google: GAQL `WHERE segments.date BETWEEN d1 AND d3`
+        • TikTok: `start_date`/`end_date` + `dimensions=[stat_time_day]`
+        + `data_level=AUCTION_ADVERTISER`
+    → CAD-convert via the shared `cadConvert` helper:
+        • Meta (ILS) — FX → CAD
+        • TikTok (USD) — FX → CAD
+        • Google (CAD) — passthrough
+        • FX failure → null → preserve prior column
+    → upsertDataDailySpend(platform, spendCad, impressions) — partial-
+      column UPSERT to data_daily (only fb/ga/tt_spend_cad + impressions)
+
+cron-live now owns only fetch-shopify-rolling-3day +
+fetch-shopify-orders-attribution-today + persist-rolling-3day (revenue
++ derived). `spendByDate` is aliased over `priorSpendByDate` (which
+SELECTs what workers wrote) so the persist code is unchanged. ~870
+lines removed (158 from the deleted step + the 2 dropped test files
+worth of fixtures).
+
+### Race mitigation (workers vs cron-live on data_daily)
+Supabase JS `.upsert({...payload}, {onConflict: 'date,store_id'})`
+builds the SET clause from payload keys only. Workers' payload contains
+only fb/ga/tt_spend_cad + _impressions; cron-live's payload contains
+only revenue + derived. Disjoint columns → merge per-column → no
+overwrites. Same semantic cron-live + cron-daily relied on for years.
+
+### API call budget delta
+Before E1.6: 27 platform calls / 10 min (3 stores × 3 platforms × 3 dates).
+After E1.6: 9 platform calls / 10 min (3 stores × 3 platforms × 1 bulk).
+Net: −50% platform API load. Meta BUC pressure also drops by ~33%.
+
+### FX-failure semantics
+The shared `cadConvert` helper (extracted to
+`dashboard-web/src/lib/inngest/cadConvert.ts`) carries the exact null-
+preserve contract from cron-live's audit fix 2026-05-23 a/WARN-3.
+When FX times out or returns invalid, cadConvert returns null →
+upsertDataDailySpend OMITS the affected column → Supabase preserves
+the prior value. "Stale > wrong" — never overwrite a valid CAD figure
+with raw ILS/USD.
+
+### Files inventory (new in E1.6)
+- `dashboard-web/src/lib/inngest/cadConvert.ts` (+ test, 8 cases)
+- `dashboard-web/src/lib/inngest/upsertDataDailySpend.ts` (+ test, 7 cases)
+- `dashboard-web/src/lib/fetchers/metaAccountSpend.ts` (+ test, 4 cases)
+- `dashboard-web/src/lib/fetchers/googleAccountSpend.ts` (+ test, 3 cases)
+- `dashboard-web/src/lib/fetchers/tiktokAccountSpend.ts` (+ test, 4 cases)
+- 3 worker hot_metrics steps + production adapter wiring (+ 6 tests)
+
+### Tests
++26 new (8+7+4+3+4+6) − 8 dropped on removed steps
+(cronLive.test.ts T5/T7/T8 + cronLiveShopifyDecoupled.test.ts) =
+**net +18 tests; 1574 total green** (was 1548).
+
+### Rollback
+`git revert` the E1.6 commits. cron-live's fetch-light + spendByDate
+fresh path are restored; workers stop the account-aggregate step.
+data_daily is self-healing on the next tick from either path —
+cron-live takes over again.
+
+### Function inventory delta vs E1.5 table
+| Family | Before E1.6 | After E1.6 |
+|---|---|---|
+| cron-live-{store} step.runs per tick | ~5 (shopify + spend-light + 3 prior + persist) | 3 (shopify + orders + persist) |
+| Worker hot_metrics steps per tick | 4 (BUC + hot ids + 2 upserts + recHotPair) | 5 (+ account-aggregate) |
+| Platform API calls / 10 min | 36 | 18 |
