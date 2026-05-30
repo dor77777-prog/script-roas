@@ -4,10 +4,8 @@ import { startTransition, useEffect, useMemo, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import {
   AlertCircle,
-  TrendingUp,
   Package,
   Table,
-  CalendarDays,
   Megaphone,
   Receipt,
   Menu,
@@ -17,8 +15,6 @@ import { computePresetRange, previousRange } from '@/lib/presets';
 import { aggregate, aggregateByStore, dailySeries, filterRows } from '@/lib/analytics';
 import { cn } from '@/lib/utils';
 import { Filters } from './Filters';
-import { RoasChart } from './RoasChart';
-import { MonthlyTables } from './MonthlyTables';
 import { DetailTable } from './DetailTable';
 import { ProductsTable } from './ProductsTable';
 import { ProductCentricView } from './ProductCentricView';
@@ -45,6 +41,9 @@ import { HomePerStoreBand } from './HomePerStoreBand';
 import { readDashboardState, syncUrl, type TabKey } from '@/lib/urlState';
 import { buildDateRangeKey } from '@/lib/dateRange';
 import { Button } from '@/components/ui/Button';
+import * as Tabs from '@radix-ui/react-tabs';
+import { AnalysisTrendsTab } from './AnalysisTrendsTab';
+import { AnalysisArchiveTab } from './AnalysisArchiveTab';
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -497,32 +496,28 @@ function AnalysisTab({
   setFilters: (next: F) => void;
 }) {
   return (
-    <div className="space-y-4 sm:space-y-5">
-      <SectionIntro
-        icon={<CalendarDays size={20} />}
-        title="טווח לניתוח"
-        description="הסינון מטה משפיע על גרף המגמה בלבד. הטבלאות החודשיות מציגות עד 17 חודשים אחורה — בלי תלות בטווח שבחרת."
-      />
-      <Filters filters={filters} stores={data.stores} onChange={setFilters} />
-
-      <SectionIntro
-        icon={<TrendingUp size={20} />}
-        title="מגמת ROAS לאורך זמן"
-        description="קו לכל חנות. הקו האדום-מקווקו מציין את היעד הפנימי שלך — ROAS 3.0. רוצה לראות חנות אחת? סנן למעלה."
-      />
-      <div className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
-        <RoasChart data={filtered.series} stores={filtered.visibleStores} rows={filtered.cur} bare />
-      </div>
-
-      <SectionIntro
-        icon={<CalendarDays size={20} />}
-        title="טבלאות חודשיות"
-        description="טבלה לכל חודש עם שורה לכל יום, עד 17 חודשים אחורה. ROAS צבוע: אדום (<2), כתום (2-2.7), ירוק (2.7-3), כחול (>3). יום עם הוצאה אך ללא מכירה מסומן בשחור עם '0'."
-      />
-      <div className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
-        <MonthlyTables stores={data.stores} globalStore={filters.store} bare />
-      </div>
-    </div>
+    <Tabs.Root defaultValue="trends" className="flex flex-col gap-4">
+      <Tabs.List className="flex gap-2 border-b border-line-subtle">
+        <Tabs.Trigger
+          value="trends"
+          className="px-3 py-2 text-sm data-[state=active]:font-medium data-[state=active]:border-b-2 data-[state=active]:border-accent"
+        >
+          מגמות
+        </Tabs.Trigger>
+        <Tabs.Trigger
+          value="archive"
+          className="px-3 py-2 text-sm data-[state=active]:font-medium data-[state=active]:border-b-2 data-[state=active]:border-accent"
+        >
+          היסטוריה
+        </Tabs.Trigger>
+      </Tabs.List>
+      <Tabs.Content value="trends">
+        <AnalysisTrendsTab data={data} filtered={filtered} filters={filters} setFilters={setFilters} />
+      </Tabs.Content>
+      <Tabs.Content value="archive">
+        <AnalysisArchiveTab stores={data.stores} globalStore={filters.store} />
+      </Tabs.Content>
+    </Tabs.Root>
   );
 }
 
