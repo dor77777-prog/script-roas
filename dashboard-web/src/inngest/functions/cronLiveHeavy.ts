@@ -62,7 +62,10 @@ import { getMetaBucUsageForStore } from '@/lib/notifications/metaBucUsage';
 import { recordFreshness } from '@/lib/inngest/freshness';
 
 type StoreId = 'uzoshop' | 'zolplus' | 'usmile360';
-const ALL_STORES: StoreId[] = ['uzoshop', 'zolplus', 'usmile360'];
+// Phase E1 (2026-05-30): retained for rollback (see cronLiveHeavyFunctions
+// note at bottom). Prefixed with _ to satisfy eslint's unused-vars rule
+// while keeping the code path intact for `git revert`.
+const _ALL_STORES: StoreId[] = ['uzoshop', 'zolplus', 'usmile360'];
 
 /**
  * Tracks which fetcher threw — used by the per-platform soft-fail path to
@@ -461,7 +464,11 @@ const CRON_STAGGER: Record<StoreId, string> = {
   usmile360: 'TZ=Asia/Jerusalem 20,50 * * * *',
 };
 
-function makeCronLiveHeavy(storeId: StoreId) {
+// Phase E1 (2026-05-30): retained for rollback. Prefixed with _ to
+// satisfy eslint's unused-vars rule. To re-enable, drop the underscore
+// and restore the spread in cronLiveHeavyFunctions at the bottom of
+// the file.
+function _makeCronLiveHeavy(storeId: StoreId) {
   return inngest.createFunction(
     {
       id: `cron-live-heavy-${storeId}`,
