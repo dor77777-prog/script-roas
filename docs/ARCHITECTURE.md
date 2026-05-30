@@ -2078,16 +2078,31 @@ After this fix, TikTok hot_metrics will write `campaigns_daily.tiktok`
 every 10 min and the Phase E1.7 agg RPC will surface fresh values in
 `data_daily.tt_spend_cad + tt_impressions`.
 
-### Google hot_metrics `rows=0` (open follow-up)
+### Google hot_metrics account-TZ + 2-day window fix
 
-The `gh-diag` log from the 20:50 tick shows:
+The `gh-diag` log from the 20:50 tick showed
 `adgroup_query store=uzoshop date=2026-05-30 ids=3 rows=0`. Google
 Ads's GAQL query for 3 known-active adgroup IDs filtered by
 `segments.date = '2026-05-30'` returns ZERO rows. The 3 IDs match the
 rows currently in `campaigns_daily.google` (stale since 17:30 IL).
 
-Hypothesis: Google Ads account timezone vs Asia/Jerusalem `dateStr`
-mismatch, or known Google reporting delay (cost.cost_micros buffered
-for up to ~3 hours). Confirmed candidate fix: use the account's TZ
-date instead of UTC-derived date. Investigation ongoing as a separate
-issue from the TikTok fix above.
+**Root cause**: `segments.date` in GAQL is bucketed in the account's
+TZ, NOT UTC. The worker passed `dateStr = nowIso.slice(0, 10)` which
+is UTC-derived; accounts in non-UTC timezones got 0 rows because the
+queried date didn't match the account's calendar day.
+
+**Fix**: `fetchGoogleHotMetricsForStore` now queries
+`SELECT customer.time_zone FROM customer LIMIT 1` once at the start
+(extra ~50ms RPC), computes both `today` + `yesterday` in the
+account's TZ, and filters with `segments.date BETWEEN '${yesterdayInTz}'
+AND '${todayInTz}'`. The 2-day window also tolerates Google's known
+cost-reporting delay (cost_micros can buffer up to ~3 hours after the
+activity).
+
+The fetcher returns rows with `date = segments.date` from Google's
+response. Worker writes them as-is into `campaigns_daily`; the agg
+RPC aggregates by `(date, store_id, platform)`. If account TZ differs
+from IL, campaign rows will land under the Google-account TZ's date —
+the dashboard's "today IL" view then shows them via the agg RPC
+provided IL-today and account-TZ-today overlap (true for uzoshop
+since the account is in Israel).

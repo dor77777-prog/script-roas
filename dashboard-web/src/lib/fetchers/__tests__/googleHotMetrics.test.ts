@@ -4,6 +4,11 @@ import { fetchGoogleHotMetricsForStore } from '@/lib/fetchers/googleHotMetrics';
 describe('fetchGoogleHotMetricsForStore()', () => {
   it('returns adset + ad metrics rows for hot ids (no campaign-level rows per CRIT-B)', async () => {
     const searchStream = vi.fn();
+    // Phase E1.7 hotfix: fetcher now queries customer.time_zone first
+    // to bucket segments.date in the account's TZ (not UTC).
+    searchStream.mockResolvedValueOnce([
+      { customer: { timeZone: 'Asia/Jerusalem' } },
+    ]);
     // ad-group metrics
     // CRIT-C: JSON keys are camelCase — adGroup, costMicros, conversionsValue.
     // IMP-A: rows now include campaign.name + ad_group.name so the upsert

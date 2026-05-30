@@ -41,16 +41,37 @@ export async function fetchGoogleHotMetricsForStore(input: GoogleHotMetricsInput
   if (input.hotAdgroupIds.length === 0 && input.hotAdIds.length === 0) {
     return { adsets: [], ads: [] };
   }
-  const dateLiteral = `'${dateStr}'`;
+
+  // Phase E1.7 hotfix (2026-05-30 night) — Google Ads `segments.date`
+  // is bucketed in the account's timezone, NOT UTC. Worker calls us
+  // with `dateStr` derived from `new Date().toISOString().slice(0,10)`
+  // (UTC date) which mismatches accounts in non-UTC timezones and
+  // returns 0 rows. Fix: query the account's `customer.time_zone`
+  // (one extra GAQL call per fetcher call, ~50ms) and compute the
+  // local date for the segments.date filter. We also expand the
+  // filter to `BETWEEN today-1 AND today` so Google's reporting delay
+  // (cost.cost_micros can be buffered up to ~3h after the activity)
+  // still lets us catch yesterday's full-day spend in case today is
+  // stale.
+  const tzRows = await customer.searchStream({ query: 'SELECT customer.time_zone FROM customer LIMIT 1' });
+  const accountTz = String((tzRows[0]?.customer as { timeZone?: string } | undefined)?.timeZone ?? 'UTC');
+  const todayInTz = new Intl.DateTimeFormat('en-CA', {
+    timeZone: accountTz,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  const yesterdayInTz = new Intl.DateTimeFormat('en-CA', {
+    timeZone: accountTz,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date(Date.now() - oneDayMs));
+  console.log(`[gh-diag] tz=${accountTz} todayInTz=${todayInTz} yesterdayInTz=${yesterdayInTz} workerDateStr=${dateStr}`);
 
   const adsets: AdsetDailyRow[] = [];
   if (input.hotAdgroupIds.length > 0) {
     const ids = input.hotAdgroupIds.map(id => `'${id}'`).join(',');
-    const query = `SELECT campaign.id, campaign.name, ad_group.id, ad_group.name, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value, segments.date FROM ad_group WHERE ad_group.id IN (${ids}) AND segments.date = ${dateLiteral}`;
+    const query = `SELECT campaign.id, campaign.name, ad_group.id, ad_group.name, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value, segments.date FROM ad_group WHERE ad_group.id IN (${ids}) AND segments.date BETWEEN '${yesterdayInTz}' AND '${todayInTz}'`;
     const rows = await customer.searchStream({ query });
-    // Phase E1.7 diagnostic logging — investigate why campaigns_daily.google
-    // was frozen since 17:30 IL on 2026-05-30. Captures API response shape.
-    console.log(`[gh-diag] adgroup_query store=${storeId} date=${dateStr} ids=${input.hotAdgroupIds.length} rows=${rows.length} sample=${JSON.stringify(rows[0] ?? null).slice(0, 300)}`);
+    console.log(`[gh-diag] adgroup_query store=${storeId} tz=${accountTz} range=${yesterdayInTz}..${todayInTz} ids=${input.hotAdgroupIds.length} rows=${rows.length} sample=${JSON.stringify(rows[0] ?? null).slice(0, 300)}`);
     for (const r of rows) {
       adsets.push(toAdsetRow(storeId, r));
     }
@@ -59,9 +80,9 @@ export async function fetchGoogleHotMetricsForStore(input: GoogleHotMetricsInput
   const ads: AdDailyRow[] = [];
   if (input.hotAdIds.length > 0) {
     const ids = input.hotAdIds.map(id => `'${id}'`).join(',');
-    const query = `SELECT campaign.id, campaign.name, ad_group.id, ad_group.name, ad_group_ad.ad.id, ad_group_ad.ad.name, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value, segments.date FROM ad_group_ad WHERE ad_group_ad.ad.id IN (${ids}) AND segments.date = ${dateLiteral}`;
+    const query = `SELECT campaign.id, campaign.name, ad_group.id, ad_group.name, ad_group_ad.ad.id, ad_group_ad.ad.name, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value, segments.date FROM ad_group_ad WHERE ad_group_ad.ad.id IN (${ids}) AND segments.date BETWEEN '${yesterdayInTz}' AND '${todayInTz}'`;
     const rows = await customer.searchStream({ query });
-    console.log(`[gh-diag] ad_query store=${storeId} date=${dateStr} ids=${input.hotAdIds.length} rows=${rows.length}`);
+    console.log(`[gh-diag] ad_query store=${storeId} tz=${accountTz} ids=${input.hotAdIds.length} rows=${rows.length}`);
     for (const r of rows) {
       ads.push(toAdRow(storeId, r));
     }
