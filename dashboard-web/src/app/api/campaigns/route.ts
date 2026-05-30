@@ -59,9 +59,12 @@ export async function GET(req: Request) {
   }
 
   try {
-    // Phase 12.5.x (2026-05-24): fan out 3 parallel reads. `fetchCurrentCampaignStatuses`
-    // is independent of `range` — it scans the last 60 days globally — so it
-    // runs alongside the in-range reads without blocking them.
+    // Phase 12.5.x (2026-05-24) + Phase D (2026-05-30): fan out 3 parallel reads.
+    // `fetchCurrentCampaignStatuses` is independent of `range` — it reads
+    // campaign_registry (Phase D — was: 60-day campaigns_daily scan) and then
+    // broadcasts each campaign's status to its ad_sets via a distinct-tuples
+    // lookup on campaigns_daily — so it runs alongside the in-range reads
+    // without blocking them.
     const [rows, dataLastWriteAt, currentEffectiveStatus] = await Promise.all([
       fetchCampaignsFromPostgres({ range }),
       fetchCampaignsDailyLastWriteAt({ range }),

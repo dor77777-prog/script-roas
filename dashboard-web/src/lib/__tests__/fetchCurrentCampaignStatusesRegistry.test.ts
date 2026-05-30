@@ -92,7 +92,7 @@ describe('fetchCurrentCampaignStatuses → campaign_registry', () => {
     });
   });
 
-  it("dedupes when the same (campaign, ad_set) appears multiple times in adsets_daily lookup", async () => {
+  it("dedupes when the same (campaign, ad_set) appears multiple times in campaigns_daily lookup", async () => {
     const registryChain = buildChain([
       {
         store_id: 'uzoshop', platform: 'meta', campaign_id: 'C1',

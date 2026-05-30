@@ -816,6 +816,13 @@ export async function fetchCampaignsFromPostgres(
  * Soft-fail: a query error returns an empty map. The aggregator's existing
  * in-range logic still produces a status — this helper is an enhancement,
  * not a hard dependency.
+ *
+ * Known scale note: Query 2 (`campaigns_daily` → distinct `(store, platform,
+ * campaign_id, ad_set_id)` tuples) is unbounded by date. At current prod
+ * scale (~15k rows) it's well under the `paginate()` ceiling (50k rows). If
+ * `campaigns_daily` grows past ~50k, the helper will silently truncate;
+ * the proper fix is to switch Query 2 to read directly from `adset_registry`
+ * (one row per ad_set, Phase D backfilled) and drop the broadcast loop.
  */
 export type CurrentEffectiveStatusEntry = {
   status: string;
