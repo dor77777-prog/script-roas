@@ -1,4 +1,4 @@
-// dashboard-web/src/components/__tests__/campaignDrawerStatusSectionFull.test.tsx
+// dashboard-web/src/components/__tests__/campaignDrawerStatusSectionFull.dom.test.tsx
 //
 // Phase D Task 13 — full status section renders 5 status fields, a
 // 3-event timeline, and the BACKFILL_UNKNOWN warning when applicable.

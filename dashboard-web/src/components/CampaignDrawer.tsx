@@ -862,13 +862,14 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
         </header>
 
         <div className="p-4 sm:p-6 space-y-5 sm:space-y-6">
-          {/* Phase C Task 13 — minimal status + freshness panel. Mounts
-              immediately below the header so the operator sees the
+          {/* Phase D Task 12 (2026-05-30) — full status + freshness panel.
+              Mounts immediately below the header so the operator sees the
               configured/effective/delivery + freshness metadata before any
-              metrics. effectiveStatus + lastLiveTickAt are derived from the
-              most-recent CampaignRow in scope (see derivation above); the
-              remaining registry-backed fields are intentionally null for
-              the Phase C MVP — Phase D wires them from campaign_registry. */}
+              metrics. All 6 reg_* fields + lastLiveTickAt are derived from
+              the CampaignRows in scope (see statusSectionData above); the
+              registry is constant per (store, platform, campaign) so the
+              seeding uses ??= rather than a per-row sweep. metricsLagMinutes
+              is reserved for a future phase. */}
           <CampaignDrawerStatusSection
             configuredStatus={statusSectionData.regConfiguredStatus}
             effectiveStatus={statusSectionData.regEffectiveStatus}
