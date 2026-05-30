@@ -2,22 +2,18 @@ import { describe, expect, it, vi } from 'vitest';
 import { fetchGoogleHotMetricsForStore } from '@/lib/fetchers/googleHotMetrics';
 
 describe('fetchGoogleHotMetricsForStore()', () => {
-  it('returns adset + ad metrics rows for hot ids (no campaign-level rows per CRIT-B)', async () => {
+  it('queries FROM campaign for hot CAMPAIGN ids and synthesizes ad_set_id = campaign_id', async () => {
+    // Works for Performance Max (which has no ad_group resource), Standard
+    // Shopping (which has ad_groups but is also queryable at campaign level),
+    // Search, and Display campaigns alike. The previous per-ad_group query
+    // returned 0 rows for PMax → data_daily.ga_spend_cad froze.
     const searchStream = vi.fn();
-    // Phase E1.7 hotfix: fetcher now queries customer.time_zone first
-    // to bucket segments.date in the account's TZ (not UTC).
+    searchStream.mockResolvedValueOnce([{ customer: { timeZone: 'Asia/Jerusalem' } }]);
+    // CRIT-C: JSON keys are camelCase — costMicros, conversionsValue.
     searchStream.mockResolvedValueOnce([
-      { customer: { timeZone: 'Asia/Jerusalem' } },
+      { campaign: { id: 'GC1', name: 'G Campaign 1' }, metrics: { impressions: '500', clicks: '10', costMicros: '25000000', conversions: 0, conversionsValue: '0' }, segments: { date: '2026-05-30' } },
     ]);
-    // ad-group metrics
-    // CRIT-C: JSON keys are camelCase — adGroup, costMicros, conversionsValue.
-    // IMP-A: rows now include campaign.name + ad_group.name so the upsert
-    // preserves the existing name columns.
-    searchStream.mockResolvedValueOnce([
-      { campaign: { id: 'GC1', name: 'G Campaign 1' }, adGroup: { id: 'AG1', name: 'AdGroup 1' }, metrics: { impressions: '500', clicks: '10', costMicros: '25000000', conversions: 0, conversionsValue: '0' }, segments: { date: '2026-05-30' } },
-    ]);
-    // ad metrics
-    // CRIT-C: JSON keys are camelCase — adGroup, adGroupAd.
+    // ad-level branch query (FROM ad_group_ad).
     searchStream.mockResolvedValueOnce([
       { campaign: { id: 'GC1', name: 'G Campaign 1' }, adGroup: { id: 'AG1', name: 'AdGroup 1' }, adGroupAd: { ad: { id: 'AD1', name: 'Ad 1' } }, metrics: { impressions: '500', clicks: '10', costMicros: '25000000', conversions: 0, conversionsValue: '0' }, segments: { date: '2026-05-30' } },
     ]);
@@ -29,11 +25,10 @@ describe('fetchGoogleHotMetricsForStore()', () => {
       dateStr: '2026-05-30',
     });
     expect(out.adsets).toHaveLength(1);
-    expect(out.adsets[0].ad_set_id).toBe('AG1');
+    // ad_set_id == campaign_id (synthetic, matches PMax convention).
     expect(out.adsets[0]).toMatchObject({
-      store_id: 'uzoshop', platform: 'google', campaign_id: 'GC1',
-      // IMP-A: name fields preserved.
-      campaign_name: 'G Campaign 1', ad_set_name: 'AdGroup 1',
+      store_id: 'uzoshop', platform: 'google', campaign_id: 'GC1', ad_set_id: 'GC1',
+      campaign_name: 'G Campaign 1', ad_set_name: 'G Campaign 1',
       spend_cad: 25, impressions: 500, clicks: 10,
     });
     expect(out.ads).toHaveLength(1);
@@ -43,7 +38,23 @@ describe('fetchGoogleHotMetricsForStore()', () => {
     });
   });
 
-  it('skips levels with empty hot sets', async () => {
+  it('issues the campaign-level GAQL query with FROM campaign and account-tz date range', async () => {
+    const searchStream = vi.fn();
+    searchStream.mockResolvedValueOnce([{ customer: { timeZone: 'America/Toronto' } }]);
+    searchStream.mockResolvedValueOnce([]);
+    const customer = { searchStream } as unknown as Parameters<typeof fetchGoogleHotMetricsForStore>[0]['customer'];
+    await fetchGoogleHotMetricsForStore({
+      storeId: 'uzoshop', customer,
+      hotCampaignIds: ['GC1', 'GC2'], hotAdgroupIds: [], hotAdIds: [],
+      dateStr: '2026-05-30',
+    });
+    const campaignQueryCall = searchStream.mock.calls.find(c => /FROM campaign/.test(String(c[0].query)));
+    expect(campaignQueryCall).toBeDefined();
+    expect(String(campaignQueryCall![0].query)).toContain("WHERE campaign.id IN ('GC1','GC2')");
+    expect(String(campaignQueryCall![0].query)).toMatch(/segments\.date BETWEEN '\d{4}-\d{2}-\d{2}' AND '\d{4}-\d{2}-\d{2}'/);
+  });
+
+  it('skips fetches with empty hot sets', async () => {
     const searchStream = vi.fn();
     const customer = { searchStream } as unknown as Parameters<typeof fetchGoogleHotMetricsForStore>[0]['customer'];
     const out = await fetchGoogleHotMetricsForStore({

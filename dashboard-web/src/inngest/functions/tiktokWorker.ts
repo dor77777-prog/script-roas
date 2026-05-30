@@ -157,6 +157,21 @@ export type RunTikTokWorkerJobInput = {
   }) => Promise<void>;
   upsertCampaignsDaily: (rows: Array<Record<string, unknown>>) => Promise<void>;
   upsertAdsDaily: (rows: Array<Record<string, unknown>>) => Promise<void>;
+  /**
+   * Phase E1.7 night (2026-05-30) — loads the ad_id → { adgroup_id,
+   * campaign_id } map from ad_registry for the hot ad ids. Required
+   * because TikTok's AUCTION_AD report dimensions cannot include parent
+   * IDs (`code=40002 data_level AUCTION_AD and dimension <X> do not match`).
+   * Worker queries `SELECT ad_id, adset_id, campaign_id FROM ad_registry
+   * WHERE platform='tiktok' AND ad_id IN (hotAdIds)`.
+   *
+   * Optional only for backwards-compat with vitest fixtures that pass
+   * no hot ad ids; production binding always provides it.
+   */
+  loadAdParentMap?: (input: {
+    storeId: StoreId;
+    hotAdIds: string[];
+  }) => Promise<Map<string, { adgroup_id: string; campaign_id: string }>>;
   recordFreshness: (input: {
     storeId: StoreId;
     platform: 'tiktok';
@@ -543,6 +558,15 @@ async function runTikTokHotMetricsBranch(input: RunTikTokWorkerJobInput): Promis
     ]);
     const today = nowIso.slice(0, 10);
 
+    // Phase E1.7 night (2026-05-30) — load ad_registry → adId → parent
+    // map AFTER hot ids resolve (depends on hotAd). Required because
+    // TikTok's AUCTION_AD report cannot carry adgroup_id / campaign_id
+    // as dimensions. The fetcher uses this map to enrich AD rows so
+    // they route to the right store via the campaign-store-map.
+    const adIdToParent = hotAd.length > 0 && input.loadAdParentMap
+      ? await input.loadAdParentMap({ storeId, hotAdIds: hotAd })
+      : new Map<string, { adgroup_id: string; campaign_id: string }>();
+
     // Phase E1.6.1 (2026-05-30) — TikTok per-store spend split via the
     // agg RPC. Runs UNCONDITIONALLY (independent of hot-set state).
     //
@@ -599,6 +623,7 @@ async function runTikTokHotMetricsBranch(input: RunTikTokWorkerJobInput): Promis
       hotAdIds: hotAd,
       dateStr: today,
       campaignStoreMap,
+      adIdToParent,
       getFxCadFor: fxCadFor,
     });
 
@@ -857,6 +882,33 @@ export const tiktokWorker = inngest.createFunction(
               );
             }
           }
+        },
+        // Phase E1.7 night (2026-05-30) — adId → { adgroup_id, campaign_id }
+        // lookup from ad_registry. Needed because TikTok's AUCTION_AD report
+        // cannot include parent IDs as dimensions. We scope to platform
+        // 'tiktok' but NOT to a specific store_id — the campaign-store-map
+        // may have re-routed the ad's campaign to a different store between
+        // ticks, in which case the registry row still carries the correct
+        // adgroup_id / campaign_id linkage (the fetcher will route via
+        // resolveStore using the current map).
+        loadAdParentMap: async ({ hotAdIds }) => {
+          const out = new Map<string, { adgroup_id: string; campaign_id: string }>();
+          if (hotAdIds.length === 0) return out;
+          const { data, error } = await sb
+            .from('ad_registry')
+            .select('ad_id, adset_id, campaign_id')
+            .eq('platform', 'tiktok')
+            .in('ad_id', hotAdIds);
+          if (error) {
+            console.warn(`tiktokWorker loadAdParentMap: ${error.message}`);
+            return out;
+          }
+          for (const row of (data ?? []) as Array<{ ad_id: string; adset_id: string; campaign_id: string }>) {
+            if (row.ad_id && row.adset_id && row.campaign_id) {
+              out.set(row.ad_id, { adgroup_id: row.adset_id, campaign_id: row.campaign_id });
+            }
+          }
+          return out;
         },
         nowIso,
       });

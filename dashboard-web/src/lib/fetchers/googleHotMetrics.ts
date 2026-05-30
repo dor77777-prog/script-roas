@@ -1,18 +1,28 @@
 // dashboard-web/src/lib/fetchers/googleHotMetrics.ts
 //
-// Phase C — Google Ads metrics fetch for hot ids. Cost is reported
-// in micros (1/1,000,000 of the account currency unit); we divide by
-// 1e6 to get major-unit. uzoshop's Google account is CAD-native, so
-// no FX conversion needed at this level.
+// Google Ads hot-set metrics fetcher for campaigns_daily + ads_daily.
 //
-// CRIT-B note: campaign-level rows are intentionally NOT fetched. The
-// campaigns_daily.ad_set_id column is NOT NULL — Google's `campaign`
-// resource returns no ad_group breakdown so there's no source value
-// to satisfy the constraint. The campaign-aggregate value used by
-// Today / Today-Live is computed at read time by the existing
-// aggregators reading the per-ad-group rows. `hotCampaignIds` remains
-// in the input shape so callers don't have to change; it is now
-// ignored by the fetcher.
+// Resource selection (per Google Ads API):
+//   campaigns_daily — query `FROM campaign WHERE campaign.id IN (...)` for
+//     hot CAMPAIGN ids. This works for ALL campaign types (Performance Max,
+//     Standard Shopping, Search, Display), because per Google's docs every
+//     campaign aggregates `metrics.cost_micros` etc at the campaign resource.
+//     Performance Max campaigns intentionally expose NO `ad_group` resource
+//     (their delivery is asset-group based), so the previous
+//     `FROM ad_group WHERE ad_group.id IN (campaignId)` query returned 0
+//     rows. Synthesizing `ad_set_id = campaign_id` matches the existing
+//     convention used by the nightly cron + the Phase D backfill (see
+//     `campaigns_daily.google` historical rows).
+//   ads_daily — query `FROM ad_group_ad WHERE ad_group_ad.ad.id IN (...)`
+//     for hot AD ids. Returns 0 rows for PMax campaigns (no `ad_group_ad`
+//     resource); returns 1+ rows per ad_id for non-PMax campaigns.
+//
+// Cost is reported in micros (1/1,000,000 of the account currency unit);
+// we divide by 1e6 to get major-unit. uzoshop's Google account is CAD-
+// native, so no FX conversion needed at this level.
+//
+// `hotAdgroupIds` remains in the input shape so callers don't have to
+// change; it is now ignored by the fetcher.
 
 import type { StoreId } from '@/lib/registries/types';
 import type { AdDailyRow, AdsetDailyRow, CampaignDailyRow } from './metaHotMetrics';
@@ -36,23 +46,24 @@ export type GoogleHotMetricsResult = {
 };
 
 export async function fetchGoogleHotMetricsForStore(input: GoogleHotMetricsInput): Promise<GoogleHotMetricsResult> {
-  const { storeId, customer, dateStr } = input;
-  // hotCampaignIds is intentionally ignored — see file-header CRIT-B note.
-  if (input.hotAdgroupIds.length === 0 && input.hotAdIds.length === 0) {
+  const { storeId, customer } = input;
+  // hotAdgroupIds is intentionally ignored — we query at campaign level
+  // (see file-header). dateStr is also unused because Google's `segments.date`
+  // is bucketed in the account timezone — we resolve the date range below
+  // from the account's `customer.time_zone`. Empty hot-set early-exit.
+  if (input.hotCampaignIds.length === 0 && input.hotAdIds.length === 0) {
     return { adsets: [], ads: [] };
   }
 
-  // Phase E1.7 hotfix (2026-05-30 night) — Google Ads `segments.date`
-  // is bucketed in the account's timezone, NOT UTC. Worker calls us
-  // with `dateStr` derived from `new Date().toISOString().slice(0,10)`
-  // (UTC date) which mismatches accounts in non-UTC timezones and
-  // returns 0 rows. Fix: query the account's `customer.time_zone`
-  // (one extra GAQL call per fetcher call, ~50ms) and compute the
-  // local date for the segments.date filter. We also expand the
-  // filter to `BETWEEN today-1 AND today` so Google's reporting delay
-  // (cost.cost_micros can be buffered up to ~3h after the activity)
-  // still lets us catch yesterday's full-day spend in case today is
-  // stale.
+  // Google Ads `segments.date` is bucketed in the account's timezone, NOT
+  // UTC. Worker calls us with `dateStr` derived from `new Date().toISOString()
+  // .slice(0,10)` (UTC date) which mismatches accounts in non-UTC timezones
+  // and returns 0 rows. Fix: query the account's `customer.time_zone` (one
+  // extra GAQL call per fetcher call, ~50ms) and compute the local date for
+  // the segments.date filter. The filter is `BETWEEN today-1 AND today` so
+  // Google's reporting delay (cost.cost_micros can be buffered up to ~3h
+  // after the activity) still lets us catch yesterday's full-day spend if
+  // today is stale.
   const tzRows = await customer.searchStream({ query: 'SELECT customer.time_zone FROM customer LIMIT 1' });
   const accountTz = String((tzRows[0]?.customer as { timeZone?: string } | undefined)?.timeZone ?? 'UTC');
   const todayInTz = new Intl.DateTimeFormat('en-CA', {
@@ -64,30 +75,14 @@ export async function fetchGoogleHotMetricsForStore(input: GoogleHotMetricsInput
     timeZone: accountTz,
     year: 'numeric', month: '2-digit', day: '2-digit',
   }).format(new Date(Date.now() - oneDayMs));
-  console.log(`[gh-diag] tz=${accountTz} todayInTz=${todayInTz} yesterdayInTz=${yesterdayInTz} workerDateStr=${dateStr}`);
 
   const adsets: AdsetDailyRow[] = [];
-  if (input.hotAdgroupIds.length > 0) {
-    const ids = input.hotAdgroupIds.map(id => `'${id}'`).join(',');
-    const query = `SELECT campaign.id, campaign.name, ad_group.id, ad_group.name, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value, segments.date FROM ad_group WHERE ad_group.id IN (${ids}) AND segments.date BETWEEN '${yesterdayInTz}' AND '${todayInTz}'`;
+  if (input.hotCampaignIds.length > 0) {
+    const ids = input.hotCampaignIds.map(id => `'${id}'`).join(',');
+    const query = `SELECT campaign.id, campaign.name, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value, segments.date FROM campaign WHERE campaign.id IN (${ids}) AND segments.date BETWEEN '${yesterdayInTz}' AND '${todayInTz}'`;
     const rows = await customer.searchStream({ query });
-    console.log(`[gh-diag] adgroup_query store=${storeId} tz=${accountTz} range=${yesterdayInTz}..${todayInTz} ids=${input.hotAdgroupIds.length} rows=${rows.length} sample=${JSON.stringify(rows[0] ?? null).slice(0, 300)}`);
-    // Phase E1.7 diag #2: if filtered query returns 0, fall back to a
-    // broader query (NO id filter, just date) to verify Google has any
-    // data today + to capture the actual ad_group IDs that have spend.
-    // This is diagnostic only — the rows still go through the filtered
-    // path. Helps determine if our hot-set IDs match Google's reality.
-    if (rows.length === 0) {
-      const broadQuery = `SELECT campaign.id, campaign.name, ad_group.id, ad_group.name, metrics.cost_micros, segments.date FROM ad_group WHERE segments.date BETWEEN '${yesterdayInTz}' AND '${todayInTz}' AND metrics.cost_micros > 0 LIMIT 20`;
-      const broadRows = await customer.searchStream({ query: broadQuery });
-      console.log(`[gh-diag] BROAD store=${storeId} rows_with_cost=${broadRows.length} actual_ids=${broadRows.slice(0, 10).map(r => {
-        const c = (r as { campaign?: Record<string, unknown> }).campaign ?? {};
-        const g = (r as { adGroup?: Record<string, unknown> }).adGroup ?? {};
-        return `c=${c.id}/ag=${g.id}/cost=${((r as { metrics?: Record<string, unknown> }).metrics ?? {}).costMicros}`;
-      }).join(' | ').slice(0, 600)}`);
-    }
     for (const r of rows) {
-      adsets.push(toAdsetRow(storeId, r));
+      adsets.push(toAdsetRowFromCampaign(storeId, r));
     }
   }
 
@@ -96,7 +91,6 @@ export async function fetchGoogleHotMetricsForStore(input: GoogleHotMetricsInput
     const ids = input.hotAdIds.map(id => `'${id}'`).join(',');
     const query = `SELECT campaign.id, campaign.name, ad_group.id, ad_group.name, ad_group_ad.ad.id, ad_group_ad.ad.name, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value, segments.date FROM ad_group_ad WHERE ad_group_ad.ad.id IN (${ids}) AND segments.date BETWEEN '${yesterdayInTz}' AND '${todayInTz}'`;
     const rows = await customer.searchStream({ query });
-    console.log(`[gh-diag] ad_query store=${storeId} tz=${accountTz} ids=${input.hotAdIds.length} rows=${rows.length}`);
     for (const r of rows) {
       ads.push(toAdRow(storeId, r));
     }
@@ -125,14 +119,21 @@ function toCampaignRow(storeId: StoreId, r: Record<string, unknown>): CampaignDa
   };
 }
 
-function toAdsetRow(storeId: StoreId, r: Record<string, unknown>): AdsetDailyRow {
-  // CRIT-C: JSON uses camelCase key `adGroup`.
-  const ag = (r.adGroup ?? {}) as Record<string, unknown>;
+/**
+ * Synthesize an adset row from a campaign-level result by setting
+ * `ad_set_id = campaign_id`. Matches the convention used by the nightly
+ * cron + Phase D backfill for Performance Max campaigns (which have no
+ * real ad_group resource). For non-PMax campaigns this is still correct
+ * because we sum across all rows per (date, store_id, platform) when
+ * deriving `data_daily.ga_spend_cad` via `agg_data_daily_for_date`.
+ */
+function toAdsetRowFromCampaign(storeId: StoreId, r: Record<string, unknown>): AdsetDailyRow {
+  const c = (r.campaign ?? {}) as Record<string, unknown>;
+  const base = toCampaignRow(storeId, r);
   return {
-    ...toCampaignRow(storeId, r),
-    ad_set_id: String(ag.id),
-    // IMP-A: preserve ad_set_name (sourced from ad_group.name).
-    ad_set_name: (ag.name as string | undefined) ?? null,
+    ...base,
+    ad_set_id: String(c.id),
+    ad_set_name: (c.name as string | undefined) ?? null,
   };
 }
 
