@@ -182,15 +182,17 @@ Inngest מ-serialize את ה-return של כל `step.run` callback דרך JSON. *
 ### 5.3 Google Ads
 - **API**: `v24` (יורד מהאוויר רק מאי 2027).
 - **קבצים**: `dashboard-web/src/lib/fetchers/googleAds.ts`.
-- **Auth**: OAuth refresh-token + developer-token. ENV: `GOOGLE_ADS_DEVELOPER_TOKEN`, `<STORE>_GOOGLE_ADS_CUSTOMER_ID`, `<STORE>_GOOGLE_ADS_REFRESH_TOKEN`.
+- **Auth**: OAuth refresh-token + developer-token. ENV: `GOOGLEADS_DEVELOPER_TOKEN`, `GOOGLEADS_CLIENT_ID`, `GOOGLEADS_CLIENT_SECRET`, `GOOGLEADS_LOGIN_CUSTOMER_ID`, `GOOGLEADS_REFRESH_TOKEN` (all global), plus `<STORE>_GOOGLEADS_CUSTOMER_ID` per store. **Active stores:** only `uzoshop` has Google Ads today (per `docs/PROPS-MAP.md` §3 + §4). usmile360 + zolplus have no Google account → the Phase C worker treats them as "not configured" and records a `success` no-op freshness row instead of attempting a fetch (see §[Phase C soak fixes](#phase-c-soak-fixes-2026-05-30)).
 - **GAQL**: `SELECT campaign.id, campaign.name, campaign.status, metrics.cost_micros, ... FROM campaign ...` ו-`SELECT ad_group.id, ad_group.status, ... FROM ad_group ...`.
 - **status fields**: `campaign.status` (`ENABLED` / `PAUSED` / `REMOVED`), `ad_group.status` (same).
 - **Conversions**: לוקחים `conversions` + `conversions_value` ישירות מ-`metrics`.
+- **`change_status` GAQL bounded-range requirement (CRIT-F-2, 2026-05-30):** the `change_status` resource requires BOTH a lower AND an upper bound on `last_change_date_time` — single-sided `>` is rejected with `CHANGE_DATE_RANGE_INFINITE`. `fetchGoogleStatusForStore` builds the upper bound from `formatGaqlDateTime(new Date())` so the bounded window matches the cutoff exactly.
 
 ### 5.4 TikTok Marketing
 - **API**: `v1.3`.
 - **קובץ**: `dashboard-web/src/lib/fetchers/tiktok.ts`.
-- **Auth**: long-lived access token + advertiser_id. ENV: `UZOSHOP_TIKTOK_ACCESS_TOKEN`, `UZOSHOP_TIKTOK_ADVERTISER_ID` (TikTok פעיל רק על uzoshop נכון להיום).
+- **Auth**: long-lived access token + advertiser_id. ENV: `UZOSHOP_TIKTOK_ACCESS_TOKEN`, `UZOSHOP_TIKTOK_ADVERTISER_ID` (**TikTok-on-Vercel הוא חשבון יחיד**).
+- **Shared-account multi-tenant model (operator-confirmed 2026-05-30):** there is ONE TikTok ad account (uzoshop's). It contains multiple Shopify pixels — one per destination store. When the operator uploads an ad in TikTok they pick the pixel matching the relevant store. The single advertiser therefore serves **all 3 stores** simultaneously, and per-row store attribution is recovered post-fetch via the Phase A.5 v2 `campaign-store-map` (operator-tagged in `CampaignDrawer`; see §25.11). Workers for usmile360 + zolplus **never have their own TikTok env vars** — their dedicated `tiktok-worker` invocations are intentionally no-ops; the rows under their `store_id` are written by uzoshop's worker via the map. See §[Phase C soak fixes](#phase-c-soak-fixes-2026-05-30) for the `isTikTokConfiguredForStore` gate that prevents these no-op invocations from throwing.
 - **Endpoints**:
   - `/open_api/v1.3/report/integrated/get/` עם `data_level=AUCTION_AD` ל-spend/impressions/clicks/conversions/value.
   - `/open_api/v1.3/adgroup/get/` ל-`secondary_status` (effective_status).
@@ -1282,3 +1284,64 @@ This adapts Meta's bucket usage automatically — when usage drops, refresh freq
 - `cron-live-heavy` decommission → Phase C.5 (after 3-day canary clean reconcile).
 - Full UI registry-status read path (CampaignsTable + CampaignDrawer fully wired to registries instead of legacy fields) → Phase D.
 - Shopify worker on the orchestrator → Phase D.
+
+## Phase C soak fixes (2026-05-30)
+
+Eight hours after the Phase C deploy the soak verification queries surfaced three production failures that all rendered as "empty `data_freshness` rows" in the operator panel. Root cause for each was a worker throwing **before** reaching its `recordFreshness` call.
+
+**Findings (from production Inngest logs):**
+
+1. **`CHANGE_DATE_RANGE_INFINITE` on Google `change_status`** — uzoshop's status-branch GAQL had only `last_change_date_time > 'X'`. Google's `change_status` resource rejects single-sided ranges. Operator panel symptom: zero `google {campaign,adset,ad}_status` rows for **all 3 stores** (uzoshop hit the query error; usmile360 + zolplus hit issue 2 below).
+2. **Missing `USMILE360_GOOGLEADS_CUSTOMER_ID`** (and same for `zolplus`) — only `uzoshop` has Google Ads (per §5.3 + PROPS-MAP §3/§4). The orchestrator naively fanned out for all (store, platform, scope) combos; `safeCustomer` threw, no freshness recorded.
+3. **Missing `USMILE360_TIKTOK_*`** (and same for `zolplus`) — only `uzoshop` has TikTok (per §5.4). Same fan-out / `safeAccount` throw / empty freshness pattern.
+
+**The architectural antipattern.** Both `google-worker` and `tiktok-worker` status branches called `safeCustomer` / `safeAccount` → `fetchStatus` BEFORE any `recordFreshness` write. Any throw — invalid query, missing creds, network glitch — left `data_freshness` indistinguishable from "this store has never run". Operator couldn't tell broken from never-attempted.
+
+**Three fixes — single shared design (one commit):**
+
+1. **`isPlatformConfiguredForStore` gate (no-op success).** Each worker checks per-store env var presence at the **top** of the branch:
+   - `isGoogleConfiguredForStore(storeId)` → `${UPPER}_GOOGLEADS_CUSTOMER_ID`.
+   - `isTikTokConfiguredForStore(storeId)` → `${UPPER}_TIKTOK_ADVERTISER_ID` && `${UPPER}_TIKTOK_ACCESS_TOKEN`.
+
+   When false, the branch records `success` freshness for every scope it owns and returns. **Why `success` and not `not_configured`:** keeps the operator panel consistent (one row per (store, platform, scope) combo, always green for tenant stores). Semantically it is correct — the worker had nothing to do *and the data is being maintained elsewhere* (uzoshop's worker, for the TikTok shared-account case; nowhere, for the Google-not-configured case where there is no data at all).
+
+   Override hook (`isGoogleConfigured?` / `isTikTokConfigured?` on the worker input type) exists for unit tests to exercise both paths explicitly without depending on env-var presence.
+
+2. **try/catch wrap around the main work.** Both branches in both workers now wrap the fetch + diff + upsert work. On throw they write a `transient_error` row per scope (with the truncated error message) **before** re-throwing. Re-throwing keeps Inngest's exponential-backoff retry intact; the next successful tick overwrites with `success`.
+
+   Same pattern applies to the `hot_metrics` branches — they were previously protected only by the hot-set empty short-circuit (which happened to run before `safeCustomer`); the new explicit `isPlatformConfigured` gate + try/catch make the resilience independent of code-path ordering.
+
+3. **CRIT-F-2 — Google `change_status` bounded range.** Added the upper bound `change_status.last_change_date_time <= '${formatGaqlDateTime(new Date())}'` to the GAQL in `fetchGoogleStatusForStore` (CRIT-F's prior fix added LIMIT + ORDER BY but missed the bounded-range requirement specific to this resource). See §5.3.
+
+**Files touched:**
+
+- [`dashboard-web/src/lib/fetchers/googleStatus.ts`](../dashboard-web/src/lib/fetchers/googleStatus.ts) — CRIT-F-2 bound + extended comment.
+- [`dashboard-web/src/lib/fetchers/googleAccountConfig.ts`](../dashboard-web/src/lib/fetchers/googleAccountConfig.ts) — export `isGoogleConfiguredForStore`.
+- [`dashboard-web/src/lib/fetchers/tiktokAccountConfig.ts`](../dashboard-web/src/lib/fetchers/tiktokAccountConfig.ts) — export `isTikTokConfiguredForStore`.
+- [`dashboard-web/src/inngest/functions/googleWorker.ts`](../dashboard-web/src/inngest/functions/googleWorker.ts) — configured-gate + try/catch on both branches.
+- [`dashboard-web/src/inngest/functions/tiktokWorker.ts`](../dashboard-web/src/inngest/functions/tiktokWorker.ts) — same.
+- 9 new vitest cases (4 googleWorker + 4 tiktokWorker + 1 googleStatus).
+
+**Post-fix expected `data_freshness` shape (45 rows total):**
+
+| platform | scopes (5) | rows per scope | total |
+|---|---|---|---|
+| meta | campaign/adset/ad status + campaign/ad metrics | 3 (1 per store) | 15 |
+| google | same | 3 — uzoshop runs the real fetch, usmile360+zolplus no-op success | 15 |
+| tiktok | same | 3 — uzoshop runs the real fetch + tenant rows via the Phase A.5 v2 map; usmile360+zolplus no-op success | 15 |
+
+The operator panel becomes a true health matrix: any red row corresponds to a real failure (`transient_error`), not "this combination is not deployed yet".
+
+**Drawer hotfix — shared-advertiser-id resolution.** The same soak surfaced a Phase A.5 v2 bug in `CampaignDrawer.tsx`. The TikTok store-mapping section computed `const advertiserId = adAccounts[storeId]?.tiktokAdvertiserId ?? ''`. But the advertiser id is a **single shared id** that lives only under `uzoshop` in the adAccounts map (§5.4). The moment a campaign was successfully attributed to usmile360 or zolplus — exactly the success case the operator is most likely to revisit — the drawer's `storeId` prop became the tenant store, `adAccounts['usmile360'].tiktokAdvertiserId` returned `''`, the `<select disabled={!advertiserId}>` rendered grey-out, and the storeMap lookup hit the empty key → `currentValue = undefined` → the "(לא ממופה · ברירת מחדל uzoshop)" badge appeared next to campaigns the operator had already mapped. The operator could not re-map without going back to uzoshop's filter.
+
+**Fix:** new helper [`resolveSharedTikTokAdvertiserId(accounts: AdAccountMap)`](../dashboard-web/src/lib/campaignsLinks.ts) scans every adAccount entry and returns the first non-empty `tiktokAdvertiserId`. The drawer ([CampaignDrawer.tsx:383](../dashboard-web/src/components/CampaignDrawer.tsx#L383) + [CampaignDrawer.tsx:1315](../dashboard-web/src/components/CampaignDrawer.tsx#L1315)) calls it instead of the per-store lookup. The dropdown is now enabled for every store filter as long as ANY store carries the advertiser id; the storeMap key is computed consistently from the shared id; previously-mapped campaigns render with the correct value selected; the badge appears only for genuinely unmapped campaigns.
+
+If TikTok ever onboards multiple distinct advertisers (e.g. a per-store TikTok rebuild), the helper becomes wrong and the drawer needs a per-campaign advertiser id (probably stored on the campaign row itself). Future problem — gated behind a single function so the change is localised.
+
+**Test coverage (Phase C soak total):**
+- 5 unit tests in [`campaignsLinks.test.ts`](../dashboard-web/src/lib/__tests__/campaignsLinks.test.ts) for the resolver.
+- 3 DOM regression tests in [`campaignDrawerStoreMapV2.dom.test.tsx`](../dashboard-web/src/components/__tests__/campaignDrawerStoreMapV2.dom.test.tsx) under the `shared-advertiser-id resolution` describe block — exercises the exact bug scenario (storeId='usmile360', only uzoshop has the advertiser id) and asserts dropdown enabled + mapping resolved.
+- 1 GAQL bound test in [`googleStatus.test.ts`](../dashboard-web/src/lib/fetchers/__tests__/googleStatus.test.ts) asserts both `>` and `<=` operators on `last_change_date_time`.
+- 4 + 4 worker tests in [`googleWorker.test.ts`](../dashboard-web/src/inngest/functions/__tests__/googleWorker.test.ts) / [`tiktokWorker.test.ts`](../dashboard-web/src/inngest/functions/__tests__/tiktokWorker.test.ts) — `isConfigured` no-op paths + try/catch `transient_error` paths.
+
+**Open follow-up:** the `meta-worker` should adopt the same `isConfigured` + try/catch shape for symmetry (Meta has per-store accounts for all 3 stores today, so the antipattern is dormant — but a future store onboarding could hit it). Tracked separately.

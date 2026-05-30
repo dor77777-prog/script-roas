@@ -40,7 +40,10 @@ import { fetchGoogleStatusForStore } from '@/lib/fetchers/googleStatus';
 import type { GoogleStatusInput, GoogleStatusResult } from '@/lib/fetchers/googleStatus';
 import { fetchGoogleHotMetricsForStore } from '@/lib/fetchers/googleHotMetrics';
 import type { GoogleHotMetricsInput, GoogleHotMetricsResult } from '@/lib/fetchers/googleHotMetrics';
-import { getGoogleCustomerForStore } from '@/lib/fetchers/googleAccountConfig';
+import {
+  getGoogleCustomerForStore,
+  isGoogleConfiguredForStore,
+} from '@/lib/fetchers/googleAccountConfig';
 import { diffAgainstRegistry } from '@/lib/registries/diff';
 import {
   buildRegistryUpsertRow,
@@ -112,7 +115,31 @@ export type RunGoogleWorkerJobInput = {
   getCustomer?: (storeId: StoreId) => Promise<{
     searchStream: (input: { query: string }) => Promise<Array<Record<string, unknown>>>;
   }>;
+  /**
+   * Phase C soak fix (2026-05-30): optional override of the per-store
+   * "is Google configured?" check. Defaults to `isGoogleConfiguredForStore`
+   * (env-var presence of `${UPPER}_GOOGLEADS_CUSTOMER_ID`). When false the
+   * worker no-ops and records `success` freshness for every scope, then
+   * returns without touching the customer resolver or the fetcher.
+   *
+   * Why this exists: only `uzoshop` has its own Google Ads account today
+   * (see `docs/PROPS-MAP.md` §3/§4 + `ARCHITECTURE.md` §5.3); the
+   * orchestrator naively fans out events for every (store, platform, scope)
+   * combo (`cronTickOrchestrator.ts:17`). Without this gate, `safeCustomer`
+   * threw `Missing ${UPPER}_GOOGLEADS_CUSTOMER_ID` every tick for
+   * usmile360 + zolplus and the worker never reached `recordFreshness` —
+   * the operator panel stayed permanently empty for those rows.
+   */
+  isGoogleConfigured?: (storeId: StoreId) => boolean;
 };
+
+function checkGoogleConfigured(
+  storeId: StoreId,
+  override?: (storeId: StoreId) => boolean,
+): boolean {
+  if (override) return override(storeId);
+  return isGoogleConfiguredForStore(storeId);
+}
 
 async function safeCustomer(
   storeId: StoreId,
@@ -151,76 +178,106 @@ export async function runGoogleWorkerJob(input: RunGoogleWorkerJobInput): Promis
 }
 
 async function runGoogleStatusBranch(input: RunGoogleWorkerJobInput): Promise<void> {
-  const {
-    jobData,
-    fetchStatus,
-    loadPriorRegistry,
-    upsertRegistry,
-    insertStatusEvents,
-    recordFreshness: rec,
-    getCustomer,
-    nowIso,
-  } = input;
+  const { jobData, recordFreshness: rec } = input;
   const storeId = jobData.store_id;
 
-  // 1. Resolve customer + fetch — `fetchGoogleStatusForStore` runs a
-  //    change_status discovery query then entity follow-ups for
-  //    CAMPAIGN / AD_GROUP / AD_GROUP_AD types.
-  const customer = await safeCustomer(storeId, getCustomer);
-  const status = await fetchStatus({ storeId, customer });
+  const recAllStatusScopes = async (
+    status: 'success' | 'transient_error',
+    errorMessage?: string,
+  ): Promise<void> => {
+    for (const s of ['campaign_status', 'adset_status', 'ad_status'] as const) {
+      await rec({
+        storeId,
+        platform: 'google',
+        scope: s,
+        tableName: registryNameForScope(s),
+        status,
+        errorMessage,
+      });
+    }
+  };
 
-  // 2. Load prior registry rows for the diff (platform='google').
-  const prior = await loadPriorRegistry(storeId);
-
-  // 3. Diff → status events (one per genuine transition; cosmetic
-  //    edits like name changes do NOT emit events).
-  const campaignEvents = diffAgainstRegistry({
-    entityType: 'campaign',
-    prior: prior.campaigns,
-    fresh: status.campaigns,
-    occurredAt: nowIso,
-  });
-  const adsetEvents = diffAgainstRegistry({
-    entityType: 'adset',
-    prior: prior.adsets as Map<string, CampaignRegistryRow>,
-    fresh: status.adsets as CampaignRegistryRow[],
-    occurredAt: nowIso,
-  });
-  const adEvents = diffAgainstRegistry({
-    entityType: 'ad',
-    prior: prior.ads as Map<string, CampaignRegistryRow>,
-    fresh: status.ads as CampaignRegistryRow[],
-    occurredAt: nowIso,
-  });
-  const allEvents = [...campaignEvents, ...adsetEvents, ...adEvents];
-  if (allEvents.length > 0) {
-    await insertStatusEvents({ events: allEvents });
+  // Phase C soak: stores without their own Google Ads account (e.g.
+  // usmile360, zolplus — only uzoshop has Google today per ARCHITECTURE.md
+  // §5.3) record a freshness success and return. Without this, every tick
+  // the orchestrator naively fanned out for these stores and the missing
+  // env var (`${UPPER}_GOOGLEADS_CUSTOMER_ID`) made `safeCustomer` throw —
+  // resulting in zero status freshness rows and a permanently empty
+  // operator panel for Google status.
+  if (!checkGoogleConfigured(storeId, input.isGoogleConfigured)) {
+    await recAllStatusScopes('success');
+    return;
   }
 
-  // 4. Upsert all 3 registries. buildRegistryUpsertRow preserves
-  //    first_seen_at + computes status_changed_at correctly.
-  const campRows = status.campaigns.map((c) =>
-    buildRegistryUpsertRow({ prior: prior.campaigns.get(c.campaign_id) ?? null, fresh: c, nowIso }),
-  );
-  await upsertRegistry({ table: 'campaign_registry', rows: campRows });
-  const asRows = status.adsets.map((a) =>
-    buildRegistryUpsertRow({ prior: prior.adsets.get(a.adset_id) ?? null, fresh: a, nowIso }),
-  );
-  await upsertRegistry({ table: 'adset_registry', rows: asRows });
-  const adRows = status.ads.map((a) =>
-    buildRegistryUpsertRow({ prior: prior.ads.get(a.ad_id) ?? null, fresh: a, nowIso }),
-  );
-  await upsertRegistry({ table: 'ad_registry', rows: adRows });
+  try {
+    const {
+      fetchStatus,
+      loadPriorRegistry,
+      upsertRegistry,
+      insertStatusEvents,
+      getCustomer,
+      nowIso,
+    } = input;
 
-  // 5. Mark freshness success for all 3 scopes.
-  for (const s of ['campaign_status', 'adset_status', 'ad_status'] as const) {
-    await rec({
-      storeId,
-      platform: 'google',
-      scope: s,
-      tableName: registryNameForScope(s),
-      status: 'success',
+    // 1. Resolve customer + fetch — `fetchGoogleStatusForStore` runs a
+    //    change_status discovery query then entity follow-ups for
+    //    CAMPAIGN / AD_GROUP / AD_GROUP_AD types.
+    const customer = await safeCustomer(storeId, getCustomer);
+    const status = await fetchStatus({ storeId, customer });
+
+    // 2. Load prior registry rows for the diff (platform='google').
+    const prior = await loadPriorRegistry(storeId);
+
+    // 3. Diff → status events (one per genuine transition; cosmetic
+    //    edits like name changes do NOT emit events).
+    const campaignEvents = diffAgainstRegistry({
+      entityType: 'campaign',
+      prior: prior.campaigns,
+      fresh: status.campaigns,
+      occurredAt: nowIso,
     });
+    const adsetEvents = diffAgainstRegistry({
+      entityType: 'adset',
+      prior: prior.adsets as Map<string, CampaignRegistryRow>,
+      fresh: status.adsets as CampaignRegistryRow[],
+      occurredAt: nowIso,
+    });
+    const adEvents = diffAgainstRegistry({
+      entityType: 'ad',
+      prior: prior.ads as Map<string, CampaignRegistryRow>,
+      fresh: status.ads as CampaignRegistryRow[],
+      occurredAt: nowIso,
+    });
+    const allEvents = [...campaignEvents, ...adsetEvents, ...adEvents];
+    if (allEvents.length > 0) {
+      await insertStatusEvents({ events: allEvents });
+    }
+
+    // 4. Upsert all 3 registries. buildRegistryUpsertRow preserves
+    //    first_seen_at + computes status_changed_at correctly.
+    const campRows = status.campaigns.map((c) =>
+      buildRegistryUpsertRow({ prior: prior.campaigns.get(c.campaign_id) ?? null, fresh: c, nowIso }),
+    );
+    await upsertRegistry({ table: 'campaign_registry', rows: campRows });
+    const asRows = status.adsets.map((a) =>
+      buildRegistryUpsertRow({ prior: prior.adsets.get(a.adset_id) ?? null, fresh: a, nowIso }),
+    );
+    await upsertRegistry({ table: 'adset_registry', rows: asRows });
+    const adRows = status.ads.map((a) =>
+      buildRegistryUpsertRow({ prior: prior.ads.get(a.ad_id) ?? null, fresh: a, nowIso }),
+    );
+    await upsertRegistry({ table: 'ad_registry', rows: adRows });
+
+    // 5. Mark freshness success for all 3 scopes.
+    await recAllStatusScopes('success');
+  } catch (err) {
+    // Phase C soak: surface the failure to the operator panel by writing a
+    // transient_error row per scope BEFORE re-throwing. Re-throwing keeps
+    // Inngest's exponential-backoff retry intact; the next successful tick
+    // overwrites the row with status='success'.
+    const message = err instanceof Error ? err.message : String(err);
+    await recAllStatusScopes('transient_error', message);
+    throw err;
   }
 }
 
@@ -231,18 +288,7 @@ function registryNameForScope(scope: 'campaign_status' | 'adset_status' | 'ad_st
 }
 
 async function runGoogleHotMetricsBranch(input: RunGoogleWorkerJobInput): Promise<void> {
-  const {
-    jobData,
-    fetchHotMetrics,
-    getHotCampaignIds,
-    getHotAdgroupIds,
-    getHotAdIds,
-    upsertCampaignsDaily,
-    upsertAdsDaily,
-    recordFreshness: rec,
-    getCustomer,
-    nowIso,
-  } = input;
+  const { jobData, recordFreshness: rec } = input;
   const storeId = jobData.store_id;
 
   // IMP-C: every hot_metrics outcome records BOTH campaign_metrics
@@ -271,55 +317,86 @@ async function runGoogleHotMetricsBranch(input: RunGoogleWorkerJobInput): Promis
     });
   };
 
-  // 1. Load hot ids in parallel.
-  const [hotCampaign, hotAdgroup, hotAd] = await Promise.all([
-    getHotCampaignIds(storeId),
-    getHotAdgroupIds(storeId),
-    getHotAdIds(storeId),
-  ]);
-
-  // 2. Empty hot set is a NORMAL state (e.g. all campaigns paused) — we
-  //    still mark freshness success because the worker did its job;
-  //    there was simply nothing hot to refresh.
-  if (hotCampaign.length + hotAdgroup.length + hotAd.length === 0) {
+  // Phase C soak: stores without their own Google Ads account record
+  // freshness success and return. The hot-set empty-state short-circuit
+  // below ALSO writes a success row, but only ran after `safeCustomer`
+  // — for stores with hot ids and no creds the worker threw before
+  // touching `recordFreshness`. This gate moves the no-creds case to
+  // the top so it's not creds-vs-hot-ids order-dependent.
+  if (!checkGoogleConfigured(storeId, input.isGoogleConfigured)) {
     await recHotPair('success');
     return;
   }
 
-  // 3. Resolve customer + fetch metrics for today only.
-  const customer = await safeCustomer(storeId, getCustomer);
-  const today = nowIso.slice(0, 10);
-  const metrics = await fetchHotMetrics({
-    storeId,
-    customer,
-    hotCampaignIds: hotCampaign,
-    hotAdgroupIds: hotAdgroup,
-    hotAdIds: hotAd,
-    dateStr: today,
-  });
+  try {
+    const {
+      fetchHotMetrics,
+      getHotCampaignIds,
+      getHotAdgroupIds,
+      getHotAdIds,
+      upsertCampaignsDaily,
+      upsertAdsDaily,
+      getCustomer,
+      nowIso,
+    } = input;
 
-  // 4. Upsert campaigns_daily (adsets only) and ads_daily, stamping
-  //    source='live_tick' + last_live_tick_at on every row.
-  //    CRIT-B: hot-metrics fetcher returns only adset + ad rows; the
-  //    campaign-level aggregate is computed at read time by the existing
-  //    aggregators (Today / Today-Live). campaigns_daily.ad_set_id is
-  //    NOT NULL so we cannot insert a campaign-only row.
-  if (metrics.adsets.length > 0) {
-    const all: Array<Record<string, unknown>> = metrics.adsets.map((a) => ({
-      ...a,
-      source: 'live_tick',
-      last_live_tick_at: nowIso,
-    }));
-    await upsertCampaignsDaily(all);
-  }
-  if (metrics.ads.length > 0) {
-    await upsertAdsDaily(
-      metrics.ads.map((a) => ({ ...a, source: 'live_tick', last_live_tick_at: nowIso })),
-    );
-  }
+    // 1. Load hot ids in parallel.
+    const [hotCampaign, hotAdgroup, hotAd] = await Promise.all([
+      getHotCampaignIds(storeId),
+      getHotAdgroupIds(storeId),
+      getHotAdIds(storeId),
+    ]);
 
-  // 5. Mark freshness success for both campaign_metrics + ad_metrics.
-  await recHotPair('success');
+    // 2. Empty hot set is a NORMAL state (e.g. all campaigns paused) — we
+    //    still mark freshness success because the worker did its job;
+    //    there was simply nothing hot to refresh.
+    if (hotCampaign.length + hotAdgroup.length + hotAd.length === 0) {
+      await recHotPair('success');
+      return;
+    }
+
+    // 3. Resolve customer + fetch metrics for today only.
+    const customer = await safeCustomer(storeId, getCustomer);
+    const today = nowIso.slice(0, 10);
+    const metrics = await fetchHotMetrics({
+      storeId,
+      customer,
+      hotCampaignIds: hotCampaign,
+      hotAdgroupIds: hotAdgroup,
+      hotAdIds: hotAd,
+      dateStr: today,
+    });
+
+    // 4. Upsert campaigns_daily (adsets only) and ads_daily, stamping
+    //    source='live_tick' + last_live_tick_at on every row.
+    //    CRIT-B: hot-metrics fetcher returns only adset + ad rows; the
+    //    campaign-level aggregate is computed at read time by the existing
+    //    aggregators (Today / Today-Live). campaigns_daily.ad_set_id is
+    //    NOT NULL so we cannot insert a campaign-only row.
+    if (metrics.adsets.length > 0) {
+      const all: Array<Record<string, unknown>> = metrics.adsets.map((a) => ({
+        ...a,
+        source: 'live_tick',
+        last_live_tick_at: nowIso,
+      }));
+      await upsertCampaignsDaily(all);
+    }
+    if (metrics.ads.length > 0) {
+      await upsertAdsDaily(
+        metrics.ads.map((a) => ({ ...a, source: 'live_tick', last_live_tick_at: nowIso })),
+      );
+    }
+
+    // 5. Mark freshness success for both campaign_metrics + ad_metrics.
+    await recHotPair('success');
+  } catch (err) {
+    // Phase C soak: surface the failure to the operator panel by writing
+    // transient_error rows BEFORE re-throwing. Re-throw preserves the
+    // Inngest retry behavior; next successful tick overwrites with success.
+    const message = err instanceof Error ? err.message : String(err);
+    await recHotPair('transient_error', message);
+    throw err;
+  }
 }
 
 // ---------------------------------------------------------------------------

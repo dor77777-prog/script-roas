@@ -80,6 +80,10 @@ import {
   setMappedProducts,
   type ProductMap,
 } from '@/lib/campaignProductMap';
+import {
+  resolveSharedTikTokAdvertiserId,
+  type AdAccountMap,
+} from '@/lib/campaignsLinks';
 
 // ---------------------------------------------------------------------------
 // Minimal test component — mirrors the dropdown section from CampaignDrawer.
@@ -294,6 +298,99 @@ describe('CampaignDrawer Store section (Phase A.5 v2)', () => {
 
     expect(writeStoreMapMock).toHaveBeenCalledTimes(1);
     expect(setMappedProductsMock).not.toHaveBeenCalled();
+  });
+
+  // Phase C soak hotfix (2026-05-30) — regression test for the bug where
+  // the dropdown looked up the advertiser id via `adAccounts[storeId]`. For
+  // any campaign whose CURRENT attribution is usmile360 / zolplus (i.e. the
+  // operator already mapped it via the drawer + cron-live-heavy migrated
+  // the campaigns_daily row → drawer's `storeId` prop = 'usmile360'),
+  // `adAccounts['usmile360'].tiktokAdvertiserId` returned '' → dropdown
+  // disabled + empty storeMap key → "unmapped (default uzoshop)" badge for
+  // a campaign the operator HAD already mapped. The fix routes through
+  // `resolveSharedTikTokAdvertiserId(adAccounts)` which scans every store
+  // and returns the single shared id.
+  describe('shared-advertiser-id resolution (regression — drawer hotfix 2026-05-30)', () => {
+    function StoreSectionWithAdAccounts(props: {
+      storeId: string;
+      campaignId: string;
+      adAccounts: AdAccountMap;
+      initialStoreMap?: CampaignStoreMap;
+    }) {
+      const advertiserId = resolveSharedTikTokAdvertiserId(props.adAccounts);
+      return (
+        <StoreSection
+          storeId={props.storeId}
+          campaignId={props.campaignId}
+          advertiserId={advertiserId}
+          initialStoreMap={props.initialStoreMap}
+        />
+      );
+    }
+
+    const ADV = 'TT-UZO-9999';
+
+    it('dropdown is ENABLED when drawer renders for usmile360 attribution + uzoshop is the only advertiser-bearing store', () => {
+      const accounts: AdAccountMap = {
+        uzoshop: { metaAdAccountId: 'M-UZO', googleAdsCustomerId: 'G-UZO', tiktokAdvertiserId: ADV },
+        zolplus: { metaAdAccountId: 'M-ZOL', googleAdsCustomerId: null },
+        usmile360: { metaAdAccountId: 'M-USM', googleAdsCustomerId: null },
+      };
+      render(
+        <StoreSectionWithAdAccounts
+          storeId="usmile360"
+          campaignId="C-USMILE-1"
+          adAccounts={accounts}
+        />,
+      );
+      const select = screen.getByTestId('drawer-store-select') as HTMLSelectElement;
+      expect(select.disabled).toBe(false);
+    });
+
+    it('shows the EXISTING mapping when drawer renders for usmile360 attribution + advertiser only on uzoshop', () => {
+      // Operator previously mapped C-USMILE-1 → 'usmile360' from uzoshop's view.
+      // The storeMap entry uses the (sole) shared advertiser id, NOT the
+      // tenant store's empty id. After the soak hotfix, opening the same
+      // campaign from any attribution view resolves the SAME key and
+      // surfaces the mapping correctly.
+      const accounts: AdAccountMap = {
+        uzoshop: { metaAdAccountId: 'M-UZO', googleAdsCustomerId: 'G-UZO', tiktokAdvertiserId: ADV },
+        usmile360: { metaAdAccountId: 'M-USM', googleAdsCustomerId: null },
+        zolplus: { metaAdAccountId: 'M-ZOL', googleAdsCustomerId: null },
+      };
+      const initial: CampaignStoreMap = {
+        [`tiktok::${ADV}::C-USMILE-1`]: 'usmile360',
+      };
+      render(
+        <StoreSectionWithAdAccounts
+          storeId="usmile360"
+          campaignId="C-USMILE-1"
+          adAccounts={accounts}
+          initialStoreMap={initial}
+        />,
+      );
+      const select = screen.getByTestId('drawer-store-select') as HTMLSelectElement;
+      expect(select.disabled).toBe(false);
+      expect(select.value).toBe('usmile360');
+      // effectiveStoreId resolves through the storeMap → usmile360 → '360usmile'.
+      expect(screen.getByTestId('effective-store-name').textContent).toBe('360usmile');
+    });
+
+    it('dropdown is DISABLED only when literally no store has a TikTok advertiser id (true "TikTok not deployed yet")', () => {
+      const accounts: AdAccountMap = {
+        uzoshop: { metaAdAccountId: 'M-UZO', googleAdsCustomerId: 'G-UZO' },
+        zolplus: { metaAdAccountId: 'M-ZOL', googleAdsCustomerId: null },
+      };
+      render(
+        <StoreSectionWithAdAccounts
+          storeId="uzoshop"
+          campaignId="C-1"
+          adAccounts={accounts}
+        />,
+      );
+      const select = screen.getByTestId('drawer-store-select') as HTMLSelectElement;
+      expect(select.disabled).toBe(true);
+    });
   });
 
   it('effectiveStoreName + STORE_DISPLAY_NAMES resolve correctly for all known stores', () => {

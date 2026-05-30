@@ -56,3 +56,21 @@ export async function getGoogleCustomerForStore(storeId: string): Promise<Google
     },
   };
 }
+
+/**
+ * Phase C soak fix (2026-05-30): returns true iff the per-store Google Ads
+ * customer-id env var is set. Used by `googleWorker` to no-op + record a
+ * `success` freshness row for stores that don't have a Google Ads account
+ * (e.g. usmile360 / zolplus when only uzoshop runs Google). Without this
+ * check, the orchestrator's blanket fan-out fed those stores into a
+ * `safeCustomer` call that always threw, leaving data_freshness empty.
+ *
+ * The check is intentionally narrow: it inspects only the per-store
+ * customer id. OAuth client id/secret + refresh token are global concerns
+ * shared by all configured stores; if they go missing the next REAL fetch
+ * fails loud (via the new try/catch in the worker).
+ */
+export function isGoogleConfiguredForStore(storeId: string): boolean {
+  const envVar = `${storeId.toUpperCase()}_GOOGLEADS_CUSTOMER_ID`;
+  return Boolean(process.env[envVar]);
+}

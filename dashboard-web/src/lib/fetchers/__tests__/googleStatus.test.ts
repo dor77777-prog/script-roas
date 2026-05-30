@@ -36,4 +36,28 @@ describe('fetchGoogleStatusForStore()', () => {
     expect(out.adsets).toHaveLength(0);
     expect(out.ads).toHaveLength(0);
   });
+
+  it('change_status GAQL has BOTH lower AND upper bounds on last_change_date_time (avoids CHANGE_DATE_RANGE_INFINITE)', async () => {
+    // Production failure observed 2026-05-30: Google rejects unbounded
+    // `last_change_date_time > X` with
+    //   "errorCode": { "changeStatusError": "CHANGE_DATE_RANGE_INFINITE" }
+    //   "message":   "The change_status request is missing filters on
+    //                 change_status.last_change_date_time or is filtering
+    //                 on change_status.last_change_date_time with an
+    //                 infinite range."
+    // CRIT-F's prior fix added LIMIT + ORDER BY but missed the bounded-range
+    // requirement.
+    const searchStream = vi.fn().mockResolvedValue([]);
+    const customer = { searchStream } as unknown as Parameters<typeof fetchGoogleStatusForStore>[0]['customer'];
+    await fetchGoogleStatusForStore({ storeId: 'uzoshop', customer });
+    const firstQuery = searchStream.mock.calls[0][0].query as string;
+    // Must filter ON last_change_date_time (existing CRIT-F guarantee).
+    expect(firstQuery).toMatch(/change_status\.last_change_date_time\s*>/);
+    // NEW: must also have an upper bound to satisfy the bounded-range
+    // requirement. We don't pin the exact operator (<= vs <) — only that
+    // the field appears twice in the WHERE.
+    const lcdtOccurrences = firstQuery.match(/change_status\.last_change_date_time/g) ?? [];
+    expect(lcdtOccurrences.length).toBeGreaterThanOrEqual(2);
+    expect(firstQuery).toMatch(/change_status\.last_change_date_time\s*<=?/);
+  });
 });

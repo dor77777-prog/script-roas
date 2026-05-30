@@ -7,7 +7,7 @@
 │                                                  │
 │      מדריך הפעלה שוטף למפעיל הדשבורד            │
 │                                                  │
-│      גרסה:        2.1.22                         │
+│      גרסה:        2.1.23                         │
 │      תאריך:       2026-05-30                     │
 │      קהל יעד:     מפעיל יחיד · החלטות יומיות   │
 │                                                  │
@@ -245,6 +245,18 @@ Meta ו-Google אינם מושפעים — אין campaign-store-map עבור פ
 **Sum invariant מובטח:** אחרי Hotfix 4, ה-SUM של data_daily.tt_spend_cad cross-stores לכל תאריך = סך כל ה-spend ב-campaigns_daily לאותו תאריך (אין duplication גם כשהקמפיין עובר חנות בתוך היום).
 
 **Hotfix 5 לערב — TodayLive per-store breakdown לא הציג TikTok ל-usmile360/zolplus:** הקומפוננטה `TodayLive` השתמשה ב-`storeHasTikTok(s.store)` שבודקת set סטטי `STORES_WITH_TIKTOK = {uzoshop}`. אחרי Phase A.5 v2, usmile360 ו-zolplus יכולות לקבל TikTok spend דרך המיפוי, אבל הbreakdown באר ההוצאה לא הציג את שורת TikTok. תוצאה: הסיכום היה $110 (Meta $66 + TikTok $43.49) אבל הbreakdown הציג רק "Meta: 66" → looked broken. תוקן: הchcck עכשיו `storeHasTikTok(s.store) || (s.ttSpend ?? 0) > 0`.
+
+---
+
+### 2.1.23 (2026-05-30) — Phase C soak fixes: Google status GAQL + drawer mapping bug + worker resilience
+
+שלוש בעיות שצצו ב-soak של 8 שעות אחרי deploy של Phase C, וכולן תוקנו בקומיט אחד:
+
+- **Google `change_status` שאילתה נדחתה מ-Google** עם `CHANGE_DATE_RANGE_INFINITE` כי היה גבול תחתון בלבד ל-`last_change_date_time`. תוצאה: ה-`data_freshness` של Google למשתנים `campaign_status` / `adset_status` / `ad_status` נשאר ריק בכל ה-3 חנויות, וה-Operator Panel ראה "קופסה ריקה" במקום ירוק. **תיקון:** הוספת תקרה נוספת ל-GAQL — `... last_change_date_time <= '<now>'` — כך שה-Range חסום משני הצדדים. ראה ARCHITECTURE.md §5.3 + §Phase C soak fixes לפרטים.
+- **`google-worker` + `tiktok-worker` נפלו ל-`Missing env var`** עבור חנויות שאין להן account עצמאי על הפלטפורמה (Google: רק uzoshop מוגדרת; TikTok: גם רק uzoshop, ו-usmile360 + zolplus משתמשות באותו ה-advertiser דרך מיפוי Phase A.5 v2). תוצאה: כל tick יצר 6 retries מיותרים ושום שורת `data_freshness`. **תיקון:** כל worker בודק עכשיו `isPlatformConfiguredForStore(storeId)` בראש ה-branch, וכשהתשובה false — רושם `success` ב-`data_freshness` ויוצא מיד (no-op). בנוסף נוסף `try/catch` סביב כל branch שעוטף כשלים אמיתיים ב-`transient_error` (במקום להתפצל בלי לרשום כלום) כך שה-Operator Panel תופס תקלות מיד.
+- **CampaignDrawer — הdropdown של "חנות בעלת הקמפיין" היה לא לחיץ + רשם "(לא ממופה · ברירת מחדל uzoshop)" גם לקמפיינים שכבר מוּפו ל-usmile360 / zolplus.** הבאג היה ב-resolution של ה-`tiktokAdvertiserId` — הקוד חיפש דרך `adAccounts[storeId].tiktokAdvertiserId`, אבל ה-advertiser הוא אחד משותף ויושב רק תחת uzoshop. כשהדרואר נפתח לקמפיין שכבר מיוחס ל-usmile360, ה-lookup החזיר "" → ה-dropdown נחסם וה-storeMap lookup נכשל. **תיקון:** Helper חדש `resolveSharedTikTokAdvertiserId(adAccounts)` שסורק את כל ה-accounts ומחזיר את ה-ID המשותף הראשון. עכשיו ה-dropdown נגיש מכל פילטר חנות, וקמפיינים שמופו מקבלים את הערך הנכון בבחירת ה-select + ב-Effective Store Name.
+
+**שיפור עקבי ל-Operator Panel:** מספר השורות ב-`data_freshness` עולה מ-21 ל-45 (5 scopes × 3 stores × 3 platforms) — כל קומבינציה רושמת או success אמיתי או transient_error מפורט. אין יותר "שורות חסרות" שמסתירות תקלות.
 
 ---
 

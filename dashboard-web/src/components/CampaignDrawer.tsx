@@ -40,7 +40,11 @@ import { useCampaignAttribution } from '@/lib/hooks/useCampaignAttribution';
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import { roasLabel } from '@/lib/analytics';
 import type { CampaignRow } from '@/lib/campaigns';
-import { buildAdsManagerLink, type AdAccountMap } from '@/lib/campaignsLinks';
+import {
+  buildAdsManagerLink,
+  resolveSharedTikTokAdvertiserId,
+  type AdAccountMap,
+} from '@/lib/campaignsLinks';
 import {
   readOptimized,
   toggleOptimized,
@@ -378,9 +382,15 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
   // Non-TikTok campaigns: effectiveStoreId === storeId-prop (no mapping).
   // TikTok unmapped: effectiveStoreId === storeId-prop (defaults to uzoshop).
   // TikTok mapped: effectiveStoreId === storeMap[key] (the new store).
+  //
+  // Phase C soak hotfix (2026-05-30) — the advertiser id is shared across
+  // all stores (only uzoshop has env vars). Using `adAccounts[storeId]`
+  // returned '' for campaigns already attributed to usmile360/zolplus →
+  // empty storeMap key → every mapped campaign rendered as "unmapped". Use
+  // `resolveSharedTikTokAdvertiserId` which scans the whole adAccounts map.
   const effectiveStoreId = useMemo(() => {
     if (summary?.platform !== 'TikTok') return storeId;
-    const advertiserId = adAccounts[storeId]?.tiktokAdvertiserId ?? '';
+    const advertiserId = resolveSharedTikTokAdvertiserId(adAccounts);
     if (!advertiserId) return storeId;
     return storeMap[campaignStoreKey('tiktok', advertiserId, campaignId)] ?? storeId;
   }, [summary?.platform, storeMap, adAccounts, storeId, campaignId]);
@@ -1312,7 +1322,11 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
               ads_daily under the new store (Task 3 + 4's DELETE-then-UPSERT
               guarantees no duplicate rows). */}
           {summary.platform === 'TikTok' && (() => {
-            const advertiserId = adAccounts[storeId]?.tiktokAdvertiserId ?? '';
+            // Phase C soak hotfix (2026-05-30) — see comment on
+            // `effectiveStoreId` above. The TikTok advertiser is a single
+            // shared id; do NOT look it up via `adAccounts[storeId]`
+            // (returns '' for tenant stores).
+            const advertiserId = resolveSharedTikTokAdvertiserId(adAccounts);
             const key = advertiserId
               ? campaignStoreKey('tiktok', advertiserId, campaignId)
               : '';

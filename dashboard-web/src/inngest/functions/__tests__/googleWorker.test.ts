@@ -29,6 +29,7 @@ describe('runGoogleWorkerJob() — status scope', () => {
       upsertCampaignsDaily: vi.fn(), upsertAdsDaily: vi.fn(),
       recordFreshness,
       nowIso: NOW_ISO,
+      isGoogleConfigured: () => true,
     });
     expect(fetchStatus).toHaveBeenCalled();
     expect(upsertRegistry).toHaveBeenCalledWith(expect.objectContaining({ table: 'campaign_registry' }));
@@ -57,6 +58,7 @@ describe('runGoogleWorkerJob() — hot_metrics scope', () => {
       upsertCampaignsDaily, upsertAdsDaily: vi.fn(),
       recordFreshness,
       nowIso: NOW_ISO,
+      isGoogleConfigured: () => true,
     });
     expect(fetchMetrics).toHaveBeenCalled();
     expect(upsertCampaignsDaily).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({ ad_set_id: 'AG1' })]));
@@ -78,10 +80,116 @@ describe('runGoogleWorkerJob() — hot_metrics with empty hot set', () => {
       upsertCampaignsDaily, upsertAdsDaily: vi.fn(),
       recordFreshness,
       nowIso: NOW_ISO,
+      isGoogleConfigured: () => true,
     });
     expect(fetchHotMetrics).not.toHaveBeenCalled();
     expect(upsertCampaignsDaily).not.toHaveBeenCalled();
     expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({ scope: 'campaign_metrics', status: 'success' }));
+  });
+});
+
+describe('runGoogleWorkerJob() — not configured (no per-store Google creds)', () => {
+  // Stores without per-store env vars (e.g. usmile360 / zolplus when only
+  // uzoshop has Google Ads) must NOT throw. The orchestrator naively fans
+  // out for every (store, platform, scope) combo; the worker handles the
+  // "this store has no Google account" case as a no-op + freshness success
+  // so the operator panel stays consistent and Inngest doesn't accumulate
+  // retryable failures forever.
+
+  it('status: skips fetch, records 3 success freshness rows', async () => {
+    const fetchStatus = vi.fn();
+    const upsertRegistry = vi.fn();
+    const recordFreshness = vi.fn();
+    await runGoogleWorkerJob({
+      jobData: { store_id: 'usmile360', scope: 'status', tick_id: 'T', staleness_seconds: 600, budget_pct_estimate: 0 },
+      fetchStatus, fetchHotMetrics: vi.fn(),
+      getHotCampaignIds: async () => [], getHotAdgroupIds: async () => [], getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry, insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(), upsertAdsDaily: vi.fn(),
+      recordFreshness,
+      nowIso: NOW_ISO,
+      isGoogleConfigured: () => false,
+    });
+    expect(fetchStatus).not.toHaveBeenCalled();
+    expect(upsertRegistry).not.toHaveBeenCalled();
+    const scopes = recordFreshness.mock.calls.map(c => c[0].scope).sort();
+    expect(scopes).toEqual(['ad_status', 'adset_status', 'campaign_status']);
+    expect(recordFreshness.mock.calls.every(c => c[0].status === 'success')).toBe(true);
+  });
+
+  it('hot_metrics: skips fetch, records 2 success freshness rows', async () => {
+    const fetchHotMetrics = vi.fn();
+    const upsertCampaignsDaily = vi.fn();
+    const recordFreshness = vi.fn();
+    await runGoogleWorkerJob({
+      jobData: { store_id: 'usmile360', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
+      fetchStatus: vi.fn(), fetchHotMetrics,
+      getHotCampaignIds: async () => ['HC1'], getHotAdgroupIds: async () => [], getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(), insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily, upsertAdsDaily: vi.fn(),
+      recordFreshness,
+      nowIso: NOW_ISO,
+      isGoogleConfigured: () => false,
+    });
+    expect(fetchHotMetrics).not.toHaveBeenCalled();
+    expect(upsertCampaignsDaily).not.toHaveBeenCalled();
+    const scopes = recordFreshness.mock.calls.map(c => c[0].scope).sort();
+    expect(scopes).toEqual(['ad_metrics', 'campaign_metrics']);
+    expect(recordFreshness.mock.calls.every(c => c[0].status === 'success')).toBe(true);
+  });
+});
+
+describe('runGoogleWorkerJob() — fetch throws (CHANGE_DATE_RANGE_INFINITE, transient API failure, etc.)', () => {
+  // Phase C soak found that when fetchStatus throws, no freshness row gets
+  // written and the operator panel cannot distinguish "broken" from
+  // "this store has not run yet". Both branches must now record a
+  // transient_error row before re-throwing (Inngest's retry layer still
+  // sees a thrown error → exponential backoff preserved).
+
+  it('status: records 3 transient_error rows then re-throws', async () => {
+    const err = new Error('CHANGE_DATE_RANGE_INFINITE');
+    const fetchStatus = vi.fn().mockRejectedValue(err);
+    const recordFreshness = vi.fn();
+    await expect(
+      runGoogleWorkerJob({
+        jobData: { store_id: 'uzoshop', scope: 'status', tick_id: 'T', staleness_seconds: 600, budget_pct_estimate: 0 },
+        fetchStatus, fetchHotMetrics: vi.fn(),
+        getHotCampaignIds: async () => [], getHotAdgroupIds: async () => [], getHotAdIds: async () => [],
+        loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+        upsertRegistry: vi.fn(), insertStatusEvents: vi.fn(),
+        upsertCampaignsDaily: vi.fn(), upsertAdsDaily: vi.fn(),
+        recordFreshness,
+        nowIso: NOW_ISO,
+        isGoogleConfigured: () => true,
+      }),
+    ).rejects.toThrow('CHANGE_DATE_RANGE_INFINITE');
+    const errorCalls = recordFreshness.mock.calls.filter(c => c[0].status === 'transient_error');
+    expect(errorCalls.map(c => c[0].scope).sort()).toEqual(['ad_status', 'adset_status', 'campaign_status']);
+    expect(errorCalls[0][0].errorMessage).toContain('CHANGE_DATE_RANGE_INFINITE');
+  });
+
+  it('hot_metrics: records 2 transient_error rows then re-throws', async () => {
+    const err = new Error('HTTP 503: Backend unavailable');
+    const fetchHotMetrics = vi.fn().mockRejectedValue(err);
+    const recordFreshness = vi.fn();
+    await expect(
+      runGoogleWorkerJob({
+        jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
+        fetchStatus: vi.fn(), fetchHotMetrics,
+        getHotCampaignIds: async () => ['HC1'], getHotAdgroupIds: async () => ['HA1'], getHotAdIds: async () => [],
+        loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+        upsertRegistry: vi.fn(), insertStatusEvents: vi.fn(),
+        upsertCampaignsDaily: vi.fn(), upsertAdsDaily: vi.fn(),
+        recordFreshness,
+        nowIso: NOW_ISO,
+        isGoogleConfigured: () => true,
+      }),
+    ).rejects.toThrow('HTTP 503');
+    const errorCalls = recordFreshness.mock.calls.filter(c => c[0].status === 'transient_error');
+    expect(errorCalls.map(c => c[0].scope).sort()).toEqual(['ad_metrics', 'campaign_metrics']);
+    expect(errorCalls[0][0].errorMessage).toContain('HTTP 503');
   });
 });
 

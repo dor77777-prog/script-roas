@@ -118,3 +118,30 @@ export function hasAccountAwareLink(
   if (platform === 'TikTok') return !!acct.tiktokAdvertiserId;
   return false;
 }
+
+/**
+ * Phase C soak (2026-05-30) — drawer hotfix.
+ *
+ * Returns the single TikTok advertiser id shared across all stores, or '' if
+ * no store has one configured. Per ARCHITECTURE.md §5.4, TikTok runs on ONE
+ * advertiser (uzoshop's) and usmile360 + zolplus are tenants whose data is
+ * attributed via the Phase A.5 v2 `campaign-store-map`.
+ *
+ * Why not `accounts[storeId].tiktokAdvertiserId`: when a campaign is
+ * attributed to usmile360 (via the operator's store-mapping), the drawer's
+ * `storeId` prop becomes 'usmile360' — but only uzoshop's adAccount entry
+ * carries the advertiserId. The naive lookup returns '' → dropdown disabled
+ * + storeMap lookup hits the empty key. This helper makes the lookup
+ * resilient by scanning every adAccount and returning the first non-empty id.
+ *
+ * Future-proofing: if multiple TikTok advertisers ever exist, the drawer
+ * needs a per-campaign advertiserId, not this shared helper. Today's data
+ * shape (one advertiser) makes that distinction moot.
+ */
+export function resolveSharedTikTokAdvertiserId(accounts: AdAccountMap): string {
+  for (const acct of Object.values(accounts)) {
+    const id = acct?.tiktokAdvertiserId;
+    if (id && id.length > 0) return id;
+  }
+  return '';
+}

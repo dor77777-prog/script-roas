@@ -30,6 +30,8 @@ describe('runTikTokWorkerJob() — status scope', () => {
       upsertCampaignsDaily: vi.fn(), upsertAdsDaily: vi.fn(),
       recordFreshness,
       nowIso: NOW_ISO,
+      isTikTokConfigured: () => true,
+      getAccount: async () => ({ advertiserId: 'ADV1', accessToken: 'TOK', accountCurrency: 'USD' }),
     });
     expect(fetchStatus).toHaveBeenCalled();
     expect(upsertRegistry).toHaveBeenCalledWith(expect.objectContaining({ table: 'campaign_registry' }));
@@ -57,6 +59,9 @@ describe('runTikTokWorkerJob() — hot_metrics scope', () => {
       upsertCampaignsDaily, upsertAdsDaily: vi.fn(),
       recordFreshness,
       nowIso: NOW_ISO,
+      isTikTokConfigured: () => true,
+      getAccount: async () => ({ advertiserId: 'ADV1', accessToken: 'TOK', accountCurrency: 'USD' }),
+      getFxCadFor: async () => async (amount: number) => amount,
     });
     expect(fetchHotMetrics).toHaveBeenCalled();
     expect(upsertCampaignsDaily).toHaveBeenCalled();
@@ -79,10 +84,126 @@ describe('runTikTokWorkerJob() — hot_metrics with empty hot set', () => {
       upsertCampaignsDaily: vi.fn(), upsertAdsDaily: vi.fn(),
       recordFreshness,
       nowIso: NOW_ISO,
+      isTikTokConfigured: () => true,
     });
     expect(fetchHotMetrics).not.toHaveBeenCalled();
     expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({ scope: 'campaign_metrics', status: 'success' }));
     expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({ scope: 'ad_metrics', status: 'success' }));
+  });
+});
+
+describe('runTikTokWorkerJob() — not configured (shared TikTok account architecture)', () => {
+  // Per ARCHITECTURE.md §5.4 + the user-confirmed model (2026-05-30):
+  // there is ONE TikTok ad account (uzoshop's) that serves multiple
+  // stores. Per-store TikTok env vars exist only for uzoshop. usmile360
+  // + zolplus are "tenants" whose data is written by uzoshop's worker
+  // via the Phase A.5 v2 campaign-store-map. Their dedicated workers
+  // must NOT throw on missing env vars — they should no-op and record a
+  // freshness success so the operator panel stays consistent.
+
+  it('status: skips loadStoreMap + fetch when not configured, records 3 success rows', async () => {
+    const loadStoreMap = vi.fn();
+    const fetchStatus = vi.fn();
+    const upsertRegistry = vi.fn();
+    const recordFreshness = vi.fn();
+    await runTikTokWorkerJob({
+      jobData: { store_id: 'usmile360', scope: 'status', tick_id: 'T', staleness_seconds: 600, budget_pct_estimate: 0 },
+      loadStoreMap, fetchStatus, fetchHotMetrics: vi.fn(),
+      getHotCampaignIds: async () => [], getHotAdgroupIds: async () => [], getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry, insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(), upsertAdsDaily: vi.fn(),
+      recordFreshness,
+      nowIso: NOW_ISO,
+      isTikTokConfigured: () => false,
+    });
+    expect(loadStoreMap).not.toHaveBeenCalled();
+    expect(fetchStatus).not.toHaveBeenCalled();
+    expect(upsertRegistry).not.toHaveBeenCalled();
+    const scopes = recordFreshness.mock.calls.map(c => c[0].scope).sort();
+    expect(scopes).toEqual(['ad_status', 'adset_status', 'campaign_status']);
+    expect(recordFreshness.mock.calls.every(c => c[0].status === 'success')).toBe(true);
+  });
+
+  it('hot_metrics: skips fetch + safeAccount when not configured even if hot ids exist, records 2 success rows', async () => {
+    // Critical: usmile360 may have campaign_registry rows (uzoshop's worker
+    // writes them via campaign-store-map) → getHotCampaignIds may return
+    // ids. Without the early-return, safeAccount throws and no freshness
+    // is recorded.
+    const fetchHotMetrics = vi.fn();
+    const recordFreshness = vi.fn();
+    await runTikTokWorkerJob({
+      jobData: { store_id: 'usmile360', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
+      loadStoreMap: async () => ({}),
+      fetchStatus: vi.fn(), fetchHotMetrics,
+      getHotCampaignIds: async () => ['TC1'], getHotAdgroupIds: async () => ['TG1'], getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(), insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(), upsertAdsDaily: vi.fn(),
+      recordFreshness,
+      nowIso: NOW_ISO,
+      isTikTokConfigured: () => false,
+    });
+    expect(fetchHotMetrics).not.toHaveBeenCalled();
+    const scopes = recordFreshness.mock.calls.map(c => c[0].scope).sort();
+    expect(scopes).toEqual(['ad_metrics', 'campaign_metrics']);
+    expect(recordFreshness.mock.calls.every(c => c[0].status === 'success')).toBe(true);
+  });
+});
+
+describe('runTikTokWorkerJob() — fetch throws (transient API failure, etc.)', () => {
+  // Same antipattern as Google: without a try/catch wrap, fetcher failures
+  // leave data_freshness empty and the operator can't distinguish broken
+  // from never-ran. Both branches must record transient_error before
+  // re-throwing.
+
+  it('status: records 3 transient_error rows then re-throws', async () => {
+    const err = new Error('TikTok HTTP 503: Service Unavailable');
+    const fetchStatus = vi.fn().mockRejectedValue(err);
+    const recordFreshness = vi.fn();
+    await expect(
+      runTikTokWorkerJob({
+        jobData: { store_id: 'uzoshop', scope: 'status', tick_id: 'T', staleness_seconds: 600, budget_pct_estimate: 0 },
+        loadStoreMap: async () => ({}),
+        fetchStatus, fetchHotMetrics: vi.fn(),
+        getHotCampaignIds: async () => [], getHotAdgroupIds: async () => [], getHotAdIds: async () => [],
+        loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+        upsertRegistry: vi.fn(), insertStatusEvents: vi.fn(),
+        upsertCampaignsDaily: vi.fn(), upsertAdsDaily: vi.fn(),
+        recordFreshness,
+        nowIso: NOW_ISO,
+        isTikTokConfigured: () => true,
+        getAccount: async () => ({ advertiserId: 'ADV1', accessToken: 'TOK', accountCurrency: 'USD' }),
+      }),
+    ).rejects.toThrow('HTTP 503');
+    const errorCalls = recordFreshness.mock.calls.filter(c => c[0].status === 'transient_error');
+    expect(errorCalls.map(c => c[0].scope).sort()).toEqual(['ad_status', 'adset_status', 'campaign_status']);
+    expect(errorCalls[0][0].errorMessage).toContain('HTTP 503');
+  });
+
+  it('hot_metrics: records 2 transient_error rows then re-throws', async () => {
+    const err = new Error('TikTok report API: code=40001 rate limit exceeded');
+    const fetchHotMetrics = vi.fn().mockRejectedValue(err);
+    const recordFreshness = vi.fn();
+    await expect(
+      runTikTokWorkerJob({
+        jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
+        loadStoreMap: async () => ({}),
+        fetchStatus: vi.fn(), fetchHotMetrics,
+        getHotCampaignIds: async () => ['TC1'], getHotAdgroupIds: async () => ['TG1'], getHotAdIds: async () => [],
+        loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+        upsertRegistry: vi.fn(), insertStatusEvents: vi.fn(),
+        upsertCampaignsDaily: vi.fn(), upsertAdsDaily: vi.fn(),
+        recordFreshness,
+        nowIso: NOW_ISO,
+        isTikTokConfigured: () => true,
+        getAccount: async () => ({ advertiserId: 'ADV1', accessToken: 'TOK', accountCurrency: 'USD' }),
+        getFxCadFor: async () => async (amount: number) => amount,
+      }),
+    ).rejects.toThrow('rate limit');
+    const errorCalls = recordFreshness.mock.calls.filter(c => c[0].status === 'transient_error');
+    expect(errorCalls.map(c => c[0].scope).sort()).toEqual(['ad_metrics', 'campaign_metrics']);
+    expect(errorCalls[0][0].errorMessage).toContain('rate limit');
   });
 });
 

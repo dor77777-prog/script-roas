@@ -41,16 +41,26 @@ export async function fetchGoogleStatusForStore(input: GoogleStatusInput): Promi
   // CRIT-F: GAQL does NOT support `LAST_24_HOURS` as a date-range constant
   // — only LAST_7_DAYS / LAST_14_DAYS / LAST_30_DAYS for the LAST_* family.
   // For sub-day windows, compare last_change_date_time with a datetime
-  // literal formatted 'YYYY-MM-DD HH:MM:SS'. Per Google docs, change_status
-  // queries should also LIMIT 10000 and ORDER BY last_change_date_time
-  // DESC so the most recent changes are processed first.
+  // literal formatted 'YYYY-MM-DD HH:MM:SS'.
+  //
+  // CRIT-F-2 (Phase C soak, 2026-05-30): a single-sided `>` filter is
+  // rejected by Google as `CHANGE_DATE_RANGE_INFINITE` ("The change_status
+  // request … is filtering on change_status.last_change_date_time with an
+  // infinite range."). The bounded-range requirement is specific to the
+  // change_status resource — both lower AND upper bounds are required.
+  // We use NOW as the upper bound so the window is exactly the same 24h
+  // the cutoff defined. Per Google docs, change_status queries should also
+  // LIMIT 10000 and ORDER BY last_change_date_time DESC so the most recent
+  // changes are processed first.
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const cutoffIso = formatGaqlDateTime(cutoff);
+  const upperIso = formatGaqlDateTime(new Date());
   const changeRows = await customer.searchStream({
     query: `
       SELECT change_status.resource_name, change_status.resource_type, change_status.last_change_date_time
         FROM change_status
        WHERE change_status.last_change_date_time > '${cutoffIso}'
+         AND change_status.last_change_date_time <= '${upperIso}'
          AND change_status.resource_type IN ('CAMPAIGN', 'AD_GROUP', 'AD_GROUP_AD')
        ORDER BY change_status.last_change_date_time DESC
        LIMIT 10000

@@ -55,6 +55,7 @@ import type { TikTokHotMetricsInput, TikTokHotMetricsResult } from '@/lib/fetche
 import {
   getTikTokAccountForStore,
   getTikTokFxCadAdapterForStore,
+  isTikTokConfiguredForStore,
   type TikTokAccountConfig,
 } from '@/lib/fetchers/tiktokAccountConfig';
 import { loadCampaignStoreMapFromSupabase } from '@/lib/inngest/campaignStoreMap';
@@ -139,7 +140,33 @@ export type RunTikTokWorkerJobInput = {
    * because fetchHotMetrics is stubbed.
    */
   getFxCadFor?: (storeId: StoreId) => Promise<TikTokHotMetricsInput['getFxCadFor']>;
+  /**
+   * Phase C soak fix (2026-05-30): optional override of the per-store
+   * "is TikTok configured?" check. Defaults to `isTikTokConfiguredForStore`
+   * (env-var presence of `${UPPER}_TIKTOK_ADVERTISER_ID` +
+   * `${UPPER}_TIKTOK_ACCESS_TOKEN`). When false the worker no-ops and
+   * records `success` freshness for every scope.
+   *
+   * Per ARCHITECTURE.md §5.4 + the operator confirmation 2026-05-30:
+   * there is ONE TikTok ad account (uzoshop's). It serves multiple stores
+   * via TikTok's per-ad pixel selection — operator uploads an ad and
+   * picks the pixel matching the destination store. The Phase A.5 v2
+   * `campaign-store-map` then attributes each campaign to the right
+   * store at write time. The dedicated workers for usmile360/zolplus
+   * therefore have nothing to do; uzoshop's worker writes their rows
+   * via the map. Without this gate, every tick threw on missing env vars
+   * and the operator panel stayed permanently empty for those rows.
+   */
+  isTikTokConfigured?: (storeId: StoreId) => boolean;
 };
+
+function checkTikTokConfigured(
+  storeId: StoreId,
+  override?: (storeId: StoreId) => boolean,
+): boolean {
+  if (override) return override(storeId);
+  return isTikTokConfiguredForStore(storeId);
+}
 
 async function safeAccount(
   storeId: StoreId,
@@ -198,86 +225,112 @@ export async function runTikTokWorkerJob(input: RunTikTokWorkerJobInput): Promis
 }
 
 async function runTikTokStatusBranch(input: RunTikTokWorkerJobInput): Promise<void> {
-  const {
-    jobData,
-    loadStoreMap,
-    fetchStatus,
-    loadPriorRegistry,
-    upsertRegistry,
-    insertStatusEvents,
-    recordFreshness: rec,
-    getAccount,
-    nowIso,
-  } = input;
+  const { jobData, recordFreshness: rec } = input;
   const storeId = jobData.store_id;
 
-  // 1. Load campaign-store-map (Phase A.5) BEFORE fetch so the fetcher
-  //    resolves per-row store_id during the same call.
-  const campaignStoreMap = await loadStoreMap();
+  const recAllStatusScopes = async (
+    status: 'success' | 'transient_error',
+    errorMessage?: string,
+  ): Promise<void> => {
+    for (const s of ['campaign_status', 'adset_status', 'ad_status'] as const) {
+      await rec({
+        storeId,
+        platform: 'tiktok',
+        scope: s,
+        tableName: registryNameForScope(s),
+        status,
+        errorMessage,
+      });
+    }
+  };
 
-  // 2. Resolve TikTok account (advertiser_id + access_token + currency).
-  const account = await safeAccount(storeId, getAccount);
-
-  // 3. Fetch status — paginated list of campaigns + adgroups + ads.
-  const status = await fetchStatus({
-    storeId,
-    advertiserId: account.advertiserId,
-    accessToken: account.accessToken,
-    campaignStoreMap,
-  });
-
-  // 4. Load prior registry rows for the diff (platform='tiktok').
-  const prior = await loadPriorRegistry(storeId);
-
-  // 5. Diff → status events (one per genuine transition; cosmetic
-  //    edits like name changes do NOT emit events).
-  const campaignEvents = diffAgainstRegistry({
-    entityType: 'campaign',
-    prior: prior.campaigns,
-    fresh: status.campaigns,
-    occurredAt: nowIso,
-  });
-  const adsetEvents = diffAgainstRegistry({
-    entityType: 'adset',
-    prior: prior.adsets as Map<string, CampaignRegistryRow>,
-    fresh: status.adsets as CampaignRegistryRow[],
-    occurredAt: nowIso,
-  });
-  const adEvents = diffAgainstRegistry({
-    entityType: 'ad',
-    prior: prior.ads as Map<string, CampaignRegistryRow>,
-    fresh: status.ads as CampaignRegistryRow[],
-    occurredAt: nowIso,
-  });
-  const allEvents = [...campaignEvents, ...adsetEvents, ...adEvents];
-  if (allEvents.length > 0) {
-    await insertStatusEvents({ events: allEvents });
+  // Phase C soak: stores without their own TikTok account (usmile360 +
+  // zolplus per the shared-account architecture, ARCHITECTURE.md §5.4)
+  // record freshness success and return. uzoshop's worker writes any
+  // tenant rows via the Phase A.5 v2 campaign-store-map.
+  if (!checkTikTokConfigured(storeId, input.isTikTokConfigured)) {
+    await recAllStatusScopes('success');
+    return;
   }
 
-  // 6. Upsert all 3 registries. buildRegistryUpsertRow preserves
-  //    first_seen_at + computes status_changed_at correctly.
-  const campRows = status.campaigns.map((c) =>
-    buildRegistryUpsertRow({ prior: prior.campaigns.get(c.campaign_id) ?? null, fresh: c, nowIso }),
-  );
-  await upsertRegistry({ table: 'campaign_registry', rows: campRows });
-  const asRows = status.adsets.map((a) =>
-    buildRegistryUpsertRow({ prior: prior.adsets.get(a.adset_id) ?? null, fresh: a, nowIso }),
-  );
-  await upsertRegistry({ table: 'adset_registry', rows: asRows });
-  const adRows = status.ads.map((a) =>
-    buildRegistryUpsertRow({ prior: prior.ads.get(a.ad_id) ?? null, fresh: a, nowIso }),
-  );
-  await upsertRegistry({ table: 'ad_registry', rows: adRows });
+  try {
+    const {
+      loadStoreMap,
+      fetchStatus,
+      loadPriorRegistry,
+      upsertRegistry,
+      insertStatusEvents,
+      getAccount,
+      nowIso,
+    } = input;
 
-  // 7. Mark freshness success for all 3 scopes.
-  for (const s of ['campaign_status', 'adset_status', 'ad_status'] as const) {
-    await rec({
+    // 1. Load campaign-store-map (Phase A.5) BEFORE fetch so the fetcher
+    //    resolves per-row store_id during the same call.
+    const campaignStoreMap = await loadStoreMap();
+
+    // 2. Resolve TikTok account (advertiser_id + access_token + currency).
+    const account = await safeAccount(storeId, getAccount);
+
+    // 3. Fetch status — paginated list of campaigns + adgroups + ads.
+    const status = await fetchStatus({
       storeId,
-      platform: 'tiktok',
-      scope: s,
-      tableName: registryNameForScope(s),
-      status: 'success',
+      advertiserId: account.advertiserId,
+      accessToken: account.accessToken,
+      campaignStoreMap,
     });
+
+    // 4. Load prior registry rows for the diff (platform='tiktok').
+    const prior = await loadPriorRegistry(storeId);
+
+    // 5. Diff → status events (one per genuine transition; cosmetic
+    //    edits like name changes do NOT emit events).
+    const campaignEvents = diffAgainstRegistry({
+      entityType: 'campaign',
+      prior: prior.campaigns,
+      fresh: status.campaigns,
+      occurredAt: nowIso,
+    });
+    const adsetEvents = diffAgainstRegistry({
+      entityType: 'adset',
+      prior: prior.adsets as Map<string, CampaignRegistryRow>,
+      fresh: status.adsets as CampaignRegistryRow[],
+      occurredAt: nowIso,
+    });
+    const adEvents = diffAgainstRegistry({
+      entityType: 'ad',
+      prior: prior.ads as Map<string, CampaignRegistryRow>,
+      fresh: status.ads as CampaignRegistryRow[],
+      occurredAt: nowIso,
+    });
+    const allEvents = [...campaignEvents, ...adsetEvents, ...adEvents];
+    if (allEvents.length > 0) {
+      await insertStatusEvents({ events: allEvents });
+    }
+
+    // 6. Upsert all 3 registries. buildRegistryUpsertRow preserves
+    //    first_seen_at + computes status_changed_at correctly.
+    const campRows = status.campaigns.map((c) =>
+      buildRegistryUpsertRow({ prior: prior.campaigns.get(c.campaign_id) ?? null, fresh: c, nowIso }),
+    );
+    await upsertRegistry({ table: 'campaign_registry', rows: campRows });
+    const asRows = status.adsets.map((a) =>
+      buildRegistryUpsertRow({ prior: prior.adsets.get(a.adset_id) ?? null, fresh: a, nowIso }),
+    );
+    await upsertRegistry({ table: 'adset_registry', rows: asRows });
+    const adRows = status.ads.map((a) =>
+      buildRegistryUpsertRow({ prior: prior.ads.get(a.ad_id) ?? null, fresh: a, nowIso }),
+    );
+    await upsertRegistry({ table: 'ad_registry', rows: adRows });
+
+    // 7. Mark freshness success for all 3 scopes.
+    await recAllStatusScopes('success');
+  } catch (err) {
+    // Phase C soak: surface failure to the operator panel by writing a
+    // transient_error row per scope BEFORE re-throwing. Re-throw
+    // preserves Inngest's exponential-backoff retry.
+    const message = err instanceof Error ? err.message : String(err);
+    await recAllStatusScopes('transient_error', message);
+    throw err;
   }
 }
 
@@ -288,20 +341,7 @@ function registryNameForScope(scope: 'campaign_status' | 'adset_status' | 'ad_st
 }
 
 async function runTikTokHotMetricsBranch(input: RunTikTokWorkerJobInput): Promise<void> {
-  const {
-    jobData,
-    loadStoreMap,
-    fetchHotMetrics,
-    getHotCampaignIds,
-    getHotAdgroupIds,
-    getHotAdIds,
-    upsertCampaignsDaily,
-    upsertAdsDaily,
-    recordFreshness: rec,
-    getAccount,
-    getFxCadFor,
-    nowIso,
-  } = input;
+  const { jobData, recordFreshness: rec } = input;
   const storeId = jobData.store_id;
 
   // IMP-C: every hot_metrics outcome records BOTH campaign_metrics
@@ -330,63 +370,94 @@ async function runTikTokHotMetricsBranch(input: RunTikTokWorkerJobInput): Promis
     });
   };
 
-  // 1. Load hot ids in parallel.
-  const [hotCampaign, hotAdgroup, hotAd] = await Promise.all([
-    getHotCampaignIds(storeId),
-    getHotAdgroupIds(storeId),
-    getHotAdIds(storeId),
-  ]);
-
-  // 2. Empty hot set is a NORMAL state (e.g. all campaigns paused) — we
-  //    still mark freshness success because the worker did its job;
-  //    there was simply nothing hot to refresh.
-  if (hotCampaign.length + hotAdgroup.length + hotAd.length === 0) {
+  // Phase C soak: stores without their own TikTok account record success
+  // and return. Note: this gate is required EVEN with the hot-set empty
+  // short-circuit below, because tenants in the Phase A.5 v2 map (e.g.
+  // usmile360) may have campaign_registry rows written by uzoshop's
+  // worker → getHotCampaignIds returns non-empty → without this check,
+  // safeAccount would throw on missing env vars and no freshness row
+  // would be recorded.
+  if (!checkTikTokConfigured(storeId, input.isTikTokConfigured)) {
     await recHotPair('success');
     return;
   }
 
-  // 3. Load campaign-store-map + resolve account + FX adapter.
-  const [campaignStoreMap, account, fxCadFor] = await Promise.all([
-    loadStoreMap(),
-    safeAccount(storeId, getAccount),
-    safeFxCadFor(storeId, getFxCadFor),
-  ]);
-  const today = nowIso.slice(0, 10);
-  const metrics = await fetchHotMetrics({
-    storeId,
-    advertiserId: account.advertiserId,
-    accessToken: account.accessToken,
-    accountCurrency: account.accountCurrency,
-    hotCampaignIds: hotCampaign,
-    hotAdgroupIds: hotAdgroup,
-    hotAdIds: hotAd,
-    dateStr: today,
-    campaignStoreMap,
-    getFxCadFor: fxCadFor,
-  });
+  try {
+    const {
+      loadStoreMap,
+      fetchHotMetrics,
+      getHotCampaignIds,
+      getHotAdgroupIds,
+      getHotAdIds,
+      upsertCampaignsDaily,
+      upsertAdsDaily,
+      getAccount,
+      getFxCadFor,
+      nowIso,
+    } = input;
 
-  // 4. Upsert campaigns_daily (adsets only) and ads_daily, stamping
-  //    source='live_tick' + last_live_tick_at on every row.
-  //    CRIT-B: hot-metrics fetcher returns only adset + ad rows; the
-  //    campaign-level aggregate is computed at read time by the existing
-  //    aggregators (Today / Today-Live). campaigns_daily.ad_set_id is
-  //    NOT NULL so we cannot insert a campaign-only row.
-  if (metrics.adsets.length > 0) {
-    const all: Array<Record<string, unknown>> = metrics.adsets.map((a) => ({
-      ...a,
-      source: 'live_tick',
-      last_live_tick_at: nowIso,
-    }));
-    await upsertCampaignsDaily(all);
-  }
-  if (metrics.ads.length > 0) {
-    await upsertAdsDaily(
-      metrics.ads.map((a) => ({ ...a, source: 'live_tick', last_live_tick_at: nowIso })),
-    );
-  }
+    // 1. Load hot ids in parallel.
+    const [hotCampaign, hotAdgroup, hotAd] = await Promise.all([
+      getHotCampaignIds(storeId),
+      getHotAdgroupIds(storeId),
+      getHotAdIds(storeId),
+    ]);
 
-  // 5. Mark freshness success for both campaign_metrics + ad_metrics.
-  await recHotPair('success');
+    // 2. Empty hot set is a NORMAL state (e.g. all campaigns paused) — we
+    //    still mark freshness success because the worker did its job;
+    //    there was simply nothing hot to refresh.
+    if (hotCampaign.length + hotAdgroup.length + hotAd.length === 0) {
+      await recHotPair('success');
+      return;
+    }
+
+    // 3. Load campaign-store-map + resolve account + FX adapter.
+    const [campaignStoreMap, account, fxCadFor] = await Promise.all([
+      loadStoreMap(),
+      safeAccount(storeId, getAccount),
+      safeFxCadFor(storeId, getFxCadFor),
+    ]);
+    const today = nowIso.slice(0, 10);
+    const metrics = await fetchHotMetrics({
+      storeId,
+      advertiserId: account.advertiserId,
+      accessToken: account.accessToken,
+      accountCurrency: account.accountCurrency,
+      hotCampaignIds: hotCampaign,
+      hotAdgroupIds: hotAdgroup,
+      hotAdIds: hotAd,
+      dateStr: today,
+      campaignStoreMap,
+      getFxCadFor: fxCadFor,
+    });
+
+    // 4. Upsert campaigns_daily (adsets only) and ads_daily, stamping
+    //    source='live_tick' + last_live_tick_at on every row.
+    //    CRIT-B: hot-metrics fetcher returns only adset + ad rows; the
+    //    campaign-level aggregate is computed at read time by the existing
+    //    aggregators (Today / Today-Live). campaigns_daily.ad_set_id is
+    //    NOT NULL so we cannot insert a campaign-only row.
+    if (metrics.adsets.length > 0) {
+      const all: Array<Record<string, unknown>> = metrics.adsets.map((a) => ({
+        ...a,
+        source: 'live_tick',
+        last_live_tick_at: nowIso,
+      }));
+      await upsertCampaignsDaily(all);
+    }
+    if (metrics.ads.length > 0) {
+      await upsertAdsDaily(
+        metrics.ads.map((a) => ({ ...a, source: 'live_tick', last_live_tick_at: nowIso })),
+      );
+    }
+
+    // 5. Mark freshness success for both campaign_metrics + ad_metrics.
+    await recHotPair('success');
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    await recHotPair('transient_error', message);
+    throw err;
+  }
 }
 
 // ---------------------------------------------------------------------------

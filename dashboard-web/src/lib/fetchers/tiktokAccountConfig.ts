@@ -63,6 +63,26 @@ function readTikTokCredsFromEnv(storeId: StoreId): {
   return { advertiserId: advertiserId!, accessToken: accessToken! };
 }
 
+/**
+ * Phase C soak fix (2026-05-30): returns true iff the per-store TikTok env
+ * vars are set. Used by `tiktokWorker` to no-op + record `success` freshness
+ * for stores that don't have their own TikTok ad account (per
+ * ARCHITECTURE.md §5.4: only uzoshop has an active TikTok account today;
+ * usmile360 + zolplus are "tenants" served by Phase A.5 v2's
+ * campaign-store-map attribution from uzoshop's worker).
+ *
+ * Without this gate, every tick the worker for usmile360/zolplus called
+ * `safeAccount` → `readTikTokCredsFromEnv` → threw, leaving status
+ * freshness empty and producing repeated Inngest function-run failures.
+ */
+export function isTikTokConfiguredForStore(storeId: StoreId): boolean {
+  const upper = storeId.toUpperCase();
+  return (
+    Boolean(process.env[`${upper}_TIKTOK_ADVERTISER_ID`]) &&
+    Boolean(process.env[`${upper}_TIKTOK_ACCESS_TOKEN`])
+  );
+}
+
 function normalizeCurrency(raw: string): 'USD' | 'CAD' | 'ILS' {
   const upper = raw.toUpperCase();
   if (upper === 'USD' || upper === 'CAD' || upper === 'ILS') return upper;
