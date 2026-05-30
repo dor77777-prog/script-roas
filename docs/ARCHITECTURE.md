@@ -2050,6 +2050,22 @@ fetchers (prefixed `[gh-diag]` / `[tt-diag]`) to capture API response
 shape for the next 1-2 ticks; these will be removed once root cause
 is confirmed.
 
+### TikTok dimensions must include `campaign_id` for store-map routing
+
+After the JSON.stringify(ids) fix above, TikTok started returning rows
+again — but ALL of them got attributed to `uzoshop` (the function-arg
+storeId) regardless of the Phase A.5 v2 campaign-store-map. Root
+cause: `fetchTikTokHotMetricsForStore` requested only
+`dimensions=["adgroup_id"]` (or `["ad_id"]`). TikTok's response only
+carries the requested dimensions. `toCampaignRow` read
+`d.campaign_id` → undefined → `cid = ''` → `resolveStore('')` fell
+back to the function-arg storeId. The map was never consulted.
+
+Fix: include `campaign_id` in the dimensions array:
+`dimensions=["campaign_id","adgroup_id"]` (and similarly with `ad_id`
+for AD-level). Now the response carries `dimensions.campaign_id` and
+`resolveStore(cid)` correctly routes each row to the mapped store.
+
 ### TikTok `filter_value` was always-array (latent Phase C bug)
 
 The envelope error surface (above) immediately uncovered: `code=40002

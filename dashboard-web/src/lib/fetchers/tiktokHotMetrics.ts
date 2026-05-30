@@ -65,18 +65,19 @@ export async function fetchTikTokHotMetricsForStore(input: TikTokHotMetricsInput
     ids: string[],
   ): Promise<Array<Record<string, unknown>>> => {
     if (ids.length === 0) return [];
-    // Phase E1.7 hotfix (2026-05-30 night) — TikTok `filtering` rejects
-    // arrays for filter_value (`code=40002 filtering.0.filter_value: Not
-    // a valid string`). Confirmed by tonight's diag deploy. The
-    // documented format for `filter_type: IN` requires the values as a
-    // STRING (comma-separated or stringified array). We use
-    // `JSON.stringify(ids)` which produces `"[\"id1\",\"id2\"]"` —
-    // TikTok parses this as the array. This bug has been latent since
-    // Phase C deployed; campaigns_daily.tiktok appeared to update only
-    // because cron-live-heavy was filling it until Phase E1 disabled it
-    // at ~17:40 IL on 2026-05-30.
+    // Phase E1.7 hotfix #1 — TikTok `filtering` rejects arrays for
+    // filter_value (`code=40002`). Use JSON.stringify(ids) instead.
     const filteringArr = [{ field_name: filterField, filter_type: 'IN', filter_value: JSON.stringify(ids) }];
-    const url = `${TT_BASE}/report/integrated/get/?advertiser_id=${advertiserId}&report_type=BASIC&data_level=${dataLevel}&dimensions=["${dimensionName}"]&metrics=["spend","impressions","clicks","conversion","purchase","total_purchase_value"]&start_date=${dateStr}&end_date=${dateStr}&page=1&page_size=1000&filtering=${encodeURIComponent(JSON.stringify(filteringArr))}`;
+    // Phase E1.7 hotfix #2 — REQUEST campaign_id AS A DIMENSION so the
+    // response includes `dimensions.campaign_id`. Without this the
+    // toCampaignRow `cid = ''` fallback hit `resolveStore('')` which
+    // returns function-arg storeId — ATTRIBUTING ALL TIKTOK ROWS TO
+    // uzoshop regardless of the campaign-store-map. User caught this
+    // 2026-05-30 night ("no TikTok campaign is mapped to uzoshop, all
+    // are usmile"). With campaign_id in dimensions, resolveStore
+    // correctly routes each row via the map.
+    const dimensions = JSON.stringify(['campaign_id', dimensionName]);
+    const url = `${TT_BASE}/report/integrated/get/?advertiser_id=${advertiserId}&report_type=BASIC&data_level=${dataLevel}&dimensions=${encodeURIComponent(dimensions)}&metrics=${encodeURIComponent(JSON.stringify(['spend','impressions','clicks','conversion','purchase','total_purchase_value']))}&start_date=${dateStr}&end_date=${dateStr}&page=1&page_size=1000&filtering=${encodeURIComponent(JSON.stringify(filteringArr))}`;
     const res = await fetcher(url, { headers: { 'Access-Token': accessToken } });
     if (!res.ok) throw new Error(`TikTok report ${dataLevel}: ${res.status}`);
     const body = await res.json() as { code?: number; message?: string; data?: { list?: unknown[] } };
