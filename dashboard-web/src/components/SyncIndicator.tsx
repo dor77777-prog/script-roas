@@ -83,7 +83,7 @@ export function SyncIndicator() {
   } else if (status === 'error') {
     icon = <CloudOff size={13} />;
     label = 'sync שגיאה';
-    tone = 'bg-red-500/85 text-white hover:bg-red-500';
+    tone = 'bg-status-red/85 text-white hover:bg-status-red';
     title = 'לחץ לפרטים';
   } else if (supabaseDown) {
     // D-D1 yellow — Sheets OK (or hasn't synced yet), Supabase unreachable.

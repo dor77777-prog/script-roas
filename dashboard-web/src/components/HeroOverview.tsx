@@ -718,7 +718,7 @@ function DeltaPill({ value, inverse }: { value: number; inverse?: boolean }) {
         'inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-medium tabular-nums',
         isFlat && 'text-white/55',
         !isFlat && isPositive && 'text-emerald-300',
-        !isFlat && !isPositive && 'text-status-warning-fg',
+        !isFlat && !isPositive && 'text-status-warning',
       )}
     >
       <Icon size={11} className="shrink-0" />
@@ -737,7 +737,7 @@ function RawDeltaPill({ value }: { value: number }) {
         'inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-medium tabular-nums',
         isFlat && 'text-white/55',
         !isFlat && value > 0 && 'text-emerald-300',
-        !isFlat && value < 0 && 'text-status-warning-fg',
+        !isFlat && value < 0 && 'text-status-warning',
       )}
     >
       <Icon size={11} className="shrink-0" />
