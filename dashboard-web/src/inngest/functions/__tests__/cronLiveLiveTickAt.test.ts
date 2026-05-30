@@ -183,22 +183,18 @@ describe('cron-live — last_live_tick_at on data_daily + products_daily', () =>
     }
   });
 
-  it('4. spend-only fallback payload contains last_live_tick_at', async () => {
-    // Shopify fetch FAILS; spend fetchers succeed → spend-only path for all dates
+  it('4. Phase E1.6.2 — spend-only fallback is a NO-OP (workers own spend columns; no data_daily upsert when Shopify fails)', async () => {
+    // Post-Phase-E1.6.2 hotfix (2026-05-30 evening): cron-live no longer
+    // writes fb/ga/tt_spend_cad / *_impressions to data_daily — those are
+    // owned by the 3 hot_metrics worker branches. When Shopify fails and
+    // no Shopify data is available, there is literally nothing for
+    // cron-live to write (the platform spend would race the workers).
+    // The spend-only branch is now a silent return.
     const mod = await import('../cronLive');
     vi.spyOn(shopifyFetcher, 'fetchShopifyDayRows').mockRejectedValue(
       new Error('Shopify 503'),
     );
     vi.spyOn(shopifyFetcher, 'fetchShopifyOrdersAttribution').mockResolvedValue([]);
-    vi.spyOn(metaFetcher, 'fetchMetaSpendForDayLight').mockResolvedValue({
-      storeId: 'uzoshop', date: '2026-05-29', spend: 80, currency: 'CAD', impressions: 800,
-    });
-    vi.spyOn(googleAdsFetcher, 'fetchGoogleAdsSpendForDay').mockResolvedValue({
-      storeId: 'uzoshop', date: '2026-05-29', spend: 40, currency: 'CAD', impressions: 400,
-    });
-    vi.spyOn(tiktokFetcher, 'fetchTikTokSpendForDay').mockResolvedValue({
-      storeId: 'uzoshop', date: '2026-05-29', spend: 20, currency: 'CAD', impressions: 200,
-    });
 
     const { admin, upsertsByTable } = makeSupabaseMock();
     vi.spyOn(supabaseAdminMod, 'getSupabaseAdmin').mockReturnValue(admin);
@@ -207,20 +203,13 @@ describe('cron-live — last_live_tick_at on data_daily + products_daily', () =>
     const { step } = makeStepStub();
     await mod.runLiveForStore('uzoshop', { step });
 
+    // No spend-only upsert should fire — workers own those columns now.
     const dataDailyUpserts = (upsertsByTable['data_daily'] ?? []).flat();
-    // Spend-only rows: have fb_spend_cad but no revenue_cad
     const spendOnlyRows = dataDailyUpserts.filter(
       (r) => (r as Record<string, unknown>).revenue_cad === undefined &&
               (r as Record<string, unknown>).fb_spend_cad !== undefined,
     );
-    expect(spendOnlyRows.length).toBeGreaterThanOrEqual(1);
-
-    for (const row of spendOnlyRows) {
-      const r = row as Record<string, unknown>;
-      expect(r).toHaveProperty('last_live_tick_at');
-      expect(typeof r.last_live_tick_at).toBe('string');
-      expect(ISO_PATTERN.test(r.last_live_tick_at as string)).toBe(true);
-    }
+    expect(spendOnlyRows).toEqual([]);
   });
 });
 

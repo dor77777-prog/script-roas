@@ -423,50 +423,18 @@ async function persistDayForStore(
   // entirely (products_daily is Shopify-derived; with no Shopify rows
   // for this tick there's nothing to write).
   if (opts?.spendOnly === true) {
-    if (!spendOverride) {
-      // Defensive: caller MUST pass spendOverride when requesting
-      // spendOnly. Without spend values there's literally nothing to
-      // write; bail silently rather than UPSERT a row with only PK
-      // columns (which would create a phantom data_daily row with
-      // NULL Shopify cols).
-      return;
-    }
-    // Phase A.5 v2 (2026-05-29 evening) — OMIT tt_spend_cad and tt_impressions
-    // from this payload. cron-live fetches the TikTok advertiser's full spend
-    // for the function-arg storeId (ignores the campaign-store-map), so its
-    // values would WRONGLY attribute the moved campaign's spend back to the
-    // pre-mapping store. The agg_tiktok_spend_per_store_for_date RPC (called
-    // from persistCampaignsLive + cronDaily after each cron-live-heavy tick)
-    // is the source of truth for tt_spend_cad. Omitting from the UPSERT
-    // payload means ON CONFLICT preserves the RPC-set value.
+    // Phase E1.6.2 (2026-05-30 evening hotfix) — post-Phase-E1.6 the
+    // bulk-date account-spend fetch was moved from cron-live to the 3
+    // hot_metrics worker branches. `spendOverride` is no longer populated
+    // from fresh API calls — it's aliased over `priorSpendByDate` (a
+    // SELECT at the start of the cron-live tick). Writing it back during
+    // the persist step would OVERWRITE the worker-fresh values that
+    // landed between the SELECT and the UPSERT — exactly the race the
+    // user reported 2026-05-30 evening ("not updating except Campaigns").
     //
-    // Trade-off: Live CPM for TikTok updates every 30 min (cron-live-heavy
-    // interval) instead of 10 min (cron-live). Acceptable per the Phase 13.8
-    // (Live CPM) spec which already accepted similar trade-offs for accuracy.
-    //
-    // total_spend_cad is also omitted because it depends on tt_spend_cad;
-    // the agg RPC's Pass 2 recomputes it correctly.
-    const spendOnlyPayload: Record<string, unknown> = {
-      date,
-      store_id: storeId,
-      store_name: shopify.storeName,
-      fb_spend_cad: spendOverride.fbSpendCad,
-      ga_spend_cad: spendOverride.gaSpendCad,
-      // Phase 13.8 (2026-05-26) — fb/ga impressions still ride along with
-      // spend for Live CPM. tt_impressions omitted alongside tt_spend_cad.
-      fb_impressions: spendOverride.fbImpressions,
-      ga_impressions: spendOverride.gaImpressions,
-      // Phase A Task 14 (2026-05-29) — freshness timestamp for Phase D badges.
-      last_live_tick_at: liveTickAt,
-    };
-    const { error: spendOnlyErr } = await admin
-      .from('data_daily')
-      .upsert(spendOnlyPayload, { onConflict: 'date,store_id' });
-    if (spendOnlyErr) {
-      throw new Error(
-        `data_daily spend-only upsert for ${storeId} ${date}: ${spendOnlyErr.message}`,
-      );
-    }
+    // The spend-only branch is now a no-op. cron-live owns Shopify columns
+    // + derived; workers own fb/ga/tt_spend_cad + impressions; the agg
+    // RPC owns tt_spend_cad's per-store split (TikTok shared-account).
     return;
   }
 
@@ -567,20 +535,22 @@ async function persistDayForStore(
   const netProfit = grossProfit - cogs;
   const roas = totalSpendCad > 0 ? revenueCad / totalSpendCad : 0;
 
-  // Build the payload. Spend columns ABSENT from the payload → preserved on
-  // ON CONFLICT DO UPDATE (Supabase JS only includes payload keys in the
-  // SET clause). For a fresh INSERT (no existing row), we ADD zeros so the
-  // 3 spend columns have NUMERIC defaults — otherwise they'd be NULL until
-  // the next daily-cron tick.
+  // Phase E1.6.2 (2026-05-30 evening hotfix) — cron-live OWNS only the
+  // Shopify-derived columns. Workers own fb/ga/tt_spend_cad +
+  // fb/ga/tt_impressions; the agg RPC owns tt_spend_cad's per-store
+  // split. Pre-fix, cron-live re-wrote fb/ga columns from priorSpend
+  // (a SELECT at the start of the tick), which OVERWROTE the worker-
+  // fresh values that landed between the SELECT and the UPSERT —
+  // exactly the user's 2026-05-30 evening report ("not updating
+  // except Campaigns"). Now the payload contains revenue + derived +
+  // last_live_tick_at only. The derived calcs (roas / gross / net) use
+  // priorSpend values, so they may be up to ~10 min stale until the
+  // next cron-live tick reads fresh worker writes — acceptable trade-
+  // off vs the race condition that froze spend entirely.
   //
-  // Phase 05.7.4 (2026-05-22) — gross_revenue_cad + refund_deduction_cad MUST
-  // be written together with revenue_cad. If cronLive writes revenue_cad in
-  // isolation (as it did pre-fix), a stale gross from a prior cronDaily run
-  // produces the impossible state `revenue > gross` (uzoshop 2026-05-21
-  // showed revenue=$2,133 vs gross=$2,029, refund=$0). The fetcher returns
-  // all three together, so passing all three to the upsert costs nothing
-  // and preserves the invariant `revenue = gross − refund_deduction` on
-  // every write.
+  // For fresh INSERT (no existing row) we seed all spend/impressions
+  // columns to 0 so subsequent reads return numeric zeros instead of
+  // NULL. Workers will overwrite on their next tick (≤10 min).
   type DataDailyUpsertRow = {
     date: string;
     store_id: string;
@@ -615,32 +585,17 @@ async function persistDayForStore(
     // Phase A Task 14 (2026-05-29) — freshness timestamp for Phase D badges.
     last_live_tick_at: liveTickAt,
   };
-  // When spendOverride is supplied, include the spend columns in the payload
-  // so the UPSERT updates them. When NOT supplied and the row exists, omit
-  // them so ON CONFLICT preserves existing values. When NOT supplied and the
-  // row doesn't exist (fresh INSERT), seed with zeros so subsequent reads
-  // get NUMERIC 0 instead of NULL.
-  if (spendOverride !== undefined) {
-    dataDailyPayload.fb_spend_cad = fbSpendCad;
-    dataDailyPayload.ga_spend_cad = gaSpendCad;
-    // Phase A.5 v2 (2026-05-29 evening) — OMIT tt_spend_cad and
-    // total_spend_cad here too (same reason as the spendOnly branch above).
-    // The agg_tiktok_spend_per_store_for_date RPC owns tt_spend_cad after
-    // each cron-live-heavy tick; cron-live writing the legacy non-mapping-
-    // aware value would oscillate the per-store TikTok display every 10 min.
-    // Phase 13.8 (2026-05-26) — fb/ga impressions still move in lockstep
-    // with spend for Live CPM. tt_impressions omitted alongside tt_spend_cad.
-    dataDailyPayload.fb_impressions = fbImpressions;
-    dataDailyPayload.ga_impressions = gaImpressions;
-  } else if (!existing) {
-    dataDailyPayload.fb_spend_cad = 0;
-    dataDailyPayload.ga_spend_cad = 0;
-    dataDailyPayload.tt_spend_cad = 0;
-    dataDailyPayload.total_spend_cad = 0;
-    dataDailyPayload.fb_impressions = 0;
-    dataDailyPayload.ga_impressions = 0;
-    dataDailyPayload.tt_impressions = 0;
-  }
+  // Phase E1.6.2 — NO zero-seed for spend/impressions columns. Workers
+  // OWN those columns; cron-live touching them (even to seed zeros)
+  // would race the worker writes. If no data_daily row exists yet for
+  // (date, store_id), the UPSERT below creates one with NULL spend
+  // columns; readers handle NULL via COALESCE / ?? 0. The next worker
+  // tick (≤10 min) fills them with real values.
+  //
+  // Silence unused-var lint for the now-redundant override-cascade
+  // values. They're computed above for the derived calcs only.
+  void fbSpendCad; void gaSpendCad; void ttSpendCad; void totalSpendCad;
+  void fbImpressions; void gaImpressions;
 
   const { error: dataErr } = await admin
     .from('data_daily')

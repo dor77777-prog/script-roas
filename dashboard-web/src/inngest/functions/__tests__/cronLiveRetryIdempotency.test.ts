@@ -292,15 +292,18 @@ describe('cronLive persist-rolling-3day retry idempotency (INN-10)', () => {
       }
     }
 
-    // For EVERY date in the rolling window, the final persisted
-    // fb_spend_cad MUST equal the original prior (100). If the bug is
-    // alive, at least one date will show 200 (the retry's re-read).
+    // Phase E1.6.2 (2026-05-30 evening hotfix): cron-live no longer
+    // writes fb/ga/tt_spend_cad or fb/ga/tt_impressions to data_daily —
+    // those columns are owned by the 3 hot_metrics worker branches.
+    // The INN-10 prior-preserve invariant is replaced by a stricter
+    // contract: the spend columns must NOT appear in cron-live's
+    // upsert payload at all (so there's nothing to race with the
+    // worker writes that land between SELECT and UPSERT).
     for (const [date, row] of latestByDate.entries()) {
-      expect(
-        row.fb_spend_cad,
-        `fb_spend_cad for ${date} must equal original prior (100), not the retry's re-read of its own UPSERT (200). ` +
-          `If this assertion fails, INN-10 is alive: the SELECT inside persist-rolling-3day is reading the same step's own writes on retry.`,
-      ).toBe(100);
+      expect(row.fb_spend_cad, `fb_spend_cad must NOT be in cron-live payload for ${date} (workers own it post-E1.6.2)`).toBeUndefined();
+      expect(row.ga_spend_cad, `ga_spend_cad must NOT be in cron-live payload for ${date} (workers own it post-E1.6.2)`).toBeUndefined();
+      expect(row.fb_impressions, `fb_impressions must NOT be in cron-live payload for ${date} (workers own it post-E1.6.2)`).toBeUndefined();
+      expect(row.ga_impressions, `ga_impressions must NOT be in cron-live payload for ${date} (workers own it post-E1.6.2)`).toBeUndefined();
     }
   });
 
