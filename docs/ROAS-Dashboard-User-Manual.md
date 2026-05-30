@@ -7,7 +7,7 @@
 │                                                  │
 │      מדריך הפעלה שוטף למפעיל הדשבורד            │
 │                                                  │
-│      גרסה:        2.1.24                         │
+│      גרסה:        2.2.0                          │
 │      תאריך:       2026-05-30                     │
 │      קהל יעד:     מפעיל יחיד · החלטות יומיות   │
 │                                                  │
@@ -247,6 +247,29 @@ Meta ו-Google אינם מושפעים — אין campaign-store-map עבור פ
 **Hotfix 5 לערב — TodayLive per-store breakdown לא הציג TikTok ל-usmile360/zolplus:** הקומפוננטה `TodayLive` השתמשה ב-`storeHasTikTok(s.store)` שבודקת set סטטי `STORES_WITH_TIKTOK = {uzoshop}`. אחרי Phase A.5 v2, usmile360 ו-zolplus יכולות לקבל TikTok spend דרך המיפוי, אבל הbreakdown באר ההוצאה לא הציג את שורת TikTok. תוצאה: הסיכום היה $110 (Meta $66 + TikTok $43.49) אבל הbreakdown הציג רק "Meta: 66" → looked broken. תוקן: הchcck עכשיו `storeHasTikTok(s.store) || (s.ttSpend ?? 0) > 0`.
 
 ---
+
+### 2.2.0 (2026-05-30) — Phase D: Registry-Status Cutover
+
+- Campaign / adset status chips in the table now reflect the latest
+  platform-native value within **10 min** (was: ~30 min via
+  `cron-live-heavy`).
+- New delivery-status chip on the campaign drawer's status panel
+  displays one of:
+  - **DELIVERING** (green) — actively serving impressions.
+  - **NOT_DELIVERING** (gray) — paused/disabled/archived.
+  - **LIMITED** (orange) — daily budget exceeded; resumes tomorrow.
+  - **PENDING_REVIEW** (blue) — under platform review.
+  - **LEARNING** (blue) — Meta learning phase.
+  - **REJECTED** (red) — TikTok review denied.
+- Campaign drawer's "סטטוס + טריות" panel is now the **full** Phase D
+  layout: 3 status fields side-by-side (configured / effective /
+  delivery) + 3-event timeline (נראה לראשונה / שינוי סטטוס אחרון /
+  סטטוס נדגם בהצלחה).
+- A new "⏳ טוען מ-Platform" chip appears briefly on freshly-backfilled
+  campaigns until the orchestrator's status worker observes them
+  (~10 min). Operator action: none — it disappears automatically.
+- No changes to Shopify revenue / orders / refunds / monthly aggregates
+  — Phase D is status-only.
 
 ### 2.1.24 (2026-05-30) — Phase C soak hotfix #2: Google `change_status` entity-id extraction (CRIT-G)
 
@@ -2843,7 +2866,7 @@ Seen 5 times. Alert #2.
 
 ## סוף המסמך
 
-**גרסה:** 2.1.22 · **תאריך עדכון:** 2026-05-30
+**גרסה:** 2.2.0 · **תאריך עדכון:** 2026-05-30
 
 > מסמך זה מתעדכן עם כל שינוי שהמפעיל רואה במסך. אם משהו לא תואם למה שאתה רואה — דווח למפתח לעדכון.
 

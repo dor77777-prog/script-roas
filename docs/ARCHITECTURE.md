@@ -1356,3 +1356,71 @@ Parsing loop reads the per-type field selected by `resource_type` and applies th
 **Audit of the same pattern on Meta + TikTok:** clean. `metaStatus.ts` reads `c.id` directly from `/campaigns?fields=id,...` Graph responses (numeric strings, no resource_name involved). `tiktokStatus.ts` reads `r.campaign_id` / `r.ad_id` directly from TikTok's `/campaign/get/` responses (same shape). The CRIT-G class is unique to Google's `change_status` log resource — Meta and TikTok don't expose a change-log API of this kind, so their status discovery hits campaigns/adsets/ads directly.
 
 **Open follow-up:** the `meta-worker` should adopt the same `isConfigured` + try/catch shape for symmetry (Meta has per-store accounts for all 3 stores today, so the antipattern is dormant — but a future store onboarding could hit it). Tracked separately.
+
+## Phase D — Registry-Status Cutover (2026-05-30)
+
+The dashboard now reads campaign / adset / ad **status** from the 3
+registries written by the Phase B/C orchestrator (≤10 min refresh)
+instead of from `effective_status` on the 3 `*_daily` tables (~30 min
+refresh via `cron-live-heavy`).
+
+### What changed
+- **3 SQL migrations** added under `supabase/migrations/`:
+  - `20260530250000_phase_d_backfill_registries.sql` — one-time backfill,
+    idempotent, `ON CONFLICT DO NOTHING`. Sources `campaign_registry` +
+    `adset_registry` from `campaigns_daily` (ad-set-granular per its PK).
+    Sources `ad_registry` keys-only from `ads_daily` (no `effective_status`
+    column on `ads_daily` to derive from).
+  - `20260530260000_phase_d_auto_coverage_triggers.sql` — 2 `AFTER INSERT`
+    triggers (one on `campaigns_daily` that seeds both campaign + adset
+    registries; one on `ads_daily` for keys-only ad_registry).
+  - `20260530270000_phase_d_enriched_views.sql` — `campaigns_enriched`
+    / `adsets_enriched` / `ads_enriched` `LEFT JOIN` views.
+- **postgresReaders.ts** — `fetchCampaignsFromPostgres` /
+  `fetchAdsFromPostgres` select from the enriched views; `CampaignRow` /
+  `AdRow` carry 6 `reg*` fields. `fetchCurrentCampaignStatuses` rebuilt
+  to read `campaign_registry` directly (was: 60-day scan of
+  `campaigns_daily`).
+- **statusClassification.ts** (`lib/registries/`) — single source of
+  truth for the (`regDeliveryStatus` × fallback chain) → {label, tone,
+  isOff, isBackfillUnknown} mapping. Consumed by `CampaignsTableRow`
+  (chip) + `CampaignDrawerStatusSection` (panel). `tiktokStatusSets.ts`
+  re-exports `TIKTOK_ACTIVE_ENOUGH` from `platformConfig.ts` (single
+  source for "TT statuses we treat as ON") + owns `TIKTOK_OFF_STATUSES`
+  locally.
+- **CampaignDrawerStatusSection** expanded from "minimal" (Phase C) to
+  "full": 3 status chips side-by-side (configured / effective /
+  delivery), BACKFILL_UNKNOWN explainer paragraph, 3-event timeline
+  (first_seen → status_changed → last_status_success → last_live_tick).
+- **ProductCentricView** + **CohortComparisonPanel** swap to `reg*`
+  fields with legacy fallback. ProductCentricView's `isActive` check
+  treats `UNKNOWN` as fall-through (matches `classifyCampaignStatus`).
+
+### What didn't change
+Writers (cronDaily / cronLive / metaWorker / googleWorker / tiktokWorker)
+continue writing to `*_daily` and registries exactly as before. The
+cutover is read-side only.
+
+Shopify pipeline (revenue / orders / refunds / catalog) untouched —
+Phase D is status-only and does not modify `data_daily`,
+`orders_attribution`, `products_daily`, or the `cronLive.ts` Shopify
+fetcher branch.
+
+### Sentinel
+`configured_status = 'BACKFILL_UNKNOWN'` marks rows that the backfill
+seeded from daily data alone (i.e. no platform-native operator-set value
+has been observed yet). The next status-scope worker tick (~10 min)
+replaces it with the real platform value. The UI surfaces a small
+"⏳ טוען מ-Platform" chip and an explainer block while the sentinel
+is active.
+
+### Coverage parity test
+`registryCoverageParity.live.test.ts` (AUDIT_LIVE=1) asserts every
+distinct `(store, platform, entity_id)` in the dailies has a matching
+registry row. Adset tuples sourced from `campaigns_daily` (which is
+ad-set-granular per its PK), not from a non-existent `adsets_daily`.
+
+### Rollback
+Revert the frontend / postgresReaders commits. The DB layer
+(VIEWs + triggers + backfilled rows) stays in place — it harms nothing
+while idle and lets us roll forward instantly. See spec §6.
