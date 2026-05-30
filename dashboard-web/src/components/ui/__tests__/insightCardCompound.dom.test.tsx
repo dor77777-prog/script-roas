@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { InsightCard, InsightCardGroup, InsightCardRow } from '@/components/ui/InsightCard';
+import { InsightCardGroup, InsightCardRow } from '@/components/ui/InsightCard';
 
 describe('InsightCard compound API', () => {
   it('renders InsightCardGroup with header label + count badge', () => {
