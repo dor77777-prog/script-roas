@@ -492,7 +492,7 @@ export function AdsDrawer({
                                 : 0;
                               const tone =
                                 adAttr.trust.level === 'high'    ? 'bg-status-greenBg/60 text-status-green'
-                              : adAttr.trust.level === 'medium'  ? 'bg-status-warning-bg text-status-warning-fg'
+                              : adAttr.trust.level === 'medium'  ? 'bg-status-warningBg text-status-warningFg'
                               : adAttr.trust.level === 'unknown' ? 'bg-elevated2 text-ink-secondary'
                               :                                    'bg-status-redBg/60 text-status-red';
                               const tooltip =

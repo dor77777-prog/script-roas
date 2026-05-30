@@ -59,8 +59,8 @@ const SEVERITY_META: Record<
   warning: {
     label: 'אזהרות',
     icon: <AlertTriangle size={16} />,
-    color: 'text-status-warning-fg',
-    bg: 'bg-status-warning-bg',
+    color: 'text-status-warningFg',
+    bg: 'bg-status-warningBg',
     border: 'border-status-warning/30',
     badge: 'bg-status-warning text-white',
   },

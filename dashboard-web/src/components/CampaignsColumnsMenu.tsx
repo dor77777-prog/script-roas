@@ -133,7 +133,7 @@ export function CampaignsColumnsMenu({
         className={cn(
           'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs sm:text-sm transition-colors',
           hiddenCount > 0
-            ? 'border-status-warning/30 bg-status-warning-bg text-status-warning-fg hover:bg-status-warning-bg'
+            ? 'border-status-warning/30 bg-status-warningBg text-status-warningFg hover:bg-status-warningBg'
             : 'border-line bg-elevated text-ink-secondary hover:bg-elevated2',
         )}
         title={
@@ -147,7 +147,7 @@ export function CampaignsColumnsMenu({
         <Columns3 size={13} />
         <span>עמודות</span>
         {hiddenCount > 0 && (
-          <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-status-warning text-status-warning-fg text-[10px] font-bold">
+          <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-status-warning text-status-warningFg text-[10px] font-bold">
             {hiddenCount}
           </span>
         )}

@@ -46,7 +46,7 @@ export function InsightsPanel({ storeAggs, rows }: Props) {
         <Lightbulb size={18} className="text-ink-secondary" />
         תובנות מהירות
       </h2>
-      <div className="rounded-xl bg-status-warning-bg border border-status-warning/30 divide-y divide-status-warning/30 overflow-hidden">
+      <div className="rounded-xl bg-status-warningBg border border-status-warning/30 divide-y divide-status-warning/30 overflow-hidden">
         {top && (
           <InsightRow
             icon={<Trophy className="text-status-warning" size={20} />}

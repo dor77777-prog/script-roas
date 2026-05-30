@@ -230,7 +230,7 @@ const KIND_META: Record<
   'top-product': {
     icon: <Trophy size={16} />,
     label: 'מוצר מוביל',
-    tone: 'text-status-warning bg-status-warning-bg',
+    tone: 'text-status-warning bg-status-warningBg',
   },
   'top-campaign': {
     icon: <Trophy size={16} />,

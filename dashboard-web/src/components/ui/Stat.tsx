@@ -15,7 +15,7 @@ const statVariants = cva(
     variants: {
       tone: {
         neutral: 'border-line',
-        warning: 'border-status-warning bg-status-warning-bg',
+        warning: 'border-status-warning bg-status-warningBg',
         success: 'border-status-green bg-status-greenBg',
         danger:  'border-status-red bg-status-redBg',
       },

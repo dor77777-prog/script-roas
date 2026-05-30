@@ -181,7 +181,7 @@ export function AdSetTable({
                   <td className="px-3 py-2 text-end tabular-nums">{formatCurrency(a.spend)}</td>
                   <td className="px-3 py-2 text-end tabular-nums">
                     {a.adSetBudgetCad && a.adSetBudgetCad > 0 ? (
-                      <span className={cn('font-medium', tight && 'text-status-warning-fg')}>
+                      <span className={cn('font-medium', tight && 'text-status-warningFg')}>
                         {formatCurrency(a.adSetBudgetCad)}
                       </span>
                     ) : (
@@ -209,7 +209,7 @@ export function AdSetTable({
                         : 0;
                       const tone =
                         adsetAttr.trust.level === 'high'    ? 'bg-status-greenBg/60 text-status-green'
-                      : adsetAttr.trust.level === 'medium'  ? 'bg-status-warning-bg text-status-warning-fg'
+                      : adsetAttr.trust.level === 'medium'  ? 'bg-status-warningBg text-status-warningFg'
                       : adsetAttr.trust.level === 'unknown' ? 'bg-elevated2 text-ink-secondary'
                       :                                       'bg-status-redBg/60 text-status-red';
                       const tooltip =

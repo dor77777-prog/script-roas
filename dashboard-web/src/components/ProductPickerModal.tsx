@@ -260,10 +260,10 @@ export function ProductPickerModal({
 
         <div className="px-4 sm:px-5 py-3 border-b border-line-subtle">
           {!isLoading && !usingCatalog && (
-            <div className="mb-2.5 rounded-md bg-status-warning-bg border border-status-warning/30 px-2.5 py-2 text-[11px] text-status-warning-fg leading-relaxed">
+            <div className="mb-2.5 rounded-md bg-status-warningBg border border-status-warning/30 px-2.5 py-2 text-[11px] text-status-warningFg leading-relaxed">
               <strong>הקטלוג עוד לא סונכרן.</strong> מוצגים רק מוצרים שכבר ביצעו
               מכירה. כדי לראות את כל המוצרים בחנות (כולל חדשים בלי הזמנות),
-              לחץ על <code className="font-mono bg-status-warning-bg px-1 rounded">Sync now</code>{' '}
+              לחץ על <code className="font-mono bg-status-warningBg px-1 rounded">Sync now</code>{' '}
               בקונסולת האופרטור — או המתן לריצת ה-cron היומית הבאה (00:05 שעון ישראל).
             </div>
           )}
@@ -368,7 +368,7 @@ export function ProductPickerModal({
                           const more = others.length > 2 ? ` +${others.length - 2}` : '';
                           return (
                             <div
-                              className="text-[10px] mt-0.5 inline-flex items-center gap-1 text-status-warning-fg bg-status-warning-bg border border-status-warning/30 rounded px-1.5 py-0.5"
+                              className="text-[10px] mt-0.5 inline-flex items-center gap-1 text-status-warningFg bg-status-warningBg border border-status-warning/30 rounded px-1.5 py-0.5"
                               title={`גם ממופה ל: ${others.join(', ')}`}
                             >
                               🔗 גם ב-{others.length} קמפיינים: {preview}{more}

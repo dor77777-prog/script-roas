@@ -247,9 +247,9 @@ export function BillingCsvImport({
       </div>
 
       {warnings.length > 0 && (
-        <div className="rounded-lg bg-status-warning-bg border border-status-warning/30 p-3 flex items-start gap-2">
-          <AlertCircle size={14} className="text-status-warning-fg shrink-0 mt-0.5" />
-          <div className="text-xs text-status-warning-fg">
+        <div className="rounded-lg bg-status-warningBg border border-status-warning/30 p-3 flex items-start gap-2">
+          <AlertCircle size={14} className="text-status-warningFg shrink-0 mt-0.5" />
+          <div className="text-xs text-status-warningFg">
             {warnings.map((w, i) => <div key={i}>{w}</div>)}
           </div>
         </div>
@@ -304,7 +304,7 @@ export function BillingCsvImport({
                     {p.description}
                   </div>
                   {p.duplicateOfId && (
-                    <div className="text-[10px] text-status-warning-fg mt-0.5">
+                    <div className="text-[10px] text-status-warningFg mt-0.5">
                       ⚠️ קיים כבר במנויים הפעילים — דילוג ברירת מחדל
                     </div>
                   )}

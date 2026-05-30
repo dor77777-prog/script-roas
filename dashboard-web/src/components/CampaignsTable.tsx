@@ -1411,7 +1411,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         );
         const toneBg: Record<typeof analysis.tone, string> = {
           positive: 'bg-status-greenBg/40 border-status-green/30 text-status-green',
-          warning:  'bg-status-warning-bg border-status-warning/30 text-status-warning-fg',
+          warning:  'bg-status-warningBg border-status-warning/30 text-status-warningFg',
           negative: 'bg-status-redBg/40 border-status-red/30 text-status-red',
           neutral:  'bg-elevated2 border-line-subtle text-ink-secondary',
         };
@@ -1672,7 +1672,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
             </div>
           )}
           {cpmAnalysisMode === 'prev' && !isLoadingPrev && analysis.mode === 'half-over-half' && (
-            <div className="text-[10px] text-status-warning-fg bg-status-warning-bg px-2 py-1 rounded mt-1">
+            <div className="text-[10px] text-status-warningFg bg-status-warningBg px-2 py-1 rounded mt-1">
               {/* FIX-19 (5.2.2.1): fallback disclosure when previous period had
                   fewer than PREV_PERIOD_MIN_DAYS active days.
                   WR-01 (5.2.2.1): gated by !isLoadingPrev so the banner does not fire prematurely

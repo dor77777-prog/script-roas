@@ -30,7 +30,7 @@ describe('CampaignsTableRow trustLevel — locks TEST-07 (5.2.2.1)', () => {
 
   it('maps "medium" to the warning chip tone via the production helper', () => {
     const value: CampaignsTableRowTrustLevel = 'medium';
-    expect(computeTrustTone(value)).toBe('bg-status-warning-bg text-status-warning-fg');
+    expect(computeTrustTone(value)).toBe('bg-status-warningBg text-status-warningFg');
   });
 
   it('maps "low" to the red chip tone via the production helper', () => {

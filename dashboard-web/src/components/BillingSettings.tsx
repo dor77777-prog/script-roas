@@ -84,7 +84,7 @@ export const SOURCE_COLOR: Record<CostSource, string> = {
   'shopify-plan': 'bg-accent/10 text-accent',
   'shopify-app':  'bg-blue-100 text-blue-700',
   'external-app': 'bg-purple-100 text-purple-700',
-  email:          'bg-status-warning-bg text-status-warning-fg',
+  email:          'bg-status-warningBg text-status-warningFg',
   usage:          'bg-status-orangeBg text-status-orange',
   'one-off':      'bg-ink-muted/15 text-ink-secondary',
   other:          'bg-ink-muted/15 text-ink-secondary',
@@ -388,16 +388,16 @@ function RecurringTab({
   return (
     <div className="space-y-3">
       {planErrorStores.length > 0 && (
-        <div className="rounded-lg border border-status-warning/30 bg-status-warning-bg p-3">
+        <div className="rounded-lg border border-status-warning/30 bg-status-warningBg p-3">
           <div className="flex items-start gap-2">
-            <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-status-warning-bg text-status-warning-fg shrink-0">
+            <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-status-warningBg text-status-warningFg shrink-0">
               <AlertCircle size={14} />
             </span>
             <div className="flex-1 min-w-0">
-              <div className="text-xs sm:text-sm font-semibold text-status-warning-fg">
+              <div className="text-xs sm:text-sm font-semibold text-status-warningFg">
                 זיהוי אוטומטי של תוכניות Shopify נכשל
               </div>
-              <p className="text-[11px] sm:text-xs text-status-warning-fg/85 mt-0.5 leading-relaxed">
+              <p className="text-[11px] sm:text-xs text-status-warningFg/85 mt-0.5 leading-relaxed">
                 הקריאה ל-plan דרך Shopify GraphQL Admin API נכשלה. סיבות
                 נפוצות: ה-token לא כולל את ה-scope <code>read_shop</code>,
                 ה-token פג, או החנות חסומה. תיקון נדרש בצד ה-token של החנות
@@ -419,7 +419,7 @@ function RecurringTab({
                     </div>
                     <div
                       dir="ltr"
-                      className="text-[10px] text-status-warning-fg/80 font-mono mt-1 break-words"
+                      className="text-[10px] text-status-warningFg/80 font-mono mt-1 break-words"
                     >
                       {m.lastError}
                     </div>

@@ -208,7 +208,7 @@ export function GoalTracker({ data }: Props) {
           </button>
         </div>
         {editError && (
-          <p className="text-[11px] text-status-warning-fg mt-2" role="alert">
+          <p className="text-[11px] text-status-warningFg mt-2" role="alert">
             {editError}
           </p>
         )}
@@ -233,7 +233,7 @@ export function GoalTracker({ data }: Props) {
   > = {
     ahead: { label: 'מקדים את היעד', bg: 'bg-status-greenBg', color: 'text-status-green' },
     'on-pace': { label: 'בקצב הנכון', bg: 'bg-accent/10', color: 'text-accent' },
-    behind: { label: 'מפגר מהיעד', bg: 'bg-status-warning-bg', color: 'text-status-warning-fg' },
+    behind: { label: 'מפגר מהיעד', bg: 'bg-status-warningBg', color: 'text-status-warningFg' },
     unknown: { label: '—', bg: 'bg-elevated2', color: 'text-ink-muted' },
   };
   const sMeta = statusMeta[pacing.status];

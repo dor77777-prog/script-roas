@@ -229,7 +229,7 @@ export function RefundIndicator(props: {
           cancelHide();
           setOpen((v) => !v);
         }}
-        className="inline-flex items-center justify-center text-status-warning-fg hover:text-status-warning cursor-pointer"
+        className="inline-flex items-center justify-center text-status-warningFg hover:text-status-warning cursor-pointer"
       >
         <RotateCcw size={14} />
       </button>

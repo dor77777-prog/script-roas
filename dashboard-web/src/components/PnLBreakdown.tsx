@@ -56,7 +56,7 @@ const SOURCE_COLOR: Record<CostSource, string> = {
   'shopify-plan': 'text-accent',
   'shopify-app':  'text-blue-700',
   'external-app': 'text-purple-700',
-  email:          'text-status-warning-fg',
+  email:          'text-status-warningFg',
   usage:          'text-status-orange',
   'one-off':      'text-ink-secondary',
   other:          'text-ink-secondary',
@@ -213,13 +213,13 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
       {open && (
         <div className="p-4 sm:p-5 border-t border-line-subtle animate-fade-in">
           {!hasConfiguredFixed && (
-            <div className="mb-4 rounded-lg bg-status-warning-bg border border-status-warning/30 px-3 py-2.5 flex items-start gap-2">
-              <AlertCircle size={14} className="text-status-warning-fg shrink-0 mt-0.5" />
-              <div className="text-[11px] sm:text-xs text-status-warning-fg leading-relaxed">
+            <div className="mb-4 rounded-lg bg-status-warningBg border border-status-warning/30 px-3 py-2.5 flex items-start gap-2">
+              <AlertCircle size={14} className="text-status-warningFg shrink-0 mt-0.5" />
+              <div className="text-[11px] sm:text-xs text-status-warningFg leading-relaxed">
                 <strong>טרם הוגדרו עלויות חודשיות.</strong> ה-P&amp;L כרגע משקלל רק
                 COGS (25%) ו-Transaction Fees (6.5%) — בלי Shopify Plan,
                 אפליקציות, או שירות אימייל. לחץ על{' '}
-                <span className="inline-flex items-center gap-1 px-1 py-0.5 rounded bg-status-warning-bg font-semibold">
+                <span className="inline-flex items-center gap-1 px-1 py-0.5 rounded bg-status-warningBg font-semibold">
                   <SettingsIcon size={10} /> עלויות חודשיות
                 </span>{' '}
                 למעלה כדי להוסיף אותן (מנוי Shopify, Klaviyo, וכו&apos;).
