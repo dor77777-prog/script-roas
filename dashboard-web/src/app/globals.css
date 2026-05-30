@@ -112,6 +112,16 @@
   --store-usmile: oklch(72% 0.20 130);      /* lime */
   --store-usmile-bg: oklch(94% 0.04 130);
   --store-usmile-fg: oklch(22% 0.05 130);
+
+  /* Annotation markers — was hardcoded hex per kind in annotations.ts. */
+  --annotation-launch: oklch(55% 0.18 145);   /* green */
+  --annotation-pause: oklch(60% 0.20 25);     /* red */
+  --annotation-budget: oklch(60% 0.18 260);   /* blue */
+  --annotation-pricing: oklch(65% 0.16 75);   /* amber */
+  --annotation-sale: oklch(65% 0.20 305);     /* purple */
+  --annotation-creative: oklch(60% 0.18 200); /* cyan */
+  --annotation-supplier: oklch(50% 0.10 30);  /* brown */
+  --annotation-other: oklch(60% 0.005 0);     /* gray */
 }
 
 [data-theme="dark"] {
@@ -207,6 +217,15 @@
   --store-usmile: oklch(78% 0.20 130);
   --store-usmile-bg: oklch(28% 0.08 130);
   --store-usmile-fg: oklch(94% 0.04 130);
+
+  --annotation-launch: oklch(72% 0.20 145);
+  --annotation-pause: oklch(72% 0.22 25);
+  --annotation-budget: oklch(72% 0.22 260);
+  --annotation-pricing: oklch(78% 0.18 75);
+  --annotation-sale: oklch(75% 0.20 305);
+  --annotation-creative: oklch(75% 0.18 200);
+  --annotation-supplier: oklch(65% 0.12 30);
+  --annotation-other: oklch(70% 0.005 0);
 }
 
 /* ===========================================================================

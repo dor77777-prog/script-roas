@@ -59,14 +59,14 @@ export const ANNOTATION_KIND_EMOJI: Record<AnnotationKind, string> = {
 };
 
 export const ANNOTATION_KIND_COLOR: Record<AnnotationKind, string> = {
-  launch:    '#15803d', // green
-  pause:     '#dc2626', // red
-  budget:    '#0d3680', // navy
-  pricing:   '#d97706', // amber
-  sale:      '#c026d3', // fuchsia
-  creative:  '#0891b2', // cyan
-  supplier:  '#7c3aed', // purple
-  other:     '#64748b', // slate
+  launch:   'var(--annotation-launch)',
+  pause:    'var(--annotation-pause)',
+  budget:   'var(--annotation-budget)',
+  pricing:  'var(--annotation-pricing)',
+  sale:     'var(--annotation-sale)',
+  creative: 'var(--annotation-creative)',
+  supplier: 'var(--annotation-supplier)',
+  other:    'var(--annotation-other)',
 };
 
 export function readAnnotations(): Annotation[] {
