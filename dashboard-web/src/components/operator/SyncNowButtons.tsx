@@ -58,6 +58,7 @@ import { useState } from 'react';
 import { RefreshCw, Loader2 } from 'lucide-react';
 import { STORE_ID_TO_NAME } from '@/lib/platformsByStore';
 import { operatorFetch } from '@/lib/operatorClient';
+import { Button } from '@/components/ui/Button';
 
 // Source of truth — mirrors the route's VALID_STORES allowlist
 // (api/operator/sync-now/route.ts:58). Keeping the literal here rather
@@ -129,11 +130,12 @@ export function SyncNowButtons() {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
-        <button
+        <Button
           type="button"
+          size="sm"
           onClick={() => sync({ scope: 'all' }, 'Sync all stores')}
           disabled={pendingKey !== null}
-          className="flex items-center gap-1 bg-accent hover:bg-accent/90 disabled:bg-elevated2 disabled:text-ink-muted disabled:cursor-not-allowed text-white text-sm px-3 py-2 rounded"
+          className="gap-1"
         >
           {pendingKey === 'all' ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -141,16 +143,18 @@ export function SyncNowButtons() {
             <RefreshCw className="w-4 h-4" />
           )}
           Sync now (כל החנויות)
-        </button>
+        </Button>
         {STORES.map((storeId) => (
-          <button
+          <Button
             key={storeId}
             type="button"
+            variant="ghost"
+            size="sm"
             onClick={() =>
               sync({ scope: 'store', storeId }, `Sync ${storeLabel(storeId)}`)
             }
             disabled={pendingKey !== null}
-            className="flex items-center gap-1 bg-accent/70 hover:bg-accent/80 disabled:bg-elevated2 disabled:text-ink-muted disabled:cursor-not-allowed text-white text-sm px-3 py-2 rounded"
+            className="gap-1 bg-accent/70 hover:bg-accent/80 text-white"
           >
             {pendingKey === storeId ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -158,7 +162,7 @@ export function SyncNowButtons() {
               <RefreshCw className="w-4 h-4" />
             )}
             {storeLabel(storeId)}
-          </button>
+          </Button>
         ))}
       </div>
 

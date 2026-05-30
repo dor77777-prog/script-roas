@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { RotateCcw } from 'lucide-react';
 import { formatNumber } from '@/lib/utils';
+import { Button } from '@/components/ui/Button';
 
 /**
  * Phase 05.7.3 — refund-day indicator chip + tooltip.
@@ -215,9 +216,10 @@ export function RefundIndicator(props: {
       onMouseEnter={touch ? undefined : () => { cancelHide(); setOpen(true); }}
       onMouseLeave={touch ? undefined : scheduleHide}
     >
-      <button
+      <Button
         ref={btnRef}
         type="button"
+        variant="ghost"
         aria-label="הצג פירוט החזרים"
         onClick={(e) => {
           e.stopPropagation();
@@ -229,10 +231,10 @@ export function RefundIndicator(props: {
           cancelHide();
           setOpen((v) => !v);
         }}
-        className="inline-flex items-center justify-center text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 cursor-pointer"
+        className="inline-flex items-center justify-center text-status-warningFg hover:text-status-warning cursor-pointer w-auto h-auto p-0"
       >
         <RotateCcw size={14} />
-      </button>
+      </Button>
       {open &&
         pos &&
         typeof document !== 'undefined' &&
@@ -259,7 +261,7 @@ export function RefundIndicator(props: {
             className="z-[9999] px-3 py-2 rounded-md shadow-xl bg-ink text-canvas text-xs leading-relaxed text-start"
             dir="rtl"
           >
-            <span className="block font-semibold text-amber-300 mb-1">
+            <span className="block font-semibold text-status-warning mb-1">
               יום עם החזרים
             </span>
             <span className="block">
@@ -268,7 +270,7 @@ export function RefundIndicator(props: {
             </span>
             <span className="block">
               סכום החזרים:{' '}
-              <span className="tabular-nums font-medium text-amber-200">
+              <span className="tabular-nums font-medium text-status-warning">
                 −{refundLabel}
               </span>
             </span>

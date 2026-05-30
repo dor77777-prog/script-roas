@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/Button';
 
 export type TabDef<K extends string> = {
   key: K;
@@ -43,16 +44,17 @@ export function TabNav<K extends string>({ tabs, active, onChange }: Props<K>) {
           {tabs.map(tab => {
             const isActive = active === tab.key;
             return (
-              <button
+              <Button
                 key={tab.key}
                 ref={isActive ? activeRef : null}
                 role="tab"
+                variant="ghost"
                 aria-selected={isActive}
                 onClick={() => onChange(tab.key)}
                 className={cn(
-                  'group relative inline-flex items-center gap-1.5 sm:gap-2',
-                  'px-3 sm:px-4 py-2.5 sm:py-3 text-xs sm:text-sm font-medium',
-                  'whitespace-nowrap transition-colors shrink-0',
+                  'group relative gap-1.5 sm:gap-2',
+                  'px-3 sm:px-4 py-2.5 sm:py-3 h-auto text-xs sm:text-sm font-medium',
+                  'whitespace-nowrap shrink-0',
                   isActive
                     ? 'text-accent'
                     : 'text-ink-secondary hover:text-ink',
@@ -79,7 +81,7 @@ export function TabNav<K extends string>({ tabs, active, onChange }: Props<K>) {
                     isActive ? 'bg-accent opacity-100' : 'opacity-0',
                   )}
                 />
-              </button>
+              </Button>
             );
           })}
         </div>

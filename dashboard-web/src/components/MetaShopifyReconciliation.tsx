@@ -13,11 +13,12 @@ import type { CampaignRow } from '@/lib/campaigns';
 import type { OrderAttributionRow, OrderSource } from '@/lib/ordersAttribution';
 import { campaignKey, type ProductMap } from '@/lib/campaignProductMap';
 import { pearson, pearsonWithLag } from '@/lib/attributionAnalysis';
-import { CHART_COLORS } from '@/lib/chartColors';
+import { CHART_AXIS_COLOR, CHART_COLORS } from '@/lib/chartColors';
 import { enumerateDateRange } from '@/lib/dateRange';
 import { PRODUCT_MAP_CHIP_KEY } from '@/lib/sessionKeys';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import { ChartContainer } from '@/components/ui/chart/ChartContainer';
+import { Button } from '@/components/ui/Button';
 import {
   ChartTooltip,
   ChartTooltipLabel,
@@ -417,7 +418,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
   const primaryRClass =
     primaryAbsR === null ? 'text-ink-muted'
       : primaryAbsR >= 0.7 ? 'text-status-green'
-      : primaryAbsR >= 0.3 ? 'text-amber-600'
+      : primaryAbsR >= 0.3 ? 'text-status-warning'
       : 'text-status-red';
   const noSignalTitle = 'אין שונות בסדרה — לא ניתן לחשב';
   const formatR = (value: number | null) => (
@@ -448,23 +449,25 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
             <span className="leading-relaxed">
               ה-product↔campaign mapping מבוסס על המיפוי הנוכחי שלך. שינוי המיפוי משפיע על נתונים היסטוריים בדיעבד.
             </span>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               aria-label="הסתר הודעת מיפוי"
               onClick={() => {
                 window.sessionStorage.setItem(PRODUCT_MAP_CHIP_KEY, '1');
                 setChipHidden(true);
               }}
-              className="ms-auto shrink-0 rounded p-2 text-ink-subtle hover:bg-elevated2 hover:text-ink-secondary transition-colors"
+              className="ms-auto shrink-0"
             >
               <X size={12} />
-            </button>
+            </Button>
           </div>
         )}
 
         {/* Dark traffic chip */}
         {reconciliation.darkTrafficPercent > 0 && (
-          <div className="rounded-md bg-amber-50 border border-amber-200 px-2.5 py-1.5 text-[11px] text-amber-900">
+          <div className="rounded-md bg-status-warningBg border border-status-warning/30 px-2.5 py-1.5 text-[11px] text-status-warningFg">
             <strong>פער &quot;Dark traffic&quot; {reconciliation.darkTrafficPercent}%:</strong>{' '}
             סכום Meta+Google+Organic נמוך מ-Shopify בפועל. ייתכן channel attribution חסר (UTMs לא מוגדרים נכון, סוגי orders שלא מתויגים).
           </div>
@@ -535,7 +538,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 if (primaryChannel === 'Google') {
                   return (
                     <>
-                      <strong className="text-amber-600">מתאם חלקי.</strong>{' '}
+                      <strong className="text-status-warning">מתאם חלקי.</strong>{' '}
                       Google תופס חלק מהתנועות אבל יש ימים שהוא חורג.{' '}
                       התעלם מ-Google ברמת יום בודד, התייחס רק לאגרגציה של 7+ ימים.
                     </>
@@ -544,7 +547,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 if (primaryChannel === 'TikTok') {
                   return (
                     <>
-                      <strong className="text-amber-600">מתאם חלקי.</strong>{' '}
+                      <strong className="text-status-warning">מתאם חלקי.</strong>{' '}
                       TikTok תופס חלק מהתנועות אבל יש ימים שהוא חורג.{' '}
                       התעלם מ-TikTok ברמת יום בודד, התייחס רק לאגרגציה של 7+ ימים.
                     </>
@@ -553,7 +556,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 if (primaryChannel === 'Combined') {
                   return (
                     <>
-                      <strong className="text-amber-600">מתאם חלקי.</strong>{' '}
+                      <strong className="text-status-warning">מתאם חלקי.</strong>{' '}
                       Σ של 4 הערוצים מול Shopify מסביר חלק מהתנועה, אבל חסרים ימים.{' '}
                       בדוק מיפוי מוצרים, UTMs וערוצים שלא נכנסים לאחת הסדרות.
                     </>
@@ -561,7 +564,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 }
                 return (
                   <>
-                    <strong className="text-amber-600">מתאם חלקי.</strong>{' '}
+                    <strong className="text-status-warning">מתאם חלקי.</strong>{' '}
                     Meta תופס חלק מהתנועות אבל יש ימים שהוא חורג.{' '}
                     התעלם מ-Meta ברמת יום בודד, התייחס רק לאגרגציה של 7+ ימים.
                   </>
@@ -622,7 +625,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
           reconciliation.bestR !== null &&
           reconciliation.r !== null &&
           reconciliation.bestR > reconciliation.r + LAG_IMPROVEMENT_THRESHOLD && (
-          <div className="rounded-md bg-amber-50 border border-amber-200 px-2.5 py-1.5 text-[11px] text-amber-900">
+          <div className="rounded-md bg-status-warningBg border border-status-warning/30 px-2.5 py-1.5 text-[11px] text-status-warningFg">
             <strong>זוהה lag של {Math.abs(reconciliation.bestLag)} ימים:</strong>{' '}
             {reconciliation.bestLag > 0
               ? `Meta מדווח על המרה ${Math.abs(reconciliation.bestLag)} ימים לפני שהמכירה מופיעה ב-Shopify (חלון attribution).`
@@ -634,7 +637,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
           <ComposedChart data={reconciliation.series} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
               <XAxis
                 dataKey="date"
-                tick={{ fontSize: 9, fill: CHART_COLORS.reconciliationAxis }}
+                tick={{ fontSize: 9, fill: CHART_AXIS_COLOR }}
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={d => {
@@ -647,7 +650,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                   vs Shopify net revenue; without a labelled Y axis the
                   operator couldn't read the magnitude of agreement / gap. */}
               <YAxis
-                tick={{ fontSize: 9, fill: CHART_COLORS.reconciliationAxis }}
+                tick={{ fontSize: 9, fill: CHART_AXIS_COLOR }}
                 tickLine={false}
                 axisLine={false}
                 // c/HI-02: pick decimal precision per magnitude. The old

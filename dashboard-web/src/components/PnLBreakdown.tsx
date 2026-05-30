@@ -6,6 +6,7 @@ import { cn, formatCurrency } from '@/lib/utils';
 import type { Aggregate } from '@/lib/analytics';
 import { TRANSACTION_FEES_RATE } from '@/lib/costs';
 import { sumRefundsInRange } from '@/lib/refundDayHeuristic';
+import { Button } from '@/components/ui/Button';
 import type { DailyRow } from '@/lib/types';
 import {
   billingForRange,
@@ -56,7 +57,7 @@ const SOURCE_COLOR: Record<CostSource, string> = {
   'shopify-plan': 'text-accent',
   'shopify-app':  'text-blue-700',
   'external-app': 'text-purple-700',
-  email:          'text-amber-700',
+  email:          'text-status-warningFg',
   usage:          'text-status-orange',
   'one-off':      'text-ink-secondary',
   other:          'text-ink-secondary',
@@ -166,15 +167,16 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
               </h2>
             </div>
           </div>
-          <button
+          <Button
             type="button"
+            variant="ghost"
             onClick={() => setOpen(v => !v)}
             aria-expanded={open}
-            className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-medium text-ink-secondary hover:text-ink px-2 py-1 rounded-md hover:bg-elevated2 transition-colors shrink-0"
+            className="gap-1 h-auto px-2 py-1 text-[11px] sm:text-xs font-medium text-ink-secondary hover:text-ink shrink-0"
           >
             {open ? 'הסתר פירוט' : 'הצג פירוט מלא'}
             {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-          </button>
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-5">
@@ -213,13 +215,13 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
       {open && (
         <div className="p-4 sm:p-5 border-t border-line-subtle animate-fade-in">
           {!hasConfiguredFixed && (
-            <div className="mb-4 rounded-lg bg-amber-50 border border-amber-200 px-3 py-2.5 flex items-start gap-2">
-              <AlertCircle size={14} className="text-amber-700 shrink-0 mt-0.5" />
-              <div className="text-[11px] sm:text-xs text-amber-900 leading-relaxed">
+            <div className="mb-4 rounded-lg bg-status-warningBg border border-status-warning/30 px-3 py-2.5 flex items-start gap-2">
+              <AlertCircle size={14} className="text-status-warningFg shrink-0 mt-0.5" />
+              <div className="text-[11px] sm:text-xs text-status-warningFg leading-relaxed">
                 <strong>טרם הוגדרו עלויות חודשיות.</strong> ה-P&amp;L כרגע משקלל רק
                 COGS (25%) ו-Transaction Fees (6.5%) — בלי Shopify Plan,
                 אפליקציות, או שירות אימייל. לחץ על{' '}
-                <span className="inline-flex items-center gap-1 px-1 py-0.5 rounded bg-amber-100 font-semibold">
+                <span className="inline-flex items-center gap-1 px-1 py-0.5 rounded bg-status-warningBg font-semibold">
                   <SettingsIcon size={10} /> עלויות חודשיות
                 </span>{' '}
                 למעלה כדי להוסיף אותן (מנוי Shopify, Klaviyo, וכו&apos;).

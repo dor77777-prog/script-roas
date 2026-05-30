@@ -5,6 +5,7 @@ import { Info, Package, X } from 'lucide-react';
 import type { ProductChannelBreakdown as ProductChannelBreakdownType } from '@/lib/attributionAnalysis';
 import { PRODUCT_MAP_CHIP_KEY } from '@/lib/sessionKeys';
 import { CHART_COLORS } from '@/lib/chartColors';
+import { Button } from '@/components/ui/Button';
 
 /**
  * Phase 1 channel-level product attribution panel — answers "where did the
@@ -93,17 +94,19 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
             <span className="leading-relaxed">
               ה-product↔campaign mapping מבוסס על המיפוי הנוכחי שלך. שינוי המיפוי משפיע על נתונים היסטוריים בדיעבד.
             </span>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               aria-label="הסתר הודעת מיפוי"
               onClick={() => {
                 window.sessionStorage.setItem(PRODUCT_MAP_CHIP_KEY, '1');
                 setChipHidden(true);
               }}
-              className="ms-auto shrink-0 rounded p-2 text-ink-subtle hover:bg-elevated2 hover:text-ink-secondary transition-colors"
+              className="ms-auto shrink-0"
             >
               <X size={12} />
-            </button>
+            </Button>
           </div>
         )}
 
@@ -157,7 +160,7 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
           </div>
         )}
         {exclusiveFacebookShare < 0.3 && total >= 5 && (
-          <div className="rounded-md bg-amber-50 border border-amber-300 text-amber-800 px-2.5 py-2 text-[11px] leading-relaxed">
+          <div className="rounded-md bg-status-warningBg border border-status-warning/30 text-status-warningFg px-2.5 py-2 text-[11px] leading-relaxed">
             <strong>⚠️ </strong>
             רק {fbPct}% מהמכירות הגיעו מפייסבוק
             {' → '}

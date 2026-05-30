@@ -49,6 +49,7 @@ import { useState } from 'react';
 import { CalendarDays, Loader2 } from 'lucide-react';
 import { STORE_ID_TO_NAME } from '@/lib/platformsByStore';
 import { operatorFetch } from '@/lib/operatorClient';
+import { Button } from '@/components/ui/Button';
 
 // Source of truth — mirrors the route's VALID_STORES allowlist.
 const ALL_STORES = ['uzoshop', 'zolplus', 'usmile360'] as const;
@@ -201,11 +202,12 @@ export function BackfillPicker() {
             ))}
           </div>
         </div>
-        <button
+        <Button
           type="button"
+          size="sm"
           onClick={submit}
           disabled={submitDisabled}
-          className="flex items-center gap-1 bg-accent hover:bg-accent/90 disabled:bg-elevated2 disabled:text-ink-muted disabled:cursor-not-allowed text-white text-sm px-3 py-1 rounded h-[30px]"
+          className="gap-1"
         >
           {submitting ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -213,7 +215,7 @@ export function BackfillPicker() {
             <CalendarDays className="w-4 h-4" />
           )}
           {submitting ? 'מפעיל…' : 'הפעל Backfill'}
-        </button>
+        </Button>
       </div>
 
       {message && (

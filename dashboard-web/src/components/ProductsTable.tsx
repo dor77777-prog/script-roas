@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
+import { Button } from '@/components/ui/Button';
 import type { ProductRow } from '@/lib/products';
 import type { ProductsResponse } from '@/app/api/products/route';
 import type { DateRange } from '@/lib/types';
@@ -397,20 +398,19 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
           dir="ltr"
         >
           {(Object.keys(PERIOD_LABELS) as Period[]).map(p => (
-            <button
+            <Button
               key={p}
               role="tab"
+              variant={period === p ? 'primary' : 'ghost'}
               aria-selected={period === p}
               onClick={() => setPeriod(p)}
               className={cn(
-                'px-2.5 sm:px-3 py-1.5 sm:py-1.5 text-[11px] sm:text-xs font-medium transition-colors min-w-[54px] sm:min-w-[64px]',
-                period === p
-                  ? 'bg-accent text-white'
-                  : 'bg-elevated text-ink-secondary hover:bg-elevated2',
+                'px-2.5 sm:px-3 py-1.5 h-auto text-[11px] sm:text-xs font-medium min-w-[54px] sm:min-w-[64px] rounded-none',
+                period === p ? '' : 'text-ink-secondary',
               )}
             >
               {PERIOD_LABELS[p]}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -478,24 +478,27 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
             isCustomRange ? 'border-accent text-accent' : 'border-line text-ink-secondary',
           )}
         />
-        <button
+        <Button
           type="button"
+          variant="secondary"
+          size="sm"
           onClick={() => setLocalRange({ from: today, to: today })}
-          className="rounded-lg border border-status-green/40 bg-status-greenBg/60 text-status-green hover:bg-status-greenBg px-2 py-1.5 text-xs font-semibold transition-colors"
+          className="border-status-green/40 bg-status-greenBg/60 text-status-green hover:bg-status-greenBg"
           title="קפוץ ליום הנוכחי (live)"
         >
           היום
-        </button>
+        </Button>
         {isCustomRange && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
             onClick={() => setLocalRange(range)}
-            className="p-2 rounded hover:bg-elevated2 text-ink-muted hover:text-ink transition-colors"
             aria-label="חזור לטווח הגלובלי"
             title="חזור לטווח שנבחר בסינון העליון"
           >
             <X size={14} />
-          </button>
+          </Button>
         )}
       </div>
 
@@ -770,9 +773,10 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                 {/* Show more / show less */}
                 {shouldCollapse && (
                   <div className="px-4 sm:px-5 py-2 bg-elevated2/30 border-t border-line/60">
-                    <button
+                    <Button
+                      variant="ghost"
                       onClick={() => toggle(bucket.key)}
-                      className="text-xs sm:text-sm text-accent hover:text-accent font-medium inline-flex items-center gap-1.5 transition-colors"
+                      className="h-auto p-0 gap-1.5 text-xs sm:text-sm text-accent hover:text-accent font-medium"
                     >
                       {isExpanded ? (
                         <>
@@ -785,7 +789,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                           הצג עוד {remaining} מוצרים
                         </>
                       )}
-                    </button>
+                    </Button>
                   </div>
                 )}
               </div>

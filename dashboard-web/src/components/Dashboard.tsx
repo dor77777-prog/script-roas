@@ -4,13 +4,8 @@ import { startTransition, useEffect, useMemo, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import {
   AlertCircle,
-  TrendingUp,
   Package,
   Table,
-  Radio,
-  Target,
-  Store,
-  CalendarDays,
   Megaphone,
   Receipt,
   Menu,
@@ -20,23 +15,15 @@ import { computePresetRange, previousRange } from '@/lib/presets';
 import { aggregate, aggregateByStore, dailySeries, filterRows } from '@/lib/analytics';
 import { cn } from '@/lib/utils';
 import { Filters } from './Filters';
-import { KpiCards } from './KpiCards';
-import { PerStoreCards } from './PerStoreCards';
-import { RoasChart } from './RoasChart';
-import { MonthlyTables } from './MonthlyTables';
 import { DetailTable } from './DetailTable';
-import { TodayLive } from './TodayLive';
 import { ProductsTable } from './ProductsTable';
 import { ProductCentricView } from './ProductCentricView';
 import { CampaignsTable } from './CampaignsTable';
 import { CampaignsTopList, type CampaignTopListPoint } from './CampaignsTopList';
 import { aggregate as aggregateCampaigns } from '@/lib/campaignsAggregator';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
-import { InsightsBoard } from './InsightsBoard';
-import { GoalTracker } from './GoalTracker';
 import { AiReportButton } from './AiReportButton';
 import { TabHeader } from './TabHeader';
-import { HeroOverview } from './HeroOverview';
 import { PnLBreakdown } from './PnLBreakdown';
 import { BillingSettings } from './BillingSettings';
 import { AnnotationsPanel } from './AnnotationsPanel';
@@ -48,8 +35,16 @@ import { CloudSync } from './CloudSync';
 import { SyncIndicator } from './SyncIndicator';
 import { FreshnessChip } from './FreshnessChip';
 import { TabFreshnessHeader } from './TabFreshnessHeader';
+import { HomeLiveBand } from './HomeLiveBand';
+import { HomeSummaryBand } from './HomeSummaryBand';
+import { HomePerStoreBand } from './HomePerStoreBand';
 import { readDashboardState, syncUrl, type TabKey } from '@/lib/urlState';
 import { buildDateRangeKey } from '@/lib/dateRange';
+import { Button } from '@/components/ui/Button';
+import * as Tabs from '@radix-ui/react-tabs';
+import { AnalysisTrendsTab } from './AnalysisTrendsTab';
+import { AnalysisArchiveTab } from './AnalysisArchiveTab';
+import { GoalTracker } from './GoalTracker';
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -271,14 +266,16 @@ export function Dashboard() {
               On md and up the Sidebar is the persistent right-rail, so the
               hamburger is hidden via `md:hidden`. Sits on the start side
               (right in RTL) so it's reachable with the right thumb. */}
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="icon"
             onClick={() => setMobileSidebarOpen(true)}
-            className="md:hidden inline-flex items-center justify-center w-11 h-11 rounded-lg bg-elevated2 text-ink hover:bg-elevated2/80 transition-colors"
+            className="md:hidden"
             aria-label="פתח תפריט"
           >
             <Menu size={20} />
-          </button>
+          </Button>
 
           <div className="flex items-center gap-2">
             <FreshnessChip dataLastWriteAt={data?.dataLastWriteAt ?? null} />
@@ -408,19 +405,6 @@ function HomeTab({
 }) {
   return (
     <div className="space-y-4 sm:space-y-5 animate-fade-in-up">
-      {/* ===== Live snapshot (today) — now the FIRST section per user
-                    request. Real-time read of the day-in-progress trumps the
-                    Hero editorial summary as the at-a-glance default. ===== */}
-      <SectionIntro
-        icon={<Radio size={18} />}
-        title="היום עד לרגע זה"
-        description="הכנסות Shopify + הזמנות בזמן אמת + הוצאות Meta/Google/TikTok (עם פיגור ~20 דק'). רענון אוטומטי כל 10 דקות."
-      />
-      <TodayLive rows={data.rows} fxIlsToCad={data.fxIlsToCad} />
-
-      {/* ===== Hero — editorial story + chart-as-background + floating KPIs ===== */}
-      <HeroOverview data={data} filters={filters} />
-
       <TabHeader
         title="בית"
         description="שנה טווח או חנות לעדכון כל המסך."
@@ -428,35 +412,25 @@ function HomeTab({
         actionSlot={<AiReportButton data={data} filters={filters} openSignal={aiReportSignal} />}
       />
 
-      {/* ===== Goal tracker — monthly revenue target with pacing + forecast.
-                Intentionally GLOBAL: ignores both `filters.store` and
-                `filters.range` so the single business-wide goal stays
-                meaningful regardless of how the rest of the dashboard is
-                filtered. See GoalTracker.tsx docstring. ===== */}
-      <GoalTracker data={data} />
-
-      {/* ===== Insights engine — anomalies, recommendations, opportunities ===== */}
-      <InsightsBoard data={data} />
-
       {/* ===== Activity log — events overlay on charts so anomalies have context ===== */}
       <AnnotationsPanel range={filters.range} store={filters.store} />
 
-      {/* ===== Detailed KPI cards — full breakdown, the "drill-down" of the hero ===== */}
-      <SectionIntro
-        icon={<Target size={18} />}
-        title="מדדים מסכמים לתקופה"
-        description="הסיכום של כל החנויות הנבחרות בטווח שבחרת. כל מספר מושווה לתקופה הקודמת באותו אורך."
-        formula="ROAS = הכנסות / סך הוצאות פרסום   •   רווח נטו = הכנסות − הוצאות − COGS − עמלות − עלויות קבועות"
-      />
-      <KpiCards current={filtered.curAgg} previous={filtered.prevAgg} series={filtered.cur} />
+      <div className="space-y-6">
+        {/* Band 1 — Live intra-day snapshot */}
+        <HomeLiveBand rows={data.rows} fxIlsToCad={data.fxIlsToCad} />
 
-      {/* ===== Per-store cards ===== */}
-      <SectionIntro
-        icon={<Store size={18} />}
-        title="ביצועים לפי חנות"
-        description="כרטיס לכל חנות עם ה-ROAS, ההכנסות, ההוצאות, והרווח הגולמי לתקופה הנבחרת. החנות עם ROAS הכי גבוה מקבלת אייקון מובילה."
-      />
-      <PerStoreCards data={filtered.storeAggs} ordersByStore={ordersByStore} bare />
+        {/* Band 2 — Yesterday comparison + KPI cards */}
+        <HomeSummaryBand
+          heroProps={{ data, filters }}
+          kpiProps={{ current: filtered.curAgg, previous: filtered.prevAgg, series: filtered.cur }}
+        />
+
+        {/* Band 3 — Per-store breakdown + collapsible insights */}
+        <HomePerStoreBand
+          perStoreProps={{ data: filtered.storeAggs, ordersByStore, bare: true }}
+          insightsProps={{ data }}
+        />
+      </div>
     </div>
   );
 }
@@ -487,6 +461,8 @@ function PnLTab({
       />
 
       <Filters filters={filters} stores={data.stores} onChange={setFilters} />
+
+      <GoalTracker data={data} />
 
       <div className="space-y-3">
         <div className="flex justify-end">
@@ -523,32 +499,28 @@ function AnalysisTab({
   setFilters: (next: F) => void;
 }) {
   return (
-    <div className="space-y-4 sm:space-y-5">
-      <SectionIntro
-        icon={<CalendarDays size={20} />}
-        title="טווח לניתוח"
-        description="הסינון מטה משפיע על גרף המגמה בלבד. הטבלאות החודשיות מציגות עד 17 חודשים אחורה — בלי תלות בטווח שבחרת."
-      />
-      <Filters filters={filters} stores={data.stores} onChange={setFilters} />
-
-      <SectionIntro
-        icon={<TrendingUp size={20} />}
-        title="מגמת ROAS לאורך זמן"
-        description="קו לכל חנות. הקו האדום-מקווקו מציין את היעד הפנימי שלך — ROAS 3.0. רוצה לראות חנות אחת? סנן למעלה."
-      />
-      <div className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
-        <RoasChart data={filtered.series} stores={filtered.visibleStores} rows={filtered.cur} bare />
-      </div>
-
-      <SectionIntro
-        icon={<CalendarDays size={20} />}
-        title="טבלאות חודשיות"
-        description="טבלה לכל חודש עם שורה לכל יום, עד 17 חודשים אחורה. ROAS צבוע: אדום (<2), כתום (2-2.7), ירוק (2.7-3), כחול (>3). יום עם הוצאה אך ללא מכירה מסומן בשחור עם '0'."
-      />
-      <div className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
-        <MonthlyTables stores={data.stores} globalStore={filters.store} bare />
-      </div>
-    </div>
+    <Tabs.Root defaultValue="trends" className="flex flex-col gap-4">
+      <Tabs.List className="flex gap-2 border-b border-line-subtle">
+        <Tabs.Trigger
+          value="trends"
+          className="px-3 py-2 text-sm data-[state=active]:font-medium data-[state=active]:border-b-2 data-[state=active]:border-accent"
+        >
+          מגמות
+        </Tabs.Trigger>
+        <Tabs.Trigger
+          value="archive"
+          className="px-3 py-2 text-sm data-[state=active]:font-medium data-[state=active]:border-b-2 data-[state=active]:border-accent"
+        >
+          היסטוריה
+        </Tabs.Trigger>
+      </Tabs.List>
+      <Tabs.Content value="trends">
+        <AnalysisTrendsTab data={data} filtered={filtered} filters={filters} setFilters={setFilters} />
+      </Tabs.Content>
+      <Tabs.Content value="archive">
+        <AnalysisArchiveTab stores={data.stores} globalStore={filters.store} />
+      </Tabs.Content>
+    </Tabs.Root>
   );
 }
 
@@ -689,21 +661,22 @@ function ProductsTab({
           dir="ltr"
         >
           {PRODUCTS_SUBTABS.map((t) => (
-            <button
+            <Button
               key={t.key}
               role="tab"
+              variant={subTab === t.key ? 'primary' : 'ghost'}
               aria-selected={subTab === t.key}
               onClick={() => setSubTab(t.key)}
               className={cn(
-                'px-4 sm:px-5 py-2 text-xs sm:text-sm font-medium transition-colors min-w-[140px]',
+                'px-4 sm:px-5 py-2 h-auto text-xs sm:text-sm font-medium min-w-[140px] rounded-none',
                 subTab === t.key
-                  ? 'bg-accent text-white'
-                  : 'bg-elevated text-ink-secondary hover:bg-elevated2',
+                  ? ''
+                  : 'text-ink-secondary',
               )}
               dir="rtl"
             >
               {t.label}
-            </button>
+            </Button>
           ))}
         </div>
       </div>

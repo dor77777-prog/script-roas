@@ -59,6 +59,9 @@ const config: Config = {
           gray:       'var(--status-gray)',
           grayBg:     'var(--status-gray-bg)',
           grayFg:     'var(--status-gray-fg)',
+          warning:    'var(--status-warning)',
+          warningBg:  'var(--status-warning-bg)',
+          warningFg:  'var(--status-warning-fg)',
         },
 
         // ===== LEGACY (kept during migration; removed in Plan 7) =====

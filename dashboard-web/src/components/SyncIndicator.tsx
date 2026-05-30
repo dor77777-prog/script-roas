@@ -6,6 +6,7 @@ import { Cloud, CloudOff, RefreshCw, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getSyncState, hydrateFromCloud, type SyncState } from '@/lib/cloudSync';
 import type { HealthResponse } from '@/app/api/health/route';
+import { Button } from '@/components/ui/Button';
 
 /**
  * Header pill showing the current cloud-sync status. Clicking the pill (in
@@ -83,7 +84,7 @@ export function SyncIndicator() {
   } else if (status === 'error') {
     icon = <CloudOff size={13} />;
     label = 'sync שגיאה';
-    tone = 'bg-red-500/85 text-white hover:bg-red-500';
+    tone = 'bg-status-red/85 text-white hover:bg-status-red';
     title = 'לחץ לפרטים';
   } else if (supabaseDown) {
     // D-D1 yellow — Sheets OK (or hasn't synced yet), Supabase unreachable.
@@ -91,7 +92,7 @@ export function SyncIndicator() {
     // operator gets the documented amber signal as soon as health reports.
     icon = <Cloud size={13} />;
     label = 'sync OK';
-    tone = 'bg-amber-500/30 text-white hover:bg-amber-500/40';
+    tone = 'bg-status-warning/30 text-white hover:bg-status-warning/40';
     title = 'Sheets תקין, Supabase לא זמין — בדוק SUPABASE_URL / SUPABASE_ANON_KEY ב-Vercel';
   } else if (status === 'ok') {
     icon = <Cloud size={13} />;
@@ -122,11 +123,12 @@ export function SyncIndicator() {
 
   return (
     <div className="relative">
-      <button
+      <Button
+        variant="ghost"
         onClick={onClick}
         title={title}
         className={cn(
-          'inline-flex items-center gap-1.5 rounded-lg px-2 sm:px-2.5 py-1.5 text-[11px] sm:text-xs font-medium transition-colors ring-1 ring-white/10',
+          'gap-1.5 rounded-lg px-2 sm:px-2.5 py-1.5 h-auto text-[11px] sm:text-xs font-medium ring-1 ring-white/10',
           tone,
         )}
       >
@@ -143,7 +145,7 @@ export function SyncIndicator() {
         >
           {label}
         </span>
-      </button>
+      </Button>
       {expanded && status === 'error' && (
         <div
           dir="rtl"
@@ -169,15 +171,16 @@ export function SyncIndicator() {
                   <code>GOOGLE_PRIVATE_KEY</code> תקפים?</li>
                 </ul>
               </div>
-              <button
+              <Button
+                variant="link"
                 onClick={() => {
                   setExpanded(false);
                   void hydrateFromCloud();
                 }}
-                className="mt-2 text-[11px] font-semibold text-accent hover:text-accent"
+                className="mt-2 h-auto p-0 text-[11px] font-semibold text-accent"
               >
                 נסה שוב
-              </button>
+              </Button>
             </div>
           </div>
         </div>

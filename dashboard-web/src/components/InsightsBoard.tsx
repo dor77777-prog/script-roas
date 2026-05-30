@@ -34,6 +34,8 @@ import {
 } from '@/lib/insights';
 import { cn } from '@/lib/utils';
 import { AiInsightPill } from '@/components/ui/AiInsightPill';
+import { Button } from '@/components/ui/Button';
+import { InsightCardGroup, InsightCardRow } from '@/components/ui/InsightCard';
 
 const fetcher = (url: string) => fetch(url).then(r => (r.ok ? r.json() : null));
 
@@ -59,10 +61,10 @@ const SEVERITY_META: Record<
   warning: {
     label: 'אזהרות',
     icon: <AlertTriangle size={16} />,
-    color: 'text-amber-700',
-    bg: 'bg-amber-50',
-    border: 'border-amber-200',
-    badge: 'bg-amber-500 text-white',
+    color: 'text-status-warningFg',
+    bg: 'bg-status-warningBg',
+    border: 'border-status-warning/30',
+    badge: 'bg-status-warning text-white',
   },
   opportunity: {
     label: 'הזדמנויות',
@@ -219,16 +221,17 @@ export function InsightsBoard({ data }: Props) {
   return (
     <section className="rounded-2xl bg-elevated border border-line-subtle shadow-sm overflow-hidden">
       {/* Clickable header — toggles the whole board open/closed. */}
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={toggleBoard}
         aria-expanded={boardExpanded}
         className={cn(
-          'w-full text-start',
+          'w-full justify-start h-auto',
           'px-4 sm:px-6 py-4 sm:py-5',
           'border-b border-line-subtle',
           'bg-gradient-to-l from-accent/5 via-elevated to-elevated',
-          'hover:from-accent/8 hover:to-elevated2/40 transition-colors',
+          'hover:from-accent/8 hover:to-elevated2/40',
         )}
       >
         <div className="flex items-center justify-between gap-3">
@@ -269,7 +272,7 @@ export function InsightsBoard({ data }: Props) {
             />
           </div>
         </div>
-      </button>
+      </Button>
 
       {/* AI-insight pill — surfaces the headline insight title as a one-line
           context cue inside the expanded board where the editorial InsightHero
@@ -328,14 +331,25 @@ export function InsightsBoard({ data }: Props) {
             const list = grouped[sev];
             if (list.length === 0) return null;
             const meta = SEVERITY_META[sev];
+            // critical and warning are always shown expanded; others start collapsed.
+            const alwaysExpanded = sev === 'critical' || sev === 'warning';
             return (
-              <SeverityGroup
+              <InsightCardGroup
                 key={sev}
                 severity={sev}
-                meta={meta}
-                items={list}
-                onMark={markInsight}
-              />
+                label={meta.label}
+                count={list.length}
+                icon={meta.icon}
+                alwaysExpanded={alwaysExpanded}
+                defaultExpanded={alwaysExpanded}
+              >
+                <InsightGroupBody
+                  severity={sev}
+                  meta={meta}
+                  items={list}
+                  onMark={markInsight}
+                />
+              </InsightCardGroup>
             );
           })}
         </div>
@@ -350,9 +364,10 @@ export function InsightsBoard({ data }: Props) {
       {/* Hidden / muted insights — only meaningful when the board is open */}
       {boardExpanded && hiddenCount > 0 && (
         <div className="border-t border-line-subtle bg-elevated2/30">
-          <button
+          <Button
+            variant="ghost"
             onClick={() => setShowHidden(v => !v)}
-            className="w-full px-4 sm:px-5 py-2.5 flex items-center justify-between gap-2 text-ink-secondary hover:text-ink hover:bg-elevated2 transition-colors"
+            className="w-full justify-between h-auto px-4 sm:px-5 py-2.5 text-ink-secondary hover:text-ink"
           >
             <span className="inline-flex items-center gap-2 text-xs sm:text-sm">
               {showHidden ? <Eye size={14} /> : <EyeOff size={14} />}
@@ -364,7 +379,7 @@ export function InsightsBoard({ data }: Props) {
               </span>
             </span>
             {showHidden ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </button>
+          </Button>
           {showHidden && (
             <ul className="divide-y divide-line-subtle/70 animate-fade-in">
               {hidden.map(ins => {
@@ -389,14 +404,15 @@ export function InsightsBoard({ data }: Props) {
                         {stateLabel}{st?.at ? ` · ${relativeTime(st.at)}` : ''}
                       </div>
                     </div>
-                    <button
+                    <Button
+                      variant="ghost"
                       onClick={() => restoreInsight(ins.id)}
-                      className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-accent hover:bg-accent/10 rounded transition-colors shrink-0"
+                      className="gap-1 px-2 py-1 h-auto text-[11px] font-semibold text-accent hover:bg-accent/10 shrink-0"
                       title="שחזר תובנה לרשימה הראשית"
                     >
                       <Undo2 size={11} />
                       שחזר
-                    </button>
+                    </Button>
                   </li>
                 );
               })}
@@ -430,16 +446,17 @@ function InsightHero({
   // muted for the kind of vertical-rule moment we want here).
   const ACCENT_BG: Record<Severity, string> = {
     critical:    'bg-status-red',
-    warning:     'bg-amber-500',
+    warning:     'bg-status-warning',
     opportunity: 'bg-accent',
     positive:    'bg-status-green',
     info:        'bg-ink-muted',
   };
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
       onClick={onClick}
-      className="w-full text-start group flex items-stretch gap-4 sm:gap-5 px-4 sm:px-6 py-4 sm:py-5 hover:bg-elevated2/40 transition-colors"
+      className="w-full justify-start items-stretch h-auto gap-4 sm:gap-5 px-4 sm:px-6 py-4 sm:py-5"
       aria-label={`פתח לוח תובנות (${insight.title})`}
     >
       {/* Vertical accent bar — anchors the typographic moment and signals
@@ -473,11 +490,16 @@ function InsightHero({
           לחץ לפרטים ולכל התובנות ←
         </div>
       </div>
-    </button>
+    </Button>
   );
 }
 
-function SeverityGroup({
+/**
+ * Inner body for a severity group — manages the "show all / show 3" state
+ * and renders each insight as an InsightCardRow.
+ * InsightCardGroup provides the header/collapsible shell; this is the content.
+ */
+function InsightGroupBody({
   severity,
   meta,
   items,
@@ -490,34 +512,23 @@ function SeverityGroup({
 }) {
   const showAllByDefault = severity === 'critical' || severity === 'warning';
   const [showAll, setShowAll] = useState(showAllByDefault);
-  const visible = showAll ? items : items.slice(0, 3);
-  const remaining = items.length - visible.length;
+  const visibleItems = showAll ? items : items.slice(0, 3);
+  const remaining = items.length - visibleItems.length;
 
   return (
-    <div className={cn('border-b border-line-subtle last:border-b-0', meta.bg)}>
-      <div className={cn('px-4 sm:px-5 py-2.5 sm:py-3 flex items-center gap-2', meta.color)}>
-        <span className="shrink-0">{meta.icon}</span>
-        <span className="text-xs sm:text-sm font-semibold tracking-wide">{meta.label}</span>
-        <span
-          className={cn(
-            'inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-bold rounded-full tabular-nums',
-            meta.badge,
-          )}
-        >
-          {items.length}
-        </span>
-      </div>
+    <>
       <ul className="space-y-px">
-        {visible.map(insight => (
-          <InsightRow key={insight.id} insight={insight} meta={meta} onMark={onMark} />
+        {visibleItems.map(insight => (
+          <InsightBoardRow key={insight.id} insight={insight} meta={meta} onMark={onMark} />
         ))}
       </ul>
       {remaining > 0 && (
         <div className="px-4 sm:px-5 py-2">
-          <button
+          <Button
+            variant="ghost"
             onClick={() => setShowAll(v => !v)}
             className={cn(
-              'text-[11px] sm:text-xs font-medium inline-flex items-center gap-1 transition-colors',
+              'h-auto p-0 text-[11px] sm:text-xs font-medium gap-1',
               meta.color, 'hover:opacity-80',
             )}
           >
@@ -532,14 +543,18 @@ function SeverityGroup({
                 הצג עוד {remaining}
               </>
             )}
-          </button>
+          </Button>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
-function InsightRow({
+/**
+ * Single insight row inside the board — delegates rendering to InsightCardRow
+ * and assembles the action buttons + optional scope badge as ReactNode props.
+ */
+function InsightBoardRow({
   insight,
   meta,
   onMark,
@@ -548,115 +563,76 @@ function InsightRow({
   meta: typeof SEVERITY_META[Severity];
   onMark: (insight: Insight, kind: InsightStateKind) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const hasDetail = !!insight.why;
-  return (
-    <li
-      className={cn(
-        'group/insight px-4 sm:px-5 py-2.5 sm:py-3',
-        'hover:bg-elevated/60 transition-colors',
-        'border-t border-line-subtle/50',
+  // Compose title with optional scope badge inline so InsightCardRow's title slot
+  // can stay a single ReactNode (no extra props needed).
+  const titleNode = (
+    <div className="flex items-start justify-between gap-2 flex-wrap">
+      <span>{insight.title}</span>
+      {insight.scope && (
+        <span className="inline-block text-[10px] sm:text-[11px] font-medium text-ink-muted bg-elevated/80 border border-line-subtle px-1.5 py-0.5 rounded shrink-0">
+          {insight.scope}
+        </span>
       )}
-    >
-      <div className="flex items-start gap-3">
-        <span
+    </div>
+  );
+
+  // Compose the action bar — Mark Done / Hide / External link.
+  // The "Why?" disclosure is handled by InsightCardRow's whyDisclosure prop.
+  const actionsNode = (
+    <>
+      {/* Mark done — ghost gray, turns green on hover */}
+      <Button
+        variant="secondary"
+        onClick={() => onMark(insight, 'done')}
+        className={cn(
+          'gap-1 px-2 py-1 h-auto text-[11px] font-medium',
+          'text-ink-secondary hover:text-status-green hover:border-status-green/40 hover:bg-status-greenBg/40',
+        )}
+        title="סמן שטיפלתי בזה — יוסתר ל-7 ימים, יחזור אם הבעיה תחזור"
+      >
+        <Check size={12} />
+        טיפלתי
+      </Button>
+      {/* Hide */}
+      <Button
+        variant="ghost"
+        onClick={() => onMark(insight, 'ignored')}
+        className="gap-1 px-2 py-1 h-auto text-[11px] font-medium text-ink-muted hover:text-ink"
+        title="הסתר — לא יחזור עד שתשחזר ידנית"
+      >
+        <ArchiveX size={12} />
+        הסתר
+      </Button>
+      {/* External link */}
+      {insight.href && (
+        <a
+          href={insight.href}
+          target="_blank"
+          rel="noopener noreferrer"
           className={cn(
-            'inline-flex items-center justify-center w-6 h-6 rounded-md shrink-0 mt-0.5',
-            meta.color, 'bg-elevated/80 ring-1 ring-inset',
-            meta.border,
+            'inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold',
+            'border border-transparent',
+            meta.color,
+            'hover:bg-elevated/80 hover:border-line-subtle',
+            'transition-colors',
           )}
         >
-          {meta.icon}
-        </span>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2 flex-wrap">
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold text-ink leading-snug">
-                {insight.title}
-              </div>
-              <div className="text-xs sm:text-[13px] text-ink-secondary mt-0.5 leading-relaxed">
-                {insight.detail}
-              </div>
-            </div>
-            {insight.scope && (
-              <span className="inline-block text-[10px] sm:text-[11px] font-medium text-ink-muted bg-elevated/80 border border-line-subtle px-1.5 py-0.5 rounded shrink-0">
-                {insight.scope}
-              </span>
-            )}
-          </div>
+          <ExternalLink size={11} />
+          פתח קמפיין
+        </a>
+      )}
+    </>
+  );
 
-          {/* Action row — ghost buttons by default, intensify on hover so it's
-              clear these are actions, not state indicators. The previous
-              filled-green "בוצע" pill read as "this is already done". */}
-          <div className="flex items-center gap-1 mt-2 flex-wrap">
-            {/* Mark done — ghost gray, turns green on hover to telegraph intent */}
-            <button
-              onClick={() => onMark(insight, 'done')}
-              className={cn(
-                'inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium',
-                'border border-line-subtle bg-elevated',
-                'text-ink-secondary hover:text-status-green hover:border-status-green/40 hover:bg-status-greenBg/40',
-                'transition-colors',
-              )}
-              title="סמן שטיפלתי בזה — יוסתר ל-7 ימים, יחזור אם הבעיה תחזור"
-            >
-              <Check size={12} />
-              טיפלתי
-            </button>
-            {/* Hide — ghost gray, stays muted on hover (less aggressive) */}
-            <button
-              onClick={() => onMark(insight, 'ignored')}
-              className={cn(
-                'inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium',
-                'border border-transparent bg-transparent',
-                'text-ink-muted hover:text-ink hover:bg-elevated2',
-                'transition-colors',
-              )}
-              title="הסתר — לא יחזור עד שתשחזר ידנית"
-            >
-              <ArchiveX size={12} />
-              הסתר
-            </button>
-
-            {/* External link if any */}
-            {insight.href && (
-              <a
-                href={insight.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={cn(
-                  'inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold',
-                  'border border-transparent',
-                  meta.color,
-                  'hover:bg-elevated/80 hover:border-line-subtle',
-                  'transition-colors',
-                )}
-              >
-                <ExternalLink size={11} />
-                פתח קמפיין
-              </a>
-            )}
-
-            {/* Why disclosure pushed to the end */}
-            {hasDetail && (
-              <button
-                onClick={() => setExpanded(v => !v)}
-                className="text-[11px] text-ink-muted hover:text-ink inline-flex items-center gap-1 transition-colors ml-auto px-2 py-1"
-              >
-                {expanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
-                {expanded ? 'הסתר הסבר' : 'למה?'}
-              </button>
-            )}
-          </div>
-
-          {expanded && hasDetail && (
-            <div className="mt-2 px-2.5 py-1.5 text-[11px] sm:text-xs text-ink-secondary bg-elevated/60 border-s-2 border-line-subtle rounded animate-fade-in leading-relaxed">
-              {insight.why}
-            </div>
-          )}
-        </div>
-      </div>
-    </li>
+  return (
+    <InsightCardRow
+      severity={insight.severity}
+      icon={meta.icon}
+      title={titleNode}
+      detail={insight.detail}
+      actions={actionsNode}
+      whyDisclosure={insight.why ?? undefined}
+    />
   );
 }
 

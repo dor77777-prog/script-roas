@@ -3,6 +3,7 @@
 import { RefreshCw } from 'lucide-react';
 import { FreshnessChip } from './FreshnessChip';
 import { useDashboardRefresh } from '@/lib/useDashboardRefresh';
+import { Button } from '@/components/ui/Button';
 
 /**
  * Phase 05.7.6 — Per-tab freshness header.
@@ -56,7 +57,7 @@ export function TabFreshnessHeader(props: {
         <FreshnessChip dataLastWriteAt={dataLastWriteAt} />
         {isRefreshing && (
           <span
-            className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md ring-1 ring-amber-300 bg-amber-100 text-amber-800 text-[11px] sm:text-xs"
+            className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md ring-1 ring-status-warning/30 bg-status-warningBg text-status-warningFg text-[11px] sm:text-xs"
             role="status"
           >
             <RefreshCw size={11} className="animate-spin" />
@@ -64,11 +65,12 @@ export function TabFreshnessHeader(props: {
           </span>
         )}
       </div>
-      <button
+      <Button
         type="button"
+        variant="secondary"
+        size="sm"
         onClick={handleRefreshClick}
         disabled={isRefreshing}
-        className="inline-flex items-center gap-1.5 rounded-md border border-line bg-elevated hover:bg-elevated2 disabled:opacity-50 disabled:cursor-not-allowed px-2.5 py-1.5 text-xs sm:text-sm text-ink-secondary transition-colors"
         title="מרענן את כל הנתונים בדשבורד מ-Shopify, Meta, Google, TikTok. לוקח 30-60 שניות (יוצג אישור לפני ההפעלה)."
         aria-label="רענן את כל הדשבורד"
       >
@@ -77,7 +79,7 @@ export function TabFreshnessHeader(props: {
           className={isRefreshing ? 'animate-spin' : ''}
         />
         <span>{isRefreshing ? 'מרענן...' : 'רענן הכל'}</span>
-      </button>
+      </Button>
     </div>
   );
 }

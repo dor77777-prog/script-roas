@@ -9,6 +9,7 @@ import {
   Circle,
 } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
+import { Button } from '@/components/ui/Button';
 import { roasLabel } from '@/lib/analytics';
 import type { AttributionAnalysis } from '@/lib/attributionAnalysis';
 
@@ -154,8 +155,10 @@ export function AdSetTable({
                   title={canDrillToAds ? 'לחץ לראות את המודעות באד-סט' : undefined}
                 >
                   <td className="px-2 py-2 text-center w-[36px]">
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="icon"
                       onClick={e => {
                         // Stop the click from bubbling up to the row,
                         // which would also open AdsDrawer for this
@@ -165,7 +168,7 @@ export function AdSetTable({
                         onToggleOptimized(markKey);
                       }}
                       className={cn(
-                        'inline-flex items-center justify-center w-7 h-7 rounded-full transition-colors',
+                        'w-7 h-7 rounded-full',
                         isOptimized
                           ? 'text-status-green hover:bg-status-greenBg/60'
                           : 'text-ink-muted hover:text-status-green hover:bg-status-greenBg/40',
@@ -175,13 +178,13 @@ export function AdSetTable({
                       aria-pressed={isOptimized}
                     >
                       {isOptimized ? <CheckCircle2 size={16} /> : <Circle size={16} />}
-                    </button>
+                    </Button>
                   </td>
                   <td className="px-3 py-2 text-ink truncate max-w-[200px]" title={a.name}>{a.name}</td>
                   <td className="px-3 py-2 text-end tabular-nums">{formatCurrency(a.spend)}</td>
                   <td className="px-3 py-2 text-end tabular-nums">
                     {a.adSetBudgetCad && a.adSetBudgetCad > 0 ? (
-                      <span className={cn('font-medium', tight && 'text-amber-700')}>
+                      <span className={cn('font-medium', tight && 'text-status-warningFg')}>
                         {formatCurrency(a.adSetBudgetCad)}
                       </span>
                     ) : (
@@ -209,7 +212,7 @@ export function AdSetTable({
                         : 0;
                       const tone =
                         adsetAttr.trust.level === 'high'    ? 'bg-status-greenBg/60 text-status-green'
-                      : adsetAttr.trust.level === 'medium'  ? 'bg-amber-50 text-amber-700'
+                      : adsetAttr.trust.level === 'medium'  ? 'bg-status-warningBg text-status-warningFg'
                       : adsetAttr.trust.level === 'unknown' ? 'bg-elevated2 text-ink-secondary'
                       :                                       'bg-status-redBg/60 text-status-red';
                       const tooltip =
@@ -269,11 +272,12 @@ function AdSetSortHeader({
     align === 'start' ? 'text-start' : align === 'end' ? 'text-end' : 'text-center';
   return (
     <th className={cn('font-medium px-3 py-2', textAlign)}>
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={() => onClick(col)}
         className={cn(
-          'inline-flex items-center gap-1 transition-colors group select-none cursor-pointer w-full',
+          'gap-1 select-none cursor-pointer w-full h-auto p-0',
           justify,
           isActive
             ? 'text-accent font-semibold'
@@ -291,7 +295,7 @@ function AdSetSortHeader({
         ) : (
           <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-60 transition-opacity" />
         )}
-      </button>
+      </Button>
     </th>
   );
 }

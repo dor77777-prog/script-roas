@@ -116,7 +116,7 @@ function StoreCard({
         className="px-4 sm:px-5 py-2.5 sm:py-3 text-white font-semibold flex items-center justify-between gap-2"
         style={{ background: color }}
       >
-        <span className="truncate">🏪 {agg.store}</span>
+        <span className="truncate">🏪 <bdi dir="ltr">{agg.store}</bdi></span>
         {isTop && (
           <span
             className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold bg-white/20 backdrop-blur-sm px-1.5 py-0.5 rounded"

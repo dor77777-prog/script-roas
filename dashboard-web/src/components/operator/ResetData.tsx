@@ -62,6 +62,7 @@ import {
   type ResetScope,
 } from '@/lib/operatorReset';
 import { operatorFetch } from '@/lib/operatorClient';
+import { Button } from '@/components/ui/Button';
 
 // Wire-shape of the /api/operator/reset 200 response. Mirrored locally
 // rather than imported across the server/client boundary to keep the
@@ -200,16 +201,17 @@ export function ResetData() {
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
         {[SCOPE_ALL, SCOPE_EXCEPT_MANUAL].map((d) => (
-          <button
+          <Button
             key={d.scope}
             type="button"
+            variant="ghost"
             onClick={() => openModal(d)}
             disabled={submitting}
-            className={`flex items-center gap-2 text-white text-sm px-3 py-2 rounded disabled:cursor-not-allowed ${d.buttonClass}`}
+            className={`gap-2 text-white text-sm px-3 py-2 h-auto rounded ${d.buttonClass}`}
           >
             <AlertTriangle className="w-4 h-4" />
             {d.buttonLabel}
-          </button>
+          </Button>
         ))}
       </div>
 
@@ -263,15 +265,16 @@ export function ResetData() {
                 <AlertTriangle className="w-5 h-5 text-status-red" />
                 {active.modalTitle}
               </h3>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={closeModal}
                 disabled={submitting}
                 aria-label="סגור"
-                className="inline-flex items-center justify-center w-11 h-11 sm:w-auto sm:h-auto sm:p-1 rounded hover:bg-elevated2"
+                className="w-11 h-11 sm:w-auto sm:h-auto sm:p-1"
               >
                 <X className="w-4 h-4" />
-              </button>
+              </Button>
             </div>
 
             <div className="flex-1 overflow-y-auto -mx-4 px-4">
@@ -353,26 +356,28 @@ export function ResetData() {
             </div>
 
             <div className="sticky bottom-0 bg-elevated pt-2 flex justify-end gap-2 shrink-0 border-t border-line-subtle sm:border-t-0 -mx-4 px-4 sm:mx-0 sm:px-0">
-              <button
+              <Button
                 type="button"
+                variant="secondary"
                 onClick={closeModal}
                 disabled={submitting}
-                className="bg-elevated2 hover:bg-elevated2/90 disabled:bg-elevated2/70 text-ink text-sm px-3 py-2 sm:py-1 rounded min-h-[44px] sm:min-h-0"
+                className="text-sm px-3 py-2 sm:py-1 min-h-[44px] sm:min-h-0 h-auto"
               >
                 ביטול
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="destructive"
                 onClick={submit}
                 disabled={
                   submitting ||
                   typed !== CONFIRM_TOKEN_FOR_SCOPE[active.scope]
                 }
-                className="flex items-center gap-1 bg-status-red hover:bg-status-red/90 disabled:bg-status-red/40 disabled:cursor-not-allowed text-white text-sm px-3 py-2 sm:py-1 rounded min-h-[44px] sm:min-h-0"
+                className="gap-1 text-sm px-3 py-2 sm:py-1 min-h-[44px] sm:min-h-0 h-auto"
               >
                 {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
                 {submitting ? 'מוחק…' : 'אשר ומחק'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

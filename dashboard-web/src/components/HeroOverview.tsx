@@ -266,7 +266,7 @@ export function HeroOverview({ data, filters }: Props) {
         'relative overflow-hidden rounded-2xl text-white shadow-elevated',
         // LIGHT mode: bold navy brand gradient (per user preference — the
         // dark indigo card stands out as the hero on a light page).
-        'bg-gradient-to-br from-[#091c4a] via-[#0d3680] to-[#1d4ed8]',
+        'bg-[linear-gradient(135deg,var(--gradient-hero-from),var(--gradient-hero-via)_45%,var(--gradient-hero-to))]',
         // DARK mode: theme-aware accent gradient (subtler — doesn't fight
         // the dark page). The accent token shifts to a lighter indigo in
         // dark theme so text-white stays readable.
@@ -324,7 +324,7 @@ export function HeroOverview({ data, filters }: Props) {
             />
             {heavyDates.length > 0 && (
               <div
-                className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-500/15 border border-amber-400/30 px-2 py-0.5 text-xs text-amber-300 font-medium"
+                className="mt-2 inline-flex items-center gap-1 rounded-full bg-status-warning/15 border border-status-warning/30 px-2 py-0.5 text-xs text-status-warningFg font-medium"
                 title={`${heavyDates.length === 1 ? 'יום רפאנד כבד' : `${heavyDates.length} ימי רפאנד כבדים`} בתקופה — ${heavyDates.map(d => fmtDateShort(d)).join(', ')}`}
               >
                 <RotateCcw className="h-3 w-3" aria-hidden="true" />
@@ -516,7 +516,9 @@ function RoasTrendChart({
         <ComposedChart data={series} margin={{ top: 28, right: 12, left: 12, bottom: 0 }}>
           <defs>
             <linearGradient id="hero-roas-fill" x1="0" y1="0" x2="0" y2="1">
+              {/* eslint-disable-next-line local/no-hex-color-in-components -- SVG stopColor on hero-card gradient; no CSS-var equivalent */}
               <stop offset="0%"   stopColor="#ffffff" stopOpacity={0.15} />
+              {/* eslint-disable-next-line local/no-hex-color-in-components -- SVG stopColor on hero-card gradient; no CSS-var equivalent */}
               <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
             </linearGradient>
           </defs>
@@ -577,6 +579,7 @@ function RoasTrendChart({
               );
             });
           })()}
+          {/* eslint-disable local/no-hex-color-in-components -- Recharts Line SVG props (stroke, dot fill) on hero card; white-on-dark, no CSS-var equivalent */}
           <Line
             type="monotone"
             dataKey="roas"
@@ -591,6 +594,7 @@ function RoasTrendChart({
             isAnimationActive
             animationDuration={500}
           />
+          {/* eslint-enable local/no-hex-color-in-components */}
           <Tooltip
             content={({ active, payload }) => {
               if (!active || !payload || payload.length === 0) return null;
@@ -718,7 +722,7 @@ function DeltaPill({ value, inverse }: { value: number; inverse?: boolean }) {
         'inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-medium tabular-nums',
         isFlat && 'text-white/55',
         !isFlat && isPositive && 'text-emerald-300',
-        !isFlat && !isPositive && 'text-amber-200',
+        !isFlat && !isPositive && 'text-status-warning',
       )}
     >
       <Icon size={11} className="shrink-0" />
@@ -737,7 +741,7 @@ function RawDeltaPill({ value }: { value: number }) {
         'inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-medium tabular-nums',
         isFlat && 'text-white/55',
         !isFlat && value > 0 && 'text-emerald-300',
-        !isFlat && value < 0 && 'text-amber-200',
+        !isFlat && value < 0 && 'text-status-warning',
       )}
     >
       <Icon size={11} className="shrink-0" />

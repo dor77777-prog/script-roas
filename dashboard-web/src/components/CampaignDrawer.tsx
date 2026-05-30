@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
+import { Button } from '@/components/ui/Button';
 import {
-  X,
   ExternalLink,
   Maximize2,
   Megaphone,
@@ -82,7 +82,7 @@ import {
   allocateProductRevenue,
   type ProductMap,
 } from '@/lib/campaignProductMap';
-import { CHART_COLORS } from '@/lib/chartColors';
+import { CHART_AXIS_COLOR, CHART_COLORS } from '@/lib/chartColors';
 import { buildDateRangeKey, getPreviousPeriod } from '@/lib/dateRange';
 import { ChartContainer } from '@/components/ui/chart/ChartContainer';
 import {
@@ -91,6 +91,8 @@ import {
   ChartTooltipRow,
   ChartTooltipValue,
 } from '@/components/ui/chart/ChartTooltip';
+import { Sheet, SheetContent } from '@/components/ui/Sheet';
+import { BADGE_TONE_BG } from '@/components/ui/Badge';
 
 /**
  * Slide-in campaign drilldown drawer. Linear/Vercel-style: full context
@@ -121,14 +123,6 @@ type Props = {
    *  table's healthByKey is keyed by adSet rather than campaign — V2
    *  doesn't backfill campaign-level health for adset mode). */
   health?: CampaignHealth;
-};
-
-const TONE_BG: Record<string, string> = {
-  red:    'bg-status-redBg text-status-red',
-  orange: 'bg-status-orangeBg text-status-orange',
-  green:  'bg-status-greenBg text-status-green',
-  blue:   'bg-status-blueBg text-status-blue',
-  gray:   'bg-elevated2 text-ink-muted',
 };
 
 export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAccounts, rangeFrom, rangeTo, health }: Props) {
@@ -790,28 +784,17 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
   })();
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex animate-fade-in"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="campaign-drawer-title"
-    >
-      <div
-        className="absolute inset-0 bg-ink/35 backdrop-blur-sm"
-        onClick={onClose}
-        aria-hidden
-      />
-      <aside
+    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent
+        side="end"
         dir="rtl"
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        aria-labelledby="campaign-drawer-title"
         style={{ viewTransitionName: 'drawer-panel' as never }}
         className={cn(
-          'relative bg-elevated max-w-full',
-          'h-full overflow-y-auto',
-          'shadow-elevated',
-          // Side-drawer mode: 640px panel anchored to the start (right in RTL)
-          // Fullscreen mode: stretches edge-to-edge so charts + tables breathe
-          !isFullscreen && 'w-full sm:w-[min(640px,100vw)] ml-0 sm:ms-auto',
-          isFullscreen && 'w-full',
+          'overflow-y-auto flex flex-col p-0',
+          !isFullscreen && 'w-full sm:w-[min(640px,100vw)]',
+          isFullscreen && 'w-full sm:w-full max-w-full',
         )}
       >
         <header className="sticky top-0 bg-elevated/95 backdrop-blur-md z-10 px-4 sm:px-6 py-4 border-b border-line-subtle">
@@ -822,7 +805,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
               </span>
               <div className="min-w-0">
                 <h2 id="campaign-drawer-title" className="text-base sm:text-lg font-semibold text-ink tracking-tight truncate">
-                  {summary.campaignName || '(ללא שם)'}
+                  {summary.campaignName ? <bdi dir="ltr">{summary.campaignName}</bdi> : '(ללא שם)'}
                 </h2>
                 <div className="text-[11px] sm:text-xs text-ink-muted flex items-center gap-1.5 mt-0.5">
                   <StoreIcon size={11} />
@@ -840,23 +823,21 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={() => setIsFullscreen(v => !v)}
                 aria-label={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
                 title={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
-                className="inline-flex items-center justify-center w-11 h-11 sm:w-auto sm:h-auto sm:p-1.5 rounded hover:bg-elevated2 text-ink-muted hover:text-ink transition-colors"
               >
                 {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-              </button>
-              <button onClick={onClose} aria-label="סגור" className="inline-flex items-center justify-center w-11 h-11 sm:w-auto sm:h-auto sm:p-1.5 rounded hover:bg-elevated2 text-ink-muted hover:text-ink transition-colors">
-                <X size={18} />
-              </button>
+              </Button>
             </div>
           </div>
           {link && (
             <a href={link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-accent hover:text-accent/80 font-medium">
               <ExternalLink size={13} />
-              פתח ב-{summary.platform} Ads Manager
+              פתח ב-<bdi dir="ltr">{summary.platform}</bdi> Ads Manager
             </a>
           )}
         </header>
@@ -923,7 +904,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                   </defs>
                   <XAxis
                     dataKey="date"
-                    tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
+                    tick={{ fontSize: 10, fill: CHART_AXIS_COLOR }}
                     tickLine={false}
                     axisLine={false}
                     tickFormatter={d => {
@@ -936,7 +917,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                       glance. Was `hide` previously which left the chart
                       ambiguous (peaks indistinguishable from troughs). */}
                   <YAxis
-                    tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
+                    tick={{ fontSize: 10, fill: CHART_AXIS_COLOR }}
                     tickLine={false}
                     axisLine={false}
                     tickFormatter={v => `C$${formatCurrency(Number(v))}`}
@@ -1076,7 +1057,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
               : 'השוואה: חצי שני vs חצי ראשון של הטווח';
             const toneBg: Record<typeof analysis.tone, string> = {
               positive: 'bg-status-greenBg/40 border-status-green/30 text-status-green',
-              warning:  'bg-amber-50 border-amber-300 text-amber-800',
+              warning:  'bg-status-warningBg border-status-warning/30 text-status-warningFg',
               negative: 'bg-status-redBg/40 border-status-red/30 text-status-red',
               neutral:  'bg-elevated2 border-line-subtle text-ink-secondary',
             };
@@ -1093,30 +1074,32 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                   <div className="flex items-center gap-3 flex-wrap">
                     {/* Analysis baseline toggle — same UX as CampaignsTable. */}
                     <div className="inline-flex items-center gap-0.5 rounded-md border border-line-subtle bg-elevated p-0.5 text-[10px]">
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
                         onClick={() => setCpmAnalysisMode('half')}
                         className={cn(
-                          'px-2 py-0.5 rounded transition-colors',
+                          'px-2 py-0.5 h-auto rounded transition-colors text-[10px]',
                           cpmAnalysisMode === 'half'
                             ? 'bg-accent/10 text-accent font-medium'
                             : 'text-ink-muted hover:text-ink',
                         )}
                       >
                         חצי-חצי
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
+                        variant="ghost"
                         onClick={() => setCpmAnalysisMode('prev')}
                         className={cn(
-                          'px-2 py-0.5 rounded transition-colors',
+                          'px-2 py-0.5 h-auto rounded transition-colors text-[10px]',
                           cpmAnalysisMode === 'prev'
                             ? 'bg-accent/10 text-accent font-medium'
                             : 'text-ink-muted hover:text-ink',
                         )}
                       >
                         vs תקופה קודמת
-                      </button>
+                      </Button>
                     </div>
                     {/* ROAS overlay toggle — a tiny switch that adds a second
                         line + right Y-axis for ROAS so the user can compare
@@ -1136,7 +1119,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                   <LineChart data={chartData} margin={{ top: 8, right: showRoasOverlay ? 56 : 16, left: 4, bottom: 0 }}>
                     <XAxis
                       dataKey="date"
-                      tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
+                      tick={{ fontSize: 10, fill: CHART_AXIS_COLOR }}
                       tickLine={false}
                       axisLine={false}
                       tickFormatter={d => {
@@ -1147,7 +1130,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                     />
                     <YAxis
                       yAxisId="cpm"
-                      tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
+                      tick={{ fontSize: 10, fill: CHART_AXIS_COLOR }}
                       tickLine={false}
                       axisLine={false}
                       tickFormatter={v => `C$${Number(v).toFixed(2)}`}
@@ -1278,7 +1261,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                     </span>
                     {showPrevLine && (
                       <span className="inline-flex items-center gap-1.5">
-                        <span className="inline-block w-3 border-t-2 border-dashed border-amber-400" />
+                        <span className="inline-block w-3 border-t-2 border-dashed border-status-warning" />
                         CPM תקופה קודמת
                       </span>
                     )}
@@ -1291,7 +1274,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                   </div>
                 )}
                 {cpmAnalysisMode === 'prev' && !isLoadingPrev && analysis.mode === 'half-over-half' && (
-                  <div className="text-[10px] text-amber-700 bg-amber-50 px-2 py-1 rounded mt-1">
+                  <div className="text-[10px] text-status-warningFg bg-status-warningBg px-2 py-1 rounded mt-1">
                     {/* FIX-19 (5.2.2.1): fallback disclosure when previous period had
                         fewer than PREV_PERIOD_MIN_DAYS active days.
                         WR-01 (5.2.2.1): gated by !isLoadingPrev so the banner does not fire prematurely
@@ -1429,14 +1412,16 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                     </span>
                   )}
                 </h3>
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
+                  size="sm"
                   onClick={() => setPickerOpen(true)}
-                  className="inline-flex items-center gap-1 rounded-md bg-elevated border border-line hover:border-accent/40 px-2 py-1 text-[11px] font-medium text-ink-secondary hover:text-accent transition-colors"
+                  className="text-[11px]"
                 >
                   <Edit3 size={12} />
                   {mappedIds.length > 0 ? 'ערוך מיפוי' : 'שייך מוצרים'}
-                </button>
+                </Button>
               </div>
               {mappedIds.length === 0 ? (
                 <p className="text-[11px] text-ink-muted leading-relaxed bg-elevated2/40 rounded-lg px-3 py-2">
@@ -1462,7 +1447,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                         <span className="truncate max-w-[120px]">{id}</span>
                         {others.length > 0 && (
                           <span
-                            className="text-amber-700 text-[9px] font-sans ms-1"
+                            className="text-status-warningFg text-[9px] font-sans ms-1"
                             aria-label={`גם משויך ל-${others.length} קמפיינים אחרים`}
                           >
                             🔗 +{others.length}
@@ -1481,7 +1466,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                   share) isn't obvious without this note. */}
               {mappedIds.length > 0 &&
                 mappedIds.some(id => (otherCampaignsByProduct.get(id) ?? []).length > 0) && (
-                  <p className="text-[10px] text-ink-muted leading-relaxed mt-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+                  <p className="text-[10px] text-ink-muted leading-relaxed mt-2 bg-status-warningBg border border-status-warning/30 rounded-lg px-3 py-1.5">
                     🔗 חלק מהמוצרים גם משויכים לקמפיינים אחרים. ה-ROAS Shopify
                     של הקמפיין הזה מחושב לפי <strong>חלקו של הקמפיין בהוצאה</strong>{' '}
                     (חלוקה פרופורציונלית) — לא לפי כל ההכנסה של המוצר.
@@ -1543,7 +1528,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
             לחץ Esc או על הרקע לסגירה
           </div>
         </div>
-      </aside>
+      </SheetContent>
 
       <ProductPickerModal
         open={pickerOpen}
@@ -1583,7 +1568,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
           adAccounts={adAccounts}
         />
       )}
-    </div>
+    </Sheet>
   );
 }
 
@@ -1623,7 +1608,7 @@ function DrawerStat({ label, value, prefix, chip, primary, compact, accent }: {
         <span
           className={cn(
             'inline-block mt-1 px-1.5 py-0.5 text-[9px] sm:text-[10px] font-semibold rounded',
-            TONE_BG[chip.tone],
+            BADGE_TONE_BG[chip.tone as keyof typeof BADGE_TONE_BG],
           )}
         >
           {chip.text}

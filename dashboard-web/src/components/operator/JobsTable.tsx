@@ -49,6 +49,7 @@ import useSWR from 'swr';
 import { useState } from 'react';
 import { Loader2, CheckCircle2, XCircle, Clock, AlertCircle } from 'lucide-react';
 import { operatorFetch } from '@/lib/operatorClient';
+import { Button } from '@/components/ui/Button';
 
 // Wire-shape of the /api/operator/jobs proxy response. Mirrors the
 // narrowed type in route.ts — we deliberately do NOT import the type
@@ -206,17 +207,18 @@ export function JobsTable() {
                 {formatDuration(run.run_started_at, run.ended_at)}
               </td>
               <td className="p-2">
-                <button
+                <Button
                   type="button"
+                  variant="link"
                   onClick={() =>
                     setExpandedId(expandedId === run.run_id ? null : run.run_id)
                   }
-                  className="text-xs text-status-blue hover:underline"
+                  className="h-auto p-0 text-xs text-status-blue"
                   aria-expanded={expandedId === run.run_id}
                   aria-controls={`run-output-${run.run_id}`}
                 >
                   {expandedId === run.run_id ? 'הסתר' : 'הצג'}
-                </button>
+                </Button>
               </td>
             </tr>
           ))}

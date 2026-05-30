@@ -212,7 +212,7 @@ function CohortSection({ title, subtitle, members, tone, onDrillCampaign }: Sect
       className={cn(
         'rounded-lg border overflow-x-auto',
         tone === 'intra'
-          ? 'border-amber-200 bg-amber-50/30'
+          ? 'border-status-warning/30 bg-status-warningBg/30'
           : 'border-line-subtle bg-elevated2/30',
       )}
     >
@@ -220,7 +220,7 @@ function CohortSection({ title, subtitle, members, tone, onDrillCampaign }: Sect
         <span
           className={cn(
             'inline-flex items-center justify-center w-6 h-6 rounded',
-            tone === 'intra' ? 'bg-amber-200/70 text-amber-900' : 'bg-accent/15 text-accent',
+            tone === 'intra' ? 'bg-status-warning/70 text-status-warningFg' : 'bg-accent/15 text-accent',
           )}
         >
           {tone === 'intra' ? <AlertCircle size={13} /> : <Equal size={13} />}
@@ -357,7 +357,7 @@ export function CohortComparisonPanel({
                 // floor in `applyCohortAdjustmentOnce`.
                 : intraCount >= 3 && currentRankIntra === intraCount
                   ? 'bg-status-redBg/60 text-status-red border-status-red/30'
-                  : 'bg-amber-100 text-amber-800 border-amber-300',
+                  : 'bg-status-warningBg text-status-warningFg border-status-warning/30',
             )}
             title={
               currentRankIntra === 1
@@ -386,7 +386,7 @@ export function CohortComparisonPanel({
             cannibalizationAlerts[0].risk === 'high'
               ? 'bg-status-redBg/60 border-status-red/40'
               : cannibalizationAlerts[0].risk === 'medium'
-                ? 'bg-amber-100 border-amber-300'
+                ? 'bg-status-warningBg border-status-warning/30'
                 : 'bg-accent/10 border-accent/30',
           )}
         >
@@ -397,7 +397,7 @@ export function CohortComparisonPanel({
                 cannibalizationAlerts[0].risk === 'high'
                   ? 'text-status-red'
                   : cannibalizationAlerts[0].risk === 'medium'
-                    ? 'text-amber-800'
+                    ? 'text-status-warningFg'
                     : 'text-accent',
               )}
             />
@@ -418,7 +418,7 @@ export function CohortComparisonPanel({
                     v.risk === 'high'
                       ? 'bg-status-red/30 text-status-red'
                       : v.risk === 'medium'
-                        ? 'bg-amber-300 text-amber-900'
+                        ? 'bg-status-warning text-status-warningFg'
                         : 'bg-accent/25 text-accent',
                   )}
                 >

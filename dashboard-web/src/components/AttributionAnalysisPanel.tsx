@@ -23,7 +23,7 @@ type Props = {
 export function AttributionAnalysisPanel({ analysis, spend, value }: Props) {
   const trustBg =
     analysis.trust.level === 'high'    ? 'bg-status-greenBg/50 border-status-green/30 text-status-green'
-  : analysis.trust.level === 'medium'  ? 'bg-amber-50 border-amber-300 text-amber-800'
+  : analysis.trust.level === 'medium'  ? 'bg-status-warningBg border-status-warning/30 text-status-warningFg'
   : analysis.trust.level === 'unknown' ? 'bg-elevated2 border-line-subtle text-ink-secondary'
   :                                      'bg-status-redBg/50 border-status-red/30 text-status-red';
 

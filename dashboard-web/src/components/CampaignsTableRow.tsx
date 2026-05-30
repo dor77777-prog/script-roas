@@ -3,6 +3,7 @@
 import { Fragment } from 'react';
 import { CheckCircle2, Circle, ExternalLink } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
+import { Button } from '@/components/ui/Button';
 import { campaignKey } from '@/lib/campaignProductMap';
 import { buildAdsManagerLink, type AdAccountMap } from '@/lib/campaignsLinks';
 import { roasLabel } from '@/lib/analytics';
@@ -43,7 +44,7 @@ export type CampaignsTableRowTrustLevel =
  */
 export function computeTrustTone(level: CampaignsTableRowTrustLevel): string {
   return level === 'high'   ? 'bg-status-greenBg/60 text-status-green'
-       : level === 'medium' ? 'bg-amber-50 text-amber-700'
+       : level === 'medium' ? 'bg-status-warningBg text-status-warningFg'
        :                      'bg-status-redBg/60 text-status-red';
 }
 
@@ -237,14 +238,16 @@ export function CampaignsTableRow({
           open the drawer). The empty Circle is the un-marked
           state; CheckCircle2 in green is the marked state. */}
       <td data-col-id="optimized" className="px-2 py-2 text-center w-[36px]">
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           onClick={e => {
             e.stopPropagation();
             onToggleOptimized(a.key);
           }}
           className={cn(
-            'inline-flex items-center justify-center w-7 h-7 rounded-full transition-colors',
+            'w-7 h-7 rounded-full',
             isOptimized
               ? 'text-status-green hover:bg-status-greenBg/60'
               : 'text-ink-muted hover:text-status-green hover:bg-status-greenBg/40',
@@ -254,7 +257,7 @@ export function CampaignsTableRow({
           aria-pressed={isOptimized}
         >
           {isOptimized ? <CheckCircle2 size={18} /> : <Circle size={18} />}
-        </button>
+        </Button>
       </td>
       {/* Phase 05.7.x — unified Campaign Health Score badge. Replaces the
           mental cost of synthesising 5 independent chips (trust, off-day,
@@ -285,7 +288,7 @@ export function CampaignsTableRow({
                 className="truncate"
                 title={mode === 'campaign' ? a.campaignName : (a.adSetName || a.campaignName)}
               >
-                {mode === 'campaign' ? a.campaignName : a.adSetName}
+                <bdi dir="ltr">{mode === 'campaign' ? a.campaignName : a.adSetName}</bdi>
               </span>
               {/* CBO / ABO tag — small typographic signal so
                   the user can tell at a glance which level
@@ -331,7 +334,7 @@ export function CampaignsTableRow({
                   campaignKey(a.storeId, a.platform, a.campaignId),
                 ) && (
                   <span
-                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-amber-100 text-amber-800 border border-amber-300"
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-status-warningBg text-status-warningFg border border-status-warning/30"
                     title="הקמפיין הזה עדיין לא ממופה למוצרי Shopify. פתח את המגירה (קליק על שם הקמפיין) ובחר את המוצרים הרלוונטיים כדי שהדאשבורד יחשב ROAS Shopify אמיתי."
                   >
                     🏷️ לא ממופה
@@ -354,7 +357,7 @@ export function CampaignsTableRow({
                   once the next orchestrator tick runs the status worker. */}
               {statusVerdict.isBackfillUnknown && (
                 <span
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-amber-50 text-amber-700 border border-amber-200"
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-status-warningBg text-status-warningFg border border-status-warning/30"
                   title="הסטטוס המוגדר עדיין לא נדגם מה-platform — ימולא בעוד עד 10 דק׳."
                 >
                   ⏳ טוען מ-Platform
@@ -369,10 +372,10 @@ export function CampaignsTableRow({
                   : `${a.platform} · ${a.storeName}`
               }
             >
-              {a.platform}
+              <bdi dir="ltr">{a.platform}</bdi>
               {' · '}
-              {a.storeName}
-              {mode === 'adset' && a.campaignName ? ` · ${a.campaignName}` : ''}
+              <bdi dir="ltr">{a.storeName}</bdi>
+              {mode === 'adset' && a.campaignName ? <>{' · '}<bdi dir="ltr">{a.campaignName}</bdi></> : ''}
             </div>
           </div>
         </div>
@@ -421,7 +424,7 @@ export function CampaignsTableRow({
           // budget, flag amber — useful "pacing" signal.
           const tight = a.spend > 0 && a.spend > budget * 0.95;
           return (
-            <span className={cn('font-medium', tight && 'text-amber-700')}>
+            <span className={cn('font-medium', tight && 'text-status-warningFg')}>
               {formatCurrency(budget)}
             </span>
           );

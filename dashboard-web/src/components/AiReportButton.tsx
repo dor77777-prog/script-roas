@@ -5,6 +5,7 @@ import useSWR, { useSWRConfig } from 'swr';
 import { Bot, Copy, Check, Download, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { generateAiReport } from '@/lib/aiReport';
+import { Button } from '@/components/ui/Button';
 import type { DashboardData, Filters as F } from '@/lib/types';
 import type { ProductsResponse } from '@/app/api/products/route';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
@@ -158,14 +159,15 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
 
   return (
     <>
-      <button
+      <Button
         type="button"
+        size="sm"
         onClick={() => { setOpen(true); setReport(''); }}
-        className="inline-flex items-center gap-2 rounded-lg bg-accent text-white px-3 py-2 text-xs sm:text-sm font-semibold hover:bg-accent/80 transition-colors shadow-sm"
+        className="gap-2 shadow-sm"
       >
         <Bot size={15} />
         ייצא דוח ל-AI
-      </button>
+      </Button>
 
       {open && (
         <div
@@ -185,13 +187,14 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
                   ייצוא דוח לבינה מלאכותית
                 </h2>
               </div>
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={() => setOpen(false)}
-                className="p-2 rounded hover:bg-elevated2 text-ink-muted hover:text-ink transition-colors"
                 aria-label="סגור"
               >
                 <X size={18} />
-              </button>
+              </Button>
             </header>
 
             {/* Body */}
@@ -220,11 +223,11 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
               </div>
 
               {!report && (
-                <button
+                <Button
                   type="button"
                   onClick={handleGenerate}
                   disabled={generating || !dataReady}
-                  className="w-full rounded-lg bg-accent text-white py-3 font-semibold hover:bg-accent/80 transition-colors disabled:bg-ink-muted disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+                  className="w-full py-3 gap-2"
                 >
                   {generating ? (
                     <>
@@ -242,37 +245,42 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
                       צור דוח
                     </>
                   )}
-                </button>
+                </Button>
               )}
 
               {report && (
                 <>
                   <div className="flex flex-wrap gap-2">
-                    <button
+                    <Button
                       onClick={handleCopy}
+                      size="sm"
                       className={cn(
-                        'inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs sm:text-sm font-semibold transition-colors',
+                        'gap-1.5',
                         copied
-                          ? 'bg-status-greenBg text-status-green'
-                          : 'bg-accent text-white hover:bg-accent/80',
+                          ? 'bg-status-greenBg text-status-green hover:bg-status-greenBg'
+                          : '',
                       )}
                     >
                       {copied ? <Check size={14} /> : <Copy size={14} />}
                       {copied ? 'הועתק!' : 'העתק ללוח'}
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={handleDownload}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-elevated border border-line px-3 py-2 text-xs sm:text-sm font-semibold text-ink hover:border-accent/40 transition-colors"
+                      className="gap-1.5"
                     >
                       <Download size={14} />
                       הורד כקובץ .md
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={() => setReport('')}
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-elevated border border-line px-3 py-2 text-xs sm:text-sm text-ink-secondary hover:border-line-strong transition-colors mr-auto"
+                      className="gap-1.5 mr-auto"
                     >
                       צור מחדש
-                    </button>
+                    </Button>
                   </div>
                   <textarea
                     readOnly

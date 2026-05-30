@@ -14,6 +14,7 @@ import {
   Settings as SettingsIcon,
 } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
+import { Button } from '@/components/ui/Button';
 import {
   generateId,
   hasAnyBilling,
@@ -84,7 +85,7 @@ export const SOURCE_COLOR: Record<CostSource, string> = {
   'shopify-plan': 'bg-accent/10 text-accent',
   'shopify-app':  'bg-blue-100 text-blue-700',
   'external-app': 'bg-purple-100 text-purple-700',
-  email:          'bg-amber-100 text-amber-700',
+  email:          'bg-status-warningBg text-status-warningFg',
   usage:          'bg-status-orangeBg text-status-orange',
   'one-off':      'bg-ink-muted/15 text-ink-secondary',
   other:          'bg-ink-muted/15 text-ink-secondary',
@@ -169,14 +170,11 @@ export function BillingSettings({ storeNames }: Props) {
 
   return (
     <>
-      <button
+      <Button
+        variant="secondary"
+        size="sm"
         onClick={() => setOpen(true)}
-        className={cn(
-          'inline-flex items-center gap-1.5 sm:gap-2 rounded-lg',
-          'bg-elevated hover:bg-elevated2 text-ink-secondary hover:text-ink',
-          'border border-line-subtle hover:border-line',
-          'px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium transition-colors shrink-0',
-        )}
+        className="gap-1.5 sm:gap-2 shrink-0"
         title="הגדרות עלויות חודשיות"
       >
         <SettingsIcon size={14} />
@@ -184,7 +182,7 @@ export function BillingSettings({ storeNames }: Props) {
         <span className="hidden sm:inline text-ink-muted tabular-nums">
           ({recurring.filter(r => r.active).length} פעילות · CAD {formatCurrency(totalMonthly)})
         </span>
-      </button>
+      </Button>
 
       {open && (
         <div
@@ -214,13 +212,14 @@ export function BillingSettings({ storeNames }: Props) {
                   </p>
                 </div>
               </div>
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={() => setOpen(false)}
-                className="p-2 rounded hover:bg-elevated2 text-ink-muted hover:text-ink"
                 aria-label="סגור"
               >
                 <X size={18} />
-              </button>
+              </Button>
             </header>
 
             {/* Tabs */}
@@ -230,14 +229,16 @@ export function BillingSettings({ storeNames }: Props) {
                 { key: 'onetime' as Tab, label: 'חד-פעמיים', count: oneTime.length },
                 { key: 'import' as Tab, label: 'ייבא CSV מ-Shopify', count: 0 },
               ]).map(t => (
-                <button
+                <Button
                   key={t.key}
+                  variant={tab === t.key ? 'ghost' : 'ghost'}
+                  size="sm"
                   onClick={() => setTab(t.key)}
                   className={cn(
-                    'px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors',
+                    'h-auto px-3 py-1.5 text-xs sm:text-sm font-medium',
                     tab === t.key
                       ? 'bg-accent/10 text-accent'
-                      : 'text-ink-secondary hover:bg-elevated2',
+                      : 'text-ink-secondary',
                   )}
                 >
                   {t.label}
@@ -246,7 +247,7 @@ export function BillingSettings({ storeNames }: Props) {
                       ({t.count})
                     </span>
                   )}
-                </button>
+                </Button>
               ))}
             </nav>
 
@@ -388,16 +389,16 @@ function RecurringTab({
   return (
     <div className="space-y-3">
       {planErrorStores.length > 0 && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3">
+        <div className="rounded-lg border border-status-warning/30 bg-status-warningBg p-3">
           <div className="flex items-start gap-2">
-            <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-amber-100 text-amber-700 shrink-0">
+            <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-status-warningBg text-status-warningFg shrink-0">
               <AlertCircle size={14} />
             </span>
             <div className="flex-1 min-w-0">
-              <div className="text-xs sm:text-sm font-semibold text-amber-900">
+              <div className="text-xs sm:text-sm font-semibold text-status-warningFg">
                 זיהוי אוטומטי של תוכניות Shopify נכשל
               </div>
-              <p className="text-[11px] sm:text-xs text-amber-900/85 mt-0.5 leading-relaxed">
+              <p className="text-[11px] sm:text-xs text-status-warningFg/85 mt-0.5 leading-relaxed">
                 הקריאה ל-plan דרך Shopify GraphQL Admin API נכשלה. סיבות
                 נפוצות: ה-token לא כולל את ה-scope <code>read_shop</code>,
                 ה-token פג, או החנות חסומה. תיקון נדרש בצד ה-token של החנות
@@ -407,7 +408,7 @@ function RecurringTab({
                 {planErrorStores.map(m => (
                   <li
                     key={m.storeId}
-                    className="rounded-md bg-elevated border border-amber-200 px-2.5 py-1.5"
+                    className="rounded-md bg-elevated border border-status-warning/30 px-2.5 py-1.5"
                   >
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-semibold text-ink shrink-0">
@@ -419,7 +420,7 @@ function RecurringTab({
                     </div>
                     <div
                       dir="ltr"
-                      className="text-[10px] text-amber-900/80 font-mono mt-1 break-words"
+                      className="text-[10px] text-status-warningFg/80 font-mono mt-1 break-words"
                     >
                       {m.lastError}
                     </div>
@@ -442,12 +443,13 @@ function RecurringTab({
                   זיהינו אוטומטית תוכניות Shopify
                 </div>
                 {missingDetected.length > 1 && (
-                  <button
+                  <Button
+                    variant="link"
                     onClick={addAllDetected}
-                    className="text-[11px] sm:text-xs font-semibold text-accent hover:text-accent/80"
+                    className="h-auto p-0 text-[11px] sm:text-xs font-semibold"
                   >
                     הוסף את כולן ({missingDetected.length})
-                  </button>
+                  </Button>
                 )}
               </div>
               <p className="text-[11px] sm:text-xs text-ink-secondary mt-0.5 leading-relaxed">
@@ -471,13 +473,14 @@ function RecurringTab({
                       <span className="text-[10px] text-ink-muted tabular-nums shrink-0">
                         {cad ? `≈ CAD ${formatCurrency(cad)}/מ` : 'מחיר לא ידוע — הזן ידנית'}
                       </span>
-                      <button
+                      <Button
+                        size="sm"
                         onClick={() => addDetectedPlan(m)}
-                        className="ml-auto inline-flex items-center gap-1 rounded-md bg-accent text-white px-2 py-0.5 text-[11px] font-semibold hover:bg-accent/80 shrink-0"
+                        className="ml-auto gap-1 text-[11px] shrink-0"
                       >
                         <Plus size={11} />
                         הוסף
-                      </button>
+                      </Button>
                     </li>
                   );
                 })}
@@ -492,13 +495,14 @@ function RecurringTab({
           מנויים חודשיים שחוזרים אוטומטית בכל חודש. Shopify plan, אפליקציות
           חיצוניות (Klaviyo וכו&apos;), שירות אימייל. כל שורה פעילה תיכלל ב-P&amp;L.
         </p>
-        <button
+        <Button
           onClick={addNew}
-          className="inline-flex items-center gap-1 rounded-lg bg-accent text-white px-3 py-1.5 text-xs sm:text-sm font-semibold hover:bg-accent/80 shrink-0"
+          size="sm"
+          className="shrink-0"
         >
           <Plus size={13} />
           הוסף
-        </button>
+        </Button>
       </div>
 
       {items.length === 0 ? (
@@ -590,20 +594,26 @@ function RecurringTab({
                     )}
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <button
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
                       onClick={() => setEditing(r.id)}
-                      className="p-2 rounded text-ink-muted hover:text-ink hover:bg-elevated2"
                       aria-label="ערוך"
+                      className="w-8 h-8"
                     >
                       <Edit3 size={14} />
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
                       onClick={() => remove(r.id)}
-                      className="p-2 rounded text-ink-muted hover:text-status-red hover:bg-status-redBg"
                       aria-label="מחק"
+                      className="w-8 h-8 text-ink-muted hover:text-status-red hover:bg-status-redBg"
                     >
                       <Trash2 size={14} />
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}
@@ -802,36 +812,38 @@ function RecurringEditForm({
           חישוב
         </label>
         <div className="flex items-center gap-1 mt-1">
-          <button
+          <Button
             type="button"
+            variant="ghost"
             onClick={() => {
               setKind('fixed');
               if (editError) setEditError(null);
             }}
             className={cn(
-              'flex-1 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors border',
+              'flex-1 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors border h-auto',
               kind === 'fixed'
-                ? 'bg-accent text-white border-accent'
+                ? 'bg-accent text-white border-accent hover:bg-accent/90'
                 : 'bg-elevated text-ink-secondary hover:bg-elevated2 border-line',
             )}
           >
             סכום קבוע (CAD)
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
             onClick={() => {
               setKind('percent');
               if (editError) setEditError(null);
             }}
             className={cn(
-              'flex-1 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors border',
+              'flex-1 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors border h-auto',
               kind === 'percent'
-                ? 'bg-accent text-white border-accent'
+                ? 'bg-accent text-white border-accent hover:bg-accent/90'
                 : 'bg-elevated text-ink-secondary hover:bg-elevated2 border-line',
             )}
           >
             % מהמחזור
-          </button>
+          </Button>
         </div>
         <p className="text-[10px] text-ink-muted mt-1 leading-relaxed">
           {kind === 'percent'
@@ -849,19 +861,21 @@ function RecurringEditForm({
         />
       </div>
       <div className="flex items-center gap-2 pt-1">
-        <button
+        <Button
           onClick={commit}
-          className="inline-flex items-center gap-1 rounded-lg bg-accent text-white px-3 py-1.5 text-xs sm:text-sm font-semibold hover:bg-accent/80"
+          size="sm"
+          className="gap-1"
         >
           <Check size={13} />
           שמור
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={cancel}
-          className="inline-flex items-center gap-1 rounded-lg border border-line text-ink-secondary hover:text-ink px-3 py-1.5 text-xs sm:text-sm"
         >
           ביטול
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -914,13 +928,14 @@ function OneTimeTab({
           חיובים חד-פעמיים: סף-חיוב של Shopify Email, התקנת אפליקציה, ייעוץ, וכל
           הוצאה שלא חוזרת בכל חודש.
         </p>
-        <button
+        <Button
           onClick={addNew}
-          className="inline-flex items-center gap-1 rounded-lg bg-accent text-white px-3 py-1.5 text-xs sm:text-sm font-semibold hover:bg-accent/80 shrink-0"
+          size="sm"
+          className="shrink-0"
         >
           <Plus size={13} />
           הוסף
-        </button>
+        </Button>
       </div>
 
       {sorted.length === 0 ? (
@@ -986,20 +1001,26 @@ function OneTimeTab({
                     </div>
                   </div>
                   <div className="flex items-center gap-1 shrink-0">
-                    <button
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
                       onClick={() => setEditing(r.id)}
-                      className="p-2 rounded text-ink-muted hover:text-ink hover:bg-elevated2"
                       aria-label="ערוך"
+                      className="w-8 h-8"
                     >
                       <Edit3 size={14} />
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
                       onClick={() => remove(r.id)}
-                      className="p-2 rounded text-ink-muted hover:text-status-red hover:bg-status-redBg"
                       aria-label="מחק"
+                      className="w-8 h-8 text-ink-muted hover:text-status-red hover:bg-status-redBg"
                     >
                       <Trash2 size={14} />
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}
@@ -1150,19 +1171,21 @@ function OneTimeEditForm({
         />
       </div>
       <div className="flex items-center gap-2 pt-1">
-        <button
+        <Button
           onClick={commit}
-          className="inline-flex items-center gap-1 rounded-lg bg-accent text-white px-3 py-1.5 text-xs sm:text-sm font-semibold hover:bg-accent/80"
+          size="sm"
+          className="gap-1"
         >
           <Check size={13} />
           שמור
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={cancel}
-          className="inline-flex items-center gap-1 rounded-lg border border-line text-ink-secondary hover:text-ink px-3 py-1.5 text-xs sm:text-sm"
         >
           ביטול
-        </button>
+        </Button>
       </div>
     </div>
   );
