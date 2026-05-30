@@ -2229,3 +2229,85 @@ yesterday's full-day spend from each platform and restores the
 correct 2026-05-30 values; the next post-deploy tick writes today
 under `date = '2026-05-31'`, and the agg RPC populates
 `data_daily['2026-05-31']`.
+
+## 26. UI/UX Design-System Overhaul (2026-05-30)
+
+Single-PR overhaul addressing 11 concerns raised in the 2026-05-30 fresh
+independent audit (see `docs/superpowers/specs/2026-05-30-ui-ux-design-system-overhaul-audit.md`).
+
+### Token system
+Two-layer (semantic OKLCH vars in `globals.css` referenced by Tailwind
+utilities + CVA primitives). New tokens added in this overhaul:
+`--status-warning(-bg, -fg)`, `--chart-axis`, `--chart-cpm-prev`,
+`--gradient-hero-{from,via,to}`, `--store-{uzoshop,zolplus,usmile}(-bg, -fg)`,
+8 `--annotation-*` tokens. All tokens carry both `:root` and
+`[data-theme="dark"]` definitions; the `tokenParity.test.ts` CI gate
+enforces this contract.
+
+Tailwind class-name convention: status sub-tokens use camelCase keys in
+tailwind.config.ts (`status.warningBg`) which Tailwind preserves literally
+in the class form (`bg-status-warningBg`, NOT `bg-status-warning-bg`).
+Reverse migration of any kebab usages happened in commit `28da6b4`.
+
+### Color palette unification
+Store palette is canonical at the chart palette (cyan / hot-pink / lime —
+sourced from `storeColors.ts`). `format.ts STORE_HUES` now routes through
+the `--store-*` tokens, with `storeBadgeHex()` exposed as a backwards-
+compat shim for server-side callers (WhatsApp summaries).
+
+Platform tokens promoted from `chartColors.ts` into a canonical
+`PLATFORM_TOKENS` map exposing per-platform `color` + `strokeDasharray`
++ `strokeWidth`. Shopify keeps its dashed-stroke convention to signal
+"actual revenue" vs "reported ads platforms".
+
+### Component primitives (3 new + 1 compound extension)
+- `Stat` — replaces 2 inline drawer stat-block functions.
+- `TableBase` (Head + HeaderCell + Row + Cell) — replaces 4 ad-hoc tables.
+- `InsightCard` (+ `InsightCard.Group` + `InsightCard.Row` compound API) —
+  replaces 4 custom warning/info card surfaces AND absorbs
+  `InsightsBoard.tsx`'s severity-grouped row pattern (compound extension
+  shipped in commit `138fd78`).
+
+`Badge.tsx` now exports `BADGE_TONE_BG` as the single source of truth;
+the 2 duplicate maps in CampaignsTable + AdsDrawer are deleted.
+
+### Drawers → Sheet primitive
+`CampaignDrawer` + `AdsDrawer` migrated to the `Sheet` primitive
+(`side="end"` for RTL safety). Header padding, backdrop blur, close-
+button size now consistent.
+
+### IA restructure
+- **Home tab** → 3 visual bands (`HomeLiveBand` / `HomeSummaryBand` /
+  `HomePerStoreBand`) — scroll height drops ~40%.
+- **Analysis tab** → 2 sub-tabs (`Trends` honors global filter;
+  `Archive` has its own year selector + month accordion).
+- **/operator** → 4 sub-tabs (`Sync` / `Health` / `Activity` / `Danger`).
+- `GoalTracker` moves Home → P&L (matches its global scope).
+
+### Bidi sweep
+Six high-traffic surfaces wrap dynamic LTR content in `<bdi dir="ltr">`:
+CampaignDrawer title + Ads Manager link, CampaignsTableRow campaign-name
+cell + 3 mixed-text tooltips, PerStoreCards store-name span. Mixed
+Hebrew + English no longer reorders.
+
+### Virtualization
+DEFERRED for `CampaignsTable`. The component already uses
+`TOP_N_DEFAULT = 10` pagination (clicking "הצג עוד" expands progressively),
+so virtualization solves a non-problem at current data scale. The
+required CSS-grid rewrite would risk regressing sticky-header alignment,
+RTL horizontal scroll, inline Recharts Sparklines, and screen-reader
+table semantics. If row counts ever exceed ~500, server-side pagination
+(`?page=` URL param) is the safer path. See commit `09ad684` for the
+deferral rationale.
+
+### ESLint guards
+3 custom rules prevent regression:
+1. `local/no-raw-button-in-components` — forbid `<button>` outside `components/ui/`.
+2. `local/no-dark-variant-in-components` — forbid `dark:` Tailwind variants in components.
+3. `local/no-hex-color-in-components` — forbid hex literals in components (5 SVG-color exemptions inline in HeroOverview).
+
+### Tests
+Final count: 1602 node passed | 9 skipped + ~120 DOM tests. New tests:
+sidebarHover, buttonDestructive, stat, tableBase, insightCard
+(simple + compound), yearSelector, bidi, token-parity,
+globals-new-tokens, dark-mode-tuning, badge.

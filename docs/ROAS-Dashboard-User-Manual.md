@@ -7,7 +7,7 @@
 │                                                  │
 │      מדריך הפעלה שוטף למפעיל הדשבורד            │
 │                                                  │
-│      גרסה:        2.3.1                          │
+│      גרסה:        2.4.0                          │
 │      תאריך:       2026-05-30                     │
 │      קהל יעד:     מפעיל יחיד · החלטות יומיות   │
 │                                                  │
@@ -25,6 +25,42 @@
 ```
 
 > **המסמך הזה הוא מדריך הפעלה שוטף.** הוא מסביר מה רואים על המסך ואיך לקבל החלטות יומיות. הוא לא מסביר איך המערכת בנויה, איך הקוד עובד, או איך מתחזקים אותה — לפרטים האלה ראה `docs/ARCHITECTURE.md`.
+
+---
+
+## מה התחדש (2026-05-30 · UI/UX Overhaul · 2.4.0)
+
+### Version 2.4.0 (2026-05-30) — UI/UX overhaul
+
+**What changed for you:**
+
+- **Home tab** is now organized into 3 vertically-grouped bands:
+  - **עכשיו** (Live) — intra-day live snapshot
+  - **היום מול אתמול** (Compare) — hero + KPI cards comparing today to yesterday
+  - **לפי חנות** (Per store) — per-store cards + collapsible insights
+  Scroll height drops about 40% — you see the most-important numbers without scrolling.
+
+- **Analysis tab** is now split into 2 sub-tabs:
+  - **מגמות** (Trends) — ROAS chart + annotations honor the global date filter
+  - **היסטוריה** (Archive) — pick any year via the year chip row, drill into monthly tables
+
+- **/operator** has 4 sub-tabs: **סנכרון** (Sync), **בריאות** (Health),
+  **פעילות** (Activity), **מסוכן** (Danger). The "Reset data" red button
+  is now in the Danger sub-tab.
+
+- **GoalTracker** moved from the Home tab to the **P&L** tab — it ties
+  monthly revenue progress to where the monthly P&L numbers live.
+
+- **Live tab gradient** is calmer in dark mode — less visual fatigue.
+
+- **Mixed Hebrew + English text** (campaign names, ad-set names, store
+  identifiers) now renders left-to-right inside Hebrew sentences without
+  reordering — no more "Summer Sale 2026" showing up as "2026 Sale Summer".
+
+- **Color tokens are unified**: store colors (cyan / hot-pink / lime)
+  match between charts and per-store badges. Warning chips, hero
+  gradients, and annotation markers all source from the same design
+  tokens — light and dark modes stay in sync.
 
 ---
 
