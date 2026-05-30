@@ -39,6 +39,7 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { recordMetaBucUsage } from '@/lib/notifications/metaBucUsage';
 import { isAuthError, isRateLimitError } from '@/lib/notifications/detectAuthError';
 import { notifyTokenFailure } from '@/lib/notifications/tokenFailures';
+import { getTodayInIsraelTz } from '@/lib/dateRange';
 // Phase E1.7 (2026-05-30 night) — Meta worker no longer fetches
 // account-aggregate spend or writes data_daily.fb_spend_cad directly.
 // campaigns_daily is the single source of truth; the unified RPC
@@ -294,7 +295,7 @@ export async function runMetaWorkerJob(input: RunMetaWorkerJobInput): Promise<vo
   // Without this, postgresReaders.fetchCampaigns row-existence check
   // would drop zero-spend active rows until cron-daily ran ~24h later.
   if (input.upsertCampaignsDaily) {
-    const today = nowIso.slice(0, 10);
+    const today = getTodayInIsraelTz(nowIso);
     const activePlaceholders = status.adsets
       .filter((a) => a.effective_status === 'ACTIVE')
       .map((a) => ({
@@ -439,7 +440,7 @@ async function runMetaHotMetricsBranch(input: RunMetaWorkerJobInput): Promise<vo
     // the prior store's row needs to zero). Soft-fail so hot-set
     // metrics path still runs if RPC has transient issue.
     if (input.aggregateDataDaily) {
-      const todayDate = nowIso.slice(0, 10);
+      const todayDate = getTodayInIsraelTz(nowIso);
       try {
         await input.aggregateDataDaily(todayDate);
       } catch (err) {
@@ -463,7 +464,7 @@ async function runMetaHotMetricsBranch(input: RunMetaWorkerJobInput): Promise<vo
     }
 
     // 5. Hot-set fetch — single batched insights call for hot ids only.
-    const today = nowIso.slice(0, 10);
+    const today = getTodayInIsraelTz(nowIso);
     const metrics = await fetchHotMetrics({
       storeId,
       adAccountId: creds.adAccountId,

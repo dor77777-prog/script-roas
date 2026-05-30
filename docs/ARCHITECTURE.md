@@ -2205,3 +2205,27 @@ convention and Phase D backfill). The agg RPC sums by
 `data_daily.ga_spend_cad`. `hotAdgroupIds` is now ignored in the
 input shape. The ad-level branch (`FROM ad_group_ad`) is unchanged —
 returns 0 rows for PMax naturally, returns real rows for other types.
+
+### Phase E1.7 night follow-up #2 — workers use IL TZ for `campaigns_daily.date`
+
+All 3 hot_metrics workers computed `today = nowIso.slice(0, 10)` —
+UTC date. Israel is UTC+3 (IDT) or UTC+2 (IST), so between 00:00 IL
+and 03:00 IL each night the UTC date is one day behind the IL date.
+
+Symptom (observed 2026-05-31 00:20 IL): the 00:00 + 00:10 + 00:20 IL
+ticks wrote campaigns_daily rows under `date = '2026-05-30'` (UTC),
+UPSERT-overwriting yesterday's final spend with today's partial
+spend. The corresponding `agg_data_daily_for_date('2026-05-30')`
+call then propagated the (wrong) sums to `data_daily.{fb,ga,tt}_*`.
+Meanwhile `data_daily['2026-05-31']` (written by cron-live in IL TZ)
+sat at zero spend.
+
+Fix: new helper `getTodayInIsraelTz(nowIso?)` in `lib/dateRange.ts`.
+Workers now compute `today` via that helper. The optional `nowIso`
+parameter lets vitest pin deterministic dates without mocking `Date`.
+
+Recovery: the next `cron-yesterday-refresh` cycle (every 2h) re-pulls
+yesterday's full-day spend from each platform and restores the
+correct 2026-05-30 values; the next post-deploy tick writes today
+under `date = '2026-05-31'`, and the agg RPC populates
+`data_daily['2026-05-31']`.

@@ -68,6 +68,7 @@ import {
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { isAuthError, isRateLimitError } from '@/lib/notifications/detectAuthError';
 import { notifyTokenFailure } from '@/lib/notifications/tokenFailures';
+import { getTodayInIsraelTz } from '@/lib/dateRange';
 // Phase E1.6.1 (2026-05-30): TikTok does NOT use the bulk-date
 // account-spend fetcher + cadConvert + upsertDataDailySpend path that
 // Meta/Google use. Reason: there is ONE shared TikTok ad account
@@ -468,7 +469,7 @@ async function runTikTokStatusBranch(input: RunTikTokWorkerJobInput): Promise<vo
     // a.store_id (NOT function-arg storeId) preserves the Phase A.5 v2
     // attribution model.
     if (input.upsertCampaignsDaily) {
-      const today = nowIso.slice(0, 10);
+      const today = getTodayInIsraelTz(nowIso);
       const activePlaceholders = status.adsets
         .filter((a) => TIKTOK_ACTIVE_STATUSES.has(a.effective_status ?? ''))
         .map((a) => ({
@@ -571,7 +572,7 @@ async function runTikTokHotMetricsBranch(input: RunTikTokWorkerJobInput): Promis
       safeAccount(storeId, getAccount),
       safeFxCadFor(storeId, getFxCadFor),
     ]);
-    const today = nowIso.slice(0, 10);
+    const today = getTodayInIsraelTz(nowIso);
 
     // Phase E1.7 night (2026-05-30) — load registry maps AFTER hot ids
     // resolve. Required because TikTok's AUCTION_ADGROUP report cannot

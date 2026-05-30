@@ -127,6 +127,30 @@ export function defaultRange(): DateRange {
 }
 
 /**
+ * Returns 'YYYY-MM-DD' for the given instant (or now) in Asia/Jerusalem.
+ *
+ * Why this exists: workers call `nowIso.slice(0, 10)` which returns the
+ * UTC date. Between 00:00 IL and 03:00 IL (= 21:00-24:00 UTC the prior
+ * day), UTC-derived "today" is one day BEHIND the user's IL "today",
+ * causing campaigns_daily writes for today to land under yesterday's
+ * row. The dashboard renders in IL TZ, so this helper anchors worker
+ * writes to the same TZ as cron-live and the UI.
+ *
+ * Pass `nowIso` (the worker's pinned ISO timestamp) so tests can drive
+ * deterministic dates and the worker writes a date consistent with its
+ * `last_live_tick_at` stamp.
+ */
+export function getTodayInIsraelTz(nowIso?: string): string {
+  const d = nowIso ? new Date(nowIso) : new Date();
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jerusalem',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d);
+}
+
+/**
  * Builds the SWR cache key for a paginated route. SWR keys are strings,
  * so changing `range` (e.g., user picks a wider range in Filters) yields
  * a NEW key → SWR fires a fresh fetch (no stale-cache shadow).

@@ -53,6 +53,7 @@ import {
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { isAuthError, isRateLimitError } from '@/lib/notifications/detectAuthError';
 import { notifyTokenFailure } from '@/lib/notifications/tokenFailures';
+import { getTodayInIsraelTz } from '@/lib/dateRange';
 // Phase E1.7 (2026-05-30 night) — Google worker no longer fetches
 // account-aggregate spend. campaigns_daily is the single source of
 // truth; the unified RPC `agg_data_daily_for_date(d)` re-aggregates
@@ -314,7 +315,7 @@ async function runGoogleStatusBranch(input: RunGoogleWorkerJobInput): Promise<vo
     // within 10 min of going live, even when hot_metrics hasn't yet
     // fetched real spend.
     if (input.upsertCampaignsDaily) {
-      const today = nowIso.slice(0, 10);
+      const today = getTodayInIsraelTz(nowIso);
       const activePlaceholders = status.adsets
         .filter((a) => a.effective_status === 'ENABLED')
         .map((a) => ({
@@ -423,7 +424,7 @@ async function runGoogleHotMetricsBranch(input: RunGoogleWorkerJobInput): Promis
     // derived columns fresh. Soft-fail so hot-set metrics path runs
     // even if RPC has transient issue.
     if (input.aggregateDataDaily) {
-      const todayDate = nowIso.slice(0, 10);
+      const todayDate = getTodayInIsraelTz(nowIso);
       try {
         await input.aggregateDataDaily(todayDate);
       } catch (err) {
@@ -442,7 +443,7 @@ async function runGoogleHotMetricsBranch(input: RunGoogleWorkerJobInput): Promis
     }
 
     // 4. Fetch hot-set metrics for today only.
-    const today = nowIso.slice(0, 10);
+    const today = getTodayInIsraelTz(nowIso);
     const metrics = await fetchHotMetrics({
       storeId,
       customer,
