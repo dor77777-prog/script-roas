@@ -266,7 +266,7 @@ export function HeroOverview({ data, filters }: Props) {
         'relative overflow-hidden rounded-2xl text-white shadow-elevated',
         // LIGHT mode: bold navy brand gradient (per user preference — the
         // dark indigo card stands out as the hero on a light page).
-        'bg-gradient-to-br from-[#091c4a] via-[#0d3680] to-[#1d4ed8]',
+        'bg-[linear-gradient(135deg,var(--gradient-hero-from),var(--gradient-hero-via)_45%,var(--gradient-hero-to))]',
         // DARK mode: theme-aware accent gradient (subtler — doesn't fight
         // the dark page). The accent token shifts to a lighter indigo in
         // dark theme so text-white stays readable.
