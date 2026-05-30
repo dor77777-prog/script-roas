@@ -172,6 +172,63 @@ describe('runMetaWorkerJob() — hot_metrics scope', () => {
     expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({ scope: 'campaign_metrics', status: 'success' }));
   });
 
+  it('Phase E1: hot_metrics fetch rejects with 429 → recHotPair transient_error + notifyTokenFailure(meta_hot_metrics_rate_limit)', async () => {
+    const notifyTokenFailure = vi.fn().mockResolvedValue(undefined);
+    const recordFreshness = vi.fn().mockResolvedValue(undefined);
+    const err = new Error('Meta Graph API: HTTP 429 rate limit exceeded');
+    const fetchHotMetrics = vi.fn().mockRejectedValue(err);
+    await expect(runMetaWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 12 },
+      bucProbe: async () => ({ pct: 12, etaMinutes: 0 }),
+      fetchStatus: vi.fn(),
+      fetchHotMetrics,
+      getHotCampaignIds: async () => ['C1'],
+      getHotAdsetIds: async () => ['AS1'],
+      getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(),
+      insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(),
+      upsertAdsDaily: vi.fn(),
+      getCredentials: async () => ({ adAccountId: 'act_1', accessToken: 'tok', getFxCadFor: async () => async () => 1 } as never),
+      recordFreshness,
+      upsertBuc: vi.fn(),
+      notifyTokenFailure,
+      nowIso: NOW_ISO,
+    })).rejects.toThrow('rate limit');
+    const transientErrorCalls = recordFreshness.mock.calls.filter(c => c[0].status === 'transient_error');
+    expect(transientErrorCalls.map(c => c[0].scope).sort()).toEqual(['ad_metrics', 'campaign_metrics']);
+    expect(notifyTokenFailure).toHaveBeenCalledOnce();
+    expect(notifyTokenFailure.mock.calls[0][0].operation).toBe('meta_hot_metrics_rate_limit');
+  });
+
+  it('Phase E1: hot_metrics fetch rejects with auth → notifyTokenFailure(meta_hot_metrics_auth)', async () => {
+    const notifyTokenFailure = vi.fn().mockResolvedValue(undefined);
+    const err = new Error('Meta Graph API: HTTP 401 OAuthException invalid access token');
+    const fetchHotMetrics = vi.fn().mockRejectedValue(err);
+    await expect(runMetaWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 12 },
+      bucProbe: async () => ({ pct: 12, etaMinutes: 0 }),
+      fetchStatus: vi.fn(),
+      fetchHotMetrics,
+      getHotCampaignIds: async () => ['C1'],
+      getHotAdsetIds: async () => ['AS1'],
+      getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(),
+      insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(),
+      upsertAdsDaily: vi.fn(),
+      getCredentials: async () => ({ adAccountId: 'act_1', accessToken: 'tok', getFxCadFor: async () => async () => 1 } as never),
+      recordFreshness: vi.fn(),
+      upsertBuc: vi.fn(),
+      notifyTokenFailure,
+      nowIso: NOW_ISO,
+    })).rejects.toThrow('invalid access token');
+    expect(notifyTokenFailure).toHaveBeenCalledOnce();
+    expect(notifyTokenFailure.mock.calls[0][0].operation).toBe('meta_hot_metrics_auth');
+  });
+
   it('Phase E1: BUC budget_skip fires notifyTokenFailure(meta_hot_metrics_budget_skip)', async () => {
     const notifyTokenFailure = vi.fn().mockResolvedValue(undefined);
     const recordFreshness = vi.fn().mockResolvedValue(undefined);

@@ -37,6 +37,7 @@ import {
 } from '@/lib/registries/upsert';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { recordMetaBucUsage } from '@/lib/notifications/metaBucUsage';
+import { isAuthError, isRateLimitError } from '@/lib/notifications/detectAuthError';
 import {
   getAdAccountIdForStore,
   getMetaAccessTokenForStore,
@@ -373,61 +374,85 @@ async function runMetaHotMetricsBranch(input: RunMetaWorkerJobInput): Promise<vo
     return;
   }
 
-  // 2. Load hot ids in parallel — missing injections default to empty list.
-  const [hotCampaign, hotAdset, hotAd] = await Promise.all([
-    (getHotCampaignIds ?? (async () => []))(storeId),
-    (getHotAdsetIds ?? (async () => []))(storeId),
-    (getHotAdIds ?? (async () => []))(storeId),
-  ]);
+  try {
+    // 2. Load hot ids in parallel — missing injections default to empty list.
+    const [hotCampaign, hotAdset, hotAd] = await Promise.all([
+      (getHotCampaignIds ?? (async () => []))(storeId),
+      (getHotAdsetIds ?? (async () => []))(storeId),
+      (getHotAdIds ?? (async () => []))(storeId),
+    ]);
 
-  if (hotCampaign.length + hotAdset.length + hotAd.length === 0) {
-    // Nothing hot to refresh today → freshness=success (worker ran cleanly).
+    if (hotCampaign.length + hotAdset.length + hotAd.length === 0) {
+      // Nothing hot to refresh today → freshness=success (worker ran cleanly).
+      await recHotPair('success');
+      return;
+    }
+
+    // Wiring guard — Inngest binding must supply fetchHotMetrics for prod.
+    if (!fetchHotMetrics) {
+      await recHotPair('transient_error', 'fetchHotMetrics not wired');
+      return;
+    }
+
+    // 3. Resolve credentials + fetch — single batched insights call.
+    const creds = await safeCredentials(storeId, getCredentials);
+    const today = nowIso.slice(0, 10);
+    const metrics = await fetchHotMetrics({
+      storeId,
+      adAccountId: creds.adAccountId,
+      accessToken: creds.accessToken,
+      hotCampaignIds: hotCampaign,
+      hotAdsetIds: hotAdset,
+      hotAdIds: hotAd,
+      dateStr: today,
+      getFxCadFor: creds.getFxCadFor,
+    });
+
+    // 4. Upsert campaigns_daily (adsets only) and ads_daily, stamping
+    //    source='live_tick' + last_live_tick_at on every row.
+    //    CRIT-B: hot-metrics fetcher returns only adset + ad rows; the
+    //    campaign-level aggregate is computed at read time by the existing
+    //    aggregators (Today / Today-Live). campaigns_daily.ad_set_id is
+    //    NOT NULL so we cannot insert a campaign-only row.
+    if (upsertCampaignsDaily && metrics.adsets.length > 0) {
+      const all: Array<Record<string, unknown>> = metrics.adsets.map((a) => ({
+        ...a,
+        source: 'live_tick',
+        last_live_tick_at: nowIso,
+      }));
+      await upsertCampaignsDaily(all);
+    }
+    if (upsertAdsDaily && metrics.ads.length > 0) {
+      await upsertAdsDaily(
+        metrics.ads.map((a) => ({ ...a, source: 'live_tick', last_live_tick_at: nowIso })),
+      );
+    }
+
+    // 5. Mark freshness success for both campaign_metrics + ad_metrics.
     await recHotPair('success');
-    return;
+  } catch (err) {
+    // Phase E1 (2026-05-30) — surface auth/rate errors to the operator
+    // panel AND fire WhatsApp via notifyTokenFailure. Mirrors googleWorker
+    // pattern. Re-throw preserves Inngest's exponential-backoff retry.
+    const message = err instanceof Error ? err.message : String(err);
+    await recHotPair('transient_error', message);
+    const isRate = isRateLimitError('meta', message);
+    const isAuth = isAuthError('meta', message);
+    if ((isRate || isAuth) && input.notifyTokenFailure) {
+      await input.notifyTokenFailure({
+        provider: 'meta',
+        storeId,
+        operation: isRate ? 'meta_hot_metrics_rate_limit' : 'meta_hot_metrics_auth',
+        errorMsg: message,
+        advice: isRate
+          ? 'Meta reported HTTP 429 / quota-exceeded. Hot metrics worker will retry on next orchestrator tick (10 min). No operator action needed unless this persists across multiple ticks.'
+          : 'Refresh the Meta access token in Vercel and redeploy. See docs/PROPS-MAP.md for the env var name.',
+      }).catch((alertErr) => {
+        console.warn(`metaWorker hot_metrics ${isRate ? 'rate' : 'auth'} alert threw: ${alertErr instanceof Error ? alertErr.message : alertErr}`);
+      });
+    }
+    throw err;
   }
-
-  // Wiring guard — Inngest binding must supply fetchHotMetrics for prod.
-  if (!fetchHotMetrics) {
-    await recHotPair('transient_error', 'fetchHotMetrics not wired');
-    return;
-  }
-
-  // 3. Resolve credentials + fetch — single batched insights call.
-  const creds = await safeCredentials(storeId, getCredentials);
-  const today = nowIso.slice(0, 10);
-  const metrics = await fetchHotMetrics({
-    storeId,
-    adAccountId: creds.adAccountId,
-    accessToken: creds.accessToken,
-    hotCampaignIds: hotCampaign,
-    hotAdsetIds: hotAdset,
-    hotAdIds: hotAd,
-    dateStr: today,
-    getFxCadFor: creds.getFxCadFor,
-  });
-
-  // 4. Upsert campaigns_daily (adsets only) and ads_daily, stamping
-  //    source='live_tick' + last_live_tick_at on every row.
-  //    CRIT-B: hot-metrics fetcher returns only adset + ad rows; the
-  //    campaign-level aggregate is computed at read time by the existing
-  //    aggregators (Today / Today-Live). campaigns_daily.ad_set_id is
-  //    NOT NULL so we cannot insert a campaign-only row.
-  if (upsertCampaignsDaily && metrics.adsets.length > 0) {
-    const all: Array<Record<string, unknown>> = metrics.adsets.map((a) => ({
-      ...a,
-      source: 'live_tick',
-      last_live_tick_at: nowIso,
-    }));
-    await upsertCampaignsDaily(all);
-  }
-  if (upsertAdsDaily && metrics.ads.length > 0) {
-    await upsertAdsDaily(
-      metrics.ads.map((a) => ({ ...a, source: 'live_tick', last_live_tick_at: nowIso })),
-    );
-  }
-
-  // 5. Mark freshness success for both campaign_metrics + ad_metrics.
-  await recHotPair('success');
 }
 
 // ---------------------------------------------------------------------------
