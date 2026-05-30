@@ -1,17 +1,57 @@
 import { describe, expect, it } from 'vitest';
 import {
-  isCampaignCurrentlyOff,
-  isCampaignOff,
+  classifyCampaignStatus,
   OFF_RECENCY_DAYS,
-} from '@/components/CampaignsTableRow';
+} from '@/lib/registries/statusClassification';
 
 /**
- * FIX-26: locks the contract of `isCampaignCurrentlyOff`. The helper drives
- * the "currently off" chip in CampaignsTableRow: a campaign that hasn't run
- * (spend > 0) in the last OFF_RECENCY_DAYS days is considered paused, and
- * the row gets a muted chip so the operator knows the historical-range
- * numbers don't reflect a live campaign.
+ * FIX-26: locks the contract of the lastActiveDate heuristic. The signal
+ * drives the "currently off" chip in CampaignsTableRow: a campaign that
+ * hasn't run (spend > 0) in the last OFF_RECENCY_DAYS days is considered
+ * paused, and the row gets a muted chip so the operator knows the
+ * historical-range numbers don't reflect a live campaign.
+ *
+ * Phase D (2026-05-30) — the original two local helpers (`isCampaignOff`
+ * and `isCampaignCurrentlyOff`) were lifted into the shared
+ * `classifyCampaignStatus` classifier. The test below preserves every
+ * pre-Phase-D assertion by routing each call through `classifyCampaignStatus`
+ * with the registry inputs nulled out — collapsing the classifier's
+ * 5-rung precedence to the legacy `effectiveStatus → lastActiveDate`
+ * path that the original two helpers exercised. The shape of the
+ * assertions is intentionally unchanged so any future Phase-D regression
+ * surfaces as a single targeted failure here.
  */
+
+/** Phase D adapter — exercise the legacy `(effective, platform, lastActive, today)` path of the classifier. */
+function isCampaignOff(
+  effectiveStatus: string | null,
+  platform: string,
+  lastActiveDate: string | null,
+  today: string,
+): boolean {
+  return classifyCampaignStatus({
+    regDeliveryStatus: null,
+    regEffectiveStatus: null,
+    regConfiguredStatus: null,
+    legacyEffectiveStatus: effectiveStatus,
+    platform,
+    lastActiveDate,
+    today,
+  }).isOff;
+}
+
+/** Phase D adapter — exercise the date-only heuristic by nulling all status inputs. */
+function isCampaignCurrentlyOff(lastActiveDate: string | null, today: string): boolean {
+  return classifyCampaignStatus({
+    regDeliveryStatus: null,
+    regEffectiveStatus: null,
+    regConfiguredStatus: null,
+    legacyEffectiveStatus: null,
+    platform: 'meta',
+    lastActiveDate,
+    today,
+  }).isOff;
+}
 
 describe('isCampaignCurrentlyOff — locks FIX-26 contract', () => {
   it('OFF_RECENCY_DAYS is 2 (matches Apps Script collection cadence)', () => {

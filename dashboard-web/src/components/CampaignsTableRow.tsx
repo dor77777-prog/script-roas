@@ -14,6 +14,7 @@ import type { DailyCpmRoasPoint } from '@/lib/cpmRoasAnalysis';
 import { HealthScoreBadge } from './HealthScoreBadge';
 import { Sparkline } from './ui/Sparkline';
 import { CampaignFreshnessChip } from './CampaignFreshnessChip';
+import { classifyCampaignStatus } from '@/lib/registries/statusClassification';
 
 /**
  * The narrowed trust-level union actually used by CampaignsTableRow's
@@ -127,163 +128,12 @@ type Props = {
   }) => void;
 };
 
-/**
- * FIX-26: how many days of inactivity (zero spend) before a row is
- * considered "currently off". The 2-day buffer absorbs the in-flight
- * window between cron-daily (00:05 IL, materialises "today−1") and
- * cron-live (every 10 min IL, rolling 3-day refresh for "today").
- * A campaign that ran yesterday is almost certainly still active; a
- * campaign that hasn't run in 2+ days is the earliest point we can call
- * "paused" without false-positives from a between-ticks live cadence
- * gap or a delayed Meta/Google insights aggregation.
- *
- * Phase 11 (2026-05-25): comment originally referenced Apps Script
- * collection latency. The buffer was preserved on conversion because
- * the new Inngest pipeline has the same in-flight window shape (live
- * probe lags real-time by up to one 10-min tick, plus upstream insights
- * aggregate hourly). Revisit if cron-live proves reliable enough to
- * tighten to 1 day.
- */
-export const OFF_RECENCY_DAYS = 2;
-
-/**
- * FIX-26: returns true iff `lastActiveDate` is older than `today − OFF_RECENCY_DAYS`.
- * Lexicographic comparison on YYYY-MM-DD is correct here — both inputs are
- * canonical ISO date strings, so string comparison matches calendar order.
- *
- * Edge cases:
- *  - lastActiveDate === null  → false (not enough data to call it "off";
- *    the campaign shows in the table on impressions/conversions/value alone
- *    without any spend ever, which is rare and almost certainly stale data
- *    rather than a paused campaign).
- *  - today malformed          → false (fail-open, do not render the chip).
- */
-export function isCampaignCurrentlyOff(lastActiveDate: string | null, today: string): boolean {
-  if (!lastActiveDate) return false;
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(today)) return false;
-  const [yyyy, mm, dd] = today.split('-').map(Number);
-  const todayMs = Date.UTC(yyyy, mm - 1, dd);
-  const thresholdMs = todayMs - OFF_RECENCY_DAYS * 86400_000;
-  const threshold = new Date(thresholdMs).toISOString().slice(0, 10);
-  return lastActiveDate < threshold;
-}
-
-/**
- * OPERATOR-1 (audit v3, 2026-05-23): TikTok's ad-group status taxonomy
- * has FIVE distinct "off-ish" terminal/blocked states and FIVE distinct
- * "on-ish" delivering/preparing states. Pre-fix code treated any status
- * !== 'ADGROUP_STATUS_DELIVERY_OK' as OFF — which flipped active campaigns
- * to "כבוי" whenever TikTok temporarily reported BUDGET_EXCEED (very
- * common — fires whenever the daily budget caps mid-day, but the campaign
- * is still ACTIVE in TikTok Ads Manager), AUDIT / REVIEWING (the moderation
- * loop on new creatives), or NOT_START (a scheduled-to-start ad-group
- * that hasn't reached its start time yet).
- *
- * The operator reported (2026-05-23): "dashboard shows the campaign as
- * off but TikTok Ads Manager shows it as Active". The 5 status values
- * below were the culprits in production.
- *
- * Source: TikTok Business API `/adgroup/get/` `operation_status` field.
- * https://business-api.tiktok.com/portal/docs?id=1739561631127553
- *
- * Reference list (10 statuses total):
- *   Delivering / preparing (TIKTOK_ACTIVE_ENOUGH):
- *     ADGROUP_STATUS_DELIVERY_OK      — actively serving impressions
- *     ADGROUP_STATUS_BUDGET_EXCEED    — paused TODAY (daily cap); resumes tomorrow
- *     ADGROUP_STATUS_AUDIT            — under TikTok creative review (will deliver after approval)
- *     ADGROUP_STATUS_REVIEWING        — alternate spelling some endpoints return
- *     ADGROUP_STATUS_NOT_START        — scheduled, before start time
- *
- *   Truly off (TIKTOK_OFF_STATUSES):
- *     ADGROUP_STATUS_DISABLE          — operator manually paused
- *     ADGROUP_STATUS_TIMEDOUT         — past scheduled end date
- *     ADGROUP_STATUS_FROZEN           — TikTok policy-frozen
- *     ADGROUP_STATUS_ARCHIVED         — operator archived
- *     ADGROUP_STATUS_DELETE           — soft-deleted (still surfaces in some API responses)
- */
-const TIKTOK_OFF_STATUSES = new Set([
-  'ADGROUP_STATUS_DISABLE',
-  'ADGROUP_STATUS_TIMEDOUT',
-  'ADGROUP_STATUS_FROZEN',
-  'ADGROUP_STATUS_ARCHIVED',
-  'ADGROUP_STATUS_DELETE',
-  // Phase 12.5.x (2026-05-24) — operator-reported: TikTok ad-groups under a
-  // campaign-level pause report `ADGROUP_STATUS_CAMPAIGN_DISABLE` (parent
-  // disabled) on every child. Previously this fell through to the date
-  // heuristic and the off-chip didn't fire on operator-paused campaigns.
-  'ADGROUP_STATUS_CAMPAIGN_DISABLE',
-  // Parent / advertiser-level disable variants — same operator-visible
-  // meaning ("campaign not delivering"). Added defensively so a future
-  // advertiser-level freeze surfaces correctly.
-  'ADGROUP_STATUS_ADVERTISER_AUDIT_DENY',
-  'ADGROUP_STATUS_ADVERTISER_FROZEN',
-  'ADGROUP_STATUS_ADVERTISER_BUDGET_EXCEED',
-  'ADGROUP_STATUS_BALANCE_EXCEED',
-  'ADGROUP_STATUS_AUDIT_DENY',
-]);
-
-const TIKTOK_ACTIVE_ENOUGH = new Set([
-  'ADGROUP_STATUS_DELIVERY_OK',
-  'ADGROUP_STATUS_BUDGET_EXCEED',
-  'ADGROUP_STATUS_AUDIT',
-  'ADGROUP_STATUS_REVIEWING',
-  'ADGROUP_STATUS_NOT_START',
-]);
-
-/**
- * Phase 05.7.x — "is this campaign currently off?" using the platform's
- * real effective_status when available, falling back to FIX-26's date
- * heuristic when status is null (older data, status fetcher soft-failed,
- * or Sheets path).
- *
- * Active state per platform:
- *   Meta:   'ACTIVE'
- *   Google: 'ENABLED'
- *   TikTok: anything in TIKTOK_ACTIVE_ENOUGH (delivering / preparing) is ON;
- *           anything in TIKTOK_OFF_STATUSES (terminal / blocked) is OFF.
- *           See the TIKTOK_OFF_STATUSES JSDoc above for the operator-reported
- *           rationale (OPERATOR-1 audit fix 2026-05-23).
- *
- * This is the signal the dashboard's "כבוי" chip now consumes — replaces
- * the previous 2-day blanket buffer so a campaign paused 1 hour ago lights
- * up the chip on the next cron tick (or next manual refresh) instead of
- * waiting 2 full days for the heuristic to catch up.
- *
- * TikTok statuses that match NEITHER set (e.g. a future TikTok status
- * we don't know about yet) fall through to the date heuristic — fail-safe
- * default: rely on lastActiveDate rather than guessing how to interpret
- * an unmapped status (which could otherwise flip a live campaign to "off"
- * on a single bad classification).
- */
-export function isCampaignOff(
-  effectiveStatus: string | null,
-  platform: string,
-  lastActiveDate: string | null,
-  today: string,
-): boolean {
-  if (effectiveStatus) {
-    const norm = effectiveStatus.trim().toUpperCase();
-    const platformNorm = (platform || '').toLowerCase();
-    switch (platformNorm) {
-      case 'meta':
-        return norm !== 'ACTIVE';
-      case 'google':
-        return norm !== 'ENABLED';
-      case 'tiktok':
-        // Tiered classification (OPERATOR-1 audit fix 2026-05-23):
-        // explicit OFF set → true; explicit ACTIVE-enough set → false;
-        // anything else falls through to the date heuristic.
-        if (TIKTOK_OFF_STATUSES.has(norm)) return true;
-        if (TIKTOK_ACTIVE_ENOUGH.has(norm)) return false;
-        break;
-      default:
-        // Unknown platform name — fall through to the date heuristic
-        // rather than risk a false-positive on an unmapped status.
-        break;
-    }
-  }
-  return isCampaignCurrentlyOff(lastActiveDate, today);
-}
+// Phase D (2026-05-30) — `OFF_RECENCY_DAYS`, `isCampaignCurrentlyOff`,
+// `TIKTOK_OFF_STATUSES`, `TIKTOK_ACTIVE_ENOUGH`, and `isCampaignOff` all
+// moved into the shared classifier. The new entry point is
+// `classifyCampaignStatus({...}).isOff` — used at the call site below.
+// Sets:    `@/lib/registries/tiktokStatusSets` / `@/lib/platformConfig`
+// Helpers: `@/lib/registries/statusClassification`
 
 /** Format YYYY-MM-DD as DD/MM for the off-chip tooltip text. */
 function formatLastActiveDate(iso: string): string {
@@ -312,7 +162,20 @@ export function CampaignsTableRow({
   // a visual signal that the operator is looking at historical data.
   // Phase 05.7.x — prefer the platform's real effective_status; fall back
   // to FIX-26's lastActiveDate heuristic when status is unknown.
-  const isCurrentlyOff = isCampaignOff(a.effectiveStatus, a.platform, a.lastActiveDate, today);
+  // Phase D (2026-05-30) — single classifier consumes registry + legacy +
+  // heuristic precedence. Returns a 4-tuple the chip rendering below uses
+  // (isOff drives the "כבוי" chip; isBackfillUnknown drives the secondary
+  // "טוען מ-Platform" chip).
+  const statusVerdict = classifyCampaignStatus({
+    regDeliveryStatus: a.regDeliveryStatus,
+    regEffectiveStatus: a.regEffectiveStatus,
+    regConfiguredStatus: a.regConfiguredStatus,
+    legacyEffectiveStatus: a.effectiveStatus,
+    platform: a.platform,
+    lastActiveDate: a.lastActiveDate,
+    today,
+  });
+  const isCurrentlyOff = statusVerdict.isOff;
   const roas = a.spend > 0 ? a.conversionValue / a.spend : 0;
   const ctr = a.impressions > 0 ? a.clicks / a.impressions : 0;
   const cpc = a.clicks > 0 ? a.spend / a.clicks : 0;
@@ -484,6 +347,19 @@ export function CampaignsTableRow({
                   so it doesn't compete with the more-important "כבוי" /
                   "לא ממופה" warnings. */}
               <CampaignFreshnessChip lastLiveTickAt={a.lastLiveTickAt ?? null} />
+              {/* Phase D (2026-05-30) — surfaces the moment a registry row's
+                  configured_status is still the BACKFILL_UNKNOWN sentinel
+                  (i.e. the platform's native value hasn't been observed
+                  since the Phase D backfill). Disappears within ~10 min
+                  once the next orchestrator tick runs the status worker. */}
+              {statusVerdict.isBackfillUnknown && (
+                <span
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-amber-50 text-amber-700 border border-amber-200"
+                  title="הסטטוס המוגדר עדיין לא נדגם מה-platform — ימולא בעוד עד 10 דק׳."
+                >
+                  ⏳ טוען מ-Platform
+                </span>
+              )}
             </div>
             <div
               className="text-[10px] sm:text-[11px] text-ink-muted truncate"
