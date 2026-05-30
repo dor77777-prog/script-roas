@@ -35,6 +35,7 @@ import {
 import { cn } from '@/lib/utils';
 import { AiInsightPill } from '@/components/ui/AiInsightPill';
 import { Button } from '@/components/ui/Button';
+import { InsightCardGroup, InsightCardRow } from '@/components/ui/InsightCard';
 
 const fetcher = (url: string) => fetch(url).then(r => (r.ok ? r.json() : null));
 
@@ -330,14 +331,25 @@ export function InsightsBoard({ data }: Props) {
             const list = grouped[sev];
             if (list.length === 0) return null;
             const meta = SEVERITY_META[sev];
+            // critical and warning are always shown expanded; others start collapsed.
+            const alwaysExpanded = sev === 'critical' || sev === 'warning';
             return (
-              <SeverityGroup
+              <InsightCardGroup
                 key={sev}
                 severity={sev}
-                meta={meta}
-                items={list}
-                onMark={markInsight}
-              />
+                label={meta.label}
+                count={list.length}
+                icon={meta.icon}
+                alwaysExpanded={alwaysExpanded}
+                defaultExpanded={alwaysExpanded}
+              >
+                <InsightGroupBody
+                  severity={sev}
+                  meta={meta}
+                  items={list}
+                  onMark={markInsight}
+                />
+              </InsightCardGroup>
             );
           })}
         </div>
@@ -482,7 +494,12 @@ function InsightHero({
   );
 }
 
-function SeverityGroup({
+/**
+ * Inner body for a severity group — manages the "show all / show 3" state
+ * and renders each insight as an InsightCardRow.
+ * InsightCardGroup provides the header/collapsible shell; this is the content.
+ */
+function InsightGroupBody({
   severity,
   meta,
   items,
@@ -495,26 +512,14 @@ function SeverityGroup({
 }) {
   const showAllByDefault = severity === 'critical' || severity === 'warning';
   const [showAll, setShowAll] = useState(showAllByDefault);
-  const visible = showAll ? items : items.slice(0, 3);
-  const remaining = items.length - visible.length;
+  const visibleItems = showAll ? items : items.slice(0, 3);
+  const remaining = items.length - visibleItems.length;
 
   return (
-    <div className={cn('border-b border-line-subtle last:border-b-0', meta.bg)}>
-      <div className={cn('px-4 sm:px-5 py-2.5 sm:py-3 flex items-center gap-2', meta.color)}>
-        <span className="shrink-0">{meta.icon}</span>
-        <span className="text-xs sm:text-sm font-semibold tracking-wide">{meta.label}</span>
-        <span
-          className={cn(
-            'inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-bold rounded-full tabular-nums',
-            meta.badge,
-          )}
-        >
-          {items.length}
-        </span>
-      </div>
+    <>
       <ul className="space-y-px">
-        {visible.map(insight => (
-          <InsightRow key={insight.id} insight={insight} meta={meta} onMark={onMark} />
+        {visibleItems.map(insight => (
+          <InsightBoardRow key={insight.id} insight={insight} meta={meta} onMark={onMark} />
         ))}
       </ul>
       {remaining > 0 && (
@@ -541,11 +546,15 @@ function SeverityGroup({
           </Button>
         </div>
       )}
-    </div>
+    </>
   );
 }
 
-function InsightRow({
+/**
+ * Single insight row inside the board — delegates rendering to InsightCardRow
+ * and assembles the action buttons + optional scope badge as ReactNode props.
+ */
+function InsightBoardRow({
   insight,
   meta,
   onMark,
@@ -554,111 +563,76 @@ function InsightRow({
   meta: typeof SEVERITY_META[Severity];
   onMark: (insight: Insight, kind: InsightStateKind) => void;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const hasDetail = !!insight.why;
-  return (
-    <li
-      className={cn(
-        'group/insight px-4 sm:px-5 py-2.5 sm:py-3',
-        'hover:bg-elevated/60 transition-colors',
-        'border-t border-line-subtle/50',
+  // Compose title with optional scope badge inline so InsightCardRow's title slot
+  // can stay a single ReactNode (no extra props needed).
+  const titleNode = (
+    <div className="flex items-start justify-between gap-2 flex-wrap">
+      <span>{insight.title}</span>
+      {insight.scope && (
+        <span className="inline-block text-[10px] sm:text-[11px] font-medium text-ink-muted bg-elevated/80 border border-line-subtle px-1.5 py-0.5 rounded shrink-0">
+          {insight.scope}
+        </span>
       )}
-    >
-      <div className="flex items-start gap-3">
-        <span
+    </div>
+  );
+
+  // Compose the action bar — Mark Done / Hide / External link.
+  // The "Why?" disclosure is handled by InsightCardRow's whyDisclosure prop.
+  const actionsNode = (
+    <>
+      {/* Mark done — ghost gray, turns green on hover */}
+      <Button
+        variant="secondary"
+        onClick={() => onMark(insight, 'done')}
+        className={cn(
+          'gap-1 px-2 py-1 h-auto text-[11px] font-medium',
+          'text-ink-secondary hover:text-status-green hover:border-status-green/40 hover:bg-status-greenBg/40',
+        )}
+        title="סמן שטיפלתי בזה — יוסתר ל-7 ימים, יחזור אם הבעיה תחזור"
+      >
+        <Check size={12} />
+        טיפלתי
+      </Button>
+      {/* Hide */}
+      <Button
+        variant="ghost"
+        onClick={() => onMark(insight, 'ignored')}
+        className="gap-1 px-2 py-1 h-auto text-[11px] font-medium text-ink-muted hover:text-ink"
+        title="הסתר — לא יחזור עד שתשחזר ידנית"
+      >
+        <ArchiveX size={12} />
+        הסתר
+      </Button>
+      {/* External link */}
+      {insight.href && (
+        <a
+          href={insight.href}
+          target="_blank"
+          rel="noopener noreferrer"
           className={cn(
-            'inline-flex items-center justify-center w-6 h-6 rounded-md shrink-0 mt-0.5',
-            meta.color, 'bg-elevated/80 ring-1 ring-inset',
-            meta.border,
+            'inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold',
+            'border border-transparent',
+            meta.color,
+            'hover:bg-elevated/80 hover:border-line-subtle',
+            'transition-colors',
           )}
         >
-          {meta.icon}
-        </span>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2 flex-wrap">
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold text-ink leading-snug">
-                {insight.title}
-              </div>
-              <div className="text-xs sm:text-[13px] text-ink-secondary mt-0.5 leading-relaxed">
-                {insight.detail}
-              </div>
-            </div>
-            {insight.scope && (
-              <span className="inline-block text-[10px] sm:text-[11px] font-medium text-ink-muted bg-elevated/80 border border-line-subtle px-1.5 py-0.5 rounded shrink-0">
-                {insight.scope}
-              </span>
-            )}
-          </div>
+          <ExternalLink size={11} />
+          פתח קמפיין
+        </a>
+      )}
+    </>
+  );
 
-          {/* Action row — ghost buttons by default, intensify on hover so it's
-              clear these are actions, not state indicators. The previous
-              filled-green "בוצע" pill read as "this is already done". */}
-          <div className="flex items-center gap-1 mt-2 flex-wrap">
-            {/* Mark done — ghost gray, turns green on hover to telegraph intent */}
-            <Button
-              variant="secondary"
-              onClick={() => onMark(insight, 'done')}
-              className={cn(
-                'gap-1 px-2 py-1 h-auto text-[11px] font-medium',
-                'text-ink-secondary hover:text-status-green hover:border-status-green/40 hover:bg-status-greenBg/40',
-              )}
-              title="סמן שטיפלתי בזה — יוסתר ל-7 ימים, יחזור אם הבעיה תחזור"
-            >
-              <Check size={12} />
-              טיפלתי
-            </Button>
-            {/* Hide — ghost gray, stays muted on hover (less aggressive) */}
-            <Button
-              variant="ghost"
-              onClick={() => onMark(insight, 'ignored')}
-              className="gap-1 px-2 py-1 h-auto text-[11px] font-medium text-ink-muted hover:text-ink"
-              title="הסתר — לא יחזור עד שתשחזר ידנית"
-            >
-              <ArchiveX size={12} />
-              הסתר
-            </Button>
-
-            {/* External link if any */}
-            {insight.href && (
-              <a
-                href={insight.href}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={cn(
-                  'inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold',
-                  'border border-transparent',
-                  meta.color,
-                  'hover:bg-elevated/80 hover:border-line-subtle',
-                  'transition-colors',
-                )}
-              >
-                <ExternalLink size={11} />
-                פתח קמפיין
-              </a>
-            )}
-
-            {/* Why disclosure pushed to the end */}
-            {hasDetail && (
-              <Button
-                variant="ghost"
-                onClick={() => setExpanded(v => !v)}
-                className="h-auto gap-1 px-2 py-1 text-[11px] text-ink-muted hover:text-ink ml-auto"
-              >
-                {expanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
-                {expanded ? 'הסתר הסבר' : 'למה?'}
-              </Button>
-            )}
-          </div>
-
-          {expanded && hasDetail && (
-            <div className="mt-2 px-2.5 py-1.5 text-[11px] sm:text-xs text-ink-secondary bg-elevated/60 border-s-2 border-line-subtle rounded animate-fade-in leading-relaxed">
-              {insight.why}
-            </div>
-          )}
-        </div>
-      </div>
-    </li>
+  return (
+    <InsightCardRow
+      severity={insight.severity}
+      icon={meta.icon}
+      title={titleNode}
+      detail={insight.detail}
+      actions={actionsNode}
+      whyDisclosure={insight.why ?? undefined}
+    />
   );
 }
 
