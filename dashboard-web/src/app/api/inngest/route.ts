@@ -98,6 +98,7 @@ import { inngest } from '@/inngest/client';
 import { cronDailyFunctions } from '@/inngest/functions/cronDaily';
 import { cronLiveFunctions } from '@/inngest/functions/cronLive';
 import { cronLiveHeavyFunctions } from '@/inngest/functions/cronLiveHeavy';
+import { cronYesterdayRefreshFunctions } from '@/inngest/functions/cronYesterdayRefresh';
 import { cronTickOrchestrator } from '@/inngest/functions/cronTickOrchestrator';
 import { metaWorker } from '@/inngest/functions/metaWorker';
 import { googleWorker } from '@/inngest/functions/googleWorker';
@@ -139,7 +140,8 @@ export const { GET, POST, PUT } = serve({
   functions: [
     ...cronDailyFunctions, // 3 functions (uzoshop / zolplus / usmile360)
     ...cronLiveFunctions, // 3 functions (uzoshop / zolplus / usmile360)
-    ...cronLiveHeavyFunctions, // Phase 13.9 — 3 functions (per-store, 30-min cadence) refreshing campaigns_daily + ads_daily metrics for today + yesterday.
+    ...cronLiveHeavyFunctions, // Phase E1 (2026-05-30) — DISABLED (empty array). cron-tick-orchestrator + hot_metrics workers cover today; cron-yesterday-refresh covers yesterday.
+    ...cronYesterdayRefreshFunctions, // Phase E1.5 (2026-05-30) — 3 functions (per-store, 2h cadence) running runDailyForStore for yesterday — catches cross-day refunds + late attribution that cron-daily wouldn't process until 00:05.
     cronTickOrchestrator, // Phase B — 1 function (Inngest tick orchestrator: scheduler + worker fan-out)
     metaWorker, // Phase B — 1 function (Meta-platform worker invoked by orchestrator); Phase C extended with 'hot_metrics' scope
     googleWorker, // Phase C — 1 function (Google-platform worker invoked by orchestrator; handles status + hot_metrics scopes)
