@@ -291,6 +291,78 @@ describe('runMetaWorkerJob() — hot_metrics scope', () => {
     expect(notifyTokenFailure.mock.calls[0][0].operation).toBe('meta_hot_metrics_auth');
   });
 
+  it('Phase E1.6: after hot-ids upsert, fetches account-aggregate for 3 dates + writes each to data_daily via partial-column UPSERT', async () => {
+    const fetchAccountSpend = vi.fn().mockResolvedValue([
+      { date: '2026-05-27', spend: 100, currency: 'ILS', impressions: 5000 },
+      { date: '2026-05-28', spend: 200, currency: 'ILS', impressions: 8000 },
+      { date: '2026-05-29', spend:  50, currency: 'ILS', impressions: 2500 },
+    ]);
+    const cadConvert = vi.fn().mockImplementation(async (n: number) => n * 0.5);
+    const upsertDataDailySpend = vi.fn().mockResolvedValue(undefined);
+    await runMetaWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 12 },
+      bucProbe: async () => ({ pct: 12, etaMinutes: 0 }),
+      fetchStatus: vi.fn(),
+      fetchHotMetrics: vi.fn().mockResolvedValue({ adsets: [], ads: [] }),
+      getHotCampaignIds: async () => ['C1'],
+      getHotAdsetIds: async () => ['AS1'],
+      getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(),
+      insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(),
+      upsertAdsDaily: vi.fn(),
+      getCredentials: async () => ({ adAccountId: 'act_1', accessToken: 'tok', getFxCadFor: async () => async () => 0.5 } as never),
+      recordFreshness: vi.fn(),
+      upsertBuc: vi.fn(),
+      fetchAccountSpend,
+      cadConvert,
+      upsertDataDailySpend,
+      nowIso: '2026-05-29T16:00:00.000Z',
+    });
+    expect(fetchAccountSpend).toHaveBeenCalledOnce();
+    const fetchArgs = fetchAccountSpend.mock.calls[0][0];
+    expect([...fetchArgs.dates].sort()).toEqual(['2026-05-27', '2026-05-28', '2026-05-29']);
+    expect(upsertDataDailySpend).toHaveBeenCalledTimes(3);
+    const written = upsertDataDailySpend.mock.calls.map(c => c[0]);
+    expect(written.find(w => w.date === '2026-05-27')).toMatchObject({
+      platform: 'meta', storeId: 'uzoshop', spendCad: 50, impressions: 5000,
+    });
+    expect(written.find(w => w.date === '2026-05-29')).toMatchObject({
+      platform: 'meta', storeId: 'uzoshop', spendCad: 25, impressions: 2500,
+    });
+  });
+
+  it('Phase E1.6: fetch-account-spend rejection: soft-fail (log + continue), hot_metrics success still recorded', async () => {
+    const fetchAccountSpend = vi.fn().mockRejectedValue(new Error('Meta 429'));
+    const recordFreshness = vi.fn();
+    await runMetaWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 12 },
+      bucProbe: async () => ({ pct: 12, etaMinutes: 0 }),
+      fetchStatus: vi.fn(),
+      fetchHotMetrics: vi.fn().mockResolvedValue({ adsets: [], ads: [] }),
+      getHotCampaignIds: async () => ['C1'],
+      getHotAdsetIds: async () => [],
+      getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(),
+      insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(),
+      upsertAdsDaily: vi.fn(),
+      getCredentials: async () => ({ adAccountId: 'act_1', accessToken: 'tok', getFxCadFor: async () => async () => 0.5 } as never),
+      recordFreshness,
+      upsertBuc: vi.fn(),
+      fetchAccountSpend,
+      cadConvert: vi.fn(),
+      upsertDataDailySpend: vi.fn(),
+      nowIso: '2026-05-29T16:00:00.000Z',
+    });
+    expect(fetchAccountSpend).toHaveBeenCalledOnce();
+    expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({
+      scope: 'campaign_metrics', status: 'success',
+    }));
+  });
+
   it('Phase E1: BUC budget_skip fires notifyTokenFailure(meta_hot_metrics_budget_skip)', async () => {
     const notifyTokenFailure = vi.fn().mockResolvedValue(undefined);
     const recordFreshness = vi.fn().mockResolvedValue(undefined);
