@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/Button';
 
 type Props = {
   title: React.ReactNode;
@@ -58,11 +59,12 @@ export function CollapsibleSection({
 
   return (
     <section className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={toggle}
         aria-expanded={open}
-        className="w-full flex items-center justify-between gap-3 px-4 sm:px-5 py-3 sm:py-3.5 hover:bg-elevated2/50 active:bg-elevated2 transition-colors text-start"
+        className="w-full justify-between h-auto gap-3 px-4 sm:px-5 py-3 sm:py-3.5 hover:bg-elevated2/50 active:bg-elevated2"
       >
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           {icon && <span className="text-ink-secondary shrink-0">{icon}</span>}
@@ -87,7 +89,7 @@ export function CollapsibleSection({
             )}
           />
         </div>
-      </button>
+      </Button>
       {/* Render children only after hydration so the persisted state applies
           on first paint without a layout jump. */}
       {hydrated && open && <div className="border-t border-line">{children}</div>}

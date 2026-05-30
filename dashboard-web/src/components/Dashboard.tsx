@@ -50,6 +50,7 @@ import { FreshnessChip } from './FreshnessChip';
 import { TabFreshnessHeader } from './TabFreshnessHeader';
 import { readDashboardState, syncUrl, type TabKey } from '@/lib/urlState';
 import { buildDateRangeKey } from '@/lib/dateRange';
+import { Button } from '@/components/ui/Button';
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -271,14 +272,16 @@ export function Dashboard() {
               On md and up the Sidebar is the persistent right-rail, so the
               hamburger is hidden via `md:hidden`. Sits on the start side
               (right in RTL) so it's reachable with the right thumb. */}
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="icon"
             onClick={() => setMobileSidebarOpen(true)}
-            className="md:hidden inline-flex items-center justify-center w-11 h-11 rounded-lg bg-elevated2 text-ink hover:bg-elevated2/80 transition-colors"
+            className="md:hidden"
             aria-label="פתח תפריט"
           >
             <Menu size={20} />
-          </button>
+          </Button>
 
           <div className="flex items-center gap-2">
             <FreshnessChip dataLastWriteAt={data?.dataLastWriteAt ?? null} />
@@ -689,21 +692,22 @@ function ProductsTab({
           dir="ltr"
         >
           {PRODUCTS_SUBTABS.map((t) => (
-            <button
+            <Button
               key={t.key}
               role="tab"
+              variant={subTab === t.key ? 'primary' : 'ghost'}
               aria-selected={subTab === t.key}
               onClick={() => setSubTab(t.key)}
               className={cn(
-                'px-4 sm:px-5 py-2 text-xs sm:text-sm font-medium transition-colors min-w-[140px]',
+                'px-4 sm:px-5 py-2 h-auto text-xs sm:text-sm font-medium min-w-[140px] rounded-none',
                 subTab === t.key
-                  ? 'bg-accent text-white'
-                  : 'bg-elevated text-ink-secondary hover:bg-elevated2',
+                  ? ''
+                  : 'text-ink-secondary',
               )}
               dir="rtl"
             >
               {t.label}
-            </button>
+            </Button>
           ))}
         </div>
       </div>

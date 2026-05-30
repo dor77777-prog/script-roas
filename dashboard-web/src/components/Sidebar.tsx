@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from './ThemeProvider';
+import { Button } from '@/components/ui/Button';
 import type { TabKey } from '@/lib/urlState';
 
 type NavItem = { key: TabKey; label: string; icon: React.ReactNode };
@@ -59,14 +60,16 @@ function SidebarBody({
           <span className="text-sm font-semibold truncate flex-1">דשבורד ROAS</span>
         )}
         {variant === 'mobile' && onClose && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
             onClick={onClose}
             aria-label="סגור תפריט"
-            className="inline-flex items-center justify-center w-10 h-10 -me-1 rounded-md text-ink-muted hover:text-ink hover:bg-elevated2 transition-colors shrink-0"
+            className="-me-1 shrink-0"
           >
             <X size={20} />
-          </button>
+          </Button>
         )}
       </div>
 
@@ -75,10 +78,11 @@ function SidebarBody({
         {NAV.map(item => {
           const isActive = item.key === activeTab;
           return (
-            <button
+            <Button
               key={item.key}
               role="tab"
               type="button"
+              variant="ghost"
               aria-current={isActive ? 'page' : undefined}
               aria-selected={isActive}
               onClick={() => {
@@ -86,8 +90,7 @@ function SidebarBody({
                 onItemClick?.();
               }}
               className={cn(
-                'flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                'flex w-full justify-start gap-3 rounded-md px-2.5 py-2 text-sm h-auto',
                 isActive
                   ? 'bg-elevated2 text-ink font-medium ring-1 ring-line-subtle'
                   : 'text-ink-muted hover:text-ink hover:bg-elevated',
@@ -95,7 +98,7 @@ function SidebarBody({
             >
               <span className="shrink-0">{item.icon}</span>
               {!isCollapsed && <span>{item.label}</span>}
-            </button>
+            </Button>
           );
         })}
       </nav>
@@ -115,50 +118,57 @@ function SidebarBody({
         </Link>
 
         <div className={cn('flex items-center gap-1 px-1', isCollapsed && 'flex-col')}>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
             aria-label="עקוב אחר ההעדפה של המערכת"
             onClick={() => setChoice('system')}
             className={cn(
-              'rounded-md p-2.5 text-ink-muted hover:bg-elevated2',
+              'text-ink-muted',
               choice === 'system' && 'bg-elevated2 text-ink',
             )}
           >
             <Monitor size={14} />
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
             aria-label="מצב בהיר"
             onClick={() => setChoice('light')}
             className={cn(
-              'rounded-md p-2.5 text-ink-muted hover:bg-elevated2',
+              'text-ink-muted',
               choice === 'light' && 'bg-elevated2 text-ink',
             )}
           >
             <Sun size={14} />
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
             aria-label="מצב כהה"
             onClick={() => setChoice('dark')}
             className={cn(
-              'rounded-md p-2.5 text-ink-muted hover:bg-elevated2',
+              'text-ink-muted',
               choice === 'dark' && 'bg-elevated2 text-ink',
             )}
           >
             <Moon size={14} />
-          </button>
+          </Button>
         </div>
 
         {variant === 'desktop' && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
             aria-label={collapsed ? 'הרחב' : 'כווץ'}
             onClick={onToggleCollapsed}
-            className="flex w-full items-center justify-center rounded-md p-1.5 text-ink-muted hover:bg-elevated2"
+            className="w-full h-auto p-1.5 text-ink-muted"
           >
             {collapsed ? <ChevronsLeft size={14} /> : <ChevronsRight size={14} />}
-          </button>
+          </Button>
         )}
       </div>
     </>

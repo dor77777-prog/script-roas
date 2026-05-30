@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Target, Edit3, Check, X, TrendingUp, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/Button';
 import type { DashboardData } from '@/lib/types';
 import {
   computePacing,
@@ -134,13 +135,14 @@ export function GoalTracker({ data }: Props) {
             הגדר יעד הכנסות לחודש הזה והדשבורד יחשב בכל יום אם אתה מתקדם
             כפי שצריך, יקדים, או מפגר.
           </p>
-          <button
+          <Button
             onClick={startEdit}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-white text-accent hover:bg-white/95 px-3 py-2 text-xs sm:text-sm font-semibold transition-colors"
+            size="sm"
+            className="bg-white text-accent hover:bg-white/95"
           >
             <Edit3 size={13} />
             קבע יעד
-          </button>
+          </Button>
         </div>
       </section>
     );
@@ -186,26 +188,22 @@ export function GoalTracker({ data }: Props) {
               )}
             />
           </div>
-          <button
+          <Button
             onClick={commitEdit}
             disabled={draftIsInvalid}
-            className={cn(
-              'inline-flex items-center gap-1 rounded-lg text-white px-3 py-2 text-xs sm:text-sm font-semibold',
-              draftIsInvalid
-                ? 'bg-accent/40 cursor-not-allowed'
-                : 'bg-accent hover:bg-accent/80',
-            )}
+            size="sm"
           >
             <Check size={13} />
             שמור
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="secondary"
+            size="icon"
             onClick={cancelEdit}
-            className="inline-flex items-center justify-center w-9 h-9 rounded-lg border border-line text-ink-muted hover:text-ink"
             aria-label="בטל"
           >
             <X size={14} />
-          </button>
+          </Button>
         </div>
         {editError && (
           <p className="text-[11px] text-status-warningFg mt-2" role="alert">
@@ -263,14 +261,15 @@ export function GoalTracker({ data }: Props) {
               {sMeta.label}
             </span>
           </div>
-          <button
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={startEdit}
-            className="p-2 rounded text-ink-muted hover:text-ink hover:bg-elevated2 transition-colors"
             aria-label="ערוך יעד"
             title="ערוך יעד"
           >
             <Edit3 size={13} />
-          </button>
+          </Button>
         </div>
 
         {/* Numbers row */}

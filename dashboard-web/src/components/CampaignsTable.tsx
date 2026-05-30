@@ -73,6 +73,7 @@ import { buildDateRangeKey, getPreviousPeriod } from '@/lib/dateRange';
 import { roasLabel } from '@/lib/analytics';
 import { useCampaignTrueRevenue } from '@/lib/hooks/useCampaignTrueRevenue';
 import { CampaignsTableRow } from './CampaignsTableRow';
+import { Button } from '@/components/ui/Button';
 import { CampaignDrawer } from './CampaignDrawer';
 import { AdsDrawer } from './AdsDrawer';
 import { readTabLocalState, syncTabLocalUrl } from '@/lib/urlState';
@@ -1194,20 +1195,21 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
           dir="ltr"
         >
           {(['campaign', 'adset'] as Mode[]).map(m => (
-            <button
+            <Button
               key={m}
               role="tab"
               aria-selected={mode === m}
               onClick={() => setMode(m)}
+              variant="ghost"
               className={cn(
-                'px-2.5 sm:px-3.5 py-1.5 text-[11px] sm:text-xs font-medium transition-colors min-w-[64px] sm:min-w-[80px]',
+                'px-2.5 sm:px-3.5 py-1.5 text-[11px] sm:text-xs font-medium transition-colors min-w-[64px] sm:min-w-[80px] h-auto rounded-none',
                 mode === m
-                  ? 'bg-accent text-white'
+                  ? 'bg-accent text-white hover:bg-accent/90'
                   : 'bg-elevated text-ink-secondary hover:bg-elevated2',
               )}
             >
               {m === 'campaign' ? 'קמפיינים' : 'אד-סטים'}
-            </button>
+            </Button>
           ))}
         </div>
       </div>
@@ -1266,29 +1268,32 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
           )}
         />
         {isCustomRange && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
             onClick={() => setLocalRange(range)}
-            className="p-2 rounded hover:bg-elevated2 text-ink-muted hover:text-ink"
             title="חזור לטווח הגלובלי"
           >
             <X size={14} />
-          </button>
+          </Button>
         )}
       </div>
 
       {/* P1-3 mobile audit (2026-05-29) — expander toggle for SECONDARY
           filters. Visible only on < sm. On sm+ the secondary block is
           always rendered inline so this button stays hidden. */}
-      <button
+      <Button
         type="button"
+        variant="secondary"
+        size="sm"
         onClick={() => setMobileFiltersOpen(v => !v)}
-        className="sm:hidden inline-flex items-center gap-1.5 rounded-md border border-line bg-elevated text-ink hover:bg-elevated2 px-2.5 py-1.5 text-xs font-medium transition-colors"
+        className="sm:hidden gap-1.5"
         aria-expanded={mobileFiltersOpen}
       >
         <Filter size={13} />
         {mobileFiltersOpen ? 'הסתר' : 'סינון נוסף'}
-      </button>
+      </Button>
 
       {/* SECONDARY filters — collapsed behind expander on mobile, always
           inline on sm+. Wrapped in a single flex container so the expander
@@ -1308,20 +1313,21 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
             dir="ltr"
           >
             {(['all', 'Meta', 'Google', 'TikTok'] as Platform[]).map(p => (
-              <button
+              <Button
                 key={p}
                 role="tab"
                 aria-selected={platform === p}
                 onClick={() => setPlatform(p)}
+                variant="ghost"
                 className={cn(
-                  'px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-medium transition-colors min-w-[48px] sm:min-w-[58px]',
+                  'px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-medium transition-colors min-w-[48px] sm:min-w-[58px] h-auto rounded-none',
                   platform === p
-                    ? 'bg-accent text-white'
+                    ? 'bg-accent text-white hover:bg-accent/90'
                     : 'bg-elevated text-ink-secondary hover:bg-elevated2',
                 )}
               >
                 {p === 'all' ? 'כולם' : p}
-              </button>
+              </Button>
             ))}
           </div>
         </div>
@@ -1354,14 +1360,15 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
             <span className="font-medium text-ink-secondary tabular-nums">
               {optimized.size} מסומנים
             </span>
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={onClearAll}
-              className="font-semibold text-ink-muted hover:text-status-red transition-colors px-1.5 py-0.5 rounded hover:bg-status-redBg/40"
               title="הסר את כל הסימונים"
+              className="h-auto px-1.5 py-0.5 text-[11px] sm:text-xs font-semibold text-ink-muted hover:text-status-red hover:bg-status-redBg/40"
             >
               נקה הכל
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -1473,30 +1480,32 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                   box compares against. Two modes: half-over-half (within
                   range) vs previous-period (same-length window before). */}
               <div className="inline-flex items-center gap-0.5 rounded-md border border-line-subtle bg-elevated p-0.5 text-[10px]">
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={() => setCpmAnalysisMode('half')}
                   className={cn(
-                    'px-2 py-0.5 rounded transition-colors',
+                    'px-2 py-0.5 h-auto text-[10px] rounded transition-colors',
                     cpmAnalysisMode === 'half'
                       ? 'bg-accent/10 text-accent font-medium'
                       : 'text-ink-muted hover:text-ink',
                   )}
                 >
                   חצי-חצי
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={() => setCpmAnalysisMode('prev')}
                   className={cn(
-                    'px-2 py-0.5 rounded transition-colors',
+                    'px-2 py-0.5 h-auto text-[10px] rounded transition-colors',
                     cpmAnalysisMode === 'prev'
                       ? 'bg-accent/10 text-accent font-medium'
                       : 'text-ink-muted hover:text-ink',
                   )}
                 >
                   vs תקופה קודמת
-                </button>
+                </Button>
               </div>
               <label className="inline-flex items-center gap-1.5 text-[11px] text-ink-secondary cursor-pointer select-none">
                 <input
@@ -1507,14 +1516,15 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                 />
                 הוסף ROAS לגרף
               </label>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={() => setCpmExpanded(false)}
-                className="text-[11px] text-ink-muted hover:text-ink transition-colors"
+                className="h-auto p-0 text-[11px] text-ink-muted hover:text-ink"
                 aria-label="סגור"
               >
                 ✕
-              </button>
+              </Button>
             </div>
           </div>
           <ChartContainer className="h-40 sm:h-48" dir="ltr" height="100%">
@@ -2147,9 +2157,10 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
 
           {aggregated.length > TOP_N_DEFAULT && (
             <div className="px-4 sm:px-5 py-2.5 bg-elevated2/30 border-t border-line-subtle">
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => setShowAll(v => !v)}
-                className="text-xs sm:text-sm text-accent hover:text-accent font-medium inline-flex items-center gap-1.5 transition-colors"
+                className="h-auto p-0 gap-1.5 text-xs sm:text-sm text-accent hover:text-accent font-medium"
               >
                 {showAll ? (
                   <>
@@ -2162,7 +2173,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     הצג עוד {remaining}
                   </>
                 )}
-              </button>
+              </Button>
             </div>
           )}
         </>
@@ -2454,11 +2465,12 @@ function SortHeader({
       dataColId={dataColId}
       tooltip={tooltip}
     >
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={() => onClick(sortKey)}
         className={cn(
-          'inline-flex items-center gap-1 transition-colors group',
+          'gap-1 h-auto p-0 transition-colors group',
           'select-none cursor-pointer',
           justify,
           isActive
@@ -2477,7 +2489,7 @@ function SortHeader({
         ) : (
           <ArrowUpDown size={12} className="text-ink-subtle opacity-0 group-hover:opacity-100 transition-opacity" />
         )}
-      </button>
+      </Button>
     </ColumnHeaderTh>
   );
 }
@@ -2542,9 +2554,9 @@ function Stat({
   );
   if (interactive) {
     return (
-      <button type="button" onClick={onClick} aria-pressed={active} className={className}>
+      <Button type="button" variant="ghost" onClick={onClick} aria-pressed={active} className={cn(className, 'h-auto p-0 text-start block')}>
         {content}
-      </button>
+      </Button>
     );
   }
   return <div className={className}>{content}</div>;

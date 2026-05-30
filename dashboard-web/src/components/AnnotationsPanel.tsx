@@ -12,6 +12,7 @@ import {
   Store as StoreIcon,
 } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
+import { Button } from '@/components/ui/Button';
 import {
   ANNOTATION_KIND_COLOR,
   ANNOTATION_KIND_EMOJI,
@@ -82,15 +83,16 @@ export function AnnotationsPanel({ range, store }: Props) {
   return (
     <section className="rounded-2xl bg-elevated border border-line-subtle shadow-sm overflow-hidden">
       {/* Clickable header */}
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={() => setOpen(v => !v)}
         aria-expanded={open}
         className={cn(
-          'w-full text-start px-4 sm:px-5 py-3',
+          'w-full justify-start h-auto text-start px-4 sm:px-5 py-3',
           'border-b border-line-subtle',
           'bg-gradient-to-l from-accent/4 to-elevated',
-          'hover:from-accent/8 hover:to-elevated2/40 transition-colors',
+          'hover:from-accent/8 hover:to-elevated2/40',
         )}
       >
         <div className="flex items-center justify-between gap-3">
@@ -116,19 +118,20 @@ export function AnnotationsPanel({ range, store }: Props) {
             {open ? '▼' : '◀'}
           </span>
         </div>
-      </button>
+      </Button>
 
       {open && (
         <div className="p-4 sm:p-5 space-y-3 animate-fade-in">
           {/* Add-new toolbar */}
           {!adding ? (
-            <button
+            <Button
+              variant="ghost"
               onClick={() => setAdding(true)}
-              className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-dashed border-line bg-elevated2/40 hover:bg-elevated2 hover:border-accent/40 px-3 py-2 text-xs sm:text-sm font-medium text-ink-secondary hover:text-ink transition-colors"
+              className="w-full justify-center gap-1.5 rounded-lg border border-dashed border-line bg-elevated2/40 hover:bg-elevated2 hover:border-accent/40 px-3 py-2 h-auto text-xs sm:text-sm font-medium text-ink-secondary hover:text-ink"
             >
               <Plus size={14} />
               תעד אירוע חדש
-            </button>
+            </Button>
           ) : (
             <AnnotationForm
               storeOptions={store === 'All' ? [] : [store]}
@@ -190,20 +193,26 @@ export function AnnotationsPanel({ range, store }: Props) {
                         )}
                       </div>
                       <div className="flex items-center gap-1 shrink-0">
-                        <button
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
                           onClick={() => setEditing(a.id)}
-                          className="p-2 rounded text-ink-muted hover:text-ink hover:bg-elevated2"
                           aria-label="ערוך"
+                          className="w-8 h-8"
                         >
                           <Edit3 size={13} />
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
                           onClick={() => remove(a.id)}
-                          className="p-2 rounded text-ink-muted hover:text-status-red hover:bg-status-redBg"
                           aria-label="מחק"
+                          className="w-8 h-8 text-ink-muted hover:text-status-red hover:bg-status-redBg"
                         >
                           <Trash2 size={13} />
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   )}
@@ -322,21 +331,24 @@ function AnnotationForm({
         </div>
       )}
       <div className="flex items-center gap-2 pt-1">
-        <button
+        <Button
           onClick={commit}
           disabled={!title.trim()}
-          className="inline-flex items-center gap-1 rounded-lg bg-accent text-white px-3 py-1.5 text-xs sm:text-sm font-semibold hover:bg-accent/80 disabled:bg-ink-muted disabled:cursor-not-allowed"
+          size="sm"
+          className="gap-1"
         >
           <Check size={13} />
           שמור
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={onCancel}
-          className="inline-flex items-center gap-1 rounded-lg border border-line text-ink-secondary hover:text-ink px-3 py-1.5 text-xs sm:text-sm"
+          className="gap-1"
         >
           <X size={13} />
           ביטול
-        </button>
+        </Button>
         <span className="text-[10px] text-ink-muted ml-auto inline-flex items-center gap-1">
           <Calendar size={10} />
           יסומן על הגרף

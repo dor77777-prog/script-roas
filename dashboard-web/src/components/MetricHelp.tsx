@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/Button';
 
 /**
  * Inline help affordance for a metric. Renders a small "?" icon that opens
@@ -78,8 +79,9 @@ export function MetricHelp({ content, className, subtle = true }: Props) {
 
   return (
     <span className={cn('relative inline-block', className)}>
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={e => { e.stopPropagation(); cancelHide(); setOpen(o => !o); }}
         // HIGH-5: mouseEnter on the button cancels any pending hide
         // timer (so re-entry within the grace window keeps it open).
@@ -92,14 +94,14 @@ export function MetricHelp({ content, className, subtle = true }: Props) {
         onBlur={scheduleHide}
         aria-label={`הסבר על ${content.name}`}
         className={cn(
-          'inline-flex items-center justify-center w-4 h-4 rounded-full transition-colors',
+          'w-4 h-4 rounded-full',
           subtle
             ? 'text-ink-subtle hover:text-ink-secondary opacity-60 hover:opacity-100'
             : 'text-ink-secondary hover:text-ink bg-elevated2 hover:bg-line',
         )}
       >
         <Info size={11} />
-      </button>
+      </Button>
 
       {open && (
         <div

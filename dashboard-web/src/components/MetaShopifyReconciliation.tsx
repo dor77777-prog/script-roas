@@ -18,6 +18,7 @@ import { enumerateDateRange } from '@/lib/dateRange';
 import { PRODUCT_MAP_CHIP_KEY } from '@/lib/sessionKeys';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import { ChartContainer } from '@/components/ui/chart/ChartContainer';
+import { Button } from '@/components/ui/Button';
 import {
   ChartTooltip,
   ChartTooltipLabel,
@@ -448,17 +449,19 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
             <span className="leading-relaxed">
               ה-product↔campaign mapping מבוסס על המיפוי הנוכחי שלך. שינוי המיפוי משפיע על נתונים היסטוריים בדיעבד.
             </span>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               aria-label="הסתר הודעת מיפוי"
               onClick={() => {
                 window.sessionStorage.setItem(PRODUCT_MAP_CHIP_KEY, '1');
                 setChipHidden(true);
               }}
-              className="ms-auto shrink-0 rounded p-2 text-ink-subtle hover:bg-elevated2 hover:text-ink-secondary transition-colors"
+              className="ms-auto shrink-0"
             >
               <X size={12} />
-            </button>
+            </Button>
           </div>
         )}
 

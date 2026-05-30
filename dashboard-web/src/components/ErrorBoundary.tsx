@@ -2,6 +2,7 @@
 
 import { Component, type ReactNode, type ErrorInfo } from 'react';
 import * as Sentry from '@sentry/nextjs';
+import { Button } from '@/components/ui/Button';
 
 type Props = { children: ReactNode };
 type State = { hasError: boolean; error: Error | null };
@@ -48,18 +49,17 @@ export class ErrorBoundary extends Component<Props, State> {
                 : 'שגיאה פנימית. נסה לרענן את הדף.'}
             </p>
             <div className="flex gap-2">
-              <button
+              <Button
                 onClick={this.handleReset}
-                className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent/90"
               >
                 נסה שוב
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="secondary"
                 onClick={() => window.location.reload()}
-                className="rounded-lg border border-line-subtle px-4 py-2 text-sm font-medium text-ink hover:bg-elevated2"
               >
                 רענן דף
-              </button>
+              </Button>
             </div>
           </div>
         </div>

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
+import { Button } from '@/components/ui/Button';
 import {
   X,
   ExternalLink,
@@ -347,21 +348,23 @@ export function AdsDrawer({
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <button
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => setIsFullscreen(v => !v)}
               aria-label={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
               title={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
-              className="inline-flex items-center justify-center w-11 h-11 sm:w-auto sm:h-auto sm:p-1.5 rounded hover:bg-elevated2 text-ink-muted hover:text-ink transition-colors"
             >
               {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={onClose}
-              className="inline-flex items-center justify-center w-11 h-11 sm:w-auto sm:h-auto sm:p-1.5 rounded hover:bg-elevated2 text-ink-muted hover:text-ink"
               aria-label="סגור"
             >
               <X size={18} />
-            </button>
+            </Button>
           </div>
         </header>
 
@@ -446,8 +449,10 @@ export function AdsDrawer({
                           )}
                         >
                           <td className="px-2 py-2 text-center w-[36px]">
-                            <button
+                            <Button
                               type="button"
+                              variant="ghost"
+                              size="icon"
                               onClick={e => {
                                 // Defensive stopPropagation: no parent row
                                 // onClick exists today, but matching the
@@ -457,7 +462,7 @@ export function AdsDrawer({
                                 onToggle(markKey);
                               }}
                               className={cn(
-                                'inline-flex items-center justify-center w-7 h-7 rounded-full transition-colors',
+                                'w-7 h-7 rounded-full',
                                 isOptimized
                                   ? 'text-status-green hover:bg-status-greenBg/60'
                                   : 'text-ink-muted hover:text-status-green hover:bg-status-greenBg/40',
@@ -466,7 +471,7 @@ export function AdsDrawer({
                               aria-pressed={isOptimized}
                             >
                               {isOptimized ? <CheckCircle2 size={16} /> : <Circle size={16} />}
-                            </button>
+                            </Button>
                           </td>
                           <td className="px-3 py-2 text-ink truncate max-w-[220px]" title={a.adName}>
                             {a.adName}
@@ -611,11 +616,12 @@ function AdSortHeader({
     align === 'start' ? 'text-start' : align === 'end' ? 'text-end' : 'text-center';
   return (
     <th className={cn('font-medium px-3 py-2', textAlign)}>
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={() => onClick(col)}
         className={cn(
-          'inline-flex items-center gap-1 transition-colors group select-none cursor-pointer w-full',
+          'gap-1 select-none cursor-pointer w-full h-auto p-0',
           justify,
           isActive
             ? 'text-accent font-semibold'
@@ -629,7 +635,7 @@ function AdSortHeader({
         ) : (
           <ArrowUpDown size={12} className="opacity-0 group-hover:opacity-60 transition-opacity" />
         )}
-      </button>
+      </Button>
     </th>
   );
 }

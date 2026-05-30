@@ -49,6 +49,7 @@ import useSWR from 'swr';
 import { useState } from 'react';
 import { Plus, Trash2, X } from 'lucide-react';
 import { operatorFetch } from '@/lib/operatorClient';
+import { Button } from '@/components/ui/Button';
 
 type Row = {
   id: number;
@@ -289,15 +290,16 @@ export function ManualOverridesCrud() {
             placeholder="(אופציונלי)"
           />
         </label>
-        <button
+        <Button
           type="button"
+          size="sm"
           onClick={addRow}
           disabled={submitting}
-          className="flex items-center gap-1 bg-accent hover:bg-accent/90 disabled:bg-elevated2 disabled:text-ink-muted disabled:cursor-not-allowed text-white text-sm px-3 py-1 rounded h-[30px]"
+          className="gap-1"
         >
           <Plus className="w-4 h-4" />
           {submitting ? 'מוסיף…' : 'הוסף'}
-        </button>
+        </Button>
       </div>
       {addError && <p className="text-status-red text-sm" role="alert">{addError}</p>}
 
@@ -332,14 +334,16 @@ export function ManualOverridesCrud() {
                 <td className="p-2" dir="ltr">{r.currency}</td>
                 <td className="p-2 text-ink-secondary">{r.notes ?? '—'}</td>
                 <td className="p-2">
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
+                    size="icon"
                     onClick={() => setConfirmDelete(r)}
-                    className="text-status-red hover:text-status-red/80"
                     aria-label={`מחק שורה ${r.id}`}
+                    className="w-8 h-8 text-status-red hover:text-status-red/80 hover:bg-status-redBg"
                   >
                     <Trash2 className="w-4 h-4" />
-                  </button>
+                  </Button>
                 </td>
               </tr>
             ))}
@@ -360,14 +364,15 @@ export function ManualOverridesCrud() {
               <h3 id="confirm-delete-title" className="text-lg font-semibold">
                 אישור מחיקה
               </h3>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={closeDeleteModal}
                 aria-label="סגור"
-                className="inline-flex items-center justify-center w-11 h-11 sm:w-auto sm:h-auto sm:p-1 rounded hover:bg-elevated2"
+                className="w-11 h-11 sm:w-auto sm:h-auto sm:p-1"
               >
                 <X className="w-4 h-4" />
-              </button>
+              </Button>
             </div>
             <div className="flex-1 overflow-y-auto -mx-4 px-4">
               <p className="text-sm mb-3">
@@ -384,22 +389,24 @@ export function ManualOverridesCrud() {
               )}
             </div>
             <div className="sticky bottom-0 bg-elevated pt-2 flex justify-end gap-2 shrink-0 border-t border-line-subtle sm:border-t-0 -mx-4 px-4 sm:mx-0 sm:px-0">
-              <button
+              <Button
                 type="button"
+                variant="secondary"
                 onClick={closeDeleteModal}
                 disabled={deleting}
-                className="bg-elevated2 hover:bg-elevated2/90 disabled:bg-elevated2 disabled:text-ink-muted disabled:cursor-not-allowed text-ink text-sm px-3 py-2 sm:py-1 rounded min-h-[44px] sm:min-h-0"
+                className="text-sm px-3 py-2 sm:py-1 min-h-[44px] sm:min-h-0 h-auto"
               >
                 ביטול
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="destructive"
                 onClick={() => deleteRow(confirmDelete.id)}
                 disabled={deleting}
-                className="bg-status-red hover:bg-status-red/90 disabled:bg-status-red/40 text-white text-sm px-3 py-2 sm:py-1 rounded min-h-[44px] sm:min-h-0"
+                className="text-sm px-3 py-2 sm:py-1 min-h-[44px] sm:min-h-0 h-auto"
               >
                 {deleting ? 'מוחק…' : 'מחק'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

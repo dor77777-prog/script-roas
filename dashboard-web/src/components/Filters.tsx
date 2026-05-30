@@ -10,6 +10,7 @@ import {
 import type { Filters as F, PresetKey } from '@/lib/types';
 import { Calendar, ChevronDown, Store, Zap } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
+import { Button } from '@/components/ui/Button';
 import { applyFromCandidate, applyToCandidate } from '@/lib/rangeClamp';
 
 /**
@@ -77,19 +78,19 @@ export function Filters({ filters, stores, onChange }: Props) {
             </label>
             <div className="grid grid-cols-2 gap-2">
               {PRESET_FEATURED.map(p => (
-                <button
+                <Button
                   key={p}
+                  variant={filters.preset === p ? 'primary' : 'secondary'}
                   onClick={() => selectPreset(p)}
                   className={cn(
-                    'rounded-lg px-3 py-2.5 text-sm font-semibold transition-all',
-                    'border ring-0 focus-visible:ring-2 focus-visible:ring-accent/30',
+                    'rounded-lg text-sm font-semibold',
                     filters.preset === p
-                      ? 'bg-accent text-accent-fg border-accent shadow-sm'
-                      : 'bg-elevated text-ink border-line hover:border-accent/40 hover:bg-elevated2 active:scale-[0.98]',
+                      ? 'border-accent shadow-sm'
+                      : 'hover:border-accent/40 active:scale-[0.98]',
                   )}
                 >
                   {PRESET_LABELS[p]}
-                </button>
+                </Button>
               ))}
             </div>
           </div>
@@ -132,34 +133,37 @@ export function Filters({ filters, stores, onChange }: Props) {
         </div>
 
         {/* ===== Advanced toggle ===== */}
-        <button
+        <Button
           type="button"
+          variant="ghost"
           onClick={() => setAdvancedOpen(v => !v)}
-          className="text-[11px] sm:text-xs text-ink-secondary hover:text-ink inline-flex items-center gap-1 transition-colors font-medium"
+          className="h-auto p-0 text-[11px] sm:text-xs text-ink-secondary hover:text-ink gap-1 font-medium"
         >
           <ChevronDown
             size={13}
             className={cn('transition-transform duration-DEFAULT', showAdvanced && 'rotate-180')}
           />
           טווחים נוספים
-        </button>
+        </Button>
 
         {showAdvanced && (
           <div className="space-y-3 pt-1 animate-fade-in">
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-1.5">
               {PRESET_SECONDARY.map(p => (
-                <button
+                <Button
                   key={p}
+                  variant={filters.preset === p ? 'primary' : 'secondary'}
+                  size="sm"
                   onClick={() => selectPreset(p)}
                   className={cn(
-                    'rounded-lg px-2.5 py-2 text-xs sm:text-sm font-medium transition-all border',
+                    'rounded-lg text-xs sm:text-sm font-medium',
                     filters.preset === p
-                      ? 'bg-accent text-accent-fg border-accent shadow-sm'
-                      : 'bg-elevated text-ink-secondary border-line hover:border-accent/40 hover:text-ink active:scale-[0.98]',
+                      ? 'border-accent shadow-sm'
+                      : 'hover:border-accent/40 active:scale-[0.98]',
                   )}
                 >
                   {PRESET_LABELS[p]}
-                </button>
+                </Button>
               ))}
             </div>
 

@@ -6,6 +6,7 @@ import { CalendarDays, ChevronDown, ChevronUp } from 'lucide-react';
 import type { DailyRow, DashboardData } from '@/lib/types';
 import { cn, formatDate, formatNumber } from '@/lib/utils';
 import { RefundIndicator } from './RefundIndicator';
+import { Button } from '@/components/ui/Button';
 import { roasLabel } from '@/lib/analytics';
 import { buildDateRangeKey } from '@/lib/dateRange';
 
@@ -260,19 +261,20 @@ function Tab({
   onClick: () => void;
 }) {
   return (
-    <button
+    <Button
       role="tab"
       aria-selected={active}
       onClick={onClick}
+      variant="ghost"
       className={cn(
-        'px-3 sm:px-3.5 py-2 sm:py-2 text-xs sm:text-sm font-medium transition-colors min-h-[44px] sm:min-h-0',
+        'px-3 sm:px-3.5 py-2 sm:py-2 text-xs sm:text-sm font-medium transition-colors min-h-[44px] sm:min-h-0 h-auto',
         active
-          ? 'bg-accent text-white'
+          ? 'bg-accent text-white hover:bg-accent/90'
           : 'bg-elevated text-ink-secondary hover:bg-elevated2',
       )}
     >
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -320,15 +322,16 @@ function MonthBlockPerStore({
 
   return (
     <div className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
-      <button
+      <Button
+        variant="ghost"
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between gap-2 px-4 sm:px-5 py-3 min-h-[44px] bg-ink text-canvas"
+        className="w-full justify-between gap-2 px-4 sm:px-5 py-3 min-h-[44px] h-auto bg-ink text-canvas hover:bg-ink/90"
       >
         <span className="font-semibold truncate min-w-0">
           {monthTitle(ym)}  •  {storeName}
         </span>
         {open ? <ChevronUp size={18} className="shrink-0" /> : <ChevronDown size={18} className="shrink-0" />}
-      </button>
+      </Button>
       {open && (
         <div className="overflow-auto max-h-[60vh]">
           <table className="w-full text-xs sm:text-sm min-w-[500px]">
@@ -443,15 +446,16 @@ function MonthBlockSummary({
 
   return (
     <div className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
-      <button
+      <Button
+        variant="ghost"
         onClick={() => setOpen(!open)}
-        className="w-full flex items-center justify-between gap-2 px-4 sm:px-5 py-3 min-h-[44px] bg-ink text-canvas"
+        className="w-full justify-between gap-2 px-4 sm:px-5 py-3 min-h-[44px] h-auto bg-ink text-canvas hover:bg-ink/90"
       >
         <span className="font-semibold truncate min-w-0">
           {monthTitle(ym)}  •  סיכום כל החנויות ({stores.length})
         </span>
         {open ? <ChevronUp size={18} className="shrink-0" /> : <ChevronDown size={18} className="shrink-0" />}
-      </button>
+      </Button>
       {open && (
         <div className="overflow-auto max-h-[60vh]">
           <table className="w-full text-xs sm:text-sm min-w-[500px]">

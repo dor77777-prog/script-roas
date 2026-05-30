@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { RotateCcw } from 'lucide-react';
 import { formatNumber } from '@/lib/utils';
+import { Button } from '@/components/ui/Button';
 
 /**
  * Phase 05.7.3 — refund-day indicator chip + tooltip.
@@ -215,9 +216,10 @@ export function RefundIndicator(props: {
       onMouseEnter={touch ? undefined : () => { cancelHide(); setOpen(true); }}
       onMouseLeave={touch ? undefined : scheduleHide}
     >
-      <button
+      <Button
         ref={btnRef}
         type="button"
+        variant="ghost"
         aria-label="הצג פירוט החזרים"
         onClick={(e) => {
           e.stopPropagation();
@@ -229,10 +231,10 @@ export function RefundIndicator(props: {
           cancelHide();
           setOpen((v) => !v);
         }}
-        className="inline-flex items-center justify-center text-status-warningFg hover:text-status-warning cursor-pointer"
+        className="inline-flex items-center justify-center text-status-warningFg hover:text-status-warning cursor-pointer w-auto h-auto p-0"
       >
         <RotateCcw size={14} />
-      </button>
+      </Button>
       {open &&
         pos &&
         typeof document !== 'undefined' &&

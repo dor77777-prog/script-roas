@@ -34,6 +34,7 @@ import {
 } from '@/lib/insights';
 import { cn } from '@/lib/utils';
 import { AiInsightPill } from '@/components/ui/AiInsightPill';
+import { Button } from '@/components/ui/Button';
 
 const fetcher = (url: string) => fetch(url).then(r => (r.ok ? r.json() : null));
 
@@ -219,16 +220,17 @@ export function InsightsBoard({ data }: Props) {
   return (
     <section className="rounded-2xl bg-elevated border border-line-subtle shadow-sm overflow-hidden">
       {/* Clickable header — toggles the whole board open/closed. */}
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={toggleBoard}
         aria-expanded={boardExpanded}
         className={cn(
-          'w-full text-start',
+          'w-full justify-start h-auto',
           'px-4 sm:px-6 py-4 sm:py-5',
           'border-b border-line-subtle',
           'bg-gradient-to-l from-accent/5 via-elevated to-elevated',
-          'hover:from-accent/8 hover:to-elevated2/40 transition-colors',
+          'hover:from-accent/8 hover:to-elevated2/40',
         )}
       >
         <div className="flex items-center justify-between gap-3">
@@ -269,7 +271,7 @@ export function InsightsBoard({ data }: Props) {
             />
           </div>
         </div>
-      </button>
+      </Button>
 
       {/* AI-insight pill — surfaces the headline insight title as a one-line
           context cue inside the expanded board where the editorial InsightHero
@@ -350,9 +352,10 @@ export function InsightsBoard({ data }: Props) {
       {/* Hidden / muted insights — only meaningful when the board is open */}
       {boardExpanded && hiddenCount > 0 && (
         <div className="border-t border-line-subtle bg-elevated2/30">
-          <button
+          <Button
+            variant="ghost"
             onClick={() => setShowHidden(v => !v)}
-            className="w-full px-4 sm:px-5 py-2.5 flex items-center justify-between gap-2 text-ink-secondary hover:text-ink hover:bg-elevated2 transition-colors"
+            className="w-full justify-between h-auto px-4 sm:px-5 py-2.5 text-ink-secondary hover:text-ink"
           >
             <span className="inline-flex items-center gap-2 text-xs sm:text-sm">
               {showHidden ? <Eye size={14} /> : <EyeOff size={14} />}
@@ -364,7 +367,7 @@ export function InsightsBoard({ data }: Props) {
               </span>
             </span>
             {showHidden ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </button>
+          </Button>
           {showHidden && (
             <ul className="divide-y divide-line-subtle/70 animate-fade-in">
               {hidden.map(ins => {
@@ -389,14 +392,15 @@ export function InsightsBoard({ data }: Props) {
                         {stateLabel}{st?.at ? ` · ${relativeTime(st.at)}` : ''}
                       </div>
                     </div>
-                    <button
+                    <Button
+                      variant="ghost"
                       onClick={() => restoreInsight(ins.id)}
-                      className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold text-accent hover:bg-accent/10 rounded transition-colors shrink-0"
+                      className="gap-1 px-2 py-1 h-auto text-[11px] font-semibold text-accent hover:bg-accent/10 shrink-0"
                       title="שחזר תובנה לרשימה הראשית"
                     >
                       <Undo2 size={11} />
                       שחזר
-                    </button>
+                    </Button>
                   </li>
                 );
               })}
@@ -436,10 +440,11 @@ function InsightHero({
     info:        'bg-ink-muted',
   };
   return (
-    <button
+    <Button
       type="button"
+      variant="ghost"
       onClick={onClick}
-      className="w-full text-start group flex items-stretch gap-4 sm:gap-5 px-4 sm:px-6 py-4 sm:py-5 hover:bg-elevated2/40 transition-colors"
+      className="w-full justify-start items-stretch h-auto gap-4 sm:gap-5 px-4 sm:px-6 py-4 sm:py-5"
       aria-label={`פתח לוח תובנות (${insight.title})`}
     >
       {/* Vertical accent bar — anchors the typographic moment and signals
@@ -473,7 +478,7 @@ function InsightHero({
           לחץ לפרטים ולכל התובנות ←
         </div>
       </div>
-    </button>
+    </Button>
   );
 }
 
@@ -514,10 +519,11 @@ function SeverityGroup({
       </ul>
       {remaining > 0 && (
         <div className="px-4 sm:px-5 py-2">
-          <button
+          <Button
+            variant="ghost"
             onClick={() => setShowAll(v => !v)}
             className={cn(
-              'text-[11px] sm:text-xs font-medium inline-flex items-center gap-1 transition-colors',
+              'h-auto p-0 text-[11px] sm:text-xs font-medium gap-1',
               meta.color, 'hover:opacity-80',
             )}
           >
@@ -532,7 +538,7 @@ function SeverityGroup({
                 הצג עוד {remaining}
               </>
             )}
-          </button>
+          </Button>
         </div>
       )}
     </div>
@@ -590,33 +596,28 @@ function InsightRow({
               filled-green "בוצע" pill read as "this is already done". */}
           <div className="flex items-center gap-1 mt-2 flex-wrap">
             {/* Mark done — ghost gray, turns green on hover to telegraph intent */}
-            <button
+            <Button
+              variant="secondary"
               onClick={() => onMark(insight, 'done')}
               className={cn(
-                'inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium',
-                'border border-line-subtle bg-elevated',
+                'gap-1 px-2 py-1 h-auto text-[11px] font-medium',
                 'text-ink-secondary hover:text-status-green hover:border-status-green/40 hover:bg-status-greenBg/40',
-                'transition-colors',
               )}
               title="סמן שטיפלתי בזה — יוסתר ל-7 ימים, יחזור אם הבעיה תחזור"
             >
               <Check size={12} />
               טיפלתי
-            </button>
+            </Button>
             {/* Hide — ghost gray, stays muted on hover (less aggressive) */}
-            <button
+            <Button
+              variant="ghost"
               onClick={() => onMark(insight, 'ignored')}
-              className={cn(
-                'inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium',
-                'border border-transparent bg-transparent',
-                'text-ink-muted hover:text-ink hover:bg-elevated2',
-                'transition-colors',
-              )}
+              className="gap-1 px-2 py-1 h-auto text-[11px] font-medium text-ink-muted hover:text-ink"
               title="הסתר — לא יחזור עד שתשחזר ידנית"
             >
               <ArchiveX size={12} />
               הסתר
-            </button>
+            </Button>
 
             {/* External link if any */}
             {insight.href && (
@@ -639,13 +640,14 @@ function InsightRow({
 
             {/* Why disclosure pushed to the end */}
             {hasDetail && (
-              <button
+              <Button
+                variant="ghost"
                 onClick={() => setExpanded(v => !v)}
-                className="text-[11px] text-ink-muted hover:text-ink inline-flex items-center gap-1 transition-colors ml-auto px-2 py-1"
+                className="h-auto gap-1 px-2 py-1 text-[11px] text-ink-muted hover:text-ink ml-auto"
               >
                 {expanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
                 {expanded ? 'הסתר הסבר' : 'למה?'}
-              </button>
+              </Button>
             )}
           </div>
 

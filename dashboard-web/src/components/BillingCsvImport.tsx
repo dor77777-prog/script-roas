@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Upload, AlertCircle, Check } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
+import { Button } from '@/components/ui/Button';
 import {
   findMatchingRecurring,
   generateId,
@@ -208,13 +209,14 @@ export function BillingCsvImport({
             ))}
           </select>
         </div>
-        <button
+        <Button
+          size="sm"
           onClick={() => fileInput.current?.click()}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-accent text-white px-3 py-2 text-xs sm:text-sm font-semibold hover:bg-accent-dark"
+          className="gap-1.5"
         >
           <Upload size={14} />
           בחר קובץ
-        </button>
+        </Button>
         <input
           ref={fileInput}
           type="file"
@@ -237,13 +239,15 @@ export function BillingCsvImport({
           dir="ltr"
           className="w-full rounded-lg border border-line bg-elevated px-2.5 py-2 text-xs font-mono leading-relaxed focus:outline-none focus:border-accent focus:shadow-focus"
         />
-        <button
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={parse}
           disabled={!csv.trim()}
-          className="mt-2 inline-flex items-center gap-1 rounded-lg bg-elevated border border-line hover:border-accent/40 px-3 py-1.5 text-xs sm:text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="mt-2"
         >
           נתח
-        </button>
+        </Button>
       </div>
 
       {warnings.length > 0 && (
@@ -271,14 +275,15 @@ export function BillingCsvImport({
                 </span>
               )}
             </div>
-            <button
+            <Button
+              size="sm"
               onClick={confirm}
               disabled={counts.rec + counts.ot === 0}
-              className="inline-flex items-center gap-1 rounded-lg bg-accent text-white px-3 py-1.5 text-xs sm:text-sm font-semibold hover:bg-accent-dark disabled:bg-ink-muted disabled:cursor-not-allowed"
+              className="gap-1"
             >
               <Check size={13} />
               ייבא ({counts.rec + counts.ot})
-            </button>
+            </Button>
           </header>
           <ul className="divide-y divide-line-subtle max-h-80 overflow-y-auto">
             {preview.map(p => (
@@ -314,28 +319,30 @@ export function BillingCsvImport({
                   className="inline-flex rounded-md border border-line bg-elevated overflow-hidden text-[10px] shrink-0"
                   dir="ltr"
                 >
-                  <button
+                  <Button
+                    variant="ghost"
                     onClick={() => setRow(p.id, { type: 'recurring' })}
                     className={cn(
-                      'px-1.5 py-0.5 transition-colors',
+                      'px-1.5 py-0.5 h-auto text-[10px] rounded-none transition-colors',
                       p.type === 'recurring'
-                        ? 'bg-accent text-white'
+                        ? 'bg-accent text-white hover:bg-accent/90'
                         : 'text-ink-secondary hover:bg-elevated2',
                     )}
                   >
                     חודשי
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="ghost"
                     onClick={() => setRow(p.id, { type: 'onetime' })}
                     className={cn(
-                      'px-1.5 py-0.5 transition-colors border-e border-line',
+                      'px-1.5 py-0.5 h-auto text-[10px] rounded-none transition-colors border-e border-line',
                       p.type === 'onetime'
-                        ? 'bg-accent text-white'
+                        ? 'bg-accent text-white hover:bg-accent/90'
                         : 'text-ink-secondary hover:bg-elevated2',
                     )}
                   >
                     חד-פעמי
-                  </button>
+                  </Button>
                 </div>
                 <span
                   className={cn(

@@ -3,6 +3,7 @@
 import { Fragment } from 'react';
 import { CheckCircle2, Circle, ExternalLink } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
+import { Button } from '@/components/ui/Button';
 import { campaignKey } from '@/lib/campaignProductMap';
 import { buildAdsManagerLink, type AdAccountMap } from '@/lib/campaignsLinks';
 import { roasLabel } from '@/lib/analytics';
@@ -237,14 +238,16 @@ export function CampaignsTableRow({
           open the drawer). The empty Circle is the un-marked
           state; CheckCircle2 in green is the marked state. */}
       <td data-col-id="optimized" className="px-2 py-2 text-center w-[36px]">
-        <button
+        <Button
           type="button"
+          variant="ghost"
+          size="icon"
           onClick={e => {
             e.stopPropagation();
             onToggleOptimized(a.key);
           }}
           className={cn(
-            'inline-flex items-center justify-center w-7 h-7 rounded-full transition-colors',
+            'w-7 h-7 rounded-full',
             isOptimized
               ? 'text-status-green hover:bg-status-greenBg/60'
               : 'text-ink-muted hover:text-status-green hover:bg-status-greenBg/40',
@@ -254,7 +257,7 @@ export function CampaignsTableRow({
           aria-pressed={isOptimized}
         >
           {isOptimized ? <CheckCircle2 size={18} /> : <Circle size={18} />}
-        </button>
+        </Button>
       </td>
       {/* Phase 05.7.x — unified Campaign Health Score badge. Replaces the
           mental cost of synthesising 5 independent chips (trust, off-day,

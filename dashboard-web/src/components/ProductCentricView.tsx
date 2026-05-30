@@ -20,6 +20,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from '
 import useSWR from 'swr';
 import { ChevronDown, ChevronLeft, Info, Package, Trophy } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
+import { Button } from '@/components/ui/Button';
 import { buildProductCentricView, type ProductCohortRow } from '@/lib/productCentricView';
 import { aggregate } from '@/lib/campaignsAggregator';
 import { readProductMap, type ProductMap } from '@/lib/campaignProductMap';
@@ -426,11 +427,12 @@ function ProductRow({
   // hover bg / panel bg honors the rounded outer border.
   return (
     <li className="rounded-lg border border-line-subtle">
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={onToggle}
         className={cn(
-          'w-full flex items-center gap-3 px-3 py-2.5 hover:bg-elevated2/40 transition-colors text-start',
+          'w-full justify-start h-auto gap-3 px-3 py-2.5',
           expanded ? 'rounded-t-lg' : 'rounded-lg',
         )}
       >
@@ -461,7 +463,7 @@ function ProductRow({
             ))}
           </div>
         )}
-      </button>
+      </Button>
 
       {expanded && (
         <div className="px-3 pb-3 pt-1 space-y-3 bg-elevated2/20 rounded-b-lg">
@@ -834,8 +836,9 @@ function ColHelp({
       )}
     >
       <span>{label}</span>
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onMouseEnter={() => {
           cancelHide();
           setOpen(true);
@@ -852,10 +855,10 @@ function ColHelp({
           setOpen((o) => !o);
         }}
         aria-label={`הסבר על ${label}`}
-        className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full text-ink-subtle hover:text-ink-secondary opacity-60 hover:opacity-100 transition-colors"
+        className="w-3.5 h-3.5 rounded-full text-ink-subtle hover:text-ink-secondary opacity-60 hover:opacity-100"
       >
         <Info size={10} />
-      </button>
+      </Button>
       {open && (
         <div
           role="tooltip"

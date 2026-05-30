@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
+import { Button } from '@/components/ui/Button';
 import {
   X,
   ExternalLink,
@@ -840,17 +841,18 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
               </div>
             </div>
             <div className="flex items-center gap-1 shrink-0">
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={() => setIsFullscreen(v => !v)}
                 aria-label={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
                 title={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
-                className="inline-flex items-center justify-center w-11 h-11 sm:w-auto sm:h-auto sm:p-1.5 rounded hover:bg-elevated2 text-ink-muted hover:text-ink transition-colors"
               >
                 {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-              </button>
-              <button onClick={onClose} aria-label="סגור" className="inline-flex items-center justify-center w-11 h-11 sm:w-auto sm:h-auto sm:p-1.5 rounded hover:bg-elevated2 text-ink-muted hover:text-ink transition-colors">
+              </Button>
+              <Button variant="ghost" size="icon" onClick={onClose} aria-label="סגור">
                 <X size={18} />
-              </button>
+              </Button>
             </div>
           </div>
           {link && (
@@ -1093,30 +1095,32 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                   <div className="flex items-center gap-3 flex-wrap">
                     {/* Analysis baseline toggle — same UX as CampaignsTable. */}
                     <div className="inline-flex items-center gap-0.5 rounded-md border border-line-subtle bg-elevated p-0.5 text-[10px]">
-                      <button
+                      <Button
                         type="button"
+                        variant="ghost"
                         onClick={() => setCpmAnalysisMode('half')}
                         className={cn(
-                          'px-2 py-0.5 rounded transition-colors',
+                          'px-2 py-0.5 h-auto rounded transition-colors text-[10px]',
                           cpmAnalysisMode === 'half'
                             ? 'bg-accent/10 text-accent font-medium'
                             : 'text-ink-muted hover:text-ink',
                         )}
                       >
                         חצי-חצי
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
+                        variant="ghost"
                         onClick={() => setCpmAnalysisMode('prev')}
                         className={cn(
-                          'px-2 py-0.5 rounded transition-colors',
+                          'px-2 py-0.5 h-auto rounded transition-colors text-[10px]',
                           cpmAnalysisMode === 'prev'
                             ? 'bg-accent/10 text-accent font-medium'
                             : 'text-ink-muted hover:text-ink',
                         )}
                       >
                         vs תקופה קודמת
-                      </button>
+                      </Button>
                     </div>
                     {/* ROAS overlay toggle — a tiny switch that adds a second
                         line + right Y-axis for ROAS so the user can compare
@@ -1429,14 +1433,16 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                     </span>
                   )}
                 </h3>
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
+                  size="sm"
                   onClick={() => setPickerOpen(true)}
-                  className="inline-flex items-center gap-1 rounded-md bg-elevated border border-line hover:border-accent/40 px-2 py-1 text-[11px] font-medium text-ink-secondary hover:text-accent transition-colors"
+                  className="text-[11px]"
                 >
                   <Edit3 size={12} />
                   {mappedIds.length > 0 ? 'ערוך מיפוי' : 'שייך מוצרים'}
-                </button>
+                </Button>
               </div>
               {mappedIds.length === 0 ? (
                 <p className="text-[11px] text-ink-muted leading-relaxed bg-elevated2/40 rounded-lg px-3 py-2">

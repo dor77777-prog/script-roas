@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, Columns3, RotateCcw, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/Button';
 import {
   CAMPAIGNS_COLUMNS,
   REORDERABLE_COLUMN_IDS,
@@ -127,14 +128,16 @@ export function CampaignsColumnsMenu({
 
   return (
     <div className="relative" ref={popoverRef}>
-      <button
+      <Button
         type="button"
+        variant="secondary"
+        size="sm"
         onClick={() => setOpen(v => !v)}
         className={cn(
-          'inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs sm:text-sm transition-colors',
+          'gap-1.5',
           hiddenCount > 0
             ? 'border-status-warning/30 bg-status-warningBg text-status-warningFg hover:bg-status-warningBg'
-            : 'border-line bg-elevated text-ink-secondary hover:bg-elevated2',
+            : '',
         )}
         title={
           hiddenCount > 0
@@ -151,7 +154,7 @@ export function CampaignsColumnsMenu({
             {hiddenCount}
           </span>
         )}
-      </button>
+      </Button>
 
       {open && (
         <div
@@ -163,14 +166,15 @@ export function CampaignsColumnsMenu({
             <h3 className="text-sm font-semibold text-ink">
               עמודות בטבלה
             </h3>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={() => setOpen(false)}
               aria-label="סגור"
-              className="text-ink-muted hover:text-ink rounded p-2"
             >
               <X size={14} />
-            </button>
+            </Button>
           </div>
           <p className="text-[10px] text-ink-muted leading-relaxed mb-2">
             סמן/בטל סימון כדי להציג/להסתיר עמודות. ההגדרות שמורות בכל הדפדפנים שלך.
@@ -222,36 +226,38 @@ export function CampaignsColumnsMenu({
                         baselines line up with their reorderable siblings. */}
                     {isReorderable && (
                       <div className="flex flex-col shrink-0 self-center">
-                        <button
+                        <Button
                           type="button"
+                          variant="ghost"
                           onClick={() => move(col.id, 'up')}
                           disabled={!canUp}
                           aria-label={`הזז ${col.label} למעלה`}
                           title="הזז למעלה"
                           className={cn(
-                            'inline-flex items-center justify-center w-5 h-4 rounded-sm transition-colors',
+                            'w-5 h-4 rounded-sm',
                             canUp
                               ? 'text-ink-secondary hover:text-ink hover:bg-elevated2'
                               : 'text-ink-subtle/40 cursor-not-allowed',
                           )}
                         >
                           <ChevronUp size={12} />
-                        </button>
-                        <button
+                        </Button>
+                        <Button
                           type="button"
+                          variant="ghost"
                           onClick={() => move(col.id, 'down')}
                           disabled={!canDown}
                           aria-label={`הזז ${col.label} למטה`}
                           title="הזז למטה"
                           className={cn(
-                            'inline-flex items-center justify-center w-5 h-4 rounded-sm transition-colors',
+                            'w-5 h-4 rounded-sm',
                             canDown
                               ? 'text-ink-secondary hover:text-ink hover:bg-elevated2'
                               : 'text-ink-subtle/40 cursor-not-allowed',
                           )}
                         >
                           <ChevronDown size={12} />
-                        </button>
+                        </Button>
                       </div>
                     )}
                   </li>
@@ -262,24 +268,26 @@ export function CampaignsColumnsMenu({
           {(hiddenCount > 0 || hasCustomOrder) && (
             <div className="mt-2 pt-2 border-t border-line-subtle flex flex-col gap-1.5">
               {hiddenCount > 0 && (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={restoreAll}
-                  className="inline-flex items-center gap-1.5 text-xs text-accent hover:text-accent/80 font-medium"
+                  className="h-auto p-0 gap-1.5 text-xs text-accent hover:text-accent/80 font-medium"
                 >
                   <RotateCcw size={12} />
                   <span>השב את כל העמודות</span>
-                </button>
+                </Button>
               )}
               {hasCustomOrder && (
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
                   onClick={resetOrder}
-                  className="inline-flex items-center gap-1.5 text-xs text-accent hover:text-accent/80 font-medium"
+                  className="h-auto p-0 gap-1.5 text-xs text-accent hover:text-accent/80 font-medium"
                 >
                   <RotateCcw size={12} />
                   <span>אפס סדר עמודות</span>
-                </button>
+                </Button>
               )}
             </div>
           )}

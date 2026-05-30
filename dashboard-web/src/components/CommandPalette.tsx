@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from './ThemeProvider';
+import { Button } from '@/components/ui/Button';
 import { useDrawerEsc } from '@/lib/drawerStack';
 import type { DashboardData, Filters as F, PresetKey } from '@/lib/types';
 import { PRESET_LABELS, computePresetRange } from '@/lib/presets';
@@ -480,14 +481,15 @@ export function CommandPalette({
   // ---- Trigger pill + modal -----------------------------------------------
   return (
     <>
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={() => { setOpen(true); setWarmCache(true); }}
         className={cn(
-          'inline-flex items-center gap-1.5 sm:gap-2 rounded-lg',
+          'gap-1.5 sm:gap-2 rounded-lg',
           'bg-white/10 hover:bg-white/15 active:bg-white/20',
           'border border-white/15 text-white/85',
-          'px-2.5 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm font-medium transition-colors shrink-0',
+          'px-2.5 sm:px-3 py-1.5 sm:py-2 h-auto text-xs sm:text-sm font-medium shrink-0',
         )}
         title="חיפוש מהיר (⌘K)"
         aria-label="פתח פנל פקודות"
@@ -497,7 +499,7 @@ export function CommandPalette({
         <kbd className="hidden md:inline-flex items-center gap-0.5 px-1 py-0.5 text-[10px] font-mono bg-white/15 rounded border border-white/15 tabular-nums">
           <CmdIcon size={9} />K
         </kbd>
-      </button>
+      </Button>
 
       {open && (
         <div
@@ -523,13 +525,14 @@ export function CommandPalette({
                 className="flex-1 bg-transparent border-0 outline-none text-sm text-ink placeholder:text-ink-muted"
                 autoFocus
               />
-              <button
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={close}
-                className="p-2 rounded hover:bg-elevated2 text-ink-muted hover:text-ink"
                 aria-label="סגור"
               >
                 <X size={14} />
-              </button>
+              </Button>
             </div>
 
             {/* NL query placeholder slot (wired in Plan 2) */}
@@ -652,13 +655,14 @@ function GroupedSection({
           const globalIdx = flat.indexOf(item);
           const isActive = globalIdx === activeIdx;
           return (
-            <button
+            <Button
               key={item.id}
+              variant="ghost"
               data-idx={globalIdx}
               onMouseMove={() => setActiveIdx(globalIdx)}
               onClick={() => item.perform()}
               className={cn(
-                'w-full flex items-center gap-3 px-3 py-2 text-start transition-colors rounded-lg mx-1',
+                'w-full justify-start gap-3 px-3 py-2 h-auto rounded-lg mx-1',
                 isActive
                   ? 'bg-accent/8 text-ink'
                   : 'text-ink-secondary hover:bg-elevated2',
@@ -672,7 +676,7 @@ function GroupedSection({
               >
                 {item.icon}
               </span>
-              <div className="min-w-0 flex-1">
+              <div className="min-w-0 flex-1 text-start">
                 <div className={cn(
                   'text-sm truncate',
                   isActive ? 'font-semibold text-ink' : 'font-medium',
@@ -685,7 +689,7 @@ function GroupedSection({
                   </div>
                 )}
               </div>
-            </button>
+            </Button>
           );
         })}
       </div>

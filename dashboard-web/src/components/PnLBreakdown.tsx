@@ -6,6 +6,7 @@ import { cn, formatCurrency } from '@/lib/utils';
 import type { Aggregate } from '@/lib/analytics';
 import { TRANSACTION_FEES_RATE } from '@/lib/costs';
 import { sumRefundsInRange } from '@/lib/refundDayHeuristic';
+import { Button } from '@/components/ui/Button';
 import type { DailyRow } from '@/lib/types';
 import {
   billingForRange,
@@ -166,15 +167,16 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
               </h2>
             </div>
           </div>
-          <button
+          <Button
             type="button"
+            variant="ghost"
             onClick={() => setOpen(v => !v)}
             aria-expanded={open}
-            className="inline-flex items-center gap-1 text-[11px] sm:text-xs font-medium text-ink-secondary hover:text-ink px-2 py-1 rounded-md hover:bg-elevated2 transition-colors shrink-0"
+            className="gap-1 h-auto px-2 py-1 text-[11px] sm:text-xs font-medium text-ink-secondary hover:text-ink shrink-0"
           >
             {open ? 'הסתר פירוט' : 'הצג פירוט מלא'}
             {open ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
-          </button>
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-5">

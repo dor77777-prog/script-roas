@@ -24,6 +24,7 @@ import {
   getOperatorSecret,
   setOperatorSecret,
 } from '@/lib/operatorClient';
+import { Button } from '@/components/ui/Button';
 
 export function OperatorSecretBanner() {
   const [stored, setStored] = useState<string | null>(null);
@@ -80,10 +81,11 @@ export function OperatorSecretBanner() {
               dir="ltr"
               autoComplete="off"
             />
-            <button
+            <Button
               type="button"
+              variant="ghost"
               onClick={() => setShowPassword((v) => !v)}
-              className="absolute inset-y-0 right-2 flex items-center text-ink-secondary hover:text-ink"
+              className="absolute inset-y-0 right-2 w-auto h-auto p-0 flex items-center text-ink-secondary hover:text-ink"
               aria-label={showPassword ? 'הסתר secret' : 'הצג secret'}
             >
               {showPassword ? (
@@ -91,16 +93,17 @@ export function OperatorSecretBanner() {
               ) : (
                 <Eye className="w-3.5 h-3.5" />
               )}
-            </button>
+            </Button>
           </div>
-          <button
+          <Button
             type="button"
+            variant="ghost"
             onClick={handleSave}
             disabled={!input.trim()}
-            className="bg-status-orange hover:bg-status-orange/90 disabled:bg-elevated2 disabled:text-ink-muted disabled:cursor-not-allowed text-white text-sm px-3 py-1 rounded"
+            className="h-auto bg-status-orange hover:bg-status-orange/90 text-white text-sm px-3 py-1"
           >
             שמור
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -130,10 +133,11 @@ export function OperatorSecretBanner() {
                 dir="ltr"
                 autoComplete="off"
               />
-              <button
+              <Button
                 type="button"
+                variant="ghost"
                 onClick={() => setShowPassword((v) => !v)}
-                className="absolute inset-y-0 right-1.5 flex items-center text-ink-secondary"
+                className="absolute inset-y-0 right-1.5 w-auto h-auto p-0 flex items-center text-ink-secondary"
                 aria-label={showPassword ? 'הסתר' : 'הצג'}
               >
                 {showPassword ? (
@@ -141,40 +145,44 @@ export function OperatorSecretBanner() {
                 ) : (
                   <Eye className="w-3 h-3" />
                 )}
-              </button>
+              </Button>
             </div>
-            <button
+            <Button
               type="button"
+              variant="link"
               onClick={handleSave}
               disabled={!input.trim()}
-              className="text-status-orange hover:text-status-orange/90 disabled:text-ink-muted disabled:cursor-not-allowed"
+              className="h-auto p-0 text-status-orange hover:text-status-orange/90"
             >
               שמור
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="link"
               onClick={() => { setShowInput(false); setInput(''); }}
-              className="text-ink-secondary hover:text-ink"
+              className="h-auto p-0 text-ink-secondary hover:text-ink"
             >
               ביטול
-            </button>
+            </Button>
           </>
         ) : (
           <>
-            <button
+            <Button
               type="button"
+              variant="link"
               onClick={() => setShowInput(true)}
-              className="text-status-orange hover:text-status-orange/90"
+              className="h-auto p-0 text-status-orange hover:text-status-orange/90"
             >
               החלף secret
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
+              variant="link"
               onClick={handleClear}
-              className="text-status-red hover:text-status-red/90"
+              className="h-auto p-0 text-status-red hover:text-status-red/90"
             >
               נקה
-            </button>
+            </Button>
           </>
         )}
       </div>

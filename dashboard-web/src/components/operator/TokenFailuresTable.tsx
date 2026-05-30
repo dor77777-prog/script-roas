@@ -23,6 +23,7 @@ import type {
   TokenFailureRow,
 } from '@/app/api/operator/token-failures/route';
 import { operatorFetch } from '@/lib/operatorClient';
+import { Button } from '@/components/ui/Button';
 
 const ENDPOINT = '/api/operator/token-failures';
 
@@ -254,18 +255,19 @@ function FailureRowFragment({
         <td className="px-3 py-2 text-end tabular-nums">{row.seenCount}</td>
         <td className="px-3 py-2 text-end tabular-nums">{row.alertsSentCount}</td>
         <td className="px-3 py-2 text-end">
-          <button
+          <Button
             type="button"
+            variant="ghost"
             onClick={(e) => {
               e.stopPropagation();
               onResolve();
             }}
             disabled={isResolving}
-            className="inline-flex items-center gap-1 px-2 py-1 text-2xs rounded bg-status-green/15 text-status-green hover:bg-status-green/25 disabled:opacity-50"
+            className="gap-1 px-2 py-1 h-auto text-2xs bg-status-green/15 text-status-green hover:bg-status-green/25"
           >
             <CheckCircle2 size={12} />
             {isResolving ? 'מסמן...' : 'סמן כתוקן'}
-          </button>
+          </Button>
         </td>
       </tr>
       {expanded && (

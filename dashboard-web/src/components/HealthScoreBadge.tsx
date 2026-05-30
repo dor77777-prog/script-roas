@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 import type { CampaignHealth, HealthGrade } from '@/lib/campaignHealthScore';
+import { Button } from '@/components/ui/Button';
 
 /**
  * Per-campaign Health Score badge with click-to-drill popover.
@@ -61,8 +62,9 @@ export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
 
   return (
     <div ref={containerRef} className="relative inline-flex">
-      <button
+      <Button
         type="button"
+        variant="ghost"
         onClick={(e) => {
           e.stopPropagation();
           setOpen((v) => !v);
@@ -71,10 +73,8 @@ export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
         aria-haspopup="dialog"
         title={`${styles.label}${isUnknown ? '' : ` · ${health.score}/100`} — לחץ לפירוט`}
         className={cn(
-          'inline-flex items-center justify-center min-w-[34px] h-7',
-          'rounded-md px-1.5 text-[12px] font-bold leading-none tabular-nums',
-          'ring-1 transition-all cursor-pointer select-none',
-          'hover:opacity-90 active:scale-95',
+          'min-w-[34px] h-7 px-1.5 text-[12px] font-bold leading-none tabular-nums',
+          'ring-1 cursor-pointer select-none hover:opacity-90 active:scale-95',
           styles.chip,
           styles.ring,
         )}
@@ -85,7 +85,7 @@ export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
             {health.score}
           </span>
         )}
-      </button>
+      </Button>
 
       {open && (
         <div
@@ -126,14 +126,16 @@ export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
                 )}
               </div>
             </div>
-            <button
+            <Button
               type="button"
+              variant="ghost"
+              size="icon"
               onClick={() => setOpen(false)}
               aria-label="סגור"
-              className="text-ink-muted hover:text-ink text-[16px] leading-none px-1"
+              className="h-auto w-auto px-1 text-[16px] leading-none"
             >
               ×
-            </button>
+            </Button>
           </div>
 
           {/* Insufficient short-circuit — render reasons only */}

@@ -16,6 +16,7 @@
 import { useState } from 'react';
 import { Send, Loader2 } from 'lucide-react';
 import { operatorFetch } from '@/lib/operatorClient';
+import { Button } from '@/components/ui/Button';
 
 type Trigger = 'noon' | 'evening' | 'eod';
 
@@ -60,12 +61,13 @@ export function WhatsappTestButtons() {
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
         {(Object.keys(TRIGGER_LABELS) as Trigger[]).map((trigger) => (
-          <button
+          <Button
             key={trigger}
             type="button"
+            variant="ghost"
             onClick={() => send(trigger)}
             disabled={pendingKey !== null}
-            className="flex items-center gap-1 bg-status-green hover:bg-status-green/90 disabled:bg-elevated2 disabled:text-ink-muted disabled:cursor-not-allowed text-white text-sm px-3 py-2 rounded"
+            className="gap-1 bg-status-green hover:bg-status-green/90 disabled:bg-elevated2 disabled:text-ink-muted text-white text-sm px-3 py-2 h-auto"
           >
             {pendingKey === trigger ? (
               <Loader2 className="w-4 h-4 animate-spin" />
@@ -73,7 +75,7 @@ export function WhatsappTestButtons() {
               <Send className="w-4 h-4" />
             )}
             {TRIGGER_LABELS[trigger]}
-          </button>
+          </Button>
         ))}
       </div>
 
