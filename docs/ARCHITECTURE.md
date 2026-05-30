@@ -1424,3 +1424,44 @@ ad-set-granular per its PK), not from a non-existent `adsets_daily`.
 Revert the frontend / postgresReaders commits. The DB layer
 (VIEWs + triggers + backfilled rows) stays in place — it harms nothing
 while idle and lets us roll forward instantly. See spec §6.
+
+### Phase D soak fix (2026-05-30) — close-out structural patches
+After the initial deploy, 4 registry rows stayed at the
+`BACKFILL_UNKNOWN` sentinel beyond the expected 1–2 worker-cycle
+window. Root-cause analysis showed three distinct issues no amount of
+additional polling would resolve. Three changes landed to close Phase D:
+
+1. **One-shot cleanup migration**
+   (`20260530290000_phase_d_soak_cleanup_stuck_unknown_rows.sql`).
+   Idempotent: `DELETE` 2 TikTok cross-attribution duplicates and
+   `UPDATE configured_status = effective_status` for 2 worker-
+   unreachable rows. After apply, all 3 platforms drop to 0%
+   `BACKFILL_UNKNOWN`.
+
+2. **Google fetcher BACKFILL_UNKNOWN sweep**
+   (`googleStatus.ts:GoogleStatusInput.extraCampaignIds`,
+   `googleWorker.ts:runGoogleStatusBranch`). The Google Ads
+   `change_status` resource only surfaces campaigns that changed in the
+   last 24h, so a long-stable ENABLED campaign was never re-fetched and
+   stayed at the sentinel forever. The worker now derives the set of
+   stale ids from the prior registry (`configured_status === 'BACKFILL_UNKNOWN'`)
+   and passes them to the fetcher as `extraCampaignIds`, which merges
+   them into the existing follow-up `SELECT campaign.id, …` query. Every
+   tick with any stale rows performs a one-shot refresh.
+
+3. **TikTok worker stale-attribution registry DELETE**
+   (`tiktokWorker.ts:runTikTokStatusBranch + Inngest binding`). The
+   TikTok ad account belongs to uzoshop but individual campaigns can be
+   mapped to other stores via the Phase A.5 v2 `campaign-store-map`.
+   When the resolved store changes (e.g. uzoshop → usmile360), the new
+   upsert writes `(tiktok, usmile360, X)` but the prior
+   `(tiktok, uzoshop, X)` row stays — the upsert PK includes store_id,
+   no conflict. The worker now mirrors the same DELETE-then-UPSERT
+   pattern `persistCampaignsLive` already uses for `campaigns_daily`:
+   after the campaign_registry upsert, DELETE any
+   `(platform='tiktok', campaign_id IN fresh_set, store_id NOT IN fresh_target_set)`
+   rows. Soft-fail on DELETE error — the upsert already succeeded; the
+   next tick retries.
+
+Scope deferred: adset/ad-level cleanup is out of scope for the close-
+out patch; revisit when Phase E2 adds ad-level status workers.
