@@ -1263,6 +1263,12 @@ export function generateAiReport({
         lastActiveDate: null,
         effectiveStatus: status,
         lastLiveTickAt: null,
+        regConfiguredStatus: null,
+        regEffectiveStatus: null,
+        regDeliveryStatus: null,
+        regFirstSeenAt: null,
+        regStatusChangedAt: null,
+        regLastStatusSuccessAt: null,
       };
       const health = computeCampaignHealth({
         aggregated: agg,

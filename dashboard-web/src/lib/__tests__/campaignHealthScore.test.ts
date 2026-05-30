@@ -36,6 +36,12 @@ function makeAggregated(patch: Partial<Aggregated> = {}): Aggregated {
     lastActiveDate: '2026-05-22',
     effectiveStatus: null,
     lastLiveTickAt: null,
+    regConfiguredStatus: null,
+    regEffectiveStatus: null,
+    regDeliveryStatus: null,
+    regFirstSeenAt: null,
+    regStatusChangedAt: null,
+    regLastStatusSuccessAt: null,
     ...patch,
   };
 }

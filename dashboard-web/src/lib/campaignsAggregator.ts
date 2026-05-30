@@ -116,6 +116,17 @@ export type Aggregated = {
    * writes or pre-migration rows).
    */
   lastLiveTickAt: string | null;
+  /**
+   * Phase D (2026-05-30) — registry-backed status. Constant across the
+   * per-day rows that fold into this aggregate; seeded from the first row
+   * and never overwritten because the registry doesn't vary by day.
+   */
+  regConfiguredStatus: string | null;
+  regEffectiveStatus: string | null;
+  regDeliveryStatus: string | null;
+  regFirstSeenAt: string | null;
+  regStatusChangedAt: string | null;
+  regLastStatusSuccessAt: string | null;
 };
 
 export function aggregate(
@@ -230,6 +241,12 @@ export function aggregate(
         // Phase A / Phase C — seed with this row's tick (or null). Loop
         // below picks the MAX across the aggregate's per-day rows.
         lastLiveTickAt: r.lastLiveTickAt ?? null,
+        regConfiguredStatus: r.regConfiguredStatus,
+        regEffectiveStatus: r.regEffectiveStatus,
+        regDeliveryStatus: r.regDeliveryStatus,
+        regFirstSeenAt: r.regFirstSeenAt,
+        regStatusChangedAt: r.regStatusChangedAt,
+        regLastStatusSuccessAt: r.regLastStatusSuccessAt,
       });
       if (r.campaignBudgetCad != null) latestBudgetDate.set(key, r.date);
       if (mode === 'adset' && r.adSetBudgetCad != null) latestAdSetBudgetDate.set(key, r.date);

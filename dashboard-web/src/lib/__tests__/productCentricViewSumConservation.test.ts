@@ -59,6 +59,12 @@ function makeAgg(overrides: Partial<Aggregated>): Aggregated {
     lastActiveDate: '2026-05-20',
     effectiveStatus: 'ACTIVE',
     lastLiveTickAt: null,
+    regConfiguredStatus: null,
+    regEffectiveStatus: null,
+    regDeliveryStatus: null,
+    regFirstSeenAt: null,
+    regStatusChangedAt: null,
+    regLastStatusSuccessAt: null,
     ...overrides,
   };
 }
