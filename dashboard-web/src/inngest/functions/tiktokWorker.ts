@@ -68,6 +68,10 @@ import {
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { isAuthError, isRateLimitError } from '@/lib/notifications/detectAuthError';
 import { notifyTokenFailure } from '@/lib/notifications/tokenFailures';
+import { fetchTikTokAccountSpendForDates } from '@/lib/fetchers/tiktokAccountSpend';
+import { makeCadConvert } from '@/lib/inngest/cadConvert';
+import { upsertDataDailySpend } from '@/lib/inngest/upsertDataDailySpend';
+import { getFxRate } from '@/lib/fetchers/fx';
 
 // Phase E1.5 (2026-05-30) — TikTok's 5 "delivering / preparing" ad-group
 // statuses. Mirrors the local set in cronLive.ts (being removed in
@@ -198,6 +202,21 @@ export type RunTikTokWorkerJobInput = {
     operation: string;
     errorMsg: string;
     advice?: string;
+  }) => Promise<void>;
+  /** Phase E1.6 (2026-05-30) — bulk-date TikTok account-level spend. */
+  fetchAccountSpend?: (input: {
+    advertiserId: string;
+    accessToken: string;
+    accountCurrency: string;
+    dates: string[];
+  }) => Promise<Array<{ date: string; spend: number; currency: string; impressions: number }>>;
+  cadConvert?: (amount: number, currency: string, dateStr: string) => Promise<number | null>;
+  upsertDataDailySpend?: (input: {
+    storeId: string;
+    date: string;
+    platform: 'meta' | 'google' | 'tiktok';
+    spendCad: number | null;
+    impressions: number | null;
   }) => Promise<void>;
 };
 
@@ -535,6 +554,40 @@ async function runTikTokHotMetricsBranch(input: RunTikTokWorkerJobInput): Promis
       );
     }
 
+    // Phase E1.6 (2026-05-30) — TikTok account-aggregate spend →
+    // data_daily. Same shape as meta/google E1.6 steps. TikTok ad
+    // accounts are USD-billed (per project memory
+    // ad-account-currencies); cadConvert handles USD → CAD.
+    if (input.fetchAccountSpend && input.cadConvert && input.upsertDataDailySpend) {
+      try {
+        const todayDate = nowIso.slice(0, 10);
+        const oneDayMs = 24 * 60 * 60 * 1000;
+        const dates = [0, 1, 2].map((d) =>
+          new Date(new Date(todayDate + 'T00:00:00Z').getTime() - d * oneDayMs)
+            .toISOString().slice(0, 10),
+        );
+        const rows = await input.fetchAccountSpend({
+          advertiserId: account.advertiserId,
+          accessToken: account.accessToken,
+          accountCurrency: account.accountCurrency,
+          dates,
+        });
+        for (const r of rows) {
+          const spendCad = await input.cadConvert(r.spend, r.currency, r.date);
+          await input.upsertDataDailySpend({
+            storeId,
+            date: r.date,
+            platform: 'tiktok',
+            spendCad,
+            impressions: r.impressions,
+          });
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(`tiktokWorker account-aggregate-spend ${storeId}: ${message}`);
+      }
+    }
+
     // 5. Mark freshness success for both campaign_metrics + ad_metrics.
     await recHotPair('success');
   } catch (err) {
@@ -683,6 +736,12 @@ export const tiktokWorker = inngest.createFunction(
             advice: inp.advice,
           });
         },
+        // Phase E1.6 (2026-05-30) — bulk-date account-aggregate spend
+        // → data_daily via partial-column UPSERT.
+        fetchAccountSpend: fetchTikTokAccountSpendForDates,
+        cadConvert: makeCadConvert(getFxRate),
+        upsertDataDailySpend: async (inp) =>
+          upsertDataDailySpend({ admin: sb, ...inp }),
         nowIso,
       });
     });

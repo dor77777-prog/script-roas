@@ -201,6 +201,72 @@ describe('runTikTokWorkerJob() — hot_metrics scope', () => {
   });
 });
 
+describe('runTikTokWorkerJob() — hot_metrics Phase E1.6 account-aggregate', () => {
+  it('after hot-ids upsert: fetches account-aggregate + writes each to data_daily', async () => {
+    const fetchAccountSpend = vi.fn().mockResolvedValue([
+      { date: '2026-05-27', spend:  50, currency: 'USD', impressions:  500 },
+      { date: '2026-05-28', spend: 100, currency: 'USD', impressions: 1000 },
+      { date: '2026-05-29', spend:  25, currency: 'USD', impressions:  250 },
+    ]);
+    const cadConvert = vi.fn().mockImplementation(async (n: number) => n * 1.4);
+    const upsertDataDailySpend = vi.fn().mockResolvedValue(undefined);
+    await runTikTokWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
+      loadStoreMap: async () => ({}),
+      fetchStatus: vi.fn(),
+      fetchHotMetrics: vi.fn().mockResolvedValue({ adsets: [], ads: [] }),
+      getHotCampaignIds: async () => ['TC1'], getHotAdgroupIds: async () => ['TG1'], getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(), insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(), upsertAdsDaily: vi.fn(),
+      recordFreshness: vi.fn(),
+      getAccount: async () => ({ advertiserId: 'ADV1', accessToken: 'TOK', accountCurrency: 'USD' }),
+      getFxCadFor: async () => async () => 1.4,
+      fetchAccountSpend,
+      cadConvert,
+      upsertDataDailySpend,
+      nowIso: '2026-05-29T16:00:00.000Z',
+      isTikTokConfigured: () => true,
+    });
+    expect(fetchAccountSpend).toHaveBeenCalledOnce();
+    expect(upsertDataDailySpend).toHaveBeenCalledTimes(3);
+    const written = upsertDataDailySpend.mock.calls.map(c => c[0]);
+    expect(written.find(w => w.date === '2026-05-27')).toMatchObject({
+      platform: 'tiktok', storeId: 'uzoshop', spendCad: 70, impressions: 500,
+    });
+    expect(written.find(w => w.date === '2026-05-28')).toMatchObject({
+      platform: 'tiktok', storeId: 'uzoshop', spendCad: 140, impressions: 1000,
+    });
+  });
+
+  it('soft-fails on account-spend rejection — hot_metrics success still recorded', async () => {
+    const fetchAccountSpend = vi.fn().mockRejectedValue(new Error('TikTok code=40001 rate limit'));
+    const recordFreshness = vi.fn();
+    await runTikTokWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
+      loadStoreMap: async () => ({}),
+      fetchStatus: vi.fn(),
+      fetchHotMetrics: vi.fn().mockResolvedValue({ adsets: [], ads: [] }),
+      getHotCampaignIds: async () => ['TC1'], getHotAdgroupIds: async () => ['TG1'], getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(), insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(), upsertAdsDaily: vi.fn(),
+      recordFreshness,
+      getAccount: async () => ({ advertiserId: 'ADV1', accessToken: 'TOK', accountCurrency: 'USD' }),
+      getFxCadFor: async () => async () => 1.4,
+      fetchAccountSpend,
+      cadConvert: vi.fn(),
+      upsertDataDailySpend: vi.fn(),
+      nowIso: '2026-05-29T16:00:00.000Z',
+      isTikTokConfigured: () => true,
+    });
+    expect(fetchAccountSpend).toHaveBeenCalledOnce();
+    expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({
+      scope: 'campaign_metrics', status: 'success',
+    }));
+  });
+});
+
 describe('runTikTokWorkerJob() — hot_metrics auth/rate alerts (Phase E1)', () => {
   it('rate-limit → notifyTokenFailure(tiktok_hot_metrics_rate_limit)', async () => {
     const notifyTokenFailure = vi.fn().mockResolvedValue(undefined);
