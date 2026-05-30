@@ -778,42 +778,40 @@ export async function fetchCampaignsFromPostgres(
 }
 
 // ────────────────────────────────────────────────────────────────────────
-// 5b. fetchCurrentCampaignStatuses — latest non-null effective_status per
-//     (store, platform, campaign, ad_set) across the last 60 days, regardless
-//     of any operator-selected range.
+// 5b. fetchCurrentCampaignStatuses — absolute-latest effective_status per
+//     (store, platform, campaign, ad_set), regardless of any operator-
+//     selected range.
 //
-//     Phase 12.5.x (2026-05-24): the dashboard's "כבוי" chip used to derive
-//     off-state from the chronologically-latest row INSIDE the operator's
-//     selected range. That worked iff cron-live's UPDATE pass had refreshed
-//     in-range historical rows to the platform's current status. When that
-//     refresh lagged (or soft-failed for TikTok, which has the most
-//     fragile fetcher), the chip stayed silent on a paused campaign.
+//     Phase D (2026-05-30) — refactored to read campaign_registry directly
+//     + broadcast via campaigns_daily lookup. Previously this was a 60-day
+//     SELECT over campaigns_daily ordered by updated_at DESC. Post-Phase-B,
+//     campaign_registry IS the authoritative source: every (store, platform,
+//     campaign_id) has exactly one row whose effective_status is refreshed
+//     by the status-scope worker every ~10 min. The 60-day scan is now
+//     redundant — registry has fresher data and skips the per-row dedup.
 //
-//     This helper decouples the chip from the in-range data: it returns the
-//     ABSOLUTE-latest status the DB has seen for each key. Aggregator uses it
-//     to override the (possibly stale) in-range latest. cron-live still
-//     keeps the rows in sync, but the chip is now correct even if cron-live
-//     lags by hours.
-//
-//     60-day lookback is plenty: cron-live updates EVERY historical row
-//     every ~10 min (Phase 12.5, see cronLive.ts:1019), so any enrolled
-//     ad-set has a fresh-status row within minutes. Older rows would be
-//     redundant — the latest one always wins in the dedup loop below.
-//     Campaigns that haven't been touched in >60 days fall back to the
-//     in-range latest (existing behavior).
+//     Phase 12.5.x history preserved for reference: the dashboard's "כבוי"
+//     chip used to derive off-state from the chronologically-latest row
+//     INSIDE the operator's selected range. That worked iff cron-live's
+//     UPDATE pass had refreshed in-range historical rows. When that refresh
+//     lagged (or soft-failed for TikTok), the chip stayed silent on a paused
+//     campaign. This helper decoupled the chip from the in-range data —
+//     keeping that decoupling, just switching the source to registry.
 // ────────────────────────────────────────────────────────────────────────
 
 /**
- * Map value shape: `{ status, updatedAt }`. The `updatedAt` is the trigger-
- * managed `updated_at` of the row that supplied this status (Supabase trigger
- * `trg_campaigns_daily_updated_at`, migration 20260522015042). The aggregator
- * uses it to pick the FRESHEST status across a campaign's ad-sets — handles
- * the partial-failure case where one ad-set's cron-live UPDATE silently
- * fails and its row keeps an older status that's no longer current.
+ * Phase D (2026-05-30) — refactored to read campaign_registry directly
+ * + broadcast via campaigns_daily lookup.
+ *
+ * Map value shape: `{ status, updatedAt }`. The `status` is the registry's
+ * `effective_status`; the `updatedAt` is the registry's `last_seen_at`
+ * (when the status-scope worker last refreshed this campaign).
  *
  * Map key shape: `storeId::Platform::campaignId::adSetId`. Platform is
  * TitleCase to match `CampaignRow.platform` so the aggregator can look up
- * by the same key it already builds.
+ * by the same key it already builds. Registry stores per-campaign — to
+ * preserve the key shape, we broadcast each campaign's status to every
+ * (campaign, ad_set) tuple that exists in campaigns_daily.
  *
  * Soft-fail: a query error returns an empty map. The aggregator's existing
  * in-range logic still produces a status — this helper is an enhancement,
@@ -828,51 +826,72 @@ export async function fetchCurrentCampaignStatuses(): Promise<
   Record<string, CurrentEffectiveStatusEntry>
 > {
   const out: Record<string, CurrentEffectiveStatusEntry> = {};
-  const sinceMs = Date.now() - 60 * 86_400_000;
-  const since = new Date(sinceMs).toISOString().slice(0, 10);
-  let data: DbRow[];
+
+  // 1. Read absolute-latest status for every campaign from the registry.
+  //    Phase D (2026-05-30) — previously this was a 60-day SELECT over
+  //    campaigns_daily ordered by updated_at DESC. Registry IS the
+  //    authoritative source post-Phase-B: every (store, platform,
+  //    campaign_id) has exactly one row whose effective_status was
+  //    last refreshed by the status-scope worker (≤10 min lag).
+  let registry: DbRow[];
   try {
-    data = await paginate<DbRow>(() => {
+    registry = await paginate<DbRow>(() => {
       return getSupabase()
-        .from('campaigns_daily')
-        .select(
-          'store_id, platform, campaign_id, ad_set_id, effective_status, date, updated_at',
-        )
-        .not('effective_status', 'is', null)
-        .gte('date', since)
-        // Phase 12.5.x (2026-05-24, operator robustness) — order by
-        // `updated_at` DESC so the FIRST row per key is the one cron-live
-        // wrote last. Previously we ordered by `date` (the day the row
-        // represents), which silently picked an OLDER cron-live write
-        // whenever cron-live's UPDATE pass rewrote the same row multiple
-        // times across ticks. `updated_at` is trigger-managed
-        // (migration 20260522015042) and bumps on every write — the
-        // canonical "freshness" signal for partial-failure resilience.
-        .order('updated_at', { ascending: false });
+        .from('campaign_registry')
+        .select('store_id, platform, campaign_id, effective_status, last_seen_at')
+        .not('effective_status', 'is', null);
     });
   } catch (e) {
-    console.warn(`postgresReaders.fetchCurrentCampaignStatuses: ${(e as Error).message}`);
+    console.warn(`postgresReaders.fetchCurrentCampaignStatuses (registry): ${(e as Error).message}`);
+    return out;
+  }
+
+  // 2. Build a campaign-level map of status → updatedAt.
+  type CampaignStatus = { status: string; updatedAt: string };
+  const byCampaign = new Map<string, CampaignStatus>();
+  for (const r of registry) {
+    const storeId    = String(r.store_id ?? '');
+    const platform   = titleCasePlatform(r.platform);
+    const campaignId = String(r.campaign_id ?? '');
+    if (!storeId || !campaignId) continue;
+    const status = String(r.effective_status ?? '').trim();
+    if (!status) continue;
+    const updatedAt = r.last_seen_at ? String(r.last_seen_at) : '';
+    if (!updatedAt) continue;
+    byCampaign.set(`${storeId}::${platform}::${campaignId}`, { status, updatedAt });
+  }
+
+  // 3. For every (store, platform, campaign) we have a status for, look up
+  //    all of its ad_set_ids from campaigns_daily and broadcast the campaign
+  //    status to each. Keeps the existing key shape so callers don't change.
+  //    NB: campaigns_daily (not adsets_daily — that table doesn't exist) is
+  //    the source of (campaign_id, ad_set_id) tuples; its PK includes
+  //    ad_set_id, making it ad-set-granular.
+  let adsets: DbRow[];
+  try {
+    adsets = await paginate<DbRow>(() => {
+      return getSupabase()
+        .from('campaigns_daily')
+        .select('store_id, platform, campaign_id, ad_set_id');
+    });
+  } catch (e) {
+    console.warn(`postgresReaders.fetchCurrentCampaignStatuses (adsets): ${(e as Error).message}`);
     return out;
   }
   const seen = new Set<string>();
-  for (const r of data) {
-    const platform = titleCasePlatform(r.platform);
-    const storeId = String(r.store_id ?? '');
+  for (const r of adsets) {
+    const storeId    = String(r.store_id ?? '');
+    const platform   = titleCasePlatform(r.platform);
     const campaignId = String(r.campaign_id ?? '');
-    const adSetId = String(r.ad_set_id ?? '');
-    if (!storeId || !campaignId) continue;
-    const key = `${storeId}::${platform}::${campaignId}::${adSetId}`;
-    if (seen.has(key)) continue;
-    const status = String(r.effective_status ?? '').trim();
+    const adSetId    = String(r.ad_set_id ?? '');
+    if (!storeId || !campaignId || !adSetId) continue;
+    const campaignKey = `${storeId}::${platform}::${campaignId}`;
+    const status = byCampaign.get(campaignKey);
     if (!status) continue;
-    const updatedAtRaw = r.updated_at;
-    const updatedAt =
-      updatedAtRaw === null || updatedAtRaw === undefined
-        ? ''
-        : String(updatedAtRaw);
-    if (!updatedAt) continue;
+    const key = `${campaignKey}::${adSetId}`;
+    if (seen.has(key)) continue;
     seen.add(key);
-    out[key] = { status, updatedAt };
+    out[key] = { status: status.status, updatedAt: status.updatedAt };
   }
   return out;
 }
