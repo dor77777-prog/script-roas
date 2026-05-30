@@ -46,11 +46,11 @@ export async function fetchGoogleHotMetricsForStore(input: GoogleHotMetricsInput
   const adsets: AdsetDailyRow[] = [];
   if (input.hotAdgroupIds.length > 0) {
     const ids = input.hotAdgroupIds.map(id => `'${id}'`).join(',');
-    // IMP-A: include campaign.name + ad_group.name so the upsert preserves
-    // existing name columns (Supabase upsert SETs every column).
-    const rows = await customer.searchStream({
-      query: `SELECT campaign.id, campaign.name, ad_group.id, ad_group.name, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value, segments.date FROM ad_group WHERE ad_group.id IN (${ids}) AND segments.date = ${dateLiteral}`,
-    });
+    const query = `SELECT campaign.id, campaign.name, ad_group.id, ad_group.name, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value, segments.date FROM ad_group WHERE ad_group.id IN (${ids}) AND segments.date = ${dateLiteral}`;
+    const rows = await customer.searchStream({ query });
+    // Phase E1.7 diagnostic logging — investigate why campaigns_daily.google
+    // was frozen since 17:30 IL on 2026-05-30. Captures API response shape.
+    console.log(`[gh-diag] adgroup_query store=${storeId} date=${dateStr} ids=${input.hotAdgroupIds.length} rows=${rows.length} sample=${JSON.stringify(rows[0] ?? null).slice(0, 300)}`);
     for (const r of rows) {
       adsets.push(toAdsetRow(storeId, r));
     }
@@ -59,10 +59,9 @@ export async function fetchGoogleHotMetricsForStore(input: GoogleHotMetricsInput
   const ads: AdDailyRow[] = [];
   if (input.hotAdIds.length > 0) {
     const ids = input.hotAdIds.map(id => `'${id}'`).join(',');
-    // IMP-A: include campaign.name + ad_group.name + ad_group_ad.ad.name.
-    const rows = await customer.searchStream({
-      query: `SELECT campaign.id, campaign.name, ad_group.id, ad_group.name, ad_group_ad.ad.id, ad_group_ad.ad.name, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value, segments.date FROM ad_group_ad WHERE ad_group_ad.ad.id IN (${ids}) AND segments.date = ${dateLiteral}`,
-    });
+    const query = `SELECT campaign.id, campaign.name, ad_group.id, ad_group.name, ad_group_ad.ad.id, ad_group_ad.ad.name, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value, segments.date FROM ad_group_ad WHERE ad_group_ad.ad.id IN (${ids}) AND segments.date = ${dateLiteral}`;
+    const rows = await customer.searchStream({ query });
+    console.log(`[gh-diag] ad_query store=${storeId} date=${dateStr} ids=${input.hotAdIds.length} rows=${rows.length}`);
     for (const r of rows) {
       ads.push(toAdRow(storeId, r));
     }

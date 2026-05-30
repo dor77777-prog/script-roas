@@ -2035,3 +2035,17 @@ without restart.
 Net change: 18 tests deleted (upsertDataDailySpend + 3 account-spend
 fetchers) + 6 new tests written (the 2 new contracts per worker × 3
 workers). Final: 1559 passed / 0 failed / 9 skipped.
+
+### Diagnostic hotfix to TikTok hot_metrics envelope
+
+While verifying Phase E1.7 in production we observed that
+`campaigns_daily.{google,tiktok}` was frozen since 17:30 IL despite
+freshness rows reporting success. Root cause: `fetchTikTokHotMetricsForStore`
+did not check the TikTok response envelope's `code !== 0` (rate limit
+/ auth / quota errors) — it silently returned `[]`. Fix: throw with
+`code` + `message` so the worker's outer try/catch records
+`transient_error` freshness and Inngest's retry kicks in. Same commit
+adds temporary `console.log` diagnostics to both Google + TikTok hot
+fetchers (prefixed `[gh-diag]` / `[tt-diag]`) to capture API response
+shape for the next 1-2 ticks; these will be removed once root cause
+is confirmed.

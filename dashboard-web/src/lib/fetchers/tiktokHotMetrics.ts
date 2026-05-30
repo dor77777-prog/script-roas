@@ -68,8 +68,19 @@ export async function fetchTikTokHotMetricsForStore(input: TikTokHotMetricsInput
     const url = `${TT_BASE}/report/integrated/get/?advertiser_id=${advertiserId}&report_type=BASIC&data_level=${dataLevel}&dimensions=["${dimensionName}"]&metrics=["spend","impressions","clicks","conversion","purchase","total_purchase_value"]&start_date=${dateStr}&end_date=${dateStr}&page=1&page_size=1000&filtering=${encodeURIComponent(JSON.stringify([{ field_name: filterField, filter_type: 'IN', filter_value: ids }]))}`;
     const res = await fetcher(url, { headers: { 'Access-Token': accessToken } });
     if (!res.ok) throw new Error(`TikTok report ${dataLevel}: ${res.status}`);
-    const body = await res.json() as { data?: { list?: unknown[] } };
-    return (body.data?.list as Array<Record<string, unknown>>) ?? [];
+    const body = await res.json() as { code?: number; message?: string; data?: { list?: unknown[] } };
+    // Phase E1.7 (2026-05-30 night) — surface TikTok's envelope error codes
+    // instead of silently returning []. code !== 0 means an API-level
+    // failure (rate limit / token expired / invalid params); pre-fix the
+    // fetcher swallowed these and the dashboard appeared "frozen". Now
+    // the worker's outer try/catch records transient_error + Inngest
+    // retries.
+    if (body.code !== undefined && body.code !== 0) {
+      throw new Error(`TikTok report ${dataLevel}: code=${body.code} message=${body.message ?? ''}`);
+    }
+    const list = (body.data?.list as Array<Record<string, unknown>>) ?? [];
+    console.log(`[tt-diag] ${dataLevel} store=${storeId} date=${dateStr} ids=${ids.length} rows=${list.length} code=${body.code} sample=${JSON.stringify(list[0] ?? null).slice(0, 300)}`);
+    return list;
   };
 
   const [adgroupRaw, adRaw] = await Promise.all([
