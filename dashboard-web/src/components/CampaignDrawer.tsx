@@ -822,7 +822,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
               </span>
               <div className="min-w-0">
                 <h2 id="campaign-drawer-title" className="text-base sm:text-lg font-semibold text-ink tracking-tight truncate">
-                  {summary.campaignName || '(ללא שם)'}
+                  {summary.campaignName ? <bdi dir="ltr">{summary.campaignName}</bdi> : '(ללא שם)'}
                 </h2>
                 <div className="text-[11px] sm:text-xs text-ink-muted flex items-center gap-1.5 mt-0.5">
                   <StoreIcon size={11} />
@@ -856,7 +856,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
           {link && (
             <a href={link} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-accent hover:text-accent/80 font-medium">
               <ExternalLink size={13} />
-              פתח ב-{summary.platform} Ads Manager
+              פתח ב-<bdi dir="ltr">{summary.platform}</bdi> Ads Manager
             </a>
           )}
         </header>

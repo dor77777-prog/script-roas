@@ -285,7 +285,7 @@ export function CampaignsTableRow({
                 className="truncate"
                 title={mode === 'campaign' ? a.campaignName : (a.adSetName || a.campaignName)}
               >
-                {mode === 'campaign' ? a.campaignName : a.adSetName}
+                <bdi dir="ltr">{mode === 'campaign' ? a.campaignName : a.adSetName}</bdi>
               </span>
               {/* CBO / ABO tag — small typographic signal so
                   the user can tell at a glance which level
@@ -369,10 +369,10 @@ export function CampaignsTableRow({
                   : `${a.platform} · ${a.storeName}`
               }
             >
-              {a.platform}
+              <bdi dir="ltr">{a.platform}</bdi>
               {' · '}
-              {a.storeName}
-              {mode === 'adset' && a.campaignName ? ` · ${a.campaignName}` : ''}
+              <bdi dir="ltr">{a.storeName}</bdi>
+              {mode === 'adset' && a.campaignName ? <>{' · '}<bdi dir="ltr">{a.campaignName}</bdi></> : ''}
             </div>
           </div>
         </div>
