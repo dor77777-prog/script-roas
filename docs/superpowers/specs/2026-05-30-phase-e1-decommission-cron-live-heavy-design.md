@@ -181,6 +181,43 @@ The exact threshold + gate helper functions are already shared in `dashboard-web
 - Adding BUC-equivalent pre-flight gates for Google or TikTok (those platforms' APIs don't expose a comparable usage signal; rate-limit catch + retry remains the model).
 - Adding token-failure alerts to status branches (status errors are operator-panel-visible; WhatsApp would be noise).
 
+## E1.5 ADDITION (2026-05-30, post-brainstorm) — cron-live cleanup
+
+After the spec was approved, a follow-on scan revealed that `cron-live` (per-store, every 10 min) still performs 5 platform-related steps that drift from its original "Shopify-only" intent. With cron-live-heavy decommissioned by E1, cleaning cron-live to its original scope completes the architectural separation: **ads metrics via orchestrator+workers, Shopify via cron-live**.
+
+### Scan results
+
+| cron-live step | Verdict | Notes |
+|---|---|---|
+| `fetch-status-meta-budgets` | ✅ Safe to remove | Only `effectiveStatus` was consumed; redundant with `metaWorker.runMetaStatusBranch` registry writes. |
+| `fetch-status-google-statuses` | ✅ Safe to remove | Same — covered by `googleWorker.runGoogleStatusBranch`. |
+| `fetch-status-tiktok-statuses` | ✅ Safe to remove | Same — covered by `tiktokWorker.runTikTokStatusBranch`. |
+| `refresh-effective-status` (UPDATE on historical rows) | ✅ Safe to remove | `statusClassification.ts:104` prefers `regEffectiveStatus`; `legacyEffectiveStatus` is a NULL-only fallback. Phase D backfill ensures registry is always populated. |
+| `enroll-active-ad-sets` (UPSERT placeholders) | ❌ Gap — needs migration | `postgresReaders.fetchCampaigns:678-690` drops a row with zero spend unless its `effective_status` indicates currently-active. Without the placeholder, a freshly-activated ad-set with 0 spend disappears from the dashboard for up to 24h. |
+
+### Migration: per-platform status workers absorb enrollment
+
+The 3 status workers (`metaWorker.runMetaStatusBranch`, `googleWorker.runGoogleStatusBranch`, `tiktokWorker.runTikTokStatusBranch`) already fetch the full status set every 10 min via the orchestrator. They have all the data needed for the placeholder enrollment — they just don't currently write to `campaigns_daily`.
+
+**Add to each status worker's branch (after the existing registry upserts):**
+1. Filter fresh adsets to platform-active (Meta=ACTIVE, Google=ENABLED, TikTok=5 delivering/preparing statuses).
+2. UPSERT placeholder rows to `campaigns_daily` with payload `{date=today, store_id, platform, campaign_id, campaign_name, ad_set_id, ad_set_name, effective_status}` — no metric columns, so spend/impressions/clicks/conversions are preserved on conflict and default 0 on insert.
+3. UPSERT key: `'date,store_id,platform,campaign_id,ad_set_id'` (same as cron-live's enrollment + cron-live-heavy + hot_metrics writes).
+
+### After E1.5
+
+`cron-live` keeps only:
+- `fetch-shopify-rolling-3day`
+- `persist-rolling-3day`
+
+…plus the Shopify token-failure alert path (still relevant; not duplicated elsewhere).
+
+`cron-live` no longer references Meta/Google/TikTok at all.
+
+### Why merge into Phase E1
+
+Per user 2026-05-30: one cohesive PR is preferable over splitting into E1 then E1.5. Two pushes = double the soak time + double the risk of intermediate state surprises. Single push = entire architectural cleanup ships atomically.
+
 ## Related memory
 
 - [[phase-e-scope-decision]] — Phase E scoped to E1-E4 only.
