@@ -29,7 +29,11 @@ import { useSWRConfig } from 'swr';
  */
 
 const POLL_INTERVAL_MS = 5_000;
-const MAX_WAIT_MS = 90_000;
+// Phase E1.5 (2026-05-30) — Refresh All now runs runDailyForStore for
+// 3 dates per store (today + yesterday + day-before) instead of just
+// today. Bump watchdog so the operator doesn't see a false
+// "didn't advance" warning on the longer runs.
+const MAX_WAIT_MS = 180_000;
 
 type RefreshState = {
   isRefreshing: boolean;

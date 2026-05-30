@@ -59,15 +59,34 @@ type Payload =
 const ALL_STORES = ['uzoshop', 'zolplus', 'usmile360'] as const;
 const VALID_STORES = new Set<string>(ALL_STORES);
 
+// Phase E1.5 (2026-05-30) — 3-day rolling window for "Refresh All".
+// A manual click now refreshes today + yesterday + day-before so the
+// operator catches cross-day Shopify refunds, late attribution, and
+// per-platform spend that cron-daily wouldn't process until 00:05.
+function rolling3DaysJerusalem(): string[] {
+  const fmt = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jerusalem',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  const now = new Date();
+  const oneDayMs = 24 * 60 * 60 * 1000;
+  return [0, 1, 2].map((d) => fmt.format(new Date(now.getTime() - d * oneDayMs)));
+}
+
 export async function POST(req: Request) {
   try {
     const body = (await req.json()) as Payload;
 
-    let events: Array<{ name: 'event/sync-now'; data: { storeId: string } }>;
+    let events: Array<{ name: 'event/sync-now'; data: { storeId: string; dates?: string[] } }>;
     if (body.scope === 'all') {
+      // Phase E1.5 — pass a 3-day window so the eventSyncNow handler
+      // loops runDailyForStore for [today, yesterday, day-before].
+      const dates = rolling3DaysJerusalem();
       events = ALL_STORES.map((s) => ({
         name: 'event/sync-now',
-        data: { storeId: s },
+        data: { storeId: s, dates },
       }));
     } else if (
       body.scope === 'store' &&

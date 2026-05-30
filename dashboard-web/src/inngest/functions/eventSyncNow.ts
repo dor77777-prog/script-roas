@@ -63,11 +63,23 @@ import { captureStepError } from '@/lib/sentry/capture';
 type SyncNowPayload = {
   storeId: StoreId;
   /**
-   * Optional date. YYYY-MM-DD. When omitted, the handler resolves it to
-   * today in Asia/Jerusalem at function-execution time (not send time)
-   * so the value reflects the moment the worker picks up the event.
+   * Optional date. YYYY-MM-DD. When omitted AND `dates` is also omitted,
+   * the handler resolves it to today in Asia/Jerusalem at
+   * function-execution time (not send time) so the value reflects the
+   * moment the worker picks up the event. Ignored when `dates` is set.
    */
   date?: string;
+  /**
+   * Phase E1.5 (2026-05-30) — optional rolling-window list of dates.
+   * When set, the handler runs `runDailyForStore` for EACH date in
+   * sequence (per-store serialization preserves per-platform rate-limit
+   * safety the same way cron-live-heavy's [today, yesterday] loop did).
+   * The "Refresh All" button now passes
+   * [today, yesterday, day-before-yesterday] so a manual click catches
+   * cross-day refunds + attribution shifts that cron-daily wouldn't
+   * process until the next 00:05 tick.
+   */
+  dates?: string[];
 };
 
 /**
@@ -110,22 +122,36 @@ export const eventSyncNow = inngest.createFunction(
     triggers: [{ event: 'event/sync-now' }],
   },
   async ({ event, step }) => {
-    const { storeId, date = todayJerusalem() } = event.data as SyncNowPayload;
+    const payload = event.data as SyncNowPayload;
+    const { storeId } = payload;
+    // Phase E1.5 (2026-05-30) — resolve the date list: explicit `dates`
+    // wins, else fall back to the single `date` (or today as ultimate
+    // default). Single-element list reduces to the original behavior.
+    const dates: string[] = payload.dates && payload.dates.length > 0
+      ? payload.dates
+      : [payload.date ?? todayJerusalem()];
 
     try {
       // Cast narrows Inngest's full step API to the StepRunner subset
       // runDailyForStore consumes. See plan 08 deviation #3 + cronLive.ts
-      // line 410 for the same cast precedent — sound because the handler's
+      // for the same cast precedent — sound because the handler's
       // payloads (StoreId, dateStr) and runDailyForStore's return type are
       // primitive/plain-object (Jsonify<T> ≡ T for these shapes).
-      return await runDailyForStore(storeId, date, {
-        step: step as unknown as StepRunner,
-      });
+      //
+      // Sequential per-store across dates: serializing within a store
+      // preserves per-platform rate-limit safety (Meta/Google/TikTok all
+      // throttle per-account); parallelism across stores is preserved by
+      // Inngest firing one event per store.
+      for (const d of dates) {
+        await runDailyForStore(storeId, d, {
+          step: step as unknown as StepRunner,
+        });
+      }
     } catch (e) {
       captureStepError(
         { fnId: 'event-sync-now', stepName: 'top-level', storeId },
         e,
-        { date },
+        { dates },
       );
       throw e;
     }
