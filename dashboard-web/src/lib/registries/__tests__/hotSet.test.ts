@@ -14,11 +14,12 @@ describe('getHotCampaignIds()', () => {
     expect(out).toEqual(['C1', 'C2']);
   });
 
-  it('returns empty array on error (soft-fail; logs warning)', async () => {
+  it('Phase E1.6.1 (2026-05-30): THROWS on RPC error (no more silent soft-fail). Worker outer catch records transient_error so operator sees the cause.', async () => {
     const rpc = vi.fn().mockResolvedValue({ data: null, error: { message: 'boom' } });
     const admin = { rpc } as unknown as Parameters<typeof getHotCampaignIds>[0]['admin'];
-    const out = await getHotCampaignIds({ admin, storeId: 'uzoshop', platform: 'meta' });
-    expect(out).toEqual([]);
+    await expect(
+      getHotCampaignIds({ admin, storeId: 'uzoshop', platform: 'meta' }),
+    ).rejects.toThrow('[get_hot_campaign_ids] rpc failed: boom');
   });
 
   it('returns empty array when data is null with no error', async () => {

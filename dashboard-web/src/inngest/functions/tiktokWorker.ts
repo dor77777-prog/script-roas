@@ -68,10 +68,16 @@ import {
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { isAuthError, isRateLimitError } from '@/lib/notifications/detectAuthError';
 import { notifyTokenFailure } from '@/lib/notifications/tokenFailures';
-import { fetchTikTokAccountSpendForDates } from '@/lib/fetchers/tiktokAccountSpend';
-import { makeCadConvert } from '@/lib/inngest/cadConvert';
-import { upsertDataDailySpend } from '@/lib/inngest/upsertDataDailySpend';
-import { getFxRate } from '@/lib/fetchers/fx';
+// Phase E1.6.1 (2026-05-30): TikTok does NOT use the bulk-date
+// account-spend fetcher + cadConvert + upsertDataDailySpend path that
+// Meta/Google use. Reason: there is ONE shared TikTok ad account
+// (uzoshop's) serving multiple stores via per-ad pixel routing
+// (Phase A.5 v2). The account-level spend from TikTok's API is the
+// cross-store aggregate — writing it to one store_id's data_daily
+// row would inflate that store and starve the others. The per-store
+// split is owned by the SQL function `agg_tiktok_spend_per_store_for_date`
+// which re-aggregates campaigns_daily (already correctly attributed
+// via the campaign-store-map at write time) into data_daily.
 
 // Phase E1.5 (2026-05-30) — TikTok's 5 "delivering / preparing" ad-group
 // statuses. Mirrors the local set in cronLive.ts (being removed in
@@ -203,21 +209,28 @@ export type RunTikTokWorkerJobInput = {
     errorMsg: string;
     advice?: string;
   }) => Promise<void>;
-  /** Phase E1.6 (2026-05-30) — bulk-date TikTok account-level spend. */
-  fetchAccountSpend?: (input: {
-    advertiserId: string;
-    accessToken: string;
-    accountCurrency: string;
-    dates: string[];
-  }) => Promise<Array<{ date: string; spend: number; currency: string; impressions: number }>>;
-  cadConvert?: (amount: number, currency: string, dateStr: string) => Promise<number | null>;
-  upsertDataDailySpend?: (input: {
-    storeId: string;
-    date: string;
-    platform: 'meta' | 'google' | 'tiktok';
-    spendCad: number | null;
-    impressions: number | null;
-  }) => Promise<void>;
+  /**
+   * Phase E1.6.1 (2026-05-30) — per-store TikTok spend split.
+   *
+   * Calls `agg_tiktok_spend_per_store_for_date(d)` RPC to re-aggregate
+   * `campaigns_daily.spend_cad + impressions` per (date, store_id) and
+   * write the result into `data_daily.tt_spend_cad + tt_impressions`.
+   * Re-computes `total_spend_cad`, `roas`, `gross_profit_cad`,
+   * `net_profit_cad` for the same date as a side-effect (Pass 2 of the
+   * RPC). Idempotent.
+   *
+   * Replaces the Phase E1.6 cross-store account-aggregate write that
+   * was incorrectly writing the FULL advertiser total to uzoshop's
+   * data_daily slot (and zero to usmile360 + zolplus). Pre-Phase-E1,
+   * this RPC ran every 30 min from cron-live-heavy via persistCampaignsLive.
+   * cron-live-heavy was decommissioned in Phase E1, so the RPC only
+   * ran nightly from cronDaily — the user's 2026-05-30 report of stale
+   * tt_spend_cad for tenant stores.
+   *
+   * Optional for backwards-compat with the test fixtures that predate
+   * this hook; production binding always provides it.
+   */
+  aggregateTiktokSpendByStore?: (date: string) => Promise<void>;
 };
 
 function checkTikTokConfigured(
@@ -499,11 +512,9 @@ async function runTikTokHotMetricsBranch(input: RunTikTokWorkerJobInput): Promis
       nowIso,
     } = input;
 
-    // 1. Load hot ids in parallel with account + FX (account-aggregate
-    // below needs the account regardless of hot-set state; loadStoreMap
-    // is only needed for the hot-set fetch path so it stays here too —
-    // cheap enough to fetch every tick and keeps the parallel block
-    // tight).
+    // 1. Load hot ids in parallel with account + FX. loadStoreMap is
+    //    only needed for the hot-set fetch path but is cheap and keeps
+    //    the parallel block tight.
     const [hotCampaign, hotAdgroup, hotAd, campaignStoreMap, account, fxCadFor] = await Promise.all([
       getHotCampaignIds(storeId),
       getHotAdgroupIds(storeId),
@@ -512,63 +523,54 @@ async function runTikTokHotMetricsBranch(input: RunTikTokWorkerJobInput): Promis
       safeAccount(storeId, getAccount),
       safeFxCadFor(storeId, getFxCadFor),
     ]);
+    const today = nowIso.slice(0, 10);
 
-    // 2. Phase E1.6 (2026-05-30) — TikTok account-aggregate spend →
-    // data_daily. RUNS UNCONDITIONALLY (independent of hot-set state).
-    // Pre-fix: this block lived AFTER the empty-hot-set early-exit so
-    // uzoshop's TikTok tt_spend_cad + tt_impressions froze whenever no
-    // campaigns were hot. Restored to pre-E1.6 cron-live parity
-    // (every-tick write). TikTok ad accounts are USD-billed; cadConvert
-    // handles USD → CAD.
+    // Phase E1.6.1 (2026-05-30) — TikTok per-store spend split via the
+    // agg RPC. Runs UNCONDITIONALLY (independent of hot-set state).
     //
-    // Soft-fail: a fetch error here does NOT throw — we still want to
-    // run hot-set metrics below if hot ids exist. Next tick (10 min)
-    // retries. Note: this fix only restores updates for uzoshop's
-    // TikTok column. usmile360 + zolplus tt_spend_cad continues to be
-    // owned by the `agg_tiktok_spend_per_store_for_date` RPC because
-    // they share uzoshop's TikTok ad account via per-ad pixel routing
-    // (Phase A.5 v2 architecture).
-    if (input.fetchAccountSpend && input.cadConvert && input.upsertDataDailySpend) {
+    // Why this exists:
+    //   - Pre-Phase E1: cron-live-heavy ran every 30 min, called
+    //     persistCampaignsLive which called the agg RPC, so per-store
+    //     tt_spend_cad for usmile360 + zolplus stayed fresh.
+    //   - Phase E1 (2026-05-30 ~17:40 IL) disabled cron-live-heavy
+    //     entirely. Only cronDaily nightly call remained → tt_spend_cad
+    //     froze during the day.
+    //   - Phase E1.6 (2026-05-30 ~18:30 IL) added a per-tick write of
+    //     `data_daily.tt_spend_cad` from this branch via the bulk-date
+    //     account spend fetcher. That fetcher returns the cross-store
+    //     advertiser total → wrong value for uzoshop (inflated by
+    //     other stores' campaigns) and silent zero for usmile360/zolplus
+    //     (their workers skip at `checkTikTokConfigured`).
+    //
+    // Correct architecture: per-campaign spend is already attributed
+    // to the right store_id in campaigns_daily (via the campaign-store-
+    // map at write time). The agg RPC re-aggregates campaigns_daily
+    // → data_daily per-store. Calling it after every hot_metrics
+    // upsert keeps usmile360 + zolplus + uzoshop in sync within 10 min.
+    //
+    // Soft-fail: an RPC error here does NOT throw — we still want
+    // the hot-set fetch below to run. Operator sees the failure via
+    // the recHotPair('transient_error') path below if the worker
+    // throws for other reasons.
+    if (input.aggregateTiktokSpendByStore) {
       try {
-        const todayDate = nowIso.slice(0, 10);
-        const oneDayMs = 24 * 60 * 60 * 1000;
-        const dates = [0, 1, 2].map((d) =>
-          new Date(new Date(todayDate + 'T00:00:00Z').getTime() - d * oneDayMs)
-            .toISOString().slice(0, 10),
-        );
-        const rows = await input.fetchAccountSpend({
-          advertiserId: account.advertiserId,
-          accessToken: account.accessToken,
-          accountCurrency: account.accountCurrency,
-          dates,
-        });
-        for (const r of rows) {
-          const spendCad = await input.cadConvert(r.spend, r.currency, r.date);
-          await input.upsertDataDailySpend({
-            storeId,
-            date: r.date,
-            platform: 'tiktok',
-            spendCad,
-            impressions: r.impressions,
-          });
-        }
+        await input.aggregateTiktokSpendByStore(today);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        console.warn(`tiktokWorker account-aggregate-spend ${storeId}: ${message}`);
+        console.warn(`tiktokWorker aggregateTiktokSpendByStore ${today}: ${message}`);
       }
     }
 
-    // 3. Empty hot set is a NORMAL state (e.g. all campaigns paused) — we
+    // 2. Empty hot set is a NORMAL state (e.g. all campaigns paused) — we
     //    still mark freshness success because the worker did its job;
-    //    there was simply nothing hot to refresh. Account-aggregate
-    //    above already ran.
+    //    there was simply nothing hot to refresh. The agg RPC above
+    //    already ran against existing campaigns_daily rows.
     if (hotCampaign.length + hotAdgroup.length + hotAd.length === 0) {
       await recHotPair('success');
       return;
     }
 
-    // 4. Fetch hot-set metrics for today only.
-    const today = nowIso.slice(0, 10);
+    // 3. Fetch hot-set metrics for today only.
     const metrics = await fetchHotMetrics({
       storeId,
       advertiserId: account.advertiserId,
@@ -582,7 +584,7 @@ async function runTikTokHotMetricsBranch(input: RunTikTokWorkerJobInput): Promis
       getFxCadFor: fxCadFor,
     });
 
-    // 5. Upsert campaigns_daily (adsets only) and ads_daily, stamping
+    // 4. Upsert campaigns_daily (adsets only) and ads_daily, stamping
     //    source='live_tick' + last_live_tick_at on every row.
     //    CRIT-B: hot-metrics fetcher returns only adset + ad rows; the
     //    campaign-level aggregate is computed at read time by the existing
@@ -600,6 +602,18 @@ async function runTikTokHotMetricsBranch(input: RunTikTokWorkerJobInput): Promis
       await upsertAdsDaily(
         metrics.ads.map((a) => ({ ...a, source: 'live_tick', last_live_tick_at: nowIso })),
       );
+    }
+
+    // 5. Re-aggregate AFTER fresh writes so data_daily.tt_spend_cad
+    //    reflects the new campaigns_daily values (otherwise the RPC
+    //    call at step 1 saw pre-write state). Soft-fail same as step 1.
+    if (input.aggregateTiktokSpendByStore) {
+      try {
+        await input.aggregateTiktokSpendByStore(today);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.warn(`tiktokWorker aggregateTiktokSpendByStore (post-upsert) ${today}: ${message}`);
+      }
     }
 
     // 6. Mark freshness success for both campaign_metrics + ad_metrics.
@@ -750,12 +764,18 @@ export const tiktokWorker = inngest.createFunction(
             advice: inp.advice,
           });
         },
-        // Phase E1.6 (2026-05-30) — bulk-date account-aggregate spend
-        // → data_daily via partial-column UPSERT.
-        fetchAccountSpend: fetchTikTokAccountSpendForDates,
-        cadConvert: makeCadConvert(getFxRate),
-        upsertDataDailySpend: async (inp) =>
-          upsertDataDailySpend({ admin: sb, ...inp }),
+        // Phase E1.6.1 (2026-05-30) — per-store TikTok spend split via
+        // the SQL function. Replaces the Phase E1.6 cross-store
+        // account-aggregate write (which incorrectly wrote the full
+        // advertiser total to uzoshop's data_daily slot). See the
+        // commentary on `aggregateTiktokSpendByStore` in the
+        // RunTikTokWorkerJobInput type for rationale.
+        aggregateTiktokSpendByStore: async (date: string) => {
+          const { error } = await sb.rpc('agg_tiktok_spend_per_store_for_date', { d: date });
+          if (error) {
+            throw new Error(`agg_tiktok_spend_per_store_for_date(${date}): ${error.message}`);
+          }
+        },
         nowIso,
       });
     });

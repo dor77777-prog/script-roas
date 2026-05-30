@@ -201,15 +201,18 @@ describe('runTikTokWorkerJob() — hot_metrics scope', () => {
   });
 });
 
-describe('runTikTokWorkerJob() — hot_metrics Phase E1.6 account-aggregate', () => {
-  it('after hot-ids upsert: fetches account-aggregate + writes each to data_daily', async () => {
-    const fetchAccountSpend = vi.fn().mockResolvedValue([
-      { date: '2026-05-27', spend:  50, currency: 'USD', impressions:  500 },
-      { date: '2026-05-28', spend: 100, currency: 'USD', impressions: 1000 },
-      { date: '2026-05-29', spend:  25, currency: 'USD', impressions:  250 },
-    ]);
-    const cadConvert = vi.fn().mockImplementation(async (n: number) => n * 1.4);
-    const upsertDataDailySpend = vi.fn().mockResolvedValue(undefined);
+describe('runTikTokWorkerJob() — hot_metrics Phase E1.6.1 per-store agg RPC', () => {
+  // Phase E1.6.1 (2026-05-30): TikTok does NOT use the bulk-date account
+  // spend fetcher Meta/Google use. The advertiser-level total is the
+  // cross-store aggregate (one TikTok account serves multiple stores via
+  // per-ad pixel routing) — writing it to one store_id's data_daily row
+  // would inflate that store and starve the others. Instead, the worker
+  // calls `agg_tiktok_spend_per_store_for_date(d)` which re-aggregates
+  // campaigns_daily (already attributed correctly via the campaign-store-
+  // map) per-store into data_daily.
+
+  it('with non-empty hot set: calls agg RPC TWICE (pre-fetch + post-upsert) for today', async () => {
+    const aggregateTiktokSpendByStore = vi.fn().mockResolvedValue(undefined);
     await runTikTokWorkerJob({
       jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
       loadStoreMap: async () => ({}),
@@ -222,25 +225,21 @@ describe('runTikTokWorkerJob() — hot_metrics Phase E1.6 account-aggregate', ()
       recordFreshness: vi.fn(),
       getAccount: async () => ({ advertiserId: 'ADV1', accessToken: 'TOK', accountCurrency: 'USD' }),
       getFxCadFor: async () => async () => 1.4,
-      fetchAccountSpend,
-      cadConvert,
-      upsertDataDailySpend,
+      aggregateTiktokSpendByStore,
       nowIso: '2026-05-29T16:00:00.000Z',
       isTikTokConfigured: () => true,
     });
-    expect(fetchAccountSpend).toHaveBeenCalledOnce();
-    expect(upsertDataDailySpend).toHaveBeenCalledTimes(3);
-    const written = upsertDataDailySpend.mock.calls.map(c => c[0]);
-    expect(written.find(w => w.date === '2026-05-27')).toMatchObject({
-      platform: 'tiktok', storeId: 'uzoshop', spendCad: 70, impressions: 500,
-    });
-    expect(written.find(w => w.date === '2026-05-28')).toMatchObject({
-      platform: 'tiktok', storeId: 'uzoshop', spendCad: 140, impressions: 1000,
-    });
+    // Once before hot-set fetch (refresh from existing campaigns_daily) +
+    // once after upsertCampaignsDaily (pick up fresh writes).
+    expect(aggregateTiktokSpendByStore).toHaveBeenCalledTimes(2);
+    expect(aggregateTiktokSpendByStore).toHaveBeenNthCalledWith(1, '2026-05-29');
+    expect(aggregateTiktokSpendByStore).toHaveBeenNthCalledWith(2, '2026-05-29');
   });
 
-  it('soft-fails on account-spend rejection — hot_metrics success still recorded', async () => {
-    const fetchAccountSpend = vi.fn().mockRejectedValue(new Error('TikTok code=40001 rate limit'));
+  it('soft-fails on agg RPC rejection — hot_metrics success still recorded', async () => {
+    const aggregateTiktokSpendByStore = vi.fn().mockRejectedValue(
+      new Error('agg_tiktok_spend_per_store_for_date(2026-05-29): function not found'),
+    );
     const recordFreshness = vi.fn();
     await runTikTokWorkerJob({
       jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
@@ -254,13 +253,11 @@ describe('runTikTokWorkerJob() — hot_metrics Phase E1.6 account-aggregate', ()
       recordFreshness,
       getAccount: async () => ({ advertiserId: 'ADV1', accessToken: 'TOK', accountCurrency: 'USD' }),
       getFxCadFor: async () => async () => 1.4,
-      fetchAccountSpend,
-      cadConvert: vi.fn(),
-      upsertDataDailySpend: vi.fn(),
+      aggregateTiktokSpendByStore,
       nowIso: '2026-05-29T16:00:00.000Z',
       isTikTokConfigured: () => true,
     });
-    expect(fetchAccountSpend).toHaveBeenCalledOnce();
+    expect(aggregateTiktokSpendByStore).toHaveBeenCalled();
     expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({
       scope: 'campaign_metrics', status: 'success',
     }));
@@ -336,18 +333,12 @@ describe('runTikTokWorkerJob() — hot_metrics with empty hot set', () => {
     expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({ scope: 'ad_metrics', status: 'success' }));
   });
 
-  it('Phase E1.6 regression fix (2026-05-30): empty hot set STILL writes account-aggregate to data_daily', async () => {
-    // Same regression as meta/google — empty-hot-set early-exit pre-empted
-    // the Phase E1.6 account-spend write, freezing data_daily.tt_spend_cad
-    // + tt_impressions for uzoshop's TikTok account whenever no campaigns
-    // were hot.
-    const fetchAccountSpend = vi.fn().mockResolvedValue([
-      { date: '2026-05-27', spend:  50, currency: 'USD', impressions:  500 },
-      { date: '2026-05-28', spend: 100, currency: 'USD', impressions: 1000 },
-      { date: '2026-05-29', spend:  25, currency: 'USD', impressions:  250 },
-    ]);
-    const cadConvert = vi.fn().mockImplementation(async (n: number) => n * 1.4);
-    const upsertDataDailySpend = vi.fn().mockResolvedValue(undefined);
+  it('Phase E1.6.1 regression fix (2026-05-30): empty hot set STILL calls the agg RPC (re-aggregate from existing campaigns_daily) — hot-set early-exit must NOT pre-empt the per-store split', async () => {
+    // Pre-fix: the empty-hot-set early-exit returned BEFORE the
+    // per-store agg call, freezing data_daily.tt_spend_cad +
+    // tt_impressions for ALL stores. usmile360 + zolplus tt_spend_cad
+    // stale during the day (only the nightly cronDaily RPC ran).
+    const aggregateTiktokSpendByStore = vi.fn().mockResolvedValue(undefined);
     const fetchHotMetrics = vi.fn();
     await runTikTokWorkerJob({
       jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
@@ -365,19 +356,15 @@ describe('runTikTokWorkerJob() — hot_metrics with empty hot set', () => {
       recordFreshness: vi.fn(),
       getAccount: async () => ({ advertiserId: 'ADV1', accessToken: 'TOK', accountCurrency: 'USD' }),
       getFxCadFor: async () => async () => 1.4,
-      fetchAccountSpend,
-      cadConvert,
-      upsertDataDailySpend,
+      aggregateTiktokSpendByStore,
       nowIso: '2026-05-29T16:00:00.000Z',
       isTikTokConfigured: () => true,
     });
     expect(fetchHotMetrics).not.toHaveBeenCalled();
-    expect(fetchAccountSpend).toHaveBeenCalledOnce();
-    expect(upsertDataDailySpend).toHaveBeenCalledTimes(3);
-    const written = upsertDataDailySpend.mock.calls.map(c => c[0]);
-    expect(written.find(w => w.date === '2026-05-29')).toMatchObject({
-      platform: 'tiktok', storeId: 'uzoshop', spendCad: 35, impressions: 250,
-    });
+    // Exactly 1 call (the post-upsert call is skipped because the
+    // empty-hot-set branch returns before fetchHotMetrics + upserts).
+    expect(aggregateTiktokSpendByStore).toHaveBeenCalledTimes(1);
+    expect(aggregateTiktokSpendByStore).toHaveBeenCalledWith('2026-05-29');
   });
 });
 
