@@ -2155,3 +2155,43 @@ from IL, campaign rows will land under the Google-account TZ's date —
 the dashboard's "today IL" view then shows them via the agg RPC
 provided IL-today and account-TZ-today overlap (true for uzoshop
 since the account is in Israel).
+
+### Phase E1.7 night follow-up — TikTok AUCTION_AD + Google PMax fixes
+
+Two issues surfaced after the initial Phase E1.7 deploy that the
+"add account-TZ" Google fix didn't address:
+
+**TikTok AUCTION_AD dimension rule** — TikTok's BASIC `report_type`
+at `data_level=AUCTION_AD` rejects any ID dimension other than
+`ad_id` with `code=40002 data_level AUCTION_AD and dimension <X>
+do not match`. The earlier hotfix that swapped `campaign_id`→`adgroup_id`
+in the dimensions array hit the same wall (adgroup_id also rejected).
+
+Fix: dimensions=`["ad_id"]` only. Parent IDs (adgroup_id, campaign_id)
+are now sourced from `ad_registry` via a worker-built map
+`adId → { adgroup_id, campaign_id }` passed to the fetcher as
+`adIdToParent`. The fetcher enriches each AD row's dimensions and
+uses `resolveStore(campaign_id)` via the campaign-store-map for
+store routing — preserving the Phase A.5 v2 attribution model.
+AD rows without a registry entry are SKIPPED (safer than
+mis-attribution under the worker's default storeId fallback).
+
+**Google PMax campaigns** — Performance Max campaigns expose NO
+`ad_group` resource (delivery is asset-group based). Querying
+`FROM ad_group WHERE ad_group.id IN (...)` for a PMax campaign id
+returns 0 rows. uzoshop's hot set includes 2 PMax campaigns
+(`22542818628`, `23590447604`) whose ids land in `ad_set_id` by the
+existing nightly-cron + Phase D backfill convention.
+
+Fix: `fetchGoogleHotMetricsForStore` now queries
+`FROM campaign WHERE campaign.id IN (hotCampaignIds)` instead of
+`FROM ad_group WHERE ad_group.id IN (hotAdgroupIds)`. This works
+uniformly for **all** Google campaign types (PMax, Standard Shopping,
+Search, Display) because every campaign aggregates `metrics.cost_micros`
+at the campaign resource. Rows are written with
+`ad_set_id = campaign_id` (synthetic, matches existing PMax
+convention and Phase D backfill). The agg RPC sums by
+`(date, store_id, platform)` so this synthesis is loss-less for
+`data_daily.ga_spend_cad`. `hotAdgroupIds` is now ignored in the
+input shape. The ad-level branch (`FROM ad_group_ad`) is unchanged —
+returns 0 rows for PMax naturally, returns real rows for other types.
