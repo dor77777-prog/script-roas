@@ -78,6 +78,40 @@
   --status-gray:    oklch(60% 0 0);
   --status-gray-bg: oklch(93% 0 0);
   --status-gray-fg: oklch(22% 0 0);
+
+  /* Phase E1.6.1 UI overhaul (2026-05-30) — semantic warning tone for
+     amber-* sweep. Same chroma as --status-orange but tuned for
+     warnings: -bg at 92% L (light) / 18% L (dark) for chip surface,
+     -fg at 25% L (light) / 92% L (dark) for body text. */
+  --status-warning: oklch(70% 0.14 75);
+  --status-warning-bg: oklch(95% 0.06 75);
+  --status-warning-fg: oklch(25% 0.05 75);
+
+  /* Chart utility tokens. --chart-axis was referenced by chartColors.ts
+     but never defined. Anchored to --text-muted at 60% opacity for a
+     subtle axis line. --chart-cpm-prev was a hardcoded #fbbf24 in
+     chartColors.ts; now mode-aware. */
+  --chart-axis: oklch(60% 0.015 250 / 0.6);
+  --chart-cpm-prev: oklch(75% 0.15 75);
+
+  /* Hero gradient — was hardcoded #091c4a / #0d3680 / #1d4ed8 in
+     HeroOverview.tsx. Refactored to CSS vars so dark mode adapts. */
+  --gradient-hero-from: oklch(20% 0.12 260);
+  --gradient-hero-via: oklch(32% 0.16 260);
+  --gradient-hero-to: oklch(48% 0.20 260);
+
+  /* Per-store badge color tokens. Sourced from storeColors.ts chart
+     palette (cyan / hot-pink / lime) per 2026-05-30 user decision —
+     replaces format.ts STORE_HUES navy/red/green schism. */
+  --store-uzoshop: oklch(70% 0.13 200);     /* cyan */
+  --store-uzoshop-bg: oklch(94% 0.04 200);
+  --store-uzoshop-fg: oklch(22% 0.05 200);
+  --store-zolplus: oklch(68% 0.20 340);     /* hot pink */
+  --store-zolplus-bg: oklch(94% 0.04 340);
+  --store-zolplus-fg: oklch(22% 0.06 340);
+  --store-usmile: oklch(72% 0.20 130);      /* lime */
+  --store-usmile-bg: oklch(94% 0.04 130);
+  --store-usmile-fg: oklch(22% 0.05 130);
 }
 
 [data-theme="dark"] {
@@ -151,6 +185,28 @@
   --status-gray:    oklch(65% 0 0);
   --status-gray-bg: oklch(40% 0 0);
   --status-gray-fg: oklch(99% 0 0);
+
+  /* Phase E1.6.1 UI overhaul — dark-mode warning/chart/hero/store tokens. */
+  --status-warning: oklch(78% 0.18 75);
+  --status-warning-bg: oklch(28% 0.08 75);
+  --status-warning-fg: oklch(94% 0.04 75);
+
+  --chart-axis: oklch(65% 0.015 240 / 0.5);
+  --chart-cpm-prev: oklch(80% 0.18 75);
+
+  --gradient-hero-from: oklch(15% 0.06 260);
+  --gradient-hero-via: oklch(22% 0.12 260);
+  --gradient-hero-to: oklch(35% 0.18 260);
+
+  --store-uzoshop: oklch(75% 0.13 200);
+  --store-uzoshop-bg: oklch(28% 0.06 200);
+  --store-uzoshop-fg: oklch(94% 0.04 200);
+  --store-zolplus: oklch(72% 0.20 340);
+  --store-zolplus-bg: oklch(28% 0.08 340);
+  --store-zolplus-fg: oklch(94% 0.04 340);
+  --store-usmile: oklch(78% 0.20 130);
+  --store-usmile-bg: oklch(28% 0.08 130);
+  --store-usmile-fg: oklch(94% 0.04 130);
 }
 
 /* ===========================================================================
