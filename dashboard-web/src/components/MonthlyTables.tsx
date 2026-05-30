@@ -25,6 +25,11 @@ type Props = {
   globalStore?: string;
   /** When true, omit the outer title/header — used inside CollapsibleSection. */
   bare?: boolean;
+  /**
+   * When provided, fetch only that calendar year's data (Jan 1 – Dec 31).
+   * Defaults to the rolling 17-month history window for backwards compat.
+   */
+  year?: number;
 };
 
 /**
@@ -114,7 +119,7 @@ function roasCell(roas: number, revenue: number, totalSpend: number): { classNam
   return { className: ROAS_BG[roasLabel(roas).tone], text: formatNumber(roas) };
 }
 
-export function MonthlyTables({ stores, globalStore, bare = false }: Props) {
+export function MonthlyTables({ stores, globalStore, bare = false, year }: Props) {
   const [mode, setMode] = useState<Mode>('per-store');
 
   // Initialise the local store dropdown from the global filter when it names a
@@ -134,10 +139,12 @@ export function MonthlyTables({ stores, globalStore, bare = false }: Props) {
     }
   }, [globalStore, stores]);
 
-  const historyRange = useMemo(
-    () => ({ from: isoMonthsAgo(MONTHLY_TABLES_HISTORY_MONTHS), to: isoToday() }),
-    [],
-  );
+  const historyRange = useMemo(() => {
+    if (year != null) {
+      return { from: `${year}-01-01`, to: `${year}-12-31` };
+    }
+    return { from: isoMonthsAgo(MONTHLY_TABLES_HISTORY_MONTHS), to: isoToday() };
+  }, [year]);
 
   const { data, error, isLoading } = useSWR<DashboardData>(
     buildDateRangeKey('/api/data', historyRange),
@@ -215,15 +222,22 @@ export function MonthlyTables({ stores, globalStore, bare = false }: Props) {
     </div>
   );
 
+  // Determine the two most recent months (current + previous) for default-open.
+  const { y: todayY, m: todayM } = ilTodayParts();
+  const currentYm = `${todayY}-${String(todayM).padStart(2, '0')}`;
+  const prevDate = new Date(Date.UTC(todayY, todayM - 2, 1));
+  const prevYm = `${prevDate.getUTCFullYear()}-${String(prevDate.getUTCMonth() + 1).padStart(2, '0')}`;
+
   const blocks = (
     <div className={cn('space-y-4', bare ? 'p-4 sm:p-5 pt-4' : 'space-y-6')}>
       {monthGroups.map(({ ym, rows: monthRows }) => {
+        const defaultOpen = ym === currentYm || ym === prevYm;
         if (mode === 'per-store') {
           const storeRows = monthRows.filter(r => r.storeName === storeFilter);
           if (!storeRows.length) return null;
-          return <MonthBlockPerStore key={ym} ym={ym} storeName={storeFilter} rows={storeRows} />;
+          return <MonthBlockPerStore key={ym} ym={ym} storeName={storeFilter} rows={storeRows} defaultOpen={defaultOpen} />;
         }
-        return <MonthBlockSummary key={ym} ym={ym} rows={monthRows} stores={stores} />;
+        return <MonthBlockSummary key={ym} ym={ym} rows={monthRows} stores={stores} defaultOpen={defaultOpen} />;
       })}
     </div>
   );
@@ -287,12 +301,14 @@ function MonthBlockPerStore({
   ym,
   storeName,
   rows,
+  defaultOpen = true,
 }: {
   ym: string;
   storeName: string;
   rows: DailyRow[];
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(defaultOpen);
   // detect if store has GA (any row with gaSpend > 0)
   const hasGa = rows.some(r => r.gaSpend > 0);
   // Phase 05.7.7 — show TikTok column only when at least one row in this
@@ -408,12 +424,14 @@ function MonthBlockSummary({
   ym,
   rows,
   stores,
+  defaultOpen = true,
 }: {
   ym: string;
   rows: DailyRow[];
   stores: string[];
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(defaultOpen);
   const allDays = daysOfMonth(ym);
 
   // Aggregate by date across all stores. Phase 05.7.3: also accumulate
