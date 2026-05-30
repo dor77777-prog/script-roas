@@ -275,17 +275,17 @@ input[type="number"] {
 /* ===========================================================================
    Recharts tooltip — match the system shadow + radius.
    =========================================================================== */
-.recharts-default-tooltip {
-  background: rgba(13, 37, 61, 0.96) !important;
-  border: none !important;
+.recharts-tooltip-wrapper .recharts-default-tooltip {
+  background: var(--surface-elevated-2) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-default) !important;
+  box-shadow: var(--shadow-md);
   border-radius: 10px !important;
-  box-shadow: 0 12px 32px -6px rgba(15, 31, 81, 0.18),
-              0 4px 8px -2px rgba(15, 31, 81, 0.10) !important;
   padding: 10px 14px !important;
   font-feature-settings: 'tnum';
 }
-.recharts-tooltip-label { color: #a8b5c2 !important; margin-bottom: 4px !important; font-size: 11px; }
-.recharts-tooltip-item  { color: #ffffff !important; font-size: 13px; }
+.recharts-tooltip-label { color: var(--text-secondary) !important; margin-bottom: 4px !important; font-size: 11px; }
+.recharts-tooltip-item  { color: var(--text-primary) !important; font-size: 13px; }
 
 /* ===========================================================================
    Focus-visible: a single, consistent ring across the dashboard.
