@@ -210,6 +210,28 @@ export type RunTikTokWorkerJobInput = {
     advice?: string;
   }) => Promise<void>;
   /**
+   * Phase E1.7 hotfix #4 (2026-05-30 night) — DELETE stale
+   * campaigns_daily rows for re-mapped campaigns. For each (date,
+   * platform, campaign_id, ad_set_id) we're about to write under
+   * store_id S, DELETE any existing row with same key but store_id != S.
+   * Prevents double-count after the campaign-store-map moves a
+   * campaign from store A to store B.
+   */
+  deleteStaleCampaignsDailyRows?: (rows: Array<{
+    date: string;
+    platform: 'tiktok';
+    campaign_id: string;
+    ad_set_id: string;
+    store_id: string;
+  }>) => Promise<void>;
+  /** Phase E1.7 hotfix #4 — same idea for ads_daily (PK includes store_id). */
+  deleteStaleAdsDailyRows?: (rows: Array<{
+    date: string;
+    platform: 'tiktok';
+    ad_id: string;
+    store_id: string;
+  }>) => Promise<void>;
+  /**
    * Phase E1.7 (2026-05-30 night) — unified agg RPC.
    *
    * Calls `agg_data_daily_for_date(d)` RPC to re-aggregate
@@ -580,12 +602,34 @@ async function runTikTokHotMetricsBranch(input: RunTikTokWorkerJobInput): Promis
       getFxCadFor: fxCadFor,
     });
 
-    // 4. Upsert campaigns_daily (adsets only) and ads_daily, stamping
-    //    source='live_tick' + last_live_tick_at on every row.
-    //    CRIT-B: hot-metrics fetcher returns only adset + ad rows; the
-    //    campaign-level aggregate is computed at read time by the existing
-    //    aggregators (Today / Today-Live). campaigns_daily.ad_set_id is
-    //    NOT NULL so we cannot insert a campaign-only row.
+    // 4. Phase E1.7 hotfix #4 — DELETE-then-UPSERT for re-mapped
+    // campaigns. When a TikTok campaign moves stores via the
+    // campaign-store-map (operator action), the new tick writes rows
+    // under the NEW store_id; old rows under the OLD store_id linger
+    // in campaigns_daily because the PK includes store_id. The agg
+    // RPC would SUM both → double-count. Fix: for each (campaign_id,
+    // ad_set_id) we're about to write, DELETE any rows on the same
+    // date+platform under DIFFERENT store_id. Mirrors the Phase A.5 v2
+    // pattern in persistCampaignsLive (which only ran from cron-live-
+    // heavy, now disabled).
+    //
+    // Same DELETE-then-UPSERT applies to ads_daily for AD-level rows
+    // (ads_daily PK includes store_id by the same logic).
+    if (metrics.adsets.length > 0 && input.deleteStaleCampaignsDailyRows) {
+      const adsetKeys = metrics.adsets.map((a) => ({
+        date: today, platform: 'tiktok' as const,
+        campaign_id: a.campaign_id, ad_set_id: a.ad_set_id, store_id: a.store_id,
+      }));
+      await input.deleteStaleCampaignsDailyRows(adsetKeys);
+    }
+    if (metrics.ads.length > 0 && input.deleteStaleAdsDailyRows) {
+      const adKeys = metrics.ads.map((a) => ({
+        date: today, platform: 'tiktok' as const,
+        ad_id: a.ad_id, store_id: a.store_id,
+      }));
+      await input.deleteStaleAdsDailyRows(adKeys);
+    }
+
     if (metrics.adsets.length > 0) {
       const all: Array<Record<string, unknown>> = metrics.adsets.map((a) => ({
         ...a,
@@ -767,14 +811,51 @@ export const tiktokWorker = inngest.createFunction(
         // commentary on `aggregateTiktokSpendByStore` in the
         // RunTikTokWorkerJobInput type for rationale.
         // Phase E1.7 (2026-05-30 night) — unified agg RPC replaces the
-        // TikTok-only `agg_tiktok_spend_per_store_for_date`. Same Pass 1
-        // (zero) + Pass 2 (aggregate from campaigns_daily) + Pass 3
-        // (derive total/roas/gross/net) but now for all 3 platforms in
-        // one call.
+        // TikTok-only `agg_tiktok_spend_per_store_for_date`.
         aggregateDataDaily: async (date: string) => {
           const { error } = await sb.rpc('agg_data_daily_for_date', { d: date });
           if (error) {
             throw new Error(`agg_data_daily_for_date(${date}) for tiktok: ${error.message}`);
+          }
+        },
+        // Phase E1.7 hotfix #4 — DELETE-then-UPSERT for re-mapped
+        // campaigns. For each fresh (date, platform, campaign_id,
+        // ad_set_id, store_id) we're about to UPSERT, DELETE rows that
+        // share the first 4 keys but have a DIFFERENT store_id. Without
+        // this DELETE, a campaign that moves stores via the campaign-
+        // store-map leaves stale rows under the old store_id that the
+        // agg RPC would sum → double-count.
+        deleteStaleCampaignsDailyRows: async (rows) => {
+          for (const r of rows) {
+            const { error } = await sb
+              .from('campaigns_daily')
+              .delete()
+              .eq('date', r.date)
+              .eq('platform', r.platform)
+              .eq('campaign_id', r.campaign_id)
+              .eq('ad_set_id', r.ad_set_id)
+              .neq('store_id', r.store_id);
+            if (error) {
+              console.warn(
+                `tiktokWorker deleteStaleCampaignsDailyRows ${r.campaign_id}/${r.ad_set_id} keep=${r.store_id}: ${error.message}`,
+              );
+            }
+          }
+        },
+        deleteStaleAdsDailyRows: async (rows) => {
+          for (const r of rows) {
+            const { error } = await sb
+              .from('ads_daily')
+              .delete()
+              .eq('date', r.date)
+              .eq('platform', r.platform)
+              .eq('ad_id', r.ad_id)
+              .neq('store_id', r.store_id);
+            if (error) {
+              console.warn(
+                `tiktokWorker deleteStaleAdsDailyRows ${r.ad_id} keep=${r.store_id}: ${error.message}`,
+              );
+            }
           }
         },
         nowIso,

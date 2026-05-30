@@ -2050,6 +2050,29 @@ fetchers (prefixed `[gh-diag]` / `[tt-diag]`) to capture API response
 shape for the next 1-2 ticks; these will be removed once root cause
 is confirmed.
 
+### TikTok DELETE-then-UPSERT for re-mapped campaigns
+
+User raised the concern that the dimensions fix must also handle new
+campaigns, status changes, and most importantly campaigns RE-MAPPED to
+different stores via the Phase A.5 v2 campaign-store-map. The
+campaigns_daily PK is (date, store_id, platform, campaign_id,
+ad_set_id) — when a campaign moves stores, the next hot_metrics tick
+writes a row under the NEW store_id but the OLD row under the previous
+store_id lingers. The agg_data_daily_for_date RPC then sums BOTH rows
+→ double-count on both stores.
+
+Phase A.5 v2's `persistCampaignsLive` (cron-live-heavy era, disabled
+in Phase E1) had this DELETE-then-UPSERT pattern. The pattern moves
+to the hot_metrics worker now via two new helpers wired in the Inngest
+binding:
+- `deleteStaleCampaignsDailyRows(rows)` — for each fresh (date,
+  platform, campaign_id, ad_set_id, store_id) DELETE rows with same
+  first 4 keys but a different store_id.
+- `deleteStaleAdsDailyRows(rows)` — same for ads_daily (PK also
+  includes store_id).
+
+Both fire BEFORE the upsertCampaignsDaily / upsertAdsDaily calls.
+
 ### TikTok AD-level dimensions don't allow campaign_id
 
 The dimensions hotfix above worked at AUCTION_ADGROUP level but TikTok
