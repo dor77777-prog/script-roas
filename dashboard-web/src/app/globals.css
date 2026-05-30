@@ -125,7 +125,7 @@
   /* Text — inverted scale */
   --text-primary:   oklch(95% 0.01 240);
   --text-secondary: oklch(78% 0.01 240);
-  --text-muted:     oklch(60% 0.015 240);
+  --text-muted:     oklch(70% 0.015 240);
   --text-subtle:    oklch(45% 0.015 240);
 
   /* Borders */
@@ -167,23 +167,23 @@
      Hue separation maintained: red 10 / orange 75 / green 145 / blue 255
      (red↔orange = 65°, green↔blue = 110°). */
   --status-red:    oklch(72% 0.22 10);
-  --status-red-bg: oklch(50% 0.22 10);
+  --status-red-bg: oklch(42% 0.14 10);
   --status-red-fg: oklch(99% 0.01 10);
 
   --status-orange:    oklch(80% 0.18 75);
-  --status-orange-bg: oklch(55% 0.20 75);
+  --status-orange-bg: oklch(45% 0.14 75);
   --status-orange-fg: oklch(99% 0.01 75);
 
   --status-green:    oklch(72% 0.22 145);
-  --status-green-bg: oklch(50% 0.22 145);
+  --status-green-bg: oklch(42% 0.14 145);
   --status-green-fg: oklch(99% 0.01 145);
 
   --status-blue:    oklch(70% 0.22 255);
-  --status-blue-bg: oklch(48% 0.22 255);
+  --status-blue-bg: oklch(42% 0.14 255);
   --status-blue-fg: oklch(99% 0.01 255);
 
   --status-gray:    oklch(65% 0 0);
-  --status-gray-bg: oklch(40% 0 0);
+  --status-gray-bg: oklch(42% 0.005 0);
   --status-gray-fg: oklch(99% 0 0);
 
   /* Phase E1.6.1 UI overhaul — dark-mode warning/chart/hero/store tokens. */
