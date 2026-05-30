@@ -51,6 +51,7 @@ import {
   upsertRegistryBatch,
 } from '@/lib/registries/upsert';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { isAuthError, isRateLimitError } from '@/lib/notifications/detectAuthError';
 import {
   getHotCampaignIds as getHotCampaignIdsHelper,
   getHotAdsetIds as getHotAdsetIdsHelper,
@@ -131,6 +132,19 @@ export type RunGoogleWorkerJobInput = {
    * the operator panel stayed permanently empty for those rows.
    */
   isGoogleConfigured?: (storeId: StoreId) => boolean;
+  /**
+   * Phase E1 (2026-05-30) — operator WhatsApp alert hook for the
+   * hot_metrics branch. Invoked with operation 'google_hot_metrics_*'
+   * on auth/rate-limit errors. Optional for backwards-compat with
+   * existing test fixtures.
+   */
+  notifyTokenFailure?: (input: {
+    provider: 'meta' | 'google' | 'tiktok';
+    storeId: string;
+    operation: string;
+    errorMsg: string;
+    advice?: string;
+  }) => Promise<void>;
 };
 
 function checkGoogleConfigured(
@@ -407,6 +421,24 @@ async function runGoogleHotMetricsBranch(input: RunGoogleWorkerJobInput): Promis
     // Inngest retry behavior; next successful tick overwrites with success.
     const message = err instanceof Error ? err.message : String(err);
     await recHotPair('transient_error', message);
+    // Phase E1 (2026-05-30) — fire WhatsApp via notifyTokenFailure on
+    // auth/rate errors so operator gets paged within ~10 min of token
+    // going dead (replaces cron-live-heavy's alert path).
+    const isRate = isRateLimitError('google', message);
+    const isAuth = isAuthError('google', message);
+    if ((isRate || isAuth) && input.notifyTokenFailure) {
+      await input.notifyTokenFailure({
+        provider: 'google',
+        storeId,
+        operation: isRate ? 'google_hot_metrics_rate_limit' : 'google_hot_metrics_auth',
+        errorMsg: message,
+        advice: isRate
+          ? 'Google reported RESOURCE_EXHAUSTED / 429. Hot metrics worker will retry on next orchestrator tick (10 min). No operator action needed unless this persists across multiple ticks.'
+          : 'Refresh the Google OAuth refresh token. See docs/PROPS-MAP.md for the env var name (UZOSHOP_GOOGLE_REFRESH_TOKEN).',
+      }).catch((alertErr) => {
+        console.warn(`googleWorker hot_metrics ${isRate ? 'rate' : 'auth'} alert threw: ${alertErr instanceof Error ? alertErr.message : alertErr}`);
+      });
+    }
     throw err;
   }
 }

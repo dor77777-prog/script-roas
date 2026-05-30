@@ -66,6 +66,48 @@ describe('runGoogleWorkerJob() — hot_metrics scope', () => {
   });
 });
 
+describe('runGoogleWorkerJob() — hot_metrics auth/rate alerts (Phase E1)', () => {
+  it('rate-limit → notifyTokenFailure(google_hot_metrics_rate_limit)', async () => {
+    const notifyTokenFailure = vi.fn().mockResolvedValue(undefined);
+    const err = new Error('Google Ads API: RESOURCE_EXHAUSTED quota exceeded');
+    const fetchHotMetrics = vi.fn().mockRejectedValue(err);
+    await expect(runGoogleWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
+      fetchStatus: vi.fn(), fetchHotMetrics,
+      getHotCampaignIds: async () => ['GC1'], getHotAdgroupIds: async () => ['AG1'], getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(), insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(), upsertAdsDaily: vi.fn(),
+      recordFreshness: vi.fn(),
+      notifyTokenFailure,
+      nowIso: NOW_ISO,
+      isGoogleConfigured: () => true,
+    })).rejects.toThrow('RESOURCE_EXHAUSTED');
+    expect(notifyTokenFailure).toHaveBeenCalledOnce();
+    expect(notifyTokenFailure.mock.calls[0][0].operation).toBe('google_hot_metrics_rate_limit');
+  });
+
+  it('auth error → notifyTokenFailure(google_hot_metrics_auth)', async () => {
+    const notifyTokenFailure = vi.fn().mockResolvedValue(undefined);
+    const err = new Error('Google Ads API: UNAUTHENTICATED invalid_grant refresh token expired');
+    const fetchHotMetrics = vi.fn().mockRejectedValue(err);
+    await expect(runGoogleWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
+      fetchStatus: vi.fn(), fetchHotMetrics,
+      getHotCampaignIds: async () => ['GC1'], getHotAdgroupIds: async () => ['AG1'], getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(), insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(), upsertAdsDaily: vi.fn(),
+      recordFreshness: vi.fn(),
+      notifyTokenFailure,
+      nowIso: NOW_ISO,
+      isGoogleConfigured: () => true,
+    })).rejects.toThrow('UNAUTHENTICATED');
+    expect(notifyTokenFailure).toHaveBeenCalledOnce();
+    expect(notifyTokenFailure.mock.calls[0][0].operation).toBe('google_hot_metrics_auth');
+  });
+});
+
 describe('runGoogleWorkerJob() — hot_metrics with empty hot set', () => {
   it('skips fetch but still records campaign_metrics success', async () => {
     const fetchHotMetrics = vi.fn();
