@@ -1498,3 +1498,148 @@ operator internal-tool use case.
 Companion data fix: migration `20260530300000` DELETE'd today's two
 stale `(tiktok, uzoshop, …)` rows so coverage parity restored
 immediately rather than waiting for ambient cleanup.
+
+## Phase E1 — Decommission `cron-live-heavy` (2026-05-30)
+
+The 3 per-store `cron-live-heavy` Inngest functions are no longer
+registered (`cronLiveHeavyFunctions = []`). `cron-tick-orchestrator`
+(every 10 min) is the single source of live truth for `campaigns_daily`
++ `ads_daily` metric refreshes via the hot_metrics worker branches in
+`metaWorker` / `googleWorker` / `tiktokWorker`.
+
+### What moved
+- **Token-failure WhatsApp alerts** (auth/rate errors): cron-live-heavy
+  fired these per provider per store per date with operation keys
+  `cron_live_heavy_rate_limit` / `cron_live_heavy_auth`. After E1, the
+  3 hot_metrics worker branches fire equivalents with NEW operation
+  keys (`meta_hot_metrics_rate_limit`, `google_hot_metrics_auth`,
+  `tiktok_hot_metrics_rate_limit`, etc.). Status branches stay alert-
+  free (they only `recordFreshness('transient_error')` to surface in
+  /operator — WhatsApp on every status hiccup would be noise).
+- **Meta BUC pre-flight gate**: the metaWorker hot_metrics branch
+  already had the gate but did NOT fire a WhatsApp on `budget_skip`.
+  E1 adds the suppressed-WhatsApp call (`meta_hot_metrics_budget_skip`
+  operation) so the operator sees BUC throttling on `/operator` and
+  gets a DB notification record without the panic ping.
+
+### What stays
+- `cronLiveHeavy.ts` source — `runHeavyForStore` + `makeCronLiveHeavy`
+  remain in the file for: (a) existing vitest fixtures that drive
+  `runHeavyForStore` directly via dynamic import; (b) git-revert
+  rollback if a coverage gap surfaces in soak.
+- `persistCampaignsLive.ts` source — `cron-daily` (nightly authoritative
+  run) still calls it. No change.
+- `agg_tiktok_spend_per_store_for_date` RPC — still useful for
+  cron-daily.
+
+### Why now
+The Phase C reconcile harness `audit:reconcile:hot-vs-heavy` proved
+parity for hot_metrics writes. Phase D's coverage parity + 0%
+BACKFILL_UNKNOWN snapshot proved stable status ingestion. Per user
+2026-05-30, the scope-memo's "~1 week soak" prereq was waived.
+
+### Savings
+- Frees 3 Inngest function slots (cron-live-heavy was 3 staggered
+  per-store crons).
+- ~30% reduction in cron API load — cron-live-heavy was the heaviest
+  per-tick burden (full per-platform insights fetch every 30 min).
+- Freshness improves: `campaigns_daily.last_live_tick_at` updates
+  every ≤10 min instead of every ≤30 min.
+
+### Rollback
+`git revert` the E1 commits + push. Vercel redeploys in 3-5 min.
+cron-live-heavy returns to service on next Inngest sync. Self-healing:
+the next cron-live-heavy tick writes the same campaigns_daily rows
+hot_metrics was writing — no data loss.
+
+## Phase E1.5 — cron-live → Shopify-only + per-worker enrollment + cron-yesterday-refresh (2026-05-30)
+
+E1.5 expands the cleanup beyond cron-live-heavy:
+
+### cron-live stripped to Shopify-only
+The original 05.6 design intent (`cron-live` header lines 1-50) was
+"refresh Shopify revenue on a 3-day rolling window every 10 min — Meta
++ Google Ads are NOT refreshed on the live cadence". Over time, status
+fetches + enrollment placeholders accreted into the same function. With
+the orchestrator + workers now owning all platform discovery, those
+accretions are removed:
+
+- Deleted ~285 lines of `step.run('refresh-effective-status', …)` —
+  fetched Meta budgets + Google ad-group statuses + TikTok ad-group
+  statuses, built an enrollments list, UPSERTed placeholders, and
+  UPDATEd historical `effective_status`.
+- Deleted the 3 `fetchMetaBudgets` / `fetchGoogleAdsAdGroupStatuses`
+  / `fetchTikTokAdGroupStatuses` import sites (no longer used by
+  cron-live).
+- Kept: `fetch-shopify-rolling-3day` + `persist-rolling-3day`. The
+  remaining shape matches the original "Shopify-only on live" design.
+
+### Per-worker placeholder enrollment
+The 3 status workers (`runMetaStatusBranch`, `runGoogleStatusBranch`,
+`runTikTokStatusBranch`) now also UPSERT placeholder rows into
+`campaigns_daily` for any ACTIVE ad-set after their registry upserts:
+
+- Meta: `effective_status === 'ACTIVE'`.
+- Google: `effective_status === 'ENABLED'`.
+- TikTok: any of the 5 `TIKTOK_ACTIVE_STATUSES`
+  (`ADGROUP_STATUS_DELIVERY_OK`, `BUDGET_EXCEED`, `AUDIT`,
+  `REVIEWING`, `NOT_START`).
+
+Payload omits metric columns so spend/impressions/clicks/conversions
+are preserved on conflict (defaults 0 on insert). TikTok uses the
+per-row `a.store_id` (already resolved by the fetcher via
+`campaign-store-map`) so the Phase A.5 v2 multi-store attribution model
+is preserved.
+
+This closes the gap that would otherwise appear when cron-live's
+enrollment loop was removed: `postgresReaders.fetchCampaigns:678-690`
+drops rows with zero metrics unless their `effective_status` is
+currently active, which requires SOME row in `campaigns_daily`.
+
+### `cron-yesterday-refresh` — every 2h per store
+New cron family (`cronYesterdayRefreshFunctions`) — 3 Inngest functions,
+staggered :15 / :20 / :25 every even hour (Asia/Jerusalem). Each
+function runs `runDailyForStore(store, yesterday)` to keep yesterday's
+per-platform spend + per-order attribution + cross-day Shopify refunds
+fresh during the day.
+
+Operator-acceptable midpoint between the "perfect" 30-min refresh that
+cron-live-heavy used to do (now removed) and "next day only"
+cron-daily (too stale for refunds arriving mid-day). 12 fires/day per
+store = ~36/day total = ~324 step.runs/day = ~10K/month — well within
+the Inngest free-tier 50K cap.
+
+### Refresh All button — 3-day window
+`POST /api/operator/sync-now` `{scope:'all'}` now passes a
+`dates: [today, yesterday, day-before]` field to the 3 `event/sync-now`
+events. `eventSyncNow` loops `runDailyForStore` for each date
+sequentially (parallelism across stores preserved by 3 separate
+events). A manual click now catches cross-day refunds + late
+attribution + per-platform spend for the last 3 days at once.
+
+Watchdog (`useDashboardRefresh.MAX_WAIT_MS`) bumped from 90s → 180s to
+match the longer per-tick runtime (3× per store).
+
+### Test impact
+- Deleted: `cronLivePastRowBackfill.test.ts` (5 tests, on the removed
+  refresh-effective-status UPDATE bounds), `cronLiveStatusRefresh.test.ts`
+  (3 tests, on the removed step's resilience).
+- Updated: `cronLiveHeavyBudgetSkip.test.ts` — `cronLiveHeavyFunctions
+  .length === 0` (was `=== 3`).
+- Added: 10 new tests (2 BUC/auth/rate per platform × 3 platforms = 6;
+  1 placeholder enrollment per platform × 3 platforms = 3; 1 disable
+  regression-guard for cronLiveHeavy).
+- Net: 1546 baseline + 10 new − 8 deleted = **1548 tests green**.
+
+### Inngest function inventory after E1+E1.5
+| Family | Count | Cadence | Purpose |
+|---|---|---|---|
+| `cron-daily-{store}` | 3 | 00:05 daily | authoritative yesterday refresh |
+| `cron-live-{store}` | 3 | every 10 min | Shopify-only (revenue + orders + refunds for [today, T-1, T-2]) |
+| `cron-yesterday-refresh-{store}` | 3 | every 2h staggered | yesterday refresh during the day |
+| `cron-tick-orchestrator` | 1 | every 10 min | fan-out status + hot_metrics events |
+| `metaWorker` / `googleWorker` / `tiktokWorker` | 3 | event-triggered | status (including placeholder enrollment) + hot_metrics + WhatsApp alerts |
+| `eventSyncNow` / `eventBackfill` | 2 | operator-triggered | sync-now (Refresh All 3-day window) + backfill range picker |
+| `cronOauthCanary` | 1 | 00:00 daily | token canary |
+| `whatsappCronFunctions` + `eventWhatsappSendNow` | 2 | varies | operator WhatsApp queue |
+| `cronLiveHeavyFunctions` | **0** | — | DISABLED in E1 (empty array) |
