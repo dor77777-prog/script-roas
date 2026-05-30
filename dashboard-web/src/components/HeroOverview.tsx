@@ -516,7 +516,9 @@ function RoasTrendChart({
         <ComposedChart data={series} margin={{ top: 28, right: 12, left: 12, bottom: 0 }}>
           <defs>
             <linearGradient id="hero-roas-fill" x1="0" y1="0" x2="0" y2="1">
+              {/* eslint-disable-next-line local/no-hex-color-in-components -- SVG stopColor on hero-card gradient; no CSS-var equivalent */}
               <stop offset="0%"   stopColor="#ffffff" stopOpacity={0.15} />
+              {/* eslint-disable-next-line local/no-hex-color-in-components -- SVG stopColor on hero-card gradient; no CSS-var equivalent */}
               <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
             </linearGradient>
           </defs>
@@ -577,6 +579,7 @@ function RoasTrendChart({
               );
             });
           })()}
+          {/* eslint-disable local/no-hex-color-in-components -- Recharts Line SVG props (stroke, dot fill) on hero card; white-on-dark, no CSS-var equivalent */}
           <Line
             type="monotone"
             dataKey="roas"
@@ -591,6 +594,7 @@ function RoasTrendChart({
             isAnimationActive
             animationDuration={500}
           />
+          {/* eslint-enable local/no-hex-color-in-components */}
           <Tooltip
             content={({ active, payload }) => {
               if (!active || !payload || payload.length === 0) return null;

@@ -23,6 +23,18 @@ import nextPlugin from '@next/eslint-plugin-next';
 import reactPlugin from 'eslint-plugin-react';
 import reactHooksPlugin from 'eslint-plugin-react-hooks';
 import globals from 'globals';
+import noRawButtonInComponents from './eslint-rules/no-raw-button-in-components.js';
+import noDarkVariantInComponents from './eslint-rules/no-dark-variant-in-components.js';
+import noHexColorInComponents from './eslint-rules/no-hex-color-in-components.js';
+
+// Local plugin — bundles the 3 design-system regression guards.
+const localPlugin = {
+  rules: {
+    'no-raw-button-in-components': noRawButtonInComponents,
+    'no-dark-variant-in-components': noDarkVariantInComponents,
+    'no-hex-color-in-components': noHexColorInComponents,
+  },
+};
 
 export default tseslint.config(
   // 1. Default ignores — anything we don't lint.
@@ -55,6 +67,7 @@ export default tseslint.config(
       '@next/next': nextPlugin,
       react: reactPlugin,
       'react-hooks': reactHooksPlugin,
+      local: localPlugin,
     },
     settings: {
       react: { version: 'detect' },
@@ -102,6 +115,11 @@ export default tseslint.config(
       ],
       // Default rule is fine but conflicts with the customized version above.
       'no-unused-vars': 'off',
+
+      // Design-system regression guards (Tasks 10/17 amber + button sweeps).
+      'local/no-raw-button-in-components': 'error',
+      'local/no-dark-variant-in-components': 'error',
+      'local/no-hex-color-in-components': 'error',
 
       // Allow ts-expect-error / ts-ignore with description (we use it in
       // shim casts where the type erasure is documented inline).
