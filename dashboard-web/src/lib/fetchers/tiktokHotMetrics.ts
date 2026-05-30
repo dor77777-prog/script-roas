@@ -65,18 +65,18 @@ export async function fetchTikTokHotMetricsForStore(input: TikTokHotMetricsInput
     ids: string[],
   ): Promise<Array<Record<string, unknown>>> => {
     if (ids.length === 0) return [];
-    // Phase E1.7 hotfix #1 — TikTok `filtering` rejects arrays for
-    // filter_value (`code=40002`). Use JSON.stringify(ids) instead.
+    // Phase E1.7 hotfix #1 — `filter_value` must be a STRING for IN filter.
     const filteringArr = [{ field_name: filterField, filter_type: 'IN', filter_value: JSON.stringify(ids) }];
-    // Phase E1.7 hotfix #2 — REQUEST campaign_id AS A DIMENSION so the
-    // response includes `dimensions.campaign_id`. Without this the
-    // toCampaignRow `cid = ''` fallback hit `resolveStore('')` which
-    // returns function-arg storeId — ATTRIBUTING ALL TIKTOK ROWS TO
-    // uzoshop regardless of the campaign-store-map. User caught this
-    // 2026-05-30 night ("no TikTok campaign is mapped to uzoshop, all
-    // are usmile"). With campaign_id in dimensions, resolveStore
-    // correctly routes each row via the map.
-    const dimensions = JSON.stringify(['campaign_id', dimensionName]);
+    // Phase E1.7 hotfix #3 — TikTok rejects `dimensions=["campaign_id","ad_id"]`
+    // at AUCTION_AD level (`code=40002 data_level AUCTION_AD and dimension
+    // campaign_id do not match`). For ADGROUP level we CAN include
+    // campaign_id (validated by tonight's logs). For AD level we use
+    // `["adgroup_id","ad_id"]` and look up campaign_id via the map built
+    // from the ADGROUP fetch in the caller.
+    const dims = dataLevel === 'AUCTION_ADGROUP'
+      ? ['campaign_id', dimensionName]
+      : ['adgroup_id', dimensionName];
+    const dimensions = JSON.stringify(dims);
     const url = `${TT_BASE}/report/integrated/get/?advertiser_id=${advertiserId}&report_type=BASIC&data_level=${dataLevel}&dimensions=${encodeURIComponent(dimensions)}&metrics=${encodeURIComponent(JSON.stringify(['spend','impressions','clicks','conversion','purchase','total_purchase_value']))}&start_date=${dateStr}&end_date=${dateStr}&page=1&page_size=1000&filtering=${encodeURIComponent(JSON.stringify(filteringArr))}`;
     const res = await fetcher(url, { headers: { 'Access-Token': accessToken } });
     if (!res.ok) throw new Error(`TikTok report ${dataLevel}: ${res.status}`);
@@ -100,8 +100,28 @@ export async function fetchTikTokHotMetricsForStore(input: TikTokHotMetricsInput
     fetchLevel('AUCTION_AD', 'ad_id', 'ad_ids', input.hotAdIds),
   ]);
 
+  // Phase E1.7 hotfix #3 — Build adgroup_id → campaign_id map from the
+  // ADGROUP-level rows so AD-level rows can be properly routed via the
+  // campaign-store-map. Falls back to '' (resolveStore returns storeId)
+  // for ads whose adgroup isn't in the hot ADGROUP set this tick.
+  const adgroupToCampaign = new Map<string, string>();
+  for (const r of adgroupRaw) {
+    const d = (r.dimensions ?? {}) as Record<string, unknown>;
+    const agid = String(d.adgroup_id ?? '');
+    const cid = String(d.campaign_id ?? '');
+    if (agid && cid) adgroupToCampaign.set(agid, cid);
+  }
+
   const adsets = await Promise.all(adgroupRaw.map(r => toAdsetRow(resolveStore, dateStr, r, accountCurrency, getFxCadFor)));
-  const ads = await Promise.all(adRaw.map(r => toAdRow(resolveStore, dateStr, r, accountCurrency, getFxCadFor)));
+  // For AD rows: enrich `dimensions.campaign_id` from the map before
+  // calling toAdRow (which reads campaign_id via the toCampaignRow path).
+  const ads = await Promise.all(adRaw.map(r => {
+    const d = (r.dimensions ?? {}) as Record<string, unknown>;
+    const agid = String(d.adgroup_id ?? '');
+    const cid = adgroupToCampaign.get(agid) ?? '';
+    const enriched = { ...r, dimensions: { ...d, campaign_id: cid } };
+    return toAdRow(resolveStore, dateStr, enriched, accountCurrency, getFxCadFor);
+  }));
 
   return { adsets, ads };
 }

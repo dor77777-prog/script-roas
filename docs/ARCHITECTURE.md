@@ -2050,6 +2050,16 @@ fetchers (prefixed `[gh-diag]` / `[tt-diag]`) to capture API response
 shape for the next 1-2 ticks; these will be removed once root cause
 is confirmed.
 
+### TikTok AD-level dimensions don't allow campaign_id
+
+The dimensions hotfix above worked at AUCTION_ADGROUP level but TikTok
+rejects `dimensions=["campaign_id","ad_id"]` at AUCTION_AD level with
+`code=40002 data_level AUCTION_AD and dimension campaign_id do not
+match`. Fix: AD-level uses `dimensions=["adgroup_id","ad_id"]`, then
+enriches each row's `campaign_id` from a `Map<adgroup_id, campaign_id>`
+built from the ADGROUP-level fetch in the same tick. This way both
+levels route correctly via the campaign-store-map.
+
 ### TikTok dimensions must include `campaign_id` for store-map routing
 
 After the JSON.stringify(ids) fix above, TikTok started returning rows

@@ -72,6 +72,20 @@ export async function fetchGoogleHotMetricsForStore(input: GoogleHotMetricsInput
     const query = `SELECT campaign.id, campaign.name, ad_group.id, ad_group.name, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value, segments.date FROM ad_group WHERE ad_group.id IN (${ids}) AND segments.date BETWEEN '${yesterdayInTz}' AND '${todayInTz}'`;
     const rows = await customer.searchStream({ query });
     console.log(`[gh-diag] adgroup_query store=${storeId} tz=${accountTz} range=${yesterdayInTz}..${todayInTz} ids=${input.hotAdgroupIds.length} rows=${rows.length} sample=${JSON.stringify(rows[0] ?? null).slice(0, 300)}`);
+    // Phase E1.7 diag #2: if filtered query returns 0, fall back to a
+    // broader query (NO id filter, just date) to verify Google has any
+    // data today + to capture the actual ad_group IDs that have spend.
+    // This is diagnostic only — the rows still go through the filtered
+    // path. Helps determine if our hot-set IDs match Google's reality.
+    if (rows.length === 0) {
+      const broadQuery = `SELECT campaign.id, campaign.name, ad_group.id, ad_group.name, metrics.cost_micros, segments.date FROM ad_group WHERE segments.date BETWEEN '${yesterdayInTz}' AND '${todayInTz}' AND metrics.cost_micros > 0 LIMIT 20`;
+      const broadRows = await customer.searchStream({ query: broadQuery });
+      console.log(`[gh-diag] BROAD store=${storeId} rows_with_cost=${broadRows.length} actual_ids=${broadRows.slice(0, 10).map(r => {
+        const c = (r as { campaign?: Record<string, unknown> }).campaign ?? {};
+        const g = (r as { adGroup?: Record<string, unknown> }).adGroup ?? {};
+        return `c=${c.id}/ag=${g.id}/cost=${((r as { metrics?: Record<string, unknown> }).metrics ?? {}).costMicros}`;
+      }).join(' | ').slice(0, 600)}`);
+    }
     for (const r of rows) {
       adsets.push(toAdsetRow(storeId, r));
     }
