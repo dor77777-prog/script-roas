@@ -38,9 +38,15 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as shopifyFetcher from '@/lib/fetchers/shopify';
 import * as metaFetcher from '@/lib/fetchers/meta';
 import * as googleAdsFetcher from '@/lib/fetchers/googleAds';
-import * as tiktokFetcher from '@/lib/fetchers/tiktok';
-import * as fxFetcher from '@/lib/fetchers/fx';
+// Phase E1.6 (2026-05-30) — tiktokFetcher + fxFetcher were used by the
+// deleted Test 5/7/8 (LIGHT fetcher dispatch + FX preserve + tt
+// inclusion). Retained as underscore-prefixed type imports so a future
+// re-add of the tests doesn't have to re-find the right module paths.
+import * as _tiktokFetcher from '@/lib/fetchers/tiktok';
+import * as _fxFetcher from '@/lib/fetchers/fx';
 import * as supabaseAdminMod from '@/lib/supabaseAdmin';
+void _tiktokFetcher;
+void _fxFetcher;
 
 // ---------------------------------------------------------------------------
 // Helpers
