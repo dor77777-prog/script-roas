@@ -66,6 +66,7 @@ import {
   upsertRegistryBatch,
 } from '@/lib/registries/upsert';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import { isAuthError, isRateLimitError } from '@/lib/notifications/detectAuthError';
 import {
   getHotCampaignIds as getHotCampaignIdsHelper,
   getHotAdsetIds as getHotAdsetIdsHelper,
@@ -173,6 +174,18 @@ export type RunTikTokWorkerJobInput = {
    * and the operator panel stayed permanently empty for those rows.
    */
   isTikTokConfigured?: (storeId: StoreId) => boolean;
+  /**
+   * Phase E1 (2026-05-30) — operator WhatsApp alert hook for the
+   * hot_metrics branch. Invoked with operation 'tiktok_hot_metrics_*'
+   * on auth/rate-limit errors.
+   */
+  notifyTokenFailure?: (input: {
+    provider: 'meta' | 'google' | 'tiktok';
+    storeId: string;
+    operation: string;
+    errorMsg: string;
+    advice?: string;
+  }) => Promise<void>;
 };
 
 function checkTikTokConfigured(
@@ -490,6 +503,24 @@ async function runTikTokHotMetricsBranch(input: RunTikTokWorkerJobInput): Promis
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await recHotPair('transient_error', message);
+    // Phase E1 (2026-05-30) — fire WhatsApp via notifyTokenFailure on
+    // auth/rate so operator gets paged within ~10 min of token going
+    // dead (replaces cron-live-heavy's alert path).
+    const isRate = isRateLimitError('tiktok', message);
+    const isAuth = isAuthError('tiktok', message);
+    if ((isRate || isAuth) && input.notifyTokenFailure) {
+      await input.notifyTokenFailure({
+        provider: 'tiktok',
+        storeId,
+        operation: isRate ? 'tiktok_hot_metrics_rate_limit' : 'tiktok_hot_metrics_auth',
+        errorMsg: message,
+        advice: isRate
+          ? 'TikTok reported HTTP 429 / code=40001 quota exceeded. Hot metrics worker will retry on next orchestrator tick (10 min). No operator action needed unless this persists.'
+          : 'Refresh the TikTok access token. See docs/PROPS-MAP.md (UZOSHOP_TIKTOK_ACCESS_TOKEN).',
+      }).catch((alertErr) => {
+        console.warn(`tiktokWorker hot_metrics ${isRate ? 'rate' : 'auth'} alert threw: ${alertErr instanceof Error ? alertErr.message : alertErr}`);
+      });
+    }
     throw err;
   }
 }

@@ -142,6 +142,54 @@ describe('runTikTokWorkerJob() — hot_metrics scope', () => {
   });
 });
 
+describe('runTikTokWorkerJob() — hot_metrics auth/rate alerts (Phase E1)', () => {
+  it('rate-limit → notifyTokenFailure(tiktok_hot_metrics_rate_limit)', async () => {
+    const notifyTokenFailure = vi.fn().mockResolvedValue(undefined);
+    const err = new Error('TikTok report API: code=40001 rate limit exceeded');
+    const fetchHotMetrics = vi.fn().mockRejectedValue(err);
+    await expect(runTikTokWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
+      loadStoreMap: async () => ({}),
+      fetchStatus: vi.fn(), fetchHotMetrics,
+      getHotCampaignIds: async () => ['TC1'], getHotAdgroupIds: async () => ['TG1'], getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(), insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(), upsertAdsDaily: vi.fn(),
+      recordFreshness: vi.fn(),
+      notifyTokenFailure,
+      nowIso: NOW_ISO,
+      isTikTokConfigured: () => true,
+      getAccount: async () => ({ advertiserId: 'ADV1', accessToken: 'TOK', accountCurrency: 'USD' }),
+      getFxCadFor: async () => async () => 1,
+    })).rejects.toThrow('rate limit');
+    expect(notifyTokenFailure).toHaveBeenCalledOnce();
+    expect(notifyTokenFailure.mock.calls[0][0].operation).toBe('tiktok_hot_metrics_rate_limit');
+  });
+
+  it('auth error → notifyTokenFailure(tiktok_hot_metrics_auth)', async () => {
+    const notifyTokenFailure = vi.fn().mockResolvedValue(undefined);
+    const err = new Error('TikTok report API: code=40105 access token invalid');
+    const fetchHotMetrics = vi.fn().mockRejectedValue(err);
+    await expect(runTikTokWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
+      loadStoreMap: async () => ({}),
+      fetchStatus: vi.fn(), fetchHotMetrics,
+      getHotCampaignIds: async () => ['TC1'], getHotAdgroupIds: async () => ['TG1'], getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(), insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(), upsertAdsDaily: vi.fn(),
+      recordFreshness: vi.fn(),
+      notifyTokenFailure,
+      nowIso: NOW_ISO,
+      isTikTokConfigured: () => true,
+      getAccount: async () => ({ advertiserId: 'ADV1', accessToken: 'TOK', accountCurrency: 'USD' }),
+      getFxCadFor: async () => async () => 1,
+    })).rejects.toThrow('access token invalid');
+    expect(notifyTokenFailure).toHaveBeenCalledOnce();
+    expect(notifyTokenFailure.mock.calls[0][0].operation).toBe('tiktok_hot_metrics_auth');
+  });
+});
+
 describe('runTikTokWorkerJob() — hot_metrics with empty hot set', () => {
   it('skips fetch but still records campaign_metrics + ad_metrics success', async () => {
     const fetchHotMetrics = vi.fn();
