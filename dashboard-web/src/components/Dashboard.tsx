@@ -7,9 +7,6 @@ import {
   TrendingUp,
   Package,
   Table,
-  Radio,
-  Target,
-  Store,
   CalendarDays,
   Megaphone,
   Receipt,
@@ -20,23 +17,17 @@ import { computePresetRange, previousRange } from '@/lib/presets';
 import { aggregate, aggregateByStore, dailySeries, filterRows } from '@/lib/analytics';
 import { cn } from '@/lib/utils';
 import { Filters } from './Filters';
-import { KpiCards } from './KpiCards';
-import { PerStoreCards } from './PerStoreCards';
 import { RoasChart } from './RoasChart';
 import { MonthlyTables } from './MonthlyTables';
 import { DetailTable } from './DetailTable';
-import { TodayLive } from './TodayLive';
 import { ProductsTable } from './ProductsTable';
 import { ProductCentricView } from './ProductCentricView';
 import { CampaignsTable } from './CampaignsTable';
 import { CampaignsTopList, type CampaignTopListPoint } from './CampaignsTopList';
 import { aggregate as aggregateCampaigns } from '@/lib/campaignsAggregator';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
-import { InsightsBoard } from './InsightsBoard';
-import { GoalTracker } from './GoalTracker';
 import { AiReportButton } from './AiReportButton';
 import { TabHeader } from './TabHeader';
-import { HeroOverview } from './HeroOverview';
 import { PnLBreakdown } from './PnLBreakdown';
 import { BillingSettings } from './BillingSettings';
 import { AnnotationsPanel } from './AnnotationsPanel';
@@ -48,6 +39,9 @@ import { CloudSync } from './CloudSync';
 import { SyncIndicator } from './SyncIndicator';
 import { FreshnessChip } from './FreshnessChip';
 import { TabFreshnessHeader } from './TabFreshnessHeader';
+import { HomeLiveBand } from './HomeLiveBand';
+import { HomeSummaryBand } from './HomeSummaryBand';
+import { HomePerStoreBand } from './HomePerStoreBand';
 import { readDashboardState, syncUrl, type TabKey } from '@/lib/urlState';
 import { buildDateRangeKey } from '@/lib/dateRange';
 import { Button } from '@/components/ui/Button';
@@ -411,19 +405,6 @@ function HomeTab({
 }) {
   return (
     <div className="space-y-4 sm:space-y-5 animate-fade-in-up">
-      {/* ===== Live snapshot (today) — now the FIRST section per user
-                    request. Real-time read of the day-in-progress trumps the
-                    Hero editorial summary as the at-a-glance default. ===== */}
-      <SectionIntro
-        icon={<Radio size={18} />}
-        title="היום עד לרגע זה"
-        description="הכנסות Shopify + הזמנות בזמן אמת + הוצאות Meta/Google/TikTok (עם פיגור ~20 דק'). רענון אוטומטי כל 10 דקות."
-      />
-      <TodayLive rows={data.rows} fxIlsToCad={data.fxIlsToCad} />
-
-      {/* ===== Hero — editorial story + chart-as-background + floating KPIs ===== */}
-      <HeroOverview data={data} filters={filters} />
-
       <TabHeader
         title="בית"
         description="שנה טווח או חנות לעדכון כל המסך."
@@ -431,35 +412,25 @@ function HomeTab({
         actionSlot={<AiReportButton data={data} filters={filters} openSignal={aiReportSignal} />}
       />
 
-      {/* ===== Goal tracker — monthly revenue target with pacing + forecast.
-                Intentionally GLOBAL: ignores both `filters.store` and
-                `filters.range` so the single business-wide goal stays
-                meaningful regardless of how the rest of the dashboard is
-                filtered. See GoalTracker.tsx docstring. ===== */}
-      <GoalTracker data={data} />
-
-      {/* ===== Insights engine — anomalies, recommendations, opportunities ===== */}
-      <InsightsBoard data={data} />
-
       {/* ===== Activity log — events overlay on charts so anomalies have context ===== */}
       <AnnotationsPanel range={filters.range} store={filters.store} />
 
-      {/* ===== Detailed KPI cards — full breakdown, the "drill-down" of the hero ===== */}
-      <SectionIntro
-        icon={<Target size={18} />}
-        title="מדדים מסכמים לתקופה"
-        description="הסיכום של כל החנויות הנבחרות בטווח שבחרת. כל מספר מושווה לתקופה הקודמת באותו אורך."
-        formula="ROAS = הכנסות / סך הוצאות פרסום   •   רווח נטו = הכנסות − הוצאות − COGS − עמלות − עלויות קבועות"
-      />
-      <KpiCards current={filtered.curAgg} previous={filtered.prevAgg} series={filtered.cur} />
+      <div className="space-y-6">
+        {/* Band 1 — Live intra-day snapshot */}
+        <HomeLiveBand rows={data.rows} fxIlsToCad={data.fxIlsToCad} />
 
-      {/* ===== Per-store cards ===== */}
-      <SectionIntro
-        icon={<Store size={18} />}
-        title="ביצועים לפי חנות"
-        description="כרטיס לכל חנות עם ה-ROAS, ההכנסות, ההוצאות, והרווח הגולמי לתקופה הנבחרת. החנות עם ROAS הכי גבוה מקבלת אייקון מובילה."
-      />
-      <PerStoreCards data={filtered.storeAggs} ordersByStore={ordersByStore} bare />
+        {/* Band 2 — Yesterday comparison + KPI cards */}
+        <HomeSummaryBand
+          heroProps={{ data, filters }}
+          kpiProps={{ current: filtered.curAgg, previous: filtered.prevAgg, series: filtered.cur }}
+        />
+
+        {/* Band 3 — Per-store breakdown + collapsible insights */}
+        <HomePerStoreBand
+          perStoreProps={{ data: filtered.storeAggs, ordersByStore, bare: true }}
+          insightsProps={{ data }}
+        />
+      </div>
     </div>
   );
 }
