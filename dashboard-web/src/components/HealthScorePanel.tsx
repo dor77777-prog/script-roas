@@ -5,6 +5,7 @@ import type {
   CampaignHealth,
   HealthGrade,
 } from '@/lib/campaignHealthScore';
+import { InsightCard } from '@/components/ui/InsightCard';
 
 /**
  * Inline (always-expanded) Health Score panel for the campaign drawer.
@@ -125,10 +126,10 @@ export function HealthScorePanel({ health }: { health: CampaignHealth }) {
   const recommendations = buildRecommendations(health);
 
   return (
-    <section
-      dir="rtl"
-      aria-label="ציון בריאות הקמפיין"
-      className="rounded-2xl bg-elevated border border-line-subtle shadow-sm p-4 sm:p-5 space-y-4"
+    <InsightCard
+      tone="neutral"
+      title="ציון בריאות קמפיין"
+      className="space-y-4"
     >
       {/* Top row: grade badge + label + score */}
       <div className="flex items-start gap-3 sm:gap-4">
@@ -228,6 +229,6 @@ export function HealthScorePanel({ health }: { health: CampaignHealth }) {
           </div>
         </>
       )}
-    </section>
+    </InsightCard>
   );
 }

@@ -1,12 +1,13 @@
 'use client';
 
 import useSWR from 'swr';
-import { Trophy, TrendingUp, TrendingDown, Sparkles } from 'lucide-react';
+import { Trophy, TrendingUp, TrendingDown } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import type { ProductsResponse } from '@/app/api/products/route';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { CampaignRow } from '@/lib/campaigns';
 import type { ProductRow } from '@/lib/products';
+import { InsightCard } from '@/components/ui/InsightCard';
 
 /**
  * Compact "what's working" widget — answers three questions in five seconds:
@@ -187,39 +188,30 @@ export function WhatsWorking() {
   if (insights.length === 0) {
     // Loading or genuinely no data — show a placeholder rather than nothing.
     return (
-      <section className="rounded-xl bg-elevated border border-line-subtle shadow-sm p-4 sm:p-5">
-        <div className="flex items-center gap-2 mb-1">
-          <Sparkles size={18} className="text-status-warning" />
-          <h2 className="text-sm sm:text-base font-semibold text-ink">
-            מה עובד השבוע
-          </h2>
-        </div>
+      <InsightCard tone="success" title="מה עובד השבוע">
         <p className="text-xs text-ink-muted">
           ממתין לנתונים מהשבוע האחרון…
         </p>
-      </section>
+      </InsightCard>
     );
   }
 
   return (
-    <section className="rounded-xl bg-elevated border border-line-subtle shadow-sm overflow-hidden">
-      <header className="px-4 sm:px-5 py-3 border-b border-line-subtle bg-gradient-to-l from-status-warning-bg/60 to-elevated">
-        <div className="flex items-center gap-2">
-          <Sparkles size={18} className="text-status-warning" />
-          <h2 className="text-sm sm:text-base font-semibold text-ink">
-            מה עובד השבוע
-          </h2>
-          <span className="text-[10px] sm:text-xs text-ink-muted ml-auto">
-            השוואת 7 ימים אחרונים מול ה-7 שלפניהם
-          </span>
-        </div>
-      </header>
-      <ul className="divide-y divide-line-subtle">
+    <InsightCard
+      tone="success"
+      title="מה עובד השבוע"
+      action={
+        <span className="text-[10px] sm:text-xs text-ink-muted">
+          השוואת 7 ימים אחרונים מול ה-7 שלפניהם
+        </span>
+      }
+    >
+      <ul className="divide-y divide-status-green/15 -mx-4 -mb-2">
         {insights.map((ins, i) => (
           <InsightRow key={i} insight={ins} />
         ))}
       </ul>
-    </section>
+    </InsightCard>
   );
 }
 

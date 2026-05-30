@@ -1,9 +1,10 @@
 'use client';
 
-import { Trophy, AlertTriangle, Calendar, Lightbulb } from 'lucide-react';
+import { Trophy, AlertTriangle, Calendar } from 'lucide-react';
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import type { DailyRow } from '@/lib/types';
 import type { StoreAgg } from '@/lib/analytics';
+import { InsightCard } from '@/components/ui/InsightCard';
 
 type Props = {
   storeAggs: StoreAgg[];
@@ -41,34 +42,32 @@ export function InsightsPanel({ storeAggs, rows }: Props) {
   if (!storeAggs.length) return null;
 
   return (
-    <section className="space-y-3">
-      <h2 className="flex items-center gap-2 text-base font-semibold text-ink">
-        <Lightbulb size={18} className="text-ink-secondary" />
-        תובנות מהירות
-      </h2>
-      <div className="rounded-xl bg-status-warningBg border border-status-warning/30 divide-y divide-status-warning/30 overflow-hidden">
-        {top && (
-          <InsightRow
-            icon={<Trophy className="text-status-warning" size={20} />}
-            primary={`חנות מובילה: ${top.store}`}
-            secondary={`ROAS ${formatNumber(top.roas)}  •  הכנסות CAD ${formatCurrency(top.revenue)}`}
-          />
-        )}
-        {bottom && bottom.store !== top?.store && (
-          <InsightRow
-            icon={<AlertTriangle className="text-status-red" size={20} />}
-            primary={`דורש תשומת לב: ${bottom.store}`}
-            secondary={`ROAS ${formatNumber(bottom.roas)}`}
-          />
-        )}
-        {bestDate && (
-          <InsightRow
-            icon={<Calendar className="text-accent" size={20} />}
-            primary={`יום הכי טוב בתקופה: ${formatDate(bestDate)}`}
-            secondary={`ROAS ${formatNumber(bestRoas)}  •  הכנסות CAD ${formatCurrency(bestRevenue)}`}
-          />
-        )}
-      </div>
+    <section>
+      <InsightCard tone="info" title="תובנות מהירות">
+        <div className="divide-y divide-status-blue/20 -mx-4 -mb-2">
+          {top && (
+            <InsightRow
+              icon={<Trophy className="text-status-warning" size={20} />}
+              primary={`חנות מובילה: ${top.store}`}
+              secondary={`ROAS ${formatNumber(top.roas)}  •  הכנסות CAD ${formatCurrency(top.revenue)}`}
+            />
+          )}
+          {bottom && bottom.store !== top?.store && (
+            <InsightRow
+              icon={<AlertTriangle className="text-status-red" size={20} />}
+              primary={`דורש תשומת לב: ${bottom.store}`}
+              secondary={`ROAS ${formatNumber(bottom.roas)}`}
+            />
+          )}
+          {bestDate && (
+            <InsightRow
+              icon={<Calendar className="text-accent" size={20} />}
+              primary={`יום הכי טוב בתקופה: ${formatDate(bestDate)}`}
+              secondary={`ROAS ${formatNumber(bestRoas)}  •  הכנסות CAD ${formatCurrency(bestRevenue)}`}
+            />
+          )}
+        </div>
+      </InsightCard>
     </section>
   );
 }
