@@ -1731,3 +1731,101 @@ cron-live takes over again.
 | cron-live-{store} step.runs per tick | ~5 (shopify + spend-light + 3 prior + persist) | 3 (shopify + orders + persist) |
 | Worker hot_metrics steps per tick | 4 (BUC + hot ids + 2 upserts + recHotPair) | 5 (+ account-aggregate) |
 | Platform API calls / 10 min | 36 | 18 |
+
+## Phase E1.6.1 — Hot-set / account-aggregate regression hotfixes (2026-05-30 evening)
+
+The Phase E1.6 ship at ~18:30 IL stopped propagating account-level
+spend + CPM to `data_daily.{fb,ga,tt}_spend_cad` + `*_impressions` in
+production. Three independent bugs surfaced once the cron-live
+fetch-light step was removed; this section documents all three and the
+fixes that landed in commits `cfd1903` + `a4c0d0e`.
+
+### Bug 1 — Empty hot-set early-exit pre-empted the E1.6 write
+
+In all 3 hot_metrics worker branches (`metaWorker`, `googleWorker`,
+`tiktokWorker`), the Phase E1.6 account-aggregate block was placed
+**after** the pre-existing `if (hotCampaign + hotAdset + hotAd === 0)
+return;` early-exit. Stores with no campaigns flagged "hot" at tick
+time (per the 5-branch hot-set RPCs in
+`20260530240000_phase_c_hot_set_functions.sql`) returned **before** the
+new account-aggregate write, freezing `data_daily.fb/ga/tt_spend_cad`
++ impressions. cron-live's `priorSpendByDate` then re-read the stale
+values every tick → the dashboard's per-account spend / Live CPM
+appeared frozen even though Phase E1.6 had wired the new path
+"correctly".
+
+**Fix**: in each worker's `runXHotMetricsBranch`, resolve credentials
+early and execute the account-aggregate block **before** the
+empty-hot-set check. The hot-set fetch + campaigns_daily / ads_daily
+upsert remain gated on a non-empty hot set as before. Regression
+tests added to all 3 *.test.ts files asserting that an empty hot set
+still triggers `fetchAccountSpend` + 3 calls to
+`upsertDataDailySpend` (Meta/Google) or `aggregateTiktokSpendByStore`
+(TikTok).
+
+### Bug 2 — `hotSet.ts` silent soft-fail-to-empty hid RPC failures
+
+The Phase C wrappers `getHotCampaignIds` / `getHotAdsetIds` /
+`getHotAdIds` (`dashboard-web/src/lib/registries/hotSet.ts`) caught any
+RPC error and returned `[]` with `console.warn`. A missing migration,
+permissions issue, transient DB failure, or a genuinely empty hot set
+all looked identical to the worker → no operator signal, no Sentry
+event, no freshness `transient_error` row.
+
+**Fix**: remove the soft-fail; throw on RPC errors. The worker's outer
+try/catch records `data_freshness.transient_error` and Inngest's
+exponential-backoff retry kicks in. Operator sees the cause in
+`/operator`'s freshness panel within one tick. Updated
+`hotSet.test.ts` to assert the new throw contract.
+
+### Bug 3 — TikTok account-aggregate cross-store inflation
+
+The Phase E1.6 block in `tiktokWorker` called the bulk-date account
+spend fetcher and wrote the **full advertiser total** to
+`data_daily.tt_spend_cad` for whatever store_id ran the worker. For
+TikTok this is wrong: there is **one** shared advertiser (uzoshop's)
+serving multiple stores via per-ad pixel routing (Phase A.5 v2). So:
+
+- `uzoshop.tt_spend_cad` was inflated (full advertiser total = sum of
+  all stores' campaign spend).
+- `usmile360.tt_spend_cad` + `zolplus.tt_spend_cad` stayed at 0 because
+  those stores' workers skip at `checkTikTokConfigured` (only uzoshop
+  has its own TikTok env vars).
+
+Pre-Phase-E1 this was avoided by `cron-live-heavy` running the
+`agg_tiktok_spend_per_store_for_date(d)` RPC every 30 min via
+`persistCampaignsLive`. Phase E1 (earlier today) disabled
+`cron-live-heavy` entirely, leaving only the nightly cronDaily call.
+
+**Fix**: remove the bulk-date account-spend write from `tiktokWorker`
+entirely. Replace with a per-tick call to
+`agg_tiktok_spend_per_store_for_date(today)` — once before the
+empty-hot-set early-exit (re-aggregates whatever's currently in
+campaigns_daily) and once after `upsertCampaignsDaily` (picks up the
+fresh writes). The RPC re-aggregates campaigns_daily per (date,
+store_id) — which is already correctly attributed via the campaign-
+store-map at write time — into `data_daily.tt_spend_cad +
+tt_impressions`, then recomputes `total_spend_cad + roas +
+gross_profit + net_profit` in Pass 2. Meta + Google's E1.6
+account-aggregate blocks are unchanged (each store has its own ad
+account → no cross-store inflation issue).
+
+**Removed wiring**: the TikTok Inngest binding no longer passes
+`fetchAccountSpend` / `cadConvert` / `upsertDataDailySpend`. The
+`fetchTikTokAccountSpendForDates` fetcher remains in the codebase
+unused (kept for the operator's manual debugging if ever needed; not
+imported by the worker).
+
+### Tests
+3 new regression tests (one per worker) for Bug 1.
+1 updated hotSet test for Bug 2.
+3 restructured TikTok tests for Bug 3 (replacing the 2 prior E1.6
+account-aggregate tests + the regression test added for Bug 1).
+**Net: 1577 total tests green** (was 1574).
+
+### Rollback
+`git revert cfd1903 a4c0d0e`. The empty-hot-set early-exit returns to
+its pre-fix position (Bug 1 returns); hotSet.ts goes back to silent
+soft-fail (Bug 2 returns); tiktokWorker re-wires the bulk-date account
+fetcher (Bug 3 returns). data_daily heals on the next nightly
+cronDaily run regardless.
