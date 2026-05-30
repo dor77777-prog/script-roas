@@ -61,6 +61,12 @@ export type CohortMember = {
     roasShopifyPlatform: number;
     conversions: number;
     effectiveStatus: string | null;
+    /**
+     * Phase D (2026-05-30) — registry-backed effective status. Threaded
+     * through from Aggregated so the cohort comparison panel can prefer
+     * always-fresh registry truth over the legacy effective_status.
+     */
+    regEffectiveStatus: string | null;
   } | undefined;
 };
 
@@ -435,6 +441,7 @@ function buildMember(
         ),
         conversions: agg.conversions,
         effectiveStatus: agg.effectiveStatus,
+        regEffectiveStatus: agg.regEffectiveStatus,
       }
     : undefined;
 

@@ -47,6 +47,13 @@ export type ProductCohortMember = {
   /** roas = conversionValue / spend (platform-reported). 0 when spend=0. */
   platformRoas: number;
   effectiveStatus: string | null;
+  /**
+   * Phase D (2026-05-30) — registry-backed delivery status, threaded
+   * through from Aggregated so the per-platform mini-table can prefer
+   * always-fresh registry truth over the legacy effective_status.
+   * Null for dormant members (no aggregated row in range).
+   */
+  regDeliveryStatus: string | null;
 };
 
 export type ProductCohortRow = {
@@ -398,6 +405,7 @@ export function buildProductCentricView(
           allocatedRevenueEstimate: allocatedRev,
           platformRoas: 0,
           effectiveStatus: null,
+          regDeliveryStatus: null,
         };
       }
       const a = r.agg;
@@ -438,6 +446,7 @@ export function buildProductCentricView(
         allocatedRevenueEstimate: allocatedRev,
         platformRoas: a.spend > 0 ? a.conversionValue / a.spend : 0,
         effectiveStatus: a.effectiveStatus,
+        regDeliveryStatus: a.regDeliveryStatus,
       };
     });
 

@@ -188,7 +188,9 @@ function MemberRow({ member, rank, isCurrent, onDrill }: MemberRowProps) {
         {metrics ? formatNumber(metrics.conversions, 0) : '—'}
       </td>
       <td className="px-2 py-1.5 text-xs text-end">
-        <StatusBadge status={metrics?.effectiveStatus ?? null} />
+        {/* Phase D (2026-05-30) — prefer reg_effective_status; fall back
+            to legacy. */}
+        <StatusBadge status={metrics?.regEffectiveStatus ?? metrics?.effectiveStatus ?? null} />
       </td>
     </tr>
   );

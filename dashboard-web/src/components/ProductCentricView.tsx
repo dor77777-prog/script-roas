@@ -624,9 +624,14 @@ function ProductRow({
                 <tbody>
                   {platformGroup.members.map((m, i) => {
                     const isActive =
-                      m.effectiveStatus === 'ACTIVE' ||
-                      m.effectiveStatus === 'ENABLED' ||
-                      m.effectiveStatus === 'ADGROUP_STATUS_DELIVERY_OK';
+                      // Phase D (2026-05-30) — prefer registry-backed
+                      // delivery_status (always-fresh ≤10 min); fall back
+                      // to legacy effectiveStatus when null.
+                      (m.regDeliveryStatus
+                        ? m.regDeliveryStatus === 'DELIVERING'
+                        : m.effectiveStatus === 'ACTIVE' ||
+                          m.effectiveStatus === 'ENABLED' ||
+                          m.effectiveStatus === 'ADGROUP_STATUS_DELIVERY_OK');
                     const isLeader = i === 0;
                     return (
                       <tr

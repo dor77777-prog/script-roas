@@ -52,6 +52,7 @@ function makeMember(opts: {
       roasShopifyPlatform: opts.roasShopifyPlatform ?? 0,
       conversions: 1,
       effectiveStatus: null,
+      regEffectiveStatus: null,
     },
   };
 }
