@@ -1465,3 +1465,36 @@ additional polling would resolve. Three changes landed to close Phase D:
 
 Scope deferred: adset/ad-level cleanup is out of scope for the close-
 out patch; revisit when Phase E2 adds ad-level status workers.
+
+### Phase D soak fix #2 (2026-05-30) — cron-live omits TikTok enrollment
+Re-running the coverage parity harness after the first soak fix exposed
+a separate upstream bug: `cron-live`'s "active ad-set enrollment"
+UPSERT was writing TikTok placeholder rows to `campaigns_daily` under
+the function-arg `storeId` (= the cron iteration's store, usually
+`uzoshop`) without consulting `campaign-store-map`. This created a
+fresh `(tiktok, uzoshop, X)` row for every cron-live tick on every
+TikTok campaign mapped to a non-uzoshop store, which (a) violated
+coverage parity once the matching registry row was DELETEd, and (b)
+re-seeded the same kind of cross-attribution duplicates that the
+Phase A.5 v2 backfill had cleaned.
+
+Fix: `cron-live` now filters out `platform === 'tiktok'` from
+`activeEnrollments` before the UPSERT, mirroring the principle from
+Phase A.5 v2 ("cron-live omits tt" for the same reason it omits spend
+aggregation). TikTok enrollment placeholders continue to be written by
+`cron-live-heavy` (every 30 min, via `persistCampaignsLive` which
+applies the per-row map) and the Phase C `tiktokWorker` hot_metrics
+branch (every 10 min). The UPDATE step #3 in `cron-live` still applies
+to all platforms including TikTok because it only modifies
+`effective_status` on EXISTING rows — it cannot create mis-attributed
+placeholder rows.
+
+Tradeoff acknowledged: a newly-active TikTok ad-set will not appear
+in `campaigns_daily` until the next cron-live-heavy tick (≤30 min)
+instead of the next cron-live tick (≤1 min). This is consistent with
+the existing TikTok spend latency and acceptable for the single-
+operator internal-tool use case.
+
+Companion data fix: migration `20260530300000` DELETE'd today's two
+stale `(tiktok, uzoshop, …)` rows so coverage parity restored
+immediately rather than waiting for ambient cleanup.

@@ -1478,8 +1478,23 @@ async function runLiveForStoreInner(
     //    INSERT path uses the schema defaults (0) for the missing
     //    metrics — exactly the "placeholder" state we want for a
     //    just-launched, not-yet-spent campaign.
+    // Phase D soak (2026-05-30) — cron-live OMITS TikTok from the enrollment
+    // UPSERT for the same reason Phase A.5 v2 omits TikTok spend: cron-live
+    // attributes by the function-arg storeId (the cron-iteration's store) and
+    // does NOT consult campaign-store-map. For TikTok, where the ad account
+    // is owned by uzoshop but individual campaigns can be mapped to other
+    // stores, this writes uzoshop-attributed campaigns_daily rows for
+    // campaigns that should belong to (e.g.) usmile360 — which then poisons
+    // Phase D registry backfill with cross-attribution duplicates.
+    //
+    // TikTok enrollment is handled correctly by cron-live-heavy (every 30
+    // min via persistCampaignsLive, which resolves per-row store_id via the
+    // map) and the Phase C tiktokWorker (every 10 min via the hot_metrics
+    // fetcher). The UPDATE step #3 below still applies to TikTok because it
+    // only modifies effective_status on EXISTING rows — it can't create
+    // mis-attributed placeholder rows.
     const activeEnrollments = enrollments.filter((e) =>
-      isActiveForPlatform(e.platform, e.status),
+      e.platform !== 'tiktok' && isActiveForPlatform(e.platform, e.status),
     );
     if (activeEnrollments.length > 0) {
       const upsertRows = activeEnrollments.map((e) => ({
