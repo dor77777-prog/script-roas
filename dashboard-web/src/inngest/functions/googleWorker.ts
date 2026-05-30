@@ -294,6 +294,31 @@ async function runGoogleStatusBranch(input: RunGoogleWorkerJobInput): Promise<vo
     );
     await upsertRegistry({ table: 'ad_registry', rows: adRows });
 
+    // 4.5 — Phase E1.5 (2026-05-30) — placeholder enrollment for Google
+    // (mirrors metaWorker Task 8 / cron-live's enroll-active-ad-sets
+    // step being removed in Task 11). Any ENABLED ad-group gets a
+    // placeholder row in campaigns_daily so it appears in the dashboard
+    // within 10 min of going live, even when hot_metrics hasn't yet
+    // fetched real spend.
+    if (input.upsertCampaignsDaily) {
+      const today = nowIso.slice(0, 10);
+      const activePlaceholders = status.adsets
+        .filter((a) => a.effective_status === 'ENABLED')
+        .map((a) => ({
+          date: today,
+          store_id: a.store_id,
+          platform: 'google' as const,
+          campaign_id: a.campaign_id,
+          campaign_name: status.campaigns.find((c) => c.campaign_id === a.campaign_id)?.name ?? '',
+          ad_set_id: a.adset_id,
+          ad_set_name: a.name ?? '',
+          effective_status: a.effective_status,
+        }));
+      if (activePlaceholders.length > 0) {
+        await input.upsertCampaignsDaily(activePlaceholders);
+      }
+    }
+
     // 5. Mark freshness success for all 3 scopes.
     await recAllStatusScopes('success');
   } catch (err) {

@@ -39,6 +39,67 @@ describe('runGoogleWorkerJob() — status scope', () => {
   });
 });
 
+describe('runGoogleWorkerJob() — status scope Phase E1.5 placeholder enrollment', () => {
+  it('ENABLED adsets UPSERT placeholder rows into campaigns_daily (no metrics)', async () => {
+    const fetchStatus = vi.fn().mockResolvedValue({
+      campaigns: [{
+        store_id: 'uzoshop', platform: 'google', campaign_id: 'GC1', name: 'GCamp 1',
+        configured_status: 'ENABLED', effective_status: 'SERVING', delivery_status: 'DELIVERING',
+        is_enabled: true, is_serving: true,
+        first_seen_at: '__placeholder__', last_seen_at: '__placeholder__',
+        platform_updated_at: null, status_changed_at: null,
+        last_metrics_success_at: null, last_status_success_at: null,
+        raw_status_payload: null, missed_seen_count: 0, is_removed: false,
+      }],
+      adsets: [
+        {
+          store_id: 'uzoshop', platform: 'google', campaign_id: 'GC1', adset_id: 'GA1', name: 'AdGroup Active',
+          configured_status: 'ENABLED', effective_status: 'ENABLED', delivery_status: 'DELIVERING',
+          is_enabled: true, is_serving: true,
+          first_seen_at: null, last_seen_at: null,
+          platform_updated_at: null, status_changed_at: null,
+          last_metrics_success_at: null, last_status_success_at: null,
+          raw_status_payload: null, missed_seen_count: 0, is_removed: false,
+        },
+        {
+          store_id: 'uzoshop', platform: 'google', campaign_id: 'GC2', adset_id: 'GA2', name: 'AdGroup Paused',
+          configured_status: 'PAUSED', effective_status: 'PAUSED', delivery_status: 'NOT_DELIVERING',
+          is_enabled: false, is_serving: false,
+          first_seen_at: null, last_seen_at: null,
+          platform_updated_at: null, status_changed_at: null,
+          last_metrics_success_at: null, last_status_success_at: null,
+          raw_status_payload: null, missed_seen_count: 0, is_removed: false,
+        },
+      ],
+      ads: [],
+    });
+    const upsertCampaignsDaily = vi.fn().mockResolvedValue(undefined);
+    await runGoogleWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'status', tick_id: 'T', staleness_seconds: 600, budget_pct_estimate: 10 },
+      fetchStatus, fetchHotMetrics: vi.fn(),
+      getHotCampaignIds: async () => [], getHotAdgroupIds: async () => [], getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(), insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily, upsertAdsDaily: vi.fn(),
+      recordFreshness: vi.fn(),
+      nowIso: NOW_ISO,
+      isGoogleConfigured: () => true,
+    });
+    expect(upsertCampaignsDaily).toHaveBeenCalledOnce();
+    const rows = upsertCampaignsDaily.mock.calls[0][0];
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      store_id: 'uzoshop',
+      platform: 'google',
+      campaign_id: 'GC1',
+      ad_set_id: 'GA1',
+      effective_status: 'ENABLED',
+    });
+    expect(rows[0]).not.toHaveProperty('spend_cad');
+    expect(rows[0]).not.toHaveProperty('impressions');
+  });
+});
+
 describe('runGoogleWorkerJob() — hot_metrics scope', () => {
   it('happy path: getHotIds → fetchMetrics → upsert daily (CRIT-B: adsets-only into campaigns_daily)', async () => {
     // CRIT-B: fetcher returns only adsets + ads (no campaign-level rows).
