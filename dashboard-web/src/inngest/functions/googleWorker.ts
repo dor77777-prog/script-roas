@@ -223,10 +223,22 @@ async function runGoogleStatusBranch(input: RunGoogleWorkerJobInput): Promise<vo
     //    change_status discovery query then entity follow-ups for
     //    CAMPAIGN / AD_GROUP / AD_GROUP_AD types.
     const customer = await safeCustomer(storeId, getCustomer);
-    const status = await fetchStatus({ storeId, customer });
 
-    // 2. Load prior registry rows for the diff (platform='google').
+    // Phase D soak (2026-05-30) — load prior registry BEFORE the fetch so
+    // we can pass any BACKFILL_UNKNOWN campaign ids to the fetcher as
+    // extraCampaignIds. change_status alone misses long-stable campaigns
+    // (e.g. ENABLED for a week without edits), leaving the migration's
+    // sentinel in place forever. This sweep is the structural fix —
+    // every tick that has stale rows performs a one-shot refresh.
     const prior = await loadPriorRegistry(storeId);
+    const extraCampaignIds: string[] = [];
+    for (const row of prior.campaigns.values()) {
+      if (row.configured_status === 'BACKFILL_UNKNOWN') {
+        extraCampaignIds.push(row.campaign_id);
+      }
+    }
+
+    const status = await fetchStatus({ storeId, customer, extraCampaignIds });
 
     // 3. Diff → status events (one per genuine transition; cosmetic
     //    edits like name changes do NOT emit events).

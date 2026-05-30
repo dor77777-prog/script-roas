@@ -35,6 +35,18 @@ type Customer = {
 export type GoogleStatusInput = {
   storeId: StoreId;
   customer: Customer;
+  /**
+   * Phase D soak (2026-05-30) — campaign ids the worker wants the
+   * follow-up SELECT to include even if change_status didn't surface
+   * them in the last 24h. Used to sweep registry rows that are still
+   * at the BACKFILL_UNKNOWN sentinel because the campaign has been
+   * stable longer than the change_status window.
+   *
+   * Without this, a long-stable campaign that was inserted by Phase D
+   * migration backfill stays at BACKFILL_UNKNOWN forever — the worker
+   * never re-queries it.
+   */
+  extraCampaignIds?: string[];
 };
 
 export type GoogleStatusResult = {
@@ -116,6 +128,16 @@ export async function fetchGoogleStatusForStore(input: GoogleStatusInput): Promi
       // `WHERE ad_group_ad.ad.id IN (...)` at the follow-up step.
       const adId = tail.split('~').pop();
       if (adId) adIds.add(adId);
+    }
+  }
+
+  // Phase D soak (2026-05-30) — merge in any extra ids the worker wants
+  // swept (registry rows still at BACKFILL_UNKNOWN because the campaign
+  // hasn't changed in the change_status 24h window). Set semantics dedupe
+  // against change_status hits automatically.
+  if (input.extraCampaignIds) {
+    for (const id of input.extraCampaignIds) {
+      if (id) campaignIds.add(id);
     }
   }
 

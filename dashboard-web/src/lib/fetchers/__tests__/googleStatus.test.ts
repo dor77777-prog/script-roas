@@ -139,4 +139,67 @@ describe('fetchGoogleStatusForStore()', () => {
     expect(lcdtOccurrences.length).toBeGreaterThanOrEqual(2);
     expect(firstQuery).toMatch(/change_status\.last_change_date_time\s*<=?/);
   });
+
+  // Phase D soak (2026-05-30) — sweep BACKFILL_UNKNOWN registry rows that
+  // change_status alone can't surface (long-stable campaigns outside the
+  // 24h window). Worker derives extraCampaignIds from prior registry rows
+  // where configured_status='BACKFILL_UNKNOWN' and passes them in here.
+  it('extraCampaignIds: includes registry sweep campaign ids in the follow-up query even when change_status returns empty', async () => {
+    const searchStream = vi.fn();
+    searchStream.mockResolvedValueOnce([]);
+    searchStream.mockResolvedValueOnce([
+      { campaign: { id: '22552655236', name: 'Long-Stable Campaign', status: 'ENABLED', servingStatus: 'SERVING' } },
+    ]);
+    const customer = { searchStream } as unknown as Parameters<typeof fetchGoogleStatusForStore>[0]['customer'];
+    const out = await fetchGoogleStatusForStore({
+      storeId: 'uzoshop',
+      customer,
+      extraCampaignIds: ['22552655236'],
+    });
+    expect(searchStream).toHaveBeenCalledTimes(2);
+    const followUpQuery = searchStream.mock.calls[1][0].query as string;
+    expect(followUpQuery).toContain("'22552655236'");
+    expect(out.campaigns).toHaveLength(1);
+    expect(out.campaigns[0]).toMatchObject({
+      store_id: 'uzoshop', platform: 'google',
+      campaign_id: '22552655236', configured_status: 'ENABLED', effective_status: 'SERVING',
+    });
+  });
+
+  it('extraCampaignIds: deduplicates ids that already appear in change_status', async () => {
+    const searchStream = vi.fn();
+    searchStream.mockResolvedValueOnce([
+      {
+        changeStatus: {
+          resourceType: 'CAMPAIGN',
+          campaign: 'customers/123/campaigns/22542818628',
+          lastChangeDateTime: '2026-05-30 14:00:00',
+        },
+      },
+    ]);
+    searchStream.mockResolvedValueOnce([
+      { campaign: { id: '22542818628', name: 'X', status: 'ENABLED', servingStatus: 'SERVING' } },
+    ]);
+    const customer = { searchStream } as unknown as Parameters<typeof fetchGoogleStatusForStore>[0]['customer'];
+    await fetchGoogleStatusForStore({
+      storeId: 'uzoshop',
+      customer,
+      extraCampaignIds: ['22542818628'],
+    });
+    const followUpQuery = searchStream.mock.calls[1][0].query as string;
+    const matches = followUpQuery.match(/'22542818628'/g) ?? [];
+    expect(matches).toHaveLength(1);
+  });
+
+  it('extraCampaignIds: skips follow-up entirely when both change_status and extra ids are empty', async () => {
+    const searchStream = vi.fn().mockResolvedValueOnce([]);
+    const customer = { searchStream } as unknown as Parameters<typeof fetchGoogleStatusForStore>[0]['customer'];
+    const out = await fetchGoogleStatusForStore({
+      storeId: 'uzoshop',
+      customer,
+      extraCampaignIds: [],
+    });
+    expect(searchStream).toHaveBeenCalledTimes(1);
+    expect(out.campaigns).toHaveLength(0);
+  });
 });
