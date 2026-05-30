@@ -269,6 +269,33 @@ export async function runMetaWorkerJob(input: RunMetaWorkerJobInput): Promise<vo
   );
   await upsertRegistry({ table: 'ad_registry', rows: adRows });
 
+  // 6.5 — Phase E1.5 (2026-05-30) — placeholder enrollment migrated from
+  // cron-live's enroll-active-ad-sets step. The status worker now owns
+  // per-store enrollment for Meta: any ACTIVE adset gets a placeholder
+  // row in campaigns_daily (no metric columns → preserved on conflict;
+  // default 0 on insert) so it appears in the dashboard within 10 min of
+  // going live, even when hot_metrics hasn't yet fetched real spend.
+  // Without this, postgresReaders.fetchCampaigns row-existence check
+  // would drop zero-spend active rows until cron-daily ran ~24h later.
+  if (input.upsertCampaignsDaily) {
+    const today = nowIso.slice(0, 10);
+    const activePlaceholders = status.adsets
+      .filter((a) => a.effective_status === 'ACTIVE')
+      .map((a) => ({
+        date: today,
+        store_id: a.store_id,
+        platform: 'meta' as const,
+        campaign_id: a.campaign_id,
+        campaign_name: status.campaigns.find((c) => c.campaign_id === a.campaign_id)?.name ?? '',
+        ad_set_id: a.adset_id,
+        ad_set_name: a.name ?? '',
+        effective_status: a.effective_status,
+      }));
+    if (activePlaceholders.length > 0) {
+      await input.upsertCampaignsDaily(activePlaceholders);
+    }
+  }
+
   // 7. Mark freshness success for all 3 scopes.
   for (const s of ['campaign_status', 'adset_status', 'ad_status'] as const) {
     await rec({

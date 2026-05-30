@@ -93,6 +93,68 @@ describe('runMetaWorkerJob()', () => {
     expect(successCalls.map(c => c[0].scope).sort()).toEqual(['ad_status', 'adset_status', 'campaign_status']);
   });
 
+  it('Phase E1.5: ACTIVE adsets UPSERT placeholder rows into campaigns_daily (no metrics)', async () => {
+    const fetcher = vi.fn().mockResolvedValue({
+      campaigns: [freshCampaign('C1', 'ACTIVE'), freshCampaign('C2', 'PAUSED')],
+      adsets: [
+        {
+          store_id: 'uzoshop', platform: 'meta', campaign_id: 'C1', adset_id: 'AS1', name: 'Adset Active',
+          configured_status: 'ACTIVE', effective_status: 'ACTIVE', delivery_status: 'DELIVERING',
+          is_enabled: true, is_serving: true,
+          first_seen_at: '__placeholder__', last_seen_at: '__placeholder__',
+          platform_updated_at: null, status_changed_at: null,
+          last_metrics_success_at: null, last_status_success_at: null,
+          raw_status_payload: null, missed_seen_count: 0, is_removed: false,
+          daily_budget_cad: null, lifetime_budget_cad: null,
+        },
+        {
+          store_id: 'uzoshop', platform: 'meta', campaign_id: 'C2', adset_id: 'AS2', name: 'Adset Paused',
+          configured_status: 'PAUSED', effective_status: 'PAUSED', delivery_status: 'NOT_DELIVERING',
+          is_enabled: false, is_serving: false,
+          first_seen_at: '__placeholder__', last_seen_at: '__placeholder__',
+          platform_updated_at: null, status_changed_at: null,
+          last_metrics_success_at: null, last_status_success_at: null,
+          raw_status_payload: null, missed_seen_count: 0, is_removed: false,
+          daily_budget_cad: null, lifetime_budget_cad: null,
+        },
+      ],
+      ads: [],
+      bucUsage: {
+        ads_insights_call_pct: 12, ads_insights_cputime_pct: 5, ads_insights_time_pct: 5, ads_insights_eta_minutes: 0,
+        ads_management_call_pct: 7, ads_management_cputime_pct: 2, ads_management_time_pct: 2, ads_management_eta_minutes: 0,
+      },
+    });
+    const upsertCampaignsDaily = vi.fn().mockResolvedValue(undefined);
+    await runMetaWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'status', tick_id: 'T', staleness_seconds: 900, budget_pct_estimate: 12 },
+      bucProbe: async () => ({ pct: 12, etaMinutes: 0 }),
+      fetchStatus: fetcher,
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(),
+      insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily,
+      upsertAdsDaily: vi.fn(),
+      recordFreshness: vi.fn(),
+      upsertBuc: vi.fn(),
+      nowIso: NOW_ISO,
+    });
+    expect(upsertCampaignsDaily).toHaveBeenCalledOnce();
+    const rows = upsertCampaignsDaily.mock.calls[0][0];
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      date: '2026-05-29',
+      store_id: 'uzoshop',
+      platform: 'meta',
+      campaign_id: 'C1',
+      ad_set_id: 'AS1',
+      effective_status: 'ACTIVE',
+    });
+    expect(rows[0]).not.toHaveProperty('spend_cad');
+    expect(rows[0]).not.toHaveProperty('impressions');
+    expect(rows[0]).not.toHaveProperty('clicks');
+    expect(rows[0]).not.toHaveProperty('conversions');
+  });
+
   it('ignores scope !== status (Phase C will handle hot_metrics)', async () => {
     const fetcher = vi.fn();
     await runMetaWorkerJob({
