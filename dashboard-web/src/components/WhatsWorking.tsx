@@ -189,7 +189,7 @@ export function WhatsWorking() {
     return (
       <section className="rounded-xl bg-elevated border border-line-subtle shadow-sm p-4 sm:p-5">
         <div className="flex items-center gap-2 mb-1">
-          <Sparkles size={18} className="text-amber-500" />
+          <Sparkles size={18} className="text-status-warning" />
           <h2 className="text-sm sm:text-base font-semibold text-ink">
             מה עובד השבוע
           </h2>
@@ -203,9 +203,9 @@ export function WhatsWorking() {
 
   return (
     <section className="rounded-xl bg-elevated border border-line-subtle shadow-sm overflow-hidden">
-      <header className="px-4 sm:px-5 py-3 border-b border-line-subtle bg-gradient-to-l from-amber-50/60 to-elevated">
+      <header className="px-4 sm:px-5 py-3 border-b border-line-subtle bg-gradient-to-l from-status-warning-bg/60 to-elevated">
         <div className="flex items-center gap-2">
-          <Sparkles size={18} className="text-amber-500" />
+          <Sparkles size={18} className="text-status-warning" />
           <h2 className="text-sm sm:text-base font-semibold text-ink">
             מה עובד השבוע
           </h2>
@@ -230,7 +230,7 @@ const KIND_META: Record<
   'top-product': {
     icon: <Trophy size={16} />,
     label: 'מוצר מוביל',
-    tone: 'text-amber-600 bg-amber-50',
+    tone: 'text-status-warning bg-status-warning-bg',
   },
   'top-campaign': {
     icon: <Trophy size={16} />,

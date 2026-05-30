@@ -43,7 +43,7 @@ export type CampaignsTableRowTrustLevel =
  */
 export function computeTrustTone(level: CampaignsTableRowTrustLevel): string {
   return level === 'high'   ? 'bg-status-greenBg/60 text-status-green'
-       : level === 'medium' ? 'bg-amber-50 text-amber-700'
+       : level === 'medium' ? 'bg-status-warning-bg text-status-warning-fg'
        :                      'bg-status-redBg/60 text-status-red';
 }
 
@@ -331,7 +331,7 @@ export function CampaignsTableRow({
                   campaignKey(a.storeId, a.platform, a.campaignId),
                 ) && (
                   <span
-                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-amber-100 text-amber-800 border border-amber-300"
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-status-warning-bg text-status-warning-fg border border-status-warning/30"
                     title="הקמפיין הזה עדיין לא ממופה למוצרי Shopify. פתח את המגירה (קליק על שם הקמפיין) ובחר את המוצרים הרלוונטיים כדי שהדאשבורד יחשב ROAS Shopify אמיתי."
                   >
                     🏷️ לא ממופה
@@ -354,7 +354,7 @@ export function CampaignsTableRow({
                   once the next orchestrator tick runs the status worker. */}
               {statusVerdict.isBackfillUnknown && (
                 <span
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-amber-50 text-amber-700 border border-amber-200"
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-status-warning-bg text-status-warning-fg border border-status-warning/30"
                   title="הסטטוס המוגדר עדיין לא נדגם מה-platform — ימולא בעוד עד 10 דק׳."
                 >
                   ⏳ טוען מ-Platform
@@ -421,7 +421,7 @@ export function CampaignsTableRow({
           // budget, flag amber — useful "pacing" signal.
           const tight = a.spend > 0 && a.spend > budget * 0.95;
           return (
-            <span className={cn('font-medium', tight && 'text-amber-700')}>
+            <span className={cn('font-medium', tight && 'text-status-warning-fg')}>
               {formatCurrency(budget)}
             </span>
           );

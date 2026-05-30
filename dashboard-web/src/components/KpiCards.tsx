@@ -335,7 +335,7 @@ function KpiCard({
             'flex items-center gap-1 text-[10px] sm:text-[11px] font-medium',
             delta.direction === 'flat' && 'text-ink-muted',
             isGood && 'text-status-green',
-            isBad  && 'text-amber-600',
+            isBad  && 'text-status-warning',
           )}
         >
           {delta.direction === 'up'   && <TrendingUp   size={11} className="shrink-0" />}

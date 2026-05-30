@@ -1076,7 +1076,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
               : 'השוואה: חצי שני vs חצי ראשון של הטווח';
             const toneBg: Record<typeof analysis.tone, string> = {
               positive: 'bg-status-greenBg/40 border-status-green/30 text-status-green',
-              warning:  'bg-amber-50 border-amber-300 text-amber-800',
+              warning:  'bg-status-warning-bg border-status-warning/30 text-status-warning-fg',
               negative: 'bg-status-redBg/40 border-status-red/30 text-status-red',
               neutral:  'bg-elevated2 border-line-subtle text-ink-secondary',
             };
@@ -1278,7 +1278,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                     </span>
                     {showPrevLine && (
                       <span className="inline-flex items-center gap-1.5">
-                        <span className="inline-block w-3 border-t-2 border-dashed border-amber-400" />
+                        <span className="inline-block w-3 border-t-2 border-dashed border-status-warning" />
                         CPM תקופה קודמת
                       </span>
                     )}
@@ -1291,7 +1291,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                   </div>
                 )}
                 {cpmAnalysisMode === 'prev' && !isLoadingPrev && analysis.mode === 'half-over-half' && (
-                  <div className="text-[10px] text-amber-700 bg-amber-50 px-2 py-1 rounded mt-1">
+                  <div className="text-[10px] text-status-warning-fg bg-status-warning-bg px-2 py-1 rounded mt-1">
                     {/* FIX-19 (5.2.2.1): fallback disclosure when previous period had
                         fewer than PREV_PERIOD_MIN_DAYS active days.
                         WR-01 (5.2.2.1): gated by !isLoadingPrev so the banner does not fire prematurely
@@ -1462,7 +1462,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                         <span className="truncate max-w-[120px]">{id}</span>
                         {others.length > 0 && (
                           <span
-                            className="text-amber-700 text-[9px] font-sans ms-1"
+                            className="text-status-warning-fg text-[9px] font-sans ms-1"
                             aria-label={`גם משויך ל-${others.length} קמפיינים אחרים`}
                           >
                             🔗 +{others.length}
@@ -1481,7 +1481,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                   share) isn't obvious without this note. */}
               {mappedIds.length > 0 &&
                 mappedIds.some(id => (otherCampaignsByProduct.get(id) ?? []).length > 0) && (
-                  <p className="text-[10px] text-ink-muted leading-relaxed mt-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
+                  <p className="text-[10px] text-ink-muted leading-relaxed mt-2 bg-status-warning-bg border border-status-warning/30 rounded-lg px-3 py-1.5">
                     🔗 חלק מהמוצרים גם משויכים לקמפיינים אחרים. ה-ROAS Shopify
                     של הקמפיין הזה מחושב לפי <strong>חלקו של הקמפיין בהוצאה</strong>{' '}
                     (חלוקה פרופורציונלית) — לא לפי כל ההכנסה של המוצר.

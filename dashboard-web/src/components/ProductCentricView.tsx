@@ -441,7 +441,7 @@ function ProductRow({
           <div className="text-sm font-semibold text-ink truncate" title={row.productTitle}>
             {row.productTitle}
             {row.isMultiMapped && (
-              <span className="inline-block text-[10px] font-bold tracking-wider align-middle bg-amber-100 text-amber-800 border border-amber-300 px-1.5 py-0.5 rounded ms-2">
+              <span className="inline-block text-[10px] font-bold tracking-wider align-middle bg-status-warning-bg text-status-warning-fg border border-status-warning/30 px-1.5 py-0.5 rounded ms-2">
                 🔗 {row.members.length} קמפיינים
               </span>
             )}

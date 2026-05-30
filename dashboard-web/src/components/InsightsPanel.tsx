@@ -46,10 +46,10 @@ export function InsightsPanel({ storeAggs, rows }: Props) {
         <Lightbulb size={18} className="text-ink-secondary" />
         תובנות מהירות
       </h2>
-      <div className="rounded-xl bg-amber-50 border border-amber-200 divide-y divide-amber-200 overflow-hidden">
+      <div className="rounded-xl bg-status-warning-bg border border-status-warning/30 divide-y divide-status-warning/30 overflow-hidden">
         {top && (
           <InsightRow
-            icon={<Trophy className="text-amber-600" size={20} />}
+            icon={<Trophy className="text-status-warning" size={20} />}
             primary={`חנות מובילה: ${top.store}`}
             secondary={`ROAS ${formatNumber(top.roas)}  •  הכנסות CAD ${formatCurrency(top.revenue)}`}
           />

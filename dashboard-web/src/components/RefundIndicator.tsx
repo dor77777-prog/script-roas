@@ -229,7 +229,7 @@ export function RefundIndicator(props: {
           cancelHide();
           setOpen((v) => !v);
         }}
-        className="inline-flex items-center justify-center text-amber-700 dark:text-amber-300 hover:text-amber-900 dark:hover:text-amber-100 cursor-pointer"
+        className="inline-flex items-center justify-center text-status-warning-fg hover:text-status-warning cursor-pointer"
       >
         <RotateCcw size={14} />
       </button>
@@ -259,7 +259,7 @@ export function RefundIndicator(props: {
             className="z-[9999] px-3 py-2 rounded-md shadow-xl bg-ink text-canvas text-xs leading-relaxed text-start"
             dir="rtl"
           >
-            <span className="block font-semibold text-amber-300 mb-1">
+            <span className="block font-semibold text-status-warning-fg mb-1">
               יום עם החזרים
             </span>
             <span className="block">
@@ -268,7 +268,7 @@ export function RefundIndicator(props: {
             </span>
             <span className="block">
               סכום החזרים:{' '}
-              <span className="tabular-nums font-medium text-amber-200">
+              <span className="tabular-nums font-medium text-status-warning-fg">
                 −{refundLabel}
               </span>
             </span>

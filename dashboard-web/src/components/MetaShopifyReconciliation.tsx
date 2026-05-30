@@ -417,7 +417,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
   const primaryRClass =
     primaryAbsR === null ? 'text-ink-muted'
       : primaryAbsR >= 0.7 ? 'text-status-green'
-      : primaryAbsR >= 0.3 ? 'text-amber-600'
+      : primaryAbsR >= 0.3 ? 'text-status-warning'
       : 'text-status-red';
   const noSignalTitle = 'אין שונות בסדרה — לא ניתן לחשב';
   const formatR = (value: number | null) => (
@@ -464,7 +464,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
 
         {/* Dark traffic chip */}
         {reconciliation.darkTrafficPercent > 0 && (
-          <div className="rounded-md bg-amber-50 border border-amber-200 px-2.5 py-1.5 text-[11px] text-amber-900">
+          <div className="rounded-md bg-status-warning-bg border border-status-warning/30 px-2.5 py-1.5 text-[11px] text-status-warning-fg">
             <strong>פער &quot;Dark traffic&quot; {reconciliation.darkTrafficPercent}%:</strong>{' '}
             סכום Meta+Google+Organic נמוך מ-Shopify בפועל. ייתכן channel attribution חסר (UTMs לא מוגדרים נכון, סוגי orders שלא מתויגים).
           </div>
@@ -535,7 +535,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 if (primaryChannel === 'Google') {
                   return (
                     <>
-                      <strong className="text-amber-600">מתאם חלקי.</strong>{' '}
+                      <strong className="text-status-warning">מתאם חלקי.</strong>{' '}
                       Google תופס חלק מהתנועות אבל יש ימים שהוא חורג.{' '}
                       התעלם מ-Google ברמת יום בודד, התייחס רק לאגרגציה של 7+ ימים.
                     </>
@@ -544,7 +544,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 if (primaryChannel === 'TikTok') {
                   return (
                     <>
-                      <strong className="text-amber-600">מתאם חלקי.</strong>{' '}
+                      <strong className="text-status-warning">מתאם חלקי.</strong>{' '}
                       TikTok תופס חלק מהתנועות אבל יש ימים שהוא חורג.{' '}
                       התעלם מ-TikTok ברמת יום בודד, התייחס רק לאגרגציה של 7+ ימים.
                     </>
@@ -553,7 +553,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 if (primaryChannel === 'Combined') {
                   return (
                     <>
-                      <strong className="text-amber-600">מתאם חלקי.</strong>{' '}
+                      <strong className="text-status-warning">מתאם חלקי.</strong>{' '}
                       Σ של 4 הערוצים מול Shopify מסביר חלק מהתנועה, אבל חסרים ימים.{' '}
                       בדוק מיפוי מוצרים, UTMs וערוצים שלא נכנסים לאחת הסדרות.
                     </>
@@ -561,7 +561,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 }
                 return (
                   <>
-                    <strong className="text-amber-600">מתאם חלקי.</strong>{' '}
+                    <strong className="text-status-warning">מתאם חלקי.</strong>{' '}
                     Meta תופס חלק מהתנועות אבל יש ימים שהוא חורג.{' '}
                     התעלם מ-Meta ברמת יום בודד, התייחס רק לאגרגציה של 7+ ימים.
                   </>
@@ -622,7 +622,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
           reconciliation.bestR !== null &&
           reconciliation.r !== null &&
           reconciliation.bestR > reconciliation.r + LAG_IMPROVEMENT_THRESHOLD && (
-          <div className="rounded-md bg-amber-50 border border-amber-200 px-2.5 py-1.5 text-[11px] text-amber-900">
+          <div className="rounded-md bg-status-warning-bg border border-status-warning/30 px-2.5 py-1.5 text-[11px] text-status-warning-fg">
             <strong>זוהה lag של {Math.abs(reconciliation.bestLag)} ימים:</strong>{' '}
             {reconciliation.bestLag > 0
               ? `Meta מדווח על המרה ${Math.abs(reconciliation.bestLag)} ימים לפני שהמכירה מופיעה ב-Shopify (חלון attribution).`

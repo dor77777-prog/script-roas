@@ -157,7 +157,7 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
           </div>
         )}
         {exclusiveFacebookShare < 0.3 && total >= 5 && (
-          <div className="rounded-md bg-amber-50 border border-amber-300 text-amber-800 px-2.5 py-2 text-[11px] leading-relaxed">
+          <div className="rounded-md bg-status-warning-bg border border-status-warning/30 text-status-warning-fg px-2.5 py-2 text-[11px] leading-relaxed">
             <strong>⚠️ </strong>
             רק {fbPct}% מהמכירות הגיעו מפייסבוק
             {' → '}

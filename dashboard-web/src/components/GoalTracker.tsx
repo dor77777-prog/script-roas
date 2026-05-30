@@ -181,7 +181,7 @@ export function GoalTracker({ data }: Props) {
               className={cn(
                 'w-full rounded-lg border bg-elevated pe-3 ps-12 py-2 text-sm focus:outline-none focus:shadow-focus',
                 editError != null || draftIsInvalid
-                  ? 'border-amber-500 focus:border-amber-600'
+                  ? 'border-status-warning focus:border-status-warning'
                   : 'border-line focus:border-accent',
               )}
             />
@@ -208,7 +208,7 @@ export function GoalTracker({ data }: Props) {
           </button>
         </div>
         {editError && (
-          <p className="text-[11px] text-amber-700 mt-2" role="alert">
+          <p className="text-[11px] text-status-warning-fg mt-2" role="alert">
             {editError}
           </p>
         )}
@@ -233,7 +233,7 @@ export function GoalTracker({ data }: Props) {
   > = {
     ahead: { label: 'מקדים את היעד', bg: 'bg-status-greenBg', color: 'text-status-green' },
     'on-pace': { label: 'בקצב הנכון', bg: 'bg-accent/10', color: 'text-accent' },
-    behind: { label: 'מפגר מהיעד', bg: 'bg-amber-100', color: 'text-amber-700' },
+    behind: { label: 'מפגר מהיעד', bg: 'bg-status-warning-bg', color: 'text-status-warning-fg' },
     unknown: { label: '—', bg: 'bg-elevated2', color: 'text-ink-muted' },
   };
   const sMeta = statusMeta[pacing.status];
@@ -242,7 +242,7 @@ export function GoalTracker({ data }: Props) {
   const barColor =
     pacing.status === 'ahead' ? 'bg-status-green'
     : pacing.status === 'on-pace' ? 'bg-accent'
-    : pacing.status === 'behind' ? 'bg-amber-500'
+    : pacing.status === 'behind' ? 'bg-status-warning'
     : 'bg-ink-muted';
 
   return (

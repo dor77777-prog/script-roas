@@ -324,7 +324,7 @@ export function HeroOverview({ data, filters }: Props) {
             />
             {heavyDates.length > 0 && (
               <div
-                className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-500/15 border border-amber-400/30 px-2 py-0.5 text-xs text-amber-300 font-medium"
+                className="mt-2 inline-flex items-center gap-1 rounded-full bg-status-warning/15 border border-status-warning/30 px-2 py-0.5 text-xs text-status-warning-fg font-medium"
                 title={`${heavyDates.length === 1 ? 'יום רפאנד כבד' : `${heavyDates.length} ימי רפאנד כבדים`} בתקופה — ${heavyDates.map(d => fmtDateShort(d)).join(', ')}`}
               >
                 <RotateCcw className="h-3 w-3" aria-hidden="true" />
@@ -718,7 +718,7 @@ function DeltaPill({ value, inverse }: { value: number; inverse?: boolean }) {
         'inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-medium tabular-nums',
         isFlat && 'text-white/55',
         !isFlat && isPositive && 'text-emerald-300',
-        !isFlat && !isPositive && 'text-amber-200',
+        !isFlat && !isPositive && 'text-status-warning-fg',
       )}
     >
       <Icon size={11} className="shrink-0" />
@@ -737,7 +737,7 @@ function RawDeltaPill({ value }: { value: number }) {
         'inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-medium tabular-nums',
         isFlat && 'text-white/55',
         !isFlat && value > 0 && 'text-emerald-300',
-        !isFlat && value < 0 && 'text-amber-200',
+        !isFlat && value < 0 && 'text-status-warning-fg',
       )}
     >
       <Icon size={11} className="shrink-0" />

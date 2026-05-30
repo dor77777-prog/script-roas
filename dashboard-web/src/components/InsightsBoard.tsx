@@ -59,10 +59,10 @@ const SEVERITY_META: Record<
   warning: {
     label: 'אזהרות',
     icon: <AlertTriangle size={16} />,
-    color: 'text-amber-700',
-    bg: 'bg-amber-50',
-    border: 'border-amber-200',
-    badge: 'bg-amber-500 text-white',
+    color: 'text-status-warning-fg',
+    bg: 'bg-status-warning-bg',
+    border: 'border-status-warning/30',
+    badge: 'bg-status-warning text-white',
   },
   opportunity: {
     label: 'הזדמנויות',
@@ -430,7 +430,7 @@ function InsightHero({
   // muted for the kind of vertical-rule moment we want here).
   const ACCENT_BG: Record<Severity, string> = {
     critical:    'bg-status-red',
-    warning:     'bg-amber-500',
+    warning:     'bg-status-warning',
     opportunity: 'bg-accent',
     positive:    'bg-status-green',
     info:        'bg-ink-muted',

@@ -91,7 +91,7 @@ export function SyncIndicator() {
     // operator gets the documented amber signal as soon as health reports.
     icon = <Cloud size={13} />;
     label = 'sync OK';
-    tone = 'bg-amber-500/30 text-white hover:bg-amber-500/40';
+    tone = 'bg-status-warning/30 text-white hover:bg-status-warning/40';
     title = 'Sheets תקין, Supabase לא זמין — בדוק SUPABASE_URL / SUPABASE_ANON_KEY ב-Vercel';
   } else if (status === 'ok') {
     icon = <Cloud size={13} />;

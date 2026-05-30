@@ -24,7 +24,7 @@ describe('HeroOverview — refund-visibility strings', () => {
   it('appends a refund clause to the story when sumRefundsInRange > 0', () => {
     expect(SRC).toMatch(/(החזרים מעובדים|עובדו .* בהחזרים)/);
   });
-  it('uses the amber palette (matches existing RefundIndicator)', () => {
-    expect(SRC).toMatch(/amber-/);
+  it('uses the status-warning palette (tokens route through --status-warning)', () => {
+    expect(SRC).toMatch(/status-warning/);
   });
 });
