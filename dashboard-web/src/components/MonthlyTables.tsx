@@ -37,6 +37,13 @@ type Props = {
    * all months of the year are shown (default behavior).
    */
   month?: number | null;
+  /**
+   * When true, suppress the internal mode-toggle (לפי חנות / סיכום כללי) and
+   * store dropdown. Forces mode='per-store' and uses globalStore directly.
+   * Use this when the parent is already controlling the store via a sub-tab
+   * so the user doesn't have to pick a store in two places.
+   */
+  hideStoreToolbar?: boolean;
 };
 
 /**
@@ -126,7 +133,7 @@ function roasCell(roas: number, revenue: number, totalSpend: number): { classNam
   return { className: ROAS_BG[roasLabel(roas).tone], text: formatNumber(roas) };
 }
 
-export function MonthlyTables({ stores, globalStore, bare = false, year, month }: Props) {
+export function MonthlyTables({ stores, globalStore, bare = false, year, month, hideStoreToolbar = false }: Props) {
   const [mode, setMode] = useState<Mode>('per-store');
 
   // Initialise the local store dropdown from the global filter when it names a
@@ -138,6 +145,13 @@ export function MonthlyTables({ stores, globalStore, bare = false, year, month }
       ? globalStore
       : stores[0] || 'All';
   const [storeFilter, setStoreFilter] = useState<string>(initialStore);
+
+  // When the parent controls the store via a sub-tab, lock both mode and
+  // storeFilter to the parent-provided values — no internal picker needed.
+  const effectiveMode: Mode = hideStoreToolbar ? 'per-store' : mode;
+  const effectiveStoreFilter: string = hideStoreToolbar && globalStore && globalStore !== 'All'
+    ? globalStore
+    : storeFilter;
 
   useEffect(() => {
     if (!globalStore || globalStore === 'All') return;
@@ -251,10 +265,10 @@ export function MonthlyTables({ stores, globalStore, bare = false, year, month }
     <div className={cn('space-y-4', bare ? 'p-4 sm:p-5 pt-4' : 'space-y-6')}>
       {visibleMonthGroups.map(({ ym, rows: monthRows }) => {
         const defaultOpen = ym === currentYm || ym === prevYm;
-        if (mode === 'per-store') {
-          const storeRows = monthRows.filter(r => r.storeName === storeFilter);
+        if (effectiveMode === 'per-store') {
+          const storeRows = monthRows.filter(r => r.storeName === effectiveStoreFilter);
           if (!storeRows.length) return null;
-          return <MonthBlockPerStore key={ym} ym={ym} storeName={storeFilter} rows={storeRows} defaultOpen={defaultOpen} />;
+          return <MonthBlockPerStore key={ym} ym={ym} storeName={effectiveStoreFilter} rows={storeRows} defaultOpen={defaultOpen} />;
         }
         return <MonthBlockSummary key={ym} ym={ym} rows={monthRows} stores={stores} defaultOpen={defaultOpen} />;
       })}
@@ -264,7 +278,7 @@ export function MonthlyTables({ stores, globalStore, bare = false, year, month }
   if (bare) {
     return (
       <div>
-        {toolbar}
+        {!hideStoreToolbar && toolbar}
         {blocks}
       </div>
     );
@@ -277,7 +291,7 @@ export function MonthlyTables({ stores, globalStore, bare = false, year, month }
           <CalendarDays size={18} className="text-ink-secondary" />
           טבלאות חודשיות
         </h2>
-        {toolbar}
+        {!hideStoreToolbar && toolbar}
       </div>
       {blocks}
     </section>

@@ -51,6 +51,7 @@ function StorePanel({
           year={year}
           month={month}
           bare
+          hideStoreToolbar
         />
       </div>
     </div>
