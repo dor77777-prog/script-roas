@@ -117,7 +117,6 @@ import { captureStepError, captureCronFetchError } from '@/lib/sentry/capture';
 // (minimizes diff churn).
 import {
   STORE_ID_TO_NAME as STORE_NAMES,
-  STORES_WITH_TIKTOK_IDS as STORES_WITH_TIKTOK,
 } from '@/lib/platformsByStore';
 
 // =============================================================================
@@ -339,267 +338,47 @@ async function persistDayForStore(
   storeId: StoreId,
   date: string,
   shopify: ShopifyDayRows,
-  /**
-   * Phase 05.7.6 (2026-05-22): when cron-live fetches Meta+Google+TikTok
-   * for "today" (idx=0 of the rolling window), it passes the fresh CAD
-   * spend here so we OVERWRITE the spend columns on data_daily. For
-   * yesterday + day-before (idx=1, idx=2 of rolling window) callers omit
-   * this and we preserve the spend that cron-daily wrote at 00:05.
-   *
-   * Phase 05.7.7 (2026-05-22) — extended with ttSpendCad for the new
-   * TikTok integration (uzoshop only currently).
-   */
-  spendOverride?: {
-    fbSpendCad: number;
-    gaSpendCad: number;
-    ttSpendCad: number;
-    /**
-     * Phase 13.8 (2026-05-26) — per-platform impressions, written to
-     * data_daily.fb/ga/tt_impressions alongside the spend columns. Same
-     * null→prior per-platform preserve semantics as the spend fields:
-     * the caller resolves nullish-coalesce against priorSpendByDate
-     * before handing the override in, so this function always sees a
-     * concrete number.
-     */
-    fbImpressions: number;
-    gaImpressions: number;
-    ttImpressions: number;
-  },
-  /**
-   * Audit fix 2026-05-24 (AUDIT INN-07, Phase 12.2.2): when set with
-   * `spendOnly: true`, the payload OMITS all Shopify-owned columns
-   * (revenue_cad, gross_revenue_cad, refund_deduction_cad, roas,
-   * gross_profit_cad, cogs_cad, net_profit_cad) so the ON CONFLICT DO
-   * UPDATE preserves the last good Shopify values when Shopify fetch
-   * failed but ad-platform fetchers succeeded for this date.
-   *
-   * Pre-fix: persist-rolling-3day's `if (!shopifyOk) continue;`
-   * short-circuit blocked spend recovery for D-1 even when Meta /
-   * Google / TikTok had successfully returned fresh CAD values, so a
-   * single Shopify 503 froze ad-platform spend reporting for that
-   * date until the next daily cron tick (potentially 24h later).
-   *
-   * Evidence: raw-returns/inngest_cronLive.json (INN-07).
-   */
-  opts?: { spendOnly?: boolean },
-  /**
-   * Phase 13.4 (2026-05-25) — memoized prior spend values from the
-   * `select-prior-spend-{date}-{storeId}` step. When provided AND
-   * spendOverride is undefined, use these instead of the inline SELECT
-   * below. Skipping the inline SELECT removes a non-idempotent read that
-   * could race the per-platform-preserve fallback on Inngest retry.
-   *
-   * Backward compat: when prior is undefined, fall back to the inline
-   * SELECT (preserves the original behaviour for tests + ad-hoc callers).
-   */
-  prior?: {
-    priorFb: number;
-    priorGa: number;
-    priorTt: number;
-    priorTotal: number;
-    /**
-     * Phase 13.8 (2026-05-26) — memoized prior impressions per platform,
-     * same purpose as the priorFb / priorGa / priorTt above: preserve
-     * existing data_daily.fb/ga/tt_impressions when this tick's fetcher
-     * returned null (per-platform preserve).
-     */
-    priorFbImp: number;
-    priorGaImp: number;
-    priorTtImp: number;
-  },
 ): Promise<void> {
+  // Phase E1.6.2 (2026-05-30 evening) — cron-live is now PURELY Shopify.
+  // It writes only Shopify-derived columns + the freshness timestamp +
+  // cogs_cad (depends only on revenue). The derived columns that depend
+  // on platform spend (total_spend_cad, roas, gross_profit_cad,
+  // net_profit_cad) are re-computed by the `recompute_data_daily_derived`
+  // RPC at the bottom of this function — atomic in the database so the
+  // workers and cron-live never race over derived values.
+  //
+  // Removed from this function (vs pre-E1.6.2):
+  //   - spendOverride parameter (and its 6-field shape)
+  //   - opts.spendOnly parameter
+  //   - prior parameter (memoized priorSpendByDate)
+  //   - inline SELECT of fb/ga/tt spend + impressions
+  //   - the 6-way cascade computing fbSpendCad/gaSpendCad/ttSpendCad/
+  //     totalSpendCad/fbImpressions/gaImpressions
+  //   - the dataDailyPayload entries for roas/gross/net/total
+  //
+  // The 3 workers (metaWorker / googleWorker / tiktokWorker) own
+  // fb/ga/tt_spend_cad + fb/ga/tt_impressions and call the same
+  // recompute RPC after their writes.
   const admin = getSupabaseAdmin();
-
-  // Phase A Task 14 (2026-05-29): single timestamp for this persistDayForStore
-  // call so all upserts within one tick share the same last_live_tick_at.
-  // Mirrors cron-daily's reconciled_at invariant: within one call every
-  // touched row in data_daily / products_daily carries the same timestamp.
   const liveTickAt = new Date().toISOString();
-
-  // INN-07 spend-only branch — early return after a minimal UPSERT that
-  // touches ONLY the per-platform spend columns. We deliberately skip
-  // the SELECT-then-preserve dance (no need to read existing Shopify
-  // cols — we're not writing them) AND skip the products_daily branch
-  // entirely (products_daily is Shopify-derived; with no Shopify rows
-  // for this tick there's nothing to write).
-  if (opts?.spendOnly === true) {
-    // Phase E1.6.2 (2026-05-30 evening hotfix) — post-Phase-E1.6 the
-    // bulk-date account-spend fetch was moved from cron-live to the 3
-    // hot_metrics worker branches. `spendOverride` is no longer populated
-    // from fresh API calls — it's aliased over `priorSpendByDate` (a
-    // SELECT at the start of the cron-live tick). Writing it back during
-    // the persist step would OVERWRITE the worker-fresh values that
-    // landed between the SELECT and the UPSERT — exactly the race the
-    // user reported 2026-05-30 evening ("not updating except Campaigns").
-    //
-    // The spend-only branch is now a no-op. cron-live owns Shopify columns
-    // + derived; workers own fb/ga/tt_spend_cad + impressions; the agg
-    // RPC owns tt_spend_cad's per-store split (TikTok shared-account).
-    return;
-  }
-
-  // -----------------------------------------------------------------
-  // data_daily — resolve existing spend (for preserve path), then UPSERT.
-  //
-  // Phase 13.4: prefer the memoized `prior` values from the caller (which
-  // came from the `select-prior-spend-{date}-{storeId}` step.run). When
-  // prior is provided AND spendOverride is undefined, skip the inline
-  // SELECT entirely — that removes a non-idempotent read that previously
-  // raced the per-platform-preserve fallback on Inngest retry. Fall back
-  // to the inline SELECT when neither spendOverride nor prior is provided
-  // (test / ad-hoc callers).
-  // -----------------------------------------------------------------
-  let existing: {
-    fb_spend_cad?: unknown;
-    ga_spend_cad?: unknown;
-    tt_spend_cad?: unknown;
-    total_spend_cad?: unknown;
-    fb_impressions?: unknown;
-    ga_impressions?: unknown;
-    tt_impressions?: unknown;
-  } | null = null;
-  if (spendOverride === undefined && prior === undefined) {
-    const { data, error: selErr } = await admin
-      .from('data_daily')
-      .select('fb_spend_cad, ga_spend_cad, tt_spend_cad, total_spend_cad, fb_impressions, ga_impressions, tt_impressions')
-      .eq('date', date)
-      .eq('store_id', storeId)
-      .maybeSingle();
-    if (selErr) {
-      throw new Error(`data_daily select for ${storeId} ${date}: ${selErr.message}`);
-    }
-    existing = data;
-  }
-
-  const fbSpendCad =
-    spendOverride !== undefined
-      ? spendOverride.fbSpendCad
-      : prior !== undefined
-        ? prior.priorFb
-        : Number(existing?.fb_spend_cad ?? 0) || 0;
-  const gaSpendCad =
-    spendOverride !== undefined
-      ? spendOverride.gaSpendCad
-      : prior !== undefined
-        ? prior.priorGa
-        : Number(existing?.ga_spend_cad ?? 0) || 0;
-  const ttSpendCad =
-    spendOverride !== undefined
-      ? spendOverride.ttSpendCad
-      : prior !== undefined
-        ? prior.priorTt
-        : Number(existing?.tt_spend_cad ?? 0) || 0;
-  const totalSpendCad =
-    spendOverride !== undefined
-      ? fbSpendCad + gaSpendCad + ttSpendCad
-      : prior !== undefined
-        ? prior.priorTotal
-        : Number(existing?.total_spend_cad ?? 0) || 0;
-
-  // Phase 13.8 (2026-05-26) — per-platform impressions follow the same
-  // preserve cascade as spend above: override → memoized prior → inline
-  // SELECT fallback → 0. NULL in the SELECT result coerces to 0 via
-  // `?? 0` so historical rows (which pre-date this phase) don't drag the
-  // payload into a phantom NULL write.
-  const fbImpressions =
-    spendOverride !== undefined
-      ? spendOverride.fbImpressions
-      : prior !== undefined
-        ? prior.priorFbImp
-        : Number(existing?.fb_impressions ?? 0) || 0;
-  const gaImpressions =
-    spendOverride !== undefined
-      ? spendOverride.gaImpressions
-      : prior !== undefined
-        ? prior.priorGaImp
-        : Number(existing?.ga_impressions ?? 0) || 0;
-  // Phase A.5 v2 (2026-05-29 evening) — ttImpressions intentionally unused.
-  // cron-live no longer writes tt_spend_cad or tt_impressions to data_daily;
-  // both are owned by the agg RPC after each cron-live-heavy tick. The
-  // declaration is kept as `_` so the symmetry with fb/ga is documented but
-  // ESLint accepts the unused binding.
-  const _ttImpressions =
-    spendOverride !== undefined
-      ? spendOverride.ttImpressions
-      : prior !== undefined
-        ? prior.priorTtImp
-        : Number(existing?.tt_impressions ?? 0) || 0;
-  void _ttImpressions;
-
   const revenueCad = shopify.revenueCad;
-  // Audit fix 2026-05-23 (BL-COGS): use the per-store rate (matches
-  // cronDaily's writer). Previously a hardcoded 0.25 here clobbered
-  // cronDaily's correct value within 10 min of the daily cron landing.
   const cogs = revenueCad * getCogsRateForStore(storeId);
-  const grossProfit = revenueCad - totalSpendCad;
-  const netProfit = grossProfit - cogs;
-  const roas = totalSpendCad > 0 ? revenueCad / totalSpendCad : 0;
-
-  // Phase E1.6.2 (2026-05-30 evening hotfix) — cron-live OWNS only the
-  // Shopify-derived columns. Workers own fb/ga/tt_spend_cad +
-  // fb/ga/tt_impressions; the agg RPC owns tt_spend_cad's per-store
-  // split. Pre-fix, cron-live re-wrote fb/ga columns from priorSpend
-  // (a SELECT at the start of the tick), which OVERWROTE the worker-
-  // fresh values that landed between the SELECT and the UPSERT —
-  // exactly the user's 2026-05-30 evening report ("not updating
-  // except Campaigns"). Now the payload contains revenue + derived +
-  // last_live_tick_at only. The derived calcs (roas / gross / net) use
-  // priorSpend values, so they may be up to ~10 min stale until the
-  // next cron-live tick reads fresh worker writes — acceptable trade-
-  // off vs the race condition that froze spend entirely.
-  //
-  // For fresh INSERT (no existing row) we seed all spend/impressions
-  // columns to 0 so subsequent reads return numeric zeros instead of
-  // NULL. Workers will overwrite on their next tick (≤10 min).
-  type DataDailyUpsertRow = {
-    date: string;
-    store_id: string;
-    store_name: string;
-    revenue_cad: number;
-    gross_revenue_cad: number;
-    refund_deduction_cad: number;
-    roas: number;
-    gross_profit_cad: number;
-    cogs_cad: number;
-    net_profit_cad: number;
-    last_live_tick_at: string;
-    fb_spend_cad?: number;
-    ga_spend_cad?: number;
-    tt_spend_cad?: number;
-    total_spend_cad?: number;
-    fb_impressions?: number;
-    ga_impressions?: number;
-    tt_impressions?: number;
-  };
-  const dataDailyPayload: DataDailyUpsertRow = {
-    date,
-    store_id: storeId,
-    store_name: shopify.storeName,
-    revenue_cad: revenueCad,
-    gross_revenue_cad: shopify.grossRevenueCad,
-    refund_deduction_cad: shopify.refundDeductionCad,
-    roas,
-    gross_profit_cad: grossProfit,
-    cogs_cad: cogs,
-    net_profit_cad: netProfit,
-    // Phase A Task 14 (2026-05-29) — freshness timestamp for Phase D badges.
-    last_live_tick_at: liveTickAt,
-  };
-  // Phase E1.6.2 — NO zero-seed for spend/impressions columns. Workers
-  // OWN those columns; cron-live touching them (even to seed zeros)
-  // would race the worker writes. If no data_daily row exists yet for
-  // (date, store_id), the UPSERT below creates one with NULL spend
-  // columns; readers handle NULL via COALESCE / ?? 0. The next worker
-  // tick (≤10 min) fills them with real values.
-  //
-  // Silence unused-var lint for the now-redundant override-cascade
-  // values. They're computed above for the derived calcs only.
-  void fbSpendCad; void gaSpendCad; void ttSpendCad; void totalSpendCad;
-  void fbImpressions; void gaImpressions;
 
   const { error: dataErr } = await admin
     .from('data_daily')
-    .upsert(dataDailyPayload, { onConflict: 'date,store_id' });
+    .upsert(
+      {
+        date,
+        store_id: storeId,
+        store_name: shopify.storeName,
+        revenue_cad: revenueCad,
+        gross_revenue_cad: shopify.grossRevenueCad,
+        refund_deduction_cad: shopify.refundDeductionCad,
+        cogs_cad: cogs,
+        last_live_tick_at: liveTickAt,
+      },
+      { onConflict: 'date,store_id' },
+    );
   if (dataErr) {
     throw new Error(`data_daily upsert for ${storeId} ${date}: ${dataErr.message}`);
   }
@@ -645,6 +424,18 @@ async function persistDayForStore(
         `products_daily upsert for ${storeId} ${date}: ${prodErr.message}`,
       );
     }
+  }
+
+  // Phase E1.6.2 (2026-05-30 evening) — re-derive total_spend_cad +
+  // roas + gross_profit_cad + net_profit_cad atomically from the
+  // current (worker-fresh) spend values + the revenue we just wrote.
+  // Workers call this same RPC after each spend write; idempotent.
+  const { error: deriveErr } = await admin
+    .rpc('recompute_data_daily_derived', { d: date });
+  if (deriveErr) {
+    throw new Error(
+      `recompute_data_daily_derived(${date}) for ${storeId}: ${deriveErr.message}`,
+    );
   }
 }
 
@@ -803,21 +594,11 @@ async function runLiveForStoreInner(
   // calls/hour per platform × 3 stores ≈ negligible vs each platform's
   // rate limits (Meta ~1/s, Google 15K/day, TikTok 600/min).
   //
-  // Phase 05.7.7: TikTok added alongside Meta + Google. Same per-fetcher
-  // soft-fail policy. TikTok is uzoshop-only via STORES_WITH_TIKTOK; other
-  // stores short-circuit to null without hitting the API.
-  type DateSpend = {
-    fbSpendCad: number | null;
-    gaSpendCad: number | null;
-    ttSpendCad: number | null;
-    // Phase 13.8 (2026-05-26) — per-platform impressions tracked alongside
-    // CAD spend. No FX conversion needed (impressions are platform-agnostic
-    // counts). null follows the same "fetcher failed/skipped" convention as
-    // the spend fields so the persist step can apply per-platform preserve.
-    fbImpressions: number | null;
-    gaImpressions: number | null;
-    ttImpressions: number | null;
-  };
+  // Phase E1.6.2 (2026-05-30 evening) — DateSpend type removed.
+  // cron-live no longer carries any platform-spend values. Workers
+  // (meta/google/tiktokWorker hot_metrics branches) own the fetch +
+  // write of fb/ga/tt_spend_cad + impressions. The recompute RPC
+  // re-derives total/roas/gross/net atomically.
 
   // ----- STEP 3: fetch today's orders_attribution (for WhatsApp summary) -----
   //
@@ -848,103 +629,17 @@ async function runLiveForStoreInner(
 
   // ----- STEP 4: persist (sequential, idempotent) -----
   //
-  // Three write modes per date based on what succeeded:
+  // Phase E1.6.2 (2026-05-30 evening) — cron-live is Shopify-only.
+  // Write modes per date:
+  //   1. Shopify OK  → persist Shopify columns + cogs + last_live_tick_at;
+  //                     call recompute_data_daily_derived(date) to refresh
+  //                     total/roas/gross/net atomically from worker-fresh
+  //                     spend values in data_daily.
+  //   2. Shopify FAILED → skip this date entirely (preserve last good row).
   //
-  //   1. Shopify OK + all ad platforms attempted OK → write everything
-  //      (revenue/gross/refund + fb/ga/tt/total spend + derived cols)
-  //   2. Shopify OK + ads partial/failed → write Shopify cols, preserve spend
-  //   3. Shopify FAILED → write NOTHING for this date (preserve last good row)
-  //
-  // For TikTok: stores NOT in STORES_WITH_TIKTOK always pass ttSpendCad=0 in
-  // the override (so total_spend stays correct), without ever calling the
-  // TikTok API. For uzoshop with a failed TikTok fetch, we treat it like
-  // any other platform failure — preserve whatever was last written.
-  //
-  // Audit fix 2026-05-24 (AUDIT INN-10, Phase 12.1.1): SELECT prior spend
-  // in a separate step.run per date so its result is MEMOIZED across
-  // Inngest retries. Pre-fix the SELECT lived INSIDE persist-rolling-3day's
-  // callback; on retry it read the first attempt's freshly-written UPSERT
-  // instead of the original prior, silently corrupting the per-platform-
-  // preserve fallback (~4/day at 1% retry rate across 432 ticks/day).
-  // Evidence: .planning/phases/12-codebase-audit-baseline/raw-returns/
-  //   inngest_cronLive.json finding INN-10.
-  //
-  // Inngest exec budget: +3/tick (one per date in the rolling window).
-  // cron-live budget rises from ~25.9K/month → ~38.9K/month (free-tier
-  // cap 50K). 22% headroom retained.
-  // Phase 13.4 — extend priorSpendByDate to also read total_spend_cad so
-  // persistDayForStore's no-override path (the one where every platform
-  // fetch returned null and we preserve the existing row's spend) can use
-  // the memoized value instead of its own inline SELECT. Pre-13.4 the
-  // inline SELECT inside persistDayForStore (data_daily.fb/ga/tt/total)
-  // ran AFTER the priorSpend step's UPSERT during retries — non-idempotent
-  // and racing the per-platform-preserve fallback. Reading total here means
-  // persistDayForStore can be fed the prior values via a parameter and the
-  // inline SELECT becomes a defensive fallback only (when no caller has
-  // memoized values to hand in).
-  const priorSpendByDate: Record<
-    string,
-    {
-      priorFb: number;
-      priorGa: number;
-      priorTt: number;
-      priorTotal: number;
-      // Phase 13.8 (2026-05-26) — also memoize the prior impressions per
-      // platform so per-platform preserve applies symmetrically to spend
-      // and impressions. Without this, a single null impressions value
-      // from a flaky fetcher could overwrite a freshly-written non-zero
-      // impressions count.
-      priorFbImp: number;
-      priorGaImp: number;
-      priorTtImp: number;
-    }
-  > = {};
-  for (const date of dates) {
-    priorSpendByDate[date] = await step.run(
-      `select-prior-spend-${date}-${storeId}`,
-      async () => {
-        const admin = getSupabaseAdmin();
-        const { data: prior } = await admin
-          .from('data_daily')
-          .select('fb_spend_cad, ga_spend_cad, tt_spend_cad, total_spend_cad, fb_impressions, ga_impressions, tt_impressions')
-          .eq('date', date)
-          .eq('store_id', storeId)
-          .maybeSingle();
-        return {
-          priorFb: Number(prior?.fb_spend_cad ?? 0) || 0,
-          priorGa: Number(prior?.ga_spend_cad ?? 0) || 0,
-          priorTt: Number(prior?.tt_spend_cad ?? 0) || 0,
-          priorTotal: Number(prior?.total_spend_cad ?? 0) || 0,
-          priorFbImp: Number(prior?.fb_impressions ?? 0) || 0,
-          priorGaImp: Number(prior?.ga_impressions ?? 0) || 0,
-          priorTtImp: Number(prior?.tt_impressions ?? 0) || 0,
-        };
-      },
-    );
-  }
-
-  // Phase E1.6 (2026-05-30) — `spendByDate` was populated by the
-  // (now-removed) `fetch-meta-google-tiktok-spend-light-3day` step.
-  // After E1.6, account-level spend is owned by the 3 hot_metrics
-  // worker branches which write data_daily.fb/ga/tt_spend_cad +
-  // impressions directly via partial-column UPSERT. The downstream
-  // persist code below still references `spendByDate[date]`; alias
-  // it over `priorSpendByDate` (which selects what workers wrote)
-  // to keep the persist logic unchanged. Result: persist's per-row
-  // payload computes from current data_daily values seeded by
-  // workers (≤10 min stale).
-  const spendByDate: Record<string, DateSpend> = {};
-  for (const date of dates) {
-    const p = priorSpendByDate[date];
-    spendByDate[date] = {
-      fbSpendCad: p.priorFb,
-      gaSpendCad: p.priorGa,
-      ttSpendCad: p.priorTt,
-      fbImpressions: p.priorFbImp,
-      gaImpressions: p.priorGaImp,
-      ttImpressions: p.priorTtImp,
-    };
-  }
+  // Removed in E1.6.2: priorSpendByDate SELECT loop (no spend cascade
+  // needed; workers own those columns and the recompute RPC consumes
+  // them at the DB layer).
 
   await step.run('persist-rolling-3day', async () => {
     for (let i = 0; i < dates.length; i++) {
@@ -955,140 +650,25 @@ async function runLiveForStoreInner(
       const shopifyOk = !(shopify as { __shopifyFailed?: boolean }).__shopifyFailed;
 
       if (!shopifyOk) {
-        // Audit fix 2026-05-24 (AUDIT INN-07, Phase 12.2.2): decouple
-        // Shopify-coupled gating. Pre-fix the early `continue;` here
-        // blocked ad-platform spend recovery for the date even when
-        // Meta / Google / TikTok had successfully returned fresh CAD
-        // values. Now, if any ad-platform value is fresh for this date,
-        // we run a SPEND-ONLY persist (Option A — see PLAN 12.2-02
-        // open question) that UPSERTs ONLY the spend columns; ON
-        // CONFLICT DO UPDATE preserves whatever Shopify values were
-        // last successfully written.
-        //
-        // Composes safely with the Phase 12.1.1 INN-10 memoized SELECT:
-        // priorSpendByDate is already populated above this loop, so the
-        // per-platform null→prior fallback still works for the spend-only
-        // path. Evidence: raw-returns/inngest_cronLive.json (INN-07).
-        const dateSpend =
-          spendByDate[date] ?? {
-            fbSpendCad: null,
-            gaSpendCad: null,
-            ttSpendCad: null,
-            fbImpressions: null,
-            gaImpressions: null,
-            ttImpressions: null,
-          };
-        const haveAnySpend =
-          dateSpend.fbSpendCad !== null ||
-          dateSpend.gaSpendCad !== null ||
-          dateSpend.ttSpendCad !== null;
-        if (haveAnySpend) {
-          const { priorFb, priorGa, priorTt, priorFbImp, priorGaImp, priorTtImp } = priorSpendByDate[date];
-          console.warn(
-            `cron-live ${storeId} ${date}: Shopify failed — running spend-only persist to recover ad-platform columns (Shopify cols preserved via ON CONFLICT).`,
-          );
-          await persistDayForStore(
-            storeId,
-            date,
-            shopify,
-            {
-              fbSpendCad: dateSpend.fbSpendCad ?? priorFb,
-              gaSpendCad: dateSpend.gaSpendCad ?? priorGa,
-              ttSpendCad: STORES_WITH_TIKTOK.has(storeId)
-                ? (dateSpend.ttSpendCad ?? priorTt)
-                : 0,
-              fbImpressions: dateSpend.fbImpressions ?? priorFbImp,
-              gaImpressions: dateSpend.gaImpressions ?? priorGaImp,
-              ttImpressions: STORES_WITH_TIKTOK.has(storeId)
-                ? (dateSpend.ttImpressions ?? priorTtImp)
-                : 0,
-            },
-            { spendOnly: true },
-          );
-        } else {
-          console.warn(
-            `cron-live ${storeId} ${date}: Shopify failed AND no fresh ad-platform spend — skipping persist to preserve last good row.`,
-          );
-        }
+        // Phase E1.6.2 (2026-05-30 evening) — Shopify failure → skip
+        // persist entirely. Workers own platform spend columns; the
+        // pre-fix spend-only fallback that wrote fb/ga columns from
+        // a stale priorSpend snapshot was the cause of the
+        // user-reported race condition ("not updating except
+        // Campaigns"). Next cron-live tick (≤10 min) retries Shopify.
+        console.warn(
+          `cron-live ${storeId} ${date}: Shopify failed — skipping persist (preserve last good row; workers own platform spend).`,
+        );
         continue;
       }
 
-      // Phase 05.7.8 (2026-05-22) — relaxed the all-or-nothing override gate.
-      //
-      // Previous behavior (regression):
-      //   If ANY of Meta / Google / TikTok returned null (timeout, 401,
-      //   missing creds), the whole spend override was dropped, so
-      //   persistDayForStore got `undefined` and BOTH fb+ga (which DID
-      //   succeed) were preserved at their stale value. For a TikTok store
-      //   like uzoshop, a single TikTok auth blip would freeze today's
-      //   Meta+Google spend for hours.
-      //
-      // New behavior (per-platform preserve):
-      //   We always write an override on "today", and for each platform that
-      //   returned null we fall back to the existing column value from the
-      //   data_daily row (or 0 if the row doesn't exist yet). That way Meta
-      //   updates fresh even when TikTok 401s, TikTok updates fresh even
-      //   when Meta times out, etc. The "preserve" logic moves down into
-      //   persistDayForStore via the per-column nullish-coalesce below.
-      //
-      // We still skip the override entirely if cron-live couldn't fetch ANY
-      // of the three platforms (network down at the worker) — in that case
-      // there's nothing fresh to write and we let cron-daily handle today's
-      // spend at 00:05 IL tomorrow.
-      // Audit fix 2026-05-23 (CR-02 pipeline): per-date spend lookup
-      // replaces the previous single `fbSpendCad/gaSpendCad/ttSpendCad`
-      // closure variables (which only held "today"'s values). Now
-      // yesterday + day-before-yesterday also benefit from the cron-live
-      // refresh — operator no longer loses 24h of ad-spend recovery when
-      // cron-daily's 00:05 IL run fails.
-      const dateSpend = spendByDate[date] ?? {
-        fbSpendCad: null,
-        gaSpendCad: null,
-        ttSpendCad: null,
-        fbImpressions: null,
-        gaImpressions: null,
-        ttImpressions: null,
-      };
-      const haveAnySpend =
-        dateSpend.fbSpendCad !== null ||
-        dateSpend.gaSpendCad !== null ||
-        dateSpend.ttSpendCad !== null;
-
-      // (Removed `isToday` gate: cron-live now overrides spend for every
-      //  date in the rolling window when ad-platform data is fresh.)
-      if (haveAnySpend) {
-        // Audit fix 2026-05-24 (AUDIT INN-10): read the per-date prior
-        // values from the MEMOIZED priorSpendByDate map populated by
-        // the select-prior-spend-* step.runs above. Pre-fix this was
-        // an inline SELECT inside persist-rolling-3day — non-idempotent
-        // on Inngest retry because the SELECT would re-execute AFTER
-        // the first attempt's UPSERT had landed.
-        const { priorFb, priorGa, priorTt, priorFbImp, priorGaImp, priorTtImp } = priorSpendByDate[date];
-        await persistDayForStore(storeId, date, shopify, {
-          fbSpendCad: dateSpend.fbSpendCad ?? priorFb,
-          gaSpendCad: dateSpend.gaSpendCad ?? priorGa,
-          ttSpendCad: STORES_WITH_TIKTOK.has(storeId)
-            ? (dateSpend.ttSpendCad ?? priorTt)
-            : 0,
-          fbImpressions: dateSpend.fbImpressions ?? priorFbImp,
-          gaImpressions: dateSpend.gaImpressions ?? priorGaImp,
-          ttImpressions: STORES_WITH_TIKTOK.has(storeId)
-            ? (dateSpend.ttImpressions ?? priorTtImp)
-            : 0,
-        });
-      } else {
-        // Phase 13.4: pass the memoized prior so persistDayForStore can
-        // skip its inline SELECT (which was the last non-idempotent read
-        // in the persist path).
-        await persistDayForStore(
-          storeId,
-          date,
-          shopify,
-          undefined,
-          undefined,
-          priorSpendByDate[date],
-        );
-      }
+      // Phase E1.6.2 (2026-05-30 evening) — cron-live is Shopify-only.
+      // No spend cascade, no per-platform preserve, no spendOverride.
+      // Workers (meta/google/tiktokWorker hot_metrics branches) own
+      // fb/ga/tt_spend_cad + impressions; the agg RPC owns TikTok's
+      // per-store split; recompute_data_daily_derived re-derives
+      // total/roas/gross/net atomically in the DB after each write.
+      await persistDayForStore(storeId, date, shopify);
     }
 
     // Phase 05.7.8 — persist today's orders_attribution rows. Same UPSERT
@@ -1156,31 +736,23 @@ async function runLiveForStoreInner(
   for (const date of dates) {
     perDayRevenue[date] = shopifyByDate[date].revenueCad;
   }
-  // Audit fix 2026-05-23 (CR-02 pipeline): today's spend now comes
-  // from spendByDate[today] rather than the deprecated closure vars.
-  const todaySpendEntry = spendByDate[today] ?? {
-    fbSpendCad: null,
-    gaSpendCad: null,
-    ttSpendCad: null,
-    fbImpressions: null,
-    gaImpressions: null,
-    ttImpressions: null,
-  };
+  // Phase E1.6.2 (2026-05-30 evening) — cron-live no longer carries
+  // platform-spend values; the operator-console summary that consumed
+  // todaySpendCad now reads it from data_daily directly (or via the
+  // hot_metrics workers' freshness rows). We keep the shape for
+  // backwards-compat with tests but return zeros.
   return {
     storeId,
     rollingDates: dates,
     perDayRevenue,
     todaySpendCad: {
-      fb: todaySpendEntry.fbSpendCad ?? 0,
-      ga: todaySpendEntry.gaSpendCad ?? 0,
-      // Audit fix 2026-05-24 (B-01): TikTok spend was previously dropped
-      // from this summary, which meant any operator-console consumer
-      // reading `runLiveForStore(...).todaySpendCad` underreported the
-      // TikTok amount for uzoshop. On-disk data (data_daily) was always
-      // correct — the row writer at the persist step already handled
-      // tt_spend_cad. This fix surfaces TikTok to the in-memory return
-      // value to match the writer.
-      tt: todaySpendEntry.ttSpendCad ?? 0,
+      // Phase E1.6.2 (2026-05-30 evening) — cron-live no longer
+      // carries platform spend. Workers own those columns; this
+      // summary return value is a deprecated shape kept only for
+      // backwards-compat with existing test fixtures.
+      fb: 0,
+      ga: 0,
+      tt: 0,
     },
   };
 }

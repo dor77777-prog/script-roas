@@ -62,6 +62,11 @@ function makeSupabaseMock() {
 
   const admin = {
     from: vi.fn((table: string) => makeTableBuilder(table)),
+    // Phase E1.6.2 (2026-05-30 evening) — cron-live + upsertDataDailySpend
+    // now call `recompute_data_daily_derived(d)` after each write to keep
+    // total/roas/gross/net atomically in sync with worker-fresh spend.
+    // Tests can ignore the RPC; just acknowledge the call.
+    rpc: vi.fn(() => Promise.resolve({ data: null, error: null })),
   } as unknown as ReturnType<typeof supabaseAdminMod.getSupabaseAdmin>;
 
   return { admin, upsertsByTable };

@@ -142,6 +142,7 @@ function makeSupabaseAdminMock() {
 
   const admin = {
     from: vi.fn((table: string) => makeTableBuilder(table)),
+    rpc: vi.fn(() => Promise.resolve({ data: null, error: null })), // Phase E1.6.2 recompute RPC stub
   };
 
   return {

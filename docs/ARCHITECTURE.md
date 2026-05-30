@@ -1829,3 +1829,109 @@ its pre-fix position (Bug 1 returns); hotSet.ts goes back to silent
 soft-fail (Bug 2 returns); tiktokWorker re-wires the bulk-date account
 fetcher (Bug 3 returns). data_daily heals on the next nightly
 cronDaily run regardless.
+
+## Phase E1.6.2 — cron-live is truly Shopify-only + derive-calc decoupling (2026-05-30 evening)
+
+After the three E1.6.1 hotfixes (cfd1903 + a4c0d0e) deployed, the user
+reported that the dashboard "still wasn't updating except Campaigns"
+even though those fixes were in production. Investigation found a
+fourth bug — bigger than the prior three — that Phase E1.6 had created.
+
+### Bug 4 — cron-live re-wrote platform spend columns from a stale snapshot
+
+Phase E1.6 (18:30 IL) moved the bulk-date account-spend FETCH from
+cron-live to the 3 hot_metrics worker branches but LEFT the WRITE in
+cron-live's `persistDayForStore`. The `spendOverride` parameter that
+used to receive fresh API values was redirected to read from
+`priorSpendByDate` — a SELECT cron-live cached at the start of its
+10-min tick. Between cron-live's SELECT (T+0s) and its later UPSERT
+(T+30-60s), workers wrote fresh fb/ga_spend_cad values to data_daily;
+cron-live's persist step then OVERWROTE those worker-fresh values with
+the stale priorSpend snapshot.
+
+Campaigns tab (reads campaigns_daily, owned exclusively by workers)
+kept updating because nothing raced. Every other tab (reads
+data_daily) saw oscillating / frozen values.
+
+### Fix scope
+
+Two cleanups landed in Phase E1.6.2:
+
+**1. `cron-live` is now PURELY Shopify (no FB/Google/TikTok references in TS).**
+
+Removed entirely from `cronLive.ts`:
+- `DateSpend` type
+- `priorSpendByDate` SELECT loop (was 3 step.runs per tick, one per date)
+- `spendByDate` aliasing over priorSpendByDate
+- `spendOverride` / `opts.spendOnly` / `prior` parameters on `persistDayForStore`
+- All `fb_spend_cad` / `ga_spend_cad` / `tt_spend_cad` / `fb_impressions` /
+  `ga_impressions` / `tt_impressions` / `total_spend_cad` references
+- The `STORES_WITH_TIKTOK` import
+- The "spend-only fallback" UPSERT branch (was Phase 12.2.2 INN-07 fix;
+  now obsolete because workers own platform spend)
+- The `roas` / `gross_profit_cad` / `net_profit_cad` inline computations
+  in the persist payload
+
+`persistDayForStore` now writes only:
+- `date`, `store_id`, `store_name`
+- `revenue_cad`, `gross_revenue_cad`, `refund_deduction_cad` (Shopify)
+- `cogs_cad` (computed from revenue × per-store rate; depends only on
+  revenue so no race)
+- `last_live_tick_at` (freshness timestamp)
+
+The `runLiveForStore` return shape's `todaySpendCad` field is preserved
+for backwards-compat with tests but always returns zeros (deprecated).
+
+**2. `recompute_data_daily_derived(d date)` SQL function — atomic derive at DB layer.**
+
+New migration `20260530300000_recompute_data_daily_derived.sql`. The
+function reads the current `fb_spend_cad + ga_spend_cad + tt_spend_cad
++ revenue_cad + cogs_cad` from data_daily and re-derives
+`total_spend_cad + roas + gross_profit_cad + net_profit_cad` for every
+row on date `d`. Idempotent.
+
+Called from:
+- `persistDayForStore` (cron-live) — after the Shopify UPSERT.
+- `upsertDataDailySpend` (Meta + Google workers) — after each spend write.
+- (TikTok already calls `agg_tiktok_spend_per_store_for_date` which does
+  the same derive logic as its Pass 2.)
+
+This decouples cron-live and workers entirely. Neither needs to know
+about the other's columns; the DB re-derives in one atomic UPDATE.
+
+### Ownership matrix (post-Phase E1.6.2)
+
+| Column | Owner | Cadence |
+|---|---|---|
+| `revenue_cad`, `gross_revenue_cad`, `refund_deduction_cad`, `cogs_cad`, `store_name`, `last_live_tick_at` | cron-live | 10 min |
+| `fb_spend_cad`, `fb_impressions` | metaWorker hot_metrics | ~10 min (orchestrator-driven) |
+| `ga_spend_cad`, `ga_impressions` | googleWorker hot_metrics | ~10 min |
+| `tt_spend_cad`, `tt_impressions` | agg RPC (via tiktokWorker's `aggregateTiktokSpendByStore` call) | ~10 min |
+| `total_spend_cad`, `roas`, `gross_profit_cad`, `net_profit_cad` | `recompute_data_daily_derived` RPC (called from cron-live + each worker) | atomic per-write |
+
+### Tests
+Updated 4 test files for the new contract:
+- `upsertDataDailySpend.test.ts` — mock now includes `admin.rpc` (5 tests).
+- `cronLive.test.ts` — mock includes `admin.rpc` (1 test).
+- `cronLiveLiveTickAt.test.ts` — mock includes `admin.rpc`; "spend-only
+  fallback" test inverted to assert NO data_daily upsert when Shopify
+  fails (3 tests).
+- `cronLiveRetryIdempotency.test.ts` — entire INN-10 contract replaced:
+  cron-live's payload must NOT contain `fb/ga_spend_cad` /
+  `fb/ga_impressions`, and no `select-prior-spend-*` step.run labels
+  should appear (3 tests).
+
+Vitest: 1577 pass / 0 fail / 9 skip.
+
+### Migration deployment
+`20260530300000_recompute_data_daily_derived.sql` must be applied to
+the production Supabase before the new TS code can run successfully.
+If applied via the Supabase Dashboard SQL editor: paste the migration
+SQL and execute. cron-live + workers will start calling the RPC on
+their next tick.
+
+### Rollback
+`git revert` the Phase E1.6.2 commits. The pre-fix race condition
+returns (workers write fresh spend, cron-live overwrites with stale
+snapshots). The RPC stays in the DB unused (no harm); `DROP FUNCTION
+recompute_data_daily_derived(date)` if a clean DB rollback is needed.

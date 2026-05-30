@@ -4,9 +4,13 @@ import { upsertDataDailySpend } from '@/lib/inngest/upsertDataDailySpend';
 function mockAdmin() {
   const upsert = vi.fn().mockResolvedValue({ error: null });
   const from = vi.fn().mockReturnValue({ upsert });
+  // Phase E1.6.2 (2026-05-30 evening) — upsertDataDailySpend now also
+  // calls `recompute_data_daily_derived(d)` via admin.rpc to keep
+  // total/roas/gross/net atomic with the freshly-written spend.
+  const rpc = vi.fn().mockResolvedValue({ data: null, error: null });
   return {
-    admin: { from } as unknown as Parameters<typeof upsertDataDailySpend>[0]['admin'],
-    spies: { from, upsert },
+    admin: { from, rpc } as unknown as Parameters<typeof upsertDataDailySpend>[0]['admin'],
+    spies: { from, upsert, rpc },
   };
 }
 

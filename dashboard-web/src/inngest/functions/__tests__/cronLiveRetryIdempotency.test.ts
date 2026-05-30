@@ -140,7 +140,10 @@ function makeSupabaseAdminMock(selectResults: Array<{ fb: number; ga: number; tt
     };
   }
 
-  const admin = { from: vi.fn((table: string) => makeTableBuilder(table)) };
+  const admin = {
+    from: vi.fn((table: string) => makeTableBuilder(table)),
+    rpc: vi.fn(() => Promise.resolve({ data: null, error: null })), // Phase E1.6.2 recompute RPC stub
+  };
   return { admin, upsertCalls, updateCalls, selectCallCount };
 }
 
@@ -368,17 +371,19 @@ describe('cronLive persist-rolling-3day retry idempotency (INN-10)', () => {
     const { step, labels } = makeStepStub();
     await mod.runLiveForStore('uzoshop', { step });
 
-    // Find the earliest occurrence of any select-prior-spend label and
-    // the index of persist-rolling-3day; assert the former < the latter.
+    // Phase E1.6.2 (2026-05-30 evening) — the `select-prior-spend-*`
+    // step.run was REMOVED entirely. cron-live no longer reads platform
+    // spend at all (workers own those columns; the recompute RPC
+    // re-derives total/roas/gross/net atomically). The INN-10
+    // SELECT-of-our-own-UPSERT race that this test guarded against is
+    // structurally impossible now. Pin: NO select-prior-spend label
+    // should appear in cron-live's step list.
     const persistIdx = labels.indexOf('persist-rolling-3day');
     expect(persistIdx).toBeGreaterThanOrEqual(0);
     const selectIndices = labels
       .map((l, i) => (l.startsWith('select-prior-spend-') ? i : -1))
       .filter((i) => i >= 0);
-    expect(selectIndices.length).toBeGreaterThanOrEqual(1);
-    for (const i of selectIndices) {
-      expect(i).toBeLessThan(persistIdx);
-    }
+    expect(selectIndices.length, 'select-prior-spend step removed in Phase E1.6.2').toBe(0);
   });
 
   it('select-prior-spend is called once per date in the rolling window (3 dates → 3 calls)', async () => {
@@ -442,9 +447,11 @@ describe('cronLive persist-rolling-3day retry idempotency (INN-10)', () => {
     const { step, labels } = makeStepStub();
     await mod.runLiveForStore('uzoshop', { step });
 
+    // Phase E1.6.2 (2026-05-30 evening) — the `select-prior-spend-*`
+    // step.run was REMOVED entirely. cron-live no longer caches the
+    // pre-write spend values (workers own those columns post-fix). The
+    // step count drops from 3 → 0 for these labels.
     const selectLabels = labels.filter((l) => l.startsWith('select-prior-spend-'));
-    expect(selectLabels.length).toBe(3);
-    // Each label should be unique (date-suffixed).
-    expect(new Set(selectLabels).size).toBe(3);
+    expect(selectLabels.length, 'select-prior-spend step removed in Phase E1.6.2').toBe(0);
   });
 });

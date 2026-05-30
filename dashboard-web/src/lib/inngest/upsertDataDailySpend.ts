@@ -60,4 +60,24 @@ export async function upsertDataDailySpend(input: Input): Promise<void> {
       `data_daily upsert ${platform} ${storeId} ${date}: ${error.message}`,
     );
   }
+  // Phase E1.6.2 (2026-05-30 evening) — re-derive total_spend_cad + roas
+  // + gross_profit_cad + net_profit_cad atomically from the fresh spend
+  // we just wrote + the revenue column owned by cron-live. Pre-fix,
+  // cron-live computed these derived values inline at persist time
+  // using a priorSpend SELECT it cached at the start of the tick —
+  // a race window between the SELECT and the UPSERT silently froze
+  // derived values for ~10 min when workers wrote spend in between.
+  // The recompute RPC fixes this at the DB layer; idempotent.
+  //
+  // Soft-fail by re-throw so the worker's outer try/catch records
+  // data_freshness.transient_error and Inngest retries. Without
+  // re-deriving, the next data_daily read would mix fresh spend with
+  // stale total/roas — worse than failing loudly.
+  const { error: deriveErr } = await admin
+    .rpc('recompute_data_daily_derived', { d: date });
+  if (deriveErr) {
+    throw new Error(
+      `recompute_data_daily_derived(${date}) for ${platform} ${storeId}: ${deriveErr.message}`,
+    );
+  }
 }
