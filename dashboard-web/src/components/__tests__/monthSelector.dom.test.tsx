@@ -3,26 +3,27 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { MonthSelector } from '@/components/MonthSelector';
 
 describe('MonthSelector', () => {
-  it('renders 12 month chips and highlights the selected month', () => {
+  it('renders a select with "כל השנה" + 12 months; selected reflects value', () => {
     render(<MonthSelector value={5} onChange={() => {}} />);
-    // 12 buttons by aria-label
-    const may = screen.getByRole('button', { name: /מאי/ });
-    expect(may.getAttribute('aria-pressed')).toBe('true');
-    const jan = screen.getByRole('button', { name: /ינואר/ });
-    expect(jan.getAttribute('aria-pressed')).toBe('false');
+    const select = screen.getByRole('combobox') as HTMLSelectElement;
+    expect(select.value).toBe('5');
+    expect(screen.getByRole('option', { name: /כל השנה/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /מאי/ })).toBeInTheDocument();
   });
 
-  it('calls onChange with the clicked month (1-12)', () => {
+  it('selecting "כל השנה" fires onChange(null)', () => {
     const onChange = vi.fn();
     render(<MonthSelector value={5} onChange={onChange} />);
-    fireEvent.click(screen.getByRole('button', { name: /מרץ/ }));
-    expect(onChange).toHaveBeenCalledWith(3);
-  });
-
-  it('"כל השנה" chip clears the month (calls onChange with null)', () => {
-    const onChange = vi.fn();
-    render(<MonthSelector value={5} onChange={onChange} />);
-    fireEvent.click(screen.getByRole('button', { name: /כל השנה/ }));
+    const select = screen.getByRole('combobox') as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: 'all' } });
     expect(onChange).toHaveBeenCalledWith(null);
+  });
+
+  it('selecting a month fires onChange with the numeric month', () => {
+    const onChange = vi.fn();
+    render(<MonthSelector value={null} onChange={onChange} />);
+    const select = screen.getByRole('combobox') as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: '3' } });
+    expect(onChange).toHaveBeenCalledWith(3);
   });
 });

@@ -1,7 +1,6 @@
 'use client';
 
-import { useState } from 'react';
-import { Button } from '@/components/ui/Button';
+import { ChevronDown } from 'lucide-react';
 
 interface Props {
   value?: number;
@@ -14,26 +13,26 @@ export function YearSelector({ value, onChange, startYear, endYear }: Props) {
   const now = new Date();
   const end = endYear ?? now.getFullYear();
   const start = startYear ?? end - 2;
-  const [internal, setInternal] = useState<number>(value ?? end);
-  const selected = value ?? internal;
+  const selected = value ?? end;
   const years: number[] = [];
   for (let y = start; y <= end; y++) years.push(y);
   return (
-    <div role="group" aria-label="Year selector" className="flex gap-1.5">
-      {years.map((y) => (
-        <Button
-          key={y}
-          variant={y === selected ? 'primary' : 'ghost'}
-          size="sm"
-          aria-pressed={y === selected}
-          onClick={() => {
-            setInternal(y);
-            onChange?.(y);
-          }}
-        >
-          {y}
-        </Button>
-      ))}
+    <div className="relative">
+      <select
+        value={String(selected)}
+        onChange={e => onChange?.(parseInt(e.target.value, 10))}
+        className="appearance-none rounded-lg border border-line bg-elevated ps-3 pe-9 py-2.5 sm:py-2 text-sm font-medium text-ink hover:border-line-strong focus:outline-none focus:border-accent focus:shadow-focus transition-colors cursor-pointer"
+      >
+        {years.map(y => (
+          <option key={y} value={String(y)}>
+            {y}
+          </option>
+        ))}
+      </select>
+      <ChevronDown
+        size={14}
+        className="pointer-events-none absolute end-2.5 top-1/2 -translate-y-1/2 text-ink-muted"
+      />
     </div>
   );
 }

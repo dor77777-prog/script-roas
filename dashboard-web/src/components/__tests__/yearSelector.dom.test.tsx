@@ -3,19 +3,21 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { YearSelector } from '@/components/YearSelector';
 
 describe('YearSelector', () => {
-  it('renders [N..currentYear] chips and highlights the selected year', () => {
+  it('renders a select with options [startYear..endYear] and highlights value', () => {
     render(<YearSelector value={2026} onChange={() => {}} startYear={2024} endYear={2026} />);
-    expect(screen.getByRole('button', { name: '2024' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: '2025' })).toBeInTheDocument();
-    const chip2026 = screen.getByRole('button', { name: '2026' });
-    expect(chip2026).toBeInTheDocument();
-    expect(chip2026.getAttribute('aria-pressed')).toBe('true');
+    const select = screen.getByRole('combobox') as HTMLSelectElement;
+    expect(select.value).toBe('2026');
+    // Each year appears as an option
+    expect(screen.getByRole('option', { name: '2024' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '2025' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: '2026' })).toBeInTheDocument();
   });
 
-  it('calls onChange when a chip is clicked', () => {
+  it('calls onChange with the parsed numeric year on change', () => {
     const onChange = vi.fn();
     render(<YearSelector value={2026} onChange={onChange} startYear={2024} endYear={2026} />);
-    fireEvent.click(screen.getByRole('button', { name: '2025' }));
+    const select = screen.getByRole('combobox') as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: '2025' } });
     expect(onChange).toHaveBeenCalledWith(2025);
   });
 });

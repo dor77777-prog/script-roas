@@ -1,6 +1,6 @@
 'use client';
 
-import { Button } from '@/components/ui/Button';
+import { ChevronDown } from 'lucide-react';
 
 const HE_MONTHS = [
   'ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
@@ -14,30 +14,28 @@ interface Props {
 }
 
 export function MonthSelector({ value, onChange }: Props) {
+  const selectValue = value === null ? 'all' : String(value);
   return (
-    <div role="group" aria-label="Month selector" className="flex flex-wrap gap-1.5">
-      <Button
-        variant={value === null ? 'primary' : 'ghost'}
-        size="sm"
-        aria-pressed={value === null}
-        onClick={() => onChange(null)}
+    <div className="relative">
+      <select
+        value={selectValue}
+        onChange={e => {
+          const v = e.target.value;
+          onChange(v === 'all' ? null : parseInt(v, 10));
+        }}
+        className="appearance-none rounded-lg border border-line bg-elevated ps-3 pe-9 py-2.5 sm:py-2 text-sm font-medium text-ink hover:border-line-strong focus:outline-none focus:border-accent focus:shadow-focus transition-colors cursor-pointer"
       >
-        כל השנה
-      </Button>
-      {HE_MONTHS.map((label, idx) => {
-        const m = idx + 1;
-        return (
-          <Button
-            key={m}
-            variant={value === m ? 'primary' : 'ghost'}
-            size="sm"
-            aria-pressed={value === m}
-            onClick={() => onChange(m)}
-          >
+        <option value="all">כל השנה</option>
+        {HE_MONTHS.map((label, idx) => (
+          <option key={idx + 1} value={String(idx + 1)}>
             {label}
-          </Button>
-        );
-      })}
+          </option>
+        ))}
+      </select>
+      <ChevronDown
+        size={14}
+        className="pointer-events-none absolute end-2.5 top-1/2 -translate-y-1/2 text-ink-muted"
+      />
     </div>
   );
 }

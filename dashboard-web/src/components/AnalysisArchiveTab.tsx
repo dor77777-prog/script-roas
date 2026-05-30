@@ -30,7 +30,7 @@ function StorePanel({
 }) {
   const now = new Date();
   const [year, setYear] = useState<number>(now.getFullYear());
-  const [month, setMonth] = useState<number | null>(null);
+  const [month, setMonth] = useState<number | null>(now.getMonth() + 1);
 
   return (
     <div className="space-y-4">
