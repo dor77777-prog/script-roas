@@ -6,9 +6,20 @@
 // CRIT-C note: GAQL queries themselves remain snake_case (GAQL is
 // case-sensitive snake_case), but the Google Ads JSON API returns
 // camelCase keys — see googleAds.ts:479-489 for the canonical shape:
-//   r.changeStatus.resourceType / resourceName / lastChangeDateTime
+//   r.changeStatus.resourceType / lastChangeDateTime
+//   r.changeStatus.campaign / .adGroup / .adGroupAd (per-type entity refs)
 //   r.adGroup, r.adGroupAd.ad, metrics.costMicros, metrics.conversionsValue
 // Snake-case lookups silently return undefined → empty result sets.
+//
+// CRIT-G note (Phase C soak hotfix, 2026-05-30):
+// `change_status.resource_name` is the resource_name of THE CHANGE_STATUS
+// itself (`customers/{cid}/changeStatus/{minute_bucket-entity_type-entity_id}`),
+// NOT the changed campaign/adGroup/ad. Splitting it on `/` and popping
+// returned a composite id like `1780118362096495-5-22542818628` which
+// Google rejected at the follow-up step with `BAD_NUMBER`. The fix is to
+// SELECT and read the typed sibling fields (`change_status.campaign`,
+// `change_status.ad_group`, `change_status.ad_group_ad`) which each
+// carry the proper resource_name of the changed entity.
 
 import type {
   AdRegistryRow,
@@ -55,9 +66,17 @@ export async function fetchGoogleStatusForStore(input: GoogleStatusInput): Promi
   const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
   const cutoffIso = formatGaqlDateTime(cutoff);
   const upperIso = formatGaqlDateTime(new Date());
+  // CRIT-G: select the typed entity references (change_status.campaign,
+  // change_status.ad_group, change_status.ad_group_ad) so the parsing
+  // loop can extract the entity_id from the changed resource's name —
+  // not from the change_status's own composite resource_name.
   const changeRows = await customer.searchStream({
     query: `
-      SELECT change_status.resource_name, change_status.resource_type, change_status.last_change_date_time
+      SELECT change_status.resource_type,
+             change_status.campaign,
+             change_status.ad_group,
+             change_status.ad_group_ad,
+             change_status.last_change_date_time
         FROM change_status
        WHERE change_status.last_change_date_time > '${cutoffIso}'
          AND change_status.last_change_date_time <= '${upperIso}'
@@ -72,16 +91,32 @@ export async function fetchGoogleStatusForStore(input: GoogleStatusInput): Promi
   const adIds = new Set<string>();
   for (const r of changeRows) {
     // CRIT-C: JSON response uses camelCase keys (changeStatus, resourceType,
-    // resourceName). Snake-case here would silently return undefined.
+    // campaign, adGroup, adGroupAd). Snake-case here would silently return
+    // undefined.
+    // CRIT-G: read the entity_id from the per-type typed field
+    // (change_status.campaign / .adGroup / .adGroupAd), NOT from
+    // change_status.resource_name (that's the change_status's own
+    // composite name and would produce BAD_NUMBER on the follow-up).
     const cs = (r as { changeStatus?: Record<string, unknown> }).changeStatus;
     if (!cs) continue;
     const type = cs.resourceType as string;
-    const name = cs.resourceName as string;
-    const id = name?.split('/').pop();
-    if (!id) continue;
-    if (type === 'CAMPAIGN') campaignIds.add(id);
-    if (type === 'AD_GROUP') adgroupIds.add(id);
-    if (type === 'AD_GROUP_AD') adIds.add(id);
+    const entityResource =
+      type === 'CAMPAIGN'    ? (cs.campaign as string | undefined)
+      : type === 'AD_GROUP'   ? (cs.adGroup as string | undefined)
+      : type === 'AD_GROUP_AD' ? (cs.adGroupAd as string | undefined)
+      : undefined;
+    const tail = entityResource?.split('/').pop();
+    if (!tail) continue;
+    if (type === 'CAMPAIGN') campaignIds.add(tail);
+    if (type === 'AD_GROUP') adgroupIds.add(tail);
+    if (type === 'AD_GROUP_AD') {
+      // ad_group_ad resource_name ends with `<adGroupId>~<adId>` per
+      // Google Ads API convention. The numeric `ad.id` is the segment
+      // after the tilde; passing the full composite would fail
+      // `WHERE ad_group_ad.ad.id IN (...)` at the follow-up step.
+      const adId = tail.split('~').pop();
+      if (adId) adIds.add(adId);
+    }
   }
 
   // 2. Follow up with full entity rows.

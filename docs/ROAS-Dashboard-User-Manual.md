@@ -7,7 +7,7 @@
 │                                                  │
 │      מדריך הפעלה שוטף למפעיל הדשבורד            │
 │                                                  │
-│      גרסה:        2.1.23                         │
+│      גרסה:        2.1.24                         │
 │      תאריך:       2026-05-30                     │
 │      קהל יעד:     מפעיל יחיד · החלטות יומיות   │
 │                                                  │
@@ -245,6 +245,16 @@ Meta ו-Google אינם מושפעים — אין campaign-store-map עבור פ
 **Sum invariant מובטח:** אחרי Hotfix 4, ה-SUM של data_daily.tt_spend_cad cross-stores לכל תאריך = סך כל ה-spend ב-campaigns_daily לאותו תאריך (אין duplication גם כשהקמפיין עובר חנות בתוך היום).
 
 **Hotfix 5 לערב — TodayLive per-store breakdown לא הציג TikTok ל-usmile360/zolplus:** הקומפוננטה `TodayLive` השתמשה ב-`storeHasTikTok(s.store)` שבודקת set סטטי `STORES_WITH_TIKTOK = {uzoshop}`. אחרי Phase A.5 v2, usmile360 ו-zolplus יכולות לקבל TikTok spend דרך המיפוי, אבל הbreakdown באר ההוצאה לא הציג את שורת TikTok. תוצאה: הסיכום היה $110 (Meta $66 + TikTok $43.49) אבל הbreakdown הציג רק "Meta: 66" → looked broken. תוקן: הchcck עכשיו `storeHasTikTok(s.store) || (s.ttSpend ?? 0) > 0`.
+
+---
+
+### 2.1.24 (2026-05-30) — Phase C soak hotfix #2: Google `change_status` entity-id extraction (CRIT-G)
+
+המשך לסבב התיקונים של 2.1.23. אחרי שתוקנו GAQL bound + ה-OAuth refresh-token, הופיעה שגיאה חדשה ב-Inngest של ה-google-worker: `BAD_NUMBER` על `WHERE campaign.id IN ('1780118362096495-5-22542818628', …)`. הסיבה היתה בפענוח התשובה מ-`change_status`: השדה `resource_name` מחזיר את שם המשאב של רשומת ה-change_status עצמה (`customers/{cid}/changeStatus/{minute_bucket-entity_type-entity_id}`), לא של הקמפיין/אדגרופ/אד ששתנו. ה-fetcher פיצל את ה-resource_name לפי `/` ולקח את ה-tail — שהוא כל ה-composite, לא ה-id היחיד שגוגל מוכן לקבל.
+
+**תיקון:** ה-GAQL הורחב לסלקט את השדות הטיפוסיים — `change_status.campaign`, `change_status.ad_group`, `change_status.ad_group_ad`. הפענוח מחלץ את ה-resource_name של הישות הנכונה לפי `resource_type`, ועבור AD_GROUP_AD יש גם split('~') להוצאת ה-ad_id מהcomposite tail. 2 רגרסיה-טסטים חדשים מכסים את AD_GROUP + AD_GROUP_AD; הטסט הקיים של CAMPAIGN שוכתב לשקף את ה-JSON האמיתי של גוגל (Mock הקיים היה מלאכותי ופספס את הבאג).
+
+**אודיט מקביל ב-Meta + TikTok:** נקיים. שניהם לא משתמשים ב-change-log API — הם פונים ל-`/campaigns?fields=id,...` ו-`/campaign/get/` ישירות שמחזירים `id` נקי. הבאג הזה ספציפי לגוגל.
 
 ---
 

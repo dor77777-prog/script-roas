@@ -4,28 +4,107 @@ import { fetchGoogleStatusForStore } from '@/lib/fetchers/googleStatus';
 describe('fetchGoogleStatusForStore()', () => {
   it('returns campaigns + adgroups + ads with status from change_status + entity follow-up', async () => {
     const searchStream = vi.fn();
-    // First call: change_status query.
+    // First call: change_status query — REAL Google shape.
+    //
+    // CRIT-G (Phase C soak hotfix, 2026-05-30): change_status.resource_name
+    // is the resource_name of THE CHANGE_STATUS itself
+    // (`customers/{cid}/changeStatus/{minute_bucket-entity_type-entity_id}`),
+    // not the changed campaign. The campaign's resource_name lives in
+    // `change_status.campaign` (typed sibling field). Splitting
+    // `resource_name` on `/` returned the composite id and produced
+    // `WHERE campaign.id IN ('1780118362096495-5-22542818628')` →
+    // Google rejected with `BAD_NUMBER`.
+    //
     // CRIT-C: response JSON uses camelCase keys (changeStatus,
-    // resourceType, resourceName, lastChangeDateTime).
+    // resourceType, lastChangeDateTime). Typed sibling fields are
+    // `campaign` / `adGroup` / `adGroupAd`.
     searchStream.mockResolvedValueOnce([
-      { campaign: { id: 'GC1' }, changeStatus: { resourceType: 'CAMPAIGN', resourceName: 'customers/123/campaigns/GC1', lastChangeDateTime: '2026-05-30 14:00:00' } },
+      {
+        changeStatus: {
+          resourceType: 'CAMPAIGN',
+          resourceName: 'customers/123/changeStatus/1780118362096495-5-22542818628',
+          campaign: 'customers/123/campaigns/22542818628',
+          lastChangeDateTime: '2026-05-30 14:00:00',
+        },
+      },
     ]);
     // Second call: campaign entity follow-up.
     // CRIT-C: `servingStatus` (camelCase) — GAQL stays snake_case but the
     // returned JSON object is camelCase.
     searchStream.mockResolvedValueOnce([
-      { campaign: { id: 'GC1', name: 'G Campaign 1', status: 'ENABLED', servingStatus: 'SERVING' } },
+      { campaign: { id: '22542818628', name: 'G Campaign 1', status: 'ENABLED', servingStatus: 'SERVING' } },
     ]);
     const customer = { searchStream } as unknown as Parameters<typeof fetchGoogleStatusForStore>[0]['customer'];
     const out = await fetchGoogleStatusForStore({
       storeId: 'uzoshop',
       customer,
     });
+
+    // The follow-up query must use the campaign id from `change_status.campaign`
+    // (numeric '22542818628'), NOT the change_status composite from
+    // `resource_name`. CRIT-G regression guard.
+    const followUpQuery = searchStream.mock.calls[1][0].query as string;
+    expect(followUpQuery).toContain("'22542818628'");
+    expect(followUpQuery).not.toContain('1780118362096495');
+
     expect(out.campaigns).toHaveLength(1);
     expect(out.campaigns[0]).toMatchObject({
       store_id: 'uzoshop', platform: 'google',
-      campaign_id: 'GC1', configured_status: 'ENABLED', effective_status: 'SERVING',
+      campaign_id: '22542818628', configured_status: 'ENABLED', effective_status: 'SERVING',
     });
+  });
+
+  it('CRIT-G: extracts AD_GROUP ids from change_status.adGroup, not from resource_name', async () => {
+    const searchStream = vi.fn();
+    searchStream.mockResolvedValueOnce([
+      {
+        changeStatus: {
+          resourceType: 'AD_GROUP',
+          resourceName: 'customers/123/changeStatus/1780118362096499-3-99999111',
+          adGroup: 'customers/123/adGroups/77777222',
+          lastChangeDateTime: '2026-05-30 14:01:00',
+        },
+      },
+    ]);
+    // Follow-up: ad_group entity
+    searchStream.mockResolvedValueOnce([
+      { adGroup: { id: '77777222', campaign: 'customers/123/campaigns/22542818628', name: 'AG 1', status: 'ENABLED' } },
+    ]);
+    const customer = { searchStream } as unknown as Parameters<typeof fetchGoogleStatusForStore>[0]['customer'];
+    const out = await fetchGoogleStatusForStore({ storeId: 'uzoshop', customer });
+    const followUpQuery = searchStream.mock.calls[1][0].query as string;
+    expect(followUpQuery).toContain("'77777222'");
+    expect(followUpQuery).not.toContain('1780118362096499');
+    expect(out.adsets).toHaveLength(1);
+    expect(out.adsets[0]).toMatchObject({ adset_id: '77777222', campaign_id: '22542818628' });
+  });
+
+  it('CRIT-G: extracts AD_GROUP_AD ids from change_status.adGroupAd, not from resource_name', async () => {
+    const searchStream = vi.fn();
+    searchStream.mockResolvedValueOnce([
+      {
+        changeStatus: {
+          resourceType: 'AD_GROUP_AD',
+          resourceName: 'customers/123/changeStatus/1780118362096500-13-88888333',
+          adGroupAd: 'customers/123/adGroupAds/77777222~55555444',
+          lastChangeDateTime: '2026-05-30 14:02:00',
+        },
+      },
+    ]);
+    // Follow-up: ad_group_ad entity (the GAQL filters by ad_group_ad.ad.id IN ...)
+    searchStream.mockResolvedValueOnce([
+      {
+        campaign: { id: '22542818628' },
+        adGroupAd: { adGroup: 'customers/123/adGroups/77777222', ad: { id: '55555444' }, status: 'ENABLED' },
+      },
+    ]);
+    const customer = { searchStream } as unknown as Parameters<typeof fetchGoogleStatusForStore>[0]['customer'];
+    const out = await fetchGoogleStatusForStore({ storeId: 'uzoshop', customer });
+    const followUpQuery = searchStream.mock.calls[1][0].query as string;
+    expect(followUpQuery).toContain("'55555444'");
+    expect(followUpQuery).not.toContain('1780118362096500');
+    expect(out.ads).toHaveLength(1);
+    expect(out.ads[0]).toMatchObject({ ad_id: '55555444' });
   });
 
   it('returns empty when change_status yields no rows', async () => {

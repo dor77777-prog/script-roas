@@ -1344,4 +1344,15 @@ If TikTok ever onboards multiple distinct advertisers (e.g. a per-store TikTok r
 - 1 GAQL bound test in [`googleStatus.test.ts`](../dashboard-web/src/lib/fetchers/__tests__/googleStatus.test.ts) asserts both `>` and `<=` operators on `last_change_date_time`.
 - 4 + 4 worker tests in [`googleWorker.test.ts`](../dashboard-web/src/inngest/functions/__tests__/googleWorker.test.ts) / [`tiktokWorker.test.ts`](../dashboard-web/src/inngest/functions/__tests__/tiktokWorker.test.ts) — `isConfigured` no-op paths + try/catch `transient_error` paths.
 
+**CRIT-G — `change_status.resource_name` is the wrong field for entity-id extraction (Phase C soak follow-up).** Once the GAQL bound + OAuth token rotation cleared, the Google status worker hit a NEW error: `BAD_NUMBER` on `WHERE campaign.id IN ('1780118362096495-5-22542818628', …)`. Root cause was in the change_status response parsing — `change_status.resource_name` returns the resource_name of the **change_status entity itself** (`customers/{cid}/changeStatus/{minute_bucket-entity_type-entity_id}`), not the changed campaign / ad_group / ad. The fetcher was splitting it on `/` and treating the composite tail as the entity_id, which Google promptly rejected at the follow-up `campaign.id IN (...)` step.
+
+**Fix:** the GAQL now selects the typed sibling fields:
+- `change_status.campaign` → resource_name of the changed campaign (when `resource_type=CAMPAIGN`)
+- `change_status.ad_group` → resource_name of the changed ad_group (when `resource_type=AD_GROUP`)
+- `change_status.ad_group_ad` → resource_name of the changed ad_group_ad (when `resource_type=AD_GROUP_AD`); its tail is `<adGroupId>~<adId>` so an extra `split('~').pop()` yields the ad id.
+
+Parsing loop reads the per-type field selected by `resource_type` and applies the right split sequence. 2 new regression tests cover AD_GROUP + AD_GROUP_AD; the existing CAMPAIGN test was rewritten to use the real Google JSON shape (with `changeStatus.campaign` carrying the campaign's resource_name) so the unit suite reflects production behavior and catches this class of bug going forward.
+
+**Audit of the same pattern on Meta + TikTok:** clean. `metaStatus.ts` reads `c.id` directly from `/campaigns?fields=id,...` Graph responses (numeric strings, no resource_name involved). `tiktokStatus.ts` reads `r.campaign_id` / `r.ad_id` directly from TikTok's `/campaign/get/` responses (same shape). The CRIT-G class is unique to Google's `change_status` log resource — Meta and TikTok don't expose a change-log API of this kind, so their status discovery hits campaigns/adsets/ads directly.
+
 **Open follow-up:** the `meta-worker` should adopt the same `isConfigured` + try/catch shape for symmetry (Meta has per-store accounts for all 3 stores today, so the antipattern is dormant — but a future store onboarding could hit it). Tracked separately.
