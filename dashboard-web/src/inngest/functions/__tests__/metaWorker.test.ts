@@ -171,4 +171,35 @@ describe('runMetaWorkerJob() — hot_metrics scope', () => {
     expect(fetcher).not.toHaveBeenCalled();
     expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({ scope: 'campaign_metrics', status: 'success' }));
   });
+
+  it('Phase E1: BUC budget_skip fires notifyTokenFailure(meta_hot_metrics_budget_skip)', async () => {
+    const notifyTokenFailure = vi.fn().mockResolvedValue(undefined);
+    const recordFreshness = vi.fn().mockResolvedValue(undefined);
+    await runMetaWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 90 },
+      bucProbe: async () => ({ etaMinutes: 5, pct: 92 }),
+      fetchStatus: vi.fn(),
+      fetchHotMetrics: vi.fn(),
+      getHotCampaignIds: async () => [],
+      getHotAdsetIds: async () => [],
+      getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(),
+      insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(),
+      upsertAdsDaily: vi.fn(),
+      recordFreshness,
+      upsertBuc: vi.fn(),
+      notifyTokenFailure,
+      nowIso: NOW_ISO,
+    });
+    const budgetSkipCalls = recordFreshness.mock.calls.filter(c => c[0].status === 'budget_skip');
+    expect(budgetSkipCalls.length).toBeGreaterThan(0);
+    expect(notifyTokenFailure).toHaveBeenCalledOnce();
+    const call = notifyTokenFailure.mock.calls[0][0];
+    expect(call.provider).toBe('meta');
+    expect(call.storeId).toBe('uzoshop');
+    expect(call.operation).toBe('meta_hot_metrics_budget_skip');
+    expect(call.errorMsg).toMatch(/ETA=5/);
+  });
 });

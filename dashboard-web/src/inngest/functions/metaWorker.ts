@@ -88,6 +88,20 @@ export type RunMetaWorkerJobInput = {
     errorMessage?: string;
   }) => Promise<void>;
   upsertBuc: (row: Record<string, unknown>) => Promise<void>;
+  /**
+   * Phase E1 (2026-05-30) — operator WhatsApp alert hook. The hot_metrics
+   * branch invokes this on BUC budget_skip / auth errors / rate-limit
+   * errors with a `meta_hot_metrics_*` operation key. Optional because
+   * existing tests don't all pass it; production Inngest binding always
+   * supplies it via the notifyTokenFailure adapter.
+   */
+  notifyTokenFailure?: (input: {
+    provider: 'meta' | 'google' | 'tiktok';
+    storeId: string;
+    operation: string;
+    errorMsg: string;
+    advice?: string;
+  }) => Promise<void>;
   nowIso: string;
   /**
    * Optional credential resolver. When omitted (production path), the pure
@@ -337,12 +351,25 @@ async function runMetaHotMetricsBranch(input: RunMetaWorkerJobInput): Promise<vo
   // 1. BUC pre-flight — same hard gate as status branch.
   const buc = await bucProbe(storeId);
   if (buc.etaMinutes > 0 || buc.pct >= HARD_SKIP_PCT) {
-    await recHotPair(
-      'budget_skip',
-      buc.etaMinutes > 0
-        ? `Meta ETA=${buc.etaMinutes}min`
-        : `pct=${buc.pct}>=${HARD_SKIP_PCT}`,
-    );
+    const errorMsg = buc.etaMinutes > 0
+      ? `Meta ETA=${buc.etaMinutes}min`
+      : `pct=${buc.pct}>=${HARD_SKIP_PCT}`;
+    await recHotPair('budget_skip', errorMsg);
+    // Phase E1 (2026-05-30) — fire suppressed-WhatsApp alert via
+    // notifyTokenFailure (operation throttles via the standard 1/6h
+    // per-key window). Matches the cron-live-heavy behavior being
+    // replaced — operator gets a DB notification row, no panic ping.
+    if (input.notifyTokenFailure) {
+      await input.notifyTokenFailure({
+        provider: 'meta',
+        storeId,
+        operation: 'meta_hot_metrics_budget_skip',
+        errorMsg,
+        advice: 'Meta BUC reached the hard-skip threshold; hot_metrics worker skipped this tick. No operator action — worker will retry next orchestrator tick (10 min) once usage decays.',
+      }).catch((alertErr) => {
+        console.warn(`metaWorker hot_metrics budget_skip alert threw: ${alertErr instanceof Error ? alertErr.message : alertErr}`);
+      });
+    }
     return;
   }
 
