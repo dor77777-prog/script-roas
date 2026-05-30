@@ -99,10 +99,10 @@ import {
 // longer calls Meta/Google/TikTok status APIs. Status discovery +
 // enrollment placeholders moved to per-store workers via
 // cron-tick-orchestrator.
-import { fetchMetaSpendForDayLight } from '@/lib/fetchers/meta';
-import { fetchGoogleAdsSpendForDay } from '@/lib/fetchers/googleAds';
-import { fetchTikTokSpendForDay } from '@/lib/fetchers/tiktok';
-import { getFxRate } from '@/lib/fetchers/fx';
+// Phase E1.6 (2026-05-30) — fetch-meta-google-tiktok-spend-light-3day
+// step removed; account-level spend is owned by the 3 hot_metrics
+// worker branches. These imports (Meta/Google/TikTok light spend
+// fetchers + getFxRate) are no longer needed in cron-live.
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { TIKTOK_ACTIVE_ENOUGH } from '@/lib/platformConfig';
 // Phase 12.5.x (2026-05-24) — token-failure alerts. Same wiring as cronDaily;
@@ -863,164 +863,6 @@ async function runLiveForStoreInner(
     gaImpressions: number | null;
     ttImpressions: number | null;
   };
-  const spendByDate = await step.run('fetch-meta-google-tiktok-spend-light-3day', async () => {
-    // Audit fix 2026-05-23 (a/WARN-3): FX failure must NOT silently
-    // convert at 1×. Pre-fix, when getFxRate timed-out or 5xx'd, the
-    // `.catch(() => 1)` treated 1 USD as 1 CAD — overwriting today's
-    // CAD spend column with raw USD numbers (~30% low). Amplified by
-    // the rolling 3-day refresh, a single FX outage could corrupt 3
-    // dates × 3 stores × 3 platforms simultaneously.
-    //
-    // New behavior: FX failure returns null from cadConvert. The
-    // caller's null check (below in the .then) propagates null all
-    // the way to the per-platform preserve in the persist step,
-    // which keeps the prior-day's column value. Net result: if FX
-    // fails today, the CAD spend column shows the prior-day value
-    // until FX recovers — a less-bad failure than overwriting USD
-    // spend with garbage. The operator sees stale data (which is
-    // surfaced by the freshness chip) instead of wrong data.
-    const cadConvert = async (
-      value: { spend: number; currency: string } | null,
-      dateStr: string,
-    ): Promise<number | null> => {
-      if (!value || !Number.isFinite(value.spend) || value.spend === 0) return 0;
-      const currency = (value.currency || 'CAD').toUpperCase();
-      if (currency === 'CAD') return value.spend;
-      const rate = await withTimeout(
-        getFxRate(currency, 'CAD', dateStr),
-        5_000,
-        'FX',
-      ).catch(() => null);
-      if (rate === null || !Number.isFinite(rate) || rate <= 0) {
-        console.warn(
-          `cron-live: FX ${currency}→CAD on ${dateStr} failed — skipping spend update for this date/platform (per-platform preserve keeps prior value).`,
-        );
-        return null;
-      }
-      return value.spend * rate;
-    };
-    const out: Record<string, DateSpend> = {};
-    // Fetch all 3 platforms × all 3 dates in parallel. Each platform/date
-    // pair is independent (no cross-dependency) so a single Promise.all
-    // is fine for both throughput and per-call timeout isolation.
-    // Phase 13.8 (2026-05-26) — each task now reports `impressions` alongside
-    // CAD-converted spend. Impressions are platform-agnostic counts so they
-    // skip the FX-conversion step entirely; they propagate as-is from the
-    // fetcher to the persist step.
-    const tasks: Array<Promise<{ date: string; key: 'fb' | 'ga' | 'tt'; cad: number | null; impressions: number | null }>> = [];
-    for (const d of dates) {
-      tasks.push(
-        withTimeout(fetchMetaSpendForDayLight(storeId, d), 12_000, 'Meta')
-          .catch((e) => {
-            const errMsg = e instanceof Error ? e.message : String(e);
-            console.warn(
-              `cron-live: Meta light spend ${storeId} ${d} failed/timed-out: ${errMsg}`,
-            );
-            if (isAuthError('meta', errMsg)) {
-              notifyTokenFailure({
-                provider: 'meta',
-                storeId: storeId as 'uzoshop' | 'zolplus' | 'usmile360',
-                operation: 'fetch_spend',
-                errorMsg: errMsg,
-                advice:
-                  'Refresh the Meta access token in Vercel (' +
-                  `${storeId.toUpperCase()}_META_ACCESS_TOKEN`.replace(/`/g, '') +
-                  ') and redeploy.',
-              }).catch(() => {});
-            } else {
-              captureCronFetchError(
-                { storeId, platform: 'meta', dedup: sentryDedup, quietWhatsapp: true },
-                e,
-              ).catch(() => {});
-            }
-            return null;
-          })
-          .then(async (v) => ({ date: d, key: 'fb' as const, cad: v === null ? null : await cadConvert(v, d), impressions: v === null ? null : v.impressions })),
-      );
-      tasks.push(
-        withTimeout(fetchGoogleAdsSpendForDay(storeId, d), 12_000, 'Google')
-          .catch((e) => {
-            const errMsg = e instanceof Error ? e.message : String(e);
-            console.warn(
-              `cron-live: Google spend ${storeId} ${d} failed/timed-out: ${errMsg}`,
-            );
-            if (isAuthError('google', errMsg)) {
-              notifyTokenFailure({
-                provider: 'google',
-                storeId: storeId as 'uzoshop' | 'zolplus' | 'usmile360',
-                operation: 'fetch_spend',
-                errorMsg: errMsg,
-                advice:
-                  'Re-run the OAuth Playground flow to mint a fresh GOOGLEADS_REFRESH_TOKEN. ' +
-                  'Update Vercel env vars + redeploy. See docs/PROPS-MAP.md rows 28-32.',
-              }).catch(() => {});
-            } else {
-              captureCronFetchError(
-                { storeId, platform: 'google', dedup: sentryDedup, quietWhatsapp: true },
-                e,
-              ).catch(() => {});
-            }
-            return null;
-          })
-          .then(async (v) => ({ date: d, key: 'ga' as const, cad: v === null ? null : await cadConvert(v, d), impressions: v === null ? null : v.impressions })),
-      );
-      if (STORES_WITH_TIKTOK.has(storeId)) {
-        tasks.push(
-          withTimeout(fetchTikTokSpendForDay(storeId, d), 12_000, 'TikTok')
-            .catch((e) => {
-              const errMsg = e instanceof Error ? e.message : String(e);
-              console.warn(
-                `cron-live: TikTok spend ${storeId} ${d} failed/timed-out: ${errMsg}`,
-              );
-              if (isAuthError('tiktok', errMsg)) {
-                notifyTokenFailure({
-                  provider: 'tiktok',
-                  storeId: storeId as 'uzoshop' | 'zolplus' | 'usmile360',
-                  operation: 'fetch_spend',
-                  errorMsg: errMsg,
-                  advice:
-                    'Re-authorize TikTok via /api/oauth/tiktok/callback to refresh the ' +
-                    `${storeId.toUpperCase()}_TIKTOK_ACCESS_TOKEN. Update Vercel env + redeploy.`,
-                }).catch(() => {});
-              } else {
-                captureCronFetchError(
-                  { storeId, platform: 'tiktok', dedup: sentryDedup, quietWhatsapp: true },
-                  e,
-                ).catch(() => {});
-              }
-              return null;
-            })
-            .then(async (v) => ({ date: d, key: 'tt' as const, cad: v === null ? null : await cadConvert(v, d), impressions: v === null ? null : v.impressions })),
-        );
-      }
-    }
-    const results = await Promise.all(tasks);
-    for (const d of dates) {
-      out[d] = {
-        fbSpendCad: null,
-        gaSpendCad: null,
-        ttSpendCad: null,
-        fbImpressions: null,
-        gaImpressions: null,
-        ttImpressions: null,
-      };
-    }
-    for (const r of results) {
-      const slot = out[r.date];
-      if (!slot) continue;
-      if (r.key === 'fb') {
-        slot.fbSpendCad = r.cad;
-        slot.fbImpressions = r.impressions;
-      } else if (r.key === 'ga') {
-        slot.gaSpendCad = r.cad;
-        slot.gaImpressions = r.impressions;
-      } else {
-        slot.ttSpendCad = r.cad;
-        slot.ttImpressions = r.impressions;
-      }
-    }
-    return out;
-  }) as Record<string, DateSpend>;
 
   // ----- STEP 3: fetch today's orders_attribution (for WhatsApp summary) -----
   //
@@ -1124,6 +966,29 @@ async function runLiveForStoreInner(
         };
       },
     );
+  }
+
+  // Phase E1.6 (2026-05-30) — `spendByDate` was populated by the
+  // (now-removed) `fetch-meta-google-tiktok-spend-light-3day` step.
+  // After E1.6, account-level spend is owned by the 3 hot_metrics
+  // worker branches which write data_daily.fb/ga/tt_spend_cad +
+  // impressions directly via partial-column UPSERT. The downstream
+  // persist code below still references `spendByDate[date]`; alias
+  // it over `priorSpendByDate` (which selects what workers wrote)
+  // to keep the persist logic unchanged. Result: persist's per-row
+  // payload computes from current data_daily values seeded by
+  // workers (≤10 min stale).
+  const spendByDate: Record<string, DateSpend> = {};
+  for (const date of dates) {
+    const p = priorSpendByDate[date];
+    spendByDate[date] = {
+      fbSpendCad: p.priorFb,
+      gaSpendCad: p.priorGa,
+      ttSpendCad: p.priorTt,
+      fbImpressions: p.priorFbImp,
+      gaImpressions: p.priorGaImp,
+      ttImpressions: p.priorTtImp,
+    };
   }
 
   await step.run('persist-rolling-3day', async () => {
