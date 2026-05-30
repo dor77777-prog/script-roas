@@ -139,24 +139,41 @@ export function fmtDateShort(yyyymmdd: string): string {
  * Stable per-store color tokens. The same store gets the same color in every
  * chart, sparkline, legend, and store-chip — cross-component memory pattern
  * lifted from PostHog. Add new stores by extending this map.
+ *
+ * Phase E1.6.1 UI overhaul (2026-05-30) — store badge colors now route
+ * through CSS-var tokens (defined in globals.css). Removes the
+ * pre-overhaul schism where charts used cyan/pink/lime and badges used
+ * navy/red/green (incompatible visual identities for the same store).
  */
-export const STORE_HUES: Record<string, { hex: string; bg: string }> = {
-  uzoshop:     { hex: '#0d3680', bg: 'rgba(13, 54, 128, 0.08)' },
-  'Zol Plus':  { hex: '#c92a2a', bg: 'rgba(201, 42, 42, 0.08)' },
-  '360usmile': { hex: '#0a7d3b', bg: 'rgba(10, 125, 59, 0.08)' },
+export const STORE_HUES: Record<string, { fg: string; bg: string }> = {
+  uzoshop:     { fg: 'var(--store-uzoshop-fg)', bg: 'var(--store-uzoshop-bg)' },
+  'Zol Plus':  { fg: 'var(--store-zolplus-fg)', bg: 'var(--store-zolplus-bg)' },
+  '360usmile': { fg: 'var(--store-usmile-fg)',  bg: 'var(--store-usmile-bg)'  },
 };
 
+// Server-side / non-browser callers (WhatsApp summary etc.) still need
+// a concrete hex. Returns the LIGHT-mode chart-palette value so the
+// rendered string matches the dashboard's light-mode display.
+const STORE_HEX_LIGHT: Record<string, string> = {
+  uzoshop: '#06b6d4',     // cyan (chart palette)
+  'Zol Plus': '#ec4899',  // hot pink
+  '360usmile': '#84cc16', // lime
+};
+export function storeBadgeHex(store: string): string {
+  return STORE_HEX_LIGHT[store] ?? '#6b7280'; // gray fallback for unknown stores
+}
+
 export function storeColor(storeName: string, fallbackIdx = 0): string {
-  if (STORE_HUES[storeName]) return STORE_HUES[storeName].hex;
-  return ['#0d3680', '#c92a2a', '#0a7d3b', '#b45309', '#7c3aed'][fallbackIdx % 5];
+  if (STORE_HUES[storeName]) return STORE_HUES[storeName].fg;
+  return ['#06b6d4', '#ec4899', '#84cc16', '#b45309', '#7c3aed'][fallbackIdx % 5];
 }
 
 export function storeBg(storeName: string, fallbackIdx = 0): string {
   if (STORE_HUES[storeName]) return STORE_HUES[storeName].bg;
   return [
-    'rgba(13, 54, 128, 0.08)',
-    'rgba(201, 42, 42, 0.08)',
-    'rgba(10, 125, 59, 0.08)',
+    'rgba(6, 182, 212, 0.08)',
+    'rgba(236, 72, 153, 0.08)',
+    'rgba(132, 204, 22, 0.08)',
     'rgba(180, 83, 9, 0.08)',
     'rgba(124, 58, 237, 0.08)',
   ][fallbackIdx % 5];

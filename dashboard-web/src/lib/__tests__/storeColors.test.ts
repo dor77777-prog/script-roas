@@ -9,6 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { STORE_COLORS, storeColor } from '@/lib/storeColors';
+import { STORE_HUES, storeBadgeHex } from '@/lib/format';
 
 const KNOWN_STORES = ['uzoshop', 'Zol Plus', '360usmile'] as const;
 
@@ -52,5 +53,20 @@ describe('storeColors — canonical single-source palette (A1-F5 / A6-S2)', () =
     const color1 = storeColor('future-store-b', 1);
     // Different indices should (generally) produce different colors
     expect(color0).not.toBe(color1);
+  });
+});
+
+describe('Phase E1.6.1 — store color unification (chart palette canonical)', () => {
+  it('format.ts STORE_HUES routes through CSS vars (not hardcoded hex)', () => {
+    expect(STORE_HUES.uzoshop.fg).toBe('var(--store-uzoshop-fg)');
+    expect(STORE_HUES.uzoshop.bg).toBe('var(--store-uzoshop-bg)');
+    expect(STORE_HUES['Zol Plus'].fg).toBe('var(--store-zolplus-fg)');
+    expect(STORE_HUES['360usmile'].fg).toBe('var(--store-usmile-fg)');
+  });
+
+  it('storeBadgeHex returns chart-palette hex for known stores (backwards-compat shim)', () => {
+    expect(storeBadgeHex('uzoshop')).toBe('#06b6d4');
+    expect(storeBadgeHex('Zol Plus')).toBe('#ec4899');
+    expect(storeBadgeHex('360usmile')).toBe('#84cc16');
   });
 });
