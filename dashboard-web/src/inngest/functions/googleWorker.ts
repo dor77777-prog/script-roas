@@ -53,10 +53,10 @@ import {
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { isAuthError, isRateLimitError } from '@/lib/notifications/detectAuthError';
 import { notifyTokenFailure } from '@/lib/notifications/tokenFailures';
-import { fetchGoogleAccountSpendForDates } from '@/lib/fetchers/googleAccountSpend';
-import { makeCadConvert } from '@/lib/inngest/cadConvert';
-import { upsertDataDailySpend } from '@/lib/inngest/upsertDataDailySpend';
-import { getFxRate } from '@/lib/fetchers/fx';
+// Phase E1.7 (2026-05-30 night) — Google worker no longer fetches
+// account-aggregate spend. campaigns_daily is the single source of
+// truth; the unified RPC `agg_data_daily_for_date(d)` re-aggregates
+// into data_daily after every upsert. See ARCHITECTURE.md §Phase E1.7.
 import {
   getHotCampaignIds as getHotCampaignIdsHelper,
   getHotAdsetIds as getHotAdsetIdsHelper,
@@ -150,19 +150,14 @@ export type RunGoogleWorkerJobInput = {
     errorMsg: string;
     advice?: string;
   }) => Promise<void>;
-  /** Phase E1.6 (2026-05-30) — bulk-date Google account-level spend. */
-  fetchAccountSpend?: (input: {
-    customer: { searchStream: (q: { query: string }) => Promise<Array<Record<string, unknown>>> };
-    dates: string[];
-  }) => Promise<Array<{ date: string; spend: number; currency: string; impressions: number }>>;
-  cadConvert?: (amount: number, currency: string, dateStr: string) => Promise<number | null>;
-  upsertDataDailySpend?: (input: {
-    storeId: string;
-    date: string;
-    platform: 'meta' | 'google' | 'tiktok';
-    spendCad: number | null;
-    impressions: number | null;
-  }) => Promise<void>;
+  /**
+   * Phase E1.7 (2026-05-30 night) — unified agg RPC.
+   * Re-aggregates campaigns_daily → data_daily.{fb,ga,tt}_spend_cad +
+   * impressions + derived totals atomically. Called twice: once before
+   * the empty-hot-set check (soft-fail) and once after upsertCampaignsDaily
+   * (re-throw on error). Replaces Phase E1.6 fetchAccountSpend path.
+   */
+  aggregateDataDaily?: (date: string) => Promise<void>;
 };
 
 function checkGoogleConfigured(
@@ -422,42 +417,18 @@ async function runGoogleHotMetricsBranch(input: RunGoogleWorkerJobInput): Promis
     // account-aggregate spend runs every tick regardless of hot-set state.
     const customer = await safeCustomer(storeId, getCustomer);
 
-    // 2. Phase E1.6 (2026-05-30) — Google account-aggregate spend →
-    // data_daily. RUNS UNCONDITIONALLY (independent of hot-set state).
-    // Pre-fix: this block lived AFTER the empty-hot-set early-exit so
-    // uzoshop's Google ga_spend_cad + ga_impressions froze whenever no
-    // campaigns were hot at tick time. Restored to pre-E1.6 cron-live
-    // parity (every-tick write). Google Ads account for uzoshop is
-    // CAD-native; cadConvert passes through.
-    //
-    // Soft-fail: a fetch error here does NOT throw — we still want to
-    // run hot-set metrics below if hot ids exist. Next tick (10 min)
-    // retries.
-    if (input.fetchAccountSpend && input.cadConvert && input.upsertDataDailySpend) {
+    // 2. Phase E1.7 (2026-05-30 night) — pre-fetch agg RPC call. Same
+    // semantics as metaWorker — re-aggregates existing campaigns_daily
+    // values into data_daily so empty-hot-set ticks still keep
+    // derived columns fresh. Soft-fail so hot-set metrics path runs
+    // even if RPC has transient issue.
+    if (input.aggregateDataDaily) {
+      const todayDate = nowIso.slice(0, 10);
       try {
-        const todayDate = nowIso.slice(0, 10);
-        const oneDayMs = 24 * 60 * 60 * 1000;
-        const dates = [0, 1, 2].map((d) =>
-          new Date(new Date(todayDate + 'T00:00:00Z').getTime() - d * oneDayMs)
-            .toISOString().slice(0, 10),
-        );
-        const rows = await input.fetchAccountSpend({
-          customer,
-          dates,
-        });
-        for (const r of rows) {
-          const spendCad = await input.cadConvert(r.spend, r.currency, r.date);
-          await input.upsertDataDailySpend({
-            storeId,
-            date: r.date,
-            platform: 'google',
-            spendCad,
-            impressions: r.impressions,
-          });
-        }
+        await input.aggregateDataDaily(todayDate);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        console.warn(`googleWorker account-aggregate-spend ${storeId}: ${message}`);
+        console.warn(`googleWorker aggregateDataDaily (pre-fetch) ${todayDate}: ${message}`);
       }
     }
 
@@ -501,7 +472,15 @@ async function runGoogleHotMetricsBranch(input: RunGoogleWorkerJobInput): Promis
       );
     }
 
-    // 6. Mark freshness success for both campaign_metrics + ad_metrics.
+    // 6. Phase E1.7 (2026-05-30 night) — post-upsert agg RPC call.
+    // Re-aggregate the freshly-written campaigns_daily values into
+    // data_daily atomically. Errors re-throw so outer catch records
+    // transient_error.
+    if (input.aggregateDataDaily) {
+      await input.aggregateDataDaily(today);
+    }
+
+    // 7. Mark freshness success for both campaign_metrics + ad_metrics.
     await recHotPair('success');
   } catch (err) {
     // Phase C soak: surface the failure to the operator panel by writing
@@ -625,10 +604,14 @@ export const googleWorker = inngest.createFunction(
         },
         // Phase E1.6 (2026-05-30) — bulk-date account-aggregate spend
         // → data_daily via partial-column UPSERT.
-        fetchAccountSpend: fetchGoogleAccountSpendForDates,
-        cadConvert: makeCadConvert(getFxRate),
-        upsertDataDailySpend: async (inp) =>
-          upsertDataDailySpend({ admin: sb, ...inp }),
+        // Phase E1.7 (2026-05-30 night) — unified agg RPC replaces the
+        // Phase E1.6 fetchAccountSpend path.
+        aggregateDataDaily: async (date: string) => {
+          const { error } = await sb.rpc('agg_data_daily_for_date', { d: date });
+          if (error) {
+            throw new Error(`agg_data_daily_for_date(${date}) for google: ${error.message}`);
+          }
+        },
         nowIso,
       });
     });

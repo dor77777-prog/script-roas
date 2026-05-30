@@ -234,20 +234,17 @@ describe('runMetaWorkerJob() — hot_metrics scope', () => {
     expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({ scope: 'campaign_metrics', status: 'success' }));
   });
 
-  it('Phase E1.6 regression fix (2026-05-30): empty hot set STILL writes account-aggregate to data_daily — hot-set early-exit must NOT pre-empt the account-spend write', async () => {
-    // Pre-fix bug: the empty-hot-set early-exit in runMetaHotMetricsBranch
-    // returned BEFORE the Phase E1.6 account-spend block was reached, so
-    // any store with no campaigns flagged "hot" at tick time froze
-    // data_daily.fb_spend_cad + fb_impressions in production. cron-live's
-    // priorSpendByDate then re-read the stale values on each subsequent
-    // tick and the dashboard's per-account spend / Live CPM never moved.
-    const fetchAccountSpend = vi.fn().mockResolvedValue([
-      { date: '2026-05-27', spend: 100, currency: 'ILS', impressions: 5000 },
-      { date: '2026-05-28', spend: 200, currency: 'ILS', impressions: 8000 },
-      { date: '2026-05-29', spend:  50, currency: 'ILS', impressions: 2500 },
-    ]);
-    const cadConvert = vi.fn().mockImplementation(async (n: number) => n * 0.5);
-    const upsertDataDailySpend = vi.fn().mockResolvedValue(undefined);
+  it('Phase E1.7 regression fix: empty hot set STILL calls aggregateDataDaily (pre-fetch) — early-exit must NOT pre-empt the agg RPC', async () => {
+    // Pre-Phase-E1.7 history (preserved for context):
+    // - Phase E1.6 (2026-05-30 ~18:30 IL) moved account-aggregate fetch
+    //   to workers but the empty-hot-set early-exit pre-empted it.
+    // - Phase E1.6.1 (~19:30 IL) fixed by running account-aggregate
+    //   BEFORE the empty-hot-set check.
+    // - Phase E1.7 (this fix, ~20:30 IL) replaces account-aggregate
+    //   with the unified `agg_data_daily_for_date` RPC. The pre-fetch
+    //   call is preserved (re-aggregates campaigns_daily even when no
+    //   new writes happen this tick).
+    const aggregateDataDaily = vi.fn().mockResolvedValue(undefined);
     const fetchHotMetrics = vi.fn();
     await runMetaWorkerJob({
       jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 12 },
@@ -265,18 +262,14 @@ describe('runMetaWorkerJob() — hot_metrics scope', () => {
       getCredentials: async () => ({ adAccountId: 'act_1', accessToken: 'tok', getFxCadFor: async () => async () => 0.5 } as never),
       recordFreshness: vi.fn(),
       upsertBuc: vi.fn(),
-      fetchAccountSpend,
-      cadConvert,
-      upsertDataDailySpend,
+      aggregateDataDaily,
       nowIso: '2026-05-29T16:00:00.000Z',
     });
     expect(fetchHotMetrics).not.toHaveBeenCalled();
-    expect(fetchAccountSpend).toHaveBeenCalledOnce();
-    expect(upsertDataDailySpend).toHaveBeenCalledTimes(3);
-    const written = upsertDataDailySpend.mock.calls.map(c => c[0]);
-    expect(written.find(w => w.date === '2026-05-29')).toMatchObject({
-      platform: 'meta', storeId: 'uzoshop', spendCad: 25, impressions: 2500,
-    });
+    // Exactly 1 call (pre-fetch). Post-upsert call is skipped because
+    // the empty-hot-set early-exit returns before upsertCampaignsDaily.
+    expect(aggregateDataDaily).toHaveBeenCalledTimes(1);
+    expect(aggregateDataDaily).toHaveBeenCalledWith('2026-05-29');
   });
 
   it('Phase E1: hot_metrics fetch rejects with 429 → recHotPair transient_error + notifyTokenFailure(meta_hot_metrics_rate_limit)', async () => {
@@ -336,14 +329,8 @@ describe('runMetaWorkerJob() — hot_metrics scope', () => {
     expect(notifyTokenFailure.mock.calls[0][0].operation).toBe('meta_hot_metrics_auth');
   });
 
-  it('Phase E1.6: after hot-ids upsert, fetches account-aggregate for 3 dates + writes each to data_daily via partial-column UPSERT', async () => {
-    const fetchAccountSpend = vi.fn().mockResolvedValue([
-      { date: '2026-05-27', spend: 100, currency: 'ILS', impressions: 5000 },
-      { date: '2026-05-28', spend: 200, currency: 'ILS', impressions: 8000 },
-      { date: '2026-05-29', spend:  50, currency: 'ILS', impressions: 2500 },
-    ]);
-    const cadConvert = vi.fn().mockImplementation(async (n: number) => n * 0.5);
-    const upsertDataDailySpend = vi.fn().mockResolvedValue(undefined);
+  it('Phase E1.7 (2026-05-30 night): hot_metrics calls aggregateDataDaily twice (pre-fetch + post-upsert) for today', async () => {
+    const aggregateDataDaily = vi.fn().mockResolvedValue(undefined);
     await runMetaWorkerJob({
       jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 12 },
       bucProbe: async () => ({ pct: 12, etaMinutes: 0 }),
@@ -360,26 +347,20 @@ describe('runMetaWorkerJob() — hot_metrics scope', () => {
       getCredentials: async () => ({ adAccountId: 'act_1', accessToken: 'tok', getFxCadFor: async () => async () => 0.5 } as never),
       recordFreshness: vi.fn(),
       upsertBuc: vi.fn(),
-      fetchAccountSpend,
-      cadConvert,
-      upsertDataDailySpend,
+      aggregateDataDaily,
       nowIso: '2026-05-29T16:00:00.000Z',
     });
-    expect(fetchAccountSpend).toHaveBeenCalledOnce();
-    const fetchArgs = fetchAccountSpend.mock.calls[0][0];
-    expect([...fetchArgs.dates].sort()).toEqual(['2026-05-27', '2026-05-28', '2026-05-29']);
-    expect(upsertDataDailySpend).toHaveBeenCalledTimes(3);
-    const written = upsertDataDailySpend.mock.calls.map(c => c[0]);
-    expect(written.find(w => w.date === '2026-05-27')).toMatchObject({
-      platform: 'meta', storeId: 'uzoshop', spendCad: 50, impressions: 5000,
-    });
-    expect(written.find(w => w.date === '2026-05-29')).toMatchObject({
-      platform: 'meta', storeId: 'uzoshop', spendCad: 25, impressions: 2500,
-    });
+    // Once pre-fetch (before empty-hot-set check) + once post-upserts
+    // (after upsertCampaignsDaily + upsertAdsDaily, before recHotPair).
+    expect(aggregateDataDaily).toHaveBeenCalledTimes(2);
+    expect(aggregateDataDaily).toHaveBeenNthCalledWith(1, '2026-05-29');
+    expect(aggregateDataDaily).toHaveBeenNthCalledWith(2, '2026-05-29');
   });
 
-  it('Phase E1.6: fetch-account-spend rejection: soft-fail (log + continue), hot_metrics success still recorded', async () => {
-    const fetchAccountSpend = vi.fn().mockRejectedValue(new Error('Meta 429'));
+  it('Phase E1.7: pre-fetch aggregateDataDaily soft-fails (log + continue); hot_metrics still records success', async () => {
+    const aggregateDataDaily = vi.fn()
+      .mockRejectedValueOnce(new Error('RPC transient'))
+      .mockResolvedValue(undefined);
     const recordFreshness = vi.fn();
     await runMetaWorkerJob({
       jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 12 },
@@ -397,12 +378,13 @@ describe('runMetaWorkerJob() — hot_metrics scope', () => {
       getCredentials: async () => ({ adAccountId: 'act_1', accessToken: 'tok', getFxCadFor: async () => async () => 0.5 } as never),
       recordFreshness,
       upsertBuc: vi.fn(),
-      fetchAccountSpend,
-      cadConvert: vi.fn(),
-      upsertDataDailySpend: vi.fn(),
+      aggregateDataDaily,
       nowIso: '2026-05-29T16:00:00.000Z',
     });
-    expect(fetchAccountSpend).toHaveBeenCalledOnce();
+    // Pre-fetch call (rejected) logs warning + continues. Post-upsert
+    // call (resolved) succeeds. Both campaign_metrics + ad_metrics
+    // recHotPair('success') still fires.
+    expect(aggregateDataDaily).toHaveBeenCalledTimes(2);
     expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({
       scope: 'campaign_metrics', status: 'success',
     }));

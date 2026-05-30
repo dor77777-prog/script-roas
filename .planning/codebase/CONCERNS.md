@@ -1,583 +1,379 @@
 # Codebase Concerns
 
-**Analysis Date:** 2026-05-18
+**Analysis Date:** 2026-05-24
+**Baseline:** `b846ae7` (HEAD after Phase 12)
+**Supersedes:** prior CONCERNS.md (2026-05-18, pre-v1/v2/v3 audit and pre-Phase-11 Apps Script decommission)
 
-המסמך הזה מתעד סיכונים, חוב טכני ופערים שהמערכת תרוויח מתיקונם. נכון לסוף Round 5
-(commit `6d9df13`) — אחרי 5 סבבי `/gsd-code-review` ו-60+ commits של תיקונים.
-חלק מהנקודות הן fragile-by-design (Apps Script 6-min cap), חלק מתחילות להופיע ככל
-שהמערכת גדלה (products-daily ללא rotation), וחלק נכנסו מתי שהוחלפה אסטרטגיה
-באמצע הדרך (CampaignsTable שגדל ל-1722 שורות תוך כדי הוספת trust-chip + attribution).
+This is the post-conversion, post-v3-audit honest snapshot. Multiple audit rounds
+have closed the original concerns (Apps Script 6-min cap, missing test suite,
+COGS duplication, last-write-wins cloud-sync, etc.) by either fixing the issue or
+removing the surface entirely (Apps Script decommissioned in Phase 11).
+
+The items below are what remains **OPEN** for future-claude and the operator. Each
+item cites file:line + the audit finding ID + the commit that resolved or deferred
+it.
 
 ---
 
 ## Tech Debt
 
-### Apps Script 6-min Execution Limit
+### U-03 — `aiReport.ts` CV thresholds inlined as magic numbers (DEFERRED)
 
-- **Issue:** כל `runUpdateForDate` חייב להסתיים תוך 6 דקות. כיום 3 חנויות ≈ 4–5 דקות
-  עם sleep של 1.5s בין חנויות + 500ms בין כתיבות (`DailyUpdate.gs:42, 122, 142, 151`).
-  ה-backfill הידני נדרש להתחלק לחתיכות (`backfillRangeForStores` + `backfillZolUsmileMay1to14`
-  ב-`DailyUpdate.gs:423`).
-- **Files:** `DailyUpdate.gs:22-72`, `DailyUpdate.gs:351-425`.
-- **Impact:** כאשר תיווסף חנות רביעית או כשנפח ההזמנות יגדל (orders-attribution כותב
-  שורה לכל הזמנה — היום אחד עם 200+ הזמנות לחנות = 600+ כתיבות + chunked formatting),
-  ה-`runDailyUpdate` היומי יתחיל לגעת ב-cap. הסימן הראשון יהיה ש-store 3 יתחיל
-  להיכשל ב-timeout, בדיוק התסמין ש-Round 4 כבר טיפל בו אחת.
-- **Fix approach:** לפצל את ה-trigger ל-3 פונקציות נפרדות (one-per-store) שכל אחת
-  מקבלת trigger יומי משלה ב-00:05 / 00:10 / 00:15. כל אחת מקבלת 6 דקות נפרדות,
-  אין בעיית quota cascade ביניהן, ו-`refreshAllStoreMeta` יוקפץ ל-trigger רביעי.
-
-### אין test suite
-
-- **Issue:** ה-codebase כולו ללא יחידת בדיקות. אין Jest / Vitest מותקן (ב-`dashboard-web/package.json`
-  אין dependencies של testing), אין `*.test.*` או `*.spec.*` קבצים בכל הפרויקט.
-- **Files:** מודולים קריטיים ללא כיסוי: `dashboard-web/src/lib/attributionAnalysis.ts`
-  (878 שורות, Bayesian CI, window stability, outlier detection),
-  `dashboard-web/src/lib/analytics.ts`, `dashboard-web/src/lib/campaignProductMap.ts`,
-  `dashboard-web/src/lib/ordersAttribution.ts`, `Shopify.gs::classifyOrderAttribution_`,
-  `SheetBuilder.gs::writeOrdersAttributionForDay`.
-- **Impact:** כל refactor שעובר על מודולי analytics הוא ריצה בעיניים עצומות. הבאגים
-  שהתגלו ב-Round 5 (CR5-01 fall-through ב-`orderMatchesCampaign`, CR5-02 `decodeURIComponent`
-  ללא try/catch, WR5-04 degenerate-CI כשsoldim AOV זהה) — כולם היו נתפסים בטריוויאליות
-  ע"י unit-tests מינימליות.
-- **Fix approach:** להוסיף Vitest + לכתוב 30–50 בדיקות שכבת ה-pure-functions
-  ב-`attributionAnalysis.ts` (analyzeAttribution / detectOutlierDays / computeWindowStability),
-  `analytics.ts` (aggregations), `campaignProductMap.ts`, `ordersAttribution.ts::parseSource`.
-  לא צריך e2e — מספיק בודקים deterministic על data fixtures.
-
-### COGS rate מ-duplicated בשני מקומות
-
-- **Issue:** `COGS_RATE_OF_REVENUE = 0.25` מוגדר ב-2 מקומות:
-  - `Config.gs:20` (Apps Script side — נכתב ל-`data-daily` עם COGS כבר מחושב)
-  - `dashboard-web/src/lib/analytics.ts:11` (dashboard side — fallback לתאריכים שטרם
-    נכתבו ל-`data-daily`)
-- **Files:** `Config.gs:20`, `dashboard-web/src/lib/analytics.ts:11`.
-- **Impact:** עדכון בצד אחד בלי השני יצור פער בין נתונים היסטוריים (נכתבו ב-rate
-  אחד) לנתונים החיים (מחושבים ב-rate אחר). כבר יש הערה ב-`Config.gs:18` שמזכירה
-  לעדכן את שני המקומות, אבל זה דורש משמעת אנושית.
-- **Fix approach:** למשוך את ה-COGS rate ל-Script Property
-  (`getProp('cogs.rateOfRevenue', 0.25)` ב-Apps Script + ב-API `/api/cogs-config`
-  בצד הדשבורד שמחזיר את אותו ערך). מקור אמת אחד.
-
-### Reconciliation panel משתמש ב-campaign-active days
-
-- **Issue:** ה-`MetaShopifyReconciliation` ב-`CampaignDrawer` מצמצם את חלון
-  ההשוואה לימים שבהם היה Meta-spend > 0 (תוקן ב-`8de9d32`: channel breakdown
-  עכשיו משתמש בטווח המלא של המשתמש, אבל ה-reconciliation עדיין מסתמך על
-  active-only).
-- **Files:** `dashboard-web/src/components/CampaignDrawer.tsx`.
-- **Impact:** ימים שבהם הקמפיין הופסק (paused) אבל היו מכירות (organic / retargeting
-  של ad-set אחר באותו קמפיין?) לא נראים ב-reconciliation, מה שגורם לפער הכאילו
-  "חסרות מכירות". מסיט את ה-Pearson r ו-lag detection.
-- **Fix approach:** להוסיף toggle ב-UI ("הצג רק ימים פעילים" vs "הצג את כל הטווח")
-  או להפריד את שני המתודות לשתי קופסאות נפרדות (each labeled clearly).
-
-### Product ID precision — `setNumberFormat('@')` רק על שורות חדשות
-
-- **Issue:** ב-commit `8de9d32` נוסף `setNumberFormat('@')` בעמודות productId
-  ב-`products-daily` ו-`orders-attribution` כדי למנוע איבוד דיוק ב-IDs ארוכים
-  (`1234567890123` שהפך ל-`1.23456789012e12`). אבל זה מטפל רק בכתיבות חדשות —
-  שורות היסטוריות שכבר אבדו את הדיוק לא בודקות בחזרה.
-- **Files:** `SheetBuilder.gs::writeProductSalesForDay_`, `SheetBuilder.gs::writeOrdersAttributionForDay`,
-  `dashboard-web/src/lib/products.ts`, `dashboard-web/src/lib/ordersAttribution.ts`.
-- **Impact:** מוצרים ישנים שהוקלדו לפני המיגרציה — productId שלהם מאוחסן ב-Sheets
-  כ-scientific notation. הדשבורד מפרסר אותם כ-`Number`, ולכן ה-lookup ב-product-map
-  נכשל (לא מוצא התאמה). הסיכון: trueRevenue allocation מתעלם מהמוצרים האלה ברצף
-  שקט.
-- **Fix approach:** סקריפט חד-פעמי שעובר על שני הטאבים, ממיר כל cell בעמודת
-  productId חזרה ל-string (`String(value).replace(/\..*$/,'')` אם זה כן number)
-  + `setNumberFormat('@')` על כל הטווח. הרצה אחת ידנית מהעורך.
-
-### Cloud-sync last-write-wins
-
-- **Issue:** 7 keys (`billing` / `annotations` / `goal` / `insight-states` /
-  `campaign-optimized` / `product-map` / `billing-onetime`) מסונכרנים ב-cloud דרך
-  `/api/dashboard-state` POST. כל POST דורס את הערך הקיים. אין vector-clock /
-  CRDT / Last-Modified check.
-- **Files:** `dashboard-web/src/lib/cloudSync.ts`, `dashboard-web/src/app/api/dashboard-state/route.ts:59-84`.
-- **Impact:** אם 2 שותפים עורכים את `billing` באותה דקה, הכתיבה השנייה דורסת את
-  הראשונה. בקצב עריכה הנמוך של היום (פעם ביום, בדרך כלל by one operator) הסיכון
-  קטן, אבל אין לוג מי כתב מה.
-- **Fix approach:** קצר טווח — להוסיף `updatedAt` per-key (כבר קיים ב-`updatedAtByKey`)
-  ו-`If-Match` header על ה-POST. ארוך טווח — לעבור למודל merge-by-shape (לדוגמה,
-  annotations הוא Array של אובייקטים יחודיים-by-id → אפשר למזג).
-
-### Phantom-spreadsheet protection חד-פעמית
-
-- **Issue:** ה-`ensureSpreadsheet` ב-`Main.gs` מטפל ב-timeout transient דרך retry
-  + לעולם לא יוצר spreadsheet חדש כשמקבל "not found" אחרי timeout. ההגנה
-  שילובית: `resetSpreadsheetIdToKnownGood` (`Config.gs:249-278`) +
-  `printCurrentSpreadsheetId` (`Config.gs:285-295`) מאפשרים reset ידני אם
-  ה-property בכל זאת התקלקל.
-- **Files:** `Config.gs:249-295`, `Main.gs::ensureSpreadsheet`.
-- **Impact:** אם `spreadsheet.id` Script Property מוחלף ידנית למזהה שגוי (operator
-  טועה בעת deployment חדש), ה-Apps Script יקרא וייכתב לגיליון אחר מהדשבורד —
-  data fork שקט. אין alert שתופס את ההבדל בין `SPREADSHEET_ID` ב-Vercel לבין
-  `spreadsheet.id` ב-Apps Script.
-- **Fix approach:** להוסיף assertion יומי שמשווה את שני המזהים (אם ה-Apps Script
-  יודע איך לזהות את ה-Vercel side) או — פשוט יותר — לפרסם את `spreadsheet.id`
-  בלוג היומי + להוסיף הערה ב-tab `store-meta` שמראה שטיפן ה-id מה-Apps Script.
+- **Issue:** The CV (coefficient of variation) bucket thresholds for stable /
+  medium / volatile CPM are hardcoded as `0.15` and `0.35` directly in the
+  classification expression instead of being hoisted as named constants. Sibling
+  thresholds in `attributionAnalysis.ts` ARE hoisted (`STABLE_THRESHOLD` /
+  `VOLATILE_THRESHOLD`), so there's a discoverability inconsistency.
+- **Files:** `dashboard-web/src/lib/aiReport.ts:398, 400` (the ternary that maps
+  CV → bucket); also referenced inline at `:387-388` (tooltip copy that mentions
+  the same numbers).
+- **Impact:** Cosmetic. Math is correct today. Future change to the thresholds
+  requires editing 4 occurrences (2 in the ternary + the tooltip copy) instead
+  of one constant. Easy to miss the tooltip and ship inconsistent UX.
+- **Operator stance (Phase 9 triage):** "When you have time" — explicitly
+  deferred. Not blocking.
+- **Fix approach:** Hoist `STABLE_CV_MAX = 0.15` and `VOLATILE_CV_MIN = 0.35`
+  at module top, replace inline usage, interpolate into the tooltip copy. ~5
+  line change.
+- **Target phase:** Polish pass (no dedicated phase needed).
 
 ---
 
-## Anti-Patterns / Smells
+### Per-platform constants still partially split across 3 files
 
-### קומפוננטות ענק (>1000 שורות) שמקשות על תחזוקה
-
-- **Issue:** שלושת הקבצים הגדולים בדשבורד:
-  - `dashboard-web/src/components/CampaignsTable.tsx` — **1732 שורות**
-  - `dashboard-web/src/components/CampaignDrawer.tsx` — **1440 שורות**
-  - `dashboard-web/src/components/BillingSettings.tsx` — **1328 שורות**
-- **Files:** ראה למעלה.
-- **Impact:** ה-IDE איטי בקבצים כאלה, refactor שגיאות-prone (כל edit עלול לשבור
-  משהו ברחוק), code review מסורבל. במיוחד `CampaignsTable.tsx` שבו `useMemo` ענקיים
-  של חישוב per-campaign true-revenue/attribution קופצים בין `Map<string, number>`,
-  `Map<string, AttributionAnalysis>`, ו-`trueRevenueByKey` בשורות 600–700.
-- **Fix approach:**
-  - `CampaignsTable` → לפצל ל-`CampaignsTable` (טבלה ראשית) + `useCampaignTrueRevenue`
-    (hook) + `useCampaignAttribution` (hook) + `CampaignRow` (sub-component).
-    יעד: כל קובץ ≤500 שורות.
-  - `CampaignDrawer` → לפצל ל-`CampaignDrawer` + `AdSetTable` + `AttributionPanel`
-    + `MetaShopifyReconciliation` (כבר קיים partially).
-  - `BillingSettings` → לפצל ל-`BillingSettings` (UI) + `useBillingPartners` (hook)
-    + `useBillingOneTime` (hook).
-
-### מחרוזות עברית מקודדות בקוד
-
-- **Issue:** מחרוזות UI בעברית פזורות ישירות ב-JSX לאורך כל הקומפוננטות
-  (`PerStoreCards.tsx:100` עם `"ROAS נמוך — דורש בחינה"`,
-  `CommandPalette.tsx:146` עם `"מעבר ל-קמפיינים"`, וכו'). אין שכבת i18n.
-- **Files:** כל ה-`dashboard-web/src/components/*.tsx`.
-- **Impact:** הוספת שפה שניה (אנגלית / ערבית) דורשת refactor מסיבי. שינוי
-  ניסוח של מחרוזת מצריך grep + multiple edits — אין מקור אמת אחד.
-- **Fix approach:** להוציא ל-`dashboard-web/src/lib/strings.he.ts` עם
-  type-safe key map. ראשון: לעבור עם codemod שמחליף כל string literal עברי
-  ב-`s.tabCampaigns` (וכו') ולשלוח את המפתחות לקובץ אחד.
-
-### Apps Script Upload ידני
-
-- **Issue:** כל שינוי ב-`*.gs` דורש פתיחה ידנית של עורך Apps Script + paste של
-  הקובץ. אין `clasp` או deployment דרך CI/CD. גם אין pre-commit hook שמוודא שה-`.gs`
-  המקומי תואם ל-deployed.
-- **Files:** כל ה-`*.gs` ב-root הפרויקט.
-- **Impact:** סיכון להעלות גרסה חלקית (חצי קובץ מקומי, חצי בעורך), קושי
-  לעקוב מתי בדיוק שינוי הגיע ל-production. תיעוד ב-`SYSTEM_OVERVIEW.md` מסתמך
-  על "commit hash" אבל אין הגרנטיה שה-deploy תואם.
-- **Fix approach:** להגדיר `clasp` עם `.clasprc.json` (לא ב-git), להוסיף
-  `clasp push` ל-`package.json` כ-`deploy:gs`. שלב הבא — GitHub Action שעושה
-  `clasp push` ב-push ל-`main` (דורש `CLASPRC_JSON` כ-GH Secret).
-
-### Cache TTLs hardcoded per-route
-
-- **Issue:** כל route ב-`/api/*` מגדיר את ה-`revalidate` וה-`Cache-Control`
-  בנפרד עם מספר sayım (60 / 300 / 3600 / 10). אין מקור אמת אחד.
-- **Files:** `dashboard-web/src/app/api/data/route.ts:7,35`,
-  `dashboard-web/src/app/api/campaigns/route.ts:4,20`,
-  `dashboard-web/src/app/api/products/route.ts:4,20`,
-  `dashboard-web/src/app/api/ads/route.ts:4,18`,
-  `dashboard-web/src/app/api/orders-attribution/route.ts:6,24`,
-  `dashboard-web/src/app/api/store-meta/route.ts:8,30`,
-  `dashboard-web/src/app/api/product-catalog/route.ts:8,25`,
-  `dashboard-web/src/app/api/dashboard-state/route.ts:46`.
-- **Impact:** שינוי policy ("נחזק את כל הקריאות ל-30s במקום 60s") דורש 8 edits.
-  סבירות גבוהה להחמיץ כתובת אחת ולקבל פערים.
-- **Fix approach:** `dashboard-web/src/lib/cacheConfig.ts` עם:
-  ```ts
-  export const CACHE_CONFIG = {
-    data: { revalidate: 60, swr: 120 },
-    campaigns: { revalidate: 60, swr: 120 },
-    ads: { revalidate: 300, swr: 900 },
-    ordersAttribution: { revalidate: 300, swr: 900 },
-    storeMeta: { revalidate: 3600, swr: 86400 },
-    dashboardState: { revalidate: 10, swr: 60 },
-    productCatalog: { revalidate: 60, swr: 300 },
-    products: { revalidate: 60, swr: 120 },
-  } as const;
-  ```
-  + helper `cacheControl(key)` שמחזיר `'public, s-maxage=X, stale-while-revalidate=Y'`.
-
-### `analyzeAttribution` נקרא inside `.map(...)` ב-render
-
-- **Issue:** ב-`CampaignDrawer.tsx:1011-1024` וב-`AdsDrawer.tsx:378-390`,
-  `analyzeAttributionForAdSet`/`analyzeAttributionForAd` נקראים inside IIFE per
-  row בכל render. ב-CampaignsTable זה מקופל ב-`useMemo` אבל ב-drawers לא.
-- **Files:** ראה למעלה (תועד ב-REVIEW-5.md IN5-01).
-- **Impact:** Drawer עם 20 ad-sets + orders-attribution של ~2000 שורות → 20×O(N)
-  filter ב-כל render, גם כשמשנים sort בלבד. אין כרגע user complaint אבל זה
-  סוללה לבעיה performance ככל שהנתונים גדלים.
-- **Fix approach:** לבנות `Map<adSetId, AttributionAnalysis>` ב-`useMemo` אחד
-  ולחפש per row — בדיוק כמו `trueRevenueByKey` ב-CampaignsTable.
-
-### `decodeURIComponent` ללא try/catch (already-known)
-
-- **Issue:** תוקן ב-Round 5 (`Shopify.gs::safeDecode_`), אבל ה-pattern של
-  "decode user-supplied string" עדיין מופיע במקומות אחרים — `dashboard-web/src/lib/ordersAttribution.ts`
-  על `utm_source/utm_medium/utm_campaign` שמגיעים מ-Sheets כ-strings שכבר עברו
-  decode פעם אחת.
-- **Files:** `Shopify.gs:601-610` (תוקן), אבל יש שאריות ב-API routes שלא נסרקו.
-- **Impact:** אם משתמש מוסיף landing URL ידנית ב-manual-spend tab עם `%E0`,
-  הסיכון חוזר.
-- **Fix approach:** ליצור `safeDecode` ב-`dashboard-web/src/lib/utils.ts` כ-utility
-  משותף, ולהחליף כל קריאת `decodeURIComponent` בה.
+- **Issue:** Phase 10 U-01 extracted `TIKTOK_ACTIVE_ENOUGH` to a shared
+  `lib/platformConfig.ts` (commit `b919705`) consumed by both `cronLive.ts`
+  (writer) and `postgresReaders.ts` (reader). That fixed the writer↔reader
+  symmetry concern. However, other per-platform constants still live in their
+  original modules:
+  - `PLATFORM_ROAS_PIVOT` (Meta 3.0 / Google 3.5 / TikTok 2.0) in
+    `campaignHealthScore.ts:141`
+  - `PLATFORM_FALLBACK_TRUST` in `campaignHealthScore.ts` (sibling block)
+  - `STORES_WITH_GOOGLE_ADS = new Set(['uzoshop'])` in
+    `fetchers/googleAds.ts:73`
+- **Files:** `dashboard-web/src/lib/campaignHealthScore.ts:141`,
+  `dashboard-web/src/lib/fetchers/googleAds.ts:73`.
+- **Impact:** None today — no consumer of these constants lives outside its
+  owning module. Future-fragile: if a new module needs to know "is this a
+  Google-Ads store?" it will either import from `fetchers/` (a layer cross
+  the dashboard generally avoids) or duplicate the set.
+- **Fix approach:** Move all 3 into `lib/platformConfig.ts` as the single
+  source of truth for per-platform / per-store metadata. Update the audit's
+  cross-surface observation #5 once done.
+- **Target phase:** Polish pass during the next refactor that touches either
+  file. Not blocking.
 
 ---
 
-## Security Gaps + Recommendations
+### Variance convention inconsistency (no doc justifying the asymmetry)
 
-### Service-account scope רחב מהצורך
-
-- **Issue:** ה-service-account
-  (`roas-dashboard-reader@roas-tracker-ga.iam.gserviceaccount.com`) משתמש
-  ב-`spreadsheets.readonly` לקריאות + `spreadsheets` (write) לכתיבת
-  `dashboard-state`. ה-write scope נותן הרשאה לכתוב על כל הגיליון, כולל data-daily
-  / campaigns / orders-attribution.
-- **Files:** `dashboard-web/src/lib/sheets.ts:24-27`.
-- **Impact:** אם המפתח של ה-service-account דולף, התוקף יכול לזהם את כל הנתונים,
-  לא רק את `dashboard-state`. אין named-range scoping ב-Google Sheets API
-  (כל ה-scope הוא רוחבי על ה-file).
-- **Recommendations:**
-  1. ליצור service-account שני (`roas-dashboard-writer@...`) בעל `spreadsheets`
-     scope ב-API key נפרד שמשמש רק את ה-POST של `/api/dashboard-state`.
-     ה-service-account הראשי יישאר read-only קשיח.
-  2. בנוסף, ב-Google Sheets, להעניק לה-writer רק access ל-spreadsheet אחד
-     (כן default), אבל בצד Vercel — להפריד את שני המפתחות לשני env vars שונים
-     (`GOOGLE_READER_KEY` / `GOOGLE_WRITER_KEY`) כך שדליפה של אחד לא תפגע בשני.
-
-### `ALLOWED_STATE_KEYS` — pattern טוב, לשמור
-
-- **Status:** ב-Round 4 נוסף allowlist על POST `/api/dashboard-state` שדוחה
-  כל key שלא ב-`ALLOWED_STATE_KEYS` (`dashboard-web/src/app/api/dashboard-state/route.ts:74`).
-  זה כתבי הגנה נגד prototype-pollution + הסכמה type-safe מול `StateKey` union.
-- **Files:** `dashboard-web/src/lib/sheets.ts::isAllowedStateKey`,
-  `dashboard-web/src/lib/cloudSync.ts::StateKey`.
-- **Recommendation:** **כן לשמור.** כל הוספה של key חדש חייבת לעבור גם
-  ב-`StateKey` וגם ב-`ALLOWED_STATE_KEYS` — היום זה manual, כדאי להוסיף test
-  שמוודא שהשניים מסונכרנים.
-
-### אין rate limiting על POST `/api/dashboard-state`
-
-- **Issue:** Endpoint שכותב ל-Google Sheets API (יקר). אין rate limit per-IP
-  או per-session. כל קליינט שמתחבר לדשבורד יכול לשלוח 1000 POSTs בשנייה.
-- **Files:** `dashboard-web/src/app/api/dashboard-state/route.ts:59-84`.
-- **Impact:** משתמש זדוני שיכול לפתוח את הדשבורד (אם זה internal — לא ציבורי,
-  לא קריטי; אבל אם נחליט לחשוף — קריטי) יכול למצות את ה-quota היומי של
-  Sheets API → כל הדשבורד נופל ל-24 שעות.
-- **Recommendations:**
-  1. להוסיף rate-limit middleware (Upstash Redis + `@vercel/edge-rate-limit`,
-     או נכון יותר — Vercel's built-in Edge Config) — 10 POSTs/min/IP.
-  2. בנוסף, להוסיף server-side debounce של 1s על כל key — אם 2 POSTs לאותו key
-     מגיעים ב-100ms, רק האחרון יבוצע.
-  3. אופציה — ל-batching: לחבר את 7 ה-keys לכתיבה אחת `POST /api/dashboard-state/batch`
-     במקום 7 POSTs נפרדים.
-
-### `notification.email` ב-Script Property — בטוח אבל לא tested
-
-- **Issue:** `notification.email` נשמר ב-Script Properties יחד עם tokens של
-  Meta / Google / Shopify. כל מי שיש לו edit access ל-Apps Script Project
-  יכול לראות את כל ה-properties.
-- **Files:** `Config.gs:164`, `DailyUpdate.gs:502-538`.
-- **Impact:** אין דליפה ב-git (Properties לא ב-source), אבל אם איש GTI עוזב
-  והחשבון שלו לא מבוטל, יש לו גישה ל-tokens של 3 חנויות + ad accounts.
-- **Recommendations:**
-  1. תיעוד clear של מי יש לו access ל-Apps Script Project (כיום ל-1–2 שותפים?).
-  2. סקירה רבעונית — מי על רשימת ה-collaborators ולמה.
-  3. אופציה — להעביר את ה-tokens החשובים (Meta + Google) ל-Google Secret Manager
-     ולשלוף ב-runtime; דורש refactor אבל גודל הסיכון מצדיק.
-
-### אין audit log על cloud-state edits
-
-- **Issue:** `dashboard-state` tab שומר את הערך הנוכחי + `updatedAtByKey` (per
-  key timestamp). אין log "מי שינה מה ומתי, ומה היה הערך הקודם".
-- **Files:** `dashboard-web/src/lib/sheets.ts::upsertDashboardStateKey`,
-  `dashboard-web/src/app/api/dashboard-state/route.ts:77`.
-- **Impact:** אם שותף משנה ערך billing בטעות וצריך לשחזר — אין דרך. גם debug
-  של "מי שינה את ה-product-map?" בלתי אפשרי.
-- **Recommendations:**
-  1. להוסיף tab `dashboard-state-audit` עם 4 עמודות: timestamp, key, old-value,
-     new-value (truncated to 500 chars). כתיבה אחת לכל POST.
-  2. retention — keep last 30 days, חסל ישנים.
-  3. ב-UI להוסיף "תיעוד" tab שמראה את 50 השינויים האחרונים.
+- **Issue:** Three statistical computations use different variance conventions
+  without inline justification:
+  - `attributionAnalysis.ts` AOV CI uses Bessel-corrected sample variance
+    (correct — AOVs ARE a sample from an infinite future-purchases
+    distribution).
+  - `attributionAnalysis.ts` `computeWindowStability` uses POPULATION variance
+    (defensible — the window IS the full population for that store-period).
+  - `aiReport.ts` CV uses POPULATION variance (same reasoning as above).
+- **Files:** `dashboard-web/src/lib/attributionAnalysis.ts:356, 861`
+  (Bessel/sample); `dashboard-web/src/lib/attributionAnalysis.ts` window
+  stability block; `dashboard-web/src/lib/aiReport.ts:373-377`.
+- **Impact:** None mathematically — each call-site is defensible. But there's
+  no shared `lib/stats.ts` exposing `sampleVariance` vs `populationVariance`
+  with clear names, so a future contributor could easily mis-apply Bessel
+  correction without realizing it's a deliberate choice.
+- **Fix approach:** Extract a `lib/stats.ts` module with explicitly-named
+  exports + JSDoc explaining when to use each. Migrate the 3 call-sites.
+- **Target phase:** Polish pass. Not blocking.
 
 ---
 
-## Scalability Concerns
+## Known Bugs
 
-### Single spreadsheet עבור כל 3 החנויות
-
-- **Issue:** כל הנתונים יושבים ב-spreadsheet אחד (8 סוגי טאבים × 3 חנויות =
-  ~17 טאבים פעילים). Sheets API מגביל ל-10 מיליון cells per-spreadsheet.
-- **Files:** `dashboard-web/src/lib/sheets.ts` (כל הקריאות), `Main.gs::ensureSpreadsheet`.
-- **Current usage estimate (rough):** data-daily ~2k שורות × 13 cols = 26k cells.
-  campaigns × 3 × ~300 ad-sets-per-day × 365 days × 13 cols ≈ 4.3M cells.
-  orders-attribution × 3 × ~100 orders/day × 365 days × 14 cols ≈ 1.5M cells.
-  **סה"כ ~6M cells.** אם תיווסף חנות 4 ברמה דומה — נגיע ל-8M, מתקרבים ל-cap.
-- **Impact:** מעבר ל-10M cells דורש פיצול ל-2 spreadsheets שונים, וכל ה-`fetchDailyData`
-  / `fetchCampaignsData` יצטרכו לעשות 2 קריאות במקום אחת.
-- **Recommendations:**
-  1. **רוטציה:** להעביר נתונים מעל גיל 18 חודש ל-archive spreadsheet (קר). הדשבורד
-     יקרא רק את ה-warm spreadsheet כברירת מחדל, ויטען מ-archive on-demand אם
-     המשתמש בוחר טווח ישן.
-  2. **per-store splitting:** לפצל את ה-spreadsheet ל-3 (`roas-uzoshop`, `roas-zolplus`,
-     `roas-usmile`) + מאסטר אחד ל-`data-daily` + `dashboard-state`. ה-Apps Script
-     יכתוב לכל חנות לקובץ שלה, הדשבורד יקרא במקביל.
-
-### `products-daily` ללא rotation
-
-- **Issue:** שורה לכל (יום, חנות, מוצר) מצטברת ללא מחיקה. אם חנות מוכרת 30
-  מוצרים שונים ביום, אחרי שנה ⇒ 30 × 365 = 11k שורות. אחרי 5 שנים — 55k שורות
-  per-store, 165k שורות סה"כ.
-- **Files:** `SheetBuilder.gs::writeProductSalesForDay_`,
-  `dashboard-web/src/app/api/products/route.ts`.
-- **Impact:** הדשבורד עושה batchGet של כל הטאב בכל קריאה ל-`/api/products`,
-  ואז המחשב של הקליינט עושה filter לפי הטווח שהמשתמש בחר. ב-165k שורות זה
-  יתחיל להראות איטיות הן ב-Sheets read (5–10 שניות) הן ב-rendering.
-- **Recommendations:**
-  1. **שלב 1 (קצר טווח):** להוסיף `?from=YYYY-MM-DD&to=YYYY-MM-DD` ל-`/api/products`
-     ולעשות filter על ה-Sheets call (`A:N` →
-     רק שורות בתוך הטווח). דורש index sort של הטאב לפי תאריך + binary search
-     על range A.
-  2. **שלב 2 (ארוך טווח):** רוטציה — שורות מעל 18 חודש ⇒ ל-`products-daily-archive`.
-     `/api/products` קורא רק מהחדש אלא אם המשתמש בחר טווח > 18 חודש.
-
-### `orders-attribution` עם line items JSON per row
-
-- **Issue:** Phase 1 הוסיף עמודה `Line Items (JSON)` לכל שורה ב-`orders-attribution`.
-  cell גודל ממוצע ~200–500 chars, יכול לגדול ל-2000 chars לhotline orders עם
-  10 פריטים. Sheets API range read קורא את כל ה-cells, גם הריקים, גם הגדולים.
-- **Files:** `SheetBuilder.gs::writeOrdersAttributionForDay`,
-  `dashboard-web/src/lib/ordersAttribution.ts`,
-  `dashboard-web/src/app/api/orders-attribution/route.ts`.
-- **Impact:** אחרי 3 שנים × 3 חנויות × 100 orders/day = ~330k שורות עם cells
-  גדולים. ה-range read יזחל. נוסף לכך, parse JSON ב-client per-row יהיה
-  CPU-heavy.
-- **Recommendations:**
-  1. **rotation** — דומה ל-products-daily, שורות מעל 18 חודש לarchive.
-  2. **lazy parsing** — הדשבורד מחזיר רק את ה-IDs בקובץ ה-API, ה-JSON של
-     line items נטען על-demand כש-CampaignDrawer פתוח עבור קמפיין ספציפי.
-  3. **שקול** — להעביר את ה-line-items ל-tab נפרד `{store}-line-items` (one row
-     per item, foreign-key ל-order_id). פתרון יותר נכון מבחינת data modeling
-     אבל דורש refactor.
-
-### `/api/data` ו-`/api/campaigns` מחזירים את כל ההיסטוריה
-
-- **Issue:** ב-current implementation, אין pagination. בכל קריאה — כל הtable
-  נשלח לקליינט, וה-Filter על הטווח קורה ב-client (`useMemo` over rows).
-- **Files:** `dashboard-web/src/app/api/data/route.ts`,
-  `dashboard-web/src/app/api/campaigns/route.ts`,
-  `dashboard-web/src/lib/data.ts`.
-- **Impact:** היום, ~2k שורות ב-data-daily ו-~10k שורות ב-campaigns מועברים
-  ב-payload של ~500KB-1MB. תוך שנה זה יהיה 5MB+. browsers יתחילו להחזיק זה לא טוב,
-  TTI יעלה ב-2-3 שניות.
-- **Recommendations:**
-  1. להוסיף `?from=&to=` ל-`/api/data` ו-`/api/campaigns` — ה-default יחזיר רק
-     last 90 days. אם המשתמש בחר טווח רחב יותר ב-`Filters`, יישלח request חדש
-     (cached separately by SWR key).
-  2. אופציה משלימה — server-side aggregation: `/api/data?from=X&to=Y&agg=month`
-     יחזיר 12 שורות במקום 365. שימושי בעיקר ל-AnalysisTab.
-
-### Cloud-sync hydration כל 30s × N partners
-
-- **Issue:** `CloudSync.tsx:21` poll ל-`/api/dashboard-state` כל 30s.
-  אם 5 שותפים פתחו את הדשבורד במקביל — 5 × 120/hour = **600 reads/hour**
-  על `dashboard-state`.
-- **Files:** `dashboard-web/src/components/CloudSync.tsx`,
-  `dashboard-web/src/app/api/dashboard-state/route.ts`.
-- **Impact:** Sheets API quota הוא 60 reads/minute/user — עם service-account
-  משותף, 5 שותפים × 2 polls/min = 10 reads/min, יש מרווח. אבל אם יגדל ל-20
-  שותפים נגיע ל-quota wall.
-- **Recommendations:**
-  1. להחליף polling ב-Server-Sent Events (Vercel תומך) או WebSocket — הקצה
-     משדר רק כשיש שינוי. דורש refactor אבל מבטל את ה-quota stress.
-  2. או — adaptive polling: visible tab → 30s, hidden tab → 5min, idle → stop.
-     קל יותר ליישם.
-  3. במקביל — לקצר את ה-payload: `/api/dashboard-state?since=<lastUpdated>`
-     יחזיר רק את ה-keys ש-`updatedAtByKey[key] > since`. ה-CDN cache עדיין
-     עובד כי הtimestamp עוקב.
+**None open.** The only concrete bug from the v3 audit (B-01: `cronLive.ts`
+return value dropped `tt` from `todaySpendCad`) was fixed in commit `48a2945`
+(Phase 10). All prior-audit critical bugs (v1, v2, v3) are also closed.
 
 ---
 
-## Robustness / Observability Gaps
+## Resolved (cross-reference)
 
-### `Logger.log` ב-Apps Script — retention קצר
+### U-05 — RESOLVED in Phase 12 (commit `b846ae7`)
 
-- **Issue:** `Logger.log` הולך ל-Apps Script Executions, נשמר ~30 ימים אז נמחק.
-- **Files:** כל ה-`*.gs`.
-- **Impact:** debug של בעיה שצצה לפני 6 חודשים ("למה החודש של יוני 2025 נראה
-  שונה ב-Shopify מה-data-daily?") — אין logs לבחון.
-- **Recommendations:**
-  1. **שלב 1:** להעביר את כל ה-Logger.log המשמעותיים לקובץ `logs` tab
-     ב-spreadsheet עצמו (`SheetBuilder.gs::appendLogRow`). שמירה ל-ever
-     (rotation לאחר 6 חודשים).
-  2. **שלב 2:** structured logging — במקום `Logger.log("text")`, להשתמש
-     ב-`logEvent({type, store, date, msg, durMs})` שמקודד ל-JSON ושומר
-     ב-tab `logs`. אם נדרש analytics על ה-logs — `=JSONPATH()` נוסחאות + tab
-     מסכם.
-  3. **שלב 3 (אם רלוונטי):** אקספורט יומי של ה-logs ל-BigQuery ל-3y retention
-     + query capabilities.
-
-### דשבורד ללא client-side error reporting
-
-- **Issue:** אין Sentry / Datadog / NewRelic / log-rocket. שגיאות JS שקורות
-  אצל המשתמש (browser-specific bug, network blip, malformed sheet row) לא
-  מגיעות אליי.
-- **Files:** `dashboard-web/src/app/layout.tsx` — אין `ErrorBoundary` global.
-- **Impact:** משתמש פותח דשבורד, רואה white-screen, סוגר, פותח שוב, עובד. אני
-  לעולם לא יודע שזה קרה.
-- **Recommendations:**
-  1. להוסיף Sentry (free tier מספיק) — `@sentry/nextjs` install + Sentry DSN
-     ב-env. ב-`layout.tsx` להוסיף `ErrorBoundary` שמדווח גם שגיאות שלא
-     נתפסו ב-React.
-  2. ל-Edge functions של Vercel — `console.error` כבר נכנס ל-Vercel Logs;
-     מספיק להוסיף לשם רק parsing/aggregation. אופציונלי — להעביר גם את ה-server
-     logs ל-Sentry.
-
-### בדיקת phantom-spreadsheet — חד-פעמית
-
-- **Issue:** ה-`ensureSpreadsheet` בודק פעם בתחילת ריצה. אם property משתנה
-  באמצע ריצה (אורגנית לא יקרה, אבל race קיים) — undefined behavior.
-- **Files:** `Main.gs::ensureSpreadsheet`.
-- **Impact:** קצה-מקרה מאוד נדיר. בעיקר מסוכן אם operator מריץ
-  `resetSpreadsheetIdToKnownGood` תוך כדי שrun יומי באמצע ריצה.
-- **Recommendations:**
-  1. להוסיף `Cache-Service lock` שמונע מ-`runDailyUpdate` ו-`resetSpreadsheetIdToKnownGood`
-     לרוץ במקביל.
-  2. או — לדגום שוב את הproperty בנקודות קריטיות (לפני כל write batch), אבל זה
-     overkill לקצה מקרה.
-
-### אין alerts לגבי quota approach
-
-- **Issue:** `notifyError_` שולח מייל **רק כשהריצה כשלה** (לרבות quota error
-  שקרה). אין מנגנון "אנחנו ב-80% מהquota — היזהר".
-- **Files:** `DailyUpdate.gs:67-71`, `DailyUpdate.gs:502-538`.
-- **Impact:** ביום שבו נגיע ל-quota cap, נדע רק כשהריצה תיכשל — לא יום קודם.
-  כיום הריצה לוקחת ~4 דק' מתוך 6 → יש מרווח, אבל ככל שיוסיפו חנויות/קמפיינים
-  זה יתחיל לטעון.
-- **Recommendations:**
-  1. למדוד duration של `runDailyUpdate` (כבר חלקית לוגית) ולשלוח התראה אם
-     `duration > 4.5 min` באופן עקבי 3 ימים ברצף.
-  2. דומה ל-Sheets API quota usage — לעקוב אחרי `429` responses
-     מ-`UrlFetchApp` ולשלוח התראה אם שיעור 429 ביום עולה על 5%.
+- **Original concern:** `COVERAGE_UPPER_CLAMP = 2` in `attributionAnalysis.ts`
+  silently capped extreme halo (coverage > 2×) without surfacing it to the
+  operator. Truly anomalous attribution leaks were invisible.
+- **Resolution:** Phase 12 changed the contract: the raw coverage value is
+  now exposed, AND a "halo exceeded" warning chip renders when the value
+  crosses the clamp threshold. Operator sees both the actual ratio and an
+  explicit warning marker.
+- **Commit:** `b846ae7` — `fix(attribution): show raw coverage + halo-exceeded warning chip (AUDIT U-05)`.
+- **Status:** Closed. No follow-up needed.
 
 ---
 
-## Recommendations (prioritized — what would have the highest leverage)
+## Test Coverage Gaps
 
-מסודר לפי "tradeoff": כמה זה עוזר vs כמה זה לוקח לעשות.
+### `aiReport.ts` statistics — PARTIALLY COVERED (Phase 10 C-01)
 
-### 1. Unit tests עבור `attributionAnalysis.ts`  [HIGH IMPACT, LOW EFFORT]
+- **What was tested in Phase 10 (commit `adb0c17`):** Added oracle for
+  `medianMad`, `stddev`, `CV`, `z-score`, and `momentum` computations in a
+  new `__tests__/aiReportStatistics.test.ts`.
+- **What remains untested:**
+  - CV-threshold BUCKET BOUNDARIES at exactly `0.15` and `0.35` — Phase 10
+    covered the math, not the categorization ternary at `aiReport.ts:398, 400`.
+  - Funnel rate guards (division-by-zero edges).
+  - Date-bucketing logic for the report's weekly/monthly sections.
+- **Files:** `dashboard-web/src/lib/aiReport.ts` (~700 LOC of statistical
+  computation, ~50% now under oracle).
+- **Impact:** Math is correct today. Future changes to the bucket boundaries
+  or funnel guards could ship undetected by CI.
+- **Priority:** Medium. Most-leverage gap closed; remainder is polish.
 
-המודול היחיד שהכי קרוב למסחר-קריטי (החישוב ש-true ROAS נשען עליו) — ועדיין
-חסר כיסוי לחלוטין. הוספת 30–50 בדיקות vitest עם data fixtures (יום עם spend +
-מספר orders, יום בלי spend, יום ש-Meta דיווח על conversion ללא click-ID, יום
-עם ad-set שמשובץ למספר קמפיינים) תפס מיידית את הבאגים ש-Round 5 חשף.
+### Other C-* gaps from v3 audit — CLOSED
 
-**Effort:** ~1 day. **Risk reduction:** עצום — כל refactor עתידי של המודול
-יקבל regression safety net.
-
-### 2. Split `CampaignsTable` ל-≤500-line sub-components  [HIGH IMPACT, MED EFFORT]
-
-1732 שורות הופכות את הקובץ ל-cognitive load גבוה. פיצול ל-`useCampaignTrueRevenue`
-+ `useCampaignAttribution` (hooks) + `CampaignsTableRow` (component) + הtable
-עצמה יחסוך זמן IDE ויאפשר tests cellular per-hook.
-
-**Effort:** ~2 days. **Maintenance saving:** הרבה — כל פיצ'ר חדש בטבלה יהיה
-מהיר יותר.
-
-### 3. `clasp` push + GitHub Action  [HIGH IMPACT, LOW EFFORT]
-
-הוצאת ה"manual upload" של `*.gs` החוצה ⇒ deployment אחיד עם git. לא נצטרך לדאוג
-"האם הgs שב-production תואם ל-main".
-
-**Effort:** ~2 hours. **Risk reduction:** סופית — סוף לסיכון של חצי-deploy.
-
-### 4. Sentry client-side error reporting  [HIGH IMPACT, LOW EFFORT]
-
-free tier מספיק. ה-install הוא 2 dependencies + DSN ב-env. ⇒ visibility מלאה לכשלי
-client שלא היו ידועים.
-
-**Effort:** ~3 hours. **Visibility:** גבוהה.
-
-### 5. `data-daily` ו-`products-daily` retention policy  [MED IMPACT, MED EFFORT]
-
-לפני שה-spreadsheet מגיע ל-cell-cap. רוטציה ל-archive spreadsheet, עם דשבורד
-שיודע to-fall-back.
-
-**Effort:** ~3 days. **Future risk reduction:** משמעותית — מונע "fire" עתידי.
-
-### 6. ADR למודל ה-7-key cloud-sync  [LOW IMPACT, LOW EFFORT]
-
-מסמך אחד שמתעד את המודל המלא (keys, validation rules, who edits when) ⇒ source
-of truth ל-onboarding שותפים חדשים + ל-refactor עתידי.
-
-**Effort:** ~3 hours. **Value:** documentation-only, אבל חוסך לי שעות onboarding.
-
-### 7. `cacheConfig.ts` module  [LOW IMPACT, LOW EFFORT]
-
-הוצאת ה-TTL hardcoded למקור אחד. שינוי policy עתידי יהיה אחיד.
-
-**Effort:** ~2 hours. **Maintenance saving:** קטנה אבל מצטברת.
-
-### 8. Row-count guards ב-API routes  [LOW IMPACT, LOW EFFORT]
-
-הוספת `if (rows.length > 50000) console.warn(...)` בכל route. עוזר לזהות
-מתי באמת נדרשת pagination.
-
-**Effort:** ~1 hour. **Value:** signal צף לפני שזה הופך לבעיה.
-
-### 9. Externalize Hebrew strings  [MED IMPACT, HIGH EFFORT]
-
-לא עוזר ב-day-1 (אין דרישה ל-i18n כעת), אבל הופך הוספת שפה לקלה. עדיף לעשות
-זאת אגב ה-CampaignsTable split (לחסוך עבודה כפולה).
-
-**Effort:** ~4 days. **Future value:** קריטית אם תהיה צורך באנגלית.
-
-### 10. Structured logging  [LOW IMPACT, MED EFFORT]
-
-JSON logs ב-Apps Script ⇒ tab `logs` ב-Spreadsheet + לאחר מכן BigQuery export.
-Pre-requisite להזרים ל-Splunk/Looker/Datadog בעתיד.
-
-**Effort:** ~3 days. **Value:** ארוך-טווח, debugging של בעיות היסטוריות.
+- **C-02** — `postgresReaders.ts` newest-row dedup: fixture added in
+  commit `c6e590c` (Phase 10).
+- **C-03** — `cronLive.ts` past-row backfill date boundary: fixture added in
+  commit `e953a2d` (Phase 10).
+- **C-04** — `tiktok.ts` `code !== 0` envelope path: test added in commit
+  `a7d36f5` (Phase 10).
+- **C-05** — `algorithm-parity.test.ts` permanently skipped: file DELETED in
+  Phase 11 (commit `74633ee`). No Sheets baseline exists anymore to compare
+  against. This is intentional — Apps Script tier was decommissioned, the
+  parity gate has no other side to compare to.
 
 ---
 
-## Things Going Well (Worth Preserving)
+## Tooling Gaps
 
-המסמך הזה מתמקד בריט פערים, אבל יש דברים שצריך לזהות ולשמר כי הם עובדים טוב.
+### Inngest test glob (RESOLVED — left in for cross-reference)
 
-### `/gsd-code-review` discipline
+- **Status:** RESOLVED (Phase 05.6 plan 08, see `vitest.config.ts:30-38`).
+- **History:** Pre-resolution, `vitest.config.ts` default glob only targeted
+  `src/lib/**/__tests__` and the comment at `cronLive.test.ts:27` warned
+  that Inngest tests required an explicit path.
+- **Current state:** Config explicitly enumerates BOTH paths:
+  `'src/lib/**/__tests__/**/*.test.{ts,tsx}'` AND
+  `'src/inngest/**/__tests__/**/*.test.{ts,tsx}'`. A bare
+  `npx vitest run` now picks up the full 946-test suite.
+- **Lingering risk:** the `cronLive.test.ts:27` header comment is stale and
+  still says "must be run with an explicit path" — operator should drop the
+  warning when next touching that file. ~1-line doc cleanup.
 
-5 סבבי code-review (`REVIEW.md`, `REVIEW-2.md`, ... `REVIEW-5.md`), כל אחד הוליד
-~12 תיקונים. המערכת היום בטוחה משמעותית ממה שהיתה ב-Round 1. **לשמר** את הקצב —
-כל פיצ'ר משמעותי שתי-עיניים-נוספות לפני שmerge.
+### No CI workflow
 
-### Idempotent write pattern
+- **Issue:** `.github/workflows/` directory does not exist. There is no
+  automated `tsc --noEmit && vitest run` gate on push to main. Every
+  invariant we ship depends on the operator (or claude) remembering to run
+  the test suite locally before committing.
+- **Impact:** Major exposure. The codebase has ~900 tests; without CI, any
+  inconvenient one-off could silently break and only surface on the next
+  manual run. After Phase 11 deleted the `clasp` CI workflow (the only
+  workflow that existed), there is now zero automated gating.
+- **Fix approach:** Add `.github/workflows/test.yml` that runs on push to
+  main and on PRs: `cd dashboard-web && npm ci && npx tsc --noEmit && npx vitest run`.
+  Add a status badge to README.md.
+- **Target phase:** Polish pass — high value, low effort. Strongly recommended
+  before Phase 6 (security work).
 
-`writeOrdersAttributionForDay` / `writeCampaignRowsForDay` / `writeProductSalesForDay_`
-כולם בנויים על "clear rows for dateStr, append new ones". ⇒ הרצה שניה (גם
-backfill, גם live update כל 15 דק') לא יוצרת duplicates. **לשמר.**
+### No cross-fetcher contract test
 
-### Phantom-spreadsheet protection
+- **Issue:** The 4 ad-platform fetchers (`meta.ts`, `googleAds.ts`,
+  `tiktok.ts`, `shopify.ts`) all return rows with a conceptual
+  `{ storeId, date, spend, currency }` shape, but no shared type or
+  contract test enforces this. A future change that shifts e.g. tiktok's
+  `spend` from CAD to USD without updating the FX wrapper would not fail
+  any test — it would just produce silently wrong dashboard numbers.
+- **Files:** `dashboard-web/src/lib/fetchers/{meta,googleAds,tiktok,shopify}.ts`.
+- **Impact:** Major future-fragility. Each fetcher is well-tested in
+  isolation, but the cross-fetcher contract is implicit.
+- **Fix approach:** Add a `lib/fetchers/__tests__/fetcherContract.test.ts`
+  that imports each fetcher's output type and asserts the common shape +
+  currency invariants. Optionally extract a shared `FetcherRow` type.
+- **Target phase:** Polish pass.
 
-`resetSpreadsheetIdToKnownGood` + `printCurrentSpreadsheetId` + `ensureSpreadsheet`
-שעמיד ל-timeout (לא יוצר חדש). ⇒ סיכון של data fork קטן משמעותית. **לשמר.**
+### No integration test for cron-live × Supabase
 
-### Trust chip + fallback pattern ב-CampaignsTable
-
-4-level confidence chip + fallback ל-product-map כש-attribution לא קיים ⇒ UX
-שטרם נשבר גם בתסריטי edge (orders-attribution tab חסר, Google campaign בלי
-per-product mapping). **לשמר** ולא להחליף ב-"all-or-nothing".
-
-### Round 5 defensive patterns
-
-- `Object.create(null)` ב-`Shopify.gs::classifyOrderAttribution_` (params object)
-- `Number.isFinite(...)` guards ב-aggregations
-- `safeDecode_` (try/catch מסביב ל-`decodeURIComponent`)
-- 3-tier email resolver ב-`notifyError_` (configured → owner → active)
-- Inter-store sleep מ-runUpdateForDate שpropagated גם ל-runUpdateForDateForStores_
-
-כל אחד מהם מטפל ב-failure mode ספציפי שכבר ראינו. **לשמר** ולחקות את הpattern
-ב-קוד חדש.
+- **Issue:** Every cron-live test mocks Supabase. The full pipeline
+  cron-live → Supabase upsert → postgresReaders read is exercised piecewise
+  but never end-to-end against a real (or even stubbed-real) Supabase
+  instance.
+- **Files:** `dashboard-web/src/inngest/functions/__tests__/cronLive.test.ts`,
+  `dashboard-web/src/lib/__tests__/postgresReaders.test.ts`.
+- **Impact:** Schema drift between writer and reader could go undetected.
+  Phase 10 C-02 (newest-row dedup) fixture is a step toward this but still
+  exercises only one direction.
+- **Fix approach:** Spin up a Supabase local instance (or use the existing
+  staging project with a test schema) for one integration test per cron
+  cycle. Heavy lift; defer unless schema drift bites.
+- **Target phase:** Phase 7 (Observability) or later.
 
 ---
 
-*Concerns audit: 2026-05-18*
+## Architectural Concerns
+
+### Single-operator + URL-obscurity trust model (ACCEPTED)
+
+- **Issue:** No auth gate on inner dashboard routes. The trust boundary is
+  "you have the URL". Internal routes accept any client.
+- **Impact:** Inappropriate for any future multi-user scenario. Adequate for
+  the current single-operator internal-tool model.
+- **Operator stance:** Explicitly accepted (per memory entry
+  `project_script_roas_dashboard.md`). Phase 6 (Security) explicitly DROPPED
+  rate-limit / If-Match / auth gating — confirmed 2026-05-19.
+- **Status:** Accepted constraint. Document in README before any future
+  attempt to expose the dashboard publicly. **Do not silently retrofit.**
+
+### Apps Script tier fully removed (Phase 11)
+
+- **Status note:** The dual-tier Sheets-vs-Postgres concern from earlier
+  audit rounds is gone. After Phase 11 (commits `9c09696`..`1973d06`):
+  - 10 `.gs` files at repo root: deleted
+  - `appsscript.json` + `.clasp.json`: deleted
+  - `lib/sheets.ts`: deleted (after relocating `isAllowedStateKey` +
+    `StoreMetaRow` type elsewhere)
+  - `featureFlags.ts::readFrom()`: removed (READ_FROM=postgres has been
+    permanent since Phase 05.7.0)
+  - `algorithm-parity.test.ts`: deleted (no Sheets baseline left to
+    compare against)
+- **Implication for future work:** Any document, comment, or memory referring
+  to "the Sheets tier", `READ_FROM`, `clasp`, or `runDailyUpdate` is now
+  stale. All data-plane work is in `dashboard-web/src/inngest/functions/`
+  and `dashboard-web/src/lib/fetchers/`.
+
+---
+
+## Operational Concerns
+
+### Token-failure WhatsApp alerts — SHIPPED, but single-recipient
+
+- **Status:** WhatsApp template approved by Meta on 2026-05-22. Alerts are
+  wired and fire on token failures.
+- **Constraint:** Alerts go ONLY to `+972524809540`. Hardcoded
+  single-recipient by design (operator's personal number) — intentional per
+  memory `project_token_failure_alerts_pending.md`.
+- **Implication:** If the operator's number changes, the constant must be
+  updated in code. No alternate recipient as backup. If that single number
+  is unreachable, the alert is lost.
+- **Future-claude note:** Do NOT regress to multi-recipient without explicit
+  operator request. The single-recipient choice is deliberate.
+
+### Google OAuth refresh token expires ~2026-05-30
+
+- **Issue:** The `roas-tracker-ga` OAuth consent screen is in TESTING mode.
+  Refresh tokens issued by TESTING-mode OAuth apps expire after 7 days.
+  Current token issued ~2026-05-23 → expires ~2026-05-30.
+- **Fix (operator-only — cannot be done by claude):** Operator must publish
+  the `roas-tracker-ga` OAuth consent screen to PRODUCTION in Google Cloud
+  Console. Once published, refresh tokens become permanent (no 7-day expiry).
+- **Impact:** When the token expires, all Google Ads cron-live + cron-daily
+  fetches will start failing with auth errors. Dashboard's Google Ads spend
+  column for `uzoshop` (the only `STORES_WITH_GOOGLE_ADS` member) will go
+  stale. Will surface as Inngest job failures + WhatsApp alerts.
+- **Reference:** Memory entry `project_google_oauth_refresh_token_pending`.
+- **Target action:** Operator to publish the OAuth screen before 2026-05-30.
+
+### FX failure path — Frankfurter outage masking
+
+- **Background:** Both `cronDaily` and `cronLive` now wrap `getFxRate` (USD→CAD)
+  in a `.catch(() => null)` block (Phase 10 CRIT-5 fix + v2 a/WARN-3). On a
+  Frankfurter API outage, `fxRate` resolves to `null`, and the per-row
+  payload OMITS the `spend_cad` column.
+- **Behavior on Supabase upsert:** `ON CONFLICT DO UPDATE` with the column
+  omitted means Supabase PRESERVES the prior `spend_cad` value for that row.
+- **Visible symptom:** The CAD spend column appears "stuck" at yesterday's
+  value (or last-successful-FX-day value) until Frankfurter recovers. There
+  is NO error chip in the dashboard, NO WhatsApp alert. Operator sees a
+  static number and may not realize FX is down.
+- **Files:** `dashboard-web/src/inngest/functions/cronDaily.ts`,
+  `dashboard-web/src/inngest/functions/cronLive.ts`,
+  `dashboard-web/src/lib/fetchers/fx.ts`.
+- **Impact:** Medium. Spend in native USD is still updated correctly. Only
+  the CAD conversion lags during outage. ROAS calculations downstream use
+  CAD, so they'll lag too.
+- **Fix approach:** Surface FX staleness in the dashboard — e.g. a chip on
+  the spend column when the row's `fx_rate_used_at` is older than 24h. Not
+  blocking until next Frankfurter outage.
+- **Target phase:** Phase 7 (Observability) — FX staleness chip.
+
+### WhatsApp EOD timing moved to 00:30 IL
+
+- **Background:** Phase 10 HIGH-13 moved the WhatsApp end-of-day summary
+  trigger from 00:10 IL to 00:30 IL. The reason: `cronDaily`'s retry budget
+  is ~7.5 minutes (3 retries × 2.5 min); a 00:10 EOD could fire before
+  `cronDaily` had finished a retry-laden run, producing an EOD summary based
+  on partial data.
+- **Status:** SHIPPED. Operator confirmed acceptable.
+- **Risk:** None today. Future increase of `cronDaily` runtime past 25min
+  would re-introduce overlap. Monitor Inngest job durations if fetcher count
+  grows.
+
+### Bayesian shrinkage uses best-of(orders, spend) — needs operator validation
+
+- **Background:** Phase 10 b/HI-02 changed cohort ranking to use the
+  best-of-two Bayesian shrinkage:
+  `shrinkage = max(orders / (orders + 10), spend / (spend + 500))`
+  instead of either alone. Intent: a low-order ad-set with high spend
+  shouldn't get extreme shrinkage (or vice versa).
+- **Files:** `dashboard-web/src/lib/campaignHealthScore.ts` cohort block.
+- **Risk:** Operator should periodically eyeball that cohort rankings don't
+  drift unexpectedly compared to pre-Phase-10 behavior. The shrinkage curve
+  is now non-monotonic in a sense (best-of-two = max), so an ad-set crossing
+  one of the two thresholds can jump in ranking discontinuously.
+- **Mitigation:** Phase 10's regression tests pin the math; operator-visible
+  drift would surface in the cohort comparison drawer.
+
+---
+
+## Recent Direction Shifts (Operator Corrections)
+
+### GoalTracker is GLOBAL — never scope to filters.store or filters.range
+
+- **Date:** 2026-05-23 (operator correction).
+- **Constraint:** `GoalTracker.tsx` MUST ignore `filters.store` AND
+  `filters.range`. The monthly goal is a single business-wide target across
+  all stores. Filtering it would render an incomplete picture of progress
+  toward the actual goal.
+- **Reference:** Memory entry `feedback_monthly_goal_is_global`.
+- **Future-claude action:** When touching `GoalTracker.tsx` or any goal-related
+  hook, verify the global-scope contract is preserved. Do NOT introduce a
+  per-store goal without explicit operator request.
+
+### TodayLive is always LIVE — own SWR fetch decoupled from filters.range
+
+- **Date:** 2026-05-23 (operator-reported).
+- **Constraint:** `TodayLive.tsx` (or its hook) must fetch its own LIVE data
+  for today's date, recomputed on every render. It must NOT respect the
+  operator's chosen date range filter. The whole point of TodayLive is to
+  show "what's happening right now", not "what happened in the selected
+  range".
+- **Future-claude action:** When touching TodayLive or any "today's
+  performance" surface, verify the date is recomputed every render (not
+  memoized at mount) and that no `filters.range` dependency is introduced.
+
+---
+
+## Items Removed from Previous CONCERNS.md (now resolved or obsolete)
+
+The previous CONCERNS.md (2026-05-18) listed concerns that have since been
+closed. Documenting here so future-claude doesn't re-raise them:
+
+- **Apps Script 6-min execution limit** → OBSOLETE. Apps Script decommissioned
+  in Phase 11.
+- **No test suite** → CLOSED. Vitest installed; ~900 tests across `lib/` and
+  `inngest/functions/`.
+- **COGS rate duplicated** → CLOSED. Now driven by per-store env vars
+  (`${STORE_UPPERCASE}_COGS_RATE`); single source per store.
+- **Cloud-sync last-write-wins** → OBSOLETE. Single operator + Supabase
+  upsert with `updated_at` newest-row wins per Phase 10 C-02 fixture.
+- **Reconciliation panel uses campaign-active days only** → Resolved in
+  earlier polish work (see commit history in `MetaShopifyReconciliation`).
+- **Product ID precision (Sheets scientific notation)** → OBSOLETE. Sheets
+  tier removed; Supabase columns are properly typed.
+- **CampaignsTable / CampaignDrawer / BillingSettings >1300 LOC** → Status
+  unchanged but flagged in Phase 4 of the roadmap (not in audit scope).
+
+---
+
+*Concerns audit: 2026-05-24 — post Phase 10 + 11 + 12, baseline `b846ae7`.*

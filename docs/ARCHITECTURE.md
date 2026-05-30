@@ -1935,3 +1935,103 @@ their next tick.
 returns (workers write fresh spend, cron-live overwrites with stale
 snapshots). The RPC stays in the DB unused (no harm); `DROP FUNCTION
 recompute_data_daily_derived(date)` if a clean DB rollback is needed.
+
+## Phase E1.7 — `campaigns_daily` as Source of Truth + Unified Agg RPC (2026-05-30 night)
+
+Tonight's third architectural cleanup. After Phase E1.6.1 + E1.6.2 the
+dashboard still had two parallel data paths for ad spend:
+- `campaigns_daily` (per-campaign, written by hot_metrics workers — fresh)
+- `data_daily.{fb,ga,tt}_spend_cad` (account-aggregate via the
+  `upsertDataDailySpend` helper — lagged Meta by ~$35 and silently
+  failed on Day-3 due to `store_name NOT NULL`)
+
+User reported "everything not updating except Campaigns". Vercel logs
+showed: every 10-min tick threw `data_daily upsert <platform> <store>
+2026-05-28: null value in column "store_name" of relation "data_daily"
+violates not-null constraint`. The error was caught by the soft-fail
+catch, so freshness still reported success — but Day-3 column never
+updated and Meta lagged by $35.
+
+### Bug 4 — `store_name NOT NULL` silently dropped Day-3 writes
+
+The Phase E1.6 `upsertDataDailySpend` helper used a partial-column
+UPSERT: payload had only `{date, store_id, fb_spend_cad}` (no
+`store_name`). PostgreSQL's INSERT ... ON CONFLICT evaluates NOT NULL
+constraints BEFORE the conflict check. For Day-3 dates where no row
+existed yet, the INSERT path tripped the constraint and the
+ON CONFLICT branch never fired. Every worker, every tick, for every
+store on 2026-05-28 — silent failure all evening.
+
+### Architecture cleanup
+
+`campaigns_daily` is now the SINGLE source of truth for ad spend.
+`data_daily.{fb,ga,tt}_spend_cad + impressions` is DERIVED from
+`campaigns_daily` via the unified RPC.
+
+### The unified RPC: `agg_data_daily_for_date(d date)`
+
+Three passes per call (migration `20260530310000`):
+
+1. **ZERO** — every `data_daily` row on date `d` gets
+   `fb/ga/tt_spend_cad` and `fb/ga/tt_impressions` zeroed. Stores that
+   lost all campaign activity correctly drop to 0.
+
+2. **AGGREGATE** — SUM `campaigns_daily.spend_cad + impressions` per
+   `(date, store_id, platform)` and UPDATE `data_daily`. TikTok rows
+   attributed via the Phase A.5 v2 campaign-store-map land on the
+   right `data_daily` row.
+
+3. **DERIVE** — re-compute `total_spend_cad + roas + gross_profit_cad
+   + net_profit_cad` from freshly-set spend + cron-live-owned revenue
+   + cogs.
+
+Called from:
+- `cronLive.ts persistDayForStore` (after Shopify UPSERT)
+- `metaWorker hot_metrics branch` (before empty-hot-set + after upserts)
+- `googleWorker hot_metrics branch` (same pattern)
+- `tiktokWorker hot_metrics branch` (same pattern)
+
+The pre-fetch call (before empty-hot-set) is soft-fail (logs warning,
+continues). The post-upsert call re-throws so the outer try/catch
+records `transient_error` freshness for operator visibility.
+
+### Ownership matrix (post-Phase E1.7)
+
+| Column(s) | Owner | Cadence |
+|---|---|---|
+| `revenue_cad`, `gross_revenue_cad`, `refund_deduction_cad`, `cogs_cad`, `store_name`, `last_live_tick_at` | cron-live | 10 min |
+| `campaigns_daily.spend_cad + impressions` (Meta) | metaWorker hot_metrics | ~10 min |
+| `campaigns_daily.spend_cad + impressions` (Google) | googleWorker hot_metrics | ~10 min |
+| `campaigns_daily.spend_cad + impressions` (TikTok) | tiktokWorker hot_metrics | ~10 min |
+| `data_daily.{fb,ga,tt}_spend_cad + impressions` | `agg_data_daily_for_date` RPC (called from cron-live + 3 workers) | atomic per-write |
+| `data_daily.total_spend_cad`, `roas`, `gross_profit_cad`, `net_profit_cad` | `agg_data_daily_for_date` RPC (same call) | atomic per-write |
+
+**Key change**: `data_daily.{fb,ga,tt}_spend_cad` is no longer written
+DIRECTLY by anything. It is derived by the SQL function from
+`campaigns_daily`. There is exactly ONE source of truth.
+
+### Files deleted
+
+- `dashboard-web/src/lib/inngest/upsertDataDailySpend.ts` (+ test)
+- `dashboard-web/src/lib/fetchers/metaAccountSpend.ts` (+ test)
+- `dashboard-web/src/lib/fetchers/googleAccountSpend.ts` (+ test)
+- `dashboard-web/src/lib/fetchers/tiktokAccountSpend.ts` (+ test)
+
+3 fewer Meta/Google/TikTok account-aggregate API calls per tick.
+
+### Migrations deployed
+
+- `20260530310000_agg_data_daily_for_date.sql` — the new unified RPC.
+- 4 older RPCs are dormant (superseded but not dropped — kept for
+  migration history immutability): `agg_tiktok_spend_per_store_for_date`,
+  `recompute_data_daily_derived`, the 2 fix-pass migrations.
+
+After applying via `supabase db query --linked --file …` we ran
+`NOTIFY pgrst, 'reload schema'` so PostgREST picks up the new function
+without restart.
+
+### Tests
+
+Net change: 18 tests deleted (upsertDataDailySpend + 3 account-spend
+fetchers) + 6 new tests written (the 2 new contracts per worker × 3
+workers). Final: 1559 passed / 0 failed / 9 skipped.

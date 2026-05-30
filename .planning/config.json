@@ -1,0 +1,10 @@
+{
+  "workflow": {
+    "cross_ai_execution": true,
+    "cross_ai_command": "codex exec -s danger-full-access --skip-git-repo-check -",
+    "cross_ai_timeout": 1800
+  },
+  "graphify": {
+    "enabled": true
+  }
+}

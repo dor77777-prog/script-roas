@@ -127,15 +127,9 @@ describe('runGoogleWorkerJob() — hot_metrics scope', () => {
   });
 });
 
-describe('runGoogleWorkerJob() — hot_metrics Phase E1.6 account-aggregate', () => {
-  it('after hot-ids upsert: fetches account-aggregate for 3 dates + writes each to data_daily', async () => {
-    const fetchAccountSpend = vi.fn().mockResolvedValue([
-      { date: '2026-05-27', spend: 100, currency: 'CAD', impressions: 1000 },
-      { date: '2026-05-28', spend: 200, currency: 'CAD', impressions: 2000 },
-      { date: '2026-05-29', spend:  50, currency: 'CAD', impressions:  500 },
-    ]);
-    const cadConvert = vi.fn().mockImplementation(async (n: number) => n);
-    const upsertDataDailySpend = vi.fn().mockResolvedValue(undefined);
+describe('runGoogleWorkerJob() — hot_metrics Phase E1.7 unified agg RPC', () => {
+  it('non-empty hot set: calls aggregateDataDaily TWICE (pre-fetch + post-upsert)', async () => {
+    const aggregateDataDaily = vi.fn().mockResolvedValue(undefined);
     await runGoogleWorkerJob({
       jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
       fetchStatus: vi.fn(),
@@ -150,22 +144,19 @@ describe('runGoogleWorkerJob() — hot_metrics Phase E1.6 account-aggregate', ()
       upsertAdsDaily: vi.fn(),
       getCustomer: async () => ({ searchStream: async () => [] }),
       recordFreshness: vi.fn(),
-      fetchAccountSpend,
-      cadConvert,
-      upsertDataDailySpend,
+      aggregateDataDaily,
       nowIso: '2026-05-29T16:00:00.000Z',
       isGoogleConfigured: () => true,
     });
-    expect(fetchAccountSpend).toHaveBeenCalledOnce();
-    expect(upsertDataDailySpend).toHaveBeenCalledTimes(3);
-    const written = upsertDataDailySpend.mock.calls.map(c => c[0]);
-    expect(written.find(w => w.date === '2026-05-27')).toMatchObject({
-      platform: 'google', storeId: 'uzoshop', spendCad: 100, impressions: 1000,
-    });
+    expect(aggregateDataDaily).toHaveBeenCalledTimes(2);
+    expect(aggregateDataDaily).toHaveBeenNthCalledWith(1, '2026-05-29');
+    expect(aggregateDataDaily).toHaveBeenNthCalledWith(2, '2026-05-29');
   });
 
-  it('soft-fails on account-spend rejection — records success freshness anyway', async () => {
-    const fetchAccountSpend = vi.fn().mockRejectedValue(new Error('Google RESOURCE_EXHAUSTED'));
+  it('pre-fetch aggregateDataDaily soft-fails — hot_metrics success still recorded', async () => {
+    const aggregateDataDaily = vi.fn()
+      .mockRejectedValueOnce(new Error('Google RPC transient'))
+      .mockResolvedValue(undefined);
     const recordFreshness = vi.fn();
     await runGoogleWorkerJob({
       jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
@@ -177,13 +168,11 @@ describe('runGoogleWorkerJob() — hot_metrics Phase E1.6 account-aggregate', ()
       upsertCampaignsDaily: vi.fn(), upsertAdsDaily: vi.fn(),
       getCustomer: async () => ({ searchStream: async () => [] }),
       recordFreshness,
-      fetchAccountSpend,
-      cadConvert: vi.fn(),
-      upsertDataDailySpend: vi.fn(),
+      aggregateDataDaily,
       nowIso: '2026-05-29T16:00:00.000Z',
       isGoogleConfigured: () => true,
     });
-    expect(fetchAccountSpend).toHaveBeenCalledOnce();
+    expect(aggregateDataDaily).toHaveBeenCalledTimes(2);
     expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({
       scope: 'campaign_metrics', status: 'success',
     }));
@@ -253,17 +242,8 @@ describe('runGoogleWorkerJob() — hot_metrics with empty hot set', () => {
     expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({ scope: 'campaign_metrics', status: 'success' }));
   });
 
-  it('Phase E1.6 regression fix (2026-05-30): empty hot set STILL writes account-aggregate to data_daily', async () => {
-    // Same regression as metaWorker — empty-hot-set early-exit pre-empted
-    // the Phase E1.6 account-spend write, freezing data_daily.ga_spend_cad
-    // + ga_impressions whenever uzoshop had no Google campaigns hot.
-    const fetchAccountSpend = vi.fn().mockResolvedValue([
-      { date: '2026-05-27', spend: 100, currency: 'CAD', impressions: 1000 },
-      { date: '2026-05-28', spend: 200, currency: 'CAD', impressions: 2000 },
-      { date: '2026-05-29', spend:  50, currency: 'CAD', impressions:  500 },
-    ]);
-    const cadConvert = vi.fn().mockImplementation(async (n: number) => n);
-    const upsertDataDailySpend = vi.fn().mockResolvedValue(undefined);
+  it('Phase E1.7 regression: empty hot set STILL calls aggregateDataDaily (pre-fetch)', async () => {
+    const aggregateDataDaily = vi.fn().mockResolvedValue(undefined);
     const fetchHotMetrics = vi.fn();
     await runGoogleWorkerJob({
       jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
@@ -279,19 +259,14 @@ describe('runGoogleWorkerJob() — hot_metrics with empty hot set', () => {
       upsertAdsDaily: vi.fn(),
       getCustomer: async () => ({ searchStream: async () => [] }),
       recordFreshness: vi.fn(),
-      fetchAccountSpend,
-      cadConvert,
-      upsertDataDailySpend,
+      aggregateDataDaily,
       nowIso: '2026-05-29T16:00:00.000Z',
       isGoogleConfigured: () => true,
     });
     expect(fetchHotMetrics).not.toHaveBeenCalled();
-    expect(fetchAccountSpend).toHaveBeenCalledOnce();
-    expect(upsertDataDailySpend).toHaveBeenCalledTimes(3);
-    const written = upsertDataDailySpend.mock.calls.map(c => c[0]);
-    expect(written.find(w => w.date === '2026-05-29')).toMatchObject({
-      platform: 'google', storeId: 'uzoshop', spendCad: 50, impressions: 500,
-    });
+    // Exactly 1 call (pre-fetch). Post-upsert skipped via early return.
+    expect(aggregateDataDaily).toHaveBeenCalledTimes(1);
+    expect(aggregateDataDaily).toHaveBeenCalledWith('2026-05-29');
   });
 });
 

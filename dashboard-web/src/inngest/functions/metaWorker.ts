@@ -39,10 +39,11 @@ import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { recordMetaBucUsage } from '@/lib/notifications/metaBucUsage';
 import { isAuthError, isRateLimitError } from '@/lib/notifications/detectAuthError';
 import { notifyTokenFailure } from '@/lib/notifications/tokenFailures';
-import { fetchMetaAccountSpendForDates } from '@/lib/fetchers/metaAccountSpend';
-import { makeCadConvert } from '@/lib/inngest/cadConvert';
-import { upsertDataDailySpend } from '@/lib/inngest/upsertDataDailySpend';
-import { getFxRate } from '@/lib/fetchers/fx';
+// Phase E1.7 (2026-05-30 night) — Meta worker no longer fetches
+// account-aggregate spend or writes data_daily.fb_spend_cad directly.
+// campaigns_daily is the single source of truth; the unified RPC
+// `agg_data_daily_for_date(d)` re-aggregates it into data_daily after
+// every upsert. See ARCHITECTURE.md §Phase E1.7.
 import {
   getAdAccountIdForStore,
   getMetaAccessTokenForStore,
@@ -109,25 +110,15 @@ export type RunMetaWorkerJobInput = {
     advice?: string;
   }) => Promise<void>;
   /**
-   * Phase E1.6 (2026-05-30) — bulk-date account-level spend fetcher.
-   * Optional for backwards-compat with existing test fixtures; prod
-   * binding always supplies it.
+   * Phase E1.7 (2026-05-30 night) — unified agg RPC.
+   * Re-aggregates campaigns_daily → data_daily.{fb,ga,tt}_spend_cad +
+   * impressions + derived totals (roas/gross/net) atomically at the
+   * DB layer. Replaces the Phase E1.6 partial-column UPSERT path
+   * (which failed silently on store_name NOT NULL for Day-3 dates).
+   * Called twice: once before the empty-hot-set check (soft-fail) and
+   * once after upsertCampaignsDaily (re-throw on error).
    */
-  fetchAccountSpend?: (input: {
-    adAccountId: string;
-    accessToken: string;
-    dates: string[];
-  }) => Promise<Array<{ date: string; spend: number; currency: string; impressions: number }>>;
-  /** Phase E1.6 — CAD-converter with FX-fail-null semantics. */
-  cadConvert?: (amount: number, currency: string, dateStr: string) => Promise<number | null>;
-  /** Phase E1.6 — partial-column UPSERT to data_daily for one platform's spend + impressions. */
-  upsertDataDailySpend?: (input: {
-    storeId: string;
-    date: string;
-    platform: 'meta' | 'google' | 'tiktok';
-    spendCad: number | null;
-    impressions: number | null;
-  }) => Promise<void>;
+  aggregateDataDaily?: (date: string) => Promise<void>;
   nowIso: string;
   /**
    * Optional credential resolver. When omitted (production path), the pure
@@ -440,45 +431,20 @@ async function runMetaHotMetricsBranch(input: RunMetaWorkerJobInput): Promise<vo
     // account-aggregate spend runs every tick regardless of hot-set state.
     const creds = await safeCredentials(storeId, getCredentials);
 
-    // 3. Phase E1.6 (2026-05-30) — account-aggregate spend → data_daily.
-    // RUNS UNCONDITIONALLY (independent of hot-set state). Pre-fix
-    // (2026-05-30 18:30 IL): this block lived AFTER the empty-hot-set
-    // early-exit at line ~441, so any store with no campaigns flagged
-    // "hot" at tick time froze data_daily.fb_spend_cad + fb_impressions
-    // until campaigns went hot again. Restored to "every tick" parity
-    // with the pre-E1.6 cron-live behavior.
-    //
-    // Soft-fail: a fetch error here does NOT throw — we still want the
-    // hot-set metrics path below to run if hot ids exist. Next tick
-    // (10 min) retries. Auth/rate errors here surface via the outer
-    // catch's notifyTokenFailure path ONLY when they bubble out of the
-    // hot-set fetch — for account-aggregate alone we log + continue.
-    if (input.fetchAccountSpend && input.cadConvert && input.upsertDataDailySpend) {
+    // 3. Phase E1.7 (2026-05-30 night) — pre-fetch agg RPC call.
+    // Re-aggregates existing campaigns_daily values into data_daily.
+    // Handles the empty-hot-set case where no new writes happen but
+    // stored values may need re-aggregation (e.g. campaign was just
+    // attributed to a different store via the campaign-store-map and
+    // the prior store's row needs to zero). Soft-fail so hot-set
+    // metrics path still runs if RPC has transient issue.
+    if (input.aggregateDataDaily) {
+      const todayDate = nowIso.slice(0, 10);
       try {
-        const todayDate = nowIso.slice(0, 10);
-        const oneDayMs = 24 * 60 * 60 * 1000;
-        const dates = [0, 1, 2].map((d) =>
-          new Date(new Date(todayDate + 'T00:00:00Z').getTime() - d * oneDayMs)
-            .toISOString().slice(0, 10),
-        );
-        const rows = await input.fetchAccountSpend({
-          adAccountId: creds.adAccountId,
-          accessToken: creds.accessToken,
-          dates,
-        });
-        for (const r of rows) {
-          const spendCad = await input.cadConvert(r.spend, r.currency, r.date);
-          await input.upsertDataDailySpend({
-            storeId,
-            date: r.date,
-            platform: 'meta',
-            spendCad,
-            impressions: r.impressions,
-          });
-        }
+        await input.aggregateDataDaily(todayDate);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        console.warn(`metaWorker account-aggregate-spend ${storeId}: ${message}`);
+        console.warn(`metaWorker aggregateDataDaily (pre-fetch) ${todayDate}: ${message}`);
       }
     }
 
@@ -529,7 +495,16 @@ async function runMetaHotMetricsBranch(input: RunMetaWorkerJobInput): Promise<vo
       );
     }
 
-    // 7. Mark freshness success for both campaign_metrics + ad_metrics.
+    // 7. Phase E1.7 (2026-05-30 night) — post-upsert agg RPC call.
+    // Re-aggregate the freshly-written campaigns_daily values into
+    // data_daily and re-derive total/roas/gross/net atomically. Errors
+    // re-throw so the outer catch records transient_error (we want
+    // operator-visible failure here, unlike the pre-fetch call above).
+    if (input.aggregateDataDaily) {
+      await input.aggregateDataDaily(today);
+    }
+
+    // 8. Mark freshness success for both campaign_metrics + ad_metrics.
     await recHotPair('success');
   } catch (err) {
     // Phase E1 (2026-05-30) — surface auth/rate errors to the operator
@@ -657,10 +632,15 @@ export const metaWorker = inngest.createFunction(
         },
         // Phase E1.6 (2026-05-30) — bulk-date account-aggregate spend
         // → data_daily via partial-column UPSERT. See spec.
-        fetchAccountSpend: fetchMetaAccountSpendForDates,
-        cadConvert: makeCadConvert(getFxRate),
-        upsertDataDailySpend: async (inp) =>
-          upsertDataDailySpend({ admin: sb, ...inp }),
+        // Phase E1.7 (2026-05-30 night) — unified agg RPC. Replaces the
+        // Phase E1.6 fetchAccountSpend + cadConvert + upsertDataDailySpend
+        // path which silently failed on store_name NOT NULL for Day-3.
+        aggregateDataDaily: async (date: string) => {
+          const { error } = await sb.rpc('agg_data_daily_for_date', { d: date });
+          if (error) {
+            throw new Error(`agg_data_daily_for_date(${date}) for meta: ${error.message}`);
+          }
+        },
         upsertBuc: async (row) => {
           await sb
             .from('meta_buc_usage')

@@ -426,15 +426,16 @@ async function persistDayForStore(
     }
   }
 
-  // Phase E1.6.2 (2026-05-30 evening) — re-derive total_spend_cad +
-  // roas + gross_profit_cad + net_profit_cad atomically from the
-  // current (worker-fresh) spend values + the revenue we just wrote.
-  // Workers call this same RPC after each spend write; idempotent.
-  const { error: deriveErr } = await admin
-    .rpc('recompute_data_daily_derived', { d: date });
-  if (deriveErr) {
+  // Phase E1.7 (2026-05-30 night) — unified agg RPC. Re-aggregates
+  // campaigns_daily into data_daily.{fb,ga,tt}_spend_cad + impressions
+  // and re-derives total/roas/gross/net atomically. Replaces the
+  // narrower `recompute_data_daily_derived` (which only did the derive
+  // step). Workers call the same RPC after their spend writes.
+  const { error: aggErr } = await admin
+    .rpc('agg_data_daily_for_date', { d: date });
+  if (aggErr) {
     throw new Error(
-      `recompute_data_daily_derived(${date}) for ${storeId}: ${deriveErr.message}`,
+      `agg_data_daily_for_date(${date}) for ${storeId}: ${aggErr.message}`,
     );
   }
 }

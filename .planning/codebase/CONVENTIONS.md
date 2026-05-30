@@ -1,516 +1,320 @@
 # Coding Conventions
 
-**Analysis Date:** 2026-05-18
+**Analysis Date:** 2026-05-24
 
-This document is prescriptive: it describes the conventions that future code
-in this repo MUST follow. Every rule below is anchored to existing files —
-follow those examples when adding new code.
+**HEAD at analysis time:** `b846ae7` (post-Phase-11 + post-Phase-12 audit fixes)
 
-## Languages In Play
+This document is **prescriptive**: it describes the conventions that future code in this repo MUST follow. Every rule is anchored to existing files — follow those examples when adding new code.
 
-Two layers, two language flavours — same conventions where possible, but not
-identical:
+## Single-tier reality (post-Phase 11)
 
-| Layer | Language | Style |
-|-------|----------|-------|
-| Dashboard | TypeScript (`strict: true`) + React 19 + Next.js 15 | Modern ES, types preferred over runtime guards |
-| Apps Script (backend) | Google Apps Script JS (V8) | ES6+, but no TS, no npm — heavier inline defensiveness |
+The Apps Script tier was decommissioned in Phase 11 (commits `9c09696..1973d06`, 2026-05-24). What remains is one tier:
 
-When something is layer-specific, it's labelled below.
+| Layer | Tech | Style |
+|-------|------|-------|
+| Dashboard + cron pipeline | TypeScript (`strict: true`) + React 19 + Next.js 15 + Inngest | Modern ES, types preferred over runtime guards |
 
-## Naming Patterns
+References to `READ_FROM=postgres`, `lib/sheets.ts`, `algorithm-parity.test.ts`, `.gs` files, `appsscript.json`, and `.clasp.json` are GONE. Do not reintroduce them. Any historical convention talking about Apps Script (`PascalCase.gs` files, trailing-underscore `_` helpers, V8 runtime) is obsolete and should NOT be cited in new code.
 
-**Files (TypeScript):**
-- React components: `PascalCase.tsx` — `CampaignsTable.tsx`, `CampaignDrawer.tsx`, `SyncIndicator.tsx`
-- Libraries / helpers: `camelCase.ts` — `attributionAnalysis.ts`, `cloudSync.ts`, `campaignProductMap.ts`
-- Single-purpose per file (one big exported component or one cohesive helper module)
-- Co-located by concern, not by type — `lib/` for pure helpers, `components/` for React, `app/api/` for routes
+## TypeScript configuration
 
-**Files (Apps Script):**
-- `PascalCase.gs` per topical area: `Config.gs`, `DailyUpdate.gs`, `SheetBuilder.gs`, `Shopify.gs`, `MetaAds.gs`, `GoogleAds.gs`, `FX.gs`, `ManualOverrides.gs`, `Main.gs`
-- One file per integration / concern
+`dashboard-web/tsconfig.json` (verified):
+- `"strict": true` — non-negotiable. All sub-flags inherit (`noImplicitAny`, `strictNullChecks`, `strictFunctionTypes`, etc.).
+- `"target": "ES2022"`
+- `"moduleResolution": "bundler"` (Next 15 / TS 5 idiom)
+- `"paths": { "@/*": ["./src/*"] }` — the **only** path alias. Use it everywhere instead of deep relative imports.
+- `"isolatedModules": true` — every file must be independently transpilable. No `const enum`, no `export =` syntax.
 
-**Functions:**
-- TypeScript: `camelCase` exports — `analyzeAttribution`, `orderMatchesCampaign`, `pushCloudKey`, `hydrateFromCloud`
-- React components: `PascalCase` — `CampaignDrawer`, `BillingSettings`, `SyncIndicator`
-- Apps Script private helpers: `camelCase_` trailing underscore — `safeDecode_`, `parseYMD_`, `round2_`, `classifyOrderAttribution_`, `computeLineItemsCad_`, `getLayout_`, `summaryFormulasForRow_`
-- Apps Script public entry points (callable from triggers / editor): no trailing underscore — `runDailyUpdate`, `runLiveUpdate`, `runUpdateForDate`, `verifyConfig`, `resetSpreadsheetIdToKnownGood`
-- The trailing `_` convention is load-bearing on Apps Script: only no-underscore functions appear in the editor's "Run" menu and trigger picker. Keep this distinction strict.
+`.eslintrc*` / `eslint.config.*` files **do not exist** in the repo. ESLint is wired through `next lint` (npm script `lint` in `dashboard-web/package.json:9`) using the `eslint-config-next` ruleset (devDep at `package.json:35`). No Prettier config. No Biome. Formatting is by convention (see "Code Style" below) — not machine-enforced.
 
-**Variables:**
-- `camelCase` throughout, both layers
-- Hebrew strings are LABEL VALUES (`'אמין'`, `'אין המרות'`, `'הוצאה CAD ...'`), never identifiers
-- Constants: `UPPER_SNAKE` at module scope — `STATE_KEYS`, `STORE_TAB_CONFIG`, `STORES`, `TZ`, `SUMMARY_TAB`, `HYDRATE_GRACE_MS`, `FROZEN_USD_TO_CAD`, `COGS_RATE_OF_REVENUE`, `META_API_VERSION`
+## File and directory naming
 
-**Types (TypeScript-specific):**
-- Always `type X = {...}`, never `interface` — `AttributionAnalysis`, `OrderAttributionRow`, `SyncState`, `RecurringCost`, `DailyRow`, `DateRange`, `Filters`, `ProductChannelBreakdown`
-- Union types over enums — `type OrderSource = 'meta-paid' | 'google-paid' | ...`, `type Severity = 'critical' | 'warning' | ...`, `type SyncStatus = 'idle' | 'syncing' | 'ok' | 'error'`
-- Type aliases live next to the function they describe — `analyzeAttribution` returns `AttributionAnalysis` declared 145 lines above in the same file (`src/lib/attributionAnalysis.ts:23-72`)
+**React components** (`dashboard-web/src/components/*.tsx`): `PascalCase.tsx`. Examples: `CampaignsTable.tsx`, `CampaignDrawer.tsx`, `SyncIndicator.tsx`, `HealthScoreBadge.tsx`. 46 components total.
 
-**Composite Keys:**
-- Pattern: `${a}::${b}` — `${storeId}::${campaignId}` from `campaignKey()` (`src/lib/campaignProductMap.ts:28-30`)
-- Extended for nesting: `${storeId}::${platform}::${campaignId}::${adSetId}::${adId}` (`AdsDrawer.tsx:381`)
-- Use double-colon to make split/regex unambiguous and to visually distinguish from single-colon path keys (`roas-dashboard:billing-recurring`)
+**Library modules** (`dashboard-web/src/lib/*.ts`): `camelCase.ts`. Examples: `attributionAnalysis.ts`, `cloudSync.ts`, `campaignProductMap.ts`, `campaignHealthScore.ts`, `platformConfig.ts`. 49 modules total.
 
-**localStorage / Cloud Keys:**
-- Prefix `roas-dashboard:` — `roas-dashboard:billing-recurring`, `roas-dashboard:annotations`, `roas-dashboard:monthly-revenue-goal`, `roas-dashboard:insight-states`, `roas-dashboard:campaign-optimized`, `roas-dashboard:campaign-product-map`
-- One canonical list: `STATE_KEYS` in `src/lib/cloudSync.ts:47-55` — adding a key REQUIRES touching this constant; the type system enforces sync coverage
-- Custom event names: `roas-{topic}-changed` — `roas-billing-changed`, `roas-annotations-changed`, `roas-campaign-optimized-changed`, etc. Listed centrally in `CHANGE_EVENTS` (`cloudSync.ts:58-66`)
+**Hooks** (`dashboard-web/src/lib/hooks/*.ts`): `useXyz.ts`. Examples: `useCampaignAttribution.ts`, `useCampaignTrueRevenue.ts`, `useBillingRecurring.ts`, `useBillingOneTime.ts`.
 
-## TypeScript Conventions
+**Inngest functions** (`dashboard-web/src/inngest/functions/*.ts`): `camelCase.ts` named for the cron's purpose. Examples: `cronDaily.ts`, `cronLive.ts`, `cronWhatsapp.ts`, `eventBackfill.ts`, `eventSyncNow.ts`.
 
-**`strict: true`** (`dashboard-web/tsconfig.json`). All conventions below
-flow from that.
+**API routes** (`dashboard-web/src/app/api/<resource>/route.ts`): Next 15 App Router idiom. The directory name is the URL segment.
 
-**No `any`. Period.**
-- Use `unknown` at parse boundaries (`parseNumber(v: unknown)`, `parseDate(v: unknown)`, `parseSource(v: unknown)`, `parseLineItems(v: unknown)` in `src/lib/ordersAttribution.ts`, `src/lib/sheets.ts`)
-- Narrow with type guards: `if (typeof v === 'string') ...`, `if (Array.isArray(parsed)) ...`
-- For type-cast fallbacks, document WHY:
-  ```ts
-  return s as OrderSource;  // src/lib/ordersAttribution.ts:136 — see IN5-06 doc above
-  ```
+**Tests** (`dashboard-web/src/**/__tests__/<sourceName>.test.ts`): co-located with source in a sibling `__tests__/` directory. The test file mirrors the source name; one source file may produce several test files when the surface is large (`campaignHealthScore.ts` → `campaignHealthScore.test.ts`; `attributionAnalysis.ts` → 6 test files). See `TESTING.md` for the full list.
 
-**`type X = {...}`, NOT `interface`.**
-Repo-wide convention. Helps consistency and avoids declaration merging
-surprises. There are zero `interface` declarations in `src/lib/` or
-`src/components/`.
+## Function and identifier naming
 
-**Strict null handling via `?? ''` / `?? 0` / `?? []` defaults at the read boundary:**
+**Functions** (TS): `camelCase`. Examples: `analyzeAttribution`, `applyCohortAdjustmentOnce`, `getCogsRateForStore`, `computeCampaignHealth`, `pushCloudKey`, `hydrateFromCloud`.
+
+**React components**: `PascalCase` — must match the file name.
+
+**Types/interfaces**: `PascalCase`. Prefer `type X = …` over `interface`. Type-only exports use `export type`. Example: `export type CampaignHealth = { … }` in `campaignHealthScore.ts:71`.
+
+**Constants**: `SCREAMING_SNAKE_CASE` for module-load immutables. Examples:
+- `WEIGHTS` in `campaignHealthScore.ts:100` (object frozen by `as const`)
+- `TIKTOK_ACTIVE_ENOUGH` in `platformConfig.ts:42`
+- `STORES_WITH_TIKTOK` in `cronLive.ts:139` and `cronDaily.ts:86` (duplicated — see "Single source of truth" below)
+- `COGS_RATE_OF_REVENUE = 0.25` in `analytics.ts:17`
+- `TRANSACTION_FEES_RATE = 0.065` in `costs.ts:37`
+
+**Private helpers** (module-local, not exported): trailing-underscore convention carried over from the deleted Apps Script tier. Examples in `cpmRoasAnalysis.ts`: `halfOverHalfDelta_`, `meanOrNull_`. This is **optional but still encouraged** — it grepability-flags "this is not part of the module's contract."
+
+## Single source of truth (per-platform config)
+
+When the same data needs to be consumed by multiple modules (e.g. writer + reader), hoist it into `lib/platformConfig.ts` and import from both sites. This was the AUDIT U-01 fix:
+
 ```ts
-// src/lib/ordersAttribution.ts:215-233
-const orderId = String(row[1] ?? '').trim();
-...
-utmSource: String(row[4] ?? '').trim(),
-fbclidPresent: row[8] === true || String(row[8] ?? '').toUpperCase() === 'TRUE',
+// dashboard-web/src/lib/platformConfig.ts:42
+export const TIKTOK_ACTIVE_ENOUGH: ReadonlySet<string> = new Set([
+  'ADGROUP_STATUS_DELIVERY_OK',
+  'ADGROUP_STATUS_BUDGET_EXCEED',
+  'ADGROUP_STATUS_AUDIT',
+  'ADGROUP_STATUS_REVIEWING',
+  'ADGROUP_STATUS_NOT_START',
+]);
 ```
 
-**No truthy checks for numbers — use `Number.isFinite`:**
-```ts
-// src/lib/attributionAnalysis.ts:408, 425, 440, 487, 494
-if (!Number.isFinite(fromMs) || !Number.isFinite(toMs)) return null;
-if (!Number.isFinite(o.totalCad)) continue;
-if (!Number.isFinite(p.value)) continue;     // IN5-04 fix — explicit reject
+Both `cronLive.ts:isActiveForPlatform` (writer) and `postgresReaders.ts` (reader) import this set. Pre-fix they each had their own inline literal that silently drifted.
+
+**Outstanding drift to clean up:** `STORES_WITH_TIKTOK` is duplicated in `cronLive.ts:139` and `cronDaily.ts:86` (same `new Set(['uzoshop'])`). When you change one, change the other. A follow-up should consolidate into `platformConfig.ts`.
+
+## Per-store data convention
+
+Per-store calibration uses environment variables following a strict pattern:
+
 ```
-This guards against NaN from upstream divide-by-zero in derived metrics. A
-filter like `b.meta > 0` excluding NaN works incidentally but is fragile —
-prefer the explicit `Number.isFinite` guard.
-
-**`satisfies` for API response shape enforcement:**
-```ts
-// src/app/api/orders-attribution/route.ts:21
-return NextResponse.json(
-  { rows, lastUpdated: new Date().toISOString() } satisfies OrdersAttributionResponse,
-  { headers: { 'Cache-Control': '...' } },
-);
-```
-Error paths must satisfy the same type — see WR5-05 fix. The `error?: string`
-field is optional on the type so degraded responses can carry the message
-without losing shape compliance.
-
-**Discriminated objects over flag soup:**
-```ts
-// src/lib/attributionAnalysis.ts:67-72
-export type AttributionTrust = {
-  level: 'high' | 'medium' | 'low' | 'unknown';
-  label: string;
-  score: number;
-};
-```
-The `level` is the discriminant; downstream UI keys backgrounds + chips off it.
-
-## File Organization
-
-**One responsibility per file:**
-- `attributionAnalysis.ts` — analytic engine, three sibling exports
-  (`analyzeAttribution`, `analyzeAttributionForAdSet`, `analyzeAttributionForAd`)
-  plus a fourth with deliberately different shape (`analyzeProductChannel`,
-  see comment at line 748-763 explaining why coverage/trust don't apply)
-- `ordersAttribution.ts` — sheets fetch + per-row parsing for one tab family
-- `cloudSync.ts` — localStorage ↔ Google Sheet sync engine, all key
-  registration in `STATE_KEYS`
-- `campaignProductMap.ts` — the storage adapter AND the allocation algebra
-  for a single concern (campaign↔product mapping)
-
-**Component files (React):**
-- One component per file. The file name = component name
-- Sub-components for sort headers, drawers-within-drawers, etc. live in the
-  same file ONLY if they're not reused elsewhere (see
-  `AdSortHeader` inside `AdsDrawer.tsx`)
-
-**Libs grouped by concern, NOT by type:**
-- `lib/` has no `types.ts` for shared types — types live with the functions
-  that produce/consume them
-- `lib/types.ts` exists but holds only the very top-level
-  data shapes (`DailyRow`, `DashboardData`, `DateRange`, `PresetKey`,
-  `Filters`) — these are imported widely so deserve a central home
-- More specific types (`CampaignRow`, `ProductRow`, `Insight`, `Aggregate`)
-  live in `campaigns.ts`, `products.ts`, `insights.ts`, `analytics.ts`
-  respectively
-
-**No barrel files / `index.ts`:**
-Imports always reach into the specific module:
-```ts
-import { analyzeAttribution } from '@/lib/attributionAnalysis';
-// NOT: import { analyzeAttribution } from '@/lib';
+${STORE_UPPERCASE}_COGS_RATE     # e.g. UZOSHOP_COGS_RATE=0.31
+${STORE_UPPERCASE}_TX_FEES_RATE  # e.g. USMILE360_TX_FEES_RATE=0.045
 ```
 
-## Comment Style: "WHY, not WHAT"
+The lookup helpers are in `dashboard-web/src/lib/analytics.ts`:
+- `getCogsRateForStore(storeId)` at `analytics.ts:31` — fallback `0.25`
+- `getTransactionFeesRateForStore(storeId)` at `analytics.ts:55` — fallback `0.065`
 
-The dominant convention in this repo. Code says what; comments say why.
+Both helpers validate `parsed >= 0 && parsed <= 1` and fall back to the project-wide default on bad input. **Mirror this pattern** for any future per-store rate (e.g. shipping, returns) — the cron writers (`cronDaily.ts`, `cronLive.ts`) and the read-side `analytics.ts` must agree on the same env-var key.
 
-**Heavy comments on architectural decisions:**
-- `src/lib/attributionAnalysis.ts:1-19` — opening docstring explains the
-  whole "deterministic vs modeled" mental model the analyzer encodes
-- `src/lib/attributionAnalysis.ts:74-91` — `orderMatchesCampaign` explains
-  the Tier 1 (utm_id) → Tier 2 (utm_campaign) match strategy and the
-  CR5-01 reason for NOT falling through on a Tier 1 mismatch
-- `src/lib/attributionAnalysis.ts:202-213` — Bayesian CI explanation
-  describes WHY normal approximation is good enough vs full Wilson
-- `SheetBuilder.gs:1539-1542` — Phase 1 migration note explains how two
-  idempotent migration blocks (lastCol<13 and lastCol<14) coexist
-- `Config.gs:14-19` — COGS_RATE_OF_REVENUE comment includes a
-  cross-layer sync warning (parallel constant in
-  `dashboard-web/src/lib/analytics.ts:11`)
-- `Shopify.gs:651-658` — `safeDecode_` exists ONLY because of CR5-02; the
-  one-line docstring captures the failure mode it prevents
-- `DailyUpdate.gs:37-42` — `Utilities.sleep(1500)` between stores carries
-  ~3 lines of comment explaining the quota cascade it fixes
+## Timezone convention
 
-**Comments reference review codes when the code is shaped by a review fix:**
-Examples: `(IN5-02)`, `(IN5-03)`, `(IN5-04)`, `(IN5-05)`, `(WR2-01)`,
-`(WR2-04)`, `(WR-01)`, `(WR-02)`, `(#IN-03)`. These tags trace back to
-`.planning/reviews/REVIEW-N.md` so future readers can find the original
-issue.
+**Every** "today" / "yesterday" / calendar-day resolution in this codebase uses the same pattern:
 
-**Light comments on routine code:**
-Trivial loops, simple maps, JSX rendering get no comments. The function
-docstring covers intent; the body is self-documenting.
+```ts
+const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem' });
+const today = fmt.format(new Date()); // 'YYYY-MM-DD'
+```
 
-**Apps Script: Hebrew + English mixed:**
-- Module docstrings often Hebrew (`SheetBuilder.gs:1-13`,
-  `DailyUpdate.gs:1-8`, `Config.gs:1-5`) — these document business intent
-  to the operator, not English-only Claude
-- Function-level WHY comments are English (post-Round-N reviews) — they
-  document engineering reasoning
-- Both are valid in the same file. Don't translate either when editing
-  unless asked
+`'en-CA'` locale produces `YYYY-MM-DD`. `'Asia/Jerusalem'` is the project timezone. 94 references in `dashboard-web/src/`. Verified callsites:
+- `dashboard-web/src/inngest/functions/cronLive.ts:208`
+- `dashboard-web/src/inngest/functions/cronDaily.ts:132`
+- `dashboard-web/src/inngest/functions/eventSyncNow.ts:82`
+- `dashboard-web/src/lib/insights.ts:63`
+- `dashboard-web/src/lib/shopifyRevenueRefunds.ts:206`
+- `dashboard-web/src/app/api/debug/shopify-fetch/route.ts:49`
 
-## Defensive Coding Patterns
+**Do not** use `new Date().toISOString().slice(0, 10)` for "today" — that returns UTC, which is the wrong day for ~3 hours every morning Israeli time.
 
-**Parsing input boundaries: never throw, always degrade:**
-- `parseLineItems` (`src/lib/ordersAttribution.ts:153-175`) — try/catch
-  around `JSON.parse`, filters elements aggressively, returns `[]` on any
-  failure. Defaults to `[]` rather than `null` so callers iterate without
-  null-guards (the "Claude's Discretion" call documented in the JSDoc)
-- `parseSource` (`src/lib/ordersAttribution.ts:133-137`) — permissive cast
-  with documented fallback for future Apps Script source kinds
-- `parseDate` (`src/lib/ordersAttribution.ts:106-121`) — handles Sheets
-  serial numbers, ISO strings, and DD/MM/YYYY strings, returns `null`
-  on unrecognised input
-- `readProductMap` (`src/lib/campaignProductMap.ts:32-50`) — JSON.parse +
-  shape validation + per-entry filter; returns `{}` on any anomaly
-- `readOptimized` (`src/lib/campaignOptimized.ts:20-31`) — same shape,
-  returns `new Set()` on failure
-- `safeReadArray` (`src/lib/billing.ts:61-71`) — generic skeleton other
-  read paths often inline
+## Currency convention
 
-**Apps Script: try/catch around every section in `updateStoreForDate_`:**
-Each subsystem in `DailyUpdate.gs:74-192` is wrapped:
-```js
-try {
-  updateCampaignDataForStoreDate_(ss, store, dateStr, ilsToCad);
-} catch (e) {
-  Logger.log(`Campaign-level data for ${store.name} ${dateStr} failed: ${e && e.message ? e.message : e}`);
+**CAD is the reporting currency.** Every persisted dollar amount in `data_daily` / `campaigns_daily` is in CAD. Foreign currencies (USD from Meta, USD/ILS/EUR from Shopify, USD from TikTok, etc.) are converted at the fetcher boundary via `getFxRate(from, 'CAD', dateStr)` in `dashboard-web/src/lib/fetchers/fx.ts`.
+
+`getFxRate` is **throw-on-failure** by contract — every caller wraps the call site with `.catch(() => null)` or a try/catch and decides its own fallback. See `cronLive.ts:641` (the `a/WARN-3` fix) for the canonical pattern: FX timeout/5xx → null → convert at 1×, log a warning.
+
+## Hebrew RTL convention
+
+The dashboard is Hebrew-first, RTL throughout. Two rules:
+
+**1. Use Tailwind logical-side utilities, not directional ones:**
+- `start-2` / `end-2` instead of `left-2` / `right-2`
+- `ms-3` / `me-3` instead of `ml-3` / `mr-3`
+- `ps-3` / `pe-3` instead of `pl-3` / `pr-3`
+
+Verified callsites: `SyncIndicator.tsx:139`, `MetricHelp.tsx:110, 146`, `PerStoreCards.tsx:142`. The fix `382bed8 fix(product-picker): search icon uses logical end-2.5 for RTL (HIGH-2)` (commit 2026-05-23) is the regression that proved this rule isn't optional — a `right-2.5` rendered on the WRONG side under RTL.
+
+**2. Wrap RTL-content roots with `dir="rtl"`:**
+- `Dashboard.tsx:205`: `<div dir="rtl" className="min-h-screen bg-background">` — the root container
+- Popovers / drawers each re-declare `dir="rtl"` because they render in portals outside the root: `SyncIndicator.tsx:138`, `MetricHelp.tsx:107`, `HealthScoreBadge.tsx:93`, `CommandPalette.tsx:468`, `ProductPickerModal.tsx:231`, `HealthScorePanel.tsx:140`, `AdsDrawer.tsx`, etc.
+
+**Hebrew strings live inline in components and pure-helper return values** — no i18n framework. This is intentional (single-operator product, no localization need).
+
+## Import organization
+
+Order within a file (observed in `dashboard-web/src/components/Dashboard.tsx:1-30` and most lib files):
+
+1. React + framework imports (`react`, `next/link`, `next/navigation`)
+2. Third-party (`swr`, `recharts`, `lucide-react`, `@supabase/supabase-js`)
+3. Internal — types first (`import type { … } from '@/lib/…'`)
+4. Internal — values (`import { … } from '@/lib/…'`)
+5. Local / sibling (`./Filters`, `./KpiCards`)
+
+**Always use the `@/` alias for internal imports.** Deep relatives (`../../lib/…`) only appear in test files where the test sits one directory deeper than the source. New code MUST use `@/lib/foo` over `../../lib/foo`.
+
+`export type` is used aggressively — separating type-only re-exports from value re-exports keeps `isolatedModules` happy and the bundle smaller.
+
+## JSDoc and comment density
+
+This is a **comment-heavy** codebase. The pattern is **deliberate** and load-bearing:
+
+- 42 of 49 `lib/*.ts` files (86%) open with a `/** … */` module-header block explaining intent, math derivation, and audit history.
+- Major modules carry **23+** JSDoc / fence-comment blocks (`attributionAnalysis.ts`).
+- Audit-fix annotations are inlined at the patched site, NOT relegated to commit messages. Pattern: `// Audit fix YYYY-MM-DD (<finding-id>): …` or `// AUDIT <finding-id> (<date>): …`. Verified at:
+  - `costs.ts:27` — "Audit fix 2026-05-23 (d/HI-01): deleted the unused STORE_FIXED_COSTS map…"
+  - `analytics.ts:20` — "Audit fix 2026-05-23 (d/HI-02): per-store COGS rate at the read side."
+  - `campaignHealthScore.ts:65` — "Audit fix 2026-05-24 (U-06): the apply function was renamed from `applyCohortHealthAdjustment` to `applyCohortAdjustmentOnce`…"
+  - `platformConfig.ts:4-39` — module-header explains why the file was created (AUDIT U-01) and what asymmetry it eliminates.
+
+**Why this matters:** the operator-debugger reading this code months later needs to know WHY a non-obvious constant or branch exists. The audit-fix inline pattern is the project's substitute for an institutional code-review trail.
+
+When you patch an audit finding:
+1. Inline a comment at the patched site with the finding ID (`AUDIT U-XX` / `b/HI-NN` / etc.) and a 1-2 sentence rationale.
+2. The commit message follows the parallel pattern (see "Commit conventions" below).
+
+## Code style (formatting)
+
+No Prettier — formatting is by convention. The observed style:
+
+- **2-space indent**
+- **Single quotes** for strings, **double quotes** only inside JSX attributes
+- **Semicolons** terminate statements
+- **Trailing commas** in multi-line arrays / objects / param lists
+- **Arrow functions** preferred for callbacks; `function` keyword for top-level named exports
+- **`const`** by default; **`let`** only when reassignment is genuinely needed; **`var`** never
+- **No unused imports / variables** — ESLint via `next lint` catches this
+
+## Error handling
+
+77 `throw new Error(…)` callsites across `dashboard-web/src/lib`. The patterns:
+
+**Pure helpers** (e.g. `campaignHealthScore.ts:111`): throw at module load if invariants violate. Example:
+```ts
+if (Math.abs(_WEIGHT_SUM - 1.0) > 1e-9) {
+  throw new Error(`Health-score weights must sum to 1.0, got ${_WEIGHT_SUM}`);
 }
 ```
-The pattern: log to `Logger.log` with the `failed (non-fatal)` marker, then
-continue. The day's daily-row write succeeds even if campaigns / ads /
-products / orders-attribution fails. Operators see the failure in
-Executions, the dashboard sees stale-but-coherent data.
 
-**`Object.create(null)` for plain maps:**
-```js
-// Shopify.gs:688 — IN5-05 fix
-const params = Object.create(null);
-```
-Used when keys come from external input (note_attributes, UTM params) so
-inherited methods like `hasOwnProperty` / `toString` / `__proto__` can't
-collide. Defensive — not security-critical here because values are coerced
-to `String`, but the lookup-correctness argument is the same.
+**Fetchers** (e.g. `fetchers/fx.ts`, `fetchers/tiktok.ts`): throw on network / API envelope failure. Callers wrap with `try/catch` or `.catch()` and decide policy.
 
-**`setNumberFormat('@')` on long-ID columns (Apps Script):**
-```js
-// SheetBuilder.gs:1019, 1158, 1351, 1616, 1617, 1621
-sh.getRange(2, 2, combined.length, 1).setNumberFormat('@');   // Order ID
-sh.getRange(2, 12, combined.length, 2).setNumberFormat('@');  // UTM ID + UTM Term
-sh.getRange(2, 14, combined.length, 1).setNumberFormat('@');  // Line Items (JSON)
-```
-Meta IDs are 17–19 digits, outside JS double-precision integer range.
-Without `'@'` (text format) Sheets reformats them to scientific notation
-and corrupts the value on round-trip. Format MUST be set BEFORE
-`setValues`.
+**Cron functions** (e.g. `cronLive.ts`): sequential `for...of await` + explicit `result.error` checks (HIGH-12 + HIGH-NEW-4 fixes intact). One failed store does not block the rest.
 
-**Idempotent writes (clear-then-write per date):**
-The pattern, applied to every per-day Sheets writer:
-1. Read all existing rows below header
-2. Filter to keep rows where the date column parses AND `!== dateStr`
-3. Concat new rows for `dateStr` to the kept set
-4. Clear the whole data range
-5. `setValues` once with the combined block
-6. Apply format on the whole block
+**API routes** (`app/api/*/route.ts`): wrap with `userFacingError(…)` from `@/lib/apiErrors` to produce structured `{ error, code }` responses. NEVER leak stack traces to the client.
 
-Examples: `writeCampaignRowsForDay` (`SheetBuilder.gs:725`),
-`writeAdsRowsForDay` (`SheetBuilder.gs:1200+`),
-`writeOrdersAttributionForDay` (`SheetBuilder.gs:1565`),
-`writeProductSalesForDay_` (`SheetBuilder.gs:1340+`).
-
-Two notes baked into the convention:
-- **Preserve unparseable dates** (don't drop `key === null` rows) — see
-  WR5-02 fix at `SheetBuilder.gs:748-753`. Returning `key !== dateStr`
-  (not `key !== dateStr && key !== null`) preserves rows where a previous
-  write crashed mid-format. Operator can manually fix; we never silently
-  destroy data we don't recognise.
-- **Single `setValues` per call** — batched writes are ~10× faster than
-  cell-by-cell, and matter because the daily run is hard-bounded by Apps
-  Script's 6-minute execution budget.
-
-**Try/catch around `decodeURIComponent` (Apps Script):**
-`Shopify.gs:651-658` declares `safeDecode_`, used per-pair in
-`classifyOrderAttribution_` so a single malformed escape in a bot's
-landing URL drops that one param, not the whole order's classification.
-See CR5-02.
-
-**Numeric guards on analyzer inputs:**
-- `Number.isFinite(o.totalCad)` before accumulating
-  (`attributionAnalysis.ts:431`)
-- `Number.isFinite(p.value)` before bucketing
-  (`attributionAnalysis.ts:440`)
-- Variance-zero check before computing CI (`attributionAnalysis.ts:220`,
-  `attributionAnalysis.ts:654` — WR5-04 fix). Treats homogeneous samples
-  as "not enough info" rather than rendering a falsely-precise interval.
-
-**Sheets API quota throttle:**
-`Utilities.sleep(500)` between sub-stages within `updateStoreForDate_`
-(after campaigns, after ads, after products) and `Utilities.sleep(1500)`
-between stores in `runUpdateForDate` (`DailyUpdate.gs:42`). Without these,
-stores 2 and 3 timed out from quota saturation. Sleep cost (~3s per run)
-is well under the runtime budget.
-
-## React Patterns
-
-**`'use client'` directive at the top of every component file:**
-Required for Next.js 15 app router because every component uses hooks /
-event handlers. Server components live in `app/api/*/route.ts` only.
-
-**`useMemo` for derived state:**
-```ts
-// CampaignsTable.tsx:606-682 — trueRevenueByKey computed once per
-// (mode, data, productsResp, ordersAttrResp, productMap, aggregated, localRange)
-const trueRevenueByKey = useMemo(() => {
-  ...
-  for (const a of aggregated) {
-    ...
-    const attribution = analyzeAttribution(...);
-    out.set(k, { ..., attribution });
-  }
-  return out;
-}, [mode, data, productsResp, ordersAttrResp, productMap, aggregated, localRange]);
-```
-Every analyzer call (Bayesian CI, window stability, outlier z-score) is
-non-free. Always memoize on the inputs that drive it. **Anti-pattern**: the
-ad-set and ad call sites in `CampaignDrawer.tsx:1012-1024` and
-`AdsDrawer.tsx:378-390` invoke `analyzeAttributionForAdSet`/`...ForAd`
-inside `(() => { ... })()` per render (IN5-01). When fixing, follow the
-campaign-level memoization shape — build a `Map<adSetId, AttributionAnalysis>`
-in one `useMemo` and look up per cell.
-
-**SWR for data fetching:**
-- `useSWR<DashboardData>('/api/data', fetcher, { refreshInterval: 60_000, revalidateOnFocus: true })` — `Dashboard.tsx:68-72`
-- `useSWR<StoreMetaResponse>(open ? '/api/store-meta' : null, ..., { revalidateOnFocus: false, dedupingInterval: 60_000 })` — `BillingSettings.tsx:107-111`. Note the conditional key (`open ? url : null`) — SWR skips the fetch when the key is null. Use this to defer panel-only API calls.
-- Errors thrown from fetchers surface via SWR's `error` field; the global fetcher in `Dashboard.tsx:45-52` reads `body.error` from the response and re-throws with a meaningful message
-
-**localStorage + cloud-sync for cross-device state:**
-- Reads stay synchronous (`readRecurring()`, `readAnnotations()`, `readOptimized()`, `readProductMap()`) — components never await localStorage
-- Writes do the full triad: `localStorage.setItem` → `window.dispatchEvent(new CustomEvent('roas-{topic}-changed'))` → `pushCloudKey(STATE_KEY, value)`
-- Components subscribe to the custom event in a `useEffect` to re-read on changes (cross-component AND cross-device propagation)
-- Initial hydrate from cloud is gated on `isHydrated()` (`src/lib/cloudSync.ts:411`) — seed-data branches in `BillingSettings` wait for this so they don't overwrite a partner's data
-
-**Drawer stack pattern (`useDrawerEsc`):**
-The Esc-key coordination problem and fix lives in
-`src/lib/drawerStack.ts`. Each drawer drops in:
-```tsx
-import { useDrawerEsc } from '@/lib/drawerStack';
-useDrawerEsc(open, onClose);
-```
-Module-level array of `onClose` callbacks; only the topmost responds to
-Esc. Single shared `window.addEventListener('keydown', ...)`, installed
-lazily on first push and removed on last pop. **Use this hook, never
-register your own Esc listener directly.** See WR-01.
-
-**Defensive `e.stopPropagation()` on row-action buttons:**
-`AdsDrawer.tsx:402-409` documents the pattern: even if no parent
-`onClick` exists today, stop propagation so a future row-click handler
-doesn't accidentally trigger when the user toggles a child button. Cheap
-forward-compat for tables.
-
-**Hebrew RTL + numeric formatting via `<bdi dir="ltr">`:**
-`src/lib/format.ts` wraps every numeric atom in `bdi(content)` so the
-Unicode bidi algorithm doesn't reshuffle currency code + digits + sign in
-ways that look broken. Helper exports: `fmtCount`, `fmtMoney`,
-`fmtMoneyBare`, `fmtNum2`, `fmtDeltaPct`, `fmtPct`, `fmtDate`,
-`fmtDateShort`. **Use these in JSX**; the bare `formatCurrency` /
-`formatNumber` in `src/lib/utils.ts` return raw strings and are fine for
-non-React contexts (CSV export, logs).
-
-**Stable per-store colours:**
-`src/lib/format.ts:144-164` exports `STORE_HUES` + `storeColor` /
-`storeBg` helpers. Every chart, sparkline, legend, and chip MUST resolve
-through these so a store keeps the same hue across the dashboard. Adding
-a store: extend the `STORE_HUES` map.
-
-**`tabular-nums` className on numeric cells:**
-The `bdi()` helper in `format.ts:69-76` defaults to
-`className: 'tabular-nums'`. Numeric table cells across the app rely on
-this for vertical alignment.
-
-## Import Organization
-
-The convention, by example (e.g. `CampaignsTable.tsx:1-44`):
-
-1. `'use client';` directive (one line, top of file)
-2. React / Next / external React packages (`useEffect`, `useMemo`, `useState`, `useSWR`)
-3. Icon imports (`lucide-react`) — grouped as one block
-4. Recharts / other heavy external packages if used
-5. `@/lib/*` helpers — utility / pure layers first
-6. `@/lib/*` data shapes (`type CampaignRow`, etc.)
-7. `@/app/api/*` response types
-8. `./` local components last
-
-**Path aliases:**
-- `@/*` → `src/*` (`tsconfig.json:17`)
-- Always use `@/lib/...` and `@/components/...`; avoid relative `../../lib/...`
-  paths beyond same-folder `./`
-
-## Module Design
-
-**Exports:**
-- Named exports throughout — no `export default` in `src/lib/` or `src/components/` except the Next.js page default in `src/app/page.tsx:3-5`
-- Type exports use `export type X = ...` — co-located with implementation
-- Reverse-lookup helpers live next to forward functions
-  (`campaignsForProduct` next to `setMappedProducts` in
-  `campaignProductMap.ts`)
-
-**No barrel files** (already covered above) — directly import from the
-file that owns the symbol.
-
-**Pure functions get explicit "no side effects" JSDoc when worth flagging:**
-```ts
-// src/lib/attributionAnalysis.ts:798
-* Pure function — no side effects, no IO. Safe to memoize on inputs.
-```
-This is a contract the React layer relies on for `useMemo`.
-
-## Error Handling
-
-**TypeScript layer:**
-- API routes: top-level try/catch returning a structured error response,
-  preserving the declared response shape (see WR5-05 fix in
-  `src/app/api/orders-attribution/route.ts:28-44`)
-- Pure analyzers: never throw — return `null` for "unusable input"
-  (analyzers in `attributionAnalysis.ts` return `AttributionAnalysis | null`)
-  or return an explicit zero object (`analyzeProductChannel` returns
-  `ProductChannelBreakdown` with all zeros, NOT null, so the caller
-  doesn't need a null-guard before reading `breakdown.totalOrders`)
-- Cloud sync: errors set `syncState.status = 'error'` + `lastError`
-  message, surfaced via `SyncIndicator`. Never throw to the user
-
-**Apps Script layer:**
-- Top-level entry points (`runDailyUpdate`, `runUpdateForDate`) catch
-  per-store and per-section errors, log to `Logger.log` with a
-  `[store] message` prefix, and accumulate into an `errors` array
-  reported in the final summary
-- `notifyError_` sends to `notification.email` Script Property when any
-  errors occurred (`DailyUpdate.gs:68-71`)
-- `fetchWithRetry_` (`Config.gs:115-142`) wraps every external HTTP call
-  with retries on 5xx + 429 + network errors. Backoff: 2.5s × attempt,
-  5s × attempt for 429. Use this — never call `UrlFetchApp.fetch` directly
+**No error-monitoring service beyond Sentry** — `@sentry/nextjs` v8 is wired in `next.config.ts:15` and hooked at `dashboard-web/src/components/ErrorBoundary.tsx` (`Sentry.captureException` on React render errors). Only 2 explicit `captureException` callsites — everything else relies on Sentry's automatic Next.js instrumentation.
 
 ## Logging
 
-**TypeScript:**
-- `console.warn(...)` and `console.error(...)` for non-fatal issues (e.g.
-  `cloudSync.ts:222`, `route.ts:30`)
-- No structured logger / Sentry / Datadog wiring — Vercel captures stdout
-- Avoid `console.log` in production paths; reserved for ad-hoc debug
-  during development
+**No logger library** (no pino, no winston, no bunyan). 16 `console.*` calls across `lib/`. The convention:
+- `console.error(...)` for things the operator needs to see in Inngest logs / Vercel logs
+- `console.warn(...)` for soft-fail / graceful-degradation paths (e.g. FX timeout)
+- `console.log(...)` is rare — almost always considered noise and removed in review
 
-**Apps Script:**
-- `Logger.log(...)` everywhere — visible in the Apps Script Executions tab
-- Include enough context to diagnose: store name, date, the value that
-  failed, the actual exception's `e.message ?? e`
-- "non-fatal" marker in the message when the try/catch is deliberately
-  swallowing the error (so the operator can grep)
+Cron functions log step-level summaries via the `step.run('label', async () => …)` wrapper — Inngest's dashboard renders each label as a timeline entry. Prefer that over `console.log` inside cron handlers.
 
-## Function Design
+## Function design
 
-**Size:** Keep functions focused. The largest analyzer
-(`analyzeAttribution`, ~200 LOC) is at the upper end of acceptable
-because each section is a documented, distinct concern (deterministic
-matching → coverage → Bayesian CI → window stability → outlier days →
-trust ladder). Pull a helper when you can name it (`computeWindowStability`,
-`detectOutlierDays`, `buildAnalysis`).
+**Pure functions** are the default in `lib/`. Side effects (network, DB, time) are pushed to the edges (`fetchers/`, `inngest/functions/`, `app/api/*/route.ts`). 68 of 69 `lib/__tests__/*.test.ts` files exercise pure helpers — they import the function, call it with a fixture, assert the return shape. Mocking is reserved for the few helpers that touch `supabase` or `fetch`.
 
-**Parameters:** Object args when there are 3+ related params or any
-optional ones. The pattern from `analyzeProductChannel`
-(`attributionAnalysis.ts:799-805`) and `buildAnalysis`
-(`attributionAnalysis.ts:622-638`):
+**Factory builders** are used in test files to keep fixtures readable. Pattern from `campaignHealthScore.test.ts:18`:
 ```ts
-export function analyzeProductChannel(opts: {
-  productIds: string[];
-  orders: OrderAttributionRow[];
-  storeId: string;
-  dateFrom: string;
-  dateTo: string;
-}): ProductChannelBreakdown {
-  const { productIds, orders, storeId, dateFrom, dateTo } = opts;
-  ...
+function makeAggregated(patch: Partial<Aggregated> = {}): Aggregated {
+  return { /* sensible defaults */, ...patch };
 }
 ```
+A shared `dashboard-web/src/lib/__tests__/fixtures.ts` exports `makeOrder()`, `makeOrderAttributionRow()`, etc. for cross-test reuse.
 
-**Return values:** Match the contract documented at the top — if the
-docstring says "null when input is unusable", every code path must either
-return a real value or `null` (no `undefined`). Explicit-zero objects
-(`analyzeProductChannel`) avoid forcing callers into null-checks for the
-no-data case.
+## Module design
 
-**Optional parameters:** Add to the end with a default. Document the
-"why" inline (`dailyMetaSeries?: Array<...>` in
-`attributionAnalysis.ts:181-184`).
+**Named exports only** — no default exports anywhere in `lib/`. The only `export default` in the codebase is on React components (Next 15 requires it for `app/**/page.tsx`).
 
-## Cross-Cutting
+**No barrel files** (`index.ts` re-export files). Import directly from the source module:
+```ts
+import { computeCampaignHealth } from '@/lib/campaignHealthScore'; // ✓
+import { computeCampaignHealth } from '@/lib';                     // ✗ no barrel
+```
 
-**Stable references for line/file lookups:**
-Many comments cite line numbers (`attributionAnalysis.ts:209-225`,
-`Shopify.gs:601-610`, `SheetBuilder.gs:1532-1541`). When refactoring,
-update affected anchor comments — they're load-bearing for review docs
-and future map-codebase passes.
+**One concern per file** — modules grow as the concern grows (`aiReport.ts` is 2282 LOC, `cronLive.ts` is 1238 LOC, `attributionAnalysis.ts` is 1202 LOC). Splitting is by independent responsibility, not by line count.
 
-**No global state in TS layer EXCEPT documented module singletons:**
-- `cloudSync.ts` has module-level `lastPushAt`, `pendingTimers`,
-  `pendingRetries`, `hydrated`, `syncState` — these implement the
-  debouncer / hydrator with intentional cross-call state. Documented
-  inline (`cloudSync.ts:68-83`)
-- `drawerStack.ts` has module-level `stack` + `listenerInstalled` —
-  documented as the WR-01 fix
-- Adding new module state requires the same level of documentation
+## TypeScript escape hatches — observed
 
-**FX rate handling:**
-Production P&L numbers go through the LIVE FX rate fetched by Apps Script
-(`getFxRate`). The frozen `FROZEN_USD_TO_CAD = 1.36` in
-`src/lib/constants.ts:24` is ONLY for deterministic suggestions /
-previews where users would otherwise see numbers wobble between sessions.
-Re-check quarterly; the constant carries a "Last reviewed" comment.
+`@ts-expect-error`, `@ts-ignore`, and inline `any` together total **104** occurrences in `lib/`. `as unknown as X` double-casts: 29 occurrences. Mostly in test fixtures (`as unknown as TrueRevenueInfo['attribution']` at `campaignHealthScore.test.ts:77`) where a deep type is partially constructed. **Production source code should resort to escape hatches sparingly** — every callsite is a future maintenance hazard.
+
+## Atomic-commit discipline (operator-enforced)
+
+Every commit must be:
+1. **Atomic** — one logical change, no drive-by edits.
+2. **`tsc` clean** — `cd dashboard-web && npx tsc --noEmit` returns zero errors.
+3. **`vitest` green** — `cd dashboard-web && npx vitest run` returns 0 failures (skips are OK if documented).
+
+This is enforced by the operator manually (no pre-commit hook is wired). Phases that ship multiple commits run all three gates between each commit. Verified via recent commit graph: every audit fix has its OWN commit (`adb0c17`, `c6e590c`, `b919705`, `e953a2d`, `a7d36f5`, etc. — one finding ID per commit).
+
+## Commit conventions
+
+Format: `<type>(<scope>): <one-line summary> (<finding-id> [/ <finding-id>])`
+
+Examples from recent history (`git log --oneline -10`):
+- `b846ae7 fix(attribution): show raw coverage + halo-exceeded warning chip (AUDIT U-05)`
+- `c2f4f9c refactor(health-score): rename + assert applyCohortAdjustmentOnce to prevent double-apply (AUDIT U-06)`
+- `f001f70 fix(attribution): surface mixed window-stability verdict in operator copy (AUDIT U-04)`
+- `b919705 fix(tiktok-status): shared TIKTOK_ACTIVE_ENOUGH set for writer + reader symmetry (AUDIT U-01)`
+- `48a2945 fix(cron-live): include tt in todaySpendCad return summary (AUDIT B-01)`
+
+**Types in use:** `fix`, `feat`, `refactor`, `chore`, `docs`, `test`.
+
+**Body** (optional, ~3-10 lines for non-trivial changes) explains:
+- WHAT changed
+- WHY (link to audit finding / operator request / bug report)
+- TESTS added/touched
+
+The finding-ID suffix is **load-bearing**. It binds the commit to its audit-spec entry so `git log --grep='U-06'` retrieves the patch. Honor this even for follow-up commits that touch the same finding.
+
+## `git add` discipline (NEVER use `-A` or `.`)
+
+**Rule:** `git add <specific files>` only. **Never** `git add -A`, `git add .`, or `git add --all`.
+
+This is a hard-won lesson from earlier in the project: a `git add -A` race during a multi-phase work session pulled an unrelated working-tree change into a focused commit. The audit trail was contaminated and the commit needed to be rewritten.
+
+**When committing, list every file by name in the `git add` command.** If the file list is long, that's a signal the commit is too large — split it first.
+
+## Documentation discipline
+
+Two pre-push gates, on par with `tsc` and `vitest`:
+
+**UX changes** → update `docs/USER_MANUAL.md` (Hebrew, operator-facing).
+
+**Architecture / code / pipeline changes** → update `docs/ARCHITECTURE.md` (English, technical).
+
+The user-memory note (`feedback_keep_user_manual_current.md`) is explicit: "Two separate pre-push gates, on par with tsc/vitest." Stale docs are a commit-blocker.
+
+## Localhost rule (verification)
+
+**Never `curl localhost` in verify checks.** All runtime verification, payload checks, and smoke-tests must hit the production URL (e.g. `https://script-roas.vercel.app/api/health`). A local dev server can pass while production fails (env-var divergence, Sentry wiring, Inngest URLs).
+
+The user-memory note (`feedback_no_localhost_checks.md`) treats this as a workflow invariant. Phase `<verify>` blocks that include `curl http://localhost:3000/...` are wrong by construction.
+
+## Audit-fix annotation style
+
+When you patch an audit finding, leave a permanent inline trace. Three forms in active use:
+
+1. **Header line in module JSDoc** (when the finding reshapes a whole file):
+   ```ts
+   /**
+    * Audit fix 2026-05-23 (d/HI-01): deleted the unused STORE_FIXED_COSTS map…
+    */
+   ```
+
+2. **Block comment at the patched code site:**
+   ```ts
+   // AUDIT U-02 (2026-05-24): all default-fixture instances represent a
+   // normal up/down/flat read; the 'no-baseline' verdict is exercised
+   // explicitly in cpmRoasAnalysis.test.ts.
+   ```
+
+3. **JSDoc on a renamed export** (when the rename IS the fix):
+   ```ts
+   /** Audit fix 2026-05-24 (U-06): the apply function was renamed from
+    *  `applyCohortHealthAdjustment` to `applyCohortAdjustmentOnce` and
+    *  now asserts this field is 0 on entry — calling it twice on the
+    *  same base throws instead of silently double-applying. */
+   ```
+
+The finding ID (`U-06`, `d/HI-01`, etc.) is the join key between the source, the commit message, and the audit `.planning/audit-*/AUDIT*.md` table. Keep all three in sync.
 
 ---
 
-*Convention analysis: 2026-05-18*
+*Convention analysis: 2026-05-24*

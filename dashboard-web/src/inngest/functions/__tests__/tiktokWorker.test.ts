@@ -212,7 +212,7 @@ describe('runTikTokWorkerJob() — hot_metrics Phase E1.6.1 per-store agg RPC', 
   // map) per-store into data_daily.
 
   it('with non-empty hot set: calls agg RPC TWICE (pre-fetch + post-upsert) for today', async () => {
-    const aggregateTiktokSpendByStore = vi.fn().mockResolvedValue(undefined);
+    const aggregateDataDaily = vi.fn().mockResolvedValue(undefined);
     await runTikTokWorkerJob({
       jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
       loadStoreMap: async () => ({}),
@@ -225,19 +225,19 @@ describe('runTikTokWorkerJob() — hot_metrics Phase E1.6.1 per-store agg RPC', 
       recordFreshness: vi.fn(),
       getAccount: async () => ({ advertiserId: 'ADV1', accessToken: 'TOK', accountCurrency: 'USD' }),
       getFxCadFor: async () => async () => 1.4,
-      aggregateTiktokSpendByStore,
+      aggregateDataDaily,
       nowIso: '2026-05-29T16:00:00.000Z',
       isTikTokConfigured: () => true,
     });
     // Once before hot-set fetch (refresh from existing campaigns_daily) +
     // once after upsertCampaignsDaily (pick up fresh writes).
-    expect(aggregateTiktokSpendByStore).toHaveBeenCalledTimes(2);
-    expect(aggregateTiktokSpendByStore).toHaveBeenNthCalledWith(1, '2026-05-29');
-    expect(aggregateTiktokSpendByStore).toHaveBeenNthCalledWith(2, '2026-05-29');
+    expect(aggregateDataDaily).toHaveBeenCalledTimes(2);
+    expect(aggregateDataDaily).toHaveBeenNthCalledWith(1, '2026-05-29');
+    expect(aggregateDataDaily).toHaveBeenNthCalledWith(2, '2026-05-29');
   });
 
   it('soft-fails on agg RPC rejection — hot_metrics success still recorded', async () => {
-    const aggregateTiktokSpendByStore = vi.fn().mockRejectedValue(
+    const aggregateDataDaily = vi.fn().mockRejectedValue(
       new Error('agg_tiktok_spend_per_store_for_date(2026-05-29): function not found'),
     );
     const recordFreshness = vi.fn();
@@ -253,11 +253,11 @@ describe('runTikTokWorkerJob() — hot_metrics Phase E1.6.1 per-store agg RPC', 
       recordFreshness,
       getAccount: async () => ({ advertiserId: 'ADV1', accessToken: 'TOK', accountCurrency: 'USD' }),
       getFxCadFor: async () => async () => 1.4,
-      aggregateTiktokSpendByStore,
+      aggregateDataDaily,
       nowIso: '2026-05-29T16:00:00.000Z',
       isTikTokConfigured: () => true,
     });
-    expect(aggregateTiktokSpendByStore).toHaveBeenCalled();
+    expect(aggregateDataDaily).toHaveBeenCalled();
     expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({
       scope: 'campaign_metrics', status: 'success',
     }));
@@ -338,7 +338,7 @@ describe('runTikTokWorkerJob() — hot_metrics with empty hot set', () => {
     // per-store agg call, freezing data_daily.tt_spend_cad +
     // tt_impressions for ALL stores. usmile360 + zolplus tt_spend_cad
     // stale during the day (only the nightly cronDaily RPC ran).
-    const aggregateTiktokSpendByStore = vi.fn().mockResolvedValue(undefined);
+    const aggregateDataDaily = vi.fn().mockResolvedValue(undefined);
     const fetchHotMetrics = vi.fn();
     await runTikTokWorkerJob({
       jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
@@ -356,15 +356,15 @@ describe('runTikTokWorkerJob() — hot_metrics with empty hot set', () => {
       recordFreshness: vi.fn(),
       getAccount: async () => ({ advertiserId: 'ADV1', accessToken: 'TOK', accountCurrency: 'USD' }),
       getFxCadFor: async () => async () => 1.4,
-      aggregateTiktokSpendByStore,
+      aggregateDataDaily,
       nowIso: '2026-05-29T16:00:00.000Z',
       isTikTokConfigured: () => true,
     });
     expect(fetchHotMetrics).not.toHaveBeenCalled();
     // Exactly 1 call (the post-upsert call is skipped because the
     // empty-hot-set branch returns before fetchHotMetrics + upserts).
-    expect(aggregateTiktokSpendByStore).toHaveBeenCalledTimes(1);
-    expect(aggregateTiktokSpendByStore).toHaveBeenCalledWith('2026-05-29');
+    expect(aggregateDataDaily).toHaveBeenCalledTimes(1);
+    expect(aggregateDataDaily).toHaveBeenCalledWith('2026-05-29');
   });
 });
 

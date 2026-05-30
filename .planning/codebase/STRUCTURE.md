@@ -1,356 +1,398 @@
 # Codebase Structure
 
-**Analysis Date:** 2026-05-18
+**Analysis Date:** 2026-05-24
+
+**Post-Phase-11 state.** The Apps Script `.gs` tier has been fully removed — no `*.gs` files, no `appsscript.json`, no `.clasp.json`, no `.clasprc.json`. The repo is now a single-tier Next.js + Inngest + Supabase Postgres codebase. All historical references to `lib/sheets.ts`, `READ_FROM=sheets`, or `clasp push` are gone.
 
 ## Directory Layout
 
 ```text
 script-roas/
-├── *.gs                          # Apps Script collection layer (V8 runtime)
-├── appsscript.json               # Apps Script manifest (timezone, OAuth scopes)
-├── README.md                     # Quick-start
-├── WELCOME.md                    # Onboarding doc
-├── SETUP.md                      # Full setup walk-through
-├── SYSTEM_OVERVIEW.md            # End-to-end system architecture (canonical)
-├── COGS_SETUP.md                 # COGS rate explanation
-├── .planning/                    # GSD command output (plans, reviews, codebase maps)
-│   ├── ROADMAP.md                # Phase tracker
-│   ├── phases/                   # Phase-specific plan + research docs
-│   │   └── 01-channel-level-product-attribution/
-│   │       ├── 01-CONTEXT.md
-│   │       ├── 01-PATTERNS.md
-│   │       ├── 01-PLAN.md
-│   │       ├── 01-PLAN-REVIEW.md
-│   │       └── 01-RESEARCH.md
-│   ├── reviews/                  # Post-execution code reviews
-│   │   ├── REVIEW.md
-│   │   ├── REVIEW-2.md
-│   │   ├── REVIEW-3.md
-│   │   ├── REVIEW-4.md
-│   │   └── REVIEW-5.md
-│   └── codebase/                 # GSD codebase maps (this file lives here)
-└── dashboard-web/                # Next.js 15 dashboard (App Router)
-    ├── package.json
-    ├── tsconfig.json             # Path alias `@/*` → `./src/*`
-    ├── next.config.ts
-    ├── postcss.config.mjs
-    ├── tailwind.config.ts
-    └── src/
-        ├── app/                  # App Router root
-        │   ├── layout.tsx        # RTL <html dir="rtl"> + Heebo font
-        │   ├── page.tsx          # Mounts <Dashboard />
-        │   ├── globals.css
-        │   └── api/              # 8 API routes
-        ├── components/           # 31 React components
-        └── lib/                  # 24 modules (parsers, attribution, sync, utils)
+├── COGS_SETUP.md          # Operator runbook for per-store COGS env vars
+├── README.md              # Top-level project overview
+├── SYSTEM_OVERVIEW.md     # Pipeline architecture summary for operators
+├── WELCOME.md             # First-touch operator onboarding
+├── package.json           # Root package (planning + dev tooling only)
+├── package-lock.json
+├── .env                   # Local-only env file (gitignored)
+├── .gitignore
+├── .claspignore           # Vestigial — Phase 11 left this file but it has no effect now
+├── dashboard-web/         # ── Next.js app (the entire deployable codebase)
+├── supabase/              # ── DB schema + migrations (source of truth for tables)
+├── docs/                  # ── Operator-facing docs (User Manual, Quick Start)
+└── .planning/             # ── GSD planning workspace (out-of-band, not deployed)
 ```
 
-## Directory Purposes
-
-**`/` (project root):**
-- Purpose: Apps Script source files + global project docs
-- Contains: 9 `.gs` files + `appsscript.json` manifest + setup/architecture markdowns
-- Key files: `DailyUpdate.gs`, `SheetBuilder.gs`, `Config.gs`, `SYSTEM_OVERVIEW.md`
-
-**`/dashboard-web/`:**
-- Purpose: Next.js 15.5 dashboard app — separate deployment from Apps Script
-- Contains: React 19 components, App Router pages, Tailwind, googleapis service-account integration
-- Key files: `package.json`, `tsconfig.json`, `src/app/page.tsx`, `src/components/Dashboard.tsx`
-
-**`/dashboard-web/src/app/`:**
-- Purpose: Next.js App Router roots
-- Contains: top-level layout, home page, 8 API route handlers
-- Key files: `layout.tsx` (RTL config), `api/{route}/route.ts`
-
-**`/dashboard-web/src/components/`:**
-- Purpose: All UI React components (`.tsx`)
-- Contains: 31 components — tabs, drawers, charts, modals, controls
-- Key files: `Dashboard.tsx` (root), `CampaignsTable.tsx` (1732 lines — core surface), `CampaignDrawer.tsx` (1440), `BillingSettings.tsx` (1328)
-
-**`/dashboard-web/src/lib/`:**
-- Purpose: All non-React TypeScript modules — data parsers, business logic, sync engine, utilities
-- Contains: 24 modules grouped by concern (data layer, attribution, cloud-sync, formatters)
-- Key files: `sheets.ts` (server-side Sheets I/O), `cloudSync.ts` (write-through engine), `attributionAnalysis.ts` (trust-ladder engine), `analytics.ts` (aggregators)
-
-**`/.planning/`:**
-- Purpose: GSD command output — plans, reviews, codebase analyses
-- Contains: `ROADMAP.md` + `phases/` + `reviews/` + `codebase/`
-- Key files: `ROADMAP.md` (current phase tracker), `phases/01-channel-level-product-attribution/01-PLAN.md`
-
-## Apps Script Files (project root, 9 `.gs` + manifest)
-
-| File | Lines | Purpose |
-|------|------:|---------|
-| `Main.gs` | 132 | UI menu + setup helpers: `setupAll`, `installDailyTrigger`, `installLiveTrigger`, `onOpen` menu hook |
-| `Config.gs` | 305 | Constants (`STORES`, `COGS_RATE_OF_REVENUE=0.25`), `getProp`/`setProp`, `fetchWithRetry_`, `verifyConfig`, `resetSpreadsheetIdToKnownGood`, `printCurrentSpreadsheetId`, tab-name helpers (`campaignTabName_`, `adsTabName_`, `ordersAttributionTabName_`) |
-| `DailyUpdate.gs` | 614 | **Orchestration**: `runDailyUpdate`, `runLiveUpdate`, `runUpdateForDate`, `backfillRange`, `backfillRangeForStores`, `runUpdateForDateForStores_`, `updateStoreForDate_`, `updateCampaignDataForStoreDate_`, `updateAdDataForStoreDate_`, `writeDailyFlatRow_`, `writeProductSalesForDay_`, `notifyError_` (3-tier resolver) |
-| `Shopify.gs` | 992 | Shopify REST + GraphQL clients: `getShopifyRevenue`, `getShopifyProductSalesForDay`, `getShopifyPlan` (GraphQL), `getShopifyProductsCatalog`, `getShopifyOrdersAttribution`, `classifyOrderAttribution_` (per-order source classification), `bootstrapShopifyTokenForStore_` (auto-bootstrap on 401), `safeDecode_` (URI guard) |
-| `MetaAds.gs` | 580 | Meta Marketing API v20.0: `getMetaSpend` (account level), `getMetaAdSetInsights` (adset level), `getMetaAdInsights` (ad level), `getMetaBudgets` (CBO/ABO state) |
-| `GoogleAds.gs` | 281 | Google Ads API v20: `getGoogleAdsSpend`, `getGoogleAdsAdGroupInsights`, OAuth refresh-token flow |
-| `FX.gs` | 38 | `getFxRate(from, to, dateStr)` — Frankfurter API, daily cache in `PropertiesService` |
-| `ManualOverrides.gs` | 379 | Read `manual-spend` tab — operator-written overrides that take precedence over API calls |
-| `SheetBuilder.gs` | 2200+ | **Sheet plumbing**: `ensureSpreadsheet` (with retry + phantom protection), `getLayout_`, `getOrCreateMonthBlock_`, `createMonthBlock_`, `ensureDailyFlatTab_`, `ensureStoreMetaTab_`, `ensureCampaignTabHeaders_`, `ensureAdsTabHeaders_`, `ensureOrdersAttributionTab_`, `writeDayRow`, `writeCampaignRowsForDay`, `writeAdsRowsForDay`, `writeOrdersAttributionForDay`, `refreshAllProductCatalogs`, `catalogNeedsRefresh_`, `refreshAllStoreMeta`, chunked writes |
-| `appsscript.json` | 14 | Manifest: timezone `Asia/Jerusalem`, V8 runtime, OAuth scopes (script.external_request, spreadsheets, drive, script.scriptapp, script.send_mail, userinfo.email), Stackdriver exception logging |
-
-## Dashboard `src/app/api/` (8 routes)
+### dashboard-web/
 
 ```text
-src/app/api/
-├── ads/route.ts                 # GET — 300s s-maxage, graceful empty-on-error
-├── campaigns/route.ts           # GET — 60s s-maxage, force-dynamic
-├── dashboard-state/route.ts     # GET + POST — 10s s-maxage, no force-dynamic
-├── data/route.ts                # GET — 60s s-maxage, also fetches FX (1h cache)
-├── orders-attribution/route.ts  # GET — 300s s-maxage, graceful empty-on-error
-├── product-catalog/route.ts     # GET — 60s s-maxage, 300s SWR
-├── products/route.ts            # GET — 60s s-maxage, force-dynamic
-└── store-meta/route.ts          # GET — 3600s s-maxage, 86400s SWR
+dashboard-web/
+├── README.md
+├── package.json           # The deployable package manifest
+├── tsconfig.json
+├── next.config.ts
+├── postcss.config.mjs
+├── tailwind.config.ts
+├── vitest.config.ts
+├── instrumentation.ts            # Sentry init hook
+├── sentry.client.config.ts
+├── sentry.server.config.ts
+├── sentry.edge.config.ts
+└── src/
+    ├── app/                      # Next.js App Router
+    │   ├── layout.tsx
+    │   ├── page.tsx              # → renders <Dashboard />
+    │   ├── globals.css
+    │   ├── operator/             # /operator sibling route
+    │   │   ├── layout.tsx
+    │   │   └── page.tsx          # ניהול console (7 sections)
+    │   └── api/                  # 19 route.ts files (data + operator + webhook)
+    │       ├── ads/route.ts
+    │       ├── campaigns/route.ts
+    │       ├── dashboard-state/route.ts
+    │       ├── data/route.ts
+    │       ├── debug/shopify-fetch/route.ts
+    │       ├── health/route.ts
+    │       ├── inngest/route.ts          # Inngest serve() webhook
+    │       ├── oauth/tiktok/callback/route.ts
+    │       ├── operator/
+    │       │   ├── backfill/route.ts
+    │       │   ├── jobs/route.ts
+    │       │   ├── manual-overrides/route.ts
+    │       │   ├── notifications/send/route.ts
+    │       │   ├── reset/route.ts
+    │       │   ├── sync-now/route.ts
+    │       │   └── token-failures/route.ts
+    │       ├── orders-attribution/route.ts
+    │       ├── product-catalog/route.ts
+    │       ├── products/route.ts
+    │       └── store-meta/route.ts
+    │
+    ├── inngest/                  # 11 Inngest functions
+    │   ├── client.ts             # Inngest singleton ({id: 'roas-dashboard'})
+    │   └── functions/
+    │       ├── cronDaily.ts      # 3 cron-daily-{store} functions @ 00:05 IL
+    │       ├── cronLive.ts       # 3 cron-live-{store} functions @ */10 IL
+    │       ├── cronWhatsapp.ts   # 3 whatsapp-{noon|evening|eod} + 1 event
+    │       ├── eventBackfill.ts  # event/backfill — operator backfill picker
+    │       ├── eventSyncNow.ts   # event/sync-now — operator sync button
+    │       └── __tests__/        # Vitest specs for each function
+    │
+    ├── components/               # 54 React components (PascalCase.tsx)
+    │   ├── Dashboard.tsx                 # 6-tab shell
+    │   ├── CloudSync.tsx                 # mounts hydrate + 30s poll
+    │   ├── SyncIndicator.tsx             # status pill
+    │   ├── KpiCards.tsx, PerStoreCards.tsx, RoasChart.tsx, ...
+    │   ├── CampaignsTable.tsx, CampaignDrawer.tsx, CampaignsTableRow.tsx
+    │   ├── ProductsTable.tsx, ProductCentricView.tsx, ProductChannelBreakdown.tsx
+    │   ├── BillingSettings.tsx, BillingCsvImport.tsx
+    │   ├── InsightsBoard.tsx, InsightsPanel.tsx, WhatsWorking.tsx
+    │   ├── operator/                     # 7 operator-console components
+    │   │   ├── BackfillPicker.tsx
+    │   │   ├── JobsTable.tsx
+    │   │   ├── ManualOverridesCrud.tsx
+    │   │   ├── ResetData.tsx
+    │   │   ├── SyncNowButtons.tsx
+    │   │   ├── TokenFailuresTable.tsx
+    │   │   └── WhatsappTestButtons.tsx
+    │   └── __tests__/                    # Vitest component specs
+    │
+    └── lib/                              # Domain logic + shared utilities
+        ├── analytics.ts                  # aggregate, aggregateByStore, dailySeries
+        ├── apiErrors.ts                  # userFacingError sanitiser
+        ├── attributionAnalysis.ts        # click-id matching, cohort detection
+        ├── billing.ts                    # recurring + one-time cost model
+        ├── cacheConfig.ts                # Cache-Control config per route
+        ├── campaignHealthScore.ts        # cohort-aware health-score algorithm
+        ├── campaignOptimized.ts          # operator-typed "optimized" flag
+        ├── campaignProductMap.ts         # campaign → product mapping
+        ├── campaigns.ts                  # CampaignRow type
+        ├── campaignsAggregator.ts        # cross-platform aggregation
+        ├── cannibalizationDetection.ts   # multi-mapping cohort overlap
+        ├── chartColors.ts                # Recharts palette
+        ├── cloudSync.ts                  # localStorage ↔ /api/dashboard-state
+        ├── constants.ts
+        ├── costs.ts
+        ├── cpmRoasAnalysis.ts
+        ├── dashboardStateKeys.ts         # ALLOWED_STATE_KEYS (Phase 11 home)
+        ├── dateRange.ts                  # parseRangeParams, isInRange
+        ├── dateValidation.ts             # isDate helper
+        ├── drawerStack.ts                # nested drawer ESC handling
+        ├── drillFilter.ts
+        ├── format.ts                     # number / currency / percent formatters
+        ├── insights.ts                   # insights engine (anomalies, opps)
+        ├── lineItems.ts                  # Shopify line-item helpers
+        ├── multiMappingCohort.ts         # cohort ranking with Bayesian shrinkage
+        ├── operatorReset.ts              # reset payload validator
+        ├── ordersAttribution.ts          # OrderAttributionRow type
+        ├── platformConfig.ts             # TIKTOK_ACTIVE_ENOUGH (writer ↔ reader)
+        ├── platformsByStore.ts           # store → active platforms map
+        ├── postgresReaders.ts            # 8 fetch*FromPostgres + 1 writer
+        ├── presets.ts                    # date-range presets
+        ├── productCatalog.ts             # CatalogProduct type
+        ├── productCentricView.ts         # product-centric pivot logic
+        ├── products.ts                   # ProductRow type
+        ├── rangeClamp.ts                 # clamp ranges to data availability
+        ├── sessionKeys.ts
+        ├── shopifyRevenueRefunds.ts      # canonical refund-correction algorithm
+        ├── sparklineGeometry.ts
+        ├── supabase.ts                   # anon client (read-only SELECT)
+        ├── supabaseAdmin.ts              # service_role client (Inngest writes)
+        ├── types.ts                      # DailyRow, DashboardData, Filters
+        ├── urlState.ts                   # readDashboardState, syncUrl
+        ├── useDashboardRefresh.ts        # global SWR mutate hook
+        ├── utils.ts                      # safeDecode + misc helpers
+        ├── ads.ts, aiReport.ts, annotations.ts
+        ├── campaignsColumnPrefs.ts, campaignsLinks.ts
+        ├── fetchers/                     # 7 external-API HTTP wrappers
+        │   ├── fx.ts                     # Frankfurter currency conversion
+        │   ├── googleAds.ts              # GAQL queries
+        │   ├── manualOverrides.ts        # Supabase manual_overrides merger
+        │   ├── meta.ts                   # Meta Marketing Insights
+        │   ├── shopify.ts                # Admin REST orders + products
+        │   ├── shopifyAuth.ts            # multi-store credential router
+        │   └── tiktok.ts                 # TikTok Business API
+        ├── hooks/                        # React hooks split from large components
+        │   ├── useBillingOneTime.ts
+        │   ├── useBillingRecurring.ts
+        │   ├── useCampaignAttribution.ts
+        │   └── useCampaignTrueRevenue.ts
+        ├── notifications/                # WhatsApp + token-failure plumbing
+        │   ├── sendDailySummary.ts       # Orchestrator for the 3 cron flows
+        │   ├── summary.ts                # buildStoreSummary
+        │   ├── templateParams.ts         # 5-slot template parameter builder
+        │   ├── tokenFailures.ts          # notifyTokenFailure + throttle
+        │   └── whatsapp.ts               # sendWhatsAppTemplate + config loader
+        └── __tests__/                    # 144 Vitest specs (one file per unit)
 ```
 
-## Dashboard `src/components/` (31 components)
+### supabase/
 
-### Tab + drawer tier (>200 lines)
+```text
+supabase/
+├── config.toml                  # Supabase CLI project link
+├── MIGRATION-DISCIPLINE.md      # Additive-only migration rules (Phase 05.5 doc)
+└── migrations/                  # 11 SQL migrations (idempotent, additive)
+    ├── 20260521063112_initial_schema.sql
+    ├── 20260521063301_seed_stores.sql
+    ├── 20260521075741_add_constraints_and_grants.sql
+    ├── 20260521075829_make_seeds_idempotent.sql
+    ├── 20260521192312_add_data_daily_gross_refund_columns.sql
+    ├── 20260522002225_add_data_daily_tiktok_spend.sql
+    ├── 20260522010146_add_data_daily_updated_at.sql
+    ├── 20260522015042_add_updated_at_to_3_dailies.sql
+    ├── 20260522102151_add_tiktok_platform_check.sql
+    ├── 20260522180000_add_campaigns_daily_effective_status.sql
+    └── 20260523080000_add_token_failures.sql
+```
 
-| File | Lines | Role |
-|------|------:|------|
-| `CampaignsTable.tsx` | 1732 | Core surface — Meta + Google rows, sortable, attribution chip + fallback, opens CampaignDrawer |
-| `BillingSettings.tsx` | 1328 | Modal — 3 tabs (recurring / one-time / CSV import) + Shopify-plan auto-detect |
-| `CampaignDrawer.tsx` | 1440 | Drill-down — hero stats, daily chart, AttributionAnalysisPanel, MetaShopifyReconciliation, ad-sets table; z-50 |
-| `ProductsTable.tsx` | 884 | Products tab table |
-| `InsightsBoard.tsx` | 707 | Collapsable insights surface — anomalies / recommendations / forecasts + InsightHero (headline view) |
-| `CommandPalette.tsx` | 626 | Cmd-K navigator |
-| `AdsDrawer.tsx` | 586 | Ad-level drill-down from CampaignDrawer; z-60; per-ad trust chip |
-| `Dashboard.tsx` | 545 | Root component — SWR setup, URL state, tab routing, header (CommandPalette + SyncIndicator) |
-| `HeroOverview.tsx` | 525 | ROAS chart + annotation reference lines (HomeTab hero) |
-| `PnLBreakdown.tsx` | 442 | Hero strip + Waterfall (Revenue → -Ad Spend → -COGS → -Tx Fees → -Fixed → True Net) |
-| `ProductPickerModal.tsx` | 368 | Multi-select modal — campaign↔product mapping; z-[70] |
-| `MonthlyTables.tsx` | 349 | Monthly per-store + combined summary tables |
-| `AnnotationsPanel.tsx` | 347 | Annotation CRUD (8 event types) |
-| `GoalTracker.tsx` | 335 | Monthly revenue goal + projected EoM |
-| `KpiCards.tsx` | 327 | 4-column KPI strip with comparison-to-previous |
-| `TodayLive.tsx` | 298 | Live tile — current day's snapshot (refreshed by 15-min Apps Script trigger) |
-| `WhatsWorking.tsx` | 292 | Top-performers card |
-| `AiReportButton.tsx` | 240 | Prompt assembly + copy-to-clipboard |
+### docs/
 
-### Supporting tier (<200 lines)
+```text
+docs/
+├── ARCHITECTURE.md                  # Operator-facing pipeline doc (Hebrew)
+├── PROPS-MAP.md                     # 43-row env-var classification (Phase 05.5)
+├── ROAS-Dashboard-Quick-Start.md
+└── ROAS-Dashboard-User-Manual.md    # 14k+ lines, single source of truth for UX
+```
 
-| File | Lines | Role |
-|------|------:|------|
-| `RoasChart.tsx` | 178 | Multi-line trend chart per store |
-| `MetricHelp.tsx` | 177 | Glossary tooltips |
-| `Filters.tsx` | 172 | Date range + preset + store selector |
-| `PerStoreCards.tsx` | 144 | 3 per-store summary cards |
-| `SyncIndicator.tsx` | 127 | Cloud sync status pill in header (idle/syncing/ok/error) |
-| `DetailTable.tsx` | 127 | DetailTab raw table |
-| `Sparkline.tsx` | 108 | Inline mini-chart |
-| `RollingNumber.tsx` | 102 | Animated number transition |
-| `CollapsibleSection.tsx` | 96 | Reusable collapse primitive |
-| `InsightsPanel.tsx` | 94 | Lightweight insights subset (legacy) |
-| `TabNav.tsx` | 89 | Top tab strip |
-| `SectionIntro.tsx` | 77 | Section header + description |
-| `CloudSync.tsx` | 34 | Invisible mount that drives `hydrateFromCloud()` lifecycle |
-
-## Dashboard `src/lib/` (24 modules)
-
-### Data layer (parsers + server I/O)
-
-| File | Lines | Role |
-|------|------:|------|
-| `sheets.ts` | 470 | Server-side Sheets I/O — `getAuth`, `fetchDailyData`, `fetchStoreMeta`, `fetchDashboardState`, `upsertDashboardStateKey`, `ALLOWED_STATE_KEYS` + `isAllowedStateKey` |
-| `campaigns.ts` | 182 | Parse `{store}-campaigns` → `CampaignRow[]`; `fetchCampaignsData` batch across 3 stores |
-| `ads.ts` | 150 | Parse `{store}-ads` → `AdRow[]`; `fetchAdsData` batch |
-| `products.ts` | 123 | Parse `products-daily` → `ProductRow[]`; `fetchProductsData` |
-| `productCatalog.ts` | 106 | Parse `{store}-products-catalog` → `CatalogProduct[]`; `fetchProductCatalog` |
-| `ordersAttribution.ts` | 238 | Parse `{store}-orders-attribution` → `OrderAttributionRow[]`; includes `Line Items (JSON)` column parsing |
-
-### Attribution + analytics layer
-
-| File | Lines | Role |
-|------|------:|------|
-| `attributionAnalysis.ts` | 878 | **Core**: `analyzeAttribution`, `analyzeAttributionForAdSet`, `analyzeAttributionForAd` + shared `buildAnalysis`; Bayesian CI, window stability, outlier detection, trust ladder; `orderMatchesCampaign` (utm_id authoritative) |
-| `campaignProductMap.ts` | 157 | Many-to-many mapping + `allocateProductRevenue` (proportional split by spend) |
-| `analytics.ts` | 176 | Aggregators — `aggregate`, `aggregateByStore`, `dailySeries`, `deltaPct`, `forecastMonthEnd`, `filterRows`, `COGS_RATE_OF_REVENUE=0.25` |
-| `insights.ts` | 671 | InsightsBoard engine — anomalies (z-score), recommendations, forecasts; 5 severity levels; insight-states lifecycle (handled/hidden) |
-| `aiReport.ts` | 564 | AI prompt assembly across all data in selected range |
-| `billing.ts` | 561 | Recurring + one-time costs + CSV importer + `billingForRange` proration; CSV classifier heuristic + `findMatchingRecurring` dedup |
-
-### Cloud sync layer
-
-| File | Lines | Role |
-|------|------:|------|
-| `cloudSync.ts` | 413 | `STATE_KEYS` (7), `CHANGE_EVENTS`, `pushCloudKey` (debounced 400ms), `hydrateFromCloud` (30s poll), `postWithRetry`, `SyncState`, `HYDRATE_GRACE_MS=8000` |
-| `annotations.ts` | 113 | Annotation CRUD + scope filtering; 8 event types |
-| `campaignOptimized.ts` | 61 | Optimization marks `Set<storeId::platform::campaignId::adSetId::adId>` + toggle/clear |
-
-### UI helpers + state
-
-| File | Lines | Role |
-|------|------:|------|
-| `drawerStack.ts` | 62 | `useDrawerEsc(open, onClose)` — single shared Esc listener over nested drawer stack |
-| `urlState.ts` | 110 | URL ↔ `{tab, filters}` serialization for refresh/bookmark restore |
-| `presets.ts` | 85 | Date-range presets (`this_month`, `last_7_days`, `last_30_days`, …) + `previousRange` |
-| `campaignsLinks.ts` | 100 | `buildAdsManagerLink` — `act=` / `__c=` / `selected_ad_ids=` deep links |
-| `format.ts` | 164 | Extra formatters (Hebrew labels, compact numbers) |
-| `utils.ts` | 36 | `formatCurrency`, `formatNumber`, `formatDate`, `cn` (clsx + twMerge) |
-| `constants.ts` | 24 | `FROZEN_USD_TO_CAD` fallback rate |
-| `costs.ts` | 112 | `TRANSACTION_FEES_RATE=0.065` + cost-line helpers |
-| `types.ts` | 41 | Shared types: `DailyRow`, `DashboardData`, `DateRange`, `PresetKey`, `Filters` |
-
-## `.planning/` structure
+### .planning/
 
 ```text
 .planning/
-├── ROADMAP.md                                 # Current phase + status tracker
-├── phases/
-│   └── 01-channel-level-product-attribution/  # Per-product channel breakdown work
-│       ├── 01-CONTEXT.md                      # Background + goal
-│       ├── 01-PATTERNS.md                     # Patterns to follow
-│       ├── 01-PLAN.md                         # Atomic task list
-│       ├── 01-PLAN-REVIEW.md                  # Review of plan
-│       └── 01-RESEARCH.md                     # Research notes
-├── reviews/                                   # Post-execution code reviews (5 rounds)
-│   ├── REVIEW.md
-│   ├── REVIEW-2.md
-│   ├── REVIEW-3.md
-│   ├── REVIEW-4.md
-│   └── REVIEW-5.md
-└── codebase/                                  # GSD codebase maps (auto-generated)
-    ├── ARCHITECTURE.md
-    └── STRUCTURE.md
+├── STATE.md                     # GSD progress tracker (auto-managed)
+├── ROADMAP.md                   # Phase index (manually curated)
+├── HANDOFF-2026-05-22.md
+├── config.json
+├── codebase/                    # ← this folder (the 7 mapping docs)
+│   ├── ARCHITECTURE.md
+│   ├── CONCERNS.md
+│   ├── CONVENTIONS.md
+│   ├── INTEGRATIONS.md
+│   ├── STACK.md
+│   ├── STRUCTURE.md
+│   └── TESTING.md
+├── phases/                      # One folder per GSD phase
+├── audit-2026-05-23/            # Algorithmic audit run 1
+├── audit-2026-05-23-v2/         # Algorithmic audit run 2
+├── audit-2026-05-23-v3/         # Algorithmic audit run 3
+├── features/                    # Cross-phase feature notes
+├── notes/                       # Free-form exploration notes
+└── reviews/                     # Cross-AI code review outputs
 ```
 
-**Phase numbering convention** (per `ROADMAP.md`):
-- Integer phases (1, 2, 3): Planned milestone work
-- Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
-- Phase 0 (retroactive): Foundation (Apps Script + Dashboard + 5 rounds of code review)
+## File-Count Snapshot
+
+| Directory | TS/TSX files |
+|-----------|--------------|
+| `dashboard-web/src/` (total) | 235 |
+| `dashboard-web/src/app/` | 23 |
+| `dashboard-web/src/components/` | 54 |
+| `dashboard-web/src/lib/` | 54 (non-test) |
+| `dashboard-web/src/inngest/` | 14 |
+| `dashboard-web/src/lib/__tests__/` | 144 specs |
+| `dashboard-web/src/components/__tests__/` | 1 spec |
+| `dashboard-web/src/inngest/functions/__tests__/` | 8 specs |
+| `supabase/migrations/` | 11 SQL files |
+
+## Directory Purposes
+
+**`dashboard-web/`:**
+- Purpose: The entire deployable Next.js application. Vercel watches this subdirectory.
+- Contains: All app code, configs, Sentry init, Tailwind theme, Vitest config.
+- Key files: `package.json` (deployable manifest), `next.config.ts`, `vitest.config.ts`, `instrumentation.ts`.
+
+**`dashboard-web/src/app/`:**
+- Purpose: Next.js App Router — page routes + API routes only.
+- Contains: 3 page routes (`/`, `/operator`, `layout.tsx`) + 19 API `route.ts` files.
+- Key files: `app/page.tsx` (root), `app/operator/page.tsx` (sibling console), `app/api/inngest/route.ts` (Inngest webhook).
+
+**`dashboard-web/src/inngest/`:**
+- Purpose: All Inngest cron + event function definitions.
+- Contains: `client.ts` (singleton) + 5 function files exporting 11 functions total.
+- Key files: `inngest/functions/cronDaily.ts` (5K+ lines incl. shared handler), `inngest/functions/cronLive.ts`, `inngest/functions/cronWhatsapp.ts`.
+
+**`dashboard-web/src/components/`:**
+- Purpose: React UI components (PascalCase). 54 in the flat root + 7 in `operator/` subdirectory.
+- Contains: Dashboard shell, 6 tab views, drawers, tables, charts, panels.
+- Key files: `Dashboard.tsx` (orchestrator), `CampaignsTable.tsx`/`CampaignDrawer.tsx` (deepest interactive surface), `CloudSync.tsx` (mounts cloud-sync).
+
+**`dashboard-web/src/lib/`:**
+- Purpose: Pure-logic modules and shared utilities. Most files are ≤200 lines.
+- Contains: Domain algorithms (`attributionAnalysis.ts`, `multiMappingCohort.ts`, `shopifyRevenueRefunds.ts`), HTTP fetchers, type definitions, Postgres readers, cloud-sync, formatting.
+- Subdirectories: `fetchers/` (external-API I/O), `hooks/` (React hooks split from big components), `notifications/` (WhatsApp + token-failure), `__tests__/` (Vitest).
+
+**`supabase/`:**
+- Purpose: Database source of truth. CLI project link + additive migrations.
+- Contains: `config.toml`, 11 SQL migrations, `MIGRATION-DISCIPLINE.md` (additive-only tripwire).
+- Generated: No. Hand-edited. Every migration is committed and applied via `supabase db push`.
+- Committed: Yes.
+
+**`docs/`:**
+- Purpose: Operator-facing documentation.
+- Contains: `ROAS-Dashboard-User-Manual.md` (canonical UX doc, Hebrew), `ARCHITECTURE.md` (operator-readable pipeline diagram), `PROPS-MAP.md` (env-var matrix), Quick Start.
+- Note: Per project memory ("Keep docs current — split by audience"), UX changes go to User Manual; architecture changes go to `docs/ARCHITECTURE.md`. The `.planning/codebase/ARCHITECTURE.md` you are reading is a separate internal-only doc for Claude.
+
+**`.planning/`:**
+- Purpose: GSD workspace (Get Stuff Done planning system). Not deployed.
+- Contains: Roadmap, state, phase folders, codebase mapping (this folder), audit run outputs, cross-AI reviews.
 
 ## Key File Locations
 
 **Entry Points:**
-- `Main.gs:9` (`setupAll`): One-time Apps Script setup — creates spreadsheet, builds tabs, installs triggers
-- `DailyUpdate.gs:10` (`runDailyUpdate`): Daily trigger entry — 00:05 IL
-- `DailyUpdate.gs:18` (`runLiveUpdate`): Live trigger entry — every 15 min
-- `dashboard-web/src/app/page.tsx`: Dashboard root route → mounts `<Dashboard />`
-- `dashboard-web/src/components/Dashboard.tsx:67`: Dashboard component root
+- `dashboard-web/src/app/page.tsx`: Dashboard root (renders `<Dashboard />`).
+- `dashboard-web/src/app/operator/page.tsx`: Operator console (`/operator`).
+- `dashboard-web/src/app/api/inngest/route.ts`: Inngest webhook — registers all 11 functions.
 
 **Configuration:**
-- `Config.gs:6-26`: `TZ`, `SUMMARY_TAB`, `DAILY_FLAT_TAB`, `COGS_RATE_OF_REVENUE`, `STORES` array
-- `appsscript.json`: Apps Script manifest (V8, timezone, OAuth scopes)
-- `dashboard-web/package.json`: Dependencies — Next 15.5, React 19, googleapis 144, swr 2.3, recharts 2.15, date-fns 4.1, tailwind 3.4
-- `dashboard-web/tsconfig.json`: Strict TypeScript + `@/*` path alias
-- `dashboard-web/next.config.ts`: Next config
-- `dashboard-web/tailwind.config.ts`: Tailwind config (RTL via `dir="rtl"` in `app/layout.tsx`)
-- Vercel env: `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY`, `SPREADSHEET_ID`
-- Apps Script `PropertiesService.ScriptProperties`: `spreadsheet.id`, `{storeId}.shopify.token`, `{storeId}.meta.account`, `{storeId}.google.customer`, `notification.email`
+- `dashboard-web/package.json`: Deployable manifest (Next 15, React 19, Inngest 4.4, Supabase 2.106, Vitest 2.1).
+- `dashboard-web/next.config.ts`: Sentry wrapping + Vercel build config.
+- `dashboard-web/vitest.config.ts`: Vitest with jsdom for component tests.
+- `dashboard-web/tailwind.config.ts`: RTL-aware design tokens.
+- `supabase/config.toml`: Supabase project link (cloud-hosted).
+- `.env`: Local-only env. **Never read by Claude.** Reference template lives in `docs/PROPS-MAP.md`.
 
 **Core Logic:**
-- `DailyUpdate.gs:74` (`updateStoreForDate_`): Single-store daily sweep — orchestrates all 8 tab writes
-- `SheetBuilder.gs:79` (`ensureSpreadsheet`): Phantom-spreadsheet protection
-- `dashboard-web/src/lib/cloudSync.ts:143` (`pushCloudKey`): Write-through to cloud
-- `dashboard-web/src/lib/sheets.ts:348` (`upsertDashboardStateKey`): Server-side cloud-state writer with dedup
-- `dashboard-web/src/lib/attributionAnalysis.ts`: Trust-ladder engine
+- `dashboard-web/src/inngest/functions/cronDaily.ts`: `runDailyForStore` shared handler.
+- `dashboard-web/src/inngest/functions/cronLive.ts`: `runLiveForStore` 3-day rolling window.
+- `dashboard-web/src/lib/postgresReaders.ts`: All Postgres SELECT helpers + dashboard-state writer.
+- `dashboard-web/src/lib/shopifyRevenueRefunds.ts`: Canonical refund-correction algorithm.
+- `dashboard-web/src/lib/cloudSync.ts`: Browser-side state mirror.
+- `dashboard-web/src/lib/platformConfig.ts`: Writer↔reader symmetric sets.
 
 **Testing:**
-- No automated test directory exists. Manual verification is via dashboard hard-refresh + Apps Script `Logger.log` traces.
+- `dashboard-web/src/lib/__tests__/`: 144 unit-test files.
+- `dashboard-web/src/inngest/functions/__tests__/`: 8 Inngest function tests.
+- `dashboard-web/src/components/__tests__/`: 1 component-level test (most logic is in `lib/`).
 
 ## Naming Conventions
 
 **Files:**
-- Apps Script: PascalCase `.gs` (`DailyUpdate.gs`, `SheetBuilder.gs`)
-- React components: PascalCase `.tsx` (`CampaignsTable.tsx`, `CampaignDrawer.tsx`)
-- TypeScript lib modules: camelCase `.ts` (`cloudSync.ts`, `attributionAnalysis.ts`)
-- API routes: Next convention `route.ts` inside lowercase-kebab dir (`api/orders-attribution/route.ts`)
+- React components: `PascalCase.tsx` (e.g., `CampaignsTable.tsx`, `KpiCards.tsx`).
+- Lib modules: `camelCase.ts` (e.g., `cloudSync.ts`, `multiMappingCohort.ts`, `shopifyRevenueRefunds.ts`).
+- Hooks: `use*.ts` in `lib/hooks/` (e.g., `useCampaignAttribution.ts`).
+- Inngest functions: `camelCase.ts` matching the function group (e.g., `cronDaily.ts`, `eventBackfill.ts`).
+- API routes: always `route.ts` inside a folder named after the URL segment.
+- Tests: `<sourceFile>.test.ts` co-located in `__tests__/` next to the source folder.
 
 **Directories:**
-- Sheet tabs: kebab-case for shared tabs (`data-daily`, `products-daily`, `store-meta`, `dashboard-state`)
-- Sheet tabs: `{storeId}-{kind}` for per-store tabs (`uzoshop-campaigns`, `zolplus-ads`, `usmile360-orders-attribution`)
-- Phase dirs: numeric prefix + kebab-case (`.planning/phases/01-channel-level-product-attribution/`)
+- App router segments: kebab-case (`dashboard-state/`, `orders-attribution/`, `product-catalog/`, `manual-overrides/`).
+- Lib subgroups: camelCase (`fetchers/`, `hooks/`, `notifications/`).
+- Tests: `__tests__/` (one per peer source directory).
 
-**Functions (Apps Script):**
-- Public (callable from menu/trigger): camelCase (`runDailyUpdate`, `setupAll`, `refreshAllProductCatalogs`)
-- Private (internal helpers): trailing underscore (`_`) — `updateStoreForDate_`, `notifyError_`, `safeDecode_`, `classifyOrderAttribution_`, `ensureSpreadsheet`
-
-**Functions (TypeScript):**
-- camelCase exports (`fetchDailyData`, `pushCloudKey`, `analyzeAttribution`, `allocateProductRevenue`)
-- React component exports: PascalCase (`<Dashboard />`, `<CampaignsTable />`)
-- Hooks: `use` prefix (`useDrawerEsc`, `useSWR`)
-
-**Types:**
-- PascalCase: `DailyRow`, `CampaignRow`, `OrderAttributionRow`, `AttributionAnalysis`, `StateKey`
-
-**Constants:**
-- UPPER_SNAKE_CASE for module-level (`STATE_KEYS`, `ALLOWED_STATE_KEYS`, `COGS_RATE_OF_REVENUE`, `HYDRATE_GRACE_MS`, `STORES`, `TZ`)
+**Symbols inside files:**
+- React components: `PascalCase` (matches filename).
+- Functions and hooks: `camelCase` (`fetchDailyDataFromPostgres`, `pushCloudKey`, `useBillingRecurring`).
+- Types: `PascalCase` (`DailyRow`, `CampaignRow`, `MultiMappingCohort`).
+- Constants: `SCREAMING_SNAKE_CASE` (`STATE_KEYS`, `TIKTOK_ACTIVE_ENOUGH`, `ROLLING_WINDOW_DAYS`).
 
 ## Where to Add New Code
 
-**New API route (Dashboard reads a new sheet tab):**
-- Add tab parser: `dashboard-web/src/lib/{newTab}.ts` (export `fetchXxx`, `XxxRow` type)
-- Add route: `dashboard-web/src/app/api/{kebab-name}/route.ts` — copy from `dashboard-web/src/app/api/ads/route.ts` for the soft-fail-on-error pattern
-- Set explicit `revalidate` + `Cache-Control: s-maxage=...` based on update frequency (compare to existing routes)
-- Do **not** add `force-dynamic` if you also set `Cache-Control` (IN-04 anti-pattern)
+**New Inngest cron / event function:**
+- Implementation: `dashboard-web/src/inngest/functions/<groupName>.ts`. If it belongs in an existing group (cron-daily, cron-live, cron-whatsapp), extend that file; otherwise create a new file.
+- Registration: add to the `functions: [...]` array in `dashboard-web/src/app/api/inngest/route.ts:112-121`. Without this, the function is invisible to Inngest cloud.
+- Tests: `dashboard-web/src/inngest/functions/__tests__/<name>.test.ts` using the `StepRunner` stub pattern from `cronDaily.test.ts`.
 
-**New Apps Script collector (new external API):**
-- New file at root: `{Provider}.gs` (PascalCase, no underscore — globals export to all `.gs` files)
-- Helper-style functions use trailing `_` (e.g. `fetchProviderData_`)
-- Call from `updateStoreForDate_` (`DailyUpdate.gs:74`) wrapped in try/catch
-- Use `fetchWithRetry_` from `Config.gs` for HTTPS
+**New API route:**
+- Implementation: `dashboard-web/src/app/api/<segment>/route.ts`. Export `GET` / `POST` / `PUT` / `DELETE` handlers.
+- For data reads: import from `lib/postgresReaders.ts`. Use `parseRangeParams` for `?from=&to=` validation. Use the `status 200 + rows: [] + error: "..."` degraded path.
+- For operator writes: validate payload against runtime allowlists (NOT TypeScript only). Fire `inngest.send(...)` for async work; return 202.
+- Cache control: import from `lib/cacheConfig.ts` (`cacheControl('keyName')`).
 
-**New sheet tab type:**
-- Add tab-name helper to `Config.gs` (e.g. `myNewTabName_(storeId)`)
-- Add `ensureMyNewTab_(ss)` + headers in `SheetBuilder.gs` (idempotent: check existence then ensure headers)
-- Add `writeMyNewTabForDay(ss, storeId, dateStr, rows)` — filter rows for date first, then append (idempotent invariant)
-- Wire into `updateStoreForDate_` in `DailyUpdate.gs` between try/catch
-- Dashboard side: parser in `dashboard-web/src/lib/`, route in `dashboard-web/src/app/api/`
+**New React component:**
+- Implementation: `dashboard-web/src/components/<PascalCaseName>.tsx`.
+- For operator-only components: place in `components/operator/`.
+- Use existing design tokens from `tailwind.config.ts` — no inline hex colors. RTL is the default direction (`dir="rtl"` on the root). All operator-facing text in Hebrew.
+- Hook out heavy state to `lib/hooks/use<Name>.ts` if the component exceeds ~500 lines.
 
-**New component:**
-- Place in `dashboard-web/src/components/{NewName}.tsx`
-- Import via `@/components/NewName` (path alias)
-- Add `'use client';` directive if it uses state/hooks
-- Tab-level components compose into `dashboard-web/src/components/Dashboard.tsx`
-- Drawer-level components register `useDrawerEsc(open, onClose)` from `@/lib/drawerStack`
+**New Postgres reader:**
+- Implementation: add to `dashboard-web/src/lib/postgresReaders.ts` following the existing pattern (anon client for SELECT, service_role only for writes).
+- Return shape: ALWAYS return the same shape as any existing UI consumer expects. Drift will silently regress the UI.
 
-**New cloud-sync key:**
-- Append to `STATE_KEYS` (`dashboard-web/src/lib/cloudSync.ts:47`)
-- Append to `ALLOWED_STATE_KEYS` (`dashboard-web/src/lib/sheets.ts:231`) — **must** stay in sync
-- Append to `CHANGE_EVENTS` (`dashboard-web/src/lib/cloudSync.ts:58`) with a unique event name
-- Add read/write helpers in a dedicated module (e.g. `dashboard-web/src/lib/myFeature.ts`)
-- Read path: `localStorage.getItem` + `JSON.parse`
-- Write path: `localStorage.setItem` + `window.dispatchEvent(new Event(CHANGE_EVENTS[key]))` + `pushCloudKey(key, value)`
+**New external-API fetcher:**
+- Implementation: `dashboard-web/src/lib/fetchers/<provider>.ts`. Pure HTTP wrapper that throws on non-200.
+- Caller pattern: only Inngest functions should call fetchers directly. UI/API routes read from Postgres via `postgresReaders.ts`.
+- Token failures: wrap calls in try/catch and call `notifyTokenFailure(...)` from `lib/notifications/tokenFailures.ts`.
 
-**Utilities:**
-- Pure formatters/helpers → `dashboard-web/src/lib/utils.ts` or `dashboard-web/src/lib/format.ts`
-- Type-only exports → `dashboard-web/src/lib/types.ts`
+**New DB column or table:**
+- Migration: create `supabase/migrations/YYYYMMDDhhmmss_<description>.sql` following the additive-only convention (see `supabase/MIGRATION-DISCIPLINE.md`).
+- Apply: `supabase db push` against the linked cloud project.
+- Reader update: extend the relevant function in `lib/postgresReaders.ts`. Bump the `select(...)` projection; cast row shape.
+- Writer update: extend the relevant `runDailyForStore` / `runLiveForStore` step.
 
-**New phase plan:**
-- `.planning/phases/{NN-kebab-name}/` directory
-- Files: `NN-CONTEXT.md`, `NN-RESEARCH.md`, `NN-PLAN.md`, `NN-PLAN-REVIEW.md`, `NN-PATTERNS.md` (driven by GSD commands)
-- Update `.planning/ROADMAP.md` checkbox state
+**Utilities (shared helpers):**
+- Pure functions used in >1 place: `dashboard-web/src/lib/utils.ts` or a new `lib/<name>.ts` if domain-specific.
+- React hooks: `dashboard-web/src/lib/hooks/`.
+- Type-only modules: still goes under `lib/` (`lib/types.ts` is the catch-all).
 
 ## Special Directories
 
-**`/dashboard-web/node_modules/`:**
-- Purpose: npm install output
-- Generated: Yes
-- Committed: No (gitignored)
+**`dashboard-web/src/components/__tests__/`:**
+- Purpose: Component-level test specs (rare; most logic lives in `lib/`).
+- Generated: No.
+- Committed: Yes.
+- Current count: 1 spec.
 
-**`/dashboard-web/.next/`:**
-- Purpose: Next.js build output (cached incrementally via `tsconfig.tsbuildinfo`)
-- Generated: Yes (on `npm run build` / `npm run dev`)
-- Committed: No (gitignored)
+**`dashboard-web/src/lib/__tests__/`:**
+- Purpose: Vitest specs for every pure-logic module. The bulk of the suite (144 specs).
+- Generated: No.
+- Committed: Yes.
 
-**`/.vercel/`:**
-- Purpose: Vercel CLI link to project
-- Generated: Yes
-- Committed: No
+**`.planning/audit-2026-05-23*/`:**
+- Purpose: Cross-AI audit outputs (codex + opus reviewing each other's plans).
+- Generated: By GSD audit phases.
+- Committed: Yes (decision records).
 
-**`/.planning/`:**
-- Purpose: GSD command output — plans, reviews, codebase maps
-- Generated: Yes (by GSD commands)
-- Committed: Yes (long-lived project record)
+**`.planning/phases/`:**
+- Purpose: One subfolder per phase with PLAN.md / RESEARCH.md / SUMMARY.md / CHECK.md as needed.
+- Generated: By GSD commands (`/gsd-plan-phase`, `/gsd-execute-phase`).
+- Committed: Yes.
 
-**`/.git/`:**
-- Purpose: Git internals
-- Committed: No (managed by git)
+**`node_modules/` (top-level + `dashboard-web/`):**
+- Purpose: Dependencies installed by npm.
+- Generated: Yes.
+- Committed: No (gitignored).
 
 ---
 
-*Structure analysis: 2026-05-18*
+*Structure analysis: 2026-05-24*

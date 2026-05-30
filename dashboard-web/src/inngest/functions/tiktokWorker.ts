@@ -210,27 +210,23 @@ export type RunTikTokWorkerJobInput = {
     advice?: string;
   }) => Promise<void>;
   /**
-   * Phase E1.6.1 (2026-05-30) — per-store TikTok spend split.
+   * Phase E1.7 (2026-05-30 night) — unified agg RPC.
    *
-   * Calls `agg_tiktok_spend_per_store_for_date(d)` RPC to re-aggregate
-   * `campaigns_daily.spend_cad + impressions` per (date, store_id) and
-   * write the result into `data_daily.tt_spend_cad + tt_impressions`.
-   * Re-computes `total_spend_cad`, `roas`, `gross_profit_cad`,
-   * `net_profit_cad` for the same date as a side-effect (Pass 2 of the
-   * RPC). Idempotent.
+   * Calls `agg_data_daily_for_date(d)` RPC to re-aggregate
+   * `campaigns_daily.spend_cad + impressions` per (date, store_id,
+   * platform) and write into `data_daily.{fb,ga,tt}_spend_cad +
+   * {fb,ga,tt}_impressions`, then re-derive `total_spend_cad + roas +
+   * gross_profit_cad + net_profit_cad`. Idempotent.
    *
-   * Replaces the Phase E1.6 cross-store account-aggregate write that
-   * was incorrectly writing the FULL advertiser total to uzoshop's
-   * data_daily slot (and zero to usmile360 + zolplus). Pre-Phase-E1,
-   * this RPC ran every 30 min from cron-live-heavy via persistCampaignsLive.
-   * cron-live-heavy was decommissioned in Phase E1, so the RPC only
-   * ran nightly from cronDaily — the user's 2026-05-30 report of stale
-   * tt_spend_cad for tenant stores.
+   * Replaces Phase E1.6.1's `aggregateTiktokSpendByStore` (which called
+   * `agg_tiktok_spend_per_store_for_date` — TikTok-only). The unified
+   * RPC handles Meta + Google + TikTok in one pass and is used by all
+   * 3 workers + cron-live.
    *
-   * Optional for backwards-compat with the test fixtures that predate
-   * this hook; production binding always provides it.
+   * Optional for backwards-compat with test fixtures; production
+   * binding always provides it.
    */
-  aggregateTiktokSpendByStore?: (date: string) => Promise<void>;
+  aggregateDataDaily?: (date: string) => Promise<void>;
 };
 
 function checkTikTokConfigured(
@@ -552,12 +548,12 @@ async function runTikTokHotMetricsBranch(input: RunTikTokWorkerJobInput): Promis
     // the hot-set fetch below to run. Operator sees the failure via
     // the recHotPair('transient_error') path below if the worker
     // throws for other reasons.
-    if (input.aggregateTiktokSpendByStore) {
+    if (input.aggregateDataDaily) {
       try {
-        await input.aggregateTiktokSpendByStore(today);
+        await input.aggregateDataDaily(today);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        console.warn(`tiktokWorker aggregateTiktokSpendByStore ${today}: ${message}`);
+        console.warn(`tiktokWorker aggregateDataDaily ${today}: ${message}`);
       }
     }
 
@@ -607,12 +603,12 @@ async function runTikTokHotMetricsBranch(input: RunTikTokWorkerJobInput): Promis
     // 5. Re-aggregate AFTER fresh writes so data_daily.tt_spend_cad
     //    reflects the new campaigns_daily values (otherwise the RPC
     //    call at step 1 saw pre-write state). Soft-fail same as step 1.
-    if (input.aggregateTiktokSpendByStore) {
+    if (input.aggregateDataDaily) {
       try {
-        await input.aggregateTiktokSpendByStore(today);
+        await input.aggregateDataDaily(today);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        console.warn(`tiktokWorker aggregateTiktokSpendByStore (post-upsert) ${today}: ${message}`);
+        console.warn(`tiktokWorker aggregateDataDaily (post-upsert) ${today}: ${message}`);
       }
     }
 
@@ -770,10 +766,15 @@ export const tiktokWorker = inngest.createFunction(
         // advertiser total to uzoshop's data_daily slot). See the
         // commentary on `aggregateTiktokSpendByStore` in the
         // RunTikTokWorkerJobInput type for rationale.
-        aggregateTiktokSpendByStore: async (date: string) => {
-          const { error } = await sb.rpc('agg_tiktok_spend_per_store_for_date', { d: date });
+        // Phase E1.7 (2026-05-30 night) — unified agg RPC replaces the
+        // TikTok-only `agg_tiktok_spend_per_store_for_date`. Same Pass 1
+        // (zero) + Pass 2 (aggregate from campaigns_daily) + Pass 3
+        // (derive total/roas/gross/net) but now for all 3 platforms in
+        // one call.
+        aggregateDataDaily: async (date: string) => {
+          const { error } = await sb.rpc('agg_data_daily_for_date', { d: date });
           if (error) {
-            throw new Error(`agg_tiktok_spend_per_store_for_date(${date}): ${error.message}`);
+            throw new Error(`agg_data_daily_for_date(${date}) for tiktok: ${error.message}`);
           }
         },
         nowIso,
