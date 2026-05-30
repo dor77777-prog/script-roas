@@ -626,8 +626,11 @@ function ProductRow({
                     const isActive =
                       // Phase D (2026-05-30) — prefer registry-backed
                       // delivery_status (always-fresh ≤10 min); fall back
-                      // to legacy effectiveStatus when null.
-                      (m.regDeliveryStatus
+                      // to legacy effectiveStatus when null OR when registry
+                      // returned 'UNKNOWN' (mirrors classifyCampaignStatus's
+                      // rung-2 fall-through so this site agrees with the
+                      // Task 10 chip on the same input).
+                      (m.regDeliveryStatus && m.regDeliveryStatus !== 'UNKNOWN'
                         ? m.regDeliveryStatus === 'DELIVERING'
                         : m.effectiveStatus === 'ACTIVE' ||
                           m.effectiveStatus === 'ENABLED' ||
