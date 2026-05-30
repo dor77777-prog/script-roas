@@ -434,64 +434,25 @@ async function runMetaHotMetricsBranch(input: RunMetaWorkerJobInput): Promise<vo
       (getHotAdIds ?? (async () => []))(storeId),
     ]);
 
-    if (hotCampaign.length + hotAdset.length + hotAd.length === 0) {
-      // Nothing hot to refresh today → freshness=success (worker ran cleanly).
-      await recHotPair('success');
-      return;
-    }
-
-    // Wiring guard — Inngest binding must supply fetchHotMetrics for prod.
-    if (!fetchHotMetrics) {
-      await recHotPair('transient_error', 'fetchHotMetrics not wired');
-      return;
-    }
-
-    // 3. Resolve credentials + fetch — single batched insights call.
+    // 2.5 Resolve credentials early. Both the Phase E1.6 account-aggregate
+    // write (below) AND the hot-set fetch (further down) need them. Moved
+    // above the empty-hot-set gate by the 2026-05-30 regression fix so
+    // account-aggregate spend runs every tick regardless of hot-set state.
     const creds = await safeCredentials(storeId, getCredentials);
-    const today = nowIso.slice(0, 10);
-    const metrics = await fetchHotMetrics({
-      storeId,
-      adAccountId: creds.adAccountId,
-      accessToken: creds.accessToken,
-      hotCampaignIds: hotCampaign,
-      hotAdsetIds: hotAdset,
-      hotAdIds: hotAd,
-      dateStr: today,
-      getFxCadFor: creds.getFxCadFor,
-    });
 
-    // 4. Upsert campaigns_daily (adsets only) and ads_daily, stamping
-    //    source='live_tick' + last_live_tick_at on every row.
-    //    CRIT-B: hot-metrics fetcher returns only adset + ad rows; the
-    //    campaign-level aggregate is computed at read time by the existing
-    //    aggregators (Today / Today-Live). campaigns_daily.ad_set_id is
-    //    NOT NULL so we cannot insert a campaign-only row.
-    if (upsertCampaignsDaily && metrics.adsets.length > 0) {
-      const all: Array<Record<string, unknown>> = metrics.adsets.map((a) => ({
-        ...a,
-        source: 'live_tick',
-        last_live_tick_at: nowIso,
-      }));
-      await upsertCampaignsDaily(all);
-    }
-    if (upsertAdsDaily && metrics.ads.length > 0) {
-      await upsertAdsDaily(
-        metrics.ads.map((a) => ({ ...a, source: 'live_tick', last_live_tick_at: nowIso })),
-      );
-    }
-
-    // Phase E1.6 (2026-05-30) — account-aggregate spend → data_daily.
-    // Bulk-fetches Meta account-level spend + impressions for the
-    // rolling 3-day window in one Graph API call, CAD-converts (FX
-    // failure → null → preserves prior column), and writes to
-    // data_daily via partial-column UPSERT. Workers own fb_spend_cad
-    // + fb_impressions; cron-live owns Shopify revenue + derived
-    // (E1.6 race-mitigation: payload-key-only SET clause merges
-    // per-column).
+    // 3. Phase E1.6 (2026-05-30) — account-aggregate spend → data_daily.
+    // RUNS UNCONDITIONALLY (independent of hot-set state). Pre-fix
+    // (2026-05-30 18:30 IL): this block lived AFTER the empty-hot-set
+    // early-exit at line ~441, so any store with no campaigns flagged
+    // "hot" at tick time froze data_daily.fb_spend_cad + fb_impressions
+    // until campaigns went hot again. Restored to "every tick" parity
+    // with the pre-E1.6 cron-live behavior.
     //
-    // Soft-fail: a fetch error here does NOT throw — hot-ids upsert
-    // already succeeded above, and re-throwing would mark the whole
-    // hot_metrics branch as transient_error. Next tick (10 min) retries.
+    // Soft-fail: a fetch error here does NOT throw — we still want the
+    // hot-set metrics path below to run if hot ids exist. Next tick
+    // (10 min) retries. Auth/rate errors here surface via the outer
+    // catch's notifyTokenFailure path ONLY when they bubble out of the
+    // hot-set fetch — for account-aggregate alone we log + continue.
     if (input.fetchAccountSpend && input.cadConvert && input.upsertDataDailySpend) {
       try {
         const todayDate = nowIso.slice(0, 10);
@@ -521,7 +482,54 @@ async function runMetaHotMetricsBranch(input: RunMetaWorkerJobInput): Promise<vo
       }
     }
 
-    // 5. Mark freshness success for both campaign_metrics + ad_metrics.
+    // 4. Empty hot set short-circuit. The Phase E1.6 account-aggregate
+    // write above already ran — for empty hot set the only remaining task
+    // is to mark freshness success and return.
+    if (hotCampaign.length + hotAdset.length + hotAd.length === 0) {
+      await recHotPair('success');
+      return;
+    }
+
+    // Wiring guard — Inngest binding must supply fetchHotMetrics for prod.
+    if (!fetchHotMetrics) {
+      await recHotPair('transient_error', 'fetchHotMetrics not wired');
+      return;
+    }
+
+    // 5. Hot-set fetch — single batched insights call for hot ids only.
+    const today = nowIso.slice(0, 10);
+    const metrics = await fetchHotMetrics({
+      storeId,
+      adAccountId: creds.adAccountId,
+      accessToken: creds.accessToken,
+      hotCampaignIds: hotCampaign,
+      hotAdsetIds: hotAdset,
+      hotAdIds: hotAd,
+      dateStr: today,
+      getFxCadFor: creds.getFxCadFor,
+    });
+
+    // 6. Upsert campaigns_daily (adsets only) and ads_daily, stamping
+    //    source='live_tick' + last_live_tick_at on every row.
+    //    CRIT-B: hot-metrics fetcher returns only adset + ad rows; the
+    //    campaign-level aggregate is computed at read time by the existing
+    //    aggregators (Today / Today-Live). campaigns_daily.ad_set_id is
+    //    NOT NULL so we cannot insert a campaign-only row.
+    if (upsertCampaignsDaily && metrics.adsets.length > 0) {
+      const all: Array<Record<string, unknown>> = metrics.adsets.map((a) => ({
+        ...a,
+        source: 'live_tick',
+        last_live_tick_at: nowIso,
+      }));
+      await upsertCampaignsDaily(all);
+    }
+    if (upsertAdsDaily && metrics.ads.length > 0) {
+      await upsertAdsDaily(
+        metrics.ads.map((a) => ({ ...a, source: 'live_tick', last_live_tick_at: nowIso })),
+      );
+    }
+
+    // 7. Mark freshness success for both campaign_metrics + ad_metrics.
     await recHotPair('success');
   } catch (err) {
     // Phase E1 (2026-05-30) — surface auth/rate errors to the operator

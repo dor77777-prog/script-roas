@@ -499,65 +499,35 @@ async function runTikTokHotMetricsBranch(input: RunTikTokWorkerJobInput): Promis
       nowIso,
     } = input;
 
-    // 1. Load hot ids in parallel.
-    const [hotCampaign, hotAdgroup, hotAd] = await Promise.all([
+    // 1. Load hot ids in parallel with account + FX (account-aggregate
+    // below needs the account regardless of hot-set state; loadStoreMap
+    // is only needed for the hot-set fetch path so it stays here too —
+    // cheap enough to fetch every tick and keeps the parallel block
+    // tight).
+    const [hotCampaign, hotAdgroup, hotAd, campaignStoreMap, account, fxCadFor] = await Promise.all([
       getHotCampaignIds(storeId),
       getHotAdgroupIds(storeId),
       getHotAdIds(storeId),
-    ]);
-
-    // 2. Empty hot set is a NORMAL state (e.g. all campaigns paused) — we
-    //    still mark freshness success because the worker did its job;
-    //    there was simply nothing hot to refresh.
-    if (hotCampaign.length + hotAdgroup.length + hotAd.length === 0) {
-      await recHotPair('success');
-      return;
-    }
-
-    // 3. Load campaign-store-map + resolve account + FX adapter.
-    const [campaignStoreMap, account, fxCadFor] = await Promise.all([
       loadStoreMap(),
       safeAccount(storeId, getAccount),
       safeFxCadFor(storeId, getFxCadFor),
     ]);
-    const today = nowIso.slice(0, 10);
-    const metrics = await fetchHotMetrics({
-      storeId,
-      advertiserId: account.advertiserId,
-      accessToken: account.accessToken,
-      accountCurrency: account.accountCurrency,
-      hotCampaignIds: hotCampaign,
-      hotAdgroupIds: hotAdgroup,
-      hotAdIds: hotAd,
-      dateStr: today,
-      campaignStoreMap,
-      getFxCadFor: fxCadFor,
-    });
 
-    // 4. Upsert campaigns_daily (adsets only) and ads_daily, stamping
-    //    source='live_tick' + last_live_tick_at on every row.
-    //    CRIT-B: hot-metrics fetcher returns only adset + ad rows; the
-    //    campaign-level aggregate is computed at read time by the existing
-    //    aggregators (Today / Today-Live). campaigns_daily.ad_set_id is
-    //    NOT NULL so we cannot insert a campaign-only row.
-    if (metrics.adsets.length > 0) {
-      const all: Array<Record<string, unknown>> = metrics.adsets.map((a) => ({
-        ...a,
-        source: 'live_tick',
-        last_live_tick_at: nowIso,
-      }));
-      await upsertCampaignsDaily(all);
-    }
-    if (metrics.ads.length > 0) {
-      await upsertAdsDaily(
-        metrics.ads.map((a) => ({ ...a, source: 'live_tick', last_live_tick_at: nowIso })),
-      );
-    }
-
-    // Phase E1.6 (2026-05-30) — TikTok account-aggregate spend →
-    // data_daily. Same shape as meta/google E1.6 steps. TikTok ad
-    // accounts are USD-billed (per project memory
-    // ad-account-currencies); cadConvert handles USD → CAD.
+    // 2. Phase E1.6 (2026-05-30) — TikTok account-aggregate spend →
+    // data_daily. RUNS UNCONDITIONALLY (independent of hot-set state).
+    // Pre-fix: this block lived AFTER the empty-hot-set early-exit so
+    // uzoshop's TikTok tt_spend_cad + tt_impressions froze whenever no
+    // campaigns were hot. Restored to pre-E1.6 cron-live parity
+    // (every-tick write). TikTok ad accounts are USD-billed; cadConvert
+    // handles USD → CAD.
+    //
+    // Soft-fail: a fetch error here does NOT throw — we still want to
+    // run hot-set metrics below if hot ids exist. Next tick (10 min)
+    // retries. Note: this fix only restores updates for uzoshop's
+    // TikTok column. usmile360 + zolplus tt_spend_cad continues to be
+    // owned by the `agg_tiktok_spend_per_store_for_date` RPC because
+    // they share uzoshop's TikTok ad account via per-ad pixel routing
+    // (Phase A.5 v2 architecture).
     if (input.fetchAccountSpend && input.cadConvert && input.upsertDataDailySpend) {
       try {
         const todayDate = nowIso.slice(0, 10);
@@ -588,7 +558,51 @@ async function runTikTokHotMetricsBranch(input: RunTikTokWorkerJobInput): Promis
       }
     }
 
-    // 5. Mark freshness success for both campaign_metrics + ad_metrics.
+    // 3. Empty hot set is a NORMAL state (e.g. all campaigns paused) — we
+    //    still mark freshness success because the worker did its job;
+    //    there was simply nothing hot to refresh. Account-aggregate
+    //    above already ran.
+    if (hotCampaign.length + hotAdgroup.length + hotAd.length === 0) {
+      await recHotPair('success');
+      return;
+    }
+
+    // 4. Fetch hot-set metrics for today only.
+    const today = nowIso.slice(0, 10);
+    const metrics = await fetchHotMetrics({
+      storeId,
+      advertiserId: account.advertiserId,
+      accessToken: account.accessToken,
+      accountCurrency: account.accountCurrency,
+      hotCampaignIds: hotCampaign,
+      hotAdgroupIds: hotAdgroup,
+      hotAdIds: hotAd,
+      dateStr: today,
+      campaignStoreMap,
+      getFxCadFor: fxCadFor,
+    });
+
+    // 5. Upsert campaigns_daily (adsets only) and ads_daily, stamping
+    //    source='live_tick' + last_live_tick_at on every row.
+    //    CRIT-B: hot-metrics fetcher returns only adset + ad rows; the
+    //    campaign-level aggregate is computed at read time by the existing
+    //    aggregators (Today / Today-Live). campaigns_daily.ad_set_id is
+    //    NOT NULL so we cannot insert a campaign-only row.
+    if (metrics.adsets.length > 0) {
+      const all: Array<Record<string, unknown>> = metrics.adsets.map((a) => ({
+        ...a,
+        source: 'live_tick',
+        last_live_tick_at: nowIso,
+      }));
+      await upsertCampaignsDaily(all);
+    }
+    if (metrics.ads.length > 0) {
+      await upsertAdsDaily(
+        metrics.ads.map((a) => ({ ...a, source: 'live_tick', last_live_tick_at: nowIso })),
+      );
+    }
+
+    // 6. Mark freshness success for both campaign_metrics + ad_metrics.
     await recHotPair('success');
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

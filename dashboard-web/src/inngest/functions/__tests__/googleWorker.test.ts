@@ -252,6 +252,47 @@ describe('runGoogleWorkerJob() — hot_metrics with empty hot set', () => {
     expect(upsertCampaignsDaily).not.toHaveBeenCalled();
     expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({ scope: 'campaign_metrics', status: 'success' }));
   });
+
+  it('Phase E1.6 regression fix (2026-05-30): empty hot set STILL writes account-aggregate to data_daily', async () => {
+    // Same regression as metaWorker — empty-hot-set early-exit pre-empted
+    // the Phase E1.6 account-spend write, freezing data_daily.ga_spend_cad
+    // + ga_impressions whenever uzoshop had no Google campaigns hot.
+    const fetchAccountSpend = vi.fn().mockResolvedValue([
+      { date: '2026-05-27', spend: 100, currency: 'CAD', impressions: 1000 },
+      { date: '2026-05-28', spend: 200, currency: 'CAD', impressions: 2000 },
+      { date: '2026-05-29', spend:  50, currency: 'CAD', impressions:  500 },
+    ]);
+    const cadConvert = vi.fn().mockImplementation(async (n: number) => n);
+    const upsertDataDailySpend = vi.fn().mockResolvedValue(undefined);
+    const fetchHotMetrics = vi.fn();
+    await runGoogleWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
+      fetchStatus: vi.fn(),
+      fetchHotMetrics,
+      getHotCampaignIds: async () => [],
+      getHotAdgroupIds: async () => [],
+      getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(),
+      insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(),
+      upsertAdsDaily: vi.fn(),
+      getCustomer: async () => ({ searchStream: async () => [] }),
+      recordFreshness: vi.fn(),
+      fetchAccountSpend,
+      cadConvert,
+      upsertDataDailySpend,
+      nowIso: '2026-05-29T16:00:00.000Z',
+      isGoogleConfigured: () => true,
+    });
+    expect(fetchHotMetrics).not.toHaveBeenCalled();
+    expect(fetchAccountSpend).toHaveBeenCalledOnce();
+    expect(upsertDataDailySpend).toHaveBeenCalledTimes(3);
+    const written = upsertDataDailySpend.mock.calls.map(c => c[0]);
+    expect(written.find(w => w.date === '2026-05-29')).toMatchObject({
+      platform: 'google', storeId: 'uzoshop', spendCad: 50, impressions: 500,
+    });
+  });
 });
 
 describe('runGoogleWorkerJob() — not configured (no per-store Google creds)', () => {

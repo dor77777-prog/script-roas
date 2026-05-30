@@ -234,6 +234,51 @@ describe('runMetaWorkerJob() — hot_metrics scope', () => {
     expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({ scope: 'campaign_metrics', status: 'success' }));
   });
 
+  it('Phase E1.6 regression fix (2026-05-30): empty hot set STILL writes account-aggregate to data_daily — hot-set early-exit must NOT pre-empt the account-spend write', async () => {
+    // Pre-fix bug: the empty-hot-set early-exit in runMetaHotMetricsBranch
+    // returned BEFORE the Phase E1.6 account-spend block was reached, so
+    // any store with no campaigns flagged "hot" at tick time froze
+    // data_daily.fb_spend_cad + fb_impressions in production. cron-live's
+    // priorSpendByDate then re-read the stale values on each subsequent
+    // tick and the dashboard's per-account spend / Live CPM never moved.
+    const fetchAccountSpend = vi.fn().mockResolvedValue([
+      { date: '2026-05-27', spend: 100, currency: 'ILS', impressions: 5000 },
+      { date: '2026-05-28', spend: 200, currency: 'ILS', impressions: 8000 },
+      { date: '2026-05-29', spend:  50, currency: 'ILS', impressions: 2500 },
+    ]);
+    const cadConvert = vi.fn().mockImplementation(async (n: number) => n * 0.5);
+    const upsertDataDailySpend = vi.fn().mockResolvedValue(undefined);
+    const fetchHotMetrics = vi.fn();
+    await runMetaWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 12 },
+      bucProbe: async () => ({ pct: 12, etaMinutes: 0 }),
+      fetchStatus: vi.fn(),
+      fetchHotMetrics,
+      getHotCampaignIds: async () => [],
+      getHotAdsetIds: async () => [],
+      getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(),
+      insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(),
+      upsertAdsDaily: vi.fn(),
+      getCredentials: async () => ({ adAccountId: 'act_1', accessToken: 'tok', getFxCadFor: async () => async () => 0.5 } as never),
+      recordFreshness: vi.fn(),
+      upsertBuc: vi.fn(),
+      fetchAccountSpend,
+      cadConvert,
+      upsertDataDailySpend,
+      nowIso: '2026-05-29T16:00:00.000Z',
+    });
+    expect(fetchHotMetrics).not.toHaveBeenCalled();
+    expect(fetchAccountSpend).toHaveBeenCalledOnce();
+    expect(upsertDataDailySpend).toHaveBeenCalledTimes(3);
+    const written = upsertDataDailySpend.mock.calls.map(c => c[0]);
+    expect(written.find(w => w.date === '2026-05-29')).toMatchObject({
+      platform: 'meta', storeId: 'uzoshop', spendCad: 25, impressions: 2500,
+    });
+  });
+
   it('Phase E1: hot_metrics fetch rejects with 429 → recHotPair transient_error + notifyTokenFailure(meta_hot_metrics_rate_limit)', async () => {
     const notifyTokenFailure = vi.fn().mockResolvedValue(undefined);
     const recordFreshness = vi.fn().mockResolvedValue(undefined);

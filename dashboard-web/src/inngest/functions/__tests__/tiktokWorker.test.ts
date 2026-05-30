@@ -335,6 +335,50 @@ describe('runTikTokWorkerJob() — hot_metrics with empty hot set', () => {
     expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({ scope: 'campaign_metrics', status: 'success' }));
     expect(recordFreshness).toHaveBeenCalledWith(expect.objectContaining({ scope: 'ad_metrics', status: 'success' }));
   });
+
+  it('Phase E1.6 regression fix (2026-05-30): empty hot set STILL writes account-aggregate to data_daily', async () => {
+    // Same regression as meta/google — empty-hot-set early-exit pre-empted
+    // the Phase E1.6 account-spend write, freezing data_daily.tt_spend_cad
+    // + tt_impressions for uzoshop's TikTok account whenever no campaigns
+    // were hot.
+    const fetchAccountSpend = vi.fn().mockResolvedValue([
+      { date: '2026-05-27', spend:  50, currency: 'USD', impressions:  500 },
+      { date: '2026-05-28', spend: 100, currency: 'USD', impressions: 1000 },
+      { date: '2026-05-29', spend:  25, currency: 'USD', impressions:  250 },
+    ]);
+    const cadConvert = vi.fn().mockImplementation(async (n: number) => n * 1.4);
+    const upsertDataDailySpend = vi.fn().mockResolvedValue(undefined);
+    const fetchHotMetrics = vi.fn();
+    await runTikTokWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'hot_metrics', tick_id: 'T', staleness_seconds: 300, budget_pct_estimate: 0 },
+      loadStoreMap: async () => ({}),
+      fetchStatus: vi.fn(),
+      fetchHotMetrics,
+      getHotCampaignIds: async () => [],
+      getHotAdgroupIds: async () => [],
+      getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(),
+      insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily: vi.fn(),
+      upsertAdsDaily: vi.fn(),
+      recordFreshness: vi.fn(),
+      getAccount: async () => ({ advertiserId: 'ADV1', accessToken: 'TOK', accountCurrency: 'USD' }),
+      getFxCadFor: async () => async () => 1.4,
+      fetchAccountSpend,
+      cadConvert,
+      upsertDataDailySpend,
+      nowIso: '2026-05-29T16:00:00.000Z',
+      isTikTokConfigured: () => true,
+    });
+    expect(fetchHotMetrics).not.toHaveBeenCalled();
+    expect(fetchAccountSpend).toHaveBeenCalledOnce();
+    expect(upsertDataDailySpend).toHaveBeenCalledTimes(3);
+    const written = upsertDataDailySpend.mock.calls.map(c => c[0]);
+    expect(written.find(w => w.date === '2026-05-29')).toMatchObject({
+      platform: 'tiktok', storeId: 'uzoshop', spendCad: 35, impressions: 250,
+    });
+  });
 });
 
 describe('runTikTokWorkerJob() — not configured (shared TikTok account architecture)', () => {

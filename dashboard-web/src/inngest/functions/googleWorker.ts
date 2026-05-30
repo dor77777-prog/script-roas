@@ -416,50 +416,23 @@ async function runGoogleHotMetricsBranch(input: RunGoogleWorkerJobInput): Promis
       getHotAdIds(storeId),
     ]);
 
-    // 2. Empty hot set is a NORMAL state (e.g. all campaigns paused) — we
-    //    still mark freshness success because the worker did its job;
-    //    there was simply nothing hot to refresh.
-    if (hotCampaign.length + hotAdgroup.length + hotAd.length === 0) {
-      await recHotPair('success');
-      return;
-    }
-
-    // 3. Resolve customer + fetch metrics for today only.
+    // 1.5 Resolve customer early. Both the Phase E1.6 account-aggregate
+    // write (below) AND the hot-set fetch (further down) need it. Moved
+    // above the empty-hot-set gate by the 2026-05-30 regression fix so
+    // account-aggregate spend runs every tick regardless of hot-set state.
     const customer = await safeCustomer(storeId, getCustomer);
-    const today = nowIso.slice(0, 10);
-    const metrics = await fetchHotMetrics({
-      storeId,
-      customer,
-      hotCampaignIds: hotCampaign,
-      hotAdgroupIds: hotAdgroup,
-      hotAdIds: hotAd,
-      dateStr: today,
-    });
 
-    // 4. Upsert campaigns_daily (adsets only) and ads_daily, stamping
-    //    source='live_tick' + last_live_tick_at on every row.
-    //    CRIT-B: hot-metrics fetcher returns only adset + ad rows; the
-    //    campaign-level aggregate is computed at read time by the existing
-    //    aggregators (Today / Today-Live). campaigns_daily.ad_set_id is
-    //    NOT NULL so we cannot insert a campaign-only row.
-    if (metrics.adsets.length > 0) {
-      const all: Array<Record<string, unknown>> = metrics.adsets.map((a) => ({
-        ...a,
-        source: 'live_tick',
-        last_live_tick_at: nowIso,
-      }));
-      await upsertCampaignsDaily(all);
-    }
-    if (metrics.ads.length > 0) {
-      await upsertAdsDaily(
-        metrics.ads.map((a) => ({ ...a, source: 'live_tick', last_live_tick_at: nowIso })),
-      );
-    }
-
-    // Phase E1.6 (2026-05-30) — Google account-aggregate spend →
-    // data_daily. Same shape as metaWorker's E1.6 step. Google Ads
-    // account for uzoshop is CAD-native (per project memory
-    // ad-account-currencies); cadConvert passes through.
+    // 2. Phase E1.6 (2026-05-30) — Google account-aggregate spend →
+    // data_daily. RUNS UNCONDITIONALLY (independent of hot-set state).
+    // Pre-fix: this block lived AFTER the empty-hot-set early-exit so
+    // uzoshop's Google ga_spend_cad + ga_impressions froze whenever no
+    // campaigns were hot at tick time. Restored to pre-E1.6 cron-live
+    // parity (every-tick write). Google Ads account for uzoshop is
+    // CAD-native; cadConvert passes through.
+    //
+    // Soft-fail: a fetch error here does NOT throw — we still want to
+    // run hot-set metrics below if hot ids exist. Next tick (10 min)
+    // retries.
     if (input.fetchAccountSpend && input.cadConvert && input.upsertDataDailySpend) {
       try {
         const todayDate = nowIso.slice(0, 10);
@@ -488,7 +461,47 @@ async function runGoogleHotMetricsBranch(input: RunGoogleWorkerJobInput): Promis
       }
     }
 
-    // 5. Mark freshness success for both campaign_metrics + ad_metrics.
+    // 3. Empty hot set is a NORMAL state (e.g. all campaigns paused) — we
+    //    still mark freshness success because the worker did its job;
+    //    there was simply nothing hot to refresh. Account-aggregate
+    //    above already ran.
+    if (hotCampaign.length + hotAdgroup.length + hotAd.length === 0) {
+      await recHotPair('success');
+      return;
+    }
+
+    // 4. Fetch hot-set metrics for today only.
+    const today = nowIso.slice(0, 10);
+    const metrics = await fetchHotMetrics({
+      storeId,
+      customer,
+      hotCampaignIds: hotCampaign,
+      hotAdgroupIds: hotAdgroup,
+      hotAdIds: hotAd,
+      dateStr: today,
+    });
+
+    // 5. Upsert campaigns_daily (adsets only) and ads_daily, stamping
+    //    source='live_tick' + last_live_tick_at on every row.
+    //    CRIT-B: hot-metrics fetcher returns only adset + ad rows; the
+    //    campaign-level aggregate is computed at read time by the existing
+    //    aggregators (Today / Today-Live). campaigns_daily.ad_set_id is
+    //    NOT NULL so we cannot insert a campaign-only row.
+    if (metrics.adsets.length > 0) {
+      const all: Array<Record<string, unknown>> = metrics.adsets.map((a) => ({
+        ...a,
+        source: 'live_tick',
+        last_live_tick_at: nowIso,
+      }));
+      await upsertCampaignsDaily(all);
+    }
+    if (metrics.ads.length > 0) {
+      await upsertAdsDaily(
+        metrics.ads.map((a) => ({ ...a, source: 'live_tick', last_live_tick_at: nowIso })),
+      );
+    }
+
+    // 6. Mark freshness success for both campaign_metrics + ad_metrics.
     await recHotPair('success');
   } catch (err) {
     // Phase C soak: surface the failure to the operator panel by writing
