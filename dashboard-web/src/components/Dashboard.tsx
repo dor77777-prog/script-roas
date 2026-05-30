@@ -44,6 +44,7 @@ import { Button } from '@/components/ui/Button';
 import * as Tabs from '@radix-ui/react-tabs';
 import { AnalysisTrendsTab } from './AnalysisTrendsTab';
 import { AnalysisArchiveTab } from './AnalysisArchiveTab';
+import { GoalTracker } from './GoalTracker';
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -460,6 +461,8 @@ function PnLTab({
       />
 
       <Filters filters={filters} stores={data.stores} onChange={setFilters} />
+
+      <GoalTracker data={data} />
 
       <div className="space-y-3">
         <div className="flex justify-end">
