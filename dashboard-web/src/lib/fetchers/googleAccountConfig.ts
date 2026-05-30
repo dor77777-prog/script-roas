@@ -69,6 +69,16 @@ export async function getGoogleCustomerForStore(storeId: string): Promise<Google
  * customer id. OAuth client id/secret + refresh token are global concerns
  * shared by all configured stores; if they go missing the next REAL fetch
  * fails loud (via the new try/catch in the worker).
+ *
+ * Operator note (2026-05-30): the global `GOOGLEADS_REFRESH_TOKEN` was
+ * rotated today via OAuth Playground after Google revoked the prior one
+ * (Testing-mode 7-day TTL). Until the `roas-tracker-ga` consent screen is
+ * published to Production, the operator must rotate the refresh token
+ * every ~7 days or whenever a `invalid_grant` shows up in
+ * `data_freshness.error_message` for the `google` platform. The new
+ * try/catch in `googleWorker` surfaces this as `transient_error` rows
+ * with the full Google response, so the trigger condition is visible in
+ * the Operator Panel without digging into Inngest logs.
  */
 export function isGoogleConfiguredForStore(storeId: string): boolean {
   const envVar = `${storeId.toUpperCase()}_GOOGLEADS_CUSTOMER_ID`;
