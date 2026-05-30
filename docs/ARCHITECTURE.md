@@ -2161,19 +2161,29 @@ since the account is in Israel).
 Two issues surfaced after the initial Phase E1.7 deploy that the
 "add account-TZ" Google fix didn't address:
 
-**TikTok AUCTION_AD dimension rule** — TikTok's BASIC `report_type`
-at `data_level=AUCTION_AD` rejects any ID dimension other than
-`ad_id` with `code=40002 data_level AUCTION_AD and dimension <X>
-do not match`. The earlier hotfix that swapped `campaign_id`→`adgroup_id`
-in the dimensions array hit the same wall (adgroup_id also rejected).
+**TikTok dimension rules (validated empirically against the
+production API)** — TikTok's BASIC `report_type` enforces a strict
+single-dimension-per-data-level rule. The 21:50 production tick after
+the first deploy proved it rejects both:
 
-Fix: dimensions=`["ad_id"]` only. Parent IDs (adgroup_id, campaign_id)
-are now sourced from `ad_registry` via a worker-built map
-`adId → { adgroup_id, campaign_id }` passed to the fetcher as
-`adIdToParent`. The fetcher enriches each AD row's dimensions and
-uses `resolveStore(campaign_id)` via the campaign-store-map for
-store routing — preserving the Phase A.5 v2 attribution model.
-AD rows without a registry entry are SKIPPED (safer than
+- AUCTION_AD with `["adgroup_id","ad_id"]` or `["campaign_id","ad_id"]`
+  → `code=40002 data_level AUCTION_AD and dimension <X> do not match`
+- AUCTION_ADGROUP with `["campaign_id","adgroup_id"]`
+  → `code=40002 data_level AUCTION_ADGROUP and dimension campaign_id
+  do not match`
+
+Fix: dimensions = exactly `["adgroup_id"]` at AUCTION_ADGROUP and
+exactly `["ad_id"]` at AUCTION_AD. Parent IDs come from worker-built
+maps sourced from the registries:
+
+- `adsetIdToCampaignId` (from `adset_registry WHERE platform='tiktok'
+  AND adset_id IN (hotAdgroupIds)`) — used to enrich ADGROUP rows.
+- `adIdToParent` (from `ad_registry WHERE platform='tiktok' AND
+  ad_id IN (hotAdIds)`) — used to enrich AD rows.
+
+The fetcher uses `resolveStore(campaign_id)` via the campaign-store-map
+for store routing — preserving the Phase A.5 v2 attribution model.
+Rows whose parent IDs aren't in the maps are SKIPPED (safer than
 mis-attribution under the worker's default storeId fallback).
 
 **Google PMax campaigns** — Performance Max campaigns expose NO

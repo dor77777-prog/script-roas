@@ -4,12 +4,14 @@ import { fetchTikTokHotMetricsForStore } from '@/lib/fetchers/tiktokHotMetrics';
 afterEach(() => { vi.restoreAllMocks(); });
 
 describe('fetchTikTokHotMetricsForStore()', () => {
-  it('returns adset + ad rows with metrics for hot ids (no campaign-level rows per CRIT-B)', async () => {
+  it('returns adset rows with metrics enriched via adsetIdToCampaignId map', async () => {
+    // AUCTION_ADGROUP response only carries adgroup_id (TikTok rejects
+    // campaign_id at that level). Worker passes adset_registry-derived map.
     const adgroupBody = {
       code: 0,
       data: {
         list: [{
-          dimensions: { campaign_id: 'TC1', adgroup_id: 'TG1' },
+          dimensions: { adgroup_id: 'TG1' },
           metrics: { spend: '25.5', impressions: '1000', clicks: '20', conversion: 3, purchase: '3', total_purchase_value: '150.0' },
         }],
       },
@@ -20,6 +22,7 @@ describe('fetchTikTokHotMetricsForStore()', () => {
       hotCampaignIds: ['TC1'], hotAdgroupIds: ['TG1'], hotAdIds: [],
       dateStr: '2026-05-30', campaignStoreMap: {},
       accountCurrency: 'USD',
+      adsetIdToCampaignId: new Map([['TG1', 'TC1']]),
       fetcher: fetchMock,
       getFxCadFor: async (amount, currency) => currency === 'USD' ? amount * 1.36 : amount,
     });
@@ -28,6 +31,50 @@ describe('fetchTikTokHotMetricsForStore()', () => {
       store_id: 'uzoshop', platform: 'tiktok', campaign_id: 'TC1', ad_set_id: 'TG1',
       impressions: 1000, clicks: 20, conversions: 3,
     });
+  });
+
+  it('AUCTION_ADGROUP request sends only ["adgroup_id"] in dimensions', async () => {
+    const adgroupBody = { code: 0, data: { list: [] } };
+    const calls: string[] = [];
+    const fetchMock = vi.fn(async (url: RequestInfo | URL) => {
+      calls.push(String(url));
+      return new Response(JSON.stringify(adgroupBody), { status: 200 });
+    });
+    await fetchTikTokHotMetricsForStore({
+      storeId: 'uzoshop', advertiserId: '12345', accessToken: 'tok',
+      hotCampaignIds: [], hotAdgroupIds: ['TG1'], hotAdIds: [],
+      dateStr: '2026-05-30', campaignStoreMap: {},
+      accountCurrency: 'USD',
+      adsetIdToCampaignId: new Map([['TG1', 'TC1']]),
+      fetcher: fetchMock,
+      getFxCadFor: async () => 0,
+    });
+    const adgroupUrl = calls.find(c => /data_level=AUCTION_ADGROUP/.test(c))!;
+    expect(decodeURIComponent(adgroupUrl)).toContain('dimensions=["adgroup_id"]');
+    expect(decodeURIComponent(adgroupUrl)).not.toContain('campaign_id');
+  });
+
+  it('ADGROUP rows without a campaign map entry are skipped', async () => {
+    const adgroupBody = {
+      code: 0,
+      data: {
+        list: [{
+          dimensions: { adgroup_id: 'TG-ORPHAN' },
+          metrics: { spend: '5', impressions: '100', clicks: '2', conversion: 0, purchase: '0', total_purchase_value: '0' },
+        }],
+      },
+    };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(adgroupBody), { status: 200 }));
+    const out = await fetchTikTokHotMetricsForStore({
+      storeId: 'uzoshop', advertiserId: '12345', accessToken: 'tok',
+      hotCampaignIds: [], hotAdgroupIds: ['TG-ORPHAN'], hotAdIds: [],
+      dateStr: '2026-05-30', campaignStoreMap: {},
+      accountCurrency: 'USD',
+      // No adsetIdToCampaignId entry for TG-ORPHAN.
+      fetcher: fetchMock,
+      getFxCadFor: async () => 0,
+    });
+    expect(out.adsets).toHaveLength(0);
   });
 
   it('AUCTION_AD request sends only ["ad_id"] in dimensions (parent IDs come from adIdToParent)', async () => {
@@ -39,7 +86,7 @@ describe('fetchTikTokHotMetricsForStore()', () => {
     const adgroupBody = {
       code: 0,
       data: { list: [{
-        dimensions: { campaign_id: 'TC1', adgroup_id: 'TG1' },
+        dimensions: { adgroup_id: 'TG1' },
         metrics: { spend: '10', impressions: '100', clicks: '5', conversion: 1, purchase: '1', total_purchase_value: '20' },
       }] },
     };
@@ -61,6 +108,7 @@ describe('fetchTikTokHotMetricsForStore()', () => {
       hotCampaignIds: ['TC1'], hotAdgroupIds: ['TG1'], hotAdIds: ['AD-1'],
       dateStr: '2026-05-30', campaignStoreMap: {},
       accountCurrency: 'USD',
+      adsetIdToCampaignId: new Map([['TG1', 'TC1']]),
       adIdToParent,
       fetcher: fetchMock,
       getFxCadFor: async (amount, currency) => currency === 'USD' ? amount * 1.36 : amount,
@@ -110,7 +158,7 @@ describe('fetchTikTokHotMetricsForStore()', () => {
     const adgroupBody = {
       code: 0,
       data: { list: [{
-        dimensions: { campaign_id: 'TC1', adgroup_id: 'TG1' },
+        dimensions: { adgroup_id: 'TG1' },
         metrics: { spend: '10', impressions: '100', clicks: '5', conversion: 1, purchase: '1', total_purchase_value: '20' },
       }] },
     };
@@ -131,6 +179,7 @@ describe('fetchTikTokHotMetricsForStore()', () => {
       dateStr: '2026-05-30',
       campaignStoreMap: { 'tiktok::12345::TC1': 'usmile360' },
       accountCurrency: 'USD',
+      adsetIdToCampaignId: new Map([['TG1', 'TC1']]),
       adIdToParent,
       fetcher: fetchMock,
       getFxCadFor: async (amount) => amount,

@@ -2,15 +2,21 @@
 //
 // TikTok hot-set metrics fetcher for campaigns_daily + ads_daily.
 //
-// Dimension rules (per TikTok BASIC report_type):
-//   AUCTION_ADGROUP — dimensions MUST contain `adgroup_id` and MAY contain
-//     `campaign_id`. We send `["campaign_id","adgroup_id"]` so a single row
-//     carries both for adset_registry routing via the campaign-store-map.
-//   AUCTION_AD — dimensions MUST contain `ad_id` and MUST NOT contain any
-//     other ID dimension. TikTok rejects `["adgroup_id","ad_id"]` or
-//     `["campaign_id","ad_id"]` with `code=40002 data_level AUCTION_AD and
-//     dimension <X> do not match`. Parent IDs are sourced from the caller-
-//     provided `adIdToParent` map (built from ad_registry by the worker).
+// Dimension rules (per TikTok BASIC report_type, validated empirically
+// against the production API 2026-05-30):
+//   AUCTION_ADGROUP — dimensions MUST be exactly `["adgroup_id"]`. TikTok
+//     rejects `["campaign_id","adgroup_id"]` with
+//     `code=40002 data_level AUCTION_ADGROUP and dimension campaign_id do
+//     not match`.
+//   AUCTION_AD — dimensions MUST be exactly `["ad_id"]`. TikTok rejects any
+//     parent ID with `code=40002 data_level AUCTION_AD and dimension <X>
+//     do not match`.
+//
+// Parent IDs are sourced from caller-provided maps:
+//   * `adsetIdToCampaignId` (built from adset_registry by the worker) for
+//     AUCTION_ADGROUP rows
+//   * `adIdToParent` (built from ad_registry by the worker) for AUCTION_AD
+//     rows
 //
 // CRIT-B note: AUCTION_CAMPAIGN-level rows are intentionally NOT fetched.
 // The campaigns_daily.ad_set_id column is NOT NULL — the TikTok report at
@@ -34,6 +40,18 @@ export type TikTokHotMetricsInput = {
   hotAdIds: string[];
   dateStr: string;
   campaignStoreMap: Record<string, string>;
+  /**
+   * Adset → campaign map sourced from adset_registry by the worker.
+   * Required because AUCTION_ADGROUP responses cannot carry campaign_id as
+   * a dimension. The worker queries `adset_registry WHERE platform='tiktok'
+   * AND adset_id IN (hotAdgroupIds)` and builds adgroupId → campaign_id.
+   * Adgroups NOT present in this map are SKIPPED (would otherwise route
+   * to the worker's storeId fallback, not the campaign-store-map target).
+   *
+   * Optional only for backwards-compat with vitest fixtures that pass no
+   * hot adgroup ids.
+   */
+  adsetIdToCampaignId?: Map<string, string>;
   /**
    * Per-ad parent map sourced from ad_registry by the worker.
    * Required because AUCTION_AD responses cannot carry parent IDs (see
@@ -88,12 +106,11 @@ export async function fetchTikTokHotMetricsForStore(input: TikTokHotMetricsInput
     // `filter_value` MUST be a JSON-stringified array (TikTok rejects raw
     // arrays with `40002 Invalid filter_value type`).
     const filteringArr = [{ field_name: filterField, filter_type: 'IN', filter_value: JSON.stringify(ids) }];
-    // Per TikTok docs: dimensions MUST match the data_level. At ADGROUP
-    // we can additionally include `campaign_id` (validated in production);
-    // at AD we can ONLY include `ad_id`. Parent IDs for AD rows come from
-    // the caller-provided `adIdToParent` map.
+    // Per TikTok: dimensions MUST be exactly the ID matching the
+    // data_level. Parent IDs come from caller-provided maps
+    // (`adsetIdToCampaignId` for ADGROUP rows, `adIdToParent` for AD rows).
     const dims = dataLevel === 'AUCTION_ADGROUP'
-      ? ['campaign_id', 'adgroup_id']
+      ? ['adgroup_id']
       : ['ad_id'];
     const dimensions = JSON.stringify(dims);
     const url = `${TT_BASE}/report/integrated/get/?advertiser_id=${advertiserId}&report_type=BASIC&data_level=${dataLevel}&dimensions=${encodeURIComponent(dimensions)}&metrics=${encodeURIComponent(JSON.stringify(['spend','impressions','clicks','conversion','purchase','total_purchase_value']))}&start_date=${dateStr}&end_date=${dateStr}&page=1&page_size=1000&filtering=${encodeURIComponent(JSON.stringify(filteringArr))}`;
@@ -115,23 +132,25 @@ export async function fetchTikTokHotMetricsForStore(input: TikTokHotMetricsInput
     fetchLevel('AUCTION_AD', 'ad_ids', input.hotAdIds),
   ]);
 
-  // Build adgroup_id → campaign_id map from ADGROUP rows. Used as a
-  // secondary lookup for AD rows whose ad_id isn't in `adIdToParent`
-  // but whose adgroup is (rare race during a registry-refresh tick).
-  const adgroupToCampaign = new Map<string, string>();
+  // ADGROUP rows: enrich `dimensions.campaign_id` from the worker-provided
+  // `adsetIdToCampaignId` map (sourced from adset_registry). Skip rows we
+  // can't enrich — they would land under the wrong store_id via the
+  // campaign-store-map fallback.
+  const adsetIdToCampaignId = input.adsetIdToCampaignId ?? new Map<string, string>();
+  const adsets: AdsetDailyRow[] = [];
   for (const r of adgroupRaw) {
     const d = (r.dimensions ?? {}) as Record<string, unknown>;
-    const agid = String(d.adgroup_id ?? '');
-    const cid = String(d.campaign_id ?? '');
-    if (agid && cid) adgroupToCampaign.set(agid, cid);
+    const adgroupId = String(d.adgroup_id ?? '');
+    if (!adgroupId) continue;
+    const campaignId = adsetIdToCampaignId.get(adgroupId) ?? '';
+    if (!campaignId) continue;
+    const enriched = { ...r, dimensions: { ...d, campaign_id: campaignId } };
+    adsets.push(await toAdsetRow(resolveStore, dateStr, enriched, accountCurrency, getFxCadFor));
   }
 
-  const adsets = await Promise.all(adgroupRaw.map(r => toAdsetRow(resolveStore, dateStr, r, accountCurrency, getFxCadFor)));
-
-  // For AD rows: enrich `dimensions.campaign_id` + `dimensions.adgroup_id`
-  // from the worker-provided map (primary) or the ADGROUP-derived map
-  // (secondary). Skip rows we can't enrich — they would land under the
-  // wrong store_id via the campaign-store-map fallback.
+  // AD rows: enrich `dimensions.adgroup_id + campaign_id` from the worker-
+  // provided `adIdToParent` map (sourced from ad_registry). Skip rows we
+  // can't enrich.
   const adIdToParent = input.adIdToParent ?? new Map<string, { adgroup_id: string; campaign_id: string }>();
   const ads: AdDailyRow[] = [];
   for (const r of adRaw) {
@@ -139,10 +158,8 @@ export async function fetchTikTokHotMetricsForStore(input: TikTokHotMetricsInput
     const adId = String(d.ad_id ?? '');
     if (!adId) continue;
     const fromMap = adIdToParent.get(adId);
-    const adgroupId = fromMap?.adgroup_id ?? '';
-    const campaignId = fromMap?.campaign_id ?? adgroupToCampaign.get(adgroupId) ?? '';
-    if (!adgroupId || !campaignId) continue;
-    const enriched = { ...r, dimensions: { ...d, adgroup_id: adgroupId, campaign_id: campaignId } };
+    if (!fromMap?.adgroup_id || !fromMap?.campaign_id) continue;
+    const enriched = { ...r, dimensions: { ...d, adgroup_id: fromMap.adgroup_id, campaign_id: fromMap.campaign_id } };
     ads.push(await toAdRow(resolveStore, dateStr, enriched, accountCurrency, getFxCadFor));
   }
 
