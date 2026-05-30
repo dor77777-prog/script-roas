@@ -67,6 +67,18 @@ import {
 } from '@/lib/registries/upsert';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { isAuthError, isRateLimitError } from '@/lib/notifications/detectAuthError';
+
+// Phase E1.5 (2026-05-30) — TikTok's 5 "delivering / preparing" ad-group
+// statuses. Mirrors the local set in cronLive.ts (being removed in
+// Task 11). Inlined here to keep the worker self-contained without a
+// circular import.
+const TIKTOK_ACTIVE_STATUSES = new Set([
+  'ADGROUP_STATUS_DELIVERY_OK',
+  'ADGROUP_STATUS_BUDGET_EXCEED',
+  'ADGROUP_STATUS_AUDIT',
+  'ADGROUP_STATUS_REVIEWING',
+  'ADGROUP_STATUS_NOT_START',
+]);
 import {
   getHotCampaignIds as getHotCampaignIdsHelper,
   getHotAdsetIds as getHotAdsetIdsHelper,
@@ -368,6 +380,30 @@ async function runTikTokStatusBranch(input: RunTikTokWorkerJobInput): Promise<vo
       buildRegistryUpsertRow({ prior: prior.ads.get(a.ad_id) ?? null, fresh: a, nowIso }),
     );
     await upsertRegistry({ table: 'ad_registry', rows: adRows });
+
+    // 6.5 — Phase E1.5 (2026-05-30) — placeholder enrollment for TikTok
+    // (mirrors metaWorker/googleWorker Tasks 8/9). adset.store_id was
+    // already resolved by the fetcher via campaign-store-map, so writing
+    // a.store_id (NOT function-arg storeId) preserves the Phase A.5 v2
+    // attribution model.
+    if (input.upsertCampaignsDaily) {
+      const today = nowIso.slice(0, 10);
+      const activePlaceholders = status.adsets
+        .filter((a) => TIKTOK_ACTIVE_STATUSES.has(a.effective_status ?? ''))
+        .map((a) => ({
+          date: today,
+          store_id: a.store_id,
+          platform: 'tiktok' as const,
+          campaign_id: a.campaign_id,
+          campaign_name: status.campaigns.find((c) => c.campaign_id === a.campaign_id)?.name ?? '',
+          ad_set_id: a.adset_id,
+          ad_set_name: a.name ?? '',
+          effective_status: a.effective_status,
+        }));
+      if (activePlaceholders.length > 0) {
+        await input.upsertCampaignsDaily(activePlaceholders);
+      }
+    }
 
     // 7. Mark freshness success for all 3 scopes.
     await recAllStatusScopes('success');

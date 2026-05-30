@@ -90,6 +90,65 @@ describe('runTikTokWorkerJob() — status scope', () => {
     expect(call.freshTargetStoreIds.sort()).toEqual(['usmile360']);
   });
 
+  it('Phase E1.5: delivering/preparing adsets UPSERT placeholder rows into campaigns_daily (no metrics)', async () => {
+    const fetchStatus = vi.fn().mockResolvedValue({
+      campaigns: [{
+        store_id: 'usmile360', platform: 'tiktok', campaign_id: 'TC1', name: 'TT Camp 1',
+        configured_status: 'ENABLE', effective_status: 'ADGROUP_STATUS_DELIVERY_OK', delivery_status: 'DELIVERING',
+        is_enabled: true, is_serving: true,
+        first_seen_at: '__placeholder__', last_seen_at: '__placeholder__',
+        platform_updated_at: null, status_changed_at: null,
+        last_metrics_success_at: null, last_status_success_at: null,
+        raw_status_payload: null, missed_seen_count: 0, is_removed: false,
+      }],
+      adsets: [
+        {
+          store_id: 'usmile360', platform: 'tiktok', campaign_id: 'TC1', adset_id: 'TG1', name: 'AdGroup delivering',
+          configured_status: 'ENABLE', effective_status: 'ADGROUP_STATUS_DELIVERY_OK', delivery_status: 'DELIVERING',
+          is_enabled: true, is_serving: true,
+          first_seen_at: null, last_seen_at: null,
+          platform_updated_at: null, status_changed_at: null,
+          last_metrics_success_at: null, last_status_success_at: null,
+          raw_status_payload: null, missed_seen_count: 0, is_removed: false,
+        },
+        {
+          store_id: 'uzoshop', platform: 'tiktok', campaign_id: 'TC2', adset_id: 'TG2', name: 'AdGroup disabled',
+          configured_status: 'DISABLE', effective_status: 'ADGROUP_STATUS_CAMPAIGN_DISABLE', delivery_status: 'NOT_DELIVERING',
+          is_enabled: false, is_serving: false,
+          first_seen_at: null, last_seen_at: null,
+          platform_updated_at: null, status_changed_at: null,
+          last_metrics_success_at: null, last_status_success_at: null,
+          raw_status_payload: null, missed_seen_count: 0, is_removed: false,
+        },
+      ],
+      ads: [],
+    });
+    const upsertCampaignsDaily = vi.fn().mockResolvedValue(undefined);
+    await runTikTokWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'status', tick_id: 'T', staleness_seconds: 600, budget_pct_estimate: 0 },
+      loadStoreMap: async () => ({}),
+      fetchStatus, fetchHotMetrics: vi.fn(),
+      getHotCampaignIds: async () => [], getHotAdgroupIds: async () => [], getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(), insertStatusEvents: vi.fn(),
+      upsertCampaignsDaily, upsertAdsDaily: vi.fn(),
+      recordFreshness: vi.fn(),
+      nowIso: NOW_ISO,
+      isTikTokConfigured: () => true,
+      getAccount: async () => ({ advertiserId: 'ADV1', accessToken: 'TOK', accountCurrency: 'USD' }),
+    });
+    expect(upsertCampaignsDaily).toHaveBeenCalledOnce();
+    const rows = upsertCampaignsDaily.mock.calls[0][0];
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      store_id: 'usmile360',
+      platform: 'tiktok',
+      campaign_id: 'TC1',
+      ad_set_id: 'TG1',
+    });
+    expect(rows[0]).not.toHaveProperty('spend_cad');
+  });
+
   it('Phase D soak: does NOT call deleteStaleAttributionRows when fetch returns zero campaigns', async () => {
     const fetchStatus = vi.fn().mockResolvedValue({ campaigns: [], adsets: [], ads: [] });
     const deleteStaleAttributionRows = vi.fn();
