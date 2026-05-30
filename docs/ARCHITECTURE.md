@@ -2049,3 +2049,45 @@ adds temporary `console.log` diagnostics to both Google + TikTok hot
 fetchers (prefixed `[gh-diag]` / `[tt-diag]`) to capture API response
 shape for the next 1-2 ticks; these will be removed once root cause
 is confirmed.
+
+### TikTok `filter_value` was always-array (latent Phase C bug)
+
+The envelope error surface (above) immediately uncovered: `code=40002
+filtering.0.filter_value: Not a valid string`. The Phase C
+`fetchTikTokHotMetricsForStore` passed `filter_value: ids` where `ids`
+was a JavaScript array. TikTok's report API requires `filter_value`
+for `filter_type: 'IN'` to be a STRING (in their case, a
+JSON-stringified array — `"[\"id1\",\"id2\"]"`).
+
+The bug has been LATENT since Phase C deployed because:
+- cron-live-heavy (disabled in Phase E1 at ~17:40 IL today) was the
+  PRIMARY writer of TikTok `campaigns_daily` via `persistCampaignsLive`.
+  cron-live-heavy fetched insights via `fetchTikTokAdInsights`
+  (a DIFFERENT function path) which did not have this filter_value bug.
+- The Phase C `tiktokWorker hot_metrics` was supposed to take over but
+  silently failed, returning empty adsets/ads. campaigns_daily.tiktok
+  was being filled by cron-live-heavy until 17:40 IL, masking the
+  Phase C bug entirely.
+
+Fix: pass `filter_value: JSON.stringify(ids)` so TikTok parses it as a
+string that contains an array. Same pattern in `tiktokAccountSpend.ts`
+(the Phase E1.6 fetcher, now deleted, didn't have this bug because it
+queried account-level not adgroup-level).
+
+After this fix, TikTok hot_metrics will write `campaigns_daily.tiktok`
+every 10 min and the Phase E1.7 agg RPC will surface fresh values in
+`data_daily.tt_spend_cad + tt_impressions`.
+
+### Google hot_metrics `rows=0` (open follow-up)
+
+The `gh-diag` log from the 20:50 tick shows:
+`adgroup_query store=uzoshop date=2026-05-30 ids=3 rows=0`. Google
+Ads's GAQL query for 3 known-active adgroup IDs filtered by
+`segments.date = '2026-05-30'` returns ZERO rows. The 3 IDs match the
+rows currently in `campaigns_daily.google` (stale since 17:30 IL).
+
+Hypothesis: Google Ads account timezone vs Asia/Jerusalem `dateStr`
+mismatch, or known Google reporting delay (cost.cost_micros buffered
+for up to ~3 hours). Confirmed candidate fix: use the account's TZ
+date instead of UTC-derived date. Investigation ongoing as a separate
+issue from the TikTok fix above.
