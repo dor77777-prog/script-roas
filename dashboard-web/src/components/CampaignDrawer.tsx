@@ -754,29 +754,39 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
   })();
   const roasInfo = roasLabel(summary.roas);
 
-  // Phase C Task 13 — minimal status + freshness section. Pulls
-  // effective_status + last_live_tick_at from the rows already in scope
-  // (CampaignRow already carries both — see campaigns.ts:52/67); takes
-  // the most-recent (latest-date) non-null value. The remaining
-  // registry fields (configured/delivery/first_seen/status_changed/
-  // metrics_lag) are intentionally null for the Phase C MVP — Phase D
-  // wires them from campaign_registry.
+  // Phase D (2026-05-30) — every CampaignRow has the same reg_* values
+  // (registry is constant per (store, platform, campaign)). Pick from
+  // the first row that has them; fall back to per-row sweep for any
+  // field still on the legacy daily-only path.
   const statusSectionData = (() => {
-    let effectiveStatus: string | null = null;
+    let regConfiguredStatus: string | null = null;
+    let regEffectiveStatus: string | null = null;
+    let regDeliveryStatus: string | null = null;
+    let regFirstSeenAt: string | null = null;
+    let regStatusChangedAt: string | null = null;
+    let regLastStatusSuccessAt: string | null = null;
     let lastLiveTickAt: string | null = null;
-    let effectiveStatusDate = '';
     let lastLiveTickDate = '';
     for (const r of rows) {
-      if (r.effectiveStatus && r.date > effectiveStatusDate) {
-        effectiveStatus = r.effectiveStatus;
-        effectiveStatusDate = r.date;
-      }
+      // Registry is constant across rows for this campaign — copy once
+      // from the first row that has it.
+      regConfiguredStatus    ??= r.regConfiguredStatus;
+      regEffectiveStatus     ??= r.regEffectiveStatus;
+      regDeliveryStatus      ??= r.regDeliveryStatus;
+      regFirstSeenAt         ??= r.regFirstSeenAt;
+      regStatusChangedAt     ??= r.regStatusChangedAt;
+      regLastStatusSuccessAt ??= r.regLastStatusSuccessAt;
+      // lastLiveTickAt remains per-row (per-day truthiness varies).
       if (r.lastLiveTickAt && r.date > lastLiveTickDate) {
         lastLiveTickAt = r.lastLiveTickAt;
         lastLiveTickDate = r.date;
       }
     }
-    return { effectiveStatus, lastLiveTickAt };
+    return {
+      regConfiguredStatus, regEffectiveStatus, regDeliveryStatus,
+      regFirstSeenAt, regStatusChangedAt, regLastStatusSuccessAt,
+      lastLiveTickAt,
+    };
   })();
 
   return (
@@ -860,11 +870,12 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
               remaining registry-backed fields are intentionally null for
               the Phase C MVP — Phase D wires them from campaign_registry. */}
           <CampaignDrawerStatusSection
-            configuredStatus={null}
-            effectiveStatus={statusSectionData.effectiveStatus}
-            deliveryStatus={null}
-            firstSeenAt={null}
-            statusChangedAt={null}
+            configuredStatus={statusSectionData.regConfiguredStatus}
+            effectiveStatus={statusSectionData.regEffectiveStatus}
+            deliveryStatus={statusSectionData.regDeliveryStatus}
+            firstSeenAt={statusSectionData.regFirstSeenAt}
+            statusChangedAt={statusSectionData.regStatusChangedAt}
+            lastStatusSuccessAt={statusSectionData.regLastStatusSuccessAt}
             lastLiveTickAt={statusSectionData.lastLiveTickAt}
             metricsLagMinutes={null}
           />
