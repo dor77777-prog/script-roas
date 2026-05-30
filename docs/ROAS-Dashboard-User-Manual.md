@@ -42,7 +42,7 @@
 
 - **Analysis tab** is now split into 2 sub-tabs:
   - **מגמות** (Trends) — ROAS chart + annotations honor the global date filter
-  - **היסטוריה** (Archive) — 3 per-store sub-tabs (uzoshop / Zol Plus / 360usmile), each with its own Year + Month picker; compare e.g. usmile360 January vs uzoshop March independently
+  - **היסטוריה** (Archive) — Year + Month dropdowns at the top (default = current month); MonthlyTables below with its own per-store/summary toggle + store dropdown
 
 - **/operator** has 4 sub-tabs: **סנכרון** (Sync), **בריאות** (Health),
   **פעילות** (Activity), **מסוכן** (Danger). The "Reset data" red button
