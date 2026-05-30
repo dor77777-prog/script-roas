@@ -44,7 +44,7 @@ SELECT
   0                                                AS missed_seen_count,
   FALSE                                            AS is_removed
 FROM campaigns_daily cd
-CROSS JOIN LATERAL (
+LEFT JOIN LATERAL (
   SELECT
     cd2.effective_status,
     CASE
@@ -52,6 +52,7 @@ CROSS JOIN LATERAL (
         THEN 'DELIVERING'
       WHEN cd2.effective_status IN (
         'PAUSED','DISABLED','REMOVED','ARCHIVED','DELETE',
+        'CAMPAIGN_PAUSED','ADSET_PAUSED','DISAPPROVED',
         'ADGROUP_STATUS_DISABLE','ADGROUP_STATUS_ARCHIVED','ADGROUP_STATUS_DELETE',
         'ADGROUP_STATUS_TIMEDOUT','ADGROUP_STATUS_FROZEN',
         'ADGROUP_STATUS_CAMPAIGN_DISABLE'
@@ -59,11 +60,15 @@ CROSS JOIN LATERAL (
       WHEN cd2.effective_status IN (
         'PENDING','PENDING_REVIEW','ADGROUP_STATUS_AUDIT','ADGROUP_STATUS_REVIEWING'
       ) THEN 'PENDING_REVIEW'
+      WHEN cd2.effective_status IN ('REJECTED') THEN 'REJECTED'
       WHEN cd2.effective_status IN ('ADGROUP_STATUS_BUDGET_EXCEED','LIMITED')
         THEN 'LIMITED'
       WHEN cd2.effective_status IN ('LEARNING') THEN 'LEARNING'
       ELSE 'UNKNOWN'
     END                                            AS delivery_status,
+    -- is_enabled is gated on effective_status here because configured_status
+    -- is the BACKFILL_UNKNOWN sentinel. Phase B/C status workers overwrite
+    -- this with the platform's real configured_status within ~10 min.
     CASE
       WHEN cd2.effective_status IN ('ACTIVE','ENABLED') THEN TRUE
       WHEN cd2.effective_status IS NULL THEN NULL
@@ -82,7 +87,7 @@ CROSS JOIN LATERAL (
     AND cd2.effective_status IS NOT NULL
   ORDER BY cd2.date DESC
   LIMIT 1
-) AS latest
+) AS latest ON TRUE
 GROUP BY
   cd.store_id, cd.platform, cd.campaign_id,
   latest.effective_status, latest.delivery_status,
@@ -123,7 +128,7 @@ SELECT
   NULL::timestamptz, NULL::timestamptz,
   '{}'::jsonb, 0, FALSE
 FROM campaigns_daily cd
-CROSS JOIN LATERAL (
+LEFT JOIN LATERAL (
   SELECT
     cd2.effective_status,
     CASE
@@ -131,6 +136,7 @@ CROSS JOIN LATERAL (
         THEN 'DELIVERING'
       WHEN cd2.effective_status IN (
         'PAUSED','DISABLED','REMOVED','ARCHIVED','DELETE',
+        'CAMPAIGN_PAUSED','ADSET_PAUSED','DISAPPROVED',
         'ADGROUP_STATUS_DISABLE','ADGROUP_STATUS_ARCHIVED','ADGROUP_STATUS_DELETE',
         'ADGROUP_STATUS_TIMEDOUT','ADGROUP_STATUS_FROZEN',
         'ADGROUP_STATUS_CAMPAIGN_DISABLE'
@@ -138,11 +144,15 @@ CROSS JOIN LATERAL (
       WHEN cd2.effective_status IN (
         'PENDING','PENDING_REVIEW','ADGROUP_STATUS_AUDIT','ADGROUP_STATUS_REVIEWING'
       ) THEN 'PENDING_REVIEW'
+      WHEN cd2.effective_status IN ('REJECTED') THEN 'REJECTED'
       WHEN cd2.effective_status IN ('ADGROUP_STATUS_BUDGET_EXCEED','LIMITED')
         THEN 'LIMITED'
       WHEN cd2.effective_status IN ('LEARNING') THEN 'LEARNING'
       ELSE 'UNKNOWN'
     END                                            AS delivery_status,
+    -- is_enabled is gated on effective_status here because configured_status
+    -- is the BACKFILL_UNKNOWN sentinel. Phase B/C status workers overwrite
+    -- this with the platform's real configured_status within ~10 min.
     CASE
       WHEN cd2.effective_status IN ('ACTIVE','ENABLED') THEN TRUE
       WHEN cd2.effective_status IS NULL THEN NULL
@@ -155,13 +165,14 @@ CROSS JOIN LATERAL (
       ELSE FALSE
     END                                            AS is_serving
   FROM campaigns_daily cd2
-  WHERE cd2.store_id   = cd.store_id
-    AND cd2.platform   = cd.platform
-    AND cd2.ad_set_id  = cd.ad_set_id
+  WHERE cd2.store_id    = cd.store_id
+    AND cd2.platform    = cd.platform
+    AND cd2.campaign_id = cd.campaign_id
+    AND cd2.ad_set_id   = cd.ad_set_id
     AND cd2.effective_status IS NOT NULL
   ORDER BY cd2.date DESC
   LIMIT 1
-) AS latest
+) AS latest ON TRUE
 GROUP BY
   cd.store_id, cd.platform, cd.campaign_id, cd.ad_set_id,
   latest.effective_status, latest.delivery_status,
