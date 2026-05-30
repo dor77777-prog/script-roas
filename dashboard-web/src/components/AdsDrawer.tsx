@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { Button } from '@/components/ui/Button';
 import {
-  X,
   ExternalLink,
   Layers,
   ArrowUp,
@@ -24,6 +23,8 @@ import { buildAdsManagerLink, type AdAccountMap } from '@/lib/campaignsLinks';
 import { readOptimized, toggleOptimized } from '@/lib/campaignOptimized';
 import { useDrawerEsc } from '@/lib/drawerStack';
 import { buildDateRangeKey } from '@/lib/dateRange';
+import { Sheet, SheetContent } from '@/components/ui/Sheet';
+import { BADGE_TONE_BG } from '@/components/ui/Badge';
 
 /**
  * Slide-in drawer that opens when the user clicks an ad-set row in the
@@ -47,14 +48,6 @@ type Props = {
   rangeFrom: string;
   rangeTo: string;
   adAccounts: AdAccountMap;
-};
-
-const TONE_BG: Record<string, string> = {
-  red:    'bg-status-redBg text-status-red',
-  orange: 'bg-status-orangeBg text-status-orange',
-  green:  'bg-status-greenBg text-status-green',
-  blue:   'bg-status-blueBg text-status-blue',
-  gray:   'bg-elevated2 text-ink-muted',
 };
 
 type AdSortKey = 'name' | 'spend' | 'value' | 'roas' | 'conversions' | 'impressions' | 'clicks';
@@ -318,19 +311,16 @@ export function AdsDrawer({
   const totalsInfo = summary ? roasLabel(summary.totals.roas) : null;
 
   return (
-    <div
-      className="fixed inset-0 z-[60] flex animate-fade-in"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="ads-drawer-title"
-    >
-      <div className="absolute inset-0 bg-ink/35 backdrop-blur-sm" onClick={onClose} aria-hidden />
-      <aside
+    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent
+        side="end"
         dir="rtl"
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        aria-labelledby="ads-drawer-title"
         className={cn(
-          'relative h-full bg-elevated shadow-elevated border-s border-line-subtle flex flex-col animate-slide-in',
-          !isFullscreen && 'ms-0 me-auto w-full sm:max-w-[640px]',
-          isFullscreen && 'w-full max-w-full',
+          'flex flex-col p-0',
+          !isFullscreen && 'w-full sm:max-w-[640px]',
+          isFullscreen && 'w-full sm:w-full max-w-full',
         )}
       >
         <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-line-subtle">
@@ -356,14 +346,6 @@ export function AdsDrawer({
               title={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
             >
               {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onClose}
-              aria-label="סגור"
-            >
-              <X size={18} />
             </Button>
           </div>
         </header>
@@ -480,7 +462,7 @@ export function AdsDrawer({
                           <td className={cn('px-3 py-2 text-end tabular-nums', a.value > a.spend && 'text-status-green font-medium')}>
                             {formatCurrency(a.value)}
                           </td>
-                          <td className={cn('px-3 py-2 text-center font-semibold tabular-nums rounded', TONE_BG[info.tone])}>
+                          <td className={cn('px-3 py-2 text-center font-semibold tabular-nums rounded', BADGE_TONE_BG[info.tone as keyof typeof BADGE_TONE_BG])}>
                             {a.roas > 0 ? formatNumber(a.roas) : '—'}
                           </td>
                           {/* Deterministic ROAS per ad via utm_content. */}
@@ -553,8 +535,8 @@ export function AdsDrawer({
             לחץ Esc או על הרקע לסגירה
           </div>
         </div>
-      </aside>
-    </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -586,7 +568,7 @@ function Stat({
         {value}
       </div>
       {chip && (
-        <span className={cn('inline-block mt-1 px-1.5 py-0.5 text-[9px] font-semibold rounded', TONE_BG[chip.tone])}>
+        <span className={cn('inline-block mt-1 px-1.5 py-0.5 text-[9px] font-semibold rounded', BADGE_TONE_BG[chip.tone as keyof typeof BADGE_TONE_BG])}>
           {chip.text}
         </span>
       )}

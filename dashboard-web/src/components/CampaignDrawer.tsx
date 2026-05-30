@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { Button } from '@/components/ui/Button';
 import {
-  X,
   ExternalLink,
   Maximize2,
   Megaphone,
@@ -92,6 +91,8 @@ import {
   ChartTooltipRow,
   ChartTooltipValue,
 } from '@/components/ui/chart/ChartTooltip';
+import { Sheet, SheetContent } from '@/components/ui/Sheet';
+import { BADGE_TONE_BG } from '@/components/ui/Badge';
 
 /**
  * Slide-in campaign drilldown drawer. Linear/Vercel-style: full context
@@ -122,14 +123,6 @@ type Props = {
    *  table's healthByKey is keyed by adSet rather than campaign — V2
    *  doesn't backfill campaign-level health for adset mode). */
   health?: CampaignHealth;
-};
-
-const TONE_BG: Record<string, string> = {
-  red:    'bg-status-redBg text-status-red',
-  orange: 'bg-status-orangeBg text-status-orange',
-  green:  'bg-status-greenBg text-status-green',
-  blue:   'bg-status-blueBg text-status-blue',
-  gray:   'bg-elevated2 text-ink-muted',
 };
 
 export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAccounts, rangeFrom, rangeTo, health }: Props) {
@@ -791,28 +784,17 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
   })();
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex animate-fade-in"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="campaign-drawer-title"
-    >
-      <div
-        className="absolute inset-0 bg-ink/35 backdrop-blur-sm"
-        onClick={onClose}
-        aria-hidden
-      />
-      <aside
+    <Sheet open={open} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent
+        side="end"
         dir="rtl"
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        aria-labelledby="campaign-drawer-title"
         style={{ viewTransitionName: 'drawer-panel' as never }}
         className={cn(
-          'relative bg-elevated max-w-full',
-          'h-full overflow-y-auto',
-          'shadow-elevated',
-          // Side-drawer mode: 640px panel anchored to the start (right in RTL)
-          // Fullscreen mode: stretches edge-to-edge so charts + tables breathe
-          !isFullscreen && 'w-full sm:w-[min(640px,100vw)] ml-0 sm:ms-auto',
-          isFullscreen && 'w-full',
+          'overflow-y-auto flex flex-col p-0',
+          !isFullscreen && 'w-full sm:w-[min(640px,100vw)]',
+          isFullscreen && 'w-full sm:w-full max-w-full',
         )}
       >
         <header className="sticky top-0 bg-elevated/95 backdrop-blur-md z-10 px-4 sm:px-6 py-4 border-b border-line-subtle">
@@ -849,9 +831,6 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                 title={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
               >
                 {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-              </Button>
-              <Button variant="ghost" size="icon" onClick={onClose} aria-label="סגור">
-                <X size={18} />
               </Button>
             </div>
           </div>
@@ -1549,7 +1528,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
             לחץ Esc או על הרקע לסגירה
           </div>
         </div>
-      </aside>
+      </SheetContent>
 
       <ProductPickerModal
         open={pickerOpen}
@@ -1589,7 +1568,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
           adAccounts={adAccounts}
         />
       )}
-    </div>
+    </Sheet>
   );
 }
 
@@ -1629,7 +1608,7 @@ function DrawerStat({ label, value, prefix, chip, primary, compact, accent }: {
         <span
           className={cn(
             'inline-block mt-1 px-1.5 py-0.5 text-[9px] sm:text-[10px] font-semibold rounded',
-            TONE_BG[chip.tone],
+            BADGE_TONE_BG[chip.tone as keyof typeof BADGE_TONE_BG],
           )}
         >
           {chip.text}

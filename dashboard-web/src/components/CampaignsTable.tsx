@@ -77,6 +77,7 @@ import { Button } from '@/components/ui/Button';
 import { CampaignDrawer } from './CampaignDrawer';
 import { AdsDrawer } from './AdsDrawer';
 import { readTabLocalState, syncTabLocalUrl } from '@/lib/urlState';
+import { BADGE_TONE_BG } from '@/components/ui/Badge';
 
 type Mode = 'campaign' | 'adset';
 type Platform = 'all' | 'Meta' | 'Google' | 'TikTok';
@@ -111,14 +112,6 @@ const fetcher = async (url: string) => {
     throw new Error(body?.error || `HTTP ${r.status}`);
   }
   return r.json() as Promise<CampaignsResponse>;
-};
-
-const TONE_BG: Record<string, string> = {
-  red:    'bg-status-redBg text-status-redFg',
-  orange: 'bg-status-orangeBg text-status-orangeFg',
-  green:  'bg-status-greenBg text-status-greenFg',
-  blue:   'bg-status-blueBg text-status-blueFg',
-  gray:   'bg-elevated2 text-ink',
 };
 
 function todayInIsrael(): string {
@@ -2544,7 +2537,7 @@ function Stat({
         <span
           className={cn(
             'inline-block mt-1 px-1.5 py-0.5 text-[9px] sm:text-[10px] font-semibold rounded',
-            TONE_BG[chip.tone],
+            BADGE_TONE_BG[chip.tone as keyof typeof BADGE_TONE_BG],
           )}
         >
           {chip.text}
