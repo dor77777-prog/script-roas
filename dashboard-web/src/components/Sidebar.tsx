@@ -89,8 +89,8 @@ function SidebarBody({
                 'flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-sm transition-colors',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                 isActive
-                  ? 'bg-elevated2 text-ink font-medium'
-                  : 'text-ink-muted hover:text-ink hover:bg-elevated2',
+                  ? 'bg-elevated2 text-ink font-medium ring-1 ring-line-subtle'
+                  : 'text-ink-muted hover:text-ink hover:bg-elevated',
               )}
             >
               <span className="shrink-0">{item.icon}</span>
