@@ -453,7 +453,11 @@ describe('postgresReaders — additional shape coverage for plan-19 routes', () 
     expect(r.platform).toBe('Google'); // TitleCased
     expect(r.adId).toBe('a1');
     expect(r.spend).toBe(25);
-    expect(fromCalls).toContain('ads_daily');
+    // Phase D (2026-05-30) — reader now reads from the ads_enriched VIEW
+    // (ads_daily LEFT JOIN ad_registry). The 6 reg_* fields are NULL here
+    // because the fixture row omits them; that is the Phase B/C-pending
+    // production state.
+    expect(fromCalls).toContain('ads_enriched');
   });
 
   it('fetchOrdersAttributionFromPostgres returns OrderAttributionRow shape with empty lineItems by default', async () => {

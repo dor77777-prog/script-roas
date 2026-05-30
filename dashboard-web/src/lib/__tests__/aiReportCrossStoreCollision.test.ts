@@ -164,6 +164,15 @@ function makeAd(overrides: Partial<AdRow>): AdRow {
     clicks: 100,
     conversions: 5,
     conversionValue: 200,
+    // Phase D (2026-05-30) — registry-backed fields. NULL here matches the
+    // production state where ad_registry is keys-only after the Phase D
+    // backfill (Phase B/C ad-level status workers are not yet shipped).
+    regConfiguredStatus: null,
+    regEffectiveStatus: null,
+    regDeliveryStatus: null,
+    regFirstSeenAt: null,
+    regStatusChangedAt: null,
+    regLastStatusSuccessAt: null,
     ...overrides,
   };
 }

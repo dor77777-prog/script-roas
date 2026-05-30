@@ -895,11 +895,21 @@ export async function fetchAdsFromPostgres(
   try {
     data = await paginate<DbRow>(() => {
       let q = getSupabase()
-        .from('ads_daily')
+        .from('ads_enriched')
         .select(
           'date, store_id, platform, campaign_id, campaign_name, ad_set_id, ' +
             'ad_set_name, ad_id, ad_name, spend_cad, impressions, clicks, ' +
-            'conversions, conversion_value_cad',
+            'conversions, conversion_value_cad, ' +
+            // Phase D (2026-05-30) — registry-backed status columns from
+            // ad_registry, joined server-side via the ads_enriched VIEW.
+            // 12-column reg_* bundle; we project the 6 the UI consumes,
+            // the other 6 are reachable via SELECT * if a future caller
+            // needs them. NB: ads_daily has no effective_status column,
+            // so the registry is currently keys-only after the Phase D
+            // backfill — these columns will be NULL until Phase B/C
+            // ad-level status workers ship.
+            'reg_configured_status, reg_effective_status, reg_delivery_status, ' +
+            'reg_first_seen_at, reg_status_changed_at, reg_last_status_success_at',
         );
       if (opts?.range) {
         q = q.gte('date', opts.range.from).lte('date', opts.range.to);
@@ -938,6 +948,46 @@ export async function fetchAdsFromPostgres(
       clicks: toNumber(r.clicks),
       conversions,
       conversionValue: toNumber(r.conversion_value_cad),
+      // Phase D (2026-05-30) — registry-backed status fields joined via the
+      // ads_enriched VIEW. NULL in production until Phase B/C ad-level
+      // status workers populate ad_registry (none exist yet; the registry
+      // was keys-only backfilled).
+      regConfiguredStatus: (() => {
+        const v = (r as { reg_configured_status?: unknown }).reg_configured_status;
+        if (v === null || v === undefined) return null;
+        const s = String(v).trim();
+        return s || null;
+      })(),
+      regEffectiveStatus: (() => {
+        const v = (r as { reg_effective_status?: unknown }).reg_effective_status;
+        if (v === null || v === undefined) return null;
+        const s = String(v).trim();
+        return s || null;
+      })(),
+      regDeliveryStatus: (() => {
+        const v = (r as { reg_delivery_status?: unknown }).reg_delivery_status;
+        if (v === null || v === undefined) return null;
+        const s = String(v).trim();
+        return s || null;
+      })(),
+      regFirstSeenAt: (() => {
+        const v = (r as { reg_first_seen_at?: unknown }).reg_first_seen_at;
+        if (v === null || v === undefined) return null;
+        const s = String(v).trim();
+        return s || null;
+      })(),
+      regStatusChangedAt: (() => {
+        const v = (r as { reg_status_changed_at?: unknown }).reg_status_changed_at;
+        if (v === null || v === undefined) return null;
+        const s = String(v).trim();
+        return s || null;
+      })(),
+      regLastStatusSuccessAt: (() => {
+        const v = (r as { reg_last_status_success_at?: unknown }).reg_last_status_success_at;
+        if (v === null || v === undefined) return null;
+        const s = String(v).trim();
+        return s || null;
+      })(),
     });
   }
   return rows;

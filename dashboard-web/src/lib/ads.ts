@@ -25,4 +25,17 @@ export type AdRow = {
   clicks: number;
   conversions: number;
   conversionValue: number;  // CAD
+  /**
+   * Phase D (2026-05-30) — registry-backed status fields. Joined server-side
+   * via the `ads_enriched` VIEW. Will be null in production until Phase B/C
+   * ad-level status workers populate `ad_registry` (none exist yet — the
+   * registry is keys-only after the Phase D backfill). The fields are
+   * provided so the UI can begin reading them ahead of the worker rollout.
+   */
+  regConfiguredStatus: string | null;
+  regEffectiveStatus: string | null;
+  regDeliveryStatus: string | null;
+  regFirstSeenAt: string | null;
+  regStatusChangedAt: string | null;
+  regLastStatusSuccessAt: string | null;
 };
