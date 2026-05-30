@@ -116,6 +116,21 @@ export type RunTikTokWorkerJobInput = {
   loadPriorRegistry: (storeId: StoreId) => Promise<PriorMaps>;
   upsertRegistry: (input: { table: 'campaign_registry' | 'adset_registry' | 'ad_registry'; rows: unknown[] }) => Promise<void>;
   insertStatusEvents: (input: { events: StatusEventInsert[] }) => Promise<void>;
+  /**
+   * Phase D soak (2026-05-30) — DELETE registry rows that share
+   * (platform, campaign_id) with a freshly-written row but live under a
+   * different store_id (stale cross-attribution leftovers from a prior
+   * mapping). Mirrors the DELETE-then-UPSERT pattern persistCampaignsLive
+   * already uses for campaigns_daily (Phase A.5 v2). Optional because
+   * the existing test fixtures predate this hook; production binding
+   * always provides it.
+   */
+  deleteStaleAttributionRows?: (input: {
+    platform: 'tiktok';
+    entityType: 'campaign' | 'adset' | 'ad';
+    freshCampaignIds: string[];
+    freshTargetStoreIds: string[];
+  }) => Promise<void>;
   upsertCampaignsDaily: (rows: Array<Record<string, unknown>>) => Promise<void>;
   upsertAdsDaily: (rows: Array<Record<string, unknown>>) => Promise<void>;
   recordFreshness: (input: {
@@ -313,6 +328,25 @@ async function runTikTokStatusBranch(input: RunTikTokWorkerJobInput): Promise<vo
       buildRegistryUpsertRow({ prior: prior.campaigns.get(c.campaign_id) ?? null, fresh: c, nowIso }),
     );
     await upsertRegistry({ table: 'campaign_registry', rows: campRows });
+
+    // Phase D soak (2026-05-30) — after writing the fresh campaign rows,
+    // DELETE any stale cross-store rows for the same campaign_ids. The
+    // upsert key includes store_id, so a (tiktok, uzoshop, X) row left
+    // over from a previous mapping does NOT conflict with the new
+    // (tiktok, usmile360, X) row — without this DELETE both linger and
+    // the uzoshop one stays at BACKFILL_UNKNOWN forever because the
+    // worker never resolves X back to uzoshop.
+    if (status.campaigns.length > 0 && input.deleteStaleAttributionRows) {
+      const freshCampaignIds = [...new Set(status.campaigns.map((c) => c.campaign_id))];
+      const freshTargetStoreIds = [...new Set(status.campaigns.map((c) => c.store_id))];
+      await input.deleteStaleAttributionRows({
+        platform: 'tiktok',
+        entityType: 'campaign',
+        freshCampaignIds,
+        freshTargetStoreIds,
+      });
+    }
+
     const asRows = status.adsets.map((a) =>
       buildRegistryUpsertRow({ prior: prior.adsets.get(a.adset_id) ?? null, fresh: a, nowIso }),
     );
@@ -519,6 +553,34 @@ export const tiktokWorker = inngest.createFunction(
           }),
         insertStatusEvents: async (inp) =>
           insertStatusEventsBatch({ admin: sb, events: inp.events }),
+        // Phase D soak (2026-05-30) — DELETE stale cross-attribution
+        // registry rows for (platform, campaign_id) pairs whose current
+        // mapping resolves to a store_id different from a prior write.
+        // Soft-fail: registry stays as-is, next tick retries; the upsert
+        // already succeeded so a transient DELETE error shouldn't fail
+        // the whole status branch and obscure the operator panel.
+        deleteStaleAttributionRows: async (inp) => {
+          const tableName =
+            inp.entityType === 'campaign' ? 'campaign_registry'
+            : inp.entityType === 'adset' ? 'adset_registry'
+            : 'ad_registry';
+          if (inp.freshCampaignIds.length === 0) return;
+          const { error } = await sb
+            .from(tableName)
+            .delete()
+            .eq('platform', inp.platform)
+            .in('campaign_id', inp.freshCampaignIds)
+            .not(
+              'store_id',
+              'in',
+              `(${inp.freshTargetStoreIds.map((s) => `"${s}"`).join(',')})`,
+            );
+          if (error) {
+            console.warn(
+              `tiktokWorker deleteStaleAttributionRows ${tableName}: ${error.message}`,
+            );
+          }
+        },
         upsertCampaignsDaily: async (rows) => {
           if (rows.length === 0) return;
           const { error } = await sb

@@ -39,6 +39,78 @@ describe('runTikTokWorkerJob() — status scope', () => {
     const successCalls = recordFreshness.mock.calls.filter(c => c[0].status === 'success');
     expect(successCalls.map(c => c[0].scope).sort()).toEqual(['ad_status', 'adset_status', 'campaign_status']);
   });
+
+  // Phase D soak (2026-05-30) — after upserting fresh campaign rows under
+  // the resolved store_id, the worker MUST DELETE any registry rows for
+  // the same (platform, campaign_id) under a DIFFERENT store_id. The
+  // PK includes store_id, so upsert never conflicts with stale rows from
+  // a previous mapping — they linger at BACKFILL_UNKNOWN forever.
+  it('Phase D soak: after upsert, calls deleteStaleAttributionRows with the fresh ids + target stores', async () => {
+    const fetchStatus = vi.fn().mockResolvedValue({
+      campaigns: [{
+        store_id: 'usmile360', platform: 'tiktok', campaign_id: '1866440028463153', name: 'X',
+        configured_status: 'ENABLE', effective_status: 'ADGROUP_STATUS_DELIVERY_OK', delivery_status: 'DELIVERING',
+        is_enabled: true, is_serving: true,
+        first_seen_at: '__placeholder__', last_seen_at: '__placeholder__',
+        platform_updated_at: null, status_changed_at: null,
+        last_metrics_success_at: null, last_status_success_at: null,
+        raw_status_payload: null, missed_seen_count: 0, is_removed: false,
+      }],
+      adsets: [], ads: [],
+    });
+    // Prior registry has a stale (tiktok, uzoshop, X) row from before the
+    // mapping moved to usmile360 — worker MUST schedule its DELETE.
+    const loadPriorRegistry = vi.fn().mockResolvedValue({
+      campaigns: new Map([['1866440028463153', {
+        store_id: 'uzoshop', platform: 'tiktok', campaign_id: '1866440028463153',
+        configured_status: 'BACKFILL_UNKNOWN', effective_status: 'ADGROUP_STATUS_DELIVERY_OK',
+      }]]),
+      adsets: new Map(), ads: new Map(),
+    });
+    const deleteStaleAttributionRows = vi.fn();
+    await runTikTokWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'status', tick_id: 'T', staleness_seconds: 600, budget_pct_estimate: 0 },
+      loadStoreMap: async () => ({}),
+      fetchStatus, fetchHotMetrics: vi.fn(),
+      getHotCampaignIds: async () => [], getHotAdgroupIds: async () => [], getHotAdIds: async () => [],
+      loadPriorRegistry,
+      upsertRegistry: vi.fn(), insertStatusEvents: vi.fn(),
+      deleteStaleAttributionRows,
+      upsertCampaignsDaily: vi.fn(), upsertAdsDaily: vi.fn(),
+      recordFreshness: vi.fn(),
+      nowIso: NOW_ISO,
+      isTikTokConfigured: () => true,
+      getAccount: async () => ({ advertiserId: 'ADV1', accessToken: 'TOK', accountCurrency: 'USD' }),
+    });
+    expect(deleteStaleAttributionRows).toHaveBeenCalledOnce();
+    const call = deleteStaleAttributionRows.mock.calls[0][0];
+    expect(call.platform).toBe('tiktok');
+    expect(call.entityType).toBe('campaign');
+    expect(call.freshCampaignIds).toEqual(['1866440028463153']);
+    expect(call.freshTargetStoreIds.sort()).toEqual(['usmile360']);
+  });
+
+  it('Phase D soak: does NOT call deleteStaleAttributionRows when fetch returns zero campaigns', async () => {
+    const fetchStatus = vi.fn().mockResolvedValue({ campaigns: [], adsets: [], ads: [] });
+    const deleteStaleAttributionRows = vi.fn();
+    await runTikTokWorkerJob({
+      jobData: { store_id: 'uzoshop', scope: 'status', tick_id: 'T', staleness_seconds: 600, budget_pct_estimate: 0 },
+      loadStoreMap: async () => ({}),
+      fetchStatus, fetchHotMetrics: vi.fn(),
+      getHotCampaignIds: async () => [], getHotAdgroupIds: async () => [], getHotAdIds: async () => [],
+      loadPriorRegistry: async () => ({ campaigns: new Map(), adsets: new Map(), ads: new Map() }),
+      upsertRegistry: vi.fn(), insertStatusEvents: vi.fn(),
+      deleteStaleAttributionRows,
+      upsertCampaignsDaily: vi.fn(), upsertAdsDaily: vi.fn(),
+      recordFreshness: vi.fn(),
+      nowIso: NOW_ISO,
+      isTikTokConfigured: () => true,
+      getAccount: async () => ({ advertiserId: 'ADV1', accessToken: 'TOK', accountCurrency: 'USD' }),
+    });
+    // Empty fresh set → no DELETE (would otherwise wipe ALL rows for the
+    // platform; guarded by the if-block in the worker).
+    expect(deleteStaleAttributionRows).not.toHaveBeenCalled();
+  });
 });
 
 describe('runTikTokWorkerJob() — hot_metrics scope', () => {
