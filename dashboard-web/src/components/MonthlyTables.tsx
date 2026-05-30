@@ -30,6 +30,13 @@ type Props = {
    * Defaults to the rolling 17-month history window for backwards compat.
    */
   year?: number;
+  /**
+   * When provided (1-12), restrict the visible months to the single month
+   * matching that number within the selected year. Client-side filter only —
+   * the SWR fetch still covers the full year range. When null or undefined,
+   * all months of the year are shown (default behavior).
+   */
+  month?: number | null;
 };
 
 /**
@@ -119,7 +126,7 @@ function roasCell(roas: number, revenue: number, totalSpend: number): { classNam
   return { className: ROAS_BG[roasLabel(roas).tone], text: formatNumber(roas) };
 }
 
-export function MonthlyTables({ stores, globalStore, bare = false, year }: Props) {
+export function MonthlyTables({ stores, globalStore, bare = false, year, month }: Props) {
   const [mode, setMode] = useState<Mode>('per-store');
 
   // Initialise the local store dropdown from the global filter when it names a
@@ -165,6 +172,18 @@ export function MonthlyTables({ stores, globalStore, bare = false, year }: Props
       .map(([ym, rs]) => ({ ym, rows: rs }))
       .sort((a, b) => b.ym.localeCompare(a.ym));
   }, [rows]);
+
+  // Client-side month filter: when `month` is a number (1-12), keep only
+  // the single month group whose key matches `${year}-MM`. No re-fetch.
+  const visibleMonthGroups = useMemo(() => {
+    if (month == null) return monthGroups;
+    const suffix = String(month).padStart(2, '0');
+    // If a year is locked, prefer exact YYYY-MM match; otherwise just match -MM.
+    const target = year != null ? `${year}-${suffix}` : suffix;
+    return monthGroups.filter(({ ym }) =>
+      year != null ? ym === target : ym.endsWith(`-${suffix}`),
+    );
+  }, [monthGroups, month, year]);
 
   if (isLoading) {
     return (
@@ -217,7 +236,7 @@ export function MonthlyTables({ stores, globalStore, bare = false, year }: Props
         </select>
       )}
       <span className="text-[10px] sm:text-xs text-ink-muted ml-auto tabular-nums">
-        {monthGroups.length} חודשים
+        {visibleMonthGroups.length} חודשים
       </span>
     </div>
   );
@@ -230,7 +249,7 @@ export function MonthlyTables({ stores, globalStore, bare = false, year }: Props
 
   const blocks = (
     <div className={cn('space-y-4', bare ? 'p-4 sm:p-5 pt-4' : 'space-y-6')}>
-      {monthGroups.map(({ ym, rows: monthRows }) => {
+      {visibleMonthGroups.map(({ ym, rows: monthRows }) => {
         const defaultOpen = ym === currentYm || ym === prevYm;
         if (mode === 'per-store') {
           const storeRows = monthRows.filter(r => r.storeName === storeFilter);

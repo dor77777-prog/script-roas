@@ -42,7 +42,7 @@
 
 - **Analysis tab** is now split into 2 sub-tabs:
   - **מגמות** (Trends) — ROAS chart + annotations honor the global date filter
-  - **היסטוריה** (Archive) — pick any year via the year chip row, drill into monthly tables
+  - **היסטוריה** (Archive) — 3 per-store sub-tabs (uzoshop / Zol Plus / 360usmile), each with its own Year + Month picker; compare e.g. usmile360 January vs uzoshop March independently
 
 - **/operator** has 4 sub-tabs: **סנכרון** (Sync), **בריאות** (Health),
   **פעילות** (Activity), **מסוכן** (Danger). The "Reset data" red button
@@ -1106,7 +1106,9 @@ ROAS
 ### 6.2 MonthlyTables — טבלאות חודשיות
 עד 17 חודשים אחורה. שתי תצוגות:
 
-> **Store filter sync (A5-F5-02):** כשה-Store Filter הגלובלי מסנן חנות ספציפית, הדרופדאון ב-MonthlyTables מתעדכן אוטומטית לאותה חנות. ניתן לשנות ידנית אחר-כך בלי להשפיע על הפילטר הגלובלי. (תנאי: עלות 17 חודשים תמיד מוצגת ללא תלות בטווח הגלובלי — ראה 6.2 סעיף טווח.)
+**Archive per-store sub-tabs:** כרטיסיית היסטוריה מחולקת ל-3 תת-כרטיסיות: `uzoshop`, `Zol Plus`, `360usmile`. לכל תת-כרטיסייה יש Year picker ו-Month picker עצמאיים — ניתן להשוות לדוגמה ינואר של usmile360 מול מרץ של uzoshop בו-זמנית. בחירת "כל השנה" ב-Month picker מציגה את כל החודשים של השנה הנבחרת (ברירת מחדל). החודש הנוכחי והקודם נפתחים אוטומטית.
+
+> **Store filter sync (A5-F5-02):** הדרופדאון "לפי חנות" בתוך MonthlyTables מוגדר אוטומטית לחנות של התת-כרטיסייה הנוכחית.
 
 **מצב א: לפי חנות**
 ```
