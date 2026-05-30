@@ -626,9 +626,9 @@ export async function fetchCampaignsFromPostgres(
             // indicator next to the campaign name.
             'last_live_tick_at, ' +
             // Phase D (2026-05-30) — registry-backed status columns, joined
-            // server-side via the campaigns_enriched VIEW. The 11-column
+            // server-side via the campaigns_enriched VIEW. The 12-column
             // bundle from campaign_registry — we project only the 6 the UI
-            // consumes; the other 5 are reachable via SELECT * on the view
+            // consumes; the other 6 are reachable via SELECT * on the view
             // if a future caller needs them.
             'reg_configured_status, reg_effective_status, reg_delivery_status, ' +
             'reg_first_seen_at, reg_status_changed_at, reg_last_status_success_at',
