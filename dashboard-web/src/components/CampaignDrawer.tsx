@@ -82,7 +82,7 @@ import {
   allocateProductRevenue,
   type ProductMap,
 } from '@/lib/campaignProductMap';
-import { CHART_COLORS } from '@/lib/chartColors';
+import { CHART_AXIS_COLOR, CHART_COLORS } from '@/lib/chartColors';
 import { buildDateRangeKey, getPreviousPeriod } from '@/lib/dateRange';
 import { ChartContainer } from '@/components/ui/chart/ChartContainer';
 import {
@@ -923,7 +923,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                   </defs>
                   <XAxis
                     dataKey="date"
-                    tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
+                    tick={{ fontSize: 10, fill: CHART_AXIS_COLOR }}
                     tickLine={false}
                     axisLine={false}
                     tickFormatter={d => {
@@ -936,7 +936,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                       glance. Was `hide` previously which left the chart
                       ambiguous (peaks indistinguishable from troughs). */}
                   <YAxis
-                    tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
+                    tick={{ fontSize: 10, fill: CHART_AXIS_COLOR }}
                     tickLine={false}
                     axisLine={false}
                     tickFormatter={v => `C$${formatCurrency(Number(v))}`}
@@ -1136,7 +1136,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                   <LineChart data={chartData} margin={{ top: 8, right: showRoasOverlay ? 56 : 16, left: 4, bottom: 0 }}>
                     <XAxis
                       dataKey="date"
-                      tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
+                      tick={{ fontSize: 10, fill: CHART_AXIS_COLOR }}
                       tickLine={false}
                       axisLine={false}
                       tickFormatter={d => {
@@ -1147,7 +1147,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                     />
                     <YAxis
                       yAxisId="cpm"
-                      tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
+                      tick={{ fontSize: 10, fill: CHART_AXIS_COLOR }}
                       tickLine={false}
                       axisLine={false}
                       tickFormatter={v => `C$${Number(v).toFixed(2)}`}

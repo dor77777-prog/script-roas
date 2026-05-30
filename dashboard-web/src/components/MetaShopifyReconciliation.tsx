@@ -13,7 +13,7 @@ import type { CampaignRow } from '@/lib/campaigns';
 import type { OrderAttributionRow, OrderSource } from '@/lib/ordersAttribution';
 import { campaignKey, type ProductMap } from '@/lib/campaignProductMap';
 import { pearson, pearsonWithLag } from '@/lib/attributionAnalysis';
-import { CHART_COLORS } from '@/lib/chartColors';
+import { CHART_AXIS_COLOR, CHART_COLORS } from '@/lib/chartColors';
 import { enumerateDateRange } from '@/lib/dateRange';
 import { PRODUCT_MAP_CHIP_KEY } from '@/lib/sessionKeys';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
@@ -634,7 +634,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
           <ComposedChart data={reconciliation.series} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
               <XAxis
                 dataKey="date"
-                tick={{ fontSize: 9, fill: CHART_COLORS.reconciliationAxis }}
+                tick={{ fontSize: 9, fill: CHART_AXIS_COLOR }}
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={d => {
@@ -647,7 +647,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                   vs Shopify net revenue; without a labelled Y axis the
                   operator couldn't read the magnitude of agreement / gap. */}
               <YAxis
-                tick={{ fontSize: 9, fill: CHART_COLORS.reconciliationAxis }}
+                tick={{ fontSize: 9, fill: CHART_AXIS_COLOR }}
                 tickLine={false}
                 axisLine={false}
                 // c/HI-02: pick decimal precision per magnitude. The old

@@ -46,7 +46,7 @@ import {
   resolveCampaignsColumnOrder,
 } from '@/lib/campaignsColumnPrefs';
 import { CampaignsColumnsMenu } from './CampaignsColumnsMenu';
-import { CHART_COLORS } from '@/lib/chartColors';
+import { CHART_AXIS_COLOR, CHART_COLORS } from '@/lib/chartColors';
 import { filterDrillRows } from '@/lib/drillFilter';
 import type { AdAccountMap } from '@/lib/campaignsLinks';
 import {
@@ -1521,7 +1521,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
               <LineChart data={cpmChartData} margin={{ top: 8, right: cpmShowRoas ? 56 : 16, left: 4, bottom: 0 }}>
                 <XAxis
                   dataKey="date"
-                  tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
+                  tick={{ fontSize: 10, fill: CHART_AXIS_COLOR }}
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={d => {
@@ -1532,7 +1532,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                 />
                 <YAxis
                   yAxisId="cpm"
-                  tick={{ fontSize: 10, fill: CHART_COLORS.axis }}
+                  tick={{ fontSize: 10, fill: CHART_AXIS_COLOR }}
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={v => `C$${Number(v).toFixed(2)}`}
