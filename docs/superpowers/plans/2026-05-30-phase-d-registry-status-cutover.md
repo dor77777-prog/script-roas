@@ -400,15 +400,20 @@ BEGIN
         THEN 'DELIVERING'
       WHEN NEW.effective_status IN (
         'PAUSED','DISABLED','REMOVED','ARCHIVED','DELETE',
+        'CAMPAIGN_PAUSED','ADSET_PAUSED','DISAPPROVED',
         'ADGROUP_STATUS_DISABLE','ADGROUP_STATUS_ARCHIVED','ADGROUP_STATUS_DELETE',
         'ADGROUP_STATUS_TIMEDOUT','ADGROUP_STATUS_FROZEN',
         'ADGROUP_STATUS_CAMPAIGN_DISABLE'
       ) THEN 'NOT_DELIVERING'
       WHEN NEW.effective_status IN ('PENDING','PENDING_REVIEW') THEN 'PENDING_REVIEW'
+      WHEN NEW.effective_status IN ('REJECTED') THEN 'REJECTED'
       WHEN NEW.effective_status IN ('ADGROUP_STATUS_BUDGET_EXCEED','LIMITED') THEN 'LIMITED'
       WHEN NEW.effective_status IN ('LEARNING') THEN 'LEARNING'
       ELSE 'UNKNOWN'
     END,
+    -- is_enabled here is gated on effective_status because configured_status
+    -- is the BACKFILL_UNKNOWN sentinel. Phase B/C status workers overwrite
+    -- this with the platform's real configured_status within ~10 min.
     CASE
       WHEN NEW.effective_status IN ('ACTIVE','ENABLED') THEN TRUE
       WHEN NEW.effective_status IS NULL THEN NULL
@@ -442,15 +447,20 @@ BEGIN
         THEN 'DELIVERING'
       WHEN NEW.effective_status IN (
         'PAUSED','DISABLED','REMOVED','ARCHIVED','DELETE',
+        'CAMPAIGN_PAUSED','ADSET_PAUSED','DISAPPROVED',
         'ADGROUP_STATUS_DISABLE','ADGROUP_STATUS_ARCHIVED','ADGROUP_STATUS_DELETE',
         'ADGROUP_STATUS_TIMEDOUT','ADGROUP_STATUS_FROZEN',
         'ADGROUP_STATUS_CAMPAIGN_DISABLE'
       ) THEN 'NOT_DELIVERING'
       WHEN NEW.effective_status IN ('PENDING','PENDING_REVIEW') THEN 'PENDING_REVIEW'
+      WHEN NEW.effective_status IN ('REJECTED') THEN 'REJECTED'
       WHEN NEW.effective_status IN ('ADGROUP_STATUS_BUDGET_EXCEED','LIMITED') THEN 'LIMITED'
       WHEN NEW.effective_status IN ('LEARNING') THEN 'LEARNING'
       ELSE 'UNKNOWN'
     END,
+    -- is_enabled here is gated on effective_status because configured_status
+    -- is the BACKFILL_UNKNOWN sentinel. Phase B/C status workers overwrite
+    -- this with the platform's real configured_status within ~10 min.
     CASE
       WHEN NEW.effective_status IN ('ACTIVE','ENABLED') THEN TRUE
       WHEN NEW.effective_status IS NULL THEN NULL
