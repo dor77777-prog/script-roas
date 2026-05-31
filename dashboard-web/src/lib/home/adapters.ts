@@ -78,22 +78,58 @@ export function aggregateCpm(
 
 /**
  * Reshape an `aggregate()` Aggregate + CPM into the
- * <CommandCenterHero current=…> prop. trueNetProfit is preferred over
- * the legacy net (matches KpiCards behaviour).
+ * <CommandCenterHero current=…> prop.
+ *
+ * Two profit fields:
+ *   • `operatingProfit` = revenue − ad spend − COGS. The hero's featured
+ *     "רווח תפעולי" card uses this — it matches what the Home tab actually
+ *     contextualises (ads + inventory). Fixed/recurring overhead is NOT
+ *     subtracted here because the Home tab doesn't surface that context;
+ *     surfacing trueNetProfit here would silently bake in costs the
+ *     operator can't see on this screen.
+ *   • `netProfit` keeps the legacy semantics (trueNetProfit — full net
+ *     after fixed + recurring + fees) so P&L callers that read
+ *     `period.netProfit` from this adapter (e.g. tests, the chart KPI
+ *     strip) keep working unchanged.
+ *
+ * `adSpendPctOfRevenue` is the ad-spend ratio (0..1+), null when revenue
+ * is 0 so the card can render "—" instead of dividing by zero.
  */
 export function toHeroPeriod(
   agg: Aggregate,
   cpm: BlendedCpm,
   ordersTotal: number,
 ): CommandCenterPeriod {
+  const operatingProfit = agg.revenue - agg.spend - agg.cogs;
   return {
     roas: agg.roas > 0 ? agg.roas : null,
     netProfit: agg.trueNetProfit,
+    operatingProfit,
     revenue: agg.revenue,
     spend: agg.spend,
     cpm: cpm.cpm > 0 ? cpm.cpm : null,
     orders: ordersTotal,
+    adSpendPctOfRevenue: agg.revenue > 0 ? agg.spend / agg.revenue : null,
   };
+}
+
+/**
+ * Band classifier for the Ad-Spend %-of-Revenue hero card.
+ *
+ * Internal target = 25% (operator-supplied). Below target = efficient
+ * (green). 25-30% = warning (orange). Above 30% = overspend (red).
+ * When revenue is missing the ratio is null and the band falls back to
+ * gray so the card renders neutral instead of misleadingly green.
+ *
+ * Accepts a percentage value (e.g. `27` for 27%), NOT a fraction — the
+ * card formats `adSpendPctOfRevenue * 100` for display and feeds that
+ * same number here so both reads agree.
+ */
+export function adSpendBand(pct: number | null | undefined): 'green' | 'orange' | 'red' | 'gray' {
+  if (pct == null || !Number.isFinite(pct)) return 'gray';
+  if (pct <= 25) return 'green';
+  if (pct <= 30) return 'orange';
+  return 'red';
 }
 
 /**
@@ -110,9 +146,16 @@ export function toHeroDelta(
   prevOrders: number,
 ): CommandCenterDelta {
   const baselineEmpty = prev.spend === 0 && prev.revenue === 0;
+  const curOperatingProfit = cur.revenue - cur.spend - cur.cogs;
+  const prevOperatingProfit = prev.revenue - prev.spend - prev.cogs;
+  const curAdSpendPct = cur.revenue > 0 ? (cur.spend / cur.revenue) * 100 : null;
+  const prevAdSpendPct = prev.revenue > 0 ? (prev.spend / prev.revenue) * 100 : null;
   return {
     roas: baselineEmpty || prev.roas === 0 ? null : cur.roas - prev.roas,
     netProfit: baselineEmpty ? null : cur.trueNetProfit - prev.trueNetProfit,
+    operatingProfit: baselineEmpty
+      ? null
+      : curOperatingProfit - prevOperatingProfit,
     revenuePct:
       baselineEmpty || prev.revenue === 0
         ? null
@@ -126,6 +169,10 @@ export function toHeroDelta(
         ? (curCpm.cpm - prevCpm.cpm) / prevCpm.cpm
         : null,
     orders: baselineEmpty ? null : curOrders - prevOrders,
+    adSpendPctOfRevenue:
+      curAdSpendPct == null || prevAdSpendPct == null
+        ? null
+        : curAdSpendPct - prevAdSpendPct,
   };
 }
 

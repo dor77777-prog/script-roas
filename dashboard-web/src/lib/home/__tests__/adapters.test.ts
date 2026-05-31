@@ -8,6 +8,7 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  adSpendBand,
   aggregateCpm,
   annotationsToPins,
   toChartData,
@@ -75,12 +76,13 @@ describe('aggregateCpm', () => {
 });
 
 describe('toHeroPeriod', () => {
-  it('maps trueNetProfit (not legacy netProfit) into the hero', () => {
+  it('maps trueNetProfit into period.netProfit (back-compat)', () => {
     const a = agg({
       trueNetProfit: 4847,
       netProfit: 5000, // legacy — should NOT leak through
       revenue: 10998,
       spend: 3924,
+      cogs: 2750,
       roas: 2.8,
     });
     const p = toHeroPeriod(a, { cpm: 8.92, impressions: 100, spend: 50 }, 188);
@@ -92,6 +94,35 @@ describe('toHeroPeriod', () => {
     expect(p.orders).toBe(188);
   });
 
+  it('computes operatingProfit = revenue − adSpend − cogs', () => {
+    const a = agg({
+      revenue: 10000,
+      spend: 3000,
+      cogs: 2500,
+      trueNetProfit: 1234, // unrelated — must NOT influence operatingProfit
+    });
+    const p = toHeroPeriod(a, { cpm: 0, impressions: 0, spend: 0 }, 0);
+    expect(p.operatingProfit).toBe(4500); // 10000 − 3000 − 2500
+  });
+
+  it('operatingProfit can go negative when COGS + ad spend exceed revenue', () => {
+    const a = agg({ revenue: 100, spend: 80, cogs: 50 });
+    const p = toHeroPeriod(a, { cpm: 0, impressions: 0, spend: 0 }, 0);
+    expect(p.operatingProfit).toBe(-30);
+  });
+
+  it('computes adSpendPctOfRevenue as a fraction', () => {
+    const a = agg({ revenue: 1000, spend: 250 });
+    const p = toHeroPeriod(a, { cpm: 0, impressions: 0, spend: 0 }, 0);
+    expect(p.adSpendPctOfRevenue).toBeCloseTo(0.25, 5);
+  });
+
+  it('null-coerces adSpendPctOfRevenue when revenue is 0 (no divide-by-zero)', () => {
+    const a = agg({ revenue: 0, spend: 100 });
+    const p = toHeroPeriod(a, { cpm: 0, impressions: 0, spend: 0 }, 0);
+    expect(p.adSpendPctOfRevenue).toBeNull();
+  });
+
   it('null-coerces ROAS when spend is 0', () => {
     const p = toHeroPeriod(agg({ roas: 0 }), { cpm: 0, impressions: 0, spend: 0 }, 0);
     expect(p.roas).toBeNull();
@@ -100,6 +131,32 @@ describe('toHeroPeriod', () => {
   it('null-coerces CPM when impressions is 0', () => {
     const p = toHeroPeriod(agg({ revenue: 100 }), { cpm: 0, impressions: 0, spend: 0 }, 0);
     expect(p.cpm).toBeNull();
+  });
+});
+
+describe('adSpendBand — 25% target', () => {
+  it('returns "green" for ≤ 25%', () => {
+    expect(adSpendBand(20)).toBe('green');
+    expect(adSpendBand(25)).toBe('green');
+    expect(adSpendBand(0)).toBe('green');
+  });
+
+  it('returns "orange" for 25% < pct ≤ 30% (warning zone)', () => {
+    expect(adSpendBand(25.01)).toBe('orange');
+    expect(adSpendBand(27)).toBe('orange');
+    expect(adSpendBand(30)).toBe('orange');
+  });
+
+  it('returns "red" for > 30% (overspend)', () => {
+    expect(adSpendBand(30.01)).toBe('red');
+    expect(adSpendBand(35)).toBe('red');
+    expect(adSpendBand(100)).toBe('red');
+  });
+
+  it('returns "gray" when input is null / undefined / NaN', () => {
+    expect(adSpendBand(null)).toBe('gray');
+    expect(adSpendBand(undefined)).toBe('gray');
+    expect(adSpendBand(Number.NaN)).toBe('gray');
   });
 });
 
@@ -115,15 +172,17 @@ describe('toHeroDelta', () => {
     );
     expect(d.roas).toBeNull();
     expect(d.netProfit).toBeNull();
+    expect(d.operatingProfit).toBeNull();
     expect(d.revenuePct).toBeNull();
     expect(d.spendPct).toBeNull();
     expect(d.orders).toBeNull();
+    expect(d.adSpendPctOfRevenue).toBeNull();
   });
 
   it('computes deltas when both periods have data', () => {
     const d = toHeroDelta(
-      agg({ revenue: 200, spend: 100, roas: 2, trueNetProfit: 50 }),
-      agg({ revenue: 100, spend: 50,  roas: 1, trueNetProfit: 25 }),
+      agg({ revenue: 200, spend: 100, roas: 2, trueNetProfit: 50, cogs: 50 }),
+      agg({ revenue: 100, spend: 50,  roas: 1, trueNetProfit: 25, cogs: 25 }),
       { cpm: 8, impressions: 10, spend: 80 },
       { cpm: 4, impressions: 5,  spend: 20 },
       10,
@@ -131,10 +190,38 @@ describe('toHeroDelta', () => {
     );
     expect(d.roas).toBe(1);
     expect(d.netProfit).toBe(25);
+    // cur opProfit = 200 − 100 − 50 = 50; prev = 100 − 50 − 25 = 25 → Δ = 25
+    expect(d.operatingProfit).toBe(25);
     expect(d.revenuePct).toBe(1);
     expect(d.spendPct).toBe(1);
     expect(d.cpmPct).toBe(1);
     expect(d.orders).toBe(5);
+    // cur adSpendPct = 50%, prev = 50% → Δ = 0 pp
+    expect(d.adSpendPctOfRevenue).toBe(0);
+  });
+
+  it('computes adSpendPctOfRevenue delta in percentage POINTS', () => {
+    const d = toHeroDelta(
+      agg({ revenue: 1000, spend: 350, roas: 2.85 }),  // 35%
+      agg({ revenue: 1000, spend: 250, roas: 4.0 }),   // 25%
+      { cpm: 0, impressions: 0, spend: 0 },
+      { cpm: 0, impressions: 0, spend: 0 },
+      0,
+      0,
+    );
+    expect(d.adSpendPctOfRevenue).toBeCloseTo(10, 5); // 35 − 25 = 10pp
+  });
+
+  it('null-coerces adSpendPctOfRevenue delta when either period has 0 revenue', () => {
+    const d = toHeroDelta(
+      agg({ revenue: 1000, spend: 250, roas: 4.0 }),
+      agg({ revenue: 0, spend: 100, roas: 0 }),
+      { cpm: 0, impressions: 0, spend: 0 },
+      { cpm: 0, impressions: 0, spend: 0 },
+      0,
+      0,
+    );
+    expect(d.adSpendPctOfRevenue).toBeNull();
   });
 });
 

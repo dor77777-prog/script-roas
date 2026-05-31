@@ -3,25 +3,35 @@
 /**
  * Task 3.1 — <CommandCenterHero> primitive.
  *
- * 2-row × 3-column glass-card grid that REPLACES the prior
- * HeroOverview + HomeLiveBand + HomeSummaryBand + KpiCards stack at the
- * top of the Home tab. Visual ref: mockup-04-final.html lines 313-338.
+ * Glass-card grid that REPLACES the prior HeroOverview + HomeLiveBand +
+ * HomeSummaryBand + KpiCards stack at the top of the Home tab. Visual
+ * ref: mockup-04-final.html lines 313-338.
  *
- *   Row 1 — Net Profit (featured + banded) · Spend · Revenue
- *   Row 2 — ROAS (banded)                  · Orders · CPM
+ *   Row 1 — Operating Profit (featured + banded) · Spend · Revenue
+ *   Row 2 — ROAS · Ad-spend ÷ Revenue (own band) · Orders · CPM
  *
- *   • Net Profit card carries `<Card band={...}>` with the band picked by
+ *   • Featured card carries the OPERATING PROFIT (revenue − ad spend −
+ *     COGS), labelled "רווח תפעולי". Full net profit (after fixed +
+ *     recurring + fees) lives on P&L per operator request — bringing it
+ *     here would bake in costs the Home tab doesn't surface, mismatching
+ *     the "Spend" card next to it which is ad-spend only.
+ *   • Featured card carries `<Card band={...}>` with the band picked by
  *     `useRoasBandGradient(roas)` — i.e. the SAME band as the ROAS tile so
  *     the two hero numbers visually agree.
- *   • Featured Net Profit number wears `.v.banded` so its colour follows
- *     the data-band attribute on the card. Secondary cards (Spend /
+ *   • Featured big number wears `.v.banded` so its colour follows the
+ *     data-band attribute on the card. Most secondary cards (Spend /
  *     Revenue / Orders / CPM) wear `.v.neutral` which renders the soft
  *     white→cool-gray text-gradient defined in globals.css.
  *   • ROAS tile (row 2) also banded + `.v.banded` (matches mockup).
+ *   • Ad-spend ÷ Revenue card (row 2) carries its OWN band — 25% target:
+ *     ≤25% green (efficient), 25-30% orange (warning), >30% red
+ *     (overspend). Independent of the business-ROAS band the rest of
+ *     the strip wears, so the operator sees two signals at a glance:
+ *     business health vs. ad efficiency.
  *   • Each card surfaces a <FreshnessBadge> chip wired to the same
  *     `updatedAt` that drives the Card's `data-freshness` desaturation,
  *     per [[home-visual-rules]] (Task 3.6).
- *   • Net Profit card renders a SVG sparkline (28-day shape) so the
+ *   • Featured card renders a SVG sparkline (28-day shape) so the
  *     featured tile carries the editorial "shape of the period" without
  *     the heavy Recharts dependency the old HeroOverview pulled in.
  *
@@ -35,9 +45,11 @@
  *     treat ↑ as positive.
  *
  * NO INFO LOSS PROMISE (mapping table per spec):
- *   • ROAS / Net / Revenue / Spend / CPM / Orders — all surfaced here.
- *   • Gross Profit moves to <RoasTargetChart> KPI strip (lives under Net's
- *     tooltip).
+ *   • ROAS / Operating Profit / Revenue / Spend / CPM / Orders +
+ *     Ad-spend ÷ Revenue — all surfaced here.
+ *   • Full Net Profit (after fixed + recurring + fees) — P&L tab.
+ *   • Gross Profit moves to <RoasTargetChart> KPI strip (lives under
+ *     Operating Profit's tooltip).
  *   • COGS, transaction fees, fixed costs — P&L tab.
  *
  * Presentational — parent (Dashboard HomeTab) reads /api/data via SWR and
@@ -54,6 +66,7 @@ import {
   type RoasBand,
 } from '@/lib/format/useRoasBandGradient';
 import { useStaleness, type StalenessInput } from '@/lib/freshness/useStaleness';
+import { adSpendBand } from '@/lib/home/adapters';
 
 /* --------------------------------------------------------------------------
  * Props — data shape locked by Task 3.1 spec.
@@ -62,9 +75,18 @@ import { useStaleness, type StalenessInput } from '@/lib/freshness/useStaleness'
 export interface CommandCenterPeriod {
   /** ROAS for the active range (revenue / spend). 0 == no spend yet. */
   roas: number | null;
-  /** Net profit in CAD (revenue − spend − COGS − fees − fixed costs).
-   *  Falls back to the legacy revenue−spend−cogs when fees/fixed not loaded. */
+  /** Full net profit in CAD (revenue − spend − COGS − fees − fixed costs).
+   *  Retained for callers that need the legacy semantics; the hero's
+   *  featured card uses `operatingProfit` instead — see field doc below. */
   netProfit: number | null;
+  /**
+   * Operating profit in CAD = revenue − ad spend − COGS. This is what the
+   * featured "רווח תפעולי" hero card surfaces — it matches the costs
+   * the Home tab actually contextualises (ads + inventory). Fixed and
+   * recurring overhead is reserved for the P&L tab, which surfaces full
+   * net profit alongside the cost lines that produce it.
+   */
+  operatingProfit: number | null;
   /** Revenue in CAD for the active range. */
   revenue: number | null;
   /** Total ad spend in CAD for the active range. */
@@ -73,13 +95,29 @@ export interface CommandCenterPeriod {
   cpm: number | null;
   /** Total orders count for the active range. */
   orders: number | null;
+  /**
+   * Ad-spend ÷ revenue as a fraction (0..1+). null when revenue is 0 so
+   * the dedicated hero card can render "—" instead of a divide-by-zero
+   * green. The card carries its OWN band (25% target → green / orange /
+   * red) — independent of the business-ROAS band the rest of the strip
+   * wears.
+   */
+  adSpendPctOfRevenue: number | null;
 }
 
 export interface CommandCenterDelta {
   /** ROAS delta as POINTS (curRoas − prevRoas). Signed. */
   roas: number | null;
-  /** Net profit delta in CAD (curNet − prevNet). Signed. */
+  /** Full net-profit delta in CAD (curTrueNet − prevTrueNet). Signed.
+   *  Retained for back-compat; the featured hero card uses
+   *  `operatingProfit` below — see field doc. */
   netProfit: number | null;
+  /**
+   * Operating-profit delta in CAD (curOpProfit − prevOpProfit) where
+   * operatingProfit = revenue − ad spend − COGS. Drives the
+   * delta-vs-previous line on the featured "רווח תפעולי" card.
+   */
+  operatingProfit: number | null;
   /** Revenue delta as fraction ((cur − prev) / prev). Signed. */
   revenuePct: number | null;
   /** Spend delta as fraction. ↑ spend is a NEGATIVE signal (inverse). */
@@ -88,6 +126,12 @@ export interface CommandCenterDelta {
   cpmPct: number | null;
   /** Orders delta as absolute count. */
   orders: number | null;
+  /**
+   * Ad-spend %-of-revenue delta as POINTS (curPct% − prevPct%, in
+   * percentage points). Signed. ↑ is a NEGATIVE signal (more of revenue
+   * going to ads, worse efficiency).
+   */
+  adSpendPctOfRevenue: number | null;
 }
 
 /**
@@ -190,6 +234,29 @@ function fmtMoneyDelta(n: number | null | undefined): string {
   const arrow = n >= 0 ? '▴' : '▾';
   const sign = n >= 0 ? '+' : '−';
   return `${arrow} ${sign}${fmtMoneyCompact(Math.abs(n))}`;
+}
+
+/**
+ * Ad-spend %-of-revenue formatter (e.g. 0.197 → "19.7%"). Returns "—"
+ * when the ratio is null/NaN so the card surfaces missing-revenue
+ * cleanly without rendering a misleading "0.0%".
+ */
+function fmtAdSpendPct(frac: number | null | undefined): string {
+  if (frac == null || Number.isNaN(frac)) return '—';
+  return `${(frac * 100).toFixed(1)}%`;
+}
+
+/**
+ * Delta formatter for the ad-spend ratio — input is in percentage POINTS
+ * (e.g. +2.3 means ratio went up by 2.3pp). Arrow direction reflects raw
+ * sign; the colour (good/bad) is decided by the caller's `positive` flag
+ * since ↑ ad-spend % is a NEGATIVE signal for efficiency.
+ */
+function fmtPctPointsDelta(points: number | null | undefined): string {
+  if (points == null || Number.isNaN(points)) return '';
+  const arrow = points >= 0 ? '▴' : '▾';
+  const sign = points >= 0 ? '+' : '−';
+  return `${arrow} ${sign}${Math.abs(points).toFixed(1)}pp`;
 }
 
 /* --------------------------------------------------------------------------
@@ -387,11 +454,14 @@ export function CommandCenterHero({
   updatedAt,
   className,
 }: CommandCenterHeroProps) {
-  // Single band selector used by ALL 6 hero cards — Change B (2026-05-31):
-  // the whole hero strip now wears the business-ROAS band so a glance at
-  // the row communicates business health. Only Net Profit + ROAS get the
-  // band-coloured big number (`.v.banded`); the other 4 keep the white
-  // gradient number on top of the band-tinted surface.
+  // Business-ROAS band selector used by 6 of the 7 hero cards — Change
+  // B (2026-05-31): most of the hero strip wears the business-ROAS band
+  // so a glance at the row communicates business health. Operating
+  // Profit + ROAS get the band-coloured big number (`.v.banded`); Spend
+  // / Revenue / Orders / CPM keep the white gradient number on top of
+  // the band-tinted surface. The 7th card (Ad-spend ÷ Revenue) carries
+  // its OWN band derived from the 25% efficiency target and uses
+  // `.v.banded` for its big number.
   const netBand = useRoasBandGradient(current.roas);
   const roasBand = netBand;
   const businessBand = netBand.band;
@@ -419,9 +489,10 @@ export function CommandCenterHero({
           freshness={freshnessStage}
           className="hero-card featured px-4 py-4 sm:px-6 sm:py-6"
           data-testid="hero-net-profit"
+          title="הכנסות − פרסום − מלאי. רווח נטו מלא (כולל הוצאות קבועות וחוזרות) נמצא ב-P&L."
         >
           <HeroCardHeader
-            label={`רווח נטו · ${rangeLabel}`}
+            label={`רווח תפעולי · ${rangeLabel}`}
             updatedAt={updatedAt}
           />
           <bdi
@@ -432,18 +503,21 @@ export function CommandCenterHero({
               'mt-2 text-[2.25rem] sm:text-[2.75rem]',
             )}
           >
-            {fmtMoneyCompact(current.netProfit)}
+            {fmtMoneyCompact(current.operatingProfit)}
           </bdi>
           <DeltaLine
-            text={fmtMoneyDelta(delta?.netProfit)}
+            text={fmtMoneyDelta(delta?.operatingProfit)}
             pctText={fmtPctDelta(
-              delta?.netProfit != null && current.netProfit != null
-                ? delta.netProfit /
-                    Math.max(1, Math.abs(current.netProfit - delta.netProfit))
+              delta?.operatingProfit != null && current.operatingProfit != null
+                ? delta.operatingProfit /
+                    Math.max(
+                      1,
+                      Math.abs(current.operatingProfit - delta.operatingProfit),
+                    )
                 : null,
             )}
             label="מול אתמול"
-            positive={(delta?.netProfit ?? 0) >= 0}
+            positive={(delta?.operatingProfit ?? 0) >= 0}
             className="text-sm mt-2.5"
           />
           {netSparkValues && netSparkValues.length >= 2 && (
@@ -504,9 +578,9 @@ export function CommandCenterHero({
         </Card>
       </div>
 
-      {/* Row 2 — ROAS (banded) · Orders · CPM ----------------------------- */}
+      {/* Row 2 — ROAS · Ad-spend %-of-revenue · Orders · CPM -------------- */}
       <div
-        className="grid gap-3 grid-cols-1 md:grid-cols-3"
+        className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-4"
         data-testid="hero-row-2"
       >
         <Card
@@ -530,6 +604,34 @@ export function CommandCenterHero({
           <MiniSparkline
             values={secondarySparklines?.roas}
             stroke={NEUTRAL_SPARK_STROKE}
+          />
+        </Card>
+
+        {/* Ad-spend ÷ revenue — independent band (25% target) ----------- */}
+        <Card
+          band={adSpendBand(
+            current.adSpendPctOfRevenue != null
+              ? current.adSpendPctOfRevenue * 100
+              : null,
+          )}
+          freshness={freshnessStage}
+          className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
+          data-testid="hero-ad-spend-pct"
+          title="אחוז הוצאות הפרסום מתוך ההכנסות בטווח הנבחר. יעד פנימי: 25% או פחות."
+        >
+          <HeroCardHeader label="פרסום ÷ הכנסות" />
+          <bdi
+            dir="ltr"
+            className="v num banded block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
+          >
+            {fmtAdSpendPct(current.adSpendPctOfRevenue)}
+          </bdi>
+          {/* ↑ ratio is a NEGATIVE signal (more $ going to ads per $ of revenue) */}
+          <DeltaLine
+            text={fmtPctPointsDelta(delta?.adSpendPctOfRevenue)}
+            label="יעד 25%"
+            positive={(delta?.adSpendPctOfRevenue ?? 0) <= 0}
+            className="text-xs mt-1.5"
           />
         </Card>
 
