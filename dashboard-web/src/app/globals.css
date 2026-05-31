@@ -1316,3 +1316,41 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   border-color: rgba(255, 255, 255, 0.18);
   border-radius: 11px;
 }
+
+/* ===========================================================================
+   GRAY (no-data / ROAS-0) PER-STORE CARD — DARK INK GUARANTEE
+   (operator 2026-06-01 — gray (no-data/ROAS-0) per-store cards use dark ink
+   (`--text`), never white, because the gray surface is near-white in light
+   mode (light-on-light guard)).
+
+   The gray card is the no-data / ROAS-0 state, whose surface is NEAR-WHITE in
+   light mode (and near-black in dark). All the vivid white-text rules above are
+   `:not([data-band="gray"])`-scoped, so they cannot reach this card — but this
+   block PINS the structural values to `var(--text)` defensively, guaranteeing
+   legibility regardless of any future white rule that forgets the negation.
+   `var(--text)` flips per theme (dark ink in light / light ink in dark), so it
+   is always the legible ink for the gray surface.
+
+   We pin the big number (`.v.banded`), the metric grid values
+   (`.scard-main-grid .sv`), the per-platform CPM values (`.cpm-row-cells .sv`),
+   the platform NAME (`.platform-name`) and the spend caption (`.cpm-spend-cap`)
+   to `--text`, and the labels (`.sl`) to `--text-muted`. We do NOT touch the
+   `.cell.spend .sv` red / `.cell.revenue .sv` green emphasis or the ↓/↑ ▴▾
+   glyphs — those band hues read fine on the neutral gray surface and keep the
+   directional cue. The platform DOT keeps its brand colour (it is painted by
+   `bg-current` on `.platform-dot`, untouched here). */
+.per-store-card.glass[data-band="gray"] .v.banded {
+  color: var(--text);
+  -webkit-text-fill-color: var(--text);
+}
+.per-store-card.glass[data-band="gray"] .scard-main-grid .sv,
+.per-store-card.glass[data-band="gray"] .cpm-row-cells .sv,
+.per-store-card.glass[data-band="gray"] .cpm-row-cells .cell > bdi,
+.per-store-card.glass[data-band="gray"] .cpm-row-cells .platform-name,
+.per-store-card.glass[data-band="gray"] .cpm-row-cells .cpm-spend-cap {
+  color: var(--text);
+}
+.per-store-card.glass[data-band="gray"] .scard-main-grid .sl,
+.per-store-card.glass[data-band="gray"] .cpm-row-cells .sl {
+  color: var(--text-muted);
+}
