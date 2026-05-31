@@ -527,59 +527,61 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    Per-card chromas tuned: red/orange/green/blue active, gray quiet. */
 .glass[data-band="red"] {
   background:
-    linear-gradient(180deg,
-      oklch(72% 0.22 22 / 0.32) 0%,
-      oklch(72% 0.22 22 / 0.18) 18%,
-      oklch(64% 0.22 22 / 0.06) 38%,
-      transparent 60%),
-    radial-gradient(ellipse 100% 40% at 50% 0%, oklch(76% 0.22 22 / 0.20) 0%, transparent 60%),
-    oklch(64% 0.22 22 / 0.08);
+    /* dominant top slab — 55% at top, fades to ~8% by 100% height */
+    linear-gradient(180deg, oklch(70% 0.24 22 / 0.55) 0%, oklch(64% 0.22 22 / 0.32) 20%, oklch(60% 0.20 22 / 0.16) 45%, oklch(58% 0.18 22 / 0.10) 75%, oklch(58% 0.16 22 / 0.08) 100%),
+    /* top-edge accent halo */
+    radial-gradient(ellipse 110% 50% at 50% 0%, oklch(78% 0.24 22 / 0.30) 0%, transparent 55%),
+    /* saturated base tint */
+    oklch(60% 0.22 22 / 0.18);
 }
-.glass[data-band="red"]::before    { background: var(--band-red);    box-shadow: 0 0 36px oklch(72% 0.22 22  / 0.90); }
+.glass[data-band="red"]::before {
+  background: var(--band-red);
+  box-shadow: 0 0 44px oklch(78% 0.24 22 / 0.95), 0 0 18px oklch(72% 0.22 22 / 0.8);
+  height: 4px;
+}
 .glass[data-band="orange"] {
   background:
-    linear-gradient(180deg,
-      oklch(84% 0.18 75 / 0.30) 0%,
-      oklch(84% 0.18 75 / 0.17) 17%,
-      oklch(78% 0.18 75 / 0.06) 38%,
-      transparent 60%),
-    radial-gradient(ellipse 100% 40% at 50% 0%, oklch(88% 0.18 75 / 0.18) 0%, transparent 60%),
-    oklch(78% 0.18 75 / 0.08);
+    linear-gradient(180deg, oklch(82% 0.20 75 / 0.52) 0%, oklch(76% 0.18 75 / 0.30) 20%, oklch(72% 0.16 75 / 0.16) 45%, oklch(68% 0.14 75 / 0.10) 75%, oklch(66% 0.14 75 / 0.08) 100%),
+    radial-gradient(ellipse 110% 50% at 50% 0%, oklch(88% 0.20 75 / 0.28) 0%, transparent 55%),
+    oklch(70% 0.18 75 / 0.18);
 }
-.glass[data-band="orange"]::before { background: var(--band-orange); box-shadow: 0 0 34px oklch(84% 0.18 75  / 0.85); }
+.glass[data-band="orange"]::before {
+  background: var(--band-orange);
+  box-shadow: 0 0 42px oklch(86% 0.20 75 / 0.90), 0 0 16px oklch(80% 0.18 75 / 0.75);
+  height: 4px;
+}
 .glass[data-band="green"] {
   background:
-    linear-gradient(180deg,
-      oklch(78% 0.18 145 / 0.28) 0%,
-      oklch(78% 0.18 145 / 0.16) 16%,
-      oklch(70% 0.18 145 / 0.05) 36%,
-      transparent 60%),
-    radial-gradient(ellipse 100% 40% at 50% 0%, oklch(82% 0.18 145 / 0.18) 0%, transparent 60%),
-    oklch(70% 0.18 145 / 0.07);
+    linear-gradient(180deg, oklch(76% 0.22 145 / 0.55) 0%, oklch(70% 0.20 145 / 0.30) 20%, oklch(66% 0.18 145 / 0.16) 45%, oklch(62% 0.16 145 / 0.10) 75%, oklch(60% 0.14 145 / 0.08) 100%),
+    radial-gradient(ellipse 110% 50% at 50% 0%, oklch(82% 0.22 145 / 0.30) 0%, transparent 55%),
+    oklch(66% 0.20 145 / 0.18);
 }
-.glass[data-band="green"]::before  { background: var(--band-green);  box-shadow: 0 0 32px oklch(78% 0.18 145 / 0.85); }
+.glass[data-band="green"]::before {
+  background: var(--band-green);
+  box-shadow: 0 0 42px oklch(80% 0.22 145 / 0.90), 0 0 16px oklch(74% 0.20 145 / 0.75);
+  height: 4px;
+}
 .glass[data-band="blue"] {
   background:
-    linear-gradient(180deg,
-      oklch(76% 0.18 240 / 0.28) 0%,
-      oklch(76% 0.18 240 / 0.16) 16%,
-      oklch(68% 0.18 240 / 0.05) 36%,
-      transparent 60%),
-    radial-gradient(ellipse 100% 40% at 50% 0%, oklch(80% 0.18 240 / 0.18) 0%, transparent 60%),
-    oklch(68% 0.18 240 / 0.07);
+    linear-gradient(180deg, oklch(74% 0.20 240 / 0.55) 0%, oklch(68% 0.18 240 / 0.30) 20%, oklch(64% 0.16 240 / 0.16) 45%, oklch(60% 0.14 240 / 0.10) 75%, oklch(58% 0.12 240 / 0.08) 100%),
+    radial-gradient(ellipse 110% 50% at 50% 0%, oklch(80% 0.20 240 / 0.30) 0%, transparent 55%),
+    oklch(64% 0.18 240 / 0.18);
 }
-.glass[data-band="blue"]::before   { background: var(--band-blue);   box-shadow: 0 0 34px oklch(76% 0.18 240 / 0.85); }
+.glass[data-band="blue"]::before {
+  background: var(--band-blue);
+  box-shadow: 0 0 44px oklch(80% 0.20 240 / 0.95), 0 0 18px oklch(74% 0.18 240 / 0.80);
+  height: 4px;
+}
 .glass[data-band="gray"] {
   background:
-    linear-gradient(180deg,
-      oklch(65% 0.015 250 / 0.10) 0%,
-      oklch(65% 0.015 250 / 0.06) 18%,
-      oklch(60% 0.012 250 / 0.03) 38%,
-      transparent 60%),
-    radial-gradient(ellipse 80% 35% at 50% 0%, oklch(70% 0.015 250 / 0.08) 0%, transparent 60%),
-    oklch(60% 0.012 250 / 0.04);
+    linear-gradient(180deg, oklch(65% 0.018 250 / 0.16) 0%, oklch(58% 0.015 250 / 0.08) 50%, transparent 100%),
+    oklch(58% 0.012 250 / 0.05);
 }
-.glass[data-band="gray"]::before   { background: var(--band-gray);   box-shadow: 0 0 14px oklch(65% 0.015 250 / 0.50); height: 3px; }
+.glass[data-band="gray"]::before {
+  background: var(--band-gray);
+  box-shadow: 0 0 16px oklch(65% 0.015 250 / 0.55);
+  height: 3px;
+}
 
 /* `.v.banded` — the big number inside a banded card renders in the band
    colour (overrides .v.neutral's text-clip gradient via -webkit-text-fill-color). */
