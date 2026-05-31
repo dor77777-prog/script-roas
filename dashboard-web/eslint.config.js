@@ -31,6 +31,7 @@ import noCrossPaletteImport from './eslint-rules/no-cross-palette-import.js';
 import noRawTableInComponents from './eslint-rules/no-raw-table-in-components.js';
 import noNativeTitleTooltip from './eslint-rules/no-native-title-tooltip.js';
 import noRawInputInComponents from './eslint-rules/no-raw-input-in-components.js';
+import noPhysicalDirectionInComponents from './eslint-rules/no-physical-direction-in-components.js';
 
 // Local plugin — bundles the design-system regression guards.
 const localPlugin = {
@@ -43,6 +44,7 @@ const localPlugin = {
     'no-raw-table-in-components': noRawTableInComponents,
     'no-native-title-tooltip': noNativeTitleTooltip,
     'no-raw-input-in-components': noRawInputInComponents,
+    'no-physical-direction-in-components': noPhysicalDirectionInComponents,
   },
 };
 
@@ -147,13 +149,19 @@ export default tseslint.config(
       // Textarea from @/components/ui instead.
       'local/no-raw-input-in-components': 'error',
 
+      // Wave-4 Task 4.5 guard — physical-direction Tailwind classes
+      // (ml/mr/pl/pr/left/right/border-l|r/rounded-l|r/text-right|left)
+      // do not flip under RTL. The dashboard runs Hebrew RTL by default,
+      // so physical classes silently break the layout. Task 4.4's
+      // codemod already paid the debt — this rule prevents regression.
+      'local/no-physical-direction-in-components': 'error',
+
       // Wave-2 Task 2.10 guard — Radix imports outside components/ui/
       // bypass the wrapped primitives (Tabs, Dialog, Sheet, Tooltip,
       // Switch, Select, Button) and the design-system surface treatment.
       // The 8 files in components/ui/ are the only allowed consumers; an
       // override below switches this off for that directory.
-      // (Wave-4 Task 4.5 will add `local/no-physical-direction-in-components`
-      //  here; Wave-5 Task 5.10 will add `local/no-emoji-in-jsx`.)
+      // (Wave-5 Task 5.10 will add `local/no-emoji-in-jsx` here.)
       'no-restricted-imports': [
         'error',
         {
