@@ -792,6 +792,13 @@ function DeltaLine({
   return (
     <div
       className={cn(
+        // `hero-delta` is a styling hook: on VIVID banded hero cards
+        // (Operating-Profit + ROAS) globals.css repaints the whole line WHITE
+        // so it stays legible on the band gradient (the muted gray below is
+        // illegible there). Neutral + gray cards keep the green/red + muted
+        // tones, which are legible on the light surface. See
+        // `.glass[data-band]:not([data-band="gray"]):not([data-band-strength="muted"]) .hero-delta`.
+        'hero-delta',
         'flex items-baseline gap-1 tabular-nums',
         positive ? 'text-status-green' : 'text-status-red',
         className,

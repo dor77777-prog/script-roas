@@ -1032,6 +1032,26 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   background: none;
 }
 
+/* operator-2026-06-01 (#18) — DeltaLine ("מול אתמול (−94%) −$1,777") on the
+   VIVID banded hero cards (Operating-Profit + ROAS) used the default green/red
+   value + `text-ink-muted` caption — the muted gray is illegible on the band
+   gradient. On vivid cards the rest of the card is WHITE, so repaint the whole
+   delta line white: value at full white, the percent + "מול אתמול" caption at
+   white-alpha. Scoped to vivid bands only — `:not([data-band="gray"])` skips
+   the no-data card and `:not([data-band-strength="muted"])` skips the NEUTRAL
+   KPI cards (Spend/Revenue/CPM/Orders/Inventory) which sit on a plain --glass-1
+   surface and keep their legible green/red + muted tones. The child <bdi>/<span>
+   override their own utility colors, so target them explicitly. */
+.glass[data-band]:not([data-band="gray"]):not([data-band-strength="muted"]) .hero-delta {
+  color: #fff;
+}
+.glass[data-band]:not([data-band="gray"]):not([data-band-strength="muted"]) .hero-delta > bdi {
+  color: #fff;
+}
+.glass[data-band]:not([data-band="gray"]):not([data-band-strength="muted"]) .hero-delta .text-ink-muted {
+  color: rgba(255, 255, 255, 0.82);
+}
+
 /* `.v.neutral` — the big number inside an UN-banded hero card renders as a
    soft white→cool-gray vertical gradient via background-clip. Source:
    docs/superpowers/mockups/2026-05-31-light-reskin/dashboard-mockups.html
