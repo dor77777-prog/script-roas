@@ -33,8 +33,8 @@
 
   /* Brand accent (Q2 violet). --accent-deep used for buttons/logo gradients,
      --accent-fg for text-on-accent. */
-  --accent:      oklch(72% 0.20 280);
-  --accent-deep: oklch(58% 0.22 285);
+  --accent:      oklch(64% 0.19 285);
+  --accent-deep: oklch(54% 0.21 283);
   --accent-fg:   oklch(99% 0 0);
 
   /* V4 band signal — see Task 1.3.
@@ -93,26 +93,26 @@
 
   /* Canvas — deep blue-violet. Used as fixed body background + linear
      gradient endpoints. */
-  --canvas-1: oklch(13% 0.020 270);
-  --canvas-2: oklch(11% 0.025 280);
+  --canvas-1: #0d0f1e;
+  --canvas-2: #0a0c18;
 
   /* Glass layers — 3-stop white-alpha stack + 2 edge tones.
      --glass-edge-hot is the violet rim used on hover/focus/active glass. */
-  --glass-1: oklch(100% 0 0 / 0.04);
-  --glass-2: oklch(100% 0 0 / 0.06);
-  --glass-3: oklch(100% 0 0 / 0.08);
-  --glass-edge:     oklch(100% 0 0 / 0.12);
-  --glass-edge-hot: oklch(72% 0.20 280 / 0.40);
+  --glass-1: #171a2e;        /* opaque navy card surface (was white-alpha glass) */
+  --glass-2: #1d2138;
+  --glass-3: #20243a;        /* slightly elevated — sticky headers */
+  --glass-edge:     rgba(255,255,255,0.09);
+  --glass-edge-hot: rgba(124,108,255,0.5);
 
   /* Foreground stack (4 stops — see Task 1.6).
      --text          → body / numbers / headings
      --text-2        → secondary labels, subtitle text
      --text-muted    → metadata, axis labels
      --text-subtle   → least-prominent meta (e.g. timestamps in tooltips) */
-  --text:        oklch(98% 0.008 80);
-  --text-2:      oklch(82% 0.012 250);
-  --text-muted:  oklch(64% 0.018 250);
-  --text-subtle: oklch(48% 0.020 250);
+  --text:        #eef1ff;
+  --text-2:      #b3b9d8;
+  --text-muted:  #828aae;
+  --text-subtle: #5a608a;
 
   /* Blur + saturate filter stacks (see Task 1.7).
      --blur-glass for regular glass cards; --blur-sheet for full-height
@@ -130,9 +130,9 @@
      Focus rings live on the global :focus-visible rule near line 222,
      so the legacy `focus:shadow-focus` is no longer needed at consumer
      sites. */
-  --shadow-glass:   0 1px 0 0 oklch(100% 0 0 / 0.07) inset, 0 12px 24px -10px oklch(0% 0 0 / 0.35);
-  --shadow-overlay: 0 8px 20px -6px oklch(0% 0 0 / 0.5);
-  --shadow-sheet:   0 24px 48px -16px oklch(0% 0 0 / 0.6), 0 1px 0 0 oklch(100% 0 0 / 0.06) inset;
+  --shadow-glass:   0 1px 2px rgba(0,0,0,0.35), 0 12px 32px rgba(0,0,0,0.42);
+  --shadow-overlay: 0 8px 24px rgba(0,0,0,0.5);
+  --shadow-sheet:   0 24px 48px rgba(0,0,0,0.6);
 
   /* Up/down deltas (mirrors band-green / band-red).
      Used by .num.up / .num.dn / sparkline +/- coloring. */
@@ -259,8 +259,8 @@
 
   /* Brand accent (violet, unchanged hue). Deeper than dark since dark's
      72% L washes out on white; white text on it clears 4.5:1. */
-  --accent:      oklch(58% 0.22 280);
-  --accent-deep: oklch(50% 0.23 285);
+  --accent:      oklch(64% 0.11 199);        /* TEAL #0ea5b7 (mesh accent) */
+  --accent-deep: oklch(56% 0.095 199);  /* #0e8a99 */
   --accent-fg:   oklch(100% 0 0);
 
   /* V4 band signal — same hues as dark; mid-tone L for read on light. */
@@ -300,24 +300,24 @@
   --radius-pill:    9999px;
 
   /* Canvas — near-white cool wash (calm light mesh). */
-  --canvas-1: oklch(96% 0.006 265);
-  --canvas-2: oklch(98.5% 0.004 265);
+  --canvas-1: #edf0f8;
+  --canvas-2: #f4f6fc;
 
   /* Glass layers — opaque white-ish cards on light + a soft cool edge.
      --glass-edge-hot keeps the violet hover/focus rim. */
-  --glass-1: oklch(100% 0 0);
-  --glass-2: oklch(98.5% 0.005 265);
-  --glass-3: oklch(96.8% 0.007 265);
-  --glass-edge:     oklch(24% 0.03 265 / 0.10);
-  --glass-edge-hot: oklch(58% 0.22 280 / 0.45);
+  --glass-1: #ffffff;
+  --glass-2: #f6f7fb;
+  --glass-3: #eef1f8;
+  --glass-edge:     rgba(22,26,48,0.08);
+  --glass-edge-hot: rgba(14,165,183,0.4);
 
   /* Foreground stack — inverted to dark inks on the light canvas.
      text 16.5:1 · text-2 7.5:1 · text-muted 3.3-3.7:1 (metadata/large)
      · text-subtle is the least-prominent meta tier (tooltip timestamps). */
-  --text:        oklch(24% 0.035 272);
-  --text-2:      oklch(45% 0.030 272);
-  --text-muted:  oklch(62% 0.025 272);
-  --text-subtle: oklch(72% 0.020 272);
+  --text:        #171a2b;
+  --text-2:      #565d78;
+  --text-muted:  #949ab4;
+  --text-subtle: #b9bdd0;
 
   /* Blur + saturate — cards are opaque in light so blur is mostly inert;
      keep modest values for the few translucent sheets/overlays. */
@@ -326,9 +326,9 @@
 
   /* Shadow stack — cool soft drops; the dark white-inset highlight is
      dropped (it only reads on dark). */
-  --shadow-glass:   0 1px 2px 0 oklch(24% 0.03 265 / 0.05), 0 10px 24px -10px oklch(24% 0.03 265 / 0.12);
-  --shadow-overlay: 0 8px 24px -6px oklch(24% 0.03 265 / 0.16);
-  --shadow-sheet:   0 24px 48px -16px oklch(24% 0.03 265 / 0.22);
+  --shadow-glass:   0 1px 2px rgba(22,26,48,0.04), 0 8px 24px rgba(22,26,48,0.07);
+  --shadow-overlay: 0 8px 24px rgba(22,26,48,0.12);
+  --shadow-sheet:   0 24px 48px rgba(22,26,48,0.16);
 
   /* Up/down deltas — mirror band-green / band-red (light values). */
   --up: var(--band-green);
@@ -767,12 +767,12 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    is the legibility floor. (See WCAG numbers in the task report.) */
 .glass[data-band="red"],
 .glass[data-band="red"][data-band-strength="strong"] {
+  --band: #ff6b81; --band-2: #e11d48;
   background:
-    radial-gradient(125% 90% at 85% -12%, oklch(100% 0 0 / 0.18) 0%, transparent 58%),
-    linear-gradient(150deg,
-      oklch(from var(--band-red) calc(l - 0.07) c h) 0%,
-      oklch(from var(--band-red) calc(l - 0.22) c h) 96%);
-  box-shadow: 0 14px 30px -10px oklch(from var(--band-red) calc(l - 0.06) c h / 0.34);
+    radial-gradient(120% 120% at 10% 0%, color-mix(in oklab, var(--band) 95%, #ffffff), transparent 55%),
+    radial-gradient(135% 125% at 100% 100%, var(--band-2), transparent 62%),
+    linear-gradient(135deg, var(--band), var(--band-2));
+  box-shadow: 0 14px 32px color-mix(in oklab, var(--band-2) 30%, transparent);
 }
 .glass[data-band="red"]::before,
 .glass[data-band="red"][data-band-strength="strong"]::before {
@@ -782,12 +782,12 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 }
 .glass[data-band="orange"],
 .glass[data-band="orange"][data-band-strength="strong"] {
+  --band: #ffb24d; --band-2: #f97316;
   background:
-    radial-gradient(125% 90% at 85% -12%, oklch(100% 0 0 / 0.18) 0%, transparent 58%),
-    linear-gradient(150deg,
-      oklch(from var(--band-orange) calc(l - 0.07) c h) 0%,
-      oklch(from var(--band-orange) calc(l - 0.22) c h) 96%);
-  box-shadow: 0 14px 30px -10px oklch(from var(--band-orange) calc(l - 0.06) c h / 0.34);
+    radial-gradient(120% 120% at 10% 0%, color-mix(in oklab, var(--band) 95%, #fff), transparent 55%),
+    radial-gradient(135% 125% at 100% 100%, var(--band-2), transparent 62%),
+    linear-gradient(135deg, var(--band), var(--band-2));
+  box-shadow: 0 14px 32px color-mix(in oklab, var(--band-2) 30%, transparent);
 }
 .glass[data-band="orange"]::before,
 .glass[data-band="orange"][data-band-strength="strong"]::before {
@@ -797,12 +797,12 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 }
 .glass[data-band="green"],
 .glass[data-band="green"][data-band-strength="strong"] {
+  --band: #34e2ad; --band-2: #0f9d6b;
   background:
-    radial-gradient(125% 90% at 85% -12%, oklch(100% 0 0 / 0.18) 0%, transparent 58%),
-    linear-gradient(150deg,
-      oklch(from var(--band-green) calc(l - 0.07) c h) 0%,
-      oklch(from var(--band-green) calc(l - 0.22) c h) 96%);
-  box-shadow: 0 14px 30px -10px oklch(from var(--band-green) calc(l - 0.06) c h / 0.34);
+    radial-gradient(120% 120% at 10% 0%, color-mix(in oklab, var(--band) 95%, #fff), transparent 55%),
+    radial-gradient(135% 125% at 100% 100%, var(--band-2), transparent 62%),
+    linear-gradient(135deg, var(--band), var(--band-2));
+  box-shadow: 0 14px 32px color-mix(in oklab, var(--band-2) 30%, transparent);
 }
 .glass[data-band="green"]::before,
 .glass[data-band="green"][data-band-strength="strong"]::before {
@@ -812,12 +812,12 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 }
 .glass[data-band="blue"],
 .glass[data-band="blue"][data-band-strength="strong"] {
+  --band: #5b8df0; --band-2: #2563eb;
   background:
-    radial-gradient(125% 90% at 85% -12%, oklch(100% 0 0 / 0.18) 0%, transparent 58%),
-    linear-gradient(150deg,
-      oklch(from var(--band-blue) calc(l - 0.07) c h) 0%,
-      oklch(from var(--band-blue) calc(l - 0.22) c h) 96%);
-  box-shadow: 0 14px 30px -10px oklch(from var(--band-blue) calc(l - 0.06) c h / 0.34);
+    radial-gradient(120% 120% at 10% 0%, color-mix(in oklab, var(--band) 95%, #fff), transparent 55%),
+    radial-gradient(135% 125% at 100% 100%, var(--band-2), transparent 62%),
+    linear-gradient(135deg, var(--band), var(--band-2));
+  box-shadow: 0 14px 32px color-mix(in oklab, var(--band-2) 30%, transparent);
 }
 .glass[data-band="blue"]::before,
 .glass[data-band="blue"][data-band-strength="strong"]::before {
