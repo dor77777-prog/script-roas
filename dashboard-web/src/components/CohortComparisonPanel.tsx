@@ -28,6 +28,7 @@
 
 import { Trophy, AlertCircle, Equal, Package, TrendingDown } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
+import { TableBase } from '@/components/ui/TableBase';
 import type { CohortMember, MultiMappingCohort } from '@/lib/multiMappingCohort';
 import type { CannibalizationVerdict } from '@/lib/cannibalizationDetection';
 
@@ -230,7 +231,7 @@ function CohortSection({ title, subtitle, members, tone, onDrillCampaign }: Sect
           <div className="text-[10px] text-ink-muted leading-tight">{subtitle}</div>
         </div>
       </div>
-      <table className="w-full min-w-[640px]">
+      <TableBase minWidth={640} stickyHeader>
         <thead className="bg-glass-2/50 text-ink-muted">
           <tr>
             <th className="px-2 py-1 text-start font-medium text-[10px]">דירוג</th>
@@ -262,7 +263,7 @@ function CohortSection({ title, subtitle, members, tone, onDrillCampaign }: Sect
             />
           ))}
         </tbody>
-      </table>
+      </TableBase>
     </div>
   );
 }

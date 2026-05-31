@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { TableBase } from '@/components/ui/TableBase';
 import type { ProductRow } from '@/lib/products';
 import type { ProductsResponse } from '@/app/api/products/route';
 import type { DateRange } from '@/lib/types';
@@ -635,8 +636,8 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                 {/* Products list */}
                 {!isEmpty && (
                   <div className="overflow-auto max-h-[70vh]">
-                    <table className="w-full text-xs sm:text-sm min-w-[680px]">
-                      <thead className="sticky top-0 z-[5] bg-glass-1">
+                    <TableBase className="text-xs sm:text-sm" minWidth={680} stickyHeader>
+                      <thead>
                         <tr className="text-ink-secondary border-y border-glass-edge bg-glass-2/40">
                           <th className="px-4 sm:px-5 py-2 text-start font-medium">מוצר</th>
                           {bucket.hasOrders && (
@@ -766,7 +767,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                           );
                         })}
                       </tbody>
-                    </table>
+                    </TableBase>
                   </div>
                 )}
 

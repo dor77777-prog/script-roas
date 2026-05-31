@@ -21,6 +21,7 @@ import useSWR from 'swr';
 import { ChevronDown, ChevronLeft, Info, Package, Trophy } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { TableBase } from '@/components/ui/TableBase';
 import { buildProductCentricView, type ProductCohortRow } from '@/lib/productCentricView';
 import { aggregate } from '@/lib/campaignsAggregator';
 import { readProductMap, type ProductMap } from '@/lib/campaignProductMap';
@@ -480,7 +481,7 @@ function ProductRow({
                 </span>
               </div>
               <div className="overflow-x-auto -mx-2 sm:mx-0">
-              <table className="w-full min-w-[480px] text-xs">
+              <TableBase className="text-xs" minWidth={480} stickyHeader>
                 <thead className="bg-glass-2/60 text-ink-muted">
                   <tr>
                     <th className="px-2 py-1 text-start font-medium text-[10px]">
@@ -716,7 +717,7 @@ function ProductRow({
                     );
                   })}
                 </tbody>
-              </table>
+              </TableBase>
               </div>
             </div>
           ))}

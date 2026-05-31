@@ -277,6 +277,23 @@ input[type="number"] {
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
 /* ===========================================================================
+   TableBase sticky-header — single source of truth for every <table> in
+   the dashboard (the `no-raw-table-in-components` lint rule guarantees
+   only TableBase can render <table>). Pins thead cells to the top of
+   the nearest scroll container with the canonical glass-3 backdrop blur.
+   Wave-2 Task 2.2 — also fixes the documented CampaignsTable:2027
+   missing-sticky bug by giving every TableBase consumer the same
+   treatment.
+   =========================================================================== */
+table[data-sticky-header] thead th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--glass-3);
+  backdrop-filter: var(--blur-glass);
+}
+
+/* ===========================================================================
    Recharts tooltip — glass treatment to match cards.
    =========================================================================== */
 .recharts-tooltip-wrapper .recharts-default-tooltip {

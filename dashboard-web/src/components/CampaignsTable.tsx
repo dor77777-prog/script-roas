@@ -74,6 +74,7 @@ import { roasLabel } from '@/lib/analytics';
 import { useCampaignTrueRevenue } from '@/lib/hooks/useCampaignTrueRevenue';
 import { CampaignsTableRow } from './CampaignsTableRow';
 import { Button } from '@/components/ui/Button';
+import { TableBase } from '@/components/ui/TableBase';
 import { CampaignDrawer } from './CampaignDrawer';
 import { AdsDrawer } from './AdsDrawer';
 import { readTabLocalState, syncTabLocalUrl } from '@/lib/urlState';
@@ -2024,8 +2025,8 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                 ),
               };
               return (
-            <table className="w-full text-xs sm:text-sm min-w-[1340px]">
-              <thead className="sticky top-0 z-[5] bg-glass-1">
+            <TableBase className="text-xs sm:text-sm" minWidth={1340} stickyHeader>
+              <thead>
                 <tr className="text-ink-secondary border-b border-glass-edge bg-glass-2/40">
                   <ColumnHeaderTh
                     className="px-3 py-2 w-[36px]"
@@ -2143,7 +2144,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                   );
                 })}
               </tbody>
-            </table>
+            </TableBase>
               );
             })()}
           </div>

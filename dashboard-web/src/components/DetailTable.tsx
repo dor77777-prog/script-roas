@@ -7,6 +7,7 @@ import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import { roasLabel } from '@/lib/analytics';
 import { RefundIndicator } from './RefundIndicator';
 import { Sparkline } from './ui/Sparkline';
+import { TableBase } from './ui/TableBase';
 
 const ROAS_BG: Record<string, string> = {
   red: 'bg-status-redBg',
@@ -67,8 +68,8 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
 
   const tableContent = (
     <div className="overflow-auto max-h-[70vh] -mx-2 sm:mx-0">
-        <table className="w-full text-xs sm:text-sm min-w-[900px]">
-          <thead className="bg-glass-2 sticky top-0 z-[5]">
+        <TableBase className="text-xs sm:text-sm" minWidth={900} stickyHeader>
+          <thead>
             <tr className="text-ink-secondary">
               <th className="px-3 py-2.5 text-start font-medium">תאריך</th>
               <th className="px-3 py-2.5 text-start font-medium">חנות</th>
@@ -143,7 +144,7 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
               );
             })}
           </tbody>
-        </table>
+        </TableBase>
     </div>
   );
 

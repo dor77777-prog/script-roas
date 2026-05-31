@@ -50,6 +50,7 @@ import { useState } from 'react';
 import { Loader2, CheckCircle2, XCircle, Clock, AlertCircle } from 'lucide-react';
 import { operatorFetch } from '@/lib/operatorClient';
 import { Button } from '@/components/ui/Button';
+import { TableBase } from '@/components/ui/TableBase';
 
 // Wire-shape of the /api/operator/jobs proxy response. Mirrors the
 // narrowed type in route.ts — we deliberately do NOT import the type
@@ -185,7 +186,7 @@ export function JobsTable() {
 
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-full text-sm">
+      <TableBase>
         <thead className="text-ink-secondary text-xs uppercase tracking-wider bg-canvas">
           <tr>
             <th className="text-right p-2">פונקציה</th>
@@ -223,7 +224,7 @@ export function JobsTable() {
             </tr>
           ))}
         </tbody>
-      </table>
+      </TableBase>
       {expandedId && (() => {
         const run = data.runs.find((r) => r.run_id === expandedId);
         if (!run) return null;

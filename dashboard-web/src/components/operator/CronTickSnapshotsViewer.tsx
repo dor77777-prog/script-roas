@@ -5,6 +5,7 @@
 
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { fetchCronTickSnapshots, type CronTickSnapshotRow } from '@/lib/operator/registriesReaders';
+import { TableBase } from '@/components/ui/TableBase';
 
 function durationSeconds(start: string, end: string | null): string {
   if (!end) return '—';
@@ -28,7 +29,7 @@ export async function CronTickSnapshotsViewer() {
         Cron-tick snapshots <span className="text-xs text-ink-secondary">({rows.length} ticks אחרונים)</span>
       </h3>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm text-ink">
+        <TableBase>
           <thead className="text-xs text-ink-secondary border-b border-glass-edge">
             <tr>
               <th className="text-right py-1 pr-2">tick_id</th>
@@ -51,7 +52,7 @@ export async function CronTickSnapshotsViewer() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </TableBase>
       </div>
     </section>
   );

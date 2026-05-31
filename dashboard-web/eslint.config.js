@@ -28,6 +28,7 @@ import noDarkVariantInComponents from './eslint-rules/no-dark-variant-in-compone
 import noHexColorInComponents from './eslint-rules/no-hex-color-in-components.js';
 import noLegacyTailwindClass from './eslint-rules/no-legacy-tailwind-class.js';
 import noCrossPaletteImport from './eslint-rules/no-cross-palette-import.js';
+import noRawTableInComponents from './eslint-rules/no-raw-table-in-components.js';
 
 // Local plugin — bundles the design-system regression guards.
 const localPlugin = {
@@ -37,6 +38,7 @@ const localPlugin = {
     'no-hex-color-in-components': noHexColorInComponents,
     'no-legacy-tailwind-class': noLegacyTailwindClass,
     'no-cross-palette-import': noCrossPaletteImport,
+    'no-raw-table-in-components': noRawTableInComponents,
   },
 };
 
@@ -127,6 +129,9 @@ export default tseslint.config(
       // Wave-1 Task 1.2 guards — legacy palette + cross-palette firewall.
       'local/no-legacy-tailwind-class': 'error',
       'local/no-cross-palette-import': 'error',
+      // Wave-2 Task 2.2 guard — raw <table> outside TableBase regresses
+      // the sticky-header treatment (see CampaignsTable:2027 bug).
+      'local/no-raw-table-in-components': 'error',
 
       // Allow ts-expect-error / ts-ignore with description (we use it in
       // shim casts where the type erasure is documented inline).

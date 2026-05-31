@@ -50,6 +50,7 @@ import { useState } from 'react';
 import { Plus, Trash2, X } from 'lucide-react';
 import { operatorFetch } from '@/lib/operatorClient';
 import { Button } from '@/components/ui/Button';
+import { TableBase } from '@/components/ui/TableBase';
 
 type Row = {
   id: number;
@@ -305,7 +306,7 @@ export function ManualOverridesCrud() {
 
       {/* Table view */}
       <div className="overflow-x-auto">
-        <table className="min-w-full text-sm">
+        <TableBase>
           <thead className="text-ink-secondary text-xs uppercase tracking-wider">
             <tr>
               <th className="text-right p-2">תאריך</th>
@@ -348,7 +349,7 @@ export function ManualOverridesCrud() {
               </tr>
             ))}
           </tbody>
-        </table>
+        </TableBase>
       </div>
 
       {/* Delete-confirmation modal (RESEARCH §Open Question 5) */}

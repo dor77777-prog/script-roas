@@ -19,6 +19,7 @@ import { PRODUCT_MAP_CHIP_KEY } from '@/lib/sessionKeys';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import { ChartContainer } from '@/components/ui/chart/ChartContainer';
 import { Button } from '@/components/ui/Button';
+import { TableBase } from '@/components/ui/TableBase';
 import {
   ChartTooltip,
   ChartTooltipLabel,
@@ -806,8 +807,8 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
             יום-לפי-יום ↓
           </summary>
           <div className="mt-2 max-h-48 overflow-auto rounded-md border border-glass-edge">
-            <table className="w-full min-w-[480px] text-[11px]">
-              <thead className="bg-glass-2/60 sticky top-0 z-[5]">
+            <TableBase className="text-[11px]" minWidth={480} stickyHeader>
+              <thead>
                 <tr className="text-ink-muted">
                   <th className="px-2 py-1.5 text-start font-medium">תאריך</th>
                   <th className="px-2 py-1.5 text-end font-medium">Meta</th>
@@ -846,7 +847,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                   );
                 })}
               </tbody>
-            </table>
+            </TableBase>
           </div>
         </details>
       </div>

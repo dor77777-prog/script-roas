@@ -24,6 +24,7 @@ import type {
 } from '@/app/api/operator/token-failures/route';
 import { operatorFetch } from '@/lib/operatorClient';
 import { Button } from '@/components/ui/Button';
+import { TableBase } from '@/components/ui/TableBase';
 
 const ENDPOINT = '/api/operator/token-failures';
 
@@ -150,7 +151,7 @@ export function TokenFailuresTable() {
             כשלים פתוחים: <span className="font-semibold text-status-red">{unresolved.length}</span>
           </div>
           <div className="border border-status-red/30 rounded-lg overflow-hidden">
-            <table className="w-full text-xs sm:text-sm">
+            <TableBase className="text-xs sm:text-sm">
               <thead className="bg-status-redBg/40 text-ink-secondary">
                 <tr>
                   <th className="px-3 py-2 text-start font-medium">פלטפורמה</th>
@@ -178,7 +179,7 @@ export function TokenFailuresTable() {
                   );
                 })}
               </tbody>
-            </table>
+            </TableBase>
           </div>
         </div>
       )}
@@ -189,7 +190,7 @@ export function TokenFailuresTable() {
             תוקנו לאחרונה ({resolved.length})
           </summary>
           <div className="mt-2 border border-glass-edge rounded-lg overflow-hidden">
-            <table className="w-full text-xs">
+            <TableBase className="text-xs">
               <tbody>
                 {resolved.map((row) => (
                   <tr
@@ -210,7 +211,7 @@ export function TokenFailuresTable() {
                   </tr>
                 ))}
               </tbody>
-            </table>
+            </TableBase>
           </div>
         </details>
       )}

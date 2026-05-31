@@ -7,6 +7,7 @@ import type { Aggregate } from '@/lib/analytics';
 import { TRANSACTION_FEES_RATE } from '@/lib/costs';
 import { sumRefundsInRange } from '@/lib/refundDayHeuristic';
 import { Button } from '@/components/ui/Button';
+import { TableBase } from '@/components/ui/TableBase';
 import type { DailyRow } from '@/lib/types';
 import {
   billingForRange,
@@ -320,8 +321,8 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
                 פירוט עלויות קבועות לפי קטגוריה
               </summary>
               <div className="mt-2 rounded-lg bg-glass-2/40 border border-glass-edge p-3 overflow-x-auto -mx-1 sm:mx-0">
-                <table className="w-full text-xs tabular-nums min-w-[420px]">
-                  <thead className="sticky top-0 z-[5] bg-glass-2/40">
+                <TableBase className="text-xs tabular-nums" minWidth={420} stickyHeader>
+                  <thead>
                     <tr className="text-[10px] uppercase text-ink-muted tracking-wide">
                       <th className="text-start font-medium pb-1.5 px-1">קטגוריה</th>
                       <th className="text-end font-medium pb-1.5 px-1">סכום (יחסי לטווח)</th>
@@ -368,7 +369,7 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
                       <td className="py-1.5 px-1 text-end">100%</td>
                     </tr>
                   </tbody>
-                </table>
+                </TableBase>
                 <div className="mt-2 text-[10px] text-ink-muted leading-relaxed">
                   עורכים את הנתונים דרך הכפתור <span className="font-semibold">עלויות חודשיות</span>{' '}
                   מעל ה-P&amp;L. כל שינוי מתעדכן מיד בכל החישובים.{' '}

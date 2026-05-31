@@ -25,6 +25,7 @@ import { useDrawerEsc } from '@/lib/drawerStack';
 import { buildDateRangeKey } from '@/lib/dateRange';
 import { Sheet, SheetContent } from '@/components/ui/Sheet';
 import { BADGE_TONE_BG } from '@/components/ui/Badge';
+import { TableBase } from '@/components/ui/TableBase';
 
 /**
  * Slide-in drawer that opens when the user clicks an ad-set row in the
@@ -390,8 +391,8 @@ export function AdsDrawer({
                   overflow-x-auto we used to have here scoped sticky to a
                   wrapper that didn't scroll vertically. */}
               <div className="rounded-xl border border-glass-edge overflow-auto max-h-[60vh]">
-                <table className="w-full text-xs sm:text-sm min-w-[720px]">
-                  <thead className="bg-glass-2/60 sticky top-0 z-[5]">
+                <TableBase className="text-xs sm:text-sm" minWidth={720} stickyHeader>
+                  <thead>
                     <tr className="text-ink-secondary">
                       <th className="px-2 py-2 w-[36px]" aria-label="סימון" />
                       <AdSortHeader label="מודעה"     col="name"        sortKey={sortKey} dir={sortDir} onClick={handleSort} align="start"  />
@@ -526,7 +527,7 @@ export function AdsDrawer({
                       );
                     })}
                   </tbody>
-                </table>
+                </TableBase>
               </div>
             </>
           )}

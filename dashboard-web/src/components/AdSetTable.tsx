@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { TableBase } from '@/components/ui/TableBase';
 import { roasLabel } from '@/lib/analytics';
 import type { AttributionAnalysis } from '@/lib/attributionAnalysis';
 
@@ -98,8 +99,8 @@ export function AdSetTable({
           on the wrapper so the sticky thead pins correctly when
           scrolling rows. */}
       <div className="rounded-xl border border-glass-edge overflow-auto max-h-[50vh]">
-        <table className="w-full text-xs sm:text-sm min-w-[720px]">
-          <thead className="bg-glass-2/60 sticky top-0 z-[5]">
+        <TableBase className="text-xs sm:text-sm" minWidth={720} stickyHeader>
+          <thead>
             <tr className="text-ink-secondary">
               <th className="px-2 py-2 w-[36px]" aria-label="סימון" />
               <AdSetSortHeader label="שם"          col="name"        sortKey={sortKey} dir={sortDir} onClick={onSort} align="start"  />
@@ -239,7 +240,7 @@ export function AdSetTable({
               );
             })}
           </tbody>
-        </table>
+        </TableBase>
       </div>
     </section>
   );

@@ -19,6 +19,7 @@
 
 import { CheckCircle2, AlertCircle, XCircle } from 'lucide-react';
 import { getFreshness, type FreshnessRow } from '@/lib/inngest/freshness';
+import { TableBase } from '@/components/ui/TableBase';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -90,7 +91,7 @@ export async function FreshnessPanel() {
 
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-full text-xs sm:text-sm">
+      <TableBase className="text-xs sm:text-sm">
         <thead className="text-ink-secondary text-xs uppercase tracking-wider bg-canvas">
           <tr>
             <th className="px-3 py-2 text-start font-medium">חנות</th>
@@ -109,7 +110,7 @@ export async function FreshnessPanel() {
             <FreshnessTableRow key={rowKey(row)} row={row} />
           ))}
         </tbody>
-      </table>
+      </TableBase>
     </div>
   );
 }
