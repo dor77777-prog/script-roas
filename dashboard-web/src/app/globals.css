@@ -610,6 +610,21 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    structural (always painted). CPM cells take NO emphasis class — they
    render in the default --text colour per the home-visual-rules memo.
    =========================================================================== */
+/* Base layout for the Per-Store metric cells. Without this, the .sl
+   (label) and .sv (value) spans render inline siblings and the text
+   glues to the number — the production regression the operator
+   reported. Mockup mockup-04i-store-emphasis.html:113-115 stacks them
+   vertically with a 4px gap; we copy that and bump it to 6px so the
+   value gets visual breathing room without inflating card height. */
+.scard-main-grid .cell { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.scard-main-grid .sl   { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); font-weight: 600; line-height: 1.2; }
+.scard-main-grid .sv   { font-size: 14px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
+
+/* Per-platform CPM cells — same layout treatment but with a slightly
+   larger gap because each cell stacks 3 stitches (platform badge →
+   spend caption → CPM value). Mirrors mockup .cpm-cell at line 230. */
+.cpm-row-cells .cell { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 10px 12px; background: oklch(100% 0 0 / 0.03); border: 1px solid var(--glass-edge); border-radius: 8px; }
+
 .cell.spend   .sv { color: var(--band-red); }
 .cell.spend   .sl::before { content: '↓ '; color: var(--band-red);   opacity: 0.7; margin-inline-end: 2px; }
 .cell.revenue .sv { color: var(--band-green); }
