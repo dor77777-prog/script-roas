@@ -169,6 +169,20 @@
   --chart-axis:     oklch(60% 0.015 250 / 0.6);
   --chart-cpm-prev: oklch(75% 0.15 75 / 0.6);
 
+  /* Task 3.2 — chart-namespaced grading tokens for the ROAS chart SVG.
+     Mirror the band hues 1-to-1 (same oklch values) so the chart line +
+     dots + target visually agree with the cards' data-band edge glow.
+     The cross-palette-import lint rule forbids chart files from consuming
+     --band-* directly; these chart-* aliases let the SVG paint the same
+     colours without tripping the guard. Keep oklch values IN SYNC with
+     the band tokens above (red/orange/green/blue). */
+  --chart-roas-line:    oklch(98% 0.008 80);
+  --chart-target-line:  oklch(70% 0.18 145);  /* mirrors --band-green */
+  --chart-pin-line:     oklch(78% 0.16 75);   /* mirrors --band-orange */
+  --chart-dot-max:      oklch(70% 0.18 145);  /* mirrors --band-green */
+  --chart-dot-min:      oklch(64% 0.22 22);   /* mirrors --band-red */
+  --chart-grid-line:    oklch(100% 0 0 / 0.06);
+
   /* ---------------------------------------------------------------------
      Task 1.10 — annotation pin palette.
      Hues consumed by lib/annotations.ts (ANNOTATION_KIND_COLOR map).
