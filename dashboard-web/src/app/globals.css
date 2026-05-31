@@ -105,6 +105,10 @@
   --canvas-1: #0d0f1e;
   --canvas-2: #0a0c18;
 
+  /* Page-wash glow — single subtle radial over the flat canvas (matches the
+     mockup's `.dash` radial). Dark = subtle violet. */
+  --bg-glow: rgba(124,108,255,0.13);
+
   /* Glass layers — 3-stop white-alpha stack + 2 edge tones.
      --glass-edge-hot is the violet rim used on hover/focus/active glass. */
   --glass-1: #171a2e;        /* opaque navy card surface (was white-alpha glass) */
@@ -112,6 +116,11 @@
   --glass-3: #20243a;        /* slightly elevated — sticky headers */
   --glass-edge:     rgba(255,255,255,0.09);
   --glass-edge-hot: rgba(124,108,255,0.5);
+
+  /* Elevated surface alias — consumed by CampaignsTable / TodayLive card
+     backgrounds + chart-dot strokes (CampaignDrawerDaily). Aliases the
+     mid glass stop so it themes automatically. */
+  --surface-elevated-1: var(--glass-2);
 
   /* Foreground stack (4 stops — see Task 1.6).
      --text          → body / numbers / headings
@@ -309,6 +318,10 @@
   --canvas-1: #edf0f8;
   --canvas-2: #f4f6fc;
 
+  /* Page-wash glow — single subtle radial over the flat canvas (matches the
+     mockup's `.dash` radial). Light = subtle teal. */
+  --bg-glow: rgba(14,165,183,0.10);
+
   /* Glass layers — opaque white-ish cards on light + a soft cool edge.
      --glass-edge-hot keeps the violet hover/focus rim. */
   --glass-1: #ffffff;
@@ -316,6 +329,9 @@
   --glass-3: #eef1f8;
   --glass-edge:     rgba(22,26,48,0.08);
   --glass-edge-hot: rgba(14,165,183,0.4);
+
+  /* Elevated surface alias — resolves per-theme via --glass-2. */
+  --surface-elevated-1: var(--glass-2);
 
   /* Foreground stack — inverted to dark inks on the light canvas.
      text 16.5:1 · text-2 7.5:1 · text-muted 3.3-3.7:1 (metadata/large)
@@ -378,18 +394,20 @@
 }
 
 /* ===========================================================================
-   Page background — fixed multi-radial wash + slow conic rotation.
-   Mockup reference: mockup-04-final.html lines 38–52. The conic gradient
-   sits on body::before behind everything (z-index: 0 + app shell uses
-   z-index: 1) and pauses under prefers-reduced-motion.
+   Page background — single subtle radial glow over a flat canvas gradient.
+   Mockup reference: dashboard-mockups.html `.dash` — ONE radial glow
+   (`--bg-glow`, subtle violet on dark / subtle teal on light) over the flat
+   canvas. The prior multi-radial wash + animated conic were removed to match
+   the approved mockup pixel-for-pixel. `body::before` is KEPT as a faint
+   STATIC single glow (no animation); the global prefers-reduced-motion guard
+   below remains. Both themes resolve correctly via `--bg-glow` / `--canvas-*`,
+   so no theme-specific `body` override is needed.
    =========================================================================== */
 html, body { background-color: var(--canvas-1); }
 body {
   color: var(--text);
   background:
-    radial-gradient(ellipse at 0% 0%,   oklch(45% 0.22 280 / 0.35) 0%, transparent 50%),
-    radial-gradient(ellipse at 100% 0%, oklch(40% 0.20 257 / 0.30) 0%, transparent 50%),
-    radial-gradient(ellipse at 50% 100%, oklch(40% 0.22 320 / 0.25) 0%, transparent 60%),
+    radial-gradient(1200px 600px at 80% -6%, var(--bg-glow), transparent 55%),
     linear-gradient(180deg, var(--canvas-1) 0%, var(--canvas-2) 100%);
   background-attachment: fixed;
   min-height: 100vh;
@@ -401,49 +419,10 @@ body {
 }
 body::before {
   content: '';
-  position: fixed; inset: -40% -10%; height: 180%;
-  background: conic-gradient(from 30deg at 50% 50%,
-    oklch(72% 0.18 280 / 0.04),
-    oklch(70% 0.18 257 / 0.04),
-    oklch(72% 0.24 12 / 0.03),
-    oklch(75% 0.14 175 / 0.03),
-    oklch(72% 0.18 280 / 0.04));
-  animation: bg-spin 60s linear infinite;
-  pointer-events: none; z-index: 0; opacity: 0.6; filter: blur(40px);
+  position: fixed; inset: 0;
+  pointer-events: none; z-index: 0; opacity: 0.5;
+  background: radial-gradient(900px 500px at 15% 105%, var(--bg-glow), transparent 60%);
 }
-
-/* ---------------------------------------------------------------------------
-   Light body mesh wash — Task 2.1. The dark body + body::before above apply
-   when data-theme is dark (the default :root). These overrides fork the wash
-   for light: a calm, pale single-accent glow over the near-white cool canvas
-   (spec: "calm in light, richer in dark"). body::before is KEPT (glassTokens
-   asserts it exists) but paled + calmed; it is NOT removed.
-   --------------------------------------------------------------------------- */
-[data-theme="light"] body {
-  background:
-    radial-gradient(ellipse at 85% -10%, oklch(90% 0.05 200 / 0.55) 0%, transparent 55%),
-    radial-gradient(ellipse at 0% 0%,    oklch(92% 0.04 285 / 0.40) 0%, transparent 50%),
-    radial-gradient(ellipse at 50% 110%, oklch(93% 0.04 320 / 0.30) 0%, transparent 60%),
-    linear-gradient(180deg, var(--canvas-1) 0%, var(--canvas-2) 100%);
-}
-[data-theme="light"] body::before {
-  opacity: 0.35;
-  filter: blur(60px);
-  background: conic-gradient(from 30deg at 50% 50%,
-    oklch(85% 0.06 285 / 0.05),
-    oklch(85% 0.06 257 / 0.05),
-    oklch(88% 0.05 320 / 0.04),
-    oklch(88% 0.05 175 / 0.04),
-    oklch(85% 0.06 285 / 0.05));
-}
-
-/* Renamed from `spin` to avoid colliding with Tailwind's built-in
-   `@keyframes spin` (used by `animate-spin` on ~10 loading spinners).
-   Behavior is identical today; this future-proofs against silent
-   regressions if we ever tune the body background rotation. The
-   global `*` prefers-reduced-motion rule below already pauses this
-   animation, so no targeted reduced-motion override is needed. */
-@keyframes bg-spin { to { transform: rotate(360deg); } }
 
 /* Tabular numbers — uses the Rubik-first numeric chain so the tnum
    feature actually resolves. Previously declared against Heebo
@@ -641,9 +620,7 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    layer on top via data-* attributes that <Card> forwards.
    =========================================================================== */
 .glass {
-  background: linear-gradient(180deg, var(--glass-2) 0%, var(--glass-1) 100%);
-  backdrop-filter: var(--blur-glass);
-  -webkit-backdrop-filter: var(--blur-glass);
+  background: var(--glass-1);
   border: 1px solid var(--glass-edge);
   box-shadow: var(--shadow-glass);
   position: relative;

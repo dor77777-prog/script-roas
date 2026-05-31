@@ -47,10 +47,12 @@ export const CHART_COLORS = {
   // CAC shares the band-blue cost-metric color with CPM. Named separately
   // so consumers don't rely on the cpm↔cac aliasing.
   cac:     'var(--band-blue)',
-  // `value` is the neutral "supporting" line color. --text-2 is the
-  // secondary ink stop in the Task-1.1 foreground stack.
-  value:   'var(--text-2)',
-  spend:   'var(--band-red)',
+  // `value` is the revenue/value series — the mockup paints it the literal
+  // mockup green (`--up`), not a neutral supporting line.
+  value:   'var(--up)',
+  // `spend` reads as the literal mockup red (`--dn` = #ef4d5b), matching the
+  // mockup's spend series exactly.
+  spend:   'var(--dn)',
 } as const;
 
 export type ChartColorKey = keyof typeof CHART_COLORS;

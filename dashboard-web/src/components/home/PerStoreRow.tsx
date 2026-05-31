@@ -30,7 +30,7 @@
 
 import { useMemo, type KeyboardEvent } from 'react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
-import { fmtMoneyCompact } from '@/lib/format';
+import { fmtMoneyCompact, fmtMoneyCompactTight } from '@/lib/format';
 import { Card } from '@/components/ui/Card';
 import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
 import { Heading } from '@/components/ui/Typography';
@@ -105,17 +105,24 @@ function fmtMoneyText(n: number | null): string {
 }
 
 /**
- * Round 6 (2026-05-31) — compact money for cells that regularly carry
- * 5-6 digit values (spend / revenue). Below 10k the cell renders the
- * full comma-separated value (`$9,840`); at or above 10k it switches
- * to compact ("$110k" / "$1.2M") so the 4-up per-store grid never
- * truncates a digit run mid-glyph. AOV is small (typically <$100) so it
- * stays on `fmtMoneyText`. Per-platform CPM cells also use the compact
- * form for spend captions because TikTok / Meta spend can spike into
- * 5-digit territory inside the same row.
+ * Round 6 (2026-05-31) — compact money for the per-platform CPM spend
+ * captions. Below 10k renders the full comma-separated value (`$9,840`);
+ * at or above 10k switches to compact ("$110k" / "$1.2M"). Used only for
+ * the small CPM caption text (not the enlarged metric-grid `.sv` cells).
  */
 function fmtMoneyTextCompact(n: number | null): string {
   return fmtMoneyCompact(n);
+}
+
+/**
+ * Round 7 (2026-05-31) — AGGRESSIVE compact for the per-store metric-grid
+ * spend / revenue `.sv` values. The enlarged 20-22px font overflowed the
+ * narrow 1/4 column at 4-digit values (`$5,755` clipped to `…,755`), so we
+ * abbreviate from ≥1_000 ("$5.8K" / "$112K"). Longest output `$XXX.XK`
+ * (7 chars) fits the cell without ellipsis. AOV + orders are unchanged.
+ */
+function fmtMoneyTextTight(n: number | null): string {
+  return fmtMoneyCompactTight(n);
 }
 
 function fmtOrdersText(n: number | null): string {
@@ -294,13 +301,13 @@ function StoreCard({
         <div className="cell spend" data-cell="spend">
           <span className="sl">הוצאה</span>
           <span className="sv num tabular-nums truncate">
-            {fmtMoneyTextCompact(store.spend)}
+            {fmtMoneyTextTight(store.spend)}
           </span>
         </div>
         <div className="cell revenue" data-cell="revenue">
           <span className="sl">הכנסה</span>
           <span className="sv num tabular-nums truncate">
-            {fmtMoneyTextCompact(store.revenue)}
+            {fmtMoneyTextTight(store.revenue)}
           </span>
         </div>
         <div className="cell" data-cell="orders">

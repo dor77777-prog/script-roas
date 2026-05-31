@@ -167,6 +167,27 @@ export function fmtMoneyCompact(n: number | null | undefined): string {
 }
 
 /**
+ * Aggressive compact money — abbreviates from ≥1_000 ("$5.8K" / "$112K" /
+ * "$1.4M"). Used by the per-store metric grid (PerStoreRow spend / revenue
+ * `.sv` cells) where the enlarged 20-22px font overflowed the narrow 1/4
+ * column at 4-digit values (e.g. `$5,755` clipped to `…,755`). The wider
+ * `fmtMoneyCompact` only abbreviates ≥10_000, so 4-digit values still
+ * truncated; this variant always fits because the longest output is
+ * `$XXX.XK` (7 chars) / `$X.XM` (5 chars). Below $1_000 it renders the
+ * plain rounded value ("$842") — those already fit. Negative values keep
+ * the typographic minus (U+2212).
+ */
+export function fmtMoneyCompactTight(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(n)) return '—';
+  const sign = n < 0 ? '−' : '';
+  const abs = Math.abs(n);
+  if (abs < 1_000) {
+    return `${sign}$${Math.round(abs).toLocaleString('en-US')}`;
+  }
+  return `${sign}$${COMPACT_USD.format(abs)}`;
+}
+
+/**
  * Format a delta percentage like "+12.4%" / "−3.4%". Always signed.
  * Returns a styled element so the call site can pick "good/bad" tone.
  */

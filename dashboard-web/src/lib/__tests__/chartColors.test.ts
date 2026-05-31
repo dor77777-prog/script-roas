@@ -36,12 +36,16 @@ describe('CHART_COLORS — brand-true palette (2026-05-30 PLATFORM_TOKENS rev)',
     expect(CHART_COLORS.roas).toBe('var(--band-green)');
   });
 
-  it('value routes to the --text-2 secondary ink stop', () => {
-    expect(CHART_COLORS.value).toBe('var(--text-2)');
+  it('value routes to the mockup green --up delta token', () => {
+    // 2026-05-31 mockup match: the value/revenue series is GREEN, not the
+    // neutral --text-2 supporting line it carried before.
+    expect(CHART_COLORS.value).toBe('var(--up)');
   });
 
-  it('Spend routes to the band-red grading token', () => {
-    expect(CHART_COLORS.spend).toBe('var(--band-red)');
+  it('Spend routes to the mockup red --dn delta token', () => {
+    // 2026-05-31 mockup match: spend is the literal mockup red #ef4d5b (--dn),
+    // pinned exactly rather than via the --band-red grading hue.
+    expect(CHART_COLORS.spend).toBe('var(--dn)');
   });
 
   it('CHART_AXIS_COLOR resolves to the theme-aware --chart-axis var', () => {
