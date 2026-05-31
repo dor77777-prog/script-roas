@@ -6,6 +6,7 @@ import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { roasLabel, type StoreAgg } from '@/lib/analytics';
 import { storeHasTikTok } from '@/lib/platformsByStore';
 import { storeColor } from '@/lib/storeColors';
+import { Card } from '@/components/ui/Card';
 
 function colorFor(name: string, idx: number) {
   return storeColor(name, idx);
@@ -110,7 +111,7 @@ function StoreCard({
 }) {
   const info = roasLabel(agg.roas);
   return (
-    <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
+    <Card className="!p-0 overflow-hidden">
       {/* Color bar header */}
       <div
         className="px-4 sm:px-5 py-2.5 sm:py-3 text-white font-semibold flex items-center justify-between gap-2"
@@ -184,7 +185,7 @@ function StoreCard({
           <Row label="רווח גולמי" value={`CAD ${formatCurrency(agg.grossProfit)}`} bold />
         </div>
       </div>
-    </div>
+    </Card>
   );
 }
 

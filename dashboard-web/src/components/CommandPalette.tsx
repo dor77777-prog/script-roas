@@ -32,6 +32,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useTheme } from './ThemeProvider';
 import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 import { useDrawerEsc } from '@/lib/drawerStack';
 import type { DashboardData, Filters as F, PresetKey } from '@/lib/types';
 import { PRESET_LABELS, computePresetRange } from '@/lib/presets';
@@ -506,12 +507,16 @@ export function CommandPalette({
           className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh] sm:pt-[12vh] px-3 bg-ink/30 backdrop-blur-md animate-fade-in"
           onClick={close}
         >
-          <div
+          <Card
             dir="rtl"
             role="dialog"
             aria-modal="true"
             aria-label="Command Palette"
-            className="w-full max-w-xl bg-glass-1 rounded-2xl shadow-sheet border border-glass-edge overflow-hidden animate-fade-in-up"
+            // Sheet-class surface (deeper shadow than the default --shadow-glass)
+            // so the palette reads as a modal-tier overlay rather than a card.
+            // !shadow-sheet overrides Card's inherited --shadow-glass; the rest
+            // (glass background, --glass-edge rim) stays from the primitive.
+            className="w-full max-w-xl !p-0 !shadow-sheet overflow-hidden animate-fade-in-up"
             onClick={e => e.stopPropagation()}
           >
             {/* Search input */}
@@ -624,7 +629,7 @@ export function CommandPalette({
                 {indexedFlat.length} תוצאות
               </span>
             </div>
-          </div>
+          </Card>
         </div>
       )}
     </>

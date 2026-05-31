@@ -35,6 +35,7 @@ import {
 import { cn } from '@/lib/utils';
 import { AiInsightPill } from '@/components/ui/AiInsightPill';
 import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 import { InsightCardGroup, InsightCardRow } from '@/components/ui/InsightCard';
 
 const fetcher = (url: string) => fetch(url).then(r => (r.ok ? r.json() : null));
@@ -219,7 +220,7 @@ export function InsightsBoard({ data }: Props) {
   }, [grouped]);
 
   return (
-    <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
+    <Card className="!p-0 overflow-hidden">
       {/* Clickable header — toggles the whole board open/closed. */}
       <Button
         type="button"
@@ -420,7 +421,7 @@ export function InsightsBoard({ data }: Props) {
           )}
         </div>
       )}
-    </section>
+    </Card>
   );
 }
 

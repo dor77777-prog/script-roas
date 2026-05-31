@@ -11,6 +11,7 @@ import type { Filters as F, PresetKey } from '@/lib/types';
 import { Calendar, ChevronDown, Store, Zap } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 import { applyFromCandidate, applyToCandidate } from '@/lib/rangeClamp';
 
 /**
@@ -67,7 +68,7 @@ export function Filters({ filters, stores, onChange }: Props) {
   const showAdvanced = advancedOpen || activeIsSecondary || filters.preset === 'custom';
 
   return (
-    <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
+    <Card className="!p-0 overflow-hidden">
       <div className="p-4 sm:p-5 space-y-3.5 sm:space-y-4">
         {/* ===== Row 1: featured presets + store ===== */}
         <div className="flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-4">
@@ -205,6 +206,6 @@ export function Filters({ filters, stores, onChange }: Props) {
           </div>
         )}
       </div>
-    </div>
+    </Card>
   );
 }

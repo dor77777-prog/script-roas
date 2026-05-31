@@ -388,6 +388,26 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 }
 
 /* ===========================================================================
+   `.glass` base — Task 2.4.
+   Mockup reference: mockup-04-final.html lines 91-98. The canonical glass
+   treatment that every Card primitive carries by default: linear gradient
+   between the --glass-1/2 stops, blur+saturate via --blur-glass, hairline
+   white-alpha rim, inset-highlight + soft-drop --shadow-glass, and
+   position:relative so the `[data-band]::before` top bar can anchor.
+   Consumers should reach this class via the `<Card>` primitive (Task 2.4
+   default = `glass rounded-card p-5`); the band + freshness variants below
+   layer on top via data-* attributes that <Card> forwards.
+   =========================================================================== */
+.glass {
+  background: linear-gradient(180deg, var(--glass-2) 0%, var(--glass-1) 100%);
+  backdrop-filter: var(--blur-glass);
+  -webkit-backdrop-filter: var(--blur-glass);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--shadow-glass);
+  position: relative;
+}
+
+/* ===========================================================================
    V4 BAND SIGNAL — Task 1.3.
    Mockup reference: mockup-04-final.html lines 91-113 + mockup-04f-v4-final.html
    lines 80-115. Any element carrying `data-band="red|orange|green|blue|gray"`

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Target, Edit3, Check, X, TrendingUp, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { Card } from '@/components/ui/Card';
 import type { DashboardData } from '@/lib/types';
 import {
   computePacing,
@@ -121,7 +122,17 @@ export function GoalTracker({ data }: Props) {
   // Two modes: goal set vs goal not set.
   if (goal == null && !editing) {
     return (
-      <section className="rounded-2xl bg-gradient-to-br from-accent/95 via-accent to-accent/80 text-white shadow-glass overflow-hidden">
+      <Card
+        variant="flat"
+        className={cn(
+          // Solid accent gradient — not a glass card; opt out via flat so
+          // the .glass rule's translucent background doesn't fight the
+          // accent fill. Keeps rounded-card + shadow-glass via explicit
+          // classes for chassis consistency.
+          '!p-0 overflow-hidden rounded-card shadow-glass',
+          'bg-gradient-to-br from-accent/95 via-accent to-accent/80 text-white',
+        )}
+      >
         <div className="p-4 sm:p-5">
           <div className="flex items-center gap-2.5 mb-3">
             <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-white/12 text-white shrink-0">
@@ -144,13 +155,13 @@ export function GoalTracker({ data }: Props) {
             קבע יעד
           </Button>
         </div>
-      </section>
+      </Card>
     );
   }
 
   if (editing) {
     return (
-      <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-glass p-4 sm:p-5">
+      <Card className="!p-4 sm:!p-5">
         <div className="flex items-center gap-2.5 mb-3">
           <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-accent/10 text-accent shrink-0">
             <Target size={14} />
@@ -218,7 +229,7 @@ export function GoalTracker({ data }: Props) {
               goal wouldn't survive a device switch. */}
           הערך נשמר גם בענן (cloud-synced) וגם בדפדפן. אפשר לעדכן בכל עת.
         </p>
-      </section>
+      </Card>
     );
   }
 
@@ -244,7 +255,7 @@ export function GoalTracker({ data }: Props) {
     : 'bg-ink-muted';
 
   return (
-    <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
+    <Card className="!p-0 overflow-hidden">
       <div className="p-4 sm:p-5">
         <div className="flex items-center justify-between gap-3 mb-3">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -349,6 +360,6 @@ export function GoalTracker({ data }: Props) {
           </span>
         </div>
       </div>
-    </section>
+    </Card>
   );
 }

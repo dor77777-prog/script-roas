@@ -10,6 +10,7 @@ import type { DailyRow, DashboardData } from '@/lib/types';
 import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
 import { storeColor } from '@/lib/storeColors';
 import { buildTodayNarrative } from '@/lib/todayNarrative';
+import { Card } from '@/components/ui/Card';
 
 const ordersFetcher = async (url: string): Promise<OrdersAttributionResponse> => {
   const r = await fetch(url);
@@ -396,9 +397,15 @@ export function TodayLive({
   const liveTone = liveToneFromRoas(agg.roas, hasAnyData);
 
   return (
-    <section
+    // TodayLive hero opts OUT of the canonical .glass treatment (`variant="flat"`)
+    // because LIVE_TONE_STYLES provides its own ROAS-band-driven gradient
+    // (cardBg/cardBorder/blob/etc.) that would fight a translucent glass
+    // background. Card chassis still gives us a consistent root for codemod
+    // sweeps and a rounded-card radius via explicit class.
+    <Card
+      variant="flat"
       className={cn(
-        'relative overflow-hidden rounded-2xl border transition-colors duration-500',
+        '!p-0 relative overflow-hidden rounded-card border transition-colors duration-500',
         liveTone.cardBg,
         liveTone.cardBorder,
         'shadow-glass animate-fade-in',
@@ -521,9 +528,9 @@ export function TodayLive({
                 ?? { meta: 0, google: 0, tiktok: 0 };
               const storeOrders = ordersByStoreToday[s.store];
               return (
-                <div
+                <Card
                   key={s.store}
-                  className="rounded-xl bg-glass-1/90 backdrop-blur-sm border border-glass-edge p-3 shadow-glass"
+                  className="!p-3"
                 >
                   {/* Header: store name + larger ROAS chip — keeps ROAS the
                       headline metric of the card. Chip text bumped from
@@ -623,7 +630,7 @@ export function TodayLive({
                       )}
                     </div>
                   </div>
-                </div>
+                </Card>
               );
             })}
           </div>
@@ -659,7 +666,7 @@ export function TodayLive({
           Meta/Google/TikTok עם פיגור של ~20 דק' מצד הפלטפורמה.
         </div>
       </div>
-    </section>
+    </Card>
   );
 }
 
@@ -693,7 +700,7 @@ function LiveStat({
   accent?: 'pos' | 'neg';
 }) {
   return (
-    <div className="rounded-xl bg-glass-1 border border-glass-edge p-2.5 sm:p-4 shadow-glass">
+    <Card className="!p-2.5 sm:!p-4">
       <div className="flex items-center justify-between mb-1 sm:mb-1.5">
         <span className="text-[11px] sm:text-xs font-medium text-ink-secondary tracking-wide truncate">
           {label}
@@ -728,7 +735,7 @@ function LiveStat({
           {badge}
         </span>
       )}
-    </div>
+    </Card>
   );
 }
 

@@ -16,6 +16,7 @@ import { roasLabel, type Aggregate, deltaPct, getCogsRateForStore } from '@/lib/
 import { RollingNumber } from './RollingNumber';
 import { Sparkline } from './Sparkline';
 import { MetricHelp, METRIC_HELP, type MetricHelpContent } from './MetricHelp';
+import { Card } from '@/components/ui/Card';
 import type { DailyRow } from '@/lib/types';
 
 const TONE_BG: Record<string, string> = {
@@ -277,10 +278,13 @@ function KpiCard({
     : 'var(--accent)';
 
   return (
-    <div
+    <Card
       className={cn(
-        'group relative rounded-xl bg-glass-1 border border-glass-edge p-3.5 sm:p-5',
-        'shadow-glass hover:border-glass-edge-hot',
+        // `group` lets descendant `group-hover:*` utilities target this
+        // card; the override `!p-3.5 sm:!p-5` replaces the Card primitive's
+        // default `p-5` with the original responsive sizing.
+        'group !p-3.5 sm:!p-5',
+        'hover:border-glass-edge-hot',
         'transition-all duration-DEFAULT ease-out',
       )}
     >
@@ -364,6 +368,6 @@ function KpiCard({
           </div>
         )}
       </div>
-    </div>
+    </Card>
   );
 }
