@@ -31,12 +31,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
 import { Heading } from '@/components/ui/Typography';
 import { cn, formatCurrency, formatNumber, formatDate } from '@/lib/utils';
 import {
   useRoasBandGradient,
   type RoasBand,
 } from '@/lib/format/useRoasBandGradient';
+import { useStaleness, type StalenessInput } from '@/lib/freshness/useStaleness';
 import {
   RoasChartDateRangePicker,
   readChartRangeFromUrl,
@@ -94,6 +96,16 @@ export interface RoasTargetChartProps {
   scopeLabel?: string;
   /** ROAS target line — defaults to 3.0. */
   target?: number;
+  /**
+   * Freshness signal — drives both the in-header <FreshnessBadge> chip
+   * and the <Card freshness="…"> desaturation (Task 3.6). Accepts the
+   * same StalenessInput shape as `useStaleness`: a single ISO timestamp
+   * (e.g. the freshest underlying row across the chart range) or a
+   * per-platform record `{ meta, google, tiktok }`. Omit if the owner
+   * has not yet wired freshness — the badge is then skipped and the
+   * Card carries no `data-freshness` attribute.
+   */
+  updatedAt?: StalenessInput;
   /** Owner refetches on range change. */
   onRangeChange?: (
     next: RoasChartRangeKey,
@@ -203,9 +215,15 @@ export function RoasTargetChart({
   data,
   scopeLabel,
   target = TARGET_Y_DEFAULT,
+  updatedAt,
   onRangeChange,
   className,
 }: RoasTargetChartProps) {
+  // Task 3.6 — freshness signal. Hook safely accepts undefined (falls
+  // through to a stale verdict with em-dash); we gate the badge render
+  // on `updatedAt !== undefined` so owners that haven't wired it yet
+  // don't get a "—" chip pinned in the header.
+  const freshness = useStaleness(updatedAt);
   /* --- pin tooltip state ----------------------------------------------- */
   // Single `openPinId` — hover sets it, click toggles it, document-level
   // click clears it. Per [[home-visual-rules]] pin tooltips are NEVER
@@ -312,6 +330,7 @@ export function RoasTargetChart({
     <Card
       className={cn('roas-card', className)}
       data-testid="roas-target-chart"
+      freshness={updatedAt !== undefined ? freshness.stage : undefined}
     >
       {/* Header --------------------------------------------------------- */}
       <div className="flex flex-wrap items-start justify-between gap-4 mb-4">
@@ -331,12 +350,17 @@ export function RoasTargetChart({
           </Heading>
         </div>
         <div className="flex flex-col items-end gap-2">
-          <span
-            className="font-mono text-[11px] uppercase tracking-[0.06em] text-ink-muted"
-            data-testid="chart-scope"
-          >
-            {scopeLabel ?? '—'}
-          </span>
+          <div className="flex items-center gap-2">
+            {updatedAt !== undefined && (
+              <FreshnessBadge updatedAt={updatedAt} />
+            )}
+            <span
+              className="font-mono text-[11px] uppercase tracking-[0.06em] text-ink-muted"
+              data-testid="chart-scope"
+            >
+              {scopeLabel ?? '—'}
+            </span>
+          </div>
           {pins.length > 0 && (
             <span
               className={cn(

@@ -166,4 +166,29 @@ describe('PerStoreRow', () => {
     expect(screen.getByText('usmile360')).toBeInTheDocument();
     expect(screen.getByText('store-3')).toBeInTheDocument();
   });
+
+  // Task 3.6 — freshness wiring. The hook's `stage` flows into both the
+  // chip class AND the surrounding <Card data-freshness="…">; both must
+  // agree so the desaturation CSS and the chip never contradict.
+  it('passes useStaleness(updatedAt).stage to Card.data-freshness AND renders matching badge', () => {
+    const now = Date.now();
+    const FRESH_TS = new Date(now - 2 * 60_000).toISOString();   // 2 min  → fresh
+    const AGING_TS = new Date(now - 20 * 60_000).toISOString();  // 20 min → aging
+    const STALE_TS = new Date(now - 47 * 60_000).toISOString();  // 47 min → stale
+    const stores: PerStoreData[] = STORES.map((s, i) => ({
+      ...s,
+      updatedAt: [FRESH_TS, AGING_TS, STALE_TS][i],
+    }));
+    const { container } = render(<PerStoreRow stores={stores} />);
+    const cards = container.querySelectorAll('[data-testid="per-store-card"]');
+    expect(cards[0].getAttribute('data-freshness')).toBe('fresh');
+    expect(cards[1].getAttribute('data-freshness')).toBe('aging');
+    expect(cards[2].getAttribute('data-freshness')).toBe('stale');
+    // Badge inside each card mirrors the same stage.
+    const badges = container.querySelectorAll('[data-testid="freshness-badge"]');
+    expect(badges).toHaveLength(3);
+    expect(badges[0].getAttribute('data-stage')).toBe('fresh');
+    expect(badges[1].getAttribute('data-stage')).toBe('aging');
+    expect(badges[2].getAttribute('data-stage')).toBe('stale');
+  });
 });

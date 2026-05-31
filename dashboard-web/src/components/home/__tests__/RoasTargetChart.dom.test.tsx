@@ -231,4 +231,48 @@ describe('<RoasTargetChart>', () => {
     render(<RoasTargetChart range="30" data={makeData()} />);
     expect(screen.getByTestId('chart-pin-count').textContent).toMatch(/1/);
   });
+
+  /* -----------------------------------------------------------------
+   * Task 3.6 — freshness wiring (badge + data-freshness must agree).
+   * ----------------------------------------------------------------- */
+
+  it('omits FreshnessBadge AND data-freshness when updatedAt prop not provided', () => {
+    render(<RoasTargetChart range="30" data={makeData()} />);
+    expect(screen.queryByTestId('freshness-badge')).not.toBeInTheDocument();
+    expect(
+      screen.getByTestId('roas-target-chart').hasAttribute('data-freshness'),
+    ).toBe(false);
+  });
+
+  it('renders FreshnessBadge AND forwards data-freshness="stale" when updatedAt is 47 min old', () => {
+    const STALE_TS = new Date(Date.now() - 47 * 60_000).toISOString();
+    render(
+      <RoasTargetChart range="30" data={makeData()} updatedAt={STALE_TS} />,
+    );
+    const card = screen.getByTestId('roas-target-chart');
+    expect(card.getAttribute('data-freshness')).toBe('stale');
+    const badge = screen.getByTestId('freshness-badge');
+    expect(badge.getAttribute('data-stage')).toBe('stale');
+    expect(badge.classList.contains('stale')).toBe(true);
+  });
+
+  it('per-platform updatedAt surfaces worst-platform label in the badge', () => {
+    render(
+      <RoasTargetChart
+        range="30"
+        data={makeData()}
+        updatedAt={{
+          meta:   new Date(Date.now() - 2 * 60_000).toISOString(),
+          google: new Date(Date.now() - 4 * 60_000).toISOString(),
+          tiktok: new Date(Date.now() - 107 * 60_000).toISOString(),
+        }}
+      />,
+    );
+    expect(screen.getByTestId('freshness-badge').textContent).toMatch(
+      /TikTok stuck · 1h 47min/,
+    );
+    expect(
+      screen.getByTestId('roas-target-chart').getAttribute('data-freshness'),
+    ).toBe('stale');
+  });
 });

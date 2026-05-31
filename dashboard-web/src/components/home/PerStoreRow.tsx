@@ -31,6 +31,7 @@
 import { useMemo, type KeyboardEvent } from 'react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
+import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
 import { Heading } from '@/components/ui/Typography';
 import { PlatformBadge, type Platform } from '@/components/ui/PlatformBadge';
 import {
@@ -38,6 +39,7 @@ import {
   type RoasBand,
 } from '@/lib/format/useRoasBandGradient';
 import { aovEmphasis } from '@/lib/format/aovEmphasis';
+import { useStaleness } from '@/lib/freshness/useStaleness';
 
 /* --------------------------------------------------------------------------
  * Props
@@ -159,6 +161,10 @@ function StoreCard({
   // without triggering rules-of-hooks lint).
   const band = useRoasBandGradient(store.roas);
   const aovClass = aovEmphasis(store.aov);
+  // Task 3.6 — freshness signal. The hook re-renders every 60s so the chip
+  // label clock stays current; the same `stage` drives the Card's
+  // `data-freshness` attribute → CSS desaturation (Task 1.4).
+  const freshness = useStaleness(store.updatedAt);
 
   // Order is stable for the per-platform CPM row: Meta → Google → TikTok
   // (matches the mockup and the chart-legend ordering). The predicate is
@@ -201,6 +207,7 @@ function StoreCard({
   return (
     <Card
       band={band.band}
+      freshness={freshness.stage}
       data-testid="per-store-card"
       role={interactive ? 'button' : undefined}
       tabIndex={interactive ? 0 : undefined}
@@ -212,14 +219,17 @@ function StoreCard({
           'cursor-pointer transition-colors hover:border-glass-edge/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60',
       )}
     >
-      {/* Header — store name + band chip ------------------------------------------------ */}
+      {/* Header — store name + band chip + freshness chip ----------------------------- */}
       <header className="flex items-center justify-between gap-2">
         <Heading level="panel" className="truncate" as="h3">
           <bdi dir="ltr">{store.storeName}</bdi>
         </Heading>
-        <span className={cn('band-chip', `chip-${band.band}`)}>
-          {BAND_CHIP_LABEL[band.band]}
-        </span>
+        <div className="flex items-center gap-2">
+          <FreshnessBadge updatedAt={store.updatedAt} />
+          <span className={cn('band-chip', `chip-${band.band}`)}>
+            {BAND_CHIP_LABEL[band.band]}
+          </span>
+        </div>
       </header>
 
       {/* ROAS hero — big banded number ---------------------------------------------------- */}
