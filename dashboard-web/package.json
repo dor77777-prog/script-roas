@@ -14,7 +14,10 @@
     "test:all": "npm run test && npm run test:components",
     "test:coverage": "vitest run --coverage",
     "audit:reconcile": "AUDIT_LIVE=1 vitest run src/lib/audit/__tests__/reconcile.live.test.ts",
-    "audit:reconcile:hot-vs-heavy": "AUDIT_LIVE=1 vitest run src/lib/audit/__tests__/reconcileHotMetricsVsHeavy.live.test.ts"
+    "audit:reconcile:hot-vs-heavy": "AUDIT_LIVE=1 vitest run src/lib/audit/__tests__/reconcileHotMetricsVsHeavy.live.test.ts",
+    "test:visual": "playwright test",
+    "test:visual:update": "playwright test --update-snapshots",
+    "test:visual:ui": "playwright test --ui"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
@@ -44,6 +47,7 @@
     "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
