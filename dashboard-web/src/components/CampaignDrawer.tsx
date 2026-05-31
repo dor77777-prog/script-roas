@@ -41,6 +41,7 @@ import {
 } from '@/lib/cpmRoasAnalysis';
 import { useCampaignAttribution } from '@/lib/hooks/useCampaignAttribution';
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
+import { fmtMoney } from '@/lib/format';
 import { roasLabel } from '@/lib/analytics';
 import type { CampaignRow } from '@/lib/campaigns';
 import {
@@ -883,8 +884,8 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
 
           <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
             <Stat density="compact" label="CTR" value={summary.impressions > 0 ? `${(summary.ctr * 100).toFixed(2)}%` : '—'} />
-            <Stat density="compact" label="CPC" value={summary.clicks > 0 ? `CAD ${formatCurrency(summary.cpc, 2)}` : '—'} />
-            <Stat density="compact" label="CPA" value={summary.conversions > 0 ? `CAD ${formatCurrency(summary.cpa, 2)}` : '—'} />
+            <Stat density="compact" label="CPC" value={summary.clicks > 0 ? fmtMoney(summary.cpc, 'CAD', 2) : '—'} />
+            <Stat density="compact" label="CPA" value={summary.conversions > 0 ? fmtMoney(summary.cpa, 'CAD', 2) : '—'} />
           </div>
 
           {summary.dailyArr.length >= 2 && (

@@ -15,6 +15,7 @@ import {
   Minimize2,
 } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
+import { fmtMoney, fmtMoneyString } from '@/lib/format';
 import { roasLabel } from '@/lib/analytics';
 import type { AdsResponse } from '@/app/api/ads/route';
 import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
@@ -383,8 +384,8 @@ export function AdsDrawer({
             <>
               {/* Totals strip — quick reference vs the parent ad-set values */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <Stat label="הוצאה" value={`CAD ${formatCurrency(summary.totals.spend)}`} />
-                <Stat label="ערך" value={`CAD ${formatCurrency(summary.totals.value)}`} accent="positive" />
+                <Stat label="הוצאה" value={fmtMoney(summary.totals.spend)} />
+                <Stat label="ערך" value={fmtMoney(summary.totals.value)} accent="positive" />
                 <Stat
                   label="ROAS"
                   value={summary.totals.roas > 0 ? formatNumber(summary.totals.roas) : '—'}
@@ -502,9 +503,9 @@ export function AdsDrawer({
                               :                                    'bg-status-redBg/60 text-status-red';
                               const tooltip =
                                 `ROAS אמיתי · ${adAttr.trust.label} (${adAttr.trust.score.toFixed(0)}/100)\n\n` +
-                                `Meta דיווח: CAD ${a.value.toFixed(0)}\n` +
-                                `click-id מתויג: CAD ${adAttr.deterministicRevenue.toFixed(0)} (${adAttr.deterministicOrders} הזמנות)\n` +
-                                `modeled: CAD ${adAttr.modeledRevenue.toFixed(0)}\n\n` +
+                                `Meta דיווח: ${fmtMoneyString(a.value)}\n` +
+                                `click-id מתויג: ${fmtMoneyString(adAttr.deterministicRevenue)} (${adAttr.deterministicOrders} הזמנות)\n` +
+                                `modeled: ${fmtMoneyString(adAttr.modeledRevenue)}\n\n` +
                                 adAttr.reasons.map(r => `• ${r}`).join('\n') +
                                 `\n\n💡 ${adAttr.recommendation}`;
                               return (

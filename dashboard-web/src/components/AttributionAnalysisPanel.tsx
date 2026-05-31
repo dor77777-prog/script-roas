@@ -2,6 +2,7 @@
 
 import { TrendingUp, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fmtMoney } from '@/lib/format';
 import type { AttributionAnalysis } from '@/lib/attributionAnalysis';
 import { Heading } from '@/components/ui/Typography';
 
@@ -95,7 +96,7 @@ export function AttributionAnalysisPanel({ analysis, spend, value }: Props) {
                   {metaRoas > 0 ? `${metaRoas.toFixed(2)}x` : '—'}
                 </div>
                 <div className="text-[10px] opacity-60 tabular-nums">
-                  CAD {value.toFixed(0)} מדווח
+                  {fmtMoney(value)} מדווח
                 </div>
               </div>
             </div>
@@ -106,8 +107,8 @@ export function AttributionAnalysisPanel({ analysis, spend, value }: Props) {
         {value > 0 && (
           <div className="space-y-1">
             <div className="flex justify-between text-[11px]">
-              <span className="opacity-80">click-id מתויג: {analysis.deterministicOrders} הזמנות (CAD {analysis.deterministicRevenue.toFixed(0)})</span>
-              <span className="opacity-80">modeled: CAD {analysis.modeledRevenue.toFixed(0)}</span>
+              <span className="opacity-80">click-id מתויג: {analysis.deterministicOrders} הזמנות ({fmtMoney(analysis.deterministicRevenue)})</span>
+              <span className="opacity-80">modeled: {fmtMoney(analysis.modeledRevenue)}</span>
             </div>
             {/* FIX-12 (5.2.2.1): clamp widths to [0, 100]; signed revenue can otherwise produce negative widths or >100% bars. */}
             <div className="h-2.5 rounded-full bg-white/40 overflow-hidden flex">

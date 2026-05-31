@@ -35,6 +35,7 @@
 import type { Aggregated } from '@/lib/campaignsAggregator';
 import type { TrueRevenueInfo } from '@/lib/hooks/useCampaignTrueRevenue';
 import type { CpmRoasAnalysis } from '@/lib/cpmRoasAnalysis';
+import { fmtMoneyString } from '@/lib/format';
 
 export type HealthGrade = 'A' | 'B' | 'C' | 'D' | 'F' | 'unknown';
 
@@ -390,7 +391,7 @@ export function computeCampaignHealth(inputs: HealthScoreInputs): CampaignHealth
         cohortAdjustment: 0,
       },
       reasons: [
-        `הוצאה $${aggregated.spend.toFixed(0)} CAD ${
+        `הוצאה ${fmtMoneyString(aggregated.spend)} ${
           aggregated.conversions === 0 ? '+ 0 המרות' : ''
         } — מדגם קטן מדי לציון אמין. חכה שיצטברו נתונים.`,
       ],

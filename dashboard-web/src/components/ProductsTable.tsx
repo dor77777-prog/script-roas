@@ -12,6 +12,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
+import { fmtMoney } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { NativeSelect } from '@/components/ui/NativeSelect';
@@ -614,7 +615,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                     <div className="hidden sm:block">
                       <span className="text-ink-muted text-[10px] sm:text-xs me-1">ברוטו</span>
                       <span className="font-semibold text-ink">
-                        CAD {formatCurrency(bucket.totalRevenue)}
+                        {fmtMoney(bucket.totalRevenue)}
                       </span>
                     </div>
                     {bucket.hasNet && bucket.totalNetRevenue !== null && (
@@ -622,7 +623,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                         <div className="hidden md:block">
                           <span className="text-ink-muted text-[10px] sm:text-xs me-1">נטו</span>
                           <span className="font-semibold text-status-green">
-                            CAD {formatCurrency(bucket.totalNetRevenue)}
+                            {fmtMoney(bucket.totalNetRevenue)}
                           </span>
                         </div>
                       </HelpTooltip>
@@ -863,10 +864,10 @@ function SummaryCard({
           value={summary.orders > 0 ? formatNumber(summary.orders, 0) : '—'}
         />
         <Stat label="יחידות" value={formatNumber(summary.units, 0)} accent="attention" />
-        <Stat label="ברוטו" value={`CAD ${formatCurrency(summary.gross)}`} />
+        <Stat label="ברוטו" value={fmtMoney(summary.gross)} />
         <Stat
           label="נטו"
-          value={summary.net !== null ? `CAD ${formatCurrency(summary.net)}` : '—'}
+          value={summary.net !== null ? fmtMoney(summary.net) : '—'}
           accent={summary.net !== null && summary.net < summary.gross ? 'positive' : 'neutral'}
           subtitle={
             haircut !== null && haircut > 0.005
@@ -890,7 +891,7 @@ function SummaryCard({
             </span>
             יחידות ·
             <span className="text-ink-secondary font-medium ms-1">
-              CAD {formatCurrency(summary.avgGrossPerDay)}
+              {fmtMoney(summary.avgGrossPerDay)}
             </span>
             ברוטו
           </span>

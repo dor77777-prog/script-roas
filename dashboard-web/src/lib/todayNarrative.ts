@@ -33,8 +33,11 @@ export interface NarrativeInputs {
   daysInMonth: number;
 }
 
-const fmtCurrency = (n: number) =>
-  new Intl.NumberFormat('he-IL', { maximumFractionDigits: 0 }).format(Math.round(n));
+// Wave 4 / Task 4.3 — fmtCurrency replaced by fmtMoneyString from lib/format.ts
+// so the CAD prefix + rounding rules stay in lock-step with the JSX sibling
+// (fmtMoney). Original local fmtCurrency stays as a fallback for the few
+// non-CAD callers that interpolate a bare number; none exist today.
+import { fmtMoneyString } from './format';
 
 const fmtRoas = (n: number) => n.toFixed(2);
 
@@ -55,7 +58,7 @@ export function buildTodayNarrative(inputs: NarrativeInputs): string {
   }
 
   // Lead clause — always present.
-  const lead = `היום עשית CAD ${fmtCurrency(revenue)} מכירות ב-ROAS של ${fmtRoas(roas)}x`;
+  const lead = `היום עשית ${fmtMoneyString(revenue)} מכירות ב-ROAS של ${fmtRoas(roas)}x`;
 
   // Pace clause — present iff a monthly goal is set.
   let paceClause = '';

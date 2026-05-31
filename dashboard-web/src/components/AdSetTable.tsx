@@ -9,6 +9,7 @@ import {
   Circle,
 } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
+import { fmtMoneyString } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
 import { TableBase } from '@/components/ui/TableBase';
 import { HelpTooltip } from '@/components/ui/Tooltip';
@@ -226,9 +227,9 @@ export function AdSetTable({
                       :                                       'bg-status-redBg/60 text-status-red';
                       const tooltip =
                         `ROAS אמיתי · ${adsetAttr.trust.label} (${adsetAttr.trust.score.toFixed(0)}/100)\n\n` +
-                        `Meta דיווח: CAD ${a.value.toFixed(0)}\n` +
-                        `click-id מתויג: CAD ${adsetAttr.deterministicRevenue.toFixed(0)} (${adsetAttr.deterministicOrders} הזמנות)\n` +
-                        `modeled: CAD ${adsetAttr.modeledRevenue.toFixed(0)}\n\n` +
+                        `Meta דיווח: ${fmtMoneyString(a.value)}\n` +
+                        `click-id מתויג: ${fmtMoneyString(adsetAttr.deterministicRevenue)} (${adsetAttr.deterministicOrders} הזמנות)\n` +
+                        `modeled: ${fmtMoneyString(adsetAttr.modeledRevenue)}\n\n` +
                         adsetAttr.reasons.map(r => `• ${r}`).join('\n') +
                         `\n\n💡 ${adsetAttr.recommendation}`;
                       return (

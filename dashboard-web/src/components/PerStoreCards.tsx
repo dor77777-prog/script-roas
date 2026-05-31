@@ -3,6 +3,7 @@
 import type { ReactNode } from 'react';
 import { Trophy, AlertTriangle, ShoppingBag } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
+import { fmtMoney } from '@/lib/format';
 import { roasLabel, type StoreAgg } from '@/lib/analytics';
 import { storeHasTikTok } from '@/lib/platformsByStore';
 import { storeColor } from '@/lib/storeColors';
@@ -150,8 +151,8 @@ function StoreCard({
           </span>
         </div>
         <div className="grid grid-cols-1 gap-1.5 text-sm pt-2 border-t border-glass-edge">
-          <Row label="הכנסות" value={`CAD ${formatCurrency(agg.revenue)}`} />
-          <Row label="הוצאות" value={`CAD ${formatCurrency(agg.spend)}`} />
+          <Row label="הכנסות" value={fmtMoney(agg.revenue)} />
+          <Row label="הוצאות" value={fmtMoney(agg.spend)} />
           {/* Phase 05.7.7 — surface Meta / Google / TikTok breakdown so each
               store card shows where the ad budget actually went.
               Phase 05.7.x (2026-05-23): TikTok now renders for every store
@@ -182,14 +183,14 @@ function StoreCard({
             // loading, "0" for genuine zero orders. Mirrors TodayLive.
             value={orderCount === undefined ? '…' : formatNumber(orderCount, 0)}
           />
-          <Row label="רווח גולמי" value={`CAD ${formatCurrency(agg.grossProfit)}`} bold />
+          <Row label="רווח גולמי" value={fmtMoney(agg.grossProfit)} bold />
         </div>
       </div>
     </Card>
   );
 }
 
-function Row({ label, value, bold = false }: { label: ReactNode; value: string; bold?: boolean }) {
+function Row({ label, value, bold = false }: { label: ReactNode; value: ReactNode; bold?: boolean }) {
   return (
     <div className="flex justify-between">
       <span className="text-ink-secondary">{label}:</span>

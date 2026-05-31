@@ -41,6 +41,7 @@ import {
   fmtDateShort,
   fmtDeltaPct,
   fmtMoneyBare,
+  fmtMoneyString,
   fmtNum2,
 } from '@/lib/format';
 
@@ -194,7 +195,7 @@ export function HeroOverview({ data, filters }: Props) {
     // case as stability. Detect it explicitly and surface the raw values
     // without claiming stability.
     const prevEmpty = prevAgg.spend === 0 && prevAgg.revenue === 0;
-    const netStr = `${curAgg.netProfit >= 0 ? '' : 'מינוס '}CAD ${Math.abs(Math.round(curAgg.netProfit)).toLocaleString('he-IL')}`;
+    const netStr = `${curAgg.netProfit >= 0 ? '' : 'מינוס '}${fmtMoneyString(Math.abs(curAgg.netProfit))}`;
     let story: string;
     if (curAgg.spend === 0 && curAgg.revenue === 0) {
       story = 'אין עדיין נתונים לטווח הזה.';
@@ -236,7 +237,7 @@ export function HeroOverview({ data, filters }: Props) {
 
     // Story clause: only appended when refunds occurred at all this period.
     if (refundsTotal > 0) {
-      const refundStr = `CAD ${Math.round(refundsTotal).toLocaleString('he-IL')}`;
+      const refundStr = fmtMoneyString(refundsTotal);
       if (heavyDates.length === 1) {
         story += ` בתקופה זו עובדו ${refundStr} בהחזרים ב-${fmtDateShort(heavyDates[0])}.`;
       } else if (heavyDates.length > 1) {

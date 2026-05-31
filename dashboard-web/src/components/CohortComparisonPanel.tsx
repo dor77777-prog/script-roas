@@ -27,7 +27,8 @@
  */
 
 import { Trophy, AlertCircle, Equal, Package, TrendingDown } from 'lucide-react';
-import { cn, formatCurrency, formatNumber } from '@/lib/utils';
+import { cn, formatNumber } from '@/lib/utils';
+import { fmtMoney } from '@/lib/format';
 import { TableBase } from '@/components/ui/TableBase';
 import { Heading } from '@/components/ui/Typography';
 import { HelpTooltip } from '@/components/ui/Tooltip';
@@ -181,7 +182,7 @@ function MemberRow({ member, rank, isCurrent, onDrill }: MemberRowProps) {
         {member.sharedProductIds.length}
       </td>
       <td className="px-2 py-1.5 text-xs tabular-nums text-end">
-        {metrics ? `CAD ${formatCurrency(metrics.spend)}` : '—'}
+        {metrics ? fmtMoney(metrics.spend) : '—'}
       </td>
       <td className="px-2 py-1.5 text-xs tabular-nums text-end font-semibold">
         {fmtRoas(metrics?.roasShopify)}
@@ -434,10 +435,10 @@ export function CohortComparisonPanel({
                 </span>
                 <br />
                 <span className="text-ink-muted">
-                  הוצאת קבוצה: CAD {formatCurrency(v.metrics.earlyHalfSpend)} →{' '}
-                  CAD {formatCurrency(v.metrics.lateHalfSpend)} ({fmtPct(v.metrics.spendGrowthPct)}) ·
-                  הכנסת מוצר: CAD {formatCurrency(v.metrics.earlyHalfRevenue)} →{' '}
-                  CAD {formatCurrency(v.metrics.lateHalfRevenue)} ({fmtPct(v.metrics.revenueGrowthPct)})
+                  הוצאת קבוצה: {fmtMoney(v.metrics.earlyHalfSpend)} →{' '}
+                  {fmtMoney(v.metrics.lateHalfSpend)} ({fmtPct(v.metrics.spendGrowthPct)}) ·
+                  הכנסת מוצר: {fmtMoney(v.metrics.earlyHalfRevenue)} →{' '}
+                  {fmtMoney(v.metrics.lateHalfRevenue)} ({fmtPct(v.metrics.revenueGrowthPct)})
                   {v.metrics.marginalRoas !== null && (
                     <>
                       {' '}· ROAS שולי: {v.metrics.marginalRoas.toFixed(2)}

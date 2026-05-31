@@ -1,4 +1,5 @@
 import { pushCloudKey, type StateKey } from './cloudSync';
+import { fmtMoneyString } from './format';
 
 /**
  * Insights engine — pure analytics, no React.
@@ -131,7 +132,7 @@ function detectMetricAnomalies(
       title: isUp
         ? `הכנסות חריגות גבוהות ב-${scope}`
         : `צניחה חריגה בהכנסות ב-${scope}`,
-      detail: `הכנסות היום: CAD ${Math.round(today.revenue).toLocaleString('he-IL')}`,
+      detail: `הכנסות היום: ${fmtMoneyString(today.revenue)}`,
       why: `z-score ${zRev.toFixed(1)} מול חציון 14 ימים. סטטיסטית חריג.`,
       weight: isUp ? 75 : 95,
     });
@@ -146,7 +147,7 @@ function detectMetricAnomalies(
       kind: 'anomaly',
       scope,
       title: `הוצאת פרסום חריגה ב-${scope}`,
-      detail: `הוצאה היום: CAD ${Math.round(today.totalSpend).toLocaleString('he-IL')}`,
+      detail: `הוצאה היום: ${fmtMoneyString(today.totalSpend)}`,
       why: `z-score ${zSpend.toFixed(1)} מול חציון 14 ימים. בדוק שאין budget runaway.`,
       weight: 85,
     });
@@ -192,7 +193,7 @@ function detectMetricAnomalies(
       kind: 'anomaly',
       scope,
       title: `יום אבוד ב-${scope}`,
-      detail: `הוצאת CAD ${Math.round(today.totalSpend).toLocaleString('he-IL')} בלי מכירות.`,
+      detail: `הוצאת ${fmtMoneyString(today.totalSpend)} בלי מכירות.`,
       why: `הוצאה גבוהה (>CAD 50) ביום עם 0 הכנסות.`,
       weight: 98,
     });
@@ -338,7 +339,7 @@ export function generateRecommendations(
       kind: 'recommendation',
       scope: `${c.platform} · ${c.storeName}`,
       title: `${c.campaignName || 'קמפיין'} ללא המרות`,
-      detail: `הוצאת CAD ${Math.round(c.spend).toLocaleString('he-IL')} ב-${c.daysActive} ימים בלי המרה אחת.`,
+      detail: `הוצאת ${fmtMoneyString(c.spend)} ב-${c.daysActive} ימים בלי המרה אחת.`,
       why: `${c.clicks} קליקים, ${c.impressions.toLocaleString('he-IL')} חשיפות, 0 המרות — בדוק את הלנדינג פייג', הקהל, או הקריאייטיב.`,
       href: adsManagerLink(c.platform, c.campaignId) ?? undefined,
       weight: 92,
@@ -375,7 +376,7 @@ export function generateRecommendations(
         scope: store,
         title: `שקול להעביר תקציב מ-${bot.platform} ל-${top.platform} ב-${store}`,
         detail: `${top.platform} ROAS ${top.roas.toFixed(2)}, ${bot.platform} ROAS ${bot.roas.toFixed(2)} — פער של ${((top.roas / bot.roas - 1) * 100).toFixed(0)}%.`,
-        why: `מבחן הקצאת תקציב: ${bot.platform} מקבל CAD ${Math.round(bot.spend).toLocaleString('he-IL')} ב-14 ימים אבל מחזיר ROAS נמוך משמעותית. נסה לחתוך 20% מהפלטפורמה החלשה והעבר לחזקה.`,
+        why: `מבחן הקצאת תקציב: ${bot.platform} מקבל ${fmtMoneyString(bot.spend)} ב-14 ימים אבל מחזיר ROAS נמוך משמעותית. נסה לחתוך 20% מהפלטפורמה החלשה והעבר לחזקה.`,
         weight: 65,
       });
     }
@@ -406,7 +407,7 @@ export function generateRecommendations(
       kind: 'highlight',
       scope: star.store,
       title: `המוצר המוביל: ${star.title}`,
-      detail: `${star.units.toLocaleString('he-IL')} יחידות, CAD ${Math.round(star.revenue).toLocaleString('he-IL')} ב-14 ימים אחרונים.`,
+      detail: `${star.units.toLocaleString('he-IL')} יחידות, ${fmtMoneyString(star.revenue)} ב-14 ימים אחרונים.`,
       why: `המוצר עם הכי הרבה יחידות בכל החנויות. שקול קמפיינים ייעודיים או הגדלת מלאי.`,
       weight: 60,
     });
@@ -441,7 +442,7 @@ export function generateRecommendations(
           scope: sr.store,
           title: `${sr.store} מתחת לממוצע הכללי`,
           detail: `ROAS ${sr.roas.toFixed(2)} מול ממוצע משוקלל ${blendRoas.toFixed(2)} בכל החנויות.`,
-          why: `הוצאה של CAD ${Math.round(sr.spend).toLocaleString('he-IL')} ב-14 ימים אחרונים. בדוק קמפיינים פעילים, יחסי המרה, וקריאייטיב.`,
+          why: `הוצאה של ${fmtMoneyString(sr.spend)} ב-14 ימים אחרונים. בדוק קמפיינים פעילים, יחסי המרה, וקריאייטיב.`,
           weight: 75,
         });
       }

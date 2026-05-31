@@ -2,7 +2,9 @@
 
 import useSWR from 'swr';
 import { Trophy, TrendingUp, TrendingDown } from 'lucide-react';
-import { cn, formatCurrency, formatNumber } from '@/lib/utils';
+import type { ReactNode } from 'react';
+import { cn, formatNumber } from '@/lib/utils';
+import { fmtMoney } from '@/lib/format';
 import type { ProductsResponse } from '@/app/api/products/route';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { CampaignRow } from '@/lib/campaigns';
@@ -41,7 +43,7 @@ function addDays(dateStr: string, n: number): string {
 type Insight = {
   kind: 'top-product' | 'top-campaign' | 'rising' | 'falling';
   primary: string;
-  secondary: string;
+  secondary: ReactNode;
   href?: string;
 };
 
@@ -83,7 +85,11 @@ function computeInsights(
       insights.push({
         kind: 'top-product',
         primary: top.title,
-        secondary: `${top.store} · ${formatNumber(top.units, 0)} יח׳ · CAD ${formatCurrency(top.rev)}`,
+        secondary: (
+          <>
+            {top.store} · {formatNumber(top.units, 0)} יח׳ · {fmtMoney(top.rev)}
+          </>
+        ),
       });
     }
   }
@@ -122,7 +128,11 @@ function computeInsights(
       insights.push({
         kind: 'top-campaign',
         primary: top.name,
-        secondary: `${top.store} · ${top.platform} · ROAS ${formatNumber(top.roas)} · הוצאה CAD ${formatCurrency(top.spend)}`,
+        secondary: (
+          <>
+            {top.store} · {top.platform} · ROAS {formatNumber(top.roas)} · הוצאה {fmtMoney(top.spend)}
+          </>
+        ),
         href: adsManagerLink(top.platform, top.campaignId) || undefined,
       });
     }

@@ -19,6 +19,7 @@
  */
 
 import type { OrderAttributionRow, OrderSource } from './ordersAttribution';
+import { fmtMoneyString } from './format';
 
 // ============================================================================
 // Tunable constants (IN-05 — hoisted from inline literals).
@@ -449,7 +450,7 @@ export function analyzeAttribution(
     // 0/100 "untrusted" badge on every zero-conversion campaign.
     trust = { level: 'unknown', label: 'אין המרות', score: 0 };
     if (campaign.spend > 0) {
-      reasons.push(`הוצאה CAD ${campaign.spend.toFixed(0)} ללא המרות מ-${platformLabel} או מ-Shopify`);
+      reasons.push(`הוצאה ${fmtMoneyString(campaign.spend)} ללא המרות מ-${platformLabel} או מ-Shopify`);
       recommendation =
         'אין המרות לניתוח. אם זה קמפיין brand-awareness/reach — סבבה. ' +
         'אחרת בדוק שה-Pixel/CAPI עובדים והקמפיין מכוון להמרות.';
@@ -463,7 +464,7 @@ export function analyzeAttribution(
       `אף הזמנה לא תויגה לקמפיין הזה — סביר ש-utm_campaign לא מוגדר ב-URL Parameters ב-${platformLabel} Ads Manager`,
     );
     reasons.push(
-      `${platformLabel} דיווח על CAD ${campaign.metaClaim.toFixed(0)} המרות בלי שום click-id מתאים`,
+      `${platformLabel} דיווח על ${fmtMoneyString(campaign.metaClaim)} המרות בלי שום click-id מתאים`,
     );
     recommendation =
       `הוסף URL Parameters לקמפיין ב-${platformLabel}: utm_source=facebook&utm_medium=cpc&utm_campaign={{campaign.name}}. ` +
@@ -472,11 +473,11 @@ export function analyzeAttribution(
     const pct = Math.round(coverage * 100);
     trust = { level: 'high', label: 'אמין', score: Math.min(100, 70 + pct / 5) };
     reasons.push(
-      `${deterministicOrders} הזמנות תויגו לקמפיין (CAD ${deterministicRevenue.toFixed(0)} מתוך CAD ${campaign.metaClaim.toFixed(0)} ש-${platformLabel} דיווח — ${pct}% coverage)`,
+      `${deterministicOrders} הזמנות תויגו לקמפיין (${fmtMoneyString(deterministicRevenue)} מתוך ${fmtMoneyString(campaign.metaClaim)} ש-${platformLabel} דיווח — ${pct}% coverage)`,
     );
     if (modeledRevenue > 0) {
       reasons.push(
-        `CAD ${modeledRevenue.toFixed(0)} ה"modeled" של ${platformLabel} (view-through / cross-device) — סביר`,
+        `${fmtMoneyString(modeledRevenue)} ה"modeled" של ${platformLabel} (view-through / cross-device) — סביר`,
       );
     }
     recommendation = coverage >= 1.0
@@ -487,13 +488,13 @@ export function analyzeAttribution(
     const modeledPct = Math.round((modeledRevenue / campaign.metaClaim) * 100);
     trust = { level: 'medium', label: 'חלקי', score: 40 + pct / 2 };
     reasons.push(
-      `${pct}% מההמרות תויגו (${deterministicOrders} הזמנות, CAD ${deterministicRevenue.toFixed(0)})`,
+      `${pct}% מההמרות תויגו (${deterministicOrders} הזמנות, ${fmtMoneyString(deterministicRevenue)})`,
     );
     reasons.push(
       `${modeledPct}% modeled — ${platformLabel} מייחס בלי click-id (view-through, cross-device, סטטיסטי)`,
     );
     if (campaign.spend < 200) {
-      reasons.push(`הוצאה נמוכה (CAD ${campaign.spend.toFixed(0)}) — מדגם קטן מגדיל אי-ודאות`);
+      reasons.push(`הוצאה נמוכה (${fmtMoneyString(campaign.spend)}) — מדגם קטן מגדיל אי-ודאות`);
     }
     // Guard divide-by-zero: when spend === 0 (operator-backfilled or
     // attribution-only campaigns), the ratio is Infinity and toFixed(2)
@@ -521,7 +522,7 @@ export function analyzeAttribution(
       // Refund-heavy day: phrase the reason in terms of net loss, not
       // a meaningless "רק -200% מההמרות תויגו" string.
       reasons.push(
-        `החזרים גדולים מההזמנות (${deterministicOrders} פעולות, CAD ${deterministicRevenue.toFixed(0)} נטו)`,
+        `החזרים גדולים מההזמנות (${deterministicOrders} פעולות, ${fmtMoneyString(deterministicRevenue)} נטו)`,
       );
     } else {
       reasons.push(
@@ -529,7 +530,7 @@ export function analyzeAttribution(
       );
     }
     reasons.push(
-      `${platformLabel} מייחס CAD ${campaign.metaClaim.toFixed(0)} אבל רק CAD ${deterministicRevenue.toFixed(0)} בפועל יש להם click-id`,
+      `${platformLabel} מייחס ${fmtMoneyString(campaign.metaClaim)} אבל רק ${fmtMoneyString(deterministicRevenue)} בפועל יש להם click-id`,
     );
     recommendation =
       `${platformLabel} מנפח דיווחים לקמפיין הזה. ` +
@@ -984,7 +985,7 @@ function buildAnalysis(opts: {
     // brand the row as "untrusted" with a 0/100 score.
     trust = { level: 'unknown', label: 'אין המרות', score: 0 };
     if (spend > 0) {
-      reasons.push(`הוצאה CAD ${spend.toFixed(0)} ללא המרות מ-${platformLabel} או מ-Shopify`);
+      reasons.push(`הוצאה ${fmtMoneyString(spend)} ללא המרות מ-${platformLabel} או מ-Shopify`);
       recommendation = `אין המרות לניתוח. אם זה brand/reach — סבבה. אחרת בדוק שה-${hebLabel} מכוון להמרות וה-Pixel/CAPI עובדים.`;
     } else {
       reasons.push('אין הוצאה ואין המרות בטווח הזה');
@@ -997,8 +998,8 @@ function buildAnalysis(opts: {
   } else if (coverage >= 0.8) {
     const pct = Math.round(coverage * 100);
     trust = { level: 'high', label: 'אמין', score: Math.min(100, 70 + pct / 5) };
-    reasons.push(`${deterministicOrders} הזמנות תויגו (${pct}% coverage, CAD ${deterministicRevenue.toFixed(0)})`);
-    if (modeledRevenue > 0) reasons.push(`CAD ${modeledRevenue.toFixed(0)} modeled (view-through / cross-device)`);
+    reasons.push(`${deterministicOrders} הזמנות תויגו (${pct}% coverage, ${fmtMoneyString(deterministicRevenue)})`);
+    if (modeledRevenue > 0) reasons.push(`${fmtMoneyString(modeledRevenue)} modeled (view-through / cross-device)`);
     recommendation = coverage >= 1.0 ? advice.goodHalo : advice.goodSteady;
   } else if (coverage >= 0.4) {
     const pct = Math.round(coverage * 100);
@@ -1024,7 +1025,7 @@ function buildAnalysis(opts: {
     const safePct = Math.max(0, pct);
     trust = { level: 'low', label: 'לא אמין', score: safePct };
     if (pct < 0) {
-      reasons.push(`החזרים גדולים מההזמנות (${deterministicOrders} פעולות, CAD ${deterministicRevenue.toFixed(0)} נטו)`);
+      reasons.push(`החזרים גדולים מההזמנות (${deterministicOrders} פעולות, ${fmtMoneyString(deterministicRevenue)} נטו)`);
     } else {
       reasons.push(`רק ${pct}% מההמרות (${deterministicOrders} הזמנות) תויגו`);
     }

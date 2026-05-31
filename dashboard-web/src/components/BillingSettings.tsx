@@ -14,6 +14,7 @@ import {
   Settings as SettingsIcon,
 } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
+import { fmtMoney } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { NativeSelect } from '@/components/ui/NativeSelect';
@@ -468,7 +469,7 @@ function RecurringTab({
                         {m.planDisplayName}
                       </span>
                       <span className="text-[10px] text-ink-muted tabular-nums shrink-0">
-                        {cad ? `≈ CAD ${formatCurrency(cad)}/מ` : 'מחיר לא ידוע — הזן ידנית'}
+                        {cad ? <>≈ {fmtMoney(cad)}/מ</> : 'מחיר לא ידוע — הזן ידנית'}
                       </span>
                       <Button
                         size="sm"

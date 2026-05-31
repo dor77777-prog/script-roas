@@ -92,6 +92,9 @@ const fmtNum = (n: number, d = 0) =>
   }).format(n);
 
 const fmtCad = (n: number) => `CAD ${fmtNum(Math.round(n))}`;
+// Two-decimal variant for CPC/CPA cells. Plain-string export → no <bdi>
+// wrap needed; this file emits markdown for AI prompts.
+const fmtCad2 = (n: number) => `CAD ${fmtNum(n, 2)}`;
 const fmtPct = (n: number, d = 1) => `${(n * 100).toFixed(d)}%`;
 const fmtDate = (s: string) => {
   const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -830,7 +833,7 @@ export function generateAiReport({
     out.push(`|---|---|---|---|---|---|---|---|---|---|`);
     for (const c of campaignsList.slice(0, 25)) {
       out.push(
-        `| ${escapeMd(c.name)} | ${c.store} | ${c.platform} | ${fmtCad(c.spend)} | ${fmtCad(c.value)} | ${c.roas > 0 ? fmtNum(c.roas, 2) : '—'} | ${fmtNum(c.conversions, 0)} | ${c.impressions > 0 ? fmtPct(c.ctr, 2) : '—'} | ${c.clicks > 0 ? `CAD ${fmtNum(c.cpc, 2)}` : '—'} | ${c.conversions > 0 ? `CAD ${fmtNum(c.cpa, 2)}` : '—'} |`,
+        `| ${escapeMd(c.name)} | ${c.store} | ${c.platform} | ${fmtCad(c.spend)} | ${fmtCad(c.value)} | ${c.roas > 0 ? fmtNum(c.roas, 2) : '—'} | ${fmtNum(c.conversions, 0)} | ${c.impressions > 0 ? fmtPct(c.ctr, 2) : '—'} | ${c.clicks > 0 ? fmtCad2(c.cpc) : '—'} | ${c.conversions > 0 ? fmtCad2(c.cpa) : '—'} |`,
       );
     }
     if (campaignsList.length > 25) {

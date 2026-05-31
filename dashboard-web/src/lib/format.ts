@@ -79,14 +79,47 @@ export function fmtCount(n: number): React.ReactElement {
   return bdi(fixMinus(COUNT.format(n)));
 }
 
-/** Format CAD/USD as `CAD 1,234` (currency prefixed, integer). */
-export function fmtMoney(n: number, code: string = 'CAD'): React.ReactElement {
+/**
+ * Format CAD/USD as `CAD 1,234` (currency prefixed). Default 0 decimals.
+ * Pass `decimals=2` for CPC/CPM/CPA cells that need cent-level precision.
+ */
+export function fmtMoney(
+  n: number,
+  code: string = 'CAD',
+  decimals: 0 | 2 = 0,
+): React.ReactElement {
+  const f = decimals === 0 ? MONEY : MONEY_2;
+  const rounded = decimals === 0 ? Math.round(n) : n;
   return bdi(
     React.createElement(React.Fragment, null,
       React.createElement('span', { className: 'text-ink-muted font-medium pe-1' }, code),
-      fixMinus(MONEY.format(Math.round(n))),
+      fixMinus(f.format(rounded)),
     ),
   );
+}
+
+/**
+ * Plain-string sibling of {@link fmtMoney} for non-JSX consumers
+ * (aria-label, title attribute, log message, multi-line tooltips, etc.).
+ * Returns the same currency-prefixed, integer-rounded string content but
+ * WITHOUT the `<bdi>` ReactNode wrap — strings can't carry DOM elements.
+ *
+ * Wave 4 / Task 4.3: introduced to reconcile the `lib/utils.ts` vs
+ * `lib/format.ts` bifurcation. Call sites that used to hand-build
+ * `` `CAD ${n}` `` (which bypassed the <bdi> wrap and risked bidi-
+ * reordering inside Hebrew tooltips/aria labels) now go through one of
+ * the two siblings — JSX → fmtMoney, string → fmtMoneyString.
+ *
+ * For 2-decimal output (CPC/CPM/CPA), pass `decimals=2`.
+ */
+export function fmtMoneyString(
+  n: number,
+  code: string = 'CAD',
+  decimals: 0 | 2 = 0,
+): string {
+  const f = decimals === 0 ? MONEY : MONEY_2;
+  const rounded = decimals === 0 ? Math.round(n) : n;
+  return `${code} ${fixMinus(f.format(rounded))}`;
 }
 
 /** Bare money without currency prefix. */

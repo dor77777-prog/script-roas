@@ -3,6 +3,7 @@
 import { Fragment } from 'react';
 import { CheckCircle2, Circle, ExternalLink } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
+import { fmtMoneyString } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { campaignKey } from '@/lib/campaignProductMap';
@@ -506,7 +507,7 @@ export function CampaignsTableRow({
           // branches so the operator always sees what the other
           // signal would have said.
           const mappingLine =
-            `Shopify מוקצה (מיפוי): CAD ${info.trueRevenue.toFixed(0)}` +
+            `Shopify מוקצה (מיפוי): ${fmtMoneyString(info.trueRevenue)}` +
             (info.metaClaim > 0
               ? ` (פער ${(gap * 100).toFixed(0)}% מול Meta)`
               : '');
@@ -517,10 +518,10 @@ export function CampaignsTableRow({
             const detRoas = a.spend > 0 ? at.deterministicRevenue / a.spend : 0;
             tooltip =
               `ROAS מבוסס click-id · ${at.trust.label} (${at.trust.score.toFixed(0)}/100)\n\n` +
-              `Meta דיווח:           CAD ${info.metaClaim.toFixed(0)}\n` +
-              `מתויג click-id:       CAD ${at.deterministicRevenue.toFixed(0)} (${at.deterministicOrders} הזמנות)\n` +
+              `Meta דיווח:           ${fmtMoneyString(info.metaClaim)}\n` +
+              `מתויג click-id:       ${fmtMoneyString(at.deterministicRevenue)} (${at.deterministicOrders} הזמנות)\n` +
               `${mappingLine}\n` +
-              `Modeled / view-through: CAD ${at.modeledRevenue.toFixed(0)}\n` +
+              `Modeled / view-through: ${fmtMoneyString(at.modeledRevenue)}\n` +
               `coverage: ${(at.coverage * 100).toFixed(0)}%\n` +
               `ROAS אמיתי: ${detRoas.toFixed(2)}x  |  ROAS לפי Meta: ${(info.metaClaim / a.spend).toFixed(2)}x\n\n` +
               at.reasons.map(r => `• ${r}`).join('\n') +
@@ -534,7 +535,7 @@ export function CampaignsTableRow({
               : '\n(אין נתוני click-id בטווח — חוזרים למיפוי מוצרים)';
             tooltip =
               `ROAS מבוסס מיפוי מוצרים · ${info.confidence.label}${clickIdNote}\n\n` +
-              `Meta דיווח: CAD ${info.metaClaim.toFixed(0)}\n` +
+              `Meta דיווח: ${fmtMoneyString(info.metaClaim)}\n` +
               `${mappingLine}\n\n` +
               info.confidence.reasons.map(r => `• ${r}`).join('\n');
           }
@@ -624,7 +625,7 @@ export function CampaignsTableRow({
             );
           }
           const tooltip =
-            `CAD ${info.deterministicRevenue.toFixed(0)} מהזמנות שסווגו ב-Shopify ל-${a.platform} ` +
+            `${fmtMoneyString(info.deterministicRevenue)} מהזמנות שסווגו ב-Shopify ל-${a.platform} ` +
             `(source='${a.platform === 'Meta' ? 'meta-paid' : a.platform === 'Google' ? 'google-paid' : 'tiktok-paid'}' או click-id מזוהה).`;
           return (
             <HelpTooltip content={tooltip}>

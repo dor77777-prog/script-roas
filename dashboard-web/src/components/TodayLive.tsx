@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { Radio, TrendingUp, DollarSign, ShoppingCart, Target, Eye, ShoppingBag } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
+import { fmtMoney } from '@/lib/format';
 import { aggregate, aggregateByStore, roasLabel } from '@/lib/analytics';
 import { storeHasTikTok } from '@/lib/platformsByStore';
 import type { DailyRow, DashboardData } from '@/lib/types';
@@ -604,7 +605,7 @@ export function TodayLive({
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-ink-muted">CPM ממוצע</span>
                       <span className="text-ink font-semibold">
-                        {storeCpm > 0 ? `CAD ${formatCurrency(storeCpm, 2)}` : '—'}
+                        {storeCpm > 0 ? fmtMoney(storeCpm, 'CAD', 2) : '—'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-2 ps-3 text-[11px] text-ink-muted flex-wrap">

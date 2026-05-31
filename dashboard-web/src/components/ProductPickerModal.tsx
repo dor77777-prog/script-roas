@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { Package, Search, X, Check } from 'lucide-react';
-import { cn, formatCurrency, formatNumber } from '@/lib/utils';
+import { cn, formatNumber } from '@/lib/utils';
+import { fmtMoney } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { HelpTooltip } from '@/components/ui/Tooltip';
@@ -355,7 +356,7 @@ export function ProductPickerModal({
                         <div className="text-[10px] sm:text-[11px] text-ink-muted tabular-nums">
                           {p.totalUnits > 0 ? (
                             <>
-                              {formatNumber(p.totalUnits, 0)} יח&apos; · CAD {formatCurrency(p.totalRevenue)}
+                              {formatNumber(p.totalUnits, 0)} יח&apos; · {fmtMoney(p.totalRevenue)}
                             </>
                           ) : (
                             <span className="text-ink-muted/80">עדיין לא בוצעו מכירות</span>

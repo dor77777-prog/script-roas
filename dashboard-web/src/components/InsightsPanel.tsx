@@ -1,7 +1,8 @@
 'use client';
 
 import { Trophy, AlertTriangle, Calendar } from 'lucide-react';
-import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
+import { cn, formatDate, formatNumber } from '@/lib/utils';
+import { fmtMoney } from '@/lib/format';
 import type { DailyRow } from '@/lib/types';
 import type { StoreAgg } from '@/lib/analytics';
 import { InsightCard } from '@/components/ui/InsightCard';
@@ -49,7 +50,11 @@ export function InsightsPanel({ storeAggs, rows }: Props) {
             <InsightRow
               icon={<Trophy className="text-status-warning" size={20} />}
               primary={`חנות מובילה: ${top.store}`}
-              secondary={`ROAS ${formatNumber(top.roas)}  •  הכנסות CAD ${formatCurrency(top.revenue)}`}
+              secondary={
+                <>
+                  ROAS {formatNumber(top.roas)}  •  הכנסות {fmtMoney(top.revenue)}
+                </>
+              }
             />
           )}
           {bottom && bottom.store !== top?.store && (
@@ -63,7 +68,11 @@ export function InsightsPanel({ storeAggs, rows }: Props) {
             <InsightRow
               icon={<Calendar className="text-accent" size={20} />}
               primary={`יום הכי טוב בתקופה: ${formatDate(bestDate)}`}
-              secondary={`ROAS ${formatNumber(bestRoas)}  •  הכנסות CAD ${formatCurrency(bestRevenue)}`}
+              secondary={
+                <>
+                  ROAS {formatNumber(bestRoas)}  •  הכנסות {fmtMoney(bestRevenue)}
+                </>
+              }
             />
           )}
         </div>
@@ -78,8 +87,8 @@ function InsightRow({
   secondary,
 }: {
   icon: React.ReactNode;
-  primary: string;
-  secondary: string;
+  primary: React.ReactNode;
+  secondary: React.ReactNode;
 }) {
   return (
     <div className="flex items-center gap-3 px-5 py-3">

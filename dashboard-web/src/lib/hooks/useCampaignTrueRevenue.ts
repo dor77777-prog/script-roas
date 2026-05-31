@@ -14,6 +14,7 @@ import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { CampaignRow } from '@/lib/campaigns';
 import type { Aggregated } from '@/lib/campaignsAggregator';
 import type { DateRange } from '@/lib/types';
+import { fmtMoneyString } from '@/lib/format';
 
 /**
  * Per-campaign output of the true-ROAS allocation. `trueRevenue` is the
@@ -147,9 +148,9 @@ function computeConfidence(
   if (spend < 200) {
     if (gap > 0.15) {
       level = applyDowngrade(level, 'medium');
-      reasons.push(`הוצאה נמוכה בתקופה (CAD ${spend.toFixed(0)}) — המדגם קטן, פער ${(gap * 100).toFixed(0)}% עשוי להיות רעש`);
+      reasons.push(`הוצאה נמוכה בתקופה (${fmtMoneyString(spend)}) — המדגם קטן, פער ${(gap * 100).toFixed(0)}% עשוי להיות רעש`);
     } else {
-      reasons.push(`הוצאה נמוכה (CAD ${spend.toFixed(0)}) — שני המקורות מסכימים, אבל המדגם קטן`);
+      reasons.push(`הוצאה נמוכה (${fmtMoneyString(spend)}) — שני המקורות מסכימים, אבל המדגם קטן`);
     }
   }
 

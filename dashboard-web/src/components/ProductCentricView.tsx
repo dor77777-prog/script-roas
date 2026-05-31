@@ -19,7 +19,8 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
 import { ChevronDown, ChevronLeft, Info, Package, Trophy } from 'lucide-react';
-import { cn, formatCurrency } from '@/lib/utils';
+import { cn } from '@/lib/utils';
+import { fmtMoney, fmtMoneyString } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { TableBase } from '@/components/ui/TableBase';
@@ -73,10 +74,10 @@ function fmtRoas(n: number): string {
 // and the eye stumbles). The body is laid out as a small stat block + a
 // one-line conclusion so each side reads cleanly in its own direction.
 function fmtCad(n: number): string {
-  // Right-to-left thousand-separator formatting suitable for inline Hebrew —
-  // pair it with `<bdi dir="ltr">` at the render site so the bidi algorithm
-  // doesn't re-order it when neighboring Hebrew runs.
-  return `CAD ${Math.round(n).toLocaleString('en-CA')}`;
+  // Wave 4 / Task 4.3 — route through fmtMoneyString so the CAD prefix +
+  // numeric rounding rules stay in lock-step with fmtMoney's JSX sibling.
+  // Render sites still pair with `<bdi dir="ltr">` per the original note.
+  return fmtMoneyString(n);
 }
 
 function statBlock(rows: Array<{ label: string; value: string; emphasis?: boolean }>): ReactNode {
@@ -455,8 +456,8 @@ function ProductRow({
             </div>
           </HelpTooltip>
           <div className="text-[11px] text-ink-muted tabular-nums">
-            הוצאת קבוצה: CAD {formatCurrency(row.totalCohortSpend)} · הכנסות נטו:{' '}
-            CAD {formatCurrency(row.totalNetRevenue)} · ROAS משוקלל:{' '}
+            הוצאת קבוצה: {fmtMoney(row.totalCohortSpend)} · הכנסות נטו:{' '}
+            {fmtMoney(row.totalNetRevenue)} · ROAS משוקלל:{' '}
             <strong className="text-ink-secondary">{fmtRoas(row.blendedRoas)}</strong>
           </div>
         </div>
@@ -481,8 +482,8 @@ function ProductRow({
                   {platformGroup.platform} ({platformGroup.members.length})
                 </span>
                 <span className="text-ink-muted tabular-nums">
-                  הוצאת פלטפ.: CAD {formatCurrency(platformGroup.intraSpend)} · הכנסה מוקצית:
-                  {' '}CAD {formatCurrency(platformGroup.intraAllocatedRevenue)}
+                  הוצאת פלטפ.: {fmtMoney(platformGroup.intraSpend)} · הכנסה מוקצית:
+                  {' '}{fmtMoney(platformGroup.intraAllocatedRevenue)}
                 </span>
               </div>
               <div className="overflow-x-auto -mx-2 sm:mx-0">
@@ -659,7 +660,7 @@ function ProductRow({
                           </td>
                         </HelpTooltip>
                         <td className="px-2 py-1.5 text-end tabular-nums">
-                          CAD {formatCurrency(m.spend)}
+                          {fmtMoney(m.spend)}
                         </td>
                         <td className="px-2 py-1.5 text-end tabular-nums text-ink-muted">
                           {fmtPct(m.intraPlatformSpendShare)}
@@ -668,10 +669,10 @@ function ProductRow({
                           {fmtPct(m.totalSpendShare)}
                         </td>
                         <td className="px-2 py-1.5 text-end tabular-nums">
-                          CAD {formatCurrency(m.allocatedRevenueEstimate)}
+                          {fmtMoney(m.allocatedRevenueEstimate)}
                         </td>
                         <td className="px-2 py-1.5 text-end tabular-nums text-ink-secondary">
-                          {m.conversionValue > 0 ? `CAD ${formatCurrency(m.conversionValue)}` : '—'}
+                          {m.conversionValue > 0 ? fmtMoney(m.conversionValue) : '—'}
                         </td>
                         <td className="px-2 py-1.5 text-end tabular-nums font-semibold">
                           {fmtRoas(m.platformRoas)}
