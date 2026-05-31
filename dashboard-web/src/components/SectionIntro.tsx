@@ -45,7 +45,7 @@ export function SectionIntro({
             className={cn(
               'shrink-0 mt-0.5 inline-flex items-center justify-center',
               'w-7 h-7 sm:w-8 sm:h-8 rounded-lg',
-              'bg-accent/8 text-accent',
+              'bg-accent-bg text-accent',
             )}
           >
             {icon}

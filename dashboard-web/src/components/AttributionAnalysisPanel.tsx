@@ -43,10 +43,10 @@ export function AttributionAnalysisPanel({
 }: Props) {
   const adAccounts = useStoreAdAccounts();
   const trustBg =
-    analysis.trust.level === 'high'    ? 'bg-status-greenBg/50 border-status-green/30 text-status-green'
-  : analysis.trust.level === 'medium'  ? 'bg-status-warningBg border-status-warning/30 text-status-warningFg'
+    analysis.trust.level === 'high'    ? 'bg-status-greenBg border-status-green text-status-greenFg'
+  : analysis.trust.level === 'medium'  ? 'bg-status-warningBg border-status-warning text-status-warningFg'
   : analysis.trust.level === 'unknown' ? 'bg-glass-2 border-glass-edge text-ink-secondary'
-  :                                      'bg-status-redBg/50 border-status-red/30 text-status-red';
+  :                                      'bg-status-redBg border-status-red text-status-redFg';
 
   const detRoas = spend > 0
     ? analysis.deterministicRevenue / spend
@@ -72,7 +72,7 @@ export function AttributionAnalysisPanel({
         {analysis.coverageExceedsClamp && (
           <div
             role="alert"
-            className="rounded-md bg-status-redBg border border-status-red/40 text-status-red px-3 py-2 flex items-start gap-2 text-[11px] leading-relaxed"
+            className="rounded-md bg-status-redBg border border-status-red text-status-redFg px-3 py-2 flex items-start gap-2 text-[11px] leading-relaxed"
           >
             <AlertTriangle size={14} className="shrink-0 mt-px" />
             <div>
@@ -130,7 +130,7 @@ export function AttributionAnalysisPanel({
               <span className="opacity-80">modeled: {fmtMoney(analysis.modeledRevenue)}</span>
             </div>
             {/* FIX-12 (5.2.2.1): clamp widths to [0, 100]; signed revenue can otherwise produce negative widths or >100% bars. */}
-            <div className="h-2.5 rounded-full bg-white/40 overflow-hidden flex">
+            <div className="h-2.5 rounded-full bg-glass-2 overflow-hidden flex">
               <div
                 className="h-full bg-current opacity-70"
                 style={{ width: `${Math.max(0, Math.min(100, (analysis.deterministicRevenue / value) * 100))}%` }}
@@ -157,7 +157,7 @@ export function AttributionAnalysisPanel({
 
         {/* Recommendation callout */}
         {analysis.recommendation && (
-          <div className="rounded-md bg-white/40 border border-current/20 px-2.5 py-2 text-[11px] leading-relaxed">
+          <div className="rounded-md bg-glass-1/60 border border-current/20 px-2.5 py-2 text-[11px] leading-relaxed">
             <strong>💡 המלצה:</strong> {analysis.recommendation}
           </div>
         )}

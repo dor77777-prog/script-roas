@@ -74,9 +74,10 @@
   --band-green:  #34e2ad;  /* mockup-locked band stop */
   --band-blue:   #5b8df0;  /* mockup-locked band stop */
   --band-gray:   #828aae;  /* mockup-locked band stop */
-  /* Task 4.1 — failure-cell token: spent money, zero sales = worst state */
-  --cell-fail:    oklch(0% 0 0);
-  --cell-fail-fg: oklch(100% 0 0);
+  /* Task 4.1 — failure-cell token: spent money, zero sales = worst state.
+     Mockup-locked: very-dark-navy fill + pink text (history-table "0" cell). */
+  --cell-fail:    #15151f;
+  --cell-fail-fg: #ff8a9a;
 
   /* ---------------------------------------------------------------------
      Task 1.8 — semantic spacing / motion / radius scales.
@@ -315,9 +316,11 @@
   --band-green:  #0f9d6b;  /* mockup-locked band stop (light) */
   --band-blue:   #3b82f6;  /* mockup-locked band stop (light) */
   --band-gray:   #949ab4;  /* mockup-locked band stop (light) */
-  /* Task 4.1 — failure-cell token: pure black stands out on light canvas */
-  --cell-fail:    oklch(0% 0 0);
-  --cell-fail-fg: oklch(100% 0 0);
+  /* Task 4.1 — failure-cell token: mockup-locked very-dark-navy fill + pink
+     text. The history-table "0" cell keeps the same dark pill in both themes
+     (mockup renders #15151f / #ff8a9a regardless of mode). */
+  --cell-fail:    #15151f;
+  --cell-fail-fg: #ff8a9a;
 
   /* Spacing scale — theme-invariant, copied verbatim from :root. */
   --space-1:  0.25rem;

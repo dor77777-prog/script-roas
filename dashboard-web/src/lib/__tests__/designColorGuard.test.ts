@@ -60,8 +60,8 @@ const MIGRATION_ALLOWLIST: string[] = [
   'AdSetTable.tsx',
   'AdsDrawer.tsx',
   'AiReportButton.tsx',
-  'AnnotationsPanel.tsx',
-  'AttributionAnalysisPanel.tsx',
+  // AnnotationsPanel.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
+  // AttributionAnalysisPanel.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
   'BillingCsvImport.tsx',
   'BillingSettings.tsx',
   'CampaignDrawerStatusSection.tsx',
@@ -69,7 +69,7 @@ const MIGRATION_ALLOWLIST: string[] = [
   'CampaignsColumnsMenu.tsx',
   'CampaignsTable.tsx',
   'CampaignsTableRow.tsx',
-  'CohortComparisonPanel.tsx',
+  // CohortComparisonPanel.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
   'CommandPalette.tsx',
   // Dashboard.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
   // Filters.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
@@ -77,16 +77,16 @@ const MIGRATION_ALLOWLIST: string[] = [
   // GoalTracker.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
   'HealthScoreBadge.tsx',
   'HealthScorePanel.tsx',
-  'InsightsBoard.tsx',
-  'MetaShopifyReconciliation.tsx',
-  'MonthlyTables.tsx',
-  'PnLBreakdown.tsx',
+  // InsightsBoard.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
+  // MetaShopifyReconciliation.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
+  // MonthlyTables.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
+  // PnLBreakdown.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
   'ProductCentricView.tsx',
   'ProductChannelBreakdown.tsx',
   'ProductPickerModal.tsx',
   'ProductsTable.tsx',
-  'RoasChart.tsx',
-  'SectionIntro.tsx',
+  // RoasChart.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
+  // SectionIntro.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
   'Sidebar.tsx',
   // SyncIndicator.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
   'TabFreshnessHeader.tsx',

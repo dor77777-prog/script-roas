@@ -468,7 +468,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
 
         {/* Dark traffic chip */}
         {reconciliation.darkTrafficPercent > 0 && (
-          <div className="rounded-md bg-status-warningBg border border-status-warning/30 px-2.5 py-1.5 text-[11px] text-status-warningFg">
+          <div className="rounded-md bg-status-warningBg border border-status-warning px-2.5 py-1.5 text-[11px] text-status-warningFg">
             <strong>פער &quot;Dark traffic&quot; {reconciliation.darkTrafficPercent}%:</strong>{' '}
             סכום Meta+Google+Organic נמוך מ-Shopify בפועל. ייתכן channel attribution חסר (UTMs לא מוגדרים נכון, סוגי orders שלא מתויגים).
           </div>
@@ -628,7 +628,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
           reconciliation.bestR !== null &&
           reconciliation.r !== null &&
           reconciliation.bestR > reconciliation.r + LAG_IMPROVEMENT_THRESHOLD && (
-          <div className="rounded-md bg-status-warningBg border border-status-warning/30 px-2.5 py-1.5 text-[11px] text-status-warningFg">
+          <div className="rounded-md bg-status-warningBg border border-status-warning px-2.5 py-1.5 text-[11px] text-status-warningFg">
             <strong>זוהה lag של {Math.abs(reconciliation.bestLag)} ימים:</strong>{' '}
             {reconciliation.bestLag > 0
               ? `Meta מדווח על המרה ${Math.abs(reconciliation.bestLag)} ימים לפני שהמכירה מופיעה ב-Shopify (חלון attribution).`

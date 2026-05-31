@@ -57,8 +57,8 @@ const SOURCE_LABEL: Record<CostSource, string> = {
 
 const SOURCE_COLOR: Record<CostSource, string> = {
   'shopify-plan': 'text-accent',
-  'shopify-app':  'text-blue-700',
-  'external-app': 'text-purple-700',
+  'shopify-app':  'text-status-blueFg',
+  'external-app': 'text-accent',
   email:          'text-status-warningFg',
   usage:          'text-status-orange',
   'one-off':      'text-ink-secondary',
@@ -153,11 +153,11 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
           proportional bars so a glance answers "did I make money?" without
           expanding anything. */}
       <div
-        className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4 bg-gradient-to-br from-accent/[0.06] via-elevated to-elevated relative"
+        className="px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4 bg-gradient-to-br from-accent-bg via-glass-1 to-glass-1 relative"
       >
         <div className="flex items-start justify-between gap-3 mb-4">
           <div className="flex items-center gap-2.5 min-w-0">
-            <span className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-accent text-white shrink-0 shadow-glass">
+            <span className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-accent text-accent-fg shrink-0 shadow-glass">
               <Receipt size={17} />
             </span>
             <div className="min-w-0">
@@ -217,7 +217,7 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
       {open && (
         <div className="p-4 sm:p-5 border-t border-glass-edge animate-fade-in">
           {!hasConfiguredFixed && (
-            <div className="mb-4 rounded-lg bg-status-warningBg border border-status-warning/30 px-3 py-2.5 flex items-start gap-2">
+            <div className="mb-4 rounded-lg bg-status-warningBg border border-status-warning px-3 py-2.5 flex items-start gap-2">
               <AlertCircle size={14} className="text-status-warningFg shrink-0 mt-0.5" />
               <div className="text-[11px] sm:text-xs text-status-warningFg leading-relaxed">
                 <strong>טרם הוגדרו עלויות חודשיות.</strong> ה-P&amp;L כרגע משקלל רק
@@ -291,7 +291,7 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
             <li
               className={cn(
                 'flex items-center justify-between gap-3 px-1 py-3 mt-1.5',
-                'border-t-2 border-ink/20',
+                'border-t-2 border-glass-edge',
               )}
             >
               <div className="flex items-center gap-2 min-w-0">
@@ -359,7 +359,7 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
                           </tr>
                         );
                       })}
-                    <tr className="border-t-2 border-ink/20 font-bold">
+                    <tr className="border-t-2 border-glass-edge font-bold">
                       <td className="py-1.5 px-1">סך הכל</td>
                       <td className="py-1.5 px-1 text-end">{formatCurrency(billing.total)}</td>
                       <td className="py-1.5 px-1 text-end text-ink">
@@ -413,7 +413,7 @@ function HeroStat({
     : 'text-status-red';
   const barColor =
     tone === 'positive' ? 'bg-accent'
-    : tone === 'negative' ? 'bg-ink-muted/55'
+    : tone === 'negative' ? 'bg-ink-muted'
     : tone === 'profit' ? 'bg-status-green'
     : 'bg-status-red';
   return (
@@ -427,7 +427,7 @@ function HeroStat({
         </span>
         {formatCurrency(amount)}
       </div>
-      <div className="h-1.5 sm:h-2 rounded-full bg-ink-muted/15 overflow-hidden">
+      <div className="h-1.5 sm:h-2 rounded-full bg-[color:var(--surface-sunken)] overflow-hidden">
         <div
           className={cn('h-full rounded-full transition-all duration-500 ease-out', barColor)}
           style={{ width: `${Math.max(2, Math.min(100, barWidthPct))}%` }}

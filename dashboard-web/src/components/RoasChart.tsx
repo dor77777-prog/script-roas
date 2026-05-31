@@ -78,7 +78,10 @@ export function RoasChart({ data, stores, rows, bare = false }: Props) {
           );
         })}
         <span className="inline-flex items-center gap-1.5 ms-auto sm:ms-2">
-          <span className="inline-block w-3 h-[2px] border-t border-dashed border-status-green/70 shrink-0" />
+          <span
+            className="inline-block w-3 h-[2px] border-t border-dashed shrink-0"
+            style={{ borderTopColor: 'var(--chart-target-line)' }}
+          />
           <span className="text-ink-muted">יעד 3.0</span>
         </span>
       </div>
@@ -148,7 +151,7 @@ export function RoasChart({ data, stores, rows, bare = false }: Props) {
                       }
                       if (!anyHeavy || refundSum <= 0) return null;
                       return (
-                        <div className="mt-1 pt-1 border-t border-status-orange/30 text-xs text-status-orange">
+                        <div className="mt-1 pt-1 border-t border-status-orange text-xs text-status-orange">
                           ↩ יום רפאנד כבד — החזרים: -CAD{' '}
                           <ChartTooltipValue className="font-normal text-status-orange">
                             {Math.round(refundSum).toLocaleString('he-IL')}

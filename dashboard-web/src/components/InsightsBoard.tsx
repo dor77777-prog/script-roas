@@ -58,33 +58,33 @@ const SEVERITY_META: Record<
     label: 'דורש פעולה מיידית',
     icon: <AlertOctagon size={16} />,
     color: 'text-status-red',
-    bg: 'bg-status-redBg/40',
-    border: 'border-status-red/20',
-    badge: 'bg-status-red text-white',
+    bg: 'bg-status-redBg',
+    border: 'border-status-red',
+    badge: 'bg-status-red text-status-redFg',
   },
   warning: {
     label: 'אזהרות',
     icon: <AlertTriangle size={16} />,
     color: 'text-status-warningFg',
     bg: 'bg-status-warningBg',
-    border: 'border-status-warning/30',
-    badge: 'bg-status-warning text-white',
+    border: 'border-status-warning',
+    badge: 'bg-status-warning text-status-warningFg',
   },
   opportunity: {
     label: 'הזדמנויות',
     icon: <Lightbulb size={16} />,
     color: 'text-accent',
-    bg: 'bg-accent/5',
-    border: 'border-accent/15',
-    badge: 'bg-accent text-white',
+    bg: 'bg-accent-bg',
+    border: 'border-accent',
+    badge: 'bg-accent text-accent-fg',
   },
   positive: {
     label: 'חיובי',
     icon: <Trophy size={16} />,
     color: 'text-status-green',
-    bg: 'bg-status-greenBg/40',
-    border: 'border-status-green/15',
-    badge: 'bg-status-green text-white',
+    bg: 'bg-status-greenBg',
+    border: 'border-status-green',
+    badge: 'bg-status-green text-status-greenFg',
   },
   info: {
     label: 'מידע',
@@ -92,7 +92,7 @@ const SEVERITY_META: Record<
     color: 'text-ink-secondary',
     bg: 'bg-glass-2',
     border: 'border-glass-edge',
-    badge: 'bg-ink-muted text-white',
+    badge: 'bg-ink-muted text-canvas',
   },
 };
 
@@ -237,13 +237,13 @@ export function InsightsBoard({ data }: Props) {
           'w-full justify-start h-auto',
           'px-4 sm:px-6 py-4 sm:py-5',
           'border-b border-glass-edge',
-          'bg-gradient-to-l from-accent/5 via-elevated to-elevated',
-          'hover:from-accent/8 hover:to-elevated2/40',
+          'bg-gradient-to-l from-accent-bg via-glass-1 to-glass-1',
+          'hover:from-accent-soft hover:to-glass-2/40',
         )}
       >
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <span className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-accent/10 text-accent shrink-0">
+            <span className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-accent-bg text-accent shrink-0">
               <Sparkles size={18} />
             </span>
             <div className="min-w-0">
@@ -311,7 +311,7 @@ export function InsightsBoard({ data }: Props) {
       {!boardExpanded && hiddenCount === 0 && totalCount === 0 && !loading && (
         <div className="px-5 sm:px-6 py-5 flex items-center gap-3">
           <span className="relative inline-flex w-2.5 h-2.5 shrink-0">
-            <span className="absolute inset-0 rounded-full bg-status-green/40 animate-ping" />
+            <span className="absolute inset-0 rounded-full bg-status-greenBg animate-ping" />
             <span className="relative inline-flex w-full h-full rounded-full bg-status-green" />
           </span>
           <div className="text-[12px] sm:text-sm text-ink-secondary">
@@ -323,7 +323,7 @@ export function InsightsBoard({ data }: Props) {
 
       {boardExpanded && !loading && totalCount === 0 && hiddenCount === 0 && (
         <div className="px-4 sm:px-5 py-10 text-center text-ink-muted">
-          <Sparkles size={28} className="mx-auto mb-2 text-ink-muted/60" />
+          <Sparkles size={28} className="mx-auto mb-2 text-ink-subtle" />
           <div className="text-sm">אין תובנות חדשות לרגע זה.</div>
           <div className="text-[11px] mt-1">
             המערכת תזהה אנומליות והזדמנויות ברגע שייווצרו.
@@ -415,7 +415,7 @@ export function InsightsBoard({ data }: Props) {
                     <Button
                       variant="ghost"
                       onClick={() => restoreInsight(ins.id)}
-                      className="gap-1 px-2 py-1 h-auto text-[11px] font-semibold text-accent hover:bg-accent/10 shrink-0"
+                      className="gap-1 px-2 py-1 h-auto text-[11px] font-semibold text-accent hover:bg-accent-bg shrink-0"
                       title="שחזר תובנה לרשימה הראשית"
                     >
                       <Undo2 size={11} />
@@ -613,7 +613,7 @@ function InsightBoardRow({
         onClick={() => onMark(insight, 'done')}
         className={cn(
           'gap-1 px-2 py-1 h-auto text-[11px] font-medium',
-          'text-ink-secondary hover:text-status-green hover:border-status-green/40 hover:bg-status-greenBg/40',
+          'text-ink-secondary hover:text-status-green hover:border-status-green hover:bg-status-greenBg',
         )}
         title="סמן שטיפלתי בזה — יוסתר ל-7 ימים, יחזור אם הבעיה תחזור"
       >

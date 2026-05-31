@@ -134,7 +134,7 @@ function StatusBadge({ status }: { status: string | null }) {
         className={cn(
           'inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium border',
           isActive
-            ? 'bg-status-greenBg/40 text-status-green border-status-green/30'
+            ? 'bg-status-greenBg text-status-greenFg border-status-green'
             : 'bg-glass-2 text-ink-muted border-glass-edge',
         )}
       >
@@ -158,7 +158,7 @@ function MemberRow({ member, rank, isCurrent, onDrill }: MemberRowProps) {
     <tr
       className={cn(
         'border-b border-glass-edge/60 last:border-0',
-        isCurrent && 'bg-accent/8 font-semibold',
+        isCurrent && 'bg-accent-bg font-semibold',
         !isCurrent && onDrill && 'hover:bg-glass-2/60 cursor-pointer',
       )}
       onClick={!isCurrent && onDrill ? onDrill : undefined}
@@ -237,7 +237,7 @@ function CohortSection({ title, subtitle, members, tone, onDrillCampaign }: Sect
       className={cn(
         'rounded-lg border overflow-x-auto',
         tone === 'intra'
-          ? 'border-status-warning/30 bg-status-warningBg/30'
+          ? 'border-status-warning bg-status-warningBg'
           : 'border-glass-edge bg-glass-2/30',
       )}
     >
@@ -245,7 +245,7 @@ function CohortSection({ title, subtitle, members, tone, onDrillCampaign }: Sect
         <span
           className={cn(
             'inline-flex items-center justify-center w-6 h-6 rounded',
-            tone === 'intra' ? 'bg-status-warning/70 text-status-warningFg' : 'bg-accent/15 text-accent',
+            tone === 'intra' ? 'bg-status-warning text-status-warningFg' : 'bg-accent-soft text-accent',
           )}
         >
           {tone === 'intra' ? <AlertCircle size={13} /> : <Equal size={13} />}
@@ -383,7 +383,7 @@ export function CohortComparisonPanel({
               className={cn(
                 'inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold shrink-0 border',
                 currentRankIntra === 1
-                  ? 'bg-status-greenBg/60 text-status-green border-status-green/30'
+                  ? 'bg-status-greenBg text-status-greenFg border-status-green'
                   // Audit fix 2026-05-23 (HIGH-02 multi-mapping): only paint
                   // the loud red "weakest" tone when the cohort is large
                   // enough for the verdict to mean something (>= 3 members).
@@ -391,8 +391,8 @@ export function CohortComparisonPanel({
                   // construction — not actionable signal. Matches the
                   // floor in `applyCohortAdjustmentOnce`.
                   : intraCount >= 3 && currentRankIntra === intraCount
-                    ? 'bg-status-redBg/60 text-status-red border-status-red/30'
-                    : 'bg-status-warningBg text-status-warningFg border-status-warning/30',
+                    ? 'bg-status-redBg text-status-redFg border-status-red'
+                    : 'bg-status-warningBg text-status-warningFg border-status-warning',
               )}
             >
               <MedalIcon rank={currentRankIntra} />
@@ -413,10 +413,10 @@ export function CohortComparisonPanel({
           className={cn(
             'rounded-lg border px-3 py-2.5 space-y-2',
             cannibalizationAlerts[0].risk === 'high'
-              ? 'bg-status-redBg/60 border-status-red/40'
+              ? 'bg-status-redBg border-status-red'
               : cannibalizationAlerts[0].risk === 'medium'
-                ? 'bg-status-warningBg border-status-warning/30'
-                : 'bg-accent/10 border-accent/30',
+                ? 'bg-status-warningBg border-status-warning'
+                : 'bg-accent-bg border-accent',
           )}
         >
           <div className="flex items-center gap-2 text-xs font-semibold">
@@ -445,10 +445,10 @@ export function CohortComparisonPanel({
                   className={cn(
                     'inline-block px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider align-middle',
                     v.risk === 'high'
-                      ? 'bg-status-red/30 text-status-red'
+                      ? 'bg-status-redBg text-status-redFg'
                       : v.risk === 'medium'
                         ? 'bg-status-warning text-status-warningFg'
-                        : 'bg-accent/25 text-accent',
+                        : 'bg-accent-soft text-accent',
                   )}
                 >
                   {v.risk === 'high' ? 'גבוה' : v.risk === 'medium' ? 'בינוני' : 'נמוך'}

@@ -95,13 +95,13 @@ export function AnnotationsPanel({ range, store }: Props) {
         className={cn(
           'w-full justify-start h-auto text-start px-4 sm:px-5 py-3',
           'border-b border-glass-edge',
-          'bg-gradient-to-l from-accent/4 to-elevated',
-          'hover:from-accent/8 hover:to-elevated2/40',
+          'bg-gradient-to-l from-accent-bg to-glass-1',
+          'hover:from-accent-soft hover:to-glass-2/40',
         )}
       >
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5 min-w-0">
-            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent/10 text-accent shrink-0">
+            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent-bg text-accent shrink-0">
               <Pin size={15} />
             </span>
             <div className="min-w-0">
@@ -131,7 +131,7 @@ export function AnnotationsPanel({ range, store }: Props) {
             <Button
               variant="ghost"
               onClick={() => setAdding(true)}
-              className="w-full justify-center gap-1.5 rounded-lg border border-dashed border-glass-edge bg-glass-2/40 hover:bg-glass-2 hover:border-accent/40 px-3 py-2 h-auto text-xs sm:text-sm font-medium text-ink-secondary hover:text-ink"
+              className="w-full justify-center gap-1.5 rounded-lg border border-dashed border-glass-edge bg-glass-2/40 hover:bg-glass-2 hover:border-accent px-3 py-2 h-auto text-xs sm:text-sm font-medium text-ink-secondary hover:text-ink"
             >
               <Plus size={14} />
               תעד אירוע חדש

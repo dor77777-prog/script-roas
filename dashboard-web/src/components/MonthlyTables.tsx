@@ -295,7 +295,7 @@ function Tab({
       className={cn(
         'px-3 sm:px-3.5 py-2 sm:py-2 text-xs sm:text-sm font-medium transition-colors min-h-[44px] sm:min-h-0 h-auto',
         active
-          ? 'bg-accent text-white hover:bg-accent/90'
+          ? 'bg-accent text-accent-fg hover:bg-[color-mix(in_oklab,var(--accent)_88%,var(--text))]'
           : 'bg-glass-1 text-ink-secondary hover:bg-glass-2',
       )}
     >
@@ -353,7 +353,7 @@ function MonthBlockPerStore({
       <Button
         variant="ghost"
         onClick={() => setOpen(!open)}
-        className="w-full justify-between gap-2 px-4 sm:px-5 py-3 min-h-[44px] h-auto bg-ink text-canvas hover:bg-ink/90"
+        className="w-full justify-between gap-2 px-4 sm:px-5 py-3 min-h-[44px] h-auto bg-ink text-canvas hover:bg-[color-mix(in_oklab,var(--text)_90%,var(--canvas-1))]"
       >
         <span className="font-semibold truncate min-w-0">
           {monthTitle(ym)}  •  {storeName}
@@ -479,7 +479,7 @@ function MonthBlockSummary({
       <Button
         variant="ghost"
         onClick={() => setOpen(!open)}
-        className="w-full justify-between gap-2 px-4 sm:px-5 py-3 min-h-[44px] h-auto bg-ink text-canvas hover:bg-ink/90"
+        className="w-full justify-between gap-2 px-4 sm:px-5 py-3 min-h-[44px] h-auto bg-ink text-canvas hover:bg-[color-mix(in_oklab,var(--text)_90%,var(--canvas-1))]"
       >
         <span className="font-semibold truncate min-w-0">
           {monthTitle(ym)}  •  סיכום כל החנויות ({stores.length})
