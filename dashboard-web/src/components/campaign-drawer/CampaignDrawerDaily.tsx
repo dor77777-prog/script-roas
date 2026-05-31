@@ -101,7 +101,11 @@ export function CampaignDrawerDaily({
             </Heading>
           </div>
           <ChartContainer
-            className="h-40 sm:h-44 rounded-xl bg-glass-2/40 border border-glass-edge p-2"
+            // OPERATOR FIX (2026-06-01): explicit min-h so the chart never
+            // squishes inside the modal (Sheet variant="modal" is a
+            // flex-col/overflow-hidden card; SheetBody is the scroll area).
+            // 200px gives the area chart room to breathe vs the prior 160px.
+            className="h-40 sm:h-44 min-h-[200px] rounded-xl bg-glass-2/40 border border-glass-edge p-2"
             height="100%"
           >
             <AreaChart data={dailyArr} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
@@ -297,7 +301,10 @@ export function CampaignDrawerDaily({
               </div>
             </div>
             <ChartContainer
-              className="h-40 sm:h-44 rounded-xl bg-glass-2/40 border border-glass-edge p-2"
+              // OPERATOR FIX (2026-06-01): explicit min-h so the CPM line
+              // chart never squishes inside the modal. See the spend↔value
+              // chart above for the rationale.
+              className="h-40 sm:h-44 min-h-[200px] rounded-xl bg-glass-2/40 border border-glass-edge p-2"
               height="100%"
             >
               <LineChart data={chartData} margin={{ top: 8, right: showRoasOverlay ? 56 : 16, left: 4, bottom: 0 }}>
