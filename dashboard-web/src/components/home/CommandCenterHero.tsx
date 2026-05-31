@@ -441,8 +441,15 @@ function MiniSparkline({
  * but Change B (2026-05-31) made the hero's 4 secondary cards carry the
  * business-ROAS band on their background — a semantic-coloured spark on
  * top of a band-tinted surface clashes (red stroke on orange field, etc.).
- * Round 5 replaces all 4 with the shared NEUTRAL_SPARK_STROKE so the
- * spark reads as a tonal echo of the band rather than competing with it.
+ * Round 5 replaced all 4 with the shared NEUTRAL_SPARK_STROKE so the spark
+ * read as a tonal echo of the band rather than competing with it.
+ *
+ * 2026-05-31 mockup-alignment: the secondary cards are now CLEAN NEUTRAL
+ * surfaces (no band tint — see globals.css muted override), so the spark
+ * clash that motivated Round 5 is gone. The approved mockup puts SEMANTIC
+ * colour back on the two money sparks: Spend = down-red (var(--dn)),
+ * Revenue = up-green (var(--up)). COGS / Orders / CPM stay neutral, and
+ * the featured Net-Profit card keeps its BAND_STROKE.
  * -------------------------------------------------------------------------- */
 
 /* --------------------------------------------------------------------------
@@ -553,9 +560,10 @@ export function CommandCenterHero({
             positive={(delta?.spendPct ?? 0) <= 0}
             className="text-xs mt-1.5"
           />
+          {/* 2026-05-31 mockup-alignment: neutral card, RED (spend) spark. */}
           <MiniSparkline
             values={secondarySparklines?.spend}
-            stroke={NEUTRAL_SPARK_STROKE}
+            stroke={'var(--dn)'}
           />
         </Card>
 
@@ -578,9 +586,10 @@ export function CommandCenterHero({
             positive={(delta?.revenuePct ?? 0) >= 0}
             className="text-xs mt-1.5"
           />
+          {/* 2026-05-31 mockup-alignment: neutral card, GREEN (revenue) spark. */}
           <MiniSparkline
             values={secondarySparklines?.revenue}
-            stroke={NEUTRAL_SPARK_STROKE}
+            stroke={'var(--up)'}
           />
         </Card>
       </div>

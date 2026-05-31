@@ -912,6 +912,26 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 }
 
 /* ---------------------------------------------------------------------
+   2026-05-31 mockup-alignment — secondary hero cards = CLEAN NEUTRAL.
+   The approved mockup (mesh light / dark-mesh dark) renders the secondary
+   hero KPI cards (Spend / Revenue / Inventory / Orders / CPM) as plain
+   neutral surfaces (white in light, navy in dark) with NO band tint and
+   NO glowing edge-bar — the colour lives only in the sparkline. The
+   round-6 muted band-tint + glowing `::before` above produced a "weird
+   orange glow" that diverged from the mockup. These two rules supersede
+   ALL 5 per-band muted tint/`::before` blocks (red/orange/green/blue/gray)
+   above and flatten muted cards to the base glass surface. The STRONG /
+   default band cards (per-store rows + featured hero trio) are untouched
+   and stay vivid.
+   --------------------------------------------------------------------- */
+.glass[data-band][data-band-strength="muted"] {
+  background: var(--glass-1);
+}
+.glass[data-band][data-band-strength="muted"]::before {
+  display: none;
+}
+
+/* ---------------------------------------------------------------------
    Round 6 (2026-05-31) — text contrast on banded cards.
    The hero card eyebrow label (`.hero-eyebrow`) reads `text-ink-muted`
    by default (~64% L) — too low contrast over a strong band slab. When
@@ -929,10 +949,11 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 }
 .glass[data-band][data-band-strength="muted"] .hero-eyebrow,
 .glass[data-band][data-band-strength="muted"] .sl {
-  /* Muted cards still need lift but slightly less aggressive — the
-     band slab isn't dominating so the default muted text stays legible
-     with only a small bump. */
-  color: oklch(90% 0.012 80);
+  /* 2026-05-31 mockup-alignment: muted cards are now CLEAN NEUTRAL (no
+     band tint), so the white-ish lift the strong band cards use would make
+     these labels too bright / low-contrast on a neutral surface. Reset to
+     the normal muted ink so neutral-card labels read like any other card. */
+  color: var(--text-muted);
 }
 /* The `.cell.spend .sl::before` / `.cell.revenue .sl::before` glyph
    colours use the band hues directly; the brighter `.sl` colour above
@@ -1006,8 +1027,14 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    stale Per-Store row visibly fades next to live siblings. Thresholds
    (15 min / 30 min) live in lib/freshness/useStaleness.ts:
      fresh  → no filter,                 opacity 1.00
-     aging  → saturate(0.60),            opacity 0.92  (15-30 min old)
-     stale  → saturate(0.30) brightness  opacity 0.80  (>30 min old)
+     aging  → saturate(0.96),            opacity 0.98  (15-30 min old)
+     stale  → saturate(0.88),            opacity 0.95  (>30 min old)
+   2026-05-31 mockup-alignment: the fade is now BARELY-THERE so the vivid
+   per-store band cards keep their brand colour (they're flagged "stale").
+   The freshness CHIP (LIVE/AGING/STALE pill) is the real staleness signal —
+   the card-level desaturation is just a whisper. Previously aging=0.60 /
+   stale=0.30 mud-washed the vivid cards; that conflicted with the approved
+   mockup which keeps per-store band cards ALWAYS VIVID.
    The transition uses --motion-freshness so a refresh re-saturates smoothly.
    `.glass[data-band]::before` (the band glow bar) is dimmed in lockstep so
    a stale card cannot keep a hot green/red rim.
@@ -1020,10 +1047,10 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   transition: filter var(--motion-freshness), opacity var(--motion-freshness);
 }
 .glass[data-freshness="fresh"] { filter: none; opacity: 1; }
-.glass[data-freshness="aging"] { filter: saturate(0.60); opacity: 0.92; }
-.glass[data-freshness="aging"]::before { opacity: 0.6 !important; filter: saturate(0.60); }
-.glass[data-freshness="stale"] { filter: saturate(0.30) brightness(0.95); opacity: 0.80; }
-.glass[data-freshness="stale"]::before { opacity: 0.3 !important; filter: saturate(0.30); }
+.glass[data-freshness="aging"] { filter: saturate(0.96); opacity: 0.98; }
+.glass[data-freshness="aging"]::before { opacity: 0.85 !important; filter: saturate(0.96); }
+.glass[data-freshness="stale"] { filter: saturate(0.88); opacity: 0.95; }
+.glass[data-freshness="stale"]::before { opacity: 0.7 !important; filter: saturate(0.88); }
 
 /* === Platform-color emphasis (operator fix) ================================
    Brand dots washed out inside band-tinted + freshness-desaturated per-store
@@ -1045,10 +1072,13 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 }
 
 /* Re-saturate the platform cells to cancel the parent freshness filter.
-   Nested saturate() multiplies: aging 0.60 × 1.67 ≈ 1.0, stale 0.30 × 3.33 ≈ 1.0,
-   so the brand colour stays full-saturation while the rest of the card fades. */
-.glass[data-freshness="aging"] .cpm-row-cells .cell[data-platform] { filter: saturate(1.67); }
-.glass[data-freshness="stale"] .cpm-row-cells .cell[data-platform] { filter: saturate(3.33); }
+   Nested saturate() multiplies: aging 0.96 × 1.04 ≈ 1.0, stale 0.88 × 1.14 ≈ 1.0,
+   so the brand colour stays full-saturation while the rest of the card fades.
+   2026-05-31: parent fade softened (was 0.60/0.30 → now 0.96/0.88), so the
+   cancel multipliers drop from 1.67/3.33 to 1/0.96 ≈ 1.04 and 1/0.88 ≈ 1.14
+   to avoid over-saturating the platform cells. */
+.glass[data-freshness="aging"] .cpm-row-cells .cell[data-platform] { filter: saturate(1.04); }
+.glass[data-freshness="stale"] .cpm-row-cells .cell[data-platform] { filter: saturate(1.14); }
 
 /* Freshness chip — small uppercase pill carried inside the card header
    that mirrors the desaturation stage as a label ("LIVE · 4m" / "AGING ·

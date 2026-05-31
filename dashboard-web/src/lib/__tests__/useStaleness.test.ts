@@ -9,10 +9,15 @@ import { computeStaleness } from '../freshness/useStaleness';
  * that downstream CSS turns into a saturate()+opacity filter on the
  * containing `.glass[data-freshness]` surface.
  *
- * Thresholds (locked, must match plan + freshness-desaturation-thresholds):
+ * Thresholds (locked) — the AGE STAGE is what this test asserts. The CSS
+ * filter values below are the downstream styling (globals.css) and were
+ * softened 2026-05-31 to keep the vivid per-store band cards readable; the
+ * freshness CHIP is now the primary staleness signal, so the card-level
+ * desaturation is barely-there. These values are documentary only — no
+ * assertion here depends on them:
  *   age < 15 min          → fresh   (filter: none,            opacity: 1.00)
- *   15 min ≤ age < 30 min → aging   (filter: saturate(0.60),  opacity: 0.92)
- *   age ≥ 30 min          → stale   (filter: saturate(0.30),  opacity: 0.80)
+ *   15 min ≤ age < 30 min → aging   (filter: saturate(0.96),  opacity: 0.98)
+ *   age ≥ 30 min          → stale   (filter: saturate(0.88),  opacity: 0.95)
  *   updatedAt == null     → stale   (label: "—")
  *
  * Label format:
