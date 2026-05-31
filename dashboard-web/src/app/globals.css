@@ -462,6 +462,20 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 .glass[data-band="blue"]   .v.banded { color: var(--band-blue);   -webkit-text-fill-color: var(--band-blue);   background: none; }
 .glass[data-band="gray"]   .v.banded { color: var(--band-gray);   -webkit-text-fill-color: var(--band-gray);   background: none; }
 
+/* `.v.neutral` — the big number inside an UN-banded hero card renders as a
+   soft white→cool-gray vertical gradient via background-clip. Source:
+   mockup-04-final.html `.hero-card .v.neutral` rule. Used by
+   <CommandCenterHero> (Task 3.1) on secondary tiles (Spend / Revenue /
+   Orders / CPM) so they read as a tonal neutral rather than fighting the
+   featured banded tiles for chroma. When a banded ancestor is present, the
+   `.v.banded` rule above takes over via the more-specific selector. */
+.v.neutral {
+  background: linear-gradient(180deg, oklch(100% 0 0) 0%, oklch(78% 0.02 250) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
 /* Band chips — restate the band as a small uppercase pill alongside
    the big number (e.g. "GREEN" / "RED"). Verbatim from mockup. */
 .band-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.06em; font-family: 'Geist Mono'; }

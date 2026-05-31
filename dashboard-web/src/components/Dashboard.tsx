@@ -22,6 +22,7 @@ import { CampaignsTable } from './CampaignsTable';
 import { CampaignsTopList, type CampaignTopListPoint } from './CampaignsTopList';
 import { aggregate as aggregateCampaigns } from '@/lib/campaignsAggregator';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
+import { PRESET_LABELS } from '@/lib/presets';
 import { AiReportButton } from './AiReportButton';
 import { TabHeader } from './TabHeader';
 import { PnLBreakdown } from './PnLBreakdown';
@@ -35,16 +36,32 @@ import { CloudSync } from './CloudSync';
 import { SyncIndicator } from './SyncIndicator';
 import { FreshnessChip } from './FreshnessChip';
 import { TabFreshnessHeader } from './TabFreshnessHeader';
-import { HomeLiveBand } from './HomeLiveBand';
-import { HomeSummaryBand } from './HomeSummaryBand';
-import { HomePerStoreBand } from './HomePerStoreBand';
-import { readDashboardState, syncUrl, type TabKey } from '@/lib/urlState';
+import { readDashboardState, syncUrl, drillToCampaigns, type TabKey } from '@/lib/urlState';
 import { buildDateRangeKey } from '@/lib/dateRange';
 import { Button } from '@/components/ui/Button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { AnalysisTrendsTab } from './AnalysisTrendsTab';
 import { AnalysisArchiveTab } from './AnalysisArchiveTab';
 import { GoalTracker } from './GoalTracker';
+import { PageScope } from '@/components/ui/PageScope';
+import { CommandCenterHero } from '@/components/home/CommandCenterHero';
+import { PerStoreRow } from '@/components/home/PerStoreRow';
+import {
+  RoasTargetChart,
+  readChartRangeFromUrl,
+  type ChartCustomRange,
+  type RoasChartRangeKey,
+} from '@/components/home/RoasTargetChart';
+import { ActivityFeed } from '@/components/home/ActivityFeed';
+import { InsightsBoard } from './InsightsBoard';
+import {
+  aggregateCpm,
+  toHeroPeriod,
+  toHeroDelta,
+  toNetSparkValues,
+  toPerStoreData,
+  toChartData,
+} from '@/lib/home/adapters';
 
 const fetcher = async (url: string) => {
   const res = await fetch(url);
@@ -386,6 +403,22 @@ type FilteredView = {
   cur: DashboardData['rows'];
 };
 
+// ----------------------------------------------------------------------------
+// HomeTab — Task 3.1 (UI/UX overhaul). 5-locked-section structure per
+// [[home-visual-rules]] + mockup-04-final.html:
+//
+//   1. TabHeader (title + range/store filters + AI report button)
+//   2. CommandCenterHero (2-row hero strip — banded Net + KPIs)
+//   3. PerStoreRow (3 stores, semantic emphasis, per-platform CPM)
+//   4. RoasTargetChart (independent chart range, target line, pins)
+//   5. InsightsBoard + ActivityFeed (bottom 2-up grid)
+//
+// AnnotationsPanel stays as a thin overlay above the hero — it owns the
+// "add an event marker" UI used by RoasTargetChart's pins; ergonomically
+// it belongs near the chart but technically it writes to localStorage so
+// either placement works. Top is the historical placement; keeping it
+// preserves muscle memory.
+// ----------------------------------------------------------------------------
 function HomeTab({
   data,
   filtered,
@@ -403,32 +436,273 @@ function HomeTab({
   /** Phase 05.7.8 — per-store order count for the range, keyed by storeName. */
   ordersByStore: Record<string, number>;
 }) {
+  // Chart range is INDEPENDENT of the page-level filter range — operator can
+  // browse a 90-day trend without losing the "today" snapshot above. Seeded
+  // from `?chartRange=…` URL params so refresh / share preserves the choice.
+  const [chartRange, setChartRange] = useState<RoasChartRangeKey>('30');
+  const [chartCustomRange, setChartCustomRange] = useState<
+    ChartCustomRange | undefined
+  >(undefined);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const parsed = readChartRangeFromUrl(window.location.search);
+    setChartRange(parsed.range);
+    setChartCustomRange(parsed.customRange);
+  }, []);
+
+  // Resolve chart range → concrete from/to. Custom takes its own bounds;
+  // the named presets compute from "today in IL" (matches the page-level
+  // presets — same helper).
+  const chartFromTo = useMemo<{ from: string; to: string }>(() => {
+    if (chartRange === 'custom' && chartCustomRange) return chartCustomRange;
+    switch (chartRange) {
+      case '7':   return computePresetRange('last_7_days');
+      case '30':  return computePresetRange('last_30_days');
+      case '90': {
+        // No `last_90_days` preset — synthesize directly from today.
+        const today = computePresetRange('today');
+        const fromDate = new Date(today.from + 'T00:00:00Z');
+        fromDate.setUTCDate(fromDate.getUTCDate() - 89);
+        return { from: fromDate.toISOString().slice(0, 10), to: today.to };
+      }
+      case 'mtd': return computePresetRange('this_month');
+      case 'qtd': {
+        const today = computePresetRange('today');
+        const todayDate = new Date(today.from + 'T00:00:00Z');
+        const m = todayDate.getUTCMonth();
+        const qStart = Math.floor(m / 3) * 3;
+        const from = new Date(Date.UTC(todayDate.getUTCFullYear(), qStart, 1));
+        return { from: from.toISOString().slice(0, 10), to: today.to };
+      }
+      case 'ytd': {
+        const today = computePresetRange('today');
+        const todayDate = new Date(today.from + 'T00:00:00Z');
+        const from = new Date(Date.UTC(todayDate.getUTCFullYear(), 0, 1));
+        return { from: from.toISOString().slice(0, 10), to: today.to };
+      }
+      default: return computePresetRange('last_30_days');
+    }
+  }, [chartRange, chartCustomRange]);
+
+  // ---- /api/campaigns — single fetch for both Hero CPM + PerStoreRow per-
+  // platform CPM. Stored in SWR so the existing Campaigns tab share its
+  // cache. CPM-previous-period fetched separately for the delta line.
+  const campaignsKey = buildDateRangeKey('/api/campaigns', filters.range);
+  const { data: campaignsData } = useSWR<CampaignsResponse>(
+    campaignsKey,
+    campaignsFetcher,
+    { refreshInterval: 120_000, revalidateOnFocus: false },
+  );
+  const prevRange = useMemo(() => previousRange(filters.range), [filters.range]);
+  const { data: campaignsDataPrev } = useSWR<CampaignsResponse>(
+    buildDateRangeKey('/api/campaigns', prevRange),
+    campaignsFetcher,
+    { refreshInterval: 120_000, revalidateOnFocus: false },
+  );
+  // Previous-period rows for the hero delta — /api/data only returns the
+  // current range so the previous baseline needs its own fetch.
+  const { data: dataPrev } = useSWR<DashboardData>(
+    buildDateRangeKey('/api/data', prevRange),
+    fetcher,
+    { revalidateOnFocus: false },
+  );
+
+  // ---- Chart range data — independent of page filters so the picker can
+  // walk 7d/30d/90d/MTD/QTD/YTD without losing the snapshot above.
+  const { data: chartDataResp } = useSWR<DashboardData>(
+    buildDateRangeKey('/api/data', chartFromTo),
+    fetcher,
+    { revalidateOnFocus: false },
+  );
+  const { data: chartCampaignsResp } = useSWR<CampaignsResponse>(
+    buildDateRangeKey('/api/campaigns', chartFromTo),
+    campaignsFetcher,
+    { refreshInterval: 120_000, revalidateOnFocus: false },
+  );
+
+  // ---- Hero — current + previous + spark ---------------------------------
+  const heroCpm = useMemo(
+    () =>
+      aggregateCpm(
+        campaignsData?.rows,
+        filters.range.from,
+        filters.range.to,
+        filters.store,
+      ),
+    [campaignsData, filters.range, filters.store],
+  );
+  const heroCpmPrev = useMemo(
+    () =>
+      aggregateCpm(
+        campaignsDataPrev?.rows,
+        prevRange.from,
+        prevRange.to,
+        filters.store,
+      ),
+    [campaignsDataPrev, prevRange, filters.store],
+  );
+  // Sum of order counts across visible stores for the current range — the
+  // hero's "Orders" big number. Previous-range orders fall back to 0 (we
+  // skip the extra fetch to keep the home tab lean).
+  const heroOrders = useMemo(() => {
+    let total = 0;
+    for (const k of Object.keys(ordersByStore)) total += ordersByStore[k] ?? 0;
+    return total;
+  }, [ordersByStore]);
+  const prevAggFromPrevData = useMemo(() => {
+    if (!dataPrev) return null;
+    const prevCur = filterRows(dataPrev.rows, prevRange, filters.store);
+    return aggregate(prevCur, prevRange);
+  }, [dataPrev, prevRange, filters.store]);
+  const heroPeriod = useMemo(
+    () => toHeroPeriod(filtered.curAgg, heroCpm, heroOrders),
+    [filtered.curAgg, heroCpm, heroOrders],
+  );
+  const heroDelta = useMemo(() => {
+    if (!prevAggFromPrevData) return undefined;
+    return toHeroDelta(
+      filtered.curAgg,
+      prevAggFromPrevData,
+      heroCpm,
+      heroCpmPrev,
+      heroOrders,
+      0,
+    );
+  }, [filtered.curAgg, prevAggFromPrevData, heroCpm, heroCpmPrev, heroOrders]);
+  const netSparkValues = useMemo(
+    () => toNetSparkValues(filtered.series),
+    [filtered.series],
+  );
+
+  // ---- Per-store row ------------------------------------------------------
+  const storeIdByName = useMemo<Record<string, string>>(() => {
+    const out: Record<string, string> = {};
+    for (const r of data.rows) {
+      if (!out[r.storeName]) out[r.storeName] = r.storeId;
+    }
+    return out;
+  }, [data.rows]);
+  const perStoreData = useMemo(
+    () =>
+      toPerStoreData(
+        filtered.storeAggs,
+        campaignsData?.rows,
+        filters.range,
+        ordersByStore,
+        storeIdByName,
+      ),
+    [
+      filtered.storeAggs,
+      campaignsData,
+      filters.range,
+      ordersByStore,
+      storeIdByName,
+    ],
+  );
+
+  // ---- ROAS chart data ----------------------------------------------------
+  const chartScope = useMemo(() => {
+    const stores =
+      filters.store === 'All'
+        ? (chartDataResp?.stores ?? data.stores)
+        : [filters.store];
+    const cur = chartDataResp
+      ? filterRows(chartDataResp.rows, chartFromTo, filters.store)
+      : [];
+    const series = dailySeries(cur, stores, chartFromTo);
+    const agg = aggregate(cur, chartFromTo);
+    const cpm = aggregateCpm(
+      chartCampaignsResp?.rows,
+      chartFromTo.from,
+      chartFromTo.to,
+      filters.store,
+    );
+    return { series, agg, cpm };
+  }, [
+    chartDataResp,
+    chartCampaignsResp,
+    chartFromTo,
+    filters.store,
+    data.stores,
+  ]);
+  const chartProp = useMemo(
+    () =>
+      toChartData(
+        chartScope.series,
+        chartScope.agg,
+        chartScope.cpm,
+        prevAggFromPrevData,
+      ),
+    [chartScope, prevAggFromPrevData],
+  );
+
+  const handleStoreSelect = (storeId: string) => {
+    drillToCampaigns({ store: storeId });
+  };
+
+  // Range label for PageScope — the operator's preset key picks the human
+  // label, with a custom-range fallback when the picker is in custom mode.
+  const rangeLabel = filters.preset === 'custom'
+    ? `${filters.range.from} — ${filters.range.to}`
+    : PRESET_LABELS[filters.preset];
+
+  // Hero range label is the same in the current build (a future iteration
+  // could pull the active range-tab label exactly from the segmented
+  // control); for now the preset label reads naturally.
+  const heroRangeLabel = rangeLabel;
+
   return (
     <div className="space-y-4 sm:space-y-5 animate-fade-in-up">
+      {/* 1. Header — title + filters + AI report ----------------------------- */}
       <TabHeader
         title="בית"
         description="שנה טווח או חנות לעדכון כל המסך."
         filterSlot={<Filters filters={filters} stores={data.stores} onChange={setFilters} />}
         actionSlot={<AiReportButton data={data} filters={filters} openSignal={aiReportSignal} />}
       />
+      <PageScope
+        store={filters.store === 'All' ? 'כל החנויות' : filters.store}
+        rangeLabel={rangeLabel}
+        currency="CAD"
+      />
 
-      {/* ===== Activity log — events overlay on charts so anomalies have context ===== */}
+      {/* Activity-log overlay — annotation pin authoring (writes feed pins) */}
       <AnnotationsPanel range={filters.range} store={filters.store} />
 
-      <div className="space-y-6">
-        {/* Band 1 — Live intra-day snapshot */}
-        <HomeLiveBand rows={data.rows} fxIlsToCad={data.fxIlsToCad} />
+      {/* 2. Hero strip — 2 rows × 3 cards ----------------------------------- */}
+      <CommandCenterHero
+        current={heroPeriod}
+        delta={heroDelta}
+        rangeLabel={heroRangeLabel}
+        netSparkValues={netSparkValues}
+        updatedAt={data.dataLastWriteAt ?? undefined}
+      />
 
-        {/* Band 2 — Yesterday comparison + KPI cards */}
-        <HomeSummaryBand
-          heroProps={{ data, filters }}
-          kpiProps={{ current: filtered.curAgg, previous: filtered.prevAgg, series: filtered.cur }}
-        />
+      {/* 3. Per-store row — 3 stores w/ semantic emphasis ------------------- */}
+      <PerStoreRow stores={perStoreData} onStoreSelect={handleStoreSelect} />
 
-        {/* Band 3 — Per-store breakdown + collapsible insights */}
-        <HomePerStoreBand
-          perStoreProps={{ data: filtered.storeAggs, ordersByStore, bare: true }}
-          insightsProps={{ data }}
+      {/* 4. ROAS-vs-target chart — independent date range ------------------- */}
+      <RoasTargetChart
+        range={chartRange}
+        customRange={chartCustomRange}
+        data={chartProp}
+        scopeLabel={
+          filters.store === 'All'
+            ? `${data.stores.length} חנויות`
+            : filters.store
+        }
+        updatedAt={chartDataResp?.dataLastWriteAt ?? undefined}
+        onRangeChange={(next, custom) => {
+          setChartRange(next);
+          setChartCustomRange(custom);
+        }}
+      />
+
+      {/* 5. Bottom 2-up — Insights board + Activity feed -------------------- */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <InsightsBoard data={data} />
+        <ActivityFeed
+          store={filters.store === 'All' ? undefined : filters.store}
         />
       </div>
     </div>
