@@ -13,6 +13,8 @@ import {
   Circle,
   Maximize2,
   Minimize2,
+  AlertTriangle,
+  RefreshCw,
 } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { fmtMoney, fmtMoneyString } from '@/lib/format';
@@ -58,9 +60,16 @@ type Props = {
 type AdSortKey = 'name' | 'spend' | 'value' | 'roas' | 'conversions' | 'impressions' | 'clicks';
 type AdSortDir = 'asc' | 'desc';
 
+// Task 5.7 (P0-9) — surface API failures instead of masking as empty.
+// Pre-fix returned `{ rows: [] }` on !r.ok which made a real 500/4xx
+// look identical to "the ad-set legitimately has no ads in range" —
+// the operator stared at an empty list, blamed the data pipeline,
+// re-ran the cron, and called it a day. Now the fetcher throws so
+// SWR's `error` state activates and the drawer renders an explicit
+// error UI with a retry control.
 const fetcher = async (url: string): Promise<AdsResponse> => {
   const r = await fetch(url);
-  if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString(), dataLastWriteAt: null };
+  if (!r.ok) throw new Error(`AdsDrawer: ${r.status} ${r.statusText}`);
   return r.json();
 };
 
@@ -80,7 +89,7 @@ export function AdsDrawer({
   const drawerRange = { from: rangeFrom, to: rangeTo };
   // FIX-07 (5.2.2.1): range-keyed SWR for /api/ads. Server now filters by range; cache key per range prevents drawer-to-drawer cache pollution.
   const adsBaseKey = open ? buildDateRangeKey('/api/ads', drawerRange) : null;
-  const { data, isLoading } = useSWR<AdsResponse>(
+  const { data, isLoading, error, mutate } = useSWR<AdsResponse>(
     adsBaseKey,
     fetcher,
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
@@ -89,11 +98,22 @@ export function AdsDrawer({
   // fires when this drawer opens so users who never drill into ads don't pay
   // the orders-attribution sheet read.
   const ordersAttrBaseKey = open ? buildDateRangeKey('/api/orders-attribution', drawerRange) : null;
+  // Task 5.7 (P0-9) — same throw-on-error contract as the primary ads
+  // fetcher. Orders-attribution is non-critical (drives the "ROAS
+  // Shopify" per-ad chip + tooltip); if it 4xx/5xx we don't want to
+  // block the whole drawer, just degrade the chip silently. So we
+  // catch the throw here and fall back to an empty rows array — the
+  // chip column renders "—" instead. The primary fetcher above still
+  // surfaces ITS errors because losing the ads list IS critical.
   const { data: ordersAttrData } = useSWR<OrdersAttributionResponse>(
     ordersAttrBaseKey,
     async (url: string) => {
       const r = await fetch(url);
-      if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
+      if (!r.ok) {
+        // Degrade silently — no rows means deterministic ROAS chips
+        // render "—" but the primary ad list is unaffected.
+        return { rows: [], lastUpdated: new Date().toISOString() };
+      }
       return r.json();
     },
     { revalidateOnFocus: false, dedupingInterval: 60_000 },
@@ -363,13 +383,51 @@ export function AdsDrawer({
         </SheetHeader>
 
         <SheetBody className="sm:px-5 space-y-4">
-          {isLoading && (
+          {isLoading && !error && (
             <div className="text-center text-sm text-ink-muted py-10">
               טוען נתוני מודעות…
             </div>
           )}
 
-          {!isLoading && (!summary || summary.ads.length === 0) && (
+          {/* Task 5.7 (P0-9) — explicit error UI. Replaces the pre-fix
+              behavior where the fetcher swallowed !r.ok and returned
+              `{ rows: [] }` → identical to a legitimate empty list →
+              operator silently mis-diagnosed the API as healthy. */}
+          {error && (
+            <div
+              role="alert"
+              data-testid="ads-drawer-error"
+              className="rounded-xl border border-status-red/30 bg-status-redBg/40 text-status-red px-4 py-4 mx-1"
+            >
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle size={18} className="shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <div className="font-semibold text-[13px]">
+                    שגיאה בטעינת מודעות
+                  </div>
+                  <div className="text-[11px] opacity-80 mt-1 leading-relaxed">
+                    הקריאה ל-<code className="font-mono">/api/ads</code> נכשלה.
+                    זה לא אומר שאין מודעות — זה אומר שהשרת לא ענה.
+                    נסה לרענן, ואם זה לא עוזר בדוק את הלוגים.
+                  </div>
+                  <div className="text-[10px] opacity-60 mt-1 font-mono">
+                    {error instanceof Error ? error.message : String(error)}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => mutate()}
+                    className="mt-3 gap-1.5 text-[12px]"
+                  >
+                    <RefreshCw size={12} />
+                    נסה שוב
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!isLoading && !error && (!summary || summary.ads.length === 0) && (
             <div className="text-center py-10 text-ink-muted">
               <Layers size={28} className="mx-auto mb-2 text-ink-muted/60" />
               <div className="text-sm">אין נתוני מודעות לטווח הזה.</div>
@@ -380,7 +438,7 @@ export function AdsDrawer({
             </div>
           )}
 
-          {summary && summary.ads.length > 0 && (
+          {!error && summary && summary.ads.length > 0 && (
             <>
               {/* Totals strip — quick reference vs the parent ad-set values */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
