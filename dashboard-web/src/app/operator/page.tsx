@@ -17,6 +17,7 @@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { OperatorSecretBanner } from '@/components/operator/OperatorSecretBanner';
 import { Heading } from '@/components/ui/Typography';
+import { StatusPill } from '@/components/ui/StatusPill';
 import { SyncTab } from './SyncTab';
 import { HealthTab } from './HealthTab';
 import { ActivityTab } from './ActivityTab';
@@ -31,9 +32,13 @@ export const metadata = {
   title: 'ניהול — ROAS Dashboard',
 };
 
+// Task 5.1 (P1-21): "בריאות" is the new default tab. The first thing
+// the operator sees when opening /operator is the freshness lag matrix +
+// token failures, NOT the manual sync buttons. Sync remains immediately
+// reachable as the second tab.
 const TABS = [
-  ['sync', 'סנכרון'],
   ['health', 'בריאות'],
+  ['sync', 'סנכרון'],
   ['activity', 'פעילות'],
   ['danger', 'מסוכן'],
 ] as const;
@@ -42,7 +47,13 @@ export default function OperatorPage() {
   return (
     <main className="max-w-7xl mx-auto px-4 py-6">
       <header className="mb-6">
-        <Heading level="display">ניהול</Heading>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <Heading level="display">ניהול</Heading>
+          {/* Task 5.1 — top-level <StatusPill> rolls freshness % + open
+              token-failures into one GREEN/YELLOW/RED chip so the operator
+              can answer "is everything OK?" without scanning sub-tabs. */}
+          <StatusPill />
+        </div>
         <p className="text-ink-secondary text-sm mt-1">
           ניהול אוטומציה: ריצות Inngest, backfill, החלפות ידניות, ו-Sync.
         </p>
@@ -56,7 +67,7 @@ export default function OperatorPage() {
           secret even when the gate is not enforced. */}
       <OperatorSecretBanner />
 
-      <Tabs defaultValue="sync" variant="underline" className="mt-6">
+      <Tabs defaultValue="health" variant="underline" className="mt-6">
         <TabsList className="mb-6">
           {TABS.map(([value, label]) => (
             <TabsTrigger key={value} value={value}>
