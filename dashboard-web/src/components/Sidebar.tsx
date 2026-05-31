@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import {
   Home, Receipt, TrendingUp, Megaphone, Package, Table,
-  Cog, Sun, Moon, Monitor, ChevronsLeft, ChevronsRight, X,
+  Cog, Sun, Moon, Monitor, PanelRightOpen, PanelRightClose, X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from './ThemeProvider';
@@ -167,7 +167,14 @@ function SidebarBody({
             onClick={onToggleCollapsed}
             className="w-full h-auto p-1.5 text-ink-muted"
           >
-            {collapsed ? <ChevronsLeft size={14} /> : <ChevronsRight size={14} />}
+            {/* RTL note (Task 4.8): the sidebar lives on the RTL-start
+                edge (right in Hebrew). PanelRightOpen / PanelRightClose
+                are *logical* glyphs — they visually depict a right-edge
+                panel revealing or tucking away its content, which matches
+                this sidebar's geometry regardless of writing direction.
+                The prior ChevronsLeft/ChevronsRight pointed the wrong way
+                in RTL because they're purely physical-direction icons. */}
+            {collapsed ? <PanelRightOpen size={14} /> : <PanelRightClose size={14} />}
           </Button>
         )}
       </div>
