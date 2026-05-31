@@ -5,7 +5,9 @@ import { RoasChart } from '@/components/RoasChart';
 import { AnnotationsPanel } from '@/components/AnnotationsPanel';
 import { SectionIntro } from '@/components/SectionIntro';
 import { Filters } from '@/components/Filters';
+import { PageScope } from '@/components/ui/PageScope';
 import { PageSynthesis } from '@/components/ui/PageSynthesis';
+import { rangeLabelHebrew } from '@/lib/presets';
 import { synthesizeTrends } from '@/lib/synthesis/trends';
 import type { DashboardData, Filters as F } from '@/lib/types';
 import { dailySeries } from '@/lib/analytics';
@@ -29,6 +31,11 @@ export function AnalysisTrendsTab({ data, filtered, filters, setFilters }: Props
         icon={<CalendarDays size={20} />}
         title="טווח לניתוח"
         description="הסינון מטה משפיע על גרף המגמה בלבד. הטבלאות החודשיות מציגות עד 17 חודשים אחורה — בלי תלות בטווח שבחרת."
+      />
+      <PageScope
+        store={filters.store === 'All' ? 'כל החנויות' : filters.store}
+        rangeLabel={rangeLabelHebrew(filters.preset, filters.range)}
+        currency="CAD"
       />
       <PageSynthesis
         text={trendsSynthesis.text}

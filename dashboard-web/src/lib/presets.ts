@@ -120,6 +120,23 @@ export function _computePresetRangeForIlToday(
   }
 }
 
+/**
+ * Hebrew range label for `<PageScope>`. When the operator is on a preset the
+ * label is the preset's Hebrew name ("30 ימים אחרונים", "מתחילת החודש", …);
+ * when the picker is in custom mode the label is "from — to" so the operator
+ * always sees the active selection at a glance.
+ *
+ * Shared by every top-level page header in Wave 5 Task 5.9 so the label
+ * format never drifts between tabs (Home / Trends / Archive / P&L / Detail /
+ * Campaigns / Products).
+ */
+export function rangeLabelHebrew(
+  preset: PresetKey,
+  range: DateRange,
+): string {
+  return preset === 'custom' ? `${range.from} — ${range.to}` : PRESET_LABELS[preset];
+}
+
 /** Previous period of equal length, ending the day before `range.from`. */
 export function previousRange(range: DateRange): DateRange {
   const from = new Date(range.from + 'T00:00:00Z');

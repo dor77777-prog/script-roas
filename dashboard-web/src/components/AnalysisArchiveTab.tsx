@@ -7,6 +7,7 @@ import { YearSelector } from '@/components/YearSelector';
 import { MonthSelector } from '@/components/MonthSelector';
 import { MonthlyTables } from '@/components/MonthlyTables';
 import { SectionIntro } from '@/components/SectionIntro';
+import { PageScope } from '@/components/ui/PageScope';
 import { PageSynthesis } from '@/components/ui/PageSynthesis';
 import { synthesizeArchive } from '@/lib/synthesis/archive';
 import { buildDateRangeKey } from '@/lib/dateRange';
@@ -73,6 +74,11 @@ export function AnalysisArchiveTab({ stores, globalStore }: Props) {
         icon={<CalendarDays size={20} />}
         title={isStoreScoped ? `טבלאות חודשיות — ${globalStore}` : 'טבלאות חודשיות'}
         description="טבלה לכל חודש עם שורה לכל יום. ROAS צבוע: אדום (<2), כתום (2-2.7), ירוק (2.7-3), כחול (>3). יום עם הוצאה אך ללא מכירה מסומן בשחור עם '0'."
+      />
+      <PageScope
+        store={isStoreScoped ? globalStore! : 'כל החנויות'}
+        rangeLabel={month != null ? `${month}/${year}` : `${year}`}
+        currency="CAD"
       />
       <PageSynthesis
         text={archiveSynthesis.text}

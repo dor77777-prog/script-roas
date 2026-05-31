@@ -22,7 +22,7 @@ import { CampaignsTable } from './CampaignsTable';
 import { CampaignsTopList, type CampaignTopListPoint } from './CampaignsTopList';
 import { aggregate as aggregateCampaigns } from '@/lib/campaignsAggregator';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
-import { PRESET_LABELS } from '@/lib/presets';
+import { rangeLabelHebrew } from '@/lib/presets';
 import { AiReportButton } from './AiReportButton';
 import { TabHeader } from './TabHeader';
 import { PnLBreakdown } from './PnLBreakdown';
@@ -645,9 +645,9 @@ function HomeTab({
 
   // Range label for PageScope — the operator's preset key picks the human
   // label, with a custom-range fallback when the picker is in custom mode.
-  const rangeLabel = filters.preset === 'custom'
-    ? `${filters.range.from} — ${filters.range.to}`
-    : PRESET_LABELS[filters.preset];
+  // Shared with every other top-level tab via `rangeLabelHebrew` so the
+  // format never drifts between Home / Trends / P&L / Campaigns / etc.
+  const rangeLabel = rangeLabelHebrew(filters.preset, filters.range);
 
   // Hero range label is the same in the current build (a future iteration
   // could pull the active range-tab label exactly from the segmented
@@ -736,6 +736,11 @@ function PnLTab({
         title="הרווח שלך לתקופה"
         description="כל ההכנסות פחות כל ההוצאות — ad spend, COGS (25%), עמלות עיבוד (6.5%), ועלויות חודשיות קבועות (מנויים + חד-פעמיים) — עד לרווח נטו אמיתי. שנה טווח או חנות וכל המספרים יתעדכנו."
         formula="רווח נטו = הכנסות − Ad Spend − COGS − Transaction Fees − Fixed Costs"
+      />
+      <PageScope
+        store={filters.store === 'All' ? 'כל החנויות' : filters.store}
+        rangeLabel={rangeLabelHebrew(filters.preset, filters.range)}
+        currency="CAD"
       />
       <PageSynthesis
         text={pnlSynthesis.text}
@@ -862,6 +867,11 @@ function CampaignsTab({
         description="קמפיין-לכל-קמפיין ואד-סט-לכל-אד-סט: כמה הוצאת, כמה החזיר, ROAS, CTR, CPC ו-CPA. ממויין כברירת מחדל לפי ROAS — שורות עליונות הן הזוכות. לחיצה על האייקון מימין לשורה פותחת ישירות את הקמפיין ב-Meta/Google Ads Manager."
         formula="ROAS = ערך המרות / הוצאה · CTR = קליקים / חשיפות · CPA = הוצאה / המרות"
       />
+      <PageScope
+        store={filters.store === 'All' ? 'כל החנויות' : filters.store}
+        rangeLabel={rangeLabelHebrew(filters.preset, filters.range)}
+        currency="CAD"
+      />
       <Filters filters={filters} stores={data.stores} onChange={setFilters} />
       <QuadrantScatterCard filters={filters} />
       <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
@@ -918,6 +928,11 @@ function ProductsTab({
         title={active.label}
         description={active.description}
         formula={subTab === 'table' ? 'ברוטו = מחיר × כמות   •   נטו = ברוטו − הנחות − החזרים' : undefined}
+      />
+      <PageScope
+        store={filters.store === 'All' ? 'כל החנויות' : filters.store}
+        rangeLabel={rangeLabelHebrew(filters.preset, filters.range)}
+        currency="CAD"
       />
 
       {/* Show global filter too so user knows what date range is active */}
@@ -998,6 +1013,11 @@ function DetailTab({
         icon={<Table size={20} />}
         title="פירוט יומי"
         description="כל שורה בטבלה היא (יום × חנות) — הוצאות פייסבוק, גוגל, הכנסות, ROAS, ורווח. עד 100 שורות אחרונות בטווח הנבחר. ROAS אדום עם '0' = יום שהוצאת בו כסף אבל לא היו מכירות (כשל)."
+      />
+      <PageScope
+        store={filters.store === 'All' ? 'כל החנויות' : filters.store}
+        rangeLabel={rangeLabelHebrew(filters.preset, filters.range)}
+        currency="CAD"
       />
       <PageSynthesis
         text={detailSynthesis.text}
