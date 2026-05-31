@@ -106,4 +106,83 @@ describe('Sheet primitive', () => {
     expect(cls).toMatch(/\bborder-s\b/);
     expect(cls).toMatch(/\bborder-glass-edge-hot\b/);
   });
+
+  // -------------------------------------------------------------------------
+  // Wave-4 Task 4.1 — centered modal variant.
+  //
+  // `variant="modal"` turns the Sheet into a centered floating card on a
+  // dimmed scrim (the Campaign drawer mockup) instead of an edge drawer.
+  // It must NOT carry the drawer's slide-in / edge-gradient classes, must
+  // be centered + flat --glass-1, and its overlay must use the scrim token.
+  // The drawer path is unchanged (covered by the tests above).
+  // -------------------------------------------------------------------------
+  describe('variant="modal" (Wave-4 Task 4.1)', () => {
+    it('renders a centered, flat glass-1 modal card (no slide-in / edge gradient)', async () => {
+      render(
+        <Sheet defaultOpen>
+          <SheetContent variant="modal" data-testid="modal-panel">
+            <SheetTitle>t</SheetTitle>
+          </SheetContent>
+        </Sheet>,
+      );
+      const panel = await screen.findByTestId('modal-panel');
+      const cls = panel.className;
+      // Centered, not edge-slid.
+      expect(cls).toMatch(/\bleft-1\/2\b/);
+      expect(cls).toMatch(/\btop-1\/2\b/);
+      expect(cls).toMatch(/-translate-x-1\/2/);
+      expect(cls).toMatch(/-translate-y-1\/2/);
+      // Zoom/fade entrance — NOT a slide.
+      expect(cls).toMatch(/\bzoom-in-95\b/);
+      expect(cls).toMatch(/\bfade-in-0\b/);
+      expect(cls).not.toMatch(/slide-in-from-/);
+      // Flat surface — glass-1, NOT the drawer's glass-3→glass-2 gradient.
+      expect(cls).toMatch(/\bbg-glass-1\b/);
+      expect(cls).not.toMatch(/\bbg-gradient-to-b\b/);
+      expect(cls).not.toMatch(/\bfrom-glass-3\b/);
+      // Modal radius + hairline edge + shadow.
+      expect(cls).toMatch(/rounded-\[var\(--radius-hero\)\]/);
+      expect(cls).toMatch(/\bborder-glass-edge\b/);
+      expect(cls).toMatch(/\bshadow-sheet\b/);
+      // No edge-hot highlight border on a modal (that's a drawer cue).
+      expect(cls).not.toMatch(/\bborder-glass-edge-hot\b/);
+      // Mobile full-screen sheet collapse.
+      expect(cls).toMatch(/max-sm:inset-0/);
+      expect(cls).toMatch(/max-sm:rounded-none/);
+    });
+
+    it('uses the scrim overlay (bg-scrim) for the modal variant', async () => {
+      const { container } = render(
+        <Sheet defaultOpen>
+          <SheetContent variant="modal">
+            <SheetTitle>t</SheetTitle>
+          </SheetContent>
+        </Sheet>,
+      );
+      await screen.findByText('t');
+      // The Radix overlay is the fixed inset-0 element rendered before the
+      // content. For the modal variant it must carry bg-scrim, NOT the
+      // drawer's bg-glass-3.
+      const overlay = container.ownerDocument.querySelector('[class*="fixed"][class*="inset-0"]');
+      expect(overlay).not.toBeNull();
+      expect(overlay!.className).toMatch(/\bbg-scrim\b/);
+      expect(overlay!.className).not.toMatch(/\bbg-glass-3\b/);
+    });
+
+    it('default (no variant) stays a drawer with the glass-3→glass-2 gradient + scrim-free overlay', async () => {
+      const { container } = render(
+        <Sheet defaultOpen>
+          <SheetContent data-testid="default-panel">
+            <SheetTitle>t</SheetTitle>
+          </SheetContent>
+        </Sheet>,
+      );
+      const panel = await screen.findByTestId('default-panel');
+      // defaultVariants → drawer + side="end".
+      expect(panel.className).toMatch(/\bslide-in-from-end\b/);
+      expect(panel.className).toMatch(/\bbg-gradient-to-b\b/);
+      const overlay = container.ownerDocument.querySelector('[class*="fixed"][class*="inset-0"]');
+      expect(overlay!.className).toMatch(/\bbg-glass-3\b/);
+    });
+  });
 });

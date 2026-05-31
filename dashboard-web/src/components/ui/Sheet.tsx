@@ -27,36 +27,77 @@ import { cn } from '@/lib/utils';
  * resolve correctly under both writing modes; using `border-glass-edge-hot`
  * for the opening-edge keeps the highlight in sync with `dir`.
  */
+/**
+ * Wave-4 Task 4.1 — `variant` axis: `drawer` (default, edge-anchored) vs
+ * `modal` (centered floating card on a dimmed scrim).
+ *
+ *   variant="drawer"  → the Wave-2 edge drawer. `side` (end/start/top/bottom)
+ *                       picks the opening edge, slide-in direction, and the
+ *                       violet edge-hot highlight border. Surface = the glass
+ *                       gradient + blur.
+ *   variant="modal"   → a centered card (the Campaign drawer mockup). FLAT
+ *                       `bg-glass-1` surface (no gradient), `zoom-in-95
+ *                       fade-in-0` entrance instead of a slide, hairline
+ *                       `border-glass-edge`, `rounded-[var(--radius-hero)]`.
+ *                       On `max-sm` it becomes a full-screen sheet
+ *                       (edge-to-edge, square corners). `side` is IGNORED for
+ *                       modals — the compoundVariants below only emit side
+ *                       classes when `variant === 'drawer'`.
+ *
+ * The shared base keeps only truly common classes (positioning context,
+ * z-index, ink colour, shadow, the shared motion cadence). Surface + motion
+ * direction now live PER-VARIANT so a modal never inherits the drawer's
+ * gradient/blur/slide.
+ */
 const sheetVariants = cva(
-  cn(
-    // Wave-6 Task 6.1 — pin the entrance to the semantic motion
-    // vocabulary: `duration-base` resolves to --motion-base (240 ms) so
-    // the drawer enters at the same cadence as Sheet/Dialog elsewhere
-    // in the system instead of tailwindcss-animate's stock 150 ms. The
-    // `ease-out` curve already maps to the Wave-1 ease-out cubic via
-    // tailwind.config.ts. The prefers-reduced-motion sweep (Task 6.2)
-    // collapses the slide to instant. `transition-{transform,opacity}`
-    // also lets the fullscreen width toggle animate using --motion-large
-    // (480 ms) below — see SheetContent className composition.
-    'fixed z-50 text-ink shadow-sheet animate-in duration-base ease-out',
-    // Glass surface — gradient + blur. Tailwind's gradient-stop tokens DO
-    // resolve our --glass-* vars (see tailwind.config.ts `colors.glass`).
-    'bg-gradient-to-b from-glass-3 to-glass-2 [backdrop-filter:var(--blur-sheet)] [-webkit-backdrop-filter:var(--blur-sheet)]',
-  ),
+  // Wave-6 Task 6.1 — pin the entrance to the semantic motion vocabulary:
+  // `duration-base` resolves to --motion-base (240 ms) and `ease-out` to the
+  // Wave-1 ease-out cubic. The prefers-reduced-motion sweep (Task 6.2)
+  // collapses the slide/zoom to instant. Surface + entrance direction are set
+  // per-variant below so the two presentations stay independent.
+  'fixed z-50 text-ink shadow-sheet animate-in duration-base ease-out',
   {
     variants: {
+      variant: {
+        // Glass surface — gradient + blur. Tailwind's gradient-stop tokens DO
+        // resolve our --glass-* vars (see tailwind.config.ts `colors.glass`).
+        drawer:
+          'bg-gradient-to-b from-glass-3 to-glass-2 [backdrop-filter:var(--blur-sheet)] [-webkit-backdrop-filter:var(--blur-sheet)]',
+        // Centered floating card. Flat --glass-1 (NOT the drawer gradient),
+        // hairline edge, hero radius, zoom/fade entrance. On max-sm it
+        // collapses to a full-screen edge-to-edge sheet with square corners.
+        modal: cn(
+          'left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2',
+          'w-[min(92vw,920px)] max-h-[88vh] flex flex-col overflow-hidden',
+          'rounded-[var(--radius-hero)] border border-glass-edge bg-glass-1',
+          'zoom-in-95 fade-in-0',
+          'max-sm:inset-0 max-sm:left-0 max-sm:top-0 max-sm:translate-x-0 max-sm:translate-y-0',
+          'max-sm:w-full max-sm:max-w-none max-sm:h-full max-sm:max-h-none max-sm:rounded-none',
+        ),
+      },
+      // `side` is declared so the prop is accepted, but emits NO classes on
+      // its own — the actual edge positioning/slide/highlight is driven by the
+      // compoundVariants below, gated on `variant === 'drawer'`. This keeps a
+      // modal (which ignores side) from ever picking up edge classes, and
+      // avoids double-emitting the side classes for drawers.
       side: {
-        // Opening edge = inline-start side; highlight goes on the start border.
-        end:    'top-0 end-0 h-full w-3/4 max-w-md slide-in-from-end border-s border-glass-edge-hot',
-        // Opening edge = inline-end side; highlight goes on the end border.
-        start:  'top-0 start-0 h-full w-3/4 max-w-md slide-in-from-start border-e border-glass-edge-hot',
-        // Opening edge = bottom; highlight on the bottom border.
-        top:    'top-0 inset-x-0 h-1/3 slide-in-from-top border-b border-glass-edge-hot',
-        // Opening edge = top; highlight on the top border.
-        bottom: 'bottom-0 inset-x-0 h-1/3 slide-in-from-bottom border-t border-glass-edge-hot',
+        end:    '',
+        start:  '',
+        top:    '',
+        bottom: '',
       },
     },
-    defaultVariants: { side: 'end' },
+    // `side` classes apply ONLY to the drawer variant — a modal is centered and
+    // ignores `side` entirely. compoundVariants gate each side on
+    // variant=drawer so a `<SheetContent variant="modal" side="end">` (or the
+    // defaultVariants' side="end") never picks up edge positioning/slide.
+    compoundVariants: [
+      { variant: 'drawer', side: 'end',    class: 'top-0 end-0 h-full w-3/4 max-w-md slide-in-from-end border-s border-glass-edge-hot' },
+      { variant: 'drawer', side: 'start',  class: 'top-0 start-0 h-full w-3/4 max-w-md slide-in-from-start border-e border-glass-edge-hot' },
+      { variant: 'drawer', side: 'top',    class: 'top-0 inset-x-0 h-1/3 slide-in-from-top border-b border-glass-edge-hot' },
+      { variant: 'drawer', side: 'bottom', class: 'bottom-0 inset-x-0 h-1/3 slide-in-from-bottom border-t border-glass-edge-hot' },
+    ],
+    defaultVariants: { variant: 'drawer', side: 'end' },
   },
 );
 
@@ -91,12 +132,20 @@ export interface SheetContentProps
 const SheetContentC = forwardRef<
   React.ElementRef<typeof RadixDialog.Content>,
   SheetContentProps
->(({ className, side, children, hideDefaultClose, ...props }, ref) => (
+>(({ className, variant, side, children, hideDefaultClose, ...props }, ref) => (
   <RadixDialog.Portal>
-    <RadixDialog.Overlay className="fixed inset-0 z-50 bg-glass-3 backdrop-blur-sm animate-in fade-in-0" />
+    {/* Overlay treatment follows the variant: the modal sits on the tokenised
+        --scrim dim (a calm dialog backdrop), the drawer keeps its frosted
+        glass-3 wash. Both fade in. */}
+    <RadixDialog.Overlay
+      className={cn(
+        'fixed inset-0 z-50 backdrop-blur-sm animate-in fade-in-0',
+        variant === 'modal' ? 'bg-scrim' : 'bg-glass-3',
+      )}
+    />
     <RadixDialog.Content
       ref={ref}
-      className={cn(sheetVariants({ side }), className)}
+      className={cn(sheetVariants({ variant, side }), className)}
       {...props}
     >
       {children}
