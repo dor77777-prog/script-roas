@@ -36,4 +36,29 @@ describe('Button primitive', () => {
     expect(cls).not.toMatch(/\bpl-/);
     expect(cls).not.toMatch(/\bpr-/);
   });
+
+  // P0-11: focus ring must contrast against each variant's own background.
+  // A ring in the same hue as the bg is invisible — the keyboard-only user
+  // sees nothing on Tab. Primary (violet bg) → ring uses --accent-fg (white).
+  // Destructive (red bg) → ring uses --status-redFg (near-white).
+  it('primary variant uses contrast ring (accent-fg, not accent)', () => {
+    render(<Button variant="primary" data-testid="b">x</Button>);
+    const cls = screen.getByTestId('b').className;
+    expect(cls).toMatch(/focus-visible:ring-accent-fg/);
+    expect(cls).not.toMatch(/focus-visible:ring-accent(\s|$|[^-])/);
+  });
+
+  it('destructive variant uses contrast ring (status-redFg)', () => {
+    render(<Button variant="destructive" data-testid="b">x</Button>);
+    const cls = screen.getByTestId('b').className;
+    expect(cls).toMatch(/focus-visible:ring-status-redFg/);
+  });
+
+  it('secondary / ghost / link variants keep standard accent ring', () => {
+    for (const variant of ['secondary', 'ghost', 'link'] as const) {
+      const { unmount } = render(<Button variant={variant} data-testid="b">x</Button>);
+      expect(screen.getByTestId('b').className).toMatch(/focus-visible:ring-accent\b/);
+      unmount();
+    }
+  });
 });

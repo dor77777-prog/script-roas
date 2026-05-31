@@ -3,18 +3,25 @@ import { Slot } from '@radix-ui/react-slot';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
+// Per-variant focus rings (P0-11):
+// Primary (violet bg) and destructive (red bg) need *contrast* rings — a
+// same-color-as-bg ring is invisible. We use the variant's own *foreground*
+// token for the ring and a 2-px canvas offset so the ring reads against the
+// dark canvas regardless of where the button sits. Secondary / ghost / link
+// keep the standard accent ring because their backgrounds are neutral and
+// violet provides plenty of contrast.
 const buttonVariants = cva(
   'inline-flex items-center justify-center gap-1.5 whitespace-nowrap font-medium ' +
-    'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent ' +
+    'transition-colors focus-visible:outline-none focus-visible:ring-2 ' +
     'focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:opacity-50 disabled:pointer-events-none',
   {
     variants: {
       variant: {
-        primary:     'bg-accent text-accent-fg hover:bg-accent/90',
-        secondary:   'bg-glass-2 text-ink border border-glass-edge hover:bg-glass-1',
-        ghost:       'text-ink hover:bg-glass-2',
-        destructive: 'bg-status-red text-status-redFg hover:bg-status-red/90',
-        link:        'text-accent underline-offset-4 hover:underline',
+        primary:     'bg-accent text-accent-fg hover:bg-accent/90 focus-visible:ring-accent-fg',
+        secondary:   'bg-glass-2 text-ink border border-glass-edge hover:bg-glass-1 focus-visible:ring-accent',
+        ghost:       'text-ink hover:bg-glass-2 focus-visible:ring-accent',
+        destructive: 'bg-status-red text-status-redFg hover:bg-status-red/90 focus-visible:ring-status-redFg',
+        link:        'text-accent underline-offset-4 hover:underline focus-visible:ring-accent',
       },
       size: {
         sm: 'h-8 px-3 text-xs rounded-md',
