@@ -62,3 +62,67 @@ describe('body background animation layer — Task 1.1', () => {
     expect(css).toContain('prefers-reduced-motion');
   });
 });
+
+/**
+ * Task 1.6 — foreground stack as `text-ink-*` Tailwind aliases.
+ *
+ * The Phase-1 v2 plan relaxed the original 3-variable LCH theme for surfaces
+ * (those now layer via translucent glass stops in :root), but kept the LCH-
+ * style benefit for the 4-stop foreground stack — a single OKLCH hue ramp
+ * (h ≈ 80→250, L 98→48) for `--text`, `--text-2`, `--text-muted`,
+ * `--text-subtle`. These four vars MUST be present in :root and MUST be
+ * surfaced as Tailwind colour aliases under `colors.ink.*` so consumer code
+ * never reaches past the token boundary.
+ *
+ * Two assertions:
+ *   1. Each `--text*` var is defined inside :root.
+ *   2. tailwind.config.ts contains an `ink:` block with the 4 required keys,
+ *      each binding to the corresponding `--text*` var. Compile-time class
+ *      resolution (`npx tailwindcss -i …`) is harder to wire into vitest, so
+ *      this text-level grep on tailwind.config.ts is the proxy.
+ */
+describe('foreground stack `text-ink-*` aliases — Task 1.6', () => {
+  const root = extractRoot();
+
+  const TEXT_VARS = ['--text', '--text-2', '--text-muted', '--text-subtle'];
+
+  for (const tok of TEXT_VARS) {
+    it(`defines ${tok} in :root`, () => {
+      expect(root).toContain(`${tok}:`);
+    });
+  }
+
+  const tailwindConfig = readFileSync(
+    join(__dirname, '..', '..', '..', 'tailwind.config.ts'),
+    'utf-8',
+  );
+
+  // Extract the `ink: { … }` block out of tailwind.config.ts so the
+  // alias-key assertions cannot accidentally pass against a stray
+  // mention elsewhere in the file (e.g. a comment referencing `ink`).
+  function extractInkBlock(): string {
+    const m = tailwindConfig.match(/ink:\s*\{([\s\S]*?)\}/);
+    if (!m) throw new Error('`ink:` block not found in tailwind.config.ts');
+    return m[1];
+  }
+
+  const inkBlock = extractInkBlock();
+
+  // `key: 'var(--cssvar)'` — the value may use single or double quotes
+  // and any amount of whitespace.
+  const INK_ALIASES: { key: string; cssVar: string }[] = [
+    { key: 'DEFAULT',   cssVar: '--text' },
+    { key: 'secondary', cssVar: '--text-2' },
+    { key: 'muted',     cssVar: '--text-muted' },
+    { key: 'subtle',    cssVar: '--text-subtle' },
+  ];
+
+  for (const { key, cssVar } of INK_ALIASES) {
+    it(`tailwind.config.ts \`ink.${key}\` binds to var(${cssVar})`, () => {
+      const regex = new RegExp(
+        `\\b${key}\\s*:\\s*['"\`]var\\(${cssVar.replace(/-/g, '\\-')}\\)['"\`]`,
+      );
+      expect(inkBlock).toMatch(regex);
+    });
+  }
+});
