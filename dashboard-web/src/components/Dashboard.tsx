@@ -415,13 +415,17 @@ type FilteredView = {
 
 // ----------------------------------------------------------------------------
 // HomeTab — Task 3.1 (UI/UX overhaul). 5-locked-section structure per
-// [[home-visual-rules]] + mockup-04-final.html:
+// [[home-visual-rules]] + mockup-04-final.html (per-store swap 2026-05-31):
 //
 //   1. TabHeader (title + range/store filters + AI report button)
-//   2. CommandCenterHero (2-row hero strip — banded Net + KPIs)
-//   3. PerStoreRow (3 stores, semantic emphasis, per-platform CPM)
+//   2. PerStoreRow (3 stores, semantic emphasis, per-platform CPM)
+//   3. CommandCenterHero (2-row hero strip — banded Net + KPIs)
 //   4. RoasTargetChart (independent chart range, target line, pins)
 //   5. InsightsBoard + ActivityFeed (bottom 2-up grid)
+//
+// Per-store-first ordering: user feedback 2026-05-31 — the first glance
+// answers "what's happening per store?", and the business-wide total is the
+// follow-up. Hero stays the editorial summary, just one slot lower.
 //
 // AnnotationsPanel stays as a thin overlay above the hero — it owns the
 // "add an event marker" UI used by RoasTargetChart's pins; ergonomically
@@ -726,7 +730,12 @@ function HomeTab({
       {/* Activity-log overlay — annotation pin authoring (writes feed pins) */}
       <AnnotationsPanel range={filters.range} store={filters.store} />
 
-      {/* 2. Hero strip — 2 rows × 3 cards ----------------------------------- */}
+      {/* 2. Per-store row — 3 stores w/ semantic emphasis ------------------- */}
+      {/* Per-store FIRST (was section 3): user prefers "per store" before    */}
+      {/* the business-wide hero summary. Locked 2026-05-31.                  */}
+      <PerStoreRow stores={perStoreData} onStoreSelect={handleStoreSelect} />
+
+      {/* 3. Hero strip — 2 rows × 3 cards (business-wide summary) ----------- */}
       <CommandCenterHero
         current={heroPeriod}
         delta={heroDelta}
@@ -735,9 +744,6 @@ function HomeTab({
         secondarySparklines={secondarySparklines}
         updatedAt={data.dataLastWriteAt ?? undefined}
       />
-
-      {/* 3. Per-store row — 3 stores w/ semantic emphasis ------------------- */}
-      <PerStoreRow stores={perStoreData} onStoreSelect={handleStoreSelect} />
 
       {/* 4. ROAS-vs-target chart — independent date range ------------------- */}
       <RoasTargetChart
