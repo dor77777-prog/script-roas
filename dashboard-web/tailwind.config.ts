@@ -175,6 +175,19 @@ const config: Config = {
       },
 
       borderRadius: {
+        // Wave-1 Task 1.8 — semantic radius scale, sourced from
+        // `--radius-*` vars in globals.css. New components consume the
+        // semantic tokens (rounded-{control|chip|card|hero|pill}); we
+        // intentionally LEAVE the size aliases (sm/md/lg/xl/2xl/3xl) in
+        // place at their Phase-13 numeric values because ~370 existing
+        // consumers reference them and migrating in a single task would
+        // dwarf the shadow sweep (Task 1.7, ~40 sites) at unacceptable
+        // visual-regression risk. Migration happens progressively as
+        // components are touched in Waves 2-5. Mapping:
+        //   rounded-md  ↔ rounded-control (both 8 px)
+        //   rounded-sm  ↔ rounded-chip    (both 6 px)
+        //   rounded-xl  ↔ rounded-card    (both 14 px)
+        //   rounded-full ↔ rounded-pill
         sm:    '0.375rem',
         DEFAULT: '0.5rem',
         md:    '0.5rem',
@@ -182,17 +195,38 @@ const config: Config = {
         xl:    '0.875rem',   // 14 — for cards
         '2xl': '1.125rem',   // 18 — for hero sections
         '3xl': '1.5rem',
+        // Semantic tokens (preferred for new code):
+        control: 'var(--radius-control)',
+        chip:    'var(--radius-chip)',
+        card:    'var(--radius-card)',
+        hero:    'var(--radius-hero)',
+        pill:    'var(--radius-pill)',
       },
 
       transitionDuration: {
-        DEFAULT: '180ms',
-        slow:    '320ms',
+        // Wave-1 Task 1.8 — semantic motion scale, sourced from
+        // `--motion-*` vars. New code prefers
+        // duration-{snap|fast|base|slow|large}; the existing
+        // duration-200 / duration-500 sites (7 total) are folded into
+        // duration-fast / duration-slow as components are touched.
+        // DEFAULT remains 180 ms so `transition` (no duration suffix)
+        // still feels right.
+        DEFAULT: 'var(--motion-fast)',
+        snap:    'var(--motion-snap)',
+        fast:    'var(--motion-fast)',
+        base:    'var(--motion-base)',
+        slow:    'var(--motion-slow)',
+        large:   'var(--motion-large)',
       },
 
       transitionTimingFunction: {
-        // ease-out-cubic; no bounce.
+        // ease-out-cubic; no bounce. `out` is now sourced from
+        // `--ease-out` (a slightly different cubic — 0.16,1,0.3,1 —
+        // tuned for the mockup's "snap-to-rest" feel). DEFAULT keeps
+        // the old curve so existing `transition` calls don't shift
+        // their micro-easing under our feet.
         DEFAULT: 'cubic-bezier(0.22, 1, 0.36, 1)',
-        out: 'cubic-bezier(0.22, 1, 0.36, 1)',
+        out: 'var(--ease-out)',
       },
 
       keyframes: {

@@ -45,11 +45,42 @@
   --band-blue:   oklch(68% 0.16 240);
   --band-gray:   oklch(60% 0.012 250);
 
-  /* Card radius — used by .glass + .glass[data-band]::before so the
-     3px top-edge bar's start/end radii match the card. Hoisted here
-     by Task 1.3 ahead of Task 1.8's full radius scale so the band
-     CSS does not embed a magic 14px. */
-  --radius-card: 14px;
+  /* ---------------------------------------------------------------------
+     Task 1.8 — semantic spacing / motion / radius scales.
+     The scale below is the canonical surface vocabulary; new Tailwind
+     utilities rounded-control|chip|card|hero|pill,
+     duration-snap|fast|base|slow|large, and ease-out map directly to
+     these vars (see tailwind.config.ts). --radius-card was already
+     hoisted by Task 1.3 (so the .glass[data-band]::before bar's
+     border-start radii don't embed a magic 14px); it stays here as
+     the single source of truth and is now also exposed in Tailwind as
+     `rounded-card`. NOTE: literal curly braces are avoided in this
+     comment intentionally — glassTokens.test.ts extracts the :root
+     block with a non-greedy regex that would otherwise close on the
+     first closing brace it encountered.
+     ---------------------------------------------------------------------*/
+  --space-1:  0.25rem;
+  --space-2:  0.5rem;
+  --space-3:  0.75rem;
+  --space-4:  1rem;
+  --space-5:  1.25rem;
+  --space-6:  1.5rem;
+  --space-8:  2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+
+  --motion-snap:  120ms;
+  --motion-fast:  180ms;
+  --motion-base:  240ms;
+  --motion-slow:  320ms;
+  --motion-large: 480ms;
+  --ease-out:     cubic-bezier(0.16, 1, 0.3, 1);
+
+  --radius-control: 0.5rem;   /* 8  — buttons, inputs, selects */
+  --radius-chip:    0.375rem; /* 6  — pills, chips, mini tags */
+  --radius-card:    0.875rem; /* 14 — cards (matches .glass + ::before bar) */
+  --radius-hero:    1rem;     /* 16 — hero / dialog / sheet surfaces */
+  --radius-pill:    9999px;   /* fully rounded — avatars, status dots */
 
   /* Canvas — deep blue-violet. Used as fixed body background + linear
      gradient endpoints. */
