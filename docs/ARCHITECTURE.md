@@ -3,7 +3,7 @@
 > **קהל יעד**: מפתחים, מי שמתחזק את הקוד, AI agents שעובדים על הריפו.
 > זה לא user manual — לזה יש את [docs/ROAS-Dashboard-User-Manual.md](ROAS-Dashboard-User-Manual.md).
 >
-> **גרסה**: 1.2 · **תאריך**: 2026-06-01 · **בסיס קוד**: Phase 05.7.x + mesh exact re-skin + Campaign modal
+> **גרסה**: 1.3 · **תאריך**: 2026-06-01 · **בסיס קוד**: Phase 05.7.x + mesh exact re-skin + Campaign modal + post-deploy fidelity
 
 ---
 
@@ -2753,4 +2753,46 @@ truth for Esc.
 DOM coverage: `components/__tests__/adsOverModalStack.dom.test.tsx`
 (AdsDrawer-over-modal z-order + Esc ordering) and
 `lib/__tests__/drawerStack.test.ts` (stack push/pop + top-only dispatch).
+
+### 28.5 Post-deploy fidelity fixes (2026-06-01)
+
+A small after-deploy polish pass on top of §27/§28. No data/algorithm/workflow
+change — visual fidelity only.
+
+- **V4 band top-bar (`::before`) removed.** Per operator, the 4px band-colored
+  top-edge bar on banded cards (per-store + hero) read as "an annoying frame
+  like a roof". It is now hidden at the BASE `.glass[data-band]::before` rule
+  with `display: none;`; the per-band `::before` rules below set only
+  background/box-shadow/height (never `display`), so they inherit the hide. The
+  band SIGNAL is now the vivid card GRADIENT + the white `.v.banded` number +
+  the `.band-chip` chip — the top bar is no longer part of the V4 contract
+  (§27.2). The data-attribute contract itself is unchanged.
+
+- **ROAS cells unified to SOLID status badges.** The Analysis/History monthly
+  tables (`MonthlyTables.tsx`, `DetailTable.tsx`) and the Campaigns table
+  (`CampaignsTableRow.tsx`, `AdSetTable.tsx`) previously washed the whole `<td>`
+  in a PALE band tint (`bg-status-*Bg`). They now render the ROAS value as a
+  SOLID rounded badge (white number on solid green/blue/orange/red) matching the
+  campaign SCORE chips (`HealthScoreBadge.tsx`) and the mockup. The logic is
+  consolidated into a single source of truth, `lib/format/roasCell.ts`
+  (`roasCell()` returns `bg-status-{c} text-accent-fg`; `ROAS_BG` solid map;
+  failure-cell still driven by the `roas-cell-fail` utility + `--cell-fail` /
+  `--cell-fail-fg` tokens), plus the new `lib/format/RoasBadge.tsx` primitive
+  (`RoasBadge` renders the inner chip; `roasCellTdClass()` keeps the full-cell
+  wash only for the failure case). Thresholds + band→tone mapping unchanged.
+  Covered by `lib/__tests__/roasCell.test.ts`.
+
+- **Vivid per-store cards → all-white text + white-alpha CPM tiles.** On a vivid
+  band per-store card the band gradient is the signal, so all text reads white
+  (including platform names + CPM values) and the per-platform CPM tiles are
+  white-alpha (not brand-tinted); the platform DOT keeps its brand color
+  (`bg-current` on `.platform-dot`). Scoped to
+  `.per-store-card.glass[data-band]:not([data-band="gray"])`. GRAY (no-data /
+  ROAS-0) cards are excluded and additionally PINNED to dark ink (`var(--text)`)
+  by an explicit `[data-band="gray"]` guard block, because the gray surface is
+  near-white in light mode (light-on-light guard).
+
+- **Campaign-drawer Daily charts** given an explicit min-height
+  (`campaign-drawer/CampaignDrawerDaily.tsx`) so they don't squish inside the
+  centered modal.
 
