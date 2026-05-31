@@ -15,7 +15,7 @@ import { TableBase } from '@/components/ui/TableBase';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { Heading } from '@/components/ui/Typography';
 import { roasLabel } from '@/lib/analytics';
-import { ROAS_TONE_BG } from '@/lib/format/roasCell';
+import { ROAS_TONE_BG, ROAS_BADGE_SHAPE } from '@/lib/format/roasCell';
 import type { AttributionAnalysis } from '@/lib/attributionAnalysis';
 
 /**
@@ -194,8 +194,12 @@ export function AdSetTable({
                   <td className={cn('px-3 py-2 text-end tabular-nums', a.value > a.spend && 'text-status-green font-medium')}>
                     {formatCurrency(a.value)}
                   </td>
-                  <td className={cn('px-3 py-2 text-center font-semibold tabular-nums rounded', ROAS_TONE_BG[info.tone])}>
-                    {a.roas > 0 ? formatNumber(a.roas) : '—'}
+                  <td className="px-3 py-2 text-center font-semibold tabular-nums">
+                    {/* OPERATOR FIX (2026-06-01): solid rounded badge (mirrors
+                        HealthScoreBadge + mockup) instead of pale full-cell tint. */}
+                    <span className={cn(ROAS_BADGE_SHAPE, ROAS_TONE_BG[info.tone])}>
+                      {a.roas > 0 ? formatNumber(a.roas) : '—'}
+                    </span>
                   </td>
                   {/* Deterministic ROAS per ad-set via utm_term. */}
                   <td className="px-3 py-2 text-center">

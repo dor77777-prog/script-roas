@@ -4,7 +4,7 @@ import { Fragment } from 'react';
 import { CheckCircle2, Circle, ExternalLink, Pause, Tag, Hourglass } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { fmtMoneyString } from '@/lib/format';
-import { ROAS_TONE_BG } from '@/lib/format/roasCell';
+import { ROAS_TONE_BG, ROAS_BADGE_SHAPE } from '@/lib/format/roasCell';
 import { Button } from '@/components/ui/Button';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { campaignKey } from '@/lib/campaignProductMap';
@@ -432,8 +432,13 @@ export function CampaignsTableRow({
         </td>
       ),
       roas: (
-        <td data-col-id="roas" className={cn('px-3 py-2 text-center font-semibold tabular-nums rounded', ROAS_TONE_BG[info.tone])}>
-        {roas > 0 ? formatNumber(roas) : '—'}
+        <td data-col-id="roas" className="px-3 py-2 text-center font-semibold tabular-nums">
+          {/* OPERATOR FIX (2026-06-01): ROAS value rendered as a SOLID rounded
+              badge (mirrors HealthScoreBadge + mockup) instead of a pale
+              full-cell tint. */}
+          <span className={cn(ROAS_BADGE_SHAPE, ROAS_TONE_BG[info.tone])}>
+            {roas > 0 ? formatNumber(roas) : '—'}
+          </span>
         </td>
       ),
       roasShopify: (

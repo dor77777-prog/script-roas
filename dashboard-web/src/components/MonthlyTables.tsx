@@ -11,6 +11,7 @@ import { NativeSelect } from '@/components/ui/NativeSelect';
 import { TableBase } from '@/components/ui/TableBase';
 import { buildDateRangeKey } from '@/lib/dateRange';
 import { roasCell } from '@/lib/format/roasCell';
+import { RoasBadge, roasCellTdClass } from '@/lib/format/RoasBadge';
 import { Heading } from '@/components/ui/Typography';
 
 const HE_MONTHS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
@@ -401,8 +402,8 @@ function MonthBlockPerStore({
                         />
                       )}
                     </td>
-                    <td className={cn('px-3 py-1.5 text-center tabular-nums font-medium', cell.className)}>
-                      {cell.text}
+                    <td className={cn('px-3 py-1.5 text-center tabular-nums font-medium', roasCellTdClass(cell.className))}>
+                      <RoasBadge className={cell.className} text={cell.text} />
                     </td>
                   </tr>
                 );
@@ -420,9 +421,14 @@ function MonthBlockPerStore({
                     refundDeduction={totalRefund}
                   />
                 </td>
-                <td className={cn('px-3 py-2 text-center tabular-nums', roasCell(totalRoas, totalRev, totalSpend).className)}>
-                  {roasCell(totalRoas, totalRev, totalSpend).text}
-                </td>
+                {(() => {
+                  const totalCell = roasCell(totalRoas, totalRev, totalSpend);
+                  return (
+                    <td className={cn('px-3 py-2 text-center tabular-nums', roasCellTdClass(totalCell.className))}>
+                      <RoasBadge className={totalCell.className} text={totalCell.text} />
+                    </td>
+                  );
+                })()}
               </tr>
             </tbody>
           </TableBase>
@@ -517,8 +523,8 @@ function MonthBlockSummary({
                         />
                       )}
                     </td>
-                    <td className={cn('px-3 py-1.5 text-center tabular-nums font-medium', cell.className)}>
-                      {cell.text}
+                    <td className={cn('px-3 py-1.5 text-center tabular-nums font-medium', roasCellTdClass(cell.className))}>
+                      <RoasBadge className={cell.className} text={cell.text} />
                     </td>
                   </tr>
                 );
@@ -533,8 +539,8 @@ function MonthBlockSummary({
                     refundDeduction={totalRefund}
                   />
                 </td>
-                <td className={cn('px-3 py-2 text-center tabular-nums', totalCell.className)}>
-                  {totalCell.text}
+                <td className={cn('px-3 py-2 text-center tabular-nums', roasCellTdClass(totalCell.className))}>
+                  <RoasBadge className={totalCell.className} text={totalCell.text} />
                 </td>
               </tr>
             </tbody>

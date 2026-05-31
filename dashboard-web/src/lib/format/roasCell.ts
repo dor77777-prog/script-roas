@@ -22,12 +22,23 @@
 import { roasLabel } from '@/lib/analytics';
 import { formatNumber } from '@/lib/utils';
 
-/** ROAS band-tone → cell background only. Used by MonthlyTables + DetailTable. */
+/**
+ * ROAS band-tone → SOLID badge color. Used by MonthlyTables + DetailTable.
+ *
+ * OPERATOR FIX (2026-06-01): the Analysis→History monthly tables previously
+ * washed the WHOLE `<td>` in a PALE tint (`bg-status-*Bg`). The operator
+ * wants them to match the campaign SCORE badges (HealthScoreBadge.tsx) and
+ * the mockup (mockup-mesh-light-analysis-history.png): a SOLID rounded badge
+ * (white number on solid green/blue/orange/red), not a full-cell wash. So
+ * `roasCell()` now returns the solid `bg-status-{c} text-accent-fg` class,
+ * and consumers render the value inside an inline-flex rounded badge (see
+ * `RoasBadge` / the inline badge span in each table). Thresholds unchanged.
+ */
 const ROAS_BG: Record<string, string> = {
-  red:    'bg-status-redBg',
-  orange: 'bg-status-orangeBg',
-  green:  'bg-status-greenBg',
-  blue:   'bg-status-blueBg',
+  red:    'bg-status-red text-accent-fg',
+  orange: 'bg-status-orange text-accent-fg',
+  green:  'bg-status-green text-accent-fg',
+  blue:   'bg-status-blue text-accent-fg',
   gray:   '',
 };
 
@@ -49,14 +60,28 @@ export function roasCell(
 }
 
 /**
- * ROAS band-tone → cell bg + fg (richer variant).
- * Used by CampaignsTableRow — consolidated from the byte-identical copy that
- * lived there.  Uses the canonical `text-status-*Fg` pattern (see NOTE above).
+ * ROAS band-tone → SOLID badge bg + white fg (richer variant).
+ * Used by CampaignsTableRow + AdSetTable.
+ *
+ * OPERATOR FIX (2026-06-01): for consistency with the Analysis→History fix
+ * above (and because the campaign-table ROAS cells in the mockup are ALSO
+ * solid), this map now emits the SOLID `bg-status-{c} text-accent-fg` chip —
+ * same treatment as HealthScoreBadge — instead of the prior pale
+ * `bg-status-*Bg` / `text-status-*Fg` tint. Gray (no/low data) stays a quiet
+ * neutral chip. Both consumers wrap the value in a rounded badge span.
  */
 export const ROAS_TONE_BG: Record<string, string> = {
-  red:    'bg-status-redBg text-status-redFg',
-  orange: 'bg-status-orangeBg text-status-orangeFg',
-  green:  'bg-status-greenBg text-status-greenFg',
-  blue:   'bg-status-blueBg text-status-blueFg',
+  red:    'bg-status-red text-accent-fg',
+  orange: 'bg-status-orange text-accent-fg',
+  green:  'bg-status-green text-accent-fg',
+  blue:   'bg-status-blue text-accent-fg',
   gray:   'bg-glass-2 text-ink',
 };
+
+/**
+ * Shared badge-shape classes for ROAS cells — mirrors HealthScoreBadge's chip
+ * (inline-flex rounded pill, bold tabular nums, white number on solid band).
+ * Combine with a `ROAS_BG` / `ROAS_TONE_BG` color entry to render the badge.
+ */
+export const ROAS_BADGE_SHAPE =
+  'inline-flex items-center justify-center min-w-[3rem] px-2 py-0.5 rounded-md font-bold tabular-nums';

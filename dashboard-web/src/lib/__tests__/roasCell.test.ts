@@ -39,46 +39,50 @@ describe('roasCell — no-data path (spend = 0, revenue = 0)', () => {
 });
 
 describe('roasCell — normal path (revenue > 0)', () => {
-  it('returns the band-tone background class + formatted ROAS', () => {
-    // roas 3.2 → roasLabel → 'blue' tone → 'bg-status-blueBg'
+  // OPERATOR FIX (2026-06-01): the monthly-table ROAS value is now a SOLID
+  // status badge (`bg-status-{c} text-accent-fg`) matching HealthScoreBadge +
+  // the mockup, instead of the prior pale `bg-status-*Bg` full-cell tint.
+  // Thresholds + band→tone mapping are UNCHANGED — only the color style.
+  it('returns the SOLID band-tone badge class + formatted ROAS', () => {
+    // roas 3.2 → roasLabel → 'blue' tone → 'bg-status-blue text-accent-fg'
     const roas = 3.2;
     const revenue = 5000;
     const spend = 1500;
     const result = roasCell(roas, revenue, spend);
     const expectedTone = roasLabel(roas).tone;
     const expectedClass = {
-      red: 'bg-status-redBg',
-      orange: 'bg-status-orangeBg',
-      green: 'bg-status-greenBg',
-      blue: 'bg-status-blueBg',
+      red: 'bg-status-red text-accent-fg',
+      orange: 'bg-status-orange text-accent-fg',
+      green: 'bg-status-green text-accent-fg',
+      blue: 'bg-status-blue text-accent-fg',
       gray: '',
     }[expectedTone];
     expect(result.className).toBe(expectedClass);
     expect(result.text).toBe(formatNumber(roas));
   });
 
-  it('red-tone ROAS (e.g. 1.5) → bg-status-redBg', () => {
+  it('red-tone ROAS (e.g. 1.5) → solid bg-status-red text-accent-fg', () => {
     const result = roasCell(1.5, 1000, 700);
     expect(roasLabel(1.5).tone).toBe('red');
-    expect(result.className).toBe('bg-status-redBg');
+    expect(result.className).toBe('bg-status-red text-accent-fg');
   });
 
-  it('orange-tone ROAS (e.g. 2.3) → bg-status-orangeBg', () => {
+  it('orange-tone ROAS (e.g. 2.3) → solid bg-status-orange text-accent-fg', () => {
     const result = roasCell(2.3, 2000, 900);
     expect(roasLabel(2.3).tone).toBe('orange');
-    expect(result.className).toBe('bg-status-orangeBg');
+    expect(result.className).toBe('bg-status-orange text-accent-fg');
   });
 
-  it('green-tone ROAS (e.g. 2.9) → bg-status-greenBg', () => {
+  it('green-tone ROAS (e.g. 2.9) → solid bg-status-green text-accent-fg', () => {
     const result = roasCell(2.9, 2000, 700);
     expect(roasLabel(2.9).tone).toBe('green');
-    expect(result.className).toBe('bg-status-greenBg');
+    expect(result.className).toBe('bg-status-green text-accent-fg');
   });
 
-  it('blue-tone ROAS (e.g. 4.0) → bg-status-blueBg', () => {
+  it('blue-tone ROAS (e.g. 4.0) → solid bg-status-blue text-accent-fg', () => {
     const result = roasCell(4.0, 4000, 1000);
     expect(roasLabel(4.0).tone).toBe('blue');
-    expect(result.className).toBe('bg-status-blueBg');
+    expect(result.className).toBe('bg-status-blue text-accent-fg');
   });
 });
 
@@ -97,14 +101,19 @@ describe('ROAS_TONE_BG map', () => {
   });
 
   it('each entry includes both a bg- and text- class', () => {
+    // OPERATOR FIX (2026-06-01): non-gray tones are now SOLID badges
+    // (`bg-status-{c}` + white `text-accent-fg`), matching HealthScoreBadge +
+    // the mockup, instead of the prior pale `bg-status-*Bg` / `text-status-*Fg`.
     for (const [tone, classes] of Object.entries(ROAS_TONE_BG)) {
       if (tone === 'gray') {
-        // gray uses bg-glass-2 + text-ink
+        // gray (no/low data) stays a quiet neutral chip: bg-glass-2 + text-ink
         expect(classes).toContain('bg-glass-2');
         expect(classes).toContain('text-ink');
       } else {
-        expect(classes, `ROAS_TONE_BG[${tone}] should have bg-*`).toMatch(/bg-status-\w+/);
-        expect(classes, `ROAS_TONE_BG[${tone}] should have text-*`).toMatch(/text-status-\w+/);
+        expect(classes, `ROAS_TONE_BG[${tone}] should have a solid bg-status-*`)
+          .toMatch(/bg-status-(red|orange|green|blue)\b/);
+        expect(classes, `ROAS_TONE_BG[${tone}] should have white text-accent-fg`)
+          .toContain('text-accent-fg');
       }
     }
   });

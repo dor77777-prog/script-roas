@@ -6,6 +6,7 @@ import type { DailyRow } from '@/lib/types';
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import { RefundIndicator } from './RefundIndicator';
 import { roasCell } from '@/lib/format/roasCell';
+import { RoasBadge, roasCellTdClass } from '@/lib/format/RoasBadge';
 import { Sparkline } from './ui/Sparkline';
 import { TableBase } from './ui/TableBase';
 import { Heading } from './ui/Typography';
@@ -107,8 +108,8 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
                       refundDeduction={r.refundDeduction}
                     />
                   </td>
-                  <td className={cn('px-3 py-2 text-center font-medium tabular-nums', cell.className)}>
-                    {cell.text}
+                  <td className={cn('px-3 py-2 text-center font-medium tabular-nums', roasCellTdClass(cell.className))}>
+                    <RoasBadge className={cell.className} text={cell.text} />
                   </td>
                   <td className="px-3 py-2 text-end tabular-nums">{formatNumber(r.grossProfit)}</td>
                   {showCogs && (
