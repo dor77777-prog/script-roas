@@ -55,7 +55,9 @@ function PlatformRow({ platform, store }: { platform: string; store: string }) {
     <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-ink-secondary">
       <PlatformBadge platform={platform} size="sm" className="!h-auto !text-[11px] sm:!text-xs" />
       <span className="text-ink-muted">·</span>
-      <span>{store}</span>
+      {/* Store id is LTR English; wrap in <bdi> so RTL flow can't shuffle
+          it against the dot separator or PlatformBadge. */}
+      <bdi dir="ltr">{store}</bdi>
     </div>
   );
 }
@@ -113,7 +115,9 @@ function Row({
             <div className="min-w-0 flex-1">
               <HelpTooltip content={campaign.name}>
                 <div className="text-sm font-medium text-ink truncate">
-                  {campaign.name}
+                  {/* Campaign name (LTR) inside an RTL row — isolate so
+                      digits/punctuation can't be reordered. */}
+                  <bdi dir="ltr">{campaign.name}</bdi>
                 </div>
               </HelpTooltip>
               <PlatformRow platform={campaign.platform} store={campaign.storeName} />

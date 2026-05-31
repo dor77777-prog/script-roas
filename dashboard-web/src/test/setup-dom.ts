@@ -46,6 +46,16 @@ if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
   });
 }
 
+// jsdom does not implement Element.prototype.scrollIntoView. Components
+// that use it for keyboard navigation (e.g. CommandPalette scrolling the
+// active option into view) crash without a stub.
+if (
+  typeof Element !== 'undefined' &&
+  typeof (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView !== 'function'
+) {
+  (Element.prototype as { scrollIntoView: () => void }).scrollIntoView = function () {};
+}
+
 // React 19 ships with built-in act() warnings under jsdom. The matcher
 // extensions above add expect(...).toBeInTheDocument() etc. and run once
 // per test file before describe blocks execute.

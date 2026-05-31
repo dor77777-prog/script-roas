@@ -333,12 +333,17 @@ export function AdsDrawer({
               <Layers size={16} />
             </span>
             <div className="min-w-0">
+              {/* Hebrew "מודעות ב-" + LTR English "ad-set" literal. Wrap the
+                  LTR fragment in <bdi> so bidi reordering doesn't pull
+                  "ad-set" out of position within the header chip. */}
               <div className="text-[10px] uppercase tracking-[0.12em] font-semibold text-ink-muted">
-                מודעות ב-ad-set
+                מודעות ב-<bdi dir="ltr">ad-set</bdi>
               </div>
               <HelpTooltip content={adSetName}>
                 <Heading level="section" id="ads-drawer-title" className="font-bold truncate">
-                  {adSetName}
+                  {/* Ad-set name is LTR English; isolate so it can't be
+                      reordered against the surrounding RTL drawer chrome. */}
+                  <bdi dir="ltr">{adSetName}</bdi>
                 </Heading>
               </HelpTooltip>
             </div>
@@ -465,7 +470,10 @@ export function AdsDrawer({
                           </td>
                           <HelpTooltip content={a.adName}>
                             <td className="px-3 py-2 text-ink truncate max-w-[220px]">
-                              {a.adName}
+                              {/* Ad name (English/LTR) inside an RTL drawer
+                                  table — isolate so bidi can't shuffle
+                                  alphanumeric runs against neighbour cells. */}
+                              <bdi dir="ltr">{a.adName}</bdi>
                             </td>
                           </HelpTooltip>
                           <td className="px-3 py-2 text-end tabular-nums">{formatCurrency(a.spend)}</td>

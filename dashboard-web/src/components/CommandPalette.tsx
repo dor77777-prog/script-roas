@@ -69,8 +69,15 @@ type CommandKind = 'tab' | 'preset' | 'store' | 'campaign' | 'product' | 'action
 type Command = {
   id: string;
   kind: CommandKind;
-  label: string;
-  subtitle?: string;
+  /** Display label. Strings are rendered as-is; ReactNode lets call sites
+   * wrap dynamic LTR fragments (campaign / product names) in <bdi> to
+   * isolate them from the surrounding Hebrew RTL flow. */
+  label: React.ReactNode;
+  /** Plain-text version of the label, used for sort/match scoring (label
+   * may be a ReactNode that contains <bdi> wrappers we don't want to
+   * include in the search corpus). */
+  labelText: string;
+  subtitle?: React.ReactNode;
   icon: React.ReactNode;
   /** A search corpus joined into a single lower-case string. */
   search: string;
@@ -182,6 +189,7 @@ export function CommandPalette({
         id: `tab-${t.key}`,
         kind: 'tab',
         label: t.label,
+        labelText: t.label,
         icon: t.icon,
         search: t.search.toLowerCase(),
         perform: () => { setActiveTab(t.key); close(); },
@@ -195,6 +203,7 @@ export function CommandPalette({
         id: `preset-${p}`,
         kind: 'preset',
         label: PRESET_LABELS[p],
+        labelText: PRESET_LABELS[p],
         subtitle: 'טווח זמן',
         icon: <CalendarDays size={15} />,
         search: `${PRESET_LABELS[p]} ${p} time range תקופה`.toLowerCase(),
@@ -210,6 +219,7 @@ export function CommandPalette({
       id: 'store-all',
       kind: 'store',
       label: 'כל החנויות',
+      labelText: 'כל החנויות',
       subtitle: 'בחירת חנות',
       icon: <StoreIcon size={15} />,
       search: 'כל החנויות all stores'.toLowerCase(),
@@ -219,7 +229,10 @@ export function CommandPalette({
       cmds.push({
         id: `store-${s}`,
         kind: 'store',
-        label: s,
+        // Store IDs are English/LTR; wrap in <bdi> so they always render as
+        // an atomic LTR run inside the Hebrew RTL palette body.
+        label: <bdi dir="ltr">{s}</bdi>,
+        labelText: s,
         subtitle: 'בחירת חנות',
         icon: <StoreIcon size={15} />,
         search: `${s} store חנות`.toLowerCase(),
@@ -269,11 +282,28 @@ export function CommandPalette({
         .slice(0, 30);
       for (const c of top) {
         const roas = c.spend > 0 ? c.value / c.spend : 0;
+        const campaignNameText = c.campaignName || '(ללא שם)';
         cmds.push({
           id: `campaign-${c.campaignId}`,
           kind: 'campaign',
-          label: c.campaignName || '(ללא שם)',
-          subtitle: `${c.platform} · ${c.store} · ROAS ${roas.toFixed(2)}`,
+          // Wave 4 / Task 4.2 — campaign name is LTR English (sometimes
+          // mixed with digits); isolate it in <bdi> so RTL flow can't
+          // shuffle its components.
+          label: <bdi dir="ltr">{campaignNameText}</bdi>,
+          labelText: campaignNameText,
+          // Subtitle interpolates platform name (LTR), store id (LTR), and
+          // a ROAS number into a Hebrew RTL row. Each LTR atom gets its
+          // own <bdi> wrap so the order stays Platform · Store · ROAS …
+          // regardless of bidi heuristics.
+          subtitle: (
+            <>
+              <bdi dir="ltr">{c.platform}</bdi>
+              {' · '}
+              <bdi dir="ltr">{c.store}</bdi>
+              {' · ROAS '}
+              <bdi dir="ltr">{roas.toFixed(2)}</bdi>
+            </>
+          ),
           icon: <Megaphone size={15} />,
           search: `${c.campaignName} ${c.platform} ${c.store} קמפיין`.toLowerCase(),
           perform: () => {
@@ -320,8 +350,21 @@ export function CommandPalette({
         cmds.push({
           id: `product-${p.store}::${p.title}`,
           kind: 'product',
-          label: p.title,
-          subtitle: `${p.store} · ${p.units.toLocaleString('he-IL')} יחידות`,
+          // Product title is typically LTR English; wrap in <bdi>.
+          label: <bdi dir="ltr">{p.title}</bdi>,
+          labelText: p.title,
+          // Subtitle mixes English store id + Hebrew "יחידות" + a localised
+          // number. The LTR atoms each get their own <bdi> so the visual
+          // order stays "<store> · <units> יחידות" rather than collapsing
+          // through bidi reordering.
+          subtitle: (
+            <>
+              <bdi dir="ltr">{p.store}</bdi>
+              {' · '}
+              <bdi dir="ltr">{p.units.toLocaleString('he-IL')}</bdi>
+              {' יחידות'}
+            </>
+          ),
           icon: <Package size={15} />,
           search: `${p.title} ${p.store} מוצר`.toLowerCase(),
           perform: () => {
@@ -338,6 +381,7 @@ export function CommandPalette({
       id: 'action-refresh',
       kind: 'action',
       label: 'רענן נתונים',
+      labelText: 'רענן נתונים',
       subtitle: 'משוך מחדש מ-Sheets',
       icon: <RefreshCw size={15} />,
       search: 'רענן refresh reload עדכן'.toLowerCase(),
@@ -347,6 +391,7 @@ export function CommandPalette({
       id: 'action-ai-report',
       kind: 'action',
       label: 'ייצא דוח לבינה מלאכותית',
+      labelText: 'ייצא דוח לבינה מלאכותית',
       subtitle: 'דוח Markdown מוכן ל-ChatGPT / Claude',
       icon: <Bot size={15} />,
       search: 'ai report ייצא chatgpt claude מארקדאון'.toLowerCase(),
@@ -356,6 +401,7 @@ export function CommandPalette({
       id: 'action-meta',
       kind: 'action',
       label: 'פתח Meta Ads Manager',
+      labelText: 'פתח Meta Ads Manager',
       subtitle: 'business.facebook.com',
       icon: <ExternalLink size={15} />,
       search: 'meta facebook ads manager פייסבוק'.toLowerCase(),
@@ -368,6 +414,7 @@ export function CommandPalette({
       id: 'action-google',
       kind: 'action',
       label: 'פתח Google Ads',
+      labelText: 'פתח Google Ads',
       subtitle: 'ads.google.com',
       icon: <ExternalLink size={15} />,
       search: 'google ads גוגל'.toLowerCase(),
@@ -382,6 +429,7 @@ export function CommandPalette({
       id: 'theme-light',
       kind: 'action',
       label: 'מעבר למצב בהיר',
+      labelText: 'מעבר למצב בהיר',
       subtitle: 'Light theme',
       icon: <Sun size={14} />,
       search: 'theme light בהיר אור day',
@@ -391,6 +439,7 @@ export function CommandPalette({
       id: 'theme-dark',
       kind: 'action',
       label: 'מעבר למצב כהה',
+      labelText: 'מעבר למצב כהה',
       subtitle: 'Dark theme',
       icon: <Moon size={14} />,
       search: 'theme dark כהה לילה night',
@@ -400,6 +449,7 @@ export function CommandPalette({
       id: 'theme-system',
       kind: 'action',
       label: 'עקוב אחר העדפת המערכת',
+      labelText: 'עקוב אחר העדפת המערכת',
       subtitle: 'Follow system',
       icon: <Monitor size={14} />,
       search: 'theme system auto אוטומטי מערכת',
@@ -424,7 +474,10 @@ export function CommandPalette({
       .map(c => {
         let score = 0;
         for (const t of tokens) {
-          if (c.label.toLowerCase().startsWith(t)) score += 100;
+          // Use the plain-text companion (`labelText`) instead of `label`,
+          // which may now be a ReactNode (Wave 4 / Task 4.2 — labels can
+          // be <bdi>-wrapped React fragments for bidi isolation).
+          if (c.labelText.toLowerCase().startsWith(t)) score += 100;
           else if (c.search.includes(' ' + t)) score += 50;
           else if (c.search.includes(t)) score += 25;
           else { score = -Infinity; break; }
