@@ -12,7 +12,6 @@ import {
 import {
   readStoredTheme,
   writeStoredTheme,
-  resolveTheme,
   type ThemeChoice,
   type ResolvedTheme,
 } from '@/lib/theme';
@@ -26,34 +25,27 @@ type ThemeContextValue = {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
+  // 2026-05-31 single-mode flip: the dashboard now ships dark-only. We
+  // still expose `choice` / `setChoice` (and persist them via
+  // `writeStoredTheme`) because Sidebar + CommandPalette render the
+  // theme-toggle UI and the Sidebar DOM tests assert against it. The
+  // resolved value is hard-pinned to 'dark' and the DOM-write effect
+  // always forces <html data-theme="dark">, so the previous
+  // matchMedia(prefers-color-scheme) subscription + osPrefersDark state +
+  // resolveTheme() call were unreachable — dropped to remove the live
+  // listener cost and the misleading reactivity.
   const [choice, setChoiceState] = useState<ThemeChoice>(() => readStoredTheme());
 
-  const [osPrefersDark, setOsPrefersDark] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches;
-  });
+  const resolved: ResolvedTheme = 'dark';
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    const onChange = (e: MediaQueryListEvent) => setOsPrefersDark(e.matches);
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
-
-  const resolved = useMemo(
-    () => resolveTheme(choice, osPrefersDark),
-    [choice, osPrefersDark],
-  );
-
-  useEffect(() => {
-    // 2026-05-31 single-mode flip: <html> is hard-coded to data-theme="dark"
-    // in layout.tsx. Force the attribute back to "dark" on every render so
-    // stale localStorage values (from before the flip) cannot demote a
-    // running session to a non-existent light palette.
+    // Re-assert dark on every mount so stale localStorage values (from
+    // before the flip) cannot demote a running session to a non-existent
+    // light palette. `<html data-theme="dark">` is also hard-coded in
+    // layout.tsx for the first paint.
     if (typeof document === 'undefined') return;
     document.documentElement.setAttribute('data-theme', 'dark');
-  }, [resolved]);
+  }, []);
 
   const setChoice = useCallback((next: ThemeChoice) => {
     setChoiceState(next);

@@ -17,15 +17,20 @@ const css = readFileSync(
 );
 
 function extractRoot(): string {
-  const m = css.match(/:root\s*\{([\s\S]*?)\n\}/);
+  // Non-greedy match through to the FIRST `}` after `:root {` so the test
+  // survives a one-line collapse / trailing whitespace after Prettier
+  // reformatting the block.
+  const m = css.match(/:root\s*\{([\s\S]*?)\}/);
   if (!m) throw new Error(':root block not found in globals.css');
   return m[1];
 }
 
-/** Extract the hue (3rd OKLCH component) from a `--var: oklch(L% C H ...)` decl. */
+/** Extract the hue (3rd OKLCH component) from a `--var: oklch(L% C H ...)` decl.
+ *  Accepts both whitespace and comma separators between components — CSS
+ *  allows both forms and Prettier may reformat one into the other. */
 function hueOf(varName: string, block: string): number {
   const re = new RegExp(
-    `(?<![\\w-])${varName}\\s*:\\s*oklch\\(\\s*[\\d.]+%\\s+[\\d.]+\\s+([\\d.]+)`,
+    `(?<![\\w-])${varName}\\s*:\\s*oklch\\(\\s*[\\d.]+%[\\s,]+[\\d.]+[\\s,]+([\\d.]+)`,
   );
   const m = block.match(re);
   if (!m) throw new Error(`could not parse hue for ${varName}`);

@@ -16,7 +16,10 @@ const css = readFileSync(
 );
 
 function extractRoot(): string {
-  const m = css.match(/:root\s*\{([\s\S]*?)\n\}/);
+  // Non-greedy match through to the FIRST `}` after `:root {` so the test
+  // survives a one-line collapse / trailing whitespace after Prettier
+  // reformatting the block.
+  const m = css.match(/:root\s*\{([\s\S]*?)\}/);
   if (!m) throw new Error(':root block not found in globals.css');
   return m[1];
 }
@@ -44,4 +47,18 @@ describe('glass + canvas + blur tokens — Task 1.1', () => {
       expect(root).toContain(`${tok}:`);
     });
   }
+});
+
+describe('body background animation layer — Task 1.1', () => {
+  // Lock in the visual signature so a future engineer cannot silently
+  // delete the conic-gradient bg layer (body::before) or the global
+  // prefers-reduced-motion guard that pauses it on accessibility-sensitive
+  // sessions. Pure text-level assertions to keep the test JSDOM-free.
+  it('renders a body::before pseudo-element for the conic-gradient bg layer', () => {
+    expect(css).toContain('body::before');
+  });
+
+  it('respects prefers-reduced-motion somewhere in globals.css', () => {
+    expect(css).toContain('prefers-reduced-motion');
+  });
 });

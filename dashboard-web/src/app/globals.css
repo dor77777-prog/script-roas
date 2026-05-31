@@ -111,13 +111,16 @@ body::before {
     oklch(72% 0.24 12 / 0.03),
     oklch(75% 0.14 175 / 0.03),
     oklch(72% 0.18 280 / 0.04));
-  animation: spin 60s linear infinite;
+  animation: bg-spin 60s linear infinite;
   pointer-events: none; z-index: 0; opacity: 0.6; filter: blur(40px);
 }
-@keyframes spin { to { transform: rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) {
-  body::before { animation: none; }
-}
+/* Renamed from `spin` to avoid colliding with Tailwind's built-in
+   `@keyframes spin` (used by `animate-spin` on ~10 loading spinners).
+   Behavior is identical today; this future-proofs against silent
+   regressions if we ever tune the body background rotation. The
+   global `*` prefers-reduced-motion rule below already pauses this
+   animation, so no targeted reduced-motion override is needed. */
+@keyframes bg-spin { to { transform: rotate(360deg); } }
 
 /* Tabular numbers — uses the Rubik-first numeric chain so the tnum
    feature actually resolves. Previously declared against Heebo
