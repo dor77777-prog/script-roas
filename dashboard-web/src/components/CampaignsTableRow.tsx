@@ -4,6 +4,7 @@ import { Fragment } from 'react';
 import { CheckCircle2, Circle, ExternalLink, Pause, Tag, Hourglass } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { fmtMoneyString } from '@/lib/format';
+import { ROAS_TONE_BG } from '@/lib/format/roasCell';
 import { Button } from '@/components/ui/Button';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { campaignKey } from '@/lib/campaignProductMap';
@@ -50,17 +51,6 @@ export function computeTrustTone(level: CampaignsTableRowTrustLevel): string {
        :                      'bg-status-redBg/60 text-status-red';
 }
 
-// Duplicated from CampaignsTable.tsx:199-205 per D-04 (target-soft cap) —
-// leaving this tiny lookup table colocated with the row that uses it
-// avoids creating a wrapper module for 6 lines. Same 5-entry shape as
-// the parent's copy + AdSetTable's copy (both are byte-identical).
-const TONE_BG: Record<string, string> = {
-  red:    'bg-status-redBg text-status-redFg',
-  orange: 'bg-status-orangeBg text-status-orangeFg',
-  green:  'bg-status-greenBg text-status-greenFg',
-  blue:   'bg-status-blueBg text-status-blueFg',
-  gray:   'bg-glass-2 text-ink',
-};
 
 type Props = {
   a: Aggregated;
@@ -442,7 +432,7 @@ export function CampaignsTableRow({
         </td>
       ),
       roas: (
-        <td data-col-id="roas" className={cn('px-3 py-2 text-center font-semibold tabular-nums rounded', TONE_BG[info.tone])}>
+        <td data-col-id="roas" className={cn('px-3 py-2 text-center font-semibold tabular-nums rounded', ROAS_TONE_BG[info.tone])}>
         {roas > 0 ? formatNumber(roas) : '—'}
         </td>
       ),

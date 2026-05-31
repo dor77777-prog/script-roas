@@ -50,6 +50,9 @@
   --band-green:  oklch(64% 0.24 145);
   --band-blue:   oklch(62% 0.22 240);
   --band-gray:   oklch(60% 0.012 250);
+  /* Task 4.1 — failure-cell token: spent money, zero sales = worst state */
+  --cell-fail:    oklch(0% 0 0);
+  --cell-fail-fg: oklch(100% 0 0);
 
   /* ---------------------------------------------------------------------
      Task 1.8 — semantic spacing / motion / radius scales.
@@ -266,6 +269,9 @@
   --band-green:  oklch(56% 0.20 145);
   --band-blue:   oklch(56% 0.20 240);
   --band-gray:   oklch(64% 0.012 250);
+  /* Task 4.1 — failure-cell token: pure black stands out on light canvas */
+  --cell-fail:    oklch(0% 0 0);
+  --cell-fail-fg: oklch(100% 0 0);
 
   /* Spacing scale — theme-invariant, copied verbatim from :root. */
   --space-1:  0.25rem;
@@ -989,6 +995,9 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 .chip-green  { background: oklch(from var(--band-green) l c h / 0.18); color: var(--band-green); }
 .chip-blue   { background: oklch(from var(--band-blue) l c h / 0.18); color: var(--band-blue); }
 .chip-gray   { background: oklch(from var(--band-gray) l c h / 0.12); color: var(--text-muted); }
+
+/* Task 4.1 — ROAS failure-cell: spent money, zero revenue (worst state). */
+.roas-cell-fail { background: var(--cell-fail); color: var(--cell-fail-fg); }
 
 /* ===========================================================================
    FRESHNESS DESATURATION — Task 1.4.

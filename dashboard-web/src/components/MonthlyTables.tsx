@@ -9,8 +9,8 @@ import { RefundIndicator } from './RefundIndicator';
 import { Button } from '@/components/ui/Button';
 import { NativeSelect } from '@/components/ui/NativeSelect';
 import { TableBase } from '@/components/ui/TableBase';
-import { roasLabel } from '@/lib/analytics';
 import { buildDateRangeKey } from '@/lib/dateRange';
+import { roasCell } from '@/lib/format/roasCell';
 import { Heading } from '@/components/ui/Typography';
 
 const HE_MONTHS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
@@ -111,30 +111,6 @@ const fetcher = async (url: string): Promise<DashboardData> => {
   return res.json() as Promise<DashboardData>;
 };
 
-const ROAS_BG: Record<string, string> = {
-  red: 'bg-status-redBg',
-  orange: 'bg-status-orangeBg',
-  green: 'bg-status-greenBg',
-  blue: 'bg-status-blueBg',
-  gray: '',
-};
-
-/**
- * Cell styling for ROAS. A day with revenue=0 means the day was a complete
- * miss (spent money, no sales). Surfaces it visually with a black cell + "0"
- * so it stands out from "no data yet" (gray, empty).
- */
-function roasCell(roas: number, revenue: number, totalSpend: number): { className: string; text: string } {
-  // Day where revenue is zero but money WAS spent — flag as "0" on black.
-  if (revenue === 0 && totalSpend > 0) {
-    return { className: 'bg-black text-white', text: '0' };
-  }
-  // Day with no data at all (no spend AND no revenue) — leave blank.
-  if (revenue === 0 && totalSpend === 0) {
-    return { className: '', text: '' };
-  }
-  return { className: ROAS_BG[roasLabel(roas).tone], text: formatNumber(roas) };
-}
 
 export function MonthlyTables({ stores, globalStore, bare = false, year, month, hideStoreToolbar = false }: Props) {
   const [mode, setMode] = useState<Mode>('per-store');

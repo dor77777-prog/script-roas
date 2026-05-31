@@ -4,25 +4,12 @@ import { useMemo } from 'react';
 import { Table } from 'lucide-react';
 import type { DailyRow } from '@/lib/types';
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
-import { roasLabel } from '@/lib/analytics';
 import { RefundIndicator } from './RefundIndicator';
+import { roasCell } from '@/lib/format/roasCell';
 import { Sparkline } from './ui/Sparkline';
 import { TableBase } from './ui/TableBase';
 import { Heading } from './ui/Typography';
 
-const ROAS_BG: Record<string, string> = {
-  red: 'bg-status-redBg',
-  orange: 'bg-status-orangeBg',
-  green: 'bg-status-greenBg',
-  blue: 'bg-status-blueBg',
-  gray: '',
-};
-
-function roasCellStyle(roas: number, revenue: number, totalSpend: number) {
-  if (revenue === 0 && totalSpend > 0) return { className: 'bg-status-red text-white', text: '0' };
-  if (revenue === 0 && totalSpend === 0) return { className: '', text: '' };
-  return { className: ROAS_BG[roasLabel(roas).tone], text: formatNumber(roas) };
-}
 
 type DetailProps = {
   rows: DailyRow[];
@@ -90,7 +77,7 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
           </thead>
           <tbody>
             {display.map((r, i) => {
-              const cell = roasCellStyle(r.roas, r.revenue, r.totalSpend);
+              const cell = roasCell(r.roas, r.revenue, r.totalSpend);
               return (
                 <tr key={i} className="border-t border-glass-edge hover:bg-glass-2/50">
                   <td className="px-3 py-2 tabular-nums">{formatDate(r.date)}</td>
