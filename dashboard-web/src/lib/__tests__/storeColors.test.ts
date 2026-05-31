@@ -1,15 +1,23 @@
 /**
  * storeColors.test.ts — A1-F5 / A6-S2 contract test.
  *
- * Before centralisation, STORE_COLORS was defined three times with conflicting
- * hex values (PerStoreCards used red/green, TodayLive used a darker red/green,
- * RoasChart used amber/teal). This test pins the canonical values so any
- * accidental drift in storeColors.ts is caught immediately.
+ * Before Task 1.11 (UI/UX overhaul 2026-05-30), per-store colors were defined
+ * in FOUR places with conflicting values:
+ *   • storeColors.STORE_COLORS  → chart-store CSS vars (which didn't exist)
+ *   • format.STORE_HUES         → store-fg/store-bg CSS vars (which didn't exist)
+ *   • format.STORE_HEX_LIGHT    → raw hex literals
+ *   • format.storeColor/storeBg → fallback hex arrays
+ *
+ * Task 1.11 consolidated all four into `@/lib/storeColors` reading from the
+ * canonical `--store-uzo / --store-usm / --store-3` tokens. This test pins
+ * the new contract and verifies the format.ts duplicates are gone.
  */
 
 import { describe, expect, it } from 'vitest';
-import { STORE_COLORS, storeColor } from '@/lib/storeColors';
-import { STORE_HUES, storeBadgeHex } from '@/lib/format';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { STORE_COLORS, storeColor, storeBadge } from '@/lib/storeColors';
+import * as format from '@/lib/format';
 
 const KNOWN_STORES = ['uzoshop', 'Zol Plus', '360usmile'] as const;
 
@@ -18,29 +26,29 @@ describe('storeColors — canonical single-source palette (A1-F5 / A6-S2)', () =
     for (const store of KNOWN_STORES) {
       expect(STORE_COLORS).toHaveProperty(store);
       expect(typeof STORE_COLORS[store]).toBe('string');
-      expect(STORE_COLORS[store]).toMatch(/^var\(--chart-store-/);
+      expect(STORE_COLORS[store]).toMatch(/^var\(--store-/);
     }
   });
 
   it('storeColor() returns the same value for a given store regardless of call site', () => {
     for (const store of KNOWN_STORES) {
-      // idx=0 is irrelevant for known stores (direct lookup wins)
+      // idx is irrelevant for known stores (direct lookup wins)
       expect(storeColor(store, 0)).toBe(STORE_COLORS[store]);
       expect(storeColor(store, 1)).toBe(STORE_COLORS[store]);
       expect(storeColor(store, 99)).toBe(STORE_COLORS[store]);
     }
   });
 
-  it('uzoshop is keyed to the cyan chart-store CSS var', () => {
-    expect(STORE_COLORS.uzoshop).toBe('var(--chart-store-uzoshop)');
+  it('uzoshop is keyed to --store-uzo (cyan slot from Task 1.1)', () => {
+    expect(STORE_COLORS.uzoshop).toBe('var(--store-uzo)');
   });
 
-  it('Zol Plus is keyed to the hot-pink chart-store CSS var', () => {
-    expect(STORE_COLORS['Zol Plus']).toBe('var(--chart-store-zolplus)');
+  it('360usmile is keyed to --store-usm (magenta slot from Task 1.1)', () => {
+    expect(STORE_COLORS['360usmile']).toBe('var(--store-usm)');
   });
 
-  it('360usmile is keyed to the lime chart-store CSS var', () => {
-    expect(STORE_COLORS['360usmile']).toBe('var(--chart-store-usmile)');
+  it('Zol Plus is keyed to --store-3 (lime slot from Task 1.1)', () => {
+    expect(STORE_COLORS['Zol Plus']).toBe('var(--store-3)');
   });
 
   it('unknown store falls back to a non-empty hex string', () => {
@@ -51,22 +59,67 @@ describe('storeColors — canonical single-source palette (A1-F5 / A6-S2)', () =
   it('fallback cycles by index for unknown stores', () => {
     const color0 = storeColor('future-store-a', 0);
     const color1 = storeColor('future-store-b', 1);
-    // Different indices should (generally) produce different colors
     expect(color0).not.toBe(color1);
   });
 });
 
-describe('Phase E1.6.1 — store color unification (chart palette canonical)', () => {
-  it('format.ts STORE_HUES routes through CSS vars (not hardcoded hex)', () => {
-    expect(STORE_HUES.uzoshop.fg).toBe('var(--store-uzoshop-fg)');
-    expect(STORE_HUES.uzoshop.bg).toBe('var(--store-uzoshop-bg)');
-    expect(STORE_HUES['Zol Plus'].fg).toBe('var(--store-zolplus-fg)');
-    expect(STORE_HUES['360usmile'].fg).toBe('var(--store-usmile-fg)');
+describe('storeBadge() — bg + fg derived from the same token', () => {
+  it('returns an object with `bg` and `fg` keys for every known store', () => {
+    for (const store of KNOWN_STORES) {
+      const badge = storeBadge(store);
+      expect(badge).toHaveProperty('bg');
+      expect(badge).toHaveProperty('fg');
+      expect(typeof badge.bg).toBe('string');
+      expect(typeof badge.fg).toBe('string');
+    }
   });
 
-  it('storeBadgeHex returns chart-palette hex for known stores (backwards-compat shim)', () => {
-    expect(storeBadgeHex('uzoshop')).toBe('#06b6d4');
-    expect(storeBadgeHex('Zol Plus')).toBe('#ec4899');
-    expect(storeBadgeHex('360usmile')).toBe('#84cc16');
+  it('fg matches storeColor() so chart-line and badge-text use the same token', () => {
+    for (const store of KNOWN_STORES) {
+      expect(storeBadge(store).fg).toBe(storeColor(store));
+    }
+  });
+
+  it('bg is a color-mix of the fg token at 16% opacity (no second lookup)', () => {
+    const { bg, fg } = storeBadge('uzoshop');
+    expect(bg).toContain('color-mix');
+    expect(bg).toContain(fg);
+    expect(bg).toMatch(/16%/);
+  });
+
+  it('unknown store gets a deterministic badge from the fallback palette', () => {
+    const badge = storeBadge('unknown-future-store', 0);
+    expect(badge.fg).toMatch(/^#[0-9a-fA-F]{6}$/);
+    expect(badge.bg).toContain('color-mix');
+  });
+});
+
+describe('Task 1.11 — format.ts no longer owns store-color state', () => {
+  it('format.ts does NOT export STORE_HUES', () => {
+    expect((format as Record<string, unknown>).STORE_HUES).toBeUndefined();
+  });
+
+  it('format.ts does NOT export storeBadgeHex', () => {
+    expect((format as Record<string, unknown>).storeBadgeHex).toBeUndefined();
+  });
+
+  it('format.ts does NOT export storeColor (canonical lives in storeColors.ts)', () => {
+    expect((format as Record<string, unknown>).storeColor).toBeUndefined();
+  });
+
+  it('format.ts does NOT export storeBg (canonical lives in storeColors.ts)', () => {
+    expect((format as Record<string, unknown>).storeBg).toBeUndefined();
+  });
+
+  it('format.ts source file no longer contains the deleted identifiers', () => {
+    // Source-level check so a future re-introduction (even as a const that
+    // isn't re-exported) trips the test.
+    const src = readFileSync(
+      resolve(__dirname, '../format.ts'),
+      'utf8',
+    );
+    expect(src).not.toMatch(/\bSTORE_HUES\b/);
+    expect(src).not.toMatch(/\bSTORE_HEX_LIGHT\b/);
+    expect(src).not.toMatch(/\bstoreBadgeHex\b/);
   });
 });
