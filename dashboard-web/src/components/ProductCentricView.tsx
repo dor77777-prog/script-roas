@@ -334,7 +334,7 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
 
   if (isAllStores) {
     return (
-      <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-sm p-4 sm:p-5">
+      <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-glass p-4 sm:p-5">
         <h2 className="text-base font-semibold text-ink inline-flex items-center gap-2 mb-1.5">
           <Package size={16} className="text-ink-secondary" />
           מוצרים → קמפיינים
@@ -349,7 +349,7 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
 
   if (!campaignsData || !productsData) {
     return (
-      <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-sm p-4 sm:p-5">
+      <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-glass p-4 sm:p-5">
         <div className="text-sm text-ink-muted">טוען…</div>
       </section>
     );
@@ -357,7 +357,7 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
 
   if (allRows.length === 0) {
     return (
-      <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-sm p-4 sm:p-5">
+      <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-glass p-4 sm:p-5">
         <h2 className="text-base font-semibold text-ink inline-flex items-center gap-2 mb-1.5">
           <Package size={16} className="text-ink-secondary" />
           מוצרים → קמפיינים
@@ -370,7 +370,7 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
   }
 
   return (
-    <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-sm p-4 sm:p-5">
+    <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-glass p-4 sm:p-5">
       <div className="flex items-center justify-between gap-3 mb-3">
         <h2 className="text-base font-semibold text-ink inline-flex items-center gap-2">
           <Package size={16} className="text-ink-secondary" />
@@ -797,7 +797,7 @@ function HoverTooltip({
           className={cn(
             'absolute z-50 top-full mt-2 end-0',
             'w-[260px] sm:w-[300px] max-w-[min(90vw,320px)]',
-            'rounded-xl bg-ink text-canvas p-3 shadow-elevated',
+            'rounded-xl bg-ink text-canvas p-3 shadow-overlay',
             'text-xs leading-relaxed pointer-events-auto',
           )}
         >
@@ -869,7 +869,7 @@ function ColHelp({
             'absolute z-50 top-full mt-2',
             align === 'start' ? 'start-0' : 'end-0',
             'w-[260px] sm:w-[300px] max-w-[min(90vw,320px)]',
-            'rounded-xl bg-ink text-canvas p-3 shadow-elevated',
+            'rounded-xl bg-ink text-canvas p-3 shadow-overlay',
             'text-xs leading-relaxed pointer-events-auto',
             'font-normal text-start',
           )}

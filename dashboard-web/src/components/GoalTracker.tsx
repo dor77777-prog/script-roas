@@ -121,7 +121,7 @@ export function GoalTracker({ data }: Props) {
   // Two modes: goal set vs goal not set.
   if (goal == null && !editing) {
     return (
-      <section className="rounded-2xl bg-gradient-to-br from-accent/95 via-accent to-accent/80 text-white shadow-sm overflow-hidden">
+      <section className="rounded-2xl bg-gradient-to-br from-accent/95 via-accent to-accent/80 text-white shadow-glass overflow-hidden">
         <div className="p-4 sm:p-5">
           <div className="flex items-center gap-2.5 mb-3">
             <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-white/12 text-white shrink-0">
@@ -150,7 +150,7 @@ export function GoalTracker({ data }: Props) {
 
   if (editing) {
     return (
-      <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-sm p-4 sm:p-5">
+      <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-glass p-4 sm:p-5">
         <div className="flex items-center gap-2.5 mb-3">
           <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-accent/10 text-accent shrink-0">
             <Target size={14} />
@@ -181,7 +181,7 @@ export function GoalTracker({ data }: Props) {
               autoFocus
               aria-invalid={editError != null || draftIsInvalid}
               className={cn(
-                'w-full rounded-lg border bg-glass-1 pe-3 ps-12 py-2 text-sm focus:outline-none focus:shadow-focus',
+                'w-full rounded-lg border bg-glass-1 pe-3 ps-12 py-2 text-sm focus:outline-none',
                 editError != null || draftIsInvalid
                   ? 'border-status-warning focus:border-status-warning'
                   : 'border-glass-edge focus:border-accent',
@@ -244,7 +244,7 @@ export function GoalTracker({ data }: Props) {
     : 'bg-ink-muted';
 
   return (
-    <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-sm overflow-hidden">
+    <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
       <div className="p-4 sm:p-5">
         <div className="flex items-center justify-between gap-3 mb-3">
           <div className="flex items-center gap-2.5 min-w-0">

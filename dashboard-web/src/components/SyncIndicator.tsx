@@ -149,7 +149,7 @@ export function SyncIndicator() {
       {expanded && status === 'error' && (
         <div
           dir="rtl"
-          className="absolute top-full end-0 mt-1 w-80 max-w-[min(90vw,320px)] rounded-lg bg-glass-1 text-ink shadow-elevated border border-glass-edge p-3 z-50"
+          className="absolute top-full end-0 mt-1 w-80 max-w-[min(90vw,320px)] rounded-lg bg-glass-1 text-ink shadow-overlay border border-glass-edge p-3 z-50"
         >
           <div className="flex items-start gap-2">
             <span className="inline-flex w-7 h-7 rounded-md bg-status-redBg text-status-red items-center justify-center shrink-0">

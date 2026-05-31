@@ -80,6 +80,20 @@
   --blur-glass: blur(20px) saturate(140%);
   --blur-sheet: blur(36px) saturate(160%);
 
+  /* Shadow stack — Task 1.7. Three blessed tokens replace the prior
+     xs/sm/card/cardHover/elevated/focus/innerHighlight ladder. The
+     Tailwind `boxShadow` map only exposes glass / overlay / sheet — any
+     `shadow-sm|md|lg|xl|card|elevated|inner` regression silently no-ops.
+       --shadow-glass    cards, KPIs, badges (inset highlight + soft drop)
+       --shadow-overlay  tooltips, popovers, dropdown menus
+       --shadow-sheet    drawers, dialogs, modals (deeper drop + inset)
+     Focus rings live on the global :focus-visible rule near line 222,
+     so the legacy `focus:shadow-focus` is no longer needed at consumer
+     sites. */
+  --shadow-glass:   0 1px 0 0 oklch(100% 0 0 / 0.07) inset, 0 12px 24px -10px oklch(0% 0 0 / 0.35);
+  --shadow-overlay: 0 8px 20px -6px oklch(0% 0 0 / 0.5);
+  --shadow-sheet:   0 24px 48px -16px oklch(0% 0 0 / 0.6), 0 1px 0 0 oklch(100% 0 0 / 0.06) inset;
+
   /* Up/down deltas (mirrors band-green / band-red).
      Used by .num.up / .num.dn / sparkline +/- coloring. */
   --up: var(--band-green);

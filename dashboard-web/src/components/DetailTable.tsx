@@ -59,7 +59,7 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
       return <div className="p-8 text-center text-ink-muted text-sm">אין נתונים בטווח שבחרת</div>;
     }
     return (
-      <section className="rounded-xl bg-glass-1 border border-glass-edge p-8 text-center text-ink-muted shadow-sm">
+      <section className="rounded-xl bg-glass-1 border border-glass-edge p-8 text-center text-ink-muted shadow-glass">
         אין נתונים בטווח שבחרת
       </section>
     );
@@ -165,7 +165,7 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
   }
 
   return (
-    <section className="rounded-xl bg-glass-1 border border-glass-edge shadow-sm overflow-hidden">
+    <section className="rounded-xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
       <h2 className="flex items-center gap-2 text-base font-semibold text-ink px-5 py-4 border-b border-glass-edge">
         <Table size={18} className="text-ink-secondary" />
         פירוט יומי

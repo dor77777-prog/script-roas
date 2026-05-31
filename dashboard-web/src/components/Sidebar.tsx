@@ -241,7 +241,7 @@ export function Sidebar({
         aria-hidden={!isMobileOpen}
         className={cn(
           'fixed inset-y-0 start-0 w-64 max-w-[80vw] z-50 md:hidden',
-          'bg-glass-1 text-ink shadow-elevated overflow-y-auto',
+          'bg-glass-1 text-ink shadow-sheet overflow-y-auto',
           'flex flex-col transition-transform duration-DEFAULT',
           isMobileOpen ? 'translate-x-0' : 'translate-x-full',
         )}

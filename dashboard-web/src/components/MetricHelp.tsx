@@ -111,7 +111,7 @@ export function MetricHelp({ content, className, subtle = true }: Props) {
           className={cn(
             'absolute z-30 top-full mt-2 end-0',
             'w-[260px] sm:w-[300px] max-w-[min(90vw,320px)]',
-            'rounded-xl bg-ink text-canvas p-3 shadow-elevated',
+            'rounded-xl bg-ink text-canvas p-3 shadow-overlay',
             'text-xs leading-relaxed animate-fade-in',
             'pointer-events-auto',
           )}

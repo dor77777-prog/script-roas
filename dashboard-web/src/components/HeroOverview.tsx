@@ -263,7 +263,7 @@ export function HeroOverview({ data, filters }: Props) {
   return (
     <section
       className={cn(
-        'relative overflow-hidden rounded-2xl text-white shadow-elevated',
+        'relative overflow-hidden rounded-2xl text-white shadow-glass',
         // LIGHT mode: bold navy brand gradient (per user preference — the
         // dark indigo card stands out as the hero on a light page).
         'bg-[linear-gradient(135deg,var(--gradient-hero-from),var(--gradient-hero-via)_45%,var(--gradient-hero-to))]',

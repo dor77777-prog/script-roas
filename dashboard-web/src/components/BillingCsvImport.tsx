@@ -202,7 +202,7 @@ export function BillingCsvImport({
                 };
               }));
             }}
-            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-2 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
+            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-2 text-sm focus:outline-none focus:border-accent"
           >
             {storeNames.map(s => (
               <option key={s} value={s}>{s}</option>
@@ -237,7 +237,7 @@ export function BillingCsvImport({
           placeholder="Bill number,Issue date,Currency,Total,..."
           rows={6}
           dir="ltr"
-          className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-2 text-xs font-mono leading-relaxed focus:outline-none focus:border-accent focus:shadow-focus"
+          className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-2 text-xs font-mono leading-relaxed focus:outline-none focus:border-accent"
         />
         <Button
           variant="secondary"

@@ -101,7 +101,7 @@ export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
             'absolute z-[15] top-full mt-2 start-0',
             'w-[320px] sm:w-[340px] max-w-[min(86vw,360px)]',
             'rounded-xl bg-glass-1 text-ink border border-glass-edge',
-            'shadow-elevated p-3.5',
+            'shadow-overlay p-3.5',
             'text-[12px] leading-relaxed text-start animate-fade-in',
           )}
           onClick={(e) => e.stopPropagation()}

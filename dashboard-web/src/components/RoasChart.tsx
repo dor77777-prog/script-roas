@@ -214,7 +214,7 @@ export function RoasChart({ data, stores, rows, bare = false }: Props) {
   if (bare) return <div className="p-3 sm:p-5">{chart}</div>;
 
   return (
-    <section className="rounded-xl bg-glass-1 border border-glass-edge p-3 sm:p-5 shadow-sm">
+    <section className="rounded-xl bg-glass-1 border border-glass-edge p-3 sm:p-5 shadow-glass">
       <h2 className="flex items-center gap-2 text-sm sm:text-base font-semibold text-ink mb-3 sm:mb-4">
         <TrendingUp size={18} className="text-ink-secondary" />
         מגמת ROAS לאורך זמן

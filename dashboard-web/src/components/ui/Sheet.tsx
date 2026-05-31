@@ -7,7 +7,7 @@ import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const sheetVariants = cva(
-  'fixed z-50 bg-glass-1 text-ink shadow-xl border-glass-edge transition ease-out animate-in slide-in-from-end',
+  'fixed z-50 bg-glass-1 text-ink shadow-sheet border-glass-edge transition ease-out animate-in slide-in-from-end',
   {
     variants: {
       side: {

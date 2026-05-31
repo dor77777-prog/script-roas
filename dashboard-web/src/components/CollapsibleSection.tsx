@@ -58,7 +58,7 @@ export function CollapsibleSection({
   }
 
   return (
-    <section className="rounded-xl bg-glass-1 border border-glass-edge shadow-sm overflow-hidden">
+    <section className="rounded-xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
       <Button
         type="button"
         variant="ghost"

@@ -163,7 +163,7 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
         type="button"
         size="sm"
         onClick={() => { setOpen(true); setReport(''); }}
-        className="gap-2 shadow-sm"
+        className="gap-2 shadow-glass"
       >
         <Bot size={15} />
         ייצא דוח ל-AI
@@ -176,7 +176,7 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
         >
           <div
             dir="rtl"
-            className="bg-glass-1 w-full sm:max-w-3xl sm:mx-4 rounded-t-2xl sm:rounded-2xl shadow-elevated border border-glass-edge max-h-[90vh] flex flex-col"
+            className="bg-glass-1 w-full sm:max-w-3xl sm:mx-4 rounded-t-2xl sm:rounded-2xl shadow-sheet border border-glass-edge max-h-[90vh] flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}

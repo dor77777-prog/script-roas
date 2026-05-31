@@ -36,7 +36,7 @@ export const SelectContent = forwardRef<
     <RadixSelect.Content
       ref={ref}
       className={cn(
-        'z-50 overflow-hidden rounded-md border border-glass-edge bg-glass-1 shadow-md text-ink',
+        'z-50 overflow-hidden rounded-md border border-glass-edge bg-glass-1 shadow-overlay text-ink',
         className,
       )}
       position="popper"

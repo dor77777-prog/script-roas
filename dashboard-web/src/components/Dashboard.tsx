@@ -591,7 +591,7 @@ function CampaignsTab({
       />
       <Filters filters={filters} stores={data.stores} onChange={setFilters} />
       <QuadrantScatterCard filters={filters} />
-      <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-sm overflow-hidden">
+      <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
         <CampaignsTable
           range={filters.range}
           store={filters.store}
@@ -682,7 +682,7 @@ function ProductsTab({
       </div>
 
       {subTab === 'table' && (
-        <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-sm overflow-hidden">
+        <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
           <ProductsTable
             range={filters.range}
             store={filters.store}
@@ -726,7 +726,7 @@ function DetailTab({
         description="כל שורה בטבלה היא (יום × חנות) — הוצאות פייסבוק, גוגל, הכנסות, ROAS, ורווח. עד 100 שורות אחרונות בטווח הנבחר. ROAS אדום עם '0' = יום שהוצאת בו כסף אבל לא היו מכירות (כשל)."
       />
       <Filters filters={filters} stores={stores} onChange={setFilters} />
-      <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-sm overflow-hidden">
+      <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
         <DetailTable rows={filtered.cur} bare />
       </div>
     </div>

@@ -21,7 +21,7 @@ export function YearSelector({ value, onChange, startYear, endYear }: Props) {
       <select
         value={String(selected)}
         onChange={e => onChange?.(parseInt(e.target.value, 10))}
-        className="appearance-none rounded-lg border border-glass-edge bg-glass-1 ps-3 pe-9 py-2.5 sm:py-2 text-sm font-medium text-ink hover:border-glass-edge-hot focus:outline-none focus:border-accent focus:shadow-focus transition-colors cursor-pointer"
+        className="appearance-none rounded-lg border border-glass-edge bg-glass-1 ps-3 pe-9 py-2.5 sm:py-2 text-sm font-medium text-ink hover:border-glass-edge-hot focus:outline-none focus:border-accent transition-colors cursor-pointer"
       >
         {years.map(y => (
           <option key={y} value={String(y)}>

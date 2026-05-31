@@ -160,7 +160,7 @@ export function CampaignsColumnsMenu({
         <div
           role="dialog"
           aria-label="עריכת עמודות"
-          className="absolute end-0 top-full mt-1 z-30 w-[300px] rounded-xl border border-glass-edge bg-glass-1 shadow-elevated p-3"
+          className="absolute end-0 top-full mt-1 z-30 w-[300px] rounded-xl border border-glass-edge bg-glass-1 shadow-overlay p-3"
         >
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold text-ink">

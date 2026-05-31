@@ -219,7 +219,7 @@ export function InsightsBoard({ data }: Props) {
   }, [grouped]);
 
   return (
-    <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-sm overflow-hidden">
+    <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
       {/* Clickable header — toggles the whole board open/closed. */}
       <Button
         type="button"

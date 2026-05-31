@@ -18,7 +18,7 @@ export const Switch = forwardRef<
     )}
     {...props}
   >
-    <RadixSwitch.Thumb className="block h-4 w-4 rounded-full bg-glass-1 shadow-sm transition-transform data-[state=checked]:translate-x-4 rtl:data-[state=checked]:-translate-x-4 translate-x-0.5" />
+    <RadixSwitch.Thumb className="block h-4 w-4 rounded-full bg-glass-1 shadow-glass transition-transform data-[state=checked]:translate-x-4 rtl:data-[state=checked]:-translate-x-4 translate-x-0.5" />
   </RadixSwitch.Root>
 ));
 Switch.displayName = RadixSwitch.Root.displayName;

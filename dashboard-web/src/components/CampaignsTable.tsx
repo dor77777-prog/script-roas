@@ -2398,7 +2398,7 @@ function ColumnHeaderTh({
             'absolute z-[15] top-full mt-2 end-0',
             'w-[260px] sm:w-[280px] max-w-[min(85vw,300px)]',
             'rounded-xl bg-ink text-canvas px-3 py-2.5',
-            'shadow-elevated text-[11px] sm:text-[12px] leading-relaxed',
+            'shadow-overlay text-[11px] sm:text-[12px] leading-relaxed',
             'pointer-events-none animate-fade-in font-normal text-start whitespace-normal',
           )}
         >

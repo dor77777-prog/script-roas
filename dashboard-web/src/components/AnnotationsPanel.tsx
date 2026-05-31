@@ -81,7 +81,7 @@ export function AnnotationsPanel({ range, store }: Props) {
   }
 
   return (
-    <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-sm overflow-hidden">
+    <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
       {/* Clickable header */}
       <Button
         type="button"
@@ -286,7 +286,7 @@ function AnnotationForm({
               if (e.key === 'Enter') commit();
               if (e.key === 'Escape') onCancel();
             }}
-            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
+            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent"
           />
         </div>
         <div>
@@ -310,7 +310,7 @@ function AnnotationForm({
             if (e.key === 'Enter') commit();
             if (e.key === 'Escape') onCancel();
           }}
-          className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
+          className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent"
         />
       </div>
       {storeOptions.length > 0 && (

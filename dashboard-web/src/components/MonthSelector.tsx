@@ -23,7 +23,7 @@ export function MonthSelector({ value, onChange }: Props) {
           const v = e.target.value;
           onChange(v === 'all' ? null : parseInt(v, 10));
         }}
-        className="appearance-none rounded-lg border border-glass-edge bg-glass-1 ps-3 pe-9 py-2.5 sm:py-2 text-sm font-medium text-ink hover:border-glass-edge-hot focus:outline-none focus:border-accent focus:shadow-focus transition-colors cursor-pointer"
+        className="appearance-none rounded-lg border border-glass-edge bg-glass-1 ps-3 pe-9 py-2.5 sm:py-2 text-sm font-medium text-ink hover:border-glass-edge-hot focus:outline-none focus:border-accent transition-colors cursor-pointer"
       >
         <option value="all">כל השנה</option>
         {HE_MONTHS.map((label, idx) => (

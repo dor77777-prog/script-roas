@@ -370,7 +370,7 @@ function MonthBlockPerStore({
   const byDate = new Map(rows.map(r => [r.date, r]));
 
   return (
-    <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-sm overflow-hidden">
+    <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
       <Button
         variant="ghost"
         onClick={() => setOpen(!open)}
@@ -496,7 +496,7 @@ function MonthBlockSummary({
   const totalCell = roasCell(totalRoas, totalRev, totalSpend);
 
   return (
-    <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-sm overflow-hidden">
+    <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
       <Button
         variant="ghost"
         onClick={() => setOpen(!open)}

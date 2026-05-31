@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
  *     </ChartTooltipRow>
  *   </ChartTooltip>
  *
- * The card uses the new OKLCH tokens (bg-glass-1, border-glass-edge, shadow-lg)
+ * The card uses the new OKLCH tokens (bg-glass-1, border-glass-edge, shadow-overlay)
  * so it renders correctly in both light and dark themes.
  */
 export function ChartTooltip({
@@ -28,7 +28,7 @@ export function ChartTooltip({
       dir="rtl"
       className={cn(
         'rounded-lg bg-glass-1/95 border border-glass-edge text-ink',
-        'px-3 py-2 text-xs shadow-lg backdrop-blur-sm',
+        'px-3 py-2 text-xs shadow-overlay backdrop-blur-sm',
         'min-w-[160px]',
         className,
       )}

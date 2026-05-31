@@ -230,7 +230,7 @@ export function ProductPickerModal({
       />
       <div
         dir="rtl"
-        className="relative w-full h-full m-0 sm:m-auto sm:w-auto sm:max-w-[560px] sm:max-h-[88vh] sm:h-auto bg-glass-1 rounded-none sm:rounded-2xl shadow-elevated border-0 sm:border sm:border-glass-edge flex flex-col"
+        className="relative w-full h-full m-0 sm:m-auto sm:w-auto sm:max-w-[560px] sm:max-h-[88vh] sm:h-auto bg-glass-1 rounded-none sm:rounded-2xl shadow-sheet border-0 sm:border sm:border-glass-edge flex flex-col"
       >
         <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-glass-edge">
           <div className="min-w-0 flex items-center gap-2.5">
@@ -293,7 +293,7 @@ export function ProductPickerModal({
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="חפש מוצר…"
-              className="w-full rounded-lg border border-glass-edge bg-glass-1 ps-3 pe-9 py-2 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
+              className="w-full rounded-lg border border-glass-edge bg-glass-1 ps-3 pe-9 py-2 text-sm focus:outline-none focus:border-accent"
               autoFocus
             />
           </div>

@@ -146,7 +146,7 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
   const maxAmount = Math.max(revenue, totalCosts, Math.abs(finalProfit), 1);
 
   return (
-    <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-elevated overflow-hidden">
+    <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
       {/* Hero strip — always visible. Three big numbers side-by-side with
           proportional bars so a glance answers "did I make money?" without
           expanding anything. */}
@@ -155,7 +155,7 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
       >
         <div className="flex items-start justify-between gap-3 mb-4">
           <div className="flex items-center gap-2.5 min-w-0">
-            <span className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-accent text-white shrink-0 shadow-sm">
+            <span className="inline-flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-accent text-white shrink-0 shadow-glass">
               <Receipt size={17} />
             </span>
             <div className="min-w-0">

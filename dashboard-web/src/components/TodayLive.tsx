@@ -401,7 +401,7 @@ export function TodayLive({
         'relative overflow-hidden rounded-2xl border transition-colors duration-500',
         liveTone.cardBg,
         liveTone.cardBorder,
-        'shadow-sm animate-fade-in',
+        'shadow-glass animate-fade-in',
       )}
     >
       {/* Decorative corner blob — tinted to match the current ROAS band so
@@ -523,7 +523,7 @@ export function TodayLive({
               return (
                 <div
                   key={s.store}
-                  className="rounded-xl bg-glass-1/90 backdrop-blur-sm border border-glass-edge p-3 shadow-xs"
+                  className="rounded-xl bg-glass-1/90 backdrop-blur-sm border border-glass-edge p-3 shadow-glass"
                 >
                   {/* Header: store name + larger ROAS chip — keeps ROAS the
                       headline metric of the card. Chip text bumped from
@@ -693,7 +693,7 @@ function LiveStat({
   accent?: 'pos' | 'neg';
 }) {
   return (
-    <div className="rounded-xl bg-glass-1 border border-glass-edge p-2.5 sm:p-4 shadow-xs">
+    <div className="rounded-xl bg-glass-1 border border-glass-edge p-2.5 sm:p-4 shadow-glass">
       <div className="flex items-center justify-between mb-1 sm:mb-1.5">
         <span className="text-[11px] sm:text-xs font-medium text-ink-secondary tracking-wide truncate">
           {label}

@@ -110,7 +110,7 @@ function StoreCard({
 }) {
   const info = roasLabel(agg.roas);
   return (
-    <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-sm overflow-hidden">
+    <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
       {/* Color bar header */}
       <div
         className="px-4 sm:px-5 py-2.5 sm:py-3 text-white font-semibold flex items-center justify-between gap-2"

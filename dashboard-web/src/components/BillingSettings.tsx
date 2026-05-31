@@ -194,7 +194,7 @@ export function BillingSettings({ storeNames }: Props) {
             role="dialog"
             aria-modal="true"
             aria-labelledby="billing-settings-title"
-            className="bg-glass-1 w-full sm:max-w-3xl sm:mx-4 rounded-t-2xl sm:rounded-2xl shadow-elevated border border-glass-edge max-h-[92vh] flex flex-col"
+            className="bg-glass-1 w-full sm:max-w-3xl sm:mx-4 rounded-t-2xl sm:rounded-2xl shadow-sheet border border-glass-edge max-h-[92vh] flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}
@@ -723,7 +723,7 @@ function RecurringEditForm({
               if (e.key === 'Enter') commit();
               if (e.key === 'Escape') cancel();
             }}
-            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
+            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent"
           />
         </div>
         <div>
@@ -731,7 +731,7 @@ function RecurringEditForm({
           <select
             value={store}
             onChange={e => setStore(e.target.value)}
-            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
+            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent"
           >
             <option value="All">כל החנויות</option>
             {storeNames.map(s => (
@@ -744,7 +744,7 @@ function RecurringEditForm({
           <select
             value={source}
             onChange={e => setSource(e.target.value as CostSource)}
-            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
+            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent"
           >
             {Object.entries(SOURCE_LABEL).map(([k, label]) => (
               <option key={k} value={k}>{label}</option>
@@ -772,7 +772,7 @@ function RecurringEditForm({
                 'w-full rounded-lg border bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none tabular-nums',
                 editError
                   ? 'border-status-red focus:border-status-red focus:shadow-[0_0_0_2px_rgba(220,38,38,0.15)]'
-                  : 'border-glass-edge focus:border-accent focus:shadow-focus',
+                  : 'border-glass-edge focus:border-accent',
               )}
             />
           ) : (
@@ -792,7 +792,7 @@ function RecurringEditForm({
                 'w-full rounded-lg border bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none tabular-nums',
                 editError
                   ? 'border-status-red focus:border-status-red focus:shadow-[0_0_0_2px_rgba(220,38,38,0.15)]'
-                  : 'border-glass-edge focus:border-accent focus:shadow-focus',
+                  : 'border-glass-edge focus:border-accent',
               )}
             />
           )}
@@ -857,7 +857,7 @@ function RecurringEditForm({
           value={notes}
           onChange={e => setNotes(e.target.value)}
           placeholder="לדוגמה: Klaviyo Pro plan, מתחיל מ-12.5%"
-          className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
+          className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent"
         />
       </div>
       <div className="flex items-center gap-2 pt-1">
@@ -1087,7 +1087,7 @@ function OneTimeEditForm({
             type="date"
             value={date}
             onChange={e => setDate(e.target.value)}
-            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm tabular-nums focus:outline-none focus:border-accent focus:shadow-focus"
+            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm tabular-nums focus:outline-none focus:border-accent"
           />
         </div>
         <div>
@@ -1095,7 +1095,7 @@ function OneTimeEditForm({
           <select
             value={store}
             onChange={e => setStore(e.target.value)}
-            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
+            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent"
           >
             <option value="All">כל החנויות</option>
             {storeNames.map(s => (
@@ -1115,7 +1115,7 @@ function OneTimeEditForm({
             if (e.key === 'Enter') commit();
             if (e.key === 'Escape') cancel();
           }}
-          className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
+          className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent"
         />
       </div>
       <div className="grid grid-cols-2 gap-2">
@@ -1124,7 +1124,7 @@ function OneTimeEditForm({
           <select
             value={source}
             onChange={e => setSource(e.target.value as CostSource)}
-            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
+            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent"
           >
             {Object.entries(SOURCE_LABEL).map(([k, label]) => (
               <option key={k} value={k}>{label}</option>
@@ -1149,7 +1149,7 @@ function OneTimeEditForm({
               'w-full rounded-lg border bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none tabular-nums',
               editError
                 ? 'border-status-red focus:border-status-red focus:shadow-[0_0_0_2px_rgba(220,38,38,0.15)]'
-                : 'border-glass-edge focus:border-accent focus:shadow-focus',
+                : 'border-glass-edge focus:border-accent',
             )}
           />
           {editError && (
@@ -1167,7 +1167,7 @@ function OneTimeEditForm({
         <input
           value={notes}
           onChange={e => setNotes(e.target.value)}
-          className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
+          className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent"
         />
       </div>
       <div className="flex items-center gap-2 pt-1">

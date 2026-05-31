@@ -15,7 +15,7 @@ import tailwindcssAnimate from 'tailwindcss-animate';
  *
  *   - Numbers everywhere use tabular-nums; display weights stay lighter
  *     (300-500) so the dashboard reads "editorial / fintech".
- *   - Shadows are layered & cool-tinted (rgba(15, 31, 81, …)) — not flat black.
+ *   - Shadows: 3 blessed tokens (glass / overlay / sheet) — see Task 1.7.
  *   - Border radius scale: 6 (inputs) · 8 (buttons) · 12 (cards) · 16 (hero).
  *   - Easing uses ease-out-cubic only; no bounce/elastic.
  */
@@ -164,16 +164,14 @@ const config: Config = {
       },
 
       boxShadow: {
-        // Cool-tinted, layered. Two-level Stripe-style.
-        xs:   '0 1px 1px 0 rgba(15, 31, 81, 0.04)',
-        sm:   '0 1px 2px 0 rgba(15, 31, 81, 0.05), 0 1px 1px 0 rgba(15, 31, 81, 0.04)',
-        card: '0 1px 3px 0 rgba(15, 31, 81, 0.06), 0 1px 1px 0 rgba(15, 31, 81, 0.04)',
-        cardHover:
-              '0 4px 12px -2px rgba(15, 31, 81, 0.10), 0 2px 4px -1px rgba(15, 31, 81, 0.05)',
-        elevated:
-              '0 12px 32px -6px rgba(15, 31, 81, 0.12), 0 4px 8px -2px rgba(15, 31, 81, 0.06)',
-        focus: '0 0 0 3px rgba(13, 54, 128, 0.18)',
-        innerHighlight: 'inset 0 1px 0 0 rgba(255,255,255,0.6)',
+        // Wave-1 Task 1.7 — 3 blessed shadows. The prior
+        // xs/sm/card/cardHover/elevated/focus/innerHighlight ladder is GONE;
+        // any `shadow-sm|md|lg|xl|card|elevated|inner` regression resolves
+        // to nothing (silently flat surface). Focus rings live on the global
+        // `:focus-visible` rule in globals.css.
+        glass:   'var(--shadow-glass)',
+        overlay: 'var(--shadow-overlay)',
+        sheet:   'var(--shadow-sheet)',
       },
 
       borderRadius: {

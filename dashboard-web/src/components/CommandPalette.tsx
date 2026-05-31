@@ -511,7 +511,7 @@ export function CommandPalette({
             role="dialog"
             aria-modal="true"
             aria-label="Command Palette"
-            className="w-full max-w-xl bg-glass-1 rounded-2xl shadow-elevated border border-glass-edge overflow-hidden animate-fade-in-up"
+            className="w-full max-w-xl bg-glass-1 rounded-2xl shadow-sheet border border-glass-edge overflow-hidden animate-fade-in-up"
             onClick={e => e.stopPropagation()}
           >
             {/* Search input */}
