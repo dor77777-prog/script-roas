@@ -29,6 +29,7 @@ import { FROZEN_USD_TO_CAD } from '@/lib/constants';
 import { useBillingRecurring } from '@/lib/hooks/useBillingRecurring';
 import { useBillingOneTime } from '@/lib/hooks/useBillingOneTime';
 import { useDrawerEsc } from '@/lib/drawerStack';
+import { Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle } from '@/components/ui/Sheet';
 import { BillingCsvImport } from './BillingCsvImport';
 
 type StoreMetaRow = {
@@ -184,105 +185,98 @@ export function BillingSettings({ storeNames }: Props) {
         </span>
       </Button>
 
-      {open && (
-        <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-ink/35 backdrop-blur-sm animate-fade-in"
-          onClick={() => setOpen(false)}
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent
+          side="bottom"
+          dir="rtl"
+          aria-labelledby="billing-settings-title"
+          hideDefaultClose
+          className="h-[92vh] sm:h-[88vh] max-h-[92vh] flex flex-col p-0 sm:mx-auto sm:max-w-3xl rounded-t-2xl sm:rounded-2xl sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2 sm:inset-x-0"
         >
-          <div
-            dir="rtl"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="billing-settings-title"
-            className="bg-glass-1 w-full sm:max-w-3xl sm:mx-4 rounded-t-2xl sm:rounded-2xl shadow-sheet border border-glass-edge max-h-[92vh] flex flex-col"
-            onClick={e => e.stopPropagation()}
-          >
-            {/* Header */}
-            <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-glass-edge">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent/10 text-accent shrink-0">
-                  <Receipt size={16} />
-                </span>
-                <div className="min-w-0">
-                  <h2 id="billing-settings-title" className="text-sm sm:text-base font-semibold text-ink tracking-tight truncate">
-                    עלויות חודשיות
-                  </h2>
-                  <p className="text-[10px] sm:text-xs text-ink-muted mt-0.5 truncate">
-                    Shopify plan, אפליקציות, שירותים — מתעדכנים ב-P&amp;L האמיתי
-                  </p>
-                </div>
+          <SheetHeader className="flex items-center justify-between gap-3 py-3 sm:px-5">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent/10 text-accent shrink-0">
+                <Receipt size={16} />
+              </span>
+              <div className="min-w-0">
+                <SheetTitle id="billing-settings-title" className="text-sm sm:text-base truncate">
+                  עלויות חודשיות
+                </SheetTitle>
+                <p className="text-[10px] sm:text-xs text-ink-muted mt-0.5 truncate">
+                  Shopify plan, אפליקציות, שירותים — מתעדכנים ב-P&amp;L האמיתי
+                </p>
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setOpen(false)}
-                aria-label="סגור"
-              >
-                <X size={18} />
-              </Button>
-            </header>
-
-            {/* Tabs */}
-            <nav className="px-4 sm:px-5 py-2 border-b border-glass-edge flex items-center gap-1">
-              {([
-                { key: 'recurring' as Tab, label: 'חודשי קבוע', count: recurring.length },
-                { key: 'onetime' as Tab, label: 'חד-פעמיים', count: oneTime.length },
-                { key: 'import' as Tab, label: 'ייבא CSV מ-Shopify', count: 0 },
-              ]).map(t => (
-                <Button
-                  key={t.key}
-                  variant={tab === t.key ? 'ghost' : 'ghost'}
-                  size="sm"
-                  onClick={() => setTab(t.key)}
-                  className={cn(
-                    'h-auto px-3 py-1.5 text-xs sm:text-sm font-medium',
-                    tab === t.key
-                      ? 'bg-accent/10 text-accent'
-                      : 'text-ink-secondary',
-                  )}
-                >
-                  {t.label}
-                  {t.count > 0 && (
-                    <span className="ml-1.5 inline-block text-[10px] tabular-nums text-ink-muted">
-                      ({t.count})
-                    </span>
-                  )}
-                </Button>
-              ))}
-            </nav>
-
-            {/* Body */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-5">
-              {tab === 'recurring' && (
-                <RecurringTab
-                  items={recurring}
-                  storeNames={storeNames}
-                  detectedPlans={detectedPlans}
-                  onChange={persistRecurring}
-                />
-              )}
-              {tab === 'onetime' && (
-                <OneTimeTab
-                  items={oneTime}
-                  storeNames={storeNames}
-                  onChange={persistOneTime}
-                />
-              )}
-              {tab === 'import' && (
-                <BillingCsvImport
-                  storeNames={storeNames}
-                  currentRecurring={recurring}
-                  onImported={(newRecurring, newOneTime, destination) => {
-                    if (newRecurring.length > 0) persistRecurring([...newRecurring, ...recurring]);
-                    if (newOneTime.length > 0) persistOneTime([...newOneTime, ...oneTime]);
-                    setTab(destination);
-                  }}
-                />
-              )}
             </div>
-          </div>
-        </div>
-      )}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setOpen(false)}
+              aria-label="סגור"
+              className="z-20"
+            >
+              <X size={18} />
+            </Button>
+          </SheetHeader>
+
+          {/* Tabs */}
+          <nav className="px-4 sm:px-5 py-2 border-b border-glass-edge flex items-center gap-1 bg-glass-2/95 [backdrop-filter:var(--blur-glass)]">
+            {([
+              { key: 'recurring' as Tab, label: 'חודשי קבוע', count: recurring.length },
+              { key: 'onetime' as Tab, label: 'חד-פעמיים', count: oneTime.length },
+              { key: 'import' as Tab, label: 'ייבא CSV מ-Shopify', count: 0 },
+            ]).map(t => (
+              <Button
+                key={t.key}
+                variant={tab === t.key ? 'ghost' : 'ghost'}
+                size="sm"
+                onClick={() => setTab(t.key)}
+                className={cn(
+                  'h-auto px-3 py-1.5 text-xs sm:text-sm font-medium',
+                  tab === t.key
+                    ? 'bg-accent/10 text-accent'
+                    : 'text-ink-secondary',
+                )}
+              >
+                {t.label}
+                {t.count > 0 && (
+                  <span className="ml-1.5 inline-block text-[10px] tabular-nums text-ink-muted">
+                    ({t.count})
+                  </span>
+                )}
+              </Button>
+            ))}
+          </nav>
+
+          <SheetBody className="sm:px-5">
+            {tab === 'recurring' && (
+              <RecurringTab
+                items={recurring}
+                storeNames={storeNames}
+                detectedPlans={detectedPlans}
+                onChange={persistRecurring}
+              />
+            )}
+            {tab === 'onetime' && (
+              <OneTimeTab
+                items={oneTime}
+                storeNames={storeNames}
+                onChange={persistOneTime}
+              />
+            )}
+            {tab === 'import' && (
+              <BillingCsvImport
+                storeNames={storeNames}
+                currentRecurring={recurring}
+                onImported={(newRecurring, newOneTime, destination) => {
+                  if (newRecurring.length > 0) persistRecurring([...newRecurring, ...recurring]);
+                  if (newOneTime.length > 0) persistOneTime([...newOneTime, ...oneTime]);
+                  setTab(destination);
+                }}
+              />
+            )}
+          </SheetBody>
+        </SheetContent>
+      </Sheet>
     </>
   );
 }

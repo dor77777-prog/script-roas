@@ -23,7 +23,7 @@ import { buildAdsManagerLink, type AdAccountMap } from '@/lib/campaignsLinks';
 import { readOptimized, toggleOptimized } from '@/lib/campaignOptimized';
 import { useDrawerEsc } from '@/lib/drawerStack';
 import { buildDateRangeKey } from '@/lib/dateRange';
-import { Sheet, SheetContent } from '@/components/ui/Sheet';
+import { Sheet, SheetContent, SheetHeader, SheetBody } from '@/components/ui/Sheet';
 import { Badge, BADGE_TONE_BG, type BadgeTone } from '@/components/ui/Badge';
 import { Stat } from '@/components/ui/Stat';
 import { TableBase } from '@/components/ui/TableBase';
@@ -325,7 +325,7 @@ export function AdsDrawer({
           isFullscreen && 'w-full sm:w-full max-w-full',
         )}
       >
-        <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-glass-edge">
+        <SheetHeader className="flex items-center justify-between gap-3 py-3 sm:px-5">
           <div className="min-w-0 flex items-center gap-2.5">
             <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent/10 text-accent shrink-0">
               <Layers size={16} />
@@ -350,9 +350,9 @@ export function AdsDrawer({
               {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
             </Button>
           </div>
-        </header>
+        </SheetHeader>
 
-        <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+        <SheetBody className="sm:px-5 space-y-4">
           {isLoading && (
             <div className="text-center text-sm text-ink-muted py-10">
               טוען נתוני מודעות…
@@ -536,7 +536,7 @@ export function AdsDrawer({
           <div className="text-[10px] text-ink-muted text-center pt-2">
             לחץ Esc או על הרקע לסגירה
           </div>
-        </div>
+        </SheetBody>
       </SheetContent>
     </Sheet>
   );

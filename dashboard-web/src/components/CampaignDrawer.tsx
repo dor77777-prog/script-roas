@@ -91,7 +91,7 @@ import {
   ChartTooltipRow,
   ChartTooltipValue,
 } from '@/components/ui/chart/ChartTooltip';
-import { Sheet, SheetContent } from '@/components/ui/Sheet';
+import { Sheet, SheetContent, SheetHeader, SheetBody } from '@/components/ui/Sheet';
 import { Badge, type BadgeTone } from '@/components/ui/Badge';
 import { Stat } from '@/components/ui/Stat';
 
@@ -793,12 +793,12 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
         aria-labelledby="campaign-drawer-title"
         style={{ viewTransitionName: 'drawer-panel' as never }}
         className={cn(
-          'overflow-y-auto flex flex-col p-0',
+          'flex flex-col p-0',
           !isFullscreen && 'w-full sm:w-[min(640px,100vw)]',
           isFullscreen && 'w-full sm:w-full max-w-full',
         )}
       >
-        <header className="sticky top-0 bg-glass-1/95 backdrop-blur-md z-10 px-4 sm:px-6 py-4 border-b border-glass-edge">
+        <SheetHeader>
           <div className="flex items-start justify-between gap-3 mb-2">
             <div className="flex items-center gap-2 min-w-0 flex-1">
               <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent/8 text-accent shrink-0">
@@ -841,9 +841,9 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
               פתח ב-<bdi dir="ltr">{summary.platform}</bdi> Ads Manager
             </a>
           )}
-        </header>
+        </SheetHeader>
 
-        <div className="p-4 sm:p-6 space-y-5 sm:space-y-6">
+        <SheetBody className="space-y-5 sm:space-y-6">
           {/* Phase D Task 12 (2026-05-30) — full status + freshness panel.
               Mounts immediately below the header so the operator sees the
               configured/effective/delivery + freshness metadata before any
@@ -1528,7 +1528,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
           <div className="text-[10px] text-ink-muted text-center pt-2">
             לחץ Esc או על הרקע לסגירה
           </div>
-        </div>
+        </SheetBody>
       </SheetContent>
 
       <ProductPickerModal
