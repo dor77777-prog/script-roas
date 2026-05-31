@@ -20,11 +20,11 @@
      separation. TikTok hue (12°) sits ≥13° from --band-red (22°) so a red
      ROAS band next to a TikTok line never collides — enforced by
      chartTokens.test.ts. */
-  --chart-platform-meta:    oklch(70% 0.18 257);
-  --chart-platform-google:  oklch(80% 0.15 90);
-  --chart-platform-tiktok:  oklch(72% 0.24 12);
-  --chart-platform-organic: oklch(75% 0.14 175);
-  --chart-platform-shopify: oklch(70% 0.16 165);
+  --chart-platform-meta:    #1877f2;  /* mockup-locked brand color */
+  --chart-platform-google:  #f4a200;  /* mockup-locked brand color */
+  --chart-platform-tiktok:  #ff2e7e;  /* mockup-locked brand color */
+  --chart-platform-organic: #14b8a6;  /* teal — mockup has no explicit organic; clear teal */
+  --chart-platform-shopify: #0fb37a;  /* shopify = e-commerce green */
 
   /* Stores — per-store hues for Per-Store row, store badges. */
   --store-uzo: oklch(72% 0.16 210);
@@ -37,6 +37,15 @@
   --accent-deep: oklch(54% 0.21 283);
   --accent-fg:   oklch(99% 0 0);
 
+  /* Sidebar — dark slim rail in BOTH themes (mockup keeps it dark on light too).
+     The logo gradient stays violet in BOTH themes (mockup .sb-logo
+     #7c6cff→#5a49f0) regardless of the theme accent. */
+  --sidebar:           #15182a;
+  --sidebar-fg:        #8b91ad;
+  --sidebar-fg-active: #ffffff;
+  --sidebar-logo-1:    #7c6cff;
+  --sidebar-logo-2:    #5a49f0;
+
   /* V4 band signal — see Task 1.3.
      Round-6 tuning (2026-05-31): orange hue shifted 55→45 (true orange,
      less amber) and orange chroma bumped 0.22→0.24 because the previous
@@ -45,11 +54,11 @@
      boosted (see .glass[data-band="…"] rules further down). NOTE: orange
      hue 45 still clears ≥13° from --chart-platform-tiktok (12°) so the
      colorCollisions guard stays green; google (90°) is 45° away. */
-  --band-red:    oklch(62% 0.26 25);
-  --band-orange: oklch(70% 0.24 45);
-  --band-green:  oklch(64% 0.24 145);
-  --band-blue:   oklch(62% 0.22 240);
-  --band-gray:   oklch(60% 0.012 250);
+  --band-red:    #ff6b81;  /* mockup-locked band stop */
+  --band-orange: #ffb24d;  /* mockup-locked band stop */
+  --band-green:  #34e2ad;  /* mockup-locked band stop */
+  --band-blue:   #5b8df0;  /* mockup-locked band stop */
+  --band-gray:   #828aae;  /* mockup-locked band stop */
   /* Task 4.1 — failure-cell token: spent money, zero sales = worst state */
   --cell-fail:    oklch(0% 0 0);
   --cell-fail-fg: oklch(100% 0 0);
@@ -134,10 +143,11 @@
   --shadow-overlay: 0 8px 24px rgba(0,0,0,0.5);
   --shadow-sheet:   0 24px 48px rgba(0,0,0,0.6);
 
-  /* Up/down deltas (mirrors band-green / band-red).
+  /* Up/down deltas — literal mockup green / red (NOT aliased to band-* so
+     deltas + spend/revenue sparklines use the exact mockup green/red).
      Used by .num.up / .num.dn / sparkline +/- coloring. */
-  --up: var(--band-green);
-  --dn: var(--band-red);
+  --up: #0fb37a;  /* mockup-locked delta-up */
+  --dn: #ef4d5b;  /* mockup-locked delta-down */
 
   /* Task 1.4 — freshness desaturation transition.
      Controls how long it takes for a card to fade from
@@ -155,24 +165,12 @@
      `--band-*` which is ANALYTIC grading. local/no-cross-palette-import
      enforces the split at lint time.
      ---------------------------------------------------------------------*/
-  --status-red:    oklch(64% 0.20 22);
-  --status-red-bg: oklch(42% 0.14 22);
-  --status-red-fg: oklch(96% 0.04 22);
-  --status-orange:    oklch(78% 0.16 75);
-  --status-orange-bg: oklch(45% 0.14 75);
-  --status-orange-fg: oklch(96% 0.04 75);
-  --status-green:    oklch(70% 0.18 145);
-  --status-green-bg: oklch(42% 0.14 145);
-  --status-green-fg: oklch(96% 0.04 145);
-  --status-blue:    oklch(68% 0.16 240);
-  --status-blue-bg: oklch(42% 0.14 240);
-  --status-blue-fg: oklch(96% 0.04 240);
-  --status-gray:    oklch(60% 0.012 250);
-  --status-gray-bg: oklch(42% 0.005 250);
-  --status-gray-fg: oklch(96% 0.005 250);
-  --status-warning:    oklch(78% 0.18 75);
-  --status-warning-bg: oklch(45% 0.14 75);
-  --status-warning-fg: oklch(96% 0.04 75);
+  --status-red:    #ef4d5b; --status-red-bg: rgba(239,77,91,0.18); --status-red-fg: #ff9aa8;
+  --status-orange: #f59e0b; --status-orange-bg: rgba(245,158,11,0.16); --status-orange-fg: #ffd08a;
+  --status-green:  #0fb37a; --status-green-bg: rgba(15,179,122,0.16); --status-green-fg: #5cf0c3;
+  --status-blue:   #3b82f6; --status-blue-bg: rgba(59,130,246,0.18); --status-blue-fg: #8bbcff;
+  --status-gray:   #828aae; --status-gray-bg: rgba(255,255,255,0.07); --status-gray-fg: #aab0cd;
+  --status-warning: #f59e0b; --status-warning-bg: rgba(245,158,11,0.16); --status-warning-fg: #ffd08a;
 
   /* Chart helper tokens (used by RoasChart axis grid + CPM-prev ghost line). */
   --chart-axis:     oklch(60% 0.015 250 / 0.6);
@@ -185,11 +183,11 @@
      --band-* directly; these chart-* aliases let the SVG paint the same
      colours without tripping the guard. Keep oklch values IN SYNC with
      the band tokens above (red/orange/green/blue). */
-  --chart-roas-line:    oklch(98% 0.008 80);
-  --chart-target-line:  oklch(70% 0.18 145);  /* mirrors --band-green */
-  --chart-pin-line:     oklch(78% 0.16 75);   /* mirrors --band-orange */
-  --chart-dot-max:      oklch(70% 0.18 145);  /* mirrors --band-green */
-  --chart-dot-min:      oklch(64% 0.22 22);   /* mirrors --band-red */
+  --chart-roas-line:    #eef1ff;             /* dark = light line on dark plot */
+  --chart-target-line:  #0fb37a;             /* mockup-locked green target */
+  --chart-pin-line:     #f59e0b;             /* mockup-locked amber pins */
+  --chart-dot-max:      #0fb37a;             /* mockup-locked green max-dot */
+  --chart-dot-min:      #ef4d5b;             /* mockup-locked red min-dot */
   --chart-grid-line:    oklch(100% 0 0 / 0.06);
 
   /* ---------------------------------------------------------------------
@@ -246,11 +244,11 @@
 [data-theme="light"] {
   /* Chart — platform-brand-mirrored. Same hues as dark; L darkened so each
      line reads against a near-white plot. */
-  --chart-platform-meta:    oklch(56% 0.20 257);
-  --chart-platform-google:  oklch(68% 0.16 90);
-  --chart-platform-tiktok:  oklch(62% 0.24 12);
-  --chart-platform-organic: oklch(60% 0.13 175);
-  --chart-platform-shopify: oklch(58% 0.15 165);
+  --chart-platform-meta:    #1877f2;  /* mockup-locked brand color (theme-independent) */
+  --chart-platform-google:  #f4a200;  /* mockup-locked brand color */
+  --chart-platform-tiktok:  #ff2e7e;  /* mockup-locked brand color */
+  --chart-platform-organic: #14b8a6;  /* teal — mockup has no explicit organic; clear teal */
+  --chart-platform-shopify: #0fb37a;  /* shopify = e-commerce green */
 
   /* Stores — same hues; mid-tone for legible badges on light. */
   --store-uzo: oklch(58% 0.16 210);
@@ -263,12 +261,20 @@
   --accent-deep: oklch(56% 0.095 199);  /* #0e8a99 */
   --accent-fg:   oklch(100% 0 0);
 
+  /* Sidebar — dark slim rail in BOTH themes (mockup keeps it dark on light too).
+     Logo stays violet in BOTH themes (mockup .sb-logo) regardless of accent. */
+  --sidebar:           #15182a;
+  --sidebar-fg:        #8b91ad;
+  --sidebar-fg-active: #ffffff;
+  --sidebar-logo-1:    #7c6cff;
+  --sidebar-logo-2:    #5a49f0;
+
   /* V4 band signal — same hues as dark; mid-tone L for read on light. */
-  --band-red:    oklch(57% 0.24 25);
-  --band-orange: oklch(64% 0.20 45);
-  --band-green:  oklch(56% 0.20 145);
-  --band-blue:   oklch(56% 0.20 240);
-  --band-gray:   oklch(64% 0.012 250);
+  --band-red:    #e11d48;  /* mockup-locked band stop (light) */
+  --band-orange: #f97316;  /* mockup-locked band stop (light) */
+  --band-green:  #0f9d6b;  /* mockup-locked band stop (light) */
+  --band-blue:   #2563eb;  /* mockup-locked band stop (light) */
+  --band-gray:   #949ab4;  /* mockup-locked band stop (light) */
   /* Task 4.1 — failure-cell token: pure black stands out on light canvas */
   --cell-fail:    oklch(0% 0 0);
   --cell-fail-fg: oklch(100% 0 0);
@@ -330,33 +336,21 @@
   --shadow-overlay: 0 8px 24px rgba(22,26,48,0.12);
   --shadow-sheet:   0 24px 48px rgba(22,26,48,0.16);
 
-  /* Up/down deltas — mirror band-green / band-red (light values). */
-  --up: var(--band-green);
-  --dn: var(--band-red);
+  /* Up/down deltas — literal mockup green / red (theme-independent). */
+  --up: #0fb37a;  /* mockup-locked delta-up */
+  --dn: #ef4d5b;  /* mockup-locked delta-down */
 
   /* Freshness desaturation transition — theme-invariant. */
   --motion-freshness: 600ms ease-out;
 
   /* Status palette — INVERTED for light: pale tint -bg + dark -fg text.
      Same hues as dark. base = mid signal; -fg on -bg clears 4.5:1. */
-  --status-red:    oklch(57% 0.20 22);
-  --status-red-bg: oklch(94% 0.045 22);
-  --status-red-fg: oklch(45% 0.17 22);
-  --status-orange:    oklch(70% 0.16 75);
-  --status-orange-bg: oklch(95% 0.045 75);
-  --status-orange-fg: oklch(50% 0.13 75);
-  --status-green:    oklch(58% 0.16 145);
-  --status-green-bg: oklch(94% 0.050 145);
-  --status-green-fg: oklch(43% 0.14 145);
-  --status-blue:    oklch(56% 0.15 240);
-  --status-blue-bg: oklch(94% 0.040 240);
-  --status-blue-fg: oklch(44% 0.14 240);
-  --status-gray:    oklch(60% 0.012 250);
-  --status-gray-bg: oklch(95% 0.004 250);
-  --status-gray-fg: oklch(45% 0.010 250);
-  --status-warning:    oklch(70% 0.16 75);
-  --status-warning-bg: oklch(95% 0.050 75);
-  --status-warning-fg: oklch(50% 0.13 75);
+  --status-red:    #ef4d5b; --status-red-bg: #ffe9ec; --status-red-fg: #d22c3c;
+  --status-orange: #f59e0b; --status-orange-bg: #fff3da; --status-orange-fg: #b45309;
+  --status-green:  #0fb37a; --status-green-bg: #effaf5; --status-green-fg: #0a8a5e;
+  --status-blue:   #3b82f6; --status-blue-bg: #e9f1ff; --status-blue-fg: #2563eb;
+  --status-gray:   #949ab4; --status-gray-bg: #eef0f5; --status-gray-fg: #5a6076;
+  --status-warning: #f59e0b; --status-warning-bg: #fff3da; --status-warning-fg: #b45309;
 
   /* Chart helpers — axis / CPM-prev ghost darkened to read on light plot. */
   --chart-axis:     oklch(45% 0.02 250 / 0.55);
@@ -365,11 +359,11 @@
   /* Chart grading tokens — ROAS line flips to a dark line on light;
      target / pin / dots stay band-mirrored at light L; grid is a dark
      hairline. Hues unchanged. */
-  --chart-roas-line:    oklch(30% 0.03 272);
-  --chart-target-line:  oklch(56% 0.20 145);
-  --chart-pin-line:     oklch(64% 0.16 75);
-  --chart-dot-max:      oklch(56% 0.20 145);
-  --chart-dot-min:      oklch(57% 0.22 22);
+  --chart-roas-line:    #171a2b;             /* light = dark line on light plot */
+  --chart-target-line:  #0fb37a;             /* mockup-locked green target */
+  --chart-pin-line:     #f59e0b;             /* mockup-locked amber pins */
+  --chart-dot-max:      #0fb37a;             /* mockup-locked green max-dot */
+  --chart-dot-min:      #ef4d5b;             /* mockup-locked red min-dot */
   --chart-grid-line:    oklch(24% 0.03 265 / 0.08);
 
   /* Annotation pins — same hues as dark; mid-tone for the light plot. */

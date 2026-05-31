@@ -102,14 +102,45 @@ function SidebarBody({
   const { choice, setChoice } = useTheme();
   const isCollapsed = variant === 'desktop' && collapsed;
   const showTooltips = isCollapsed;
+  // Desktop rail is a DARK surface in BOTH themes (sidebar tokens), so its
+  // inner items render light-on-dark via the sidebar fg tokens + faint
+  // white-alpha hovers. The mobile drawer sits on bg-canvas, so it keeps the
+  // normal ink/glass classes that read correctly on the themed canvas.
+  const isDesktop = variant === 'desktop';
+  // Default (resting) text colour for an inner item.
+  const railText = isDesktop ? 'text-[var(--sidebar-fg)]' : 'text-ink-muted';
+  // Hover treatment — brighten text + faint white-alpha fill on dark rail.
+  const railHover = isDesktop
+    ? 'hover:text-[var(--sidebar-fg-active)] hover:bg-white/[0.06]'
+    : 'hover:text-ink hover:bg-glass-2';
+  // Active / selected treatment — violet tint + active fg on dark rail.
+  const railActive = isDesktop
+    ? 'bg-[color-mix(in_oklab,var(--accent)_22%,transparent)] text-[var(--sidebar-fg-active)]'
+    : 'bg-glass-2 text-ink';
 
   return (
     <>
       {/* Brand + (mobile) close button */}
-      <div className="px-3 py-3 border-b border-glass-edge flex items-center gap-2">
-        <div className="h-7 w-7 rounded-md bg-accent shrink-0" aria-hidden />
+      <div
+        className={cn(
+          'px-3 py-3 border-b flex items-center gap-2',
+          isDesktop ? 'border-white/10' : 'border-glass-edge',
+        )}
+      >
+        {/* Logo keeps the violet gradient in both themes (mockup .sb-logo). */}
+        <div
+          className="h-7 w-7 rounded-md shrink-0 bg-gradient-to-br from-[var(--sidebar-logo-1)] to-[var(--sidebar-logo-2)]"
+          aria-hidden
+        />
         {!isCollapsed && (
-          <span className="text-sm font-semibold truncate flex-1">דשבורד ROAS</span>
+          <span
+            className={cn(
+              'text-sm font-semibold truncate flex-1',
+              isDesktop && 'text-[var(--sidebar-fg-active)]',
+            )}
+          >
+            דשבורד ROAS
+          </span>
         )}
         {variant === 'mobile' && onClose && (
           <Button
@@ -148,8 +179,8 @@ function SidebarBody({
                   ? 'justify-center px-0 py-2'
                   : 'justify-start gap-3 px-2.5 py-2',
                 isActive
-                  ? 'bg-glass-2 text-ink font-medium ring-1 ring-glass-edge'
-                  : 'text-ink-muted hover:text-ink hover:bg-glass-1',
+                  ? cn(railActive, 'font-medium ring-1 ring-glass-edge')
+                  : cn(railText, railHover),
               )}
             >
               <span className="shrink-0">{item.icon}</span>
@@ -170,7 +201,12 @@ function SidebarBody({
       </nav>
 
       {/* Footer: operator + theme toggle + pin */}
-      <div className="border-t border-glass-edge px-2 py-3 space-y-1">
+      <div
+        className={cn(
+          'border-t px-2 py-3 space-y-1',
+          isDesktop ? 'border-white/10' : 'border-glass-edge',
+        )}
+      >
         <RailTooltip show={showTooltips} label="ניהול">
           <Link
             href="/operator"
@@ -181,7 +217,7 @@ function SidebarBody({
               isCollapsed
                 ? 'justify-center px-0 py-2'
                 : 'justify-start gap-3 px-2.5 py-2',
-              'text-ink-muted hover:text-ink hover:bg-glass-2',
+              railText, railHover,
             )}
           >
             <Cog size={16} />
@@ -197,8 +233,8 @@ function SidebarBody({
             aria-label="עקוב אחר ההעדפה של המערכת"
             onClick={() => setChoice('system')}
             className={cn(
-              'text-ink-muted',
-              choice === 'system' && 'bg-glass-2 text-ink',
+              railText, railHover,
+              choice === 'system' && railActive,
             )}
           >
             <Monitor size={14} />
@@ -210,8 +246,8 @@ function SidebarBody({
             aria-label="מצב בהיר"
             onClick={() => setChoice('light')}
             className={cn(
-              'text-ink-muted',
-              choice === 'light' && 'bg-glass-2 text-ink',
+              railText, railHover,
+              choice === 'light' && railActive,
             )}
           >
             <Sun size={14} />
@@ -223,8 +259,8 @@ function SidebarBody({
             aria-label="מצב כהה"
             onClick={() => setChoice('dark')}
             className={cn(
-              'text-ink-muted',
-              choice === 'dark' && 'bg-glass-2 text-ink',
+              railText, railHover,
+              choice === 'dark' && railActive,
             )}
           >
             <Moon size={14} />
@@ -246,7 +282,7 @@ function SidebarBody({
               data-testid="sidebar-pin-toggle"
               className={cn(
                 'w-full h-auto p-1.5',
-                pinned ? 'text-ink bg-glass-2' : 'text-ink-muted',
+                pinned ? railActive : cn(railText, railHover),
               )}
             >
               {/* Pin glyph rotates from "ready to pin" → "pinned" so the
@@ -379,7 +415,10 @@ export function Sidebar({
         data-pinned={pinned ? 'true' : 'false'}
         style={{ width: expanded ? 220 : 72 }}
         className={cn(
-          'sticky top-0 h-screen border-s border-glass-edge bg-glass-1 text-ink',
+          // Mockup keeps a DARK slim rail in BOTH themes — use the sidebar
+          // tokens (theme-independent #15182a) rather than bg-glass-1/text-ink
+          // so the rail never goes dark-on-dark or washes out on light.
+          'sticky top-0 h-screen border-s border-glass-edge bg-[var(--sidebar)] text-[var(--sidebar-fg)]',
           'hidden md:flex flex-col transition-[width] duration-200 ease-out',
         )}
         aria-label="ניווט ראשי"
