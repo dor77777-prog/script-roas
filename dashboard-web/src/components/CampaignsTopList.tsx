@@ -4,6 +4,7 @@ import { Trophy, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { Heading } from '@/components/ui/Typography';
+import { PlatformBadge } from '@/components/ui/PlatformBadge';
 
 /**
  * "Winners and Losers" view that replaces the previous QuadrantScatter
@@ -41,19 +42,18 @@ type Props = {
   perSide?: number;
 };
 
-/** Per-platform color dot, matching Meta blue / Google amber / TikTok pink. */
-const PLATFORM_DOT: Record<string, string> = {
-  Meta: 'bg-status-blue',
-  Google: 'bg-status-orange',
-  TikTok: 'bg-status-red',
-};
-
-function PlatformChip({ platform, store }: { platform: string; store: string }) {
-  const dot = PLATFORM_DOT[platform] ?? 'bg-status-gray';
+/**
+ * Per-platform identity row: PlatformBadge (brand-mirrored dot + label
+ * via --chart-platform-* tokens) followed by the store name. Both sit
+ * on the same baseline so the chip reads as one visual unit. Replaces
+ * the prior inline `PlatformChip` definition that hard-coded
+ * `bg-status-{blue|orange|red}` swatches drifting from the canonical
+ * chart palette (Task 2.9).
+ */
+function PlatformRow({ platform, store }: { platform: string; store: string }) {
   return (
     <div className="flex items-center gap-1.5 text-[11px] sm:text-xs text-ink-secondary">
-      <span className={cn('inline-block w-1.5 h-1.5 rounded-full shrink-0', dot)} aria-hidden />
-      <span className="font-medium">{platform}</span>
+      <PlatformBadge platform={platform} size="sm" className="!h-auto !text-[11px] sm:!text-xs" />
       <span className="text-ink-muted">·</span>
       <span>{store}</span>
     </div>
@@ -107,7 +107,7 @@ function Row({
                   {campaign.name}
                 </div>
               </HelpTooltip>
-              <PlatformChip platform={campaign.platform} store={campaign.storeName} />
+              <PlatformRow platform={campaign.platform} store={campaign.storeName} />
             </div>
             <div className={cn('text-end shrink-0 tabular-nums', roasColor)}>
               <div className="text-base sm:text-lg font-semibold leading-tight">
