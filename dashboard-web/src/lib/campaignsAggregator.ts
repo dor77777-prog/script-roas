@@ -175,6 +175,29 @@ export function aggregate(
    */
   storeDisplayNames?: Record<string, string>,
 ): Aggregated[] {
+  // Bug fix (2026-05-31): the user-facing "all stores" + "all platforms"
+  // sentinels must be matched permissively. Historical bug: the table's
+  // toolbar emits `localStore = 'All'` (capital A) and the global filter
+  // emits the same, but URL-restored / cloud-synced / drill-through paths
+  // can produce 'all' (lowercase), '__all__', or '' depending on which
+  // surface wrote them. Treating only the exact string 'All' as the
+  // wildcard caused the Campaigns tab to render empty when any of those
+  // alternate forms slipped through — the user-reported bug:
+  //   "בטאב קמפיינים הם לא מוצגים הקמפיינים אם מסתכלים על כל החנויות"
+  // (Campaigns aren't shown in the Campaigns tab when looking at all stores.)
+  //
+  // Normalize once, before the per-row loop, so the inner filter is a
+  // pure equality check and the wildcard policy is enforced in one place.
+  // Same treatment for platform — 'all' / 'All' / '' / undefined all mean
+  // "no platform filter".
+  const ALL_STORE_SENTINELS = new Set(['All', 'all', '__all__', '']);
+  const ALL_PLATFORM_SENTINELS = new Set(['all', 'All', '__all__', '']);
+  const storeWildcard =
+    storeFilter == null || ALL_STORE_SENTINELS.has(storeFilter);
+  const platformWildcard =
+    platformFilter == null ||
+    ALL_PLATFORM_SENTINELS.has(platformFilter as unknown as string);
+
   const map = new Map<string, Aggregated>();
   // Per-key "latest budget date" trackers so overwrite depends on the row's
   // `date`, NOT iteration order (#IN-02 — backfilled past dates appended to
@@ -196,8 +219,8 @@ export function aggregate(
     // FIX-03 already migrated the DRILLDOWN to storeId; the toolbar filter
     // pipeline needs the same migration (thread storeId through Filters →
     // CampaignsTable → here). Tracked as a future-phase refactor.
-    if (storeFilter !== 'All' && r.storeName !== storeFilter) continue;
-    if (platformFilter !== 'all' && r.platform !== platformFilter) continue;
+    if (!storeWildcard && r.storeName !== storeFilter) continue;
+    if (!platformWildcard && r.platform !== platformFilter) continue;
 
     // Phase A.5 v2 evening hotfix #7 — resolve effective store BEFORE computing
     // the key, so historical rows under an old store_id collapse with newer

@@ -126,6 +126,30 @@ function todayInIsrael(): string {
   }).format(new Date());
 }
 
+/**
+ * Bug fix (2026-05-31) — single source of truth for "is this store filter
+ * the all-stores wildcard?". The user reported that the Campaigns tab
+ * rendered empty when "all stores" was selected; root cause was the per-
+ * call-site `localStore !== 'All'` checks treating only the exact string
+ * 'All' as the wildcard. URL-restored / cloud-synced filter values can
+ * arrive as 'all' (lowercase), '__all__', or '' — those slipped through
+ * the literal check and were treated as a real store name, filtering
+ * everything out.
+ *
+ * Mirrors the same normalization in `campaignsAggregator.ts:aggregate`,
+ * which now applies the wildcard at the row-filter level for the
+ * aggregator's own filtering path. This helper exists for the auxiliary
+ * scopes inside CampaignsTable (cpmDaily / dailyByCampaign / attribution
+ * panel / allCampaignRows / pretty-print label) so all six sites agree on
+ * the same rule.
+ */
+const STORE_ALL_SENTINELS = new Set<string | undefined | null>([
+  'All', 'all', '__all__', '', null, undefined,
+]);
+function isAllStores(value: string | undefined | null): boolean {
+  return STORE_ALL_SENTINELS.has(value);
+}
+
 // --- Aggregation ------------------------------------------------------------
 
 /** Sort a list of aggregated rows by the chosen column + direction.
@@ -658,7 +682,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     if (!data) return [];
     return data.rows.filter(r => {
       if (r.date < localRange.from || r.date > localRange.to) return false;
-      if (localStore !== 'All' && r.storeName !== localStore) return false;
+      if (!isAllStores(localStore) && r.storeName !== localStore) return false;
       return true;
     });
   }, [data, localStore, localRange]);
@@ -802,7 +826,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     const grouped = new Map<string, Map<string, DayBucket>>();
     for (const r of data.rows) {
       if (r.date < localRange.from || r.date > localRange.to) continue;
-      if (localStore !== 'All' && r.storeName !== localStore) continue;
+      if (!isAllStores(localStore) && r.storeName !== localStore) continue;
       if (platform !== 'all' && r.platform !== platform) continue;
       const key =
         mode === 'campaign'
@@ -922,7 +946,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       // today but cheap and catches any future regression where the lib
       // contract changes — e.g., a cache layer that serves a wider window.
       if (r.date < localRange.from || r.date > localRange.to) continue;
-      if (localStore !== 'All' && r.storeName !== localStore) continue;
+      if (!isAllStores(localStore) && r.storeName !== localStore) continue;
       if (platform !== 'all' && r.platform !== platform) continue;
       if (!byDay.has(r.date)) byDay.set(r.date, { spend: 0, impressions: 0, value: 0 });
       const d = byDay.get(r.date)!;
@@ -982,7 +1006,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       // /api/campaigns is already filtered server-side by cpmPrevRange via
       // parseRangeParams (the SWR key includes buildDateRangeKey).
       if (r.date < cpmPrevRange.from || r.date > cpmPrevRange.to) continue;
-      if (localStore !== 'All' && r.storeName !== localStore) continue;
+      if (!isAllStores(localStore) && r.storeName !== localStore) continue;
       if (platform !== 'all' && r.platform !== platform) continue;
       if (!byDay.has(r.date)) byDay.set(r.date, { spend: 0, impressions: 0, value: 0 });
       const d = byDay.get(r.date)!;
@@ -1128,7 +1152,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       // Unlike /api/campaigns this filter is the authoritative one for
       // dailyRows; do not remove without first range-filtering at the source.
       if (r.date < localRange.from || r.date > localRange.to) continue;
-      if (localStore !== 'All' && r.storeName !== localStore) continue;
+      if (!isAllStores(localStore) && r.storeName !== localStore) continue;
       shopifyRevenue += r.revenue;
       metaSpendInScope += r.fbSpend;
       googleSpendInScope += r.gaSpend;
@@ -1491,7 +1515,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
             <Heading level="panel" className="inline-flex items-center gap-1.5 text-xs sm:text-sm">
               CPM לאורך זמן
               <span className="text-[10px] font-medium text-ink-muted">
-                ({localStore === 'All' ? 'כל החנויות' : localStore}
+                ({isAllStores(localStore) ? 'כל החנויות' : localStore}
                 {platform !== 'all' ? ` · ${platform}` : ''}
                 {', CAD'})
               </span>

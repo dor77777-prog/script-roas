@@ -209,6 +209,71 @@ describe('aggregate() — Phase A.5 v2 evening hotfix #7: effective-store collap
     expect(out).toHaveLength(2);
   });
 
+  it('Bug fix (2026-05-31): storeFilter="All" aggregates ALL stores into the result (user-reported Campaigns-tab-empty regression)', () => {
+    // User report: "בטאב קמפיינים הם לא מוצגים הקמפיינים אם מסתכלים על כל החנויות"
+    // (Campaigns aren't shown in the Campaigns tab when looking at all stores.)
+    // This guards the basic "All-stores" path against any future refactor
+    // that re-introduces a hard-coded `=== 'All'` check.
+    const rows = [
+      makeRow({ storeId: 'uzoshop', storeName: 'uzoshop', platform: 'Meta', campaignId: 'c1', date: '2026-05-15', spend: 100 }),
+      makeRow({ storeId: '360usmile', storeName: '360usmile', platform: 'Google', campaignId: 'c2', date: '2026-05-15', spend: 50 }),
+      makeRow({ storeId: 'zolplus', storeName: 'Zol Plus', platform: 'TikTok', campaignId: 'c3', date: '2026-05-15', spend: 25 }),
+    ];
+    const out = aggregate(rows, 'campaign', 'All', 'all', RANGE);
+    expect(out).toHaveLength(3);
+    const stores = new Set(out.map(a => a.storeName));
+    expect(stores).toEqual(new Set(['uzoshop', '360usmile', 'Zol Plus']));
+  });
+
+  it('Bug fix (2026-05-31): storeFilter sentinels "all" / "__all__" / "" all collapse to the wildcard', () => {
+    // URL-restored / cloud-synced / drill-through paths can produce lower-
+    // case 'all' or '__all__' or '' instead of 'All'. The aggregator must
+    // treat ALL of these as "no store filter" so the Campaigns tab is not
+    // surprise-empty just because one upstream forgot the capital A.
+    const rows = [
+      makeRow({ storeId: 'uzoshop', storeName: 'uzoshop', platform: 'Meta', campaignId: 'c1', date: '2026-05-15', spend: 100 }),
+      makeRow({ storeId: '360usmile', storeName: '360usmile', platform: 'Google', campaignId: 'c2', date: '2026-05-15', spend: 50 }),
+    ];
+    for (const sentinel of ['all', '__all__', ''] as const) {
+      const out = aggregate(rows, 'campaign', sentinel, 'all', RANGE);
+      expect(out, `sentinel='${sentinel}' should aggregate ALL stores`).toHaveLength(2);
+    }
+  });
+
+  it('Bug fix (2026-05-31): platformFilter sentinels "All" / "__all__" / "" all collapse to the wildcard', () => {
+    // Symmetric to the store sentinel test above. Per the user report the
+    // platform filter sometimes arrives as 'All' (capital) from drill-
+    // through, and the column-order parser writes '__all__' when an
+    // operator clears the filter via the URL.
+    const rows = [
+      makeRow({ storeId: 'uzoshop', storeName: 'uzoshop', platform: 'Meta', campaignId: 'c1', date: '2026-05-15', spend: 100 }),
+      makeRow({ storeId: 'uzoshop', storeName: 'uzoshop', platform: 'Google', campaignId: 'c2', date: '2026-05-15', spend: 50 }),
+      makeRow({ storeId: 'uzoshop', storeName: 'uzoshop', platform: 'TikTok', campaignId: 'c3', date: '2026-05-15', spend: 25 }),
+    ];
+    // Cast through `unknown` because the type only admits 'all' | 'Meta'
+    // | 'Google' | 'TikTok' but the bug specifically targets stringly-
+    // typed inputs that bypass the compiler (URL params / cloud-sync
+    // payloads).  AggregatePlatformFilter is widened on purpose here.
+    type Loose = Parameters<typeof aggregate>[3];
+    for (const sentinel of ['All', '__all__', ''] as const) {
+      const out = aggregate(rows, 'campaign', 'All', sentinel as unknown as Loose, RANGE);
+      expect(out, `platform sentinel='${sentinel}' should aggregate ALL platforms`).toHaveLength(3);
+    }
+  });
+
+  it('Bug fix (2026-05-31): a specific store filter is still honored (no over-broadening regression)', () => {
+    // Defensive: the new sentinel normalization must NOT match legitimate
+    // store names. If it accidentally did, picking 'uzoshop' would also
+    // surface '360usmile' rows — silently merging stores.
+    const rows = [
+      makeRow({ storeId: 'uzoshop', storeName: 'uzoshop', platform: 'Meta', campaignId: 'c1', date: '2026-05-15', spend: 100 }),
+      makeRow({ storeId: '360usmile', storeName: '360usmile', platform: 'Google', campaignId: 'c2', date: '2026-05-15', spend: 50 }),
+    ];
+    const out = aggregate(rows, 'campaign', 'uzoshop', 'all', RANGE);
+    expect(out).toHaveLength(1);
+    expect(out[0].storeName).toBe('uzoshop');
+  });
+
   it('rows whose campaignId has no mapping entry keep their original storeId', () => {
     const rows = [
       makeRow({
