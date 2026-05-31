@@ -647,17 +647,18 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Drawer entrance morph — used by the View Transitions API call in
-   CampaignsTable when opening CampaignDrawer. The fixed overlay
-   inherits the default cross-fade; the panel itself gets the matched
-   element transition via view-transition-name. */
-@media (prefers-reduced-motion: no-preference) {
-  ::view-transition-old(drawer-panel),
-  ::view-transition-new(drawer-panel) {
-    animation-duration: 220ms;
-    animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
-  }
-}
+/* Wave-4 Task 4.4 — the Campaign view is now a centered MODAL, not an edge
+   drawer. Its entrance is a scale+fade (`animate-in zoom-in-95 fade-in-0` +
+   `duration-base`) driven by tailwindcss-animate on the Sheet `variant="modal"`
+   panel — a regular CSS animation, NOT a View Transition. So the panel no
+   longer sets `view-transition-name: drawer-panel`, and the matched-element
+   `::view-transition-*(drawer-panel)` slide-morph tuning that lived here is
+   gone (it had no element left to claim it). The `startViewTransition` wrapper
+   in CampaignsTable still runs the root cross-fade (tuned above) for the
+   open-state change; the AdsDrawer keeps its tailwindcss-animate slide
+   (`slide-in-from-end`). prefers-reduced-motion collapses the modal zoom to
+   instant via the universal rule above (animation-duration: 0.01ms) — no
+   leftover slide keyframe targets the modal. */
 
 /* ===========================================================================
    `.glass` base — Task 2.4 (mesh re-skin).
