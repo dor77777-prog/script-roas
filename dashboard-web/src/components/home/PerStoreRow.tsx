@@ -264,7 +264,7 @@ function StoreCard({
       <header className="store-top flex items-center justify-between gap-3">
         <Heading
           level="panel"
-          className="truncate text-lg md:text-xl font-semibold"
+          className="store-name truncate text-lg md:text-xl font-semibold"
           as="h3"
         >
           <bdi dir="ltr">{store.storeName}</bdi>

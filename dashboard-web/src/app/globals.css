@@ -1145,6 +1145,32 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   50%      { opacity: 0.5; transform: scale(0.85); }
 }
 
+/* operator-2026-06-01 (#13) — LIVE/AGING/STALE chip → WHITE-ALPHA pill on
+   VIVID band cards. The default `.fresh-chip.live|aging|stale` rules above
+   tint the pill with the band-green / band-orange / band-red status hue +
+   matching text. On a VIVID band card (red/orange/green/blue) that status
+   tint CLASHES with the card's own band gradient (e.g. green LIVE chip on an
+   orange card, red STALE chip on a green card). The mockup
+   (docs/superpowers/mockups/2026-05-31-light-reskin/dashboard-mockups.html)
+   shows the `● LIVE · 14s` chip as a WHITE-ALPHA pill (white text, white-alpha
+   fill) on the vivid card — matching the `.band-tag` pill beside it. So on any
+   `.glass[data-band]:not([data-band="gray"])` card (hero banded Operating
+   Profit + ROAS, AND every vivid per-store card) we override the chip + its
+   leading pulse dot to white-alpha, irrespective of the live/aging/stale
+   variant. GRAY cards are EXCLUDED — their surface is near-neutral, so the
+   colored status chip stays legible there and is NOT overridden. */
+.glass[data-band]:not([data-band="gray"]) .fresh-chip,
+.glass[data-band]:not([data-band="gray"]) .fresh-chip.live,
+.glass[data-band]:not([data-band="gray"]) .fresh-chip.aging,
+.glass[data-band]:not([data-band="gray"]) .fresh-chip.stale {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+.glass[data-band]:not([data-band="gray"]) .fresh-chip .pulse {
+  background: #fff;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.8);
+}
+
 /* Reduced-motion: the project-wide `@media (prefers-reduced-motion: reduce)`
    block earlier in this file already neutralises animation+transition
    durations globally. These explicit rules below make the intent obvious
@@ -1330,6 +1356,19 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   border-radius: 11px;
 }
 
+/* (5) STORE NAME → white (operator-2026-06-01 #12). The store heading is a
+   <Heading level="panel"> whose `text-ink` default renders DARK ink — on a
+   vivid band card that reads as near-invisible dark-on-band. The mockup
+   `.store` puts the name in `#fff`. We give the heading a plain `.store-name`
+   class hook (NO colour in the .tsx — guard-safe) and paint it white here.
+   `!important` beats the `text-ink` Tailwind utility on the same element
+   regardless of stylesheet source order (same approach as `.platform-name`).
+   GRAY cards are EXCLUDED via `:not([data-band="gray"])` — their near-neutral
+   surface keeps the dark ink (pinned defensively in the gray block below). */
+.per-store-card.glass[data-band]:not([data-band="gray"]) .store-name {
+  color: #fff !important;
+}
+
 /* ===========================================================================
    GRAY (no-data / ROAS-0) PER-STORE CARD — DARK INK GUARANTEE
    (operator 2026-06-01 — gray (no-data/ROAS-0) per-store cards use dark ink
@@ -1362,6 +1401,13 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 .per-store-card.glass[data-band="gray"] .cpm-row-cells .platform-name,
 .per-store-card.glass[data-band="gray"] .cpm-row-cells .cpm-spend-cap {
   color: var(--text);
+}
+/* Gray-card store NAME stays DARK ink (theme-correct). The vivid white-name
+   rule above is `:not([data-band="gray"])`-scoped so it cannot reach this
+   card; this pins it defensively to `var(--text)`. `!important` matches the
+   vivid rule's specificity so neither rule wins by source order. */
+.per-store-card.glass[data-band="gray"] .store-name {
+  color: var(--text) !important;
 }
 /* operator-2026-06-01b: the gray (no-data/ROAS-0) per-store card labels were
    pinned to `--text-muted` (faint gray). Operator reports they read as
