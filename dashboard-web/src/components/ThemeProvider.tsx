@@ -47,8 +47,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
+    // 2026-05-31 single-mode flip: <html> is hard-coded to data-theme="dark"
+    // in layout.tsx. Force the attribute back to "dark" on every render so
+    // stale localStorage values (from before the flip) cannot demote a
+    // running session to a non-existent light palette.
     if (typeof document === 'undefined') return;
-    document.documentElement.setAttribute('data-theme', resolved);
+    document.documentElement.setAttribute('data-theme', 'dark');
   }, [resolved]);
 
   const setChoice = useCallback((next: ThemeChoice) => {

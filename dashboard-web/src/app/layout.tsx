@@ -44,31 +44,23 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  themeColor: '#0d3680',
+  // Matches --canvas-1 (deep blue-violet single-mode dark canvas).
+  themeColor: '#0a0c1d',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // Single-mode dark per the 2026-05-31 visual-direction flip. data-theme
+  // is hard-coded on <html> so the first paint is correct and there is no
+  // light-mode bootstrapping script to delete with hydration. ThemeProvider
+  // is retained for its useTheme() consumers (Sidebar, CommandPalette) but
+  // its DOM-write effect always resolves to "dark" now.
   return (
-    <html lang="he" dir="rtl" className={`${heebo.variable} ${rubik.variable} ${geistMono.variable}`}>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-(function () {
-  try {
-    var k = 'roas-theme';
-    var v = localStorage.getItem(k);
-    var c = (v === 'light' || v === 'dark' || v === 'system') ? v : 'system';
-    var d = c === 'dark' || (c === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-    document.documentElement.setAttribute('data-theme', d ? 'dark' : 'light');
-  } catch (e) {
-    document.documentElement.setAttribute('data-theme', 'light');
-  }
-})();
-            `.trim(),
-          }}
-        />
-      </head>
+    <html
+      lang="he"
+      dir="rtl"
+      data-theme="dark"
+      className={`${heebo.variable} ${rubik.variable} ${geistMono.variable}`}
+    >
       <body className="font-sans antialiased text-ink bg-canvas">
         <ThemeProvider>
           <ErrorBoundary>{children}</ErrorBoundary>

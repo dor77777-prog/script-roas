@@ -3,240 +3,120 @@
 @tailwind utilities;
 
 /* ===========================================================================
-   Design Tokens — OKLCH-based. Defined in :root (light) and overridden
-   under [data-theme="dark"]. Tailwind reads these via the CSS-variable
-   color strategy in tailwind.config.ts. ROAS status tokens map 1-to-1
-   to the existing roasLabel() tones (red < 2.0, orange 2.0–2.7,
-   green 2.7–3.0, blue > 3.0, gray for no-data) — color logic itself
-   does not move.
+   Design Tokens — OKLCH-based, SINGLE-MODE (dark only).
+   2026-05-31 visual-direction flip: glass+neon (Vision UI flagship) replaces
+   the prior Linear-flat dual-mode palette. Every token now lives in :root,
+   no [data-theme="dark"] overrides. Source-of-truth: mockup-04-final.html.
+   Tailwind reads these via the CSS-variable color strategy in
+   tailwind.config.ts. ROAS status tokens map 1-to-1 to the existing
+   roasLabel() tones (red < 2.0, orange 2.0–2.7, green 2.7–3.0, blue > 3.0,
+   gray for no-data) — color logic itself does not move.
    =========================================================================== */
 :root {
-  /* Surfaces — warm off-white scale */
-  --surface-canvas:    oklch(99% 0.005 80);
-  --surface-elevated-1: oklch(100% 0 0);
-  --surface-elevated-2: oklch(97% 0.005 80);
-  --surface-overlay:   oklch(95% 0.005 80 / 0.92);
+  /* Chart — platform-brand-mirrored (Q1 locked).
+     Hues mirror real platform identity: Meta blue (257), Google amber (90),
+     TikTok red (12), organic teal (175), Shopify green (165). Colorblind
+     disambiguation is handled by stroke patterns + legend, not by hue
+     separation. TikTok hue (12°) sits ≥13° from --band-red (22°) so a red
+     ROAS band next to a TikTok line never collides — enforced by
+     chartTokens.test.ts. */
+  --chart-platform-meta:    oklch(70% 0.18 257);
+  --chart-platform-google:  oklch(80% 0.15 90);
+  --chart-platform-tiktok:  oklch(72% 0.24 12);
+  --chart-platform-organic: oklch(75% 0.14 175);
+  --chart-platform-shopify: oklch(70% 0.16 165);
 
-  /* Text */
-  --text-primary:   oklch(20% 0.02 250);
-  --text-secondary: oklch(40% 0.02 250);
-  --text-muted:     oklch(60% 0.015 250);
-  --text-subtle:    oklch(75% 0.01 250);
+  /* Stores — per-store hues for Per-Store row, store badges. */
+  --store-uzo: oklch(72% 0.16 210);
+  --store-usm: oklch(72% 0.18 330);
+  --store-3:   oklch(70% 0.16 100);
 
-  /* Borders */
-  --border-default: oklch(90% 0.01 250);
-  --border-subtle:  oklch(94% 0.005 250);
-  --border-strong:  oklch(80% 0.015 250);
+  /* Brand accent (Q2 violet). --accent-deep used for buttons/logo gradients,
+     --accent-fg for text-on-accent. */
+  --accent:      oklch(72% 0.20 280);
+  --accent-deep: oklch(58% 0.22 285);
+  --accent-fg:   oklch(99% 0 0);
 
-  /* Accent — single cool indigo */
-  --accent:    oklch(55% 0.18 260);
-  --accent-fg: oklch(99% 0 0);
-  --accent-dark: oklch(45% 0.18 260);
+  /* V4 band signal — see Task 1.3.
+     Tuned for dark-canvas legibility at ≥4.5:1 contrast for stroke ≥2px. */
+  --band-red:    oklch(64% 0.22 22);
+  --band-orange: oklch(78% 0.16 75);
+  --band-green:  oklch(70% 0.18 145);
+  --band-blue:   oklch(68% 0.16 240);
+  --band-gray:   oklch(60% 0.012 250);
 
-  /* Chart categorical palette — brand-true platforms + non-platform store hues.
-     Light defaults below; dark overrides under [data-theme="dark"].
-     Spec: docs/superpowers/specs/2026-05-29-chart-line-colors-dark-mode-design.md
-     Replaces the prior "should NOT theme-swap" contract: hue families now reflect
-     real brand identity (Meta blue, Google amber, TikTok red, etc.), and colorblind
-     disambiguation is handled by stroke patterns + legend, not by hue separation. */
-  --chart-platform-meta:     #2563eb;
-  --chart-platform-google:   #d97706;
-  --chart-platform-tiktok:   #ef4444;
-  --chart-platform-organic:  #a855f7;
-  --chart-platform-shopify:  #10b981;
+  /* Canvas — deep blue-violet. Used as fixed body background + linear
+     gradient endpoints. */
+  --canvas-1: oklch(13% 0.020 270);
+  --canvas-2: oklch(11% 0.025 280);
 
-  --chart-store-uzoshop:  #06b6d4;
-  --chart-store-zolplus:  #ec4899;
-  --chart-store-usmile:   #84cc16;
+  /* Glass layers — 3-stop white-alpha stack + 2 edge tones.
+     --glass-edge-hot is the violet rim used on hover/focus/active glass. */
+  --glass-1: oklch(100% 0 0 / 0.04);
+  --glass-2: oklch(100% 0 0 / 0.06);
+  --glass-3: oklch(100% 0 0 / 0.08);
+  --glass-edge:     oklch(100% 0 0 / 0.12);
+  --glass-edge-hot: oklch(72% 0.20 280 / 0.40);
 
-  /* ROAS status — LIGHT theme HOTFIX-9 2026-05-29.
-     User feedback iteratively pushed for clearer text-on-colored-bg in
-     table cells. The -fg variants are designed to pair with -bg cells;
-     this revision drops their chroma to near-zero so text reads as
-     near-black instead of "tinted-dark-color on tinted-light-color"
-     (which the user called "blue on blue, green on green" — same hue,
-     different L, low perceptual contrast).
-     - bg variants keep their L=90 + chroma 0.10-0.11 (clearly colored)
-     - fg variants now near-neutral dark (oklch 20-25% chroma 0.02-0.04)
-       for crisp black-on-color contrast (>=8:1 AAA) */
-  --status-red:    oklch(60% 0.18 25);
-  --status-red-bg: oklch(90% 0.10 25);
-  --status-red-fg: oklch(22% 0.04 25);
+  /* Foreground stack (4 stops — see Task 1.6).
+     --text          → body / numbers / headings
+     --text-2        → secondary labels, subtitle text
+     --text-muted    → metadata, axis labels
+     --text-subtle   → least-prominent meta (e.g. timestamps in tooltips) */
+  --text:        oklch(98% 0.008 80);
+  --text-2:      oklch(82% 0.012 250);
+  --text-muted:  oklch(64% 0.018 250);
+  --text-subtle: oklch(48% 0.020 250);
 
-  --status-orange:    oklch(70% 0.16 55);
-  --status-orange-bg: oklch(91% 0.11 55);
-  --status-orange-fg: oklch(25% 0.04 55);
+  /* Blur + saturate filter stacks (see Task 1.7).
+     --blur-glass for regular glass cards; --blur-sheet for full-height
+     sheets / overlays where we want extra saturation pop. */
+  --blur-glass: blur(20px) saturate(140%);
+  --blur-sheet: blur(36px) saturate(160%);
 
-  --status-green:    oklch(60% 0.16 145);
-  --status-green-bg: oklch(90% 0.10 145);
-  --status-green-fg: oklch(22% 0.04 145);
-
-  --status-blue:    oklch(60% 0.16 240);
-  --status-blue-bg: oklch(90% 0.10 240);
-  --status-blue-fg: oklch(22% 0.04 240);
-
-  --status-gray:    oklch(60% 0 0);
-  --status-gray-bg: oklch(93% 0 0);
-  --status-gray-fg: oklch(22% 0 0);
-
-  /* Phase E1.6.1 UI overhaul (2026-05-30) — semantic warning tone for
-     amber-* sweep. Same chroma as --status-orange but tuned for
-     warnings: -bg at 92% L (light) / 18% L (dark) for chip surface,
-     -fg at 25% L (light) / 92% L (dark) for body text. */
-  --status-warning: oklch(70% 0.14 75);
-  --status-warning-bg: oklch(95% 0.06 75);
-  --status-warning-fg: oklch(25% 0.05 75);
-
-  /* Chart utility tokens. --chart-axis was referenced by chartColors.ts
-     but never defined. Anchored to --text-muted at 60% opacity for a
-     subtle axis line. --chart-cpm-prev was a hardcoded #fbbf24 in
-     chartColors.ts; now mode-aware. */
-  --chart-axis: oklch(60% 0.015 250 / 0.6);
-  --chart-cpm-prev: oklch(75% 0.15 75);
-
-  /* Hero gradient — was hardcoded #091c4a / #0d3680 / #1d4ed8 in
-     HeroOverview.tsx. Refactored to CSS vars so dark mode adapts. */
-  --gradient-hero-from: oklch(20% 0.12 260);
-  --gradient-hero-via: oklch(32% 0.16 260);
-  --gradient-hero-to: oklch(48% 0.20 260);
-
-  /* Per-store badge color tokens. Sourced from storeColors.ts chart
-     palette (cyan / hot-pink / lime) per 2026-05-30 user decision —
-     replaces format.ts STORE_HUES navy/red/green schism. */
-  --store-uzoshop: oklch(70% 0.13 200);     /* cyan */
-  --store-uzoshop-bg: oklch(94% 0.04 200);
-  --store-uzoshop-fg: oklch(22% 0.05 200);
-  --store-zolplus: oklch(68% 0.20 340);     /* hot pink */
-  --store-zolplus-bg: oklch(94% 0.04 340);
-  --store-zolplus-fg: oklch(22% 0.06 340);
-  --store-usmile: oklch(72% 0.20 130);      /* lime */
-  --store-usmile-bg: oklch(94% 0.04 130);
-  --store-usmile-fg: oklch(22% 0.05 130);
-
-  /* Annotation markers — was hardcoded hex per kind in annotations.ts. */
-  --annotation-launch: oklch(55% 0.18 145);   /* green */
-  --annotation-pause: oklch(60% 0.20 25);     /* red */
-  --annotation-budget: oklch(60% 0.18 260);   /* blue */
-  --annotation-pricing: oklch(65% 0.16 75);   /* amber */
-  --annotation-sale: oklch(65% 0.20 305);     /* purple */
-  --annotation-creative: oklch(60% 0.18 200); /* cyan */
-  --annotation-supplier: oklch(50% 0.10 30);  /* brown */
-  --annotation-other: oklch(60% 0.005 0);     /* gray */
-}
-
-[data-theme="dark"] {
-  /* Surfaces — soft dark, NOT pure #000 (modern dark standard).
-     Highest contrast against text-primary, lowest against text-subtle. */
-  --surface-canvas:    oklch(15% 0.01 240);
-  --surface-elevated-1: oklch(19% 0.01 240);
-  --surface-elevated-2: oklch(23% 0.01 240);
-  --surface-overlay:   oklch(15% 0.01 240 / 0.85);
-
-  /* Text — inverted scale */
-  --text-primary:   oklch(95% 0.01 240);
-  --text-secondary: oklch(78% 0.01 240);
-  --text-muted:     oklch(70% 0.015 240);
-  --text-subtle:    oklch(45% 0.015 240);
-
-  /* Borders */
-  /* --border-subtle is decorative-only in dark mode (fails WCAG 1.4.11).
-     Use --border-default for interactive element outlines. */
-  --border-subtle:  oklch(28% 0.01 240);
-  --border-default: oklch(35% 0.01 240);
-  --border-strong:  oklch(45% 0.01 240);
-
-  /* Accent — slightly desaturated for dark */
-  --accent:    oklch(65% 0.16 260);
-  --accent-fg: oklch(15% 0.01 240);
-  --accent-dark: oklch(75% 0.16 260);
-
-  /* Chart categorical palette — dark overrides.
-     Tuned to OKLCH L ~70-78% so every line sits ~5:1 against the dark canvas
-     (passes WCAG AA Large for stroke widths >=2px, which is the baseline for
-     all chart lines in this codebase). Hue preserved per series identity. */
-  --chart-platform-meta:     oklch(70% 0.18 260);
-  --chart-platform-google:   oklch(75% 0.16 60);
-  --chart-platform-tiktok:   oklch(72% 0.22 25);
-  --chart-platform-organic:  oklch(75% 0.18 305);
-  --chart-platform-shopify:  oklch(75% 0.18 155);
-
-  --chart-store-uzoshop:  oklch(75% 0.13 200);
-  --chart-store-zolplus:  oklch(72% 0.20 340);
-  --chart-store-usmile:   oklch(78% 0.20 130);
-
-  /* ROAS status — dark theme HOTFIX-6 2026-05-29.
-     User feedback iteratively pushed for brighter, more vibrant bg colors:
-       hotfix-2: chroma 0.06 → 0.12 (still too muted)
-       hotfix-3: chroma 0.12 → 0.18-0.20, L 28 → 36-42 (still feels dark)
-       hotfix-6: L 36-42 → 48-55 + chroma 0.18-0.20 → 0.22 (brighter, more
-                 saturated; green especially gets a big boost — user said
-                 "ירוק נראה מאוד כהה")
-     White text on OKLCH L=48-55% bg gives 3.5-5:1 sRGB contrast (passes
-     AA normal at L≤50, AA Large only at L=55 — but our table cells use
-     BOLD tabular-nums for ROAS values, so AA Large is acceptable).
-     Hue separation maintained: red 10 / orange 75 / green 145 / blue 255
-     (red↔orange = 65°, green↔blue = 110°). */
-  --status-red:    oklch(72% 0.22 10);
-  --status-red-bg: oklch(42% 0.14 10);
-  --status-red-fg: oklch(99% 0.01 10);
-
-  --status-orange:    oklch(80% 0.18 75);
-  --status-orange-bg: oklch(45% 0.14 75);
-  --status-orange-fg: oklch(99% 0.01 75);
-
-  --status-green:    oklch(72% 0.22 145);
-  --status-green-bg: oklch(42% 0.14 145);
-  --status-green-fg: oklch(99% 0.01 145);
-
-  --status-blue:    oklch(70% 0.22 255);
-  --status-blue-bg: oklch(42% 0.14 255);
-  --status-blue-fg: oklch(99% 0.01 255);
-
-  --status-gray:    oklch(65% 0 0);
-  --status-gray-bg: oklch(42% 0.005 0);
-  --status-gray-fg: oklch(99% 0 0);
-
-  /* Phase E1.6.1 UI overhaul — dark-mode warning/chart/hero/store tokens. */
-  --status-warning: oklch(78% 0.18 75);
-  --status-warning-bg: oklch(28% 0.08 75);
-  --status-warning-fg: oklch(94% 0.04 75);
-
-  --chart-axis: oklch(65% 0.015 240 / 0.5);
-  --chart-cpm-prev: oklch(80% 0.18 75);
-
-  --gradient-hero-from: oklch(15% 0.06 260);
-  --gradient-hero-via: oklch(22% 0.12 260);
-  --gradient-hero-to: oklch(35% 0.18 260);
-
-  --store-uzoshop: oklch(75% 0.13 200);
-  --store-uzoshop-bg: oklch(28% 0.06 200);
-  --store-uzoshop-fg: oklch(94% 0.04 200);
-  --store-zolplus: oklch(72% 0.20 340);
-  --store-zolplus-bg: oklch(28% 0.08 340);
-  --store-zolplus-fg: oklch(94% 0.04 340);
-  --store-usmile: oklch(78% 0.20 130);
-  --store-usmile-bg: oklch(28% 0.08 130);
-  --store-usmile-fg: oklch(94% 0.04 130);
-
-  --annotation-launch: oklch(72% 0.20 145);
-  --annotation-pause: oklch(72% 0.22 25);
-  --annotation-budget: oklch(72% 0.22 260);
-  --annotation-pricing: oklch(78% 0.18 75);
-  --annotation-sale: oklch(75% 0.20 305);
-  --annotation-creative: oklch(75% 0.18 200);
-  --annotation-supplier: oklch(65% 0.12 30);
-  --annotation-other: oklch(70% 0.005 0);
+  /* Up/down deltas (mirrors band-green / band-red).
+     Used by .num.up / .num.dn / sparkline +/- coloring. */
+  --up: var(--band-green);
+  --dn: var(--band-red);
 }
 
 /* ===========================================================================
-   Base — body styles, font features, selection.
+   Page background — fixed multi-radial wash + slow conic rotation.
+   Mockup reference: mockup-04-final.html lines 38–52. The conic gradient
+   sits on body::before behind everything (z-index: 0 + app shell uses
+   z-index: 1) and pauses under prefers-reduced-motion.
    =========================================================================== */
-html, body {
-  background: var(--surface-canvas);
+html, body { background-color: var(--canvas-1); }
+body {
+  color: var(--text);
+  background:
+    radial-gradient(ellipse at 0% 0%,   oklch(45% 0.22 280 / 0.35) 0%, transparent 50%),
+    radial-gradient(ellipse at 100% 0%, oklch(40% 0.20 257 / 0.30) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 100%, oklch(40% 0.22 320 / 0.25) 0%, transparent 60%),
+    linear-gradient(180deg, var(--canvas-1) 0%, var(--canvas-2) 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+  overflow-x: hidden;
   font-feature-settings: 'kern', 'ss01';
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   text-rendering: optimizeLegibility;
+}
+body::before {
+  content: '';
+  position: fixed; inset: -40% -10%; height: 180%;
+  background: conic-gradient(from 30deg at 50% 50%,
+    oklch(72% 0.18 280 / 0.04),
+    oklch(70% 0.18 257 / 0.04),
+    oklch(72% 0.24 12 / 0.03),
+    oklch(75% 0.14 175 / 0.03),
+    oklch(72% 0.18 280 / 0.04));
+  animation: spin 60s linear infinite;
+  pointer-events: none; z-index: 0; opacity: 0.6; filter: blur(40px);
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  body::before { animation: none; }
 }
 
 /* Tabular numbers — uses the Rubik-first numeric chain so the tnum
@@ -252,57 +132,59 @@ input[type="number"] {
 }
 
 ::selection {
-  background: rgba(13, 54, 128, 0.18);
-  color: #0d253d;
+  background: var(--glass-edge-hot);
+  color: var(--text);
 }
 
 /* ===========================================================================
-   Scrollbars — soft, cool-tinted.
+   Scrollbars — translucent on dark canvas.
    =========================================================================== */
 *::-webkit-scrollbar { width: 10px; height: 10px; }
 *::-webkit-scrollbar-track { background: transparent; }
 *::-webkit-scrollbar-thumb {
-  background: #d9e2ec;
+  background: var(--glass-2);
   border-radius: 8px;
-  border: 2px solid #f6f9fc;
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
-*::-webkit-scrollbar-thumb:hover { background: #c4d0de; }
+*::-webkit-scrollbar-thumb:hover { background: var(--glass-3); background-clip: padding-box; }
 
 /* Hide scrollbar for tab nav strip and other horizontal scrollers. */
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
 /* ===========================================================================
-   Recharts tooltip — match the system shadow + radius.
+   Recharts tooltip — glass treatment to match cards.
    =========================================================================== */
 .recharts-tooltip-wrapper .recharts-default-tooltip {
-  background: var(--surface-elevated-2) !important;
-  color: var(--text-primary) !important;
-  border: 1px solid var(--border-default) !important;
-  box-shadow: var(--shadow-md);
+  background: var(--glass-2) !important;
+  color: var(--text) !important;
+  border: 1px solid var(--glass-edge) !important;
+  backdrop-filter: var(--blur-glass);
   border-radius: 10px !important;
   padding: 10px 14px !important;
   font-feature-settings: 'tnum';
 }
-.recharts-tooltip-label { color: var(--text-secondary) !important; margin-bottom: 4px !important; font-size: 11px; }
-.recharts-tooltip-item  { color: var(--text-primary) !important; font-size: 13px; }
+.recharts-tooltip-label { color: var(--text-2) !important; margin-bottom: 4px !important; font-size: 11px; }
+.recharts-tooltip-item  { color: var(--text) !important; font-size: 13px; }
 
 /* ===========================================================================
-   Focus-visible: a single, consistent ring across the dashboard.
+   Focus-visible: a single, consistent violet ring across the dashboard.
    =========================================================================== */
 :where(button, a, input, select, textarea, [role="tab"], [role="button"]):focus-visible {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(13, 54, 128, 0.20);
+  box-shadow: 0 0 0 3px var(--glass-edge-hot);
   border-radius: 0.5rem;
 }
 
 /* ===========================================================================
-   Native inputs — clean up dark-mode invert + RTL date glyphs.
+   Native inputs — clean up date picker glyphs against dark.
    =========================================================================== */
 input[type="date"]::-webkit-calendar-picker-indicator {
   opacity: 0.55;
   cursor: pointer;
   transition: opacity 180ms;
+  filter: invert(1);
 }
 input[type="date"]:hover::-webkit-calendar-picker-indicator {
   opacity: 1;
@@ -312,9 +194,9 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 .skeleton {
   background: linear-gradient(
     90deg,
-    rgba(217, 226, 236, 0.4) 0%,
-    rgba(217, 226, 236, 0.7) 50%,
-    rgba(217, 226, 236, 0.4) 100%
+    var(--glass-1) 0%,
+    var(--glass-2) 50%,
+    var(--glass-1) 100%
   );
   background-size: 200% 100%;
   animation: shimmer 1.6s linear infinite;
