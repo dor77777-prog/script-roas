@@ -215,13 +215,26 @@ function StoreCard({
       onClick={interactive ? handleClick : undefined}
       onKeyDown={interactive ? handleKeyDown : undefined}
       className={cn(
+        // Per-store cards opt into a roomier interior so the bumped sizes
+        // breathe — see 2.5.4 patch notes. The `!p-6 md:!p-7` overrides the
+        // Card default `p-5` without churning every other consumer of the
+        // primitive.
+        '!p-6 md:!p-7 per-store-card',
         interactive &&
           'cursor-pointer transition-colors hover:border-glass-edge/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60',
       )}
     >
-      {/* Header — store name + band chip + freshness chip ----------------------------- */}
-      <header className="flex items-center justify-between gap-2">
-        <Heading level="panel" className="truncate" as="h3">
+      {/* Zone 1 — colored "slab" header.
+          The .glass[data-band] CSS now paints a strong gradient over the top
+          ~35% of the card. Store name + band chip + ROAS hero sit ON this
+          slab so the band colour is what the operator's eye lands on first
+          ("the store IS this band" rather than "the store has a hint of"). */}
+      <header className="flex items-center justify-between gap-3">
+        <Heading
+          level="panel"
+          className="truncate text-lg md:text-xl font-semibold"
+          as="h3"
+        >
           <bdi dir="ltr">{store.storeName}</bdi>
         </Heading>
         <div className="flex items-center gap-2">
@@ -232,23 +245,29 @@ function StoreCard({
         </div>
       </header>
 
-      {/* ROAS hero — big banded number ---------------------------------------------------- */}
-      <div className="mt-2 flex items-baseline justify-between gap-2">
-        <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-ink-muted">
+      {/* ROAS hero — huge banded number. 56-64px so the operator can read
+          today's ROAS from across the room. The label drops to its own line
+          (above the number) so the number gets the full horizontal axis. */}
+      <div className="mt-3 flex items-end justify-between gap-3">
+        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-ink-muted">
           ROAS היום
         </span>
         <bdi
           dir="ltr"
-          className="v banded text-2xl font-light tabular-nums tracking-tight"
+          className="v banded text-[56px] md:text-[64px] font-light tabular-nums tracking-tight leading-none"
         >
           {fmtRoasText(store.roas)}
         </bdi>
       </div>
 
-      {/* 4-up metric grid — semantic emphasis class hooks pinned by tests.
-          Collapses to 2 columns on phones so 4 narrow money columns don't
-          truncate currency glyphs / break the AOV cell mid-word. */}
-      <div className="scard-main-grid grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+      {/* Zone 2 — 4-up metric grid.
+          Semantic emphasis class hooks pinned by tests. Collapses to 2
+          columns on phones so 4 narrow money columns don't truncate
+          currency glyphs / break the AOV cell mid-word.
+          The `per-store-card` ancestor class lets globals.css bump
+          .sl / .sv sizes inside this row WITHOUT affecting other
+          scard-main-grid consumers. */}
+      <div className="scard-main-grid grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5 pt-4 border-t border-glass-edge">
         <div className="cell spend" data-cell="spend">
           <span className="sl">הוצאה</span>
           <span className="sv num tabular-nums">{fmtMoneyText(store.spend)}</span>
@@ -267,13 +286,14 @@ function StoreCard({
         </div>
       </div>
 
-      {/* Per-platform CPM row — CPM cells use ONLY `cell` (no emphasis) ---------------- */}
+      {/* Zone 3 — per-platform CPM. CPM cells use ONLY `cell` (no emphasis).
+          Bumped sizes per 2.5.4 patch: label 10→12, value 14→18. */}
       {cpmEntries.length > 0 && (
-        <div className="cpm-row mt-4 pt-3 border-t border-dashed border-glass-edge">
-          <div className="cpm-row-label font-mono text-[10px] uppercase tracking-[0.08em] text-ink-subtle font-bold mb-2">
+        <div className="cpm-row mt-5 pt-4 border-t border-dashed border-glass-edge">
+          <div className="cpm-row-label font-mono text-[11px] md:text-[12px] uppercase tracking-[0.08em] text-ink-subtle font-bold mb-3">
             CPM לפי פלטפורמה
           </div>
-          <div className={cn('cpm-row-cells grid gap-2', cpmGridCols)}>
+          <div className={cn('cpm-row-cells grid gap-3', cpmGridCols)}>
             {cpmEntries.map(({ platform, data }) => (
               <div
                 key={platform}
@@ -282,12 +302,12 @@ function StoreCard({
                 data-platform={platform}
               >
                 <PlatformBadge platform={platform} size="sm" />
-                <span className="text-[10px] text-ink-muted leading-tight">
+                <span className="text-[11px] text-ink-muted leading-tight">
                   spend · <bdi dir="ltr" className="tabular-nums">{fmtMoneyText(data.spend)}</bdi>
                 </span>
                 <bdi
                   dir="ltr"
-                  className="text-sm font-semibold tabular-nums text-ink"
+                  className="text-[18px] md:text-[20px] font-semibold tabular-nums text-ink leading-none"
                 >
                   {fmtMoneyText(data.cpm)}
                 </bdi>

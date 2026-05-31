@@ -474,7 +474,10 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    =========================================================================== */
 .glass[data-band]::before {
   content: ''; position: absolute; inset-block-start: 0; inset-inline: 0;
-  height: 3px;
+  /* Bar bumped 3 → 4px (round 3, 2.5.4) for more visual weight. The gray
+     band rule below pulls it back to 3px because the no-data state should
+     stay quiet. */
+  height: 4px;
   border-start-start-radius: var(--radius-card);
   border-start-end-radius:   var(--radius-card);
   pointer-events: none;
@@ -504,43 +507,79 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   transform: scale(1);
   transition: opacity 300ms var(--ease-out), transform 300ms var(--ease-out);
 }
-/* Banded card backgrounds use a top-anchored radial halo + low base tint so
-   most of the color lives near the top edge (right under the ::before bar).
-   This makes the bar look like it's emitting light into the card without
-   flooding the whole surface with chroma (a "halo", not a "wash"). The
-   radial fades by 70% of the ellipse so the bottom of the card stays
-   readable. Tuned 2026-05-31 after user feedback that flat 5% tint felt
-   dark/dead — see commit for rationale. */
+/* Round 3 (2026-05-31, 2.5.4) — "colored header slab".
+   Previous rounds tried a radial halo at the top edge. The operator still
+   read the cards as too refined / academic, because the chroma fell off
+   inside the first 25% of card height. Round 3 stacks THREE layers per
+   banded card so the band identity dominates:
+     1. A linear top-slab gradient that covers ~60% of card height and
+        only fully fades to transparent at 60%; this is the layer that
+        actually paints the "this card IS this band" feeling.
+     2. A radial accent at the top edge that amplifies the ::before bar's
+        glow as if the bar is bleeding light down into the slab.
+     3. A low base tint over the whole card so even the bottom keeps a
+        subtle echo of the band hue.
+   The slab uses the high-lightness "halo" hue (L ~72–76) at high opacity
+   for the first stop, then steps down to the canonical band hue at lower
+   opacity, so the top reads BRIGHTER than the band's solid colour and the
+   eye perceives it as lit-from-above rather than washed-over. Gray stays
+   subtle because "no data" should not compete with informative bands.
+   Per-card chromas tuned: red/orange/green/blue active, gray quiet. */
 .glass[data-band="red"] {
   background:
-    radial-gradient(ellipse 90% 60% at 50% 0%, oklch(72% 0.22 22  / 0.32) 0%, transparent 85%),
-    oklch(64% 0.22 22  / 0.12);
+    linear-gradient(180deg,
+      oklch(72% 0.22 22 / 0.32) 0%,
+      oklch(72% 0.22 22 / 0.18) 18%,
+      oklch(64% 0.22 22 / 0.06) 38%,
+      transparent 60%),
+    radial-gradient(ellipse 100% 40% at 50% 0%, oklch(76% 0.22 22 / 0.20) 0%, transparent 60%),
+    oklch(64% 0.22 22 / 0.08);
 }
-.glass[data-band="red"]::before    { background: var(--band-red);    box-shadow: 0 0 32px oklch(72% 0.22 22  / 0.85); }
+.glass[data-band="red"]::before    { background: var(--band-red);    box-shadow: 0 0 36px oklch(72% 0.22 22  / 0.90); }
 .glass[data-band="orange"] {
   background:
-    radial-gradient(ellipse 90% 60% at 50% 0%, oklch(84% 0.16 75  / 0.30) 0%, transparent 85%),
-    oklch(78% 0.16 75  / 0.12);
+    linear-gradient(180deg,
+      oklch(84% 0.18 75 / 0.30) 0%,
+      oklch(84% 0.18 75 / 0.17) 17%,
+      oklch(78% 0.18 75 / 0.06) 38%,
+      transparent 60%),
+    radial-gradient(ellipse 100% 40% at 50% 0%, oklch(88% 0.18 75 / 0.18) 0%, transparent 60%),
+    oklch(78% 0.18 75 / 0.08);
 }
-.glass[data-band="orange"]::before { background: var(--band-orange); box-shadow: 0 0 30px oklch(84% 0.16 75  / 0.80); }
+.glass[data-band="orange"]::before { background: var(--band-orange); box-shadow: 0 0 34px oklch(84% 0.18 75  / 0.85); }
 .glass[data-band="green"] {
   background:
-    radial-gradient(ellipse 90% 60% at 50% 0%, oklch(78% 0.18 145 / 0.28) 0%, transparent 85%),
-    oklch(70% 0.18 145 / 0.11);
+    linear-gradient(180deg,
+      oklch(78% 0.18 145 / 0.28) 0%,
+      oklch(78% 0.18 145 / 0.16) 16%,
+      oklch(70% 0.18 145 / 0.05) 36%,
+      transparent 60%),
+    radial-gradient(ellipse 100% 40% at 50% 0%, oklch(82% 0.18 145 / 0.18) 0%, transparent 60%),
+    oklch(70% 0.18 145 / 0.07);
 }
-.glass[data-band="green"]::before  { background: var(--band-green);  box-shadow: 0 0 30px oklch(78% 0.18 145 / 0.80); }
+.glass[data-band="green"]::before  { background: var(--band-green);  box-shadow: 0 0 32px oklch(78% 0.18 145 / 0.85); }
 .glass[data-band="blue"] {
   background:
-    radial-gradient(ellipse 90% 60% at 50% 0%, oklch(76% 0.16 240 / 0.28) 0%, transparent 85%),
-    oklch(68% 0.16 240 / 0.10);
+    linear-gradient(180deg,
+      oklch(76% 0.18 240 / 0.28) 0%,
+      oklch(76% 0.18 240 / 0.16) 16%,
+      oklch(68% 0.18 240 / 0.05) 36%,
+      transparent 60%),
+    radial-gradient(ellipse 100% 40% at 50% 0%, oklch(80% 0.18 240 / 0.18) 0%, transparent 60%),
+    oklch(68% 0.18 240 / 0.07);
 }
-.glass[data-band="blue"]::before   { background: var(--band-blue);   box-shadow: 0 0 32px oklch(76% 0.16 240 / 0.85); }
+.glass[data-band="blue"]::before   { background: var(--band-blue);   box-shadow: 0 0 34px oklch(76% 0.18 240 / 0.85); }
 .glass[data-band="gray"] {
   background:
-    radial-gradient(ellipse 80% 50% at 50% 0%, oklch(65% 0.015 250 / 0.10) 0%, transparent 70%),
+    linear-gradient(180deg,
+      oklch(65% 0.015 250 / 0.10) 0%,
+      oklch(65% 0.015 250 / 0.06) 18%,
+      oklch(60% 0.012 250 / 0.03) 38%,
+      transparent 60%),
+    radial-gradient(ellipse 80% 35% at 50% 0%, oklch(70% 0.015 250 / 0.08) 0%, transparent 60%),
     oklch(60% 0.012 250 / 0.04);
 }
-.glass[data-band="gray"]::before   { background: var(--band-gray);   box-shadow: 0 0 12px oklch(65% 0.015 250 / 0.45); }
+.glass[data-band="gray"]::before   { background: var(--band-gray);   box-shadow: 0 0 14px oklch(65% 0.015 250 / 0.50); height: 3px; }
 
 /* `.v.banded` — the big number inside a banded card renders in the band
    colour (overrides .v.neutral's text-clip gradient via -webkit-text-fill-color). */
@@ -647,10 +686,24 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 .scard-main-grid .sl   { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); font-weight: 600; line-height: 1.2; }
 .scard-main-grid .sv   { font-size: 14px; font-weight: 700; line-height: 1.2; font-variant-numeric: tabular-nums; }
 
+/* Round 3 (2.5.4) — per-store cards get a 1-step size bump on the metric
+   grid so the operator can read spend / revenue / orders / AOV at a glance.
+   Scoped to `.per-store-card` (the className the PerStoreRow primitive
+   adds) so other consumers of `.scard-main-grid` keep their compact sizing. */
+.per-store-card .scard-main-grid .sl { font-size: 12px; }
+.per-store-card .scard-main-grid .sv { font-size: 18px; }
+@media (min-width: 768px) {
+  .per-store-card .scard-main-grid .sv { font-size: 20px; }
+}
+
 /* Per-platform CPM cells — same layout treatment but with a slightly
    larger gap because each cell stacks 3 stitches (platform badge →
    spend caption → CPM value). Mirrors mockup .cpm-cell at line 230. */
 .cpm-row-cells .cell { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 10px 12px; background: oklch(100% 0 0 / 0.03); border: 1px solid var(--glass-edge); border-radius: 8px; }
+
+/* Per-store CPM cells — bump padding so the bigger value (18-20px) has
+   the same proportional breathing room as the 14px default. */
+.per-store-card .cpm-row-cells .cell { padding: 12px 14px; gap: 8px; }
 
 .cell.spend   .sv { color: var(--band-red); }
 .cell.spend   .sl::before { content: '↓ '; color: var(--band-red);   opacity: 0.7; margin-inline-end: 2px; }
