@@ -23,6 +23,7 @@ import { cn, formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { TableBase } from '@/components/ui/TableBase';
+import { Heading } from '@/components/ui/Typography';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { buildProductCentricView, type ProductCohortRow } from '@/lib/productCentricView';
 import { aggregate } from '@/lib/campaignsAggregator';
@@ -338,10 +339,10 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
   if (isAllStores) {
     return (
       <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-glass p-4 sm:p-5">
-        <h2 className="text-base font-semibold text-ink inline-flex items-center gap-2 mb-1.5">
+        <Heading level="section" className="inline-flex items-center gap-2 mb-1.5">
           <Package size={16} className="text-ink-secondary" />
           מוצרים → קמפיינים
-        </h2>
+        </Heading>
         <div className="text-sm text-ink-muted">
           בחר חנות ספציפית בפילטר העליון כדי לראות את הפיבוט. (מיפויים הם לפי
           חנות; ב-"All" אין דרך לאחד.)
@@ -361,10 +362,10 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
   if (allRows.length === 0) {
     return (
       <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-glass p-4 sm:p-5">
-        <h2 className="text-base font-semibold text-ink inline-flex items-center gap-2 mb-1.5">
+        <Heading level="section" className="inline-flex items-center gap-2 mb-1.5">
           <Package size={16} className="text-ink-secondary" />
           מוצרים → קמפיינים
-        </h2>
+        </Heading>
         <div className="text-sm text-ink-muted">
           אין מיפויים פעילים. ברגע שתוסיף מיפוי דרך מגירת הקמפיין, הוא יופיע כאן.
         </div>
@@ -375,13 +376,13 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
   return (
     <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-glass p-4 sm:p-5">
       <div className="flex items-center justify-between gap-3 mb-3">
-        <h2 className="text-base font-semibold text-ink inline-flex items-center gap-2">
+        <Heading level="section" className="inline-flex items-center gap-2">
           <Package size={16} className="text-ink-secondary" />
           מוצרים → קמפיינים
           <span className="text-[11px] font-normal text-ink-muted">
             ({multiCount} עם 2+ קמפיינים{soloCount > 0 ? ` · ${soloCount} עם קמפיין אחד` : ''})
           </span>
-        </h2>
+        </Heading>
         {soloCount > 0 && (
           <label className="inline-flex items-center gap-1.5 text-xs text-ink-secondary cursor-pointer">
             <Input

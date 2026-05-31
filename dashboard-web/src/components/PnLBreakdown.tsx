@@ -8,6 +8,7 @@ import { TRANSACTION_FEES_RATE } from '@/lib/costs';
 import { sumRefundsInRange } from '@/lib/refundDayHeuristic';
 import { Button } from '@/components/ui/Button';
 import { TableBase } from '@/components/ui/TableBase';
+import { Heading } from '@/components/ui/Typography';
 import type { DailyRow } from '@/lib/types';
 import {
   billingForRange,
@@ -163,9 +164,9 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
               <div className="text-[11px] uppercase tracking-[0.12em] font-semibold text-ink-muted">
                 Profit &amp; Loss
               </div>
-              <h2 className="text-base sm:text-xl font-bold text-ink tracking-tight leading-tight">
+              <Heading level="hero">
                 כמה נשאר ביד?
-              </h2>
+              </Heading>
             </div>
           </div>
           <Button

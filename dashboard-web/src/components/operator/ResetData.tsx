@@ -64,6 +64,7 @@ import {
 import { operatorFetch } from '@/lib/operatorClient';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Heading } from '@/components/ui/Typography';
 
 // Wire-shape of the /api/operator/reset 200 response. Mirrored locally
 // rather than imported across the server/client boundary to keep the
@@ -259,13 +260,14 @@ export function ResetData() {
         >
           <div className="bg-glass-1 border-0 sm:border sm:border-glass-edge rounded-none sm:rounded p-4 w-full h-full sm:h-auto sm:max-w-md sm:mx-4 flex flex-col">
             <div className="flex items-start justify-between mb-3 shrink-0">
-              <h3
+              <Heading
+                level="hero"
                 id="reset-confirm-title"
-                className="text-lg font-semibold flex items-center gap-2"
+                className="flex items-center gap-2"
               >
                 <AlertTriangle className="w-5 h-5 text-status-red" />
                 {active.modalTitle}
-              </h3>
+              </Heading>
               <Button
                 type="button"
                 variant="ghost"

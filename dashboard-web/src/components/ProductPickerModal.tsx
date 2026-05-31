@@ -7,6 +7,7 @@ import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { HelpTooltip } from '@/components/ui/Tooltip';
+import { Heading } from '@/components/ui/Typography';
 import { useDrawerEsc } from '@/lib/drawerStack';
 import type { ProductRow } from '@/lib/products';
 import type { ProductsResponse } from '@/app/api/products/route';
@@ -244,9 +245,9 @@ export function ProductPickerModal({
                 שייך מוצרי {storeName} לקמפיין
               </div>
               <HelpTooltip content={campaignName}>
-                <h2 id="product-picker-title" className="text-sm sm:text-base font-bold text-ink tracking-tight truncate">
+                <Heading level="section" id="product-picker-title" className="font-bold truncate">
                   {campaignName}
-                </h2>
+                </Heading>
               </HelpTooltip>
               <div className="text-[10px] text-ink-muted mt-0.5 inline-flex items-center gap-1">
                 <span>מוצגים רק מוצרים מחנות:</span>

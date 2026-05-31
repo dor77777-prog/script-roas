@@ -23,6 +23,7 @@ import { buildAdsManagerLink, type AdAccountMap } from '@/lib/campaignsLinks';
 import { readOptimized, toggleOptimized } from '@/lib/campaignOptimized';
 import { useDrawerEsc } from '@/lib/drawerStack';
 import { buildDateRangeKey } from '@/lib/dateRange';
+import { Heading } from '@/components/ui/Typography';
 import { Sheet, SheetContent, SheetHeader, SheetBody } from '@/components/ui/Sheet';
 import { Badge, BADGE_TONE_BG, type BadgeTone } from '@/components/ui/Badge';
 import { HelpTooltip } from '@/components/ui/Tooltip';
@@ -336,9 +337,9 @@ export function AdsDrawer({
                 מודעות ב-ad-set
               </div>
               <HelpTooltip content={adSetName}>
-                <h2 id="ads-drawer-title" className="text-sm sm:text-base font-bold text-ink tracking-tight truncate">
+                <Heading level="section" id="ads-drawer-title" className="font-bold truncate">
                   {adSetName}
-                </h2>
+                </Heading>
               </HelpTooltip>
             </div>
           </div>

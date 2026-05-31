@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { HelpTooltip } from '@/components/ui/Tooltip';
+import { Heading } from '@/components/ui/Typography';
 import {
   CAMPAIGNS_COLUMNS,
   REORDERABLE_COLUMN_IDS,
@@ -165,9 +166,9 @@ export function CampaignsColumnsMenu({
           className="absolute end-0 top-full mt-1 z-30 w-[300px] rounded-xl border border-glass-edge bg-glass-1 shadow-overlay p-3"
         >
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-ink">
+            <Heading level="panel">
               עמודות בטבלה
-            </h3>
+            </Heading>
             <Button
               type="button"
               variant="ghost"

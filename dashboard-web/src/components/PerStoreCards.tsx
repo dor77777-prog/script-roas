@@ -7,6 +7,7 @@ import { roasLabel, type StoreAgg } from '@/lib/analytics';
 import { storeHasTikTok } from '@/lib/platformsByStore';
 import { storeColor } from '@/lib/storeColors';
 import { Card } from '@/components/ui/Card';
+import { Heading } from '@/components/ui/Typography';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 
 function colorFor(name: string, idx: number) {
@@ -89,9 +90,9 @@ export function PerStoreCards({ data, ordersByStore, bare = false }: Props) {
 
   return (
     <section className="space-y-3">
-      <h2 className="flex items-center gap-2 text-base font-semibold text-ink">
+      <Heading level="section" className="flex items-center gap-2">
         ביצועים לפי חנות
-      </h2>
+      </Heading>
       {grid}
     </section>
   );

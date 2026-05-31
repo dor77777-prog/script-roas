@@ -7,6 +7,7 @@
 import { StatusEventsFeed } from '@/components/operator/StatusEventsFeed';
 import { CronTickSnapshotsViewer } from '@/components/operator/CronTickSnapshotsViewer';
 import { JobsTable } from '@/components/operator/JobsTable';
+import { Heading } from '@/components/ui/Typography';
 
 export function ActivityTab() {
   return (
@@ -15,12 +16,12 @@ export function ActivityTab() {
           (tick/worker lifecycle, errors, budget_skip). Server component;
           fetches at request time. */}
       <section>
-        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+        <Heading level="hero" className="mb-3 flex items-center gap-2">
           <span>סטטוס אירועים</span>
           <span className="text-ink-secondary text-xs font-normal">
             (status_events — מחזור חיים של tick/worker, שגיאות, budget skip)
           </span>
-        </h2>
+        </Heading>
         <StatusEventsFeed />
       </section>
 
@@ -28,17 +29,17 @@ export function ActivityTab() {
           history (per (store, platform) outcome of each orchestrator run).
           Server component; fetches cron_tick_snapshots at request time. */}
       <section>
-        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+        <Heading level="hero" className="mb-3 flex items-center gap-2">
           <span>סנפשוטים של cron ticks</span>
           <span className="text-ink-secondary text-xs font-normal">
             (cron_tick_snapshots — תוצאה לכל (store × platform) בכל ריצה)
           </span>
-        </h2>
+        </Heading>
         <CronTickSnapshotsViewer />
       </section>
 
       <section>
-        <h2 className="text-lg font-semibold mb-3">ריצות אחרונות</h2>
+        <Heading level="hero" className="mb-3">ריצות אחרונות</Heading>
         {/* Plan 13: JobsTable — SWR polls /api/operator/jobs every 15s (D-D3);
             the proxy soft-fails to HTTP 200 with { runs: [], error } so the
             component handles loading / amber / empty states itself. */}

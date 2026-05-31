@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { generateAiReport } from '@/lib/aiReport';
 import { Button } from '@/components/ui/Button';
 import { Textarea } from '@/components/ui/Textarea';
+import { Heading } from '@/components/ui/Typography';
 import type { DashboardData, Filters as F } from '@/lib/types';
 import type { ProductsResponse } from '@/app/api/products/route';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
@@ -184,9 +185,9 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
             <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-glass-edge">
               <div className="flex items-center gap-2 min-w-0">
                 <Bot size={18} className="text-accent shrink-0" />
-                <h2 className="text-sm sm:text-base font-semibold text-ink truncate">
+                <Heading level="section" className="truncate">
                   ייצוא דוח לבינה מלאכותית
-                </h2>
+                </Heading>
               </div>
               <Button
                 variant="ghost"

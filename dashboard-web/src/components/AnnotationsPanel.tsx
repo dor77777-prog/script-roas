@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { NativeSelect } from '@/components/ui/NativeSelect';
 import { HelpTooltip } from '@/components/ui/Tooltip';
+import { Heading } from '@/components/ui/Typography';
 import {
   ANNOTATION_KIND_COLOR,
   ANNOTATION_KIND_EMOJI,
@@ -104,9 +105,9 @@ export function AnnotationsPanel({ range, store }: Props) {
               <Pin size={15} />
             </span>
             <div className="min-w-0">
-              <h2 className="text-sm sm:text-base font-bold text-ink tracking-tight leading-tight">
+              <Heading level="section" className="font-bold">
                 יומן אירועים
-              </h2>
+              </Heading>
               <div className="text-[11px] sm:text-xs text-ink-muted mt-0.5 leading-tight">
                 {inScope.length === 0
                   ? 'תיעד שינויים שהוצעו (השקות, מבצעים, שינויי תקציב) — יוצגו על הגרף'

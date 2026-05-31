@@ -16,6 +16,7 @@ import {
   ChartTooltipValue,
 } from '@/components/ui/chart/ChartTooltip';
 import { CHART_WARNING_COLOR } from '@/lib/chartColors';
+import { Heading } from '@/components/ui/Typography';
 
 // The cyan primary color is the visual anchor — the first store's line
 // gets bold label treatment to guide the eye. Using STORE_COLORS directly
@@ -215,10 +216,10 @@ export function RoasChart({ data, stores, rows, bare = false }: Props) {
 
   return (
     <section className="rounded-xl bg-glass-1 border border-glass-edge p-3 sm:p-5 shadow-glass">
-      <h2 className="flex items-center gap-2 text-sm sm:text-base font-semibold text-ink mb-3 sm:mb-4">
+      <Heading level="section" className="flex items-center gap-2 mb-3 sm:mb-4">
         <TrendingUp size={18} className="text-ink-secondary" />
         מגמת ROAS לאורך זמן
-      </h2>
+      </Heading>
       {chart}
     </section>
   );

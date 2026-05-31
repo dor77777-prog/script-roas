@@ -3,6 +3,7 @@
 import { Trophy, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { HelpTooltip } from '@/components/ui/Tooltip';
+import { Heading } from '@/components/ui/Typography';
 
 /**
  * "Winners and Losers" view that replaces the previous QuadrantScatter
@@ -142,7 +143,7 @@ export function CampaignsTopList({
     return (
       <div className={cn('rounded-xl bg-glass-1 border border-glass-edge p-5', className)}>
         {title && (
-          <h3 className="text-sm sm:text-base font-semibold text-ink mb-2">{title}</h3>
+          <Heading level="section" className="mb-2">{title}</Heading>
         )}
         <div className="text-ink-muted text-sm text-center py-8">
           אין נתונים להצגה — בחר טווח עם קמפיינים פעילים.
@@ -170,7 +171,7 @@ export function CampaignsTopList({
   return (
     <div className={cn('rounded-xl bg-glass-1 border border-glass-edge p-3 sm:p-5', className)}>
       {title && (
-        <h3 className="text-sm sm:text-base font-semibold text-ink mb-1">{title}</h3>
+        <Heading level="section" className="mb-1">{title}</Heading>
       )}
       <p className="text-[11px] sm:text-xs text-ink-secondary mb-3 leading-relaxed">
         ה-{Math.min(perSide, data.length)} מנצחים ביותר וה-{losersCount} שצריכים תשומת לב — לפי ROAS. כל קמפיין עם פלטפורמה, חנות, וההמלצה הכי קונקרטית.
@@ -179,10 +180,10 @@ export function CampaignsTopList({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
         {/* Winners — right column in RTL */}
         <div className="min-w-0">
-          <h4 className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-status-green mb-2">
+          <Heading as="h4" level="panel" className="flex items-center gap-1.5 text-xs sm:text-sm !text-status-green mb-2">
             <Trophy size={14} />
             מנצחים ({winnersCount})
-          </h4>
+          </Heading>
           <ul className="rounded-lg border border-glass-edge bg-glass-2/40 px-2 sm:px-3">
             {winners.map((c, i) => (
               <Row key={`${c.platform}:${c.name}:${c.storeName}`} rank={i + 1} campaign={c} variant="winner" />
@@ -191,10 +192,10 @@ export function CampaignsTopList({
         </div>
         {/* Losers — left column in RTL */}
         <div className="min-w-0">
-          <h4 className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-status-red mb-2">
+          <Heading as="h4" level="panel" className="flex items-center gap-1.5 text-xs sm:text-sm !text-status-red mb-2">
             <AlertTriangle size={14} />
             לתשומת לב ({losersCount})
-          </h4>
+          </Heading>
           <ul className="rounded-lg border border-glass-edge bg-glass-2/40 px-2 sm:px-3">
             {losers.map((c, i) => (
               <Row key={`${c.platform}:${c.name}:${c.storeName}`} rank={i + 1} campaign={c} variant="loser" />

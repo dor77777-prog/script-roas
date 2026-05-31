@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { Heading } from '@/components/ui/Typography';
 
 type Props = {
   title: React.ReactNode;
@@ -69,9 +70,9 @@ export function CollapsibleSection({
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           {icon && <span className="text-ink-secondary shrink-0">{icon}</span>}
           <div className="min-w-0">
-            <h2 className="text-sm sm:text-base font-semibold text-ink truncate">
+            <Heading level="section" className="truncate">
               {title}
-            </h2>
+            </Heading>
             {subtitle && (
               <div className="text-[10px] sm:text-xs text-ink-muted mt-0.5 truncate">
                 {subtitle}

@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
+import { Heading } from '@/components/ui/Typography';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import type { DashboardData } from '@/lib/types';
 import {
@@ -140,9 +141,9 @@ export function GoalTracker({ data }: Props) {
             <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-white/12 text-white shrink-0">
               <Target size={14} />
             </span>
-            <h2 className="text-sm sm:text-base font-semibold tracking-tight">
+            <Heading level="section" className="text-white">
               קבע יעד חודשי
-            </h2>
+            </Heading>
           </div>
           <p className="text-xs sm:text-sm text-white/75 leading-relaxed mb-3">
             הגדר יעד הכנסות לחודש הזה והדשבורד יחשב בכל יום אם אתה מתקדם
@@ -168,9 +169,9 @@ export function GoalTracker({ data }: Props) {
           <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-accent/10 text-accent shrink-0">
             <Target size={14} />
           </span>
-          <h2 className="text-sm sm:text-base font-semibold text-ink">
+          <Heading level="section">
             הזן יעד הכנסות חודשי
-          </h2>
+          </Heading>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex-1">
@@ -256,9 +257,9 @@ export function GoalTracker({ data }: Props) {
             <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-accent/10 text-accent shrink-0">
               <Target size={14} />
             </span>
-            <h2 className="text-sm sm:text-base font-semibold text-ink tracking-tight">
+            <Heading level="section">
               יעד חודשי
-            </h2>
+            </Heading>
             <span className={cn(
               'inline-flex items-center px-2 py-0.5 text-[10px] sm:text-[11px] font-semibold rounded',
               sMeta.bg, sMeta.color,

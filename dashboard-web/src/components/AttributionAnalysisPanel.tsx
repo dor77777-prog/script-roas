@@ -3,6 +3,7 @@
 import { TrendingUp, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { AttributionAnalysis } from '@/lib/attributionAnalysis';
+import { Heading } from '@/components/ui/Typography';
 
 /**
  * Trust verdict callout shown inside the campaign drawer. The parent
@@ -36,10 +37,10 @@ export function AttributionAnalysisPanel({ analysis, spend, value }: Props) {
 
   return (
     <section>
-      <h3 className="text-sm font-semibold text-ink inline-flex items-center gap-1.5 mb-2">
+      <Heading level="panel" className="inline-flex items-center gap-1.5 mb-2">
         <TrendingUp size={14} className="text-ink-secondary" />
         ניתוח attribution
-      </h3>
+      </Heading>
       <div className={cn('rounded-xl border p-3 space-y-3', trustBg)}>
         {/* AUDIT U-05 (2026-05-24): pixel-broken warning chip. When
             deterministicRevenue exceeds 2× of Meta's claim, the pixel is

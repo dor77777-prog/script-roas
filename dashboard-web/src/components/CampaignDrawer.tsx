@@ -97,6 +97,7 @@ import {
 import { Sheet, SheetContent, SheetHeader, SheetBody } from '@/components/ui/Sheet';
 import { Badge, type BadgeTone } from '@/components/ui/Badge';
 import { Stat } from '@/components/ui/Stat';
+import { Heading } from '@/components/ui/Typography';
 
 /**
  * Slide-in campaign drilldown drawer. Linear/Vercel-style: full context
@@ -808,9 +809,9 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                 <Megaphone size={16} />
               </span>
               <div className="min-w-0">
-                <h2 id="campaign-drawer-title" className="text-base sm:text-lg font-semibold text-ink tracking-tight truncate">
+                <Heading as="h2" level="hero" id="campaign-drawer-title" className="truncate">
                   {summary.campaignName ? <bdi dir="ltr">{summary.campaignName}</bdi> : '(ללא שם)'}
-                </h2>
+                </Heading>
                 <div className="text-[11px] sm:text-xs text-ink-muted flex items-center gap-1.5 mt-0.5">
                   <StoreIcon size={11} />
                   {/* Phase A.5 v2 (2026-05-29 evening) — show the effective
@@ -889,10 +890,10 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
           {summary.dailyArr.length >= 2 && (
             <section>
               <div className="flex items-center justify-between mb-2">
-                <h3 className="text-sm font-semibold text-ink inline-flex items-center gap-1.5">
+                <Heading level="panel" className="inline-flex items-center gap-1.5">
                   <TrendingUp size={14} className="text-ink-secondary" />
                   הוצאה ↔ ערך המרות לאורך הזמן
-                </h3>
+                </Heading>
               </div>
               <ChartContainer className="h-40 sm:h-44 rounded-xl bg-glass-2/40 border border-glass-edge p-2" height="100%">
                 <AreaChart data={summary.dailyArr} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
@@ -1068,13 +1069,13 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
             return (
               <section>
                 <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-                  <h3 className="text-sm font-semibold text-ink inline-flex items-center gap-1.5">
+                  <Heading level="panel" className="inline-flex items-center gap-1.5">
                     <TrendingUp size={14} className="text-ink-secondary" />
                     CPM לאורך זמן
                     <span className="text-[10px] font-medium text-ink-muted">
                       (עלות ל-1000 חשיפות, CAD)
                     </span>
-                  </h3>
+                  </Heading>
                   <div className="flex items-center gap-3 flex-wrap">
                     {/* Analysis baseline toggle — same UX as CampaignsTable. */}
                     <div className="inline-flex items-center gap-0.5 rounded-md border border-glass-edge bg-glass-1 p-0.5 text-[10px]">
@@ -1340,14 +1341,14 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
             return (
               <section>
                 <div className="flex items-center justify-between gap-2 mb-2">
-                  <h3 className="text-sm font-semibold text-ink inline-flex items-center gap-1.5">
+                  <Heading level="panel" className="inline-flex items-center gap-1.5">
                     🏪 חנות בעלת הקמפיין
                     {isUnmapped && (
                       <span className="text-[10px] font-medium text-status-orange">
                         (לא ממופה · ברירת מחדל uzoshop)
                       </span>
                     )}
-                  </h3>
+                  </Heading>
                 </div>
                 <p className="text-[11px] text-ink-muted leading-relaxed bg-glass-2/40 rounded-lg px-3 py-2 mb-2">
                   ה-TikTok advertiser שלנו (uzoshop) משרת מספר חנויות. בחר לאיזו חנות הקמפיין שייך —
@@ -1407,7 +1408,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
           {(summary.platform === 'Meta' || summary.platform === 'TikTok') && (
             <section>
               <div className="flex items-center justify-between gap-2 mb-2">
-                <h3 className="text-sm font-semibold text-ink inline-flex items-center gap-1.5">
+                <Heading level="panel" className="inline-flex items-center gap-1.5">
                   <Package size={14} className="text-ink-secondary" />
                   מוצרי Shopify משויכים
                   {mappedIds.length > 0 && (
@@ -1415,7 +1416,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                       ({mappedIds.length})
                     </span>
                   )}
-                </h3>
+                </Heading>
                 <Button
                   type="button"
                   variant="secondary"

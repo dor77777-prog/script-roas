@@ -82,6 +82,7 @@ import { AdsDrawer } from './AdsDrawer';
 import { readTabLocalState, syncTabLocalUrl } from '@/lib/urlState';
 import { Badge, type BadgeTone } from '@/components/ui/Badge';
 import { Stat } from '@/components/ui/Stat';
+import { Heading } from '@/components/ui/Typography';
 
 type Mode = 'campaign' | 'adset';
 type Platform = 'all' | 'Meta' | 'Google' | 'TikTok';
@@ -1464,14 +1465,14 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         return (
         <div className="mt-3 rounded-lg bg-glass-1 border border-glass-edge p-3">
           <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
-            <h3 className="text-xs sm:text-sm font-semibold text-ink inline-flex items-center gap-1.5">
+            <Heading level="panel" className="inline-flex items-center gap-1.5 text-xs sm:text-sm">
               CPM לאורך זמן
               <span className="text-[10px] font-medium text-ink-muted">
                 ({localStore === 'All' ? 'כל החנויות' : localStore}
                 {platform !== 'all' ? ` · ${platform}` : ''}
                 {', CAD'})
               </span>
-            </h3>
+            </Heading>
             <div className="flex items-center gap-3 flex-wrap">
               {/* Analysis baseline toggle — picks what the smart-analysis
                   box compares against. Two modes: half-over-half (within

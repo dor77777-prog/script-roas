@@ -12,6 +12,7 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 import { useState, type ReactNode } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import { Heading } from './Typography';
 
 // ---------------------------------------------------------------------------
 // Flat InsightCard (original — unchanged for backwards compat)
@@ -43,7 +44,7 @@ export function InsightCard({ title, children, tone, action, className }: Insigh
   return (
     <div className={cn(cardVariants({ tone }), className)}>
       <div className="flex items-center justify-between gap-2">
-        <h4 className="text-sm font-medium">{title}</h4>
+        <Heading as="h4" level="panel" className="font-medium">{title}</Heading>
         {action}
       </div>
       <div className="text-sm">{children}</div>

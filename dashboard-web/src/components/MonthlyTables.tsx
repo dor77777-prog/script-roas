@@ -11,6 +11,7 @@ import { NativeSelect } from '@/components/ui/NativeSelect';
 import { TableBase } from '@/components/ui/TableBase';
 import { roasLabel } from '@/lib/analytics';
 import { buildDateRangeKey } from '@/lib/dateRange';
+import { Heading } from '@/components/ui/Typography';
 
 const HE_MONTHS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
 
@@ -289,10 +290,10 @@ export function MonthlyTables({ stores, globalStore, bare = false, year, month, 
   return (
     <section className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="flex items-center gap-2 text-base font-semibold text-ink">
+        <Heading level="section" className="flex items-center gap-2">
           <CalendarDays size={18} className="text-ink-secondary" />
           טבלאות חודשיות
-        </h2>
+        </Heading>
         {!hideStoreToolbar && toolbar}
       </div>
       {blocks}

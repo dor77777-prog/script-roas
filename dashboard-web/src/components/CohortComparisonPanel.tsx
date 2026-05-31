@@ -29,6 +29,7 @@
 import { Trophy, AlertCircle, Equal, Package, TrendingDown } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { TableBase } from '@/components/ui/TableBase';
+import { Heading } from '@/components/ui/Typography';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import type { CohortMember, MultiMappingCohort } from '@/lib/multiMappingCohort';
 import type { CannibalizationVerdict } from '@/lib/cannibalizationDetection';
@@ -335,10 +336,10 @@ export function CohortComparisonPanel({
     <section className="space-y-3">
       <div className="flex items-start justify-between gap-2">
         <div>
-          <h3 className="text-sm font-semibold text-ink inline-flex items-center gap-1.5">
+          <Heading level="panel" className="inline-flex items-center gap-1.5">
             <Trophy size={14} className="text-ink-secondary" />
             השוואה לקמפיינים שמקדמים את אותם מוצרים
-          </h3>
+          </Heading>
           <p className="text-[11px] text-ink-muted mt-0.5 leading-relaxed">
             הקמפיין הזה חולק מיפוי עם {cohort.others.length} קמפיינים אחרים בסך
             הכל ({cohort.sharedProductIds.length} מוצרים משותפים). ה-ROAS Shopify

@@ -6,6 +6,7 @@
 import { Pause, Play, Sparkles, Archive, AlertCircle, MousePointerClick, Eye } from 'lucide-react';
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { fetchStatusEvents, type StatusEventRow } from '@/lib/operator/registriesReaders';
+import { Heading } from '@/components/ui/Typography';
 
 function relativeHebrew(iso: string): string {
   const dMs = Date.now() - new Date(iso).getTime();
@@ -33,16 +34,16 @@ export async function StatusEventsFeed() {
   if (events.length === 0) {
     return (
       <section className="border border-glass-edge rounded-lg p-4 text-ink-secondary text-sm">
-        <h3 className="text-base font-medium text-ink mb-2">שינויי סטטוס אחרונים</h3>
+        <Heading level="section" className="font-medium mb-2">שינויי סטטוס אחרונים</Heading>
         <p>אין אירועי סטטוס עדיין. הראשון יופיע תוך 10 דקות מהפעלת ה-orchestrator.</p>
       </section>
     );
   }
   return (
     <section className="border border-glass-edge rounded-lg p-4">
-      <h3 className="text-base font-medium text-ink mb-3">
+      <Heading level="section" className="font-medium mb-3">
         שינויי סטטוס אחרונים <span className="text-xs text-ink-secondary">(50 אחרונים)</span>
-      </h3>
+      </Heading>
       <ul className="space-y-1.5 text-sm">
         {events.map((e) => (
           <li key={e.id} className="flex items-start gap-2.5 text-ink">

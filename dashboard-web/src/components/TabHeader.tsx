@@ -1,5 +1,6 @@
 import { type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
+import { Heading } from '@/components/ui/Typography';
 
 export function TabHeader({
   title,
@@ -18,7 +19,7 @@ export function TabHeader({
     <header className={cn('flex flex-col gap-3 pb-3 border-b border-glass-edge mb-4', className)}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-base sm:text-lg font-semibold text-ink leading-tight">{title}</h2>
+          <Heading level="hero">{title}</Heading>
           {description && (
             <p className="text-xs text-ink-muted mt-1 leading-relaxed">{description}</p>
           )}

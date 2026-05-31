@@ -37,6 +37,7 @@ import { AiInsightPill } from '@/components/ui/AiInsightPill';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { InsightCardGroup, InsightCardRow } from '@/components/ui/InsightCard';
+import { Heading } from '@/components/ui/Typography';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 
 const fetcher = (url: string) => fetch(url).then(r => (r.ok ? r.json() : null));
@@ -242,9 +243,9 @@ export function InsightsBoard({ data }: Props) {
               <Sparkles size={18} />
             </span>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-xl font-bold text-ink tracking-tight leading-tight">
+              <Heading level="hero">
                 תובנות חכמות
-              </h2>
+              </Heading>
               <div className="text-[11px] sm:text-xs text-ink-muted mt-0.5 leading-tight">
                 {loading && (
                   <span className="inline-flex items-center gap-1 mr-2">

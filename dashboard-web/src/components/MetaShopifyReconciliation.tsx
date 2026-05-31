@@ -18,6 +18,7 @@ import { enumerateDateRange } from '@/lib/dateRange';
 import { PRODUCT_MAP_CHIP_KEY } from '@/lib/sessionKeys';
 import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import { ChartContainer } from '@/components/ui/chart/ChartContainer';
+import { Heading } from '@/components/ui/Typography';
 import { Button } from '@/components/ui/Button';
 import { TableBase } from '@/components/ui/TableBase';
 import { HelpTooltip } from '@/components/ui/Tooltip';
@@ -436,10 +437,10 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
 
   return (
     <section>
-      <h3 className="text-sm font-semibold text-ink inline-flex items-center gap-1.5 mb-2">
+      <Heading level="panel" className="inline-flex items-center gap-1.5 mb-2">
         <TrendingUp size={14} className="text-ink-secondary" />
         ערוצים מול Shopify — מתאם יומי
-      </h3>
+      </Heading>
       <div className="rounded-xl border border-glass-edge bg-glass-2/30 p-3 space-y-3">
         {!chipHidden && (
           <HelpTooltip content="current state, not date-versioned">

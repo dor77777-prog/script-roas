@@ -11,6 +11,7 @@ import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/rou
 import { storeColor } from '@/lib/storeColors';
 import { buildTodayNarrative } from '@/lib/todayNarrative';
 import { Card } from '@/components/ui/Card';
+import { Heading } from '@/components/ui/Typography';
 
 const ordersFetcher = async (url: string): Promise<OrdersAttributionResponse> => {
   const r = await fetch(url);
@@ -432,10 +433,10 @@ export function TodayLive({
               <span className={cn('animate-ping absolute inline-flex h-full w-full rounded-full opacity-75', liveTone.pulse)} />
               <span className={cn('relative inline-flex rounded-full h-2.5 w-2.5', liveTone.pulse)} />
             </span>
-            <h2 className="flex items-center gap-2 text-sm sm:text-base font-semibold text-ink truncate">
+            <Heading level="section" className="flex items-center gap-2 truncate">
               <Radio size={16} className={cn('shrink-0 transition-colors duration-500', liveTone.iconColor)} />
               היום — חי
-            </h2>
+            </Heading>
             <span className={cn('hidden sm:inline-block px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded shrink-0 transition-colors duration-500', liveTone.pill)}>
               LIVE
             </span>

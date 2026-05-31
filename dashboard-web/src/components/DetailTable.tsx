@@ -8,6 +8,7 @@ import { roasLabel } from '@/lib/analytics';
 import { RefundIndicator } from './RefundIndicator';
 import { Sparkline } from './ui/Sparkline';
 import { TableBase } from './ui/TableBase';
+import { Heading } from './ui/Typography';
 
 const ROAS_BG: Record<string, string> = {
   red: 'bg-status-redBg',
@@ -167,11 +168,11 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
 
   return (
     <section className="rounded-xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
-      <h2 className="flex items-center gap-2 text-base font-semibold text-ink px-5 py-4 border-b border-glass-edge">
+      <Heading level="section" className="flex items-center gap-2 px-5 py-4 border-b border-glass-edge">
         <Table size={18} className="text-ink-secondary" />
         פירוט יומי
         {meta}
-      </h2>
+      </Heading>
       {tableContent}
     </section>
   );

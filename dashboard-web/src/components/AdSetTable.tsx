@@ -12,6 +12,7 @@ import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { TableBase } from '@/components/ui/TableBase';
 import { HelpTooltip } from '@/components/ui/Tooltip';
+import { Heading } from '@/components/ui/Typography';
 import { roasLabel } from '@/lib/analytics';
 import type { AttributionAnalysis } from '@/lib/attributionAnalysis';
 
@@ -87,10 +88,10 @@ export function AdSetTable({
 }: Props) {
   return (
     <section>
-      <h3 className="text-sm font-semibold text-ink inline-flex items-center gap-1.5 mb-2">
+      <Heading level="panel" className="inline-flex items-center gap-1.5 mb-2">
         <Layers size={14} className="text-ink-secondary" />
         אד-סטים ({adSets.length})
-      </h3>
+      </Heading>
       {/* Horizontal scroll mirrors the AdsDrawer pattern — the
           ad-sets table has 7 columns (toggle / name / spend / budget /
           value / ROAS / conversions) and gets wider than the drawer's

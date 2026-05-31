@@ -53,6 +53,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { NativeSelect } from '@/components/ui/NativeSelect';
 import { TableBase } from '@/components/ui/TableBase';
+import { Heading } from '@/components/ui/Typography';
 
 type Row = {
   id: number;
@@ -359,9 +360,9 @@ export function ManualOverridesCrud() {
         >
           <div className="bg-glass-1 border-0 sm:border sm:border-glass-edge rounded-none sm:rounded p-4 w-full h-full sm:h-auto sm:max-w-md sm:mx-4 flex flex-col">
             <div className="flex items-start justify-between mb-3 shrink-0">
-              <h3 id="confirm-delete-title" className="text-lg font-semibold">
+              <Heading level="hero" id="confirm-delete-title">
                 אישור מחיקה
-              </h3>
+              </Heading>
               <Button
                 type="button"
                 variant="ghost"

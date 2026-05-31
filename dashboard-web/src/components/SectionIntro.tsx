@@ -2,6 +2,7 @@
 
 import { Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Heading } from '@/components/ui/Typography';
 
 type Props = {
   icon?: React.ReactNode;
@@ -51,9 +52,9 @@ export function SectionIntro({
           </span>
         )}
         <div className="min-w-0">
-          <h2 className="text-sm sm:text-base font-semibold text-ink tracking-tight">
+          <Heading level="section">
             {title}
-          </h2>
+          </Heading>
           <p className="text-[11px] sm:text-xs text-ink-secondary mt-0.5 leading-relaxed">
             {description}
           </p>

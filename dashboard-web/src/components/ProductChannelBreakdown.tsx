@@ -7,6 +7,7 @@ import { PRODUCT_MAP_CHIP_KEY } from '@/lib/sessionKeys';
 import { CHART_COLORS } from '@/lib/chartColors';
 import { Button } from '@/components/ui/Button';
 import { HelpTooltip } from '@/components/ui/Tooltip';
+import { Heading } from '@/components/ui/Typography';
 
 /**
  * Phase 1 channel-level product attribution panel — answers "where did the
@@ -79,12 +80,12 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
   const fbPct = Math.round(exclusiveFacebookShare * 100);
   return (
     <section>
-      <h3 className="text-sm font-semibold text-ink inline-flex items-center gap-1.5 mb-2">
+      <Heading level="panel" className="inline-flex items-center gap-1.5 mb-2">
         <Package size={14} className="text-ink-secondary" />
         <HelpTooltip content="סיגנל זה משלים את ה-trust chip. הוא מודד 'מאיפה הגיעו הקונים של המוצרים המשויכים' גם כש-utm_id חסר.">
           <span>מכירות לפי ערוץ של המוצרים המשויכים</span>
         </HelpTooltip>
-      </h3>
+      </Heading>
       <div className="rounded-xl border border-glass-edge bg-glass-2/30 p-3 space-y-3">
         {!chipHidden && (
           <HelpTooltip content="current state, not date-versioned">

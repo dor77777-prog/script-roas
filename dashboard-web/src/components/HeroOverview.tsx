@@ -16,6 +16,7 @@ import { Badge, type BadgeTone } from '@/components/ui/Badge';
 import { Stat } from '@/components/ui/Stat';
 import { ChartContainer } from '@/components/ui/chart/ChartContainer';
 import { HelpTooltip } from '@/components/ui/Tooltip';
+import { Heading } from '@/components/ui/Typography';
 import {
   ChartTooltip,
   ChartTooltipLabel,
@@ -303,13 +304,20 @@ export function HeroOverview({ data, filters }: Props) {
           <span className="tabular-nums">{daysInRange} ימים</span>
         </div>
 
-        {/* Editorial story line — the centerpiece */}
-        <h2
-          className="text-lg sm:text-2xl md:text-[1.75rem] font-light leading-snug tracking-tight text-white max-w-3xl mb-6 sm:mb-8"
+        {/* Editorial story line — the centerpiece. Special-case: Heading
+            primitive's `hero` would coerce font-bold; this floor-spanning
+            story line uses an editorial `font-light` weight + a one-off
+            `1.75rem` step between 2xl and 3xl. We pass an empty `level`
+            (still gets text-ink) via className override and lean on the
+            polymorphic `as="h2"` so semantics stay correct. */}
+        <Heading
+          as="h2"
+          level="hero"
+          className="!font-light text-lg sm:text-2xl md:text-[1.75rem] leading-snug !text-white max-w-3xl mb-6 sm:mb-8"
           style={{ textWrap: 'balance' } as React.CSSProperties}
         >
           {story}
-        </h2>
+        </Heading>
 
         {/* Floating KPI strip — no card chrome, just hairline dividers */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-x-6 sm:gap-x-8 gap-y-5 sm:gap-y-6">

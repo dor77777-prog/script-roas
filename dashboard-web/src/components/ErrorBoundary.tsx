@@ -3,6 +3,7 @@
 import { Component, type ReactNode, type ErrorInfo } from 'react';
 import * as Sentry from '@sentry/nextjs';
 import { Button } from '@/components/ui/Button';
+import { Heading } from '@/components/ui/Typography';
 
 type Props = { children: ReactNode };
 type State = { hasError: boolean; error: Error | null };
@@ -33,7 +34,7 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <div className="min-h-screen flex items-center justify-center bg-canvas p-6">
           <div className="max-w-md rounded-2xl border border-glass-edge bg-glass-1 p-6 shadow-sheet space-y-4">
-            <h1 className="text-xl font-semibold text-ink">משהו השתבש</h1>
+            <Heading level="hero">משהו השתבש</Heading>
             <p className="text-sm text-ink-secondary">
               הדשבורד נתקל בשגיאה בלתי צפויה. ניתן לרענן את הדף או לנסות שוב.
             </p>

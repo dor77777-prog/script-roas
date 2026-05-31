@@ -8,17 +8,18 @@
 import { TokenFailuresTable } from '@/components/operator/TokenFailuresTable';
 import { MetaBucPanel } from '@/components/operator/MetaBucPanel';
 import { FreshnessPanel } from '@/components/operator/FreshnessPanel';
+import { Heading } from '@/components/ui/Typography';
 
 export function HealthTab() {
   return (
     <div className="space-y-8">
       <section>
-        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+        <Heading level="hero" className="mb-3 flex items-center gap-2">
           <span>בעיות טוקן</span>
           <span className="text-ink-secondary text-xs font-normal">
             (אישורים שפגו / API tokens שצריך לחדש)
           </span>
-        </h2>
+        </Heading>
         {/* Phase 05.7.x (2026-05-23) — TokenFailuresTable surfaces every
             upstream auth/API failure detected by the fetchers (Google,
             Meta, TikTok, WhatsApp, Shopify, FX). Resolve button clears
@@ -49,12 +50,12 @@ export function HealthTab() {
           ≥80% triggers budget_skip guard in cron-live-heavy; operator can
           see which accounts are near/over the threshold here. */}
       <section>
-        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+        <Heading level="hero" className="mb-3 flex items-center gap-2">
           <span>תקציב Meta BUC</span>
           <span className="text-ink-secondary text-xs font-normal">
             (per ad-account; ≥80% מפעיל budget skip מונע)
           </span>
-        </h2>
+        </Heading>
         <MetaBucPanel />
       </section>
 
@@ -62,12 +63,12 @@ export function HealthTab() {
           lag matrix. Server component; fetches data_freshness at request time.
           Sorted by lag_minutes DESC NULLS LAST so the stale rows float up. */}
       <section>
-        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+        <Heading level="hero" className="mb-3 flex items-center gap-2">
           <span>טריות נתונים</span>
           <span className="text-ink-secondary text-xs font-normal">
             (לכל store × platform × scope × table — ממוין לפי lag יורד)
           </span>
-        </h2>
+        </Heading>
         <FreshnessPanel />
       </section>
     </div>

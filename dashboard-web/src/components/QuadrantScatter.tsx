@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/chart/ChartTooltip';
 import { QUADRANT_PALETTE, CHART_COLORS } from '@/lib/chartColors';
 import { cn } from '@/lib/utils';
+import { Heading } from '@/components/ui/Typography';
 
 export interface QuadrantPoint {
   name: string;
@@ -139,7 +140,7 @@ export function QuadrantScatter({
     return (
       <div className={cn('rounded-xl bg-glass-1 border border-glass-edge p-5', className)}>
         {title && (
-          <h3 className="text-sm sm:text-base font-semibold text-ink mb-2">{title}</h3>
+          <Heading level="section" className="mb-2">{title}</Heading>
         )}
         <div className="text-ink-muted text-sm text-center py-8">
           אין נתונים להצגה — בחר טווח עם קמפיינים פעילים.
@@ -152,7 +153,7 @@ export function QuadrantScatter({
     <div className={cn('rounded-xl bg-glass-1 border border-glass-edge p-3 sm:p-5', className)}>
       <div className="flex items-start justify-between gap-2 mb-1 flex-wrap">
         {title && (
-          <h3 className="text-sm sm:text-base font-semibold text-ink">{title}</h3>
+          <Heading level="section">{title}</Heading>
         )}
         {/* Hotfix-9: zoom-to-cluster toggle. When ON (default), the chart
             clips axes to ~p90 of each dimension and lists outliers below,

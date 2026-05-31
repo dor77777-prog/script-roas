@@ -7,6 +7,8 @@
 //
 // Server-fetched on parent; receives props synchronously.
 
+import { Heading } from '@/components/ui/Typography';
+
 export type CampaignDrawerStatusSectionProps = {
   configuredStatus: string | null;
   effectiveStatus: string | null;
@@ -51,7 +53,7 @@ export function CampaignDrawerStatusSection(p: CampaignDrawerStatusSectionProps)
 
   return (
     <section className="border border-glass-edge rounded-lg p-4 my-3">
-      <h3 className="text-sm font-medium text-ink mb-3">סטטוס + טריות</h3>
+      <Heading level="panel" className="font-medium mb-3">סטטוס + טריות</Heading>
 
       {/* Phase D — Top row: 3 status chips side by side. */}
       <div className="grid grid-cols-3 gap-2 mb-3">
@@ -94,7 +96,7 @@ export function CampaignDrawerStatusSection(p: CampaignDrawerStatusSectionProps)
 
       {/* Phase D — 3-event timeline. */}
       <div className="border-t border-glass-edge pt-3">
-        <h4 className="text-[11px] font-medium text-ink-secondary mb-2">היסטוריית סטטוס</h4>
+        <Heading as="h4" level="panel" className="text-[11px] font-medium !text-ink-secondary mb-2">היסטוריית סטטוס</Heading>
         <div className="grid grid-cols-2 gap-y-1.5 text-xs">
           <span className="text-ink-secondary">נראה לראשונה</span>
           <span className="text-ink">{relIso(p.firstSeenAt)}</span>

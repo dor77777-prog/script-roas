@@ -10,17 +10,18 @@
 
 import { WhatsappTestButtons } from '@/components/operator/WhatsappTestButtons';
 import { ResetData } from '@/components/operator/ResetData';
+import { Heading } from '@/components/ui/Typography';
 
 export function DangerTab() {
   return (
     <div className="space-y-8">
       <section>
-        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+        <Heading level="hero" className="mb-3 flex items-center gap-2">
           <span>התראות WhatsApp</span>
           <span className="text-ink-secondary text-xs font-normal">
             (3 הודעות אוטומטיות ביום — 12:00, 18:00, 00:10)
           </span>
-        </h2>
+        </Heading>
         <p className="text-ink-secondary text-sm mb-3">
           הקרון של Inngest שולח דוח ROAS יומי ב-WhatsApp ל-2 מספרים מוגדרים
           (notification_config). הכפתורים למטה מאפשרים לשלוח ידנית את אותה
@@ -38,12 +39,12 @@ export function DangerTab() {
           the component itself enforces a typed-token confirmation before any
           DELETE fires. */}
       <section>
-        <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+        <Heading level="hero" className="mb-3 flex items-center gap-2">
           <span>ניקוי וריסט</span>
           <span className="text-ink-secondary text-xs font-normal">
             (destructive — איפוס נתונים)
           </span>
-        </h2>
+        </Heading>
         <p className="text-ink-secondary text-sm mb-3">
           מחיקה רבת-טבלאות של נתוני הדשבורד ב-Supabase, על מנת להריץ
           backfill מאפס ולוודא שהדשבורד מתמלא מחדש כראוי. הפעולה מתאשרת
