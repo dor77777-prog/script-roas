@@ -87,13 +87,13 @@ export const SOURCE_LABEL: Record<CostSource, string> = {
 };
 
 export const SOURCE_COLOR: Record<CostSource, string> = {
-  'shopify-plan': 'bg-accent/10 text-accent',
-  'shopify-app':  'bg-blue-100 text-blue-700',
-  'external-app': 'bg-purple-100 text-purple-700',
+  'shopify-plan': 'bg-accent-bg text-accent',
+  'shopify-app':  'bg-status-blueBg text-status-blueFg',
+  'external-app': 'bg-status-grayBg text-status-grayFg',
   email:          'bg-status-warningBg text-status-warningFg',
   usage:          'bg-status-orangeBg text-status-orange',
-  'one-off':      'bg-ink-muted/15 text-ink-secondary',
-  other:          'bg-ink-muted/15 text-ink-secondary',
+  'one-off':      'bg-ink-muted text-ink-secondary',
+  other:          'bg-ink-muted text-ink-secondary',
 };
 
 export function BillingSettings({ storeNames }: Props) {
@@ -199,7 +199,7 @@ export function BillingSettings({ storeNames }: Props) {
         >
           <SheetHeader className="flex items-center justify-between gap-3 py-3 sm:px-5">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent/10 text-accent shrink-0">
+              <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent-soft text-accent shrink-0">
                 <Receipt size={16} />
               </span>
               <div className="min-w-0">
@@ -237,7 +237,7 @@ export function BillingSettings({ storeNames }: Props) {
                 className={cn(
                   'h-auto px-3 py-1.5 text-xs sm:text-sm font-medium',
                   tab === t.key
-                    ? 'bg-accent/10 text-accent'
+                    ? 'bg-accent-bg text-accent'
                     : 'text-ink-secondary',
                 )}
               >
@@ -387,7 +387,7 @@ function RecurringTab({
   return (
     <div className="space-y-3">
       {planErrorStores.length > 0 && (
-        <div className="rounded-lg border border-status-warning/30 bg-status-warningBg p-3">
+        <div className="rounded-lg border border-status-warning bg-status-warningBg p-3">
           <div className="flex items-start gap-2">
             <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-status-warningBg text-status-warningFg shrink-0">
               <AlertCircle size={14} />
@@ -396,7 +396,7 @@ function RecurringTab({
               <div className="text-xs sm:text-sm font-semibold text-status-warningFg">
                 זיהוי אוטומטי של תוכניות Shopify נכשל
               </div>
-              <p className="text-[11px] sm:text-xs text-status-warningFg/85 mt-0.5 leading-relaxed">
+              <p className="text-[11px] sm:text-xs text-status-warningFg mt-0.5 leading-relaxed">
                 הקריאה ל-plan דרך Shopify GraphQL Admin API נכשלה. סיבות
                 נפוצות: ה-token לא כולל את ה-scope <code>read_shop</code>,
                 ה-token פג, או החנות חסומה. תיקון נדרש בצד ה-token של החנות
@@ -406,7 +406,7 @@ function RecurringTab({
                 {planErrorStores.map(m => (
                   <li
                     key={m.storeId}
-                    className="rounded-md bg-glass-1 border border-status-warning/30 px-2.5 py-1.5"
+                    className="rounded-md bg-glass-1 border border-status-warning px-2.5 py-1.5"
                   >
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-semibold text-ink shrink-0">
@@ -418,7 +418,7 @@ function RecurringTab({
                     </div>
                     <div
                       dir="ltr"
-                      className="text-[10px] text-status-warningFg/80 font-mono mt-1 break-words"
+                      className="text-[10px] text-status-warningFg font-mono mt-1 break-words"
                     >
                       {m.lastError}
                     </div>
@@ -430,9 +430,9 @@ function RecurringTab({
         </div>
       )}
       {missingDetected.length > 0 && (
-        <div className="rounded-lg border border-accent/30 bg-accent/5 p-3">
+        <div className="rounded-lg border border-accent bg-accent-bg p-3">
           <div className="flex items-start gap-2">
-            <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-accent/15 text-accent shrink-0">
+            <span className="inline-flex items-center justify-center w-7 h-7 rounded-md bg-accent-soft text-accent shrink-0">
               <Sparkles size={14} />
             </span>
             <div className="flex-1 min-w-0">
@@ -505,7 +505,7 @@ function RecurringTab({
 
       {items.length === 0 ? (
         <div className="text-center py-10 text-ink-muted text-sm">
-          <Receipt size={28} className="mx-auto mb-2 text-ink-muted/60" />
+          <Receipt size={28} className="mx-auto mb-2 text-ink-muted" />
           <div>אין מנויים חודשיים. לחץ "הוסף" כדי להתחיל.</div>
         </div>
       ) : (
@@ -800,7 +800,7 @@ function RecurringEditForm({
             className={cn(
               'flex-1 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors border h-auto',
               kind === 'fixed'
-                ? 'bg-accent text-white border-accent hover:bg-accent/90'
+                ? 'bg-accent text-accent-fg border-accent hover:bg-[color-mix(in_oklab,var(--accent)_88%,var(--text))]'
                 : 'bg-glass-1 text-ink-secondary hover:bg-glass-2 border-glass-edge',
             )}
           >
@@ -816,7 +816,7 @@ function RecurringEditForm({
             className={cn(
               'flex-1 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors border h-auto',
               kind === 'percent'
-                ? 'bg-accent text-white border-accent hover:bg-accent/90'
+                ? 'bg-accent text-accent-fg border-accent hover:bg-[color-mix(in_oklab,var(--accent)_88%,var(--text))]'
                 : 'bg-glass-1 text-ink-secondary hover:bg-glass-2 border-glass-edge',
             )}
           >
@@ -917,7 +917,7 @@ function OneTimeTab({
 
       {sorted.length === 0 ? (
         <div className="text-center py-10 text-ink-muted text-sm">
-          <Receipt size={28} className="mx-auto mb-2 text-ink-muted/60" />
+          <Receipt size={28} className="mx-auto mb-2 text-ink-muted" />
           <div>אין חיובים חד-פעמיים. ייבא CSV מ-Shopify ⬅️ או הוסף ידנית.</div>
         </div>
       ) : (

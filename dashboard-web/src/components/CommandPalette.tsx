@@ -542,8 +542,8 @@ export function CommandPalette({
         onClick={() => { setOpen(true); setWarmCache(true); }}
         className={cn(
           'gap-1.5 sm:gap-2 rounded-lg',
-          'bg-white/10 hover:bg-white/15 active:bg-white/20',
-          'border border-white/15 text-white/85',
+          'bg-glass-2 hover:bg-glass-3 active:bg-[color:var(--surface-elevated-1)]',
+          'border border-glass-edge text-ink-secondary',
           'px-2.5 sm:px-3 py-1.5 sm:py-2 h-auto text-xs sm:text-sm font-medium shrink-0',
         )}
         title="חיפוש מהיר (⌘K)"
@@ -551,14 +551,14 @@ export function CommandPalette({
       >
         <Search size={14} />
         <span className="hidden sm:inline">חיפוש</span>
-        <kbd className="hidden md:inline-flex items-center gap-0.5 px-1 py-0.5 text-[10px] font-mono bg-white/15 rounded border border-white/15 tabular-nums">
+        <kbd className="hidden md:inline-flex items-center gap-0.5 px-1 py-0.5 text-[10px] font-mono bg-glass-2 rounded border border-glass-edge tabular-nums">
           <CmdIcon size={9} />K
         </kbd>
       </Button>
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh] sm:pt-[12vh] px-3 bg-ink/30 backdrop-blur-md animate-fade-in"
+          className="fixed inset-0 z-50 flex items-start justify-center pt-[8vh] sm:pt-[12vh] px-3 bg-scrim backdrop-blur-md animate-fade-in"
           onClick={close}
         >
           <Card
@@ -724,14 +724,14 @@ function GroupedSection({
               className={cn(
                 'w-full justify-start gap-3 px-3 py-2 h-auto rounded-lg mx-1',
                 isActive
-                  ? 'bg-accent/8 text-ink'
+                  ? 'bg-accent-bg text-ink'
                   : 'text-ink-secondary hover:bg-glass-2',
               )}
             >
               <span
                 className={cn(
                   'inline-flex items-center justify-center w-6 h-6 rounded-md shrink-0',
-                  isActive ? 'bg-accent/15 text-accent' : 'bg-glass-2 text-ink-muted',
+                  isActive ? 'bg-accent-soft text-accent' : 'bg-glass-2 text-ink-muted',
                 )}
               >
                 {item.icon}

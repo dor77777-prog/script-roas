@@ -111,7 +111,7 @@ function SidebarBody({
   const railText = isDesktop ? 'text-[var(--sidebar-fg)]' : 'text-ink-muted';
   // Hover treatment — brighten text + faint white-alpha fill on dark rail.
   const railHover = isDesktop
-    ? 'hover:text-[var(--sidebar-fg-active)] hover:bg-white/[0.06]'
+    ? 'hover:text-[var(--sidebar-fg-active)] hover:bg-[color-mix(in_oklab,var(--sidebar-fg)_8%,transparent)]'
     : 'hover:text-ink hover:bg-glass-2';
   // Active / selected treatment — violet tint + active fg on dark rail.
   const railActive = isDesktop
@@ -124,7 +124,7 @@ function SidebarBody({
       <div
         className={cn(
           'px-3 py-3 border-b flex items-center gap-2',
-          isDesktop ? 'border-white/10' : 'border-glass-edge',
+          isDesktop ? 'border-[color-mix(in_oklab,var(--sidebar-fg)_12%,transparent)]' : 'border-glass-edge',
         )}
       >
         {/* Logo keeps the violet gradient in both themes (mockup .sb-logo). */}
@@ -204,7 +204,7 @@ function SidebarBody({
       <div
         className={cn(
           'border-t px-2 py-3 space-y-1',
-          isDesktop ? 'border-white/10' : 'border-glass-edge',
+          isDesktop ? 'border-[color-mix(in_oklab,var(--sidebar-fg)_12%,transparent)]' : 'border-glass-edge',
         )}
       >
         <RailTooltip show={showTooltips} label="ניהול">
@@ -416,7 +416,7 @@ export function Sidebar({
         style={{ width: expanded ? 220 : 72 }}
         className={cn(
           // Mockup keeps a DARK slim rail in BOTH themes — use the sidebar
-          // tokens (theme-independent #15182a) rather than bg-glass-1/text-ink
+          // tokens (theme-independent dark surface) rather than bg-glass-1/text-ink
           // so the rail never goes dark-on-dark or washes out on light.
           'sticky top-0 h-screen border-s border-glass-edge bg-[var(--sidebar)] text-[var(--sidebar-fg)]',
           'hidden md:flex flex-col transition-[width] duration-200 ease-out',
@@ -449,16 +449,17 @@ export function Sidebar({
           = closed (off-screen right), `translate-x-0` = open (right edge).
           In LTR (English) this would be off-screen left instead — fine,
           but we're RTL-first here. */}
-      {/* Backdrop — solid canvas tint at 70% so the content behind reads as
-          a clearly dimmed layer (not a slightly-tinted bleed-through). The
+      {/* Backdrop — the shared scrim token so the content behind reads as a
+          clearly dimmed layer (not a slightly-tinted bleed-through). The
           mobile sidebar Sheet is hand-rolled so we don't get Radix's
-          stronger-by-default overlay; bumping to the canvas tone matches
-          the visual weight of native iOS / Android navigation drawers. */}
+          stronger-by-default overlay; the scrim token matches the visual
+          weight of native iOS / Android navigation drawers and flips per
+          theme. */}
       <div
         onClick={onMobileClose}
         aria-hidden={!isMobileOpen}
         className={cn(
-          'fixed inset-0 bg-canvas-2/70 backdrop-blur-sm z-40 md:hidden transition-opacity duration-DEFAULT',
+          'fixed inset-0 bg-scrim backdrop-blur-sm z-40 md:hidden transition-opacity duration-DEFAULT',
           isMobileOpen ? 'opacity-100' : 'opacity-0 pointer-events-none',
         )}
       />
@@ -473,7 +474,7 @@ export function Sidebar({
           // body is fully opaque on phones — operator feedback said the
           // glass treatment let underlying content bleed through and made
           // the labels hard to read. Desktop rail keeps the glass look.
-          'bg-canvas text-ink shadow-sheet overflow-y-auto',
+          'bg-canvas-1 text-ink shadow-sheet overflow-y-auto',
           'border-s border-glass-edge',
           'flex flex-col transition-transform duration-DEFAULT',
           isMobileOpen ? 'translate-x-0' : 'translate-x-full',

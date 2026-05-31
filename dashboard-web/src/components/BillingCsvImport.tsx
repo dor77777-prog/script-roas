@@ -254,7 +254,7 @@ export function BillingCsvImport({
       </div>
 
       {warnings.length > 0 && (
-        <div className="rounded-lg bg-status-warningBg border border-status-warning/30 p-3 flex items-start gap-2">
+        <div className="rounded-lg bg-status-warningBg border border-status-warning p-3 flex items-start gap-2">
           <AlertCircle size={14} className="text-status-warningFg shrink-0 mt-0.5" />
           <div className="text-xs text-status-warningFg">
             {warnings.map((w, i) => <div key={i}>{w}</div>)}
@@ -329,7 +329,7 @@ export function BillingCsvImport({
                     className={cn(
                       'px-1.5 py-0.5 h-auto text-[10px] rounded-none transition-colors',
                       p.type === 'recurring'
-                        ? 'bg-accent text-white hover:bg-accent/90'
+                        ? 'bg-accent text-accent-fg hover:bg-[color-mix(in_oklab,var(--accent)_88%,var(--text))]'
                         : 'text-ink-secondary hover:bg-glass-2',
                     )}
                   >
@@ -341,7 +341,7 @@ export function BillingCsvImport({
                     className={cn(
                       'px-1.5 py-0.5 h-auto text-[10px] rounded-none transition-colors border-e border-glass-edge',
                       p.type === 'onetime'
-                        ? 'bg-accent text-white hover:bg-accent/90'
+                        ? 'bg-accent text-accent-fg hover:bg-[color-mix(in_oklab,var(--accent)_88%,var(--text))]'
                         : 'text-ink-secondary hover:bg-glass-2',
                     )}
                   >

@@ -173,7 +173,7 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm animate-fade-in"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-scrim backdrop-blur-sm animate-fade-in"
           onClick={() => setOpen(false)}
         >
           <div

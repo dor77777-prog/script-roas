@@ -59,18 +59,18 @@ const COMPONENTS_DIR = path.resolve(__dirname, '..', '..', 'components');
 const MIGRATION_ALLOWLIST: string[] = [
   // AdSetTable.tsx — MIGRATED in Wave 3.3a (removed from allowlist)
   // AdsDrawer.tsx — MIGRATED in Wave 3.3b (removed from allowlist)
-  'AiReportButton.tsx',
+  // AiReportButton.tsx — MIGRATED in Wave 3.7 (removed from allowlist)
   // AnnotationsPanel.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
   // AttributionAnalysisPanel.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
-  'BillingCsvImport.tsx',
-  'BillingSettings.tsx',
+  // BillingCsvImport.tsx — MIGRATED in Wave 3.7 (removed from allowlist)
+  // BillingSettings.tsx — MIGRATED in Wave 3.7 (removed from allowlist)
   // CampaignDrawerStatusSection.tsx — MIGRATED in Wave 3.3a (removed from allowlist)
   // CampaignFreshnessChip.tsx — MIGRATED in Wave 3.3a (removed from allowlist)
   // CampaignsColumnsMenu.tsx — MIGRATED in Wave 3.3a (removed from allowlist)
   // CampaignsTable.tsx — MIGRATED in Wave 3.3a (removed from allowlist)
   // CampaignsTableRow.tsx — MIGRATED in Wave 3.3a (removed from allowlist)
   // CohortComparisonPanel.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
-  'CommandPalette.tsx',
+  // CommandPalette.tsx — MIGRATED in Wave 3.5 (removed from allowlist)
   // Dashboard.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
   // Filters.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
   // FreshnessChip.tsx — MIGRATED in Wave 3.3a (removed from allowlist)
@@ -87,7 +87,7 @@ const MIGRATION_ALLOWLIST: string[] = [
   // ProductsTable.tsx — MIGRATED in Wave 3.4 (removed from allowlist)
   // RoasChart.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
   // SectionIntro.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
-  'Sidebar.tsx',
+  // Sidebar.tsx — MIGRATED in Wave 3.5 (removed from allowlist)
   // SyncIndicator.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
   // TabFreshnessHeader.tsx — MIGRATED in Wave 3.3a (removed from allowlist)
   // campaign-drawer/CampaignDrawerAdSets.tsx — MIGRATED in Wave 3.3b (removed from allowlist)
