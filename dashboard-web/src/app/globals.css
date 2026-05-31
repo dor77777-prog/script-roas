@@ -85,6 +85,12 @@
   --up: var(--band-green);
   --dn: var(--band-red);
 
+  /* Task 1.4 — freshness desaturation transition.
+     Controls how long it takes for a card to fade from
+     fresh→aging→stale (or back) when its data refreshes.
+     Mirrors the band glow transition (Task 1.3) for visual cohesion. */
+  --motion-freshness: 600ms ease-out;
+
   /* ---------------------------------------------------------------------
      Task 1.2 — status palette restoration.
      The Task-1.1 glass+neon flip dropped these; the new Tailwind colors
@@ -338,3 +344,54 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 .chip-green  { background: oklch(70% 0.18 145 / 0.18); color: var(--band-green); }
 .chip-blue   { background: oklch(68% 0.16 240 / 0.18); color: var(--band-blue); }
 .chip-gray   { background: oklch(60% 0.012 250 / 0.12); color: var(--text-muted); }
+
+/* ===========================================================================
+   FRESHNESS DESATURATION — Task 1.4.
+   Mockup reference: mockup-05-freshness-desaturation.html lines 94-132.
+   `.glass[data-freshness="fresh|aging|stale"]` desaturates the card so a
+   stale Per-Store row visibly fades next to live siblings. Thresholds
+   (15 min / 30 min) live in lib/freshness/useStaleness.ts:
+     fresh  → no filter,                 opacity 1.00
+     aging  → saturate(0.60),            opacity 0.92  (15-30 min old)
+     stale  → saturate(0.30) brightness  opacity 0.80  (>30 min old)
+   The transition uses --motion-freshness so a refresh re-saturates smoothly.
+   `.glass[data-band]::before` (the band glow bar) is dimmed in lockstep so
+   a stale card cannot keep a hot green/red rim.
+
+   NOTE: transition is scoped to `.glass[data-freshness]` rather than
+   the bare `.glass` class to avoid disturbing other transition stacks
+   on glass surfaces that don't participate in the freshness system.
+   =========================================================================== */
+.glass[data-freshness] {
+  transition: filter var(--motion-freshness), opacity var(--motion-freshness);
+}
+.glass[data-freshness="fresh"] { filter: none; opacity: 1; }
+.glass[data-freshness="aging"] { filter: saturate(0.60); opacity: 0.92; }
+.glass[data-freshness="aging"]::before { opacity: 0.6 !important; filter: saturate(0.60); }
+.glass[data-freshness="stale"] { filter: saturate(0.30) brightness(0.95); opacity: 0.80; }
+.glass[data-freshness="stale"]::before { opacity: 0.3 !important; filter: saturate(0.30); }
+
+/* Freshness chip — small uppercase pill carried inside the card header
+   that mirrors the desaturation stage as a label ("LIVE · 4m" / "AGING ·
+   22min" / "STALE · 1h 47min"). Pulse dot animates only when fresh.
+   Renamed @keyframes to `fresh-pulse` to avoid collision with Tailwind's
+   built-in `animate-pulse` utility (same trap as Task 1.1 cleanup). */
+.fresh-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px; font-family: 'Geist Mono'; text-transform: uppercase; letter-spacing: 0.06em; }
+.fresh-chip .pulse { width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 6px currentColor; }
+.fresh-chip.live  { background: oklch(70% 0.18 145 / 0.18); color: var(--band-green); }
+.fresh-chip.aging { background: oklch(78% 0.16 75  / 0.18); color: var(--band-orange); }
+.fresh-chip.stale { background: oklch(64% 0.22 22  / 0.18); color: var(--band-red); }
+.fresh-chip.live .pulse { animation: fresh-pulse 2s ease-out infinite; }
+@keyframes fresh-pulse {
+  0%, 100% { opacity: 1;   transform: scale(1); }
+  50%      { opacity: 0.5; transform: scale(0.85); }
+}
+
+/* Reduced-motion: the project-wide `@media (prefers-reduced-motion: reduce)`
+   block earlier in this file already neutralises animation+transition
+   durations globally. These explicit rules below make the intent obvious
+   at the call-site and survive any future relaxation of the global rule. */
+@media (prefers-reduced-motion: reduce) {
+  .fresh-chip.live .pulse { animation: none; }
+  .glass[data-freshness] { transition: none; }
+}
