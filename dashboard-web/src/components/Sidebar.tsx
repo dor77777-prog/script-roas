@@ -1,26 +1,72 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   Home, Receipt, TrendingUp, Megaphone, Package, Table,
-  Cog, Sun, Moon, Monitor, PanelRightOpen, PanelRightClose, X,
+  Cog, Sun, Moon, Monitor, Pin, PinOff, X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from './ThemeProvider';
 import { Button } from '@/components/ui/Button';
+import { HelpTooltip } from '@/components/ui/Tooltip';
+import { useSidebarPin } from '@/lib/hooks/useSidebarPin';
 import type { TabKey } from '@/lib/urlState';
 
-type NavItem = { key: TabKey; label: string; icon: React.ReactNode };
+type NavItem = {
+  key: TabKey;
+  label: string;
+  icon: React.ReactNode;
+  /** 1-based slot used in the ⌘N tooltip hint on collapsed state. */
+  slot: number;
+};
 
 const NAV: NavItem[] = [
-  { key: 'home',      label: 'בית',     icon: <Home size={16} /> },
-  { key: 'pnl',       label: 'P&L',     icon: <Receipt size={16} /> },
-  { key: 'analysis',  label: 'ניתוח',    icon: <TrendingUp size={16} /> },
-  { key: 'campaigns', label: 'קמפיינים', icon: <Megaphone size={16} /> },
-  { key: 'products',  label: 'מוצרים',   icon: <Package size={16} /> },
-  { key: 'detail',    label: 'פירוט',    icon: <Table size={16} /> },
+  { key: 'home',      label: 'בית',      icon: <Home size={16} />,        slot: 1 },
+  { key: 'pnl',       label: 'P&L',      icon: <Receipt size={16} />,     slot: 2 },
+  { key: 'analysis',  label: 'ניתוח',    icon: <TrendingUp size={16} />,  slot: 3 },
+  { key: 'campaigns', label: 'קמפיינים', icon: <Megaphone size={16} />,   slot: 4 },
+  { key: 'products',  label: 'מוצרים',   icon: <Package size={16} />,     slot: 5 },
+  { key: 'detail',    label: 'פירוט',    icon: <Table size={16} />,       slot: 6 },
 ];
+
+/**
+ * Wraps a single rail item in a collapsed-state tooltip showing the label
+ * + a ⌘N shortcut hint. Expanded sidebars don't need the tooltip because
+ * the label is already visible inline, so we pass `content={null}` and let
+ * HelpTooltip short-circuit to a passthrough render.
+ *
+ * The shortcut text is wrapped in <bdi dir="ltr"> so the ⌘ glyph and digit
+ * render left-to-right even inside the RTL body — otherwise "⌘1" would
+ * mirror to "1⌘" which looks broken to keyboard-savvy users.
+ */
+function RailTooltip({
+  show,
+  label,
+  shortcut,
+  children,
+}: {
+  show: boolean;
+  label: string;
+  shortcut?: string;
+  children: React.ReactNode;
+}) {
+  const content = show ? (
+    <span className="flex items-center gap-2">
+      <span>{label}</span>
+      {shortcut && (
+        <bdi dir="ltr" className="font-mono text-2xs text-ink-muted">
+          {shortcut}
+        </bdi>
+      )}
+    </span>
+  ) : null;
+  return (
+    <HelpTooltip content={content} side="left" sideOffset={10}>
+      {children}
+    </HelpTooltip>
+  );
+}
 
 /**
  * Renders the full nav body (brand + tabs + footer controls). Shared between
@@ -32,15 +78,20 @@ function SidebarBody({
   activeTab,
   onTabChange,
   collapsed,
-  onToggleCollapsed,
+  pinned,
+  onTogglePin,
   onItemClick,
   onClose,
   variant,
 }: {
   activeTab: TabKey;
   onTabChange: (key: TabKey) => void;
+  /** True when rendering as a 72px icon-rail (desktop only). */
   collapsed: boolean;
-  onToggleCollapsed: () => void;
+  /** Sticky pin preference (desktop only). Drives the pin/unpin button glyph. */
+  pinned: boolean;
+  /** Flip the pinned preference (desktop only). */
+  onTogglePin: () => void;
   /** Called after a nav item or operator link is tapped (used by mobile to close drawer). */
   onItemClick?: () => void;
   /** Mobile-only: explicit close-X handler. Renders the X button when set. */
@@ -50,6 +101,7 @@ function SidebarBody({
 }) {
   const { choice, setChoice } = useTheme();
   const isCollapsed = variant === 'desktop' && collapsed;
+  const showTooltips = isCollapsed;
 
   return (
     <>
@@ -77,7 +129,7 @@ function SidebarBody({
       <nav className="flex-1 px-2 py-3 space-y-0.5" role="tablist">
         {NAV.map(item => {
           const isActive = item.key === activeTab;
-          return (
+          const button = (
             <Button
               key={item.key}
               role="tab"
@@ -85,12 +137,16 @@ function SidebarBody({
               variant="ghost"
               aria-current={isActive ? 'page' : undefined}
               aria-selected={isActive}
+              aria-label={isCollapsed ? item.label : undefined}
               onClick={() => {
                 onTabChange(item.key);
                 onItemClick?.();
               }}
               className={cn(
-                'flex w-full justify-start gap-3 rounded-md px-2.5 py-2 text-sm h-auto',
+                'flex w-full rounded-md text-sm h-auto',
+                isCollapsed
+                  ? 'justify-center px-0 py-2'
+                  : 'justify-start gap-3 px-2.5 py-2',
                 isActive
                   ? 'bg-glass-2 text-ink font-medium ring-1 ring-glass-edge'
                   : 'text-ink-muted hover:text-ink hover:bg-glass-1',
@@ -100,22 +156,38 @@ function SidebarBody({
               {!isCollapsed && <span>{item.label}</span>}
             </Button>
           );
+          return (
+            <RailTooltip
+              key={item.key}
+              show={showTooltips}
+              label={item.label}
+              shortcut={`⌘${item.slot}`}
+            >
+              {button}
+            </RailTooltip>
+          );
         })}
       </nav>
 
-      {/* Footer: operator + theme toggle + collapse */}
+      {/* Footer: operator + theme toggle + pin */}
       <div className="border-t border-glass-edge px-2 py-3 space-y-1">
-        <Link
-          href="/operator"
-          onClick={() => onItemClick?.()}
-          className={cn(
-            'flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-sm',
-            'text-ink-muted hover:text-ink hover:bg-glass-2',
-          )}
-        >
-          <Cog size={16} />
-          {!isCollapsed && <span>ניהול</span>}
-        </Link>
+        <RailTooltip show={showTooltips} label="ניהול">
+          <Link
+            href="/operator"
+            onClick={() => onItemClick?.()}
+            aria-label={isCollapsed ? 'ניהול' : undefined}
+            className={cn(
+              'flex w-full items-center rounded-md text-sm',
+              isCollapsed
+                ? 'justify-center px-0 py-2'
+                : 'justify-start gap-3 px-2.5 py-2',
+              'text-ink-muted hover:text-ink hover:bg-glass-2',
+            )}
+          >
+            <Cog size={16} />
+            {!isCollapsed && <span>ניהול</span>}
+          </Link>
+        </RailTooltip>
 
         <div className={cn('flex items-center gap-1 px-1', isCollapsed && 'flex-col')}>
           <Button
@@ -160,28 +232,53 @@ function SidebarBody({
         </div>
 
         {variant === 'desktop' && (
-          <Button
-            type="button"
-            variant="ghost"
-            aria-label={collapsed ? 'הרחב' : 'כווץ'}
-            onClick={onToggleCollapsed}
-            className="w-full h-auto p-1.5 text-ink-muted"
+          <RailTooltip
+            show={showTooltips}
+            label={pinned ? 'בטל הצמדה' : 'הצמד פתוח'}
+            shortcut="⌘\"
           >
-            {/* RTL note (Task 4.8): the sidebar lives on the RTL-start
-                edge (right in Hebrew). PanelRightOpen / PanelRightClose
-                are *logical* glyphs — they visually depict a right-edge
-                panel revealing or tucking away its content, which matches
-                this sidebar's geometry regardless of writing direction.
-                The prior ChevronsLeft/ChevronsRight pointed the wrong way
-                in RTL because they're purely physical-direction icons. */}
-            {collapsed ? <PanelRightOpen size={14} /> : <PanelRightClose size={14} />}
-          </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              aria-label={pinned ? 'בטל הצמדה' : 'הצמד פתוח'}
+              aria-pressed={pinned}
+              onClick={onTogglePin}
+              data-testid="sidebar-pin-toggle"
+              className={cn(
+                'w-full h-auto p-1.5',
+                pinned ? 'text-ink bg-glass-2' : 'text-ink-muted',
+              )}
+            >
+              {/* Pin glyph rotates from "ready to pin" → "pinned" so the
+                  affordance reads at a glance even before the user finds
+                  the tooltip. PinOff = currently pinned, click to release;
+                  Pin = currently free, click to pin open. */}
+              {pinned ? <PinOff size={14} /> : <Pin size={14} />}
+            </Button>
+          </RailTooltip>
         )}
       </div>
     </>
   );
 }
 
+/**
+ * Desktop sidebar interaction model (Task 5.8 — Q10):
+ *
+ *   - Default state: 72px icon-rail (collapsed).
+ *   - Hover anywhere over the rail for 200ms → temporarily expand to
+ *     220px. Mouse leave collapses it back unless pinned.
+ *   - Pin button in the footer flips the sticky `sidebar:pinned`
+ *     preference (persisted via useSidebarPin → localStorage).
+ *   - ⌘\ (Cmd+\ on macOS, Ctrl+\ on Windows/Linux) toggles the pinned
+ *     state globally. Same convention as VS Code / Cursor.
+ *
+ * Width math: `expanded = pinned || hoverExpanded`. Width transitions at
+ * 200ms ease-out via Tailwind's transition-[width] utility — Tailwind's
+ * `duration-200` is exactly the 200ms cited by the mockup. The
+ * `ease-out` keyword matches `transition: width 200ms ease-out` from the
+ * mockup CSS verbatim.
+ */
 export function Sidebar({
   activeTab,
   onTabChange,
@@ -195,24 +292,86 @@ export function Sidebar({
   /** Called when the user closes the mobile drawer (backdrop tap, nav click). */
   onMobileClose: () => void;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const { pinned, togglePin } = useSidebarPin();
+  const [hoverExpanded, setHoverExpanded] = useState(false);
+  // Use the cross-platform Timeout type (browser + Node both narrow to
+  // number/Timeout via the DOM lib; `ReturnType<typeof setTimeout>` is the
+  // portable form). Stored in a ref so we can cancel on a fast mouse-out
+  // without re-rendering.
+  const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const expanded = pinned || hoverExpanded;
+
+  const onMouseEnter = useCallback(() => {
+    if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = setTimeout(() => {
+      setHoverExpanded(true);
+      hoverTimerRef.current = null;
+    }, 200);
+  }, []);
+
+  const onMouseLeave = useCallback(() => {
+    if (hoverTimerRef.current) {
+      clearTimeout(hoverTimerRef.current);
+      hoverTimerRef.current = null;
+    }
+    setHoverExpanded(false);
+  }, []);
+
+  // Cancel any pending hover-expand timer on unmount so we never call
+  // setState on an unmounted component during fast nav.
+  useEffect(() => {
+    return () => {
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
+    };
+  }, []);
+
+  // Global ⌘\ (Cmd+\) / Ctrl+\ shortcut to toggle the pin state. Mirrors
+  // the keyboard model used by CommandPalette for Cmd+K — listen on
+  // document, gate to non-editable targets, preventDefault to avoid the
+  // browser's default behaviour (Chrome / Firefox have no built-in
+  // binding for \, but Safari / extension shortcuts sometimes do).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === '\\') {
+        const t = e.target as HTMLElement | null;
+        const isEditable =
+          !!t && (
+            t.tagName === 'INPUT' ||
+            t.tagName === 'TEXTAREA' ||
+            t.isContentEditable
+          );
+        if (isEditable) return;
+        e.preventDefault();
+        togglePin();
+      }
+    }
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [togglePin]);
 
   return (
     <>
-      {/* ===== Desktop right-rail (md and up) — unchanged behaviour ===== */}
+      {/* ===== Desktop right-rail (md and up) ===== */}
       <aside
+        onMouseEnter={onMouseEnter}
+        onMouseLeave={onMouseLeave}
+        data-testid="desktop-sidebar"
+        data-expanded={expanded ? 'true' : 'false'}
+        data-pinned={pinned ? 'true' : 'false'}
+        style={{ width: expanded ? 220 : 72 }}
         className={cn(
           'sticky top-0 h-screen border-s border-glass-edge bg-glass-1 text-ink',
-          'hidden md:flex flex-col transition-[width] duration-200',
-          collapsed ? 'w-16' : 'w-60',
+          'hidden md:flex flex-col transition-[width] duration-200 ease-out',
         )}
         aria-label="ניווט ראשי"
       >
         <SidebarBody
           activeTab={activeTab}
           onTabChange={onTabChange}
-          collapsed={collapsed}
-          onToggleCollapsed={() => setCollapsed(v => !v)}
+          collapsed={!expanded}
+          pinned={pinned}
+          onTogglePin={togglePin}
           variant="desktop"
         />
       </aside>
@@ -257,7 +416,8 @@ export function Sidebar({
           activeTab={activeTab}
           onTabChange={onTabChange}
           collapsed={false}
-          onToggleCollapsed={() => undefined}
+          pinned={false}
+          onTogglePin={() => undefined}
           onItemClick={onMobileClose}
           onClose={onMobileClose}
           variant="mobile"

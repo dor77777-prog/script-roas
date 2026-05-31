@@ -1,20 +1,30 @@
-import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { Sidebar } from '@/components/Sidebar';
 import { ThemeProvider } from '@/components/ThemeProvider';
+import { TooltipProvider } from '@/components/ui/Tooltip';
 
 function renderSidebar() {
   return render(
     <ThemeProvider>
-      <Sidebar
-        activeTab="home"
-        onTabChange={() => {}}
-        isMobileOpen={false}
-        onMobileClose={() => {}}
-      />
+      <TooltipProvider delayDuration={0} skipDelayDuration={0}>
+        <Sidebar
+          activeTab="home"
+          onTabChange={() => {}}
+          isMobileOpen={false}
+          onMobileClose={() => {}}
+        />
+      </TooltipProvider>
     </ThemeProvider>,
   );
 }
+
+beforeEach(() => {
+  // Each test starts with a clean localStorage so a leaked
+  // sidebar:pinned=true from a previous test cannot make a "default
+  // collapsed" assertion silently pass against a pre-pinned sidebar.
+  window.localStorage.clear();
+});
 
 describe('Sidebar — hover state must differ from active state', () => {
   it('inactive nav item hover classes do NOT include bg-glass-2', () => {
@@ -33,4 +43,217 @@ describe('Sidebar — hover state must differ from active state', () => {
     const active = screen.getAllByRole('tab', { name: /בית/ })[0];
     expect(active.className).toMatch(/ring-1/);
   });
+});
+
+// ---------------------------------------------------------------------------
+// Task 5.8 — slim 72px rail + hover-to-expand + pin + ⌘\ shortcut.
+// ---------------------------------------------------------------------------
+
+describe('Sidebar — Task 5.8 collapsed rail + hover-to-expand', () => {
+  it('Step 1: default-renders collapsed at 72px (no sidebar:pinned in localStorage)', () => {
+    renderSidebar();
+    const desktop = screen.getByTestId('desktop-sidebar');
+    expect(desktop.getAttribute('data-expanded')).toBe('false');
+    expect(desktop.getAttribute('data-pinned')).toBe('false');
+    // Inline width style is the source of truth — class transitions only
+    // describe HOW the width changes, not the resting value.
+    expect(desktop.style.width).toBe('72px');
+  });
+
+  it('Step 1: pre-existing sidebar:pinned=true hydrates into 220px pinned-expanded state', async () => {
+    window.localStorage.setItem('sidebar:pinned', 'true');
+    renderSidebar();
+    const desktop = screen.getByTestId('desktop-sidebar');
+    // The useSidebarPin hook hydrates inside useEffect — wait one tick so
+    // React commits the post-hydration state. Asserting synchronously
+    // would see the SSR-safe collapsed default and incorrectly pass.
+    await waitFor(() => {
+      expect(desktop.getAttribute('data-pinned')).toBe('true');
+      expect(desktop.getAttribute('data-expanded')).toBe('true');
+      expect(desktop.style.width).toBe('220px');
+    });
+  });
+
+  it('Step 2: hover for 200ms temporarily expands; mouseleave collapses back', () => {
+    vi.useFakeTimers();
+    try {
+      renderSidebar();
+      const desktop = screen.getByTestId('desktop-sidebar');
+
+      // mouseenter starts the 200ms timer — width must still be collapsed
+      // immediately after the enter event.
+      act(() => {
+        fireEvent.mouseEnter(desktop);
+      });
+      expect(desktop.style.width).toBe('72px');
+
+      // Advance just under the threshold — still collapsed.
+      act(() => {
+        vi.advanceTimersByTime(199);
+      });
+      expect(desktop.style.width).toBe('72px');
+
+      // Cross the 200ms boundary — must expand.
+      act(() => {
+        vi.advanceTimersByTime(1);
+      });
+      expect(desktop.style.width).toBe('220px');
+
+      // mouseleave collapses back immediately (pinned=false).
+      act(() => {
+        fireEvent.mouseLeave(desktop);
+      });
+      expect(desktop.style.width).toBe('72px');
+      expect(desktop.getAttribute('data-pinned')).toBe('false');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('Step 2: mouseleave before 200ms cancels the pending expand', () => {
+    vi.useFakeTimers();
+    try {
+      renderSidebar();
+      const desktop = screen.getByTestId('desktop-sidebar');
+
+      act(() => {
+        fireEvent.mouseEnter(desktop);
+        vi.advanceTimersByTime(100);
+        fireEvent.mouseLeave(desktop);
+        // Push past 200ms — if the timer wasn't cancelled, this would
+        // still flip hoverExpanded to true.
+        vi.advanceTimersByTime(500);
+      });
+      expect(desktop.style.width).toBe('72px');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('Step 3: clicking pin toggles persist sidebar:pinned in localStorage', () => {
+    renderSidebar();
+    const desktop = screen.getByTestId('desktop-sidebar');
+
+    expect(window.localStorage.getItem('sidebar:pinned')).toBeNull();
+    // Re-query the pin button after each render — the surrounding rail
+    // re-mounts its layout (collapsed → expanded) when pinned flips, so
+    // a captured reference would point to a detached DOM node.
+    expect(
+      within(desktop).getByTestId('sidebar-pin-toggle').getAttribute('aria-pressed'),
+    ).toBe('false');
+
+    act(() => {
+      fireEvent.click(within(desktop).getByTestId('sidebar-pin-toggle'));
+    });
+    expect(window.localStorage.getItem('sidebar:pinned')).toBe('true');
+    expect(
+      within(desktop).getByTestId('sidebar-pin-toggle').getAttribute('aria-pressed'),
+    ).toBe('true');
+    expect(desktop.style.width).toBe('220px');
+
+    act(() => {
+      fireEvent.click(within(desktop).getByTestId('sidebar-pin-toggle'));
+    });
+    expect(window.localStorage.getItem('sidebar:pinned')).toBe('false');
+    expect(
+      within(desktop).getByTestId('sidebar-pin-toggle').getAttribute('aria-pressed'),
+    ).toBe('false');
+    expect(desktop.style.width).toBe('72px');
+  });
+
+  it('Step 4: ⌘\\ keyboard shortcut toggles pinned state', () => {
+    renderSidebar();
+    const desktop = screen.getByTestId('desktop-sidebar');
+    expect(desktop.getAttribute('data-pinned')).toBe('false');
+
+    act(() => {
+      fireEvent.keyDown(document, { key: '\\', metaKey: true });
+    });
+    expect(desktop.getAttribute('data-pinned')).toBe('true');
+    expect(window.localStorage.getItem('sidebar:pinned')).toBe('true');
+
+    // Second press unpins.
+    act(() => {
+      fireEvent.keyDown(document, { key: '\\', metaKey: true });
+    });
+    expect(desktop.getAttribute('data-pinned')).toBe('false');
+    expect(window.localStorage.getItem('sidebar:pinned')).toBe('false');
+
+    // Ctrl+\ (Windows/Linux) works equivalently.
+    act(() => {
+      fireEvent.keyDown(document, { key: '\\', ctrlKey: true });
+    });
+    expect(desktop.getAttribute('data-pinned')).toBe('true');
+  });
+
+  it('Step 4: ⌘\\ is ignored when focus is inside an editable element', () => {
+    renderSidebar();
+    const desktop = screen.getByTestId('desktop-sidebar');
+
+    // Append a real input to the document and fire the event with that
+    // input as the keydown target — mirrors how CommandPalette guards its
+    // ⌘K binding from typed text.
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    try {
+      act(() => {
+        fireEvent.keyDown(input, { key: '\\', metaKey: true });
+      });
+      expect(desktop.getAttribute('data-pinned')).toBe('false');
+    } finally {
+      document.body.removeChild(input);
+    }
+  });
+
+  it('Step 5: collapsed rail nav items expose label + shortcut via aria-label / tooltip content', () => {
+    renderSidebar();
+    const desktop = screen.getByTestId('desktop-sidebar');
+
+    // Collapsed state hides the inline label, so the only accessible
+    // text for the icon is via aria-label. The tooltip itself is portal-
+    // rendered and only appears on actual hover, which jsdom doesn't
+    // simulate cleanly; aria-label is the visible-to-AT contract for
+    // collapsed icons, so we pin that.
+    const home = within(desktop).getByRole('tab', { name: 'בית' });
+    expect(home.getAttribute('aria-label')).toBe('בית');
+
+    const pnl = within(desktop).getByRole('tab', { name: 'P&L' });
+    expect(pnl.getAttribute('aria-label')).toBe('P&L');
+
+    // The pin button itself surfaces ⌘\ in its tooltip; its own
+    // aria-label flips between "pin open" / "unpin".
+    const pinBtn = within(desktop).getByTestId('sidebar-pin-toggle');
+    expect(pinBtn.getAttribute('aria-label')).toBe('הצמד פתוח');
+  });
+
+  it('Step 5: expanded sidebar removes the per-icon aria-label (the inline text takes over)', () => {
+    window.localStorage.setItem('sidebar:pinned', 'true');
+    renderSidebar();
+    const desktop = screen.getByTestId('desktop-sidebar');
+    // After hydration the rail is expanded — labels render inline and
+    // the redundant aria-label is dropped so screen readers don't double-
+    // announce "Home Home".
+    return waitFor(() => {
+      expect(desktop.getAttribute('data-expanded')).toBe('true');
+      const home = within(desktop).getByRole('tab', { name: 'בית' });
+      expect(home.getAttribute('aria-label')).toBeNull();
+    });
+  });
+
+  it('width transition uses 200ms ease-out per mockup CSS', () => {
+    renderSidebar();
+    const desktop = screen.getByTestId('desktop-sidebar');
+    // Tailwind: transition-[width] duration-200 ease-out. The class
+    // string is the source of truth — testing the resolved CSS would
+    // require a real stylesheet which jsdom does not parse.
+    expect(desktop.className).toMatch(/transition-\[width\]/);
+    expect(desktop.className).toMatch(/duration-200/);
+    expect(desktop.className).toMatch(/ease-out/);
+  });
+});
+
+afterEach(() => {
+  // Belt-and-braces — the global afterEach in setup-dom.ts only handles
+  // RTL cleanup; localStorage state would otherwise leak between files.
+  window.localStorage.clear();
 });
