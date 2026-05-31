@@ -513,34 +513,34 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    dark/dead — see commit for rationale. */
 .glass[data-band="red"] {
   background:
-    radial-gradient(ellipse 80% 50% at 50% 0%, oklch(64% 0.22 22  / 0.18) 0%, transparent 70%),
-    oklch(64% 0.22 22  / 0.07);
+    radial-gradient(ellipse 90% 60% at 50% 0%, oklch(72% 0.22 22  / 0.32) 0%, transparent 85%),
+    oklch(64% 0.22 22  / 0.12);
 }
-.glass[data-band="red"]::before    { background: var(--band-red);    box-shadow: 0 0 24px oklch(64% 0.22 22  / 0.75); }
+.glass[data-band="red"]::before    { background: var(--band-red);    box-shadow: 0 0 32px oklch(72% 0.22 22  / 0.85); }
 .glass[data-band="orange"] {
   background:
-    radial-gradient(ellipse 80% 50% at 50% 0%, oklch(78% 0.16 75  / 0.16) 0%, transparent 70%),
-    oklch(78% 0.16 75  / 0.07);
+    radial-gradient(ellipse 90% 60% at 50% 0%, oklch(84% 0.16 75  / 0.30) 0%, transparent 85%),
+    oklch(78% 0.16 75  / 0.12);
 }
-.glass[data-band="orange"]::before { background: var(--band-orange); box-shadow: 0 0 22px oklch(78% 0.16 75  / 0.70); }
+.glass[data-band="orange"]::before { background: var(--band-orange); box-shadow: 0 0 30px oklch(84% 0.16 75  / 0.80); }
 .glass[data-band="green"] {
   background:
-    radial-gradient(ellipse 80% 50% at 50% 0%, oklch(70% 0.18 145 / 0.16) 0%, transparent 70%),
-    oklch(70% 0.18 145 / 0.06);
+    radial-gradient(ellipse 90% 60% at 50% 0%, oklch(78% 0.18 145 / 0.28) 0%, transparent 85%),
+    oklch(70% 0.18 145 / 0.11);
 }
-.glass[data-band="green"]::before  { background: var(--band-green);  box-shadow: 0 0 22px oklch(70% 0.18 145 / 0.70); }
+.glass[data-band="green"]::before  { background: var(--band-green);  box-shadow: 0 0 30px oklch(78% 0.18 145 / 0.80); }
 .glass[data-band="blue"] {
   background:
-    radial-gradient(ellipse 80% 50% at 50% 0%, oklch(68% 0.16 240 / 0.14) 0%, transparent 70%),
-    oklch(68% 0.16 240 / 0.06);
+    radial-gradient(ellipse 90% 60% at 50% 0%, oklch(76% 0.16 240 / 0.28) 0%, transparent 85%),
+    oklch(68% 0.16 240 / 0.10);
 }
-.glass[data-band="blue"]::before   { background: var(--band-blue);   box-shadow: 0 0 24px oklch(68% 0.16 240 / 0.75); }
+.glass[data-band="blue"]::before   { background: var(--band-blue);   box-shadow: 0 0 32px oklch(76% 0.16 240 / 0.85); }
 .glass[data-band="gray"] {
   background:
-    radial-gradient(ellipse 80% 50% at 50% 0%, oklch(60% 0.012 250 / 0.06) 0%, transparent 70%),
-    oklch(60% 0.012 250 / 0.03);
+    radial-gradient(ellipse 80% 50% at 50% 0%, oklch(65% 0.015 250 / 0.10) 0%, transparent 70%),
+    oklch(60% 0.012 250 / 0.04);
 }
-.glass[data-band="gray"]::before   { background: var(--band-gray);   box-shadow: 0 0 10px oklch(60% 0.012 250 / 0.4); }
+.glass[data-band="gray"]::before   { background: var(--band-gray);   box-shadow: 0 0 12px oklch(65% 0.015 250 / 0.45); }
 
 /* `.v.banded` — the big number inside a banded card renders in the band
    colour (overrides .v.neutral's text-clip gradient via -webkit-text-fill-color). */
