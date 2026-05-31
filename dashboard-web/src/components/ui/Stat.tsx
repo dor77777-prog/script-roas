@@ -54,11 +54,14 @@ const statVariants = cva(
         hero:    'p-0 gap-1.5 border-0 bg-transparent shadow-none rounded-none',
       },
       active: {
-        true:  'border-accent/40 ring-1 ring-accent/20 bg-accent/[0.04]',
+        // Accent emphasis via alpha-safe tokens: border-accent (solid rim),
+        // bg-accent-soft (alpha-baked wash). Flat `accent/NN` would silently
+        // drop its alpha (the token has no <alpha-value> channel).
+        true:  'border-accent ring-1 ring-[color:var(--accent-soft)] bg-accent-soft',
         false: '',
       },
       interactive: {
-        true:  'cursor-pointer transition-colors hover:border-accent/40 hover:bg-accent/[0.02] focus-visible:outline-none',
+        true:  'cursor-pointer transition-colors hover:border-accent hover:bg-accent-bg focus-visible:outline-none',
         false: '',
       },
     },
@@ -71,7 +74,7 @@ const labelVariants = cva('text-ink-muted leading-tight', {
     density: {
       compact: 'text-[10px] uppercase tracking-wide',
       regular: 'text-[10px] sm:text-xs',
-      hero:    'text-[11px] sm:text-xs uppercase tracking-[0.12em] font-semibold text-white/65',
+      hero:    'text-[11px] sm:text-xs uppercase tracking-[0.12em] font-semibold text-ink-secondary',
     },
   },
   defaultVariants: { density: 'regular' },
@@ -95,9 +98,9 @@ const valueVariants = cva('tabular-nums leading-tight', {
     // Hero density tints negative values amber (not red) — matches the
     // original FloatingKpi behaviour: hero is informational, red is reserved
     // for actionable failures.
-    { density: 'hero', accent: 'negative', class: 'text-orange-200' },
-    { density: 'hero', accent: 'neutral',  class: 'text-white' },
-    { density: 'hero', accent: 'positive', class: 'text-white' },
+    { density: 'hero', accent: 'negative', class: 'text-status-orangeFg' },
+    { density: 'hero', accent: 'neutral',  class: 'text-ink' },
+    { density: 'hero', accent: 'positive', class: 'text-ink' },
   ],
   defaultVariants: { density: 'regular', accent: 'neutral' },
 });
