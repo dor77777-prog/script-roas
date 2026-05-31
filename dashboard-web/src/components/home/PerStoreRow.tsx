@@ -360,7 +360,7 @@ function StoreCard({
                     still overflows in extreme cases. CPM value (the big
                     number below) stays full-precision because it's
                     typically $5-$50. */}
-                <span className="text-[11px] text-ink-muted leading-tight truncate">
+                <span className="cpm-spend-cap text-[11px] text-ink-muted leading-tight truncate">
                   spend · <bdi dir="ltr" className="tabular-nums">{fmtMoneyTextCompact(data.spend)}</bdi>
                 </span>
                 <bdi

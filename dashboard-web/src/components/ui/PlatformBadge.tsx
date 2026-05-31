@@ -170,7 +170,13 @@ export const PlatformBadge = forwardRef<HTMLSpanElement, PlatformBadgeProps>(
             aria-hidden
           />
         )}
-        {showLabel && <span>{resolvedLabel}</span>}
+        {/* `platform-name` is a plain semantic hook (no colour). The badge's
+            brand colour still reaches the label via the parent's
+            `text-chart-*` class. globals.css uses this hook to override the
+            label to WHITE on a vivid per-store band card (operator 2026-06-01)
+            WITHOUT touching the dot, whose brand colour comes from
+            `.platform-dot`'s `bg-current`. */}
+        {showLabel && <span className="platform-name">{resolvedLabel}</span>}
       </span>
     );
   },

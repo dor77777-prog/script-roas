@@ -1238,3 +1238,81 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 .cell.aov-bad  .sl::after { content: ' ▾'; color: var(--band-red);   opacity: 0.8; }
 .cell.aov-mid  .sv { color: var(--text); }
 /* CPM cells take NO emphasis class — always white. */
+
+/* ===========================================================================
+   VIVID PER-STORE CARD — ALL-WHITE TEXT (operator 2026-06-01).
+   Mockup reference: docs/superpowers/mockups/2026-05-31-light-reskin/
+   dashboard-mockups.html `.store` (card text is `#fff` throughout; the
+   per-platform `.plat` tiles are white-alpha, NOT brand-tinted).
+
+   On a VIVID band per-store card (red/orange/green/blue) the band GRADIENT is
+   the signal — so ALL text reads WHITE, superseding the colored emphasis used
+   elsewhere (spend-red ↓ / revenue-green ↑ / AOV good-bad / brand-hue platform
+   NAME). This kills the reported "blue Meta name on a blue card → invisible"
+   and "too many colors / black orders value" regressions. The platform DOT
+   KEEPS its brand colour (its colour comes from `.platform-dot { bg-current }`,
+   not from these text rules, so whitening the label leaves the dot untouched).
+
+   GRAY (no-data) cards are EXCLUDED via `:not([data-band="gray"])` — their
+   surface is near-neutral, so they KEEP normal ink emphasis (legible in light).
+
+   Specificity: each selector below is prefixed with
+   `.per-store-card.glass[data-band]:not([data-band="gray"])`
+   (two classes + an attribute + a negation pseudo-class). That out-specifies
+   the base emphasis rules it must beat:
+     • `.cell.spend .sv` etc.  (2 classes)         → loses
+     • `.glass[data-band]:not([data-band="gray"]) .cell.spend .sl::before`
+       (1 class + attr + :not + class + pseudo)    → matched 1:1 below
+     • the `.cpm-row-cells .cell[data-platform="…"]` bg + `.cell[data-platform]`
+       glow rules                                  → out-specified below.
+   The platform-NAME utility colour (`text-chart-meta` etc.) is an inline-ish
+   Tailwind class, so the `.platform-name` override carries `!important` to beat
+   the utility regardless of source order.
+   =========================================================================== */
+/* (1) ALL metric values → white. Covers the main 4-up grid (.sv), the CPM
+   value `<bdi>` (which uses the `text-ink` utility, not `.sv`) and the CPM
+   spend caption (`.cpm-spend-cap`). We target the value `<bdi>` and the
+   caption by their own hooks (NOT a blanket `.cell > span`) so the
+   <PlatformBadge> outer span — which carries `text-chart-*` AND owns the dot
+   via `bg-current` — is left untouched (whitening it would whiten the dot). */
+.per-store-card.glass[data-band]:not([data-band="gray"]) .scard-main-grid .sv,
+.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .sv,
+.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .cell > bdi,
+.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .cpm-spend-cap {
+  color: oklch(100% 0 0);
+}
+
+/* (2) Per-platform CPM NAME → white. The label lives in <PlatformBadge>'s
+   `.platform-name` span, which inherits a brand hue from the badge's
+   `text-chart-*` parent class; `!important` beats that Tailwind utility.
+   The DOT (`.platform-dot`) is NOT targeted, so it keeps its brand colour. */
+.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .platform-name {
+  color: oklch(100% 0 0) !important;
+}
+
+/* (3) Directional glyphs (↓ spend / ↑ revenue / ▴ ▾ AOV) → white-alpha so they
+   don't flash band-red/green on the vivid card. Out-specifies the
+   `.glass[data-band]:not([data-band="gray"]) .cell.spend .sl::before` band-hue
+   rule above (this one adds `.per-store-card` → strictly more specific). */
+.per-store-card.glass[data-band]:not([data-band="gray"]) .cell.spend   .sl::before,
+.per-store-card.glass[data-band]:not([data-band="gray"]) .cell.revenue .sl::before,
+.per-store-card.glass[data-band]:not([data-band="gray"]) .cell.aov-good .sl::after,
+.per-store-card.glass[data-band]:not([data-band="gray"]) .cell.aov-bad  .sl::after {
+  color: oklch(100% 0 0 / 0.75);
+}
+
+/* (4) CPM tiles → mockup `.plat` (white-alpha fill + white-alpha hairline),
+   overriding both the base `.cpm-row-cells .cell` dark-text-tint bg +
+   `--glass-edge` border AND the per-platform
+   `.cell[data-platform="…"] { background: oklch(from var(--chart-platform-*) …) }`
+   brand tint. radius 11px matches the mockup `.plat` tile. */
+.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .cell,
+.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .cell[data-platform="meta"],
+.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .cell[data-platform="google"],
+.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .cell[data-platform="tiktok"],
+.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .cell[data-platform="organic"],
+.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .cell[data-platform="shopify"] {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.18);
+  border-radius: 11px;
+}
