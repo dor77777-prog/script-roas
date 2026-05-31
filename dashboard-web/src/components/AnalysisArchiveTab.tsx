@@ -14,7 +14,13 @@ import type { DashboardData } from '@/lib/types';
 
 type Props = {
   stores: DashboardData['stores'];
-  /** Legacy — kept so Dashboard.tsx call-site doesn't need to change. Unused. */
+  /**
+   * Global store filter (filters.store from Dashboard). When set to a
+   * specific store, the archive scopes both the page synthesis and the
+   * monthly tables to that store. 'All' (or undefined) preserves the
+   * legacy all-stores behavior. Per [[home-visual-rules]] the global
+   * filter applies to most pages — Archive was previously ignoring it.
+   */
   globalStore?: string;
 };
 
@@ -30,7 +36,7 @@ const fetcher = async (url: string): Promise<DashboardData> => {
   return res.json();
 };
 
-export function AnalysisArchiveTab({ stores }: Props) {
+export function AnalysisArchiveTab({ stores, globalStore }: Props) {
   const now = new Date();
   const [year, setYear] = useState<number>(now.getFullYear());
   const [month, setMonth] = useState<number | null>(now.getMonth() + 1);
@@ -46,8 +52,18 @@ export function AnalysisArchiveTab({ stores }: Props) {
     fetcher,
     { revalidateOnFocus: false },
   );
+
+  // Apply the global store filter to the synthesiser's input AND to the
+  // visible scope label. The MonthlyTables child gets globalStore directly
+  // and handles its own per-store filtering. 'All' (undefined or 'All')
+  // preserves the all-stores behavior.
+  const isStoreScoped =
+    !!globalStore && globalStore !== 'All' && stores.includes(globalStore);
+  const scopedRows = isStoreScoped
+    ? (data?.rows ?? []).filter(r => r.storeName === globalStore)
+    : (data?.rows ?? []);
   const archiveSynthesis = synthesizeArchive({
-    rows: data?.rows ?? [],
+    rows: scopedRows,
     year,
   });
 
@@ -55,7 +71,7 @@ export function AnalysisArchiveTab({ stores }: Props) {
     <div className="space-y-4 sm:space-y-5">
       <SectionIntro
         icon={<CalendarDays size={20} />}
-        title="טבלאות חודשיות"
+        title={isStoreScoped ? `טבלאות חודשיות — ${globalStore}` : 'טבלאות חודשיות'}
         description="טבלה לכל חודש עם שורה לכל יום. ROAS צבוע: אדום (<2), כתום (2-2.7), ירוק (2.7-3), כחול (>3). יום עם הוצאה אך ללא מכירה מסומן בשחור עם '0'."
       />
       <PageSynthesis
@@ -73,7 +89,7 @@ export function AnalysisArchiveTab({ stores }: Props) {
           <MonthSelector value={month} onChange={setMonth} />
         </div>
       </div>
-      <MonthlyTables stores={stores} year={year} month={month} />
+      <MonthlyTables stores={stores} globalStore={globalStore} year={year} month={month} />
     </div>
   );
 }
