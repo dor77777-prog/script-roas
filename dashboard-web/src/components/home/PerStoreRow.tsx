@@ -269,7 +269,7 @@ function StoreCard({
         </span>
         <bdi
           dir="ltr"
-          className="v banded text-[56px] md:text-[64px] font-light tabular-nums tracking-tight leading-none"
+          className="v banded text-[60px] md:text-[72px] font-light tabular-nums tracking-tight leading-none"
         >
           {fmtRoasText(store.roas)}
         </bdi>
@@ -345,7 +345,7 @@ function StoreCard({
                 </span>
                 <bdi
                   dir="ltr"
-                  className="text-[18px] md:text-[20px] font-semibold tabular-nums text-ink leading-none truncate"
+                  className="text-[20px] md:text-[22px] font-semibold tabular-nums text-ink leading-none truncate"
                 >
                   {fmtMoneyText(data.cpm)}
                 </bdi>

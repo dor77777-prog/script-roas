@@ -741,91 +741,99 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    operator's feedback "the colours look pale" was specifically about
    per-store cards. Orange uses the new hue 45 + chroma 0.24 from the
    :root `--band-orange` token (round-6 true-orange shift). */
+/* Task 2.2 (2026-05-31) — MESH re-skin of the STRONG band variant.
+   The round-6 hardcoded dark-calibrated slabs were illegible over the
+   light canvas. They are replaced by a VIVID band gradient built FROM
+   the `--band-*` token via OKLCH relative-color syntax, so the card
+   auto-flips per theme (the token carries the dark/light L). The big
+   number is now WHITE (.v.banded rule further down). Mockup reference:
+   docs/.../dashboard-mockups.html `.store` — 135deg band→band-2 gradient,
+   white radial top-corner sheen, band-coloured drop shadow.
+   The gradient runs TOP = token L − 0.07, BOTTOM = token L − 0.22. This
+   range is set by the WCAG gate: the band tokens' own L (chosen for
+   chip/text on a dark canvas, up to L≈0.70 for green/orange) is too light
+   to carry white at full token-L, so the gradient is deepened just enough
+   that white in the NUMBER region (≈35% down the card) clears ≥4.5:1 in
+   BOTH themes. The radial white sheen + ::before edge bar keep the vivid
+   "lit-from-above" band identity at the top. The `.v.banded` text-shadow
+   is the legibility floor. (See WCAG numbers in the task report.) */
 .glass[data-band="red"],
 .glass[data-band="red"][data-band-strength="strong"] {
   background:
-    /* dominant top slab — round-6 85% at top, fades to ~22% by 100% */
-    linear-gradient(180deg,
-      oklch(58% 0.24 25 / 0.85) 0%,
-      oklch(54% 0.22 25 / 0.62) 22%,
-      oklch(48% 0.20 25 / 0.42) 50%,
-      oklch(42% 0.18 25 / 0.28) 78%,
-      oklch(38% 0.16 25 / 0.22) 100%),
-    /* top-edge accent halo */
-    radial-gradient(ellipse 120% 50% at 50% 0%, oklch(65% 0.26 25 / 0.36) 0%, transparent 55%),
-    /* saturated base tint — round-6 28→38% */
-    oklch(50% 0.22 25 / 0.38);
+    radial-gradient(125% 90% at 85% -12%, oklch(100% 0 0 / 0.18) 0%, transparent 58%),
+    linear-gradient(150deg,
+      oklch(from var(--band-red) calc(l - 0.07) c h) 0%,
+      oklch(from var(--band-red) calc(l - 0.22) c h) 96%);
+  box-shadow: 0 14px 30px -10px oklch(from var(--band-red) calc(l - 0.06) c h / 0.34);
 }
 .glass[data-band="red"]::before,
 .glass[data-band="red"][data-band-strength="strong"]::before {
-  background: oklch(62% 0.26 25);
-  box-shadow: 0 0 52px oklch(65% 0.26 25 / 1.0), 0 0 18px oklch(58% 0.24 25 / 0.9);
+  background: var(--band-red);
+  box-shadow: 0 0 52px oklch(from var(--band-red) calc(l + 0.03) c h / 1.0), 0 0 18px oklch(from var(--band-red) l c h / 0.9);
   height: 4px;
 }
 .glass[data-band="orange"],
 .glass[data-band="orange"][data-band-strength="strong"] {
   background:
-    linear-gradient(180deg,
-      oklch(62% 0.22 45 / 0.85) 0%,
-      oklch(56% 0.22 45 / 0.62) 22%,
-      oklch(50% 0.20 45 / 0.42) 50%,
-      oklch(46% 0.18 45 / 0.28) 78%,
-      oklch(42% 0.16 45 / 0.22) 100%),
-    radial-gradient(ellipse 120% 50% at 50% 0%, oklch(72% 0.24 45 / 0.36) 0%, transparent 55%),
-    oklch(54% 0.22 45 / 0.38);
+    radial-gradient(125% 90% at 85% -12%, oklch(100% 0 0 / 0.18) 0%, transparent 58%),
+    linear-gradient(150deg,
+      oklch(from var(--band-orange) calc(l - 0.07) c h) 0%,
+      oklch(from var(--band-orange) calc(l - 0.22) c h) 96%);
+  box-shadow: 0 14px 30px -10px oklch(from var(--band-orange) calc(l - 0.06) c h / 0.34);
 }
 .glass[data-band="orange"]::before,
 .glass[data-band="orange"][data-band-strength="strong"]::before {
-  background: oklch(70% 0.24 45);
-  box-shadow: 0 0 52px oklch(72% 0.24 45 / 1.0), 0 0 18px oklch(62% 0.22 45 / 0.9);
+  background: var(--band-orange);
+  box-shadow: 0 0 52px oklch(from var(--band-orange) calc(l + 0.03) c h / 1.0), 0 0 18px oklch(from var(--band-orange) l c h / 0.9);
   height: 4px;
 }
 .glass[data-band="green"],
 .glass[data-band="green"][data-band-strength="strong"] {
   background:
-    linear-gradient(180deg,
-      oklch(58% 0.22 145 / 0.85) 0%,
-      oklch(54% 0.20 145 / 0.62) 22%,
-      oklch(48% 0.18 145 / 0.42) 50%,
-      oklch(44% 0.16 145 / 0.28) 78%,
-      oklch(40% 0.14 145 / 0.22) 100%),
-    radial-gradient(ellipse 120% 50% at 50% 0%, oklch(65% 0.24 145 / 0.36) 0%, transparent 55%),
-    oklch(50% 0.20 145 / 0.38);
+    radial-gradient(125% 90% at 85% -12%, oklch(100% 0 0 / 0.18) 0%, transparent 58%),
+    linear-gradient(150deg,
+      oklch(from var(--band-green) calc(l - 0.07) c h) 0%,
+      oklch(from var(--band-green) calc(l - 0.22) c h) 96%);
+  box-shadow: 0 14px 30px -10px oklch(from var(--band-green) calc(l - 0.06) c h / 0.34);
 }
 .glass[data-band="green"]::before,
 .glass[data-band="green"][data-band-strength="strong"]::before {
-  background: oklch(64% 0.24 145);
-  box-shadow: 0 0 52px oklch(65% 0.24 145 / 1.0), 0 0 18px oklch(58% 0.22 145 / 0.9);
+  background: var(--band-green);
+  box-shadow: 0 0 52px oklch(from var(--band-green) calc(l + 0.03) c h / 1.0), 0 0 18px oklch(from var(--band-green) l c h / 0.9);
   height: 4px;
 }
 .glass[data-band="blue"],
 .glass[data-band="blue"][data-band-strength="strong"] {
   background:
-    linear-gradient(180deg,
-      oklch(58% 0.20 240 / 0.85) 0%,
-      oklch(54% 0.18 240 / 0.62) 22%,
-      oklch(48% 0.16 240 / 0.42) 50%,
-      oklch(44% 0.14 240 / 0.28) 78%,
-      oklch(40% 0.12 240 / 0.22) 100%),
-    radial-gradient(ellipse 120% 50% at 50% 0%, oklch(65% 0.22 240 / 0.36) 0%, transparent 55%),
-    oklch(50% 0.18 240 / 0.38);
+    radial-gradient(125% 90% at 85% -12%, oklch(100% 0 0 / 0.18) 0%, transparent 58%),
+    linear-gradient(150deg,
+      oklch(from var(--band-blue) calc(l - 0.07) c h) 0%,
+      oklch(from var(--band-blue) calc(l - 0.22) c h) 96%);
+  box-shadow: 0 14px 30px -10px oklch(from var(--band-blue) calc(l - 0.06) c h / 0.34);
 }
 .glass[data-band="blue"]::before,
 .glass[data-band="blue"][data-band-strength="strong"]::before {
-  background: oklch(62% 0.22 240);
-  box-shadow: 0 0 52px oklch(65% 0.22 240 / 1.0), 0 0 18px oklch(58% 0.20 240 / 0.9);
+  background: var(--band-blue);
+  box-shadow: 0 0 52px oklch(from var(--band-blue) calc(l + 0.03) c h / 1.0), 0 0 18px oklch(from var(--band-blue) l c h / 0.9);
   height: 4px;
 }
+/* Gray = no-data / neutral. Stays a FAINT neutral tint (NOT vivid) built
+   from the --band-gray token so it tracks the theme; its number is NOT
+   white (see .v.banded gray rule — uses --text ink for legibility on the
+   near-neutral surface). */
 .glass[data-band="gray"],
 .glass[data-band="gray"][data-band-strength="strong"] {
   background:
-    linear-gradient(180deg, oklch(60% 0.015 250 / 0.18) 0%, oklch(50% 0.012 250 / 0.10) 50%, transparent 100%),
-    oklch(50% 0.012 250 / 0.06);
+    linear-gradient(180deg,
+      oklch(from var(--band-gray) l c h / 0.18) 0%,
+      oklch(from var(--band-gray) calc(l - 0.10) c h / 0.10) 50%,
+      transparent 100%),
+    oklch(from var(--band-gray) calc(l - 0.10) c h / 0.06);
 }
 .glass[data-band="gray"]::before,
 .glass[data-band="gray"][data-band-strength="strong"]::before {
-  background: oklch(60% 0.015 250);
-  box-shadow: 0 0 18px oklch(60% 0.015 250 / 0.55);
+  background: var(--band-gray);
+  box-shadow: 0 0 18px oklch(from var(--band-gray) l c h / 0.55);
   height: 3px;
 }
 
@@ -840,54 +848,58 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    (Operating Profit + ROAS + Ad-spend %) opts into `"strong"` (or
    omits the attribute) and gets the full round-6 band treatment.
    --------------------------------------------------------------------- */
+/* Task 2.2 (2026-05-31) — muted variant tokenised. Built from --band-*
+   relative-colour at low opacity so it tracks the theme (light canvas no
+   longer breaks). Stays a FAINT band tint — NOT the vivid strong gradient.
+   The number on these cards is .v.neutral (untouched). */
 .glass[data-band="red"][data-band-strength="muted"] {
   background:
-    linear-gradient(180deg, oklch(60% 0.20 25 / 0.18) 0%, transparent 35%),
-    oklch(50% 0.18 25 / 0.06);
+    linear-gradient(180deg, oklch(from var(--band-red) l c h / 0.18) 0%, transparent 35%),
+    oklch(from var(--band-red) calc(l - 0.08) c h / 0.06);
 }
 .glass[data-band="red"][data-band-strength="muted"]::before {
-  background: oklch(62% 0.26 25);
-  box-shadow: 0 0 18px oklch(65% 0.26 25 / 0.55);
+  background: var(--band-red);
+  box-shadow: 0 0 18px oklch(from var(--band-red) calc(l + 0.03) c h / 0.55);
   height: 3px;
 }
 .glass[data-band="orange"][data-band-strength="muted"] {
   background:
-    linear-gradient(180deg, oklch(64% 0.22 45 / 0.18) 0%, transparent 35%),
-    oklch(54% 0.20 45 / 0.06);
+    linear-gradient(180deg, oklch(from var(--band-orange) l c h / 0.18) 0%, transparent 35%),
+    oklch(from var(--band-orange) calc(l - 0.08) c h / 0.06);
 }
 .glass[data-band="orange"][data-band-strength="muted"]::before {
-  background: oklch(70% 0.24 45);
-  box-shadow: 0 0 18px oklch(72% 0.24 45 / 0.55);
+  background: var(--band-orange);
+  box-shadow: 0 0 18px oklch(from var(--band-orange) calc(l + 0.03) c h / 0.55);
   height: 3px;
 }
 .glass[data-band="green"][data-band-strength="muted"] {
   background:
-    linear-gradient(180deg, oklch(60% 0.20 145 / 0.18) 0%, transparent 35%),
-    oklch(50% 0.18 145 / 0.06);
+    linear-gradient(180deg, oklch(from var(--band-green) l c h / 0.18) 0%, transparent 35%),
+    oklch(from var(--band-green) calc(l - 0.08) c h / 0.06);
 }
 .glass[data-band="green"][data-band-strength="muted"]::before {
-  background: oklch(64% 0.24 145);
-  box-shadow: 0 0 18px oklch(65% 0.24 145 / 0.55);
+  background: var(--band-green);
+  box-shadow: 0 0 18px oklch(from var(--band-green) calc(l + 0.03) c h / 0.55);
   height: 3px;
 }
 .glass[data-band="blue"][data-band-strength="muted"] {
   background:
-    linear-gradient(180deg, oklch(60% 0.18 240 / 0.18) 0%, transparent 35%),
-    oklch(50% 0.16 240 / 0.06);
+    linear-gradient(180deg, oklch(from var(--band-blue) l c h / 0.18) 0%, transparent 35%),
+    oklch(from var(--band-blue) calc(l - 0.08) c h / 0.06);
 }
 .glass[data-band="blue"][data-band-strength="muted"]::before {
-  background: oklch(62% 0.22 240);
-  box-shadow: 0 0 18px oklch(65% 0.22 240 / 0.55);
+  background: var(--band-blue);
+  box-shadow: 0 0 18px oklch(from var(--band-blue) calc(l + 0.03) c h / 0.55);
   height: 3px;
 }
 .glass[data-band="gray"][data-band-strength="muted"] {
   background:
-    linear-gradient(180deg, oklch(60% 0.015 250 / 0.10) 0%, transparent 35%),
-    oklch(50% 0.012 250 / 0.04);
+    linear-gradient(180deg, oklch(from var(--band-gray) l c h / 0.10) 0%, transparent 35%),
+    oklch(from var(--band-gray) calc(l - 0.10) c h / 0.04);
 }
 .glass[data-band="gray"][data-band-strength="muted"]::before {
-  background: oklch(60% 0.015 250);
-  box-shadow: 0 0 12px oklch(60% 0.015 250 / 0.40);
+  background: var(--band-gray);
+  box-shadow: 0 0 12px oklch(from var(--band-gray) l c h / 0.40);
   height: 3px;
 }
 
@@ -923,13 +935,26 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 .glass[data-band]:not([data-band="gray"]) .cell.aov-good .sl::after { color: var(--band-green); }
 .glass[data-band]:not([data-band="gray"]) .cell.aov-bad  .sl::after { color: var(--band-red);   }
 
-/* `.v.banded` — the big number inside a banded card renders in the band
-   colour (overrides .v.neutral's text-clip gradient via -webkit-text-fill-color). */
-.glass[data-band="red"]    .v.banded { color: var(--band-red);    -webkit-text-fill-color: var(--band-red);    background: none; }
-.glass[data-band="orange"] .v.banded { color: var(--band-orange); -webkit-text-fill-color: var(--band-orange); background: none; }
-.glass[data-band="green"]  .v.banded { color: var(--band-green);  -webkit-text-fill-color: var(--band-green);  background: none; }
-.glass[data-band="blue"]   .v.banded { color: var(--band-blue);   -webkit-text-fill-color: var(--band-blue);   background: none; }
-.glass[data-band="gray"]   .v.banded { color: var(--band-gray);   -webkit-text-fill-color: var(--band-gray);   background: none; }
+/* Task 2.2 (2026-05-31) — `.v.banded` flips to WHITE on the vivid band
+   gradient (mesh re-skin). White-on-band-L holds ≥4.5:1 in the number
+   region; the text-shadow is the legibility floor (and lifts contrast
+   further where the gradient dips toward token-L − 0.14 lower down).
+   Gray is the no-data state: its surface is near-neutral, so its number
+   stays INK (--text), not white, to remain legible (esp. in light). */
+.glass[data-band="red"]    .v.banded,
+.glass[data-band="orange"] .v.banded,
+.glass[data-band="green"]  .v.banded,
+.glass[data-band="blue"]   .v.banded {
+  color: oklch(100% 0 0);
+  -webkit-text-fill-color: oklch(100% 0 0);
+  background: none;
+  text-shadow: 0 1px 2px oklch(0% 0 0 / 0.22);
+}
+.glass[data-band="gray"] .v.banded {
+  color: var(--text);
+  -webkit-text-fill-color: var(--text);
+  background: none;
+}
 
 /* `.v.neutral` — the big number inside an UN-banded hero card renders as a
    soft white→cool-gray vertical gradient via background-clip. Source:
@@ -1033,9 +1058,11 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    Scoped to `.per-store-card` (the className the PerStoreRow primitive
    adds) so other consumers of `.scard-main-grid` keep their compact sizing. */
 .per-store-card .scard-main-grid .sl { font-size: 12px; }
-.per-store-card .scard-main-grid .sv { font-size: 18px; }
+/* Task 2.2 (2026-05-31) — slight enlargement for at-a-glance readability
+   of the per-store sub-data (paired with the bigger ROAS number). */
+.per-store-card .scard-main-grid .sv { font-size: 20px; }
 @media (min-width: 768px) {
-  .per-store-card .scard-main-grid .sv { font-size: 20px; }
+  .per-store-card .scard-main-grid .sv { font-size: 22px; }
 }
 
 /* Per-platform CPM cells — same layout treatment but with a slightly
