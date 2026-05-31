@@ -379,3 +379,78 @@ export function syncTabLocalUrl(
   const url = window.location.pathname + nextSearch + window.location.hash;
   window.history.replaceState(null, '', url);
 }
+
+/* --------------------------------------------------------------------------
+ * Task 3.4 — Home → Campaigns drill helper.
+ *
+ * Home cards (PerStoreRow, CommandCenterHero secondary tiles) drill into the
+ * Campaigns tab pre-filtered by store and/or platform. This helper centralises
+ * the URL mutation so every drill site has identical semantics:
+ *
+ *   1. Set `tab=campaigns` (the global tab param read by readDashboardState).
+ *   2. Set the campaigns-tab-local `c_store` / `c_platform` overrides if
+ *      provided (those are the params read by readTabLocalState('campaigns')).
+ *   3. dispatch a `popstate` event so the Dashboard's URL-state effect
+ *      re-reads the search string in the same tick (history.pushState alone
+ *      does NOT trigger popstate — without this nudge the dashboard would
+ *      need a full reload to notice the change).
+ *
+ * `pushState` (not replaceState) so the operator's back button returns them
+ * to the Home tab they drilled from — that's the whole point of a drill.
+ * -------------------------------------------------------------------------- */
+
+export type DrillToCampaignsOpts = {
+  /** Store filter for the campaigns tab. Pass undefined / 'All' to clear. */
+  store?: string;
+  /** Platform filter for the campaigns tab. 'all' | 'meta' | 'google' | 'tiktok'. */
+  platform?: 'all' | 'meta' | 'google' | 'tiktok';
+};
+
+/**
+ * Mutate the URL to land on the Campaigns tab with optional store/platform
+ * pre-filters applied. Safe to call from SSR contexts — no-ops on the server.
+ *
+ * The caller should also call into the Dashboard tab-change handler (or just
+ * rely on the popstate listener — Dashboard re-reads the URL on every
+ * popstate). We dispatch popstate here so a single call is sufficient.
+ */
+export function drillToCampaigns(opts: DrillToCampaignsOpts = {}): void {
+  if (typeof window === 'undefined') return;
+
+  const existing = new URLSearchParams(
+    window.location.search.startsWith('?')
+      ? window.location.search.slice(1)
+      : window.location.search,
+  );
+
+  // Global tab → campaigns.
+  existing.set('tab', 'campaigns');
+
+  // Campaigns-tab-local store override. Default 'All' is encoded by clearing
+  // the param (matches syncTabLocalUrl semantics).
+  if (opts.store && opts.store !== 'All') {
+    existing.set('c_store', opts.store);
+  } else {
+    existing.delete('c_store');
+  }
+
+  // Campaigns-tab-local platform filter. Default 'all' is the omitted state.
+  if (opts.platform && opts.platform !== 'all') {
+    existing.set('c_platform', opts.platform);
+  } else {
+    existing.delete('c_platform');
+  }
+
+  const next = existing.toString();
+  const nextSearch = next ? `?${next}` : '';
+  const url = window.location.pathname + nextSearch + window.location.hash;
+
+  // pushState (not replaceState) — drilling is a navigation, so the back
+  // button should return the operator to the Home view they came from.
+  window.history.pushState(null, '', url);
+
+  // Nudge any listener (Dashboard's URL-sync effect) to re-read the search.
+  // pushState alone does NOT fire popstate; without this dispatch the URL
+  // would update but the dashboard wouldn't switch tabs until next render.
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}

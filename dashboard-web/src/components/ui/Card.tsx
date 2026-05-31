@@ -1,4 +1,10 @@
-import { forwardRef, type HTMLAttributes } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  type HTMLAttributes,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+} from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
@@ -69,18 +75,85 @@ export interface CardProps
   band?: CardBand;
   /** V4 freshness desaturation — forwards to `data-freshness="…"`. */
   freshness?: CardFreshness;
+  /**
+   * Task 3.4 — drill-down entry point.
+   *
+   * When supplied, the card becomes an interactive surface:
+   *   • role="button" + tabIndex=0 (unless the caller already set them)
+   *   • click + Enter + Space all invoke `onDrill`
+   *   • cursor:pointer + focus-visible ring (--accent)
+   *
+   * Orthogonal to consumer-side handlers like PerStoreRow's `onStoreSelect`
+   * (those still work — this is a generic primitive so net-new cards can
+   * wire drill behaviour without re-implementing the keyboard plumbing).
+   *
+   * The caller is responsible for the destination (typically wiring
+   * `drillToCampaigns({ store, platform })` from `lib/urlState.ts`).
+   */
+  onDrill?: () => void;
 }
 
 export const Card = forwardRef<HTMLDivElement, CardProps>(
-  ({ className, variant, band, freshness, ...props }, ref) => (
-    <div
-      ref={ref}
-      className={cn(cardVariants({ variant }), className)}
-      data-band={band}
-      data-freshness={freshness}
-      {...props}
-    />
-  ),
+  (
+    {
+      className,
+      variant,
+      band,
+      freshness,
+      onDrill,
+      onClick,
+      onKeyDown,
+      role,
+      tabIndex,
+      ...props
+    },
+    ref,
+  ) => {
+    const interactive = typeof onDrill === 'function';
+
+    const handleClick = useCallback(
+      (e: ReactMouseEvent<HTMLDivElement>) => {
+        // Preserve any consumer-supplied onClick — fire that first so a
+        // wrapping click handler can stopPropagation if needed.
+        onClick?.(e);
+        if (!interactive || e.defaultPrevented) return;
+        onDrill!();
+      },
+      [interactive, onClick, onDrill],
+    );
+
+    const handleKeyDown = useCallback(
+      (e: ReactKeyboardEvent<HTMLDivElement>) => {
+        onKeyDown?.(e);
+        if (!interactive || e.defaultPrevented) return;
+        if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+          // preventDefault on Space stops the page from scrolling.
+          e.preventDefault();
+          onDrill!();
+        }
+      },
+      [interactive, onKeyDown, onDrill],
+    );
+
+    return (
+      <div
+        ref={ref}
+        className={cn(
+          cardVariants({ variant }),
+          interactive &&
+            'cursor-pointer transition-colors hover:border-glass-edge/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60',
+          className,
+        )}
+        data-band={band}
+        data-freshness={freshness}
+        role={interactive ? (role ?? 'button') : role}
+        tabIndex={interactive ? (tabIndex ?? 0) : tabIndex}
+        onClick={interactive || onClick ? handleClick : undefined}
+        onKeyDown={interactive || onKeyDown ? handleKeyDown : undefined}
+        {...props}
+      />
+    );
+  },
 );
 Card.displayName = 'Card';
 

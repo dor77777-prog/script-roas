@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import type { MouseEvent as ReactMouseEvent } from 'react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { Card, CardHeader, CardTitle, CardDescription, CardBody, CardFooter } from '../Card';
 
 describe('Card primitive', () => {
@@ -84,5 +85,93 @@ describe('Card primitive', () => {
     const el = screen.getByTestId('card');
     expect(el.hasAttribute('data-band')).toBe(false);
     expect(el.hasAttribute('data-freshness')).toBe(false);
+  });
+
+  // ---------------------------------------------------------------------
+  // Task 3.4 — onDrill API (Home cards drill into Campaigns tab).
+  // ---------------------------------------------------------------------
+
+  it('Task 3.4 — onDrill: click invokes the callback', () => {
+    const onDrill = vi.fn();
+    render(<Card onDrill={onDrill} data-testid="card">x</Card>);
+    fireEvent.click(screen.getByTestId('card'));
+    expect(onDrill).toHaveBeenCalledTimes(1);
+  });
+
+  it('Task 3.4 — onDrill: Enter invokes the callback', () => {
+    const onDrill = vi.fn();
+    render(<Card onDrill={onDrill} data-testid="card">x</Card>);
+    fireEvent.keyDown(screen.getByTestId('card'), { key: 'Enter' });
+    expect(onDrill).toHaveBeenCalledTimes(1);
+  });
+
+  it('Task 3.4 — onDrill: Space invokes the callback', () => {
+    const onDrill = vi.fn();
+    render(<Card onDrill={onDrill} data-testid="card">x</Card>);
+    fireEvent.keyDown(screen.getByTestId('card'), { key: ' ' });
+    expect(onDrill).toHaveBeenCalledTimes(1);
+  });
+
+  it('Task 3.4 — onDrill: applies role=button + tabIndex=0', () => {
+    render(<Card onDrill={() => {}} data-testid="card">x</Card>);
+    const el = screen.getByTestId('card');
+    expect(el.getAttribute('role')).toBe('button');
+    expect(el.getAttribute('tabindex')).toBe('0');
+  });
+
+  it('Task 3.4 — onDrill: caller-supplied role + tabIndex win over defaults', () => {
+    render(
+      <Card onDrill={() => {}} role="link" tabIndex={-1} data-testid="card">x</Card>,
+    );
+    const el = screen.getByTestId('card');
+    expect(el.getAttribute('role')).toBe('link');
+    expect(el.getAttribute('tabindex')).toBe('-1');
+  });
+
+  it('Task 3.4 — onDrill: applies cursor-pointer + focus-visible ring', () => {
+    render(<Card onDrill={() => {}} data-testid="card">x</Card>);
+    const cls = screen.getByTestId('card').className;
+    expect(cls).toMatch(/cursor-pointer/);
+    expect(cls).toMatch(/focus-visible:ring-/);
+  });
+
+  it('Task 3.4 — no onDrill: card is NOT interactive (no role, no tabIndex, no cursor)', () => {
+    render(<Card data-testid="card">x</Card>);
+    const el = screen.getByTestId('card');
+    expect(el.hasAttribute('role')).toBe(false);
+    expect(el.hasAttribute('tabindex')).toBe(false);
+    expect(el.className).not.toMatch(/cursor-pointer/);
+  });
+
+  it('Task 3.4 — onDrill: ignores non-Enter/Space keys', () => {
+    const onDrill = vi.fn();
+    render(<Card onDrill={onDrill} data-testid="card">x</Card>);
+    const el = screen.getByTestId('card');
+    fireEvent.keyDown(el, { key: 'a' });
+    fireEvent.keyDown(el, { key: 'Tab' });
+    fireEvent.keyDown(el, { key: 'Escape' });
+    expect(onDrill).not.toHaveBeenCalled();
+  });
+
+  it('Task 3.4 — onDrill: caller onClick still fires (composed, not clobbered)', () => {
+    const onDrill = vi.fn();
+    const onClick = vi.fn();
+    render(
+      <Card onDrill={onDrill} onClick={onClick} data-testid="card">x</Card>,
+    );
+    fireEvent.click(screen.getByTestId('card'));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onDrill).toHaveBeenCalledTimes(1);
+  });
+
+  it('Task 3.4 — onDrill: caller onClick calling preventDefault suppresses the drill', () => {
+    const onDrill = vi.fn();
+    const onClick = vi.fn((e: ReactMouseEvent) => e.preventDefault());
+    render(
+      <Card onDrill={onDrill} onClick={onClick} data-testid="card">x</Card>,
+    );
+    fireEvent.click(screen.getByTestId('card'));
+    expect(onClick).toHaveBeenCalledTimes(1);
+    expect(onDrill).not.toHaveBeenCalled();
   });
 });
