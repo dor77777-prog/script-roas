@@ -85,7 +85,7 @@
      duration-snap|fast|base|slow|large, and ease-out map directly to
      these vars (see tailwind.config.ts). --radius-card was already
      hoisted by Task 1.3 (so the .glass[data-band]::before bar's
-     border-start radii don't embed a magic 14px); it stays here as
+     border-start radii don't embed a magic pixel value); it stays here as
      the single source of truth and is now also exposed in Tailwind as
      `rounded-card`. NOTE: literal curly braces are avoided in this
      comment intentionally — glassTokens.test.ts extracts the :root

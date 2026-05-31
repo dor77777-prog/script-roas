@@ -215,10 +215,12 @@ const config: Config = {
         // consumers reference them and migrating in a single task would
         // dwarf the shadow sweep (Task 1.7, ~40 sites) at unacceptable
         // visual-regression risk. Migration happens progressively as
-        // components are touched in Waves 2-5. Mapping:
-        //   rounded-md  ↔ rounded-control (both 8 px)
-        //   rounded-sm  ↔ rounded-chip    (both 6 px)
-        //   rounded-xl  ↔ rounded-card    (both 14 px)
+        // components are touched in Waves 2-5. NOTE: the mesh re-skin
+        // bumped the semantic radii toward the mockup, so they have now
+        // DIVERGED from the size aliases (no longer 1:1). Current mapping:
+        //   rounded-control = 10px (var) ; nearest size alias = lg
+        //   rounded-chip    = 11px (var) ; between md and lg (no exact alias)
+        //   rounded-card    = 18px (var) ; equals size alias 2xl
         //   rounded-full ↔ rounded-pill
         sm:    '0.375rem',
         DEFAULT: '0.5rem',
