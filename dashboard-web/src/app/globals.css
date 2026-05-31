@@ -395,3 +395,27 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   .fresh-chip.live .pulse { animation: none; }
   .glass[data-freshness] { transition: none; }
 }
+
+/* ===========================================================================
+   PER-STORE SEMANTIC EMPHASIS — Task 1.5.
+   Mockup reference: mockup-04i-store-emphasis.html lines 117-155.
+   Each metric cell on a Per-Store row carries a class hook:
+     .cell.spend     → red value + ↓ glyph on the label
+     .cell.revenue   → green value + ↑ glyph on the label
+     .cell.aov-good  → green value + ▴ glyph (AOV > 70 CAD)
+     .cell.aov-bad   → red value + ▾ glyph   (AOV < 50 CAD)
+     .cell.aov-mid   → neutral white          (50 ≤ AOV ≤ 70 CAD)
+   AOV classes come from `lib/format/aovEmphasis.ts`; spend/revenue are
+   structural (always painted). CPM cells take NO emphasis class — they
+   render in the default --text colour per the home-visual-rules memo.
+   =========================================================================== */
+.cell.spend   .sv { color: var(--band-red); }
+.cell.spend   .sl::before { content: '↓ '; color: var(--band-red);   opacity: 0.7; margin-inline-end: 2px; }
+.cell.revenue .sv { color: var(--band-green); }
+.cell.revenue .sl::before { content: '↑ '; color: var(--band-green); opacity: 0.7; margin-inline-end: 2px; }
+.cell.aov-good .sv { color: var(--band-green); }
+.cell.aov-good .sl::after { content: ' ▴'; color: var(--band-green); opacity: 0.8; }
+.cell.aov-bad  .sv { color: var(--band-red); }
+.cell.aov-bad  .sl::after { content: ' ▾'; color: var(--band-red);   opacity: 0.8; }
+.cell.aov-mid  .sv { color: var(--text); }
+/* CPM cells take NO emphasis class — always white. */
