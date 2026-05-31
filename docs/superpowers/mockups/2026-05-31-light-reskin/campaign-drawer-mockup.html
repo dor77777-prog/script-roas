@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="he" dir="rtl" data-theme="light">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>ROAS · מגירת קמפיין — Mesh (Light + Dark)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  /* ===== MESH (light) — default ===== */
+  :root{
+    --canvas:#edf0f8; --canvas-2:#f4f6fc;
+    --surface:#ffffff; --surface-2:#f6f7fb; --surface-sunken:#eef1f8;
+    --border:rgba(22,26,48,.09); --border-strong:rgba(22,26,48,.15);
+    --ink:#171a2b; --ink-2:#565d78; --ink-muted:#949ab4; --ink-faint:#b9bdd0;
+    --accent:#6d5efc; --accent-ink:#5a49f0; --accent-soft:#efecff;
+    --meta:#1877f2; --meta-bg:#e8f1ff; --meta-ink:#1877f2;
+    --google:#f4a200; --google-bg:#fff3d6; --google-ink:#9a6a00;
+    --tiktok:#ff2e7e; --tiktok-bg:#ffe3ef; --tiktok-ink:#c01863;
+    --up:#0fb37a; --down:#ef4d5b;
+    --sh-card:0 1px 2px rgba(22,26,48,.05), 0 10px 30px rgba(22,26,48,.08);
+    --sh-pop:0 18px 50px rgba(22,26,48,.18);
+    --radius:18px; --radius-sm:12px;
+    /* mesh page wash */
+    --wash:
+      radial-gradient(900px 460px at 88% -8%, rgba(14,165,183,.10), rgba(0,0,0,0) 55%),
+      radial-gradient(760px 420px at -6% 4%, rgba(124,108,255,.10), rgba(0,0,0,0) 55%),
+      radial-gradient(820px 520px at 50% 116%, rgba(236,72,153,.07), rgba(0,0,0,0) 60%),
+      linear-gradient(180deg,var(--canvas),var(--canvas-2));
+    /* ROAS cell tones */
+    --c-green:#0fb37a; --c-blue:#3b82f6; --c-amber:#f59e0b; --c-red:#ef4d5b; --c-fail:#11131f;
+    /* status chips */
+    --st-green:#0fb37a; --st-green-bg:#e7f8f1; --st-green-ink:#0a8a5e;
+    --st-blue:#3b82f6;  --st-blue-bg:#e9f1ff;  --st-blue-ink:#2563eb;
+    --st-orange:#f59e0b;--st-orange-bg:#fff3da;--st-orange-ink:#b45309;
+    --st-red:#ef4d5b;   --st-red-bg:#ffe9ec;   --st-red-ink:#d22c3c;
+    --st-gray:#949ab4;  --st-gray-bg:#eef0f5;  --st-gray-ink:#5a6076;
+    --backdrop:rgba(18,22,42,.34);
+    --topbar:rgba(255,255,255,.82);
+  }
+  /* ===== DARK-MESH ===== */
+  html[data-theme="dark"]{
+    --canvas:#0d0f1e; --canvas-2:#0a0c18;
+    --surface:#171a2e; --surface-2:#1d2138; --surface-sunken:#14172a;
+    --border:rgba(255,255,255,.09); --border-strong:rgba(255,255,255,.16);
+    --ink:#eef1ff; --ink-2:#b3b9d8; --ink-muted:#828aae; --ink-faint:#5a608a;
+    --accent:#7c6cff; --accent-ink:#a99cff; --accent-soft:rgba(124,108,255,.16);
+    --meta:#5b9dff; --meta-bg:rgba(24,119,242,.18); --meta-ink:#8bbcff;
+    --google:#ffcf66; --google-bg:rgba(244,162,0,.16); --google-ink:#ffd98a;
+    --tiktok:#ff6aa6; --tiktok-bg:rgba(255,46,126,.20); --tiktok-ink:#ff9bc4;
+    --up:#34e2ad; --down:#ff6b81;
+    --sh-card:0 1px 0 rgba(255,255,255,.04) inset, 0 16px 40px rgba(0,0,0,.5);
+    --sh-pop:0 28px 64px rgba(0,0,0,.62);
+    --wash:
+      radial-gradient(900px 480px at 86% -10%, rgba(124,108,255,.22), rgba(0,0,0,0) 55%),
+      radial-gradient(760px 440px at -6% 2%, rgba(24,119,242,.18), rgba(0,0,0,0) 55%),
+      radial-gradient(820px 560px at 50% 118%, rgba(236,72,153,.16), rgba(0,0,0,0) 60%),
+      linear-gradient(180deg,var(--canvas),var(--canvas-2));
+    --c-green:#0fb37a; --c-blue:#3b82f6; --c-amber:#f59e0b; --c-red:#ef4d5b; --c-fail:#05060c;
+    --st-green:#34e2ad; --st-green-bg:rgba(15,179,122,.16); --st-green-ink:#5cf0c3;
+    --st-blue:#5b9dff;  --st-blue-bg:rgba(59,130,246,.18); --st-blue-ink:#8bbcff;
+    --st-orange:#ffbb55;--st-orange-bg:rgba(245,158,11,.16);--st-orange-ink:#ffd08a;
+    --st-red:#ff6b81;   --st-red-bg:rgba(239,77,91,.18);   --st-red-ink:#ff9aa8;
+    --st-gray:#828aae;  --st-gray-bg:rgba(255,255,255,.07);--st-gray-ink:#aab0cd;
+    --backdrop:rgba(2,3,10,.6);
+    --topbar:rgba(23,26,46,.82);
+  }
+
+  *{box-sizing:border-box;min-width:0}
+  html,body{margin:0;padding:0}
+  body{font-family:'Heebo','Inter',system-ui,-apple-system,sans-serif;-webkit-font-smoothing:antialiased;
+    font-size:14px;line-height:1.45;color:var(--ink);background:var(--wash) fixed;min-height:100vh}
+  .num{font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums}
+
+  /* top mock control bar */
+  .ctrl{position:sticky;top:0;z-index:60;display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    background:var(--topbar);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);
+    padding:10px 18px;font-size:12.5px;color:var(--ink-2)}
+  .ctrl b{color:var(--ink);font-size:13px}
+  .seg{display:inline-flex;background:var(--surface-sunken);border:1px solid var(--border);border-radius:11px;padding:3px;gap:2px}
+  .seg button{border:0;background:transparent;height:28px;padding:0 13px;border-radius:8px;font-family:inherit;
+    font-weight:700;font-size:12px;color:var(--ink-2);cursor:pointer}
+  .seg button.on{background:var(--accent);color:#fff}
+  .ctrl .hint{color:var(--ink-muted)}
+
+  .stage{min-height:calc(100vh - 50px);position:relative;display:grid;place-items:center;padding:34px 18px}
+  .ghost{position:absolute;inset:0;display:grid;place-items:center;color:var(--ink-faint);font-weight:800;
+    font-size:64px;letter-spacing:-.03em;opacity:.5;user-select:none;pointer-events:none}
+  .backdrop{position:fixed;inset:0;background:var(--backdrop);backdrop-filter:blur(2px);z-index:30}
+
+  /* ===== DRAWER ===== */
+  .drawer{position:relative;z-index:40;width:min(900px,96vw);max-height:90vh;display:flex;flex-direction:column;
+    background:var(--surface);border:1px solid var(--border);border-radius:22px;box-shadow:var(--sh-pop);overflow:hidden}
+  .dhead{position:relative;padding:18px 20px 14px;border-bottom:1px solid var(--border);overflow:hidden}
+  /* ROAS-band tint on the header glass (blue band = ROAS ≥ 3) */
+  .dhead::before{content:"";position:absolute;inset:0;z-index:0;opacity:.16;pointer-events:none;
+    background:linear-gradient(135deg,#5b8def 0%, #2563eb 90%)}
+  .dhead > *{position:relative;z-index:1}
+  .dhead-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+  .dh-id{display:flex;align-items:center;gap:11px;min-width:0}
+  .dh-ic{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;flex:none;color:#fff;font-weight:800;
+    background:linear-gradient(135deg,#5b8def,#2563eb)}
+  .dh-name{font-size:18px;font-weight:800;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dh-sub{display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:var(--ink-2);font-size:12.5px;margin-top:4px}
+  .dh-sub .dot{width:4px;height:4px;border-radius:50%;background:var(--ink-faint)}
+  .iconbtn{width:32px;height:32px;border-radius:9px;border:1px solid var(--border);background:var(--surface-2);
+    color:var(--ink-2);display:grid;place-items:center;cursor:pointer;font-size:15px}
+  .dh-amlink{display:inline-flex;align-items:center;gap:6px;color:var(--accent-ink);font-weight:700;font-size:12.5px;margin-top:9px;text-decoration:none}
+  .band-tag{font-size:10px;font-weight:800;letter-spacing:.06em;padding:3px 9px;border-radius:999px;
+    background:rgba(37,99,235,.14);color:#2563eb}
+  html[data-theme="dark"] .band-tag{background:rgba(91,141,239,.22);color:#9dbcff}
+
+  /* tabs */
+  .tabs{display:flex;gap:4px;padding:10px 14px 0;overflow-x:auto;border-bottom:1px solid var(--border);background:var(--surface)}
+  .tabs button{border:0;background:transparent;font-family:inherit;font-weight:700;font-size:13px;color:var(--ink-muted);
+    padding:9px 13px 12px;cursor:pointer;white-space:nowrap;border-bottom:2.5px solid transparent;margin-bottom:-1px}
+  .tabs button.on{color:var(--ink);border-bottom-color:var(--accent)}
+  .body{padding:18px 20px 22px;overflow:auto}
+  .panel{display:none}.panel.on{display:block}
+
+  /* cards / sections */
+  .sec{border:1px solid var(--border);border-radius:var(--radius);background:var(--surface);padding:15px;margin-bottom:14px}
+  .sec.sunken{background:var(--surface-2)}
+  .sec-h{display:flex;align-items:center;gap:8px;font-weight:800;font-size:13.5px;margin:0 0 11px}
+  .sec-h .ico{color:var(--accent-ink)}
+  .lbl{font-size:10.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-muted)}
+
+  /* KPI grid */
+  .kgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .kpi{border:1px solid var(--border);border-radius:14px;background:var(--surface-2);padding:12px 13px}
+  .kpi .v{font-family:'Inter';font-weight:800;font-size:24px;letter-spacing:-.02em;margin-top:5px}
+  .kpi .v.up{color:var(--up)} .kpi .v.dn{color:var(--down)}
+  .kpi .roas-row{display:flex;align-items:center;gap:8px;margin-top:5px}
+  .kpi .roas-row .v{font-size:24px}
+  .roas-chip{font-size:10px;font-weight:800;padding:3px 8px;border-radius:999px}
+  .roas-chip.blue{background:var(--st-blue-bg);color:var(--st-blue-ink)}
+  .kstrip{display:grid;grid-template-columns:repeat(3,1fr);border:1px solid var(--border);border-radius:13px;
+    overflow:hidden;background:var(--surface-2);margin-top:12px}
+  .kstrip .kk{padding:11px 13px;border-inline-start:1px solid var(--border)}
+  .kstrip .kk:first-child{border-inline-start:0}
+  .kstrip .kk .v{font-family:'Inter';font-weight:800;font-size:18px;margin-top:3px}
+
+  /* health */
+  .health-top{display:flex;align-items:center;gap:11px;margin-bottom:13px}
+  .grade{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;font-family:'Inter';font-weight:900;font-size:24px;flex:none}
+  .grade.b{background:var(--st-blue-bg);color:var(--st-blue-ink)}
+  .grade-meta .t{font-weight:800;font-size:15px}
+  .grade-meta .s{color:var(--ink-2);font-size:12px}
+  .bars{display:flex;flex-direction:column;gap:9px}
+  .bar-row{display:grid;grid-template-columns:120px 1fr 34px;align-items:center;gap:10px;font-size:12px}
+  .bar-row .nm{color:var(--ink-2);font-weight:600}
+  .bar-row .nm small{color:var(--ink-faint);font-weight:600}
+  .track{height:8px;border-radius:999px;background:var(--surface-sunken);overflow:hidden}
+  .fill{height:100%;border-radius:999px}
+  .fill.g{background:var(--st-green)} .fill.b{background:var(--st-blue)} .fill.o{background:var(--st-orange)} .fill.r{background:var(--st-red)}
+  .bar-row .pct{font-family:'Inter';font-weight:800;text-align:end;color:var(--ink-2)}
+  .reco{margin-top:12px;padding:10px 12px;border-radius:11px;border:1px solid var(--border);
+    background:var(--surface-2);font-size:12.5px;color:var(--ink-2)}
+  .reco b{color:var(--ink)}
+
+  /* product tags */
+  .ptags{display:flex;flex-wrap:wrap;gap:7px}
+  .ptag{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:var(--ink-2);
+    background:var(--surface-2);border:1px solid var(--border);border-radius:9px;padding:5px 9px}
+  .countpill{font-size:10.5px;font-weight:800;background:var(--accent-soft);color:var(--accent-ink);border-radius:999px;padding:2px 8px}
+  html[data-theme="dark"] .countpill{background:rgba(124,108,255,.18);color:#bcb2ff}
+  .minibtn{font-family:inherit;font-size:11.5px;font-weight:700;color:var(--accent-ink);background:transparent;border:1px solid var(--border);border-radius:9px;padding:5px 10px;cursor:pointer}
+
+  /* tables */
+  table{width:100%;border-collapse:collapse;font-size:12.5px}
+  thead th{font-size:10.5px;color:var(--ink-muted);font-weight:800;text-transform:uppercase;letter-spacing:.03em;
+    padding:9px 10px;text-align:start;border-bottom:1px solid var(--border);white-space:nowrap;cursor:pointer}
+  thead th.r{text-align:end} thead th.c{text-align:center}
+  tbody td{padding:10px;border-bottom:1px solid var(--border);white-space:nowrap}
+  tbody tr:last-child td{border-bottom:0}
+  tbody tr:hover{background:var(--surface-2)}
+  td.r{text-align:end;font-family:'Inter';font-variant-numeric:tabular-nums}
+  td.c{text-align:center}
+  td.name{font-family:'Inter';max-width:200px;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+  .toggle{width:17px;height:17px;border-radius:50%;border:2px solid var(--up);display:inline-block;vertical-align:middle}
+  .toggle.off{border-color:var(--ink-faint)}
+  .roas-cell{display:inline-grid;place-items:center;min-width:50px;height:25px;border-radius:7px;
+    font-family:'Inter';font-weight:800;color:#fff;font-size:12px}
+  .rc-green{background:var(--c-green)} .rc-blue{background:var(--c-blue)} .rc-amber{background:var(--c-amber)} .rc-red{background:var(--c-red)}
+  .rc-fail{background:var(--c-fail)}
+  .trust{display:inline-block;font-size:9px;font-weight:800;border-radius:6px;padding:1px 6px;margin-top:3px}
+  .trust.high{background:var(--st-green-bg);color:var(--st-green-ink)}
+  .trust.med{background:var(--st-orange-bg);color:var(--st-orange-ink)}
+  .trust.low{background:var(--st-red-bg);color:var(--st-red-ink)}
+  .trust.unk{background:var(--st-gray-bg);color:var(--st-gray-ink)}
+  .drill{font-family:inherit;font-size:11.5px;font-weight:700;color:var(--accent-ink);background:transparent;
+    border:1px solid var(--border);border-radius:8px;padding:4px 9px;cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+
+  /* platform pill */
+  .plat{display:inline-flex;align-items:center;gap:6px;border-radius:9px;padding:3px 8px;font-size:11px;font-weight:700}
+  .plat .pdot{width:9px;height:9px;border-radius:50%;box-shadow:0 0 0 2px var(--surface)}
+  .p-meta{background:var(--meta-bg);color:var(--meta-ink)} .p-meta .pdot{background:var(--meta)}
+  .p-google{background:var(--google-bg);color:var(--google-ink)} .p-google .pdot{background:var(--google)}
+  .p-tiktok{background:var(--tiktok-bg);color:var(--tiktok-ink)} .p-tiktok .pdot{background:var(--tiktok)}
+
+  /* daily charts (schematic) */
+  .plot{height:180px;border:1px solid var(--border);border-radius:12px;background:var(--surface-2);position:relative;overflow:hidden}
+  .legend{display:flex;gap:16px;margin-top:9px;font-size:11.5px;color:var(--ink-2)}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-inline-end:6px;vertical-align:middle}
+  .ana{margin-top:11px;border:1px solid var(--border);border-inline-start:3px solid var(--st-green);
+    border-radius:11px;padding:11px 13px;background:var(--surface-2);font-size:12.5px}
+  .ana b{color:var(--ink)}
+  .toolrow{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin-bottom:11px}
+
+  /* status chips */
+  .chips3{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}
+  .chipcard{border:1px solid var(--border);border-radius:13px;background:var(--surface-2);padding:12px}
+  .schip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:800;border-radius:999px;padding:4px 11px;margin-top:7px}
+  .schip.green{background:var(--st-green-bg);color:var(--st-green-ink)}
+  .schip.gray{background:var(--st-gray-bg);color:var(--st-gray-ink)}
+  .schip.orange{background:var(--st-orange-bg);color:var(--st-orange-ink)}
+  .timeline{margin-top:14px}
+  .tl{display:flex;align-items:center;gap:9px;padding:8px 0;border-top:1px solid var(--border);font-size:12.5px;color:var(--ink-2)}
+  .tl .clock{color:var(--ink-muted)}
+  .tl time{margin-inline-start:auto;color:var(--ink-muted);font-family:'Inter';font-size:11.5px}
+  .note{font-size:12.5px;color:var(--ink-2);background:var(--surface-2);border:1px solid var(--border);border-radius:11px;padding:11px 13px}
+
+  /* ===== nested AdsDrawer — slides over the campaign drawer from the inline-start (right, in RTL) ===== */
+  .ads{position:fixed;inset-block:0;inset-inline-start:0;z-index:70;width:min(820px,94vw);
+    background:var(--surface);border-inline-start:1px solid var(--border);box-shadow:var(--sh-pop);
+    display:none;flex-direction:column}
+  .ads.on{display:flex}
+  .ads-head{flex:none}
+  .ads-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 18px;border-bottom:1px solid var(--border)}
+  .ads-body{padding:16px 18px;overflow:auto}
+  .badge-warn{display:inline-block;font-size:9px;font-weight:800;color:var(--st-orange-ink);background:var(--st-orange-bg);
+    border:1px solid var(--border);border-radius:6px;padding:1px 6px;margin-inline-start:6px}
+
+  @media(max-width:680px){
+    .kgrid{grid-template-columns:repeat(2,1fr)} .kstrip{grid-template-columns:repeat(3,1fr)}
+    .bar-row{grid-template-columns:96px 1fr 30px} .chips3{grid-template-columns:1fr}
+    .drawer{width:96vw;max-height:94vh}
+  }
+</style>
+</head>
+<body>
+  <div class="ctrl">
+    <b>מגירת קמפיין · Mesh re-skin</b>
+    <span class="hint">תצוגה מקדימה — בהיר/כהה. החלף טאבים, ופתח את מגירת המודעות (drill ל-ad-set).</span>
+    <span class="seg" style="margin-inline-start:auto">
+      <button id="t-light" class="on" onclick="setTheme('light')">☀︎ בהיר (mesh)</button>
+      <button id="t-dark" onclick="setTheme('dark')">☾ כהה (dark-mesh)</button>
+    </span>
+  </div>
+
+  <div class="stage">
+    <div class="ghost">ROAS</div>
+    <div class="backdrop"></div>
+
+    <!-- ===================== CAMPAIGN DRAWER ===================== -->
+    <section class="drawer" role="dialog" aria-label="מגירת קמפיין">
+      <header class="dhead">
+        <div class="dhead-top">
+          <div class="dh-id">
+            <div class="dh-ic">f</div>
+            <div style="min-width:0">
+              <div class="dh-name" dir="ltr">USA_PROSPECTING_BROAD_V3</div>
+              <div class="dh-sub">
+                <span>🏪 uzoshop</span><span class="dot"></span>
+                <span class="plat p-meta"><span class="pdot"></span>Meta</span><span class="dot"></span>
+                <span>📅 14 ימים פעילים</span><span class="dot"></span>
+                <span class="band-tag">ROAS · מעולה</span>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:7px;flex:none">
+            <button class="iconbtn" title="מסך מלא">⤢</button>
+            <button class="iconbtn" title="סגור">✕</button>
+          </div>
+        </div>
+        <a class="dh-amlink" href="#">🔗 פתח ב-Meta Ads Manager</a>
+      </header>
+
+      <nav class="tabs">
+        <button class="on" onclick="showTab('overview',this)">סקירה</button>
+        <button onclick="showTab('daily',this)">יומי</button>
+        <button onclick="showTab('adsets',this)">Ad Sets</button>
+        <button onclick="showTab('ads',this)">מודעות</button>
+        <button onclick="showTab('status',this)">סטטוס</button>
+        <button onclick="showTab('history',this)">היסטוריה</button>
+      </nav>
+
+      <div class="body">
+        <!-- ===== OVERVIEW ===== -->
+        <div class="panel on" id="p-overview">
+          <div class="sec">
+            <div class="health-top">
+              <div class="grade b">B</div>
+              <div class="grade-meta">
+                <div class="t">ציון בריאות · בריא</div>
+                <div class="s">החולשה היחסית: אמינות attribution — שווה לבדוק תיוג click-id</div>
+              </div>
+            </div>
+            <div class="bars">
+              <div class="bar-row"><span class="nm">רווחיות <small>40%</small></span><span class="track"><span class="fill g" style="width:72%"></span></span><span class="pct">72</span></div>
+              <div class="bar-row"><span class="nm">נפח <small>15%</small></span><span class="track"><span class="fill b" style="width:58%"></span></span><span class="pct">58</span></div>
+              <div class="bar-row"><span class="nm">מומנטום <small>25%</small></span><span class="track"><span class="fill g" style="width:81%"></span></span><span class="pct">81</span></div>
+              <div class="bar-row"><span class="nm">אמינות attr׳ <small>20%</small></span><span class="track"><span class="fill o" style="width:42%"></span></span><span class="pct">42</span></div>
+            </div>
+            <div class="reco">💡 <b>המלצה:</b> ה-ROAS חזק (3.42) והמומנטום עולה — שווה להעלות תקציב ב-15–20%. שפר תיוג click-id כדי לחזק את אמינות ה-attribution.</div>
+          </div>
+
+          <div class="sec">
+            <div class="kgrid">
+              <div class="kpi">
+                <span class="lbl">ROAS</span>
+                <div class="roas-row"><span class="v num">3.42</span><span class="roas-chip blue">מעולה</span></div>
+              </div>
+              <div class="kpi"><span class="lbl">הוצאה</span><div class="v num">C$4,820</div></div>
+              <div class="kpi"><span class="lbl">ערך המרות</span><div class="v num up">C$16,484</div></div>
+              <div class="kpi"><span class="lbl">המרות</span><div class="v num">213</div></div>
+            </div>
+            <div class="kstrip">
+              <div class="kk"><span class="lbl">CTR</span><div class="v num">1.84%</div></div>
+              <div class="kk"><span class="lbl">CPC</span><div class="v num">C$0.71</div></div>
+              <div class="kk"><span class="lbl">CPA</span><div class="v num">C$22.6</div></div>
+            </div>
+          </div>
+
+          <div class="sec">
+            <div class="sec-h"><span class="ico">📦</span> מוצרי Shopify משויכים <span class="countpill">4</span>
+              <button class="minibtn" style="margin-inline-start:auto">ערוך מיפוי</button></div>
+            <div class="ptags">
+              <span class="ptag">📦 Aurora Lamp · #88213</span>
+              <span class="ptag">📦 Mini Projector · #88204</span>
+              <span class="ptag">📦 Posture Belt · #88251</span>
+              <span class="ptag">📦 LED Strip 5m · #88260</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== DAILY ===== -->
+        <div class="panel" id="p-daily">
+          <div class="sec">
+            <div class="sec-h"><span class="ico">📈</span> הוצאה ↔ ערך המרות לאורך הזמן</div>
+            <div class="plot">
+              <svg width="100%" height="100%" viewBox="0 0 600 180" preserveAspectRatio="none">
+                <polygon points="0,150 60,120 120,128 180,96 240,104 300,70 360,80 420,52 480,60 540,38 600,46 600,180 0,180" fill="rgba(15,179,122,.22)"/>
+                <polyline points="0,150 60,120 120,128 180,96 240,104 300,70 360,80 420,52 480,60 540,38 600,46" fill="none" stroke="#0fb37a" stroke-width="2"/>
+                <polygon points="0,166 60,158 120,160 180,150 240,152 300,142 360,146 420,138 480,140 540,134 600,136 600,180 0,180" fill="rgba(239,77,91,.20)"/>
+                <polyline points="0,166 60,158 120,160 180,150 240,152 300,142 360,146 420,138 480,140 540,134 600,136" fill="none" stroke="#ef4d5b" stroke-width="2"/>
+              </svg>
+            </div>
+            <div class="legend"><span><i style="background:#0fb37a"></i>ערך המרות</span><span><i style="background:#ef4d5b"></i>הוצאה</span></div>
+          </div>
+          <div class="sec">
+            <div class="toolrow">
+              <span class="seg"><button class="on">חצי-חצי</button><button>vs תקופה קודמת</button></span>
+              <label style="font-size:12.5px;color:var(--ink-2)"><input type="checkbox"/> הוסף ROAS לגרף</label>
+            </div>
+            <div class="plot">
+              <svg width="100%" height="100%" viewBox="0 0 600 180" preserveAspectRatio="none">
+                <line x1="0" y1="90" x2="600" y2="90" stroke="var(--border-strong)" stroke-dasharray="5 5"/>
+                <polyline points="0,120 60,112 120,116 180,98 240,104 300,86 360,92 420,72 480,80 540,64 600,70" fill="none" stroke="var(--accent)" stroke-width="2"/>
+              </svg>
+            </div>
+            <div class="legend"><span><i style="background:var(--accent)"></i>CPM</span><span><i style="background:var(--border-strong)"></i>חצי ראשון (baseline)</span></div>
+            <div class="ana"><b>ניתוח:</b> ה-CPM ירד 11% בחצי השני מול הראשון, וה-ROAS עלה במקביל — הקהל מתחמם, יעילות הקנייה משתפרת.</div>
+          </div>
+        </div>
+
+        <!-- ===== AD SETS ===== -->
+        <div class="panel" id="p-adsets">
+          <div class="sec" style="padding:6px 6px 2px">
+            <div class="sec-h" style="padding:10px 10px 0"><span class="ico">▦</span> אד-סטים (3)</div>
+            <table>
+              <thead><tr>
+                <th></th><th>שם</th><th class="r">הוצאה</th><th class="r">תקציב יומי</th><th class="r">ערך</th>
+                <th class="c">ROAS</th><th class="c">ROAS Shopify</th><th class="r">המרות</th><th></th>
+              </tr></thead>
+              <tbody>
+                <tr>
+                  <td><span class="toggle"></span></td>
+                  <td class="name" dir="ltr">ADV_Lookalike_3%_Video</td>
+                  <td class="r">C$2,140</td><td class="r">C$160</td><td class="r">C$8,210</td>
+                  <td class="c"><span class="roas-cell rc-blue">3.84</span></td>
+                  <td class="c"><span class="roas-cell rc-green">3.61</span><br><span class="trust high">high</span></td>
+                  <td class="r">102</td>
+                  <td><button class="drill" onclick="openAds()">פתח מודעות ‹</button></td>
+                </tr>
+                <tr>
+                  <td><span class="toggle"></span></td>
+                  <td class="name" dir="ltr">Interest_HomeDecor_BroadCBO</td>
+                  <td class="r">C$1,690</td><td class="r">C$120</td><td class="r">C$5,420</td>
+                  <td class="c"><span class="roas-cell rc-blue">3.21</span></td>
+                  <td class="c"><span class="roas-cell rc-amber">2.58</span><br><span class="trust med">medium</span></td>
+                  <td class="r">71</td>
+                  <td><button class="drill" onclick="openAds()">פתח מודעות ‹</button></td>
+                </tr>
+                <tr>
+                  <td><span class="toggle off"></span></td>
+                  <td class="name" dir="ltr">Retargeting_7d_DPA</td>
+                  <td class="r">C$990</td><td class="r">C$70</td><td class="r">C$2,854</td>
+                  <td class="c"><span class="roas-cell rc-amber">2.88</span></td>
+                  <td class="c"><span class="roas-cell rc-amber">2.41</span><br><span class="trust unk">unknown</span></td>
+                  <td class="r">40</td>
+                  <td><button class="drill" onclick="openAds()">פתח מודעות ‹</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- ===== ADS (by ad-set quick list) ===== -->
+        <div class="panel" id="p-ads">
+          <div class="sec">
+            <div class="sec-h"><span class="ico">▦</span> מודעות לפי ad-set</div>
+            <div class="note" style="margin-bottom:12px">נתוני מודעות נטענים לפי ad-set. בחר ad-set מהרשימה כדי לפתוח את כל המודעות שלו.</div>
+            <div class="ptags" style="flex-direction:column;align-items:stretch;gap:9px">
+              <div style="display:flex;align-items:center;gap:12px;border:1px solid var(--border);border-radius:12px;padding:11px 13px;background:var(--surface-2)">
+                <div style="min-width:0"><div class="name" dir="ltr" style="font-weight:700">ADV_Lookalike_3%_Video</div>
+                  <div style="color:var(--ink-muted);font-size:11.5px" class="num">C$2,140 · 102 המרות</div></div>
+                <button class="drill" style="margin-inline-start:auto" onclick="openAds()">פתח מודעות ‹</button>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;border:1px solid var(--border);border-radius:12px;padding:11px 13px;background:var(--surface-2)">
+                <div style="min-width:0"><div class="name" dir="ltr" style="font-weight:700">Interest_HomeDecor_BroadCBO</div>
+                  <div style="color:var(--ink-muted);font-size:11.5px" class="num">C$1,690 · 71 המרות</div></div>
+                <button class="drill" style="margin-inline-start:auto" onclick="openAds()">פתח מודעות ‹</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== STATUS ===== -->
+        <div class="panel" id="p-status">
+          <div class="sec">
+            <div class="sec-h"><span class="ico">◫</span> סטטוס + טריות</div>
+            <div class="chips3">
+              <div class="chipcard"><span class="lbl">configured</span><br><span class="schip green">● ACTIVE</span></div>
+              <div class="chipcard"><span class="lbl">effective</span><br><span class="schip gray">ACTIVE</span></div>
+              <div class="chipcard"><span class="lbl">delivery</span><br><span class="schip green">● DELIVERING</span></div>
+            </div>
+            <div class="timeline">
+              <div class="lbl" style="margin-bottom:4px">היסטוריית סטטוס</div>
+              <div class="tl"><span class="clock">🕘</span> נראה לראשונה <time>לפני 14 ימים</time></div>
+              <div class="tl"><span class="clock">🕘</span> שינוי סטטוס אחרון <time>לפני 3 ימים</time></div>
+              <div class="tl"><span class="clock">🕘</span> עדכון סטטוס מוצלח אחרון <time>לפני 8 דקות</time></div>
+              <div class="tl"><span class="clock">🕘</span> טיק חי אחרון <time>לפני 6 דקות</time></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== HISTORY ===== -->
+        <div class="panel" id="p-history">
+          <div class="sec">
+            <div class="sec-h"><span class="ico">🗓</span> ציר זמן רישומי</div>
+            <div class="note" style="margin-bottom:12px">תיעוד מלא של עריכות תקציב ושינויי סטטוס יגיע ב-Phase E2+. עד אז, אלה התאריכים שה-pipeline שומר על הקמפיין.</div>
+            <div class="timeline" style="margin-top:0">
+              <div class="tl"><span class="clock">🕘</span> נראה לראשונה <time>17/05/2026</time></div>
+              <div class="tl"><span class="clock">🕘</span> שינוי סטטוס אחרון <time>28/05/2026</time></div>
+              <div class="tl"><span class="clock">🕘</span> עדכון סטטוס מוצלח אחרון <time>31/05 17:42</time></div>
+              <div class="tl"><span class="clock">🕘</span> טיק חי אחרון <time>31/05 17:44</time></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== NESTED ADS DRAWER ===================== -->
+    <aside class="ads" id="adsDrawer" aria-label="מודעות ב-ad-set">
+      <div class="ads-head">
+        <div class="dh-id">
+          <div class="dh-ic" style="background:linear-gradient(135deg,var(--accent),var(--accent-ink))">▦</div>
+          <div style="min-width:0">
+            <div class="dh-name" style="font-size:16px">מודעות ב-<span dir="ltr">ADV_Lookalike_3%_Video</span></div>
+            <div class="dh-sub"><span class="num">C$2,140 הוצאה</span><span class="dot"></span><span class="num up">C$8,210 ערך</span>
+              <span class="dot"></span><span class="roas-cell rc-blue" style="height:20px;min-width:42px">3.84</span><span class="dot"></span><span>102 המרות</span></div>
+          </div>
+        </div>
+        <div style="display:flex;gap:7px;flex:none">
+          <button class="iconbtn" title="מסך מלא">⤢</button>
+          <button class="iconbtn" title="סגור" onclick="closeAds()">✕</button>
+        </div>
+      </div>
+      <div class="ads-body">
+        <div class="sec" style="padding:6px 6px 2px">
+          <table>
+            <thead><tr>
+              <th></th><th>מודעה</th><th class="r">הוצאה</th><th class="r">ערך</th><th class="c">ROAS</th>
+              <th class="c">ROAS Shopify</th><th class="r">המרות</th><th class="r">חשיפות</th><th class="r">קליקים</th><th></th>
+            </tr></thead>
+            <tbody>
+              <tr><td><span class="toggle"></span></td><td class="name" dir="ltr">Aurora_UGC_15s_v4</td>
+                <td class="r">C$780</td><td class="r">C$3,510</td><td class="c"><span class="roas-cell rc-blue">4.50</span></td>
+                <td class="c"><span class="roas-cell rc-green">4.22</span><br><span class="trust high">high</span></td>
+                <td class="r">44</td><td class="r">214k</td><td class="r">3,940</td><td><button class="iconbtn" style="width:26px;height:26px">↗</button></td></tr>
+              <tr><td><span class="toggle"></span></td><td class="name" dir="ltr">Aurora_Static_Carousel</td>
+                <td class="r">C$610</td><td class="r">C$2,180</td><td class="c"><span class="roas-cell rc-blue">3.57</span></td>
+                <td class="c"><span class="roas-cell rc-green">3.40</span><br><span class="trust high">high</span></td>
+                <td class="r">29</td><td class="r">168k</td><td class="r">2,710</td><td><button class="iconbtn" style="width:26px;height:26px">↗</button></td></tr>
+              <tr><td><span class="toggle off"></span></td><td class="name" dir="ltr">Projector_Hook_A</td>
+                <td class="r">C$520</td><td class="r">C$1,640</td><td class="c"><span class="roas-cell rc-amber">3.15</span></td>
+                <td class="c"><span class="roas-cell rc-amber">2.61</span><br><span class="trust med">medium</span></td>
+                <td class="r">21</td><td class="r">132k</td><td class="r">1,980</td><td><button class="iconbtn" style="width:26px;height:26px">↗</button></td></tr>
+              <tr><td><span class="toggle off"></span></td><td class="name" dir="ltr">Belt_TestCreative_B <span class="badge-warn">בלמידה</span></td>
+                <td class="r">C$230</td><td class="r">C$0</td><td class="c"><span class="roas-cell rc-fail">0</span></td>
+                <td class="c"><span class="roas-cell rc-fail">0</span><br><span class="trust low">low</span></td>
+                <td class="r">0</td><td class="r">38k</td><td class="r">410</td><td><button class="iconbtn" style="width:26px;height:26px">↗</button></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="note">תא <b>שחור «0»</b> = הוצאה בלי מכירה (כשל) — מאוחד בכל הטבלאות. צבע התא בשאר הימים לפי 4 ה-bands.</div>
+      </div>
+    </aside>
+  </div>
+
+<script>
+  function setTheme(t){
+    document.documentElement.setAttribute('data-theme', t);
+    document.getElementById('t-light').classList.toggle('on', t==='light');
+    document.getElementById('t-dark').classList.toggle('on', t==='dark');
+  }
+  function showTab(id, btn){
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('on'));
+    document.getElementById('p-'+id).classList.add('on');
+    document.querySelectorAll('.tabs button').forEach(b=>b.classList.remove('on'));
+    btn.classList.add('on');
+  }
+  function openAds(){ document.getElementById('adsDrawer').classList.add('on'); }
+  function closeAds(){ document.getElementById('adsDrawer').classList.remove('on'); }
+</script>
+</body>
+</html>
