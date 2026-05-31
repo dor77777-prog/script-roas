@@ -32,6 +32,7 @@ import noRawTableInComponents from './eslint-rules/no-raw-table-in-components.js
 import noNativeTitleTooltip from './eslint-rules/no-native-title-tooltip.js';
 import noRawInputInComponents from './eslint-rules/no-raw-input-in-components.js';
 import noPhysicalDirectionInComponents from './eslint-rules/no-physical-direction-in-components.js';
+import noEmojiInJsx from './eslint-rules/no-emoji-in-jsx.js';
 
 // Local plugin — bundles the design-system regression guards.
 const localPlugin = {
@@ -45,6 +46,7 @@ const localPlugin = {
     'no-native-title-tooltip': noNativeTitleTooltip,
     'no-raw-input-in-components': noRawInputInComponents,
     'no-physical-direction-in-components': noPhysicalDirectionInComponents,
+    'no-emoji-in-jsx': noEmojiInJsx,
   },
 };
 
@@ -156,12 +158,20 @@ export default tseslint.config(
       // codemod already paid the debt — this rule prevents regression.
       'local/no-physical-direction-in-components': 'error',
 
+      // Wave-5 Task 5.10 guard — emoji in JSX chrome (alerts, labels,
+      // buttons, headers) competes with Lucide icons and renders
+      // inconsistently across OS/font-rendering. Use Lucide for chrome;
+      // editorial emoji (chart pins 💰, tooltip-text 💡, …) are
+      // allowlisted inside the rule. Registered at 'warn' first so we
+      // can iterate without breaking the build — promote to 'error'
+      // once the inventory is fully landed.
+      'local/no-emoji-in-jsx': 'warn',
+
       // Wave-2 Task 2.10 guard — Radix imports outside components/ui/
       // bypass the wrapped primitives (Tabs, Dialog, Sheet, Tooltip,
       // Switch, Select, Button) and the design-system surface treatment.
       // The 8 files in components/ui/ are the only allowed consumers; an
       // override below switches this off for that directory.
-      // (Wave-5 Task 5.10 will add `local/no-emoji-in-jsx` here.)
       'no-restricted-imports': [
         'error',
         {

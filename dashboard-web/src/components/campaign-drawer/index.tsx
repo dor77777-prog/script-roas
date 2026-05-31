@@ -33,6 +33,7 @@ import {
   Calendar,
   Store as StoreIcon,
   Minimize2,
+  AlertTriangle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { NativeSelect } from '@/components/ui/NativeSelect';
@@ -721,8 +722,9 @@ export function CampaignDrawer({
               <option value="usmile360">360usmile</option>
             </NativeSelect>
             {!isUnmapped && currentValue !== storeId && (
-              <p className="text-[11px] text-status-orange mt-2">
-                ⚠ מיפוי המוצרים למטה כבר מציג את {currentValue}. שאר הפאנלים בכרטיסייה הזו עדיין מציגים נתונים של {storeId} עד שcron-live-heavy יכתוב מחדש (עד 30 דק׳).
+              <p className="text-[11px] text-status-orange mt-2 inline-flex items-start gap-1">
+                <AlertTriangle size={11} className="shrink-0 mt-0.5" aria-hidden />
+                <span>מיפוי המוצרים למטה כבר מציג את {currentValue}. שאר הפאנלים בכרטיסייה הזו עדיין מציגים נתונים של {storeId} עד שcron-live-heavy יכתוב מחדש (עד 30 דק׳).</span>
               </p>
             )}
           </section>

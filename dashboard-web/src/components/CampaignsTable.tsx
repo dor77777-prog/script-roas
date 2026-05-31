@@ -1544,7 +1544,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                 className="h-auto p-0 text-[11px] text-ink-muted hover:text-ink"
                 aria-label="סגור"
               >
-                ✕
+                <X size={11} aria-hidden />
               </Button>
             </div>
           </div>

@@ -15,7 +15,7 @@
  * here without changing its public API.
  */
 
-import { Layers, ChevronLeft } from 'lucide-react';
+import { Layers, ChevronLeft, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Heading } from '@/components/ui/Typography';
 import { fmtMoney } from '@/lib/format';
@@ -60,8 +60,9 @@ export function CampaignDrawerAds({ adSets, platform, onDrillAds }: CampaignDraw
         <p className="text-[11px] text-ink-muted leading-relaxed bg-glass-2/40 rounded-lg px-3 py-2 mb-3">
           נתוני מודעות נטענים לפי ad-set. בחר ad-set מהרשימה למטה כדי לפתוח את כל המודעות שלו.
           {!adDrillSupported && (
-            <span className="block mt-1 text-status-orange">
-              ⚠ {platform} לא חושף נתוני מודעות ברמה הזו (PMax / לא נתמך).
+            <span className="mt-1 inline-flex items-center gap-1 text-status-orange">
+              <AlertTriangle size={11} className="shrink-0" aria-hidden />
+              {platform} לא חושף נתוני מודעות ברמה הזו (PMax / לא נתמך).
             </span>
           )}
         </p>

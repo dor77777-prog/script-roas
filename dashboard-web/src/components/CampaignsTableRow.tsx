@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment } from 'react';
-import { CheckCircle2, Circle, ExternalLink } from 'lucide-react';
+import { CheckCircle2, Circle, ExternalLink, Pause, Tag, Hourglass } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { fmtMoneyString } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
@@ -319,7 +319,8 @@ export function CampaignsTableRow({
               {isCurrentlyOff && a.lastActiveDate && (
                 <HelpTooltip content={`קמפיין כבוי כרגע. הריצה האחרונה: ${formatLastActiveDate(a.lastActiveDate)}. הנתונים בשורה הם היסטוריים בלבד.`}>
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-glass-2 text-ink-muted border border-glass-edge">
-                    ⏸ כבוי · {formatLastActiveDate(a.lastActiveDate)}
+                    <Pause size={9} className="shrink-0" aria-hidden />
+                    כבוי · {formatLastActiveDate(a.lastActiveDate)}
                   </span>
                 </HelpTooltip>
               )}
@@ -338,7 +339,8 @@ export function CampaignsTableRow({
                 ) && (
                   <HelpTooltip content="הקמפיין הזה עדיין לא ממופה למוצרי Shopify. פתח את המגירה (קליק על שם הקמפיין) ובחר את המוצרים הרלוונטיים כדי שהדאשבורד יחשב ROAS Shopify אמיתי.">
                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-status-warningBg text-status-warningFg border border-status-warning/30">
-                      🏷️ לא ממופה
+                      <Tag size={9} className="shrink-0" aria-hidden />
+                      לא ממופה
                     </span>
                   </HelpTooltip>
                 )}
@@ -360,7 +362,8 @@ export function CampaignsTableRow({
               {statusVerdict.isBackfillUnknown && (
                 <HelpTooltip content="הסטטוס המוגדר עדיין לא נדגם מה-platform — ימולא בעוד עד 10 דק׳.">
                   <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-status-warningBg text-status-warningFg border border-status-warning/30">
-                    ⏳ טוען מ-Platform
+                    <Hourglass size={9} className="shrink-0" aria-hidden />
+                    טוען מ-Platform
                   </span>
                 </HelpTooltip>
               )}

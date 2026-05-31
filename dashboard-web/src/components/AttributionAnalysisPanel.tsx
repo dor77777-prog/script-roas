@@ -76,7 +76,7 @@ export function AttributionAnalysisPanel({
           >
             <AlertTriangle size={14} className="shrink-0 mt-px" />
             <div>
-              <strong className="block font-semibold">⚠ הילה חריגה ({(analysis.coverage * 100).toFixed(0)}%) — בדוק את הפיקסל</strong>
+              <strong className="block font-semibold">הילה חריגה ({(analysis.coverage * 100).toFixed(0)}%) — בדוק את הפיקסל</strong>
               <span className="opacity-80">
                 Shopify רואה יותר מפי-2 הזמנות ממה ש-Meta דיווחה — סימן לפיקסל
                 שבור / חסום, לדריפט של חלון הייחוס, או לקמפיינים אחרים שמושכים
