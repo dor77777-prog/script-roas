@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ROAS · Light Reskin — Home</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    /* neutral light system */
+    --canvas:#eef0f6;
+    --surface:#ffffff;
+    --surface-2:#f6f7fb;
+    --surface-sunken:#f1f3f9;
+    --border:rgba(22,26,48,.08);
+    --border-strong:rgba(22,26,48,.14);
+    --ink:#171a2b;
+    --ink-2:#565d78;
+    --ink-muted:#949ab4;
+    --ink-faint:#b9bdd0;
+    /* primary accent (violet/indigo) */
+    --accent:#6d5efc;
+    --accent-ink:#5a49f0;
+    --accent-soft:#efecff;
+    /* semantic */
+    --up:#0fb37a;
+    --down:#ef4d5b;
+    /* platform brand-mirrored */
+    --meta:#1877f2;
+    --google:#f4a200;
+    --tiktok:#ff2e7e;
+    /* shadows */
+    --sh-card:0 1px 2px rgba(22,26,48,.04), 0 8px 24px rgba(22,26,48,.06);
+    --sh-soft:0 1px 2px rgba(22,26,48,.05);
+    --radius:16px;
+    --radius-sm:11px;
+  }
+  *{box-sizing:border-box;min-width:0}
+  html,body{margin:0;padding:0}
+  body{
+    background:
+      radial-gradient(1200px 600px at 80% -10%, #f4f1ff 0%, rgba(244,241,255,0) 55%),
+      var(--canvas);
+    color:var(--ink);
+    font-family:'Heebo','Inter',system-ui,-apple-system,sans-serif;
+    -webkit-font-smoothing:antialiased;
+    font-size:14px;
+    line-height:1.45;
+  }
+  .app{display:grid;grid-template-columns:72px 1fr;min-height:100vh}
+  /* ---------- sidebar (right, RTL) ---------- */
+  .sidebar{
+    grid-column:1;background:#15182a;display:flex;flex-direction:column;align-items:center;
+    padding:16px 0;gap:6px;position:sticky;top:0;height:100vh
+  }
+  .sb-logo{width:38px;height:38px;border-radius:11px;background:linear-gradient(135deg,#7c6cff,#5a49f0);
+    display:grid;place-items:center;color:#fff;font-weight:800;margin-bottom:14px;box-shadow:0 6px 16px rgba(109,94,252,.45)}
+  .sb-ic{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;color:#8b91ad;cursor:pointer;transition:.15s}
+  .sb-ic svg{width:20px;height:20px}
+  .sb-ic:hover{background:rgba(255,255,255,.06);color:#cfd3e6}
+  .sb-ic.active{background:linear-gradient(135deg,rgba(124,108,255,.22),rgba(124,108,255,.10));color:#fff}
+  .sb-ic.active::before{content:"";position:absolute;right:0;width:3px;height:22px;border-radius:3px;background:#7c6cff;margin-right:-15px}
+  .sb-sp{flex:1}
+  /* ---------- main ---------- */
+  .main{grid-column:2;min-width:0}
+  .topbar{
+    position:sticky;top:0;z-index:20;height:60px;display:flex;align-items:center;gap:12px;
+    padding:0 26px;background:rgba(255,255,255,.82);backdrop-filter:blur(12px);
+    border-bottom:1px solid var(--border)
+  }
+  .chip{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 13px;border-radius:10px;
+    font-weight:600;font-size:12.5px;border:1px solid var(--border);background:var(--surface);color:var(--ink-2)}
+  .chip.ok{color:#0fb37a;border-color:rgba(15,179,122,.25);background:#effaf5}
+  .chip.live{color:#0fb37a;background:#eafaf3;border-color:rgba(15,179,122,.22)}
+  .search{flex:0 0 320px;display:flex;align-items:center;gap:9px;height:36px;padding:0 13px;border-radius:11px;
+    background:var(--surface-2);border:1px solid var(--border);color:var(--ink-muted);font-size:13px}
+  .search kbd{margin-inline-start:auto;font-family:'Inter';font-size:10.5px;background:#fff;border:1px solid var(--border);border-radius:6px;padding:1px 6px;color:var(--ink-muted)}
+  .grow{flex:1}
+  .content{padding:24px 26px 60px;max-width:1320px;margin:0 auto}
+  /* header row */
+  .page-head{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:18px}
+  h1{font-size:23px;font-weight:800;margin:0;letter-spacing:-.01em}
+  .sub{color:var(--ink-muted);font-size:13px;margin-top:3px}
+  .head-actions{display:flex;gap:10px}
+  .btn{height:36px;padding:0 15px;border-radius:10px;font-weight:600;font-size:13px;border:1px solid var(--border);
+    background:var(--surface);color:var(--ink-2);display:inline-flex;align-items:center;gap:8px;cursor:pointer;box-shadow:var(--sh-soft)}
+  .btn svg{width:15px;height:15px}
+  .btn.primary{background:linear-gradient(135deg,#7c6cff,#5a49f0);color:#fff;border:0;box-shadow:0 6px 16px rgba(109,94,252,.32)}
+  /* filter strip */
+  .filterbar{display:flex;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--border);
+    border-radius:14px;padding:9px 12px;box-shadow:var(--sh-soft);margin-bottom:12px;flex-wrap:wrap}
+  .seg{display:inline-flex;background:var(--surface-sunken);border-radius:10px;padding:3px;gap:2px;margin-inline-start:auto}
+  .seg button{border:0;background:transparent;height:30px;padding:0 13px;border-radius:8px;font-weight:600;font-size:12.5px;color:var(--ink-2);cursor:pointer}
+  .seg button.on{background:#fff;color:var(--accent-ink);box-shadow:var(--sh-soft)}
+  .pill{height:34px;display:inline-flex;align-items:center;gap:8px;padding:0 13px;border-radius:10px;border:1px solid var(--border);background:var(--surface-2);font-weight:600;font-size:12.5px;color:var(--ink-2)}
+  .scope{color:var(--ink-muted);font-size:12px;text-align:start;margin:2px 2px 16px}
+  /* activity collapsed bar */
+  .act-bar{display:flex;align-items:center;gap:12px;background:var(--surface);border:1px solid var(--border);
+    border-radius:14px;padding:14px 18px;box-shadow:var(--sh-soft);margin-bottom:20px}
+  .act-bar .t{font-weight:700}
+  .act-bar .s{color:var(--ink-muted);font-size:12.5px}
+  /* grid helpers */
+  .row3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:16px}
+  .row3b{display:grid;grid-template-columns:1fr 1fr 1.15fr;gap:16px;margin-bottom:16px}
+  .row4{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:22px}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--sh-card)}
+  .card-pad{padding:18px}
+  .lbl{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-muted)}
+  .num{font-family:'Inter','Heebo';font-weight:800;letter-spacing:-.02em}
+  /* ---------- per-store colored (ROAS band) cards ---------- */
+  .store{border-radius:var(--radius);padding:18px;color:#fff;position:relative;overflow:hidden;box-shadow:var(--sh-card)}
+  .store::after{content:"";position:absolute;inset:0;background:radial-gradient(120% 80% at 85% -20%,rgba(255,255,255,.22),rgba(255,255,255,0) 60%);pointer-events:none}
+  .band-low{background:linear-gradient(135deg,#ff6b81 0%,#e11d48 92%);box-shadow:0 10px 26px rgba(225,29,72,.30)}
+  .band-watch{background:linear-gradient(135deg,#ffb24d 0%,#f97316 95%);box-shadow:0 10px 26px rgba(249,115,22,.28)}
+  .band-good{background:linear-gradient(135deg,#34e2ad 0%,#0f9d6b 95%);box-shadow:0 10px 26px rgba(16,157,107,.28)}
+  .store-top{display:flex;align-items:center;justify-content:space-between}
+  .store-name{font-size:17px;font-weight:800}
+  .band-tag{font-size:10px;font-weight:800;letter-spacing:.08em;padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.22);color:#fff}
+  .roas-big{font-family:'Inter';font-weight:800;font-size:52px;line-height:1.05;margin:10px 0 0;letter-spacing:-.03em}
+  .roas-big small{font-size:26px;opacity:.7;font-weight:700}
+  .roas-cap{font-size:11px;font-weight:700;letter-spacing:.08em;opacity:.85;text-transform:uppercase}
+  .store hr{border:0;border-top:1px solid rgba(255,255,255,.22);margin:14px 0}
+  .st-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .st-stat .k{font-size:10.5px;opacity:.82;font-weight:600;display:flex;gap:3px;align-items:center}
+  .st-stat .v{font-family:'Inter';font-weight:800;font-size:16px;margin-top:2px}
+  .arrow{font-size:10px}
+  .plat-lbl{font-size:10px;font-weight:700;letter-spacing:.05em;opacity:.8;text-transform:uppercase;margin:16px 0 8px;text-align:start}
+  .plats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .plat{background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.18);border-radius:11px;padding:9px 10px}
+  .plat .ph{display:flex;align-items:center;justify-content:space-between;font-size:10.5px;opacity:.92}
+  .pdot{width:7px;height:7px;border-radius:50%;display:inline-block}
+  .plat .pv{font-family:'Inter';font-weight:800;font-size:15px;margin-top:5px}
+  /* ---------- neutral KPI cards ---------- */
+  .kpi{padding:17px 18px;position:relative}
+  .kpi .top{display:flex;align-items:center;justify-content:space-between}
+  .ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center}
+  .ic svg{width:17px;height:17px}
+  .kpi .v{font-size:27px;margin-top:12px}
+  .kpi .k{font-size:11.5px;color:var(--ink-muted);font-weight:600;margin-top:2px}
+  .delta{font-size:11.5px;font-weight:700;display:inline-flex;align-items:center;gap:3px}
+  .delta.u{color:var(--up)}.delta.d{color:var(--down)}
+  .spark{margin-top:12px;height:34px;width:100%}
+  /* big band KPI (business ROAS-colored hero) */
+  .kpi-band{color:#fff;border:0}
+  .kpi-band .k,.kpi-band .roas-cap{opacity:.9}
+  .kpi-band .v{font-size:34px}
+  /* roas chart */
+  .chart-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:6px}
+  .tldr{font-size:14.5px;font-weight:700}
+  .tldr b{color:var(--accent-ink)}
+  .kstrip{display:grid;grid-template-columns:repeat(5,1fr);gap:0;border:1px solid var(--border);border-radius:12px;overflow:hidden;margin:14px 0 18px;background:var(--surface-2)}
+  .kstrip>div{padding:12px 14px;border-inline-start:1px solid var(--border)}
+  .kstrip>div:first-child{border-inline-start:0}
+  .kstrip .kv{font-size:18px;margin-top:3px}
+  .kstrip .kk{font-size:10.5px;color:var(--ink-muted);font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+  .badge-warn{display:inline-block;font-size:9.5px;font-weight:800;color:#b45309;background:#fff3da;border:1px solid #fde2ac;border-radius:6px;padding:1px 6px;margin-inline-start:6px;vertical-align:middle}
+  .plot{height:230px;border:1px solid var(--border);border-radius:12px;background:linear-gradient(180deg,#fff,#fbfcff);position:relative;overflow:hidden}
+  /* bottom */
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .feed-row{display:flex;align-items:center;justify-content:space-between;padding:11px 4px;border-bottom:1px solid var(--border);font-size:12.5px}
+  .feed-row:last-child{border-bottom:0}
+  .badge{font-size:9.5px;font-weight:800;letter-spacing:.04em;padding:2px 7px;border-radius:6px}
+  .b-enable{color:#0fb37a;background:#eafaf3}
+  .b-time{color:var(--ink-muted);font-family:'Inter';font-size:11px}
+  .insight{border:1px solid var(--border);border-inline-start:3px solid var(--down);border-radius:12px;padding:14px;background:linear-gradient(90deg,#fff5f5,#fff)}
+  .insight .tag{font-size:10px;font-weight:800;color:var(--down);letter-spacing:.05em}
+  .insight h4{margin:7px 0 4px;font-size:15px}
+  .insight p{margin:0;color:var(--ink-2);font-size:12.5px}
+  .sec-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:13px}
+  .sec-title .t{font-weight:800;font-size:15px}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- MAIN -->
+  <div class="main">
+    <header class="topbar">
+      <span class="chip live">● עודכן עכשיו</span>
+      <div class="search">⌕ חיפוש… <kbd>⌘K</kbd></div>
+      <span class="grow"></span>
+      <span class="chip ok">● sync OK</span>
+    </header>
+
+    <div class="content">
+      <!-- page head -->
+      <div class="page-head">
+        <div>
+          <h1>בית</h1>
+          <div class="sub">שנה טווח או חנות לעדכון כל המסך.</div>
+        </div>
+        <div class="head-actions">
+          <button class="btn">⟳ רענן הכל</button>
+          <button class="btn primary">✦ ייצא דוח ל-AI</button>
+        </div>
+      </div>
+
+      <!-- filter strip -->
+      <div class="filterbar">
+        <span class="pill">⌄ טווחים נוספים</span>
+        <span class="pill">📅 01/05/2026 — 31/05/2026 · 31 ימים</span>
+        <span class="pill">⌄ כל החנויות</span>
+        <div class="seg">
+          <button>טווח מהיר ⚡</button>
+          <button>היום</button>
+          <button>אתמול</button>
+          <button>7 ימים אחרונים</button>
+          <button class="on">מתחילת החודש</button>
+        </div>
+      </div>
+      <div class="scope">כל החנויות · מתחילת החודש · CAD</div>
+
+      <!-- activity collapsed -->
+      <div class="act-bar">
+        <div style="display:flex;flex-direction:column">
+          <span class="t">יומן אירועים</span>
+          <span class="s">2 אירועים בטווח שבחרת</span>
+        </div>
+        <span class="grow"></span>
+        <span class="lbl">📌</span>
+        <span style="color:var(--ink-muted)">‹</span>
+      </div>
+
+      <!-- ===== PER-STORE ROW (ROAS-colored) ===== -->
+      <div class="row3">
+        <!-- 360usmile · LOW -->
+        <div class="store band-low">
+          <div class="store-top">
+            <span class="band-tag">ROAS נמוך</span>
+            <span class="store-name">360usmile</span>
+          </div>
+          <div class="roas-big">1.67<small>x</small></div>
+          <div class="roas-cap">ROAS · היום</div>
+          <hr/>
+          <div class="st-stats">
+            <div class="st-stat"><div class="k">הוצאה <span class="arrow">▾</span></div><div class="v">$3,440</div></div>
+            <div class="st-stat"><div class="k">הכנסה <span class="arrow">▴</span></div><div class="v">$5,755</div></div>
+            <div class="st-stat"><div class="k">הזמנות</div><div class="v">61</div></div>
+            <div class="st-stat"><div class="k">AOV</div><div class="v">$94</div></div>
+          </div>
+          <div class="plat-lbl">CPM לפי פלטפורמה</div>
+          <div class="plats" style="grid-template-columns:repeat(2,1fr)">
+            <div class="plat"><div class="ph"><span>$3,246 · spend</span><span>Meta <i class="pdot" style="background:#bcd6ff"></i></span></div><div class="pv">$18</div></div>
+            <div class="plat"><div class="ph"><span>$194 · spend</span><span>TikTok <i class="pdot" style="background:#ffc1da"></i></span></div><div class="pv">$2</div></div>
+          </div>
+        </div>
+
+        <!-- uzoshop · WATCH -->
+        <div class="store band-watch">
+          <div class="store-top">
+            <span class="band-tag">למעקב</span>
+            <span class="store-name">uzoshop</span>
+          </div>
+          <div class="roas-big">2.34<small>x</small></div>
+          <div class="roas-cap">ROAS · היום</div>
+          <hr/>
+          <div class="st-stats">
+            <div class="st-stat"><div class="k">הוצאה <span class="arrow">▾</span></div><div class="v">$41.1K</div></div>
+            <div class="st-stat"><div class="k">הכנסה <span class="arrow">▴</span></div><div class="v">$96K</div></div>
+            <div class="st-stat"><div class="k">הזמנות</div><div class="v">971</div></div>
+            <div class="st-stat"><div class="k">AOV</div><div class="v">$99</div></div>
+          </div>
+          <div class="plat-lbl">CPM לפי פלטפורמה</div>
+          <div class="plats">
+            <div class="plat"><div class="ph"><span>$0.2K</span><span>Meta <i class="pdot" style="background:#bcd6ff"></i></span></div><div class="pv">$30</div></div>
+            <div class="plat"><div class="ph"><span>$197</span><span>Google <i class="pdot" style="background:#ffe2a6"></i></span></div><div class="pv">$7</div></div>
+            <div class="plat"><div class="ph"><span>$256</span><span>TikTok <i class="pdot" style="background:#ffc1da"></i></span></div><div class="pv">$1</div></div>
+          </div>
+        </div>
+
+        <!-- Zol Plus · GOOD -->
+        <div class="store band-good">
+          <div class="store-top">
+            <span class="band-tag">תקין</span>
+            <span class="store-name">Zol Plus</span>
+          </div>
+          <div class="roas-big">2.76<small>x</small></div>
+          <div class="roas-cap">ROAS · היום</div>
+          <hr/>
+          <div class="st-stats">
+            <div class="st-stat"><div class="k">הוצאה <span class="arrow">▾</span></div><div class="v">$3,432</div></div>
+            <div class="st-stat"><div class="k">הכנסה <span class="arrow">▴</span></div><div class="v">$9,474</div></div>
+            <div class="st-stat"><div class="k">הזמנות</div><div class="v">96</div></div>
+            <div class="st-stat"><div class="k">AOV</div><div class="v">$99</div></div>
+          </div>
+          <div class="plat-lbl">CPM לפי פלטפורמה</div>
+          <div class="plats" style="grid-template-columns:1fr">
+            <div class="plat"><div class="ph"><span>$3,432 · spend</span><span>Meta <i class="pdot" style="background:#bcd6ff"></i></span></div><div class="pv">$32</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== GLOBAL BUSINESS KPI ===== -->
+      <div class="row3b">
+        <div class="card kpi">
+          <div class="top"><span class="lbl">הכנסה</span><span class="ic" style="background:#eafaf3;color:#0fb37a">$</span></div>
+          <div class="num v">$111,266</div>
+          <div class="k">מתחילת החודש · כל החנויות</div>
+          <svg class="spark" viewBox="0 0 200 34" preserveAspectRatio="none"><defs><linearGradient id="g1" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#0fb37a" stop-opacity=".25"/><stop offset="1" stop-color="#0fb37a" stop-opacity="0"/></linearGradient></defs><path d="M0,24 L20,22 40,20 60,21 80,16 100,17 120,12 140,14 160,9 180,10 200,6" fill="none" stroke="#0fb37a" stroke-width="2"/><path d="M0,24 L20,22 40,20 60,21 80,16 100,17 120,12 140,14 160,9 180,10 200,6 L200,34 L0,34Z" fill="url(#g1)"/></svg>
+        </div>
+        <div class="card kpi">
+          <div class="top"><span class="lbl">הוצאה</span><span class="ic" style="background:#fdeaec;color:#ef4d5b">↧</span></div>
+          <div class="num v">$47,948</div>
+          <div class="k">הוצאת פרסום · מתחילת החודש</div>
+          <svg class="spark" viewBox="0 0 200 34" preserveAspectRatio="none"><path d="M0,12 L20,14 40,13 60,16 80,15 100,18 120,17 140,20 160,19 180,22 200,21" fill="none" stroke="#ef4d5b" stroke-width="2"/></svg>
+        </div>
+        <!-- business hero — ROAS-band colored (overall ROAS 2.32 → watch/amber) -->
+        <div class="store band-watch kpi-band" style="padding:18px">
+          <div class="store-top">
+            <span class="band-tag">● LIVE · 14s</span>
+            <span class="lbl" style="color:#fff;opacity:.92">רווח תפעולי · מתחילת החודש</span>
+          </div>
+          <div class="num v" style="font-size:40px;margin-top:10px">$35,501</div>
+          <div class="roas-cap">מבוסס ROAS עסקי 2.32</div>
+          <svg class="spark" viewBox="0 0 200 30" preserveAspectRatio="none" style="height:30px;margin-top:10px"><path d="M0,20 L20,15 40,18 60,10 80,14 100,8 120,12 140,7 160,11 180,6 200,9" fill="none" stroke="#fff" stroke-width="2" opacity=".9"/></svg>
+        </div>
+      </div>
+
+      <div class="row4">
+        <div class="card kpi">
+          <div class="top"><span class="lbl">CPM · עסקי</span><span class="ic" style="background:var(--accent-soft);color:var(--accent-ink)">◷</span></div>
+          <div class="num v">$16.33</div><div class="k">עלות ל-1,000 חשיפות</div>
+        </div>
+        <div class="card kpi">
+          <div class="top"><span class="lbl">הזמנות · סה״כ</span><span class="ic" style="background:#eef0ff;color:#5a49f0">🛍</span></div>
+          <div class="num v">1,128</div><div class="k">כל החנויות</div>
+        </div>
+        <div class="card kpi">
+          <div class="top"><span class="lbl">מלאי · מתחילת החודש</span><span class="ic" style="background:#fff3da;color:#b45309">▣</span></div>
+          <div class="num v">$27,816</div><div class="k delta d">−25.0% מהמחזור</div>
+        </div>
+        <!-- ROAS stat — band colored -->
+        <div class="store band-watch kpi-band" style="padding:17px 18px">
+          <div class="top" style="display:flex;justify-content:space-between;align-items:center"><span class="lbl" style="color:#fff;opacity:.92">ROAS</span><span class="band-tag">למעקב</span></div>
+          <div class="num v" style="font-size:30px;margin-top:10px">2.32</div>
+          <svg class="spark" viewBox="0 0 200 30" preserveAspectRatio="none" style="height:28px"><path d="M0,18 L20,14 40,17 60,12 80,16 100,11 120,15 140,9 160,13 180,8 200,12" fill="none" stroke="#fff" stroke-width="2" opacity=".9"/></svg>
+        </div>
+      </div>
+
+      <!-- ===== ROAS vs TARGET CHART ===== -->
+      <div class="card card-pad" style="margin-bottom:22px">
+        <div class="chart-head">
+          <div class="tldr">ROAS ירד <b>10.8%</b> ב-30 הימים האחרונים. ממוצע <b>2.3</b> מול יעד <b>3.0</b>.</div>
+          <div class="seg">
+            <button>מותאם</button><button>מהשנה</button><button>מהרבעון</button><button>מהחודש</button><button>90 ימים</button><button>7 ימים</button><button class="on">30 ימים</button>
+          </div>
+        </div>
+        <div class="kstrip">
+          <div><div class="kk">הכנסות</div><div class="num kv">106,059</div></div>
+          <div><div class="kk">ROAS <span class="badge-warn">דורש מעקב</span></div><div class="num kv" style="color:#f97316">2.35x</div></div>
+          <div><div class="kk">הוצאת פרסום</div><div class="num kv">45,212</div></div>
+          <div><div class="kk">רווח תפעולי</div><div class="num kv" style="color:#0fb37a">34,332</div></div>
+          <div><div class="kk">CPM</div><div class="num kv">0.00</div></div>
+        </div>
+        <div class="plot">
+          <svg viewBox="0 0 1000 230" preserveAspectRatio="none" style="width:100%;height:100%">
+            <line x1="0" y1="70" x2="1000" y2="70" stroke="#6d5efc" stroke-width="1.5" stroke-dasharray="6 6" opacity=".55"/>
+            <text x="8" y="62" font-size="13" fill="#9499b4" font-family="Inter">יעד 3.0</text>
+            <polyline points="20,120 80,112 140,128 200,134 260,140 320,118 380,116 440,108 500,118 560,170 620,128 680,150 740,140 800,118 860,86 920,130 980,124" fill="none" stroke="#171a2b" stroke-width="2.5"/>
+            <circle cx="320" cy="118" r="4" fill="#0fb37a"/><circle cx="560" cy="170" r="4" fill="#ef4d5b"/>
+            <g><line x1="560" y1="40" x2="560" y2="200" stroke="#f4a200" stroke-width="1" stroke-dasharray="3 3" opacity=".5"/><text x="560" y="34" font-size="15" text-anchor="middle">💰</text></g>
+            <g><line x1="860" y1="40" x2="860" y2="200" stroke="#f4a200" stroke-width="1" stroke-dasharray="3 3" opacity=".5"/><text x="860" y="34" font-size="15" text-anchor="middle">💰</text></g>
+          </svg>
+        </div>
+        <div style="display:flex;justify-content:space-between;color:var(--ink-muted);font-size:11.5px;margin-top:10px">
+          <span>— ROAS תקופה קודמת · ההכנסות שכבר נצברו <b style="color:var(--ink)">CAD 106,059</b></span>
+          <span>30 ימי פעילות</span>
+        </div>
+      </div>
+
+      <!-- ===== BOTTOM: activity + insights ===== -->
+      <div class="row2">
+        <div class="card card-pad">
+          <div class="sec-title"><span class="t">פעילות אחרונה</span><span class="chip live">● LIVE · 0s</span></div>
+          <div class="feed-row"><span><b>1866443342716082</b> · usmile360 · tiktok → <span class="badge b-enable">ENABLE</span></span><span class="b-time">כרגע</span></div>
+          <div class="feed-row"><span><b>1866454102790369</b> · usmile360 · tiktok → <span class="badge b-enable">ENABLE</span></span><span class="b-time">כרגע</span></div>
+          <div class="feed-row"><span><b>1866454102790337</b> · usmile360 · tiktok → <span class="badge b-enable">ENABLE</span></span><span class="b-time">כרגע</span></div>
+          <div class="feed-row"><span><b>1866445530677282</b> · usmile360 · tiktok → <span class="badge b-enable">ENABLE</span></span><span class="b-time">כרגע</span></div>
+          <div class="feed-row"><span><b>1866441028463153</b> · usmile360 · tiktok → <span class="badge b-enable">ENABLE</span></span><span class="b-time">כרגע</span></div>
+        </div>
+        <div class="card card-pad">
+          <div class="sec-title"><span class="t">תובנות חכמות</span><span class="chip">1 תובנה פעילה</span></div>
+          <div class="insight">
+            <div class="tag">● דורש פעולה מיידית</div>
+            <h4>ROAS נמוך 3 ימים ברצף ב-360usmile</h4>
+            <p>ממוצע 3 ימים אחרונים 0.99, מול ממוצע 14 ימים קודמים 2.42.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SIDEBAR (right) -->
+  <aside class="sidebar">
+    <div class="sb-logo">R</div>
+    <div class="sb-ic active" style="position:relative">⌂</div>
+    <div class="sb-ic">▤</div>
+    <div class="sb-ic">📈</div>
+    <div class="sb-ic">📣</div>
+    <div class="sb-ic">▦</div>
+    <div class="sb-ic">⊞</div>
+    <div class="sb-sp"></div>
+    <div class="sb-ic">⚙</div>
+    <div class="sb-ic">◑</div>
+  </aside>
+</div>
+</body>
+</html>
