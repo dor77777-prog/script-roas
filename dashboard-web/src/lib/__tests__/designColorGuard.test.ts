@@ -155,9 +155,13 @@ const FN_LITERAL = /\b(?:rgba?|hsla?|oklch|oklab|lab|lch|hwb)\s*\(/;
 // (bg-accent-bg / bg-accent-soft / text-accent-fg) are only allowed WITHOUT a
 // trailing `/NN`, so they never reach this pattern.
 const FLAT_TOKEN_ALPHA = new RegExp(
-  '\\b(?:bg|text|border|ring|divide|fill|stroke|outline)-' +
+  // Use the SAME broad utility list as WHITE_BLACK/NAMED_PALETTE so gradient
+  // stops (from-/via-/to-accent/[0.06]) are caught too, not just bg-/text-/etc.
+  '\\b' + UTILITY + '-' +
     '(?:accent(?:-deep)?|canvas(?:-[12])?|ink(?:-[a-z]+)?|status-[a-zA-Z]+)' +
-    '/[0-9.]+',
+    // alpha can be a bare digit (`/10`) OR Tailwind's arbitrary bracketed
+    // form (`/[0.04]`) — both silently drop on a flat (no <alpha-value>) token.
+    '/(?:\\[[0-9.]+\\]|[0-9.]+)',
 );
 
 interface Detector {
