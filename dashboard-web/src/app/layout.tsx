@@ -68,11 +68,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       suppressHydrationWarning
       className={`${heebo.variable} ${rubik.variable} ${geistMono.variable}`}
     >
-      {/* Pre-hydration theme bootstrap — runs before first paint to prevent FOUC.
-          Key 'roas-theme' matches THEME_STORAGE_KEY in lib/theme.ts.
-          Semantics: explicit light/dark wins; else follow OS; default dark on error. */}
-      <script dangerouslySetInnerHTML={{ __html: `(function(){try{var c=localStorage.getItem('roas-theme');var d=window.matchMedia('(prefers-color-scheme: dark)').matches;var t=(c==='light'||c==='dark')?c:(d?'dark':'light');document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();` }} />
       <body className="font-sans antialiased text-ink bg-canvas">
+        {/* Pre-hydration theme bootstrap — first child of <body> so it runs before
+            first paint and prevents FOUC (render-blocking inline scripts at the top
+            of <body> execute before any rendering, matching the next-themes pattern).
+            Key 'roas-theme' matches THEME_STORAGE_KEY in lib/theme.ts.
+            Semantics: explicit light/dark wins; else follow OS; default dark on error.
+            suppressHydrationWarning stays on <html> because the script mutates
+            document.documentElement (data-theme) before React hydrates. */}
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var c=localStorage.getItem('roas-theme');var d=window.matchMedia('(prefers-color-scheme: dark)').matches;var t=(c==='light'||c==='dark')?c:(d?'dark':'light');document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();` }} />
         <ThemeProvider>
           {/*
             Task 2.6 — single Radix Tooltip root for the whole app.

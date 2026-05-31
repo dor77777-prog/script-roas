@@ -34,7 +34,15 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   // correct before React hydrates.
   const [choice, setChoiceState] = useState<ThemeChoice>(() => readStoredTheme());
 
-  const [osPrefersDark, setOsPrefersDark] = useState(true); // default dark to match the FOUC fallback in layout
+  // Lazy initializer reads matchMedia synchronously on the client so the
+  // initial resolved value matches what the pre-paint bootstrap script already
+  // wrote to data-theme, eliminating the light-OS first-paint flash.
+  // On the server (SSR) we return true — matching the bootstrap script's
+  // catch-fallback dark baseline — so there is no hydration mismatch.
+  const [osPrefersDark, setOsPrefersDark] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return true; // SSR baseline (matches the bootstrap script's catch fallback)
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     setOsPrefersDark(mq.matches);
