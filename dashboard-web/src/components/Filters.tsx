@@ -70,43 +70,64 @@ export function Filters({ filters, stores, onChange }: Props) {
   const showAdvanced = advancedOpen || activeIsSecondary || filters.preset === 'custom';
 
   return (
-    <Card className="!p-0 overflow-hidden">
-      <div className="p-4 sm:p-5 space-y-3.5 sm:space-y-4">
-        {/* ===== Row 1: featured presets + store ===== */}
-        <div className="flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-4">
-          <div className="flex-1 min-w-0">
-            <label className="text-[11px] sm:text-xs font-medium text-ink-secondary flex items-center gap-1.5 mb-1.5 sm:mb-2 tracking-wide">
-              <Zap size={12} className="text-status-orange fill-status-orange" />
-              טווח מהיר
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              {PRESET_FEATURED.map(p => (
-                <Button
-                  key={p}
-                  variant={filters.preset === p ? 'primary' : 'secondary'}
-                  onClick={() => selectPreset(p)}
-                  className={cn(
-                    'rounded-lg text-sm font-semibold',
-                    filters.preset === p
-                      ? 'border-accent shadow-glass'
-                      : 'hover:border-accent/40 active:scale-[0.98]',
-                  )}
-                >
-                  {PRESET_LABELS[p]}
-                </Button>
-              ))}
-            </div>
+    <Card className="!p-0 overflow-hidden w-full">
+      {/* ===== Compact horizontal strip =====
+       *
+       * 2026-05-31 UX rework — was a tall right-aligned block (~300 px) with
+       * the featured presets in a 2×2 grid stacked above a separate store
+       * picker, a selected-range banner row, and a full-width "טווחים
+       * נוספים" toggle row. Operator feedback: leaves the rest of the page
+       * empty on the side. New layout collapses everything into ONE flex
+       * row that spans the full page width and wraps at narrow viewports.
+       *
+       *   [⚡ טווח מהיר] [היום][אתמול][7 ימים][מתחילת החודש] | [חנות ▾] | [📅 from — to · N ימים] | [▾ טווחים נוספים]
+       *
+       * The advanced section (secondary presets + custom-date inputs) is
+       * still toggled inline beneath the strip but only appears when the
+       * operator opens it (or auto-opens because a secondary/custom preset
+       * is active).
+       */}
+      <div className="px-3 py-2.5 sm:px-4 sm:py-3">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+          {/* Label (anchor on the right under RTL) */}
+          <div className="flex items-center gap-1.5 text-[11px] sm:text-xs font-medium text-ink-secondary tracking-wide whitespace-nowrap">
+            <Zap size={12} className="text-status-orange fill-status-orange" />
+            טווח מהיר
           </div>
 
-          <div className="sm:w-[200px]">
-            <label className="text-[11px] sm:text-xs font-medium text-ink-secondary flex items-center gap-1.5 mb-1.5 sm:mb-2 tracking-wide">
-              <Store size={12} />
-              חנות
-            </label>
+          {/* Featured presets — wrap naturally if width is constrained */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {PRESET_FEATURED.map(p => (
+              <Button
+                key={p}
+                variant={filters.preset === p ? 'primary' : 'secondary'}
+                size="sm"
+                onClick={() => selectPreset(p)}
+                className={cn(
+                  'rounded-lg text-xs sm:text-sm font-semibold',
+                  filters.preset === p
+                    ? 'border-accent shadow-glass'
+                    : 'hover:border-accent/40 active:scale-[0.98]',
+                )}
+              >
+                {PRESET_LABELS[p]}
+              </Button>
+            ))}
+          </div>
+
+          {/* Spacer pushes store-picker + range banner + toggle to the
+           * opposite end of the row. `flex-1` only takes effect when there
+           * is room to grow; otherwise the wrap absorbs it. */}
+          <div className="hidden md:block flex-1" />
+
+          {/* Store picker — compact inline */}
+          <div className="flex items-center gap-1.5">
+            <Store size={13} className="text-ink-muted" aria-hidden="true" />
             <NativeSelect
               value={filters.store}
               onChange={e => onChange({ ...filters, store: e.target.value })}
-              className="font-medium"
+              className="h-8 py-0 text-xs sm:text-sm font-medium min-w-[140px]"
+              aria-label="חנות"
             >
               <option value="All">כל החנויות</option>
               {stores.map(s => (
@@ -116,36 +137,36 @@ export function Filters({ filters, stores, onChange }: Props) {
               ))}
             </NativeSelect>
           </div>
-        </div>
 
-        {/* ===== Selected range banner ===== */}
-        <div className="flex items-center justify-between rounded-lg bg-glass-2 px-3 py-2 text-xs sm:text-sm">
-          <div className="flex items-center gap-2 text-ink-secondary">
-            <Calendar size={13} className="text-ink-muted" />
-            <span className="tabular-nums">
+          {/* Selected range chip */}
+          <div className="flex items-center gap-2 rounded-lg bg-glass-2 px-2.5 py-1.5 text-xs sm:text-sm whitespace-nowrap">
+            <Calendar size={13} className="text-ink-muted" aria-hidden="true" />
+            <span className="tabular-nums text-ink-secondary">
               {formatDate(filters.range.from)} — {formatDate(filters.range.to)}
             </span>
+            <span className="font-semibold text-ink tabular-nums">· {days} ימים</span>
           </div>
-          <span className="font-semibold text-ink tabular-nums">{days} ימים</span>
+
+          {/* Advanced toggle — inline chevron button */}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={() => setAdvancedOpen(v => !v)}
+            className="h-8 px-2 text-[11px] sm:text-xs text-ink-secondary hover:text-ink gap-1 font-medium"
+            aria-expanded={showAdvanced}
+          >
+            <ChevronDown
+              size={13}
+              className={cn('transition-transform duration-DEFAULT', showAdvanced && 'rotate-180')}
+            />
+            טווחים נוספים
+          </Button>
         </div>
 
-        {/* ===== Advanced toggle ===== */}
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => setAdvancedOpen(v => !v)}
-          className="h-auto p-0 text-[11px] sm:text-xs text-ink-secondary hover:text-ink gap-1 font-medium"
-        >
-          <ChevronDown
-            size={13}
-            className={cn('transition-transform duration-DEFAULT', showAdvanced && 'rotate-180')}
-          />
-          טווחים נוספים
-        </Button>
-
         {showAdvanced && (
-          <div className="space-y-3 pt-1 animate-fade-in">
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-1.5">
+          <div className="space-y-2.5 pt-2.5 mt-2.5 border-t border-glass-edge animate-fade-in">
+            <div className="flex flex-wrap items-center gap-1.5">
               {PRESET_SECONDARY.map(p => (
                 <Button
                   key={p}
@@ -165,7 +186,7 @@ export function Filters({ filters, stores, onChange }: Props) {
             </div>
 
             {filters.preset === 'custom' && (
-              <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-2 max-w-md">
                 <Input
                   type="date"
                   value={filters.range.from}
