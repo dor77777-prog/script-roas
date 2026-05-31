@@ -741,7 +741,13 @@ export function CampaignDrawer({
         aria-labelledby="campaign-drawer-title"
         style={{ viewTransitionName: 'drawer-panel' as never }}
         className={cn(
-          'flex flex-col p-0',
+          // Wave-6 Task 6.1 — drawer fullscreen toggle animates over
+          // --motion-large (480 ms) so the width morph reads as a
+          // deliberate state change. We transition the `width` + `max-width`
+          // pair because the non-fullscreen mode uses a `w-[min(...)]`
+          // (width-only) and the fullscreen mode uses `max-w-full`.
+          // prefers-reduced-motion collapses it via the project-wide rule.
+          'flex flex-col p-0 transition-[width,max-width] duration-large ease-out',
           !isFullscreen && 'w-full sm:w-[min(640px,100vw)]',
           isFullscreen && 'w-full sm:w-full max-w-full',
         )}

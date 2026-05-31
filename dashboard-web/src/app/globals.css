@@ -443,6 +443,30 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   pointer-events: none;
   transition: opacity 600ms ease-out, filter 600ms ease-out;
 }
+
+/* ---------------------------------------------------------------------
+   Wave-6 Task 6.1 — V4 band entrance fade + scale.
+   When a banded Card mounts, Card.tsx waits two RAFs and flips
+   `data-mounted="true"` on the node. Until that flip lands the card
+   reads at opacity:0 + scale(0.98); once mounted the 300 ms ease-out
+   transition restores it to natural rest. We scope the transition to
+   `[data-mounted]` so the initial paint doesn't ALSO animate
+   (i.e. the unmounted state is instant, only the flip animates).
+   The `.glass[data-band]::before` glow already transitions at 600 ms,
+   so the bar's opacity follows the card's natural entrance. The
+   project-wide prefers-reduced-motion rule below collapses this to
+   instant; a targeted rule in the Task 6.2 sweep makes the intent
+   explicit at this CSS site.
+   ---------------------------------------------------------------------*/
+.glass[data-band]:not([data-mounted]) {
+  opacity: 0;
+  transform: scale(0.98);
+}
+.glass[data-band][data-mounted] {
+  opacity: 1;
+  transform: scale(1);
+  transition: opacity 300ms var(--ease-out), transform 300ms var(--ease-out);
+}
 .glass[data-band="red"]    { background: oklch(64% 0.22 22  / 0.05); }
 .glass[data-band="red"]::before    { background: var(--band-red);    box-shadow: 0 0 14px oklch(64% 0.22 22  / 0.5); }
 .glass[data-band="orange"] { background: oklch(78% 0.16 75  / 0.05); }

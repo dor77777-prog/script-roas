@@ -1,6 +1,8 @@
 import {
   forwardRef,
   useCallback,
+  useLayoutEffect,
+  useRef,
   type HTMLAttributes,
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
@@ -44,8 +46,15 @@ const cardVariants = cva(
    * literal class name; CSS rule lives in globals.css. `text-ink` is added
    * so cards have a body-coloured default text fill (was on the previous
    * implementation; no consumer relies on it but removing it would silently
-   * change foreground colour on every card). */
-  'glass rounded-card p-5 text-ink transition-colors',
+   * change foreground colour on every card).
+   *
+   * Wave-6 Task 6.1 — `card-hover` adds the universal hover lift
+   * (translateY(-2px) over --motion-snap). The `.card-hover` class hook
+   * lives in globals.css so the prefers-reduced-motion sweep (Task 6.2)
+   * can collapse the transform back to none. We pair it with
+   * `transition-transform duration-snap` so the lift uses the semantic
+   * motion vocabulary (120 ms) instead of an arbitrary number. */
+  'glass rounded-card p-5 text-ink transition-colors card-hover transition-transform duration-snap hover:-translate-y-0.5',
   {
     variants: {
       variant: {
@@ -111,6 +120,40 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
   ) => {
     const interactive = typeof onDrill === 'function';
 
+    /* Wave-6 Task 6.1 — V4 band signal entrance.
+     * When a banded card mounts, the `.glass[data-band]:not([data-mounted])`
+     * rule in globals.css clamps it to `opacity:0; transform:scale(0.98)`.
+     * On the next frame we flip `data-mounted="true"` on the node so the
+     * 300 ms fade-in + scale-up plays. Only runs when `band` is set so an
+     * un-banded Card has zero animation overhead. The DOM-attribute flip
+     * (vs a React state re-render) keeps the transition under-the-hood and
+     * avoids a paint-stomp on every prop change. The prefers-reduced-motion
+     * sweep (Task 6.2) collapses the keyframe to instant. */
+    const localRef = useRef<HTMLDivElement | null>(null);
+    useLayoutEffect(() => {
+      if (!band) return;
+      const node = localRef.current;
+      if (!node) return;
+      // Two RAFs so the initial unmounted style is applied before flipping.
+      const id = requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          node.setAttribute('data-mounted', 'true');
+        });
+      });
+      return () => cancelAnimationFrame(id);
+    }, [band]);
+
+    /* Compose the forwarded ref with our local one so both consumers
+     * (caller's ref) and our useLayoutEffect read the same node. */
+    const setRefs = useCallback(
+      (node: HTMLDivElement | null) => {
+        localRef.current = node;
+        if (typeof ref === 'function') ref(node);
+        else if (ref) (ref as React.MutableRefObject<HTMLDivElement | null>).current = node;
+      },
+      [ref],
+    );
+
     const handleClick = useCallback(
       (e: ReactMouseEvent<HTMLDivElement>) => {
         // Preserve any consumer-supplied onClick — fire that first so a
@@ -137,7 +180,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
 
     return (
       <div
-        ref={ref}
+        ref={setRefs}
         className={cn(
           cardVariants({ variant }),
           interactive &&

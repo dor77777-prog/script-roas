@@ -89,6 +89,20 @@ export const TabsContent = forwardRef<
   React.ElementRef<typeof RadixTabs.Content>,
   React.ComponentPropsWithoutRef<typeof RadixTabs.Content>
 >(({ className, ...props }, ref) => (
-  <RadixTabs.Content ref={ref} className={cn('mt-3 focus-visible:outline-none', className)} {...props} />
+  // Wave-6 Task 6.1 — tab content swap animates over --motion-snap
+  // (120 ms) using tailwindcss-animate's fade-in + ease-out. Radix
+  // toggles the panel via `data-state="active"`; the `data-[state=active]`
+  // selector scopes the animation to the entering panel only (the
+  // leaving panel is removed from the DOM by Radix). prefers-reduced-motion
+  // collapses it via the project-wide rule in globals.css.
+  <RadixTabs.Content
+    ref={ref}
+    className={cn(
+      'mt-3 focus-visible:outline-none',
+      'data-[state=active]:animate-in data-[state=active]:fade-in-0 data-[state=active]:duration-snap data-[state=active]:ease-out',
+      className,
+    )}
+    {...props}
+  />
 ));
 TabsContent.displayName = RadixTabs.Content.displayName;

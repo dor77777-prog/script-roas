@@ -29,7 +29,16 @@ import { cn } from '@/lib/utils';
  */
 const sheetVariants = cva(
   cn(
-    'fixed z-50 text-ink shadow-sheet transition ease-out animate-in',
+    // Wave-6 Task 6.1 — pin the entrance to the semantic motion
+    // vocabulary: `duration-base` resolves to --motion-base (240 ms) so
+    // the drawer enters at the same cadence as Sheet/Dialog elsewhere
+    // in the system instead of tailwindcss-animate's stock 150 ms. The
+    // `ease-out` curve already maps to the Wave-1 ease-out cubic via
+    // tailwind.config.ts. The prefers-reduced-motion sweep (Task 6.2)
+    // collapses the slide to instant. `transition-{transform,opacity}`
+    // also lets the fullscreen width toggle animate using --motion-large
+    // (480 ms) below — see SheetContent className composition.
+    'fixed z-50 text-ink shadow-sheet animate-in duration-base ease-out',
     // Glass surface — gradient + blur. Tailwind's gradient-stop tokens DO
     // resolve our --glass-* vars (see tailwind.config.ts `colors.glass`).
     'bg-gradient-to-b from-glass-3 to-glass-2 [backdrop-filter:var(--blur-sheet)] [-webkit-backdrop-filter:var(--blur-sheet)]',

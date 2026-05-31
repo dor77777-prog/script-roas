@@ -343,7 +343,13 @@ export function AdsDrawer({
         onEscapeKeyDown={(e) => e.preventDefault()}
         aria-labelledby="ads-drawer-title"
         className={cn(
-          'flex flex-col p-0',
+          // Wave-6 Task 6.1 — drawer fullscreen toggle animates over
+          // --motion-large (480 ms) so the width morph reads as a
+          // deliberate state change instead of a snap. We transition
+          // max-width specifically (the only property that flips between
+          // the two width modes). prefers-reduced-motion collapses it
+          // via the project-wide rule in globals.css.
+          'flex flex-col p-0 transition-[max-width] duration-large ease-out',
           !isFullscreen && 'w-full sm:max-w-[640px]',
           isFullscreen && 'w-full sm:w-full max-w-full',
         )}

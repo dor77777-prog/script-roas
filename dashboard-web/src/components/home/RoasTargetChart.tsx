@@ -618,6 +618,13 @@ export function RoasTargetChart({
                     className={cn(
                       'absolute z-10 whitespace-nowrap text-[11px] text-ink px-2.5 py-1 rounded-md',
                       'bg-glass-2 backdrop-blur-md border border-status-warning/30 shadow-overlay',
+                      // Wave-6 Task 6.1 — pin tooltip entrance: 120 ms
+                      // opacity + ~4 px Y translate via tailwindcss-animate.
+                      // slide-in-from-bottom-1 = 0.25 rem (4 px) — see the
+                      // plugin's CSS-var-driven utility. prefers-reduced-motion
+                      // (Task 6.2) collapses the keyframe to instant via the
+                      // targeted `[role="tooltip"]` rule in globals.css.
+                      'animate-in fade-in-0 slide-in-from-bottom-1 duration-snap ease-out',
                     )}
                     style={{ transform: 'translateX(-50%)', top: -44 }}
                     dir="rtl"
