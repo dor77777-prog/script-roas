@@ -133,7 +133,33 @@ export function CampaignDrawer({
   // ---- Local UI state ---------------------------------------------------
   const [sortKey, setSortKey] = useState<AdSetSortKey>('spend');
   const [sortDir, setSortDir] = useState<AdSetSortDir>('desc');
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  // Fullscreen toggle — persisted per-drawer in localStorage so the
+  // operator's preference survives drawer close/reopen and full reloads.
+  // SSR-safe: lazy initialiser guards against `window` access during
+  // server render (Next.js client-component still mounts the initial
+  // tree on the server). Key namespace `drawer:campaign:fullscreen`
+  // keeps the Campaign vs Ad preferences independent.
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return window.localStorage.getItem('drawer:campaign:fullscreen') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem(
+        'drawer:campaign:fullscreen',
+        String(isFullscreen),
+      );
+    } catch {
+      // localStorage can throw in private-mode Safari / disabled storage;
+      // a missing persistence is acceptable — the toggle still works for
+      // the current session.
+    }
+  }, [isFullscreen]);
   // Daily sub-tab notifies us when the operator switches to 'prev' baseline
   // so we can flip the SWR fetch from null → the prev key.
   const [cpmAnalysisMode, setCpmAnalysisMode] = useState<'half' | 'prev'>('half');
@@ -747,8 +773,14 @@ export function CampaignDrawer({
           // pair because the non-fullscreen mode uses a `w-[min(...)]`
           // (width-only) and the fullscreen mode uses `max-w-full`.
           // prefers-reduced-motion collapses it via the project-wide rule.
+          //
+          // 2026-05-31 widened default 640 → 880px after operator feedback
+          // that the panel felt cramped (the overview tab now packs hero +
+          // analysis + reconciliation + cohort + cannibalisation panels).
+          // 880px keeps a comfortable backdrop click-target on a 1440px
+          // laptop while letting 2-column stat grids breathe.
           'flex flex-col p-0 transition-[width,max-width] duration-large ease-out',
-          !isFullscreen && 'w-full sm:w-[min(640px,100vw)]',
+          !isFullscreen && 'w-full sm:w-[min(880px,100vw)]',
           isFullscreen && 'w-full sm:w-full max-w-full',
         )}
       >
@@ -760,7 +792,13 @@ export function CampaignDrawer({
           data-testid="campaign-drawer-hero"
           className="glass"
         >
-          <div className="flex items-start justify-between gap-3 mb-2">
+          {/* pe-10 reserves space for the Sheet primitive's auto-injected
+              close X (positioned at `end-3 top-3`, ~32 px wide w/ padding)
+              so the maximize button never sits underneath it. The X stays
+              at z-20 from Wave-2 Task 2.5; the maximize button is in
+              normal flow so the visual stack reads X → max in the RTL
+              top-end corner. */}
+          <div className="flex items-start justify-between gap-3 mb-2 pe-10">
             <div className="flex items-center gap-2 min-w-0 flex-1">
               <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent/8 text-accent shrink-0">
                 <Megaphone size={16} />
@@ -787,6 +825,7 @@ export function CampaignDrawer({
                 onClick={() => setIsFullscreen(v => !v)}
                 aria-label={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
                 title={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
+                data-testid="campaign-drawer-fullscreen-toggle"
               >
                 {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
               </Button>

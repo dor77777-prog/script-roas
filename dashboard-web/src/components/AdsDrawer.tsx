@@ -123,7 +123,25 @@ export function AdsDrawer({
   const [sortDir, setSortDir] = useState<AdSortDir>('desc');
   // Mirror CampaignDrawer's fullscreen toggle so the ad-level drilldown can
   // also expand edge-to-edge for inspection of long ad lists / tables.
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  // Persisted under a separate `drawer:ad:fullscreen` key so the operator
+  // can prefer fullscreen ads without forcing fullscreen on the parent
+  // CampaignDrawer (and vice-versa).
+  const [isFullscreen, setIsFullscreen] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return window.localStorage.getItem('drawer:ad:fullscreen') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      window.localStorage.setItem('drawer:ad:fullscreen', String(isFullscreen));
+    } catch {
+      // ignore — see CampaignDrawer for the same fallback rationale
+    }
+  }, [isFullscreen]);
   function handleSort(key: AdSortKey) {
     if (key === sortKey) {
       setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
@@ -349,12 +367,21 @@ export function AdsDrawer({
           // max-width specifically (the only property that flips between
           // the two width modes). prefers-reduced-motion collapses it
           // via the project-wide rule in globals.css.
+          //
+          // 2026-05-31 widened default 640 → 820px after operator feedback
+          // that the ad list felt cramped (impressions/clicks columns
+          // force the table into horizontal scroll at 640px). 820px keeps
+          // the AdsDrawer narrower than the parent CampaignDrawer (880px)
+          // so the nested drilldown reads as a sibling, not an equal.
           'flex flex-col p-0 transition-[max-width] duration-large ease-out',
-          !isFullscreen && 'w-full sm:max-w-[640px]',
+          !isFullscreen && 'w-full sm:max-w-[820px]',
           isFullscreen && 'w-full sm:w-full max-w-full',
         )}
       >
-        <SheetHeader className="flex items-center justify-between gap-3 py-3 sm:px-5">
+        {/* pe-10 reserves space for the Sheet primitive's auto-injected
+            close X (positioned at `end-3 top-3`, ~32 px) so the maximize
+            button never sits underneath it. Matches CampaignDrawer. */}
+        <SheetHeader className="flex items-center justify-between gap-3 py-3 sm:px-5 pe-10">
           <div className="min-w-0 flex items-center gap-2.5">
             <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent/10 text-accent shrink-0">
               <Layers size={16} />
@@ -382,6 +409,7 @@ export function AdsDrawer({
               onClick={() => setIsFullscreen(v => !v)}
               aria-label={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
               title={isFullscreen ? 'כווץ למגירה' : 'הרחב למסך מלא'}
+              data-testid="ads-drawer-fullscreen-toggle"
             >
               {isFullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
             </Button>
