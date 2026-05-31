@@ -111,7 +111,7 @@ export function MetricHelp({ content, className, subtle = true }: Props) {
           className={cn(
             'absolute z-30 top-full mt-2 end-0',
             'w-[260px] sm:w-[300px] max-w-[min(90vw,320px)]',
-            'rounded-xl bg-ink text-canvas p-3 shadow-overlay',
+            'rounded-xl bg-glass-2 text-ink border border-glass-edge p-3 shadow-overlay',
             'text-xs leading-relaxed animate-fade-in',
             'pointer-events-auto',
           )}
@@ -121,31 +121,31 @@ export function MetricHelp({ content, className, subtle = true }: Props) {
           onMouseEnter={cancelHide}
           onMouseLeave={scheduleHide}
         >
-          <div className="font-semibold text-canvas mb-1.5">{content.name}</div>
-          <div className="text-canvas/80">{content.whatIs}</div>
+          <div className="font-semibold text-ink mb-1.5">{content.name}</div>
+          <div className="text-ink-secondary">{content.whatIs}</div>
           {content.formula && (
             <code
               dir="ltr"
-              className="inline-block mt-2 px-1.5 py-0.5 rounded text-[10px] bg-canvas/10 text-canvas/90 tabular-nums"
+              className="inline-block mt-2 px-1.5 py-0.5 rounded text-[10px] bg-glass-edge text-ink tabular-nums"
             >
               {content.formula}
             </code>
           )}
           {content.good && (
-            <div className="mt-2 pt-2 border-t border-canvas/10">
-              <span className="text-emerald-300 font-semibold">טוב:</span>{' '}
-              <span className="text-canvas/80">{content.good}</span>
+            <div className="mt-2 pt-2 border-t border-glass-edge">
+              <span className="text-emerald-500 font-semibold">טוב:</span>{' '}
+              <span className="text-ink-secondary">{content.good}</span>
             </div>
           )}
           {content.context && (
-            <div className="mt-1.5 text-[10px] text-canvas/55">
+            <div className="mt-1.5 text-[10px] text-ink-subtle">
               {content.context}
             </div>
           )}
           {/* Small triangle pointer to anchor the tooltip to the trigger */}
           <div
             aria-hidden
-            className="absolute -top-1.5 end-1.5 w-2.5 h-2.5 bg-ink rotate-45"
+            className="absolute -top-1.5 end-1.5 w-2.5 h-2.5 bg-glass-2 border border-glass-edge rotate-45"
           />
         </div>
       )}
