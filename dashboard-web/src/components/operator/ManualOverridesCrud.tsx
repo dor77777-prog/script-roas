@@ -122,9 +122,14 @@ function initialForm(): FormState {
 }
 
 export function ManualOverridesCrud() {
+  // Task 5.2 (UI/UX overhaul) — explicit 15 s refresh + revalidateOnFocus so
+  // this panel matches the rest of /operator after the refresh-paradigm
+  // unification. Previously this hook ran with SWR defaults (focus-only),
+  // which made the panel feel stale relative to JobsTable / TokenFailures.
   const { data, error, mutate, isLoading } = useSWR<ListResponse>(
     '/api/operator/manual-overrides',
     fetcher,
+    { refreshInterval: 15_000, revalidateOnFocus: true },
   );
 
   const [confirmDelete, setConfirmDelete] = useState<Row | null>(null);

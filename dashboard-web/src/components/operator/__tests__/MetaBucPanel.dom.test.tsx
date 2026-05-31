@@ -1,37 +1,42 @@
 // dashboard-web/src/components/operator/__tests__/MetaBucPanel.dom.test.tsx
 //
-// Component tests for MetaBucPanel (Phase A Task 15).
+// Component tests for MetaBucPanel.
 //
-// Testing strategy: MetaBucPanel is an async server component that calls
-// getSupabaseAdmin() internally. We mock @/lib/supabaseAdmin and extract the
-// rendering logic into pure sub-components that are testable synchronously.
-//
-// We test the rendering branches by calling the component as an async
-// function and awaiting the returned JSX, then rendering the result.
-// This pattern is the pragmatic workaround recommended for server components
-// in vitest/jsdom — React 18's renderToString works on server-component JSX
-// if the component itself is awaited first (it returns a ReactElement, not a
-// Promise<ReactElement> for the rendering step).
+// Task 5.2 (UI/UX overhaul, 2026-05-30): the panel was converted from an
+// async server component to a client component that polls
+// /api/operator/meta-buc-usage via SWR @ 15 s. We now mock `swr` instead
+// of `@/lib/supabaseAdmin`.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 // ---------------------------------------------------------------------------
-// Mocks — must be established before the module under test is imported.
+// Mocks
 // ---------------------------------------------------------------------------
+let nextSwrResult: { data: unknown; isLoading: boolean } = {
+  data: undefined,
+  isLoading: true,
+};
+function setSwrResult(r: { data: unknown; isLoading: boolean }) {
+  nextSwrResult = r;
+}
 
-vi.mock('@/lib/supabaseAdmin', () => ({
-  getSupabaseAdmin: vi.fn(),
+vi.mock('swr', () => ({
+  default: () => nextSwrResult,
 }));
 
-import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+vi.mock('@/lib/operatorClient', () => ({
+  operatorFetch: vi.fn(),
+}));
+
 import { MetaBucPanel } from '../MetaBucPanel';
+import type { BucRow } from '@/app/api/operator/meta-buc-usage/route';
 
 // ---------------------------------------------------------------------------
 // Fixtures
 // ---------------------------------------------------------------------------
 
-const BASE_ROW = {
+const BASE_ROW: BucRow = {
   store_id: 'uzoshop',
   ad_account_id: '123456',
   ads_insights_call_pct: 45,
@@ -43,10 +48,10 @@ const BASE_ROW = {
   ads_management_time_pct: 35,
   ads_management_eta_minutes: 0,
   last_url: null,
-  last_updated_at: new Date(Date.now() - 5 * 60_000).toISOString(), // 5 min ago
+  last_updated_at: new Date(Date.now() - 5 * 60_000).toISOString(),
 };
 
-const HIGH_USAGE_ROW = {
+const HIGH_USAGE_ROW: BucRow = {
   ...BASE_ROW,
   store_id: 'zolplus',
   ad_account_id: '789012',
@@ -60,28 +65,8 @@ const HIGH_USAGE_ROW = {
   ads_management_eta_minutes: 0,
 };
 
-// Helper: build a mock Supabase chain that returns the given rows.
-function mockSupabase(rows: typeof BASE_ROW[]) {
-  const chain = {
-    from: vi.fn().mockReturnThis(),
-    select: vi.fn().mockReturnThis(),
-    order: vi.fn().mockReturnThis(),
-    // Return a resolved promise so await works inside fetchBucRows.
-    then: undefined as unknown,
-  };
-  // Make the chain itself thenable so `await sb.from(...).select(...).order(...)` resolves.
-  const result = { data: rows };
-  // Override .order to return a Promise-like object on the last call
-  chain.order = vi.fn().mockImplementation(function (this: typeof chain) {
-    // Return an object that resolves when awaited
-    const thenableChain = {
-      ...chain,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      then: (resolve: (v: typeof result) => void) => resolve(result),
-    };
-    return thenableChain;
-  });
-  (getSupabaseAdmin as ReturnType<typeof vi.fn>).mockReturnValue(chain);
+function metaBucResp(rows: BucRow[]) {
+  return { rows, lastUpdated: new Date().toISOString() };
 }
 
 // ---------------------------------------------------------------------------
@@ -90,67 +75,71 @@ function mockSupabase(rows: typeof BASE_ROW[]) {
 
 describe('MetaBucPanel', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    setSwrResult({ data: undefined, isLoading: true });
   });
 
-  it('renders empty state when fetch returns no rows', async () => {
-    mockSupabase([]);
-    const jsx = await MetaBucPanel();
-    render(jsx);
-    expect(
-      screen.getByText(/אין נתוני BUC עדיין/),
-    ).toBeDefined();
+  it('renders loading state on first paint', () => {
+    setSwrResult({ data: undefined, isLoading: true });
+    render(<MetaBucPanel />);
+    expect(screen.getByText(/טוען נתוני BUC/)).toBeDefined();
   });
 
-  it('renders one card per (store, ad_account_id) row', async () => {
-    mockSupabase([BASE_ROW, HIGH_USAGE_ROW]);
-    const jsx = await MetaBucPanel();
-    render(jsx);
-    // Each card shows the store_id
+  it('renders empty state when API returns no rows', () => {
+    setSwrResult({ data: metaBucResp([]), isLoading: false });
+    render(<MetaBucPanel />);
+    expect(screen.getByText(/אין נתוני BUC עדיין/)).toBeDefined();
+  });
+
+  it('renders one card per (store, ad_account_id) row', () => {
+    setSwrResult({
+      data: metaBucResp([BASE_ROW, HIGH_USAGE_ROW]),
+      isLoading: false,
+    });
+    render(<MetaBucPanel />);
     expect(screen.getByText('uzoshop')).toBeDefined();
     expect(screen.getByText('zolplus')).toBeDefined();
-    // Each card shows the ad account ID with "act_" prefix
     expect(screen.getByText('act_123456')).toBeDefined();
     expect(screen.getByText('act_789012')).toBeDefined();
   });
 
-  it('shows ETA badge when eta_minutes > 0', async () => {
-    mockSupabase([HIGH_USAGE_ROW]); // ads_insights_eta_minutes = 45
-    const jsx = await MetaBucPanel();
-    render(jsx);
-    // ETA text should appear for ads_insights block
+  it('shows ETA badge when eta_minutes > 0', () => {
+    setSwrResult({
+      data: metaBucResp([HIGH_USAGE_ROW]),
+      isLoading: false,
+    });
+    render(<MetaBucPanel />);
     expect(screen.getByText(/ETA חזרה 45 דק׳/)).toBeDefined();
   });
 
-  it('does NOT show ETA badge when eta_minutes = 0', async () => {
-    mockSupabase([BASE_ROW]); // all eta = 0
-    const jsx = await MetaBucPanel();
-    render(jsx);
-    const etaEls = screen.queryAllByText(/ETA חזרה/);
-    expect(etaEls.length).toBe(0);
+  it('does NOT show ETA badge when eta_minutes = 0', () => {
+    setSwrResult({ data: metaBucResp([BASE_ROW]), isLoading: false });
+    render(<MetaBucPanel />);
+    expect(screen.queryAllByText(/ETA חזרה/).length).toBe(0);
   });
 
-  it('applies status-red class for pct >= 80', async () => {
-    mockSupabase([HIGH_USAGE_ROW]); // ads_insights_call_pct = 85
-    const jsx = await MetaBucPanel();
-    const { container } = render(jsx);
-    // The progress bar fill div for call_count should have bg-status-red
+  it('applies status-red class for pct >= 80', () => {
+    setSwrResult({
+      data: metaBucResp([HIGH_USAGE_ROW]),
+      isLoading: false,
+    });
+    const { container } = render(<MetaBucPanel />);
     const redBars = container.querySelectorAll('.bg-status-red');
     expect(redBars.length).toBeGreaterThan(0);
   });
 
-  it('applies status-orange class for pct >= 60 and < 80', async () => {
-    mockSupabase([HIGH_USAGE_ROW]); // ads_insights_cputime_pct = 65
-    const jsx = await MetaBucPanel();
-    const { container } = render(jsx);
+  it('applies status-orange class for pct >= 60 and < 80', () => {
+    setSwrResult({
+      data: metaBucResp([HIGH_USAGE_ROW]),
+      isLoading: false,
+    });
+    const { container } = render(<MetaBucPanel />);
     const orangeBars = container.querySelectorAll('.bg-status-orange');
     expect(orangeBars.length).toBeGreaterThan(0);
   });
 
-  it('applies status-green class for pct < 60', async () => {
-    mockSupabase([BASE_ROW]); // all pcts < 60
-    const jsx = await MetaBucPanel();
-    const { container } = render(jsx);
+  it('applies status-green class for pct < 60', () => {
+    setSwrResult({ data: metaBucResp([BASE_ROW]), isLoading: false });
+    const { container } = render(<MetaBucPanel />);
     const greenBars = container.querySelectorAll('.bg-status-green');
     expect(greenBars.length).toBeGreaterThan(0);
   });

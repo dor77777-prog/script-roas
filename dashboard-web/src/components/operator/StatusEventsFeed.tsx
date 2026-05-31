@@ -1,12 +1,28 @@
+'use client';
+
 // dashboard-web/src/components/operator/StatusEventsFeed.tsx
 //
-// Phase B — last 50 entries from campaign_status_events. Server
-// component (mirrors FreshnessPanel pattern).
+// Phase B — last 50 entries from campaign_status_events.
+//
+// Task 5.2 (UI/UX overhaul, 2026-05-30): converted from an async server
+// component to a client component with 15 s SWR polling so all 4 operator
+// sub-tabs share a single refresh paradigm.
+//
+// Reuses /api/operator/status-events (originally created for the Home
+// ActivityFeed) — same endpoint, both surfaces get the same data shape.
 
+import useSWR from 'swr';
 import { Pause, Play, Sparkles, Archive, AlertCircle, MousePointerClick, Eye } from 'lucide-react';
-import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { fetchStatusEvents, type StatusEventRow } from '@/lib/operator/registriesReaders';
+import { operatorFetch } from '@/lib/operatorClient';
 import { Heading } from '@/components/ui/Typography';
+import type { StatusEventsResponse } from '@/app/api/operator/status-events/route';
+
+const ENDPOINT = '/api/operator/status-events';
+
+async function fetcher(url: string): Promise<StatusEventsResponse> {
+  const res = await operatorFetch(url);
+  return (await res.json()) as StatusEventsResponse;
+}
 
 function relativeHebrew(iso: string): string {
   const dMs = Date.now() - new Date(iso).getTime();
@@ -29,8 +45,23 @@ function kindIcon(kind: string) {
   return <AlertCircle size={size} className="text-status-red" />;
 }
 
-export async function StatusEventsFeed() {
-  const events: StatusEventRow[] = await fetchStatusEvents(getSupabaseAdmin());
+export function StatusEventsFeed() {
+  const { data, isLoading } = useSWR<StatusEventsResponse>(ENDPOINT, fetcher, {
+    refreshInterval: 15_000,
+    revalidateOnFocus: true,
+  });
+
+  if (isLoading && !data) {
+    return (
+      <section className="border border-glass-edge rounded-lg p-4 text-ink-secondary text-sm">
+        <Heading level="section" className="font-medium mb-2">שינויי סטטוס אחרונים</Heading>
+        <p>טוען…</p>
+      </section>
+    );
+  }
+
+  const events = data?.events ?? [];
+
   if (events.length === 0) {
     return (
       <section className="border border-glass-edge rounded-lg p-4 text-ink-secondary text-sm">

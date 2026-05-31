@@ -85,9 +85,12 @@ const STORE_LABEL: Record<string, string> = {
 };
 
 export function TokenFailuresTable() {
+  // Task 5.2 (UI/UX overhaul) — 15 s cadence + revalidateOnFocus:true to
+  // match the rest of /operator after the refresh-paradigm unification.
+  // Was: 30 000 ms / revalidateOnFocus:false.
   const { data, error, mutate } = useSWR<TokenFailuresResponse>(ENDPOINT, fetcher, {
-    refreshInterval: 30_000,
-    revalidateOnFocus: false,
+    refreshInterval: 15_000,
+    revalidateOnFocus: true,
   });
   const [expanded, setExpanded] = useState<string | null>(null);
   const [resolving, setResolving] = useState<string | null>(null);

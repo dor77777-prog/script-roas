@@ -18,6 +18,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { OperatorSecretBanner } from '@/components/operator/OperatorSecretBanner';
 import { Heading } from '@/components/ui/Typography';
 import { StatusPill } from '@/components/ui/StatusPill';
+import { OperatorRefreshButton } from './OperatorRefreshButton';
 import { SyncTab } from './SyncTab';
 import { HealthTab } from './HealthTab';
 import { ActivityTab } from './ActivityTab';
@@ -49,10 +50,16 @@ export default function OperatorPage() {
       <header className="mb-6">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <Heading level="display">ניהול</Heading>
-          {/* Task 5.1 — top-level <StatusPill> rolls freshness % + open
-              token-failures into one GREEN/YELLOW/RED chip so the operator
-              can answer "is everything OK?" without scanning sub-tabs. */}
-          <StatusPill />
+          <div className="flex items-center gap-2">
+            {/* Task 5.1 — top-level <StatusPill> rolls freshness % + open
+                token-failures into one GREEN/YELLOW/RED chip so the operator
+                can answer "is everything OK?" without scanning sub-tabs. */}
+            <StatusPill />
+            {/* Task 5.2 — manual <Refresh> button piggybacks on SWR's global
+                mutate(): revalidates every operator sub-tab's data in one
+                click instead of waiting for the next 15 s tick. */}
+            <OperatorRefreshButton />
+          </div>
         </div>
         <p className="text-ink-secondary text-sm mt-1">
           ניהול אוטומציה: ריצות Inngest, backfill, החלפות ידניות, ו-Sync.

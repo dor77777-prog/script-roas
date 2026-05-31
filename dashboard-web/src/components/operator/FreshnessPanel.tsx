@@ -1,26 +1,37 @@
+'use client';
+
 // dashboard-web/src/components/operator/FreshnessPanel.tsx
 //
-// Phase A (Task 15) — server component that surfaces the data_freshness
-// table on /operator. Renders the (store, platform, scope, table_name)
-// matrix sorted by lag_minutes DESC NULLS LAST.
+// Phase A (Task 15) — surfaces the data_freshness table on /operator. Renders
+// the (store, platform, scope, table_name) matrix sorted by lag_minutes DESC
+// NULLS LAST.
+//
+// Task 5.2 (UI/UX overhaul, 2026-05-30): converted from an async server
+// component to a client component with 15 s SWR polling so all 4 operator
+// sub-tabs share a single refresh paradigm. The header <Refresh> button
+// piggybacks on the same SWR cache via useSWRConfig().mutate().
 //
 // Design choices:
-//  - Async server component — read-only, ≤10-min cadence, no SWR needed.
-//  - Uses getFreshness() from @/lib/inngest/freshness (Task 10 helper).
-//  - formatRelative mirrors TokenFailuresTable's pattern, copied here per
-//    the spec (YAGNI — do not extract until 3+ callers exist).
-//  - Status icons: CheckCircle2 / AlertCircle / XCircle from lucide-react,
-//    matching TokenFailuresTable's icon imports.
-//  - Token substitutions (spec listed non-existent tokens):
-//      text-status-error → text-status-red
-//      text-status-warning → text-status-orange
-//      text-status-success → text-status-green
-//      border-ink-divider → border-glass-edge
+//  - Uses /api/operator/freshness (HTTP shim around getFreshness() helper).
+//  - 15 000 ms refresh interval — matches JobsTable + TokenFailuresTable +
+//    every other panel after Task 5.2's unification.
+//  - revalidateOnFocus = true: returning to the tab refreshes immediately
+//    rather than waiting for the next 15 s tick.
 
+import useSWR from 'swr';
 import { CheckCircle2, AlertCircle, XCircle } from 'lucide-react';
-import { getFreshness, type FreshnessRow } from '@/lib/inngest/freshness';
+import { operatorFetch } from '@/lib/operatorClient';
+import { type FreshnessRow } from '@/lib/inngest/freshness';
 import { TableBase } from '@/components/ui/TableBase';
 import { HelpTooltip } from '@/components/ui/Tooltip';
+import type { FreshnessResponse } from '@/app/api/operator/freshness/route';
+
+const ENDPOINT = '/api/operator/freshness';
+
+async function fetcher(url: string): Promise<FreshnessResponse> {
+  const res = await operatorFetch(url);
+  return (await res.json()) as FreshnessResponse;
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -76,11 +87,20 @@ function statusTextClass(status: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Server component
+// Component
 // ---------------------------------------------------------------------------
 
-export async function FreshnessPanel() {
-  const rows = await getFreshness();
+export function FreshnessPanel() {
+  const { data, isLoading } = useSWR<FreshnessResponse>(ENDPOINT, fetcher, {
+    refreshInterval: 15_000,
+    revalidateOnFocus: true,
+  });
+
+  if (isLoading && !data) {
+    return <p className="text-ink-secondary text-sm">טוען טריות נתונים…</p>;
+  }
+
+  const rows = data?.rows ?? [];
 
   if (!rows.length) {
     return (

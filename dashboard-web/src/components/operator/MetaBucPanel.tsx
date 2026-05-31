@@ -1,69 +1,42 @@
+'use client';
+
 // dashboard-web/src/components/operator/MetaBucPanel.tsx
 //
-// Phase A (Task 15) — server component that surfaces the meta_buc_usage
-// table on /operator. Renders per-(store, ad_account_id) cards with 6
-// progress bars each (3 metrics × 2 BUCs: ads_insights + ads_management).
+// Phase A (Task 15) — surfaces the meta_buc_usage table on /operator.
+// Renders per-(store, ad_account_id) cards with 6 progress bars each
+// (3 metrics × 2 BUCs: ads_insights + ads_management).
 //
-// Design choices:
-//  - Async server component — fetches at request time; no SWR needed.
-//    meta_buc_usage changes at most every 10 min (cron cadence). Operator
-//    refreshes the page when they want fresh data.
-//  - Token substitutions (spec listed non-existent tokens):
-//      bg-status-error    → bg-status-red
-//      bg-status-warning  → bg-status-orange
-//      bg-status-success  → bg-status-green
-//      text-status-error  → text-status-red
-//      border-ink-divider → border-glass-edge
-//      bg-ink-bgSubtle    → bg-canvas
-//  - All substitutions use tokens present in tailwind.config.ts and used
-//    by the existing operator panels (TokenFailuresTable, JobsTable, etc.).
+// Task 5.2 (UI/UX overhaul, 2026-05-30): converted from an async server
+// component to a client component with 15 s SWR polling so all 4 operator
+// sub-tabs share a single refresh paradigm.
 
-import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
+import useSWR from 'swr';
+import { operatorFetch } from '@/lib/operatorClient';
+import type { MetaBucUsageResponse, BucRow } from '@/app/api/operator/meta-buc-usage/route';
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+const ENDPOINT = '/api/operator/meta-buc-usage';
 
-type BucRow = {
-  store_id: string;
-  ad_account_id: string;
-  ads_insights_call_pct: number;
-  ads_insights_cputime_pct: number;
-  ads_insights_time_pct: number;
-  ads_insights_eta_minutes: number;
-  ads_management_call_pct: number;
-  ads_management_cputime_pct: number;
-  ads_management_time_pct: number;
-  ads_management_eta_minutes: number;
-  last_url: string | null;
-  last_updated_at: string;
-};
-
-// ---------------------------------------------------------------------------
-// Data fetching
-// ---------------------------------------------------------------------------
-
-async function fetchBucRows(): Promise<BucRow[]> {
-  try {
-    const sb = getSupabaseAdmin();
-    const { data } = await sb
-      .from('meta_buc_usage')
-      .select('*')
-      .order('store_id', { ascending: true })
-      .order('ad_account_id', { ascending: true });
-    return (data ?? []) as BucRow[];
-  } catch (e) {
-    console.warn('[MetaBucPanel] fetch failed:', e);
-    return [];
-  }
+async function fetcher(url: string): Promise<MetaBucUsageResponse> {
+  const res = await operatorFetch(url);
+  return (await res.json()) as MetaBucUsageResponse;
 }
 
 // ---------------------------------------------------------------------------
-// Server component
+// Component
 // ---------------------------------------------------------------------------
 
-export async function MetaBucPanel() {
-  const rows = await fetchBucRows();
+export function MetaBucPanel() {
+  const { data, isLoading } = useSWR<MetaBucUsageResponse>(ENDPOINT, fetcher, {
+    refreshInterval: 15_000,
+    revalidateOnFocus: true,
+  });
+
+  if (isLoading && !data) {
+    return <p className="text-ink-secondary text-sm">טוען נתוני BUC…</p>;
+  }
+
+  const rows = data?.rows ?? [];
+
   if (!rows.length) {
     return (
       <p className="text-ink-secondary text-sm">
@@ -81,7 +54,7 @@ export async function MetaBucPanel() {
 }
 
 // ---------------------------------------------------------------------------
-// Sub-components (pure — no server/client boundary needed)
+// Sub-components
 // ---------------------------------------------------------------------------
 
 function BucRowCard({ row }: { row: BucRow }) {
@@ -148,7 +121,6 @@ function BucBlock({
 
 function ProgressBar({ label, pct }: { label: string; pct: number }) {
   // Color: ≥80 status-red (error), ≥60 status-orange (warning), else status-green.
-  // Substitution: spec said status-error/warning/success; codebase uses red/orange/green.
   const colorClass =
     pct >= 80 ? 'bg-status-red' : pct >= 60 ? 'bg-status-orange' : 'bg-status-green';
   return (

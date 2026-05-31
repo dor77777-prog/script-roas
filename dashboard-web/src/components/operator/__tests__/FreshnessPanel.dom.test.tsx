@@ -1,23 +1,34 @@
 // dashboard-web/src/components/operator/__tests__/FreshnessPanel.dom.test.tsx
 //
-// Component tests for FreshnessPanel (Phase A Task 15).
+// Component tests for FreshnessPanel.
 //
-// Testing strategy: FreshnessPanel is an async server component that calls
-// getFreshness() from @/lib/inngest/freshness. We mock that module and call
-// the component as an async function, then render the returned ReactElement.
+// Task 5.2 (UI/UX overhaul, 2026-05-30): the panel was converted from an
+// async server component (which called getFreshness() directly) to a client
+// component that polls /api/operator/freshness via SWR @ 15 s. We now mock
+// `swr` instead of `@/lib/inngest/freshness`.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 // ---------------------------------------------------------------------------
-// Mocks — established before the module under test is imported.
+// Mocks — must precede the import of the module under test.
 // ---------------------------------------------------------------------------
+let nextSwrResult: { data: unknown; isLoading: boolean } = {
+  data: undefined,
+  isLoading: true,
+};
+function setSwrResult(r: { data: unknown; isLoading: boolean }) {
+  nextSwrResult = r;
+}
 
-vi.mock('@/lib/inngest/freshness', () => ({
-  getFreshness: vi.fn(),
+vi.mock('swr', () => ({
+  default: () => nextSwrResult,
 }));
 
-import { getFreshness } from '@/lib/inngest/freshness';
+vi.mock('@/lib/operatorClient', () => ({
+  operatorFetch: vi.fn(),
+}));
+
 import { FreshnessPanel } from '../FreshnessPanel';
 import type { FreshnessRow } from '@/lib/inngest/freshness';
 
@@ -44,113 +55,121 @@ function makeRow(overrides: Partial<FreshnessRow> = {}): FreshnessRow {
   };
 }
 
+function freshnessResp(rows: FreshnessRow[]) {
+  return { rows, lastUpdated: new Date().toISOString() };
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 describe('FreshnessPanel', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    setSwrResult({ data: undefined, isLoading: true });
   });
 
-  it('renders empty state when getFreshness returns []', async () => {
-    (getFreshness as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    const jsx = await FreshnessPanel();
-    render(jsx);
+  it('renders loading state on first paint', () => {
+    setSwrResult({ data: undefined, isLoading: true });
+    render(<FreshnessPanel />);
+    expect(screen.getByText(/טוען טריות נתונים/)).toBeDefined();
+  });
+
+  it('renders empty state when SWR resolves with no rows', () => {
+    setSwrResult({ data: freshnessResp([]), isLoading: false });
+    render(<FreshnessPanel />);
     expect(screen.getByText(/אין רשומות freshness עדיין/)).toBeDefined();
   });
 
-  it('renders one row per freshness entry', async () => {
+  it('renders one row per freshness entry', () => {
     const rows = [
       makeRow({ store_id: 'uzoshop', platform: 'meta', scope: 'campaign_status', table_name: 'campaigns_daily', lag_minutes: 5 }),
       makeRow({ store_id: 'zolplus', platform: 'tiktok', scope: 'ad_metrics', table_name: 'ads_daily', lag_minutes: 20 }),
       makeRow({ store_id: 'usmile360', platform: 'google', scope: 'kpi_daily', table_name: 'data_daily', lag_minutes: 0 }),
     ];
-    (getFreshness as ReturnType<typeof vi.fn>).mockResolvedValue(rows);
-    const jsx = await FreshnessPanel();
-    render(jsx);
+    setSwrResult({ data: freshnessResp(rows), isLoading: false });
+    render(<FreshnessPanel />);
     expect(screen.getByText('uzoshop')).toBeDefined();
     expect(screen.getByText('zolplus')).toBeDefined();
     expect(screen.getByText('usmile360')).toBeDefined();
   });
 
-  it('renders rows in the order returned by getFreshness (lag DESC from helper)', async () => {
-    // getFreshness already orders by lag_minutes DESC — component just renders.
-    // We verify the DOM order matches the array order.
+  it('renders rows in the order returned by the API (lag DESC from helper)', () => {
     const rows = [
       makeRow({ store_id: 'uzoshop', lag_minutes: 42 }),
       makeRow({ store_id: 'zolplus', lag_minutes: 15 }),
       makeRow({ store_id: 'usmile360', lag_minutes: 0 }),
     ];
-    (getFreshness as ReturnType<typeof vi.fn>).mockResolvedValue(rows);
-    const jsx = await FreshnessPanel();
-    const { container } = render(jsx);
+    setSwrResult({ data: freshnessResp(rows), isLoading: false });
+    const { container } = render(<FreshnessPanel />);
     const storeCells = container.querySelectorAll('tbody tr td:first-child');
     expect(storeCells[0].textContent).toBe('uzoshop');
     expect(storeCells[1].textContent).toBe('zolplus');
     expect(storeCells[2].textContent).toBe('usmile360');
   });
 
-  it('shows CheckCircle2 (status-green) for success status', async () => {
-    (getFreshness as ReturnType<typeof vi.fn>).mockResolvedValue([
-      makeRow({ status: 'success' }),
-    ]);
-    const jsx = await FreshnessPanel();
-    const { container } = render(jsx);
-    // lucide CheckCircle2 renders an SVG; verify the text-status-green class
+  it('shows CheckCircle2 (status-green) for success status', () => {
+    setSwrResult({
+      data: freshnessResp([makeRow({ status: 'success' })]),
+      isLoading: false,
+    });
+    const { container } = render(<FreshnessPanel />);
     const greenIcons = container.querySelectorAll('.text-status-green');
     expect(greenIcons.length).toBeGreaterThan(0);
   });
 
-  it('shows AlertCircle (status-orange) for budget_skip status', async () => {
-    (getFreshness as ReturnType<typeof vi.fn>).mockResolvedValue([
-      makeRow({ status: 'budget_skip', budget_skip: true, error_code: 'META_BUDGET_HIGH' }),
-    ]);
-    const jsx = await FreshnessPanel();
-    const { container } = render(jsx);
+  it('shows AlertCircle (status-orange) for budget_skip status', () => {
+    setSwrResult({
+      data: freshnessResp([
+        makeRow({ status: 'budget_skip', budget_skip: true, error_code: 'META_BUDGET_HIGH' }),
+      ]),
+      isLoading: false,
+    });
+    const { container } = render(<FreshnessPanel />);
     const orangeIcons = container.querySelectorAll('.text-status-orange');
     expect(orangeIcons.length).toBeGreaterThan(0);
-    // The error_code should appear in the notes column
     expect(screen.getByText('META_BUDGET_HIGH')).toBeDefined();
   });
 
-  it('shows XCircle (status-red) for transient_error status', async () => {
-    (getFreshness as ReturnType<typeof vi.fn>).mockResolvedValue([
-      makeRow({ status: 'transient_error', error_message: '429 too many requests' }),
-    ]);
-    const jsx = await FreshnessPanel();
-    const { container } = render(jsx);
+  it('shows XCircle (status-red) for transient_error status', () => {
+    setSwrResult({
+      data: freshnessResp([
+        makeRow({ status: 'transient_error', error_message: '429 too many requests' }),
+      ]),
+      isLoading: false,
+    });
+    const { container } = render(<FreshnessPanel />);
     const redIcons = container.querySelectorAll('.text-status-red');
     expect(redIcons.length).toBeGreaterThan(0);
     expect(screen.getByText(/429 too many requests/)).toBeDefined();
   });
 
-  it('shows XCircle for auth_error status', async () => {
-    (getFreshness as ReturnType<typeof vi.fn>).mockResolvedValue([
-      makeRow({ status: 'auth_error', error_message: 'Token expired' }),
-    ]);
-    const jsx = await FreshnessPanel();
-    const { container } = render(jsx);
+  it('shows XCircle for auth_error status', () => {
+    setSwrResult({
+      data: freshnessResp([
+        makeRow({ status: 'auth_error', error_message: 'Token expired' }),
+      ]),
+      isLoading: false,
+    });
+    const { container } = render(<FreshnessPanel />);
     const redIcons = container.querySelectorAll('.text-status-red');
     expect(redIcons.length).toBeGreaterThan(0);
   });
 
-  it('displays lag_minutes as a number in the lag column', async () => {
-    (getFreshness as ReturnType<typeof vi.fn>).mockResolvedValue([
-      makeRow({ lag_minutes: 37 }),
-    ]);
-    const jsx = await FreshnessPanel();
-    render(jsx);
+  it('displays lag_minutes as a number in the lag column', () => {
+    setSwrResult({
+      data: freshnessResp([makeRow({ lag_minutes: 37 })]),
+      isLoading: false,
+    });
+    render(<FreshnessPanel />);
     expect(screen.getByText('37')).toBeDefined();
   });
 
-  it('displays — when lag_minutes is null', async () => {
-    (getFreshness as ReturnType<typeof vi.fn>).mockResolvedValue([
-      makeRow({ lag_minutes: null }),
-    ]);
-    const jsx = await FreshnessPanel();
-    render(jsx);
-    // There will be multiple — cells (lag + notes when no error)
+  it('displays — when lag_minutes is null', () => {
+    setSwrResult({
+      data: freshnessResp([makeRow({ lag_minutes: null })]),
+      isLoading: false,
+    });
+    render(<FreshnessPanel />);
     const dashes = screen.getAllByText('—');
     expect(dashes.length).toBeGreaterThan(0);
   });

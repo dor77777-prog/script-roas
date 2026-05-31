@@ -1,12 +1,25 @@
+'use client';
+
 // dashboard-web/src/components/operator/CronTickSnapshotsViewer.tsx
 //
-// Phase B — last 144 cron-tick snapshots (24h × 6 ticks/h). Server
-// component.
+// Phase B — last 144 cron-tick snapshots (24h × 6 ticks/h).
+//
+// Task 5.2 (UI/UX overhaul, 2026-05-30): converted from an async server
+// component to a client component with 15 s SWR polling so all 4 operator
+// sub-tabs share a single refresh paradigm.
 
-import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
-import { fetchCronTickSnapshots, type CronTickSnapshotRow } from '@/lib/operator/registriesReaders';
+import useSWR from 'swr';
+import { operatorFetch } from '@/lib/operatorClient';
 import { TableBase } from '@/components/ui/TableBase';
 import { Heading } from '@/components/ui/Typography';
+import type { CronTickSnapshotsResponse } from '@/app/api/operator/cron-tick-snapshots/route';
+
+const ENDPOINT = '/api/operator/cron-tick-snapshots';
+
+async function fetcher(url: string): Promise<CronTickSnapshotsResponse> {
+  const res = await operatorFetch(url);
+  return (await res.json()) as CronTickSnapshotsResponse;
+}
 
 function durationSeconds(start: string, end: string | null): string {
   if (!end) return '—';
@@ -14,8 +27,23 @@ function durationSeconds(start: string, end: string | null): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
-export async function CronTickSnapshotsViewer() {
-  const rows: CronTickSnapshotRow[] = await fetchCronTickSnapshots(getSupabaseAdmin());
+export function CronTickSnapshotsViewer() {
+  const { data, isLoading } = useSWR<CronTickSnapshotsResponse>(ENDPOINT, fetcher, {
+    refreshInterval: 15_000,
+    revalidateOnFocus: true,
+  });
+
+  if (isLoading && !data) {
+    return (
+      <section className="border border-glass-edge rounded-lg p-4 text-ink-secondary text-sm">
+        <Heading level="section" className="font-medium mb-2">Cron-tick snapshots</Heading>
+        <p>טוען…</p>
+      </section>
+    );
+  }
+
+  const rows = data?.rows ?? [];
+
   if (rows.length === 0) {
     return (
       <section className="border border-glass-edge rounded-lg p-4 text-ink-secondary text-sm">
