@@ -687,7 +687,6 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    docs/superpowers/mockups/2026-05-31-light-reskin/dashboard-mockups.html.
    Any element carrying `data-band="red|orange|green|blue|gray"`
    on a `.glass` card gets:
-     • a 3px top-edge bar with band glow,
      • a ~5% chroma tint behind the existing glass gradient,
      • a band-coloured `.v.banded` child element (the big number),
      • a matching `.band-chip` chip (separate utility class).
@@ -695,12 +694,23 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    `useRoasBandGradient(roas, isStale)` picks the band id at JS layer;
    downstream components write the value to `data-band` directly. The
    600ms opacity+filter transition lets a fresh→stale flip animate.
+
+   OPERATOR FIX (2026-06-01): the top-edge band bar (`::before`) was removed
+   — the operator read it as "an annoying frame at the top like a roof" on
+   the home cards. We hide it at the BASE rule with `display: none;`; the
+   per-band `::before` rules below only set background/box-shadow/height
+   (never `display`), so they inherit the hide. The band SIGNAL is now the
+   vivid card GRADIENT + the white `.v.banded` number + the `.band-chip`
+   chip — the top bar is no longer part of the signal.
    =========================================================================== */
 .glass[data-band]::before {
+  /* OPERATOR FIX (2026-06-01): top "roof" bar removed — see block comment
+     above. The gradient/number/chip remain the band signal. */
+  display: none;
   content: ''; position: absolute; inset-block-start: 0; inset-inline: 0;
   /* Bar bumped 3 → 4px (round 3, 2.5.4) for more visual weight. The gray
      band rule below pulls it back to 3px because the no-data state should
-     stay quiet. */
+     stay quiet. (No longer rendered — kept for reference / easy revert.) */
   height: 4px;
   border-start-start-radius: var(--radius-card);
   border-start-end-radius:   var(--radius-card);

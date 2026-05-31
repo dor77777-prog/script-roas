@@ -62,7 +62,9 @@ describe('Card primitive', () => {
   });
 
   // Task 2.4 — band prop forwards to `data-band` attribute. CSS in
-  // globals.css (.glass[data-band="…"]) layers the top glow bar + tint.
+  // globals.css (.glass[data-band="…"]) layers the band gradient + tint.
+  // (Operator fix 2026-06-01 removed the top "roof" glow bar; the gradient
+  // + white number + chip remain the band signal.)
   it('forwards `band` prop to data-band attribute', () => {
     render(<Card band="green" data-testid="card">x</Card>);
     expect(screen.getByTestId('card')).toHaveAttribute('data-band', 'green');
