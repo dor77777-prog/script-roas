@@ -139,7 +139,7 @@ export function CampaignsColumnsMenu({
         className={cn(
           'gap-1.5',
           hiddenCount > 0
-            ? 'border-status-warning/30 bg-status-warningBg text-status-warningFg hover:bg-status-warningBg'
+            ? 'border-status-warning bg-status-warningBg text-status-warningFg hover:bg-status-warningBg'
             : '',
         )}
         title={
@@ -241,7 +241,7 @@ export function CampaignsColumnsMenu({
                             'w-5 h-4 rounded-sm',
                             canUp
                               ? 'text-ink-secondary hover:text-ink hover:bg-glass-2'
-                              : 'text-ink-subtle/40 cursor-not-allowed',
+                              : 'text-ink-subtle cursor-not-allowed',
                           )}
                         >
                           <ChevronUp size={12} />
@@ -257,7 +257,7 @@ export function CampaignsColumnsMenu({
                             'w-5 h-4 rounded-sm',
                             canDown
                               ? 'text-ink-secondary hover:text-ink hover:bg-glass-2'
-                              : 'text-ink-subtle/40 cursor-not-allowed',
+                              : 'text-ink-subtle cursor-not-allowed',
                           )}
                         >
                           <ChevronDown size={12} />
@@ -276,7 +276,7 @@ export function CampaignsColumnsMenu({
                   type="button"
                   variant="ghost"
                   onClick={restoreAll}
-                  className="h-auto p-0 gap-1.5 text-xs text-accent hover:text-accent/80 font-medium"
+                  className="h-auto p-0 gap-1.5 text-xs text-accent hover:text-accent-deep font-medium"
                 >
                   <RotateCcw size={12} />
                   <span>השב את כל העמודות</span>
@@ -287,7 +287,7 @@ export function CampaignsColumnsMenu({
                   type="button"
                   variant="ghost"
                   onClick={resetOrder}
-                  className="h-auto p-0 gap-1.5 text-xs text-accent hover:text-accent/80 font-medium"
+                  className="h-auto p-0 gap-1.5 text-xs text-accent hover:text-accent-deep font-medium"
                 >
                   <RotateCcw size={12} />
                   <span>אפס סדר עמודות</span>

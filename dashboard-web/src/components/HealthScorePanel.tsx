@@ -26,12 +26,15 @@ import { useStoreAdAccounts } from '@/lib/hooks/useStoreAdAccounts';
  * the badge to handle both modes.
  */
 
+// Grade chip is the big bold SOLID score badge (mockup): white grade-letter on
+// a solid status band. `tone` colors only the label TEXT on the neutral card
+// surface, so it stays the legible status color (not a tint, not white).
 const GRADE_STYLES: Record<HealthGrade, { chip: string; ring: string; label: string; tone: string }> = {
-  A: { chip: 'bg-status-greenBg text-status-green', ring: 'ring-status-green/30', label: 'מצוין', tone: 'text-status-green' },
-  B: { chip: 'bg-status-blueBg text-status-blue', ring: 'ring-status-blue/30', label: 'בריא', tone: 'text-status-blue' },
-  C: { chip: 'bg-status-orangeBg text-status-orange', ring: 'ring-status-orange/30', label: 'גבולי', tone: 'text-status-orange' },
-  D: { chip: 'bg-status-redBg text-status-red', ring: 'ring-status-red/30', label: 'בעייתי', tone: 'text-status-red' },
-  F: { chip: 'bg-status-redBg text-status-red', ring: 'ring-status-red/40', label: 'כשל', tone: 'text-status-red' },
+  A: { chip: 'bg-status-green text-accent-fg', ring: 'ring-status-green', label: 'מצוין', tone: 'text-status-green' },
+  B: { chip: 'bg-status-blue text-accent-fg', ring: 'ring-status-blue', label: 'בריא', tone: 'text-status-blue' },
+  C: { chip: 'bg-status-orange text-accent-fg', ring: 'ring-status-orange', label: 'גבולי', tone: 'text-status-orange' },
+  D: { chip: 'bg-status-red text-accent-fg', ring: 'ring-status-red', label: 'בעייתי', tone: 'text-status-red' },
+  F: { chip: 'bg-status-red text-accent-fg', ring: 'ring-status-red', label: 'כשל', tone: 'text-status-red' },
   unknown: { chip: 'bg-glass-2 text-ink-muted', ring: 'ring-glass-edge', label: 'מוקדם מדי', tone: 'text-ink-muted' },
 };
 

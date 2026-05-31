@@ -57,7 +57,7 @@ export function TabFreshnessHeader(props: {
         <FreshnessChip dataLastWriteAt={dataLastWriteAt} />
         {isRefreshing && (
           <span
-            className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md ring-1 ring-status-warning/30 bg-status-warningBg text-status-warningFg text-[11px] sm:text-xs"
+            className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md ring-1 ring-status-warning bg-status-warningBg text-status-warningFg text-[11px] sm:text-xs"
             role="status"
           >
             <RefreshCw size={11} className="animate-spin" />

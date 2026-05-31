@@ -57,26 +57,26 @@ const COMPONENTS_DIR = path.resolve(__dirname, '..', '..', 'components');
 // test (forces the ratchet to shrink).
 // ---------------------------------------------------------------------------
 const MIGRATION_ALLOWLIST: string[] = [
-  'AdSetTable.tsx',
+  // AdSetTable.tsx — MIGRATED in Wave 3.3a (removed from allowlist)
   'AdsDrawer.tsx',
   'AiReportButton.tsx',
   // AnnotationsPanel.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
   // AttributionAnalysisPanel.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
   'BillingCsvImport.tsx',
   'BillingSettings.tsx',
-  'CampaignDrawerStatusSection.tsx',
-  'CampaignFreshnessChip.tsx',
-  'CampaignsColumnsMenu.tsx',
-  'CampaignsTable.tsx',
-  'CampaignsTableRow.tsx',
+  // CampaignDrawerStatusSection.tsx — MIGRATED in Wave 3.3a (removed from allowlist)
+  // CampaignFreshnessChip.tsx — MIGRATED in Wave 3.3a (removed from allowlist)
+  // CampaignsColumnsMenu.tsx — MIGRATED in Wave 3.3a (removed from allowlist)
+  // CampaignsTable.tsx — MIGRATED in Wave 3.3a (removed from allowlist)
+  // CampaignsTableRow.tsx — MIGRATED in Wave 3.3a (removed from allowlist)
   // CohortComparisonPanel.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
   'CommandPalette.tsx',
   // Dashboard.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
   // Filters.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
-  'FreshnessChip.tsx',
+  // FreshnessChip.tsx — MIGRATED in Wave 3.3a (removed from allowlist)
   // GoalTracker.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
-  'HealthScoreBadge.tsx',
-  'HealthScorePanel.tsx',
+  // HealthScoreBadge.tsx — MIGRATED in Wave 3.3a (removed from allowlist)
+  // HealthScorePanel.tsx — MIGRATED in Wave 3.3a (removed from allowlist)
   // InsightsBoard.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
   // MetaShopifyReconciliation.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
   // MonthlyTables.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
@@ -89,7 +89,7 @@ const MIGRATION_ALLOWLIST: string[] = [
   // SectionIntro.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
   'Sidebar.tsx',
   // SyncIndicator.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
-  'TabFreshnessHeader.tsx',
+  // TabFreshnessHeader.tsx — MIGRATED in Wave 3.3a (removed from allowlist)
   'campaign-drawer/CampaignDrawerAdSets.tsx',
   'campaign-drawer/CampaignDrawerDaily.tsx',
   'campaign-drawer/CampaignDrawerOverview.tsx',

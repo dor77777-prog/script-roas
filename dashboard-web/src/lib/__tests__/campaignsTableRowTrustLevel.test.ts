@@ -25,7 +25,9 @@ describe('CampaignsTableRow trustLevel — locks TEST-07 (5.2.2.1)', () => {
 
   it('maps "high" to the green chip tone via the production helper', () => {
     const value: CampaignsTableRowTrustLevel = 'high';
-    expect(computeTrustTone(value)).toBe('bg-status-greenBg/60 text-status-green');
+    // Wave 3.3a: migrated to the canonical tint-pill pattern (Bg + Fg, no
+    // slash-alpha) so the chip is legible in both light and dark themes.
+    expect(computeTrustTone(value)).toBe('bg-status-greenBg text-status-greenFg');
   });
 
   it('maps "medium" to the warning chip tone via the production helper', () => {
@@ -35,6 +37,8 @@ describe('CampaignsTableRow trustLevel — locks TEST-07 (5.2.2.1)', () => {
 
   it('maps "low" to the red chip tone via the production helper', () => {
     const value: CampaignsTableRowTrustLevel = 'low';
-    expect(computeTrustTone(value)).toBe('bg-status-redBg/60 text-status-red');
+    // Wave 3.3a: migrated to the canonical tint-pill pattern (Bg + Fg, no
+    // slash-alpha) so the chip is legible in both light and dark themes.
+    expect(computeTrustTone(value)).toBe('bg-status-redBg text-status-redFg');
   });
 });

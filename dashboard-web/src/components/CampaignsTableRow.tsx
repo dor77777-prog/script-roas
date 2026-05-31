@@ -46,9 +46,9 @@ export type CampaignsTableRowTrustLevel =
  * to before calling here.
  */
 export function computeTrustTone(level: CampaignsTableRowTrustLevel): string {
-  return level === 'high'   ? 'bg-status-greenBg/60 text-status-green'
+  return level === 'high'   ? 'bg-status-greenBg text-status-greenFg'
        : level === 'medium' ? 'bg-status-warningBg text-status-warningFg'
-       :                      'bg-status-redBg/60 text-status-red';
+       :                      'bg-status-redBg text-status-redFg';
 }
 
 
@@ -243,8 +243,8 @@ export function CampaignsTableRow({
           className={cn(
             'w-7 h-7 rounded-full',
             isOptimized
-              ? 'text-status-green hover:bg-status-greenBg/60'
-              : 'text-ink-muted hover:text-status-green hover:bg-status-greenBg/40',
+              ? 'text-status-green hover:bg-status-greenBg'
+              : 'text-ink-muted hover:text-status-green hover:bg-status-greenBg',
           )}
           title={isOptimized ? 'לחץ להסרת הסימון' : 'סמן כאופטימיזציה בוצעה'}
           aria-label={isOptimized ? 'בטל סימון אופטימיזציה' : 'סמן כאופטימיזציה בוצעה'}
@@ -293,8 +293,8 @@ export function CampaignsTableRow({
                     className={cn(
                       'inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0',
                       a.budgetType === 'CBO'
-                        ? 'bg-accent/10 text-accent'
-                        : 'bg-purple-100 text-purple-700',
+                        ? 'bg-accent-bg text-accent'
+                        : 'bg-accent-bg text-accent',
                     )}
                   >
                     {a.budgetType}
@@ -328,7 +328,7 @@ export function CampaignsTableRow({
                   campaignKey(a.storeId, a.platform, a.campaignId),
                 ) && (
                   <HelpTooltip content="הקמפיין הזה עדיין לא ממופה למוצרי Shopify. פתח את המגירה (קליק על שם הקמפיין) ובחר את המוצרים הרלוונטיים כדי שהדאשבורד יחשב ROAS Shopify אמיתי.">
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-status-warningBg text-status-warningFg border border-status-warning/30">
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-status-warningBg text-status-warningFg border border-status-warning">
                       <Tag size={9} className="shrink-0" aria-hidden />
                       לא ממופה
                     </span>
@@ -351,7 +351,7 @@ export function CampaignsTableRow({
                   once the next orchestrator tick runs the status worker. */}
               {statusVerdict.isBackfillUnknown && (
                 <HelpTooltip content="הסטטוס המוגדר עדיין לא נדגם מה-platform — ימולא בעוד עד 10 דק׳.">
-                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-status-warningBg text-status-warningFg border border-status-warning/30">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-status-warningBg text-status-warningFg border border-status-warning">
                     <Hourglass size={9} className="shrink-0" aria-hidden />
                     טוען מ-Platform
                   </span>
@@ -766,7 +766,7 @@ export function CampaignsTableRow({
               target="_blank"
               rel="noopener noreferrer"
               onClick={e => e.stopPropagation()}
-              className="inline-flex items-center justify-center w-7 h-7 rounded text-ink-muted hover:text-accent hover:bg-accent/8 transition-colors"
+              className="inline-flex items-center justify-center w-7 h-7 rounded text-ink-muted hover:text-accent hover:bg-accent-bg transition-colors"
               aria-label="פתח ב-Ads Manager"
             >
               <ExternalLink size={14} />

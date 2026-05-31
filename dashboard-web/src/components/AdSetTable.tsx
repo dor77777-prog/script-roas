@@ -168,8 +168,8 @@ export function AdSetTable({
                       className={cn(
                         'w-7 h-7 rounded-full',
                         isOptimized
-                          ? 'text-status-green hover:bg-status-greenBg/60'
-                          : 'text-ink-muted hover:text-status-green hover:bg-status-greenBg/40',
+                          ? 'text-status-green hover:bg-status-greenBg'
+                          : 'text-ink-muted hover:text-status-green hover:bg-status-greenBg',
                       )}
                       title={isOptimized ? 'לחץ להסרת הסימון' : 'סמן כאופטימיזציה בוצעה'}
                       aria-label={isOptimized ? 'בטל סימון אופטימיזציה' : 'סמן כאופטימיזציה בוצעה'}
@@ -211,10 +211,10 @@ export function AdSetTable({
                         ? adsetAttr.deterministicRevenue / a.spend
                         : 0;
                       const tone =
-                        adsetAttr.trust.level === 'high'    ? 'bg-status-greenBg/60 text-status-green'
+                        adsetAttr.trust.level === 'high'    ? 'bg-status-greenBg text-status-greenFg'
                       : adsetAttr.trust.level === 'medium'  ? 'bg-status-warningBg text-status-warningFg'
                       : adsetAttr.trust.level === 'unknown' ? 'bg-glass-2 text-ink-secondary'
-                      :                                       'bg-status-redBg/60 text-status-red';
+                      :                                       'bg-status-redBg text-status-redFg';
                       const tooltip =
                         `ROAS אמיתי · ${adsetAttr.trust.label} (${adsetAttr.trust.score.toFixed(0)}/100)\n\n` +
                         `Meta דיווח: ${fmtMoneyString(a.value)}\n` +

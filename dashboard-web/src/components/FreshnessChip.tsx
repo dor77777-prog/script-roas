@@ -45,9 +45,9 @@ export function FreshnessChip(props: {
   // gated by a `variant` prop — consolidated into one palette as part of
   // the dashboard token overhaul (2026-05-29).
   const palette = {
-    green: 'bg-status-greenBg text-status-greenFg ring-status-green/30',
-    yellow: 'bg-status-orangeBg text-status-orangeFg ring-status-orange/30',
-    red: 'bg-status-redBg text-status-redFg ring-status-red/30',
+    green: 'bg-status-greenBg text-status-greenFg ring-status-green',
+    yellow: 'bg-status-orangeBg text-status-orangeFg ring-status-orange',
+    red: 'bg-status-redBg text-status-redFg ring-status-red',
     gray: 'bg-glass-2 text-ink-secondary ring-glass-edge',
   } as const;
   const toneClass = palette[tone];

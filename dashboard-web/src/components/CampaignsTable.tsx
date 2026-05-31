@@ -1249,7 +1249,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
               className={cn(
                 'px-2.5 sm:px-3.5 py-1.5 text-[11px] sm:text-xs font-medium transition-colors min-w-[64px] sm:min-w-[80px] h-auto rounded-none',
                 mode === m
-                  ? 'bg-accent text-white hover:bg-accent/90'
+                  ? 'bg-accent text-accent-fg hover:bg-[color-mix(in_oklab,var(--accent)_88%,var(--text))]'
                   : 'bg-glass-1 text-ink-secondary hover:bg-glass-2',
               )}
             >
@@ -1367,7 +1367,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                 className={cn(
                   'px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-medium transition-colors min-w-[48px] sm:min-w-[58px] h-auto rounded-none',
                   platform === p
-                    ? 'bg-accent text-white hover:bg-accent/90'
+                    ? 'bg-accent text-accent-fg hover:bg-[color-mix(in_oklab,var(--accent)_88%,var(--text))]'
                     : 'bg-glass-1 text-ink-secondary hover:bg-glass-2',
                 )}
               >
@@ -1410,7 +1410,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
               variant="ghost"
               onClick={onClearAll}
               title="הסר את כל הסימונים"
-              className="h-auto px-1.5 py-0.5 text-[11px] sm:text-xs font-semibold text-ink-muted hover:text-status-red hover:bg-status-redBg/40"
+              className="h-auto px-1.5 py-0.5 text-[11px] sm:text-xs font-semibold text-ink-muted hover:text-status-red hover:bg-status-redBg"
             >
               נקה הכל
             </Button>
@@ -1435,7 +1435,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   // ----- Summary -----
   const roasInfo = roasLabel(totals.roas);
   const summary = aggregated.length > 0 && (
-    <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gradient-to-l from-accent/5 to-elevated border-b border-glass-edge">
+    <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gradient-to-l from-accent-bg to-glass-2 border-b border-glass-edge">
       <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3">
         <Stat label="ROAS" value={totals.roas > 0 ? formatNumber(totals.roas) : '—'} chip={<Badge tone={roasInfo.tone as BadgeTone}>{roasInfo.text}</Badge>} />
         <Stat label="הוצאה" value={formatCurrency(totals.spend)} prefix="CAD" />
@@ -1462,9 +1462,9 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
           cpmAnalysisMode === 'prev' && cpmDailyPrev ? { prev: cpmDailyPrev } : undefined,
         );
         const toneBg: Record<typeof analysis.tone, string> = {
-          positive: 'bg-status-greenBg/40 border-status-green/30 text-status-green',
-          warning:  'bg-status-warningBg border-status-warning/30 text-status-warningFg',
-          negative: 'bg-status-redBg/40 border-status-red/30 text-status-red',
+          positive: 'bg-status-greenBg border-status-green text-status-greenFg',
+          warning:  'bg-status-warningBg border-status-warning text-status-warningFg',
+          negative: 'bg-status-redBg border-status-red text-status-redFg',
           neutral:  'bg-glass-2 border-glass-edge text-ink-secondary',
         };
         // Build an explicit baseline label with the actual date windows so
@@ -1532,7 +1532,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                   className={cn(
                     'px-2 py-0.5 h-auto text-[10px] rounded transition-colors',
                     cpmAnalysisMode === 'half'
-                      ? 'bg-accent/10 text-accent font-medium'
+                      ? 'bg-accent-bg text-accent font-medium'
                       : 'text-ink-muted hover:text-ink',
                   )}
                 >
@@ -1545,7 +1545,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                   className={cn(
                     'px-2 py-0.5 h-auto text-[10px] rounded transition-colors',
                     cpmAnalysisMode === 'prev'
-                      ? 'bg-accent/10 text-accent font-medium'
+                      ? 'bg-accent-bg text-accent font-medium'
                       : 'text-ink-muted hover:text-ink',
                   )}
                 >
@@ -1557,7 +1557,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                   type="checkbox"
                   checked={cpmShowRoas}
                   onChange={e => setCpmShowRoas(e.target.checked)}
-                  className="rounded border-glass-edge text-accent focus:ring-accent/30 cursor-pointer"
+                  className="rounded border-glass-edge text-accent focus:ring-accent cursor-pointer"
                 />
                 הוסף ROAS לגרף
               </label>
@@ -1779,7 +1779,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
 
       {/* Both SWR-thrown errors and the 200+data.error degraded path (#WR-06). */}
       {(error || data?.error) && (
-        <div className="m-4 rounded-lg bg-status-redBg border border-status-red/30 p-3 flex items-start gap-2 text-sm">
+        <div className="m-4 rounded-lg bg-status-redBg border border-status-red p-3 flex items-start gap-2 text-sm">
           <AlertCircle className="text-status-red shrink-0" size={18} />
           <div>
             <div className="font-semibold text-status-red">שגיאה בטעינת קמפיינים</div>
@@ -1796,7 +1796,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
 
       {data && !error && !data.error && aggregated.length === 0 && (
         <div className="p-8 text-center text-ink-muted text-sm">
-          <Megaphone className="mx-auto mb-2 text-ink-muted/60" size={28} />
+          <Megaphone className="mx-auto mb-2 text-ink-subtle" size={28} />
           <div>אין קמפיינים פעילים בטווח הזה.</div>
           <div className="text-[11px] mt-1">נסה להרחיב את טווח התאריכים או לשנות פלטפורמה.</div>
         </div>
@@ -2289,8 +2289,8 @@ function AttributionGapPanel({
   };
 }) {
   const toneClass = {
-    good: 'border-status-green/30 bg-status-greenBg/40',
-    flag: 'border-status-red/30 bg-status-redBg/40',
+    good: 'border-status-green bg-status-greenBg',
+    flag: 'border-status-red bg-status-redBg',
   }[gap.tone];
 
   const arrow = gap.gapPct > 0 ? '↗' : gap.gapPct < 0 ? '↘' : '=';

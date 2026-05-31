@@ -11,7 +11,7 @@ export type CampaignFreshnessChipProps = {
 };
 
 function colorForMinutes(min: number | null): { dot: string; label: string } {
-  if (min === null) return { dot: 'bg-ink-secondary/30', label: '—' };
+  if (min === null) return { dot: 'bg-status-gray', label: '—' };
   if (min < 15) return { dot: 'bg-status-green', label: `${min} דק׳` };
   if (min < 60) return { dot: 'bg-status-orange', label: `${min} דק׳` };
   return { dot: 'bg-status-red', label: `${Math.floor(min / 60)} שע׳` };

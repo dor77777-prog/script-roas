@@ -63,7 +63,7 @@ export function CampaignDrawerStatusSection(p: CampaignDrawerStatusSectionProps)
           <span className={
             'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ' +
             (isBackfillUnknown
-              ? 'bg-status-warningBg text-status-warningFg border border-status-warning/30'
+              ? 'bg-status-warningBg text-status-warningFg border border-status-warning'
               : 'bg-glass-2 text-ink')
           }>
             {isBackfillUnknown ? '⏳ טוען מ-Platform' : (p.configuredStatus ?? '—')}
@@ -88,7 +88,7 @@ export function CampaignDrawerStatusSection(p: CampaignDrawerStatusSectionProps)
 
       {/* BACKFILL_UNKNOWN explainer — only when active. */}
       {isBackfillUnknown && (
-        <p className="text-[11px] text-status-warningFg bg-status-warningBg border border-status-warning/30 rounded px-2 py-1 mb-3">
+        <p className="text-[11px] text-status-warningFg bg-status-warningBg border border-status-warning rounded px-2 py-1 mb-3">
           הסטטוס המוגדר מ-platform עדיין לא נדגם — המערכת מילאה את השדה
           באופן זמני מתוך הנתון היומי. הערך האמיתי ימולא בעוד עד 10 דקות
           ע״י ה-status worker.

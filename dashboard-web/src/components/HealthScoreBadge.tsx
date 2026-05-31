@@ -18,12 +18,15 @@ import { Button } from '@/components/ui/Button';
  * from commit e45f743).
  */
 
+// Grade chips are bold SOLID score badges (mockup): white grade-letter on a
+// solid status band. s-a→green, s-b→blue, s-c→orange, s-d/F→red. `unknown`
+// stays a neutral tint (not a status color).
 const GRADE_STYLES: Record<HealthGrade, { chip: string; ring: string; label: string }> = {
-  A: { chip: 'bg-status-greenBg text-status-green', ring: 'ring-status-green/30', label: 'מצוין' },
-  B: { chip: 'bg-status-blueBg text-status-blue', ring: 'ring-status-blue/30', label: 'בריא' },
-  C: { chip: 'bg-status-orangeBg text-status-orange', ring: 'ring-status-orange/30', label: 'גבולי' },
-  D: { chip: 'bg-status-redBg text-status-red', ring: 'ring-status-red/30', label: 'בעייתי' },
-  F: { chip: 'bg-status-redBg text-status-red', ring: 'ring-status-red/40', label: 'כשל' },
+  A: { chip: 'bg-status-green text-accent-fg', ring: 'ring-status-green', label: 'מצוין' },
+  B: { chip: 'bg-status-blue text-accent-fg', ring: 'ring-status-blue', label: 'בריא' },
+  C: { chip: 'bg-status-orange text-accent-fg', ring: 'ring-status-orange', label: 'גבולי' },
+  D: { chip: 'bg-status-red text-accent-fg', ring: 'ring-status-red', label: 'בעייתי' },
+  F: { chip: 'bg-status-red text-accent-fg', ring: 'ring-status-red', label: 'כשל' },
   unknown: { chip: 'bg-glass-2 text-ink-muted', ring: 'ring-glass-edge', label: 'מוקדם מדי' },
 };
 
@@ -81,7 +84,7 @@ export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
       >
         {isUnknown ? '⏳' : health.grade}
         {!isUnknown && (
-          <span className="ms-1 text-[10px] font-medium text-ink-secondary/90">
+          <span className="ms-1 text-[10px] font-medium text-accent-fg">
             {health.score}
           </span>
         )}
