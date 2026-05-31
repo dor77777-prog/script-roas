@@ -2320,3 +2320,209 @@ Final count: 1602 node passed | 9 skipped + ~120 DOM tests. New tests:
 sidebarHover, buttonDestructive, stat, tableBase, insightCard
 (simple + compound), yearSelector, bidi, token-parity,
 globals-new-tokens, dark-mode-tuning, badge.
+
+---
+
+## 27. Premium 2026 Design-System Contract (2026-05-31)
+
+Layered polish on top of §26 — same data, same algorithms, same
+operator workflow. §26 stabilized the design tokens + ESLint guards;
+§27 documents the **visual language contract** that Wave-3+ work added
+(glass+neon canvas, V4 band attributes, freshness staging, semantic
+emphasis classes, motion vocabulary, synthesis module). This is the
+reference contract any Phase-3+ component or page MUST honor.
+
+### 27.1 Glass+neon token system
+
+**Canvas tokens** (deep blue-violet base — replaces the flat `--bg`
+neutral previously used in §26):
+- `--canvas-1` — body base color (darkest violet-tinted shade).
+- `--canvas-2` — secondary canvas / scrolled-content base.
+
+Both canvas tokens carry an animated **conic-gradient body
+background** (`globals.css` body rule) — a slow-rotating
+`conic-gradient(...)` blend driven by a CSS custom property
+`--canvas-rotate` animated via `@keyframes` (`prefers-reduced-motion`
+short-circuits the animation per §27.6).
+
+**Glass layers** — translucent surfaces stacked over the canvas:
+- `--glass-1` — primary card surface (most opaque).
+- `--glass-2` — nested card / drawer sub-section.
+- `--glass-3` — popover / tooltip / detached overlay.
+- `--glass-edge` — 1px stroke at rest.
+- `--glass-edge-hot` — 1px stroke on hover / focus / `data-band` active
+  states.
+
+The `.glass` utility class composes
+`background: var(--glass-1); border: 1px solid var(--glass-edge);
+backdrop-filter: blur(...)`. All cards, drawers, popovers go through
+`.glass` — no raw `bg-white` / `bg-slate-*` in components.
+
+### 27.2 V4 band data-attribute contract
+
+ROAS health is communicated via **data attributes**, not class names.
+Any `.glass` element MAY declare `data-band="red|orange|green|blue|gray"`
+to opt-in to band styling. The CSS contract:
+
+- **3px top edge bar** in the band color (sits flush against the
+  glass element's top border).
+- **Background tint** — band color blended at ~6% alpha into the
+  glass surface.
+- **`.v.banded` numeric color** — numeric children with the `.v.banded`
+  utility class adopt the band color for typography, so the band
+  echoes from the edge to the headline metric.
+
+`useRoasBandGradient(roas: number)` (in
+`src/lib/format/useRoasBandGradient.ts`) is the canonical mapper from
+a numeric ROAS to a band:
+- `roas < 2.0` → `red`
+- `2.0 ≤ roas < 2.7` → `orange`
+- `2.7 ≤ roas < 3.0` → `green`
+- `roas ≥ 3.0` → `green` (no extra tier — green tops out at break-even)
+- `roas == null` / not-finite → `gray`
+
+The `blue` band is reserved for **informational / accent** non-ROAS
+emphasis (e.g. cross-store summary bars) — never auto-derived from
+the helper.
+
+### 27.3 Freshness data-attribute contract
+
+Card-level freshness uses a parallel data-attribute contract — any
+`.glass` element MAY declare `data-freshness="fresh|aging|stale"`. The
+CSS effect:
+
+- `fresh` — no filter, full opacity.
+- `aging` — `filter: saturate(0.7)`.
+- `stale` — `filter: saturate(0.4); opacity: 0.85`.
+
+The contract is **purely cosmetic** — content remains keyboard-
+accessible and readable; the desaturation is the visual cue, not an
+interaction block.
+
+`useStaleness(updatedAt: string | null)` (in
+`src/lib/freshness/useStaleness.ts`) computes the stage for a single
+timestamp. For cards aggregating multiple sources (e.g. PerStoreRow
+showing all platforms), the **worst-stage wins** rule applies — the
+hook returns `stale` if ANY platform is stale, else `aging` if any
+is aging, else `fresh`. Thresholds: 15 min → aging; 30 min → stale.
+
+### 27.4 Semantic emphasis classes
+
+Per-cell color emphasis lives in `src/lib/format/aovEmphasis.ts` +
+companion utility classes:
+- `.cell.spend` — red emphasis when value is rising.
+- `.cell.revenue` — green emphasis when value is rising.
+- `.cell.aov-good` — green (AOV trending healthy).
+- `.cell.aov-bad` — red (AOV below conditional floor).
+- `.cell.aov-mid` — neutral white (in-band).
+
+The contract is **direction-of-good**, not magnitude — these classes
+indicate which direction is positive for the user, so red on Spend
+means "spend went up (bad)" while red on Revenue means "revenue went
+down (bad)". CPM intentionally has no emphasis class (cost indicator,
+not an actionable home-tab KPI).
+
+### 27.5 Motion vocabulary
+
+5-tier motion scale in `globals.css` `:root`:
+- `--motion-snap` — 120ms (instant feedback: button press, toggle).
+- `--motion-fast` — 180ms (hover transitions, color swaps).
+- `--motion-base` — 240ms (default tween for layout shifts).
+- `--motion-slow` — 320ms (drawer slides, modal entrances).
+- `--motion-large` — 480ms (page-level view transitions, hero swaps).
+
+All animations honor `prefers-reduced-motion: reduce` via a global
+`@media` rule that flattens transitions to `0.01ms` (see commit
+`29f2dbc`).
+
+### 27.6 ESLint enforcement — 9 rules at `error`
+
+The full guardrail set (extends §26.3 — moved here as the canonical
+list):
+
+1. `local/no-raw-button-in-components` — forbid `<button>` outside
+   `components/ui/`.
+2. `local/no-raw-table-in-components` — forbid raw `<table>` outside
+   `TableBase`.
+3. `local/no-raw-input-in-components` — forbid raw `<input>` /
+   `<select>` / `<textarea>` outside primitives.
+4. `local/no-native-title-tooltip` — forbid native `title="…"`
+   tooltips (use `Tooltip` primitive).
+5. `local/no-legacy-tailwind-class` — forbid pre-overhaul palette
+   classes (`bg-slate-*`, `text-slate-*`, etc.).
+6. `local/no-cross-palette-import` — forbid cross-palette helper
+   imports between scope boundaries.
+7. `local/no-physical-direction-in-components` — forbid `left:` /
+   `right:` / `ml-*` / `mr-*` etc.; use logical properties (`start`,
+   `end`, `ms-*`, `me-*`) for RTL safety.
+8. `local/no-emoji-in-jsx` — warn-level guard against emoji literals
+   in JSX text (use `lucide-react` icons or `Badge` primitives).
+9. `no-restricted-imports` — forbid `@radix-ui/react-*` imports
+   outside `components/ui/`; primitives wrap Radix and are the only
+   allowed consumers.
+
+`no-hex-color-in-components` + `no-dark-variant-in-components` from
+§26 remain in force but are now considered baseline.
+
+### 27.7 `lib/synthesis/` module — authoritative TL;DR
+
+Located at `dashboard-web/src/lib/synthesis/`. 5 page-scoped
+synthesizers that turn raw aggregated data into a single Hebrew TL;DR
+sentence/paragraph block rendered by the `PageSynthesis` primitive:
+
+- `roasChart.ts` — Home / RoasTargetChart synthesis (peak day,
+  trough day, vs-target delta).
+- `trends.ts` — Analysis → Trends sub-tab.
+- `archive.ts` — Analysis → Archive sub-tab.
+- `detail.ts` — Detail tab (per-day P&L narration).
+- `pnl.ts` — P&L tab (month-to-date summary).
+
+Each synthesizer is a **pure function** of its data input — no I/O,
+no DOM, no React. Co-located unit tests in
+`src/lib/synthesis/__tests__/` ensure stable output across data
+shapes. New pages adding TL;DR must add a synthesizer here — no
+inline string concatenation in components.
+
+### 27.8 Key helpers (canonical locations)
+
+- `useStaleness` — `src/lib/freshness/useStaleness.ts`
+- `FreshnessBadge` — `src/components/ui/FreshnessBadge.tsx`
+- `useRoasBandGradient` — `src/lib/format/useRoasBandGradient.ts`
+- `aovEmphasis` — `src/lib/format/aovEmphasis.ts`
+- `StatusPill` — `src/components/ui/StatusPill.tsx` (used on
+  `/operator` for cron/worker status surfacing).
+
+### 27.9 Playwright visual-regression CI gate
+
+`dashboard-web/tests/visual/` holds Playwright specs that snapshot:
+- `pages.spec.ts` — every top-level page (Home / P&L / Analysis /
+  Campaigns / Products / Detail / Operator) at desktop + mobile
+  breakpoints, in light + dark themes.
+- `states.spec.ts` — key component states (drawer open / sub-tab
+  switches / annotation pin hover / freshness stages).
+
+The gate runs on **every PR** via GitHub Actions. Snapshot diffs
+beyond the configured threshold fail the check; the failing run
+uploads the Playwright HTML report as an artifact (`playwright-
+report/`) for visual inspection. See commit `643fa6a` for the
+workflow definition.
+
+Updating baselines is intentional and requires running
+`npx playwright test --update-snapshots` locally then committing the
+updated PNGs.
+
+### 27.10 Sidebar pin state contract
+
+The slim 72px sidebar (Wave-5 / Q10, commit `ad2c4ff`) stores its
+pinned state in `localStorage` under the key **`sidebar:pinned`**
+(boolean as `"1"` / `"0"`). Behavior:
+- Unpinned (default) — sidebar is 72px, icons only; hover expands
+  it temporarily; mouse-leave collapses it.
+- Pinned — sidebar stays expanded for the entire session even after
+  mouse-leave.
+
+Keyboard shortcut **`⌘\` (Mac) / `Ctrl+\` (Win/Linux)** toggles
+pinned ↔ unpinned globally (registered at app root). Mobile is
+unaffected — drawer behavior (§2.1.6) still applies via the
+`<768px` media query.
+
