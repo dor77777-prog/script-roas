@@ -277,12 +277,21 @@ function NetSparkline({
  * -------------------------------------------------------------------------- */
 
 const BAND_STROKE: Record<RoasBand, string> = {
-  red:    'oklch(64% 0.22 22)',
-  orange: 'oklch(78% 0.16 75)',
-  green:  'oklch(70% 0.18 145)',
-  blue:   'oklch(68% 0.16 240)',
+  red:    'oklch(62% 0.26 25)',
+  orange: 'oklch(68% 0.22 55)',
+  green:  'oklch(64% 0.24 145)',
+  blue:   'oklch(62% 0.22 240)',
   gray:   'oklch(60% 0.012 250)',
 };
+
+/* --------------------------------------------------------------------------
+ * Neutral sparkline stroke used when a secondary card carries a band
+ * background (Change C — 2026-05-31). A semi-transparent warm-white sits
+ * on top of any band hue without competing with it, so the spark reads as
+ * a tonal echo of the card's surface rather than a semantic-coloured stroke
+ * fighting the band tint.
+ * -------------------------------------------------------------------------- */
+const NEUTRAL_SPARK_STROKE = 'oklch(95% 0.008 80 / 0.65)';
 
 /* --------------------------------------------------------------------------
  * MiniSparkline — slim 30 px stroke+fill spark for the secondary cards.
@@ -356,22 +365,14 @@ function MiniSparkline({
 }
 
 /* --------------------------------------------------------------------------
- * Per-metric stroke colour for the 5 secondary cards. Each colour is the
- * semantic "direction" tone — Spend is a soft down-red, Revenue is the
- * up-green band, ROAS is the accent violet, Orders is a neutral ink, and
- * CPM is the info-blue we already use on auxiliary metrics. All use OKLCH
- * literals (same palette family as BAND_STROKE) so the strokes sit in the
- * same colour space and the strip reads as a unified set rather than five
- * disparate hues.
+ * Per-metric stroke colours used to live here (Spend = down-red, Revenue =
+ * up-green, ROAS = accent violet, Orders = neutral ink, CPM = info-blue),
+ * but Change B (2026-05-31) made the hero's 4 secondary cards carry the
+ * business-ROAS band on their background — a semantic-coloured spark on
+ * top of a band-tinted surface clashes (red stroke on orange field, etc.).
+ * Round 5 replaces all 4 with the shared NEUTRAL_SPARK_STROKE so the
+ * spark reads as a tonal echo of the band rather than competing with it.
  * -------------------------------------------------------------------------- */
-
-const SECONDARY_SPARK_STROKE = {
-  spend:   'oklch(64% 0.18 22)',   // softer than the band-red rim
-  revenue: 'oklch(70% 0.16 145)',  // matches band-green
-  roas:    'oklch(70% 0.18 295)',  // accent violet
-  orders:  'oklch(70% 0.012 250)', // neutral ink
-  cpm:     'oklch(68% 0.14 240)',  // info-blue
-} as const;
 
 /* --------------------------------------------------------------------------
  * Component
@@ -386,11 +387,14 @@ export function CommandCenterHero({
   updatedAt,
   className,
 }: CommandCenterHeroProps) {
-  // Single band selector used by BOTH the featured Net card and the
-  // banded ROAS tile in row 2 — locked per [[home-visual-rules]] so the
-  // two hero numbers always agree on hue.
+  // Single band selector used by ALL 6 hero cards — Change B (2026-05-31):
+  // the whole hero strip now wears the business-ROAS band so a glance at
+  // the row communicates business health. Only Net Profit + ROAS get the
+  // band-coloured big number (`.v.banded`); the other 4 keep the white
+  // gradient number on top of the band-tinted surface.
   const netBand = useRoasBandGradient(current.roas);
   const roasBand = netBand;
+  const businessBand = netBand.band;
   // Freshness is the same input for every card in the hero — when a stale
   // sweep affects the period, the whole strip dims together. (Per-card
   // staleness will come back if we wire per-platform updatedAt later.)
@@ -451,6 +455,7 @@ export function CommandCenterHero({
         </Card>
 
         <Card
+          band={businessBand}
           freshness={freshnessStage}
           className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
           data-testid="hero-spend"
@@ -470,11 +475,12 @@ export function CommandCenterHero({
           />
           <MiniSparkline
             values={secondarySparklines?.spend}
-            stroke={SECONDARY_SPARK_STROKE.spend}
+            stroke={NEUTRAL_SPARK_STROKE}
           />
         </Card>
 
         <Card
+          band={businessBand}
           freshness={freshnessStage}
           className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
           data-testid="hero-revenue"
@@ -493,7 +499,7 @@ export function CommandCenterHero({
           />
           <MiniSparkline
             values={secondarySparklines?.revenue}
-            stroke={SECONDARY_SPARK_STROKE.revenue}
+            stroke={NEUTRAL_SPARK_STROKE}
           />
         </Card>
       </div>
@@ -523,11 +529,12 @@ export function CommandCenterHero({
           />
           <MiniSparkline
             values={secondarySparklines?.roas}
-            stroke={SECONDARY_SPARK_STROKE.roas}
+            stroke={NEUTRAL_SPARK_STROKE}
           />
         </Card>
 
         <Card
+          band={businessBand}
           freshness={freshnessStage}
           className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
           data-testid="hero-orders"
@@ -546,11 +553,12 @@ export function CommandCenterHero({
           />
           <MiniSparkline
             values={secondarySparklines?.orders}
-            stroke={SECONDARY_SPARK_STROKE.orders}
+            stroke={NEUTRAL_SPARK_STROKE}
           />
         </Card>
 
         <Card
+          band={businessBand}
           freshness={freshnessStage}
           className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
           data-testid="hero-cpm"
@@ -572,7 +580,7 @@ export function CommandCenterHero({
           />
           <MiniSparkline
             values={secondarySparklines?.cpm}
-            stroke={SECONDARY_SPARK_STROKE.cpm}
+            stroke={NEUTRAL_SPARK_STROKE}
           />
         </Card>
       </div>
