@@ -334,7 +334,7 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
 
   if (isAllStores) {
     return (
-      <section className="rounded-2xl bg-elevated border border-line-subtle shadow-sm p-4 sm:p-5">
+      <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-sm p-4 sm:p-5">
         <h2 className="text-base font-semibold text-ink inline-flex items-center gap-2 mb-1.5">
           <Package size={16} className="text-ink-secondary" />
           מוצרים → קמפיינים
@@ -349,7 +349,7 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
 
   if (!campaignsData || !productsData) {
     return (
-      <section className="rounded-2xl bg-elevated border border-line-subtle shadow-sm p-4 sm:p-5">
+      <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-sm p-4 sm:p-5">
         <div className="text-sm text-ink-muted">טוען…</div>
       </section>
     );
@@ -357,7 +357,7 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
 
   if (allRows.length === 0) {
     return (
-      <section className="rounded-2xl bg-elevated border border-line-subtle shadow-sm p-4 sm:p-5">
+      <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-sm p-4 sm:p-5">
         <h2 className="text-base font-semibold text-ink inline-flex items-center gap-2 mb-1.5">
           <Package size={16} className="text-ink-secondary" />
           מוצרים → קמפיינים
@@ -370,7 +370,7 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
   }
 
   return (
-    <section className="rounded-2xl bg-elevated border border-line-subtle shadow-sm p-4 sm:p-5">
+    <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-sm p-4 sm:p-5">
       <div className="flex items-center justify-between gap-3 mb-3">
         <h2 className="text-base font-semibold text-ink inline-flex items-center gap-2">
           <Package size={16} className="text-ink-secondary" />
@@ -385,7 +385,7 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
               type="checkbox"
               checked={showSolo}
               onChange={e => setShowSolo(e.target.checked)}
-              className="rounded border-line"
+              className="rounded border-glass-edge"
             />
             הצג גם מוצרים עם קמפיין אחד
           </label>
@@ -426,7 +426,7 @@ function ProductRow({
   // rounded corners directly to the inner button + expanded panel so the
   // hover bg / panel bg honors the rounded outer border.
   return (
-    <li className="rounded-lg border border-line-subtle">
+    <li className="rounded-lg border border-glass-edge">
       <Button
         type="button"
         variant="ghost"
@@ -457,7 +457,7 @@ function ProductRow({
         {row.byPlatform.length > 0 && (
           <div className="hidden sm:flex items-center gap-1.5 text-[10px] text-ink-muted shrink-0">
             {row.byPlatform.map(p => (
-              <span key={p.platform} className="bg-elevated2 px-1.5 py-0.5 rounded">
+              <span key={p.platform} className="bg-glass-2 px-1.5 py-0.5 rounded">
                 {p.platform}: {p.members.length}
               </span>
             ))}
@@ -466,7 +466,7 @@ function ProductRow({
       </Button>
 
       {expanded && (
-        <div className="px-3 pb-3 pt-1 space-y-3 bg-elevated2/20 rounded-b-lg">
+        <div className="px-3 pb-3 pt-1 space-y-3 bg-glass-2/20 rounded-b-lg">
           {row.byPlatform.map(platformGroup => (
             <div key={platformGroup.platform}>
               <div className="flex items-center justify-between gap-2 mb-1.5 text-[11px]">
@@ -481,7 +481,7 @@ function ProductRow({
               </div>
               <div className="overflow-x-auto -mx-2 sm:mx-0">
               <table className="w-full min-w-[480px] text-xs">
-                <thead className="bg-elevated2/60 text-ink-muted">
+                <thead className="bg-glass-2/60 text-ink-muted">
                   <tr>
                     <th className="px-2 py-1 text-start font-medium text-[10px]">
                       <ColHelp
@@ -642,7 +642,7 @@ function ProductRow({
                       <tr
                         key={m.campaignKey}
                         className={cn(
-                          'border-b border-line-subtle/50 last:border-0',
+                          'border-b border-glass-edge/50 last:border-0',
                           isLeader && 'bg-accent/5',
                         )}
                       >
@@ -685,7 +685,7 @@ function ProductRow({
                                   d.tone === 'bad' &&
                                     'bg-status-redBg/60 text-status-red border-status-red/30',
                                   d.tone === 'neutral' &&
-                                    'bg-elevated2 text-ink-muted border-line-subtle',
+                                    'bg-glass-2 text-ink-muted border-glass-edge',
                                 )}
                               >
                                 {d.text}
@@ -706,7 +706,7 @@ function ProductRow({
                               'inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium border',
                               isActive
                                 ? 'bg-status-greenBg/40 text-status-green border-status-green/30'
-                                : 'bg-elevated2 text-ink-muted border-line-subtle',
+                                : 'bg-glass-2 text-ink-muted border-glass-edge',
                             )}
                           >
                             {isActive ? 'פעיל' : 'כבוי'}

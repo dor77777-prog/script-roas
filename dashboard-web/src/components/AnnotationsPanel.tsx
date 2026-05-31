@@ -81,7 +81,7 @@ export function AnnotationsPanel({ range, store }: Props) {
   }
 
   return (
-    <section className="rounded-2xl bg-elevated border border-line-subtle shadow-sm overflow-hidden">
+    <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-sm overflow-hidden">
       {/* Clickable header */}
       <Button
         type="button"
@@ -90,7 +90,7 @@ export function AnnotationsPanel({ range, store }: Props) {
         aria-expanded={open}
         className={cn(
           'w-full justify-start h-auto text-start px-4 sm:px-5 py-3',
-          'border-b border-line-subtle',
+          'border-b border-glass-edge',
           'bg-gradient-to-l from-accent/4 to-elevated',
           'hover:from-accent/8 hover:to-elevated2/40',
         )}
@@ -127,7 +127,7 @@ export function AnnotationsPanel({ range, store }: Props) {
             <Button
               variant="ghost"
               onClick={() => setAdding(true)}
-              className="w-full justify-center gap-1.5 rounded-lg border border-dashed border-line bg-elevated2/40 hover:bg-elevated2 hover:border-accent/40 px-3 py-2 h-auto text-xs sm:text-sm font-medium text-ink-secondary hover:text-ink"
+              className="w-full justify-center gap-1.5 rounded-lg border border-dashed border-glass-edge bg-glass-2/40 hover:bg-glass-2 hover:border-accent/40 px-3 py-2 h-auto text-xs sm:text-sm font-medium text-ink-secondary hover:text-ink"
             >
               <Plus size={14} />
               תעד אירוע חדש
@@ -150,7 +150,7 @@ export function AnnotationsPanel({ range, store }: Props) {
               {inScope.map(a => (
                 <li
                   key={a.id}
-                  className="rounded-lg border border-line-subtle bg-elevated hover:bg-elevated2/30 transition-colors"
+                  className="rounded-lg border border-glass-edge bg-glass-1 hover:bg-glass-2/30 transition-colors"
                 >
                   {editing === a.id ? (
                     <AnnotationForm
@@ -259,14 +259,14 @@ function AnnotationForm({
   }
 
   return (
-    <div className="p-3 space-y-2 bg-elevated2/40 rounded-lg border border-line-subtle">
+    <div className="p-3 space-y-2 bg-glass-2/40 rounded-lg border border-glass-edge">
       <div className="grid grid-cols-[auto_1fr_auto] gap-2 items-end">
         <div>
           <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">סוג</label>
           <select
             value={kind}
             onChange={e => setKind(e.target.value as AnnotationKind)}
-            className="block rounded-lg border border-line bg-elevated px-2 py-1.5 text-sm focus:outline-none focus:border-accent"
+            className="block rounded-lg border border-glass-edge bg-glass-1 px-2 py-1.5 text-sm focus:outline-none focus:border-accent"
           >
             {(Object.keys(ANNOTATION_KIND_LABEL) as AnnotationKind[]).map(k => (
               <option key={k} value={k}>
@@ -286,7 +286,7 @@ function AnnotationForm({
               if (e.key === 'Enter') commit();
               if (e.key === 'Escape') onCancel();
             }}
-            className="w-full rounded-lg border border-line bg-elevated px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
+            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
           />
         </div>
         <div>
@@ -296,7 +296,7 @@ function AnnotationForm({
             value={date}
             max={today}
             onChange={e => setDate(e.target.value)}
-            className="rounded-lg border border-line bg-elevated px-2 py-1.5 text-sm tabular-nums focus:outline-none focus:border-accent"
+            className="rounded-lg border border-glass-edge bg-glass-1 px-2 py-1.5 text-sm tabular-nums focus:outline-none focus:border-accent"
           />
         </div>
       </div>
@@ -310,7 +310,7 @@ function AnnotationForm({
             if (e.key === 'Enter') commit();
             if (e.key === 'Escape') onCancel();
           }}
-          className="w-full rounded-lg border border-line bg-elevated px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
+          className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
         />
       </div>
       {storeOptions.length > 0 && (
@@ -321,7 +321,7 @@ function AnnotationForm({
           <select
             value={scopedStore}
             onChange={e => setScopedStore(e.target.value)}
-            className="rounded-lg border border-line bg-elevated px-2 py-1 text-xs focus:outline-none focus:border-accent"
+            className="rounded-lg border border-glass-edge bg-glass-1 px-2 py-1 text-xs focus:outline-none focus:border-accent"
           >
             <option value="">כל החנויות</option>
             {storeOptions.map(s => (

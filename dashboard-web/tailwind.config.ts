@@ -2,14 +2,22 @@ import type { Config } from 'tailwindcss';
 import tailwindcssAnimate from 'tailwindcss-animate';
 
 /**
- * Design tokens influenced by Stripe + Linear + Impeccable principles:
- *  - Body text is deep navy, never pure black.
- *  - Background is a cool-tinted off-white (#f6f9fc), not paper white.
- *  - Numbers everywhere use tabular-nums; display weights stay lighter (300-500)
- *    so the dashboard reads "editorial / fintech" rather than "marketing-bold".
- *  - Shadows are layered & cool-tinted (rgba(15, 31, 81, …)) — not flat black.
- *  - Border radius scale: 6 (inputs) · 8 (buttons) · 12 (cards) · 16 (hero).
- *  - Easing uses ease-out-cubic only; no bounce/elastic.
+ * Wave-1 Task 1.2 token palette — single source of truth.
+ *
+ *   canvas / glass / band / chart / store / accent / status / ink
+ *
+ * Every Tailwind color alias below resolves to a `var(--*)` token defined in
+ * src/app/globals.css. The Phase-13 hex palette (`primary`, `roas`, `text`,
+ * `surface*`, `border*`) AND the Task-1.1 interim aliases (`elevated`,
+ * `elevated2`, `overlay`, `line.*`) are GONE — `local/no-legacy-tailwind-class`
+ * + the `tokenSweep` vitest regression guard block any regression at lint /
+ * test time.
+ *
+ *   - Numbers everywhere use tabular-nums; display weights stay lighter
+ *     (300-500) so the dashboard reads "editorial / fintech".
+ *   - Shadows are layered & cool-tinted (rgba(15, 31, 81, …)) — not flat black.
+ *   - Border radius scale: 6 (inputs) · 8 (buttons) · 12 (cards) · 16 (hero).
+ *   - Easing uses ease-out-cubic only; no bounce/elastic.
  */
 const config: Config = {
   content: ['./src/**/*.{js,ts,jsx,tsx,mdx}'],
@@ -17,100 +25,97 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // New token-driven colors (OKLCH, light/dark aware). Consumed by
-        // components/ui/* primitives and progressively by migrated
-        // legacy components. The hex/literal color block below is kept
-        // intact during the migration so unmigrated components don't
-        // visually break — deleted in Plan 7 (polish) once nothing uses
-        // them.
-        canvas:        'var(--surface-canvas)',
-        elevated:      'var(--surface-elevated-1)',
-        elevated2:     'var(--surface-elevated-2)',
-        overlay:       'var(--surface-overlay)',
-        ink: {
-          DEFAULT:   'var(--text-primary)',
-          secondary: 'var(--text-secondary)',
-          muted:     'var(--text-muted)',
-          subtle:    'var(--text-subtle)',
+        // ---- Canvas: fixed body background (deep blue-violet, single-mode).
+        canvas: {
+          DEFAULT: 'var(--canvas-1)',
+          1:       'var(--canvas-1)',
+          2:       'var(--canvas-2)',
         },
-        line: {
-          DEFAULT: 'var(--border-default)',
-          subtle:  'var(--border-subtle)',
-          strong:  'var(--border-strong)',
+
+        // ---- Glass: 3-layer white-alpha stack + 2 edge tones.
+        //      Used for cards, drawers, table headers, hover/active surfaces.
+        //      The two edge tones (default + hot) replace the old line.*
+        //      border family — `border-glass-edge-hot` is the violet rim used
+        //      on hover/focus/active glass.
+        glass: {
+          1: 'var(--glass-1)',
+          2: 'var(--glass-2)',
+          3: 'var(--glass-3)',
+          edge:      'var(--glass-edge)',
+          'edge-hot': 'var(--glass-edge-hot)',
         },
+
+        // ---- Band: ROAS-grading signal palette (red < 2.0, orange 2.0-2.7,
+        //      green 2.7-3.0, blue > 3.0, gray for no-data). Tuned for
+        //      dark-canvas legibility at ≥4.5:1 contrast for stroke ≥2px.
+        //      Task 1.3 owns the data-band="..." attribute consumers.
+        band: {
+          red:    'var(--band-red)',
+          orange: 'var(--band-orange)',
+          green:  'var(--band-green)',
+          blue:   'var(--band-blue)',
+          gray:   'var(--band-gray)',
+        },
+
+        // ---- Chart: platform-brand-mirrored palette. See globals.css for
+        //      the per-platform hue rationale (Meta blue, Google amber,
+        //      TikTok red, organic teal, Shopify green).
+        chart: {
+          meta:    'var(--chart-platform-meta)',
+          google:  'var(--chart-platform-google)',
+          tiktok:  'var(--chart-platform-tiktok)',
+          organic: 'var(--chart-platform-organic)',
+          shopify: 'var(--chart-platform-shopify)',
+        },
+
+        // ---- Store: per-store hues for Per-Store row + store badges.
+        store: {
+          uzo: 'var(--store-uzo)',
+          usm: 'var(--store-usm)',
+          3:   'var(--store-3)',
+        },
+
+        // ---- Accent: brand violet (Q2). Used for buttons, focus rings,
+        //      active-state highlights, logo gradient.
         accent: {
           DEFAULT: 'var(--accent)',
+          deep:    'var(--accent-deep)',
           fg:      'var(--accent-fg)',
-          dark:    'var(--accent-dark)',
         },
+
+        // ---- Status: system-state semantics (token failures, sync errors,
+        //      freshness chips). Distinct from --band-* — band = analytic
+        //      grading, status = operational signal. Cross-pollination is
+        //      blocked by local/no-cross-palette-import.
         status: {
-          red:        'var(--status-red)',
-          redBg:      'var(--status-red-bg)',
-          redFg:      'var(--status-red-fg)',
-          orange:     'var(--status-orange)',
-          orangeBg:   'var(--status-orange-bg)',
-          orangeFg:   'var(--status-orange-fg)',
-          green:      'var(--status-green)',
-          greenBg:    'var(--status-green-bg)',
-          greenFg:    'var(--status-green-fg)',
-          blue:       'var(--status-blue)',
-          blueBg:     'var(--status-blue-bg)',
-          blueFg:     'var(--status-blue-fg)',
-          gray:       'var(--status-gray)',
-          grayBg:     'var(--status-gray-bg)',
-          grayFg:     'var(--status-gray-fg)',
-          warning:    'var(--status-warning)',
-          warningBg:  'var(--status-warning-bg)',
-          warningFg:  'var(--status-warning-fg)',
+          red:       'var(--status-red)',
+          redBg:     'var(--status-red-bg)',
+          redFg:     'var(--status-red-fg)',
+          orange:    'var(--status-orange)',
+          orangeBg:  'var(--status-orange-bg)',
+          orangeFg:  'var(--status-orange-fg)',
+          green:     'var(--status-green)',
+          greenBg:   'var(--status-green-bg)',
+          greenFg:   'var(--status-green-fg)',
+          blue:      'var(--status-blue)',
+          blueBg:    'var(--status-blue-bg)',
+          blueFg:    'var(--status-blue-fg)',
+          gray:      'var(--status-gray)',
+          grayBg:    'var(--status-gray-bg)',
+          grayFg:    'var(--status-gray-fg)',
+          warning:   'var(--status-warning)',
+          warningBg: 'var(--status-warning-bg)',
+          warningFg: 'var(--status-warning-fg)',
         },
 
-        // ===== LEGACY (kept during migration; removed in Plan 7) =====
-        // Cool-tinted surface stack — pure white feels harsh next to data.
-        background:    '#f6f9fc',
-        surface:       '#ffffff',
-        surfaceMuted:  '#f0f4f9',
-        surfaceSubtle: '#fafbfd',
-        surfaceSunken: '#eef2f7',
-        border:        '#d9e2ec',
-        borderSubtle:  '#e7ecf2',
-        borderStrong:  '#c4d0de',
-
-        // Deep navy primary — refined, slightly more saturated than default.
-        primary: {
-          DEFAULT: '#0d3680',
-          light:   '#3257ad',
-          lighter: '#dde7f5',
-          dark:    '#091c4a',
-          50:  '#f0f5fd',
-          100: '#dde7f5',
-          200: '#b9cdec',
-          300: '#8ba8de',
-          400: '#5b81cd',
-          500: '#3257ad',
-          600: '#0d3680',
-          700: '#0a285f',
-          800: '#091c4a',
-          900: '#06112f',
-        },
-
-        // ROAS semantic — kept the same hues but cleaner backgrounds.
-        roas: {
-          red:      '#dc2626',
-          redBg:    '#fef0f0',
-          orange:   '#d97706',
-          orangeBg: '#fff5e3',
-          green:    '#15803d',
-          greenBg:  '#e8f6ed',
-          blue:     '#1d4ed8',
-          blueBg:   '#e3ecff',
-        },
-
-        // Text: deep navy ink, not pure black. Better on cool-tinted bg.
-        text: {
-          primary:   '#0d253d',
-          secondary: '#3c4858',
-          muted:     '#7a8a9a',
-          subtle:    '#a8b5c2',
+        // ---- Ink: 4-stop foreground stack. `text-ink` is body / numbers /
+        //      headings; -secondary is subtitle text; -muted is metadata;
+        //      -subtle is least-prominent meta (e.g. timestamps in tooltips).
+        ink: {
+          DEFAULT:   'var(--text)',
+          secondary: 'var(--text-2)',
+          muted:     'var(--text-muted)',
+          subtle:    'var(--text-subtle)',
         },
       },
 

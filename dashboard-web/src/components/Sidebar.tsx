@@ -54,7 +54,7 @@ function SidebarBody({
   return (
     <>
       {/* Brand + (mobile) close button */}
-      <div className="px-3 py-3 border-b border-line-subtle flex items-center gap-2">
+      <div className="px-3 py-3 border-b border-glass-edge flex items-center gap-2">
         <div className="h-7 w-7 rounded-md bg-accent shrink-0" aria-hidden />
         {!isCollapsed && (
           <span className="text-sm font-semibold truncate flex-1">דשבורד ROAS</span>
@@ -92,8 +92,8 @@ function SidebarBody({
               className={cn(
                 'flex w-full justify-start gap-3 rounded-md px-2.5 py-2 text-sm h-auto',
                 isActive
-                  ? 'bg-elevated2 text-ink font-medium ring-1 ring-line-subtle'
-                  : 'text-ink-muted hover:text-ink hover:bg-elevated',
+                  ? 'bg-glass-2 text-ink font-medium ring-1 ring-glass-edge'
+                  : 'text-ink-muted hover:text-ink hover:bg-glass-1',
               )}
             >
               <span className="shrink-0">{item.icon}</span>
@@ -104,13 +104,13 @@ function SidebarBody({
       </nav>
 
       {/* Footer: operator + theme toggle + collapse */}
-      <div className="border-t border-line-subtle px-2 py-3 space-y-1">
+      <div className="border-t border-glass-edge px-2 py-3 space-y-1">
         <Link
           href="/operator"
           onClick={() => onItemClick?.()}
           className={cn(
             'flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-sm',
-            'text-ink-muted hover:text-ink hover:bg-elevated2',
+            'text-ink-muted hover:text-ink hover:bg-glass-2',
           )}
         >
           <Cog size={16} />
@@ -126,7 +126,7 @@ function SidebarBody({
             onClick={() => setChoice('system')}
             className={cn(
               'text-ink-muted',
-              choice === 'system' && 'bg-elevated2 text-ink',
+              choice === 'system' && 'bg-glass-2 text-ink',
             )}
           >
             <Monitor size={14} />
@@ -139,7 +139,7 @@ function SidebarBody({
             onClick={() => setChoice('light')}
             className={cn(
               'text-ink-muted',
-              choice === 'light' && 'bg-elevated2 text-ink',
+              choice === 'light' && 'bg-glass-2 text-ink',
             )}
           >
             <Sun size={14} />
@@ -152,7 +152,7 @@ function SidebarBody({
             onClick={() => setChoice('dark')}
             className={cn(
               'text-ink-muted',
-              choice === 'dark' && 'bg-elevated2 text-ink',
+              choice === 'dark' && 'bg-glass-2 text-ink',
             )}
           >
             <Moon size={14} />
@@ -195,7 +195,7 @@ export function Sidebar({
       {/* ===== Desktop right-rail (md and up) — unchanged behaviour ===== */}
       <aside
         className={cn(
-          'sticky top-0 h-screen border-s border-line bg-elevated text-ink',
+          'sticky top-0 h-screen border-s border-glass-edge bg-glass-1 text-ink',
           'hidden md:flex flex-col transition-[width] duration-200',
           collapsed ? 'w-16' : 'w-60',
         )}
@@ -230,7 +230,7 @@ export function Sidebar({
         onClick={onMobileClose}
         aria-hidden={!isMobileOpen}
         className={cn(
-          'fixed inset-0 bg-overlay/60 z-40 md:hidden transition-opacity duration-DEFAULT',
+          'fixed inset-0 bg-glass-3/60 z-40 md:hidden transition-opacity duration-DEFAULT',
           isMobileOpen ? 'opacity-100' : 'opacity-0 pointer-events-none',
         )}
       />
@@ -241,7 +241,7 @@ export function Sidebar({
         aria-hidden={!isMobileOpen}
         className={cn(
           'fixed inset-y-0 start-0 w-64 max-w-[80vw] z-50 md:hidden',
-          'bg-elevated text-ink shadow-elevated overflow-y-auto',
+          'bg-glass-1 text-ink shadow-elevated overflow-y-auto',
           'flex flex-col transition-transform duration-DEFAULT',
           isMobileOpen ? 'translate-x-0' : 'translate-x-full',
         )}

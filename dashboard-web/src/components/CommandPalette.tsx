@@ -511,11 +511,11 @@ export function CommandPalette({
             role="dialog"
             aria-modal="true"
             aria-label="Command Palette"
-            className="w-full max-w-xl bg-elevated rounded-2xl shadow-elevated border border-line-subtle overflow-hidden animate-fade-in-up"
+            className="w-full max-w-xl bg-glass-1 rounded-2xl shadow-elevated border border-glass-edge overflow-hidden animate-fade-in-up"
             onClick={e => e.stopPropagation()}
           >
             {/* Search input */}
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-line-subtle">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-glass-edge">
               <Search size={16} className="text-ink-muted shrink-0" />
               <input
                 ref={inputRef}
@@ -537,7 +537,7 @@ export function CommandPalette({
 
             {/* NL query placeholder slot (wired in Plan 2) */}
             {query.length > 0 && (
-              <div className="px-3 py-2 border-b border-line-subtle text-xs text-ink-muted">
+              <div className="px-3 py-2 border-b border-glass-edge text-xs text-ink-muted">
                 <Sparkles size={12} className="inline-block me-1" />
                 שאלת AI: <span className="text-ink">{query}</span>
                 <span className="opacity-50">{' '}— יזמין ב-Plan 2</span>
@@ -604,18 +604,18 @@ export function CommandPalette({
             </div>
 
             {/* Footer hints */}
-            <div className="px-4 py-2 border-t border-line-subtle flex items-center justify-between text-[10px] text-ink-muted">
+            <div className="px-4 py-2 border-t border-glass-edge flex items-center justify-between text-[10px] text-ink-muted">
               <div className="flex items-center gap-3">
                 <span className="inline-flex items-center gap-1">
-                  <kbd className="px-1 py-0.5 bg-elevated2 rounded text-[9px] font-mono">↑↓</kbd>
+                  <kbd className="px-1 py-0.5 bg-glass-2 rounded text-[9px] font-mono">↑↓</kbd>
                   ניווט
                 </span>
                 <span className="inline-flex items-center gap-1">
-                  <kbd className="px-1 py-0.5 bg-elevated2 rounded text-[9px] font-mono">↵</kbd>
+                  <kbd className="px-1 py-0.5 bg-glass-2 rounded text-[9px] font-mono">↵</kbd>
                   בחר
                 </span>
                 <span className="inline-flex items-center gap-1">
-                  <kbd className="px-1 py-0.5 bg-elevated2 rounded text-[9px] font-mono">esc</kbd>
+                  <kbd className="px-1 py-0.5 bg-glass-2 rounded text-[9px] font-mono">esc</kbd>
                   סגור
                 </span>
               </div>
@@ -665,13 +665,13 @@ function GroupedSection({
                 'w-full justify-start gap-3 px-3 py-2 h-auto rounded-lg mx-1',
                 isActive
                   ? 'bg-accent/8 text-ink'
-                  : 'text-ink-secondary hover:bg-elevated2',
+                  : 'text-ink-secondary hover:bg-glass-2',
               )}
             >
               <span
                 className={cn(
                   'inline-flex items-center justify-center w-6 h-6 rounded-md shrink-0',
-                  isActive ? 'bg-accent/15 text-accent' : 'bg-elevated2 text-ink-muted',
+                  isActive ? 'bg-accent/15 text-accent' : 'bg-glass-2 text-ink-muted',
                 )}
               >
                 {item.icon}

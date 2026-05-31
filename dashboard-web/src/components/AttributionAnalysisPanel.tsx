@@ -24,7 +24,7 @@ export function AttributionAnalysisPanel({ analysis, spend, value }: Props) {
   const trustBg =
     analysis.trust.level === 'high'    ? 'bg-status-greenBg/50 border-status-green/30 text-status-green'
   : analysis.trust.level === 'medium'  ? 'bg-status-warningBg border-status-warning/30 text-status-warningFg'
-  : analysis.trust.level === 'unknown' ? 'bg-elevated2 border-line-subtle text-ink-secondary'
+  : analysis.trust.level === 'unknown' ? 'bg-glass-2 border-glass-edge text-ink-secondary'
   :                                      'bg-status-redBg/50 border-status-red/30 text-status-red';
 
   const detRoas = spend > 0

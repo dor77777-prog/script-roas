@@ -67,7 +67,7 @@ export function Filters({ filters, stores, onChange }: Props) {
   const showAdvanced = advancedOpen || activeIsSecondary || filters.preset === 'custom';
 
   return (
-    <div className="rounded-xl bg-elevated border border-line-subtle shadow-card overflow-hidden">
+    <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-card overflow-hidden">
       <div className="p-4 sm:p-5 space-y-3.5 sm:space-y-4">
         {/* ===== Row 1: featured presets + store ===== */}
         <div className="flex flex-col sm:flex-row sm:items-end gap-3 sm:gap-4">
@@ -104,7 +104,7 @@ export function Filters({ filters, stores, onChange }: Props) {
               <select
                 value={filters.store}
                 onChange={e => onChange({ ...filters, store: e.target.value })}
-                className="w-full appearance-none rounded-lg border border-line bg-elevated ps-3 pe-9 py-2.5 sm:py-2 text-sm font-medium text-ink hover:border-line-strong focus:outline-none focus:border-accent focus:shadow-focus transition-colors cursor-pointer"
+                className="w-full appearance-none rounded-lg border border-glass-edge bg-glass-1 ps-3 pe-9 py-2.5 sm:py-2 text-sm font-medium text-ink hover:border-glass-edge-hot focus:outline-none focus:border-accent focus:shadow-focus transition-colors cursor-pointer"
               >
                 <option value="All">כל החנויות</option>
                 {stores.map(s => (
@@ -122,7 +122,7 @@ export function Filters({ filters, stores, onChange }: Props) {
         </div>
 
         {/* ===== Selected range banner ===== */}
-        <div className="flex items-center justify-between rounded-lg bg-elevated2 px-3 py-2 text-xs sm:text-sm">
+        <div className="flex items-center justify-between rounded-lg bg-glass-2 px-3 py-2 text-xs sm:text-sm">
           <div className="flex items-center gap-2 text-ink-secondary">
             <Calendar size={13} className="text-ink-muted" />
             <span className="tabular-nums">
@@ -182,7 +182,7 @@ export function Filters({ filters, stores, onChange }: Props) {
                     if (next === null) return;
                     onChange({ ...filters, range: next });
                   }}
-                  className="rounded-lg border border-line bg-elevated px-3 py-2 text-sm w-full text-ink focus:outline-none focus:border-accent focus:shadow-focus transition-colors"
+                  className="rounded-lg border border-glass-edge bg-glass-1 px-3 py-2 text-sm w-full text-ink focus:outline-none focus:border-accent focus:shadow-focus transition-colors"
                 />
                 <span className="text-ink-secondary text-center hidden sm:inline">—</span>
                 <input
@@ -198,7 +198,7 @@ export function Filters({ filters, stores, onChange }: Props) {
                     if (next === null) return;
                     onChange({ ...filters, range: next });
                   }}
-                  className="rounded-lg border border-line bg-elevated px-3 py-2 text-sm w-full text-ink focus:outline-none focus:border-accent focus:shadow-focus transition-colors"
+                  className="rounded-lg border border-glass-edge bg-glass-1 px-3 py-2 text-sm w-full text-ink focus:outline-none focus:border-accent focus:shadow-focus transition-colors"
                 />
               </div>
             )}

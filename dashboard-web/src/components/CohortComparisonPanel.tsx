@@ -125,7 +125,7 @@ function StatusBadge({ status }: { status: string | null }) {
         'inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium border',
         isActive
           ? 'bg-status-greenBg/40 text-status-green border-status-green/30'
-          : 'bg-elevated2 text-ink-muted border-line-subtle',
+          : 'bg-glass-2 text-ink-muted border-glass-edge',
       )}
       title={status}
     >
@@ -147,9 +147,9 @@ function MemberRow({ member, rank, isCurrent, onDrill }: MemberRowProps) {
   return (
     <tr
       className={cn(
-        'border-b border-line-subtle/60 last:border-0',
+        'border-b border-glass-edge/60 last:border-0',
         isCurrent && 'bg-accent/8 font-semibold',
-        !isCurrent && onDrill && 'hover:bg-elevated2/60 cursor-pointer',
+        !isCurrent && onDrill && 'hover:bg-glass-2/60 cursor-pointer',
       )}
       onClick={!isCurrent && onDrill ? onDrill : undefined}
     >
@@ -213,10 +213,10 @@ function CohortSection({ title, subtitle, members, tone, onDrillCampaign }: Sect
         'rounded-lg border overflow-x-auto',
         tone === 'intra'
           ? 'border-status-warning/30 bg-status-warningBg/30'
-          : 'border-line-subtle bg-elevated2/30',
+          : 'border-glass-edge bg-glass-2/30',
       )}
     >
-      <div className="px-3 py-2 border-b border-line-subtle/60 flex items-center gap-2">
+      <div className="px-3 py-2 border-b border-glass-edge/60 flex items-center gap-2">
         <span
           className={cn(
             'inline-flex items-center justify-center w-6 h-6 rounded',
@@ -231,7 +231,7 @@ function CohortSection({ title, subtitle, members, tone, onDrillCampaign }: Sect
         </div>
       </div>
       <table className="w-full min-w-[640px]">
-        <thead className="bg-elevated2/50 text-ink-muted">
+        <thead className="bg-glass-2/50 text-ink-muted">
           <tr>
             <th className="px-2 py-1 text-start font-medium text-[10px]">דירוג</th>
             <th className="px-2 py-1 text-start font-medium text-[10px]">קמפיין</th>
@@ -452,7 +452,7 @@ export function CohortComparisonPanel({
           well". Distinct visual treatment (neutral surfaceMuted, not the
           red/amber/blue severity tones) so it doesn't read as an alarm. */}
       {compositionChangedAlerts.length > 0 && (
-        <div className="rounded-lg border border-line-subtle bg-elevated2/40 px-3 py-2.5 space-y-2">
+        <div className="rounded-lg border border-glass-edge bg-glass-2/40 px-3 py-2.5 space-y-2">
           <div className="flex items-center gap-2 text-xs font-semibold text-ink-secondary">
             <TrendingDown size={14} className="text-ink-muted" />
             <span>ניתוח קניבליזציה מושהה — הרכב הקבוצה השתנה בתוך הטווח</span>
@@ -498,7 +498,7 @@ export function CohortComparisonPanel({
 
       {/* Educational footer — explains the ranking + revenue split so the
           operator understands what the table means and what action to take. */}
-      <div className="rounded-lg bg-elevated2/40 border border-line-subtle px-3 py-2 text-[10px] text-ink-secondary leading-relaxed inline-flex items-start gap-1.5">
+      <div className="rounded-lg bg-glass-2/40 border border-glass-edge px-3 py-2 text-[10px] text-ink-secondary leading-relaxed inline-flex items-start gap-1.5">
         <Package size={11} className="text-ink-muted mt-0.5 shrink-0" />
         <span>
           <strong>איך לקרוא:</strong> ROAS Shopify של כל קמפיין מבוסס על חלקו

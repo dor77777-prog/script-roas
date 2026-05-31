@@ -91,7 +91,7 @@ function Row({
   const verdictColor = isWinner ? 'text-status-green' : 'text-status-red';
 
   return (
-    <li className="py-2.5 border-b border-line-subtle last:border-b-0">
+    <li className="py-2.5 border-b border-glass-edge last:border-b-0">
       <div className="flex items-start gap-2">
         <span className="text-ink-muted font-mono text-[11px] mt-0.5 tabular-nums shrink-0 w-4 text-end">
           {rank}.
@@ -137,7 +137,7 @@ export function CampaignsTopList({
 }: Props) {
   if (data.length === 0) {
     return (
-      <div className={cn('rounded-xl bg-elevated border border-line p-5', className)}>
+      <div className={cn('rounded-xl bg-glass-1 border border-glass-edge p-5', className)}>
         {title && (
           <h3 className="text-sm sm:text-base font-semibold text-ink mb-2">{title}</h3>
         )}
@@ -165,7 +165,7 @@ export function CampaignsTopList({
   // pattern.
 
   return (
-    <div className={cn('rounded-xl bg-elevated border border-line p-3 sm:p-5', className)}>
+    <div className={cn('rounded-xl bg-glass-1 border border-glass-edge p-3 sm:p-5', className)}>
       {title && (
         <h3 className="text-sm sm:text-base font-semibold text-ink mb-1">{title}</h3>
       )}
@@ -180,7 +180,7 @@ export function CampaignsTopList({
             <Trophy size={14} />
             מנצחים ({winnersCount})
           </h4>
-          <ul className="rounded-lg border border-line-subtle bg-elevated2/40 px-2 sm:px-3">
+          <ul className="rounded-lg border border-glass-edge bg-glass-2/40 px-2 sm:px-3">
             {winners.map((c, i) => (
               <Row key={`${c.platform}:${c.name}:${c.storeName}`} rank={i + 1} campaign={c} variant="winner" />
             ))}
@@ -192,7 +192,7 @@ export function CampaignsTopList({
             <AlertTriangle size={14} />
             לתשומת לב ({losersCount})
           </h4>
-          <ul className="rounded-lg border border-line-subtle bg-elevated2/40 px-2 sm:px-3">
+          <ul className="rounded-lg border border-glass-edge bg-glass-2/40 px-2 sm:px-3">
             {losers.map((c, i) => (
               <Row key={`${c.platform}:${c.name}:${c.storeName}`} rank={i + 1} campaign={c} variant="loser" />
             ))}

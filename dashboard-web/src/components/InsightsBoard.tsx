@@ -86,8 +86,8 @@ const SEVERITY_META: Record<
     label: 'מידע',
     icon: <Info size={16} />,
     color: 'text-ink-secondary',
-    bg: 'bg-elevated2',
-    border: 'border-line-subtle',
+    bg: 'bg-glass-2',
+    border: 'border-glass-edge',
     badge: 'bg-ink-muted text-white',
   },
 };
@@ -219,7 +219,7 @@ export function InsightsBoard({ data }: Props) {
   }, [grouped]);
 
   return (
-    <section className="rounded-2xl bg-elevated border border-line-subtle shadow-sm overflow-hidden">
+    <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-sm overflow-hidden">
       {/* Clickable header — toggles the whole board open/closed. */}
       <Button
         type="button"
@@ -229,7 +229,7 @@ export function InsightsBoard({ data }: Props) {
         className={cn(
           'w-full justify-start h-auto',
           'px-4 sm:px-6 py-4 sm:py-5',
-          'border-b border-line-subtle',
+          'border-b border-glass-edge',
           'bg-gradient-to-l from-accent/5 via-elevated to-elevated',
           'hover:from-accent/8 hover:to-elevated2/40',
         )}
@@ -363,7 +363,7 @@ export function InsightsBoard({ data }: Props) {
 
       {/* Hidden / muted insights — only meaningful when the board is open */}
       {boardExpanded && hiddenCount > 0 && (
-        <div className="border-t border-line-subtle bg-elevated2/30">
+        <div className="border-t border-glass-edge bg-glass-2/30">
           <Button
             variant="ghost"
             onClick={() => setShowHidden(v => !v)}
@@ -381,7 +381,7 @@ export function InsightsBoard({ data }: Props) {
             {showHidden ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </Button>
           {showHidden && (
-            <ul className="divide-y divide-line-subtle/70 animate-fade-in">
+            <ul className="divide-y divide-glass-edge/70 animate-fade-in">
               {hidden.map(ins => {
                 const st = states[ins.id];
                 const meta = SEVERITY_META[ins.severity];
@@ -391,7 +391,7 @@ export function InsightsBoard({ data }: Props) {
                     <span
                       className={cn(
                         'inline-flex items-center justify-center w-6 h-6 rounded-md shrink-0 mt-0.5 opacity-60',
-                        meta.color, 'bg-elevated ring-1 ring-inset', meta.border,
+                        meta.color, 'bg-glass-1 ring-1 ring-inset', meta.border,
                       )}
                     >
                       {meta.icon}
@@ -569,7 +569,7 @@ function InsightBoardRow({
     <div className="flex items-start justify-between gap-2 flex-wrap">
       <span>{insight.title}</span>
       {insight.scope && (
-        <span className="inline-block text-[10px] sm:text-[11px] font-medium text-ink-muted bg-elevated/80 border border-line-subtle px-1.5 py-0.5 rounded shrink-0">
+        <span className="inline-block text-[10px] sm:text-[11px] font-medium text-ink-muted bg-glass-1/80 border border-glass-edge px-1.5 py-0.5 rounded shrink-0">
           {insight.scope}
         </span>
       )}
@@ -613,7 +613,7 @@ function InsightBoardRow({
             'inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold',
             'border border-transparent',
             meta.color,
-            'hover:bg-elevated/80 hover:border-line-subtle',
+            'hover:bg-glass-1/80 hover:border-glass-edge',
             'transition-colors',
           )}
         >

@@ -62,7 +62,7 @@ export function SectionIntro({
               dir="ltr"
               className={cn(
                 'inline-block mt-1.5 px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] tabular-nums',
-                'bg-elevated2 border border-line-subtle text-ink-secondary',
+                'bg-glass-2 border border-glass-edge text-ink-secondary',
                 'font-mono',
               )}
             >

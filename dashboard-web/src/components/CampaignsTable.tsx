@@ -1174,7 +1174,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
 
   // ----- Toolbar -----
   const toolbar = (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2 sm:gap-3 px-4 sm:px-5 py-3 bg-elevated2/40 border-b border-line-subtle">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2 sm:gap-3 px-4 sm:px-5 py-3 bg-glass-2/40 border-b border-glass-edge">
       {/* PRIMARY filters — always inline on every breakpoint.
           Order: Mode → Store → Date range. */}
       {/* Mode selector: campaign or ad-set */}
@@ -1184,7 +1184,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         </span>
         <div
           role="tablist"
-          className="inline-flex rounded-lg border border-line bg-elevated overflow-hidden divide-x divide-line"
+          className="inline-flex rounded-lg border border-glass-edge bg-glass-1 overflow-hidden divide-x divide-glass-edge"
           dir="ltr"
         >
           {(['campaign', 'adset'] as Mode[]).map(m => (
@@ -1198,7 +1198,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                 'px-2.5 sm:px-3.5 py-1.5 text-[11px] sm:text-xs font-medium transition-colors min-w-[64px] sm:min-w-[80px] h-auto rounded-none',
                 mode === m
                   ? 'bg-accent text-white hover:bg-accent/90'
-                  : 'bg-elevated text-ink-secondary hover:bg-elevated2',
+                  : 'bg-glass-1 text-ink-secondary hover:bg-glass-2',
               )}
             >
               {m === 'campaign' ? 'קמפיינים' : 'אד-סטים'}
@@ -1213,7 +1213,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         <select
           value={localStore}
           onChange={e => setLocalStore(e.target.value)}
-          className="rounded-lg border border-line bg-elevated px-2.5 py-1.5 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/30 min-w-[120px]"
+          className="rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/30 min-w-[120px]"
         >
           <option value="All">כל החנויות</option>
           {stores.map(s => (
@@ -1238,8 +1238,8 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
             );
           }}
           className={cn(
-            'rounded-lg border bg-elevated px-2 py-1.5 text-xs sm:text-sm font-medium',
-            isCustomRange ? 'border-accent text-accent' : 'border-line text-ink-secondary',
+            'rounded-lg border bg-glass-1 px-2 py-1.5 text-xs sm:text-sm font-medium',
+            isCustomRange ? 'border-accent text-accent' : 'border-glass-edge text-ink-secondary',
           )}
         />
         <span className="text-ink-muted text-xs">—</span>
@@ -1256,8 +1256,8 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
             );
           }}
           className={cn(
-            'rounded-lg border bg-elevated px-2 py-1.5 text-xs sm:text-sm font-medium',
-            isCustomRange ? 'border-accent text-accent' : 'border-line text-ink-secondary',
+            'rounded-lg border bg-glass-1 px-2 py-1.5 text-xs sm:text-sm font-medium',
+            isCustomRange ? 'border-accent text-accent' : 'border-glass-edge text-ink-secondary',
           )}
         />
         {isCustomRange && (
@@ -1302,7 +1302,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         <div className="flex items-center gap-2">
           <div
             role="tablist"
-            className="inline-flex rounded-lg border border-line bg-elevated overflow-hidden divide-x divide-line"
+            className="inline-flex rounded-lg border border-glass-edge bg-glass-1 overflow-hidden divide-x divide-glass-edge"
             dir="ltr"
           >
             {(['all', 'Meta', 'Google', 'TikTok'] as Platform[]).map(p => (
@@ -1316,7 +1316,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                   'px-2.5 sm:px-3 py-1.5 text-[11px] sm:text-xs font-medium transition-colors min-w-[48px] sm:min-w-[58px] h-auto rounded-none',
                   platform === p
                     ? 'bg-accent text-white hover:bg-accent/90'
-                    : 'bg-elevated text-ink-secondary hover:bg-elevated2',
+                    : 'bg-glass-1 text-ink-secondary hover:bg-glass-2',
                 )}
               >
                 {p === 'all' ? 'כולם' : p}
@@ -1335,7 +1335,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
               type="checkbox"
               checked={showOnlyMultiMapped}
               onChange={e => setShowOnlyMultiMapped(e.target.checked)}
-              className="rounded border-line accent-accent"
+              className="rounded border-glass-edge accent-accent"
             />
             <span>🔗 רק קמפיינים עם מיפוי משותף</span>
             {showOnlyMultiMapped && (
@@ -1383,7 +1383,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   // ----- Summary -----
   const roasInfo = roasLabel(totals.roas);
   const summary = aggregated.length > 0 && (
-    <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gradient-to-l from-accent/5 to-elevated border-b border-line-subtle">
+    <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gradient-to-l from-accent/5 to-elevated border-b border-glass-edge">
       <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3">
         <Stat label="ROAS" value={totals.roas > 0 ? formatNumber(totals.roas) : '—'} chip={{ text: roasInfo.text, tone: roasInfo.tone }} />
         <Stat label="הוצאה" value={formatCurrency(totals.spend)} prefix="CAD" />
@@ -1413,7 +1413,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
           positive: 'bg-status-greenBg/40 border-status-green/30 text-status-green',
           warning:  'bg-status-warningBg border-status-warning/30 text-status-warningFg',
           negative: 'bg-status-redBg/40 border-status-red/30 text-status-red',
-          neutral:  'bg-elevated2 border-line-subtle text-ink-secondary',
+          neutral:  'bg-glass-2 border-glass-edge text-ink-secondary',
         };
         // Build an explicit baseline label with the actual date windows so
         // the user knows exactly what's being compared. Format MM-DD/DD →
@@ -1458,7 +1458,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         });
         const showPrevLine = cpmAnalysisMode === 'prev' && !isLoadingPrev && (cpmDailyPrev?.length ?? 0) > 0;
         return (
-        <div className="mt-3 rounded-lg bg-elevated border border-line-subtle p-3">
+        <div className="mt-3 rounded-lg bg-glass-1 border border-glass-edge p-3">
           <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
             <h3 className="text-xs sm:text-sm font-semibold text-ink inline-flex items-center gap-1.5">
               CPM לאורך זמן
@@ -1472,7 +1472,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
               {/* Analysis baseline toggle — picks what the smart-analysis
                   box compares against. Two modes: half-over-half (within
                   range) vs previous-period (same-length window before). */}
-              <div className="inline-flex items-center gap-0.5 rounded-md border border-line-subtle bg-elevated p-0.5 text-[10px]">
+              <div className="inline-flex items-center gap-0.5 rounded-md border border-glass-edge bg-glass-1 p-0.5 text-[10px]">
                 <Button
                   type="button"
                   variant="ghost"
@@ -1505,7 +1505,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                   type="checkbox"
                   checked={cpmShowRoas}
                   onChange={e => setCpmShowRoas(e.target.checked)}
-                  className="rounded border-line-subtle text-accent focus:ring-accent/30 cursor-pointer"
+                  className="rounded border-glass-edge text-accent focus:ring-accent/30 cursor-pointer"
                 />
                 הוסף ROAS לגרף
               </label>
@@ -1589,7 +1589,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                           </ChartTooltipRow>
                         )}
                         {showPrevLine && d.prevCpm != null && (
-                          <div className="mt-1 pt-1 border-t border-line-subtle">
+                          <div className="mt-1 pt-1 border-t border-glass-edge">
                             <div className="text-ink-muted text-[10px] mb-0.5">
                               תקופה קודמת{d.prevDate ? ` (${formatDate(d.prevDate)})` : ''}:
                             </div>
@@ -1707,7 +1707,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         );
       })()}
       {totals.spend > 0 && (
-        <div className="mt-3 pt-3 border-t border-line-subtle text-[10px] sm:text-xs text-ink-muted tabular-nums flex flex-wrap gap-x-3 gap-y-1">
+        <div className="mt-3 pt-3 border-t border-glass-edge text-[10px] sm:text-xs text-ink-muted tabular-nums flex flex-wrap gap-x-3 gap-y-1">
           <span>CPC: <span className="text-ink-secondary font-medium">CAD {formatCurrency(totals.cpc, 2)}</span></span>
           <span className="text-ink-subtle">·</span>
           <span>CPA: <span className="text-ink-secondary font-medium">CAD {totals.conversions > 0 ? formatCurrency(totals.cpa, 2) : '—'}</span></span>
@@ -1871,7 +1871,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     dir={sortDir}
                     onClick={handleSort}
                     align="end"
-                    className="px-3 py-2 w-[92px] border-e border-line-subtle"
+                    className="px-3 py-2 w-[92px] border-e border-glass-edge"
                     dataColId="shopifyValuePlatform"
                     tooltip="ערך המכירות (CAD) שסווגו דטרמיניסטית לפלטפורמה הזו דרך source / click-id ב-Shopify (utm_source, ttclid, fbclid, gclid). רק הזמנות שאנחנו 100% בטוחים שהן מהפלטפורמה הזו — בלי הקצאה פרופורציונלית. זה מה שאפשר להוכיח."
                   />
@@ -1890,7 +1890,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     dir={sortDir}
                     onClick={handleSort}
                     align="end"
-                    className="px-3 py-2 w-[78px] border-e border-line-subtle"
+                    className="px-3 py-2 w-[78px] border-e border-glass-edge"
                     dataColId="shopifyUnitsPlatform"
                     tooltip="מספר היחידות שנמכרו ב-Shopify מהזמנות שסווגו דטרמיניסטית לפלטפורמה הזו. סופר units (line_items.quantity) — לא orders. רק הזמנות עם source / click-id ברור."
                   />
@@ -2025,8 +2025,8 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
               };
               return (
             <table className="w-full text-xs sm:text-sm min-w-[1340px]">
-              <thead className="sticky top-0 z-[5] bg-elevated">
-                <tr className="text-ink-secondary border-b border-line-subtle bg-elevated2/40">
+              <thead className="sticky top-0 z-[5] bg-glass-1">
+                <tr className="text-ink-secondary border-b border-glass-edge bg-glass-2/40">
                   <ColumnHeaderTh
                     className="px-3 py-2 w-[36px]"
                     ariaLabel="סימון אופטימיזציה"
@@ -2149,7 +2149,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
           </div>
 
           {aggregated.length > TOP_N_DEFAULT && (
-            <div className="px-4 sm:px-5 py-2.5 bg-elevated2/30 border-t border-line-subtle">
+            <div className="px-4 sm:px-5 py-2.5 bg-glass-2/30 border-t border-glass-edge">
               <Button
                 variant="ghost"
                 onClick={() => setShowAll(v => !v)}
@@ -2246,7 +2246,7 @@ function AttributionGapPanel({
   return (
     <section
       className={cn(
-        'px-4 sm:px-5 py-3 sm:py-4 border-b border-line-subtle',
+        'px-4 sm:px-5 py-3 sm:py-4 border-b border-glass-edge',
         toneClass,
       )}
     >
@@ -2511,8 +2511,8 @@ function Stat({
   const interactive = !!onClick;
   const className = cn(
     'rounded-lg border px-2.5 sm:px-3 py-1.5 sm:py-2 text-start',
-    !interactive && 'bg-elevated border-line-subtle',
-    interactive && !active && 'bg-elevated border-line-subtle hover:border-accent/40 hover:bg-accent/[0.02] transition-colors cursor-pointer',
+    !interactive && 'bg-glass-1 border-glass-edge',
+    interactive && !active && 'bg-glass-1 border-glass-edge hover:border-accent/40 hover:bg-accent/[0.02] transition-colors cursor-pointer',
     interactive && active && 'bg-accent/[0.04] border-accent/40 ring-1 ring-accent/20 cursor-pointer',
   );
   const content = (

@@ -439,11 +439,11 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
         <TrendingUp size={14} className="text-ink-secondary" />
         ערוצים מול Shopify — מתאם יומי
       </h3>
-      <div className="rounded-xl border border-line-subtle bg-elevated2/30 p-3 space-y-3">
+      <div className="rounded-xl border border-glass-edge bg-glass-2/30 p-3 space-y-3">
         {!chipHidden && (
           <div
             title="current state, not date-versioned"
-            className="rounded-md bg-elevated2 border border-line-subtle px-2.5 py-1.5 text-[11px] text-ink-muted flex items-center gap-1.5"
+            className="rounded-md bg-glass-2 border border-glass-edge px-2.5 py-1.5 text-[11px] text-ink-muted flex items-center gap-1.5"
           >
             <Info size={12} className="shrink-0 text-ink-subtle" />
             <span className="leading-relaxed">
@@ -805,9 +805,9 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
           <summary className="cursor-pointer text-ink-secondary hover:text-ink select-none py-1">
             יום-לפי-יום ↓
           </summary>
-          <div className="mt-2 max-h-48 overflow-auto rounded-md border border-line-subtle">
+          <div className="mt-2 max-h-48 overflow-auto rounded-md border border-glass-edge">
             <table className="w-full min-w-[480px] text-[11px]">
-              <thead className="bg-elevated2/60 sticky top-0 z-[5]">
+              <thead className="bg-glass-2/60 sticky top-0 z-[5]">
                 <tr className="text-ink-muted">
                   <th className="px-2 py-1.5 text-start font-medium">תאריך</th>
                   <th className="px-2 py-1.5 text-end font-medium">Meta</th>
@@ -832,7 +832,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                     red: 'text-status-red',
                   }[deltaTone];
                   return (
-                    <tr key={s.date} className="border-t border-line-subtle">
+                    <tr key={s.date} className="border-t border-glass-edge">
                       <td className="px-2 py-1 text-ink-secondary tabular-nums">{s.date.slice(5)}</td>
                       <td className="px-2 py-1 text-end tabular-nums">{formatCurrency(s.meta)}</td>
                       <td className="px-2 py-1 text-end tabular-nums">{formatCurrency(s.google)}</td>

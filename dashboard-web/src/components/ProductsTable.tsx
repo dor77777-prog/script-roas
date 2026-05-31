@@ -386,7 +386,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
   }
 
   const toolbar = (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2 sm:gap-3 px-4 sm:px-5 py-3 bg-elevated2/40 border-b border-line">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:flex-wrap gap-2 sm:gap-3 px-4 sm:px-5 py-3 bg-glass-2/40 border-b border-glass-edge">
       {/* Period selector */}
       <div className="flex items-center gap-2">
         <span className="text-[11px] sm:text-xs text-ink-secondary font-medium shrink-0">
@@ -394,7 +394,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
         </span>
         <div
           role="tablist"
-          className="inline-flex rounded-lg border border-line bg-elevated overflow-hidden divide-x divide-line"
+          className="inline-flex rounded-lg border border-glass-edge bg-glass-1 overflow-hidden divide-x divide-glass-edge"
           dir="ltr"
         >
           {(Object.keys(PERIOD_LABELS) as Period[]).map(p => (
@@ -421,7 +421,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
         <select
           value={localStore}
           onChange={e => setLocalStore(e.target.value)}
-          className="rounded-lg border border-line bg-elevated px-2.5 py-1.5 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/30 min-w-[140px]"
+          className="rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/30 min-w-[140px]"
         >
           <option value="All">כל החנויות</option>
           {stores.map(s => (
@@ -455,8 +455,8 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
           }}
           aria-label="מתאריך"
           className={cn(
-            'rounded-lg border bg-elevated px-2 py-1.5 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/30',
-            isCustomRange ? 'border-accent text-accent' : 'border-line text-ink-secondary',
+            'rounded-lg border bg-glass-1 px-2 py-1.5 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/30',
+            isCustomRange ? 'border-accent text-accent' : 'border-glass-edge text-ink-secondary',
           )}
         />
         <span className="text-ink-muted text-xs">—</span>
@@ -474,8 +474,8 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
           }}
           aria-label="עד תאריך"
           className={cn(
-            'rounded-lg border bg-elevated px-2 py-1.5 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/30',
-            isCustomRange ? 'border-accent text-accent' : 'border-line text-ink-secondary',
+            'rounded-lg border bg-glass-1 px-2 py-1.5 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/30',
+            isCustomRange ? 'border-accent text-accent' : 'border-glass-edge text-ink-secondary',
           )}
         />
         <Button
@@ -552,7 +552,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
       )}
 
       {data && buckets.length > 0 && (
-        <div className="divide-y divide-line">
+        <div className="divide-y divide-glass-edge">
           {buckets.map(bucket => {
             const isExpanded = expanded.has(bucket.key);
             const shouldCollapse = bucket.products.length > TOP_N_DEFAULT;
@@ -636,8 +636,8 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                 {!isEmpty && (
                   <div className="overflow-auto max-h-[70vh]">
                     <table className="w-full text-xs sm:text-sm min-w-[680px]">
-                      <thead className="sticky top-0 z-[5] bg-elevated">
-                        <tr className="text-ink-secondary border-y border-line bg-elevated2/40">
+                      <thead className="sticky top-0 z-[5] bg-glass-1">
+                        <tr className="text-ink-secondary border-y border-glass-edge bg-glass-2/40">
                           <th className="px-4 sm:px-5 py-2 text-start font-medium">מוצר</th>
                           {bucket.hasOrders && (
                             <th className="px-3 py-2 text-end font-medium w-[80px]">
@@ -680,11 +680,11 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                           return (
                             <tr
                               key={`${bucket.key}-${p.productId}-${i}`}
-                              className="border-b border-line/60 hover:bg-elevated2/40"
+                              className="border-b border-glass-edge/60 hover:bg-glass-2/40"
                             >
                               <td className="px-4 sm:px-5 py-2 text-ink">
                                 <div className="flex items-center gap-2">
-                                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-elevated2 text-[10px] font-bold text-ink-secondary tabular-nums shrink-0">
+                                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-glass-2 text-[10px] font-bold text-ink-secondary tabular-nums shrink-0">
                                     {i + 1}
                                   </span>
                                   <span className="truncate">{p.productTitle}</span>
@@ -772,7 +772,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
 
                 {/* Show more / show less */}
                 {shouldCollapse && (
-                  <div className="px-4 sm:px-5 py-2 bg-elevated2/30 border-t border-line/60">
+                  <div className="px-4 sm:px-5 py-2 bg-glass-2/30 border-t border-glass-edge/60">
                     <Button
                       variant="ghost"
                       onClick={() => toggle(bucket.key)}
@@ -837,7 +837,7 @@ function SummaryCard({
       : null;
 
   return (
-    <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gradient-to-l from-accent/5 to-elevated border-b border-line">
+    <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gradient-to-l from-accent/5 to-elevated border-b border-glass-edge">
       <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-base sm:text-lg font-bold text-ink truncate">
@@ -876,7 +876,7 @@ function SummaryCard({
       </div>
 
       {summary.days > 1 && (
-        <div className="mt-3 pt-3 border-t border-line/60 flex items-center justify-between gap-3 flex-wrap text-[10px] sm:text-xs text-ink-muted tabular-nums">
+        <div className="mt-3 pt-3 border-t border-glass-edge/60 flex items-center justify-between gap-3 flex-wrap text-[10px] sm:text-xs text-ink-muted tabular-nums">
           <span>
             ממוצע ליום:
             <span className="text-ink-secondary font-medium ms-1">
@@ -912,7 +912,7 @@ function Stat({
   return (
     <div
       className={cn(
-        'rounded-lg bg-elevated border border-line px-2.5 sm:px-3 py-1.5 sm:py-2',
+        'rounded-lg bg-glass-1 border border-glass-edge px-2.5 sm:px-3 py-1.5 sm:py-2',
         className,
       )}
     >

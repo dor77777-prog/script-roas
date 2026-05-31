@@ -13,7 +13,7 @@
 //      bg-status-warning  → bg-status-orange
 //      bg-status-success  → bg-status-green
 //      text-status-error  → text-status-red
-//      border-ink-divider → border-line-subtle
+//      border-ink-divider → border-glass-edge
 //      bg-ink-bgSubtle    → bg-canvas
 //  - All substitutions use tokens present in tailwind.config.ts and used
 //    by the existing operator panels (TokenFailuresTable, JobsTable, etc.).
@@ -89,7 +89,7 @@ function BucRowCard({ row }: { row: BucRow }) {
     (Date.now() - new Date(row.last_updated_at).getTime()) / 60_000,
   );
   return (
-    <div className="border border-line-subtle rounded-md p-4">
+    <div className="border border-glass-edge rounded-md p-4">
       <div className="flex items-center justify-between mb-3">
         <div>
           <span className="font-semibold">{row.store_id}</span>

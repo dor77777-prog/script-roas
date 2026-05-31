@@ -323,7 +323,7 @@ export function AdsDrawer({
           isFullscreen && 'w-full sm:w-full max-w-full',
         )}
       >
-        <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-line-subtle">
+        <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-glass-edge">
           <div className="min-w-0 flex items-center gap-2.5">
             <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent/10 text-accent shrink-0">
               <Layers size={16} />
@@ -389,9 +389,9 @@ export function AdsDrawer({
                   to stick within. Drawer body already scrolls, but the inner
                   overflow-x-auto we used to have here scoped sticky to a
                   wrapper that didn't scroll vertically. */}
-              <div className="rounded-xl border border-line-subtle overflow-auto max-h-[60vh]">
+              <div className="rounded-xl border border-glass-edge overflow-auto max-h-[60vh]">
                 <table className="w-full text-xs sm:text-sm min-w-[720px]">
-                  <thead className="bg-elevated2/60 sticky top-0 z-[5]">
+                  <thead className="bg-glass-2/60 sticky top-0 z-[5]">
                     <tr className="text-ink-secondary">
                       <th className="px-2 py-2 w-[36px]" aria-label="סימון" />
                       <AdSortHeader label="מודעה"     col="name"        sortKey={sortKey} dir={sortDir} onClick={handleSort} align="start"  />
@@ -426,7 +426,7 @@ export function AdsDrawer({
                         <tr
                           key={a.adId || a.adName || i}
                           className={cn(
-                            'border-t border-line-subtle transition-opacity',
+                            'border-t border-glass-edge transition-opacity',
                             isOptimized && 'opacity-50 hover:opacity-100',
                           )}
                         >
@@ -480,7 +480,7 @@ export function AdsDrawer({
                               const tone =
                                 adAttr.trust.level === 'high'    ? 'bg-status-greenBg/60 text-status-green'
                               : adAttr.trust.level === 'medium'  ? 'bg-status-warningBg text-status-warningFg'
-                              : adAttr.trust.level === 'unknown' ? 'bg-elevated2 text-ink-secondary'
+                              : adAttr.trust.level === 'unknown' ? 'bg-glass-2 text-ink-secondary'
                               :                                    'bg-status-redBg/60 text-status-red';
                               const tooltip =
                                 `ROAS אמיתי · ${adAttr.trust.label} (${adAttr.trust.score.toFixed(0)}/100)\n\n` +
@@ -558,7 +558,7 @@ function Stat({
   accent?: 'green' | 'red';
 }) {
   return (
-    <div className="rounded-lg border border-line-subtle bg-elevated2/30 px-2.5 py-2">
+    <div className="rounded-lg border border-glass-edge bg-glass-2/30 px-2.5 py-2">
       <div className="text-[10px] text-ink-muted uppercase tracking-wide leading-tight">{label}</div>
       <div className={cn(
         'text-xs sm:text-sm font-semibold tabular-nums mt-0.5',

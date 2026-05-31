@@ -260,7 +260,7 @@ export function Dashboard() {
             inside <Header> have a home. */}
         <header
           role="banner"
-          className="sticky top-0 z-30 bg-elevated/85 backdrop-blur-xl border-b border-line-subtle px-4 py-2 flex items-center justify-between md:justify-end gap-2"
+          className="sticky top-0 z-30 bg-glass-1/85 backdrop-blur-xl border-b border-glass-edge px-4 py-2 flex items-center justify-between md:justify-end gap-2"
         >
           {/* Mobile-only hamburger — opens the off-canvas Sidebar drawer.
               On md and up the Sidebar is the persistent right-rail, so the
@@ -500,7 +500,7 @@ function AnalysisTab({
 }) {
   return (
     <Tabs.Root defaultValue="trends" className="flex flex-col gap-4">
-      <Tabs.List className="flex gap-2 border-b border-line-subtle">
+      <Tabs.List className="flex gap-2 border-b border-glass-edge">
         <Tabs.Trigger
           value="trends"
           className="px-3 py-2 text-sm data-[state=active]:font-medium data-[state=active]:border-b-2 data-[state=active]:border-accent"
@@ -591,7 +591,7 @@ function CampaignsTab({
       />
       <Filters filters={filters} stores={data.stores} onChange={setFilters} />
       <QuadrantScatterCard filters={filters} />
-      <div className="rounded-xl bg-elevated border border-line-subtle shadow-sm overflow-hidden">
+      <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-sm overflow-hidden">
         <CampaignsTable
           range={filters.range}
           store={filters.store}
@@ -657,7 +657,7 @@ function ProductsTab({
         <div
           role="tablist"
           aria-label="תצוגות בטאב מוצרים"
-          className="inline-flex rounded-lg border border-line bg-elevated overflow-hidden divide-x divide-line"
+          className="inline-flex rounded-lg border border-glass-edge bg-glass-1 overflow-hidden divide-x divide-glass-edge"
           dir="ltr"
         >
           {PRODUCTS_SUBTABS.map((t) => (
@@ -682,7 +682,7 @@ function ProductsTab({
       </div>
 
       {subTab === 'table' && (
-        <div className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
+        <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-sm overflow-hidden">
           <ProductsTable
             range={filters.range}
             store={filters.store}
@@ -726,7 +726,7 @@ function DetailTab({
         description="כל שורה בטבלה היא (יום × חנות) — הוצאות פייסבוק, גוגל, הכנסות, ROAS, ורווח. עד 100 שורות אחרונות בטווח הנבחר. ROAS אדום עם '0' = יום שהוצאת בו כסף אבל לא היו מכירות (כשל)."
       />
       <Filters filters={filters} stores={stores} onChange={setFilters} />
-      <div className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
+      <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-sm overflow-hidden">
         <DetailTable rows={filtered.cur} bare />
       </div>
     </div>

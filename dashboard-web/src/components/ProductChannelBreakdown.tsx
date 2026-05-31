@@ -84,11 +84,11 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
           מכירות לפי ערוץ של המוצרים המשויכים
         </span>
       </h3>
-      <div className="rounded-xl border border-line-subtle bg-elevated2/30 p-3 space-y-3">
+      <div className="rounded-xl border border-glass-edge bg-glass-2/30 p-3 space-y-3">
         {!chipHidden && (
           <div
             title="current state, not date-versioned"
-            className="rounded-md bg-elevated2 border border-line-subtle px-2.5 py-1.5 text-[11px] text-ink-muted flex items-center gap-1.5"
+            className="rounded-md bg-glass-2 border border-glass-edge px-2.5 py-1.5 text-[11px] text-ink-muted flex items-center gap-1.5"
           >
             <Info size={12} className="shrink-0 text-ink-subtle" />
             <span className="leading-relaxed">
@@ -126,12 +126,12 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
               Google, TikTok) read CHART_COLORS for brand-true colors that
               match the per-platform lines elsewhere in the dashboard.
               Direct + Other stay neutral grays (they aren't paid identities). */}
-          <div className="h-2.5 rounded-full bg-elevated2 overflow-hidden flex">
+          <div className="h-2.5 rounded-full bg-glass-2 overflow-hidden flex">
             <div className="h-full" style={{ width: `${(fb / total) * 100}%`,     background: CHART_COLORS.meta }} />
             <div className="h-full" style={{ width: `${(google / total) * 100}%`, background: CHART_COLORS.google }} />
             <div className="h-full" style={{ width: `${(tiktok / total) * 100}%`, background: CHART_COLORS.tiktok }} />
-            <div className="h-full bg-text-muted"  style={{ width: `${(direct / total) * 100}%` }} />
-            <div className="h-full bg-text-subtle" style={{ width: `${(other / total) * 100}%` }} />
+            <div className="h-full bg-ink-muted"  style={{ width: `${(direct / total) * 100}%` }} />
+            <div className="h-full bg-ink-subtle" style={{ width: `${(other / total) * 100}%` }} />
           </div>
         </div>
 

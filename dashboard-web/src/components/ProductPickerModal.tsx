@@ -230,9 +230,9 @@ export function ProductPickerModal({
       />
       <div
         dir="rtl"
-        className="relative w-full h-full m-0 sm:m-auto sm:w-auto sm:max-w-[560px] sm:max-h-[88vh] sm:h-auto bg-elevated rounded-none sm:rounded-2xl shadow-elevated border-0 sm:border sm:border-line-subtle flex flex-col"
+        className="relative w-full h-full m-0 sm:m-auto sm:w-auto sm:max-w-[560px] sm:max-h-[88vh] sm:h-auto bg-glass-1 rounded-none sm:rounded-2xl shadow-elevated border-0 sm:border sm:border-glass-edge flex flex-col"
       >
-        <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-line-subtle">
+        <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-glass-edge">
           <div className="min-w-0 flex items-center gap-2.5">
             <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent/10 text-accent shrink-0">
               <Package size={16} />
@@ -261,7 +261,7 @@ export function ProductPickerModal({
           </Button>
         </header>
 
-        <div className="px-4 sm:px-5 py-3 border-b border-line-subtle">
+        <div className="px-4 sm:px-5 py-3 border-b border-glass-edge">
           {!isLoading && !usingCatalog && (
             <div className="mb-2.5 rounded-md bg-status-warningBg border border-status-warning/30 px-2.5 py-2 text-[11px] text-status-warningFg leading-relaxed">
               <strong>הקטלוג עוד לא סונכרן.</strong> מוצגים רק מוצרים שכבר ביצעו
@@ -293,7 +293,7 @@ export function ProductPickerModal({
               value={query}
               onChange={e => setQuery(e.target.value)}
               placeholder="חפש מוצר…"
-              className="w-full rounded-lg border border-line bg-elevated ps-3 pe-9 py-2 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
+              className="w-full rounded-lg border border-glass-edge bg-glass-1 ps-3 pe-9 py-2 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
               autoFocus
             />
           </div>
@@ -327,7 +327,7 @@ export function ProductPickerModal({
                         'w-full justify-start h-auto px-3 py-2 gap-3',
                         isOn
                           ? 'bg-accent/10 hover:bg-accent/15'
-                          : 'hover:bg-elevated2',
+                          : 'hover:bg-glass-2',
                       )}
                       aria-pressed={isOn}
                     >
@@ -336,7 +336,7 @@ export function ProductPickerModal({
                           'inline-flex items-center justify-center w-5 h-5 rounded border-2 shrink-0 transition-colors',
                           isOn
                             ? 'bg-accent border-accent text-white'
-                            : 'border-line bg-elevated',
+                            : 'border-glass-edge bg-glass-1',
                         )}
                       >
                         {isOn && <Check size={12} strokeWidth={3} />}
@@ -388,7 +388,7 @@ export function ProductPickerModal({
           )}
         </div>
 
-        <footer className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-t border-line-subtle bg-elevated2/30">
+        <footer className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-t border-glass-edge bg-glass-2/30">
           <span className="text-[11px] sm:text-xs text-ink-secondary tabular-nums">
             <strong className="text-ink">{selected.size}</strong> נבחרו
           </span>

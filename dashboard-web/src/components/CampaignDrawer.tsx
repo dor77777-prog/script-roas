@@ -797,7 +797,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
           isFullscreen && 'w-full sm:w-full max-w-full',
         )}
       >
-        <header className="sticky top-0 bg-elevated/95 backdrop-blur-md z-10 px-4 sm:px-6 py-4 border-b border-line-subtle">
+        <header className="sticky top-0 bg-glass-1/95 backdrop-blur-md z-10 px-4 sm:px-6 py-4 border-b border-glass-edge">
           <div className="flex items-start justify-between gap-3 mb-2">
             <div className="flex items-center gap-2 min-w-0 flex-1">
               <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent/8 text-accent shrink-0">
@@ -890,7 +890,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                   הוצאה ↔ ערך המרות לאורך הזמן
                 </h3>
               </div>
-              <ChartContainer className="h-40 sm:h-44 rounded-xl bg-elevated2/40 border border-line-subtle p-2" height="100%">
+              <ChartContainer className="h-40 sm:h-44 rounded-xl bg-glass-2/40 border border-glass-edge p-2" height="100%">
                 <AreaChart data={summary.dailyArr} margin={{ top: 4, right: 8, left: 8, bottom: 0 }}>
                   <defs>
                     <linearGradient id="drawer-spend" x1="0" y1="0" x2="0" y2="1">
@@ -1059,7 +1059,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
               positive: 'bg-status-greenBg/40 border-status-green/30 text-status-green',
               warning:  'bg-status-warningBg border-status-warning/30 text-status-warningFg',
               negative: 'bg-status-redBg/40 border-status-red/30 text-status-red',
-              neutral:  'bg-elevated2 border-line-subtle text-ink-secondary',
+              neutral:  'bg-glass-2 border-glass-edge text-ink-secondary',
             };
             return (
               <section>
@@ -1073,7 +1073,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                   </h3>
                   <div className="flex items-center gap-3 flex-wrap">
                     {/* Analysis baseline toggle — same UX as CampaignsTable. */}
-                    <div className="inline-flex items-center gap-0.5 rounded-md border border-line-subtle bg-elevated p-0.5 text-[10px]">
+                    <div className="inline-flex items-center gap-0.5 rounded-md border border-glass-edge bg-glass-1 p-0.5 text-[10px]">
                       <Button
                         type="button"
                         variant="ghost"
@@ -1109,13 +1109,13 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                         type="checkbox"
                         checked={showRoasOverlay}
                         onChange={e => setShowRoasOverlay(e.target.checked)}
-                        className="rounded border-line-subtle text-accent focus:ring-accent/30 cursor-pointer"
+                        className="rounded border-glass-edge text-accent focus:ring-accent/30 cursor-pointer"
                       />
                       הוסף ROAS לגרף
                     </label>
                   </div>
                 </div>
-                <ChartContainer className="h-40 sm:h-44 rounded-xl bg-elevated2/40 border border-line-subtle p-2" dir="ltr" height="100%">
+                <ChartContainer className="h-40 sm:h-44 rounded-xl bg-glass-2/40 border border-glass-edge p-2" dir="ltr" height="100%">
                   <LineChart data={chartData} margin={{ top: 8, right: showRoasOverlay ? 56 : 16, left: 4, bottom: 0 }}>
                     <XAxis
                       dataKey="date"
@@ -1188,7 +1188,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                               </ChartTooltipRow>
                             )}
                             {showPrevLine && d.prevCpm != null && (
-                              <div className="mt-1 pt-1 border-t border-line-subtle">
+                              <div className="mt-1 pt-1 border-t border-glass-edge">
                                 <div className="text-ink-muted text-[10px] mb-0.5">
                                   תקופה קודמת{d.prevDate ? ` (${formatDate(d.prevDate)})` : ''}:
                                 </div>
@@ -1345,7 +1345,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                     )}
                   </h3>
                 </div>
-                <p className="text-[11px] text-ink-muted leading-relaxed bg-elevated2/40 rounded-lg px-3 py-2 mb-2">
+                <p className="text-[11px] text-ink-muted leading-relaxed bg-glass-2/40 rounded-lg px-3 py-2 mb-2">
                   ה-TikTok advertiser שלנו (uzoshop) משרת מספר חנויות. בחר לאיזו חנות הקמפיין שייך —
                   קודם תייג חנות, אח״כ שייך מוצרים. שינוי חל מיידית על מיפוי המוצרים למטה; הסבב הבא של cron-live-heavy (עד 30 דק׳)
                   ירשום את ה-spend תחת החנות הנכונה ב-<code>campaigns_daily</code>. שורות היסטוריות נשארות תחת uzoshop.
@@ -1384,7 +1384,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                       }
                     }
                   }}
-                  className="w-full text-sm bg-elevated border border-line rounded px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="w-full text-sm bg-glass-1 border border-glass-edge rounded px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <option value="__unmapped__">(לא ממופה · ברירת מחדל uzoshop)</option>
                   <option value="uzoshop">uzoshop</option>
@@ -1424,7 +1424,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                 </Button>
               </div>
               {mappedIds.length === 0 ? (
-                <p className="text-[11px] text-ink-muted leading-relaxed bg-elevated2/40 rounded-lg px-3 py-2">
+                <p className="text-[11px] text-ink-muted leading-relaxed bg-glass-2/40 rounded-lg px-3 py-2">
                   לא משויכים מוצרים. לאחר שיוך, ה-ROAS יחושב מחדש לפי מכירות{' '}
                   Shopify אמיתיות במקום ערך ההמרה ש-{summary.platform} דיווחה
                   (לרוב מנופח).
@@ -1584,7 +1584,7 @@ function DrawerStat({ label, value, prefix, chip, primary, compact, accent }: {
   return (
     <div
       className={cn(
-        'rounded-lg border border-line-subtle bg-elevated2/30',
+        'rounded-lg border border-glass-edge bg-glass-2/30',
         compact ? 'px-2.5 py-2' : 'px-3 py-2.5 sm:px-3.5 sm:py-3',
       )}
     >

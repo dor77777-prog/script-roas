@@ -34,7 +34,7 @@ export function AnalysisTrendsTab({ data, filtered, filters, setFilters }: Props
         title="מגמת ROAS לאורך זמן"
         description="קו לכל חנות. הקו האדום-מקווקו מציין את היעד הפנימי שלך — ROAS 3.0. רוצה לראות חנות אחת? סנן למעלה."
       />
-      <div className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
+      <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-sm overflow-hidden">
         <RoasChart data={filtered.series} stores={filtered.visibleStores} rows={filtered.cur} bare />
       </div>
 

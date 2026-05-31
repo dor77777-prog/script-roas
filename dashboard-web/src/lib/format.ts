@@ -83,7 +83,7 @@ export function fmtCount(n: number): React.ReactElement {
 export function fmtMoney(n: number, code: string = 'CAD'): React.ReactElement {
   return bdi(
     React.createElement(React.Fragment, null,
-      React.createElement('span', { className: 'text-text-muted font-medium pe-1' }, code),
+      React.createElement('span', { className: 'text-ink-muted font-medium pe-1' }, code),
       fixMinus(MONEY.format(Math.round(n))),
     ),
   );

@@ -22,8 +22,8 @@ describe('CHART_COLORS — brand-true palette (2026-05-30 PLATFORM_TOKENS rev)',
     expect(CHART_COLORS.shopify).toBe('var(--chart-platform-shopify)');
   });
 
-  it('CPM routes to the status-blue semantic token', () => {
-    expect(CHART_COLORS.cpm).toBe('var(--status-blue)');
+  it('CPM routes to the band-blue grading token', () => {
+    expect(CHART_COLORS.cpm).toBe('var(--band-blue)');
   });
 
   it('CPM previous-period comparator routes to the mode-aware --chart-cpm-prev CSS var', () => {
@@ -32,16 +32,16 @@ describe('CHART_COLORS — brand-true palette (2026-05-30 PLATFORM_TOKENS rev)',
     expect(CHART_COLORS.cpmPrev).toBe('var(--chart-cpm-prev)');
   });
 
-  it('ROAS routes to the status-green semantic token', () => {
-    expect(CHART_COLORS.roas).toBe('var(--status-green)');
+  it('ROAS routes to the band-green grading token', () => {
+    expect(CHART_COLORS.roas).toBe('var(--band-green)');
   });
 
-  it('value routes to the text-secondary semantic token', () => {
-    expect(CHART_COLORS.value).toBe('var(--text-secondary)');
+  it('value routes to the --text-2 secondary ink stop', () => {
+    expect(CHART_COLORS.value).toBe('var(--text-2)');
   });
 
-  it('Spend routes to the status-red semantic token', () => {
-    expect(CHART_COLORS.spend).toBe('var(--status-red)');
+  it('Spend routes to the band-red grading token', () => {
+    expect(CHART_COLORS.spend).toBe('var(--band-red)');
   });
 
   it('CHART_AXIS_COLOR resolves to the theme-aware --chart-axis var', () => {

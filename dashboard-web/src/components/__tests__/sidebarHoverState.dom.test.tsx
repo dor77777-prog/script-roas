@@ -17,14 +17,14 @@ function renderSidebar() {
 }
 
 describe('Sidebar — hover state must differ from active state', () => {
-  it('inactive nav item hover classes do NOT include bg-elevated2', () => {
+  it('inactive nav item hover classes do NOT include bg-glass-2', () => {
     renderSidebar();
     // Both rails render — grab the first P&L button (desktop rail).
     const inactive = screen.getAllByRole('tab', { name: /P&L/ })[0];
     const cls = inactive.className;
-    // Inactive default state must NOT use bg-elevated2 (the active bg).
-    // Hover may use bg-elevated (one step lighter) but never bg-elevated2.
-    expect(cls).not.toMatch(/\bhover:bg-elevated2\b/);
+    // Inactive default state must NOT use bg-glass-2 (the active bg).
+    // Hover may use bg-glass-1 (one step lighter) but never bg-glass-2.
+    expect(cls).not.toMatch(/\bhover:bg-glass-2\b/);
   });
 
   it('active nav item carries a 1-px ring for depth (visually distinct from hover)', () => {

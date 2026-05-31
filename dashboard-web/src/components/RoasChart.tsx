@@ -15,6 +15,7 @@ import {
   ChartTooltipRow,
   ChartTooltipValue,
 } from '@/components/ui/chart/ChartTooltip';
+import { CHART_WARNING_COLOR } from '@/lib/chartColors';
 
 // The cyan primary color is the visual anchor — the first store's line
 // gets bold label treatment to guide the eye. Using STORE_COLORS directly
@@ -184,11 +185,12 @@ export function RoasChart({ data, stores, rows, bare = false }: Props) {
                           cy={props.cy}
                           r={8}
                           fill="transparent"
-                          // Heavy-refund-day warning ring. Uses the
-                          // theme-aware orange status token (was a raw
-                          // amber-500 RGB literal that didn't shift in
-                          // dark mode and got hard to spot on dark canvas).
-                          stroke="var(--status-orange)"
+                          // Heavy-refund-day warning ring. Routes through
+                          // chartColors.ts (CHART_WARNING_COLOR) so the
+                          // `local/no-cross-palette-import` rule stays
+                          // green — chart files cannot directly consume
+                          // --band-* / --status-* (see Q1 in v2 plan).
+                          stroke={CHART_WARNING_COLOR}
                           strokeWidth={2}
                         />
                       </g>
@@ -212,7 +214,7 @@ export function RoasChart({ data, stores, rows, bare = false }: Props) {
   if (bare) return <div className="p-3 sm:p-5">{chart}</div>;
 
   return (
-    <section className="rounded-xl bg-elevated border border-line p-3 sm:p-5 shadow-sm">
+    <section className="rounded-xl bg-glass-1 border border-glass-edge p-3 sm:p-5 shadow-sm">
       <h2 className="flex items-center gap-2 text-sm sm:text-base font-semibold text-ink mb-3 sm:mb-4">
         <TrendingUp size={18} className="text-ink-secondary" />
         מגמת ROAS לאורך זמן

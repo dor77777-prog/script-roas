@@ -256,7 +256,7 @@ export function ResetData() {
           aria-modal="true"
           aria-labelledby="reset-confirm-title"
         >
-          <div className="bg-elevated border-0 sm:border sm:border-line rounded-none sm:rounded p-4 w-full h-full sm:h-auto sm:max-w-md sm:mx-4 flex flex-col">
+          <div className="bg-glass-1 border-0 sm:border sm:border-glass-edge rounded-none sm:rounded p-4 w-full h-full sm:h-auto sm:max-w-md sm:mx-4 flex flex-col">
             <div className="flex items-start justify-between mb-3 shrink-0">
               <h3
                 id="reset-confirm-title"
@@ -331,7 +331,7 @@ export function ResetData() {
                   הקלד את הטוקן הבא בדיוק כדי לאשר:
                 </span>
                 <code
-                  className="block bg-canvas border border-line-subtle rounded px-2 py-1 text-xs text-status-orange mb-2"
+                  className="block bg-canvas border border-glass-edge rounded px-2 py-1 text-xs text-status-orange mb-2"
                   dir="ltr"
                 >
                   {CONFIRM_TOKEN_FOR_SCOPE[active.scope]}
@@ -340,7 +340,7 @@ export function ResetData() {
                   type="text"
                   value={typed}
                   onChange={(e) => setTyped(e.target.value)}
-                  className="w-full bg-canvas border border-line-subtle rounded px-2 py-1 text-sm text-ink"
+                  className="w-full bg-canvas border border-glass-edge rounded px-2 py-1 text-sm text-ink"
                   dir="ltr"
                   placeholder="הקלד כאן…"
                   autoFocus
@@ -355,7 +355,7 @@ export function ResetData() {
               )}
             </div>
 
-            <div className="sticky bottom-0 bg-elevated pt-2 flex justify-end gap-2 shrink-0 border-t border-line-subtle sm:border-t-0 -mx-4 px-4 sm:mx-0 sm:px-0">
+            <div className="sticky bottom-0 bg-glass-1 pt-2 flex justify-end gap-2 shrink-0 border-t border-glass-edge sm:border-t-0 -mx-4 px-4 sm:mx-0 sm:px-0">
               <Button
                 type="button"
                 variant="secondary"

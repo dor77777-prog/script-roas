@@ -7,7 +7,7 @@ import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const sheetVariants = cva(
-  'fixed z-50 bg-elevated text-ink shadow-xl border-line transition ease-out animate-in slide-in-from-end',
+  'fixed z-50 bg-glass-1 text-ink shadow-xl border-glass-edge transition ease-out animate-in slide-in-from-end',
   {
     variants: {
       side: {
@@ -36,7 +36,7 @@ export const SheetContent = forwardRef<
   SheetContentProps
 >(({ className, side, children, ...props }, ref) => (
   <RadixDialog.Portal>
-    <RadixDialog.Overlay className="fixed inset-0 z-50 bg-overlay backdrop-blur-sm animate-in fade-in-0" />
+    <RadixDialog.Overlay className="fixed inset-0 z-50 bg-glass-3 backdrop-blur-sm animate-in fade-in-0" />
     <RadixDialog.Content
       ref={ref}
       className={cn(sheetVariants({ side }), className)}
@@ -45,7 +45,7 @@ export const SheetContent = forwardRef<
       {children}
       <SheetClose
         aria-label="סגור"
-        className="absolute end-3 top-3 rounded-md p-1 text-ink-muted hover:bg-elevated2"
+        className="absolute end-3 top-3 rounded-md p-1 text-ink-muted hover:bg-glass-2"
       >
         <X size={16} />
       </SheetClose>

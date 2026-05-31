@@ -58,13 +58,13 @@ export function CollapsibleSection({
   }
 
   return (
-    <section className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
+    <section className="rounded-xl bg-glass-1 border border-glass-edge shadow-sm overflow-hidden">
       <Button
         type="button"
         variant="ghost"
         onClick={toggle}
         aria-expanded={open}
-        className="w-full justify-between h-auto gap-3 px-4 sm:px-5 py-3 sm:py-3.5 hover:bg-elevated2/50 active:bg-elevated2"
+        className="w-full justify-between h-auto gap-3 px-4 sm:px-5 py-3 sm:py-3.5 hover:bg-glass-2/50 active:bg-glass-2"
       >
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           {icon && <span className="text-ink-secondary shrink-0">{icon}</span>}
@@ -92,7 +92,7 @@ export function CollapsibleSection({
       </Button>
       {/* Render children only after hydration so the persisted state applies
           on first paint without a layout jump. */}
-      {hydrated && open && <div className="border-t border-line">{children}</div>}
+      {hydrated && open && <div className="border-t border-glass-edge">{children}</div>}
     </section>
   );
 }

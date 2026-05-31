@@ -194,11 +194,11 @@ export function BillingSettings({ storeNames }: Props) {
             role="dialog"
             aria-modal="true"
             aria-labelledby="billing-settings-title"
-            className="bg-elevated w-full sm:max-w-3xl sm:mx-4 rounded-t-2xl sm:rounded-2xl shadow-elevated border border-line-subtle max-h-[92vh] flex flex-col"
+            className="bg-glass-1 w-full sm:max-w-3xl sm:mx-4 rounded-t-2xl sm:rounded-2xl shadow-elevated border border-glass-edge max-h-[92vh] flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}
-            <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-line-subtle">
+            <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-glass-edge">
               <div className="flex items-center gap-2 min-w-0">
                 <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent/10 text-accent shrink-0">
                   <Receipt size={16} />
@@ -223,7 +223,7 @@ export function BillingSettings({ storeNames }: Props) {
             </header>
 
             {/* Tabs */}
-            <nav className="px-4 sm:px-5 py-2 border-b border-line-subtle flex items-center gap-1">
+            <nav className="px-4 sm:px-5 py-2 border-b border-glass-edge flex items-center gap-1">
               {([
                 { key: 'recurring' as Tab, label: 'חודשי קבוע', count: recurring.length },
                 { key: 'onetime' as Tab, label: 'חד-פעמיים', count: oneTime.length },
@@ -408,7 +408,7 @@ function RecurringTab({
                 {planErrorStores.map(m => (
                   <li
                     key={m.storeId}
-                    className="rounded-md bg-elevated border border-status-warning/30 px-2.5 py-1.5"
+                    className="rounded-md bg-glass-1 border border-status-warning/30 px-2.5 py-1.5"
                   >
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-semibold text-ink shrink-0">
@@ -462,7 +462,7 @@ function RecurringTab({
                   return (
                     <li
                       key={m.storeId}
-                      className="flex items-center gap-2 rounded-md bg-elevated border border-line-subtle px-2.5 py-1.5"
+                      className="flex items-center gap-2 rounded-md bg-glass-1 border border-glass-edge px-2.5 py-1.5"
                     >
                       <span className="text-xs text-ink-secondary shrink-0">
                         {m.storeName}
@@ -516,8 +516,8 @@ function RecurringTab({
             <li
               key={r.id}
               className={cn(
-                'rounded-lg border bg-elevated',
-                r.active ? 'border-line-subtle' : 'border-line-subtle/50 opacity-60',
+                'rounded-lg border bg-glass-1',
+                r.active ? 'border-glass-edge' : 'border-glass-edge/50 opacity-60',
               )}
             >
               {editing === r.id ? (
@@ -723,7 +723,7 @@ function RecurringEditForm({
               if (e.key === 'Enter') commit();
               if (e.key === 'Escape') cancel();
             }}
-            className="w-full rounded-lg border border-line bg-elevated px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
+            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
           />
         </div>
         <div>
@@ -731,7 +731,7 @@ function RecurringEditForm({
           <select
             value={store}
             onChange={e => setStore(e.target.value)}
-            className="w-full rounded-lg border border-line bg-elevated px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
+            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
           >
             <option value="All">כל החנויות</option>
             {storeNames.map(s => (
@@ -744,7 +744,7 @@ function RecurringEditForm({
           <select
             value={source}
             onChange={e => setSource(e.target.value as CostSource)}
-            className="w-full rounded-lg border border-line bg-elevated px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
+            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
           >
             {Object.entries(SOURCE_LABEL).map(([k, label]) => (
               <option key={k} value={k}>{label}</option>
@@ -769,10 +769,10 @@ function RecurringEditForm({
                 if (e.key === 'Escape') cancel();
               }}
               className={cn(
-                'w-full rounded-lg border bg-elevated px-2.5 py-1.5 text-sm focus:outline-none tabular-nums',
+                'w-full rounded-lg border bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none tabular-nums',
                 editError
                   ? 'border-status-red focus:border-status-red focus:shadow-[0_0_0_2px_rgba(220,38,38,0.15)]'
-                  : 'border-line focus:border-accent focus:shadow-focus',
+                  : 'border-glass-edge focus:border-accent focus:shadow-focus',
               )}
             />
           ) : (
@@ -789,10 +789,10 @@ function RecurringEditForm({
                 if (e.key === 'Escape') cancel();
               }}
               className={cn(
-                'w-full rounded-lg border bg-elevated px-2.5 py-1.5 text-sm focus:outline-none tabular-nums',
+                'w-full rounded-lg border bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none tabular-nums',
                 editError
                   ? 'border-status-red focus:border-status-red focus:shadow-[0_0_0_2px_rgba(220,38,38,0.15)]'
-                  : 'border-line focus:border-accent focus:shadow-focus',
+                  : 'border-glass-edge focus:border-accent focus:shadow-focus',
               )}
             />
           )}
@@ -823,7 +823,7 @@ function RecurringEditForm({
               'flex-1 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors border h-auto',
               kind === 'fixed'
                 ? 'bg-accent text-white border-accent hover:bg-accent/90'
-                : 'bg-elevated text-ink-secondary hover:bg-elevated2 border-line',
+                : 'bg-glass-1 text-ink-secondary hover:bg-glass-2 border-glass-edge',
             )}
           >
             סכום קבוע (CAD)
@@ -839,7 +839,7 @@ function RecurringEditForm({
               'flex-1 px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors border h-auto',
               kind === 'percent'
                 ? 'bg-accent text-white border-accent hover:bg-accent/90'
-                : 'bg-elevated text-ink-secondary hover:bg-elevated2 border-line',
+                : 'bg-glass-1 text-ink-secondary hover:bg-glass-2 border-glass-edge',
             )}
           >
             % מהמחזור
@@ -857,7 +857,7 @@ function RecurringEditForm({
           value={notes}
           onChange={e => setNotes(e.target.value)}
           placeholder="לדוגמה: Klaviyo Pro plan, מתחיל מ-12.5%"
-          className="w-full rounded-lg border border-line bg-elevated px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
+          className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
         />
       </div>
       <div className="flex items-center gap-2 pt-1">
@@ -946,7 +946,7 @@ function OneTimeTab({
       ) : (
         <ul className="space-y-2">
           {sorted.map(r => (
-            <li key={r.id} className="rounded-lg border border-line-subtle bg-elevated">
+            <li key={r.id} className="rounded-lg border border-glass-edge bg-glass-1">
               {editing === r.id ? (
                 <OneTimeEditForm
                   item={r}
@@ -1087,7 +1087,7 @@ function OneTimeEditForm({
             type="date"
             value={date}
             onChange={e => setDate(e.target.value)}
-            className="w-full rounded-lg border border-line bg-elevated px-2.5 py-1.5 text-sm tabular-nums focus:outline-none focus:border-accent focus:shadow-focus"
+            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm tabular-nums focus:outline-none focus:border-accent focus:shadow-focus"
           />
         </div>
         <div>
@@ -1095,7 +1095,7 @@ function OneTimeEditForm({
           <select
             value={store}
             onChange={e => setStore(e.target.value)}
-            className="w-full rounded-lg border border-line bg-elevated px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
+            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
           >
             <option value="All">כל החנויות</option>
             {storeNames.map(s => (
@@ -1115,7 +1115,7 @@ function OneTimeEditForm({
             if (e.key === 'Enter') commit();
             if (e.key === 'Escape') cancel();
           }}
-          className="w-full rounded-lg border border-line bg-elevated px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
+          className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
         />
       </div>
       <div className="grid grid-cols-2 gap-2">
@@ -1124,7 +1124,7 @@ function OneTimeEditForm({
           <select
             value={source}
             onChange={e => setSource(e.target.value as CostSource)}
-            className="w-full rounded-lg border border-line bg-elevated px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
+            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
           >
             {Object.entries(SOURCE_LABEL).map(([k, label]) => (
               <option key={k} value={k}>{label}</option>
@@ -1146,10 +1146,10 @@ function OneTimeEditForm({
               if (e.key === 'Escape') cancel();
             }}
             className={cn(
-              'w-full rounded-lg border bg-elevated px-2.5 py-1.5 text-sm focus:outline-none tabular-nums',
+              'w-full rounded-lg border bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none tabular-nums',
               editError
                 ? 'border-status-red focus:border-status-red focus:shadow-[0_0_0_2px_rgba(220,38,38,0.15)]'
-                : 'border-line focus:border-accent focus:shadow-focus',
+                : 'border-glass-edge focus:border-accent focus:shadow-focus',
             )}
           />
           {editError && (
@@ -1167,7 +1167,7 @@ function OneTimeEditForm({
         <input
           value={notes}
           onChange={e => setNotes(e.target.value)}
-          className="w-full rounded-lg border border-line bg-elevated px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
+          className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
         />
       </div>
       <div className="flex items-center gap-2 pt-1">

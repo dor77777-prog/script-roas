@@ -15,6 +15,7 @@ import {
   ChartTooltipRow,
   ChartTooltipValue,
 } from '@/components/ui/chart/ChartTooltip';
+import { QUADRANT_PALETTE, CHART_COLORS } from '@/lib/chartColors';
 import { cn } from '@/lib/utils';
 
 export interface QuadrantPoint {
@@ -48,12 +49,10 @@ function quadrantOf(p: { roas: number; cac: number }, medRoas: number, medCac: n
   return 'loser';
 }
 
-const QUADRANT_FILL: Record<QuadrantTone, string> = {
-  winner: 'var(--status-green)',
-  'efficient-low-roas': 'var(--status-blue)',
-  'profitable-but-expensive': 'var(--status-orange)',
-  loser: 'var(--status-red)',
-};
+// Reads the canonical chart↔band bridge in @/lib/chartColors so
+// `local/no-cross-palette-import` stays clean. See chartColors.ts header
+// for the architectural rationale.
+const QUADRANT_FILL: Record<QuadrantTone, string> = QUADRANT_PALETTE;
 
 export function QuadrantScatter({
   data,
@@ -137,7 +136,7 @@ export function QuadrantScatter({
 
   if (data.length === 0) {
     return (
-      <div className={cn('rounded-xl bg-elevated border border-line p-5', className)}>
+      <div className={cn('rounded-xl bg-glass-1 border border-glass-edge p-5', className)}>
         {title && (
           <h3 className="text-sm sm:text-base font-semibold text-ink mb-2">{title}</h3>
         )}
@@ -149,7 +148,7 @@ export function QuadrantScatter({
   }
 
   return (
-    <div className={cn('rounded-xl bg-elevated border border-line p-3 sm:p-5', className)}>
+    <div className={cn('rounded-xl bg-glass-1 border border-glass-edge p-3 sm:p-5', className)}>
       <div className="flex items-start justify-between gap-2 mb-1 flex-wrap">
         {title && (
           <h3 className="text-sm sm:text-base font-semibold text-ink">{title}</h3>
@@ -238,10 +237,10 @@ export function QuadrantScatter({
                   <ChartTooltipRow color={QUADRANT_FILL[tone]} label="רביעון">
                     <ChartTooltipValue>{toneLabel[tone]}</ChartTooltipValue>
                   </ChartTooltipRow>
-                  <ChartTooltipRow color="var(--status-green)" label="ROAS">
+                  <ChartTooltipRow color={CHART_COLORS.roas} label="ROAS">
                     <ChartTooltipValue>{p.roas.toFixed(2)}</ChartTooltipValue>
                   </ChartTooltipRow>
-                  <ChartTooltipRow color="var(--status-blue)" label="CAC">
+                  <ChartTooltipRow color={CHART_COLORS.cac} label="CAC">
                     <ChartTooltipValue>CAD {Math.round(p.cac).toLocaleString('he-IL')}</ChartTooltipValue>
                   </ChartTooltipRow>
                   <ChartTooltipRow color="var(--accent)" label="הוצאה">

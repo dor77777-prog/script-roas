@@ -77,7 +77,7 @@ export function OperatorSecretBanner() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
               placeholder="הזן את ה-secret…"
-              className="w-full bg-canvas border border-line-subtle rounded px-2 py-1 text-sm text-ink pr-8 focus:border-accent focus:outline-none"
+              className="w-full bg-canvas border border-glass-edge rounded px-2 py-1 text-sm text-ink pr-8 focus:border-accent focus:outline-none"
               dir="ltr"
               autoComplete="off"
             />
@@ -111,7 +111,7 @@ export function OperatorSecretBanner() {
 
   // Secret IS stored → show a subtle affordance to change or clear it
   return (
-    <div className="rounded border border-line-subtle bg-canvas px-3 py-2 flex items-center justify-between text-xs text-ink-secondary">
+    <div className="rounded border border-glass-edge bg-canvas px-3 py-2 flex items-center justify-between text-xs text-ink-secondary">
       <div className="flex items-center gap-1.5">
         <CheckCircle2 className="w-3.5 h-3.5 text-status-green shrink-0" />
         <span>Operator secret מוגדר ב-localStorage.</span>
@@ -129,7 +129,7 @@ export function OperatorSecretBanner() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
                 placeholder="secret חדש…"
-                className="bg-canvas border border-line-subtle rounded px-2 py-0.5 text-xs text-ink pr-7 focus:border-accent focus:outline-none"
+                className="bg-canvas border border-glass-edge rounded px-2 py-0.5 text-xs text-ink pr-7 focus:border-accent focus:outline-none"
                 dir="ltr"
                 autoComplete="off"
               />

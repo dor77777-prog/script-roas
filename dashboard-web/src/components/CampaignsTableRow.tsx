@@ -57,7 +57,7 @@ const TONE_BG: Record<string, string> = {
   orange: 'bg-status-orangeBg text-status-orangeFg',
   green:  'bg-status-greenBg text-status-greenFg',
   blue:   'bg-status-blueBg text-status-blueFg',
-  gray:   'bg-elevated2 text-ink',
+  gray:   'bg-glass-2 text-ink',
 };
 
 type Props = {
@@ -196,7 +196,7 @@ export function CampaignsTableRow({
   return (
     <tr
       className={cn(
-        'border-b border-line-subtle hover:bg-elevated2/40 cursor-pointer transition-opacity',
+        'border-b border-glass-edge hover:bg-glass-2/40 cursor-pointer transition-opacity',
         // Marked rows visually retreat so the user's eye
         // anchors on the un-marked work-list. Hovering brings
         // them back to full opacity so re-reading details
@@ -274,7 +274,7 @@ export function CampaignsTableRow({
       </td>
       <td data-col-id="campaignName" className="px-3 sm:px-5 py-2 max-w-[280px] sm:max-w-[400px]">
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-elevated2 text-[10px] font-bold text-ink-secondary tabular-nums shrink-0">
+          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-glass-2 text-[10px] font-bold text-ink-secondary tabular-nums shrink-0">
             {i + 1}
           </span>
           <div className="min-w-0 flex-1">
@@ -314,7 +314,7 @@ export function CampaignsTableRow({
                   active one. */}
               {isCurrentlyOff && a.lastActiveDate && (
                 <span
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-elevated2 text-ink-muted border border-line-subtle"
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-glass-2 text-ink-muted border border-glass-edge"
                   title={`קמפיין כבוי כרגע. הריצה האחרונה: ${formatLastActiveDate(a.lastActiveDate)}. הנתונים בשורה הם היסטוריים בלבד.`}
                 >
                   ⏸ כבוי · {formatLastActiveDate(a.lastActiveDate)}
@@ -608,7 +608,7 @@ export function CampaignsTableRow({
       // useCampaignTrueRevenue.ts (deterministicRevenue/Units +
       // productTotals).
       shopifyValuePlatform: (
-      <td data-col-id="shopifyValuePlatform" className="px-3 py-2 text-end tabular-nums border-e border-line-subtle/40">
+      <td data-col-id="shopifyValuePlatform" className="px-3 py-2 text-end tabular-nums border-e border-glass-edge/40">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);
@@ -635,7 +635,7 @@ export function CampaignsTableRow({
       ),
       // [2] יח' Shopify · פלטפורמה — deterministic units
       shopifyUnitsPlatform: (
-      <td data-col-id="shopifyUnitsPlatform" className="px-3 py-2 text-end tabular-nums border-e border-line-subtle/40">
+      <td data-col-id="shopifyUnitsPlatform" className="px-3 py-2 text-end tabular-nums border-e border-glass-edge/40">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);

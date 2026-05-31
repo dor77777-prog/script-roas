@@ -15,7 +15,7 @@
 //      text-status-error → text-status-red
 //      text-status-warning → text-status-orange
 //      text-status-success → text-status-green
-//      border-ink-divider → border-line-subtle
+//      border-ink-divider → border-glass-edge
 
 import { CheckCircle2, AlertCircle, XCircle } from 'lucide-react';
 import { getFreshness, type FreshnessRow } from '@/lib/inngest/freshness';
@@ -130,7 +130,7 @@ function FreshnessTableRow({ row }: { row: FreshnessRow }) {
       : '—';
 
   return (
-    <tr className="border-t border-line-subtle">
+    <tr className="border-t border-glass-edge">
       <td className="px-3 py-2 font-semibold">{row.store_id}</td>
       <td className="px-3 py-2 font-mono text-xs">{row.platform}</td>
       <td className="px-3 py-2 font-mono text-xs">{row.scope}</td>

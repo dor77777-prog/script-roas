@@ -15,7 +15,7 @@ export function TabHeader({
   className?: string;
 }) {
   return (
-    <header className={cn('flex flex-col gap-3 pb-3 border-b border-line-subtle mb-4', className)}>
+    <header className={cn('flex flex-col gap-3 pb-3 border-b border-glass-edge mb-4', className)}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-base sm:text-lg font-semibold text-ink leading-tight">{title}</h2>

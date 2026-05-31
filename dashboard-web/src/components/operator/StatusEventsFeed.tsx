@@ -32,26 +32,26 @@ export async function StatusEventsFeed() {
   const events: StatusEventRow[] = await fetchStatusEvents(getSupabaseAdmin());
   if (events.length === 0) {
     return (
-      <section className="border border-line-subtle rounded-lg p-4 text-ink-secondary text-sm">
-        <h3 className="text-base font-medium text-ink-primary mb-2">שינויי סטטוס אחרונים</h3>
+      <section className="border border-glass-edge rounded-lg p-4 text-ink-secondary text-sm">
+        <h3 className="text-base font-medium text-ink mb-2">שינויי סטטוס אחרונים</h3>
         <p>אין אירועי סטטוס עדיין. הראשון יופיע תוך 10 דקות מהפעלת ה-orchestrator.</p>
       </section>
     );
   }
   return (
-    <section className="border border-line-subtle rounded-lg p-4">
-      <h3 className="text-base font-medium text-ink-primary mb-3">
+    <section className="border border-glass-edge rounded-lg p-4">
+      <h3 className="text-base font-medium text-ink mb-3">
         שינויי סטטוס אחרונים <span className="text-xs text-ink-secondary">(50 אחרונים)</span>
       </h3>
       <ul className="space-y-1.5 text-sm">
         {events.map((e) => (
-          <li key={e.id} className="flex items-start gap-2.5 text-ink-primary">
+          <li key={e.id} className="flex items-start gap-2.5 text-ink">
             <span className="mt-0.5 shrink-0">{kindIcon(e.change_kind)}</span>
             <span className="text-ink-secondary shrink-0 text-xs w-24">{relativeHebrew(e.occurred_at)}</span>
             <span className="shrink-0 text-xs text-ink-secondary">{e.store_id} · {e.platform} · {e.entity_type}</span>
             <span className="shrink-0 text-xs font-mono">{e.entity_id}</span>
             <span className="text-xs text-ink-secondary">
-              {e.from_status ?? '—'} → <strong className="text-ink-primary">{e.to_status}</strong>
+              {e.from_status ?? '—'} → <strong className="text-ink">{e.to_status}</strong>
             </span>
           </li>
         ))}

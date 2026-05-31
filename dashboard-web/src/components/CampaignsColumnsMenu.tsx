@@ -160,7 +160,7 @@ export function CampaignsColumnsMenu({
         <div
           role="dialog"
           aria-label="עריכת עמודות"
-          className="absolute end-0 top-full mt-1 z-30 w-[300px] rounded-xl border border-line bg-elevated shadow-elevated p-3"
+          className="absolute end-0 top-full mt-1 z-30 w-[300px] rounded-xl border border-glass-edge bg-glass-1 shadow-elevated p-3"
         >
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold text-ink">
@@ -201,7 +201,7 @@ export function CampaignsColumnsMenu({
                     <label
                       className={cn(
                         'flex items-start gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors flex-1 min-w-0',
-                        'hover:bg-elevated2',
+                        'hover:bg-glass-2',
                       )}
                       title={col.description ?? ''}
                     >
@@ -236,7 +236,7 @@ export function CampaignsColumnsMenu({
                           className={cn(
                             'w-5 h-4 rounded-sm',
                             canUp
-                              ? 'text-ink-secondary hover:text-ink hover:bg-elevated2'
+                              ? 'text-ink-secondary hover:text-ink hover:bg-glass-2'
                               : 'text-ink-subtle/40 cursor-not-allowed',
                           )}
                         >
@@ -252,7 +252,7 @@ export function CampaignsColumnsMenu({
                           className={cn(
                             'w-5 h-4 rounded-sm',
                             canDown
-                              ? 'text-ink-secondary hover:text-ink hover:bg-elevated2'
+                              ? 'text-ink-secondary hover:text-ink hover:bg-glass-2'
                               : 'text-ink-subtle/40 cursor-not-allowed',
                           )}
                         >
@@ -266,7 +266,7 @@ export function CampaignsColumnsMenu({
             })()}
           </ul>
           {(hiddenCount > 0 || hasCustomOrder) && (
-            <div className="mt-2 pt-2 border-t border-line-subtle flex flex-col gap-1.5">
+            <div className="mt-2 pt-2 border-t border-glass-edge flex flex-col gap-1.5">
               {hiddenCount > 0 && (
                 <Button
                   type="button"

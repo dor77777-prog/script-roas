@@ -10,11 +10,11 @@ import { cn } from '@/lib/utils';
 import type { ReactNode } from 'react';
 
 const statVariants = cva(
-  'rounded-md border bg-elevated2 px-3 py-2 flex flex-col gap-1',
+  'rounded-md border bg-glass-2 px-3 py-2 flex flex-col gap-1',
   {
     variants: {
       tone: {
-        neutral: 'border-line',
+        neutral: 'border-glass-edge',
         warning: 'border-status-warning bg-status-warningBg',
         success: 'border-status-green bg-status-greenBg',
         danger:  'border-status-red bg-status-redBg',

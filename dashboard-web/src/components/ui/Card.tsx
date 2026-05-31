@@ -3,12 +3,12 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const cardVariants = cva(
-  'bg-elevated text-ink rounded-xl transition-colors',
+  'bg-glass-1 text-ink rounded-xl transition-colors',
   {
     variants: {
       variant: {
-        default:  'border border-line shadow-sm',
-        elevated: 'border border-line shadow-md',
+        default:  'border border-glass-edge shadow-sm',
+        elevated: 'border border-glass-edge shadow-md',
         flat:     '',
       },
     },
@@ -57,7 +57,7 @@ CardBody.displayName = 'CardBody';
 
 export const CardFooter = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(
   ({ className, ...props }, ref) => (
-    <div ref={ref} className={cn('px-5 py-3 border-t border-line-subtle', className)} {...props} />
+    <div ref={ref} className={cn('px-5 py-3 border-t border-glass-edge', className)} {...props} />
   ),
 );
 CardFooter.displayName = 'CardFooter';

@@ -1,5 +1,6 @@
 import { type ReactElement, type CSSProperties } from 'react';
 import { ResponsiveContainer } from 'recharts';
+import { CHART_TARGET_COLOR } from '@/lib/chartColors';
 import { cn } from '@/lib/utils';
 
 /**
@@ -29,13 +30,15 @@ export function ChartContainer({
 } & Omit<React.HTMLAttributes<HTMLDivElement>, 'style' | 'children'>) {
   const cssVars: CSSProperties = {
     // shadcn chart token surface. The right side must be a REAL CSS-var
-    // name from globals.css, NOT a Tailwind utility name. Pre-flight
-    // verified these exist:
-    //   --border-subtle, --text-muted, --border-strong, --status-green.
-    ['--chart-grid' as never]: 'var(--border-subtle)',
-    ['--chart-axis' as never]: 'var(--text-muted)',
-    ['--chart-cursor' as never]: 'var(--border-strong)',
-    ['--chart-target' as never]: 'var(--status-green)',
+    // name from globals.css, NOT a Tailwind utility name. Post-Task-1.2
+    // the `--border-*` family is gone (Task-1.1 glass+neon flip); the
+    // shadcn chart vars now route through --glass-edge / --text-muted
+    // and import the band→chart bridge color from chartColors.ts so
+    // local/no-cross-palette-import stays green.
+    ['--chart-grid' as never]:   'var(--glass-edge)',
+    ['--chart-axis' as never]:   'var(--text-muted)',
+    ['--chart-cursor' as never]: 'var(--glass-edge-hot)',
+    ['--chart-target' as never]: CHART_TARGET_COLOR,
   };
 
   return (

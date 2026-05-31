@@ -215,14 +215,14 @@ export function ManualOverridesCrud() {
   return (
     <div className="space-y-3">
       {/* Add-row form — inline so the operator's eye never leaves the table. */}
-      <div className="flex flex-wrap items-end gap-2 p-3 bg-elevated2 rounded">
+      <div className="flex flex-wrap items-end gap-2 p-3 bg-glass-2 rounded">
         <label className="flex flex-col text-xs text-ink-secondary gap-1">
           תאריך
           <input
             type="date"
             value={formState.date}
             onChange={(e) => setFormState((s) => ({ ...s, date: e.target.value }))}
-            className="bg-canvas border border-line-subtle rounded px-2 py-1 text-sm text-ink"
+            className="bg-canvas border border-glass-edge rounded px-2 py-1 text-sm text-ink"
             dir="ltr"
           />
         </label>
@@ -231,7 +231,7 @@ export function ManualOverridesCrud() {
           <select
             value={formState.store_id}
             onChange={(e) => setFormState((s) => ({ ...s, store_id: e.target.value }))}
-            className="bg-canvas border border-line-subtle rounded px-2 py-1 text-sm text-ink"
+            className="bg-canvas border border-glass-edge rounded px-2 py-1 text-sm text-ink"
           >
             {ALL_STORES.map((s) => (
               <option key={s} value={s}>
@@ -245,7 +245,7 @@ export function ManualOverridesCrud() {
           <select
             value={formState.platform}
             onChange={(e) => setFormState((s) => ({ ...s, platform: e.target.value }))}
-            className="bg-canvas border border-line-subtle rounded px-2 py-1 text-sm text-ink"
+            className="bg-canvas border border-glass-edge rounded px-2 py-1 text-sm text-ink"
           >
             {ALL_PLATFORMS.map((p) => (
               <option key={p} value={p}>
@@ -261,7 +261,7 @@ export function ManualOverridesCrud() {
             step="0.01"
             value={formState.spend}
             onChange={(e) => setFormState((s) => ({ ...s, spend: e.target.value }))}
-            className="bg-canvas border border-line-subtle rounded px-2 py-1 text-sm w-24 text-ink"
+            className="bg-canvas border border-glass-edge rounded px-2 py-1 text-sm w-24 text-ink"
             dir="ltr"
             placeholder="0.00"
           />
@@ -271,7 +271,7 @@ export function ManualOverridesCrud() {
           <select
             value={formState.currency}
             onChange={(e) => setFormState((s) => ({ ...s, currency: e.target.value }))}
-            className="bg-canvas border border-line-subtle rounded px-2 py-1 text-sm text-ink"
+            className="bg-canvas border border-glass-edge rounded px-2 py-1 text-sm text-ink"
           >
             {ALL_CURRENCIES.map((c) => (
               <option key={c} value={c}>
@@ -286,7 +286,7 @@ export function ManualOverridesCrud() {
             type="text"
             value={formState.notes}
             onChange={(e) => setFormState((s) => ({ ...s, notes: e.target.value }))}
-            className="bg-canvas border border-line-subtle rounded px-2 py-1 text-sm text-ink"
+            className="bg-canvas border border-glass-edge rounded px-2 py-1 text-sm text-ink"
             placeholder="(אופציונלי)"
           />
         </label>
@@ -326,7 +326,7 @@ export function ManualOverridesCrud() {
               </tr>
             )}
             {rows.map((r) => (
-              <tr key={r.id} className="border-t border-line-subtle">
+              <tr key={r.id} className="border-t border-glass-edge">
                 <td className="p-2" dir="ltr">{r.date}</td>
                 <td className="p-2">{r.store_id}</td>
                 <td className="p-2">{r.platform}</td>
@@ -359,7 +359,7 @@ export function ManualOverridesCrud() {
           aria-modal="true"
           aria-labelledby="confirm-delete-title"
         >
-          <div className="bg-elevated border-0 sm:border sm:border-line rounded-none sm:rounded p-4 w-full h-full sm:h-auto sm:max-w-md sm:mx-4 flex flex-col">
+          <div className="bg-glass-1 border-0 sm:border sm:border-glass-edge rounded-none sm:rounded p-4 w-full h-full sm:h-auto sm:max-w-md sm:mx-4 flex flex-col">
             <div className="flex items-start justify-between mb-3 shrink-0">
               <h3 id="confirm-delete-title" className="text-lg font-semibold">
                 אישור מחיקה
@@ -388,7 +388,7 @@ export function ManualOverridesCrud() {
                 </p>
               )}
             </div>
-            <div className="sticky bottom-0 bg-elevated pt-2 flex justify-end gap-2 shrink-0 border-t border-line-subtle sm:border-t-0 -mx-4 px-4 sm:mx-0 sm:px-0">
+            <div className="sticky bottom-0 bg-glass-1 pt-2 flex justify-end gap-2 shrink-0 border-t border-glass-edge sm:border-t-0 -mx-4 px-4 sm:mx-0 sm:px-0">
               <Button
                 type="button"
                 variant="secondary"

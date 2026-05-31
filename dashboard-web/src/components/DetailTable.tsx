@@ -59,7 +59,7 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
       return <div className="p-8 text-center text-ink-muted text-sm">אין נתונים בטווח שבחרת</div>;
     }
     return (
-      <section className="rounded-xl bg-elevated border border-line p-8 text-center text-ink-muted shadow-sm">
+      <section className="rounded-xl bg-glass-1 border border-glass-edge p-8 text-center text-ink-muted shadow-sm">
         אין נתונים בטווח שבחרת
       </section>
     );
@@ -68,7 +68,7 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
   const tableContent = (
     <div className="overflow-auto max-h-[70vh] -mx-2 sm:mx-0">
         <table className="w-full text-xs sm:text-sm min-w-[900px]">
-          <thead className="bg-elevated2 sticky top-0 z-[5]">
+          <thead className="bg-glass-2 sticky top-0 z-[5]">
             <tr className="text-ink-secondary">
               <th className="px-3 py-2.5 text-start font-medium">תאריך</th>
               <th className="px-3 py-2.5 text-start font-medium">חנות</th>
@@ -90,7 +90,7 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
             {display.map((r, i) => {
               const cell = roasCellStyle(r.roas, r.revenue, r.totalSpend);
               return (
-                <tr key={i} className="border-t border-line hover:bg-elevated2/50">
+                <tr key={i} className="border-t border-glass-edge hover:bg-glass-2/50">
                   <td className="px-3 py-2 tabular-nums">{formatDate(r.date)}</td>
                   <td className="px-3 py-2 font-medium">{r.storeName}</td>
                   <td className="px-2 py-2 text-center align-middle">
@@ -156,7 +156,7 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
   if (bare) {
     return (
       <div>
-        <div className="px-4 sm:px-5 py-3 bg-elevated2/40 border-b border-line text-xs text-ink-secondary">
+        <div className="px-4 sm:px-5 py-3 bg-glass-2/40 border-b border-glass-edge text-xs text-ink-secondary">
           {meta}
         </div>
         {tableContent}
@@ -165,8 +165,8 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
   }
 
   return (
-    <section className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
-      <h2 className="flex items-center gap-2 text-base font-semibold text-ink px-5 py-4 border-b border-line">
+    <section className="rounded-xl bg-glass-1 border border-glass-edge shadow-sm overflow-hidden">
+      <h2 className="flex items-center gap-2 text-base font-semibold text-ink px-5 py-4 border-b border-glass-edge">
         <Table size={18} className="text-ink-secondary" />
         פירוט יומי
         {meta}

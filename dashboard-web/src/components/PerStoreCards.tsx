@@ -44,7 +44,7 @@ const TONE_BG: Record<string, string> = {
   orange: 'bg-status-orangeBg text-status-orange',
   green: 'bg-status-greenBg text-status-green',
   blue: 'bg-status-blueBg text-status-blue',
-  gray: 'bg-elevated2 text-ink-muted',
+  gray: 'bg-glass-2 text-ink-muted',
 };
 
 type Props = {
@@ -110,7 +110,7 @@ function StoreCard({
 }) {
   const info = roasLabel(agg.roas);
   return (
-    <div className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
+    <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-sm overflow-hidden">
       {/* Color bar header */}
       <div
         className="px-4 sm:px-5 py-2.5 sm:py-3 text-white font-semibold flex items-center justify-between gap-2"
@@ -148,7 +148,7 @@ function StoreCard({
             {info.text}
           </span>
         </div>
-        <div className="grid grid-cols-1 gap-1.5 text-sm pt-2 border-t border-line">
+        <div className="grid grid-cols-1 gap-1.5 text-sm pt-2 border-t border-glass-edge">
           <Row label="הכנסות" value={`CAD ${formatCurrency(agg.revenue)}`} />
           <Row label="הוצאות" value={`CAD ${formatCurrency(agg.spend)}`} />
           {/* Phase 05.7.7 — surface Meta / Google / TikTok breakdown so each

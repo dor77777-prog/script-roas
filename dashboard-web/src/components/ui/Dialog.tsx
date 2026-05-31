@@ -14,12 +14,12 @@ export const DialogContent = forwardRef<
   React.ComponentPropsWithoutRef<typeof RadixDialog.Content> & { children: ReactNode }
 >(({ className, children, ...props }, ref) => (
   <RadixDialog.Portal>
-    <RadixDialog.Overlay className="fixed inset-0 z-50 bg-overlay backdrop-blur-sm animate-in fade-in-0" />
+    <RadixDialog.Overlay className="fixed inset-0 z-50 bg-glass-3 backdrop-blur-sm animate-in fade-in-0" />
     <RadixDialog.Content
       ref={ref}
       className={cn(
         'fixed inset-x-0 top-1/2 z-50 w-full max-w-lg mx-auto -translate-y-1/2',
-        'bg-elevated text-ink rounded-xl border border-line shadow-xl p-6',
+        'bg-glass-1 text-ink rounded-xl border border-glass-edge shadow-xl p-6',
         'animate-in fade-in-0 zoom-in-95',
         className,
       )}
@@ -28,7 +28,7 @@ export const DialogContent = forwardRef<
       {children}
       <DialogClose
         aria-label="סגור"
-        className="absolute end-3 top-3 rounded-md p-1 text-ink-muted hover:bg-elevated2"
+        className="absolute end-3 top-3 rounded-md p-1 text-ink-muted hover:bg-glass-2"
       >
         <X size={16} />
       </DialogClose>

@@ -244,7 +244,7 @@ const KIND_META: Record<
 function InsightRow({ insight }: { insight: Insight }) {
   const meta = KIND_META[insight.kind];
   const content = (
-    <div className="flex items-center gap-3 px-4 sm:px-5 py-3 hover:bg-elevated2/40 transition-colors">
+    <div className="flex items-center gap-3 px-4 sm:px-5 py-3 hover:bg-glass-2/40 transition-colors">
       <span
         className={cn(
           'inline-flex items-center justify-center w-8 h-8 rounded-lg shrink-0',

@@ -40,7 +40,7 @@ const TONE_BG: Record<string, string> = {
   orange: 'bg-status-orangeBg text-status-orange',
   green:  'bg-status-greenBg text-status-green',
   blue:   'bg-status-blueBg text-status-blue',
-  gray:   'bg-elevated2 text-ink-muted',
+  gray:   'bg-glass-2 text-ink-muted',
 };
 
 /**
@@ -103,7 +103,7 @@ type LiveTone = {
 const LIVE_TONE_STYLES: Record<string, LiveTone> = {
   gray: {
     cardBg: 'bg-[linear-gradient(225deg,var(--status-gray-bg),var(--surface-elevated-1)_75%)]',
-    cardBorder: 'border-line',
+    cardBorder: 'border-glass-edge',
     blob: 'bg-status-gray/10',
     pulse: 'bg-status-gray',
     pill: 'bg-status-gray text-white',
@@ -523,7 +523,7 @@ export function TodayLive({
               return (
                 <div
                   key={s.store}
-                  className="rounded-xl bg-elevated/90 backdrop-blur-sm border border-line-subtle p-3 shadow-xs"
+                  className="rounded-xl bg-glass-1/90 backdrop-blur-sm border border-glass-edge p-3 shadow-xs"
                 >
                   {/* Header: store name + larger ROAS chip — keeps ROAS the
                       headline metric of the card. Chip text bumped from
@@ -693,7 +693,7 @@ function LiveStat({
   accent?: 'pos' | 'neg';
 }) {
   return (
-    <div className="rounded-xl bg-elevated border border-line-subtle p-2.5 sm:p-4 shadow-xs">
+    <div className="rounded-xl bg-glass-1 border border-glass-edge p-2.5 sm:p-4 shadow-xs">
       <div className="flex items-center justify-between mb-1 sm:mb-1.5">
         <span className="text-[11px] sm:text-xs font-medium text-ink-secondary tracking-wide truncate">
           {label}

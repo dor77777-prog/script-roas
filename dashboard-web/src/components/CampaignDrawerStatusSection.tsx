@@ -33,25 +33,25 @@ function relIso(iso: string | null): string {
 
 const DELIVERY_TONE: Record<string, string> = {
   DELIVERING:     'bg-status-greenBg text-status-greenFg',
-  NOT_DELIVERING: 'bg-elevated2 text-ink-secondary',
+  NOT_DELIVERING: 'bg-glass-2 text-ink-secondary',
   LIMITED:        'bg-status-orangeBg text-status-orangeFg',
   PENDING_REVIEW: 'bg-status-blueBg text-status-blueFg',
   LEARNING:       'bg-status-blueBg text-status-blueFg',
   REJECTED:       'bg-status-redBg text-status-redFg',
-  UNKNOWN:        'bg-elevated2 text-ink-muted',
+  UNKNOWN:        'bg-glass-2 text-ink-muted',
 };
 
 function deliveryClass(status: string | null): string {
-  if (!status) return 'bg-elevated2 text-ink-muted';
-  return DELIVERY_TONE[status] ?? 'bg-elevated2 text-ink-muted';
+  if (!status) return 'bg-glass-2 text-ink-muted';
+  return DELIVERY_TONE[status] ?? 'bg-glass-2 text-ink-muted';
 }
 
 export function CampaignDrawerStatusSection(p: CampaignDrawerStatusSectionProps) {
   const isBackfillUnknown = p.configuredStatus === 'BACKFILL_UNKNOWN';
 
   return (
-    <section className="border border-line-subtle rounded-lg p-4 my-3">
-      <h3 className="text-sm font-medium text-ink-primary mb-3">סטטוס + טריות</h3>
+    <section className="border border-glass-edge rounded-lg p-4 my-3">
+      <h3 className="text-sm font-medium text-ink mb-3">סטטוס + טריות</h3>
 
       {/* Phase D — Top row: 3 status chips side by side. */}
       <div className="grid grid-cols-3 gap-2 mb-3">
@@ -61,14 +61,14 @@ export function CampaignDrawerStatusSection(p: CampaignDrawerStatusSectionProps)
             'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ' +
             (isBackfillUnknown
               ? 'bg-status-warningBg text-status-warningFg border border-status-warning/30'
-              : 'bg-elevated2 text-ink-primary')
+              : 'bg-glass-2 text-ink')
           }>
             {isBackfillUnknown ? '⏳ טוען מ-Platform' : (p.configuredStatus ?? '—')}
           </span>
         </div>
         <div className="flex flex-col items-start gap-1">
           <span className="text-[10px] text-ink-secondary">effective</span>
-          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-elevated2 text-ink-primary">
+          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-glass-2 text-ink">
             {p.effectiveStatus ?? '—'}
           </span>
         </div>
@@ -93,19 +93,19 @@ export function CampaignDrawerStatusSection(p: CampaignDrawerStatusSectionProps)
       )}
 
       {/* Phase D — 3-event timeline. */}
-      <div className="border-t border-line-subtle pt-3">
+      <div className="border-t border-glass-edge pt-3">
         <h4 className="text-[11px] font-medium text-ink-secondary mb-2">היסטוריית סטטוס</h4>
         <div className="grid grid-cols-2 gap-y-1.5 text-xs">
           <span className="text-ink-secondary">נראה לראשונה</span>
-          <span className="text-ink-primary">{relIso(p.firstSeenAt)}</span>
+          <span className="text-ink">{relIso(p.firstSeenAt)}</span>
           <span className="text-ink-secondary">שינוי סטטוס אחרון</span>
-          <span className="text-ink-primary">{relIso(p.statusChangedAt)}</span>
+          <span className="text-ink">{relIso(p.statusChangedAt)}</span>
           <span className="text-ink-secondary">סטטוס נדגם בהצלחה</span>
-          <span className="text-ink-primary">{relIso(p.lastStatusSuccessAt)}</span>
+          <span className="text-ink">{relIso(p.lastStatusSuccessAt)}</span>
           <span className="text-ink-secondary">last_live_tick</span>
-          <span className="text-ink-primary">{relIso(p.lastLiveTickAt)}</span>
+          <span className="text-ink">{relIso(p.lastLiveTickAt)}</span>
           <span className="text-ink-secondary">metrics lag</span>
-          <span className="text-ink-primary">{relMin(p.metricsLagMinutes)}</span>
+          <span className="text-ink">{relMin(p.metricsLagMinutes)}</span>
         </div>
       </div>
     </section>

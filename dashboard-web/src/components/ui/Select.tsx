@@ -16,7 +16,7 @@ export const SelectTrigger = forwardRef<
   <RadixSelect.Trigger
     ref={ref}
     className={cn(
-      'inline-flex h-9 items-center justify-between gap-2 rounded-md border border-line bg-elevated px-3 py-1 text-sm text-ink',
+      'inline-flex h-9 items-center justify-between gap-2 rounded-md border border-glass-edge bg-glass-1 px-3 py-1 text-sm text-ink',
       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
       className,
     )}
@@ -36,7 +36,7 @@ export const SelectContent = forwardRef<
     <RadixSelect.Content
       ref={ref}
       className={cn(
-        'z-50 overflow-hidden rounded-md border border-line bg-elevated shadow-md text-ink',
+        'z-50 overflow-hidden rounded-md border border-glass-edge bg-glass-1 shadow-md text-ink',
         className,
       )}
       position="popper"
@@ -54,7 +54,7 @@ export const SelectItem = forwardRef<
     ref={ref}
     className={cn(
       'relative flex cursor-pointer select-none items-center gap-2 px-3 py-1.5 text-sm',
-      'data-[highlighted]:bg-elevated2 data-[disabled]:opacity-50',
+      'data-[highlighted]:bg-glass-2 data-[disabled]:opacity-50',
       className,
     )}
     {...props}

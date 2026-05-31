@@ -150,7 +150,7 @@ export function GoalTracker({ data }: Props) {
 
   if (editing) {
     return (
-      <section className="rounded-2xl bg-elevated border border-line-subtle shadow-sm p-4 sm:p-5">
+      <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-sm p-4 sm:p-5">
         <div className="flex items-center gap-2.5 mb-3">
           <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-accent/10 text-accent shrink-0">
             <Target size={14} />
@@ -181,10 +181,10 @@ export function GoalTracker({ data }: Props) {
               autoFocus
               aria-invalid={editError != null || draftIsInvalid}
               className={cn(
-                'w-full rounded-lg border bg-elevated pe-3 ps-12 py-2 text-sm focus:outline-none focus:shadow-focus',
+                'w-full rounded-lg border bg-glass-1 pe-3 ps-12 py-2 text-sm focus:outline-none focus:shadow-focus',
                 editError != null || draftIsInvalid
                   ? 'border-status-warning focus:border-status-warning'
-                  : 'border-line focus:border-accent',
+                  : 'border-glass-edge focus:border-accent',
               )}
             />
           </div>
@@ -232,7 +232,7 @@ export function GoalTracker({ data }: Props) {
     ahead: { label: 'מקדים את היעד', bg: 'bg-status-greenBg', color: 'text-status-green' },
     'on-pace': { label: 'בקצב הנכון', bg: 'bg-accent/10', color: 'text-accent' },
     behind: { label: 'מפגר מהיעד', bg: 'bg-status-warningBg', color: 'text-status-warningFg' },
-    unknown: { label: '—', bg: 'bg-elevated2', color: 'text-ink-muted' },
+    unknown: { label: '—', bg: 'bg-glass-2', color: 'text-ink-muted' },
   };
   const sMeta = statusMeta[pacing.status];
 
@@ -244,7 +244,7 @@ export function GoalTracker({ data }: Props) {
     : 'bg-ink-muted';
 
   return (
-    <section className="rounded-2xl bg-elevated border border-line-subtle shadow-sm overflow-hidden">
+    <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-sm overflow-hidden">
       <div className="p-4 sm:p-5">
         <div className="flex items-center justify-between gap-3 mb-3">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -316,7 +316,7 @@ export function GoalTracker({ data }: Props) {
         </div>
 
         {/* Progress bar with expected-pacing marker */}
-        <div className="relative h-2.5 bg-elevated2 rounded-full overflow-hidden">
+        <div className="relative h-2.5 bg-glass-2 rounded-full overflow-hidden">
           <div
             className={cn('h-full rounded-full transition-all duration-slow ease-out', barColor)}
             style={{ width: `${progressPct * 100}%` }}

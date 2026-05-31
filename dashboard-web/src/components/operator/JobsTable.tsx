@@ -197,7 +197,7 @@ export function JobsTable() {
         </thead>
         <tbody>
           {data.runs.map((run) => (
-            <tr key={run.run_id} className="border-t border-line-subtle">
+            <tr key={run.run_id} className="border-t border-glass-edge">
               <td className="p-2 font-mono text-xs">{run.function_id}</td>
               <td className="p-2"><StatusBadge status={run.status} /></td>
               <td className="p-2 text-ink-secondary text-xs" title={run.run_started_at}>

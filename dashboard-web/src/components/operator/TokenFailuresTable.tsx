@@ -188,13 +188,13 @@ export function TokenFailuresTable() {
           <summary className="text-xs text-ink-muted cursor-pointer hover:text-ink-secondary">
             תוקנו לאחרונה ({resolved.length})
           </summary>
-          <div className="mt-2 border border-line-subtle rounded-lg overflow-hidden">
+          <div className="mt-2 border border-glass-edge rounded-lg overflow-hidden">
             <table className="w-full text-xs">
               <tbody>
                 {resolved.map((row) => (
                   <tr
                     key={`${row.provider}::${row.storeId}::${row.operation}`}
-                    className="border-b border-line-subtle last:border-0 text-ink-muted"
+                    className="border-b border-glass-edge last:border-0 text-ink-muted"
                   >
                     <td className="px-3 py-1.5 inline-flex items-center gap-1">
                       <CheckCircle2 size={12} className="text-status-green" />

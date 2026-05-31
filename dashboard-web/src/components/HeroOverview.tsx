@@ -87,7 +87,7 @@ const TONE_CHIP: Record<string, string> = {
   orange: 'bg-status-orangeBg text-status-orange',
   green:  'bg-status-greenBg text-status-green',
   blue:   'bg-status-blueBg text-status-blue',
-  gray:   'bg-elevated2 text-ink-muted',
+  gray:   'bg-glass-2 text-ink-muted',
 };
 
 export function HeroOverview({ data, filters }: Props) {

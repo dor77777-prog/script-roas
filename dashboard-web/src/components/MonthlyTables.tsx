@@ -201,7 +201,7 @@ export function MonthlyTables({ stores, globalStore, bare = false, year, month, 
 
   if (isLoading) {
     return (
-      <div className={cn('px-4 sm:px-5 py-6 text-sm text-ink-secondary', bare && 'border-b border-line')}>
+      <div className={cn('px-4 sm:px-5 py-6 text-sm text-ink-secondary', bare && 'border-b border-glass-edge')}>
         טוען טבלאות חודשיות...
       </div>
     );
@@ -209,7 +209,7 @@ export function MonthlyTables({ stores, globalStore, bare = false, year, month, 
 
   if (error) {
     return (
-      <div className={cn('px-4 sm:px-5 py-6 text-sm text-status-red', bare && 'border-b border-line')}>
+      <div className={cn('px-4 sm:px-5 py-6 text-sm text-status-red', bare && 'border-b border-glass-edge')}>
         שגיאה בטעינת הטבלאות החודשיות: {error instanceof Error ? error.message : String(error)}
       </div>
     );
@@ -221,12 +221,12 @@ export function MonthlyTables({ stores, globalStore, bare = false, year, month, 
     <div
       className={cn(
         'flex flex-wrap items-center gap-2',
-        bare && 'px-4 sm:px-5 py-3 bg-elevated2/40 border-b border-line',
+        bare && 'px-4 sm:px-5 py-3 bg-glass-2/40 border-b border-glass-edge',
       )}
     >
       <div
         role="tablist"
-        className="inline-flex rounded-lg border border-line bg-elevated overflow-hidden divide-x divide-border"
+        className="inline-flex rounded-lg border border-glass-edge bg-glass-1 overflow-hidden divide-x divide-glass-edge"
         dir="ltr"
       >
         <Tab active={mode === 'per-store'} onClick={() => setMode('per-store')}>
@@ -240,7 +240,7 @@ export function MonthlyTables({ stores, globalStore, bare = false, year, month, 
         <select
           value={storeFilter}
           onChange={e => setStoreFilter(e.target.value)}
-          className="rounded-lg border border-line bg-elevated px-3 py-1.5 text-sm font-medium"
+          className="rounded-lg border border-glass-edge bg-glass-1 px-3 py-1.5 text-sm font-medium"
         >
           {stores.map(s => (
             <option key={s} value={s}>
@@ -317,7 +317,7 @@ function Tab({
         'px-3 sm:px-3.5 py-2 sm:py-2 text-xs sm:text-sm font-medium transition-colors min-h-[44px] sm:min-h-0 h-auto',
         active
           ? 'bg-accent text-white hover:bg-accent/90'
-          : 'bg-elevated text-ink-secondary hover:bg-elevated2',
+          : 'bg-glass-1 text-ink-secondary hover:bg-glass-2',
       )}
     >
       {children}
@@ -370,7 +370,7 @@ function MonthBlockPerStore({
   const byDate = new Map(rows.map(r => [r.date, r]));
 
   return (
-    <div className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
+    <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-sm overflow-hidden">
       <Button
         variant="ghost"
         onClick={() => setOpen(!open)}
@@ -384,7 +384,7 @@ function MonthBlockPerStore({
       {open && (
         <div className="overflow-auto max-h-[60vh]">
           <table className="w-full text-xs sm:text-sm min-w-[500px]">
-            <thead className="bg-elevated2 sticky top-0 z-[5]">
+            <thead className="bg-glass-2 sticky top-0 z-[5]">
               <tr className="text-ink-secondary">
                 <th className="px-3 py-2 text-start font-medium">תאריך</th>
                 {hasGa && <th className="px-3 py-2 text-end font-medium">פייסבוק</th>}
@@ -403,7 +403,7 @@ function MonthBlockPerStore({
                   ? roasCell(r.roas, r.revenue, r.totalSpend)
                   : { className: '', text: '' };
                 return (
-                  <tr key={d} className={cn('border-t border-line', isEmpty && 'text-ink-muted')}>
+                  <tr key={d} className={cn('border-t border-glass-edge', isEmpty && 'text-ink-muted')}>
                     <td className="px-3 py-1.5 tabular-nums">{formatDate(d)}</td>
                     {hasGa && <td className="px-3 py-1.5 text-end tabular-nums">{r ? formatNumber(r.fbSpend) : ''}</td>}
                     {hasGa && <td className="px-3 py-1.5 text-end tabular-nums">{r ? formatNumber(r.gaSpend) : ''}</td>}
@@ -428,7 +428,7 @@ function MonthBlockPerStore({
                   </tr>
                 );
               })}
-              <tr className="border-t-2 border-line bg-elevated2 font-semibold">
+              <tr className="border-t-2 border-glass-edge bg-glass-2 font-semibold">
                 <td className="px-3 py-2">סך הכל</td>
                 {hasGa && <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalFb)}</td>}
                 {hasGa && <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalGa)}</td>}
@@ -496,7 +496,7 @@ function MonthBlockSummary({
   const totalCell = roasCell(totalRoas, totalRev, totalSpend);
 
   return (
-    <div className="rounded-xl bg-elevated border border-line shadow-sm overflow-hidden">
+    <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-sm overflow-hidden">
       <Button
         variant="ghost"
         onClick={() => setOpen(!open)}
@@ -510,7 +510,7 @@ function MonthBlockSummary({
       {open && (
         <div className="overflow-auto max-h-[60vh]">
           <table className="w-full text-xs sm:text-sm min-w-[500px]">
-            <thead className="bg-elevated2 sticky top-0 z-[5]">
+            <thead className="bg-glass-2 sticky top-0 z-[5]">
               <tr className="text-ink-secondary">
                 <th className="px-3 py-2 text-start font-medium">תאריך</th>
                 <th className="px-3 py-2 text-end font-medium">יצא סה&quot;כ</th>
@@ -526,7 +526,7 @@ function MonthBlockSummary({
                   ? roasCell(roas, agg.revenue, agg.spend)
                   : { className: '', text: '' };
                 return (
-                  <tr key={d} className={cn('border-t border-line', !agg && 'text-ink-muted')}>
+                  <tr key={d} className={cn('border-t border-glass-edge', !agg && 'text-ink-muted')}>
                     <td className="px-3 py-1.5 tabular-nums">{formatDate(d)}</td>
                     <td className="px-3 py-1.5 text-end tabular-nums">{agg ? formatNumber(agg.spend) : ''}</td>
                     <td className="px-3 py-1.5 text-end tabular-nums">
@@ -544,7 +544,7 @@ function MonthBlockSummary({
                   </tr>
                 );
               })}
-              <tr className="border-t-2 border-line bg-elevated2 font-semibold">
+              <tr className="border-t-2 border-glass-edge bg-glass-2 font-semibold">
                 <td className="px-3 py-2">סך הכל</td>
                 <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalSpend)}</td>
                 <td className="px-3 py-2 text-end tabular-nums">

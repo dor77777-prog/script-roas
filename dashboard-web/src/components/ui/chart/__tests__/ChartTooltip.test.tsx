@@ -16,7 +16,7 @@ describe('ChartTooltip', () => {
     );
     const card = container.firstChild as HTMLElement;
     expect(card.getAttribute('dir')).toBe('rtl');
-    expect(card.className).toMatch(/bg-elevated/);
+    expect(card.className).toMatch(/bg-glass-1/);
   });
 
   it('renders label, row, and value text content', () => {

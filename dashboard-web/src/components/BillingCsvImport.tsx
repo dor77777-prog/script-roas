@@ -159,7 +159,7 @@ export function BillingCsvImport({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-lg bg-elevated2/60 border border-line-subtle p-3 text-xs sm:text-sm text-ink-secondary leading-relaxed">
+      <div className="rounded-lg bg-glass-2/60 border border-glass-edge p-3 text-xs sm:text-sm text-ink-secondary leading-relaxed">
         <p className="mb-1">
           <strong>איך מוציאים CSV מ-Shopify:</strong>
         </p>
@@ -202,7 +202,7 @@ export function BillingCsvImport({
                 };
               }));
             }}
-            className="w-full rounded-lg border border-line bg-elevated px-2.5 py-2 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
+            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-2 text-sm focus:outline-none focus:border-accent focus:shadow-focus"
           >
             {storeNames.map(s => (
               <option key={s} value={s}>{s}</option>
@@ -237,7 +237,7 @@ export function BillingCsvImport({
           placeholder="Bill number,Issue date,Currency,Total,..."
           rows={6}
           dir="ltr"
-          className="w-full rounded-lg border border-line bg-elevated px-2.5 py-2 text-xs font-mono leading-relaxed focus:outline-none focus:border-accent focus:shadow-focus"
+          className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-2 text-xs font-mono leading-relaxed focus:outline-none focus:border-accent focus:shadow-focus"
         />
         <Button
           variant="secondary"
@@ -260,8 +260,8 @@ export function BillingCsvImport({
       )}
 
       {preview.length > 0 && (
-        <div className="rounded-lg border border-line-subtle overflow-hidden">
-          <header className="flex items-center justify-between gap-2 px-3 py-2 bg-elevated2/60 border-b border-line-subtle flex-wrap">
+        <div className="rounded-lg border border-glass-edge overflow-hidden">
+          <header className="flex items-center justify-between gap-2 px-3 py-2 bg-glass-2/60 border-b border-glass-edge flex-wrap">
             <div className="flex items-center gap-3 text-[11px] sm:text-xs text-ink-secondary tabular-nums">
               <span>
                 <strong className="text-ink">{counts.rec}</strong> חודשיים
@@ -285,7 +285,7 @@ export function BillingCsvImport({
               ייבא ({counts.rec + counts.ot})
             </Button>
           </header>
-          <ul className="divide-y divide-line-subtle max-h-80 overflow-y-auto">
+          <ul className="divide-y divide-glass-edge max-h-80 overflow-y-auto">
             {preview.map(p => (
               <li
                 key={p.id}
@@ -316,7 +316,7 @@ export function BillingCsvImport({
                 </div>
                 {/* Type toggle — segmented control */}
                 <div
-                  className="inline-flex rounded-md border border-line bg-elevated overflow-hidden text-[10px] shrink-0"
+                  className="inline-flex rounded-md border border-glass-edge bg-glass-1 overflow-hidden text-[10px] shrink-0"
                   dir="ltr"
                 >
                   <Button
@@ -326,7 +326,7 @@ export function BillingCsvImport({
                       'px-1.5 py-0.5 h-auto text-[10px] rounded-none transition-colors',
                       p.type === 'recurring'
                         ? 'bg-accent text-white hover:bg-accent/90'
-                        : 'text-ink-secondary hover:bg-elevated2',
+                        : 'text-ink-secondary hover:bg-glass-2',
                     )}
                   >
                     חודשי
@@ -335,10 +335,10 @@ export function BillingCsvImport({
                     variant="ghost"
                     onClick={() => setRow(p.id, { type: 'onetime' })}
                     className={cn(
-                      'px-1.5 py-0.5 h-auto text-[10px] rounded-none transition-colors border-e border-line',
+                      'px-1.5 py-0.5 h-auto text-[10px] rounded-none transition-colors border-e border-glass-edge',
                       p.type === 'onetime'
                         ? 'bg-accent text-white hover:bg-accent/90'
-                        : 'text-ink-secondary hover:bg-elevated2',
+                        : 'text-ink-secondary hover:bg-glass-2',
                     )}
                   >
                     חד-פעמי

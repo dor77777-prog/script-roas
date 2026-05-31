@@ -78,6 +78,39 @@
      Used by .num.up / .num.dn / sparkline +/- coloring. */
   --up: var(--band-green);
   --dn: var(--band-red);
+
+  /* ---------------------------------------------------------------------
+     Task 1.2 — status palette restoration.
+     The Task-1.1 glass+neon flip dropped these; the new Tailwind colors
+     block (canvas/glass/band/chart/store/accent/status/ink) still needs
+     `--status-*` so the ~700 `bg-status-*` / `text-status-*` consumers
+     resolve to something meaningful. Status semantics are OPERATIONAL
+     (token failures, sync errors, freshness chips) — distinct from
+     `--band-*` which is ANALYTIC grading. local/no-cross-palette-import
+     enforces the split at lint time.
+     ---------------------------------------------------------------------*/
+  --status-red:    oklch(64% 0.20 22);
+  --status-red-bg: oklch(42% 0.14 22);
+  --status-red-fg: oklch(96% 0.04 22);
+  --status-orange:    oklch(78% 0.16 75);
+  --status-orange-bg: oklch(45% 0.14 75);
+  --status-orange-fg: oklch(96% 0.04 75);
+  --status-green:    oklch(70% 0.18 145);
+  --status-green-bg: oklch(42% 0.14 145);
+  --status-green-fg: oklch(96% 0.04 145);
+  --status-blue:    oklch(68% 0.16 240);
+  --status-blue-bg: oklch(42% 0.14 240);
+  --status-blue-fg: oklch(96% 0.04 240);
+  --status-gray:    oklch(60% 0.012 250);
+  --status-gray-bg: oklch(42% 0.005 250);
+  --status-gray-fg: oklch(96% 0.005 250);
+  --status-warning:    oklch(78% 0.18 75);
+  --status-warning-bg: oklch(45% 0.14 75);
+  --status-warning-fg: oklch(96% 0.04 75);
+
+  /* Chart helper tokens (used by RoasChart axis grid + CPM-prev ghost line). */
+  --chart-axis:     oklch(60% 0.015 250 / 0.6);
+  --chart-cpm-prev: oklch(75% 0.15 75 / 0.6);
 }
 
 /* ===========================================================================

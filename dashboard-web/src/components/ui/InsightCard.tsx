@@ -25,7 +25,7 @@ const cardVariants = cva(
         warning: 'bg-status-warningBg text-status-warningFg border-status-warning',
         success: 'bg-status-greenBg text-status-greenFg border-status-green',
         info:    'bg-status-blueBg text-status-blueFg border-status-blue',
-        neutral: 'bg-elevated2 text-ink border-line',
+        neutral: 'bg-glass-2 text-ink border-glass-edge',
       },
     },
     defaultVariants: { tone: 'neutral' },
@@ -97,11 +97,11 @@ const SEVERITY_TOKENS: Record<
     iconBadge:   'bg-status-green/15 text-status-green ring-status-green/20',
   },
   info: {
-    groupBg:     'bg-elevated2',
-    groupBorder: 'border-line',
+    groupBg:     'bg-glass-2',
+    groupBorder: 'border-glass-edge',
     groupHeader: 'text-ink-secondary',
     badge:       'bg-ink-muted text-white',
-    iconBadge:   'bg-elevated text-ink-muted ring-line',
+    iconBadge:   'bg-glass-1 text-ink-muted ring-glass-edge',
   },
 };
 
@@ -146,7 +146,7 @@ export function InsightCardGroup({
   return (
     <div
       className={cn(
-        'border-b border-line-subtle last:border-b-0',
+        'border-b border-glass-edge last:border-b-0',
         tokens.groupBg,
         className,
       )}
@@ -224,8 +224,8 @@ export function InsightCardRow({
     <li
       className={cn(
         'group/insight px-4 sm:px-5 py-2.5 sm:py-3',
-        'hover:bg-elevated/60 transition-colors',
-        'border-t border-line-subtle/50',
+        'hover:bg-glass-1/60 transition-colors',
+        'border-t border-glass-edge/50',
         className,
       )}
     >
@@ -234,7 +234,7 @@ export function InsightCardRow({
         <span
           className={cn(
             'inline-flex items-center justify-center w-6 h-6 rounded-md shrink-0 mt-0.5',
-            'bg-elevated/80 ring-1 ring-inset',
+            'bg-glass-1/80 ring-1 ring-inset',
             tokens.iconBadge,
           )}
         >
@@ -269,7 +269,7 @@ export function InsightCardRow({
 
           {/* Why disclosure panel */}
           {whyDisclosure && whyOpen && (
-            <div className="mt-2 px-2.5 py-1.5 text-[11px] sm:text-xs text-ink-secondary bg-elevated/60 border-s-2 border-line-subtle rounded animate-fade-in leading-relaxed">
+            <div className="mt-2 px-2.5 py-1.5 text-[11px] sm:text-xs text-ink-secondary bg-glass-1/60 border-s-2 border-glass-edge rounded animate-fade-in leading-relaxed">
               {whyDisclosure}
             </div>
           )}

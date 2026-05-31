@@ -56,7 +56,7 @@ export default function OperatorPage() {
       <OperatorSecretBanner />
 
       <Tabs.Root defaultValue="sync" className="mt-6">
-        <Tabs.List className="flex gap-2 border-b border-line-subtle mb-6">
+        <Tabs.List className="flex gap-2 border-b border-glass-edge mb-6">
           {TABS.map(([value, label]) => (
             <Tabs.Trigger
               key={value}

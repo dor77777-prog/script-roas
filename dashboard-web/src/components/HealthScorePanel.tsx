@@ -30,7 +30,7 @@ const GRADE_STYLES: Record<HealthGrade, { chip: string; ring: string; label: str
   C: { chip: 'bg-status-orangeBg text-status-orange', ring: 'ring-status-orange/30', label: 'גבולי', tone: 'text-status-orange' },
   D: { chip: 'bg-status-redBg text-status-red', ring: 'ring-status-red/30', label: 'בעייתי', tone: 'text-status-red' },
   F: { chip: 'bg-status-redBg text-status-red', ring: 'ring-status-red/40', label: 'כשל', tone: 'text-status-red' },
-  unknown: { chip: 'bg-elevated2 text-ink-muted', ring: 'ring-line-subtle', label: 'מוקדם מדי', tone: 'text-ink-muted' },
+  unknown: { chip: 'bg-glass-2 text-ink-muted', ring: 'ring-glass-edge', label: 'מוקדם מדי', tone: 'text-ink-muted' },
 };
 
 type WeightedComponentKey = 'profitability' | 'volume' | 'trajectory' | 'attributionClarity';
@@ -164,7 +164,7 @@ export function HealthScorePanel({ health }: { health: CampaignHealth }) {
 
       {/* Insufficient short-circuit — render reasons only */}
       {health.insufficient ? (
-        <div className="rounded-lg bg-elevated2/40 border border-line-subtle px-3 py-2.5 text-[12px] text-ink-secondary leading-relaxed">
+        <div className="rounded-lg bg-glass-2/40 border border-glass-edge px-3 py-2.5 text-[12px] text-ink-secondary leading-relaxed">
           {health.reasons[0]}
         </div>
       ) : (
@@ -185,7 +185,7 @@ export function HealthScorePanel({ health }: { health: CampaignHealth }) {
                       {value}/100
                     </span>
                   </div>
-                  <div className="h-2 rounded-full bg-elevated2 overflow-hidden">
+                  <div className="h-2 rounded-full bg-glass-2 overflow-hidden">
                     <div
                       className={cn('h-full rounded-full transition-all', barColor(value))}
                       style={{ width: `${Math.max(2, value)}%` }}
@@ -204,7 +204,7 @@ export function HealthScorePanel({ health }: { health: CampaignHealth }) {
               voice (vs. the old world where 5 separate chips suggested
               5 separate things). */}
           {recommendations.length > 0 && (
-            <div className="pt-3 border-t border-line-subtle">
+            <div className="pt-3 border-t border-glass-edge">
               <div className="text-[11px] sm:text-xs font-semibold text-ink mb-1.5 uppercase tracking-wide">
                 המלצה
               </div>
@@ -224,7 +224,7 @@ export function HealthScorePanel({ health }: { health: CampaignHealth }) {
 
           {/* Footer formula reference — keep tiny, just so a curious
               operator can verify how the score was assembled. */}
-          <div className="pt-2 border-t border-line-subtle text-[10.5px] sm:text-[11px] text-ink-muted leading-snug">
+          <div className="pt-2 border-t border-glass-edge text-[10.5px] sm:text-[11px] text-ink-muted leading-snug">
             ציון = (רווחיות×0.40) + (נפח×0.15) + (מומנטום×0.25) + (attribution×0.20)
           </div>
         </>

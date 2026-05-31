@@ -31,8 +31,8 @@ export function TabNav<K extends string>({ tabs, active, onChange }: Props<K>) {
     <nav
       className={cn(
         'sticky top-[52px] sm:top-[64px] z-20',
-        'bg-elevated/85 backdrop-blur-xl supports-[backdrop-filter]:bg-elevated/75',
-        'border-b border-line-subtle',
+        'bg-glass-1/85 backdrop-blur-xl supports-[backdrop-filter]:bg-glass-1/75',
+        'border-b border-glass-edge',
       )}
       aria-label="ניווט בדשבורד"
     >

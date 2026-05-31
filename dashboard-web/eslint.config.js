@@ -26,13 +26,17 @@ import globals from 'globals';
 import noRawButtonInComponents from './eslint-rules/no-raw-button-in-components.js';
 import noDarkVariantInComponents from './eslint-rules/no-dark-variant-in-components.js';
 import noHexColorInComponents from './eslint-rules/no-hex-color-in-components.js';
+import noLegacyTailwindClass from './eslint-rules/no-legacy-tailwind-class.js';
+import noCrossPaletteImport from './eslint-rules/no-cross-palette-import.js';
 
-// Local plugin — bundles the 3 design-system regression guards.
+// Local plugin — bundles the design-system regression guards.
 const localPlugin = {
   rules: {
     'no-raw-button-in-components': noRawButtonInComponents,
     'no-dark-variant-in-components': noDarkVariantInComponents,
     'no-hex-color-in-components': noHexColorInComponents,
+    'no-legacy-tailwind-class': noLegacyTailwindClass,
+    'no-cross-palette-import': noCrossPaletteImport,
   },
 };
 
@@ -120,6 +124,9 @@ export default tseslint.config(
       'local/no-raw-button-in-components': 'error',
       'local/no-dark-variant-in-components': 'error',
       'local/no-hex-color-in-components': 'error',
+      // Wave-1 Task 1.2 guards — legacy palette + cross-palette firewall.
+      'local/no-legacy-tailwind-class': 'error',
+      'local/no-cross-palette-import': 'error',
 
       // Allow ts-expect-error / ts-ignore with description (we use it in
       // shim casts where the type erasure is documented inline).

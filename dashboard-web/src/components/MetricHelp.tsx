@@ -97,7 +97,7 @@ export function MetricHelp({ content, className, subtle = true }: Props) {
           'w-4 h-4 rounded-full',
           subtle
             ? 'text-ink-subtle hover:text-ink-secondary opacity-60 hover:opacity-100'
-            : 'text-ink-secondary hover:text-ink bg-elevated2 hover:bg-line',
+            : 'text-ink-secondary hover:text-ink bg-glass-2 hover:bg-line',
         )}
       >
         <Info size={11} />

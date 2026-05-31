@@ -176,11 +176,11 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
         >
           <div
             dir="rtl"
-            className="bg-elevated w-full sm:max-w-3xl sm:mx-4 rounded-t-2xl sm:rounded-2xl shadow-elevated border border-line-subtle max-h-[90vh] flex flex-col"
+            className="bg-glass-1 w-full sm:max-w-3xl sm:mx-4 rounded-t-2xl sm:rounded-2xl shadow-elevated border border-glass-edge max-h-[90vh] flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}
-            <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-line-subtle">
+            <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-glass-edge">
               <div className="flex items-center gap-2 min-w-0">
                 <Bot size={18} className="text-accent shrink-0" />
                 <h2 className="text-sm sm:text-base font-semibold text-ink truncate">
@@ -199,7 +199,7 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
 
             {/* Body */}
             <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
-              <div className="rounded-lg bg-elevated2 border border-line-subtle p-3 sm:p-4 text-xs sm:text-sm text-ink-secondary space-y-2">
+              <div className="rounded-lg bg-glass-2 border border-glass-edge p-3 sm:p-4 text-xs sm:text-sm text-ink-secondary space-y-2">
                 <div className="font-semibold text-ink">היקף הדוח</div>
                 <div className="flex flex-wrap gap-x-4 gap-y-1 tabular-nums">
                   <span>
@@ -286,7 +286,7 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
                     readOnly
                     value={report}
                     dir="rtl"
-                    className="w-full h-[400px] sm:h-[500px] rounded-lg border border-line-subtle bg-elevated2/40 p-3 sm:p-4 text-xs sm:text-sm font-mono leading-relaxed text-ink resize-y focus:outline-none focus:border-accent"
+                    className="w-full h-[400px] sm:h-[500px] rounded-lg border border-glass-edge bg-glass-2/40 p-3 sm:p-4 text-xs sm:text-sm font-mono leading-relaxed text-ink resize-y focus:outline-none focus:border-accent"
                     onClick={e => (e.target as HTMLTextAreaElement).select()}
                   />
                   <div className="text-[11px] sm:text-xs text-ink-muted">

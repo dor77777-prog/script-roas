@@ -146,7 +146,7 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
   const maxAmount = Math.max(revenue, totalCosts, Math.abs(finalProfit), 1);
 
   return (
-    <section className="rounded-2xl bg-elevated border border-line-subtle shadow-elevated overflow-hidden">
+    <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-elevated overflow-hidden">
       {/* Hero strip — always visible. Three big numbers side-by-side with
           proportional bars so a glance answers "did I make money?" without
           expanding anything. */}
@@ -213,7 +213,7 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
       </div>
 
       {open && (
-        <div className="p-4 sm:p-5 border-t border-line-subtle animate-fade-in">
+        <div className="p-4 sm:p-5 border-t border-glass-edge animate-fade-in">
           {!hasConfiguredFixed && (
             <div className="mb-4 rounded-lg bg-status-warningBg border border-status-warning/30 px-3 py-2.5 flex items-start gap-2">
               <AlertCircle size={14} className="text-status-warningFg shrink-0 mt-0.5" />
@@ -319,9 +319,9 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
                 <ChevronUp size={11} className="transition-transform group-open:rotate-180" />
                 פירוט עלויות קבועות לפי קטגוריה
               </summary>
-              <div className="mt-2 rounded-lg bg-elevated2/40 border border-line-subtle p-3 overflow-x-auto -mx-1 sm:mx-0">
+              <div className="mt-2 rounded-lg bg-glass-2/40 border border-glass-edge p-3 overflow-x-auto -mx-1 sm:mx-0">
                 <table className="w-full text-xs tabular-nums min-w-[420px]">
-                  <thead className="sticky top-0 z-[5] bg-elevated2/40">
+                  <thead className="sticky top-0 z-[5] bg-glass-2/40">
                     <tr className="text-[10px] uppercase text-ink-muted tracking-wide">
                       <th className="text-start font-medium pb-1.5 px-1">קטגוריה</th>
                       <th className="text-end font-medium pb-1.5 px-1">סכום (יחסי לטווח)</th>
@@ -341,7 +341,7 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
                         // on $5K/mo revenue reads as 2% on any view length.
                         const revPct = revenue > 0 ? (amt / revenue) * 100 : 0;
                         return (
-                          <tr key={s} className="border-t border-line-subtle/60">
+                          <tr key={s} className="border-t border-glass-edge/60">
                             <td className={cn('py-1 px-1 font-medium', SOURCE_COLOR[s])}>
                               {SOURCE_LABEL[s]}
                             </td>
@@ -459,7 +459,7 @@ function PnLLine({
   return (
     <li
       className={cn(
-        'grid items-center gap-x-3 py-2 border-b border-line-subtle/40 last:border-b-0',
+        'grid items-center gap-x-3 py-2 border-b border-glass-edge/40 last:border-b-0',
         'grid-cols-[1fr_120px] sm:grid-cols-[1fr_120px_140px]',
       )}
     >
@@ -487,7 +487,7 @@ function PnLLine({
       </div>
 
       {/* Column 3: running total — desktop only */}
-      <div className="text-end hidden sm:block border-s border-line-subtle ps-3">
+      <div className="text-end hidden sm:block border-s border-glass-edge ps-3">
         <div className="text-[10px] text-ink-muted uppercase tracking-wide leading-tight">נשאר</div>
         {running === null ? (
           <span className="text-xs text-ink-secondary opacity-50" aria-label="הערה — לא משפיע על הסכום הרץ">—</span>

@@ -59,7 +59,7 @@ const TONE_BG: Record<string, string> = {
   orange: 'bg-status-orangeBg text-status-orange',
   green:  'bg-status-greenBg text-status-green',
   blue:   'bg-status-blueBg text-status-blue',
-  gray:   'bg-elevated2 text-ink-muted',
+  gray:   'bg-glass-2 text-ink-muted',
 };
 
 type Props = {
@@ -97,9 +97,9 @@ export function AdSetTable({
       {/* Same pattern as AdsDrawer: a real vertical scroll context
           on the wrapper so the sticky thead pins correctly when
           scrolling rows. */}
-      <div className="rounded-xl border border-line-subtle overflow-auto max-h-[50vh]">
+      <div className="rounded-xl border border-glass-edge overflow-auto max-h-[50vh]">
         <table className="w-full text-xs sm:text-sm min-w-[720px]">
-          <thead className="bg-elevated2/60 sticky top-0 z-[5]">
+          <thead className="bg-glass-2/60 sticky top-0 z-[5]">
             <tr className="text-ink-secondary">
               <th className="px-2 py-2 w-[36px]" aria-label="סימון" />
               <AdSetSortHeader label="שם"          col="name"        sortKey={sortKey} dir={sortDir} onClick={onSort} align="start"  />
@@ -139,9 +139,9 @@ export function AdSetTable({
                 <tr
                   key={a.id || a.name || i}
                   className={cn(
-                    'border-t border-line-subtle transition-opacity',
+                    'border-t border-glass-edge transition-opacity',
                     isOptimized && 'opacity-50 hover:opacity-100',
-                    canDrillToAds && 'cursor-pointer hover:bg-elevated2/30',
+                    canDrillToAds && 'cursor-pointer hover:bg-glass-2/30',
                   )}
                   onClick={() => {
                     if (!canDrillToAds) return;
@@ -213,7 +213,7 @@ export function AdSetTable({
                       const tone =
                         adsetAttr.trust.level === 'high'    ? 'bg-status-greenBg/60 text-status-green'
                       : adsetAttr.trust.level === 'medium'  ? 'bg-status-warningBg text-status-warningFg'
-                      : adsetAttr.trust.level === 'unknown' ? 'bg-elevated2 text-ink-secondary'
+                      : adsetAttr.trust.level === 'unknown' ? 'bg-glass-2 text-ink-secondary'
                       :                                       'bg-status-redBg/60 text-status-red';
                       const tooltip =
                         `ROAS אמיתי · ${adsetAttr.trust.label} (${adsetAttr.trust.score.toFixed(0)}/100)\n\n` +

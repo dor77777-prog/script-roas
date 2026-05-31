@@ -24,7 +24,7 @@ const GRADE_STYLES: Record<HealthGrade, { chip: string; ring: string; label: str
   C: { chip: 'bg-status-orangeBg text-status-orange', ring: 'ring-status-orange/30', label: 'גבולי' },
   D: { chip: 'bg-status-redBg text-status-red', ring: 'ring-status-red/30', label: 'בעייתי' },
   F: { chip: 'bg-status-redBg text-status-red', ring: 'ring-status-red/40', label: 'כשל' },
-  unknown: { chip: 'bg-elevated2 text-ink-muted', ring: 'ring-line-subtle', label: 'מוקדם מדי' },
+  unknown: { chip: 'bg-glass-2 text-ink-muted', ring: 'ring-glass-edge', label: 'מוקדם מדי' },
 };
 
 const COMPONENT_LABELS = {
@@ -100,14 +100,14 @@ export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
           className={cn(
             'absolute z-[15] top-full mt-2 start-0',
             'w-[320px] sm:w-[340px] max-w-[min(86vw,360px)]',
-            'rounded-xl bg-elevated text-ink border border-line-subtle',
+            'rounded-xl bg-glass-1 text-ink border border-glass-edge',
             'shadow-elevated p-3.5',
             'text-[12px] leading-relaxed text-start animate-fade-in',
           )}
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between gap-2 mb-2.5 pb-2 border-b border-line-subtle">
+          <div className="flex items-center justify-between gap-2 mb-2.5 pb-2 border-b border-glass-edge">
             <div className="flex items-center gap-2">
               <span
                 className={cn(
@@ -166,7 +166,7 @@ export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
                             {value}/100
                           </span>
                         </div>
-                        <div className="h-1.5 rounded-full bg-elevated2 overflow-hidden">
+                        <div className="h-1.5 rounded-full bg-glass-2 overflow-hidden">
                           <div
                             className={cn(
                               'h-full rounded-full transition-all',
@@ -191,7 +191,7 @@ export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
               </div>
 
               {/* Footer with formula note */}
-              <div className="mt-2.5 pt-2 border-t border-line-subtle text-[10.5px] text-ink-muted leading-snug">
+              <div className="mt-2.5 pt-2 border-t border-glass-edge text-[10.5px] text-ink-muted leading-snug">
                 ציון = (רווחיות×0.40) + (נפח×0.15) + (מומנטום×0.25) + (attribution×0.20)
               </div>
             </>

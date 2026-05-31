@@ -169,7 +169,7 @@ export function BackfillPicker() {
             value={from}
             min={HISTORY_BOUNDARY}
             onChange={(e) => setFrom(e.target.value)}
-            className="bg-canvas border border-line-subtle rounded px-2 py-1 text-sm text-ink focus:border-accent"
+            className="bg-canvas border border-glass-edge rounded px-2 py-1 text-sm text-ink focus:border-accent"
             dir="ltr"
           />
         </label>
@@ -180,7 +180,7 @@ export function BackfillPicker() {
             value={to}
             min={from}
             onChange={(e) => setTo(e.target.value)}
-            className="bg-canvas border border-line-subtle rounded px-2 py-1 text-sm text-ink focus:border-accent"
+            className="bg-canvas border border-glass-edge rounded px-2 py-1 text-sm text-ink focus:border-accent"
             dir="ltr"
           />
         </label>

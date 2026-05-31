@@ -18,7 +18,7 @@ export function TableBase({ children, className }: { children: ReactNode; classN
 
 export function TableHead({ children }: { children: ReactNode }) {
   return (
-    <thead className="bg-elevated2 sticky top-0 z-10 border-b border-line-subtle">
+    <thead className="bg-glass-2 sticky top-0 z-10 border-b border-glass-edge">
       {children}
     </thead>
   );
@@ -26,7 +26,7 @@ export function TableHead({ children }: { children: ReactNode }) {
 
 export function TableRow({ children, className, ...rest }: { children: ReactNode; className?: string } & React.HTMLAttributes<HTMLTableRowElement>) {
   return (
-    <tr {...rest} className={cn('border-b border-line-subtle hover:bg-elevated/40 transition-colors', className)}>
+    <tr {...rest} className={cn('border-b border-glass-edge hover:bg-glass-1/40 transition-colors', className)}>
       {children}
     </tr>
   );

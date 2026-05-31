@@ -16,20 +16,20 @@ export async function CronTickSnapshotsViewer() {
   const rows: CronTickSnapshotRow[] = await fetchCronTickSnapshots(getSupabaseAdmin());
   if (rows.length === 0) {
     return (
-      <section className="border border-line-subtle rounded-lg p-4 text-ink-secondary text-sm">
-        <h3 className="text-base font-medium text-ink-primary mb-2">Cron-tick snapshots</h3>
+      <section className="border border-glass-edge rounded-lg p-4 text-ink-secondary text-sm">
+        <h3 className="text-base font-medium text-ink mb-2">Cron-tick snapshots</h3>
         <p>אין ticks עדיין.</p>
       </section>
     );
   }
   return (
-    <section className="border border-line-subtle rounded-lg p-4">
-      <h3 className="text-base font-medium text-ink-primary mb-3">
+    <section className="border border-glass-edge rounded-lg p-4">
+      <h3 className="text-base font-medium text-ink mb-3">
         Cron-tick snapshots <span className="text-xs text-ink-secondary">({rows.length} ticks אחרונים)</span>
       </h3>
       <div className="overflow-x-auto">
-        <table className="w-full text-sm text-ink-primary">
-          <thead className="text-xs text-ink-secondary border-b border-line-subtle">
+        <table className="w-full text-sm text-ink">
+          <thead className="text-xs text-ink-secondary border-b border-glass-edge">
             <tr>
               <th className="text-right py-1 pr-2">tick_id</th>
               <th className="text-left py-1 px-2">fan_out</th>
@@ -41,7 +41,7 @@ export async function CronTickSnapshotsViewer() {
           </thead>
           <tbody className="font-mono text-xs">
             {rows.map((r) => (
-              <tr key={r.tick_id} className="border-b border-line-subtle/40">
+              <tr key={r.tick_id} className="border-b border-glass-edge/40">
                 <td className="text-right py-1 pr-2">{r.tick_id}</td>
                 <td className="py-1 px-2">{r.fan_out_count ?? '—'}</td>
                 <td className="py-1 px-2 text-status-green">{r.events_completed_count ?? '—'}</td>

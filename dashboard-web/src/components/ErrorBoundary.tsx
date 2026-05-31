@@ -32,7 +32,7 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="min-h-screen flex items-center justify-center bg-canvas p-6">
-          <div className="max-w-md rounded-2xl border border-line-subtle bg-elevated p-6 shadow-lg space-y-4">
+          <div className="max-w-md rounded-2xl border border-glass-edge bg-glass-1 p-6 shadow-lg space-y-4">
             <h1 className="text-xl font-semibold text-ink">משהו השתבש</h1>
             <p className="text-sm text-ink-secondary">
               הדשבורד נתקל בשגיאה בלתי צפויה. ניתן לרענן את הדף או לנסות שוב.

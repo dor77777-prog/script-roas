@@ -23,7 +23,7 @@ const TONE_BG: Record<string, string> = {
   orange: 'bg-status-orangeBg text-status-orange',
   green:  'bg-status-greenBg text-status-green',
   blue:   'bg-status-blueBg text-status-blue',
-  gray:   'bg-elevated2 text-ink-muted',
+  gray:   'bg-glass-2 text-ink-muted',
 };
 
 /** Length-aware sizing so long numbers don't get truncated. */
@@ -279,8 +279,8 @@ function KpiCard({
   return (
     <div
       className={cn(
-        'group relative rounded-xl bg-elevated border border-line-subtle p-3.5 sm:p-5',
-        'shadow-sm hover:shadow-cardHover hover:border-line',
+        'group relative rounded-xl bg-glass-1 border border-glass-edge p-3.5 sm:p-5',
+        'shadow-sm hover:shadow-cardHover hover:border-glass-edge',
         'transition-all duration-DEFAULT ease-out',
       )}
     >

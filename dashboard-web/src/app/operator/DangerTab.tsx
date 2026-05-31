@@ -30,7 +30,7 @@ export function DangerTab() {
         <WhatsappTestButtons />
       </section>
 
-      <hr className="border-line-subtle" />
+      <hr className="border-glass-edge" />
 
       {/* Phase 05.7.1: destructive reset panel. Separated by a horizontal rule
           so it is visually distinct from the normal WhatsApp testing flow above.

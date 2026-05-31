@@ -67,7 +67,7 @@ export function WhatsappTestButtons() {
             variant="ghost"
             onClick={() => send(trigger)}
             disabled={pendingKey !== null}
-            className="gap-1 bg-status-green hover:bg-status-green/90 disabled:bg-elevated2 disabled:text-ink-muted text-white text-sm px-3 py-2 h-auto"
+            className="gap-1 bg-status-green hover:bg-status-green/90 disabled:bg-glass-2 disabled:text-ink-muted text-white text-sm px-3 py-2 h-auto"
           >
             {pendingKey === trigger ? (
               <Loader2 className="w-4 h-4 animate-spin" />
