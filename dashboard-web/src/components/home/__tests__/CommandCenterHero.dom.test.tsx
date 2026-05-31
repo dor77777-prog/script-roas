@@ -9,9 +9,11 @@
 //     hero strip only contextualises ad-spend & inventory).
 //   • Operating Profit card is banded by business ROAS (same hue as the
 //     ROAS tile so the two hero numbers visually agree).
-//   • Operating Profit + ROAS + Ad-spend % render .v.banded;
-//     Spend/Revenue/Orders/CPM render .v.neutral.
-//   • Ad-spend ÷ Revenue card carries its OWN band — 25% target.
+//   • Operating Profit + ROAS render .v.banded;
+//     Spend / Revenue / Inventory / Orders / CPM render .v.neutral.
+//   • Inventory (COGS) card uses the muted business band — informational,
+//     not a status signal. Surfaces "מלאי · {rangeLabel}" + fmtMoneyCompact +
+//     "~X.X% מהמחזור" subtitle.
 //   • A null current.cpm renders "—" (no $0.00 surprise).
 
 import { describe, expect, it } from 'vitest';
@@ -29,8 +31,7 @@ const PERIOD_GREEN: CommandCenterPeriod = {
   spend: 3924,
   cpm: 8.92,
   orders: 188,
-  // 3924 / 10998 ≈ 35.7% → ad-spend band = red
-  adSpendPctOfRevenue: 3924 / 10998,
+  cogs: 2750, // 2750 / 10998 ≈ 25.0%
 };
 
 describe('<CommandCenterHero>', () => {
@@ -44,7 +45,7 @@ describe('<CommandCenterHero>', () => {
     expect(getByTestId('hero-spend')).toBeTruthy();
     expect(getByTestId('hero-revenue')).toBeTruthy();
     expect(getByTestId('hero-roas')).toBeTruthy();
-    expect(getByTestId('hero-ad-spend-pct')).toBeTruthy();
+    expect(getByTestId('hero-cogs')).toBeTruthy();
     expect(getByTestId('hero-orders')).toBeTruthy();
     expect(getByTestId('hero-cpm')).toBeTruthy();
   });
@@ -75,22 +76,25 @@ describe('<CommandCenterHero>', () => {
     expect(featured.textContent).not.toContain('$4,847');
   });
 
-  it('Operating Profit + ROAS + Ad-spend% render the .v.banded class hook', () => {
+  it('Operating Profit + ROAS render the .v.banded class hook', () => {
     const { container } = render(
       <CommandCenterHero current={PERIOD_GREEN} rangeLabel="היום" />,
     );
     const bandedNumbers = container.querySelectorAll('.v.banded');
-    // Three banded numbers — Operating Profit, ROAS, Ad-spend %.
-    expect(bandedNumbers.length).toBe(3);
+    // Two banded numbers — Operating Profit + ROAS. (Inventory replaced
+    // the prior Ad-spend % card, which was also banded; the inventory
+    // card uses .v.neutral because it's informational, not a status
+    // signal.)
+    expect(bandedNumbers.length).toBe(2);
   });
 
-  it('Spend / Revenue / Orders / CPM render the .v.neutral class hook', () => {
+  it('Spend / Revenue / Inventory / Orders / CPM render the .v.neutral class hook', () => {
     const { container } = render(
       <CommandCenterHero current={PERIOD_GREEN} rangeLabel="היום" />,
     );
     const neutralNumbers = container.querySelectorAll('.v.neutral');
-    // Exactly four neutral numbers — Spend, Revenue, Orders, CPM.
-    expect(neutralNumbers.length).toBe(4);
+    // Exactly five neutral numbers — Spend, Revenue, Inventory, Orders, CPM.
+    expect(neutralNumbers.length).toBe(5);
   });
 
   it('null CPM renders "—" not "$0"', () => {
@@ -121,62 +125,66 @@ describe('<CommandCenterHero>', () => {
     expect(getByTestId('hero-roas').getAttribute('data-band')).toBe('red');
   });
 
-  describe('Ad-spend % card — independent 25% target band', () => {
-    it('ratio ≤ 25% → data-band="green" (efficient)', () => {
-      const efficient: CommandCenterPeriod = {
-        ...PERIOD_GREEN,
-        adSpendPctOfRevenue: 0.20, // 20%
-      };
+  describe('Inventory (COGS) card — informational, muted band', () => {
+    it('label includes "מלאי" and echoes the range label', () => {
       const { getByTestId } = render(
-        <CommandCenterHero current={efficient} rangeLabel="היום" />,
+        <CommandCenterHero current={PERIOD_GREEN} rangeLabel="היום" />,
       );
-      expect(getByTestId('hero-ad-spend-pct').getAttribute('data-band')).toBe('green');
+      const card = getByTestId('hero-cogs');
+      expect(card.textContent).toContain('מלאי');
+      expect(card.textContent).toContain('היום');
     });
 
-    it('25% < ratio ≤ 30% → data-band="orange" (warning)', () => {
-      const warn: CommandCenterPeriod = {
-        ...PERIOD_GREEN,
-        adSpendPctOfRevenue: 0.27, // 27%
-      };
+    it('renders fmtMoneyCompact(cogs) as the big number', () => {
       const { getByTestId } = render(
-        <CommandCenterHero current={warn} rangeLabel="היום" />,
+        <CommandCenterHero current={PERIOD_GREEN} rangeLabel="היום" />,
       );
-      expect(getByTestId('hero-ad-spend-pct').getAttribute('data-band')).toBe('orange');
+      const card = getByTestId('hero-cogs');
+      // cogs = 2750 → "$2,750"
+      expect(card.querySelector('.v')?.textContent).toBe('$2,750');
     });
 
-    it('ratio > 30% → data-band="red" (overspend)', () => {
-      const over: CommandCenterPeriod = {
-        ...PERIOD_GREEN,
-        adSpendPctOfRevenue: 0.35, // 35%
-      };
+    it('renders the "~X.X% מהמחזור" subtitle when revenue > 0', () => {
       const { getByTestId } = render(
-        <CommandCenterHero current={over} rangeLabel="היום" />,
+        <CommandCenterHero current={PERIOD_GREEN} rangeLabel="היום" />,
       );
-      expect(getByTestId('hero-ad-spend-pct').getAttribute('data-band')).toBe('red');
+      // 2750 / 10998 ≈ 25.0%
+      const subtitle = getByTestId('hero-cogs-subtitle');
+      expect(subtitle.textContent).toContain('25.0%');
+      expect(subtitle.textContent).toContain('מהמחזור');
     });
 
-    it('null ratio → data-band="gray" + value renders "—"', () => {
+    it('null cogs renders "—" + omits the subtitle (graceful missing data)', () => {
+      const noCogs: CommandCenterPeriod = { ...PERIOD_GREEN, cogs: null };
+      const { getByTestId, queryByTestId } = render(
+        <CommandCenterHero current={noCogs} rangeLabel="היום" />,
+      );
+      const card = getByTestId('hero-cogs');
+      expect(card.querySelector('.v')?.textContent).toBe('—');
+      expect(queryByTestId('hero-cogs-subtitle')).toBeNull();
+    });
+
+    it('zero revenue omits the subtitle (no divide-by-zero) but keeps the dollar value', () => {
       const noRev: CommandCenterPeriod = {
         ...PERIOD_GREEN,
-        adSpendPctOfRevenue: null,
+        revenue: 0,
+        cogs: 1000,
       };
-      const { getByTestId } = render(
+      const { getByTestId, queryByTestId } = render(
         <CommandCenterHero current={noRev} rangeLabel="היום" />,
       );
-      const card = getByTestId('hero-ad-spend-pct');
-      expect(card.getAttribute('data-band')).toBe('gray');
-      expect(card.querySelector('.v')?.textContent).toBe('—');
+      expect(getByTestId('hero-cogs').querySelector('.v')?.textContent).toBe('$1,000');
+      expect(queryByTestId('hero-cogs-subtitle')).toBeNull();
     });
 
-    it('formats the ratio as "%.1f%" (e.g. 0.197 → "19.7%")', () => {
-      const p: CommandCenterPeriod = {
-        ...PERIOD_GREEN,
-        adSpendPctOfRevenue: 0.197,
-      };
+    it('carries the muted business-band attribute (no independent threshold colouring)', () => {
       const { getByTestId } = render(
-        <CommandCenterHero current={p} rangeLabel="היום" />,
+        <CommandCenterHero current={PERIOD_GREEN} rangeLabel="היום" />,
       );
-      expect(getByTestId('hero-ad-spend-pct').querySelector('.v')?.textContent).toBe('19.7%');
+      const card = getByTestId('hero-cogs');
+      // Business ROAS = 2.8 → green band; muted strength.
+      expect(card.getAttribute('data-band')).toBe('green');
+      expect(card.getAttribute('data-band-strength')).toBe('muted');
     });
   });
 });

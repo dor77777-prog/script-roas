@@ -92,8 +92,12 @@ export function aggregateCpm(
  *     `period.netProfit` from this adapter (e.g. tests, the chart KPI
  *     strip) keep working unchanged.
  *
- * `adSpendPctOfRevenue` is the ad-spend ratio (0..1+), null when revenue
- * is 0 so the card can render "—" instead of dividing by zero.
+ * `cogs` is the period's cost-of-goods-sold total in CAD. Exposed so the
+ * row-2 inventory hero card can render its dollar amount and the
+ * "% of revenue" subtitle without recomputing it from a sibling field.
+ * Replaces the prior `adSpendPctOfRevenue` field (the Ad-Spend ÷ Revenue
+ * card it powered was retired 2026-05-31 in favour of an inventory card
+ * the operator finds more actionable).
  */
 export function toHeroPeriod(
   agg: Aggregate,
@@ -109,27 +113,8 @@ export function toHeroPeriod(
     spend: agg.spend,
     cpm: cpm.cpm > 0 ? cpm.cpm : null,
     orders: ordersTotal,
-    adSpendPctOfRevenue: agg.revenue > 0 ? agg.spend / agg.revenue : null,
+    cogs: agg.cogs,
   };
-}
-
-/**
- * Band classifier for the Ad-Spend %-of-Revenue hero card.
- *
- * Internal target = 25% (operator-supplied). Below target = efficient
- * (green). 25-30% = warning (orange). Above 30% = overspend (red).
- * When revenue is missing the ratio is null and the band falls back to
- * gray so the card renders neutral instead of misleadingly green.
- *
- * Accepts a percentage value (e.g. `27` for 27%), NOT a fraction — the
- * card formats `adSpendPctOfRevenue * 100` for display and feeds that
- * same number here so both reads agree.
- */
-export function adSpendBand(pct: number | null | undefined): 'green' | 'orange' | 'red' | 'gray' {
-  if (pct == null || !Number.isFinite(pct)) return 'gray';
-  if (pct <= 25) return 'green';
-  if (pct <= 30) return 'orange';
-  return 'red';
 }
 
 /**
@@ -148,8 +133,6 @@ export function toHeroDelta(
   const baselineEmpty = prev.spend === 0 && prev.revenue === 0;
   const curOperatingProfit = cur.revenue - cur.spend - cur.cogs;
   const prevOperatingProfit = prev.revenue - prev.spend - prev.cogs;
-  const curAdSpendPct = cur.revenue > 0 ? (cur.spend / cur.revenue) * 100 : null;
-  const prevAdSpendPct = prev.revenue > 0 ? (prev.spend / prev.revenue) * 100 : null;
   return {
     roas: baselineEmpty || prev.roas === 0 ? null : cur.roas - prev.roas,
     netProfit: baselineEmpty ? null : cur.trueNetProfit - prev.trueNetProfit,
@@ -169,10 +152,7 @@ export function toHeroDelta(
         ? (curCpm.cpm - prevCpm.cpm) / prevCpm.cpm
         : null,
     orders: baselineEmpty ? null : curOrders - prevOrders,
-    adSpendPctOfRevenue:
-      curAdSpendPct == null || prevAdSpendPct == null
-        ? null
-        : curAdSpendPct - prevAdSpendPct,
+    cogs: baselineEmpty ? null : cur.cogs - prev.cogs,
   };
 }
 

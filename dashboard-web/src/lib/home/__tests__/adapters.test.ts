@@ -8,7 +8,6 @@
 
 import { describe, expect, it } from 'vitest';
 import {
-  adSpendBand,
   aggregateCpm,
   annotationsToPins,
   toChartData,
@@ -111,16 +110,16 @@ describe('toHeroPeriod', () => {
     expect(p.operatingProfit).toBe(-30);
   });
 
-  it('computes adSpendPctOfRevenue as a fraction', () => {
-    const a = agg({ revenue: 1000, spend: 250 });
+  it('exposes COGS straight off the aggregate so the inventory card can render its dollar value', () => {
+    const a = agg({ revenue: 1000, spend: 200, cogs: 250 });
     const p = toHeroPeriod(a, { cpm: 0, impressions: 0, spend: 0 }, 0);
-    expect(p.adSpendPctOfRevenue).toBeCloseTo(0.25, 5);
+    expect(p.cogs).toBe(250);
   });
 
-  it('null-coerces adSpendPctOfRevenue when revenue is 0 (no divide-by-zero)', () => {
-    const a = agg({ revenue: 0, spend: 100 });
+  it('passes through zero COGS rather than coercing to null — operator distinguishes "missing data" (handled by the card) from "no inventory cost yet today" (legitimate 0)', () => {
+    const a = agg({ revenue: 1000, spend: 200, cogs: 0 });
     const p = toHeroPeriod(a, { cpm: 0, impressions: 0, spend: 0 }, 0);
-    expect(p.adSpendPctOfRevenue).toBeNull();
+    expect(p.cogs).toBe(0);
   });
 
   it('null-coerces ROAS when spend is 0', () => {
@@ -131,32 +130,6 @@ describe('toHeroPeriod', () => {
   it('null-coerces CPM when impressions is 0', () => {
     const p = toHeroPeriod(agg({ revenue: 100 }), { cpm: 0, impressions: 0, spend: 0 }, 0);
     expect(p.cpm).toBeNull();
-  });
-});
-
-describe('adSpendBand — 25% target', () => {
-  it('returns "green" for ≤ 25%', () => {
-    expect(adSpendBand(20)).toBe('green');
-    expect(adSpendBand(25)).toBe('green');
-    expect(adSpendBand(0)).toBe('green');
-  });
-
-  it('returns "orange" for 25% < pct ≤ 30% (warning zone)', () => {
-    expect(adSpendBand(25.01)).toBe('orange');
-    expect(adSpendBand(27)).toBe('orange');
-    expect(adSpendBand(30)).toBe('orange');
-  });
-
-  it('returns "red" for > 30% (overspend)', () => {
-    expect(adSpendBand(30.01)).toBe('red');
-    expect(adSpendBand(35)).toBe('red');
-    expect(adSpendBand(100)).toBe('red');
-  });
-
-  it('returns "gray" when input is null / undefined / NaN', () => {
-    expect(adSpendBand(null)).toBe('gray');
-    expect(adSpendBand(undefined)).toBe('gray');
-    expect(adSpendBand(Number.NaN)).toBe('gray');
   });
 });
 
@@ -176,7 +149,7 @@ describe('toHeroDelta', () => {
     expect(d.revenuePct).toBeNull();
     expect(d.spendPct).toBeNull();
     expect(d.orders).toBeNull();
-    expect(d.adSpendPctOfRevenue).toBeNull();
+    expect(d.cogs).toBeNull();
   });
 
   it('computes deltas when both periods have data', () => {
@@ -196,32 +169,20 @@ describe('toHeroDelta', () => {
     expect(d.spendPct).toBe(1);
     expect(d.cpmPct).toBe(1);
     expect(d.orders).toBe(5);
-    // cur adSpendPct = 50%, prev = 50% → Δ = 0 pp
-    expect(d.adSpendPctOfRevenue).toBe(0);
+    // cogs delta in CAD (cur − prev) = 50 − 25 = 25
+    expect(d.cogs).toBe(25);
   });
 
-  it('computes adSpendPctOfRevenue delta in percentage POINTS', () => {
+  it('computes COGS delta in absolute CAD (signed)', () => {
     const d = toHeroDelta(
-      agg({ revenue: 1000, spend: 350, roas: 2.85 }),  // 35%
-      agg({ revenue: 1000, spend: 250, roas: 4.0 }),   // 25%
+      agg({ revenue: 1000, spend: 250, roas: 4.0, cogs: 300 }),
+      agg({ revenue: 1000, spend: 250, roas: 4.0, cogs: 200 }),
       { cpm: 0, impressions: 0, spend: 0 },
       { cpm: 0, impressions: 0, spend: 0 },
       0,
       0,
     );
-    expect(d.adSpendPctOfRevenue).toBeCloseTo(10, 5); // 35 − 25 = 10pp
-  });
-
-  it('null-coerces adSpendPctOfRevenue delta when either period has 0 revenue', () => {
-    const d = toHeroDelta(
-      agg({ revenue: 1000, spend: 250, roas: 4.0 }),
-      agg({ revenue: 0, spend: 100, roas: 0 }),
-      { cpm: 0, impressions: 0, spend: 0 },
-      { cpm: 0, impressions: 0, spend: 0 },
-      0,
-      0,
-    );
-    expect(d.adSpendPctOfRevenue).toBeNull();
+    expect(d.cogs).toBe(100);
   });
 });
 
