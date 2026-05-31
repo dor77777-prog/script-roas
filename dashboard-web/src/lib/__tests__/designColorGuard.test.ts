@@ -58,7 +58,7 @@ const COMPONENTS_DIR = path.resolve(__dirname, '..', '..', 'components');
 // ---------------------------------------------------------------------------
 const MIGRATION_ALLOWLIST: string[] = [
   // AdSetTable.tsx — MIGRATED in Wave 3.3a (removed from allowlist)
-  'AdsDrawer.tsx',
+  // AdsDrawer.tsx — MIGRATED in Wave 3.3b (removed from allowlist)
   'AiReportButton.tsx',
   // AnnotationsPanel.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
   // AttributionAnalysisPanel.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
@@ -90,10 +90,10 @@ const MIGRATION_ALLOWLIST: string[] = [
   'Sidebar.tsx',
   // SyncIndicator.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
   // TabFreshnessHeader.tsx — MIGRATED in Wave 3.3a (removed from allowlist)
-  'campaign-drawer/CampaignDrawerAdSets.tsx',
-  'campaign-drawer/CampaignDrawerDaily.tsx',
-  'campaign-drawer/CampaignDrawerOverview.tsx',
-  'campaign-drawer/index.tsx',
+  // campaign-drawer/CampaignDrawerAdSets.tsx — MIGRATED in Wave 3.3b (removed from allowlist)
+  // campaign-drawer/CampaignDrawerDaily.tsx — MIGRATED in Wave 3.3b (removed from allowlist)
+  // campaign-drawer/CampaignDrawerOverview.tsx — MIGRATED in Wave 3.3b (removed from allowlist)
+  // campaign-drawer/index.tsx — MIGRATED in Wave 3.3b (removed from allowlist)
   // home/ActivityFeed.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
   // home/PerStoreRow.tsx — MIGRATED in Wave 3.0 (removed from allowlist)
   // home/RoasChartDateRangePicker.tsx — MIGRATED in Wave 3.1 (removed from allowlist)

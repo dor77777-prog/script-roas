@@ -201,7 +201,7 @@ export function CampaignDrawerOverview({
                         : id
                     }
                   >
-                    <li className="inline-flex items-center gap-1 text-[11px] bg-accent/8 text-accent px-2 py-0.5 rounded-md font-mono">
+                    <li className="inline-flex items-center gap-1 text-[11px] bg-accent-soft text-accent px-2 py-0.5 rounded-md font-mono">
                       <Package size={10} />
                       <span className="truncate max-w-[120px]">{id}</span>
                       {others.length > 0 && (
@@ -220,7 +220,7 @@ export function CampaignDrawerOverview({
           )}
           {mappedIds.length > 0 &&
             mappedIds.some(id => (otherCampaignsByProduct.get(id) ?? []).length > 0) && (
-              <p className="text-[10px] text-ink-muted leading-relaxed mt-2 bg-status-warningBg border border-status-warning/30 rounded-lg px-3 py-1.5">
+              <p className="text-[10px] text-ink-muted leading-relaxed mt-2 bg-status-warningBg border border-status-warning rounded-lg px-3 py-1.5">
                 🔗 חלק מהמוצרים גם משויכים לקמפיינים אחרים. ה-ROAS Shopify
                 של הקמפיין הזה מחושב לפי <strong>חלקו של הקמפיין בהוצאה</strong>{' '}
                 (חלוקה פרופורציונלית) — לא לפי כל ההכנסה של המוצר.

@@ -241,9 +241,9 @@ export function CampaignDrawerDaily({
           ? `השוואה: חצי שני (${secondHalfDates}) מול חצי ראשון (${firstHalfDates})`
           : 'השוואה: חצי שני vs חצי ראשון של הטווח';
         const toneBg: Record<typeof analysis.tone, string> = {
-          positive: 'bg-status-greenBg/40 border-status-green/30 text-status-green',
-          warning:  'bg-status-warningBg border-status-warning/30 text-status-warningFg',
-          negative: 'bg-status-redBg/40 border-status-red/30 text-status-red',
+          positive: 'bg-status-greenBg border-status-green text-status-greenFg',
+          warning:  'bg-status-warningBg border-status-warning text-status-warningFg',
+          negative: 'bg-status-redBg border-status-red text-status-redFg',
           neutral:  'bg-glass-2 border-glass-edge text-ink-secondary',
         };
         return (
@@ -265,7 +265,7 @@ export function CampaignDrawerDaily({
                     className={cn(
                       'px-2 py-0.5 h-auto rounded transition-colors text-[10px]',
                       cpmAnalysisMode === 'half'
-                        ? 'bg-accent/10 text-accent font-medium'
+                        ? 'bg-accent-bg text-accent font-medium'
                         : 'text-ink-muted hover:text-ink',
                     )}
                   >
@@ -278,7 +278,7 @@ export function CampaignDrawerDaily({
                     className={cn(
                       'px-2 py-0.5 h-auto rounded transition-colors text-[10px]',
                       cpmAnalysisMode === 'prev'
-                        ? 'bg-accent/10 text-accent font-medium'
+                        ? 'bg-accent-bg text-accent font-medium'
                         : 'text-ink-muted hover:text-ink',
                     )}
                   >
@@ -290,7 +290,7 @@ export function CampaignDrawerDaily({
                     type="checkbox"
                     checked={showRoasOverlay}
                     onChange={e => setShowRoasOverlay(e.target.checked)}
-                    className="rounded border-glass-edge text-accent focus:ring-accent/30 cursor-pointer"
+                    className="rounded border-glass-edge text-accent focus:ring-accent cursor-pointer"
                   />
                   הוסף ROAS לגרף
                 </label>

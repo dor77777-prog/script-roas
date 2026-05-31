@@ -55,7 +55,7 @@ export function CampaignDrawerAdSets(props: CampaignDrawerAdSetsProps) {
         className="text-center py-10 text-ink-muted"
         data-testid="campaign-drawer-tab-adsets"
       >
-        <Layers size={28} className="mx-auto mb-2 text-ink-muted/60" />
+        <Layers size={28} className="mx-auto mb-2 text-ink-subtle" />
         <div className="text-sm">אין נתוני ad-sets לטווח הזה.</div>
       </div>
     );

@@ -800,7 +800,7 @@ export function CampaignDrawer({
               top-end corner. */}
           <div className="flex items-start justify-between gap-3 mb-2 pe-10">
             <div className="flex items-center gap-2 min-w-0 flex-1">
-              <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent/8 text-accent shrink-0">
+              <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent-soft text-accent shrink-0">
                 <Megaphone size={16} />
               </span>
               <div className="min-w-0">
@@ -836,7 +836,7 @@ export function CampaignDrawer({
               href={link}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-accent hover:text-accent/80 font-medium"
+              className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-accent hover:text-accent-deep font-medium"
             >
               <ExternalLink size={13} />
               פתח ב-<bdi dir="ltr">{summary.platform}</bdi> Ads Manager

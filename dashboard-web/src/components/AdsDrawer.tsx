@@ -383,7 +383,7 @@ export function AdsDrawer({
             button never sits underneath it. Matches CampaignDrawer. */}
         <SheetHeader className="flex items-center justify-between gap-3 py-3 sm:px-5 pe-10">
           <div className="min-w-0 flex items-center gap-2.5">
-            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent/10 text-accent shrink-0">
+            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent-soft text-accent shrink-0">
               <Layers size={16} />
             </span>
             <div className="min-w-0">
@@ -431,7 +431,7 @@ export function AdsDrawer({
             <div
               role="alert"
               data-testid="ads-drawer-error"
-              className="rounded-xl border border-status-red/30 bg-status-redBg/40 text-status-red px-4 py-4 mx-1"
+              className="rounded-xl border border-status-red bg-status-redBg text-status-redFg px-4 py-4 mx-1"
             >
               <div className="flex items-start gap-2.5">
                 <AlertTriangle size={18} className="shrink-0 mt-0.5" />
@@ -463,7 +463,7 @@ export function AdsDrawer({
 
           {!isLoading && !error && (!summary || summary.ads.length === 0) && (
             <div className="text-center py-10 text-ink-muted">
-              <Layers size={28} className="mx-auto mb-2 text-ink-muted/60" />
+              <Layers size={28} className="mx-auto mb-2 text-ink-subtle" />
               <div className="text-sm">אין נתוני מודעות לטווח הזה.</div>
               <div className="text-[11px] mt-1 leading-relaxed">
                 ודא ש-<code className="font-mono">runDailyUpdate</code>{' '}
@@ -552,8 +552,8 @@ export function AdsDrawer({
                               className={cn(
                                 'w-7 h-7 rounded-full',
                                 isOptimized
-                                  ? 'text-status-green hover:bg-status-greenBg/60'
-                                  : 'text-ink-muted hover:text-status-green hover:bg-status-greenBg/40',
+                                  ? 'text-status-green hover:bg-status-greenBg'
+                                  : 'text-ink-muted hover:text-status-green hover:bg-status-greenBg',
                               )}
                               title={isOptimized ? 'לחץ להסרת הסימון' : 'סמן כאופטימיזציה בוצעה'}
                               aria-pressed={isOptimized}
@@ -589,10 +589,10 @@ export function AdsDrawer({
                                 ? adAttr.deterministicRevenue / a.spend
                                 : 0;
                               const tone =
-                                adAttr.trust.level === 'high'    ? 'bg-status-greenBg/60 text-status-green'
+                                adAttr.trust.level === 'high'    ? 'bg-status-greenBg text-status-greenFg'
                               : adAttr.trust.level === 'medium'  ? 'bg-status-warningBg text-status-warningFg'
                               : adAttr.trust.level === 'unknown' ? 'bg-glass-2 text-ink-secondary'
-                              :                                    'bg-status-redBg/60 text-status-red';
+                              :                                    'bg-status-redBg text-status-redFg';
                               const tooltip =
                                 `ROAS אמיתי · ${adAttr.trust.label} (${adAttr.trust.score.toFixed(0)}/100)\n\n` +
                                 `Meta דיווח: ${fmtMoneyString(a.value)}\n` +
@@ -628,7 +628,7 @@ export function AdsDrawer({
                                   href={link}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="inline-flex items-center justify-center w-7 h-7 rounded text-ink-muted hover:text-accent hover:bg-accent/8 transition-colors"
+                                  className="inline-flex items-center justify-center w-7 h-7 rounded text-ink-muted hover:text-accent hover:bg-accent-bg transition-colors"
                                   aria-label="פתח את המודעה במנהל מודעות"
                                 >
                                   <ExternalLink size={14} />
