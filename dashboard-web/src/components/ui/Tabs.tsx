@@ -26,9 +26,18 @@ type TabsRootProps = React.ComponentPropsWithoutRef<typeof RadixTabs.Root> & {
 export const Tabs = forwardRef<
   React.ElementRef<typeof RadixTabs.Root>,
   TabsRootProps
->(({ variant = 'pill', children, ...props }, ref) => (
+>(({ variant = 'pill', children, dir, ...props }, ref) => (
+  // The app is RTL (layout.tsx sets <html dir="rtl">). Radix's Tabs Root
+  // calls useDirection(dir) which falls back to "ltr" when no
+  // DirectionProvider is in the tree, then writes that dir onto its
+  // <Primitive.div>. That stamps dir="ltr" onto every Tabs Root we render
+  // — visible in the wild when the AnalysisTrendsTab / AnalysisArchiveTab
+  // split flipped the Analysis pane to LTR even though the page chrome
+  // stayed RTL. We restore the document direction by defaulting to "rtl"
+  // here, and still let callers override via the `dir` prop when a chart
+  // or chronology genuinely needs LTR.
   <TabsVariantContext.Provider value={variant}>
-    <RadixTabs.Root ref={ref} {...props}>
+    <RadixTabs.Root ref={ref} dir={dir ?? 'rtl'} {...props}>
       {children}
     </RadixTabs.Root>
   </TabsVariantContext.Provider>
