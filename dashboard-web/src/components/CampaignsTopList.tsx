@@ -1,6 +1,6 @@
 'use client';
 
-import { Trophy, AlertTriangle } from 'lucide-react';
+import { Trophy, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { Heading } from '@/components/ui/Typography';
@@ -78,17 +78,26 @@ function Row({
       ? 'text-status-red'
       : 'text-status-orange';
 
-  const verdict = isWinner
+  // Verdict text. The leading directional arrow used to be a Unicode "→"
+  // (U+2192 RIGHTWARDS ARROW). In an RTL Hebrew row the bidi algorithm
+  // renders a right-pointing arrow pointing AWAY from the verdict text
+  // it refers to — operators reported the arrow felt "disconnected" from
+  // the recommendation. Replaced with a logical <ArrowLeft /> from lucide
+  // which, under RTL flow, visually points TOWARD the start of the next
+  // word (i.e. the verdict). The icon component renders SVG and doesn't
+  // participate in bidi reordering, so it always points in the reading
+  // direction.
+  const verdictText = isWinner
     ? campaign.roas >= 4
-      ? '→ הגדל תקציב משמעותית'
+      ? 'הגדל תקציב משמעותית'
       : campaign.roas >= 2.7
-        ? '→ מקום להגדיל תקציב'
-        : '→ יציב — שמור על תקציב'
+        ? 'מקום להגדיל תקציב'
+        : 'יציב — שמור על תקציב'
     : campaign.roas < 1
-      ? '→ סגור או בדוק מיפוי'
+      ? 'סגור או בדוק מיפוי'
       : campaign.roas < 2
-        ? '→ הקטן תקציב / אופטימיזציה'
-        : '→ בדוק מה רץ פה';
+        ? 'הקטן תקציב / אופטימיזציה'
+        : 'בדוק מה רץ פה';
 
   const verdictColor = isWinner ? 'text-status-green' : 'text-status-red';
 
@@ -125,7 +134,17 @@ function Row({
               {' · '}
               <span className="text-ink-muted">CAC:</span> {Math.round(campaign.cac).toLocaleString('he-IL')}
             </div>
-            <div className={cn('font-medium shrink-0', verdictColor)}>{verdict}</div>
+            <div
+              className={cn('font-medium shrink-0 inline-flex items-center gap-1', verdictColor)}
+              data-testid="campaigns-top-list-verdict"
+            >
+              <ArrowLeft
+                className="w-3 h-3 shrink-0"
+                aria-hidden="true"
+                data-testid="campaigns-top-list-verdict-arrow"
+              />
+              <span>{verdictText}</span>
+            </div>
           </div>
         </div>
       </div>
