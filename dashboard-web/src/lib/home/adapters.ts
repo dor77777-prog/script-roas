@@ -18,6 +18,7 @@ import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type {
   CommandCenterDelta,
   CommandCenterPeriod,
+  CommandCenterSecondarySparklines,
 } from '@/components/home/CommandCenterHero';
 import type {
   PerStoreData,
@@ -144,6 +145,100 @@ export function toHeroDelta(
 export function toNetSparkValues(series: DailySeries[]): number[] {
   if (!series || series.length === 0) return [];
   return series.map((d) => d.totalRevenue - d.totalSpend);
+}
+
+/**
+ * Per-day series for the 5 secondary hero cards. Each array is the same
+ * length as `series` (one entry per calendar day in the active range, in
+ * ISO order) so the sparklines on every card stay temporally aligned —
+ * the operator can compare shapes across cards without mentally
+ * re-stretching them.
+ *
+ * Sources:
+ *   - Spend / Revenue / ROAS are sliced straight off DailySeries (the
+ *     same input the Net spark already uses, so no second pass over the
+ *     row set).
+ *   - Orders requires bucketing the raw orders-attribution rows by date
+ *     because DailySeries doesn't carry order counts — the caller passes
+ *     the `ordersRows` SWR payload directly so this adapter stays pure.
+ *   - CPM needs (spend, impressions) per day; the campaigns SWR payload
+ *     carries them, but the per-day buckets are produced here so the
+ *     hero never inherits an unfiltered (multi-store) series when the
+ *     operator narrows the global store filter.
+ *
+ * Each metric returns `undefined` (not `[]`) when its source rows are
+ * missing — the hero treats `undefined` as "spark suppressed, leave the
+ * card bare" while an empty array is still treated as "data loaded, no
+ * days in range" and rendered as nothing.
+ */
+export function toSecondarySparklines(opts: {
+  series: DailySeries[];
+  range: { from: string; to: string };
+  store: string;
+  ordersRows?: Array<{ storeName: string; date: string }>;
+  campaignsRows?: CampaignsResponse['rows'];
+}): CommandCenterSecondarySparklines {
+  const { series, range, store, ordersRows, campaignsRows } = opts;
+
+  // Build the canonical ISO-date list once from `series` so every metric
+  // bucket lines up with the existing chart x-axis. This guarantees every
+  // returned array is length-equal (zero-filled days included).
+  const dateOrder = series.map((d) => d.date);
+  const dateIndex = new Map(dateOrder.map((d, i) => [d, i]));
+
+  const spend   = series.map((d) => d.totalSpend);
+  const revenue = series.map((d) => d.totalRevenue);
+  // ROAS at the same per-day grain — `totalRoas` is already computed in
+  // dailySeries (sum-revenue / sum-spend within the day, so it's a true
+  // blended ROAS for that calendar day).
+  const roas    = series.map((d) => d.totalRoas);
+
+  // Orders: 1 increment per attribution row, scoped by the same store
+  // filter the per-store row uses so a single-store view doesn't get a
+  // blended-all sparkline. Days with zero orders sit at 0 (not undefined)
+  // — matches the SVG geometry that treats a flat baseline as "no
+  // activity yet" rather than "data missing".
+  const orders = dateOrder.map(() => 0);
+  if (ordersRows && ordersRows.length > 0) {
+    for (const r of ordersRows) {
+      if (r.date < range.from || r.date > range.to) continue;
+      if (store !== 'All' && r.storeName !== store) continue;
+      const idx = dateIndex.get(r.date);
+      if (idx == null) continue;
+      orders[idx]! += 1;
+    }
+  }
+
+  // CPM: blended (spend / impressions × 1000) per day. Days with zero
+  // impressions emit 0 — same baseline-flat semantics as orders.
+  // `campaignsRows` may be undefined while the secondary SWR is still
+  // loading; we propagate undefined so the spark hides rather than
+  // showing a misleading flat line.
+  let cpm: number[] | undefined;
+  if (campaignsRows && campaignsRows.length > 0) {
+    const cpmSpend = dateOrder.map(() => 0);
+    const cpmImpr  = dateOrder.map(() => 0);
+    for (const r of campaignsRows) {
+      if (r.date < range.from || r.date > range.to) continue;
+      if (store !== 'All' && r.storeName !== store) continue;
+      const idx = dateIndex.get(r.date);
+      if (idx == null) continue;
+      cpmSpend[idx]! += r.spend;
+      cpmImpr[idx]!  += r.impressions;
+    }
+    cpm = cpmSpend.map((s, i) => {
+      const imp = cpmImpr[i]!;
+      return imp > 0 ? (s / imp) * 1000 : 0;
+    });
+  }
+
+  return {
+    spend,
+    revenue,
+    roas,
+    orders: ordersRows ? orders : undefined,
+    cpm,
+  };
 }
 
 /* --------------------------------------------------------------------------

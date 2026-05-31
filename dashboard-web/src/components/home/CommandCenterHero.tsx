@@ -90,6 +90,22 @@ export interface CommandCenterDelta {
   orders: number | null;
 }
 
+/**
+ * Secondary-card sparkline series (one entry per calendar day in the active
+ * range, ISO-date order). Each metric is optional — when a metric's array
+ * is missing or has <2 finite values, that card renders without a
+ * sparkline. This keeps the row visually stable while data is still loading
+ * but lets every card carry the "shape of the period" once it lands —
+ * matching the operator's request that the cards stop looking empty.
+ */
+export interface CommandCenterSecondarySparklines {
+  spend?: number[];
+  revenue?: number[];
+  roas?: number[];
+  orders?: number[];
+  cpm?: number[];
+}
+
 export interface CommandCenterHeroProps {
   current: CommandCenterPeriod;
   /** Optional previous-period numbers; when omitted, delta lines hide. */
@@ -101,6 +117,13 @@ export interface CommandCenterHeroProps {
    * Drives the row-1 featured-card sparkline. Pass [] to suppress.
    */
   netSparkValues?: number[];
+  /**
+   * Per-metric daily series for the 5 secondary hero cards. Each metric is
+   * rendered with a tone-appropriate stroke (Spend = down-red, Revenue =
+   * up-green, ROAS = accent violet, Orders = neutral ink, CPM = info-blue)
+   * so a glance at the strip shows direction at the same time as magnitude.
+   */
+  secondarySparklines?: CommandCenterSecondarySparklines;
   /**
    * Freshness signal — drives every card's <FreshnessBadge> AND the
    * Card's `data-freshness` desaturation. Accepts the same shape as
@@ -262,6 +285,95 @@ const BAND_STROKE: Record<RoasBand, string> = {
 };
 
 /* --------------------------------------------------------------------------
+ * MiniSparkline — slim 30 px stroke+fill spark for the secondary cards.
+ *
+ * Same geometry as <NetSparkline> but smaller and accepts an arbitrary
+ * stroke colour so each secondary card carries a tone matching its
+ * semantic role (Spend = down-red, Revenue = up-green, ROAS = accent
+ * violet, Orders = neutral ink, CPM = info-blue). The fill is a vertical
+ * gradient from 35% → 0% so the line reads first and the area is a soft
+ * lead-in — no second visual layer competing with the big number.
+ *
+ * Lives inline (vs. a separate primitives file) because every prop is
+ * specific to the hero strip's editorial role and we want the spark
+ * geometry + the per-card colour map next to each other for quick
+ * tuning.
+ * -------------------------------------------------------------------------- */
+
+function MiniSparkline({
+  values,
+  stroke,
+}: {
+  values: number[] | undefined;
+  stroke: string;
+}) {
+  // Hooks first — see NetSparkline for the same rationale.
+  const gid = useMemo(
+    () => `mini-spark-${Math.random().toString(36).slice(2, 8)}`,
+    [],
+  );
+  if (!values || values.length < 2) return null;
+  const W = 600;
+  const H = 30;
+  const PAD_Y = 3;
+  const clean = values.filter((v) => Number.isFinite(v));
+  if (clean.length < 2) return null;
+  const lo = Math.min(...clean);
+  const hi = Math.max(...clean);
+  // When every value is identical the range is 0; render a flat line at
+  // the vertical midline instead of dividing by zero.
+  const range = hi - lo || 1;
+  const stepX = W / (clean.length - 1);
+  const yFor = (v: number) =>
+    H - PAD_Y - ((v - lo) / range) * (H - PAD_Y * 2);
+
+  const linePath = clean
+    .map((v, i) => {
+      const x = i * stepX;
+      const y = yFor(v);
+      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
+  const areaPath = `${linePath} L${W},${H} L0,${H} Z`;
+
+  return (
+    <svg
+      className="block w-full h-[30px] mt-3"
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="none"
+      aria-hidden
+    >
+      <defs>
+        <linearGradient id={gid} x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stopColor={stroke} stopOpacity={0.35} />
+          <stop offset="100%" stopColor={stroke} stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <path d={linePath} fill="none" stroke={stroke} strokeWidth={1.5} />
+      <path d={areaPath} fill={`url(#${gid})`} />
+    </svg>
+  );
+}
+
+/* --------------------------------------------------------------------------
+ * Per-metric stroke colour for the 5 secondary cards. Each colour is the
+ * semantic "direction" tone — Spend is a soft down-red, Revenue is the
+ * up-green band, ROAS is the accent violet, Orders is a neutral ink, and
+ * CPM is the info-blue we already use on auxiliary metrics. All use OKLCH
+ * literals (same palette family as BAND_STROKE) so the strokes sit in the
+ * same colour space and the strip reads as a unified set rather than five
+ * disparate hues.
+ * -------------------------------------------------------------------------- */
+
+const SECONDARY_SPARK_STROKE = {
+  spend:   'oklch(64% 0.18 22)',   // softer than the band-red rim
+  revenue: 'oklch(70% 0.16 145)',  // matches band-green
+  roas:    'oklch(70% 0.18 295)',  // accent violet
+  orders:  'oklch(70% 0.012 250)', // neutral ink
+  cpm:     'oklch(68% 0.14 240)',  // info-blue
+} as const;
+
+/* --------------------------------------------------------------------------
  * Component
  * -------------------------------------------------------------------------- */
 
@@ -270,6 +382,7 @@ export function CommandCenterHero({
   delta,
   rangeLabel,
   netSparkValues,
+  secondarySparklines,
   updatedAt,
   className,
 }: CommandCenterHeroProps) {
@@ -355,6 +468,10 @@ export function CommandCenterHero({
             positive={(delta?.spendPct ?? 0) <= 0}
             className="text-xs mt-1.5"
           />
+          <MiniSparkline
+            values={secondarySparklines?.spend}
+            stroke={SECONDARY_SPARK_STROKE.spend}
+          />
         </Card>
 
         <Card
@@ -373,6 +490,10 @@ export function CommandCenterHero({
             text={fmtPctDelta(delta?.revenuePct)}
             positive={(delta?.revenuePct ?? 0) >= 0}
             className="text-xs mt-1.5"
+          />
+          <MiniSparkline
+            values={secondarySparklines?.revenue}
+            stroke={SECONDARY_SPARK_STROKE.revenue}
           />
         </Card>
       </div>
@@ -400,6 +521,10 @@ export function CommandCenterHero({
             positive={(delta?.roas ?? 0) >= 0}
             className="text-xs mt-1.5"
           />
+          <MiniSparkline
+            values={secondarySparklines?.roas}
+            stroke={SECONDARY_SPARK_STROKE.roas}
+          />
         </Card>
 
         <Card
@@ -418,6 +543,10 @@ export function CommandCenterHero({
             text={fmtCountDelta(delta?.orders)}
             positive={(delta?.orders ?? 0) >= 0}
             className="text-xs mt-1.5"
+          />
+          <MiniSparkline
+            values={secondarySparklines?.orders}
+            stroke={SECONDARY_SPARK_STROKE.orders}
           />
         </Card>
 
@@ -440,6 +569,10 @@ export function CommandCenterHero({
             text={fmtPctDelta(delta?.cpmPct)}
             positive={(delta?.cpmPct ?? 0) <= 0}
             className="text-xs mt-1.5"
+          />
+          <MiniSparkline
+            values={secondarySparklines?.cpm}
+            stroke={SECONDARY_SPARK_STROKE.cpm}
           />
         </Card>
       </div>

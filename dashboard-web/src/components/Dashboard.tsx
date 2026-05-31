@@ -69,6 +69,7 @@ import {
   toNetSparkValues,
   toPerStoreData,
   toChartData,
+  toSecondarySparklines,
 } from '@/lib/home/adapters';
 
 const fetcher = async (url: string) => {
@@ -366,6 +367,7 @@ export function Dashboard() {
                   setFilters={setFilters}
                   aiReportSignal={aiReportSignal}
                   ordersByStore={ordersByStore}
+                  ordersRows={ordersData?.rows}
                 />
               )}
               {activeTab === 'pnl' && (
@@ -434,6 +436,7 @@ function HomeTab({
   setFilters,
   aiReportSignal,
   ordersByStore,
+  ordersRows,
 }: {
   data: DashboardData;
   filtered: FilteredView;
@@ -443,6 +446,12 @@ function HomeTab({
   aiReportSignal: number;
   /** Phase 05.7.8 — per-store order count for the range, keyed by storeName. */
   ordersByStore: Record<string, number>;
+  /**
+   * Raw orders-attribution rows for the active range. Threaded through so
+   * the Hero strip's per-day Orders sparkline can bucket the same row set
+   * the per-store order count already consumes — no second SWR fetch.
+   */
+  ordersRows?: Array<{ storeName: string; date: string }>;
 }) {
   // Chart range is INDEPENDENT of the page-level filter range — operator can
   // browse a 90-day trend without losing the "today" snapshot above. Seeded
@@ -581,6 +590,21 @@ function HomeTab({
     () => toNetSparkValues(filtered.series),
     [filtered.series],
   );
+  // Bug F (2026-05-31) — every secondary hero card carries a per-day
+  // sparkline so the strip stops feeling empty. The adapter reuses the
+  // exact (series, orders, campaigns) inputs the rest of the Home tab
+  // already consumes so no extra SWR fetch is introduced.
+  const secondarySparklines = useMemo(
+    () =>
+      toSecondarySparklines({
+        series: filtered.series,
+        range: filters.range,
+        store: filters.store,
+        ordersRows,
+        campaignsRows: campaignsData?.rows,
+      }),
+    [filtered.series, filters.range, filters.store, ordersRows, campaignsData],
+  );
 
   // ---- Per-store row ------------------------------------------------------
   const storeIdByName = useMemo<Record<string, string>>(() => {
@@ -708,6 +732,7 @@ function HomeTab({
         delta={heroDelta}
         rangeLabel={heroRangeLabel}
         netSparkValues={netSparkValues}
+        secondarySparklines={secondarySparklines}
         updatedAt={data.dataLastWriteAt ?? undefined}
       />
 
