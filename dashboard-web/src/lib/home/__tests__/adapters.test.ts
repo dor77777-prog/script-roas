@@ -9,12 +9,15 @@
 import { describe, expect, it } from 'vitest';
 import {
   aggregateCpm,
+  annotationsToPins,
+  toChartData,
   toHeroDelta,
   toHeroPeriod,
   toPerStoreData,
 } from '../adapters';
 import type { Aggregate, StoreAgg } from '@/lib/analytics';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
+import type { Annotation } from '@/lib/annotations';
 
 const EMPTY_AGG: Aggregate = {
   revenue: 0,
@@ -174,6 +177,46 @@ describe('toPerStoreData', () => {
       {},
     );
     expect(result[0].aov).toBeNull();
+  });
+});
+
+describe('annotationsToPins — Bug fix (2026-05-31)', () => {
+  it('maps every annotation to a pin with id + date + label + canonical kind emoji', () => {
+    const annotations: Annotation[] = [
+      { id: 'a1', date: '2026-05-10', kind: 'launch', title: 'New campaign', createdAt: 1 },
+      { id: 'a2', date: '2026-05-15', kind: 'budget', title: 'Bumped CBO', createdAt: 2 },
+      { id: 'a3', date: '2026-05-20', kind: 'pause',  title: 'Paused under-performer', createdAt: 3 },
+    ];
+    const pins = annotationsToPins(annotations);
+    expect(pins).toHaveLength(3);
+    expect(pins[0]).toEqual({ id: 'a1', date: '2026-05-10', icon: '✨', label: 'New campaign' });
+    expect(pins[1]).toEqual({ id: 'a2', date: '2026-05-15', icon: '💰', label: 'Bumped CBO' });
+    expect(pins[2]).toEqual({ id: 'a3', date: '2026-05-20', icon: '⏸', label: 'Paused under-performer' });
+  });
+
+  it('returns an empty array for empty input', () => {
+    expect(annotationsToPins([])).toEqual([]);
+  });
+});
+
+describe('toChartData — annotation pins wiring (Bug fix 2026-05-31)', () => {
+  const aggZero: Aggregate = agg({});
+  const cpmZero = { cpm: 0, impressions: 0, spend: 0 };
+
+  it('emits empty pins when annotations is omitted (back-compat)', () => {
+    const out = toChartData([], aggZero, cpmZero, null);
+    expect(out.pins).toEqual([]);
+  });
+
+  it('plumbs supplied annotations through to pins so the chart can render them', () => {
+    const annotations: Annotation[] = [
+      { id: 'pin-1', date: '2026-05-10', kind: 'sale', title: 'BFCM dry-run', createdAt: 1 },
+    ];
+    const out = toChartData([], aggZero, cpmZero, null, annotations);
+    expect(out.pins).toHaveLength(1);
+    expect(out.pins[0].id).toBe('pin-1');
+    expect(out.pins[0].date).toBe('2026-05-10');
+    expect(out.pins[0].label).toBe('BFCM dry-run');
   });
 });
 

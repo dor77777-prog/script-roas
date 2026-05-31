@@ -28,6 +28,11 @@ import { TabHeader } from './TabHeader';
 import { PnLBreakdown } from './PnLBreakdown';
 import { BillingSettings } from './BillingSettings';
 import { AnnotationsPanel } from './AnnotationsPanel';
+import {
+  annotationsInScope,
+  readAnnotations,
+  type Annotation,
+} from '@/lib/annotations';
 import { CommandPalette } from './CommandPalette';
 import { Sidebar } from './Sidebar';
 import { FocusMode } from './FocusMode';
@@ -603,6 +608,30 @@ function HomeTab({
     ],
   );
 
+  // ---- Annotation pins for RoasTargetChart -------------------------------
+  // Bug fix (2026-05-31): the chart's annotation pins were stubbed empty in
+  // the Wave-3 redesign. Wire them to the same localStorage-backed source
+  // the AnnotationsPanel writes to so launching a campaign / logging a sale
+  // immediately shows up as a pin on the chart, matching the pre-overhaul
+  // RoasChart behavior. Subscribes to the existing 'roas-annotations-changed'
+  // event so a new annotation surfaces without a refresh.
+  const [annotationsAll, setAnnotationsAll] = useState<Annotation[]>([]);
+  useEffect(() => {
+    setAnnotationsAll(readAnnotations());
+    const onChange = () => setAnnotationsAll(readAnnotations());
+    window.addEventListener('roas-annotations-changed', onChange);
+    return () => window.removeEventListener('roas-annotations-changed', onChange);
+  }, []);
+  // Scope to the CHART date range (independent from the page filter range)
+  // so pins disappear when the operator narrows the chart picker to a
+  // window that doesn't contain that annotation. Store filter follows the
+  // page-level scope — pins for store-scoped events hide when the operator
+  // narrows to a different store.
+  const chartAnnotations = useMemo(
+    () => annotationsInScope(annotationsAll, chartFromTo, filters.store),
+    [annotationsAll, chartFromTo, filters.store],
+  );
+
   // ---- ROAS chart data ----------------------------------------------------
   const chartScope = useMemo(() => {
     const stores =
@@ -635,8 +664,9 @@ function HomeTab({
         chartScope.agg,
         chartScope.cpm,
         prevAggFromPrevData,
+        chartAnnotations,
       ),
-    [chartScope, prevAggFromPrevData],
+    [chartScope, prevAggFromPrevData, chartAnnotations],
   );
 
   const handleStoreSelect = (storeId: string) => {

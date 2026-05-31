@@ -24,6 +24,7 @@ import type {
   PerStorePlatformCpm,
 } from '@/components/home/PerStoreRow';
 import type {
+  AnnotationPin,
   RoasChartData,
   RoasChartKpis,
 } from '@/components/home/RoasTargetChart';
@@ -31,6 +32,10 @@ import type {
   RoasChartPoint,
 } from '@/lib/synthesis/roasChart';
 import { storeHasTikTok } from '@/lib/platformsByStore';
+import {
+  ANNOTATION_KIND_EMOJI,
+  type Annotation,
+} from '@/lib/annotations';
 
 /* --------------------------------------------------------------------------
  * CommandCenterHero
@@ -250,19 +255,53 @@ export function toChartKpis(agg: Aggregate, cpm: BlendedCpm): RoasChartKpis {
 }
 
 /**
+ * Map operator-logged annotations → `AnnotationPin[]` consumed by the
+ * <RoasTargetChart> pins overlay.
+ *
+ * Filter contract (mirrors HeroOverview's legacy chart wiring):
+ *   • `annotations` is already scope-filtered by the caller via
+ *     `annotationsInScope(readAnnotations(), range, store)` — we trust that
+ *     slice and do not re-filter here.
+ *   • Pins outside the chart's `points` date range are silently dropped by
+ *     the chart's `renderablePins` memo (date→index lookup misses), so we
+ *     emit every in-scope annotation and let the chart decide what to
+ *     render. Keeps the pin-count chip ("3 ציוני דרך") honest relative to
+ *     the operator's full activity log, not the visible chart slice.
+ *
+ * Emoji defaulting: each AnnotationKind has a canonical emoji in
+ * ANNOTATION_KIND_EMOJI; we pass it through so the chart pin's glyph matches
+ * the AnnotationsPanel + StatusEventsFeed icons. The chart still falls back
+ * to 💰 if `icon` is undefined (mockup default).
+ */
+export function annotationsToPins(annotations: Annotation[]): AnnotationPin[] {
+  return annotations.map((a) => ({
+    id: a.id,
+    date: a.date,
+    icon: ANNOTATION_KIND_EMOJI[a.kind],
+    label: a.title,
+  }));
+}
+
+/**
  * Wrap everything into the <RoasTargetChart data=…> prop.
+ *
+ * `annotations` is optional so legacy callers (tests, ad-hoc fixtures)
+ * keep working without surfacing pins; the Home Dashboard threads in the
+ * scope-filtered annotation list via `readAnnotations()` + a localStorage
+ * subscription so the chart re-renders when the operator logs a new event.
  */
 export function toChartData(
   series: DailySeries[],
   agg: Aggregate,
   cpm: BlendedCpm,
   prevAgg: Aggregate | null,
+  annotations: Annotation[] = [],
 ): RoasChartData {
   const points = toChartPoints(series);
   const daysActive = points.filter((p) => p.roas != null).length;
   return {
     points,
-    pins: [],
+    pins: annotationsToPins(annotations),
     kpis: toChartKpis(agg, cpm),
     prevPeriod:
       prevAgg && prevAgg.spend > 0

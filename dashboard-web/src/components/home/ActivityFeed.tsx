@@ -208,10 +208,20 @@ export function ActivityFeed({
     return s ? `?${s}` : '';
   }, [store, platform]);
 
+  // refreshInterval: 15s — operator-reported (2026-05-31) that the feed
+  // felt frozen on the Home tab. The route is ISR-cached (revalidate=60s)
+  // so a 15s poll is effectively cheap: most polls hit the SWR dedupe
+  // (`dedupingInterval: 30_000`) or the CDN, and only every ~4th poll
+  // round-trips Supabase. Trade-off: stale events surface ≤15s instead of
+  // ≤60s, at zero meaningful upstream cost.
   const { data, error } = useSWR<StatusEventsResponse>(
     `/api/operator/status-events${params}`,
     fetcher,
-    { refreshInterval: 60_000, revalidateOnFocus: true },
+    {
+      refreshInterval: 15_000,
+      revalidateOnFocus: true,
+      dedupingInterval: 30_000,
+    },
   );
 
   const events: StatusEventRow[] = data?.events ?? [];
