@@ -360,6 +360,13 @@ export function AdsDrawer({
         dir="rtl"
         onEscapeKeyDown={(e) => e.preventDefault()}
         aria-labelledby="ads-drawer-title"
+        // Wave-4 Task 4.3 — the AdsDrawer opens OVER the centered Campaign
+        // modal. Both Sheets portal to <body> and the ads portal mounts later
+        // (so it's after the modal in DOM order), but we ALSO lift the ads
+        // overlay + content to z-[60] so the modal's z-50 scrim can never
+        // cover the ad-level drilldown regardless of portal ordering. The
+        // modal dims behind this drawer + its own scrim.
+        overlayClassName="z-[60]"
         className={cn(
           // Wave-6 Task 6.1 — drawer fullscreen toggle animates over
           // --motion-large (480 ms) so the width morph reads as a
@@ -373,7 +380,7 @@ export function AdsDrawer({
           // force the table into horizontal scroll at 640px). 820px keeps
           // the AdsDrawer narrower than the parent CampaignDrawer (880px)
           // so the nested drilldown reads as a sibling, not an equal.
-          'flex flex-col p-0 transition-[max-width] duration-large ease-out',
+          'z-[60] flex flex-col p-0 transition-[max-width] duration-large ease-out',
           !isFullscreen && 'w-full sm:max-w-[820px]',
           isFullscreen && 'w-full sm:w-full max-w-full',
         )}

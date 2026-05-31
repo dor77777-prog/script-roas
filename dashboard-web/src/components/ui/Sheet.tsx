@@ -127,20 +127,31 @@ export interface SheetContentProps
   children: ReactNode;
   /** Hide the auto-rendered X. Set to true when the consumer provides its own. */
   hideDefaultClose?: boolean;
+  /**
+   * Extra classes for the Radix overlay (the dim scrim/wash behind the panel).
+   * Used by nested drawers that must paint ABOVE a parent Sheet's overlay —
+   * e.g. the AdsDrawer opens over the centered Campaign modal and bumps both
+   * its overlay and content to `z-[60]` so the modal's z-50 scrim can't cover
+   * the ad-level drilldown. twMerge in `cn` lets a `z-[60]` here win over the
+   * default `z-50`.
+   */
+  overlayClassName?: string;
 }
 
 const SheetContentC = forwardRef<
   React.ElementRef<typeof RadixDialog.Content>,
   SheetContentProps
->(({ className, variant, side, children, hideDefaultClose, ...props }, ref) => (
+>(({ className, variant, side, children, hideDefaultClose, overlayClassName, ...props }, ref) => (
   <RadixDialog.Portal>
     {/* Overlay treatment follows the variant: the modal sits on the tokenised
         --scrim dim (a calm dialog backdrop), the drawer keeps its frosted
-        glass-3 wash. Both fade in. */}
+        glass-3 wash. Both fade in. `overlayClassName` lets a nested drawer
+        lift its scrim above a parent Sheet's overlay (see prop docs). */}
     <RadixDialog.Overlay
       className={cn(
         'fixed inset-0 z-50 backdrop-blur-sm animate-in fade-in-0',
         variant === 'modal' ? 'bg-scrim' : 'bg-glass-3',
+        overlayClassName,
       )}
     />
     <RadixDialog.Content
