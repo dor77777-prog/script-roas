@@ -133,7 +133,12 @@ export function GoalTracker({ data }: Props) {
           // accent fill. Keeps rounded-card + shadow-glass via explicit
           // classes for chassis consistency.
           '!p-0 overflow-hidden rounded-card shadow-glass',
-          'bg-[linear-gradient(135deg,var(--accent),var(--accent-deep))] text-accent-fg',
+          // Far gradient stop is a DARKER anchor (~55% of the accent's own
+          // lightness, derived from the token so it stays dark in BOTH themes)
+          // rather than --accent-deep, which LIGHTENS in dark mode (deep accent
+          // is lighter than accent) and drops the white body text to ~1.94
+          // contrast. Keeps white-on-fill well above 4.5:1 in light AND dark.
+          'bg-[linear-gradient(135deg,var(--accent),oklch(from_var(--accent)_calc(l*0.55)_c_h))] text-accent-fg',
         )}
       >
         <div className="p-4 sm:p-5">
@@ -145,7 +150,7 @@ export function GoalTracker({ data }: Props) {
               קבע יעד חודשי
             </Heading>
           </div>
-          <p className="text-xs sm:text-sm text-[color-mix(in_oklab,var(--accent-fg)_75%,transparent)] leading-relaxed mb-3">
+          <p className="text-xs sm:text-sm text-accent-fg leading-relaxed mb-3">
             הגדר יעד הכנסות לחודש הזה והדשבורד יחשב בכל יום אם אתה מתקדם
             כפי שצריך, יקדים, או מפגר.
           </p>

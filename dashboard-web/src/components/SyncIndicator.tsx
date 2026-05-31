@@ -84,7 +84,7 @@ export function SyncIndicator() {
   } else if (status === 'error') {
     icon = <CloudOff size={13} />;
     label = 'sync שגיאה';
-    tone = 'bg-status-red text-status-redFg hover:bg-[color-mix(in_oklab,var(--status-red)_88%,var(--text))]';
+    tone = 'bg-status-red text-accent-fg hover:bg-[color-mix(in_oklab,var(--status-red)_88%,var(--text))]';
     title = 'לחץ לפרטים';
   } else if (supabaseDown) {
     // D-D1 yellow — Sheets OK (or hasn't synced yet), Supabase unreachable.
