@@ -5,10 +5,16 @@
  *
  * Glass-card grid that REPLACES the prior HeroOverview + HomeLiveBand +
  * HomeSummaryBand + KpiCards stack at the top of the Home tab. Visual
- * ref: mockup-04-final.html lines 313-338.
+ * ref: 2026-05-31 mesh mockup (`dashboard-mockups.html` `.row3b` + `.row4`).
  *
- *   Row 1 — Operating Profit (featured + banded) · Spend · Revenue
- *   Row 2 — ROAS · Inventory (COGS, muted) · Orders · CPM
+ *   Row 1 (`.row3b`, 1fr 1fr 1.15fr) — Revenue · Spend · Operating Profit
+ *   Row 2 (`.row4`, repeat(4,1fr))   — CPM · Orders · Inventory (COGS) · ROAS
+ *
+ *   The two VIVID banded cards (Operating Profit, ROAS) live on the END/LEFT
+ *   column under dir="rtl": the FIRST grid item renders in the start/right
+ *   column, the LAST in the end/left column, so DOM-last banded cards stack
+ *   on the left edge exactly as the approved mockup shows. The neutral KPI
+ *   cards (Spend / Revenue / Inventory / Orders / CPM) fill the start side.
  *
  *   • Featured card carries the OPERATING PROFIT (revenue − ad spend −
  *     COGS), labelled "רווח תפעולי". Full net profit (after fixed +
@@ -488,14 +494,77 @@ export function CommandCenterHero({
       aria-label="סקירת תקופה"
       className={cn('space-y-3', className)}
     >
-      {/* Row 1 — Net Profit (featured + banded) · Spend · Revenue --------- */}
+      {/*
+        Row 1 — DOM order Revenue · Spend · Operating Profit (featured + banded).
+        The mockup (`.row3b`, grid-template-columns: 1fr 1fr 1.15fr) is rendered
+        under dir="rtl": the FIRST grid item lands in the rightmost (start)
+        column and the LAST lands in the leftmost (end) column. The approved
+        mockup puts the vivid banded Operating-Profit card on the LEFT/END
+        (slightly wider, 1.15fr) with the two neutral money cards filling the
+        start side — Spend in the middle, Revenue at the start/right. DOM
+        order here is therefore Revenue → Spend → Profit so the banded card
+        stacks with the banded ROAS card directly below it (row 2, also END).
+      */}
       <div
         className={cn(
           'grid gap-3',
-          'grid-cols-1 md:grid-cols-[2fr_1fr_1fr]',
+          'grid-cols-1 md:grid-cols-[1fr_1fr_1.15fr]',
         )}
         data-testid="hero-row-1"
       >
+        <Card
+          band={businessBand}
+          bandStrength="muted"
+          freshness={freshnessStage}
+          className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
+          data-testid="hero-revenue"
+        >
+          <HeroCardHeader label="הכנסה" />
+          <bdi
+            dir="ltr"
+            className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
+          >
+            {fmtMoneyCompact(current.revenue)}
+          </bdi>
+          <DeltaLine
+            text={fmtPctDelta(delta?.revenuePct)}
+            positive={(delta?.revenuePct ?? 0) >= 0}
+            className="text-xs mt-1.5"
+          />
+          {/* 2026-05-31 mockup-alignment: neutral card, GREEN (revenue) spark. */}
+          <MiniSparkline
+            values={secondarySparklines?.revenue}
+            stroke={'var(--up)'}
+          />
+        </Card>
+
+        <Card
+          band={businessBand}
+          bandStrength="muted"
+          freshness={freshnessStage}
+          className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
+          data-testid="hero-spend"
+        >
+          <HeroCardHeader label="הוצאה" />
+          <bdi
+            dir="ltr"
+            className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
+          >
+            {fmtMoneyCompact(current.spend)}
+          </bdi>
+          {/* spend ↑ is a NEGATIVE signal */}
+          <DeltaLine
+            text={fmtPctDelta(delta?.spendPct)}
+            positive={(delta?.spendPct ?? 0) <= 0}
+            className="text-xs mt-1.5"
+          />
+          {/* 2026-05-31 mockup-alignment: neutral card, RED (spend) spark. */}
+          <MiniSparkline
+            values={secondarySparklines?.spend}
+            stroke={'var(--dn)'}
+          />
+        </Card>
+
         <Card
           band={netBand.band}
           freshness={freshnessStage}
@@ -539,86 +608,69 @@ export function CommandCenterHero({
             />
           )}
         </Card>
-
-        <Card
-          band={businessBand}
-          bandStrength="muted"
-          freshness={freshnessStage}
-          className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
-          data-testid="hero-spend"
-        >
-          <HeroCardHeader label="הוצאה" />
-          <bdi
-            dir="ltr"
-            className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
-          >
-            {fmtMoneyCompact(current.spend)}
-          </bdi>
-          {/* spend ↑ is a NEGATIVE signal */}
-          <DeltaLine
-            text={fmtPctDelta(delta?.spendPct)}
-            positive={(delta?.spendPct ?? 0) <= 0}
-            className="text-xs mt-1.5"
-          />
-          {/* 2026-05-31 mockup-alignment: neutral card, RED (spend) spark. */}
-          <MiniSparkline
-            values={secondarySparklines?.spend}
-            stroke={'var(--dn)'}
-          />
-        </Card>
-
-        <Card
-          band={businessBand}
-          bandStrength="muted"
-          freshness={freshnessStage}
-          className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
-          data-testid="hero-revenue"
-        >
-          <HeroCardHeader label="הכנסה" />
-          <bdi
-            dir="ltr"
-            className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
-          >
-            {fmtMoneyCompact(current.revenue)}
-          </bdi>
-          <DeltaLine
-            text={fmtPctDelta(delta?.revenuePct)}
-            positive={(delta?.revenuePct ?? 0) >= 0}
-            className="text-xs mt-1.5"
-          />
-          {/* 2026-05-31 mockup-alignment: neutral card, GREEN (revenue) spark. */}
-          <MiniSparkline
-            values={secondarySparklines?.revenue}
-            stroke={'var(--up)'}
-          />
-        </Card>
       </div>
 
-      {/* Row 2 — ROAS · Inventory (COGS) · Orders · CPM ------------------ */}
+      {/*
+        Row 2 — DOM order CPM · Orders · Inventory (COGS) · ROAS (featured + banded).
+        Mirrors row 1: under dir="rtl" the FIRST grid item is the start/right
+        column and the LAST is the end/left column (mockup `.row4`,
+        grid-template-columns: repeat(4,1fr)). DOM order CPM → Orders →
+        Inventory → ROAS lands ROAS on the LEFT/END so it stacks directly
+        beneath the banded Operating-Profit card from row 1.
+      */}
       <div
         className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-4"
         data-testid="hero-row-2"
       >
         <Card
-          band={roasBand.band}
+          band={businessBand}
+          bandStrength="muted"
           freshness={freshnessStage}
           className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
-          data-testid="hero-roas"
+          data-testid="hero-cpm"
         >
-          <HeroCardHeader label="ROAS" />
+          <HeroCardHeader label="CPM · עסקי" />
           <bdi
             dir="ltr"
-            className="v num banded block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
+            className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
           >
-            {fmtRoas(current.roas)}
+            {current.cpm != null && current.cpm > 0
+              ? fmtMoneyDecimal(current.cpm, 2)
+              : '—'}
           </bdi>
+          {/* CPM ↑ is a NEGATIVE signal */}
           <DeltaLine
-            text={fmtRoasDelta(delta?.roas)}
-            positive={(delta?.roas ?? 0) >= 0}
+            text={fmtPctDelta(delta?.cpmPct)}
+            positive={(delta?.cpmPct ?? 0) <= 0}
             className="text-xs mt-1.5"
           />
           <MiniSparkline
-            values={secondarySparklines?.roas}
+            values={secondarySparklines?.cpm}
+            stroke={NEUTRAL_SPARK_STROKE}
+          />
+        </Card>
+
+        <Card
+          band={businessBand}
+          bandStrength="muted"
+          freshness={freshnessStage}
+          className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
+          data-testid="hero-orders"
+        >
+          <HeroCardHeader label="הזמנות · סה״כ" />
+          <bdi
+            dir="ltr"
+            className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
+          >
+            {fmtCount(current.orders)}
+          </bdi>
+          <DeltaLine
+            text={fmtCountDelta(delta?.orders)}
+            positive={(delta?.orders ?? 0) >= 0}
+            className="text-xs mt-1.5"
+          />
+          <MiniSparkline
+            values={secondarySparklines?.orders}
             stroke={NEUTRAL_SPARK_STROKE}
           />
         </Card>
@@ -658,54 +710,25 @@ export function CommandCenterHero({
         </Card>
 
         <Card
-          band={businessBand}
-          bandStrength="muted"
+          band={roasBand.band}
           freshness={freshnessStage}
           className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
-          data-testid="hero-orders"
+          data-testid="hero-roas"
         >
-          <HeroCardHeader label="הזמנות · סה״כ" />
+          <HeroCardHeader label="ROAS" />
           <bdi
             dir="ltr"
-            className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
+            className="v num banded block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
           >
-            {fmtCount(current.orders)}
+            {fmtRoas(current.roas)}
           </bdi>
           <DeltaLine
-            text={fmtCountDelta(delta?.orders)}
-            positive={(delta?.orders ?? 0) >= 0}
+            text={fmtRoasDelta(delta?.roas)}
+            positive={(delta?.roas ?? 0) >= 0}
             className="text-xs mt-1.5"
           />
           <MiniSparkline
-            values={secondarySparklines?.orders}
-            stroke={NEUTRAL_SPARK_STROKE}
-          />
-        </Card>
-
-        <Card
-          band={businessBand}
-          bandStrength="muted"
-          freshness={freshnessStage}
-          className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
-          data-testid="hero-cpm"
-        >
-          <HeroCardHeader label="CPM · עסקי" />
-          <bdi
-            dir="ltr"
-            className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
-          >
-            {current.cpm != null && current.cpm > 0
-              ? fmtMoneyDecimal(current.cpm, 2)
-              : '—'}
-          </bdi>
-          {/* CPM ↑ is a NEGATIVE signal */}
-          <DeltaLine
-            text={fmtPctDelta(delta?.cpmPct)}
-            positive={(delta?.cpmPct ?? 0) <= 0}
-            className="text-xs mt-1.5"
-          />
-          <MiniSparkline
-            values={secondarySparklines?.cpm}
+            values={secondarySparklines?.roas}
             stroke={NEUTRAL_SPARK_STROKE}
           />
         </Card>
