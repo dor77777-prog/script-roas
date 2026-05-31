@@ -227,6 +227,19 @@
   --chart-dot-min:      #ef4d5b;             /* mockup-locked red min-dot */
   --chart-grid-line:    oklch(100% 0 0 / 0.06);
 
+  /* V4 interactive-chart tokens (target-chart mockup 2026-06-01).
+     Two-tone area fill (green above the target line / red below), a
+     dashed crosshair, and a violet "today" marker. Chart-scoped so the
+     SVG never reaches for --band-* / --status-* (cross-palette guard). */
+  --chart-area-up-top:  oklch(from var(--up) l c h / 0.34);  /* green, near top */
+  --chart-area-up-bot:  oklch(from var(--up) l c h / 0.06);  /* green, fade at target */
+  --chart-area-dn-top:  oklch(from var(--dn) l c h / 0.06);  /* red, fade at target */
+  --chart-area-dn-bot:  oklch(from var(--dn) l c h / 0.26);  /* red, near bottom */
+  --chart-crosshair:    oklch(from var(--chart-roas-line) l c h / 0.45);
+  --chart-today:        var(--accent);       /* violet "today" marker (dark) */
+  --chart-today-pulse:  oklch(from var(--accent) l c h / 0.3);
+  --chart-hover-ring:   var(--glass-2);      /* hover-dot core ring vs plot */
+
   /* ---------------------------------------------------------------------
      Task 1.10 — annotation pin palette.
      Hues consumed by lib/annotations.ts (ANNOTATION_KIND_COLOR map).
@@ -426,6 +439,18 @@
   --chart-dot-min:      #ef4d5b;             /* mockup-locked red min-dot */
   --chart-grid-line:    oklch(24% 0.03 265 / 0.08);
 
+  /* V4 interactive-chart tokens — light theme (see dark block for intent).
+     Two-tone area fill, dashed crosshair, teal "today" marker (--accent
+     is teal on light). Kept chart-scoped to satisfy the cross-palette guard. */
+  --chart-area-up-top:  oklch(from var(--up) l c h / 0.26);
+  --chart-area-up-bot:  oklch(from var(--up) l c h / 0.05);
+  --chart-area-dn-top:  oklch(from var(--dn) l c h / 0.05);
+  --chart-area-dn-bot:  oklch(from var(--dn) l c h / 0.20);
+  --chart-crosshair:    oklch(from var(--chart-roas-line) l c h / 0.4);
+  --chart-today:        var(--accent);       /* teal "today" marker (light) */
+  --chart-today-pulse:  oklch(from var(--accent) l c h / 0.28);
+  --chart-hover-ring:   var(--glass-2);
+
   /* Annotation pins — same hues as dark; mid-tone for the light plot. */
   --annotation-launch:   oklch(56% 0.18 145);
   --annotation-pause:    oklch(60% 0.012 250);
@@ -504,6 +529,59 @@ input[type="number"] {
 /* Hide scrollbar for tab nav strip and other horizontal scrollers. */
 .scrollbar-hide::-webkit-scrollbar { display: none; }
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* ===========================================================================
+   V4 ROAS-vs-target chart — draw-in + crosshair + "today" pulse.
+   (target-chart mockup 2026-06-01, RoasTargetChart.tsx)
+   The mockup played these inline; here they live as CSS classes so the
+   project-wide `@media (prefers-reduced-motion: reduce)` sweep collapses
+   every duration to ~0 and the chart simply paints at rest. The
+   stroke-dash-* properties on the line are seeded inline (path length) by
+   the component; the animation only drives the offset back to 0.
+   =========================================================================== */
+@keyframes roas-line-draw {
+  from { stroke-dashoffset: var(--roas-line-len, 1200); }
+  to   { stroke-dashoffset: 0; }
+}
+@keyframes roas-area-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.roas-line-draw {
+  animation: roas-line-draw 1100ms cubic-bezier(0.65, 0.05, 0.36, 1) forwards;
+}
+.roas-area-rise {
+  animation: roas-area-rise 900ms cubic-bezier(0.2, 0.7, 0.3, 1) 200ms both;
+}
+/* Crosshair vertical guide — opacity toggled by the `.on` class the
+   component adds on pointer-move; the transition fades it in/out. */
+.roas-crosshair {
+  stroke: var(--chart-crosshair);
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+.roas-crosshair.on { opacity: 0.75; }
+.roas-hover-dot {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+.roas-hover-dot.on { opacity: 1; }
+/* "Today" pulse — a slow breathing halo behind the last data point. */
+@keyframes roas-today-pulse {
+  0%, 100% { r: 5; opacity: 0.4; }
+  50%      { r: 13; opacity: 0; }
+}
+.roas-today-pulse { animation: roas-today-pulse 2.4s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  /* Paint the line at rest (no dash sweep) and freeze the pulse. */
+  .roas-line-draw { animation: none !important; stroke-dashoffset: 0 !important; }
+  .roas-area-rise { animation: none !important; opacity: 1 !important; transform: none !important; }
+  .roas-today-pulse { animation: none !important; opacity: 0.35 !important; }
+}
 
 /* ===========================================================================
    TableBase sticky-header — single source of truth for every <table> in

@@ -205,6 +205,76 @@ function findMinMax(points: RoasChartPoint[]): {
   return { min, max };
 }
 
+/**
+ * A single contiguous run of non-null ROAS points (index + screen coords).
+ * The chart skips null gaps, so a sparse series yields several segments.
+ */
+interface PlotPoint {
+  index: number;
+  x: number;
+  y: number;
+  roas: number;
+  date: string;
+}
+
+function buildSegments(points: RoasChartPoint[]): PlotPoint[][] {
+  const segments: PlotPoint[][] = [];
+  let cur: PlotPoint[] = [];
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    if (p.roas == null || Number.isNaN(p.roas)) {
+      if (cur.length) segments.push(cur);
+      cur = [];
+      continue;
+    }
+    cur.push({
+      index: i,
+      x: xForIndex(i, points.length),
+      y: yForRoas(p.roas),
+      roas: p.roas,
+      date: p.date,
+    });
+  }
+  if (cur.length) segments.push(cur);
+  return segments;
+}
+
+/**
+ * Catmull-Rom → cubic-bézier smoothing (V4 mockup smoothPath). Produces the
+ * same "type=monotone"-style soft curve the recommended mockup uses without
+ * pulling in Recharts. A single point degrades to a move; two+ smooth.
+ */
+function smoothPath(pts: PlotPoint[]): string {
+  if (pts.length === 0) return '';
+  if (pts.length === 1) return `M${pts[0].x.toFixed(2)},${pts[0].y.toFixed(2)}`;
+  let d = `M${pts[0].x.toFixed(2)},${pts[0].y.toFixed(2)}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1] || pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] || p2;
+    const c1x = p1.x + (p2.x - p0.x) / 6;
+    const c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6;
+    const c2y = p2.y - (p3.y - p1.y) / 6;
+    d +=
+      ` C${c1x.toFixed(2)},${c1y.toFixed(2)} ` +
+      `${c2x.toFixed(2)},${c2y.toFixed(2)} ` +
+      `${p2.x.toFixed(2)},${p2.y.toFixed(2)}`;
+  }
+  return d;
+}
+
+/** Close a smoothed line down to the plot baseline → a fillable area path. */
+function areaPathFromSegment(seg: PlotPoint[]): string {
+  if (seg.length === 0) return '';
+  const top = smoothPath(seg);
+  const baseY = (VB_HEIGHT - PADDING_BOTTOM).toFixed(2);
+  const firstX = seg[0].x.toFixed(2);
+  const lastX = seg[seg.length - 1].x.toFixed(2);
+  return `${top} L${lastX},${baseY} L${firstX},${baseY} Z`;
+}
+
 /* --------------------------------------------------------------------------
  * Component
  * -------------------------------------------------------------------------- */
@@ -251,6 +321,13 @@ export function RoasTargetChart({
     return () => document.removeEventListener('pointerdown', handler);
   }, [openPinId]);
 
+  /* --- crosshair + rich tooltip state (V4) ----------------------------- */
+  // `hoverIndex` is the nearest data point under the pointer; null = no
+  // crosshair. Driven by pointermove over the SVG plot. The custom tooltip
+  // (date · ROAS · target · delta-vs-target) renders in HTML over the chart.
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+
   /* --- derived ----------------------------------------------------------- */
   const { points, pins, kpis, prevPeriod, daysActive } = data;
   const synthesis = useMemo(
@@ -262,24 +339,69 @@ export function RoasTargetChart({
   const accentBand: RoasBand =
     synthesis.confidence === 'high' ? synthesis.band : roasBand;
 
-  // SVG path for the daily ROAS line — skip null-roas segments.
-  const linePath = useMemo(() => {
-    if (points.length === 0) return '';
-    const segments: string[] = [];
-    let penDown = false;
-    for (let i = 0; i < points.length; i++) {
+  // Contiguous non-null runs → smoothed line + two-tone area paths. The
+  // line keeps the `chart-roas-line` testid (now a smooth monotone-style
+  // curve instead of straight segments); the area is a NEW overlay clipped
+  // at the target line so green sits above the target and red below it.
+  const segments = useMemo(() => buildSegments(points), [points]);
+  const smoothLinePath = useMemo(
+    () => segments.map((seg) => smoothPath(seg)).join(' '),
+    [segments],
+  );
+  const areaPaths = useMemo(
+    () => segments.map((seg) => areaPathFromSegment(seg)),
+    [segments],
+  );
+
+  // Last non-null point = the "today" marker anchor.
+  const todayPoint = useMemo<PlotPoint | null>(() => {
+    for (let i = points.length - 1; i >= 0; i--) {
       const p = points[i];
-      if (p.roas == null || Number.isNaN(p.roas)) {
-        penDown = false;
-        continue;
+      if (p.roas != null && !Number.isNaN(p.roas)) {
+        return {
+          index: i,
+          x: xForIndex(i, points.length),
+          y: yForRoas(p.roas),
+          roas: p.roas,
+          date: p.date,
+        };
       }
-      const x = xForIndex(i, points.length);
-      const y = yForRoas(p.roas);
-      segments.push(`${penDown ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`);
-      penDown = true;
     }
-    return segments.join(' ');
+    return null;
   }, [points]);
+
+  // Crosshair anchor — only when the hovered index has a real ROAS value.
+  const hoverPoint = useMemo<PlotPoint | null>(() => {
+    if (hoverIndex == null) return null;
+    const p = points[hoverIndex];
+    if (!p || p.roas == null || Number.isNaN(p.roas)) return null;
+    return {
+      index: hoverIndex,
+      x: xForIndex(hoverIndex, points.length),
+      y: yForRoas(p.roas),
+      roas: p.roas,
+      date: p.date,
+    };
+  }, [hoverIndex, points]);
+
+  // Map pointer clientX → nearest data index (viewBox-space, RTL-safe:
+  // getBoundingClientRect is screen-space and the viewBox maps left→right).
+  const handlePlotMove = useCallback(
+    (e: React.PointerEvent<SVGSVGElement>) => {
+      const svg = svgRef.current;
+      if (!svg || points.length === 0) return;
+      const rect = svg.getBoundingClientRect();
+      if (rect.width === 0) return;
+      const rel = (e.clientX - rect.left) / rect.width; // 0..1 visual L→R
+      const vbx = rel * VB_WIDTH;
+      const usable = VB_WIDTH - PADDING_LEFT - PADDING_RIGHT;
+      const frac = Math.max(0, Math.min(1, (vbx - PADDING_LEFT) / usable));
+      const idx = Math.round(frac * (points.length - 1));
+      setHoverIndex(Math.max(0, Math.min(points.length - 1, idx)));
+    },
+    [points.length],
+  );
+  const handlePlotLeave = useCallback(() => setHoverIndex(null), []);
 
   // Pin → x position (only pins whose date is in the dataset are rendered).
   const renderablePins = useMemo(() => {
@@ -299,6 +421,35 @@ export function RoasTargetChart({
       })
       .filter((p): p is NonNullable<typeof p> => p !== null);
   }, [pins, points]);
+
+  // viewBox-x → overlay `left:` percentage (matches the renderablePins math
+  // so the HTML overlays sit exactly above their SVG anchor under both LTR
+  // and the page's RTL — the wrapper is dir="ltr").
+  const leftPctForIndex = useCallback(
+    (idx: number): number =>
+      points.length <= 1
+        ? 50
+        : ((idx / (points.length - 1)) *
+            ((VB_WIDTH - PADDING_LEFT) / VB_WIDTH) +
+            PADDING_LEFT / VB_WIDTH) *
+          100,
+    [points.length],
+  );
+
+  // Per-pin date + ROAS for the richer popover (event name + date + ROAS).
+  const pinMetaById = useMemo(() => {
+    const m = new Map<string, { date: string; roas: number | null }>();
+    for (const { pin, index } of renderablePins) {
+      const p = points[index];
+      m.set(pin.id, { date: pin.date, roas: p?.roas ?? null });
+    }
+    return m;
+  }, [renderablePins, points]);
+
+  const todayLeftPct = useMemo(
+    () => (todayPoint ? leftPctForIndex(todayPoint.index) : null),
+    [todayPoint, leftPctForIndex],
+  );
 
   const xAxisLabels = useMemo(() => {
     if (points.length === 0) return [] as Array<{ text: string; x: number; anchor: 'start' | 'middle' | 'end' }>;
@@ -440,6 +591,7 @@ export function RoasTargetChart({
         data-testid="chart-wrap"
       >
         <svg
+          ref={svgRef}
           viewBox={`0 0 ${VB_WIDTH} ${VB_HEIGHT}`}
           preserveAspectRatio="none"
           width="100%"
@@ -448,7 +600,50 @@ export function RoasTargetChart({
           role="img"
           aria-label={synthesis.text || 'גרף ROAS יומי מול יעד'}
           data-testid="chart-svg"
+          onPointerMove={handlePlotMove}
+          onPointerLeave={handlePlotLeave}
         >
+          {/* defs: two-tone area gradient (green above target / red below)
+              + a plot clip so the filled area never bleeds past the axes.
+              The gradient stop where green→red flips is placed at the target
+              line's y (in 0..1 of the plot height), so the colour boundary
+              lands exactly on the dashed יעד line. */}
+          <defs>
+            <linearGradient
+              id="roas-area-fill"
+              x1="0"
+              y1={PADDING_TOP}
+              x2="0"
+              y2={VB_HEIGHT - PADDING_BOTTOM}
+              gradientUnits="userSpaceOnUse"
+            >
+              {(() => {
+                const plotH = VB_HEIGHT - PADDING_TOP - PADDING_BOTTOM;
+                const targetOffset = Math.max(
+                  0,
+                  Math.min(1, (yForRoas(target) - PADDING_TOP) / plotH),
+                );
+                const pct = `${(targetOffset * 100).toFixed(2)}%`;
+                return (
+                  <>
+                    <stop offset="0%" stopColor="var(--chart-area-up-top)" />
+                    <stop offset={pct} stopColor="var(--chart-area-up-bot)" />
+                    <stop offset={pct} stopColor="var(--chart-area-dn-top)" />
+                    <stop offset="100%" stopColor="var(--chart-area-dn-bot)" />
+                  </>
+                );
+              })()}
+            </linearGradient>
+            <clipPath id="roas-plot-clip">
+              <rect
+                x={PADDING_LEFT}
+                y={PADDING_TOP - 4}
+                width={VB_WIDTH - PADDING_LEFT - PADDING_RIGHT}
+                height={VB_HEIGHT - PADDING_TOP - PADDING_BOTTOM + 8}
+              />
+            </clipPath>
+          </defs>
+
           {/* Gridlines at integer ROAS values */}
           {[Y_MAX, 3, 2, 1].map((v) => (
             <line
@@ -476,6 +671,22 @@ export function RoasTargetChart({
               {v.toFixed(1)}
             </text>
           ))}
+
+          {/* Gradient area fill — two-tone, drawn UNDER the line. The
+              `roas-area-rise` class fades+slides it up on mount (collapsed
+              by the global prefers-reduced-motion sweep). */}
+          {areaPaths.map((d, i) =>
+            d ? (
+              <path
+                key={`area-${i}`}
+                d={d}
+                fill="url(#roas-area-fill)"
+                clipPath="url(#roas-plot-clip)"
+                className="roas-area-rise"
+                data-testid={i === 0 ? 'chart-roas-area' : undefined}
+              />
+            ) : null,
+          )}
 
           {/* Target line */}
           <line
@@ -509,16 +720,37 @@ export function RoasTargetChart({
             />
           ))}
 
-          {/* ROAS line */}
-          {linePath && (
+          {/* ROAS line — smooth monotone-style curve. `roas-line-draw`
+              + the inline dash seed make it "draw in" on mount; the
+              --roas-line-len var sizes the dash to the path so the sweep
+              is proportional. preserveAspectRatio="none" stretches the
+              dash slightly but the effect still reads as a draw-in. */}
+          {smoothLinePath && (
             <path
-              d={linePath}
+              d={smoothLinePath}
               fill="none"
+              className="roas-line-draw"
               style={{
                 stroke: 'var(--chart-roas-line)',
                 strokeWidth: 2,
+                strokeLinejoin: 'round',
+                strokeLinecap: 'round',
+                strokeDasharray: 'var(--roas-line-len, 1600)',
+                ['--roas-line-len' as string]: '1600',
               }}
               data-testid="chart-roas-line"
+            />
+          )}
+
+          {/* Crosshair vertical guide — follows the nearest hovered point. */}
+          {hoverPoint && (
+            <line
+              className="roas-crosshair on"
+              x1={hoverPoint.x}
+              x2={hoverPoint.x}
+              y1={PADDING_TOP}
+              y2={VB_HEIGHT - PADDING_BOTTOM}
+              data-testid="chart-crosshair"
             />
           )}
 
@@ -549,6 +781,96 @@ export function RoasTargetChart({
               </circle>
             );
           })}
+
+          {/* min / max value labels (שיא / שפל) — only when both exist and
+              are distinct points, so we don't double-label a flat series. */}
+          {minMax.max && minMax.max.index !== minMax.min?.index && (
+            <text
+              x={xForIndex(minMax.max.index, points.length)}
+              y={yForRoas(minMax.max.value) - 8}
+              textAnchor="middle"
+              style={{
+                fontFamily: 'var(--font-mono, ui-monospace)',
+                fontSize: 10,
+                fontWeight: 700,
+                fill: 'var(--chart-dot-max)',
+              }}
+              data-testid="chart-max-label"
+            >
+              {`שיא ${minMax.max.value.toFixed(1)}`}
+            </text>
+          )}
+          {minMax.min && minMax.min.index !== minMax.max?.index && (
+            <text
+              x={xForIndex(minMax.min.index, points.length)}
+              y={yForRoas(minMax.min.value) + 16}
+              textAnchor="middle"
+              style={{
+                fontFamily: 'var(--font-mono, ui-monospace)',
+                fontSize: 10,
+                fontWeight: 700,
+                fill: 'var(--chart-dot-min)',
+              }}
+              data-testid="chart-min-label"
+            >
+              {`שפל ${minMax.min.value.toFixed(1)}`}
+            </text>
+          )}
+
+          {/* "Today" marker — a violet/accent vertical line + pulsing dot at
+              the last data point, visually distinct from the amber event
+              pins. Labelled "היום" above the plot. */}
+          {todayPoint && (
+            <g data-testid="chart-today-marker">
+              <line
+                x1={todayPoint.x}
+                x2={todayPoint.x}
+                y1={PADDING_TOP}
+                y2={VB_HEIGHT - PADDING_BOTTOM}
+                style={{
+                  stroke: 'var(--chart-today)',
+                  strokeWidth: 1.5,
+                  strokeDasharray: '2 4',
+                  opacity: 0.85,
+                }}
+              />
+              <circle
+                className="roas-today-pulse"
+                cx={todayPoint.x}
+                cy={todayPoint.y}
+                r={6}
+                style={{ fill: 'var(--chart-today-pulse)' }}
+              />
+              <circle
+                cx={todayPoint.x}
+                cy={todayPoint.y}
+                r={4}
+                style={{ fill: 'var(--chart-today)' }}
+              />
+            </g>
+          )}
+
+          {/* Crosshair hover dot — a ring + core on the hovered point. */}
+          {hoverPoint && (
+            <g className="roas-hover-dot on">
+              <circle
+                cx={hoverPoint.x}
+                cy={hoverPoint.y}
+                r={6}
+                style={{
+                  fill: 'var(--chart-hover-ring)',
+                  stroke: 'var(--chart-roas-line)',
+                  strokeWidth: 2,
+                }}
+              />
+              <circle
+                cx={hoverPoint.x}
+                cy={hoverPoint.y}
+                r={2.5}
+                style={{ fill: 'var(--chart-roas-line)' }}
+              />
+            </g>
+          )}
 
           {/* X-axis labels */}
           {xAxisLabels.map((l, i) => (
@@ -616,7 +938,7 @@ export function RoasTargetChart({
                     role="tooltip"
                     data-testid={`chart-pin-tooltip-${pin.id}`}
                     className={cn(
-                      'absolute z-10 whitespace-nowrap text-[11px] text-ink px-2.5 py-1 rounded-md',
+                      'absolute z-10 w-max max-w-[14rem] text-ink px-3 py-2 rounded-lg',
                       'bg-glass-2 backdrop-blur-md border border-status-warning shadow-overlay',
                       // Wave-6 Task 6.1 — pin tooltip entrance: 120 ms
                       // opacity + ~4 px Y translate via tailwindcss-animate.
@@ -626,16 +948,89 @@ export function RoasTargetChart({
                       // targeted `[role="tooltip"]` rule in globals.css.
                       'animate-in fade-in-0 slide-in-from-bottom-1 duration-snap ease-out',
                     )}
-                    style={{ transform: 'translateX(-50%)', top: -44 }}
+                    style={{ transform: 'translateX(-50%)', top: -64 }}
                     dir="rtl"
                   >
-                    <span className="me-1" aria-hidden>{pin.icon ?? '💰'}</span>
-                    {pin.label}
+                    {/* V4 popover: event name (bold) + date · ROAS context. */}
+                    <div className="flex items-center gap-1.5 text-[12px] font-bold leading-snug">
+                      <span aria-hidden>{pin.icon ?? '💰'}</span>
+                      {pin.label}
+                    </div>
+                    <div className="mt-0.5 font-mono text-[10px] tabular-nums text-ink-muted">
+                      {formatDate(pin.date)}
+                      {pinMetaById.get(pin.id)?.roas != null && (
+                        <> · ROAS {pinMetaById.get(pin.id)!.roas!.toFixed(2)}</>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
             );
           })}
+
+          {/* "היום" today label — HTML badge above the SVG today marker
+              (SVG text would distort under preserveAspectRatio="none"). */}
+          {todayLeftPct != null && (
+            <div
+              className="absolute"
+              style={{ left: `${todayLeftPct}%`, top: -2 }}
+              data-testid="chart-today-label"
+            >
+              <span
+                className="absolute -translate-x-1/2 px-1.5 py-0.5 rounded-full text-[9px] font-extrabold leading-none text-accent-fg"
+                style={{ transform: 'translateX(-50%)', backgroundColor: 'var(--chart-today)' }}
+                dir="rtl"
+              >
+                היום
+              </span>
+            </div>
+          )}
+
+          {/* Rich crosshair tooltip — date · ROAS · target · delta-vs-target.
+              Mirrors the V4 mockup card: glass-2 surface, ink text, the
+              delta row tinted green (≥target ▲) / red (<target ▼). */}
+          {hoverPoint && (
+            <div
+              className="absolute"
+              style={{ left: `${leftPctForIndex(hoverPoint.index)}%`, top: 0 }}
+            >
+              <div
+                role="tooltip"
+                data-testid="chart-hover-tooltip"
+                dir="rtl"
+                className={cn(
+                  'absolute z-10 -translate-x-1/2 w-max min-w-[9.5rem] px-3 py-2 rounded-lg',
+                  'bg-glass-2 backdrop-blur-md border border-glass-edge shadow-overlay',
+                  'text-[12px] text-ink pointer-events-none',
+                )}
+                style={{ transform: 'translateX(-50%)', top: -84 }}
+              >
+                <div className="font-bold text-[11px] mb-1">
+                  {formatDate(hoverPoint.date)}
+                </div>
+                <div className="flex items-center justify-between gap-4 leading-relaxed">
+                  <span className="text-ink-muted">ROAS</span>
+                  <span className="font-bold tabular-nums">{hoverPoint.roas.toFixed(2)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-4 leading-relaxed">
+                  <span className="text-ink-muted">יעד</span>
+                  <span className="font-bold tabular-nums">{target.toFixed(2)}</span>
+                </div>
+                <div
+                  className={cn(
+                    'mt-1 pt-1 border-t border-glass-edge flex items-center gap-1 font-bold tabular-nums',
+                    hoverPoint.roas >= target
+                      ? 'text-[color:var(--up)]'
+                      : 'text-[color:var(--dn)]',
+                  )}
+                >
+                  <span aria-hidden>{hoverPoint.roas >= target ? '▲' : '▼'}</span>
+                  {hoverPoint.roas >= target ? '+' : ''}
+                  {(hoverPoint.roas - target).toFixed(2)} מול היעד
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
