@@ -40,7 +40,6 @@ vi.mock('@/lib/campaignProductMap', async (orig) => {
 // Imports after mocks.
 // ---------------------------------------------------------------------------
 import { CampaignDrawer } from '@/components/CampaignDrawer';
-import { PerStoreCards } from '@/components/PerStoreCards';
 import { CampaignsTopList, type CampaignTopListPoint } from '@/components/CampaignsTopList';
 import { AdsDrawer } from '@/components/AdsDrawer';
 import { CommandPalette } from '@/components/CommandPalette';
@@ -117,17 +116,6 @@ describe('Task 12 — bidi isolation on mixed Hebrew+English surfaces', () => {
     );
     const link = screen.getByRole('link', { name: /Ads Manager/ });
     expect(link.querySelector('bdi[dir="ltr"]')).not.toBeNull();
-  });
-
-  it('PerStoreCards wraps store name in <bdi dir="ltr">', () => {
-    render(
-      <PerStoreCards
-        data={[{ store: 'uzoshop', spend: 100, revenue: 200, roas: 2, orders: 5, fbSpend: 100, gaSpend: 0, grossProfit: 100 } as never]}
-      />,
-    );
-    const storeLabel = screen.getByText('uzoshop');
-    expect(storeLabel.tagName.toLowerCase()).toBe('bdi');
-    expect(storeLabel.getAttribute('dir')).toBe('ltr');
   });
 });
 

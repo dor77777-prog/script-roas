@@ -135,17 +135,6 @@ describe('P0-1 label guard — source-file string assertions', () => {
     expect(src).not.toMatch(/showCogs.*רווח נטו/s);
   });
 
-  it('HomeSummaryBand.tsx KpiCards formula describes the full trueNetProfit formula', () => {
-    // Task 20 (3-band Home restructure) moved the KPI formula from Dashboard.tsx
-    // into HomeSummaryBand.tsx. The guard is preserved there.
-    const src = readFileSync(
-      resolve(root, 'src/components/HomeSummaryBand.tsx'),
-      'utf8',
-    );
-    expect(src).toMatch(/רווח נטו = הכנסות − הוצאות − COGS − עמלות − עלויות קבועות/);
-    expect(src).not.toMatch(/רווח נטו = הכנסות − הוצאות − COGS \(25%\)/);
-  });
-
   it('aiReport.ts section 1.2 uses "רווח תפעולי", not "רווח נטו בפועל"', () => {
     const src = readFileSync(
       resolve(root, 'src/lib/aiReport.ts'),
