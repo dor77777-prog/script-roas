@@ -70,6 +70,7 @@ import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/rou
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { DateRange } from '@/lib/types';
 import { buildDateRangeKey, getPreviousPeriod } from '@/lib/dateRange';
+import { isReconciliationCoherent } from '@/lib/reconciliationCoherence';
 import { roasLabel } from '@/lib/analytics';
 import { useCampaignTrueRevenue } from '@/lib/hooks/useCampaignTrueRevenue';
 import { CampaignsTableRow } from './CampaignsTableRow';
@@ -292,6 +293,37 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     fetcher,
     { refreshInterval: 120_000, revalidateOnFocus: false },
   );
+
+  // Data-correctness fix (2026-06-01) — snapshot WHICH localRange the currently
+  // resolved campaigns `data` was fetched for.
+  //
+  // Why: this `data` (→ `aggregated`) is SWR-keyed on `localRange`, but SWR has
+  // no `keepPreviousData` here so when `localRange` changes to a key SWR has
+  // cached it returns the PRIOR key's response synchronously while it
+  // revalidates. For one-or-more render cycles `data` can therefore describe a
+  // DIFFERENT window than the `localRange` props. The attribution-
+  // reconciliation panel ("התאמת שיוך · Meta & Google & TikTok ↔ Shopify",
+  // `attributionGap` below) compares this `data`-derived platform claim against
+  // `dailyRows` (the page-global /api/data prop) sliced by `localRange`, which
+  // updates synchronously. When the two halves describe different windows the
+  // operator sees "unrelated numbers" (over/under-count gap %, reliability
+  // ratio, interpretation copy) until a refetch re-syncs them — the reported
+  // bug. We record the range the in-hand `data` belongs to so the panel can
+  // gate on coherence (only render when platform-side range == Shopify-side
+  // range). Stored as STATE (not a ref) so settling the new-range fetch
+  // triggers a re-render → the gated panel re-evaluates and reappears with
+  // coherent numbers. The effect lag is one-directional and safe: at worst the
+  // panel hides for one extra frame; it never renders a mismatched pair.
+  const [campaignsDataRange, setCampaignsDataRange] = useState<DateRange | null>(null);
+  useEffect(() => {
+    if (data && !isLoading) {
+      setCampaignsDataRange(prev =>
+        prev && prev.from === localRange.from && prev.to === localRange.to
+          ? prev
+          : { from: localRange.from, to: localRange.to },
+      );
+    }
+  }, [data, isLoading, localRange.from, localRange.to]);
 
   // store-meta → Meta ad-account ID / Google Ads customer ID for deep links.
   const { data: storeMeta } = useSWR<{ rows: Array<{ storeId: string; metaAdAccountId: string | null; googleAdsCustomerId: string | null; tiktokAdvertiserId: string | null }> }>(
@@ -1135,6 +1167,23 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     if (showOnlyMultiMapped) return null;
     if (aggregated.length === 0) return null;
 
+    // Data-correctness fix (2026-06-01) — COHERENCE GATE. The platform claim
+    // (`aggregated`, from /api/campaigns keyed on `localRange`) and the Shopify
+    // revenue (`dailyRows`, the page-global /api/data prop re-sliced by
+    // `localRange`) settle on a new window at DIFFERENT times after a date
+    // change. Comparing a mismatched pair shows the operator "unrelated
+    // numbers" until a refetch re-syncs them. Bail (hide the panel) until both
+    // halves provably describe the same window. See `isReconciliationCoherent`.
+    if (
+      !isReconciliationCoherent({
+        localRange,
+        globalRange: range,
+        campaignsDataRange,
+      })
+    ) {
+      return null;
+    }
+
     // Sum Meta/Google conversion value across all visible campaigns.
     const platformClaimed = aggregated.reduce(
       (s, a) => s + a.conversionValue,
@@ -1210,7 +1259,9 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       tone,
     };
     // `totals` covered transitively via `aggregated` dep (#IN-05).
-  }, [aggregated, dailyRows, localRange, localStore, platform, showOnlyMultiMapped]);
+    // `range.from`/`range.to` drive the dailyRows-coverage gate (2);
+    // `campaignsDataRange` is the state-snapshot read inside gate (1).
+  }, [aggregated, dailyRows, localRange, localStore, platform, showOnlyMultiMapped, range.from, range.to, campaignsDataRange]);
 
   // FIX-22 (5.2.2.1): memoize drillRows so the drawer's useMemo([rows]) doesn't invalidate on every parent re-render.
   const drillRows = useMemo(() => {
