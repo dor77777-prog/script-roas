@@ -1,11 +1,15 @@
 'use client';
 
 import { useState } from 'react';
+import useSWR from 'swr';
 import { CalendarDays } from 'lucide-react';
 import { YearSelector } from '@/components/YearSelector';
 import { MonthSelector } from '@/components/MonthSelector';
 import { MonthlyTables } from '@/components/MonthlyTables';
 import { SectionIntro } from '@/components/SectionIntro';
+import { PageSynthesis } from '@/components/ui/PageSynthesis';
+import { synthesizeArchive } from '@/lib/synthesis/archive';
+import { buildDateRangeKey } from '@/lib/dateRange';
 import type { DashboardData } from '@/lib/types';
 
 type Props = {
@@ -14,10 +18,38 @@ type Props = {
   globalStore?: string;
 };
 
+// Match MonthlyTables' fetcher so the SWR key is shared (no duplicate
+// network request — same `/api/data?from=...&to=...` URL is hit by both
+// children of AnalysisArchiveTab).
+const fetcher = async (url: string): Promise<DashboardData> => {
+  const res = await fetch(url);
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body?.error || `Failed to load (${res.status})`);
+  }
+  return res.json();
+};
+
 export function AnalysisArchiveTab({ stores }: Props) {
   const now = new Date();
   const [year, setYear] = useState<number>(now.getFullYear());
   const [month, setMonth] = useState<number | null>(now.getMonth() + 1);
+
+  // Share the SWR key with MonthlyTables so the year-wide fetch is
+  // cached once and the synthesiser reads the same row set the tables
+  // render. Without the shared key the synthesiser would fire its own
+  // request and could disagree on the "strongest month" when the
+  // network responses returned at slightly different times.
+  const historyRange = { from: `${year}-01-01`, to: `${year}-12-31` };
+  const { data } = useSWR<DashboardData>(
+    buildDateRangeKey('/api/data', historyRange),
+    fetcher,
+    { revalidateOnFocus: false },
+  );
+  const archiveSynthesis = synthesizeArchive({
+    rows: data?.rows ?? [],
+    year,
+  });
 
   return (
     <div className="space-y-4 sm:space-y-5">
@@ -25,6 +57,11 @@ export function AnalysisArchiveTab({ stores }: Props) {
         icon={<CalendarDays size={20} />}
         title="טבלאות חודשיות"
         description="טבלה לכל חודש עם שורה לכל יום. ROAS צבוע: אדום (<2), כתום (2-2.7), ירוק (2.7-3), כחול (>3). יום עם הוצאה אך ללא מכירה מסומן בשחור עם '0'."
+      />
+      <PageSynthesis
+        text={archiveSynthesis.text}
+        anchorMetric={archiveSynthesis.anchorMetric}
+        confidence={archiveSynthesis.confidence}
       />
       <div className="flex flex-col gap-3">
         <div className="flex items-center gap-3 flex-wrap">

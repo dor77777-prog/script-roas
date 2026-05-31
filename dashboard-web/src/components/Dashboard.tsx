@@ -44,6 +44,9 @@ import { AnalysisTrendsTab } from './AnalysisTrendsTab';
 import { AnalysisArchiveTab } from './AnalysisArchiveTab';
 import { GoalTracker } from './GoalTracker';
 import { PageScope } from '@/components/ui/PageScope';
+import { PageSynthesis } from '@/components/ui/PageSynthesis';
+import { synthesizeDetail } from '@/lib/synthesis/detail';
+import { synthesizePnl } from '@/lib/synthesis/pnl';
 import { CommandCenterHero } from '@/components/home/CommandCenterHero';
 import { PerStoreRow } from '@/components/home/PerStoreRow';
 import {
@@ -725,6 +728,7 @@ function PnLTab({
   filters: F;
   setFilters: (next: F) => void;
 }) {
+  const pnlSynthesis = synthesizePnl({ agg: filtered.curAgg });
   return (
     <div className="space-y-4 sm:space-y-5 animate-fade-in-up">
       <SectionIntro
@@ -732,6 +736,11 @@ function PnLTab({
         title="הרווח שלך לתקופה"
         description="כל ההכנסות פחות כל ההוצאות — ad spend, COGS (25%), עמלות עיבוד (6.5%), ועלויות חודשיות קבועות (מנויים + חד-פעמיים) — עד לרווח נטו אמיתי. שנה טווח או חנות וכל המספרים יתעדכנו."
         formula="רווח נטו = הכנסות − Ad Spend − COGS − Transaction Fees − Fixed Costs"
+      />
+      <PageSynthesis
+        text={pnlSynthesis.text}
+        anchorMetric={pnlSynthesis.anchorMetric}
+        confidence={pnlSynthesis.confidence}
       />
 
       <Filters filters={filters} stores={data.stores} onChange={setFilters} />
@@ -982,12 +991,18 @@ function DetailTab({
   setFilters: (next: F) => void;
   stores: string[];
 }) {
+  const detailSynthesis = synthesizeDetail({ rows: filtered.cur });
   return (
     <div className="space-y-4 sm:space-y-5">
       <SectionIntro
         icon={<Table size={20} />}
         title="פירוט יומי"
         description="כל שורה בטבלה היא (יום × חנות) — הוצאות פייסבוק, גוגל, הכנסות, ROAS, ורווח. עד 100 שורות אחרונות בטווח הנבחר. ROAS אדום עם '0' = יום שהוצאת בו כסף אבל לא היו מכירות (כשל)."
+      />
+      <PageSynthesis
+        text={detailSynthesis.text}
+        anchorMetric={detailSynthesis.anchorMetric}
+        confidence={detailSynthesis.confidence}
       />
       <Filters filters={filters} stores={stores} onChange={setFilters} />
       <div className="rounded-xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
