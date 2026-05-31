@@ -45,6 +45,12 @@
   --band-blue:   oklch(68% 0.16 240);
   --band-gray:   oklch(60% 0.012 250);
 
+  /* Card radius — used by .glass + .glass[data-band]::before so the
+     3px top-edge bar's start/end radii match the card. Hoisted here
+     by Task 1.3 ahead of Task 1.8's full radius scale so the band
+     CSS does not embed a magic 14px. */
+  --radius-card: 14px;
+
   /* Canvas — deep blue-violet. Used as fixed body background + linear
      gradient endpoints. */
   --canvas-1: oklch(13% 0.020 270);
@@ -282,3 +288,53 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
     animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 }
+
+/* ===========================================================================
+   V4 BAND SIGNAL — Task 1.3.
+   Mockup reference: mockup-04-final.html lines 91-113 + mockup-04f-v4-final.html
+   lines 80-115. Any element carrying `data-band="red|orange|green|blue|gray"`
+   on a `.glass` card gets:
+     • a 3px top-edge bar with band glow,
+     • a ~5% chroma tint behind the existing glass gradient,
+     • a band-coloured `.v.banded` child element (the big number),
+     • a matching `.band-chip` chip (separate utility class).
+   Consumed by CommandCenterHero (Task 3.1) and PerStoreRow (Task 3.3).
+   `useRoasBandGradient(roas, isStale)` picks the band id at JS layer;
+   downstream components write the value to `data-band` directly. The
+   600ms opacity+filter transition lets a fresh→stale flip animate.
+   =========================================================================== */
+.glass[data-band]::before {
+  content: ''; position: absolute; inset-block-start: 0; inset-inline: 0;
+  height: 3px;
+  border-start-start-radius: var(--radius-card);
+  border-start-end-radius:   var(--radius-card);
+  pointer-events: none;
+  transition: opacity 600ms ease-out, filter 600ms ease-out;
+}
+.glass[data-band="red"]    { background: oklch(64% 0.22 22  / 0.05); }
+.glass[data-band="red"]::before    { background: var(--band-red);    box-shadow: 0 0 14px oklch(64% 0.22 22  / 0.5); }
+.glass[data-band="orange"] { background: oklch(78% 0.16 75  / 0.05); }
+.glass[data-band="orange"]::before { background: var(--band-orange); box-shadow: 0 0 14px oklch(78% 0.16 75  / 0.45); }
+.glass[data-band="green"]  { background: oklch(70% 0.18 145 / 0.05); }
+.glass[data-band="green"]::before  { background: var(--band-green);  box-shadow: 0 0 14px oklch(70% 0.18 145 / 0.5); }
+.glass[data-band="blue"]   { background: oklch(68% 0.16 240 / 0.05); }
+.glass[data-band="blue"]::before   { background: var(--band-blue);   box-shadow: 0 0 14px oklch(68% 0.16 240 / 0.5); }
+.glass[data-band="gray"]   { background: oklch(60% 0.012 250 / 0.04); }
+.glass[data-band="gray"]::before   { background: var(--band-gray);   box-shadow: 0 0 8px  oklch(60% 0.012 250 / 0.3); }
+
+/* `.v.banded` — the big number inside a banded card renders in the band
+   colour (overrides .v.neutral's text-clip gradient via -webkit-text-fill-color). */
+.glass[data-band="red"]    .v.banded { color: var(--band-red);    -webkit-text-fill-color: var(--band-red);    background: none; }
+.glass[data-band="orange"] .v.banded { color: var(--band-orange); -webkit-text-fill-color: var(--band-orange); background: none; }
+.glass[data-band="green"]  .v.banded { color: var(--band-green);  -webkit-text-fill-color: var(--band-green);  background: none; }
+.glass[data-band="blue"]   .v.banded { color: var(--band-blue);   -webkit-text-fill-color: var(--band-blue);   background: none; }
+.glass[data-band="gray"]   .v.banded { color: var(--band-gray);   -webkit-text-fill-color: var(--band-gray);   background: none; }
+
+/* Band chips — restate the band as a small uppercase pill alongside
+   the big number (e.g. "GREEN" / "RED"). Verbatim from mockup. */
+.band-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.06em; font-family: 'Geist Mono'; }
+.chip-red    { background: oklch(64% 0.22 22  / 0.18); color: var(--band-red); }
+.chip-orange { background: oklch(78% 0.16 75  / 0.18); color: var(--band-orange); }
+.chip-green  { background: oklch(70% 0.18 145 / 0.18); color: var(--band-green); }
+.chip-blue   { background: oklch(68% 0.16 240 / 0.18); color: var(--band-blue); }
+.chip-gray   { background: oklch(60% 0.012 250 / 0.12); color: var(--text-muted); }
