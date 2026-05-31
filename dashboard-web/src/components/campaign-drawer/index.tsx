@@ -315,13 +315,22 @@ export function CampaignDrawer({
       campaignName: first.campaignName,
       storeName: first.storeName,
       platform: first.platform,
+      // Task 5.6 (P1-10 / Q7) — pass through the resolved (storeId,
+      // campaignId) so `CampaignDrawerOverview` can hand them to
+      // `HealthScorePanel` / `AttributionAnalysisPanel` which now
+      // render an InsightActions secondary (Ads Manager deep-link).
+      // We use the drawer-input storeId and campaignId (not first.*),
+      // since `first` is the first daily row and we want the canonical
+      // identifiers that opened the drawer.
+      storeId,
+      campaignId,
       spend, value, clicks, impressions, conversions,
       roas, ctr, cpc, cpa,
       dailyArr,
       adSets,
       activeDays: byDay.size,
     };
-  }, [rows]);
+  }, [rows, storeId, campaignId]);
 
   // ---- Effective-store (Phase A.5 v2) ---------------------------------
   const effectiveStoreId = useMemo(() => {

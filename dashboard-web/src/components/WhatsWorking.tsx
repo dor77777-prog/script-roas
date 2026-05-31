@@ -10,6 +10,8 @@ import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { CampaignRow } from '@/lib/campaigns';
 import type { ProductRow } from '@/lib/products';
 import { InsightCard } from '@/components/ui/InsightCard';
+import { InsightActions } from '@/components/insights/InsightActions';
+import { useStoreAdAccounts } from '@/lib/hooks/useStoreAdAccounts';
 
 /**
  * Compact "what's working" widget — answers three questions in five seconds:
@@ -44,19 +46,17 @@ type Insight = {
   kind: 'top-product' | 'top-campaign' | 'rising' | 'falling';
   primary: string;
   secondary: ReactNode;
-  href?: string;
+  // Task 5.6 — campaign reference (top-campaign rows only) used by
+  // `InsightActions` to render the drawer-default + Ads Manager
+  // deep-link pair. Product rows leave this undefined; no actions
+  // render in that case.
+  campaign?: {
+    storeId: string;
+    platform: 'Meta' | 'Google' | 'TikTok';
+    campaignId: string;
+    campaignName: string;
+  };
 };
-
-function adsManagerLink(platform: string, campaignId: string): string | null {
-  if (!campaignId) return null;
-  if (platform === 'Meta') {
-    return `https://business.facebook.com/adsmanager/manage/ads?selected_campaign_ids=${encodeURIComponent(campaignId)}`;
-  }
-  if (platform === 'Google') {
-    return `https://ads.google.com/aw/campaigns?campaignId=${encodeURIComponent(campaignId)}`;
-  }
-  return null;
-}
 
 function computeInsights(
   products: ProductRow[],
@@ -97,7 +97,7 @@ function computeInsights(
   // ----- 2. Top campaign (last 7 days, by ROAS where spend >= 100 CAD)
   {
     type Agg = {
-      name: string; store: string; platform: string; campaignId: string;
+      name: string; store: string; storeId: string; platform: string; campaignId: string;
       spend: number; value: number;
     };
     const map = new Map<string, Agg>();
@@ -108,6 +108,7 @@ function computeInsights(
         map.set(key, {
           name: c.campaignName,
           store: c.storeName,
+          storeId: c.storeId,
           platform: c.platform,
           campaignId: c.campaignId,
           spend: 0,
@@ -125,6 +126,13 @@ function computeInsights(
       .sort((a, b) => b.roas - a.roas);
     const top = candidates[0];
     if (top && top.roas > 0) {
+      // Only Meta/Google/TikTok have an Ads Manager + drawer. Organic /
+      // Shopify-source rows would yield no action pair, so we skip the
+      // `campaign` ref in that case (no row is currently produced for
+      // them today, but the guard future-proofs WhatsWorking against
+      // an organic top-campaign appearing later).
+      const isAdsPlatform =
+        top.platform === 'Meta' || top.platform === 'Google' || top.platform === 'TikTok';
       insights.push({
         kind: 'top-campaign',
         primary: top.name,
@@ -133,7 +141,14 @@ function computeInsights(
             {top.store} · {top.platform} · ROAS {formatNumber(top.roas)} · הוצאה {fmtMoney(top.spend)}
           </>
         ),
-        href: adsManagerLink(top.platform, top.campaignId) || undefined,
+        campaign: isAdsPlatform && top.campaignId
+          ? {
+              storeId: top.storeId,
+              platform: top.platform as 'Meta' | 'Google' | 'TikTok',
+              campaignId: top.campaignId,
+              campaignName: top.name,
+            }
+          : undefined,
       });
     }
   }
@@ -189,6 +204,8 @@ export function WhatsWorking() {
     refreshInterval: 120_000,
     revalidateOnFocus: false,
   });
+  // Task 5.6 — account map for InsightActions deep-links.
+  const adAccounts = useStoreAdAccounts();
 
   const insights = computeInsights(
     products?.rows ?? [],
@@ -218,7 +235,7 @@ export function WhatsWorking() {
     >
       <ul className="divide-y divide-status-green/15 -mx-4 -mb-2">
         {insights.map((ins, i) => (
-          <InsightRow key={i} insight={ins} />
+          <InsightRow key={i} insight={ins} adAccounts={adAccounts} />
         ))}
       </ul>
     </InsightCard>
@@ -251,44 +268,52 @@ const KIND_META: Record<
   },
 };
 
-function InsightRow({ insight }: { insight: Insight }) {
+function InsightRow({
+  insight,
+  adAccounts,
+}: {
+  insight: Insight;
+  adAccounts: import('@/lib/campaignsLinks').AdAccountMap;
+}) {
   const meta = KIND_META[insight.kind];
-  const content = (
-    <div className="flex items-center gap-3 px-4 sm:px-5 py-3 hover:bg-glass-2/40 transition-colors">
-      <span
-        className={cn(
-          'inline-flex items-center justify-center w-8 h-8 rounded-lg shrink-0',
-          meta.tone,
-        )}
-      >
-        {meta.icon}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="text-[10px] sm:text-xs font-medium text-ink-secondary tracking-wide uppercase">
-          {meta.label}
-        </div>
-        <div className="text-sm sm:text-base font-semibold text-ink truncate mt-0.5">
-          {insight.primary}
-        </div>
-        <div className="text-[11px] sm:text-xs text-ink-muted truncate tabular-nums mt-0.5">
-          {insight.secondary}
+  return (
+    <li>
+      <div className="flex items-center gap-3 px-4 sm:px-5 py-3 hover:bg-glass-2/40 transition-colors">
+        <span
+          className={cn(
+            'inline-flex items-center justify-center w-8 h-8 rounded-lg shrink-0',
+            meta.tone,
+          )}
+        >
+          {meta.icon}
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="text-[10px] sm:text-xs font-medium text-ink-secondary tracking-wide uppercase">
+            {meta.label}
+          </div>
+          <div className="text-sm sm:text-base font-semibold text-ink truncate mt-0.5">
+            {insight.primary}
+          </div>
+          <div className="text-[11px] sm:text-xs text-ink-muted truncate tabular-nums mt-0.5">
+            {insight.secondary}
+          </div>
+          {/* Task 5.6 — Q7 contract: row-anchored action pair. Replaces
+              the pre-fix pattern of wrapping the whole row in an `<a
+              href>` (which silently confused "I want to learn more" with
+              "I want to act on it") with two intentful buttons. */}
+          {insight.campaign && (
+            <div className="mt-1.5">
+              <InsightActions
+                campaignId={insight.campaign.campaignId}
+                campaignName={insight.campaign.campaignName}
+                platform={insight.campaign.platform}
+                storeId={insight.campaign.storeId}
+                adAccounts={adAccounts}
+              />
+            </div>
+          )}
         </div>
       </div>
-    </div>
+    </li>
   );
-  if (insight.href) {
-    return (
-      <li>
-        <a
-          href={insight.href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="block"
-        >
-          {content}
-        </a>
-      </li>
-    );
-  }
-  return <li>{content}</li>;
 }

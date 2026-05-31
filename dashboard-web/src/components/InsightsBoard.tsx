@@ -10,7 +10,6 @@ import {
   Trophy,
   ChevronDown,
   ChevronUp,
-  ExternalLink,
   Info,
   RefreshCw,
   Check,
@@ -39,6 +38,8 @@ import { Card } from '@/components/ui/Card';
 import { InsightCardGroup, InsightCardRow } from '@/components/ui/InsightCard';
 import { Heading } from '@/components/ui/Typography';
 import { HelpTooltip } from '@/components/ui/Tooltip';
+import { InsightActions } from '@/components/insights/InsightActions';
+import { useStoreAdAccounts } from '@/lib/hooks/useStoreAdAccounts';
 
 const fetcher = (url: string) => fetch(url).then(r => (r.ok ? r.json() : null));
 
@@ -112,6 +113,9 @@ export function InsightsBoard({ data }: Props) {
     '/api/campaigns', fetcher,
     { refreshInterval: 120_000, revalidateOnFocus: false },
   );
+  // Task 5.6 (P1-10 / Q7) — feeds `InsightActions` deep-links with
+  // account-aware URLs. Hook dedupes the SWR call with CampaignsTable.
+  const adAccounts = useStoreAdAccounts();
 
   // Persisted per-insight state ("done" / "ignored") in localStorage.
   // We hydrate after mount to avoid SSR/client mismatch.
@@ -351,6 +355,7 @@ export function InsightsBoard({ data }: Props) {
                   meta={meta}
                   items={list}
                   onMark={markInsight}
+                  adAccounts={adAccounts}
                 />
               </InsightCardGroup>
             );
@@ -507,11 +512,13 @@ function InsightGroupBody({
   meta,
   items,
   onMark,
+  adAccounts,
 }: {
   severity: Severity;
   meta: typeof SEVERITY_META[Severity];
   items: Insight[];
   onMark: (insight: Insight, kind: InsightStateKind) => void;
+  adAccounts: import('@/lib/campaignsLinks').AdAccountMap;
 }) {
   const showAllByDefault = severity === 'critical' || severity === 'warning';
   const [showAll, setShowAll] = useState(showAllByDefault);
@@ -522,7 +529,13 @@ function InsightGroupBody({
     <>
       <ul className="space-y-px">
         {visibleItems.map(insight => (
-          <InsightBoardRow key={insight.id} insight={insight} meta={meta} onMark={onMark} />
+          <InsightBoardRow
+            key={insight.id}
+            insight={insight}
+            meta={meta}
+            onMark={onMark}
+            adAccounts={adAccounts}
+          />
         ))}
       </ul>
       {remaining > 0 && (
@@ -561,10 +574,12 @@ function InsightBoardRow({
   insight,
   meta,
   onMark,
+  adAccounts,
 }: {
   insight: Insight;
   meta: typeof SEVERITY_META[Severity];
   onMark: (insight: Insight, kind: InsightStateKind) => void;
+  adAccounts: import('@/lib/campaignsLinks').AdAccountMap;
 }) {
   // Compose title with optional scope badge inline so InsightCardRow's title slot
   // can stay a single ReactNode (no extra props needed).
@@ -579,8 +594,17 @@ function InsightBoardRow({
     </div>
   );
 
-  // Compose the action bar — Mark Done / Hide / External link.
+  // Compose the action bar — Mark Done / Hide / InsightActions (Q7).
   // The "Why?" disclosure is handled by InsightCardRow's whyDisclosure prop.
+  // Task 5.6: pre-Q7 we rendered a single external `href` link with a
+  // "פתח קמפיין" label that ALWAYS opened the platform's Ads Manager.
+  // That conflated two distinct intents (read context in the dashboard
+  // vs. take action on the platform) into one ambiguous CTA. The new
+  // `InsightActions` splits them — primary opens the in-app drawer,
+  // secondary deep-links to Ads Manager. Falls back to nothing when
+  // the insight has no campaign reference (e.g. store-level anomaly).
+  // `meta` is still used downstream by `InsightCardRow` for the row's
+  // icon styling (see line 646), so it stays in scope.
   const actionsNode = (
     <>
       {/* Mark done — ghost gray, turns green on hover */}
@@ -606,24 +630,14 @@ function InsightBoardRow({
         <ArchiveX size={12} />
         הסתר
       </Button>
-      {/* External link */}
-      {insight.href && (
-        <a
-          href={insight.href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={cn(
-            'inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-semibold',
-            'border border-transparent',
-            meta.color,
-            'hover:bg-glass-1/80 hover:border-glass-edge',
-            'transition-colors',
-          )}
-        >
-          <ExternalLink size={11} />
-          פתח קמפיין
-        </a>
-      )}
+      {/* Q7 — drawer-default + Ads Manager deep-link */}
+      <InsightActions
+        campaignId={insight.campaignId}
+        campaignName={insight.campaignName}
+        platform={insight.platform}
+        storeId={insight.storeId}
+        adAccounts={adAccounts}
+      />
     </>
   );
 

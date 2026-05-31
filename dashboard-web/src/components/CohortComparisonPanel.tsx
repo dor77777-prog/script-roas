@@ -44,8 +44,13 @@ type Props = {
    *  banner; the panel keeps working as a pure comparison view. */
   cannibalizationVerdicts?: CannibalizationVerdict[];
   /** When the operator clicks a non-current member, the drawer can open
-   *  that campaign in place. Optional — passes (campaignId, platform). */
-  onDrillCampaign?: (campaignId: string, platform: string) => void;
+   *  that campaign in place. Optional — passes (campaignId, platform,
+   *  storeId). Task 5.6 (P1-10 / Q7) added `storeId` so the parent can
+   *  dispatch the global `roas-open-campaign-drawer` event with a
+   *  complete `OpenCampaignDrawerDetail` — campaign+platform alone are
+   *  insufficient because `CampaignsTable` keys the drawer's open-state
+   *  by (storeId, platform, campaignId) tuple. */
+  onDrillCampaign?: (campaignId: string, platform: string, storeId: string) => void;
 };
 
 function MedalIcon({ rank }: { rank: number }) {
@@ -208,8 +213,22 @@ type SectionProps = {
   members: Array<CohortMember & { isCurrent: boolean }>;
   /** Indicator for the operator: how dangerous is competition here? */
   tone: 'intra' | 'cross';
-  onDrillCampaign?: (campaignId: string, platform: string) => void;
+  onDrillCampaign?: (campaignId: string, platform: string, storeId: string) => void;
 };
+
+/**
+ * Extract the storeId from a `${storeId}::${platform}::${campaignId}`
+ * key. Returns null if the key shape is malformed. Used by
+ * `CohortSection` to feed `onDrillCampaign(storeId, ...)` — the cohort
+ * lib's own `parseKey` is private to that module, so we re-derive the
+ * shape here rather than widening its export surface.
+ */
+function storeIdFromCampaignKey(key: string): string | null {
+  const parts = key.split('::');
+  if (parts.length !== 3) return null;
+  const [storeId] = parts;
+  return storeId || null;
+}
 
 function CohortSection({ title, subtitle, members, tone, onDrillCampaign }: SectionProps) {
   if (members.length === 0) return null;
@@ -260,11 +279,12 @@ function CohortSection({ title, subtitle, members, tone, onDrillCampaign }: Sect
               member={m}
               rank={i + 1}
               isCurrent={m.isCurrent}
-              onDrill={
-                !m.isCurrent && onDrillCampaign
-                  ? () => onDrillCampaign(m.campaignId, m.platform)
-                  : undefined
-              }
+              onDrill={(() => {
+                if (m.isCurrent || !onDrillCampaign) return undefined;
+                const storeId = storeIdFromCampaignKey(m.campaignKey);
+                if (!storeId) return undefined;
+                return () => onDrillCampaign(m.campaignId, m.platform, storeId);
+              })()}
             />
           ))}
         </tbody>

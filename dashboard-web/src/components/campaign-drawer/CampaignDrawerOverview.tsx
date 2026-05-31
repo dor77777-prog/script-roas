@@ -28,6 +28,7 @@ import { roasLabel } from '@/lib/analytics';
 import { AttributionAnalysisPanel } from '../AttributionAnalysisPanel';
 import { CohortComparisonPanel } from '../CohortComparisonPanel';
 import { HealthScorePanel } from '../HealthScorePanel';
+import { dispatchOpenCampaignDrawer } from '../insights/InsightActions';
 import {
   MetaShopifyReconciliation,
   buildReconciliation,
@@ -57,6 +58,13 @@ export interface OverviewSummary {
   cpc: number;
   cpa: number;
   activeDays: number;
+  // Task 5.6 (P1-10 / Q7) — identifiers needed by `InsightActions` to
+  // render the Ads Manager deep-link secondary inside HealthScorePanel
+  // and AttributionAnalysisPanel. Optional so existing callers in tests
+  // / older entry points don't crash; the panels gracefully omit the
+  // secondary action when these are missing.
+  campaignId?: string;
+  storeId?: string;
 }
 
 export interface CampaignDrawerOverviewProps {
@@ -92,9 +100,29 @@ export function CampaignDrawerOverview({
   const showMappedProducts =
     summary.platform === 'Meta' || summary.platform === 'TikTok';
 
+  // Task 5.6 — narrow the free-form `summary.platform: string` to the
+  // 3 ad-platforms union that InsightActions expects. Anything else
+  // (e.g. legacy 'organic' / 'shopify' surfaces that might end up in
+  // the drawer in future) leaves it undefined so the Ads Manager
+  // deep-link footer hides entirely.
+  const adsPlatform: 'Meta' | 'Google' | 'TikTok' | undefined =
+    summary.platform === 'Meta' ||
+    summary.platform === 'Google' ||
+    summary.platform === 'TikTok'
+      ? summary.platform
+      : undefined;
+
   return (
     <div className="space-y-5 sm:space-y-6" data-testid="campaign-drawer-tab-overview">
-      {health && <HealthScorePanel health={health} />}
+      {health && (
+        <HealthScorePanel
+          health={health}
+          campaignId={summary.campaignId}
+          campaignName={summary.campaignName}
+          platform={adsPlatform}
+          storeId={summary.storeId}
+        />
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
         <Stat
@@ -205,11 +233,25 @@ export function CampaignDrawerOverview({
         <CohortComparisonPanel
           cohort={cohort}
           cannibalizationVerdicts={cannibalizationVerdicts}
-          onDrillCampaign={(targetCampaignId, targetPlatform) => {
-            console.info(
-              `cohort drill: ${targetPlatform} / ${targetCampaignId} — ` +
-                `(click on the row in the campaigns table to open its drawer)`,
-            );
+          onDrillCampaign={(targetCampaignId, targetPlatform, targetStoreId) => {
+            // Task 5.6 (P1-10 / Q7) — wire the no-op console log up to
+            // the real open-drawer event. CampaignsTable subscribes via
+            // `roas-open-campaign-drawer`; clicking a non-current cohort
+            // member now swaps the drawer in place. Platform string from
+            // CohortMember is already constrained to the 3 ads platforms
+            // at this scope — the cohort only contains ad-platform
+            // members (Meta / Google / TikTok).
+            if (
+              targetPlatform === 'Meta' ||
+              targetPlatform === 'Google' ||
+              targetPlatform === 'TikTok'
+            ) {
+              dispatchOpenCampaignDrawer({
+                storeId: targetStoreId,
+                platform: targetPlatform,
+                campaignId: targetCampaignId,
+              });
+            }
           }}
         />
       )}
@@ -219,6 +261,10 @@ export function CampaignDrawerOverview({
           analysis={analysis}
           spend={summary.spend}
           value={summary.value}
+          campaignId={summary.campaignId}
+          campaignName={summary.campaignName}
+          platform={adsPlatform}
+          storeId={summary.storeId}
         />
       )}
 

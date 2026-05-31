@@ -54,6 +54,17 @@ export type Insight = {
   scope?: string;
   /** Sort order helper. */
   weight: number;
+  // Task 5.6 (P1-10 / Q7) — structured campaign reference used by
+  // `InsightActions` to render the "פתח קמפיין" + "פתח ב-Ads Manager"
+  // action pair. Optional because store-level / cross-platform insights
+  // (e.g. "shift budget from X to Y") legitimately reference no single
+  // campaign — those still render the rest of the row, just without
+  // the action buttons.
+  campaignId?: string;
+  campaignName?: string;
+  platform?: 'Meta' | 'Google' | 'TikTok' | 'organic' | 'shopify';
+  storeId?: string;
+  storeName?: string;
 };
 
 // ============================================================================
@@ -251,6 +262,7 @@ export function generateRecommendations(
   type CAgg = {
     campaignId: string;
     campaignName: string;
+    storeId: string;           // Task 5.6 — required by InsightActions / open-drawer event.
     storeName: string;
     platform: string;
     spend: number;
@@ -268,6 +280,7 @@ export function generateRecommendations(
       cAgg.set(k, {
         campaignId: c.campaignId,
         campaignName: c.campaignName,
+        storeId: c.storeId,
         storeName: c.storeName,
         platform: c.platform,
         spend: 0, value: 0, conversions: 0, impressions: 0, clicks: 0,
@@ -289,6 +302,22 @@ export function generateRecommendations(
     daysActive: c.activeDays.size,
   }));
 
+  // Task 5.6 (P1-10 / Q7) — structured campaign reference used by
+  // `InsightActions` to build the "פתח קמפיין" + "פתח ב-Ads Manager"
+  // pair. Cast to the Insight platform union — `CampaignRow.platform`
+  // is a free `string` upstream, but here we know it's one of the
+  // three ad platforms because that's the only data shape
+  // generateRecommendations is fed.
+  function campaignRef(c: CAgg): Pick<Insight, 'campaignId' | 'campaignName' | 'platform' | 'storeId' | 'storeName'> {
+    return {
+      campaignId: c.campaignId,
+      campaignName: c.campaignName,
+      platform: c.platform as Insight['platform'],
+      storeId: c.storeId,
+      storeName: c.storeName,
+    };
+  }
+
   // SCALE: high ROAS + meaningful spend → consider increasing budget
   const scaleCandidates = cList
     .filter(c => c.spend >= 200 && c.daysActive >= 7 && c.roas >= 3.5)
@@ -305,6 +334,7 @@ export function generateRecommendations(
       why: `הוצאה ${Math.round(c.spend).toLocaleString('he-IL')} CAD יצרה ערך ${Math.round(c.value).toLocaleString('he-IL')} CAD לאורך ${c.daysActive} ימים — מצביע על קמפיין יציב ובעל פוטנציאל לסקייל.`,
       href: adsManagerLink(c.platform, c.campaignId) ?? undefined,
       weight: 70 + Math.min(20, c.roas * 4),
+      ...campaignRef(c),
     });
   }
 
@@ -324,6 +354,7 @@ export function generateRecommendations(
       why: `קמפיין יציב אבל לא משתלם — מחזיר פחות מ-CAD על כל CAD שהוצא.`,
       href: adsManagerLink(c.platform, c.campaignId) ?? undefined,
       weight: 80,
+      ...campaignRef(c),
     });
   }
 
@@ -343,6 +374,7 @@ export function generateRecommendations(
       why: `${c.clicks} קליקים, ${c.impressions.toLocaleString('he-IL')} חשיפות, 0 המרות — בדוק את הלנדינג פייג', הקהל, או הקריאייטיב.`,
       href: adsManagerLink(c.platform, c.campaignId) ?? undefined,
       weight: 92,
+      ...campaignRef(c),
     });
   }
 

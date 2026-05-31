@@ -5,6 +5,8 @@ import { cn } from '@/lib/utils';
 import { fmtMoney } from '@/lib/format';
 import type { AttributionAnalysis } from '@/lib/attributionAnalysis';
 import { Heading } from '@/components/ui/Typography';
+import { InsightActions } from '@/components/insights/InsightActions';
+import { useStoreAdAccounts } from '@/lib/hooks/useStoreAdAccounts';
 
 /**
  * Trust verdict callout shown inside the campaign drawer. The parent
@@ -20,9 +22,26 @@ type Props = {
   analysis: AttributionAnalysis;
   spend: number;
   value: number;
+  // Task 5.6 (P1-10 / Q7) — optional campaign context for the Ads
+  // Manager deep-link footer. Same shape and rationale as
+  // `HealthScorePanel` (see its prop block). The primary "open drawer"
+  // is hidden because this panel only renders inside the drawer.
+  campaignId?: string;
+  campaignName?: string;
+  platform?: 'Meta' | 'Google' | 'TikTok';
+  storeId?: string;
 };
 
-export function AttributionAnalysisPanel({ analysis, spend, value }: Props) {
+export function AttributionAnalysisPanel({
+  analysis,
+  spend,
+  value,
+  campaignId,
+  campaignName,
+  platform,
+  storeId,
+}: Props) {
+  const adAccounts = useStoreAdAccounts();
   const trustBg =
     analysis.trust.level === 'high'    ? 'bg-status-greenBg/50 border-status-green/30 text-status-green'
   : analysis.trust.level === 'medium'  ? 'bg-status-warningBg border-status-warning/30 text-status-warningFg'
@@ -158,6 +177,21 @@ export function AttributionAnalysisPanel({ analysis, spend, value }: Props) {
                 • <strong>{analysis.outlierDays.length}</strong> ימי spike מ-Meta (modeled)
               </span>
             )}
+          </div>
+        )}
+
+        {/* Task 5.6 (P1-10 / Q7) — Ads Manager deep-link footer.
+            Hidden primary because we already live inside the drawer. */}
+        {campaignId && storeId && platform && (
+          <div className="pt-2 border-t border-current/15">
+            <InsightActions
+              campaignId={campaignId}
+              campaignName={campaignName}
+              platform={platform}
+              storeId={storeId}
+              adAccounts={adAccounts}
+              hidePrimary
+            />
           </div>
         )}
       </div>

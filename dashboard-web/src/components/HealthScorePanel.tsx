@@ -6,6 +6,8 @@ import type {
   HealthGrade,
 } from '@/lib/campaignHealthScore';
 import { InsightCard } from '@/components/ui/InsightCard';
+import { InsightActions } from '@/components/insights/InsightActions';
+import { useStoreAdAccounts } from '@/lib/hooks/useStoreAdAccounts';
 
 /**
  * Inline (always-expanded) Health Score panel for the campaign drawer.
@@ -120,10 +122,40 @@ function buildRecommendations(health: CampaignHealth): string[] {
   return out;
 }
 
-export function HealthScorePanel({ health }: { health: CampaignHealth }) {
+/**
+ * Task 5.6 (P1-10 / Q7) — optional campaign context lets the panel
+ * render an `InsightActions` secondary (Ads Manager deep-link) inline
+ * with the score recommendations. The primary "open drawer" action is
+ * hidden because this panel ALWAYS renders inside the drawer already —
+ * dispatching open-drawer for the same campaign would be a no-op.
+ *
+ * All four context fields are optional so tests / older mounts that
+ * don't have the context don't break — the action bar simply doesn't
+ * render in that case.
+ */
+type HealthScorePanelProps = {
+  health: CampaignHealth;
+  campaignId?: string;
+  campaignName?: string;
+  platform?: 'Meta' | 'Google' | 'TikTok';
+  storeId?: string;
+};
+
+export function HealthScorePanel({
+  health,
+  campaignId,
+  campaignName,
+  platform,
+  storeId,
+}: HealthScorePanelProps) {
   const styles = GRADE_STYLES[health.grade];
   const isUnknown = health.grade === 'unknown';
   const recommendations = buildRecommendations(health);
+  // Task 5.6 — hook is safe to call unconditionally (SWR-deduped). Live
+  // require so unit tests that import the panel without an SWRConfig
+  // still work (SWR fallback to undefined data → empty map → no
+  // deep-link, panel still renders).
+  const adAccounts = useStoreAdAccounts();
 
   return (
     <InsightCard
@@ -227,6 +259,25 @@ export function HealthScorePanel({ health }: { health: CampaignHealth }) {
           <div className="pt-2 border-t border-glass-edge text-[10.5px] sm:text-[11px] text-ink-muted leading-snug">
             ציון = (רווחיות×0.40) + (נפח×0.15) + (מומנטום×0.25) + (attribution×0.20)
           </div>
+
+          {/* Task 5.6 (P1-10 / Q7) — Ads Manager deep-link footer.
+              `hidePrimary` because this panel ALWAYS renders inside the
+              drawer; dispatching open-drawer for the current campaign
+              would be a self-loop. The component silently no-ops when
+              the platform isn't Meta/Google/TikTok or when context is
+              missing. */}
+          {campaignId && storeId && platform && (
+            <div className="pt-2 border-t border-glass-edge">
+              <InsightActions
+                campaignId={campaignId}
+                campaignName={campaignName}
+                platform={platform}
+                storeId={storeId}
+                adAccounts={adAccounts}
+                hidePrimary
+              />
+            </div>
+          )}
         </>
       )}
     </InsightCard>

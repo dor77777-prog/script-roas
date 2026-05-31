@@ -528,6 +528,29 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     };
   });
 
+  // Task 5.6 (Wave 5, P1-10 / Q7) — listen for the global
+  // `roas-open-campaign-drawer` event dispatched by `InsightActions`'s
+  // primary button (from InsightsBoard / WhatsWorking / drawer-mounted
+  // insight panels). CampaignsTable is the single owner of the
+  // CampaignDrawer's open state, so this is the natural subscriber.
+  // Event detail is typed by `OpenCampaignDrawerDetail` in
+  // `components/insights/InsightActions.tsx`.
+  useEffect(() => {
+    function onOpen(e: Event) {
+      const detail = (e as CustomEvent<{
+        storeId: string;
+        platform: 'Meta' | 'Google' | 'TikTok';
+        campaignId: string;
+      }>).detail;
+      if (!detail || !detail.campaignId || !detail.storeId || !detail.platform) return;
+      setDrillStoreId(detail.storeId);
+      setDrillPlatform(detail.platform);
+      setDrillCampaignId(detail.campaignId);
+    }
+    window.addEventListener('roas-open-campaign-drawer', onOpen);
+    return () => window.removeEventListener('roas-open-campaign-drawer', onOpen);
+  }, []);
+
   // Phase 12.5.x (2026-05-24) — resolve adDrill.adSetName from data.rows once
   // it loads. URL-hydrated adDrill starts with '' (we don't put free text in
   // the URL); the drawer header shows a placeholder until this fires.
