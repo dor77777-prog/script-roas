@@ -95,7 +95,7 @@ const MIGRATION_ALLOWLIST: string[] = [
   'campaign-drawer/CampaignDrawerOverview.tsx',
   'campaign-drawer/index.tsx',
   'home/ActivityFeed.tsx',
-  'home/PerStoreRow.tsx',
+  // home/PerStoreRow.tsx — MIGRATED in Wave 3.0 (removed from allowlist)
   'home/RoasChartDateRangePicker.tsx',
   'home/RoasTargetChart.tsx',
   'operator/JobsTable.tsx',

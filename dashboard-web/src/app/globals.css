@@ -1166,6 +1166,45 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   .per-store-card .scard-main-grid .sv { font-size: 22px; }
 }
 
+/* Wave 3.0 (2026-05-31) — mockup `.store` header parity.
+   The band-tag pill + the "ROAS · היום" caption sit ON the vivid band
+   gradient, so they read as WHITE-on-white-alpha (verbatim from the mockup
+   `.band-tag` { background: rgba(255,255,255,.22); color: #fff } and
+   `.roas-cap` { opacity: .85 }). Scoped to `.per-store-card` so the shared
+   `.band-chip` styling used on the NEUTRAL RoasTargetChart surface is left
+   untouched. Gray (no-data) keeps the same treatment — its surface is
+   near-neutral but the white-alpha pill still reads, matching the mockup. */
+.per-store-card .band-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  font-family: 'Geist Mono';
+  background: rgba(255, 255, 255, 0.22);
+  color: oklch(100% 0 0);
+}
+.per-store-card .roas-cap {
+  color: oklch(100% 0 0);
+  opacity: 0.85;
+}
+/* Gray (no-data) band card: the surface is near-neutral, so a white pill /
+   white caption would be low-contrast (esp. in light). Reset both to the
+   normal ink tones so the no-data state reads without shouting — mirrors the
+   `.v.banded` gray exception above (which keeps the number ink, not white). */
+.glass[data-band="gray"].per-store-card .band-tag {
+  background: oklch(from var(--band-gray) l c h / 0.12);
+  color: var(--text-muted);
+}
+.glass[data-band="gray"].per-store-card .roas-cap {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
 /* Per-platform CPM cells — same layout treatment but with a slightly
    larger gap because each cell stacks 3 stitches (platform badge →
    spend caption → CPM value). Mirrors mockup .cpm-cell at line 230. */

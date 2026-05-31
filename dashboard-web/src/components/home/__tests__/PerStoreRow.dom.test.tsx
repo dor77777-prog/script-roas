@@ -167,6 +167,21 @@ describe('PerStoreRow', () => {
     expect(screen.getByText('store-3')).toBeInTheDocument();
   });
 
+  // Wave 3.0 — RTL/bidi coverage (re-establishes the assertion the deleted
+  // bidi.dom.test.tsx made on the now-removed PerStoreCards). Latin store
+  // names ("uzoshop", "Zol Plus") must be isolated in <bdi dir="ltr"> so they
+  // don't bidi-flip when rendered inside the Hebrew RTL document — otherwise a
+  // name ending in a digit/punctuation can reorder against the surrounding
+  // Hebrew header. The wrapper is the element that directly carries the text.
+  it('wraps each store name in <bdi dir="ltr">', () => {
+    render(<PerStoreRow stores={STORES} />);
+    for (const name of ['uzoshop', 'usmile360', 'store-3']) {
+      const label = screen.getByText(name);
+      expect(label.tagName.toLowerCase()).toBe('bdi');
+      expect(label.getAttribute('dir')).toBe('ltr');
+    }
+  });
+
   // Task 3.6 — freshness wiring. The hook's `stage` flows into both the
   // chip class AND the surrounding <Card data-freshness="…">; both must
   // agree so the desaturation CSS and the chip never contradict.

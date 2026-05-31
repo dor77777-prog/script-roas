@@ -21,8 +21,12 @@
  * does not own URL state itself so it stays trivially testable + reusable
  * outside Dashboard.tsx).
  *
- * Visual ref: mockup-04i-store-emphasis.html (semantic emphasis spec)
- *           + mockup-04-final.html (per-store row layout)
+ * Visual ref: docs/superpowers/mockups/2026-05-31-light-reskin/
+ *   dashboard-mockups.html `.store` card (mesh re-skin, both light + dark):
+ *   white text on the vivid band gradient, a white-alpha uppercase band-tag
+ *   pill + freshness chip in the header, a big ROAS number with the band
+ *   caption beneath it, an hr separator, the 4-up metric grid, and the
+ *   per-platform CPM tiles (white-alpha `.plat` cells).
  * Data plumbing arrives in Task 3.1 (Dashboard.tsx wires real StoreAgg →
  * PerStoreData). The inline `PerStoreData` type below is the contract that
  * task will satisfy.
@@ -82,15 +86,21 @@ export interface PerStoreRowProps {
 }
 
 /* --------------------------------------------------------------------------
- * Internal — band-chip label per band id (Hebrew, kept short for the chip).
+ * Internal — band-tag label per band id. Hebrew band-state wording, mirroring
+ * the mockup `.store` `.band-tag` pill (which carries the ROAS state in
+ * Hebrew, e.g. "תקין" / "למעקב" / "ROAS נמוך"). We use the project's canonical
+ * `roasLabel()` band wording (lib/analytics.ts) so the per-store pill reads
+ * identically to every other ROAS-state surface (RoasTargetChart annotation,
+ * tables, etc.) — one source of truth for band wording instead of a bespoke
+ * per-card vocabulary.
  * -------------------------------------------------------------------------- */
 
-const BAND_CHIP_LABEL: Record<RoasBand, string> = {
-  red:    'BELOW',
-  orange: 'WATCH',
-  green:  'GREEN',
-  blue:   'AHEAD',
-  gray:   'NO DATA',
+const BAND_TAG_LABEL: Record<RoasBand, string> = {
+  red:    'דורש בחינה',
+  orange: 'סביר',
+  green:  'טוב',
+  blue:   'מעולה',
+  gray:   'אין נתונים',
 };
 
 /* --------------------------------------------------------------------------
@@ -243,7 +253,7 @@ function StoreCard({
         // primitive.
         '!p-6 md:!p-7 per-store-card',
         interactive &&
-          'cursor-pointer transition-colors hover:border-glass-edge/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60',
+          'cursor-pointer transition-colors hover:border-glass-edge/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
       )}
     >
       {/* Zone 1 — colored "slab" header.
@@ -251,7 +261,7 @@ function StoreCard({
           ~35% of the card. Store name + band chip + ROAS hero sit ON this
           slab so the band colour is what the operator's eye lands on first
           ("the store IS this band" rather than "the store has a hint of"). */}
-      <header className="flex items-center justify-between gap-3">
+      <header className="store-top flex items-center justify-between gap-3">
         <Heading
           level="panel"
           className="truncate text-lg md:text-xl font-semibold"
@@ -261,25 +271,28 @@ function StoreCard({
         </Heading>
         <div className="flex items-center gap-2">
           <FreshnessBadge updatedAt={store.updatedAt} />
-          <span className={cn('band-chip', `chip-${band.band}`)}>
-            {BAND_CHIP_LABEL[band.band]}
-          </span>
+          {/* Band-tag pill. On the vivid band card it reads as the mockup's
+              white-on-white-alpha pill via the `.per-store-card .band-tag`
+              rule in globals.css — NOT a value-coloured chip, since the band
+              colour already IS the whole card. */}
+          <span className="band-tag">{BAND_TAG_LABEL[band.band]}</span>
         </div>
       </header>
 
-      {/* ROAS hero — huge banded number. 56-64px so the operator can read
-          today's ROAS from across the room. The label drops to its own line
-          (above the number) so the number gets the full horizontal axis. */}
-      <div className="mt-3 flex items-end justify-between gap-3 min-w-0">
-        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-ink-muted">
-          ROAS היום
-        </span>
+      {/* ROAS hero — huge banded number with the band caption beneath it
+          (mockup `.roas-big` + `.roas-cap`). The number gets the full width
+          so the operator can read today's ROAS from across the room; the
+          uppercase "ROAS · היום" caption sits under it. */}
+      <div className="mt-2 min-w-0">
         <bdi
           dir="ltr"
-          className="v banded text-[60px] md:text-[72px] font-light tabular-nums tracking-tight leading-none whitespace-nowrap"
+          className="v banded block text-[50px] md:text-[60px] font-light tabular-nums tracking-tight leading-none whitespace-nowrap"
         >
           {fmtRoasText(store.roas)}
         </bdi>
+        <span className="roas-cap mt-1 block font-mono text-[11px] uppercase tracking-[0.08em] text-ink-muted">
+          ROAS · היום
+        </span>
       </div>
 
       {/* Zone 2 — 4-up metric grid.
