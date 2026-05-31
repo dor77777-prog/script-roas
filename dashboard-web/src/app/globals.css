@@ -221,6 +221,163 @@
 }
 
 /* ===========================================================================
+   LIGHT MODE — Task 2.1 "mesh rich gradient" (light = calm).
+   `:root` above IS the dark token set and stays verbatim; this block
+   re-declares EVERY one of those 89 tokens with light values when
+   <html data-theme="light"> is set. Specificity of :root and
+   [data-theme="light"] is equal, so this block winning relies on SOURCE
+   ORDER — hence it sits immediately after :root.
+
+   Rules honoured here:
+     - HUES are identical to dark; only Lightness / Chroma / alpha change,
+       so brand identity + the colorCollisions hue-gaps are preserved.
+     - Non-color tokens (space / motion / ease / radius / motion-freshness)
+       are theme-invariant and copied verbatim from :root.
+     - Status palette semantics are INVERTED for light: a pale tint -bg
+       carries dark -fg text (dark used a dark -bg + light -fg).
+     - Chart line / grid / axis tokens DARKEN so they read on a light plot.
+     - NO literal curly brace characters appear in this comment — the
+       themeParity brace-walker and the :root guard regexes rely on that
+       convention to delimit blocks cleanly.
+   =========================================================================== */
+[data-theme="light"] {
+  /* Chart — platform-brand-mirrored. Same hues as dark; L darkened so each
+     line reads against a near-white plot. */
+  --chart-platform-meta:    oklch(56% 0.20 257);
+  --chart-platform-google:  oklch(68% 0.16 90);
+  --chart-platform-tiktok:  oklch(62% 0.24 12);
+  --chart-platform-organic: oklch(60% 0.13 175);
+  --chart-platform-shopify: oklch(58% 0.15 165);
+
+  /* Stores — same hues; mid-tone for legible badges on light. */
+  --store-uzo: oklch(58% 0.16 210);
+  --store-usm: oklch(58% 0.18 330);
+  --store-3:   oklch(58% 0.16 100);
+
+  /* Brand accent (violet, unchanged hue). Deeper than dark since dark's
+     72% L washes out on white; white text on it clears 4.5:1. */
+  --accent:      oklch(58% 0.22 280);
+  --accent-deep: oklch(50% 0.23 285);
+  --accent-fg:   oklch(100% 0 0);
+
+  /* V4 band signal — same hues as dark; mid-tone L for read on light. */
+  --band-red:    oklch(57% 0.24 25);
+  --band-orange: oklch(64% 0.20 45);
+  --band-green:  oklch(56% 0.20 145);
+  --band-blue:   oklch(56% 0.20 240);
+  --band-gray:   oklch(64% 0.012 250);
+
+  /* Spacing scale — theme-invariant, copied verbatim from :root. */
+  --space-1:  0.25rem;
+  --space-2:  0.5rem;
+  --space-3:  0.75rem;
+  --space-4:  1rem;
+  --space-5:  1.25rem;
+  --space-6:  1.5rem;
+  --space-8:  2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+
+  /* Motion / easing — theme-invariant, copied verbatim from :root. */
+  --motion-snap:  120ms;
+  --motion-fast:  180ms;
+  --motion-base:  240ms;
+  --motion-slow:  320ms;
+  --motion-large: 480ms;
+  --ease-out:     cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Radius scale — theme-invariant, copied verbatim from :root. */
+  --radius-control: 0.5rem;
+  --radius-chip:    0.375rem;
+  --radius-card:    0.875rem;
+  --radius-hero:    1rem;
+  --radius-pill:    9999px;
+
+  /* Canvas — near-white cool wash (calm light mesh). */
+  --canvas-1: oklch(96% 0.006 265);
+  --canvas-2: oklch(98.5% 0.004 265);
+
+  /* Glass layers — opaque white-ish cards on light + a soft cool edge.
+     --glass-edge-hot keeps the violet hover/focus rim. */
+  --glass-1: oklch(100% 0 0);
+  --glass-2: oklch(98.5% 0.005 265);
+  --glass-3: oklch(96.8% 0.007 265);
+  --glass-edge:     oklch(24% 0.03 265 / 0.10);
+  --glass-edge-hot: oklch(58% 0.22 280 / 0.45);
+
+  /* Foreground stack — inverted to dark inks on the light canvas.
+     text 16.5:1 · text-2 7.5:1 · text-muted 3.3-3.7:1 (metadata/large)
+     · text-subtle is the least-prominent meta tier (tooltip timestamps). */
+  --text:        oklch(24% 0.035 272);
+  --text-2:      oklch(45% 0.030 272);
+  --text-muted:  oklch(62% 0.025 272);
+  --text-subtle: oklch(72% 0.020 272);
+
+  /* Blur + saturate — cards are opaque in light so blur is mostly inert;
+     keep modest values for the few translucent sheets/overlays. */
+  --blur-glass: blur(20px) saturate(120%);
+  --blur-sheet: blur(36px) saturate(130%);
+
+  /* Shadow stack — cool soft drops; the dark white-inset highlight is
+     dropped (it only reads on dark). */
+  --shadow-glass:   0 1px 2px 0 oklch(24% 0.03 265 / 0.05), 0 10px 24px -10px oklch(24% 0.03 265 / 0.12);
+  --shadow-overlay: 0 8px 24px -6px oklch(24% 0.03 265 / 0.16);
+  --shadow-sheet:   0 24px 48px -16px oklch(24% 0.03 265 / 0.22);
+
+  /* Up/down deltas — mirror band-green / band-red (light values). */
+  --up: var(--band-green);
+  --dn: var(--band-red);
+
+  /* Freshness desaturation transition — theme-invariant. */
+  --motion-freshness: 600ms ease-out;
+
+  /* Status palette — INVERTED for light: pale tint -bg + dark -fg text.
+     Same hues as dark. base = mid signal; -fg on -bg clears 4.5:1. */
+  --status-red:    oklch(57% 0.20 22);
+  --status-red-bg: oklch(94% 0.045 22);
+  --status-red-fg: oklch(45% 0.17 22);
+  --status-orange:    oklch(70% 0.16 75);
+  --status-orange-bg: oklch(95% 0.045 75);
+  --status-orange-fg: oklch(50% 0.13 75);
+  --status-green:    oklch(58% 0.16 145);
+  --status-green-bg: oklch(94% 0.050 145);
+  --status-green-fg: oklch(43% 0.14 145);
+  --status-blue:    oklch(56% 0.15 240);
+  --status-blue-bg: oklch(94% 0.040 240);
+  --status-blue-fg: oklch(44% 0.14 240);
+  --status-gray:    oklch(60% 0.012 250);
+  --status-gray-bg: oklch(95% 0.004 250);
+  --status-gray-fg: oklch(45% 0.010 250);
+  --status-warning:    oklch(70% 0.16 75);
+  --status-warning-bg: oklch(95% 0.050 75);
+  --status-warning-fg: oklch(50% 0.13 75);
+
+  /* Chart helpers — axis / CPM-prev ghost darkened to read on light plot. */
+  --chart-axis:     oklch(45% 0.02 250 / 0.55);
+  --chart-cpm-prev: oklch(68% 0.14 75 / 0.7);
+
+  /* Chart grading tokens — ROAS line flips to a dark line on light;
+     target / pin / dots stay band-mirrored at light L; grid is a dark
+     hairline. Hues unchanged. */
+  --chart-roas-line:    oklch(30% 0.03 272);
+  --chart-target-line:  oklch(56% 0.20 145);
+  --chart-pin-line:     oklch(64% 0.16 75);
+  --chart-dot-max:      oklch(56% 0.20 145);
+  --chart-dot-min:      oklch(57% 0.22 22);
+  --chart-grid-line:    oklch(24% 0.03 265 / 0.08);
+
+  /* Annotation pins — same hues as dark; mid-tone for the light plot. */
+  --annotation-launch:   oklch(56% 0.18 145);
+  --annotation-pause:    oklch(60% 0.012 250);
+  --annotation-budget:   oklch(64% 0.16 75);
+  --annotation-pricing:  oklch(58% 0.20 280);
+  --annotation-sale:     oklch(60% 0.20 320);
+  --annotation-creative: oklch(58% 0.14 180);
+  --annotation-supplier: oklch(56% 0.16 240);
+  --annotation-other:    oklch(60% 0.018 250);
+}
+
+/* ===========================================================================
    Page background — fixed multi-radial wash + slow conic rotation.
    Mockup reference: mockup-04-final.html lines 38–52. The conic gradient
    sits on body::before behind everything (z-index: 0 + app shell uses
@@ -254,6 +411,32 @@ body::before {
   animation: bg-spin 60s linear infinite;
   pointer-events: none; z-index: 0; opacity: 0.6; filter: blur(40px);
 }
+
+/* ---------------------------------------------------------------------------
+   Light body mesh wash — Task 2.1. The dark body + body::before above apply
+   when data-theme is dark (the default :root). These overrides fork the wash
+   for light: a calm, pale single-accent glow over the near-white cool canvas
+   (spec: "calm in light, richer in dark"). body::before is KEPT (glassTokens
+   asserts it exists) but paled + calmed; it is NOT removed.
+   --------------------------------------------------------------------------- */
+[data-theme="light"] body {
+  background:
+    radial-gradient(ellipse at 85% -10%, oklch(90% 0.05 200 / 0.55) 0%, transparent 55%),
+    radial-gradient(ellipse at 0% 0%,    oklch(92% 0.04 285 / 0.40) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 110%, oklch(93% 0.04 320 / 0.30) 0%, transparent 60%),
+    linear-gradient(180deg, var(--canvas-1) 0%, var(--canvas-2) 100%);
+}
+[data-theme="light"] body::before {
+  opacity: 0.35;
+  filter: blur(60px);
+  background: conic-gradient(from 30deg at 50% 50%,
+    oklch(85% 0.06 285 / 0.05),
+    oklch(85% 0.06 257 / 0.05),
+    oklch(88% 0.05 320 / 0.04),
+    oklch(88% 0.05 175 / 0.04),
+    oklch(85% 0.06 285 / 0.05));
+}
+
 /* Renamed from `spin` to avoid colliding with Tailwind's built-in
    `@keyframes spin` (used by `animate-spin` on ~10 loading spinners).
    Behavior is identical today; this future-proofs against silent
