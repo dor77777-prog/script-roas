@@ -243,7 +243,7 @@ export function BillingSettings({ storeNames }: Props) {
               >
                 {t.label}
                 {t.count > 0 && (
-                  <span className="ml-1.5 inline-block text-[10px] tabular-nums text-ink-muted">
+                  <span className="ms-1.5 inline-block text-[10px] tabular-nums text-ink-muted">
                     ({t.count})
                   </span>
                 )}
@@ -474,7 +474,7 @@ function RecurringTab({
                       <Button
                         size="sm"
                         onClick={() => addDetectedPlan(m)}
-                        className="ml-auto gap-1 text-[11px] shrink-0"
+                        className="ms-auto gap-1 text-[11px] shrink-0"
                       >
                         <Plus size={11} />
                         הוסף
@@ -585,7 +585,7 @@ function RecurringTab({
                     ) : (
                       <>
                         <div className="text-sm font-bold tabular-nums text-ink">
-                          <span className="text-[10px] text-ink-muted font-medium ml-1">CAD</span>
+                          <span className="text-[10px] text-ink-muted font-medium ms-1">CAD</span>
                           {formatCurrency(r.monthlyCAD)}
                         </div>
                         <div className="text-[10px] text-ink-muted">/חודש</div>
@@ -973,7 +973,7 @@ function OneTimeTab({
                   </div>
                   <div className="text-end shrink-0">
                     <div className="text-sm font-bold tabular-nums text-ink">
-                      <span className="text-[10px] text-ink-muted font-medium ml-1">CAD</span>
+                      <span className="text-[10px] text-ink-muted font-medium ms-1">CAD</span>
                       {formatCurrency(r.amountCAD)}
                     </div>
                   </div>

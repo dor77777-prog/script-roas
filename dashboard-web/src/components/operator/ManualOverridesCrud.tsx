@@ -307,13 +307,13 @@ export function ManualOverridesCrud() {
         <TableBase>
           <thead className="text-ink-secondary text-xs uppercase tracking-wider">
             <tr>
-              <th className="text-right p-2">תאריך</th>
-              <th className="text-right p-2">חנות</th>
-              <th className="text-right p-2">פלטפורמה</th>
-              <th className="text-right p-2">סכום</th>
-              <th className="text-right p-2">מטבע</th>
-              <th className="text-right p-2">הערות</th>
-              <th className="text-right p-2">פעולות</th>
+              <th className="text-end p-2">תאריך</th>
+              <th className="text-end p-2">חנות</th>
+              <th className="text-end p-2">פלטפורמה</th>
+              <th className="text-end p-2">סכום</th>
+              <th className="text-end p-2">מטבע</th>
+              <th className="text-end p-2">הערות</th>
+              <th className="text-end p-2">פעולות</th>
             </tr>
           </thead>
           <tbody>

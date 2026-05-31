@@ -252,7 +252,7 @@ export function MonthlyTables({ stores, globalStore, bare = false, year, month, 
           ))}
         </NativeSelect>
       )}
-      <span className="text-[10px] sm:text-xs text-ink-muted ml-auto tabular-nums">
+      <span className="text-[10px] sm:text-xs text-ink-muted ms-auto tabular-nums">
         {visibleMonthGroups.length} חודשים
       </span>
     </div>

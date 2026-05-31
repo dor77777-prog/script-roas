@@ -296,7 +296,7 @@ function KpiCard({
           <span className="text-[11px] sm:text-xs font-medium text-ink-secondary tracking-wide truncate">
             {label}
             {labelSuffix && (
-              <span className="text-ink-muted font-normal ml-1">{labelSuffix}</span>
+              <span className="text-ink-muted font-normal ms-1">{labelSuffix}</span>
             )}
           </span>
           {help && <MetricHelp content={help} />}

@@ -308,7 +308,7 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
                   finalProfit >= 0 ? 'text-status-green' : 'text-status-red',
                 )}
               >
-                <span className="text-[10px] text-ink-muted font-medium ml-1">CAD</span>
+                <span className="text-[10px] text-ink-muted font-medium ms-1">CAD</span>
                 {formatCurrency(finalProfit)}
               </span>
             </li>
@@ -422,7 +422,7 @@ function HeroStat({
         {label}
       </div>
       <div className={cn('text-xl sm:text-3xl font-bold tabular-nums leading-none', amountColor)}>
-        <span className="text-[10px] sm:text-xs text-ink-muted font-medium ml-1.5 align-baseline">
+        <span className="text-[10px] sm:text-xs text-ink-muted font-medium ms-1.5 align-baseline">
           CAD
         </span>
         {formatCurrency(amount)}

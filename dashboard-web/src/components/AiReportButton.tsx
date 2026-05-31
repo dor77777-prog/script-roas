@@ -279,7 +279,7 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
                       variant="secondary"
                       size="sm"
                       onClick={() => setReport('')}
-                      className="gap-1.5 mr-auto"
+                      className="gap-1.5 me-auto"
                     >
                       צור מחדש
                     </Button>

@@ -285,7 +285,7 @@ export function HeroOverview({ data, filters }: Props) {
       />
       <div
         aria-hidden
-        className="absolute top-0 right-0 w-72 h-72 -translate-y-1/2 translate-x-1/3 rounded-full bg-cyan-300/15 blur-3xl pointer-events-none"
+        className="absolute top-0 end-0 w-72 h-72 -translate-y-1/2 translate-x-1/3 rounded-full bg-cyan-300/15 blur-3xl pointer-events-none"
       />
 
       {/* The chart used to live as a ghost background, but the user

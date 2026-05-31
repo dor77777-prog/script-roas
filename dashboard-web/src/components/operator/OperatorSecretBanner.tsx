@@ -78,7 +78,7 @@ export function OperatorSecretBanner() {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
               placeholder="הזן את ה-secret…"
-              className="pr-8"
+              className="pe-8"
               dir="ltr"
               autoComplete="off"
             />
@@ -86,7 +86,7 @@ export function OperatorSecretBanner() {
               type="button"
               variant="ghost"
               onClick={() => setShowPassword((v) => !v)}
-              className="absolute inset-y-0 right-2 w-auto h-auto p-0 flex items-center text-ink-secondary hover:text-ink"
+              className="absolute inset-y-0 end-2 w-auto h-auto p-0 flex items-center text-ink-secondary hover:text-ink"
               aria-label={showPassword ? 'הסתר secret' : 'הצג secret'}
             >
               {showPassword ? (
@@ -130,7 +130,7 @@ export function OperatorSecretBanner() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
                 placeholder="secret חדש…"
-                className="h-7 px-2 py-0.5 text-xs pr-7"
+                className="h-7 px-2 py-0.5 text-xs pe-7"
                 dir="ltr"
                 autoComplete="off"
               />
@@ -138,7 +138,7 @@ export function OperatorSecretBanner() {
                 type="button"
                 variant="ghost"
                 onClick={() => setShowPassword((v) => !v)}
-                className="absolute inset-y-0 right-1.5 w-auto h-auto p-0 flex items-center text-ink-secondary"
+                className="absolute inset-y-0 end-1.5 w-auto h-auto p-0 flex items-center text-ink-secondary"
                 aria-label={showPassword ? 'הסתר' : 'הצג'}
               >
                 {showPassword ? (

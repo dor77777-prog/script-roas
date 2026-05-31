@@ -167,7 +167,7 @@ export function BillingCsvImport({
         <p className="mb-1">
           <strong>איך מוציאים CSV מ-Shopify:</strong>
         </p>
-        <ol className="list-decimal list-inside space-y-0.5 mr-3">
+        <ol className="list-decimal list-inside space-y-0.5 me-3">
           <li>Shopify Admin → Settings → Billing → Bill history</li>
           <li>בחר את החודש הרצוי → לחץ &quot;Export&quot;</li>
           <li>Shopify ישלח CSV למייל שלך</li>

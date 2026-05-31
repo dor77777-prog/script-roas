@@ -204,9 +204,10 @@ export default tseslint.config(
     },
   },
 
-  // 5. Config files (root JS / mjs / cjs) — relax module-resolution rules.
+  // 5. Config files (root JS / mjs / cjs) + build-tool scripts under
+  //    scripts/ — both run on Node and need globals.node available.
   {
-    files: ['*.{js,mjs,cjs}', 'eslint.config.js'],
+    files: ['*.{js,mjs,cjs}', 'eslint.config.js', 'scripts/**/*.{js,mjs,cjs}'],
     languageOptions: {
       globals: { ...globals.node },
     },

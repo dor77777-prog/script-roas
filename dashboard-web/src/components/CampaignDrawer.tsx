@@ -1307,7 +1307,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                       {isLoadingPrev && <span className="ms-2 opacity-50">· טוען נתוני תקופה קודמת...</span>}
                     </div>
                   )}
-                  <span className="font-semibold ml-1">ניתוח:</span>
+                  <span className="font-semibold ms-1">ניתוח:</span>
                   <span>{analysis.text}</span>
                 </div>
               </section>

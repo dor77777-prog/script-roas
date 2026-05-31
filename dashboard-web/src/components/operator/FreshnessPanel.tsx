@@ -144,7 +144,7 @@ function FreshnessTableRow({ row }: { row: FreshnessRow }) {
           <StatusIcon status={row.status} />
           <span className="font-mono">{statusLabel(row.status)}</span>
           {row.budget_skip && row.status !== 'budget_skip' && (
-            <span className="ml-1 inline-flex items-center gap-0.5 text-status-orange">
+            <span className="ms-1 inline-flex items-center gap-0.5 text-status-orange">
               <AlertCircle size={11} />
               <span className="text-2xs">budget_skip</span>
             </span>

@@ -190,11 +190,11 @@ export function JobsTable() {
       <TableBase>
         <thead className="text-ink-secondary text-xs uppercase tracking-wider bg-canvas">
           <tr>
-            <th className="text-right p-2">פונקציה</th>
-            <th className="text-right p-2">סטטוס</th>
-            <th className="text-right p-2">התחלה</th>
-            <th className="text-right p-2">משך</th>
-            <th className="text-right p-2">פרטים</th>
+            <th className="text-end p-2">פונקציה</th>
+            <th className="text-end p-2">סטטוס</th>
+            <th className="text-end p-2">התחלה</th>
+            <th className="text-end p-2">משך</th>
+            <th className="text-end p-2">פרטים</th>
           </tr>
         </thead>
         <tbody>

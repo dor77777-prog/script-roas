@@ -442,7 +442,7 @@ export function TodayLive({
               LIVE
             </span>
           </div>
-          <div className="text-[11px] sm:text-xs text-ink-secondary text-left tabular-nums shrink-0">
+          <div className="text-[11px] sm:text-xs text-ink-secondary text-start tabular-nums shrink-0">
             <div className="font-medium">{today}</div>
             <div className="text-ink-muted">עודכן {now}</div>
           </div>

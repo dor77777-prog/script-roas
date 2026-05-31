@@ -350,7 +350,7 @@ function AnnotationForm({
           <X size={13} />
           ביטול
         </Button>
-        <span className="text-[10px] text-ink-muted ml-auto inline-flex items-center gap-1">
+        <span className="text-[10px] text-ink-muted ms-auto inline-flex items-center gap-1">
           <Calendar size={10} />
           יסומן על הגרף
         </span>

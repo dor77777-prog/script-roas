@@ -175,7 +175,7 @@ export function InsightCardGroup({
           {count}
         </span>
         {!alwaysExpanded && (
-          <span className="ml-auto text-ink-muted" aria-hidden>
+          <span className="ms-auto text-ink-muted" aria-hidden>
             {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
           </span>
         )}
@@ -259,7 +259,7 @@ export function InsightCardRow({
                 <button
                   type="button"
                   onClick={() => setWhyOpen(v => !v)}
-                  className="h-auto gap-1 px-2 py-1 inline-flex items-center text-[11px] text-ink-muted hover:text-ink ml-auto rounded"
+                  className="h-auto gap-1 px-2 py-1 inline-flex items-center text-[11px] text-ink-muted hover:text-ink ms-auto rounded"
                 >
                   {whyOpen ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
                   {whyOpen ? 'הסתר הסבר' : 'למה?'}

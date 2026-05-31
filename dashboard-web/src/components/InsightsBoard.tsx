@@ -248,7 +248,7 @@ export function InsightsBoard({ data }: Props) {
               </Heading>
               <div className="text-[11px] sm:text-xs text-ink-muted mt-0.5 leading-tight">
                 {loading && (
-                  <span className="inline-flex items-center gap-1 mr-2">
+                  <span className="inline-flex items-center gap-1 me-2">
                     <RefreshCw size={11} className="animate-spin" />
                     מנתח…
                   </span>

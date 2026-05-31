@@ -508,7 +508,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
         )}
       </div>
 
-      <span className="text-[10px] sm:text-xs text-ink-muted tabular-nums sm:mr-auto">
+      <span className="text-[10px] sm:text-xs text-ink-muted tabular-nums sm:me-auto">
         {summary.days === 1
           ? `יום אחד · ${formatDate(localRange.from)}`
           : `${summary.days} ימים · ${buckets.length} ${period === 'day' ? 'ימים' : 'תקופות'}`}

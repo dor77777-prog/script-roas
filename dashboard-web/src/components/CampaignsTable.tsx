@@ -1371,7 +1371,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         )}
       </div>
 
-      <span className="text-[10px] sm:text-xs text-ink-muted tabular-nums sm:mr-auto">
+      <span className="text-[10px] sm:text-xs text-ink-muted tabular-nums sm:me-auto">
         {/* Audit fix 2026-05-23 (FIND-14): when the multi-mapped filter is
             on, show the visible-row count instead of the pre-filter total so
             this headline number doesn't disagree with the table body. The
@@ -1705,7 +1705,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                 {isLoadingPrev && <span className="ms-2 opacity-50">· טוען נתוני תקופה קודמת...</span>}
               </div>
             )}
-            <span className="font-semibold ml-1">ניתוח:</span>
+            <span className="font-semibold ms-1">ניתוח:</span>
             <span>{analysis.text}</span>
           </div>
         </div>
@@ -2267,7 +2267,7 @@ function AttributionGapPanel({
             פלטפורמות מדווחות
           </div>
           <div className="text-base sm:text-lg font-semibold tabular-nums text-ink mt-0.5">
-            <span className="text-[10px] text-ink-muted font-medium ml-1">CAD</span>
+            <span className="text-[10px] text-ink-muted font-medium ms-1">CAD</span>
             {formatCurrency(gap.platformClaimed)}
           </div>
           <div className="text-[10px] text-ink-muted tabular-nums">
@@ -2280,7 +2280,7 @@ function AttributionGapPanel({
             Shopify בפועל
           </div>
           <div className="text-base sm:text-lg font-bold tabular-nums text-ink mt-0.5">
-            <span className="text-[10px] text-ink-muted font-medium ml-1">CAD</span>
+            <span className="text-[10px] text-ink-muted font-medium ms-1">CAD</span>
             {formatCurrency(gap.shopifyRevenue)}
           </div>
           <div className="text-[10px] text-ink-muted tabular-nums">
@@ -2298,7 +2298,7 @@ function AttributionGapPanel({
               gap.absGap >= 0 ? 'text-status-green' : 'text-status-red',
             )}
           >
-            <span className="text-[10px] text-ink-muted font-medium ml-1">CAD</span>
+            <span className="text-[10px] text-ink-muted font-medium ms-1">CAD</span>
             {gap.absGap >= 0 ? '+' : ''}{formatCurrency(gap.absGap)}
           </div>
           <div className="text-[10px] text-ink-muted tabular-nums">
