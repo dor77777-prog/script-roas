@@ -1016,6 +1016,31 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 .glass[data-freshness="stale"] { filter: saturate(0.30) brightness(0.95); opacity: 0.80; }
 .glass[data-freshness="stale"]::before { opacity: 0.3 !important; filter: saturate(0.30); }
 
+/* === Platform-color emphasis (operator fix) ================================
+   Brand dots washed out inside band-tinted + freshness-desaturated per-store
+   cards. Fix = per-platform tinted CPM cell + a white contrast ring on the dot
+   + re-saturation that cancels the parent freshness filter so brand identity
+   survives on aging/stale cards. The `data-platform` hook is emitted by
+   PerStoreRow's CPM cells. */
+.cpm-row-cells .cell[data-platform="meta"]    { background: oklch(from var(--chart-platform-meta)    l c h / 0.14); }
+.cpm-row-cells .cell[data-platform="google"]  { background: oklch(from var(--chart-platform-google)  l c h / 0.14); }
+.cpm-row-cells .cell[data-platform="tiktok"]  { background: oklch(from var(--chart-platform-tiktok)  l c h / 0.14); }
+.cpm-row-cells .cell[data-platform="organic"] { background: oklch(from var(--chart-platform-organic) l c h / 0.14); }
+.cpm-row-cells .cell[data-platform="shopify"] { background: oklch(from var(--chart-platform-shopify) l c h / 0.14); }
+
+/* dot: white contrast ring (survives saturate — lightness is unaffected) +
+   brand glow. !important overrides PlatformBadge's inline boxShadow, but ONLY
+   for dots inside a data-platform cell (badges elsewhere keep the default glow). */
+.cell[data-platform] .platform-dot {
+  box-shadow: 0 0 0 2px oklch(100% 0 0 / 0.9), 0 0 6px color-mix(in oklab, currentColor 70%, transparent) !important;
+}
+
+/* Re-saturate the platform cells to cancel the parent freshness filter.
+   Nested saturate() multiplies: aging 0.60 × 1.67 ≈ 1.0, stale 0.30 × 3.33 ≈ 1.0,
+   so the brand colour stays full-saturation while the rest of the card fades. */
+.glass[data-freshness="aging"] .cpm-row-cells .cell[data-platform] { filter: saturate(1.67); }
+.glass[data-freshness="stale"] .cpm-row-cells .cell[data-platform] { filter: saturate(3.33); }
+
 /* Freshness chip — small uppercase pill carried inside the card header
    that mirrors the desaturation stage as a label ("LIVE · 4m" / "AGING ·
    22min" / "STALE · 1h 47min"). Pulse dot animates only when fresh.

@@ -159,7 +159,7 @@ export const PlatformBadge = forwardRef<HTMLSpanElement, PlatformBadgeProps>(
         )}
         {showDot && (
           <span
-            className="inline-block w-2 h-2 rounded-full shrink-0 bg-current"
+            className="platform-dot inline-block w-2 h-2 rounded-full shrink-0 bg-current"
             // `box-shadow: 0 0 8px currentColor` produces the neon glow
             // from the mockup's `.cpm-plat .gd` rule. Tailwind can't
             // express this via a utility because it needs `currentColor`
