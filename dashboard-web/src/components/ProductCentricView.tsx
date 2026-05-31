@@ -85,11 +85,11 @@ function statBlock(rows: Array<{ label: string; value: string; emphasis?: boolea
     <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 my-2 text-[11px]">
       {rows.map((r) => (
         <Fragment key={r.label}>
-          <dt className="text-canvas/55">{r.label}</dt>
+          <dt className="text-ink-muted">{r.label}</dt>
           <dd
             className={cn(
               'text-end tabular-nums',
-              r.emphasis ? 'text-canvas font-semibold' : 'text-canvas/90',
+              r.emphasis ? 'text-ink font-semibold' : 'text-ink-secondary',
             )}
           >
             <bdi dir="ltr">{r.value}</bdi>
@@ -449,7 +449,7 @@ function ProductRow({
             <div className="text-sm font-semibold text-ink truncate">
               {row.productTitle}
               {row.isMultiMapped && (
-                <span className="inline-block text-[10px] font-bold tracking-wider align-middle bg-status-warningBg text-status-warningFg border border-status-warning/30 px-1.5 py-0.5 rounded ms-2">
+                <span className="inline-block text-[10px] font-bold tracking-wider align-middle bg-status-warningBg text-status-warningFg px-1.5 py-0.5 rounded ms-2">
                   🔗 {row.members.length} קמפיינים
                 </span>
               )}
@@ -508,7 +508,7 @@ function ProductRow({
                         body={
                           <>
                             סך מה שהוצאת על הקמפיין הזה בטווח שנבחר, ב-CAD לאחר המרה מהמטבע
-                            המקורי של הפלטפורמה. מקור: <code dir="ltr" className="text-canvas/95">data_daily</code>.
+                            המקורי של הפלטפורמה. מקור: <code dir="ltr" className="text-ink-secondary">data_daily</code>.
                           </>
                         }
                       />
@@ -521,7 +521,7 @@ function ProductRow({
                             איזה אחוז מהוצאת המוצר <strong>באותה פלטפורמה</strong> שייך לקמפיין
                             הזה. דוגמה: 60% ב-Meta אומר שהקמפיין הוא 60% מסך הוצאת Meta על המוצר.
                             נוסחה:{' '}
-                            <code dir="ltr" className="text-canvas/95">
+                            <code dir="ltr" className="text-ink-secondary">
                               spend / Σ spend (same platform, same product)
                             </code>
                             .
@@ -537,7 +537,7 @@ function ProductRow({
                             איזה אחוז מסך ההוצאה <strong>של כל הקמפיינים</strong> על המוצר (כל
                             הפלטפורמות יחד) שייך לקמפיין הזה. מאפשר השוואה cross-platform.
                             נוסחה:{' '}
-                            <code dir="ltr" className="text-canvas/95">
+                            <code dir="ltr" className="text-ink-secondary">
                               spend / cohort total spend
                             </code>
                             .
@@ -554,7 +554,7 @@ function ProductRow({
                             שה-allocator מחלק את ההכנסות בין הקמפיינים בקוהורט. הסדר: קודם
                             ההזמנות שיוחסו דטרמיניסטית (fbclid/gclid/ttclid), אז השאר מתחלק
                             פרופורציונלית ל-spend. נוסחה מקורבת:{' '}
-                            <code dir="ltr" className="text-canvas/95">
+                            <code dir="ltr" className="text-ink-secondary">
                               Shopify net × intra-platform spend share
                             </code>
                             .
@@ -583,7 +583,7 @@ function ProductRow({
                           <>
                             ה-ROAS לפי <strong>ה-pixel של הפלטפורמה</strong> (Meta/Google/TikTok)
                             — לא לפי Shopify. נוסחה:{' '}
-                            <code dir="ltr" className="text-canvas/95">
+                            <code dir="ltr" className="text-ink-secondary">
                               conversionValue / spend
                             </code>
                             . שונה מ-ROAS משוקלל בסיכום (שמבוסס Shopify אמיתי). פער גדול בין
@@ -599,17 +599,17 @@ function ProductRow({
                           <>
                             ההפרש היחסי בין ההכנסה ש-pixel דיווח להכנסה המוקצית מ-Shopify.
                             נוסחה:{' '}
-                            <code dir="ltr" className="text-canvas/95">
+                            <code dir="ltr" className="text-ink-secondary">
                               (pixel − Shopify) / Shopify
                             </code>
                             .
                             <span className="block mt-2">
-                              <span className="text-emerald-300">תואם</span> = פער &lt; 10%
+                              <span className="text-status-greenFg">תואם</span> = פער &lt; 10%
                               (תקין).{' '}
-                              <span className="text-orange-300">±10–25%</span> = סטייה
+                              <span className="text-status-orangeFg">±10–25%</span> = סטייה
                               בינונית.{' '}
-                              <span className="text-red-300">±25%+</span> /{' '}
-                              <span className="text-red-300">pixel ריק</span> = הקמפיין הזה
+                              <span className="text-status-redFg">±25%+</span> /{' '}
+                              <span className="text-status-redFg">pixel ריק</span> = הקמפיין הזה
                               לא משקף נכון את המכירות, סמוך על ROAS משוקלל.
                             </span>
                           </>
@@ -650,7 +650,7 @@ function ProductRow({
                         key={m.campaignKey}
                         className={cn(
                           'border-b border-glass-edge/50 last:border-0',
-                          isLeader && 'bg-accent/5',
+                          isLeader && 'bg-accent-bg',
                         )}
                       >
                         <HelpTooltip content={m.campaignName}>
@@ -688,11 +688,11 @@ function ProductRow({
                                 className={cn(
                                   'inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold tabular-nums border cursor-help',
                                   d.tone === 'good' &&
-                                    'bg-status-greenBg/40 text-status-green border-status-green/30',
+                                    'bg-status-greenBg text-status-greenFg border-status-green',
                                   d.tone === 'warn' &&
-                                    'bg-status-orangeBg/60 text-status-orange border-status-orange/30',
+                                    'bg-status-orangeBg text-status-orangeFg border-status-orange',
                                   d.tone === 'bad' &&
-                                    'bg-status-redBg/60 text-status-red border-status-red/30',
+                                    'bg-status-redBg text-status-redFg border-status-red',
                                   d.tone === 'neutral' &&
                                     'bg-glass-2 text-ink-muted border-glass-edge',
                                 )}
@@ -714,7 +714,7 @@ function ProductRow({
                             className={cn(
                               'inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium border',
                               isActive
-                                ? 'bg-status-greenBg/40 text-status-green border-status-green/30'
+                                ? 'bg-status-greenBg text-status-greenFg border-status-green'
                                 : 'bg-glass-2 text-ink-muted border-glass-edge',
                             )}
                           >

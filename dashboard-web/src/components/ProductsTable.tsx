@@ -489,7 +489,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
           variant="secondary"
           size="sm"
           onClick={() => setLocalRange({ from: today, to: today })}
-          className="border-status-green/40 bg-status-greenBg/60 text-status-green hover:bg-status-greenBg"
+          className="border-status-green bg-status-greenBg text-status-greenFg hover:bg-status-greenBg"
           title="קפוץ ליום הנוכחי (live)"
         >
           היום
@@ -534,7 +534,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
         * path (data.error). After WR-06, /api/products returns 200 with
         * rows: [] + error on failure so SWR consumers stay consistent. */}
       {(error || data?.error) && (
-        <div className="m-4 rounded-lg bg-status-redBg border border-status-red/30 p-3 flex items-start gap-2 text-sm">
+        <div className="m-4 rounded-lg bg-status-redBg border border-status-red p-3 flex items-start gap-2 text-sm">
           <AlertCircle className="text-status-red shrink-0" size={18} />
           <div>
             <div className="font-semibold text-status-red">שגיאה בטעינת המוצרים</div>
@@ -551,7 +551,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
 
       {data && !error && !data.error && buckets.length === 0 && (
         <div className="p-8 text-center text-ink-muted text-sm">
-          <Calendar className="mx-auto mb-2 text-ink-muted/60" size={28} />
+          <Calendar className="mx-auto mb-2 text-ink-subtle" size={28} />
           <div>אין מוצרים שנמכרו בטווח הזה.</div>
           <div className="text-[11px] mt-1">נסה לבחור טווח תאריכים רחב יותר בסינון למעלה.</div>
         </div>
@@ -574,7 +574,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
               <div
                 key={bucket.key}
                 className={cn(
-                  isLive && 'bg-gradient-to-r from-status-greenBg/30 to-transparent',
+                  isLive && 'bg-gradient-to-r from-status-greenBg to-transparent',
                 )}
               >
                 {/* Bucket header */}
@@ -591,7 +591,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                     </span>
                     {isLive && (
                       <HelpTooltip content="עד לרגע זה - יתעדכן עוד עד חצות">
-                        <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-status-green bg-status-greenBg/80 px-1.5 py-0.5 rounded">
+                        <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-status-greenFg bg-status-greenBg px-1.5 py-0.5 rounded">
                           <Radio size={11} /> חי · {nowLabel}
                         </span>
                       </HelpTooltip>
@@ -633,7 +633,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
 
                 {/* Live bucket empty state — explain that data is on the way */}
                 {isLive && isEmpty && (
-                  <div className="px-4 sm:px-5 py-4 text-center text-xs sm:text-sm text-ink-secondary border-t border-status-green/20 bg-status-greenBg/20">
+                  <div className="px-4 sm:px-5 py-4 text-center text-xs sm:text-sm text-ink-secondary border-t border-status-green bg-status-greenBg">
                     עוד לא נמכרו מוצרים היום. הסקריפט החי מרענן את הטאב כל 15 דקות —
                     שורה זו תמשיך להתעדכן עד חצות.
                   </div>
@@ -844,7 +844,7 @@ function SummaryCard({
       : null;
 
   return (
-    <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gradient-to-l from-accent/5 to-elevated border-b border-glass-edge">
+    <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gradient-to-l from-accent-bg to-glass-2 border-b border-glass-edge">
       <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-base sm:text-lg font-bold text-ink truncate">

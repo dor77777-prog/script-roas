@@ -228,7 +228,7 @@ export function ProductPickerModal({
       aria-labelledby="product-picker-title"
     >
       <div
-        className="absolute inset-0 bg-ink/45 backdrop-blur-sm"
+        className="absolute inset-0 bg-scrim backdrop-blur-sm"
         onClick={onClose}
         aria-hidden
       />
@@ -238,7 +238,7 @@ export function ProductPickerModal({
       >
         <header className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-glass-edge">
           <div className="min-w-0 flex items-center gap-2.5">
-            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent/10 text-accent shrink-0">
+            <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent-soft text-accent shrink-0">
               <Package size={16} />
             </span>
             <div className="min-w-0">
@@ -269,7 +269,7 @@ export function ProductPickerModal({
 
         <div className="px-4 sm:px-5 py-3 border-b border-glass-edge">
           {!isLoading && !usingCatalog && (
-            <div className="mb-2.5 rounded-md bg-status-warningBg border border-status-warning/30 px-2.5 py-2 text-[11px] text-status-warningFg leading-relaxed">
+            <div className="mb-2.5 rounded-md bg-status-warningBg border border-status-warning px-2.5 py-2 text-[11px] text-status-warningFg leading-relaxed">
               <strong>הקטלוג עוד לא סונכרן.</strong> מוצגים רק מוצרים שכבר ביצעו
               מכירה. כדי לראות את כל המוצרים בחנות (כולל חדשים בלי הזמנות),
               לחץ על <code className="font-mono bg-status-warningBg px-1 rounded">Sync now</code>{' '}
@@ -310,7 +310,7 @@ export function ProductPickerModal({
           )}
           {!isLoading && filtered.length === 0 && (
             <div className="text-center text-sm text-ink-muted py-10">
-              <Package size={28} className="mx-auto mb-2 text-ink-muted/60" />
+              <Package size={28} className="mx-auto mb-2 text-ink-subtle" />
               {query
                 ? 'אין מוצרים שמתאימים לחיפוש.'
                 : 'אין מוצרים זמינים לחנות הזאת. ודא ש-products-daily מאוכלס.'}
@@ -329,7 +329,7 @@ export function ProductPickerModal({
                       className={cn(
                         'w-full justify-start h-auto px-3 py-2 gap-3',
                         isOn
-                          ? 'bg-accent/10 hover:bg-accent/15'
+                          ? 'bg-accent-bg hover:bg-accent-soft'
                           : 'hover:bg-glass-2',
                       )}
                       aria-pressed={isOn}
@@ -338,7 +338,7 @@ export function ProductPickerModal({
                         className={cn(
                           'inline-flex items-center justify-center w-5 h-5 rounded border-2 shrink-0 transition-colors',
                           isOn
-                            ? 'bg-accent border-accent text-white'
+                            ? 'bg-accent border-accent text-accent-fg'
                             : 'border-glass-edge bg-glass-1',
                         )}
                       >
@@ -359,7 +359,7 @@ export function ProductPickerModal({
                               {formatNumber(p.totalUnits, 0)} יח&apos; · {fmtMoney(p.totalRevenue)}
                             </>
                           ) : (
-                            <span className="text-ink-muted/80">עדיין לא בוצעו מכירות</span>
+                            <span className="text-ink-muted">עדיין לא בוצעו מכירות</span>
                           )}
                         </div>
                         {(() => {
@@ -377,7 +377,7 @@ export function ProductPickerModal({
                           const more = others.length > 2 ? ` +${others.length - 2}` : '';
                           return (
                             <HelpTooltip content={`גם ממופה ל: ${others.join(', ')}`}>
-                              <div className="text-[10px] mt-0.5 inline-flex items-center gap-1 text-status-warningFg bg-status-warningBg border border-status-warning/30 rounded px-1.5 py-0.5">
+                              <div className="text-[10px] mt-0.5 inline-flex items-center gap-1 text-status-warningFg bg-status-warningBg rounded px-1.5 py-0.5">
                                 🔗 גם ב-{others.length} קמפיינים: {preview}{more}
                               </div>
                             </HelpTooltip>

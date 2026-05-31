@@ -153,7 +153,7 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
             the green ≥60% chip on a phantom signal — recommending
             budget increase off attribution noise. */}
         {exclusiveFacebookShare >= 0.6 && (
-          <div className="rounded-md bg-status-greenBg/50 border border-status-green/30 text-status-green px-2.5 py-2 text-[11px] leading-relaxed">
+          <div className="rounded-md bg-status-greenBg border border-status-green text-status-greenFg px-2.5 py-2 text-[11px] leading-relaxed">
             <strong>💡 </strong>
             {fbPct}% מהמכירות הגיעו מפייסבוק
             {' → '}
@@ -161,7 +161,7 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
           </div>
         )}
         {exclusiveFacebookShare < 0.3 && total >= 5 && (
-          <div className="rounded-md bg-status-warningBg border border-status-warning/30 text-status-warningFg px-2.5 py-2 text-[11px] leading-relaxed">
+          <div className="rounded-md bg-status-warningBg border border-status-warning text-status-warningFg px-2.5 py-2 text-[11px] leading-relaxed">
             <strong>⚠️ </strong>
             רק {fbPct}% מהמכירות הגיעו מפייסבוק
             {' → '}

@@ -81,10 +81,10 @@ const MIGRATION_ALLOWLIST: string[] = [
   // MetaShopifyReconciliation.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
   // MonthlyTables.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
   // PnLBreakdown.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
-  'ProductCentricView.tsx',
-  'ProductChannelBreakdown.tsx',
-  'ProductPickerModal.tsx',
-  'ProductsTable.tsx',
+  // ProductCentricView.tsx — MIGRATED in Wave 3.4 (removed from allowlist)
+  // ProductChannelBreakdown.tsx — MIGRATED in Wave 3.4 (removed from allowlist)
+  // ProductPickerModal.tsx — MIGRATED in Wave 3.4 (removed from allowlist)
+  // ProductsTable.tsx — MIGRATED in Wave 3.4 (removed from allowlist)
   // RoasChart.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
   // SectionIntro.tsx — MIGRATED in Wave 3.2 (removed from allowlist)
   'Sidebar.tsx',
