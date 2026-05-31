@@ -3,7 +3,7 @@
 > **קהל יעד**: מפתחים, מי שמתחזק את הקוד, AI agents שעובדים על הריפו.
 > זה לא user manual — לזה יש את [docs/ROAS-Dashboard-User-Manual.md](ROAS-Dashboard-User-Manual.md).
 >
-> **גרסה**: 1.0 · **תאריך**: 2026-05-22 · **בסיס קוד**: Phase 05.7.x
+> **גרסה**: 1.1 · **תאריך**: 2026-05-31 · **בסיס קוד**: Phase 05.7.x + mesh re-skin
 
 ---
 
@@ -2525,4 +2525,90 @@ Keyboard shortcut **`⌘\` (Mac) / `Ctrl+\` (Win/Linux)** toggles
 pinned ↔ unpinned globally (registered at app root). Mobile is
 unaffected — drawer behavior (§2.1.6) still applies via the
 `<768px` media query.
+
+### 27.11 Dual-mode theming (Light + Dark) — 2026-05-31 mesh re-skin
+
+The re-skin reactivated the previously-disabled light mode, making both
+themes first-class. The theming system is token-driven end-to-end; no
+component holds hardcoded colors.
+
+#### Token contract (`globals.css`)
+
+```
+:root {
+  /* DARK token set — authoritative baseline */
+  --canvas-1: oklch(…);
+  --band-red: oklch(…);
+  …all tokens…
+}
+
+[data-theme="light"] {
+  /* LIGHT token set — re-declares every token */
+  --canvas-1: oklch(…);
+  --band-red: oklch(…);
+  …all tokens…
+}
+```
+
+The `:root` block holds the **dark** values; `[data-theme="light"]`
+overrides **every** token with its light counterpart. A vitest
+**`themeParity`** guard (`src/lib/__tests__/themeParity.test.ts`)
+asserts at CI time that every token present in `:root` has a matching
+declaration under `[data-theme="light"]` — preventing silent
+single-mode regressions.
+
+#### Theme resolution pipeline (`ThemeProvider`)
+
+```
+user choice ("system" | "light" | "dark")
+    ×
+OS prefers-color-scheme
+    ↓
+ThemeProvider resolves → effective theme ("light" | "dark")
+    ↓
+writes data-theme="light|dark" on <html>
+    ↓
+CSS selector [data-theme="light"] takes effect
+```
+
+`ThemeProvider` (`src/components/providers/ThemeProvider.tsx`) reads
+the stored choice from `localStorage` (`theme-preference`), subscribes
+to `window.matchMedia('(prefers-color-scheme: dark)')` for `system`
+mode, and writes `document.documentElement.dataset.theme`.
+
+**No FOUC:** `layout.tsx` injects an inline bootstrap script (≤200
+bytes, before any `<link>` or body content) that reads `localStorage`
+and sets `data-theme` synchronously — the browser paints the correct
+theme on first render. `viewport.themeColor` in `layout.tsx` is
+declared per-scheme via the Next.js `metadata.themeColor` array so
+the browser chrome color updates correctly on mobile.
+
+#### Theme-aware derivations
+
+Tokens that vary continuously from the base color set use **OKLCH
+relative-color** syntax so they flip automatically with the theme:
+
+```css
+/* Example: band-card gradient built from --band-red */
+background: oklch(from var(--band-red) calc(l - 0.08) c h / 0.35);
+```
+
+Key derivation families:
+
+| Surface | Technique |
+|---|---|
+| Band-card gradients (per-store, hero ROAS) | `oklch(from var(--band-*)…)` relative-color + mesh layering |
+| Band chips + FreshnessBadge chips | Same relative-color via `--band-*/0.15` bg tint |
+| Hero sparklines inside colored cards | `oklch(from var(--band-*) l c h / 0.6)` — semi-transparent brand color |
+| Freshness desaturation (AGING/STALE) | CSS `filter: saturate(X)` on the `.glass` container |
+| Platform dot re-saturation | Nested `filter: saturate(Y)` on `.platform-dot` overrides parent desaturation so brand colors (Meta/Google/TikTok) stay distinct even on STALE cards |
+| Failure-day cell | `background: var(--cell-fail)` — tokens `oklch(10% 0 0)` dark / `oklch(15% 0 0)` light (near-black in both modes) |
+| Tooltip surfaces | `var(--canvas-tooltip)` + `var(--text-canvas)` — no hardcoded `bg-ink text-white` |
+
+#### Sidebar theme control
+
+Three buttons at the bottom of the Sidebar (`☀️` / `🌙` / `🖥️`)
+dispatch `setTheme('light' | 'dark' | 'system')`. The active choice
+is visually highlighted. Command Palette (`⌘K`) exposes the same
+actions as `theme-light`, `theme-dark`, `theme-system` commands.
 
