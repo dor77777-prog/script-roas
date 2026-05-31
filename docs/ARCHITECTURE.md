@@ -3,7 +3,7 @@
 > **קהל יעד**: מפתחים, מי שמתחזק את הקוד, AI agents שעובדים על הריפו.
 > זה לא user manual — לזה יש את [docs/ROAS-Dashboard-User-Manual.md](ROAS-Dashboard-User-Manual.md).
 >
-> **גרסה**: 1.1 · **תאריך**: 2026-05-31 · **בסיס קוד**: Phase 05.7.x + mesh re-skin
+> **גרסה**: 1.2 · **תאריך**: 2026-06-01 · **בסיס קוד**: Phase 05.7.x + mesh exact re-skin + Campaign modal
 
 ---
 
@@ -2611,4 +2611,146 @@ Three buttons at the bottom of the Sidebar (`☀️` / `🌙` / `🖥️`)
 dispatch `setTheme('light' | 'dark' | 'system')`. The active choice
 is visually highlighted. Command Palette (`⌘K`) exposes the same
 actions as `theme-light`, `theme-dark`, `theme-system` commands.
+
+---
+
+## 28. Mesh exact re-skin + Campaign modal (2026-06-01)
+
+A "match-the-mockup-exactly" pass on top of §27 — same data, same
+algorithms, same operator workflow. Two parts:
+(a) **mesh token additions + a green-ratchet design-color guard** that
+enforces token-only colors across every component, and
+(b) a **drawer → modal architecture change**: the Campaign view is now a
+centered modal (a new `Sheet variant="modal"`) with the Ads drawer
+rendered as an edge drawer *over* it.
+
+The session also deleted **18 dead prior-design components** (HomeLiveBand /
+HeroOverview / TodayLive / KpiCards / PerStoreCards / … + the unused
+`ui/Dialog` and `ui/Select` primitives) — all unreferenced, nothing
+user-visible changed. Commit range on `main`: `3fb43d7..ab2bf74`.
+
+### 28.1 Mesh token additions
+
+`globals.css` gained five tokens, each declared in BOTH the `:root`
+(dark) and `[data-theme="light"]` blocks (the `themeParity` guard from
+§27.11 enforces the dual-mode contract):
+
+| Token | Role | Dark | Light |
+|---|---|---|---|
+| `--accent-soft` | icon-chip bg, operator accent-panel, mapped-product pill (alpha-safe tint) | `rgba(124,108,255,0.16)` | `#def5f7` |
+| `--accent-bg` | alpha-safe replacement for the old `bg-accent/NN` tint sites | `rgba(124,108,255,0.12)` | `rgba(14,165,183,0.10)` |
+| `--surface-sunken` | recessed surface (inset wells / track backgrounds) | `#191d31` | `#f1f3f9` |
+| `--scrim` | dialog/modal backdrop dim | `rgba(0,0,0,0.6)` | `rgba(22,26,48,0.45)` |
+| `--shadow-soft` | subtle 1px lift for flat surfaces | `0 1px 2px rgba(0,0,0,0.3)` | `0 1px 2px rgba(22,26,48,0.05)` |
+
+Token-drift fixes in the same pass: card radius re-pinned to **18px**,
+chip/control radius to **11/10px**, the accent pinned to the exact mockup
+hex (`#0ea5b7` teal light / `#7c6cff` violet dark), band-orange / band-blue
+light values corrected, and the chart annotation pin to `#f4a200`. A real
+light-mode bug was fixed in the process: the date-picker glyph was
+inverting white-on-white. Stale "glass+neon / mockup-04" narration was
+purged from the token comments.
+
+### 28.2 Design-color green-ratchet guard (token-only-colors enforcement)
+
+`src/lib/__tests__/designColorGuard.test.ts` is a **green-ratchet** CI
+gate that scans every component under `src/components/**` (excluding
+test/story files) and FAILS on any forbidden color escape hatch:
+
+1. `white` / `black` literals on `bg|text|border|fill|divide|ring`.
+2. slash-alpha on those keywords (`white/NN`, `black/NN`).
+3. raw Tailwind named palette (`gray|slate|…|fuchsia`)-NN.
+4. inline color literals — `#hex` / `rgb()` / `hsl()` / `oklch()` inside a
+   className or style string.
+5. **slash-alpha on FLAT tokens** — e.g. `bg-accent/40`. The flat tokens
+   bind to a bare `var(--…)` with no `<alpha-value>` channel
+   (verified against `tailwind.config.ts`), so `/NN` silently DROPS its
+   alpha — a visually-invisible footgun. The guard catches the bracketed
+   and gradient-stop forms too (commit `e830563`).
+
+**Explicitly allowed:** `var(--…)`, `color-mix(… var(--…) …)`,
+`oklch(from var(--…) …)`, arbitrary `[color:var(--…)]`, the alpha-safe
+tint tokens (`bg-accent-bg` / `bg-accent-soft` / `text-accent-fg` and the
+status `*Bg` / `*Fg` tints used WITHOUT `/NN`), and token utilities like
+`bg-status-green` (no digit after the color word → never matches the
+named-palette regex).
+
+**Ratchet mechanics:** a `MIGRATION_ALLOWLIST` holds the component paths
+NOT yet migrated. The test fails when (a) a file NOT on the list has ≥1
+violation (regression guard), OR (b) a file ON the list has 0 violations
+(stale entry — it was fixed and must be removed). The list can only ever
+shrink. This session migrated ~50 components and emptied the practical
+allowlist down to seeded-migration exceptions only.
+
+This guard complements the §26/§27 ESLint rules
+(`no-hex-color-in-components`, `no-dark-variant-in-components`): ESLint is
+a lint-time AST gate; `designColorGuard` is a vitest gate that also
+catches the slash-alpha-drops-alpha class of bug ESLint can't see.
+
+### 28.3 `Sheet` `variant` axis: `drawer` vs `modal`
+
+`components/ui/Sheet.tsx` (the Radix-Dialog-backed sheet primitive) gained
+a `variant` axis on its CVA alongside the existing `side` axis:
+
+| `variant` | Presentation | Surface | Entrance | `side` |
+|---|---|---|---|---|
+| `drawer` (default) | edge-docked panel | gradient `from-glass-3 to-glass-2` + `--blur-sheet` backdrop + `--glass-edge-hot` opening-edge highlight | slide-in from the chosen edge | honored (`end`/`start`/`top`/`bottom`) |
+| `modal` | centered floating card | **flat** `bg-glass-1` (no gradient), hairline `border-glass-edge`, `rounded-[var(--radius-hero)]` | `zoom-in-95 fade-in-0` | **IGNORED** |
+
+Implementation notes:
+
+- The shared CVA base keeps only truly common classes (`fixed z-50
+  text-ink shadow-sheet animate-in duration-base ease-out`). Surface +
+  entrance direction live **per-variant** so a modal never inherits the
+  drawer's gradient/blur/slide.
+- `side` is declared so the prop is accepted but emits **no** classes on
+  its own; the edge positioning/slide/highlight is driven by
+  `compoundVariants` gated on `variant === 'drawer'`. So a
+  `<SheetContent variant="modal" side="end">` (or the default `side="end"`)
+  never picks up edge classes.
+- The modal layout: `left-1/2 top-1/2 -translate-*` centering,
+  `w-[min(92vw,920px)] max-h-[88vh]`, flex-column, `overflow-hidden`. On
+  **`max-sm`** it collapses to a full-screen edge-to-edge sheet
+  (`inset-0`, `w-full`, `h-full`, `rounded-none`).
+- **Overlay treatment follows the variant:** modal sits on the tokenised
+  `bg-scrim` dim (§28.1); drawer keeps its frosted `bg-glass-3` wash. Both
+  fade in. A new `overlayClassName` prop lets a nested drawer lift its
+  scrim above a parent Sheet's overlay (see §28.4).
+
+### 28.4 Drawer-over-modal stacking: CampaignDrawer (modal) + AdsDrawer (drawer)
+
+`components/campaign-drawer/index.tsx` now renders its `SheetContent` with
+`variant="modal"` (`p-0 sm:w-[min(880px,92vw)]` — the operator's preferred
+880px width overrides the cva's 920px default; the mobile full-screen
+sheet from `max-sm:w-full` still wins on phones). The **⤢ expand /
+maximize control was removed** — the modal is a fixed-size centered card,
+so only the X close remains (`pe-10` on the title row reserves space for
+the primitive's auto-injected close X at `end-3 top-3`, z-20).
+
+`components/AdsDrawer.tsx` stays an **edge drawer** (default
+`variant="drawer"`, `side="end"`) but is rendered *over* the campaign
+modal. Because the modal's overlay + content sit at `z-50`, the AdsDrawer
+bumps BOTH its overlay and its content to **`z-[60]`**
+(`overlayClassName="z-[60]"` + `z-[60]` on the content) so the modal's
+scrim can never cover the ad-level drilldown. `twMerge` (via `cn`) lets the
+`z-[60]` win over the primitive's default `z-50`.
+
+**Esc handling — `lib/drawerStack.ts`.** A module-level stack coordinates
+Esc across nested overlays so a single keystroke only closes the *topmost*
+open layer (fixes #WR-01, where two `window` keydown listeners fired in the
+same tick and collapsed the whole stack). Each layer calls
+`useDrawerEsc(open, onClose)`; the hook pushes a **getter** (not the
+callback itself) so it always reads the latest `onClose` ref without
+re-pushing on every parent render (CC-02), and keys its effect on `[open]`
+only. A single shared `window` keydown listener is installed lazily on
+first push and removed on last pop, invoking only the top entry's current
+callback. Result: **Esc pops the AdsDrawer first** (back to the Campaign
+modal), **a second Esc closes the modal**. The Campaign modal additionally
+sets `onEscapeKeyDown={(e) => e.preventDefault()}` so Radix's own
+Esc-to-close doesn't race the stack — the stack is the single source of
+truth for Esc.
+
+DOM coverage: `components/__tests__/adsOverModalStack.dom.test.tsx`
+(AdsDrawer-over-modal z-order + Esc ordering) and
+`lib/__tests__/drawerStack.test.ts` (stack push/pop + top-only dispatch).
 
