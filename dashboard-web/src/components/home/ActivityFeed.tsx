@@ -13,7 +13,14 @@
  *   transitions). Pulling a server component into that tree means the
  *   shell has to re-mount on every filter change just to re-fetch the
  *   feed. The SWR path coalesces all open tabs into one upstream call
- *   via the cached /api/operator/status-events route (60s revalidate).
+ *   via the cached /api/home/activity-events route (60s revalidate).
+ *
+ * Route history: originally Wave 3 wired this to /api/operator/status-events.
+ * That path is gated by OPERATOR_SECRET middleware → on deployments with
+ * the secret set, Home (no operator auth) got a 404 and surfaced "טעינת
+ * פעילות אחרונה נכשלה." The public twin /api/home/activity-events reads
+ * from the same fetchStatusEvents source under the rest-of-dashboard
+ * URL-obscurity trust model.
  *
  * Filter contract (per [[home-visual-rules]]):
  *   • When `store` is 'All' / undefined, every event shows.
@@ -56,7 +63,7 @@ export interface ActivityFeedProps {
 }
 
 /* --------------------------------------------------------------------------
- * Fetcher — SWR adapter for /api/operator/status-events.
+ * Fetcher — SWR adapter for /api/home/activity-events.
  * -------------------------------------------------------------------------- */
 
 const fetcher = async (url: string): Promise<StatusEventsResponse> => {
@@ -214,8 +221,12 @@ export function ActivityFeed({
   // (`dedupingInterval: 30_000`) or the CDN, and only every ~4th poll
   // round-trips Supabase. Trade-off: stale events surface ≤15s instead of
   // ≤60s, at zero meaningful upstream cost.
+  //
+  // Endpoint: /api/home/activity-events — public sibling of /api/operator/
+  // status-events that bypasses the OPERATOR_SECRET middleware gate so the
+  // feed renders on Home for non-operator sessions.
   const { data, error } = useSWR<StatusEventsResponse>(
-    `/api/operator/status-events${params}`,
+    `/api/home/activity-events${params}`,
     fetcher,
     {
       refreshInterval: 15_000,
