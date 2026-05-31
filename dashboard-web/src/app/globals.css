@@ -504,16 +504,43 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   transform: scale(1);
   transition: opacity 300ms var(--ease-out), transform 300ms var(--ease-out);
 }
-.glass[data-band="red"]    { background: oklch(64% 0.22 22  / 0.05); }
-.glass[data-band="red"]::before    { background: var(--band-red);    box-shadow: 0 0 14px oklch(64% 0.22 22  / 0.5); }
-.glass[data-band="orange"] { background: oklch(78% 0.16 75  / 0.05); }
-.glass[data-band="orange"]::before { background: var(--band-orange); box-shadow: 0 0 14px oklch(78% 0.16 75  / 0.45); }
-.glass[data-band="green"]  { background: oklch(70% 0.18 145 / 0.05); }
-.glass[data-band="green"]::before  { background: var(--band-green);  box-shadow: 0 0 14px oklch(70% 0.18 145 / 0.5); }
-.glass[data-band="blue"]   { background: oklch(68% 0.16 240 / 0.05); }
-.glass[data-band="blue"]::before   { background: var(--band-blue);   box-shadow: 0 0 14px oklch(68% 0.16 240 / 0.5); }
-.glass[data-band="gray"]   { background: oklch(60% 0.012 250 / 0.04); }
-.glass[data-band="gray"]::before   { background: var(--band-gray);   box-shadow: 0 0 8px  oklch(60% 0.012 250 / 0.3); }
+/* Banded card backgrounds use a top-anchored radial halo + low base tint so
+   most of the color lives near the top edge (right under the ::before bar).
+   This makes the bar look like it's emitting light into the card without
+   flooding the whole surface with chroma (a "halo", not a "wash"). The
+   radial fades by 70% of the ellipse so the bottom of the card stays
+   readable. Tuned 2026-05-31 after user feedback that flat 5% tint felt
+   dark/dead — see commit for rationale. */
+.glass[data-band="red"] {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, oklch(64% 0.22 22  / 0.18) 0%, transparent 70%),
+    oklch(64% 0.22 22  / 0.07);
+}
+.glass[data-band="red"]::before    { background: var(--band-red);    box-shadow: 0 0 24px oklch(64% 0.22 22  / 0.75); }
+.glass[data-band="orange"] {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, oklch(78% 0.16 75  / 0.16) 0%, transparent 70%),
+    oklch(78% 0.16 75  / 0.07);
+}
+.glass[data-band="orange"]::before { background: var(--band-orange); box-shadow: 0 0 22px oklch(78% 0.16 75  / 0.70); }
+.glass[data-band="green"] {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, oklch(70% 0.18 145 / 0.16) 0%, transparent 70%),
+    oklch(70% 0.18 145 / 0.06);
+}
+.glass[data-band="green"]::before  { background: var(--band-green);  box-shadow: 0 0 22px oklch(70% 0.18 145 / 0.70); }
+.glass[data-band="blue"] {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, oklch(68% 0.16 240 / 0.14) 0%, transparent 70%),
+    oklch(68% 0.16 240 / 0.06);
+}
+.glass[data-band="blue"]::before   { background: var(--band-blue);   box-shadow: 0 0 24px oklch(68% 0.16 240 / 0.75); }
+.glass[data-band="gray"] {
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, oklch(60% 0.012 250 / 0.06) 0%, transparent 70%),
+    oklch(60% 0.012 250 / 0.03);
+}
+.glass[data-band="gray"]::before   { background: var(--band-gray);   box-shadow: 0 0 10px oklch(60% 0.012 250 / 0.4); }
 
 /* `.v.banded` — the big number inside a banded card renders in the band
    colour (overrides .v.neutral's text-clip gradient via -webkit-text-fill-color). */
