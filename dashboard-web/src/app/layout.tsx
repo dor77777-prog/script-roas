@@ -45,23 +45,33 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
-  // Matches --canvas-1 (deep blue-violet single-mode dark canvas).
-  themeColor: '#0a0c1d',
+  // Dual-mode browser-chrome tint: dark matches --canvas-1 (deep blue-violet);
+  // light (#f3f4f8) is provisional light-canvas chrome — will be reconciled
+  // with the real light canvas token in a later phase.
+  themeColor: [
+    { media: '(prefers-color-scheme: dark)',  color: '#0a0c1d' },
+    { media: '(prefers-color-scheme: light)', color: '#f3f4f8' },
+  ],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  // Single-mode dark per the 2026-05-31 visual-direction flip. data-theme
-  // is hard-coded on <html> so the first paint is correct and there is no
-  // light-mode bootstrapping script to delete with hydration. ThemeProvider
-  // is retained for its useTheme() consumers (Sidebar, CommandPalette) but
-  // its DOM-write effect always resolves to "dark" now.
+  // data-theme is NOT hard-coded here. The inline script below sets it before
+  // first paint (eliminating FOUC) by reading localStorage + OS preference,
+  // matching the resolveTheme() logic in ThemeProvider. suppressHydrationWarning
+  // on <html> is required because the pre-paint script mutates data-theme
+  // before React hydrates (standard next-themes pattern — React ignores the
+  // mismatch rather than emitting a hydration-warning).
   return (
     <html
       lang="he"
       dir="rtl"
-      data-theme="dark"
+      suppressHydrationWarning
       className={`${heebo.variable} ${rubik.variable} ${geistMono.variable}`}
     >
+      {/* Pre-hydration theme bootstrap — runs before first paint to prevent FOUC.
+          Key 'roas-theme' matches THEME_STORAGE_KEY in lib/theme.ts.
+          Semantics: explicit light/dark wins; else follow OS; default dark on error. */}
+      <script dangerouslySetInnerHTML={{ __html: `(function(){try{var c=localStorage.getItem('roas-theme');var d=window.matchMedia('(prefers-color-scheme: dark)').matches;var t=(c==='light'||c==='dark')?c:(d?'dark':'light');document.documentElement.setAttribute('data-theme',t);}catch(e){document.documentElement.setAttribute('data-theme','dark');}})();` }} />
       <body className="font-sans antialiased text-ink bg-canvas">
         <ThemeProvider>
           {/*
