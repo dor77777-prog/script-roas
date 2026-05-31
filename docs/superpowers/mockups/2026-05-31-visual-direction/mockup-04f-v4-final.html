@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup 4f — V4 final (top bar + number-in-color + per-platform CPM)</title>
+<link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --meta: oklch(70% 0.18 257);
+    --google: oklch(80% 0.15 90);
+    --tiktok: oklch(72% 0.24 12);
+    --accent: oklch(72% 0.20 280);
+    --band-red:    oklch(64% 0.22 22);
+    --band-orange: oklch(78% 0.16 75);
+    --band-green:  oklch(70% 0.18 145);
+    --band-blue:   oklch(68% 0.16 240);
+    --store-uzo: oklch(72% 0.16 210);
+    --store-usm: oklch(72% 0.18 330);
+    --store-3: oklch(70% 0.16 100);
+    --canvas-1: oklch(13% 0.020 270);
+    --canvas-2: oklch(11% 0.025 280);
+    --glass-1: oklch(100% 0 0 / 0.04);
+    --glass-2: oklch(100% 0 0 / 0.06);
+    --glass-3: oklch(100% 0 0 / 0.08);
+    --glass-edge: oklch(100% 0 0 / 0.12);
+    --glass-edge-hot: oklch(72% 0.20 280 / 0.4);
+    --up: oklch(70% 0.18 145);
+    --dn: oklch(64% 0.22 22);
+    --text: oklch(98% 0.008 80);
+    --text-2: oklch(82% 0.012 250);
+    --text-muted: oklch(64% 0.018 250);
+    --text-subtle: oklch(48% 0.020 250);
+  }
+  * { box-sizing: border-box; }
+  html,body { margin:0; padding:0; min-height:100vh; }
+  body {
+    font-family: 'Inter','Heebo',system-ui,sans-serif;
+    font-feature-settings: 'cv11','ss01','ss03';
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    font-size: 13px;
+    line-height: 1.45;
+    background:
+      radial-gradient(ellipse at 0% 0%, oklch(45% 0.22 280 / 0.25) 0%, transparent 50%),
+      radial-gradient(ellipse at 100% 0%, oklch(40% 0.20 257 / 0.20) 0%, transparent 50%),
+      linear-gradient(180deg, var(--canvas-1) 0%, var(--canvas-2) 100%);
+    background-attachment: fixed; min-height: 100vh; padding: 32px 36px;
+  }
+  .num { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .mono { font-family: 'Geist Mono', ui-monospace, monospace; }
+  h1 { font-family: 'Heebo','Inter'; font-size: 24px; font-weight: 800; letter-spacing: -0.024em; margin: 0 0 6px; }
+  .sub { color: var(--text-muted); font-size: 13.5px; margin: 0 0 24px; }
+
+  .sec { margin-bottom: 28px; }
+  .sec-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+  .sec-eyebrow { font-family: 'Geist Mono'; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-subtle); font-weight: 600; }
+  .sec-title { font-size: 14px; font-weight: 600; color: var(--text-2); }
+
+  .glass {
+    background: linear-gradient(180deg, var(--glass-2) 0%, var(--glass-1) 100%);
+    backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid var(--glass-edge);
+    border-radius: 12px;
+    box-shadow: 0 1px 0 0 oklch(100% 0 0 / 0.07) inset, 0 12px 24px -10px oklch(0% 0 0 / 0.35);
+    overflow: hidden;
+    position: relative;
+  }
+
+  .store-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  .scard { padding: 18px 18px 16px; cursor: pointer; transition: transform 120ms; }
+  .scard:hover { transform: translateY(-2px); }
+  .scard-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
+  .scard-name { font-family: 'Geist Mono'; font-size: 14px; font-weight: 600; }
+  .uzo .scard-name { color: var(--store-uzo); }
+  .usm .scard-name { color: var(--store-usm); }
+  .s3 .scard-name { color: var(--store-3); }
+
+  /* ============================================
+     V4 BAND SIGNAL — top bar (3px) + number-in-color
+     ============================================ */
+  .scard::before {
+    content: ''; position: absolute; inset-block-start: 0; inset-inline: 0; height: 3px;
+  }
+  .b-blue   { background: oklch(68% 0.16 240 / 0.04); }
+  .b-blue::before   { background: var(--band-blue);   box-shadow: 0 0 14px oklch(68% 0.16 240 / 0.5); }
+  .b-green  { background: oklch(70% 0.18 145 / 0.04); }
+  .b-green::before  { background: var(--band-green);  box-shadow: 0 0 14px oklch(70% 0.18 145 / 0.5); }
+  .b-orange { background: oklch(78% 0.16 75 / 0.04); }
+  .b-orange::before { background: var(--band-orange); box-shadow: 0 0 14px oklch(78% 0.16 75 / 0.45); }
+  .b-red    { background: oklch(64% 0.22 22 / 0.04); }
+  .b-red::before    { background: var(--band-red);    box-shadow: 0 0 14px oklch(64% 0.22 22 / 0.5); }
+
+  /* Band chip */
+  .band-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; font-weight: 700;
+    padding: 2px 7px; border-radius: 4px;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    font-family: 'Geist Mono';
+  }
+  .chip-red    { background: oklch(64% 0.22 22 / 0.18);  color: var(--band-red); }
+  .chip-orange { background: oklch(78% 0.16 75 / 0.18);  color: var(--band-orange); }
+  .chip-green  { background: oklch(70% 0.18 145 / 0.18); color: var(--band-green); }
+  .chip-blue   { background: oklch(68% 0.16 240 / 0.18); color: var(--band-blue); }
+
+  /* ROAS number — rendered in band color */
+  .scard-roas-block { display: flex; align-items: baseline; gap: 12px; margin: 6px 0 14px; }
+  .scard-roas-block .v { font-family: 'Heebo'; font-size: 38px; font-weight: 800; letter-spacing: -0.025em; line-height: 1; font-variant-numeric: tabular-nums; }
+  .scard-roas-block .label { font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .b-blue   .v { color: var(--band-blue); }
+  .b-green  .v { color: var(--band-green); }
+  .b-orange .v { color: var(--band-orange); }
+  .b-red    .v { color: var(--band-red); }
+
+  /* MAIN metrics row (spend / revenue / orders / AOV) */
+  .scard-main-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px 14px; padding-top: 12px; border-top: 1px solid oklch(100% 0 0 / 0.06); }
+  .scard-main-grid .sl { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); font-weight: 600; }
+  .scard-main-grid .sv { font-family: 'Inter'; font-size: 13.5px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px; }
+
+  /* PER-PLATFORM CPM row */
+  .cpm-row { margin-top: 14px; padding-top: 12px; border-top: 1px dashed oklch(100% 0 0 / 0.08); }
+  .cpm-row-label {
+    font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-subtle); font-weight: 700; font-family: 'Geist Mono';
+    margin-bottom: 6px;
+  }
+  .cpm-row-cells { display: grid; gap: 8px; }
+  .cpm-row-cells.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+  .cpm-row-cells.cols-2 { grid-template-columns: 1fr 1fr; }
+  .cpm-row-cells.cols-1 { grid-template-columns: 1fr; }
+  .cpm-cell {
+    padding: 8px 10px;
+    background: oklch(100% 0 0 / 0.03);
+    border: 1px solid oklch(100% 0 0 / 0.06);
+    border-radius: 7px;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .cpm-cell-head { display: flex; justify-content: space-between; align-items: center; }
+  .cpm-plat { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; }
+  .cpm-plat .gd { width: 6px; height: 6px; border-radius: 50%; box-shadow: 0 0 4px currentColor; }
+  .cpm-plat.meta   { color: var(--meta); }
+  .cpm-plat.google { color: var(--google); }
+  .cpm-plat.tiktok { color: var(--tiktok); }
+  .cpm-spend { font-size: 9.5px; color: var(--text-subtle); font-family: 'Geist Mono'; font-variant-numeric: tabular-nums; }
+  .cpm-val { font-family: 'Inter'; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; }
+  .cpm-val.warn { color: var(--band-orange); }
+  .cpm-val.high { color: var(--band-red); }
+  .cpm-inactive { font-size: 10px; color: var(--text-subtle); margin-top: 6px; font-family: 'Geist Mono'; }
+
+  /* Hero strip too (Net Profit gets V4 band signal too) */
+  .hero-row { display: grid; grid-template-columns: 1.6fr 1fr 1fr 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .hero-card { padding: 18px 20px; position: relative; overflow: hidden; }
+  .hero-card.featured { padding: 22px 24px; }
+  .hero-card .l { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 600; }
+  .hero-card .v { font-family: 'Heebo','Inter'; font-weight: 800; letter-spacing: -0.025em; line-height: 1.05; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .hero-card .v.neutral { background: linear-gradient(180deg, oklch(100% 0 0) 0%, oklch(78% 0.02 250) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero-card.featured .v { font-size: 38px; }
+  .hero-card .v { font-size: 22px; }
+  .hero-card .d { font-size: 11.5px; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .up { color: var(--up); }
+  .dn { color: var(--dn); }
+  .hero-card.featured.b-green .v { color: var(--band-green); background: none; -webkit-text-fill-color: var(--band-green); }
+  .hero-card.featured.b-blue  .v { color: var(--band-blue); background: none; -webkit-text-fill-color: var(--band-blue); }
+  .hero-card.featured.b-orange .v { color: var(--band-orange); background: none; -webkit-text-fill-color: var(--band-orange); }
+  .hero-card.featured.b-red   .v { color: var(--band-red); background: none; -webkit-text-fill-color: var(--band-red); }
+  .hero-card::before {
+    content: ''; position: absolute; inset-block-start: 0; inset-inline: 0; height: 0;
+  }
+  .hero-card.b-blue::before, .hero-card.b-green::before, .hero-card.b-orange::before, .hero-card.b-red::before { height: 3px; }
+  .hero-card.b-blue::before   { background: var(--band-blue); box-shadow: 0 0 14px oklch(68% 0.16 240 / 0.5); }
+  .hero-card.b-green::before  { background: var(--band-green); box-shadow: 0 0 14px oklch(70% 0.18 145 / 0.5); }
+  .hero-card.b-orange::before { background: var(--band-orange); box-shadow: 0 0 14px oklch(78% 0.16 75 / 0.45); }
+  .hero-card.b-red::before    { background: var(--band-red); box-shadow: 0 0 14px oklch(64% 0.22 22 / 0.5); }
+  .hero-spark { width: 100%; height: 34px; display: block; margin-top: 8px; }
+
+  /* Decide */
+  .decide { padding: 18px 22px; border-radius: 12px; margin-top: 24px; border: 1px solid var(--glass-edge-hot); background: linear-gradient(180deg, oklch(100% 0 0 / 0.05) 0%, oklch(72% 0.20 280 / 0.05) 100%); backdrop-filter: blur(16px); }
+  .decide h2 { font-size: 15px; margin: 0 0 6px; }
+  .decide p { color: var(--text-muted); margin: 0 0 14px; font-size: 12px; line-height: 1.55; }
+  .choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .choice { padding: 11px 13px; background: var(--glass-2); border: 1px solid var(--glass-edge); border-radius: 8px; cursor: pointer; transition: all 120ms; }
+  .choice:hover { border-color: var(--glass-edge-hot); transform: translateY(-1px); }
+  .choice .l { display: inline-block; background: linear-gradient(135deg, oklch(72% 0.22 280), oklch(58% 0.22 285)); color: white; font-family: 'Geist Mono'; font-size: 10px; padding: 1px 5px; border-radius: 3px; font-weight: 700; margin-inline-end: 6px; }
+  .choice .ct { font-size: 12px; font-weight: 600; }
+  .choice .cd { color: var(--text-muted); font-size: 11px; margin-top: 3px; line-height: 1.4; }
+</style>
+</head>
+<body>
+
+<h1>V4 final · top bar + number-in-color · with per-platform CPM</h1>
+<div class="sub">Band signal locked: <b>solid 3px top bar with glow + ROAS number rendered in band color + small band chip</b>. No more aggressive radial gradient. Red @ h22, orange @ h75 (53° apart, not confusable). Per-store CPM split shows only platforms each store is actually spending on.</div>
+
+<!-- HERO STRIP -->
+<div class="sec">
+  <div class="sec-h"><span class="sec-eyebrow">hero · today · overall</span><span class="sec-title">3 חנויות · CAD</span></div>
+  <div class="hero-row">
+    <div class="glass hero-card featured b-green">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div class="l">רווח נטו · היום</div>
+          <div class="v num">$4,847</div>
+          <div class="d up">▴ +$612 (+15%) מול אתמול</div>
+        </div>
+        <span class="band-chip chip-green">▴ ROAS 2.80 · בריא</span>
+      </div>
+      <svg class="hero-spark" viewBox="0 0 400 34" preserveAspectRatio="none">
+        <defs><linearGradient id="ghero" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="oklch(70% 0.18 145)" stop-opacity="0.5"/><stop offset="100%" stop-color="oklch(70% 0.18 145)" stop-opacity="0"/></linearGradient></defs>
+        <path d="M0,26 L30,22 L60,20 L90,18 L120,16 L150,12 L180,14 L210,10 L240,12 L270,6 L300,8 L330,4 L360,6 L400,2" fill="none" stroke="oklch(70% 0.18 145)" stroke-width="2"/>
+        <path d="M0,26 L30,22 L60,20 L90,18 L120,16 L150,12 L180,14 L210,10 L240,12 L270,6 L300,8 L330,4 L360,6 L400,2 L400,34 L0,34 Z" fill="url(#ghero)"/>
+      </svg>
+    </div>
+    <div class="glass hero-card"><div class="l">הוצאה</div><div class="v num neutral">$3,924</div><div class="d up">▴ +6%</div></div>
+    <div class="glass hero-card"><div class="l">הכנסה</div><div class="v num neutral">$10,998</div><div class="d up">▴ +12%</div></div>
+    <div class="glass hero-card"><div class="l">הזמנות · סה״כ</div><div class="v num neutral">188</div><div class="d up">▴ +24 (3 חנויות)</div></div>
+    <div class="glass hero-card"><div class="l">ROAS</div><div class="v num" style="color:var(--band-green);-webkit-text-fill-color:var(--band-green)">2.80</div><div class="d up">▴ +0.18</div></div>
+    <div class="glass hero-card"><div class="l">CPM · עסקי</div><div class="v num neutral">$8.92</div><div class="d dn">▴ +$0.34</div></div>
+  </div>
+</div>
+
+<!-- PER-STORE CARDS -->
+<div class="sec">
+  <div class="sec-h"><span class="sec-eyebrow">section · per-store</span><span class="sec-title">3 חנויות · ROAS + CPM לפי פלטפורמה</span></div>
+  <div class="store-row">
+
+    <!-- uzoshop: blue band -->
+    <div class="glass scard uzo b-blue">
+      <div class="scard-head"><span class="scard-name">uzoshop</span><span class="band-chip chip-blue">▴ &gt; 3.0</span></div>
+      <div class="scard-roas-block"><span class="v num">3.12</span><span class="label">ROAS היום</span></div>
+      <div class="scard-main-grid">
+        <div><div class="sl">הוצאה</div><div class="sv num">$1,847</div></div>
+        <div><div class="sl">הכנסה</div><div class="sv num">$5,762</div></div>
+        <div><div class="sl">הזמנות</div><div class="sv num">98</div></div>
+        <div><div class="sl">AOV</div><div class="sv num">$58.80</div></div>
+      </div>
+      <div class="cpm-row">
+        <div class="cpm-row-label">CPM לפי פלטפורמה</div>
+        <div class="cpm-row-cells cols-3">
+          <div class="cpm-cell"><div class="cpm-cell-head"><span class="cpm-plat meta"><span class="gd" style="background:var(--meta)"></span>Meta</span><span class="cpm-spend">$842</span></div><div class="cpm-val">$7.94</div></div>
+          <div class="cpm-cell"><div class="cpm-cell-head"><span class="cpm-plat google"><span class="gd" style="background:var(--google)"></span>Google</span><span class="cpm-spend">$612</span></div><div class="cpm-val">$8.18</div></div>
+          <div class="cpm-cell"><div class="cpm-cell-head"><span class="cpm-plat tiktok"><span class="gd" style="background:var(--tiktok)"></span>TikTok</span><span class="cpm-spend">$393</span></div><div class="cpm-val">$8.74</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- usmile360: green band -->
+    <div class="glass scard usm b-green">
+      <div class="scard-head"><span class="scard-name">usmile360</span><span class="band-chip chip-green">▴ 2.7-3.0</span></div>
+      <div class="scard-roas-block"><span class="v num">2.95</span><span class="label">ROAS היום</span></div>
+      <div class="scard-main-grid">
+        <div><div class="sl">הוצאה</div><div class="sv num">$1,392</div></div>
+        <div><div class="sl">הכנסה</div><div class="sv num">$4,106</div></div>
+        <div><div class="sl">הזמנות</div><div class="sv num">68</div></div>
+        <div><div class="sl">AOV</div><div class="sv num">$60.40</div></div>
+      </div>
+      <div class="cpm-row">
+        <div class="cpm-row-label">CPM לפי פלטפורמה</div>
+        <div class="cpm-row-cells cols-2">
+          <div class="cpm-cell"><div class="cpm-cell-head"><span class="cpm-plat meta"><span class="gd" style="background:var(--meta)"></span>Meta</span><span class="cpm-spend">$868</span></div><div class="cpm-val">$8.62</div></div>
+          <div class="cpm-cell"><div class="cpm-cell-head"><span class="cpm-plat tiktok"><span class="gd" style="background:var(--tiktok)"></span>TikTok</span><span class="cpm-spend">$524</span></div><div class="cpm-val warn">$10.18</div></div>
+        </div>
+        <div class="cpm-inactive">Google · לא פעיל היום</div>
+      </div>
+    </div>
+
+    <!-- store-3: red band -->
+    <div class="glass scard s3 b-red">
+      <div class="scard-head"><span class="scard-name">store-3</span><span class="band-chip chip-red">▾ &lt; 2.0</span></div>
+      <div class="scard-roas-block"><span class="v num">1.65</span><span class="label">ROAS היום</span></div>
+      <div class="scard-main-grid">
+        <div><div class="sl">הוצאה</div><div class="sv num">$685</div></div>
+        <div><div class="sl">הכנסה</div><div class="sv num">$1,130</div></div>
+        <div><div class="sl">הזמנות</div><div class="sv num">22</div></div>
+        <div><div class="sl">AOV</div><div class="sv num">$51.40</div></div>
+      </div>
+      <div class="cpm-row">
+        <div class="cpm-row-label">CPM לפי פלטפורמה</div>
+        <div class="cpm-row-cells cols-1">
+          <div class="cpm-cell"><div class="cpm-cell-head"><span class="cpm-plat google"><span class="gd" style="background:var(--google)"></span>Google</span><span class="cpm-spend">$685 · יחיד</span></div><div class="cpm-val high">$12.20</div></div>
+        </div>
+        <div class="cpm-inactive">Meta · TikTok · לא פעילים</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="decide">
+  <h2>V4 + per-platform CPM — final?</h2>
+  <p>Top 3px bar with glow + ROAS number in band color + small chip. Reds and oranges now clearly separated (h22 vs h75). Each store card shows CPM split across only the platforms it's actually using. Hero strip's Net Profit card uses the same V4 signal at the top edge.</p>
+  <div class="choices">
+    <div class="choice"><span class="l">A</span><span class="ct">✅ Approve · move to mockup 5</span><div class="cd">This is the band signal pattern. Move to freshness desaturation demo next.</div></div>
+    <div class="choice"><span class="l">B</span><span class="ct">Adjust intensity</span><div class="cd">Top bar glow / number saturation needs micro-adjust. Will describe.</div></div>
+    <div class="choice"><span class="l">C</span><span class="ct">Layout iterate</span><div class="cd">Card layout / CPM row position needs change. Will describe.</div></div>
+  </div>
+</div>
+
+</body>
+</html>

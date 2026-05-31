@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup 3 — Primitive set · glass + neon</title>
+<link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* Brand-mirrored chart palette (from mockup 1) */
+    --meta:    oklch(70% 0.18 257);
+    --google:  oklch(80% 0.15 90);
+    --tiktok:  oklch(72% 0.24 12);
+    --organic: oklch(75% 0.14 175);
+    --shop:    oklch(65% 0.18 165);
+    --accent:  oklch(72% 0.20 280);
+    --accent-dim: oklch(60% 0.18 280);
+    --up:      oklch(68% 0.18 145);
+    --dn:      oklch(70% 0.20 25);
+    --warn:    oklch(78% 0.18 60);
+
+    /* Glass canvas — deep blue-violet base */
+    --canvas-1: oklch(13% 0.020 270);
+    --canvas-2: oklch(11% 0.025 280);
+
+    /* Glass surface tokens — translucent */
+    --glass-1: oklch(100% 0 0 / 0.04);
+    --glass-2: oklch(100% 0 0 / 0.06);
+    --glass-3: oklch(100% 0 0 / 0.08);
+    --glass-edge:  oklch(100% 0 0 / 0.12);
+    --glass-edge-hot: oklch(72% 0.20 280 / 0.45);
+
+    --text:        oklch(98% 0.008 80);
+    --text-2:      oklch(82% 0.012 250);
+    --text-muted:  oklch(64% 0.018 250);
+    --text-subtle: oklch(48% 0.020 250);
+  }
+  * { box-sizing: border-box; }
+  html,body { margin:0; padding:0; min-height:100vh; }
+  body {
+    font-family: 'Inter','Heebo',system-ui,sans-serif;
+    font-feature-settings: 'cv11','ss01','ss03';
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    font-size: 13px;
+    line-height: 1.45;
+    background:
+      radial-gradient(ellipse at 0% 0%, oklch(45% 0.22 280 / 0.35) 0%, transparent 50%),
+      radial-gradient(ellipse at 100% 0%, oklch(40% 0.20 257 / 0.30) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 100%, oklch(40% 0.22 320 / 0.25) 0%, transparent 60%),
+      linear-gradient(180deg, var(--canvas-1) 0%, var(--canvas-2) 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+  /* Conic decoration behind the page (animated) */
+  body::before {
+    content: '';
+    position: fixed; inset: -40% -10%; height: 180%;
+    background: conic-gradient(from 30deg at 50% 50%,
+      oklch(72% 0.18 280 / 0.04),
+      oklch(70% 0.18 257 / 0.04),
+      oklch(72% 0.24 12 / 0.03),
+      oklch(75% 0.14 175 / 0.03),
+      oklch(72% 0.18 280 / 0.04));
+    animation: spin 60s linear infinite;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.6;
+    filter: blur(40px);
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .num { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .mono { font-family: 'Geist Mono', ui-monospace, monospace; }
+
+  .page { position: relative; z-index: 1; padding: 40px 48px 48px; max-width: 1400px; margin: 0 auto; }
+  h1 { font-family: 'Heebo','Inter'; font-size: 28px; font-weight: 800; letter-spacing: -0.024em; margin: 0 0 6px; background: linear-gradient(180deg, oklch(100% 0 0) 0%, oklch(80% 0.02 250) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .sub { color: var(--text-muted); font-size: 13.5px; margin: 0 0 32px; }
+
+  /* Section labels (mono uppercase eyebrow) */
+  .sec { margin-bottom: 36px; }
+  .sec-h { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
+  .sec-eyebrow { font-family: 'Geist Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-subtle); font-weight: 600; }
+  .sec-title { font-size: 16px; font-weight: 600; color: var(--text-2); }
+
+  /* GLASS PRIMITIVE — base */
+  .glass {
+    background: linear-gradient(180deg, var(--glass-2) 0%, var(--glass-1) 100%);
+    backdrop-filter: blur(24px) saturate(140%);
+    -webkit-backdrop-filter: blur(24px) saturate(140%);
+    border: 1px solid var(--glass-edge);
+    border-radius: 14px;
+    box-shadow:
+      0 1px 0 0 oklch(100% 0 0 / 0.08) inset,
+      0 -1px 0 0 oklch(0% 0 0 / 0.2) inset,
+      0 24px 48px -16px oklch(0% 0 0 / 0.5),
+      0 8px 16px -8px oklch(0% 0 0 / 0.3);
+    position: relative;
+  }
+  .glass-pad { padding: 18px 20px; }
+
+  /* ============================================
+     BUTTONS
+     ============================================ */
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: 'Inter','Heebo'; font-size: 13px; font-weight: 600;
+    padding: 8px 16px; border-radius: 10px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: transform 120ms ease-out, box-shadow 200ms ease-out, background 200ms ease-out;
+    letter-spacing: -0.005em;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn:active { transform: translateY(0); }
+
+  /* primary — violet glow */
+  .btn-primary {
+    background: linear-gradient(180deg, oklch(72% 0.22 280) 0%, oklch(58% 0.22 285) 100%);
+    color: white;
+    box-shadow:
+      0 1px 0 0 oklch(100% 0 0 / 0.3) inset,
+      0 -2px 0 0 oklch(40% 0.15 280) inset,
+      0 0 16px -2px oklch(72% 0.20 280 / 0.6),
+      0 6px 14px -4px oklch(50% 0.18 280 / 0.5);
+    border-color: oklch(80% 0.18 280 / 0.6);
+  }
+  .btn-primary:hover { box-shadow: 0 1px 0 0 oklch(100% 0 0 / 0.3) inset, 0 -2px 0 0 oklch(40% 0.15 280) inset, 0 0 24px 0 oklch(72% 0.20 280 / 0.8), 0 8px 16px -4px oklch(50% 0.18 280 / 0.6); }
+
+  /* secondary — glass */
+  .btn-secondary {
+    background: var(--glass-2);
+    backdrop-filter: blur(16px);
+    color: var(--text);
+    border-color: var(--glass-edge);
+    box-shadow: 0 1px 0 0 oklch(100% 0 0 / 0.08) inset;
+  }
+  .btn-secondary:hover { background: var(--glass-3); border-color: var(--glass-edge-hot); box-shadow: 0 1px 0 0 oklch(100% 0 0 / 0.12) inset, 0 0 12px -2px oklch(72% 0.20 280 / 0.3); }
+
+  /* ghost — borderless */
+  .btn-ghost { background: transparent; color: var(--text-2); padding: 8px 12px; }
+  .btn-ghost:hover { background: var(--glass-1); color: var(--text); }
+
+  /* destructive */
+  .btn-danger {
+    background: linear-gradient(180deg, oklch(72% 0.22 25) 0%, oklch(58% 0.20 25) 100%);
+    color: white;
+    box-shadow:
+      0 1px 0 0 oklch(100% 0 0 / 0.25) inset,
+      0 0 14px -2px oklch(70% 0.20 25 / 0.5),
+      0 4px 12px -2px oklch(50% 0.18 25 / 0.5);
+    border-color: oklch(80% 0.18 25 / 0.5);
+  }
+
+  /* icon */
+  .btn-icon {
+    width: 36px; height: 36px; padding: 0; justify-content: center;
+    background: var(--glass-2); border-color: var(--glass-edge); color: var(--text-2);
+  }
+  .btn-icon svg { width: 16px; height: 16px; }
+
+  /* ============================================
+     BADGES — platform colored with glow
+     ============================================ */
+  .badge-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .pbadge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: 'Inter'; font-size: 11.5px; font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid currentColor;
+    background: oklch(100% 0 0 / 0.04);
+  }
+  .pbadge .glow-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 8px currentColor; }
+  .pbadge.meta    { color: var(--meta);    background: linear-gradient(90deg, oklch(70% 0.18 257 / 0.12), transparent); }
+  .pbadge.google  { color: var(--google);  background: linear-gradient(90deg, oklch(80% 0.15 90 / 0.12), transparent); }
+  .pbadge.tiktok  { color: var(--tiktok);  background: linear-gradient(90deg, oklch(72% 0.24 12 / 0.12), transparent); }
+  .pbadge.organic { color: var(--organic); background: linear-gradient(90deg, oklch(75% 0.14 175 / 0.12), transparent); }
+  .pbadge.shop    { color: var(--shop);    background: linear-gradient(90deg, oklch(65% 0.18 165 / 0.12), transparent); }
+
+  /* status badges */
+  .sbadge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 600; padding: 2px 9px; border-radius: 6px;
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .sbadge.live   { background: oklch(68% 0.18 145 / 0.18); color: var(--up); box-shadow: 0 0 12px -2px oklch(68% 0.18 145 / 0.4); }
+  .sbadge.warn   { background: oklch(78% 0.18 60 / 0.20); color: var(--warn); }
+  .sbadge.error  { background: oklch(70% 0.20 25 / 0.22); color: var(--dn); box-shadow: 0 0 12px -2px oklch(70% 0.20 25 / 0.4); }
+  .sbadge.idle   { background: oklch(100% 0 0 / 0.06); color: var(--text-subtle); }
+
+  /* ============================================
+     STAT primitive (3 sizes)
+     ============================================ */
+  .stat-row { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 14px; }
+  .stat { padding: 16px 18px; }
+  .stat .l { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 600; }
+  .stat .v {
+    font-family: 'Heebo','Inter'; font-weight: 700; letter-spacing: -0.025em;
+    margin-top: 6px; line-height: 1.05;
+    background: linear-gradient(180deg, oklch(100% 0 0) 0%, oklch(75% 0.02 250) 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .stat .d { font-size: 11.5px; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .stat.hero .v { font-size: 44px; }
+  .stat.hero .sp { width: 100%; height: 28px; display: block; margin-top: 8px; }
+  .stat.standard .v { font-size: 28px; }
+  .stat.mini { padding: 12px 14px; }
+  .stat.mini .v { font-size: 18px; }
+  .up { color: var(--up); }
+  .dn { color: var(--dn); }
+
+  /* ============================================
+     CARD variants
+     ============================================ */
+  .card-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  .ucard-head {
+    padding: 12px 16px; border-bottom: 1px solid oklch(100% 0 0 / 0.06);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .ucard-title { font-size: 13px; font-weight: 600; color: var(--text-2); }
+  .ucard-body { padding: 14px 16px; }
+
+  /* accent card — violet glow on edge */
+  .card-accent {
+    border-color: oklch(72% 0.20 280 / 0.35);
+    box-shadow:
+      0 1px 0 0 oklch(100% 0 0 / 0.10) inset,
+      0 0 0 1px oklch(72% 0.20 280 / 0.15),
+      0 0 24px -4px oklch(72% 0.20 280 / 0.35),
+      0 20px 40px -16px oklch(0% 0 0 / 0.5);
+  }
+  .card-status-up {
+    border-color: oklch(68% 0.18 145 / 0.30);
+    box-shadow:
+      0 1px 0 0 oklch(100% 0 0 / 0.08) inset,
+      0 0 20px -4px oklch(68% 0.18 145 / 0.3),
+      0 20px 40px -16px oklch(0% 0 0 / 0.5);
+  }
+
+  /* ============================================
+     INPUT + SELECT + TABS
+     ============================================ */
+  .control-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: end; }
+  .input-wrap { display: flex; flex-direction: column; gap: 6px; }
+  .input-wrap label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+  .input, .select {
+    background: var(--glass-2);
+    backdrop-filter: blur(12px);
+    border: 1px solid var(--glass-edge);
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-family: 'Inter'; font-size: 13px;
+    transition: border-color 120ms, box-shadow 120ms;
+    width: 100%;
+    box-shadow: 0 1px 0 0 oklch(100% 0 0 / 0.06) inset;
+  }
+  .input:focus, .select:focus { outline: 0; border-color: var(--glass-edge-hot); box-shadow: 0 1px 0 0 oklch(100% 0 0 / 0.08) inset, 0 0 0 3px oklch(72% 0.20 280 / 0.15), 0 0 16px -2px oklch(72% 0.20 280 / 0.4); }
+  .input::placeholder { color: var(--text-subtle); }
+
+  .tabs {
+    display: inline-flex;
+    gap: 4px; padding: 4px;
+    background: var(--glass-1); backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-edge); border-radius: 12px;
+  }
+  .tab {
+    padding: 6px 14px; border-radius: 8px; font-size: 12.5px; font-weight: 600;
+    color: var(--text-muted); cursor: pointer; transition: all 120ms;
+  }
+  .tab:hover { color: var(--text-2); }
+  .tab.active {
+    color: white;
+    background: linear-gradient(180deg, oklch(72% 0.22 280) 0%, oklch(58% 0.22 285) 100%);
+    box-shadow: 0 0 12px -2px oklch(72% 0.20 280 / 0.6), 0 1px 0 0 oklch(100% 0 0 / 0.25) inset;
+  }
+
+  /* ============================================
+     SHEET / DRAWER preview
+     ============================================ */
+  .sheet-preview { position: relative; height: 280px; overflow: hidden; border-radius: 14px; border: 1px solid var(--glass-edge); }
+  .sheet-bg {
+    position: absolute; inset: 0;
+    background: linear-gradient(135deg, oklch(20% 0.025 280) 0%, oklch(14% 0.020 250) 100%);
+    display: grid; place-items: center;
+  }
+  .sheet-bg-text { color: var(--text-subtle); font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; font-family: 'Geist Mono', monospace; }
+  .sheet-panel {
+    position: absolute; inset-block: 0; inset-inline-start: 0; width: 64%;
+    background: linear-gradient(135deg, oklch(100% 0 0 / 0.10) 0%, oklch(100% 0 0 / 0.04) 100%);
+    backdrop-filter: blur(36px) saturate(160%);
+    -webkit-backdrop-filter: blur(36px) saturate(160%);
+    border-inline-end: 1px solid var(--glass-edge);
+    box-shadow:
+      24px 0 40px -8px oklch(0% 0 0 / 0.5),
+      inset 1px 0 0 0 oklch(100% 0 0 / 0.1);
+    padding: 18px 20px;
+  }
+  .sheet-h { display: flex; justify-content: space-between; margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid oklch(100% 0 0 / 0.08); }
+  .sheet-h h3 { font-size: 15px; font-weight: 700; margin: 0; letter-spacing: -0.01em; }
+  .sheet-h .x { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: var(--glass-2); border-radius: 8px; border: 1px solid var(--glass-edge); cursor: pointer; }
+  .sheet-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .sheet-stat { padding: 10px 12px; background: oklch(100% 0 0 / 0.04); border-radius: 8px; border: 1px solid oklch(100% 0 0 / 0.06); }
+  .sheet-stat .sl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); }
+  .sheet-stat .sv { font-family: 'Heebo'; font-size: 18px; font-weight: 700; margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+  /* ============================================
+     DECIDE
+     ============================================ */
+  .decide { padding: 22px 24px; border-radius: 16px; margin-top: 16px; border: 1px solid var(--glass-edge-hot); background: linear-gradient(180deg, oklch(100% 0 0 / 0.05) 0%, oklch(72% 0.20 280 / 0.06) 100%); backdrop-filter: blur(20px); }
+  .decide h2 { font-size: 17px; margin: 0 0 6px; }
+  .decide p { color: var(--text-muted); margin: 0 0 14px; font-size: 12.5px; line-height: 1.55; }
+  .choices { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .choice { padding: 12px 14px; background: var(--glass-2); border: 1px solid var(--glass-edge); border-radius: 10px; cursor: pointer; transition: all 120ms; }
+  .choice:hover { border-color: var(--glass-edge-hot); transform: translateY(-1px); box-shadow: 0 0 16px -2px oklch(72% 0.20 280 / 0.3); }
+  .choice .l { display: inline-block; background: linear-gradient(135deg, oklch(72% 0.22 280), oklch(58% 0.22 285)); color: white; font-family: 'Geist Mono', monospace; font-size: 10px; padding: 2px 6px; border-radius: 4px; font-weight: 700; margin-inline-end: 6px; box-shadow: 0 0 8px oklch(72% 0.20 280 / 0.5); }
+  .choice .ct { font-size: 13px; font-weight: 600; }
+  .choice .cd { color: var(--text-muted); font-size: 11.5px; margin-top: 3px; line-height: 1.45; }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <h1>Primitive set · glass + neon · dark</h1>
+  <div class="sub">Vision UI / Material-flagship aesthetic applied across every component. Brand-mirrored colors stay. Violet accent (~280) is primary CTA. Backdrop-filter blur on every glass surface. Edge glows on focus/hover/active states.</div>
+
+  <!-- BUTTONS -->
+  <div class="sec">
+    <div class="sec-h">
+      <div>
+        <div class="sec-eyebrow">primitive · 01</div>
+        <div class="sec-title">Buttons</div>
+      </div>
+    </div>
+    <div class="glass glass-pad">
+      <div class="btn-row">
+        <button class="btn btn-primary">פעולה ראשית</button>
+        <button class="btn btn-secondary">משני (glass)</button>
+        <button class="btn btn-ghost">Ghost</button>
+        <button class="btn btn-danger">מחק</button>
+        <button class="btn btn-icon" title="settings">⚙</button>
+        <button class="btn btn-icon" title="refresh">↻</button>
+        <button class="btn btn-icon" title="filter">⫶</button>
+        <button class="btn btn-primary" disabled style="opacity:0.4;cursor:not-allowed;transform:none;box-shadow:none;background:var(--glass-2);color:var(--text-muted);border:1px solid var(--glass-edge)">Disabled</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- BADGES -->
+  <div class="sec">
+    <div class="sec-h">
+      <div>
+        <div class="sec-eyebrow">primitive · 02</div>
+        <div class="sec-title">Platform & status badges</div>
+      </div>
+    </div>
+    <div class="glass glass-pad">
+      <div class="badge-row" style="margin-bottom:14px">
+        <span class="pbadge meta"><span class="glow-dot"></span>Meta</span>
+        <span class="pbadge google"><span class="glow-dot"></span>Google</span>
+        <span class="pbadge tiktok"><span class="glow-dot"></span>TikTok</span>
+        <span class="pbadge organic"><span class="glow-dot"></span>Organic</span>
+        <span class="pbadge shop"><span class="glow-dot"></span>Shopify ↗</span>
+      </div>
+      <div class="badge-row">
+        <span class="sbadge live"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 6px currentColor"></span>LIVE</span>
+        <span class="sbadge warn">WARN</span>
+        <span class="sbadge error">ERROR</span>
+        <span class="sbadge idle">IDLE</span>
+        <span class="sbadge live">ROAS 3.04 ▴</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="sec">
+    <div class="sec-h">
+      <div>
+        <div class="sec-eyebrow">primitive · 03</div>
+        <div class="sec-title">Stat (hero / standard / mini)</div>
+      </div>
+    </div>
+    <div class="stat-row">
+      <div class="glass stat hero">
+        <div class="l">ROAS · uzoshop · 30 ימים</div>
+        <div class="v num">3.12</div>
+        <div class="d up">▴ +0.4 vs חודש קודם</div>
+        <svg class="sp" viewBox="0 0 400 28" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="sp-grad" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="oklch(72% 0.20 280)" stop-opacity="0.6"/><stop offset="100%" stop-color="oklch(72% 0.20 280)" stop-opacity="0"/></linearGradient>
+          </defs>
+          <path d="M0,22 L40,20 L80,18 L120,14 L160,16 L200,12 L240,10 L280,7 L320,9 L360,4 L400,2" fill="none" stroke="oklch(72% 0.20 280)" stroke-width="2" style="filter:drop-shadow(0 0 4px oklch(72% 0.20 280 / 0.6))"/>
+          <path d="M0,22 L40,20 L80,18 L120,14 L160,16 L200,12 L240,10 L280,7 L320,9 L360,4 L400,2 L400,28 L0,28 Z" fill="url(#sp-grad)"/>
+        </svg>
+      </div>
+      <div class="glass stat standard">
+        <div class="l">הוצאה</div>
+        <div class="v num">$1,247</div>
+        <div class="d dn">▾ 12% מול שבוע קודם</div>
+      </div>
+      <div class="glass stat standard">
+        <div class="l">הכנסה</div>
+        <div class="v num">$3,891</div>
+        <div class="d up">▴ +8%</div>
+      </div>
+    </div>
+    <div class="stat-row" style="margin-top:14px;grid-template-columns: repeat(5, 1fr)">
+      <div class="glass stat mini"><div class="l">CPM</div><div class="v num">$8.42</div></div>
+      <div class="glass stat mini"><div class="l">CPC</div><div class="v num">$0.84</div></div>
+      <div class="glass stat mini"><div class="l">CTR</div><div class="v num">2.1%</div></div>
+      <div class="glass stat mini"><div class="l">CVR</div><div class="v num">3.8%</div></div>
+      <div class="glass stat mini"><div class="l">AOV</div><div class="v num">$58.20</div></div>
+    </div>
+  </div>
+
+  <!-- CARDS -->
+  <div class="sec">
+    <div class="sec-h">
+      <div>
+        <div class="sec-eyebrow">primitive · 04</div>
+        <div class="sec-title">Card variants (default / accent / status)</div>
+      </div>
+    </div>
+    <div class="card-row">
+      <div class="glass">
+        <div class="ucard-head"><span class="ucard-title">קמפיין נבחר</span><span class="pbadge meta"><span class="glow-dot"></span>Meta</span></div>
+        <div class="ucard-body">
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">שם</div>
+          <div style="font-family:'Geist Mono';font-size:13px">UZO_META_PROS_07</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-top:14px">
+            <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">הוצאה</div><div class="num" style="font-weight:700;font-size:15px;margin-top:2px">$382</div></div>
+            <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">הכנסה</div><div class="num" style="font-weight:700;font-size:15px;margin-top:2px">$1,318</div></div>
+            <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">ROAS</div><div class="num up" style="font-weight:700;font-size:15px;margin-top:2px">3.45</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="glass card-accent">
+        <div class="ucard-head"><span class="ucard-title">תובנה — Accent</span><span class="sbadge live">חדש</span></div>
+        <div class="ucard-body">
+          <div style="font-size:13px;line-height:1.5;margin-bottom:12px">קמפיין <b>UZO_TT_PROS_RT_15</b> חצה ROAS 3.0 לראשונה השבוע. שקול להגדיל תקציב.</div>
+          <div style="display:flex;gap:8px"><button class="btn btn-primary" style="padding:6px 12px;font-size:12px">פתח קמפיין</button><button class="btn btn-secondary" style="padding:6px 12px;font-size:12px">TikTok Ads ↗</button></div>
+        </div>
+      </div>
+
+      <div class="glass card-status-up">
+        <div class="ucard-head"><span class="ucard-title">סטטוס מערכת</span><span class="sbadge live"><span style="width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 6px currentColor"></span>GREEN</span></div>
+        <div class="ucard-body">
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">workers · 18/18</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <span class="pbadge meta"><span class="glow-dot"></span>6</span>
+            <span class="pbadge google"><span class="glow-dot"></span>6</span>
+            <span class="pbadge tiktok"><span class="glow-dot"></span>6</span>
+          </div>
+          <div style="font-size:11.5px;color:var(--text-muted);margin-top:12px">freshness 100% · errors 0 · p95 842ms</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INPUTS + TABS -->
+  <div class="sec">
+    <div class="sec-h">
+      <div>
+        <div class="sec-eyebrow">primitive · 05</div>
+        <div class="sec-title">Controls — Input / Select / Tabs</div>
+      </div>
+    </div>
+    <div class="glass glass-pad">
+      <div class="control-row" style="margin-bottom:18px">
+        <div class="input-wrap"><label>חיפוש קמפיין</label><input class="input" placeholder="UZO_META_PROS..."></div>
+        <div class="input-wrap"><label>פלטפורמה</label>
+          <select class="select"><option>כל הפלטפורמות</option><option>Meta</option><option>Google</option><option>TikTok</option></select>
+        </div>
+      </div>
+      <div class="tabs">
+        <div class="tab">סקירה</div>
+        <div class="tab active">ביצועים</div>
+        <div class="tab">מודעות</div>
+        <div class="tab">סטטוס</div>
+        <div class="tab">היסטוריה</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SHEET preview -->
+  <div class="sec">
+    <div class="sec-h">
+      <div>
+        <div class="sec-eyebrow">primitive · 06</div>
+        <div class="sec-title">Sheet (campaign drawer preview)</div>
+      </div>
+    </div>
+    <div class="sheet-preview">
+      <div class="sheet-bg"><div class="sheet-bg-text">page content (blurred behind)</div></div>
+      <div class="sheet-panel">
+        <div class="sheet-h">
+          <div><div style="font-size:10px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em">קמפיין · uzoshop · Meta</div><h3>UZO_META_PROS_07</h3></div>
+          <div class="x">✕</div>
+        </div>
+        <div class="sheet-stats">
+          <div class="sheet-stat"><div class="sl">הוצאה</div><div class="sv num">$382</div></div>
+          <div class="sheet-stat"><div class="sl">הכנסה</div><div class="sv num">$1,318</div></div>
+          <div class="sheet-stat"><div class="sl up">ROAS</div><div class="sv num up">3.45</div></div>
+        </div>
+        <div class="tabs" style="margin-top:12px"><div class="tab active">סקירה</div><div class="tab">מודעות</div><div class="tab">סטטוס</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DECIDE -->
+  <div class="decide">
+    <h2>Does the glass+neon scale across every primitive?</h2>
+    <p>Same brand-mirrored color identity (mockup 1) + violet accent. Backdrop-filter blur on every glass surface. Soft glow on hover/focus. Animated conic gradient behind the page. Gradient stat numbers. Edge highlights on cards. Tab pills with neon glow. This is the primitive baseline if you stay with D.</p>
+    <div class="choices">
+      <div class="choice"><span class="l">A</span><span class="ct">✅ This is the bar</span><div class="cd">All primitives feel coherent. Direction holds. Phase 1 audit + Phase 2 plan get a v2 rewrite to match this aesthetic.</div></div>
+      <div class="choice"><span class="l">B</span><span class="ct">Pull back glow intensity</span><div class="cd">Direction right but glows / blur / animated gradient too loud. Want subtler glass.</div></div>
+      <div class="choice"><span class="l">C</span><span class="ct">Iterate specific elements</span><div class="cd">Some primitives work, others don't. Will describe in chat which.</div></div>
+      <div class="choice"><span class="l">D</span><span class="ct">Roll back to mockup 2e B (subtle elevation)</span><div class="cd">Too much. Want lighter touch — soft shadows + inner highlight but no neon / blur / animation.</div></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

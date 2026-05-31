@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup 4g — Layout fixes</title>
+<link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --meta: oklch(70% 0.18 257);
+    --google: oklch(80% 0.15 90);
+    --tiktok: oklch(72% 0.24 12);
+    --accent: oklch(72% 0.20 280);
+    --band-red:    oklch(64% 0.22 22);
+    --band-orange: oklch(78% 0.16 75);
+    --band-green:  oklch(70% 0.18 145);
+    --band-blue:   oklch(68% 0.16 240);
+    --store-uzo: oklch(72% 0.16 210);
+    --store-usm: oklch(72% 0.18 330);
+    --store-3: oklch(70% 0.16 100);
+    --canvas-1: oklch(13% 0.020 270);
+    --canvas-2: oklch(11% 0.025 280);
+    --glass-1: oklch(100% 0 0 / 0.04);
+    --glass-2: oklch(100% 0 0 / 0.06);
+    --glass-3: oklch(100% 0 0 / 0.08);
+    --glass-edge: oklch(100% 0 0 / 0.12);
+    --glass-edge-hot: oklch(72% 0.20 280 / 0.4);
+    --up: oklch(70% 0.18 145);
+    --dn: oklch(64% 0.22 22);
+    --text: oklch(98% 0.008 80);
+    --text-2: oklch(82% 0.012 250);
+    --text-muted: oklch(64% 0.018 250);
+    --text-subtle: oklch(48% 0.020 250);
+  }
+  * { box-sizing: border-box; min-width: 0; /* FIX: prevent grid overflow */ }
+  html, body { margin: 0; padding: 0; min-height: 100vh; }
+  body {
+    font-family: 'Inter','Heebo',system-ui,sans-serif;
+    font-feature-settings: 'cv11','ss01','ss03';
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    font-size: 13px;
+    line-height: 1.45;
+    background:
+      radial-gradient(ellipse at 0% 0%, oklch(45% 0.22 280 / 0.25) 0%, transparent 50%),
+      radial-gradient(ellipse at 100% 0%, oklch(40% 0.20 257 / 0.20) 0%, transparent 50%),
+      linear-gradient(180deg, var(--canvas-1) 0%, var(--canvas-2) 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
+    padding: 32px 36px;
+  }
+  .num { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .mono { font-family: 'Geist Mono', ui-monospace, monospace; }
+  h1 { font-family: 'Heebo','Inter'; font-size: 24px; font-weight: 800; letter-spacing: -0.024em; margin: 0 0 6px; }
+  .sub { color: var(--text-muted); font-size: 13.5px; margin: 0 0 24px; }
+
+  .sec { margin-bottom: 28px; }
+  .sec-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+  .sec-eyebrow { font-family: 'Geist Mono'; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-subtle); font-weight: 600; }
+  .sec-title { font-size: 14px; font-weight: 600; color: var(--text-2); }
+
+  /* ============================================
+     GLASS CARD — overflow:VISIBLE (was clipping content)
+     Top bar uses border-radius matching parent
+     ============================================ */
+  .glass {
+    background: linear-gradient(180deg, var(--glass-2) 0%, var(--glass-1) 100%);
+    backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid var(--glass-edge);
+    border-radius: 14px;
+    box-shadow: 0 1px 0 0 oklch(100% 0 0 / 0.07) inset, 0 12px 24px -10px oklch(0% 0 0 / 0.35);
+    /* overflow: visible (default) — fix for clipped chips/sparklines */
+    position: relative;
+  }
+  /* Band signal — top bar with matched radius */
+  .glass[data-band]::before {
+    content: '';
+    position: absolute;
+    inset-block-start: 0; inset-inline: 0;
+    height: 3px;
+    border-start-start-radius: 14px;
+    border-start-end-radius: 14px;
+    pointer-events: none;
+  }
+  .glass[data-band="blue"]   { background: oklch(68% 0.16 240 / 0.05); }
+  .glass[data-band="blue"]::before   { background: var(--band-blue);   box-shadow: 0 0 14px oklch(68% 0.16 240 / 0.5); }
+  .glass[data-band="green"]  { background: oklch(70% 0.18 145 / 0.05); }
+  .glass[data-band="green"]::before  { background: var(--band-green);  box-shadow: 0 0 14px oklch(70% 0.18 145 / 0.5); }
+  .glass[data-band="orange"] { background: oklch(78% 0.16 75 / 0.05); }
+  .glass[data-band="orange"]::before { background: var(--band-orange); box-shadow: 0 0 14px oklch(78% 0.16 75 / 0.45); }
+  .glass[data-band="red"]    { background: oklch(64% 0.22 22 / 0.05); }
+  .glass[data-band="red"]::before    { background: var(--band-red);    box-shadow: 0 0 14px oklch(64% 0.22 22 / 0.5); }
+
+  /* Band chip */
+  .band-chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; font-weight: 700;
+    padding: 2px 7px; border-radius: 4px;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    font-family: 'Geist Mono';
+    white-space: nowrap;
+  }
+  .chip-red    { background: oklch(64% 0.22 22 / 0.18);  color: var(--band-red); }
+  .chip-orange { background: oklch(78% 0.16 75 / 0.18);  color: var(--band-orange); }
+  .chip-green  { background: oklch(70% 0.18 145 / 0.18); color: var(--band-green); }
+  .chip-blue   { background: oklch(68% 0.16 240 / 0.18); color: var(--band-blue); }
+
+  /* ============================================
+     HERO STRIP — 2 rows × 3 cards. Net Profit
+     featured-2fr in row 1; cleaner breathing.
+     ============================================ */
+  .hero-row { display: grid; gap: 12px; margin-bottom: 12px; }
+  .hero-row-1 { grid-template-columns: 2fr 1fr 1fr; }
+  .hero-row-2 { grid-template-columns: 1fr 1fr 1fr; }
+  .hero-card { padding: 20px 22px; }
+  .hero-card.featured { padding: 22px 26px; }
+  .hero-card .l { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 600; }
+  .hero-card .v { font-family: 'Heebo','Inter'; font-weight: 800; letter-spacing: -0.025em; line-height: 1.05; margin-top: 8px; font-variant-numeric: tabular-nums; word-break: keep-all; }
+  .hero-card .v.neutral { background: linear-gradient(180deg, oklch(100% 0 0) 0%, oklch(78% 0.02 250) 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .hero-card.featured .v { font-size: 44px; }
+  .hero-card .v { font-size: 26px; }
+  .hero-card .d { font-size: 11.5px; margin-top: 6px; font-variant-numeric: tabular-nums; line-height: 1.5; }
+  .hero-card.featured .d { font-size: 12.5px; margin-top: 10px; }
+  .up { color: var(--up); }
+  .dn { color: var(--dn); }
+  /* Band-colored value when card has data-band */
+  .glass[data-band="green"]  .v.banded { color: var(--band-green);  -webkit-text-fill-color: var(--band-green); background: none; }
+  .glass[data-band="blue"]   .v.banded { color: var(--band-blue);   -webkit-text-fill-color: var(--band-blue); background: none; }
+  .glass[data-band="orange"] .v.banded { color: var(--band-orange); -webkit-text-fill-color: var(--band-orange); background: none; }
+  .glass[data-band="red"]    .v.banded { color: var(--band-red);    -webkit-text-fill-color: var(--band-red); background: none; }
+  .hero-spark { width: 100%; height: 38px; display: block; margin-top: 14px; }
+
+  /* ============================================
+     PER-STORE CARDS — wider padding, VERTICAL
+     CPM cells (icon/spend/value stacked).
+     ============================================ */
+  .store-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  .scard { padding: 18px 20px 18px; }
+  .scard-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; gap: 8px; }
+  .scard-name { font-family: 'Geist Mono'; font-size: 14px; font-weight: 600; }
+  .uzo .scard-name { color: var(--store-uzo); }
+  .usm .scard-name { color: var(--store-usm); }
+  .s3 .scard-name { color: var(--store-3); }
+
+  .scard-roas-block { display: flex; align-items: baseline; gap: 12px; margin: 8px 0 16px; }
+  .scard-roas-block .v { font-family: 'Heebo'; font-size: 40px; font-weight: 800; letter-spacing: -0.025em; line-height: 1; font-variant-numeric: tabular-nums; }
+  .scard-roas-block .label { font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .glass[data-band="blue"]   .scard-roas-block .v { color: var(--band-blue); }
+  .glass[data-band="green"]  .scard-roas-block .v { color: var(--band-green); }
+  .glass[data-band="orange"] .scard-roas-block .v { color: var(--band-orange); }
+  .glass[data-band="red"]    .scard-roas-block .v { color: var(--band-red); }
+
+  /* Main metrics 4-up — alignment fixed */
+  .scard-main-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px 12px; padding-top: 14px; border-top: 1px solid oklch(100% 0 0 / 0.06); }
+  .scard-main-grid .cell { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .scard-main-grid .sl { font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-muted); font-weight: 600; }
+  .scard-main-grid .sv { font-family: 'Inter'; font-size: 13.5px; font-weight: 700; font-variant-numeric: tabular-nums; line-height: 1.2; }
+
+  /* ============================================
+     PER-PLATFORM CPM ROW — vertical-stack cells
+     (no more justify-between horizontal squeeze)
+     ============================================ */
+  .cpm-row { margin-top: 16px; padding-top: 14px; border-top: 1px dashed oklch(100% 0 0 / 0.08); }
+  .cpm-row-label {
+    font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--text-subtle); font-weight: 700; font-family: 'Geist Mono';
+    margin-bottom: 10px;
+  }
+  .cpm-row-cells { display: grid; gap: 8px; }
+  .cpm-row-cells.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .cpm-row-cells.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .cpm-row-cells.cols-1 { grid-template-columns: 1fr; }
+  .cpm-cell {
+    padding: 10px 12px;
+    background: oklch(100% 0 0 / 0.03);
+    border: 1px solid oklch(100% 0 0 / 0.06);
+    border-radius: 8px;
+    display: flex; flex-direction: column; gap: 6px;
+    min-width: 0;
+  }
+  .cpm-plat { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+  .cpm-plat .gd { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; box-shadow: 0 0 4px currentColor; }
+  .cpm-plat.meta   { color: var(--meta); }
+  .cpm-plat.google { color: var(--google); }
+  .cpm-plat.tiktok { color: var(--tiktok); }
+  .cpm-spend { font-size: 10px; color: var(--text-subtle); font-family: 'Geist Mono'; font-variant-numeric: tabular-nums; }
+  .cpm-val { font-family: 'Inter'; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: -0.02em; line-height: 1; }
+  .cpm-val.warn { color: var(--band-orange); }
+  .cpm-val.high { color: var(--band-red); }
+  .cpm-inactive { font-size: 10px; color: var(--text-subtle); margin-top: 8px; font-family: 'Geist Mono'; opacity: 0.7; }
+
+  /* Decide */
+  .decide { padding: 18px 22px; border-radius: 12px; margin-top: 24px; border: 1px solid var(--glass-edge-hot); background: linear-gradient(180deg, oklch(100% 0 0 / 0.05) 0%, oklch(72% 0.20 280 / 0.05) 100%); backdrop-filter: blur(16px); }
+  .decide h2 { font-size: 15px; margin: 0 0 6px; }
+  .decide p { color: var(--text-muted); margin: 0 0 14px; font-size: 12px; line-height: 1.55; }
+  .choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .choice { padding: 11px 13px; background: var(--glass-2); border: 1px solid var(--glass-edge); border-radius: 8px; cursor: pointer; transition: all 120ms; }
+  .choice:hover { border-color: var(--glass-edge-hot); transform: translateY(-1px); }
+  .choice .l { display: inline-block; background: linear-gradient(135deg, oklch(72% 0.22 280), oklch(58% 0.22 285)); color: white; font-family: 'Geist Mono'; font-size: 10px; padding: 1px 5px; border-radius: 3px; font-weight: 700; margin-inline-end: 6px; }
+  .choice .ct { font-size: 12px; font-weight: 600; }
+  .choice .cd { color: var(--text-muted); font-size: 11px; margin-top: 3px; line-height: 1.4; }
+</style>
+</head>
+<body>
+
+<h1>Layout fixes · everything sits clean now</h1>
+<div class="sub">Fixes: <code>overflow:visible</code> on cards (no more sparkline/chip clipping) · <code>min-width:0</code> on grid items (no more horizontal squeeze) · CPM cells stacked vertically · hero strip split into 2 rows for breathing room · numbers properly aligned in their own cells.</div>
+
+<!-- HERO ROW 1 (3 cards) -->
+<div class="sec">
+  <div class="sec-h"><span class="sec-eyebrow">hero · today · overall</span><span class="sec-title">3 חנויות · CAD</span></div>
+
+  <div class="hero-row hero-row-1">
+    <div class="glass hero-card featured" data-band="green">
+      <div class="l">רווח נטו · היום</div>
+      <div class="v num banded">$4,847</div>
+      <div class="d up">▴ +$612 (+15%) מול אתמול</div>
+      <svg class="hero-spark" viewBox="0 0 600 38" preserveAspectRatio="none">
+        <defs><linearGradient id="ghero" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="oklch(70% 0.18 145)" stop-opacity="0.55"/><stop offset="100%" stop-color="oklch(70% 0.18 145)" stop-opacity="0"/></linearGradient></defs>
+        <path d="M0,30 L45,26 L90,22 L135,20 L180,16 L225,14 L270,16 L315,10 L360,12 L405,7 L450,8 L495,4 L540,6 L600,2" fill="none" stroke="oklch(70% 0.18 145)" stroke-width="2"/>
+        <path d="M0,30 L45,26 L90,22 L135,20 L180,16 L225,14 L270,16 L315,10 L360,12 L405,7 L450,8 L495,4 L540,6 L600,2 L600,38 L0,38 Z" fill="url(#ghero)"/>
+      </svg>
+    </div>
+    <div class="glass hero-card">
+      <div class="l">הוצאה</div>
+      <div class="v num neutral">$3,924</div>
+      <div class="d up">▴ +6%</div>
+    </div>
+    <div class="glass hero-card">
+      <div class="l">הכנסה</div>
+      <div class="v num neutral">$10,998</div>
+      <div class="d up">▴ +12%</div>
+    </div>
+  </div>
+
+  <!-- HERO ROW 2 (3 cards) -->
+  <div class="hero-row hero-row-2">
+    <div class="glass hero-card" data-band="green">
+      <div class="l">ROAS</div>
+      <div class="v num banded">2.80</div>
+      <div class="d up">▴ +0.18 (בריא)</div>
+    </div>
+    <div class="glass hero-card">
+      <div class="l">הזמנות · סה״כ</div>
+      <div class="v num neutral">188</div>
+      <div class="d up">▴ +24 (3 חנויות)</div>
+    </div>
+    <div class="glass hero-card">
+      <div class="l">CPM · עסקי</div>
+      <div class="v num neutral">$8.92</div>
+      <div class="d dn">▴ +$0.34</div>
+    </div>
+  </div>
+</div>
+
+<!-- PER-STORE -->
+<div class="sec">
+  <div class="sec-h"><span class="sec-eyebrow">section · per-store</span><span class="sec-title">3 חנויות · ROAS + CPM לפי פלטפורמה</span></div>
+  <div class="store-row">
+
+    <!-- uzoshop: blue 3.12 · Meta+Google+TikTok -->
+    <div class="glass scard uzo" data-band="blue">
+      <div class="scard-head"><span class="scard-name">uzoshop</span><span class="band-chip chip-blue">▴ &gt; 3.0</span></div>
+      <div class="scard-roas-block"><span class="v num">3.12</span><span class="label">ROAS היום</span></div>
+      <div class="scard-main-grid">
+        <div class="cell"><span class="sl">הוצאה</span><span class="sv num">$1,847</span></div>
+        <div class="cell"><span class="sl">הכנסה</span><span class="sv num">$5,762</span></div>
+        <div class="cell"><span class="sl">הזמנות</span><span class="sv num">98</span></div>
+        <div class="cell"><span class="sl">AOV</span><span class="sv num">$58.80</span></div>
+      </div>
+      <div class="cpm-row">
+        <div class="cpm-row-label">CPM לפי פלטפורמה</div>
+        <div class="cpm-row-cells cols-3">
+          <div class="cpm-cell">
+            <span class="cpm-plat meta"><span class="gd" style="background:var(--meta)"></span>Meta</span>
+            <span class="cpm-spend">spend · $842</span>
+            <span class="cpm-val">$7.94</span>
+          </div>
+          <div class="cpm-cell">
+            <span class="cpm-plat google"><span class="gd" style="background:var(--google)"></span>Google</span>
+            <span class="cpm-spend">spend · $612</span>
+            <span class="cpm-val">$8.18</span>
+          </div>
+          <div class="cpm-cell">
+            <span class="cpm-plat tiktok"><span class="gd" style="background:var(--tiktok)"></span>TikTok</span>
+            <span class="cpm-spend">spend · $393</span>
+            <span class="cpm-val">$8.74</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- usmile360: green 2.95 · Meta+TikTok -->
+    <div class="glass scard usm" data-band="green">
+      <div class="scard-head"><span class="scard-name">usmile360</span><span class="band-chip chip-green">▴ 2.7-3.0</span></div>
+      <div class="scard-roas-block"><span class="v num">2.95</span><span class="label">ROAS היום</span></div>
+      <div class="scard-main-grid">
+        <div class="cell"><span class="sl">הוצאה</span><span class="sv num">$1,392</span></div>
+        <div class="cell"><span class="sl">הכנסה</span><span class="sv num">$4,106</span></div>
+        <div class="cell"><span class="sl">הזמנות</span><span class="sv num">68</span></div>
+        <div class="cell"><span class="sl">AOV</span><span class="sv num">$60.40</span></div>
+      </div>
+      <div class="cpm-row">
+        <div class="cpm-row-label">CPM לפי פלטפורמה</div>
+        <div class="cpm-row-cells cols-2">
+          <div class="cpm-cell">
+            <span class="cpm-plat meta"><span class="gd" style="background:var(--meta)"></span>Meta</span>
+            <span class="cpm-spend">spend · $868</span>
+            <span class="cpm-val">$8.62</span>
+          </div>
+          <div class="cpm-cell">
+            <span class="cpm-plat tiktok"><span class="gd" style="background:var(--tiktok)"></span>TikTok</span>
+            <span class="cpm-spend">spend · $524</span>
+            <span class="cpm-val warn">$10.18</span>
+          </div>
+        </div>
+        <div class="cpm-inactive">Google · לא פעיל היום</div>
+      </div>
+    </div>
+
+    <!-- store-3: red 1.65 · Google only -->
+    <div class="glass scard s3" data-band="red">
+      <div class="scard-head"><span class="scard-name">store-3</span><span class="band-chip chip-red">▾ &lt; 2.0</span></div>
+      <div class="scard-roas-block"><span class="v num">1.65</span><span class="label">ROAS היום</span></div>
+      <div class="scard-main-grid">
+        <div class="cell"><span class="sl">הוצאה</span><span class="sv num">$685</span></div>
+        <div class="cell"><span class="sl">הכנסה</span><span class="sv num">$1,130</span></div>
+        <div class="cell"><span class="sl">הזמנות</span><span class="sv num">22</span></div>
+        <div class="cell"><span class="sl">AOV</span><span class="sv num">$51.40</span></div>
+      </div>
+      <div class="cpm-row">
+        <div class="cpm-row-label">CPM לפי פלטפורמה</div>
+        <div class="cpm-row-cells cols-1">
+          <div class="cpm-cell">
+            <span class="cpm-plat google"><span class="gd" style="background:var(--google)"></span>Google · יחיד</span>
+            <span class="cpm-spend">spend · $685</span>
+            <span class="cpm-val high">$12.20</span>
+          </div>
+        </div>
+        <div class="cpm-inactive">Meta · TikTok · לא פעילים</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="decide">
+  <h2>Clean layout now?</h2>
+  <p>Hero split into 2 rows (3+3) — Net Profit featured at full breathing room with sparkline below; ROAS uses V4 banded number. Per-store cards have vertical-stacked CPM cells (icon → spend → value) so 3-platform stores read just as cleanly as 1-platform stores. <code>overflow:visible</code> + <code>min-width:0</code> on grid items kill the clipping bugs.</p>
+  <div class="choices">
+    <div class="choice"><span class="l">A</span><span class="ct">✅ Approve · move on</span><div class="cd">Layout clean. Mockup 5 (freshness desaturation) next.</div></div>
+    <div class="choice"><span class="l">B</span><span class="ct">Still clipping somewhere</span><div class="cd">Tell me what's still being cut and I'll fix.</div></div>
+    <div class="choice"><span class="l">C</span><span class="ct">Different layout direction</span><div class="cd">Rethink hero (3 cards single row? 6 single row?) or rethink per-store. Describe.</div></div>
+  </div>
+</div>
+
+</body>
+</html>

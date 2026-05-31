@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup 4h — ROAS chart section</title>
+<link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --meta: oklch(70% 0.18 257);
+    --google: oklch(80% 0.15 90);
+    --tiktok: oklch(72% 0.24 12);
+    --accent: oklch(72% 0.20 280);
+    --band-red:    oklch(64% 0.22 22);
+    --band-orange: oklch(78% 0.16 75);
+    --band-green:  oklch(70% 0.18 145);
+    --band-blue:   oklch(68% 0.16 240);
+    --store-uzo: oklch(72% 0.16 210);
+    --store-usm: oklch(72% 0.18 330);
+    --store-3: oklch(70% 0.16 100);
+    --canvas-1: oklch(13% 0.020 270);
+    --canvas-2: oklch(11% 0.025 280);
+    --glass-1: oklch(100% 0 0 / 0.04);
+    --glass-2: oklch(100% 0 0 / 0.06);
+    --glass-edge: oklch(100% 0 0 / 0.12);
+    --glass-edge-hot: oklch(72% 0.20 280 / 0.4);
+    --up: oklch(70% 0.18 145);
+    --dn: oklch(64% 0.22 22);
+    --text: oklch(98% 0.008 80);
+    --text-2: oklch(82% 0.012 250);
+    --text-muted: oklch(64% 0.018 250);
+    --text-subtle: oklch(48% 0.020 250);
+  }
+  * { box-sizing: border-box; min-width: 0; }
+  html,body { margin:0; padding:0; min-height:100vh; }
+  body {
+    font-family: 'Inter','Heebo',system-ui,sans-serif;
+    font-feature-settings: 'cv11','ss01','ss03';
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    font-size: 13px; line-height: 1.45;
+    background:
+      radial-gradient(ellipse at 0% 0%, oklch(45% 0.22 280 / 0.25) 0%, transparent 50%),
+      radial-gradient(ellipse at 100% 0%, oklch(40% 0.20 257 / 0.20) 0%, transparent 50%),
+      linear-gradient(180deg, var(--canvas-1) 0%, var(--canvas-2) 100%);
+    background-attachment: fixed; min-height: 100vh; padding: 32px 36px;
+  }
+  .num { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .mono { font-family: 'Geist Mono', ui-monospace, monospace; }
+  h1 { font-family: 'Heebo','Inter'; font-size: 22px; font-weight: 800; letter-spacing: -0.024em; margin: 0 0 4px; }
+  .sub { color: var(--text-muted); font-size: 13px; margin: 0 0 24px; }
+
+  .sec { margin-bottom: 24px; }
+  .sec-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+  .sec-eyebrow { font-family: 'Geist Mono'; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-subtle); font-weight: 600; }
+  .sec-title { font-size: 14px; font-weight: 600; color: var(--text-2); }
+
+  .glass {
+    background: linear-gradient(180deg, var(--glass-2) 0%, var(--glass-1) 100%);
+    backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid var(--glass-edge);
+    border-radius: 14px;
+    box-shadow: 0 1px 0 0 oklch(100% 0 0 / 0.07) inset, 0 12px 24px -10px oklch(0% 0 0 / 0.35);
+    position: relative;
+  }
+  .glass[data-band]::before {
+    content: ''; position: absolute; inset-block-start: 0; inset-inline: 0; height: 3px;
+    border-start-start-radius: 14px; border-start-end-radius: 14px; pointer-events: none;
+  }
+  .glass[data-band="green"]  { background: oklch(70% 0.18 145 / 0.05); }
+  .glass[data-band="green"]::before  { background: var(--band-green);  box-shadow: 0 0 14px oklch(70% 0.18 145 / 0.5); }
+  .band-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.06em; font-family: 'Geist Mono'; white-space: nowrap; }
+  .chip-green { background: oklch(70% 0.18 145 / 0.18); color: var(--band-green); }
+  .glass[data-band="green"] .v.banded { color: var(--band-green); -webkit-text-fill-color: var(--band-green); background: none; }
+
+  /* ============================================
+     ROAS-VS-TARGET CHART SECTION (new)
+     - Full width
+     - TL;DR sentence at top
+     - Min/max readout corner
+     - Chart with: dashed target line + solid ROAS line + annotation pins
+     - Bottom summary strip with prev-period
+     ============================================ */
+  .roas-card { padding: 22px 26px 18px; }
+  .roas-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+  .roas-head-left { flex: 1; min-width: 0; }
+  .roas-tldr {
+    font-family: 'Heebo','Inter';
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    line-height: 1.4;
+    color: var(--text);
+    margin: 0 0 6px;
+  }
+  .roas-tldr .accent-num { color: var(--band-orange); font-variant-numeric: tabular-nums; }
+  .roas-tldr .accent-num-good { color: var(--band-green); font-variant-numeric: tabular-nums; }
+  .roas-tldr .accent-num-bad { color: var(--band-red); font-variant-numeric: tabular-nums; }
+  .roas-sub {
+    font-size: 12.5px;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .roas-sub .dot { opacity: 0.4; margin: 0 6px; }
+  .roas-head-right { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+  .roas-scope { font-family: 'Geist Mono'; font-size: 11px; color: var(--text-muted); letter-spacing: 0.06em; }
+  .roas-scope b { color: var(--text); }
+  .pin-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; font-weight: 600;
+    padding: 4px 10px; border-radius: 999px;
+    background: oklch(78% 0.16 75 / 0.14);
+    color: var(--band-orange);
+    border: 1px solid oklch(78% 0.16 75 / 0.30);
+    margin-top: 4px;
+  }
+  .pin-chip .icn { font-size: 12px; }
+
+  /* KPI strip inside the ROAS card */
+  .roas-kpi-strip { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; background: oklch(100% 0 0 / 0.08); border: 1px solid oklch(100% 0 0 / 0.08); border-radius: 10px; overflow: hidden; margin-bottom: 18px; }
+  .rkpi { background: linear-gradient(180deg, oklch(100% 0 0 / 0.03) 0%, oklch(100% 0 0 / 0.01) 100%); padding: 14px 16px; }
+  .rkpi-l { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 600; margin-bottom: 4px; }
+  .rkpi-vrow { display: flex; align-items: baseline; gap: 6px; }
+  .rkpi-v { font-family: 'Heebo','Inter'; font-size: 26px; font-weight: 800; letter-spacing: -0.025em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .rkpi-cur { font-size: 10.5px; color: var(--text-subtle); font-family: 'Geist Mono'; }
+  .rkpi.roas .rkpi-v { color: var(--band-orange); }
+
+  /* The chart itself */
+  .chart-meta {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 11px; color: var(--text-muted); margin-bottom: 6px; padding-inline: 4px;
+  }
+  .chart-meta .legend { display: inline-flex; align-items: center; gap: 6px; font-family: 'Geist Mono'; letter-spacing: 0.04em; }
+  .chart-meta .legend .sw-line { width: 16px; height: 2px; background: oklch(95% 0.008 80); border-radius: 1px; }
+  .chart-meta .legend .sw-dash { width: 16px; height: 1.5px; border-top: 1.5px dashed var(--band-green); border-bottom: none; background: none; opacity: 0.7; }
+  .chart-meta .minmax { font-family: 'Geist Mono'; font-variant-numeric: tabular-nums; }
+  .chart-meta .minmax b { color: var(--text); font-weight: 600; margin-inline: 2px; }
+
+  .chart-wrap { position: relative; }
+  .roas-chart-svg { width: 100%; height: 220px; display: block; }
+  .grid-line { stroke: oklch(100% 0 0 / 0.06); stroke-width: 1; }
+  .target-line { stroke: var(--band-green); stroke-width: 1.5; stroke-dasharray: 4 4; opacity: 0.7; }
+  .roas-line { stroke: oklch(98% 0.008 80); stroke-width: 2; fill: none; }
+  .roas-dot { fill: oklch(98% 0.008 80); }
+  .pin-line { stroke: var(--band-orange); stroke-width: 1.2; opacity: 0.5; stroke-dasharray: 2 3; }
+  .pin-icon-bg { fill: var(--band-orange); }
+  .pin-icon-glow { fill: var(--band-orange); opacity: 0.3; filter: blur(4px); }
+  .axis-label { font-family: 'Geist Mono'; font-size: 10px; fill: var(--text-subtle); }
+  .axis-tick { stroke: oklch(100% 0 0 / 0.10); stroke-width: 1; }
+
+  /* Pin tooltip */
+  .pin-tooltip {
+    position: absolute; transform: translateX(-50%);
+    background: oklch(20% 0.020 270 / 0.95);
+    backdrop-filter: blur(12px);
+    border: 1px solid oklch(78% 0.16 75 / 0.35);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 11px;
+    color: var(--text);
+    box-shadow: 0 8px 20px -6px oklch(0% 0 0 / 0.5);
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .pin-tooltip::after {
+    content: ''; position: absolute; inset-block-start: 100%; inset-inline-start: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: oklch(78% 0.16 75 / 0.35);
+  }
+  .pin-tooltip .pt-icon { font-size: 12px; margin-inline-end: 4px; }
+
+  /* Footer strip with prev-period summary */
+  .roas-footer {
+    margin-top: 14px; padding-top: 14px;
+    border-top: 1px solid oklch(100% 0 0 / 0.08);
+    display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;
+    font-size: 12px;
+  }
+  .roas-footer .fpair { display: inline-flex; align-items: baseline; gap: 6px; }
+  .roas-footer .fl { color: var(--text-muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; font-family: 'Geist Mono'; }
+  .roas-footer .fv { color: var(--text); font-weight: 700; font-variant-numeric: tabular-nums; }
+  .roas-footer .sep { color: var(--text-subtle); opacity: 0.4; }
+
+  /* Decide */
+  .decide { padding: 18px 22px; border-radius: 12px; margin-top: 24px; border: 1px solid var(--glass-edge-hot); background: linear-gradient(180deg, oklch(100% 0 0 / 0.05) 0%, oklch(72% 0.20 280 / 0.05) 100%); backdrop-filter: blur(16px); }
+  .decide h2 { font-size: 15px; margin: 0 0 6px; }
+  .decide p { color: var(--text-muted); margin: 0 0 14px; font-size: 12px; line-height: 1.55; }
+  .choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .choice { padding: 11px 13px; background: oklch(100% 0 0 / 0.06); border: 1px solid var(--glass-edge); border-radius: 8px; cursor: pointer; transition: all 120ms; }
+  .choice:hover { border-color: var(--glass-edge-hot); transform: translateY(-1px); }
+  .choice .l { display: inline-block; background: linear-gradient(135deg, oklch(72% 0.22 280), oklch(58% 0.22 285)); color: white; font-family: 'Geist Mono'; font-size: 10px; padding: 1px 5px; border-radius: 3px; font-weight: 700; margin-inline-end: 6px; }
+  .choice .ct { font-size: 12px; font-weight: 600; }
+  .choice .cd { color: var(--text-muted); font-size: 11px; margin-top: 3px; line-height: 1.4; }
+</style>
+</head>
+<body>
+
+<h1>ROAS-vs-target chart with annotation pins</h1>
+<div class="sub">Re-adding the rich ROAS chart from the current Hero (with dashed target line + dollar-bag event pins + min/max + prev-period comparison) as its own full-width section between the hero strip and the per-store row.</div>
+
+<div class="sec">
+  <div class="sec-h">
+    <span class="sec-eyebrow">section · trend</span>
+    <span class="sec-title">ROAS היומי · vs יעד 3.0 · 31 ימים</span>
+  </div>
+
+  <div class="glass roas-card">
+
+    <!-- Head: TL;DR sentence (left) + scope + pin info (right) -->
+    <div class="roas-head">
+      <div class="roas-head-left">
+        <p class="roas-tldr">
+          ROAS <span class="accent-num">2.33</span>, רווח תפעולי של <span class="accent-num-good">34,885 CAD</span>. בתקופה זו עובדו <span class="accent-num-bad">1,131 CAD</span> בהחזרים ב-20/05.
+        </p>
+        <div class="roas-sub">אין נתוני השוואה לתקופה הקודמת<span class="dot">·</span>נתון מקסימום: 3.51<span class="dot">·</span>מינימום: 1.27</div>
+      </div>
+      <div class="roas-head-right">
+        <span class="roas-scope">01/05 — 31/05<span style="opacity:.4;margin:0 6px">·</span><b>כל החנויות</b><span style="opacity:.4;margin:0 6px">·</span>31 ימים</span>
+        <span class="pin-chip"><span class="icn">💰</span>יום רפאנד כבד (20/05)</span>
+      </div>
+    </div>
+
+    <!-- KPI strip (compact, 5-up) -->
+    <div class="roas-kpi-strip">
+      <div class="rkpi"><div class="rkpi-l">הכנסות</div><div class="rkpi-vrow"><span class="rkpi-v">108,997</span><span class="rkpi-cur">CAD</span></div></div>
+      <div class="rkpi roas"><div class="rkpi-l">ROAS</div><div class="rkpi-vrow"><span class="rkpi-v">2.33</span><span class="band-chip chip-green" style="background:oklch(78% 0.16 75 / 0.20);color:var(--band-orange)">סביר</span></div></div>
+      <div class="rkpi"><div class="rkpi-l">הוצאות פרסום</div><div class="rkpi-vrow"><span class="rkpi-v">46,863</span><span class="rkpi-cur">CAD</span></div></div>
+      <div class="rkpi"><div class="rkpi-l">רווח תפעולי</div><div class="rkpi-vrow"><span class="rkpi-v">34,885</span><span class="rkpi-cur">CAD</span></div></div>
+      <div class="rkpi"><div class="rkpi-l">CPM</div><div class="rkpi-vrow"><span class="rkpi-v">16.13</span><span class="rkpi-cur">CAD</span></div></div>
+    </div>
+
+    <!-- Chart legend / minmax strip -->
+    <div class="chart-meta">
+      <div style="display:flex;gap:18px">
+        <span class="legend"><span class="sw-line"></span>ROAS יומי</span>
+        <span class="legend"><span class="sw-dash"></span>קו מקווקו = יעד 3.0</span>
+      </div>
+      <div class="minmax">מקסימום: <b>3.51</b><span style="opacity:.4;margin:0 8px">·</span>מינימום: <b>1.27</b></div>
+    </div>
+
+    <!-- The chart with annotation pins -->
+    <div class="chart-wrap">
+      <svg class="roas-chart-svg" viewBox="0 0 1000 220" preserveAspectRatio="none">
+        <!-- Gridlines -->
+        <line class="grid-line" x1="40" x2="1000" y1="20"  y2="20"/>
+        <line class="grid-line" x1="40" x2="1000" y1="60"  y2="60"/>
+        <line class="grid-line" x1="40" x2="1000" y1="100" y2="100"/>
+        <line class="grid-line" x1="40" x2="1000" y1="140" y2="140"/>
+        <line class="grid-line" x1="40" x2="1000" y1="180" y2="180"/>
+
+        <!-- Y-axis labels -->
+        <text class="axis-label" x="0" y="24">4.0</text>
+        <text class="axis-label" x="0" y="64">3.0</text>
+        <text class="axis-label" x="0" y="104">2.0</text>
+        <text class="axis-label" x="0" y="144">1.0</text>
+
+        <!-- Target line (dashed at y=60 i.e. ROAS 3.0) -->
+        <line class="target-line" x1="40" x2="1000" y1="60" y2="60"/>
+
+        <!-- Pin vertical guides (under the pins so they sit below the line) -->
+        <line class="pin-line" x1="620" x2="620" y1="20" y2="200"/>
+        <line class="pin-line" x1="870" x2="870" y1="20" y2="200"/>
+
+        <!-- ROAS data line (31 points along x = 40..1000, varies in y) -->
+        <path class="roas-line" d="
+          M40,75
+          L72,68 L104,82 L136,84 L168,80 L200,88 L232,90 L264,95 L296,92
+          L328,74 L360,60 L392,58 L424,72 L456,80 L488,84 L520,96
+          L552,112 L584,100 L616,108 L648,118 L680,114 L712,108 L744,100
+          L776,80 L808,98 L840,108 L872,118 L904,112 L936,100 L968,90
+          L1000,76
+        "/>
+
+        <!-- ROAS data dots -->
+        <g>
+          <circle class="roas-dot" cx="40"  cy="75" r="2.5"/>
+          <circle class="roas-dot" cx="72"  cy="68" r="2.5"/>
+          <circle class="roas-dot" cx="104" cy="82" r="2.5"/>
+          <circle class="roas-dot" cx="136" cy="84" r="2.5"/>
+          <circle class="roas-dot" cx="168" cy="80" r="2.5"/>
+          <circle class="roas-dot" cx="200" cy="88" r="2.5"/>
+          <circle class="roas-dot" cx="232" cy="90" r="2.5"/>
+          <circle class="roas-dot" cx="264" cy="95" r="2.5"/>
+          <circle class="roas-dot" cx="296" cy="92" r="2.5"/>
+          <circle class="roas-dot" cx="328" cy="74" r="2.5"/>
+          <circle class="roas-dot" cx="360" cy="60" r="3"  style="fill:var(--band-green)"/>
+          <circle class="roas-dot" cx="392" cy="58" r="3"  style="fill:var(--band-green)"/>
+          <circle class="roas-dot" cx="424" cy="72" r="2.5"/>
+          <circle class="roas-dot" cx="456" cy="80" r="2.5"/>
+          <circle class="roas-dot" cx="488" cy="84" r="2.5"/>
+          <circle class="roas-dot" cx="520" cy="96" r="2.5"/>
+          <circle class="roas-dot" cx="552" cy="112" r="3" style="fill:var(--band-red)"/>
+          <circle class="roas-dot" cx="584" cy="100" r="2.5"/>
+          <circle class="roas-dot" cx="616" cy="108" r="2.5"/>
+          <circle class="roas-dot" cx="648" cy="118" r="2.5"/>
+          <circle class="roas-dot" cx="680" cy="114" r="2.5"/>
+          <circle class="roas-dot" cx="712" cy="108" r="2.5"/>
+          <circle class="roas-dot" cx="744" cy="100" r="2.5"/>
+          <circle class="roas-dot" cx="776" cy="80" r="2.5"/>
+          <circle class="roas-dot" cx="808" cy="98" r="2.5"/>
+          <circle class="roas-dot" cx="840" cy="108" r="2.5"/>
+          <circle class="roas-dot" cx="872" cy="118" r="2.5"/>
+          <circle class="roas-dot" cx="904" cy="112" r="2.5"/>
+          <circle class="roas-dot" cx="936" cy="100" r="2.5"/>
+          <circle class="roas-dot" cx="968" cy="90" r="2.5"/>
+          <circle class="roas-dot" cx="1000" cy="76" r="2.5"/>
+        </g>
+
+        <!-- Pin glows at top -->
+        <circle class="pin-icon-glow" cx="620" cy="14" r="14"/>
+        <circle class="pin-icon-glow" cx="870" cy="14" r="14"/>
+
+        <!-- X-axis labels -->
+        <text class="axis-label" x="38" y="216" text-anchor="start">01/05</text>
+        <text class="axis-label" x="520" y="216" text-anchor="middle">15/05</text>
+        <text class="axis-label" x="1000" y="216" text-anchor="end">31/05</text>
+      </svg>
+
+      <!-- Pin icons & tooltips overlaid (HTML so emoji works + tooltip is interactive in real component) -->
+      <div style="position:absolute;inset:0;pointer-events:none">
+        <!-- Pin 1: 20/05 — refund day -->
+        <div style="position:absolute;inset-block-start:-6px;inset-inline-start:62%;transform:translateX(-50%);font-size:18px;text-shadow:0 0 8px oklch(78% 0.16 75 / 0.7)">💰</div>
+        <div class="pin-tooltip" style="inset-block-start:-44px;inset-inline-start:62%">
+          <span class="pt-icon">💰</span>יום רפאנד כבד · 20/05 · 1,131 CAD
+        </div>
+        <!-- Pin 2: 28/05 — bonus annotation -->
+        <div style="position:absolute;inset-block-start:-6px;inset-inline-start:87%;transform:translateX(-50%);font-size:18px;text-shadow:0 0 8px oklch(78% 0.16 75 / 0.7)">💰</div>
+        <div class="pin-tooltip" style="inset-block-start:-44px;inset-inline-start:87%">
+          <span class="pt-icon">💰</span>שינוי תקציב Meta · 28/05
+        </div>
+      </div>
+    </div>
+
+    <!-- Footer strip with prev-period -->
+    <div class="roas-footer">
+      <div class="fpair">
+        <span class="fl">ROAS לתקופה הקודמת</span>
+        <span class="fv" style="color:var(--text-subtle)">0.00</span>
+      </div>
+      <span class="sep">·</span>
+      <div class="fpair">
+        <span class="fl">הכנסות שכבר נצברו</span>
+        <span class="fv">108,997 CAD</span>
+      </div>
+      <span class="sep">·</span>
+      <div class="fpair">
+        <span class="fl">ימי פעילות</span>
+        <span class="fv">31</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="decide">
+  <h2>ROAS chart section — placement and depth right?</h2>
+  <p>Full-width glass card with: TL;DR sentence on top (Hebrew, authoritative tone per Q6), pin chip for the 20/05 refund event, compact 5-up KPI strip, chart-meta legend + min/max readout, the chart itself (target dashed line + ROAS line with 31 dots + 2 annotation pins with hover tooltips + green/red dots for max/min), bottom footer with prev-period comparison. Sits between hero strip and per-store row in the full Home flow.</p>
+  <div class="choices">
+    <div class="choice"><span class="l">A</span><span class="ct">✅ Approve</span><div class="cd">Section structure right. Mockup 5 (freshness desaturation) next.</div></div>
+    <div class="choice"><span class="l">B</span><span class="ct">Adjust the chart</span><div class="cd">Chart height / dots / pins / target line / axes need micro-adjust. Describe.</div></div>
+    <div class="choice"><span class="l">C</span><span class="ct">Different placement</span><div class="cd">Move to a different spot on Home, or restructure section header.</div></div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup 6 — Sidebar slim vs expanded</title>
+<link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --meta: oklch(70% 0.18 257);
+    --google: oklch(80% 0.15 90);
+    --tiktok: oklch(72% 0.24 12);
+    --accent: oklch(72% 0.20 280);
+    --band-green: oklch(70% 0.18 145);
+    --band-blue: oklch(68% 0.16 240);
+    --canvas-1: oklch(13% 0.020 270);
+    --canvas-2: oklch(11% 0.025 280);
+    --glass-1: oklch(100% 0 0 / 0.04);
+    --glass-2: oklch(100% 0 0 / 0.06);
+    --glass-3: oklch(100% 0 0 / 0.08);
+    --glass-edge: oklch(100% 0 0 / 0.12);
+    --glass-edge-hot: oklch(72% 0.20 280 / 0.4);
+    --up: oklch(70% 0.18 145);
+    --text: oklch(98% 0.008 80);
+    --text-2: oklch(82% 0.012 250);
+    --text-muted: oklch(64% 0.018 250);
+    --text-subtle: oklch(48% 0.020 250);
+  }
+  * { box-sizing: border-box; min-width: 0; }
+  html, body { margin: 0; padding: 0; min-height: 100vh; }
+  body {
+    font-family: 'Inter','Heebo',system-ui,sans-serif;
+    font-feature-settings: 'cv11','ss01','ss03';
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    font-size: 13px; line-height: 1.45;
+    background:
+      radial-gradient(ellipse at 0% 0%, oklch(45% 0.22 280 / 0.25) 0%, transparent 50%),
+      radial-gradient(ellipse at 100% 0%, oklch(40% 0.20 257 / 0.20) 0%, transparent 50%),
+      linear-gradient(180deg, var(--canvas-1) 0%, var(--canvas-2) 100%);
+    background-attachment: fixed; min-height: 100vh; padding: 24px 28px;
+  }
+  .num { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .mono { font-family: 'Geist Mono', ui-monospace, monospace; }
+  h1 { font-family: 'Heebo','Inter'; font-size: 22px; font-weight: 800; letter-spacing: -0.024em; margin: 0 0 4px; }
+  .sub { color: var(--text-muted); font-size: 13px; margin: 0 0 20px; }
+
+  /* Comparison grid: two miniature app views side-by-side */
+  .compare { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 22px; }
+  .view {
+    border-radius: 14px;
+    overflow: hidden;
+    background: linear-gradient(180deg, var(--canvas-1) 0%, var(--canvas-2) 100%);
+    border: 1px solid var(--glass-edge);
+    box-shadow: 0 12px 30px -10px oklch(0% 0 0 / 0.4);
+    position: relative;
+  }
+  .view-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--glass-edge);
+    font-family: 'Geist Mono'; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-2);
+    background: oklch(100% 0 0 / 0.02);
+    font-weight: 600;
+  }
+  .view-head .badge { font-family: 'Geist Mono'; font-size: 10px; background: var(--accent); color: white; padding: 2px 7px; border-radius: 4px; font-weight: 700; }
+  .view-head.recommended .badge { background: var(--band-green); }
+
+  /* Mini app inside the view — RTL grid with sidebar */
+  .miniapp { display: grid; min-height: 480px; position: relative; }
+  .miniapp.collapsed { grid-template-columns: 72px 1fr; }
+  .miniapp.expanded  { grid-template-columns: 220px 1fr; }
+  .miniapp.hover    { grid-template-columns: 72px 1fr; }
+  .mini-sidebar {
+    background: linear-gradient(180deg, oklch(100% 0 0 / 0.05) 0%, oklch(100% 0 0 / 0.02) 100%);
+    backdrop-filter: blur(20px);
+    border-inline-end: 1px solid var(--glass-edge);
+    padding: 14px 0; display: flex; flex-direction: column; gap: 4px;
+    transition: width 200ms ease-out;
+  }
+  .mini-logo { width: 36px; height: 36px; margin: 0 auto 12px; border-radius: 10px; background: linear-gradient(135deg, oklch(72% 0.22 280), oklch(58% 0.22 285)); display: grid; place-items: center; font-weight: 800; color: white; box-shadow: 0 0 16px -2px oklch(72% 0.20 280 / 0.6), 0 1px 0 0 oklch(100% 0 0 / 0.3) inset; font-family: 'Heebo'; }
+  .mini-sb-item {
+    display: grid; align-items: center;
+    cursor: pointer; transition: all 120ms;
+    color: var(--text-muted);
+    font-size: 13px; font-weight: 500;
+    height: 40px;
+  }
+  .miniapp.collapsed .mini-sb-item,
+  .miniapp.hover .mini-sb-item {
+    grid-template-columns: 1fr;
+    place-items: center;
+    margin-inline: 14px;
+    border-radius: 10px;
+  }
+  .miniapp.expanded .mini-sb-item {
+    grid-template-columns: 36px 1fr;
+    margin-inline: 8px;
+    border-radius: 10px;
+    padding-inline: 8px;
+  }
+  .mini-sb-item .icon { font-size: 17px; display: grid; place-items: center; width: 32px; height: 32px; }
+  .mini-sb-item .label {
+    font-family: 'Inter','Heebo';
+    text-align: start;
+    white-space: nowrap;
+    overflow: hidden;
+    transition: opacity 150ms;
+  }
+  .miniapp.collapsed .mini-sb-item .label,
+  .miniapp.hover .mini-sb-item .label { display: none; }
+  .mini-sb-item:hover { background: var(--glass-2); color: var(--text); }
+  .mini-sb-item.active { background: var(--glass-3); color: var(--accent); box-shadow: 0 0 12px -2px oklch(72% 0.20 280 / 0.3), 0 1px 0 0 oklch(100% 0 0 / 0.08) inset; }
+  .mini-sb-item.bottom { margin-top: auto; }
+
+  /* Tooltip simulation for collapsed state (shown on item 2 as demo) */
+  .tooltip-demo {
+    position: absolute;
+    inset-block-start: 92px;
+    inset-inline-end: -86px;
+    background: oklch(20% 0.020 270 / 0.96);
+    border: 1px solid var(--glass-edge);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: var(--text);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 6px 16px -4px oklch(0% 0 0 / 0.5);
+    font-family: 'Inter','Heebo';
+    white-space: nowrap;
+    z-index: 10;
+  }
+  .tooltip-demo::after { content: ''; position: absolute; inset-inline-end: 100%; inset-block-start: 50%; transform: translateY(-50%); border: 5px solid transparent; border-inline-end-color: var(--glass-edge); }
+  .tooltip-demo .keyboard-hint { font-family: 'Geist Mono'; font-size: 10px; color: var(--text-subtle); margin-inline-start: 6px; padding: 1px 4px; background: oklch(100% 0 0 / 0.08); border-radius: 3px; }
+
+  /* Mini main content area — show same Home preview */
+  .mini-main { padding: 16px 18px; overflow: hidden; }
+  .mini-crumb { font-family: 'Geist Mono'; font-size: 10px; text-transform: uppercase; letter-spacing: 0.10em; color: var(--text-muted); margin-bottom: 4px; }
+  .mini-crumb b { color: var(--text); font-weight: 600; }
+  .mini-h1 { font-family: 'Heebo'; font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 14px; }
+  .mini-hero-strip { display: grid; grid-template-columns: 1.6fr 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+  .mini-card {
+    background: linear-gradient(180deg, var(--glass-2) 0%, var(--glass-1) 100%);
+    backdrop-filter: blur(16px); border: 1px solid var(--glass-edge);
+    border-radius: 10px; padding: 10px 12px;
+    position: relative; overflow: hidden;
+  }
+  .mini-card.green {
+    background: oklch(70% 0.18 145 / 0.05);
+    border-color: oklch(70% 0.18 145 / 0.30);
+  }
+  .mini-card.green::before { content: ''; position: absolute; inset-block-start: 0; inset-inline: 0; height: 2px; background: var(--band-green); box-shadow: 0 0 10px oklch(70% 0.18 145 / 0.5); border-start-start-radius: 10px; border-start-end-radius: 10px; }
+  .mini-card .ml { font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); font-weight: 600; }
+  .mini-card .mv { font-family: 'Heebo'; font-size: 17px; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .mini-card.green .mv { color: var(--band-green); }
+  .mini-card.featured .mv { font-size: 22px; }
+  .mini-store-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .mini-store-card { background: linear-gradient(180deg, var(--glass-2) 0%, var(--glass-1) 100%); border: 1px solid var(--glass-edge); border-radius: 10px; padding: 10px 12px; position: relative; }
+  .mini-store-card.blue { background: oklch(68% 0.16 240 / 0.05); border-color: oklch(68% 0.16 240 / 0.30); }
+  .mini-store-card.blue::before { content: ''; position: absolute; inset-block-start: 0; inset-inline: 0; height: 2px; background: var(--band-blue); border-start-start-radius: 10px; border-start-end-radius: 10px; }
+  .mini-store-name { font-family: 'Geist Mono'; font-size: 11px; font-weight: 600; color: var(--text-2); }
+  .mini-store-roas { font-family: 'Heebo'; font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 4px; }
+  .mini-store-card.blue .mini-store-roas { color: var(--band-blue); }
+
+  .width-indicator {
+    font-family: 'Geist Mono'; font-size: 10px; color: var(--text-subtle);
+    padding: 8px 14px; background: oklch(100% 0 0 / 0.04); border-block-start: 1px solid var(--glass-edge);
+    display: flex; justify-content: space-between;
+  }
+  .width-indicator b { color: var(--text); font-weight: 600; }
+  .width-indicator .pos { color: var(--band-green); }
+  .width-indicator .neg { color: var(--meta); }
+
+  /* Interaction sketch (third panel) */
+  .interaction {
+    background: linear-gradient(180deg, var(--glass-2) 0%, var(--glass-1) 100%);
+    backdrop-filter: blur(16px); border: 1px solid var(--glass-edge);
+    border-radius: 14px; padding: 22px 24px; margin-bottom: 22px;
+  }
+  .interaction h2 { font-size: 16px; margin: 0 0 14px; font-weight: 600; }
+  .timeline { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 14px; }
+  .step { background: oklch(100% 0 0 / 0.03); border: 1px solid var(--glass-edge); border-radius: 10px; padding: 12px; }
+  .step-num { font-family: 'Geist Mono'; font-size: 10px; color: var(--accent); font-weight: 700; margin-bottom: 4px; }
+  .step-title { font-weight: 600; font-size: 12.5px; margin-bottom: 4px; }
+  .step-desc { font-size: 11.5px; color: var(--text-muted); line-height: 1.45; }
+
+  /* Decide */
+  .decide { padding: 18px 22px; border-radius: 12px; border: 1px solid var(--glass-edge-hot); background: linear-gradient(180deg, oklch(100% 0 0 / 0.05) 0%, oklch(72% 0.20 280 / 0.05) 100%); backdrop-filter: blur(16px); }
+  .decide h2 { font-size: 15px; margin: 0 0 6px; }
+  .decide p { color: var(--text-muted); margin: 0 0 14px; font-size: 12px; line-height: 1.55; }
+  .choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .choice { padding: 11px 13px; background: oklch(100% 0 0 / 0.06); border: 1px solid var(--glass-edge); border-radius: 8px; cursor: pointer; transition: all 120ms; }
+  .choice:hover { border-color: var(--glass-edge-hot); transform: translateY(-1px); }
+  .choice .l { display: inline-block; background: linear-gradient(135deg, oklch(72% 0.22 280), oklch(58% 0.22 285)); color: white; font-family: 'Geist Mono'; font-size: 10px; padding: 1px 5px; border-radius: 3px; font-weight: 700; margin-inline-end: 6px; }
+  .choice .ct { font-size: 12px; font-weight: 600; }
+  .choice .cd { color: var(--text-muted); font-size: 11px; margin-top: 3px; line-height: 1.4; }
+</style>
+</head>
+<body>
+
+<h1>Sidebar · slim icon-rail vs expanded labels</h1>
+<div class="sub">Q10 already locked slim 72px as default. This mockup compares the two states + sketches the hover-to-expand interaction so the experience is concrete before code.</div>
+
+<!-- COMPARISON -->
+<div class="compare">
+
+  <!-- LEFT: Collapsed (default) -->
+  <div class="view">
+    <div class="view-head recommended"><span>SLIM · 72px · default (Q10)</span><span class="badge">DEFAULT</span></div>
+    <div class="miniapp collapsed">
+      <div class="mini-sidebar" style="position:relative">
+        <div class="mini-logo">R</div>
+        <div class="mini-sb-item active"><span class="icon">⌂</span><span class="label">בית</span></div>
+        <div class="mini-sb-item"><span class="icon">▦</span><span class="label">קמפיינים</span></div>
+        <div class="mini-sb-item"><span class="icon">◫</span><span class="label">מוצרים</span></div>
+        <div class="mini-sb-item"><span class="icon">≡</span><span class="label">פירוט</span></div>
+        <div class="mini-sb-item"><span class="icon">⌬</span><span class="label">ניתוח</span></div>
+        <div class="mini-sb-item"><span class="icon">$</span><span class="label">P&amp;L</span></div>
+        <div class="mini-sb-item bottom"><span class="icon">⚙</span><span class="label">תפעול</span></div>
+        <!-- Demo tooltip showing what hover looks like -->
+        <div class="tooltip-demo">קמפיינים<span class="keyboard-hint">⌘2</span></div>
+      </div>
+      <div class="mini-main">
+        <div class="mini-crumb"><b>בית</b></div>
+        <h2 class="mini-h1">בית</h2>
+        <div class="mini-hero-strip">
+          <div class="mini-card green featured"><div class="ml">רווח נטו</div><div class="mv">$4,847</div></div>
+          <div class="mini-card"><div class="ml">הוצאה</div><div class="mv">$3,924</div></div>
+          <div class="mini-card"><div class="ml">הכנסה</div><div class="mv">$10,998</div></div>
+        </div>
+        <div class="mini-store-row" style="margin-top:10px">
+          <div class="mini-store-card blue"><div class="mini-store-name">uzoshop</div><div class="mini-store-roas">3.12</div></div>
+          <div class="mini-store-card blue"><div class="mini-store-name">usmile360</div><div class="mini-store-roas">2.95</div></div>
+          <div class="mini-store-card blue"><div class="mini-store-name">store-3</div><div class="mini-store-roas">3.08</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="width-indicator">
+      <span><b>Sidebar:</b> 72px</span>
+      <span class="pos"><b>Content:</b> 100% – 72px = wider chart / table area</span>
+    </div>
+  </div>
+
+  <!-- RIGHT: Expanded -->
+  <div class="view">
+    <div class="view-head"><span>EXPANDED · 220px · hover/click</span><span class="badge">ON DEMAND</span></div>
+    <div class="miniapp expanded">
+      <div class="mini-sidebar">
+        <div class="mini-logo">R</div>
+        <div class="mini-sb-item active"><span class="icon">⌂</span><span class="label">בית</span></div>
+        <div class="mini-sb-item"><span class="icon">▦</span><span class="label">קמפיינים</span></div>
+        <div class="mini-sb-item"><span class="icon">◫</span><span class="label">מוצרים</span></div>
+        <div class="mini-sb-item"><span class="icon">≡</span><span class="label">פירוט</span></div>
+        <div class="mini-sb-item"><span class="icon">⌬</span><span class="label">ניתוח</span></div>
+        <div class="mini-sb-item"><span class="icon">$</span><span class="label">P&amp;L</span></div>
+        <div class="mini-sb-item bottom"><span class="icon">⚙</span><span class="label">תפעול</span></div>
+      </div>
+      <div class="mini-main">
+        <div class="mini-crumb"><b>בית</b></div>
+        <h2 class="mini-h1">בית</h2>
+        <div class="mini-hero-strip">
+          <div class="mini-card green featured"><div class="ml">רווח נטו</div><div class="mv">$4,847</div></div>
+          <div class="mini-card"><div class="ml">הוצאה</div><div class="mv">$3,924</div></div>
+          <div class="mini-card"><div class="ml">הכנסה</div><div class="mv">$10,998</div></div>
+        </div>
+        <div class="mini-store-row" style="margin-top:10px">
+          <div class="mini-store-card blue"><div class="mini-store-name">uzo</div><div class="mini-store-roas">3.12</div></div>
+          <div class="mini-store-card blue"><div class="mini-store-name">usm</div><div class="mini-store-roas">2.95</div></div>
+          <div class="mini-store-card blue"><div class="mini-store-name">s-3</div><div class="mini-store-roas">3.08</div></div>
+        </div>
+      </div>
+    </div>
+    <div class="width-indicator">
+      <span><b>Sidebar:</b> 220px</span>
+      <span class="neg"><b>Content:</b> 100% – 220px = narrower (~150px less for chart/table)</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- INTERACTION SKETCH -->
+<div class="interaction">
+  <h2>How you switch between them</h2>
+  <div class="timeline">
+    <div class="step">
+      <div class="step-num">STEP 1</div>
+      <div class="step-title">Default load → collapsed</div>
+      <div class="step-desc">72px icon-rail. Active route gets violet accent + edge bar. Tooltip on hover shows label + keyboard shortcut.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">STEP 2</div>
+      <div class="step-title">Hover the sidebar</div>
+      <div class="step-desc">After 200ms hover anywhere on the sidebar, expand to 220px with labels. 200ms ease-out width transition. Click an item to navigate.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">STEP 3</div>
+      <div class="step-title">Pin open (optional)</div>
+      <div class="step-desc">Click a "pin" button in the sidebar footer → expanded state persists across pages. State saved in localStorage so it sticks across sessions.</div>
+    </div>
+    <div class="step">
+      <div class="step-num">STEP 4</div>
+      <div class="step-title">Keyboard ⌘\\ to toggle</div>
+      <div class="step-desc">Power-user shortcut: ⌘\\ toggles between collapsed and pinned-expanded instantly. Same convention as VS Code / Cursor.</div>
+    </div>
+  </div>
+</div>
+
+<!-- DECIDE -->
+<div class="decide">
+  <h2>Sidebar plan locked?</h2>
+  <p>Default: <b>slim 72px icon-rail with hover-to-expand</b>. Pin button persists expansion. ⌘\\ keyboard toggle. Tooltips on hover show label + shortcut for collapsed state. RTL puts the whole rail on the right edge.</p>
+  <div class="choices">
+    <div class="choice"><span class="l">A</span><span class="ct">✅ Approve · final mockup done</span><div class="cd">All 6 mockups validated. Move to revising Phase 1 audit + Phase 2 plan to fold in everything locked.</div></div>
+    <div class="choice"><span class="l">B</span><span class="ct">Change default to expanded</span><div class="cd">Reverse Q10 — expanded is the default, collapse on demand. Means narrower content area for everyone.</div></div>
+    <div class="choice"><span class="l">C</span><span class="ct">Adjust interaction model</span><div class="cd">Hover-to-expand wrong. Maybe click-only? No pin? Different keyboard shortcut? Describe.</div></div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,121 @@
+<h2>Mockup 1 of 6 — Color palette canvas</h2>
+<p class="subtitle">Brand-mirrored chart layer + violet accent + semantic status + neutrals. Light vs dark side-by-side. All OKLCH.</p>
+
+<style>
+  .palette-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0; }
+  .palette-panel { border-radius: 8px; padding: 20px; }
+  .panel-light { background: oklch(99% 0.005 80); color: oklch(20% 0.02 250); border: 1px solid oklch(90% 0.01 250); }
+  .panel-dark { background: oklch(15% 0.012 250); color: oklch(95% 0.008 80); border: 1px solid oklch(28% 0.015 250); }
+  .panel-title { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; opacity: 0.6; margin-bottom: 16px; font-weight: 600; }
+  .swatch-row { display: grid; grid-template-columns: 80px 1fr 90px; gap: 12px; align-items: center; padding: 8px 0; border-bottom: 1px solid currentColor; border-bottom-color: rgba(128,128,128,0.18); font-size: 13px; }
+  .swatch-row:last-child { border-bottom: none; }
+  .swatch { width: 64px; height: 32px; border-radius: 4px; border: 1px solid rgba(128,128,128,0.2); }
+  .swatch-role { font-weight: 600; }
+  .swatch-meta { font-family: 'SF Mono', Consolas, monospace; font-size: 11px; opacity: 0.7; text-align: end; }
+  .section-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; opacity: 0.5; margin: 18px 0 8px; }
+  .section-label:first-child { margin-top: 0; }
+  .note { font-size: 12px; opacity: 0.7; padding: 8px 12px; background: rgba(128,128,128,0.06); border-radius: 6px; margin-top: 6px; }
+</style>
+
+<div class="palette-pair">
+  <!-- LIGHT -->
+  <div class="palette-panel panel-light">
+    <div class="panel-title">☀ Light mode</div>
+
+    <div class="section-label">Brand · single accent</div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(60% 0.20 280)"></div><div class="swatch-role">accent</div><div class="swatch-meta">280 · violet</div></div>
+
+    <div class="section-label">Chart · platform-mirrored</div>
+    <div class="swatch-row"><div class="swatch" style="background:#1877F2"></div><div class="swatch-role">Meta</div><div class="swatch-meta">#1877F2</div></div>
+    <div class="swatch-row"><div class="swatch" style="background:#FBBC04"></div><div class="swatch-role">Google</div><div class="swatch-meta">#FBBC04</div></div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(63% 0.27 12)"></div><div class="swatch-role">TikTok</div><div class="swatch-meta">12 · shifted-pink</div></div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(70% 0.14 175)"></div><div class="swatch-role">Organic</div><div class="swatch-meta">175 · teal</div></div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(55% 0.18 165)"></div><div class="swatch-role">Shopify <span style="opacity:.5;font-weight:400">· category</span></div><div class="swatch-meta">165 · muted-grn</div></div>
+
+    <div class="section-label">Semantic · status</div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(60% 0.18 25)"></div><div class="swatch-role">red</div><div class="swatch-meta">ROAS &lt; 2.0</div></div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(70% 0.16 60)"></div><div class="swatch-role">orange</div><div class="swatch-meta">2.0-2.7</div></div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(60% 0.16 145)"></div><div class="swatch-role">green</div><div class="swatch-meta">2.7-3.0</div></div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(60% 0.14 240)"></div><div class="swatch-role">blue</div><div class="swatch-meta">&gt; 3.0</div></div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(75% 0.02 250)"></div><div class="swatch-role">gray</div><div class="swatch-meta">no data</div></div>
+
+    <div class="section-label">Store · hue scale</div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(58% 0.16 210)"></div><div class="swatch-role">uzoshop</div><div class="swatch-meta">210 · cyan</div></div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(58% 0.18 330)"></div><div class="swatch-role">usmile360</div><div class="swatch-meta">330 · magenta</div></div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(60% 0.14 100)"></div><div class="swatch-role">store-3</div><div class="swatch-meta">100 · lime</div></div>
+
+    <div class="section-label">Surfaces · light</div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(99% 0.005 80)"></div><div class="swatch-role">canvas</div><div class="swatch-meta">L 99</div></div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(100% 0 0)"></div><div class="swatch-role">elev-1</div><div class="swatch-meta">L 100</div></div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(97% 0.005 80)"></div><div class="swatch-role">elev-2</div><div class="swatch-meta">L 97</div></div>
+  </div>
+
+  <!-- DARK -->
+  <div class="palette-panel panel-dark">
+    <div class="panel-title">☾ Dark mode (LCH-mirrored)</div>
+
+    <div class="section-label">Brand · single accent</div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(70% 0.18 280)"></div><div class="swatch-role">accent</div><div class="swatch-meta">280 · L+10</div></div>
+
+    <div class="section-label">Chart · platform-mirrored</div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(65% 0.18 257)"></div><div class="swatch-role">Meta</div><div class="swatch-meta">257 · L lifted</div></div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(82% 0.16 90)"></div><div class="swatch-role">Google</div><div class="swatch-meta">90 · stable</div></div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(70% 0.24 12)"></div><div class="swatch-role">TikTok</div><div class="swatch-meta">12 · L+7</div></div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(75% 0.14 175)"></div><div class="swatch-role">Organic</div><div class="swatch-meta">175 · L+5</div></div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(65% 0.18 165)"></div><div class="swatch-role">Shopify</div><div class="swatch-meta">165 · L+10</div></div>
+
+    <div class="section-label">Semantic · status</div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(68% 0.20 25)"></div><div class="swatch-role">red</div><div class="swatch-meta">L lifted</div></div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(75% 0.18 60)"></div><div class="swatch-role">orange</div><div class="swatch-meta">L lifted</div></div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(68% 0.18 145)"></div><div class="swatch-role">green</div><div class="swatch-meta">L lifted</div></div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(70% 0.16 240)"></div><div class="swatch-role">blue</div><div class="swatch-meta">L lifted</div></div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(55% 0.02 250)"></div><div class="swatch-role">gray</div><div class="swatch-meta">L 55</div></div>
+
+    <div class="section-label">Store · hue scale</div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(68% 0.18 210)"></div><div class="swatch-role">uzoshop</div><div class="swatch-meta">L+10</div></div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(70% 0.20 330)"></div><div class="swatch-role">usmile360</div><div class="swatch-meta">L+12</div></div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(70% 0.16 100)"></div><div class="swatch-role">store-3</div><div class="swatch-meta">L+10</div></div>
+
+    <div class="section-label">Surfaces · dark</div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(15% 0.012 250)"></div><div class="swatch-role">canvas</div><div class="swatch-meta">L 15</div></div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(19% 0.014 250)"></div><div class="swatch-role">elev-1</div><div class="swatch-meta">L 19</div></div>
+    <div class="swatch-row"><div class="swatch" style="background:oklch(23% 0.016 250)"></div><div class="swatch-role">elev-2</div><div class="swatch-meta">L 23</div></div>
+  </div>
+</div>
+
+<div class="note">
+  <strong>How collisions are resolved:</strong> TikTok shifts from brand-pink (#FE2C55, hue ~10) to OKLCH hue 12 + higher chroma, separating it from status-red (hue 25). Shopify becomes a category color (cart-icon prefix + own surface treatment) and never appears as a chart line, so its green doesn't collide with status-green. Accent moves to violet (~280), clear of Meta-blue chart (~257).
+</div>
+
+<h3 style="margin-top:32px">Does this direction work, or should we adjust?</h3>
+
+<div class="options">
+  <div class="option" data-choice="approve" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Approve direction</h3>
+      <p>Colors feel right. Phase 2 picks exact final OKLCH values within these anchor ranges.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="accent-different" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Approve but change accent</h3>
+      <p>Direction good, but want a different accent hue than violet (~280). Specify in chat.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="charts-different" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Reconsider chart palette</h3>
+      <p>Brand-mirrored feels too literal/noisy. Want muted brand-anchored or fully neutral semantic palette instead.</p>
+    </div>
+  </div>
+  <div class="option" data-choice="iterate" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>Iterate — I'll describe what's off</h3>
+      <p>Something else needs adjustment. Will describe in chat.</p>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mockup 5 — Freshness desaturation</title>
+<link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --meta: oklch(70% 0.18 257);
+    --google: oklch(80% 0.15 90);
+    --tiktok: oklch(72% 0.24 12);
+    --accent: oklch(72% 0.20 280);
+    --band-red:    oklch(64% 0.22 22);
+    --band-orange: oklch(78% 0.16 75);
+    --band-green:  oklch(70% 0.18 145);
+    --band-blue:   oklch(68% 0.16 240);
+    --store-uzo: oklch(72% 0.16 210);
+    --store-usm: oklch(72% 0.18 330);
+    --store-3: oklch(70% 0.16 100);
+    --canvas-1: oklch(13% 0.020 270);
+    --canvas-2: oklch(11% 0.025 280);
+    --glass-1: oklch(100% 0 0 / 0.04);
+    --glass-2: oklch(100% 0 0 / 0.06);
+    --glass-edge: oklch(100% 0 0 / 0.12);
+    --glass-edge-hot: oklch(72% 0.20 280 / 0.4);
+    --text: oklch(98% 0.008 80);
+    --text-2: oklch(82% 0.012 250);
+    --text-muted: oklch(64% 0.018 250);
+    --text-subtle: oklch(48% 0.020 250);
+  }
+  * { box-sizing: border-box; min-width: 0; }
+  html,body { margin:0; padding:0; min-height:100vh; }
+  body {
+    font-family: 'Inter','Heebo',system-ui,sans-serif;
+    font-feature-settings: 'cv11','ss01','ss03';
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    font-size: 13px; line-height: 1.45;
+    background:
+      radial-gradient(ellipse at 0% 0%, oklch(45% 0.22 280 / 0.25) 0%, transparent 50%),
+      radial-gradient(ellipse at 100% 0%, oklch(40% 0.20 257 / 0.20) 0%, transparent 50%),
+      linear-gradient(180deg, var(--canvas-1) 0%, var(--canvas-2) 100%);
+    background-attachment: fixed; min-height: 100vh; padding: 32px 36px;
+  }
+  .num { font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .mono { font-family: 'Geist Mono', ui-monospace, monospace; }
+  h1 { font-family: 'Heebo','Inter'; font-size: 24px; font-weight: 800; letter-spacing: -0.024em; margin: 0 0 6px; }
+  .sub { color: var(--text-muted); font-size: 13.5px; margin: 0 0 16px; }
+
+  /* Threshold rules strip */
+  .rules-strip {
+    display: flex; gap: 14px; flex-wrap: wrap;
+    padding: 12px 16px; background: var(--glass-1); border: 1px solid var(--glass-edge);
+    border-radius: 10px; margin-bottom: 24px; font-size: 12px;
+  }
+  .rules-strip .stage {
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .rules-strip .dot { width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
+  .rules-strip b { color: var(--text); font-weight: 600; }
+  .rules-strip .when { font-family: 'Geist Mono'; color: var(--text-subtle); font-size: 11px; }
+  .rules-strip .sep { opacity: 0.4; }
+  .stage.fresh { color: var(--band-green); }
+  .stage.aging { color: var(--band-orange); }
+  .stage.stale { color: var(--band-red); }
+
+  .sec { margin-bottom: 28px; }
+  .sec-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
+  .sec-eyebrow { font-family: 'Geist Mono'; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.12em; color: var(--text-subtle); font-weight: 600; }
+  .sec-title { font-size: 14px; font-weight: 600; color: var(--text-2); }
+
+  /* Glass + band */
+  .glass {
+    background: linear-gradient(180deg, var(--glass-2) 0%, var(--glass-1) 100%);
+    backdrop-filter: blur(20px) saturate(140%);
+    border: 1px solid var(--glass-edge);
+    border-radius: 14px;
+    box-shadow: 0 1px 0 0 oklch(100% 0 0 / 0.07) inset, 0 12px 24px -10px oklch(0% 0 0 / 0.35);
+    position: relative;
+    transition: filter 600ms ease-out, opacity 600ms ease-out;
+  }
+  .glass[data-band]::before {
+    content: ''; position: absolute; inset-block-start: 0; inset-inline: 0; height: 3px;
+    border-start-start-radius: 14px; border-start-end-radius: 14px; pointer-events: none;
+    transition: opacity 600ms ease-out, filter 600ms ease-out;
+  }
+  .glass[data-band="green"]  { background: oklch(70% 0.18 145 / 0.05); }
+  .glass[data-band="green"]::before  { background: var(--band-green);  box-shadow: 0 0 14px oklch(70% 0.18 145 / 0.5); }
+  .glass[data-band="blue"]   { background: oklch(68% 0.16 240 / 0.05); }
+  .glass[data-band="blue"]::before   { background: var(--band-blue);   box-shadow: 0 0 14px oklch(68% 0.16 240 / 0.5); }
+
+  /* ============================================
+     FRESHNESS STATES — visual desaturation
+     fresh   = 100% chroma (no filter)
+     aging   = 60% chroma + 0.85 opacity (15-30 min old)
+     stale   = 30% chroma + 0.7 opacity  (>30 min old, per Q2 aggressive)
+     ============================================ */
+  .freshness-fresh {
+    filter: none;
+    opacity: 1;
+  }
+  .freshness-aging {
+    filter: saturate(0.60);
+    opacity: 0.92;
+  }
+  .freshness-aging::before { opacity: 0.6 !important; filter: saturate(0.60); }
+  .freshness-stale {
+    filter: saturate(0.30) brightness(0.95);
+    opacity: 0.80;
+  }
+  .freshness-stale::before { opacity: 0.3 !important; filter: saturate(0.30); }
+
+  .band-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.06em; font-family: 'Geist Mono'; white-space: nowrap; }
+  .chip-green { background: oklch(70% 0.18 145 / 0.18); color: var(--band-green); }
+  .chip-blue  { background: oklch(68% 0.16 240 / 0.18); color: var(--band-blue); }
+
+  /* Freshness chip — sits in card header */
+  .fresh-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px;
+    font-family: 'Geist Mono'; text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .fresh-chip .pulse {
+    width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 6px currentColor;
+  }
+  .fresh-chip.live { background: oklch(70% 0.18 145 / 0.18); color: var(--band-green); }
+  .fresh-chip.aging { background: oklch(78% 0.16 75 / 0.18); color: var(--band-orange); }
+  .fresh-chip.stale { background: oklch(64% 0.22 22 / 0.18); color: var(--band-red); }
+  .fresh-chip.live .pulse { animation: pulse 2s ease-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; transform: scale(1) } 50% { opacity: 0.5; transform: scale(0.85) } }
+
+  /* Store card (simplified, focused on freshness demo) */
+  .store-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .scard { padding: 18px 20px 18px; cursor: pointer; }
+  .scard-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; gap: 8px; }
+  .scard-name { font-family: 'Geist Mono'; font-size: 14px; font-weight: 600; }
+  .uzo .scard-name { color: var(--store-uzo); }
+  .usm .scard-name { color: var(--store-usm); }
+  .s3 .scard-name { color: var(--store-3); }
+
+  .scard-roas-block { display: flex; align-items: baseline; gap: 12px; margin: 8px 0 12px; }
+  .scard-roas-block .v { font-family: 'Heebo'; font-size: 38px; font-weight: 800; letter-spacing: -0.025em; line-height: 1; font-variant-numeric: tabular-nums; }
+  .scard-roas-block .label { font-size: 10.5px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .glass[data-band="blue"]  .scard-roas-block .v { color: var(--band-blue); }
+  .glass[data-band="green"] .scard-roas-block .v { color: var(--band-green); }
+
+  .scard-meta-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding-top: 12px; border-top: 1px solid oklch(100% 0 0 / 0.06);
+    font-size: 11.5px;
+  }
+  .scard-meta-row .last-tick { color: var(--text-muted); font-family: 'Geist Mono'; }
+  .scard-meta-row .last-tick b { color: var(--text-2); }
+
+  /* Stage label above each card */
+  .stage-label {
+    font-family: 'Geist Mono'; font-size: 10.5px; text-transform: uppercase;
+    letter-spacing: 0.10em; font-weight: 700;
+    padding: 4px 10px; border-radius: 4px;
+    margin-bottom: 8px; display: inline-block;
+  }
+  .stage-label.fresh { background: oklch(70% 0.18 145 / 0.15); color: var(--band-green); }
+  .stage-label.aging { background: oklch(78% 0.16 75 / 0.15); color: var(--band-orange); }
+  .stage-label.stale { background: oklch(64% 0.22 22 / 0.15); color: var(--band-red); }
+  .stage-meta { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
+
+  /* Decide */
+  .decide { padding: 18px 22px; border-radius: 12px; margin-top: 28px; border: 1px solid var(--glass-edge-hot); background: linear-gradient(180deg, oklch(100% 0 0 / 0.05) 0%, oklch(72% 0.20 280 / 0.05) 100%); backdrop-filter: blur(16px); }
+  .decide h2 { font-size: 15px; margin: 0 0 6px; }
+  .decide p { color: var(--text-muted); margin: 0 0 14px; font-size: 12px; line-height: 1.55; }
+  .choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .choice { padding: 11px 13px; background: oklch(100% 0 0 / 0.06); border: 1px solid var(--glass-edge); border-radius: 8px; cursor: pointer; transition: all 120ms; }
+  .choice:hover { border-color: var(--glass-edge-hot); transform: translateY(-1px); }
+  .choice .l { display: inline-block; background: linear-gradient(135deg, oklch(72% 0.22 280), oklch(58% 0.22 285)); color: white; font-family: 'Geist Mono'; font-size: 10px; padding: 1px 5px; border-radius: 3px; font-weight: 700; margin-inline-end: 6px; }
+  .choice .ct { font-size: 12px; font-weight: 600; }
+  .choice .cd { color: var(--text-muted); font-size: 11px; margin-top: 3px; line-height: 1.4; }
+</style>
+</head>
+<body>
+
+<h1>Freshness desaturation · stale cards lose their color signal</h1>
+<div class="sub">Per Q2 (aggressive): when data is &gt; 30 min old, card desaturates to 30% chroma. Mid stage 15–30 min = 60% chroma. The shape of the signal stays — you still see the V4 top bar + band chip + ROAS number — but the saturation drops so fresh cards visually dominate.</div>
+
+<div class="rules-strip">
+  <span class="stage fresh"><span class="dot"></span><b>Fresh</b><span class="when">&lt; 15 min</span></span>
+  <span class="sep">·</span>
+  <span class="stage aging"><span class="dot"></span><b>Aging</b><span class="when">15–30 min</span></span>
+  <span class="sep">·</span>
+  <span class="stage stale"><span class="dot"></span><b>Stale</b><span class="when">&gt; 30 min</span></span>
+  <span class="sep">·</span>
+  <span style="color:var(--text-muted)"><b>filter</b> goes from <code>saturate(1.0)</code> → <code>saturate(0.60)</code> → <code>saturate(0.30)</code></span>
+</div>
+
+<!-- LIVE ROW — all fresh -->
+<div class="sec">
+  <div class="sec-h"><span class="sec-eyebrow">comparison</span><span class="sec-title">same 3 cards · 3 freshness states</span></div>
+
+  <div style="margin-bottom: 18px">
+    <div class="stage-label fresh">● Fresh · live</div>
+    <div class="stage-meta">All 3 cards just updated. Full color saturation. Band signal sharp.</div>
+    <div class="store-row">
+      <div class="glass scard uzo freshness-fresh" data-band="blue">
+        <div class="scard-head"><span class="scard-name">uzoshop</span><span class="fresh-chip live"><span class="pulse"></span>LIVE · 8s</span></div>
+        <div class="scard-roas-block"><span class="v num">3.12</span><span class="label">ROAS היום</span></div>
+        <div class="scard-meta-row"><span class="last-tick">last tick · <b>8 שניות</b></span><span class="band-chip chip-blue">▴ &gt; 3.0</span></div>
+      </div>
+      <div class="glass scard usm freshness-fresh" data-band="green">
+        <div class="scard-head"><span class="scard-name">usmile360</span><span class="fresh-chip live"><span class="pulse"></span>LIVE · 14s</span></div>
+        <div class="scard-roas-block"><span class="v num">2.95</span><span class="label">ROAS היום</span></div>
+        <div class="scard-meta-row"><span class="last-tick">last tick · <b>14 שניות</b></span><span class="band-chip chip-green">▴ 2.7-3.0</span></div>
+      </div>
+      <div class="glass scard s3 freshness-fresh" data-band="blue">
+        <div class="scard-head"><span class="scard-name">store-3</span><span class="fresh-chip live"><span class="pulse"></span>LIVE · 22s</span></div>
+        <div class="scard-roas-block"><span class="v num">3.08</span><span class="label">ROAS היום</span></div>
+        <div class="scard-meta-row"><span class="last-tick">last tick · <b>22 שניות</b></span><span class="band-chip chip-blue">▴ &gt; 3.0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-bottom: 18px">
+    <div class="stage-label aging">● Aging · 15–30 min</div>
+    <div class="stage-meta">Worker hasn't run for ~22 min. Color drops to 60% saturation — you sense the cards are less alive but still readable.</div>
+    <div class="store-row">
+      <div class="glass scard uzo freshness-aging" data-band="blue">
+        <div class="scard-head"><span class="scard-name">uzoshop</span><span class="fresh-chip aging">AGING · 22min</span></div>
+        <div class="scard-roas-block"><span class="v num">3.12</span><span class="label">ROAS</span></div>
+        <div class="scard-meta-row"><span class="last-tick">last tick · <b>22 דק׳</b></span><span class="band-chip chip-blue">▴ &gt; 3.0</span></div>
+      </div>
+      <div class="glass scard usm freshness-aging" data-band="green">
+        <div class="scard-head"><span class="scard-name">usmile360</span><span class="fresh-chip aging">AGING · 18min</span></div>
+        <div class="scard-roas-block"><span class="v num">2.95</span><span class="label">ROAS</span></div>
+        <div class="scard-meta-row"><span class="last-tick">last tick · <b>18 דק׳</b></span><span class="band-chip chip-green">▴ 2.7-3.0</span></div>
+      </div>
+      <div class="glass scard s3 freshness-aging" data-band="blue">
+        <div class="scard-head"><span class="scard-name">store-3</span><span class="fresh-chip aging">AGING · 28min</span></div>
+        <div class="scard-roas-block"><span class="v num">3.08</span><span class="label">ROAS</span></div>
+        <div class="scard-meta-row"><span class="last-tick">last tick · <b>28 דק׳</b></span><span class="band-chip chip-blue">▴ &gt; 3.0</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="stage-label stale">● Stale · &gt; 30 min</div>
+    <div class="stage-meta">Worker stuck or pipeline broken. Cards drop to 30% saturation + 80% opacity. Across the room you can immediately tell something needs attention.</div>
+    <div class="store-row">
+      <div class="glass scard uzo freshness-stale" data-band="blue">
+        <div class="scard-head"><span class="scard-name">uzoshop</span><span class="fresh-chip stale">STALE · 47min</span></div>
+        <div class="scard-roas-block"><span class="v num">3.12</span><span class="label">ROAS</span></div>
+        <div class="scard-meta-row"><span class="last-tick">last tick · <b>47 דק׳</b></span><span class="band-chip chip-blue">▴ &gt; 3.0</span></div>
+      </div>
+      <div class="glass scard usm freshness-stale" data-band="green">
+        <div class="scard-head"><span class="scard-name">usmile360</span><span class="fresh-chip stale">STALE · 1h 12m</span></div>
+        <div class="scard-roas-block"><span class="v num">2.95</span><span class="label">ROAS</span></div>
+        <div class="scard-meta-row"><span class="last-tick">last tick · <b>1ש 12דק׳</b></span><span class="band-chip chip-green">▴ 2.7-3.0</span></div>
+      </div>
+      <div class="glass scard s3 freshness-stale" data-band="blue">
+        <div class="scard-head"><span class="scard-name">store-3</span><span class="fresh-chip stale">STALE · 2h 4m</span></div>
+        <div class="scard-roas-block"><span class="v num">3.08</span><span class="label">ROAS</span></div>
+        <div class="scard-meta-row"><span class="last-tick">last tick · <b>2ש 4דק׳</b></span><span class="band-chip chip-blue">▴ &gt; 3.0</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MIXED ROW — realistic scenario -->
+<div class="sec">
+  <div class="sec-h"><span class="sec-eyebrow">scenario</span><span class="sec-title">realistic mix · 1 live · 1 aging · 1 stuck</span></div>
+  <div class="store-row">
+    <div class="glass scard uzo freshness-fresh" data-band="blue">
+      <div class="scard-head"><span class="scard-name">uzoshop</span><span class="fresh-chip live"><span class="pulse"></span>LIVE · 6s</span></div>
+      <div class="scard-roas-block"><span class="v num">3.12</span><span class="label">ROAS היום</span></div>
+      <div class="scard-meta-row"><span class="last-tick">all workers · healthy</span><span class="band-chip chip-blue">▴ &gt; 3.0</span></div>
+    </div>
+    <div class="glass scard usm freshness-aging" data-band="green">
+      <div class="scard-head"><span class="scard-name">usmile360</span><span class="fresh-chip aging">TikTok aging · 24min</span></div>
+      <div class="scard-roas-block"><span class="v num">2.95</span><span class="label">ROAS היום</span></div>
+      <div class="scard-meta-row"><span class="last-tick">last tt tick · 24 דק׳</span><span class="band-chip chip-green">▴ 2.7-3.0</span></div>
+    </div>
+    <div class="glass scard s3 freshness-stale" data-band="blue">
+      <div class="scard-head"><span class="scard-name">store-3</span><span class="fresh-chip stale">Google stuck · 1h 47m</span></div>
+      <div class="scard-roas-block"><span class="v num">3.08</span><span class="label">ROAS</span></div>
+      <div class="scard-meta-row"><span class="last-tick">last go tick · 1ש 47דק׳ · check /operator</span><span class="band-chip chip-blue">▴ &gt; 3.0</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="decide">
+  <h2>Freshness desaturation right?</h2>
+  <p>Three discrete stages (fresh / aging / stale) mapped to three CSS filter values (saturate 1.0 / 0.60 / 0.30). The V4 band signal (top bar + number color + chip) all desaturate together, so the SHAPE of the signal is preserved — you can still read ROAS, you can still see the band — but the visual energy drops dramatically. Fresh cards visually dominate; stale ones quietly fade.</p>
+  <div class="choices">
+    <div class="choice"><span class="l">A</span><span class="ct">✅ Approve</span><div class="cd">Three stages right. Mockup 6 (sidebar slim vs expanded) next.</div></div>
+    <div class="choice"><span class="l">B</span><span class="ct">Adjust thresholds</span><div class="cd">15min / 30min wrong. Tell me the right thresholds.</div></div>
+    <div class="choice"><span class="l">C</span><span class="ct">Adjust visual intensity</span><div class="cd">Aging too subtle or stale too dim. Describe.</div></div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -23,6 +23,33 @@ Headline findings:
 
 ---
 
+## DIRECTION REVISED 2026-05-31 (post mockup pass)
+
+After this audit was first written the user ran a 10-mockup visual brainstorm and **reversed the surface aesthetic** locked here. The original "Linear/Vercel hairline-flat editorial" target was replaced with **glass + neon (Vision UI tier)** — gradient surfaces with `backdrop-filter: blur(20px) saturate(140%)`, neon edge glows, an animated conic-gradient page background that rotates over 60s, and a deep blue-violet canvas (`oklch(13% 0.020 270)` → `oklch(11% 0.025 280)`). All work is now dark-mode only; light mode is no longer a target.
+
+Five additional decisions were also locked during the mockup pass:
+
+1. **V4 band signal** ([[roas-state-gradient]] mockup 4f) — every state-bearing card carries `data-band="red|orange|green|blue|gray"`. The attribute triggers (i) a 3px top-edge bar via `::before` (matched to the card's radius via `border-start-start-radius` / `border-start-end-radius`) with a glow `box-shadow`, (ii) a subtle ~5% chroma background tint, (iii) the focal `<span class="v banded">` element (the ROAS number) takes the band color via `color` / `-webkit-text-fill-color`, (iv) a small text chip restates the band. Hue separation locked: red `h22`, orange `h75` (53° apart), green `h145`, blue `h240`.
+2. **Per-store semantic emphasis** ([[home-visual-rules]] mockup 4i) — Spend cell always semantic-red with prepended `↓` glyph in label; Revenue always semantic-green with `↑`; AOV conditional (`> $70 CAD` green `▴`, `< $50` red `▾`, mid neutral); Orders neutral; **CPM cells are explicitly never colored by value — always white.**
+3. **ROAS-vs-target chart section** ([[home-visual-rules]] mockup 4h) — full-width glass card placed AFTER the per-store row (per the locked Home section order). Carries: authoritative-Hebrew TL;DR sentence, compact 5-up KPI strip (Revenue / ROAS / Spend / Net / CPM), dashed target line at 3.0, daily ROAS line with hover dots, annotation pins (💰) with **hover-only and click-only tooltips** (never always-visible), prev-period footer comparison, and **its own date-range picker** in the section header (right side) with presets 7/30/90/MTD/QTD/YTD/custom — independent of the page-level range tabs.
+4. **Freshness 3-stage desaturation** ([[freshness-desaturation-thresholds]] mockup 5) — `data-freshness="fresh|aging|stale"` triggers `filter: saturate(1.0/0.60/0.30)` + `opacity: 1.0/0.92/0.80` with `transition: filter 600ms ease-out, opacity 600ms ease-out`. Thresholds: 15min boundary for `aging`, 30min for `stale`. Chip in card header shows label + age ("LIVE · 8s" / "AGING · 22min" / "STALE · 47min").
+5. **Slim 72px icon-rail sidebar** ([[phase1-audit-decisions-2026-05-31]] Q10 / mockup 6) — collapsed default, hover-to-expand to 220px after a 200ms delay, pin button in footer persists expansion via localStorage `sidebar:pinned`, `⌘\\` keyboard shortcut toggles between collapsed and pinned-expanded. Collapsed-hover tooltip shows label + keyboard shortcut. Width transitions at `200ms ease-out`.
+
+**Visual reference:** see the mockup set in `docs/superpowers/mockups/2026-05-31-visual-direction/` (start at `README.md`). The HTML files contain the exact CSS — token values, gradient stops, box-shadow stacks, glass blur strengths, band rules — that Phase 3 / Wave 1 must adopt verbatim.
+
+**What is superseded:** §1 "Inspiration & Direction" anti-patterns (no glass / no neon / no mesh gradient) and §4 "Unified Visual Direction — Elevation & surfaces" (hairline borders, no shadows) no longer reflect the user's choice. §1 also referenced Linear/Vercel/Stripe/PostHog as targets — the right reference set is now Vision UI Dashboard (Creative Tim) + the gradient-heavy premium templates the user saw on Figma. The §4 typography ramp, the LCH theming idea (limited to the foreground stack), per-card freshness, and the in-place-drawer drill-down all stand.
+
+**What still stands** from the audit and the 10 locked decisions:
+- The 10 base decisions in [[phase1-audit-decisions-2026-05-31]]: brand-mirrored chart palette / violet accent / Shopify as category / slim sidebar / aggressive stale fade / authoritative Hebrew TL;DR / drawer + Ads-Manager deep-link / GoalTracker on P&L / Playwright CI / drawer hard cut.
+- All §2 current-state findings (legacy palette, primitive non-adoption, 7 color collisions, 6 RTL bugs, primitive coherence gaps).
+- The §5 **Prioritized Recommendations table** still stands — the *what* of the work is unchanged; only the *surface aesthetic* changed. P0/P1 items map cleanly to the v2 plan tasks.
+- Wave 2 primitive enforcement (only the visual treatment is glass+neon instead of hairline-flat).
+- Wave 4 RTL/bidi sweep.
+
+**Executable artifact for Phase 3** is the v2 plan at `docs/superpowers/plans/2026-05-31-premium-dashboard-redesign.md`, not this audit. This document is now a historical record + an inventory of what to fix. Always cross-reference the five memory files listed above for the load-bearing details before touching tokens or component visuals.
+
+---
+
 # 1. Inspiration & Direction
 
 ## The patterns we will adopt
