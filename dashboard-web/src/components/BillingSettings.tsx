@@ -30,6 +30,7 @@ import { useBillingRecurring } from '@/lib/hooks/useBillingRecurring';
 import { useBillingOneTime } from '@/lib/hooks/useBillingOneTime';
 import { useDrawerEsc } from '@/lib/drawerStack';
 import { Sheet, SheetContent, SheetHeader, SheetBody, SheetTitle } from '@/components/ui/Sheet';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 import { BillingCsvImport } from './BillingCsvImport';
 
 type StoreMetaRow = {
@@ -541,13 +542,14 @@ function RecurringTab({
                 />
               ) : (
                 <div className="flex items-center gap-3 p-3">
-                  <input
-                    type="checkbox"
-                    checked={r.active}
-                    onChange={e => update(r.id, { active: e.target.checked })}
-                    className="w-4 h-4 rounded text-accent cursor-pointer"
-                    title={r.active ? 'פעיל' : 'מושעה'}
-                  />
+                  <HelpTooltip content={r.active ? 'פעיל' : 'מושעה'}>
+                    <input
+                      type="checkbox"
+                      checked={r.active}
+                      onChange={e => update(r.id, { active: e.target.checked })}
+                      className="w-4 h-4 rounded text-accent cursor-pointer"
+                    />
+                  </HelpTooltip>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-medium text-ink">

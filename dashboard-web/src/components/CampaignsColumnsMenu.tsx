@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, Columns3, RotateCcw, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 import {
   CAMPAIGNS_COLUMNS,
   REORDERABLE_COLUMN_IDS,
@@ -198,28 +199,29 @@ export function CampaignsColumnsMenu({
                 const canDown = isReorderable && idx < lastReord;
                 return (
                   <li key={col.id} className="flex items-stretch gap-1">
-                    <label
-                      className={cn(
-                        'flex items-start gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors flex-1 min-w-0',
-                        'hover:bg-glass-2',
-                      )}
-                      title={col.description ?? ''}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={!isHidden}
-                        onChange={() => toggle(col.id)}
-                        className="mt-0.5 shrink-0"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="text-xs text-ink">{col.label}</div>
-                        {col.description && (
-                          <div className="text-[10px] text-ink-muted leading-snug">
-                            {col.description}
-                          </div>
+                    <HelpTooltip content={col.description ?? ''}>
+                      <label
+                        className={cn(
+                          'flex items-start gap-2 px-2 py-1.5 rounded-md cursor-pointer transition-colors flex-1 min-w-0',
+                          'hover:bg-glass-2',
                         )}
-                      </div>
-                    </label>
+                      >
+                        <input
+                          type="checkbox"
+                          checked={!isHidden}
+                          onChange={() => toggle(col.id)}
+                          className="mt-0.5 shrink-0"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-xs text-ink">{col.label}</div>
+                          {col.description && (
+                            <div className="text-[10px] text-ink-muted leading-snug">
+                              {col.description}
+                            </div>
+                          )}
+                        </div>
+                      </label>
+                    </HelpTooltip>
                     {/* Phase 05.7.x — up/down chevrons for reorderable
                         metric columns. Structural columns (optimized, etc.)
                         get no controls; their slot stays empty so the row

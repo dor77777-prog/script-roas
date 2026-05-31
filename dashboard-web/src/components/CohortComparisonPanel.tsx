@@ -29,6 +29,7 @@
 import { Trophy, AlertCircle, Equal, Package, TrendingDown } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { TableBase } from '@/components/ui/TableBase';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 import type { CohortMember, MultiMappingCohort } from '@/lib/multiMappingCohort';
 import type { CannibalizationVerdict } from '@/lib/cannibalizationDetection';
 
@@ -121,17 +122,18 @@ function StatusBadge({ status }: { status: string | null }) {
     status === 'ENABLED' ||
     status === 'ADGROUP_STATUS_DELIVERY_OK';
   return (
-    <span
-      className={cn(
-        'inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium border',
-        isActive
-          ? 'bg-status-greenBg/40 text-status-green border-status-green/30'
-          : 'bg-glass-2 text-ink-muted border-glass-edge',
-      )}
-      title={status}
-    >
-      {isActive ? 'פעיל' : 'כבוי'}
-    </span>
+    <HelpTooltip content={status}>
+      <span
+        className={cn(
+          'inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-medium border',
+          isActive
+            ? 'bg-status-greenBg/40 text-status-green border-status-green/30'
+            : 'bg-glass-2 text-ink-muted border-glass-edge',
+        )}
+      >
+        {isActive ? 'פעיל' : 'כבוי'}
+      </span>
+    </HelpTooltip>
   );
 }
 
@@ -164,15 +166,16 @@ function MemberRow({ member, rank, isCurrent, onDrill }: MemberRowProps) {
           )}
         </span>
       </td>
-      <td
-        className={cn(
-          'px-2 py-1.5 text-xs max-w-[200px] truncate',
-          isCurrent ? 'text-ink' : 'text-ink-secondary',
-        )}
-        title={member.campaignName}
-      >
-        {member.campaignName}
-      </td>
+      <HelpTooltip content={member.campaignName}>
+        <td
+          className={cn(
+            'px-2 py-1.5 text-xs max-w-[200px] truncate',
+            isCurrent ? 'text-ink' : 'text-ink-secondary',
+          )}
+        >
+          {member.campaignName}
+        </td>
+      </HelpTooltip>
       <td className="px-2 py-1.5 text-xs text-ink-muted tabular-nums">
         {member.sharedProductIds.length}
       </td>
@@ -345,22 +348,8 @@ export function CohortComparisonPanel({
         {/* Overall ranking chip in the header — quick visual answer to
             "where do I stand?" without scrolling. */}
         {intraCount >= 2 && cohort.intraPlatformOthers.length > 0 && (
-          <span
-            className={cn(
-              'inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold shrink-0 border',
-              currentRankIntra === 1
-                ? 'bg-status-greenBg/60 text-status-green border-status-green/30'
-                // Audit fix 2026-05-23 (HIGH-02 multi-mapping): only paint
-                // the loud red "weakest" tone when the cohort is large
-                // enough for the verdict to mean something (>= 3 members).
-                // For a 2-cohort the loser is automatically "weakest" by
-                // construction — not actionable signal. Matches the
-                // floor in `applyCohortAdjustmentOnce`.
-                : intraCount >= 3 && currentRankIntra === intraCount
-                  ? 'bg-status-redBg/60 text-status-red border-status-red/30'
-                  : 'bg-status-warningBg text-status-warningFg border-status-warning/30',
-            )}
-            title={
+          <HelpTooltip
+            content={
               currentRankIntra === 1
                 ? 'אתה מוביל בקבוצת המיפוי באותה פלטפורמה'
                 : intraCount >= 3 && currentRankIntra === intraCount
@@ -368,9 +357,26 @@ export function CohortComparisonPanel({
                   : 'אתה במיפוי משותף — דירוג בלבד'
             }
           >
-            <MedalIcon rank={currentRankIntra} />
-            במקום {currentRankIntra} מתוך {intraCount}
-          </span>
+            <span
+              className={cn(
+                'inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold shrink-0 border',
+                currentRankIntra === 1
+                  ? 'bg-status-greenBg/60 text-status-green border-status-green/30'
+                  // Audit fix 2026-05-23 (HIGH-02 multi-mapping): only paint
+                  // the loud red "weakest" tone when the cohort is large
+                  // enough for the verdict to mean something (>= 3 members).
+                  // For a 2-cohort the loser is automatically "weakest" by
+                  // construction — not actionable signal. Matches the
+                  // floor in `applyCohortAdjustmentOnce`.
+                  : intraCount >= 3 && currentRankIntra === intraCount
+                    ? 'bg-status-redBg/60 text-status-red border-status-red/30'
+                    : 'bg-status-warningBg text-status-warningFg border-status-warning/30',
+              )}
+            >
+              <MedalIcon rank={currentRankIntra} />
+              במקום {currentRankIntra} מתוך {intraCount}
+            </span>
+          </HelpTooltip>
         )}
       </div>
 

@@ -7,6 +7,7 @@ import { roasLabel, type StoreAgg } from '@/lib/analytics';
 import { storeHasTikTok } from '@/lib/platformsByStore';
 import { storeColor } from '@/lib/storeColors';
 import { Card } from '@/components/ui/Card';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 
 function colorFor(name: string, idx: number) {
   return storeColor(name, idx);
@@ -119,20 +120,18 @@ function StoreCard({
       >
         <span className="truncate">🏪 <bdi dir="ltr">{agg.store}</bdi></span>
         {isTop && (
-          <span
-            className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold bg-white/20 backdrop-blur-sm px-1.5 py-0.5 rounded"
-            title="חנות מובילה ב-ROAS"
-          >
-            <Trophy size={12} /> מובילה
-          </span>
+          <HelpTooltip content="חנות מובילה ב-ROAS">
+            <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold bg-white/20 backdrop-blur-sm px-1.5 py-0.5 rounded">
+              <Trophy size={12} /> מובילה
+            </span>
+          </HelpTooltip>
         )}
         {isRisky && !isTop && (
-          <span
-            className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold bg-white/20 backdrop-blur-sm px-1.5 py-0.5 rounded"
-            title="ROAS נמוך — דורש בחינה"
-          >
-            <AlertTriangle size={12} /> בחינה
-          </span>
+          <HelpTooltip content="ROAS נמוך — דורש בחינה">
+            <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold bg-white/20 backdrop-blur-sm px-1.5 py-0.5 rounded">
+              <AlertTriangle size={12} /> בחינה
+            </span>
+          </HelpTooltip>
         )}
       </div>
       <div className="p-4 sm:p-5 space-y-3">

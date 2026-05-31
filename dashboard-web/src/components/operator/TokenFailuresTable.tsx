@@ -25,6 +25,7 @@ import type {
 import { operatorFetch } from '@/lib/operatorClient';
 import { Button } from '@/components/ui/Button';
 import { TableBase } from '@/components/ui/TableBase';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 
 const ENDPOINT = '/api/operator/token-failures';
 
@@ -205,9 +206,11 @@ export function TokenFailuresTable() {
                       {STORE_LABEL[row.storeId] ?? row.storeId}
                     </td>
                     <td className="px-3 py-1.5 font-mono text-2xs">{row.operation}</td>
-                    <td className="px-3 py-1.5" title={row.resolvedAt ?? ''}>
-                      תוקן {formatRelative(row.resolvedAt ?? row.lastSeenAt)}
-                    </td>
+                    <HelpTooltip content={row.resolvedAt ?? ''}>
+                      <td className="px-3 py-1.5">
+                        תוקן {formatRelative(row.resolvedAt ?? row.lastSeenAt)}
+                      </td>
+                    </HelpTooltip>
                   </tr>
                 ))}
               </tbody>
@@ -250,9 +253,11 @@ function FailureRowFragment({
         </td>
         <td className="px-3 py-2">{STORE_LABEL[row.storeId] ?? row.storeId}</td>
         <td className="px-3 py-2 font-mono text-2xs">{row.operation}</td>
-        <td className="px-3 py-2 text-ink-secondary" title={row.lastSeenAt}>
-          {formatRelative(row.lastSeenAt)}
-        </td>
+        <HelpTooltip content={row.lastSeenAt}>
+          <td className="px-3 py-2 text-ink-secondary">
+            {formatRelative(row.lastSeenAt)}
+          </td>
+        </HelpTooltip>
         <td className="px-3 py-2 text-end tabular-nums">{row.seenCount}</td>
         <td className="px-3 py-2 text-end tabular-nums">{row.alertsSentCount}</td>
         <td className="px-3 py-2 text-end">

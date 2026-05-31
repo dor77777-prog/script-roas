@@ -4,6 +4,8 @@
 // last_live_tick_at from campaigns_daily. Green if <15 min, yellow
 // if 15-60, gray if >60 min or null.
 
+import { HelpTooltip } from '@/components/ui/Tooltip';
+
 export type CampaignFreshnessChipProps = {
   lastLiveTickAt: string | null | undefined;
 };
@@ -19,9 +21,11 @@ export function CampaignFreshnessChip({ lastLiveTickAt }: CampaignFreshnessChipP
   const min = lastLiveTickAt ? Math.floor((Date.now() - new Date(lastLiveTickAt).getTime()) / 60_000) : null;
   const { dot, label } = colorForMinutes(min);
   return (
-    <span className="inline-flex items-center gap-1.5 text-xs text-ink-secondary" title={lastLiveTickAt ?? 'no live tick'}>
-      <span className={`size-1.5 rounded-full ${dot}`} />
-      {label}
-    </span>
+    <HelpTooltip content={lastLiveTickAt ?? 'no live tick'}>
+      <span className="inline-flex items-center gap-1.5 text-xs text-ink-secondary">
+        <span className={`size-1.5 rounded-full ${dot}`} />
+        {label}
+      </span>
+    </HelpTooltip>
   );
 }

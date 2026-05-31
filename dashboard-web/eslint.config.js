@@ -29,6 +29,7 @@ import noHexColorInComponents from './eslint-rules/no-hex-color-in-components.js
 import noLegacyTailwindClass from './eslint-rules/no-legacy-tailwind-class.js';
 import noCrossPaletteImport from './eslint-rules/no-cross-palette-import.js';
 import noRawTableInComponents from './eslint-rules/no-raw-table-in-components.js';
+import noNativeTitleTooltip from './eslint-rules/no-native-title-tooltip.js';
 
 // Local plugin — bundles the design-system regression guards.
 const localPlugin = {
@@ -39,6 +40,7 @@ const localPlugin = {
     'no-legacy-tailwind-class': noLegacyTailwindClass,
     'no-cross-palette-import': noCrossPaletteImport,
     'no-raw-table-in-components': noRawTableInComponents,
+    'no-native-title-tooltip': noNativeTitleTooltip,
   },
 };
 
@@ -132,6 +134,11 @@ export default tseslint.config(
       // Wave-2 Task 2.2 guard — raw <table> outside TableBase regresses
       // the sticky-header treatment (see CampaignsTable:2027 bug).
       'local/no-raw-table-in-components': 'error',
+      // Wave-2 Task 2.6 guard — native `title="…"` tooltips don't match
+      // the design system (no glass-2 surface, browser-default delays,
+      // RTL bugs, ignores prefers-reduced-motion). Use `HelpTooltip`
+      // from `@/components/ui/Tooltip`.
+      'local/no-native-title-tooltip': 'error',
 
       // Allow ts-expect-error / ts-ignore with description (we use it in
       // shim casts where the type erasure is documented inline).

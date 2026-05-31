@@ -20,6 +20,7 @@
 import { CheckCircle2, AlertCircle, XCircle } from 'lucide-react';
 import { getFreshness, type FreshnessRow } from '@/lib/inngest/freshness';
 import { TableBase } from '@/components/ui/TableBase';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -153,18 +154,16 @@ function FreshnessTableRow({ row }: { row: FreshnessRow }) {
       <td className="px-3 py-2 text-end tabular-nums">
         {row.lag_minutes !== null ? row.lag_minutes : '—'}
       </td>
-      <td
-        className="px-3 py-2 text-ink-secondary"
-        title={row.last_attempt_at}
-      >
-        {formatRelative(row.last_attempt_at)}
-      </td>
-      <td
-        className="px-3 py-2 text-ink-secondary"
-        title={row.last_success_at ?? undefined}
-      >
-        {formatRelative(row.last_success_at)}
-      </td>
+      <HelpTooltip content={row.last_attempt_at}>
+        <td className="px-3 py-2 text-ink-secondary">
+          {formatRelative(row.last_attempt_at)}
+        </td>
+      </HelpTooltip>
+      <HelpTooltip content={row.last_success_at ?? undefined}>
+        <td className="px-3 py-2 text-ink-secondary">
+          {formatRelative(row.last_success_at)}
+        </td>
+      </HelpTooltip>
       <td className="px-3 py-2 text-ink-muted font-mono text-2xs max-w-xs truncate">
         {notes}
       </td>

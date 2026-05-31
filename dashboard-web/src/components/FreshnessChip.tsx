@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { AlertCircle } from 'lucide-react';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 
 /**
  * Phase 05.7.6 — Freshness chip for the dashboard header. Shows the user
@@ -52,17 +53,20 @@ export function FreshnessChip(props: {
   const toneClass = palette[tone];
 
   return (
-    <span
-      className={`inline-flex items-center gap-1 px-2 py-1 rounded-md ring-1 text-[11px] sm:text-xs tabular-nums ${toneClass}`}
-      title={
+    <HelpTooltip
+      content={
         dataLastWriteAt
           ? `נכתב ע"י cron ב-${new Date(dataLastWriteAt).toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem' })}`
           : 'אין נתוני freshness (אין שורות בטווח התאריכים)'
       }
     >
-      {warning && <AlertCircle size={11} className="shrink-0" />}
-      <span>{label}</span>
-    </span>
+      <span
+        className={`inline-flex items-center gap-1 px-2 py-1 rounded-md ring-1 text-[11px] sm:text-xs tabular-nums ${toneClass}`}
+      >
+        {warning && <AlertCircle size={11} className="shrink-0" />}
+        <span>{label}</span>
+      </span>
+    </HelpTooltip>
   );
 }
 

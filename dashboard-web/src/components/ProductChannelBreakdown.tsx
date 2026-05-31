@@ -6,6 +6,7 @@ import type { ProductChannelBreakdown as ProductChannelBreakdownType } from '@/l
 import { PRODUCT_MAP_CHIP_KEY } from '@/lib/sessionKeys';
 import { CHART_COLORS } from '@/lib/chartColors';
 import { Button } from '@/components/ui/Button';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 
 /**
  * Phase 1 channel-level product attribution panel — answers "where did the
@@ -80,34 +81,33 @@ export function ProductChannelBreakdown({ breakdown }: Props) {
     <section>
       <h3 className="text-sm font-semibold text-ink inline-flex items-center gap-1.5 mb-2">
         <Package size={14} className="text-ink-secondary" />
-        <span title="סיגנל זה משלים את ה-trust chip. הוא מודד 'מאיפה הגיעו הקונים של המוצרים המשויכים' גם כש-utm_id חסר.">
-          מכירות לפי ערוץ של המוצרים המשויכים
-        </span>
+        <HelpTooltip content="סיגנל זה משלים את ה-trust chip. הוא מודד 'מאיפה הגיעו הקונים של המוצרים המשויכים' גם כש-utm_id חסר.">
+          <span>מכירות לפי ערוץ של המוצרים המשויכים</span>
+        </HelpTooltip>
       </h3>
       <div className="rounded-xl border border-glass-edge bg-glass-2/30 p-3 space-y-3">
         {!chipHidden && (
-          <div
-            title="current state, not date-versioned"
-            className="rounded-md bg-glass-2 border border-glass-edge px-2.5 py-1.5 text-[11px] text-ink-muted flex items-center gap-1.5"
-          >
-            <Info size={12} className="shrink-0 text-ink-subtle" />
-            <span className="leading-relaxed">
-              ה-product↔campaign mapping מבוסס על המיפוי הנוכחי שלך. שינוי המיפוי משפיע על נתונים היסטוריים בדיעבד.
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label="הסתר הודעת מיפוי"
-              onClick={() => {
-                window.sessionStorage.setItem(PRODUCT_MAP_CHIP_KEY, '1');
-                setChipHidden(true);
-              }}
-              className="ms-auto shrink-0"
-            >
-              <X size={12} />
-            </Button>
-          </div>
+          <HelpTooltip content="current state, not date-versioned">
+            <div className="rounded-md bg-glass-2 border border-glass-edge px-2.5 py-1.5 text-[11px] text-ink-muted flex items-center gap-1.5">
+              <Info size={12} className="shrink-0 text-ink-subtle" />
+              <span className="leading-relaxed">
+                ה-product↔campaign mapping מבוסס על המיפוי הנוכחי שלך. שינוי המיפוי משפיע על נתונים היסטוריים בדיעבד.
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="הסתר הודעת מיפוי"
+                onClick={() => {
+                  window.sessionStorage.setItem(PRODUCT_MAP_CHIP_KEY, '1');
+                  setChipHidden(true);
+                }}
+                className="ms-auto shrink-0"
+              >
+                <X size={12} />
+              </Button>
+            </div>
+          </HelpTooltip>
         )}
 
         {/* Summary line — total orders + CAD */}

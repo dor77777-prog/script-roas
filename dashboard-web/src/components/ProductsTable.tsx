@@ -15,6 +15,7 @@ import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Stat } from '@/components/ui/Stat';
 import { TableBase } from '@/components/ui/TableBase';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 import type { ProductRow } from '@/lib/products';
 import type { ProductsResponse } from '@/app/api/products/route';
 import type { DateRange } from '@/lib/types';
@@ -586,12 +587,11 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                       {bucket.label}
                     </span>
                     {isLive && (
-                      <span
-                        className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-status-green bg-status-greenBg/80 px-1.5 py-0.5 rounded"
-                        title="עד לרגע זה - יתעדכן עוד עד חצות"
-                      >
-                        <Radio size={11} /> חי · {nowLabel}
-                      </span>
+                      <HelpTooltip content="עד לרגע זה - יתעדכן עוד עד חצות">
+                        <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-bold text-status-green bg-status-greenBg/80 px-1.5 py-0.5 rounded">
+                          <Radio size={11} /> חי · {nowLabel}
+                        </span>
+                      </HelpTooltip>
                     )}
                   </div>
                   <div className="flex items-center gap-3 sm:gap-5 text-xs sm:text-sm tabular-nums">
@@ -616,12 +616,14 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                       </span>
                     </div>
                     {bucket.hasNet && bucket.totalNetRevenue !== null && (
-                      <div className="hidden md:block" title="הכנסה אחרי הנחות והחזרים">
-                        <span className="text-ink-muted text-[10px] sm:text-xs me-1">נטו</span>
-                        <span className="font-semibold text-status-green">
-                          CAD {formatCurrency(bucket.totalNetRevenue)}
-                        </span>
-                      </div>
+                      <HelpTooltip content="הכנסה אחרי הנחות והחזרים">
+                        <div className="hidden md:block">
+                          <span className="text-ink-muted text-[10px] sm:text-xs me-1">נטו</span>
+                          <span className="font-semibold text-status-green">
+                            CAD {formatCurrency(bucket.totalNetRevenue)}
+                          </span>
+                        </div>
+                      </HelpTooltip>
                     )}
                   </div>
                 </div>
@@ -653,19 +655,17 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                             ברוטו
                           </th>
                           {bucket.hasNet && (
-                            <th
-                              className="px-3 py-2 text-end font-medium w-[110px]"
-                              title="אחרי הנחות והחזרות"
-                            >
-                              נטו
+                            <th className="px-3 py-2 text-end font-medium w-[110px]">
+                              <HelpTooltip content="אחרי הנחות והחזרות">
+                                <span>נטו</span>
+                              </HelpTooltip>
                             </th>
                           )}
                           {bucket.hasNet && (
-                            <th
-                              className="px-3 py-2 text-end font-medium w-[70px]"
-                              title="אחוז הנטו מתוך הברוטו — גבוה = מעט הנחות/החזרות"
-                            >
-                              מרג'ין
+                            <th className="px-3 py-2 text-end font-medium w-[70px]">
+                              <HelpTooltip content="אחוז הנטו מתוך הברוטו — גבוה = מעט הנחות/החזרות">
+                                <span>מרג&apos;ין</span>
+                              </HelpTooltip>
                             </th>
                           )}
                           <th className="px-3 sm:px-5 py-2 text-end font-medium w-[70px]">
@@ -698,12 +698,11 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                                     {p.orders > 0 ? formatNumber(p.orders, 0) : '—'}
                                   </span>
                                   {upo !== null && upo > 1.05 && (
-                                    <span
-                                      className="block text-[9px] sm:text-[10px] text-ink-muted leading-tight"
-                                      title={`ממוצע ${upo.toFixed(2)} יחידות להזמנה`}
-                                    >
-                                      ×{upo.toFixed(1)}
-                                    </span>
+                                    <HelpTooltip content={`ממוצע ${upo.toFixed(2)} יחידות להזמנה`}>
+                                      <span className="block text-[9px] sm:text-[10px] text-ink-muted leading-tight">
+                                        ×{upo.toFixed(1)}
+                                      </span>
+                                    </HelpTooltip>
                                   )}
                                 </td>
                               )}
@@ -738,22 +737,25 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                                       const margin = p.netRevenue / p.revenue;
                                       const pctStr = `${(margin * 100).toFixed(0)}%`;
                                       return (
-                                        <span
-                                          className={cn(
-                                            'font-medium',
-                                            margin >= 0.95 && 'text-status-green',
-                                            margin >= 0.8 && margin < 0.95 && 'text-ink',
-                                            margin < 0.8 && 'text-status-orange',
-                                            margin < 0.5 && 'text-status-red',
-                                          )}
-                                          title={
+                                        <HelpTooltip
+                                          content={
                                             margin < 0.8
                                               ? `הנחות/החזרים: ${((1 - margin) * 100).toFixed(0)}%`
                                               : 'מרג\'ין גבוה - מעט הנחות'
                                           }
                                         >
-                                          {pctStr}
-                                        </span>
+                                          <span
+                                            className={cn(
+                                              'font-medium',
+                                              margin >= 0.95 && 'text-status-green',
+                                              margin >= 0.8 && margin < 0.95 && 'text-ink',
+                                              margin < 0.8 && 'text-status-orange',
+                                              margin < 0.5 && 'text-status-red',
+                                            )}
+                                          >
+                                            {pctStr}
+                                          </span>
+                                        </HelpTooltip>
                                       );
                                     })()
                                   ) : (

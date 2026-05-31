@@ -15,6 +15,7 @@ import { TrendingUp, TrendingDown, Minus, LineChart, RotateCcw } from 'lucide-re
 import { Badge, type BadgeTone } from '@/components/ui/Badge';
 import { Stat } from '@/components/ui/Stat';
 import { ChartContainer } from '@/components/ui/chart/ChartContainer';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 import {
   ChartTooltip,
   ChartTooltipLabel,
@@ -321,15 +322,16 @@ export function HeroOverview({ data, filters }: Props) {
               delta={kpis.prevEmpty ? undefined : <DeltaPill value={kpis.dRev} />}
             />
             {heavyDates.length > 0 && (
-              <div
-                className="mt-2 inline-flex items-center gap-1 rounded-full bg-status-warning/15 border border-status-warning/30 px-2 py-0.5 text-xs text-status-warningFg font-medium"
-                title={`${heavyDates.length === 1 ? 'יום רפאנד כבד' : `${heavyDates.length} ימי רפאנד כבדים`} בתקופה — ${heavyDates.map(d => fmtDateShort(d)).join(', ')}`}
+              <HelpTooltip
+                content={`${heavyDates.length === 1 ? 'יום רפאנד כבד' : `${heavyDates.length} ימי רפאנד כבדים`} בתקופה — ${heavyDates.map(d => fmtDateShort(d)).join(', ')}`}
               >
-                <RotateCcw className="h-3 w-3" aria-hidden="true" />
-                {heavyDates.length === 1
-                  ? `יום רפאנד כבד (${fmtDateShort(heavyDates[0])})`
-                  : `${heavyDates.length} ימי רפאנד כבדים`}
-              </div>
+                <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-status-warning/15 border border-status-warning/30 px-2 py-0.5 text-xs text-status-warningFg font-medium">
+                  <RotateCcw className="h-3 w-3" aria-hidden="true" />
+                  {heavyDates.length === 1
+                    ? `יום רפאנד כבד (${fmtDateShort(heavyDates[0])})`
+                    : `${heavyDates.length} ימי רפאנד כבדים`}
+                </div>
+              </HelpTooltip>
             )}
           </div>
           <div className="lg:border-s lg:border-white/12 lg:ps-7">

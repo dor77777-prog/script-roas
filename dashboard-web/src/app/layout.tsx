@@ -3,6 +3,7 @@ import type { Metadata, Viewport } from 'next';
 import { Heebo, Rubik, Geist_Mono } from 'next/font/google';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ThemeProvider } from '@/components/ThemeProvider';
+import { TooltipProvider } from '@/components/ui/Tooltip';
 
 // Heebo is the de-facto Hebrew sans-serif for product UIs: clean, readable,
 // supports the full set of weights we use (300 for big numbers, 600 for
@@ -63,7 +64,17 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     >
       <body className="font-sans antialiased text-ink bg-canvas">
         <ThemeProvider>
-          <ErrorBoundary>{children}</ErrorBoundary>
+          {/*
+            Task 2.6 — single Radix Tooltip root for the whole app.
+            delayDuration=300ms balances "show on hover" with not being
+            annoying; skipDelayDuration=150ms lets adjacent tooltips
+            chain quickly once one is already open (matches Radix
+            recommendation for dense table UIs like CampaignsTableRow
+            and AdsDrawer).
+          */}
+          <TooltipProvider delayDuration={300} skipDelayDuration={150}>
+            <ErrorBoundary>{children}</ErrorBoundary>
+          </TooltipProvider>
         </ThemeProvider>
       </body>
     </html>

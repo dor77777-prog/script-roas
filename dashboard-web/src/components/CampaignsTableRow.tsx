@@ -4,6 +4,7 @@ import { Fragment } from 'react';
 import { CheckCircle2, Circle, ExternalLink } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 import { campaignKey } from '@/lib/campaignProductMap';
 import { buildAdsManagerLink, type AdAccountMap } from '@/lib/campaignsLinks';
 import { roasLabel } from '@/lib/analytics';
@@ -194,6 +195,15 @@ export function CampaignsTableRow({
   });
   const isOptimized = optimized.has(a.key);
   return (
+    <HelpTooltip
+      content={
+        mode === 'campaign'
+          ? 'לחץ לפרטים מלאים'
+          : mode === 'adset' && (a.platform === 'Meta' || a.platform === 'TikTok')
+          ? 'לחץ לראות את המודעות באד-סט'
+          : undefined
+      }
+    >
     <tr
       className={cn(
         'border-b border-glass-edge hover:bg-glass-2/40 cursor-pointer transition-opacity',
@@ -225,13 +235,6 @@ export function CampaignsTableRow({
           });
         }
       }}
-      title={
-        mode === 'campaign'
-          ? 'לחץ לפרטים מלאים'
-          : mode === 'adset' && (a.platform === 'Meta' || a.platform === 'TikTok')
-          ? 'לחץ לראות את המודעות באד-סט'
-          : undefined
-      }
     >
       {/* Per-row optimization toggle. Clicking flips the mark
           without bubbling into the row click (which would
@@ -284,28 +287,28 @@ export function CampaignsTableRow({
                   a short delay, which is the lowest-friction
                   way to surface long campaign / ad-set names
                   without building a custom popover. */}
-              <span
-                className="truncate"
-                title={mode === 'campaign' ? a.campaignName : (a.adSetName || a.campaignName)}
-              >
-                <bdi dir="ltr">{mode === 'campaign' ? a.campaignName : a.adSetName}</bdi>
-              </span>
+              <HelpTooltip content={mode === 'campaign' ? a.campaignName : (a.adSetName || a.campaignName)}>
+                <span className="truncate">
+                  <bdi dir="ltr">{mode === 'campaign' ? a.campaignName : a.adSetName}</bdi>
+                </span>
+              </HelpTooltip>
               {/* CBO / ABO tag — small typographic signal so
                   the user can tell at a glance which level
                   owns the budget. Only shown for Meta and only
                   when we have a non-empty type. */}
               {a.platform === 'Meta' && a.budgetType && (
-                <span
-                  className={cn(
-                    'inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0',
-                    a.budgetType === 'CBO'
-                      ? 'bg-accent/10 text-accent'
-                      : 'bg-purple-100 text-purple-700',
-                  )}
-                  title={a.budgetType === 'CBO' ? 'Campaign Budget Optimization — תקציב ברמת קמפיין' : 'Ad-Set Budget Optimization — תקציב ברמת ad-set'}
-                >
-                  {a.budgetType}
-                </span>
+                <HelpTooltip content={a.budgetType === 'CBO' ? 'Campaign Budget Optimization — תקציב ברמת קמפיין' : 'Ad-Set Budget Optimization — תקציב ברמת ad-set'}>
+                  <span
+                    className={cn(
+                      'inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0',
+                      a.budgetType === 'CBO'
+                        ? 'bg-accent/10 text-accent'
+                        : 'bg-purple-100 text-purple-700',
+                    )}
+                  >
+                    {a.budgetType}
+                  </span>
+                </HelpTooltip>
               )}
               {/* FIX-26: "currently off" chip — surfaces campaigns that
                   appear in the table on historical data alone (no spend
@@ -313,12 +316,11 @@ export function CampaignsTableRow({
                   campaign's past performance without confusing it for an
                   active one. */}
               {isCurrentlyOff && a.lastActiveDate && (
-                <span
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-glass-2 text-ink-muted border border-glass-edge"
-                  title={`קמפיין כבוי כרגע. הריצה האחרונה: ${formatLastActiveDate(a.lastActiveDate)}. הנתונים בשורה הם היסטוריים בלבד.`}
-                >
-                  ⏸ כבוי · {formatLastActiveDate(a.lastActiveDate)}
-                </span>
+                <HelpTooltip content={`קמפיין כבוי כרגע. הריצה האחרונה: ${formatLastActiveDate(a.lastActiveDate)}. הנתונים בשורה הם היסטוריים בלבד.`}>
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-glass-2 text-ink-muted border border-glass-edge">
+                    ⏸ כבוי · {formatLastActiveDate(a.lastActiveDate)}
+                  </span>
+                </HelpTooltip>
               )}
               {/* Phase 05.7.x (2026-05-23) — "unmapped" chip. Meta + TikTok
                   campaigns get a flagged warning until the operator opens
@@ -333,12 +335,11 @@ export function CampaignsTableRow({
                 !mappedCampaignKeys.has(
                   campaignKey(a.storeId, a.platform, a.campaignId),
                 ) && (
-                  <span
-                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-status-warningBg text-status-warningFg border border-status-warning/30"
-                    title="הקמפיין הזה עדיין לא ממופה למוצרי Shopify. פתח את המגירה (קליק על שם הקמפיין) ובחר את המוצרים הרלוונטיים כדי שהדאשבורד יחשב ROAS Shopify אמיתי."
-                  >
-                    🏷️ לא ממופה
-                  </span>
+                  <HelpTooltip content="הקמפיין הזה עדיין לא ממופה למוצרי Shopify. פתח את המגירה (קליק על שם הקמפיין) ובחר את המוצרים הרלוונטיים כדי שהדאשבורד יחשב ROAS Shopify אמיתי.">
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-status-warningBg text-status-warningFg border border-status-warning/30">
+                      🏷️ לא ממופה
+                    </span>
+                  </HelpTooltip>
                 )}
               {/* Phase C (2026-05-30) — freshness chip. Reads
                   `last_live_tick_at` (max across the aggregate's per-day
@@ -356,27 +357,27 @@ export function CampaignsTableRow({
                   since the Phase D backfill). Disappears within ~10 min
                   once the next orchestrator tick runs the status worker. */}
               {statusVerdict.isBackfillUnknown && (
-                <span
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-status-warningBg text-status-warningFg border border-status-warning/30"
-                  title="הסטטוס המוגדר עדיין לא נדגם מה-platform — ימולא בעוד עד 10 דק׳."
-                >
-                  ⏳ טוען מ-Platform
-                </span>
+                <HelpTooltip content="הסטטוס המוגדר עדיין לא נדגם מה-platform — ימולא בעוד עד 10 דק׳.">
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold tracking-wider shrink-0 bg-status-warningBg text-status-warningFg border border-status-warning/30">
+                    ⏳ טוען מ-Platform
+                  </span>
+                </HelpTooltip>
               )}
             </div>
-            <div
-              className="text-[10px] sm:text-[11px] text-ink-muted truncate"
-              title={
+            <HelpTooltip
+              content={
                 mode === 'adset' && a.campaignName
                   ? `${a.platform} · ${a.storeName} · קמפיין: ${a.campaignName}`
                   : `${a.platform} · ${a.storeName}`
               }
             >
-              <bdi dir="ltr">{a.platform}</bdi>
-              {' · '}
-              <bdi dir="ltr">{a.storeName}</bdi>
-              {mode === 'adset' && a.campaignName ? <>{' · '}<bdi dir="ltr">{a.campaignName}</bdi></> : ''}
-            </div>
+              <div className="text-[10px] sm:text-[11px] text-ink-muted truncate">
+                <bdi dir="ltr">{a.platform}</bdi>
+                {' · '}
+                <bdi dir="ltr">{a.storeName}</bdi>
+                {mode === 'adset' && a.campaignName ? <>{' · '}<bdi dir="ltr">{a.campaignName}</bdi></> : ''}
+              </div>
+            </HelpTooltip>
           </div>
         </div>
       </td>
@@ -448,16 +449,17 @@ export function CampaignsTableRow({
           const info = trueRevenueByKey.get(key);
           if (!info) {
             return (
-              <span
-                className="text-ink-muted text-xs"
-                title={
+              <HelpTooltip
+                content={
                   a.platform === 'Google'
                     ? 'Google PMax לא תומך במיפוי לפי מוצר — הפיד מנהל את ההצגה'
                     : 'לא משויכים מוצרים — פתח את הקמפיין כדי לשייך'
                 }
               >
-                —
-              </span>
+                <span className="text-ink-muted text-xs">
+                  —
+                </span>
+              </HelpTooltip>
             );
           }
           const trueRoas = a.spend > 0 ? info.trueRevenue / a.spend : 0;
@@ -555,11 +557,13 @@ export function CampaignsTableRow({
           void trustLevel;
           void confTone;
           return (
-            <div className="inline-flex flex-col items-center gap-0.5" title={tooltip}>
-              <span className="font-semibold tabular-nums text-ink">
-                {trueRoas > 0 ? formatNumber(trueRoas) : '—'}
-              </span>
-            </div>
+            <HelpTooltip content={tooltip}>
+              <div className="inline-flex flex-col items-center gap-0.5">
+                <span className="font-semibold tabular-nums text-ink">
+                  {trueRoas > 0 ? formatNumber(trueRoas) : '—'}
+                </span>
+              </div>
+            </HelpTooltip>
           );
         })()}
       </td>
@@ -574,12 +578,11 @@ export function CampaignsTableRow({
           const info = trueRevenueByKey.get(key);
           if (!info || a.spend <= 0 || info.deterministicRevenue <= 0) {
             return (
-              <span
-                className="text-ink-muted"
-                title={`אין הזמנות שסווגו דטרמיניסטית ל-${a.platform} עבור המוצרים המשויכים בטווח. כדי לראות ROAS פלטפורמה — צריך ש-Shopify יראה את ה-source/click-id של ההזמנות.`}
-              >
-                —
-              </span>
+              <HelpTooltip content={`אין הזמנות שסווגו דטרמיניסטית ל-${a.platform} עבור המוצרים המשויכים בטווח. כדי לראות ROAS פלטפורמה — צריך ש-Shopify יראה את ה-source/click-id של ההזמנות.`}>
+                <span className="text-ink-muted">
+                  —
+                </span>
+              </HelpTooltip>
             );
           }
           const detRoas = info.deterministicRevenue / a.spend;
@@ -591,12 +594,11 @@ export function CampaignsTableRow({
             `מבוסס על ${detUnits} מתוך ${totalUnits} יחידות שנמכרו (רק הזמנות עם source='${a.platform === 'Meta' ? 'meta-paid' : a.platform === 'Google' ? 'google-paid' : 'tiktok-paid'}' או click-id מזוהה). ` +
             `השאר עברו דרך direct / organic / פלטפורמות אחרות.`;
           return (
-            <span
-              className="font-semibold tabular-nums"
-              title={tooltip}
-            >
-              {formatNumber(detRoas)}
-            </span>
+            <HelpTooltip content={tooltip}>
+              <span className="font-semibold tabular-nums">
+                {formatNumber(detRoas)}
+              </span>
+            </HelpTooltip>
           );
         })()}
       </td>
@@ -614,21 +616,22 @@ export function CampaignsTableRow({
           const info = trueRevenueByKey.get(key);
           if (!info || info.deterministicRevenue <= 0) {
             return (
-              <span
-                className="text-ink-muted"
-                title={`אין הזמנות שסווגו דטרמיניסטית ל-${a.platform} עבור המוצרים המשויכים בטווח הנבחר.`}
-              >
-                —
-              </span>
+              <HelpTooltip content={`אין הזמנות שסווגו דטרמיניסטית ל-${a.platform} עבור המוצרים המשויכים בטווח הנבחר.`}>
+                <span className="text-ink-muted">
+                  —
+                </span>
+              </HelpTooltip>
             );
           }
           const tooltip =
             `CAD ${info.deterministicRevenue.toFixed(0)} מהזמנות שסווגו ב-Shopify ל-${a.platform} ` +
             `(source='${a.platform === 'Meta' ? 'meta-paid' : a.platform === 'Google' ? 'google-paid' : 'tiktok-paid'}' או click-id מזוהה).`;
           return (
-            <span className="font-medium" title={tooltip}>
-              {formatCurrency(info.deterministicRevenue)}
-            </span>
+            <HelpTooltip content={tooltip}>
+              <span className="font-medium">
+                {formatCurrency(info.deterministicRevenue)}
+              </span>
+            </HelpTooltip>
           );
         })()}
       </td>
@@ -641,12 +644,11 @@ export function CampaignsTableRow({
           const info = trueRevenueByKey.get(key);
           if (!info || info.deterministicUnits <= 0) {
             return (
-              <span
-                className="text-ink-muted"
-                title={`אין הזמנות שסווגו דטרמיניסטית ל-${a.platform} עבור המוצרים המשויכים בטווח הנבחר.`}
-              >
-                —
-              </span>
+              <HelpTooltip content={`אין הזמנות שסווגו דטרמיניסטית ל-${a.platform} עבור המוצרים המשויכים בטווח הנבחר.`}>
+                <span className="text-ink-muted">
+                  —
+                </span>
+              </HelpTooltip>
             );
           }
           const exact = info.deterministicUnits;
@@ -657,15 +659,14 @@ export function CampaignsTableRow({
               `(חלוקה לפי הוצאה בין הקמפיינים של ${a.platform} שממופים לאותם מוצרים).`
             : `${display} יח' מהזמנות שסווגו ב-Shopify ל-${a.platform} עבור המוצרים המשויכים.`;
           return (
-            <span
-              className="font-medium inline-flex items-center gap-0.5"
-              title={tooltip}
-            >
-              <span>{display}</span>
-              {isFractional && (
-                <span aria-hidden="true" className="text-[8px] text-ink-muted">*</span>
-              )}
-            </span>
+            <HelpTooltip content={tooltip}>
+              <span className="font-medium inline-flex items-center gap-0.5">
+                <span>{display}</span>
+                {isFractional && (
+                  <span aria-hidden="true" className="text-[8px] text-ink-muted">*</span>
+                )}
+              </span>
+            </HelpTooltip>
           );
         })()}
       </td>
@@ -680,12 +681,11 @@ export function CampaignsTableRow({
             return <span className="text-ink-muted">—</span>;
           }
           return (
-            <span
-              className="font-medium text-ink-secondary"
-              title={`סך ערך המכירות ב-Shopify של המוצרים המשויכים בטווח הנבחר, מכל הערוצים יחד (paid + organic + direct).`}
-            >
-              {formatCurrency(info.productTotals.revenue)}
-            </span>
+            <HelpTooltip content={`סך ערך המכירות ב-Shopify של המוצרים המשויכים בטווח הנבחר, מכל הערוצים יחד (paid + organic + direct).`}>
+              <span className="font-medium text-ink-secondary">
+                {formatCurrency(info.productTotals.revenue)}
+              </span>
+            </HelpTooltip>
           );
         })()}
       </td>
@@ -701,12 +701,11 @@ export function CampaignsTableRow({
           }
           const total = Math.round(info.productTotals.units);
           return (
-            <span
-              className="font-medium text-ink-secondary"
-              title={`סך היחידות שנמכרו ב-Shopify של המוצרים המשויכים בטווח הנבחר, מכל הערוצים יחד.`}
-            >
-              {total}
-            </span>
+            <HelpTooltip content={`סך היחידות שנמכרו ב-Shopify של המוצרים המשויכים בטווח הנבחר, מכל הערוצים יחד.`}>
+              <span className="font-medium text-ink-secondary">
+                {total}
+              </span>
+            </HelpTooltip>
           );
         })()}
       </td>
@@ -728,12 +727,11 @@ export function CampaignsTableRow({
           }
           const total = Math.round(info.productTotals.orders);
           return (
-            <span
-              className="font-medium text-ink-secondary"
-              title="סך ההזמנות ב-Shopify שכללו את המוצרים המשויכים, בטווח שנבחר, מכל הערוצים. מוצר שמופיע בכמה הזמנות נספר פעם להזמנה; מוצרים מרובים באותה הזמנה מסוכמים פר-מוצר."
-            >
-              {total}
-            </span>
+            <HelpTooltip content="סך ההזמנות ב-Shopify שכללו את המוצרים המשויכים, בטווח שנבחר, מכל הערוצים. מוצר שמופיע בכמה הזמנות נספר פעם להזמנה; מוצרים מרובים באותה הזמנה מסוכמים פר-מוצר.">
+              <span className="font-medium text-ink-secondary">
+                {total}
+              </span>
+            </HelpTooltip>
           );
         })()}
       </td>
@@ -768,19 +766,21 @@ export function CampaignsTableRow({
       })()}
       <td data-col-id="deepLink" className="px-2 py-2 text-center">
         {link && (
-          <a
-            href={link}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={e => e.stopPropagation()}
-            className="inline-flex items-center justify-center w-7 h-7 rounded text-ink-muted hover:text-accent hover:bg-accent/8 transition-colors"
-            title={`פתח ב-${a.platform} Ads Manager`}
-            aria-label="פתח ב-Ads Manager"
-          >
-            <ExternalLink size={14} />
-          </a>
+          <HelpTooltip content={`פתח ב-${a.platform} Ads Manager`}>
+            <a
+              href={link}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              className="inline-flex items-center justify-center w-7 h-7 rounded text-ink-muted hover:text-accent hover:bg-accent/8 transition-colors"
+              aria-label="פתח ב-Ads Manager"
+            >
+              <ExternalLink size={14} />
+            </a>
+          </HelpTooltip>
         )}
       </td>
     </tr>
+    </HelpTooltip>
   );
 }

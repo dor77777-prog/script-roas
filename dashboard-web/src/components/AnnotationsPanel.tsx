@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 import {
   ANNOTATION_KIND_COLOR,
   ANNOTATION_KIND_EMOJI,
@@ -161,17 +162,18 @@ export function AnnotationsPanel({ range, store }: Props) {
                     />
                   ) : (
                     <div className="flex items-center gap-3 p-2.5">
-                      <span
-                        className="text-base shrink-0 grid place-items-center w-7 h-7 rounded"
-                        style={{
-                          background: ANNOTATION_KIND_COLOR[a.kind] + '15',
-                          color: ANNOTATION_KIND_COLOR[a.kind],
-                        }}
-                        title={ANNOTATION_KIND_LABEL[a.kind]}
-                        aria-label={ANNOTATION_KIND_LABEL[a.kind]}
-                      >
-                        <span>{ANNOTATION_KIND_EMOJI[a.kind]}</span>
-                      </span>
+                      <HelpTooltip content={ANNOTATION_KIND_LABEL[a.kind]}>
+                        <span
+                          className="text-base shrink-0 grid place-items-center w-7 h-7 rounded"
+                          style={{
+                            background: ANNOTATION_KIND_COLOR[a.kind] + '15',
+                            color: ANNOTATION_KIND_COLOR[a.kind],
+                          }}
+                          aria-label={ANNOTATION_KIND_LABEL[a.kind]}
+                        >
+                          <span>{ANNOTATION_KIND_EMOJI[a.kind]}</span>
+                        </span>
+                      </HelpTooltip>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-semibold text-ink truncate">

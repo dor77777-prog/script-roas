@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Upload, AlertCircle, Check } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 import {
   findMatchingRecurring,
   generateId,
@@ -294,13 +295,14 @@ export function BillingCsvImport({
                   p.skip && 'opacity-50',
                 )}
               >
-                <input
-                  type="checkbox"
-                  checked={!p.skip}
-                  onChange={e => setRow(p.id, { skip: !e.target.checked })}
-                  className="w-3.5 h-3.5 rounded cursor-pointer shrink-0"
-                  title={p.skip ? 'בחר כדי לייבא' : 'בטל כדי לדלג על שורה זו'}
-                />
+                <HelpTooltip content={p.skip ? 'בחר כדי לייבא' : 'בטל כדי לדלג על שורה זו'}>
+                  <input
+                    type="checkbox"
+                    checked={!p.skip}
+                    onChange={e => setRow(p.id, { skip: !e.target.checked })}
+                    className="w-3.5 h-3.5 rounded cursor-pointer shrink-0"
+                  />
+                </HelpTooltip>
                 <span className="text-[10px] text-ink-muted tabular-nums min-w-[56px] shrink-0">
                   {p.date.slice(5)}
                 </span>

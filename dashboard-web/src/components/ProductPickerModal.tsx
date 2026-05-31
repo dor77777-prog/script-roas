@@ -5,6 +5,7 @@ import useSWR from 'swr';
 import { Package, Search, X, Check } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 import { useDrawerEsc } from '@/lib/drawerStack';
 import type { ProductRow } from '@/lib/products';
 import type { ProductsResponse } from '@/app/api/products/route';
@@ -241,9 +242,11 @@ export function ProductPickerModal({
               <div className="text-[10px] uppercase tracking-[0.12em] font-semibold text-ink-muted">
                 שייך מוצרי {storeName} לקמפיין
               </div>
-              <h2 id="product-picker-title" className="text-sm sm:text-base font-bold text-ink tracking-tight truncate" title={campaignName}>
-                {campaignName}
-              </h2>
+              <HelpTooltip content={campaignName}>
+                <h2 id="product-picker-title" className="text-sm sm:text-base font-bold text-ink tracking-tight truncate">
+                  {campaignName}
+                </h2>
+              </HelpTooltip>
               <div className="text-[10px] text-ink-muted mt-0.5 inline-flex items-center gap-1">
                 <span>מוצגים רק מוצרים מחנות:</span>
                 <span className="font-semibold text-accent">{storeName}</span>
@@ -342,12 +345,14 @@ export function ProductPickerModal({
                         {isOn && <Check size={12} strokeWidth={3} />}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <div className={cn(
-                          'text-sm truncate',
-                          isOn ? 'font-semibold text-ink' : 'text-ink',
-                        )} title={p.title}>
-                          {p.title}
-                        </div>
+                        <HelpTooltip content={p.title}>
+                          <div className={cn(
+                            'text-sm truncate',
+                            isOn ? 'font-semibold text-ink' : 'text-ink',
+                          )}>
+                            {p.title}
+                          </div>
+                        </HelpTooltip>
                         <div className="text-[10px] sm:text-[11px] text-ink-muted tabular-nums">
                           {p.totalUnits > 0 ? (
                             <>
@@ -371,12 +376,11 @@ export function ProductPickerModal({
                           const preview = others.slice(0, 2).join(' · ');
                           const more = others.length > 2 ? ` +${others.length - 2}` : '';
                           return (
-                            <div
-                              className="text-[10px] mt-0.5 inline-flex items-center gap-1 text-status-warningFg bg-status-warningBg border border-status-warning/30 rounded px-1.5 py-0.5"
-                              title={`גם ממופה ל: ${others.join(', ')}`}
-                            >
-                              🔗 גם ב-{others.length} קמפיינים: {preview}{more}
-                            </div>
+                            <HelpTooltip content={`גם ממופה ל: ${others.join(', ')}`}>
+                              <div className="text-[10px] mt-0.5 inline-flex items-center gap-1 text-status-warningFg bg-status-warningBg border border-status-warning/30 rounded px-1.5 py-0.5">
+                                🔗 גם ב-{others.length} קמפיינים: {preview}{more}
+                              </div>
+                            </HelpTooltip>
                           );
                         })()}
                       </div>

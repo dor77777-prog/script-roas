@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { Button } from '@/components/ui/Button';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 import {
   ExternalLink,
   Maximize2,
@@ -1435,26 +1436,27 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                   {mappedIds.map(id => {
                     const others = otherCampaignsByProduct.get(id) ?? [];
                     return (
-                      <li
+                      <HelpTooltip
                         key={id}
-                        title={
+                        content={
                           others.length > 0
                             ? `${id}\nגם משויך ל: ${others.join(', ')}`
                             : id
                         }
-                        className="inline-flex items-center gap-1 text-[11px] bg-accent/8 text-accent px-2 py-0.5 rounded-md font-mono"
                       >
-                        <Package size={10} />
-                        <span className="truncate max-w-[120px]">{id}</span>
-                        {others.length > 0 && (
-                          <span
-                            className="text-status-warningFg text-[9px] font-sans ms-1"
-                            aria-label={`גם משויך ל-${others.length} קמפיינים אחרים`}
-                          >
-                            🔗 +{others.length}
-                          </span>
-                        )}
-                      </li>
+                        <li className="inline-flex items-center gap-1 text-[11px] bg-accent/8 text-accent px-2 py-0.5 rounded-md font-mono">
+                          <Package size={10} />
+                          <span className="truncate max-w-[120px]">{id}</span>
+                          {others.length > 0 && (
+                            <span
+                              className="text-status-warningFg text-[9px] font-sans ms-1"
+                              aria-label={`גם משויך ל-${others.length} קמפיינים אחרים`}
+                            >
+                              🔗 +{others.length}
+                            </span>
+                          )}
+                        </li>
+                      </HelpTooltip>
                     );
                   })}
                 </ul>

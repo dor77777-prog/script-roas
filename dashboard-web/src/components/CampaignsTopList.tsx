@@ -2,6 +2,7 @@
 
 import { Trophy, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 
 /**
  * "Winners and Losers" view that replaces the previous QuadrantScatter
@@ -100,9 +101,11 @@ function Row({
           {/* Name + platform/store row */}
           <div className="flex items-start justify-between gap-2 mb-1">
             <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium text-ink truncate" title={campaign.name}>
-                {campaign.name}
-              </div>
+              <HelpTooltip content={campaign.name}>
+                <div className="text-sm font-medium text-ink truncate">
+                  {campaign.name}
+                </div>
+              </HelpTooltip>
               <PlatformChip platform={campaign.platform} store={campaign.storeName} />
             </div>
             <div className={cn('text-end shrink-0 tabular-nums', roasColor)}>

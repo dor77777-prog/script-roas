@@ -37,6 +37,7 @@ import { AiInsightPill } from '@/components/ui/AiInsightPill';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { InsightCardGroup, InsightCardRow } from '@/components/ui/InsightCard';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 
 const fetcher = (url: string) => fetch(url).then(r => (r.ok ? r.json() : null));
 
@@ -660,19 +661,19 @@ function SeverityBadges({
       {items.map(({ sev, count }) => {
         const meta = SEVERITY_META[sev];
         return (
-          <span
-            key={sev}
-            className={cn(
-              'inline-flex items-center gap-1 rounded-full',
-              compact ? 'px-1.5 py-0.5' : 'px-2 py-0.5',
-              'text-[10px] sm:text-[11px] font-bold tabular-nums',
-              meta.badge,
-            )}
-            title={`${meta.label}: ${count}`}
-          >
-            {!compact && <span className="opacity-90">{meta.icon}</span>}
-            <span>{count}</span>
-          </span>
+          <HelpTooltip key={sev} content={`${meta.label}: ${count}`}>
+            <span
+              className={cn(
+                'inline-flex items-center gap-1 rounded-full',
+                compact ? 'px-1.5 py-0.5' : 'px-2 py-0.5',
+                'text-[10px] sm:text-[11px] font-bold tabular-nums',
+                meta.badge,
+              )}
+            >
+              {!compact && <span className="opacity-90">{meta.icon}</span>}
+              <span>{count}</span>
+            </span>
+          </HelpTooltip>
         );
       })}
     </div>

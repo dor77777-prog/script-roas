@@ -11,6 +11,7 @@ import {
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { TableBase } from '@/components/ui/TableBase';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 import { roasLabel } from '@/lib/analytics';
 import type { AttributionAnalysis } from '@/lib/attributionAnalysis';
 
@@ -111,8 +112,10 @@ export function AdSetTable({
               {/* Per-ad-set deterministic attribution. Header doesn't
                   sort (the data is shape-inferred per row). Tooltip
                   on each cell explains the chip. */}
-              <th className="font-medium px-3 py-2 text-center text-ink-secondary" title="ROAS אמיתי לפי click-id (utm_term)">
-                ROAS Shopify
+              <th className="font-medium px-3 py-2 text-center text-ink-secondary">
+                <HelpTooltip content="ROAS אמיתי לפי click-id (utm_term)">
+                  <span>ROAS Shopify</span>
+                </HelpTooltip>
               </th>
               <AdSetSortHeader label="המרות"       col="conversions" sortKey={sortKey} dir={sortDir} onClick={onSort} align="end"    />
             </tr>
@@ -137,8 +140,11 @@ export function AdSetTable({
               // synthesizes campaign-level rows, no real ad granularity).
               const canDrillToAds = !!((a.platform === 'Meta' || a.platform === 'TikTok') && a.id);
               return (
-                <tr
+                <HelpTooltip
                   key={a.id || a.name || i}
+                  content={canDrillToAds ? 'לחץ לראות את המודעות באד-סט' : undefined}
+                >
+                <tr
                   className={cn(
                     'border-t border-glass-edge transition-opacity',
                     isOptimized && 'opacity-50 hover:opacity-100',
@@ -153,7 +159,6 @@ export function AdSetTable({
                       adSetName: a.name,
                     });
                   }}
-                  title={canDrillToAds ? 'לחץ לראות את המודעות באד-סט' : undefined}
                 >
                   <td className="px-2 py-2 text-center w-[36px]">
                     <Button
@@ -181,7 +186,9 @@ export function AdSetTable({
                       {isOptimized ? <CheckCircle2 size={16} /> : <Circle size={16} />}
                     </Button>
                   </td>
-                  <td className="px-3 py-2 text-ink truncate max-w-[200px]" title={a.name}>{a.name}</td>
+                  <HelpTooltip content={a.name}>
+                    <td className="px-3 py-2 text-ink truncate max-w-[200px]">{a.name}</td>
+                  </HelpTooltip>
                   <td className="px-3 py-2 text-end tabular-nums">{formatCurrency(a.spend)}</td>
                   <td className="px-3 py-2 text-end tabular-nums">
                     {a.adSetBudgetCad && a.adSetBudgetCad > 0 ? (
@@ -224,19 +231,22 @@ export function AdSetTable({
                         adsetAttr.reasons.map(r => `• ${r}`).join('\n') +
                         `\n\n💡 ${adsetAttr.recommendation}`;
                       return (
-                        <div className="inline-flex flex-col items-center gap-0.5" title={tooltip}>
-                          <span className="font-semibold tabular-nums text-ink">
-                            {detRoas > 0 ? formatNumber(detRoas) : '—'}
-                          </span>
-                          <span className={cn('inline-block text-[8px] font-bold px-1 py-0 rounded uppercase tracking-wider', tone)}>
-                            {adsetAttr.trust.label}
-                          </span>
-                        </div>
+                        <HelpTooltip content={tooltip}>
+                          <div className="inline-flex flex-col items-center gap-0.5">
+                            <span className="font-semibold tabular-nums text-ink">
+                              {detRoas > 0 ? formatNumber(detRoas) : '—'}
+                            </span>
+                            <span className={cn('inline-block text-[8px] font-bold px-1 py-0 rounded uppercase tracking-wider', tone)}>
+                              {adsetAttr.trust.label}
+                            </span>
+                          </div>
+                        </HelpTooltip>
                       );
                     })()}
                   </td>
                   <td className="px-3 py-2 text-end tabular-nums">{formatNumber(a.conversions, 0)}</td>
                 </tr>
+                </HelpTooltip>
               );
             })}
           </tbody>

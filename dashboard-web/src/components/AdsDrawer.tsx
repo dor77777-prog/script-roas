@@ -25,6 +25,7 @@ import { useDrawerEsc } from '@/lib/drawerStack';
 import { buildDateRangeKey } from '@/lib/dateRange';
 import { Sheet, SheetContent, SheetHeader, SheetBody } from '@/components/ui/Sheet';
 import { Badge, BADGE_TONE_BG, type BadgeTone } from '@/components/ui/Badge';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 import { Stat } from '@/components/ui/Stat';
 import { TableBase } from '@/components/ui/TableBase';
 
@@ -334,9 +335,11 @@ export function AdsDrawer({
               <div className="text-[10px] uppercase tracking-[0.12em] font-semibold text-ink-muted">
                 מודעות ב-ad-set
               </div>
-              <h2 id="ads-drawer-title" className="text-sm sm:text-base font-bold text-ink tracking-tight truncate" title={adSetName}>
-                {adSetName}
-              </h2>
+              <HelpTooltip content={adSetName}>
+                <h2 id="ads-drawer-title" className="text-sm sm:text-base font-bold text-ink tracking-tight truncate">
+                  {adSetName}
+                </h2>
+              </HelpTooltip>
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0">
@@ -400,8 +403,10 @@ export function AdsDrawer({
                       <AdSortHeader label="הוצאה"     col="spend"       sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
                       <AdSortHeader label="ערך"       col="value"       sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
                       <AdSortHeader label="ROAS"      col="roas"        sortKey={sortKey} dir={sortDir} onClick={handleSort} align="center" />
-                      <th className="font-medium px-3 py-2 text-center text-ink-secondary" title="ROAS אמיתי לפי click-id (utm_content={{ad.id}})">
-                        ROAS Shopify
+                      <th className="font-medium px-3 py-2 text-center text-ink-secondary">
+                        <HelpTooltip content="ROAS אמיתי לפי click-id (utm_content={{ad.id}})">
+                          <span>ROAS Shopify</span>
+                        </HelpTooltip>
                       </th>
                       <AdSortHeader label="המרות"     col="conversions" sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
                       <AdSortHeader label="חשיפות"    col="impressions" sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
@@ -457,9 +462,11 @@ export function AdsDrawer({
                               {isOptimized ? <CheckCircle2 size={16} /> : <Circle size={16} />}
                             </Button>
                           </td>
-                          <td className="px-3 py-2 text-ink truncate max-w-[220px]" title={a.adName}>
-                            {a.adName}
-                          </td>
+                          <HelpTooltip content={a.adName}>
+                            <td className="px-3 py-2 text-ink truncate max-w-[220px]">
+                              {a.adName}
+                            </td>
+                          </HelpTooltip>
                           <td className="px-3 py-2 text-end tabular-nums">{formatCurrency(a.spend)}</td>
                           <td className={cn('px-3 py-2 text-end tabular-nums', a.value > a.spend && 'text-status-green font-medium')}>
                             {formatCurrency(a.value)}
@@ -492,14 +499,16 @@ export function AdsDrawer({
                                 adAttr.reasons.map(r => `• ${r}`).join('\n') +
                                 `\n\n💡 ${adAttr.recommendation}`;
                               return (
-                                <div className="inline-flex flex-col items-center gap-0.5" title={tooltip}>
-                                  <span className="font-semibold tabular-nums text-ink">
-                                    {detRoas > 0 ? formatNumber(detRoas) : '—'}
-                                  </span>
-                                  <span className={cn('inline-block text-[8px] font-bold px-1 py-0 rounded uppercase tracking-wider', tone)}>
-                                    {adAttr.trust.label}
-                                  </span>
-                                </div>
+                                <HelpTooltip content={tooltip}>
+                                  <div className="inline-flex flex-col items-center gap-0.5">
+                                    <span className="font-semibold tabular-nums text-ink">
+                                      {detRoas > 0 ? formatNumber(detRoas) : '—'}
+                                    </span>
+                                    <span className={cn('inline-block text-[8px] font-bold px-1 py-0 rounded uppercase tracking-wider', tone)}>
+                                      {adAttr.trust.label}
+                                    </span>
+                                  </div>
+                                </HelpTooltip>
                               );
                             })()}
                           </td>
@@ -512,16 +521,17 @@ export function AdsDrawer({
                           </td>
                           <td className="px-2 py-2 text-center w-[40px]">
                             {link && (
-                              <a
-                                href={link}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center justify-center w-7 h-7 rounded text-ink-muted hover:text-accent hover:bg-accent/8 transition-colors"
-                                title="פתח את המודעה במנהל מודעות"
-                                aria-label="פתח את המודעה במנהל מודעות"
-                              >
-                                <ExternalLink size={14} />
-                              </a>
+                              <HelpTooltip content="פתח את המודעה במנהל מודעות">
+                                <a
+                                  href={link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center justify-center w-7 h-7 rounded text-ink-muted hover:text-accent hover:bg-accent/8 transition-colors"
+                                  aria-label="פתח את המודעה במנהל מודעות"
+                                >
+                                  <ExternalLink size={14} />
+                                </a>
+                              </HelpTooltip>
                             )}
                           </td>
                         </tr>

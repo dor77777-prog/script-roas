@@ -22,6 +22,7 @@ import { ChevronDown, ChevronLeft, Info, Package, Trophy } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { TableBase } from '@/components/ui/TableBase';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 import { buildProductCentricView, type ProductCohortRow } from '@/lib/productCentricView';
 import { aggregate } from '@/lib/campaignsAggregator';
 import { readProductMap, type ProductMap } from '@/lib/campaignProductMap';
@@ -441,14 +442,16 @@ function ProductRow({
           {expanded ? <ChevronDown size={14} /> : <ChevronLeft size={14} />}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="text-sm font-semibold text-ink truncate" title={row.productTitle}>
-            {row.productTitle}
-            {row.isMultiMapped && (
-              <span className="inline-block text-[10px] font-bold tracking-wider align-middle bg-status-warningBg text-status-warningFg border border-status-warning/30 px-1.5 py-0.5 rounded ms-2">
-                🔗 {row.members.length} קמפיינים
-              </span>
-            )}
-          </div>
+          <HelpTooltip content={row.productTitle}>
+            <div className="text-sm font-semibold text-ink truncate">
+              {row.productTitle}
+              {row.isMultiMapped && (
+                <span className="inline-block text-[10px] font-bold tracking-wider align-middle bg-status-warningBg text-status-warningFg border border-status-warning/30 px-1.5 py-0.5 rounded ms-2">
+                  🔗 {row.members.length} קמפיינים
+                </span>
+              )}
+            </div>
+          </HelpTooltip>
           <div className="text-[11px] text-ink-muted tabular-nums">
             הוצאת קבוצה: CAD {formatCurrency(row.totalCohortSpend)} · הכנסות נטו:{' '}
             CAD {formatCurrency(row.totalNetRevenue)} · ROAS משוקלל:{' '}
@@ -647,10 +650,12 @@ function ProductRow({
                           isLeader && 'bg-accent/5',
                         )}
                       >
-                        <td className="px-2 py-1.5 truncate max-w-[200px]" title={m.campaignName}>
-                          {isLeader && '🥇 '}
-                          {m.campaignName}
-                        </td>
+                        <HelpTooltip content={m.campaignName}>
+                          <td className="px-2 py-1.5 truncate max-w-[200px]">
+                            {isLeader && '🥇 '}
+                            {m.campaignName}
+                          </td>
+                        </HelpTooltip>
                         <td className="px-2 py-1.5 text-end tabular-nums">
                           CAD {formatCurrency(m.spend)}
                         </td>

@@ -51,6 +51,7 @@ import { Loader2, CheckCircle2, XCircle, Clock, AlertCircle } from 'lucide-react
 import { operatorFetch } from '@/lib/operatorClient';
 import { Button } from '@/components/ui/Button';
 import { TableBase } from '@/components/ui/TableBase';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 
 // Wire-shape of the /api/operator/jobs proxy response. Mirrors the
 // narrowed type in route.ts — we deliberately do NOT import the type
@@ -201,9 +202,11 @@ export function JobsTable() {
             <tr key={run.run_id} className="border-t border-glass-edge">
               <td className="p-2 font-mono text-xs">{run.function_id}</td>
               <td className="p-2"><StatusBadge status={run.status} /></td>
-              <td className="p-2 text-ink-secondary text-xs" title={run.run_started_at}>
-                {formatRelative(run.run_started_at)}
-              </td>
+              <HelpTooltip content={run.run_started_at}>
+                <td className="p-2 text-ink-secondary text-xs">
+                  {formatRelative(run.run_started_at)}
+                </td>
+              </HelpTooltip>
               <td className="p-2 text-ink-secondary text-xs" dir="ltr">
                 {formatDuration(run.run_started_at, run.ended_at)}
               </td>

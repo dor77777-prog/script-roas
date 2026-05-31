@@ -20,6 +20,7 @@ import { cn, formatCurrency, formatDate } from '@/lib/utils';
 import { ChartContainer } from '@/components/ui/chart/ChartContainer';
 import { Button } from '@/components/ui/Button';
 import { TableBase } from '@/components/ui/TableBase';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 import {
   ChartTooltip,
   ChartTooltipLabel,
@@ -426,12 +427,11 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
     value === null ? '—' : value.toFixed(2)
   );
   const renderR = (label: string, value: number | null) => (
-    <span
-      title={value === null ? noSignalTitle : undefined}
-      className={cn(value === null && 'text-ink-subtle')}
-    >
-      {label}={formatR(value)}
-    </span>
+    <HelpTooltip content={value === null ? noSignalTitle : undefined}>
+      <span className={cn(value === null && 'text-ink-subtle')}>
+        {label}={formatR(value)}
+      </span>
+    </HelpTooltip>
   );
 
   return (
@@ -442,28 +442,27 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
       </h3>
       <div className="rounded-xl border border-glass-edge bg-glass-2/30 p-3 space-y-3">
         {!chipHidden && (
-          <div
-            title="current state, not date-versioned"
-            className="rounded-md bg-glass-2 border border-glass-edge px-2.5 py-1.5 text-[11px] text-ink-muted flex items-center gap-1.5"
-          >
-            <Info size={12} className="shrink-0 text-ink-subtle" />
-            <span className="leading-relaxed">
-              ה-product↔campaign mapping מבוסס על המיפוי הנוכחי שלך. שינוי המיפוי משפיע על נתונים היסטוריים בדיעבד.
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label="הסתר הודעת מיפוי"
-              onClick={() => {
-                window.sessionStorage.setItem(PRODUCT_MAP_CHIP_KEY, '1');
-                setChipHidden(true);
-              }}
-              className="ms-auto shrink-0"
-            >
-              <X size={12} />
-            </Button>
-          </div>
+          <HelpTooltip content="current state, not date-versioned">
+            <div className="rounded-md bg-glass-2 border border-glass-edge px-2.5 py-1.5 text-[11px] text-ink-muted flex items-center gap-1.5">
+              <Info size={12} className="shrink-0 text-ink-subtle" />
+              <span className="leading-relaxed">
+                ה-product↔campaign mapping מבוסס על המיפוי הנוכחי שלך. שינוי המיפוי משפיע על נתונים היסטוריים בדיעבד.
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="הסתר הודעת מיפוי"
+                onClick={() => {
+                  window.sessionStorage.setItem(PRODUCT_MAP_CHIP_KEY, '1');
+                  setChipHidden(true);
+                }}
+                className="ms-auto shrink-0"
+              >
+                <X size={12} />
+              </Button>
+            </div>
+          </HelpTooltip>
         )}
 
         {/* Dark traffic chip */}
@@ -479,12 +478,14 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
             <div className="text-[10px] text-ink-muted uppercase tracking-wide">
               מתאם (Pearson r) · {primaryChannel}
             </div>
-            <div className={cn(
-              'text-2xl font-bold tabular-nums leading-tight',
-              primaryRClass,
-            )} title={primaryR === null ? noSignalTitle : undefined}>
-              {primaryR === null ? '—' : `${primaryR >= 0 ? '+' : ''}${primaryR.toFixed(2)}`}
-            </div>
+            <HelpTooltip content={primaryR === null ? noSignalTitle : undefined}>
+              <div className={cn(
+                'text-2xl font-bold tabular-nums leading-tight',
+                primaryRClass,
+              )}>
+                {primaryR === null ? '—' : `${primaryR >= 0 ? '+' : ''}${primaryR.toFixed(2)}`}
+              </div>
+            </HelpTooltip>
           </div>
           <div className="flex-1 min-w-[200px] text-[11px] sm:text-xs text-ink-secondary leading-relaxed">
             {(() => {

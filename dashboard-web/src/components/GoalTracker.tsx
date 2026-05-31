@@ -5,6 +5,7 @@ import { Target, Edit3, Check, X, TrendingUp, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 import type { DashboardData } from '@/lib/types';
 import {
   computePacing,
@@ -334,15 +335,16 @@ export function GoalTracker({ data }: Props) {
           />
           {/* Expected pacing marker — vertical tick */}
           {expectedPct > 0 && expectedPct < 1 && (
-            <div
-              className="absolute top-0 bottom-0 w-0.5 bg-ink/40"
-              style={{
-                // In RTL flow, "right" is the start. Position from start = right
-                // of the container.
-                insetInlineStart: `${expectedPct * 100}%`,
-              }}
-              title={`היעד היומי: ${(expectedPct * 100).toFixed(0)}%`}
-            />
+            <HelpTooltip content={`היעד היומי: ${(expectedPct * 100).toFixed(0)}%`}>
+              <div
+                className="absolute top-0 bottom-0 w-0.5 bg-ink/40"
+                style={{
+                  // In RTL flow, "right" is the start. Position from start = right
+                  // of the container.
+                  insetInlineStart: `${expectedPct * 100}%`,
+                }}
+              />
+            </HelpTooltip>
           )}
         </div>
 
