@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { NativeSelect } from '@/components/ui/NativeSelect';
 import { Stat } from '@/components/ui/Stat';
 import { TableBase } from '@/components/ui/TableBase';
 import { HelpTooltip } from '@/components/ui/Tooltip';
@@ -421,10 +423,10 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
       {/* Store filter — independent from global */}
       <div className="flex items-center gap-2">
         <Store size={14} className="text-ink-muted shrink-0" />
-        <select
+        <NativeSelect
           value={localStore}
           onChange={e => setLocalStore(e.target.value)}
-          className="rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/30 min-w-[140px]"
+          className="text-xs sm:text-sm font-medium min-w-[140px]"
         >
           <option value="All">כל החנויות</option>
           {stores.map(s => (
@@ -432,7 +434,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
               {s}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </div>
 
       {/* Range picker — works in all views. from===to means one day.
@@ -442,7 +444,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
           we auto-swap on the way in if needed. */}
       <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
         <Calendar size={14} className="text-ink-muted shrink-0" />
-        <input
+        <Input
           type="date"
           value={localRange.from}
           max={today}
@@ -458,12 +460,12 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
           }}
           aria-label="מתאריך"
           className={cn(
-            'rounded-lg border bg-glass-1 px-2 py-1.5 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/30',
-            isCustomRange ? 'border-accent text-accent' : 'border-glass-edge text-ink-secondary',
+            'w-auto text-xs sm:text-sm font-medium',
+            isCustomRange && 'border-accent text-accent',
           )}
         />
         <span className="text-ink-muted text-xs">—</span>
-        <input
+        <Input
           type="date"
           value={localRange.to}
           max={today}
@@ -477,8 +479,8 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
           }}
           aria-label="עד תאריך"
           className={cn(
-            'rounded-lg border bg-glass-1 px-2 py-1.5 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/30',
-            isCustomRange ? 'border-accent text-accent' : 'border-glass-edge text-ink-secondary',
+            'w-auto text-xs sm:text-sm font-medium',
+            isCustomRange && 'border-accent text-accent',
           )}
         />
         <Button

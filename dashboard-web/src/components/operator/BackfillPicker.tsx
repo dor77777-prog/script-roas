@@ -50,6 +50,7 @@ import { CalendarDays, Loader2 } from 'lucide-react';
 import { STORE_ID_TO_NAME } from '@/lib/platformsByStore';
 import { operatorFetch } from '@/lib/operatorClient';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 
 // Source of truth — mirrors the route's VALID_STORES allowlist.
 const ALL_STORES = ['uzoshop', 'zolplus', 'usmile360'] as const;
@@ -164,23 +165,21 @@ export function BackfillPicker() {
       <div className="flex flex-wrap items-end gap-3">
         <label className="flex flex-col text-sm">
           <span className="text-ink-secondary mb-1">מתאריך</span>
-          <input
+          <Input
             type="date"
             value={from}
             min={HISTORY_BOUNDARY}
             onChange={(e) => setFrom(e.target.value)}
-            className="bg-canvas border border-glass-edge rounded px-2 py-1 text-sm text-ink focus:border-accent"
             dir="ltr"
           />
         </label>
         <label className="flex flex-col text-sm">
           <span className="text-ink-secondary mb-1">עד תאריך</span>
-          <input
+          <Input
             type="date"
             value={to}
             min={from}
             onChange={(e) => setTo(e.target.value)}
-            className="bg-canvas border border-glass-edge rounded px-2 py-1 text-sm text-ink focus:border-accent"
             dir="ltr"
           />
         </label>
@@ -192,7 +191,7 @@ export function BackfillPicker() {
                 key={s}
                 className="flex items-center gap-1 text-sm cursor-pointer"
               >
-                <input
+                <Input
                   type="checkbox"
                   checked={storeIds.has(s)}
                   onChange={() => toggleStore(s)}

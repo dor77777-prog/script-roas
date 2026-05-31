@@ -21,6 +21,7 @@ import useSWR from 'swr';
 import { ChevronDown, ChevronLeft, Info, Package, Trophy } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { TableBase } from '@/components/ui/TableBase';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { buildProductCentricView, type ProductCohortRow } from '@/lib/productCentricView';
@@ -383,7 +384,7 @@ export function ProductCentricView({ storeId, range, productMap: propMap }: Prop
         </h2>
         {soloCount > 0 && (
           <label className="inline-flex items-center gap-1.5 text-xs text-ink-secondary cursor-pointer">
-            <input
+            <Input
               type="checkbox"
               checked={showSolo}
               onChange={e => setShowSolo(e.target.checked)}

@@ -12,6 +12,8 @@ import { Calendar, ChevronDown, Store, Zap } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
+import { NativeSelect } from '@/components/ui/NativeSelect';
 import { applyFromCandidate, applyToCandidate } from '@/lib/rangeClamp';
 
 /**
@@ -101,24 +103,18 @@ export function Filters({ filters, stores, onChange }: Props) {
               <Store size={12} />
               חנות
             </label>
-            <div className="relative">
-              <select
-                value={filters.store}
-                onChange={e => onChange({ ...filters, store: e.target.value })}
-                className="w-full appearance-none rounded-lg border border-glass-edge bg-glass-1 ps-3 pe-9 py-2.5 sm:py-2 text-sm font-medium text-ink hover:border-glass-edge-hot focus:outline-none focus:border-accent transition-colors cursor-pointer"
-              >
-                <option value="All">כל החנויות</option>
-                {stores.map(s => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown
-                size={14}
-                className="pointer-events-none absolute end-2.5 top-1/2 -translate-y-1/2 text-ink-muted"
-              />
-            </div>
+            <NativeSelect
+              value={filters.store}
+              onChange={e => onChange({ ...filters, store: e.target.value })}
+              className="font-medium"
+            >
+              <option value="All">כל החנויות</option>
+              {stores.map(s => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </NativeSelect>
           </div>
         </div>
 
@@ -170,7 +166,7 @@ export function Filters({ filters, stores, onChange }: Props) {
 
             {filters.preset === 'custom' && (
               <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto_1fr] items-center gap-2">
-                <input
+                <Input
                   type="date"
                   value={filters.range.from}
                   max={todayInIsrael()}
@@ -183,10 +179,9 @@ export function Filters({ filters, stores, onChange }: Props) {
                     if (next === null) return;
                     onChange({ ...filters, range: next });
                   }}
-                  className="rounded-lg border border-glass-edge bg-glass-1 px-3 py-2 text-sm w-full text-ink focus:outline-none focus:border-accent transition-colors"
                 />
                 <span className="text-ink-secondary text-center hidden sm:inline">—</span>
-                <input
+                <Input
                   type="date"
                   value={filters.range.to}
                   max={todayInIsrael()}
@@ -199,7 +194,6 @@ export function Filters({ filters, stores, onChange }: Props) {
                     if (next === null) return;
                     onChange({ ...filters, range: next });
                   }}
-                  className="rounded-lg border border-glass-edge bg-glass-1 px-3 py-2 text-sm w-full text-ink focus:outline-none focus:border-accent transition-colors"
                 />
               </div>
             )}

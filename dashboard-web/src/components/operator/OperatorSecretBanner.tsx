@@ -25,6 +25,7 @@ import {
   setOperatorSecret,
 } from '@/lib/operatorClient';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 
 export function OperatorSecretBanner() {
   const [stored, setStored] = useState<string | null>(null);
@@ -71,13 +72,13 @@ export function OperatorSecretBanner() {
         </p>
         <div className="flex items-center gap-2">
           <div className="relative flex-1 max-w-xs">
-            <input
+            <Input
               type={showPassword ? 'text' : 'password'}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
               placeholder="הזן את ה-secret…"
-              className="w-full bg-canvas border border-glass-edge rounded px-2 py-1 text-sm text-ink pr-8 focus:border-accent focus:outline-none"
+              className="pr-8"
               dir="ltr"
               autoComplete="off"
             />
@@ -123,13 +124,13 @@ export function OperatorSecretBanner() {
         {showInput ? (
           <>
             <div className="relative">
-              <input
+              <Input
                 type={showPassword ? 'text' : 'password'}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
                 placeholder="secret חדש…"
-                className="bg-canvas border border-glass-edge rounded px-2 py-0.5 text-xs text-ink pr-7 focus:border-accent focus:outline-none"
+                className="h-7 px-2 py-0.5 text-xs pr-7"
                 dir="ltr"
                 autoComplete="off"
               />

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Target, Edit3, Check, X, TrendingUp, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { Card } from '@/components/ui/Card';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import type { DashboardData } from '@/lib/types';
@@ -172,13 +173,11 @@ export function GoalTracker({ data }: Props) {
           </h2>
         </div>
         <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <span className="absolute start-3 top-1/2 -translate-y-1/2 text-xs text-ink-muted font-medium">
-              CAD
-            </span>
-            <input
+          <div className="flex-1">
+            <Input
               type="text"
               inputMode="numeric"
+              prefix={<span className="text-xs font-medium">CAD</span>}
               value={draft}
               onChange={e => {
                 setDraft(e.target.value.replace(/[^\d,]/g, ''));
@@ -191,13 +190,7 @@ export function GoalTracker({ data }: Props) {
               }}
               placeholder="100,000"
               autoFocus
-              aria-invalid={editError != null || draftIsInvalid}
-              className={cn(
-                'w-full rounded-lg border bg-glass-1 pe-3 ps-12 py-2 text-sm focus:outline-none',
-                editError != null || draftIsInvalid
-                  ? 'border-status-warning focus:border-status-warning'
-                  : 'border-glass-edge focus:border-accent',
-              )}
+              error={editError != null || draftIsInvalid}
             />
           </div>
           <Button

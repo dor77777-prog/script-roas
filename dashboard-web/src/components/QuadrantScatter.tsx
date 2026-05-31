@@ -9,6 +9,7 @@ import {
   ReferenceLine,
 } from 'recharts';
 import { ChartContainer } from '@/components/ui/chart/ChartContainer';
+import { Input } from '@/components/ui/Input';
 import {
   ChartTooltip,
   ChartTooltipLabel,
@@ -160,7 +161,7 @@ export function QuadrantScatter({
             outliers that stretched the original chart). */}
         {data.length > 4 && (
           <label className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs text-ink-secondary cursor-pointer select-none">
-            <input
+            <Input
               type="checkbox"
               checked={zoomCluster}
               onChange={e => setZoomCluster(e.target.checked)}

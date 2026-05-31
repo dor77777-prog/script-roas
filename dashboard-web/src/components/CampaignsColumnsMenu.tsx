@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronDown, ChevronUp, Columns3, RotateCcw, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import {
   CAMPAIGNS_COLUMNS,
@@ -206,7 +207,7 @@ export function CampaignsColumnsMenu({
                           'hover:bg-glass-2',
                         )}
                       >
-                        <input
+                        <Input
                           type="checkbox"
                           checked={!isHidden}
                           onChange={() => toggle(col.id)}

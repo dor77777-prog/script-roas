@@ -50,6 +50,8 @@ import { useState } from 'react';
 import { Plus, Trash2, X } from 'lucide-react';
 import { operatorFetch } from '@/lib/operatorClient';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { NativeSelect } from '@/components/ui/NativeSelect';
 import { TableBase } from '@/components/ui/TableBase';
 
 type Row = {
@@ -219,75 +221,70 @@ export function ManualOverridesCrud() {
       <div className="flex flex-wrap items-end gap-2 p-3 bg-glass-2 rounded">
         <label className="flex flex-col text-xs text-ink-secondary gap-1">
           תאריך
-          <input
+          <Input
             type="date"
             value={formState.date}
             onChange={(e) => setFormState((s) => ({ ...s, date: e.target.value }))}
-            className="bg-canvas border border-glass-edge rounded px-2 py-1 text-sm text-ink"
             dir="ltr"
           />
         </label>
         <label className="flex flex-col text-xs text-ink-secondary gap-1">
           חנות
-          <select
+          <NativeSelect
             value={formState.store_id}
             onChange={(e) => setFormState((s) => ({ ...s, store_id: e.target.value }))}
-            className="bg-canvas border border-glass-edge rounded px-2 py-1 text-sm text-ink"
           >
             {ALL_STORES.map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
         <label className="flex flex-col text-xs text-ink-secondary gap-1">
           פלטפורמה
-          <select
+          <NativeSelect
             value={formState.platform}
             onChange={(e) => setFormState((s) => ({ ...s, platform: e.target.value }))}
-            className="bg-canvas border border-glass-edge rounded px-2 py-1 text-sm text-ink"
           >
             {ALL_PLATFORMS.map((p) => (
               <option key={p} value={p}>
                 {p}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
         <label className="flex flex-col text-xs text-ink-secondary gap-1">
           סכום
-          <input
+          <Input
             type="number"
             step="0.01"
             value={formState.spend}
             onChange={(e) => setFormState((s) => ({ ...s, spend: e.target.value }))}
-            className="bg-canvas border border-glass-edge rounded px-2 py-1 text-sm w-24 text-ink"
+            className="w-24"
             dir="ltr"
             placeholder="0.00"
           />
         </label>
         <label className="flex flex-col text-xs text-ink-secondary gap-1">
           מטבע
-          <select
+          <NativeSelect
             value={formState.currency}
             onChange={(e) => setFormState((s) => ({ ...s, currency: e.target.value }))}
-            className="bg-canvas border border-glass-edge rounded px-2 py-1 text-sm text-ink"
           >
             {ALL_CURRENCIES.map((c) => (
               <option key={c} value={c}>
                 {c}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </label>
         <label className="flex flex-col text-xs text-ink-secondary gap-1 flex-1 min-w-40">
           הערות
-          <input
+          <Input
             type="text"
             value={formState.notes}
             onChange={(e) => setFormState((s) => ({ ...s, notes: e.target.value }))}
-            className="bg-canvas border border-glass-edge rounded px-2 py-1 text-sm text-ink"
             placeholder="(אופציונלי)"
           />
         </label>

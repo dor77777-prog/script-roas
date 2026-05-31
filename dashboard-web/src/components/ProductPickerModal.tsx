@@ -5,6 +5,7 @@ import useSWR from 'swr';
 import { Package, Search, X, Check } from 'lucide-react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { useDrawerEsc } from '@/lib/drawerStack';
 import type { ProductRow } from '@/lib/products';
@@ -281,25 +282,22 @@ export function ProductPickerModal({
               להוצאה.
             </span>
           </p>
-          <div className="relative">
-            {/*
-              HIGH-2 audit fix (2026-05-23): use the logical `end-2.5`
-              property (Tailwind v3 emits `inset-inline-end`) instead of
-              `right-2.5`. The picker is rendered inside a `dir="rtl"`
-              Hebrew document, where physical right == start (not end).
-              The icon now anchors next to the input's `pe-9` padded
-              edge in BOTH directions: RTL → visually right, LTR → left.
-            */}
-            <Search size={14} className="absolute end-2.5 top-1/2 -translate-y-1/2 text-ink-muted pointer-events-none" />
-            <input
-              type="text"
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="חפש מוצר…"
-              className="w-full rounded-lg border border-glass-edge bg-glass-1 ps-3 pe-9 py-2 text-sm focus:outline-none focus:border-accent"
-              autoFocus
-            />
-          </div>
+          {/*
+            HIGH-2 audit fix (2026-05-23): use the logical `end-…`
+            property (Tailwind v3 emits `inset-inline-end`) instead of
+            `right-…`. The picker is rendered inside a `dir="rtl"`
+            Hebrew document, where physical right == start (not end).
+            The Input's `suffix` slot anchors next to the field's
+            `pe-9` padded edge in BOTH directions.
+          */}
+          <Input
+            type="search"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="חפש מוצר…"
+            autoFocus
+            suffix={<Search size={14} />}
+          />
         </div>
 
         <div className="flex-1 overflow-y-auto px-2 sm:px-3 py-2">

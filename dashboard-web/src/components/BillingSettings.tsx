@@ -15,6 +15,8 @@ import {
 } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { NativeSelect } from '@/components/ui/NativeSelect';
 import {
   generateId,
   hasAnyBilling,
@@ -543,7 +545,7 @@ function RecurringTab({
               ) : (
                 <div className="flex items-center gap-3 p-3">
                   <HelpTooltip content={r.active ? 'פעיל' : 'מושעה'}>
-                    <input
+                    <Input
                       type="checkbox"
                       checked={r.active}
                       onChange={e => update(r.id, { active: e.target.checked })}
@@ -710,7 +712,7 @@ function RecurringEditForm({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div>
           <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">שם</label>
-          <input
+          <Input
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="Klaviyo, Shopify Plan, וכו'"
@@ -719,40 +721,37 @@ function RecurringEditForm({
               if (e.key === 'Enter') commit();
               if (e.key === 'Escape') cancel();
             }}
-            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent"
           />
         </div>
         <div>
           <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">חנות</label>
-          <select
+          <NativeSelect
             value={store}
             onChange={e => setStore(e.target.value)}
-            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent"
           >
             <option value="All">כל החנויות</option>
             {storeNames.map(s => (
               <option key={s} value={s}>{s}</option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
         <div>
           <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">סוג</label>
-          <select
+          <NativeSelect
             value={source}
             onChange={e => setSource(e.target.value as CostSource)}
-            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent"
           >
             {Object.entries(SOURCE_LABEL).map(([k, label]) => (
               <option key={k} value={k}>{label}</option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
         <div>
           <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">
             {kind === 'percent' ? 'אחוז מהמחזור (%)' : 'סכום חודשי (CAD)'}
           </label>
           {kind === 'percent' ? (
-            <input
+            <Input
               value={percentInput}
               onChange={e => {
                 setPercentInput(e.target.value.replace(/[^\d.,]/g, ''));
@@ -760,19 +759,14 @@ function RecurringEditForm({
               }}
               inputMode="decimal"
               placeholder="5"
+              error={editError ?? undefined}
               onKeyDown={e => {
                 if (e.key === 'Enter') commit();
                 if (e.key === 'Escape') cancel();
               }}
-              className={cn(
-                'w-full rounded-lg border bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none tabular-nums',
-                editError
-                  ? 'border-status-red focus:border-status-red focus:shadow-[0_0_0_2px_rgba(220,38,38,0.15)]'
-                  : 'border-glass-edge focus:border-accent',
-              )}
             />
           ) : (
-            <input
+            <Input
               value={monthlyCAD}
               onChange={e => {
                 setMonthlyCAD(e.target.value.replace(/[^\d.,]/g, ''));
@@ -780,25 +774,12 @@ function RecurringEditForm({
               }}
               inputMode="numeric"
               placeholder="60"
+              error={editError ?? undefined}
               onKeyDown={e => {
                 if (e.key === 'Enter') commit();
                 if (e.key === 'Escape') cancel();
               }}
-              className={cn(
-                'w-full rounded-lg border bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none tabular-nums',
-                editError
-                  ? 'border-status-red focus:border-status-red focus:shadow-[0_0_0_2px_rgba(220,38,38,0.15)]'
-                  : 'border-glass-edge focus:border-accent',
-              )}
             />
-          )}
-          {editError && (
-            <div
-              role="alert"
-              className="mt-1 text-[11px] text-status-red font-medium"
-            >
-              {editError}
-            </div>
           )}
         </div>
       </div>
@@ -849,11 +830,10 @@ function RecurringEditForm({
       </div>
       <div>
         <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">הערות (אופציונלי)</label>
-        <input
+        <Input
           value={notes}
           onChange={e => setNotes(e.target.value)}
           placeholder="לדוגמה: Klaviyo Pro plan, מתחיל מ-12.5%"
-          className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent"
         />
       </div>
       <div className="flex items-center gap-2 pt-1">
@@ -1079,30 +1059,28 @@ function OneTimeEditForm({
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">תאריך</label>
-          <input
+          <Input
             type="date"
             value={date}
             onChange={e => setDate(e.target.value)}
-            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm tabular-nums focus:outline-none focus:border-accent"
           />
         </div>
         <div>
           <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">חנות</label>
-          <select
+          <NativeSelect
             value={store}
             onChange={e => setStore(e.target.value)}
-            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent"
           >
             <option value="All">כל החנויות</option>
             {storeNames.map(s => (
               <option key={s} value={s}>{s}</option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
       </div>
       <div>
         <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">תיאור</label>
-        <input
+        <Input
           value={description}
           onChange={e => setDescription(e.target.value)}
           autoFocus
@@ -1111,25 +1089,23 @@ function OneTimeEditForm({
             if (e.key === 'Enter') commit();
             if (e.key === 'Escape') cancel();
           }}
-          className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent"
         />
       </div>
       <div className="grid grid-cols-2 gap-2">
         <div>
           <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">סוג</label>
-          <select
+          <NativeSelect
             value={source}
             onChange={e => setSource(e.target.value as CostSource)}
-            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent"
           >
             {Object.entries(SOURCE_LABEL).map(([k, label]) => (
               <option key={k} value={k}>{label}</option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
         <div>
           <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">סכום (CAD)</label>
-          <input
+          <Input
             value={amountCAD}
             onChange={e => {
               setAmountCAD(e.target.value.replace(/[^\d.,]/g, ''));
@@ -1137,33 +1113,19 @@ function OneTimeEditForm({
             }}
             inputMode="numeric"
             placeholder="25"
+            error={editError ?? undefined}
             onKeyDown={e => {
               if (e.key === 'Enter') commit();
               if (e.key === 'Escape') cancel();
             }}
-            className={cn(
-              'w-full rounded-lg border bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none tabular-nums',
-              editError
-                ? 'border-status-red focus:border-status-red focus:shadow-[0_0_0_2px_rgba(220,38,38,0.15)]'
-                : 'border-glass-edge focus:border-accent',
-            )}
           />
-          {editError && (
-            <div
-              role="alert"
-              className="mt-1 text-[11px] text-status-red font-medium"
-            >
-              {editError}
-            </div>
-          )}
         </div>
       </div>
       <div>
         <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">הערות (אופציונלי)</label>
-        <input
+        <Input
           value={notes}
           onChange={e => setNotes(e.target.value)}
-          className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent"
         />
       </div>
       <div className="flex items-center gap-2 pt-1">

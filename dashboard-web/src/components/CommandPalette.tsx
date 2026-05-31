@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils';
 import { useTheme } from './ThemeProvider';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { Input } from '@/components/ui/Input';
 import { useDrawerEsc } from '@/lib/drawerStack';
 import type { DashboardData, Filters as F, PresetKey } from '@/lib/types';
 import { PRESET_LABELS, computePresetRange } from '@/lib/presets';
@@ -522,12 +523,13 @@ export function CommandPalette({
             {/* Search input */}
             <div className="flex items-center gap-2 px-4 py-3 border-b border-glass-edge">
               <Search size={16} className="text-ink-muted shrink-0" />
-              <input
+              <Input
                 ref={inputRef}
+                type="search"
                 value={query}
                 onChange={e => setQuery(e.target.value)}
                 placeholder="חפש קמפיין, מוצר, חנות, פקודה…"
-                className="flex-1 bg-transparent border-0 outline-none text-sm text-ink placeholder:text-ink-muted"
+                className="flex-1 h-auto bg-transparent border-0 px-0 py-0 focus-visible:ring-0"
                 autoFocus
               />
               <Button

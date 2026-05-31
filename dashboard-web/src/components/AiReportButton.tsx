@@ -6,6 +6,7 @@ import { Bot, Copy, Check, Download, X, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { generateAiReport } from '@/lib/aiReport';
 import { Button } from '@/components/ui/Button';
+import { Textarea } from '@/components/ui/Textarea';
 import type { DashboardData, Filters as F } from '@/lib/types';
 import type { ProductsResponse } from '@/app/api/products/route';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
@@ -282,11 +283,11 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
                       צור מחדש
                     </Button>
                   </div>
-                  <textarea
+                  <Textarea
                     readOnly
                     value={report}
                     dir="rtl"
-                    className="w-full h-[400px] sm:h-[500px] rounded-lg border border-glass-edge bg-glass-2/40 p-3 sm:p-4 text-xs sm:text-sm font-mono leading-relaxed text-ink resize-y focus:outline-none focus:border-accent"
+                    className="h-[400px] sm:h-[500px] bg-glass-2/40 p-3 sm:p-4 text-xs sm:text-sm font-mono leading-relaxed"
                     onClick={e => (e.target as HTMLTextAreaElement).select()}
                   />
                   <div className="text-[11px] sm:text-xs text-ink-muted">

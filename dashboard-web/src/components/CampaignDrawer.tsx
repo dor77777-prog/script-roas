@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { NativeSelect } from '@/components/ui/NativeSelect';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import {
   ExternalLink,
@@ -1107,7 +1109,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                         line + right Y-axis for ROAS so the user can compare
                         auction cost vs return-on-spend at a glance. */}
                     <label className="inline-flex items-center gap-1.5 text-[11px] text-ink-secondary cursor-pointer select-none">
-                      <input
+                      <Input
                         type="checkbox"
                         checked={showRoasOverlay}
                         onChange={e => setShowRoasOverlay(e.target.checked)}
@@ -1352,7 +1354,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                   קודם תייג חנות, אח״כ שייך מוצרים. שינוי חל מיידית על מיפוי המוצרים למטה; הסבב הבא של cron-live-heavy (עד 30 דק׳)
                   ירשום את ה-spend תחת החנות הנכונה ב-<code>campaigns_daily</code>. שורות היסטוריות נשארות תחת uzoshop.
                 </p>
-                <select
+                <NativeSelect
                   data-testid="drawer-store-select"
                   disabled={!advertiserId}
                   value={currentValue ?? '__unmapped__'}
@@ -1386,13 +1388,13 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                       }
                     }
                   }}
-                  className="w-full text-sm bg-glass-1 border border-glass-edge rounded px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <option value="__unmapped__">(לא ממופה · ברירת מחדל uzoshop)</option>
                   <option value="uzoshop">uzoshop</option>
                   <option value="zolplus">Zol Plus</option>
                   <option value="usmile360">360usmile</option>
-                </select>
+                </NativeSelect>
                 {!isUnmapped && currentValue !== storeId && (
                   <p className="text-[11px] text-status-orange mt-2">
                     ⚠ מיפוי המוצרים למטה כבר מציג את {currentValue}. שאר הפאנלים בכרטיסייה הזו עדיין מציגים נתונים של {storeId} עד שcron-live-heavy יכתוב מחדש (עד 30 דק׳).

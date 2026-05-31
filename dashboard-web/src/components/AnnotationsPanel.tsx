@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { cn, formatDate } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { NativeSelect } from '@/components/ui/NativeSelect';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import {
   ANNOTATION_KIND_COLOR,
@@ -265,21 +267,20 @@ function AnnotationForm({
       <div className="grid grid-cols-[auto_1fr_auto] gap-2 items-end">
         <div>
           <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">סוג</label>
-          <select
+          <NativeSelect
             value={kind}
             onChange={e => setKind(e.target.value as AnnotationKind)}
-            className="block rounded-lg border border-glass-edge bg-glass-1 px-2 py-1.5 text-sm focus:outline-none focus:border-accent"
           >
             {(Object.keys(ANNOTATION_KIND_LABEL) as AnnotationKind[]).map(k => (
               <option key={k} value={k}>
                 {ANNOTATION_KIND_EMOJI[k]} {ANNOTATION_KIND_LABEL[k]}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
         <div>
           <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">כותרת</label>
-          <input
+          <Input
             value={title}
             onChange={e => setTitle(e.target.value)}
             autoFocus
@@ -288,23 +289,21 @@ function AnnotationForm({
               if (e.key === 'Enter') commit();
               if (e.key === 'Escape') onCancel();
             }}
-            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent"
           />
         </div>
         <div>
           <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">תאריך</label>
-          <input
+          <Input
             type="date"
             value={date}
             max={today}
             onChange={e => setDate(e.target.value)}
-            className="rounded-lg border border-glass-edge bg-glass-1 px-2 py-1.5 text-sm tabular-nums focus:outline-none focus:border-accent"
           />
         </div>
       </div>
       <div>
         <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">הערות (אופציונלי)</label>
-        <input
+        <Input
           value={notes}
           onChange={e => setNotes(e.target.value)}
           placeholder="מה השתנה ולמה — קצר וברור"
@@ -312,7 +311,6 @@ function AnnotationForm({
             if (e.key === 'Enter') commit();
             if (e.key === 'Escape') onCancel();
           }}
-          className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-sm focus:outline-none focus:border-accent"
         />
       </div>
       {storeOptions.length > 0 && (
@@ -320,16 +318,16 @@ function AnnotationForm({
           <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium inline-flex items-center gap-1">
             <StoreIcon size={11} /> שיוך לחנות
           </label>
-          <select
+          <NativeSelect
             value={scopedStore}
             onChange={e => setScopedStore(e.target.value)}
-            className="rounded-lg border border-glass-edge bg-glass-1 px-2 py-1 text-xs focus:outline-none focus:border-accent"
+            className="text-xs h-auto py-1"
           >
             <option value="">כל החנויות</option>
             {storeOptions.map(s => (
               <option key={s} value={s}>{s}</option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
       )}
       <div className="flex items-center gap-2 pt-1">

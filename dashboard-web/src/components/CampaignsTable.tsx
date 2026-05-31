@@ -74,6 +74,8 @@ import { roasLabel } from '@/lib/analytics';
 import { useCampaignTrueRevenue } from '@/lib/hooks/useCampaignTrueRevenue';
 import { CampaignsTableRow } from './CampaignsTableRow';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { NativeSelect } from '@/components/ui/NativeSelect';
 import { TableBase } from '@/components/ui/TableBase';
 import { CampaignDrawer } from './CampaignDrawer';
 import { AdsDrawer } from './AdsDrawer';
@@ -1212,22 +1214,22 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       {/* Store filter */}
       <div className="flex items-center gap-2">
         <StoreIcon size={14} className="text-ink-muted shrink-0" />
-        <select
+        <NativeSelect
           value={localStore}
           onChange={e => setLocalStore(e.target.value)}
-          className="rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-1.5 text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/30 min-w-[120px]"
+          className="text-xs sm:text-sm font-medium min-w-[120px]"
         >
           <option value="All">כל החנויות</option>
           {stores.map(s => (
             <option key={s} value={s}>{s}</option>
           ))}
-        </select>
+        </NativeSelect>
       </div>
 
       {/* Date range */}
       <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
         <Calendar size={14} className="text-ink-muted shrink-0" />
-        <input
+        <Input
           type="date"
           value={localRange.from}
           max={today}
@@ -1240,12 +1242,12 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
             );
           }}
           className={cn(
-            'rounded-lg border bg-glass-1 px-2 py-1.5 text-xs sm:text-sm font-medium',
-            isCustomRange ? 'border-accent text-accent' : 'border-glass-edge text-ink-secondary',
+            'w-auto text-xs sm:text-sm font-medium',
+            isCustomRange && 'border-accent text-accent',
           )}
         />
         <span className="text-ink-muted text-xs">—</span>
-        <input
+        <Input
           type="date"
           value={localRange.to}
           max={today}
@@ -1258,8 +1260,8 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
             );
           }}
           className={cn(
-            'rounded-lg border bg-glass-1 px-2 py-1.5 text-xs sm:text-sm font-medium',
-            isCustomRange ? 'border-accent text-accent' : 'border-glass-edge text-ink-secondary',
+            'w-auto text-xs sm:text-sm font-medium',
+            isCustomRange && 'border-accent text-accent',
           )}
         />
         {isCustomRange && (
@@ -1333,7 +1335,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
             + spotting cannibalization risk at a glance. */}
         <div className="flex items-center gap-2">
           <label className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs text-ink-secondary cursor-pointer select-none">
-            <input
+            <Input
               type="checkbox"
               checked={showOnlyMultiMapped}
               onChange={e => setShowOnlyMultiMapped(e.target.checked)}
@@ -1503,7 +1505,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                 </Button>
               </div>
               <label className="inline-flex items-center gap-1.5 text-[11px] text-ink-secondary cursor-pointer select-none">
-                <input
+                <Input
                   type="checkbox"
                   checked={cpmShowRoas}
                   onChange={e => setCpmShowRoas(e.target.checked)}

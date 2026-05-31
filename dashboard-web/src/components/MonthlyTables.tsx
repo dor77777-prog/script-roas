@@ -7,6 +7,7 @@ import type { DailyRow, DashboardData } from '@/lib/types';
 import { cn, formatDate, formatNumber } from '@/lib/utils';
 import { RefundIndicator } from './RefundIndicator';
 import { Button } from '@/components/ui/Button';
+import { NativeSelect } from '@/components/ui/NativeSelect';
 import { TableBase } from '@/components/ui/TableBase';
 import { roasLabel } from '@/lib/analytics';
 import { buildDateRangeKey } from '@/lib/dateRange';
@@ -238,17 +239,17 @@ export function MonthlyTables({ stores, globalStore, bare = false, year, month, 
         </Tab>
       </div>
       {mode === 'per-store' && (
-        <select
+        <NativeSelect
           value={storeFilter}
           onChange={e => setStoreFilter(e.target.value)}
-          className="rounded-lg border border-glass-edge bg-glass-1 px-3 py-1.5 text-sm font-medium"
+          className="font-medium w-auto"
         >
           {stores.map(s => (
             <option key={s} value={s}>
               {s}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       )}
       <span className="text-[10px] sm:text-xs text-ink-muted ml-auto tabular-nums">
         {visibleMonthGroups.length} חודשים

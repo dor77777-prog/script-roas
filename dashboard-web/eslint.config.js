@@ -30,6 +30,7 @@ import noLegacyTailwindClass from './eslint-rules/no-legacy-tailwind-class.js';
 import noCrossPaletteImport from './eslint-rules/no-cross-palette-import.js';
 import noRawTableInComponents from './eslint-rules/no-raw-table-in-components.js';
 import noNativeTitleTooltip from './eslint-rules/no-native-title-tooltip.js';
+import noRawInputInComponents from './eslint-rules/no-raw-input-in-components.js';
 
 // Local plugin — bundles the design-system regression guards.
 const localPlugin = {
@@ -41,6 +42,7 @@ const localPlugin = {
     'no-cross-palette-import': noCrossPaletteImport,
     'no-raw-table-in-components': noRawTableInComponents,
     'no-native-title-tooltip': noNativeTitleTooltip,
+    'no-raw-input-in-components': noRawInputInComponents,
   },
 };
 
@@ -139,6 +141,11 @@ export default tseslint.config(
       // RTL bugs, ignores prefers-reduced-motion). Use `HelpTooltip`
       // from `@/components/ui/Tooltip`.
       'local/no-native-title-tooltip': 'error',
+      // Wave-2 Task 2.7 guard — raw <input>/<select>/<textarea> bypass
+      // the canonical glass-1 surface, the dir="auto" default, and the
+      // shared error/aria-invalid wiring. Use Input / NativeSelect /
+      // Textarea from @/components/ui instead.
+      'local/no-raw-input-in-components': 'error',
 
       // Allow ts-expect-error / ts-ignore with description (we use it in
       // shim casts where the type erasure is documented inline).

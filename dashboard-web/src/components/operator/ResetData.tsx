@@ -63,6 +63,7 @@ import {
 } from '@/lib/operatorReset';
 import { operatorFetch } from '@/lib/operatorClient';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 
 // Wire-shape of the /api/operator/reset 200 response. Mirrored locally
 // rather than imported across the server/client boundary to keep the
@@ -336,11 +337,10 @@ export function ResetData() {
                 >
                   {CONFIRM_TOKEN_FOR_SCOPE[active.scope]}
                 </code>
-                <input
+                <Input
                   type="text"
                   value={typed}
                   onChange={(e) => setTyped(e.target.value)}
-                  className="w-full bg-canvas border border-glass-edge rounded px-2 py-1 text-sm text-ink"
                   dir="ltr"
                   placeholder="הקלד כאן…"
                   autoFocus

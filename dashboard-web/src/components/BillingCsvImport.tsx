@@ -4,6 +4,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Upload, AlertCircle, Check } from 'lucide-react';
 import { cn, formatCurrency } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { NativeSelect } from '@/components/ui/NativeSelect';
+import { Textarea } from '@/components/ui/Textarea';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import {
   findMatchingRecurring,
@@ -181,7 +184,7 @@ export function BillingCsvImport({
       <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-end">
         <div>
           <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">חנות יעד</label>
-          <select
+          <NativeSelect
             value={defaultStore}
             onChange={e => {
               const next = e.target.value;
@@ -203,12 +206,11 @@ export function BillingCsvImport({
                 };
               }));
             }}
-            className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-2 text-sm focus:outline-none focus:border-accent"
           >
             {storeNames.map(s => (
               <option key={s} value={s}>{s}</option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
         <Button
           size="sm"
@@ -218,7 +220,7 @@ export function BillingCsvImport({
           <Upload size={14} />
           בחר קובץ
         </Button>
-        <input
+        <Input
           ref={fileInput}
           type="file"
           accept=".csv,text/csv"
@@ -232,13 +234,13 @@ export function BillingCsvImport({
 
       <div>
         <label className="text-[11px] sm:text-[10px] text-ink-muted uppercase tracking-wide font-medium">או הדבק כאן את ה-CSV</label>
-        <textarea
+        <Textarea
           value={csv}
           onChange={e => setCsv(e.target.value)}
           placeholder="Bill number,Issue date,Currency,Total,..."
           rows={6}
           dir="ltr"
-          className="w-full rounded-lg border border-glass-edge bg-glass-1 px-2.5 py-2 text-xs font-mono leading-relaxed focus:outline-none focus:border-accent"
+          className="text-xs font-mono leading-relaxed"
         />
         <Button
           variant="secondary"
@@ -296,7 +298,7 @@ export function BillingCsvImport({
                 )}
               >
                 <HelpTooltip content={p.skip ? 'בחר כדי לייבא' : 'בטל כדי לדלג על שורה זו'}>
-                  <input
+                  <Input
                     type="checkbox"
                     checked={!p.skip}
                     onChange={e => setRow(p.id, { skip: !e.target.checked })}
