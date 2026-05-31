@@ -59,7 +59,7 @@ export function CampaignDrawerStatusSection(p: CampaignDrawerStatusSectionProps)
           column on phones so the chip labels don't truncate. */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
         <div className="flex flex-col items-start gap-1">
-          <span className="text-[10px] text-ink-secondary">configured</span>
+          <span className="text-[10px] text-ink-secondary"><bdi dir="ltr">configured</bdi></span>
           <span className={
             'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ' +
             (isBackfillUnknown
@@ -70,13 +70,13 @@ export function CampaignDrawerStatusSection(p: CampaignDrawerStatusSectionProps)
           </span>
         </div>
         <div className="flex flex-col items-start gap-1">
-          <span className="text-[10px] text-ink-secondary">effective</span>
+          <span className="text-[10px] text-ink-secondary"><bdi dir="ltr">effective</bdi></span>
           <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-glass-2 text-ink">
             {p.effectiveStatus ?? '—'}
           </span>
         </div>
         <div className="flex flex-col items-start gap-1">
-          <span className="text-[10px] text-ink-secondary">delivery</span>
+          <span className="text-[10px] text-ink-secondary"><bdi dir="ltr">delivery</bdi></span>
           <span className={
             'inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ' +
             deliveryClass(p.deliveryStatus)
@@ -105,9 +105,14 @@ export function CampaignDrawerStatusSection(p: CampaignDrawerStatusSectionProps)
           <span className="text-ink">{relIso(p.statusChangedAt)}</span>
           <span className="text-ink-secondary">סטטוס נדגם בהצלחה</span>
           <span className="text-ink">{relIso(p.lastStatusSuccessAt)}</span>
-          <span className="text-ink-secondary">last_live_tick</span>
+          {/* LTR identifiers in an RTL parent. Wrap each in <bdi dir="ltr">
+              so the parent grid logical-row order stays stable and the
+              English glyph string doesn't bleed into the Hebrew column on
+              re-flow. The Hebrew labels above don't need <bdi> because they
+              already inherit the document direction cleanly. */}
+          <span className="text-ink-secondary"><bdi dir="ltr">last_live_tick</bdi></span>
           <span className="text-ink">{relIso(p.lastLiveTickAt)}</span>
-          <span className="text-ink-secondary">metrics lag</span>
+          <span className="text-ink-secondary"><bdi dir="ltr">metrics lag</bdi></span>
           <span className="text-ink">{relMin(p.metricsLagMinutes)}</span>
         </div>
       </div>

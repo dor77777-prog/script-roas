@@ -124,7 +124,11 @@ export function StatusPill({ className, testId = 'operator-status-pill' }: Statu
         aria-live="polite"
       >
         {status === 'green' && <span className="pulse" aria-hidden="true" />}
-        {label} · {pctText}
+        {/* Mixed: Hebrew label + LTR percentage ("תקין · 85%"). Wrap the
+            percentage in <bdi dir="ltr"> so the % glyph stays on the right
+            of the digits in the RTL document instead of bidi-flipping to
+            "85% · תקין". */}
+        {label} · <bdi dir="ltr">{pctText}</bdi>
       </span>
     </HelpTooltip>
   );

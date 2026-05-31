@@ -68,7 +68,12 @@ export function FreshnessBadge({
       data-stage={stage}
     >
       {stage === 'fresh' && <span className="pulse" aria-hidden="true" />}
-      {display}
+      {/* worstLabel mixes a platform name + duration ("TikTok stuck · 1h 47min")
+          while `label` for the live stage carries an LTR clock value ("08:42").
+          Wrap in <bdi dir="ltr"> so the chip content doesn't bidi-flip when
+          rendered inside the RTL document — Hebrew text outside the chip
+          stays unaffected. */}
+      <bdi dir="ltr">{display}</bdi>
     </span>
   );
 }
