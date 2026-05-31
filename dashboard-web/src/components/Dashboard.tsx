@@ -41,7 +41,7 @@ import { HomePerStoreBand } from './HomePerStoreBand';
 import { readDashboardState, syncUrl, type TabKey } from '@/lib/urlState';
 import { buildDateRangeKey } from '@/lib/dateRange';
 import { Button } from '@/components/ui/Button';
-import * as Tabs from '@radix-ui/react-tabs';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { AnalysisTrendsTab } from './AnalysisTrendsTab';
 import { AnalysisArchiveTab } from './AnalysisArchiveTab';
 import { GoalTracker } from './GoalTracker';
@@ -499,28 +499,18 @@ function AnalysisTab({
   setFilters: (next: F) => void;
 }) {
   return (
-    <Tabs.Root defaultValue="trends" className="flex flex-col gap-4">
-      <Tabs.List className="flex gap-2 border-b border-glass-edge">
-        <Tabs.Trigger
-          value="trends"
-          className="px-3 py-2 text-sm data-[state=active]:font-medium data-[state=active]:border-b-2 data-[state=active]:border-accent"
-        >
-          מגמות
-        </Tabs.Trigger>
-        <Tabs.Trigger
-          value="archive"
-          className="px-3 py-2 text-sm data-[state=active]:font-medium data-[state=active]:border-b-2 data-[state=active]:border-accent"
-        >
-          היסטוריה
-        </Tabs.Trigger>
-      </Tabs.List>
-      <Tabs.Content value="trends">
+    <Tabs defaultValue="trends" variant="underline" className="flex flex-col gap-4">
+      <TabsList>
+        <TabsTrigger value="trends">מגמות</TabsTrigger>
+        <TabsTrigger value="archive">היסטוריה</TabsTrigger>
+      </TabsList>
+      <TabsContent value="trends">
         <AnalysisTrendsTab data={data} filtered={filtered} filters={filters} setFilters={setFilters} />
-      </Tabs.Content>
-      <Tabs.Content value="archive">
+      </TabsContent>
+      <TabsContent value="archive">
         <AnalysisArchiveTab stores={data.stores} globalStore={filters.store} />
-      </Tabs.Content>
-    </Tabs.Root>
+      </TabsContent>
+    </Tabs>
   );
 }
 

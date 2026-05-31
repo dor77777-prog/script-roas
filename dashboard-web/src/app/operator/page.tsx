@@ -14,7 +14,7 @@
 // Design tokens (`max-w-7xl`, `text-ink-secondary`, etc.) follow S-8 (RTL +
 // Hebrew) and D-D4 (match existing dashboard styling — no new tokens).
 
-import * as Tabs from '@radix-ui/react-tabs';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { OperatorSecretBanner } from '@/components/operator/OperatorSecretBanner';
 import { Heading } from '@/components/ui/Typography';
 import { SyncTab } from './SyncTab';
@@ -56,32 +56,28 @@ export default function OperatorPage() {
           secret even when the gate is not enforced. */}
       <OperatorSecretBanner />
 
-      <Tabs.Root defaultValue="sync" className="mt-6">
-        <Tabs.List className="flex gap-2 border-b border-glass-edge mb-6">
+      <Tabs defaultValue="sync" variant="underline" className="mt-6">
+        <TabsList className="mb-6">
           {TABS.map(([value, label]) => (
-            <Tabs.Trigger
-              key={value}
-              value={value}
-              className="px-3 py-2 text-sm data-[state=active]:font-medium data-[state=active]:border-b-2 data-[state=active]:border-accent"
-            >
+            <TabsTrigger key={value} value={value}>
               {label}
-            </Tabs.Trigger>
+            </TabsTrigger>
           ))}
-        </Tabs.List>
+        </TabsList>
 
-        <Tabs.Content value="sync">
+        <TabsContent value="sync">
           <SyncTab />
-        </Tabs.Content>
-        <Tabs.Content value="health">
+        </TabsContent>
+        <TabsContent value="health">
           <HealthTab />
-        </Tabs.Content>
-        <Tabs.Content value="activity">
+        </TabsContent>
+        <TabsContent value="activity">
           <ActivityTab />
-        </Tabs.Content>
-        <Tabs.Content value="danger">
+        </TabsContent>
+        <TabsContent value="danger">
           <DangerTab />
-        </Tabs.Content>
-      </Tabs.Root>
+        </TabsContent>
+      </Tabs>
     </main>
   );
 }

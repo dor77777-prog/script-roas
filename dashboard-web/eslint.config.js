@@ -147,6 +147,26 @@ export default tseslint.config(
       // Textarea from @/components/ui instead.
       'local/no-raw-input-in-components': 'error',
 
+      // Wave-2 Task 2.10 guard — Radix imports outside components/ui/
+      // bypass the wrapped primitives (Tabs, Dialog, Sheet, Tooltip,
+      // Switch, Select, Button) and the design-system surface treatment.
+      // The 8 files in components/ui/ are the only allowed consumers; an
+      // override below switches this off for that directory.
+      // (Wave-4 Task 4.5 will add `local/no-physical-direction-in-components`
+      //  here; Wave-5 Task 5.10 will add `local/no-emoji-in-jsx`.)
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@radix-ui/react-*'],
+              message:
+                'Import from @/components/ui/{Primitive} instead. Radix imports are reserved for primitives in components/ui/.',
+            },
+          ],
+        },
+      ],
+
       // Allow ts-expect-error / ts-ignore with description (we use it in
       // shim casts where the type erasure is documented inline).
       '@typescript-eslint/ban-ts-comment': [
@@ -170,6 +190,17 @@ export default tseslint.config(
       // Tests call hooks via `runHook()` helpers; the linter's
       // function-name heuristic flags these as "not a custom hook".
       'react-hooks/rules-of-hooks': 'off',
+    },
+  },
+
+  // 4b. Primitives in components/ui/ ARE the wrapped Radix consumers — the
+  // no-restricted-imports rule blocks Radix everywhere else but must be
+  // off here so Tabs.tsx / Dialog.tsx / Sheet.tsx / Tooltip.tsx /
+  // Switch.tsx / Select.tsx / Button.tsx can import @radix-ui/react-*.
+  {
+    files: ['src/components/ui/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': 'off',
     },
   },
 

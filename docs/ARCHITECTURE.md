@@ -2301,10 +2301,19 @@ table semantics. If row counts ever exceed ~500, server-side pagination
 deferral rationale.
 
 ### ESLint guards
-3 custom rules prevent regression:
+9 enforcement rules (all `'error'` severity) prevent design-system regression:
 1. `local/no-raw-button-in-components` — forbid `<button>` outside `components/ui/`.
 2. `local/no-dark-variant-in-components` — forbid `dark:` Tailwind variants in components.
 3. `local/no-hex-color-in-components` — forbid hex literals in components (5 SVG-color exemptions inline in HeroOverview).
+4. `local/no-legacy-tailwind-class` — forbid pre-Wave-1 legacy palette classes (Wave-1 Task 1.2).
+5. `local/no-cross-palette-import` — forbid cross-palette imports between scope boundaries (Wave-1 Task 1.2).
+6. `local/no-raw-table-in-components` — forbid raw `<table>` outside `TableBase` (Wave-2 Task 2.2).
+7. `local/no-native-title-tooltip` — forbid native `title="…"` tooltips (Wave-2 Task 2.6).
+8. `local/no-raw-input-in-components` — forbid raw `<input>/<select>/<textarea>` (Wave-2 Task 2.7).
+9. `no-restricted-imports` — forbid `@radix-ui/react-*` imports outside `components/ui/` (Wave-2 Task 2.10); primitives wrap Radix and are the only allowed consumers.
+
+Wave-4 Task 4.5 will add `local/no-physical-direction-in-components`;
+Wave-5 Task 5.10 will add `local/no-emoji-in-jsx`.
 
 ### Tests
 Final count: 1602 node passed | 9 skipped + ~120 DOM tests. New tests:
