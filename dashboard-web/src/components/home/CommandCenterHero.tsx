@@ -345,27 +345,24 @@ function NetSparkline({
  * surrounding tint in lock-step.
  * -------------------------------------------------------------------------- */
 
-/* Round 6 (2026-05-31): orange shifted to hue 45 / chroma 0.24 to match
- * the `--band-orange` token bump in globals.css (was hue 55 / chroma 0.22
- * which read as yellow-orange/amber against the dark canvas). Keep this
- * map in sync with `:root --band-*` — sparkline strokes should NEVER
- * desync from the surrounding card's band glow. */
+/* Round 7 (2026-05-31): reads directly from --band-* tokens so the
+ * sparkline stroke tracks the theme without any manual sync.
+ * CommandCenterHero is NOT a chart file → var(--band-*) is allowed. */
 const BAND_STROKE: Record<RoasBand, string> = {
-  red:    'oklch(62% 0.26 25)',
-  orange: 'oklch(70% 0.24 45)',
-  green:  'oklch(64% 0.24 145)',
-  blue:   'oklch(62% 0.22 240)',
-  gray:   'oklch(60% 0.012 250)',
+  red:    'var(--band-red)',
+  orange: 'var(--band-orange)',
+  green:  'var(--band-green)',
+  blue:   'var(--band-blue)',
+  gray:   'var(--band-gray)',
 };
 
 /* --------------------------------------------------------------------------
- * Neutral sparkline stroke used when a secondary card carries a band
- * background (Change C — 2026-05-31). A semi-transparent warm-white sits
- * on top of any band hue without competing with it, so the spark reads as
- * a tonal echo of the card's surface rather than a semantic-coloured stroke
- * fighting the band tint.
+ * Neutral sparkline stroke for secondary cards — derived from --text so it
+ * always contrasts the card surface: near-white in dark mode, near-ink in
+ * light mode. The 55% alpha keeps it tonal rather than competing with the
+ * band hue of any surrounding card.
  * -------------------------------------------------------------------------- */
-const NEUTRAL_SPARK_STROKE = 'oklch(95% 0.008 80 / 0.65)';
+const NEUTRAL_SPARK_STROKE = 'oklch(from var(--text) l c h / 0.55)';
 
 /* --------------------------------------------------------------------------
  * MiniSparkline — slim 30 px stroke+fill spark for the secondary cards.

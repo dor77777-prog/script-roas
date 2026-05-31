@@ -263,13 +263,13 @@ function StoreCard({
       {/* ROAS hero — huge banded number. 56-64px so the operator can read
           today's ROAS from across the room. The label drops to its own line
           (above the number) so the number gets the full horizontal axis. */}
-      <div className="mt-3 flex items-end justify-between gap-3">
+      <div className="mt-3 flex items-end justify-between gap-3 min-w-0">
         <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-ink-muted">
           ROAS היום
         </span>
         <bdi
           dir="ltr"
-          className="v banded text-[60px] md:text-[72px] font-light tabular-nums tracking-tight leading-none"
+          className="v banded text-[60px] md:text-[72px] font-light tabular-nums tracking-tight leading-none whitespace-nowrap"
         >
           {fmtRoasText(store.roas)}
         </bdi>

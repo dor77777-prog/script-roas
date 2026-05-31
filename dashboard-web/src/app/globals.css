@@ -474,6 +474,8 @@ input[type="number"] {
   background-clip: padding-box;
 }
 *::-webkit-scrollbar-thumb:hover { background: var(--glass-3); background-clip: padding-box; }
+[data-theme="light"] *::-webkit-scrollbar-thumb { background: oklch(82% 0.012 265); }
+[data-theme="light"] *::-webkit-scrollbar-thumb:hover { background: oklch(72% 0.014 265); }
 
 /* Hide scrollbar for tab nav strip and other horizontal scrollers. */
 .scrollbar-hide::-webkit-scrollbar { display: none; }
@@ -970,14 +972,23 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   color: transparent;
 }
 
+/* Light mode: the white→gray clip is invisible on a white card — flip to a
+   dark→mid vertical ink gradient so the neutral big numbers read on light. */
+[data-theme="light"] .v.neutral {
+  background: linear-gradient(180deg, oklch(34% 0.03 272) 0%, oklch(46% 0.02 272) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
 /* Band chips — restate the band as a small uppercase pill alongside
    the big number (e.g. "GREEN" / "RED"). Verbatim from mockup. */
 .band-chip { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.06em; font-family: 'Geist Mono'; }
-.chip-red    { background: oklch(64% 0.22 22  / 0.18); color: var(--band-red); }
-.chip-orange { background: oklch(78% 0.16 75  / 0.18); color: var(--band-orange); }
-.chip-green  { background: oklch(70% 0.18 145 / 0.18); color: var(--band-green); }
-.chip-blue   { background: oklch(68% 0.16 240 / 0.18); color: var(--band-blue); }
-.chip-gray   { background: oklch(60% 0.012 250 / 0.12); color: var(--text-muted); }
+.chip-red    { background: oklch(from var(--band-red) l c h / 0.18); color: var(--band-red); }
+.chip-orange { background: oklch(from var(--band-orange) l c h / 0.18); color: var(--band-orange); }
+.chip-green  { background: oklch(from var(--band-green) l c h / 0.18); color: var(--band-green); }
+.chip-blue   { background: oklch(from var(--band-blue) l c h / 0.18); color: var(--band-blue); }
+.chip-gray   { background: oklch(from var(--band-gray) l c h / 0.12); color: var(--text-muted); }
 
 /* ===========================================================================
    FRESHNESS DESATURATION — Task 1.4.
@@ -1012,9 +1023,9 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    built-in `animate-pulse` utility (same trap as Task 1.1 cleanup). */
 .fresh-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 4px; font-family: 'Geist Mono'; text-transform: uppercase; letter-spacing: 0.06em; }
 .fresh-chip .pulse { width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 6px currentColor; }
-.fresh-chip.live  { background: oklch(70% 0.18 145 / 0.18); color: var(--band-green); }
-.fresh-chip.aging { background: oklch(78% 0.16 75  / 0.18); color: var(--band-orange); }
-.fresh-chip.stale { background: oklch(64% 0.22 22  / 0.18); color: var(--band-red); }
+.fresh-chip.live  { background: oklch(from var(--band-green) l c h / 0.18); color: var(--band-green); }
+.fresh-chip.aging { background: oklch(from var(--band-orange) l c h / 0.18); color: var(--band-orange); }
+.fresh-chip.stale { background: oklch(from var(--band-red) l c h / 0.18); color: var(--band-red); }
 .fresh-chip.live .pulse { animation: fresh-pulse 2s ease-out infinite; }
 @keyframes fresh-pulse {
   0%, 100% { opacity: 1;   transform: scale(1); }
@@ -1068,7 +1079,7 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 /* Per-platform CPM cells — same layout treatment but with a slightly
    larger gap because each cell stacks 3 stitches (platform badge →
    spend caption → CPM value). Mirrors mockup .cpm-cell at line 230. */
-.cpm-row-cells .cell { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 10px 12px; background: oklch(100% 0 0 / 0.03); border: 1px solid var(--glass-edge); border-radius: 8px; }
+.cpm-row-cells .cell { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 10px 12px; background: oklch(from var(--text) l c h / 0.03); border: 1px solid var(--glass-edge); border-radius: 8px; }
 
 /* Per-store CPM cells — bump padding so the bigger value (18-20px) has
    the same proportional breathing room as the 14px default. */

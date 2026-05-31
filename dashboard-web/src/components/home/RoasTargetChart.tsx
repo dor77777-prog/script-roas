@@ -606,7 +606,7 @@ export function RoasTargetChart({
                   style={{
                     transform: 'translateX(-50%)',
                     top: -6,
-                    textShadow: '0 0 8px oklch(78% 0.16 75 / 0.7)',
+                    textShadow: '0 0 8px oklch(from var(--chart-pin-line) l c h / 0.7)',
                   }}
                 >
                   {pin.icon ?? '💰'}
