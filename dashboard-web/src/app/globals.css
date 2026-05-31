@@ -984,13 +984,23 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 .glass[data-band]:not([data-band="gray"]) .sl {
   color: oklch(94% 0.012 80);
 }
-.glass[data-band][data-band-strength="muted"] .hero-eyebrow,
 .glass[data-band][data-band-strength="muted"] .sl {
   /* 2026-05-31 mockup-alignment: muted cards are now CLEAN NEUTRAL (no
      band tint), so the white-ish lift the strong band cards use would make
      these labels too bright / low-contrast on a neutral surface. Reset to
      the normal muted ink so neutral-card labels read like any other card. */
   color: var(--text-muted);
+}
+/* operator-2026-06-01b: the NEUTRAL hero KPI cards (Spend / Revenue / CPM /
+   Orders / Inventory — all `data-band-strength="muted"` on a plain `--glass-1`
+   surface) carried their metric-name eyebrow at `--text-muted` (faint gray).
+   Operator wants these labels near-BLACK for legibility, so promote the
+   eyebrow to `--text` (dark ink in light / light ink in dark — theme-correct).
+   Scoped to `[data-band-strength="muted"]` so the BANDED hero cards (Operating
+   Profit + ROAS, which have NO muted attribute) keep their WHITE eyebrow from
+   the `:not([data-band="gray"]) .hero-eyebrow` rule above. */
+.glass[data-band][data-band-strength="muted"] .hero-eyebrow {
+  color: var(--text);
 }
 /* The `.cell.spend .sl::before` / `.cell.revenue .sl::before` glyph
    colours use the band hues directly; the brighter `.sl` colour above
@@ -1214,8 +1224,11 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   background: oklch(from var(--band-gray) l c h / 0.12);
   color: var(--text-muted);
 }
+/* operator-2026-06-01b: ROAS caption ("ROAS · היום") on the gray no-data card
+   was `--text-muted` (faint); operator wants near-black, so use `--text`. The
+   band-tag pill above stays muted (it is a chip, not a label). */
 .glass[data-band="gray"].per-store-card .roas-cap {
-  color: var(--text-muted);
+  color: var(--text);
   opacity: 1;
 }
 
@@ -1350,7 +1363,17 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 .per-store-card.glass[data-band="gray"] .cpm-row-cells .cpm-spend-cap {
   color: var(--text);
 }
+/* operator-2026-06-01b: the gray (no-data/ROAS-0) per-store card labels were
+   pinned to `--text-muted` (faint gray). Operator reports they read as
+   illegibly faint, so promote the labels to `--text` (near-black in light /
+   near-white in dark — theme-correct "black"). Covers the 4-up metric grid
+   labels (`.sl`), the per-platform CPM cell labels, the section label
+   ("CPM לפי פלטפורמה" = `.cpm-row-label`) and the ROAS caption
+   ("ROAS · היום" = `.roas-cap`). The `.cpm-spend-cap` + platform NAME are
+   already pinned to `--text` in the structural-values rule above. We do NOT
+   touch the vivid (red/orange/green/blue) cards — those stay all-white. */
 .per-store-card.glass[data-band="gray"] .scard-main-grid .sl,
-.per-store-card.glass[data-band="gray"] .cpm-row-cells .sl {
-  color: var(--text-muted);
+.per-store-card.glass[data-band="gray"] .cpm-row-cells .sl,
+.per-store-card.glass[data-band="gray"] .cpm-row-label {
+  color: var(--text);
 }
