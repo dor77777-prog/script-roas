@@ -168,6 +168,36 @@
   /* Chart helper tokens (used by RoasChart axis grid + CPM-prev ghost line). */
   --chart-axis:     oklch(60% 0.015 250 / 0.6);
   --chart-cpm-prev: oklch(75% 0.15 75 / 0.6);
+
+  /* ---------------------------------------------------------------------
+     Task 1.10 — annotation pin palette.
+     Hues consumed by lib/annotations.ts (ANNOTATION_KIND_COLOR map).
+     Chart-pin surface is distinct from per-store badges and band glows,
+     but we still rotate the three "loud" pins (sale / creative / launch)
+     away from the platform + store hues they previously collided with
+     so a creative pin sitting on top of an uzoshop line is still
+     unambiguous. Regression guard: colorCollisions.test.ts pins ΔH ≥ 13°
+     between every pin and the platform/store/band hue it could overlap.
+       sale     320  was 175 — clear of organic teal (175) AND uzo (210)
+       creative 180  was 210 — clear of uzo (210) AND organic (175)
+       launch   145  was 145 — same hue as band-green / status-green by
+                              design (launch IS a positive event); test
+                              skips the launch↔band-green pair because
+                              they never share a surface (pin = vertical
+                              chart line, band = card edge glow).
+     The remaining pins (pause / budget / pricing / supplier / other)
+     occupy hues already used by status / band but on disjoint surfaces
+     (chart annotation pins never render on chips or card edges) and are
+     therefore not part of the collision test matrix.
+     ---------------------------------------------------------------------*/
+  --annotation-launch:   oklch(70% 0.18 145);
+  --annotation-pause:    oklch(60% 0.012 250);
+  --annotation-budget:   oklch(78% 0.16 75);
+  --annotation-pricing:  oklch(72% 0.20 280);
+  --annotation-sale:     oklch(72% 0.20 320);
+  --annotation-creative: oklch(75% 0.14 180);
+  --annotation-supplier: oklch(68% 0.16 240);
+  --annotation-other:    oklch(64% 0.018 250);
 }
 
 /* ===========================================================================
