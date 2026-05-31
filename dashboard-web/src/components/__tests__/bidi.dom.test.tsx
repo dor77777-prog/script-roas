@@ -45,6 +45,7 @@ import { CampaignsTopList, type CampaignTopListPoint } from '@/components/Campai
 import { AdsDrawer } from '@/components/AdsDrawer';
 import { CommandPalette } from '@/components/CommandPalette';
 import { ThemeProvider } from '@/components/ThemeProvider';
+import { fmtMoney, fmtMoneyString } from '@/lib/format';
 import type { CampaignRow } from '@/lib/campaigns';
 import type { DashboardData, Filters as DashFilters } from '@/lib/types';
 
@@ -177,6 +178,29 @@ describe('Wave 4 / Task 4.2 — additional <bdi> isolation regressions', () => {
     expect(allBdi.find(b => b.textContent === 'My Ad Set 2026')).toBeDefined();
   });
 
+  // Wave 4 / Task 4.1 — CampaignsTopList verdict arrow uses the lucide SVG
+  // `ArrowLeft`, NOT a Unicode "→". Under RTL the legacy glyph pointed away
+  // from the verdict text it referenced. The full pin lives in
+  // `campaignsTopListArrow.dom.test.tsx`; this is a cross-link assertion so
+  // the bidi suite covers the same Wave-4 contract end-to-end.
+  it('CampaignsTopList verdicts carry an SVG arrow (no Unicode → glyph)', () => {
+    const data: CampaignTopListPoint[] = [
+      { name: 'Hero Camp', platform: 'Meta', storeName: 'uzoshop', roas: 5.0, cac: 12, spend: 1000 },
+      { name: 'Dud Camp',  platform: 'Meta', storeName: 'uzoshop', roas: 0.3, cac: 200, spend: 500 },
+    ];
+    const { container } = render(<CampaignsTopList data={data} title="Test" />);
+    const verdicts = container.querySelectorAll<HTMLElement>(
+      '[data-testid="campaigns-top-list-verdict"]',
+    );
+    expect(verdicts.length).toBeGreaterThan(0);
+    for (const v of verdicts) {
+      expect(v.textContent ?? '').not.toContain('→'); // U+2192 rightwards arrow
+      expect(
+        v.querySelector('[data-testid="campaigns-top-list-verdict-arrow"]')?.tagName.toLowerCase(),
+      ).toBe('svg');
+    }
+  });
+
   // CommandPalette — line 273 (campaign subtitle/label) + 322 (product subtitle).
   // The palette renders inside a modal layer that's hidden until open; we open
   // it by passing the Cmd+K key, but that's harder than just rendering with
@@ -229,5 +253,53 @@ describe('Wave 4 / Task 4.2 — additional <bdi> isolation regressions', () => {
     const storeBdi = Array.from(document.querySelectorAll<HTMLElement>('bdi[dir="ltr"]'))
       .find(b => b.textContent === 'uzoshop');
     expect(storeBdi).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Wave 4 / Task 4.3 — fmtMoney / fmtMoneyString currency formatting contract.
+//
+// Hand-built `` `CAD ${n}` `` interpolations used to drop the <bdi> wrapper,
+// which under Hebrew layout reordered the CAD prefix and the numeric tail
+// across other RTL text on the same line (the number visually drifted before
+// or after labels it didn't belong to). Wave 4.3 routed every site through
+// the format-lib siblings — JSX users get `fmtMoney` (returns <bdi dir="ltr">)
+// and string consumers get `fmtMoneyString` (the plain ASCII form, safe for
+// aria-label / title / log fields where the host text is already wrapped
+// elsewhere). These tests pin both contracts.
+// ---------------------------------------------------------------------------
+describe('Wave 4 / Task 4.3 — fmtMoney/fmtMoneyString bidi contract', () => {
+  it('fmtMoney returns a <bdi dir="ltr"> node so the currency stays glued to the number in RTL', () => {
+    const { container } = render(<>{fmtMoney(1234)}</>);
+    const bdi = container.querySelector('bdi[dir="ltr"]');
+    expect(bdi).not.toBeNull();
+    // Currency code and the formatted number both live inside the same bdi.
+    expect(bdi!.textContent).toMatch(/CAD/);
+    expect(bdi!.textContent).toMatch(/1,234/);
+  });
+
+  it('fmtMoney with explicit currency code propagates the code into the bdi', () => {
+    const { container } = render(<>{fmtMoney(99, 'USD')}</>);
+    const bdi = container.querySelector('bdi[dir="ltr"]');
+    expect(bdi).not.toBeNull();
+    expect(bdi!.textContent).toMatch(/USD/);
+  });
+
+  it('fmtMoneyString returns a plain ASCII string (no DOM, no bidi controls)', () => {
+    const out = fmtMoneyString(1234);
+    expect(typeof out).toBe('string');
+    // Sanity: code precedes the number with exactly one space.
+    expect(out).toBe('CAD 1,234');
+    // No stray U+2068/U+2069 directional isolates (those would only ever be
+    // appropriate inside JSX — strings should be plain ASCII).
+    expect(out).not.toMatch(/[⁦-⁩]/);
+  });
+
+  it('fmtMoneyString preserves the minus sign via fixMinus normalisation', () => {
+    // fixMinus rewrites the ASCII "-" to the Unicode minus "−" (U+2212), which
+    // bidi-renders correctly inside RTL hosts. The string flavour goes
+    // through the same path so plain-text consumers don't regress.
+    const out = fmtMoneyString(-50);
+    expect(out).toMatch(/[−-]50/); // either glyph is fine — both are minus.
   });
 });
