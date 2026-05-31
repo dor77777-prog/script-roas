@@ -15,9 +15,8 @@
  *
  * NOTE: AdSetTable.tsx previously kept a DIFFERENT TONE_BG variant that used
  * `text-status-red` (not `text-status-redFg`) and `text-ink-muted` (not
- * `text-ink`) for gray. Those differences are visual — AdSetTable is left
- * with its own local copy until a dedicated audit aligns it with this
- * canonical map (see CONCERN in Task 4.1 report).
+ * `text-ink`) for gray. AdSetTable now imports ROAS_TONE_BG directly so the
+ * canonical `*Fg` pattern is applied consistently across all ROAS cells.
  */
 
 import { roasLabel } from '@/lib/analytics';

@@ -15,6 +15,7 @@ import { TableBase } from '@/components/ui/TableBase';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { Heading } from '@/components/ui/Typography';
 import { roasLabel } from '@/lib/analytics';
+import { ROAS_TONE_BG } from '@/lib/format/roasCell';
 import type { AttributionAnalysis } from '@/lib/attributionAnalysis';
 
 /**
@@ -53,17 +54,6 @@ type AdSetItem = {
   conversions: number;
   adSetBudgetCad: number | null;
   roas: number;
-};
-
-// Tone-to-bg lookup for the ROAS chip cell. Duplicated from CampaignDrawer
-// (smaller diff per PATTERNS.md §CampaignsTableRow recommendation —
-// hoisting to @/lib/format would expand the change surface).
-const TONE_BG: Record<string, string> = {
-  red:    'bg-status-redBg text-status-red',
-  orange: 'bg-status-orangeBg text-status-orange',
-  green:  'bg-status-greenBg text-status-green',
-  blue:   'bg-status-blueBg text-status-blue',
-  gray:   'bg-glass-2 text-ink-muted',
 };
 
 type Props = {
@@ -204,7 +194,7 @@ export function AdSetTable({
                   <td className={cn('px-3 py-2 text-end tabular-nums', a.value > a.spend && 'text-status-green font-medium')}>
                     {formatCurrency(a.value)}
                   </td>
-                  <td className={cn('px-3 py-2 text-center font-semibold tabular-nums rounded', TONE_BG[info.tone])}>
+                  <td className={cn('px-3 py-2 text-center font-semibold tabular-nums rounded', ROAS_TONE_BG[info.tone])}>
                     {a.roas > 0 ? formatNumber(a.roas) : '—'}
                   </td>
                   {/* Deterministic ROAS per ad-set via utm_term. */}
