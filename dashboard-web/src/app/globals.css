@@ -361,13 +361,50 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   100% { background-position: 200% 0; }
 }
 
-/* Respect prefers-reduced-motion — kill all animations except essentials. */
+/* Respect prefers-reduced-motion — kill all animations except essentials.
+   The universal rule below collapses every animation/transition to 0.01ms;
+   the explicit rules that follow (Wave-6 Task 6.2) make the intent obvious
+   at the call sites that participate in the glass-aesthetic motion vocab
+   so a reader scanning globals.css for "reduce" sees exactly which
+   animations were dialled back instead of only the catch-all. They also
+   survive any future relaxation of the universal rule. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
+  }
+
+  /* Wave-6 Task 6.2 — V4 band entrance fade+scale (Task 6.1 / Card.tsx).
+     The unmounted clamp (opacity 0 + scale 0.98) is also lifted so the
+     card paints at natural rest immediately — without this rule a banded
+     card would render at opacity 0 forever (the transition that would
+     restore it is collapsed to 0.01 ms but the initial style still wins
+     because data-mounted is added asynchronously on the next frame). */
+  .glass[data-band]:not([data-mounted]) {
+    opacity: 1;
+    transform: none;
+  }
+  .glass[data-band][data-mounted] {
+    transition: none !important;
+  }
+
+  /* Card hover lift (Task 6.1 / .card-hover utility). The transform is
+     killed both at rest and on hover so the lift never plays. */
+  .card-hover,
+  .card-hover:hover {
+    transform: none !important;
+  }
+
+  /* Pin tooltip (Task 6.1 / RoasTargetChart). Suppress the
+     tailwindcss-animate fade-in + slide-in keyframes on the open tooltip
+     so it appears instantly. The selector matches the `role="tooltip"`
+     attribute the chart sets when the pin opens; the universal rule
+     already kills transition duration. */
+  [role="tooltip"] {
+    animation: none !important;
+    transition: none !important;
   }
 }
 
