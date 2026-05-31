@@ -140,7 +140,7 @@ export function CampaignDrawerOverview({
         <Stat label="המרות" value={formatNumber(summary.conversions, 0)} />
       </div>
 
-      <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
+      <div className="grid grid-cols-3 gap-2 sm:gap-3">
         <Stat
           density="compact"
           label="CTR"

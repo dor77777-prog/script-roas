@@ -53,6 +53,14 @@ export const TabsList = forwardRef<
     <RadixTabs.List
       ref={ref}
       className={cn(
+        // Both variants get an overflow-x-auto guard so narrow viewports
+        // (375px phones) scroll the tab strip horizontally instead of
+        // wrapping mid-row or clipping a trigger. -mx pulls the scroll
+        // edge to the page gutter so the user sees a clear edge as a
+        // hint that more tabs exist when overflowed. `.scrollbar-hide`
+        // (defined in globals.css) hides the visible bar on macOS — the
+        // scroll affordance is the momentum, not the bar itself.
+        'overflow-x-auto scrollbar-hide -mx-3 sm:mx-0 px-3 sm:px-0',
         variant === 'pill'
           ? 'inline-flex h-9 items-center gap-1 rounded-md bg-glass-2 p-1'
           : 'flex gap-2 border-b border-glass-edge',

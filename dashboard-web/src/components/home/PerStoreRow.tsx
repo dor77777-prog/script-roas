@@ -245,8 +245,10 @@ function StoreCard({
         </bdi>
       </div>
 
-      {/* 4-up metric grid — semantic emphasis class hooks pinned by tests --------------- */}
-      <div className="scard-main-grid grid grid-cols-4 gap-3 mt-3">
+      {/* 4-up metric grid — semantic emphasis class hooks pinned by tests.
+          Collapses to 2 columns on phones so 4 narrow money columns don't
+          truncate currency glyphs / break the AOV cell mid-word. */}
+      <div className="scard-main-grid grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
         <div className="cell spend" data-cell="spend">
           <span className="sl">הוצאה</span>
           <span className="sv num tabular-nums">{fmtMoneyText(store.spend)}</span>

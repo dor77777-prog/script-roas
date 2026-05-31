@@ -55,8 +55,9 @@ export function CampaignDrawerStatusSection(p: CampaignDrawerStatusSectionProps)
     <section className="border border-glass-edge rounded-lg p-4 my-3">
       <Heading level="panel" className="font-medium mb-3">סטטוס + טריות</Heading>
 
-      {/* Phase D — Top row: 3 status chips side by side. */}
-      <div className="grid grid-cols-3 gap-2 mb-3">
+      {/* Phase D — Top row: 3 status chips side by side. Stacks to a single
+          column on phones so the chip labels don't truncate. */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
         <div className="flex flex-col items-start gap-1">
           <span className="text-[10px] text-ink-secondary">configured</span>
           <span className={

@@ -413,7 +413,7 @@ export function CommandCenterHero({
         <Card
           band={netBand.band}
           freshness={freshnessStage}
-          className="hero-card featured px-5 sm:px-6 py-5 sm:py-6"
+          className="hero-card featured px-4 py-4 sm:px-6 sm:py-6"
           data-testid="hero-net-profit"
         >
           <HeroCardHeader
@@ -452,7 +452,7 @@ export function CommandCenterHero({
 
         <Card
           freshness={freshnessStage}
-          className="hero-card px-5 py-5"
+          className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
           data-testid="hero-spend"
         >
           <HeroCardHeader label="הוצאה" />
@@ -476,7 +476,7 @@ export function CommandCenterHero({
 
         <Card
           freshness={freshnessStage}
-          className="hero-card px-5 py-5"
+          className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
           data-testid="hero-revenue"
         >
           <HeroCardHeader label="הכנסה" />
@@ -506,7 +506,7 @@ export function CommandCenterHero({
         <Card
           band={roasBand.band}
           freshness={freshnessStage}
-          className="hero-card px-5 py-5"
+          className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
           data-testid="hero-roas"
         >
           <HeroCardHeader label="ROAS" />
@@ -529,7 +529,7 @@ export function CommandCenterHero({
 
         <Card
           freshness={freshnessStage}
-          className="hero-card px-5 py-5"
+          className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
           data-testid="hero-orders"
         >
           <HeroCardHeader label="הזמנות · סה״כ" />
@@ -552,7 +552,7 @@ export function CommandCenterHero({
 
         <Card
           freshness={freshnessStage}
-          className="hero-card px-5 py-5"
+          className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
           data-testid="hero-cpm"
         >
           <HeroCardHeader label="CPM · עסקי" />
