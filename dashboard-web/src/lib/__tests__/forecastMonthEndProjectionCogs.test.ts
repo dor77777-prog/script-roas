@@ -19,9 +19,27 @@
 // vitest runs node so the function is pure; we use the real
 // `todayInIsrael()` to build a fixture anchored to the current date.
 
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { forecastMonthEnd } from '@/lib/insights';
 import type { DailyRow } from '@/lib/types';
+
+// Determinism: `forecastMonthEnd` (and this file's local `todayInIsrael()`)
+// read the wall clock via `new Date()` and have no explicit `now`/`asOf`
+// parameter. Anchoring fixtures to the REAL current date makes these tests
+// flaky near month boundaries: on day 1 of a month the MTD window is a single
+// day and the baseline `[today-7..today-1]` lands in the PREVIOUS month, so the
+// fixtures fall out-of-window and the asserted projected values (e.g. 277.5)
+// no longer hold (they PASS mid-month, FAIL on 2026-06-01). Pin "now" to a
+// comfortably mid-month instant (2026-05-15) so the MTD window spans 15 days
+// and `[today-7..today-1]` stays in-month — matching the fixtures' assumption.
+const PINNED_NOW = new Date('2026-05-15T12:00:00+03:00');
+beforeAll(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(PINNED_NOW);
+});
+afterAll(() => {
+  vi.useRealTimers();
+});
 
 function todayInIsrael(): string {
   return new Intl.DateTimeFormat('en-CA', {

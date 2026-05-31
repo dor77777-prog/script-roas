@@ -32,10 +32,39 @@
  *   3. Zero-baseline fallback — last-7 window has 0 revenue; mtdCogs
  *      is still preserved (not zeroed) and the formula doesn't NaN.
  */
-import { afterEach, beforeEach, describe, it, expect } from 'vitest';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  it,
+  expect,
+  vi,
+} from 'vitest';
 import { forecastMonthEnd } from '@/lib/insights';
 import type { DailyRow } from '@/lib/types';
 import type { RecurringCost } from '@/lib/billing';
+
+// Determinism: `forecastMonthEnd` (and this file's local `todayInIsrael()`)
+// read the wall clock via `new Date()` and have no explicit `now`/`asOf`
+// parameter. Anchoring fixtures to the REAL current date makes these tests
+// flaky near month boundaries: on day 1 of a month the MTD window is a single
+// day and the baseline `[today-7..today-1]` lands in the PREVIOUS month, so the
+// fixtures fall out-of-window and the asserted projected values no longer hold
+// (they PASS mid-month, FAIL on 2026-06-01 — the homogeneous-guard MTD totals
+// collapse to 0 because no fixture row is in the single-day MTD window). Pin
+// "now" to a comfortably mid-month instant (2026-05-15) so the MTD window spans
+// 15 days and `[today-7..today-1]` stays in-month — matching the fixtures'
+// assumption (and keeping the day>=9 heterogeneous-fixture branches active).
+const PINNED_NOW = new Date('2026-05-15T12:00:00+03:00');
+beforeAll(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(PINNED_NOW);
+});
+afterAll(() => {
+  vi.useRealTimers();
+});
 
 // ---------------------------------------------------------------------------
 // Phase 13.1 (2026-05-24) — window stub for the percent-of-revenue test.
