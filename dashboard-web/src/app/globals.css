@@ -38,12 +38,15 @@
   --accent-fg:   oklch(99% 0 0);
 
   /* V4 band signal — see Task 1.3.
-     Round-5 tuning (2026-05-31): hues + chroma re-anchored so each band
-     reads as the colour it claims to be — orange shifted 75→55 (was
-     yellow-orange, now true orange), all bands keep saturation high while
-     L stays in the legible 62-68% range over the dark canvas. */
+     Round-6 tuning (2026-05-31): orange hue shifted 55→45 (true orange,
+     less amber) and orange chroma bumped 0.22→0.24 because the previous
+     mid-stop read brownish over the dark canvas. Red / green / blue keep
+     round-5 hues; only their per-card slab opacities + base tints are
+     boosted (see .glass[data-band="…"] rules further down). NOTE: orange
+     hue 45 still clears ≥13° from --chart-platform-tiktok (12°) so the
+     colorCollisions guard stays green; google (90°) is 45° away. */
   --band-red:    oklch(62% 0.26 25);
-  --band-orange: oklch(68% 0.22 55);
+  --band-orange: oklch(70% 0.24 45);
   --band-green:  oklch(64% 0.24 145);
   --band-blue:   oklch(62% 0.22 240);
   --band-gray:   oklch(60% 0.012 250);
@@ -536,83 +539,206 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    colour reads as actually red / orange / green / blue rather than as
    a hue hint. Orange hue also moved 75→55 (was yellow-orange, now
    true orange). */
-.glass[data-band="red"] {
+/* Round 6 (2026-05-31) — the rule set below is the STRONG band variant.
+   Round-5 saturation was correct for per-store cards (each card carries
+   a unique hue, contrast is informative) but the unified hero strip
+   put 6 cards in the same band → "solid orange slab" effect. Round 6
+   splits the language:
+     • These (default) rules now apply ONLY when the card opts in via
+       NO `data-band-strength` attribute (per-store rows) OR
+       `data-band-strength="strong"` (featured hero cards: Operating
+       Profit, ROAS, Ad-spend ÷ Revenue).
+     • A new `[data-band-strength="muted"]` ladder further down emits
+       a quieter version of each band (edge bar + ~6% base tint + thin
+       top halo, NO 60%-height slab) for the 4 secondary hero cards
+       (Spend, Revenue, Orders, CPM) so the strip reads as a tonal
+       echo of the lead cards instead of an oppressive same-hue blob.
+   The strong variant ALSO got a round-6 boost (top slab 72→85%, base
+   tint 28→38%) because per-store cards still wanted more punch — the
+   operator's feedback "the colours look pale" was specifically about
+   per-store cards. Orange uses the new hue 45 + chroma 0.24 from the
+   :root `--band-orange` token (round-6 true-orange shift). */
+.glass[data-band="red"],
+.glass[data-band="red"][data-band-strength="strong"] {
   background:
-    /* dominant top slab — 72% at top, fades to ~18% by 100% height */
+    /* dominant top slab — round-6 85% at top, fades to ~22% by 100% */
     linear-gradient(180deg,
-      oklch(58% 0.24 25 / 0.72) 0%,
-      oklch(54% 0.22 25 / 0.50) 22%,
-      oklch(48% 0.20 25 / 0.32) 50%,
-      oklch(42% 0.18 25 / 0.22) 78%,
-      oklch(38% 0.16 25 / 0.18) 100%),
+      oklch(58% 0.24 25 / 0.85) 0%,
+      oklch(54% 0.22 25 / 0.62) 22%,
+      oklch(48% 0.20 25 / 0.42) 50%,
+      oklch(42% 0.18 25 / 0.28) 78%,
+      oklch(38% 0.16 25 / 0.22) 100%),
     /* top-edge accent halo */
-    radial-gradient(ellipse 120% 50% at 50% 0%, oklch(65% 0.26 25 / 0.32) 0%, transparent 55%),
-    /* saturated base tint */
-    oklch(50% 0.22 25 / 0.28);
+    radial-gradient(ellipse 120% 50% at 50% 0%, oklch(65% 0.26 25 / 0.36) 0%, transparent 55%),
+    /* saturated base tint — round-6 28→38% */
+    oklch(50% 0.22 25 / 0.38);
 }
-.glass[data-band="red"]::before {
+.glass[data-band="red"]::before,
+.glass[data-band="red"][data-band-strength="strong"]::before {
   background: oklch(62% 0.26 25);
-  box-shadow: 0 0 48px oklch(65% 0.26 25 / 1.0), 0 0 18px oklch(58% 0.24 25 / 0.9);
+  box-shadow: 0 0 52px oklch(65% 0.26 25 / 1.0), 0 0 18px oklch(58% 0.24 25 / 0.9);
   height: 4px;
 }
-.glass[data-band="orange"] {
+.glass[data-band="orange"],
+.glass[data-band="orange"][data-band-strength="strong"] {
   background:
     linear-gradient(180deg,
-      oklch(62% 0.20 55 / 0.72) 0%,
-      oklch(56% 0.18 55 / 0.50) 22%,
-      oklch(50% 0.16 55 / 0.32) 50%,
-      oklch(46% 0.14 55 / 0.22) 78%,
-      oklch(42% 0.12 55 / 0.18) 100%),
-    radial-gradient(ellipse 120% 50% at 50% 0%, oklch(70% 0.22 55 / 0.32) 0%, transparent 55%),
-    oklch(54% 0.18 55 / 0.28);
+      oklch(62% 0.22 45 / 0.85) 0%,
+      oklch(56% 0.22 45 / 0.62) 22%,
+      oklch(50% 0.20 45 / 0.42) 50%,
+      oklch(46% 0.18 45 / 0.28) 78%,
+      oklch(42% 0.16 45 / 0.22) 100%),
+    radial-gradient(ellipse 120% 50% at 50% 0%, oklch(72% 0.24 45 / 0.36) 0%, transparent 55%),
+    oklch(54% 0.22 45 / 0.38);
 }
-.glass[data-band="orange"]::before {
-  background: oklch(68% 0.22 55);
-  box-shadow: 0 0 48px oklch(70% 0.22 55 / 1.0), 0 0 18px oklch(62% 0.20 55 / 0.9);
+.glass[data-band="orange"]::before,
+.glass[data-band="orange"][data-band-strength="strong"]::before {
+  background: oklch(70% 0.24 45);
+  box-shadow: 0 0 52px oklch(72% 0.24 45 / 1.0), 0 0 18px oklch(62% 0.22 45 / 0.9);
   height: 4px;
 }
-.glass[data-band="green"] {
+.glass[data-band="green"],
+.glass[data-band="green"][data-band-strength="strong"] {
   background:
     linear-gradient(180deg,
-      oklch(58% 0.22 145 / 0.72) 0%,
-      oklch(54% 0.20 145 / 0.50) 22%,
-      oklch(48% 0.18 145 / 0.32) 50%,
-      oklch(44% 0.16 145 / 0.22) 78%,
-      oklch(40% 0.14 145 / 0.18) 100%),
-    radial-gradient(ellipse 120% 50% at 50% 0%, oklch(65% 0.24 145 / 0.32) 0%, transparent 55%),
-    oklch(50% 0.20 145 / 0.28);
+      oklch(58% 0.22 145 / 0.85) 0%,
+      oklch(54% 0.20 145 / 0.62) 22%,
+      oklch(48% 0.18 145 / 0.42) 50%,
+      oklch(44% 0.16 145 / 0.28) 78%,
+      oklch(40% 0.14 145 / 0.22) 100%),
+    radial-gradient(ellipse 120% 50% at 50% 0%, oklch(65% 0.24 145 / 0.36) 0%, transparent 55%),
+    oklch(50% 0.20 145 / 0.38);
 }
-.glass[data-band="green"]::before {
+.glass[data-band="green"]::before,
+.glass[data-band="green"][data-band-strength="strong"]::before {
   background: oklch(64% 0.24 145);
-  box-shadow: 0 0 48px oklch(65% 0.24 145 / 1.0), 0 0 18px oklch(58% 0.22 145 / 0.9);
+  box-shadow: 0 0 52px oklch(65% 0.24 145 / 1.0), 0 0 18px oklch(58% 0.22 145 / 0.9);
   height: 4px;
 }
-.glass[data-band="blue"] {
+.glass[data-band="blue"],
+.glass[data-band="blue"][data-band-strength="strong"] {
   background:
     linear-gradient(180deg,
-      oklch(58% 0.20 240 / 0.72) 0%,
-      oklch(54% 0.18 240 / 0.50) 22%,
-      oklch(48% 0.16 240 / 0.32) 50%,
-      oklch(44% 0.14 240 / 0.22) 78%,
-      oklch(40% 0.12 240 / 0.18) 100%),
-    radial-gradient(ellipse 120% 50% at 50% 0%, oklch(65% 0.22 240 / 0.32) 0%, transparent 55%),
-    oklch(50% 0.18 240 / 0.28);
+      oklch(58% 0.20 240 / 0.85) 0%,
+      oklch(54% 0.18 240 / 0.62) 22%,
+      oklch(48% 0.16 240 / 0.42) 50%,
+      oklch(44% 0.14 240 / 0.28) 78%,
+      oklch(40% 0.12 240 / 0.22) 100%),
+    radial-gradient(ellipse 120% 50% at 50% 0%, oklch(65% 0.22 240 / 0.36) 0%, transparent 55%),
+    oklch(50% 0.18 240 / 0.38);
 }
-.glass[data-band="blue"]::before {
+.glass[data-band="blue"]::before,
+.glass[data-band="blue"][data-band-strength="strong"]::before {
   background: oklch(62% 0.22 240);
-  box-shadow: 0 0 48px oklch(65% 0.22 240 / 1.0), 0 0 18px oklch(58% 0.20 240 / 0.9);
+  box-shadow: 0 0 52px oklch(65% 0.22 240 / 1.0), 0 0 18px oklch(58% 0.20 240 / 0.9);
   height: 4px;
 }
-.glass[data-band="gray"] {
+.glass[data-band="gray"],
+.glass[data-band="gray"][data-band-strength="strong"] {
   background:
     linear-gradient(180deg, oklch(60% 0.015 250 / 0.18) 0%, oklch(50% 0.012 250 / 0.10) 50%, transparent 100%),
     oklch(50% 0.012 250 / 0.06);
 }
-.glass[data-band="gray"]::before {
+.glass[data-band="gray"]::before,
+.glass[data-band="gray"][data-band-strength="strong"]::before {
   background: oklch(60% 0.015 250);
   box-shadow: 0 0 18px oklch(60% 0.015 250 / 0.55);
   height: 3px;
 }
+
+/* ---------------------------------------------------------------------
+   Round 6 (2026-05-31) — MUTED band variant.
+   Opt-in via `data-band-strength="muted"` on a `.glass[data-band]` card.
+   Used by CommandCenterHero on its 4 secondary cards (Spend / Revenue /
+   Orders / CPM) so the strip stops reading as a solid same-hue blob
+   when the business-ROAS band paints 6 cards in a row. The muted
+   variant keeps the band IDENTITY (edge bar + faint top halo + low
+   base tint) without the dominant 60%-height slab. The featured trio
+   (Operating Profit + ROAS + Ad-spend %) opts into `"strong"` (or
+   omits the attribute) and gets the full round-6 band treatment.
+   --------------------------------------------------------------------- */
+.glass[data-band="red"][data-band-strength="muted"] {
+  background:
+    linear-gradient(180deg, oklch(60% 0.20 25 / 0.18) 0%, transparent 35%),
+    oklch(50% 0.18 25 / 0.06);
+}
+.glass[data-band="red"][data-band-strength="muted"]::before {
+  background: oklch(62% 0.26 25);
+  box-shadow: 0 0 18px oklch(65% 0.26 25 / 0.55);
+  height: 3px;
+}
+.glass[data-band="orange"][data-band-strength="muted"] {
+  background:
+    linear-gradient(180deg, oklch(64% 0.22 45 / 0.18) 0%, transparent 35%),
+    oklch(54% 0.20 45 / 0.06);
+}
+.glass[data-band="orange"][data-band-strength="muted"]::before {
+  background: oklch(70% 0.24 45);
+  box-shadow: 0 0 18px oklch(72% 0.24 45 / 0.55);
+  height: 3px;
+}
+.glass[data-band="green"][data-band-strength="muted"] {
+  background:
+    linear-gradient(180deg, oklch(60% 0.20 145 / 0.18) 0%, transparent 35%),
+    oklch(50% 0.18 145 / 0.06);
+}
+.glass[data-band="green"][data-band-strength="muted"]::before {
+  background: oklch(64% 0.24 145);
+  box-shadow: 0 0 18px oklch(65% 0.24 145 / 0.55);
+  height: 3px;
+}
+.glass[data-band="blue"][data-band-strength="muted"] {
+  background:
+    linear-gradient(180deg, oklch(60% 0.18 240 / 0.18) 0%, transparent 35%),
+    oklch(50% 0.16 240 / 0.06);
+}
+.glass[data-band="blue"][data-band-strength="muted"]::before {
+  background: oklch(62% 0.22 240);
+  box-shadow: 0 0 18px oklch(65% 0.22 240 / 0.55);
+  height: 3px;
+}
+.glass[data-band="gray"][data-band-strength="muted"] {
+  background:
+    linear-gradient(180deg, oklch(60% 0.015 250 / 0.10) 0%, transparent 35%),
+    oklch(50% 0.012 250 / 0.04);
+}
+.glass[data-band="gray"][data-band-strength="muted"]::before {
+  background: oklch(60% 0.015 250);
+  box-shadow: 0 0 12px oklch(60% 0.015 250 / 0.40);
+  height: 3px;
+}
+
+/* ---------------------------------------------------------------------
+   Round 6 (2026-05-31) — text contrast on banded cards.
+   The hero card eyebrow label (`.hero-eyebrow`) reads `text-ink-muted`
+   by default (~64% L) — too low contrast over a strong band slab. When
+   the card wears a band (strong OR muted), brighten the eyebrow to ~94%
+   L so the Hebrew header reads cleanly on top of the orange/red/green
+   tint. Applies to any `.glass[data-band]` so per-store cards benefit
+   too (the `.sl` cell labels inside the 4-up metric grid pick up the
+   same rule). Gray band stays at its default tone — the no-data state
+   should not visually shout. NOTE: `.v.neutral` already paints its own
+   bright white→cool-gray gradient and is unaffected.
+   --------------------------------------------------------------------- */
+.glass[data-band]:not([data-band="gray"]) .hero-eyebrow,
+.glass[data-band]:not([data-band="gray"]) .sl {
+  color: oklch(94% 0.012 80);
+}
+.glass[data-band][data-band-strength="muted"] .hero-eyebrow,
+.glass[data-band][data-band-strength="muted"] .sl {
+  /* Muted cards still need lift but slightly less aggressive — the
+     band slab isn't dominating so the default muted text stays legible
+     with only a small bump. */
+  color: oklch(90% 0.012 80);
+}
+/* The `.cell.spend .sl::before` / `.cell.revenue .sl::before` glyph
+   colours use the band hues directly; the brighter `.sl` colour above
+   would override the ↓ red / ↑ green tint. Pin the glyphs back to their
+   intentional band colours so the directional cue stays visible. */
+.glass[data-band]:not([data-band="gray"]) .cell.spend   .sl::before { color: var(--band-red);   }
+.glass[data-band]:not([data-band="gray"]) .cell.revenue .sl::before { color: var(--band-green); }
+.glass[data-band]:not([data-band="gray"]) .cell.aov-good .sl::after { color: var(--band-green); }
+.glass[data-band]:not([data-band="gray"]) .cell.aov-bad  .sl::after { color: var(--band-red);   }
 
 /* `.v.banded` — the big number inside a banded card renders in the band
    colour (overrides .v.neutral's text-clip gradient via -webkit-text-fill-color). */

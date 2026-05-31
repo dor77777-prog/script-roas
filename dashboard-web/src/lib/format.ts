@@ -134,6 +134,39 @@ export function fmtNum2(n: number): React.ReactElement {
 }
 
 /**
+ * Compact money formatter — `"$1.2k"` / `"$110k"` / `"$1.4M"`.
+ *
+ * Round-6 (2026-05-31): per-store metric cells (הוצאה / הכנסה / AOV)
+ * collapsed when revenue / spend ran into 5-6 digits (`$110,899`,
+ * `$47,738`) — the 4-up grid in `PerStoreRow` clipped the digit run
+ * because the cell value font sits at 18-20px. Compact notation keeps
+ * the number readable in narrow cells without truncating mid-glyph.
+ * Returns a plain string (not a React element) so callers can compose
+ * it inside their own `<bdi dir="ltr">` wrapper — keeps the LTR-isolate
+ * decision at the call site.
+ *
+ * Threshold: 10_000 → compact ("$10.0k"); below that, plain
+ * comma-separated ("$9,840"). Matches the operator's "looks broken
+ * once the number passes 5 digits" feedback. Negative values keep
+ * the typographic minus (U+2212) for visual alignment.
+ */
+const COMPACT_USD = new Intl.NumberFormat('en-US', {
+  notation: 'compact',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 1,
+});
+
+export function fmtMoneyCompact(n: number | null | undefined): string {
+  if (n == null || Number.isNaN(n)) return '—';
+  const sign = n < 0 ? '−' : '';
+  const abs = Math.abs(n);
+  if (abs < 10_000) {
+    return `${sign}$${Math.round(abs).toLocaleString('en-US')}`;
+  }
+  return `${sign}$${COMPACT_USD.format(abs)}`;
+}
+
+/**
  * Format a delta percentage like "+12.4%" / "−3.4%". Always signed.
  * Returns a styled element so the call site can pick "good/bad" tone.
  */

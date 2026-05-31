@@ -30,6 +30,7 @@
 
 import { useMemo, type KeyboardEvent } from 'react';
 import { cn, formatCurrency, formatNumber } from '@/lib/utils';
+import { fmtMoneyCompact } from '@/lib/format';
 import { Card } from '@/components/ui/Card';
 import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
 import { Heading } from '@/components/ui/Typography';
@@ -101,6 +102,20 @@ const BAND_CHIP_LABEL: Record<RoasBand, string> = {
 function fmtMoneyText(n: number | null): string {
   if (n == null || Number.isNaN(n)) return '—';
   return `$${formatCurrency(n)}`;
+}
+
+/**
+ * Round 6 (2026-05-31) — compact money for cells that regularly carry
+ * 5-6 digit values (spend / revenue). Below 10k the cell renders the
+ * full comma-separated value (`$9,840`); at or above 10k it switches
+ * to compact ("$110k" / "$1.2M") so the 4-up per-store grid never
+ * truncates a digit run mid-glyph. AOV is small (typically <$100) so it
+ * stays on `fmtMoneyText`. Per-platform CPM cells also use the compact
+ * form for spend captions because TikTok / Meta spend can spike into
+ * 5-digit territory inside the same row.
+ */
+function fmtMoneyTextCompact(n: number | null): string {
+  return fmtMoneyCompact(n);
 }
 
 function fmtOrdersText(n: number | null): string {
@@ -266,23 +281,37 @@ function StoreCard({
           currency glyphs / break the AOV cell mid-word.
           The `per-store-card` ancestor class lets globals.css bump
           .sl / .sv sizes inside this row WITHOUT affecting other
-          scard-main-grid consumers. */}
+          scard-main-grid consumers.
+          Round 6 (2026-05-31) — `min-w-0` on each cell is set by the
+          `.scard-main-grid .cell` rule in globals.css; we add
+          `truncate` on the `.sv` value so a stray 7-digit cell still
+          ellipsises instead of pushing the column wider than its
+          1/4-track. Spend + revenue use compact notation so
+          ≥$10k renders as "$10k" / "$110k" / "$1.2M" instead of the
+          full "$110,899" that broke the layout. AOV stays full-precision
+          (typically <$100). */}
       <div className="scard-main-grid grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5 pt-4 border-t border-glass-edge">
         <div className="cell spend" data-cell="spend">
           <span className="sl">הוצאה</span>
-          <span className="sv num tabular-nums">{fmtMoneyText(store.spend)}</span>
+          <span className="sv num tabular-nums truncate">
+            {fmtMoneyTextCompact(store.spend)}
+          </span>
         </div>
         <div className="cell revenue" data-cell="revenue">
           <span className="sl">הכנסה</span>
-          <span className="sv num tabular-nums">{fmtMoneyText(store.revenue)}</span>
+          <span className="sv num tabular-nums truncate">
+            {fmtMoneyTextCompact(store.revenue)}
+          </span>
         </div>
         <div className="cell" data-cell="orders">
           <span className="sl">הזמנות</span>
-          <span className="sv num tabular-nums">{fmtOrdersText(store.orders)}</span>
+          <span className="sv num tabular-nums truncate">
+            {fmtOrdersText(store.orders)}
+          </span>
         </div>
         <div className={cn('cell', aovClass)} data-cell="aov">
           <span className="sl">AOV</span>
-          <span className="sv num tabular-nums">{fmtMoneyText(store.aov)}</span>
+          <span className="sv num tabular-nums truncate">{fmtMoneyText(store.aov)}</span>
         </div>
       </div>
 
@@ -302,12 +331,21 @@ function StoreCard({
                 data-platform={platform}
               >
                 <PlatformBadge platform={platform} size="sm" />
-                <span className="text-[11px] text-ink-muted leading-tight">
-                  spend · <bdi dir="ltr" className="tabular-nums">{fmtMoneyText(data.spend)}</bdi>
+                {/* Round-6 (2026-05-31): spend caption uses compact
+                    notation because per-platform spend regularly hits 5
+                    digits, and the CPM cell is narrower than the main
+                    metric cells (3-up grid on a card that's already 1/3
+                    of the row). `truncate` on the span keeps the cell
+                    from spilling its border-box even if the compact form
+                    still overflows in extreme cases. CPM value (the big
+                    number below) stays full-precision because it's
+                    typically $5-$50. */}
+                <span className="text-[11px] text-ink-muted leading-tight truncate">
+                  spend · <bdi dir="ltr" className="tabular-nums">{fmtMoneyTextCompact(data.spend)}</bdi>
                 </span>
                 <bdi
                   dir="ltr"
-                  className="text-[18px] md:text-[20px] font-semibold tabular-nums text-ink leading-none"
+                  className="text-[18px] md:text-[20px] font-semibold tabular-nums text-ink leading-none truncate"
                 >
                   {fmtMoneyText(data.cpm)}
                 </bdi>

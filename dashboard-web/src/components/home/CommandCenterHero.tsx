@@ -343,9 +343,14 @@ function NetSparkline({
  * surrounding tint in lock-step.
  * -------------------------------------------------------------------------- */
 
+/* Round 6 (2026-05-31): orange shifted to hue 45 / chroma 0.24 to match
+ * the `--band-orange` token bump in globals.css (was hue 55 / chroma 0.22
+ * which read as yellow-orange/amber against the dark canvas). Keep this
+ * map in sync with `:root --band-*` — sparkline strokes should NEVER
+ * desync from the surrounding card's band glow. */
 const BAND_STROKE: Record<RoasBand, string> = {
   red:    'oklch(62% 0.26 25)',
-  orange: 'oklch(68% 0.22 55)',
+  orange: 'oklch(70% 0.24 45)',
   green:  'oklch(64% 0.24 145)',
   blue:   'oklch(62% 0.22 240)',
   gray:   'oklch(60% 0.012 250)',
@@ -530,6 +535,7 @@ export function CommandCenterHero({
 
         <Card
           band={businessBand}
+          bandStrength="muted"
           freshness={freshnessStage}
           className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
           data-testid="hero-spend"
@@ -555,6 +561,7 @@ export function CommandCenterHero({
 
         <Card
           band={businessBand}
+          bandStrength="muted"
           freshness={freshnessStage}
           className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
           data-testid="hero-revenue"
@@ -637,6 +644,7 @@ export function CommandCenterHero({
 
         <Card
           band={businessBand}
+          bandStrength="muted"
           freshness={freshnessStage}
           className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
           data-testid="hero-orders"
@@ -661,6 +669,7 @@ export function CommandCenterHero({
 
         <Card
           band={businessBand}
+          bandStrength="muted"
           freshness={freshnessStage}
           className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
           data-testid="hero-cpm"
@@ -708,7 +717,12 @@ function HeroCardHeader({
 }) {
   return (
     <div className="flex items-center justify-between gap-2">
-      <span className="text-[10.5px] uppercase tracking-[0.08em] text-ink-muted font-semibold">
+      {/* `hero-eyebrow` is the class hook that
+          `.glass[data-band] .hero-eyebrow` in globals.css picks up to
+          brighten the label colour over a band slab — without it the
+          Hebrew header ("הכנסה" / "הוצאה" / ...) reads as low-contrast
+          dim grey against the orange/red/green tint. */}
+      <span className="hero-eyebrow text-[10.5px] uppercase tracking-[0.08em] text-ink-muted font-semibold">
         {label}
       </span>
       {updatedAt !== undefined && <FreshnessBadge updatedAt={updatedAt} />}

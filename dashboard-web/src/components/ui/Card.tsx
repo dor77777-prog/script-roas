@@ -76,6 +76,18 @@ const cardVariants = cva(
 
 export type CardBand = 'red' | 'orange' | 'green' | 'blue' | 'gray';
 export type CardFreshness = 'fresh' | 'aging' | 'stale';
+/**
+ * Round 6 (2026-05-31) — opt into a quieter band rendering.
+ *   "strong" (default) → full top-slab + halo + base-tint treatment.
+ *     Use for cards that visually communicate their band state
+ *     (per-store ROAS cards, hero Operating Profit + ROAS + Ad-spend %).
+ *   "muted"             → edge bar + thin top halo + ~6% base tint, no
+ *     dominant slab. Use for hero strip secondary cards (Spend, Revenue,
+ *     Orders, CPM) so a 6-card row carrying the same business-ROAS band
+ *     does not collapse into one solid-colour blob. CSS lives in
+ *     globals.css under `.glass[data-band][data-band-strength="muted"]`.
+ */
+export type CardBandStrength = 'strong' | 'muted';
 
 export interface CardProps
   extends HTMLAttributes<HTMLDivElement>,
@@ -84,6 +96,13 @@ export interface CardProps
   band?: CardBand;
   /** V4 freshness desaturation — forwards to `data-freshness="…"`. */
   freshness?: CardFreshness;
+  /**
+   * Round-6 (2026-05-31) opt-in band strength. Forwards to
+   * `data-band-strength="…"`. Default ("strong") keeps the
+   * pre-round-6 rendering. Pass `"muted"` for a same-band card that
+   * sits inside a row of like-banded cards — see `CardBandStrength`.
+   */
+  bandStrength?: CardBandStrength;
   /**
    * Task 3.4 — drill-down entry point.
    *
@@ -108,6 +127,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
       className,
       variant,
       band,
+      bandStrength,
       freshness,
       onDrill,
       onClick,
@@ -188,6 +208,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
           className,
         )}
         data-band={band}
+        data-band-strength={band ? bandStrength : undefined}
         data-freshness={freshness}
         role={interactive ? (role ?? 'button') : role}
         tabIndex={interactive ? (tabIndex ?? 0) : tabIndex}
