@@ -21,22 +21,32 @@ import tailwindcssAnimate from 'tailwindcss-animate';
  */
 const config: Config = {
   content: ['./src/**/*.{js,ts,jsx,tsx,mdx}'],
+  // Dual-mode mesh re-skin. The CSS tokens are inverted vs the `dark:`
+  // selector below: `:root` carries the DARK token set and
+  // `[data-theme="light"]` overrides it for light. This `dark:` variant
+  // (kept, do not remove) still targets `[data-theme="dark"]` for the few
+  // `dark:`-prefixed utilities; absence of `data-theme` resolves to the
+  // :root (dark) tokens by default.
   darkMode: ['selector', '[data-theme="dark"]'],
   theme: {
     extend: {
       colors: {
-        // ---- Canvas: fixed body background (deep blue-violet, single-mode).
+        // ---- Canvas: fixed body background. Dual-mode — deep blue-violet on
+        //      dark (:root), near-white cool wash on light ([data-theme="light"]).
         canvas: {
           DEFAULT: 'var(--canvas-1)',
           1:       'var(--canvas-1)',
           2:       'var(--canvas-2)',
         },
 
-        // ---- Glass: 3-layer white-alpha stack + 2 edge tones.
-        //      Used for cards, drawers, table headers, hover/active surfaces.
-        //      The two edge tones (default + hot) replace the old line.*
-        //      border family — `border-glass-edge-hot` is the violet rim used
-        //      on hover/focus/active glass.
+        // ---- Glass: 3-layer OPAQUE mesh surface stack + 2 edge tones, tuned
+        //      per theme (navy stops on dark, white-ish on light). Used for
+        //      cards, drawers, table headers, hover/active surfaces. NOTE: the
+        //      `glass` name is legacy — these are flat opaque mesh surfaces,
+        //      not translucent glass (rename to `surface` deferred). The two
+        //      edge tones (default + hot) replace the old line.* border family
+        //      — `border-glass-edge-hot` is the accent rim (violet dark / teal
+        //      light) used on hover/focus/active surfaces.
         glass: {
           1: 'var(--glass-1)',
           2: 'var(--glass-2)',
@@ -45,9 +55,20 @@ const config: Config = {
           'edge-hot': 'var(--glass-edge-hot)',
         },
 
+        // ---- Surface: named opaque-mesh surfaces beyond the glass stack.
+        //      `elevated-1` aliases the existing CSS var (mid stop);
+        //      `sunken` (Wave 0) is the recessed-well surface for seg /
+        //      goalbar / health tracks + kstrip insets. Both flip per theme
+        //      via their --surface-* vars.
+        surface: {
+          'elevated-1': 'var(--surface-elevated-1)',
+          sunken:       'var(--surface-sunken)',
+        },
+
         // ---- Band: ROAS-grading signal palette (red < 2.0, orange 2.0-2.7,
-        //      green 2.7-3.0, blue > 3.0, gray for no-data). Tuned for
-        //      dark-canvas legibility at ≥4.5:1 contrast for stroke ≥2px.
+        //      green 2.7-3.0, blue > 3.0, gray for no-data). Tuned per theme
+        //      (dark + light values in globals.css) for ≥4.5:1 contrast at
+        //      stroke ≥2px on each canvas.
         //      Task 1.3 owns the data-band="..." attribute consumers.
         band: {
           red:    'var(--band-red)',
@@ -81,6 +102,11 @@ const config: Config = {
           DEFAULT: 'var(--accent)',
           deep:    'var(--accent-deep)',
           fg:      'var(--accent-fg)',
+          // Wave 0 mesh tints. `soft` = icon-chip bg / operator accent-panel /
+          // mapped-product pill; `bg` = alpha-safe replacement for the
+          // bg-accent/NN tint sites (so the tint flips per theme).
+          soft:    'var(--accent-soft)',
+          bg:      'var(--accent-bg)',
         },
 
         // ---- Status: system-state semantics (token failures, sync errors,
@@ -117,6 +143,10 @@ const config: Config = {
           muted:     'var(--text-muted)',
           subtle:    'var(--text-subtle)',
         },
+
+        // ---- Scrim: modal / overlay dim layer (Wave 0). Tokenised so
+        //      `bg-scrim` flips per theme instead of a raw bg-black/60.
+        scrim: 'var(--scrim)',
       },
 
       fontFamily: {
@@ -172,6 +202,8 @@ const config: Config = {
         glass:   'var(--shadow-glass)',
         overlay: 'var(--shadow-overlay)',
         sheet:   'var(--shadow-sheet)',
+        // Wave 0 — lighter button/pill drop. Flips per theme via --shadow-soft.
+        soft:    'var(--shadow-soft)',
       },
 
       borderRadius: {

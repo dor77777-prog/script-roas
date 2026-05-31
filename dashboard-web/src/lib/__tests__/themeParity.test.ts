@@ -101,3 +101,34 @@ describe('theme token parity', () => {
     ).toHaveLength(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Suite 3 — mesh re-skin (Wave 0, Task 0.1): the 5 new mockup tokens MUST be
+// declared in BOTH blocks. Listed explicitly so a future engineer cannot
+// drop one of them from a single block and still pass the broad parity scan
+// (which only catches the case where a token exists in :root but not light).
+// ---------------------------------------------------------------------------
+describe('mesh re-skin tokens — Wave 0 Task 0.1', () => {
+  const REQUIRED_NEW_TOKENS = [
+    '--accent-soft',
+    '--accent-bg',
+    '--surface-sunken',
+    '--scrim',
+    '--shadow-soft',
+  ];
+
+  for (const tok of REQUIRED_NEW_TOKENS) {
+    it(`${tok} is declared in :root`, () => {
+      expect(
+        rootTokens.has(tok),
+        `:root is missing ${tok}`,
+      ).toBe(true);
+    });
+    it(`${tok} is declared in [data-theme="light"]`, () => {
+      expect(
+        lightTokens.has(tok),
+        `[data-theme="light"] is missing ${tok}`,
+      ).toBe(true);
+    });
+  }
+});
