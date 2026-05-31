@@ -154,9 +154,9 @@ export function TokenFailuresTable() {
           <div className="text-xs text-ink-muted mb-2">
             כשלים פתוחים: <span className="font-semibold text-status-red">{unresolved.length}</span>
           </div>
-          <div className="border border-status-red/30 rounded-lg overflow-hidden">
+          <div className="border border-status-red rounded-lg overflow-hidden">
             <TableBase className="text-xs sm:text-sm">
-              <thead className="bg-status-redBg/40 text-ink-secondary">
+              <thead className="bg-status-redBg text-ink-secondary">
                 <tr>
                   <th className="px-3 py-2 text-start font-medium">פלטפורמה</th>
                   <th className="px-3 py-2 text-start font-medium">חנות</th>
@@ -247,7 +247,7 @@ function FailureRowFragment({
   return (
     <>
       <tr
-        className="border-b border-status-red/15 last:border-0 cursor-pointer hover:bg-status-redBg/20"
+        className="border-b border-status-red last:border-0 cursor-pointer hover:bg-status-redBg"
         onClick={onToggleExpand}
       >
         <td className="px-3 py-2 font-semibold inline-flex items-center gap-1.5">
@@ -272,7 +272,7 @@ function FailureRowFragment({
               onResolve();
             }}
             disabled={isResolving}
-            className="gap-1 px-2 py-1 h-auto text-2xs bg-status-green/15 text-status-green hover:bg-status-green/25"
+            className="gap-1 px-2 py-1 h-auto text-2xs bg-status-greenBg text-status-greenFg hover:opacity-80"
           >
             <CheckCircle2 size={12} />
             {isResolving ? 'מסמן...' : 'סמן כתוקן'}
@@ -280,7 +280,7 @@ function FailureRowFragment({
         </td>
       </tr>
       {expanded && (
-        <tr className="border-b border-status-red/15 last:border-0 bg-status-redBg/10">
+        <tr className="border-b border-status-red last:border-0 bg-status-redBg">
           <td colSpan={7} className="px-4 py-3 text-2xs">
             <div className="space-y-2">
               <div>
@@ -289,7 +289,7 @@ function FailureRowFragment({
                 </div>
                 <pre
                   dir="ltr"
-                  className="font-mono text-2xs bg-status-redBg/30 border border-status-red/20 rounded px-2 py-1.5 whitespace-pre-wrap break-all"
+                  className="font-mono text-2xs bg-status-redBg border border-status-red rounded px-2 py-1.5 whitespace-pre-wrap break-all"
                 >
                   {row.lastErrorMsg}
                 </pre>

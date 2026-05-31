@@ -113,10 +113,10 @@ function formatRelative(iso: string): string {
 // the loader to give a "this row will change soon" signal.
 function StatusBadge({ status }: { status: InngestRun['status'] }) {
   const cls =
-    status === 'Completed' ? 'bg-status-greenBg text-status-green border border-status-green/30'
-      : status === 'Failed' ? 'bg-status-redBg text-status-red border border-status-red/30'
-        : status === 'Running' ? 'bg-status-blueBg text-status-blue border border-status-blue/30'
-          : 'bg-status-grayBg text-status-gray border border-status-gray/30';
+    status === 'Completed' ? 'bg-status-greenBg text-status-greenFg border border-status-green'
+      : status === 'Failed' ? 'bg-status-redBg text-status-redFg border border-status-red'
+        : status === 'Running' ? 'bg-status-blueBg text-status-blueFg border border-status-blue'
+          : 'bg-status-grayBg text-status-grayFg border border-status-gray';
   const Icon =
     status === 'Completed' ? CheckCircle2
       : status === 'Failed' ? XCircle
@@ -188,7 +188,7 @@ export function JobsTable() {
   return (
     <div className="overflow-x-auto">
       <TableBase>
-        <thead className="text-ink-secondary text-xs uppercase tracking-wider bg-canvas">
+        <thead className="text-ink-secondary text-xs uppercase tracking-wider bg-glass-3">
           <tr>
             <th className="text-end p-2">פונקציה</th>
             <th className="text-end p-2">סטטוס</th>
@@ -234,7 +234,7 @@ export function JobsTable() {
         return (
           <pre
             id={`run-output-${run.run_id}`}
-            className="text-xs bg-canvas text-ink-secondary p-3 mt-2 rounded overflow-x-auto"
+            className="text-xs bg-glass-2 text-ink-secondary p-3 mt-2 rounded overflow-x-auto"
             dir="ltr"
           >
             {JSON.stringify(

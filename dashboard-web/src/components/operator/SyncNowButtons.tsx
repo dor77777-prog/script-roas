@@ -154,7 +154,7 @@ export function SyncNowButtons() {
               sync({ scope: 'store', storeId }, `Sync ${storeLabel(storeId)}`)
             }
             disabled={pendingKey !== null}
-            className="gap-1 bg-accent/70 hover:bg-accent/80 text-white"
+            className="gap-1 bg-accent hover:opacity-90 text-accent-fg"
           >
             {pendingKey === storeId ? (
               <Loader2 className="w-4 h-4 animate-spin" />

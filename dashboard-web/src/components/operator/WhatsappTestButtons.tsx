@@ -108,8 +108,8 @@ export function WhatsappTestButtons() {
               data-armed={isArmed || undefined}
               className={
                 isArmed
-                  ? 'gap-1 bg-status-warning hover:bg-status-warning/90 text-white text-sm px-3 py-2 h-auto ring-2 ring-status-warning/50 ring-offset-2 ring-offset-canvas'
-                  : 'gap-1 bg-status-green hover:bg-status-green/90 disabled:bg-glass-2 disabled:text-ink-muted text-white text-sm px-3 py-2 h-auto'
+                  ? 'gap-1 bg-status-warning hover:opacity-90 text-accent-fg text-sm px-3 py-2 h-auto ring-2 ring-status-warning ring-offset-2 ring-offset-[color:var(--canvas-1)]'
+                  : 'gap-1 bg-status-green hover:opacity-90 disabled:bg-glass-2 disabled:text-ink-muted text-accent-fg text-sm px-3 py-2 h-auto'
               }
             >
               {isPending ? (

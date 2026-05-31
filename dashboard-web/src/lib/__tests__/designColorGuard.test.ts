@@ -98,14 +98,14 @@ const MIGRATION_ALLOWLIST: string[] = [
   // home/PerStoreRow.tsx — MIGRATED in Wave 3.0 (removed from allowlist)
   // home/RoasChartDateRangePicker.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
   // home/RoasTargetChart.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
-  'operator/JobsTable.tsx',
-  'operator/ManualOverridesCrud.tsx',
-  'operator/OperatorSecretBanner.tsx',
-  'operator/ResetData.tsx',
-  'operator/StatusEventsFeed.tsx',
-  'operator/SyncNowButtons.tsx',
-  'operator/TokenFailuresTable.tsx',
-  'operator/WhatsappTestButtons.tsx',
+  // operator/JobsTable.tsx — MIGRATED in Wave 3.6 (removed from allowlist)
+  // operator/ManualOverridesCrud.tsx — MIGRATED in Wave 3.6 (removed from allowlist)
+  // operator/OperatorSecretBanner.tsx — MIGRATED in Wave 3.6 (removed from allowlist)
+  // operator/ResetData.tsx — MIGRATED in Wave 3.6 (removed from allowlist)
+  // operator/StatusEventsFeed.tsx — MIGRATED in Wave 3.6 (removed from allowlist)
+  // operator/SyncNowButtons.tsx — MIGRATED in Wave 3.6 (removed from allowlist)
+  // operator/TokenFailuresTable.tsx — MIGRATED in Wave 3.6 (removed from allowlist)
+  // operator/WhatsappTestButtons.tsx — MIGRATED in Wave 3.6 (removed from allowlist)
   // ui/AiInsightPill.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
   // ui/Button.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
   // ui/Card.tsx — MIGRATED in Wave 3.1 (removed from allowlist)

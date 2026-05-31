@@ -92,14 +92,13 @@ type ScopeDescriptor = {
   preserves?: string;
 };
 
-// Tailwind class strings rather than tokens because the operator
-// console doesn't yet have a "destructive/orange" token in
-// tailwind.config — match the inline red/orange used in
-// ManualOverridesCrud's delete button instead.
+// Per-scope status-token class strings. The mesh status tokens
+// (bg-status-red / bg-status-orange) drive the destructive emphasis;
+// hover/disabled use opacity so the solid fill stays token-flat.
 const SCOPE_ALL: ScopeDescriptor = {
   scope: 'all',
   buttonLabel: 'איפוס מלא — מחק את כל הנתונים כולל הוצאות ידניות',
-  buttonClass: 'bg-status-red hover:bg-status-red/90 disabled:bg-status-red/40',
+  buttonClass: 'bg-status-red hover:opacity-90 disabled:opacity-50',
   modalTitle: 'איפוס מלא של כל הנתונים',
   modalWarning:
     'פעולה זו תמחק את כל נתוני הדשבורד, כולל ההוצאות הידניות שהוזנו ידנית. אין צעד אחורה.',
@@ -117,7 +116,7 @@ const SCOPE_ALL: ScopeDescriptor = {
 const SCOPE_EXCEPT_MANUAL: ScopeDescriptor = {
   scope: 'except-manual',
   buttonLabel: 'איפוס חלקי — מחק הכל פרט להוצאות ידניות',
-  buttonClass: 'bg-status-orange hover:bg-status-orange/90 disabled:bg-status-orange/40',
+  buttonClass: 'bg-status-orange hover:opacity-90 disabled:opacity-50',
   modalTitle: 'איפוס חלקי — מחק הכל פרט להוצאות ידניות',
   modalWarning:
     'פעולה זו תמחק את נתוני ה-fetch (Shopify / Meta / Google / מוצרים / קמפיינים), אך תשמור על טבלת manual_overrides. ניתן לרוץ backfill מחדש.',
@@ -209,7 +208,7 @@ export function ResetData() {
             variant="ghost"
             onClick={() => openModal(d)}
             disabled={submitting}
-            className={`gap-2 text-white text-sm px-3 py-2 h-auto rounded ${d.buttonClass}`}
+            className={`gap-2 text-accent-fg text-sm px-3 py-2 h-auto rounded ${d.buttonClass}`}
           >
             <AlertTriangle className="w-4 h-4" />
             {d.buttonLabel}
@@ -224,7 +223,7 @@ export function ResetData() {
         // confirmation that no toast library is needed for.
         <div
           role="status"
-          className="rounded border border-status-green/30 bg-status-greenBg p-3 text-sm space-y-1"
+          className="rounded border border-status-green bg-status-greenBg p-3 text-sm space-y-1"
         >
           <p className="text-status-green font-semibold">
             איפוס הושלם ({lastResult.scope === 'all' ? 'מלא' : 'חלקי'}) —
@@ -253,7 +252,7 @@ export function ResetData() {
 
       {active && (
         <div
-          className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-black/60"
+          className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-scrim"
           role="dialog"
           aria-modal="true"
           aria-labelledby="reset-confirm-title"
@@ -334,7 +333,7 @@ export function ResetData() {
                   הקלד את הטוקן הבא בדיוק כדי לאשר:
                 </span>
                 <code
-                  className="block bg-canvas border border-glass-edge rounded px-2 py-1 text-xs text-status-orange mb-2"
+                  className="block bg-glass-2 border border-glass-edge rounded px-2 py-1 text-xs text-status-orange mb-2"
                   dir="ltr"
                 >
                   {CONFIRM_TOKEN_FOR_SCOPE[active.scope]}

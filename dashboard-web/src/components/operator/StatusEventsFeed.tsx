@@ -38,7 +38,7 @@ function kindIcon(kind: string) {
   const size = 14;
   if (kind === 'paused') return <Pause size={size} className="text-status-orange" />;
   if (kind === 'enabled') return <Play size={size} className="text-status-green" />;
-  if (kind === 'first_seen') return <Sparkles size={size} className="text-blue-400" />;
+  if (kind === 'first_seen') return <Sparkles size={size} className="text-status-blue" />;
   if (kind === 'archived' || kind === 'removed') return <Archive size={size} className="text-ink-secondary" />;
   if (kind === 'effective_only') return <Eye size={size} className="text-ink-secondary" />;
   if (kind === 'delivery_only') return <MousePointerClick size={size} className="text-ink-secondary" />;

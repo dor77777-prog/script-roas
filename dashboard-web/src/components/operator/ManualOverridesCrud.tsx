@@ -344,7 +344,7 @@ export function ManualOverridesCrud() {
                     size="icon"
                     onClick={() => setConfirmDelete(r)}
                     aria-label={`מחק שורה ${r.id}`}
-                    className="w-8 h-8 text-status-red hover:text-status-red/80 hover:bg-status-redBg"
+                    className="w-8 h-8 text-status-red hover:bg-status-redBg"
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
@@ -358,7 +358,7 @@ export function ManualOverridesCrud() {
       {/* Delete-confirmation modal (RESEARCH §Open Question 5) */}
       {confirmDelete && (
         <div
-          className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-black/60"
+          className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-scrim"
           role="dialog"
           aria-modal="true"
           aria-labelledby="confirm-delete-title"

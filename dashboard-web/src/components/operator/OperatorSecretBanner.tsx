@@ -59,7 +59,7 @@ export function OperatorSecretBanner() {
   // No secret stored → show the entry form
   if (!stored) {
     return (
-      <div className="rounded border border-status-orange/30 bg-status-orangeBg p-3 space-y-2 text-sm">
+      <div className="rounded border border-status-orange bg-status-orangeBg p-3 space-y-2 text-sm">
         <div className="flex items-center gap-2 text-status-orange font-medium">
           <KeyRound className="w-4 h-4 shrink-0" />
           <span>הגדרת Operator Secret</span>
@@ -101,7 +101,7 @@ export function OperatorSecretBanner() {
             variant="ghost"
             onClick={handleSave}
             disabled={!input.trim()}
-            className="h-auto bg-status-orange hover:bg-status-orange/90 text-white text-sm px-3 py-1"
+            className="h-auto bg-status-orange hover:opacity-90 text-accent-fg text-sm px-3 py-1"
           >
             שמור
           </Button>
@@ -112,7 +112,7 @@ export function OperatorSecretBanner() {
 
   // Secret IS stored → show a subtle affordance to change or clear it
   return (
-    <div className="rounded border border-glass-edge bg-canvas px-3 py-2 flex items-center justify-between text-xs text-ink-secondary">
+    <div className="rounded border border-glass-edge bg-glass-1 px-3 py-2 flex items-center justify-between text-xs text-ink-secondary">
       <div className="flex items-center gap-1.5">
         <CheckCircle2 className="w-3.5 h-3.5 text-status-green shrink-0" />
         <span>Operator secret מוגדר ב-localStorage.</span>
@@ -153,7 +153,7 @@ export function OperatorSecretBanner() {
               variant="link"
               onClick={handleSave}
               disabled={!input.trim()}
-              className="h-auto p-0 text-status-orange hover:text-status-orange/90"
+              className="h-auto p-0 text-status-orange hover:opacity-90"
             >
               שמור
             </Button>
@@ -172,7 +172,7 @@ export function OperatorSecretBanner() {
               type="button"
               variant="link"
               onClick={() => setShowInput(true)}
-              className="h-auto p-0 text-status-orange hover:text-status-orange/90"
+              className="h-auto p-0 text-status-orange hover:opacity-90"
             >
               החלף secret
             </Button>
@@ -180,7 +180,7 @@ export function OperatorSecretBanner() {
               type="button"
               variant="link"
               onClick={handleClear}
-              className="h-auto p-0 text-status-red hover:text-status-red/90"
+              className="h-auto p-0 text-status-red hover:opacity-90"
             >
               נקה
             </Button>
