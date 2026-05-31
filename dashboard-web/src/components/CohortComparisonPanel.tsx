@@ -245,7 +245,7 @@ function CohortSection({ title, subtitle, members, tone, onDrillCampaign }: Sect
         <span
           className={cn(
             'inline-flex items-center justify-center w-6 h-6 rounded',
-            tone === 'intra' ? 'bg-status-warning text-status-warningFg' : 'bg-accent-soft text-accent',
+            tone === 'intra' ? 'bg-status-warningBg text-status-warningFg' : 'bg-accent-soft text-accent',
           )}
         >
           {tone === 'intra' ? <AlertCircle size={13} /> : <Equal size={13} />}
@@ -447,7 +447,7 @@ export function CohortComparisonPanel({
                     v.risk === 'high'
                       ? 'bg-status-redBg text-status-redFg'
                       : v.risk === 'medium'
-                        ? 'bg-status-warning text-status-warningFg'
+                        ? 'bg-status-warningBg text-status-warningFg'
                         : 'bg-accent-soft text-accent',
                   )}
                 >

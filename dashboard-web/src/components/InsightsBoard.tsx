@@ -60,7 +60,7 @@ const SEVERITY_META: Record<
     color: 'text-status-red',
     bg: 'bg-status-redBg',
     border: 'border-status-red',
-    badge: 'bg-status-red text-status-redFg',
+    badge: 'bg-status-redBg text-status-redFg',
   },
   warning: {
     label: 'אזהרות',
@@ -68,12 +68,12 @@ const SEVERITY_META: Record<
     color: 'text-status-warningFg',
     bg: 'bg-status-warningBg',
     border: 'border-status-warning',
-    badge: 'bg-status-warning text-status-warningFg',
+    badge: 'bg-status-warningBg text-status-warningFg',
   },
   opportunity: {
     label: 'הזדמנויות',
     icon: <Lightbulb size={16} />,
-    color: 'text-accent',
+    color: 'text-accent-deep',
     bg: 'bg-accent-bg',
     border: 'border-accent',
     badge: 'bg-accent text-accent-fg',
@@ -84,7 +84,7 @@ const SEVERITY_META: Record<
     color: 'text-status-green',
     bg: 'bg-status-greenBg',
     border: 'border-status-green',
-    badge: 'bg-status-green text-status-greenFg',
+    badge: 'bg-status-greenBg text-status-greenFg',
   },
   info: {
     label: 'מידע',
@@ -92,7 +92,7 @@ const SEVERITY_META: Record<
     color: 'text-ink-secondary',
     bg: 'bg-glass-2',
     border: 'border-glass-edge',
-    badge: 'bg-ink-muted text-canvas',
+    badge: 'bg-status-grayBg text-status-grayFg',
   },
 };
 

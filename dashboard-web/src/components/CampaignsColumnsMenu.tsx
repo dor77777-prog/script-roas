@@ -153,7 +153,7 @@ export function CampaignsColumnsMenu({
         <Columns3 size={13} />
         <span>עמודות</span>
         {hiddenCount > 0 && (
-          <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-status-warning text-status-warningFg text-[10px] font-bold">
+          <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-status-warningBg text-status-warningFg text-[10px] font-bold">
             {hiddenCount}
           </span>
         )}

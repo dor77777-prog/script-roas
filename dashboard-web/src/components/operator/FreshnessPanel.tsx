@@ -113,7 +113,7 @@ export function FreshnessPanel() {
   return (
     <div className="overflow-x-auto">
       <TableBase className="text-xs sm:text-sm">
-        <thead className="text-ink-secondary text-xs uppercase tracking-wider bg-canvas">
+        <thead className="text-ink-secondary text-xs uppercase tracking-wider bg-glass-3">
           <tr>
             <th className="px-3 py-2 text-start font-medium">חנות</th>
             <th className="px-3 py-2 text-start font-medium">פלטפורמה</th>

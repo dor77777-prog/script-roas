@@ -101,7 +101,7 @@ const SEVERITY_TOKENS: Record<
     groupBg:     'bg-glass-2',
     groupBorder: 'border-glass-edge',
     groupHeader: 'text-ink-secondary',
-    badge:       'bg-ink-muted text-accent-fg',
+    badge:       'bg-status-grayBg text-status-grayFg',
     iconBadge:   'bg-glass-1 text-ink-muted ring-glass-edge',
   },
 };
