@@ -110,7 +110,7 @@ function ChangeIcon({
   if (kind === 'first_seen') {
     return (
       <span
-        className="grid place-items-center w-7 h-7 rounded-lg bg-accent/15 text-accent shrink-0"
+        className="grid place-items-center w-7 h-7 rounded-lg bg-accent-soft text-accent shrink-0"
         aria-hidden
       >
         <Sparkles size={13} />

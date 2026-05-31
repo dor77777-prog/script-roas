@@ -107,7 +107,7 @@ export function Filters({ filters, stores, onChange }: Props) {
                   'rounded-lg text-xs sm:text-sm font-semibold',
                   filters.preset === p
                     ? 'border-accent shadow-glass'
-                    : 'hover:border-accent/40 active:scale-[0.98]',
+                    : 'hover:border-glass-edge-hot active:scale-[0.98]',
                 )}
               >
                 {PRESET_LABELS[p]}
@@ -177,7 +177,7 @@ export function Filters({ filters, stores, onChange }: Props) {
                     'rounded-lg text-xs sm:text-sm font-medium',
                     filters.preset === p
                       ? 'border-accent shadow-glass'
-                      : 'hover:border-accent/40 active:scale-[0.98]',
+                      : 'hover:border-glass-edge-hot active:scale-[0.98]',
                   )}
                 >
                   {PRESET_LABELS[p]}

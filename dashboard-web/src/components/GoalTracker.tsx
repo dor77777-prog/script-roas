@@ -133,26 +133,26 @@ export function GoalTracker({ data }: Props) {
           // accent fill. Keeps rounded-card + shadow-glass via explicit
           // classes for chassis consistency.
           '!p-0 overflow-hidden rounded-card shadow-glass',
-          'bg-gradient-to-br from-accent/95 via-accent to-accent/80 text-white',
+          'bg-[linear-gradient(135deg,var(--accent),var(--accent-deep))] text-accent-fg',
         )}
       >
         <div className="p-4 sm:p-5">
           <div className="flex items-center gap-2.5 mb-3">
-            <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-white/12 text-white shrink-0">
+            <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-accent-soft text-accent-fg shrink-0">
               <Target size={14} />
             </span>
-            <Heading level="section" className="text-white">
+            <Heading level="section" className="text-accent-fg">
               קבע יעד חודשי
             </Heading>
           </div>
-          <p className="text-xs sm:text-sm text-white/75 leading-relaxed mb-3">
+          <p className="text-xs sm:text-sm text-[color-mix(in_oklab,var(--accent-fg)_75%,transparent)] leading-relaxed mb-3">
             הגדר יעד הכנסות לחודש הזה והדשבורד יחשב בכל יום אם אתה מתקדם
             כפי שצריך, יקדים, או מפגר.
           </p>
           <Button
             onClick={startEdit}
             size="sm"
-            className="bg-white text-accent hover:bg-white/95"
+            className="bg-glass-2 text-accent hover:bg-glass-3"
           >
             <Edit3 size={13} />
             קבע יעד
@@ -166,7 +166,7 @@ export function GoalTracker({ data }: Props) {
     return (
       <Card className="!p-4 sm:!p-5">
         <div className="flex items-center gap-2.5 mb-3">
-          <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-accent/10 text-accent shrink-0">
+          <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-accent-bg text-accent shrink-0">
             <Target size={14} />
           </span>
           <Heading level="section">
@@ -236,7 +236,7 @@ export function GoalTracker({ data }: Props) {
     { label: string; bg: string; color: string }
   > = {
     ahead: { label: 'מקדים את היעד', bg: 'bg-status-greenBg', color: 'text-status-green' },
-    'on-pace': { label: 'בקצב הנכון', bg: 'bg-accent/10', color: 'text-accent' },
+    'on-pace': { label: 'בקצב הנכון', bg: 'bg-accent-bg', color: 'text-accent' },
     behind: { label: 'מפגר מהיעד', bg: 'bg-status-warningBg', color: 'text-status-warningFg' },
     unknown: { label: '—', bg: 'bg-glass-2', color: 'text-ink-muted' },
   };
@@ -254,7 +254,7 @@ export function GoalTracker({ data }: Props) {
       <div className="p-4 sm:p-5">
         <div className="flex items-center justify-between gap-3 mb-3">
           <div className="flex items-center gap-2.5 min-w-0">
-            <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-accent/10 text-accent shrink-0">
+            <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-accent-bg text-accent shrink-0">
               <Target size={14} />
             </span>
             <Heading level="section">
@@ -331,7 +331,7 @@ export function GoalTracker({ data }: Props) {
           {expectedPct > 0 && expectedPct < 1 && (
             <HelpTooltip content={`היעד היומי: ${(expectedPct * 100).toFixed(0)}%`}>
               <div
-                className="absolute top-0 bottom-0 w-0.5 bg-ink/40"
+                className="absolute top-0 bottom-0 w-0.5 bg-ink-muted"
                 style={{
                   // In RTL flow, "right" is the start. Position from start = right
                   // of the container.
@@ -351,7 +351,7 @@ export function GoalTracker({ data }: Props) {
             נשארו {forecast.daysRemainingThisMonth} ימים
           </span>
           <span className="inline-flex items-center gap-1">
-            <span className="inline-block w-0.5 h-2.5 bg-ink/40 align-middle" />
+            <span className="inline-block w-0.5 h-2.5 bg-ink-muted align-middle" />
             יעד יומי: {(pacing.expectedPct * 100).toFixed(0)}%
           </span>
         </div>

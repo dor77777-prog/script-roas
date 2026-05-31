@@ -198,8 +198,8 @@ export function RoasChartDateRangePicker({
               className={cn(
                 'h-7 px-2.5 text-[11px] font-mono font-medium tracking-wide',
                 active
-                  ? 'border border-accent/50 bg-accent/[0.10] text-ink'
-                  : 'border border-glass-edge bg-glass-2 text-ink-muted hover:text-ink hover:bg-glass-1 hover:border-accent/30',
+                  ? 'border border-accent bg-accent-bg text-ink'
+                  : 'border border-glass-edge bg-glass-2 text-ink-muted hover:text-ink hover:bg-glass-1 hover:border-glass-edge-hot',
               )}
             >
               {p.label}
@@ -217,8 +217,8 @@ export function RoasChartDateRangePicker({
           className={cn(
             'h-7 px-2.5 text-[11px] font-mono font-medium tracking-wide',
             value === 'custom'
-              ? 'border border-accent/50 bg-accent/[0.10] text-ink'
-              : 'border border-glass-edge bg-glass-2 text-ink-muted hover:text-ink hover:bg-glass-1 hover:border-accent/30',
+              ? 'border border-accent bg-accent-bg text-ink'
+              : 'border border-glass-edge bg-glass-2 text-ink-muted hover:text-ink hover:bg-glass-1 hover:border-glass-edge-hot',
           )}
         >
           מותאם
@@ -260,7 +260,7 @@ export function RoasChartDateRangePicker({
             data-testid="chart-range-custom-apply"
             onClick={handleApplyCustom}
             disabled={!DATE_RX.test(draftFrom) || !DATE_RX.test(draftTo) || draftFrom > draftTo}
-            className="h-7 px-2 text-[11px] font-mono font-medium border border-accent/40 bg-accent/[0.12] text-ink hover:bg-accent/[0.20]"
+            className="h-7 px-2 text-[11px] font-mono font-medium border border-accent bg-accent-bg text-ink hover:bg-accent-soft"
           >
             החל
           </Button>

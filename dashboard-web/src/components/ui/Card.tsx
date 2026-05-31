@@ -204,7 +204,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
         className={cn(
           cardVariants({ variant }),
           interactive &&
-            'cursor-pointer transition-colors hover:border-glass-edge/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/60',
+            'cursor-pointer transition-colors hover:border-glass-edge-hot focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
           className,
         )}
         data-band={band}

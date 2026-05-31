@@ -71,10 +71,10 @@ const MIGRATION_ALLOWLIST: string[] = [
   'CampaignsTableRow.tsx',
   'CohortComparisonPanel.tsx',
   'CommandPalette.tsx',
-  'Dashboard.tsx',
-  'Filters.tsx',
+  // Dashboard.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
+  // Filters.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
   'FreshnessChip.tsx',
-  'GoalTracker.tsx',
+  // GoalTracker.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
   'HealthScoreBadge.tsx',
   'HealthScorePanel.tsx',
   'InsightsBoard.tsx',
@@ -88,16 +88,16 @@ const MIGRATION_ALLOWLIST: string[] = [
   'RoasChart.tsx',
   'SectionIntro.tsx',
   'Sidebar.tsx',
-  'SyncIndicator.tsx',
+  // SyncIndicator.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
   'TabFreshnessHeader.tsx',
   'campaign-drawer/CampaignDrawerAdSets.tsx',
   'campaign-drawer/CampaignDrawerDaily.tsx',
   'campaign-drawer/CampaignDrawerOverview.tsx',
   'campaign-drawer/index.tsx',
-  'home/ActivityFeed.tsx',
+  // home/ActivityFeed.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
   // home/PerStoreRow.tsx — MIGRATED in Wave 3.0 (removed from allowlist)
-  'home/RoasChartDateRangePicker.tsx',
-  'home/RoasTargetChart.tsx',
+  // home/RoasChartDateRangePicker.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
+  // home/RoasTargetChart.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
   'operator/JobsTable.tsx',
   'operator/ManualOverridesCrud.tsx',
   'operator/OperatorSecretBanner.tsx',
@@ -106,9 +106,9 @@ const MIGRATION_ALLOWLIST: string[] = [
   'operator/SyncNowButtons.tsx',
   'operator/TokenFailuresTable.tsx',
   'operator/WhatsappTestButtons.tsx',
-  'ui/AiInsightPill.tsx',
-  'ui/Button.tsx',
-  'ui/Card.tsx',
+  // ui/AiInsightPill.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
+  // ui/Button.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
+  // ui/Card.tsx — MIGRATED in Wave 3.1 (removed from allowlist)
   // ui/InsightCard.tsx — MIGRATED in Wave-2 Task 2.2 (removed from allowlist)
   // ui/Stat.tsx        — MIGRATED in Wave-2 Task 2.2 (removed from allowlist)
 ];

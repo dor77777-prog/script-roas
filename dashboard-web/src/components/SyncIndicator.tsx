@@ -60,7 +60,7 @@ export function SyncIndicator() {
   //   1. Sheets-write error (cloudSync POST failure) → RED — same as before
   //   2. Supabase ping fails (from health) → AMBER — new in 05.5
   //   3. Both fine → GREEN
-  // The 'syncing' state keeps its existing in-flight visual (bg-white/15)
+  // The 'syncing' state keeps its existing in-flight visual (neutral glass)
   // because it's a transient state ORTHOGONAL to the health check.
   //
   // REVIEW.md WR-01 fix: supabase-down evaluation is HOISTED ABOVE the status
@@ -71,7 +71,7 @@ export function SyncIndicator() {
   // hydrate completes).
   let icon = <Cloud size={13} />;
   let label = 'sync';
-  let tone = 'bg-white/12 text-white/85 hover:bg-white/20';
+  let tone = 'bg-glass-2 text-ink-secondary hover:bg-glass-3';
   let title = '';
 
   const supabaseDown = health?.supabase === 'down';
@@ -79,12 +79,12 @@ export function SyncIndicator() {
   if (status === 'syncing') {
     icon = <RefreshCw size={13} className="animate-spin" />;
     label = pendingKeys > 0 ? `שומר ${pendingKeys}…` : 'שומר…';
-    tone = 'bg-white/15 text-white';
+    tone = 'bg-glass-2 text-ink';
     title = 'שולח את השינויים שלך לענן';
   } else if (status === 'error') {
     icon = <CloudOff size={13} />;
     label = 'sync שגיאה';
-    tone = 'bg-status-red/85 text-white hover:bg-status-red';
+    tone = 'bg-status-red text-status-redFg hover:bg-[color-mix(in_oklab,var(--status-red)_88%,var(--text))]';
     title = 'לחץ לפרטים';
   } else if (supabaseDown) {
     // D-D1 yellow — Sheets OK (or hasn't synced yet), Supabase unreachable.
@@ -92,12 +92,12 @@ export function SyncIndicator() {
     // operator gets the documented amber signal as soon as health reports.
     icon = <Cloud size={13} />;
     label = 'sync OK';
-    tone = 'bg-status-warning/30 text-white hover:bg-status-warning/40';
+    tone = 'bg-status-warningBg text-status-warningFg hover:bg-status-warning';
     title = 'Sheets תקין, Supabase לא זמין — בדוק SUPABASE_URL / SUPABASE_ANON_KEY ב-Vercel';
   } else if (status === 'ok') {
     icon = <Cloud size={13} />;
     label = 'sync OK';
-    tone = 'bg-emerald-500/30 text-white hover:bg-emerald-500/40';
+    tone = 'bg-status-greenBg text-status-greenFg hover:bg-status-green';
     if (lastSyncAt) {
       const secs = Math.round((Date.now() - lastSyncAt) / 1000);
       title = secs < 60 ? `סונכרן לפני ${secs}ש` : `סונכרן לפני ${Math.round(secs / 60)}ד`;
@@ -128,7 +128,7 @@ export function SyncIndicator() {
         onClick={onClick}
         title={title}
         className={cn(
-          'gap-1.5 rounded-lg px-2 sm:px-2.5 py-1.5 h-auto text-[11px] sm:text-xs font-medium ring-1 ring-white/10',
+          'gap-1.5 rounded-lg px-2 sm:px-2.5 py-1.5 h-auto text-[11px] sm:text-xs font-medium ring-1 ring-glass-edge',
           tone,
         )}
       >

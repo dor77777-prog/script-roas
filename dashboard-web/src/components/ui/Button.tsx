@@ -17,10 +17,10 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary:     'bg-accent text-accent-fg hover:bg-accent/90 focus-visible:ring-accent-fg',
+        primary:     'bg-accent text-accent-fg hover:bg-accent-deep focus-visible:ring-accent-fg',
         secondary:   'bg-glass-2 text-ink border border-glass-edge hover:bg-glass-1 focus-visible:ring-accent',
         ghost:       'text-ink hover:bg-glass-2 focus-visible:ring-accent',
-        destructive: 'bg-status-red text-status-redFg hover:bg-status-red/90 focus-visible:ring-status-redFg',
+        destructive: 'bg-status-red text-status-redFg hover:bg-[color-mix(in_oklab,var(--status-red)_90%,var(--text))] focus-visible:ring-status-redFg',
         link:        'text-accent underline-offset-4 hover:underline focus-visible:ring-accent',
       },
       size: {

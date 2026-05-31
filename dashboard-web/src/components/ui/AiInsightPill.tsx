@@ -29,7 +29,7 @@ export function AiInsightPill({
     <div
       role="status"
       className={cn(
-        'inline-flex items-start gap-1.5 rounded-md bg-canvas/40 border-s-2 border-accent/40',
+        'inline-flex items-start gap-1.5 rounded-md bg-glass-2 border-s-2 border-accent',
         'px-2.5 py-1.5 text-xs leading-relaxed text-ink-secondary',
         className,
       )}

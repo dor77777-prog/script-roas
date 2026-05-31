@@ -136,9 +136,9 @@ function bandClassForRoas(band: RoasBand): string {
   // The KPI tile tint matches the chart band — pulls colour from the same
   // CSS variables that <Card data-band> uses, so the two never diverge.
   switch (band) {
-    case 'red':    return 'text-status-red';
-    case 'orange': return 'text-status-warning';
-    case 'green':  return 'text-status-green';
+    case 'red':    return 'text-band-red';
+    case 'orange': return 'text-band-orange';
+    case 'green':  return 'text-band-green';
     case 'blue':   return 'text-band-blue';
     case 'gray':
     default:       return 'text-ink-muted';
@@ -365,7 +365,7 @@ export function RoasTargetChart({
             <span
               className={cn(
                 'inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-0.5 rounded-full',
-                'bg-status-warningBg text-status-warning border border-status-warning/30',
+                'bg-status-warningBg text-status-warningFg border border-status-warning',
               )}
               data-testid="chart-pin-count"
             >
@@ -470,7 +470,7 @@ export function RoasTargetChart({
               style={{
                 fontFamily: 'var(--font-mono, ui-monospace)',
                 fontSize: 10,
-                fill: 'var(--text-subtle, oklch(48% 0.020 250))',
+                fill: 'var(--text-subtle)',
               }}
             >
               {v.toFixed(1)}
@@ -560,7 +560,7 @@ export function RoasTargetChart({
               style={{
                 fontFamily: 'var(--font-mono, ui-monospace)',
                 fontSize: 10,
-                fill: 'var(--text-subtle, oklch(48% 0.020 250))',
+                fill: 'var(--text-subtle)',
               }}
             >
               {l.text}
@@ -617,7 +617,7 @@ export function RoasTargetChart({
                     data-testid={`chart-pin-tooltip-${pin.id}`}
                     className={cn(
                       'absolute z-10 whitespace-nowrap text-[11px] text-ink px-2.5 py-1 rounded-md',
-                      'bg-glass-2 backdrop-blur-md border border-status-warning/30 shadow-overlay',
+                      'bg-glass-2 backdrop-blur-md border border-status-warning shadow-overlay',
                       // Wave-6 Task 6.1 — pin tooltip entrance: 120 ms
                       // opacity + ~4 px Y translate via tailwindcss-animate.
                       // slide-in-from-bottom-1 = 0.25 rem (4 px) — see the
@@ -661,8 +661,8 @@ export function RoasTargetChart({
               className={cn(
                 'text-[11px] font-mono tabular-nums',
                 kpis.roas >= prevPeriod.roas
-                  ? 'text-status-green'
-                  : 'text-status-red',
+                  ? 'text-[color:var(--up)]'
+                  : 'text-[color:var(--dn)]',
               )}
             >
               {prevPeriod.roas === 0

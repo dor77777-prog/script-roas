@@ -327,7 +327,7 @@ export function Dashboard() {
             * consistent across /api/data, /api/campaigns, /api/products, /api/ads,
             * /api/orders-attribution, etc.). Either surfaces in the same banner. */}
           {(error || data?.error) && (
-            <div className="rounded-xl bg-status-redBg border border-status-red/30 p-4 flex items-start gap-3">
+            <div className="rounded-xl bg-status-redBg border border-[color-mix(in_oklab,var(--status-red)_30%,transparent)] p-4 flex items-start gap-3">
               <AlertCircle className="text-status-red shrink-0" size={20} />
               <div>
                 <div className="font-semibold text-status-red">שגיאה בטעינת הנתונים</div>
