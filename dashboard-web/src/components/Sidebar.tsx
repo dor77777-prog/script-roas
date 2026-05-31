@@ -350,6 +350,24 @@ export function Sidebar({
     return () => document.removeEventListener('keydown', onKey);
   }, [togglePin]);
 
+  // Body scroll-lock while the mobile drawer is open. The Sidebar drawer is
+  // hand-rolled (not Radix Dialog), so we don't get Radix's automatic
+  // scroll-lock for free. Without this, tapping the drawer while the
+  // dashboard underneath has scrollable content would let the user scroll
+  // BOTH layers — the page would slide behind the open menu. We toggle
+  // `overflow-hidden` on documentElement (mirrors what Radix does) so it
+  // also works on iOS Safari where body-level overflow can be ignored.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (!isMobileOpen) return;
+    const root = document.documentElement;
+    const prev = root.style.overflow;
+    root.style.overflow = 'hidden';
+    return () => {
+      root.style.overflow = prev;
+    };
+  }, [isMobileOpen]);
+
   return (
     <>
       {/* ===== Desktop right-rail (md and up) ===== */}
@@ -392,11 +410,16 @@ export function Sidebar({
           = closed (off-screen right), `translate-x-0` = open (right edge).
           In LTR (English) this would be off-screen left instead — fine,
           but we're RTL-first here. */}
+      {/* Backdrop — solid canvas tint at 70% so the content behind reads as
+          a clearly dimmed layer (not a slightly-tinted bleed-through). The
+          mobile sidebar Sheet is hand-rolled so we don't get Radix's
+          stronger-by-default overlay; bumping to the canvas tone matches
+          the visual weight of native iOS / Android navigation drawers. */}
       <div
         onClick={onMobileClose}
         aria-hidden={!isMobileOpen}
         className={cn(
-          'fixed inset-0 bg-glass-3/60 z-40 md:hidden transition-opacity duration-DEFAULT',
+          'fixed inset-0 bg-canvas-2/70 backdrop-blur-sm z-40 md:hidden transition-opacity duration-DEFAULT',
           isMobileOpen ? 'opacity-100' : 'opacity-0 pointer-events-none',
         )}
       />
@@ -407,7 +430,12 @@ export function Sidebar({
         aria-hidden={!isMobileOpen}
         className={cn(
           'fixed inset-y-0 start-0 w-64 max-w-[80vw] z-50 md:hidden',
-          'bg-glass-1 text-ink shadow-sheet overflow-y-auto',
+          // Solid canvas background (NOT glass-1's 4% alpha) so the drawer
+          // body is fully opaque on phones — operator feedback said the
+          // glass treatment let underlying content bleed through and made
+          // the labels hard to read. Desktop rail keeps the glass look.
+          'bg-canvas text-ink shadow-sheet overflow-y-auto',
+          'border-s border-glass-edge',
           'flex flex-col transition-transform duration-DEFAULT',
           isMobileOpen ? 'translate-x-0' : 'translate-x-full',
         )}
