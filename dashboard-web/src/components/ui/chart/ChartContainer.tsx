@@ -14,12 +14,21 @@ import { cn } from '@/lib/utils';
  * the outer wrapper's height via `className` and pass `height="100%"`
  * (string) — Recharts honors percentage heights when its parent has a
  * concrete pixel height.
+ *
+ * Bidi default (Wave 4 / Task 4.6): the wrapper defaults to
+ * `dir="ltr"`. Recharts axes are chronological (date left → date right)
+ * and tooltip/legend layout assumes LTR coordinate math, so consumers
+ * inside RTL pages would otherwise have to thread `dir="ltr"` per call
+ * site. Callers may still override via the `dir` prop when they want
+ * the wrapper to inherit the document direction (e.g. a sparkline that
+ * deliberately mirrors with the surrounding text).
  */
 export function ChartContainer({
   children,
   className,
   style,
   height,
+  dir = 'ltr',
   ...rest
 }: {
   children: ReactElement;
@@ -45,6 +54,7 @@ export function ChartContainer({
     <div
       className={cn('w-full', className)}
       style={{ ...cssVars, ...style }}
+      dir={dir}
       {...rest}
     >
       <ResponsiveContainer width="100%" height={height}>

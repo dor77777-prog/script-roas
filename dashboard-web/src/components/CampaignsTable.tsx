@@ -1525,7 +1525,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
               </Button>
             </div>
           </div>
-          <ChartContainer className="h-40 sm:h-48" dir="ltr" height="100%">
+          <ChartContainer className="h-40 sm:h-48" height="100%">
               <LineChart data={cpmChartData} margin={{ top: 8, right: cpmShowRoas ? 56 : 16, left: 4, bottom: 0 }}>
                 <XAxis
                   dataKey="date"

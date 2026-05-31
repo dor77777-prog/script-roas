@@ -1121,7 +1121,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
                     </label>
                   </div>
                 </div>
-                <ChartContainer className="h-40 sm:h-44 rounded-xl bg-glass-2/40 border border-glass-edge p-2" dir="ltr" height="100%">
+                <ChartContainer className="h-40 sm:h-44 rounded-xl bg-glass-2/40 border border-glass-edge p-2" height="100%">
                   <LineChart data={chartData} margin={{ top: 8, right: showRoasOverlay ? 56 : 16, left: 4, bottom: 0 }}>
                     <XAxis
                       dataKey="date"
