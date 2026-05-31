@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
+import { Stat } from '@/components/ui/Stat';
 import { TableBase } from '@/components/ui/TableBase';
 import type { ProductRow } from '@/lib/products';
 import type { ProductsResponse } from '@/app/api/products/route';
@@ -857,12 +858,12 @@ function SummaryCard({
           label="הזמנות"
           value={summary.orders > 0 ? formatNumber(summary.orders, 0) : '—'}
         />
-        <Stat label="יחידות" value={formatNumber(summary.units, 0)} primary />
+        <Stat label="יחידות" value={formatNumber(summary.units, 0)} accent="attention" />
         <Stat label="ברוטו" value={`CAD ${formatCurrency(summary.gross)}`} />
         <Stat
           label="נטו"
           value={summary.net !== null ? `CAD ${formatCurrency(summary.net)}` : '—'}
-          accent={summary.net !== null && summary.net < summary.gross ? 'green' : undefined}
+          accent={summary.net !== null && summary.net < summary.gross ? 'positive' : 'neutral'}
           subtitle={
             haircut !== null && haircut > 0.005
               ? `−${(haircut * 100).toFixed(1)}% הנחות/החזרים`
@@ -895,44 +896,6 @@ function SummaryCard({
   );
 }
 
-function Stat({
-  label,
-  value,
-  subtitle,
-  primary = false,
-  accent,
-  className,
-}: {
-  label: string;
-  value: string;
-  subtitle?: string;
-  primary?: boolean;
-  accent?: 'green';
-  className?: string;
-}) {
-  return (
-    <div
-      className={cn(
-        'rounded-lg bg-glass-1 border border-glass-edge px-2.5 sm:px-3 py-1.5 sm:py-2',
-        className,
-      )}
-    >
-      <div className="text-[10px] sm:text-xs text-ink-muted leading-tight">{label}</div>
-      <div
-        className={cn(
-          'text-sm sm:text-base lg:text-lg font-bold tabular-nums leading-tight mt-0.5',
-          primary && 'text-accent',
-          accent === 'green' && 'text-status-green',
-          !primary && !accent && 'text-ink',
-        )}
-      >
-        {value}
-      </div>
-      {subtitle && (
-        <div className="text-[9px] sm:text-[10px] text-ink-muted leading-tight mt-0.5">
-          {subtitle}
-        </div>
-      )}
-    </div>
-  );
-}
+// Local Stat fork removed in Wave-2 Task 2.3 — unified into
+// `@/components/ui/Stat`. `primary` → accent="attention";
+// `accent="green"` → accent="positive"; `subtitle` slot preserved.

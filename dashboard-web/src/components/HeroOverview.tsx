@@ -12,6 +12,8 @@ import {
   YAxis,
 } from 'recharts';
 import { TrendingUp, TrendingDown, Minus, LineChart, RotateCcw } from 'lucide-react';
+import { Badge, type BadgeTone } from '@/components/ui/Badge';
+import { Stat } from '@/components/ui/Stat';
 import { ChartContainer } from '@/components/ui/chart/ChartContainer';
 import {
   ChartTooltip,
@@ -82,13 +84,8 @@ type Props = {
   filters: F;
 };
 
-const TONE_CHIP: Record<string, string> = {
-  red:    'bg-status-redBg text-status-red',
-  orange: 'bg-status-orangeBg text-status-orange',
-  green:  'bg-status-greenBg text-status-green',
-  blue:   'bg-status-blueBg text-status-blue',
-  gray:   'bg-glass-2 text-ink-muted',
-};
+// TONE_CHIP removed in Wave-2 Task 2.3 — chips now use the unified <Badge>
+// from @/components/ui/Badge via Stat's `chip` slot.
 
 export function HeroOverview({ data, filters }: Props) {
   // Pull /api/campaigns to compute blended CPM across the visible scope —
@@ -316,11 +313,12 @@ export function HeroOverview({ data, filters }: Props) {
         {/* Floating KPI strip — no card chrome, just hairline dividers */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-x-6 sm:gap-x-8 gap-y-5 sm:gap-y-6">
           <div className="flex flex-col">
-            <FloatingKpi
+            <Stat
+              density="hero"
               label="הכנסות"
               value={fmtMoneyBare(kpis.curAgg.revenue)}
-              valuePrefix="CAD"
-              delta={kpis.prevEmpty ? null : kpis.dRev}
+              prefix="CAD"
+              delta={kpis.prevEmpty ? undefined : <DeltaPill value={kpis.dRev} />}
             />
             {heavyDates.length > 0 && (
               <div
@@ -335,39 +333,40 @@ export function HeroOverview({ data, filters }: Props) {
             )}
           </div>
           <div className="lg:border-s lg:border-white/12 lg:ps-7">
-            <FloatingKpi
+            <Stat
+              density="hero"
               label="ROAS"
               value={fmtNum2(kpis.curAgg.roas)}
-              chip={{ text: roasInfo.text, tone: roasInfo.tone }}
-              delta={null}
-              rawDelta={kpis.prevEmpty ? undefined : kpis.dRoas}
+              chip={<Badge tone={roasInfo.tone as BadgeTone}>{roasInfo.text}</Badge>}
+              delta={kpis.prevEmpty || kpis.dRoas === undefined ? undefined : <RawDeltaPill value={kpis.dRoas} />}
             />
           </div>
           <div className="lg:border-s lg:border-white/12 lg:ps-7">
-            <FloatingKpi
+            <Stat
+              density="hero"
               label="הוצאות פרסום"
               value={fmtMoneyBare(kpis.curAgg.spend)}
-              valuePrefix="CAD"
-              delta={kpis.prevEmpty ? null : kpis.dSpend}
-              inverseDelta
+              prefix="CAD"
+              delta={kpis.prevEmpty ? undefined : <DeltaPill value={kpis.dSpend} inverse />}
             />
           </div>
           <div className="lg:border-s lg:border-white/12 lg:ps-7">
-            <FloatingKpi
+            <Stat
+              density="hero"
               label="רווח תפעולי"
               value={fmtMoneyBare(kpis.curAgg.netProfit)}
-              valuePrefix="CAD"
-              delta={kpis.prevEmpty ? null : kpis.dNet}
-              accent={kpis.curAgg.netProfit >= 0 ? 'positive' : 'negative'}
+              prefix="CAD"
+              accent={kpis.curAgg.netProfit >= 0 ? 'neutral' : 'negative'}
+              delta={kpis.prevEmpty ? undefined : <DeltaPill value={kpis.dNet} />}
             />
           </div>
           <div className="lg:border-s lg:border-white/12 lg:ps-7">
-            <FloatingKpi
+            <Stat
+              density="hero"
               label="CPM"
               value={cpmAgg.cpm > 0 ? fmtMoneyBare(cpmAgg.cpm, 2) : <>—</>}
-              valuePrefix={cpmAgg.cpm > 0 ? 'CAD' : undefined}
-              delta={dCpm}
-              inverseDelta
+              prefix={cpmAgg.cpm > 0 ? 'CAD' : undefined}
+              delta={dCpm === null ? undefined : <DeltaPill value={dCpm} inverse />}
             />
           </div>
         </div>
@@ -647,64 +646,11 @@ function RoasTrendChart({
   );
 }
 
-function FloatingKpi({
-  label,
-  value,
-  valuePrefix,
-  delta,
-  rawDelta,
-  chip,
-  accent,
-  inverseDelta = false,
-}: {
-  label: string;
-  value: React.ReactNode;
-  valuePrefix?: string;
-  /** Pass null when there's no percentage delta (e.g. ROAS uses points diff). */
-  delta: number | null;
-  rawDelta?: number; // signed absolute value (used for ROAS-style deltas)
-  chip?: { text: string; tone: string };
-  accent?: 'positive' | 'negative';
-  inverseDelta?: boolean;
-}) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-[11px] sm:text-xs uppercase tracking-[0.12em] font-semibold text-white/65">
-        {label}
-      </span>
-      <div className="flex items-baseline gap-1.5 sm:gap-2">
-        {valuePrefix && (
-          <span className="text-[11px] sm:text-xs text-white/55 font-medium">{valuePrefix}</span>
-        )}
-        <span
-          className={cn(
-            'font-light tabular-nums tracking-tight leading-none',
-            'text-[1.5rem] sm:text-[2rem] md:text-[2.25rem]',
-            accent === 'negative' ? 'text-orange-200' : 'text-white',
-          )}
-        >
-          {value}
-        </span>
-      </div>
-      {chip && (
-        <span
-          className={cn(
-            'inline-flex w-fit items-center mt-1 px-1.5 py-0.5 text-[10px] font-semibold rounded',
-            TONE_CHIP[chip.tone],
-          )}
-        >
-          {chip.text}
-        </span>
-      )}
-      {delta !== null && (
-        <DeltaPill value={delta} inverse={inverseDelta} />
-      )}
-      {delta === null && rawDelta !== undefined && (
-        <RawDeltaPill value={rawDelta} />
-      )}
-    </div>
-  );
-}
+// Local FloatingKpi fork removed in Wave-2 Task 2.3 — unified into
+// `<Stat density="hero">` from @/components/ui/Stat. The hero density sheds
+// card chrome (no padding/border/shadow) so this stays a chrome-less
+// floating KPI under the page heading, but now shares CVA + slots
+// (prefix / chip / delta) with all other stats.
 
 function DeltaPill({ value, inverse }: { value: number; inverse?: boolean }) {
   // Reserved-red rule: "down" in metrics that should grow (revenue, ROAS, net

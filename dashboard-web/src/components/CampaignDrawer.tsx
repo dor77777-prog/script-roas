@@ -92,7 +92,8 @@ import {
   ChartTooltipValue,
 } from '@/components/ui/chart/ChartTooltip';
 import { Sheet, SheetContent } from '@/components/ui/Sheet';
-import { BADGE_TONE_BG } from '@/components/ui/Badge';
+import { Badge, type BadgeTone } from '@/components/ui/Badge';
+import { Stat } from '@/components/ui/Stat';
 
 /**
  * Slide-in campaign drilldown drawer. Linear/Vercel-style: full context
@@ -870,16 +871,16 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
           {health && <HealthScorePanel health={health} />}
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
-            <DrawerStat label="ROAS" value={summary.roas > 0 ? formatNumber(summary.roas) : '—'} chip={{ text: roasInfo.text, tone: roasInfo.tone }} primary />
-            <DrawerStat label="הוצאה" value={formatCurrency(summary.spend)} prefix="CAD" />
-            <DrawerStat label="ערך המרות" value={formatCurrency(summary.value)} prefix="CAD" accent={summary.value > summary.spend ? 'green' : undefined} />
-            <DrawerStat label="המרות" value={formatNumber(summary.conversions, 0)} />
+            <Stat label="ROAS" value={summary.roas > 0 ? formatNumber(summary.roas) : '—'} chip={<Badge tone={roasInfo.tone as BadgeTone}>{roasInfo.text}</Badge>} />
+            <Stat label="הוצאה" value={formatCurrency(summary.spend)} prefix="CAD" />
+            <Stat label="ערך המרות" value={formatCurrency(summary.value)} prefix="CAD" accent={summary.value > summary.spend ? 'positive' : 'neutral'} />
+            <Stat label="המרות" value={formatNumber(summary.conversions, 0)} />
           </div>
 
           <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
-            <DrawerStat label="CTR" value={summary.impressions > 0 ? `${(summary.ctr * 100).toFixed(2)}%` : '—'} compact />
-            <DrawerStat label="CPC" value={summary.clicks > 0 ? `CAD ${formatCurrency(summary.cpc, 2)}` : '—'} compact />
-            <DrawerStat label="CPA" value={summary.conversions > 0 ? `CAD ${formatCurrency(summary.cpa, 2)}` : '—'} compact />
+            <Stat density="compact" label="CTR" value={summary.impressions > 0 ? `${(summary.ctr * 100).toFixed(2)}%` : '—'} />
+            <Stat density="compact" label="CPC" value={summary.clicks > 0 ? `CAD ${formatCurrency(summary.cpc, 2)}` : '—'} />
+            <Stat density="compact" label="CPA" value={summary.conversions > 0 ? `CAD ${formatCurrency(summary.cpa, 2)}` : '—'} />
           </div>
 
           {summary.dailyArr.length >= 2 && (
@@ -1572,48 +1573,7 @@ export function CampaignDrawer({ rows, campaignId, storeId, open, onClose, adAcc
   );
 }
 
-function DrawerStat({ label, value, prefix, chip, primary, compact, accent }: {
-  label: string;
-  value: string;
-  prefix?: string;
-  chip?: { text: string; tone: string };
-  primary?: boolean;
-  compact?: boolean;
-  accent?: 'green';
-}) {
-  return (
-    <div
-      className={cn(
-        'rounded-lg border border-glass-edge bg-glass-2/30',
-        compact ? 'px-2.5 py-2' : 'px-3 py-2.5 sm:px-3.5 sm:py-3',
-      )}
-    >
-      <div className="text-[10px] sm:text-[11px] text-ink-muted leading-tight uppercase tracking-wide">{label}</div>
-      <div className="flex items-baseline gap-1 mt-0.5">
-        {prefix && (
-          <span className="text-[10px] text-ink-muted font-medium shrink-0">{prefix}</span>
-        )}
-        <span
-          className={cn(
-            'font-semibold tabular-nums leading-tight',
-            primary ? 'text-base sm:text-lg' : 'text-sm sm:text-base',
-            accent === 'green' && 'text-status-green',
-            !accent && 'text-ink',
-          )}
-        >
-          {value}
-        </span>
-      </div>
-      {chip && (
-        <span
-          className={cn(
-            'inline-block mt-1 px-1.5 py-0.5 text-[9px] sm:text-[10px] font-semibold rounded',
-            BADGE_TONE_BG[chip.tone as keyof typeof BADGE_TONE_BG],
-          )}
-        >
-          {chip.text}
-        </span>
-      )}
-    </div>
-  );
-}
+// Local DrawerStat fork removed in Wave-2 Task 2.3 — unified into
+// `@/components/ui/Stat` (density / prefix / chip / active / delta).
+// `primary` → density="regular" (default); plain → density="regular";
+// `compact` → density="compact"; `accent="green"` → accent="positive".

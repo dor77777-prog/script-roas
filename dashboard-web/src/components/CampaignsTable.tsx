@@ -78,7 +78,8 @@ import { TableBase } from '@/components/ui/TableBase';
 import { CampaignDrawer } from './CampaignDrawer';
 import { AdsDrawer } from './AdsDrawer';
 import { readTabLocalState, syncTabLocalUrl } from '@/lib/urlState';
-import { BADGE_TONE_BG } from '@/components/ui/Badge';
+import { Badge, type BadgeTone } from '@/components/ui/Badge';
+import { Stat } from '@/components/ui/Stat';
 
 type Mode = 'campaign' | 'adset';
 type Platform = 'all' | 'Meta' | 'Google' | 'TikTok';
@@ -1386,9 +1387,9 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   const summary = aggregated.length > 0 && (
     <div className="px-4 sm:px-5 py-3 sm:py-4 bg-gradient-to-l from-accent/5 to-elevated border-b border-glass-edge">
       <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3">
-        <Stat label="ROAS" value={totals.roas > 0 ? formatNumber(totals.roas) : '—'} chip={{ text: roasInfo.text, tone: roasInfo.tone }} />
+        <Stat label="ROAS" value={totals.roas > 0 ? formatNumber(totals.roas) : '—'} chip={<Badge tone={roasInfo.tone as BadgeTone}>{roasInfo.text}</Badge>} />
         <Stat label="הוצאה" value={formatCurrency(totals.spend)} prefix="CAD" />
-        <Stat label="ערך המרות" value={formatCurrency(totals.conversionValue)} prefix="CAD" accent={totals.conversionValue >= totals.spend ? 'green' : undefined} />
+        <Stat label="ערך המרות" value={formatCurrency(totals.conversionValue)} prefix="CAD" accent={totals.conversionValue >= totals.spend ? 'positive' : 'neutral'} />
         <Stat label="המרות" value={formatNumber(totals.conversions, 0)} />
         <Stat label="קליקים" value={formatNumber(totals.clicks, 0)} />
         <Stat label="CTR" value={totals.impressions > 0 ? `${(totals.ctr * 100).toFixed(2)}%` : '—'} />
@@ -2488,70 +2489,5 @@ function SortHeader({
   );
 }
 
-function Stat({
-  label,
-  value,
-  prefix,
-  chip,
-  accent,
-  onClick,
-  active,
-}: {
-  label: string;
-  value: string;
-  prefix?: string;
-  chip?: { text: string; tone: string };
-  accent?: 'green';
-  /** When provided, the card becomes a button (keyboard focusable + hover
-   *  affordance). Use for cards that drill into a deeper view. */
-  onClick?: () => void;
-  /** Render the card with a pressed / open visual state — used when the
-   *  drill-down panel is currently expanded. */
-  active?: boolean;
-}) {
-  const interactive = !!onClick;
-  const className = cn(
-    'rounded-lg border px-2.5 sm:px-3 py-1.5 sm:py-2 text-start',
-    !interactive && 'bg-glass-1 border-glass-edge',
-    interactive && !active && 'bg-glass-1 border-glass-edge hover:border-accent/40 hover:bg-accent/[0.02] transition-colors cursor-pointer',
-    interactive && active && 'bg-accent/[0.04] border-accent/40 ring-1 ring-accent/20 cursor-pointer',
-  );
-  const content = (
-    <>
-      <div className="text-[10px] sm:text-xs text-ink-muted leading-tight">{label}</div>
-      <div className="flex items-baseline gap-1 mt-0.5">
-        {prefix && (
-          <span className="text-[10px] text-ink-muted font-medium shrink-0">{prefix}</span>
-        )}
-        <span
-          className={cn(
-            'font-semibold tabular-nums leading-tight',
-            'text-sm sm:text-base',
-            accent === 'green' && 'text-status-green',
-            !accent && 'text-ink',
-          )}
-        >
-          {value}
-        </span>
-      </div>
-      {chip && (
-        <span
-          className={cn(
-            'inline-block mt-1 px-1.5 py-0.5 text-[9px] sm:text-[10px] font-semibold rounded',
-            BADGE_TONE_BG[chip.tone as keyof typeof BADGE_TONE_BG],
-          )}
-        >
-          {chip.text}
-        </span>
-      )}
-    </>
-  );
-  if (interactive) {
-    return (
-      <Button type="button" variant="ghost" onClick={onClick} aria-pressed={active} className={cn(className, 'h-auto p-0 text-start block')}>
-        {content}
-      </Button>
-    );
-  }
-  return <div className={className}>{content}</div>;
-}
+// Local Stat fork removed in Wave-2 Task 2.3 — unified into
+// `@/components/ui/Stat` (density / prefix / chip / active / delta).

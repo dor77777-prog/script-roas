@@ -24,7 +24,8 @@ import { readOptimized, toggleOptimized } from '@/lib/campaignOptimized';
 import { useDrawerEsc } from '@/lib/drawerStack';
 import { buildDateRangeKey } from '@/lib/dateRange';
 import { Sheet, SheetContent } from '@/components/ui/Sheet';
-import { BADGE_TONE_BG } from '@/components/ui/Badge';
+import { Badge, BADGE_TONE_BG, type BadgeTone } from '@/components/ui/Badge';
+import { Stat } from '@/components/ui/Stat';
 import { TableBase } from '@/components/ui/TableBase';
 
 /**
@@ -374,11 +375,11 @@ export function AdsDrawer({
               {/* Totals strip — quick reference vs the parent ad-set values */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <Stat label="הוצאה" value={`CAD ${formatCurrency(summary.totals.spend)}`} />
-                <Stat label="ערך" value={`CAD ${formatCurrency(summary.totals.value)}`} accent="green" />
+                <Stat label="ערך" value={`CAD ${formatCurrency(summary.totals.value)}`} accent="positive" />
                 <Stat
                   label="ROAS"
                   value={summary.totals.roas > 0 ? formatNumber(summary.totals.roas) : '—'}
-                  chip={totalsInfo}
+                  chip={totalsInfo ? <Badge tone={totalsInfo.tone as BadgeTone}>{totalsInfo.text}</Badge> : undefined}
                 />
                 <Stat label="המרות" value={formatNumber(summary.totals.conversions, 0)} />
               </div>
@@ -541,41 +542,8 @@ export function AdsDrawer({
   );
 }
 
-function Stat({
-  label,
-  value,
-  chip,
-  accent,
-}: {
-  label: string;
-  value: string;
-  chip?: { text: string; tone: string } | null;
-  /**
-   * Color emphasis for the value. Kept intentionally narrow — only the two
-   * tones used in totals strips today. Add new tones here (don't widen to
-   * `string`) so the TONE_BG lookup table and this prop stay in lockstep.
-   * Sibling components: `DrawerStat` in CampaignDrawer.tsx, also widening.
-   */
-  accent?: 'green' | 'red';
-}) {
-  return (
-    <div className="rounded-lg border border-glass-edge bg-glass-2/30 px-2.5 py-2">
-      <div className="text-[10px] text-ink-muted uppercase tracking-wide leading-tight">{label}</div>
-      <div className={cn(
-        'text-xs sm:text-sm font-semibold tabular-nums mt-0.5',
-        accent === 'green' && 'text-status-green',
-        accent === 'red' && 'text-status-red',
-      )}>
-        {value}
-      </div>
-      {chip && (
-        <span className={cn('inline-block mt-1 px-1.5 py-0.5 text-[9px] font-semibold rounded', BADGE_TONE_BG[chip.tone as keyof typeof BADGE_TONE_BG])}>
-          {chip.text}
-        </span>
-      )}
-    </div>
-  );
-}
+// Local Stat fork removed in Wave-2 Task 2.3 — unified into
+// `@/components/ui/Stat` (density / prefix / chip / active / delta).
 
 function AdSortHeader({
   label,
