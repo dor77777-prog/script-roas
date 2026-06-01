@@ -101,11 +101,12 @@ export interface PerStoreRowProps {
  * -------------------------------------------------------------------------- */
 
 const BAND_TAG_LABEL: Record<RoasBand, string> = {
-  red:    'דורש בחינה',
-  orange: 'סביר',
-  green:  'טוב',
-  blue:   'מעולה',
-  gray:   'אין נתונים',
+  red:         'דורש בחינה',
+  'red-alarm': '0 מכירות',
+  orange:      'סביר',
+  green:       'טוב',
+  blue:        'מעולה',
+  gray:        'אין נתונים',
 };
 
 /* --------------------------------------------------------------------------
@@ -172,11 +173,21 @@ function StoreCard({
   store: PerStoreData;
   onSelect?: (storeId: string) => void;
 }) {
+  // Operator-locked "alarm-red" state: the store SPENT money but made ZERO
+  // sales (the worst outcome). Such a store carries `roas: null` upstream
+  // (a 0-revenue ROAS isn't a meaningful ratio), so we derive the flag from
+  // raw spend/revenue and let it drive the band. Genuine no-activity
+  // (spend === 0) does NOT trip this and stays gray ("אין נתונים").
+  const zeroSalesWithSpend =
+    (store.spend ?? 0) > 0 && store.revenue === 0;
+
   // useRoasBandGradient is a pure function (the `use` prefix is a naming
   // convention locked in lib/format/useRoasBandGradient.ts — it does NOT
   // call into React hook machinery, so it's safe to invoke per-store
-  // without triggering rules-of-hooks lint).
-  const band = useRoasBandGradient(store.roas);
+  // without triggering rules-of-hooks lint). The 2nd arg (isStale) keeps its
+  // default false here (per-card desaturation is driven by data-freshness,
+  // not this flag); the 3rd arg flips the card to the alarm-red band.
+  const band = useRoasBandGradient(store.roas, false, zeroSalesWithSpend);
   const aovClass = aovEmphasis(store.aov);
   // Task 3.6 — freshness signal. The hook re-renders every 60s so the chip
   // label clock stays current; the same `stage` drives the Card's
@@ -273,7 +284,11 @@ function StoreCard({
           dir="ltr"
           className="v banded block text-[50px] md:text-[60px] font-light tabular-nums tracking-tight leading-none whitespace-nowrap"
         >
-          {fmtRoasText(store.roas)}
+          {/* Alarm-red state shows an explicit "0.00x" (spent money, zero
+              return) rather than the "—" fmtRoasText() yields for a true null
+              ROAS. fmtRoasText itself is left untouched — other callers rely on
+              "—" for genuine no-data. */}
+          {zeroSalesWithSpend ? '0.00x' : fmtRoasText(store.roas)}
         </bdi>
         <span className="roas-cap mt-1 block font-mono text-[11px] uppercase tracking-[0.08em] text-ink-muted">
           ROAS · היום

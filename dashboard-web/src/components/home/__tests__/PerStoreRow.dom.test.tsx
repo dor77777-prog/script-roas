@@ -131,6 +131,53 @@ describe('PerStoreRow', () => {
     expect(cards[2].getAttribute('data-band')).toBe('red');    // roas 1.65
   });
 
+  // (h) Operator-locked alarm-red state — the store SPENT money but made ZERO
+  // sales (`spend>0 && revenue===0`). Card flips to data-band="red-alarm", the
+  // ROAS hero reads an explicit "0.00x" (NOT "—"), and the band-tag reads
+  // "0 מכירות". A spend=0 (no-activity) store must stay gray ("אין נתונים").
+  it('spent money + ZERO sales → red-alarm band, ROAS "0.00x", tag "0 מכירות"', () => {
+    const zeroSales: PerStoreData = {
+      storeId: 'burned-store',
+      storeName: 'burned-store',
+      spend: 100,
+      revenue: 0,
+      orders: 0,
+      aov: null,
+      roas: null, // upstream null for a 0-revenue store
+      updatedAt: null,
+      perPlatformCpm: {},
+    };
+    const { container } = render(<PerStoreRow stores={[zeroSales]} />);
+    const card = container.querySelector('[data-testid="per-store-card"]');
+    expect(card?.getAttribute('data-band')).toBe('red-alarm');
+    // ROAS hero shows the explicit 0.00x, not the "—" null placeholder.
+    const roas = card?.querySelector('.v.banded');
+    expect(roas?.textContent).toBe('0.00x');
+    // Band-tag pill reads "0 מכירות".
+    const tag = card?.querySelector('.band-tag');
+    expect(tag?.textContent).toBe('0 מכירות');
+  });
+
+  it('NO spend (spend=0) → stays gray / "אין נתונים" (no-activity, unchanged)', () => {
+    const noActivity: PerStoreData = {
+      storeId: 'idle-store',
+      storeName: 'idle-store',
+      spend: 0,
+      revenue: 0,
+      orders: 0,
+      aov: null,
+      roas: null,
+      updatedAt: null,
+      perPlatformCpm: {},
+    };
+    const { container } = render(<PerStoreRow stores={[noActivity]} />);
+    const card = container.querySelector('[data-testid="per-store-card"]');
+    expect(card?.getAttribute('data-band')).toBe('gray');
+    expect(card?.querySelector('.band-tag')?.textContent).toBe('אין נתונים');
+    // No alarm number — true null ROAS still renders the "—" placeholder.
+    expect(card?.querySelector('.v.banded')?.textContent).toBe('—');
+  });
+
   it('orders cell is neutral (only "cell", no emphasis class)', () => {
     const { container } = render(<PerStoreRow stores={[STORES[0]]} />);
     const orders = container.querySelector('[data-cell="orders"]');

@@ -77,6 +77,9 @@
      hue 45 still clears ≥13° from --chart-platform-tiktok (12°) so the
      colorCollisions guard stays green; google (90°) is 45° away. */
   --band-red:    #ff6b81;  /* mockup-locked band stop (bright ::before top-bar glow) */
+  /* alarm-red top-bar glow — a VIVID hot red, brighter/hotter than --band-red,
+     so the alarm card's 4px ::before bar visibly "shouts" more than regular red. */
+  --band-red-alarm: #ff3b5c;
   --band-orange: #ffb24d;  /* mockup-locked band stop (bright ::before top-bar glow) */
   --band-green:  #34e2ad;  /* mockup-locked band stop (bright ::before top-bar glow) */
   --band-blue:   #5b8df0;  /* mockup-locked band stop (bright ::before top-bar glow) */
@@ -92,6 +95,14 @@
      light + dark — by design). Verified by contrastGuard.test.ts.
      Mockup: docs/superpowers/mockups/2026-06-01-deepened-bands/vibrant-aa-cards.html. */
   --card-band-red:      #ce3e5a;  --card-band-red-2:    #e11c48;
+  /* alarm-red (2026-06-01) — the operator-locked "spent money, ZERO sales"
+     state (`spend>0 && revenue===0`). A DEEPER, MORE-SATURATED crimson than the
+     regular ROAS<2 red so it visibly SHOUTS more. The lightest stop
+     `--card-band-red-alarm` is the AA bottleneck for white in the number region:
+     white on #c81e3a = 5.67:1 (≥4.5 ✓; deeper end #a10d28 = 8.07:1).
+     Theme-independent like the other band surfaces. Verified by
+     contrastGuard.test.ts. */
+  --card-band-red-alarm: #c81e3a;  --card-band-red-alarm-2: #a10d28;
   --card-band-orange:   #aa6200;  --card-band-orange-2: #cb4800;
   --card-band-green:    #008456;  --card-band-green-2:  #008454;
   --card-band-blue:     #4170d1;  --card-band-blue-2:   #2563eb;
@@ -109,11 +120,13 @@
      deep surface). Tune THESE / re-derive `--card-band-*` deeper — never lower
      the threshold. */
   --on-band-red:    oklch(100% 0 0);
+  --on-band-red-alarm: oklch(100% 0 0);  /* alarm-red text = white, like the other bands (5.67:1 on the deep surface) */
   --on-band-orange: oklch(100% 0 0);
   --on-band-green:  oklch(100% 0 0);
   --on-band-blue:   oklch(100% 0 0);
   --on-band-gray:   oklch(100% 0 0);
   --on-band-red-muted:    #dfe3f2;
+  --on-band-red-alarm-muted: #dfe3f2;  /* near-white secondary (4.43:1 on the deep alarm surface ≥3:1) */
   --on-band-orange-muted: #dfe3f2;
   --on-band-green-muted:  #dfe3f2;
   --on-band-blue-muted:   #dfe3f2;
@@ -404,6 +417,9 @@
 
   /* V4 band signal — same hues as dark; mid-tone L for the bright ::before bar. */
   --band-red:    #e11d48;  /* mockup-locked band stop (light, top-bar glow) */
+  /* alarm-red top-bar glow (light) — a VIVID hot red, brighter/hotter than
+     --band-red, so the alarm card's 4px ::before bar shouts more than red. */
+  --band-red-alarm: #ff3b5c;
   --band-orange: #f59e0b;  /* mockup-locked band stop (light, top-bar glow) */
   --band-green:  #0f9d6b;  /* mockup-locked band stop (light, top-bar glow) */
   --band-blue:   #3b82f6;  /* mockup-locked band stop (light, top-bar glow) */
@@ -414,6 +430,14 @@
      identically here so the themeParity guard (every :root token has a light
      counterpart) stays green. See the :root block for the full rationale. */
   --card-band-red:      #ce3e5a;  --card-band-red-2:    #e11c48;
+  /* alarm-red (2026-06-01) — the operator-locked "spent money, ZERO sales"
+     state (`spend>0 && revenue===0`). A DEEPER, MORE-SATURATED crimson than the
+     regular ROAS<2 red so it visibly SHOUTS more. The lightest stop
+     `--card-band-red-alarm` is the AA bottleneck for white in the number region:
+     white on #c81e3a = 5.67:1 (≥4.5 ✓; deeper end #a10d28 = 8.07:1).
+     Theme-independent like the other band surfaces. Verified by
+     contrastGuard.test.ts. */
+  --card-band-red-alarm: #c81e3a;  --card-band-red-alarm-2: #a10d28;
   --card-band-orange:   #aa6200;  --card-band-orange-2: #cb4800;
   --card-band-green:    #008456;  --card-band-green-2:  #008454;
   --card-band-blue:     #4170d1;  --card-band-blue-2:   #2563eb;
@@ -428,11 +452,13 @@
      The card surface is the deepened `--card-band-*` gradient (theme-independent),
      so white clears WCAG-AA 4.5:1 identically here. Same values as :root. */
   --on-band-red:    oklch(100% 0 0);
+  --on-band-red-alarm: oklch(100% 0 0);  /* alarm-red text = white, like the other bands (5.67:1 on the deep surface) */
   --on-band-orange: oklch(100% 0 0);
   --on-band-green:  oklch(100% 0 0);
   --on-band-blue:   oklch(100% 0 0);
   --on-band-gray:   oklch(100% 0 0);
   --on-band-red-muted:    #dfe3f2;
+  --on-band-red-alarm-muted: #dfe3f2;  /* near-white secondary (4.43:1 on the deep alarm surface ≥3:1) */
   --on-band-orange-muted: #dfe3f2;
   --on-band-green-muted:  #dfe3f2;
   --on-band-blue-muted:   #dfe3f2;
@@ -1063,6 +1089,26 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   box-shadow: 0 0 52px oklch(from var(--band-red) calc(l + 0.03) c h / 1.0), 0 0 18px oklch(from var(--band-red) l c h / 0.9);
   height: 4px;
 }
+/* alarm-red (2026-06-01) — operator-locked "spent money, ZERO sales" state.
+   Clones the red structure but with the DEEPER/MORE-SATURATED alarm tokens and a
+   visibly stronger red drop shadow (a larger, hotter glow) so the card SHOUTS
+   more than the regular ROAS<2 red. White text holds AA on the deep surface
+   (white on --card-band-red-alarm = 5.67:1, verified by contrastGuard.test.ts). */
+.glass[data-band="red-alarm"],
+.glass[data-band="red-alarm"][data-band-strength="strong"] {
+  --band: var(--card-band-red-alarm); --band-2: var(--card-band-red-alarm-2);
+  background:
+    radial-gradient(120% 120% at 10% 0%, color-mix(in oklab, var(--band) 95%, #ffffff), transparent 55%),
+    radial-gradient(135% 125% at 100% 100%, var(--band-2), transparent 62%),
+    linear-gradient(135deg, var(--band), var(--band-2));
+  box-shadow: 0 18px 44px color-mix(in oklab, var(--band-red-alarm) 42%, transparent);
+}
+.glass[data-band="red-alarm"]::before,
+.glass[data-band="red-alarm"][data-band-strength="strong"]::before {
+  background: var(--band-red-alarm);
+  box-shadow: 0 0 64px oklch(from var(--band-red-alarm) calc(l + 0.04) c h / 1.0), 0 0 22px oklch(from var(--band-red-alarm) l c h / 0.95);
+  height: 4px;
+}
 .glass[data-band="orange"],
 .glass[data-band="orange"][data-band-strength="strong"] {
   --band: var(--card-band-orange); --band-2: var(--card-band-orange-2);
@@ -1230,6 +1276,8 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    --------------------------------------------------------------------- */
 .glass[data-band="red"] .hero-eyebrow,
 .glass[data-band="red"] .sl { color: var(--on-band-red-muted); }
+.glass[data-band="red-alarm"] .hero-eyebrow,
+.glass[data-band="red-alarm"] .sl { color: var(--on-band-red-alarm-muted); }
 .glass[data-band="orange"] .hero-eyebrow,
 .glass[data-band="orange"] .sl { color: var(--on-band-orange-muted); }
 .glass[data-band="green"] .hero-eyebrow,
@@ -1276,6 +1324,7 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    is a depth/lift cue only. Gray is the no-data state but is now ALSO a deep
    card (deep-neutral), so its number is WHITE too (`--on-band-gray`). */
 .glass[data-band="red"]    .v.banded { color: var(--on-band-red);    -webkit-text-fill-color: var(--on-band-red);    background: none; text-shadow: 0 1px 2px oklch(0% 0 0 / 0.12); }
+.glass[data-band="red-alarm"] .v.banded { color: var(--on-band-red-alarm); -webkit-text-fill-color: var(--on-band-red-alarm); background: none; text-shadow: 0 1px 2px oklch(0% 0 0 / 0.12); }
 .glass[data-band="orange"] .v.banded { color: var(--on-band-orange); -webkit-text-fill-color: var(--on-band-orange); background: none; text-shadow: 0 1px 2px oklch(0% 0 0 / 0.12); }
 .glass[data-band="green"]  .v.banded { color: var(--on-band-green);  -webkit-text-fill-color: var(--on-band-green);  background: none; text-shadow: 0 1px 2px oklch(0% 0 0 / 0.12); }
 .glass[data-band="blue"]   .v.banded { color: var(--on-band-blue);   -webkit-text-fill-color: var(--on-band-blue);   background: none; text-shadow: 0 1px 2px oklch(0% 0 0 / 0.12); }
@@ -1526,6 +1575,14 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 @media (min-width: 768px) {
   .per-store-card .scard-main-grid .sv { font-size: 22px; }
 }
+/* Alignment fix (2026-06-01) — spend/revenue/AOV values render via <Money>,
+   which wraps the number in <bdi dir="ltr">. The LTR direction flips the
+   value's `text-align: start` to the LEFT edge, so those three numbers no
+   longer lined up under their RTL right-aligned labels (only Orders, a plain
+   RTL span, stayed right). Pin every per-store metric value to physical
+   text-align:right so all four columns align consistently under their labels.
+   The card is always Hebrew/RTL, so `right` is the correct physical edge. */
+.per-store-card .scard-main-grid .sv { text-align: right; }
 
 /* Wave 3.0 (2026-05-31) — mockup `.store` header parity.
    The band-tag pill + the "ROAS · היום" caption sit ON the vivid band
@@ -1633,6 +1690,9 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    `--band-scrim-ink` in the band-agnostic rule just below. */
 .per-store-card.glass[data-band="red"] .scard-main-grid .sv {
   color: var(--on-band-red);
+}
+.per-store-card.glass[data-band="red-alarm"] .scard-main-grid .sv {
+  color: var(--on-band-red-alarm);
 }
 .per-store-card.glass[data-band="orange"] .scard-main-grid .sv {
   color: var(--on-band-orange);

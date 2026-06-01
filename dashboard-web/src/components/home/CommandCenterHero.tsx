@@ -373,11 +373,15 @@ function NetSparkline({
  * sparkline stroke tracks the theme without any manual sync.
  * CommandCenterHero is NOT a chart file → var(--band-*) is allowed. */
 const BAND_STROKE: Record<RoasBand, string> = {
-  red:    'var(--band-red)',
-  orange: 'var(--band-orange)',
-  green:  'var(--band-green)',
-  blue:   'var(--band-blue)',
-  gray:   'var(--band-gray)',
+  red:         'var(--band-red)',
+  // The hero never derives a red-alarm band itself (no zero-sales signal is
+  // wired here), but Record<RoasBand> must be exhaustive — point it at the
+  // alarm top-bar glow token for consistency if it ever does.
+  'red-alarm': 'var(--band-red-alarm)',
+  orange:      'var(--band-orange)',
+  green:       'var(--band-green)',
+  blue:        'var(--band-blue)',
+  gray:        'var(--band-gray)',
 };
 
 /* --------------------------------------------------------------------------

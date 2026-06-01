@@ -15,16 +15,26 @@
  * to invoke from any context — server components, loops, conditionals.
  *
  * Thresholds (locked, must stay in lock-step with roasLabel() tones):
+ *   zeroSalesWithSpend  → red-alarm   (TOP priority — wins over everything,
+ *                                      incl. a null roas; the worst outcome:
+ *                                      real ad spend, ZERO revenue)
  *   roas < 2.0          → red
  *   2.0 ≤ roas < 2.7    → orange
  *   2.7 ≤ roas < 3.0    → green
  *   roas ≥ 3.0          → blue
  *   roas null/undefined → gray
  *
+ * The `red-alarm` band is the operator-locked "spent money, made zero sales"
+ * state (`spend > 0 && revenue === 0`). The caller derives this boolean and
+ * passes it as the 3rd arg; because such a store gets `roas: null` upstream
+ * (a 0-revenue ROAS isn't a meaningful ratio), the red-alarm branch MUST sit
+ * ABOVE the null→gray check so it wins. Genuine no-activity (spend === 0)
+ * does NOT set the flag and stays gray.
+ *
  * NaN is treated as null (defensive — guards against bad math
  * upstream where a 0/0 divide produced NaN instead of null).
  */
-export type RoasBand = 'red' | 'orange' | 'green' | 'blue' | 'gray';
+export type RoasBand = 'red' | 'red-alarm' | 'orange' | 'green' | 'blue' | 'gray';
 
 export interface BandResult {
   band: RoasBand;
@@ -34,7 +44,11 @@ export interface BandResult {
 export function useRoasBandGradient(
   roas: number | null | undefined,
   isStale = false,
+  zeroSalesWithSpend = false,
 ): BandResult {
+  // Top priority — spent money, zero return. Wins over the null→gray check
+  // below because such a store carries `roas: null` upstream.
+  if (zeroSalesWithSpend) return { band: 'red-alarm', desaturate: isStale };
   if (roas == null || Number.isNaN(roas)) {
     return { band: 'gray', desaturate: isStale };
   }

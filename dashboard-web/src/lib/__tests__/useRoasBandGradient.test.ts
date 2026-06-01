@@ -9,6 +9,7 @@ import { useRoasBandGradient } from '../format/useRoasBandGradient';
  * the same number. Pure function despite the `use` prefix.
  *
  * Thresholds (locked, must match roasLabel() tones):
+ *   zeroSalesWithSpend  → red-alarm   (TOP priority — wins over null→gray)
  *   roas < 2.0          → red
  *   2.0 ≤ roas < 2.7    → orange
  *   2.7 ≤ roas < 3.0    → green
@@ -65,5 +66,42 @@ describe('useRoasBandGradient — isStale flag', () => {
 
   it('defaults isStale to false when omitted', () => {
     expect(useRoasBandGradient(2.85).desaturate).toBe(false);
+  });
+});
+
+describe('useRoasBandGradient — red-alarm (spent money, ZERO sales)', () => {
+  it('returns red-alarm when zeroSalesWithSpend=true, even with a null roas', () => {
+    // The zero-sales store carries roas:null upstream — red-alarm must win
+    // over the null→gray branch.
+    expect(useRoasBandGradient(null, false, true)).toEqual({
+      band: 'red-alarm',
+      desaturate: false,
+    });
+  });
+
+  it('red-alarm wins over a numeric roas branch too (defensive)', () => {
+    expect(useRoasBandGradient(2.5, false, true)).toEqual({
+      band: 'red-alarm',
+      desaturate: false,
+    });
+  });
+
+  it('propagates desaturate when isStale=true on the alarm band', () => {
+    expect(useRoasBandGradient(null, true, true)).toEqual({
+      band: 'red-alarm',
+      desaturate: true,
+    });
+  });
+
+  it('does NOT trip red-alarm when the flag is false (existing bands unchanged)', () => {
+    expect(useRoasBandGradient(2.5, false, false)).toEqual({
+      band: 'orange',
+      desaturate: false,
+    });
+    // No-activity / no-data path: null roas + flag false → gray (unchanged).
+    expect(useRoasBandGradient(null, false, false)).toEqual({
+      band: 'gray',
+      desaturate: false,
+    });
   });
 });

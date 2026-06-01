@@ -74,7 +74,7 @@ const cardVariants = cva(
   },
 );
 
-export type CardBand = 'red' | 'orange' | 'green' | 'blue' | 'gray';
+export type CardBand = 'red' | 'red-alarm' | 'orange' | 'green' | 'blue' | 'gray';
 export type CardFreshness = 'fresh' | 'aging' | 'stale';
 /**
  * Round 6 (2026-05-31) — opt into a quieter band rendering.

@@ -89,7 +89,11 @@ function wcagRatio(fg: string, bg: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
-const BANDS = ['red', 'orange', 'green', 'blue', 'gray'] as const;
+// `red-alarm` (2026-06-01) — the operator-locked "spent money, ZERO sales"
+// state paints a DEEPER/MORE-SATURATED crimson card (`--card-band-red-alarm`)
+// with the same all-WHITE on-band text as the other bands, so it's guarded
+// here exactly like the rest: white ≥4.5:1 + `-muted` ≥3:1 on the deep surface.
+const BANDS = ['red', 'red-alarm', 'orange', 'green', 'blue', 'gray'] as const;
 const THEMES = [
   { name: 'dark', blk: block('root') },
   { name: 'light', blk: block('light') },
