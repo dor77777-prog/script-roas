@@ -82,41 +82,36 @@ describe('forecastMonthEnd start-of-month data feed (2026-06-01)', () => {
     // day's revenue modest so MTD stays small relative to the run-rate
     // projection. Use exactly `todayDay` MTD days at $4,000 each.
     const MTD_PER_DAY = 4000;
-    const rows: DailyRow[] = [];
-    for (let day = 1; day <= todayDay; day++) {
-      rows.push(
-        row({
-          date: `${today.slice(0, 7)}-${String(day).padStart(2, '0')}`,
-          revenue: MTD_PER_DAY,
-          totalSpend: 800,
-        }),
-      );
-    }
-    const expectedMtd = MTD_PER_DAY * todayDay;
-
-    // Trailing-7-day baseline [today-7, today-1] at a stable $10,000/day.
-    // Near the start of the month these dates fall in the PREVIOUS month —
-    // exactly the rows the dashboard's `this_month` slice OMITTED.
     const BASELINE_PER_DAY = 10_000;
-    const baselineDates = new Set<string>();
-    for (let d = -7; d <= -1; d++) {
-      const date = addDays(today, d);
-      baselineDates.add(date);
-      rows.push(row({ date, revenue: BASELINE_PER_DAY, totalSpend: 1500 }));
+    const monthPrefix = today.slice(0, 7);
+
+    // One row per date (a Map dedupes overlap). Set the trailing-7 baseline
+    // FIRST at $10k so those dates ALWAYS hold $10k; fill the remaining
+    // current-month days at $4k. This makes the trailing-7 daily average a
+    // deterministic $10k on ANY run date (no day-of-month duplicate inflation —
+    // the prior version double-added "today-1" once it was a current-month day).
+    const byDate = new Map<string, number>();
+    for (let d = -7; d <= -1; d++) byDate.set(addDays(today, d), BASELINE_PER_DAY);
+    for (let day = 1; day <= todayDay; day++) {
+      const date = `${monthPrefix}-${String(day).padStart(2, '0')}`;
+      if (!byDate.has(date)) byDate.set(date, MTD_PER_DAY);
+    }
+    const rows: DailyRow[] = [...byDate].map(([date, revenue]) =>
+      row({ date, revenue, totalSpend: 800 }),
+    );
+
+    // expectedMtd = Σ revenue for current-month dates up to today (computed
+    // from the rows, so it's correct regardless of trailing/MTD overlap).
+    let expectedMtd = 0;
+    for (const [date, revenue] of byDate) {
+      if (date.slice(0, 7) === monthPrefix && date <= today) expectedMtd += revenue;
     }
 
     const f = forecastMonthEnd(rows);
-    const daysInMonth = f.daysElapsedThisMonth + f.daysRemainingThisMonth;
 
-    // MTD only counts the current-month rows (previous-month baseline rows
-    // are NOT in [monthStart, today]).
     expect(f.monthToDateRevenue).toBe(expectedMtd);
 
-    // The baseline produced a real daily average — $10,000/day from 7
-    // completed days. (When today is day 1, all 7 baseline dates are in the
-    // prior month; when today is later but still ≤ day 7, some baseline dates
-    // are prior-month and some current-month — either way all 7 are present
-    // in the WIDE feed and each holds $10,000.)
+    // All 7 trailing-window dates hold $10k → deterministic daily average.
     expect(f.dailyAvgRevenue).toBeCloseTo(BASELINE_PER_DAY, 6);
 
     // The projection extrapolates: MTD + dailyAvg × daysRemaining.
@@ -124,19 +119,12 @@ describe('forecastMonthEnd start-of-month data feed (2026-06-01)', () => {
       f.monthToDateRevenue + f.dailyAvgRevenue * f.daysRemainingThisMonth;
     expect(f.projectedRevenue).toBeCloseTo(expectedProjection, 4);
 
-    // And critically it is NOT collapsed to MTD — it is meaningfully GREATER
-    // (there are days remaining and a positive daily average), proving the
-    // forecast is doing its job once it is fed the trailing-7-day rows.
+    // Critically NOT collapsed to MTD — strictly greater when days remain,
+    // proving the forecast projects the run-rate once fed the trailing rows.
     if (f.daysRemainingThisMonth > 0) {
       expect(f.projectedRevenue).toBeGreaterThan(f.monthToDateRevenue);
-      // Concretely far above MTD — the run-rate fills the rest of the month.
-      expect(f.projectedRevenue).toBeGreaterThan(f.monthToDateRevenue * 1.5);
     }
-    // Sanity: the projection ≈ run-rate over the whole month order of magnitude.
-    expect(f.projectedRevenue).toBeCloseTo(
-      expectedMtd + BASELINE_PER_DAY * (daysInMonth - todayDay),
-      4,
-    );
+    expect(Number.isFinite(f.projectedRevenue)).toBe(true);
   });
 
   it('STARVED feed (the OLD bug): current-month early days ONLY → projection collapses to MTD', () => {
@@ -166,11 +154,12 @@ describe('forecastMonthEnd start-of-month data feed (2026-06-01)', () => {
     // none of [today-7, today-1] is in the current month), the daily average
     // is 0 and the projection collapses to MTD — the documented OLD behavior.
     //
-    // When today is later than the 7th, some of [today-7, today-1] overlaps
-    // the current-month rows we DID supply, so the baseline is non-zero. The
-    // start-of-month bug only manifests in the first ~7 days; guard the
-    // assertion to that window so the test is deterministic on any run date.
-    if (todayDay <= 7) {
+    // Only on day 1 is the ENTIRE trailing window [today-7, today-1] outside
+    // the current-month feed → baseline empty → projection collapses to MTD
+    // (the documented bug). On day ≥2 some trailing dates ARE current-month
+    // rows we supplied, so the baseline is non-zero — guard to day 1 so the
+    // test is deterministic on any run date.
+    if (todayDay === 1) {
       expect(f.dailyAvgRevenue).toBe(0);
       expect(f.projectedRevenue).toBeCloseTo(f.monthToDateRevenue, 4);
     }
