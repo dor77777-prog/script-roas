@@ -114,6 +114,12 @@ export interface PerStoreRowProps {
    * primitive intentionally does not own URL state so it stays unit-testable.
    */
   onStoreSelect?: (storeId: string) => void;
+  /**
+   * Active range label (e.g. "היום" / "7 ימים אחרונים" / "מתחילת החודש"), shown
+   * in each card's "ROAS · <range>" caption so the caption TRACKS the selected
+   * range — the ROAS number already does. Defaults to "היום" when omitted.
+   */
+  rangeLabel?: string;
   className?: string;
 }
 
@@ -169,6 +175,7 @@ function fmtRoasDeltaChip(pct: number | null | undefined): string {
 export function PerStoreRow({
   stores,
   onStoreSelect,
+  rangeLabel,
   className,
 }: PerStoreRowProps) {
   const isMobile = useIsMobile();
@@ -221,7 +228,7 @@ export function PerStoreRow({
             key={store.storeId}
             className="snap-center shrink-0 basis-[88%] sm:basis-[62%] md:basis-auto"
           >
-            <StoreCard store={store} onSelect={onStoreSelect} />
+            <StoreCard store={store} onSelect={onStoreSelect} rangeLabel={rangeLabel} />
           </div>
         ))}
       </div>
@@ -254,9 +261,11 @@ export function PerStoreRow({
 function StoreCard({
   store,
   onSelect,
+  rangeLabel,
 }: {
   store: PerStoreData;
   onSelect?: (storeId: string) => void;
+  rangeLabel?: string;
 }) {
   // Operator-locked "alarm-red" state: the store SPENT money but made ZERO
   // sales (the worst outcome). Such a store carries `roas: null` upstream
@@ -381,7 +390,7 @@ function StoreCard({
           )}
         </bdi>
         <span className="roas-cap mt-1 block font-mono text-[11px] uppercase tracking-[0.08em] text-ink-muted">
-          ROAS · היום
+          ROAS · {rangeLabel ?? 'היום'}
         </span>
 
         {/* Mobile B1 — ROAS trend spark + delta-vs-prev chip. md:hidden keeps

@@ -68,6 +68,24 @@ describe('PerStoreRow', () => {
     expect(cards).toHaveLength(3);
   });
 
+  // Regression (2026-06-01): the per-store "ROAS · <range>" caption was
+  // hardcoded to "היום", so the ROAS NUMBER tracked the selected range but the
+  // caption text never changed. It must reflect the passed rangeLabel.
+  it('ROAS caption reflects the active rangeLabel (not hardcoded "היום")', () => {
+    const { container } = render(
+      <PerStoreRow stores={[STORES[0]]} rangeLabel="7 ימים אחרונים" />,
+    );
+    const cap = container.querySelector('[data-testid="per-store-card"] .roas-cap');
+    expect(cap?.textContent).toContain('7 ימים אחרונים');
+    expect(cap?.textContent).not.toContain('היום');
+  });
+
+  it('ROAS caption defaults to "היום" when no rangeLabel is passed', () => {
+    const { container } = render(<PerStoreRow stores={[STORES[0]]} />);
+    const cap = container.querySelector('[data-testid="per-store-card"] .roas-cap');
+    expect(cap?.textContent).toContain('היום');
+  });
+
   // (a)
   it('spend cell carries class "cell spend"', () => {
     const { container } = render(<PerStoreRow stores={STORES} />);

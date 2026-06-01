@@ -31,8 +31,13 @@ export interface MobileStickyRoasProps {
   roas: number | null;
   /** Target ROAS line — defaults to 3.0. */
   target?: number;
-  /** % change vs the previous period; null → no delta chip rendered. */
-  deltaPct: number | null;
+  /**
+   * Signed ROAS-POINTS delta vs the previous period (curRoas − prevRoas) —
+   * the SAME value the hero ROAS card shows (`heroDelta.roas`), rendered in the
+   * SAME ▴/▾ +0.00 format, so the sticky and the business ROAS card never tell
+   * different stories. null → no delta chip rendered.
+   */
+  deltaRoas: number | null;
   /** Optional range label (e.g. "30 ימים אחרונים") shown in the caption row. */
   rangeLabel?: string;
 }
@@ -40,7 +45,7 @@ export interface MobileStickyRoasProps {
 export function MobileStickyRoas({
   roas,
   target = 3.0,
-  deltaPct,
+  deltaRoas,
   rangeLabel,
 }: MobileStickyRoasProps) {
   const reduced = useReducedMotion();
@@ -71,13 +76,17 @@ export function MobileStickyRoas({
   // down = <0 (red ▼). The tone is a guaranteed-contrast on-surface ink token
   // (--up / --dn), never derived from a band hue.
   const delta = useMemo(() => {
-    if (deltaPct == null || Number.isNaN(deltaPct)) return null;
-    const up = deltaPct >= 0;
+    if (deltaRoas == null || Number.isNaN(deltaRoas)) return null;
+    const up = deltaRoas >= 0;
+    // Mirror the hero ROAS card's fmtRoasDelta EXACTLY (▴/▾ + signed, 2-dp ROAS
+    // POINTS) so the sticky and the business ROAS card always agree — same value
+    // (heroDelta.roas), same format. (Was a % delta, which read as a different
+    // number than the card's +0.NN points for the identical change.)
     return {
       up,
-      text: `${up ? '▲ +' : '▼ '}${formatNumber(Math.abs(deltaPct), 1)}%`,
+      text: `${up ? '▴ +' : '▾ −'}${Math.abs(deltaRoas).toFixed(2)}`,
     };
-  }, [deltaPct]);
+  }, [deltaRoas]);
 
   // Transition classes are applied ONLY when motion is allowed. Under reduced
   // motion the collapsed state still changes the sizes, but with no animation.

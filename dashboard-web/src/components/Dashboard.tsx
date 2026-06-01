@@ -898,21 +898,12 @@ function HomeTab({
   const heroRangeLabel = rangeLabel;
 
   // B3 (mobile) — collapsing sticky ROAS summary headline. Fed from the MAIN
-  // page range (the same `filtered.curAgg` the hero's ROAS uses), NOT the
+  // page range (the same `heroPeriod` the hero ROAS card uses), NOT the
   // RoasTargetChart's independent range — so it MATCHES the hero and UPDATES
-  // when the operator changes the top range selector. (Before: it read the
-  // chart's 30-day chartProp, so it sat stuck at the chart value regardless of
-  // the page selection while its caption said the page range.) deltaPct is
-  // current-vs-prev ROAS %, null-guarded so there's no NaN and no chip when the
-  // previous period is missing (or its ROAS is 0).
-  const stickyDeltaPct = useMemo(() => {
-    const cur = filtered.curAgg.roas;
-    const prev = prevAggFromPrevData?.roas;
-    if (prev == null || prev === 0 || Number.isNaN(prev) || Number.isNaN(cur)) {
-      return null;
-    }
-    return ((cur - prev) / prev) * 100;
-  }, [filtered.curAgg, prevAggFromPrevData]);
+  // when the operator changes the top range selector. The delta is the SAME
+  // signed ROAS-POINTS value the hero ROAS card shows (`heroDelta.roas`), so the
+  // two never disagree (previously the sticky showed a % while the card showed
+  // points — the same change read as two different numbers).
 
   return (
     <div className="space-y-4 sm:space-y-5 animate-fade-in-up">
@@ -921,7 +912,7 @@ function HomeTab({
       <MobileStickyRoas
         roas={heroPeriod.roas}
         target={3.0}
-        deltaPct={stickyDeltaPct}
+        deltaRoas={heroDelta?.roas ?? null}
         rangeLabel={rangeLabel}
       />
 
@@ -949,7 +940,7 @@ function HomeTab({
         title="לפי חנות"
         description="מצב ה-ROAS, ההוצאה, ההכנסה וה-CPM של כל חנות בנפרד — לטווח הנבחר."
       />
-      <PerStoreRow stores={perStoreData} onStoreSelect={handleStoreSelect} />
+      <PerStoreRow stores={perStoreData} onStoreSelect={handleStoreSelect} rangeLabel={rangeLabel} />
 
       {/* Per-store drill-down MODAL — opens on store-card click; reuses the
           campaign modal's Sheet shell. Renders nothing while closed (data null).

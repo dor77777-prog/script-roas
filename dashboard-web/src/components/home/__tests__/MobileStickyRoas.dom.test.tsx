@@ -5,7 +5,7 @@
 // Pins:
 //   • Renders the big ROAS number (tabular bdi), the 'יעד X.X' caption, and a
 //     delta chip vs the previous period (green up / red down).
-//   • deltaPct === null → NO chip (no NaN, no $0 surprise).
+//   • deltaRoas === null → NO chip (no NaN, no $0 surprise).
 //   • Toggling collapsed (driven by the sentinel IntersectionObserver) applies
 //     a collapsed data-attribute and the size/opacity classes.
 //   • Under reduced motion the transition classes are NOT applied (the state is
@@ -69,35 +69,37 @@ afterEach(() => {
 describe('B3 — <MobileStickyRoas>', () => {
   it('renders the ROAS number, the target caption, and a delta chip', () => {
     const { getByTestId } = render(
-      <MobileStickyRoas roas={2.87} target={3.0} deltaPct={4.5} rangeLabel="30 ימים אחרונים" />,
+      <MobileStickyRoas roas={2.87} target={3.0} deltaRoas={0.39} rangeLabel="30 ימים אחרונים" />,
     );
     expect(getByTestId('mobile-sticky-roas')).toBeTruthy();
     expect(getByTestId('mobile-sticky-roas-value').textContent).toContain('2.87');
     // Target caption.
     expect(getByTestId('mobile-sticky-roas-target').textContent).toContain('3.0');
-    // Delta chip present + positive (up).
+    // Delta chip present + positive (up) — ROAS-POINTS format matching the hero
+    // ROAS card's fmtRoasDelta (▴ +0.39), NOT a percent.
     const chip = getByTestId('mobile-sticky-roas-delta');
     expect(chip).toBeTruthy();
-    expect(chip.textContent).toContain('4.5');
+    expect(chip.textContent).toContain('0.39');
+    expect(chip.textContent).not.toContain('%');
   });
 
-  it('renders NO delta chip when deltaPct is null', () => {
+  it('renders NO delta chip when deltaRoas is null', () => {
     const { queryByTestId } = render(
-      <MobileStickyRoas roas={2.87} target={3.0} deltaPct={null} />,
+      <MobileStickyRoas roas={2.87} target={3.0} deltaRoas={null} />,
     );
     expect(queryByTestId('mobile-sticky-roas-delta')).toBeNull();
   });
 
   it('renders the ROAS as "—" when roas is null (no NaN)', () => {
     const { getByTestId } = render(
-      <MobileStickyRoas roas={null} target={3.0} deltaPct={null} />,
+      <MobileStickyRoas roas={null} target={3.0} deltaRoas={null} />,
     );
     expect(getByTestId('mobile-sticky-roas-value').textContent).toContain('—');
   });
 
   it('toggles the collapsed data-attribute when the sentinel scrolls out of view', () => {
     const { getByTestId } = render(
-      <MobileStickyRoas roas={2.87} target={3.0} deltaPct={1.2} />,
+      <MobileStickyRoas roas={2.87} target={3.0} deltaRoas={1.2} />,
     );
     const bar = getByTestId('mobile-sticky-roas');
     // Sentinel visible → not collapsed.
@@ -113,7 +115,7 @@ describe('B3 — <MobileStickyRoas>', () => {
 
   it('is mobile-only (md:hidden)', () => {
     const { getByTestId } = render(
-      <MobileStickyRoas roas={2.87} target={3.0} deltaPct={null} />,
+      <MobileStickyRoas roas={2.87} target={3.0} deltaRoas={null} />,
     );
     expect(getByTestId('mobile-sticky-roas').className).toContain('md:hidden');
   });
@@ -121,7 +123,7 @@ describe('B3 — <MobileStickyRoas>', () => {
   it('applies size/opacity TRANSITION classes when motion is allowed', () => {
     setReducedMotion(false);
     const { getByTestId } = render(
-      <MobileStickyRoas roas={2.87} target={3.0} deltaPct={1.2} />,
+      <MobileStickyRoas roas={2.87} target={3.0} deltaRoas={1.2} />,
     );
     const value = getByTestId('mobile-sticky-roas-value');
     const target = getByTestId('mobile-sticky-roas-target');
@@ -133,7 +135,7 @@ describe('B3 — <MobileStickyRoas>', () => {
   it('does NOT apply transition classes under reduced motion', () => {
     setReducedMotion(true);
     const { getByTestId } = render(
-      <MobileStickyRoas roas={2.87} target={3.0} deltaPct={1.2} />,
+      <MobileStickyRoas roas={2.87} target={3.0} deltaRoas={1.2} />,
     );
     const value = getByTestId('mobile-sticky-roas-value');
     const target = getByTestId('mobile-sticky-roas-target');
