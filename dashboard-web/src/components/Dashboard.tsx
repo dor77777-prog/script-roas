@@ -44,9 +44,10 @@ import { SyncIndicator } from './SyncIndicator';
 import { FreshnessChip } from './FreshnessChip';
 import { TabFreshnessHeader } from './TabFreshnessHeader';
 import { readDashboardState, syncUrl, drillToCampaigns, type TabKey } from '@/lib/urlState';
-import { buildDateRangeKey } from '@/lib/dateRange';
+import { buildDateRangeKey, getTodayInIsraelTz } from '@/lib/dateRange';
 import { useCogsSettings } from '@/lib/hooks/useCogsSettings';
 import { applyCogsToRows } from '@/lib/cogsSettings';
+import { CogsSettings } from '@/components/CogsSettings';
 import { Button } from '@/components/ui/Button';
 import { AnalysisTrendsTab } from './AnalysisTrendsTab';
 import { AnalysisArchiveTab } from './AnalysisArchiveTab';
@@ -1072,6 +1073,11 @@ function PnLTab({
         <div className="flex justify-end">
           <BillingSettings storeNames={data.stores} />
         </div>
+        <CogsSettings
+          storeNames={data.stores}
+          currentMonth={getTodayInIsraelTz().slice(0, 7)}
+          monthsInData={Array.from(new Set(data.rows.map((r) => r.date.slice(0, 7)))).sort()}
+        />
         <PnLBreakdown
           current={filtered.curAgg}
           storeNames={filtered.visibleStores}
