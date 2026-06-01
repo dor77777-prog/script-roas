@@ -11,9 +11,17 @@ export interface SparklineProps {
   height?: number;
   tone?: 'green' | 'red' | 'orange' | 'blue' | 'gray';
   className?: string;
-  /** When the sparkline sits on a ROAS-band card, render a neutral plot scrim
-   *  + a stroke casing so the line never collides with the band tint. */
+  /** When the sparkline sits on a NEUTRAL card, render a neutral plot scrim
+   *  + a stroke casing so the line never collides with the surface. */
   onBand?: boolean;
+  /**
+   * When the sparkline sits DIRECTLY on a VIVID band slab (per-store mobile B1
+   * spark), render a bright white line on a dark casing halo and NO neutral
+   * scrim rect — so the line stays legible on any band without masking the
+   * band colour. Overrides `tone`/`onBand`. The direction signal lives in the
+   * adjacent coloured delta chip.
+   */
+  bandInk?: boolean;
 }
 
 const TONE_STROKE: Record<NonNullable<SparklineProps['tone']>, string> = {
@@ -31,6 +39,7 @@ export function Sparkline({
   tone = 'blue',
   className,
   onBand,
+  bandInk,
 }: SparklineProps) {
   const path = useMemo(() => {
     if (data.length === 0) return '';
@@ -56,10 +65,11 @@ export function Sparkline({
       role="img"
       aria-label="טרנד"
     >
-      {onBand && (
+      {/* Neutral-card mode: plot scrim rect + casing. */}
+      {onBand && !bandInk && (
         <rect x={0} y={0} width={width} height={height} fill="var(--plot-bg)" rx={3} />
       )}
-      {onBand && (
+      {onBand && !bandInk && (
         <path
           d={path}
           fill="none"
@@ -69,11 +79,22 @@ export function Sparkline({
           strokeLinejoin="round"
         />
       )}
+      {/* Vivid-band mode: dark casing halo, no scrim (keeps the band visible). */}
+      {bandInk && (
+        <path
+          d={path}
+          fill="none"
+          stroke="var(--spark-band-casing)"
+          strokeWidth={3.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      )}
       <path
         d={path}
         fill="none"
-        stroke={TONE_STROKE[tone]}
-        strokeWidth={1.25}
+        stroke={bandInk ? 'var(--spark-band-ink)' : TONE_STROKE[tone]}
+        strokeWidth={bandInk ? 1.75 : 1.25}
         strokeLinecap="round"
         strokeLinejoin="round"
       />

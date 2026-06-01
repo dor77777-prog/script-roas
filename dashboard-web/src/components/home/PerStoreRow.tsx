@@ -32,14 +32,22 @@
  * task will satisfy.
  */
 
-import { useMemo, type KeyboardEvent } from 'react';
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react';
 import { cn, formatNumber } from '@/lib/utils';
 import { Money } from '@/components/ui/Money';
 import { CountUp } from '@/components/ui/CountUp';
+import { Sparkline } from '@/components/ui/Sparkline';
 import { Card } from '@/components/ui/Card';
 import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
 import { Heading } from '@/components/ui/Typography';
 import { PlatformBadge, type Platform } from '@/components/ui/PlatformBadge';
+import { useIsMobile } from '@/lib/hooks/useIsMobile';
 import {
   useRoasBandGradient,
   type RoasBand,
@@ -145,6 +153,15 @@ function fmtOrdersText(n: number | null): string {
   return formatNumber(n, 0);
 }
 
+/** Mobile B1 — "▲ +12%" / "▼ −12%" for the per-store ROAS-delta chip. Empty
+ *  string (chip hidden) when the delta is null/NaN. Typographic minus U+2212. */
+function fmtRoasDeltaChip(pct: number | null | undefined): string {
+  if (pct == null || Number.isNaN(pct)) return '';
+  const arrow = pct >= 0 ? '▲' : '▼';
+  const sign = pct >= 0 ? '+' : '−';
+  return `${arrow} ${sign}${Math.abs(pct * 100).toFixed(0)}%`;
+}
+
 /* --------------------------------------------------------------------------
  * Component
  * -------------------------------------------------------------------------- */
@@ -154,22 +171,63 @@ export function PerStoreRow({
   onStoreSelect,
   className,
 }: PerStoreRowProps) {
+  const isMobile = useIsMobile();
+  const deckRef = useRef<HTMLDivElement>(null);
+  const [activeIdx, setActiveIdx] = useState(0);
+
+  // Track the centered card so the dots highlight the right one. RTL scrollLeft
+  // can be negative (WebKit) or positive (spec); the magnitude / max fraction
+  // is direction-agnostic, so card 0 (start/right) → idx 0 … card N → idx N.
+  const handleScroll = useCallback(() => {
+    const deck = deckRef.current;
+    if (!deck) return;
+    const max = deck.scrollWidth - deck.clientWidth;
+    if (max <= 0) return;
+    const frac = Math.abs(deck.scrollLeft) / max;
+    const idx = Math.round(frac * (stores.length - 1));
+    setActiveIdx(Math.max(0, Math.min(stores.length - 1, idx)));
+  }, [stores.length]);
+
   if (!stores.length) return null;
 
   return (
-    <div
-      className={cn(
-        'grid grid-cols-1 md:grid-cols-3 gap-4',
-        className,
+    <div className={className}>
+      <div
+        ref={deckRef}
+        onScroll={isMobile ? handleScroll : undefined}
+        className={cn(
+          // Mobile: a swipeable scroll-snap deck — each card ~88% wide so the
+          // neighbours peek, turning a phone-height stack into one card per
+          // "page". Desktop (md+): the original 3-column grid, untouched.
+          'flex gap-3 overflow-x-auto snap-x snap-mandatory scrollbar-hide pb-1',
+          'md:grid md:grid-cols-3 md:gap-4 md:overflow-visible',
+        )}
+      >
+        {stores.map((store) => (
+          <div
+            key={store.storeId}
+            className="snap-center shrink-0 basis-[88%] sm:basis-[62%] md:basis-auto"
+          >
+            <StoreCard store={store} onSelect={onStoreSelect} />
+          </div>
+        ))}
+      </div>
+
+      {/* Carousel position dots — mobile only (md:hidden), RTL-aware. Hidden on
+          desktop where all 3 cards are visible at once. */}
+      {stores.length > 1 && (
+        <div
+          className="md:hidden mt-3 flex justify-center gap-1.5"
+          aria-hidden="true"
+        >
+          {stores.map((s, i) => (
+            <span
+              key={s.storeId}
+              className={cn('carousel-dot', i === activeIdx && 'on')}
+            />
+          ))}
+        </div>
       )}
-    >
-      {stores.map((store) => (
-        <StoreCard
-          key={store.storeId}
-          store={store}
-          onSelect={onStoreSelect}
-        />
-      ))}
     </div>
   );
 }
@@ -312,6 +370,31 @@ function StoreCard({
         <span className="roas-cap mt-1 block font-mono text-[11px] uppercase tracking-[0.08em] text-ink-muted">
           ROAS · היום
         </span>
+
+        {/* Mobile B1 — ROAS trend spark + delta-vs-prev chip. md:hidden keeps
+            the desktop card's full-width ROAS hero untouched. The spark draws
+            in band-agnostic white ink (legible on ANY band, both themes); the
+            chip carries the ▲/▼ + % direction signal on a dark scrim. Hidden in
+            the alarm-red 0-sales state (no meaningful ROAS trend to show). */}
+        {!zeroSalesWithSpend &&
+          (store.roasSpark?.length ?? 0) >= 2 &&
+          (() => {
+            const deltaText = fmtRoasDeltaChip(store.roasDeltaPct);
+            return (
+              <div className="md:hidden mt-3 flex items-center gap-3">
+                <Sparkline
+                  data={store.roasSpark!}
+                  bandInk
+                  width={132}
+                  height={28}
+                  className="shrink-0"
+                />
+                {deltaText && (
+                  <span className="store-delta-chip">{deltaText}</span>
+                )}
+              </div>
+            );
+          })()}
       </div>
 
       {/* Zone 2 — 4-up metric grid.

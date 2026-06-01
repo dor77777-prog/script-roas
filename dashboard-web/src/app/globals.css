@@ -140,6 +140,16 @@
   /* Neutral inner plot scrim for charts/sparklines on band cards. */
   --plot-bg: rgba(12, 14, 26, 0.72);
 
+  /* Sparkline drawn DIRECTLY on a VIVID band slab (per-store mobile B1 spark):
+     a bright white line on a dark casing halo, so it stays legible on ANY band
+     (red/orange/green/blue/gray) WITHOUT a neutral scrim rect that would mask
+     the band colour. Band cards are vivid + white-text in BOTH themes, so these
+     are identical light/dark. The DIRECTION signal lives in the coloured delta
+     chip beside it — the line itself is band-agnostic white to avoid the
+     same-hue-on-same-hue clash the readability rule forbids. */
+  --spark-band-ink:    rgba(255, 255, 255, 0.95);
+  --spark-band-casing: rgba(0, 0, 0, 0.30);
+
   /* Fluid metric size: rem term keeps 200%-zoom safe (WCAG 1.4.4); cqi lets
      the same <Money> shrink in narrow columns and grow in wide ones. */
   --metric-font: clamp(0.9rem, 0.7rem + 2.4cqi, 1.6rem);
@@ -468,6 +478,14 @@
   --band-scrim-ink: #171a2b;
 
   --plot-bg: rgba(255, 255, 255, 0.92);
+
+  /* Identical to dark — the per-store band slab is vivid + white-text in both
+     themes, so its on-band sparkline ink/casing don't flip. (Declared here so
+     the themeParity guard — every :root token needs a light counterpart —
+     stays green.) */
+  --spark-band-ink:    rgba(255, 255, 255, 0.95);
+  --spark-band-casing: rgba(0, 0, 0, 0.30);
+
   /* --metric-font is theme-independent — re-declared identically here so the
      themeParity guard (every :root token has a light counterpart) stays green;
      the value matches :root exactly, so light behaviour is unchanged. */
@@ -1619,6 +1637,42 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    the secondary tone here (mockup `.roas-cap` { color: rgba(255,255,255,.78) }).
    Band-agnostic — covers GRAY too (now a deep card). */
 .per-store-card.glass[data-band] .roas-cap { color: var(--on-band-red-muted); }
+
+/* Mobile B1 — ROAS-delta chip beside the per-store sparkline. Sits ON the
+   vivid band, so it reads as WHITE on a DARK SCRIM (same recipe as `.band-tag`)
+   — guaranteed-AA on EVERY band in BOTH themes. Direction is the unicode arrow
+   (▲/▼) + signed %, so it needs no value-derived colour (which would clash with
+   the band hue). Only shown on phones (`md:hidden` on the wrapper). */
+.per-store-card .store-delta-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  direction: ltr;
+  font-variant-numeric: tabular-nums;
+  background: rgba(0, 0, 0, 0.22);
+  color: #fff;
+}
+
+/* Carousel position dots (mobile per-store deck). The active dot stretches into
+   a short accent bar; the rest are dim neutral pips. Token-driven so both
+   themes flip automatically. */
+.carousel-dot {
+  height: 6px;
+  width: 6px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--text-muted) 45%, transparent);
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+.carousel-dot.on {
+  width: 20px;
+  background: var(--accent);
+}
 
 /* Per-platform CPM cells — same layout treatment but with a slightly
    larger gap because each cell stacks 3 stitches (platform badge →
