@@ -221,7 +221,6 @@ export async function normalizeOrderEvent(
   const firstRefundLine = Array.isArray(refund.refund_line_items)
     ? refund.refund_line_items[0]
     : undefined;
-  const firstTxn = Array.isArray(refund.transactions) ? refund.transactions[0] : undefined;
 
   // Refund total: prefer the transactions sum; fall back to the line-item subtotals.
   let gross: number | null = null;
@@ -238,12 +237,29 @@ export async function normalizeOrderEvent(
   }
 
   const amount_original = gross === null ? null : -Math.abs(gross);
-  const currency = firstTxn?.currency ?? null;
 
-  const amount_cad =
-    amount_original !== null && currency
+  // Task A (Phase 3, 2026-06-01) — refund-currency resolution.
+  //
+  // Real refunds were arriving with `currency = null` because the FIRST
+  // transaction's `currency` was absent (an empty/zero gateway txn often is).
+  // (a) Scan ALL transactions (not just [0]) for the first present currency.
+  const currency =
+    (Array.isArray(refund.transactions)
+      ? refund.transactions.find((t) => t?.currency)?.currency
+      : undefined) ?? null;
+
+  // (b) CAD figure for the row. When we resolved a currency, convert through the
+  // shared FX helper (which short-circuits CAD→CAD). When currency is STILL null,
+  // fall back to treating the amount as already-CAD: all 3 stores transact in CAD
+  // ([[ad-account-currencies]]) and this feed is display-only, so a null-currency
+  // refund should still surface a CAD figure rather than a bare "—". No FX call is
+  // made in the fallback path.
+  let amount_cad: number | null = null;
+  if (amount_original !== null) {
+    amount_cad = currency
       ? await cadConvertBounded(cadConvert, amount_original, currency, occurred_at.slice(0, 10))
-      : null;
+      : amount_original; // currency unknown → treat as CAD (display-only)
+  }
 
   return {
     store_id: opts.storeId,

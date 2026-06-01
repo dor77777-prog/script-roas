@@ -1,46 +1,37 @@
 // dashboard-web/src/components/home/__tests__/ActivityFeedRefreshInterval.test.ts
 //
-// Bug fix regression guard (2026-05-31).
+// Phase 3 (2026-06-01) — the Home <ActivityFeed> was rebuilt into a REAL-TIME
+// Shopify activity feed. It now polls `/api/store-events` (the dedicated
+// real-time read route) instead of the campaign-status endpoint, at a 12s
+// cadence so it reads as genuinely live vs the dashboard's ~10-min cadence.
 //
-// User report: "יומן אירועים לא מתעדכן" — the Home activity feed appeared
-// frozen because SWR was polling at 60s and the operator was logging
-// events faster than that. The fix drops the poll to 15s + adds an
-// explicit `dedupingInterval: 30_000` so multiple ActivityFeed mounts
-// (e.g. open in another tab) don't multiply the upstream cost.
+// History: the prior guard (2026-05-31) pinned a 15s poll + a 30s
+// dedupingInterval against `/api/home/activity-events` (campaign-status). That
+// data source moved entirely (the operator <StatusEventsFeed> still carries the
+// status events); this guard now pins the real-time contract.
 //
-// Source-file guard rather than a DOM mount because the SWR options live
-// inside the component module and inspecting the actual SWR config from
-// the test would require mocking SWR — losing the very thing we want to
-// guarantee (that the options object literal stays the right shape).
-// This stays fast (no React render, no SWR mock, no jsdom), and any
-// regression that bumps the polling interval back to 60s will fail loud.
+// Source-file guard rather than a DOM mount so the SWR options object literal
+// is verified directly — a regression that bumps the interval back up (the feed
+// would stop feeling live) fails loud, fast, without mocking SWR.
 
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const ACTIVITY_FEED_SRC = resolve(
-  __dirname,
-  '..',
-  'ActivityFeed.tsx',
-);
+const ACTIVITY_FEED_SRC = resolve(__dirname, '..', 'ActivityFeed.tsx');
 
-describe('ActivityFeed SWR polling — Bug fix (2026-05-31)', () => {
+describe('ActivityFeed real-time SWR polling — Phase 3 (2026-06-01)', () => {
   const src = readFileSync(ACTIVITY_FEED_SRC, 'utf8');
 
-  it('uses a 15s refreshInterval (not the old 60s) so events surface within a quarter-minute', () => {
-    // Match the literal so a future refactor that swaps to a constant has
-    // to either rename the constant to something semantic OR update this
-    // guard — both are explicit decisions, not silent regressions.
-    expect(src).toMatch(/refreshInterval:\s*15_000/);
-    expect(src).not.toMatch(/refreshInterval:\s*60_000/);
+  it('polls the real-time read route /api/store-events (not the old status endpoint)', () => {
+    expect(src).toMatch(/\/api\/store-events/);
+    expect(src).not.toMatch(/\/api\/home\/activity-events/);
+    expect(src).not.toMatch(/\/api\/operator\/status-events/);
   });
 
-  it('keeps SWR dedupingInterval at 30s so concurrent tabs do not multiply Supabase calls', () => {
-    // The /api/operator/status-events route is ISR-cached at 60s; SWR's
-    // default dedupingInterval (2s) would only protect against multiple
-    // mounts within 2s. 30s gives us a meaningful coalescing window
-    // without sacrificing the 15s "fresh enough" promise to the operator.
-    expect(src).toMatch(/dedupingInterval:\s*30_000/);
+  it('uses a 12s refreshInterval so the feed reads as genuinely real-time', () => {
+    expect(src).toMatch(/refreshInterval:\s*12_000/);
+    // Must not regress to the dashboard's slow cadences.
+    expect(src).not.toMatch(/refreshInterval:\s*(?:15_000|60_000)/);
   });
 });

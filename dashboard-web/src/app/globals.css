@@ -1487,6 +1487,28 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   0%, 100% { opacity: 1;   transform: scale(1); }
   50%      { opacity: 0.5; transform: scale(0.85); }
 }
+
+/* Phase 3 — real-time activity feed LIVE-badge "ping" dot. A solid core dot
+   with an expanding/fading ring (the mockup's pulse). currentColor inherits the
+   badge's token-driven `--status-green` tone, so the dot re-skins with the
+   theme and is never a hardcoded colour. The expanding ring is the ::after
+   pseudo-element. The project-wide `@media (prefers-reduced-motion: reduce)`
+   sweep collapses BOTH animations to ~0; the component ALSO refuses to add the
+   `live-dot--ping` class under reduced motion so the ring never even paints. */
+.live-dot { position: relative; width: 9px; height: 9px; flex-shrink: 0; }
+.live-dot::before {
+  content: ""; position: absolute; inset: 0; border-radius: 50%;
+  background: currentColor;
+}
+.live-dot--ping::after {
+  content: ""; position: absolute; inset: 0; border-radius: 50%;
+  background: currentColor;
+  animation: live-ping 1.6s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+@keyframes live-ping {
+  0%        { transform: scale(1);   opacity: 0.7; }
+  80%, 100% { transform: scale(2.6); opacity: 0; }
+}
 /* Freshness STATE dot (Wave B2) — a small token-coloured dot that carries the
    live/aging/stale signal INSIDE the suppressed (neutral) pill on vivid band
    cards. Driven by the `data-fresh` attribute the <FreshnessBadge> sets on the

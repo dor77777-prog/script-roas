@@ -170,6 +170,68 @@ describe('normalizeOrderEvent — refund', () => {
     expect(ev!.quantity).toBe(1);
     expect(ev!.dedupe_key).toBe('webhook:wh-r1');
   });
+
+  // Task A (Phase 3, 2026-06-01) — real refunds arrive with the FIRST
+  // transaction lacking a currency. We must (a) scan ALL transactions for the
+  // first available currency, then (b) — since all 3 stores are CAD and the
+  // feed is display-only — fall back to treating a still-null currency as CAD
+  // for `amount_cad` so a refund still shows a CAD figure.
+  it('derives currency from a LATER transaction when transactions[0] lacks one', async () => {
+    const ev = await normalizeOrderEvent(
+      'refund',
+      {
+        id: 1001,
+        order_id: 700,
+        created_at: '2026-06-01T12:00:00Z',
+        refund_line_items: [{ quantity: 1, subtotal: '40.00', line_item: { title: 'Salmon Set' } }],
+        transactions: [
+          { amount: '40.00' }, // no currency on the first txn
+          { amount: '0.00', currency: 'USD' }, // a later txn carries it
+        ],
+      },
+      { storeId: 'zolplus', webhookId: 'wh-r2', cadConvert: fxOk },
+    );
+    expect(ev!.currency).toBe('USD');
+    expect(ev!.amount_original).toBe(-40);
+    expect(ev!.amount_cad).toBe(-56); // -40 * 1.4
+  });
+
+  it('falls back to a CAD amount_cad when NO transaction carries a currency (display-only, all stores CAD)', async () => {
+    const ev = await normalizeOrderEvent(
+      'refund',
+      {
+        id: 1002,
+        order_id: 701,
+        created_at: '2026-06-01T13:00:00Z',
+        refund_line_items: [{ quantity: 1, subtotal: '85.00', line_item: { title: 'Hair Serum' } }],
+        transactions: [{ amount: '85.00' }], // currency entirely absent (the prod bug)
+      },
+      { storeId: 'uzoshop', webhookId: 'wh-r3', cadConvert: fxOk },
+    );
+    // currency stays null (we don't fabricate the presentment currency)…
+    expect(ev!.currency).toBeNull();
+    expect(ev!.amount_original).toBe(-85);
+    // …but amount_cad falls back to the raw amount treated as CAD so the row
+    // still shows a CAD figure instead of a bare "—".
+    expect(ev!.amount_cad).toBe(-85);
+  });
+
+  it('does NOT call the FX fetcher for the CAD fallback (no Frankfurter round-trip)', async () => {
+    const spy = vi.fn(async () => 1.4);
+    await normalizeOrderEvent(
+      'refund',
+      {
+        id: 1003,
+        order_id: 702,
+        created_at: '2026-06-01T14:00:00Z',
+        refund_line_items: [{ quantity: 1, subtotal: '10.00', line_item: { title: 'X' } }],
+        transactions: [{ amount: '10.00' }], // no currency
+      },
+      { storeId: 'uzoshop', webhookId: 'wh-r4', cadConvert: spy },
+    );
+    // The fallback treats the amount as already-CAD → no rate lookup.
+    expect(spy).not.toHaveBeenCalled();
+  });
 });
 
 describe('normalizeOrderEvent — occurred_at sanity (Review #6)', () => {

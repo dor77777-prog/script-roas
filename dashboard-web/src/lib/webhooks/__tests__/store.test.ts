@@ -4,6 +4,7 @@ import {
   lookupStoreByShopDomain,
   lookupStoreByCartToken,
   insertStoreEvent,
+  readRecentStoreEvents,
 } from '../store';
 import type { NormalizedStoreEvent } from '../normalizeShopifyEvent';
 
@@ -15,20 +16,60 @@ function makeAdminMock() {
   const calls: Array<{ table: string; op: string; arg?: unknown; options?: unknown }> = [];
   let selectResult: { data: unknown; error: unknown } = { data: null, error: null };
   let upsertResult: { data: unknown; error: unknown } = { data: null, error: null };
+  let listResult: { data: unknown; error: unknown } = { data: null, error: null };
+
+  // readRecentStoreEvents builds: .select(cols).order(col,{ascending}).limit(n)
+  // with an OPTIONAL .eq('store_id', …) inserted before .order. We model the
+  // chain as a thenable builder so both shapes (with/without .eq) resolve to the
+  // same `listResult`, and every link is recorded for assertions.
+  function listBuilder(table: string) {
+    const builder = {
+      eq: vi.fn((col: string, val: unknown) => {
+        calls.push({ table, op: 'list.eq', arg: { col, val } });
+        return builder;
+      }),
+      order: vi.fn((col: string, options?: unknown) => {
+        calls.push({ table, op: 'list.order', arg: col, options });
+        return builder;
+      }),
+      limit: vi.fn((n: number) => {
+        calls.push({ table, op: 'list.limit', arg: n });
+        return Promise.resolve(listResult);
+      }),
+    };
+    return builder;
+  }
 
   const admin = {
     from: vi.fn((table: string) => ({
-      select: vi.fn(() => ({
-        eq: vi.fn((col: string, val: unknown) => {
-          calls.push({ table, op: 'select.eq', arg: { col, val } });
-          return {
-            maybeSingle: vi.fn(() => {
-              calls.push({ table, op: 'maybeSingle' });
-              return Promise.resolve(selectResult);
-            }),
-          };
-        }),
-      })),
+      select: vi.fn((cols?: unknown) => {
+        // Lookups use .select(<3-col string>).eq(...).maybeSingle(); the list
+        // reader uses .select(<col string>).order(...).limit(...). We expose
+        // BOTH `.eq().maybeSingle()` and `.order()/.limit()` off the same object
+        // so a single select() mock serves every caller.
+        const sel = {
+          eq: vi.fn((col: string, val: unknown) => {
+            // Disambiguate: the maybeSingle path is the lookup readers; the
+            // order/limit path is the list reader's optional store filter.
+            const lb = listBuilder(table);
+            return {
+              maybeSingle: vi.fn(() => {
+                calls.push({ table, op: 'select.eq', arg: { col, val } });
+                calls.push({ table, op: 'maybeSingle' });
+                return Promise.resolve(selectResult);
+              }),
+              order: (...a: unknown[]) => {
+                calls.push({ table, op: 'list.eq', arg: { col, val } });
+                return (lb.order as (...x: unknown[]) => unknown)(...a);
+              },
+            };
+          }),
+          order: (...a: unknown[]) =>
+            (listBuilder(table).order as (...x: unknown[]) => unknown)(...a),
+        };
+        void cols;
+        return sel;
+      }),
       upsert: vi.fn((rows: unknown, options?: unknown) => {
         calls.push({ table, op: 'upsert', arg: rows, options });
         return Promise.resolve(upsertResult);
@@ -44,6 +85,9 @@ function makeAdminMock() {
     },
     setUpsertResult: (r: { data: unknown; error: unknown }) => {
       upsertResult = r;
+    },
+    setListResult: (r: { data: unknown; error: unknown }) => {
+      listResult = r;
     },
   };
 }
@@ -146,5 +190,51 @@ describe('insertStoreEvent', () => {
     // ignoreDuplicates upsert returns no error on conflict; the helper must not throw.
     mock.setUpsertResult({ data: [], error: null });
     await expect(insertStoreEvent(event)).resolves.not.toThrow();
+  });
+});
+
+describe('readRecentStoreEvents (Phase 3, Task B)', () => {
+  const rows = [
+    { id: 'a', store_id: 'uzoshop', type: 'sale', amount_cad: 70, received_at: '2026-06-01T10:00:00Z' },
+    { id: 'b', store_id: 'zolplus', type: 'refund', amount_cad: -35, received_at: '2026-06-01T09:00:00Z' },
+  ];
+
+  it('reads the latest N events newest-first (received_at DESC) with the limit applied', async () => {
+    mock.setListResult({ data: rows, error: null });
+    const out = await readRecentStoreEvents({ limit: 50 });
+    expect(out).toEqual(rows);
+    expect(mock.calls).toContainEqual({ table: 'store_events', op: 'list.limit', arg: 50 });
+    const orderCall = mock.calls.find((c) => c.op === 'list.order');
+    expect(orderCall).toBeDefined();
+    expect(orderCall!.arg).toBe('received_at');
+    expect(orderCall!.options).toMatchObject({ ascending: false });
+  });
+
+  it('applies a store_id filter when storeId is given', async () => {
+    mock.setListResult({ data: [rows[0]], error: null });
+    const out = await readRecentStoreEvents({ limit: 50, storeId: 'uzoshop' });
+    expect(out).toEqual([rows[0]]);
+    expect(mock.calls).toContainEqual({
+      table: 'store_events',
+      op: 'list.eq',
+      arg: { col: 'store_id', val: 'uzoshop' },
+    });
+  });
+
+  it('does NOT add a store_id filter when storeId is omitted', async () => {
+    mock.setListResult({ data: rows, error: null });
+    await readRecentStoreEvents({ limit: 50 });
+    expect(mock.calls.some((c) => c.op === 'list.eq')).toBe(false);
+  });
+
+  it('returns [] (never throws) on a query error so the read route soft-fails', async () => {
+    mock.setListResult({ data: null, error: { message: 'boom' } });
+    const out = await readRecentStoreEvents({ limit: 50 });
+    expect(out).toEqual([]);
+  });
+
+  it('returns [] when there are no rows yet', async () => {
+    mock.setListResult({ data: null, error: null });
+    expect(await readRecentStoreEvents({ limit: 50 })).toEqual([]);
   });
 });

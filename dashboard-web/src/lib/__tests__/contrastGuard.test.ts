@@ -328,3 +328,43 @@ describe('contrast guard — status BUTTON bg carries white at WCAG-AA (both the
     }
   }
 });
+
+/**
+ * Phase 3 — real-time activity feed (2026-06-01). The feed's three event tones
+ * use the status palette: sale=green, refund=red, add_to_cart=blue. Each row
+ * carries (a) a TYPE LABEL (e.g. "מכירה") and (b) a lucide GLYPH, both painted in
+ * the matching `--status-X-fg` token. The glyph sits in a `--status-X-bg` tint
+ * box, but that box sits on the feed Card surface (`.glass` = a `--glass-2`→
+ * `--glass-1` gradient), so the BINDING worst case for both the label text and
+ * the glyph ink is the `--status-X-fg` token measured against `--glass-2` (the
+ * lighter gradient stop in dark — the lower-contrast surface for light-on-dark
+ * text; the darker stop in light — the lower-contrast surface for dark-on-light
+ * text). Hold the label to the 4.5:1 TEXT bar and the glyph to the 3:1
+ * GRAPHICAL floor, in BOTH themes. (`--glass-2` is the SAME selector key in
+ * both blocks; we read it per-theme.)
+ */
+const FEED_TONES = ['green', 'red', 'blue'] as const;
+
+describe('contrast guard — feed glyph tones (sale/refund/cart) on the Card surface (both themes)', () => {
+  for (const theme of THEMES) {
+    const surface = hexOf('--glass-2', theme.blk); // feed Card's lower-contrast gradient stop
+    for (const tone of FEED_TONES) {
+      it(`${theme.name}: --status-${tone}-fg type LABEL on --glass-2 ≥ 4.5:1`, () => {
+        const fg = hexOf(`--status-${tone}-fg`, theme.blk);
+        const ratio = wcagRatio(fg, surface);
+        expect(
+          ratio,
+          `--status-${tone}-fg ${fg} on --glass-2 ${surface} = ${ratio.toFixed(2)}:1 (need ≥4.5 for the label)`,
+        ).toBeGreaterThanOrEqual(4.5);
+      });
+      it(`${theme.name}: --status-${tone}-fg GLYPH on --glass-2 ≥ 3:1`, () => {
+        const fg = hexOf(`--status-${tone}-fg`, theme.blk);
+        const ratio = wcagRatio(fg, surface);
+        expect(
+          ratio,
+          `--status-${tone}-fg ${fg} on --glass-2 ${surface} = ${ratio.toFixed(2)}:1 (need ≥3 for the glyph)`,
+        ).toBeGreaterThanOrEqual(3.0);
+      });
+    }
+  }
+});

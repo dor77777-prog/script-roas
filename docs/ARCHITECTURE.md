@@ -3001,3 +3001,27 @@ pending prior-phase migrations were set aside so only `20260601120000` pushed).
 Tests: `shopifyHmac` (4), `normalizeShopifyEvent` (16, incl. PII-no-leak + occurred_at
 sanity), `store` (7), route (8, incl. throw→200), middleware allowlist. No UI / no
 data-pipeline change.
+
+### Phase 3 — read API + feed UI + LIVE badge (2026-06-01)
+- **`GET /api/store-events`** (`runtime='nodejs'`, `force-dynamic` + `no-store`): reads via
+  `getSupabaseAdmin()` (service-role; `store_events` has NO anon grant) and stays **password-gated**
+  (NOT in `isDashboardAuthAllowlisted` — unlike the two ingest paths). Returns
+  `{ events: [latest 50, received_at DESC], serverNow, lastReceivedAt }`, optional `?store=` (filters
+  `store_id`, applied before the cap). `nodejs`+`no-store` over ISR is deliberate: the service-role
+  client isn't Edge-safe, and the feed must be real-time (the client owns the 12s cadence). Helper
+  `readRecentStoreEvents({limit, storeId?})` in `src/lib/webhooks/store.ts`. Guard test
+  `storeEventsRouteGuard.test.ts` pins service-role + nodejs + still-gated.
+- **`<ActivityFeed>` rebuilt** (`src/components/home/ActivityFeed.tsx`): SWR-polls `/api/store-events`
+  every 12s and renders the real-time Shopify feed (sale=green / refund=red / add_to_cart=blue, all
+  token-driven; `<Money>` CAD; `<bdi>` numbers; store chips; relative time; RTL; AA both themes; DB
+  strings rendered as escaped text). The **LIVE badge** derives state from `lastReceivedAt` vs the
+  **server clock** `serverNow` (skew-immune) + SWR error: 🟢 listening (pulse + last-event time) / ⚪
+  idle ("מאזין") / 🔴 disconnected ("נותק"). Pulse + new-row animation gated by `useReducedMotion`.
+  The Home filter passes a display NAME; `resolveStoreId` maps it to the internal `store_id`
+  (`"Zol Plus"`→`zolplus`, `"360usmile"`→`usmile360`) so per-store filtering isn't empty.
+- **Refund currency**: `normalizeShopifyEvent` now scans all `transactions[]` for the first present
+  currency, and when none is present treats the amount as CAD (display-only; the 3 stores are CAD) so
+  refunds still show a figure.
+- **No info lost**: the campaign-status feed still renders in `/operator` (`StatusEventsFeed` +
+  `/api/operator/status-events`, untouched). Contrast guard extended +12 (3 glyph tones × both themes).
+- Phase 2 (add-to-cart Custom Pixel + Lovable beacon → `/api/events/cart`) is the remaining ingest path.

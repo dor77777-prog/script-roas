@@ -1,196 +1,297 @@
 'use client';
 
 /**
- * Task 3.1 — <ActivityFeed> Home consumer.
+ * Phase 3, Task C — <ActivityFeed> Home consumer (REAL-TIME Shopify feed).
  *
- * Extracts the live "recent activity" stream from `<StatusEventsFeed>`
- * (the operator console's server-rendered panel) into a CLIENT component
- * that fetches via SWR so the Home tab can re-poll on store / platform
- * filter changes without a full reload.
+ * Rebuilt 2026-06-01: this card no longer surfaces campaign-STATUS events. It
+ * now polls `/api/store-events` (SWR, 12s) and renders the real-time Shopify
+ * activity stream — sale / refund / add-to-cart — across all 3 stores, with a
+ * LIVE badge wired to the webhook stream's actual listening state.
  *
- * Why a client SWR consumer and not the same server component?
- *   The Home tab is a client island (filter state, drill handlers, view
- *   transitions). Pulling a server component into that tree means the
- *   shell has to re-mount on every filter change just to re-fetch the
- *   feed. The SWR path coalesces all open tabs into one upstream call
- *   via the cached /api/home/activity-events route (60s revalidate).
+ * (The campaign-status events it used to show were ALSO already rendered by the
+ * operator console's <StatusEventsFeed>, so this repurpose loses no information
+ * — the operator surface still carries them via its own status-events route.)
  *
- * Route history: originally Wave 3 wired this to /api/operator/status-events.
- * That path is gated by OPERATOR_SECRET middleware → on deployments with
- * the secret set, Home (no operator auth) got a 404 and surfaced "טעינת
- * פעילות אחרונה נכשלה." The public twin /api/home/activity-events reads
- * from the same fetchStatusEvents source under the rest-of-dashboard
- * URL-obscurity trust model.
+ * LIVE-badge state machine (the key element — it must read as genuinely
+ * real-time vs the dashboard's ~10-min cadence). Derived from the read route's
+ * `lastReceivedAt` / `serverNow` (server clock, so no browser-clock skew) plus
+ * the SWR error:
+ *   • listening  (GREEN, pulsing "LIVE" + last-event relative time) — the poll
+ *                 succeeds AND an event landed within LOOKBACK_MS.
+ *   • idle       (GRAY  "מאזין") — the poll succeeds but no event in the window.
+ *   • disconnected (RED "נותק") — the SWR read itself errored (route failing).
+ * The pulse + new-row slide-in respect `prefers-reduced-motion` (the global CSS
+ * sweep neutralises durations; we ALSO gate the animation CLASSES so a reduced-
+ * motion session never queues them at all).
  *
- * Filter contract (per [[home-visual-rules]]):
- *   • When `store` is 'All' / undefined, every event shows.
- *   • When `store` is a specific store id, only events for that store
- *     are surfaced ("affecting current scope" — the route filters server-
- *     side, this primitive trusts the slice it gets).
- *   • Same shape for `platform` — 'all' or a specific paid-platform key.
- *
- * Composition: thin presentational shell using <Card>. Each feed row
- * mirrors the mockup's `.feed-item` structure (28px icon · text · time).
- * Icons are platform-tinted via <PlatformBadge>; non-platform kinds
- * (warning / shopify) get a dedicated icon-tone.
- *
- * Visual ref: mockup-04-final.html lines 507-516.
+ * Token-only: every colour comes from the status/store tokens (sale=green /
+ * refund=red / add_to_cart=blue, store dots via the canonical `--store-*`
+ * tokens). No raw hex/rgb/oklch/px in this file (the designColorGuard enforces
+ * it). Numbers render through the shared <Money> primitive (CAD, overflow-safe,
+ * `<bdi dir="ltr">`). DB-sourced strings (product titles) render as TEXT only —
+ * React escapes them; we never use dangerouslySetInnerHTML.
  */
 
 import { useMemo } from 'react';
 import useSWR from 'swr';
-import { AlertTriangle, Sparkles, Pause, Play, Archive } from 'lucide-react';
+import { ShoppingBag, Undo2, ShoppingCart, Zap } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
-import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
 import { Heading } from '@/components/ui/Typography';
+import { Money } from '@/components/ui/Money';
 import { cn } from '@/lib/utils';
-import type { StatusEventRow } from '@/lib/operator/registriesReaders';
-import type { StatusEventsResponse } from '@/app/api/operator/status-events/route';
+import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
+import { STORE_ID_TO_NAME, type StoreId } from '@/lib/platformsByStore';
+import { storeColor } from '@/lib/storeColors';
+import type { StoreEventRow } from '@/lib/webhooks/store';
+import type { StoreEventsResponse } from '@/app/api/store-events/route';
 
 /* --------------------------------------------------------------------------
- * Props
+ * Props — same store-filter contract the Home tab already passes.
  * -------------------------------------------------------------------------- */
 
 export interface ActivityFeedProps {
-  /** Optional store filter — pass 'All' or undefined to show every store. */
+  /** Optional store filter — pass 'All' / undefined to show every store. */
   store?: string;
-  /** Optional platform filter — 'all' / 'meta' / 'google' / 'tiktok'. */
-  platform?: 'all' | 'meta' | 'google' | 'tiktok';
-  /** Maximum rows to render — defaults to 10 (the mockup carries 5; we
-   *  scroll past 10 with a max-height to keep the panel calm). */
+  /** Maximum rows to render — defaults to 50 (the read route caps at 50). */
   limit?: number;
   className?: string;
 }
 
 /* --------------------------------------------------------------------------
- * Fetcher — SWR adapter for /api/home/activity-events.
+ * Constants
  * -------------------------------------------------------------------------- */
 
-const fetcher = async (url: string): Promise<StatusEventsResponse> => {
+// An event is "recent" (drives the GREEN listening badge) when it landed within
+// this window. Matches the mockup footer ("אין אירועים ב-15 הדק׳ האחרונות").
+const LOOKBACK_MS = 15 * 60_000;
+
+const fetcher = async (url: string): Promise<StoreEventsResponse> => {
   const r = await fetch(url);
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
-  return r.json() as Promise<StatusEventsResponse>;
+  return r.json() as Promise<StoreEventsResponse>;
 };
 
 /* --------------------------------------------------------------------------
- * Hebrew-localised relative time. Sub-minute resolution rounded to "כרגע"
- * (matches the operator console's relativeHebrew helper — kept private
- * here so the panel can drift in copy without touching the server side).
+ * Per-type presentation (token-driven). Each tone uses the status palette
+ * (sale=green / refund=red / add_to_cart=blue) — both the glyph-box tint and
+ * the glyph/label foreground come from `--status-X-bg` / `--status-X-fg`, which
+ * the contrast guard pins to AA on the Card surface in both themes.
  * -------------------------------------------------------------------------- */
 
-function relativeHebrew(iso: string, now: number = Date.now()): string {
+interface TypePresentation {
+  label: string; // Hebrew type label
+  Icon: typeof ShoppingBag;
+  glyphBox: string; // bg tint class
+  fg: string; // glyph + label foreground class
+}
+
+const TYPE_PRESENTATION: Record<StoreEventRow['type'], TypePresentation> = {
+  sale: {
+    label: 'מכירה',
+    Icon: ShoppingBag,
+    glyphBox: 'bg-status-greenBg',
+    fg: 'text-status-greenFg',
+  },
+  refund: {
+    label: 'החזר',
+    Icon: Undo2,
+    glyphBox: 'bg-status-redBg',
+    fg: 'text-status-redFg',
+  },
+  add_to_cart: {
+    label: 'הוספה לעגלה',
+    Icon: ShoppingCart,
+    glyphBox: 'bg-status-blueBg',
+    fg: 'text-status-blueFg',
+  },
+};
+
+/* --------------------------------------------------------------------------
+ * Hebrew relative-time. `now` defaults to Date.now() (overridable for tests).
+ * -------------------------------------------------------------------------- */
+
+function relativeHebrew(iso: string | null | undefined, now: number = Date.now()): string {
+  if (!iso) return '—';
   const dMs = now - new Date(iso).getTime();
   if (!Number.isFinite(dMs)) return '—';
+  if (dMs < 5_000) return 'עכשיו';
   const dMin = Math.floor(dMs / 60_000);
   if (dMin < 1) return 'כרגע';
-  if (dMin < 60) return `${dMin}דק׳`;
+  if (dMin < 60) return `לפני ${dMin}ד׳`;
   const dHr = Math.floor(dMin / 60);
-  if (dHr < 24) return `${dHr}שע׳`;
+  if (dHr < 24) return `לפני ${dHr}ש׳`;
   const dDay = Math.floor(dHr / 24);
-  return `${dDay} ימים`;
+  return `לפני ${dDay} ימים`;
+}
+
+/** Map an internal store_id to its display name (falls back to the raw id). */
+function storeDisplayName(storeId: string): string {
+  return STORE_ID_TO_NAME[storeId as StoreId] ?? storeId;
+}
+
+/** Reverse of STORE_ID_TO_NAME — display name → internal store_id. */
+const NAME_TO_STORE_ID: Record<string, StoreId> = Object.fromEntries(
+  (Object.entries(STORE_ID_TO_NAME) as [StoreId, string][]).map(([id, name]) => [name, id]),
+);
+
+/**
+ * Resolve the Home filter value to the internal `store_id` the
+ * `/api/store-events` route queries. The Home filter passes a display NAME
+ * ("Zol Plus" / "360usmile") but `store_events.store_id` holds the id
+ * ("zolplus" / "usmile360") — without this, filtering to any store whose name
+ * ≠ id returned an empty feed. Accepts an id passed directly too.
+ */
+function resolveStoreId(store: string): string {
+  if (store in STORE_ID_TO_NAME) return store; // already an id
+  return NAME_TO_STORE_ID[store] ?? store; // a display name → id, else as-is
 }
 
 /* --------------------------------------------------------------------------
- * Icon tile per change_kind. Each tile is a 28×28 rounded glass badge
- * with a platform/kind-tinted glow. Matches mockup `.fi-icon` rules.
+ * LIVE-badge state.
  * -------------------------------------------------------------------------- */
 
-function ChangeIcon({
-  kind,
-  platform,
+type LiveState = 'listening' | 'idle' | 'disconnected';
+
+function deriveLiveState(
+  data: StoreEventsResponse | undefined,
+  error: unknown,
+): LiveState {
+  if (error) return 'disconnected';
+  if (!data) return 'idle'; // first load, no error yet → calm idle
+  const { lastReceivedAt, serverNow } = data;
+  if (!lastReceivedAt) return 'idle';
+  const ageMs = Date.parse(serverNow) - Date.parse(lastReceivedAt);
+  if (Number.isFinite(ageMs) && ageMs <= LOOKBACK_MS) return 'listening';
+  return 'idle';
+}
+
+/* --------------------------------------------------------------------------
+ * LIVE badge
+ * -------------------------------------------------------------------------- */
+
+function LiveBadge({
+  state,
+  lastReceivedAt,
+  serverNow,
+  allowMotion,
 }: {
-  kind: string;
-  platform: string;
+  state: LiveState;
+  lastReceivedAt: string | null;
+  serverNow: string;
+  allowMotion: boolean;
 }) {
-  // Platform-tinted backgrounds map to the `text-chart-*` token family the
-  // PlatformBadge consumes — kept inline so the per-platform glow uses the
-  // identical hue as the rest of the dashboard.
-  const platLower = platform.toLowerCase();
-  // Special kinds short-circuit the platform tint:
-  if (kind === 'first_seen') {
-    return (
-      <span
-        className="grid place-items-center w-7 h-7 rounded-lg bg-accent-soft text-accent shrink-0"
-        aria-hidden
-      >
-        <Sparkles size={13} />
-      </span>
-    );
-  }
-  if (kind === 'paused') {
-    return (
-      <span
-        className="grid place-items-center w-7 h-7 rounded-lg bg-status-warningBg text-status-warningFg shrink-0"
-        aria-hidden
-      >
-        <Pause size={13} />
-      </span>
-    );
-  }
-  if (kind === 'enabled') {
-    return (
-      <span
-        className="grid place-items-center w-7 h-7 rounded-lg bg-status-greenBg text-status-greenFg shrink-0"
-        aria-hidden
-      >
-        <Play size={13} />
-      </span>
-    );
-  }
-  if (kind === 'archived' || kind === 'removed') {
-    return (
-      <span
-        className="grid place-items-center w-7 h-7 rounded-lg bg-glass-2 text-ink-secondary shrink-0"
-        aria-hidden
-      >
-        <Archive size={13} />
-      </span>
-    );
-  }
-  // Default — platform-tinted letter badge so a generic status event still
-  // carries the platform identity. Matches mockup `.fi-meta`/`.fi-google`/
-  // `.fi-tiktok` style (single letter inside a tinted square).
-  if (platLower === 'meta' || platLower === 'fb' || platLower === 'facebook') {
-    return (
-      <span
-        className="grid place-items-center w-7 h-7 rounded-lg bg-chart-meta/20 text-chart-meta font-bold text-[11px] shrink-0"
-        style={{ boxShadow: '0 0 8px -2px currentColor' }}
-        aria-hidden
-      >
-        M
-      </span>
-    );
-  }
-  if (platLower === 'google' || platLower === 'ga') {
-    return (
-      <span
-        className="grid place-items-center w-7 h-7 rounded-lg bg-chart-google/20 text-chart-google font-bold text-[11px] shrink-0"
-        style={{ boxShadow: '0 0 8px -2px currentColor' }}
-        aria-hidden
-      >
-        G
-      </span>
-    );
-  }
-  if (platLower === 'tiktok' || platLower === 'tt') {
-    return (
-      <span
-        className="grid place-items-center w-7 h-7 rounded-lg bg-chart-tiktok/20 text-chart-tiktok font-bold text-[11px] shrink-0"
-        style={{ boxShadow: '0 0 8px -2px currentColor' }}
-        aria-hidden
-      >
-        T
-      </span>
-    );
-  }
-  // Unknown platform → neutral warning tile.
+  // The relative-time math uses the SERVER clock (serverNow) as "now" so the
+  // badge is immune to browser-clock skew.
+  const serverNowMs = Date.parse(serverNow);
+  const since = lastReceivedAt ? relativeHebrew(lastReceivedAt, serverNowMs) : null;
+
+  // Tone class per state — token-driven foreground + tint background.
+  const tone =
+    state === 'listening'
+      ? 'text-status-greenFg bg-status-greenBg'
+      : state === 'disconnected'
+        ? 'text-status-redFg bg-status-redBg'
+        : 'text-status-grayFg bg-status-grayBg';
+
+  const label = state === 'listening' ? 'LIVE' : state === 'disconnected' ? 'נותק' : 'מאזין';
+
   return (
     <span
-      className="grid place-items-center w-7 h-7 rounded-lg bg-status-warningBg text-status-warningFg shrink-0"
-      aria-hidden
+      data-testid="live-badge"
+      data-state={state}
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-extrabold tracking-wide',
+        tone,
+      )}
     >
-      <AlertTriangle size={13} />
+      <span
+        className={cn('live-dot', state === 'listening' && allowMotion && 'live-dot--ping')}
+        aria-hidden
+      />
+      {label}
+      {state === 'listening' && since && (
+        <span className="font-semibold opacity-80">
+          {'· '}
+          <bdi dir="rtl">{since}</bdi>
+        </span>
+      )}
     </span>
+  );
+}
+
+/* --------------------------------------------------------------------------
+ * Event row
+ * -------------------------------------------------------------------------- */
+
+function EventRow({
+  ev,
+  serverNowMs,
+  fresh,
+  allowMotion,
+}: {
+  ev: StoreEventRow;
+  serverNowMs: number;
+  fresh: boolean;
+  allowMotion: boolean;
+}) {
+  const pres = TYPE_PRESENTATION[ev.type] ?? TYPE_PRESENTATION.sale;
+  const { Icon } = pres;
+  const display = storeDisplayName(ev.store_id);
+  const showMoney = ev.type !== 'add_to_cart' && ev.amount_cad !== null;
+
+  return (
+    <div
+      data-testid="store-event-row"
+      className={cn(
+        'px-5 py-2.5 flex items-center gap-3 border-b border-glass-edge/60 last:border-b-0',
+        // Slide-in only when motion is allowed (the global CSS sweep also
+        // neutralises it, but gating the class means a reduced-motion session
+        // never queues the animation at all).
+        fresh && allowMotion && 'animate-fade-in-up',
+      )}
+    >
+      <span
+        className={cn('grid place-items-center w-9 h-9 rounded-xl shrink-0', pres.glyphBox, pres.fg)}
+        aria-hidden
+      >
+        <Icon size={17} />
+      </span>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline gap-2 flex-wrap">
+          <span className={cn('font-extrabold text-[13.5px]', pres.fg)}>{pres.label}</span>
+          {showMoney && (
+            <Money
+              value={ev.amount_cad}
+              decimals={2}
+              className={cn('font-extrabold text-[13.5px]', pres.fg)}
+            />
+          )}
+        </div>
+        {ev.product_title && (
+          <span className="block mt-0.5 text-[12.5px] text-ink-secondary truncate">
+            {ev.product_title}
+          </span>
+        )}
+        <div className="mt-1 flex items-center gap-2 text-[11px]">
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-bold text-[10.5px] bg-glass-2 text-ink-secondary"
+            data-testid="store-chip"
+          >
+            <span
+              className="w-[7px] h-[7px] rounded-full"
+              style={{ background: storeColor(display) }}
+              aria-hidden
+            />
+            <bdi dir="ltr">{display}</bdi>
+          </span>
+        </div>
+      </div>
+
+      <span className="self-start text-[11px] text-ink-subtle tabular-nums whitespace-nowrap shrink-0">
+        <bdi dir="rtl">{relativeHebrew(ev.received_at, serverNowMs)}</bdi>
+      </span>
+    </div>
   );
 }
 
@@ -198,105 +299,89 @@ function ChangeIcon({
  * Component
  * -------------------------------------------------------------------------- */
 
-export function ActivityFeed({
-  store,
-  platform = 'all',
-  limit = 10,
-  className,
-}: ActivityFeedProps) {
-  // Build the API key from the active scope. Empty-string skips a
-  // duplicate "no filter" param so cache keys stay deterministic across
-  // /All/all and undefined permutations.
+export function ActivityFeed({ store, limit = 50, className }: ActivityFeedProps) {
   const params = useMemo(() => {
     const sp = new URLSearchParams();
-    if (store && store !== 'All') sp.set('store', store);
-    if (platform && platform !== 'all') sp.set('platform', platform);
+    if (store && store !== 'All') sp.set('store', resolveStoreId(store));
     const s = sp.toString();
     return s ? `?${s}` : '';
-  }, [store, platform]);
+  }, [store]);
 
-  // refreshInterval: 15s — operator-reported (2026-05-31) that the feed
-  // felt frozen on the Home tab. The route is ISR-cached (revalidate=60s)
-  // so a 15s poll is effectively cheap: most polls hit the SWR dedupe
-  // (`dedupingInterval: 30_000`) or the CDN, and only every ~4th poll
-  // round-trips Supabase. Trade-off: stale events surface ≤15s instead of
-  // ≤60s, at zero meaningful upstream cost.
-  //
-  // Endpoint: /api/home/activity-events — public sibling of /api/operator/
-  // status-events that bypasses the OPERATOR_SECRET middleware gate so the
-  // feed renders on Home for non-operator sessions.
-  const { data, error } = useSWR<StatusEventsResponse>(
-    `/api/home/activity-events${params}`,
-    fetcher,
-    {
-      refreshInterval: 15_000,
-      revalidateOnFocus: true,
-      dedupingInterval: 30_000,
-    },
-  );
+  // refreshInterval: 12s — the feed must read as real-time vs the dashboard's
+  // ~10-min cadence. The /api/store-events route is no-store (force-dynamic),
+  // so each poll reflects the newest events; SWR's dedupe keeps it cheap.
+  const { data, error } = useSWR<StoreEventsResponse>(`/api/store-events${params}`, fetcher, {
+    refreshInterval: 12_000,
+    revalidateOnFocus: true,
+  });
 
-  const events: StatusEventRow[] = data?.events ?? [];
-  const visible = events.slice(0, limit);
-  const updatedAt = data?.lastUpdated ?? null;
+  const reducedMotion = useReducedMotion();
+  const allowMotion = !reducedMotion;
+
+  const liveState = deriveLiveState(data, error);
+  const serverNow = data?.serverNow ?? new Date().toISOString();
+  const serverNowMs = Date.parse(serverNow);
+  const events = (data?.events ?? []).slice(0, limit);
 
   return (
-    <Card
-      className={cn('!p-0 overflow-hidden flex flex-col', className)}
-      data-testid="activity-feed"
-    >
+    <Card className={cn('!p-0 overflow-hidden flex flex-col', className)} data-testid="activity-feed">
       <div className="px-5 py-3.5 flex items-center justify-between border-b border-glass-edge">
-        <Heading level="panel" as="h3" className="text-[13px] text-ink-secondary">
-          פעילות אחרונה
+        <Heading level="panel" as="h3" className="text-[13px] flex items-center gap-2">
+          <Zap size={15} className="text-accent" aria-hidden />
+          פעילות בזמן אמת
         </Heading>
-        <FreshnessBadge updatedAt={updatedAt} />
+        <LiveBadge
+          state={liveState}
+          lastReceivedAt={data?.lastReceivedAt ?? null}
+          serverNow={serverNow}
+          allowMotion={allowMotion}
+        />
       </div>
 
-      <div className="flex flex-col">
-        {error && (
-          <div className="px-5 py-6 text-center text-xs text-status-redFg">
-            טעינת פעילות אחרונה נכשלה.
+      <div className="flex flex-col max-h-[420px] overflow-auto">
+        {events.length === 0 ? (
+          // Empty / listening state (mockup): pulsing dot + Hebrew copy.
+          <div className="px-5 py-8 text-center">
+            <span
+              className={cn(
+                'live-dot mx-auto mb-3 text-status-green',
+                allowMotion && liveState !== 'disconnected' && 'live-dot--ping',
+              )}
+              aria-hidden
+            />
+            {liveState === 'disconnected' ? (
+              <>
+                <div className="font-bold text-[13px] text-status-redFg">החיבור נותק</div>
+                <div className="mt-1 text-[12px] text-ink-muted">
+                  טעינת הפיד נכשלה. ננסה שוב אוטומטית…
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="font-bold text-[13px] text-ink">מאזין בזמן אמת…</div>
+                <div className="mt-1 text-[12px] text-ink-muted">
+                  מחובר ל-3 החנויות. אירועים (מכירות, החזרים, הוספות לעגלה) יופיעו כאן ברגע שיקרו.
+                </div>
+              </>
+            )}
           </div>
+        ) : (
+          events.map((ev, i) => (
+            <EventRow
+              key={ev.id}
+              ev={ev}
+              serverNowMs={serverNowMs}
+              // Only the newest row gets the slide-in (avoids a re-animate storm
+              // when the list shifts). The freshness is purely presentational.
+              fresh={i === 0}
+              allowMotion={allowMotion}
+            />
+          ))
         )}
+      </div>
 
-        {!error && data?.error && (
-          <div className="px-5 py-6 text-center text-xs text-status-warningFg">
-            {data.error}
-          </div>
-        )}
-
-        {!error && !data?.error && visible.length === 0 && (
-          <div className="px-5 py-6 text-center text-xs text-ink-muted">
-            {data
-              ? 'אין אירועי סטטוס בטווח הנבחר.'
-              : 'טוען אירועים…'}
-          </div>
-        )}
-
-        {visible.map((e) => (
-          <div
-            key={e.id}
-            className="px-5 py-2.5 grid grid-cols-[28px_1fr_auto] gap-2.5 items-center border-b border-glass-edge/60 last:border-b-0"
-            data-testid="activity-feed-item"
-          >
-            <ChangeIcon kind={e.change_kind} platform={e.platform} />
-            <div className="min-w-0 text-[12.5px] leading-tight">
-              <bdi dir="ltr" className="font-semibold text-ink truncate block">
-                {e.entity_id}
-              </bdi>
-              <div className="text-[11px] text-ink-muted mt-0.5 truncate">
-                <bdi dir="ltr">{e.store_id}</bdi>
-                {' · '}
-                <bdi dir="ltr">{e.platform}</bdi>
-                {' · '}
-                {e.from_status ?? '—'} →{' '}
-                <strong className="text-ink-secondary">{e.to_status}</strong>
-              </div>
-            </div>
-            <span className="font-mono text-[10.5px] text-ink-subtle tabular-nums shrink-0">
-              {relativeHebrew(e.occurred_at)}
-            </span>
-          </div>
-        ))}
+      <div className="px-5 py-2.5 text-center text-[11px] text-ink-subtle border-t border-glass-edge">
+        מאזין ל-3 חנויות · מתעדכן רגעית
       </div>
     </Card>
   );
