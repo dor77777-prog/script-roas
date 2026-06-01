@@ -200,14 +200,18 @@
      --text-2        → secondary labels, subtitle text
      --text-muted    → metadata, axis labels
      --text-subtle   → least-prominent meta (e.g. timestamps in tooltips)
-     A11y re-base (2026-06-01): muted/subtle deepened to clear WCAG-AA 4.5:1
-     on the LIGHTEST dark card surface (--glass-3 #20243a) — was 4.51 / 2.53.
-     text 16.8:1 · text-2 7.9:1 · text-muted 4.61:1 · text-subtle 4.61:1.
+     A11y re-base (2026-06-01): muted/subtle deepened again to clear WCAG-AA
+     4.5:1 on the REAL worst dark surface these inks render on — the
+     chart-tooltip bg (#16323a) per the axe prod scan, which is stricter than
+     --glass-3 (#20243a). The first deepening targeted glass-3 only and landed
+     ~4.0–4.3 on the tinted tooltip/glass surfaces.
+     text 16.8:1 · text-2 7.9:1 · text-muted 4.63:1 (#16323a; 5.23 on glass-3)
+     · text-subtle 4.54:1 (#16323a; 5.12 on glass-3).
      Hue (cool-gray) preserved; locked by contrastGuard.test.ts. */
   --text:        #eef1ff;
   --text-2:      #b3b9d8;
-  --text-muted:  #838cb0;
-  --text-subtle: #838bb7;
+  --text-muted:  #8c96ba;
+  --text-subtle: #8c93bf;
 
   /* Blur + saturate filter stacks (see Task 1.7). Cards are now OPAQUE mesh
      surfaces (no backdrop-filter on .glass), so these serve ONLY the few
@@ -479,14 +483,18 @@
   --surface-sunken: #f1f3f9;
 
   /* Foreground stack — inverted to dark inks on the light canvas.
-     A11y re-base (2026-06-01): muted/subtle deepened to clear WCAG-AA 4.5:1
-     on white — was 2.78 / 1.87. Hue (cool-gray) preserved.
-     text 16.5:1 · text-2 6.5:1 · text-muted 4.61:1 · text-subtle 4.62:1.
+     A11y re-base (2026-06-01): muted/subtle deepened again to clear WCAG-AA
+     4.5:1 on the REAL worst light surface — glass-3 (#edf0f8 per axe prod
+     scan), the darkest light card surface — NOT white. The first deepening
+     targeted white only and landed ~4.6 on white but ~4.0 on the tinted
+     glass-3/status-bg surfaces.
+     text 16.5:1 · text-2 6.5:1 · text-muted 4.60:1 (#edf0f8; 5.25 on white)
+     · text-subtle 4.61:1 (#edf0f8; 5.25 on white). Hue (cool-gray) preserved.
      Locked by contrastGuard.test.ts. */
   --text:        #171a2b;
   --text-2:      #565d78;
-  --text-muted:  #6f748d;
-  --text-subtle: #717486;
+  --text-muted:  #666b84;
+  --text-subtle: #696b7d;
 
   /* Blur + saturate — cards are opaque in light so blur is mostly inert;
      keep modest values for the few translucent sheets/overlays. */

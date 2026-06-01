@@ -168,16 +168,29 @@ describe('contrast guard — --on-band-*-muted clears 3:1 on the DEEP card surfa
  * `--text-muted` / `--text-subtle` back the Tailwind `text-ink-muted` /
  * `text-ink-subtle` aliases used as small body text across the WHOLE app
  * (axis labels, metadata, captions, timestamps). An axe color-contrast scan
- * on prod surfaced ≫100 instances failing WCAG-AA in BOTH themes (muted/subtle
- * were 4.51 / 2.53 on dark, 2.78 / 1.87 on light). This locks the deepened
- * tokens against their WORST-CASE surface so they cannot silently regress:
- *   • DARK  — `--glass-3` (#20243a) is the LIGHTEST dark card surface (sticky
- *             headers), the AA bottleneck for cool-gray ink on dark.
- *   • LIGHT — plain white (#ffffff) is the worst case (white card / canvas).
+ * on prod surfaced ≫100 instances failing WCAG-AA in BOTH themes. A first
+ * deepening pass targeted WHITE (light) / `--glass-3` (dark) as the worst
+ * surface — but the axe re-scan showed these inks ALSO sit on slightly-TINTED
+ * surfaces (glass-2/glass-3/status-bgs/chart-tooltip), where they landed
+ * 4.0–4.3:1 — just under AA. This guard now locks the tokens against the REAL
+ * empirically-darkest surface each ink renders on (per the axe prod scan), so
+ * they cannot silently regress against the tinted worst case:
+ *   • DARK  — `#16323a` is the chart-tooltip bg, the darkest-contrast dark
+ *             surface these inks render on. STRICTER than `--glass-3` (#20243a),
+ *             so it is the binding worst case (hardcoded literal below).
+ *   • LIGHT — `#edf0f8` is glass-3, the darkest light card surface. STRICTER
+ *             than white (#ffffff) / status-greenBg (#effaf5, ~4.91), so it is
+ *             the binding worst case (hardcoded literal below).
+ * Both literals are HARDCODED (not read from tokens) because they are the
+ * empirically-observed worst surfaces from the axe prod scan — being honest
+ * about the real worst case matters more than tracking a token value.
  * `--text` / `--text-2` already clear AA comfortably; included for completeness.
  */
 const INK_TIERS = ['--text', '--text-2', '--text-muted', '--text-subtle'] as const;
-const INK_WORST_SURFACE = { dark: '#20243a', light: '#ffffff' } as const; // dark = --glass-3
+// Empirically-darkest surfaces these inks render on, per the axe prod scan:
+//   dark  = #16323a (chart-tooltip bg) — stricter than --glass-3 (#20243a)
+//   light = #edf0f8 (glass-3)          — stricter than white / status-greenBg
+const INK_WORST_SURFACE = { dark: '#16323a', light: '#edf0f8' } as const;
 
 describe('contrast guard — muted ink tiers clear WCAG-AA on their worst-case surface (both themes)', () => {
   for (const theme of THEMES) {
