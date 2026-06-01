@@ -78,6 +78,22 @@ const config: Config = {
           gray:   'var(--band-gray)',
         },
 
+        // ---- On-band: paired on-color foreground per band surface
+        //      (Readability Hardening, Wave A). Every --band-* ships an
+        //      --on-band-* foreground verified ≥4.5:1 WCAG-AA in both themes
+        //      by src/lib/__tests__/contrastGuard.test.ts. `band-scrim` is the
+        //      neutral sub-surface chips/CPM tiles sit on; `plot-bg` is the
+        //      inner plot scrim for charts/sparklines on band cards.
+        'on-band': {
+          red:    'var(--on-band-red)',
+          orange: 'var(--on-band-orange)',
+          green:  'var(--on-band-green)',
+          blue:   'var(--on-band-blue)',
+          gray:   'var(--on-band-gray)',
+        },
+        'band-scrim': 'var(--band-scrim)',
+        'plot-bg':    'var(--plot-bg)',
+
         // ---- Chart: platform-brand-mirrored palette. See globals.css for
         //      the per-platform hue rationale (Meta blue, Google amber,
         //      TikTok red, organic teal, Shopify green).

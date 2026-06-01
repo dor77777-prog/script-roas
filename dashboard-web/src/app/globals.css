@@ -79,6 +79,33 @@
   --cell-fail:    #15151f;
   --cell-fail-fg: #ff8a9a;
 
+  /* Readability Hardening (Wave A) — paired on-color foreground per band.
+     Dark bands are LIGHT, so the guaranteed-legible foreground is near-black
+     ink. Verified ≥4.5:1 by src/lib/__tests__/contrastGuard.test.ts — tune
+     THESE, never --band-*. */
+  --on-band-red:    #15151f;
+  --on-band-orange: #15151f;
+  --on-band-green:  #0c1714;
+  --on-band-blue:   #0c1322;
+  --on-band-gray:   #11131d;
+  --on-band-red-muted:    #2c2c3a;
+  --on-band-orange-muted: #2c2c3a;
+  --on-band-green-muted:  #1d2a26;
+  --on-band-blue-muted:   #1d2436;
+  --on-band-gray-muted:   #23252f;
+
+  /* Neutral sub-surface for chips / CPM tiles / freshness on band cards.
+     Text on the gradient sits on THIS scrim, not the variable tint. */
+  --band-scrim:     rgba(8, 9, 16, 0.62);
+  --band-scrim-ink: #eef1ff;
+
+  /* Neutral inner plot scrim for charts/sparklines on band cards. */
+  --plot-bg: rgba(12, 14, 26, 0.72);
+
+  /* Fluid metric size: rem term keeps 200%-zoom safe (WCAG 1.4.4); cqi lets
+     the same <Money> shrink in narrow columns and grow in wide ones. */
+  --metric-font: clamp(0.9rem, 0.7rem + 2.4cqi, 1.6rem);
+
   /* ---------------------------------------------------------------------
      Task 1.8 — semantic spacing / motion / radius scales.
      The scale below is the canonical surface vocabulary; new Tailwind
@@ -334,6 +361,31 @@
      (mockup renders #15151f / #ff8a9a regardless of mode). */
   --cell-fail:    #15151f;
   --cell-fail-fg: #ff8a9a;
+
+  /* Light bands are saturated mid-tones: white clears AA on red/green/blue;
+     light gray + bright amber orange need DARK ink. Verified by
+     contrastGuard.test.ts. */
+  --on-band-red:    #ffffff;
+  --on-band-orange: #15151f;
+  /* white falls short of AA on light green (3.47:1) + blue (3.68:1) — these
+     two saturated mid-tones take DARK ink instead (nudged from #ffffff). */
+  --on-band-green:  #0c1714;
+  --on-band-blue:   #0c1322;
+  --on-band-gray:   #15151f;
+  --on-band-red-muted:    #ffe4ea;
+  --on-band-orange-muted: #2c2412;
+  --on-band-green-muted:  #e6fff5;
+  --on-band-blue-muted:   #e9f1ff;
+  --on-band-gray-muted:   #2c2c3a;
+
+  --band-scrim:     rgba(255, 255, 255, 0.78);
+  --band-scrim-ink: #171a2b;
+
+  --plot-bg: rgba(255, 255, 255, 0.92);
+  /* --metric-font is theme-independent — re-declared identically here so the
+     themeParity guard (every :root token has a light counterpart) stays green;
+     the value matches :root exactly, so light behaviour is unchanged. */
+  --metric-font: clamp(0.9rem, 0.7rem + 2.4cqi, 1.6rem);
 
   /* Spacing scale — theme-invariant, copied verbatim from :root. */
   --space-1:  0.25rem;
