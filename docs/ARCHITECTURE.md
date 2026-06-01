@@ -3025,3 +3025,17 @@ data-pipeline change.
 - **No info lost**: the campaign-status feed still renders in `/operator` (`StatusEventsFeed` +
   `/api/operator/status-events`, untouched). Contrast guard extended +12 (3 glyph tones × both themes).
 - Phase 2 (add-to-cart Custom Pixel + Lovable beacon → `/api/events/cart`) is the remaining ingest path.
+
+### Phase 2 — add-to-cart ingest (client, 2026-06-01)
+- **`POST` + `OPTIONS /api/events/cart`** (`runtime='nodejs'`, `force-dynamic`): browser-called (Shopify
+  Custom Pixel on the 2 standard stores + a Lovable beacon on headless usmile), so **CORS** is on every
+  response (`corsHeaders(origin)` echoes the Origin or `*`; preflight via `OPTIONS`). Auth is the per-store
+  **`cart_public_token`** (`lookupStoreByCartToken`, enabled) — a PUBLIC token (lives in client JS), low-trust
+  by design. Origin is **best-effort**: a sandboxed Web Pixel sends the literal `Origin: null` (opaque) — that
+  AND an absent header are allowed (token-primary); rejection only when `allowed_origins` is non-empty and the
+  normalized request origin (scheme+host+port) isn't listed. Dedup `dedupe_key='cart:'+event_id`; insert
+  wrapped → always `204` (never 5xx → never blocks a storefront add-to-cart). NO PII (no money/customer;
+  `product_title` capped ~200). Middleware-allowlisted (Phase 1). **Display-only — never feeds aggregates/billing.**
+- Per-store `cart_public_token` seeded in `store_webhooks` (PUBLIC tokens; `allowed_origins` left empty = token-only
+  to start, tightened later). STOP 2 = operator pastes the Custom Pixel (Settings → Customer events) in uzoshop +
+  Zol Plus and adds the beacon to the Lovable usmile frontend.

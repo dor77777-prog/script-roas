@@ -156,6 +156,20 @@ describe('lookupStoreByCartToken', () => {
     mock.setSelectResult({ data: null, error: null });
     expect(await lookupStoreByCartToken('tok_bad')).toBeNull();
   });
+
+  it('surfaces the disabled flag for a known-but-disabled token (route drops it)', async () => {
+    mock.setSelectResult({
+      data: { store_id: 'uzoshop', allowed_origins: [], enabled: false },
+      error: null,
+    });
+    const out = await lookupStoreByCartToken('tok_off');
+    expect(out).toEqual({ store_id: 'uzoshop', allowed_origins: [], enabled: false });
+  });
+
+  it('returns null when the query errors (soft-fail → route ack+drops)', async () => {
+    mock.setSelectResult({ data: null, error: { message: 'boom' } });
+    expect(await lookupStoreByCartToken('tok_123')).toBeNull();
+  });
 });
 
 describe('insertStoreEvent', () => {
