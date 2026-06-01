@@ -68,7 +68,12 @@ export interface PerStoreData {
   aov: number | null;
   /** ROAS for the active range — drives the card band via useRoasBandGradient. */
   roas: number | null;
-  /** ISO timestamp of the freshest underlying row — reserved for Task 3.x freshness wiring. */
+  /**
+   * ISO timestamp of the dataset's freshest write (the page-global
+   * `dataLastWriteAt`). Same freshness signal the hero / TabFreshnessHeader
+   * use, so per-store LIVE/stale dots always agree with the hero. `null`
+   * only when no write timestamp is available.
+   */
   updatedAt: string | null;
   /** Per-platform CPM breakdown. Only platforms with data are present. */
   perPlatformCpm: Partial<Record<Platform, PerStorePlatformCpm>>;

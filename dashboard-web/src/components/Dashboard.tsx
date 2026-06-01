@@ -626,6 +626,7 @@ function HomeTab({
         filters.range,
         ordersByStore,
         storeIdByName,
+        data?.dataLastWriteAt ?? null,
       ),
     [
       filtered.storeAggs,
@@ -633,6 +634,7 @@ function HomeTab({
       filters.range,
       ordersByStore,
       storeIdByName,
+      data?.dataLastWriteAt,
     ],
   );
 

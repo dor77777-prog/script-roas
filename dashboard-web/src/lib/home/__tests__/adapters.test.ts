@@ -15,6 +15,7 @@ import {
   toHeroPeriod,
   toPerStoreData,
 } from '../adapters';
+import { computeStaleness } from '@/lib/freshness/useStaleness';
 import type { Aggregate, StoreAgg } from '@/lib/analytics';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { Annotation } from '@/lib/annotations';
@@ -211,6 +212,8 @@ describe('toPerStoreData', () => {
     expect(u.perPlatformCpm.tiktok).toBeUndefined();
     // AOV = revenue/orders
     expect(u.aov).toBeCloseTo(5000 / 70, 5);
+    // dataLastWriteAt omitted → updatedAt stays null (back-compat)
+    expect(u.updatedAt).toBeNull();
   });
 
   it('null-coerces AOV when orders is 0 (avoids divide-by-zero)', () => {
@@ -225,6 +228,66 @@ describe('toPerStoreData', () => {
       {},
     );
     expect(result[0].aov).toBeNull();
+  });
+
+  it('threads dataLastWriteAt onto every row as updatedAt (freshness fix)', () => {
+    // Regression: updatedAt was hardcoded null → useStaleness(null) → every
+    // per-store dot painted STALE/red regardless of real freshness. The
+    // page-global dataLastWriteAt now feeds each card, matching the hero.
+    const storeAggs: StoreAgg[] = [
+      { ...agg({ revenue: 5000, spend: 1500, roas: 3.3 }), store: 'uzoshop' },
+      { ...agg({ revenue: 2000, spend: 800, roas: 2.5 }), store: 'usmile360' },
+    ];
+    const writeTs = '2026-06-01T10:00:00Z';
+    const result = toPerStoreData(
+      storeAggs,
+      [],
+      { from: '2026-05-01', to: '2026-05-31' },
+      {},
+      {},
+      writeTs,
+    );
+    expect(result).toHaveLength(2);
+    for (const row of result) {
+      expect(row.updatedAt).toBe(writeTs);
+    }
+  });
+
+  it('updatedAt is null when dataLastWriteAt is explicitly null (back-compat)', () => {
+    const storeAggs: StoreAgg[] = [
+      { ...agg({ revenue: 1000, spend: 100, roas: 10 }), store: 'uzoshop' },
+    ];
+    const result = toPerStoreData(
+      storeAggs,
+      [],
+      { from: '2026-05-01', to: '2026-05-31' },
+      {},
+      {},
+      null,
+    );
+    expect(result[0].updatedAt).toBeNull();
+  });
+
+  it('a fresh dataLastWriteAt yields a "fresh" (green LIVE) verdict, not stale', () => {
+    // End-to-end intent: the old null updatedAt made useStaleness return
+    // "stale" → red dot. A recent write timestamp must resolve to "fresh"
+    // (< 15 min), giving the green LIVE pulse that matches the hero.
+    const now = Date.UTC(2026, 5, 1, 10, 0, 0);
+    const writeTs = new Date(now - 2 * 60_000).toISOString(); // 2 min old
+    const storeAggs: StoreAgg[] = [
+      { ...agg({ revenue: 5000, spend: 1500, roas: 3.3 }), store: 'uzoshop' },
+    ];
+    const result = toPerStoreData(
+      storeAggs,
+      [],
+      { from: '2026-05-01', to: '2026-05-31' },
+      {},
+      {},
+      writeTs,
+    );
+    expect(computeStaleness(result[0].updatedAt, now).stage).toBe('fresh');
+    // Sanity: the old hardcoded-null path was stale.
+    expect(computeStaleness(null, now).stage).toBe('stale');
   });
 });
 

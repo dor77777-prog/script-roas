@@ -292,6 +292,7 @@ export function toPerStoreData(
   range: { from: string; to: string },
   ordersByStore: Record<string, number>,
   storeIdByName: Record<string, string> = {},
+  dataLastWriteAt: string | null = null,
 ): PerStoreData[] {
   // Aggregate per (store, platform) once so the inner loop below is O(1) per
   // store. Spend + impressions are summed across the requested range only.
@@ -338,7 +339,7 @@ export function toPerStoreData(
         ? s.revenue / (ordersByStore[s.store] ?? 1)
         : null,
     roas: s.roas > 0 ? s.roas : null,
-    updatedAt: null,
+    updatedAt: dataLastWriteAt,
     perPlatformCpm: perPlatformCpm(s.store),
   }));
 }
