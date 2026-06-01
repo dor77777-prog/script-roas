@@ -185,7 +185,12 @@ function SidebarBody({
               )}
             >
               <span className="shrink-0">{item.icon}</span>
-              {!isCollapsed && <span>{item.label}</span>}
+              {/* min-w-0 + truncate: the longest label ("טבלאות אופטימיזציה")
+                  fits the expanded rail today, but this gracefully ellipsizes
+                  instead of clipping/pushing layout if the rail narrows or a
+                  future label is longer; the full text stays in the DOM for
+                  screen readers, and the collapsed state still gets RailTooltip. */}
+              {!isCollapsed && <span className="truncate min-w-0">{item.label}</span>}
             </Button>
           );
           return (

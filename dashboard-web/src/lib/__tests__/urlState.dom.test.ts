@@ -10,7 +10,18 @@
 // browser-effect surface that Task 3.4 introduced.
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { drillToCampaigns } from '../urlState';
+import {
+  drillToCampaigns,
+  readDashboardState,
+  writeDashboardState,
+  type DashboardState,
+} from '../urlState';
+
+// Shared defaults for the readDashboardState migration tests below.
+const DEFAULTS: DashboardState = {
+  tab: 'home',
+  filters: { preset: 'this_month', range: { from: '2026-01-01', to: '2026-01-31' }, store: 'All' },
+};
 
 beforeEach(() => {
   // Reset URL between tests so each starts from a known state. jsdom only
@@ -91,5 +102,37 @@ describe('drillToCampaigns', () => {
   it('is safe to call with no opts at all', () => {
     expect(() => drillToCampaigns()).not.toThrow();
     expect(window.location.search).toBe('?tab=campaigns');
+  });
+});
+
+describe('readDashboardState — legacy "analysis" tab migration (2026-06-01)', () => {
+  it('maps the retired ?tab=analysis to trends (its former default sub-tab)', () => {
+    const state = readDashboardState(DEFAULTS, '?tab=analysis');
+    expect(state.tab).toBe('trends');
+  });
+
+  it('preserves preset + store while migrating ?tab=analysis', () => {
+    const state = readDashboardState(DEFAULTS, '?tab=analysis&preset=last_7_days&store=uzoshop');
+    expect(state.tab).toBe('trends');
+    expect(state.filters.preset).toBe('last_7_days');
+    expect(state.filters.store).toBe('uzoshop');
+  });
+
+  it('accepts the new top-level archive + trends tab keys verbatim', () => {
+    expect(readDashboardState(DEFAULTS, '?tab=archive').tab).toBe('archive');
+    expect(readDashboardState(DEFAULTS, '?tab=trends').tab).toBe('trends');
+  });
+
+  it('falls back to the default tab for an unknown tab key', () => {
+    expect(readDashboardState(DEFAULTS, '?tab=bogus').tab).toBe('home');
+  });
+
+  it('never writes the retired "analysis" key back; emits the new keys (home omitted)', () => {
+    expect(writeDashboardState({ ...DEFAULTS, tab: 'archive' })).toContain('tab=archive');
+    expect(writeDashboardState({ ...DEFAULTS, tab: 'trends' })).toContain('tab=trends');
+    // home is the default → omitted from the URL for a clean "/".
+    expect(writeDashboardState({ ...DEFAULTS, tab: 'home' })).not.toContain('tab=');
+    // The retired key can never round-trip back into a written URL.
+    expect(writeDashboardState({ ...DEFAULTS, tab: 'trends' })).not.toContain('analysis');
   });
 });

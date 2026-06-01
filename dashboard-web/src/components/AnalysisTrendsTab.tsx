@@ -26,7 +26,10 @@ type Props = {
 export function AnalysisTrendsTab({ data, filtered, filters, setFilters }: Props) {
   const trendsSynthesis = synthesizeTrends({ rows: filtered.cur });
   return (
-    <div className="space-y-4 sm:space-y-5">
+    // animate-fade-in-up restores the mount transition the Radix TabsContent
+    // used to provide (now that this is a top-level tab) and matches the other
+    // top-level tabs (HomeTab / PnLTab).
+    <div className="space-y-4 sm:space-y-5 animate-fade-in-up">
       <SectionIntro
         icon={<CalendarDays size={20} />}
         title="טווח לניתוח"

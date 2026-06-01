@@ -69,7 +69,9 @@ export function AnalysisArchiveTab({ stores, globalStore }: Props) {
   });
 
   return (
-    <div className="space-y-4 sm:space-y-5">
+    // animate-fade-in-up restores the mount transition the Radix TabsContent
+    // used to provide (now a top-level tab) and matches HomeTab / PnLTab.
+    <div className="space-y-4 sm:space-y-5 animate-fade-in-up">
       <SectionIntro
         icon={<CalendarDays size={20} />}
         title={isStoreScoped ? `טבלאות חודשיות — ${globalStore}` : 'טבלאות חודשיות'}
