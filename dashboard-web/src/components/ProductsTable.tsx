@@ -9,13 +9,11 @@ import {
   Calendar,
   Radio,
   Store,
-  X,
 } from 'lucide-react';
 import { cn, formatDate, formatNumber } from '@/lib/utils';
 import { fmtMoney } from '@/lib/format';
 import { Money } from '@/components/ui/Money';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
 import { NativeSelect } from '@/components/ui/NativeSelect';
 import { Stat } from '@/components/ui/Stat';
 import { TableBase } from '@/components/ui/TableBase';
@@ -286,36 +284,22 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
     setLocalStore(globalStore);
   }, [globalStore]);
 
-  // Local date range — same pattern. From/to inputs let the user zoom into
-  // any window (single day if from===to, or any longer span).
-  // NOTE: declared before useSWR so buildDateRangeKey can use localRange as
-  // the SWR key (Phase 5 — range-keyed pagination). Changing localRange
-  // triggers a fresh SWR fetch (new key = new request, no stale-cache shadow).
-  // Phase 12.5 — initial value hydrated from URL `p_preset` + `p_from`/`p_to`.
-  const [localRange, setLocalRange] = useState<DateRange>(() => {
-    if (typeof window === 'undefined') return range;
-    const url = readTabLocalState('products', window.location.search);
-    return url.range ?? range;
-  });
-  const hydratedRangeFromUrlRef = useRef(false);
-  useEffect(() => {
-    if (!hydratedRangeFromUrlRef.current) {
-      hydratedRangeFromUrlRef.current = true;
-      return; // skip first global sync — preserve URL-hydrated value
-    }
-    setLocalRange(range);
-  }, [range.from, range.to]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The Products tab follows the page-global date range — there is no separate
+  // in-tab date picker (unified 2026-06-01 to remove dual-picker confusion +
+  // the bug class where the tab's window diverged from the page's). Kept as the
+  // name `localRange` so downstream references (SWR key, aggregation, bucket math)
+  // read unchanged; it is now simply an alias of `range`.
+  const localRange = range;
 
   // Push ProductsTable's tab-local state into the URL whenever it changes.
   // `syncTabLocalUrl` only updates the `p_*` params — global state preserved.
-  // The picker here doesn't track preset names, so we encode the raw from/to
-  // as `preset: 'custom'` so refresh restores exactly what the operator saw.
+  // The tab no longer carries its own range (it follows the global one), so we
+  // only persist the store filter; omitting `preset`/`range` makes
+  // `syncTabLocalUrl` delete any stale `p_preset`/`p_from`/`p_to` from the URL.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     syncTabLocalUrl('products', {
       store: localStore,
-      preset: 'custom',
-      range: localRange,
     }, globalStore);
   }, [localStore, localRange.from, localRange.to, globalStore]);
 
@@ -328,21 +312,12 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
     },
   );
 
-  // Detect when the local range diverges from the global one — used to show
-  // a "מחזיר לטווח הגלובלי" reset button.
-  const isCustomRange =
-    localRange.from !== range.from || localRange.to !== range.to;
-
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [nowLabel, setNowLabel] = useState(nowInIsrael());
   useEffect(() => {
     const t = setInterval(() => setNowLabel(nowInIsrael()), 30_000);
     return () => clearInterval(t);
   }, []);
-
-  // Today (Israel TZ) — used as the max for the date inputs so the user can't
-  // select tomorrow / future dates that have no data yet.
-  const today = todayInIsrael();
 
   const buckets = useMemo(() => {
     if (!data) return [];
@@ -437,76 +412,6 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
             </option>
           ))}
         </NativeSelect>
-      </div>
-
-      {/* Range picker — works in all views. from===to means one day.
-          No cross-validation between the two inputs (max/min on each other)
-          because that locks the user out of valid moves — e.g. trying to
-          push "from" to today when "to" was previously yesterday. Instead
-          we auto-swap on the way in if needed. */}
-      <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-        <Calendar size={14} className="text-ink-muted shrink-0" />
-        <Input
-          type="date"
-          value={localRange.from}
-          max={today}
-          onChange={e => {
-            const v = e.target.value;
-            if (!v) return;
-            // Clamp to today as a safety net — the browser's native max already
-            // blocks the picker, but a paste / programmatic set could bypass it.
-            const safe = v > today ? today : v;
-            setLocalRange(prev =>
-              safe > prev.to ? { from: safe, to: safe } : { ...prev, from: safe },
-            );
-          }}
-          aria-label="מתאריך"
-          className={cn(
-            'w-auto text-xs sm:text-sm font-medium',
-            isCustomRange && 'border-accent text-accent',
-          )}
-        />
-        <span className="text-ink-muted text-xs">—</span>
-        <Input
-          type="date"
-          value={localRange.to}
-          max={today}
-          onChange={e => {
-            const v = e.target.value;
-            if (!v) return;
-            const safe = v > today ? today : v;
-            setLocalRange(prev =>
-              safe < prev.from ? { from: safe, to: safe } : { ...prev, to: safe },
-            );
-          }}
-          aria-label="עד תאריך"
-          className={cn(
-            'w-auto text-xs sm:text-sm font-medium',
-            isCustomRange && 'border-accent text-accent',
-          )}
-        />
-        <Button
-          type="button"
-          variant="secondary"
-          size="sm"
-          onClick={() => setLocalRange({ from: today, to: today })}
-          className="border-status-green bg-status-greenBg text-status-greenFg hover:bg-status-greenBg"
-          title="קפוץ ליום הנוכחי (live)"
-        >
-          היום
-        </Button>
-        {isCustomRange && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => setLocalRange(range)}
-            aria-label="חזור לטווח הגלובלי"
-            title="חזור לטווח שנבחר בסינון העליון"
-          >
-            <X size={14} />
-          </Button>
-        )}
       </div>
 
       <span className="text-[10px] sm:text-xs text-ink-muted tabular-nums sm:me-auto">
