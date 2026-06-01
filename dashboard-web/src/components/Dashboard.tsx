@@ -45,6 +45,8 @@ import { FreshnessChip } from './FreshnessChip';
 import { TabFreshnessHeader } from './TabFreshnessHeader';
 import { readDashboardState, syncUrl, drillToCampaigns, type TabKey } from '@/lib/urlState';
 import { buildDateRangeKey } from '@/lib/dateRange';
+import { useCogsSettings } from '@/lib/hooks/useCogsSettings';
+import { applyCogsToRows } from '@/lib/cogsSettings';
 import { Button } from '@/components/ui/Button';
 import { AnalysisTrendsTab } from './AnalysisTrendsTab';
 import { AnalysisArchiveTab } from './AnalysisArchiveTab';
@@ -157,10 +159,19 @@ export function Dashboard() {
     return readDashboardState({ tab: 'home', filters: defaults }, window.location.search).filters;
   });
 
-  const { data, error, isLoading, mutate } = useSWR<DashboardData>(
+  const { data: rawData, error, isLoading, mutate } = useSWR<DashboardData>(
     buildDateRangeKey('/api/data', filters.range),
     fetcher,
     { refreshInterval: 60_000, revalidateOnFocus: true },
+  );
+  // Editable COGS % — recompute each row's cogs/netProfit from the operator's
+  // effective % at the earliest read point so every downstream consumer
+  // (hero, per-store, P&L, GoalTracker, Detail, insights) is retroactively
+  // adjusted. Default settings reproduce the stored 25% → no behavior change.
+  const [cogsSettings] = useCogsSettings();
+  const data = useMemo(
+    () => (rawData ? { ...rawData, rows: applyCogsToRows(rawData.rows, cogsSettings) } : rawData),
+    [rawData, cogsSettings],
   );
 
   // Phase 05.7.8 — fetch orders for the same range so per-store cards can show
@@ -576,10 +587,15 @@ function HomeTab({
   );
   // Previous-period rows for the hero delta — /api/data only returns the
   // current range so the previous baseline needs its own fetch.
-  const { data: dataPrev } = useSWR<DashboardData>(
+  const { data: rawDataPrev } = useSWR<DashboardData>(
     buildDateRangeKey('/api/data', prevRange),
     fetcher,
     { revalidateOnFocus: false },
+  );
+  const [cogsSettings] = useCogsSettings();
+  const dataPrev = useMemo(
+    () => (rawDataPrev ? { ...rawDataPrev, rows: applyCogsToRows(rawDataPrev.rows, cogsSettings) } : rawDataPrev),
+    [rawDataPrev, cogsSettings],
   );
   // Previous-range ORDER counts — /api/data doesn't carry per-store order
   // counts (that's why the current range uses a dedicated orders-attribution
@@ -594,10 +610,14 @@ function HomeTab({
 
   // ---- Chart range data — independent of page filters so the picker can
   // walk 7d/30d/90d/MTD/QTD/YTD without losing the snapshot above.
-  const { data: chartDataResp } = useSWR<DashboardData>(
+  const { data: rawChartDataResp } = useSWR<DashboardData>(
     buildDateRangeKey('/api/data', chartFromTo),
     fetcher,
     { revalidateOnFocus: false },
+  );
+  const chartDataResp = useMemo(
+    () => (rawChartDataResp ? { ...rawChartDataResp, rows: applyCogsToRows(rawChartDataResp.rows, cogsSettings) } : rawChartDataResp),
+    [rawChartDataResp, cogsSettings],
   );
   const { data: chartCampaignsResp } = useSWR<CampaignsResponse>(
     buildDateRangeKey('/api/campaigns', chartFromTo),

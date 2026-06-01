@@ -108,7 +108,7 @@ describe('applyCogsToRows', () => {
   });
 });
 
-import { applyPctToScope, type ApplyScope } from '@/lib/cogsSettings';
+import { applyPctToScope } from '@/lib/cogsSettings';
 import type { CogsScopeSettings } from '@/lib/cogsSettings';
 
 describe('applyPctToScope — the 4 apply-scopes', () => {

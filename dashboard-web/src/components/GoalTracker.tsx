@@ -12,6 +12,8 @@ import { Heading } from '@/components/ui/Typography';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import type { DashboardData } from '@/lib/types';
 import { buildDateRangeKey, getTodayInIsraelTz } from '@/lib/dateRange';
+import { useCogsSettings } from '@/lib/hooks/useCogsSettings';
+import { applyCogsToRows } from '@/lib/cogsSettings';
 import {
   computePacing,
   forecastMonthEnd,
@@ -125,7 +127,11 @@ export function GoalTracker({ data }: Props) {
   // panel always renders something; a brief under-projection before the wide
   // fetch resolves is acceptable. forecastMonthEnd does its own month-anchored
   // MTD slice + trailing-7-day baseline, so a superset range is fine.
-  const forecastRows = wideData?.rows ?? data.rows;
+  const [cogsSettings] = useCogsSettings();
+  const forecastRows = useMemo(
+    () => applyCogsToRows(wideData?.rows ?? data.rows, cogsSettings),
+    [wideData, data.rows, cogsSettings],
+  );
   const forecast = useMemo(() => forecastMonthEnd(forecastRows), [forecastRows]);
   const daysInMonth = useMemo(
     () => forecast.daysElapsedThisMonth + forecast.daysRemainingThisMonth,
