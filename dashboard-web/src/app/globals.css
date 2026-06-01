@@ -1367,16 +1367,24 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    the dot just inherits currentColor and reads as a leading bullet.) */
 .fresh-chip .fresh-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
 
-/* Deepened-bands (2026-06-01) — LIVE/AGING/STALE chip → WHITE-ALPHA pill on the
+/* Deepened-bands (2026-06-01) — LIVE/AGING/STALE chip → DARK-SCRIM pill on the
    DEEP band cards. The default `.fresh-chip.live|aging|stale` rules above tint
    the pill with the band-green / band-orange / band-red status hue + matching
    text. On a DEEP band card that status tint CLASHES with the card's own band
    gradient (e.g. green LIVE chip on an orange card). The card is now a vibrant
-   DEEPENED gradient with all-white text, so the pill sits on a white-alpha
-   sub-surface + WHITE text in BOTH themes (mockup `.fresh-chip`
-   { background: rgba(255,255,255,.22); color:#fff }) — clears AA on the deep
-   surface, neutralises the clash, and matches the rest of the card. ALL bands
-   (incl. GRAY, now also a deep card) share this one treatment.
+   DEEPENED gradient with all-white text, so the pill sits on a DARK scrim +
+   WHITE text in BOTH themes — clears AA on the deep surface AND in the card's
+   bright top-LEFT sheen zone where this chip actually sits.
+
+   CONTRAST FIX (2026-06-01) — the chip lives in the top-LEFT corner, which on
+   the 135° band gradient is the BRIGHT sheen. A white-alpha pill there let the
+   bright sheen bleed through and dropped white-on-pill to ~2.9–3.1:1 (sub-AA
+   for the ~11px small chip text). Switching the pill background to
+   `rgba(0,0,0,0.22)` (a dark scrim) lifts white-on-pill to ~6.4:1 (comfortably
+   AA) on EVERY band — and a dark-tinted pill on a vivid card reads crisp +
+   intentional. Toning the sheen does NOT fix it (the alpha pill dominates); the
+   dark scrim is the correct fix. ALL bands (incl. GRAY, now also a deep card)
+   share this one treatment.
 
    LOCKED DECISION: the pill stays neutral (no band-hued status tint) to avoid
    the clash, BUT the freshness STATE is re-introduced as a colored `.fresh-dot`
@@ -1385,13 +1393,14 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 .glass[data-band] .fresh-chip.live,
 .glass[data-band] .fresh-chip.aging,
 .glass[data-band] .fresh-chip.stale {
-  background: rgba(255, 255, 255, 0.22);
+  background: rgba(0, 0, 0, 0.22);
   color: #fff;
 }
-/* Per-store chip explicitly pinned to white-alpha too (spec parity — redundant
-   with the broad rule above but documents the intent at the call-site). */
+/* Per-store chip explicitly pinned to the dark scrim too (spec parity —
+   redundant with the broad rule above but documents the intent at the
+   call-site). */
 .per-store-card .fresh-chip {
-  background: rgba(255, 255, 255, 0.22);
+  background: rgba(0, 0, 0, 0.22);
   color: #fff;
 }
 /* The fresh-state pulse dot keeps its OWN colour on the white-alpha pill (it is
@@ -1479,11 +1488,14 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   text-transform: uppercase;
   font-family: 'Geist Mono';
   /* Deepened-bands (2026-06-01) — the card is now a DEEP vibrant gradient with
-     all-white text, so the band-tag pill sits on a WHITE-ALPHA sub-surface +
-     WHITE text in both themes (mockup `.band-tag`
-     { background: rgba(255,255,255,.22); color:#fff }). Clears AA on the deep
-     surface; band-agnostic — covers GRAY too (also a deep card). */
-  background: rgba(255, 255, 255, 0.22);
+     all-white text, so the band-tag pill sits on a DARK SCRIM + WHITE text in
+     both themes. The pill lives in the card header (top-LEFT corner = the
+     BRIGHT sheen of the 135° band gradient): a white-alpha pill there let the
+     sheen bleed through and dropped white-on-pill to ~2.9–3.1:1 (sub-AA for the
+     ~11px small chip text). `rgba(0,0,0,0.22)` lifts white-on-pill to ~6.4:1
+     (comfortably AA) on EVERY band and reads crisp + intentional on a vivid
+     card. Band-agnostic — covers GRAY too (also a deep card). */
+  background: rgba(0, 0, 0, 0.22);
   color: #fff;
 }
 /* The "ROAS · היום" caption sits directly on the BARE deep band tint. White is
@@ -1532,16 +1544,21 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    comes from `.platform-dot { bg-current }`, not from these text rules, so
    recoloring the label leaves the dot untouched).
 
-   GRAY (no-data) cards are EXCLUDED via `:not([data-band="gray"])` — their
-   surface is near-neutral, so they KEEP normal ink emphasis (legible in light).
+   Deepened-bands (2026-06-01): GRAY is now a DEEP card too, so it is NO LONGER
+   excluded. The metric-value rules below are split EXPLICITLY per band
+   (`[data-band="red"]` … `[data-band="gray"]`), and the CPM-tile / glyph rules
+   are BAND-AGNOSTIC (`.per-store-card.glass[data-band]`). There is no
+   `:not([data-band="gray"])` exclusion anywhere in this block — gray reads
+   WHITE like every other band (its dedicated `[data-band="gray"]` rule below).
 
    Specificity: each selector below is prefixed with
-   `.per-store-card.glass[data-band]:not([data-band="gray"])`
-   (two classes + an attribute + a negation pseudo-class). That out-specifies
-   the base emphasis rules it must beat:
+   `.per-store-card.glass[data-band]` (or `[data-band="<band>"]`) — two classes
+   plus an attribute selector. That out-specifies the base emphasis rules it
+   must beat:
      • `.cell.spend .sv` etc.  (2 classes)         → loses
-     • `.glass[data-band]:not([data-band="gray"]) .cell.spend .sl::before`
-       (1 class + attr + :not + class + pseudo)    → matched 1:1 below
+     • `.glass[data-band] .cell.spend .sl::before`
+       (1 class + attr + class + pseudo)           → out-specified by the
+       `.per-store-card.glass[data-band]` prefix below
      • the `.cpm-row-cells .cell[data-platform="…"]` bg + `.cell[data-platform]`
        glow rules                                  → out-specified below.
    The platform-NAME utility colour (`text-chart-meta` etc.) is an inline-ish
