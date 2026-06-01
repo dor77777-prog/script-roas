@@ -45,7 +45,7 @@ type WeightedComponentKey = 'profitability' | 'volume' | 'trajectory' | 'attribu
 // it's clear WHY it can differ from the table's "ROAS Shopify (מוקצה)" column.
 // Label/text only — the score computation is unchanged.
 const COMPONENT_LABELS: Record<WeightedComponentKey, { label: string; weight: string }> = {
-  profitability:       { label: 'רווחיות (ROAS מוכח · click-id)', weight: '40%' },
+  profitability:       { label: 'רווחיות (ROAS מוכח · click-id כשקיים)', weight: '40%' },
   volume:              { label: 'נפח',                weight: '15%' },
   trajectory:          { label: 'מומנטום',            weight: '25%' },
   attributionClarity:  { label: 'אמינות attribution', weight: '20%' },
@@ -267,9 +267,10 @@ export function HealthScorePanel({
             ציון = (רווחיות×0.40) + (נפח×0.15) + (מומנטום×0.25) + (attribution×0.20)
             {/* Column-audit 2026-06-01 (FIX 2) — ROAS basis note. */}
             <div className="mt-1">
-              הרווחיות בציון מבוססת על ROAS מוכח (דטרמיניסטי · click-id) — לכן
-              הוא עשוי להיות שונה מ-״ROAS Shopify (מוקצה)״ בטבלה, שמוסיף הקצאה
-              יחסית של הזמנות לא-מתויגות.
+              הרווחיות בציון מבוססת על ROAS מוכח (דטרמיניסטי · click-id) כשקיים
+              — לכן הוא עשוי להיות שונה מ-״ROAS Shopify (מוקצה)״ בטבלה, שמוסיף
+              הקצאה יחסית של הזמנות לא-מתויגות. כשאין הכנסת click-id, הציון
+              נופל-חזרה ל-ROAS המוקצה (ואז ל-ROAS שדיווחה הפלטפורמה).
             </div>
           </div>
 

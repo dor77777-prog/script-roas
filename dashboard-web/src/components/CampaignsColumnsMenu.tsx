@@ -38,6 +38,10 @@ export function CampaignsColumnsMenu({
   mode: 'campaign' | 'adset';
 }) {
   const [open, setOpen] = useState(false);
+  // SSR seed is intentionally `{hidden:[]}` (not the lean default seed): the
+  // menu body only renders inside the popover, which is closed (`open=false`)
+  // on first paint, so this value is never shown before the client mounts and
+  // re-reads real prefs via readCampaignsColumnPrefs(). Harmless asymmetry.
   const [prefs, setPrefs] = useState<CampaignsColumnPrefs>(() =>
     typeof window === 'undefined' ? { hidden: [] } : readCampaignsColumnPrefs(),
   );

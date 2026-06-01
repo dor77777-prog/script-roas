@@ -43,6 +43,7 @@ import {
   readCampaignsColumnPrefs,
   buildHiddenColumnsCss,
   resolveCampaignsColumnOrder,
+  DEFAULT_HIDDEN_COLUMN_IDS,
 } from '@/lib/campaignsColumnPrefs';
 import { CampaignsColumnsMenu } from './CampaignsColumnsMenu';
 import { CHART_AXIS_COLOR, CHART_COLORS } from '@/lib/chartColors';
@@ -535,7 +536,14 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   // Phase 05.7.9d / 05.7.x — column visibility + order prefs.
   // Subscribes to the cloud-sync event so a toggle on another device
   // applies here on the next poll without a manual refresh.
-  const [columnHiddenCss, setColumnHiddenCss] = useState('');
+  // Seed from the lean default-hidden set so the 11 default-hidden columns
+  // don't flash visible on first paint before the prefs-reading effect runs.
+  // SSR-safe: the same constant renders on server + client (no localStorage in
+  // the initializer) → no hydration mismatch; the effect below then corrects
+  // it for operators with custom saved prefs.
+  const [columnHiddenCss, setColumnHiddenCss] = useState(() =>
+    buildHiddenColumnsCss([...DEFAULT_HIDDEN_COLUMN_IDS]),
+  );
   const [columnOrder, setColumnOrder] = useState<string[]>(() =>
     resolveCampaignsColumnOrder(undefined),
   );
