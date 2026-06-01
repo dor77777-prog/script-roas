@@ -4,7 +4,7 @@ import { Sidebar } from '../Sidebar';
 import { ThemeProvider } from '../ThemeProvider';
 
 function renderSidebar(props: {
-  activeTab?: 'home'|'pnl'|'analysis'|'campaigns'|'products'|'detail';
+  activeTab?: 'home'|'archive'|'pnl'|'trends'|'campaigns'|'products'|'detail';
   onTabChange?: (k: string) => void;
   isMobileOpen?: boolean;
   onMobileClose?: () => void;
@@ -22,9 +22,9 @@ function renderSidebar(props: {
 }
 
 describe('Sidebar', () => {
-  it('renders all 6 tab destinations + operator link + theme toggle', () => {
+  it('renders all 7 tab destinations + operator link + theme toggle', () => {
     renderSidebar();
-    const expectedLabels = ['בית', 'P&L', 'ניתוח', 'קמפיינים', 'מוצרים', 'פירוט'];
+    const expectedLabels = ['בית', 'טבלאות אופטימיזציה', 'P&L', 'מגמות', 'קמפיינים', 'מוצרים', 'פירוט'];
     for (const label of expectedLabels) {
       // The Sidebar now renders two copies of the nav body (desktop right-
       // rail + mobile off-canvas drawer) — both are always in the DOM, the

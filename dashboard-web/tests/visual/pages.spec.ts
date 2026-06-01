@@ -6,9 +6,9 @@
 // navigate directly to the URL so the snapshot reflects the page in its
 // shareable "first load" state, not after a click sequence.
 //
-// Analysis tab houses two sub-tabs (`trends` / `archive`) under a Radix
-// Tabs root with `defaultValue="trends"`. To screenshot the archive view
-// we click the archive trigger and wait for the panel content.
+// `trends` and `archive` are now SEPARATE top-level tabs (the old "analysis"
+// wrapper was removed 2026-06-01). Each is reachable directly via `?tab=trends`
+// / `?tab=archive` — no sub-tab click needed to screenshot either view.
 //
 // Operator page (/operator) is a sibling Next.js route — NOT a TabKey on
 // the main dashboard. Its 4 sub-tabs (health / sync / activity / danger)
@@ -100,17 +100,13 @@ test.describe('top-level pages — full snapshots', () => {
     await snap(page, 'home-pnls-tab.png');
   });
 
-  test('Trends sub-tab (Analysis → Trends)', async ({ page }) => {
-    await gotoAndSettle(page, '/?tab=analysis');
-    // `defaultValue="trends"` — no click required, snapshot the page as-is.
+  test('Trends tab', async ({ page }) => {
+    await gotoAndSettle(page, '/?tab=trends');
     await snap(page, 'home-trends.png');
   });
 
-  test('Archive sub-tab (Analysis → Archive)', async ({ page }) => {
-    await gotoAndSettle(page, '/?tab=analysis');
-    // Hebrew label "היסטוריה" on the underline tab — match by role.
-    await page.getByRole('tab', { name: 'היסטוריה' }).click();
-    await page.waitForTimeout(SETTLE_MS);
+  test('Archive tab (טבלאות אופטימיזציה)', async ({ page }) => {
+    await gotoAndSettle(page, '/?tab=archive');
     await snap(page, 'home-archive.png');
   });
 

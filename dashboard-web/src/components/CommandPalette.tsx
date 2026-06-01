@@ -18,6 +18,7 @@ import {
   Megaphone,
   Package,
   Table,
+  LayoutGrid,
   Sparkles,
   RefreshCw,
   ExternalLink,
@@ -47,7 +48,7 @@ import type { ProductsResponse } from '@/app/api/products/route';
  * "yesterday" preset. Type a campaign name → jump to the campaign.
  *
  * Categories:
- *   - Navigation (home / analysis / campaigns / products / detail)
+ *   - Navigation (home / archive / pnl / trends / campaigns / products / detail)
  *   - Time ranges (presets)
  *   - Stores
  *   - Live shortcuts (today, this week, this month)
@@ -60,7 +61,7 @@ import type { ProductsResponse } from '@/app/api/products/route';
  * users / touch users.
  */
 
-type TabKey = 'home' | 'pnl' | 'analysis' | 'campaigns' | 'products' | 'detail';
+type TabKey = 'home' | 'archive' | 'pnl' | 'trends' | 'campaigns' | 'products' | 'detail';
 
 const fetcher = (url: string) => fetch(url).then(r => (r.ok ? r.json() : null));
 
@@ -177,12 +178,13 @@ export function CommandPalette({
 
     // Navigation
     const tabs: Array<{ key: TabKey; label: string; icon: React.ReactNode; search: string }> = [
-      { key: 'home',      label: 'מעבר ל-בית',     icon: <Home size={15} />,        search: 'בית home overview ראשי' },
-      { key: 'pnl',       label: 'מעבר ל-P&L',     icon: <Receipt size={15} />,     search: 'pnl רווח הוצאות profit loss' },
-      { key: 'analysis',  label: 'מעבר ל-ניתוח',    icon: <TrendingUp size={15} />,  search: 'ניתוח analysis trends גרף' },
-      { key: 'campaigns', label: 'מעבר ל-קמפיינים', icon: <Megaphone size={15} />,    search: 'קמפיינים campaigns ads מודעות' },
-      { key: 'products',  label: 'מעבר ל-מוצרים',   icon: <Package size={15} />,     search: 'מוצרים products items' },
-      { key: 'detail',    label: 'מעבר ל-פירוט',    icon: <Table size={15} />,       search: 'פירוט detail rows daily' },
+      { key: 'home',      label: 'מעבר ל-בית',                icon: <Home size={15} />,        search: 'בית home overview ראשי' },
+      { key: 'archive',   label: 'מעבר ל-טבלאות אופטימיזציה',  icon: <LayoutGrid size={15} />,  search: 'טבלאות אופטימיזציה היסטוריה archive optimization tables חודשי monthly' },
+      { key: 'pnl',       label: 'מעבר ל-P&L',                icon: <Receipt size={15} />,     search: 'pnl רווח הוצאות profit loss' },
+      { key: 'trends',    label: 'מעבר ל-מגמות',              icon: <TrendingUp size={15} />,  search: 'מגמות trends גרף roas over time מגמה' },
+      { key: 'campaigns', label: 'מעבר ל-קמפיינים',           icon: <Megaphone size={15} />,   search: 'קמפיינים campaigns ads מודעות' },
+      { key: 'products',  label: 'מעבר ל-מוצרים',             icon: <Package size={15} />,      search: 'מוצרים products items' },
+      { key: 'detail',    label: 'מעבר ל-פירוט',              icon: <Table size={15} />,        search: 'פירוט detail rows daily' },
     ];
     for (const t of tabs) {
       cmds.push({

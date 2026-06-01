@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
-  Home, Receipt, TrendingUp, Megaphone, Package, Table,
+  Home, Receipt, TrendingUp, Megaphone, Package, Table, LayoutGrid,
   Cog, Sun, Moon, Monitor, Pin, PinOff, X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -22,12 +22,13 @@ type NavItem = {
 };
 
 const NAV: NavItem[] = [
-  { key: 'home',      label: 'בית',      icon: <Home size={16} />,        slot: 1 },
-  { key: 'pnl',       label: 'P&L',      icon: <Receipt size={16} />,     slot: 2 },
-  { key: 'analysis',  label: 'ניתוח',    icon: <TrendingUp size={16} />,  slot: 3 },
-  { key: 'campaigns', label: 'קמפיינים', icon: <Megaphone size={16} />,   slot: 4 },
-  { key: 'products',  label: 'מוצרים',   icon: <Package size={16} />,     slot: 5 },
-  { key: 'detail',    label: 'פירוט',    icon: <Table size={16} />,       slot: 6 },
+  { key: 'home',      label: 'בית',                icon: <Home size={16} />,        slot: 1 },
+  { key: 'archive',   label: 'טבלאות אופטימיזציה',  icon: <LayoutGrid size={16} />,  slot: 2 },
+  { key: 'pnl',       label: 'P&L',                icon: <Receipt size={16} />,     slot: 3 },
+  { key: 'trends',    label: 'מגמות',              icon: <TrendingUp size={16} />,  slot: 4 },
+  { key: 'campaigns', label: 'קמפיינים',           icon: <Megaphone size={16} />,   slot: 5 },
+  { key: 'products',  label: 'מוצרים',             icon: <Package size={16} />,     slot: 6 },
+  { key: 'detail',    label: 'פירוט',              icon: <Table size={16} />,       slot: 7 },
 ];
 
 /**

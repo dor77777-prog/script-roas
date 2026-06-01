@@ -46,7 +46,8 @@ const ROUTES = [
   '/',
   '/?tab=campaigns',
   '/?tab=products',
-  '/?tab=analysis',
+  '/?tab=trends',
+  '/?tab=archive',
   '/operator',
 ] as const;
 

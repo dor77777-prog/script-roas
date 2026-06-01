@@ -46,7 +46,6 @@ import { TabFreshnessHeader } from './TabFreshnessHeader';
 import { readDashboardState, syncUrl, drillToCampaigns, type TabKey } from '@/lib/urlState';
 import { buildDateRangeKey } from '@/lib/dateRange';
 import { Button } from '@/components/ui/Button';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { AnalysisTrendsTab } from './AnalysisTrendsTab';
 import { AnalysisArchiveTab } from './AnalysisArchiveTab';
 import { GoalTracker } from './GoalTracker';
@@ -380,8 +379,11 @@ export function Dashboard() {
                   setFilters={setFilters}
                 />
               )}
-              {activeTab === 'analysis' && (
-                <AnalysisTab data={data} filtered={filtered} filters={filters} setFilters={setFilters} />
+              {activeTab === 'archive' && (
+                <AnalysisArchiveTab stores={data.stores} globalStore={filters.store} />
+              )}
+              {activeTab === 'trends' && (
+                <AnalysisTrendsTab data={data} filtered={filtered} filters={filters} setFilters={setFilters} />
               )}
               {activeTab === 'campaigns' && (
                 <CampaignsTab data={data} filters={filters} setFilters={setFilters} />
@@ -861,40 +863,6 @@ function PnLTab({
         />
       </div>
     </div>
-  );
-}
-
-// ============================================================================
-// Tab: ANALYSIS — trend chart + monthly breakdown tables.
-// ============================================================================
-function AnalysisTab({
-  data,
-  filtered,
-  filters,
-  setFilters,
-}: {
-  data: DashboardData;
-  filtered: {
-    series: ReturnType<typeof dailySeries>;
-    visibleStores: string[];
-    cur: DashboardData['rows'];
-  };
-  filters: F;
-  setFilters: (next: F) => void;
-}) {
-  return (
-    <Tabs defaultValue="trends" variant="underline" className="flex flex-col gap-4">
-      <TabsList>
-        <TabsTrigger value="trends">מגמות</TabsTrigger>
-        <TabsTrigger value="archive">היסטוריה</TabsTrigger>
-      </TabsList>
-      <TabsContent value="trends">
-        <AnalysisTrendsTab data={data} filtered={filtered} filters={filters} setFilters={setFilters} />
-      </TabsContent>
-      <TabsContent value="archive">
-        <AnalysisArchiveTab stores={data.stores} globalStore={filters.store} />
-      </TabsContent>
-    </Tabs>
   );
 }
 
