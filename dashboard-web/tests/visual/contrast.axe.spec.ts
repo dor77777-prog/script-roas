@@ -17,6 +17,19 @@
 //   (Wave A), which computes contrast against the resolved gradient stops.
 //   This spec owns the solid-surface contrast; that test owns the gradients.
 //
+// ACCEPTED BASELINE — platform-brand label text (operator decision 2026-06-01):
+//   The platform NAME text (Meta blue / Google amber / TikTok pink / organic
+//   teal / Shopify green) is rendered in its locked BRAND hue via <PlatformBadge>
+//   (`.platform-name` inherits the badge's `text-chart-*` color so the label,
+//   dot, and glow stay in perfect lockstep — the one component allowed to bind
+//   brand tokens to typography). On light surfaces some of these brand hues fall
+//   below WCAG-AA as small text (e.g. Google amber ~2.1:1). The operator chose
+//   to KEEP the brand hue (brand fidelity > AA for this identity surface) rather
+//   than deepen the label text. We therefore EXCLUDE `.platform-name` (and the
+//   ActivityFeed brand-tinted letter-avatar `.fi-icon`) from this gate so it
+//   stays green for everything we HAVE committed to fix. Revisit if the operator
+//   later opts into a text-only `--platform-*-fg` deepening.
+//
 // ENVIRONMENT — run against prod/preview, not local:
 //   Per the no-localhost-checks rule, run this against the Vercel
 //   prod/preview URL via PLAYWRIGHT_BASE_URL. Locally there is no Supabase
@@ -65,6 +78,10 @@ for (const route of ROUTES) {
     await gotoAndSettle(page, route);
     const results = await new AxeBuilder({ page })
       .withRules(['color-contrast'])
+      // Accepted baseline (see header): platform-brand label text stays in its
+      // locked brand hue per operator decision; exclude from the AA gate.
+      .exclude('.platform-name')
+      .exclude('.fi-icon')
       .analyze();
     expect(
       results.violations,
