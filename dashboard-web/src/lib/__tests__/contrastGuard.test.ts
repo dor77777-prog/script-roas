@@ -3,16 +3,22 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /**
- * Hermetic CONTRAST guard (Readability Hardening, Wave A).
+ * Hermetic CONTRAST guard (Readability Hardening, Wave A;
+ * deepened-bands re-base 2026-06-01).
  *
- * Every band surface ships a paired `--on-band-*` foreground token that MUST
- * clear WCAG-AA 4.5:1 against that band, in BOTH themes. The mesh look is
- * mockup-locked, so the FOREGROUND token is what we tune until it passes —
- * never the band hex.
+ * DEEPENED-BANDS NOTE (2026-06-01): the colored ROAS-band cards now paint a
+ * DEEPENED vibrant gradient and carry ALL-WHITE text. The text therefore sits on
+ * the deepened card SURFACE (`--card-band-*` = the gradient's LIGHTEST stop, the
+ * AA bottleneck for white in the number region) — NOT on the bright `--band-*`
+ * token, which is now only the 4px ::before top-bar glow. So this guard measures
+ * `--on-band-*` (white) against `--card-band-*` (the real deep surface), in BOTH
+ * themes. The `--card-band-*` stops are theme-independent (same deep card in
+ * light + dark by design). Tune `--on-band-*` / re-derive `--card-band-*` one
+ * notch deeper if any white lands <4.5 — never lower the threshold.
  *
  * Why a static check (not axe): the band is a GRADIENT; axe only reads solid
- * backgrounds. We measure the readable region against the band's representative
- * stop hex parsed straight from globals.css.
+ * backgrounds. We measure the readable region against the card's lightest stop
+ * hex parsed straight from globals.css.
  */
 const css = readFileSync(join(__dirname, '..', '..', 'app', 'globals.css'), 'utf-8');
 
@@ -26,9 +32,17 @@ function block(selector: 'root' | 'light'): string {
 }
 
 function hexOf(varName: string, blk: string): string {
-  const m = blk.match(new RegExp(`(?<![\\w-])${varName}\\s*:\\s*(#[0-9a-fA-F]{6})\\b`));
-  if (!m) throw new Error(`token ${varName} not a #rrggbb literal in block`);
-  return m[1];
+  // Accept a #rrggbb literal OR `oklch(100% 0 0)` (pure white, used by the
+  // deepened-bands all-white `--on-band-*` tokens) → normalise white to #ffffff.
+  const decl = blk.match(new RegExp(`(?<![\\w-])${varName}\\s*:\\s*([^;]+);`));
+  if (decl) {
+    const val = decl[1].trim();
+    const hexM = val.match(/^(#[0-9a-fA-F]{6})\b/);
+    if (hexM) return hexM[1];
+    // Pure-white oklch: L=100% with any (zero) chroma/hue → white.
+    if (/^oklch\(\s*100%\s+0\s+0\s*\)$/.test(val)) return '#ffffff';
+  }
+  throw new Error(`token ${varName} not a #rrggbb / oklch(100% 0 0) literal in block`);
 }
 
 /**
@@ -81,16 +95,16 @@ const THEMES = [
   { name: 'light', blk: block('light') },
 ] as const;
 
-describe('contrast guard — --on-band-* clears WCAG-AA on its band (both themes)', () => {
+describe('contrast guard — --on-band-* (white) clears WCAG-AA on the DEEP card surface (both themes)', () => {
   for (const theme of THEMES) {
     for (const band of BANDS) {
-      it(`${theme.name}: --on-band-${band} on --band-${band} ≥ 4.5:1`, () => {
+      it(`${theme.name}: --on-band-${band} on --card-band-${band} ≥ 4.5:1`, () => {
         const fg = hexOf(`--on-band-${band}`, theme.blk);
-        const bg = hexOf(`--band-${band}`, theme.blk);
+        const bg = hexOf(`--card-band-${band}`, theme.blk);
         const ratio = wcagRatio(fg, bg);
         expect(
           ratio,
-          `--on-band-${band} ${fg} on --band-${band} ${bg} = ${ratio.toFixed(2)}:1 (need ≥4.5)`,
+          `--on-band-${band} ${fg} on --card-band-${band} ${bg} = ${ratio.toFixed(2)}:1 (need ≥4.5)`,
         ).toBeGreaterThanOrEqual(4.5);
       });
     }
@@ -98,9 +112,14 @@ describe('contrast guard — --on-band-* clears WCAG-AA on its band (both themes
 });
 
 /**
- * Wave B2 — chips / CPM tiles / freshness pill now sit on the neutral
- * `--band-scrim` sub-surface and read with `--band-scrim-ink`. The scrim is an
- * `rgba()` (alpha), so we alpha-composite it over the theme's base canvas to a
+ * Wave B2 → deepened-bands (2026-06-01). The `--band-scrim` / `--band-scrim-ink`
+ * tokens are now UNUSED by the band cards: deepened-bands moved chips / CPM tiles
+ * / the freshness pill onto a WHITE-ALPHA sub-surface + WHITE text (literals in
+ * globals.css). The scrim tokens still EXIST (kept for any future neutral
+ * sub-surface need), so this composited-contrast assertion is retained as a
+ * regression guard on those token values — it does not gate the live band cards
+ * anymore (no consumer references `var(--band-scrim*)`). The scrim is an `rgba()`
+ * (alpha), so we alpha-composite it over the theme's base canvas to a
  * representative SOLID, then assert the ink clears WCAG-AA 4.5:1 against it.
  * Composite: eff = fg*alpha + base*(1-alpha) per channel.
  */
@@ -122,20 +141,21 @@ describe('contrast guard — --band-scrim-ink clears WCAG-AA on the composited s
 });
 
 /**
- * Wave B2 — the `--on-band-*-muted` secondary labels (e.g. `.sl` captions) sit
- * directly on the band TINT (not the scrim), so they're held to the AA-large /
- * non-text 3:1 floor rather than the 4.5:1 body-text bar.
+ * The `--on-band-*-muted` near-white secondary labels (e.g. `.sl` captions,
+ * `.roas-cap`, `.cpm-row-label`) sit directly on the deepened card SURFACE
+ * (`--card-band-*`, not the scrim), so they're held to the AA-large / non-text
+ * 3:1 floor rather than the 4.5:1 body-text bar.
  */
-describe('contrast guard — --on-band-*-muted clears 3:1 on its band (both themes)', () => {
+describe('contrast guard — --on-band-*-muted clears 3:1 on the DEEP card surface (both themes)', () => {
   for (const theme of THEMES) {
     for (const band of BANDS) {
-      it(`${theme.name}: --on-band-${band}-muted on --band-${band} ≥ 3:1`, () => {
+      it(`${theme.name}: --on-band-${band}-muted on --card-band-${band} ≥ 3:1`, () => {
         const fg = hexOf(`--on-band-${band}-muted`, theme.blk);
-        const bg = hexOf(`--band-${band}`, theme.blk);
+        const bg = hexOf(`--card-band-${band}`, theme.blk);
         const ratio = wcagRatio(fg, bg);
         expect(
           ratio,
-          `--on-band-${band}-muted ${fg} on --band-${band} ${bg} = ${ratio.toFixed(2)}:1 (need ≥3.0)`,
+          `--on-band-${band}-muted ${fg} on --card-band-${band} ${bg} = ${ratio.toFixed(2)}:1 (need ≥3.0)`,
         ).toBeGreaterThanOrEqual(3.0);
       });
     }

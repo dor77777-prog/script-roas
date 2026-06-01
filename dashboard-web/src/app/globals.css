@@ -69,30 +69,48 @@
      boosted (see .glass[data-band="…"] rules further down). NOTE: orange
      hue 45 still clears ≥13° from --chart-platform-tiktok (12°) so the
      colorCollisions guard stays green; google (90°) is 45° away. */
-  --band-red:    #ff6b81;  /* mockup-locked band stop */
-  --band-orange: #ffb24d;  /* mockup-locked band stop */
-  --band-green:  #34e2ad;  /* mockup-locked band stop */
-  --band-blue:   #5b8df0;  /* mockup-locked band stop */
-  --band-gray:   #828aae;  /* mockup-locked band stop */
+  --band-red:    #ff6b81;  /* mockup-locked band stop (bright ::before top-bar glow) */
+  --band-orange: #ffb24d;  /* mockup-locked band stop (bright ::before top-bar glow) */
+  --band-green:  #34e2ad;  /* mockup-locked band stop (bright ::before top-bar glow) */
+  --band-blue:   #5b8df0;  /* mockup-locked band stop (bright ::before top-bar glow) */
+  --band-gray:   #828aae;  /* mockup-locked band stop (bright ::before top-bar glow) */
+
+  /* Deepened band-card SURFACE stops (vibrant-AA, 2026-06-01). The colored
+     ROAS-band cards now paint a DEEPENED vibrant gradient (OKLCH hue+chroma
+     preserved, lightness lowered) so small WHITE text clears WCAG-AA 4.5:1.
+     `--card-band-*` is the gradient's LIGHTEST stop — the AA bottleneck for
+     white in the number region — so the surface AND the contrast guard
+     reference the SAME value. The deeper END stop (`--card-band-*-2`) feeds the
+     bottom of the 135deg linear. Theme-INDEPENDENT (same deep surface in both
+     light + dark — by design). Verified by contrastGuard.test.ts.
+     Mockup: docs/superpowers/mockups/2026-06-01-deepened-bands/vibrant-aa-cards.html. */
+  --card-band-red:      #ce3e5a;  --card-band-red-2:    #e11c48;
+  --card-band-orange:   #aa6200;  --card-band-orange-2: #cb4800;
+  --card-band-green:    #008456;  --card-band-green-2:  #008454;
+  --card-band-blue:     #4170d1;  --card-band-blue-2:   #2563eb;
+  --card-band-gray:     #6b7295;  --card-band-gray-2:   #5f6789;
   /* Task 4.1 — failure-cell token: spent money, zero sales = worst state.
      Mockup-locked: very-dark-navy fill + pink text (history-table "0" cell). */
   --cell-fail:    #15151f;
   --cell-fail-fg: #ff8a9a;
 
-  /* Readability Hardening (Wave A) — paired on-color foreground per band.
-     Dark bands are LIGHT, so the guaranteed-legible foreground is near-black
-     ink. Verified ≥4.5:1 by src/lib/__tests__/contrastGuard.test.ts — tune
-     THESE, never --band-*. */
-  --on-band-red:    #15151f;
-  --on-band-orange: #15151f;
-  --on-band-green:  #0c1714;
-  --on-band-blue:   #0c1322;
-  --on-band-gray:   #11131d;
-  --on-band-red-muted:    #2c2c3a;
-  --on-band-orange-muted: #2c2c3a;
-  --on-band-green-muted:  #1d2a26;
-  --on-band-blue-muted:   #1d2436;
-  --on-band-gray-muted:   #23252f;
+  /* Deepened-bands (2026-06-01) — band-card text is now ALL WHITE. The card
+     surface is the DEEPENED `--card-band-*` gradient (above), deep enough that
+     white clears WCAG-AA 4.5:1 at the lightest stop. The guard checks white
+     against `--card-band-*` (the real surface), NOT `--band-*` (now just the
+     bright top-bar glow). `-muted` is a near-white secondary tone (≥3:1 on the
+     deep surface). Tune THESE / re-derive `--card-band-*` deeper — never lower
+     the threshold. */
+  --on-band-red:    oklch(100% 0 0);
+  --on-band-orange: oklch(100% 0 0);
+  --on-band-green:  oklch(100% 0 0);
+  --on-band-blue:   oklch(100% 0 0);
+  --on-band-gray:   oklch(100% 0 0);
+  --on-band-red-muted:    #dfe3f2;
+  --on-band-orange-muted: #dfe3f2;
+  --on-band-green-muted:  #dfe3f2;
+  --on-band-blue-muted:   #dfe3f2;
+  --on-band-gray-muted:   #dfe3f2;
 
   /* Neutral sub-surface for chips / CPM tiles / freshness on band cards.
      Text on the gradient sits on THIS scrim, not the variable tint. */
@@ -350,33 +368,41 @@
   --sidebar-logo-1:    #7c6cff;
   --sidebar-logo-2:    #5a49f0;
 
-  /* V4 band signal — same hues as dark; mid-tone L for read on light. */
-  --band-red:    #e11d48;  /* mockup-locked band stop (light) */
-  --band-orange: #f59e0b;  /* mockup-locked band stop (light) */
-  --band-green:  #0f9d6b;  /* mockup-locked band stop (light) */
-  --band-blue:   #3b82f6;  /* mockup-locked band stop (light) */
-  --band-gray:   #949ab4;  /* mockup-locked band stop (light) */
+  /* V4 band signal — same hues as dark; mid-tone L for the bright ::before bar. */
+  --band-red:    #e11d48;  /* mockup-locked band stop (light, top-bar glow) */
+  --band-orange: #f59e0b;  /* mockup-locked band stop (light, top-bar glow) */
+  --band-green:  #0f9d6b;  /* mockup-locked band stop (light, top-bar glow) */
+  --band-blue:   #3b82f6;  /* mockup-locked band stop (light, top-bar glow) */
+  --band-gray:   #949ab4;  /* mockup-locked band stop (light, top-bar glow) */
+
+  /* Deepened band-card SURFACE stops — THEME-INDEPENDENT (same deep gradient as
+     dark; the band card is identical in both themes by design). Re-declared
+     identically here so the themeParity guard (every :root token has a light
+     counterpart) stays green. See the :root block for the full rationale. */
+  --card-band-red:      #ce3e5a;  --card-band-red-2:    #e11c48;
+  --card-band-orange:   #aa6200;  --card-band-orange-2: #cb4800;
+  --card-band-green:    #008456;  --card-band-green-2:  #008454;
+  --card-band-blue:     #4170d1;  --card-band-blue-2:   #2563eb;
+  --card-band-gray:     #6b7295;  --card-band-gray-2:   #5f6789;
   /* Task 4.1 — failure-cell token: mockup-locked very-dark-navy fill + pink
      text. The history-table "0" cell keeps the same dark pill in both themes
      (mockup renders #15151f / #ff8a9a regardless of mode). */
   --cell-fail:    #15151f;
   --cell-fail-fg: #ff8a9a;
 
-  /* Light bands are saturated mid-tones: white clears AA on red/green/blue;
-     light gray + bright amber orange need DARK ink. Verified by
-     contrastGuard.test.ts. */
-  --on-band-red:    #ffffff;
-  --on-band-orange: #15151f;
-  /* white falls short of AA on light green (3.47:1) + blue (3.68:1) — these
-     two saturated mid-tones take DARK ink instead (nudged from #ffffff). */
-  --on-band-green:  #0c1714;
-  --on-band-blue:   #0c1322;
-  --on-band-gray:   #15151f;
-  --on-band-red-muted:    #ffe4ea;
-  --on-band-orange-muted: #2c2412;
-  --on-band-green-muted:  #e6fff5;
-  --on-band-blue-muted:   #e9f1ff;
-  --on-band-gray-muted:   #2c2c3a;
+  /* Deepened-bands (2026-06-01) — band-card text is ALL WHITE in BOTH themes.
+     The card surface is the deepened `--card-band-*` gradient (theme-independent),
+     so white clears WCAG-AA 4.5:1 identically here. Same values as :root. */
+  --on-band-red:    oklch(100% 0 0);
+  --on-band-orange: oklch(100% 0 0);
+  --on-band-green:  oklch(100% 0 0);
+  --on-band-blue:   oklch(100% 0 0);
+  --on-band-gray:   oklch(100% 0 0);
+  --on-band-red-muted:    #dfe3f2;
+  --on-band-orange-muted: #dfe3f2;
+  --on-band-green-muted:  #dfe3f2;
+  --on-band-blue-muted:   #dfe3f2;
+  --on-band-gray-muted:   #dfe3f2;
 
   --band-scrim:     rgba(255, 255, 255, 0.78);
   --band-scrim-ink: #171a2b;
@@ -965,7 +991,7 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    is the legibility floor. (See WCAG numbers in the task report.) */
 .glass[data-band="red"],
 .glass[data-band="red"][data-band-strength="strong"] {
-  --band: #ff6b81; --band-2: #e11d48;
+  --band: var(--card-band-red); --band-2: var(--card-band-red-2);
   background:
     radial-gradient(120% 120% at 10% 0%, color-mix(in oklab, var(--band) 95%, #ffffff), transparent 55%),
     radial-gradient(135% 125% at 100% 100%, var(--band-2), transparent 62%),
@@ -980,7 +1006,7 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 }
 .glass[data-band="orange"],
 .glass[data-band="orange"][data-band-strength="strong"] {
-  --band: #ffb24d; --band-2: #f97316;
+  --band: var(--card-band-orange); --band-2: var(--card-band-orange-2);
   background:
     radial-gradient(120% 120% at 10% 0%, color-mix(in oklab, var(--band) 95%, #fff), transparent 55%),
     radial-gradient(135% 125% at 100% 100%, var(--band-2), transparent 62%),
@@ -995,7 +1021,7 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 }
 .glass[data-band="green"],
 .glass[data-band="green"][data-band-strength="strong"] {
-  --band: #34e2ad; --band-2: #0f9d6b;
+  --band: var(--card-band-green); --band-2: var(--card-band-green-2);
   background:
     radial-gradient(120% 120% at 10% 0%, color-mix(in oklab, var(--band) 95%, #fff), transparent 55%),
     radial-gradient(135% 125% at 100% 100%, var(--band-2), transparent 62%),
@@ -1010,7 +1036,7 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 }
 .glass[data-band="blue"],
 .glass[data-band="blue"][data-band-strength="strong"] {
-  --band: #5b8df0; --band-2: #2563eb;
+  --band: var(--card-band-blue); --band-2: var(--card-band-blue-2);
   background:
     radial-gradient(120% 120% at 10% 0%, color-mix(in oklab, var(--band) 95%, #fff), transparent 55%),
     radial-gradient(135% 125% at 100% 100%, var(--band-2), transparent 62%),
@@ -1023,18 +1049,18 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   box-shadow: 0 0 52px oklch(from var(--band-blue) calc(l + 0.03) c h / 1.0), 0 0 18px oklch(from var(--band-blue) l c h / 0.9);
   height: 4px;
 }
-/* Gray = no-data / neutral. Stays a FAINT neutral tint (NOT vivid) built
-   from the --band-gray token so it tracks the theme; its number is NOT
-   white (see .v.banded gray rule — uses --text ink for legibility on the
-   near-neutral surface). */
+/* Gray = no-data / neutral. Deepened-bands (2026-06-01): now also a DEEP card
+   (same vibrant-gradient STRUCTURE as the colored bands), just the least
+   "shouty" deep-NEUTRAL hue. White text + white-alpha chips/tiles clear AA on
+   it like the others. Built from `--card-band-gray`/`-2` (theme-independent). */
 .glass[data-band="gray"],
 .glass[data-band="gray"][data-band-strength="strong"] {
+  --band: var(--card-band-gray); --band-2: var(--card-band-gray-2);
   background:
-    linear-gradient(180deg,
-      oklch(from var(--band-gray) l c h / 0.18) 0%,
-      oklch(from var(--band-gray) calc(l - 0.10) c h / 0.10) 50%,
-      transparent 100%),
-    oklch(from var(--band-gray) calc(l - 0.10) c h / 0.06);
+    radial-gradient(120% 120% at 10% 0%, color-mix(in oklab, var(--band) 95%, #ffffff), transparent 55%),
+    radial-gradient(135% 125% at 100% 100%, var(--band-2), transparent 62%),
+    linear-gradient(135deg, var(--band), var(--band-2));
+  box-shadow: 0 14px 32px color-mix(in oklab, var(--band-2) 30%, transparent);
 }
 .glass[data-band="gray"]::before,
 .glass[data-band="gray"][data-band-strength="strong"]::before {
@@ -1151,6 +1177,10 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 .glass[data-band="green"] .sl { color: var(--on-band-green-muted); }
 .glass[data-band="blue"] .hero-eyebrow,
 .glass[data-band="blue"] .sl { color: var(--on-band-blue-muted); }
+/* Deepened-bands (2026-06-01) — gray is now a DEEP card too, so its eyebrow +
+   labels read white-muted like the other bands (not the old `--text` dark ink). */
+.glass[data-band="gray"] .hero-eyebrow,
+.glass[data-band="gray"] .sl { color: var(--on-band-gray-muted); }
 .glass[data-band][data-band-strength="muted"] .sl {
   /* 2026-05-31 mockup-alignment: muted cards are now CLEAN NEUTRAL (no
      band tint), so the `--on-band-*-muted` on-color the strong band cards
@@ -1179,42 +1209,41 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 .glass[data-band]:not([data-band="gray"]) .cell.aov-good .sl::after { color: var(--band-green); }
 .glass[data-band]:not([data-band="gray"]) .cell.aov-bad  .sl::after { color: var(--band-red);   }
 
-/* Task 2.2 (2026-05-31, on-color refresh 2026-06-01) — `.v.banded` takes
-   its band's paired `--on-band-*` on-color token on the vivid band gradient
-   (mesh re-skin): near-black ink on the light dark-theme bands, the
-   AA-verified ink in light theme. Contrast holds ≥4.5:1 — guaranteed by the
-   token (see src/lib/__tests__/contrastGuard.test.ts), NOT by the shadow.
-   The `text-shadow` is now a depth/lift cue only, no longer the contrast
-   floor. Gray is the no-data state: its surface is near-neutral, so its
-   number stays INK (--text), not an on-band token, to remain legible
-   (esp. in light). */
+/* Task 2.2 (2026-05-31) → deepened-bands (2026-06-01) — `.v.banded` takes its
+   band's paired `--on-band-*` on-color token, now WHITE, on the DEEPENED vibrant
+   band gradient. Contrast holds ≥4.5:1 — guaranteed by the token measured
+   against the real deep surface `--card-band-*` (see
+   src/lib/__tests__/contrastGuard.test.ts), NOT by the shadow. The `text-shadow`
+   is a depth/lift cue only. Gray is the no-data state but is now ALSO a deep
+   card (deep-neutral), so its number is WHITE too (`--on-band-gray`). */
 .glass[data-band="red"]    .v.banded { color: var(--on-band-red);    -webkit-text-fill-color: var(--on-band-red);    background: none; text-shadow: 0 1px 2px oklch(0% 0 0 / 0.12); }
 .glass[data-band="orange"] .v.banded { color: var(--on-band-orange); -webkit-text-fill-color: var(--on-band-orange); background: none; text-shadow: 0 1px 2px oklch(0% 0 0 / 0.12); }
 .glass[data-band="green"]  .v.banded { color: var(--on-band-green);  -webkit-text-fill-color: var(--on-band-green);  background: none; text-shadow: 0 1px 2px oklch(0% 0 0 / 0.12); }
 .glass[data-band="blue"]   .v.banded { color: var(--on-band-blue);   -webkit-text-fill-color: var(--on-band-blue);   background: none; text-shadow: 0 1px 2px oklch(0% 0 0 / 0.12); }
 .glass[data-band="gray"] .v.banded {
-  color: var(--text);
-  -webkit-text-fill-color: var(--text);
+  color: var(--on-band-gray);
+  -webkit-text-fill-color: var(--on-band-gray);
   background: none;
+  text-shadow: 0 1px 2px oklch(0% 0 0 / 0.12);
 }
 
 /* operator-2026-06-01 (#18) — DeltaLine ("מול אתמול (−94%) −$1,777") on the
-   VIVID banded hero cards (Operating-Profit + ROAS) used the default green/red
-   value + `text-ink-muted` caption — the muted gray is illegible on the band
-   gradient. On vivid cards the rest of the card is WHITE, so repaint the whole
+   banded hero cards (Operating-Profit + ROAS) used the default green/red value +
+   `text-ink-muted` caption — the muted gray is illegible on the band gradient.
+   On the DEEP band cards the rest of the card is WHITE, so repaint the whole
    delta line white: value at full white, the percent + "מול אתמול" caption at
-   white-alpha. Scoped to vivid bands only — `:not([data-band="gray"])` skips
-   the no-data card and `:not([data-band-strength="muted"])` skips the NEUTRAL
-   KPI cards (Spend/Revenue/CPM/Orders/Inventory) which sit on a plain --glass-1
-   surface and keep their legible green/red + muted tones. The child <bdi>/<span>
-   override their own utility colors, so target them explicitly. */
-.glass[data-band]:not([data-band="gray"]):not([data-band-strength="muted"]) .hero-delta {
+   white-alpha. Deepened-bands (2026-06-01): GRAY is now a DEEP card too, so the
+   `:not([data-band="gray"])` exclusion is dropped — only the NEUTRAL KPI cards
+   (`[data-band-strength="muted"]`, on plain --glass-1) keep their legible
+   green/red + muted tones. The child <bdi>/<span> override their own utility
+   colors, so target them explicitly. */
+.glass[data-band]:not([data-band-strength="muted"]) .hero-delta {
   color: #fff;
 }
-.glass[data-band]:not([data-band="gray"]):not([data-band-strength="muted"]) .hero-delta > bdi {
+.glass[data-band]:not([data-band-strength="muted"]) .hero-delta > bdi {
   color: #fff;
 }
-.glass[data-band]:not([data-band="gray"]):not([data-band-strength="muted"]) .hero-delta .text-ink-muted {
+.glass[data-band]:not([data-band-strength="muted"]) .hero-delta .text-ink-muted {
   color: rgba(255, 255, 255, 0.82);
 }
 
@@ -1338,58 +1367,52 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    the dot just inherits currentColor and reads as a leading bullet.) */
 .fresh-chip .fresh-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
 
-/* Wave B2 (2026-06-01) — LIVE/AGING/STALE chip → NEUTRAL `--band-scrim` pill on
-   VIVID band cards. The default `.fresh-chip.live|aging|stale` rules above tint
+/* Deepened-bands (2026-06-01) — LIVE/AGING/STALE chip → WHITE-ALPHA pill on the
+   DEEP band cards. The default `.fresh-chip.live|aging|stale` rules above tint
    the pill with the band-green / band-orange / band-red status hue + matching
-   text. On a VIVID band card (red/orange/green/blue) that status tint CLASHES
-   with the card's own band gradient (e.g. green LIVE chip on an orange card,
-   red STALE chip on a green card). We previously suppressed the pill to
-   white-alpha (legibility was gradient-dependent); Wave B2 moves it to the
-   neutral `--band-scrim` sub-surface + `--band-scrim-ink` so contrast is
-   token-guaranteed in both themes while STILL neutralising the clash. So on any
-   `.glass[data-band]:not([data-band="gray"])` card (hero banded Operating
-   Profit + ROAS, AND every vivid per-store card) we override the chip + its
-   leading pulse dot to the scrim, irrespective of the live/aging/stale variant.
-   GRAY cards are EXCLUDED — their surface is near-neutral, so the colored
-   status chip stays legible there and is NOT overridden.
+   text. On a DEEP band card that status tint CLASHES with the card's own band
+   gradient (e.g. green LIVE chip on an orange card). The card is now a vibrant
+   DEEPENED gradient with all-white text, so the pill sits on a white-alpha
+   sub-surface + WHITE text in BOTH themes (mockup `.fresh-chip`
+   { background: rgba(255,255,255,.22); color:#fff }) — clears AA on the deep
+   surface, neutralises the clash, and matches the rest of the card. ALL bands
+   (incl. GRAY, now also a deep card) share this one treatment.
 
    LOCKED DECISION: the pill stays neutral (no band-hued status tint) to avoid
    the clash, BUT the freshness STATE is re-introduced as a colored `.fresh-dot`
    (red=stale / orange=aging / green=live) so the signal is not lost. */
-.glass[data-band]:not([data-band="gray"]) .fresh-chip,
-.glass[data-band]:not([data-band="gray"]) .fresh-chip.live,
-.glass[data-band]:not([data-band="gray"]) .fresh-chip.aging,
-.glass[data-band]:not([data-band="gray"]) .fresh-chip.stale {
-  background: var(--band-scrim);
-  color: var(--band-scrim-ink);
+.glass[data-band] .fresh-chip,
+.glass[data-band] .fresh-chip.live,
+.glass[data-band] .fresh-chip.aging,
+.glass[data-band] .fresh-chip.stale {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
 }
-/* Per-store chip explicitly pinned to the scrim too (spec parity — redundant
+/* Per-store chip explicitly pinned to white-alpha too (spec parity — redundant
    with the broad rule above but documents the intent at the call-site). */
 .per-store-card .fresh-chip {
-  background: var(--band-scrim);
-  color: var(--band-scrim-ink);
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
 }
-/* The fresh-state pulse dot keeps its OWN colour on the neutral scrim (it is the
-   re-introduced freshness signal): green when live. */
-.glass[data-band]:not([data-band="gray"]) .fresh-chip.live .pulse {
+/* The fresh-state pulse dot keeps its OWN colour on the white-alpha pill (it is
+   the re-introduced freshness signal): green when live. Now covers every deep
+   band card incl. GRAY (status dots stay; per the task). */
+.glass[data-band] .fresh-chip.live .pulse {
   background: var(--status-green);
   box-shadow: 0 0 6px var(--status-green);
 }
-/* Token-coloured freshness dot on the neutral scrim pill — red=stale,
+/* Token-coloured freshness dot on the white-alpha pill — red=stale,
    orange=aging, green=live. The component renders `.fresh-dot` with
    `data-fresh` for the AGING/STALE stages (LIVE already shows the animated
    `.pulse` dot above), so the freshness state reads even though the pill is
-   neutral. Scoped to the SAME `.glass[data-band]:not([data-band="gray"])` set
-   as the chip-neutralizing rule above so the dot colour and the scrim pill
-   always co-apply — this covers BOTH the per-store cards AND the hero banded
-   card (Operating Profit + ROAS). Without this broader scope the hero `.fresh-dot`
-   fell back to `currentColor` (= near-white scrim-ink) and lost its red/orange
-   state, while the LIVE green pulse still showed — an inconsistent signal. The
-   neutral (non-band) chips are untouched: their base `.fresh-dot` keeps
-   `background: currentColor` and reads as a coloured leading bullet. */
-.glass[data-band]:not([data-band="gray"]) .fresh-chip .fresh-dot[data-fresh="stale"] { background: var(--status-red); }
-.glass[data-band]:not([data-band="gray"]) .fresh-chip .fresh-dot[data-fresh="aging"] { background: var(--status-orange); }
-.glass[data-band]:not([data-band="gray"]) .fresh-chip .fresh-dot[data-fresh="live"]  { background: var(--status-green); }
+   neutral. Now covers EVERY deep band card incl. GRAY — this covers BOTH the
+   per-store cards AND the hero banded card (Operating Profit + ROAS). The
+   freshness DOT colours stay (per the task). The neutral (non-band) chips are
+   untouched: their base `.fresh-dot` keeps `background: currentColor` and reads
+   as a coloured leading bullet. */
+.glass[data-band] .fresh-chip .fresh-dot[data-fresh="stale"] { background: var(--status-red); }
+.glass[data-band] .fresh-chip .fresh-dot[data-fresh="aging"] { background: var(--status-orange); }
+.glass[data-band] .fresh-chip .fresh-dot[data-fresh="live"]  { background: var(--status-green); }
 
 /* Reduced-motion: the project-wide `@media (prefers-reduced-motion: reduce)`
    block earlier in this file already neutralises animation+transition
@@ -1455,37 +1478,19 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   border-radius: 999px;
   text-transform: uppercase;
   font-family: 'Geist Mono';
-  /* Wave B2 (2026-06-01) — the pill no longer sits on white-alpha over the
-     variable band gradient (legibility was gradient-dependent). It now sits on
-     the neutral `--band-scrim` sub-surface with the tuned `--band-scrim-ink`,
-     so contrast is theme-token-guaranteed (contrastGuard.test.ts) regardless
-     of which band tint is underneath. */
-  background: var(--band-scrim);
-  color: var(--band-scrim-ink);
+  /* Deepened-bands (2026-06-01) — the card is now a DEEP vibrant gradient with
+     all-white text, so the band-tag pill sits on a WHITE-ALPHA sub-surface +
+     WHITE text in both themes (mockup `.band-tag`
+     { background: rgba(255,255,255,.22); color:#fff }). Clears AA on the deep
+     surface; band-agnostic — covers GRAY too (also a deep card). */
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
 }
-/* The "ROAS · היום" caption sits directly on the BARE band tint (no scrim
-   background box), so the neutral `--band-scrim-ink` is the wrong contrast tone
-   here. Use each band's `--on-band-*-muted` on-color, which the contrast guard
-   covers ≥3:1 against the bare tint. (Dropped the legacy `opacity:.85`.) */
-.per-store-card.glass[data-band="red"]    .roas-cap { color: var(--on-band-red-muted); }
-.per-store-card.glass[data-band="orange"] .roas-cap { color: var(--on-band-orange-muted); }
-.per-store-card.glass[data-band="green"]  .roas-cap { color: var(--on-band-green-muted); }
-.per-store-card.glass[data-band="blue"]   .roas-cap { color: var(--on-band-blue-muted); }
-/* Gray (no-data) band card: point the band-tag at the SAME scrim sub-surface
-   so all bands share ONE legibility path (Wave B2 — chose scrim over the old
-   per-band gray reset). `--band-scrim` is near-opaque + neutral in both
-   themes, so it reads cleanly over the near-neutral gray surface too. */
-.glass[data-band="gray"].per-store-card .band-tag {
-  background: var(--band-scrim);
-  color: var(--band-scrim-ink);
-}
-/* operator-2026-06-01b: ROAS caption ("ROAS · היום") on the gray no-data card
-   was `--text-muted` (faint); operator wants near-black, so use `--text`. The
-   band-tag pill above stays muted (it is a chip, not a label). */
-.glass[data-band="gray"].per-store-card .roas-cap {
-  color: var(--text);
-  opacity: 1;
-}
+/* The "ROAS · היום" caption sits directly on the BARE deep band tint. White is
+   the on-band token now; the `-muted` near-white (≥3:1 on the deep surface) is
+   the secondary tone here (mockup `.roas-cap` { color: rgba(255,255,255,.78) }).
+   Band-agnostic — covers GRAY too (now a deep card). */
+.per-store-card.glass[data-band] .roas-cap { color: var(--on-band-red-muted); }
 
 /* Per-platform CPM cells — same layout treatment but with a slightly
    larger gap because each cell stacks 3 stitches (platform badge →
@@ -1562,35 +1567,36 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 .per-store-card.glass[data-band="blue"] .scard-main-grid .sv {
   color: var(--on-band-blue);
 }
-/* Wave B2 (2026-06-01) — the CPM tiles now carry the neutral `--band-scrim`
-   background (see item (4) below), so their foreground ink switches from the
-   band-tuned `--on-band-*` (wrong against a neutral scrim) to the scrim-tuned
-   `--band-scrim-ink`. Band-agnostic: one rule covers every non-gray band, since
-   the scrim is the same neutral surface regardless of band tint. Covers the CPM
-   value `.sv`, the value `<bdi>` (uses `text-ink`, not `.sv`) and the spend
-   caption. The platform NAME is re-pointed to scrim-ink with `!important` below. */
-.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .sv,
-.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .cell > bdi,
-.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .cpm-spend-cap {
-  color: var(--band-scrim-ink);
+/* Deepened-bands (2026-06-01) — GRAY is now a DEEP card too, so its 4-up metric
+   values read WHITE like every other band (no longer dark ink). */
+.per-store-card.glass[data-band="gray"] .scard-main-grid .sv {
+  color: var(--on-band-gray);
+}
+/* Deepened-bands (2026-06-01) — the CPM tiles carry a WHITE-ALPHA sub-surface
+   (see item (4) below) on the DEEP band card, so their foreground reads WHITE in
+   both themes. Band-agnostic incl. GRAY (now a deep card). Covers the CPM value
+   `.sv`, the value `<bdi>` (uses `text-ink`, not `.sv`) and the spend caption.
+   The platform NAME is re-pointed to white with `!important` below. */
+.per-store-card.glass[data-band] .cpm-row-cells .sv,
+.per-store-card.glass[data-band] .cpm-row-cells .cell > bdi,
+.per-store-card.glass[data-band] .cpm-row-cells .cpm-spend-cap {
+  color: #fff;
 }
 
-/* Wave B2 — platform NAME also sits on the neutral CPM scrim tile, so it takes
-   `--band-scrim-ink` (band-agnostic), not the band's `--on-band-*`. `!important`
-   still beats the `text-chart-*` Tailwind utility on the same span. The DOT
+/* Deepened-bands — platform NAME also sits on the white-alpha CPM tile, so it
+   reads WHITE (band-agnostic), not the band's `--on-band-*`. `!important` still
+   beats the `text-chart-*` Tailwind utility on the same span. The DOT
    (`.platform-dot`) is NOT targeted, so it keeps its brand colour. */
-.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .platform-name {
-  color: var(--band-scrim-ink) !important;
+.per-store-card.glass[data-band] .cpm-row-cells .platform-name {
+  color: #fff !important;
 }
 
 /* (3) Directional glyphs (↓ spend / ↑ revenue / ▴ ▾ AOV) → white-alpha so they
-   don't flash band-red/green on the vivid card. Out-specifies the
-   `.glass[data-band]:not([data-band="gray"]) .cell.spend .sl::before` band-hue
-   rule above (this one adds `.per-store-card` → strictly more specific). */
-.per-store-card.glass[data-band]:not([data-band="gray"]) .cell.spend   .sl::before,
-.per-store-card.glass[data-band]:not([data-band="gray"]) .cell.revenue .sl::before,
-.per-store-card.glass[data-band]:not([data-band="gray"]) .cell.aov-good .sl::after,
-.per-store-card.glass[data-band]:not([data-band="gray"]) .cell.aov-bad  .sl::after {
+   don't flash band-red/green on the deep card. Band-agnostic incl. GRAY. */
+.per-store-card.glass[data-band] .cell.spend   .sl::before,
+.per-store-card.glass[data-band] .cell.revenue .sl::before,
+.per-store-card.glass[data-band] .cell.aov-good .sl::after,
+.per-store-card.glass[data-band] .cell.aov-bad  .sl::after {
   color: oklch(100% 0 0 / 0.75);
 }
 
@@ -1598,88 +1604,53 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    overriding both the base `.cpm-row-cells .cell` dark-text-tint bg +
    `--glass-edge` border AND the per-platform
    `.cell[data-platform="…"] { background: oklch(from var(--chart-platform-*) …) }`
-   brand tint. radius 11px matches the mockup `.plat` tile. */
-.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .cell,
-.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .cell[data-platform="meta"],
-.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .cell[data-platform="google"],
-.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .cell[data-platform="tiktok"],
-.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .cell[data-platform="organic"],
-.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .cell[data-platform="shopify"] {
-  /* Wave B2 (2026-06-01) — the CPM tile fill moves from white-alpha (legibility
-     was gradient-dependent) to the neutral `--band-scrim` sub-surface. Because
-     the tile background is now neutral (not the band tint), the Wave-B1 per-band
-     `--on-band-*` foregrounds on THESE cells are re-pointed to `--band-scrim-ink`
-     below (the bare 4-up `.scard-main-grid .sv` keeps `--on-band-*` — it has NO
-     scrim background). */
-  background: var(--band-scrim);
-  border-color: var(--band-scrim);
+   brand tint. radius 11px matches the mockup `.plat` tile. Deepened-bands
+   (2026-06-01): WHITE-ALPHA fill `rgba(255,255,255,.13)` + white-alpha edge
+   `rgba(255,255,255,.20)` (mockup `.plat`) on the deep card — band-agnostic
+   incl. GRAY. */
+.per-store-card.glass[data-band] .cpm-row-cells .cell,
+.per-store-card.glass[data-band] .cpm-row-cells .cell[data-platform="meta"],
+.per-store-card.glass[data-band] .cpm-row-cells .cell[data-platform="google"],
+.per-store-card.glass[data-band] .cpm-row-cells .cell[data-platform="tiktok"],
+.per-store-card.glass[data-band] .cpm-row-cells .cell[data-platform="organic"],
+.per-store-card.glass[data-band] .cpm-row-cells .cell[data-platform="shopify"] {
+  background: rgba(255, 255, 255, 0.13);
+  border-color: rgba(255, 255, 255, 0.20);
   border-radius: 11px;
 }
 
 /* (5) STORE NAME → white (operator-2026-06-01 #12). The store heading is a
    <Heading level="panel"> whose `text-ink` default renders DARK ink — on a
-   vivid band card that reads as near-invisible dark-on-band. The mockup
+   deep band card that reads as near-invisible dark-on-band. The mockup
    `.store` puts the name in `#fff`. We give the heading a plain `.store-name`
    class hook (NO colour in the .tsx — guard-safe) and paint it white here.
    `!important` beats the `text-ink` Tailwind utility on the same element
    regardless of stylesheet source order (same approach as `.platform-name`).
-   GRAY cards are EXCLUDED via `:not([data-band="gray"])` — their near-neutral
-   surface keeps the dark ink (pinned defensively in the gray block below). */
-.per-store-card.glass[data-band]:not([data-band="gray"]) .store-name {
+   Deepened-bands (2026-06-01): GRAY is now a deep card too, so it shares the
+   white treatment — band-agnostic. */
+.per-store-card.glass[data-band] .store-name {
   color: #fff !important;
 }
 
 /* ===========================================================================
-   GRAY (no-data / ROAS-0) PER-STORE CARD — DARK INK GUARANTEE
-   (operator 2026-06-01 — gray (no-data/ROAS-0) per-store cards use dark ink
-   (`--text`), never white, because the gray surface is near-white in light
-   mode (light-on-light guard)).
+   GRAY (no-data / ROAS-0) PER-STORE CARD — now a DEEP card, ALL-WHITE text
+   (deepened-bands 2026-06-01).
 
-   The gray card is the no-data / ROAS-0 state, whose surface is NEAR-WHITE in
-   light mode (and near-black in dark). All the vivid white-text rules above are
-   `:not([data-band="gray"])`-scoped, so they cannot reach this card — but this
-   block PINS the structural values to `var(--text)` defensively, guaranteeing
-   legibility regardless of any future white rule that forgets the negation.
-   `var(--text)` flips per theme (dark ink in light / light ink in dark), so it
-   is always the legible ink for the gray surface.
+   Gray was previously a near-neutral FAINT-tint card that used dark ink
+   (`--text`) everywhere, special-cased via a block of `--text` pins + a
+   `:not([data-band="gray"])` exclusion on every white rule. Deepened-bands
+   makes gray a DEEP deep-neutral gradient (same vibrant structure, least-shouty
+   hue) with all-WHITE text like every other band. So the per-store white-text
+   rules above are now band-agnostic (the `:not([data-band="gray"])` exclusions
+   were dropped) and reach gray directly — the old dark-ink pins are GONE.
 
-   We pin the big number (`.v.banded`), the metric grid values
-   (`.scard-main-grid .sv`), the per-platform CPM values (`.cpm-row-cells .sv`),
-   the platform NAME (`.platform-name`) and the spend caption (`.cpm-spend-cap`)
-   to `--text`, and the labels (`.sl`) to `--text-muted`. We do NOT touch the
-   `.cell.spend .sv` red / `.cell.revenue .sv` green emphasis or the ↓/↑ ▴▾
-   glyphs — those band hues read fine on the neutral gray surface and keep the
-   directional cue. The platform DOT keeps its brand colour (it is painted by
-   `bg-current` on `.platform-dot`, untouched here). */
-.per-store-card.glass[data-band="gray"] .v.banded {
-  color: var(--text);
-  -webkit-text-fill-color: var(--text);
-}
-.per-store-card.glass[data-band="gray"] .scard-main-grid .sv,
-.per-store-card.glass[data-band="gray"] .cpm-row-cells .sv,
-.per-store-card.glass[data-band="gray"] .cpm-row-cells .cell > bdi,
-.per-store-card.glass[data-band="gray"] .cpm-row-cells .platform-name,
-.per-store-card.glass[data-band="gray"] .cpm-row-cells .cpm-spend-cap {
-  color: var(--text);
-}
-/* Gray-card store NAME stays DARK ink (theme-correct). The vivid white-name
-   rule above is `:not([data-band="gray"])`-scoped so it cannot reach this
-   card; this pins it defensively to `var(--text)`. `!important` matches the
-   vivid rule's specificity so neither rule wins by source order. */
-.per-store-card.glass[data-band="gray"] .store-name {
-  color: var(--text) !important;
-}
-/* operator-2026-06-01b: the gray (no-data/ROAS-0) per-store card labels were
-   pinned to `--text-muted` (faint gray). Operator reports they read as
-   illegibly faint, so promote the labels to `--text` (near-black in light /
-   near-white in dark — theme-correct "black"). Covers the 4-up metric grid
-   labels (`.sl`), the per-platform CPM cell labels, the section label
-   ("CPM לפי פלטפורמה" = `.cpm-row-label`) and the ROAS caption
-   ("ROAS · היום" = `.roas-cap`). The `.cpm-spend-cap` + platform NAME are
-   already pinned to `--text` in the structural-values rule above. We do NOT
-   touch the vivid (red/orange/green/blue) cards — those stay all-white. */
-.per-store-card.glass[data-band="gray"] .scard-main-grid .sl,
-.per-store-card.glass[data-band="gray"] .cpm-row-cells .sl,
-.per-store-card.glass[data-band="gray"] .cpm-row-label {
-  color: var(--text);
+   The big number (`.v.banded` gray) has its own rule near the band-card block
+   above, now `--on-band-gray` = white. The `.sl` labels read white-muted via the
+   per-band `.glass[data-band="X"] .sl` rules above (gray included). The
+   `.roas-cap` is covered band-agnostically above. Only the CPM section LABEL
+   (`.cpm-row-label`, a Tailwind `text-ink-subtle` element in PerStoreRow.tsx)
+   still needs an explicit white-muted override on the deep surface — pinned
+   band-agnostically below so EVERY deep per-store card (incl. gray) reads it. */
+.per-store-card.glass[data-band] .cpm-row-label {
+  color: var(--on-band-gray-muted);
 }
