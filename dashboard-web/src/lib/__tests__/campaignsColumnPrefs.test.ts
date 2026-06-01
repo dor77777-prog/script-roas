@@ -1,17 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CAMPAIGNS_COLUMNS,
+  CAMPAIGNS_PREFS_VERSION,
   DEFAULT_HIDDEN_COLUMN_IDS,
   REORDERABLE_COLUMN_IDS,
   buildHiddenColumnsCss,
+  migrateCampaignsColumnPrefs,
   moveCampaignsColumn,
   readCampaignsColumnPrefs,
   resetCampaignsColumnOrder,
+  resetCampaignsColumnsToDefault,
   resolveCampaignsColumnOrder,
   restoreAllCampaignsColumns,
   toggleCampaignsColumnHidden,
   writeCampaignsColumnPrefs,
 } from '@/lib/campaignsColumnPrefs';
+
+const STORAGE_KEY = 'roas-dashboard:campaigns-column-visibility';
 
 /**
  * Phase 05.7.x — locks the contract of the column-prefs helpers behind
@@ -636,5 +641,95 @@ describe('buildHiddenColumnsCss — generated stylesheet', () => {
 
   it('returns empty when every ID is filtered out', () => {
     expect(buildHiddenColumnsCss(['"]{}<script>'])).toBe('');
+  });
+});
+
+// Declutter migration (2026-06-01) — existing operators (with saved prefs)
+// must get the lean default-hidden columns folded in exactly once.
+describe('migrateCampaignsColumnPrefs — one-time declutter migration', () => {
+  const seed = () => [...DEFAULT_HIDDEN_COLUMN_IDS].sort();
+
+  it('no-op when there is no saved entry (fresh operator → read seed handles it)', () => {
+    migrateCampaignsColumnPrefs();
+    expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+
+  it('unions the lean default into a pre-declutter {hidden:[]} entry + stamps version', () => {
+    // Existing operator from before the declutter: everything visible.
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ hidden: [], order: undefined }));
+    migrateCampaignsColumnPrefs();
+    const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY)!);
+    expect(stored.hidden).toEqual(seed());
+    expect(stored.v).toBe(CAMPAIGNS_PREFS_VERSION);
+    // read() now reflects the lean default for this existing operator.
+    expect(readCampaignsColumnPrefs().hidden).toEqual(seed());
+  });
+
+  it('preserves the operator\'s own hidden columns + saved order (union, not replace)', () => {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ hidden: ['cpa'], order: ['spend', 'cpa', 'roas'] }),
+    );
+    migrateCampaignsColumnPrefs();
+    const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY)!);
+    // cpa (operator's own) survives + all lean defaults are added.
+    expect(stored.hidden).toEqual([...new Set(['cpa', ...DEFAULT_HIDDEN_COLUMN_IDS])].sort());
+    expect(stored.hidden).toContain('cpa');
+    for (const id of DEFAULT_HIDDEN_COLUMN_IDS) expect(stored.hidden).toContain(id);
+    // saved order untouched.
+    expect(stored.order).toEqual(['spend', 'cpa', 'roas']);
+    expect(stored.v).toBe(CAMPAIGNS_PREFS_VERSION);
+  });
+
+  it('migrates the legacy bare-array form too', () => {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(['cpa']));
+    migrateCampaignsColumnPrefs();
+    const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY)!);
+    expect(stored.hidden).toContain('cpa');
+    for (const id of DEFAULT_HIDDEN_COLUMN_IDS) expect(stored.hidden).toContain(id);
+    expect(stored.v).toBe(CAMPAIGNS_PREFS_VERSION);
+  });
+
+  it('is idempotent — a second run does not change already-migrated prefs', () => {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ hidden: [], order: undefined }));
+    migrateCampaignsColumnPrefs();
+    const afterFirst = window.localStorage.getItem(STORAGE_KEY);
+    migrateCampaignsColumnPrefs();
+    const afterSecond = window.localStorage.getItem(STORAGE_KEY);
+    expect(afterSecond).toEqual(afterFirst);
+  });
+
+  it('does not re-hide a column the operator un-hid AFTER migrating (version guard)', () => {
+    // Operator migrates, then explicitly restores (un-hides) CPM.
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({ hidden: [], order: undefined }));
+    migrateCampaignsColumnPrefs();
+    toggleCampaignsColumnHidden('cpm'); // CPM is in the seed → this un-hides it
+    expect(readCampaignsColumnPrefs().hidden).not.toContain('cpm');
+    // A later mount must NOT re-hide CPM (prefs are already at current version).
+    migrateCampaignsColumnPrefs();
+    expect(readCampaignsColumnPrefs().hidden).not.toContain('cpm');
+  });
+});
+
+// "Restore default view" button (2026-06-01) — explicit snap to the lean default.
+describe('resetCampaignsColumnsToDefault — snap to lean default view', () => {
+  it('sets hidden to exactly the lean default set and clears custom order', () => {
+    // Operator has everything visible + a custom order.
+    moveCampaignsColumn('cpa', 'up');
+    restoreAllCampaignsColumns(); // show everything (hidden = [])
+    const out = resetCampaignsColumnsToDefault();
+    expect(out.hidden).toEqual([...DEFAULT_HIDDEN_COLUMN_IDS].sort());
+    expect(out.order).toBeUndefined();
+    // Persisted + readable back as the lean default.
+    expect(readCampaignsColumnPrefs().hidden).toEqual([...DEFAULT_HIDDEN_COLUMN_IDS].sort());
+    expect(resolveCampaignsColumnOrder(readCampaignsColumnPrefs().order)).toEqual([
+      ...REORDERABLE_COLUMN_IDS,
+    ]);
+  });
+
+  it('stamps the current schema version (so the migration stays a no-op after)', () => {
+    resetCampaignsColumnsToDefault();
+    const stored = JSON.parse(window.localStorage.getItem(STORAGE_KEY)!);
+    expect(stored.v).toBe(CAMPAIGNS_PREFS_VERSION);
   });
 });

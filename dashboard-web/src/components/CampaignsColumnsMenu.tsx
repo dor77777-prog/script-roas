@@ -13,6 +13,7 @@ import {
   readCampaignsColumnPrefs,
   toggleCampaignsColumnHidden,
   restoreAllCampaignsColumns,
+  resetCampaignsColumnsToDefault,
   resolveCampaignsColumnOrder,
   moveCampaignsColumn,
   resetCampaignsColumnOrder,
@@ -130,6 +131,11 @@ export function CampaignsColumnsMenu({
 
   const resetOrder = () => {
     const next = resetCampaignsColumnOrder();
+    setPrefs(next);
+  };
+
+  const resetToDefault = () => {
+    const next = resetCampaignsColumnsToDefault();
     setPrefs(next);
   };
 
@@ -281,32 +287,42 @@ export function CampaignsColumnsMenu({
               });
             })()}
           </ul>
-          {(hiddenCount > 0 || hasCustomOrder) && (
-            <div className="mt-2 pt-2 border-t border-glass-edge flex flex-col gap-1.5">
-              {hiddenCount > 0 && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={restoreAll}
-                  className="h-auto p-0 gap-1.5 text-xs text-accent hover:text-accent-deep font-medium"
-                >
-                  <RotateCcw size={12} />
-                  <span>השב את כל העמודות</span>
-                </Button>
-              )}
-              {hasCustomOrder && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={resetOrder}
-                  className="h-auto p-0 gap-1.5 text-xs text-accent hover:text-accent-deep font-medium"
-                >
-                  <RotateCcw size={12} />
-                  <span>אפס סדר עמודות</span>
-                </Button>
-              )}
-            </div>
-          )}
+          <div className="mt-2 pt-2 border-t border-glass-edge flex flex-col gap-1.5">
+            {/* Always available — snaps the table back to the recommended lean
+                default view (default-hidden set + canonical order). The
+                explicit counterpart to the one-time declutter migration. */}
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={resetToDefault}
+              className="h-auto p-0 gap-1.5 text-xs text-accent hover:text-accent-deep font-medium"
+            >
+              <RotateCcw size={12} />
+              <span>החזר לתצוגת ברירת מחדל</span>
+            </Button>
+            {hiddenCount > 0 && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={restoreAll}
+                className="h-auto p-0 gap-1.5 text-xs text-accent hover:text-accent-deep font-medium"
+              >
+                <RotateCcw size={12} />
+                <span>השב את כל העמודות</span>
+              </Button>
+            )}
+            {hasCustomOrder && (
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={resetOrder}
+                className="h-auto p-0 gap-1.5 text-xs text-accent hover:text-accent-deep font-medium"
+              >
+                <RotateCcw size={12} />
+                <span>אפס סדר עמודות</span>
+              </Button>
+            )}
+          </div>
         </div>
       )}
     </div>

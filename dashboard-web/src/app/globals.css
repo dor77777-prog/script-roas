@@ -99,7 +99,7 @@
   /* alarm-red top-bar glow — a VIVID hot red, brighter/hotter than --band-red,
      so the alarm card's 4px ::before bar visibly "shouts" more than regular red. */
   --band-red-alarm: #ff3b5c;
-  --band-orange: #ffb24d;  /* mockup-locked band stop (bright ::before top-bar glow) */
+  --band-orange: #ef9331;  /* operator-locked orange #EF9331 (ROAS/health/warning — NOT Google amber #f4a200) */
   --band-green:  #34e2ad;  /* mockup-locked band stop (bright ::before top-bar glow) */
   --band-blue:   #5b8df0;  /* mockup-locked band stop (bright ::before top-bar glow) */
   --band-gray:   #828aae;  /* mockup-locked band stop (bright ::before top-bar glow) */
@@ -122,7 +122,7 @@
      Theme-independent like the other band surfaces. Verified by
      contrastGuard.test.ts. */
   --card-band-red-alarm: #c81e3a;  --card-band-red-alarm-2: #a10d28;
-  --card-band-orange:   #aa6200;  --card-band-orange-2: #cb4800;
+  --card-band-orange:   #aa5e0d;  --card-band-orange-2: #8e4f0b;  /* deepened #EF9331 hue; white on lightest stop = 4.87:1 (deep end 6.42:1) */
   --card-band-green:    #008456;  --card-band-green-2:  #008454;
   --card-band-blue:     #4170d1;  --card-band-blue-2:   #2563eb;
   --card-band-gray:     #6b7295;  --card-band-gray-2:   #5f6789;
@@ -307,11 +307,11 @@
      enforces the split at lint time.
      ---------------------------------------------------------------------*/
   --status-red:    #ef4d5b; --status-red-bg: rgba(239,77,91,0.18); --status-red-fg: #ff9aa8;
-  --status-orange: #f59e0b; --status-orange-bg: rgba(245,158,11,0.16); --status-orange-fg: #ffd08a;
+  --status-orange: #ef9331; --status-orange-bg: rgba(239,147,49,0.16); --status-orange-fg: #f7c897;
   --status-green:  #0fb37a; --status-green-bg: rgba(15,179,122,0.16); --status-green-fg: #5cf0c3;
   --status-blue:   #3b82f6; --status-blue-bg: rgba(59,130,246,0.18); --status-blue-fg: #8bbcff;
   --status-gray:   #828aae; --status-gray-bg: rgba(255,255,255,0.07); --status-gray-fg: #aab0cd;
-  --status-warning: #f59e0b; --status-warning-bg: rgba(245,158,11,0.16); --status-warning-fg: #ffd08a;
+  --status-warning: #ef9331; --status-warning-bg: rgba(239,147,49,0.16); --status-warning-fg: #f7c897;
 
   /* A11y (2026-06-01): deepened on-hue status BUTTON backgrounds. The raw
      --status-* hues fail WCAG-AA under WHITE button text (green 2.70 / red
@@ -325,7 +325,7 @@
   --status-blue-btn:   #2a70e3;
   --status-green-btn:  #008651;
   --status-red-btn:    #d83649;
-  --status-orange-btn: #b25f00;
+  --status-orange-btn: #a1590c;  /* deepened #EF9331; white = 5.32:1 */
 
   /* Chart helper tokens (used by RoasChart axis grid + CPM-prev ghost line). */
   --chart-axis:     oklch(60% 0.015 250 / 0.6);
@@ -340,7 +340,7 @@
      the band tokens above (red/orange/green/blue). */
   --chart-roas-line:    #eef1ff;             /* dark = light line on dark plot */
   --chart-target-line:  #0fb37a;             /* mockup-locked green target */
-  --chart-pin-line:     #f4a200;             /* mockup-locked amber pins */
+  --chart-pin-line:     #ef9331;             /* operator-locked orange #EF9331 event pins (NOT Google amber) */
   --chart-dot-max:      #0fb37a;             /* mockup-locked green max-dot */
   --chart-dot-min:      #ef4d5b;             /* mockup-locked red min-dot */
   --chart-grid-line:    oklch(100% 0 0 / 0.06);
@@ -461,7 +461,7 @@
   /* alarm-red top-bar glow (light) — a VIVID hot red, brighter/hotter than
      --band-red, so the alarm card's 4px ::before bar shouts more than red. */
   --band-red-alarm: #ff3b5c;
-  --band-orange: #f59e0b;  /* mockup-locked band stop (light, top-bar glow) */
+  --band-orange: #ef9331;  /* operator-locked orange #EF9331 (ROAS/health/warning — NOT Google amber #f4a200) */
   --band-green:  #0f9d6b;  /* mockup-locked band stop (light, top-bar glow) */
   --band-blue:   #3b82f6;  /* mockup-locked band stop (light, top-bar glow) */
   --band-gray:   #949ab4;  /* mockup-locked band stop (light, top-bar glow) */
@@ -479,7 +479,7 @@
      Theme-independent like the other band surfaces. Verified by
      contrastGuard.test.ts. */
   --card-band-red-alarm: #c81e3a;  --card-band-red-alarm-2: #a10d28;
-  --card-band-orange:   #aa6200;  --card-band-orange-2: #cb4800;
+  --card-band-orange:   #aa5e0d;  --card-band-orange-2: #8e4f0b;  /* deepened #EF9331 hue; white on lightest stop = 4.87:1 (deep end 6.42:1) */
   --card-band-green:    #008456;  --card-band-green-2:  #008454;
   --card-band-blue:     #4170d1;  --card-band-blue-2:   #2563eb;
   --card-band-gray:     #6b7295;  --card-band-gray-2:   #5f6789;
@@ -618,15 +618,15 @@
      #ffe9ec — failing; orange/blue were ~4.55 borderline). Locked by
      contrastGuard.test.ts (each light -fg vs white AND vs own -bg). New ratios:
        red-fg    #c62333  white 5.69  bg 4.91
-       orange-fg #a04d08  white 5.90  bg 5.36
+       orange-fg #8e4f0b  white 6.42  bg 5.29  (#EF9331 hue · operator recolor 2026-06-01)
        green-fg  #00734e  white 5.90  bg 5.52
        blue-fg   #1f5fdb  white 5.65  bg 4.97 */
   --status-red:    #ef4d5b; --status-red-bg: #ffe9ec; --status-red-fg: #c62333;
-  --status-orange: #f59e0b; --status-orange-bg: #fff3da; --status-orange-fg: #a04d08;
+  --status-orange: #ef9331; --status-orange-bg: #fbe6d0; --status-orange-fg: #8e4f0b;
   --status-green:  #0fb37a; --status-green-bg: #effaf5; --status-green-fg: #00734e;
   --status-blue:   #3b82f6; --status-blue-bg: #e9f1ff; --status-blue-fg: #1f5fdb;
   --status-gray:   #949ab4; --status-gray-bg: #eef0f5; --status-gray-fg: #5a6076;
-  --status-warning: #f59e0b; --status-warning-bg: #fff3da; --status-warning-fg: #a04d08;
+  --status-warning: #ef9331; --status-warning-bg: #fbe6d0; --status-warning-fg: #8e4f0b;
 
   /* A11y (2026-06-01): deepened on-hue status BUTTON backgrounds (light).
      Theme-independent values — re-declared identically from :root so the
@@ -635,7 +635,7 @@
   --status-blue-btn:   #2a70e3;
   --status-green-btn:  #008651;
   --status-red-btn:    #d83649;
-  --status-orange-btn: #b25f00;
+  --status-orange-btn: #a1590c;  /* deepened #EF9331; white = 5.32:1 */
 
   /* Chart helpers — axis / CPM-prev ghost darkened to read on light plot. */
   --chart-axis:     oklch(45% 0.02 250 / 0.55);
@@ -646,7 +646,7 @@
      hairline. Hues unchanged. */
   --chart-roas-line:    #171a2b;             /* light = dark line on light plot */
   --chart-target-line:  #0fb37a;             /* mockup-locked green target */
-  --chart-pin-line:     #f4a200;             /* mockup-locked amber pins */
+  --chart-pin-line:     #ef9331;             /* operator-locked orange #EF9331 event pins (NOT Google amber) */
   --chart-dot-max:      #0fb37a;             /* mockup-locked green max-dot */
   --chart-dot-min:      #ef4d5b;             /* mockup-locked red min-dot */
   --chart-grid-line:    oklch(24% 0.03 265 / 0.08);

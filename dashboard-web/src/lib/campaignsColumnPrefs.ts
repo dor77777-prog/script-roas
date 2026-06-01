@@ -87,7 +87,23 @@ export type CampaignsColumnPrefs = {
    * column even if their saved prefs are stale.
    */
   order?: string[];
+  /**
+   * Schema/migration version (2026-06-01). Bumped when the lean-default
+   * declutter shipped so existing operators (who already have saved prefs,
+   * and therefore never see the read-time seed) get the new default-hidden
+   * columns folded into their `hidden` set exactly once. See
+   * `migrateCampaignsColumnPrefs`. Absent on pre-declutter saved prefs.
+   */
+  v?: number;
 };
+
+/**
+ * Current prefs schema version. Bump when a new batch of columns should be
+ * hidden-by-default for EXISTING operators too (not just fresh ones). The
+ * one-time migration unions the new `DEFAULT_HIDDEN_COLUMN_IDS` into the
+ * operator's saved `hidden` set the first time it sees an older `v`.
+ */
+export const CAMPAIGNS_PREFS_VERSION = 2;
 
 /**
  * Columns the operator may reorder. Structural columns are excluded
@@ -259,16 +275,61 @@ export function resetCampaignsColumnOrder(): CampaignsColumnPrefs {
 export function writeCampaignsColumnPrefs(prefs: CampaignsColumnPrefs): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+    // Stamp the current schema version on every write so the one-time
+    // declutter migration (migrateCampaignsColumnPrefs) becomes a no-op
+    // after the operator's prefs have been touched at least once.
+    const versioned: CampaignsColumnPrefs = { ...prefs, v: CAMPAIGNS_PREFS_VERSION };
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(versioned));
     window.dispatchEvent(
       new CustomEvent('roas-campaigns-column-visibility-changed'),
     );
     // Reach into the cloud-sync helper so other devices see the
     // change after the next poll. Same pattern as productMap +
-    // campaignOptimized.
-    pushCloudKey(STORAGE_KEY, prefs);
+    // campaignOptimized. Push the versioned object so other devices also
+    // skip the migration.
+    pushCloudKey(STORAGE_KEY, versioned);
   } catch {
     /* quota / private mode — local-only failure, ignore */
+  }
+}
+
+/**
+ * One-time declutter migration (2026-06-01). The lean default-hidden set
+ * (`DEFAULT_HIDDEN_COLUMN_IDS`) only reaches a FRESH operator via the
+ * read-time seed. An EXISTING operator already has saved prefs in
+ * localStorage, so they'd keep seeing every column. This migration runs
+ * once on mount: if the saved prefs predate the current schema version, it
+ * UNIONS the new default-hidden columns into the operator's `hidden` set
+ * (their own hidden columns + their saved order are preserved) and stamps
+ * the current version so it never runs again. The operator can still
+ * re-show any column from the "עמודות" menu afterward.
+ *
+ * No-op when: SSR, no saved prefs (fresh → read seed already applies), or
+ * the prefs are already at the current version.
+ */
+export function migrateCampaignsColumnPrefs(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return; // fresh operator — read() already seeds the lean default
+    let version: unknown;
+    try {
+      const parsed = JSON.parse(raw);
+      version =
+        parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+          ? (parsed as { v?: unknown }).v
+          : undefined;
+    } catch {
+      return; // unparseable — leave it; read() falls back to EMPTY
+    }
+    if (version === CAMPAIGNS_PREFS_VERSION) return; // already migrated
+    const cur = readCampaignsColumnPrefs();
+    const hidden = Array.from(
+      new Set([...cur.hidden, ...DEFAULT_HIDDEN_COLUMN_IDS]),
+    ).sort();
+    writeCampaignsColumnPrefs({ ...cur, hidden });
+  } catch {
+    /* ignore — migration is best-effort */
   }
 }
 
@@ -309,6 +370,22 @@ export function toggleCampaignsColumnHidden(id: string): CampaignsColumnPrefs {
 export function restoreAllCampaignsColumns(): CampaignsColumnPrefs {
   const cur = readCampaignsColumnPrefs();
   const next: CampaignsColumnPrefs = { ...cur, hidden: [] };
+  writeCampaignsColumnPrefs(next);
+  return next;
+}
+
+/**
+ * Reset to the recommended "lean" DEFAULT VIEW (2026-06-01): the
+ * default-hidden column set + the canonical column order. Unlike
+ * `restoreAllCampaignsColumns` (which shows EVERY column) this snaps the
+ * table back to the decluttered default an operator gets out of the box —
+ * the explicit, discoverable counterpart to the one-time migration.
+ */
+export function resetCampaignsColumnsToDefault(): CampaignsColumnPrefs {
+  const next: CampaignsColumnPrefs = {
+    hidden: [...DEFAULT_HIDDEN_COLUMN_IDS].sort(),
+    order: undefined,
+  };
   writeCampaignsColumnPrefs(next);
   return next;
 }

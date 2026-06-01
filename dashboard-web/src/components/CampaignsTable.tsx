@@ -43,6 +43,7 @@ import {
   readCampaignsColumnPrefs,
   buildHiddenColumnsCss,
   resolveCampaignsColumnOrder,
+  migrateCampaignsColumnPrefs,
   DEFAULT_HIDDEN_COLUMN_IDS,
 } from '@/lib/campaignsColumnPrefs';
 import { CampaignsColumnsMenu } from './CampaignsColumnsMenu';
@@ -548,6 +549,10 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     resolveCampaignsColumnOrder(undefined),
   );
   useEffect(() => {
+    // One-time declutter migration: fold the lean default-hidden columns into
+    // an EXISTING operator's saved prefs (a fresh operator gets them via the
+    // read seed). Runs before the first read so apply() reflects the result.
+    migrateCampaignsColumnPrefs();
     const apply = () => {
       const prefs = readCampaignsColumnPrefs();
       setColumnHiddenCss(buildHiddenColumnsCss(prefs.hidden));
