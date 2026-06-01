@@ -285,6 +285,22 @@ interface CampaignsByStorePlatformAgg {
  * elsewhere (TodayLive). We only include a platform key when it has spend
  * for the period — which matches the mockup's "Google · לא פעיל היום"
  * caption (rendered as omitted platforms downstream).
+ *
+ * Mobile B1 — two OPTIONAL trailing args feed the per-store card's tiny
+ * ROAS trend line + "▲/▼ X%" delta chip. Both default to omitted so every
+ * existing caller / test keeps compiling and DESKTOP is unaffected:
+ *
+ *   • `series` (DailySeries[]) — the same per-day series the Home tab
+ *     already computes. We read `entry.byStore[storeName]` for each day to
+ *     build `roasSpark` (mirrors how `toSecondarySparklines` walks `series`).
+ *     Non-finite cells (null gaps) are dropped; <2 finite points → the
+ *     field is omitted so the card hides the spark (hero MiniSparkline
+ *     contract).
+ *   • `prevRoasByStore` (Record<string, number | null>) — each store's ROAS
+ *     in the PREVIOUS equal-length range, for the delta. Supply the map
+ *     (even partially) to opt a row into delta computation; omit it
+ *     entirely to keep `roasDeltaPct` undefined (back-compat). A store
+ *     present with prev 0 / null → `roasDeltaPct = null` (can't divide).
  */
 export function toPerStoreData(
   storeAggs: StoreAgg[],
@@ -293,6 +309,8 @@ export function toPerStoreData(
   ordersByStore: Record<string, number>,
   storeIdByName: Record<string, string> = {},
   dataLastWriteAt: string | null = null,
+  series?: DailySeries[],
+  prevRoasByStore?: Record<string, number | null>,
 ): PerStoreData[] {
   // Aggregate per (store, platform) once so the inner loop below is O(1) per
   // store. Spend + impressions are summed across the requested range only.
@@ -328,6 +346,36 @@ export function toPerStoreData(
     return out;
   }
 
+  /**
+   * Mobile B1 — daily ROAS spark for one store. Walks the per-day `series`
+   * (same input the hero/chart consume) and reads each day's per-store ROAS
+   * from `entry.byStore[storeName]`, dropping non-finite (null gap) cells.
+   * Returns `undefined` when <2 finite points remain (or no series) so the
+   * card hides the spark, matching the hero MiniSparkline "<2 points" rule.
+   */
+  function roasSparkFor(storeName: string): number[] | undefined {
+    if (!series || series.length === 0) return undefined;
+    const pts: number[] = [];
+    for (const d of series) {
+      const v = d.byStore[storeName];
+      if (typeof v === 'number' && Number.isFinite(v)) pts.push(v);
+    }
+    return pts.length >= 2 ? pts : undefined;
+  }
+
+  /**
+   * Mobile B1 — fractional ROAS change vs the previous equal-length range.
+   * `undefined` when no prev map was supplied at all (back-compat); `null`
+   * when this store's prev ROAS is 0 / null / missing (can't divide); else
+   * the signed fraction (cur − prev) / prev.
+   */
+  function roasDeltaPctFor(storeName: string, curRoas: number): number | null | undefined {
+    if (prevRoasByStore === undefined) return undefined;
+    const prev = prevRoasByStore[storeName];
+    if (prev == null || prev === 0 || !Number.isFinite(prev)) return null;
+    return (curRoas - prev) / prev;
+  }
+
   return storeAggs.map((s) => ({
     storeId: storeIdByName[s.store] ?? s.store,
     storeName: s.store,
@@ -341,6 +389,8 @@ export function toPerStoreData(
     roas: s.roas > 0 ? s.roas : null,
     updatedAt: dataLastWriteAt,
     perPlatformCpm: perPlatformCpm(s.store),
+    roasSpark: roasSparkFor(s.store),
+    roasDeltaPct: roasDeltaPctFor(s.store, s.roas),
   }));
 }
 

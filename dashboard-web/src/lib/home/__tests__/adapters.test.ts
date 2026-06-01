@@ -16,7 +16,7 @@ import {
   toPerStoreData,
 } from '../adapters';
 import { computeStaleness } from '@/lib/freshness/useStaleness';
-import type { Aggregate, StoreAgg } from '@/lib/analytics';
+import type { Aggregate, DailySeries, StoreAgg } from '@/lib/analytics';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { Annotation } from '@/lib/annotations';
 
@@ -288,6 +288,196 @@ describe('toPerStoreData', () => {
     expect(computeStaleness(result[0].updatedAt, now).stage).toBe('fresh');
     // Sanity: the old hardcoded-null path was stale.
     expect(computeStaleness(null, now).stage).toBe('stale');
+  });
+});
+
+describe('toPerStoreData — per-store ROAS sparkline + delta (mobile B1)', () => {
+  // Build a per-day series whose `byStore` cells carry each store's ROAS for
+  // the day, mirroring what `dailySeries` produces. `null` = no data for that
+  // store on that day (a gap), distinct from a real 0 ("spent, earned 0").
+  function day(date: string, byStore: Record<string, number | null>): DailySeries {
+    return {
+      date,
+      byStore,
+      totalRoas: 0,
+      totalRevenue: 0,
+      totalSpend: 0,
+    };
+  }
+
+  it('builds roasSpark from the per-day per-store ROAS in ISO-date order', () => {
+    const storeAggs: StoreAgg[] = [
+      { ...agg({ revenue: 5000, spend: 1500, roas: 3.3 }), store: 'uzoshop' },
+    ];
+    const series: DailySeries[] = [
+      day('2026-05-01', { uzoshop: 2.0 }),
+      day('2026-05-02', { uzoshop: 3.5 }),
+      day('2026-05-03', { uzoshop: 4.1 }),
+    ];
+    const result = toPerStoreData(
+      storeAggs,
+      [],
+      { from: '2026-05-01', to: '2026-05-03' },
+      {},
+      {},
+      null,
+      series,
+    );
+    expect(result[0].roasSpark).toEqual([2.0, 3.5, 4.1]);
+  });
+
+  it('omits non-finite (null / gap) per-day cells from roasSpark', () => {
+    const storeAggs: StoreAgg[] = [
+      { ...agg({ revenue: 5000, spend: 1500, roas: 3.3 }), store: 'uzoshop' },
+    ];
+    const series: DailySeries[] = [
+      day('2026-05-01', { uzoshop: 2.0 }),
+      day('2026-05-02', { uzoshop: null }), // gap day — dropped
+      day('2026-05-03', { uzoshop: 4.1 }),
+    ];
+    const result = toPerStoreData(
+      storeAggs,
+      [],
+      { from: '2026-05-01', to: '2026-05-03' },
+      {},
+      {},
+      null,
+      series,
+    );
+    expect(result[0].roasSpark).toEqual([2.0, 4.1]);
+  });
+
+  it('omits roasSpark (undefined) when fewer than 2 finite points exist', () => {
+    const storeAggs: StoreAgg[] = [
+      { ...agg({ revenue: 5000, spend: 1500, roas: 3.3 }), store: 'uzoshop' },
+    ];
+    const series: DailySeries[] = [
+      day('2026-05-01', { uzoshop: 2.0 }),
+      day('2026-05-02', { uzoshop: null }),
+    ];
+    const result = toPerStoreData(
+      storeAggs,
+      [],
+      { from: '2026-05-01', to: '2026-05-02' },
+      {},
+      {},
+      null,
+      series,
+    );
+    expect(result[0].roasSpark).toBeUndefined();
+  });
+
+  it('omits roasSpark when no series is supplied (back-compat)', () => {
+    const storeAggs: StoreAgg[] = [
+      { ...agg({ revenue: 5000, spend: 1500, roas: 3.3 }), store: 'uzoshop' },
+    ];
+    const result = toPerStoreData(
+      storeAggs,
+      [],
+      { from: '2026-05-01', to: '2026-05-31' },
+      {},
+      {},
+    );
+    expect(result[0].roasSpark).toBeUndefined();
+  });
+
+  it('computes roasDeltaPct = (cur − prev) / prev, signed positive when ROAS rose', () => {
+    const storeAggs: StoreAgg[] = [
+      { ...agg({ revenue: 5000, spend: 1000, roas: 5.0 }), store: 'uzoshop' },
+    ];
+    const result = toPerStoreData(
+      storeAggs,
+      [],
+      { from: '2026-05-08', to: '2026-05-14' },
+      {},
+      {},
+      null,
+      undefined,
+      { uzoshop: 4.0 }, // prev ROAS 4 → cur 5 → +0.25
+    );
+    expect(result[0].roasDeltaPct).toBeCloseTo(0.25, 5);
+  });
+
+  it('roasDeltaPct is negative when ROAS fell', () => {
+    const storeAggs: StoreAgg[] = [
+      { ...agg({ revenue: 2000, spend: 1000, roas: 2.0 }), store: 'uzoshop' },
+    ];
+    const result = toPerStoreData(
+      storeAggs,
+      [],
+      { from: '2026-05-08', to: '2026-05-14' },
+      {},
+      {},
+      null,
+      undefined,
+      { uzoshop: 4.0 }, // prev 4 → cur 2 → −0.5
+    );
+    expect(result[0].roasDeltaPct).toBeCloseTo(-0.5, 5);
+  });
+
+  it('roasDeltaPct is null when prev ROAS is 0 (cannot divide)', () => {
+    const storeAggs: StoreAgg[] = [
+      { ...agg({ revenue: 5000, spend: 1000, roas: 5.0 }), store: 'uzoshop' },
+    ];
+    const result = toPerStoreData(
+      storeAggs,
+      [],
+      { from: '2026-05-08', to: '2026-05-14' },
+      {},
+      {},
+      null,
+      undefined,
+      { uzoshop: 0 },
+    );
+    expect(result[0].roasDeltaPct).toBeNull();
+  });
+
+  it('roasDeltaPct is null when the store is absent from the prev map (unavailable)', () => {
+    const storeAggs: StoreAgg[] = [
+      { ...agg({ revenue: 5000, spend: 1000, roas: 5.0 }), store: 'uzoshop' },
+    ];
+    const result = toPerStoreData(
+      storeAggs,
+      [],
+      { from: '2026-05-08', to: '2026-05-14' },
+      {},
+      {},
+      null,
+      undefined,
+      {}, // no prev entry for uzoshop
+    );
+    expect(result[0].roasDeltaPct).toBeNull();
+  });
+
+  it('roasDeltaPct is undefined when no prev map is supplied (back-compat)', () => {
+    const storeAggs: StoreAgg[] = [
+      { ...agg({ revenue: 5000, spend: 1000, roas: 5.0 }), store: 'uzoshop' },
+    ];
+    const result = toPerStoreData(
+      storeAggs,
+      [],
+      { from: '2026-05-08', to: '2026-05-14' },
+      {},
+      {},
+    );
+    expect(result[0].roasDeltaPct).toBeUndefined();
+  });
+
+  it('cur ROAS of 0 against a positive prev yields a −100% (−1) delta, not null', () => {
+    const storeAggs: StoreAgg[] = [
+      { ...agg({ revenue: 0, spend: 1000, roas: 0 }), store: 'uzoshop' },
+    ];
+    const result = toPerStoreData(
+      storeAggs,
+      [],
+      { from: '2026-05-08', to: '2026-05-14' },
+      {},
+      {},
+      null,
+      undefined,
+      { uzoshop: 4.0 },
+    );
+    expect(result[0].roasDeltaPct).toBeCloseTo(-1, 5);
   });
 });
 

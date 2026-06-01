@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>כרטיסי חנות — band מעומק + טקסט לבן · 5 צבעים × 2 מודים</title>
+<style>
+  /* ============================================================
+     Mockup: deepened per-store band cards, white text, both themes.
+     Direction locked by operator 2026-06-01: "לבן + להעמיק את ה-band".
+     Surfaces are DEEP band-tinted (not pastel) so small white text
+     clears WCAG-AA 4.5:1 — the same crisp white the GRAY (dark) card
+     already gets. Real per-store card layout mirrored.
+     ============================================================ */
+  :root {
+    --radius-card: 18px;
+    --ink-white: #ffffff;
+    --ink-white-muted: rgba(255,255,255,0.74);
+    --ink-white-faint: rgba(255,255,255,0.58);
+    --hair: rgba(255,255,255,0.14);
+    --tile: rgba(255,255,255,0.10);
+    --tile-edge: rgba(255,255,255,0.16);
+  }
+
+  /* ---- DEEPENED band surfaces (both themes share the deep base; that's
+         the point — a colored card is DARK-tinted so white always reads).
+         Each card: subtle 2-stop gradient for dimension, a 4px top glow bar
+         in the bright band hue (keeps the vivid ROAS-state signal), and a
+         soft outer shadow. ---- */
+  .band-red {
+    --bar: #ff6b81;
+    background:
+      radial-gradient(130% 120% at 12% 0%, #5a1626 0%, transparent 60%),
+      linear-gradient(150deg, #4a1320 0%, #2c0d16 100%);
+  }
+  .band-orange {
+    --bar: #ffb24d;
+    background:
+      radial-gradient(130% 120% at 12% 0%, #5a3a12 0%, transparent 60%),
+      linear-gradient(150deg, #47300f 0%, #281b09 100%);
+  }
+  .band-green {
+    --bar: #34e2ad;
+    background:
+      radial-gradient(130% 120% at 12% 0%, #0f4a3a 0%, transparent 60%),
+      linear-gradient(150deg, #0d3b30 0%, #08231d 100%);
+  }
+  .band-blue {
+    --bar: #5b8df0;
+    background:
+      radial-gradient(130% 120% at 12% 0%, #1b3a73 0%, transparent 60%),
+      linear-gradient(150deg, #16305e 0%, #0c1c39 100%);
+  }
+  .band-gray {
+    --bar: #828aae;
+    background:
+      radial-gradient(130% 120% at 12% 0%, #2b2f44 0%, transparent 60%),
+      linear-gradient(150deg, #232739 0%, #161a28 100%);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Heebo', -apple-system, system-ui, sans-serif;
+    background: #0b0d16;
+    color: #eef1ff;
+    padding: 28px 20px 60px;
+  }
+  h1 { font-size: 18px; font-weight: 800; margin: 0 0 4px; }
+  .sub { color: #9aa0c0; font-size: 13px; margin: 0 0 26px; }
+
+  .theme-block { margin-bottom: 40px; }
+  .theme-head {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 14px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    margin: 0 0 16px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,.08);
+  }
+  .theme-head .pill { font-size: 11px; padding: 3px 10px; border-radius: 999px; font-weight: 700; }
+  /* page background swatch per theme so cards are judged on their real canvas */
+  .canvas-dark  { background: #0b0d16; padding: 20px; border-radius: 16px; }
+  .canvas-light { background: #f3f4f8; padding: 20px; border-radius: 16px; }
+  .canvas-light .theme-head { color: #171a2b; border-color: rgba(0,0,0,.08); }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 18px;
+  }
+
+  /* ---- the card ---- */
+  .card {
+    position: relative;
+    border-radius: var(--radius-card);
+    padding: 18px 18px 16px;
+    overflow: hidden;
+    color: var(--ink-white);
+    box-shadow: 0 18px 40px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.06);
+    min-height: 360px;
+    display: flex; flex-direction: column;
+  }
+  /* 4px top glow bar in the BRIGHT band hue — keeps the vivid ROAS signal */
+  .card::before {
+    content: ""; position: absolute; inset: 0 0 auto 0; height: 4px;
+    background: var(--bar);
+    box-shadow: 0 0 22px var(--bar), 0 0 8px var(--bar);
+  }
+
+  .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  .head-left { display: flex; align-items: center; gap: 8px; }
+  .band-tag {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+    font-family: 'Geist Mono', ui-monospace, monospace;
+    padding: 3px 9px; border-radius: 999px;
+    background: rgba(255,255,255,0.16); color: var(--ink-white);
+  }
+  .fresh-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 10px; font-weight: 700; font-family: 'Geist Mono', ui-monospace, monospace;
+    padding: 3px 9px; border-radius: 999px;
+    background: rgba(255,255,255,0.16); color: var(--ink-white);
+  }
+  .fresh-dot { width: 6px; height: 6px; border-radius: 50%; }
+  .store-name { font-size: 20px; font-weight: 700; color: var(--ink-white); }
+
+  .roas-wrap { margin-top: 14px; }
+  .roas-num { font-size: 46px; font-weight: 800; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: var(--ink-white); }
+  .roas-cap { margin-top: 6px; text-align: end; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-white-muted); }
+
+  .divider { height: 1px; background: var(--hair); margin: 14px 0; }
+
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .cell { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .sl { font-size: 11px; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-white-muted); display: flex; align-items: center; gap: 3px; }
+  .sv { font-size: 21px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink-white); white-space: nowrap; }
+  .glyph-up { color: #6ff0c0; } .glyph-down { color: #ff9aa8; }
+
+  .cpm-label { font-size: 11px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-white-muted); text-align: end; margin-bottom: 10px; }
+  .cpm-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .cpm-tile {
+    border-radius: 12px; padding: 11px 13px;
+    background: var(--tile); border: 1px solid var(--tile-edge);
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .cpm-top { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+  .plat-name { font-size: 12px; font-weight: 700; color: var(--ink-white); }
+  .plat-dot { width: 9px; height: 9px; border-radius: 50%; }
+  .dot-meta { background: #4d8bf0; } .dot-google { background: #f4a200; } .dot-tiktok { background: #ff2e7e; }
+  .cpm-spend { font-size: 11px; color: var(--ink-white-faint); text-align: end; }
+  .cpm-val { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink-white); }
+
+  .contrast-badge {
+    position: absolute; bottom: 10px; inset-inline-start: 12px;
+    font-size: 10px; font-family: ui-monospace, monospace; font-weight: 700;
+    padding: 3px 8px; border-radius: 6px;
+    background: rgba(0,0,0,.35); color: #aee9c4;
+  }
+  .legend { font-size: 12px; color: #9aa0c0; margin: 22px 0 0; line-height: 1.6; }
+  .legend b { color: #eef1ff; }
+</style>
+</head>
+<body>
+  <h1>כרטיסי חנות — band מעומק + טקסט לבן</h1>
+  <p class="sub">כל 5 הצבעים (אדום · כתום · ירוק · כחול · אפור) × 2 מודים. המשטח הצבעוני הועמק כדי שטקסט לבן קטן יעבור WCAG-AA 4.5:1 — בדיוק כמו הלבן הפריך שיש היום על הכרטיס האפור. אות-ה-ROAS-בצבע נשמר בפס-העליון הזוהר (4px) בגוון ה-band הבהיר.</p>
+
+  <!-- ============ DARK MODE ============ -->
+  <div class="theme-block canvas-dark">
+    <div class="theme-head">מוד כהה (Dark) <span class="pill" style="background:#1d2138;color:#9aa0c0;">page #0b0d16</span></div>
+    <div class="grid" id="grid-dark"></div>
+  </div>
+
+  <!-- ============ LIGHT MODE ============ -->
+  <div class="theme-block canvas-light">
+    <div class="theme-head">מוד בהיר (Light) <span class="pill" style="background:#e7e9f0;color:#5a6076;">page #f3f4f8</span></div>
+    <div class="grid" id="grid-light"></div>
+  </div>
+
+  <p class="legend">
+    <b>מה השתנה:</b> המשטח הצבעוני עבר מפסטל-בהיר ל-band-מעומק (כהה-רווי), אז כל הטקסט — ערכים, כותרות, שם החנות, ותאי ה-CPM — לבן וקריא, זהה למראה הכרטיס האפור.<br>
+    <b>אות ROAS נשמר:</b> הפס העליון הזוהר (4px) + tag ה-band נושאים את צבע ה-band הבהיר, אז מצב-העסק עדיין נקרא מצבע במבט ראשון.<br>
+    <b>תג ה-contrast:</b> בכל כרטיס מוצג יחס-הניגודיות של הלבן מול המשטח (מחושב חי) — כולם ≥ 4.5:1.<br>
+    <b>אפור = ללא-נתונים:</b> נשאר העמום ביותר (לא "צועק"), אבל גם הוא לבן-קריא.
+  </p>
+
+<script>
+  // WCAG relative-luminance + ratio (for the per-card white-on-surface badge).
+  function relLum(hex) {
+    const h = hex.replace('#','');
+    const f = c => { c/=255; return c<=0.04045 ? c/12.92 : Math.pow((c+0.055)/1.055,2.4); };
+    const r=f(parseInt(h.slice(0,2),16)), g=f(parseInt(h.slice(2,4),16)), b=f(parseInt(h.slice(4,6),16));
+    return 0.2126*r + 0.7152*g + 0.0722*b;
+  }
+  function ratioWhite(hex) {
+    const L = relLum(hex);
+    return ((1.0 + 0.05) / (L + 0.05));
+  }
+
+  // Representative DEEPEST gradient stop per band (the worst-case region for
+  // white) — the badge measures white against this so it's conservative.
+  const BANDS = [
+    { key:'red',    label:'אדום',  tag:'דורש בחינה', worst:'#2c0d16', dot:'#ff6b81' },
+    { key:'orange', label:'כתום',  tag:'גבולי',      worst:'#281b09', dot:'#ffb24d' },
+    { key:'green',  label:'ירוק',  tag:'מעולה',      worst:'#08231d', dot:'#34e2ad' },
+    { key:'blue',   label:'כחול',  tag:'טוב',        worst:'#0c1c39', dot:'#5b8df0' },
+    { key:'gray',   label:'אפור',  tag:'אין נתונים', worst:'#161a28', dot:'#828aae' },
+  ];
+
+  const SAMPLE = {
+    red:    { store:'storeA',   roas:'1.4x', spend:'$5.2K', rev:'$7.3K', orders:'18',  aov:'$405' },
+    orange: { store:'storeB',   roas:'2.1x', spend:'$3.1K', rev:'$6.6K', orders:'22',  aov:'$300' },
+    green:  { store:'storeC',   roas:'4.3x', spend:'$2.4K', rev:'$10.3K',orders:'31',  aov:'$332' },
+    blue:   { store:'uzoshop',  roas:'3.32x',spend:'$620',  rev:'$2.1K', orders:'15',  aov:'$137' },
+    gray:   { store:'360usmile',roas:'—',    spend:'$45',   rev:'$0',    orders:'0',   aov:'—' },
+  };
+
+  function cardHTML(b) {
+    const s = SAMPLE[b.key];
+    const r = ratioWhite(b.worst).toFixed(2);
+    const cpm = b.key==='gray'
+      ? `<div class="cpm-tile"><div class="cpm-top"><span class="plat-name">Meta</span><span class="plat-dot dot-meta"></span></div><div class="cpm-spend">spend · $25</div><div class="cpm-val">$8</div></div>
+         <div class="cpm-tile"><div class="cpm-top"><span class="plat-name">TikTok</span><span class="plat-dot dot-tiktok"></span></div><div class="cpm-spend">spend · $12</div><div class="cpm-val">$3</div></div>`
+      : `<div class="cpm-tile"><div class="cpm-top"><span class="plat-name">Google</span><span class="plat-dot dot-google"></span></div><div class="cpm-spend">spend · $29</div><div class="cpm-val">$9</div></div>
+         <div class="cpm-tile"><div class="cpm-top"><span class="plat-name">Meta</span><span class="plat-dot dot-meta"></span></div><div class="cpm-spend">spend · $591</div><div class="cpm-val">$37</div></div>`;
+    return `
+      <div class="card band-${b.key}">
+        <div class="card-head">
+          <div class="head-left">
+            <span class="band-tag">${b.tag}</span>
+            <span class="fresh-chip"><span class="fresh-dot" style="background:${b.key==='gray'?'#828aae':'#0fb37a'}"></span>LIVE</span>
+          </div>
+          <span class="store-name">${s.store}</span>
+        </div>
+        <div class="roas-wrap" style="text-align:start">
+          <div class="roas-num">${s.roas}</div>
+          <div class="roas-cap">ROAS · היום</div>
+        </div>
+        <div class="divider"></div>
+        <div class="grid4">
+          <div class="cell"><span class="sl">הוצאה <span class="glyph-down">↓</span></span><span class="sv">${s.spend}</span></div>
+          <div class="cell"><span class="sl">הכנסה <span class="glyph-up">↑</span></span><span class="sv">${s.rev}</span></div>
+          <div class="cell"><span class="sl">הזמנות</span><span class="sv">${s.orders}</span></div>
+          <div class="cell"><span class="sl">AOV</span><span class="sv">${s.aov}</span></div>
+        </div>
+        <div class="divider"></div>
+        <div class="cpm-label">CPM לפי פלטפורמה</div>
+        <div class="cpm-row">${cpm}</div>
+        <span class="contrast-badge">white AA ${r}:1 ✓</span>
+      </div>`;
+  }
+
+  document.getElementById('grid-dark').innerHTML  = BANDS.map(cardHTML).join('');
+  document.getElementById('grid-light').innerHTML = BANDS.map(cardHTML).join('');
+</script>
+</body>
+</html>

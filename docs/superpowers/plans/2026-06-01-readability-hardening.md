@@ -320,6 +320,8 @@ git commit -m "fix(contrast): band chips/CPM/freshness sit on --band-scrim; STAL
 
 ---
 
+> **C4 CORRECTION (2026-06-01, after a BLOCKED implementer escalation — verified against code):** The plan wrongly assumed tables render money via a `$`/`CAD`-prefixed `formatCurrency`. Ground truth: `src/lib/utils.ts` `formatCurrency(n, frac=0)` returns a **BARE `he-IL` decimal** (e.g. `1,234` / `1,234.56`) — NO prefix (the currency unit lives in column headers / `<Stat prefix>` / tooltips), and it supports **2 decimals** (cpc/cpm/cpa cells). The hero uses a local `$`-prefixed **en-US compact** `fmtMoneyCompact` + a 2-decimal `fmtMoneyDecimal`, and its numbers are **mockup-locked sizes** (`text-[1.625rem]` / `text-[2.25rem]` / `text-[2.75rem]`). Consequences: (1) `<Money>` as built (always `$`/`CAD` prefix, en-US, 0-decimal) CANNOT reproduce these 1:1 — adopting it would change the visible currency look (violates the EXACT-mockup lock). (2) `.metric-fluid` (`font-size: clamp(…,1.6rem)`) would SHRINK the hero readouts — it must NOT be applied there; drop it as dead/harmful. **Resolution:** split C4 into **C4a** (extend `metricFormat`/`<Money>` to be format-faithful: `prefix: '$'|'CAD'|'none'`, `locale: 'en-US'|'he-IL'`, `decimals: 0|2`, so output matches each site byte-for-byte) and **C4b** (adopt `<Money>` at the table/hero/goal sites with the matching options + `metric-cell`, NO `metric-fluid`, NO visible string change). The overflow guarantee is `nowrap` + the compact floor — never font-shrinking.
+
 ## Wave C — The `<Money>` / `<Metric>` overflow primitive
 
 ### Task C1: Consolidated formatter core + unit tests (TDD)

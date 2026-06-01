@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>כרטיסי חנות — גרדיאנט חי + AA · 5 צבעים × 2 מודים</title>
+<style>
+  /* ============================================================
+     Vibrant gradient (135deg, band 0% -> band-2 95%) + white text,
+     SLIGHTLY DEEPENED in OKLCH (hue + chroma preserved, only L lowered)
+     so small white text clears WCAG-AA 4.5:1. Same vivid look as the
+     screenshot the operator wants, just one notch deeper. Both modes
+     share the gradient (a colored card is colored in light + dark alike).
+     ============================================================ */
+  :root {
+    --radius-card: 18px;
+    --w:    #ffffff;
+    --w-72: rgba(255,255,255,0.78);
+    --w-58: rgba(255,255,255,0.62);
+    --hair: rgba(255,255,255,0.22);
+    --tile: rgba(255,255,255,0.13);
+    --tile-edge: rgba(255,255,255,0.20);
+  }
+  /* Deepened-vibrant gradient endpoints (OKLCH L lowered to hit AA for white).
+     Original screenshot hues kept; just richer/deeper. */
+  .band-red    { --b: #ce3e5a; --b2: #e11c48; }
+  .band-orange { --b: #aa6200; --b2: #cb4800; }
+  .band-green  { --b: #008456; --b2: #008454; }
+  .band-blue   { --b: #4170d1; --b2: #2563eb; }
+  .band-gray   { --b: #6b7295; --b2: #5f6789; }
+
+  * { box-sizing: border-box; }
+  body { margin:0; font-family:'Heebo',-apple-system,system-ui,sans-serif; background:#0b0d16; color:#eef1ff; padding:28px 20px 60px; }
+  h1 { font-size:18px; font-weight:800; margin:0 0 4px; }
+  .sub { color:#9aa0c0; font-size:13px; margin:0 0 24px; max-width:1100px; }
+  .theme-block { margin-bottom:34px; }
+  .theme-head { display:flex; align-items:center; gap:10px; font-size:14px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; margin:0 0 16px; padding-bottom:8px; border-bottom:1px solid rgba(255,255,255,.08); }
+  .pill { font-size:11px; padding:3px 10px; border-radius:999px; font-weight:700; }
+  .canvas-dark  { background:#0b0d16; padding:20px; border-radius:16px; }
+  .canvas-light { background:#f3f4f8; padding:20px; border-radius:16px; }
+  .canvas-light .theme-head { color:#171a2b; border-color:rgba(0,0,0,.08); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:18px; }
+
+  .card {
+    position:relative; border-radius:var(--radius-card); padding:18px 18px 30px; overflow:hidden;
+    color:var(--w); min-height:360px; display:flex; flex-direction:column;
+    background: linear-gradient(135deg, var(--b) 0%, var(--b2) 95%);
+    box-shadow: 0 14px 34px color-mix(in oklab, var(--b2) 30%, transparent);
+  }
+  /* white top-right highlight sheen — verbatim from the source mockup .store::after */
+  .card::after { content:""; position:absolute; inset:0; pointer-events:none;
+    background: radial-gradient(120% 80% at 85% -20%, rgba(255,255,255,.20), rgba(255,255,255,0) 60%); }
+  .card > * { position:relative; z-index:1; }
+
+  .card-head { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }
+  .head-left { display:flex; align-items:center; gap:8px; }
+  .band-tag { display:inline-flex; align-items:center; gap:5px; font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; font-family:'Geist Mono',ui-monospace,monospace; padding:3px 9px; border-radius:999px; background:rgba(255,255,255,.22); color:var(--w); }
+  .fresh-chip { display:inline-flex; align-items:center; gap:6px; font-size:10px; font-weight:700; font-family:'Geist Mono',ui-monospace,monospace; padding:3px 9px; border-radius:999px; background:rgba(255,255,255,.22); color:var(--w); }
+  .fresh-dot { width:6px; height:6px; border-radius:50%; }
+  .store-name { font-size:19px; font-weight:800; color:var(--w); }
+
+  .roas-wrap { margin-top:14px; text-align:start; }
+  .roas-num { font-size:46px; font-weight:800; line-height:1; letter-spacing:-.02em; font-variant-numeric:tabular-nums; color:var(--w); text-shadow:0 1px 2px rgba(0,0,0,.14); }
+  .roas-num small { font-size:.5em; font-weight:700; }
+  .roas-cap { margin-top:6px; text-align:end; font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--w-72); }
+
+  .divider { height:1px; background:var(--hair); margin:13px 0; }
+  .grid4 { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; }
+  .cell { display:flex; flex-direction:column; gap:5px; min-width:0; }
+  .sl { font-size:11px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--w-72); display:flex; align-items:center; gap:3px; }
+  .sv { font-size:21px; font-weight:800; font-variant-numeric:tabular-nums; color:var(--w); white-space:nowrap; }
+  .g-up { color:#c8ffe9; } .g-down { color:#ffd2d9; }
+
+  .cpm-label { font-size:11px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--w-72); text-align:end; margin-bottom:10px; }
+  .cpm-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .cpm-tile { border-radius:12px; padding:11px 13px; background:var(--tile); border:1px solid var(--tile-edge); display:flex; flex-direction:column; gap:6px; }
+  .cpm-top { display:flex; align-items:center; justify-content:flex-end; gap:6px; }
+  .plat-name { font-size:12px; font-weight:700; color:var(--w); }
+  .plat-dot { width:9px; height:9px; border-radius:50%; }
+  .dot-meta{background:#4d8bf0;} .dot-google{background:#f4a200;} .dot-tiktok{background:#ff2e7e;}
+  .cpm-spend { font-size:11px; color:var(--w-58); text-align:end; }
+  .cpm-val { font-size:20px; font-weight:800; font-variant-numeric:tabular-nums; color:var(--w); }
+
+  .badge { position:absolute; bottom:9px; inset-inline-start:12px; z-index:2; font-size:10px; font-family:ui-monospace,monospace; font-weight:700; padding:3px 8px; border-radius:6px; background:rgba(0,0,0,.34); color:#aee9c4; }
+  .legend { font-size:12px; color:#9aa0c0; margin:20px 0 0; line-height:1.65; max-width:1100px; }
+  .legend b { color:#eef1ff; }
+</style>
+</head>
+<body>
+  <h1>כרטיסי חנות — גרדיאנט חי + טקסט לבן (AA)</h1>
+  <p class="sub">הגרדיאנט מהצילום שביקשת (<code>135°, band → band-2</code>) עם טקסט לבן — מועמק במדרגה אחת ב-OKLCH (גוון + רוויה נשמרים, רק הבהירות יורדת קצת) כך שגם הטקסט <b>הקטן</b> הלבן (ערכים, תוויות, CPM) עובר WCAG-AA 4.5:1. אותו גוון חי, רק עשיר/עמוק טיפה יותר — וקריא ב-100%.</p>
+
+  <div class="theme-block canvas-dark">
+    <div class="theme-head">מוד כהה (Dark) <span class="pill" style="background:#1d2138;color:#9aa0c0;">page #0b0d16</span></div>
+    <div class="grid" id="grid-dark"></div>
+  </div>
+  <div class="theme-block canvas-light">
+    <div class="theme-head">מוד בהיר (Light) <span class="pill" style="background:#e7e9f0;color:#5a6076;">page #f3f4f8</span></div>
+    <div class="grid" id="grid-light"></div>
+  </div>
+
+  <p class="legend">
+    <b>הכרטיס הצבעוני = צבעוני בשני המודים</b> (כמו בצילום) — לכן הלבן עקבי בכל מצב.<br>
+    <b>אות ROAS</b> נקרא מהגוון עצמו (אדום/כתום/ירוק/כחול) + מתג ה-band.<br>
+    <b>תג ה-contrast</b> בכל כרטיס = יחס הלבן מול הקצה הבהיר של הגרדיאנט (הגרוע) — כולם ≥ 4.5:1.<br>
+    <b>אם תרצה עוד יותר חי</b> (פחות עמוק) — אפשר, אבל אז הטקסט הקטן יורד מתחת ל-AA; זה האיזון הקרוב-ביותר לצילום ששומר קריאוּת.
+  </p>
+
+<script>
+  function rl(hex){const h=hex.replace('#','');const f=c=>{c/=255;return c<=0.04045?c/12.92:Math.pow((c+0.055)/1.055,2.4);};return 0.2126*f(parseInt(h.slice(0,2),16))+0.7152*f(parseInt(h.slice(2,4),16))+0.0722*f(parseInt(h.slice(4,6),16));}
+  function w(hex){return (1.05)/(rl(hex)+0.05);}
+  const BANDS=[
+    {key:'green', tag:'מעולה',     start:'#008456', store:'Zol Plus',  roas:'2.76', spend:'$3.4K', rev:'$9.5K', orders:'96', aov:'$99', cpm:[['Meta','dot-meta','$3,432','$32']]},
+    {key:'orange',tag:'למעקב',     start:'#aa6200', store:'uzoshop',   roas:'2.34', spend:'$41K',  rev:'$96K',  orders:'971',aov:'$99', cpm:[['TikTok','dot-tiktok','$256','$1'],['Google','dot-google','$197','$7'],['Meta','dot-meta','$0.2K','$30']]},
+    {key:'red',   tag:'ROAS נמוך', start:'#ce3e5a', store:'360usmile', roas:'1.67', spend:'$3.4K', rev:'$5.8K', orders:'61', aov:'$94', cpm:[['TikTok','dot-tiktok','$194','$2'],['Meta','dot-meta','$3,246','$18']]},
+    {key:'blue',  tag:'טוב',       start:'#4170d1', store:'storeX',    roas:'3.10', spend:'$2.4K', rev:'$7.4K', orders:'42', aov:'$176',cpm:[['Meta','dot-meta','$591','$37'],['Google','dot-google','$29','$9']]},
+    {key:'gray',  tag:'אין נתונים',start:'#6b7295', store:'storeY',    roas:'—',    spend:'$45',   rev:'$0',    orders:'0',  aov:'—',   cpm:[['Meta','dot-meta','$25','$8'],['TikTok','dot-tiktok','$12','$3']]},
+  ];
+  function card(b){
+    const r=w(b.start).toFixed(2);
+    const tiles=b.cpm.map(([n,d,sp,v])=>`<div class="cpm-tile"><div class="cpm-top"><span class="plat-name">${n}</span><span class="plat-dot ${d}"></span></div><div class="cpm-spend">spend · ${sp}</div><div class="cpm-val">${v}</div></div>`).join('');
+    return `<div class="card band-${b.key}">
+      <div class="card-head"><div class="head-left"><span class="band-tag">${b.tag}</span><span class="fresh-chip"><span class="fresh-dot" style="background:${b.key==='gray'?'#cbd0e6':'#aef5d3'}"></span>LIVE</span></div><span class="store-name">${b.store}</span></div>
+      <div class="roas-wrap"><div class="roas-num">${b.roas}${b.roas!=='—'?'<small>x</small>':''}</div><div class="roas-cap">ROAS · היום</div></div>
+      <div class="divider"></div>
+      <div class="grid4">
+        <div class="cell"><span class="sl">הוצאה <span class="g-down">↓</span></span><span class="sv">${b.spend}</span></div>
+        <div class="cell"><span class="sl">הכנסה <span class="g-up">↑</span></span><span class="sv">${b.rev}</span></div>
+        <div class="cell"><span class="sl">הזמנות</span><span class="sv">${b.orders}</span></div>
+        <div class="cell"><span class="sl">AOV</span><span class="sv">${b.aov}</span></div>
+      </div>
+      <div class="divider"></div>
+      <div class="cpm-label">CPM לפי פלטפורמה</div>
+      <div class="cpm-row" style="grid-template-columns:repeat(${b.cpm.length},1fr)">${tiles}</div>
+      <span class="badge">white AA ${r}:1 ✓</span>
+    </div>`;
+  }
+  document.getElementById('grid-dark').innerHTML  = BANDS.map(card).join('');
+  document.getElementById('grid-light').innerHTML = BANDS.map(card).join('');
+</script>
+</body>
+</html>

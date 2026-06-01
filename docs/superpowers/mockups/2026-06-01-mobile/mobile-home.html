@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>מובייל — דף הבית קומפקטי</title>
+<style>
+  /* ============================================================
+     Mobile-first home redesign mockup (390px phone).
+     Goal: per-store cards + KPI strip + chart + goal become COMPACT
+     and delightful on phone — not 3 giant stacked blocks.
+     Faithful to the real tokens (deep band gradients, white text).
+     LEFT column = CURRENT (too big).  RIGHT column = PROPOSED.
+     ============================================================ */
+  :root{
+    --canvas:#0b0d16; --glass-1:#171a2e; --glass-2:#1d2138; --edge:rgba(255,255,255,.08);
+    --ink:#eef1ff; --ink-2:#b3b9d8; --ink-muted:#838cb0; --radius:16px;
+    --band-blue-a:#4170d1; --band-blue-b:#2563eb;
+    --band-red-a:#ce3e5a; --band-red-b:#e11c48;
+    --band-green-a:#1e8264; --band-green-b:#0b3d2e;
+    --up:#6ff0c0; --dn:#ffd2d9;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#06070d;color:var(--ink);font-family:'Heebo',-apple-system,system-ui,sans-serif;padding:18px 14px 50px}
+  h1{font-size:17px;font-weight:800;margin:0 0 3px}
+  .sub{color:#8a90b0;font-size:12.5px;margin:0 0 20px;line-height:1.5}
+  .cols{display:flex;gap:18px;align-items:flex-start;flex-wrap:wrap}
+  .col{flex:1;min-width:330px}
+  .col h2{font-size:12px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:#9aa0c0;margin:0 0 12px;padding-bottom:7px;border-bottom:1px solid rgba(255,255,255,.07)}
+  .badlbl{color:#ff9aa8} .goodlbl{color:#7ee8b6}
+
+  /* phone frame */
+  .phone{width:360px;max-width:100%;margin-inline:auto;background:var(--canvas);border-radius:26px;border:8px solid #1a1d2b;box-shadow:0 20px 60px rgba(0,0,0,.5);overflow:hidden}
+  .scr{height:620px;overflow-y:auto;padding:12px 11px 30px}
+  .scr::-webkit-scrollbar{width:0}
+
+  /* section header */
+  .sec{display:flex;align-items:center;gap:7px;margin:16px 2px 9px}
+  .sec .ic{width:26px;height:26px;border-radius:8px;background:rgba(124,108,255,.16);display:grid;place-items:center;color:#a99cff;font-size:13px;flex-shrink:0}
+  .sec .t{font-size:13px;font-weight:800}
+  .sec .d{font-size:10.5px;color:var(--ink-muted);line-height:1.3}
+  .sec:first-child{margin-top:4px}
+
+  /* ============ CURRENT (oversized) per-store card ============ */
+  .cur-card{border-radius:var(--radius);padding:24px;margin-bottom:16px;color:#fff;position:relative;overflow:hidden;background:linear-gradient(135deg,var(--band-red-a),var(--band-red-b))}
+  .cur-card.blue{background:linear-gradient(135deg,var(--band-blue-a),var(--band-blue-b))}
+  .cur-head{display:flex;justify-content:space-between;align-items:flex-start}
+  .cur-tag{font-size:10px;font-weight:800;background:rgba(0,0,0,.22);padding:3px 9px;border-radius:999px}
+  .cur-name{font-size:18px;font-weight:800}
+  .cur-roas{font-size:50px;font-weight:300;line-height:1;margin:14px 0 4px;text-align:left;direction:ltr}
+  .cur-cap{font-size:10px;text-transform:uppercase;opacity:.8;text-align:left}
+  .cur-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin:18px 0;padding-top:14px;border-top:1px solid rgba(255,255,255,.18)}
+  .cur-grid .sl{font-size:11px;opacity:.8} .cur-grid .sv{font-size:21px;font-weight:800;text-align:right;direction:ltr}
+  .cur-cpm{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,.18)}
+  .cur-tile{background:rgba(255,255,255,.13);border-radius:11px;padding:11px}
+
+  /* ============ PROPOSED compact per-store card ============ */
+  .pc{border-radius:14px;padding:13px 14px;margin-bottom:10px;color:#fff;position:relative;overflow:hidden;background:linear-gradient(135deg,var(--band-red-a),var(--band-red-b))}
+  .pc.blue{background:linear-gradient(135deg,var(--band-blue-a),var(--band-blue-b))}
+  .pc::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:rgba(255,255,255,.35)}
+  .pc-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .pc-name{font-size:14px;font-weight:800}
+  .pc-right{display:flex;align-items:center;gap:7px}
+  .pc-roas{font-size:24px;font-weight:800;line-height:1;direction:ltr}
+  .pc-tag{font-size:9px;font-weight:800;background:rgba(0,0,0,.24);padding:2px 7px;border-radius:999px;white-space:nowrap}
+  .pc-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:11px;padding-top:10px;border-top:1px solid rgba(255,255,255,.18)}
+  .pc-m{text-align:center}
+  .pc-m .k{font-size:8.5px;opacity:.78;text-transform:uppercase;display:block;letter-spacing:.02em}
+  .pc-m .v{font-size:14px;font-weight:800;direction:ltr;margin-top:2px}
+  /* CPM collapses to a single inline row of chips */
+  .pc-cpm{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+  .pc-chip{display:flex;align-items:center;gap:5px;background:rgba(255,255,255,.13);border-radius:8px;padding:4px 8px;font-size:11px;font-weight:700}
+  .pc-chip .dot{width:7px;height:7px;border-radius:50%}
+  .dot-meta{background:#4d8bf0}.dot-google{background:#f4a200}.dot-tiktok{background:#ff2e7e}
+  .pc-chip .sp{opacity:.62;font-size:9.5px;font-weight:600}
+
+  /* ============ KPI strip (proposed: 2-up compact) ============ */
+  .kpi-feat{border-radius:14px;padding:14px;margin-bottom:9px;color:#fff;background:linear-gradient(135deg,var(--band-green-a),var(--band-green-b));position:relative;overflow:hidden}
+  .kpi-feat::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:rgba(255,255,255,.3)}
+  .kpi-feat .lbl{font-size:11px;opacity:.85;text-align:left;direction:rtl;display:flex;justify-content:space-between;align-items:center}
+  .kpi-feat .live{font-size:8.5px;background:rgba(0,0,0,.24);padding:2px 6px;border-radius:999px;font-weight:800}
+  .kpi-feat .big{font-size:30px;font-weight:800;direction:ltr;margin-top:4px}
+  .kpi-feat .delta{font-size:11px;opacity:.85;margin-top:5px;color:var(--dn)}
+  .kpi2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .kpi{background:var(--glass-1);border:1px solid var(--edge);border-radius:13px;padding:12px}
+  .kpi .k{font-size:10px;color:var(--ink-muted);text-align:left;direction:rtl;text-transform:uppercase;letter-spacing:.03em}
+  .kpi .v{font-size:20px;font-weight:800;direction:ltr;margin-top:5px}
+  .kpi .chg{font-size:10.5px;margin-top:3px} .chg.up{color:var(--up)} .chg.dn{color:var(--dn)}
+
+  /* chart + goal compact */
+  .card{background:var(--glass-1);border:1px solid var(--edge);border-radius:14px;padding:13px;margin-top:9px}
+  .card .ttl{font-size:11px;color:var(--ink-muted);text-align:left;direction:rtl;margin-bottom:8px}
+  .spark{height:60px;background:linear-gradient(180deg,rgba(124,108,255,.18),transparent);border-radius:8px;position:relative}
+  .spark svg{position:absolute;inset:0;width:100%;height:100%}
+  .goal{font-size:12px;color:var(--ink-2);line-height:1.55} .goal b{color:#ffd08a}
+  .ranges{display:flex;gap:5px;margin-top:9px;flex-wrap:wrap}
+  .ranges b{font-size:10.5px;padding:4px 9px;border-radius:7px;background:var(--glass-2);color:var(--ink-2)}
+  .ranges b.on{background:#6d5efc;color:#fff}
+
+  .note{font-size:12px;color:#9aa0c0;line-height:1.6;margin-top:14px;max-width:340px}
+  .note b{color:#eef1ff}
+</style>
+</head>
+<body>
+  <h1>מובייל — דף הבית: קומפקטי וכיף</h1>
+  <p class="sub">משמאל המצב <span class="badlbl">הנוכחי</span> (כרטיסים ענקיים שתופסים את כל המסך), מימין ה<span class="goodlbl">מוצע</span> — אותו מידע, צפוף וקריא לפלאפון. כל הנתונים נשמרים.</p>
+
+  <div class="cols">
+    <!-- ============ CURRENT ============ -->
+    <div class="col">
+      <h2 class="badlbl">נוכחי — כרטיס אחד תופס מסך שלם</h2>
+      <div class="phone"><div class="scr">
+        <div class="cur-card blue">
+          <div class="cur-head"><span class="cur-tag">מעולה · LIVE</span><span class="cur-name">uzoshop</span></div>
+          <div class="cur-roas">3.45x</div><div class="cur-cap">ROAS · היום</div>
+          <div class="cur-grid">
+            <div><span class="sl">הוצאה ↓</span><div class="sv">$620</div></div>
+            <div><span class="sl">הכנסה ↑</span><div class="sv">$2.1K</div></div>
+            <div><span class="sl">הזמנות</span><div class="sv">15</div></div>
+            <div><span class="sl">AOV</span><div class="sv">$137</div></div>
+          </div>
+          <div class="cur-cpm">
+            <div class="cur-tile">Google · $9</div><div class="cur-tile">Meta · $37</div>
+          </div>
+        </div>
+        <div class="cur-card">
+          <div class="cur-head"><span class="cur-tag">דורש בחינה</span><span class="cur-name">360usmile</span></div>
+          <div class="cur-roas">1.67x</div><div class="cur-cap">ROAS · היום</div>
+          <div class="cur-grid">
+            <div><span class="sl">הוצאה ↓</span><div class="sv">$45</div></div>
+            <div><span class="sl">הכנסה ↑</span><div class="sv">$75</div></div>
+            <div><span class="sl">הזמנות</span><div class="sv">2</div></div>
+            <div><span class="sl">AOV</span><div class="sv">$37</div></div>
+          </div>
+        </div>
+        <div style="text-align:center;color:#5a608a;font-size:11px;padding:8px">↓ עוד גלילה ארוכה לכרטיס השלישי + ה-KPI…</div>
+      </div></div>
+    </div>
+
+    <!-- ============ PROPOSED ============ -->
+    <div class="col">
+      <h2 class="goodlbl">מוצע — הכל נראה במבט, קומפקטי</h2>
+      <div class="phone"><div class="scr">
+        <!-- section: per store -->
+        <div class="sec"><span class="ic">▦</span><div><div class="t">לפי חנות</div><div class="d">ROAS, הוצאה, הכנסה ו-CPM של כל חנות</div></div></div>
+
+        <div class="pc blue">
+          <div class="pc-top"><span class="pc-name">uzoshop</span><div class="pc-right"><span class="pc-roas">3.45x</span><span class="pc-tag">מעולה</span></div></div>
+          <div class="pc-metrics">
+            <div class="pc-m"><span class="k">הוצאה</span><span class="v">$620</span></div>
+            <div class="pc-m"><span class="k">הכנסה</span><span class="v">$2.1K</span></div>
+            <div class="pc-m"><span class="k">הזמנות</span><span class="v">15</span></div>
+            <div class="pc-m"><span class="k">AOV</span><span class="v">$137</span></div>
+          </div>
+          <div class="pc-cpm">
+            <span class="pc-chip"><span class="dot dot-google"></span>Google $9 <span class="sp">·$48</span></span>
+            <span class="pc-chip"><span class="dot dot-meta"></span>Meta $37 <span class="sp">·$813</span></span>
+          </div>
+        </div>
+
+        <div class="pc">
+          <div class="pc-top"><span class="pc-name">360usmile</span><div class="pc-right"><span class="pc-roas">1.67x</span><span class="pc-tag">דורש בחינה</span></div></div>
+          <div class="pc-metrics">
+            <div class="pc-m"><span class="k">הוצאה</span><span class="v">$45</span></div>
+            <div class="pc-m"><span class="k">הכנסה</span><span class="v">$75</span></div>
+            <div class="pc-m"><span class="k">הזמנות</span><span class="v">2</span></div>
+            <div class="pc-m"><span class="k">AOV</span><span class="v">$37</span></div>
+          </div>
+          <div class="pc-cpm">
+            <span class="pc-chip"><span class="dot dot-meta"></span>Meta $25 <span class="sp">·$45</span></span>
+            <span class="pc-chip"><span class="dot dot-tiktok"></span>TikTok $3 <span class="sp">·$21</span></span>
+          </div>
+        </div>
+
+        <div class="pc">
+          <div class="pc-top"><span class="pc-name">Zol Plus</span><div class="pc-right"><span class="pc-roas">2.76x</span><span class="pc-tag">סביר</span></div></div>
+          <div class="pc-metrics">
+            <div class="pc-m"><span class="k">הוצאה</span><span class="v">$3.4K</span></div>
+            <div class="pc-m"><span class="k">הכנסה</span><span class="v">$9.5K</span></div>
+            <div class="pc-m"><span class="k">הזמנות</span><span class="v">96</span></div>
+            <div class="pc-m"><span class="k">AOV</span><span class="v">$99</span></div>
+          </div>
+          <div class="pc-cpm">
+            <span class="pc-chip"><span class="dot dot-meta"></span>Meta $32 <span class="sp">·$3.4K</span></span>
+          </div>
+        </div>
+
+        <!-- section: business -->
+        <div class="sec"><span class="ic">⌂</span><div><div class="t">סיכום עסקי</div><div class="d">המספרים המצרפיים של כל העסק</div></div></div>
+
+        <div class="kpi-feat">
+          <div class="lbl"><span>רווח תפעולי · היום</span><span class="live">LIVE · 4m</span></div>
+          <div class="big">$1,172</div>
+          <div class="delta">▾ −$707 (−38%) מול אתמול</div>
+        </div>
+        <div class="kpi2">
+          <div class="kpi"><div class="k">הכנסה</div><div class="v">$2,915</div><div class="chg dn">▾ −40%</div></div>
+          <div class="kpi"><div class="k">הוצאה</div><div class="v">$1,015</div><div class="chg dn">▾ −43%</div></div>
+          <div class="kpi"><div class="k">ROAS</div><div class="v">2.87</div><div class="chg up">▴ +0.13</div></div>
+          <div class="kpi"><div class="k">הזמנות</div><div class="v">24</div><div class="chg up">▴ +24</div></div>
+          <div class="kpi"><div class="k">מלאי · היום</div><div class="v">$729</div><div class="chg" style="color:#8a90b0">~25%</div></div>
+          <div class="kpi"><div class="k">CPM עסקי</div><div class="v">$27.12</div><div class="chg dn">▴ +28%</div></div>
+        </div>
+
+        <!-- chart -->
+        <div class="card">
+          <div class="ttl">ROAS מול יעד · 30 ימים</div>
+          <div class="spark"><svg viewBox="0 0 300 60" preserveAspectRatio="none"><path d="M0,40 L40,32 L80,38 L120,22 L160,28 L200,18 L240,24 L300,14" fill="none" stroke="#34e2ad" stroke-width="2"/></svg></div>
+          <div class="ranges"><b>7 ימים</b><b class="on">30 ימים</b><b>90 ימים</b><b>מהחודש</b></div>
+        </div>
+        <!-- goal -->
+        <div class="card">
+          <div class="goal">ROAS ירד 10.7% ב-30 הימים האחרונים. ממוצע <b>2.3</b> מול יעד 3.0.</div>
+        </div>
+      </div></div>
+    </div>
+  </div>
+
+  <p class="note">
+    <b>מה משתנה (מובייל בלבד — דסקטופ לא נוגעים בו):</b><br>
+    • <b>כרטיס חנות קומפקטי</b>: ריפוד 24→13px, ROAS 50→24px (לצד השם במקום ענק מתחת), 4 המדדים בשורה אחת צפופה, ו-CPM הופך לשבבי-inline במקום אריחים גדולים. → כרטיס ~⅓ מהגובה.<br>
+    • <b>רצועת KPI</b>: רווח-תפעולי גדול למעלה + השאר ב-2-טורים קומפקטיים (במקום 6 בלוקים מלא-רוחב).<br>
+    • <b>כותרות-סקשן</b> ("לפי חנות" / "סיכום עסקי") שמפרידות ויזואלית.<br>
+    • <b>הכל נשמר</b> — אותו מידע בדיוק, רק צפוף וכיף לאצבע. בדסקטופ (md+) חוזרים ל-3-טורים והגדלים הגדולים כרגיל.
+  </p>
+</body>
+</html>

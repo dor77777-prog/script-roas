@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>מובייל v2 — חוויה כיפית · light + dark</title>
+<style>
+  /* ============================================================
+     Mobile home v2 — DELIGHT mockup. Interactive. BOTH themes.
+     5 features: A1 swipeable carousel · A2 count-up · A3 thumb pills
+     · B1 sparkline+delta · B3 collapsing sticky summary.
+     Token-driven (vars flip per .theme-dark / .theme-light frame).
+     ============================================================ */
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Heebo',-apple-system,system-ui,sans-serif;background:#0a0b12;color:#e8eaf2;padding:18px 14px 60px}
+  h1{font-size:17px;font-weight:800;margin:0 0 3px}
+  .sub{color:#8a90b0;font-size:12.5px;margin:0 0 22px;line-height:1.55;max-width:760px}
+  .feat{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 22px}
+  .feat span{font-size:11px;background:#1a1d2b;color:#b9bdd0;border:1px solid #2a2e40;border-radius:999px;padding:3px 10px}
+  .feat b{color:#a99cff}
+  .cols{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;justify-content:center}
+  .stage{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .stage > .lbl{font-size:12px;font-weight:800;letter-spacing:.05em;text-transform:uppercase}
+  .lbl.d{color:#a99cff}.lbl.l{color:#0e8a99}
+
+  /* ===== theme token sets ===== */
+  .frame{width:374px;max-width:100%;border-radius:30px;border:9px solid #15171f;box-shadow:0 24px 70px rgba(0,0,0,.55);overflow:hidden}
+  .theme-dark{
+    --canvas:#0b0d16;--glass-1:#171a2e;--glass-2:#1d2138;--edge:rgba(255,255,255,.09);
+    --ink:#eef1ff;--ink-2:#b3b9d8;--ink-muted:#838cb0;
+    --pill-track:#1d2138;--pill-thumb:#6d5efc;--pill-ink:#b3b9d8;--pill-ink-on:#fff;
+    --up:#5cf0c3;--dn:#ff9aa8;--accent:#7c6cff;
+    --bd-blue-a:#4170d1;--bd-blue-b:#2563eb;--bd-red-a:#ce3e5a;--bd-red-b:#e11c48;
+    --bd-grn-a:#1e8264;--bd-grn-b:#0b3d2e;--bd-org-a:#aa6200;--bd-org-b:#cb4800;
+    --skel:#222641;
+  }
+  .theme-light{
+    --canvas:#f3f4f8;--glass-1:#ffffff;--glass-2:#f6f7fb;--edge:rgba(20,24,48,.10);
+    --ink:#171a2b;--ink-2:#565d78;--ink-muted:#6f748d;
+    --pill-track:#e7e9f0;--pill-thumb:#0ea5b7;--pill-ink:#565d78;--pill-ink-on:#fff;
+    --up:#0a8a5e;--dn:#d22c3c;--accent:#0ea5b7;
+    --bd-blue-a:#4170d1;--bd-blue-b:#2563eb;--bd-red-a:#ce3e5a;--bd-red-b:#e11c48;
+    --bd-grn-a:#1e8264;--bd-grn-b:#0b3d2e;--bd-org-a:#aa6200;--bd-org-b:#cb4800;
+    --skel:#e7e9f0;
+  }
+  .scr{height:660px;overflow-y:auto;background:var(--canvas);color:var(--ink);scroll-behavior:smooth;position:relative}
+  .scr::-webkit-scrollbar{width:0}
+
+  /* ===== B3 collapsing sticky summary ===== */
+  .sticky{position:sticky;top:0;z-index:20;background:color-mix(in oklab,var(--canvas) 86%,transparent);backdrop-filter:blur(12px);border-bottom:1px solid var(--edge);padding:12px 14px;transition:padding .25s ease}
+  .sticky .big{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+  .sticky .roas{font-size:30px;font-weight:800;direction:ltr;transition:font-size .25s ease}
+  .sticky .meta{font-size:12px;color:var(--ink-muted);text-align:left;direction:rtl}
+  .sticky .tgt{font-size:11px;color:var(--ink-muted);margin-top:3px;transition:opacity .2s,max-height .25s;max-height:20px;overflow:hidden}
+  .sticky .deltachip{font-size:12px;font-weight:800;padding:2px 8px;border-radius:999px;direction:ltr}
+  .scr.collapsed .sticky{padding:8px 14px}
+  .scr.collapsed .sticky .roas{font-size:20px}
+  .scr.collapsed .sticky .tgt{opacity:0;max-height:0;margin:0}
+
+  /* ===== A3 thumb-bar range pills ===== */
+  .pillbar{position:sticky;top:0;z-index:10;background:var(--canvas);padding:10px 14px 6px}
+  .pills{position:relative;display:flex;background:var(--pill-track);border-radius:12px;padding:4px}
+  .pills .thumb{position:absolute;top:4px;bottom:4px;border-radius:9px;background:var(--pill-thumb);transition:inset-inline-start .28s cubic-bezier(.34,1.4,.5,1),width .28s cubic-bezier(.34,1.4,.5,1);box-shadow:0 2px 8px color-mix(in oklab,var(--pill-thumb) 50%,transparent)}
+  .pills button{flex:1;position:relative;z-index:1;border:0;background:transparent;color:var(--pill-ink);font-family:inherit;font-size:12px;font-weight:700;padding:8px 4px;border-radius:9px;cursor:pointer;min-height:40px;transition:color .2s}
+  .pills button.on{color:var(--pill-ink-on)}
+  .pills button:active{transform:scale(.96)}
+
+  /* ===== sections ===== */
+  .sec{display:flex;align-items:center;gap:7px;margin:14px 14px 8px}
+  .sec .ic{width:25px;height:25px;border-radius:8px;background:color-mix(in oklab,var(--accent) 18%,transparent);display:grid;place-items:center;color:var(--accent);font-size:12px}
+  .sec .t{font-size:13px;font-weight:800;color:var(--ink)}
+  .sec .d{font-size:10px;color:var(--ink-muted)}
+
+  /* ===== A1 swipeable carousel ===== */
+  .deck{display:flex;gap:11px;overflow-x:auto;scroll-snap-type:x mandatory;padding:2px 14px 4px;scrollbar-width:none}
+  .deck::-webkit-scrollbar{display:none}
+  .pc{scroll-snap-align:center;flex:0 0 84%;border-radius:16px;padding:15px 16px;color:#fff;position:relative;overflow:hidden;background:linear-gradient(135deg,var(--bd-blue-a),var(--bd-blue-b));transition:transform .12s}
+  .pc:active{transform:scale(.985)}
+  .pc.red{background:linear-gradient(135deg,var(--bd-red-a),var(--bd-red-b))}
+  .pc.org{background:linear-gradient(135deg,var(--bd-org-a),var(--bd-org-b))}
+  .pc::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:rgba(255,255,255,.4)}
+  .pc-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .pc-name{font-size:15px;font-weight:800}
+  .pc-tag{font-size:9px;font-weight:800;background:rgba(0,0,0,.24);padding:2px 8px;border-radius:999px}
+  .pc-roasrow{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-top:10px}
+  .pc-roas{font-size:34px;font-weight:800;line-height:1;direction:ltr}
+  /* B1 sparkline + delta */
+  .pc-spark{flex:1;height:34px;position:relative}
+  .pc-spark svg{position:absolute;inset:0;width:100%;height:100%}
+  .pc-delta{font-size:12px;font-weight:800;direction:ltr;padding:2px 8px;border-radius:999px;background:rgba(255,255,255,.15);white-space:nowrap}
+  .pc-metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-top:13px;padding-top:11px;border-top:1px solid rgba(255,255,255,.2)}
+  .pc-m{text-align:center}
+  .pc-m .k{font-size:8px;opacity:.78;text-transform:uppercase;display:block}
+  .pc-m .v{font-size:13px;font-weight:800;direction:ltr;margin-top:2px}
+  .pc-cpm{display:flex;gap:5px;margin-top:9px;flex-wrap:wrap}
+  .pc-chip{display:flex;align-items:center;gap:4px;background:rgba(255,255,255,.13);border-radius:7px;padding:3px 7px;font-size:10.5px;font-weight:700}
+  .pc-chip .dot{width:6px;height:6px;border-radius:50%}
+  .dot-meta{background:#4d8bf0}.dot-google{background:#f4a200}.dot-tiktok{background:#ff2e7e}
+  /* dots */
+  .dots{display:flex;justify-content:center;gap:6px;margin:9px 0 4px}
+  .dots i{width:6px;height:6px;border-radius:50%;background:var(--ink-muted);opacity:.4;transition:.25s}
+  .dots i.on{opacity:1;width:18px;border-radius:3px;background:var(--accent)}
+
+  /* KPI compact 2-up */
+  .kpi2{display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:0 14px}
+  .kpi{background:var(--glass-1);border:1px solid var(--edge);border-radius:12px;padding:11px}
+  .kpi .k{font-size:9.5px;color:var(--ink-muted);text-align:left;direction:rtl;text-transform:uppercase}
+  .kpi .v{font-size:18px;font-weight:800;direction:ltr;margin-top:4px;color:var(--ink)}
+  .kpi .c{font-size:10px;margin-top:2px} .c.up{color:var(--up)} .c.dn{color:var(--dn)}
+
+  .hint{font-size:11px;color:var(--ink-muted);text-align:center;padding:10px 14px 4px}
+  .note{font-size:12.5px;color:#9aa0c0;line-height:1.7;margin-top:26px;max-width:780px}
+  .note b{color:#e8eaf2}.note u{text-decoration:none;color:#a99cff}
+</style>
+</head>
+<body>
+  <h1>מובייל v2 — חוויה כיפית 🎉</h1>
+  <p class="sub">5 פיצ'רים מומלצים, אינטראקטיביים, ב<b>שני המודים</b>. <b>החלק</b> את כרטיסי החנות הצדה · <b>הקש</b> על סרגל הטווחים · <b>גלול</b> כדי לראות את הסיכום מתכווץ למעלה.</p>
+  <div class="feat">
+    <span><b>A1</b> קרוסלת-כרטיסים</span><span><b>A2</b> מספרים שמטפסים</span><span><b>A3</b> סרגל-טווחים נע</span><span><b>B1</b> sparkline + דלתא</span><span><b>B3</b> סיכום מתכווץ דביק</span>
+  </div>
+
+  <div class="cols">
+    <div class="stage"><div class="lbl d">🌙 כהה</div><div class="frame" id="frame-dark"></div></div>
+    <div class="stage"><div class="lbl l">☀️ בהיר</div><div class="frame" id="frame-light"></div></div>
+  </div>
+
+  <p class="note">
+    <b>מה כל פיצ'ר נותן:</b><br>
+    <u>A1 קרוסלה</u> — 3 הכרטיסים הופכים מערימה ארוכה ל<b>דק שמחליקים</b> בו, כל חנות עמוד מלא, נקודות-מעקב למטה (מתהפכות נכון ל-RTL).<br>
+    <u>A2 count-up</u> — מספרי ה-ROAS וה-KPI <b>מטפסים ומתייצבים</b> בכניסה (כבוי תחת reduced-motion).<br>
+    <u>A3 סרגל-טווחים</u> — pill עם <b>סמן נע קפיצי</b> (היום/7/30…), יעדי-מגע ≥44px, באזור-האגודל.<br>
+    <u>B1 sparkline+דלתא</u> — בכל כרטיס <b>קו-מגמה זעיר + צ'יפ ▲/▼%</b> צבוע — האות הכי דחוס-מידע במבט.<br>
+    <u>B3 סיכום דביק</u> — ה-ROAS-מול-יעד <b>נשאר תמיד למעלה</b>, מתכווץ לפס דק בגלילה.<br><br>
+    <b>הכל מובייל-בלבד</b> (דסקטופ קפוא ב-md+), token-driven, עובר AA בשני המודים. אופציונלי 6: <b>bottom-sheet</b> לדריל (הקשה על כרטיס → גיליון עולה מלמטה). pull-to-refresh — אציע במקום כפתור-רענון אלא אם תרצה את המחווה.
+  </p>
+
+<script>
+  const STORES = [
+    {cls:'',    name:'uzoshop',   tag:'מעולה', roas:3.45, spark:[2.1,2.4,2.0,2.8,3.0,3.2,3.45], delta:'▲ +9%', up:true,  m:['$620','$2.1K','15','$137'], cpm:[['Google','dot-google','$9'],['Meta','dot-meta','$37']]},
+    {cls:'org', name:'Zol Plus',  tag:'סביר',  roas:2.76, spark:[3.1,2.9,2.6,2.7,2.8,2.7,2.76],delta:'▼ −4%', up:false, m:['$3.4K','$9.5K','96','$99'], cpm:[['Meta','dot-meta','$32']]},
+    {cls:'red', name:'360usmile', tag:'דורש בחינה', roas:1.67, spark:[2.4,2.1,1.9,1.8,1.7,1.6,1.67],delta:'▼ −12%',up:false, m:['$45','$75','2','$37'], cpm:[['Meta','dot-meta','$25'],['TikTok','dot-tiktok','$3']]},
+  ];
+  function sparkPath(vals){
+    const w=100,h=34,mn=Math.min(...vals),mx=Math.max(...vals),r=(mx-mn)||1;
+    return vals.map((v,i)=>`${i?'L':'M'}${(i/(vals.length-1)*w).toFixed(1)},${(h-((v-mn)/r)*h).toFixed(1)}`).join(' ');
+  }
+  function buildScreen(theme){
+    const cards = STORES.map((s,i)=>`
+      <div class="pc ${s.cls}">
+        <div class="pc-top"><span class="pc-name">${s.name}</span><span class="pc-tag">${s.tag}</span></div>
+        <div class="pc-roasrow">
+          <span class="pc-roas" data-count="${s.roas}">0.00x</span>
+          <div class="pc-spark"><svg viewBox="0 0 100 34" preserveAspectRatio="none"><path d="${sparkPath(s.spark)}" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".55"/><path d="${sparkPath(s.spark)}" fill="none" stroke="${s.up?'#c8ffe9':'#ffd2d9'}" stroke-width="1.4" stroke-linecap="round"/></svg></div>
+          <span class="pc-delta" style="color:${s.up?'#c8ffe9':'#ffd2d9'}">${s.delta}</span>
+        </div>
+        <div class="pc-metrics">
+          <div class="pc-m"><span class="k">הוצאה</span><span class="v">${s.m[0]}</span></div>
+          <div class="pc-m"><span class="k">הכנסה</span><span class="v">${s.m[1]}</span></div>
+          <div class="pc-m"><span class="k">הזמנות</span><span class="v">${s.m[2]}</span></div>
+          <div class="pc-m"><span class="k">AOV</span><span class="v">${s.m[3]}</span></div>
+        </div>
+        <div class="pc-cpm">${s.cpm.map(c=>`<span class="pc-chip"><span class="dot ${c[1]}"></span>${c[0]} ${c[2]}</span>`).join('')}</div>
+      </div>`).join('');
+    return `
+    <div class="scr theme-${theme}">
+      <div class="sticky">
+        <div class="big">
+          <div><span class="roas" data-count="2.87">0.00</span> <span class="deltachip" style="color:var(--up)">▲ +0.13</span></div>
+          <div class="meta">ROAS · מול יעד 3.0</div>
+        </div>
+        <div class="tgt">ירד 10.7% ב-30 הימים האחרונים · ממוצע 2.3</div>
+      </div>
+      <div class="pillbar">
+        <div class="pills">
+          <span class="thumb"></span>
+          <button class="on">היום</button><button>7 ימים</button><button>30 ימים</button><button>מהחודש</button>
+        </div>
+      </div>
+      <div class="sec"><span class="ic">▦</span><div><div class="t">לפי חנות</div><div class="d">החלק לצדדים →</div></div></div>
+      <div class="deck">${cards}</div>
+      <div class="dots"><i class="on"></i><i></i><i></i></div>
+      <div class="sec"><span class="ic">⌂</span><div><div class="t">סיכום עסקי</div></div></div>
+      <div class="kpi2">
+        <div class="kpi"><div class="k">רווח תפעולי</div><div class="v" data-count="1172" data-money>$0</div><div class="c dn">▾ −38%</div></div>
+        <div class="kpi"><div class="k">הכנסה</div><div class="v" data-count="2915" data-money>$0</div><div class="c dn">▾ −40%</div></div>
+        <div class="kpi"><div class="k">הוצאה</div><div class="v" data-count="1015" data-money>$0</div><div class="c dn">▾ −43%</div></div>
+        <div class="kpi"><div class="k">הזמנות</div><div class="v" data-count="24">0</div><div class="c up">▴ +24</div></div>
+      </div>
+      <div class="hint">↑ גלול למעלה כדי לראות את הסיכום מתכווץ · החלק את הכרטיסים</div>
+      <div style="height:40px"></div>
+    </div>`;
+  }
+
+  function wire(scr){
+    // A2 count-up
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    scr.querySelectorAll('[data-count]').forEach(el=>{
+      const target=parseFloat(el.dataset.count), money='money' in el.dataset, dec=el.textContent.includes('.')||/\.\d/.test(el.dataset.count)||target%1!==0;
+      const isX=el.classList.contains('pc-roas'); const suffix=isX?'x':'';
+      if(reduce){ el.textContent=(money?'$':'')+Math.round(target).toLocaleString('en-US')+(dec&&!money?'':'')+suffix; if(!money&&dec) el.textContent=target.toFixed(2)+suffix; return; }
+      let t0=null,dur=900;
+      function tick(ts){ if(!t0)t0=ts; const p=Math.min(1,(ts-t0)/dur), e=1-Math.pow(1-p,3), val=target*e;
+        el.textContent = money ? '$'+Math.round(val).toLocaleString('en-US') : (target%1!==0? val.toFixed(2)+suffix : Math.round(val).toLocaleString('en-US')+suffix);
+        if(p<1) requestAnimationFrame(tick); }
+      requestAnimationFrame(tick);
+    });
+    // A3 thumb pill slider
+    const pills=scr.querySelector('.pills'); if(pills){
+      const btns=[...pills.querySelectorAll('button')], thumb=pills.querySelector('.thumb');
+      function move(b){ thumb.style.width=b.offsetWidth+'px'; thumb.style.insetInlineStart=b.offsetLeft+'px'; btns.forEach(x=>x.classList.toggle('on',x===b)); }
+      requestAnimationFrame(()=>move(btns[0]));
+      btns.forEach(b=>b.addEventListener('click',()=>move(b)));
+    }
+    // A1 dot tracking on scroll
+    const deck=scr.querySelector('.deck'), dots=[...scr.querySelectorAll('.dots i')];
+    if(deck){ deck.addEventListener('scroll',()=>{ const i=Math.round(deck.scrollLeft/ -(deck.scrollWidth-deck.clientWidth) * (STORES.length-1) ); // RTL scrollLeft is negative
+      const idx=Math.min(STORES.length-1,Math.max(0,Math.round(Math.abs(deck.scrollLeft)/(deck.scrollWidth-deck.clientWidth)*(STORES.length-1))));
+      dots.forEach((d,k)=>d.classList.toggle('on',k===idx)); }); }
+    // B3 collapse on scroll
+    scr.addEventListener('scroll',()=>{ scr.classList.toggle('collapsed', scr.scrollTop>120); });
+  }
+
+  ['dark','light'].forEach(t=>{
+    const host=document.getElementById('frame-'+t);
+    host.innerHTML=buildScreen(t);
+    wire(host.querySelector('.scr'));
+  });
+</script>
+</body>
+</html>

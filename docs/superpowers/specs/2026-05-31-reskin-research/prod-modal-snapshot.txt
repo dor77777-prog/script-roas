@@ -1,0 +1,96 @@
+uid=1_0 RootWebArea "דשבורד ROAS" url="https://roas-dashboard-smoky.vercel.app/?c_preset=custom&c_from=2026-05-20&c_to=2026-05-31&tab=campaigns&c_drill=uzoshop%3A%3AMeta%3A%3A120247337357730721"
+  uid=1_1 banner
+    uid=1_2 button "sync OK" description="סונכרן לפני 1ש"
+      uid=1_3 generic atomic live="polite" relevant="additions text"
+  uid=1_4 dialog "תחתונים לבריחת שתן"
+    uid=1_5 banner
+      uid=1_6 heading "תחתונים לבריחת שתן" level="2"
+      uid=1_7 StaticText "uzoshop"
+      uid=1_8 StaticText "·"
+      uid=1_9 StaticText "Meta"
+      uid=1_10 StaticText "·"
+      uid=1_11 StaticText "12"
+      uid=1_12 StaticText " ימים פעילים"
+      uid=1_13 link "פתח ב- Meta Ads Manager" url="https://business.facebook.com/adsmanager/manage/adsets?act=26442930835313109&selected_campaign_ids=120247337357730721"
+        uid=1_14 StaticText "פתח ב-"
+        uid=1_15 StaticText "Meta"
+        uid=1_16 StaticText "Ads Manager"
+    uid=1_17 tablist orientation="horizontal"
+      uid=1_18 tab "סקירה" focusable focused selectable
+      uid=1_19 tab "יומי" selectable selected
+      uid=1_20 tab "Ad Sets" selectable
+      uid=1_21 tab "מודעות" selectable
+      uid=1_22 tab "סטטוס" selectable
+      uid=1_23 tab "היסטוריה" selectable
+    uid=1_24 tabpanel "יומי"
+      uid=1_25 heading "הוצאה ↔ ערך המרות לאורך הזמן" level="3"
+      uid=1_26 application
+        uid=1_27 group
+        uid=1_28 group
+        uid=1_29 group
+        uid=1_30 group
+        uid=1_31 group
+        uid=1_32 group
+        uid=1_33 group
+        uid=1_34 group
+        uid=1_35 group
+        uid=1_36 group
+        uid=1_37 group
+        uid=1_38 group
+          uid=1_39 StaticText "20/05"
+          uid=1_40 StaticText "21/05"
+          uid=1_41 StaticText "22/05"
+          uid=1_42 StaticText "23/05"
+          uid=1_43 StaticText "24/05"
+          uid=1_44 StaticText "25/05"
+          uid=1_45 StaticText "26/05"
+          uid=1_46 StaticText "27/05"
+          uid=1_47 StaticText "28/05"
+          uid=1_48 StaticText "29/05"
+          uid=1_49 StaticText "30/05"
+          uid=1_50 StaticText "31/05"
+          uid=1_51 StaticText "C$0"
+          uid=1_52 StaticText "C$150"
+          uid=1_53 StaticText "C$300"
+          uid=1_54 StaticText "C$450"
+          uid=1_55 StaticText "C$600"
+      uid=1_56 StaticText "ערך המרות"
+      uid=1_57 StaticText "הוצאה"
+      uid=1_58 heading "CPM לאורך זמן (עלות ל-1000 חשיפות, CAD)" level="3"
+      uid=1_59 button "חצי-חצי"
+      uid=1_60 button "vs תקופה קודמת"
+      uid=1_61 checkbox "הוסף ROAS לגרף"
+      uid=1_62 application
+        uid=1_63 group
+        uid=1_64 group
+        uid=1_65 group
+        uid=1_66 group
+        uid=1_67 group
+        uid=1_68 group
+        uid=1_69 group
+        uid=1_70 group
+        uid=1_71 group
+        uid=1_72 group
+        uid=1_73 group
+        uid=1_74 group
+          uid=1_75 StaticText "20/05"
+          uid=1_76 StaticText "21/05"
+          uid=1_77 StaticText "22/05"
+          uid=1_78 StaticText "23/05"
+          uid=1_79 StaticText "24/05"
+          uid=1_80 StaticText "25/05"
+          uid=1_81 StaticText "26/05"
+          uid=1_82 StaticText "27/05"
+          uid=1_83 StaticText "28/05"
+          uid=1_84 StaticText "29/05"
+          uid=1_85 StaticText "30/05"
+          uid=1_86 StaticText "31/05"
+          uid=1_87 StaticText "C$0.00"
+          uid=1_88 StaticText "C$15.00"
+          uid=1_89 StaticText "C$30.00"
+          uid=1_90 StaticText "C$48.71"
+      uid=1_91 StaticText "השוואה: חצי שני (05/26—05/31) מול חצי ראשון (05/20—05/25)"
+      uid=1_92 StaticText "ניתוח:"
+      uid=1_93 StaticText "CPM יציב וROAS עלה ב-320% — שיפור באופטימיזציה (קריאייטיב חדש? audience טוב יותר?) בלי שינוי בלחץ האוקציה."
+    uid=1_94 StaticText "לחץ Esc או על הרקע לסגירה"
+    uid=1_95 button "סגור"

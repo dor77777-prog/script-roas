@@ -577,6 +577,20 @@ function HomeTab({
     const prevCur = filterRows(dataPrev.rows, prevRange, filters.store);
     return aggregate(prevCur, prevRange);
   }, [dataPrev, prevRange, filters.store]);
+  // Mobile B1 — previous-range ROAS per store, for the per-store card delta
+  // chip. Reuses the SAME `dataPrev` SWR payload the hero delta already
+  // fetched (no extra network call); `aggregateByStore` gives us each store's
+  // prev ROAS. `undefined` while prev data is still loading so the adapter
+  // leaves `roasDeltaPct` omitted rather than rendering a misleading 0.
+  const prevRoasByStore = useMemo<Record<string, number> | undefined>(() => {
+    if (!dataPrev) return undefined;
+    const prevCur = filterRows(dataPrev.rows, prevRange, filters.store);
+    const out: Record<string, number> = {};
+    for (const sa of aggregateByStore(prevCur, prevRange)) {
+      out[sa.store] = sa.roas;
+    }
+    return out;
+  }, [dataPrev, prevRange, filters.store]);
   const heroPeriod = useMemo(
     () => toHeroPeriod(filtered.curAgg, heroCpm, heroOrders),
     [filtered.curAgg, heroCpm, heroOrders],
@@ -629,6 +643,11 @@ function HomeTab({
         ordersByStore,
         storeIdByName,
         data?.dataLastWriteAt ?? null,
+        // Mobile B1 — per-store ROAS spark (from the per-day series the Home
+        // tab already computes) + delta-vs-prev-range chip (from the prev
+        // SWR payload the hero delta already fetched). Desktop ignores both.
+        filtered.series,
+        prevRoasByStore,
       ),
     [
       filtered.storeAggs,
@@ -637,6 +656,8 @@ function HomeTab({
       ordersByStore,
       storeIdByName,
       data?.dataLastWriteAt,
+      filtered.series,
+      prevRoasByStore,
     ],
   );
 

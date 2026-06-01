@@ -78,6 +78,24 @@ export interface PerStoreData {
   updatedAt: string | null;
   /** Per-platform CPM breakdown. Only platforms with data are present. */
   perPlatformCpm: Partial<Record<Platform, PerStorePlatformCpm>>;
+  /**
+   * Mobile B1 — daily ROAS for this store across the active range, in
+   * ISO-date order, for the per-store card's tiny trend line. Gap days
+   * (null / non-finite per-day ROAS) are dropped, so this is a dense
+   * series of only the days with real data. `undefined` (omitted) when
+   * fewer than 2 finite points exist — the mobile card then hides the
+   * spark entirely, matching the hero MiniSparkline's "<2 points → no
+   * line" contract. Desktop ignores this field.
+   */
+  roasSpark?: number[];
+  /**
+   * Mobile B1 — fractional ROAS change vs the PREVIOUS equal-length range
+   * ((curRoas − prevRoas) / prevRoas), signed, for the "▲/▼ X%" delta chip.
+   * `null` when the previous ROAS is 0 or unavailable (can't divide).
+   * `undefined` (omitted) when no previous-range data was supplied at all
+   * (back-compat — existing consumers pass none). Desktop ignores this field.
+   */
+  roasDeltaPct?: number | null;
 }
 
 export interface PerStoreRowProps {
