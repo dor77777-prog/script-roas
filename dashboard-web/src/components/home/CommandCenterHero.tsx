@@ -531,7 +531,11 @@ export function CommandCenterHero({
       <div
         className={cn(
           'grid gap-3',
-          'grid-cols-1 md:grid-cols-[1fr_1fr_1.15fr]',
+          // Mobile: 2-up compact grid (Revenue + Spend share the top row; the
+          // featured Operating-Profit card spans full width below — see its
+          // `col-span-2`). Was a single tall stack that ate the whole phone
+          // screen. md+ desktop layout (1fr 1fr 1.15fr) is unchanged.
+          'grid-cols-2 md:grid-cols-[1fr_1fr_1.15fr]',
         )}
         data-testid="hero-row-1"
       >
@@ -591,7 +595,9 @@ export function CommandCenterHero({
         <Card
           band={netBand.band}
           freshness={freshnessStage}
-          className="hero-card featured px-4 py-4 sm:px-6 sm:py-6"
+          // col-span-2 on mobile → the featured banded marquee spans the full
+          // phone width beneath Revenue+Spend; md+ returns to its single column.
+          className="hero-card featured col-span-2 md:col-span-1 px-4 py-4 sm:px-6 sm:py-6"
           data-testid="hero-net-profit"
           title="הכנסות − פרסום − מלאי. רווח נטו מלא (כולל הוצאות קבועות וחוזרות) נמצא ב-P&L."
         >
@@ -642,7 +648,7 @@ export function CommandCenterHero({
         beneath the banded Operating-Profit card from row 1.
       */}
       <div
-        className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-4"
+        className="grid gap-3 grid-cols-2 md:grid-cols-4"
         data-testid="hero-row-2"
       >
         <Card
