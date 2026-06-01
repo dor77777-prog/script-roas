@@ -52,8 +52,8 @@ function makeData(over: Partial<StoreDetailData> = {}): StoreDetailData {
       { platform: 'tiktok', spend: 140, cpm: 3, roas: 2.4 },
     ],
     topCampaigns: [
-      { name: 'Meta · ABO – Hero Video', platform: 'meta', roas: 4.2, spend: 640, storeId: 'uzoshop', campaignId: 'cmp-1' },
-      { name: 'Google · PMax – Catalog', platform: 'google', roas: 3.3, spend: 520, storeId: 'uzoshop', campaignId: 'cmp-2' },
+      { name: 'Meta · ABO – Hero Video', platform: 'meta', roas: 4.2, spend: 640, revenue: 2688, orders: 92, storeId: 'uzoshop', campaignId: 'cmp-1' },
+      { name: 'Google · PMax – Catalog', platform: 'google', roas: 3.3, spend: 520, revenue: 1716, orders: 58, storeId: 'uzoshop', campaignId: 'cmp-2' },
     ],
     ...over,
   };

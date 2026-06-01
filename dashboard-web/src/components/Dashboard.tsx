@@ -24,7 +24,7 @@ import { CampaignsTable } from './CampaignsTable';
 import { CampaignsTopList, type CampaignTopListPoint } from './CampaignsTopList';
 import { aggregate as aggregateCampaigns } from '@/lib/campaignsAggregator';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
-import { rangeLabelHebrew } from '@/lib/presets';
+import { rangeLabelHebrew, comparisonLabelHebrew } from '@/lib/presets';
 import { AiReportButton } from './AiReportButton';
 import { TabHeader } from './TabHeader';
 import { PnLBreakdown } from './PnLBreakdown';
@@ -973,6 +973,7 @@ function HomeTab({
         current={heroPeriod}
         delta={heroDelta}
         rangeLabel={heroRangeLabel}
+        comparisonLabel={comparisonLabelHebrew(filters.preset)}
         netSparkValues={netSparkValues}
         secondarySparklines={secondarySparklines}
         updatedAt={data.dataLastWriteAt ?? undefined}

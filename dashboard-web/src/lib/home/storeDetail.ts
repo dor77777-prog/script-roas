@@ -42,6 +42,11 @@ export interface StoreDetailCampaign {
   /** value / spend. null when spend is 0. */
   roas: number | null;
   spend: number;
+  /** Platform-attributed revenue (Σ conversionValue), CAD. The IMPACT metric the
+   *  list is ranked by (so tiny-spend high-ROAS campaigns don't dominate). */
+  revenue: number;
+  /** Platform-attributed orders/conversions (Σ conversions). */
+  orders: number;
   /** Supabase store id (from the campaign row) — feeds the Campaigns-tab drill. */
   storeId: string;
   /** Platform-native campaign id — feeds the Campaigns-tab drill (c_drill). */
@@ -126,6 +131,7 @@ interface CampaignAccum {
   campaignId: string;
   spend: number;
   value: number;
+  orders: number;
 }
 
 export function toStoreDetail(args: ToStoreDetailArgs): StoreDetailData {
@@ -186,9 +192,10 @@ export function toStoreDetail(args: ToStoreDetailArgs): StoreDetailData {
       const key = `${plat}::${r.campaignId}`;
       const c =
         campaignAccum.get(key) ??
-        { name: r.campaignName, platform: plat, storeId: r.storeId, campaignId: r.campaignId, spend: 0, value: 0 };
+        { name: r.campaignName, platform: plat, storeId: r.storeId, campaignId: r.campaignId, spend: 0, value: 0, orders: 0 };
       c.spend += r.spend;
       c.value += r.conversionValue;
+      c.orders += r.conversions;
       campaignAccum.set(key, c);
     }
   }
@@ -207,25 +214,22 @@ export function toStoreDetail(args: ToStoreDetailArgs): StoreDetailData {
     })
     .filter((p): p is StoreDetailPlatform => p !== null);
 
-  // Top campaigns: roas desc (null roas sorts last), then spend desc, top 5.
+  // Top campaigns: ranked by REVENUE desc (the impact metric — so a tiny-spend
+  // high-ROAS campaign doesn't outrank a high-revenue one), tiebreak spend desc,
+  // top 5. ROAS + orders are surfaced per row for context (operator request
+  // 2026-06-01: "top by ROAS AND by revenue/orders").
   const topCampaigns: StoreDetailCampaign[] = Array.from(campaignAccum.values())
     .map((c) => ({
       name: c.name,
       platform: c.platform,
       roas: c.spend > 0 ? c.value / c.spend : null,
       spend: c.spend,
+      revenue: c.value,
+      orders: c.orders,
       storeId: c.storeId,
       campaignId: c.campaignId,
     }))
-    .sort((a, b) => {
-      const ar = a.roas;
-      const br = b.roas;
-      if (ar == null && br == null) return b.spend - a.spend;
-      if (ar == null) return 1;
-      if (br == null) return -1;
-      if (br !== ar) return br - ar;
-      return b.spend - a.spend;
-    })
+    .sort((a, b) => (b.revenue !== a.revenue ? b.revenue - a.revenue : b.spend - a.spend))
     .slice(0, 5);
 
   return {

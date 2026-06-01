@@ -406,32 +406,41 @@ describe('toStoreDetail — platforms', () => {
 });
 
 describe('toStoreDetail — topCampaigns', () => {
-  it('aggregates per campaign, computes roas, sorts desc, caps at 5', () => {
+  it('aggregates per campaign, sorts by REVENUE desc (not ROAS), caps at 5, exposes revenue+orders', () => {
+    // Operator request 2026-06-01: "top campaigns" must reflect IMPACT
+    // (revenue/orders), not just a high ROAS ratio on tiny spend. Spend varies
+    // here so revenue-desc and ROAS-desc DIVERGE: by revenue the order is
+    // A,B,C,D,E; by ROAS it would be E,D,C,B,A (A has the LOWEST roas).
     const rows: CampaignRow[] = [
-      makeRow({ campaignId: 'a', campaignName: 'A', platform: 'Meta', spend: 100, conversionValue: 420 }), // 4.2
-      makeRow({ campaignId: 'b', campaignName: 'B', platform: 'Google', spend: 100, conversionValue: 330 }), // 3.3
-      makeRow({ campaignId: 'c', campaignName: 'C', platform: 'Meta', spend: 100, conversionValue: 300 }), // 3.0
-      makeRow({ campaignId: 'd', campaignName: 'D', platform: 'TikTok', spend: 100, conversionValue: 240 }), // 2.4
-      makeRow({ campaignId: 'e', campaignName: 'E', platform: 'Meta', spend: 100, conversionValue: 170 }), // 1.7
-      makeRow({ campaignId: 'f', campaignName: 'F', platform: 'Meta', spend: 100, conversionValue: 100 }), // 1.0 (should drop, top5)
+      makeRow({ campaignId: 'a', campaignName: 'A', platform: 'Meta',   spend: 200, conversionValue: 1000, conversions: 40 }), // roas 5.0,  rev 1000
+      makeRow({ campaignId: 'b', campaignName: 'B', platform: 'Google', spend: 100, conversionValue: 600,  conversions: 25 }), // roas 6.0,  rev 600
+      makeRow({ campaignId: 'c', campaignName: 'C', platform: 'Meta',   spend: 50,  conversionValue: 400,  conversions: 18 }), // roas 8.0,  rev 400
+      makeRow({ campaignId: 'd', campaignName: 'D', platform: 'TikTok', spend: 30,  conversionValue: 300,  conversions: 12 }), // roas 10.0, rev 300
+      makeRow({ campaignId: 'e', campaignName: 'E', platform: 'Meta',   spend: 10,  conversionValue: 200,  conversions: 8 }),  // roas 20.0, rev 200
+      makeRow({ campaignId: 'f', campaignName: 'F', platform: 'Meta',   spend: 5,   conversionValue: 100,  conversions: 4 }),  // roas 20.0, rev 100 (drops, top5)
     ];
     const d = toStoreDetail({
       storeId: 'uzoshop',
       storeName: 'uzoshop',
-      cur: makeAgg({ store: 'uzoshop', spend: 600, revenue: 1560, roas: 2.6 }),
+      cur: makeAgg({ store: 'uzoshop', spend: 395, revenue: 2600, roas: 6.58 }),
       prev: null,
       series: [],
       campaignRows: rows,
       range: RANGE,
-      orders: 10,
+      orders: 107,
       prevOrders: null,
       updatedAt: null,
     });
     expect(d.topCampaigns).toHaveLength(5);
+    // Revenue-desc order — NOT roas-desc (roas would put A last, E/F first).
     expect(d.topCampaigns.map((c) => c.name)).toEqual(['A', 'B', 'C', 'D', 'E']);
-    expect(d.topCampaigns[0].roas).toBeCloseTo(4.2, 6);
+    // The top row is the highest-REVENUE campaign even though it has the LOWEST roas.
+    expect(d.topCampaigns[0].name).toBe('A');
+    expect(d.topCampaigns[0].revenue).toBe(1000);
+    expect(d.topCampaigns[0].orders).toBe(40);
+    expect(d.topCampaigns[0].roas).toBeCloseTo(5.0, 6);
+    expect(d.topCampaigns[0].spend).toBe(200);
     expect(d.topCampaigns[0].platform).toBe('meta');
-    expect(d.topCampaigns[0].spend).toBe(100);
     // storeId + campaignId pass through for the Campaigns-tab deep-link.
     expect(d.topCampaigns[0].storeId).toBe('uzoshop');
     expect(d.topCampaigns[0].campaignId).toBe('a');

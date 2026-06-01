@@ -170,6 +170,13 @@ export interface CommandCenterHeroProps {
   /** Range label used in the Net-Profit eyebrow ("היום" / "30 ימים"). */
   rangeLabel: string;
   /**
+   * "vs <previous period>" caption for the featured card's delta line. The
+   * delta compares against the previous equal-length period, so this must track
+   * the selected range (e.g. "מול אתמול" for today, "מול החודש הקודם" for
+   * this_month). Defaults to "מול אתמול" for back-compat.
+   */
+  comparisonLabel?: string;
+  /**
    * Daily Net Profit values across the active range, in ISO date order.
    * Drives the row-1 featured-card sparkline. Pass [] to suppress.
    */
@@ -489,6 +496,7 @@ export function CommandCenterHero({
   current,
   delta,
   rangeLabel,
+  comparisonLabel = 'מול אתמול',
   netSparkValues,
   secondarySparklines,
   updatedAt,
@@ -626,7 +634,7 @@ export function CommandCenterHero({
                     )
                 : null,
             )}
-            label="מול אתמול"
+            label={comparisonLabel}
             positive={(delta?.operatingProfit ?? 0) >= 0}
             className="text-sm mt-2.5"
           />

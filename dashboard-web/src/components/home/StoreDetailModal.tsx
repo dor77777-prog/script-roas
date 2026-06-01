@@ -49,7 +49,7 @@ import { useDrawerEsc } from '@/lib/drawerStack';
 import { useRoasBandGradient, type RoasBand } from '@/lib/format/useRoasBandGradient';
 import { roasLabel } from '@/lib/analytics';
 import { ROAS_TONE_BG, ROAS_BADGE_SHAPE } from '@/lib/format/roasCell';
-import { cn } from '@/lib/utils';
+import { cn, formatNumber } from '@/lib/utils';
 import type { DailySeries } from '@/lib/analytics';
 import type { DailyRow } from '@/lib/types';
 import type { StoreDetailData } from '@/lib/home/storeDetail';
@@ -386,9 +386,16 @@ export function StoreDetailModal({
                       <bdi dir="ltr" className="flex-1 min-w-0 truncate text-[12.5px] font-semibold text-ink">
                         {c.name}
                       </bdi>
-                      <span className="text-[11px] text-ink-muted tabular-nums shrink-0">
-                        <Money value={c.spend} compactAbove={10_000} />
-                      </span>
+                      {/* Impact metrics — revenue is the rank metric (bold),
+                          with orders + spend on a muted second line. */}
+                      <div className="text-end shrink-0 leading-tight">
+                        <div className="text-[12px] font-semibold text-ink tabular-nums">
+                          <Money value={c.revenue} compactAbove={100_000} />
+                        </div>
+                        <div className="text-[10px] text-ink-muted tabular-nums whitespace-nowrap">
+                          {formatNumber(c.orders, 0)} הזמ׳ · <Money value={c.spend} compactAbove={10_000} /> הוצ׳
+                        </div>
+                      </div>
                       <span className={cn(ROAS_BADGE_SHAPE, '!min-w-[3rem] text-[12px]', ROAS_TONE_BG[tone])}>
                         <bdi dir="ltr">{c.roas == null ? '—' : `${c.roas.toFixed(2)}x`}</bdi>
                       </span>

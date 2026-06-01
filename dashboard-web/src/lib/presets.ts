@@ -137,6 +137,28 @@ export function rangeLabelHebrew(
   return preset === 'custom' ? `${range.from} — ${range.to}` : PRESET_LABELS[preset];
 }
 
+/**
+ * Hebrew "vs <previous period>" caption for a delta-vs-previous line. The delta
+ * compares against the previous equal-length period (see `previousRange`), so
+ * the caption must reflect the SELECTED range — not a hardcoded "מול אתמול".
+ * e.g. today → "מול אתמול", this_month → "מול החודש הקודם", last_7_days →
+ * "מול 7 הימים הקודמים". Falls back to the always-correct generic for `custom`.
+ */
+const COMPARISON_LABELS: Record<PresetKey, string> = {
+  today: 'מול אתמול',
+  yesterday: 'מול שלשום',
+  this_month: 'מול החודש הקודם',
+  this_week: 'מול השבוע הקודם',
+  last_7_days: 'מול 7 הימים הקודמים',
+  last_month: 'מול החודש שלפניו',
+  last_30_days: 'מול 30 הימים הקודמים',
+  custom: 'מול התקופה הקודמת',
+};
+
+export function comparisonLabelHebrew(preset: PresetKey): string {
+  return COMPARISON_LABELS[preset] ?? 'מול התקופה הקודמת';
+}
+
 /** Previous period of equal length, ending the day before `range.from`. */
 export function previousRange(range: DateRange): DateRange {
   const from = new Date(range.from + 'T00:00:00Z');
