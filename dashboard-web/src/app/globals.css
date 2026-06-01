@@ -1299,32 +1299,59 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   0%, 100% { opacity: 1;   transform: scale(1); }
   50%      { opacity: 0.5; transform: scale(0.85); }
 }
+/* Freshness STATE dot (Wave B2) — a small token-coloured dot that carries the
+   live/aging/stale signal INSIDE the suppressed (neutral) pill on vivid band
+   cards. Driven by the `data-fresh` attribute the <FreshnessBadge> sets on the
+   span. Base style here; the colour is applied per-state on the scrim chip
+   below. (On NON-banded surfaces the chip text itself is already coloured, so
+   the dot just inherits currentColor and reads as a leading bullet.) */
+.fresh-chip .fresh-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
 
-/* operator-2026-06-01 (#13) — LIVE/AGING/STALE chip → WHITE-ALPHA pill on
-   VIVID band cards. The default `.fresh-chip.live|aging|stale` rules above
-   tint the pill with the band-green / band-orange / band-red status hue +
-   matching text. On a VIVID band card (red/orange/green/blue) that status
-   tint CLASHES with the card's own band gradient (e.g. green LIVE chip on an
-   orange card, red STALE chip on a green card). The mockup
-   (docs/superpowers/mockups/2026-05-31-light-reskin/dashboard-mockups.html)
-   shows the `● LIVE · 14s` chip as a WHITE-ALPHA pill (white text, white-alpha
-   fill) on the vivid card — matching the `.band-tag` pill beside it. So on any
+/* Wave B2 (2026-06-01) — LIVE/AGING/STALE chip → NEUTRAL `--band-scrim` pill on
+   VIVID band cards. The default `.fresh-chip.live|aging|stale` rules above tint
+   the pill with the band-green / band-orange / band-red status hue + matching
+   text. On a VIVID band card (red/orange/green/blue) that status tint CLASHES
+   with the card's own band gradient (e.g. green LIVE chip on an orange card,
+   red STALE chip on a green card). We previously suppressed the pill to
+   white-alpha (legibility was gradient-dependent); Wave B2 moves it to the
+   neutral `--band-scrim` sub-surface + `--band-scrim-ink` so contrast is
+   token-guaranteed in both themes while STILL neutralising the clash. So on any
    `.glass[data-band]:not([data-band="gray"])` card (hero banded Operating
    Profit + ROAS, AND every vivid per-store card) we override the chip + its
-   leading pulse dot to white-alpha, irrespective of the live/aging/stale
-   variant. GRAY cards are EXCLUDED — their surface is near-neutral, so the
-   colored status chip stays legible there and is NOT overridden. */
+   leading pulse dot to the scrim, irrespective of the live/aging/stale variant.
+   GRAY cards are EXCLUDED — their surface is near-neutral, so the colored
+   status chip stays legible there and is NOT overridden.
+
+   LOCKED DECISION: the pill stays neutral (no band-hued status tint) to avoid
+   the clash, BUT the freshness STATE is re-introduced as a colored `.fresh-dot`
+   (red=stale / orange=aging / green=live) so the signal is not lost. */
 .glass[data-band]:not([data-band="gray"]) .fresh-chip,
 .glass[data-band]:not([data-band="gray"]) .fresh-chip.live,
 .glass[data-band]:not([data-band="gray"]) .fresh-chip.aging,
 .glass[data-band]:not([data-band="gray"]) .fresh-chip.stale {
-  background: rgba(255, 255, 255, 0.18);
-  color: #fff;
+  background: var(--band-scrim);
+  color: var(--band-scrim-ink);
 }
-.glass[data-band]:not([data-band="gray"]) .fresh-chip .pulse {
-  background: #fff;
-  box-shadow: 0 0 6px rgba(255, 255, 255, 0.8);
+/* Per-store chip explicitly pinned to the scrim too (spec parity — redundant
+   with the broad rule above but documents the intent at the call-site). */
+.per-store-card .fresh-chip {
+  background: var(--band-scrim);
+  color: var(--band-scrim-ink);
 }
+/* The fresh-state pulse dot keeps its OWN colour on the neutral scrim (it is the
+   re-introduced freshness signal): green when live. */
+.glass[data-band]:not([data-band="gray"]) .fresh-chip.live .pulse {
+  background: var(--status-green);
+  box-shadow: 0 0 6px var(--status-green);
+}
+/* Token-coloured freshness dot on the per-store scrim pill — red=stale,
+   orange=aging, green=live. The component renders `.fresh-dot` with
+   `data-fresh` for the AGING/STALE stages (LIVE already shows the animated
+   `.pulse` dot above), so the freshness state reads even though the pill is
+   neutral. */
+.per-store-card .fresh-chip .fresh-dot[data-fresh="stale"] { background: var(--status-red); }
+.per-store-card .fresh-chip .fresh-dot[data-fresh="aging"] { background: var(--status-orange); }
+.per-store-card .fresh-chip .fresh-dot[data-fresh="live"]  { background: var(--status-green); }
 
 /* Reduced-motion: the project-wide `@media (prefers-reduced-motion: reduce)`
    block earlier in this file already neutralises animation+transition
@@ -1390,20 +1417,26 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   border-radius: 999px;
   text-transform: uppercase;
   font-family: 'Geist Mono';
-  background: rgba(255, 255, 255, 0.22);
-  color: oklch(100% 0 0);
+  /* Wave B2 (2026-06-01) — the pill no longer sits on white-alpha over the
+     variable band gradient (legibility was gradient-dependent). It now sits on
+     the neutral `--band-scrim` sub-surface with the tuned `--band-scrim-ink`,
+     so contrast is theme-token-guaranteed (contrastGuard.test.ts) regardless
+     of which band tint is underneath. */
+  background: var(--band-scrim);
+  color: var(--band-scrim-ink);
 }
 .per-store-card .roas-cap {
-  color: oklch(100% 0 0);
-  opacity: 0.85;
+  /* Wave B2 — scrim ink (tuned for AA); dropped the legacy `opacity:.85`
+     since `--band-scrim-ink` is already the correct on-scrim tone. */
+  color: var(--band-scrim-ink);
 }
-/* Gray (no-data) band card: the surface is near-neutral, so a white pill /
-   white caption would be low-contrast (esp. in light). Reset both to the
-   normal ink tones so the no-data state reads without shouting — mirrors the
-   `.v.banded` gray exception above (which keeps the number ink, not white). */
+/* Gray (no-data) band card: point the band-tag at the SAME scrim sub-surface
+   so all bands share ONE legibility path (Wave B2 — chose scrim over the old
+   per-band gray reset). `--band-scrim` is near-opaque + neutral in both
+   themes, so it reads cleanly over the near-neutral gray surface too. */
 .glass[data-band="gray"].per-store-card .band-tag {
-  background: oklch(from var(--band-gray) l c h / 0.12);
-  color: var(--text-muted);
+  background: var(--band-scrim);
+  color: var(--band-scrim-ink);
 }
 /* operator-2026-06-01b: ROAS caption ("ROAS · היום") on the gray no-data card
    was `--text-muted` (faint); operator wants near-black, so use `--text`. The
@@ -1469,38 +1502,36 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    Tailwind class, so the `.platform-name` override carries `!important` to beat
    the utility regardless of source order.
    =========================================================================== */
-/* (1) ALL metric values → the band's `--on-band-*` on-color (near-black ink
-   on the light dark-theme bands; the AA-verified ink in light theme; ≥4.5:1
-   guaranteed by src/lib/__tests__/contrastGuard.test.ts). Covers the main
-   4-up grid (.sv), the CPM value `<bdi>` (which uses the `text-ink` utility,
-   not `.sv`) and the CPM spend caption (`.cpm-spend-cap`). We target the
-   value `<bdi>` and the caption by their own hooks (NOT a blanket
-   `.cell > span`) so the <PlatformBadge> outer span — which carries
-   `text-chart-*` AND owns the dot via `bg-current` — is left untouched
-   (recoloring it would recolor the dot). */
-.per-store-card.glass[data-band="red"] .scard-main-grid .sv,
-.per-store-card.glass[data-band="red"] .cpm-row-cells .sv,
-.per-store-card.glass[data-band="red"] .cpm-row-cells .cell > bdi,
-.per-store-card.glass[data-band="red"] .cpm-row-cells .cpm-spend-cap {
+/* (1) Metric values → the band's `--on-band-*` on-color (near-black ink on the
+   light dark-theme bands; the AA-verified ink in light theme; ≥4.5:1 guaranteed
+   by src/lib/__tests__/contrastGuard.test.ts).
+   Wave B2 SPLIT: the bare 4-up metric grid (.scard-main-grid .sv) has NO scrim
+   sub-surface — it sits directly on the band tint — so it KEEPS `--on-band-*`.
+   The CPM-tile foregrounds (which now sit on the neutral `--band-scrim`) move to
+   `--band-scrim-ink` in the band-agnostic rule just below. */
+.per-store-card.glass[data-band="red"] .scard-main-grid .sv {
   color: var(--on-band-red);
 }
-.per-store-card.glass[data-band="orange"] .scard-main-grid .sv,
-.per-store-card.glass[data-band="orange"] .cpm-row-cells .sv,
-.per-store-card.glass[data-band="orange"] .cpm-row-cells .cell > bdi,
-.per-store-card.glass[data-band="orange"] .cpm-row-cells .cpm-spend-cap {
+.per-store-card.glass[data-band="orange"] .scard-main-grid .sv {
   color: var(--on-band-orange);
 }
-.per-store-card.glass[data-band="green"] .scard-main-grid .sv,
-.per-store-card.glass[data-band="green"] .cpm-row-cells .sv,
-.per-store-card.glass[data-band="green"] .cpm-row-cells .cell > bdi,
-.per-store-card.glass[data-band="green"] .cpm-row-cells .cpm-spend-cap {
+.per-store-card.glass[data-band="green"] .scard-main-grid .sv {
   color: var(--on-band-green);
 }
-.per-store-card.glass[data-band="blue"] .scard-main-grid .sv,
-.per-store-card.glass[data-band="blue"] .cpm-row-cells .sv,
-.per-store-card.glass[data-band="blue"] .cpm-row-cells .cell > bdi,
-.per-store-card.glass[data-band="blue"] .cpm-row-cells .cpm-spend-cap {
+.per-store-card.glass[data-band="blue"] .scard-main-grid .sv {
   color: var(--on-band-blue);
+}
+/* Wave B2 (2026-06-01) — the CPM tiles now carry the neutral `--band-scrim`
+   background (see item (4) below), so their foreground ink switches from the
+   band-tuned `--on-band-*` (wrong against a neutral scrim) to the scrim-tuned
+   `--band-scrim-ink`. Band-agnostic: one rule covers every non-gray band, since
+   the scrim is the same neutral surface regardless of band tint. Covers the CPM
+   value `.sv`, the value `<bdi>` (uses `text-ink`, not `.sv`) and the spend
+   caption. The platform NAME is re-pointed to scrim-ink with `!important` below. */
+.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .sv,
+.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .cell > bdi,
+.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .cpm-spend-cap {
+  color: var(--band-scrim-ink);
 }
 
 /* (2) Per-platform CPM NAME → the band's `--on-band-*` on-color. The label
@@ -1508,17 +1539,12 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    hue from the badge's `text-chart-*` parent class; `!important` beats that
    Tailwind utility. The DOT (`.platform-dot`) is NOT targeted, so it keeps
    its brand colour. */
-.per-store-card.glass[data-band="red"] .cpm-row-cells .platform-name {
-  color: var(--on-band-red) !important;
-}
-.per-store-card.glass[data-band="orange"] .cpm-row-cells .platform-name {
-  color: var(--on-band-orange) !important;
-}
-.per-store-card.glass[data-band="green"] .cpm-row-cells .platform-name {
-  color: var(--on-band-green) !important;
-}
-.per-store-card.glass[data-band="blue"] .cpm-row-cells .platform-name {
-  color: var(--on-band-blue) !important;
+/* Wave B2 — platform NAME also sits on the neutral CPM scrim tile, so it takes
+   `--band-scrim-ink` (band-agnostic), not the band's `--on-band-*`. `!important`
+   still beats the `text-chart-*` Tailwind utility on the same span. The DOT
+   (`.platform-dot`) is NOT targeted, so it keeps its brand colour. */
+.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .platform-name {
+  color: var(--band-scrim-ink) !important;
 }
 
 /* (3) Directional glyphs (↓ spend / ↑ revenue / ▴ ▾ AOV) → white-alpha so they
@@ -1543,8 +1569,14 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 .per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .cell[data-platform="tiktok"],
 .per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .cell[data-platform="organic"],
 .per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .cell[data-platform="shopify"] {
-  background: rgba(255, 255, 255, 0.16);
-  border-color: rgba(255, 255, 255, 0.18);
+  /* Wave B2 (2026-06-01) — the CPM tile fill moves from white-alpha (legibility
+     was gradient-dependent) to the neutral `--band-scrim` sub-surface. Because
+     the tile background is now neutral (not the band tint), the Wave-B1 per-band
+     `--on-band-*` foregrounds on THESE cells are re-pointed to `--band-scrim-ink`
+     below (the bare 4-up `.scard-main-grid .sv` keeps `--on-band-*` — it has NO
+     scrim background). */
+  background: var(--band-scrim);
+  border-color: var(--band-scrim);
   border-radius: 11px;
 }
 

@@ -67,7 +67,18 @@ export function FreshnessBadge({
       data-testid={testId}
       data-stage={stage}
     >
-      {stage === 'fresh' && <span className="pulse" aria-hidden="true" />}
+      {stage === 'fresh' ? (
+        // LIVE keeps its animated pulse dot (also the freshness signal).
+        <span className="pulse" aria-hidden="true" />
+      ) : (
+        // Wave B2 — AGING/STALE re-introduce the freshness STATE as a small
+        // token-coloured dot inside the (neutral, scrim) pill on vivid band
+        // cards, so the signal isn't lost when the pill is suppressed. Colour
+        // is driven entirely by the `data-fresh` attribute + the CSS in
+        // globals.css (`.fresh-dot[data-fresh="aging|stale"]`) — NO raw colour
+        // in the .tsx (guard-safe).
+        <span className="fresh-dot" data-fresh={chipCls} aria-hidden="true" />
+      )}
       {/* worstLabel mixes a platform name + duration ("TikTok stuck · 1h 47min")
           while `label` for the live stage carries an LTR clock value ("08:42").
           Wrap in <bdi dir="ltr"> so the chip content doesn't bidi-flip when

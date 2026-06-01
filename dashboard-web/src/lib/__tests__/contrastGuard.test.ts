@@ -31,6 +31,32 @@ function hexOf(varName: string, blk: string): string {
   return m[1];
 }
 
+/**
+ * Parse an `rgba(r, g, b, a)` token value into its 4 channels.
+ * Used for `--band-scrim`, which is an alpha colour (not a #rrggbb), so it
+ * can't go through `hexOf`. The scrim composites over a base, so we read its
+ * channels here and blend in `effectiveSolid` below.
+ */
+function rgbaOf(varName: string, blk: string): { r: number; g: number; b: number; a: number } {
+  const m = blk.match(
+    new RegExp(`(?<![\\w-])${varName}\\s*:\\s*rgba\\(\\s*(\\d+)\\s*,\\s*(\\d+)\\s*,\\s*(\\d+)\\s*,\\s*([0-9.]+)\\s*\\)`),
+  );
+  if (!m) throw new Error(`token ${varName} not an rgba(...) literal in block`);
+  return { r: +m[1], g: +m[2], b: +m[3], a: +m[4] };
+}
+
+/** Alpha-composite a #rrggbb hex base UNDER an rgba foreground → effective #rrggbb. */
+function effectiveSolid(fg: { r: number; g: number; b: number; a: number }, baseHex: string): string {
+  const h = baseHex.replace('#', '');
+  const br = parseInt(h.slice(0, 2), 16);
+  const bg = parseInt(h.slice(2, 4), 16);
+  const bb = parseInt(h.slice(4, 6), 16);
+  // eff = fg*alpha + base*(1-alpha), per channel.
+  const blend = (f: number, b: number) => Math.round(f * fg.a + b * (1 - fg.a));
+  const to2 = (n: number) => n.toString(16).padStart(2, '0');
+  return `#${to2(blend(fg.r, br))}${to2(blend(fg.g, bg))}${to2(blend(fg.b, bb))}`;
+}
+
 function srgbToLinear(c: number): number {
   const x = c / 255;
   return x <= 0.04045 ? x / 12.92 : Math.pow((x + 0.055) / 1.055, 2.4);
@@ -66,6 +92,51 @@ describe('contrast guard — --on-band-* clears WCAG-AA on its band (both themes
           ratio,
           `--on-band-${band} ${fg} on --band-${band} ${bg} = ${ratio.toFixed(2)}:1 (need ≥4.5)`,
         ).toBeGreaterThanOrEqual(4.5);
+      });
+    }
+  }
+});
+
+/**
+ * Wave B2 — chips / CPM tiles / freshness pill now sit on the neutral
+ * `--band-scrim` sub-surface and read with `--band-scrim-ink`. The scrim is an
+ * `rgba()` (alpha), so we alpha-composite it over the theme's base canvas to a
+ * representative SOLID, then assert the ink clears WCAG-AA 4.5:1 against it.
+ * Composite: eff = fg*alpha + base*(1-alpha) per channel.
+ */
+const CANVAS_BASE = { dark: '#0d0f1e', light: '#ffffff' } as const;
+
+describe('contrast guard — --band-scrim-ink clears WCAG-AA on the composited scrim (both themes)', () => {
+  for (const theme of THEMES) {
+    it(`${theme.name}: --band-scrim-ink on composited --band-scrim ≥ 4.5:1`, () => {
+      const ink = hexOf('--band-scrim-ink', theme.blk);
+      const scrim = rgbaOf('--band-scrim', theme.blk);
+      const eff = effectiveSolid(scrim, CANVAS_BASE[theme.name]);
+      const ratio = wcagRatio(ink, eff);
+      expect(
+        ratio,
+        `--band-scrim-ink ${ink} on effective --band-scrim ${eff} (over ${CANVAS_BASE[theme.name]}) = ${ratio.toFixed(2)}:1 (need ≥4.5)`,
+      ).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+});
+
+/**
+ * Wave B2 — the `--on-band-*-muted` secondary labels (e.g. `.sl` captions) sit
+ * directly on the band TINT (not the scrim), so they're held to the AA-large /
+ * non-text 3:1 floor rather than the 4.5:1 body-text bar.
+ */
+describe('contrast guard — --on-band-*-muted clears 3:1 on its band (both themes)', () => {
+  for (const theme of THEMES) {
+    for (const band of BANDS) {
+      it(`${theme.name}: --on-band-${band}-muted on --band-${band} ≥ 3:1`, () => {
+        const fg = hexOf(`--on-band-${band}-muted`, theme.blk);
+        const bg = hexOf(`--band-${band}`, theme.blk);
+        const ratio = wcagRatio(fg, bg);
+        expect(
+          ratio,
+          `--on-band-${band}-muted ${fg} on --band-${band} ${bg} = ${ratio.toFixed(2)}:1 (need ≥3.0)`,
+        ).toBeGreaterThanOrEqual(3.0);
       });
     }
   }
