@@ -519,11 +519,14 @@ export function MonthBlockSummary({
   // Aggregate by date across all stores. Phase 05.7.3: also accumulate
   // gross + refund so the summary table can show the refund indicator
   // per-day and on the month total.
-  type Agg = { spend: number; revenue: number; gross: number; refund: number };
+  type Agg = { fb: number; ga: number; tt: number; spend: number; revenue: number; gross: number; refund: number };
   const byDate = new Map<string, Agg>();
   for (const r of rows) {
-    if (!byDate.has(r.date)) byDate.set(r.date, { spend: 0, revenue: 0, gross: 0, refund: 0 });
+    if (!byDate.has(r.date)) byDate.set(r.date, { fb: 0, ga: 0, tt: 0, spend: 0, revenue: 0, gross: 0, refund: 0 });
     const e = byDate.get(r.date)!;
+    e.fb += r.fbSpend;
+    e.ga += r.gaSpend;
+    e.tt += r.ttSpend ?? 0;
     e.spend += r.totalSpend;
     e.revenue += r.revenue;
     e.gross += r.grossRevenue ?? r.revenue;
@@ -531,9 +534,19 @@ export function MonthBlockSummary({
       e.refund += r.refundDeduction;
     }
   }
+  // Per-platform column visibility — show a platform iff it spent this month
+  // anywhere across the stores in scope (independent per platform).
+  const hasFb = rows.some(r => r.fbSpend > 0);
+  const hasGa = rows.some(r => r.gaSpend > 0);
+  const hasTt = rows.some(r => (r.ttSpend ?? 0) > 0);
+  const anyPlatform = hasFb || hasGa || hasTt;
 
+  let totalFb = 0, totalGa = 0, totalTt = 0;
   let totalSpend = 0, totalRev = 0, totalGross = 0, totalRefund = 0;
   for (const r of rows) {
+    totalFb += r.fbSpend;
+    totalGa += r.gaSpend;
+    totalTt += r.ttSpend ?? 0;
     totalSpend += r.totalSpend;
     totalRev += r.revenue;
     totalGross += r.grossRevenue ?? r.revenue;
@@ -558,11 +571,14 @@ export function MonthBlockSummary({
       </Button>
       {open && (
         <div className="overflow-auto max-h-[60vh]">
-          <TableBase className="text-xs sm:text-sm" minWidth={500} stickyHeader>
+          <TableBase className="text-xs sm:text-sm" minWidth={640} stickyHeader>
             <thead>
               <tr className="text-ink-secondary">
                 <th className="px-3 py-2 text-start font-medium">תאריך</th>
-                <th className="px-3 py-2 text-end font-medium">יצא סה&quot;כ</th>
+                {hasFb && <th className="px-3 py-2 text-end font-medium">פייסבוק</th>}
+                {hasGa && <th className="px-3 py-2 text-end font-medium">גוגל</th>}
+                {hasTt && <th className="px-3 py-2 text-end font-medium">טיקטוק</th>}
+                <th className="px-3 py-2 text-end font-medium">{anyPlatform ? 'יצא סה"כ' : 'יצא'}</th>
                 <th className="px-3 py-2 text-end font-medium">נכנס סה&quot;כ</th>
                 <th className="px-3 py-2 text-center font-medium">ROAS</th>
               </tr>
@@ -577,6 +593,9 @@ export function MonthBlockSummary({
                 return (
                   <tr key={d} className={cn('border-t border-glass-edge', !agg && 'text-ink-muted')}>
                     <td className="px-3 py-1.5 tabular-nums">{formatDate(d)}</td>
+                    {hasFb && <td className="px-3 py-1.5 text-end tabular-nums">{agg ? formatNumber(agg.fb) : ''}</td>}
+                    {hasGa && <td className="px-3 py-1.5 text-end tabular-nums">{agg ? formatNumber(agg.ga) : ''}</td>}
+                    {hasTt && <td className="px-3 py-1.5 text-end tabular-nums">{agg ? formatNumber(agg.tt) : ''}</td>}
                     <td className="px-3 py-1.5 text-end tabular-nums">{agg ? formatNumber(agg.spend) : ''}</td>
                     <td className="px-3 py-1.5 text-end tabular-nums">
                       {agg ? formatNumber(agg.revenue) : ''}
@@ -595,6 +614,9 @@ export function MonthBlockSummary({
               })}
               <tr className="border-t-2 border-glass-edge bg-glass-2 font-semibold">
                 <td className="px-3 py-2">סך הכל</td>
+                {hasFb && <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalFb)}</td>}
+                {hasGa && <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalGa)}</td>}
+                {hasTt && <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalTt)}</td>}
                 <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalSpend)}</td>
                 <td className="px-3 py-2 text-end tabular-nums">
                   {formatNumber(totalRev)}
