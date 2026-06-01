@@ -7,7 +7,6 @@ import {
   ArrowDown,
   ArrowUp,
   ArrowUpDown,
-  Calendar,
   CheckCircle2,
   ChevronDown,
   ChevronUp,
@@ -260,33 +259,16 @@ const TOP_N_DEFAULT = 10;
 
 export function CampaignsTable({ range, store: globalStore, stores, dailyRows }: Props) {
   // NOTE: localRange is declared BEFORE the useSWR calls so buildDateRangeKey
-  // can use it as the SWR key (CR-02 fix — Phase 5 range-keyed pagination).
-  // Changing localRange via the in-toolbar date picker triggers a fresh SWR
-  // fetch (new key = new request, no stale-cache shadow). Mirrors the
-  // ProductsTable pattern. Without this, the table aggregator filters on
-  // localRange but the fetch is keyed on the GLOBAL range — any
-  // localRange.from earlier than range.from (or .to later than range.to)
-  // would silently filter against dates that were never fetched.
+  // can use it as the SWR key. It is now simply an alias of the page-global
+  // `range` prop.
   //
-  // Phase 12.x — initial value is hydrated from the URL (c_preset + c_from/c_to
-  // params). Survives refresh + bookmarkable. When the global range changes,
-  // we still reset to it (operator's explicit Filters change should override
-  // the per-tab local override).
-  const [localRange, setLocalRange] = useState<DateRange>(() => {
-    if (typeof window === 'undefined') return range;
-    const url = readTabLocalState('campaigns', window.location.search);
-    return url.range ?? range;
-  });
-  // Track whether we've already hydrated from URL so the first global-range
-  // change (immediately after mount) doesn't overwrite the URL-restored value.
-  const hydratedFromUrlRef = useRef(false);
-  useEffect(() => {
-    if (!hydratedFromUrlRef.current) {
-      hydratedFromUrlRef.current = true;
-      return; // skip first global sync — preserve URL-hydrated value
-    }
-    setLocalRange(range);
-  }, [range.from, range.to]); // eslint-disable-line react-hooks/exhaustive-deps
+  // The Campaigns tab follows the page-global date range — there is no
+  // separate in-tab date picker (unified 2026-06-01 to remove the dual-picker
+  // confusion + the class of bugs where the tab's window diverged from the
+  // page's, e.g. the attribution-reconciliation panel hiding itself). Kept as
+  // the name `localRange` so the ~40 downstream references (SWR keys, attribution
+  // math, CPM comparison) read unchanged; it is now simply an alias of `range`.
+  const localRange = range;
 
   const { data, error, isLoading } = useSWR<CampaignsResponse>(
     buildDateRangeKey('/api/campaigns', localRange),
@@ -663,8 +645,9 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     syncTabLocalUrl('campaigns', {
       store: localStore,
       platform: platformParam,
-      preset: 'custom',
-      range: localRange,
+      // No per-tab range override — the Campaigns tab follows the global range
+      // (unified 2026-06-01), so we intentionally omit preset/range here. The
+      // c_preset/c_from/c_to params are cleared by syncTabLocalUrl when absent.
       mode,
       sortKey,
       sortDir,
@@ -700,11 +683,9 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     drillStoreId,
     adDrill,
   ]);
-  // (localRange and its sync-effect moved above the useSWR calls — see CR-02.)
+  // (localRange is now an alias of the global range — declared above.)
 
   const today = todayInIsrael();
-  const isCustomRange =
-    localRange.from !== range.from || localRange.to !== range.to;
 
   // Phase 05.7.x (2026-05-23) — operator filter "show only multi-mapped
   // campaigns". When ON, the table is filtered down to rows whose
@@ -1356,57 +1337,6 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
             <option key={s} value={s}>{s}</option>
           ))}
         </NativeSelect>
-      </div>
-
-      {/* Date range */}
-      <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-        <Calendar size={14} className="text-ink-muted shrink-0" />
-        <Input
-          type="date"
-          value={localRange.from}
-          max={today}
-          onChange={e => {
-            const v = e.target.value;
-            if (!v) return;
-            const safe = v > today ? today : v;
-            setLocalRange(prev =>
-              safe > prev.to ? { from: safe, to: safe } : { ...prev, from: safe },
-            );
-          }}
-          className={cn(
-            'w-auto text-xs sm:text-sm font-medium',
-            isCustomRange && 'border-accent text-accent',
-          )}
-        />
-        <span className="text-ink-muted text-xs">—</span>
-        <Input
-          type="date"
-          value={localRange.to}
-          max={today}
-          onChange={e => {
-            const v = e.target.value;
-            if (!v) return;
-            const safe = v > today ? today : v;
-            setLocalRange(prev =>
-              safe < prev.from ? { from: safe, to: safe } : { ...prev, to: safe },
-            );
-          }}
-          className={cn(
-            'w-auto text-xs sm:text-sm font-medium',
-            isCustomRange && 'border-accent text-accent',
-          )}
-        />
-        {isCustomRange && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            onClick={() => setLocalRange(range)}
-            title="חזור לטווח הגלובלי"
-          >
-            <X size={14} />
-          </Button>
-        )}
       </div>
 
       {/* P1-3 mobile audit (2026-05-29) — expander toggle for SECONDARY
