@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="he" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Monthly tables · per-platform spend — mockup</title>
+<style>
+  /* Token values lifted from the app (globals.css) for fidelity. */
+  :root{
+    --canvas:#0b0d1a; --canvas-1:#11142400; --glass-1:#161a2e; --glass-2:#1d2138;
+    --glass-edge:rgba(255,255,255,.08); --ink:#eef1ff; --ink-2:#cdd3ea;
+    --ink-secondary:#aab0cd; --ink-muted:#8b91ad; --shadow:0 8px 30px rgba(0,0,0,.35);
+    /* ROAS band badge tokens */
+    --red:#d83649; --orange:#ef9331; --green:#008651; --blue:#2a70e3;
+    --red-fg:#fff; --orange-fg:#fff; --green-fg:#fff; --blue-fg:#fff;
+    --mesh1:#1b2350; --mesh2:#3a1c4e; --mesh3:#0e2540;
+  }
+  [data-theme="light"]{
+    --canvas:#eef1f8; --glass-1:#ffffff; --glass-2:#f6f7fb;
+    --glass-edge:rgba(15,20,40,.10); --ink:#171a2b; --ink-2:#2b3046;
+    --ink-secondary:#5a6076; --ink-muted:#7a8198; --shadow:0 8px 30px rgba(30,40,80,.12);
+    --red:#d83649; --orange:#ef9331; --green:#008651; --blue:#2a70e3;
+    --mesh1:#dfe6fb; --mesh2:#f1e3f4; --mesh3:#e2eefb;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Heebo,Arial,sans-serif;
+    color:var(--ink); min-height:100vh; padding:28px 18px 80px;
+    background:
+      radial-gradient(120% 120% at 12% 0%, var(--mesh1), transparent 55%),
+      radial-gradient(120% 120% at 90% 10%, var(--mesh2), transparent 55%),
+      radial-gradient(140% 120% at 50% 100%, var(--mesh3), transparent 60%),
+      var(--canvas);
+  }
+  .wrap{max-width:760px; margin:0 auto}
+  h1{font-size:18px; margin:0 0 4px}
+  .sub{color:var(--ink-muted); font-size:13px; margin:0 0 22px}
+  .toggle{position:fixed; top:14px; left:14px; z-index:9}
+  .toggle button{
+    font:inherit; font-size:12px; font-weight:600; cursor:pointer;
+    background:var(--glass-2); color:var(--ink); border:1px solid var(--glass-edge);
+    border-radius:999px; padding:7px 14px;
+  }
+  .card{
+    border-radius:14px; background:var(--glass-1); border:1px solid var(--glass-edge);
+    box-shadow:var(--shadow); overflow:hidden; margin-bottom:24px;
+  }
+  .card > .hd{
+    background:var(--ink); color:var(--canvas); padding:12px 16px; font-weight:600;
+    display:flex; justify-content:space-between; align-items:center;
+  }
+  [data-theme="light"] .card > .hd{ background:#171a2b; color:#fff; }
+  .scroll{overflow:auto}
+  table{width:100%; border-collapse:collapse; font-size:13.5px; min-width:560px}
+  thead th{
+    color:var(--ink-secondary); font-weight:500; padding:9px 12px; text-align:end;
+    position:sticky; top:0; background:var(--glass-1); white-space:nowrap;
+  }
+  thead th.date{text-align:start}
+  thead th.roas{text-align:center}
+  tbody td{padding:7px 12px; text-align:end; font-variant-numeric:tabular-nums; border-top:1px solid var(--glass-edge); white-space:nowrap}
+  tbody td.date{text-align:start}
+  tbody td.roas{text-align:center}
+  tr.empty td{color:var(--ink-muted)}
+  tfoot td{padding:10px 12px; font-weight:700; border-top:2px solid var(--glass-edge); background:var(--glass-2); text-align:end; font-variant-numeric:tabular-nums}
+  tfoot td.date{text-align:start}
+  tfoot td.roas{text-align:center}
+  .badge{
+    display:inline-flex; align-items:center; justify-content:center; min-width:46px;
+    padding:2px 9px; border-radius:7px; font-weight:700; font-variant-numeric:tabular-nums;
+  }
+  .b-red{background:var(--red); color:var(--red-fg)}
+  .b-orange{background:var(--orange); color:var(--orange-fg)}   /* bright #EF9331 + white (operator-locked) */
+  .b-green{background:var(--green); color:var(--green-fg)}
+  .b-blue{background:var(--blue); color:var(--blue-fg)}
+  .note{font-size:12px; color:var(--ink-muted); margin:-10px 2px 22px; line-height:1.5}
+  .pcol{color:var(--ink-2)}
+  .legend{display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--ink-muted); margin:0 2px 26px}
+  .legend b{color:var(--ink-2); font-weight:600}
+</style>
+</head>
+<body>
+  <div class="toggle"><button onclick="document.documentElement.setAttribute('data-theme', document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark')">החלף מצב כהה/בהיר</button></div>
+
+  <div class="wrap">
+    <h1>טבלאות חודשיות · פירוט הוצאה לפי פלטפורמה — מוקאפ</h1>
+    <p class="sub">יוני 2026 · נתוני דמה להמחשה · CAD. החלף בין כהה/בהיר עם הכפתור משמאל למעלה.</p>
+
+    <div class="legend">
+      <span><b>חדש:</b> עמודה לכל פלטפורמה שהוציאה בחודש</span>
+      <span><b>פייסבוק / גוגל / טיקטוק</b> — רק אם הוציאו</span>
+      <span><b>יצא סה"כ</b> = סכום הפלטפורמות</span>
+      <span><b>נכנס סה"כ</b> = הכנסת Shopify</span>
+    </div>
+
+    <!-- ===== GENERAL SUMMARY (all stores) — the NEW per-platform columns ===== -->
+    <div class="card">
+      <div class="hd"><span>יוני 2026  •  סיכום כל החנויות (3)</span><span>▾</span></div>
+      <div class="scroll">
+        <table>
+          <thead>
+            <tr>
+              <th class="date">תאריך</th>
+              <th>פייסבוק</th>
+              <th>גוגל</th>
+              <th>טיקטוק</th>
+              <th>יצא סה"כ</th>
+              <th>נכנס סה"כ</th>
+              <th class="roas">ROAS</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="date">01/06</td><td class="pcol">1,256</td><td class="pcol">109</td><td class="pcol">393</td><td>1,758</td><td>5,142</td><td class="roas"><span class="badge b-green">2.92</span></td></tr>
+            <tr><td class="date">02/06</td><td class="pcol">1,402</td><td class="pcol">133</td><td class="pcol">421</td><td>1,956</td><td>4,610</td><td class="roas"><span class="badge b-orange">2.36</span></td></tr>
+            <tr><td class="date">03/06</td><td class="pcol">980</td><td class="pcol">88</td><td class="pcol">0</td><td>1,068</td><td>3,990</td><td class="roas"><span class="badge b-green">2.99</span></td></tr>
+            <tr><td class="date">04/06</td><td class="pcol">1,540</td><td class="pcol">152</td><td class="pcol">512</td><td>2,204</td><td>3,180</td><td class="roas"><span class="badge b-red">1.44</span></td></tr>
+            <tr><td class="date">05/06</td><td class="pcol">1,180</td><td class="pcol">120</td><td class="pcol">360</td><td>1,660</td><td>5,810</td><td class="roas"><span class="badge b-blue">3.50</span></td></tr>
+            <tr class="empty"><td class="date">06/06</td><td>—</td><td>—</td><td>—</td><td></td><td></td><td class="roas"></td></tr>
+          </tbody>
+          <tfoot>
+            <tr><td class="date">סך הכל</td><td>6,358</td><td>602</td><td>1,686</td><td>8,646</td><td>22,732</td><td class="roas"><span class="badge b-green">2.63</span></td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+    <p class="note">↑ <b>הסיכום הכללי</b> — זה החלק החדש: עד היום היו כאן רק "יצא סה"כ · נכנס סה"כ · ROAS". עכשיו יש עמודה לכל פלטפורמה שהוציאה בחודש (על פני כל החנויות), ואז יצא-סה"כ + נכנס-סה"כ.</p>
+
+    <!-- ===== PER-STORE — independent platform columns (bug fix) ===== -->
+    <div class="card">
+      <div class="hd"><span>יוני 2026  •  zolplus</span><span>▾</span></div>
+      <div class="scroll">
+        <table style="min-width:420px">
+          <thead>
+            <tr>
+              <th class="date">תאריך</th>
+              <th>פייסבוק</th>
+              <th>יצא סה"כ</th>
+              <th>נכנס</th>
+              <th class="roas">ROAS</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td class="date">01/06</td><td class="pcol">842</td><td>842</td><td>2,310</td><td class="roas"><span class="badge b-green">2.74</span></td></tr>
+            <tr><td class="date">02/06</td><td class="pcol">910</td><td>910</td><td>2,140</td><td class="roas"><span class="badge b-orange">2.35</span></td></tr>
+            <tr><td class="date">03/06</td><td class="pcol">760</td><td>760</td><td>2,520</td><td class="roas"><span class="badge b-green">2.95</span></td></tr>
+          </tbody>
+          <tfoot>
+            <tr><td class="date">סך הכל</td><td>2,512</td><td>2,512</td><td>6,970</td><td class="roas"><span class="badge b-green">2.77</span></td></tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+    <p class="note">↑ <b>פר-חנות (תיקון הבאג)</b> — חנות שהוציאה רק על <b>פייסבוק</b>: היום עמודות פייסבוק+גוגל מקובצות תחת דגל אחד של גוגל, אז עבור חנות פייסבוק-בלבד <b>שתי</b> העמודות נעלמות וההוצאה נבלעת ב"יצא". אחרי התיקון — מופיעה רק עמודת <b>פייסבוק</b> (כי רק היא הוציאה).</p>
+
+    <p class="note" style="opacity:.85">צבע ה-ROAS: 🟧 כתום = #EF9331 עם טקסט לבן (כמו שנקבע), 🟩 ירוק / 🟦 כחול / 🟥 אדום — זהה לכל מקום אחר בדשבורד.</p>
+  </div>
+</body>
+</html>
