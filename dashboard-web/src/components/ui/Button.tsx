@@ -17,7 +17,7 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        primary:     'bg-accent text-accent-fg hover:bg-[color-mix(in_oklab,var(--accent)_88%,var(--text))] focus-visible:ring-accent-fg',
+        primary:     'bg-accent-btn text-accent-fg hover:bg-accent-btnHover focus-visible:ring-accent-fg',
         secondary:   'bg-glass-2 text-ink border border-glass-edge hover:bg-glass-1 focus-visible:ring-accent',
         ghost:       'text-ink hover:bg-glass-2 focus-visible:ring-accent',
         destructive: 'bg-status-red text-accent-fg hover:bg-[color-mix(in_oklab,var(--status-red)_90%,var(--text))] focus-visible:ring-status-redFg',

@@ -161,3 +161,62 @@ describe('contrast guard — --on-band-*-muted clears 3:1 on the DEEP card surfa
     }
   }
 });
+
+/**
+ * A11y re-base (2026-06-01) — SYSTEMATIC muted-ink tiers.
+ *
+ * `--text-muted` / `--text-subtle` back the Tailwind `text-ink-muted` /
+ * `text-ink-subtle` aliases used as small body text across the WHOLE app
+ * (axis labels, metadata, captions, timestamps). An axe color-contrast scan
+ * on prod surfaced ≫100 instances failing WCAG-AA in BOTH themes (muted/subtle
+ * were 4.51 / 2.53 on dark, 2.78 / 1.87 on light). This locks the deepened
+ * tokens against their WORST-CASE surface so they cannot silently regress:
+ *   • DARK  — `--glass-3` (#20243a) is the LIGHTEST dark card surface (sticky
+ *             headers), the AA bottleneck for cool-gray ink on dark.
+ *   • LIGHT — plain white (#ffffff) is the worst case (white card / canvas).
+ * `--text` / `--text-2` already clear AA comfortably; included for completeness.
+ */
+const INK_TIERS = ['--text', '--text-2', '--text-muted', '--text-subtle'] as const;
+const INK_WORST_SURFACE = { dark: '#20243a', light: '#ffffff' } as const; // dark = --glass-3
+
+describe('contrast guard — muted ink tiers clear WCAG-AA on their worst-case surface (both themes)', () => {
+  for (const theme of THEMES) {
+    const surface = INK_WORST_SURFACE[theme.name];
+    for (const tier of INK_TIERS) {
+      it(`${theme.name}: ${tier} on ${surface} ≥ 4.5:1`, () => {
+        const fg = hexOf(tier, theme.blk);
+        const ratio = wcagRatio(fg, surface);
+        expect(
+          ratio,
+          `${tier} ${fg} on ${surface} = ${ratio.toFixed(2)}:1 (need ≥4.5)`,
+        ).toBeGreaterThanOrEqual(4.5);
+      });
+    }
+  }
+});
+
+/**
+ * A11y re-base (2026-06-01) — accent BUTTON background.
+ *
+ * The primary `<Button variant="primary">` renders white (`--accent-fg`) on
+ * an accent surface. On the brand `--accent` (violet #7c6cff dark / teal
+ * #0ea5b7 light) white is only 3.86 / 2.96:1 → FAIL. The button now paints a
+ * deepened on-hue `--accent-btn` (with `--accent-btn-hover` for the hover
+ * state). The brand `--accent` is intentionally NOT changed (rings/glows/links
+ * use it for non-text). This locks white ≥4.5:1 on both the rest + hover bg.
+ */
+describe('contrast guard — accent BUTTON bg carries white at WCAG-AA (both themes)', () => {
+  for (const theme of THEMES) {
+    for (const btnVar of ['--accent-btn', '--accent-btn-hover'] as const) {
+      it(`${theme.name}: --accent-fg (white) on ${btnVar} ≥ 4.5:1`, () => {
+        const fg = hexOf('--accent-fg', theme.blk); // oklch(100% 0 0) → #ffffff
+        const bg = hexOf(btnVar, theme.blk);
+        const ratio = wcagRatio(fg, bg);
+        expect(
+          ratio,
+          `--accent-fg ${fg} on ${btnVar} ${bg} = ${ratio.toFixed(2)}:1 (need ≥4.5)`,
+        ).toBeGreaterThanOrEqual(4.5);
+      });
+    }
+  }
+});

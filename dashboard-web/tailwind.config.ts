@@ -118,6 +118,11 @@ const config: Config = {
           DEFAULT: 'var(--accent)',
           deep:    'var(--accent-deep)',
           fg:      'var(--accent-fg)',
+          // A11y: deepened on-hue accent used ONLY for the text-bearing primary
+          // button bg (white-on-accent fails AA on the brand --accent).
+          // `btnHover` deepens further so the hover state also clears AA.
+          btn:      'var(--accent-btn)',
+          btnHover: 'var(--accent-btn-hover)',
           // Wave 0 mesh tints. `soft` = icon-chip bg / operator accent-panel /
           // mapped-product pill; `bg` = alpha-safe replacement for the
           // bg-accent/NN tint sites (so the tint flips per theme).
