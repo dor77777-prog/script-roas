@@ -48,7 +48,11 @@ export function useCountUp(
   options: UseCountUpOptions = {},
 ): number {
   const { durationMs = 900 } = options;
-  const safeTarget = target == null || Number.isNaN(target) ? null : target;
+  // Reject null / NaN / ±Infinity — a non-finite target would interpolate to
+  // NaN mid-tween (0 + (Infinity−0)·eased) and blank the number. Caller renders
+  // the em-dash placeholder for the null result.
+  const safeTarget =
+    target == null || !Number.isFinite(target) ? null : target;
 
   const [value, setValue] = useState<number>(() => {
     if (safeTarget == null) return 0;

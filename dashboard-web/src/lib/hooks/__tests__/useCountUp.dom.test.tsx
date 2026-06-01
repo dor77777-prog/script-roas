@@ -82,6 +82,13 @@ describe('useCountUp', () => {
     expect(rafQueue.length).toBe(0);
   });
 
+  it('non-finite target (Infinity) → treated as null, returns 0 (never NaN)', () => {
+    installReducedMotion(false);
+    const { result } = renderHook(() => useCountUp(Number.POSITIVE_INFINITY));
+    expect(result.current).toBe(0);
+    expect(rafQueue.length).toBe(0);
+  });
+
   it('retargets from the currently-displayed value, not back to 0', () => {
     installReducedMotion(false);
     const { result, rerender } = renderHook(

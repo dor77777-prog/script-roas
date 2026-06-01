@@ -21,6 +21,28 @@
  */
 const COMPACT = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
 
+/**
+ * Memoized grouped formatters, keyed by `locale_decimals`. `formatMetricValue`
+ * runs once per FRAME inside the count-up tween (≈30–40×/animation × several
+ * hero numbers), so constructing a fresh `Intl.NumberFormat` each call was
+ * needless churn. The set of (locale, decimals) combos is tiny and bounded, so
+ * a plain module cache never grows unbounded.
+ */
+const GROUPED_CACHE = new Map<string, Intl.NumberFormat>();
+function groupedFormatter(locale: string, decimals: number): Intl.NumberFormat {
+  const key = `${locale}_${decimals}`;
+  let fmt = GROUPED_CACHE.get(key);
+  if (!fmt) {
+    fmt = new Intl.NumberFormat(locale, {
+      style: 'decimal',
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals,
+    });
+    GROUPED_CACHE.set(key, fmt);
+  }
+  return fmt;
+}
+
 export type MoneyPrefix = '$' | 'CAD' | 'none';
 
 export interface MetricFormatOpts {
@@ -65,11 +87,7 @@ export function formatMetricValue(
   const sign = normalized < 0 ? '−' : '';
   const abs = Math.abs(normalized);
 
-  const grouped = new Intl.NumberFormat(locale, {
-    style: 'decimal',
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
+  const grouped = groupedFormatter(locale, decimals);
   const full = applyPrefix(prefix, grouped.format(abs), sign);
   if (abs < compactAbove) return { display: full, full, compacted: false };
   const display = applyPrefix(prefix, COMPACT.format(abs), sign);

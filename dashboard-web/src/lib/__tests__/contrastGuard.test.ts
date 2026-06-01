@@ -116,6 +116,30 @@ describe('contrast guard — --on-band-* (white) clears WCAG-AA on the DEEP card
 });
 
 /**
+ * Mobile B1 (2026-06-01) — the per-store ROAS sparkline is drawn DIRECTLY on the
+ * vivid band slab with `--spark-band-ink` (over a `--spark-band-casing` halo, which
+ * only helps). We hold the ink to the 4.5:1 TEXT bar (not the 3:1 graphical floor)
+ * to match the `--on-band-*` precedent — the band line should read as crisply as the
+ * band numbers. The ink is an opaque `rgba(255,255,255,1)`, so we composite (a=1 →
+ * pure white) and assert it on every `--card-band-*` surface in BOTH themes.
+ */
+describe('contrast guard — --spark-band-ink clears WCAG-AA on the DEEP card surface (both themes)', () => {
+  for (const theme of THEMES) {
+    for (const band of BANDS) {
+      it(`${theme.name}: --spark-band-ink on --card-band-${band} ≥ 4.5:1`, () => {
+        const ink = effectiveSolid(rgbaOf('--spark-band-ink', theme.blk), '#000000');
+        const bg = hexOf(`--card-band-${band}`, theme.blk);
+        const ratio = wcagRatio(ink, bg);
+        expect(
+          ratio,
+          `--spark-band-ink ${ink} on --card-band-${band} ${bg} = ${ratio.toFixed(2)}:1 (need ≥4.5)`,
+        ).toBeGreaterThanOrEqual(4.5);
+      });
+    }
+  }
+});
+
+/**
  * Wave B2 → deepened-bands (2026-06-01). The `--band-scrim` / `--band-scrim-ink`
  * tokens are now UNUSED by the band cards: deepened-bands moved chips / CPM tiles
  * / the freshness pill onto a WHITE-ALPHA sub-surface + WHITE text (literals in

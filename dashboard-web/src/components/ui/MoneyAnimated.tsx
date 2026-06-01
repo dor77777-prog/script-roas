@@ -32,7 +32,18 @@ export function MoneyAnimated({
   const animated = useCountUp(value, { durationMs });
   const isEmpty = value == null || Number.isNaN(value);
   const finalFmt = formatMetricValue(value, opts);
-  const frameFmt = formatMetricValue(animated, opts);
+  // Format the animating frame with the FINAL value's compaction MODE, not its
+  // own — otherwise the painted width snaps (e.g. "$999,999" → "$1.0M") as the
+  // value crosses the compactAbove threshold mid-climb, reflowing the cell. By
+  // forcing the frame to match the final mode (always-compact when the final is
+  // compacted via compactAbove:0; never-compact otherwise via compactAbove:∞)
+  // the digit token stays in one family for the whole tween — no reflow.
+  const frameDisplay = isEmpty
+    ? '—'
+    : formatMetricValue(animated, {
+        ...opts,
+        compactAbove: finalFmt.compacted ? 0 : Number.POSITIVE_INFINITY,
+      }).display;
   return (
     <bdi
       dir="ltr"
@@ -40,7 +51,7 @@ export function MoneyAnimated({
       // eslint-disable-next-line local/no-native-title-tooltip -- overflow-recovery exact value (final, not the animating frame)
       title={finalFmt.compacted ? finalFmt.full : undefined}
     >
-      {isEmpty ? '—' : frameFmt.display}
+      {frameDisplay}
       {finalFmt.compacted && <span className="sr-only">{finalFmt.full}</span>}
     </bdi>
   );

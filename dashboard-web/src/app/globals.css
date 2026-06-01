@@ -146,8 +146,10 @@
      the band colour. Band cards are vivid + white-text in BOTH themes, so these
      are identical light/dark. The DIRECTION signal lives in the coloured delta
      chip beside it — the line itself is band-agnostic white to avoid the
-     same-hue-on-same-hue clash the readability rule forbids. */
-  --spark-band-ink:    rgba(255, 255, 255, 0.95);
+     same-hue-on-same-hue clash the readability rule forbids. Fully-opaque white
+     so it clears 4.5:1 (text standard) on every band — matching the --on-band-*
+     precedent — not just the 3:1 graphical floor; the contrastGuard asserts it. */
+  --spark-band-ink:    rgba(255, 255, 255, 1);
   --spark-band-casing: rgba(0, 0, 0, 0.30);
 
   /* Fluid metric size: rem term keeps 200%-zoom safe (WCAG 1.4.4); cqi lets
@@ -483,7 +485,7 @@
      themes, so its on-band sparkline ink/casing don't flip. (Declared here so
      the themeParity guard — every :root token needs a light counterpart —
      stays green.) */
-  --spark-band-ink:    rgba(255, 255, 255, 0.95);
+  --spark-band-ink:    rgba(255, 255, 255, 1);
   --spark-band-casing: rgba(0, 0, 0, 0.30);
 
   /* --metric-font is theme-independent — re-declared identically here so the

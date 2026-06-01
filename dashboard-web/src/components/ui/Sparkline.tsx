@@ -11,8 +11,9 @@ export interface SparklineProps {
   height?: number;
   tone?: 'green' | 'red' | 'orange' | 'blue' | 'gray';
   className?: string;
-  /** When the sparkline sits on a NEUTRAL card, render a neutral plot scrim
-   *  + a stroke casing so the line never collides with the surface. */
+  /** When the sparkline sits on a NEUTRAL card (in this scrim mode), render a
+   *  neutral plot scrim + a stroke casing so the line never collides with the
+   *  surface. For a VIVID band slab use `bandInk` instead (white-on-casing). */
   onBand?: boolean;
   /**
    * When the sparkline sits DIRECTLY on a VIVID band slab (per-store mobile B1
@@ -61,7 +62,11 @@ export function Sparkline({
       width={width}
       height={height}
       viewBox={`0 0 ${width} ${height}`}
-      className={cn('overflow-visible', className)}
+      // bandInk sparks fill their flex container (per-store mobile B1 row), so
+      // stretch the viewBox horizontally; neutral/table sparks keep their fixed
+      // aspect so dense rows render identically to before.
+      preserveAspectRatio={bandInk ? 'none' : undefined}
+      className={cn('overflow-visible', bandInk && 'w-full', className)}
       role="img"
       aria-label="טרנד"
     >

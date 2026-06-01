@@ -689,9 +689,19 @@ export function CommandCenterHero({
           <HeroCardHeader label="הזמנות · סה״כ" />
           <bdi
             dir="ltr"
-            className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
+            className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem] whitespace-nowrap"
           >
-            <CountUp value={current.orders} format={fmtCount} />
+            {/* Orders is a COUNT — routed through <Money prefix="none"> so it
+                inherits the overflow-safe compact floor (≥100k → "150K", exact
+                value in title/sr-only) AND the count-up animation, instead of a
+                raw toLocaleString that could clip a 7-digit count on the ~165px
+                mobile 2-up card. */}
+            <Money
+              value={current.orders}
+              prefix="none"
+              compactAbove={100_000}
+              countUp
+            />
           </bdi>
           <DeltaLine
             text={fmtCountDelta(delta?.orders)}
@@ -747,7 +757,7 @@ export function CommandCenterHero({
           <HeroCardHeader label="ROAS" />
           <bdi
             dir="ltr"
-            className="v num banded block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
+            className="v num banded block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem] whitespace-nowrap"
           >
             <CountUp value={current.roas} format={fmtRoas} />
           </bdi>

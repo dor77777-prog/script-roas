@@ -173,20 +173,33 @@ export function PerStoreRow({
 }: PerStoreRowProps) {
   const isMobile = useIsMobile();
   const deckRef = useRef<HTMLDivElement>(null);
+  const rafPending = useRef(false);
   const [activeIdx, setActiveIdx] = useState(0);
 
   // Track the centered card so the dots highlight the right one. RTL scrollLeft
   // can be negative (WebKit) or positive (spec); the magnitude / max fraction
   // is direction-agnostic, so card 0 (start/right) → idx 0 … card N → idx N.
+  //
+  // The scroll event fires ~every frame during a swipe; we coalesce to one rAF
+  // tick AND bail the setState when the index is unchanged, so the component
+  // re-renders only on an actual dot change (≈twice per swipe), not 60×/sec.
+  // `deck.children.length` is read live so a changed store list can't stale the
+  // index (no `stores` closure dependency needed).
   const handleScroll = useCallback(() => {
-    const deck = deckRef.current;
-    if (!deck) return;
-    const max = deck.scrollWidth - deck.clientWidth;
-    if (max <= 0) return;
-    const frac = Math.abs(deck.scrollLeft) / max;
-    const idx = Math.round(frac * (stores.length - 1));
-    setActiveIdx(Math.max(0, Math.min(stores.length - 1, idx)));
-  }, [stores.length]);
+    if (rafPending.current) return;
+    rafPending.current = true;
+    requestAnimationFrame(() => {
+      rafPending.current = false;
+      const deck = deckRef.current;
+      if (!deck) return;
+      const max = deck.scrollWidth - deck.clientWidth;
+      const count = deck.children.length;
+      if (max <= 0 || count <= 1) return;
+      const frac = Math.abs(deck.scrollLeft) / max;
+      const idx = Math.max(0, Math.min(count - 1, Math.round(frac * (count - 1))));
+      setActiveIdx((prev) => (prev === idx ? prev : idx));
+    });
+  }, []);
 
   if (!stores.length) return null;
 
@@ -386,8 +399,8 @@ function StoreCard({
                   data={store.roasSpark!}
                   bandInk
                   width={132}
-                  height={28}
-                  className="shrink-0"
+                  height={34}
+                  className="flex-1"
                 />
                 {deltaText && (
                   <span className="store-delta-chip">{deltaText}</span>
