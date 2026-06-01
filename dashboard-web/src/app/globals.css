@@ -583,6 +583,30 @@ input[type="number"] {
 .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
 /* ===========================================================================
+   Readability Hardening (Wave C) — overflow-safe metric number.
+   tabular-nums + nowrap guarantee a number is never clipped/ellipsized; the
+   font-size tracks --metric-font (a clamp() with a cqi term), so when the
+   parent .metric-cell sets container-type: inline-size the value fluidly
+   shrinks/grows with its column. The overflow guarantee comes from nowrap +
+   the formatter's compact floor (compact output is bounded to ≤8 chars,
+   "$XXX.XM") + the parent's min-width:0 — NOT from a forced width.
+   `.metric-num` deliberately does NOT set min-inline-size: forcing 8ch
+   everywhere would blow out narrow table columns (tiny CPM tiles, dense
+   cells). Width reservation is opt-in via `.metric-reserve` for the big
+   hero / per-store readouts that want a stable, non-jittering column.
+   (.metric-num is referenced from <Money>; globals.css is not scanned by the
+   design-color guard, and this block carries no color of its own.)
+   =========================================================================== */
+.metric-num {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  font-size: var(--metric-font);
+  line-height: 1.15;
+}
+.metric-reserve { min-inline-size: 8ch; }
+.metric-cell { container-type: inline-size; min-width: 0; }
+
+/* ===========================================================================
    V4 ROAS-vs-target chart — draw-in + crosshair + "today" pulse.
    (target-chart mockup 2026-06-01, RoasTargetChart.tsx)
    The mockup played these inline; here they live as CSS classes so the
