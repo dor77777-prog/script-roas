@@ -9,6 +9,8 @@ import {
   Megaphone,
   Receipt,
   Menu,
+  Store,
+  Building2,
 } from 'lucide-react';
 import type { DashboardData, Filters as F } from '@/lib/types';
 import { computePresetRange, previousRange } from '@/lib/presets';
@@ -735,9 +737,19 @@ function HomeTab({
       {/* 2. Per-store row — 3 stores w/ semantic emphasis ------------------- */}
       {/* Per-store FIRST (was section 3): user prefers "per store" before    */}
       {/* the business-wide hero summary. Locked 2026-05-31.                  */}
+      <SectionIntro
+        icon={<Store size={20} />}
+        title="לפי חנות"
+        description="מצב ה-ROAS, ההוצאה, ההכנסה וה-CPM של כל חנות בנפרד — לטווח הנבחר."
+      />
       <PerStoreRow stores={perStoreData} onStoreSelect={handleStoreSelect} />
 
       {/* 3. Hero strip — 2 rows × 3 cards (business-wide summary) ----------- */}
+      <SectionIntro
+        icon={<Building2 size={20} />}
+        title="סיכום עסקי"
+        description="המספרים המצרפיים של כל העסק — רווח תפעולי, הכנסה, הוצאה, ROAS, הזמנות ו-CPM — מאוחדים על פני כל החנויות."
+      />
       <CommandCenterHero
         current={heroPeriod}
         delta={heroDelta}

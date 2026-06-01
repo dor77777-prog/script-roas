@@ -17,9 +17,12 @@
 
 import { Layers, ChevronLeft, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 import { Heading } from '@/components/ui/Typography';
 import { fmtMoney } from '@/lib/format';
-import { formatNumber } from '@/lib/utils';
+import { cn, formatNumber } from '@/lib/utils';
+import { ROAS_TONE_BG, ROAS_BADGE_SHAPE } from '@/lib/format/roasCell';
+import { roasLabel } from '@/lib/analytics';
 
 interface AdSetItem {
   id: string;
@@ -74,41 +77,54 @@ export function CampaignDrawerAds({ adSets, platform, onDrillAds }: CampaignDraw
         </div>
       ) : (
         <ul className="space-y-1.5">
-          {drillableSets.map(set => (
-            <li
-              key={set.id}
-              className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg border border-glass-edge bg-glass-1 hover:bg-glass-2 transition-colors"
-            >
-              <div className="min-w-0 flex-1">
-                <div className="text-xs font-medium text-ink truncate">
-                  <bdi dir="ltr">{set.name || '—'}</bdi>
+          {drillableSets.map(set => {
+            const info = roasLabel(set.roas);
+            return (
+              <li
+                key={set.id}
+                className="flex items-center justify-between gap-3 px-3 py-2 rounded-lg border border-glass-edge bg-glass-1 hover:bg-glass-2 transition-colors"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="text-xs font-medium text-ink truncate">
+                    <bdi dir="ltr">{set.name || '—'}</bdi>
+                  </div>
+                  <div className="text-[10px] text-ink-muted tabular-nums mt-0.5">
+                    {fmtMoney(set.spend)} · {formatNumber(set.conversions, 0)} המרות
+                  </div>
                 </div>
-                <div className="text-[10px] text-ink-muted tabular-nums mt-0.5">
-                  {fmtMoney(set.spend)} · {formatNumber(set.conversions, 0)} המרות
+                <div className="flex items-center gap-2 shrink-0">
+                  <HelpTooltip content={`ROAS — ${info.text}`}>
+                    <span
+                      className={cn(ROAS_BADGE_SHAPE, ROAS_TONE_BG[info.tone], 'text-[11px]')}
+                      aria-label={`ROAS ${set.roas > 0 ? formatNumber(set.roas) : '—'}`}
+                    >
+                      {set.roas > 0 ? formatNumber(set.roas) : '—'}
+                    </span>
+                  </HelpTooltip>
+                  {adDrillSupported && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="text-[11px]"
+                      onClick={() =>
+                        onDrillAds({
+                          storeId: set.storeId,
+                          campaignId: set.campaignId,
+                          adSetId: set.id,
+                          adSetName: set.name || '—',
+                        })
+                      }
+                      aria-label={`פתח מודעות עבור ${set.name || 'ad-set'}`}
+                    >
+                      פתח מודעות
+                      <ChevronLeft size={12} />
+                    </Button>
+                  )}
                 </div>
-              </div>
-              {adDrillSupported && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="text-[11px] shrink-0"
-                  onClick={() =>
-                    onDrillAds({
-                      storeId: set.storeId,
-                      campaignId: set.campaignId,
-                      adSetId: set.id,
-                      adSetName: set.name || '—',
-                    })
-                  }
-                  aria-label={`פתח מודעות עבור ${set.name || 'ad-set'}`}
-                >
-                  פתח מודעות
-                  <ChevronLeft size={12} />
-                </Button>
-              )}
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
