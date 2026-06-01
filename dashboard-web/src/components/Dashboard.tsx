@@ -62,6 +62,9 @@ import {
   type RoasChartRangeKey,
 } from '@/components/home/RoasTargetChart';
 import { ActivityFeed } from '@/components/home/ActivityFeed';
+import { StoreDetailModal } from '@/components/home/StoreDetailModal';
+import { toStoreDetail } from '@/lib/home/storeDetail';
+import type { StoreAgg } from '@/lib/analytics';
 import { InsightsBoard } from './InsightsBoard';
 import {
   aggregateCpm,
@@ -468,6 +471,10 @@ function HomeTab({
   const [chartCustomRange, setChartCustomRange] = useState<
     ChartCustomRange | undefined
   >(undefined);
+  // Per-store drill-down MODAL — clicking a store card opens this (instead of
+  // jumping straight to Campaigns). `null` = closed. The modal's data is built
+  // by `toStoreDetail` from the state HomeTab already holds (no new fetch).
+  const [modalStoreId, setModalStoreId] = useState<string | null>(null);
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const parsed = readChartRangeFromUrl(window.location.search);
@@ -593,6 +600,19 @@ function HomeTab({
     }
     return out;
   }, [dataPrev, prevRange, filters.store]);
+  // Per-store drill MODAL — the FULL previous-range StoreAgg per store (mirrors
+  // `prevRoasByStore` but keeps every field so the modal's KPI deltas can be
+  // computed). Reuses the SAME `dataPrev` SWR payload (no extra network call).
+  // `undefined` while prev data loads → the adapter leaves all deltas null.
+  const prevStoreAggByName = useMemo<Record<string, StoreAgg> | undefined>(() => {
+    if (!dataPrev) return undefined;
+    const prevCur = filterRows(dataPrev.rows, prevRange, filters.store);
+    const out: Record<string, StoreAgg> = {};
+    for (const sa of aggregateByStore(prevCur, prevRange)) {
+      out[sa.store] = sa;
+    }
+    return out;
+  }, [dataPrev, prevRange, filters.store]);
   const heroPeriod = useMemo(
     () => toHeroPeriod(filtered.curAgg, heroCpm, heroOrders),
     [filtered.curAgg, heroCpm, heroOrders],
@@ -663,6 +683,49 @@ function HomeTab({
     ],
   );
 
+  // ---- Per-store drill MODAL data ----------------------------------------
+  // Built ONLY when a store card is clicked (`modalStoreId` set). Pure
+  // `toStoreDetail` over the state HomeTab already holds — current StoreAgg
+  // (filtered.storeAggs), prev StoreAgg (prevStoreAggByName), the per-day
+  // series, campaign rows, and the per-store order count. No new fetch.
+  // prevOrders is null: HomeTab doesn't fetch a previous-range order count
+  // (heroDelta uses 0 too), so orders/aov deltas stay omitted by design.
+  const storeDetail = useMemo(() => {
+    if (modalStoreId === null) return null;
+    // Resolve the display name for the selected storeId via the per-store row
+    // (it carries both id + name); fall back to the storeIdByName inverse.
+    const fromRow = perStoreData.find((s) => s.storeId === modalStoreId);
+    const storeName =
+      fromRow?.storeName ??
+      Object.keys(storeIdByName).find((name) => storeIdByName[name] === modalStoreId) ??
+      modalStoreId;
+    const cur = filtered.storeAggs.find((s) => s.store === storeName);
+    if (!cur) return null;
+    return toStoreDetail({
+      storeId: modalStoreId,
+      storeName,
+      cur,
+      prev: prevStoreAggByName?.[storeName] ?? null,
+      series: filtered.series,
+      campaignRows: campaignsData?.rows,
+      range: filters.range,
+      orders: ordersByStore[storeName] ?? 0,
+      prevOrders: null,
+      updatedAt: data?.dataLastWriteAt ?? null,
+    });
+  }, [
+    modalStoreId,
+    perStoreData,
+    storeIdByName,
+    filtered.storeAggs,
+    filtered.series,
+    prevStoreAggByName,
+    campaignsData,
+    filters.range,
+    ordersByStore,
+    data?.dataLastWriteAt,
+  ]);
+
   // ---- Annotation pins for RoasTargetChart -------------------------------
   // Bug fix (2026-05-31): the chart's annotation pins were stubbed empty in
   // the Wave-3 redesign. Wire them to the same localStorage-backed source
@@ -724,8 +787,11 @@ function HomeTab({
     [chartScope, prevAggFromPrevData, chartAnnotations],
   );
 
+  // Clicking a store card now OPENS the drill MODAL (was: drill straight to
+  // Campaigns). The modal's footer / campaign rows still drill via
+  // `drillToCampaigns` (wired on the modal's onOpenCampaigns below).
   const handleStoreSelect = (storeId: string) => {
-    drillToCampaigns({ store: storeId });
+    setModalStoreId(storeId);
   };
 
   // Range label for PageScope — the operator's preset key picks the human
@@ -766,6 +832,21 @@ function HomeTab({
         description="מצב ה-ROAS, ההוצאה, ההכנסה וה-CPM של כל חנות בנפרד — לטווח הנבחר."
       />
       <PerStoreRow stores={perStoreData} onStoreSelect={handleStoreSelect} />
+
+      {/* Per-store drill-down MODAL — opens on store-card click; reuses the
+          campaign modal's Sheet shell. Renders nothing while closed (data null).
+          onOpenCampaigns closes the modal THEN drills to the Campaigns tab
+          pre-filtered by the store. */}
+      <StoreDetailModal
+        data={storeDetail}
+        open={modalStoreId !== null}
+        onClose={() => setModalStoreId(null)}
+        rangeLabel={rangeLabel}
+        onOpenCampaigns={(id) => {
+          setModalStoreId(null);
+          drillToCampaigns({ store: id });
+        }}
+      />
 
       {/* 3. Hero strip — 2 rows × 3 cards (business-wide summary) ----------- */}
       <SectionIntro

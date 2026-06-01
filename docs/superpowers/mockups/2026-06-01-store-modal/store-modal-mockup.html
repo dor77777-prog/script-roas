@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>מודאל חנות — מוקאפ · כהה / בהיר / מובייל</title>
+<style>
+  /* =========================================================================
+     Per-store drill MODAL mockup. Opens like the campaign modal (centered Sheet
+     variant="modal", full-screen on mobile). Token-driven; .theme-dark /
+     .theme-light flip the vars. Sections (per operator decision):
+       1. vivid ROAS-band header slab (white text)  2. KPI cards + delta vs prev
+       3. ROAS-over-time chart  4. per-platform breakdown  5. top campaigns
+       + footer button → Campaigns tab.
+     ========================================================================= */
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Heebo',-apple-system,system-ui,sans-serif;background:#070811;color:#e8eaf2;padding:20px 16px 70px}
+  h1{font-size:18px;font-weight:800;margin:0 0 4px}
+  .sub{color:#8a90b0;font-size:12.5px;margin:0 0 8px;line-height:1.6;max-width:900px}
+  .feat{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 24px}
+  .feat span{font-size:11px;background:#16192a;color:#b9bdd0;border:1px solid #262a3e;border-radius:999px;padding:3px 10px}
+  .feat b{color:#a99cff}
+  .cols{display:flex;gap:30px;align-items:flex-start;flex-wrap:wrap;justify-content:center}
+  .stage{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .stage>.lbl{font-size:12px;font-weight:800;letter-spacing:.05em;text-transform:uppercase}
+  .lbl.d{color:#a99cff}.lbl.l{color:#0e8a99}.lbl.m{color:#e0a23a}
+
+  /* ===== theme token sets ===== */
+  .theme-dark{
+    --canvas:#0b0d16;--scrim:rgba(4,5,11,.66);--glass-1:#171a2e;--glass-2:#1d2138;--edge:rgba(255,255,255,.10);
+    --ink:#eef1ff;--ink-2:#b3b9d8;--ink-muted:#8c96ba;
+    --up:#5cf0c3;--dn:#ff9aa8;--accent:#7c6cff;--accent-ink:#fff;
+    --bd-a:#4170d1;--bd-b:#2563eb; /* blue (uzoshop ROAS מעולה) */
+    --plot:rgba(12,14,26,.55);--spark-ink:#fff;--spark-cas:rgba(0,0,0,.30);
+    --dot-meta:#4d8bf0;--dot-google:#f4a200;--dot-tiktok:#ff2e7e;
+  }
+  .theme-light{
+    --canvas:#f3f4f8;--scrim:rgba(20,24,48,.34);--glass-1:#ffffff;--glass-2:#f6f7fb;--edge:rgba(20,24,48,.11);
+    --ink:#171a2b;--ink-2:#565d78;--ink-muted:#6b7186;
+    --up:#0a8a5e;--dn:#d22c3c;--accent:#0ea5b7;--accent-ink:#fff;
+    --bd-a:#4170d1;--bd-b:#2563eb;
+    --plot:rgba(255,255,255,.55);--spark-ink:#fff;--spark-cas:rgba(0,0,0,.30);
+    --dot-meta:#4d8bf0;--dot-google:#f4a200;--dot-tiktok:#ff2e7e;
+  }
+
+  /* ===== the "page behind" + scrim + modal shell ===== */
+  .behind{position:relative;border-radius:18px;overflow:hidden;background:var(--canvas);width:920px;max-width:100%;height:680px}
+  .behind.mobile{width:380px;height:720px}
+  .scrim{position:absolute;inset:0;background:var(--scrim);backdrop-filter:blur(3px)}
+  .modal{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:min(840px,92%);max-height:88%;
+    background:var(--canvas);border:1px solid var(--edge);border-radius:20px;overflow:hidden;display:flex;flex-direction:column;
+    box-shadow:0 30px 90px rgba(0,0,0,.5)}
+  .behind.mobile .modal{inset:0;left:0;top:0;transform:none;width:100%;max-height:100%;height:100%;border-radius:0}
+  .modal-scroll{overflow-y:auto;scrollbar-width:none}.modal-scroll::-webkit-scrollbar{display:none}
+
+  /* ===== 1. vivid band header slab ===== */
+  .mh{position:relative;padding:18px 20px 20px;color:#fff;background:linear-gradient(135deg,var(--bd-a),var(--bd-b))}
+  .mh::before{content:"";position:absolute;inset:0 0 auto 0;height:3px;background:rgba(255,255,255,.4)}
+  .mh-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .mh-name{font-size:20px;font-weight:800;direction:ltr}
+  .mh-right{display:flex;align-items:center;gap:8px}
+  .chip{font-size:10px;font-weight:800;background:rgba(0,0,0,.24);color:#fff;padding:3px 9px;border-radius:999px;letter-spacing:.04em}
+  .chip.live::before{content:"";display:inline-block;width:6px;height:6px;border-radius:50%;background:#5cf0c3;margin-inline-end:5px;vertical-align:middle}
+  .x{width:30px;height:30px;border-radius:9px;background:rgba(0,0,0,.22);color:#fff;border:0;font-size:16px;cursor:pointer;display:grid;place-items:center}
+  .mh-roasrow{display:flex;align-items:flex-end;gap:16px;margin-top:12px}
+  .mh-roas{font-size:54px;font-weight:300;line-height:.9;direction:ltr;letter-spacing:-1px}
+  .mh-cap{font-family:'Geist Mono',monospace;font-size:11px;text-transform:uppercase;letter-spacing:.08em;opacity:.85;margin-bottom:7px}
+  .mh-spark{flex:1;height:38px;align-self:flex-end}
+  .mh-spark svg{width:100%;height:100%}
+
+  /* ===== body ===== */
+  .body{padding:16px 18px 22px}
+  .sec-t{font-size:12px;font-weight:800;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.06em;margin:18px 2px 9px}
+  .sec-t:first-child{margin-top:4px}
+
+  /* 2. KPI cards */
+  .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:9px}
+  .kpi{background:var(--glass-1);border:1px solid var(--edge);border-radius:13px;padding:11px 12px}
+  .kpi .k{font-size:9.5px;color:var(--ink-muted);text-transform:uppercase;letter-spacing:.05em;direction:rtl;text-align:right}
+  .kpi .v{font-size:19px;font-weight:800;color:var(--ink);direction:ltr;margin-top:3px;font-variant-numeric:tabular-nums}
+  .kpi .d{font-size:10.5px;font-weight:700;margin-top:3px;direction:ltr;font-variant-numeric:tabular-nums}
+  .d.up{color:var(--up)}.d.dn{color:var(--dn)}
+  .kpi .ks{height:16px;margin-top:5px}.kpi .ks svg{width:100%;height:100%}
+
+  /* 3. ROAS chart */
+  .chart{background:var(--glass-1);border:1px solid var(--edge);border-radius:14px;padding:14px 14px 8px;position:relative}
+  .chart .cap{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+  .chart .cap .t{font-size:12px;font-weight:700;color:var(--ink)}
+  .chart .cap .tgt{font-size:11px;color:var(--ink-muted)}
+  .chart svg{width:100%;height:140px;display:block}
+
+  /* 4. per-platform */
+  .plats{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}
+  .plat{background:var(--glass-1);border:1px solid var(--edge);border-radius:13px;padding:11px 12px}
+  .plat .ph{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:800;color:var(--ink)}
+  .plat .dot{width:8px;height:8px;border-radius:50%}
+  .plat .pr{display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:var(--ink-2)}
+  .plat .pr b{color:var(--ink);font-variant-numeric:tabular-nums;direction:ltr}
+
+  /* 5. top campaigns */
+  .camps{background:var(--glass-1);border:1px solid var(--edge);border-radius:14px;overflow:hidden}
+  .camp{display:flex;align-items:center;gap:10px;padding:10px 13px;border-top:1px solid var(--edge);cursor:pointer}
+  .camp:first-child{border-top:0}
+  .camp:hover{background:var(--glass-2)}
+  .camp .cn{flex:1;font-size:12.5px;color:var(--ink);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:ltr}
+  .camp .cdot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+  .camp .croas{font-size:12px;font-weight:800;padding:2px 9px;border-radius:999px;color:#fff;font-variant-numeric:tabular-nums;direction:ltr}
+  .roas-grn{background:linear-gradient(135deg,#1e8264,#0b3d2e)}.roas-blu{background:linear-gradient(135deg,#4170d1,#2563eb)}
+  .roas-org{background:linear-gradient(135deg,#aa6200,#cb4800)}.roas-red{background:linear-gradient(135deg,#ce3e5a,#e11c48)}
+  .camp .cspend{font-size:11px;color:var(--ink-muted);direction:ltr;font-variant-numeric:tabular-nums;min-width:54px;text-align:left}
+
+  /* footer */
+  .foot{margin-top:18px;display:flex;gap:10px}
+  .btn{flex:1;border:0;border-radius:12px;padding:12px;font-family:inherit;font-size:13.5px;font-weight:800;cursor:pointer}
+  .btn.primary{background:var(--accent);color:var(--accent-ink)}
+  .btn.ghost{flex:0 0 auto;background:var(--glass-1);border:1px solid var(--edge);color:var(--ink-2);padding:12px 16px}
+
+  .note{font-size:12.5px;color:#9aa0c0;line-height:1.75;margin-top:30px;max-width:900px}
+  .note b{color:#e8eaf2}.note u{text-decoration:none;color:#a99cff}
+</style>
+</head>
+<body>
+  <h1>מודאל דריל לחנות — מוקאפ 🎯</h1>
+  <p class="sub">לחיצה על כרטיס חנות בעמוד הבית פותחת מודאל מרכזי (כמו מודאל הקמפיין; במובייל מסך-מלא). אותו נתון שכבר טעון בדשבורד — בלי טעינה חדשה.</p>
+  <div class="feat"><span><b>1</b> כותרת-band חיה</span><span><b>2</b> KPI + דלתא מול תקופה קודמת</span><span><b>3</b> גרף ROAS לאורך זמן</span><span><b>4</b> פירוט לפי פלטפורמה</span><span><b>5</b> קמפיינים מובילים</span><span><b>→</b> כפתור לטאב קמפיינים</span></div>
+
+  <div class="cols">
+    <div class="stage"><div class="lbl d">🌙 כהה — דסקטופ</div><div class="behind theme-dark" id="d"></div></div>
+    <div class="stage"><div class="lbl l">☀️ בהיר — דסקטופ</div><div class="behind theme-light" id="l"></div></div>
+    <div class="stage"><div class="lbl m">📱 מובייל (מסך-מלא)</div><div class="behind mobile theme-dark" id="m"></div></div>
+  </div>
+
+  <p class="note">
+    <b>מבנה (לפי בחירתך):</b><br>
+    <u>כותרת</u> — לוח-band בצבע מצב-ה-ROAS (לבן מלא, AA), שם החנות, ROAS ענק (מטפס), תג-מצב, צ'יפ LIVE/טריות, וקו-מגמה לבן.<br>
+    <u>KPI</u> — הוצאה / הכנסה / רווח תפעולי / הזמנות / AOV, כל אחד עם <b>▲▼% מול התקופה הקודמת</b> + sparkline זעיר.<br>
+    <u>גרף ROAS</u> — קו ROAS יומי של החנות לאורך הטווח, עם קו-יעד 3.0.<br>
+    <u>פלטפורמות</u> — Meta / Google / TikTok: הוצאה + CPM (+ROAS אם זמין).<br>
+    <u>קמפיינים מובילים</u> — 5 המובילים לפי ROAS (מ-campaignsData), לחיצה → טאב קמפיינים.<br>
+    <u>כפתור</u> — "פתח את כל הקמפיינים של החנות →".<br><br>
+    הכל token-driven, לבן-על-band AA בשני המודים, &lt;Money&gt; בטוח-מגלישה, sparkline לבן-קריא. <b>רוצה שינוי בסקשנים / סדר / צבעים?</b> תגיד ואכוונן לפני מימוש.
+  </p>
+
+<script>
+  const SPARK=(vals,w,h,pad)=>{const mn=Math.min(...vals),mx=Math.max(...vals),r=(mx-mn)||1;return vals.map((v,i)=>`${i?'L':'M'}${(i/(vals.length-1)*w).toFixed(1)},${(h-pad-((v-mn)/r)*(h-pad*2)).toFixed(1)}`).join(' ');};
+  const ROAS=[2.1,2.4,2.0,2.8,2.6,3.0,3.1,2.9,3.2,3.0,3.3,3.45];
+  const KPI=[
+    {k:'הוצאה',v:'$1,840',d:'▾ −8%',cls:'up',s:[5,6,5,4,5,4,4]},      /* spend down = good */
+    {k:'הכנסה',v:'$6,350',d:'▴ +14%',cls:'up',s:[3,4,4,5,5,6,7]},
+    {k:'רווח תפעולי',v:'$2,790',d:'▴ +19%',cls:'up',s:[2,3,3,4,4,5,6]},
+    {k:'הזמנות',v:'46',d:'▴ +6',cls:'up',s:[4,4,5,4,6,5,7]},
+    {k:'AOV',v:'$138',d:'▾ −3%',cls:'dn',s:[6,5,6,5,5,4,5]},
+  ];
+  const PLATS=[
+    {n:'Meta',dot:'dot-meta',spend:'$1,180',cpm:'$37',roas:'3.6x'},
+    {n:'Google',dot:'dot-google',spend:'$520',cpm:'$9',roas:'3.1x'},
+    {n:'TikTok',dot:'dot-tiktok',spend:'$140',cpm:'$3',roas:'2.4x'},
+  ];
+  const CAMPS=[
+    {n:'Meta · ABO – Hero Video',dot:'dot-meta',roas:'4.2x',cls:'roas-blu',spend:'$640'},
+    {n:'Google · PMax – Catalog',dot:'dot-google',roas:'3.3x',cls:'roas-grn',spend:'$520'},
+    {n:'Meta · Retargeting 7d',dot:'dot-meta',roas:'3.0x',cls:'roas-grn',spend:'$300'},
+    {n:'TikTok · Spark – UGC',dot:'dot-tiktok',roas:'2.4x',cls:'roas-org',spend:'$140'},
+    {n:'Meta · Prospecting Broad',dot:'dot-meta',roas:'1.7x',cls:'roas-red',spend:'$240'},
+  ];
+
+  function roasChart(){
+    const w=760,h=140,pad=14,tgtY=h-pad-((3.0-1.8)/(3.6-1.8))*(h-pad*2);
+    const line=SPARK(ROAS,w,h,pad), area=`${line} L${w},${h} L0,${h} Z`;
+    return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+      <defs><linearGradient id="rg" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="var(--accent)" stop-opacity=".28"/><stop offset="100%" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>
+      <line x1="0" y1="${tgtY}" x2="${w}" y2="${tgtY}" stroke="var(--dn)" stroke-width="1.3" stroke-dasharray="5 5" opacity=".8"/>
+      <path d="${area}" fill="url(#rg)"/>
+      <path d="${line}" fill="none" stroke="var(--accent)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
+  }
+  function bandSpark(){
+    const w=200,h=38,pad=4,line=SPARK(ROAS,w,h,pad);
+    return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none">
+      <path d="${line}" fill="none" stroke="var(--spark-cas)" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="${line}" fill="none" stroke="var(--spark-ink)" stroke-width="1.9" stroke-linecap="round"/></svg>`;
+  }
+  function kpiSpark(s,cls){const w=80,h=16,line=SPARK(s,w,h,2);return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><path d="${line}" fill="none" stroke="var(--${cls==='up'?'up':'dn'})" stroke-width="1.5" stroke-linecap="round" opacity=".85"/></svg>`;}
+
+  function modal(){
+    return `<div class="scrim"></div><div class="modal"><div class="modal-scroll">
+      <div class="mh">
+        <div class="mh-top">
+          <span class="mh-name">uzoshop</span>
+          <div class="mh-right"><span class="chip live">LIVE · עכשיו</span><span class="chip">מעולה</span><button class="x">✕</button></div>
+        </div>
+        <div class="mh-roasrow">
+          <div><div class="mh-roas">3.45x</div><div class="mh-cap">ROAS · 30 ימים</div></div>
+          <div class="mh-spark">${bandSpark()}</div>
+        </div>
+      </div>
+      <div class="body">
+        <div class="sec-t">מדדי החנות · מול 30 הימים הקודמים</div>
+        <div class="kpis">${KPI.map(x=>`<div class="kpi"><div class="k">${x.k}</div><div class="v">${x.v}</div><div class="d ${x.cls}">${x.d}</div><div class="ks">${kpiSpark(x.s,x.cls)}</div></div>`).join('')}</div>
+        <div class="sec-t">ROAS לאורך זמן</div>
+        <div class="chart"><div class="cap"><span class="t">מגמת ROAS — uzoshop</span><span class="tgt">— — יעד 3.0</span></div>${roasChart()}</div>
+        <div class="sec-t">פירוט לפי פלטפורמה</div>
+        <div class="plats">${PLATS.map(p=>`<div class="plat"><div class="ph"><span class="dot ${p.dot}"></span>${p.n}</div><div class="pr"><span>הוצאה</span><b>${p.spend}</b></div><div class="pr"><span>CPM</span><b>${p.cpm}</b></div><div class="pr"><span>ROAS</span><b>${p.roas}</b></div></div>`).join('')}</div>
+        <div class="sec-t">קמפיינים מובילים</div>
+        <div class="camps">${CAMPS.map(c=>`<div class="camp"><span class="cdot ${c.dot}" style="background:var(--${c.dot.replace('dot-','dot-')})"></span><span class="cn">${c.n}</span><span class="cspend">${c.spend}</span><span class="croas ${c.cls}">${c.roas}</span></div>`).join('')}</div>
+        <div class="foot"><button class="btn primary">פתח את כל הקמפיינים של uzoshop →</button><button class="btn ghost">סגור</button></div>
+      </div>
+    </div></div>`;
+  }
+  ['d','l','m'].forEach(id=>{document.getElementById(id).innerHTML=modal();});
+  // fix dot colors via CSS vars
+  document.querySelectorAll('.cdot').forEach(el=>{const m=el.className.match(/dot-(meta|google|tiktok)/);if(m)el.style.background=`var(--dot-${m[1]})`;});
+</script>
+</body>
+</html>
