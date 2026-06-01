@@ -63,3 +63,47 @@ describe('cogsSettings — model + effectiveCogsPct', () => {
     expect(readCogsSettings()).toEqual(defaultCogsSettings());
   });
 });
+
+import { applyCogsToRows } from '@/lib/cogsSettings';
+import type { DailyRow } from '@/lib/types';
+
+function makeRow(over: Partial<DailyRow>): DailyRow {
+  const revenue = over.revenue ?? 1000;
+  const totalSpend = over.totalSpend ?? 300;
+  return {
+    date: '2026-06-15', storeId: 'uzoshop', storeName: 'uzoshop',
+    fbSpend: 0, gaSpend: 0, ttSpend: 0, totalSpend, revenue, roas: revenue / (totalSpend || 1),
+    grossProfit: revenue - totalSpend, cogs: revenue * 0.25, netProfit: revenue - totalSpend - revenue * 0.25,
+    hasCogs: true, grossRevenue: null, refundDeduction: null,
+    fbImpressions: null, gaImpressions: null, ttImpressions: null, ...over,
+  };
+}
+
+describe('applyCogsToRows', () => {
+  it('recomputes cogs + netProfit per row from the effective %, leaves grossProfit', () => {
+    const s: CogsSettings = { v: 1, mode: 'business', business: { default: 25, byMonth: { '2026-06': 30 } }, perStore: {} };
+    const [r] = applyCogsToRows([makeRow({ revenue: 1000, totalSpend: 300 })], s);
+    expect(r.cogs).toBeCloseTo(300, 6);       // 1000 × 30%
+    expect(r.netProfit).toBeCloseTo(400, 6);  // 1000 − 300 − 300
+    expect(r.grossProfit).toBeCloseTo(700, 6); // revenue − spend (unchanged)
+    expect(r.hasCogs).toBe(true);
+  });
+
+  it('uses each row\'s own month + store', () => {
+    const s: CogsSettings = { v: 1, mode: 'per-store', business: { default: 25, byMonth: {} },
+      perStore: { uzoshop: { default: 20, byMonth: {} }, zolplus: { default: 40, byMonth: {} } } };
+    const rows = applyCogsToRows([
+      makeRow({ storeName: 'uzoshop', revenue: 1000 }),
+      makeRow({ storeName: 'zolplus', revenue: 1000 }),
+    ], s);
+    expect(rows[0].cogs).toBeCloseTo(200, 6); // uzoshop 20%
+    expect(rows[1].cogs).toBeCloseTo(400, 6); // zolplus 40%
+  });
+
+  it('default settings reproduce a 25%-stored row unchanged', () => {
+    const r0 = makeRow({ revenue: 800, totalSpend: 200 }); // cogs 200, net 400
+    const [r] = applyCogsToRows([r0], defaultCogsSettings());
+    expect(r.cogs).toBeCloseTo(r0.cogs, 6);
+    expect(r.netProfit).toBeCloseTo(r0.netProfit, 6);
+  });
+});
