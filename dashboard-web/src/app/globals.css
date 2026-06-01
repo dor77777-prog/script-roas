@@ -1102,13 +1102,15 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    Round 6 (2026-05-31) — text contrast on banded cards.
    The hero card eyebrow label (`.hero-eyebrow`) reads `text-ink-muted`
    by default (~64% L) — too low contrast over a strong band slab. When
-   the card wears a band (strong OR muted), brighten the eyebrow to ~94%
-   L so the Hebrew header reads cleanly on top of the orange/red/green
-   tint. Applies to any `.glass[data-band]` so per-store cards benefit
+   the card wears a band, repaint the eyebrow with that band's paired
+   `--on-band-*-muted` on-color token (near-black ink on the light
+   dark-theme bands; the AA-verified ink in light theme) so the Hebrew
+   header reads cleanly on top of the orange/red/green tint. Applies to
+   each strong band (red/orange/green/blue) so per-store cards benefit
    too (the `.sl` cell labels inside the 4-up metric grid pick up the
-   same rule). Gray band stays at its default tone — the no-data state
-   should not visually shout. NOTE: `.v.neutral` already paints its own
-   bright white→cool-gray gradient and is unaffected.
+   same rule). Gray band has no rule here — the no-data state should not
+   visually shout. NOTE: `.v.neutral` already paints its own bright
+   white→cool-gray gradient and is unaffected.
    --------------------------------------------------------------------- */
 .glass[data-band="red"] .hero-eyebrow,
 .glass[data-band="red"] .sl { color: var(--on-band-red-muted); }
@@ -1120,9 +1122,10 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 .glass[data-band="blue"] .sl { color: var(--on-band-blue-muted); }
 .glass[data-band][data-band-strength="muted"] .sl {
   /* 2026-05-31 mockup-alignment: muted cards are now CLEAN NEUTRAL (no
-     band tint), so the white-ish lift the strong band cards use would make
-     these labels too bright / low-contrast on a neutral surface. Reset to
-     the normal muted ink so neutral-card labels read like any other card. */
+     band tint), so the `--on-band-*-muted` on-color the strong band cards
+     use (tuned for the vivid slab) would be wrong-contrast on a neutral
+     surface. Reset to the normal muted ink so neutral-card labels read
+     like any other card. */
   color: var(--text-muted);
 }
 /* operator-2026-06-01b: the NEUTRAL hero KPI cards (Spend / Revenue / CPM /
@@ -1131,8 +1134,8 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    Operator wants these labels near-BLACK for legibility, so promote the
    eyebrow to `--text` (dark ink in light / light ink in dark — theme-correct).
    Scoped to `[data-band-strength="muted"]` so the BANDED hero cards (Operating
-   Profit + ROAS, which have NO muted attribute) keep their WHITE eyebrow from
-   the `:not([data-band="gray"]) .hero-eyebrow` rule above. */
+   Profit + ROAS, which have NO muted attribute) keep their `--on-band-*-muted`
+   on-color eyebrow from the per-band `.hero-eyebrow` rules above. */
 .glass[data-band][data-band-strength="muted"] .hero-eyebrow {
   color: var(--text);
 }
@@ -1145,12 +1148,15 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 .glass[data-band]:not([data-band="gray"]) .cell.aov-good .sl::after { color: var(--band-green); }
 .glass[data-band]:not([data-band="gray"]) .cell.aov-bad  .sl::after { color: var(--band-red);   }
 
-/* Task 2.2 (2026-05-31) — `.v.banded` flips to WHITE on the vivid band
-   gradient (mesh re-skin). White-on-band-L holds ≥4.5:1 in the number
-   region; the text-shadow is the legibility floor (and lifts contrast
-   further where the gradient dips toward token-L − 0.14 lower down).
-   Gray is the no-data state: its surface is near-neutral, so its number
-   stays INK (--text), not white, to remain legible (esp. in light). */
+/* Task 2.2 (2026-05-31, on-color refresh 2026-06-01) — `.v.banded` takes
+   its band's paired `--on-band-*` on-color token on the vivid band gradient
+   (mesh re-skin): near-black ink on the light dark-theme bands, the
+   AA-verified ink in light theme. Contrast holds ≥4.5:1 — guaranteed by the
+   token (see src/lib/__tests__/contrastGuard.test.ts), NOT by the shadow.
+   The `text-shadow` is now a depth/lift cue only, no longer the contrast
+   floor. Gray is the no-data state: its surface is near-neutral, so its
+   number stays INK (--text), not an on-band token, to remain legible
+   (esp. in light). */
 .glass[data-band="red"]    .v.banded { color: var(--on-band-red);    -webkit-text-fill-color: var(--on-band-red);    background: none; text-shadow: 0 1px 2px oklch(0% 0 0 / 0.12); }
 .glass[data-band="orange"] .v.banded { color: var(--on-band-orange); -webkit-text-fill-color: var(--on-band-orange); background: none; text-shadow: 0 1px 2px oklch(0% 0 0 / 0.12); }
 .glass[data-band="green"]  .v.banded { color: var(--on-band-green);  -webkit-text-fill-color: var(--on-band-green);  background: none; text-shadow: 0 1px 2px oklch(0% 0 0 / 0.12); }
@@ -1428,18 +1434,24 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 /* CPM cells take NO emphasis class — always white. */
 
 /* ===========================================================================
-   VIVID PER-STORE CARD — ALL-WHITE TEXT (operator 2026-06-01).
+   VIVID PER-STORE CARD — ON-BAND-INK TEXT (operator 2026-06-01;
+   on-color refresh 2026-06-01).
    Mockup reference: docs/superpowers/mockups/2026-05-31-light-reskin/
-   dashboard-mockups.html `.store` (card text is `#fff` throughout; the
-   per-platform `.plat` tiles are white-alpha, NOT brand-tinted).
+   dashboard-mockups.html `.store` (card text is high-contrast on-band
+   throughout; the per-platform `.plat` tiles are white-alpha, NOT
+   brand-tinted).
 
    On a VIVID band per-store card (red/orange/green/blue) the band GRADIENT is
-   the signal — so ALL text reads WHITE, superseding the colored emphasis used
-   elsewhere (spend-red ↓ / revenue-green ↑ / AOV good-bad / brand-hue platform
-   NAME). This kills the reported "blue Meta name on a blue card → invisible"
-   and "too many colors / black orders value" regressions. The platform DOT
-   KEEPS its brand colour (its colour comes from `.platform-dot { bg-current }`,
-   not from these text rules, so whitening the label leaves the dot untouched).
+   the signal — so values + platform NAMES read with the band's `--on-band-*`
+   on-color (near-black ink on the light dark-theme bands; the AA-verified ink
+   in light theme; ≥4.5:1 guaranteed by contrastGuard.test.ts), superseding the
+   colored emphasis used elsewhere (spend-red ↓ / revenue-green ↑ / AOV
+   good-bad / brand-hue platform NAME). Directional glyphs (item 3) and the
+   store name (item 5) stay white-alpha / white. This kills the reported "blue
+   Meta name on a blue card → invisible" and "too many colors / black orders
+   value" regressions. The platform DOT KEEPS its brand colour (its colour
+   comes from `.platform-dot { bg-current }`, not from these text rules, so
+   recoloring the label leaves the dot untouched).
 
    GRAY (no-data) cards are EXCLUDED via `:not([data-band="gray"])` — their
    surface is near-neutral, so they KEEP normal ink emphasis (legible in light).
@@ -1457,12 +1469,15 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    Tailwind class, so the `.platform-name` override carries `!important` to beat
    the utility regardless of source order.
    =========================================================================== */
-/* (1) ALL metric values → white. Covers the main 4-up grid (.sv), the CPM
-   value `<bdi>` (which uses the `text-ink` utility, not `.sv`) and the CPM
-   spend caption (`.cpm-spend-cap`). We target the value `<bdi>` and the
-   caption by their own hooks (NOT a blanket `.cell > span`) so the
-   <PlatformBadge> outer span — which carries `text-chart-*` AND owns the dot
-   via `bg-current` — is left untouched (whitening it would whiten the dot). */
+/* (1) ALL metric values → the band's `--on-band-*` on-color (near-black ink
+   on the light dark-theme bands; the AA-verified ink in light theme; ≥4.5:1
+   guaranteed by src/lib/__tests__/contrastGuard.test.ts). Covers the main
+   4-up grid (.sv), the CPM value `<bdi>` (which uses the `text-ink` utility,
+   not `.sv`) and the CPM spend caption (`.cpm-spend-cap`). We target the
+   value `<bdi>` and the caption by their own hooks (NOT a blanket
+   `.cell > span`) so the <PlatformBadge> outer span — which carries
+   `text-chart-*` AND owns the dot via `bg-current` — is left untouched
+   (recoloring it would recolor the dot). */
 .per-store-card.glass[data-band="red"] .scard-main-grid .sv,
 .per-store-card.glass[data-band="red"] .cpm-row-cells .sv,
 .per-store-card.glass[data-band="red"] .cpm-row-cells .cell > bdi,
@@ -1488,10 +1503,11 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   color: var(--on-band-blue);
 }
 
-/* (2) Per-platform CPM NAME → white. The label lives in <PlatformBadge>'s
-   `.platform-name` span, which inherits a brand hue from the badge's
-   `text-chart-*` parent class; `!important` beats that Tailwind utility.
-   The DOT (`.platform-dot`) is NOT targeted, so it keeps its brand colour. */
+/* (2) Per-platform CPM NAME → the band's `--on-band-*` on-color. The label
+   lives in <PlatformBadge>'s `.platform-name` span, which inherits a brand
+   hue from the badge's `text-chart-*` parent class; `!important` beats that
+   Tailwind utility. The DOT (`.platform-dot`) is NOT targeted, so it keeps
+   its brand colour. */
 .per-store-card.glass[data-band="red"] .cpm-row-cells .platform-name {
   color: var(--on-band-red) !important;
 }
