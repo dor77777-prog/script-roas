@@ -1,15 +1,16 @@
 // dashboard-web/src/components/__tests__/campaignDrawerSubTabs.dom.test.tsx
 //
-// Task 5.5 (Wave 5) — CampaignDrawer 6-sub-tab navigation + hero data-band.
+// Task 5.5 (Wave 5) — CampaignDrawer 6-sub-tab navigation.
+// Task 1.5 (2026-06-01) — NEUTRAL hero header (replaces the old data-band hero).
 //
 // Coverage:
 //   1. All 6 sub-tab triggers render and the default active tab is Overview.
 //   2. Clicking a sub-tab swaps the content panel via data-testid.
-//   3. The Sheet.Header hero card carries `data-band` equal to
-//      `useRoasBandGradient(campaign.roas).band` — the same band signal
-//      the rest of the dashboard surfaces.
-//   4. The 4 ROAS bands (red / orange / green / blue) all map correctly
-//      from the campaign's aggregate ROAS.
+//   3. The hero header is NEUTRAL — it must NOT carry `data-band` (that coupling
+//      to `.glass[data-band]:not([data-mounted])` made the header render at
+//      opacity:0 on every campaign — the Task-1.5 invisibility bug). Instead it
+//      shows the campaign name, a brand-colored platform pill, and a ROAS health
+//      chip (the band signal now lives on the chip, not the header surface).
 
 import { describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
@@ -160,28 +161,29 @@ describe('CampaignDrawer — 6 sub-tab navigation (Task 5.5)', () => {
   });
 });
 
-describe('CampaignDrawer — hero data-band matches useRoasBandGradient (Task 5.5)', () => {
-  it('roas=1.5 (< 2.0) → data-band="red"', () => {
+describe('CampaignDrawer — neutral hero header (Task 1.5)', () => {
+  it('does NOT carry data-band (else the .glass[data-band] opacity:0 rule hides the header)', () => {
     renderWithRoas(1.5);
     const hero = screen.getByTestId('campaign-drawer-hero');
-    expect(hero.getAttribute('data-band')).toBe('red');
+    expect(
+      hero.getAttribute('data-band'),
+      'data-band on the hero re-triggers the opacity:0 invisibility bug',
+    ).toBeNull();
   });
 
-  it('roas=2.3 (2.0 ≤ x < 2.7) → data-band="orange"', () => {
-    renderWithRoas(2.3);
-    const hero = screen.getByTestId('campaign-drawer-hero');
-    expect(hero.getAttribute('data-band')).toBe('orange');
-  });
-
-  it('roas=2.8 (2.7 ≤ x < 3.0) → data-band="green"', () => {
-    renderWithRoas(2.8);
-    const hero = screen.getByTestId('campaign-drawer-hero');
-    expect(hero.getAttribute('data-band')).toBe('green');
-  });
-
-  it('roas=3.5 (≥ 3.0) → data-band="blue"', () => {
+  it('renders the campaign name, a brand-colored platform pill, and a ROAS health chip', () => {
     renderWithRoas(3.5);
     const hero = screen.getByTestId('campaign-drawer-hero');
-    expect(hero.getAttribute('data-band')).toBe('blue');
+    // Campaign name (the thing that was invisible before the fix).
+    expect(hero.textContent).toContain('Band Test Campaign');
+    // Platform identity = the brand-tinted pill wrapping the canonical badge.
+    const pill = hero.querySelector('.platform-pill[data-platform="meta"]');
+    expect(pill, 'header must render the .platform-pill for the campaign platform').toBeTruthy();
+    expect(hero.textContent).toContain('Meta');
+    // ROAS health chip preserves the band signal on the neutral header.
+    expect(hero.textContent).toMatch(/ROAS\s*3\.50/);
+    // The AA fix (label → neutral ink, dot keeps brand color) is guarded
+    // hermetically against globals.css in campaignDrawerHeaderGuard.test.ts —
+    // jsdom doesn't load the stylesheet, so the computed-color check lives there.
   });
 });

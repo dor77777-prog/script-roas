@@ -19,16 +19,20 @@
  *      at the root so a sub-tab swap doesn't tear them down.
  *
  * Visual treatment: Sheet.Header (sticky glass) + Sheet.Body from
- * Wave 2 Task 2.5. Hero metadata row carries `data-band` from
- * `useRoasBandGradient` per [[roas-state-gradient]] so the drawer
- * inherits the same band signal as the rest of the dashboard.
+ * Wave 2 Task 2.5. Task 1.5 — the header is NEUTRAL (no ROAS band
+ * gradient): it uses the SheetHeader primitive's own glass surface and
+ * shows the campaign name, a brand-colored platform pill, the store
+ * chip, a small band-tone ROAS health chip, and the active-days chip.
+ * Removing `data-band` here ALSO fixes the prior invisible-header bug:
+ * the `.glass[data-band]:not([data-mounted])` opacity:0 rule in
+ * globals.css only matches banded .glass elements, and the SheetHeader
+ * never added `data-mounted`, so it stayed transparent.
  */
 
 import { useEffect, useMemo, useState } from 'react';
 import useSWR from 'swr';
 import {
   ExternalLink,
-  Megaphone,
   Calendar,
   Store as StoreIcon,
   AlertTriangle,
@@ -42,7 +46,9 @@ import {
 } from '@/components/ui/Sheet';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/Tabs';
 import { Heading } from '@/components/ui/Typography';
-import { useRoasBandGradient } from '@/lib/format/useRoasBandGradient';
+import { PlatformBadge, normalizePlatform } from '@/components/ui/PlatformBadge';
+import { roasLabel } from '@/lib/analytics';
+import { ROAS_TONE_BG } from '@/lib/format/roasCell';
 import type { CampaignsResponse } from '@/app/api/campaigns/route';
 import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
 import type { ProductsResponse } from '@/app/api/products/route';
@@ -589,14 +595,6 @@ export function CampaignDrawer({
     };
   }, [rows]);
 
-  // ---- ROAS band signal for the hero card -----------------------------
-  // Must be computed BEFORE any early return so the (lint-perceived) hook
-  // order is stable. `useRoasBandGradient` is actually a pure function —
-  // the `use` prefix is a naming convention locked in
-  // lib/format/useRoasBandGradient.ts — but the ESLint hooks rule still
-  // requires us to call it unconditionally.
-  const heroBand = useRoasBandGradient(summary?.roas ?? null).band;
-
   // ---- Bail early -----------------------------------------------------
   if (!open || !summary) return null;
 
@@ -751,39 +749,48 @@ export function CampaignDrawer({
           'p-0 sm:w-[min(880px,92vw)]',
         )}
       >
-        {/* Sheet.Header — sticky glass strip from Wave 2 Task 2.5.
-            The hero card carries data-band so the band signal renders
-            via the .glass[data-band] CSS in globals.css (Task 1.3). */}
-        <SheetHeader
-          data-band={heroBand}
-          data-testid="campaign-drawer-hero"
-          className="glass"
-        >
+        {/* Sheet.Header — NEUTRAL sticky glass strip (Task 1.5). No
+            `data-band`: the header uses the SheetHeader primitive's own
+            sticky/bg-glass-2/95/backdrop/border-b surface. Identity reads
+            from the brand-colored platform pill + store/ROAS/active-days
+            chips below the name — NOT from a full band gradient. Dropping
+            `data-band` also unblocks the `.glass[data-band]:not(
+            [data-mounted])` opacity:0 rule that previously hid this header. */}
+        <SheetHeader data-testid="campaign-drawer-hero">
           {/* pe-10 reserves space for the Sheet primitive's auto-injected
               close X (positioned at `end-3 top-3`, ~32 px wide w/ padding) so
               the title row never sits underneath it. The X stays at z-20 from
               Wave-2 Task 2.5. Wave-4 Task 4.2 removed the ⤢ expand/maximize
               control — the modal is a fixed-size centered card (full-screen
               sheet on mobile), so only the X close remains. */}
-          <div className="flex items-start gap-3 mb-2 pe-10">
-            <div className="flex items-center gap-2 min-w-0 flex-1">
-              <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-accent-soft text-accent shrink-0">
-                <Megaphone size={16} />
+          <div className="min-w-0 pe-10">
+            <Heading as="h2" level="hero" id="campaign-drawer-title" className="truncate">
+              {summary.campaignName ? <bdi dir="ltr">{summary.campaignName}</bdi> : '(ללא שם)'}
+            </Heading>
+            <div className="flex flex-wrap items-center gap-2 mt-2">
+              {/* platform pill — brand-tinted bg (CSS class) wrapping the canonical PlatformBadge */}
+              <span className="platform-pill" data-platform={normalizePlatform(summary.platform) ?? undefined}>
+                <PlatformBadge platform={summary.platform} size="sm" />
               </span>
-              <div className="min-w-0">
-                <Heading as="h2" level="hero" id="campaign-drawer-title" className="truncate">
-                  {summary.campaignName ? <bdi dir="ltr">{summary.campaignName}</bdi> : '(ללא שם)'}
-                </Heading>
-                <div className="text-[11px] sm:text-xs text-ink-muted flex items-center gap-1.5 mt-0.5">
-                  <StoreIcon size={11} />
-                  <span>{effectiveStoreName}</span>
-                  <span className="text-ink-subtle">·</span>
-                  <span>{summary.platform}</span>
-                  <span className="text-ink-subtle">·</span>
-                  <Calendar size={11} />
-                  <span className="tabular-nums">{summary.activeDays} ימים פעילים</span>
-                </div>
-              </div>
+              {/* store */}
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-glass-2 border border-glass-edge px-2.5 py-1 text-xs font-semibold text-ink-secondary">
+                <StoreIcon size={12} />
+                <span>{effectiveStoreName}</span>
+              </span>
+              {/* ROAS health chip — band-tone colored, only when a meaningful ratio exists */}
+              {summary.roas != null && summary.roas > 0 && (
+                <span
+                  className={cn('inline-flex items-center rounded-full px-2.5 py-1 text-xs font-extrabold tabular-nums', ROAS_TONE_BG[roasLabel(summary.roas).tone])}
+                  dir="ltr"
+                >
+                  ROAS {summary.roas.toFixed(2)}×
+                </span>
+              )}
+              {/* active days */}
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-glass-2 border border-glass-edge px-2.5 py-1 text-xs font-semibold text-ink-secondary">
+                <Calendar size={12} />
+                <span className="tabular-nums">{summary.activeDays} ימים</span>
+              </span>
             </div>
           </div>
           {link && (
@@ -791,7 +798,7 @@ export function CampaignDrawer({
               href={link}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-accent hover:text-accent-deep font-medium"
+              className="inline-flex items-center gap-1.5 mt-3 text-xs sm:text-sm text-accent hover:text-accent-deep font-medium"
             >
               <ExternalLink size={13} />
               פתח ב-<bdi dir="ltr">{summary.platform}</bdi> Ads Manager

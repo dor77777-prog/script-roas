@@ -1661,6 +1661,25 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   color: #fff;
 }
 
+/* Campaign-drawer neutral-header platform pill (Task 1.5) — brand-tinted bg
+   wrapping a PlatformBadge so the platform color reads as a clear block on the
+   neutral header, in both themes. Brand tints are theme-independent. */
+.platform-pill {
+  display: inline-flex; align-items: center;
+  border-radius: 999px; padding: 0.2rem 0.55rem; border: 1px solid transparent;
+}
+.platform-pill[data-platform="meta"]   { background: color-mix(in oklab, var(--chart-platform-meta) 15%, transparent);   border-color: color-mix(in oklab, var(--chart-platform-meta) 38%, transparent); }
+.platform-pill[data-platform="google"] { background: color-mix(in oklab, var(--chart-platform-google) 16%, transparent); border-color: color-mix(in oklab, var(--chart-platform-google) 40%, transparent); }
+.platform-pill[data-platform="tiktok"] { background: color-mix(in oklab, var(--chart-platform-tiktok) 15%, transparent); border-color: color-mix(in oklab, var(--chart-platform-tiktok) 40%, transparent); }
+/* The PlatformBadge LABEL inside the pill must read as neutral high-contrast ink
+   — the brand hue on a faint SAME-hue tint fails WCAG-AA (e.g. Google amber is
+   ~1.75:1 in light), the project's forbidden "text-color-from-brand" case. Force
+   `--text` (≈15:1 on the tint, both themes). The DOT (`.platform-dot`) is NOT
+   targeted, so it KEEPS its brand colour (operator requirement: dot = platform
+   colour). `!important` beats the `text-chart-*` utility on the same span — same
+   approach as the `.cpm-row-cells .platform-name` rule above. */
+.platform-pill .platform-name { color: var(--text) !important; }
+
 /* Carousel position dots (mobile per-store deck). The active dot stretches into
    a short accent bar; the rest are dim neutral pips. Token-driven so both
    themes flip automatically. */
