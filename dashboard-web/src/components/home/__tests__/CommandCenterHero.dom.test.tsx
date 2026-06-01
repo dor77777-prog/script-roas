@@ -188,17 +188,18 @@ describe('<CommandCenterHero>', () => {
     });
   });
 
-  // Wave D2 — featured-card sparkline (NetSparkline) legibility hardening.
+  // Wave D2 (refined) — featured-card sparkline (NetSparkline) legibility.
   // The featured Operating-Profit card sits on a ROAS-band gradient and the
   // spark stroke uses that SAME band hue, so on a matching band (green line
-  // on a green band) the line can vanish into the tint. The fix adds a neutral
-  // --plot-bg plot scrim + a neutral casing under-stroke so the line reads on
-  // any band in both themes, while the band-tinted AREA fill keeps band
-  // identity. The spark only renders when netSparkValues (≥2 points) is passed.
-  describe('Featured-card sparkline (NetSparkline) plot scrim + casing', () => {
+  // on a green band) the line can vanish into the tint. The fix uses a neutral
+  // --plot-bg casing under-stroke ONLY (no scrim rect) so the line reads on
+  // any band in both themes, while the band-tinted AREA fill — and the card's
+  // ROAS-state band colour behind it — show through fully. The spark only
+  // renders when netSparkValues (≥2 points) is passed.
+  describe('Featured-card sparkline (NetSparkline) casing-only (no scrim)', () => {
     const SPARK = [1, 3, 2, 5, 4, 6];
 
-    it('renders a neutral plot scrim rect + casing/coloured line paths', () => {
+    it('renders area + casing/coloured line paths and NO scrim rect', () => {
       const { getByTestId } = render(
         <CommandCenterHero
           current={PERIOD_GREEN}
@@ -207,17 +208,15 @@ describe('<CommandCenterHero>', () => {
         />,
       );
       // The featured card carries the green band; its spark hue MATCHES the
-      // band — exactly the P0 collision the scrim + casing protect against.
+      // band — exactly the P0 collision the casing protects against.
       const featured = getByTestId('hero-net-profit');
       const svg = featured.querySelector('svg');
       expect(svg).toBeTruthy();
 
-      // Neutral scrim rect — the band-tint-free backdrop for the line.
-      const scrim = svg!.querySelector('rect');
-      expect(scrim).toBeTruthy();
-      expect(scrim!.getAttribute('fill')).toBe('var(--plot-bg)');
+      // NO scrim rect — the band colour/gradient must show through fully.
+      expect(svg!.querySelector('rect')).toBeNull();
 
-      // ≥3 paths now: area fill + neutral casing + coloured line.
+      // ≥3 paths: area fill + neutral casing + coloured line.
       const paths = svg!.querySelectorAll('path');
       expect(paths.length).toBeGreaterThanOrEqual(3);
 
@@ -232,7 +231,7 @@ describe('<CommandCenterHero>', () => {
       );
       expect(colouredLine.length).toBe(1);
 
-      // Layering order: scrim → area → casing → coloured line. The casing
+      // Layering order: area → casing → coloured line. The casing
       // node must precede the coloured-line node in document order.
       const nodes = Array.from(svg!.children);
       const casingIdx = nodes.indexOf(casing[0]);

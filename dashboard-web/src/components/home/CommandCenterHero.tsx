@@ -329,21 +329,21 @@ function NetSparkline({
         </linearGradient>
       </defs>
       {/*
-        Wave D2 — neutral plot scrim + line casing.
+        Wave D2 (refined) — line casing only, NO plot scrim.
         The featured card sits on a ROAS-band gradient and the spark is drawn
         in that SAME band hue (green line on a green band, etc.), so the line
-        can vanish into the matching tint. Layering, base→top:
-          1. scrim rect (neutral --plot-bg) — a flat backdrop so the line never
-             draws straight onto the matching band tint.
-          2. area path (band-tinted gradient) — band identity still reads as a
-             soft fill sitting on the scrim.
-          3. casing under-stroke (neutral --plot-bg, thicker) — a halo that
-             separates the coloured line from the area beneath it.
-          4. coloured line (bandColorVar) — reads clearly on its neutral casing.
-        --plot-bg is theme-aware (dark scrim in dark mode, near-white in light),
-        so this holds on every band in both themes.
+        can vanish into the matching tint. We deliberately DO NOT lay a neutral
+        scrim rect behind the spark: that would mask the card's ROAS-state band
+        colour, which must read at a glance. Instead the casing alone keeps the
+        line legible on any band. Layering, base→top:
+          1. area path (band-tinted gradient) — band identity reads as a soft
+             fill, with the band colour/gradient showing through fully (no scrim).
+          2. casing under-stroke (neutral --plot-bg, thicker) — a halo that
+             separates the coloured line from the area/band beneath it.
+          3. coloured line (bandColorVar) — reads clearly on its neutral casing.
+        --plot-bg is theme-aware (dark casing in dark mode, near-white in light),
+        so the casing holds on every band in both themes.
       */}
-      <rect x={0} y={0} width={W} height={H} fill="var(--plot-bg)" rx={3} />
       <path d={areaPath} fill={`url(#${gid})`} />
       <path
         d={linePath}
