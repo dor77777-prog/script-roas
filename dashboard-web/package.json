@@ -17,7 +17,9 @@
     "audit:reconcile:hot-vs-heavy": "AUDIT_LIVE=1 vitest run src/lib/audit/__tests__/reconcileHotMetricsVsHeavy.live.test.ts",
     "test:visual": "playwright test",
     "test:visual:update": "playwright test --update-snapshots",
-    "test:visual:ui": "playwright test --ui"
+    "test:visual:ui": "playwright test --ui",
+    "test:visual:axe": "playwright test contrast.axe.spec.ts",
+    "test:visual:overflow": "playwright test overflow.spec.ts"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
@@ -47,6 +49,7 @@
     "tailwindcss-animate": "^1.0.7"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.3",
     "@playwright/test": "^1.60.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

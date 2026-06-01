@@ -3,11 +3,20 @@
 // Task 6.3 (UI/UX Design-System Overhaul) — Playwright + image-snapshot
 // visual-regression CI gate.
 //
-// Single-mode (dark) app: per [[ui-ux-overhaul-plan]] the dashboard does NOT
-// ship a light mode, so we only run the chromium project with `colorScheme:
-// 'dark'`. Viewport is locked to 1440×900 — the canonical mockup-04-final.html
-// design width. Other widths (mobile / tablet) are out of scope for v1 of the
-// visual gate; revisit if the dashboard ever gets a true responsive QA pass.
+// Light + Dark: the mesh re-skin SHIPPED both light AND dark mode on
+// 2026-05-31, so the stale "single-mode dark app" assumption is gone. We
+// run TWO projects — `chromium-dark` (colorScheme 'dark') and
+// `chromium-light` (colorScheme 'light') — both at 1440×900, the canonical
+// mockup-04-final.html design width. Other widths (mobile / tablet) are out
+// of scope for this gate; revisit if the dashboard ever gets a true
+// responsive QA pass.
+//
+// How the theme is forced: `colorScheme` only sets the OS-level
+// prefers-color-scheme signal. The app's ThemeProvider persists the user's
+// CHOICE in localStorage['roas-theme'] ('system' | 'light' | 'dark') and
+// paints `data-theme` on <html> from it. The contrast/overflow specs ALSO
+// set localStorage['roas-theme'] in an addInitScript keyed off the project
+// name, so the theme is forced deterministically regardless of OS hints.
 //
 // Thresholds tuned for sub-pixel font-rendering noise: 0.2 colour-channel
 // tolerance + 100 max diff pixels is the lowest-noise pair that still flags
@@ -15,11 +24,16 @@
 // renders). Anti-aliasing differences across CI runners typically register
 // 30-60 px; 100 keeps a comfortable margin without masking 1-row breaks.
 //
-// webServer block boots `next dev` and waits for http://localhost:3000.
-// On CI it always boots a fresh server; on a developer's laptop we reuse the
-// existing dev server (saves the 8-15 s boot every iteration).
+// Prod-pointable: baseURL is overridable via PLAYWRIGHT_BASE_URL so these
+// specs can run against the Vercel prod/preview deploy (where real data
+// renders). When PLAYWRIGHT_BASE_URL is set we SKIP the local dev webServer
+// entirely — local has no Supabase data, so the data-backed gates
+// (contrast.axe, overflow) are only meaningful against prod/preview.
+// When unset, we fall back to booting `next dev` at localhost:3000.
 
 import { defineConfig, devices } from '@playwright/test';
+
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000';
 
 export default defineConfig({
   testDir: './tests/visual',
@@ -29,17 +43,24 @@ export default defineConfig({
   workers: process.env.CI ? 1 : undefined,
   reporter: process.env.CI ? [['html'], ['github']] : 'html',
   use: {
-    baseURL: 'http://localhost:3000',
+    baseURL,
     trace: 'on-first-retry',
-    // Single-mode app — dashboard has no light theme.
-    colorScheme: 'dark',
   },
   projects: [
     {
-      name: 'chromium',
+      name: 'chromium-dark',
       use: {
         ...devices['Desktop Chrome'],
         viewport: { width: 1440, height: 900 },
+        colorScheme: 'dark',
+      },
+    },
+    {
+      name: 'chromium-light',
+      use: {
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1440, height: 900 },
+        colorScheme: 'light',
       },
     },
   ],
@@ -53,12 +74,16 @@ export default defineConfig({
       animations: 'disabled',
     },
   },
-  webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-    stdout: 'ignore',
-    stderr: 'pipe',
-  },
+  // Boot `next dev` only when we're NOT pointed at a deployed URL. When
+  // PLAYWRIGHT_BASE_URL is set (prod/preview run) there is nothing to boot.
+  webServer: process.env.PLAYWRIGHT_BASE_URL
+    ? undefined
+    : {
+        command: 'npm run dev',
+        url: 'http://localhost:3000',
+        reuseExistingServer: !process.env.CI,
+        timeout: 120_000,
+        stdout: 'ignore',
+        stderr: 'pipe',
+      },
 });
