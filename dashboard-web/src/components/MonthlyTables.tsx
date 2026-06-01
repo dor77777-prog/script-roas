@@ -386,11 +386,15 @@ export function MonthBlockPerStore({
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
-  // detect if store has GA (any row with gaSpend > 0)
+  // Per-platform column visibility — INDEPENDENT per platform: each column is
+  // shown iff that platform spent > 0 this month (2026-06-01: previously
+  // פייסבוק+גוגל were both gated by gaSpend, so a Facebook-only store hid both).
+  const hasFb = rows.some(r => r.fbSpend > 0);
   const hasGa = rows.some(r => r.gaSpend > 0);
   // Phase 05.7.7 — show TikTok column only when at least one row in this
   // month/store has TikTok spend (currently uzoshop-only).
   const hasTt = rows.some(r => (r.ttSpend ?? 0) > 0);
+  const anyPlatform = hasFb || hasGa || hasTt;
 
   let totalFb = 0, totalGa = 0, totalTt = 0, totalSpend = 0, totalRev = 0;
   let totalGross = 0;
@@ -431,10 +435,10 @@ export function MonthBlockPerStore({
             <thead>
               <tr className="text-ink-secondary">
                 <th className="px-3 py-2 text-start font-medium">תאריך</th>
-                {hasGa && <th className="px-3 py-2 text-end font-medium">פייסבוק</th>}
+                {hasFb && <th className="px-3 py-2 text-end font-medium">פייסבוק</th>}
                 {hasGa && <th className="px-3 py-2 text-end font-medium">גוגל</th>}
                 {hasTt && <th className="px-3 py-2 text-end font-medium">טיקטוק</th>}
-                <th className="px-3 py-2 text-end font-medium">{hasGa ? 'יצא סה"כ' : 'יצא'}</th>
+                <th className="px-3 py-2 text-end font-medium">{anyPlatform ? 'יצא סה"כ' : 'יצא'}</th>
                 <th className="px-3 py-2 text-end font-medium">נכנס</th>
                 <th className="px-3 py-2 text-center font-medium">ROAS</th>
               </tr>
@@ -449,7 +453,7 @@ export function MonthBlockPerStore({
                 return (
                   <tr key={d} className={cn('border-t border-glass-edge', isEmpty && 'text-ink-muted')}>
                     <td className="px-3 py-1.5 tabular-nums">{formatDate(d)}</td>
-                    {hasGa && <td className="px-3 py-1.5 text-end tabular-nums">{r ? formatNumber(r.fbSpend) : ''}</td>}
+                    {hasFb && <td className="px-3 py-1.5 text-end tabular-nums">{r ? formatNumber(r.fbSpend) : ''}</td>}
                     {hasGa && <td className="px-3 py-1.5 text-end tabular-nums">{r ? formatNumber(r.gaSpend) : ''}</td>}
                     {hasTt && (
                       <td className="px-3 py-1.5 text-end tabular-nums">
@@ -474,7 +478,7 @@ export function MonthBlockPerStore({
               })}
               <tr className="border-t-2 border-glass-edge bg-glass-2 font-semibold">
                 <td className="px-3 py-2">סך הכל</td>
-                {hasGa && <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalFb)}</td>}
+                {hasFb && <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalFb)}</td>}
                 {hasGa && <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalGa)}</td>}
                 {hasTt && <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalTt)}</td>}
                 <td className="px-3 py-2 text-end tabular-nums">{formatNumber(totalSpend)}</td>
