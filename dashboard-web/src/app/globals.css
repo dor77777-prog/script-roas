@@ -1110,10 +1110,14 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    should not visually shout. NOTE: `.v.neutral` already paints its own
    bright white→cool-gray gradient and is unaffected.
    --------------------------------------------------------------------- */
-.glass[data-band]:not([data-band="gray"]) .hero-eyebrow,
-.glass[data-band]:not([data-band="gray"]) .sl {
-  color: oklch(94% 0.012 80);
-}
+.glass[data-band="red"] .hero-eyebrow,
+.glass[data-band="red"] .sl { color: var(--on-band-red-muted); }
+.glass[data-band="orange"] .hero-eyebrow,
+.glass[data-band="orange"] .sl { color: var(--on-band-orange-muted); }
+.glass[data-band="green"] .hero-eyebrow,
+.glass[data-band="green"] .sl { color: var(--on-band-green-muted); }
+.glass[data-band="blue"] .hero-eyebrow,
+.glass[data-band="blue"] .sl { color: var(--on-band-blue-muted); }
 .glass[data-band][data-band-strength="muted"] .sl {
   /* 2026-05-31 mockup-alignment: muted cards are now CLEAN NEUTRAL (no
      band tint), so the white-ish lift the strong band cards use would make
@@ -1147,15 +1151,10 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    further where the gradient dips toward token-L − 0.14 lower down).
    Gray is the no-data state: its surface is near-neutral, so its number
    stays INK (--text), not white, to remain legible (esp. in light). */
-.glass[data-band="red"]    .v.banded,
-.glass[data-band="orange"] .v.banded,
-.glass[data-band="green"]  .v.banded,
-.glass[data-band="blue"]   .v.banded {
-  color: oklch(100% 0 0);
-  -webkit-text-fill-color: oklch(100% 0 0);
-  background: none;
-  text-shadow: 0 1px 2px oklch(0% 0 0 / 0.22);
-}
+.glass[data-band="red"]    .v.banded { color: var(--on-band-red);    -webkit-text-fill-color: var(--on-band-red);    background: none; text-shadow: 0 1px 2px oklch(0% 0 0 / 0.12); }
+.glass[data-band="orange"] .v.banded { color: var(--on-band-orange); -webkit-text-fill-color: var(--on-band-orange); background: none; text-shadow: 0 1px 2px oklch(0% 0 0 / 0.12); }
+.glass[data-band="green"]  .v.banded { color: var(--on-band-green);  -webkit-text-fill-color: var(--on-band-green);  background: none; text-shadow: 0 1px 2px oklch(0% 0 0 / 0.12); }
+.glass[data-band="blue"]   .v.banded { color: var(--on-band-blue);   -webkit-text-fill-color: var(--on-band-blue);   background: none; text-shadow: 0 1px 2px oklch(0% 0 0 / 0.12); }
 .glass[data-band="gray"] .v.banded {
   color: var(--text);
   -webkit-text-fill-color: var(--text);
@@ -1464,19 +1463,46 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
    caption by their own hooks (NOT a blanket `.cell > span`) so the
    <PlatformBadge> outer span — which carries `text-chart-*` AND owns the dot
    via `bg-current` — is left untouched (whitening it would whiten the dot). */
-.per-store-card.glass[data-band]:not([data-band="gray"]) .scard-main-grid .sv,
-.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .sv,
-.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .cell > bdi,
-.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .cpm-spend-cap {
-  color: oklch(100% 0 0);
+.per-store-card.glass[data-band="red"] .scard-main-grid .sv,
+.per-store-card.glass[data-band="red"] .cpm-row-cells .sv,
+.per-store-card.glass[data-band="red"] .cpm-row-cells .cell > bdi,
+.per-store-card.glass[data-band="red"] .cpm-row-cells .cpm-spend-cap {
+  color: var(--on-band-red);
+}
+.per-store-card.glass[data-band="orange"] .scard-main-grid .sv,
+.per-store-card.glass[data-band="orange"] .cpm-row-cells .sv,
+.per-store-card.glass[data-band="orange"] .cpm-row-cells .cell > bdi,
+.per-store-card.glass[data-band="orange"] .cpm-row-cells .cpm-spend-cap {
+  color: var(--on-band-orange);
+}
+.per-store-card.glass[data-band="green"] .scard-main-grid .sv,
+.per-store-card.glass[data-band="green"] .cpm-row-cells .sv,
+.per-store-card.glass[data-band="green"] .cpm-row-cells .cell > bdi,
+.per-store-card.glass[data-band="green"] .cpm-row-cells .cpm-spend-cap {
+  color: var(--on-band-green);
+}
+.per-store-card.glass[data-band="blue"] .scard-main-grid .sv,
+.per-store-card.glass[data-band="blue"] .cpm-row-cells .sv,
+.per-store-card.glass[data-band="blue"] .cpm-row-cells .cell > bdi,
+.per-store-card.glass[data-band="blue"] .cpm-row-cells .cpm-spend-cap {
+  color: var(--on-band-blue);
 }
 
 /* (2) Per-platform CPM NAME → white. The label lives in <PlatformBadge>'s
    `.platform-name` span, which inherits a brand hue from the badge's
    `text-chart-*` parent class; `!important` beats that Tailwind utility.
    The DOT (`.platform-dot`) is NOT targeted, so it keeps its brand colour. */
-.per-store-card.glass[data-band]:not([data-band="gray"]) .cpm-row-cells .platform-name {
-  color: oklch(100% 0 0) !important;
+.per-store-card.glass[data-band="red"] .cpm-row-cells .platform-name {
+  color: var(--on-band-red) !important;
+}
+.per-store-card.glass[data-band="orange"] .cpm-row-cells .platform-name {
+  color: var(--on-band-orange) !important;
+}
+.per-store-card.glass[data-band="green"] .cpm-row-cells .platform-name {
+  color: var(--on-band-green) !important;
+}
+.per-store-card.glass[data-band="blue"] .cpm-row-cells .platform-name {
+  color: var(--on-band-blue) !important;
 }
 
 /* (3) Directional glyphs (↓ spend / ↑ revenue / ▴ ▾ AOV) → white-alpha so they
