@@ -187,4 +187,69 @@ describe('<CommandCenterHero>', () => {
       expect(card.getAttribute('data-band-strength')).toBe('muted');
     });
   });
+
+  // Wave D2 — featured-card sparkline (NetSparkline) legibility hardening.
+  // The featured Operating-Profit card sits on a ROAS-band gradient and the
+  // spark stroke uses that SAME band hue, so on a matching band (green line
+  // on a green band) the line can vanish into the tint. The fix adds a neutral
+  // --plot-bg plot scrim + a neutral casing under-stroke so the line reads on
+  // any band in both themes, while the band-tinted AREA fill keeps band
+  // identity. The spark only renders when netSparkValues (≥2 points) is passed.
+  describe('Featured-card sparkline (NetSparkline) plot scrim + casing', () => {
+    const SPARK = [1, 3, 2, 5, 4, 6];
+
+    it('renders a neutral plot scrim rect + casing/coloured line paths', () => {
+      const { getByTestId } = render(
+        <CommandCenterHero
+          current={PERIOD_GREEN}
+          rangeLabel="היום"
+          netSparkValues={SPARK}
+        />,
+      );
+      // The featured card carries the green band; its spark hue MATCHES the
+      // band — exactly the P0 collision the scrim + casing protect against.
+      const featured = getByTestId('hero-net-profit');
+      const svg = featured.querySelector('svg');
+      expect(svg).toBeTruthy();
+
+      // Neutral scrim rect — the band-tint-free backdrop for the line.
+      const scrim = svg!.querySelector('rect');
+      expect(scrim).toBeTruthy();
+      expect(scrim!.getAttribute('fill')).toBe('var(--plot-bg)');
+
+      // ≥3 paths now: area fill + neutral casing + coloured line.
+      const paths = svg!.querySelectorAll('path');
+      expect(paths.length).toBeGreaterThanOrEqual(3);
+
+      // Exactly one casing under-stroke in the neutral plot colour, drawn
+      // BEFORE (under) the coloured line; the coloured line uses the band var.
+      const casing = Array.from(paths).filter(
+        (p) => p.getAttribute('stroke') === 'var(--plot-bg)',
+      );
+      expect(casing.length).toBe(1);
+      const colouredLine = Array.from(paths).filter(
+        (p) => p.getAttribute('stroke') === 'var(--band-green)',
+      );
+      expect(colouredLine.length).toBe(1);
+
+      // Layering order: scrim → area → casing → coloured line. The casing
+      // node must precede the coloured-line node in document order.
+      const nodes = Array.from(svg!.children);
+      const casingIdx = nodes.indexOf(casing[0]);
+      const lineIdx = nodes.indexOf(colouredLine[0]);
+      expect(casingIdx).toBeGreaterThan(-1);
+      expect(lineIdx).toBeGreaterThan(casingIdx);
+    });
+
+    it('omits the spark entirely when fewer than 2 points are supplied', () => {
+      const { getByTestId } = render(
+        <CommandCenterHero
+          current={PERIOD_GREEN}
+          rangeLabel="היום"
+          netSparkValues={[5]}
+        />,
+      );
+      expect(getByTestId('hero-net-profit').querySelector('svg')).toBeNull();
+    });
+  });
 });

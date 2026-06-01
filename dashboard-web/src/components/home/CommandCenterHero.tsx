@@ -328,13 +328,37 @@ function NetSparkline({
           <stop offset="100%" stopColor={bandColorVar} stopOpacity={0} />
         </linearGradient>
       </defs>
+      {/*
+        Wave D2 — neutral plot scrim + line casing.
+        The featured card sits on a ROAS-band gradient and the spark is drawn
+        in that SAME band hue (green line on a green band, etc.), so the line
+        can vanish into the matching tint. Layering, base→top:
+          1. scrim rect (neutral --plot-bg) — a flat backdrop so the line never
+             draws straight onto the matching band tint.
+          2. area path (band-tinted gradient) — band identity still reads as a
+             soft fill sitting on the scrim.
+          3. casing under-stroke (neutral --plot-bg, thicker) — a halo that
+             separates the coloured line from the area beneath it.
+          4. coloured line (bandColorVar) — reads clearly on its neutral casing.
+        --plot-bg is theme-aware (dark scrim in dark mode, near-white in light),
+        so this holds on every band in both themes.
+      */}
+      <rect x={0} y={0} width={W} height={H} fill="var(--plot-bg)" rx={3} />
+      <path d={areaPath} fill={`url(#${gid})`} />
+      <path
+        d={linePath}
+        fill="none"
+        stroke="var(--plot-bg)"
+        strokeWidth={4}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
       <path
         d={linePath}
         fill="none"
         stroke={bandColorVar}
         strokeWidth={2}
       />
-      <path d={areaPath} fill={`url(#${gid})`} />
     </svg>
   );
 }
