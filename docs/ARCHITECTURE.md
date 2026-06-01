@@ -2949,3 +2949,55 @@ ratchet). The contrast/money ratchets sit alongside the §28.2 `designColorGuard
 as the third and fourth green-ratchet vitest gates. No data/algorithm/workflow
 change — readability + a11y + one display bugfix + one picker unification only.
 
+
+## 30. Real-Time Shopify Activity Feed — Ingest (Phase 0-1, 2026-06-01)
+
+**Goal:** replace the Home "פעילות אחרונה" card with a webhook-fed real-time feed
+(sale + refund + add-to-cart) across the 3 stores. This section covers the
+**ingest backbone** (Phases 0-1); the cart pixel/beacon (Phase 2) and the feed UI
++ LIVE badge (Phase 3) land in later commits. Spec:
+`docs/superpowers/specs/2026-06-01-realtime-activity-feed-design.md`; plan:
+`docs/superpowers/plans/2026-06-01-realtime-activity-feed.md`.
+
+### New tables (migration `20260601120000_realtime_activity_feed.sql`)
+- **`store_webhooks`** — per-store webhook routing + secrets, so connect /
+  disconnect / change / **add a store is a row edit, never a redeploy**. Columns:
+  `store_id → stores.id`, `shop_domain` (unique; matched against
+  `X-Shopify-Shop-Domain`), `signing_secret` (server-webhook HMAC), `cart_public_token`
+  + `allowed_origins[]` (Phase-2 client cart), `enabled`. **Service-role-only** —
+  it holds secrets, so NO `anon` grant is issued (RLS is disabled project-wide;
+  the absence of an anon grant is the access boundary).
+- **`store_events`** — normalized feed rows: `type` (`sale|refund|add_to_cart`),
+  `amount_cad` + `currency` + `amount_original`, `product_title`, `quantity`,
+  `customer_label` (MASKED — initials or null, never raw PII), `occurred_at`,
+  `received_at` (drives LIVE freshness), `dedupe_key` (UNIQUE → idempotent),
+  `raw` (trimmed to a non-PII allowlist). Read in Phase 3 via a service-role
+  server route behind the password gate (no anon grant).
+
+### Ingest endpoint `POST /api/webhooks/shopify` (`runtime='nodejs'`)
+Allowlisted in `isDashboardAuthAllowlisted` (Shopify can't present the dashboard
+cookie); authenticates per-request instead:
+- Reads the **raw body first** (`req.text()`) — HMAC is over exact bytes, never a
+  JSON round-trip. Routes by `X-Shopify-Shop-Domain` → `store_webhooks` lookup.
+- **HMAC-SHA256** over the raw body vs `X-Shopify-Hmac-Sha256`, **constant-time**
+  (`timingSafeEqual`, equal-length-guarded). Unknown/disabled shop → `200` ack+drop
+  (so Shopify stops retrying); bad signature → `401`; non-surfaced topic /
+  unparseable JSON → `200`; valid → idempotent upsert on `dedupe_key`.
+- **Retry-storm guards** (security review): the post-verify normalize+insert is
+  wrapped so a transient DB/FX error returns `200` (not `500` → 48h of Shopify
+  retries); the CAD conversion is **bounded by a 1.5s race** so a hung FX service
+  can't blow the <5s ack window (→ `amount_cad` null, preserve `amount_original`).
+  `occurred_at` is coerced to a valid ISO before the NOT-NULL timestamptz insert.
+- CAD via the existing `makeCadConvert`/`getFxRate` (FX outage → null, "stale >
+  wrong" money rule). PII masked at the normalize boundary.
+
+### Operator wiring (STOP 1)
+Per store, Shopify admin → Settings → Notifications → Webhooks → `orders/create`
++ `refunds/create` (JSON) → the endpoint URL; the store's single signing secret +
+myshopify domain are stored as a `store_webhooks` row (applied out-of-band, secrets
+never committed). The migration was applied to prod in isolation (the 2 unrelated
+pending prior-phase migrations were set aside so only `20260601120000` pushed).
+
+Tests: `shopifyHmac` (4), `normalizeShopifyEvent` (16, incl. PII-no-leak + occurred_at
+sanity), `store` (7), route (8, incl. throw→200), middleware allowlist. No UI / no
+data-pipeline change.
