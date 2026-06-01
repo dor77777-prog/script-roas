@@ -4,15 +4,36 @@
  * `display` = what's painted (compact iff abs >= compactAbove). `full` = the
  * always-exact grouped string for title / sr-only. Compact output is bounded
  * (`$XXX.XM`, ≤8 chars) so a `ch`-reserved cell can never overflow at min font.
- * Reuses the dashboard's `$`/`CAD ` prefix convention (NOT narrowSymbol).
- * Negatives use the typographic minus U+2212.
+ *
+ * Wave C4a: gained `prefix` / `locale` / `decimals` so a single primitive can
+ * reproduce EVERY money render site in the app byte-for-byte:
+ *   - bare `he-IL` 0dp  → table cells  (`formatCurrency(n, 0)`):  `1,234`
+ *   - bare `he-IL` 2dp  → cpc/cpm/cpa  (`formatCurrency(n, 2)`):  `1,234.56`
+ *   - `$`-prefixed en-US → hero compact (`fmtMoneyCompact`):      `$4,847` / `$1.2M`
+ *   - bare en-US 2dp     → hero cpm grouping:                     `1,234.56`
+ * Negatives use the typographic minus U+2212; a tiny negative that rounds to
+ * zero at the requested precision normalizes to `0` (mirrors `formatCurrency`).
+ *
+ * NOTE: the compact path is intentionally locale-INDEPENDENT (always en-US
+ * `1.2M`). Compaction only fires for huge values as an overflow floor, where a
+ * bounded `1.2M`-style token is the goal regardless of the cell's grouping
+ * locale; full/sr-only/title always carry the exact locale-grouped value.
  */
-const GROUPED = new Intl.NumberFormat('en-US', { maximumFractionDigits: 0 });
 const COMPACT = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
 
+export type MoneyPrefix = '$' | 'CAD' | 'none';
+
 export interface MetricFormatOpts {
-  /** Currency code prefix; '$' (default) or 'CAD'. */
-  code?: '$' | 'CAD';
+  /**
+   * Prefix convention: '$' (default) → `$1,234`; 'CAD' → `CAD 1,234`;
+   * 'none' → bare grouped value (`1,234`). Replaces the old `code` option
+   * (renamed in Wave C4a — there were no other `code` callers).
+   */
+  prefix?: MoneyPrefix;
+  /** Grouping locale for the full (non-compact) value. Default 'en-US'. */
+  locale?: 'en-US' | 'he-IL';
+  /** Fractional digits for the full value. Default 0. */
+  decimals?: 0 | 2;
   /** Compact above this abs value; full grouped below. Default 100_000. */
   compactAbove?: number;
 }
@@ -22,20 +43,35 @@ export interface MetricFormatResult {
   compacted: boolean;
 }
 
-function prefix(code: '$' | 'CAD', body: string, sign: string): string {
-  return code === 'CAD' ? `CAD ${sign}${body}` : `${sign}$${body}`;
+function applyPrefix(prefix: MoneyPrefix, body: string, sign: string): string {
+  if (prefix === 'CAD') return `CAD ${sign}${body}`;
+  if (prefix === 'none') return `${sign}${body}`;
+  return `${sign}$${body}`;
 }
 
 export function formatMetricValue(
   value: number | null | undefined,
   opts: MetricFormatOpts = {},
 ): MetricFormatResult {
-  const { code = '$', compactAbove = 100_000 } = opts;
+  const { prefix = '$', locale = 'en-US', decimals = 0, compactAbove = 100_000 } = opts;
   if (value == null || Number.isNaN(value)) return { display: '—', full: '—', compacted: false };
-  const sign = value < 0 ? '−' : '';
-  const abs = Math.abs(value);
-  const full = prefix(code, GROUPED.format(Math.round(abs)), sign);
+
+  // -0 normalization (mirror formatCurrency): a tiny negative that rounds to
+  // zero magnitude at the requested precision must show 0, never −0.
+  const factor = 10 ** decimals;
+  const rounded = Math.round(value * factor) / factor;
+  const normalized = rounded === 0 ? 0 : value;
+
+  const sign = normalized < 0 ? '−' : '';
+  const abs = Math.abs(normalized);
+
+  const grouped = new Intl.NumberFormat(locale, {
+    style: 'decimal',
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+  const full = applyPrefix(prefix, grouped.format(abs), sign);
   if (abs < compactAbove) return { display: full, full, compacted: false };
-  const display = prefix(code, COMPACT.format(abs), sign);
+  const display = applyPrefix(prefix, COMPACT.format(abs), sign);
   return { display, full, compacted: true };
 }

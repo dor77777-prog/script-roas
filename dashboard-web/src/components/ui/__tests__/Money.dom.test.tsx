@@ -22,4 +22,9 @@ describe('Money', () => {
     const { container } = render(<Money value={1500} />);
     expect(container.querySelector('bdi')?.getAttribute('dir')).toBe('ltr');
   });
+  it('renders a bare localized value when prefix=none (no $ prefix)', () => {
+    const { container } = render(<Money value={1234} prefix="none" locale="he-IL" />);
+    expect(container.textContent).toBe('1,234');
+    expect(container.textContent).not.toContain('$');
+  });
 });
