@@ -11,6 +11,9 @@ export interface SparklineProps {
   height?: number;
   tone?: 'green' | 'red' | 'orange' | 'blue' | 'gray';
   className?: string;
+  /** When the sparkline sits on a ROAS-band card, render a neutral plot scrim
+   *  + a stroke casing so the line never collides with the band tint. */
+  onBand?: boolean;
 }
 
 const TONE_STROKE: Record<NonNullable<SparklineProps['tone']>, string> = {
@@ -27,6 +30,7 @@ export function Sparkline({
   height = 16,
   tone = 'blue',
   className,
+  onBand,
 }: SparklineProps) {
   const path = useMemo(() => {
     if (data.length === 0) return '';
@@ -52,6 +56,19 @@ export function Sparkline({
       role="img"
       aria-label="טרנד"
     >
+      {onBand && (
+        <rect x={0} y={0} width={width} height={height} fill="var(--plot-bg)" rx={3} />
+      )}
+      {onBand && (
+        <path
+          d={path}
+          fill="none"
+          stroke="var(--plot-bg)"
+          strokeWidth={3}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      )}
       <path
         d={path}
         fill="none"
