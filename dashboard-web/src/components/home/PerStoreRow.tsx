@@ -33,8 +33,8 @@
  */
 
 import { useMemo, type KeyboardEvent } from 'react';
-import { cn, formatCurrency, formatNumber } from '@/lib/utils';
-import { fmtMoneyCompact, fmtMoneyCompactTight } from '@/lib/format';
+import { cn, formatNumber } from '@/lib/utils';
+import { Money } from '@/components/ui/Money';
 import { Card } from '@/components/ui/Card';
 import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
 import { Heading } from '@/components/ui/Typography';
@@ -104,36 +104,16 @@ const BAND_TAG_LABEL: Record<RoasBand, string> = {
 };
 
 /* --------------------------------------------------------------------------
- * Money / number formatters — local thin wrappers so cell content is a string
+ * Number formatters — local thin wrappers so cell content is a string
  * (the `.sv` CSS selectors in globals.css target the inner <span> by class,
  * not by element identity, so plain strings work fine).
+ *
+ * Wave C3 (2026-06-01) — every MONEY readout in this card now renders through
+ * the overflow-safe <Money> primitive (tabular-nums + nowrap + a compact
+ * floor, value-exact in title/sr-only) instead of a clipped/`truncate`d
+ * string. The old `fmtMoneyText* ` helpers were therefore deleted. Orders is
+ * a COUNT (never `$`-prefixed), so it keeps its own plain-string formatter.
  * -------------------------------------------------------------------------- */
-
-function fmtMoneyText(n: number | null): string {
-  if (n == null || Number.isNaN(n)) return '—';
-  return `$${formatCurrency(n)}`;
-}
-
-/**
- * Round 6 (2026-05-31) — compact money for the per-platform CPM spend
- * captions. Below 10k renders the full comma-separated value (`$9,840`);
- * at or above 10k switches to compact ("$110k" / "$1.2M"). Used only for
- * the small CPM caption text (not the enlarged metric-grid `.sv` cells).
- */
-function fmtMoneyTextCompact(n: number | null): string {
-  return fmtMoneyCompact(n);
-}
-
-/**
- * Round 7 (2026-05-31) — AGGRESSIVE compact for the per-store metric-grid
- * spend / revenue `.sv` values. The enlarged 20-22px font overflowed the
- * narrow 1/4 column at 4-digit values (`$5,755` clipped to `…,755`), so we
- * abbreviate from ≥1_000 ("$5.8K" / "$112K"). Longest output `$XXX.XK`
- * (7 chars) fits the cell without ellipsis. AOV + orders are unchanged.
- */
-function fmtMoneyTextTight(n: number | null): string {
-  return fmtMoneyCompactTight(n);
-}
 
 function fmtOrdersText(n: number | null): string {
   if (n == null || Number.isNaN(n)) return '—';
@@ -302,36 +282,34 @@ function StoreCard({
           The `per-store-card` ancestor class lets globals.css bump
           .sl / .sv sizes inside this row WITHOUT affecting other
           scard-main-grid consumers.
-          Round 6 (2026-05-31) — `min-w-0` on each cell is set by the
-          `.scard-main-grid .cell` rule in globals.css; we add
-          `truncate` on the `.sv` value so a stray 7-digit cell still
-          ellipsises instead of pushing the column wider than its
-          1/4-track. Spend + revenue use compact notation so
-          ≥$10k renders as "$10k" / "$110k" / "$1.2M" instead of the
-          full "$110,899" that broke the layout. AOV stays full-precision
-          (typically <$100). */}
+          Wave C3 (2026-06-01) — every money value renders via the
+          overflow-safe <Money> primitive (tabular-nums + nowrap + a compact
+          floor, value-exact in title/sr-only) so a digit is NEVER clipped or
+          ellipsised — `truncate` is gone from all numeric cells. Spend +
+          revenue compact from ≥$1k ("$5.8K" / "$112K") so the enlarged
+          20-22px font fits the 1/4-track; AOV uses a high (100k) floor so it
+          stays full-precision (typically <$100) yet still nowrap-safe. Orders
+          is a COUNT (no `$`-prefix) → a plain `whitespace-nowrap` span, never
+          <Money>. The `.sv` class hook is kept so the per-band on-color CSS
+          (`.scard-main-grid .sv`) + the 20/22px size rule still apply. */}
       <div className="scard-main-grid grid grid-cols-2 sm:grid-cols-4 gap-4 mt-5 pt-4 border-t border-glass-edge">
         <div className="cell spend" data-cell="spend">
           <span className="sl">הוצאה</span>
-          <span className="sv num tabular-nums truncate">
-            {fmtMoneyTextTight(store.spend)}
-          </span>
+          <Money value={store.spend} compactAbove={1_000} className="sv num" />
         </div>
         <div className="cell revenue" data-cell="revenue">
           <span className="sl">הכנסה</span>
-          <span className="sv num tabular-nums truncate">
-            {fmtMoneyTextTight(store.revenue)}
-          </span>
+          <Money value={store.revenue} compactAbove={1_000} className="sv num" />
         </div>
         <div className="cell" data-cell="orders">
           <span className="sl">הזמנות</span>
-          <span className="sv num tabular-nums truncate">
+          <span className="sv num tabular-nums whitespace-nowrap">
             {fmtOrdersText(store.orders)}
           </span>
         </div>
         <div className={cn('cell', aovClass)} data-cell="aov">
           <span className="sl">AOV</span>
-          <span className="sv num tabular-nums truncate">{fmtMoneyText(store.aov)}</span>
+          <Money value={store.aov} compactAbove={100_000} className="sv num" />
         </div>
       </div>
 
@@ -355,20 +333,22 @@ function StoreCard({
                     notation because per-platform spend regularly hits 5
                     digits, and the CPM cell is narrower than the main
                     metric cells (3-up grid on a card that's already 1/3
-                    of the row). `truncate` on the span keeps the cell
-                    from spilling its border-box even if the compact form
-                    still overflows in extreme cases. CPM value (the big
-                    number below) stays full-precision because it's
-                    typically $5-$50. */}
-                <span className="cpm-spend-cap text-[11px] text-ink-muted leading-tight truncate">
-                  spend · <bdi dir="ltr" className="tabular-nums">{fmtMoneyTextCompact(data.spend)}</bdi>
+                    of the row). Wave C3 (2026-06-01): the value renders via
+                    <Money> (tabular-nums + nowrap + a compact floor at ≥10k,
+                    value-exact in title/sr-only) so the digits are never
+                    clipped — `truncate` removed from this span. The
+                    `.cpm-spend-cap` foreground colour is set in globals.css
+                    (Wave B2 → `--band-scrim-ink`) and inherits to the inner
+                    <Money> bdi. CPM value (the big number below) stays
+                    full-precision because it's typically $5-$50. */}
+                <span className="cpm-spend-cap text-[11px] text-ink-muted leading-tight">
+                  spend · <Money value={data.spend} compactAbove={10_000} className="text-[11px]" />
                 </span>
-                <bdi
-                  dir="ltr"
-                  className="text-[20px] md:text-[22px] font-semibold tabular-nums text-ink leading-none truncate"
-                >
-                  {fmtMoneyText(data.cpm)}
-                </bdi>
+                <Money
+                  value={data.cpm}
+                  compactAbove={100_000}
+                  className="text-[20px] md:text-[22px] font-semibold leading-none"
+                />
               </div>
             ))}
           </div>

@@ -584,12 +584,22 @@ input[type="number"] {
 
 /* ===========================================================================
    Readability Hardening (Wave C) — overflow-safe metric number.
-   tabular-nums + nowrap guarantee a number is never clipped/ellipsized; the
-   font-size tracks --metric-font (a clamp() with a cqi term), so when the
-   parent .metric-cell sets container-type: inline-size the value fluidly
-   shrinks/grows with its column. The overflow guarantee comes from nowrap +
-   the formatter's compact floor (compact output is bounded to ≤8 chars,
-   "$XXX.XM") + the parent's min-width:0 — NOT from a forced width.
+   tabular-nums + nowrap guarantee a number is never clipped/ellipsized — that
+   is the WHOLE overflow contract: nowrap (never wrap/ellipsize) + the
+   formatter's compact floor (compact output is bounded to ≤8 chars, "$XXX.XM")
+   + the parent's min-width:0. It does NOT depend on font-size.
+
+   Wave C3 (2026-06-01) — base `.metric-num` is now SIZE-AGNOSTIC: it carries
+   NO font-size, so a call-site size (e.g. `text-[20px]`, or the per-store
+   `.sv` 20/22px rule) always wins. Previously `.metric-num` forced
+   `font-size: var(--metric-font)` and — because it's emitted AFTER the
+   Tailwind utilities in the built CSS — silently beat any same-specificity
+   call-site `text-[Npx]` (same specificity, later source), clamping operator-
+   tuned readouts to the fluid size. Fluid container-sizing is now OPT-IN via
+   `.metric-fluid` (used only by readouts that actually want to grow/shrink
+   with their `.metric-cell` container; none in PerStoreRow, which has explicit
+   operator sizes).
+
    `.metric-num` deliberately does NOT set min-inline-size: forcing 8ch
    everywhere would blow out narrow table columns (tiny CPM tiles, dense
    cells). Width reservation is opt-in via `.metric-reserve` for the big
@@ -600,9 +610,12 @@ input[type="number"] {
 .metric-num {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  font-size: var(--metric-font);
-  line-height: 1.15;
 }
+/* Opt-in fluid sizing: font-size tracks --metric-font (a clamp() with a cqi
+   term), so when an ancestor .metric-cell sets container-type: inline-size the
+   value fluidly shrinks/grows with its column. Add this ALONGSIDE .metric-num
+   only on readouts that want container-fluid sizing. */
+.metric-fluid { font-size: var(--metric-font); line-height: 1.15; }
 .metric-reserve { min-inline-size: 8ch; }
 .metric-cell { container-type: inline-size; min-width: 0; }
 
