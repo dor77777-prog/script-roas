@@ -2796,3 +2796,156 @@ change — visual fidelity only.
   (`campaign-drawer/CampaignDrawerDaily.tsx`) so they don't squish inside the
   centered modal.
 
+## 29. Readability & Legibility Hardening (2026-06-01)
+
+A "readability & legibility hardening" initiative on top of §27/§28 — it
+**builds on** the mesh re-skin (§28) and the Premium 2026 contract (§27). Same
+data, same algorithms, same operator workflow, same pipeline: this is a
+readability + accessibility (a11y) pass plus one coupled display bugfix and one
+UX unification. No pipeline change. Two new contrast/overflow concerns are made
+*hermetically enforceable* so the gains can't silently regress.
+
+Five engineering pillars:
+
+### 29.1 On-color token matrix (`--on-band-*` + `-muted`) — band text never derives from the band
+
+The mesh band surfaces are gradients whose hue is the operator signal, so the
+text that sits ON them must come from a **paired, independently-tuned on-color
+token**, never from the variable band color. `globals.css` gained the matrix in
+BOTH the `:root` (dark) and `[data-theme="light"]` blocks (the `themeParity`
+guard from §27.11 enforces the dual declaration):
+
+| Token family | Role |
+|---|---|
+| `--on-band-{red\|orange\|green\|blue\|gray}` | strong-contrast ink for the primary band-surface text (per-store ROAS number `.v.banded`, etc.) — AA-verified against the band's representative gradient stop |
+| `--on-band-{band}-muted` | second-tier on-color for labels / the ROAS caption that sit on the BARE band tint (`.sl`, `roas-cap`) — still ≥ AA, but allowed to be softer |
+| `--band-scrim` / `--band-scrim-ink` | a NEUTRAL sub-surface (white-alpha in light, near-black-alpha in dark) + its ink. Chips, CPM tiles and the freshness pill sit on this scrim so their contrast is independent of the underlying band hue |
+| `--plot-bg` | neutral chart scrim / sparkline casing fill (§29.3) |
+| `--metric-font` | shared `clamp()` font size for the overflow-safe number primitive (§29.2); theme-independent, re-declared identically in both blocks for parity |
+
+**Rule:** any text rendered on a `.glass[data-band]` surface references one of
+these paired tokens (or the neutral `--band-scrim-ink`). It must **never** be
+hardcoded `white` (the bug this fixes: a light-theme white-on-white failure on
+vivid cards) nor derived from the band color. The per-band CSS lives under
+`.glass[data-band="…"] .v.banded` / `.sl` / `roas-cap` rules in `globals.css`.
+
+**Freshness signal preserved on the scrim:** moving the LIVE/AGING/STALE pill
+onto `--band-scrim` would have erased its status color, so STALE/AGING restore
+the status hue as a small colored **dot** inside the white-alpha pill
+(`.fresh-dot`), keeping the freshness signal legible without re-coupling to the
+band.
+
+**Hermetic gate — `src/lib/__tests__/contrastGuard.test.ts`** (static, vitest).
+It parses the band hexes + every `--on-band-*` / `-muted` / `--band-scrim*`
+token straight out of `globals.css` for BOTH `:root` and `[data-theme="light"]`
+and fails CI if any pairing drops below WCAG-AA 4.5:1. Static (not axe) **by
+design**: the band is a GRADIENT and axe only reads solid backgrounds — so this
+guard owns the gradient surfaces in both themes (see the axe division of labor
+in §29.4).
+
+### 29.2 `<Money>` overflow-safe number primitive
+
+`src/components/ui/Money.tsx` + its core `src/lib/metricFormat.ts`
+(`formatMetricValue`). A 7-digit value can no longer overflow its cell or get
+ellipsized.
+
+- **`formatMetricValue(value, opts)`** is the single source of truth. Opts:
+  `prefix` (`'$'` | `'CAD'` | `'none'`), `locale` (`'en-US'` | `'he-IL'`),
+  `decimals` (`0` | `2`), `compactAbove` (default `100_000`). It returns
+  `{ display, full, compacted }`: `display` is what's painted (compacted to a
+  bounded `$X.XM` token iff `abs >= compactAbove`), `full` is always the exact
+  locale-grouped value, `compacted` flags whether they differ. These opts let
+  ONE primitive reproduce every prior money render site byte-for-byte (bare
+  `he-IL` 0/2dp table cells, `$`-prefixed `en-US` compact hero, etc.). Negatives
+  use U+2212; a tiny negative that rounds to 0 normalizes to `0` (mirrors
+  `formatCurrency`). The compact path is intentionally locale-INDEPENDENT
+  (`1.2M`) — compaction is an overflow floor, and `full`/title/sr-only carry the
+  exact grouped value.
+- **`<Money>`** renders a `<bdi dir="ltr" className="metric-num">` with the
+  `display` string, and — ONLY when compacted — sets the native `title` to
+  `full` plus an `sr-only` span carrying `full`. So the EXACT value is always
+  recoverable on hover and to screen readers. RTL-isolated via `<bdi>`.
+- **CSS contract (`globals.css`):** `.metric-num` is `tabular-nums` + `nowrap`
+  and deliberately **size-agnostic** (Wave C3) so call-site size classes win and
+  it does NOT force a width. Width reservation is opt-in via `.metric-reserve`
+  (`min-inline-size: 8ch`) for the big hero/goal numbers; `.metric-cell`
+  (`container-type: inline-size`) enables the `cqi`-based `--metric-font`. The
+  overflow contract = `nowrap` + compact floor + exact value in title/sr-only.
+- **Adoption:** per-store cards, campaigns/products tables, hero, goal tracker,
+  top-list.
+- **Hermetic gate — `src/lib/__tests__/moneyPrimitiveGuard.test.ts`**: a
+  green-ratchet (identical mechanics to `designColorGuard` §28.2) that scans
+  `src/components/**` for NEW raw money construction (`.toLocaleString(` and
+  hand-built `$${…}` / `CAD ${…}` templates) and blocks regressions. Approved
+  helper calls (`<Money>`, `formatMetricValue`, `formatCurrency`, `fmtMoney*`)
+  are not flagged; a curated `MIGRATION_ALLOWLIST` records the legitimate
+  exceptions (the detector over-matches by design — also catching date/count
+  `.toLocaleString` and chart-axis tick formatters — and lets the allowlist
+  carry one-line reasons). The list can only shrink.
+
+### 29.3 Sparkline legibility on band surfaces
+
+- **`Sparkline onBand` prop** (`src/components/ui/Sparkline.tsx`): when set, the
+  SVG paints a neutral `--plot-bg` scrim rect behind the line AND a thick
+  `--plot-bg` under-stroke (casing) beneath the colored stroke, so the trend
+  line never collides with a same-hue band tint.
+- **Hero `NetSparkline` — casing-only** (`components/home/CommandCenterHero.tsx`,
+  refined in `caca263`): the featured Net-Profit card deliberately DROPS the
+  plot-scrim rect and keeps only the casing under-stroke (neutral `--plot-bg`,
+  thicker) under the band-colored line. This preserves the band color as the
+  card's surface signal (no neutral panel over the gradient) while the casing
+  alone keeps the line readable. `--plot-bg` is theme-aware, so the casing holds
+  on every band in both themes.
+
+### 29.4 Hermetic CI gates + axe-vs-static division of labor
+
+Playwright now declares **two projects** — `chromium-light` (`colorScheme:
+'light'`) and `chromium-dark` — both at 1440×900, and a **prod-overridable
+`baseURL`** via `PLAYWRIGHT_BASE_URL` (when set, the local dev `webServer` is
+skipped). Per the no-localhost-in-verify rule, the a11y gates run **post-deploy
+against prod**. New specs:
+
+- **`tests/visual/contrast.axe.spec.ts`** — `@axe-core/playwright`
+  color-contrast on every tab, both themes. axe reads SOLID backgrounds.
+- **`tests/visual/overflow.spec.ts`** — at 200% zoom, asserts no `.metric-num`
+  element overflows its container (the `<Money>` overflow contract, validated in
+  a real browser).
+
+**Division of labor (documented so the coverage gap is intentional, not
+accidental):** `@axe-core/playwright` color-contrast covers the **solid**
+surfaces; the **gradient** band surfaces — which axe cannot read — are owned by
+the static `contrastGuard` (§29.1), which measures the on-color token against
+the parsed band stop hex in both themes. Together they cover every text-on-color
+pairing in the app.
+
+### 29.5 Coupled fixes — date-picker unification + attribution panel
+
+- **Single global date picker (Campaigns + Products).** The redundant in-tab
+  date pickers were removed from BOTH `CampaignsTable.tsx` and
+  `ProductsTable.tsx`; each tab now follows the single page-global `range` prop.
+  Implementation: `const localRange = range;` — `localRange` is kept as an
+  **alias** of the `range` prop so the ~40 downstream references (SWR keys,
+  attribution coherence, bucket math, aggregation) didn't have to churn. Old
+  `c_from`/`c_to`/`p_from`/`p_to` (and `*_preset`) URL bookmarks degrade
+  gracefully — they're parsed-but-ignored, then swept out of the URL by
+  `syncTabLocalUrl`. This kills the dual-picker confusion AND the
+  divergence-bug class that caused the attribution-panel disappearance below.
+- **Attribution-panel Shopify-side-follows-range fix** (`CampaignsTable.tsx`,
+  commit `cc87f54`). The "התאמת שיוך · Meta & Google & TikTok ↔ Shopify" panel
+  reconciles the platform claim (`/api/campaigns`, keyed on `localRange`) against
+  Shopify revenue. It previously used the page-global `dailyRows` prop for the
+  Shopify side, so whenever the (now-removed) in-table picker selected a window
+  outside the global range, the coherence gate saw two mismatched windows and
+  hid the panel — which manifested as the panel vanishing for non-global ranges
+  / non-uzoshop stores. Fix: the Shopify side now fetches `/api/data` keyed on
+  the SAME `localRange` (`panelDailyRows = localDailyResp?.rows ?? dailyRows`,
+  the global prop only as a first-paint fallback), so both halves always describe
+  the same window. Verified on prod: the data was always present — this was a
+  display bug, not sparsity.
+
+Cross-references: builds on §27 (Premium 2026 design-system contract — V4 band /
+freshness / semantic emphasis), §28 (mesh exact re-skin + token-only-color
+ratchet). The contrast/money ratchets sit alongside the §28.2 `designColorGuard`
+as the third and fourth green-ratchet vitest gates. No data/algorithm/workflow
+change — readability + a11y + one display bugfix + one picker unification only.
+
