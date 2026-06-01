@@ -22,7 +22,9 @@
  *   3. ROAS-over-time chart — the store-scoped `RoasChart` (target line kept).
  *   4. Per-platform breakdown — spend + CPM + ROAS per Meta/Google/TikTok.
  *   5. Top campaigns — name + spend + a solid colored ROAS chip; clicking a row
- *      (or the footer button) calls onOpenCampaigns(storeId).
+ *      passes its {storeId,platform,campaignId} to onOpenCampaigns to deep-link
+ *      that campaign's drawer; the footer button calls onOpenCampaigns() (no
+ *      arg) to drill to the Campaigns table filtered to the store.
  *   6. Footer — primary "פתח את כל הקמפיינים …" + ghost "סגור".
  *
  * Token-driven only (designColorGuard): no raw hex/rgb/oklch/px colours in
@@ -70,7 +72,18 @@ export interface StoreDetailModalProps {
   open: boolean;
   onClose: () => void;
   rangeLabel: string;
-  onOpenCampaigns: (storeId: string) => void;
+  /**
+   * Drill into the Campaigns tab. Called with no argument from the footer
+   * "show all campaigns" button (table filtered to this store), or with a
+   * `{ storeId, platform, campaignId }` identity from a top-campaign row to
+   * open that exact campaign's drawer. The host wires this to
+   * `drillToCampaigns`.
+   */
+  onOpenCampaigns: (campaign?: {
+    storeId: string;
+    platform: 'meta' | 'google' | 'tiktok';
+    campaignId: string;
+  }) => void;
 }
 
 /* --------------------------------------------------------------------------
@@ -146,6 +159,12 @@ export function StoreDetailModal({
   }, [data]);
 
   if (!data) return null;
+
+  // A line chart needs ≥2 calendar days to draw anything meaningful. On a
+  // single-day range (e.g. "today"/"yesterday") `roasSeries` has one entry, so
+  // the chart renders an empty plot that just wastes space and confuses — hide
+  // the whole section in that case (mirrors the header sparkline's ≥2 guard).
+  const showRoasChart = data.roasSeries.length >= 2;
 
   const chartRows: DailyRow[] = []; // no refund-day highlighting needed here
 
@@ -292,15 +311,18 @@ export function StoreDetailModal({
           {/* ── 3. ROAS over time ────────────────────────────────────────
               Store-scoped RoasChart. Target line + neutral plot scrim are
               owned by the chart; bare=true drops its own card chrome since we
-              wrap it in a neutral Card here. */}
-          <section>
-            <h3 className="text-xs font-bold uppercase tracking-[0.06em] text-ink-muted mb-2.5">
-              ROAS לאורך זמן
-            </h3>
-            <Card className="!p-3 sm:!p-4">
-              <RoasChart data={chartSeries} stores={[data.storeName]} rows={chartRows} bare />
-            </Card>
-          </section>
+              wrap it in a neutral Card here. Hidden on a single-day range
+              (`showRoasChart`) where a one-point line would be empty. */}
+          {showRoasChart && (
+            <section data-testid="store-detail-chart">
+              <h3 className="text-xs font-bold uppercase tracking-[0.06em] text-ink-muted mb-2.5">
+                ROAS לאורך זמן
+              </h3>
+              <Card className="!p-3 sm:!p-4">
+                <RoasChart data={chartSeries} stores={[data.storeName]} rows={chartRows} bare />
+              </Card>
+            </section>
+          )}
 
           {/* ── 4. Per-platform breakdown ────────────────────────────────*/}
           {data.platforms.length > 0 && (
@@ -349,9 +371,15 @@ export function StoreDetailModal({
                   const tone = c.roas == null ? 'gray' : roasLabel(c.roas).tone;
                   return (
                     <Button
-                      key={`${c.platform}-${c.name}-${i}`}
+                      key={`${c.platform}-${c.campaignId}-${i}`}
                       variant="ghost"
-                      onClick={() => onOpenCampaigns(data.storeId)}
+                      onClick={() =>
+                        onOpenCampaigns({
+                          storeId: c.storeId,
+                          platform: c.platform,
+                          campaignId: c.campaignId,
+                        })
+                      }
                       className="w-full !justify-start gap-2.5 px-3 py-2.5 !h-auto !rounded-none text-start"
                     >
                       <PlatformBadge platform={c.platform} size="sm" showLabel={false} />
@@ -379,7 +407,7 @@ export function StoreDetailModal({
             size="lg"
             className="flex-1"
             data-testid="store-detail-open-campaigns"
-            onClick={() => onOpenCampaigns(data.storeId)}
+            onClick={() => onOpenCampaigns()}
           >
             <span className="truncate">
               פתח את כל הקמפיינים של <bdi dir="ltr">{data.storeName}</bdi>

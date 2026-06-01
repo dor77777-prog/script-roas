@@ -408,6 +408,22 @@ export type DrillToCampaignsOpts = {
   store?: string;
   /** Platform filter for the campaigns tab. 'all' | 'meta' | 'google' | 'tiktok'. */
   platform?: 'all' | 'meta' | 'google' | 'tiktok';
+  /**
+   * Optional specific-campaign deep-link. When set, also writes the
+   * campaigns-tab `c_drill` param so CampaignsTable opens that exact campaign's
+   * drawer on mount (hydrated by `readTabLocalState('campaigns').drill`). The
+   * platform is the lowercase Home key; it's mapped to the drawer's
+   * 'Meta'|'Google'|'TikTok' casing here. Omit to land on the table only.
+   */
+  campaign?: { storeId: string; platform: 'meta' | 'google' | 'tiktok'; campaignId: string };
+};
+
+/** Lowercase Home platform key → the 'Meta'|'Google'|'TikTok' casing the
+ *  Campaigns-tab drill (c_drill) + CampaignDrawer match against. */
+const DRILL_PLATFORM_LABEL: Record<'meta' | 'google' | 'tiktok', 'Meta' | 'Google' | 'TikTok'> = {
+  meta: 'Meta',
+  google: 'Google',
+  tiktok: 'TikTok',
 };
 
 /**
@@ -443,6 +459,19 @@ export function drillToCampaigns(opts: DrillToCampaignsOpts = {}): void {
     existing.set('c_platform', opts.platform);
   } else {
     existing.delete('c_platform');
+  }
+
+  // Specific-campaign deep-link → CampaignsTable hydrates `drill` from this on
+  // mount and opens the CampaignDrawer for that exact campaign. Same
+  // `storeId::Platform::campaignId` encoding syncTabLocalUrl writes. Cleared
+  // when no campaign is given (footer "show all campaigns" → table only).
+  if (opts.campaign) {
+    existing.set(
+      'c_drill',
+      `${opts.campaign.storeId}::${DRILL_PLATFORM_LABEL[opts.campaign.platform]}::${opts.campaign.campaignId}`,
+    );
+  } else {
+    existing.delete('c_drill');
   }
 
   const next = existing.toString();

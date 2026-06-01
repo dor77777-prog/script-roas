@@ -7,8 +7,10 @@
 //   • Header: store name (bdi ltr) + big ROAS + a close button.
 //   • KPI section: all 5 labels (הוצאה / הכנסה / רווח תפעולי / הזמנות / AOV).
 //   • A platform breakdown card + at least one top-campaign row.
-//   • Footer primary button fires onOpenCampaigns(storeId); clicking a
-//     campaign row also fires it.
+//   • Footer "show all campaigns" fires onOpenCampaigns() (no campaign → table
+//     only); clicking a campaign row fires onOpenCampaigns({storeId,platform,
+//     campaignId}) to deep-link that campaign's drawer.
+//   • ROAS chart shows for a ≥2-day range, hidden on a single-day range.
 //
 // Reduced-motion is on in the test runner → <CountUp> renders the FINAL value
 // immediately (no animation frames), so the ROAS number is its final string.
@@ -50,8 +52,8 @@ function makeData(over: Partial<StoreDetailData> = {}): StoreDetailData {
       { platform: 'tiktok', spend: 140, cpm: 3, roas: 2.4 },
     ],
     topCampaigns: [
-      { name: 'Meta · ABO – Hero Video', platform: 'meta', roas: 4.2, spend: 640 },
-      { name: 'Google · PMax – Catalog', platform: 'google', roas: 3.3, spend: 520 },
+      { name: 'Meta · ABO – Hero Video', platform: 'meta', roas: 4.2, spend: 640, storeId: 'uzoshop', campaignId: 'cmp-1' },
+      { name: 'Google · PMax – Catalog', platform: 'google', roas: 3.3, spend: 520, storeId: 'uzoshop', campaignId: 'cmp-2' },
     ],
     ...over,
   };
@@ -104,18 +106,36 @@ describe('<StoreDetailModal>', () => {
     expect(screen.getByText('Meta · ABO – Hero Video')).toBeInTheDocument();
   });
 
-  it('footer primary button fires onOpenCampaigns with the storeId', () => {
+  it('footer "show all campaigns" fires onOpenCampaigns with no campaign (table only)', () => {
     const onOpenCampaigns = vi.fn();
     render(<StoreDetailModal data={makeData()} open onClose={() => {}} rangeLabel="30 ימים" onOpenCampaigns={onOpenCampaigns} />);
     fireEvent.click(screen.getByTestId('store-detail-open-campaigns'));
-    expect(onOpenCampaigns).toHaveBeenCalledWith('uzoshop');
+    // No argument → host drills to the Campaigns tab filtered to the store,
+    // without opening any specific campaign drawer.
+    expect(onOpenCampaigns).toHaveBeenCalledTimes(1);
+    expect(onOpenCampaigns.mock.calls[0][0]).toBeUndefined();
   });
 
-  it('clicking a campaign row fires onOpenCampaigns with the storeId', () => {
+  it('clicking a campaign row deep-links that exact campaign (storeId+platform+campaignId)', () => {
     const onOpenCampaigns = vi.fn();
     render(<StoreDetailModal data={makeData()} open onClose={() => {}} rangeLabel="30 ימים" onOpenCampaigns={onOpenCampaigns} />);
     fireEvent.click(screen.getByText('Meta · ABO – Hero Video'));
-    expect(onOpenCampaigns).toHaveBeenCalledWith('uzoshop');
+    expect(onOpenCampaigns).toHaveBeenCalledWith({
+      storeId: 'uzoshop',
+      platform: 'meta',
+      campaignId: 'cmp-1',
+    });
+  });
+
+  it('shows the ROAS-over-time chart when the range spans ≥2 days', () => {
+    render(<StoreDetailModal data={makeData()} open onClose={() => {}} rangeLabel="30 ימים" onOpenCampaigns={() => {}} />);
+    expect(screen.getByTestId('store-detail-chart')).toBeInTheDocument();
+  });
+
+  it('hides the ROAS chart on a single-day range (one series point — empty plot)', () => {
+    const data = makeData({ roasSeries: [{ date: '2026-05-01', roas: 2.1 }] });
+    render(<StoreDetailModal data={data} open onClose={() => {}} rangeLabel="יום" onOpenCampaigns={() => {}} />);
+    expect(screen.queryByTestId('store-detail-chart')).toBeNull();
   });
 
   it('ghost close button fires onClose', () => {

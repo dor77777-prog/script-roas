@@ -1,6 +1,6 @@
 'use client';
 
-import { startTransition, useEffect, useMemo, useState } from 'react';
+import { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import useSWR, { useSWRConfig } from 'swr';
 import {
   AlertCircle,
@@ -212,6 +212,37 @@ export function Dashboard() {
   useEffect(() => {
     syncUrl({ tab: activeTab, filters });
   }, [activeTab, filters]);
+
+  // Reconcile React state FROM the URL on browser back/forward AND on
+  // programmatic pushState navigations. `drillToCampaigns` (Home store-modal →
+  // Campaigns) pushes `tab=campaigns` + `c_store`/`c_drill` then dispatches a
+  // popstate; the back button likewise changes the URL. `syncUrl` above is
+  // one-way (state → URL), so without this listener the URL would change while
+  // `activeTab`/`filters` stayed put — the symptom being a drill that "does
+  // nothing". The tab-local `c_*` params are owned by each tab's own component
+  // (re-hydrated on its mount), so we reconcile only the global tab + filters
+  // here. `replaceState` (syncUrl / syncTabLocalUrl) does NOT fire popstate, so
+  // this never loops. The tab change routes through `handleTabChange` (via a
+  // ref so the listener stays subscribed once, with no stale closure) so
+  // back/forward + drill get the SAME View-Transition cross-fade user-initiated
+  // tab clicks get — not an instant, inconsistent jump. `setFilters` is stable.
+  const handleTabChangeRef = useRef(handleTabChange);
+  handleTabChangeRef.current = handleTabChange;
+  useEffect(() => {
+    const onPop = () => {
+      const next = readDashboardState(
+        {
+          tab: 'home',
+          filters: { preset: initialPreset, range: computePresetRange(initialPreset), store: 'All' },
+        },
+        window.location.search,
+      );
+      handleTabChangeRef.current(next.tab);
+      setFilters(next.filters);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
 
   const filtered = useMemo(() => {
     if (!data) return null;
@@ -891,9 +922,15 @@ function HomeTab({
         open={modalStoreId !== null}
         onClose={() => setModalStoreId(null)}
         rangeLabel={rangeLabel}
-        onOpenCampaigns={(id) => {
+        onOpenCampaigns={(campaign) => {
+          // Capture the store NAME before closing (storeDetail goes null once
+          // modalStoreId clears). `store` filters the Campaigns tab (c_store);
+          // `campaign` (when a row was clicked) deep-links its drawer (c_drill).
+          // drillToCampaigns writes the URL + dispatches popstate → the
+          // listener above switches activeTab to 'campaigns'.
+          const storeName = storeDetail?.storeName;
           setModalStoreId(null);
-          drillToCampaigns({ store: id });
+          drillToCampaigns({ store: storeName, campaign });
         }}
       />
 

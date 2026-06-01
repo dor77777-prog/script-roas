@@ -432,6 +432,9 @@ describe('toStoreDetail — topCampaigns', () => {
     expect(d.topCampaigns[0].roas).toBeCloseTo(4.2, 6);
     expect(d.topCampaigns[0].platform).toBe('meta');
     expect(d.topCampaigns[0].spend).toBe(100);
+    // storeId + campaignId pass through for the Campaigns-tab deep-link.
+    expect(d.topCampaigns[0].storeId).toBe('uzoshop');
+    expect(d.topCampaigns[0].campaignId).toBe('a');
   });
 
   it('folds multiple rows of the same campaign before computing roas', () => {

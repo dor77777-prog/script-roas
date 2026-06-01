@@ -76,6 +76,26 @@ describe('drillToCampaigns', () => {
     expect(params.get('c_platform')).toBe('google');
   });
 
+  it('writes c_drill (storeId::Platform::campaignId) when a campaign is given', () => {
+    window.history.replaceState(null, '', '/');
+    drillToCampaigns({
+      store: 'uzoshop',
+      campaign: { storeId: 'store-uuid-1', platform: 'meta', campaignId: 'cmp-99' },
+    });
+    const params = new URLSearchParams(window.location.search);
+    expect(params.get('tab')).toBe('campaigns');
+    expect(params.get('c_store')).toBe('uzoshop');
+    // lowercase Home platform key maps to the CampaignDrawer's 'Meta' casing.
+    expect(params.get('c_drill')).toBe('store-uuid-1::Meta::cmp-99');
+  });
+
+  it('clears a stale c_drill when called without a campaign (table-only drill)', () => {
+    window.history.replaceState(null, '', '/?tab=campaigns&c_drill=old::Google::x');
+    drillToCampaigns({ store: 'uzoshop' });
+    const params = new URLSearchParams(window.location.search);
+    expect(params.has('c_drill')).toBe(false);
+  });
+
   it('uses pushState (drill is a navigation — back button returns to Home)', () => {
     const lengthBefore = window.history.length;
     drillToCampaigns({ store: 'uzoshop' });

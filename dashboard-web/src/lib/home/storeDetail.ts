@@ -42,6 +42,10 @@ export interface StoreDetailCampaign {
   /** value / spend. null when spend is 0. */
   roas: number | null;
   spend: number;
+  /** Supabase store id (from the campaign row) — feeds the Campaigns-tab drill. */
+  storeId: string;
+  /** Platform-native campaign id — feeds the Campaigns-tab drill (c_drill). */
+  campaignId: string;
 }
 
 export interface StoreDetailData {
@@ -118,6 +122,8 @@ interface PlatformAccum {
 interface CampaignAccum {
   name: string;
   platform: PaidPlatform;
+  storeId: string;
+  campaignId: string;
   spend: number;
   value: number;
 }
@@ -178,7 +184,9 @@ export function toStoreDetail(args: ToStoreDetailArgs): StoreDetailData {
       platformAccum.set(plat, p);
 
       const key = `${plat}::${r.campaignId}`;
-      const c = campaignAccum.get(key) ?? { name: r.campaignName, platform: plat, spend: 0, value: 0 };
+      const c =
+        campaignAccum.get(key) ??
+        { name: r.campaignName, platform: plat, storeId: r.storeId, campaignId: r.campaignId, spend: 0, value: 0 };
       c.spend += r.spend;
       c.value += r.conversionValue;
       campaignAccum.set(key, c);
@@ -206,6 +214,8 @@ export function toStoreDetail(args: ToStoreDetailArgs): StoreDetailData {
       platform: c.platform,
       roas: c.spend > 0 ? c.value / c.spend : null,
       spend: c.spend,
+      storeId: c.storeId,
+      campaignId: c.campaignId,
     }))
     .sort((a, b) => {
       const ar = a.roas;
