@@ -128,6 +128,10 @@ export function GoalTracker({ data }: Props) {
   // fetch resolves is acceptable. forecastMonthEnd does its own month-anchored
   // MTD slice + trailing-7-day baseline, so a superset range is fine.
   const [cogsSettings] = useCogsSettings();
+  // Note: the prop `data.rows` are ALREADY cogs-adjusted by Dashboard; the real
+  // forecast feed is `wideData.rows`. This re-apply is a harmless idempotent
+  // fallback (cogs/netProfit derive only from revenue/spend) covering the
+  // pre-`wideData` first paint before the wide SWR fetch resolves.
   const forecastRows = useMemo(
     () => applyCogsToRows(wideData?.rows ?? data.rows, cogsSettings),
     [wideData, data.rows, cogsSettings],

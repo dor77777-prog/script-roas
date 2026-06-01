@@ -30,7 +30,27 @@ export function CogsSettings({ storeNames, currentMonth, monthsInData }: {
   const [scopeKind, setScopeKind] = useState<ScopeKind>('current');
   const [specificMonth, setSpecificMonth] = useState<string>(currentMonth);
 
-  const months = useMemo(() => Array.from(new Set([...monthsInData, currentMonth])).sort().reverse(), [monthsInData, currentMonth]);
+  // Fixed 18-month lookback ending at currentMonth, UNIONed with the months
+  // actually present in the loaded range (monthsInData) and every explicit
+  // byMonth key across the active scope(s). This makes the timeline, the
+  // specific-month picker, and "all-previous" cover history independent of the
+  // dashboard's current filter range (FIX 2026-06-02).
+  const months = useMemo(() => {
+    const set = new Set<string>([...lastNMonths(currentMonth, 18), ...monthsInData, currentMonth]);
+    // Pull in any edited month even if it falls outside the 18-month window.
+    if (mode === 'per-store') {
+      for (const s of storeNames) for (const m of Object.keys(settings.perStore[s]?.byMonth ?? {})) set.add(m);
+    } else {
+      for (const m of Object.keys(settings.business.byMonth)) set.add(m);
+    }
+    return Array.from(set).sort().reverse();
+  }, [monthsInData, currentMonth, mode, storeNames, settings]);
+
+  /** Is `m` explicitly edited for the active mode (has a byMonth entry)? */
+  const isEdited = (m: string): boolean =>
+    mode === 'per-store'
+      ? storeNames.some((s) => settings.perStore[s]?.byMonth[m] !== undefined)
+      : settings.business.byMonth[m] !== undefined;
 
   const buildApply = (): ApplyScope => {
     switch (scopeKind) {
@@ -122,14 +142,31 @@ export function CogsSettings({ storeNames, currentMonth, monthsInData }: {
             </TableRow>
           </TableHead>
           <tbody>
-            {months.map((m) => (
-              <TableRow key={m}>
-                <TableCell className="tabular-nums">{m}</TableCell>
-                {mode === 'per-store'
-                  ? storeNames.map((s) => <TableCell key={s} numeric>{(effectiveCogsPct(settings, s, m) * 100).toFixed(0)}%</TableCell>)
-                  : <TableCell numeric>{(effectiveCogsPct(settings, '', m) * 100).toFixed(0)}%</TableCell>}
-              </TableRow>
-            ))}
+            {months.map((m) => {
+              const edited = isEdited(m);
+              const dim = edited ? '' : 'text-ink-muted';
+              return (
+                <TableRow key={m} data-testid={`cogs-timeline-row-${m}`}>
+                  <TableCell className={cn('tabular-nums', dim)}>
+                    {m}
+                    {edited && <Badge testid={`cogs-edited-${m}`} variant="edited">נערך</Badge>}
+                  </TableCell>
+                  {mode === 'per-store'
+                    ? storeNames.map((s, i) => (
+                        <TableCell key={s} numeric className={dim}>
+                          {(effectiveCogsPct(settings, s, m) * 100).toFixed(0)}%
+                          {!edited && i === 0 && <Badge testid={`cogs-default-${m}`} variant="default">ברירת מחדל</Badge>}
+                        </TableCell>
+                      ))
+                    : (
+                      <TableCell numeric className={dim}>
+                        {(effectiveCogsPct(settings, '', m) * 100).toFixed(0)}%
+                        {!edited && <Badge testid={`cogs-default-${m}`} variant="default">ברירת מחדל</Badge>}
+                      </TableCell>
+                    )}
+                </TableRow>
+              );
+            })}
           </tbody>
         </TableBase>
       </div>
@@ -141,6 +178,33 @@ function clampPct(v: string): number {
   const n = parseFloat(v);
   if (!Number.isFinite(n)) return DEFAULT_COGS_PCT;
   return Math.max(0, Math.min(100, n));
+}
+
+/** Last `n` calendar months ending at `endMonth` (inclusive), 'YYYY-MM' desc-then-sorted by caller. */
+function lastNMonths(endMonth: string, n: number): string[] {
+  const out: string[] = [];
+  let [y, m] = endMonth.split('-').map(Number);
+  if (!Number.isFinite(y) || !Number.isFinite(m)) return out;
+  for (let i = 0; i < n; i++) {
+    out.push(`${y}-${String(m).padStart(2, '0')}`);
+    m -= 1;
+    if (m === 0) { m = 12; y -= 1; }
+  }
+  return out;
+}
+
+function Badge({ testid, variant, children }: { testid: string; variant: 'edited' | 'default'; children: React.ReactNode }) {
+  return (
+    <span
+      data-testid={testid}
+      className={cn(
+        'ms-1.5 inline-block rounded-md px-1.5 py-0.5 text-2xs font-bold align-middle',
+        variant === 'edited' ? 'bg-accent-soft text-accent' : 'bg-glass-3 text-ink-secondary',
+      )}
+    >
+      {children}
+    </span>
+  );
 }
 
 function PctField({ label, testid, value, onChange }: { label: string; testid: string; value: string; onChange: (v: string) => void }) {
