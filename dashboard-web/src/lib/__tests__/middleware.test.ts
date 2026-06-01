@@ -21,6 +21,7 @@ import {
   isOperatorApiPath,
   constantTimeEqual,
   checkOperatorSecret,
+  isDashboardAuthAllowlisted,
 } from '../middlewareHelpers';
 
 describe('isOperatorApiPath', () => {
@@ -160,6 +161,30 @@ describe('checkOperatorSecret', () => {
       ENV_SECRET,
     );
     expect(result).toEqual({ pass: true });
+  });
+});
+
+describe('isDashboardAuthAllowlisted — Shopify ingest endpoints (Task 2)', () => {
+  it('allowlists the Shopify webhook ingest path', () => {
+    expect(isDashboardAuthAllowlisted('/api/webhooks/shopify')).toBe(true);
+  });
+
+  it('allowlists the cart-beacon ingest path', () => {
+    expect(isDashboardAuthAllowlisted('/api/events/cart')).toBe(true);
+  });
+
+  it('does NOT allowlist a random API path', () => {
+    expect(isDashboardAuthAllowlisted('/api/x')).toBe(false);
+    expect(isDashboardAuthAllowlisted('/api/data')).toBe(false);
+    expect(isDashboardAuthAllowlisted('/api/webhooks/shopify/extra')).toBe(false);
+  });
+
+  it('still allowlists the existing entries (regression)', () => {
+    expect(isDashboardAuthAllowlisted('/login')).toBe(true);
+    expect(isDashboardAuthAllowlisted('/api/login')).toBe(true);
+    expect(isDashboardAuthAllowlisted('/api/logout')).toBe(true);
+    expect(isDashboardAuthAllowlisted('/_next/static/chunk.js')).toBe(true);
+    expect(isDashboardAuthAllowlisted('/favicon.ico')).toBe(true);
   });
 });
 

@@ -82,6 +82,11 @@ export function isDashboardAuthAllowlisted(pathname: string): boolean {
   // a file, while /logo.svg or /chunk.123.js is.
   const lastSegment = pathname.slice(pathname.lastIndexOf('/') + 1);
   if (lastSegment.includes('.')) return true;
+  // Task 2 — Shopify ingest endpoints. Shopify/browsers can't present the
+  // dashboard cookie; these authenticate via HMAC (webhook) / per-store token
+  // + origin (cart) at the route level instead.
+  if (pathname === '/api/webhooks/shopify') return true;
+  if (pathname === '/api/events/cart') return true;
   return false;
 }
 
