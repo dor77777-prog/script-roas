@@ -350,6 +350,26 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     return out;
   }, [storeMeta]);
 
+  // Data-correctness fix (2026-06-01) — the attribution-reconciliation panel
+  // reconciles the platform claim (/api/campaigns, keyed on localRange) against
+  // Shopify revenue. Previously it used the PAGE-GLOBAL `dailyRows` prop (fetched
+  // for the top-of-page range), so whenever the in-table date picker selected a
+  // window outside the global range the coherence gate hid the panel entirely.
+  // Fetch /api/data keyed on the SAME localRange so both halves always describe
+  // the same window — the panel now works for every range and every store.
+  const { data: localDailyResp } = useSWR<{ rows: import('@/lib/types').DailyRow[] }>(
+    buildDateRangeKey('/api/data', localRange),
+    async (url: string) => {
+      const r = await fetch(url);
+      if (!r.ok) return { rows: [] };
+      return r.json();
+    },
+    { revalidateOnFocus: false, dedupingInterval: 60_000 },
+  );
+  // Prefer the localRange-coherent rows; fall back to the global prop on first
+  // paint (before this fetch settles) so the panel isn't blank on initial load.
+  const panelDailyRows = localDailyResp?.rows ?? dailyRows;
+
   // Products + mapping feed `useCampaignTrueRevenue` (Shopify-based true ROAS).
   // Keyed on localRange so the trust chip and Shopify-ROAS columns stay in
   // sync with the active filter window (CR-02).
@@ -1169,15 +1189,24 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
 
     // Data-correctness fix (2026-06-01) — COHERENCE GATE. The platform claim
     // (`aggregated`, from /api/campaigns keyed on `localRange`) and the Shopify
-    // revenue (`dailyRows`, the page-global /api/data prop re-sliced by
-    // `localRange`) settle on a new window at DIFFERENT times after a date
-    // change. Comparing a mismatched pair shows the operator "unrelated
-    // numbers" until a refetch re-syncs them. Bail (hide the panel) until both
-    // halves provably describe the same window. See `isReconciliationCoherent`.
+    // revenue are now BOTH keyed on `localRange`: the Shopify side reads
+    // `panelDailyRows`, fetched from /api/data on the SAME localRange (see the
+    // `localDailyResp` SWR call above). Once that fetch lands, both halves
+    // structurally describe the same window, so the old `localRange ⊆ globalRange`
+    // coverage requirement (gate 2) is no longer the right condition — passing
+    // `globalRange: localRange` makes gate 2 always satisfied. Gate 1
+    // (campaignsDataRange === localRange) still guards against a stale cached
+    // campaigns SWR response, so we keep it as-is.
+    //
+    // First-paint fallback: until `localDailyResp` settles, `panelDailyRows`
+    // falls back to the page-global `dailyRows` prop (covered by `range`). In
+    // that window the real global range IS the right coverage check, so we pass
+    // `globalRange: range` until the local fetch lands. This keeps the proven
+    // gate coherent in both phases.
     if (
       !isReconciliationCoherent({
         localRange,
-        globalRange: range,
+        globalRange: localDailyResp ? localRange : range,
         campaignsDataRange,
       })
     ) {
@@ -1195,11 +1224,12 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     let metaSpendInScope = 0;
     let googleSpendInScope = 0;
     let ttSpendInScope = 0;
-    for (const r of dailyRows) {
-      // IN-03 (5.2.2.1): defense-in-depth filter — `dailyRows` (the Sheet's
-      // daily-summary tab) is NOT pre-filtered by range on the server today.
-      // Unlike /api/campaigns this filter is the authoritative one for
-      // dailyRows; do not remove without first range-filtering at the source.
+    for (const r of panelDailyRows) {
+      // IN-03 (5.2.2.1): defense-in-depth filter — `panelDailyRows` is the
+      // localRange-keyed /api/data fetch (falling back to the page-global
+      // `dailyRows` prop on first paint). Neither is guaranteed pre-filtered to
+      // the exact localRange on the server, so this filter remains the
+      // authoritative one; do not remove without range-filtering at the source.
       if (r.date < localRange.from || r.date > localRange.to) continue;
       if (!isAllStores(localStore) && r.storeName !== localStore) continue;
       shopifyRevenue += r.revenue;
@@ -1259,9 +1289,12 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       tone,
     };
     // `totals` covered transitively via `aggregated` dep (#IN-05).
-    // `range.from`/`range.to` drive the dailyRows-coverage gate (2);
+    // `panelDailyRows` is the localRange-keyed Shopify side (falls back to the
+    // `dailyRows` prop on first paint). `localDailyResp` toggles the gate's
+    // first-paint-vs-settled branch; `range.from`/`range.to` only matter while
+    // `localDailyResp` is undefined (the fallback-coverage gate 2).
     // `campaignsDataRange` is the state-snapshot read inside gate (1).
-  }, [aggregated, dailyRows, localRange, localStore, platform, showOnlyMultiMapped, range.from, range.to, campaignsDataRange]);
+  }, [aggregated, panelDailyRows, localDailyResp, localRange, localStore, platform, showOnlyMultiMapped, range.from, range.to, campaignsDataRange]);
 
   // FIX-22 (5.2.2.1): memoize drillRows so the drawer's useMemo([rows]) doesn't invalidate on every parent re-render.
   const drillRows = useMemo(() => {
