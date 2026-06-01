@@ -56,6 +56,53 @@ export function constantTimeEqual(a: string, b: string): boolean {
   return result === 0;
 }
 
+/**
+ * Password-gate allowlist — paths that are ALWAYS reachable without the
+ * dashboard-auth cookie. Everything else is gated when the gate is active.
+ *
+ *   - /login              the gate's own entry page (must be reachable to log in)
+ *   - /api/login          POSTs the password, sets the cookie
+ *   - /api/logout         clears the cookie
+ *   - /_next/*            Next.js build internals (static + image optimizer + data)
+ *   - /favicon.ico, /robots.txt, and any path with a file extension
+ *     (e.g. /apple-touch-icon.png, /something.js) — static assets.
+ *
+ * The config.matcher in middleware.ts already excludes most of these so the
+ * middleware never even runs for them; this function is the defence-in-depth
+ * second check inside the middleware body and the unit-test surface.
+ */
+export function isDashboardAuthAllowlisted(pathname: string): boolean {
+  if (pathname === '/login' || pathname.startsWith('/login/')) return true;
+  if (pathname === '/api/login') return true;
+  if (pathname === '/api/logout') return true;
+  if (pathname.startsWith('/_next/')) return true;
+  if (pathname === '/favicon.ico' || pathname === '/robots.txt') return true;
+  // Any static file with an extension in its last path segment. We look only
+  // at the final segment so a path like /campaigns (no dot) is NOT treated as
+  // a file, while /logo.svg or /chunk.123.js is.
+  const lastSegment = pathname.slice(pathname.lastIndexOf('/') + 1);
+  if (lastSegment.includes('.')) return true;
+  return false;
+}
+
+/**
+ * Returns true iff BOTH password-gate env vars are configured, meaning the
+ * dashboard-auth gate should be enforced. Mirrors `shouldEnforceSecret` — when
+ * either env var is unset the gate degrades to INACTIVE (dev safety), so a
+ * developer without a populated .env.local is never locked out.
+ */
+export function shouldEnforceDashboardAuth(
+  dashboardPassword: string | undefined,
+  signingSecret: string | undefined,
+): boolean {
+  return (
+    typeof dashboardPassword === 'string' &&
+    dashboardPassword.length > 0 &&
+    typeof signingSecret === 'string' &&
+    signingSecret.length > 0
+  );
+}
+
 type GateResult = { pass: true } | { pass: false; status: 404 };
 
 /**

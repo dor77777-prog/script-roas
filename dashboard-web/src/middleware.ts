@@ -1,62 +1,107 @@
 // dashboard-web/middleware.ts
 //
-// Security hardening FIX 3 — operator-secret middleware.
+// TWO layered gates, both running here, plus a noindex header.
 //
-// Runs on every request that matches the config.matcher below.
-// Two responsibilities:
+//   1. Dashboard password gate (Phase: password-gate).
+//      Gates ALL routes except a small allowlist. A device that entered the
+//      correct password carries a signed `dash_auth` cookie (60-day trusted
+//      device); without a valid cookie:
+//        - an HTML page request → 302 redirect to /login?next=<original-path>
+//        - an /api/* request    → 401 JSON { error: 'unauthorized' }
+//      The gate is ACTIVE only when BOTH DASHBOARD_PASSWORD and
+//      AUTH_SIGNING_SECRET env vars are set; if either is unset the gate
+//      degrades to INACTIVE (pass-through) so a dev without a populated
+//      .env.local is not locked out — same degradation pattern as the
+//      operator-secret gate below.
 //
-//   1. Always: set X-Robots-Tag: noindex, nofollow on the response.
-//      Prevents search engines from indexing /operator or any /api/operator/*
-//      endpoint even if the URL is somehow discovered (e.g. via referer leak
-//      or crawl of a link in a public page).
+//   2. Operator-secret gate (Security hardening FIX 3) — UNCHANGED behaviour.
+//      For /api/operator/* paths only: require an 'x-operator-secret' header
+//      matching OPERATOR_SECRET (when that env var is set). Mismatch → 404
+//      (never 401/403; 404 leaks no info). This runs AFTER the dashboard gate
+//      so an operator API call needs BOTH the dashboard cookie AND the secret
+//      header. The /operator PAGE is allowed through the operator gate (it
+//      renders the secret-entry form) but STILL requires the dashboard cookie.
 //
-//   2. For /api/operator/* paths only: gate by OPERATOR_SECRET env var.
-//      - If OPERATOR_SECRET is NOT set → pass through (backward compat).
-//        The current single-user deployment has no secret configured; this
-//        keeps existing behaviour unchanged.
-//      - If OPERATOR_SECRET IS set → require the request to carry an
-//        'x-operator-secret' header that exactly matches the env value.
-//        Mismatch / missing header → 404 (not 401/403; 404 leaks no info).
-//        Comparison is constant-time (crypto.timingSafeEqual) to prevent
-//        timing attacks.
+//   3. Always: X-Robots-Tag: noindex, nofollow on the response.
 //
-//   The /operator PAGE itself is allowed through unconditionally — it renders
-//   the secret-entry form that lets the operator store the secret in
-//   localStorage before any API calls are made.
-//
-// Activation: set OPERATOR_SECRET env var in Vercel (or .env.local for dev).
-// Deactivation: remove the env var → gate becomes inactive, all requests pass.
+// Activation: set DASHBOARD_PASSWORD + AUTH_SIGNING_SECRET (and optionally
+// OPERATOR_SECRET) in Vercel (or .env.local for dev).
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { checkOperatorSecret } from '@/lib/middlewareHelpers';
+import {
+  checkOperatorSecret,
+  isDashboardAuthAllowlisted,
+  shouldEnforceDashboardAuth,
+} from '@/lib/middlewareHelpers';
+import { verifyAuthToken, COOKIE_NAME } from '@/lib/auth/dashboardAuth';
 
-export function middleware(request: NextRequest): NextResponse {
+const NOINDEX = 'noindex, nofollow';
+
+function withNoindex(response: NextResponse): NextResponse {
+  response.headers.set('X-Robots-Tag', NOINDEX);
+  return response;
+}
+
+export async function middleware(request: NextRequest): Promise<NextResponse> {
   const { pathname } = request.nextUrl;
 
+  // ---- Gate 1: dashboard password gate ------------------------------------
+  // Allowlisted paths skip the dashboard-auth check entirely (but still flow
+  // through the operator + noindex logic below).
+  if (!isDashboardAuthAllowlisted(pathname)) {
+    const dashboardPassword = process.env.DASHBOARD_PASSWORD;
+    const signingSecret = process.env.AUTH_SIGNING_SECRET;
+
+    if (shouldEnforceDashboardAuth(dashboardPassword, signingSecret)) {
+      const token = request.cookies.get(COOKIE_NAME)?.value;
+      const valid = await verifyAuthToken(
+        signingSecret as string,
+        token,
+        Date.now(),
+      );
+
+      if (!valid) {
+        // API requests get a JSON 401; page requests get a redirect to /login.
+        if (pathname.startsWith('/api/')) {
+          return withNoindex(
+            NextResponse.json({ error: 'unauthorized' }, { status: 401 }),
+          );
+        }
+        const loginUrl = request.nextUrl.clone();
+        loginUrl.pathname = '/login';
+        loginUrl.search = '';
+        // Preserve the originally-requested path (incl. query) so /login can
+        // bounce the user back after a successful login.
+        loginUrl.searchParams.set('next', pathname + request.nextUrl.search);
+        return withNoindex(NextResponse.redirect(loginUrl));
+      }
+    }
+    // Gate inactive (env unset) OR valid cookie → fall through to operator
+    // gate + noindex.
+  }
+
+  // ---- Gate 2: operator-secret gate (unchanged) ---------------------------
   const headerValue = request.headers.get('x-operator-secret');
   const envSecret = process.env.OPERATOR_SECRET;
-
   const gateResult = checkOperatorSecret(pathname, headerValue, envSecret);
 
   if (!gateResult.pass) {
     // 404 — never 401/403; exposing an auth requirement reveals that the
     // route exists. A 404 is indistinguishable from "no such route".
-    const response = NextResponse.json(
-      { error: 'Not found' },
-      { status: 404 },
-    );
-    response.headers.set('X-Robots-Tag', 'noindex, nofollow');
-    return response;
+    return withNoindex(NextResponse.json({ error: 'Not found' }, { status: 404 }));
   }
 
-  // Pass through — add noindex header to all matched routes (both API paths
-  // and the /operator page).
-  const response = NextResponse.next();
-  response.headers.set('X-Robots-Tag', 'noindex, nofollow');
-  return response;
+  // ---- Pass through with noindex ------------------------------------------
+  return withNoindex(NextResponse.next());
 }
 
 export const config = {
-  matcher: ['/api/operator/:path*', '/operator/:path*', '/operator'],
+  // Match the WHOLE app, excluding Next internals + static assets + the
+  // password-gate allowlist (/login, /api/login, /api/logout). Excluded paths
+  // never hit the middleware, so /login is always reachable unauthenticated.
+  // Everything else flows through both gates above.
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|robots.txt|login|api/login|api/logout).*)',
+  ],
 };
