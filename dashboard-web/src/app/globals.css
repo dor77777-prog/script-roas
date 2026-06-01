@@ -1344,14 +1344,21 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   background: var(--status-green);
   box-shadow: 0 0 6px var(--status-green);
 }
-/* Token-coloured freshness dot on the per-store scrim pill — red=stale,
+/* Token-coloured freshness dot on the neutral scrim pill — red=stale,
    orange=aging, green=live. The component renders `.fresh-dot` with
    `data-fresh` for the AGING/STALE stages (LIVE already shows the animated
    `.pulse` dot above), so the freshness state reads even though the pill is
-   neutral. */
-.per-store-card .fresh-chip .fresh-dot[data-fresh="stale"] { background: var(--status-red); }
-.per-store-card .fresh-chip .fresh-dot[data-fresh="aging"] { background: var(--status-orange); }
-.per-store-card .fresh-chip .fresh-dot[data-fresh="live"]  { background: var(--status-green); }
+   neutral. Scoped to the SAME `.glass[data-band]:not([data-band="gray"])` set
+   as the chip-neutralizing rule above so the dot colour and the scrim pill
+   always co-apply — this covers BOTH the per-store cards AND the hero banded
+   card (Operating Profit + ROAS). Without this broader scope the hero `.fresh-dot`
+   fell back to `currentColor` (= near-white scrim-ink) and lost its red/orange
+   state, while the LIVE green pulse still showed — an inconsistent signal. The
+   neutral (non-band) chips are untouched: their base `.fresh-dot` keeps
+   `background: currentColor` and reads as a coloured leading bullet. */
+.glass[data-band]:not([data-band="gray"]) .fresh-chip .fresh-dot[data-fresh="stale"] { background: var(--status-red); }
+.glass[data-band]:not([data-band="gray"]) .fresh-chip .fresh-dot[data-fresh="aging"] { background: var(--status-orange); }
+.glass[data-band]:not([data-band="gray"]) .fresh-chip .fresh-dot[data-fresh="live"]  { background: var(--status-green); }
 
 /* Reduced-motion: the project-wide `@media (prefers-reduced-motion: reduce)`
    block earlier in this file already neutralises animation+transition
@@ -1425,11 +1432,14 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   background: var(--band-scrim);
   color: var(--band-scrim-ink);
 }
-.per-store-card .roas-cap {
-  /* Wave B2 — scrim ink (tuned for AA); dropped the legacy `opacity:.85`
-     since `--band-scrim-ink` is already the correct on-scrim tone. */
-  color: var(--band-scrim-ink);
-}
+/* The "ROAS · היום" caption sits directly on the BARE band tint (no scrim
+   background box), so the neutral `--band-scrim-ink` is the wrong contrast tone
+   here. Use each band's `--on-band-*-muted` on-color, which the contrast guard
+   covers ≥3:1 against the bare tint. (Dropped the legacy `opacity:.85`.) */
+.per-store-card.glass[data-band="red"]    .roas-cap { color: var(--on-band-red-muted); }
+.per-store-card.glass[data-band="orange"] .roas-cap { color: var(--on-band-orange-muted); }
+.per-store-card.glass[data-band="green"]  .roas-cap { color: var(--on-band-green-muted); }
+.per-store-card.glass[data-band="blue"]   .roas-cap { color: var(--on-band-blue-muted); }
 /* Gray (no-data) band card: point the band-tag at the SAME scrim sub-surface
    so all bands share ONE legibility path (Wave B2 — chose scrim over the old
    per-band gray reset). `--band-scrim` is near-opaque + neutral in both
@@ -1534,11 +1544,6 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
   color: var(--band-scrim-ink);
 }
 
-/* (2) Per-platform CPM NAME → the band's `--on-band-*` on-color. The label
-   lives in <PlatformBadge>'s `.platform-name` span, which inherits a brand
-   hue from the badge's `text-chart-*` parent class; `!important` beats that
-   Tailwind utility. The DOT (`.platform-dot`) is NOT targeted, so it keeps
-   its brand colour. */
 /* Wave B2 — platform NAME also sits on the neutral CPM scrim tile, so it takes
    `--band-scrim-ink` (band-agnostic), not the band's `--on-band-*`. `!important`
    still beats the `text-chart-*` Tailwind utility on the same span. The DOT

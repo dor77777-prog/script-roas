@@ -74,6 +74,9 @@ describe('<FreshnessBadge>', () => {
     expect(chip.classList.contains('stale')).toBe(true);
     expect(chip.getAttribute('data-stage')).toBe('stale');
     expect(container.querySelector('.fresh-chip .pulse')).toBeNull();
+    // Wave B2 follow-up: stale renders a static `.fresh-dot[data-fresh="stale"]`
+    // (the re-introduced freshness-state signal) in place of the .pulse.
+    expect(container.querySelector('.fresh-chip .fresh-dot[data-fresh="stale"]')).not.toBeNull();
     expect(chip.textContent).toMatch(/STALE · 47min/);
   });
 

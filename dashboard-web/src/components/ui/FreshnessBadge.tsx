@@ -4,7 +4,9 @@
  * Thin presentational wrapper over `useStaleness` from
  * `lib/freshness/useStaleness.ts` (Task 1.4). Renders the
  * `.fresh-chip.{live|aging|stale}` chip defined in globals.css
- * (Task 1.4), with a pulsing `.pulse` dot ONLY on the fresh stage.
+ * (Task 1.4). The LIVE stage gets the animated `.pulse` dot; AGING
+ * and STALE render a static `.fresh-dot` (state-coloured) instead —
+ * same freshness signal, no animation.
  *
  * The stage→class mapping is deliberate: the hook returns
  * `'fresh'|'aging'|'stale'` while the CSS uses `.fresh-chip.live`
