@@ -11,8 +11,9 @@ import {
   Store,
   X,
 } from 'lucide-react';
-import { cn, formatCurrency, formatDate, formatNumber } from '@/lib/utils';
+import { cn, formatDate, formatNumber } from '@/lib/utils';
 import { fmtMoney } from '@/lib/format';
+import { Money } from '@/components/ui/Money';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { NativeSelect } from '@/components/ui/NativeSelect';
@@ -712,11 +713,11 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                               <td className="px-3 py-2 text-end font-semibold tabular-nums">
                                 {formatNumber(p.units, 0)}
                               </td>
-                              <td className="px-3 py-2 text-end tabular-nums">
-                                {formatCurrency(p.revenue)}
+                              <td className="metric-cell px-3 py-2 text-end tabular-nums">
+                                <Money value={p.revenue} prefix="none" locale="he-IL" compactAbove={100_000} />
                               </td>
                               {bucket.hasNet && (
-                                <td className="px-3 py-2 text-end tabular-nums">
+                                <td className="metric-cell px-3 py-2 text-end tabular-nums">
                                   {p.netRevenue !== null ? (
                                     <span
                                       className={cn(
@@ -726,7 +727,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                                           : 'text-ink',
                                       )}
                                     >
-                                      {formatCurrency(p.netRevenue)}
+                                      <Money value={p.netRevenue} prefix="none" locale="he-IL" compactAbove={100_000} />
                                     </span>
                                   ) : (
                                     <span className="text-ink-muted">—</span>

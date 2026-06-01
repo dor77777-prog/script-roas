@@ -2,6 +2,7 @@
 
 import { Trophy, AlertTriangle, ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Money } from '@/components/ui/Money';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { Heading } from '@/components/ui/Typography';
 import { PlatformBadge } from '@/components/ui/PlatformBadge';
@@ -134,7 +135,7 @@ function Row({
           {/* Metrics + verdict row */}
           <div className="flex items-center justify-between gap-2 text-[11px] sm:text-xs">
             <div className="text-ink-secondary tabular-nums">
-              <span className="text-ink-muted">הוצאה:</span> CAD {Math.round(campaign.spend).toLocaleString('he-IL')}
+              <span className="text-ink-muted">הוצאה:</span> CAD <Money value={campaign.spend} prefix="none" locale="he-IL" compactAbove={100_000} />
               {' · '}
               <span className="text-ink-muted">CAC:</span> {Math.round(campaign.cac).toLocaleString('he-IL')}
             </div>

@@ -6,6 +6,7 @@ import { cn, formatCurrency, formatNumber } from '@/lib/utils';
 import { fmtMoneyString } from '@/lib/format';
 import { ROAS_TONE_BG, ROAS_BADGE_SHAPE } from '@/lib/format/roasCell';
 import { Button } from '@/components/ui/Button';
+import { Money } from '@/components/ui/Money';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { campaignKey } from '@/lib/campaignProductMap';
 import { buildAdsManagerLink, type AdAccountMap } from '@/lib/campaignsLinks';
@@ -406,10 +407,12 @@ export function CampaignsTableRow({
       // lock-step regardless of order.
       const metricCells: Record<string, React.ReactNode> = {
       spend: (
-        <td data-col-id="spend" className="px-3 py-2 text-end tabular-nums">{formatCurrency(a.spend)}</td>
+        <td data-col-id="spend" className="metric-cell px-3 py-2 text-end tabular-nums">
+          <Money value={a.spend} prefix="none" locale="he-IL" compactAbove={100_000} />
+        </td>
       ),
       budget: (
-        <td data-col-id="budget" className="px-3 py-2 text-end tabular-nums">
+        <td data-col-id="budget" className="metric-cell px-3 py-2 text-end tabular-nums">
         {(() => {
           const budget = mode === 'campaign' ? a.campaignBudgetCad : a.adSetBudgetCad;
           if (!budget || budget <= 0) {
@@ -420,15 +423,15 @@ export function CampaignsTableRow({
           const tight = a.spend > 0 && a.spend > budget * 0.95;
           return (
             <span className={cn('font-medium', tight && 'text-status-warningFg')}>
-              {formatCurrency(budget)}
+              <Money value={budget} prefix="none" locale="he-IL" compactAbove={100_000} className="font-medium" />
             </span>
           );
         })()}
         </td>
       ),
       conversionValue: (
-        <td data-col-id="conversionValue" className={cn('px-3 py-2 text-end tabular-nums font-medium', a.conversionValue > a.spend && 'text-status-green')}>
-        {formatCurrency(a.conversionValue)}
+        <td data-col-id="conversionValue" className={cn('metric-cell px-3 py-2 text-end tabular-nums font-medium', a.conversionValue > a.spend && 'text-status-green')}>
+        <Money value={a.conversionValue} prefix="none" locale="he-IL" compactAbove={100_000} />
         </td>
       ),
       roas: (
@@ -609,7 +612,7 @@ export function CampaignsTableRow({
       // useCampaignTrueRevenue.ts (deterministicRevenue/Units +
       // productTotals).
       shopifyValuePlatform: (
-      <td data-col-id="shopifyValuePlatform" className="px-3 py-2 text-end tabular-nums border-e border-glass-edge/40">
+      <td data-col-id="shopifyValuePlatform" className="metric-cell px-3 py-2 text-end tabular-nums border-e border-glass-edge/40">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);
@@ -628,7 +631,7 @@ export function CampaignsTableRow({
           return (
             <HelpTooltip content={tooltip}>
               <span className="font-medium">
-                {formatCurrency(info.deterministicRevenue)}
+                <Money value={info.deterministicRevenue} prefix="none" locale="he-IL" compactAbove={100_000} />
               </span>
             </HelpTooltip>
           );
@@ -672,7 +675,7 @@ export function CampaignsTableRow({
       ),
       // [3] ערך Shopify · סה"כ — total revenue across all platforms
       shopifyValueTotal: (
-      <td data-col-id="shopifyValueTotal" className="px-3 py-2 text-end tabular-nums">
+      <td data-col-id="shopifyValueTotal" className="metric-cell px-3 py-2 text-end tabular-nums">
         {(() => {
           const key = campaignKey(a.storeId, a.platform, a.campaignId);
           const info = trueRevenueByKey.get(key);
@@ -682,7 +685,7 @@ export function CampaignsTableRow({
           return (
             <HelpTooltip content={`סך ערך המכירות ב-Shopify של המוצרים המשויכים בטווח הנבחר, מכל הערוצים יחד (paid + organic + direct).`}>
               <span className="font-medium text-ink-secondary">
-                {formatCurrency(info.productTotals.revenue)}
+                <Money value={info.productTotals.revenue} prefix="none" locale="he-IL" compactAbove={100_000} />
               </span>
             </HelpTooltip>
           );
@@ -744,18 +747,24 @@ export function CampaignsTableRow({
         </td>
       ),
       cpc: (
-        <td data-col-id="cpc" className="px-3 py-2 text-end tabular-nums text-ink-secondary">
-          {a.clicks > 0 ? formatCurrency(cpc, 2) : '—'}
+        <td data-col-id="cpc" className="metric-cell px-3 py-2 text-end tabular-nums text-ink-secondary">
+          {a.clicks > 0 ? (
+            <Money value={cpc} prefix="none" locale="he-IL" decimals={2} compactAbove={100_000} />
+          ) : '—'}
         </td>
       ),
       cpm: (
-        <td data-col-id="cpm" className="px-3 py-2 text-end tabular-nums text-ink-secondary">
-          {a.impressions > 0 ? formatCurrency(cpm, 2) : '—'}
+        <td data-col-id="cpm" className="metric-cell px-3 py-2 text-end tabular-nums text-ink-secondary">
+          {a.impressions > 0 ? (
+            <Money value={cpm} prefix="none" locale="he-IL" decimals={2} compactAbove={100_000} />
+          ) : '—'}
         </td>
       ),
       cpa: (
-        <td data-col-id="cpa" className="px-3 py-2 text-end tabular-nums text-ink-secondary">
-          {a.conversions > 0 ? formatCurrency(cpa, 2) : '—'}
+        <td data-col-id="cpa" className="metric-cell px-3 py-2 text-end tabular-nums text-ink-secondary">
+          {a.conversions > 0 ? (
+            <Money value={cpa} prefix="none" locale="he-IL" decimals={2} compactAbove={100_000} />
+          ) : '—'}
         </td>
       ),
       };

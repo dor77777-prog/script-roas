@@ -5,6 +5,7 @@ import { Target, Edit3, Check, X, TrendingUp, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { Money } from '@/components/ui/Money';
 import { Card } from '@/components/ui/Card';
 import { Heading } from '@/components/ui/Typography';
 import { HelpTooltip } from '@/components/ui/Tooltip';
@@ -291,7 +292,7 @@ export function GoalTracker({ data }: Props) {
             </div>
             <div className="text-base sm:text-lg font-bold tabular-nums text-ink mt-0.5">
               <span className="text-[10px] text-ink-muted font-medium me-1">CAD</span>
-              {Math.round(forecast.monthToDateRevenue).toLocaleString('he-IL')}
+              <Money value={forecast.monthToDateRevenue} prefix="none" locale="he-IL" compactAbove={1_000_000} />
             </div>
             <div className="text-[10px] sm:text-[11px] text-ink-muted tabular-nums mt-0.5">
               {(pacing.progress * 100).toFixed(1)}% מהיעד
@@ -303,7 +304,7 @@ export function GoalTracker({ data }: Props) {
             </div>
             <div className="text-base sm:text-lg font-bold tabular-nums text-ink mt-0.5">
               <span className="text-[10px] text-ink-muted font-medium me-1">CAD</span>
-              {goal!.toLocaleString('he-IL')}
+              <Money value={goal!} prefix="none" locale="he-IL" compactAbove={1_000_000} />
             </div>
             <div className="text-[10px] sm:text-[11px] text-ink-muted tabular-nums mt-0.5">
               חסרים CAD {Math.max(0, Math.round(goal! - forecast.monthToDateRevenue)).toLocaleString('he-IL')}
@@ -316,7 +317,7 @@ export function GoalTracker({ data }: Props) {
             </div>
             <div className="text-base sm:text-lg font-bold tabular-nums text-ink mt-0.5">
               <span className="text-[10px] text-ink-muted font-medium me-1">CAD</span>
-              {Math.round(forecast.projectedRevenue).toLocaleString('he-IL')}
+              <Money value={forecast.projectedRevenue} prefix="none" locale="he-IL" compactAbove={1_000_000} />
             </div>
             <div className="text-[10px] sm:text-[11px] text-ink-muted tabular-nums mt-0.5">
               {forecast.projectedRevenue >= goal!

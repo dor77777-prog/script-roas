@@ -69,6 +69,7 @@
 import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
+import { Money } from '@/components/ui/Money';
 import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
 import {
   useRoasBandGradient,
@@ -200,13 +201,6 @@ function fmtMoneyCompact(n: number | null | undefined): string {
   // thousand separators. Money on the dashboard is CAD, but the display
   // format matches the mockup verbatim per the visual spec.
   return `${sign}$${Math.round(abs).toLocaleString('en-US')}`;
-}
-
-function fmtMoneyDecimal(n: number | null | undefined, decimals = 2): string {
-  if (n == null || Number.isNaN(n)) return '—';
-  const sign = n < 0 ? '−' : '';
-  const abs = Math.abs(n);
-  return `${sign}$${abs.toFixed(decimals)}`;
 }
 
 function fmtCount(n: number | null | undefined): string {
@@ -524,7 +518,7 @@ export function CommandCenterHero({
             dir="ltr"
             className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
           >
-            {fmtMoneyCompact(current.revenue)}
+            <Money value={current.revenue} prefix="$" compactAbove={1_000_000} />
           </bdi>
           <DeltaLine
             text={fmtPctDelta(delta?.revenuePct)}
@@ -550,7 +544,7 @@ export function CommandCenterHero({
             dir="ltr"
             className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
           >
-            {fmtMoneyCompact(current.spend)}
+            <Money value={current.spend} prefix="$" compactAbove={1_000_000} />
           </bdi>
           {/* spend ↑ is a NEGATIVE signal */}
           <DeltaLine
@@ -584,7 +578,7 @@ export function CommandCenterHero({
               'mt-2 text-[2.25rem] sm:text-[2.75rem]',
             )}
           >
-            {fmtMoneyCompact(current.operatingProfit)}
+            <Money value={current.operatingProfit} prefix="$" compactAbove={1_000_000} />
           </bdi>
           <DeltaLine
             text={fmtMoneyDelta(delta?.operatingProfit)}
@@ -634,9 +628,9 @@ export function CommandCenterHero({
             dir="ltr"
             className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
           >
-            {current.cpm != null && current.cpm > 0
-              ? fmtMoneyDecimal(current.cpm, 2)
-              : '—'}
+            {current.cpm != null && current.cpm > 0 ? (
+              <Money value={current.cpm} prefix="$" decimals={2} compactAbove={1_000_000} />
+            ) : '—'}
           </bdi>
           {/* CPM ↑ is a NEGATIVE signal */}
           <DeltaLine
@@ -693,7 +687,7 @@ export function CommandCenterHero({
             dir="ltr"
             className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
           >
-            {fmtMoneyCompact(current.cogs)}
+            <Money value={current.cogs} prefix="$" compactAbove={1_000_000} />
           </bdi>
           {(() => {
             const subtitle = fmtCogsPctSubtitle(current.cogs, current.revenue);
