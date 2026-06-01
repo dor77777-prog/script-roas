@@ -374,7 +374,7 @@ function monthTitle(ym: string): string {
   return `${HE_MONTHS[m - 1]} ${y}`;
 }
 
-function MonthBlockPerStore({
+export function MonthBlockPerStore({
   ym,
   storeName,
   rows,
@@ -502,7 +502,7 @@ function MonthBlockPerStore({
   );
 }
 
-function MonthBlockSummary({
+export function MonthBlockSummary({
   ym,
   rows,
   stores,
