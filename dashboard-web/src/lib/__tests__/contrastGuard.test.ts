@@ -94,6 +94,15 @@ function wcagRatio(fg: string, bg: string): number {
 // with the same all-WHITE on-band text as the other bands, so it's guarded
 // here exactly like the rest: white ≥4.5:1 + `-muted` ≥3:1 on the deep surface.
 const BANDS = ['red', 'red-alarm', 'orange', 'green', 'blue', 'gray'] as const;
+// EXPLICIT operator-accepted exception (2026-06-01): the ORANGE ROAS band uses
+// the BRIGHT #EF9331 the operator locked, with WHITE text for uniformity with
+// the other bands — which is BELOW WCAG-AA (white on #EF9331 = 2.36:1). The
+// operator made this call knowingly. So orange is excluded from the AA-enforced
+// white-on-band loops below and instead tracked by a dedicated "documented
+// exception" block that asserts the KNOWN sub-AA ratio — if anyone changes
+// --card-band-orange / --on-band-orange, that block breaks and forces a
+// re-decision (this is NOT a silent bypass).
+const AA_WHITE_BANDS = BANDS.filter((b) => b !== 'orange');
 const THEMES = [
   { name: 'dark', blk: block('root') },
   { name: 'light', blk: block('light') },
@@ -101,7 +110,7 @@ const THEMES = [
 
 describe('contrast guard — --on-band-* (white) clears WCAG-AA on the DEEP card surface (both themes)', () => {
   for (const theme of THEMES) {
-    for (const band of BANDS) {
+    for (const band of AA_WHITE_BANDS) {
       it(`${theme.name}: --on-band-${band} on --card-band-${band} ≥ 4.5:1`, () => {
         const fg = hexOf(`--on-band-${band}`, theme.blk);
         const bg = hexOf(`--card-band-${band}`, theme.blk);
@@ -115,6 +124,24 @@ describe('contrast guard — --on-band-* (white) clears WCAG-AA on the DEEP card
   }
 });
 
+// Documented operator-accepted EXCEPTION — orange band white-on-bright #EF9331.
+// Tracks the known sub-AA ratio so it can't silently drift further. To restore
+// AA, either deepen --card-band-orange or switch --on-band-orange back to dark.
+describe('contrast guard — orange band is an EXPLICIT operator-accepted sub-AA exception', () => {
+  for (const theme of THEMES) {
+    it(`${theme.name}: white --on-band-orange on bright --card-band-orange is the known ~2.36:1 (operator override)`, () => {
+      const fg = hexOf('--on-band-orange', theme.blk);
+      const bg = hexOf('--card-band-orange', theme.blk);
+      expect(fg, 'orange on-text is operator-locked WHITE').toBe('#ffffff');
+      const ratio = wcagRatio(fg, bg);
+      // Below AA on purpose; assert it stays in the known band so a deeper
+      // regression (or an accidental fix) is surfaced for a conscious decision.
+      expect(ratio).toBeGreaterThan(2.0);
+      expect(ratio).toBeLessThan(2.7);
+    });
+  }
+});
+
 /**
  * Mobile B1 (2026-06-01) — the per-store ROAS sparkline is drawn DIRECTLY on the
  * vivid band slab with `--spark-band-ink` (over a `--spark-band-casing` halo, which
@@ -123,26 +150,14 @@ describe('contrast guard — --on-band-* (white) clears WCAG-AA on the DEEP card
  * band numbers. The ink is an opaque `rgba(255,255,255,1)`, so we composite (a=1 →
  * pure white) and assert it on every `--card-band-*` surface in BOTH themes.
  */
-// The BRIGHT orange band (#EF9331, operator-locked 2026-06-01) overrides
-// --spark-band-ink to a DARK value, scoped to `.glass[data-band="orange"]`, so a
-// white spark wouldn't be legible on the bright surface. Read THAT scoped value
-// for the orange band (the global --spark-band-ink stays white for the deep bands).
-function orangeScopedHex(varName: string): string {
-  const m = css.match(
-    new RegExp(`\\.glass\\[data-band="orange"\\]\\s*\\{[^}]*?(?<![\\w-])${varName}\\s*:\\s*(#[0-9a-fA-F]{6})`),
-  );
-  if (!m) throw new Error(`orange-scoped ${varName} not found in globals.css`);
-  return m[1];
-}
-
+// Orange excluded: the bright #EF9331 orange band carries a WHITE spark (the
+// global --spark-band-ink) per the operator override — below AA like its white
+// band text, tracked by the documented-exception block above.
 describe('contrast guard — --spark-band-ink clears WCAG-AA on the card surface (both themes)', () => {
   for (const theme of THEMES) {
-    for (const band of BANDS) {
+    for (const band of AA_WHITE_BANDS) {
       it(`${theme.name}: --spark-band-ink on --card-band-${band} ≥ 4.5:1`, () => {
-        // Orange is a BRIGHT band → dark scoped spark ink; the rest use the global white ink.
-        const ink = band === 'orange'
-          ? orangeScopedHex('--spark-band-ink')
-          : effectiveSolid(rgbaOf('--spark-band-ink', theme.blk), '#000000');
+        const ink = effectiveSolid(rgbaOf('--spark-band-ink', theme.blk), '#000000');
         const bg = hexOf(`--card-band-${band}`, theme.blk);
         const ratio = wcagRatio(ink, bg);
         expect(
@@ -191,7 +206,7 @@ describe('contrast guard — --band-scrim-ink clears WCAG-AA on the composited s
  */
 describe('contrast guard — --on-band-*-muted clears 3:1 on the DEEP card surface (both themes)', () => {
   for (const theme of THEMES) {
-    for (const band of BANDS) {
+    for (const band of AA_WHITE_BANDS) { // orange excluded — operator-accepted sub-AA exception
       it(`${theme.name}: --on-band-${band}-muted on --card-band-${band} ≥ 3:1`, () => {
         const fg = hexOf(`--on-band-${band}-muted`, theme.blk);
         const bg = hexOf(`--card-band-${band}`, theme.blk);

@@ -140,13 +140,13 @@
      the threshold. */
   --on-band-red:    oklch(100% 0 0);
   --on-band-red-alarm: oklch(100% 0 0);  /* alarm-red text = white, like the other bands (5.67:1 on the deep surface) */
-  --on-band-orange: #2b1900;  /* operator orange #EF9331 is a BRIGHT surface → DARK on-text (7.16:1), not white */
+  --on-band-orange: oklch(100% 0 0);  /* WHITE — operator-accepted (2026-06-01): uniform white on bright #EF9331 like the other bands, BELOW AA (2.36:1), explicit operator override */
   --on-band-green:  oklch(100% 0 0);
   --on-band-blue:   oklch(100% 0 0);
   --on-band-gray:   oklch(100% 0 0);
   --on-band-red-muted:    #dfe3f2;
   --on-band-red-alarm-muted: #dfe3f2;  /* near-white secondary (4.43:1 on the deep alarm surface ≥3:1) */
-  --on-band-orange-muted: #3d2a0d;  /* dark muted on bright #EF9331 (5.79:1) */
+  --on-band-orange-muted: #dfe3f2;  /* white-ish muted, uniform with other bands (operator override; below AA on bright #EF9331) */
   --on-band-green-muted:  #dfe3f2;
   --on-band-blue-muted:   #dfe3f2;
   --on-band-gray-muted:   #dfe3f2;
@@ -332,7 +332,7 @@
      Distinct from --status-orange-btn (deep, white-text operator buttons/
      InsightCard) and from the per-store card band (which keeps its amber glow). */
   --status-orange-solid: #ef9331;
-  --status-orange-solid-fg: #2b1900;
+  --status-orange-solid-fg: #ffffff;  /* WHITE badge text on bright #EF9331 — operator override (below AA 2.36:1) */
 
   /* Chart helper tokens (used by RoasChart axis grid + CPM-prev ghost line). */
   --chart-axis:     oklch(60% 0.015 250 / 0.6);
@@ -501,13 +501,13 @@
      so white clears WCAG-AA 4.5:1 identically here. Same values as :root. */
   --on-band-red:    oklch(100% 0 0);
   --on-band-red-alarm: oklch(100% 0 0);  /* alarm-red text = white, like the other bands (5.67:1 on the deep surface) */
-  --on-band-orange: #2b1900;  /* operator orange #EF9331 is a BRIGHT surface → DARK on-text (7.16:1), not white */
+  --on-band-orange: oklch(100% 0 0);  /* WHITE — operator-accepted (2026-06-01): uniform white on bright #EF9331 like the other bands, BELOW AA (2.36:1), explicit operator override */
   --on-band-green:  oklch(100% 0 0);
   --on-band-blue:   oklch(100% 0 0);
   --on-band-gray:   oklch(100% 0 0);
   --on-band-red-muted:    #dfe3f2;
   --on-band-red-alarm-muted: #dfe3f2;  /* near-white secondary (4.43:1 on the deep alarm surface ≥3:1) */
-  --on-band-orange-muted: #3d2a0d;  /* dark muted on bright #EF9331 (5.79:1) */
+  --on-band-orange-muted: #dfe3f2;  /* white-ish muted, uniform with other bands (operator override; below AA on bright #EF9331) */
   --on-band-green-muted:  #dfe3f2;
   --on-band-blue-muted:   #dfe3f2;
   --on-band-gray-muted:   #dfe3f2;
@@ -649,7 +649,7 @@
      Distinct from --status-orange-btn (deep, white-text operator buttons/
      InsightCard) and from the per-store card band (which keeps its amber glow). */
   --status-orange-solid: #ef9331;
-  --status-orange-solid-fg: #2b1900;
+  --status-orange-solid-fg: #ffffff;  /* WHITE badge text on bright #EF9331 — operator override (below AA 2.36:1) */
 
   /* Chart helpers — axis / CPM-prev ghost darkened to read on light plot. */
   --chart-axis:     oklch(45% 0.02 250 / 0.55);
@@ -1850,20 +1850,11 @@ input[type="date"]:hover::-webkit-calendar-picker-indicator {
 .per-store-card.glass[data-band="orange"] .scard-main-grid .sv {
   color: var(--on-band-orange);
 }
-
-/* ── Operator-locked BRIGHT orange band (#EF9331) — dark on-text overrides ──
-   The orange ROAS band is now a BRIGHT surface (operator request 2026-06-01),
-   unlike the DEEP red/green/blue bands. Every card element that defaults to
-   white/light on a band card therefore needs a DARK on-color override here so
-   it stays legible (WCAG-AA) on the bright orange. Source-ordered AFTER the
-   generic white rules so it wins at equal specificity. */
-.per-store-card.glass[data-band="orange"] .roas-cap { color: var(--on-band-orange-muted); }
-.glass[data-band="orange"] { --spark-band-ink: #2b1900; --spark-band-casing: rgba(255, 255, 255, 0.55); }
-.glass[data-band="orange"] .store-delta-chip { background: rgba(0, 0, 0, 0.5); }
-.glass[data-band="orange"]:not([data-band-strength="muted"]) .hero-delta,
-.glass[data-band="orange"]:not([data-band-strength="muted"]) .hero-delta > bdi { color: #2b1900; }
-.glass[data-band="orange"]:not([data-band-strength="muted"]) .hero-delta .text-ink-muted { color: rgba(43, 25, 0, 0.82); }
-
+/* Orange band is WHITE-on-bright-#EF9331 per operator override (2026-06-01) —
+   uniform with the other bands. No dark-text overrides: --on-band-orange(-muted)
+   are white/light, and the sparkline/roas-cap/delta-chip/hero-delta fall back to
+   the generic white band rules. This is BELOW WCAG-AA (white on #EF9331 = 2.36:1)
+   and is an explicit, documented operator exception (see contrastGuard). */
 .per-store-card.glass[data-band="green"] .scard-main-grid .sv {
   color: var(--on-band-green);
 }
