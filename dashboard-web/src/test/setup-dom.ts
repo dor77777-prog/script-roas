@@ -27,14 +27,18 @@ Object.defineProperty(globalThis, 'localStorage', {
 
 // jsdom does not implement window.matchMedia. Components that read
 // OS color-scheme preference (e.g. ThemeProvider) call it on mount.
-// Provide a minimal stub that always reports light mode and supports
-// addEventListener/removeEventListener so no errors are thrown.
+// Provide a minimal stub that reports light mode for every query EXCEPT
+// `prefers-reduced-motion: reduce`, which reports `true` so count-up
+// animations (useCountUp) render their FINAL value synchronously in tests —
+// otherwise rAF-driven numbers would read 0 at assertion time and break the
+// dozens of existing hero/per-store number expectations. (A test runner with
+// no real frames is the textbook reduced-motion environment anyway.)
 if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     configurable: true,
     value: (query: string): MediaQueryList => ({
-      matches: false,
+      matches: query.includes('prefers-reduced-motion'),
       media: query,
       onchange: null,
       addListener: () => {},

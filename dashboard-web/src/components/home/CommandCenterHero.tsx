@@ -70,6 +70,7 @@ import { useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Money } from '@/components/ui/Money';
+import { CountUp } from '@/components/ui/CountUp';
 import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
 import {
   useRoasBandGradient,
@@ -546,7 +547,7 @@ export function CommandCenterHero({
             dir="ltr"
             className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
           >
-            <Money value={current.revenue} prefix="$" compactAbove={1_000_000} />
+            <Money value={current.revenue} prefix="$" compactAbove={1_000_000} countUp />
           </bdi>
           <DeltaLine
             text={fmtPctDelta(delta?.revenuePct)}
@@ -572,7 +573,7 @@ export function CommandCenterHero({
             dir="ltr"
             className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
           >
-            <Money value={current.spend} prefix="$" compactAbove={1_000_000} />
+            <Money value={current.spend} prefix="$" compactAbove={1_000_000} countUp />
           </bdi>
           {/* spend ↑ is a NEGATIVE signal */}
           <DeltaLine
@@ -606,7 +607,7 @@ export function CommandCenterHero({
               'mt-2 text-[2.25rem] sm:text-[2.75rem]',
             )}
           >
-            <Money value={current.operatingProfit} prefix="$" compactAbove={1_000_000} />
+            <Money value={current.operatingProfit} prefix="$" compactAbove={1_000_000} countUp />
           </bdi>
           <DeltaLine
             text={fmtMoneyDelta(delta?.operatingProfit)}
@@ -657,7 +658,7 @@ export function CommandCenterHero({
             className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
           >
             {current.cpm != null && current.cpm > 0 ? (
-              <Money value={current.cpm} prefix="$" decimals={2} compactAbove={1_000_000} />
+              <Money value={current.cpm} prefix="$" decimals={2} compactAbove={1_000_000} countUp />
             ) : '—'}
           </bdi>
           {/* CPM ↑ is a NEGATIVE signal */}
@@ -684,7 +685,7 @@ export function CommandCenterHero({
             dir="ltr"
             className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
           >
-            {fmtCount(current.orders)}
+            <CountUp value={current.orders} format={fmtCount} />
           </bdi>
           <DeltaLine
             text={fmtCountDelta(delta?.orders)}
@@ -715,7 +716,7 @@ export function CommandCenterHero({
             dir="ltr"
             className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
           >
-            <Money value={current.cogs} prefix="$" compactAbove={1_000_000} />
+            <Money value={current.cogs} prefix="$" compactAbove={1_000_000} countUp />
           </bdi>
           {(() => {
             const subtitle = fmtCogsPctSubtitle(current.cogs, current.revenue);
@@ -742,7 +743,7 @@ export function CommandCenterHero({
             dir="ltr"
             className="v num banded block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem]"
           >
-            {fmtRoas(current.roas)}
+            <CountUp value={current.roas} format={fmtRoas} />
           </bdi>
           <DeltaLine
             text={fmtRoasDelta(delta?.roas)}

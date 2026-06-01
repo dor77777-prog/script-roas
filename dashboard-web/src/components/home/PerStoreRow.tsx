@@ -35,6 +35,7 @@
 import { useMemo, type KeyboardEvent } from 'react';
 import { cn, formatNumber } from '@/lib/utils';
 import { Money } from '@/components/ui/Money';
+import { CountUp } from '@/components/ui/CountUp';
 import { Card } from '@/components/ui/Card';
 import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
 import { Heading } from '@/components/ui/Typography';
@@ -124,11 +125,6 @@ const BAND_TAG_LABEL: Record<RoasBand, string> = {
 function fmtOrdersText(n: number | null): string {
   if (n == null || Number.isNaN(n)) return '—';
   return formatNumber(n, 0);
-}
-
-function fmtRoasText(n: number | null): string {
-  if (n == null || Number.isNaN(n)) return '—';
-  return `${n.toFixed(2)}x`;
 }
 
 /* --------------------------------------------------------------------------
@@ -285,10 +281,15 @@ function StoreCard({
           className="v banded block text-[50px] md:text-[60px] font-light tabular-nums tracking-tight leading-none whitespace-nowrap"
         >
           {/* Alarm-red state shows an explicit "0.00x" (spent money, zero
-              return) rather than the "—" fmtRoasText() yields for a true null
-              ROAS. fmtRoasText itself is left untouched — other callers rely on
-              "—" for genuine no-data. */}
-          {zeroSalesWithSpend ? '0.00x' : fmtRoasText(store.roas)}
+              return) — kept STATIC (it's literally zero, nothing to climb to).
+              Genuine ROAS values climb in via <CountUp> ("numbers come alive"),
+              reduced-motion-aware; a null ROAS renders the "—" placeholder
+              (CountUp's own empty-state), matching the prior behaviour. */}
+          {zeroSalesWithSpend ? (
+            '0.00x'
+          ) : (
+            <CountUp value={store.roas} format={(n) => `${n.toFixed(2)}x`} />
+          )}
         </bdi>
         <span className="roas-cap mt-1 block font-mono text-[11px] uppercase tracking-[0.08em] text-ink-muted">
           ROAS · היום
