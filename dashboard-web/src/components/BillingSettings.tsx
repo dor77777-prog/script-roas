@@ -91,7 +91,7 @@ export const SOURCE_COLOR: Record<CostSource, string> = {
   'shopify-app':  'bg-status-blueBg text-status-blueFg',
   'external-app': 'bg-status-grayBg text-status-grayFg',
   email:          'bg-status-warningBg text-status-warningFg',
-  usage:          'bg-status-orangeBg text-status-orange',
+  usage:          'bg-status-orangeBg text-status-orangeFg',
   'one-off':      'bg-ink-muted text-ink-secondary',
   other:          'bg-ink-muted text-ink-secondary',
 };
@@ -609,7 +609,7 @@ function RecurringTab({
                       size="icon"
                       onClick={() => remove(r.id)}
                       aria-label="מחק"
-                      className="w-8 h-8 text-ink-muted hover:text-status-red hover:bg-status-redBg"
+                      className="w-8 h-8 text-ink-muted hover:text-status-redFg hover:bg-status-redBg"
                     >
                       <Trash2 size={14} />
                     </Button>
@@ -994,7 +994,7 @@ function OneTimeTab({
                       size="icon"
                       onClick={() => remove(r.id)}
                       aria-label="מחק"
-                      className="w-8 h-8 text-ink-muted hover:text-status-red hover:bg-status-redBg"
+                      className="w-8 h-8 text-ink-muted hover:text-status-redFg hover:bg-status-redBg"
                     >
                       <Trash2 size={14} />
                     </Button>

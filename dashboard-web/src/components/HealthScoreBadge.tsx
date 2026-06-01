@@ -22,11 +22,11 @@ import { Button } from '@/components/ui/Button';
 // solid status band. s-a→green, s-b→blue, s-c→orange, s-d/F→red. `unknown`
 // stays a neutral tint (not a status color).
 const GRADE_STYLES: Record<HealthGrade, { chip: string; ring: string; label: string }> = {
-  A: { chip: 'bg-status-green text-accent-fg', ring: 'ring-status-green', label: 'מצוין' },
-  B: { chip: 'bg-status-blue text-accent-fg', ring: 'ring-status-blue', label: 'בריא' },
-  C: { chip: 'bg-status-orange text-accent-fg', ring: 'ring-status-orange', label: 'גבולי' },
-  D: { chip: 'bg-status-red text-accent-fg', ring: 'ring-status-red', label: 'בעייתי' },
-  F: { chip: 'bg-status-red text-accent-fg', ring: 'ring-status-red', label: 'כשל' },
+  A: { chip: 'bg-status-greenBtn text-accent-fg', ring: 'ring-status-green', label: 'מצוין' },
+  B: { chip: 'bg-status-blueBtn text-accent-fg', ring: 'ring-status-blue', label: 'בריא' },
+  C: { chip: 'bg-status-orangeBtn text-accent-fg', ring: 'ring-status-orange', label: 'גבולי' },
+  D: { chip: 'bg-status-redBtn text-accent-fg', ring: 'ring-status-red', label: 'בעייתי' },
+  F: { chip: 'bg-status-redBtn text-accent-fg', ring: 'ring-status-red', label: 'כשל' },
   unknown: { chip: 'bg-glass-2 text-ink-muted', ring: 'ring-glass-edge', label: 'מוקדם מדי' },
 };
 

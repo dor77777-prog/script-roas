@@ -36,7 +36,7 @@ export function HealthTab() {
           per-campaign Store dropdown in the Campaigns tab. */}
       <section className="rounded-md border border-status-orange/30 bg-status-orange/8 px-4 py-3 text-sm">
         <p className="text-ink-secondary">
-          <span className="font-semibold text-status-orange">שורות TikTok היסטוריות</span>
+          <span className="font-semibold text-status-orangeFg">שורות TikTok היסטוריות</span>
           {' '}(לפני 2026-05-29) משויכות כולן ל-<code>uzoshop</code>. זו ההנחה הישנה
           מלפני שמיפוי קמפיין↔חנות עלה ב-Phase A.5. השתמש בעמודת{' '}
           <span className="font-semibold">חנות</span> ב-<code>קמפיינים</code> כדי לתייג

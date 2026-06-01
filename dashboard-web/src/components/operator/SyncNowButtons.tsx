@@ -167,12 +167,12 @@ export function SyncNowButtons() {
       </div>
 
       {message && (
-        <p className="text-status-green text-sm" role="status">
+        <p className="text-status-greenFg text-sm" role="status">
           {message}
         </p>
       )}
       {error && (
-        <p className="text-status-red text-sm" role="alert">
+        <p className="text-status-redFg text-sm" role="alert">
           שגיאה: {error}
         </p>
       )}

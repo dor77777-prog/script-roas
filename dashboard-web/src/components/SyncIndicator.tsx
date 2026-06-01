@@ -84,7 +84,7 @@ export function SyncIndicator() {
   } else if (status === 'error') {
     icon = <CloudOff size={13} />;
     label = 'sync שגיאה';
-    tone = 'bg-status-red text-accent-fg hover:bg-[color-mix(in_oklab,var(--status-red)_88%,var(--text))]';
+    tone = 'bg-status-redBtn text-accent-fg hover:bg-[color-mix(in_oklab,var(--status-red-btn)_88%,black)]';
     title = 'לחץ לפרטים';
   } else if (supabaseDown) {
     // D-D1 yellow — Sheets OK (or hasn't synced yet), Supabase unreachable.
@@ -152,7 +152,7 @@ export function SyncIndicator() {
           className="absolute top-full end-0 mt-1 w-80 max-w-[min(90vw,320px)] rounded-lg bg-glass-1 text-ink shadow-overlay border border-glass-edge p-3 z-50"
         >
           <div className="flex items-start gap-2">
-            <span className="inline-flex w-7 h-7 rounded-md bg-status-redBg text-status-red items-center justify-center shrink-0">
+            <span className="inline-flex w-7 h-7 rounded-md bg-status-redBg text-status-redFg items-center justify-center shrink-0">
               <AlertTriangle size={14} />
             </span>
             <div className="min-w-0 flex-1">

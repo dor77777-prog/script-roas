@@ -328,9 +328,9 @@ export function Dashboard() {
             * /api/orders-attribution, etc.). Either surfaces in the same banner. */}
           {(error || data?.error) && (
             <div className="rounded-xl bg-status-redBg border border-[color-mix(in_oklab,var(--status-red)_30%,transparent)] p-4 flex items-start gap-3">
-              <AlertCircle className="text-status-red shrink-0" size={20} />
+              <AlertCircle className="text-status-redFg shrink-0" size={20} />
               <div>
-                <div className="font-semibold text-status-red">שגיאה בטעינת הנתונים</div>
+                <div className="font-semibold text-status-redFg">שגיאה בטעינת הנתונים</div>
                 <div className="text-sm text-ink-secondary mt-1">
                   {error ? (error as Error).message : data?.error}
                 </div>

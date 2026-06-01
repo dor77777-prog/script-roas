@@ -151,9 +151,9 @@ export function RoasChart({ data, stores, rows, bare = false }: Props) {
                       }
                       if (!anyHeavy || refundSum <= 0) return null;
                       return (
-                        <div className="mt-1 pt-1 border-t border-status-orange text-xs text-status-orange">
+                        <div className="mt-1 pt-1 border-t border-status-orange text-xs text-status-orangeFg">
                           ↩ יום רפאנד כבד — החזרים: -CAD{' '}
-                          <ChartTooltipValue className="font-normal text-status-orange">
+                          <ChartTooltipValue className="font-normal text-status-orangeFg">
                             {Math.round(refundSum).toLocaleString('he-IL')}
                           </ChartTooltipValue>
                           . ה-ROAS משקף את הנטו.

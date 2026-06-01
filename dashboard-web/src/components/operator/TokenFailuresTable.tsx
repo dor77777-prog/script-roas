@@ -128,7 +128,7 @@ export function TokenFailuresTable() {
 
   if (error) {
     return (
-      <div className="text-sm text-status-orange inline-flex items-center gap-1">
+      <div className="text-sm text-status-orangeFg inline-flex items-center gap-1">
         <AlertCircle size={14} /> שגיאת רענון — ננסה שוב בעוד 30 שניות.
       </div>
     );
@@ -141,7 +141,7 @@ export function TokenFailuresTable() {
   if (rows.length === 0) {
     return (
       <div className="text-sm text-ink-secondary inline-flex items-center gap-1.5">
-        <CheckCircle2 size={14} className="text-status-green" />
+        <CheckCircle2 size={14} className="text-status-greenFg" />
         אין כשלי טוקנים פתוחים. הכל ירוק.
       </div>
     );
@@ -152,7 +152,7 @@ export function TokenFailuresTable() {
       {unresolved.length > 0 && (
         <div>
           <div className="text-xs text-ink-muted mb-2">
-            כשלים פתוחים: <span className="font-semibold text-status-red">{unresolved.length}</span>
+            כשלים פתוחים: <span className="font-semibold text-status-redFg">{unresolved.length}</span>
           </div>
           <div className="border border-status-red rounded-lg overflow-hidden">
             <TableBase className="text-xs sm:text-sm">
@@ -202,7 +202,7 @@ export function TokenFailuresTable() {
                     className="border-b border-glass-edge last:border-0 text-ink-muted"
                   >
                     <td className="px-3 py-1.5 inline-flex items-center gap-1">
-                      <CheckCircle2 size={12} className="text-status-green" />
+                      <CheckCircle2 size={12} className="text-status-greenFg" />
                       {PROVIDER_LABEL[row.provider] ?? row.provider}
                     </td>
                     <td className="px-3 py-1.5">
@@ -251,7 +251,7 @@ function FailureRowFragment({
         onClick={onToggleExpand}
       >
         <td className="px-3 py-2 font-semibold inline-flex items-center gap-1.5">
-          <XCircle size={13} className="text-status-red shrink-0" />
+          <XCircle size={13} className="text-status-redFg shrink-0" />
           {PROVIDER_LABEL[row.provider] ?? row.provider}
         </td>
         <td className="px-3 py-2">{STORE_LABEL[row.storeId] ?? row.storeId}</td>

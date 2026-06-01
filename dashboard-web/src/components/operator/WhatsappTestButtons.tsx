@@ -108,8 +108,8 @@ export function WhatsappTestButtons() {
               data-armed={isArmed || undefined}
               className={
                 isArmed
-                  ? 'gap-1 bg-status-warning hover:opacity-90 text-accent-fg text-sm px-3 py-2 h-auto ring-2 ring-status-warning ring-offset-2 ring-offset-[color:var(--canvas-1)]'
-                  : 'gap-1 bg-status-green hover:opacity-90 disabled:bg-glass-2 disabled:text-ink-muted text-accent-fg text-sm px-3 py-2 h-auto'
+                  ? 'gap-1 bg-status-orangeBtn hover:opacity-90 text-accent-fg text-sm px-3 py-2 h-auto ring-2 ring-status-warning ring-offset-2 ring-offset-[color:var(--canvas-1)]'
+                  : 'gap-1 bg-status-greenBtn hover:opacity-90 disabled:bg-glass-2 disabled:text-ink-muted text-accent-fg text-sm px-3 py-2 h-auto'
               }
             >
               {isPending ? (
@@ -128,12 +128,12 @@ export function WhatsappTestButtons() {
       </div>
 
       {message && (
-        <p className="text-status-green text-sm" role="status">
+        <p className="text-status-greenFg text-sm" role="status">
           {message}
         </p>
       )}
       {error && (
-        <p className="text-status-red text-sm" role="alert">
+        <p className="text-status-redFg text-sm" role="alert">
           שגיאה: {error}
         </p>
       )}

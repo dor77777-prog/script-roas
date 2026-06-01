@@ -113,7 +113,7 @@ describe('FreshnessPanel', () => {
       isLoading: false,
     });
     const { container } = render(<FreshnessPanel />);
-    const greenIcons = container.querySelectorAll('.text-status-green');
+    const greenIcons = container.querySelectorAll('.text-status-greenFg');
     expect(greenIcons.length).toBeGreaterThan(0);
   });
 
@@ -125,7 +125,7 @@ describe('FreshnessPanel', () => {
       isLoading: false,
     });
     const { container } = render(<FreshnessPanel />);
-    const orangeIcons = container.querySelectorAll('.text-status-orange');
+    const orangeIcons = container.querySelectorAll('.text-status-orangeFg');
     expect(orangeIcons.length).toBeGreaterThan(0);
     expect(screen.getByText('META_BUDGET_HIGH')).toBeDefined();
   });
@@ -138,7 +138,7 @@ describe('FreshnessPanel', () => {
       isLoading: false,
     });
     const { container } = render(<FreshnessPanel />);
-    const redIcons = container.querySelectorAll('.text-status-red');
+    const redIcons = container.querySelectorAll('.text-status-redFg');
     expect(redIcons.length).toBeGreaterThan(0);
     expect(screen.getByText(/429 too many requests/)).toBeDefined();
   });
@@ -151,7 +151,7 @@ describe('FreshnessPanel', () => {
       isLoading: false,
     });
     const { container } = render(<FreshnessPanel />);
-    const redIcons = container.querySelectorAll('.text-status-red');
+    const redIcons = container.querySelectorAll('.text-status-redFg');
     expect(redIcons.length).toBeGreaterThan(0);
   });
 

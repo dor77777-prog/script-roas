@@ -60,7 +60,7 @@ const SOURCE_COLOR: Record<CostSource, string> = {
   'shopify-app':  'text-status-blueFg',
   'external-app': 'text-accent',
   email:          'text-status-warningFg',
-  usage:          'text-status-orange',
+  usage:          'text-status-orangeFg',
   'one-off':      'text-ink-secondary',
   other:          'text-ink-secondary',
 };
@@ -305,7 +305,7 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
               <span
                 className={cn(
                   'text-base sm:text-lg font-bold tabular-nums',
-                  finalProfit >= 0 ? 'text-status-green' : 'text-status-red',
+                  finalProfit >= 0 ? 'text-status-greenFg' : 'text-status-redFg',
                 )}
               >
                 <span className="text-[10px] text-ink-muted font-medium ms-1">CAD</span>
@@ -409,8 +409,8 @@ function HeroStat({
   const amountColor =
     tone === 'positive' ? 'text-ink'
     : tone === 'negative' ? 'text-ink'
-    : tone === 'profit' ? 'text-status-green'
-    : 'text-status-red';
+    : tone === 'profit' ? 'text-status-greenFg'
+    : 'text-status-redFg';
   const barColor =
     tone === 'positive' ? 'bg-accent'
     : tone === 'negative' ? 'bg-ink-muted'
@@ -497,7 +497,7 @@ function PnLLine({
           <div
             className={cn(
               'text-xs font-semibold tabular-nums leading-tight mt-0.5 font-mono',
-              running >= 0 ? 'text-ink' : 'text-status-red',
+              running >= 0 ? 'text-ink' : 'text-status-redFg',
             )}
           >
             {formatCurrency(running)}

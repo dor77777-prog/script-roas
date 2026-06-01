@@ -420,9 +420,9 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
   const primaryAbsR = primaryR === null ? null : Math.abs(primaryR);
   const primaryRClass =
     primaryAbsR === null ? 'text-ink-muted'
-      : primaryAbsR >= 0.7 ? 'text-status-green'
-      : primaryAbsR >= 0.3 ? 'text-status-warning'
-      : 'text-status-red';
+      : primaryAbsR >= 0.7 ? 'text-status-greenFg'
+      : primaryAbsR >= 0.3 ? 'text-status-warningFg'
+      : 'text-status-redFg';
   const noSignalTitle = 'אין שונות בסדרה — לא ניתן לחשב';
   const formatR = (value: number | null) => (
     value === null ? '—' : value.toFixed(2)
@@ -502,7 +502,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 if (primaryChannel === 'Google') {
                   return (
                     <>
-                      <strong className="text-status-green">מתאם גבוה.</strong>{' '}
+                      <strong className="text-status-greenFg">מתאם גבוה.</strong>{' '}
                       Google תופס את הטרנדים נכון. אם יש פער במספרים — סביר שזה{' '}
                       <strong>bias קבוע</strong> (חלון attribution, modeled conversions, halo).{' '}
                       החלטות גידול תקציב על בסיס מגמות Google אמינות.
@@ -512,7 +512,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 if (primaryChannel === 'TikTok') {
                   return (
                     <>
-                      <strong className="text-status-green">מתאם גבוה.</strong>{' '}
+                      <strong className="text-status-greenFg">מתאם גבוה.</strong>{' '}
                       TikTok תופס את הטרנדים נכון. אם יש פער במספרים — סביר שזה{' '}
                       <strong>bias קבוע</strong> (TikTok pixel + modeled conversions).{' '}
                       החלטות גידול תקציב על בסיס מגמות TikTok אמינות.
@@ -522,7 +522,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 if (primaryChannel === 'Combined') {
                   return (
                     <>
-                      <strong className="text-status-green">מתאם גבוה.</strong>{' '}
+                      <strong className="text-status-greenFg">מתאם גבוה.</strong>{' '}
                       Σ של 4 הערוצים מול Shopify תופס את הטרנדים נכון. פער קבוע במספרים{' '}
                       מעיד בדרך כלל על bias בערוצי הדיווח, לא על שבירת המגמה.
                     </>
@@ -530,7 +530,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 }
                 return (
                   <>
-                    <strong className="text-status-green">מתאם גבוה.</strong>{' '}
+                    <strong className="text-status-greenFg">מתאם גבוה.</strong>{' '}
                     Meta תופס את הטרנדים נכון. אם יש פער במספרים — סביר שזה{' '}
                     <strong>bias קבוע</strong> (view-through credit, halo).{' '}
                     החלטות גידול תקציב על בסיס מגמות Meta אמינות.
@@ -541,7 +541,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 if (primaryChannel === 'Google') {
                   return (
                     <>
-                      <strong className="text-status-warning">מתאם חלקי.</strong>{' '}
+                      <strong className="text-status-warningFg">מתאם חלקי.</strong>{' '}
                       Google תופס חלק מהתנועות אבל יש ימים שהוא חורג.{' '}
                       התעלם מ-Google ברמת יום בודד, התייחס רק לאגרגציה של 7+ ימים.
                     </>
@@ -550,7 +550,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 if (primaryChannel === 'TikTok') {
                   return (
                     <>
-                      <strong className="text-status-warning">מתאם חלקי.</strong>{' '}
+                      <strong className="text-status-warningFg">מתאם חלקי.</strong>{' '}
                       TikTok תופס חלק מהתנועות אבל יש ימים שהוא חורג.{' '}
                       התעלם מ-TikTok ברמת יום בודד, התייחס רק לאגרגציה של 7+ ימים.
                     </>
@@ -559,7 +559,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 if (primaryChannel === 'Combined') {
                   return (
                     <>
-                      <strong className="text-status-warning">מתאם חלקי.</strong>{' '}
+                      <strong className="text-status-warningFg">מתאם חלקי.</strong>{' '}
                       Σ של 4 הערוצים מול Shopify מסביר חלק מהתנועה, אבל חסרים ימים.{' '}
                       בדוק מיפוי מוצרים, UTMs וערוצים שלא נכנסים לאחת הסדרות.
                     </>
@@ -567,7 +567,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 }
                 return (
                   <>
-                    <strong className="text-status-warning">מתאם חלקי.</strong>{' '}
+                    <strong className="text-status-warningFg">מתאם חלקי.</strong>{' '}
                     Meta תופס חלק מהתנועות אבל יש ימים שהוא חורג.{' '}
                     התעלם מ-Meta ברמת יום בודד, התייחס רק לאגרגציה של 7+ ימים.
                   </>
@@ -576,7 +576,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
               if (primaryChannel === 'Google') {
                 return (
                   <>
-                    <strong className="text-status-red">אין מתאם.</strong>{' '}
+                    <strong className="text-status-redFg">אין מתאם.</strong>{' '}
                     Google מדווח על המרות שלא מופיעות ב-Shopify. או שהמיפוי לא מלא{' '}
                     (חסרים מוצרים), או שיש over-attribution אגרסיבי. אל תקבל החלטות{' '}
                     על בסיס המרות Google של הקמפיין הזה.
@@ -586,7 +586,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
               if (primaryChannel === 'TikTok') {
                 return (
                   <>
-                    <strong className="text-status-red">אין מתאם.</strong>{' '}
+                    <strong className="text-status-redFg">אין מתאם.</strong>{' '}
                     TikTok מדווח על המרות שלא מופיעות ב-Shopify. או שהמיפוי לא מלא{' '}
                     (חסרים מוצרים), או שיש over-attribution אגרסיבי (TikTok pixel
                     + view-through). אל תקבל החלטות על בסיס המרות TikTok של הקמפיין הזה.
@@ -596,7 +596,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
               if (primaryChannel === 'Combined') {
                 return (
                   <>
-                    <strong className="text-status-red">אין מתאם.</strong>{' '}
+                    <strong className="text-status-redFg">אין מתאם.</strong>{' '}
                     Σ של 4 הערוצים מול Shopify לא מסביר את מכירות Shopify בפועל.{' '}
                     בדוק אם חסרים מוצרים במיפוי, UTMs, או ערוצי מכירה שלא מסווגים.
                   </>
@@ -604,7 +604,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
               }
               return (
                 <>
-                  <strong className="text-status-red">אין מתאם.</strong>{' '}
+                  <strong className="text-status-redFg">אין מתאם.</strong>{' '}
                   Meta מדווח על המרות שלא מופיעות ב-Shopify. או שהמיפוי לא מלא{' '}
                   (חסרים מוצרים), או שיש over-attribution אגרסיבי. אל תקבל החלטות{' '}
                   על בסיס המרות Meta של הקמפיין הזה.
@@ -778,7 +778,7 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                 stroke="currentColor"
                 strokeWidth="2.5"
                 strokeDasharray="4 2"
-                className="text-status-green"
+                className="text-status-greenFg"
               />
             </svg>
             <span className="text-ink font-semibold">Shopify (בפועל)</span>
@@ -831,8 +831,8 @@ export function MetaShopifyReconciliation({ reconciliation }: Props) {
                   const { label: deltaLabel, tone: deltaTone } = computeDayDelta(channelTotal, s.shopify);
                   const deltaClass = {
                     neutral: 'text-ink-muted',
-                    green: 'text-status-green',
-                    red: 'text-status-red',
+                    green: 'text-status-greenFg',
+                    red: 'text-status-redFg',
                   }[deltaTone];
                   return (
                     <tr key={s.date} className="border-t border-glass-edge">

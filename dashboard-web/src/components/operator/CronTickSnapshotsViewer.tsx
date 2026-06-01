@@ -74,9 +74,9 @@ export function CronTickSnapshotsViewer() {
               <tr key={r.tick_id} className="border-b border-glass-edge/40">
                 <td className="text-end py-1 pe-2">{r.tick_id}</td>
                 <td className="py-1 px-2">{r.fan_out_count ?? '—'}</td>
-                <td className="py-1 px-2 text-status-green">{r.events_completed_count ?? '—'}</td>
-                <td className="py-1 px-2 text-status-orange">{r.events_skipped_count ?? '—'}</td>
-                <td className="py-1 px-2 text-status-red">{r.events_failed_count ?? '—'}</td>
+                <td className="py-1 px-2 text-status-greenFg">{r.events_completed_count ?? '—'}</td>
+                <td className="py-1 px-2 text-status-orangeFg">{r.events_skipped_count ?? '—'}</td>
+                <td className="py-1 px-2 text-status-redFg">{r.events_failed_count ?? '—'}</td>
                 <td className="py-1 ps-2 text-ink-secondary">{durationSeconds(r.started_at, r.finished_at)}</td>
               </tr>
             ))}

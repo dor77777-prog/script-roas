@@ -98,7 +98,7 @@ type ScopeDescriptor = {
 const SCOPE_ALL: ScopeDescriptor = {
   scope: 'all',
   buttonLabel: 'איפוס מלא — מחק את כל הנתונים כולל הוצאות ידניות',
-  buttonClass: 'bg-status-red hover:opacity-90 disabled:opacity-50',
+  buttonClass: 'bg-status-redBtn hover:opacity-90 disabled:opacity-50',
   modalTitle: 'איפוס מלא של כל הנתונים',
   modalWarning:
     'פעולה זו תמחק את כל נתוני הדשבורד, כולל ההוצאות הידניות שהוזנו ידנית. אין צעד אחורה.',
@@ -116,7 +116,7 @@ const SCOPE_ALL: ScopeDescriptor = {
 const SCOPE_EXCEPT_MANUAL: ScopeDescriptor = {
   scope: 'except-manual',
   buttonLabel: 'איפוס חלקי — מחק הכל פרט להוצאות ידניות',
-  buttonClass: 'bg-status-orange hover:opacity-90 disabled:opacity-50',
+  buttonClass: 'bg-status-orangeBtn hover:opacity-90 disabled:opacity-50',
   modalTitle: 'איפוס חלקי — מחק הכל פרט להוצאות ידניות',
   modalWarning:
     'פעולה זו תמחק את נתוני ה-fetch (Shopify / Meta / Google / מוצרים / קמפיינים), אך תשמור על טבלת manual_overrides. ניתן לרוץ backfill מחדש.',
@@ -225,7 +225,7 @@ export function ResetData() {
           role="status"
           className="rounded border border-status-green bg-status-greenBg p-3 text-sm space-y-1"
         >
-          <p className="text-status-green font-semibold">
+          <p className="text-status-greenFg font-semibold">
             איפוס הושלם ({lastResult.scope === 'all' ? 'מלא' : 'חלקי'}) —
             סה״כ {lastResult.total} שורות נמחקו (
             <span dir="ltr">{lastResult.durationMs}ms</span>).
@@ -237,13 +237,13 @@ export function ResetData() {
                 {count >= 0 ? (
                   <span>{count} rows</span>
                 ) : (
-                  <span className="text-status-red">failed</span>
+                  <span className="text-status-redFg">failed</span>
                 )}
               </li>
             ))}
           </ul>
           {lastResult.errors && (
-            <p className="text-status-orange text-xs">
+            <p className="text-status-orangeFg text-xs">
               חלק מהטבלאות נכשלו — ראה פירוט מעל. ייתכן שצריך לרוץ שוב.
             </p>
           )}
@@ -264,7 +264,7 @@ export function ResetData() {
                 id="reset-confirm-title"
                 className="flex items-center gap-2"
               >
-                <AlertTriangle className="w-5 h-5 text-status-red" />
+                <AlertTriangle className="w-5 h-5 text-status-redFg" />
                 {active.modalTitle}
               </Heading>
               <Button
@@ -289,7 +289,7 @@ export function ResetData() {
                 <ul className="text-xs space-y-0.5">
                   {active.tablesShown.map((t) => (
                     <li key={t} dir="ltr">
-                      <code className="text-status-red">{t}</code>
+                      <code className="text-status-redFg">{t}</code>
                     </li>
                   ))}
                 </ul>
@@ -299,7 +299,7 @@ export function ResetData() {
                 <ul className="text-xs space-y-0.5">
                   {PROTECTED_TABLES.map((t) => (
                     <li key={t} dir="ltr">
-                      <code className="text-status-green">{t}</code>
+                      <code className="text-status-greenFg">{t}</code>
                       {t === 'stores' && (
                         <span className="text-ink-secondary" dir="rtl">
                           {' '}— 3 החנויות שלך
@@ -319,7 +319,7 @@ export function ResetData() {
                   ))}
                   {active.preserves && (
                     <li dir="ltr">
-                      <code className="text-status-green">{active.preserves}</code>
+                      <code className="text-status-greenFg">{active.preserves}</code>
                       <span className="text-ink-secondary" dir="rtl">
                         {' '}— הוצאות ידניות (במצב חלקי)
                       </span>
@@ -333,7 +333,7 @@ export function ResetData() {
                   הקלד את הטוקן הבא בדיוק כדי לאשר:
                 </span>
                 <code
-                  className="block bg-glass-2 border border-glass-edge rounded px-2 py-1 text-xs text-status-orange mb-2"
+                  className="block bg-glass-2 border border-glass-edge rounded px-2 py-1 text-xs text-status-orangeFg mb-2"
                   dir="ltr"
                 >
                   {CONFIRM_TOKEN_FOR_SCOPE[active.scope]}
@@ -350,7 +350,7 @@ export function ResetData() {
               </label>
 
               {error && (
-                <p className="text-status-red text-sm mb-3" role="alert">
+                <p className="text-status-redFg text-sm mb-3" role="alert">
                   {error}
                 </p>
               )}

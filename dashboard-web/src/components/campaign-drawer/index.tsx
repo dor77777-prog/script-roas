@@ -674,7 +674,7 @@ export function CampaignDrawer({
               <Heading level="panel" className="inline-flex items-center gap-1.5">
                 🏪 חנות בעלת הקמפיין
                 {isUnmapped && (
-                  <span className="text-[10px] font-medium text-status-orange">
+                  <span className="text-[10px] font-medium text-status-orangeFg">
                     (לא ממופה · ברירת מחדל uzoshop)
                   </span>
                 )}
@@ -722,7 +722,7 @@ export function CampaignDrawer({
               <option value="usmile360">360usmile</option>
             </NativeSelect>
             {!isUnmapped && currentValue !== storeId && (
-              <p className="text-[11px] text-status-orange mt-2 inline-flex items-start gap-1">
+              <p className="text-[11px] text-status-orangeFg mt-2 inline-flex items-start gap-1">
                 <AlertTriangle size={11} className="shrink-0 mt-0.5" aria-hidden />
                 <span>מיפוי המוצרים למטה כבר מציג את {currentValue}. שאר הפאנלים בכרטיסייה הזו עדיין מציגים נתונים של {storeId} עד שcron-live-heavy יכתוב מחדש (עד 30 דק׳).</span>
               </p>

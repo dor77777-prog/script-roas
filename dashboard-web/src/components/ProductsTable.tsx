@@ -441,9 +441,9 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
         * rows: [] + error on failure so SWR consumers stay consistent. */}
       {(error || data?.error) && (
         <div className="m-4 rounded-lg bg-status-redBg border border-status-red p-3 flex items-start gap-2 text-sm">
-          <AlertCircle className="text-status-red shrink-0" size={18} />
+          <AlertCircle className="text-status-redFg shrink-0" size={18} />
           <div>
-            <div className="font-semibold text-status-red">שגיאה בטעינת המוצרים</div>
+            <div className="font-semibold text-status-redFg">שגיאה בטעינת המוצרים</div>
             <div className="text-ink-secondary text-xs mt-1">
               {error ? (error as Error).message : data?.error}
             </div>
@@ -528,7 +528,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                       <HelpTooltip content="הכנסה אחרי הנחות והחזרים">
                         <div className="hidden md:block">
                           <span className="text-ink-muted text-[10px] sm:text-xs me-1">נטו</span>
-                          <span className="font-semibold text-status-green">
+                          <span className="font-semibold text-status-greenFg">
                             {fmtMoney(bucket.totalNetRevenue)}
                           </span>
                         </div>
@@ -628,7 +628,7 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                                       className={cn(
                                         'font-medium',
                                         p.netRevenue < p.revenue
-                                          ? 'text-status-green'
+                                          ? 'text-status-greenFg'
                                           : 'text-ink',
                                       )}
                                     >
@@ -656,10 +656,10 @@ export function ProductsTable({ range, store: globalStore, stores }: Props) {
                                           <span
                                             className={cn(
                                               'font-medium',
-                                              margin >= 0.95 && 'text-status-green',
+                                              margin >= 0.95 && 'text-status-greenFg',
                                               margin >= 0.8 && margin < 0.95 && 'text-ink',
-                                              margin < 0.8 && 'text-status-orange',
-                                              margin < 0.5 && 'text-status-red',
+                                              margin < 0.8 && 'text-status-orangeFg',
+                                              margin < 0.5 && 'text-status-redFg',
                                             )}
                                           >
                                             {pctStr}

@@ -14,7 +14,7 @@
  * Badge.tsx, FreshnessChip.tsx, InsightCard.tsx, and CampaignDrawerStatusSection.
  *
  * NOTE: AdSetTable.tsx previously kept a DIFFERENT TONE_BG variant that used
- * `text-status-red` (not `text-status-redFg`) and `text-ink-muted` (not
+ * `text-status-redFg` (not `text-status-redFg`) and `text-ink-muted` (not
  * `text-ink`) for gray. AdSetTable now imports ROAS_TONE_BG directly so the
  * canonical `*Fg` pattern is applied consistently across all ROAS cells.
  */
@@ -35,10 +35,10 @@ import { formatNumber } from '@/lib/utils';
  * `RoasBadge` / the inline badge span in each table). Thresholds unchanged.
  */
 const ROAS_BG: Record<string, string> = {
-  red:    'bg-status-red text-accent-fg',
-  orange: 'bg-status-orange text-accent-fg',
-  green:  'bg-status-green text-accent-fg',
-  blue:   'bg-status-blue text-accent-fg',
+  red:    'bg-status-redBtn text-accent-fg',
+  orange: 'bg-status-orangeBtn text-accent-fg',
+  green:  'bg-status-greenBtn text-accent-fg',
+  blue:   'bg-status-blueBtn text-accent-fg',
   gray:   '',
 };
 
@@ -71,10 +71,10 @@ export function roasCell(
  * neutral chip. Both consumers wrap the value in a rounded badge span.
  */
 export const ROAS_TONE_BG: Record<string, string> = {
-  red:    'bg-status-red text-accent-fg',
-  orange: 'bg-status-orange text-accent-fg',
-  green:  'bg-status-green text-accent-fg',
-  blue:   'bg-status-blue text-accent-fg',
+  red:    'bg-status-redBtn text-accent-fg',
+  orange: 'bg-status-orangeBtn text-accent-fg',
+  green:  'bg-status-greenBtn text-accent-fg',
+  blue:   'bg-status-blueBtn text-accent-fg',
   gray:   'bg-glass-2 text-ink',
 };
 

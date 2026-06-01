@@ -91,7 +91,7 @@ export function Filters({ filters, stores, onChange }: Props) {
         <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
           {/* Label (anchor on the right under RTL) */}
           <div className="flex items-center gap-1.5 text-[11px] sm:text-xs font-medium text-ink-secondary tracking-wide whitespace-nowrap">
-            <Zap size={12} className="text-status-orange fill-status-orange" />
+            <Zap size={12} className="text-status-orangeFg fill-status-orange" />
             טווח מהיר
           </div>
 

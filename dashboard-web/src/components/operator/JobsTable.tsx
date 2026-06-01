@@ -151,7 +151,7 @@ export function JobsTable() {
     // route module itself failed to load. Render the raw error string
     // (already client-side, no exfiltration concern) for ops triage.
     return (
-      <p className="text-status-red text-sm">
+      <p className="text-status-redFg text-sm">
         שגיאה בטעינת ריצות: {error instanceof Error ? error.message : String(error)}
       </p>
     );
@@ -161,7 +161,7 @@ export function JobsTable() {
     // SyncIndicator degraded-state pattern — non-blocking, sanitized
     // Hebrew copy from userFacingError on the server.
     return (
-      <p className="text-status-orange text-sm flex items-center gap-1">
+      <p className="text-status-orangeFg text-sm flex items-center gap-1">
         <AlertCircle className="w-4 h-4" />
         {data.error}
       </p>
@@ -217,7 +217,7 @@ export function JobsTable() {
                   onClick={() =>
                     setExpandedId(expandedId === run.run_id ? null : run.run_id)
                   }
-                  className="h-auto p-0 text-xs text-status-blue"
+                  className="h-auto p-0 text-xs text-status-blueFg"
                   aria-expanded={expandedId === run.run_id}
                   aria-controls={`run-output-${run.run_id}`}
                 >

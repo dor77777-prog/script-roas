@@ -89,8 +89,8 @@ const valueVariants = cva('tabular-nums leading-tight', {
     },
     accent: {
       neutral:   'text-ink',
-      positive:  'text-status-green',
-      negative:  'text-status-red',
+      positive:  'text-status-greenFg',
+      negative:  'text-status-redFg',
       attention: 'text-accent',
     },
   },

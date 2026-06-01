@@ -818,7 +818,7 @@ function DeltaLine({
         // `.glass[data-band]:not([data-band="gray"]):not([data-band-strength="muted"]) .hero-delta`.
         'hero-delta',
         'flex items-baseline gap-1 tabular-nums',
-        positive ? 'text-status-green' : 'text-status-red',
+        positive ? 'text-status-greenFg' : 'text-status-redFg',
         className,
       )}
     >

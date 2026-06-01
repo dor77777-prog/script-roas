@@ -57,7 +57,7 @@ const SEVERITY_META: Record<
   critical: {
     label: 'דורש פעולה מיידית',
     icon: <AlertOctagon size={16} />,
-    color: 'text-status-red',
+    color: 'text-status-redFg',
     bg: 'bg-status-redBg',
     border: 'border-status-red',
     badge: 'bg-status-redBg text-status-redFg',
@@ -81,7 +81,7 @@ const SEVERITY_META: Record<
   positive: {
     label: 'חיובי',
     icon: <Trophy size={16} />,
-    color: 'text-status-green',
+    color: 'text-status-greenFg',
     bg: 'bg-status-greenBg',
     border: 'border-status-green',
     badge: 'bg-status-greenBg text-status-greenFg',
@@ -613,7 +613,7 @@ function InsightBoardRow({
         onClick={() => onMark(insight, 'done')}
         className={cn(
           'gap-1 px-2 py-1 h-auto text-[11px] font-medium',
-          'text-ink-secondary hover:text-status-green hover:border-status-green hover:bg-status-greenBg',
+          'text-ink-secondary hover:text-status-greenFg hover:border-status-green hover:bg-status-greenBg',
         )}
         title="סמן שטיפלתי בזה — יוסתר ל-7 ימים, יחזור אם הבעיה תחזור"
       >

@@ -241,7 +241,7 @@ export function GoalTracker({ data }: Props) {
     typeof pacing.status,
     { label: string; bg: string; color: string }
   > = {
-    ahead: { label: 'מקדים את היעד', bg: 'bg-status-greenBg', color: 'text-status-green' },
+    ahead: { label: 'מקדים את היעד', bg: 'bg-status-greenBg', color: 'text-status-greenFg' },
     'on-pace': { label: 'בקצב הנכון', bg: 'bg-accent-bg', color: 'text-accent' },
     behind: { label: 'מפגר מהיעד', bg: 'bg-status-warningBg', color: 'text-status-warningFg' },
     unknown: { label: '—', bg: 'bg-glass-2', color: 'text-ink-muted' },

@@ -378,7 +378,7 @@ export function CampaignDrawerDaily({
                               {prevDeltaPct != null && (
                                 <span className={cn(
                                   'ms-1.5 text-[10px] font-semibold',
-                                  prevDeltaPct < 0 ? 'text-status-green' : prevDeltaPct > 0 ? 'text-status-red' : 'text-ink-muted',
+                                  prevDeltaPct < 0 ? 'text-status-greenFg' : prevDeltaPct > 0 ? 'text-status-redFg' : 'text-ink-muted',
                                 )}>
                                   ({prevDeltaPct > 0 ? '+' : ''}{prevDeltaPct.toFixed(1)}%)
                                 </span>

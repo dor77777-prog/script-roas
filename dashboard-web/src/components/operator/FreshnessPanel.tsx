@@ -60,13 +60,13 @@ type StatusIconProps = { status: string };
 
 function StatusIcon({ status }: StatusIconProps) {
   if (status === 'success') {
-    return <CheckCircle2 size={14} className="text-status-green shrink-0" />;
+    return <CheckCircle2 size={14} className="text-status-greenFg shrink-0" />;
   }
   if (status === 'budget_skip') {
-    return <AlertCircle size={14} className="text-status-orange shrink-0" />;
+    return <AlertCircle size={14} className="text-status-orangeFg shrink-0" />;
   }
   // transient_error | auth_error | parse_error → red XCircle
-  return <XCircle size={14} className="text-status-red shrink-0" />;
+  return <XCircle size={14} className="text-status-redFg shrink-0" />;
 }
 
 function statusLabel(status: string): string {
@@ -81,9 +81,9 @@ function statusLabel(status: string): string {
 }
 
 function statusTextClass(status: string): string {
-  if (status === 'success') return 'text-status-green';
-  if (status === 'budget_skip') return 'text-status-orange';
-  return 'text-status-red';
+  if (status === 'success') return 'text-status-greenFg';
+  if (status === 'budget_skip') return 'text-status-orangeFg';
+  return 'text-status-redFg';
 }
 
 // ---------------------------------------------------------------------------
@@ -164,7 +164,7 @@ function FreshnessTableRow({ row }: { row: FreshnessRow }) {
           <StatusIcon status={row.status} />
           <span className="font-mono">{statusLabel(row.status)}</span>
           {row.budget_skip && row.status !== 'budget_skip' && (
-            <span className="ms-1 inline-flex items-center gap-0.5 text-status-orange">
+            <span className="ms-1 inline-flex items-center gap-0.5 text-status-orangeFg">
               <AlertCircle size={11} />
               <span className="text-2xs">budget_skip</span>
             </span>

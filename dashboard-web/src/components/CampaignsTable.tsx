@@ -1415,7 +1415,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
         {/* Optimized-mark counter + bulk-clear (only renders when something marked). */}
         {optimized.size > 0 && (
           <div className="flex items-center gap-1.5 text-[11px] sm:text-xs">
-            <CheckCircle2 size={13} className="text-status-green shrink-0" />
+            <CheckCircle2 size={13} className="text-status-greenFg shrink-0" />
             <span className="font-medium text-ink-secondary tabular-nums">
               {optimized.size} מסומנים
             </span>
@@ -1424,7 +1424,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
               variant="ghost"
               onClick={onClearAll}
               title="הסר את כל הסימונים"
-              className="h-auto px-1.5 py-0.5 text-[11px] sm:text-xs font-semibold text-ink-muted hover:text-status-red hover:bg-status-redBg"
+              className="h-auto px-1.5 py-0.5 text-[11px] sm:text-xs font-semibold text-ink-muted hover:text-status-redFg hover:bg-status-redBg"
             >
               נקה הכל
             </Button>
@@ -1664,7 +1664,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                               {prevDeltaPct != null && (
                                 <span className={cn(
                                   'ms-1.5 text-[10px] font-semibold',
-                                  prevDeltaPct < 0 ? 'text-status-green' : prevDeltaPct > 0 ? 'text-status-red' : 'text-ink-muted',
+                                  prevDeltaPct < 0 ? 'text-status-greenFg' : prevDeltaPct > 0 ? 'text-status-redFg' : 'text-ink-muted',
                                 )}>
                                   ({prevDeltaPct > 0 ? '+' : ''}{prevDeltaPct.toFixed(1)}%)
                                 </span>
@@ -1794,9 +1794,9 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       {/* Both SWR-thrown errors and the 200+data.error degraded path (#WR-06). */}
       {(error || data?.error) && (
         <div className="m-4 rounded-lg bg-status-redBg border border-status-red p-3 flex items-start gap-2 text-sm">
-          <AlertCircle className="text-status-red shrink-0" size={18} />
+          <AlertCircle className="text-status-redFg shrink-0" size={18} />
           <div>
-            <div className="font-semibold text-status-red">שגיאה בטעינת קמפיינים</div>
+            <div className="font-semibold text-status-redFg">שגיאה בטעינת קמפיינים</div>
             <div className="text-ink-secondary text-xs mt-1">
               {error ? (error as Error).message : data?.error}
             </div>
@@ -2356,7 +2356,7 @@ function AttributionGapPanel({
           <div
             className={cn(
               'text-base sm:text-lg font-bold tabular-nums mt-0.5',
-              gap.absGap >= 0 ? 'text-status-green' : 'text-status-red',
+              gap.absGap >= 0 ? 'text-status-greenFg' : 'text-status-redFg',
             )}
           >
             <span className="text-[10px] text-ink-muted font-medium ms-1">CAD</span>

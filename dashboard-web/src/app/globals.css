@@ -269,6 +269,20 @@
   --status-gray:   #828aae; --status-gray-bg: rgba(255,255,255,0.07); --status-gray-fg: #aab0cd;
   --status-warning: #f59e0b; --status-warning-bg: rgba(245,158,11,0.16); --status-warning-fg: #ffd08a;
 
+  /* A11y (2026-06-01): deepened on-hue status BUTTON backgrounds. The raw
+     --status-* hues fail WCAG-AA under WHITE button text (green 2.70 / red
+     3.56 / blue 3.67 / orange 2.14). These `-btn` variants deepen lightness
+     only (hue preserved) so white clears ≥4.5:1. Theme-independent values
+     (white is white in both themes); re-declared in [data-theme="light"] for
+     the themeParity guard. Used ONLY for text-bearing solid status buttons /
+     badges — dots, bars, glows, chip-bgs keep the original --status-* hue.
+       blue   white = 4.64   green  white = 4.64
+       red    white = 4.62   orange white = 4.64 */
+  --status-blue-btn:   #2a70e3;
+  --status-green-btn:  #008651;
+  --status-red-btn:    #d83649;
+  --status-orange-btn: #b25f00;
+
   /* Chart helper tokens (used by RoasChart axis grid + CPM-prev ghost line). */
   --chart-axis:     oklch(60% 0.015 250 / 0.6);
   --chart-cpm-prev: oklch(75% 0.15 75 / 0.6);
@@ -521,13 +535,32 @@
   --motion-freshness: 600ms ease-out;
 
   /* Status palette — INVERTED for light: pale tint -bg + dark -fg text.
-     Same hues as dark. base = mid signal; -fg on -bg clears 4.5:1. */
-  --status-red:    #ef4d5b; --status-red-bg: #ffe9ec; --status-red-fg: #d22c3c;
-  --status-orange: #f59e0b; --status-orange-bg: #fff3da; --status-orange-fg: #b45309;
-  --status-green:  #0fb37a; --status-green-bg: #effaf5; --status-green-fg: #0a8a5e;
-  --status-blue:   #3b82f6; --status-blue-bg: #e9f1ff; --status-blue-fg: #2563eb;
+     Same hues as dark. base = mid signal; -fg on -bg clears 4.5:1.
+     A11y (2026-06-01): the light `-fg` text tokens are deepened (hue
+     preserved) so each clears WCAG-AA ≥4.5:1 on BOTH white AND its own pale
+     `-bg` tint (an axe prod scan showed green-fg #0a8a5e at 4.09 on its own
+     #effaf5 bg and 4.37 on white — both failing; red-fg #d22c3c at 4.35 on
+     #ffe9ec — failing; orange/blue were ~4.55 borderline). Locked by
+     contrastGuard.test.ts (each light -fg vs white AND vs own -bg). New ratios:
+       red-fg    #c62333  white 5.69  bg 4.91
+       orange-fg #a04d08  white 5.90  bg 5.36
+       green-fg  #00734e  white 5.90  bg 5.52
+       blue-fg   #1f5fdb  white 5.65  bg 4.97 */
+  --status-red:    #ef4d5b; --status-red-bg: #ffe9ec; --status-red-fg: #c62333;
+  --status-orange: #f59e0b; --status-orange-bg: #fff3da; --status-orange-fg: #a04d08;
+  --status-green:  #0fb37a; --status-green-bg: #effaf5; --status-green-fg: #00734e;
+  --status-blue:   #3b82f6; --status-blue-bg: #e9f1ff; --status-blue-fg: #1f5fdb;
   --status-gray:   #949ab4; --status-gray-bg: #eef0f5; --status-gray-fg: #5a6076;
-  --status-warning: #f59e0b; --status-warning-bg: #fff3da; --status-warning-fg: #b45309;
+  --status-warning: #f59e0b; --status-warning-bg: #fff3da; --status-warning-fg: #a04d08;
+
+  /* A11y (2026-06-01): deepened on-hue status BUTTON backgrounds (light).
+     Theme-independent values — re-declared identically from :root so the
+     themeParity guard stays green and white clears ≥4.5:1 in both themes.
+     Used ONLY for text-bearing solid status buttons / badges. */
+  --status-blue-btn:   #2a70e3;
+  --status-green-btn:  #008651;
+  --status-red-btn:    #d83649;
+  --status-orange-btn: #b25f00;
 
   /* Chart helpers — axis / CPM-prev ghost darkened to read on light plot. */
   --chart-axis:     oklch(45% 0.02 250 / 0.55);

@@ -72,7 +72,7 @@ describe('Stat primitive', () => {
   it('accent="positive" tints value green; "attention" tints accent', () => {
     const { container, rerender } = render(<Stat label="x" value="y" accent="positive" />);
     const bdi = container.querySelector('bdi');
-    expect(bdi).toHaveClass('text-status-green');
+    expect(bdi).toHaveClass('text-status-greenFg');
     rerender(<Stat label="x" value="y" accent="attention" />);
     const bdi2 = container.querySelector('bdi');
     expect(bdi2).toHaveClass('text-accent');

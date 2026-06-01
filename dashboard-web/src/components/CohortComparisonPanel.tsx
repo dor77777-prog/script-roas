@@ -424,7 +424,7 @@ export function CohortComparisonPanel({
               size={14}
               className={cn(
                 cannibalizationAlerts[0].risk === 'high'
-                  ? 'text-status-red'
+                  ? 'text-status-redFg'
                   : cannibalizationAlerts[0].risk === 'medium'
                     ? 'text-status-warningFg'
                     : 'text-accent',

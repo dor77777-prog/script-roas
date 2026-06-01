@@ -121,8 +121,8 @@ export function DetailTable({ rows, bare = false }: DetailProps) {
                     <td
                       className={cn(
                         'px-3 py-2 text-end tabular-nums font-medium',
-                        r.hasCogs && r.netProfit >= 0 && 'text-status-green',
-                        r.hasCogs && r.netProfit < 0 && 'text-status-red',
+                        r.hasCogs && r.netProfit >= 0 && 'text-status-greenFg',
+                        r.hasCogs && r.netProfit < 0 && 'text-status-redFg',
                         !r.hasCogs && 'text-ink-muted',
                       )}
                     >

@@ -259,7 +259,7 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
                       className={cn(
                         'gap-1.5',
                         copied
-                          ? 'bg-status-greenBg text-status-green hover:bg-status-greenBg'
+                          ? 'bg-status-greenBg text-status-greenFg hover:bg-status-greenBg'
                           : '',
                       )}
                     >

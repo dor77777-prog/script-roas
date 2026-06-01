@@ -168,8 +168,8 @@ export function AdSetTable({
                       className={cn(
                         'w-7 h-7 rounded-full',
                         isOptimized
-                          ? 'text-status-green hover:bg-status-greenBg'
-                          : 'text-ink-muted hover:text-status-green hover:bg-status-greenBg',
+                          ? 'text-status-greenFg hover:bg-status-greenBg'
+                          : 'text-ink-muted hover:text-status-greenFg hover:bg-status-greenBg',
                       )}
                       title={isOptimized ? 'לחץ להסרת הסימון' : 'סמן כאופטימיזציה בוצעה'}
                       aria-label={isOptimized ? 'בטל סימון אופטימיזציה' : 'סמן כאופטימיזציה בוצעה'}
@@ -191,7 +191,7 @@ export function AdSetTable({
                       <span className="text-ink-muted">—</span>
                     )}
                   </td>
-                  <td className={cn('px-3 py-2 text-end tabular-nums', a.value > a.spend && 'text-status-green font-medium')}>
+                  <td className={cn('px-3 py-2 text-end tabular-nums', a.value > a.spend && 'text-status-greenFg font-medium')}>
                     {formatCurrency(a.value)}
                   </td>
                   <td className="px-3 py-2 text-center font-semibold tabular-nums">

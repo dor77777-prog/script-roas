@@ -75,11 +75,11 @@ function Row({
   const isWinner = variant === 'winner';
   const roasColor = isWinner
     ? campaign.roas >= 3
-      ? 'text-status-green'
-      : 'text-status-blue'
+      ? 'text-status-greenFg'
+      : 'text-status-blueFg'
     : campaign.roas < 1
-      ? 'text-status-red'
-      : 'text-status-orange';
+      ? 'text-status-redFg'
+      : 'text-status-orangeFg';
 
   // Verdict text. The leading directional arrow used to be a Unicode "→"
   // (U+2192 RIGHTWARDS ARROW). In an RTL Hebrew row the bidi algorithm
@@ -102,7 +102,7 @@ function Row({
         ? 'הקטן תקציב / אופטימיזציה'
         : 'בדוק מה רץ פה';
 
-  const verdictColor = isWinner ? 'text-status-green' : 'text-status-red';
+  const verdictColor = isWinner ? 'text-status-greenFg' : 'text-status-redFg';
 
   return (
     <li className="py-2.5 border-b border-glass-edge last:border-b-0">
@@ -204,7 +204,7 @@ export function CampaignsTopList({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
         {/* Winners — right column in RTL */}
         <div className="min-w-0">
-          <Heading as="h4" level="panel" className="flex items-center gap-1.5 text-xs sm:text-sm !text-status-green mb-2">
+          <Heading as="h4" level="panel" className="flex items-center gap-1.5 text-xs sm:text-sm !text-status-greenFg mb-2">
             <Trophy size={14} />
             מנצחים ({winnersCount})
           </Heading>
@@ -216,7 +216,7 @@ export function CampaignsTopList({
         </div>
         {/* Losers — left column in RTL */}
         <div className="min-w-0">
-          <Heading as="h4" level="panel" className="flex items-center gap-1.5 text-xs sm:text-sm !text-status-red mb-2">
+          <Heading as="h4" level="panel" className="flex items-center gap-1.5 text-xs sm:text-sm !text-status-redFg mb-2">
             <AlertTriangle size={14} />
             לתשומת לב ({losersCount})
           </Heading>

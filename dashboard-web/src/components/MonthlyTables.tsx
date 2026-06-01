@@ -189,7 +189,7 @@ export function MonthlyTables({ stores, globalStore, bare = false, year, month, 
 
   if (error) {
     return (
-      <div className={cn('px-4 sm:px-5 py-6 text-sm text-status-red', bare && 'border-b border-glass-edge')}>
+      <div className={cn('px-4 sm:px-5 py-6 text-sm text-status-redFg', bare && 'border-b border-glass-edge')}>
         שגיאה בטעינת הטבלאות החודשיות: {error instanceof Error ? error.message : String(error)}
       </div>
     );

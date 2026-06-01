@@ -680,7 +680,7 @@ export function CommandPalette({
                 </span>
               </div>
               <span className="inline-flex items-center gap-1">
-                <Sparkles size={10} className="text-status-warning" />
+                <Sparkles size={10} className="text-status-warningFg" />
                 {indexedFlat.length} תוצאות
               </span>
             </div>

@@ -44,45 +44,49 @@ describe('roasCell — normal path (revenue > 0)', () => {
   // the mockup, instead of the prior pale `bg-status-*Bg` full-cell tint.
   // Thresholds + band→tone mapping are UNCHANGED — only the color style.
   it('returns the SOLID band-tone badge class + formatted ROAS', () => {
-    // roas 3.2 → roasLabel → 'blue' tone → 'bg-status-blue text-accent-fg'
+    // A11y FINAL (2026-06-01): the solid ROAS badge now points at the deepened
+    // on-hue `-btn` token (white text fails AA on the raw --status-* hue), so
+    // the className is `bg-status-{c}Btn text-accent-fg`. Thresholds + band→tone
+    // mapping are UNCHANGED — only the deepened bg.
+    // roas 3.2 → roasLabel → 'blue' tone → 'bg-status-blueBtn text-accent-fg'
     const roas = 3.2;
     const revenue = 5000;
     const spend = 1500;
     const result = roasCell(roas, revenue, spend);
     const expectedTone = roasLabel(roas).tone;
     const expectedClass = {
-      red: 'bg-status-red text-accent-fg',
-      orange: 'bg-status-orange text-accent-fg',
-      green: 'bg-status-green text-accent-fg',
-      blue: 'bg-status-blue text-accent-fg',
+      red: 'bg-status-redBtn text-accent-fg',
+      orange: 'bg-status-orangeBtn text-accent-fg',
+      green: 'bg-status-greenBtn text-accent-fg',
+      blue: 'bg-status-blueBtn text-accent-fg',
       gray: '',
     }[expectedTone];
     expect(result.className).toBe(expectedClass);
     expect(result.text).toBe(formatNumber(roas));
   });
 
-  it('red-tone ROAS (e.g. 1.5) → solid bg-status-red text-accent-fg', () => {
+  it('red-tone ROAS (e.g. 1.5) → solid bg-status-redBtn text-accent-fg', () => {
     const result = roasCell(1.5, 1000, 700);
     expect(roasLabel(1.5).tone).toBe('red');
-    expect(result.className).toBe('bg-status-red text-accent-fg');
+    expect(result.className).toBe('bg-status-redBtn text-accent-fg');
   });
 
-  it('orange-tone ROAS (e.g. 2.3) → solid bg-status-orange text-accent-fg', () => {
+  it('orange-tone ROAS (e.g. 2.3) → solid bg-status-orangeBtn text-accent-fg', () => {
     const result = roasCell(2.3, 2000, 900);
     expect(roasLabel(2.3).tone).toBe('orange');
-    expect(result.className).toBe('bg-status-orange text-accent-fg');
+    expect(result.className).toBe('bg-status-orangeBtn text-accent-fg');
   });
 
-  it('green-tone ROAS (e.g. 2.9) → solid bg-status-green text-accent-fg', () => {
+  it('green-tone ROAS (e.g. 2.9) → solid bg-status-greenBtn text-accent-fg', () => {
     const result = roasCell(2.9, 2000, 700);
     expect(roasLabel(2.9).tone).toBe('green');
-    expect(result.className).toBe('bg-status-green text-accent-fg');
+    expect(result.className).toBe('bg-status-greenBtn text-accent-fg');
   });
 
-  it('blue-tone ROAS (e.g. 4.0) → solid bg-status-blue text-accent-fg', () => {
+  it('blue-tone ROAS (e.g. 4.0) → solid bg-status-blueBtn text-accent-fg', () => {
     const result = roasCell(4.0, 4000, 1000);
     expect(roasLabel(4.0).tone).toBe('blue');
-    expect(result.className).toBe('bg-status-blue text-accent-fg');
+    expect(result.className).toBe('bg-status-blueBtn text-accent-fg');
   });
 });
 
@@ -102,16 +106,18 @@ describe('ROAS_TONE_BG map', () => {
 
   it('each entry includes both a bg- and text- class', () => {
     // OPERATOR FIX (2026-06-01): non-gray tones are now SOLID badges
-    // (`bg-status-{c}` + white `text-accent-fg`), matching HealthScoreBadge +
-    // the mockup, instead of the prior pale `bg-status-*Bg` / `text-status-*Fg`.
+    // (white `text-accent-fg`), matching HealthScoreBadge + the mockup,
+    // instead of the prior pale `bg-status-*Bg` / `text-status-*Fg`.
+    // A11y FINAL (2026-06-01): the solid bg points at the deepened on-hue
+    // `-btn` token (white fails AA on the raw --status-* hue).
     for (const [tone, classes] of Object.entries(ROAS_TONE_BG)) {
       if (tone === 'gray') {
         // gray (no/low data) stays a quiet neutral chip: bg-glass-2 + text-ink
         expect(classes).toContain('bg-glass-2');
         expect(classes).toContain('text-ink');
       } else {
-        expect(classes, `ROAS_TONE_BG[${tone}] should have a solid bg-status-*`)
-          .toMatch(/bg-status-(red|orange|green|blue)\b/);
+        expect(classes, `ROAS_TONE_BG[${tone}] should have a solid bg-status-*Btn`)
+          .toMatch(/bg-status-(red|orange|green|blue)Btn\b/);
         expect(classes, `ROAS_TONE_BG[${tone}] should have white text-accent-fg`)
           .toContain('text-accent-fg');
       }

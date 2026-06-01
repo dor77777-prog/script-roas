@@ -109,7 +109,7 @@ function BucBlock({
       <div className="flex items-center justify-between mb-2">
         <span className="font-mono text-xs font-semibold">{title}</span>
         {eta > 0 && (
-          <span className="text-xs text-status-red">ETA חזרה {eta} דק׳</span>
+          <span className="text-xs text-status-redFg">ETA חזרה {eta} דק׳</span>
         )}
       </div>
       <ProgressBar label="call_count" pct={call} />

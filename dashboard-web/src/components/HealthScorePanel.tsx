@@ -30,11 +30,11 @@ import { useStoreAdAccounts } from '@/lib/hooks/useStoreAdAccounts';
 // a solid status band. `tone` colors only the label TEXT on the neutral card
 // surface, so it stays the legible status color (not a tint, not white).
 const GRADE_STYLES: Record<HealthGrade, { chip: string; ring: string; label: string; tone: string }> = {
-  A: { chip: 'bg-status-green text-accent-fg', ring: 'ring-status-green', label: 'מצוין', tone: 'text-status-green' },
-  B: { chip: 'bg-status-blue text-accent-fg', ring: 'ring-status-blue', label: 'בריא', tone: 'text-status-blue' },
-  C: { chip: 'bg-status-orange text-accent-fg', ring: 'ring-status-orange', label: 'גבולי', tone: 'text-status-orange' },
-  D: { chip: 'bg-status-red text-accent-fg', ring: 'ring-status-red', label: 'בעייתי', tone: 'text-status-red' },
-  F: { chip: 'bg-status-red text-accent-fg', ring: 'ring-status-red', label: 'כשל', tone: 'text-status-red' },
+  A: { chip: 'bg-status-greenBtn text-accent-fg', ring: 'ring-status-green', label: 'מצוין', tone: 'text-status-greenFg' },
+  B: { chip: 'bg-status-blueBtn text-accent-fg', ring: 'ring-status-blue', label: 'בריא', tone: 'text-status-blueFg' },
+  C: { chip: 'bg-status-orangeBtn text-accent-fg', ring: 'ring-status-orange', label: 'גבולי', tone: 'text-status-orangeFg' },
+  D: { chip: 'bg-status-redBtn text-accent-fg', ring: 'ring-status-red', label: 'בעייתי', tone: 'text-status-redFg' },
+  F: { chip: 'bg-status-redBtn text-accent-fg', ring: 'ring-status-red', label: 'כשל', tone: 'text-status-redFg' },
   unknown: { chip: 'bg-glass-2 text-ink-muted', ring: 'ring-glass-edge', label: 'מוקדם מדי', tone: 'text-ink-muted' },
 };
 

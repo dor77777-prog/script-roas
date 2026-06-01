@@ -208,7 +208,7 @@ export function ManualOverridesCrud() {
   }
   if (error) {
     return (
-      <p className="text-status-red text-sm">
+      <p className="text-status-redFg text-sm">
         שגיאה בטעינת הרשימה: {error instanceof Error ? error.message : String(error)}
       </p>
     );
@@ -216,7 +216,7 @@ export function ManualOverridesCrud() {
   // S-2 soft-fail surfaced as amber (non-blocking) — list is empty but the
   // page still renders. Same shape as SyncIndicator's degraded path.
   if (data?.error) {
-    return <p className="text-status-orange text-sm">{data.error}</p>;
+    return <p className="text-status-orangeFg text-sm">{data.error}</p>;
   }
 
   const rows = data?.rows ?? [];
@@ -305,7 +305,7 @@ export function ManualOverridesCrud() {
           {submitting ? 'מוסיף…' : 'הוסף'}
         </Button>
       </div>
-      {addError && <p className="text-status-red text-sm" role="alert">{addError}</p>}
+      {addError && <p className="text-status-redFg text-sm" role="alert">{addError}</p>}
 
       {/* Table view */}
       <div className="overflow-x-auto">
@@ -344,7 +344,7 @@ export function ManualOverridesCrud() {
                     size="icon"
                     onClick={() => setConfirmDelete(r)}
                     aria-label={`מחק שורה ${r.id}`}
-                    className="w-8 h-8 text-status-red hover:bg-status-redBg"
+                    className="w-8 h-8 text-status-redFg hover:bg-status-redBg"
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
@@ -387,7 +387,7 @@ export function ManualOverridesCrud() {
                 סכום: <span dir="ltr">{Number(confirmDelete.spend).toFixed(2)} {confirmDelete.currency}</span>
               </p>
               {deleteError && (
-                <p className="text-status-red text-sm mb-3" role="alert">
+                <p className="text-status-redFg text-sm mb-3" role="alert">
                   {deleteError}
                 </p>
               )}

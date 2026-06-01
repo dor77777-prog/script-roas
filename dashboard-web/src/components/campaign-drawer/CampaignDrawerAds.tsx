@@ -60,7 +60,7 @@ export function CampaignDrawerAds({ adSets, platform, onDrillAds }: CampaignDraw
         <p className="text-[11px] text-ink-muted leading-relaxed bg-glass-2/40 rounded-lg px-3 py-2 mb-3">
           נתוני מודעות נטענים לפי ad-set. בחר ad-set מהרשימה למטה כדי לפתוח את כל המודעות שלו.
           {!adDrillSupported && (
-            <span className="mt-1 inline-flex items-center gap-1 text-status-orange">
+            <span className="mt-1 inline-flex items-center gap-1 text-status-orangeFg">
               <AlertTriangle size={11} className="shrink-0" aria-hidden />
               {platform} לא חושף נתוני מודעות ברמה הזו (PMax / לא נתמך).
             </span>

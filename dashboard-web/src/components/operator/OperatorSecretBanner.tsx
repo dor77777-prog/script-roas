@@ -60,14 +60,14 @@ export function OperatorSecretBanner() {
   if (!stored) {
     return (
       <div className="rounded border border-status-orange bg-status-orangeBg p-3 space-y-2 text-sm">
-        <div className="flex items-center gap-2 text-status-orange font-medium">
+        <div className="flex items-center gap-2 text-status-orangeFg font-medium">
           <KeyRound className="w-4 h-4 shrink-0" />
           <span>הגדרת Operator Secret</span>
         </div>
         <p className="text-ink-secondary text-xs">
-          נדרש כאשר <code className="text-status-orange">OPERATOR_SECRET</code> מוגדר
+          נדרש כאשר <code className="text-status-orangeFg">OPERATOR_SECRET</code> מוגדר
           ב-Vercel; נשמר ב-localStorage של הדפדפן הזה. כל קריאות ה-API ל-
-          <code className="text-status-orange">/api/operator/*</code> יכלול את ה-secret
+          <code className="text-status-orangeFg">/api/operator/*</code> יכלול את ה-secret
           אוטומטית.
         </p>
         <div className="flex items-center gap-2">
@@ -101,7 +101,7 @@ export function OperatorSecretBanner() {
             variant="ghost"
             onClick={handleSave}
             disabled={!input.trim()}
-            className="h-auto bg-status-orange hover:opacity-90 text-accent-fg text-sm px-3 py-1"
+            className="h-auto bg-status-orangeBtn hover:opacity-90 text-accent-fg text-sm px-3 py-1"
           >
             שמור
           </Button>
@@ -114,10 +114,10 @@ export function OperatorSecretBanner() {
   return (
     <div className="rounded border border-glass-edge bg-glass-1 px-3 py-2 flex items-center justify-between text-xs text-ink-secondary">
       <div className="flex items-center gap-1.5">
-        <CheckCircle2 className="w-3.5 h-3.5 text-status-green shrink-0" />
+        <CheckCircle2 className="w-3.5 h-3.5 text-status-greenFg shrink-0" />
         <span>Operator secret מוגדר ב-localStorage.</span>
         {saved && (
-          <span className="text-status-green font-medium">נשמר!</span>
+          <span className="text-status-greenFg font-medium">נשמר!</span>
         )}
       </div>
       <div className="flex items-center gap-3">
@@ -153,7 +153,7 @@ export function OperatorSecretBanner() {
               variant="link"
               onClick={handleSave}
               disabled={!input.trim()}
-              className="h-auto p-0 text-status-orange hover:opacity-90"
+              className="h-auto p-0 text-status-orangeFg hover:opacity-90"
             >
               שמור
             </Button>
@@ -172,7 +172,7 @@ export function OperatorSecretBanner() {
               type="button"
               variant="link"
               onClick={() => setShowInput(true)}
-              className="h-auto p-0 text-status-orange hover:opacity-90"
+              className="h-auto p-0 text-status-orangeFg hover:opacity-90"
             >
               החלף secret
             </Button>
@@ -180,7 +180,7 @@ export function OperatorSecretBanner() {
               type="button"
               variant="link"
               onClick={handleClear}
-              className="h-auto p-0 text-status-red hover:opacity-90"
+              className="h-auto p-0 text-status-redFg hover:opacity-90"
             >
               נקה
             </Button>

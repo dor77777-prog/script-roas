@@ -120,7 +120,7 @@ function ChangeIcon({
   if (kind === 'paused') {
     return (
       <span
-        className="grid place-items-center w-7 h-7 rounded-lg bg-status-warningBg text-status-warning shrink-0"
+        className="grid place-items-center w-7 h-7 rounded-lg bg-status-warningBg text-status-warningFg shrink-0"
         aria-hidden
       >
         <Pause size={13} />
@@ -130,7 +130,7 @@ function ChangeIcon({
   if (kind === 'enabled') {
     return (
       <span
-        className="grid place-items-center w-7 h-7 rounded-lg bg-status-greenBg text-status-green shrink-0"
+        className="grid place-items-center w-7 h-7 rounded-lg bg-status-greenBg text-status-greenFg shrink-0"
         aria-hidden
       >
         <Play size={13} />
@@ -186,7 +186,7 @@ function ChangeIcon({
   // Unknown platform → neutral warning tile.
   return (
     <span
-      className="grid place-items-center w-7 h-7 rounded-lg bg-status-warningBg text-status-warning shrink-0"
+      className="grid place-items-center w-7 h-7 rounded-lg bg-status-warningBg text-status-warningFg shrink-0"
       aria-hidden
     >
       <AlertTriangle size={13} />
@@ -253,13 +253,13 @@ export function ActivityFeed({
 
       <div className="flex flex-col">
         {error && (
-          <div className="px-5 py-6 text-center text-xs text-status-red">
+          <div className="px-5 py-6 text-center text-xs text-status-redFg">
             טעינת פעילות אחרונה נכשלה.
           </div>
         )}
 
         {!error && data?.error && (
-          <div className="px-5 py-6 text-center text-xs text-status-warning">
+          <div className="px-5 py-6 text-center text-xs text-status-warningFg">
             {data.error}
           </div>
         )}

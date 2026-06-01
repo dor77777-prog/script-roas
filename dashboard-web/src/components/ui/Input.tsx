@@ -128,7 +128,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           <p
             id={errorId}
             role="alert"
-            className="mt-1 text-[11px] font-medium text-status-red"
+            className="mt-1 text-[11px] font-medium text-status-redFg"
           >
             {errorMessage}
           </p>

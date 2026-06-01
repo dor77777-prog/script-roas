@@ -233,3 +233,70 @@ describe('contrast guard — accent BUTTON bg carries white at WCAG-AA (both the
     }
   }
 });
+
+/**
+ * A11y FINAL pass (2026-06-01) — STATUS-as-text uses the tuned `-fg` token.
+ *
+ * An axe prod scan flagged the RAW `--status-*` hues used as small TEXT
+ * (`text-status-green` = #0fb37a on white = 2.70, etc.). The fix swapped those
+ * call sites to `text-status-Xfg`, which pairs the tuned `-fg` token. For the
+ * swap to be honest, every LIGHT `-fg` text token must clear WCAG-AA ≥4.5:1 on
+ * BOTH white (raw-hue-on-white sites) AND its own pale `-bg` tint (colored-text
+ * on tinted-chip sites). The axe scan showed green-fg #0a8a5e (4.09 on its own
+ * #effaf5 bg) and red-fg #d22c3c (4.35 on #ffe9ec) BELOW AA — both were
+ * deepened (hue preserved). The DARK `-fg` tokens are light-on-dark and clear
+ * AA comfortably on their composited bgs (7.5–10.7:1), so only the LIGHT theme
+ * is gated here. `gray` is a neutral, not a status hue; included for parity.
+ */
+const STATUS_FG = ['red', 'orange', 'green', 'blue', 'gray', 'warning'] as const;
+const LIGHT_BLK = block('light');
+
+describe('contrast guard — LIGHT status `-fg` text clears WCAG-AA on white AND its own `-bg`', () => {
+  for (const s of STATUS_FG) {
+    it(`light: --status-${s}-fg on #ffffff ≥ 4.5:1`, () => {
+      const fg = hexOf(`--status-${s}-fg`, LIGHT_BLK);
+      const ratio = wcagRatio(fg, '#ffffff');
+      expect(
+        ratio,
+        `--status-${s}-fg ${fg} on #ffffff = ${ratio.toFixed(2)}:1 (need ≥4.5)`,
+      ).toBeGreaterThanOrEqual(4.5);
+    });
+    it(`light: --status-${s}-fg on --status-${s}-bg ≥ 4.5:1`, () => {
+      const fg = hexOf(`--status-${s}-fg`, LIGHT_BLK);
+      const bg = hexOf(`--status-${s}-bg`, LIGHT_BLK); // light -bg are #rrggbb tints
+      const ratio = wcagRatio(fg, bg);
+      expect(
+        ratio,
+        `--status-${s}-fg ${fg} on --status-${s}-bg ${bg} = ${ratio.toFixed(2)}:1 (need ≥4.5)`,
+      ).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+});
+
+/**
+ * A11y FINAL pass (2026-06-01) — STATUS/ACCENT BUTTON bg carries white at AA.
+ *
+ * Solid status buttons / grade chips render WHITE (`--accent-fg`) on a status
+ * fill. The raw `--status-*` hues fail under white (green 2.70 / red 3.56 /
+ * blue 3.67 / orange 2.14). The text-bearing buttons now point at deepened
+ * on-hue `-btn` tokens (hue preserved, lightness deepened). These are
+ * theme-independent (white is white in both themes) but declared in both
+ * blocks; assert in both for completeness. Non-text status fills (dots, bars,
+ * glows) keep the original `--status-*` hue and are intentionally NOT gated.
+ */
+const STATUS_BTN = ['blue', 'green', 'red', 'orange'] as const;
+
+describe('contrast guard — status BUTTON bg carries white at WCAG-AA (both themes)', () => {
+  for (const theme of THEMES) {
+    for (const s of STATUS_BTN) {
+      it(`${theme.name}: white on --status-${s}-btn ≥ 4.5:1`, () => {
+        const bg = hexOf(`--status-${s}-btn`, theme.blk);
+        const ratio = wcagRatio('#ffffff', bg);
+        expect(
+          ratio,
+          `white on --status-${s}-btn ${bg} = ${ratio.toFixed(2)}:1 (need ≥4.5)`,
+        ).toBeGreaterThanOrEqual(4.5);
+      });
+    }
+  }
+});

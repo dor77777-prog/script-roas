@@ -214,7 +214,7 @@ export function AnnotationsPanel({ range, store }: Props) {
                           size="icon"
                           onClick={() => remove(a.id)}
                           aria-label="מחק"
-                          className="w-8 h-8 text-ink-muted hover:text-status-red hover:bg-status-redBg"
+                          className="w-8 h-8 text-ink-muted hover:text-status-redFg hover:bg-status-redBg"
                         >
                           <Trash2 size={13} />
                         </Button>

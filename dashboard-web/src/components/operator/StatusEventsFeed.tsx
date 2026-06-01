@@ -36,13 +36,13 @@ function relativeHebrew(iso: string): string {
 
 function kindIcon(kind: string) {
   const size = 14;
-  if (kind === 'paused') return <Pause size={size} className="text-status-orange" />;
-  if (kind === 'enabled') return <Play size={size} className="text-status-green" />;
-  if (kind === 'first_seen') return <Sparkles size={size} className="text-status-blue" />;
+  if (kind === 'paused') return <Pause size={size} className="text-status-orangeFg" />;
+  if (kind === 'enabled') return <Play size={size} className="text-status-greenFg" />;
+  if (kind === 'first_seen') return <Sparkles size={size} className="text-status-blueFg" />;
   if (kind === 'archived' || kind === 'removed') return <Archive size={size} className="text-ink-secondary" />;
   if (kind === 'effective_only') return <Eye size={size} className="text-ink-secondary" />;
   if (kind === 'delivery_only') return <MousePointerClick size={size} className="text-ink-secondary" />;
-  return <AlertCircle size={size} className="text-status-red" />;
+  return <AlertCircle size={size} className="text-status-redFg" />;
 }
 
 export function StatusEventsFeed() {
