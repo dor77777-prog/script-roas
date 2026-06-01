@@ -93,12 +93,18 @@ export async function verifyAuthToken(
 /**
  * Sanitize a `next` redirect target to a safe same-origin path. Prevents
  * open-redirect: only relative paths beginning with a single `/` are allowed.
- * `//evil.com` (protocol-relative) and absolute URLs (`https://…`) collapse
- * to `/`.
+ * `//evil.com` (protocol-relative), `/\evil.com` (the WHATWG URL parser
+ * normalizes a leading backslash to `/`, so `/\evil.com` resolves to the
+ * protocol-relative `//evil.com` → off-site), and absolute URLs (`https://…`)
+ * all collapse to `/`.
  */
 export function sanitizeNext(next: string | null | undefined): string {
   if (!next || typeof next !== 'string') return '/';
-  if (!next.startsWith('/') || next.startsWith('//')) return '/';
+  // Reject protocol-relative (`//`) and backslash-bypass (`/\`) prefixes —
+  // both navigate off-origin once the browser's URL parser normalizes them.
+  if (!next.startsWith('/') || next.startsWith('//') || next.startsWith('/\\')) {
+    return '/';
+  }
   return next;
 }
 

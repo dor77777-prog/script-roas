@@ -117,6 +117,11 @@ describe('sanitizeNext', () => {
     expect(sanitizeNext('//evil.com/path')).toBe('/');
   });
 
+  it('collapses a backslash-bypass prefix to / (URL parser normalizes \\ → /)', () => {
+    expect(sanitizeNext('/\\evil.com')).toBe('/');
+    expect(sanitizeNext('/\\/evil.com')).toBe('/');
+  });
+
   it('collapses an absolute URL to /', () => {
     expect(sanitizeNext('https://evil')).toBe('/');
     expect(sanitizeNext('http://evil.com/x')).toBe('/');
