@@ -143,6 +143,8 @@ const config: Config = {
           orangeBg:  'var(--status-orange-bg)',
           orangeFg:  'var(--status-orange-fg)',
           orangeBtn: 'var(--status-orange-btn)',
+          orangeSolid:   'var(--status-orange-solid)',
+          orangeSolidFg: 'var(--status-orange-solid-fg)',
           green:     'var(--status-green)',
           greenBg:   'var(--status-green-bg)',
           greenFg:   'var(--status-green-fg)',

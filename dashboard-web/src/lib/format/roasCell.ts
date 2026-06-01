@@ -36,7 +36,10 @@ import { formatNumber } from '@/lib/utils';
  */
 const ROAS_BG: Record<string, string> = {
   red:    'bg-status-redBtn text-accent-fg',
-  orange: 'bg-status-orangeBtn text-accent-fg',
+  // Operator-locked bright #EF9331 ROAS orange (2026-06-01) — same orange as the
+  // band cards. White fails AA on a bright orange, so the badge carries a DARK
+  // on-color (#2b1900 = 7.16:1). Distinct from the deep --status-orange-btn.
+  orange: 'bg-status-orangeSolid text-status-orangeSolidFg',
   green:  'bg-status-greenBtn text-accent-fg',
   blue:   'bg-status-blueBtn text-accent-fg',
   gray:   '',
@@ -72,7 +75,8 @@ export function roasCell(
  */
 export const ROAS_TONE_BG: Record<string, string> = {
   red:    'bg-status-redBtn text-accent-fg',
-  orange: 'bg-status-orangeBtn text-accent-fg',
+  // Operator-locked bright #EF9331 ROAS orange (dark on-text for AA) — see ROAS_BG.
+  orange: 'bg-status-orangeSolid text-status-orangeSolidFg',
   green:  'bg-status-greenBtn text-accent-fg',
   blue:   'bg-status-blueBtn text-accent-fg',
   gray:   'bg-glass-2 text-ink',

@@ -24,7 +24,7 @@ import { Button } from '@/components/ui/Button';
 const GRADE_STYLES: Record<HealthGrade, { chip: string; ring: string; label: string }> = {
   A: { chip: 'bg-status-greenBtn text-accent-fg', ring: 'ring-status-green', label: 'מצוין' },
   B: { chip: 'bg-status-blueBtn text-accent-fg', ring: 'ring-status-blue', label: 'בריא' },
-  C: { chip: 'bg-status-orangeBtn text-accent-fg', ring: 'ring-status-orange', label: 'גבולי' },
+  C: { chip: 'bg-status-orangeSolid text-status-orangeSolidFg', ring: 'ring-status-orange', label: 'גבולי' },
   D: { chip: 'bg-status-redBtn text-accent-fg', ring: 'ring-status-red', label: 'בעייתי' },
   F: { chip: 'bg-status-redBtn text-accent-fg', ring: 'ring-status-red', label: 'כשל' },
   unknown: { chip: 'bg-glass-2 text-ink-muted', ring: 'ring-glass-edge', label: 'מוקדם מדי' },

@@ -897,25 +897,29 @@ function HomeTab({
   // control); for now the preset label reads naturally.
   const heroRangeLabel = rangeLabel;
 
-  // B3 (mobile) — collapsing sticky ROAS summary headline. Fed from the SAME
-  // chartProp the RoasTargetChart uses so the two never disagree. deltaPct is
+  // B3 (mobile) — collapsing sticky ROAS summary headline. Fed from the MAIN
+  // page range (the same `filtered.curAgg` the hero's ROAS uses), NOT the
+  // RoasTargetChart's independent range — so it MATCHES the hero and UPDATES
+  // when the operator changes the top range selector. (Before: it read the
+  // chart's 30-day chartProp, so it sat stuck at the chart value regardless of
+  // the page selection while its caption said the page range.) deltaPct is
   // current-vs-prev ROAS %, null-guarded so there's no NaN and no chip when the
   // previous period is missing (or its ROAS is 0).
   const stickyDeltaPct = useMemo(() => {
-    const cur = chartProp.kpis.roas;
-    const prev = chartProp.prevPeriod?.roas;
+    const cur = filtered.curAgg.roas;
+    const prev = prevAggFromPrevData?.roas;
     if (prev == null || prev === 0 || Number.isNaN(prev) || Number.isNaN(cur)) {
       return null;
     }
     return ((cur - prev) / prev) * 100;
-  }, [chartProp]);
+  }, [filtered.curAgg, prevAggFromPrevData]);
 
   return (
     <div className="space-y-4 sm:space-y-5 animate-fade-in-up">
       {/* B3 — MOBILE-ONLY collapsing sticky ROAS summary. Pinned to the top of
           the Home content (z-20, below the app header at z-30). Hidden at md+. */}
       <MobileStickyRoas
-        roas={chartProp.kpis.roas}
+        roas={heroPeriod.roas}
         target={3.0}
         deltaPct={stickyDeltaPct}
         rangeLabel={rangeLabel}

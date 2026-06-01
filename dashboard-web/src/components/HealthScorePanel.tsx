@@ -32,7 +32,7 @@ import { useStoreAdAccounts } from '@/lib/hooks/useStoreAdAccounts';
 const GRADE_STYLES: Record<HealthGrade, { chip: string; ring: string; label: string; tone: string }> = {
   A: { chip: 'bg-status-greenBtn text-accent-fg', ring: 'ring-status-green', label: 'מצוין', tone: 'text-status-greenFg' },
   B: { chip: 'bg-status-blueBtn text-accent-fg', ring: 'ring-status-blue', label: 'בריא', tone: 'text-status-blueFg' },
-  C: { chip: 'bg-status-orangeBtn text-accent-fg', ring: 'ring-status-orange', label: 'גבולי', tone: 'text-status-orangeFg' },
+  C: { chip: 'bg-status-orangeSolid text-status-orangeSolidFg', ring: 'ring-status-orange', label: 'גבולי', tone: 'text-status-orangeFg' },
   D: { chip: 'bg-status-redBtn text-accent-fg', ring: 'ring-status-red', label: 'בעייתי', tone: 'text-status-redFg' },
   F: { chip: 'bg-status-redBtn text-accent-fg', ring: 'ring-status-red', label: 'כשל', tone: 'text-status-redFg' },
   unknown: { chip: 'bg-glass-2 text-ink-muted', ring: 'ring-glass-edge', label: 'מוקדם מדי', tone: 'text-ink-muted' },

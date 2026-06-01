@@ -123,11 +123,26 @@ describe('contrast guard — --on-band-* (white) clears WCAG-AA on the DEEP card
  * band numbers. The ink is an opaque `rgba(255,255,255,1)`, so we composite (a=1 →
  * pure white) and assert it on every `--card-band-*` surface in BOTH themes.
  */
-describe('contrast guard — --spark-band-ink clears WCAG-AA on the DEEP card surface (both themes)', () => {
+// The BRIGHT orange band (#EF9331, operator-locked 2026-06-01) overrides
+// --spark-band-ink to a DARK value, scoped to `.glass[data-band="orange"]`, so a
+// white spark wouldn't be legible on the bright surface. Read THAT scoped value
+// for the orange band (the global --spark-band-ink stays white for the deep bands).
+function orangeScopedHex(varName: string): string {
+  const m = css.match(
+    new RegExp(`\\.glass\\[data-band="orange"\\]\\s*\\{[^}]*?(?<![\\w-])${varName}\\s*:\\s*(#[0-9a-fA-F]{6})`),
+  );
+  if (!m) throw new Error(`orange-scoped ${varName} not found in globals.css`);
+  return m[1];
+}
+
+describe('contrast guard — --spark-band-ink clears WCAG-AA on the card surface (both themes)', () => {
   for (const theme of THEMES) {
     for (const band of BANDS) {
       it(`${theme.name}: --spark-band-ink on --card-band-${band} ≥ 4.5:1`, () => {
-        const ink = effectiveSolid(rgbaOf('--spark-band-ink', theme.blk), '#000000');
+        // Orange is a BRIGHT band → dark scoped spark ink; the rest use the global white ink.
+        const ink = band === 'orange'
+          ? orangeScopedHex('--spark-band-ink')
+          : effectiveSolid(rgbaOf('--spark-band-ink', theme.blk), '#000000');
         const bg = hexOf(`--card-band-${band}`, theme.blk);
         const ratio = wcagRatio(ink, bg);
         expect(

@@ -56,7 +56,8 @@ describe('roasCell — normal path (revenue > 0)', () => {
     const expectedTone = roasLabel(roas).tone;
     const expectedClass = {
       red: 'bg-status-redBtn text-accent-fg',
-      orange: 'bg-status-orangeBtn text-accent-fg',
+      // Bright #EF9331 ROAS orange (operator-locked 2026-06-01) — dark on-text.
+      orange: 'bg-status-orangeSolid text-status-orangeSolidFg',
       green: 'bg-status-greenBtn text-accent-fg',
       blue: 'bg-status-blueBtn text-accent-fg',
       gray: '',
@@ -71,10 +72,12 @@ describe('roasCell — normal path (revenue > 0)', () => {
     expect(result.className).toBe('bg-status-redBtn text-accent-fg');
   });
 
-  it('orange-tone ROAS (e.g. 2.3) → solid bg-status-orangeBtn text-accent-fg', () => {
+  it('orange-tone ROAS (e.g. 2.3) → bright #EF9331 bg-status-orangeSolid + dark on-text', () => {
     const result = roasCell(2.3, 2000, 900);
     expect(roasLabel(2.3).tone).toBe('orange');
-    expect(result.className).toBe('bg-status-orangeBtn text-accent-fg');
+    // Operator-locked 2026-06-01: the ROAS orange is the bright #EF9331 (same as
+    // the band cards) with a DARK on-color — white fails AA on a bright orange.
+    expect(result.className).toBe('bg-status-orangeSolid text-status-orangeSolidFg');
   });
 
   it('green-tone ROAS (e.g. 2.9) → solid bg-status-greenBtn text-accent-fg', () => {
@@ -115,9 +118,14 @@ describe('ROAS_TONE_BG map', () => {
         // gray (no/low data) stays a quiet neutral chip: bg-glass-2 + text-ink
         expect(classes).toContain('bg-glass-2');
         expect(classes).toContain('text-ink');
+      } else if (tone === 'orange') {
+        // bright #EF9331 ROAS orange (operator-locked 2026-06-01) = solid
+        // bg-status-orangeSolid + DARK on-text (white fails AA on bright orange).
+        expect(classes).toContain('bg-status-orangeSolid');
+        expect(classes).toContain('text-status-orangeSolidFg');
       } else {
         expect(classes, `ROAS_TONE_BG[${tone}] should have a solid bg-status-*Btn`)
-          .toMatch(/bg-status-(red|orange|green|blue)Btn\b/);
+          .toMatch(/bg-status-(red|green|blue)Btn\b/);
         expect(classes, `ROAS_TONE_BG[${tone}] should have white text-accent-fg`)
           .toContain('text-accent-fg');
       }
