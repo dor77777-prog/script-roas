@@ -174,6 +174,20 @@ describe('toHeroDelta', () => {
     expect(d.cogs).toBe(25);
   });
 
+  it('omits the orders delta when prevOrders is null (prev count still loading)', () => {
+    const d = toHeroDelta(
+      agg({ revenue: 200, spend: 100, roas: 2 }),
+      agg({ revenue: 100, spend: 50, roas: 1 }),
+      { cpm: 8, impressions: 10, spend: 80 },
+      { cpm: 4, impressions: 5, spend: 20 },
+      10,
+      null, // prev orders not yet available → no "cur − 0" fake delta
+    );
+    expect(d.orders).toBeNull();
+    // other deltas still compute (periods have data)
+    expect(d.revenuePct).toBe(1);
+  });
+
   it('computes COGS delta in absolute CAD (signed)', () => {
     const d = toHeroDelta(
       agg({ revenue: 1000, spend: 250, roas: 4.0, cogs: 300 }),

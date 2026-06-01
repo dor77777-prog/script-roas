@@ -128,7 +128,7 @@ export function toHeroDelta(
   curCpm: BlendedCpm,
   prevCpm: BlendedCpm,
   curOrders: number,
-  prevOrders: number,
+  prevOrders: number | null,
 ): CommandCenterDelta {
   const baselineEmpty = prev.spend === 0 && prev.revenue === 0;
   const curOperatingProfit = cur.revenue - cur.spend - cur.cogs;
@@ -151,7 +151,7 @@ export function toHeroDelta(
       curCpm.cpm > 0 && prevCpm.cpm > 0
         ? (curCpm.cpm - prevCpm.cpm) / prevCpm.cpm
         : null,
-    orders: baselineEmpty ? null : curOrders - prevOrders,
+    orders: baselineEmpty || prevOrders == null ? null : curOrders - prevOrders,
     cogs: baselineEmpty ? null : cur.cogs - prev.cogs,
   };
 }

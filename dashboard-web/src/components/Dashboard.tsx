@@ -538,6 +538,16 @@ function HomeTab({
     fetcher,
     { revalidateOnFocus: false },
   );
+  // Previous-range ORDER counts — /api/data doesn't carry per-store order
+  // counts (that's why the current range uses a dedicated orders-attribution
+  // fetch); the prev range needs its own so the hero's Orders delta + the
+  // store modal's Orders/AOV deltas are REAL, not "cur − 0". Historical range
+  // → no focus revalidation needed.
+  const { data: ordersDataPrev } = useSWR<OrdersResponseShape>(
+    buildDateRangeKey('/api/orders-attribution', prevRange),
+    ordersFetcher,
+    { refreshInterval: 60_000, revalidateOnFocus: false },
+  );
 
   // ---- Chart range data — independent of page filters so the picker can
   // walk 7d/30d/90d/MTD/QTD/YTD without losing the snapshot above.
@@ -574,8 +584,9 @@ function HomeTab({
     [campaignsDataPrev, prevRange, filters.store],
   );
   // Sum of order counts across visible stores for the current range — the
-  // hero's "Orders" big number. Previous-range orders fall back to 0 (we
-  // skip the extra fetch to keep the home tab lean).
+  // hero's "Orders" big number. The previous-range counterpart is
+  // `prevOrdersTotal` (a dedicated prev orders-attribution fetch) so the
+  // Orders delta is real, not "cur − 0".
   const heroOrders = useMemo(() => {
     let total = 0;
     for (const k of Object.keys(ordersByStore)) total += ordersByStore[k] ?? 0;
@@ -606,13 +617,38 @@ function HomeTab({
   // `undefined` while prev data loads → the adapter leaves all deltas null.
   const prevStoreAggByName = useMemo<Record<string, StoreAgg> | undefined>(() => {
     if (!dataPrev) return undefined;
-    const prevCur = filterRows(dataPrev.rows, prevRange, filters.store);
+    // Build across ALL stores (not filters.store) so the drill modal can show
+    // KPI deltas for whichever store is opened, independent of the page filter.
+    const prevCur = filterRows(dataPrev.rows, prevRange, 'All');
     const out: Record<string, StoreAgg> = {};
     for (const sa of aggregateByStore(prevCur, prevRange)) {
       out[sa.store] = sa;
     }
     return out;
-  }, [dataPrev, prevRange, filters.store]);
+  }, [dataPrev, prevRange]);
+  // Previous-range order counts per store — the "table" we now retain so
+  // Orders/AOV deltas are honest. Built across ALL stores (modal can open any
+  // visible store); `null` (not 0) while the prev fetch is loading so deltas
+  // stay omitted rather than misleading.
+  const prevOrdersByStore = useMemo<Record<string, number> | null>(() => {
+    if (!ordersDataPrev) return null;
+    const out: Record<string, number> = {};
+    for (const r of ordersDataPrev.rows ?? []) {
+      if (!r.storeName) continue;
+      out[r.storeName] = (out[r.storeName] ?? 0) + 1;
+    }
+    return out;
+  }, [ordersDataPrev]);
+  // Prev-range orders total scoped to the SAME visible stores as `heroOrders`
+  // (the current-range total), so the hero's Orders delta compares like-for-like.
+  const prevOrdersTotal = useMemo<number | null>(() => {
+    if (!prevOrdersByStore) return null;
+    let total = 0;
+    for (const k of Object.keys(prevOrdersByStore)) {
+      if (filters.store === 'All' || k === filters.store) total += prevOrdersByStore[k] ?? 0;
+    }
+    return total;
+  }, [prevOrdersByStore, filters.store]);
   const heroPeriod = useMemo(
     () => toHeroPeriod(filtered.curAgg, heroCpm, heroOrders),
     [filtered.curAgg, heroCpm, heroOrders],
@@ -625,9 +661,9 @@ function HomeTab({
       heroCpm,
       heroCpmPrev,
       heroOrders,
-      0,
+      prevOrdersTotal,
     );
-  }, [filtered.curAgg, prevAggFromPrevData, heroCpm, heroCpmPrev, heroOrders]);
+  }, [filtered.curAgg, prevAggFromPrevData, heroCpm, heroCpmPrev, heroOrders, prevOrdersTotal]);
   const netSparkValues = useMemo(
     () => toNetSparkValues(filtered.series),
     [filtered.series],
@@ -688,8 +724,9 @@ function HomeTab({
   // `toStoreDetail` over the state HomeTab already holds — current StoreAgg
   // (filtered.storeAggs), prev StoreAgg (prevStoreAggByName), the per-day
   // series, campaign rows, and the per-store order count. No new fetch.
-  // prevOrders is null: HomeTab doesn't fetch a previous-range order count
-  // (heroDelta uses 0 too), so orders/aov deltas stay omitted by design.
+  // prevOrders comes from the dedicated prev orders-attribution fetch
+  // (`prevOrdersByStore`) so the modal's Orders AND AOV deltas are real; null
+  // while that fetch loads → those two deltas stay omitted until it lands.
   const storeDetail = useMemo(() => {
     if (modalStoreId === null) return null;
     // Resolve the display name for the selected storeId via the per-store row
@@ -710,7 +747,7 @@ function HomeTab({
       campaignRows: campaignsData?.rows,
       range: filters.range,
       orders: ordersByStore[storeName] ?? 0,
-      prevOrders: null,
+      prevOrders: prevOrdersByStore ? (prevOrdersByStore[storeName] ?? 0) : null,
       updatedAt: data?.dataLastWriteAt ?? null,
     });
   }, [
@@ -723,8 +760,20 @@ function HomeTab({
     campaignsData,
     filters.range,
     ordersByStore,
+    prevOrdersByStore,
     data?.dataLastWriteAt,
   ]);
+
+  // Close the drill modal if its store leaves the visible set — e.g. the store
+  // filter narrows to a DIFFERENT store, so the open store is no longer shown.
+  // A RANGE change keeps the modal open (the store stays visible) and lets
+  // `storeDetail` recompute for the new range, rather than surprising the
+  // operator by closing it.
+  useEffect(() => {
+    if (modalStoreId !== null && !perStoreData.some((s) => s.storeId === modalStoreId)) {
+      setModalStoreId(null);
+    }
+  }, [perStoreData, modalStoreId]);
 
   // ---- Annotation pins for RoasTargetChart -------------------------------
   // Bug fix (2026-05-31): the chart's annotation pins were stubbed empty in
