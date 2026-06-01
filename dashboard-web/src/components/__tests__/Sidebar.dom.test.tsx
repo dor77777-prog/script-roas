@@ -79,4 +79,25 @@ describe('Sidebar', () => {
       .filter((b): b is HTMLButtonElement => b !== null && b.getAttribute('aria-current') === 'page');
     expect(activeButtons.length).toBeGreaterThan(0);
   });
+
+  /**
+   * Regression (2026-06-01): in LIGHT mode, hovering the SELECTED desktop tab
+   * flipped its background to the near-white --glass-2 (the ghost Button
+   * variant's built-in `hover:bg-glass-2`), swallowing the white active text
+   * (--sidebar-fg-active). The active item must declare its OWN accent-based
+   * hover:bg so tailwind-merge drops the ghost's glass-2 hover.
+   */
+  it('active desktop tab keeps an accent hover fill, never the glass-2 ghost hover (light-mode contrast)', () => {
+    const { container } = renderSidebar({ activeTab: 'pnl' });
+    const rail = container.querySelector('[data-testid="desktop-sidebar"]')!;
+    const active = rail.querySelector('nav [role="tab"][aria-current="page"]') as HTMLElement;
+    expect(active).not.toBeNull();
+    const cls = active.className;
+    // tailwind-merge must have kept the accent-based hover background...
+    expect(cls).toContain('hover:bg-[color-mix(in_oklab,var(--accent)_30%,transparent)]');
+    // ...and dropped the ghost variant's near-white glass-2 hover fill.
+    expect(cls).not.toContain('hover:bg-glass-2');
+    // White active text is preserved on hover (belt-and-suspenders).
+    expect(cls).toContain('hover:text-[var(--sidebar-fg-active)]');
+  });
 });

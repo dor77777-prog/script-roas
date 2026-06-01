@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import useSWR from 'swr';
 import { CalendarDays } from 'lucide-react';
 import { YearSelector } from '@/components/YearSelector';
 import { MonthSelector } from '@/components/MonthSelector';
-import { MonthlyTables } from '@/components/MonthlyTables';
+import { MonthlyTables, Tab, type Mode } from '@/components/MonthlyTables';
+import { NativeSelect } from '@/components/ui/NativeSelect';
 import { SectionIntro } from '@/components/SectionIntro';
 import { PageScope } from '@/components/ui/PageScope';
 import { PageSynthesis } from '@/components/ui/PageSynthesis';
@@ -41,6 +42,27 @@ export function AnalysisArchiveTab({ stores, globalStore }: Props) {
   const now = new Date();
   const [year, setYear] = useState<number>(now.getFullYear());
   const [month, setMonth] = useState<number | null>(now.getMonth() + 1);
+
+  // Lifted from MonthlyTables so the mode toggle (לפי חנות / סיכום כללי) +
+  // store picker sit on the SAME row as year/month (operator request
+  // 2026-06-01). MonthlyTables receives these as CONTROLLED props and
+  // suppresses its own internal toolbar. Seeding/sync mirrors MonthlyTables'
+  // former internal logic exactly so behavior is unchanged.
+  const [mode, setMode] = useState<Mode>('per-store');
+  const [storeFilter, setStoreFilter] = useState<string>(
+    globalStore && globalStore !== 'All' && stores.includes(globalStore)
+      ? globalStore
+      : stores[0] || 'All',
+  );
+  // Keep the store picker in sync when the operator changes the global filter
+  // to a specific store — but still allow a local override afterwards (same
+  // contract MonthlyTables had).
+  useEffect(() => {
+    if (!globalStore || globalStore === 'All') return;
+    if (stores.includes(globalStore)) {
+      setStoreFilter(globalStore);
+    }
+  }, [globalStore, stores]);
 
   // Share the SWR key with MonthlyTables so the year-wide fetch is
   // cached once and the synthesiser reads the same row set the tables
@@ -87,10 +109,15 @@ export function AnalysisArchiveTab({ stores, globalStore }: Props) {
         anchorMetric={archiveSynthesis.anchorMetric}
         confidence={archiveSynthesis.confidence}
       />
-      {/* Compact year + month selectors on a SINGLE row. Each is constrained to
-          a fixed width so they no longer span the full screen (operator
-          complaint). NativeSelect's own wrapper is `w-full`, so the width cap
-          lives on these containers; still ≥36px tall + tappable on mobile. */}
+      {/* All FOUR archive controls on a SINGLE aligned row (operator request
+          2026-06-01): year · month · mode-toggle · store-picker. Each is
+          constrained to a fixed width so they don't span the full screen.
+          NativeSelect's own wrapper is `w-full`, so the width cap lives on
+          these containers; still ≥36px tall + tappable on mobile. The mode
+          toggle + store picker are the SAME markup MonthlyTables uses, lifted
+          here and wired to MonthlyTables via controlled props (its internal
+          toolbar is suppressed). items-end aligns every control to a shared
+          baseline; flex-wrap keeps the row orderly on narrow screens. */}
       <div className="flex items-end gap-3 flex-wrap">
         <label className="flex flex-col gap-1">
           <span className="text-xs text-ink-muted">שנה</span>
@@ -104,8 +131,54 @@ export function AnalysisArchiveTab({ stores, globalStore }: Props) {
             <MonthSelector value={month} onChange={setMonth} />
           </div>
         </label>
+        {/* div (not label): the toggle is a role="tablist" of buttons, not a
+            single form control, so a <label> wrapper would mis-associate its
+            caption text with the first tab's accessible name. */}
+        <div className="flex flex-col gap-1">
+          <span className="text-xs text-ink-muted">תצוגה</span>
+          <div
+            role="tablist"
+            className="inline-flex h-9 rounded-lg border border-glass-edge bg-glass-1 overflow-hidden divide-x divide-glass-edge"
+            dir="ltr"
+          >
+            <Tab active={mode === 'per-store'} onClick={() => setMode('per-store')}>
+              לפי חנות
+            </Tab>
+            <Tab active={mode === 'summary'} onClick={() => setMode('summary')}>
+              סיכום כללי
+            </Tab>
+          </div>
+        </div>
+        {mode === 'per-store' && (
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-ink-muted">חנות</span>
+            <div className="w-40">
+              <NativeSelect
+                aria-label="חנות"
+                value={storeFilter}
+                onChange={e => setStoreFilter(e.target.value)}
+                className="font-medium"
+              >
+                {stores.map(s => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </NativeSelect>
+            </div>
+          </div>
+        )}
       </div>
-      <MonthlyTables stores={stores} globalStore={globalStore} year={year} month={month} />
+      <MonthlyTables
+        stores={stores}
+        globalStore={globalStore}
+        year={year}
+        month={month}
+        mode={mode}
+        onModeChange={setMode}
+        storeFilter={storeFilter}
+        onStoreFilterChange={setStoreFilter}
+      />
     </div>
   );
 }

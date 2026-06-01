@@ -55,14 +55,17 @@ export const CAMPAIGNS_COLUMNS: ReadonlyArray<{
   { id: 'spend', label: 'הוצאה', description: 'CAD' },
   { id: 'conversionValue', label: 'ערך המרות', description: 'ערך המרות שדיווחה הפלטפורמה (CAD)' },
   { id: 'roas', label: 'ROAS (פלטפ)', description: 'ערך/הוצאה לפי דיווח הפלטפורמה' },
-  { id: 'roasShopify', label: 'ROAS Shopify (כללי)', description: 'ROAS בפועל לפי מיפוי + fallback פרופורציונלי' },
+  { id: 'roasShopify', label: 'ROAS Shopify (מוקצה)', description: 'ROAS מבוסס הכנסה מוקצה (click-id + חלוקה יחסית). המונה: ערך Shopify · מוקצה ÷ הוצאה' },
   { id: 'roasShopifyPlatform', label: 'ROAS Shopify · פלטפורמה', description: 'ROAS מבוסס רק על הזמנות שסווגו ב-Shopify לפלטפורמה הזו (דטרמיניסטי בלבד, ללא fallback)' },
   { id: 'shopifyValuePlatform', label: 'ערך Shopify · פלטפורמה', description: 'מהזמנות שסווגו לפלטפורמה הזו (source/click-id)' },
+  { id: 'shopifyValueAllocated', label: 'ערך Shopify · מוקצה', description: 'הכנסת Shopify המוקצה לקמפיין: מתויג click-id + חלק יחסי מהזמנות לא-מתויגות של המוצרים המשויכים — זהו המונה של ROAS Shopify' },
   { id: 'shopifyUnitsPlatform', label: 'יח׳ Shopify · פלטפורמה', description: 'יחידות מהזמנות שסווגו לפלטפורמה הזו' },
   { id: 'shopifyValueTotal', label: 'ערך Shopify · סה"כ', description: 'סך מכירות המוצרים הממופים בכל הפלטפורמות' },
   { id: 'shopifyUnitsTotal', label: 'יח׳ Shopify · סה"כ', description: 'סך היחידות שנמכרו של המוצרים הממופים' },
   { id: 'shopifyOrdersTotal', label: 'הזמנות Shopify · סה"כ', description: 'סך ההזמנות שכללו את המוצרים הממופים בכל הערוצים בטווח (מוצר באותה הזמנה נספר פעם אחת לכל מוצר)' },
   { id: 'conversions', label: 'המרות', description: 'מספר ההמרות שדיווחה הפלטפורמה' },
+  { id: 'clicks', label: 'קליקים', description: 'מספר הקליקים שדיווחה הפלטפורמה' },
+  { id: 'impressions', label: 'חשיפות', description: 'מספר החשיפות שדיווחה הפלטפורמה' },
   { id: 'ctr', label: 'CTR', description: 'קליקים/חשיפות' },
   { id: 'cpc', label: 'CPC', description: 'עלות לקליק' },
   { id: 'cpm', label: 'CPM', description: 'עלות ל-1000 חשיפות' },
@@ -100,24 +103,74 @@ export const REORDERABLE_COLUMN_IDS = [
   'roasShopify',
   'roasShopifyPlatform',
   'shopifyValuePlatform',
+  'shopifyValueAllocated',
   'shopifyUnitsPlatform',
   'shopifyValueTotal',
   'shopifyUnitsTotal',
   'shopifyOrdersTotal',
   'conversions',
+  'clicks',
+  'impressions',
   'ctr',
   'cpc',
   'cpm',
   'cpa',
 ] as const;
 
-const EMPTY: CampaignsColumnPrefs = { hidden: [], order: undefined };
+/**
+ * Columns that ship HIDDEN by default — visible only when the operator
+ * explicitly enables them via the "עמודות" menu (so the table doesn't get
+ * wider than necessary out of the box). This is the "lean default" declutter
+ * set: redundant or low-signal columns whose information is already covered
+ * by a visible column, kept toggle-able for power users.
+ *
+ * Why each is hidden by default:
+ *   - budget                → operational, not a performance metric.
+ *   - roasShopifyPlatform   → click-id-only ROAS; the visible `roasShopify`
+ *                             (allocated) is the headline Shopify ROAS.
+ *   - shopifyValuePlatform  → deterministic revenue; covered by the visible
+ *                             `shopifyValueAllocated` (the ROAS numerator).
+ *   - shopifyValueTotal     → gross all-channel value; informational, not
+ *                             attributable to the campaign.
+ *   - shopifyUnitsPlatform / shopifyUnitsTotal → unit counts; revenue columns
+ *                             carry the signal operators act on.
+ *   - clicks / impressions  → raw volume; read via CTR/CPC/CPM instead.
+ *   - ctr / cpc / cpm       → funnel diagnostics; off by default to keep the
+ *                             table focused on spend → revenue → ROAS.
+ *
+ * Everything NOT in this set (campaignName, spend, conversionValue, roas,
+ * roasShopify[allocated], shopifyValueAllocated, shopifyOrdersTotal,
+ * conversions, cpa, plus the structural optimized/health/roasTrend/deepLink)
+ * is visible by default.
+ *
+ * This is the SEED for a fresh operator (no saved prefs yet). Once the
+ * operator toggles any column, `hidden` becomes an explicit list written to
+ * localStorage and this seed no longer applies — they own the visibility set.
+ */
+export const DEFAULT_HIDDEN_COLUMN_IDS = [
+  'budget',
+  'roasShopifyPlatform',
+  'shopifyValuePlatform',
+  'shopifyUnitsPlatform',
+  'shopifyValueTotal',
+  'shopifyUnitsTotal',
+  'clicks',
+  'impressions',
+  'ctr',
+  'cpc',
+  'cpm',
+] as const;
+
+const EMPTY: CampaignsColumnPrefs = {
+  hidden: [...DEFAULT_HIDDEN_COLUMN_IDS],
+  order: undefined,
+};
 
 export function readCampaignsColumnPrefs(): CampaignsColumnPrefs {
   if (typeof window === 'undefined') return EMPTY;
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return EMPTY;
+    if (!raw) return { hidden: [...DEFAULT_HIDDEN_COLUMN_IDS], order: undefined };
     const parsed = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null) return EMPTY;
     // Tolerate both the canonical shape and a legacy bare array form.

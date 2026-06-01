@@ -16,7 +16,7 @@ import { Heading } from '@/components/ui/Typography';
 
 const HE_MONTHS = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
 
-type Mode = 'per-store' | 'summary';
+export type Mode = 'per-store' | 'summary';
 
 type Props = {
   stores: string[];
@@ -48,6 +48,23 @@ type Props = {
    * so the user doesn't have to pick a store in two places.
    */
   hideStoreToolbar?: boolean;
+  /**
+   * CONTROLLED mode (optional). When provided, MonthlyTables uses this value
+   * instead of its internal useState AND suppresses its own toolbar — the
+   * PARENT renders the mode toggle + store picker (so all selectors can share
+   * one row). When omitted, behavior is byte-identical to the legacy internal
+   * state + internal toolbar. Pair with `onModeChange` for a fully-driven UI.
+   */
+  mode?: Mode;
+  /** Setter for the controlled `mode` (see above). */
+  onModeChange?: (mode: Mode) => void;
+  /**
+   * CONTROLLED store filter (optional). Mirrors `mode` — when provided the
+   * parent owns the value and MonthlyTables suppresses its internal toolbar.
+   */
+  storeFilter?: string;
+  /** Setter for the controlled `storeFilter` (see above). */
+  onStoreFilterChange?: (store: string) => void;
 };
 
 /**
@@ -113,7 +130,23 @@ const fetcher = async (url: string): Promise<DashboardData> => {
 };
 
 
-export function MonthlyTables({ stores, globalStore, bare = false, year, month, hideStoreToolbar = false }: Props) {
+export function MonthlyTables({
+  stores,
+  globalStore,
+  bare = false,
+  year,
+  month,
+  hideStoreToolbar = false,
+  mode: controlledMode,
+  onModeChange,
+  storeFilter: controlledStoreFilter,
+  onStoreFilterChange,
+}: Props) {
+  // The parent fully controls mode + store when it passes `mode`/`storeFilter`
+  // (the lifted-row case). Then MonthlyTables suppresses its own toolbar and
+  // reads the parent-owned values — no internal state, no useEffect sync.
+  const isControlled = controlledMode != null && controlledStoreFilter != null;
+
   const [mode, setMode] = useState<Mode>('per-store');
 
   // Initialise the local store dropdown from the global filter when it names a
@@ -126,19 +159,34 @@ export function MonthlyTables({ stores, globalStore, bare = false, year, month, 
       : stores[0] || 'All';
   const [storeFilter, setStoreFilter] = useState<string>(initialStore);
 
-  // When the parent controls the store via a sub-tab, lock both mode and
-  // storeFilter to the parent-provided values — no internal picker needed.
-  const effectiveMode: Mode = hideStoreToolbar ? 'per-store' : mode;
-  const effectiveStoreFilter: string = hideStoreToolbar && globalStore && globalStore !== 'All'
-    ? globalStore
-    : storeFilter;
+  // Effective mode/store resolution precedence:
+  //   1. controlled props (parent owns the lifted toolbar)
+  //   2. hideStoreToolbar (parent owns the store via a sub-tab → per-store)
+  //   3. internal state (legacy: own toolbar)
+  const effectiveMode: Mode = isControlled
+    ? controlledMode
+    : hideStoreToolbar
+      ? 'per-store'
+      : mode;
+  const effectiveStoreFilter: string = isControlled
+    ? controlledStoreFilter
+    : hideStoreToolbar && globalStore && globalStore !== 'All'
+      ? globalStore
+      : storeFilter;
+
+  // The internal toolbar is suppressed when the parent controls the toolbar
+  // (controlled props) OR when hideStoreToolbar is set.
+  const showInternalToolbar = !isControlled && !hideStoreToolbar;
 
   useEffect(() => {
+    // Only the internally-managed storeFilter needs global-filter sync; when
+    // controlled the parent owns (and seeds) the value.
+    if (isControlled) return;
     if (!globalStore || globalStore === 'All') return;
     if (stores.includes(globalStore)) {
       setStoreFilter(globalStore);
     }
-  }, [globalStore, stores]);
+  }, [globalStore, stores, isControlled]);
 
   const historyRange = useMemo(() => {
     if (year != null) {
@@ -197,6 +245,19 @@ export function MonthlyTables({ stores, globalStore, bare = false, year, month, 
 
   if (!rows.length) return null;
 
+  // Internal-toolbar change handlers: drive the internal state and ALSO notify
+  // the optional callbacks so a parent can observe (uncontrolled) changes
+  // without taking full control. In the controlled case the toolbar isn't
+  // rendered, so these are inert.
+  const handleInternalMode = (next: Mode) => {
+    setMode(next);
+    onModeChange?.(next);
+  };
+  const handleInternalStore = (next: string) => {
+    setStoreFilter(next);
+    onStoreFilterChange?.(next);
+  };
+
   const toolbar = (
     <div
       className={cn(
@@ -209,17 +270,18 @@ export function MonthlyTables({ stores, globalStore, bare = false, year, month, 
         className="inline-flex rounded-lg border border-glass-edge bg-glass-1 overflow-hidden divide-x divide-glass-edge"
         dir="ltr"
       >
-        <Tab active={mode === 'per-store'} onClick={() => setMode('per-store')}>
+        <Tab active={mode === 'per-store'} onClick={() => handleInternalMode('per-store')}>
           לפי חנות
         </Tab>
-        <Tab active={mode === 'summary'} onClick={() => setMode('summary')}>
+        <Tab active={mode === 'summary'} onClick={() => handleInternalMode('summary')}>
           סיכום כללי
         </Tab>
       </div>
       {mode === 'per-store' && (
         <NativeSelect
+          aria-label="חנות"
           value={storeFilter}
-          onChange={e => setStoreFilter(e.target.value)}
+          onChange={e => handleInternalStore(e.target.value)}
           className="font-medium w-auto"
         >
           {stores.map(s => (
@@ -258,7 +320,7 @@ export function MonthlyTables({ stores, globalStore, bare = false, year, month, 
   if (bare) {
     return (
       <div>
-        {!hideStoreToolbar && toolbar}
+        {showInternalToolbar && toolbar}
         {blocks}
       </div>
     );
@@ -271,14 +333,16 @@ export function MonthlyTables({ stores, globalStore, bare = false, year, month, 
           <CalendarDays size={18} className="text-ink-secondary" />
           טבלאות חודשיות
         </Heading>
-        {!hideStoreToolbar && toolbar}
+        {showInternalToolbar && toolbar}
       </div>
       {blocks}
     </section>
   );
 }
 
-function Tab({
+// Exported so AnalysisArchiveTab can render the SAME mode toggle in its
+// shared controls row (the lifted-toolbar case) without duplicating markup.
+export function Tab({
   active,
   children,
   onClick,

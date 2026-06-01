@@ -30,8 +30,14 @@ const GRADE_STYLES: Record<HealthGrade, { chip: string; ring: string; label: str
   unknown: { chip: 'bg-glass-2 text-ink-muted', ring: 'ring-glass-edge', label: 'מוקדם מדי' },
 };
 
+// Column-audit 2026-06-01 (FIX 2) — clarify that the Health Score's
+// profitability axis is driven by the CLICK-ID / PROVEN (deterministic)
+// ROAS, so operators understand WHY the score's ROAS can differ from the
+// table's "ROAS Shopify (מוקצה)" column (which adds a proportional fallback
+// of un-attributed orders). This is a LABEL/TEXT clarification only — the
+// score computation in campaignHealthScore.ts is unchanged.
 const COMPONENT_LABELS = {
-  profitability: { label: 'רווחיות', weight: '40%' },
+  profitability: { label: 'רווחיות (ROAS מוכח · click-id)', weight: '40%' },
   volume: { label: 'נפח', weight: '15%' },
   trajectory: { label: 'מומנטום', weight: '25%' },
   attributionClarity: { label: 'אמינות attribution', weight: '20%' },
@@ -196,6 +202,13 @@ export function HealthScoreBadge({ health }: { health: CampaignHealth }) {
               {/* Footer with formula note */}
               <div className="mt-2.5 pt-2 border-t border-glass-edge text-[10.5px] text-ink-muted leading-snug">
                 ציון = (רווחיות×0.40) + (נפח×0.15) + (מומנטום×0.25) + (attribution×0.20)
+                {/* Column-audit 2026-06-01 (FIX 2) — explain the ROAS basis so
+                    the score's ROAS reconciles vs the table's allocated ROAS. */}
+                <div className="mt-1">
+                  הרווחיות בציון מבוססת על ROAS מוכח (דטרמיניסטי · click-id) —
+                  לכן הוא עשוי להיות שונה מ-״ROAS Shopify (מוקצה)״ בטבלה, שמוסיף
+                  הקצאה יחסית של הזמנות לא-מתויגות.
+                </div>
               </div>
             </>
           )}

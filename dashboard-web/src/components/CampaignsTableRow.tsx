@@ -513,18 +513,32 @@ export function CampaignsTableRow({
               ? ` (פער ${(gap * 100).toFixed(0)}% מול Meta)`
               : '');
 
+          // Column-audit 2026-06-01 (FIX 1) — spell out the numerator so the
+          // operator can reconcile this ROAS on screen:
+          //   deterministic (click-id) + fallback = allocated (trueRevenue)
+          //   allocated / spend = this ROAS.
+          // No math changed — these are the same numbers the cell already uses.
+          const fallbackRevenue = info.trueRevenue - info.deterministicRevenue;
+          const numeratorBreakdown =
+            `\nמונה ROAS Shopify (מוקצה):\n` +
+            `  click-id (דטרמיניסטי):  ${fmtMoneyString(info.deterministicRevenue)}\n` +
+            `  + הקצאה (fallback):     ${fmtMoneyString(fallbackRevenue)}\n` +
+            `  = מוקצה (trueRevenue):  ${fmtMoneyString(info.trueRevenue)}\n` +
+            `  מוקצה ÷ הוצאה = ${trueRoas.toFixed(2)}x`;
+
           let tooltip: string;
           if (useAttr) {
             const at = info.attribution!;
             const detRoas = a.spend > 0 ? at.deterministicRevenue / a.spend : 0;
             tooltip =
-              `ROAS מבוסס click-id · ${at.trust.label} (${at.trust.score.toFixed(0)}/100)\n\n` +
+              `ROAS Shopify מוקצה · ${at.trust.label} (${at.trust.score.toFixed(0)}/100)\n` +
+              numeratorBreakdown + `\n\n` +
               `Meta דיווח:           ${fmtMoneyString(info.metaClaim)}\n` +
               `מתויג click-id:       ${fmtMoneyString(at.deterministicRevenue)} (${at.deterministicOrders} הזמנות)\n` +
               `${mappingLine}\n` +
               `Modeled / view-through: ${fmtMoneyString(at.modeledRevenue)}\n` +
               `coverage: ${(at.coverage * 100).toFixed(0)}%\n` +
-              `ROAS אמיתי: ${detRoas.toFixed(2)}x  |  ROAS לפי Meta: ${(info.metaClaim / a.spend).toFixed(2)}x\n\n` +
+              `ROAS דטרמיניסטי: ${detRoas.toFixed(2)}x  |  ROAS לפי Meta: ${(info.metaClaim / a.spend).toFixed(2)}x\n\n` +
               at.reasons.map(r => `• ${r}`).join('\n') +
               `\n\n💡 ${at.recommendation}`;
           } else {
@@ -535,7 +549,8 @@ export function CampaignsTableRow({
               ? `\n(click-id: ${info.attribution!.deterministicOrders} הזמנות תויגו — לא מספיק לסיגנל; חוזרים למיפוי מוצרים)`
               : '\n(אין נתוני click-id בטווח — חוזרים למיפוי מוצרים)';
             tooltip =
-              `ROAS מבוסס מיפוי מוצרים · ${info.confidence.label}${clickIdNote}\n\n` +
+              `ROAS Shopify מוקצה · מבוסס מיפוי מוצרים · ${info.confidence.label}${clickIdNote}\n` +
+              numeratorBreakdown + `\n\n` +
               `Meta דיווח: ${fmtMoneyString(info.metaClaim)}\n` +
               `${mappingLine}\n\n` +
               info.confidence.reasons.map(r => `• ${r}`).join('\n');
@@ -632,6 +647,37 @@ export function CampaignsTableRow({
             <HelpTooltip content={tooltip}>
               <span className="font-medium">
                 <Money value={info.deterministicRevenue} prefix="none" locale="he-IL" compactAbove={100_000} />
+              </span>
+            </HelpTooltip>
+          );
+        })()}
+      </td>
+      ),
+      // Column-audit 2026-06-01 (FIX 1) — ערך Shopify · מוקצה.
+      // The VISIBLE numerator of ROAS Shopify (roasShopify = trueRevenue /
+      // spend). trueRevenue = deterministic (click-id) + spend-proportional
+      // fallback of un-attributed orders. Without this column the operator
+      // can't reconcile roasShopify on screen (e.g. 1.47 ← 173.46 / 118).
+      // Renders with 2 decimals so the division is reproducible. No math is
+      // changed here — info.trueRevenue is read straight from the existing
+      // allocator (useCampaignTrueRevenue.ts:trueRevenue = alloc.revenue).
+      shopifyValueAllocated: (
+      <td data-col-id="shopifyValueAllocated" className="metric-cell px-3 py-2 text-end tabular-nums">
+        {(() => {
+          const key = campaignKey(a.storeId, a.platform, a.campaignId);
+          const info = trueRevenueByKey.get(key);
+          if (!info || info.trueRevenue <= 0) {
+            return <span className="text-ink-muted">—</span>;
+          }
+          const allocRoas = a.spend > 0 ? info.trueRevenue / a.spend : 0;
+          const tooltip =
+            `הכנסת Shopify המוקצה לקמפיין = ${fmtMoneyString(info.trueRevenue)} ` +
+            `(מתויג click-id ${fmtMoneyString(info.deterministicRevenue)} + חלק יחסי מהזמנות לא-מתויגות). ` +
+            `זהו המונה של ROAS Shopify: מוקצה ÷ הוצאה = ${allocRoas.toFixed(2)}x.`;
+          return (
+            <HelpTooltip content={tooltip}>
+              <span className="font-medium">
+                <Money value={info.trueRevenue} prefix="none" locale="he-IL" decimals={2} compactAbove={100_000} />
               </span>
             </HelpTooltip>
           );
@@ -740,6 +786,16 @@ export function CampaignsTableRow({
       ),
       conversions: (
         <td data-col-id="conversions" className="px-3 py-2 text-end tabular-nums">{formatNumber(a.conversions, 0)}</td>
+      ),
+      // Column-audit 2026-06-01 (FIX 3) — clicks + impressions raw-volume
+      // columns. Aggregated at campaignsAggregator.ts (a.clicks / a.impressions)
+      // but had no column. HIDDEN by default (DEFAULT_HIDDEN_COLUMN_IDS) so the
+      // table doesn't get wider unless the operator enables them.
+      clicks: (
+        <td data-col-id="clicks" className="px-3 py-2 text-end tabular-nums text-ink-secondary">{formatNumber(a.clicks, 0)}</td>
+      ),
+      impressions: (
+        <td data-col-id="impressions" className="px-3 py-2 text-end tabular-nums text-ink-secondary">{formatNumber(a.impressions, 0)}</td>
       ),
       ctr: (
         <td data-col-id="ctr" className="px-3 py-2 text-end tabular-nums text-ink-secondary">

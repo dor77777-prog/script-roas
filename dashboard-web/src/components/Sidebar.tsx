@@ -118,10 +118,16 @@ function SidebarBody({
   const railHover = isDesktop
     ? 'hover:text-[var(--sidebar-fg-active)] hover:bg-[color-mix(in_oklab,var(--sidebar-fg)_8%,transparent)]'
     : 'hover:text-ink hover:bg-glass-2';
-  // Active / selected treatment — violet tint + active fg on dark rail.
+  // Active / selected treatment — accent tint + active fg on dark rail.
+  // The desktop branch MUST declare its own hover:bg/hover:text: the ghost
+  // Button variant ships `hover:bg-glass-2`, and on the active item (which
+  // doesn't get railHover) that hover fill would otherwise win. In LIGHT mode
+  // --glass-2 is a near-white surface, so the white active text (--sidebar-fg
+  // -active) gets swallowed on hover. Declaring an accent-based hover:bg here
+  // lets tailwind-merge drop the ghost's glass-2 hover and keeps white-on-dark.
   const railActive = isDesktop
-    ? 'bg-[color-mix(in_oklab,var(--accent)_22%,transparent)] text-[var(--sidebar-fg-active)]'
-    : 'bg-glass-2 text-ink';
+    ? 'bg-[color-mix(in_oklab,var(--accent)_22%,transparent)] text-[var(--sidebar-fg-active)] hover:bg-[color-mix(in_oklab,var(--accent)_30%,transparent)] hover:text-[var(--sidebar-fg-active)]'
+    : 'bg-glass-2 text-ink hover:bg-glass-2 hover:text-ink';
 
   return (
     <>

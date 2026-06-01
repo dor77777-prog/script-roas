@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CAMPAIGNS_COLUMNS,
+  DEFAULT_HIDDEN_COLUMN_IDS,
   REORDERABLE_COLUMN_IDS,
   buildHiddenColumnsCss,
   moveCampaignsColumn,
@@ -122,9 +123,11 @@ afterEach(() => {
 });
 
 describe('REORDERABLE_COLUMN_IDS — schema sanity', () => {
-  it('contains exactly the 16 metric columns documented in the manual', () => {
-    // 15 base columns + 1 new (shopifyOrdersTotal, 2026-05-23)
-    expect(REORDERABLE_COLUMN_IDS).toHaveLength(16);
+  it('contains exactly the 19 metric columns documented in the manual', () => {
+    // 16 base columns + 3 new (column-audit 2026-06-01):
+    //   shopifyValueAllocated (ROAS Shopify numerator),
+    //   clicks, impressions.
+    expect(REORDERABLE_COLUMN_IDS).toHaveLength(19);
   });
 
   it('every reorderable ID exists in CAMPAIGNS_COLUMNS', () => {
@@ -140,6 +143,94 @@ describe('REORDERABLE_COLUMN_IDS — schema sanity', () => {
     );
     for (const id of REORDERABLE_COLUMN_IDS) {
       expect(pinned.has(id)).toBe(false);
+    }
+  });
+
+  // Column-audit 2026-06-01 — FIX 1 + FIX 3 registration contract.
+  it('registers the new shopifyValueAllocated / clicks / impressions columns', () => {
+    const known = new Set(CAMPAIGNS_COLUMNS.map(c => c.id));
+    for (const id of ['shopifyValueAllocated', 'clicks', 'impressions']) {
+      expect(known.has(id)).toBe(true);
+      expect((REORDERABLE_COLUMN_IDS as readonly string[]).includes(id)).toBe(true);
+    }
+  });
+
+  it('positions shopifyValueAllocated between shopifyValuePlatform and shopifyUnitsPlatform', () => {
+    const ids = REORDERABLE_COLUMN_IDS as readonly string[];
+    const platformIdx = ids.indexOf('shopifyValuePlatform');
+    const allocIdx = ids.indexOf('shopifyValueAllocated');
+    const unitsIdx = ids.indexOf('shopifyUnitsPlatform');
+    // Allocated (the ROAS Shopify numerator) sits between the deterministic
+    // per-platform value (left) and the per-platform units (right).
+    expect(platformIdx).toBeGreaterThanOrEqual(0);
+    expect(allocIdx).toBeGreaterThan(platformIdx);
+    expect(unitsIdx).toBeGreaterThan(allocIdx);
+  });
+
+  it('the new shopifyValueAllocated column has the Hebrew label + numerator description', () => {
+    const col = CAMPAIGNS_COLUMNS.find(c => c.id === 'shopifyValueAllocated');
+    expect(col).toBeDefined();
+    expect(col!.label).toBe('ערך Shopify · מוקצה');
+    // Description must spell out that this is the ROAS Shopify numerator.
+    expect(col!.description).toContain('המונה של ROAS Shopify');
+  });
+});
+
+// Column-audit 2026-06-01 — FIX 1 + FIX 3 + declutter default-visibility contract.
+describe('DEFAULT_HIDDEN_COLUMN_IDS — default visibility (lean declutter)', () => {
+  // The full "lean default" hidden seed: redundant/low-signal columns whose
+  // information is already covered by a visible column.
+  const EXPECTED_HIDDEN = [
+    'budget',
+    'clicks',
+    'cpc',
+    'cpm',
+    'ctr',
+    'impressions',
+    'roasShopifyPlatform',
+    'shopifyUnitsPlatform',
+    'shopifyUnitsTotal',
+    'shopifyValuePlatform',
+    'shopifyValueTotal',
+  ];
+
+  it('hides exactly the lean-declutter set by default', () => {
+    expect([...DEFAULT_HIDDEN_COLUMN_IDS].sort()).toEqual(EXPECTED_HIDDEN);
+  });
+
+  it('shopifyValueAllocated is VISIBLE by default (the ROAS Shopify numerator stays on)', () => {
+    expect((DEFAULT_HIDDEN_COLUMN_IDS as readonly string[]).includes('shopifyValueAllocated')).toBe(false);
+  });
+
+  it('keeps the headline columns visible by default', () => {
+    // A fresh operator (no saved prefs) reads the seed; the visible set is
+    // every reorderable ID NOT in the hidden seed.
+    const hidden = new Set(DEFAULT_HIDDEN_COLUMN_IDS as readonly string[]);
+    const visible = (REORDERABLE_COLUMN_IDS as readonly string[]).filter(id => !hidden.has(id));
+    // The lean default keeps the spend → revenue → ROAS story visible.
+    for (const id of [
+      'spend',
+      'conversionValue',
+      'roas',
+      'roasShopify',
+      'shopifyValueAllocated',
+      'shopifyOrdersTotal',
+      'conversions',
+      'cpa',
+    ]) {
+      expect(visible).toContain(id);
+    }
+    // ...and hides the decluttered redundant columns.
+    for (const id of ['clicks', 'impressions', 'ctr', 'cpc', 'cpm', 'budget', 'shopifyValueTotal']) {
+      expect(visible).not.toContain(id);
+    }
+  });
+
+  it('every hidden-seed ID is a real, reorderable (toggle-able) column', () => {
+    // A hidden default that the operator can never un-hide would be a trap.
+    const reorderable = new Set(REORDERABLE_COLUMN_IDS as readonly string[]);
+    for (const id of DEFAULT_HIDDEN_COLUMN_IDS) {
+      expect(reorderable.has(id)).toBe(true);
     }
   });
 });
@@ -159,10 +250,14 @@ describe('resolveCampaignsColumnOrder — pure merge contract', () => {
 
   it('preserves a complete saved order verbatim', () => {
     // Operator dragged ROAS first, then spend, then everything else default.
+    // Must list ALL reorderable IDs (a partial list gets the missing ones
+    // appended) — kept in sync with REORDERABLE_COLUMN_IDS.
     const saved = ['roas', 'spend', 'budget', 'conversionValue', 'roasShopify',
-                   'roasShopifyPlatform', 'shopifyValuePlatform', 'shopifyUnitsPlatform',
-                   'shopifyValueTotal', 'shopifyUnitsTotal', 'shopifyOrdersTotal',
-                   'conversions', 'ctr', 'cpc', 'cpm', 'cpa'];
+                   'roasShopifyPlatform', 'shopifyValuePlatform', 'shopifyValueAllocated',
+                   'shopifyUnitsPlatform', 'shopifyValueTotal', 'shopifyUnitsTotal',
+                   'shopifyOrdersTotal', 'conversions', 'clicks', 'impressions',
+                   'ctr', 'cpc', 'cpm', 'cpa'];
+    expect(saved).toHaveLength(REORDERABLE_COLUMN_IDS.length);
     expect(resolveCampaignsColumnOrder(saved)).toEqual(saved);
   });
 
@@ -279,15 +374,16 @@ describe('moveCampaignsColumn — reorder one slot', () => {
   });
 
   it('preserves hidden state across reorder', () => {
-    // Hide some columns first.
-    toggleCampaignsColumnHidden('cpm');
-    toggleCampaignsColumnHidden('cpc');
+    // Hide some columns first (roas + roasShopify are visible by default,
+    // so toggling them ADDS to the hidden set).
+    toggleCampaignsColumnHidden('roas');
+    toggleCampaignsColumnHidden('roasShopify');
     // Then reorder.
     moveCampaignsColumn('cpa', 'up');
     const out = readCampaignsColumnPrefs();
     // Hidden array should still contain both IDs.
-    expect(out.hidden).toContain('cpm');
-    expect(out.hidden).toContain('cpc');
+    expect(out.hidden).toContain('roas');
+    expect(out.hidden).toContain('roasShopify');
   });
 });
 
@@ -310,24 +406,32 @@ describe('resetCampaignsColumnOrder — restore canonical', () => {
   });
 
   it('preserves hidden state across reset (only order is reset)', () => {
-    toggleCampaignsColumnHidden('cpm');
+    toggleCampaignsColumnHidden('roas');
     moveCampaignsColumn('budget', 'up');
     resetCampaignsColumnOrder();
-    expect(readCampaignsColumnPrefs().hidden).toContain('cpm');
+    expect(readCampaignsColumnPrefs().hidden).toContain('roas');
   });
 });
 
 describe('readCampaignsColumnPrefs — tolerant read', () => {
-  it('returns empty on missing localStorage entry', () => {
-    expect(readCampaignsColumnPrefs()).toEqual({ hidden: [], order: undefined });
+  it('returns the default-hidden seed on missing localStorage entry', () => {
+    // Fresh operator (no saved prefs) → clicks/impressions hidden by
+    // default; everything else (incl. shopifyValueAllocated) visible.
+    expect(readCampaignsColumnPrefs()).toEqual({
+      hidden: [...DEFAULT_HIDDEN_COLUMN_IDS],
+      order: undefined,
+    });
   });
 
-  it('returns empty on malformed JSON', () => {
+  it('returns the default-hidden seed on malformed JSON', () => {
     window.localStorage.setItem(
       'roas-dashboard:campaigns-column-visibility',
       '{ not json',
     );
-    expect(readCampaignsColumnPrefs()).toEqual({ hidden: [], order: undefined });
+    expect(readCampaignsColumnPrefs()).toEqual({
+      hidden: [...DEFAULT_HIDDEN_COLUMN_IDS],
+      order: undefined,
+    });
   });
 
   it('parses the canonical {hidden, order} shape', () => {
@@ -374,22 +478,31 @@ describe('readCampaignsColumnPrefs — tolerant read', () => {
 
 describe('toggleCampaignsColumnHidden — hide/show one column', () => {
   it('adds an ID when not hidden', () => {
-    const out = toggleCampaignsColumnHidden('cpm');
-    expect(out.hidden).toContain('cpm');
+    // roas is visible by default → toggling ADDS it to the hidden set.
+    const out = toggleCampaignsColumnHidden('roas');
+    expect(out.hidden).toContain('roas');
   });
 
   it('removes an ID when already hidden', () => {
-    toggleCampaignsColumnHidden('cpm');
-    const out = toggleCampaignsColumnHidden('cpm');
-    expect(out.hidden).not.toContain('cpm');
+    toggleCampaignsColumnHidden('roas');
+    const out = toggleCampaignsColumnHidden('roas');
+    expect(out.hidden).not.toContain('roas');
   });
 
   it('keeps the hidden array sorted (deterministic for diffs in cloud sync)', () => {
-    toggleCampaignsColumnHidden('cpm');
+    // Toggle three columns that are VISIBLE by default (not in the seed) so
+    // each one is ADDED to the hidden set; the result must stay sorted and
+    // still contain the whole declutter seed.
+    toggleCampaignsColumnHidden('roas');
     toggleCampaignsColumnHidden('cpa');
-    toggleCampaignsColumnHidden('cpc');
+    toggleCampaignsColumnHidden('spend');
     const out = readCampaignsColumnPrefs();
-    expect(out.hidden).toEqual(['cpa', 'cpc', 'cpm']);
+    // Sorted: a stable copy equals the array itself.
+    expect(out.hidden).toEqual([...out.hidden].sort());
+    // Seed + the three newly-hidden columns are all present.
+    for (const id of [...DEFAULT_HIDDEN_COLUMN_IDS, 'roas', 'cpa', 'spend']) {
+      expect(out.hidden).toContain(id);
+    }
   });
 
   /**
@@ -403,9 +516,9 @@ describe('toggleCampaignsColumnHidden — hide/show one column', () => {
    * collapse mid-workflow.
    */
   it('preserves the saved order across hide → reorder → hide (HIGH-4)', () => {
-    // 1) Hide a column.
-    toggleCampaignsColumnHidden('cpm');
-    // 2) Reorder another.
+    // 1) Hide a column (roas is visible by default → this ADDS it).
+    toggleCampaignsColumnHidden('roas');
+    // 2) Reorder another (budget is REORDERABLE[1] → moving up records order).
     moveCampaignsColumn('budget', 'up');
     const orderAfterReorder = readCampaignsColumnPrefs().order;
     expect(orderAfterReorder![0]).toBe('budget');
@@ -415,18 +528,21 @@ describe('toggleCampaignsColumnHidden — hide/show one column', () => {
     // Order MUST survive the second toggle.
     expect(out.order).toEqual(orderAfterReorder);
     expect(out.order![0]).toBe('budget');
-    // Both columns remain hidden.
-    expect(out.hidden).toEqual(['cpa', 'cpm']);
+    // Both toggled columns remain hidden — alongside the declutter seed.
+    expect(out.hidden).toContain('roas');
+    expect(out.hidden).toContain('cpa');
+    expect(out.hidden).toContain('clicks');
+    expect(out.hidden).toContain('impressions');
   });
 
   it('preserves the saved order across un-hide (toggle to clear)', () => {
     moveCampaignsColumn('cpa', 'up');
     const orderAfterReorder = readCampaignsColumnPrefs().order;
-    toggleCampaignsColumnHidden('cpm'); // hide
-    toggleCampaignsColumnHidden('cpm'); // un-hide (same call, opposite effect)
+    toggleCampaignsColumnHidden('roas'); // hide (roas is visible by default)
+    toggleCampaignsColumnHidden('roas'); // un-hide (same call, opposite effect)
     const out = readCampaignsColumnPrefs();
     expect(out.order).toEqual(orderAfterReorder);
-    expect(out.hidden).not.toContain('cpm');
+    expect(out.hidden).not.toContain('roas');
   });
 });
 

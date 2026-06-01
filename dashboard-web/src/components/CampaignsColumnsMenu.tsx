@@ -227,9 +227,17 @@ export function CampaignsColumnsMenu({
                     {/* Phase 05.7.x — up/down chevrons for reorderable
                         metric columns. Structural columns (optimized, etc.)
                         get no controls; their slot stays empty so the row
-                        baselines line up with their reorderable siblings. */}
+                        baselines line up with their reorderable siblings.
+
+                        Column-audit 2026-06-01 (FIX 4) — the chevrons were
+                        invisible in BOTH themes (transparent ghost buttons,
+                        icon-only). Give them a visible AA treatment: a real
+                        button surface (bg-glass-2 + glass-edge border) with an
+                        ink-secondary icon (→ ink on hover), a clearly-dimmed
+                        disabled state at the list ends, and a ≥24px tap target.
+                        Token-only — passes the design-color green-ratchet. */}
                     {isReorderable && (
-                      <div className="flex flex-col shrink-0 self-center">
+                      <div className="flex flex-col gap-0.5 shrink-0 self-center">
                         <Button
                           type="button"
                           variant="ghost"
@@ -238,13 +246,13 @@ export function CampaignsColumnsMenu({
                           aria-label={`הזז ${col.label} למעלה`}
                           title="הזז למעלה"
                           className={cn(
-                            'w-5 h-4 rounded-sm',
+                            'w-6 h-6 rounded-md border p-0',
                             canUp
-                              ? 'text-ink-secondary hover:text-ink hover:bg-glass-2'
-                              : 'text-ink-subtle cursor-not-allowed',
+                              ? 'bg-glass-2 border-glass-edge text-ink-secondary hover:text-ink hover:bg-glass-1'
+                              : 'bg-glass-2 border-glass-edge text-ink-subtle opacity-40 cursor-not-allowed',
                           )}
                         >
-                          <ChevronUp size={12} />
+                          <ChevronUp size={13} />
                         </Button>
                         <Button
                           type="button"
@@ -254,13 +262,13 @@ export function CampaignsColumnsMenu({
                           aria-label={`הזז ${col.label} למטה`}
                           title="הזז למטה"
                           className={cn(
-                            'w-5 h-4 rounded-sm',
+                            'w-6 h-6 rounded-md border p-0',
                             canDown
-                              ? 'text-ink-secondary hover:text-ink hover:bg-glass-2'
-                              : 'text-ink-subtle cursor-not-allowed',
+                              ? 'bg-glass-2 border-glass-edge text-ink-secondary hover:text-ink hover:bg-glass-1'
+                              : 'bg-glass-2 border-glass-edge text-ink-subtle opacity-40 cursor-not-allowed',
                           )}
                         >
-                          <ChevronDown size={12} />
+                          <ChevronDown size={13} />
                         </Button>
                       </div>
                     )}

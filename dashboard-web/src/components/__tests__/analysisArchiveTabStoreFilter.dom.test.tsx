@@ -10,7 +10,7 @@
 // surface and the data-flow level.
 
 import { describe, expect, it, vi, beforeAll, afterAll } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within, fireEvent } from '@testing-library/react';
 import type { DailyRow } from '@/lib/types';
 
 // ---------------------------------------------------------------------------
@@ -74,10 +74,41 @@ vi.mock('swr', () => ({
 }));
 
 // MonthlyTables fires its own SWR; keep its render minimal so this test
-// stays scoped to AnalysisArchiveTab's scoping contract.
+// stays scoped to AnalysisArchiveTab's scoping contract. We expose the
+// controlled props (mode / storeFilter) AnalysisArchiveTab now lifts so the
+// "controls live in the parent row and drive MonthlyTables" contract is
+// assertable. We also surface whether MonthlyTables WOULD render its own
+// toolbar: when `mode` is provided as a controlled prop it must NOT.
 vi.mock('@/components/MonthlyTables', () => ({
-  MonthlyTables: (props: { globalStore?: string }) => (
-    <div data-testid="monthly-tables" data-global-store={props.globalStore ?? ''} />
+  MonthlyTables: (props: {
+    globalStore?: string;
+    mode?: string;
+    storeFilter?: string;
+  }) => (
+    <div
+      data-testid="monthly-tables"
+      data-global-store={props.globalStore ?? ''}
+      data-mode={props.mode ?? ''}
+      data-store-filter={props.storeFilter ?? ''}
+      data-controlled={props.mode != null ? 'yes' : 'no'}
+    />
+  ),
+  // AnalysisArchiveTab imports the real <Tab> to render the mode toggle in its
+  // lifted controls row. Provide a faithful, role-correct stand-in here (the
+  // real one renders a Button with role="tab"); we only need the role + label
+  // + click wiring for these assertions.
+  Tab: ({
+    active,
+    children,
+    onClick,
+  }: {
+    active: boolean;
+    children: React.ReactNode;
+    onClick: () => void;
+  }) => (
+    <button role="tab" aria-selected={active} onClick={onClick} type="button">
+      {children}
+    </button>
   ),
 }));
 
@@ -129,5 +160,61 @@ describe('AnalysisArchiveTab — global store filter (P0-15)', () => {
     render(<AnalysisArchiveTab stores={['uzoshop', 'otherstore']} globalStore="not-a-real-store" />);
     // Unknown store -> falls back to all stores -> March wins again.
     expect(screen.getByText(/מרץ 2026/)).toBeInTheDocument();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Lifted controls row: the mode toggle (לפי חנות / סיכום כללי) + store picker
+// now live in AnalysisArchiveTab (alongside year/month) and drive
+// MonthlyTables via controlled props, so MonthlyTables suppresses its own
+// internal toolbar. (Operator request 2026-06-01: all four controls on ONE
+// aligned row.)
+// ---------------------------------------------------------------------------
+describe('AnalysisArchiveTab — lifted mode toggle + store picker row', () => {
+  it('renders the mode toggle (לפי חנות / סיכום כללי) in the parent and passes controlled props to MonthlyTables', () => {
+    render(<AnalysisArchiveTab stores={['uzoshop', 'otherstore']} globalStore="All" />);
+
+    // The role="tablist" toggle lives in AnalysisArchiveTab now.
+    const tablist = screen.getByRole('tablist');
+    expect(within(tablist).getByRole('tab', { name: 'לפי חנות' })).toBeInTheDocument();
+    expect(within(tablist).getByRole('tab', { name: 'סיכום כללי' })).toBeInTheDocument();
+
+    // Default mode is per-store; the store picker is shown and MonthlyTables
+    // receives the controlled mode + storeFilter (so it suppresses its own
+    // toolbar).
+    const mt = screen.getByTestId('monthly-tables');
+    expect(mt.getAttribute('data-mode')).toBe('per-store');
+    expect(mt.getAttribute('data-controlled')).toBe('yes');
+    // storeFilter seeds from stores[0] when global filter is 'All'.
+    expect(mt.getAttribute('data-store-filter')).toBe('uzoshop');
+  });
+
+  it('store picker is shown in per-store mode and hidden in summary mode; toggling drives MonthlyTables', () => {
+    render(<AnalysisArchiveTab stores={['uzoshop', 'otherstore']} globalStore="All" />);
+
+    // In per-store mode the store picker (labelled <select>) is present.
+    expect(screen.getByRole('combobox', { name: 'חנות' })).toBeInTheDocument();
+
+    // Switch to summary: the store picker disappears and MonthlyTables sees mode=summary.
+    fireEvent.click(screen.getByRole('tab', { name: 'סיכום כללי' }));
+    expect(screen.queryByRole('combobox', { name: 'חנות' })).not.toBeInTheDocument();
+    expect(screen.getByTestId('monthly-tables').getAttribute('data-mode')).toBe('summary');
+
+    // Back to per-store: picker returns.
+    fireEvent.click(screen.getByRole('tab', { name: 'לפי חנות' }));
+    expect(screen.getByRole('combobox', { name: 'חנות' })).toBeInTheDocument();
+    expect(screen.getByTestId('monthly-tables').getAttribute('data-mode')).toBe('per-store');
+  });
+
+  it('changing the store picker updates the controlled storeFilter passed to MonthlyTables', () => {
+    render(<AnalysisArchiveTab stores={['uzoshop', 'otherstore']} globalStore="All" />);
+    const select = screen.getByRole('combobox', { name: 'חנות' }) as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: 'otherstore' } });
+    expect(screen.getByTestId('monthly-tables').getAttribute('data-store-filter')).toBe('otherstore');
+  });
+
+  it('seeds storeFilter from a specific global store filter', () => {
+    render(<AnalysisArchiveTab stores={['uzoshop', 'otherstore']} globalStore="otherstore" />);
+    expect(screen.getByTestId('monthly-tables').getAttribute('data-store-filter')).toBe('otherstore');
   });
 });

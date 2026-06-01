@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import useSWR from 'swr';
 import { Target, Edit3, Check, X, TrendingUp, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/Button';
@@ -10,6 +11,7 @@ import { Card } from '@/components/ui/Card';
 import { Heading } from '@/components/ui/Typography';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import type { DashboardData } from '@/lib/types';
+import { buildDateRangeKey, getTodayInIsraelTz } from '@/lib/dateRange';
 import {
   computePacing,
   forecastMonthEnd,
@@ -31,12 +33,33 @@ type Props = {
   data: DashboardData;
 };
 
+// Adds `n` days to a 'YYYY-MM-DD' string, anchored in UTC ms so it is
+// DST-safe and never returns the same day twice. Mirrors the helper inside
+// lib/insights.ts (which is module-private there).
+function addIsoDays(dateStr: string, n: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10);
+}
+
+// Local fetcher for the GoalTracker's OWN wide, filter-independent window.
+// Same shape/route the dashboard uses for daily rows (/api/data →
+// DashboardData), kept self-contained so the panel never depends on the
+// parent's filtered SWR cache.
+const wideDataFetcher = async (url: string): Promise<DashboardData> => {
+  const res = await fetch(url);
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new Error(body?.error || `Failed to load (${res.status})`);
+  }
+  return res.json() as Promise<DashboardData>;
+};
+
 /**
  * The monthly goal is intentionally GLOBAL — one business-wide target the
  * operator sets once for "all stores combined", with neither the store
  * filter nor the date range affecting it. Two consequences:
  *
- *  - The widget feeds `data.rows` (every store) straight to
+ *  - The widget feeds an ALL-STORES, FILTER-INDEPENDENT row set to
  *    `forecastMonthEnd`; the function does its own month-anchored slice
  *    so date filtering also wouldn't help.
  *  - It does NOT accept `filters` as a prop. An earlier revision (audit
@@ -44,6 +67,21 @@ type Props = {
  *    MTD per store; the operator corrected that on 2026-05-23 — the
  *    intent is a single goal across the whole business, not per-store
  *    sub-goals.
+ *
+ * Why a SEPARATE SWR fetch instead of the `data.rows` prop (fix 2026-06-01):
+ * `data.rows` is scoped to the dashboard's current filter RANGE. For the
+ * default `this_month` preset at the START of a month it contains ONLY the
+ * current month's days (e.g. just June 1). But `forecastMonthEnd`'s run-rate
+ * baseline is the trailing 7 COMPLETED days `[today-7, today-1]`, which near
+ * month-start fall in the PREVIOUS month. With no matching rows the baseline
+ * daily average was 0, so `projectedRevenue = monthToDateRevenue + 0` —
+ * the end-of-month forecast collapsed to month-to-date (e.g. day 1 of 30
+ * forecasting 4,359 instead of ~130,770). It also re-coupled the GLOBAL
+ * goal to `filters.range`. We instead fetch a fixed, global window that
+ * always covers BOTH the month-to-date AND the trailing-7-day baseline:
+ * `[monthStart - 7, today]`. forecastMonthEnd re-slices its own MTD +
+ * baseline, so a superset range is safe. While the wide fetch is still
+ * loading we fall back to `data.rows` so the panel always renders.
  */
 export function GoalTracker({ data }: Props) {
   const [goal, setGoal] = useState<number | null>(null);
@@ -63,8 +101,32 @@ export function GoalTracker({ data }: Props) {
     return () => window.removeEventListener('roas-goal-changed', onChange);
   }, []);
 
-  // Always all-stores, always month-anchored — see the component docstring.
-  const forecast = useMemo(() => forecastMonthEnd(data.rows), [data.rows]);
+  // GoalTracker's OWN wide, filter-INDEPENDENT window so forecastMonthEnd is
+  // never starved of its trailing-7-day baseline (see the component
+  // docstring). The window must cover BOTH the month-to-date AND the
+  // trailing-7-day baseline at any point in the month:
+  //   range = [monthStart - 7, today]   (today/monthStart anchored in IL TZ)
+  // No store filter — the goal is global. This key is fixed for the whole
+  // session (only ticks over at IL midnight / month boundaries), so it does
+  // NOT depend on filters.range or filters.store.
+  const wideRangeKey = useMemo(() => {
+    const today = getTodayInIsraelTz();
+    const monthStart = `${today.slice(0, 7)}-01`;
+    const from = addIsoDays(monthStart, -7);
+    return buildDateRangeKey('/api/data', { from, to: today });
+  }, []);
+  const { data: wideData } = useSWR<DashboardData>(wideRangeKey, wideDataFetcher, {
+    refreshInterval: 60_000,
+    revalidateOnFocus: true,
+  });
+
+  // Feed the wide, global rows to the forecast. Fall back to the (filtered)
+  // prop rows on first paint while the wide fetch is still loading so the
+  // panel always renders something; a brief under-projection before the wide
+  // fetch resolves is acceptable. forecastMonthEnd does its own month-anchored
+  // MTD slice + trailing-7-day baseline, so a superset range is fine.
+  const forecastRows = wideData?.rows ?? data.rows;
+  const forecast = useMemo(() => forecastMonthEnd(forecastRows), [forecastRows]);
   const daysInMonth = useMemo(
     () => forecast.daysElapsedThisMonth + forecast.daysRemainingThisMonth,
     [forecast],

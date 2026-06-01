@@ -98,12 +98,15 @@ type SortKey =
   | 'shopifyRoas'              // combined Shopify ROAS (deterministic + proportional)
   | 'roasShopifyPlatform'      // Shopify ROAS using ONLY deterministic per-platform revenue
   | 'shopifyValuePlatform'     // deterministic per-platform Shopify revenue
+  | 'shopifyValueAllocated'    // allocated Shopify revenue (ROAS Shopify numerator = trueRevenue)
   | 'shopifyUnitsPlatform'     // deterministic per-platform Shopify units
   | 'shopifyValueTotal'        // total Shopify revenue (across all platforms) of mapped products
   | 'shopifyUnitsTotal'        // total Shopify units (across all platforms) of mapped products
   | 'shopifyOrdersTotal'       // Phase 05.7.x (2026-05-23) — total Shopify orders (across all platforms) of mapped products
   | 'health'                   // unified Campaign Health Score (Phase 05.7.x)
   | 'conversions'
+  | 'clicks'                   // column-audit 2026-06-01 — raw click volume (off by default)
+  | 'impressions'              // column-audit 2026-06-01 — raw impression volume (off by default)
   | 'ctr'
   | 'cpc'
   | 'cpm'                      // cost per 1000 impressions (spend / impressions * 1000)
@@ -186,6 +189,7 @@ function sortAggregated(
       }
       case 'roasShopifyPlatform':
       case 'shopifyValuePlatform':
+      case 'shopifyValueAllocated':
       case 'shopifyUnitsPlatform':
       case 'shopifyValueTotal':
       case 'shopifyUnitsTotal':
@@ -202,6 +206,10 @@ function sortAggregated(
       }
       case 'conversions':
         return a.conversions;
+      case 'clicks':
+        return a.clicks;
+      case 'impressions':
+        return a.impressions;
       case 'ctr':
         return a.impressions > 0 ? a.clicks / a.impressions : 0;
       case 'cpc':
@@ -1112,6 +1120,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     const shopifyCols = [
       'roasShopifyPlatform',
       'shopifyValuePlatform',
+      'shopifyValueAllocated',
       'shopifyUnitsPlatform',
       'shopifyValueTotal',
       'shopifyUnitsTotal',
@@ -1129,6 +1138,12 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
               break;
             case 'shopifyValuePlatform':
               v = info.deterministicRevenue;
+              break;
+            case 'shopifyValueAllocated':
+              // Column-audit 2026-06-01 (FIX 1) — sort by the ROAS Shopify
+              // numerator (allocated revenue = trueRevenue). No math added;
+              // reads the same allocator output the cell renders.
+              v = info.trueRevenue;
               break;
             case 'shopifyUnitsPlatform':
               v = info.deterministicUnits;
@@ -1901,7 +1916,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     align="center"
                     className="px-3 py-2 w-[92px]"
                     dataColId="roasShopify"
-                    tooltip={'ROAS לפי המכירות בפועל ב-Shopify של המוצרים המשויכים לקמפיין. נוסחה: (revenue דטרמיניסטי + הקצאה פרופורציונלית של נותר) ÷ הוצאה. זהו ה-ROAS האמיתי ביותר — מבוסס על מה ש-Shopify רושם, לא על מה שה-Pixel מדווח. דורש שהקמפיין ימופה למוצרים (לחץ על השורה כדי למפות).\n\n🔗 מיפוי משותף: אם המוצר ממופה ל-2+ קמפיינים, ההכנסה מתחלקת ביניהם פרופורציונלית להוצאה (intra-platform spend share). כלומר ROAS Shopify של קמפיין יחיד בקבוצה הוא חלקו, לא כל ההכנסה של המוצר. ראה גם פאנל ההשוואה במגירת הקמפיין.'}
+                    tooltip={'ROAS Shopify (מוקצה) — מבוסס הכנסה מוקצה (click-id + חלוקה יחסית). נוסחה: (revenue דטרמיניסטי מ-click-id + הקצאה פרופורציונלית של הזמנות לא-מתויגות) ÷ הוצאה. המונה מוצג בעמודה ״ערך Shopify · מוקצה״ כך שאפשר לשחזר את המספר על המסך. זהו ה-ROAS האמיתי ביותר — מבוסס על מה ש-Shopify רושם, לא על מה שה-Pixel מדווח. דורש שהקמפיין ימופה למוצרים (לחץ על השורה כדי למפות).\n\n🔗 מיפוי משותף: אם המוצר ממופה ל-2+ קמפיינים, ההכנסה מתחלקת ביניהם פרופורציונלית להוצאה (intra-platform spend share). כלומר ROAS Shopify של קמפיין יחיד בקבוצה הוא חלקו, לא כל ההכנסה של המוצר. ראה גם פאנל ההשוואה במגירת הקמפיין.'}
                   />
                 ),
                 roasShopifyPlatform: (
@@ -1940,6 +1955,25 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     className="px-3 py-2 w-[92px] border-e border-glass-edge"
                     dataColId="shopifyValuePlatform"
                     tooltip="ערך המכירות (CAD) שסווגו דטרמיניסטית לפלטפורמה הזו דרך source / click-id ב-Shopify (utm_source, ttclid, fbclid, gclid). רק הזמנות שאנחנו 100% בטוחים שהן מהפלטפורמה הזו — בלי הקצאה פרופורציונלית. זה מה שאפשר להוכיח."
+                  />
+                ),
+                shopifyValueAllocated: (
+                  <SortHeader
+                    key="shopifyValueAllocated"
+                    label={
+                      <span className="inline-flex flex-col items-end leading-tight">
+                        <span>ערך Shopify</span>
+                        <span className="text-[9px] text-ink-muted font-normal">מוקצה</span>
+                      </span>
+                    }
+                    sortKey="shopifyValueAllocated"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[92px]"
+                    dataColId="shopifyValueAllocated"
+                    tooltip={'הכנסת Shopify המוקצה לקמפיין — זהו המונה של ROAS Shopify. נוסחה: revenue דטרמיניסטי (click-id) + הקצאה פרופורציונלית של הזמנות לא-מתויגות של המוצרים המשויכים. מציג 2 ספרות אחרי הנקודה כדי שאפשר יהיה לשחזר את ROAS Shopify על המסך: מוקצה ÷ הוצאה = ROAS Shopify. (זהה ל-trueRevenue — לא שונה שום חישוב.)'}
                   />
                 ),
                 shopifyUnitsPlatform: (
@@ -2030,6 +2064,34 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     className="px-3 py-2 w-[72px]"
                     dataColId="conversions"
                     tooltip="מספר ההמרות (purchase events) שהפלטפורמה ייחסה לקמפיין בטווח. ב-Meta: actions.purchase, ב-Google: conversions, ב-TikTok: complete_payment. זוהי הספירה של הפלטפורמה — לא בהכרח שווה למספר ההזמנות ב-Shopify."
+                  />
+                ),
+                clicks: (
+                  <SortHeader
+                    key="clicks"
+                    label="קליקים"
+                    sortKey="clicks"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[80px]"
+                    dataColId="clicks"
+                    tooltip="מספר הקליקים שדיווחה הפלטפורמה על הקמפיין בטווח. עמודה זו מוסתרת כברירת מחדל — אפשר להפעיל אותה דרך תפריט ״עמודות״."
+                  />
+                ),
+                impressions: (
+                  <SortHeader
+                    key="impressions"
+                    label="חשיפות"
+                    sortKey="impressions"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="end"
+                    className="px-3 py-2 w-[90px]"
+                    dataColId="impressions"
+                    tooltip="מספר החשיפות (impressions) שדיווחה הפלטפורמה על הקמפיין בטווח. עמודה זו מוסתרת כברירת מחדל — אפשר להפעיל אותה דרך תפריט ״עמודות״."
                   />
                 ),
                 ctr: (

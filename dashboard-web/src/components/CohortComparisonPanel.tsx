@@ -263,7 +263,10 @@ function CohortSection({ title, subtitle, members, tone, onDrillCampaign }: Sect
             <th className="px-2 py-1 text-start font-medium text-[10px]">מוצרים משותפים</th>
             <th className="px-2 py-1 text-end font-medium text-[10px]">הוצאה</th>
             <th className="px-2 py-1 text-end font-medium text-[10px]">
-              ROAS Shopify
+              {/* Column-audit 2026-06-01 (FIX 2) — read as the ALLOCATED ROAS
+                  for consistency with the table's "ROAS Shopify (מוקצה)".
+                  Label only — the underlying roasShopify value is unchanged. */}
+              ROAS Shopify (מוקצה)
             </th>
             <th className="px-2 py-1 text-end font-medium text-[10px]">
               ROAS פלטפ.
