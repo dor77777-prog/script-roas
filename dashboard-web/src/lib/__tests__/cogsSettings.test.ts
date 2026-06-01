@@ -107,3 +107,32 @@ describe('applyCogsToRows', () => {
     expect(r.netProfit).toBeCloseTo(r0.netProfit, 6);
   });
 });
+
+import { applyPctToScope, type ApplyScope } from '@/lib/cogsSettings';
+import type { CogsScopeSettings } from '@/lib/cogsSettings';
+
+describe('applyPctToScope — the 4 apply-scopes', () => {
+  const base = (): CogsScopeSettings => ({ default: 25, byMonth: { '2026-04': 27 } });
+  it('current month → sets byMonth[current]', () => {
+    const out = applyPctToScope(base(), 32, { kind: 'current', currentMonth: '2026-06' }, ['2026-03','2026-04','2026-05','2026-06']);
+    expect(out.byMonth['2026-06']).toBe(32);
+    expect(out.byMonth['2026-04']).toBe(27); // untouched
+    expect(out.default).toBe(25);
+  });
+  it('specific month → sets byMonth[that]', () => {
+    const out = applyPctToScope(base(), 18, { kind: 'specific', month: '2026-05' }, ['2026-05','2026-06']);
+    expect(out.byMonth['2026-05']).toBe(18);
+  });
+  it('all previous → sets byMonth for every month < current present in the data', () => {
+    const out = applyPctToScope(base(), 33, { kind: 'all-previous', currentMonth: '2026-06' }, ['2026-03','2026-04','2026-05','2026-06']);
+    expect(out.byMonth['2026-03']).toBe(33);
+    expect(out.byMonth['2026-04']).toBe(33);
+    expect(out.byMonth['2026-05']).toBe(33);
+    expect(out.byMonth['2026-06']).toBeUndefined(); // current NOT touched
+  });
+  it('everything → sets default + clears byMonth', () => {
+    const out = applyPctToScope(base(), 26, { kind: 'everything' }, ['2026-04','2026-06']);
+    expect(out.default).toBe(26);
+    expect(out.byMonth).toEqual({});
+  });
+});
