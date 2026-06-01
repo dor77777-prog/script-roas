@@ -595,10 +595,9 @@ input[type="number"] {
    `font-size: var(--metric-font)` and — because it's emitted AFTER the
    Tailwind utilities in the built CSS — silently beat any same-specificity
    call-site `text-[Npx]` (same specificity, later source), clamping operator-
-   tuned readouts to the fluid size. Fluid container-sizing is now OPT-IN via
-   `.metric-fluid` (used only by readouts that actually want to grow/shrink
-   with their `.metric-cell` container; none in PerStoreRow, which has explicit
-   operator sizes).
+   tuned readouts to the fluid size. Call sites now own their font-size
+   explicitly (e.g. `text-[20px]`, or the per-store `.sv` rule), so no fluid
+   container-sizing helper is needed.
 
    `.metric-num` deliberately does NOT set min-inline-size: forcing 8ch
    everywhere would blow out narrow table columns (tiny CPM tiles, dense
@@ -611,11 +610,6 @@ input[type="number"] {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-/* Opt-in fluid sizing: font-size tracks --metric-font (a clamp() with a cqi
-   term), so when an ancestor .metric-cell sets container-type: inline-size the
-   value fluidly shrinks/grows with its column. Add this ALONGSIDE .metric-num
-   only on readouts that want container-fluid sizing. */
-.metric-fluid { font-size: var(--metric-font); line-height: 1.15; }
 .metric-reserve { min-inline-size: 8ch; }
 .metric-cell { container-type: inline-size; min-width: 0; }
 

@@ -137,7 +137,7 @@ function Row({
             <div className="text-ink-secondary tabular-nums">
               <span className="text-ink-muted">הוצאה:</span> CAD <Money value={campaign.spend} prefix="none" locale="he-IL" compactAbove={100_000} />
               {' · '}
-              <span className="text-ink-muted">CAC:</span> {Math.round(campaign.cac).toLocaleString('he-IL')}
+              <span className="text-ink-muted">CAC:</span> <Money value={campaign.cac} prefix="none" locale="he-IL" compactAbove={100_000} />
             </div>
             <div
               className={cn('font-medium shrink-0 inline-flex items-center gap-1', verdictColor)}

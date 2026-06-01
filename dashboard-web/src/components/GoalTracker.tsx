@@ -307,7 +307,7 @@ export function GoalTracker({ data }: Props) {
               <Money value={goal!} prefix="none" locale="he-IL" compactAbove={1_000_000} />
             </div>
             <div className="text-[10px] sm:text-[11px] text-ink-muted tabular-nums mt-0.5">
-              חסרים CAD {Math.max(0, Math.round(goal! - forecast.monthToDateRevenue)).toLocaleString('he-IL')}
+              חסרים CAD <Money value={Math.max(0, goal! - forecast.monthToDateRevenue)} prefix="none" locale="he-IL" compactAbove={1_000_000} />
             </div>
           </div>
           <div className="col-span-2 sm:col-span-1">
