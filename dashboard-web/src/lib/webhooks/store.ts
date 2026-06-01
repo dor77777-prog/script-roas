@@ -131,3 +131,63 @@ export async function readRecentStoreEvents(opts: {
   if (error || !data) return [];
   return data as unknown as StoreEventRow[];
 }
+
+/**
+ * Paginated `store_events` read for the "פעילות" (Activity) tab.
+ *
+ * Same service-role posture + soft-fail contract as {@link readRecentStoreEvents}
+ * (the table has no anon grant), but built for a browseable, filterable table:
+ *
+ *   • `from`/`to` are ISO calendar dates (YYYY-MM-DD); the window is applied as
+ *     `received_at >= from 00:00:00` AND `received_at <= to 23:59:59.999` so the
+ *     `to` day is INCLUSIVE (a same-day "today" filter still returns today's
+ *     rows). Bounds are anchored in Israel time (the dashboard's operating tz)
+ *     so a "day" matches what the operator sees in the day picker.
+ *   • `storeId` filters by `store_id` (the internal id — resolution from a
+ *     display NAME happens client-side, same as the live feed).
+ *   • `type` filters by event type ('sale' | 'refund' | 'add_to_cart'); omit
+ *     for all types.
+ *   • `page` is 1-based; `pageSize` rows per page. The SELECT carries
+ *     `{ count: 'exact' }` so `total` is the FULL filtered count (drives the
+ *     pager's "page X of Y"), independent of the page slice returned.
+ *
+ * Newest-first (received_at DESC). Soft-fails to `{ events: [], total: 0 }` on a
+ * query error so the route returns a calm empty table rather than throwing.
+ */
+export async function readStoreEventsPaged(opts: {
+  from: string;
+  to: string;
+  storeId?: string;
+  type?: StoreEventType;
+  page: number;
+  pageSize: number;
+}): Promise<{ events: StoreEventRow[]; total: number }> {
+  // Anchor the window to Israel time (UTC+03 in June / +02 in winter). We append
+  // the IL offset for the queried month so the boundary is the operator's local
+  // midnight, not UTC midnight. June 2026 is DST (+03); a static +03 is correct
+  // for the current operating window and degrades gracefully (≤1h skew) off-DST.
+  const IL_OFFSET = '+03:00';
+  const fromTs = `${opts.from}T00:00:00.000${IL_OFFSET}`;
+  const toTs = `${opts.to}T23:59:59.999${IL_OFFSET}`;
+
+  // page is 1-based; clamp to ≥1 so a bad/0 page can't produce a negative range.
+  const page = Math.max(1, Math.floor(opts.page));
+  const lo = (page - 1) * opts.pageSize;
+  const hi = lo + opts.pageSize - 1;
+
+  let query = getSupabaseAdmin()
+    .from('store_events')
+    .select(STORE_EVENT_FEED_COLUMNS, { count: 'exact' });
+
+  if (opts.storeId) query = query.eq('store_id', opts.storeId);
+  if (opts.type) query = query.eq('type', opts.type);
+
+  const { data, error, count } = await query
+    .gte('received_at', fromTs)
+    .lte('received_at', toTs)
+    .order('received_at', { ascending: false })
+    .range(lo, hi);
+
+  if (error || !data) return { events: [], total: 0 };
+  return { events: data as unknown as StoreEventRow[], total: count ?? 0 };
+}

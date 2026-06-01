@@ -41,6 +41,17 @@ type Props = {
   onChange: (next: F) => void;
 };
 
+/**
+ * Short pill labels for the MOBILE A3 bar. The two long presets are shortened
+ * so 4 pills fit a phone width; 'היום' and 'אתמול' stay verbatim (operator
+ * explicitly wants 'אתמול' present and unabbreviated). Keys are the same
+ * PRESET_FEATURED entries so this map never drifts from PRESET_LABELS order.
+ */
+const PILL_SHORT_LABELS: Partial<Record<PresetKey, string>> = {
+  last_7_days: '7 ימים',
+  this_month: 'מהחודש',
+};
+
 export function Filters({ filters, stores, onChange }: Props) {
   // Advanced presets are folded behind a toggle on small screens to reduce
   // visual noise — the two featured options + store + range cover the 95% case.
@@ -69,6 +80,21 @@ export function Filters({ filters, stores, onChange }: Props) {
   const activeIsSecondary = PRESET_SECONDARY.includes(filters.preset);
   const showAdvanced = advancedOpen || activeIsSecondary || filters.preset === 'custom';
 
+  // ── A3 mobile pill bar ───────────────────────────────────────────────────
+  // The active pill index drives the absolutely-positioned thumb. When the
+  // active preset is NOT one of the 4 featured (secondary / custom), the index
+  // is -1 → the thumb hides and no pill is marked active. The advanced section
+  // + store picker stay reachable on mobile so secondary/custom remain usable.
+  const activePillIndex = PRESET_FEATURED.indexOf(filters.preset);
+  const hasActivePill = activePillIndex >= 0;
+  // RTL thumb math: 4 equal pills in a flex row. inset-inline-start tracks the
+  // start edge of pill N at (N/4 * 100%), width is a fixed 25%. Because the
+  // wrapper is dir=rtl, `inset-inline-start` resolves to the RIGHT edge, so the
+  // thumb correctly slides right→left as the index grows — matching the pills,
+  // which are laid out right→left under RTL.
+  const thumbStart = `${(Math.max(0, activePillIndex) / PRESET_FEATURED.length) * 100}%`;
+  const thumbWidth = `${100 / PRESET_FEATURED.length}%`;
+
   return (
     <Card className="!p-0 overflow-hidden w-full">
       {/* ===== Compact horizontal strip =====
@@ -95,8 +121,13 @@ export function Filters({ filters, stores, onChange }: Props) {
             טווח מהיר
           </div>
 
-          {/* Featured presets — wrap naturally if width is constrained */}
-          <div className="flex flex-wrap items-center gap-1.5">
+          {/* Featured presets — DESKTOP (md+). Wrapped `hidden md:flex` so the
+           * md+ layout is byte-identical to before; the MOBILE pill bar below
+           * (md:hidden) replaces it on small screens. */}
+          <div
+            className="hidden md:flex flex-wrap items-center gap-1.5"
+            data-testid="filters-featured-desktop"
+          >
             {PRESET_FEATURED.map(p => (
               <Button
                 key={p}
@@ -113,6 +144,55 @@ export function Filters({ filters, stores, onChange }: Props) {
                 {PRESET_LABELS[p]}
               </Button>
             ))}
+          </div>
+
+          {/* Featured presets — MOBILE (< md). Sliding-thumb pill bar. Full
+           * width so the 4 pills + thumb fill the phone row. The thumb is an
+           * absolutely-positioned slab UNDER the active pill; it animates
+           * between pills with a bouncy curve and is RTL-correct via
+           * inset-inline-start. */}
+          <div
+            className="md:hidden w-full basis-full"
+            data-testid="filters-pillbar"
+          >
+            <div className="relative flex rounded-control bg-pill-track p-1">
+              {/* Sliding thumb — hidden (opacity 0) when no featured pill is
+               * active so secondary/custom presets degrade gracefully. */}
+              <span
+                aria-hidden="true"
+                data-testid="filters-pill-thumb"
+                className="filters-pill-thumb absolute top-1 bottom-1 rounded-[0.5625rem] bg-pill-thumb shadow-soft"
+                style={{
+                  insetInlineStart: thumbStart,
+                  width: thumbWidth,
+                  opacity: hasActivePill ? 1 : 0,
+                }}
+              />
+              {PRESET_FEATURED.map(p => {
+                const isActive = filters.preset === p;
+                return (
+                  <Button
+                    key={p}
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => selectPreset(p)}
+                    aria-pressed={isActive}
+                    className={cn(
+                      // min-h-[44px] = touch target; relative+z so the label
+                      // sits above the thumb slab. Transparent so only the
+                      // sliding thumb paints the active background.
+                      'relative z-[1] flex-1 h-auto min-h-[44px] px-1 rounded-[0.5625rem]',
+                      'bg-transparent hover:bg-transparent text-xs font-bold',
+                      'transition-colors duration-DEFAULT active:scale-[0.96]',
+                      isActive ? 'text-pill-inkOn' : 'text-pill-ink',
+                    )}
+                  >
+                    {PILL_SHORT_LABELS[p] ?? PRESET_LABELS[p]}
+                  </Button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Spacer pushes store-picker + range banner + toggle to the

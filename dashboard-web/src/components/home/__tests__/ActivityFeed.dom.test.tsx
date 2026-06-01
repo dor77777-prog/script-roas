@@ -9,7 +9,7 @@
 // `true` by default; one test flips it to `false` to assert the motion path.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent } from '@testing-library/react';
 import type { StoreEventsResponse } from '@/app/api/store-events/route';
 
 // ---- SWR mock: a settable holder the tests poke before each render. --------
@@ -265,6 +265,28 @@ describe('<ActivityFeed> — RTL + filter', () => {
     expect(lastSwrKey).not.toContain('store=');
   });
 
+  it('renders a "ראה הכל" footer link when onSeeAll is provided and fires it on click', () => {
+    const onSeeAll = vi.fn();
+    swrReturn = {
+      data: resp({ lastReceivedAt: NOW, events: [row({ id: 's1' })] }),
+      error: undefined,
+    };
+    render(<ActivityFeed onSeeAll={onSeeAll} />);
+    const link = screen.getByTestId('activity-feed-see-all');
+    expect(link.textContent).toContain('ראה הכל');
+    fireEvent.click(link);
+    expect(onSeeAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT render the "ראה הכל" link when onSeeAll is omitted', () => {
+    swrReturn = {
+      data: resp({ lastReceivedAt: NOW, events: [row({ id: 's1' })] }),
+      error: undefined,
+    };
+    render(<ActivityFeed />);
+    expect(screen.queryByTestId('activity-feed-see-all')).toBeNull();
+  });
+
   it('the row text is rendered (no raw HTML injection path)', () => {
     swrReturn = {
       data: resp({
@@ -277,5 +299,16 @@ describe('<ActivityFeed> — RTL + filter', () => {
     // The literal angle-bracket string renders as TEXT, never as a <b> element.
     expect(container.querySelector('b')).toBeNull();
     expect(within(container).getByText('<b>x</b>')).toBeInTheDocument();
+  });
+});
+
+describe('<ActivityFeed> — Home snapshot cap', () => {
+  it('renders at most 20 rows even when more events are returned (the rest live behind ראה הכל)', () => {
+    const many = Array.from({ length: 25 }, (_, i) =>
+      row({ id: `e${i}`, product_title: `מוצר ${i}` }),
+    );
+    swrReturn = { data: resp({ lastReceivedAt: NOW, events: many }), error: undefined };
+    const { container } = render(<ActivityFeed />);
+    expect(container.querySelectorAll('[data-testid="store-event-row"]').length).toBe(20);
   });
 });

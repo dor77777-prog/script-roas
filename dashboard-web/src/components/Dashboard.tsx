@@ -62,7 +62,9 @@ import {
   type RoasChartRangeKey,
 } from '@/components/home/RoasTargetChart';
 import { ActivityFeed } from '@/components/home/ActivityFeed';
+import { ActivityEventsTab } from '@/components/activity/ActivityEventsTab';
 import { StoreDetailModal } from '@/components/home/StoreDetailModal';
+import { MobileStickyRoas } from '@/components/home/MobileStickyRoas';
 import { toStoreDetail } from '@/lib/home/storeDetail';
 import type { StoreAgg } from '@/lib/analytics';
 import { InsightsBoard } from './InsightsBoard';
@@ -403,7 +405,11 @@ export function Dashboard() {
                   aiReportSignal={aiReportSignal}
                   ordersByStore={ordersByStore}
                   ordersRows={ordersData?.rows}
+                  onSeeActivity={() => handleTabChange('activity')}
                 />
+              )}
+              {activeTab === 'activity' && (
+                <ActivityEventsTab data={data} globalStore={filters.store} />
               )}
               {activeTab === 'pnl' && (
                 <PnLTab
@@ -479,6 +485,7 @@ function HomeTab({
   aiReportSignal,
   ordersByStore,
   ordersRows,
+  onSeeActivity,
 }: {
   data: DashboardData;
   filtered: FilteredView;
@@ -494,6 +501,11 @@ function HomeTab({
    * the per-store order count already consumes — no second SWR fetch.
    */
   ordersRows?: Array<{ storeName: string; date: string }>;
+  /**
+   * Switches the dashboard to the "פעילות" (Activity) tab — wired to the
+   * "ראה הכל" link in the Home <ActivityFeed> footer.
+   */
+  onSeeActivity?: () => void;
 }) {
   // Chart range is INDEPENDENT of the page-level filter range — operator can
   // browse a 90-day trend without losing the "today" snapshot above. Seeded
@@ -885,8 +897,30 @@ function HomeTab({
   // control); for now the preset label reads naturally.
   const heroRangeLabel = rangeLabel;
 
+  // B3 (mobile) — collapsing sticky ROAS summary headline. Fed from the SAME
+  // chartProp the RoasTargetChart uses so the two never disagree. deltaPct is
+  // current-vs-prev ROAS %, null-guarded so there's no NaN and no chip when the
+  // previous period is missing (or its ROAS is 0).
+  const stickyDeltaPct = useMemo(() => {
+    const cur = chartProp.kpis.roas;
+    const prev = chartProp.prevPeriod?.roas;
+    if (prev == null || prev === 0 || Number.isNaN(prev) || Number.isNaN(cur)) {
+      return null;
+    }
+    return ((cur - prev) / prev) * 100;
+  }, [chartProp]);
+
   return (
     <div className="space-y-4 sm:space-y-5 animate-fade-in-up">
+      {/* B3 — MOBILE-ONLY collapsing sticky ROAS summary. Pinned to the top of
+          the Home content (z-20, below the app header at z-30). Hidden at md+. */}
+      <MobileStickyRoas
+        roas={chartProp.kpis.roas}
+        target={3.0}
+        deltaPct={stickyDeltaPct}
+        rangeLabel={rangeLabel}
+      />
+
       {/* 1. Header — title + filters + AI report ----------------------------- */}
       <TabHeader
         title="בית"
@@ -971,6 +1005,7 @@ function HomeTab({
         <InsightsBoard data={data} />
         <ActivityFeed
           store={filters.store === 'All' ? undefined : filters.store}
+          onSeeAll={onSeeActivity}
         />
       </div>
     </div>

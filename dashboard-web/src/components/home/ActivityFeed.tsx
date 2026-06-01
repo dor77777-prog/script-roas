@@ -38,6 +38,7 @@ import { ShoppingBag, Undo2, ShoppingCart, Zap } from 'lucide-react';
 import { Card } from '@/components/ui/Card';
 import { Heading } from '@/components/ui/Typography';
 import { Money } from '@/components/ui/Money';
+import { Button } from '@/components/ui/Button';
 import { cn } from '@/lib/utils';
 import { useReducedMotion } from '@/lib/hooks/useReducedMotion';
 import { STORE_ID_TO_NAME, type StoreId } from '@/lib/platformsByStore';
@@ -52,9 +53,20 @@ import type { StoreEventsResponse } from '@/app/api/store-events/route';
 export interface ActivityFeedProps {
   /** Optional store filter — pass 'All' / undefined to show every store. */
   store?: string;
-  /** Maximum rows to render — defaults to 50 (the read route caps at 50). */
+  /**
+   * Maximum rows to render — defaults to 20. The Home feed is a SNAPSHOT of the
+   * latest activity, not a scrollable archive: it shows the newest 20 events and
+   * the "ראה הכל ‹" link drills to the full, paginated "פעילות" tab. (The read
+   * route still returns up to 50; we slice to `limit`.)
+   */
   limit?: number;
   className?: string;
+  /**
+   * When provided, renders a "ראה הכל ‹" footer link that switches to the
+   * "פעילות" (Activity) tab — the full, paginated, filterable event browser.
+   * Omitted (Home not wired) → no link.
+   */
+  onSeeAll?: () => void;
 }
 
 /* --------------------------------------------------------------------------
@@ -299,7 +311,7 @@ function EventRow({
  * Component
  * -------------------------------------------------------------------------- */
 
-export function ActivityFeed({ store, limit = 50, className }: ActivityFeedProps) {
+export function ActivityFeed({ store, limit = 20, className, onSeeAll }: ActivityFeedProps) {
   const params = useMemo(() => {
     const sp = new URLSearchParams();
     if (store && store !== 'All') sp.set('store', resolveStoreId(store));
@@ -383,6 +395,26 @@ export function ActivityFeed({ store, limit = 50, className }: ActivityFeedProps
       <div className="px-5 py-2.5 text-center text-[11px] text-ink-subtle border-t border-glass-edge">
         מאזין ל-3 חנויות · מתעדכן רגעית
       </div>
+
+      {/* "ראה הכל ‹" — deep-links to the full "פעילות" (Activity) tab. Only
+          rendered when Home wired `onSeeAll`. token-only + AA: text-accent on
+          the Card surface, ≥44px touch target. */}
+      {onSeeAll && (
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={onSeeAll}
+          data-testid="activity-feed-see-all"
+          className={cn(
+            'w-full h-auto min-h-[44px] py-2.5 rounded-none flex items-center justify-center gap-1.5',
+            'text-[12px] font-bold text-[color:var(--accent-link)] border-t border-glass-edge',
+            'hover:bg-glass-2 focus-visible:ring-accent',
+          )}
+        >
+          ראה הכל
+          <span aria-hidden>‹</span>
+        </Button>
+      )}
     </Card>
   );
 }

@@ -172,6 +172,18 @@ const config: Config = {
         // ---- Scrim: modal / overlay dim layer (Wave 0). Tokenised so
         //      `bg-scrim` flips per theme instead of a raw bg-black/60.
         scrim: 'var(--scrim)',
+
+        // ---- Pill: mobile A3 sliding range-pill bar (2026-06-01). `track` is
+        //      the recessed bar; `thumb` is the deepened on-hue accent slab the
+        //      sliding indicator paints; `ink` is the inactive muted label;
+        //      `inkOn` is the on-thumb white foreground (≥4.5:1 on the thumb in
+        //      BOTH themes — locked by contrastGuard.test.ts).
+        pill: {
+          track: 'var(--pill-track)',
+          thumb: 'var(--pill-thumb)',
+          ink:   'var(--pill-ink)',
+          inkOn: 'var(--pill-ink-on)',
+        },
       },
 
       fontFamily: {

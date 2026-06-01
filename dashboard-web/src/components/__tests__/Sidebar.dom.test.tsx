@@ -4,7 +4,7 @@ import { Sidebar } from '../Sidebar';
 import { ThemeProvider } from '../ThemeProvider';
 
 function renderSidebar(props: {
-  activeTab?: 'home'|'archive'|'pnl'|'trends'|'campaigns'|'products'|'detail';
+  activeTab?: 'home'|'activity'|'archive'|'pnl'|'trends'|'campaigns'|'products'|'detail';
   onTabChange?: (k: string) => void;
   isMobileOpen?: boolean;
   onMobileClose?: () => void;
@@ -22,9 +22,10 @@ function renderSidebar(props: {
 }
 
 describe('Sidebar', () => {
-  it('renders all 7 tab destinations + operator link + theme toggle', () => {
+  it('renders all 8 tab destinations + operator link + theme toggle', () => {
     renderSidebar();
-    const expectedLabels = ['בית', 'טבלאות אופטימיזציה', 'P&L', 'מגמות', 'קמפיינים', 'מוצרים', 'פירוט'];
+    // 'פעילות' (Activity) sits RIGHT AFTER 'בית' (Home) — first after Home.
+    const expectedLabels = ['בית', 'פעילות', 'טבלאות אופטימיזציה', 'P&L', 'מגמות', 'קמפיינים', 'מוצרים', 'פירוט'];
     for (const label of expectedLabels) {
       // The Sidebar now renders two copies of the nav body (desktop right-
       // rail + mobile off-canvas drawer) — both are always in the DOM, the
@@ -45,6 +46,28 @@ describe('Sidebar', () => {
     // Click the first copy (desktop rail) — both copies wire the same handler.
     fireEvent.click(screen.getAllByText('קמפיינים')[0]);
     expect(onTabChange).toHaveBeenCalledWith('campaigns');
+  });
+
+  it('fires onTabChange("activity") when the פעילות item is clicked', () => {
+    const onTabChange = vi.fn();
+    renderSidebar({ onTabChange });
+    fireEvent.click(screen.getAllByText('פעילות')[0]);
+    expect(onTabChange).toHaveBeenCalledWith('activity');
+  });
+
+  it('orders פעילות immediately after בית in the desktop rail', () => {
+    const { container } = renderSidebar();
+    const rail = container.querySelector('[data-testid="desktop-sidebar"]')!;
+    // The desktop rail renders collapsed (icon-only) by default, so the label
+    // text lives on each tab button's aria-label (not visible text). Read the
+    // tab order from those.
+    const labels = Array.from(rail.querySelectorAll('nav [role="tab"]')).map(
+      (b) => b.getAttribute('aria-label')?.trim() ?? b.textContent?.trim(),
+    );
+    const homeIdx = labels.findIndex((l) => l === 'בית');
+    const activityIdx = labels.findIndex((l) => l === 'פעילות');
+    expect(homeIdx).toBeGreaterThanOrEqual(0);
+    expect(activityIdx).toBe(homeIdx + 1);
   });
 
   it('marks the active item with aria-current="page"', () => {

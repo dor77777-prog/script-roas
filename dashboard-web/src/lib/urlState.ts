@@ -10,7 +10,7 @@
  *   - users can share a URL with a teammate that opens to the same view
  *
  * Encoded params (all optional, sensible defaults):
- *   tab     = home | archive | pnl | trends | campaigns | products | detail
+ *   tab     = home | activity | archive | pnl | trends | campaigns | products | detail
  *   preset  = yesterday | this_month | this_week | last_7_days | last_month
  *             | last_30_days | custom
  *   from    = YYYY-MM-DD   (only used when preset=custom)
@@ -21,9 +21,19 @@
 import type { Filters, PresetKey, DateRange } from './types';
 import { computePresetRange } from './presets';
 
-export type TabKey = 'home' | 'archive' | 'pnl' | 'trends' | 'campaigns' | 'products' | 'detail';
+export type TabKey =
+  | 'home'
+  | 'activity'
+  | 'archive'
+  | 'pnl'
+  | 'trends'
+  | 'campaigns'
+  | 'products'
+  | 'detail';
 
-const TAB_VALUES = new Set<TabKey>(['home', 'archive', 'pnl', 'trends', 'campaigns', 'products', 'detail']);
+const TAB_VALUES = new Set<TabKey>([
+  'home', 'activity', 'archive', 'pnl', 'trends', 'campaigns', 'products', 'detail',
+]);
 const PRESET_VALUES = new Set<PresetKey>([
   'today', 'yesterday', 'this_month', 'this_week',
   'last_7_days', 'last_month', 'last_30_days', 'custom',

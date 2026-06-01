@@ -14,6 +14,7 @@ import {
   CalendarDays,
   Store as StoreIcon,
   Home,
+  Zap,
   TrendingUp,
   Megaphone,
   Package,
@@ -48,7 +49,7 @@ import type { ProductsResponse } from '@/app/api/products/route';
  * "yesterday" preset. Type a campaign name → jump to the campaign.
  *
  * Categories:
- *   - Navigation (home / archive / pnl / trends / campaigns / products / detail)
+ *   - Navigation (home / activity / archive / pnl / trends / campaigns / products / detail)
  *   - Time ranges (presets)
  *   - Stores
  *   - Live shortcuts (today, this week, this month)
@@ -61,7 +62,7 @@ import type { ProductsResponse } from '@/app/api/products/route';
  * users / touch users.
  */
 
-type TabKey = 'home' | 'archive' | 'pnl' | 'trends' | 'campaigns' | 'products' | 'detail';
+type TabKey = 'home' | 'activity' | 'archive' | 'pnl' | 'trends' | 'campaigns' | 'products' | 'detail';
 
 const fetcher = (url: string) => fetch(url).then(r => (r.ok ? r.json() : null));
 
@@ -179,6 +180,7 @@ export function CommandPalette({
     // Navigation
     const tabs: Array<{ key: TabKey; label: string; icon: React.ReactNode; search: string }> = [
       { key: 'home',      label: 'מעבר ל-בית',                icon: <Home size={15} />,        search: 'בית home overview ראשי' },
+      { key: 'activity',  label: 'מעבר ל-פעילות',             icon: <Zap size={15} />,         search: 'פעילות activity events אירועים מכירות החזרים עגלה live feed' },
       { key: 'archive',   label: 'מעבר ל-טבלאות אופטימיזציה',  icon: <LayoutGrid size={15} />,  search: 'טבלאות אופטימיזציה היסטוריה archive optimization tables חודשי monthly' },
       { key: 'pnl',       label: 'מעבר ל-P&L',                icon: <Receipt size={15} />,     search: 'pnl רווח הוצאות profit loss' },
       { key: 'trends',    label: 'מעבר ל-מגמות',              icon: <TrendingUp size={15} />,  search: 'מגמות trends גרף roas over time מגמה' },

@@ -143,6 +143,16 @@ describe('readDashboardState — legacy "analysis" tab migration (2026-06-01)', 
     expect(readDashboardState(DEFAULTS, '?tab=trends').tab).toBe('trends');
   });
 
+  it('accepts the new "activity" tab key and round-trips it (read → write → read)', () => {
+    // read
+    expect(readDashboardState(DEFAULTS, '?tab=activity').tab).toBe('activity');
+    // write
+    const search = writeDashboardState({ ...DEFAULTS, tab: 'activity' });
+    expect(search).toContain('tab=activity');
+    // round-trip back
+    expect(readDashboardState(DEFAULTS, search).tab).toBe('activity');
+  });
+
   it('falls back to the default tab for an unknown tab key', () => {
     expect(readDashboardState(DEFAULTS, '?tab=bogus').tab).toBe('home');
   });

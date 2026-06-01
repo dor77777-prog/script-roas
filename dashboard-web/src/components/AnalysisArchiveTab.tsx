@@ -87,15 +87,23 @@ export function AnalysisArchiveTab({ stores, globalStore }: Props) {
         anchorMetric={archiveSynthesis.anchorMetric}
         confidence={archiveSynthesis.confidence}
       />
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-xs text-ink-muted">שנה:</span>
-          <YearSelector value={year} onChange={setYear} />
-        </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-xs text-ink-muted">חודש:</span>
-          <MonthSelector value={month} onChange={setMonth} />
-        </div>
+      {/* Compact year + month selectors on a SINGLE row. Each is constrained to
+          a fixed width so they no longer span the full screen (operator
+          complaint). NativeSelect's own wrapper is `w-full`, so the width cap
+          lives on these containers; still ≥36px tall + tappable on mobile. */}
+      <div className="flex items-end gap-3 flex-wrap">
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-ink-muted">שנה</span>
+          <div className="w-28">
+            <YearSelector value={year} onChange={setYear} />
+          </div>
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs text-ink-muted">חודש</span>
+          <div className="w-40">
+            <MonthSelector value={month} onChange={setMonth} />
+          </div>
+        </label>
       </div>
       <MonthlyTables stores={stores} globalStore={globalStore} year={year} month={month} />
     </div>

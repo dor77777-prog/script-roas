@@ -3039,3 +3039,24 @@ data-pipeline change.
 - Per-store `cart_public_token` seeded in `store_webhooks` (PUBLIC tokens; `allowed_origins` left empty = token-only
   to start, tightened later). STOP 2 = operator pastes the Custom Pixel (Settings → Customer events) in uzoshop +
   Zol Plus and adds the beacon to the Lovable usmile frontend.
+
+### Phase 3.1 — "פעילות" tab + paged events API + mobile polish (2026-06-01)
+- **`GET /api/store-events` paged branch (additive, back-compat):** with NO `page` param it returns the
+  legacy `{ events, serverNow, lastReceivedAt }` (the Home feed is unchanged); with `page` it returns
+  `{ events, total, page, pageSize, serverNow }` and honors `from`/`to` (ISO; default last 30 days,
+  IL-anchored, `to` end-of-day inclusive), `store` (id; 'All'→none), `type` (sale|refund|add_to_cart;
+  'all'→none). Helper `readStoreEventsPaged({from,to,storeId?,type?,page,pageSize})` in store.ts (service-role;
+  `received_at DESC`; `count:'exact'` + `.range()`; pageSize clamped ≤100, page ≥1). Still nodejs +
+  service-role + password-gated (NOT allowlisted; storeEventsRouteGuard green).
+- **New `activity` tab** wired exactly like the archive/trends split: `urlState.ts` (TabKey + TAB_VALUES),
+  `Sidebar.tsx` (Zap nav item, slot 2 — right after בית), `CommandPalette.tsx`, `Dashboard.tsx`
+  (`activeTab==='activity'` → `<ActivityEventsTab>`). `src/components/activity/ActivityEventsTab.tsx` = the
+  browser: compact store/day/type filters → the paged API (store NAME→id resolve), day-grouped rows
+  (lucide glyph tones sale/refund/cart, `<Money>` CAD, store chips), pagination, empty/loading. The Home
+  `<ActivityFeed>` gains an `onSeeAll` "ראה הכל ‹" footer link (Dashboard threads
+  `handleTabChange('activity')`) and is **capped to the latest 20 rows** (snapshot, not an archive).
+- **Mobile-only Home polish (desktop frozen at md+):** A3 sliding range-pills inside `Filters.tsx` (new
+  `--pill-*` tokens both themes; the on-thumb accent was deepened so white clears AA — the mockup hue would
+  have failed); B3 `MobileStickyRoas.tsx` (IntersectionObserver collapse, reduced-motion gated, z below the
+  z-30 app header). Year/month selectors in `AnalysisArchiveTab.tsx` narrowed to w-28/w-40 on one row.
+- No data-pipeline change; `store_events` is the single source for both the live feed and the tab.

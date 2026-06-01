@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>טאב פעילות — כל האירועים (מוקאפ)</title>
+<style>
+  :root{
+    --sale:#16a34a; --sale2:#22c55e; --refund:#e11c48; --cart:#2563eb;
+    --meta:#1877f2; --google:#f4a200; --tiktok:#ff2e7e;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Heebo,Arial,sans-serif;padding:24px 18px 60px}
+  body{background:#0b0e1a;color:#eef1ff}
+  h1{font-size:18px;margin:0 0 4px}.sub{color:#8c96ba;font-size:13px;margin:0 0 18px;max-width:900px;line-height:1.6}
+  .legend{background:#141a2e;border:1px solid #232a44;border-radius:12px;padding:12px 16px;margin:0 0 22px;font-size:12.5px;line-height:1.7;color:#c4cbe6;max-width:980px}
+  .legend b{color:#fff}
+  .stage{display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start}
+  .col{flex:1 1 470px;min-width:420px}
+  .col h2{font-size:12px;letter-spacing:.05em;text-transform:uppercase;color:#8c96ba;margin:0 0 10px}
+  .page{border-radius:16px;overflow:hidden;border:1px solid #232a44}
+  .page.light{border-color:#e3e7f2}
+  .page.dark{background:#0e1324}.page.light{background:#fbfcff;color:#1b2440}
+
+  /* header */
+  .hd{display:flex;align-items:center;gap:8px;padding:14px 16px 8px}
+  .hd .ic{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;font-size:13px}
+  .page.dark .hd .ic{background:color-mix(in oklab,#6d5efc 18%,transparent);color:#9b8cff}
+  .page.light .hd .ic{background:#ece9ff;color:#6d5efc}
+  .hd .t{font-size:15px;font-weight:800}.hd .d{font-size:10.5px;color:#8c96ba}
+
+  /* filters row — compact, NOT full width */
+  .filters{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:6px 16px 12px}
+  .fg{display:flex;align-items:center;gap:6px}
+  .fg label{font-size:11px;color:#8c96ba}
+  .sel{appearance:none;border-radius:9px;padding:7px 26px 7px 11px;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;min-height:36px;
+       background:no-repeat left 8px center/12px url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5 6 8l3-3.5' stroke='%238c96ba' stroke-width='1.5' fill='none'/%3E%3C/svg%3E")}
+  .page.dark .sel{background-color:#161c30;color:#eef1ff;border:1px solid #2a3354}
+  .page.light .sel{background-color:#fff;color:#1b2440;border:1px solid #e2e7f2}
+  .sel.w-store{width:150px}.sel.w-day{width:150px}
+  .type-pills{display:flex;gap:6px;margin-inline-start:auto}
+  .tp{font-size:11px;font-weight:700;border-radius:999px;padding:5px 10px;cursor:pointer;border:1px solid}
+  .page.dark .tp{background:#161c30;color:#9aa3c4;border-color:#2a3354}
+  .page.light .tp{background:#f1f3fa;color:#5a6480;border-color:#e2e7f2}
+  .tp.on{background:color-mix(in oklab,#6d5efc 16%,transparent);color:#9b8cff;border-color:color-mix(in oklab,#6d5efc 40%,transparent)}
+
+  /* rows (grouped by day) */
+  .daygroup{padding:4px 0}
+  .dayhd{font-size:11px;font-weight:800;color:#8c96ba;padding:8px 16px 4px;position:sticky;top:0}
+  .page.dark .dayhd{background:#0e1324}.page.light .dayhd{background:#fbfcff;color:#8a93ad}
+  .ev{display:flex;align-items:center;gap:11px;padding:9px 16px;border-top:1px solid}
+  .page.dark .ev{border-color:#161c30}.page.light .ev{border-color:#f1f3fa}
+  .glyph{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;font-size:14px;flex:0 0 auto}
+  .ev.sale .glyph{background:color-mix(in oklab,var(--sale) 18%,transparent);color:var(--sale2)}
+  .ev.refund .glyph{background:color-mix(in oklab,var(--refund) 18%,transparent);color:var(--refund)}
+  .ev.cart .glyph{background:color-mix(in oklab,var(--cart) 18%,transparent);color:#5b8cff}
+  .ev .mid{flex:1;min-width:0}
+  .ev .l1{display:flex;gap:8px;align-items:baseline}
+  .ev .kind{font-weight:800;font-size:13px}
+  .ev.sale .kind{color:var(--sale2)}.ev.refund .kind{color:var(--refund)}.ev.cart .kind{color:#6b9bff}
+  .page.light .ev.sale .kind{color:#15803d}.page.light .ev.cart .kind{color:#2563eb}
+  .ev .amt{font-weight:800;font-size:13px;font-variant-numeric:tabular-nums}
+  .ev .prod{font-size:12px;opacity:.9;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .page.dark .ev .prod{color:#c4cbe6}.page.light .ev .prod{color:#46506e}
+  .store{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:2px 8px;font-weight:700;font-size:10px}
+  .page.dark .store{background:#1c2236;color:#c4cbe6}.page.light .store{background:#eef1f8;color:#46506e}
+  .sd{width:7px;height:7px;border-radius:50%}
+  .ev .time{margin-inline-start:auto;font-size:11px;color:#8c96ba;font-variant-numeric:tabular-nums;white-space:nowrap}
+
+  /* pagination */
+  .pager{display:flex;align-items:center;justify-content:center;gap:10px;padding:14px 16px;border-top:1px solid #232a44}
+  .page.light .pager{border-color:#eef1f8}
+  .pbtn{font-size:12px;font-weight:700;border-radius:9px;padding:7px 14px;cursor:pointer;border:1px solid}
+  .page.dark .pbtn{background:#161c30;color:#eef1ff;border-color:#2a3354}.page.light .pbtn{background:#fff;color:#1b2440;border-color:#e2e7f2}
+  .pbtn[disabled]{opacity:.4;cursor:default}
+  .pinfo{font-size:12px;color:#8c96ba}
+
+  /* see-all link (shown in the Home feed footer) */
+  .seeall{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:#9b8cff;cursor:pointer;padding:9px 16px;border-top:1px solid #1d2440;width:100%;justify-content:center}
+  .note{font-size:12px;color:#8c96ba;margin:14px 2px 0;max-width:980px;line-height:1.6}
+</style>
+</head>
+<body>
+  <h1>טאב חדש: <b>פעילות</b> — כל האירועים (30 יום)</h1>
+  <p class="sub">פריט תפריט חדש בצד. "ראה הכל" בתחתית הפיד בעמוד הבית מקפיץ לכאן. טבלה מדפדפת של כל האירועים מ-30 הימים האחרונים, עם פילטר חנות + פילטר יום + פילטר סוג, מקובצת לפי יום.</p>
+  <div class="legend">
+    <b>הפילטרים קומפקטיים</b> (לא רוחב-מסך מלא — בדיוק כמו ההערה שלך על שנה/חודש): חנות · יום · סוג-אירוע. ברירת מחדל: כל החנויות · כל הסוגים · 30 יום. דפדוף בתחתית. הנתונים מ-<code>store_events</code> (אותו מקור כמו הפיד החי).
+  </div>
+
+  <div class="stage">
+    <div class="col">
+      <h2>Dark</h2>
+      <div class="page dark">
+        <div class="hd"><span class="ic">⚡</span><div><div class="t">פעילות</div><div class="d">כל האירועים · 30 הימים האחרונים</div></div></div>
+        <div class="filters">
+          <div class="fg"><label>חנות</label><select class="sel w-store"><option>כל החנויות</option><option>uzoshop</option><option>usmile</option><option>Zol Plus</option></select></div>
+          <div class="fg"><label>יום</label><select class="sel w-day"><option>כל הימים</option><option>היום</option><option>אתמול</option><option>1.6.2026</option><option>31.5.2026</option></select></div>
+          <div class="type-pills"><span class="tp on">הכל</span><span class="tp">מכירות</span><span class="tp">החזרים</span><span class="tp">עגלה</span></div>
+        </div>
+        <div class="daygroup">
+          <div class="dayhd">היום · 1 ביוני</div>
+          <div class="ev sale"><div class="glyph">🛍️</div><div class="mid"><div class="l1"><span class="kind">מכירה</span><span class="amt">$248.00</span></div><div class="prod">סרום לצמיחת שיער · ×2</div></div><div class="meta"></div><span class="store"><span class="sd" style="background:var(--meta)"></span>uzoshop</span><span class="time">14:52</span></div>
+          <div class="ev cart"><div class="glyph">🛒</div><div class="mid"><div class="l1"><span class="kind">הוספה לעגלה</span></div><div class="prod">מיקרוסקופ דיגיטלי</div></div><span class="store"><span class="sd" style="background:var(--tiktok)"></span>usmile</span><span class="time">14:41</span></div>
+          <div class="ev refund"><div class="glyph">↩️</div><div class="mid"><div class="l1"><span class="kind">החזר</span><span class="amt">−$59.90</span></div><div class="prod">סט סלמון</div></div><span class="store"><span class="sd" style="background:var(--google)"></span>Zol Plus</span><span class="time">13:08</span></div>
+        </div>
+        <div class="daygroup">
+          <div class="dayhd">אתמול · 31 במאי</div>
+          <div class="ev sale"><div class="glyph">🛍️</div><div class="mid"><div class="l1"><span class="kind">מכירה</span><span class="amt">$116.00</span></div><div class="prod">סאן רול</div></div><span class="store"><span class="sd" style="background:var(--meta)"></span>uzoshop</span><span class="time">21:30</span></div>
+          <div class="ev sale"><div class="glyph">🛍️</div><div class="mid"><div class="l1"><span class="kind">מכירה</span><span class="amt">$89.00</span></div><div class="prod">מברשת שיניים חכמה 360°</div></div><span class="store"><span class="sd" style="background:var(--tiktok)"></span>usmile</span><span class="time">18:02</span></div>
+        </div>
+        <div class="pager"><span class="pbtn" disabled>‹ הקודם</span><span class="pinfo">עמוד 1 מתוך 7</span><span class="pbtn">הבא ›</span></div>
+      </div>
+    </div>
+
+    <div class="col">
+      <h2>Light + "ראה הכל" בפיד</h2>
+      <div class="page light">
+        <div class="hd"><span class="ic">⚡</span><div><div class="t">פעילות</div><div class="d">כל האירועים · 30 הימים האחרונים</div></div></div>
+        <div class="filters">
+          <div class="fg"><label>חנות</label><select class="sel w-store"><option>uzoshop</option></select></div>
+          <div class="fg"><label>יום</label><select class="sel w-day"><option>1.6.2026</option></select></div>
+          <div class="type-pills"><span class="tp">הכל</span><span class="tp on">מכירות</span><span class="tp">החזרים</span><span class="tp">עגלה</span></div>
+        </div>
+        <div class="daygroup">
+          <div class="dayhd">1 ביוני · uzoshop · מכירות</div>
+          <div class="ev sale"><div class="glyph">🛍️</div><div class="mid"><div class="l1"><span class="kind">מכירה</span><span class="amt">$248.00</span></div><div class="prod">סרום לצמיחת שיער · ×2</div></div><span class="store"><span class="sd" style="background:var(--meta)"></span>uzoshop</span><span class="time">14:52</span></div>
+          <div class="ev sale"><div class="glyph">🛍️</div><div class="mid"><div class="l1"><span class="kind">מכירה</span><span class="amt">$183.62</span></div><div class="prod">מטליות ניקוי מיקרופייבר</div></div><span class="store"><span class="sd" style="background:var(--meta)"></span>uzoshop</span><span class="time">11:20</span></div>
+        </div>
+        <div class="pager"><span class="pbtn" disabled>‹ הקודם</span><span class="pinfo">עמוד 1 מתוך 2</span><span class="pbtn">הבא ›</span></div>
+      </div>
+
+      <div style="margin-top:14px" class="page light">
+        <div class="hd" style="padding-bottom:6px"><span class="ic">⚡</span><div class="t">פעילות בזמן אמת (עמוד הבית)</div></div>
+        <div style="padding:0 16px;color:#8a93ad;font-size:12px">…שורות הפיד החי…</div>
+        <div class="seeall" style="color:#6d5efc;border-color:#eef1f8">ראה הכל ‹</div>
+      </div>
+    </div>
+  </div>
+
+  <p class="note">
+    <b>איך זה עובד:</b> טאב "פעילות" חדש בתפריט (בין "בית" ל"טבלאות אופטימיזציה", או היכן שתעדיף). פילטרים <b>קומפקטיים</b>. שאילתת <code>/api/store-events</code> מורחבת עם <code>from/to</code> (30 יום), <code>store</code>, <code>type</code>, ו-<code>page/limit</code> לדפדוף. בתחתית הפיד החי בעמוד הבית מתווסף קישור <b>"ראה הכל ‹"</b> שמקפיץ לטאב הזה. אימוג'ים=פלייסהולדר (במימוש: lucide בצבעי טוקנים).
+  </p>
+</body>
+</html>

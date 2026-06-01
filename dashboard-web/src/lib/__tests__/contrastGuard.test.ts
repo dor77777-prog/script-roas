@@ -263,6 +263,52 @@ describe('contrast guard — accent BUTTON bg carries white at WCAG-AA (both the
 });
 
 /**
+ * Mobile A3 (2026-06-01) — sliding range-pill bar.
+ *
+ * The active pill's label paints `--pill-ink-on` (white) on the sliding
+ * `--pill-thumb` slab. The mockup's literal thumb (#7c6cff dark / #0ea5b7
+ * light) fails AA for white (3.86 / 2.96:1), so the thumb instead paints the
+ * DEEPENED on-hue accent (= --accent-btn), keeping the accent identity while
+ * clearing the 4.5:1 TEXT bar in BOTH themes. This guard reads the literal
+ * --pill-thumb (#rrggbb) + --pill-ink-on (oklch(100% 0 0) → #ffffff) straight
+ * from globals.css so the pair can never silently regress.
+ */
+describe('contrast guard — --pill-ink-on (white) clears WCAG-AA on --pill-thumb (both themes)', () => {
+  for (const theme of THEMES) {
+    it(`${theme.name}: --pill-ink-on on --pill-thumb ≥ 4.5:1`, () => {
+      const fg = hexOf('--pill-ink-on', theme.blk); // oklch(100% 0 0) → #ffffff
+      const bg = hexOf('--pill-thumb', theme.blk);
+      const ratio = wcagRatio(fg, bg);
+      expect(
+        ratio,
+        `--pill-ink-on ${fg} on --pill-thumb ${bg} = ${ratio.toFixed(2)}:1 (need ≥4.5)`,
+      ).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+});
+
+/* ---------------------------------------------------------------------------
+ * --accent-link (2026-06-01) — AA-safe accent for small TEXT/links on a card
+ * surface (the activity see-all link + the events-tab active filter pill). Raw
+ * --accent is too light as text (4.48:1 dark / 2.96:1 light); --accent-link
+ * resolves to --accent-deep (dark, lighter) / --accent-btn (light, deeper) so
+ * it clears the 4.5:1 TEXT bar on the --glass-1 card surface in BOTH themes.
+ * ------------------------------------------------------------------------- */
+describe('contrast guard — --accent-link clears WCAG-AA on the --glass-1 card surface (both themes)', () => {
+  for (const theme of THEMES) {
+    it(`${theme.name}: --accent-link on --glass-1 ≥ 4.5:1`, () => {
+      const fg = hexOf('--accent-link', theme.blk);
+      const bg = hexOf('--glass-1', theme.blk);
+      const ratio = wcagRatio(fg, bg);
+      expect(
+        ratio,
+        `--accent-link ${fg} on --glass-1 ${bg} = ${ratio.toFixed(2)}:1 (need ≥4.5)`,
+      ).toBeGreaterThanOrEqual(4.5);
+    });
+  }
+});
+
+/**
  * A11y FINAL pass (2026-06-01) — STATUS-as-text uses the tuned `-fg` token.
  *
  * An axe prod scan flagged the RAW `--status-*` hues used as small TEXT

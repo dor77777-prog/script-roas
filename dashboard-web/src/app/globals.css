@@ -58,6 +58,25 @@
      --accent-bg   : alpha-safe replacement for the bg-accent/NN tint sites. */
   --accent-soft: rgba(124,108,255,0.16);
   --accent-bg:   rgba(124,108,255,0.12);
+  /* AA-safe accent for small TEXT/links on a card/glass surface (raw --accent
+     is too light as text — 4.48:1 dark / 2.96:1 light). In dark the lighter
+     --accent-deep clears (7.30:1); in light the deeper --accent-btn clears
+     (4.66:1). Locked by contrastGuard. */
+  --accent-link: #a99cff; /* = --accent-deep (dark); 7.30:1 on --glass-1 */
+
+  /* Mobile A3 — sliding range-pill bar (2026-06-01).
+     pill-track  = recessed bar surface (= the sunken-well token).
+     pill-thumb  = the sliding indicator slab. The mockup used the brand
+       accent (#7c6cff) but white on it is only 3.86:1 (FAIL light @2.96:1),
+       so the thumb paints the DEEPENED on-hue accent (= accent-btn #6354e6),
+       which keeps the violet/teal accent identity AND clears WCAG-AA for the
+       on-thumb white (5.33:1 dark / 4.66:1 light — locked by contrastGuard).
+     pill-ink    = inactive (off-thumb) muted label.
+     pill-ink-on = active (on-thumb) white label. */
+  --pill-track:  var(--surface-sunken);
+  --pill-thumb:  #6354e6;
+  --pill-ink:    var(--text-muted);
+  --pill-ink-on: oklch(100% 0 0);
 
   /* Sidebar — dark slim rail in BOTH themes (mockup keeps it dark on light too).
      The logo gradient stays violet in BOTH themes (mockup .sb-logo
@@ -418,6 +437,16 @@
   /* Mesh re-skin (Wave 0) — accent tints (light). */
   --accent-soft: #def5f7;
   --accent-bg:   rgba(14,165,183,0.10);
+  /* AA-safe accent text/link (light) — the deeper --accent-btn teal clears
+     4.66:1 on white; raw --accent is only 2.96:1. See dark note. */
+  --accent-link: #0c8090; /* = --accent-btn (light); 4.66:1 on white */
+
+  /* Mobile A3 — sliding range-pill bar (light). Thumb = deepened on-hue teal
+     (= --accent-btn #0c8090); white on it = 4.66:1 (AA). See dark note above. */
+  --pill-track:  var(--surface-sunken);
+  --pill-thumb:  #0c8090;
+  --pill-ink:    var(--text-muted);
+  --pill-ink-on: oklch(100% 0 0);
 
   /* Sidebar — dark slim rail in BOTH themes (mockup keeps it dark on light too).
      Logo stays violet in BOTH themes (mockup .sb-logo) regardless of accent. */
@@ -790,6 +819,19 @@ input[type="number"] {
   50%      { r: 13; opacity: 0; }
 }
 .roas-today-pulse { animation: roas-today-pulse 2.4s ease-in-out infinite; }
+
+/* Mobile A3 — sliding range-pill thumb. The bouncy curve mirrors the mockup
+   (.pills .thumb: .28s cubic-bezier(.34,1.4,.5,1)) so the slab "overshoots"
+   slightly as it slides between pills. The opacity (thumb show/hide for
+   non-featured presets) eases in tandem. The project-wide
+   prefers-reduced-motion sweep above collapses both transitions to 0.01ms, so
+   the thumb snaps to the active pill with no motion when reduce is on. */
+.filters-pill-thumb {
+  transition:
+    inset-inline-start 0.28s cubic-bezier(0.34, 1.4, 0.5, 1),
+    width 0.28s cubic-bezier(0.34, 1.4, 0.5, 1),
+    opacity 0.2s ease;
+}
 @media (prefers-reduced-motion: reduce) {
   /* Paint the line at rest (no dash sweep) and freeze the pulse. */
   .roas-line-draw { animation: none !important; stroke-dashoffset: 0 !important; }

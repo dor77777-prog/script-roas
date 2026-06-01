@@ -5,6 +5,7 @@ import {
   lookupStoreByCartToken,
   insertStoreEvent,
   readRecentStoreEvents,
+  readStoreEventsPaged,
 } from '../store';
 import type { NormalizedStoreEvent } from '../normalizeShopifyEvent';
 
@@ -17,6 +18,11 @@ function makeAdminMock() {
   let selectResult: { data: unknown; error: unknown } = { data: null, error: null };
   let upsertResult: { data: unknown; error: unknown } = { data: null, error: null };
   let listResult: { data: unknown; error: unknown } = { data: null, error: null };
+  let pagedResult: { data: unknown; error: unknown; count: number | null } = {
+    data: null,
+    error: null,
+    count: null,
+  };
 
   // readRecentStoreEvents builds: .select(cols).order(col,{ascending}).limit(n)
   // with an OPTIONAL .eq('store_id', …) inserted before .order. We model the
@@ -40,9 +46,49 @@ function makeAdminMock() {
     return builder;
   }
 
+  // readStoreEventsPaged builds:
+  //   .select(cols, { count: 'exact' })
+  //     [.eq('store_id', …)] [.eq('type', …)]
+  //     .gte('received_at', from).lte('received_at', to)
+  //     .order('received_at', { ascending:false }).range(lo, hi)
+  // → resolves to { data, error, count }. Every link is recorded.
+  function pagedBuilder(table: string) {
+    const builder = {
+      eq: vi.fn((col: string, val: unknown) => {
+        calls.push({ table, op: 'paged.eq', arg: { col, val } });
+        return builder;
+      }),
+      gte: vi.fn((col: string, val: unknown) => {
+        calls.push({ table, op: 'paged.gte', arg: { col, val } });
+        return builder;
+      }),
+      lte: vi.fn((col: string, val: unknown) => {
+        calls.push({ table, op: 'paged.lte', arg: { col, val } });
+        return builder;
+      }),
+      order: vi.fn((col: string, options?: unknown) => {
+        calls.push({ table, op: 'paged.order', arg: col, options });
+        return builder;
+      }),
+      range: vi.fn((lo: number, hi: number) => {
+        calls.push({ table, op: 'paged.range', arg: { lo, hi } });
+        return Promise.resolve(pagedResult);
+      }),
+    };
+    return builder;
+  }
+
   const admin = {
     from: vi.fn((table: string) => ({
-      select: vi.fn((cols?: unknown) => {
+      select: vi.fn((cols?: unknown, options?: { count?: string }) => {
+        // The paged reader signals itself by passing { count: 'exact' } as the
+        // SELECT options. Route it to the paged builder so its gte/lte/range
+        // chain is recorded; everything else stays on the lookup/list shape.
+        if (options && options.count === 'exact') {
+          calls.push({ table, op: 'paged.select', options });
+          void cols;
+          return pagedBuilder(table);
+        }
         // Lookups use .select(<3-col string>).eq(...).maybeSingle(); the list
         // reader uses .select(<col string>).order(...).limit(...). We expose
         // BOTH `.eq().maybeSingle()` and `.order()/.limit()` off the same object
@@ -88,6 +134,9 @@ function makeAdminMock() {
     },
     setListResult: (r: { data: unknown; error: unknown }) => {
       listResult = r;
+    },
+    setPagedResult: (r: { data: unknown; error: unknown; count: number | null }) => {
+      pagedResult = r;
     },
   };
 }
@@ -250,5 +299,114 @@ describe('readRecentStoreEvents (Phase 3, Task B)', () => {
   it('returns [] when there are no rows yet', async () => {
     mock.setListResult({ data: null, error: null });
     expect(await readRecentStoreEvents({ limit: 50 })).toEqual([]);
+  });
+});
+
+describe('readStoreEventsPaged (Activity tab)', () => {
+  const rows = [
+    { id: 'a', store_id: 'uzoshop', type: 'sale', amount_cad: 248, received_at: '2026-06-01T10:00:00Z' },
+    { id: 'b', store_id: 'zolplus', type: 'refund', amount_cad: -59.9, received_at: '2026-06-01T09:00:00Z' },
+  ];
+
+  it('selects with an exact count, orders received_at DESC, and ranges by page', async () => {
+    mock.setPagedResult({ data: rows, error: null, count: 130 });
+    const out = await readStoreEventsPaged({
+      from: '2026-05-02',
+      to: '2026-06-01',
+      page: 1,
+      pageSize: 40,
+    });
+    expect(out).toEqual({ events: rows, total: 130 });
+    // SELECT carried { count: 'exact' } so total is the FULL filtered count.
+    expect(mock.calls).toContainEqual({
+      table: 'store_events',
+      op: 'paged.select',
+      options: { count: 'exact' },
+    });
+    const orderCall = mock.calls.find((c) => c.op === 'paged.order');
+    expect(orderCall).toBeDefined();
+    expect(orderCall!.arg).toBe('received_at');
+    expect(orderCall!.options).toMatchObject({ ascending: false });
+    // page 1, pageSize 40 → range(0, 39).
+    expect(mock.calls).toContainEqual({
+      table: 'store_events',
+      op: 'paged.range',
+      arg: { lo: 0, hi: 39 },
+    });
+  });
+
+  it('computes the range offset for a later page (page 3, pageSize 40 → range 80..119)', async () => {
+    mock.setPagedResult({ data: rows, error: null, count: 130 });
+    await readStoreEventsPaged({ from: '2026-05-02', to: '2026-06-01', page: 3, pageSize: 40 });
+    expect(mock.calls).toContainEqual({
+      table: 'store_events',
+      op: 'paged.range',
+      arg: { lo: 80, hi: 119 },
+    });
+  });
+
+  it('applies the from/to window as gte/lte on received_at (to is end-of-day inclusive)', async () => {
+    mock.setPagedResult({ data: rows, error: null, count: 2 });
+    await readStoreEventsPaged({ from: '2026-05-31', to: '2026-06-01', page: 1, pageSize: 40 });
+    const gte = mock.calls.find((c) => c.op === 'paged.gte');
+    const lte = mock.calls.find((c) => c.op === 'paged.lte');
+    expect(gte).toBeDefined();
+    expect(lte).toBeDefined();
+    expect((gte!.arg as { col: string }).col).toBe('received_at');
+    // from → start of that day (00:00).
+    expect((gte!.arg as { val: string }).val).toMatch(/^2026-05-31T00:00:00/);
+    expect((lte!.arg as { col: string }).col).toBe('received_at');
+    // to → end of that day so same-day rows are included.
+    expect((lte!.arg as { val: string }).val).toMatch(/^2026-06-01T23:59:59/);
+  });
+
+  it('filters by store_id when storeId is given', async () => {
+    mock.setPagedResult({ data: [rows[0]], error: null, count: 1 });
+    await readStoreEventsPaged({
+      from: '2026-05-02',
+      to: '2026-06-01',
+      storeId: 'uzoshop',
+      page: 1,
+      pageSize: 40,
+    });
+    expect(mock.calls).toContainEqual({
+      table: 'store_events',
+      op: 'paged.eq',
+      arg: { col: 'store_id', val: 'uzoshop' },
+    });
+  });
+
+  it('filters by type when type is given', async () => {
+    mock.setPagedResult({ data: rows, error: null, count: 2 });
+    await readStoreEventsPaged({
+      from: '2026-05-02',
+      to: '2026-06-01',
+      type: 'refund',
+      page: 1,
+      pageSize: 40,
+    });
+    expect(mock.calls).toContainEqual({
+      table: 'store_events',
+      op: 'paged.eq',
+      arg: { col: 'type', val: 'refund' },
+    });
+  });
+
+  it('does NOT add a type filter when type is omitted', async () => {
+    mock.setPagedResult({ data: rows, error: null, count: 2 });
+    await readStoreEventsPaged({ from: '2026-05-02', to: '2026-06-01', page: 1, pageSize: 40 });
+    expect(mock.calls.some((c) => c.op === 'paged.eq' && (c.arg as { col: string }).col === 'type')).toBe(false);
+  });
+
+  it('soft-fails to { events: [], total: 0 } on a query error', async () => {
+    mock.setPagedResult({ data: null, error: { message: 'boom' }, count: null });
+    const out = await readStoreEventsPaged({ from: '2026-05-02', to: '2026-06-01', page: 1, pageSize: 40 });
+    expect(out).toEqual({ events: [], total: 0 });
+  });
+
+  it('returns total 0 when count is null but no error', async () => {
+    mock.setPagedResult({ data: [], error: null, count: null });
+    const out = await readStoreEventsPaged({ from: '2026-05-02', to: '2026-06-01', page: 1, pageSize: 40 });
+    expect(out).toEqual({ events: [], total: 0 });
   });
 });
