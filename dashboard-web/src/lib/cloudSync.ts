@@ -58,6 +58,8 @@ const STATE_KEYS = [
   // back due to a campaigns_daily PK duplication bug; v2 fixes that via
   // batch DELETE-then-UPSERT in persistCampaignsLive + cronDaily.
   'roas-dashboard:campaign-store-map',
+  // Editable COGS % (2026-06-01) — per-month, retroactive, business/per-store.
+  'roas-dashboard:cogs-settings',
 ] as const;
 export type StateKey = (typeof STATE_KEYS)[number];
 
@@ -71,6 +73,7 @@ const CHANGE_EVENTS: Record<StateKey, string> = {
   'roas-dashboard:campaign-product-map': 'roas-campaign-product-map-changed',
   'roas-dashboard:campaigns-column-visibility': 'roas-campaigns-column-visibility-changed',
   'roas-dashboard:campaign-store-map': 'roas-campaign-store-map-changed',
+  'roas-dashboard:cogs-settings': 'roas-cogs-settings-changed',
 };
 
 /** ms epoch of the last push we sent for each key. Used to skip stomping
