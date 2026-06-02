@@ -35,6 +35,18 @@ export function makeOrder(overrides: Partial<OrderAttributionRow> = {}): OrderAt
     customerId: 'cust-1',
     orderCreatedAt: '2026-05-15T12:00:00-04:00',
     isFirstOrder: true,
+    // Phase 4 — first-click lens defaults (no first-click signal).
+    firstTouchSource: null,
+    firstFbclidPresent: false,
+    firstGclidPresent: false,
+    firstTtclidPresent: false,
+    firstUtmSource: null,
+    firstUtmMedium: null,
+    firstUtmCampaign: null,
+    firstUtmContent: null,
+    firstUtmId: null,
+    firstUtmTerm: null,
+    firstSeenAt: null,
     ...overrides,
   };
 }
