@@ -228,6 +228,18 @@ export type ShopifyOrderRow = {
   /** Phase 3 — order creation timestamp (Shopify `created_at`, ISO-8601 with
    *  offset). Drives the first-order-EVER MIN() in recompute_first_order_flags. */
   createdAt: string | null;
+  // Phase 4 — first-click lens. Null when no ft_* signal on the order.
+  firstTouchSource: string | null;
+  firstFbclidPresent: boolean;
+  firstGclidPresent: boolean;
+  firstTtclidPresent: boolean;
+  firstUtmSource: string | null;
+  firstUtmMedium: string | null;
+  firstUtmCampaign: string | null;
+  firstUtmContent: string | null;
+  firstUtmId: string | null;
+  firstUtmTerm: string | null;
+  firstSeenAt: string | null;
 };
 
 // =============================================================================
@@ -823,7 +835,7 @@ function safeDecode(s: string): string {
   }
 }
 
-function classifyOrderAttribution(order: ShopifyOrderPayload): {
+export function classifyOrderAttribution(order: ShopifyOrderPayload): {
   source: string;
   utmSource: string;
   utmMedium: string;
@@ -834,6 +846,19 @@ function classifyOrderAttribution(order: ShopifyOrderPayload): {
   fbclidPresent: boolean;
   gclidPresent: boolean;
   referrer: string;
+  // Phase 4 — first-click lens. Null/false when no ft_* signal is present
+  // ("no first-click signal", NOT 'direct').
+  firstTouchSource: string | null;
+  firstFbclidPresent: boolean;
+  firstGclidPresent: boolean;
+  firstTtclidPresent: boolean;
+  firstUtmSource: string | null;
+  firstUtmMedium: string | null;
+  firstUtmCampaign: string | null;
+  firstUtmContent: string | null;
+  firstUtmId: string | null;
+  firstUtmTerm: string | null;
+  firstSeenAt: string | null;
 } {
   const landing = String(order.landing_site ?? '');
   const ref = String(order.referring_site ?? '').toLowerCase();
@@ -859,6 +884,60 @@ function classifyOrderAttribution(order: ShopifyOrderPayload): {
     const name = String(na.name ?? '').toLowerCase();
     if (!name) continue;
     if (!params[name]) params[name] = String(na.value ?? '');
+  }
+
+  // ---- Phase 4: first-click (ft_*) bag + TRIMMED source chain ----
+  // The storefront writes cart attributes as `_ft_*` (single leading
+  // underscore = Shopify-private), which surface in note_attributes with
+  // the same name. Normalize a leading `_` off `_ft_` so the canonical
+  // lookup key is `ft_*`. We read ONLY from `params` (already folded from
+  // landing_site + note_attributes) — no extra fetch, no new field.
+  const ftBag: Record<string, string> = Object.create(null);
+  for (const k of Object.keys(params)) {
+    const norm = k.startsWith('_ft_') ? k.slice(1) : k; // _ft_x -> ft_x
+    if (norm.startsWith('ft_')) ftBag[norm] = params[k];
+  }
+  const ftGet = (suffix: string): string => ftBag[`ft_${suffix}`] ?? '';
+
+  const firstFbclid = !!ftGet('fbclid');
+  const firstGclid = !!ftGet('gclid');
+  const firstTtclid = !!ftGet('ttclid');
+  const firstUtmSourceRaw = ftGet('utm_source');
+  const firstUtmMediumRaw = ftGet('utm_medium');
+  const firstUtmCampaignRaw = ftGet('utm_campaign');
+  const firstUtmContentRaw = ftGet('utm_content');
+  const firstUtmIdRaw = ftGet('utm_id');
+  const firstUtmTermRaw = ftGet('utm_term');
+  const firstSeenAtRaw = ftGet('set_at');
+
+  const hasFirstSignal =
+    firstFbclid || firstGclid || firstTtclid ||
+    !!firstUtmSourceRaw || !!firstUtmCampaignRaw || !!firstUtmContentRaw ||
+    !!firstUtmIdRaw || !!firstUtmTermRaw || !!firstSeenAtRaw;
+
+  // TRIMMED chain over ONLY ft_* keys — NO source_name, NO referring_site.
+  let firstTouchSource: string | null = null;
+  if (hasFirstSignal) {
+    if (firstFbclid) firstTouchSource = 'meta-paid';
+    else if (firstGclid) firstTouchSource = 'google-paid';
+    else if (firstTtclid) firstTouchSource = 'tiktok-paid';
+    else if (/cpc|paid|paidsocial|social/i.test(firstUtmMediumRaw)) {
+      if (/^(facebook|fb|meta|instagram|ig)$/i.test(firstUtmSourceRaw)) firstTouchSource = 'meta-paid';
+      else if (/^(google|youtube)$/i.test(firstUtmSourceRaw)) firstTouchSource = 'google-paid';
+      else if (/^tiktok$/i.test(firstUtmSourceRaw)) firstTouchSource = 'tiktok-paid';
+      else firstTouchSource = 'other-paid';
+    } else if (/^(email|newsletter|klaviyo|mailchimp)$/i.test(firstUtmSourceRaw)) {
+      firstTouchSource = 'email';
+    } else if (/^tiktok$/i.test(firstUtmSourceRaw)) {
+      firstTouchSource = 'tiktok-paid';
+    } else if (firstUtmSourceRaw) {
+      firstTouchSource = 'other-paid';
+    } else {
+      // Has a ft_* signal (e.g. only ft_set_at / only a clid we didn't map)
+      // but no classifiable source — leave as null so it reads as
+      // "no first-click signal" rather than a fabricated bucket.
+      firstTouchSource = null;
+    }
   }
 
   const utmSource = params['utm_source'] ?? '';
@@ -947,6 +1026,17 @@ function classifyOrderAttribution(order: ShopifyOrderPayload): {
     fbclidPresent: fbclid,
     gclidPresent: gclid,
     referrer: refTrimmed,
+    firstTouchSource,
+    firstFbclidPresent: firstFbclid,
+    firstGclidPresent: firstGclid,
+    firstTtclidPresent: firstTtclid,
+    firstUtmSource: firstUtmSourceRaw || null,
+    firstUtmMedium: firstUtmMediumRaw || null,
+    firstUtmCampaign: firstUtmCampaignRaw || null,
+    firstUtmContent: firstUtmContentRaw || null,
+    firstUtmId: firstUtmIdRaw || null,
+    firstUtmTerm: firstUtmTermRaw || null,
+    firstSeenAt: firstSeenAtRaw || null,
   };
 }
 
@@ -1024,6 +1114,8 @@ export async function fetchShopifyOrdersAttribution(
 
   const dayStart = isoLocalMidnight(dateStr, SHOPIFY_TZ);
   const dayEnd = isoLocalMidnight(nextDayStr(dateStr), SHOPIFY_TZ);
+  // Phase 4 note: first-click ft_* keys arrive inside `note_attributes`
+  // (already in this allowlist) — NO new Shopify field is requested.
   const fields =
     'id,total_price,financial_status,test,landing_site,referring_site,' +
     'note_attributes,source_name,line_items,customer,created_at';
@@ -1083,6 +1175,17 @@ export async function fetchShopifyOrdersAttribution(
         lineItems: computeLineItemsCad(o, totalCad),
         customerId: o.customer?.id != null ? String(o.customer.id) : null,
         createdAt: o.created_at ? String(o.created_at) : null,
+        firstTouchSource: classified.firstTouchSource,
+        firstFbclidPresent: classified.firstFbclidPresent,
+        firstGclidPresent: classified.firstGclidPresent,
+        firstTtclidPresent: classified.firstTtclidPresent,
+        firstUtmSource: classified.firstUtmSource,
+        firstUtmMedium: classified.firstUtmMedium,
+        firstUtmCampaign: classified.firstUtmCampaign,
+        firstUtmContent: classified.firstUtmContent,
+        firstUtmId: classified.firstUtmId,
+        firstUtmTerm: classified.firstUtmTerm,
+        firstSeenAt: classified.firstSeenAt,
       });
     }
 
