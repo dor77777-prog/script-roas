@@ -16,7 +16,7 @@
 import { isDate } from '@/lib/dateValidation';
 
 export const VALID_STORES = new Set(['uzoshop', 'zolplus', 'usmile360']);
-export const VALID_PLATFORMS = new Set(['meta', 'google']);
+export const VALID_PLATFORMS = new Set(['meta', 'google', 'tiktok']);
 export const VALID_CURRENCIES = new Set(['ILS', 'CAD', 'USD']);
 
 export type PostBody = {
@@ -56,7 +56,7 @@ export function validatePost(body: unknown): PostBody | string {
   }
   const platform = String(b.platform ?? '').toLowerCase();
   if (!VALID_PLATFORMS.has(platform)) {
-    return "platform must be 'meta' or 'google'";
+    return "platform must be 'meta', 'google', or 'tiktok'";
   }
   const currency = String(b.currency ?? '').toUpperCase();
   if (!VALID_CURRENCIES.has(currency)) {

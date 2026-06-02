@@ -277,7 +277,7 @@ export type RunDailyResult = {
   grossProfitCad: number;
   cogsCad: number;
   netProfitCad: number;
-  overridesApplied: { meta: boolean; google: boolean };
+  overridesApplied: { meta: boolean; google: boolean; tiktok: boolean };
   productRowCount: number;
   metaCampaignRowCount: number;
   googleCampaignRowCount: number;
@@ -289,6 +289,28 @@ export type RunDailyResult = {
   ordersAttributionRowCount: number;
   productCatalogRowCount: number;
 };
+
+// ---------------------------------------------------------------------------
+// chooseTikTokSpendCad — authoritative per-store tt_spend_cad selector.
+//
+// Phase 1 (2026-06-02). When an operator TikTok manual-override exists for
+// (store, date), the operator's typed value is the authoritative per-store
+// TikTok spend and MUST win — even over a fetched value and even when the
+// fetched value is null (FX failure). Otherwise the fetched/FX'd value stands
+// (and the agg RPC may later re-derive it from campaigns_daily for the
+// non-override case). Extracted as a pure function so the decision is unit-
+// testable without a full cron integration harness.
+//
+// Operationally: a TikTok override is the operator correcting an account
+// outage where campaigns_daily is empty/wrong, so the override is the correct
+// source — never silently re-derived.
+export function chooseTikTokSpendCad(args: {
+  overrideApplied: boolean;
+  overrideCad: number;
+  fetchedCad: number | null;
+}): number | null {
+  return args.overrideApplied ? args.overrideCad : args.fetchedCad;
+}
 
 // ===========================================================================
 // runDailyForStore — shared handler body.
@@ -671,15 +693,23 @@ async function runDailyForStoreInner(
 
   // ---- Step 4: Manual overrides + FX → CAD totals -------------------------
   // mergeOverridesFromSupabase reads the manual_overrides table for
-  // (date, storeId) and REPLACES (not adds) the fb/ga spend if any rows
+  // (date, storeId) and REPLACES (not adds) the fb/ga/tt spend if any rows
   // exist, then converts to CAD via getFxRate (Frankfurter). Returns
-  // { fbSpendCad, gaSpendCad, totalSpendCad, overridesApplied }.
+  // { fbSpendCad, gaSpendCad, ttSpendCad, totalSpendCad, overridesApplied }.
+  //
+  // TikTok (2026-06-02): we pass the fetched per-store TikTok spend in so the
+  // merge can REPLACE it with the operator's typed override when one exists for
+  // (date, storeId, 'tiktok'). The override is keyed by store_id, so it only
+  // ever replaces THIS store's mapped TikTok share — never the raw shared
+  // account. `overridesApplied.tiktok` then decides whether the override value
+  // (authoritative) or the fetched/FX'd value wins at persist (Step 5 below).
   const merged = (await step.run('apply-manual-overrides', () =>
     mergeOverridesFromSupabase({
       storeId,
       date: dateStr,
       metaSpend: meta.spend, // { spend, currency:'ILS' }
       googleSpend: google.spend, // { spend, currency:'CAD' } or zero
+      tiktokSpend: tiktok.spend, // { spend, currency:'USD' } or zero-sentinel
     }),
   )) as Awaited<ReturnType<typeof mergeOverridesFromSupabase>>;
 
@@ -719,15 +749,15 @@ async function runDailyForStoreInner(
     // written, so refunds and revenue updates still land. The total_spend_cad
     // recomputation also skips the failed platform so it stays consistent
     // with whichever spend columns were actually persisted this tick.
-    let ttSpendCad: number | null = null;
+    let fetchedTtSpendCad: number | null = null;
     if (tiktok.spend.spend > 0) {
       try {
         const cur = (tiktok.spend.currency || 'USD').toUpperCase();
         if (cur === 'CAD') {
-          ttSpendCad = tiktok.spend.spend;
+          fetchedTtSpendCad = tiktok.spend.spend;
         } else {
           const rate = await getFxRate(cur, 'CAD', dateStr);
-          ttSpendCad = tiktok.spend.spend * rate;
+          fetchedTtSpendCad = tiktok.spend.spend * rate;
         }
       } catch (e) {
         console.warn(
@@ -735,18 +765,41 @@ async function runDailyForStoreInner(
             e instanceof Error ? e.message : String(e)
           }`,
         );
-        ttSpendCad = null;
+        fetchedTtSpendCad = null;
       }
     } else {
-      ttSpendCad = 0;
+      fetchedTtSpendCad = 0;
     }
+    // TikTok manual-override (2026-06-02): when the operator typed a TikTok
+    // override for (store, date), `mergeOverridesFromSupabase` already FX'd it
+    // to CAD (merged.ttSpendCad) and flagged merged.overridesApplied.tiktok.
+    // The operator value is authoritative — it wins over the fetched/FX'd value
+    // and even over a null fetched value (the override exists precisely because
+    // the TikTok account errored and the auto-pull is empty/wrong). Otherwise
+    // the fetched value (possibly null on FX failure) stands. `?? false` keeps
+    // this robust when a caller/mock supplies a merge result without the tiktok
+    // flag.
+    const ttSpendCad: number | null = chooseTikTokSpendCad({
+      overrideApplied: merged.overridesApplied.tiktok ?? false,
+      overrideCad: merged.ttSpendCad ?? 0,
+      fetchedCad: fetchedTtSpendCad,
+    });
     // total_spend_cad consistency: only include TikTok in the rolled-up
     // total when its CAD value was successfully computed. If TikTok FX
     // failed (ttSpendCad === null), we omit total_spend_cad from the upsert
     // payload too — preserving the prior consistent value rather than
     // writing a fb+ga sum that contradicts the (untouched) tt column.
+    //
+    // NOTE (2026-06-02): build the total from the persisted fb/ga + the CHOSEN
+    // ttSpendCad (override-or-fetched). We deliberately do NOT use
+    // merged.totalSpendCad here — that already folds in the merge's own TikTok
+    // figure, so reusing it would double-count TikTok. fb/ga are identical
+    // between merged.* and the persisted columns, so this stays consistent with
+    // the fb_spend_cad / ga_spend_cad / tt_spend_cad actually written below.
     const totalSpendCadAll =
-      ttSpendCad === null ? null : merged.totalSpendCad + ttSpendCad;
+      ttSpendCad === null
+        ? null
+        : merged.fbSpendCad + merged.gaSpendCad + ttSpendCad;
     const roas =
       totalSpendCadAll !== null && totalSpendCadAll > 0
         ? shopify.revenueCad / totalSpendCadAll
@@ -1488,9 +1541,25 @@ async function runDailyForStoreInner(
       // RPC can run safely. Soft-fail: the per-row campaigns_daily data is
       // correct on its own; only the data_daily aggregate is stale on failure
       // (which the next tick fixes).
-      const { error: aggErr } = await admin.rpc('agg_tiktok_spend_per_store_for_date', { d: dateStr });
-      if (aggErr) {
-        console.warn(`cron-daily ${storeId} ${dateStr}: tt agg RPC failed: ${aggErr.message}`);
+      //
+      // TikTok manual-override guard (2026-06-02): the RPC re-derives
+      // data_daily.tt_spend_cad FROM campaigns_daily — which would silently
+      // CLOBBER the operator's authoritative override we just persisted above.
+      // An override exists precisely to correct an account outage where
+      // campaigns_daily is empty/wrong, so we MUST NOT let the agg overwrite it.
+      // Skip the re-aggregation for this date when this store's TikTok override
+      // is applied; the operator's value stays authoritative. (The RPC is
+      // date-global + idempotent and re-runs every tick, so any other store's
+      // aggregate self-heals on the next override-free tick.)
+      if (merged.overridesApplied.tiktok) {
+        console.warn(
+          `cron-daily ${storeId} ${dateStr}: TikTok manual-override applied — skipping agg_tiktok_spend_per_store_for_date so the operator value stays authoritative.`,
+        );
+      } else {
+        const { error: aggErr } = await admin.rpc('agg_tiktok_spend_per_store_for_date', { d: dateStr });
+        if (aggErr) {
+          console.warn(`cron-daily ${storeId} ${dateStr}: tt agg RPC failed: ${aggErr.message}`);
+        }
       }
     }
 

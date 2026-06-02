@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { validatePost } from '@/lib/operatorManualOverrides';
+import { validatePost, VALID_PLATFORMS } from '@/lib/operatorManualOverrides';
 
 /**
  * AUDIT regression (Phase 12.3 / 2026-05-24) — API-26:
@@ -108,5 +108,38 @@ describe('manual-overrides spend strict validation (Phase 12.3 / API-26)', () =>
       const body = await res.json();
       expect(body.error).toMatch(/spend must be numeric/);
     });
+  });
+});
+
+describe('manual-overrides TikTok unblock (2026-06-02)', () => {
+  it('VALID_PLATFORMS includes tiktok (DB CHECK already allows it)', () => {
+    expect(VALID_PLATFORMS.has('tiktok')).toBe(true);
+    expect(VALID_PLATFORMS.has('meta')).toBe(true);
+    expect(VALID_PLATFORMS.has('google')).toBe(true);
+  });
+
+  it("validatePost accepts platform='tiktok'", () => {
+    const result = validatePost({
+      date: '2026-05-20',
+      store_id: 'uzoshop',
+      platform: 'tiktok',
+      spend: 1500,
+      currency: 'USD',
+      notes: 'tiktok account outage backfill',
+    });
+    expect(typeof result).toBe('object');
+    expect((result as { platform: string }).platform).toBe('tiktok');
+  });
+
+  it('rejects an unknown platform with the 3-value error copy', () => {
+    const result = validatePost({
+      date: '2026-05-20',
+      store_id: 'uzoshop',
+      platform: 'snapchat',
+      spend: 10,
+      currency: 'USD',
+    });
+    expect(typeof result).toBe('string');
+    expect(result).toBe("platform must be 'meta', 'google', or 'tiktok'");
   });
 });

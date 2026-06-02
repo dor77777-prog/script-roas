@@ -77,7 +77,17 @@ type ListResponse = {
 // rejects with a 400 / 400 — visible in the form's error line but not
 // surfaced as a runtime crash.
 const ALL_STORES = ['uzoshop', 'zolplus', 'usmile360'] as const;
-const ALL_PLATFORMS = ['meta', 'google'] as const;
+// TikTok unblock (2026-06-02): the DB CHECK constraint (migration
+// 20260522102151) and the server validator (operatorManualOverrides.ts —
+// VALID_PLATFORMS) both accept 'tiktok'. The override is CONSUMED end-to-end:
+// mergeOverridesFromSupabase (lib/fetchers/manualOverrides.ts) reads the
+// tiktok row keyed by store_id and FX-converts it to CAD, and cronDaily
+// (chooseTikTokSpendCad in inngest/functions/cronDaily.ts) persists it as the
+// authoritative tt_spend_cad for that store. Because the row is keyed by
+// store_id, a TikTok override for store X only ever replaces X's mapped TikTok
+// spend — never the raw shared account, never another store's split. Surfacing
+// it here lets the operator correct TikTok spend when the account errors.
+const ALL_PLATFORMS = ['meta', 'google', 'tiktok'] as const;
 const ALL_CURRENCIES = ['ILS', 'CAD', 'USD'] as const;
 
 async function fetcher(url: string): Promise<ListResponse> {
@@ -419,12 +429,15 @@ export function ManualOverridesCrud() {
       <p className="text-ink-secondary text-xs">
         סה״כ {rows.length} שורות. שינויים נכנסים לתוקף בריצת ה-Inngest הבאה (cron-daily, sync-now, או backfill).
       </p>
-      {/* A8-F4 (2026-05-27): the manual_overrides CHECK constraint allows
-          only meta|google. TikTok spend cannot be corrected here — this is a
-          known schema limitation, not a bug. */}
+      {/* TikTok unblock (2026-06-02): meta | google | tiktok are all
+          accepted (DB CHECK migration 20260522102151 + server validator).
+          A TikTok override is keyed by store_id and replaces that store's
+          mapped TikTok spend only — never the raw shared account. TikTok
+          spend is billed in USD, so pick the USD currency for a TikTok row. */}
       <p className="text-ink-secondary text-xs">
-        הערה: ניתן לתקן הוצאה ידנית עבור Meta ו-Google בלבד. TikTok אינו נתמך
-        כרגע במנגנון התיקונים הידני (מגבלת סכמה).
+        הערה: ניתן לתקן הוצאה ידנית עבור Meta, Google ו-TikTok. הוצאת TikTok
+        מחויבת ב-USD — בחר את המטבע USD בשורת TikTok. התיקון חל על ההוצאה
+        הממופה של החנות שנבחרה בלבד.
       </p>
     </div>
   );

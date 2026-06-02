@@ -159,7 +159,11 @@ type MockState = {
     fbSpendCad: number;
     gaSpendCad: number;
     totalSpendCad: number;
-    overridesApplied: { meta: boolean; google: boolean };
+    // TikTok unblock (2026-06-02): optional so the bulk of existing scenarios
+    // (which don't exercise TikTok overrides) keep their terse mergeResult;
+    // the dedicated override scenario sets them explicitly.
+    ttSpendCad?: number;
+    overridesApplied: { meta: boolean; google: boolean; tiktok?: boolean };
   };
   /** Phase 05.7.7 — TikTok mock fields. Default to zero/empty so the
    *  existing tests don't need to know about TikTok unless they care. */
@@ -940,6 +944,43 @@ describe('cronDaily — factory + handler', () => {
       // when spend === 0).
       expect(row?.tt_spend_cad).toBe(0);
       // Meta + Google unaffected.
+      expect(row?.fb_spend_cad).toBe(36);
+      expect(row?.ga_spend_cad).toBe(50);
+    });
+
+    // TikTok manual-override unblock (2026-06-02) — end-to-end consumer proof.
+    // When mergeOverridesFromSupabase reports overridesApplied.tiktok=true, the
+    // operator's FX'd value (merged.ttSpendCad) MUST be the persisted
+    // tt_spend_cad — NOT the fetched/FX'd value — and total_spend_cad must roll
+    // it up exactly once (no double-count with the merge's own total).
+    it('TikTok manual override → persisted tt_spend_cad uses the override value (not the fetched spend)', async () => {
+      // Fetched TikTok says 10 USD (→ would be 13.5 CAD at fxRate 1.35); the
+      // operator override says 280 CAD. The override must win.
+      mockState.tiktokSpendResult = {
+        storeId: 'uzoshop',
+        date: '2026-05-20',
+        spend: 10,
+        currency: 'USD',
+      };
+      mockState.mergeResult = {
+        fbSpendCad: 36,
+        gaSpendCad: 50,
+        ttSpendCad: 280, // operator override, already FX'd to CAD by the merge
+        totalSpendCad: 366, // 36 + 50 + 280 (merge's own roll-up)
+        overridesApplied: { meta: false, google: false, tiktok: true },
+      };
+
+      const { step } = makeMockStep();
+      await expect(
+        runDailyForStore('uzoshop', '2026-05-20', { step }),
+      ).resolves.toBeDefined();
+
+      const row = getDataDailyRow();
+      expect(row).toBeDefined();
+      // Override value wins (280), NOT the fetched 10 USD × 1.35 = 13.5.
+      expect(row?.tt_spend_cad).toBe(280);
+      // total_spend_cad rolls up fb + ga + the chosen tt exactly once.
+      expect(row?.total_spend_cad).toBe(366);
       expect(row?.fb_spend_cad).toBe(36);
       expect(row?.ga_spend_cad).toBe(50);
     });

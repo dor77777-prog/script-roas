@@ -93,7 +93,8 @@ describe('manualOverrides — mergeOverridesFromSupabase', () => {
     expect(result.fbSpendCad).toBe(12.5);
     expect(result.gaSpendCad).toBe(7.5);
     expect(result.totalSpendCad).toBeCloseTo(20.0, 6);
-    expect(result.overridesApplied).toEqual({ meta: false, google: false });
+    expect(result.ttSpendCad).toBe(0);
+    expect(result.overridesApplied).toEqual({ meta: false, google: false, tiktok: false });
     // FX should not be invoked at all (inputs are CAD; no override rows)
     expect(mockState.fxCalls).toEqual([]);
   });
@@ -117,7 +118,8 @@ describe('manualOverrides — mergeOverridesFromSupabase', () => {
     expect(result.fbSpendCad).toBeCloseTo(100 * 0.376, 6); // 37.6 — from override row
     expect(result.gaSpendCad).toBe(25); // CAD passthrough
     expect(result.totalSpendCad).toBeCloseTo(37.6 + 25, 6); // 62.6
-    expect(result.overridesApplied).toEqual({ meta: true, google: false });
+    expect(result.ttSpendCad).toBe(0);
+    expect(result.overridesApplied).toEqual({ meta: true, google: false, tiktok: false });
     // FX called once (for the override row); the CAD googleSpend short-circuits
     expect(mockState.fxCalls).toEqual([{ from: 'ILS', to: 'CAD', date: '2026-05-19' }]);
   });
@@ -142,7 +144,8 @@ describe('manualOverrides — mergeOverridesFromSupabase', () => {
     expect(result.fbSpendCad).toBeCloseTo(37.6, 6); // 100 ILS × 0.376
     expect(result.gaSpendCad).toBe(40); // CAD passthrough (no FX call)
     expect(result.totalSpendCad).toBeCloseTo(77.6, 6);
-    expect(result.overridesApplied).toEqual({ meta: true, google: true });
+    expect(result.ttSpendCad).toBe(0);
+    expect(result.overridesApplied).toEqual({ meta: true, google: true, tiktok: false });
     expect(mockState.fxCalls).toEqual([{ from: 'ILS', to: 'CAD', date: '2026-05-19' }]);
   });
 
@@ -165,14 +168,113 @@ describe('manualOverrides — mergeOverridesFromSupabase', () => {
     expect(result.fbSpendCad).toBe(42);
     expect(result.gaSpendCad).toBe(0);
     expect(result.totalSpendCad).toBe(42);
-    expect(result.overridesApplied).toEqual({ meta: true, google: false });
+    expect(result.ttSpendCad).toBe(0);
+    expect(result.overridesApplied).toEqual({ meta: true, google: false, tiktok: false });
     expect(mockState.fxCalls).toEqual([]); // No FX call at all
   });
 
-  it('defensively skips rows with unexpected platform values (logs warning, does not throw)', async () => {
-    // CHECK constraint blocks this at write-time; defensive read-side guard.
+  it('passes through the fetched tt spend (CAD) when no tiktok override exists', async () => {
+    mockState.fxResponder = () => {
+      throw new Error('FX should NOT be called — CAD tt passthrough');
+    };
+
+    const result = await mergeOverridesFromSupabase({
+      storeId: 'uzoshop',
+      date: '2026-05-19',
+      metaSpend: { spend: 0, currency: 'CAD' },
+      googleSpend: { spend: 0, currency: 'CAD' },
+      tiktokSpend: { spend: 100, currency: 'CAD' },
+    });
+
+    expect(result.ttSpendCad).toBe(100);
+    expect(result.totalSpendCad).toBe(100);
+    expect(result.overridesApplied.tiktok).toBe(false);
+    expect(mockState.fxCalls).toEqual([]);
+  });
+
+  it('FX-safety: non-CAD fetched tt (no override) does NOT call external FX — left to cronDaily graceful path (ttSpendCad 0)', async () => {
+    // CRIT-5 preservation: a TikTok-FX outage must stay survivable. The merge
+    // never FX-converts the NON-override fetched tt on a throwing path — it
+    // CAD-passthroughs only and defers non-CAD to cronDaily's graceful
+    // persist-batch block. So no getFxRate call here and ttSpendCad is 0.
+    mockState.fxResponder = () => {
+      throw new Error('FX must NOT be called for non-CAD fetched tt (no override)');
+    };
+
+    const result = await mergeOverridesFromSupabase({
+      storeId: 'uzoshop',
+      date: '2026-05-19',
+      metaSpend: { spend: 0, currency: 'CAD' },
+      googleSpend: { spend: 0, currency: 'CAD' },
+      tiktokSpend: { spend: 999, currency: 'USD' },
+    });
+
+    expect(result.ttSpendCad).toBe(0);
+    expect(result.overridesApplied.tiktok).toBe(false);
+    expect(mockState.fxCalls).toEqual([]);
+  });
+
+  it('tiktokSpend is optional — omitting it yields ttSpendCad 0', async () => {
+    mockState.fxResponder = () => {
+      throw new Error('FX should NOT be called');
+    };
+
+    const result = await mergeOverridesFromSupabase({
+      storeId: 'zolplus',
+      date: '2026-05-20',
+      metaSpend: { spend: 10, currency: 'CAD' },
+      googleSpend: { spend: 0, currency: 'CAD' },
+    });
+
+    expect(result.ttSpendCad).toBe(0);
+    expect(result.totalSpendCad).toBe(10);
+    expect(result.overridesApplied.tiktok).toBe(false);
+  });
+
+  // TikTok unblock (2026-06-02): tiktok is now a SUPPORTED, operator-typed
+  // platform. A tiktok override row is APPLIED (REPLACE semantics, keyed by
+  // store_id) — NOT skipped — and does NOT emit the defensive warning. This
+  // replaces the prior assertion that tiktok rows were discarded; that
+  // behavior was the bug the feature fixes.
+  it('APPLIES a tiktok override row (REPLACE, keyed by store_id) — no defensive warning', async () => {
     mockState.rows = [
-      { date: '2026-05-19', store_id: 'uzoshop', platform: 'tiktok', spend: 999, currency: 'CAD' },
+      { date: '2026-05-19', store_id: 'uzoshop', platform: 'tiktok', spend: 200, currency: 'USD' },
+    ];
+    mockState.fxResponder = (from, to, _date) => {
+      if (from === 'USD' && to === 'CAD') return 1.4;
+      throw new Error(`unexpected FX request ${from}->${to}`);
+    };
+
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const result = await mergeOverridesFromSupabase({
+      storeId: 'uzoshop',
+      date: '2026-05-19',
+      metaSpend: { spend: 50, currency: 'CAD' },
+      googleSpend: { spend: 25, currency: 'CAD' },
+      tiktokSpend: { spend: 999, currency: 'USD' }, // ignored — overridden
+    });
+
+    // The tiktok override REPLACES the fetched tt spend (200 USD × 1.4 = 280).
+    expect(result.fbSpendCad).toBe(50);
+    expect(result.gaSpendCad).toBe(25);
+    expect(result.ttSpendCad).toBeCloseTo(280, 6);
+    expect(result.totalSpendCad).toBeCloseTo(355, 6); // 50 + 25 + 280
+    expect(result.overridesApplied).toEqual({ meta: false, google: false, tiktok: true });
+
+    // tiktok is supported now — the defensive unknown-platform warning must NOT fire.
+    expect(warnSpy).not.toHaveBeenCalled();
+    // Exactly one FX call: the USD→CAD override conversion.
+    expect(mockState.fxCalls).toEqual([{ from: 'USD', to: 'CAD', date: '2026-05-19' }]);
+
+    warnSpy.mockRestore();
+  });
+
+  it('defensively skips rows with genuinely-unknown platform values (logs warning, does not throw)', async () => {
+    // CHECK constraint blocks anything outside meta/google/tiktok at write-time;
+    // this is the read-side defensive guard for corruption / constraint bypass.
+    mockState.rows = [
+      { date: '2026-05-19', store_id: 'uzoshop', platform: 'snapchat', spend: 999, currency: 'CAD' },
     ];
     mockState.fxResponder = () => {
       throw new Error('FX should NOT be called — no valid override matched');
@@ -190,13 +292,14 @@ describe('manualOverrides — mergeOverridesFromSupabase', () => {
     // Unknown platform row is ignored; original inputs flow through unchanged
     expect(result.fbSpendCad).toBe(50);
     expect(result.gaSpendCad).toBe(25);
+    expect(result.ttSpendCad).toBe(0);
     expect(result.totalSpendCad).toBe(75);
-    expect(result.overridesApplied).toEqual({ meta: false, google: false });
+    expect(result.overridesApplied).toEqual({ meta: false, google: false, tiktok: false });
 
     // console.warn fired with the storeId/date/platform context
     expect(warnSpy).toHaveBeenCalledTimes(1);
     const message = String(warnSpy.mock.calls[0]?.[0] ?? '');
-    expect(message).toMatch(/tiktok/);
+    expect(message).toMatch(/snapchat/);
     expect(message).toMatch(/uzoshop/);
     expect(message).toMatch(/2026-05-19/);
 

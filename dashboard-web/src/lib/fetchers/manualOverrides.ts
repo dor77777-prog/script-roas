@@ -25,14 +25,24 @@
 //   - The override's `currency` is converted to CAD via `getFxRate` (Frankfurter,
 //     see fetchers/fx.ts) when not already CAD.
 //   - Rows are operator-typed via the plan 15 CRUD UI; CHECK constraints on
-//     `platform IN ('meta', 'google')` block invalid values at write-time.
-//     Defensive read-side guard logs a warning if an unexpected platform
-//     value ever appears (would indicate constraint bypass / corruption).
+//     `platform IN ('meta', 'google', 'tiktok')` block invalid values at
+//     write-time. Defensive read-side guard logs a warning if a genuinely
+//     unexpected platform value ever appears (would indicate constraint
+//     bypass / corruption).
+//
+// TikTok (2026-06-02): the override row is keyed by `(date, store_id,
+//   platform)`. Because it is resolved per `store_id`, a TikTok override for
+//   store X replaces ONLY X's mapped TikTok spend — never the raw shared
+//   account total and never another store's mapped share. This keeps the
+//   override on the SAME per-store axis the agg uses. We do NOT touch
+//   campaignStoreMap / the TikTok fetcher / the agg RPC, so all mapping
+//   suites stay green.
 //
 // Return shape — CAD-only:
-//   - All three numbers (`fbSpendCad`, `gaSpendCad`, `totalSpendCad`) are in
-//     CAD ready for direct write to `data_daily.fb_spend_cad` /
-//     `data_daily.ga_spend_cad` / `data_daily.total_spend_cad`.
+//   - All four numbers (`fbSpendCad`, `gaSpendCad`, `ttSpendCad`,
+//     `totalSpendCad`) are in CAD ready for direct write to
+//     `data_daily.fb_spend_cad` / `data_daily.ga_spend_cad` /
+//     `data_daily.tt_spend_cad` / `data_daily.total_spend_cad`.
 //   - `overridesApplied` is returned for observability — plans 08-09 surface
 //     it on the Inngest step.run result so the operator console jobs table
 //     shows which days had operator-typed overrides applied.
@@ -47,19 +57,23 @@ export type MergeInput = {
   date: string; // YYYY-MM-DD
   metaSpend: SpendInput;
   googleSpend: SpendInput;
+  /** Mapping-resolved TikTok spend for THIS store (already split per store by
+   *  the fetcher/agg). Optional: omitted for non-TikTok stores → treated as 0. */
+  tiktokSpend?: SpendInput;
 };
 
 export type MergeResult = {
   fbSpendCad: number;
   gaSpendCad: number;
+  ttSpendCad: number;
   totalSpendCad: number;
-  overridesApplied: { meta: boolean; google: boolean };
+  overridesApplied: { meta: boolean; google: boolean; tiktok: boolean };
 };
 
 type OverrideRow = {
   date: string;
   store_id: string;
-  platform: string; // CHECK-constrained to 'meta' | 'google' at the DB
+  platform: string; // CHECK-constrained to 'meta' | 'google' | 'tiktok' at the DB
   // NUMERIC(14, 4) — supabase-js may decode as `number` or `string` depending
   // on the column precision; handle both.
   spend: number | string;
@@ -87,7 +101,7 @@ async function overrideToCad(row: OverrideRow, dateStr: string): Promise<number>
 export async function mergeOverridesFromSupabase(
   input: MergeInput,
 ): Promise<MergeResult> {
-  const { storeId, date, metaSpend, googleSpend } = input;
+  const { storeId, date, metaSpend, googleSpend, tiktokSpend } = input;
 
   const { data, error } = await getSupabaseAdmin()
     .from('manual_overrides')
@@ -102,7 +116,7 @@ export async function mergeOverridesFromSupabase(
   }
 
   const rows = (data ?? []) as OverrideRow[];
-  const overridesApplied = { meta: false, google: false };
+  const overridesApplied = { meta: false, google: false, tiktok: false };
 
   // Resolve Meta side first, then Google. `.find` is fine — at most one row
   // per (date, store_id, platform) thanks to the UNIQUE constraint.
@@ -124,17 +138,50 @@ export async function mergeOverridesFromSupabase(
     gaSpendCad = await spendToCad(googleSpend, date);
   }
 
-  // Defensive: CHECK constraint blocks platform != 'meta'/'google' at write
-  // time, so this branch should never trigger. If it does, the DB constraint
-  // was bypassed — log loudly so the operator sees it in jobs-table errors.
+  // TikTok branch (2026-06-02). The row is keyed by store_id, so this replaces
+  // ONLY this store's mapped TikTok spend — never the raw shared account, never
+  // another store's split. `tiktokSpend` is optional (non-TikTok stores omit
+  // it) → falls back to 0 when absent and no override exists.
+  //
+  // FX-failure policy (preserves CRIT-5 / O4-CR-01): when an override exists we
+  // FX-convert it here (overrideToCad) — the operator value is authoritative
+  // and the run SHOULD surface an error if its currency can't be converted.
+  // But for the NON-override fallback we deliberately do NOT call external FX
+  // (getFxRate) on a throwing path: a TikTok-FX outage must stay survivable
+  // (Shopify revenue + Meta + Google still persist; tt_spend_cad is preserved
+  // via ON CONFLICT). We CAD-passthrough only; any non-CAD fetched value is
+  // left to cronDaily's own graceful persist-batch FX block (which catches the
+  // outage and omits tt_spend_cad). cronDaily ignores this fallback unless the
+  // currency is already CAD, so this never under-reports the persisted total.
+  let ttSpendCad: number;
+  const tiktokRow = rows.find((r) => r.platform === 'tiktok');
+  if (tiktokRow) {
+    ttSpendCad = await overrideToCad(tiktokRow, date);
+    overridesApplied.tiktok = true;
+  } else if (tiktokSpend && tiktokSpend.currency === 'CAD') {
+    ttSpendCad = tiktokSpend.spend;
+  } else {
+    ttSpendCad = 0;
+  }
+
+  // Defensive: the CHECK constraint blocks platform values outside
+  // meta/google/tiktok at write time, so this branch should never trigger.
+  // If it does, the DB constraint was bypassed (or the table was corrupted) —
+  // log loudly so the operator sees it in jobs-table errors. NOTE: 'tiktok' is
+  // now a SUPPORTED, operator-typed value (handled above), so it is excluded
+  // here — only a genuinely unknown platform reaches this warning.
   for (const r of rows) {
-    if (r.platform !== 'meta' && r.platform !== 'google') {
+    if (
+      r.platform !== 'meta' &&
+      r.platform !== 'google' &&
+      r.platform !== 'tiktok'
+    ) {
       console.warn(
         `manual_overrides row with unexpected platform '${r.platform}' for ${storeId} ${date} — skipped`,
       );
     }
   }
 
-  const totalSpendCad = fbSpendCad + gaSpendCad;
-  return { fbSpendCad, gaSpendCad, totalSpendCad, overridesApplied };
+  const totalSpendCad = fbSpendCad + gaSpendCad + ttSpendCad;
+  return { fbSpendCad, gaSpendCad, ttSpendCad, totalSpendCad, overridesApplied };
 }

@@ -24,8 +24,9 @@
 //
 // Why platform/currency normalisation:
 //   The CHECK constraint `manual_overrides_platform_check` requires lowercase
-//   `meta`/`google` (per Phase 05.5 WR-07). Pitfall 7 documents how the
-//   legacy `manual-spend` Sheets tab stores `'Meta'` / `'Google'`; the UI
+//   `meta`/`google`/`tiktok` (per Phase 05.5 WR-07; tiktok added by migration
+//   20260522102151 and unblocked app-side 2026-06-02). Pitfall 7 documents how
+//   the legacy `manual-spend` Sheets tab stores `'Meta'` / `'Google'`; the UI
 //   lowercases pre-submit and the server lowercases again — defense in
 //   depth so a hand-crafted curl with `"Meta"` doesn't reach Postgres
 //   with the wrong case and trip the CHECK with a leaky error message.
@@ -159,7 +160,7 @@ export async function PATCH(req: Request) {
     if (rest.platform !== undefined) {
       const platform = String(rest.platform).toLowerCase();
       if (!VALID_PLATFORMS.has(platform)) {
-        return NextResponse.json({ error: "platform must be 'meta' or 'google'" }, { status: 400 });
+        return NextResponse.json({ error: "platform must be 'meta', 'google', or 'tiktok'" }, { status: 400 });
       }
       patch.platform = platform;
     }
