@@ -10,6 +10,7 @@ import {
   type HealthGrade,
 } from './campaignHealthScore';
 import { analyzeCpmVsRoas, type DailyCpmRoasPoint } from './cpmRoasAnalysis';
+import { getCogsRateForStore } from './analytics';
 import type { Aggregated } from './campaignsAggregator';
 import { TIKTOK_ACTIVE_ENOUGH } from './platformConfig';
 
@@ -2274,6 +2275,19 @@ export function generateAiReport({
       ' מתחת ל-2.0 = הפסד.',
   );
   out.push('- **COGS משוער**: לפי שיעור לכל חנות (השיעור המוגדר לכל חנות). רווח תפעולי = הכנסות − פרסום − COGS.');
+  // Explicit per-store COGS rate disclosure (2026-06-02): names the ACTUAL
+  // rate getCogsRateForStore returns for each in-scope store rather than a
+  // generic "per store" — keeps the report honest about the inputs. The rate
+  // is keyed by storeId (env-var convention), but we label by display name.
+  {
+    const seen = new Map<string, string>(); // storeName -> storeId (first seen)
+    for (const r of daily) {
+      if (!seen.has(r.storeName)) seen.set(r.storeName, r.storeId);
+    }
+    for (const [sName, sId] of seen) {
+      out.push(`  - ${sName}: COGS ${(getCogsRateForStore(sId) * 100).toFixed(0)}%`);
+    }
+  }
   out.push(
     '- **שלוש חנויות**: uzoshop, Zol Plus, 360usmile. כל אחת קהל ומוצרים שונים — ' +
       'אל תאחד מסקנות אם המספרים לכל חנות מספרים סיפור שונה.',
