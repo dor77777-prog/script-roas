@@ -36,9 +36,6 @@
 /** Transaction processing fee as a fraction of revenue. */
 export const TRANSACTION_FEES_RATE = 0.065;
 
-/** Email service (Klaviyo / similar) fixed monthly cost per store, in CAD. */
-export const EMAIL_COST_PER_STORE_MONTHLY = 20;
-
 // Audit fix 2026-05-27 (A2-07): removed the unused `buildPnLBreakdown`
 // helper. It had ZERO callers (verified via grep across src/) and
 // hardcoded the 6.5% transaction-fees rate, ignoring the per-store
