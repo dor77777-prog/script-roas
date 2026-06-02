@@ -128,11 +128,11 @@ afterEach(() => {
 });
 
 describe('REORDERABLE_COLUMN_IDS — schema sanity', () => {
-  it('contains exactly the 19 metric columns documented in the manual', () => {
-    // 16 base columns + 3 new (column-audit 2026-06-01):
-    //   shopifyValueAllocated (ROAS Shopify numerator),
-    //   clicks, impressions.
-    expect(REORDERABLE_COLUMN_IDS).toHaveLength(19);
+  it('contains exactly the 20 metric columns documented in the manual', () => {
+    // 16 base columns + 3 (column-audit 2026-06-01):
+    //   shopifyValueAllocated (ROAS Shopify numerator), clicks, impressions
+    // + 1 (Plan C Task 9, 2026-06-02): firstClickRoas (first-click lens).
+    expect(REORDERABLE_COLUMN_IDS).toHaveLength(20);
   });
 
   it('every reorderable ID exists in CAMPAIGNS_COLUMNS', () => {
@@ -178,6 +178,22 @@ describe('REORDERABLE_COLUMN_IDS — schema sanity', () => {
     expect(col!.label).toBe('ערך Shopify · מוקצה');
     // Description must spell out that this is the ROAS Shopify numerator.
     expect(col!.description).toContain('המונה של ROAS Shopify');
+  });
+
+  // Plan C Task 9 (2026-06-02) — first-click column registration contract.
+  it('registers firstClickRoas immediately after roasShopify (first-click beside last-click)', () => {
+    const known = new Set(CAMPAIGNS_COLUMNS.map(c => c.id));
+    expect(known.has('firstClickRoas')).toBe(true);
+    const ids = REORDERABLE_COLUMN_IDS as readonly string[];
+    expect(ids.includes('firstClickRoas')).toBe(true);
+    // Sits between the last-click ROAS Shopify (left) and the per-platform
+    // ROAS Shopify (right) so the operator reads first-click next to last-click.
+    expect(ids.indexOf('firstClickRoas')).toBe(ids.indexOf('roasShopify') + 1);
+    expect(ids.indexOf('roasShopifyPlatform')).toBe(ids.indexOf('firstClickRoas') + 1);
+  });
+
+  it('firstClickRoas is VISIBLE by default (first-click lens stays on)', () => {
+    expect((DEFAULT_HIDDEN_COLUMN_IDS as readonly string[]).includes('firstClickRoas')).toBe(false);
   });
 });
 
@@ -258,10 +274,10 @@ describe('resolveCampaignsColumnOrder — pure merge contract', () => {
     // Must list ALL reorderable IDs (a partial list gets the missing ones
     // appended) — kept in sync with REORDERABLE_COLUMN_IDS.
     const saved = ['roas', 'spend', 'budget', 'conversionValue', 'roasShopify',
-                   'roasShopifyPlatform', 'shopifyValuePlatform', 'shopifyValueAllocated',
-                   'shopifyUnitsPlatform', 'shopifyValueTotal', 'shopifyUnitsTotal',
-                   'shopifyOrdersTotal', 'conversions', 'clicks', 'impressions',
-                   'ctr', 'cpc', 'cpm', 'cpa'];
+                   'firstClickRoas', 'roasShopifyPlatform', 'shopifyValuePlatform',
+                   'shopifyValueAllocated', 'shopifyUnitsPlatform', 'shopifyValueTotal',
+                   'shopifyUnitsTotal', 'shopifyOrdersTotal', 'conversions', 'clicks',
+                   'impressions', 'ctr', 'cpc', 'cpm', 'cpa'];
     expect(saved).toHaveLength(REORDERABLE_COLUMN_IDS.length);
     expect(resolveCampaignsColumnOrder(saved)).toEqual(saved);
   });

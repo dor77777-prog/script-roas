@@ -93,6 +93,7 @@ function renderRow() {
           i={0}
           mode="campaign"
           trueRevenueByKey={trueRevenueByKey}
+          firstClickByCampaign={new Map()}
           mappedCampaignKeys={new Set([campaignKey(STORE_ID, PLATFORM, CAMPAIGN_ID)])}
           health={undefined}
           columnOrder={COLUMN_ORDER}
@@ -155,6 +156,7 @@ describe('FIX 1 — shopifyValueAllocated column (ROAS Shopify numerator)', () =
         <CampaignsTableRow
           a={ROW} i={0} mode="campaign"
           trueRevenueByKey={trueRevenueByKey}
+          firstClickByCampaign={new Map()}
           mappedCampaignKeys={new Set()}
           health={undefined}
           columnOrder={COLUMN_ORDER}

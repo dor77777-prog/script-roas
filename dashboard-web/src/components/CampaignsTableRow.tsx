@@ -13,7 +13,9 @@ import { buildAdsManagerLink, type AdAccountMap } from '@/lib/campaignsLinks';
 import { roasLabel } from '@/lib/analytics';
 import type { Aggregated } from '@/lib/campaignsAggregator';
 import type { ConfidenceLevel, TrueRevenueInfo } from '@/lib/hooks/useCampaignTrueRevenue';
-import type { AttributionTrust } from '@/lib/attributionAnalysis';
+import type { AttributionTrust, FirstClickAnalysis } from '@/lib/attributionAnalysis';
+import { firstClickDelta } from '@/components/firstClickDelta';
+import { FirstClickCoverageChip } from '@/components/FirstClickCoverageChip';
 import type { CampaignHealth } from '@/lib/campaignHealthScore';
 import type { DailyCpmRoasPoint } from '@/lib/cpmRoasAnalysis';
 import { HealthScoreBadge } from './HealthScoreBadge';
@@ -58,6 +60,15 @@ type Props = {
   i: number;
   mode: 'campaign' | 'adset';
   trueRevenueByKey: Map<string, TrueRevenueInfo>;
+  /**
+   * Plan C (2026-06-02) — per-campaign first-click ("מבוא ללקוח") analysis,
+   * keyed by `campaignKey(storeId, platform, campaignId)` (same key as
+   * trueRevenueByKey). Computed once in the parent (`firstClickByCampaign`
+   * memo) so each row does an O(1) lookup. The value is null when the
+   * platform is unsupported or there are no orders in range; the cell renders
+   * an em-dash placeholder in that case.
+   */
+  firstClickByCampaign: Map<string, FirstClickAnalysis | null>;
   /**
    * Phase 05.7.x (2026-05-23) — set of campaignKeys that DO have at least
    * one product mapped. Used to render the "🏷️ לא ממופה" chip next to
@@ -139,6 +150,7 @@ export function CampaignsTableRow({
   i,
   mode,
   trueRevenueByKey,
+  firstClickByCampaign,
   mappedCampaignKeys,
   health,
   columnOrder,
@@ -579,6 +591,64 @@ export function CampaignsTableRow({
                 <span className="font-semibold tabular-nums text-ink">
                   {trueRoas > 0 ? formatNumber(trueRoas) : '—'}
                 </span>
+              </div>
+            </HelpTooltip>
+          );
+        })()}
+      </td>
+      ),
+      // Plan C (2026-06-02) — first-click ("מבוא ללקוח") value + headline delta
+      // on hover, at ~60-70% prominence vs the last-click ROAS Shopify (opacity-80,
+      // muted). Compares first-click ROAS to the row's last-click (allocated)
+      // ROAS Shopify; the coverage chip = first-click-matched ÷ last-click-matched
+      // (deterministic) orders. Google-blind + directional-floor caveats in the
+      // tooltip. Mapping-aware: the analysis is keyed by the row's resolved store.
+      firstClickRoas: (
+      <td data-col-id="firstClickRoas" className="px-3 py-2 text-center" data-testid={`first-click-roas-${a.campaignId}`}>
+        {(() => {
+          const key = campaignKey(a.storeId, a.platform, a.campaignId);
+          const fc = firstClickByCampaign.get(key) ?? null;
+          if (!fc || fc.firstClickOrders === 0) {
+            return (
+              <HelpTooltip content={'אין סיגנל first-click בטווח לקמפיין הזה (אין ft_* / utm_id שתואם). first-click = המגע הראשון של הלקוח (מבוא ללקוח). עיוור ל-Google. כיסוי <= last-click.'}>
+                <span className="text-ink-muted text-xs">—</span>
+              </HelpTooltip>
+            );
+          }
+          const info = trueRevenueByKey.get(key);
+          // Last-click ROAS for the delta = allocated (trueRevenue) ÷ spend —
+          // the same number the ROAS Shopify cell renders. Coverage's last-click
+          // order count comes from the deterministic attribution analysis.
+          const lastClickRoas = info && a.spend > 0 ? info.trueRevenue / a.spend : 0;
+          const lastClickOrders = info?.attribution?.deterministicOrders ?? 0;
+          const d = firstClickDelta(fc.firstClickRoas, lastClickRoas);
+          const tooltip =
+            `first-click ROAS: ${fc.firstClickRoas.toFixed(2)}x (${fc.firstClickOrders} הזמנות, ${fc.firstClickRevenue.toFixed(0)} CAD)\n` +
+            `last-click ROAS Shopify: ${lastClickRoas.toFixed(2)}x\n` +
+            (d ? `delta: ${d.label}\n` : '') +
+            '\nfirst-click = המגע הראשון (מבוא ללקוח). עיוור ל-Google. כיסוי <= last-click.';
+          return (
+            <HelpTooltip content={tooltip}>
+              <div className="inline-flex flex-col items-center gap-0.5 opacity-80">
+                <span className="font-medium tabular-nums text-ink">
+                  {fc.firstClickRoas > 0 ? fc.firstClickRoas.toFixed(2) : '—'}
+                </span>
+                {d && (
+                  <span
+                    className={cn(
+                      'text-[10px] font-semibold tabular-nums',
+                      d.direction === 'up'   ? 'text-status-greenFg'
+                    : d.direction === 'down' ? 'text-status-redFg'
+                    :                          'text-ink-muted',
+                    )}
+                  >
+                    <bdi dir="ltr">{d.label}</bdi>
+                  </span>
+                )}
+                <FirstClickCoverageChip
+                  firstClickOrders={fc.firstClickOrders}
+                  lastClickOrders={lastClickOrders}
+                />
               </div>
             </HelpTooltip>
           );

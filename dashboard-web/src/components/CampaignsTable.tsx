@@ -38,6 +38,10 @@ import {
   type DailyCpmRoasPoint,
 } from '@/lib/cpmRoasAnalysis';
 import { aggregate, type Aggregated } from '@/lib/campaignsAggregator';
+import {
+  analyzeFirstClickForCampaign,
+  type FirstClickAnalysis,
+} from '@/lib/attributionAnalysis';
 import { buildHealthByKey } from '@/lib/campaignsIntelligence';
 import {
   readCampaignsColumnPrefs,
@@ -98,6 +102,7 @@ type SortKey =
   | 'conversionValue'
   | 'roas'
   | 'shopifyRoas'              // combined Shopify ROAS (deterministic + proportional)
+  | 'firstClickRoas'           // Plan C — first-click (intro-to-customer) ROAS; real sort runs in displaySource
   | 'roasShopifyPlatform'      // Shopify ROAS using ONLY deterministic per-platform revenue
   | 'shopifyValuePlatform'     // deterministic per-platform Shopify revenue
   | 'shopifyValueAllocated'    // allocated Shopify revenue (ROAS Shopify numerator = trueRevenue)
@@ -187,6 +192,12 @@ function sortAggregated(
       case 'shopifyRoas': {
         // Falls back to Meta ROAS; real Shopify-ROAS sort happens at render
         // time via the `displaySource` memo which has trueRevenueByKey in scope.
+        return a.spend > 0 ? a.conversionValue / a.spend : 0;
+      }
+      case 'firstClickRoas': {
+        // Plan C — falls back to Meta ROAS here; the real first-click sort runs
+        // in `displaySource` where `firstClickByCampaign` is in scope (same
+        // pattern as shopifyRoas above).
         return a.spend > 0 ? a.conversionValue / a.spend : 0;
       }
       case 'roasShopifyPlatform':
@@ -752,6 +763,35 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
     localRange,
   });
 
+  // Plan C (2026-06-02) — per-campaign first-click ("מבוא ללקוח") analysis,
+  // keyed by `campaignKey(storeId, platform, campaignId)` so the body cell can
+  // look it up O(1). Uses the SAME orders + range the table already has; store
+  // credit follows the row's resolved storeId (mapping-aware — `aggregated`
+  // rows are already mapping-resolved upstream, incl. the TikTok shared-account
+  // uzoshop-default override). Google IS analyzed at campaign grain (T0).
+  const firstClickByCampaign = useMemo(() => {
+    const out = new Map<string, FirstClickAnalysis | null>();
+    const orders = ordersAttrResp?.rows ?? [];
+    for (const a of aggregated) {
+      out.set(
+        campaignKey(a.storeId, a.platform, a.campaignId),
+        analyzeFirstClickForCampaign(
+          {
+            campaignName: a.campaignName,
+            campaignId: a.campaignId,
+            storeId: a.storeId,
+            platform: a.platform,
+            spend: a.spend,
+          },
+          orders,
+          localRange.from,
+          localRange.to,
+        ),
+      );
+    }
+    return out;
+  }, [aggregated, ordersAttrResp, localRange.from, localRange.to]);
+
   // Phase 05.7.x (2026-05-23) — Set of campaign keys whose product
   // mapping is SHARED with at least one other campaign in the same
   // store. Built once from productMap so the multi-mapped filter is O(1)
@@ -1110,6 +1150,24 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       });
       return withRoas.map(w => w.a);
     }
+    if (sortKey === 'firstClickRoas' && firstClickByCampaign.size > 0) {
+      // Plan C — sort by first-click ROAS. Rows with no first-click signal
+      // (fc null OR firstClickOrders === 0) sink to the bottom regardless of
+      // direction (same tie-break policy as shopifyRoas above): they carry no
+      // first-click information, so mixing them into the directional sort would
+      // surface empty rows at the top on asc.
+      const sign = sortDir === 'asc' ? 1 : -1;
+      const withFc = source.map(a => {
+        const fc = firstClickByCampaign.get(campaignKey(a.storeId, a.platform, a.campaignId)) ?? null;
+        const ready = !!fc && fc.firstClickOrders > 0;
+        return { a, roas: fc?.firstClickRoas ?? 0, ready };
+      });
+      withFc.sort((x, y) => {
+        if (x.ready !== y.ready) return x.ready ? -1 : 1;
+        return sign * (x.roas - y.roas);
+      });
+      return withFc.map(w => w.a);
+    }
     if (sortKey === 'health' && healthByKey.size > 0) {
       const sign = sortDir === 'asc' ? 1 : -1;
       const withHealth = source.map(a => {
@@ -1181,7 +1239,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
       return withVal.map(w => w.a);
     }
     return source;
-  }, [aggregatedFiltered, sortKey, sortDir, trueRevenueByKey, healthByKey]);
+  }, [aggregatedFiltered, sortKey, sortDir, trueRevenueByKey, healthByKey, firstClickByCampaign]);
   const display = showAll ? displaySource : displaySource.slice(0, TOP_N_DEFAULT);
   const remaining = displaySource.length - display.length;
 
@@ -1937,6 +1995,25 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     tooltip={'ROAS Shopify (מוקצה) — מבוסס הכנסה מוקצה (click-id + חלוקה יחסית). נוסחה: (revenue דטרמיניסטי מ-click-id + הקצאה פרופורציונלית של הזמנות לא-מתויגות) ÷ הוצאה. המונה מוצג בעמודה ״ערך Shopify · מוקצה״ כך שאפשר לשחזר את המספר על המסך. זהו ה-ROAS האמיתי ביותר — מבוסס על מה ש-Shopify רושם, לא על מה שה-Pixel מדווח. דורש שהקמפיין ימופה למוצרים (לחץ על השורה כדי למפות).\n\n🔗 מיפוי משותף: אם המוצר ממופה ל-2+ קמפיינים, ההכנסה מתחלקת ביניהם פרופורציונלית להוצאה (intra-platform spend share). כלומר ROAS Shopify של קמפיין יחיד בקבוצה הוא חלקו, לא כל ההכנסה של המוצר. ראה גם פאנל ההשוואה במגירת הקמפיין.'}
                   />
                 ),
+                firstClickRoas: (
+                  <SortHeader
+                    key="firstClickRoas"
+                    label={
+                      <span className="inline-flex flex-col items-center leading-tight opacity-80">
+                        <span>first-click</span>
+                        <span className="text-[9px] text-ink-muted font-normal">מבוא ללקוח</span>
+                      </span>
+                    }
+                    sortKey="firstClickRoas"
+                    activeKey={sortKey}
+                    dir={sortDir}
+                    onClick={handleSort}
+                    align="center"
+                    className="px-3 py-2 w-[96px]"
+                    dataColId="firstClickRoas"
+                    tooltip={'ROAS לפי first-click (המגע הראשון של הלקוח, מתוך ft_* בעגלה / utm_id). מודד כמה הקמפיין "מכניס" לקוחות חדשים — לא רק סוגר. עיוור ל-Google (כמו last-click). הכיסוי תמיד <= last-click כי לכידת ה-cookie לוסית יותר מ-click-id. השווה ל-ROAS Shopify (last-click) — ה-delta על hover.'}
+                  />
+                ),
                 roasShopifyPlatform: (
                   <SortHeader
                     key="roasShopifyPlatform"
@@ -2258,6 +2335,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                     i={i}
                     mode={mode}
                     trueRevenueByKey={trueRevenueByKey}
+                    firstClickByCampaign={firstClickByCampaign}
                     mappedCampaignKeys={mappedCampaignKeys}
                     health={healthByKey.get(a.key)}
                     columnOrder={columnOrder}
