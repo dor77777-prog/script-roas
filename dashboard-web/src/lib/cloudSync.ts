@@ -66,6 +66,8 @@ export const STATE_KEYS = [
   'roas-dashboard:campaign-store-map',
   // Editable COGS % (2026-06-01) — per-month, retroactive, business/per-store.
   'roas-dashboard:cogs-settings',
+  // Editable salaries % / amount (2026-06-02) — per-month, retroactive, business-level.
+  'roas-dashboard:salary-settings',
 ] as const;
 export type StateKey = (typeof STATE_KEYS)[number];
 
@@ -80,6 +82,7 @@ const CHANGE_EVENTS: Record<StateKey, string> = {
   'roas-dashboard:campaigns-column-visibility': 'roas-campaigns-column-visibility-changed',
   'roas-dashboard:campaign-store-map': 'roas-campaign-store-map-changed',
   'roas-dashboard:cogs-settings': 'roas-cogs-settings-changed',
+  'roas-dashboard:salary-settings': 'roas-salary-changed',
 };
 
 /** ms epoch of the last push we sent for each key. Used to skip stomping

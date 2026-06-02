@@ -39,6 +39,9 @@ export const ALLOWED_STATE_KEYS = [
   // Editable COGS % (2026-06-01) — per-month, retroactive, business/per-store.
   // Added 2026-06-02 to match cloudSync.ts:STATE_KEYS and restore cross-device sync.
   'cogs-settings',
+  // Editable salaries % / amount (2026-06-02) — per-month, retroactive, business-level.
+  // Must match cloudSync.ts:STATE_KEYS ('roas-dashboard:salary-settings') for cross-device sync.
+  'salary-settings',
 ] as const;
 
 export type AllowedStateKey = (typeof ALLOWED_STATE_KEYS)[number];
