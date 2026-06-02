@@ -4,6 +4,8 @@
 **Method:** 14-agent research workflow — 6 live web-research agents (Triple Whale + Northbeam/Polar/Lifetimely/Peel/Daasity + attribution methodology) × 6 codebase-audit agents (evidence-based, file:line) → gap analysis → adversarial "what to skip" critique.
 **Context:** Internal tool, **single operator**, 3 Shopify stores (uzoshop/zolplus/usmile360), Hebrew RTL, CAD-normalized. Data = platform-reported (Meta/Google/TikTok APIs) + Shopify orders/refunds + a Custom-Pixel add-to-cart beacon + sale/refund webhooks. **No** Triple-Pixel-style first-party identity graph.
 
+**HARD CONSTRAINT — active CAPI apps in ALL stores:** the operator already runs server-side Conversions API apps (Meta/Google/TikTok) firing conversion events with their own event_id dedup. Everything in this roadmap is **READ-ONLY / reporting** — it pulls from Shopify + ad-platform read APIs and displays numbers; it MUST NEVER send/write events to pixels or CAPI (would double-count, break dedup, or leak wrong conversion values). This is the additional reason Sonar/CAPI and Triple-Pixel are HARD SKIPs. The post-purchase survey is implemented via Shopify order `note_attributes` ONLY — zero pixel/Web-Pixel/CAPI emission. The existing add-to-cart beacon is display-only and already coexists with the CAPI apps; it is not changed.
+
 ---
 
 ## TL;DR

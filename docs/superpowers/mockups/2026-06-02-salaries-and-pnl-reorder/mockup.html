@@ -1,0 +1,756 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>מוקאפ — משכורות + סדר חדש לטאב P&amp;L</title>
+<style>
+/* ===========================================================================
+   DESIGN TOKENS — copied VERBATIM from src/app/globals.css (via the approved
+   2026-06-02-dashboard-additions mockup). :root IS the DARK token set;
+   [data-theme="light"] re-declares with light values.
+   =========================================================================== */
+:root {
+  --chart-platform-meta:    #1877f2;
+  --chart-platform-google:  #f4a200;
+  --chart-platform-tiktok:  #ff2e7e;
+  --chart-platform-organic: #14b8a6;
+  --chart-platform-shopify: #0fb37a;
+
+  --accent:      #7c6cff;
+  --accent-deep: #a99cff;
+  --accent-fg:   oklch(100% 0 0);
+  --accent-btn:       #6354e6;
+  --accent-btn-hover: #5a4dd9;
+  --accent-soft: rgba(124,108,255,0.16);
+  --accent-bg:   rgba(124,108,255,0.12);
+  --accent-link: #a99cff;
+
+  --sidebar:           #15182a;
+  --sidebar-fg:        #8b91ad;
+  --sidebar-fg-active: #ffffff;
+  --sidebar-logo-1:    #7c6cff;
+  --sidebar-logo-2:    #5a49f0;
+
+  --band-red:    #ff6b81;
+  --band-red-alarm: #ff3b5c;
+  --band-orange: #ef9331;
+  --band-green:  #34e2ad;
+  --band-blue:   #5b8df0;
+  --band-gray:   #828aae;
+
+  --card-band-red:      #ce3e5a;  --card-band-red-2:    #e11c48;
+  --card-band-red-alarm: #c81e3a; --card-band-red-alarm-2: #a10d28;
+  --card-band-orange:   #ef9331;  --card-band-orange-2: #e5851c;
+  --card-band-green:    #008456;  --card-band-green-2:  #008454;
+  --card-band-blue:     #4170d1;  --card-band-blue-2:   #2563eb;
+  --card-band-gray:     #6b7295;  --card-band-gray-2:   #5f6789;
+  --cell-fail:    #15151f;
+  --cell-fail-fg: #ff8a9a;
+
+  --on-band-red:    oklch(100% 0 0);
+  --on-band-orange: oklch(100% 0 0);
+  --on-band-green:  oklch(100% 0 0);
+  --on-band-blue:   oklch(100% 0 0);
+  --on-band-gray:   oklch(100% 0 0);
+  --on-band-red-muted:    #dfe3f2;
+  --on-band-orange-muted: #dfe3f2;
+  --on-band-green-muted:  #dfe3f2;
+  --on-band-blue-muted:   #dfe3f2;
+  --on-band-gray-muted:   #dfe3f2;
+
+  --band-scrim:     rgba(8, 9, 16, 0.62);
+  --band-scrim-ink: #eef1ff;
+  --plot-bg: rgba(12, 14, 26, 0.72);
+
+  --canvas-1: #0d0f1e;
+  --canvas-2: #0a0c18;
+  --bg-glow: rgba(124,108,255,0.13);
+
+  --glass-1: #171a2e;
+  --glass-2: #1d2138;
+  --glass-3: #20243a;
+  --glass-edge:     rgba(255,255,255,0.08);
+  --glass-edge-hot: rgba(124,108,255,0.5);
+  --surface-sunken: #191d31;
+
+  --text:        #eef1ff;
+  --text-2:      #b3b9d8;
+  --text-muted:  #8c96ba;
+  --text-subtle: #8c93bf;
+
+  --shadow-glass:   0 1px 2px rgba(0,0,0,0.35), 0 12px 32px rgba(0,0,0,0.42);
+  --shadow-overlay: 0 8px 24px rgba(0,0,0,0.5);
+  --shadow-sheet:   0 24px 48px rgba(0,0,0,0.6);
+  --shadow-soft:    0 1px 2px rgba(0,0,0,0.3);
+  --scrim: rgba(0,0,0,0.6);
+
+  --up: #0fb37a;
+  --dn: #ef4d5b;
+
+  --status-red:    #ef4d5b; --status-red-bg: rgba(239,77,91,0.18); --status-red-fg: #ff9aa8;
+  --status-orange: #ef9331; --status-orange-bg: rgba(239,147,49,0.16); --status-orange-fg: #f7c897;
+  --status-green:  #0fb37a; --status-green-bg: rgba(15,179,122,0.16); --status-green-fg: #5cf0c3;
+  --status-blue:   #3b82f6; --status-blue-bg: rgba(59,130,246,0.18); --status-blue-fg: #8bbcff;
+  --status-gray:   #828aae; --status-gray-bg: rgba(255,255,255,0.07); --status-gray-fg: #aab0cd;
+  --status-warning: #ef9331; --status-warning-bg: rgba(239,147,49,0.16); --status-warning-fg: #f7c897;
+
+  --status-orange-solid: #ef9331;
+  --status-orange-solid-fg: #ffffff;
+
+  --radius-control: 0.625rem;
+  --radius-chip:    0.6875rem;
+  --radius-card:    1.125rem;
+  --radius-hero:    1.125rem;
+  --radius-pill:    9999px;
+
+  /* mockup-only — the "changed / new / unchanged" tag accents */
+  --tag-new:    #34e2ad;
+  --tag-change: #ef9331;
+  --tag-gate:   #7c6cff;
+}
+
+[data-theme="light"] {
+  --chart-platform-meta:    #1877f2;
+  --chart-platform-google:  #f4a200;
+  --chart-platform-tiktok:  #ff2e7e;
+  --chart-platform-organic: #14b8a6;
+  --chart-platform-shopify: #0fb37a;
+
+  --accent:      #0ea5b7;
+  --accent-deep: #0e8a99;
+  --accent-fg:   oklch(100% 0 0);
+  --accent-btn:       #0c8090;
+  --accent-btn-hover: #0a6e7c;
+  --accent-soft: #def5f7;
+  --accent-bg:   rgba(14,165,183,0.10);
+  --accent-link: #0c8090;
+
+  --sidebar:           #15182a;
+  --sidebar-fg:        #8b91ad;
+  --sidebar-fg-active: #ffffff;
+  --sidebar-logo-1:    #7c6cff;
+  --sidebar-logo-2:    #5a49f0;
+
+  --band-red:    #e11d48;
+  --band-red-alarm: #ff3b5c;
+  --band-orange: #ef9331;
+  --band-green:  #0f9d6b;
+  --band-blue:   #3b82f6;
+  --band-gray:   #949ab4;
+
+  --card-band-red:      #ce3e5a;  --card-band-red-2:    #e11c48;
+  --card-band-red-alarm: #c81e3a; --card-band-red-alarm-2: #a10d28;
+  --card-band-orange:   #ef9331;  --card-band-orange-2: #e5851c;
+  --card-band-green:    #008456;  --card-band-green-2:  #008454;
+  --card-band-blue:     #4170d1;  --card-band-blue-2:   #2563eb;
+  --card-band-gray:     #6b7295;  --card-band-gray-2:   #5f6789;
+  --cell-fail:    #15151f;
+  --cell-fail-fg: #ff8a9a;
+
+  --on-band-red:    oklch(100% 0 0);
+  --on-band-orange: oklch(100% 0 0);
+  --on-band-green:  oklch(100% 0 0);
+  --on-band-blue:   oklch(100% 0 0);
+  --on-band-gray:   oklch(100% 0 0);
+  --on-band-red-muted:    #dfe3f2;
+  --on-band-orange-muted: #dfe3f2;
+  --on-band-green-muted:  #dfe3f2;
+  --on-band-blue-muted:   #dfe3f2;
+  --on-band-gray-muted:   #dfe3f2;
+
+  --band-scrim:     rgba(255, 255, 255, 0.78);
+  --band-scrim-ink: #171a2b;
+  --plot-bg: rgba(255, 255, 255, 0.92);
+
+  --canvas-1: #edf0f8;
+  --canvas-2: #f4f6fc;
+  --bg-glow: rgba(14,165,183,0.10);
+
+  --glass-1: #ffffff;
+  --glass-2: #f6f7fb;
+  --glass-3: #eef1f8;
+  --glass-edge:     rgba(22,26,48,0.08);
+  --glass-edge-hot: rgba(14,165,183,0.4);
+  --surface-sunken: #f1f3f9;
+
+  --text:        #171a2b;
+  --text-2:      #565d78;
+  --text-muted:  #666b84;
+  --text-subtle: #696b7d;
+
+  --shadow-glass:   0 1px 2px rgba(22,26,48,0.04), 0 8px 24px rgba(22,26,48,0.06);
+  --shadow-overlay: 0 8px 24px rgba(22,26,48,0.12);
+  --shadow-sheet:   0 24px 48px rgba(22,26,48,0.16);
+  --shadow-soft:    0 1px 2px rgba(22,26,48,0.05);
+  --scrim: rgba(22,26,48,0.45);
+
+  --up: #0fb37a;
+  --dn: #ef4d5b;
+
+  --status-red:    #ef4d5b; --status-red-bg: #ffe9ec; --status-red-fg: #c62333;
+  --status-orange: #ef9331; --status-orange-bg: #fbe6d0; --status-orange-fg: #8e4f0b;
+  --status-green:  #0fb37a; --status-green-bg: #effaf5; --status-green-fg: #00734e;
+  --status-blue:   #3b82f6; --status-blue-bg: #e9f1ff; --status-blue-fg: #1f5fdb;
+  --status-gray:   #949ab4; --status-gray-bg: #eef0f5; --status-gray-fg: #5a6076;
+  --status-warning: #ef9331; --status-warning-bg: #fbe6d0; --status-warning-fg: #8e4f0b;
+
+  --status-orange-solid: #ef9331;
+  --status-orange-solid-fg: #ffffff;
+
+  --radius-control: 0.625rem;
+  --radius-chip:    0.6875rem;
+  --radius-card:    1.125rem;
+  --radius-hero:    1.125rem;
+  --radius-pill:    9999px;
+
+  --tag-new:    #0f9d6b;
+  --tag-change: #b25f00;
+  --tag-gate:   #6354e6;
+}
+
+/* ===========================================================================
+   PAGE BASE — single subtle radial glow over a flat canvas gradient
+   (verbatim structure from globals.css body / body::before).
+   =========================================================================== */
+* { box-sizing: border-box; }
+html, body { background-color: var(--canvas-1); margin: 0; }
+body {
+  color: var(--text);
+  background:
+    radial-gradient(1200px 600px at 80% -6%, var(--bg-glow), transparent 55%),
+    linear-gradient(180deg, var(--canvas-1) 0%, var(--canvas-2) 100%);
+  background-attachment: fixed;
+  min-height: 100vh;
+  font-family: 'Rubik', 'Heebo', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  line-height: 1.45;
+}
+.tabular-nums, .num { font-variant-numeric: tabular-nums; font-feature-settings: 'tnum'; }
+.mono { font-family: 'Geist Mono', ui-monospace, 'SF Mono', Menlo, monospace; }
+
+/* ===========================================================================
+   GLASS BASE (from globals.css).
+   =========================================================================== */
+.glass {
+  background: var(--glass-1);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--shadow-glass);
+  position: relative;
+  border-radius: var(--radius-card);
+}
+
+/* ===========================================================================
+   PAGE LAYOUT + SECTION SCAFFOLDING (mockup chrome).
+   =========================================================================== */
+.wrap { max-width: 980px; margin: 0 auto; padding: 24px 18px 96px; }
+.topbar {
+  position: sticky; top: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 14px 18px;
+  background: color-mix(in oklab, var(--glass-1) 86%, transparent);
+  backdrop-filter: blur(20px) saturate(140%);
+  border-bottom: 1px solid var(--glass-edge);
+}
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 800; }
+.brand .logo { width: 30px; height: 30px; border-radius: 9px; background: linear-gradient(135deg, var(--sidebar-logo-1), var(--sidebar-logo-2)); }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  border-radius: var(--radius-control); border: 1px solid var(--glass-edge);
+  background: var(--glass-2); color: var(--text);
+  padding: 8px 14px; font-size: 13px; font-weight: 600; cursor: pointer;
+  font-family: inherit;
+}
+.btn:hover { border-color: var(--glass-edge-hot); }
+.btn-primary { background: var(--accent-btn); color: #fff; border-color: transparent; }
+.btn-primary:hover { background: var(--accent-btn-hover); }
+
+.legend { margin: 18px 0 8px; padding: 14px 16px; }
+.legend h1 { font-size: 18px; margin: 0 0 4px; }
+.legend .sub { color: var(--text-muted); font-size: 13px; margin-bottom: 12px; }
+.legend-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; font-size: 12.5px; color: var(--text-2); }
+.legend-row .item { display: inline-flex; align-items: center; gap: 7px; }
+
+.section { margin-top: 38px; }
+.section > .sec-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 4px; }
+.section > .sec-head h2 { font-size: 17px; margin: 0; }
+.section > .sec-head .sec-no { font-family: 'Geist Mono', monospace; font-size: 12px; color: var(--accent-link); font-weight: 700; }
+.section > .sec-desc { color: var(--text-muted); font-size: 13px; margin: 0 0 16px; max-width: 70ch; }
+
+/* The "tag" pills marking changed/new/reference elements. */
+.tag { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 800; padding: 2px 8px; border-radius: 999px; letter-spacing: .02em; white-space: nowrap; vertical-align: middle; }
+.tag-new    { background: color-mix(in oklab, var(--tag-new) 20%, transparent);    color: var(--tag-new);    border: 1px solid color-mix(in oklab, var(--tag-new) 45%, transparent); }
+.tag-change { background: color-mix(in oklab, var(--tag-change) 20%, transparent); color: var(--tag-change); border: 1px solid color-mix(in oklab, var(--tag-change) 45%, transparent); }
+.tag-ref    { background: var(--status-gray-bg); color: var(--text-muted); border: 1px solid var(--glass-edge); }
+
+/* Dashed accent outline on changed/new elements. */
+.mk-new    { outline: 2px dashed color-mix(in oklab, var(--tag-new) 70%, transparent);    outline-offset: 3px; border-radius: 14px; }
+.mk-change { outline: 2px dashed color-mix(in oklab, var(--tag-change) 75%, transparent); outline-offset: 3px; border-radius: 14px; }
+.mk-inline { outline-offset: 2px; border-radius: 9px; }
+
+/* Floating element-tag label that hovers on the top edge of a marked block. */
+.tagged { position: relative; }
+.tagged > .float-tag { position: absolute; top: -11px; inset-inline-start: 14px; z-index: 4; }
+
+.footer-note { margin-top: 40px; text-align: center; font-size: 12px; color: var(--text-muted); }
+
+/* ===========================================================================
+   SECTION 1 — P&L TAB ORDER STACK (move annotations).
+   =========================================================================== */
+.order-stack { display: flex; flex-direction: column; gap: 0; }
+.order-block {
+  position: relative;
+  padding: 18px 20px; border-radius: var(--radius-card);
+  background: var(--glass-1); border: 1px solid var(--glass-edge); box-shadow: var(--shadow-glass);
+}
+.order-block .ob-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.order-block .ob-name { font-size: 15px; font-weight: 700; }
+.order-block .ob-sub { font-size: 12px; color: var(--text-muted); margin-top: 3px; }
+.order-block .ob-comp { font-family: 'Geist Mono', monospace; font-size: 11px; color: var(--accent-link); font-weight: 700; }
+.order-block .ph-bars { display: flex; flex-direction: column; gap: 7px; margin-top: 14px; }
+.order-block .ph-bars i { display: block; height: 9px; border-radius: 5px; background: var(--surface-sunken); }
+.order-block .ph-bars i:nth-child(1) { width: 62%; }
+.order-block .ph-bars i:nth-child(2) { width: 88%; }
+.order-block .ph-bars i:nth-child(3) { width: 44%; }
+
+/* the vertical move-arrow connector between blocks */
+.order-conn { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 0; }
+.move-pill { display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 700; padding: 4px 12px; border-radius: 999px; border: 1px dashed; font-variant-numeric: tabular-nums; }
+.move-up   { color: var(--tag-change); border-color: color-mix(in oklab, var(--tag-change) 55%, transparent); background: color-mix(in oklab, var(--tag-change) 12%, transparent); }
+.move-down { color: var(--tag-change); border-color: color-mix(in oklab, var(--tag-change) 55%, transparent); background: color-mix(in oklab, var(--tag-change) 12%, transparent); }
+.editors-band {
+  margin-top: 4px; padding: 14px 14px 16px; border-radius: var(--radius-card);
+  border: 1px dashed color-mix(in oklab, var(--tag-change) 45%, transparent);
+  background: color-mix(in oklab, var(--tag-change) 7%, transparent);
+}
+.editors-band .eb-cap { font-size: 11.5px; font-weight: 700; color: var(--tag-change); margin: 0 0 12px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.editors-band .eb-stack { display: flex; flex-direction: column; gap: 10px; }
+.editors-band .order-block { background: var(--glass-2); }
+
+/* ===========================================================================
+   SETTINGS EDITOR CARD (mirrors CogsSettings / SalarySettings).
+   =========================================================================== */
+.set-card { padding: 18px 20px; }
+.set-card > h3 { margin: 0 0 16px; font-size: 14px; font-weight: 700; }
+.set-card .field-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); margin-bottom: 6px; }
+.set-block { margin-bottom: 16px; }
+
+/* segmented mode toggle (matches CogsSettings inline-flex bg-glass-2 toggle) */
+.seg { display: inline-flex; padding: 2px; gap: 2px; border-radius: var(--radius-control); background: var(--glass-2); border: 1px solid var(--glass-edge); }
+.seg button { font-family: inherit; cursor: pointer; border: none; background: transparent; color: var(--text-2); font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 8px; }
+.seg button.on { background: var(--accent); color: var(--accent-fg); }
+
+/* value-entry row: label + %/amount input matching PctField */
+.val-row { display: flex; align-items: center; gap: 10px; }
+.val-row .vr-label { flex: 1; font-size: 14px; font-weight: 600; }
+.field-affix {
+  display: inline-flex; align-items: center; width: 7.5rem;
+  border-radius: var(--radius-control); border: 1px solid var(--glass-edge);
+  background: var(--glass-2); overflow: hidden;
+}
+.field-affix .afx { padding: 0 10px; font-size: 12px; font-weight: 800; color: var(--text-muted); background: color-mix(in oklab, var(--glass-3) 70%, transparent); align-self: stretch; display: inline-flex; align-items: center; }
+.field-affix input { flex: 1; min-width: 0; font-family: inherit; font-size: 14px; font-weight: 700; text-align: center; padding: 8px 6px; background: transparent; border: none; color: var(--text); }
+.field-affix input:focus { outline: none; }
+
+/* apply-scope radios (matches Radio component) */
+.scope fieldset { border: none; padding: 0; margin: 0; }
+.scope legend { font-size: 10.5px; text-transform: uppercase; letter-spacing: .05em; color: var(--text-muted); margin-bottom: 8px; padding: 0; }
+.scope label { display: flex; align-items: center; gap: 9px; font-size: 14px; color: var(--text-2); padding: 5px 0; cursor: pointer; }
+.scope input[type="radio"] { width: 16px; height: 16px; accent-color: var(--accent); }
+.scope .sub-select { margin-inline-start: 26px; margin-top: 2px; }
+.scope select {
+  font-family: inherit; font-size: 13px; padding: 7px 10px; border-radius: var(--radius-control);
+  background: var(--glass-2); border: 1px solid var(--glass-edge); color: var(--text); direction: ltr;
+}
+
+.help-note { font-size: 11px; color: var(--text-muted); line-height: 1.55; margin: 0; }
+.note-box { margin-top: 4px; padding: 10px 12px; border-radius: 12px; font-size: 12px; line-height: 1.5; }
+.note-box.warn { background: var(--status-warning-bg); color: var(--status-warning-fg); border: 1px solid color-mix(in oklab, var(--status-warning) 40%, transparent); }
+.scope-note { font-size: 11px; color: var(--text-muted); display: inline-flex; align-items: center; gap: 6px; }
+.scope-note .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+
+/* timeline toggle + table (matches the COGS collapsible timeline) */
+.tl-toggle { display: inline-flex; align-items: center; gap: 6px; font-family: inherit; font-size: 12px; font-weight: 600; color: var(--text-2); background: transparent; border: none; padding: 4px 2px; cursor: pointer; }
+.tl-toggle:hover { color: var(--text); }
+.tl-wrap { margin-top: 10px; overflow: auto; border-radius: 12px; border: 1px solid var(--glass-edge); }
+table.tl { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+table.tl thead th {
+  background: var(--glass-3); font-size: 10.5px; font-weight: 700; color: var(--text-2);
+  text-transform: uppercase; letter-spacing: .03em; padding: 9px 12px; text-align: start;
+  border-bottom: 1px solid var(--glass-edge); white-space: nowrap;
+}
+table.tl thead th.end { text-align: end; }
+table.tl tbody td { padding: 9px 12px; border-bottom: 1px solid color-mix(in oklab, var(--glass-edge) 60%, transparent); font-variant-numeric: tabular-nums; }
+table.tl tbody tr:last-child td { border-bottom: none; }
+table.tl tbody td.end { text-align: end; }
+table.tl tbody td.dim { color: var(--text-muted); }
+.tl-badge { display: inline-block; margin-inline-start: 7px; padding: 1px 7px; border-radius: 7px; font-size: 10px; font-weight: 800; vertical-align: middle; }
+.tl-badge.edited  { background: var(--accent-soft); color: var(--accent); }
+.tl-badge.default { background: var(--glass-3); color: var(--text-2); }
+
+/* ===========================================================================
+   P&L recreation (verbatim classes from the approved mockup).
+   =========================================================================== */
+.pnl { border-radius: var(--radius-card); overflow: hidden; background: var(--glass-1); border: 1px solid var(--glass-edge); box-shadow: var(--shadow-glass); }
+.pnl-hero { padding: 20px 24px; background: linear-gradient(135deg, var(--accent-bg), var(--glass-1) 60%, var(--glass-1)); display: flex; align-items: center; gap: 12px; }
+.pnl-hero .ic { width: 40px; height: 40px; border-radius: 12px; background: var(--accent); color: var(--accent-fg); display: inline-flex; align-items: center; justify-content: center; font-size: 18px; box-shadow: var(--shadow-glass); flex-shrink: 0; }
+.pnl-hero .eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: .12em; font-weight: 700; color: var(--text-muted); }
+.pnl-hero h3 { margin: 2px 0 0; font-size: 20px; }
+.pnl-list { padding: 14px 20px 18px; }
+.pnl-line { display: grid; grid-template-columns: 1fr 130px 140px; gap: 12px; align-items: center; padding: 11px 4px; border-bottom: 1px solid color-mix(in oklab, var(--glass-edge) 50%, transparent); }
+.pnl-line .lbl { font-size: 14px; font-weight: 600; }
+.pnl-line .note { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.pnl-line .amt { text-align: end; font-family: 'Geist Mono', monospace; font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pnl-line .amt.cost { color: var(--text-2); }
+.pnl-line .amt .cad { font-size: 10px; color: var(--text-muted); margin-inline-end: 4px; font-family: inherit; }
+.pnl-line .run { text-align: end; border-inline-start: 1px solid var(--glass-edge); padding-inline-start: 12px; }
+.pnl-line .run .rl { font-size: 10px; text-transform: uppercase; color: var(--text-muted); }
+.pnl-line .run .rv { font-size: 12px; font-weight: 600; font-family: 'Geist Mono', monospace; font-variant-numeric: tabular-nums; }
+.pnl-line.is-new .lbl::after { content: ''; }
+.pnl-final { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 4px 4px; margin-top: 6px; border-top: 2px solid var(--glass-edge); }
+.pnl-final .nm { font-size: 15px; font-weight: 800; }
+.pnl-final .vv { font-size: 18px; font-weight: 800; color: var(--status-green-fg); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 720px) {
+  .pnl-line { grid-template-columns: 1fr 110px; }
+  .pnl-line .run { display: none; }
+  .val-row { flex-wrap: wrap; }
+}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand"><span class="logo"></span><span>ROAS Dashboard</span></div>
+  <button class="btn" id="themeBtn" onclick="toggleTheme()">◐ החלף מצב תצוגה</button>
+</div>
+
+<div class="wrap">
+
+  <!-- LEGEND -->
+  <div class="legend glass">
+    <h1>מוקאפ — משכורות + סדר חדש לטאב P&amp;L</h1>
+    <div class="sub">שני שינויים מאושרים בטאב הרווח והפסד: (1) סדר חדש לטאב, (2) פאנל "משכורות" חדש, ושורת משכורות חדשה במפל הרווח.</div>
+    <div class="legend-row">
+      <span class="item"><span class="tag tag-new">🆕 חדש</span> אלמנט חדש לגמרי</span>
+      <span class="item"><span class="tag tag-change">✏️ שינוי</span> אלמנט קיים שעובר שינוי / זז</span>
+      <span class="item"><span class="tag tag-ref">ללא שינוי</span> אלמנט קיים שנשאר כמו שהוא</span>
+    </div>
+  </div>
+  <p class="footer-note" style="margin-top:10px;text-align:start;">מוקאפ עיצוב — אינו מחובר לנתונים אמיתיים</p>
+
+  <!-- ===================================================================== -->
+  <!-- SECTION 1 — NEW P&L TAB ORDER -->
+  <!-- ===================================================================== -->
+  <div class="section">
+    <div class="sec-head"><span class="sec-no">SECTION 1</span><h2>סדר חדש לטאב Profit &amp; Loss <span class="tag tag-change">✏️ שינוי</span></h2></div>
+    <p class="sec-desc">היעד החודשי נשאר ראשון. ה-P&amp;L עולה מיד אחריו (במקום בתחתית), כדי שהשאלה "כמה נשאר ביד?" תהיה בולטת. שלושת העורכים — חיוב, מלאי, ומשכורות — יורדים מתחת ל-P&amp;L. החיצים מסמנים את כיוון המעבר.</p>
+
+    <div class="order-stack">
+
+      <!-- (a) GoalTracker — unchanged, stays first -->
+      <div class="order-block">
+        <div class="ob-head">
+          <div>
+            <div class="ob-name">יעד חודשי</div>
+            <div class="ob-sub">מד התקדמות מול היעד העסקי החודשי (גלובלי — מתעלם מסינון חנות/טווח)</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="ob-comp">GoalTracker</span>
+            <span class="tag tag-ref">ללא שינוי · נשאר במקום</span>
+          </div>
+        </div>
+        <div class="ph-bars"><i></i><i></i></div>
+      </div>
+
+      <!-- arrow: P&L moves UP -->
+      <div class="order-conn">
+        <span class="move-pill move-up">▲ P&amp;L עלה לכאן · מיד אחרי היעד</span>
+      </div>
+
+      <!-- (b) PnLBreakdown — moved up; rendered as a realistic income statement -->
+      <div class="order-block tagged mk-change" style="padding:0;overflow:hidden;">
+        <span class="float-tag tag tag-change">✏️ עלה לכאן</span>
+        <div class="pnl" style="box-shadow:none;border:none;border-radius:0;">
+          <div class="pnl-hero">
+            <span class="ic">🧾</span>
+            <div>
+              <div class="eyebrow">Profit &amp; Loss</div>
+              <h3>כמה נשאר ביד?</h3>
+            </div>
+            <span class="ob-comp" style="margin-inline-start:auto;">PnLBreakdown</span>
+          </div>
+          <div class="pnl-list">
+            <div class="pnl-line">
+              <div><div class="lbl">הכנסות (נטו)</div><div class="note">נטו אחרי החזרים · 100% — בסיס החישוב</div></div>
+              <div class="amt"><span class="cad">CAD</span>48,920</div>
+              <div class="run"><div class="rl">נשאר</div><div class="rv">48,920</div></div>
+            </div>
+            <div class="pnl-line" style="opacity:.85;">
+              <div><div class="lbl">החזרים בתקופה</div><div class="note">כבר מנוכים מההכנסות מעל — מוצג להבהרה (לא מקדם את הסכום הרץ)</div></div>
+              <div class="amt cost"><span class="cad">CAD</span>−1,240</div>
+              <div class="run"><div class="rl">נשאר</div><div class="rv">48,920</div></div>
+            </div>
+            <div class="pnl-line">
+              <div><div class="lbl">הוצאות פרסום</div><div class="note">Meta + Google + TikTok · ROAS 2.90</div></div>
+              <div class="amt cost"><span class="cad">CAD</span>−16,840</div>
+              <div class="run"><div class="rl">נשאר</div><div class="rv">32,080</div></div>
+            </div>
+            <div class="pnl-line">
+              <div><div class="lbl">עלות סחורה (COGS)</div><div class="note">לפי הגדרה · 27.0% מההכנסה</div></div>
+              <div class="amt cost"><span class="cad">CAD</span>−13,208</div>
+              <div class="run"><div class="rl">נשאר</div><div class="rv">18,872</div></div>
+            </div>
+            <div class="pnl-line">
+              <div><div class="lbl">עמלות עיבוד תשלום</div><div class="note">PayPal + המרת מטבע · 6.5%</div></div>
+              <div class="amt cost"><span class="cad">CAD</span>−3,180</div>
+              <div class="run"><div class="rl">נשאר</div><div class="rv">15,692</div></div>
+            </div>
+            <div class="pnl-line">
+              <div><div class="lbl">הוצאות קבועות (יחסי)</div><div class="note">4 מנויים פעילים · 18 ימים מתוך 30</div></div>
+              <div class="amt cost"><span class="cad">CAD</span>−1,290</div>
+              <div class="run"><div class="rl">נשאר</div><div class="rv">14,402</div></div>
+            </div>
+            <!-- the NEW salaries line lives here too (see Section 3 for the full treatment) -->
+            <div class="pnl-line tagged mk-new mk-inline" style="outline-offset:-2px;">
+              <span class="float-tag tag tag-new" style="inset-inline-start:4px;">🆕 חדש</span>
+              <div><div class="lbl">משכורות</div><div class="note">לפי הגדרה · 7% מהמחזור</div></div>
+              <div class="amt cost"><span class="cad">CAD</span>−3,424</div>
+              <div class="run"><div class="rl">נשאר</div><div class="rv">10,978</div></div>
+            </div>
+            <div class="pnl-final">
+              <div class="nm">רווח נטו אמיתי <span style="font-size:11px;color:var(--text-muted);font-weight:500;">(22.4% מרג'ין)</span></div>
+              <div class="vv"><span style="font-size:10px;color:var(--text-muted);font-weight:500;">CAD</span> 10,978</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- arrow: editors move DOWN -->
+      <div class="order-conn">
+        <span class="move-pill move-down">▼ העורכים ירדו לכאן · מתחת ל-P&amp;L</span>
+      </div>
+
+      <!-- (c) the three editor blocks, in order -->
+      <div class="editors-band tagged">
+        <span class="float-tag tag tag-change">✏️ ירדו לכאן</span>
+        <p class="eb-cap">⚙️ עורכי הגדרות — חיוב · מלאי · משכורות (לפי הסדר הזה, מתחת ל-P&amp;L)</p>
+        <div class="eb-stack">
+          <div class="order-block">
+            <div class="ob-head">
+              <div>
+                <div class="ob-name">הגדרות חיוב</div>
+                <div class="ob-sub">מנויים חודשיים + חיובים חד-פעמיים (Shopify Plan, אפליקציות, אימייל)</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span class="ob-comp">BillingSettings</span>
+                <span class="tag tag-change">✏️ ירד לכאן</span>
+              </div>
+            </div>
+          </div>
+          <div class="order-block">
+            <div class="ob-head">
+              <div>
+                <div class="ob-name">הוצאות מלאי (COGS)</div>
+                <div class="ob-sub">אחוז עלות סחורה — גלובלי/לפי-חנות, לפי-חודש, רטרואקטיבי</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span class="ob-comp">CogsSettings</span>
+                <span class="tag tag-change">✏️ ירד לכאן</span>
+              </div>
+            </div>
+          </div>
+          <div class="order-block tagged mk-new">
+            <span class="float-tag tag tag-new">🆕 חדש</span>
+            <div class="ob-head">
+              <div>
+                <div class="ob-name">משכורות</div>
+                <div class="ob-sub">פאנל חדש — אחוז מהמחזור או סכום חודשי קבוע (ברמת העסק)</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span class="ob-comp">SalarySettings</span>
+                <span class="tag tag-new">🆕 חדש · בתחתית</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- SECTION 2 — NEW SalarySettings PANEL -->
+  <!-- ===================================================================== -->
+  <div class="section">
+    <div class="sec-head"><span class="sec-no">SECTION 2</span><h2>פאנל "משכורות" (SalarySettings) <span class="tag tag-new">🆕 חדש</span></h2></div>
+    <p class="sec-desc">בנוי במדויק על מבנה פאנל ה-COGS: בורר מצב, שדה ערך, 4 טווחי החלה, כפתור "החל שינוי", ולוח חודשים מתקפל. ההבדל: כל חודש יכול להיות באחוז מהמחזור <strong>או</strong> בסכום חודשי קבוע (CAD), והפאנל ברמת העסק בלבד — ללא בורר חנות.</p>
+
+    <div class="glass set-card tagged mk-new">
+      <span class="float-tag tag tag-new">🆕 חדש</span>
+      <h3>משכורות</h3>
+
+      <!-- mode toggle (per-entry: % vs amount) -->
+      <div class="set-block">
+        <div class="field-label">מצב הזנה</div>
+        <div class="seg" role="tablist" aria-label="מצב הזנת משכורת">
+          <button class="on" type="button">% מהמחזור</button>
+          <button type="button">סכום חודשי (CAD)</button>
+        </div>
+        <p class="help-note" style="margin-top:8px;">ברירת מחדל: <strong>% מהמחזור</strong>. ניתן לעבור לסכום חודשי קבוע — לדוגמה כשמשלמים שכר קבוע ללא תלות במכירות.</p>
+      </div>
+
+      <!-- value field — default 7% (percent mode shown) -->
+      <div class="set-block">
+        <div class="field-label">ערך ברירת מחדל</div>
+        <div class="val-row">
+          <span class="vr-label">כל העסק</span>
+          <div class="field-affix" title="מצב אחוז">
+            <span class="afx">%</span>
+            <input dir="ltr" inputmode="decimal" value="7" aria-label="משכורות — אחוז מהמחזור" />
+          </div>
+        </div>
+        <!-- second row demonstrates the AMOUNT-mode variant of the same field -->
+        <div class="val-row" style="margin-top:10px;opacity:.92;">
+          <span class="vr-label" style="font-weight:500;color:var(--text-muted);">אותו שדה — במצב "סכום חודשי":</span>
+          <div class="field-affix" title="מצב סכום">
+            <span class="afx">CAD</span>
+            <input dir="ltr" inputmode="decimal" value="8,000" aria-label="משכורות — סכום חודשי" />
+          </div>
+        </div>
+      </div>
+
+      <!-- apply-scope radios (the 4 scopes, mirroring COGS) -->
+      <div class="set-block scope">
+        <fieldset>
+          <legend>החל על</legend>
+          <label><input type="radio" name="sal-scope" checked /><span>החודש הנוכחי (2026-06)</span></label>
+          <label><input type="radio" name="sal-scope" /><span>חודש ספציפי</span></label>
+          <div class="sub-select">
+            <select dir="ltr">
+              <option>2026-06</option><option>2026-05</option><option>2026-04</option>
+              <option>2026-03</option><option>2026-02</option><option>2026-01</option>
+            </select>
+          </div>
+          <label><input type="radio" name="sal-scope" /><span>כל החודשים הקודמים</span></label>
+          <label><input type="radio" name="sal-scope" /><span>הכל — קודמים + נוכחי + עתידיים</span></label>
+        </fieldset>
+      </div>
+
+      <button class="btn btn-primary" type="button" style="width:100%;justify-content:center;">החל שינוי</button>
+
+      <p class="help-note" style="margin-top:14px;">ברירת מחדל 7% לכל חודש שלא נערך. השינוי רטרואקטיבי ומיידי בכל הדשבורד. מסונכרן לענן.</p>
+
+      <!-- duplicate-counting warning -->
+      <div class="note-box warn">
+        ⚠️ אם הזנת משכורות ב"עלויות קבועות" — הסר משם כדי לא לספור פעמיים.
+      </div>
+
+      <!-- business-level only note -->
+      <p class="scope-note" style="margin-top:12px;"><span class="dot"></span>ברמת העסק בלבד — אין הזנה לפי חנות.</p>
+
+      <!-- collapsed-by-default month timeline toggle -->
+      <div style="margin-top:14px;border-top:1px solid var(--glass-edge);padding-top:12px;">
+        <button class="tl-toggle" type="button">▸ הצג טבלת חודשים</button>
+        <p class="help-note" style="margin-top:6px;">(מקופל כברירת מחדל — תצוגת ביקורת/היסטוריה. להלן מוצג פתוח לצורך ההמחשה.)</p>
+      </div>
+    </div>
+
+    <!-- the SAME timeline shown EXPANDED so the operator sees the percent-vs-amount duality -->
+    <div class="glass set-card" style="margin-top:14px;">
+      <button class="tl-toggle" type="button" style="font-weight:700;color:var(--text);">▾ הסתר טבלת חודשים</button>
+      <div class="tl-wrap" style="margin-top:12px;">
+        <table class="tl">
+          <thead>
+            <tr><th>חודש</th><th class="end">ערך אפקטיבי</th></tr>
+          </thead>
+          <tbody>
+            <tr><td class="dim">2026-06</td><td class="end dim">7%<span class="tl-badge default">ברירת מחדל</span></td></tr>
+            <tr><td>2026-05<span class="tl-badge edited">נערך</span></td><td class="end">10%</td></tr>
+            <tr><td class="dim">2026-04</td><td class="end dim">7%<span class="tl-badge default">ברירת מחדל</span></td></tr>
+            <tr><td>2026-03<span class="tl-badge edited">נערך</span></td><td class="end"><bdi dir="ltr">CAD 8,000</bdi> <span style="font-size:10px;color:var(--text-muted);">/ חודש</span></td></tr>
+            <tr><td class="dim">2026-02</td><td class="end dim">7%<span class="tl-badge default">ברירת מחדל</span></td></tr>
+            <tr><td class="dim">2026-01</td><td class="end dim">7%<span class="tl-badge default">ברירת מחדל</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="help-note" style="margin-top:10px;">השורה של 2026-03 מדגימה את כפילות אחוז-מול-סכום: חודש שנערך במצב "סכום חודשי" מציג את הסכום ב-CAD במקום אחוז.</p>
+    </div>
+  </div>
+
+  <!-- ===================================================================== -->
+  <!-- SECTION 3 — P&L CASCADE WITH NEW SALARIES LINE -->
+  <!-- ===================================================================== -->
+  <div class="section">
+    <div class="sec-head"><span class="sec-no">SECTION 3</span><h2>מפל הרווח עם שורת המשכורות החדשה (PnLBreakdown)</h2></div>
+    <p class="sec-desc">מפל ההכנסה המלא: מחזור − פרסום − מלאי − עמלות − קבועות − <strong>משכורות</strong> → רווח נטו. שורת המשכורות החדשה (≈7% מהמחזור) מורידה את הרווח הנטו בסכום המשכורות. כל המספרים ב-CAD, מיושרים (tabular-nums), קריאים בשני המצבים.</p>
+
+    <div class="pnl">
+      <div class="pnl-hero">
+        <span class="ic">🧾</span>
+        <div>
+          <div class="eyebrow">Profit &amp; Loss</div>
+          <h3>כמה נשאר ביד?</h3>
+        </div>
+      </div>
+      <div class="pnl-list">
+        <div class="pnl-line">
+          <div><div class="lbl">הכנסות (נטו)</div><div class="note">נטו אחרי החזרים · 100% — בסיס החישוב</div></div>
+          <div class="amt"><span class="cad">CAD</span>48,920</div>
+          <div class="run"><div class="rl">נשאר</div><div class="rv">48,920</div></div>
+        </div>
+        <div class="pnl-line" style="opacity:.85;">
+          <div><div class="lbl">החזרים בתקופה</div><div class="note">כבר מנוכים מההכנסות מעל — מוצג להבהרה (לא מקדם את הסכום הרץ)</div></div>
+          <div class="amt cost"><span class="cad">CAD</span>−1,240</div>
+          <div class="run"><div class="rl">נשאר</div><div class="rv">48,920</div></div>
+        </div>
+        <div class="pnl-line">
+          <div><div class="lbl">הוצאות פרסום</div><div class="note">Meta + Google + TikTok · ROAS 2.90</div></div>
+          <div class="amt cost"><span class="cad">CAD</span>−16,840</div>
+          <div class="run"><div class="rl">נשאר</div><div class="rv">32,080</div></div>
+        </div>
+        <div class="pnl-line">
+          <div><div class="lbl">עלות סחורה (COGS)</div><div class="note">הערכה: 27.0% מההכנסה (לכל חנות)</div></div>
+          <div class="amt cost"><span class="cad">CAD</span>−13,208</div>
+          <div class="run"><div class="rl">נשאר</div><div class="rv">18,872</div></div>
+        </div>
+        <div class="pnl-line">
+          <div><div class="lbl">עמלות עיבוד תשלום</div><div class="note">PayPal + המרת מטבע · 6.5%</div></div>
+          <div class="amt cost"><span class="cad">CAD</span>−3,180</div>
+          <div class="run"><div class="rl">נשאר</div><div class="rv">15,692</div></div>
+        </div>
+        <div class="pnl-line">
+          <div><div class="lbl">הוצאות קבועות (יחסי)</div><div class="note">4 מנויים פעילים · 18 ימים מתוך 30</div></div>
+          <div class="amt cost"><span class="cad">CAD</span>−1,290</div>
+          <div class="run"><div class="rl">נשאר</div><div class="rv">14,402</div></div>
+        </div>
+
+        <!-- NEW: salaries line -->
+        <div class="pnl-line tagged mk-new mk-inline" style="outline-offset:-3px;">
+          <span class="float-tag tag tag-new">🆕 חדש</span>
+          <div><div class="lbl">משכורות</div><div class="note">לפי הגדרה · 7% מהמחזור</div></div>
+          <div class="amt cost"><span class="cad">CAD</span>−3,424</div>
+          <div class="run"><div class="rl">נשאר</div><div class="rv">10,978</div></div>
+        </div>
+
+        <div class="pnl-final">
+          <div class="nm">רווח נטו אמיתי <span style="font-size:11px;color:var(--text-muted);font-weight:500;">(22.4% מרג'ין · ירד מ-29.4% לפני משכורות)</span></div>
+          <div class="vv"><span style="font-size:10px;color:var(--text-muted);font-weight:500;">CAD</span> 10,978</div>
+        </div>
+      </div>
+    </div>
+
+    <p class="help-note" style="margin-top:12px;">לפני שורת המשכורות הרווח הנטו היה <bdi dir="ltr">CAD 14,402</bdi>. שורת המשכורות (<bdi dir="ltr">CAD 3,424</bdi> ≈ 7% מהמחזור) מורידה אותו ל-<bdi dir="ltr">CAD 10,978</bdi>.</p>
+  </div>
+
+  <p class="footer-note">מוקאפ עיצוב — אינו מחובר לנתונים אמיתיים · כל המספרים להמחשה בלבד (CAD)</p>
+</div>
+
+<script>
+function toggleTheme() {
+  var html = document.documentElement;
+  html.setAttribute('data-theme', html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark');
+}
+</script>
+</body>
+</html>
