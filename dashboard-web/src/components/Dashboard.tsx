@@ -47,6 +47,8 @@ import { readDashboardState, syncUrl, drillToCampaigns, type TabKey } from '@/li
 import { buildDateRangeKey, getTodayInIsraelTz } from '@/lib/dateRange';
 import { useCogsSettings } from '@/lib/hooks/useCogsSettings';
 import { applyCogsToRows } from '@/lib/cogsSettings';
+import { useSalarySettings } from '@/lib/hooks/useSalarySettings';
+import { salariesForRange } from '@/lib/salarySettings';
 import { fetchJson } from '@/lib/fetchJson';
 import { useAutoRefresh } from '@/lib/hooks/useAutoRefresh';
 import { CogsSettings } from '@/components/CogsSettings';
@@ -178,6 +180,12 @@ export function Dashboard() {
     () => (rawData ? { ...rawData, rows: applyCogsToRows(rawData.rows, cogsSettings) } : rawData),
     [rawData, cogsSettings],
   );
+  // Editable salaries (2026-06-02) — business-level deduction (default 7% of
+  // revenue, per-month overridable). Threaded into the `filtered` memo's
+  // aggregate() calls below so it subtracts in trueNetProfit ONLY (hero net
+  // card, P&L cascade, insights). Operating profit (rev − adSpend − COGS) is
+  // computed separately in lib/home/adapters.ts and is untouched.
+  const [salarySettings] = useSalarySettings();
 
   // Phase 05.7.8 — fetch orders for the same range so per-store cards can show
   // "X הזמנות" alongside revenue/spend. Keeps the data path separate from
@@ -234,6 +242,16 @@ export function Dashboard() {
     window.addEventListener('roas-billing-changed', bump);
     return () => window.removeEventListener('roas-billing-changed', bump);
   }, [filters.range, swrMutate]);
+
+  // Re-aggregate on salary edits so true-net values stay in sync (mirror
+  // billingTick). `salariesForRange` is recomputed in the `filtered` memo and
+  // this tick forces that memo to re-run when the operator edits salaries.
+  const [salaryTick, setSalaryTick] = useState(0);
+  useEffect(() => {
+    const bump = () => setSalaryTick((t) => t + 1);
+    window.addEventListener('roas-salary-changed', bump);
+    return () => window.removeEventListener('roas-salary-changed', bump);
+  }, []);
 
   // Silent auto-refresh: every 10 min AND whenever the tab/app regains focus
   // (return-to-tab on desktop, reopen on mobile), revalidate EVERY SWR key in
@@ -293,8 +311,8 @@ export function Dashboard() {
       cur,
       // Phase 05.7.8 — pass the request range so fixed-cost proration uses
       // the user-selected window, not the data-derived min/max date.
-      curAgg: aggregate(cur, filters.range),
-      prevAgg: aggregate(prev, prevR),
+      curAgg: aggregate(cur, filters.range, undefined, undefined, salariesForRange(salarySettings, cur, filters.range)),
+      prevAgg: aggregate(prev, prevR, undefined, undefined, salariesForRange(salarySettings, prev, prevR)),
       // Audit fix 2026-05-23 (d/CR-02): forward filters.range so per-store
       // cards prorate fixed costs over the user's selected window, matching
       // the top-level aggregate above. Without this they prorate over the
@@ -311,7 +329,9 @@ export function Dashboard() {
       visibleStores: stores,
     };
     // billingTick: re-aggregate on billing edits so live values stay in sync.
-  }, [data, filters, billingTick]);
+    // salarySettings/salaryTick: re-aggregate on salary edits (business-level
+    // salaries subtract in trueNetProfit via salariesForRange above).
+  }, [data, filters, billingTick, salarySettings, salaryTick]);
 
   // Phase 05.7.8 — per-store order count map for the current range. Filters
   // the same way `filtered.cur` does so cards stay in sync with the global
