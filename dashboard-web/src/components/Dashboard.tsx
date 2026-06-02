@@ -1180,7 +1180,7 @@ function PnLTab({
 
       <Filters filters={filters} stores={data.stores} onChange={setFilters} />
 
-      <GoalTracker data={data} />
+      <GoalTracker data={data} range={filters.range} />
 
       <PnLBreakdown
         current={filtered.curAgg}

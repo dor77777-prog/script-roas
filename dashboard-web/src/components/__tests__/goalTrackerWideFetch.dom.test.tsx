@@ -42,7 +42,20 @@ vi.mock('swr', () => ({
 
 import { GoalTracker } from '@/components/GoalTracker';
 
-const GOAL_STORAGE_KEY = 'roas-dashboard:monthly-revenue-goal';
+// Per-month goals key (T1/T2). The panel reads its goal from here now; the
+// legacy single-number key survives only as a one-time migration source.
+const GOAL_SETTINGS_KEY = 'roas-dashboard:goal-settings';
+
+// The single-calendar-month range the GoalTracker selects on. These tests
+// exercise the CURRENT month (so the forecast path runs), so the range is the
+// current IL calendar month [monthStart, monthEnd].
+function currentMonthRange(): { from: string; to: string } {
+  const today = todayInIsrael();
+  const month = today.slice(0, 7);
+  const [y, m] = month.split('-').map(Number);
+  const last = new Date(y, m, 0).getDate();
+  return { from: `${month}-01`, to: `${month}-${String(last).padStart(2, '0')}` };
+}
 
 function todayInIsrael(): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -91,8 +104,11 @@ beforeEach(() => {
   swrReturn = { data: undefined, error: undefined };
   lastSwrKey = undefined;
   window.localStorage.clear();
-  // Pre-seed a goal so the panel renders the pacing view (with the forecast).
-  window.localStorage.setItem(GOAL_STORAGE_KEY, '100000');
+  // Pre-seed a goal for the current month so the panel renders the pacing view.
+  window.localStorage.setItem(
+    GOAL_SETTINGS_KEY,
+    JSON.stringify({ v: 1, byMonth: { [todayInIsrael().slice(0, 7)]: 100000 } }),
+  );
 });
 
 afterEach(() => {
@@ -102,8 +118,8 @@ afterEach(() => {
 describe('<GoalTracker> wide forecast fetch (2026-06-01) — stays GLOBAL', () => {
   it('keys the SWR fetch on the GLOBAL [monthStart-7, today] window, NOT the filtered prop range and with NO store filter', () => {
     swrReturn = { data: undefined, error: undefined };
-    // Prop range is irrelevant to the GoalTracker; pass arbitrary filtered rows.
-    render(<GoalTracker data={dashboardData([row({ revenue: 1 })])} />);
+    // Pass the current calendar month; the filtered prop rows are irrelevant.
+    render(<GoalTracker data={dashboardData([row({ revenue: 1 })])} range={currentMonthRange()} />);
 
     const today = todayInIsrael();
     const monthStart = `${today.slice(0, 7)}-01`;
@@ -133,7 +149,7 @@ describe('<GoalTracker> wide forecast fetch (2026-06-01) — stays GLOBAL', () =
     // Prop rows are intentionally starved (current month only) — if the
     // component used these the projection would collapse to MTD.
     const propRows = wideRows.filter((r) => r.date >= monthStart);
-    const { container } = render(<GoalTracker data={dashboardData(propRows)} />);
+    const { container } = render(<GoalTracker data={dashboardData(propRows)} range={currentMonthRange()} />);
 
     // The forecast label "חיזוי סוף חודש" must be present (pacing view rendered).
     expect(screen.getByText('חיזוי סוף חודש')).toBeInTheDocument();
@@ -156,7 +172,7 @@ describe('<GoalTracker> wide forecast fetch (2026-06-01) — stays GLOBAL', () =
     const today = todayInIsrael();
     const monthStart = `${today.slice(0, 7)}-01`;
     const propRows = [row({ date: monthStart, revenue: 4359 })];
-    render(<GoalTracker data={dashboardData(propRows)} />);
+    render(<GoalTracker data={dashboardData(propRows)} range={currentMonthRange()} />);
     // Panel renders the pacing view from the fallback rows without throwing.
     expect(screen.getByText('חיזוי סוף חודש')).toBeInTheDocument();
     expect(screen.getByText('יעד חודשי')).toBeInTheDocument();
