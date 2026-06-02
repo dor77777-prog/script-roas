@@ -552,6 +552,8 @@ Open /operator for details: https://roas-dashboard-smoky.vercel.app/operator
 > **`manual_overrides` — TikTok נתמך (Plan A, 2026-06-02):** ה-CHECK constraint על `platform` כבר התיר `tiktok` (migration `20260522102151`), אך ה-**validator בצד הלקוח** (`operatorManualOverrides.ts` `VALID_PLATFORMS`) חסם אותו ל-`meta`/`google` בלבד — שאריות מהמגבלה הישנה (A8-F4). Plan A פתח את TikTok מקצה-לקצה: validator + UI (`ManualOverridesCrud`) + מיזוג **מודע-מיפוי** ב-`mergeOverridesFromSupabase` ו-החלה ב-`cronDaily`/`cronLive` — override ל-TikTok לחנות X חל על ה-`tt_spend_cad` של אותה חנות (דרך מיפוי הקמפיינים), לא על החשבון המשותף הגולמי. fallback ללא-override: CAD-passthrough בלבד (שורד נפילת FX).
 >
 > **Plan A — framing + guards (2026-06-02):** נוסף guard ב-vitest שמוודא ש-`cronDaily` ו-`cronLive` כותבים את **אותו key-set** ל-`orders_attribution` (מונע dual-write drift), ו-guard נוסף שמוודא שה-SELECT string ב-`postgresReaders` כולל כל עמודה נצרכת (מונע persisted-but-invisible). שכבת ה-UI: ROAS המעורב תויג **MER**, ROAS פר-פלטפורמה הורד ל"מכוון בלבד" (directional), נוסף צ'יפ **כיסוי ייחוס** (hero בלבד, שקט), ו-`fetchJsonOrNull` איחד 4 fetchers כפולים. הכל read-only מול פלטפורמות המודעות.
+>
+> **Phase 0 — correctness fixes (2026-06-02, post-Plan-A):** (1) **צ'יפ כיסוי-הייחוס היה תקוע על 100%.** `hasAttributionSignal` (`lib/home/adapters.ts`) ספר `source.trim() !== ''` כסימן ייחוס — אבל ה-writer (`lib/fetchers/shopify.ts`) **לעולם לא פולט `''`**; ברירת-המחדל בסוף שרשרת הסיווג היא `'direct'`. לכן לכל הזמנה היה source לא-ריק → `covered === total` תמיד → 100% מתמטית. תוקן: `'direct'` (ו-`''`) הם דלי ה"לא ידוע" ולא נספרים כמכוסים; נספר רק **סימן חיובי אמיתי** (fbclid/gclid/utm_*/ערוץ-מזוהה כמו meta-paid/…/other-referral). ה-fixture של מבחן הכיסוי השתמש ב-`source:''` הבלתי-אפשרי בייצור והסתיר את הבאג. (2) **aiReport**: דלי המקור עכשיו מקפל `'' → 'direct'` (מתואם ל-`attributionAnalysis.ts:1205`), וה-deterministic-coverage יושר לכלול `utm_source` כפי שתיעודו תמיד טען. שתי ההתאמות **display-only** (אינן מזינות שום gate). ראה סעיף 16 לתיקון פער ה-state-keys (COGS).
 | WhatsApp test | POST `/api/operator/whatsapp/send-now` | Inngest `event-whatsapp-send-now` |
 | Reset Data | POST `/api/operator/reset` `{scope,confirm}` | ישיר ל-Supabase admin client |
 
@@ -748,9 +750,15 @@ Single threshold (`refundDeduction ≥ 20% × grossRevenue` OR `≥ $500`) lives
 | `roas:goal` | ✅ |
 | `roas:productMapChipHidden` | ❌ (per-device) |
 | `roas:campaigns:columnPrefs` (visibility + order) | ✅ |
+| `roas-dashboard:cogs-settings` (אחוז COGS לעריכה) | ✅ (תוקן 2026-06-02) |
 
 ### 16.3 Read pattern
 ב-mount, הקומפוננטה קוראת מ-localStorage. ברקע, `useCloudSync` מבקש את ה-server value וממזג. השרת תמיד win על קונפליקט (אחרון-כותב, סינגל-משתמש מבטיח שאין race).
+
+### 16.4 Client/server state-key parity (guard, 2026-06-02)
+מפתח מסונכרן חי ב-**שתי רשימות שחייבות להסכים**: הלקוח `cloudSync.ts:STATE_KEYS` (מה נשלח), והשרת `dashboardStateKeys.ts:ALLOWED_STATE_KEYS` (ה-allowlist ש-`/api/dashboard-state` POST מאמת — מפתח לא-ברשימה מקבל **400 "unknown key"** ולא נכתב). הן לא יכולות לחלוק מערך אחד כי `cloudSync.ts` הוא browser-side (`window`/`localStorage`) וייבוא שלו לתוך ה-server bundle היה גורר client-only refs.
+
+**באג שתוקן (2026-06-02):** `cogs-settings` היה ב-`STATE_KEYS` (הלקוח דחף) אבל **חסר** מ-`ALLOWED_STATE_KEYS` → כל שמירת COGS קיבלה 400 ונשארה מקומית-למכשיר. תוקן בהוספת המפתח ל-allowlist. כדי שזה לא יישנה, `src/lib/__tests__/stateKeysParity.test.ts` אוכף **שוויון-קבוצות דו-כיווני** בין שתי הרשימות (אחרי הסרת תחילית `roas-dashboard:`). **כל מפתח מסונכרן חדש (למשל `salary-settings` הקרוב) חייב להתווסף לשתי הרשימות, אחרת ה-guard נכשל.** (ה-`OPERATOR_SECRET` בכוונה אינו מסונכרן — קרדנציאל אבטחה מקומי-למכשיר.)
 
 ---
 
