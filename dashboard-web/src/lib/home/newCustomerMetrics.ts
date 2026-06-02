@@ -10,6 +10,12 @@
  * (isFirstOrder === null) are surfaced as `unclassifiableShare`, NEVER folded
  * into new or returning. ncRoas is null when merSpend <= 0 (no meaningful
  * ratio) OR ncRevenue === 0 with no orders; nCac is null when ncOrders === 0.
+ *
+ * Wave 1: `ncRevenue` is re-based onto the NET basis via the optional blended
+ * `netAdjust` factor (gross→net, default 1 = no adjustment), so NC-ROAS sits on
+ * the same basis as the headline net MER. nCAC/ncOrders are count-based and
+ * therefore untouched by the factor. A two-stage `confidence` gate is derived
+ * from `unclassifiableShare` (see NC_CONFIDENCE_LOW / NC_CONFIDENCE_SUPPRESS).
  */
 
 export interface FirstOrderInput {
@@ -21,8 +27,18 @@ export interface FirstOrderInput {
   isFirstOrder: boolean | null;
 }
 
+/** Unclassifiable share > this → "low confidence" badge on NC-ROAS. */
+export const NC_CONFIDENCE_LOW = 0.20;
+/** Unclassifiable share > this → suppress the ratio ("not enough data"). */
+export const NC_CONFIDENCE_SUPPRESS = 0.40;
+export type NcConfidence = 'ok' | 'low' | 'suppressed';
+
 export interface NewCustomerMetrics {
-  /** Σ totalCad where isFirstOrder === true. */
+  /**
+   * Σ totalCad where isFirstOrder === true, re-based to NET by the blended
+   * net-adj factor (Wave 1) so it sits on the same basis as the headline net
+   * MER. With factor 1 (degraded / no adjustment) this is the gross sum.
+   */
   ncRevenue: number;
   /** Count where isFirstOrder === true. */
   ncOrders: number;
@@ -32,12 +48,19 @@ export interface NewCustomerMetrics {
   nCac: number | null;
   /** (#isFirstOrder===null) / total; 0 when there are no rows. */
   unclassifiableShare: number;
+  /**
+   * Two-stage gate derived from unclassifiableShare:
+   * `> NC_CONFIDENCE_SUPPRESS` → 'suppressed' (hide ratio),
+   * `> NC_CONFIDENCE_LOW` → 'low' (badge), else 'ok'.
+   */
+  confidence: NcConfidence;
 }
 
 export function computeNewCustomerMetrics(
   rows: FirstOrderInput[],
   merSpend: number | null,
   storeName?: string,
+  netAdjust: number = 1,
 ): NewCustomerMetrics {
   const scoped = storeName ? rows.filter((r) => r.storeName === storeName) : rows;
 
@@ -54,9 +77,15 @@ export function computeNewCustomerMetrics(
   }
 
   const spend = merSpend != null && Number.isFinite(merSpend) ? merSpend : 0;
-  const ncRoas = spend > 0 && ncRevenue > 0 ? ncRevenue / spend : null;
+  const adjFactor = Number.isFinite(netAdjust) ? netAdjust : 1;
+  const ncRevenueNet = ncRevenue * adjFactor;
+  const ncRoas = spend > 0 && ncRevenueNet > 0 ? ncRevenueNet / spend : null;
   const nCac = ncOrders > 0 ? spend / ncOrders : null;
   const unclassifiableShare = scoped.length > 0 ? unclassifiable / scoped.length : 0;
+  const confidence: NcConfidence =
+    unclassifiableShare > NC_CONFIDENCE_SUPPRESS ? 'suppressed'
+    : unclassifiableShare > NC_CONFIDENCE_LOW ? 'low'
+    : 'ok';
 
-  return { ncRevenue, ncOrders, ncRoas, nCac, unclassifiableShare };
+  return { ncRevenue: ncRevenueNet, ncOrders, ncRoas, nCac, unclassifiableShare, confidence };
 }

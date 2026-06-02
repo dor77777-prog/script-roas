@@ -62,3 +62,32 @@ describe('computeNewCustomerMetrics', () => {
     expect(m.ncOrders).toBe(1);
   });
 });
+
+const newRow = (totalCad: number, isFirstOrder: boolean | null) => ({ storeName: 'uzoshop', totalCad, isFirstOrder });
+
+describe('computeNewCustomerMetrics — net-adj + confidence', () => {
+  it('applies the net-adjust factor to ncRevenue (and thus ncRoas)', () => {
+    const rows = [newRow(100, true), newRow(100, true), newRow(50, false)];
+    // gross new revenue = 200; factor 0.9 -> net new revenue 180; spend 60 -> ncRoas 3.0
+    const m = computeNewCustomerMetrics(rows, 60, 'uzoshop', 0.9);
+    expect(m.ncRevenue).toBeCloseTo(180);
+    expect(m.ncRoas).toBeCloseTo(3.0);
+    expect(m.nCac).toBeCloseTo(30); // 60 / 2 new orders — count-based, unaffected by factor
+  });
+  it('factor defaults to 1 when omitted (back-compat)', () => {
+    const m = computeNewCustomerMetrics([newRow(100, true)], 50, 'uzoshop');
+    expect(m.ncRevenue).toBe(100);
+  });
+  it('confidence: ok when unclassifiable <= 20%', () => {
+    const rows = [newRow(100, true), newRow(100, true), newRow(100, true), newRow(100, true), newRow(100, null)]; // 20%
+    expect(computeNewCustomerMetrics(rows, 100, 'uzoshop', 1).confidence).toBe('ok');
+  });
+  it('confidence: low when 20% < share <= 40%', () => {
+    const rows = [newRow(100, true), newRow(100, true), newRow(100, null)]; // 33%
+    expect(computeNewCustomerMetrics(rows, 100, 'uzoshop', 1).confidence).toBe('low');
+  });
+  it('confidence: suppressed when share > 40%', () => {
+    const rows = [newRow(100, true), newRow(100, null)]; // 50%
+    expect(computeNewCustomerMetrics(rows, 100, 'uzoshop', 1).confidence).toBe('suppressed');
+  });
+});

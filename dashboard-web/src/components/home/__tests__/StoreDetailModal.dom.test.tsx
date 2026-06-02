@@ -55,7 +55,7 @@ function makeData(over: Partial<StoreDetailData> = {}): StoreDetailData {
       { name: 'Meta · ABO – Hero Video', platform: 'meta', roas: 4.2, spend: 640, revenue: 2688, orders: 92, storeId: 'uzoshop', campaignId: 'cmp-1' },
       { name: 'Google · PMax – Catalog', platform: 'google', roas: 3.3, spend: 520, revenue: 1716, orders: 58, storeId: 'uzoshop', campaignId: 'cmp-2' },
     ],
-    newCustomer: { ncRevenue: 0, ncOrders: 0, ncRoas: null, nCac: null, unclassifiableShare: 0 },
+    newCustomer: { ncRevenue: 0, ncOrders: 0, ncRoas: null, nCac: null, unclassifiableShare: 0, confidence: 'ok' },
     ...over,
   };
 }
@@ -156,7 +156,7 @@ describe('<StoreDetailModal> — per-store NC-ROAS / nCAC', () => {
   it('renders the new-customer row with NC-ROAS, nCAC and unclassifiable share', () => {
     const data = makeData({
       newCustomer: {
-        ncRevenue: 300, ncOrders: 6, ncRoas: 1.5, nCac: 50, unclassifiableShare: 0.2,
+        ncRevenue: 300, ncOrders: 6, ncRoas: 1.5, nCac: 50, unclassifiableShare: 0.2, confidence: 'ok',
       },
     });
     const { getByTestId } = render(
