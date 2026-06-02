@@ -9,6 +9,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useTheme } from './ThemeProvider';
 import { Button } from '@/components/ui/Button';
+import { LogoutButton } from '@/components/LogoutButton';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { useSidebarPin } from '@/lib/hooks/useSidebarPin';
 import type { TabKey } from '@/lib/urlState';
@@ -282,6 +283,16 @@ function SidebarBody({
             <Moon size={14} />
           </Button>
         </div>
+
+        {/* Logout — POSTs to /api/logout then hard-navigates to "/". Self-
+            contained ghost primitive (own LogOut icon + Hebrew label); sits
+            with the other account/session controls in the footer. Inherits the
+            rail's collapse state + sidebar-fg tokens so it renders icon-only on
+            the 72px rail and reads correctly on the dark surface in both themes
+            — matching the operator Link / theme-toggle / pin siblings above. */}
+        <RailTooltip show={showTooltips} label="התנתק">
+          <LogoutButton collapsed={isCollapsed} railText={railText} railHover={railHover} />
+        </RailTooltip>
 
         {variant === 'desktop' && (
           <RailTooltip
