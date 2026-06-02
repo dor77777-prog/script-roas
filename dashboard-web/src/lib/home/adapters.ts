@@ -500,10 +500,16 @@ export interface CoverageResult {
 
 /** An order is "covered" when it carries ANY attribution signal. */
 function hasAttributionSignal(o: OrderAttributionRow): boolean {
+  // 'direct' and '' are the UNKNOWN bucket, NOT a signal. The writer's
+  // catch-all for an unattributed order is 'direct' (never ''), so a bare
+  // `source.trim() !== ''` check would count EVERY order as covered. Only an
+  // ATTRIBUTED channel label (meta-paid/google-paid/.../-organic/email/
+  // other-referral) counts here; click-ids and utm_* are handled below.
+  const s = o.source.trim();
   return (
     o.fbclidPresent ||
     o.gclidPresent ||
-    o.source.trim() !== '' ||
+    (s !== '' && s !== 'direct') ||
     o.utmSource.trim() !== '' ||
     o.utmMedium.trim() !== '' ||
     o.utmCampaign.trim() !== '' ||
