@@ -64,3 +64,74 @@ describe('salarySettings — model + effectiveSalaryEntry', () => {
     expect(s.byMonth['2026-05']).toEqual({ kind: 'amount', value: 9000 }); // valid kept
   });
 });
+
+import { salariesForRange } from '@/lib/salarySettings';
+import type { DailyRow } from '@/lib/types';
+import type { DateRange } from '@/lib/types';
+
+function row(date: string, revenue: number): DailyRow {
+  return {
+    date, storeId: 'uzoshop', storeName: 'uzoshop',
+    fbSpend: 0, gaSpend: 0, ttSpend: 0, totalSpend: 0, revenue,
+    roas: 0, grossProfit: revenue, cogs: 0, netProfit: revenue,
+    hasCogs: true, grossRevenue: null, refundDeduction: null,
+    fbImpressions: null, gaImpressions: null, ttImpressions: null,
+  };
+}
+
+describe('salariesForRange', () => {
+  it('percent: value% × Σ revenue of that month inside the range', () => {
+    const s: SalarySettings = { v: 1, default: { kind: 'percent', value: 7 }, byMonth: {} };
+    const rows = [row('2026-06-01', 10000), row('2026-06-15', 5000)];
+    const range: DateRange = { from: '2026-06-01', to: '2026-06-30' };
+    expect(salariesForRange(s, rows, range)).toBeCloseTo(0.07 * 15000, 6); // 1050
+  });
+
+  it('percent only counts rows inside the range', () => {
+    const s: SalarySettings = { v: 1, default: { kind: 'percent', value: 10 }, byMonth: {} };
+    // a row outside the range is ignored even though its month overlaps
+    const rows = [row('2026-06-10', 8000), row('2026-06-25', 2000)];
+    const range: DateRange = { from: '2026-06-01', to: '2026-06-15' };
+    expect(salariesForRange(s, rows, range)).toBeCloseTo(0.10 * 8000, 6); // only the in-range row → 800
+  });
+
+  it('amount: value × (days-of-month-in-range ÷ days-in-month)', () => {
+    const s: SalarySettings = { v: 1, default: { kind: 'amount', value: 9000 }, byMonth: {} };
+    const rows = [row('2026-06-10', 1)]; // a row is needed so the month is "in scope"
+    // June has 30 days; range covers 15 of them → 9000 × 15/30 = 4500
+    const range: DateRange = { from: '2026-06-01', to: '2026-06-15' };
+    expect(salariesForRange(s, rows, range)).toBeCloseTo(9000 * (15 / 30), 6);
+  });
+
+  it('amount full month → full amount', () => {
+    const s: SalarySettings = { v: 1, default: { kind: 'amount', value: 8000 }, byMonth: {} };
+    const rows = [row('2026-02-14', 1)]; // Feb 2026 = 28 days
+    const range: DateRange = { from: '2026-02-01', to: '2026-02-28' };
+    expect(salariesForRange(s, rows, range)).toBeCloseTo(8000, 6);
+  });
+
+  it('mixed months: percent month + amount month summed', () => {
+    const s: SalarySettings = {
+      v: 1, default: { kind: 'percent', value: 7 },
+      byMonth: { '2026-05': { kind: 'amount', value: 6000 } },
+    };
+    const rows = [row('2026-05-20', 4000), row('2026-06-05', 10000)];
+    // May: amount, May has 31 days; range covers 2026-05-20..05-31 = 12 days → 6000 × 12/31
+    // June: percent 7% × 10000 (only the in-range June row) = 700
+    const range: DateRange = { from: '2026-05-20', to: '2026-06-30' };
+    const may = 6000 * (12 / 31);
+    const jun = 0.07 * 10000;
+    expect(salariesForRange(s, rows, range)).toBeCloseTo(may + jun, 6);
+  });
+
+  it('default 7% reproduces the baseline when no months are edited', () => {
+    const s = defaultSalarySettings();
+    const rows = [row('2026-06-01', 20000)];
+    const range: DateRange = { from: '2026-06-01', to: '2026-06-30' };
+    expect(salariesForRange(s, rows, range)).toBeCloseTo(0.07 * 20000, 6); // 1400
+  });
+
+  it('empty rows → 0', () => {
+    expect(salariesForRange(defaultSalarySettings(), [], { from: '2026-06-01', to: '2026-06-30' })).toBe(0);
+  });
+});
