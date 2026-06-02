@@ -13,7 +13,7 @@ afterEach(() => cleanup());
 const AGG: Aggregate = {
   revenue: 10000, spend: 2000, fbSpend: 1500, gaSpend: 500, ttSpend: 0,
   roas: 5, grossProfit: 8000, cogs: 3000, netProfit: 4350,
-  transactionFees: 650, fixedCosts: 0, storeCount: 1, daysCovered: 1,
+  transactionFees: 650, fixedCosts: 0, salaries: 0, storeCount: 1, daysCovered: 1,
   trueNetProfit: 4350, trueMargin: 0.435, rowCount: 1,
 };
 

@@ -36,6 +36,7 @@ function makeAgg(over: Partial<StoreAgg> & { store: string }): StoreAgg {
     netProfit: 0,
     transactionFees: 0,
     fixedCosts: 0,
+    salaries: 0,
     storeCount: 1,
     daysCovered: 0,
     trueNetProfit: 0,

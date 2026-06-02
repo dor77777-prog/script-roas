@@ -83,6 +83,9 @@ export type Aggregate = {
   /** Per-store monthly fixed costs (Shopify plan + apps + email) prorated to
    *  the number of days in the aggregate. */
   fixedCosts: number;
+  /** Business-level salaries deduction for the period (CAD). Subtracted in
+   *  trueNetProfit only; 0 when no salary settings are applied. */
+  salaries: number;
   /** Distinct stores active in the period (used for prorating fixed costs). */
   storeCount: number;
   /** Span the aggregate covers, in calendar days. Used for the fixed-cost
@@ -140,6 +143,14 @@ export function aggregate(
    * row-derived `revenue` exactly as before.
    */
   revenueByStore?: Record<string, number>,
+  /**
+   * Phase 2026-06-02 — precomputed business-level salaries deduction for
+   * this range (from `salariesForRange`). Subtracted in `trueNetProfit`
+   * ONLY. The operating-profit path (revenue − spend − cogs, computed in
+   * lib/home/adapters.ts) and the legacy `netProfit` field are untouched.
+   * Defaults to 0 so every existing caller is unaffected.
+   */
+  salaries: number = 0,
 ): Aggregate {
   let revenue = 0, spend = 0, fbSpend = 0, gaSpend = 0, ttSpend = 0, cogs = 0;
   // Audit fix 2026-05-23 (d/HI-02): per-store rates. Transaction fees are
@@ -236,7 +247,7 @@ export function aggregate(
   } else {
     fixedCosts = billing.total;
   }
-  const trueNetProfit = revenue - spend - cogs - transactionFees - fixedCosts;
+  const trueNetProfit = revenue - spend - cogs - transactionFees - fixedCosts - salaries;
   return {
     revenue,
     spend,
@@ -249,6 +260,7 @@ export function aggregate(
     netProfit: revenue - spend - cogs,
     transactionFees,
     fixedCosts,
+    salaries,
     storeCount: rowStoreNames.length,
     daysCovered,
     trueNetProfit,

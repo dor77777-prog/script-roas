@@ -32,6 +32,7 @@ const EMPTY_AGG: Aggregate = {
   netProfit: 0,
   transactionFees: 0,
   fixedCosts: 0,
+  salaries: 0,
   storeCount: 0,
   daysCovered: 0,
   trueNetProfit: 0,

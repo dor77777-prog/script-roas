@@ -17,6 +17,7 @@ function agg(partial: Partial<Aggregate>): Aggregate {
     netProfit: 550,
     transactionFees: 65,
     fixedCosts: 50,
+    salaries: 0,
     storeCount: 1,
     daysCovered: 30,
     trueNetProfit: 435,
