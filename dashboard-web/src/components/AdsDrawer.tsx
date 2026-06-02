@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import useSWR from 'swr';
 import { Button } from '@/components/ui/Button';
 import {
@@ -508,7 +509,19 @@ export function AdsDrawer({
                       <AdSortHeader label="מודעה"     col="name"        sortKey={sortKey} dir={sortDir} onClick={handleSort} align="start"  />
                       <AdSortHeader label="הוצאה"     col="spend"       sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
                       <AdSortHeader label="ערך"       col="value"       sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
-                      <AdSortHeader label="ROAS"      col="roas"        sortKey={sortKey} dir={sortDir} onClick={handleSort} align="center" />
+                      <AdSortHeader
+                        label={
+                          <span className="inline-flex flex-col items-center leading-tight">
+                            <span>ROAS</span>
+                            <span className="text-[9px] text-ink-muted font-normal">מכוון · directional</span>
+                          </span>
+                        }
+                        col="roas"
+                        sortKey={sortKey}
+                        dir={sortDir}
+                        onClick={handleSort}
+                        align="center"
+                      />
                       <th className="font-medium px-3 py-2 text-center text-ink-secondary">
                         <HelpTooltip content="ROAS אמיתי לפי click-id (utm_content={{ad.id}})">
                           <span>ROAS Shopify</span>
@@ -672,7 +685,7 @@ function AdSortHeader({
   onClick,
   align,
 }: {
-  label: string;
+  label: ReactNode;
   col: AdSortKey;
   sortKey: AdSortKey;
   dir: AdSortDir;
