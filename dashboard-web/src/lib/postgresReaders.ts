@@ -68,7 +68,7 @@ type DbRow = Record<string, unknown>;
 export const ORDERS_ATTRIBUTION_SELECT =
   'date, store_id, order_id, total_cad, source, utm_source, utm_medium, ' +
   'utm_campaign, utm_content, fbclid_present, gclid_present, referrer, ' +
-  'utm_id, utm_term, line_items';
+  'utm_id, utm_term, line_items, customer_id, order_created_at, is_first_order';
 
 /**
  * Pagination helper — works around Supabase Cloud's `db-max-rows = 1000`
@@ -1097,6 +1097,12 @@ export async function fetchOrdersAttributionFromPostgres(
       // Matches ordersAttribution.ts:259 — empty [] when includeLineItems=false,
       // so iteration without null-guards remains safe.
       lineItems: includeLI ? parseLineItems(r.line_items) : [],
+      customerId:
+        r.customer_id == null ? null : String(r.customer_id).trim() || null,
+      orderCreatedAt:
+        r.order_created_at == null ? null : String(r.order_created_at),
+      isFirstOrder:
+        r.is_first_order === true ? true : r.is_first_order === false ? false : null,
     });
   }
   return rows;

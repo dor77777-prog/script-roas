@@ -115,6 +115,9 @@ function makeOrder(overrides: Partial<OrderAttributionRow>): OrderAttributionRow
     utmId: 'm-c1',
     utmTerm: '',
     lineItems: [],
+    customerId: 'cust-default',
+    orderCreatedAt: '2026-05-15T12:00:00-04:00',
+    isFirstOrder: true,
     ...overrides,
   };
 }

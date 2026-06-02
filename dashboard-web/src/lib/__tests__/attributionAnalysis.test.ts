@@ -34,6 +34,9 @@ function makeOrder(overrides: Partial<OrderAttributionRow>): OrderAttributionRow
     utmId: '',
     utmTerm: '',
     lineItems: [],
+    customerId: 'cust-default',
+    orderCreatedAt: '2026-05-20T12:00:00-04:00',
+    isFirstOrder: true,
     ...overrides,
   };
 }

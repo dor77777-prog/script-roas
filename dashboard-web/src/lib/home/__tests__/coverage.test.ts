@@ -12,6 +12,7 @@ function row(overrides: Partial<OrderAttributionRow>): OrderAttributionRow {
     source: 'direct', utmSource: '', utmMedium: '', utmCampaign: '', utmContent: '',
     fbclidPresent: false, gclidPresent: false, referringSite: '', utmId: '', utmTerm: '',
     lineItems: [],
+    customerId: null, orderCreatedAt: '2026-05-20T12:00:00-04:00', isFirstOrder: null,
     ...overrides,
   };
 }

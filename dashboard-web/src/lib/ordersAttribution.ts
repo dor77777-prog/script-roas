@@ -54,6 +54,15 @@ export type OrderAttributionRow = {
    *  deployed — downstream analyzers must treat `[]` as "no signal",
    *  not "zero sales". */
   lineItems: OrderLineItem[];
+  /** Phase 3 — Shopify opaque numeric customer id (string), null on guest
+   *  checkout. Privacy: id only — never name/email/phone. */
+  customerId: string | null;
+  /** Phase 3 — Shopify created_at (ISO-8601 with offset), null when missing. */
+  orderCreatedAt: string | null;
+  /** Phase 3 — TRUE when this is the customer's first order EVER for the store;
+   *  null when unclassifiable (guest checkout or not-yet-flagged). NEVER coerce
+   *  null→false — that would silently re-bucket unknowns as "returning". */
+  isFirstOrder: boolean | null;
 };
 
 /**

@@ -109,6 +109,9 @@ function makeOrderRow(overrides: Partial<OrderAttributionRow>): OrderAttribution
     utmId: '',
     utmTerm: '',
     lineItems: [{ productId: PROD_A, units: 1, revenueCad: 80 }],
+    customerId: 'cust-default',
+    orderCreatedAt: '2026-05-01T12:00:00-04:00',
+    isFirstOrder: true,
     ...overrides,
   };
 }
