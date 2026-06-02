@@ -549,7 +549,9 @@ Open /operator for details: https://roas-dashboard-smoky.vercel.app/operator
 | Backfill טווח | POST `/api/operator/backfill` `{from,to,storeIds}` | Inngest `event/backfill` |
 | manual_overrides CRUD | `/api/operator/manual-overrides` GET/POST/DELETE | ישיר ל-Supabase admin client |
 
-> **מגבלת `manual_overrides` (A8-F4, 2026-05-27):** ה-CHECK constraint על `platform` מתיר `meta` ו-`google` בלבד. תיקון הוצאה ידנית עבור TikTok **אינו נתמך** דרך ה-CRUD — מגבלת סכמה מכוונת, לא באג. שינוי תצריך migration על ה-constraint.
+> **`manual_overrides` — TikTok נתמך (Plan A, 2026-06-02):** ה-CHECK constraint על `platform` כבר התיר `tiktok` (migration `20260522102151`), אך ה-**validator בצד הלקוח** (`operatorManualOverrides.ts` `VALID_PLATFORMS`) חסם אותו ל-`meta`/`google` בלבד — שאריות מהמגבלה הישנה (A8-F4). Plan A פתח את TikTok מקצה-לקצה: validator + UI (`ManualOverridesCrud`) + מיזוג **מודע-מיפוי** ב-`mergeOverridesFromSupabase` ו-החלה ב-`cronDaily`/`cronLive` — override ל-TikTok לחנות X חל על ה-`tt_spend_cad` של אותה חנות (דרך מיפוי הקמפיינים), לא על החשבון המשותף הגולמי. fallback ללא-override: CAD-passthrough בלבד (שורד נפילת FX).
+>
+> **Plan A — framing + guards (2026-06-02):** נוסף guard ב-vitest שמוודא ש-`cronDaily` ו-`cronLive` כותבים את **אותו key-set** ל-`orders_attribution` (מונע dual-write drift), ו-guard נוסף שמוודא שה-SELECT string ב-`postgresReaders` כולל כל עמודה נצרכת (מונע persisted-but-invisible). שכבת ה-UI: ROAS המעורב תויג **MER**, ROAS פר-פלטפורמה הורד ל"מכוון בלבד" (directional), נוסף צ'יפ **כיסוי ייחוס** (hero בלבד, שקט), ו-`fetchJsonOrNull` איחד 4 fetchers כפולים. הכל read-only מול פלטפורמות המודעות.
 | WhatsApp test | POST `/api/operator/whatsapp/send-now` | Inngest `event-whatsapp-send-now` |
 | Reset Data | POST `/api/operator/reset` `{scope,confirm}` | ישיר ל-Supabase admin client |
 
