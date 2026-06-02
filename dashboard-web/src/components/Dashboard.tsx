@@ -74,6 +74,10 @@ import { ActivityEventsTab } from '@/components/activity/ActivityEventsTab';
 import { StoreDetailModal } from '@/components/home/StoreDetailModal';
 import { MobileStickyRoas } from '@/components/home/MobileStickyRoas';
 import { toStoreDetail } from '@/lib/home/storeDetail';
+import {
+  computeNewCustomerMetrics,
+  type FirstOrderInput,
+} from '@/lib/home/newCustomerMetrics';
 import type { StoreAgg } from '@/lib/analytics';
 import { InsightsBoard } from './InsightsBoard';
 import {
@@ -355,6 +359,20 @@ export function Dashboard() {
     return out;
   }, [ordersData, data, filters.store]);
 
+  // Phase 3 — rows feeding the NC-ROAS / nCAC lens (hero + store modal). Built
+  // here (where `ordersData` lives) over the SAME current-range orders-
+  // attribution rows the per-store counts + coverage chip already consume — no
+  // extra fetch — then threaded into HomeTab. Each OrderAttributionRow carries
+  // storeName / totalCad / isFirstOrder after the Phase-3 reader change.
+  const firstOrderRows = useMemo<FirstOrderInput[]>(() => {
+    const rows = ordersData?.rows ?? [];
+    return rows.map((r) => ({
+      storeName: r.storeName,
+      totalCad: r.totalCad,
+      isFirstOrder: r.isFirstOrder,
+    }));
+  }, [ordersData]);
+
   return (
     <div dir="rtl" className="min-h-screen bg-canvas flex">
       {/* Sidebar on the start-side (right in RTL). On mobile (< md) it
@@ -463,6 +481,7 @@ export function Dashboard() {
                   aiReportSignal={aiReportSignal}
                   ordersByStore={ordersByStore}
                   ordersRows={ordersData?.rows}
+                  firstOrderRows={firstOrderRows}
                   coverage={coverageChip}
                   onSeeActivity={() => handleTabChange('activity')}
                 />
@@ -544,6 +563,7 @@ function HomeTab({
   aiReportSignal,
   ordersByStore,
   ordersRows,
+  firstOrderRows,
   coverage,
   onSeeActivity,
 }: {
@@ -561,6 +581,13 @@ function HomeTab({
    * the per-store order count already consumes — no second SWR fetch.
    */
   ordersRows?: Array<{ storeName: string; date: string }>;
+  /**
+   * Phase 3 — minimal rows feeding the NC-ROAS / nCAC lens (hero subordinate
+   * tile + per-store modal row). Carries storeName / totalCad / isFirstOrder
+   * from the same current-range orders-attribution rows; built upstream so no
+   * extra fetch. Empty = zeroed newCustomer block (back-compat).
+   */
+  firstOrderRows: FirstOrderInput[];
   /**
    * Honest attribution-coverage chip (2026-06-02) — HERO ONLY. Computed
    * upstream from the same current-range orders-attribution rows. null hides
@@ -788,6 +815,15 @@ function HomeTab({
     () => toHeroPeriod(filtered.curAgg, heroCpm, heroOrders),
     [filtered.curAgg, heroCpm, heroOrders],
   );
+  // Phase 3 — NC-ROAS / nCAC subordinate tile. Scoped to the global store
+  // filter (undefined = all visible stores). MER spend = mapping-aware
+  // `filtered.curAgg.spend` (NEVER recomputed from raw account totals) so the
+  // ratio stays consistent with the hero's MER band. Its OWN band lives inside
+  // CommandCenterHero — this never touches the hero ROAS band gradient.
+  const heroNewCustomer = useMemo(() => {
+    const scope = filters.store === 'All' ? undefined : filters.store;
+    return computeNewCustomerMetrics(firstOrderRows, filtered.curAgg.spend, scope);
+  }, [firstOrderRows, filtered.curAgg.spend, filters.store]);
   const heroDelta = useMemo(() => {
     if (!prevAggFromPrevData) return undefined;
     return toHeroDelta(
@@ -884,6 +920,9 @@ function HomeTab({
       orders: ordersByStore[storeName] ?? 0,
       prevOrders: prevOrdersByStore ? (prevOrdersByStore[storeName] ?? 0) : null,
       updatedAt: data?.dataLastWriteAt ?? null,
+      // Phase 3 — per-store NC-ROAS / nCAC. toStoreDetail filters these by
+      // storeName internally; MER spend = the store's mapping-aware cur.spend.
+      firstOrderRows,
     });
   }, [
     modalStoreId,
@@ -897,6 +936,7 @@ function HomeTab({
     ordersByStore,
     prevOrdersByStore,
     data?.dataLastWriteAt,
+    firstOrderRows,
   ]);
 
   // Close the drill modal if its store leaves the visible set — e.g. the store
@@ -1070,6 +1110,7 @@ function HomeTab({
         netSparkValues={netSparkValues}
         secondarySparklines={secondarySparklines}
         updatedAt={data.dataLastWriteAt ?? undefined}
+        newCustomer={heroNewCustomer}
       />
 
       {/* 4. ROAS-vs-target chart — independent date range ------------------- */}
