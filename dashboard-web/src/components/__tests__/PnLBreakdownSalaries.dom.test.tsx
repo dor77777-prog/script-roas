@@ -5,7 +5,7 @@ import type { Aggregate } from '@/lib/analytics';
 
 function agg(over: Partial<Aggregate>): Aggregate {
   return {
-    revenue: 48920, spend: 16840, fbSpend: 0, gaSpend: 0, ttSpend: 0, roas: 2.9,
+    revenue: 48920, grossRevenue: 48920, spend: 16840, fbSpend: 0, gaSpend: 0, ttSpend: 0, roas: 2.9,
     grossProfit: 48920 - 16840, cogs: 13208, netProfit: 48920 - 16840 - 13208,
     transactionFees: 3180, fixedCosts: 1290, storeCount: 3, daysCovered: 18,
     salaries: 3424, trueNetProfit: 48920 - 16840 - 13208 - 3180 - 1290 - 3424,

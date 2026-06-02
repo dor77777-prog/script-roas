@@ -22,6 +22,7 @@ import type { Annotation } from '@/lib/annotations';
 
 const EMPTY_AGG: Aggregate = {
   revenue: 0,
+  grossRevenue: 0,
   spend: 0,
   fbSpend: 0,
   gaSpend: 0,

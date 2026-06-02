@@ -27,6 +27,7 @@ import type { FirstOrderInput } from '@/lib/home/newCustomerMetrics';
 function makeAgg(over: Partial<StoreAgg> & { store: string }): StoreAgg {
   return {
     revenue: 0,
+    grossRevenue: 0,
     spend: 0,
     fbSpend: 0,
     gaSpend: 0,

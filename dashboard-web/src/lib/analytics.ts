@@ -69,6 +69,14 @@ export function getTransactionFeesRateForStore(
 
 export type Aggregate = {
   revenue: number;
+  /**
+   * Wave 1 (2026-06-03) — Σ `gross_revenue_cad` (orders_attribution gross,
+   * BEFORE refund deduction) for the period. Lives next to `revenue` (net) so
+   * the blended net/gross re-basing factor (`netAdjustFactor`) is derivable
+   * from one agg. Degrades to net when no per-row gross is available (so the
+   * factor becomes 1 = no adjustment). NEVER use this for MER — MER is net.
+   */
+  grossRevenue: number;
   spend: number;
   fbSpend: number;
   gaSpend: number;
@@ -152,7 +160,7 @@ export function aggregate(
    */
   salaries: number = 0,
 ): Aggregate {
-  let revenue = 0, spend = 0, fbSpend = 0, gaSpend = 0, ttSpend = 0, cogs = 0;
+  let revenue = 0, grossRevenue = 0, spend = 0, fbSpend = 0, gaSpend = 0, ttSpend = 0, cogs = 0;
   // Audit fix 2026-05-23 (d/HI-02): per-store rates. Transaction fees are
   // accumulated per row using the row's own store rate so an "All"-view
   // aggregate naturally becomes a revenue-weighted sum (high-AOV stores
@@ -167,6 +175,10 @@ export function aggregate(
   let maxDate: string | null = null;
   for (const r of rows) {
     revenue += r.revenue;
+    // Wave 1 — sum gross alongside net. `grossRevenue` is null for legacy rows
+    // (pre-Phase-05.7.3); fall back to the row's net so the blended factor
+    // degrades to 1 (no adjustment) rather than understating gross.
+    grossRevenue += r.grossRevenue ?? r.revenue;
     spend += r.totalSpend;
     fbSpend += r.fbSpend;
     gaSpend += r.gaSpend;
@@ -250,6 +262,7 @@ export function aggregate(
   const trueNetProfit = revenue - spend - cogs - transactionFees - fixedCosts - salaries;
   return {
     revenue,
+    grossRevenue,
     spend,
     fbSpend,
     gaSpend,

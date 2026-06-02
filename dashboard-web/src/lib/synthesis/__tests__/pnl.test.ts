@@ -7,6 +7,7 @@ import type { Aggregate } from '@/lib/analytics';
 function agg(partial: Partial<Aggregate>): Aggregate {
   return {
     revenue: 1000,
+    grossRevenue: 1000,
     spend: 200,
     fbSpend: 200,
     gaSpend: 0,
