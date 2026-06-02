@@ -24,7 +24,8 @@ import {
  *
  *   Revenue
  *   − Ad Spend
- *   − COGS (25%)
+ *   − COGS (editable % per store/month, default 25% — shown at the EFFECTIVE
+ *     rate actually applied this period, not a hardcoded constant)
  *   − Transaction Fees (6.5%)
  *   − Fixed (Recurring subs + one-time charges, prorated)
  *   = True Net Profit
