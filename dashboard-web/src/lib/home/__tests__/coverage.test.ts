@@ -13,6 +13,11 @@ function row(overrides: Partial<OrderAttributionRow>): OrderAttributionRow {
     fbclidPresent: false, gclidPresent: false, referringSite: '', utmId: '', utmTerm: '',
     lineItems: [],
     customerId: null, orderCreatedAt: '2026-05-20T12:00:00-04:00', isFirstOrder: null,
+    // Phase 4 — first-click lens defaults (no first-click signal).
+    firstTouchSource: null, firstFbclidPresent: false, firstGclidPresent: false,
+    firstTtclidPresent: false, firstUtmSource: null, firstUtmMedium: null,
+    firstUtmCampaign: null, firstUtmContent: null, firstUtmId: null,
+    firstUtmTerm: null, firstSeenAt: null,
     ...overrides,
   };
 }

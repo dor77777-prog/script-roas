@@ -63,6 +63,20 @@ export type OrderAttributionRow = {
    *  null when unclassifiable (guest checkout or not-yet-flagged). NEVER coerce
    *  null→false — that would silently re-bucket unknowns as "returning". */
   isFirstOrder: boolean | null;
+  /** Phase 4 — first-click lens. Null when the order carries no ft_* signal
+   *  ("no first-click signal", NOT 'direct'). first_* columns added by the
+   *  20260603090000 migration; pre-migration rows read back as null. */
+  firstTouchSource: string | null;
+  firstFbclidPresent: boolean;
+  firstGclidPresent: boolean;
+  firstTtclidPresent: boolean;
+  firstUtmSource: string | null;
+  firstUtmMedium: string | null;
+  firstUtmCampaign: string | null;
+  firstUtmContent: string | null;
+  firstUtmId: string | null;
+  firstUtmTerm: string | null;
+  firstSeenAt: string | null;
 };
 
 /**

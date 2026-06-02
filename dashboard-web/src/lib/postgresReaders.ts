@@ -68,7 +68,12 @@ type DbRow = Record<string, unknown>;
 export const ORDERS_ATTRIBUTION_SELECT =
   'date, store_id, order_id, total_cad, source, utm_source, utm_medium, ' +
   'utm_campaign, utm_content, fbclid_present, gclid_present, referrer, ' +
-  'utm_id, utm_term, line_items, customer_id, order_created_at, is_first_order';
+  'utm_id, utm_term, line_items, customer_id, order_created_at, is_first_order, ' +
+  // Phase 4 — first-click lens columns (added by migration 20260603090000).
+  'first_touch_source, first_fbclid_present, first_gclid_present, ' +
+  'first_ttclid_present, first_utm_source, first_utm_medium, ' +
+  'first_utm_campaign, first_utm_content, first_utm_id, ' +
+  'first_utm_term, first_seen_at';
 
 /**
  * Pagination helper — works around Supabase Cloud's `db-max-rows = 1000`
@@ -1103,6 +1108,27 @@ export async function fetchOrdersAttributionFromPostgres(
         r.order_created_at == null ? null : String(r.order_created_at),
       isFirstOrder:
         r.is_first_order === true ? true : r.is_first_order === false ? false : null,
+      // Phase 4 — first-click. NULL columns → null/false (no first-click
+      // signal), never coerced to 'direct'.
+      firstTouchSource:
+        r.first_touch_source == null ? null : String(r.first_touch_source).trim() || null,
+      firstFbclidPresent: r.first_fbclid_present === true,
+      firstGclidPresent: r.first_gclid_present === true,
+      firstTtclidPresent: r.first_ttclid_present === true,
+      firstUtmSource:
+        r.first_utm_source == null ? null : String(r.first_utm_source).trim() || null,
+      firstUtmMedium:
+        r.first_utm_medium == null ? null : String(r.first_utm_medium).trim() || null,
+      firstUtmCampaign:
+        r.first_utm_campaign == null ? null : String(r.first_utm_campaign).trim() || null,
+      firstUtmContent:
+        r.first_utm_content == null ? null : String(r.first_utm_content).trim() || null,
+      firstUtmId:
+        r.first_utm_id == null ? null : String(r.first_utm_id).trim() || null,
+      firstUtmTerm:
+        r.first_utm_term == null ? null : String(r.first_utm_term).trim() || null,
+      firstSeenAt:
+        r.first_seen_at == null ? null : String(r.first_seen_at).trim() || null,
     });
   }
   return rows;

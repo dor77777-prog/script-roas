@@ -112,6 +112,18 @@ function makeOrderRow(overrides: Partial<OrderAttributionRow>): OrderAttribution
     customerId: 'cust-default',
     orderCreatedAt: '2026-05-01T12:00:00-04:00',
     isFirstOrder: true,
+    // Phase 4 — first-click lens defaults (no first-click signal).
+    firstTouchSource: null,
+    firstFbclidPresent: false,
+    firstGclidPresent: false,
+    firstTtclidPresent: false,
+    firstUtmSource: null,
+    firstUtmMedium: null,
+    firstUtmCampaign: null,
+    firstUtmContent: null,
+    firstUtmId: null,
+    firstUtmTerm: null,
+    firstSeenAt: null,
     ...overrides,
   };
 }
