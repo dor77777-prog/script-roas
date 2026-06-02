@@ -52,6 +52,7 @@ import { salariesForRange } from '@/lib/salarySettings';
 import { fetchJson } from '@/lib/fetchJson';
 import { useAutoRefresh } from '@/lib/hooks/useAutoRefresh';
 import { CogsSettings } from '@/components/CogsSettings';
+import { SalarySettings } from '@/components/SalarySettings';
 import { Button } from '@/components/ui/Button';
 import { AnalysisTrendsTab } from './AnalysisTrendsTab';
 import { AnalysisArchiveTab } from './AnalysisArchiveTab';
@@ -1140,6 +1141,14 @@ function PnLTab({
 
       <GoalTracker data={data} />
 
+      <PnLBreakdown
+        current={filtered.curAgg}
+        storeNames={filtered.visibleStores}
+        rangeFrom={filters.range.from}
+        rangeTo={filters.range.to}
+        rows={filtered.cur}
+      />
+
       <div className="space-y-3">
         <div className="flex justify-end">
           <BillingSettings storeNames={data.stores} />
@@ -1149,12 +1158,9 @@ function PnLTab({
           currentMonth={getTodayInIsraelTz().slice(0, 7)}
           monthsInData={Array.from(new Set(data.rows.map((r) => r.date.slice(0, 7)))).sort()}
         />
-        <PnLBreakdown
-          current={filtered.curAgg}
-          storeNames={filtered.visibleStores}
-          rangeFrom={filters.range.from}
-          rangeTo={filters.range.to}
-          rows={filtered.cur}
+        <SalarySettings
+          currentMonth={getTodayInIsraelTz().slice(0, 7)}
+          monthsInData={Array.from(new Set(data.rows.map((r) => r.date.slice(0, 7)))).sort()}
         />
       </div>
     </div>

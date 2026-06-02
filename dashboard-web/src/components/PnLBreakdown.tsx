@@ -118,10 +118,12 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
   const revenue = current.revenue;
   const pct = (n: number) => (revenue > 0 ? (n / revenue) * 100 : 0);
 
-  const afterAd     = revenue - current.spend;
-  const afterCogs   = afterAd - current.cogs;
-  const afterFees   = afterCogs - current.transactionFees;
-  const finalProfit = afterFees - current.fixedCosts;
+  const afterAd       = revenue - current.spend;
+  const afterCogs     = afterAd - current.cogs;
+  const afterFees     = afterCogs - current.transactionFees;
+  const afterFixed    = afterFees - current.fixedCosts;
+  const salaries      = current.salaries ?? 0;
+  const finalProfit   = afterFixed - salaries;
 
   // "Configured" means: at least one active recurring entry OR at least one
   // one-time entry inside the visible range.
@@ -144,7 +146,7 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
 
   // Total costs displayed in the hero strip (everything between revenue and
   // net profit). Used to size the relative bars side-by-side.
-  const totalCosts = current.spend + current.cogs + current.transactionFees + current.fixedCosts;
+  const totalCosts = current.spend + current.cogs + current.transactionFees + current.fixedCosts + (current.salaries ?? 0);
   const maxAmount = Math.max(revenue, totalCosts, Math.abs(finalProfit), 1);
 
   // Effective rates actually applied this period (NOT hardcoded). cogs is
@@ -292,8 +294,19 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
                   ? `${activeForScope.length} מנויים פעילים${oneTimeInScope.length > 0 ? ` + ${oneTimeInScope.length} חד-פעמיים` : ''} · ${current.daysCovered} ימים מתוך 30`
                   : 'לא הוגדרו עלויות — לחץ על "עלויות חודשיות" למעלה'
               }
-              running={finalProfit}
+              running={afterFixed}
             />
+            {salaries > 0 && (
+              <PnLLine
+                testid="pnl-line-salaries"
+                label="משכורות"
+                amount={-salaries}
+                pct={-pct(salaries)}
+                tone="cost"
+                note={revenue > 0 ? `לפי הגדרה · ${((salaries / revenue) * 100).toFixed(1)}% מהמחזור` : 'לפי הגדרה'}
+                running={finalProfit}
+              />
+            )}
 
             {/* Final result line */}
             <li
@@ -455,6 +468,7 @@ function PnLLine({
   tone,
   note,
   running,
+  testid,
 }: {
   label: string;
   amount: number;
@@ -465,9 +479,13 @@ function PnLLine({
    * rows that annotate but do NOT advance the cascade — see the "החזרים בתקופה"
    * row in the main cascade for the canonical example). */
   running: number | null;
+  /** Optional test hook on this line's own <li> (avoids an invalid li-in-li
+   * wrapper). Used by the salaries line so it can be targeted directly. */
+  testid?: string;
 }) {
   return (
     <li
+      data-testid={testid}
       className={cn(
         'grid items-center gap-x-3 py-2 border-b border-glass-edge/40 last:border-b-0',
         'grid-cols-[1fr_120px] sm:grid-cols-[1fr_120px_140px]',
