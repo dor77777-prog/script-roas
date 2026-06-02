@@ -253,7 +253,7 @@ function PctField({ label, testid, value, onChange }: { label: string; testid: s
 
 function Radio({ name, testid, checked, onChange, label }: { name: string; testid: string; checked: boolean; onChange: () => void; label: string }) {
   return (
-    <label className="flex items-center gap-2 text-sm text-ink-2 cursor-pointer">
+    <label className="flex items-center gap-2 text-sm text-ink-secondary cursor-pointer">
       <Input type="radio" name={name} data-testid={testid} checked={checked} onChange={onChange} className="accent-accent w-4 h-4" />
       <span>{label}</span>
     </label>

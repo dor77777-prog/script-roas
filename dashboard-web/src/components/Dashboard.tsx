@@ -1123,8 +1123,8 @@ function PnLTab({
       <SectionIntro
         icon={<Receipt size={20} />}
         title="הרווח שלך לתקופה"
-        description="כל ההכנסות פחות כל ההוצאות — ad spend, COGS (25%), עמלות עיבוד (6.5%), ועלויות חודשיות קבועות (מנויים + חד-פעמיים) — עד לרווח נטו אמיתי. שנה טווח או חנות וכל המספרים יתעדכנו."
-        formula="רווח נטו = הכנסות − Ad Spend − COGS − Transaction Fees − Fixed Costs"
+        description="כל ההכנסות פחות כל ההוצאות — ad spend, COGS (25%), עמלות עיבוד (6.5%), עלויות חודשיות קבועות (מנויים + חד-פעמיים), ומשכורות (7%) — עד לרווח נטו אמיתי. שנה טווח או חנות וכל המספרים יתעדכנו."
+        formula="רווח נטו = הכנסות − Ad Spend − COGS − Transaction Fees − Fixed Costs − Salaries"
       />
       <PageScope
         store={filters.store === 'All' ? 'כל החנויות' : filters.store}

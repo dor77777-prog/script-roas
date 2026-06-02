@@ -136,7 +136,7 @@ describe('salariesForRange', () => {
   });
 });
 
-import { applySalaryToScope, type SalaryApplyScope } from '@/lib/salarySettings';
+import { applySalaryToScope } from '@/lib/salarySettings';
 
 describe('applySalaryToScope — the 4 apply-scopes (business-only)', () => {
   const base = (): SalarySettings => ({

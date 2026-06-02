@@ -554,6 +554,8 @@ Open /operator for details: https://roas-dashboard-smoky.vercel.app/operator
 > **Plan A — framing + guards (2026-06-02):** נוסף guard ב-vitest שמוודא ש-`cronDaily` ו-`cronLive` כותבים את **אותו key-set** ל-`orders_attribution` (מונע dual-write drift), ו-guard נוסף שמוודא שה-SELECT string ב-`postgresReaders` כולל כל עמודה נצרכת (מונע persisted-but-invisible). שכבת ה-UI: ROAS המעורב תויג **MER**, ROAS פר-פלטפורמה הורד ל"מכוון בלבד" (directional), נוסף צ'יפ **כיסוי ייחוס** (hero בלבד, שקט), ו-`fetchJsonOrNull` איחד 4 fetchers כפולים. הכל read-only מול פלטפורמות המודעות.
 >
 > **Phase 0 — correctness fixes (2026-06-02, post-Plan-A):** (1) **צ'יפ כיסוי-הייחוס היה תקוע על 100%.** `hasAttributionSignal` (`lib/home/adapters.ts`) ספר `source.trim() !== ''` כסימן ייחוס — אבל ה-writer (`lib/fetchers/shopify.ts`) **לעולם לא פולט `''`**; ברירת-המחדל בסוף שרשרת הסיווג היא `'direct'`. לכן לכל הזמנה היה source לא-ריק → `covered === total` תמיד → 100% מתמטית. תוקן: `'direct'` (ו-`''`) הם דלי ה"לא ידוע" ולא נספרים כמכוסים; נספר רק **סימן חיובי אמיתי** (fbclid/gclid/utm_*/ערוץ-מזוהה כמו meta-paid/…/other-referral). ה-fixture של מבחן הכיסוי השתמש ב-`source:''` הבלתי-אפשרי בייצור והסתיר את הבאג. (2) **aiReport**: דלי המקור עכשיו מקפל `'' → 'direct'` (מתואם ל-`attributionAnalysis.ts:1205`), וה-deterministic-coverage יושר לכלול `utm_source` כפי שתיעודו תמיד טען. שתי ההתאמות **display-only** (אינן מזינות שום gate). ראה סעיף 16 לתיקון פער ה-state-keys (COGS).
+>
+> **Salaries — editable, true-net-only (2026-06-02):** `lib/salarySettings.ts` משקף את תבנית ה-COGS אך **ברמת-עסק בלבד**: מודל `{ default, byMonth }` של `SalaryEntry = { kind:'percent'|'amount'; value }`, ברירת מחדל **7% percent**. `salariesForRange(s, rows, range)` — לכל חודש שיש לו שורה בטווח: percent → `value% × Σ הכנסות החודש בתוך הטווח`; amount → `value × (ימי-החודש-בטווח ÷ ימי-החודש)`. `applySalaryToScope` = 4 תחולות. נשמר ב-localStorage + `pushCloudKey('roas-dashboard:salary-settings')` (סעיף 16). **הניכוי נכנס ב-`trueNetProfit` בלבד:** `aggregate()` קיבל פרמטר אופציונלי `salaries=0` (חמישי) המנוכה רק ב-`trueNetProfit` + שדה `Aggregate.salaries` חדש; **הרווח התפעולי (`revenue − adSpend − COGS` ב-`lib/home/adapters.ts`) וה-`netProfit` הישן לא נוגעים.** `Dashboard.tsx` מחשב `salariesForRange(salarySettings, cur, range)` ומשחיל אותו לשני קריאות `aggregate` (curAgg/prevAgg) — כך הניכוי מכבד את מסנני החנות/טווח, בדיוק כמו COGS. `PnLBreakdown` מציג קו "משכורות" (כש-salaries>0) בין "הוצאות קבועות" ל-"רווח נטו אמיתי", ו-`totalCosts` כולל אותו. **per-store ROAS cards לא מקבלים משכורות** (business-level בלבד).
 | WhatsApp test | POST `/api/operator/whatsapp/send-now` | Inngest `event-whatsapp-send-now` |
 | Reset Data | POST `/api/operator/reset` `{scope,confirm}` | ישיר ל-Supabase admin client |
 
@@ -751,6 +753,7 @@ Single threshold (`refundDeduction ≥ 20% × grossRevenue` OR `≥ $500`) lives
 | `roas:productMapChipHidden` | ❌ (per-device) |
 | `roas:campaigns:columnPrefs` (visibility + order) | ✅ |
 | `roas-dashboard:cogs-settings` (אחוז COGS לעריכה) | ✅ (תוקן 2026-06-02) |
+| `roas-dashboard:salary-settings` (משכורות %/סכום לעריכה) | ✅ (2026-06-02) |
 
 ### 16.3 Read pattern
 ב-mount, הקומפוננטה קוראת מ-localStorage. ברקע, `useCloudSync` מבקש את ה-server value וממזג. השרת תמיד win על קונפליקט (אחרון-כותב, סינגל-משתמש מבטיח שאין race).
@@ -758,7 +761,7 @@ Single threshold (`refundDeduction ≥ 20% × grossRevenue` OR `≥ $500`) lives
 ### 16.4 Client/server state-key parity (guard, 2026-06-02)
 מפתח מסונכרן חי ב-**שתי רשימות שחייבות להסכים**: הלקוח `cloudSync.ts:STATE_KEYS` (מה נשלח), והשרת `dashboardStateKeys.ts:ALLOWED_STATE_KEYS` (ה-allowlist ש-`/api/dashboard-state` POST מאמת — מפתח לא-ברשימה מקבל **400 "unknown key"** ולא נכתב). הן לא יכולות לחלוק מערך אחד כי `cloudSync.ts` הוא browser-side (`window`/`localStorage`) וייבוא שלו לתוך ה-server bundle היה גורר client-only refs.
 
-**באג שתוקן (2026-06-02):** `cogs-settings` היה ב-`STATE_KEYS` (הלקוח דחף) אבל **חסר** מ-`ALLOWED_STATE_KEYS` → כל שמירת COGS קיבלה 400 ונשארה מקומית-למכשיר. תוקן בהוספת המפתח ל-allowlist. כדי שזה לא יישנה, `src/lib/__tests__/stateKeysParity.test.ts` אוכף **שוויון-קבוצות דו-כיווני** בין שתי הרשימות (אחרי הסרת תחילית `roas-dashboard:`). **כל מפתח מסונכרן חדש (למשל `salary-settings` הקרוב) חייב להתווסף לשתי הרשימות, אחרת ה-guard נכשל.** (ה-`OPERATOR_SECRET` בכוונה אינו מסונכרן — קרדנציאל אבטחה מקומי-למכשיר.)
+**באג שתוקן (2026-06-02):** `cogs-settings` היה ב-`STATE_KEYS` (הלקוח דחף) אבל **חסר** מ-`ALLOWED_STATE_KEYS` → כל שמירת COGS קיבלה 400 ונשארה מקומית-למכשיר. תוקן בהוספת המפתח ל-allowlist. כדי שזה לא יישנה, `src/lib/__tests__/stateKeysParity.test.ts` אוכף **שוויון-קבוצות דו-כיווני** בין שתי הרשימות (אחרי הסרת תחילית `roas-dashboard:`). **כל מפתח מסונכרן חדש חייב להתווסף לשתי הרשימות, אחרת ה-guard נכשל.** (ה-`OPERATOR_SECRET` בכוונה אינו מסונכרן — קרדנציאל אבטחה מקומי-למכשיר.) **עודכן 2026-06-02:** מפתח `salary-settings` (פיצ'ר המשכורות) נוסף לשתי הרשימות — ה-guard נשאר ירוק.
 
 ---
 

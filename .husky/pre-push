@@ -1,5 +1,10 @@
 #!/usr/bin/env sh
-# Phase 13.3 — pre-push gate: tsc + vitest + lint + docs-currency.
+# Phase 13.3 — pre-push gate: tsc + vitest (node + dom) + lint + docs-currency.
+#
+# 2026-06-02: added the DOM vitest suite below. The node `npm test` config does
+# NOT include the jsdom/component suite (vitest.config.dom.ts), so a red DOM test
+# could previously reach main unnoticed (it did — the coverage-chip tooltip test).
+# Both suites now gate the push.
 #
 # Bypass with `git push --no-verify` ONLY when the change is intentionally
 # excluded from the gate (e.g. a no-rules refactor that demonstrably has
@@ -12,8 +17,11 @@ set -e
 echo "▶ tsc (no emit)"
 ( cd dashboard-web && npx tsc --noEmit )
 
-echo "▶ vitest"
+echo "▶ vitest (node)"
 ( cd dashboard-web && npm test )
+
+echo "▶ vitest (dom)"
+( cd dashboard-web && npx vitest run --config vitest.config.dom.ts )
 
 echo "▶ lint"
 ( cd dashboard-web && npm run lint )
