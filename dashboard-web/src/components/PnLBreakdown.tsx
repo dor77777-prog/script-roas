@@ -147,6 +147,14 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
   const totalCosts = current.spend + current.cogs + current.transactionFees + current.fixedCosts;
   const maxAmount = Math.max(revenue, totalCosts, Math.abs(finalProfit), 1);
 
+  // Effective rates actually applied this period (NOT hardcoded). cogs is
+  // already recomputed per-store/per-month upstream (applyCogsToRows), so
+  // cogs/revenue is the real blended COGS %. Fees rate is the constant the
+  // fee line uses.
+  const effectiveCogsPctText =
+    revenue > 0 ? `${((current.cogs / revenue) * 100).toFixed(1)}%` : 'לכל חנות';
+  const feesPctText = `${(TRANSACTION_FEES_RATE * 100).toFixed(1)}%`;
+
   return (
     <section className="rounded-2xl bg-glass-1 border border-glass-edge shadow-glass overflow-hidden">
       {/* Hero strip — always visible. Three big numbers side-by-side with
@@ -221,7 +229,7 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
               <AlertCircle size={14} className="text-status-warningFg shrink-0 mt-0.5" />
               <div className="text-[11px] sm:text-xs text-status-warningFg leading-relaxed">
                 <strong>טרם הוגדרו עלויות חודשיות.</strong> ה-P&amp;L כרגע משקלל רק
-                COGS (25%) ו-Transaction Fees (6.5%) — בלי Shopify Plan,
+                COGS ({effectiveCogsPctText}) ו-Transaction Fees ({feesPctText}) — בלי Shopify Plan,
                 אפליקציות, או שירות אימייל. לחץ על{' '}
                 <span className="inline-flex items-center gap-1 px-1 py-0.5 rounded bg-status-warningBg font-semibold">
                   <SettingsIcon size={10} /> עלויות חודשיות
