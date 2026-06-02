@@ -1907,7 +1907,12 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
                 roas: (
                   <SortHeader
                     key="roas"
-                    label="ROAS"
+                    label={
+                      <span className="inline-flex flex-col items-center leading-tight">
+                        <span>ROAS</span>
+                        <span className="text-[9px] text-ink-muted font-normal">מכוון · directional</span>
+                      </span>
+                    }
                     sortKey="roas"
                     activeKey={sortKey}
                     dir={sortDir}
