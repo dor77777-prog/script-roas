@@ -63,12 +63,33 @@ Same file, also before `</head>` (runs on every page; `/cart/update.js` is idemp
 
 ---
 
-## usmile360 (Lovable headless) — second, more involved
-usmile's frontend is Lovable (Shopify is checkout/infra only), so `/cart/update.js` cart attributes aren't the path. Instead:
-1. In the **Lovable** site, add the **Step 1 cookie snippet** (capture first-touch from the landing URL).
-2. At cart/checkout creation, send the first-touch to the dashboard's existing **`/api/events/cart`** beacon, keyed by the cart/checkout **token**; the dashboard JOINs it to the order by token at read time.
+## usmile360 (Lovable headless, Shopify Storefront API cart) — DONE via cart attributes
+usmile's Lovable frontend builds the cart through the **Shopify Storefront API** (GraphQL `cartCreate`/`cartLinesAdd`). So the first-touch attaches as **cart attributes** via the `cartAttributesUpdate` mutation — which carry onto the order's `note_attributes` → the **same deployed classifier** reads them. **No dashboard code needed.**
 
-This needs the Lovable snippet + the cart/checkout token passthrough. Flag me when you want to do usmile and I'll provide the exact Lovable beacon snippet + confirm the read-time JOIN.
+**Step 1** — add the first-touch cookie snippet (identical to the themed stores) to the Lovable site `<head>`/global script.
+
+**Step 2** — call this after the cart has an ID (post `cartCreate`/`cartLinesAdd`), ideally right before checkout, reusing the **same Storefront token** the Lovable site already uses:
+
+```js
+async function attachFirstTouchToCart(cartId, storefrontToken, shopDomain) {
+  try {
+    var m = document.cookie.match('(?:^|; )_ft=([^;]*)');
+    if (!m || !cartId) return;
+    var ft = JSON.parse(decodeURIComponent(m[1]));
+    var attributes = Object.keys(ft).map(function (k) { return { key: '_ft_' + k, value: String(ft[k]) }; });
+    await fetch('https://' + shopDomain + '/api/2026-04/graphql.json', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Shopify-Storefront-Access-Token': storefrontToken },
+      body: JSON.stringify({
+        query: 'mutation($cartId:ID!,$attributes:[AttributeInput!]!){cartAttributesUpdate(cartId:$cartId,attributes:$attributes){userErrors{message}}}',
+        variables: { cartId: cartId, attributes: attributes },
+      }),
+    });
+  } catch (e) {}
+}
+```
+
+Storefront cart attributes carry onto the order's `note_attributes` → classifier normalizes `_ft_` → `ft_` → `first_*`. CAPI-safe (one Storefront cart mutation; zero pixel/CAPI events).
 
 ---
 
