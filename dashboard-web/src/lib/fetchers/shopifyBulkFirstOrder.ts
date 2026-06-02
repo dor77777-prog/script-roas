@@ -115,6 +115,47 @@ export function resolveFirstOrdersFromBulkLines(
   return result;
 }
 
+/**
+ * Pure resolver: Bulk lines → one earliest-order row per customer, shaped for
+ * the `customer_first_order` ledger seed (Phase 3 full-history backfill).
+ *
+ * For each (customer) it picks the earliest order — MIN createdAt, with the
+ * smallest order-id tail as a deterministic lexicographic tiebreak (matching
+ * resolveFirstOrdersFromBulkLines). Guest lines (no customer id) are SKIPPED
+ * entirely: the ledger is keyed by customer, so a guest has nowhere to live.
+ *
+ * Output ids are gidTail-normalized (numeric tails) so they match the REST
+ * order_id / customer_id tails already stored in orders_attribution.
+ */
+export function resolveCustomerFirstOrders(
+  lines: BulkOrderLine[],
+): { customerId: string; firstOrderId: string; firstCreatedAt: string }[] {
+  // earliest line per customer: { orderTail, createdAt }
+  const best = new Map<string, { tail: string; createdAt: string }>();
+
+  for (const l of lines) {
+    const custId = l.customer?.id ? gidTail(l.customer.id) : null;
+    if (!custId) continue; // guest → no ledger row
+    const tail = gidTail(l.id);
+    const cur = best.get(custId);
+    const isEarlier =
+      !cur ||
+      l.createdAt < cur.createdAt ||
+      (l.createdAt === cur.createdAt && tail < cur.tail);
+    if (isEarlier) best.set(custId, { tail, createdAt: l.createdAt });
+  }
+
+  const out: { customerId: string; firstOrderId: string; firstCreatedAt: string }[] = [];
+  for (const [customerId, winner] of best) {
+    out.push({
+      customerId,
+      firstOrderId: winner.tail,
+      firstCreatedAt: winner.createdAt,
+    });
+  }
+  return out;
+}
+
 /** Kick off the Bulk export; returns the bulk operation gid. Throws on userErrors. */
 export async function startBulkFirstOrderExport(storeId: string): Promise<string> {
   const domain = requireDomain(storeId);
