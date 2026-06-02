@@ -105,6 +105,9 @@ import {
 // fetchers + getFxRate) are no longer needed in cron-live.
 import { getSupabaseAdmin } from '@/lib/supabaseAdmin';
 import { TIKTOK_ACTIVE_ENOUGH } from '@/lib/platformConfig';
+// Phase 0 (2026-06-02) — dual-write parity: reuse cronDaily's canonical
+// orders_attribution row mapper instead of hand-rolling a second literal.
+import { toOrdersAttributionRow } from '@/inngest/functions/cronDaily';
 // Phase 12.5.x (2026-05-24) — token-failure alerts. Same wiring as cronDaily;
 // cron-live catches see token expiry first (every 10 min), so the operator
 // gets the alert within ~10 min of the token going dead. notifyTokenFailure
@@ -679,23 +682,7 @@ async function runLiveForStoreInner(
     // never reverted.
     if (todayOrders.length > 0) {
       const admin = getSupabaseAdmin();
-      const orderRows = todayOrders.map((o) => ({
-        store_id: o.storeId,
-        order_id: o.orderId,
-        date: o.date,
-        total_cad: o.totalCad,
-        source: o.source,
-        utm_source: o.utmSource,
-        utm_medium: o.utmMedium,
-        utm_campaign: o.utmCampaign,
-        utm_content: o.utmContent,
-        fbclid_present: o.fbclidPresent,
-        gclid_present: o.gclidPresent,
-        referrer: o.referrer,
-        utm_id: o.utmId,
-        utm_term: o.utmTerm,
-        line_items: o.lineItems,
-      }));
+      const orderRows = todayOrders.map((o) => toOrdersAttributionRow(o));
       const { error: ordErr } = await admin
         .from('orders_attribution')
         .upsert(orderRows, { onConflict: 'store_id,order_id' });

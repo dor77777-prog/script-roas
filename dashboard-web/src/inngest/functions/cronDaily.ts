@@ -81,6 +81,95 @@ import { recordFreshness } from '@/lib/inngest/freshness';
 // local name at the use sites (minimizes diff churn).
 import { STORES_WITH_TIKTOK_IDS as STORES_WITH_TIKTOK } from '@/lib/platformsByStore';
 
+/**
+ * Phase 0 (2026-06-02) — single source of truth for the orders_attribution
+ * UPSERT column shape. cronDaily AND cronLive both build their upsert rows
+ * from this mapper so a new attribution field can't be added to one writer
+ * and silently dropped by the other. `ordersAttributionRowKeys()` is the
+ * dual-write parity guard's read surface.
+ *
+ * Field nullability mirrors the `ShopifyOrderRow` fetcher output
+ * (`src/lib/fetchers/shopify.ts` — the utm fields, referrer and line_items
+ * are nullable); the upsert tolerated those nulls before this extraction,
+ * so the widened types preserve the exact runtime contract while pinning
+ * the column set.
+ */
+export type OrderAttributionUpsertRow = {
+  store_id: string;
+  order_id: string;
+  date: string;
+  total_cad: number;
+  source: string;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  utm_content: string | null;
+  fbclid_present: boolean;
+  gclid_present: boolean;
+  referrer: string | null;
+  utm_id: string | null;
+  utm_term: string | null;
+  line_items: unknown;
+};
+
+export function toOrdersAttributionRow(o: {
+  storeId: string;
+  orderId: string;
+  date: string;
+  totalCad: number;
+  source: string;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  utmContent: string | null;
+  fbclidPresent: boolean;
+  gclidPresent: boolean;
+  referrer: string | null;
+  utmId: string | null;
+  utmTerm: string | null;
+  lineItems: unknown;
+}): OrderAttributionUpsertRow {
+  return {
+    store_id: o.storeId,
+    order_id: o.orderId,
+    date: o.date,
+    total_cad: o.totalCad,
+    source: o.source,
+    utm_source: o.utmSource,
+    utm_medium: o.utmMedium,
+    utm_campaign: o.utmCampaign,
+    utm_content: o.utmContent,
+    fbclid_present: o.fbclidPresent,
+    gclid_present: o.gclidPresent,
+    referrer: o.referrer,
+    utm_id: o.utmId,
+    utm_term: o.utmTerm,
+    line_items: o.lineItems,
+  };
+}
+
+export function ordersAttributionRowKeys(): string[] {
+  return Object.keys(
+    toOrdersAttributionRow({
+      storeId: '',
+      orderId: '',
+      date: '',
+      totalCad: 0,
+      source: '',
+      utmSource: '',
+      utmMedium: '',
+      utmCampaign: '',
+      utmContent: '',
+      fbclidPresent: false,
+      gclidPresent: false,
+      referrer: '',
+      utmId: '',
+      utmTerm: '',
+      lineItems: [],
+    }),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // STORES — single source of truth for the 3 stores. Aligns with:
 //   - Config.gs:22-26 STORES (uzoshop / zolplus / usmile360)
@@ -1416,23 +1505,7 @@ async function runDailyForStoreInner(
     // as-is; the postgresReaders parser at line 101-120 reads it back
     // into the dashboard shape.
     if (shopify.orders.length > 0) {
-      const orderRows = shopify.orders.map((o) => ({
-        store_id: o.storeId,
-        order_id: o.orderId,
-        date: o.date,
-        total_cad: o.totalCad,
-        source: o.source,
-        utm_source: o.utmSource,
-        utm_medium: o.utmMedium,
-        utm_campaign: o.utmCampaign,
-        utm_content: o.utmContent,
-        fbclid_present: o.fbclidPresent,
-        gclid_present: o.gclidPresent,
-        referrer: o.referrer,
-        utm_id: o.utmId,
-        utm_term: o.utmTerm,
-        line_items: o.lineItems,
-      }));
+      const orderRows = shopify.orders.map((o) => toOrdersAttributionRow(o));
       const { error } = await admin
         .from('orders_attribution')
         .upsert(orderRows, { onConflict: 'store_id,order_id' });
