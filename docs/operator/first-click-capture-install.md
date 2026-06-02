@@ -71,13 +71,14 @@ usmile's Lovable frontend builds the cart through the **Shopify Storefront API**
 **Step 2** — call this after the cart has an ID (post `cartCreate`/`cartLinesAdd`), ideally right before checkout, reusing the **same Storefront token** the Lovable site already uses:
 
 ```js
-async function attachFirstTouchToCart(cartId, storefrontToken, shopDomain) {
+// canonical Storefront domain for usmile (verified same store as the dashboard's 360usmile Admin fetch)
+async function attachFirstTouchToCart(cartId, storefrontToken) {
   try {
     var m = document.cookie.match('(?:^|; )_ft=([^;]*)');
     if (!m || !cartId) return;
     var ft = JSON.parse(decodeURIComponent(m[1]));
     var attributes = Object.keys(ft).map(function (k) { return { key: '_ft_' + k, value: String(ft[k]) }; });
-    await fetch('https://' + shopDomain + '/api/2026-04/graphql.json', {
+    await fetch('https://lovable-project-lv0v0.myshopify.com/api/2026-04/graphql.json', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Shopify-Storefront-Access-Token': storefrontToken },
       body: JSON.stringify({
@@ -87,9 +88,10 @@ async function attachFirstTouchToCart(cartId, storefrontToken, shopDomain) {
     });
   } catch (e) {}
 }
+// call right before checkout: attachFirstTouchToCart(cartId, '<your storefront token>')
 ```
 
-Storefront cart attributes carry onto the order's `note_attributes` → classifier normalizes `_ft_` → `ft_` → `first_*`. CAPI-safe (one Storefront cart mutation; zero pixel/CAPI events).
+Domain note: usmile's canonical myshopify domain is `lovable-project-lv0v0.myshopify.com` (what Lovable's Storefront API uses); the dashboard fetches its orders via the alias `360usmile.myshopify.com` — verified to be the **same store**, so the cart attributes reach the dashboard. Storefront cart attributes carry onto the order's `note_attributes` → classifier normalizes `_ft_` → `ft_` → `first_*`. CAPI-safe (one Storefront cart mutation; zero pixel/CAPI events).
 
 ---
 
