@@ -30,7 +30,7 @@ type Props = {
 // network request — same `/api/data?from=...&to=...` URL is hit by both
 // children of AnalysisArchiveTab).
 const fetcher = async (url: string): Promise<DashboardData> => {
-  const res = await fetch(url);
+  const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as { error?: string };
     throw new Error(body?.error || `Failed to load (${res.status})`);

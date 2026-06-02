@@ -39,6 +39,8 @@ describe('CogsSettings', () => {
 
   it('timeline marks an edited month with "נערך" and an un-edited month with "ברירת מחדל"', () => {
     render(<CogsSettings storeNames={['uzoshop']} currentMonth="2026-06" monthsInData={['2026-05','2026-06']} />);
+    // The months timeline is collapsed by default — expand it before asserting.
+    fireEvent.click(screen.getByTestId('cogs-timeline-toggle'));
     // Before editing, the current month shows the default badge, not the edited badge.
     expect(screen.getByTestId('cogs-default-2026-06')).toBeTruthy();
     expect(screen.queryByTestId('cogs-edited-2026-06')).toBeNull();
@@ -69,5 +71,28 @@ describe('CogsSettings', () => {
     expect(bm['2026-05']).toBe(20); // previous month, not in monthsInData
     expect(bm['2025-07']).toBe(20); // ~11 months back, still inside the 18-month window
     expect(bm['2026-06']).toBeUndefined(); // current month is excluded by all-previous
+  });
+
+  it('hides the months timeline by default (collapsed)', () => {
+    render(<CogsSettings storeNames={['uzoshop']} currentMonth="2026-06" monthsInData={['2026-05','2026-06']} />);
+    const toggle = screen.getByTestId('cogs-timeline-toggle');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    // Collapsed → the timeline region and its rows are not in the DOM at all.
+    expect(screen.queryByTestId('cogs-timeline')).toBeNull();
+    expect(screen.queryByTestId('cogs-default-2026-06')).toBeNull();
+  });
+
+  it('expands the months timeline on toggle click and collapses again on a second click', () => {
+    render(<CogsSettings storeNames={['uzoshop']} currentMonth="2026-06" monthsInData={['2026-05','2026-06']} />);
+    const toggle = screen.getByTestId('cogs-timeline-toggle');
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(screen.getByTestId('cogs-timeline')).toBeTruthy();
+    expect(screen.getByTestId('cogs-default-2026-06')).toBeTruthy();
+
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(screen.queryByTestId('cogs-timeline')).toBeNull();
   });
 });

@@ -41,7 +41,7 @@ import { HelpTooltip } from '@/components/ui/Tooltip';
 import { InsightActions } from '@/components/insights/InsightActions';
 import { useStoreAdAccounts } from '@/lib/hooks/useStoreAdAccounts';
 
-const fetcher = (url: string) => fetch(url).then(r => (r.ok ? r.json() : null));
+const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(r => (r.ok ? r.json() : null));
 
 const SEVERITY_META: Record<
   Severity,

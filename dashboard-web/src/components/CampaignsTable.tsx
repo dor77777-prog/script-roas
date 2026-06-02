@@ -116,7 +116,7 @@ type SortKey =
 type SortDir = 'asc' | 'desc';
 
 const fetcher = async (url: string) => {
-  const r = await fetch(url);
+  const r = await fetch(url, { cache: 'no-store' });
   if (!r.ok) {
     const body = await r.json().catch(() => ({}));
     throw new Error(body?.error || `HTTP ${r.status}`);
@@ -321,7 +321,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   const { data: storeMeta } = useSWR<{ rows: Array<{ storeId: string; metaAdAccountId: string | null; googleAdsCustomerId: string | null; tiktokAdvertiserId: string | null }> }>(
     '/api/store-meta',
     async (url: string) => {
-      const r = await fetch(url);
+      const r = await fetch(url, { cache: 'no-store' });
       if (!r.ok) return { rows: [] };
       return r.json();
     },
@@ -352,7 +352,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   const { data: localDailyResp } = useSWR<{ rows: import('@/lib/types').DailyRow[] }>(
     buildDateRangeKey('/api/data', localRange),
     async (url: string) => {
-      const r = await fetch(url);
+      const r = await fetch(url, { cache: 'no-store' });
       if (!r.ok) return { rows: [] };
       return r.json();
     },
@@ -368,7 +368,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   const { data: productsResp } = useSWR<ProductsResponse>(
     buildDateRangeKey('/api/products', localRange),
     async (url: string) => {
-      const r = await fetch(url);
+      const r = await fetch(url, { cache: 'no-store' });
       if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
       return r.json();
     },
@@ -388,7 +388,7 @@ export function CampaignsTable({ range, store: globalStore, stores, dailyRows }:
   const { data: ordersAttrResp } = useSWR<OrdersAttributionResponse>(
     ordersAttrKeyBase ? `${ordersAttrKeyBase}&lineItems=true` : null,
     async (url: string) => {
-      const r = await fetch(url);
+      const r = await fetch(url, { cache: 'no-store' });
       if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
       return r.json();
     },

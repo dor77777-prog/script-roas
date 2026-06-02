@@ -623,6 +623,15 @@ for (const table of tables) {
 ### 13.2 ISR
 `/api/campaigns/route.ts` משתמש ב-`export const revalidate = 60`. דאטה רענון אחת ל-60 שניות.
 
+### 13.2.1 Client cache strategy — `no-store` fetchers + silent auto-refresh (2026-06-02)
+**Problem:** on mobile the dashboard would serve stale numbers no matter how often the user refreshed — only fully closing/reopening the tab (or desktop `Cmd+Shift+R`) helped. Two causes: (1) the client fetchers used the browser's *default* cache mode, so mobile browsers served an old cached `/api/*` response; (2) SWR's `revalidateOnFocus` is unreliable on mobile because backgrounded JS is frozen, so the focus revalidation often never fired.
+
+**Fix (two layers):**
+- **`lib/fetchJson.ts`** — single helper doing `fetch(url, { cache: 'no-store' })` + JSON parse + error normalization. The three primary Dashboard fetchers (`/api/data`, `/api/orders-attribution`, `/api/campaigns`) route through it; every *other* client SWR GET fetcher across the app (~18 files: GoalTracker, MonthlyTables, ProductsTable, CampaignsTable, AdsDrawer, campaign-drawer, ActivityFeed, BillingSettings, InsightsBoard, etc.) had `{ cache: 'no-store' }` added inline. `no-store` only bypasses the **browser's** cache; the Vercel CDN still serves its `s-maxage`-fresh copy (≤60s), so origin load is unchanged. Server-side fetchers (`lib/fetchers/*`, e.g. `fx.ts`) are intentionally left as-is.
+- **`lib/hooks/useAutoRefresh.ts`** — mounted once in `Dashboard`. On a fixed interval (**10 min**) AND on every `visibilitychange→visible` (return-to-tab / mobile reopen — fires reliably where SWR focus does not) it calls the global SWR `mutate(() => true, undefined, { revalidate: true })`, revalidating **all** keys. No page reload → filters / scroll / open panels are preserved. The latest callback is held in a ref so a changing closure doesn't tear down the interval/listener.
+
+The manual "רענן הכל" button (`useDashboardRefresh.ts`) is unchanged — it additionally triggers the backend `sync-now` cron and uses a `_t=` query-buster to defeat the CDN too.
+
 ### 13.3 ה-Sheets path
 - `dashboard-web/src/lib/sheets.ts` עוד קיים אבל לא נקרא מ-route handlers (tree-shake out from bundle).
 - `isAllowedStateKey` נשאר ב-`sheets.ts` בשימוש כ-validator ב-`/api/dashboard-state`.

@@ -7,6 +7,7 @@ import { NativeSelect } from '@/components/ui/NativeSelect';
 import {
   TableBase, TableHead, TableRow, TableHeaderCell, TableCell,
 } from '@/components/ui/TableBase';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useCogsSettings } from '@/lib/hooks/useCogsSettings';
 import {
@@ -29,6 +30,10 @@ export function CogsSettings({ storeNames, currentMonth, monthsInData }: {
   });
   const [scopeKind, setScopeKind] = useState<ScopeKind>('current');
   const [specificMonth, setSpecificMonth] = useState<string>(currentMonth);
+  // The per-month timeline is collapsed by default — it's a reference/audit
+  // view, not something the operator needs open every time the COGS panel
+  // renders. Operators expand it on demand.
+  const [timelineOpen, setTimelineOpen] = useState(false);
 
   // Fixed 18-month lookback ending at currentMonth, UNIONed with the months
   // actually present in the loaded range (monthsInData) and every explicit
@@ -130,9 +135,27 @@ export function CogsSettings({ storeNames, currentMonth, monthsInData }: {
         ברירת מחדל {DEFAULT_COGS_PCT}% לכל חודש שלא נערך. השינוי רטרואקטיבי ומיידי בכל הדשבורד. מסונכרן לענן.
       </p>
 
-      {/* timeline */}
-      <div className="overflow-auto">
-        <TableBase density="compact" className="text-xs">
+      {/* timeline — collapsible (collapsed by default) */}
+      <div className="pt-1">
+        <Button
+          type="button"
+          variant="ghost"
+          data-testid="cogs-timeline-toggle"
+          aria-expanded={timelineOpen}
+          aria-controls="cogs-timeline-region"
+          onClick={() => setTimelineOpen((v) => !v)}
+          className="gap-1 h-auto px-2 py-1 text-[11px] sm:text-xs font-medium text-ink-secondary hover:text-ink"
+        >
+          {timelineOpen ? 'הסתר טבלת חודשים' : 'הצג טבלת חודשים'}
+          {timelineOpen ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+        </Button>
+        {timelineOpen && (
+          <div
+            id="cogs-timeline-region"
+            data-testid="cogs-timeline"
+            className="mt-2 overflow-auto animate-fade-in"
+          >
+            <TableBase density="compact" className="text-xs">
           <TableHead>
             <TableRow>
               <TableHeaderCell>חודש</TableHeaderCell>
@@ -168,7 +191,9 @@ export function CogsSettings({ storeNames, currentMonth, monthsInData }: {
               );
             })}
           </tbody>
-        </TableBase>
+            </TableBase>
+          </div>
+        )}
       </div>
     </Card>
   );

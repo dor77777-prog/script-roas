@@ -24,7 +24,7 @@ import { Button } from '@/components/ui/Button';
  * Supabase enters the read path.
  */
 
-const fetcher = (url: string) => fetch(url).then(r => (r.ok ? r.json() : null));
+const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(r => (r.ok ? r.json() : null));
 
 export function SyncIndicator() {
   const [state, setState] = useState<SyncState>(() => getSyncState());

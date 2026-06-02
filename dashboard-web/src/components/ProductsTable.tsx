@@ -35,7 +35,7 @@ const PERIOD_LABELS: Record<Period, string> = {
 };
 
 const fetcher = async (url: string) => {
-  const r = await fetch(url);
+  const r = await fetch(url, { cache: 'no-store' });
   if (!r.ok) {
     const body = await r.json().catch(() => ({}));
     throw new Error(body?.error || `HTTP ${r.status}`);

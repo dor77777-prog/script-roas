@@ -210,7 +210,7 @@ export function CampaignDrawer({
   const { data: campaignsData } = useSWR<CampaignsResponse>(
     open ? buildDateRangeKey('/api/campaigns', drawerRange) : null,
     async (url: string) => {
-      const r = await fetch(url);
+      const r = await fetch(url, { cache: 'no-store' });
       if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
       return r.json();
     },
@@ -219,7 +219,7 @@ export function CampaignDrawer({
   const { data: productsData } = useSWR<ProductsResponse>(
     open ? buildDateRangeKey('/api/products', drawerRange) : null,
     async (url: string) => {
-      const r = await fetch(url);
+      const r = await fetch(url, { cache: 'no-store' });
       if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
       return r.json();
     },
@@ -228,7 +228,7 @@ export function CampaignDrawer({
   const { data: campaignsDataPrev } = useSWR<CampaignsResponse>(
     open && cpmAnalysisMode === 'prev' ? buildDateRangeKey('/api/campaigns', prevRange) : null,
     async (url: string) => {
-      const r = await fetch(url);
+      const r = await fetch(url, { cache: 'no-store' });
       if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
       return r.json();
     },
@@ -238,7 +238,7 @@ export function CampaignDrawer({
   const { data: ordersAttrData } = useSWR<OrdersAttributionResponse>(
     ordersAttrBaseKey ? `${ordersAttrBaseKey}&lineItems=true` : null,
     async (url: string) => {
-      const r = await fetch(url);
+      const r = await fetch(url, { cache: 'no-store' });
       if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
       return r.json();
     },

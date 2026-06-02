@@ -47,6 +47,8 @@ import { readDashboardState, syncUrl, drillToCampaigns, type TabKey } from '@/li
 import { buildDateRangeKey, getTodayInIsraelTz } from '@/lib/dateRange';
 import { useCogsSettings } from '@/lib/hooks/useCogsSettings';
 import { applyCogsToRows } from '@/lib/cogsSettings';
+import { fetchJson } from '@/lib/fetchJson';
+import { useAutoRefresh } from '@/lib/hooks/useAutoRefresh';
 import { CogsSettings } from '@/components/CogsSettings';
 import { Button } from '@/components/ui/Button';
 import { AnalysisTrendsTab } from './AnalysisTrendsTab';
@@ -81,14 +83,11 @@ import {
   toSecondarySparklines,
 } from '@/lib/home/adapters';
 
-const fetcher = async (url: string) => {
-  const res = await fetch(url);
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body?.error || `Failed to load (${res.status})`);
-  }
-  return res.json() as Promise<DashboardData>;
-};
+// All client fetchers route through fetchJson → `cache: 'no-store'` so mobile
+// browsers never serve a stale cached response (the root cause of "data won't
+// refresh until I close/reopen the tab"). The CDN still serves its ≤60s-fresh
+// copy, so this adds no origin load. See lib/fetchJson.ts.
+const fetcher = (url: string) => fetchJson<DashboardData>(url);
 
 // Phase 05.7.8 — orders fetcher (separate response shape from DashboardData).
 // Returns the orders-attribution rows for the current range so the dashboard
@@ -98,14 +97,8 @@ type OrdersResponseShape = {
   lastUpdated: string;
   error?: string;
 };
-const ordersFetcher = async (url: string): Promise<OrdersResponseShape> => {
-  const res = await fetch(url);
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new Error(body?.error || `Failed to load (${res.status})`);
-  }
-  return res.json() as Promise<OrdersResponseShape>;
-};
+const ordersFetcher = (url: string): Promise<OrdersResponseShape> =>
+  fetchJson<OrdersResponseShape>(url);
 
 const initialPreset = 'this_month';
 
@@ -220,6 +213,17 @@ export function Dashboard() {
     window.addEventListener('roas-billing-changed', bump);
     return () => window.removeEventListener('roas-billing-changed', bump);
   }, [filters.range, swrMutate]);
+
+  // Silent auto-refresh: every 10 min AND whenever the tab/app regains focus
+  // (return-to-tab on desktop, reopen on mobile), revalidate EVERY SWR key in
+  // the app. Combined with the `no-store` fetchers (lib/fetchJson.ts) this
+  // makes the dashboard pick up backend updates without a page reload and
+  // without the operator having to fully close/reopen the tab on mobile.
+  // No reload → filters, scroll position, and open panels are preserved.
+  useAutoRefresh(
+    () => { void swrMutate(() => true, undefined, { revalidate: true }); },
+    { intervalMs: 600_000 },
+  );
 
   // Mirror state into the URL so refresh / bookmark / share survive. Uses
   // replaceState so we don't pollute the back-button stack.
@@ -1093,14 +1097,8 @@ function PnLTab({
 // ============================================================================
 // Tab: CAMPAIGNS — campaign + ad-set performance with ROAS / CTR / CPC / CPA.
 // ============================================================================
-const campaignsFetcher = async (url: string): Promise<CampaignsResponse> => {
-  const r = await fetch(url);
-  if (!r.ok) {
-    const body = await r.json().catch(() => ({}));
-    throw new Error(body?.error || `HTTP ${r.status}`);
-  }
-  return r.json() as Promise<CampaignsResponse>;
-};
+const campaignsFetcher = (url: string): Promise<CampaignsResponse> =>
+  fetchJson<CampaignsResponse>(url);
 
 function QuadrantScatterCard({
   filters,

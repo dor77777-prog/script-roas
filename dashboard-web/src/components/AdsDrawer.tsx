@@ -68,7 +68,7 @@ type AdSortDir = 'asc' | 'desc';
 // SWR's `error` state activates and the drawer renders an explicit
 // error UI with a retry control.
 const fetcher = async (url: string): Promise<AdsResponse> => {
-  const r = await fetch(url);
+  const r = await fetch(url, { cache: 'no-store' });
   if (!r.ok) throw new Error(`AdsDrawer: ${r.status} ${r.statusText}`);
   return r.json();
 };
@@ -108,7 +108,7 @@ export function AdsDrawer({
   const { data: ordersAttrData } = useSWR<OrdersAttributionResponse>(
     ordersAttrBaseKey,
     async (url: string) => {
-      const r = await fetch(url);
+      const r = await fetch(url, { cache: 'no-store' });
       if (!r.ok) {
         // Degrade silently — no rows means deterministic ROAS chips
         // render "—" but the primary ad list is unaffected.

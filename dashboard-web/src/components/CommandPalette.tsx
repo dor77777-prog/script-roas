@@ -64,7 +64,7 @@ import type { ProductsResponse } from '@/app/api/products/route';
 
 type TabKey = 'home' | 'activity' | 'archive' | 'pnl' | 'trends' | 'campaigns' | 'products' | 'detail';
 
-const fetcher = (url: string) => fetch(url).then(r => (r.ok ? r.json() : null));
+const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(r => (r.ok ? r.json() : null));
 
 type CommandKind = 'tab' | 'preset' | 'store' | 'campaign' | 'product' | 'action';
 

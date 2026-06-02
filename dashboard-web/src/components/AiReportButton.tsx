@@ -16,7 +16,7 @@ import type { AdsResponse } from '@/app/api/ads/route';
 import { buildDateRangeKey } from '@/lib/dateRange';
 import { readProductMap } from '@/lib/campaignProductMap';
 
-const fetcher = (url: string) => fetch(url).then(r => r.ok ? r.json() : null);
+const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(r => r.ok ? r.json() : null);
 
 type Props = {
   data: DashboardData;

@@ -41,7 +41,7 @@ type Props = {
 };
 
 const fetcher = async <T,>(url: string): Promise<T | null> => {
-  const r = await fetch(url);
+  const r = await fetch(url, { cache: 'no-store' });
   if (!r.ok) return null;
   return r.json();
 };

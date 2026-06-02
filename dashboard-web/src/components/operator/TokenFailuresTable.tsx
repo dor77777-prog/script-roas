@@ -40,7 +40,7 @@ const ENDPOINT = '/api/operator/token-failures';
 //
 // The legitimate "zero failures" case is HTTP 200 + {rows:[], no error field}.
 const fetcher = async (url: string): Promise<TokenFailuresResponse> => {
-  const r = await operatorFetch(url);
+  const r = await operatorFetch(url, { cache: 'no-store' });
   if (!r.ok) {
     const body = await r.json().catch(() => ({})) as Record<string, unknown>;
     throw new Error(String(body?.error ?? `HTTP ${r.status}`));

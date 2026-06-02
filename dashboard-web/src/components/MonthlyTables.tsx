@@ -121,7 +121,7 @@ function isoToday(): string {
 }
 
 const fetcher = async (url: string): Promise<DashboardData> => {
-  const res = await fetch(url);
+  const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body?.error || `Failed to load (${res.status})`);

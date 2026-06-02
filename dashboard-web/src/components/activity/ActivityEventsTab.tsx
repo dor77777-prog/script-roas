@@ -60,7 +60,7 @@ const WINDOW_DAYS = 30;
 type TypeFilter = 'all' | StoreEventRow['type'];
 
 const fetcher = async (url: string): Promise<StoreEventsPagedResponse> => {
-  const r = await fetch(url);
+  const r = await fetch(url, { cache: 'no-store' });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json() as Promise<StoreEventsPagedResponse>;
 };

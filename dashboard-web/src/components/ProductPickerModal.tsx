@@ -31,12 +31,12 @@ import type { ProductCatalogResponse } from '@/app/api/product-catalog/route';
  */
 
 const salesFetcher = async (url: string): Promise<ProductsResponse> => {
-  const r = await fetch(url);
+  const r = await fetch(url, { cache: 'no-store' });
   if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString(), dataLastWriteAt: null };
   return r.json();
 };
 const catalogFetcher = async (url: string): Promise<ProductCatalogResponse> => {
-  const r = await fetch(url);
+  const r = await fetch(url, { cache: 'no-store' });
   if (!r.ok) return { rows: [], lastUpdated: new Date().toISOString() };
   return r.json();
 };

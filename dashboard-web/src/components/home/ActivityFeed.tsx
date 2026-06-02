@@ -78,7 +78,7 @@ export interface ActivityFeedProps {
 const LOOKBACK_MS = 15 * 60_000;
 
 const fetcher = async (url: string): Promise<StoreEventsResponse> => {
-  const r = await fetch(url);
+  const r = await fetch(url, { cache: 'no-store' });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json() as Promise<StoreEventsResponse>;
 };

@@ -48,7 +48,7 @@ function addIsoDays(dateStr: string, n: number): string {
 // DashboardData), kept self-contained so the panel never depends on the
 // parent's filtered SWR cache.
 const wideDataFetcher = async (url: string): Promise<DashboardData> => {
-  const res = await fetch(url);
+  const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     throw new Error(body?.error || `Failed to load (${res.status})`);

@@ -38,7 +38,7 @@ type StoreMetaResponse = {
 };
 
 const fetcher = async (url: string): Promise<StoreMetaResponse> => {
-  const r = await fetch(url);
+  const r = await fetch(url, { cache: 'no-store' });
   if (!r.ok) return { rows: [] };
   return r.json();
 };

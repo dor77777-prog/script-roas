@@ -52,7 +52,7 @@ type StoreMetaRow = {
 type StoreMetaResponse = { rows: StoreMetaRow[]; lastUpdated?: string; error?: string };
 
 const metaFetcher = async (url: string): Promise<StoreMetaResponse> => {
-  const r = await fetch(url);
+  const r = await fetch(url, { cache: 'no-store' });
   if (!r.ok) return { rows: [] };
   return (await r.json()) as StoreMetaResponse;
 };
