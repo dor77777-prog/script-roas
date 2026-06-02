@@ -113,16 +113,30 @@ function getAdminClient(): SupabaseClient {
   });
 }
 
+/** "gid://shopify/Order/123" → "123" (matches orders_attribution.order_id tails). */
+function gidTail(gid: string): string {
+  const i = gid.lastIndexOf('/');
+  return i >= 0 ? gid.slice(i + 1) : gid;
+}
+
+type BulkResult = {
+  ledgerRows: LedgerRow[];
+  /** order_id tail → customer_id tail, for EVERY non-guest order in history. */
+  orderToCustomer: Map<string, string>;
+};
+
 /**
  * Export FULL Shopify order history for one store via Bulk Operations, then
- * resolve the earliest order per customer into ledger-shaped rows.
+ * (a) resolve the earliest order per customer into ledger-shaped rows, and
+ * (b) build the per-order → customer map used to backfill customer_id onto the
+ * existing orders_attribution rows (which are May+ only and mostly NULL).
  *
- * Empty url (store had 0 orders, or COMPLETED with no file) → empty array.
+ * Empty url (store had 0 orders, or COMPLETED with no file) → empty result.
  */
-async function computeLedgerRowsForStore(store: StoreId): Promise<LedgerRow[]> {
+async function computeBulkResultForStore(store: StoreId): Promise<BulkResult> {
   await startBulkFirstOrderExport(store);
   const url = await pollBulkFirstOrderUrl(store);
-  if (!url) return [];
+  if (!url) return { ledgerRows: [], orderToCustomer: new Map() };
   const res = await fetchWithBackoff(url, { method: 'GET' }, { provider: 'shopify' });
   if (!res.ok) {
     throw new Error(`bulk ${store} download failed (${res.status})`);
@@ -130,12 +144,69 @@ async function computeLedgerRowsForStore(store: StoreId): Promise<LedgerRow[]> {
   const ndjson = await res.text();
   const lines = parseBulkNdjson(ndjson);
   const resolved = resolveCustomerFirstOrders(lines);
-  return resolved.map((r) => ({
+  const ledgerRows = resolved.map((r) => ({
     store_id: store,
     customer_id: r.customerId,
     first_order_id: r.firstOrderId,
     first_created_at: r.firstCreatedAt,
   }));
+  const orderToCustomer = new Map<string, string>();
+  for (const l of lines) {
+    const cust = l.customer?.id ? gidTail(l.customer.id) : null;
+    if (cust) orderToCustomer.set(gidTail(l.id), cust);
+  }
+  return { ledgerRows, orderToCustomer };
+}
+
+/**
+ * Backfill orders_attribution.customer_id for the EXISTING (May+) rows from the
+ * full-history Bulk map, so the recompute RPC can JOIN them to the ledger.
+ * Surgical: a plain .update() sets ONLY customer_id (never touches total_cad /
+ * source / utm_* / etc.) — no data_daily re-aggregation, no ad re-fetch. Guest
+ * orders (not in the map) are left NULL (correctly unclassifiable). Grouped by
+ * customer so it's one UPDATE per customer, not per order. Returns #rows updated.
+ */
+async function backfillCustomerIds(
+  admin: SupabaseClient,
+  store: StoreId,
+  orderToCustomer: Map<string, string>,
+  dryRun: boolean,
+): Promise<number> {
+  // Which orders does orders_attribution actually hold for this store?
+  const present: string[] = [];
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await admin
+      .from('orders_attribution')
+      .select('order_id')
+      .eq('store_id', store)
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(`select orders_attribution(${store}): ${error.message}`);
+    const batch = (data ?? []) as Array<{ order_id: string }>;
+    for (const r of batch) present.push(String(r.order_id));
+    if (batch.length < PAGE) break;
+  }
+  // Group present order_ids by their (full-history) customer.
+  const byCustomer = new Map<string, string[]>();
+  for (const oid of present) {
+    const cust = orderToCustomer.get(oid);
+    if (!cust) continue; // guest / not in history → leave NULL
+    const arr = byCustomer.get(cust);
+    if (arr) arr.push(oid); else byCustomer.set(cust, [oid]);
+  }
+  let updated = 0;
+  for (const [cust, oids] of byCustomer) {
+    if (!dryRun) {
+      const { error } = await admin
+        .from('orders_attribution')
+        .update({ customer_id: cust })
+        .eq('store_id', store)
+        .in('order_id', oids);
+      if (error) throw new Error(`update customer_id(${store}, cust ${cust}): ${error.message}`);
+    }
+    updated += oids.length;
+  }
+  return updated;
 }
 
 /** UPSERT ledger rows in batches (onConflict store_id,customer_id). */
@@ -165,29 +236,42 @@ async function main(): Promise<void> {
   const mode = DRY_RUN ? 'DRY-RUN' : 'APPLY';
   console.log(`=== First-order LEDGER full-history backfill — ${mode} ===\n`);
 
-  // Validate Supabase creds up-front (clear error) UNLESS dry-run, which never
-  // touches Supabase. In dry-run we still need Shopify creds, which the fetcher
-  // helpers validate per store as they run.
-  const admin = DRY_RUN ? null : getAdminClient();
+  // Supabase is needed for the customer_id count (read) in dry-run AND for the
+  // writes in apply. If creds are missing during dry-run we still report ledger
+  // sizes (Shopify-only); apply requires creds (getAdminClient throws).
+  let admin: SupabaseClient | null = null;
+  try {
+    admin = getAdminClient();
+  } catch (e) {
+    if (!DRY_RUN) throw e;
+    console.log('(no Supabase creds — dry-run will report ledger sizes only)\n');
+  }
 
-  let grandTotal = 0;
+  let grandLedger = 0;
+  let grandUpdated = 0;
   for (const store of STORES) {
     console.log(`--- ${store} ---`);
-    const rows = await computeLedgerRowsForStore(store);
-    grandTotal += rows.length;
-    console.log(`  ledger rows (earliest order per customer): ${rows.length}`);
+    const { ledgerRows, orderToCustomer } = await computeBulkResultForStore(store);
+    grandLedger += ledgerRows.length;
+    console.log(`  ledger rows (earliest order per customer): ${ledgerRows.length}`);
+    console.log(`  full-history orders with a customer:       ${orderToCustomer.size}`);
+
+    if (admin) {
+      const n = await backfillCustomerIds(admin, store, orderToCustomer, DRY_RUN);
+      grandUpdated += n;
+      console.log(`  ${DRY_RUN ? 'would set' : '✓ set'} customer_id on ${n} existing orders_attribution rows`);
+    }
 
     if (DRY_RUN) {
-      console.log(`  DRY-RUN: skipping UPSERT + recompute_first_order_flags`);
       console.log('');
       continue;
     }
 
-    if (rows.length > 0) {
-      await upsertLedgerRows(admin!, rows);
-      console.log(`  ✓ upserted ${rows.length} ledger rows`);
+    if (ledgerRows.length > 0) {
+      await upsertLedgerRows(admin!, ledgerRows);
+      console.log(`  ✓ upserted ${ledgerRows.length} ledger rows`);
     } else {
-      console.log(`  (no rows to upsert)`);
+      console.log(`  (no ledger rows to upsert)`);
     }
     await recomputeFlags(admin!, store);
     console.log(`  ✓ recompute_first_order_flags(${store})`);
@@ -195,12 +279,13 @@ async function main(): Promise<void> {
   }
 
   console.log(`=== Summary ===`);
-  console.log(`Stores processed:        ${STORES.length}`);
-  console.log(`Total ledger rows:       ${grandTotal}`);
+  console.log(`Stores processed:           ${STORES.length}`);
+  console.log(`Total ledger rows:          ${grandLedger}`);
+  console.log(`orders_attribution updated: ${grandUpdated}`);
   if (DRY_RUN) {
-    console.log(`\nDRY-RUN. Re-run WITHOUT DRY_RUN=1 to upsert + recompute.`);
+    console.log(`\nDRY-RUN. Re-run WITHOUT DRY_RUN=1 to upsert + backfill customer_id + recompute.`);
   } else {
-    console.log(`\nAPPLIED (ledger seeded + flags recomputed).`);
+    console.log(`\nAPPLIED (ledger seeded + customer_id backfilled + flags recomputed).`);
   }
 }
 
