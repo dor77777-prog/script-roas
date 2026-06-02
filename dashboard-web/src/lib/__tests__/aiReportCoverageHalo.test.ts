@@ -293,3 +293,197 @@ describe('aiReport coverage clamp removal (Phase 12.2.1 — ALG-07)', () => {
     expect(attr).toBeGreaterThan(0);
   });
 });
+
+/**
+ * Extract the rendered "% deterministic coverage" integer from the Traffic
+ * Source Breakdown prose line (`**כיסוי deterministic**: NN% מההכנסות ...`).
+ * Returns null if the line is absent.
+ */
+function extractDeterministicCoveragePct(md: string): number | null {
+  const m = md.match(/\*\*כיסוי deterministic\*\*: (\d+)%/);
+  return m ? Number(m[1]) : null;
+}
+
+/**
+ * Extract the rendered Traffic Source Breakdown table rows (between the
+ * `## תנועה לפי מקור` header and the next `##` section). Returns the raw
+ * markdown lines that start with `| ` (header + separator + data + total).
+ */
+function extractSourceTableRows(md: string): string[] {
+  const idx = md.indexOf('## תנועה לפי מקור');
+  if (idx < 0) return [];
+  const after = md.slice(idx + '## תנועה לפי מקור'.length);
+  const nextSectionMatch = after.match(/\n## /);
+  const section = nextSectionMatch
+    ? after.slice(0, nextSectionMatch.index)
+    : after;
+  return section.split('\n').filter(l => l.startsWith('| '));
+}
+
+describe("aiReport — fold '' source into 'direct' bucket (Fix #1)", () => {
+  // A defensively-empty source ('') and an explicit 'direct' order must
+  // land in the SAME 'ישיר (no UTM)' bucket — never a separate 'לא ידוע'
+  // row — matching attributionAnalysis.ts:1205 (`o.source || 'direct'`).
+  it("source:'' and source:'direct' both render under the single 'ישיר (no UTM)' row", () => {
+    const daily: DailyRow[] = [makeDaily({})];
+    const orders: OrderAttributionRow[] = [
+      // Defensive empty source — should never occur in prod, but must fold.
+      makeOrder({
+        orderId: 'o-empty',
+        source: '',
+        utmSource: '',
+        fbclidPresent: false,
+        gclidPresent: false,
+        utmId: '',
+        utmCampaign: '',
+        totalCad: 30,
+      }),
+      // Explicit direct order.
+      makeOrder({
+        orderId: 'o-direct',
+        source: 'direct',
+        utmSource: '',
+        fbclidPresent: false,
+        gclidPresent: false,
+        utmId: '',
+        utmCampaign: '',
+        totalCad: 70,
+      }),
+    ];
+    const md = generateAiReport({
+      storeName: STORE_NAME,
+      storeId: STORE_ID,
+      range: RANGE,
+      dailyRows: daily,
+      productRows: [],
+      campaignRows: [],
+      ordersRows: orders,
+      adsRows: [],
+    });
+
+    const rows = extractSourceTableRows(md);
+    expect(rows.length).toBeGreaterThan(0);
+
+    // No dead 'לא ידוע' bucket row may appear.
+    const unknownRows = rows.filter(r => r.includes('לא ידוע'));
+    expect(unknownRows).toHaveLength(0);
+
+    // Exactly one 'ישיר (no UTM)' data row, and it carries BOTH orders
+    // (count = 2, revenue = 100 CAD = 30 + 70).
+    const directRows = rows.filter(
+      r => r.includes('ישיר (no UTM)') && !r.includes('סה"כ'),
+    );
+    expect(directRows).toHaveLength(1);
+    const cells = directRows[0].split('|').map(c => c.trim());
+    // | מקור | הזמנות | % | הכנסות | AOV |
+    // index:  1        2       3      4       5
+    expect(cells[2]).toBe('2'); // both orders folded into one bucket
+  });
+});
+
+describe('aiReport — deterministic coverage aligns with its comment (Fix #2)', () => {
+  // Fixture set (each order 100 CAD → grandTotal 400):
+  //   1. fbclid present, source meta-paid                → deterministic
+  //   2. ONLY utmSource set (other-paid, no click-id)    → deterministic (NEW)
+  //   3. pure direct, no utm/no click-id                 → NOT deterministic
+  //   4. pure direct, no utm/no click-id                 → NOT deterministic
+  // Expected coverage = 200 / 400 = 50%.
+  function buildOrders(): OrderAttributionRow[] {
+    return [
+      makeOrder({
+        orderId: 'o-fbclid',
+        source: 'meta-paid',
+        utmSource: 'facebook',
+        fbclidPresent: true,
+        gclidPresent: false,
+        totalCad: 100,
+      }),
+      makeOrder({
+        orderId: 'o-utmonly',
+        source: 'other-paid',
+        utmSource: 'newsletter',
+        fbclidPresent: false,
+        gclidPresent: false,
+        utmId: '',
+        utmCampaign: '',
+        totalCad: 100,
+      }),
+      makeOrder({
+        orderId: 'o-direct-1',
+        source: 'direct',
+        utmSource: '',
+        fbclidPresent: false,
+        gclidPresent: false,
+        utmId: '',
+        utmCampaign: '',
+        totalCad: 100,
+      }),
+      makeOrder({
+        orderId: 'o-direct-2',
+        source: 'direct',
+        utmSource: '',
+        fbclidPresent: false,
+        gclidPresent: false,
+        utmId: '',
+        utmCampaign: '',
+        totalCad: 100,
+      }),
+    ];
+  }
+
+  it('an order with ONLY utmSource set counts toward deterministic coverage; pure direct does not', () => {
+    const md = generateAiReport({
+      storeName: STORE_NAME,
+      storeId: STORE_ID,
+      range: RANGE,
+      dailyRows: [makeDaily({})],
+      productRows: [],
+      campaignRows: [],
+      ordersRows: buildOrders(),
+      adsRows: [],
+    });
+
+    // 2 of 4 orders (fbclid + utm-only) are deterministic → 50%.
+    const pct = extractDeterministicCoveragePct(md);
+    expect(pct).toBe(50);
+  });
+
+  it('whitespace-only utmSource does NOT count (uses .trim())', () => {
+    const orders: OrderAttributionRow[] = [
+      makeOrder({
+        orderId: 'o-ws',
+        source: 'direct',
+        utmSource: '   ',
+        fbclidPresent: false,
+        gclidPresent: false,
+        utmId: '',
+        utmCampaign: '',
+        totalCad: 100,
+      }),
+      makeOrder({
+        orderId: 'o-real',
+        source: 'other-paid',
+        utmSource: 'tiktok',
+        fbclidPresent: false,
+        gclidPresent: false,
+        utmId: '',
+        utmCampaign: '',
+        totalCad: 100,
+      }),
+    ];
+    const md = generateAiReport({
+      storeName: STORE_NAME,
+      storeId: STORE_ID,
+      range: RANGE,
+      dailyRows: [makeDaily({})],
+      productRows: [],
+      campaignRows: [],
+      ordersRows: orders,
+      adsRows: [],
+    });
+
+    // Only the real utmSource order counts → 1 of 2 → 50%.
+    const pct = extractDeterministicCoveragePct(md);
+    expect(pct).toBe(50);
+  });
+});

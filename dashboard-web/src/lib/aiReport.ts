@@ -622,28 +622,38 @@ export function generateAiReport({
       'other-paid':      'אחר (paid)',
       'other-referral':  'הפניה (לא מסווגת)',
       direct:            'ישיר (no UTM)',
-      '':                'לא ידוע',
     };
     type Bucket = { count: number; revenue: number };
     const bySource: Record<string, Bucket> = {};
     let grandTotal = 0;
     let grandOrders = 0;
     for (const o of orders) {
-      const key = o.source || '';
+      // Fold any defensively-empty source into the existing 'direct'
+      // bucket — the writer (shopify.ts) never emits '' (its catch-all is
+      // 'direct'), so the '' label was dead. Mirrors attributionAnalysis.ts
+      // (`o.source || 'direct'`).
+      const key = o.source || 'direct';
       if (!bySource[key]) bySource[key] = { count: 0, revenue: 0 };
       bySource[key].count += 1;
       bySource[key].revenue += o.totalCad;
       grandTotal += o.totalCad;
       grandOrders += 1;
     }
-    // Click-id deterministic coverage — % of revenue that came with an
-    // explicit click identifier (fbclid / gclid / ttclid / utm_source).
+    // Deterministic coverage — % of revenue that arrived with a signal we
+    // can attribute without modelling: a raw click-id (fbclid / gclid), a
+    // non-empty utm_source, OR a paid-source label assigned by the writer
+    // from source_name / click-id ('meta-paid' / 'google-paid' /
+    // 'tiktok-paid'). 'tiktok-paid' stands in for ttclid here — there is no
+    // `ttclidPresent` boolean on OrderAttributionRow; the writer folds
+    // ttclid + source_name=tiktok into the 'tiktok-paid' label, which is
+    // source_name-deterministic.
     let deterministicRevenue = 0;
     let _deterministicOrders = 0;
     for (const o of orders) {
       const hasClickId =
         o.fbclidPresent ||
         o.gclidPresent ||
+        o.utmSource.trim() !== '' ||
         o.source === 'meta-paid' ||
         o.source === 'google-paid' ||
         o.source === 'tiktok-paid';
@@ -686,7 +696,8 @@ export function generateAiReport({
     out.push('');
     out.push(
       `**כיסוי deterministic**: ${fmtPct(coveragePct, 0)} מההכנסות הגיעו עם ` +
-        `click-id ברור (fbclid / gclid / ttclid / utm_source=פלטפורמה). ` +
+        `אות-ייחוס דטרמיניסטי (fbclid / gclid / utm_source כלשהו / תווית ` +
+        `paid כש-source_name מזהה את הפלטפורמה — meta/google/tiktok). ` +
         `השאר (${fmtPct(1 - coveragePct, 0)}) — direct/organic/other — לא ניתן ` +
         `לייחס בוודאות לפרסום אלא רק במודלים.`,
     );
