@@ -50,6 +50,24 @@ export function _resetShopifyAuthCacheForTesting(): void {
   tokenCache.clear();
 }
 
+/**
+ * Drop the cached token for ONE store so the next `getShopifyAccessToken`
+ * call re-exchanges (picking up the app's CURRENT scopes).
+ *
+ * Why this exists (2026-06-03 incident): the 24h module-scope cache means a
+ * warm Vercel/Inngest instance keeps serving a token minted BEFORE an app
+ * scope change. After the operator added `read_customers` to enable the
+ * NC-ROAS backfill, warm instances kept their pre-grant token, so any fetch
+ * requesting the `customer` field got a 400 "Access denied for customer
+ * field. Required access: read_customers" for up to 24h. Callers detect that
+ * scope/auth error, call this to invalidate, and retry once — the re-exchange
+ * returns a token carrying the new scope, so the pipeline self-heals within a
+ * single cron tick instead of waiting out the 24h TTL.
+ */
+export function invalidateShopifyToken(storeId: string): void {
+  tokenCache.delete(storeId);
+}
+
 export async function getShopifyAccessToken(storeId: string): Promise<string> {
   const cached = tokenCache.get(storeId);
   // Refresh 60 seconds before expiry to avoid races during the exchange.

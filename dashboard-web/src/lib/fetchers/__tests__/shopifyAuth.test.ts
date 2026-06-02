@@ -13,6 +13,7 @@
 import { it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   getShopifyAccessToken,
+  invalidateShopifyToken,
   _resetShopifyAuthCacheForTesting,
 } from '../shopifyAuth';
 
@@ -138,5 +139,32 @@ it('Test 7: separate stores get separate cached tokens', async () => {
   const zol = await getShopifyAccessToken('zolplus');
   expect(uzo).toBe('shpat_UZO');
   expect(zol).toBe('shpat_ZOL');
+  expect(n).toBe(2);
+});
+
+it('Test 8: invalidateShopifyToken forces a re-exchange (scope-change self-heal)', async () => {
+  let n = 0;
+  const fetchMock = vi.fn(async () => {
+    n++;
+    // Simulate the app gaining `read_customers` between the two exchanges:
+    // the first mint lacks it, the second (post-invalidate) carries it.
+    const scope = n === 1 ? 'read_orders' : 'read_orders,read_customers';
+    return new Response(
+      JSON.stringify({ access_token: `shpat_${n}`, scope, expires_in: 86399 }),
+      { status: 200 },
+    );
+  });
+  vi.stubGlobal('fetch', fetchMock);
+
+  const first = await getShopifyAccessToken(STORE);
+  const cached = await getShopifyAccessToken(STORE); // served from cache, no fetch
+  expect(first).toBe('shpat_1');
+  expect(cached).toBe('shpat_1');
+  expect(n).toBe(1);
+
+  invalidateShopifyToken(STORE); // drop the stale-scope token
+
+  const refreshed = await getShopifyAccessToken(STORE); // re-exchange
+  expect(refreshed).toBe('shpat_2');
   expect(n).toBe(2);
 });

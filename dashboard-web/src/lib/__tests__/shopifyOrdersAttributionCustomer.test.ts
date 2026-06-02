@@ -14,6 +14,7 @@ import { fetchShopifyOrdersAttribution } from '@/lib/fetchers/shopify';
 
 vi.mock('@/lib/fetchers/shopifyAuth', () => ({
   getShopifyAccessToken: vi.fn().mockResolvedValue('shpat_TESTTOKEN'),
+  invalidateShopifyToken: vi.fn(),
 }));
 
 const originalFetch = global.fetch;

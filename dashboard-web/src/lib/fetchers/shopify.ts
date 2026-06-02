@@ -60,7 +60,10 @@ import {
   computeRevenueWithCrossDayRefunds,
   type ShopifyOrderInput,
 } from '@/lib/shopifyRevenueRefunds';
-import { getShopifyAccessToken } from '@/lib/fetchers/shopifyAuth';
+import {
+  getShopifyAccessToken,
+  invalidateShopifyToken,
+} from '@/lib/fetchers/shopifyAuth';
 import { STORE_ID_TO_NAME } from '@/lib/platformsByStore';
 import { fetchWithBackoff } from './withBackoff';
 
@@ -1110,7 +1113,10 @@ export async function fetchShopifyOrdersAttribution(
   storeId: string,
   dateStr: string,
 ): Promise<ShopifyOrderRow[]> {
-  const { domain, token } = await getShopifyCreds(storeId);
+  const { domain, token: initialToken } = await getShopifyCreds(storeId);
+  // Mutable so the scope-error self-heal below can swap in a freshly-exchanged
+  // token mid-pagination (see invalidateShopifyToken / the 2026-06-03 incident).
+  let token = initialToken;
 
   const dayStart = isoLocalMidnight(dateStr, SHOPIFY_TZ);
   const dayEnd = isoLocalMidnight(nextDayStr(dateStr), SHOPIFY_TZ);
@@ -1129,6 +1135,9 @@ export async function fetchShopifyOrdersAttribution(
 
   const out: ShopifyOrderRow[] = [];
   let pages = 0;
+  // One-shot guard: we re-exchange the token at most once across the whole
+  // pagination so a genuinely scope-less app can't spin in an infinite retry.
+  let scopeRetried = false;
 
   while (url && pages < PAGINATION_CAP) {
     const res = await fetchWithBackoff(url, {
@@ -1141,6 +1150,24 @@ export async function fetchShopifyOrdersAttribution(
 
     if (!res.ok) {
       const bodyTxt = await res.text().catch(() => '');
+      // Self-heal a stale-SCOPE cached token (2026-06-03 incident): a warm
+      // instance can hold a token minted before the app gained `read_customers`,
+      // so requesting the `customer` field returns 400 "Access denied for
+      // customer field. Required access: read_customers". Drop the cached token,
+      // re-exchange (picks up the new scope), and retry the SAME page once —
+      // instead of throwing, which would make cron-live skip the entire
+      // orders_attribution write and leave new orders unclassified for ~24h.
+      const looksLikeScopeError =
+        res.status === 401 ||
+        res.status === 403 ||
+        (res.status === 400 &&
+          /access denied|required access|read_customers/i.test(bodyTxt));
+      if (looksLikeScopeError && !scopeRetried) {
+        scopeRetried = true;
+        invalidateShopifyToken(storeId);
+        token = await getShopifyAccessToken(storeId);
+        continue; // re-fetch the same `url` with the fresh token; pages unchanged
+      }
       throw new Error(
         `Shopify orders-attribution ${storeId} ${dateStr} failed ` +
           `(${res.status}): ${bodyTxt.slice(0, 200)}`,
