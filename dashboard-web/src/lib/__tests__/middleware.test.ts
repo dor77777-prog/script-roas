@@ -173,10 +173,18 @@ describe('isDashboardAuthAllowlisted — Shopify ingest endpoints (Task 2)', () 
     expect(isDashboardAuthAllowlisted('/api/events/cart')).toBe(true);
   });
 
+  it('allowlists the Inngest serve endpoint (signature-validated; sync+invoke)', () => {
+    // Inngest Cloud cannot present the dashboard cookie; it authenticates via
+    // X-Inngest-Signature at the route level. Gating it 401'd the deploy-time
+    // sync PUT and pinned Inngest to a pre-gate deployment (2026-06-03 incident).
+    expect(isDashboardAuthAllowlisted('/api/inngest')).toBe(true);
+  });
+
   it('does NOT allowlist a random API path', () => {
     expect(isDashboardAuthAllowlisted('/api/x')).toBe(false);
     expect(isDashboardAuthAllowlisted('/api/data')).toBe(false);
     expect(isDashboardAuthAllowlisted('/api/webhooks/shopify/extra')).toBe(false);
+    expect(isDashboardAuthAllowlisted('/api/inngest/extra')).toBe(false);
   });
 
   it('still allowlists the existing entries (regression)', () => {
