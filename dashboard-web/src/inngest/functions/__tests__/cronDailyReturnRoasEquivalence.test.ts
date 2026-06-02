@@ -154,6 +154,10 @@ vi.mock('@/lib/supabaseAdmin', () => ({
         return Promise.resolve({ error: null });
       },
     }),
+    // Phase 3 (2026-06-02) — runDailyForStore calls
+    // admin.rpc('recompute_first_order_flags', ...) at the end of persist;
+    // soft-fail stub so it never throws here.
+    rpc: () => Promise.resolve({ error: null }),
   }),
 }));
 

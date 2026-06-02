@@ -28,6 +28,12 @@ describe('orders_attribution dual-write key parity', () => {
         'utm_id',
         'utm_term',
         'line_items',
+        // Phase 3 (2026-06-02) — new-vs-returning columns (dual-written by
+        // both cronDaily + cronLive via the shared toOrdersAttributionRow
+        // mapper). is_first_order itself is owned by the recompute RPC, not
+        // the writers — so it is NOT in this writer key set.
+        'customer_id',
+        'order_created_at',
       ].sort(),
     );
   });

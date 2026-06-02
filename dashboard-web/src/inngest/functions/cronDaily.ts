@@ -110,6 +110,13 @@ export type OrderAttributionUpsertRow = {
   utm_id: string | null;
   utm_term: string | null;
   line_items: unknown;
+  // Phase 3 (2026-06-02) — new-vs-returning support. customer_id is the
+  // Shopify opaque numeric id (privacy: id only); order_created_at is the
+  // immutable Shopify created_at. Both nullable (guest checkout → NULL
+  // customer_id). is_first_order itself is NOT written here — it is owned by
+  // recompute_first_order_flags() + the one-time Bulk-Operations backfill.
+  customer_id: string | null;
+  order_created_at: string | null;
 };
 
 export function toOrdersAttributionRow(o: {
@@ -128,6 +135,8 @@ export function toOrdersAttributionRow(o: {
   utmId: string | null;
   utmTerm: string | null;
   lineItems: unknown;
+  customerId: string | null;
+  createdAt: string | null;
 }): OrderAttributionUpsertRow {
   return {
     store_id: o.storeId,
@@ -145,6 +154,8 @@ export function toOrdersAttributionRow(o: {
     utm_id: o.utmId,
     utm_term: o.utmTerm,
     line_items: o.lineItems,
+    customer_id: o.customerId,
+    order_created_at: o.createdAt,
   };
 }
 
@@ -166,6 +177,8 @@ export function ordersAttributionRowKeys(): string[] {
       utmId: '',
       utmTerm: '',
       lineItems: [],
+      customerId: null,
+      createdAt: null,
     }),
   );
 }
@@ -1613,6 +1626,21 @@ async function runDailyForStoreInner(
           `product_catalog upsert for ${storeId} ${dateStr}: ${error.message}`,
         );
       }
+    }
+
+    // Phase 3 (2026-06-02) — refresh first-order-EVER flags for this store
+    // over its FULL history (the RPC is unfiltered; a newly-arrived earlier
+    // order can demote a later one). Soft-fail: the orders_attribution rows
+    // are correct on their own; only is_first_order is stale on failure (the
+    // next tick re-runs it). Unconditional — runs even when no orders landed
+    // today (a prior day's order may still need flagging).
+    const { error: foErr } = await admin.rpc('recompute_first_order_flags', {
+      p_store_id: storeId,
+    });
+    if (foErr) {
+      console.warn(
+        `cron-daily ${storeId} ${dateStr}: recompute_first_order_flags failed: ${foErr.message}`,
+      );
     }
   });
 

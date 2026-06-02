@@ -691,6 +691,18 @@ async function runLiveForStoreInner(
           `orders_attribution upsert for ${storeId} ${today}: ${ordErr.message}`,
         );
       }
+
+      // Phase 3 (2026-06-02) — refresh first-order-EVER flags for this store
+      // (full history, unfiltered). Soft-fail so a flag-recompute error never
+      // reverts the orders persist above. The next tick (≤10 min) re-runs it.
+      const { error: foErr } = await admin.rpc('recompute_first_order_flags', {
+        p_store_id: storeId,
+      });
+      if (foErr) {
+        console.warn(
+          `cron-live ${storeId} ${today}: recompute_first_order_flags failed: ${foErr.message}`,
+        );
+      }
     }
   });
 

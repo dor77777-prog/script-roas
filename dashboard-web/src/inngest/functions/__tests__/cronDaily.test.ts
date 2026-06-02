@@ -445,6 +445,11 @@ vi.mock('@/lib/supabaseAdmin', () => ({
         return Promise.resolve({ error: mockState.upsertError });
       },
     }),
+    // Phase 3 (2026-06-02) — runDailyForStore now calls
+    // admin.rpc('recompute_first_order_flags', {...}) at the end of the
+    // persist step. Soft-fail (returns { error: null }); no recording needed
+    // here — the dedicated cronDailyFirstOrder.test.ts asserts the call.
+    rpc: () => Promise.resolve({ error: null }),
   }),
 }));
 
