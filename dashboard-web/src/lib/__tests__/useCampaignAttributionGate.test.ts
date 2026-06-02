@@ -19,14 +19,12 @@ import { makeOrder } from './fixtures';
  * any platform to the analyzer. The analyzer is the single source of truth
  * for "do I support this platform?".
  *
- * Today the per-ad-set / per-ad analyzers still hard-return null for non-
- * Meta platforms (lib/attributionAnalysis.ts:717, :767) — that widening is
- * Wave 2 work in attributionAnalysis.ts, owned by a different agent. This
- * suite locks BOTH facts: (a) the campaign-level analyzer accepts TikTok,
- * proving the architecture wants TikTok parity; (b) the ad-set-level
- * analyzer still returns null for TikTok, documenting the deferred
- * follow-up that will light up TikTok numbers on the ROAS Shopify chip
- * once it lands.
+ * T0 (2026-06-02): Google is un-excluded at CAMPAIGN GRAIN ONLY — the
+ * campaign-level analyzer now accepts Meta + TikTok + Google, while the
+ * per-ad-set / per-ad analyzers stay Google-excluded because ads_daily has
+ * no Google rows (Google is campaign-grain only). This suite locks: (a) the
+ * campaign-level analyzer accepts TikTok AND Google; (b) the ad-set-level
+ * analyzer accepts TikTok but still returns null for Google.
  *
  * The hook itself isn't tested here directly — the vitest config is
  * node-only and React hooks need JSDOM. The architectural contract above
@@ -62,17 +60,40 @@ describe('useCampaignAttribution platform gate — locks d/CR-06', () => {
     expect(result!.deterministicOrders).toBe(1);
   });
 
-  it('analyzeAttribution still rejects Google (PMax utm-tracking unreliable)', () => {
+  it('analyzeAttribution now accepts Google at the campaign level (T0 2026-06-02)', () => {
+    // T0: Google is un-excluded at CAMPAIGN GRAIN ONLY. The operator tags
+    // Google final URLs with ValueTrack so orders carry the numeric
+    // campaign_id in utm_id (and/or utm_campaign). The ad/adset analyzers
+    // stay Google-excluded (ads_daily has no Google rows) — see the next test.
     const result = analyzeAttribution(
       {
         campaignName: 'Google PMax',
-        campaignId: 'g-camp-1',
+        campaignId: '23590447604',
         storeId: 'uzoshop',
         platform: 'Google',
         metaClaim: 100,
         spend: 50,
       },
-      [makeOrder()],
+      [makeOrder({ source: 'google-paid', utmId: '23590447604', utmCampaign: '', totalCad: 120, date: '2026-05-10' })],
+      range.from,
+      range.to,
+    );
+    expect(result).not.toBeNull();
+    expect(result!.deterministicOrders).toBe(1);
+    expect(result!.deterministicRevenue).toBeCloseTo(120, 4);
+  });
+
+  it('analyzeAttributionForAdSet still rejects Google (ads_daily has no Google rows — campaign grain only)', () => {
+    const result = analyzeAttributionForAdSet(
+      {
+        adSetId: 'g-adset-1',
+        adSetName: 'Google AdGroup',
+        storeId: 'uzoshop',
+        platform: 'Google',
+        metaClaim: 100,
+        spend: 50,
+      },
+      [makeOrder({ utmTerm: 'g-adset-1', totalCad: 100 })],
       range.from,
       range.to,
     );

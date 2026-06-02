@@ -10,8 +10,10 @@ describe('analyzeAttribution', () => {
   // Early exits
   // ----------------------------------------------------------------
 
-  it('returns null for non-Meta platform', () => {
-    const campaign = makeCampaign({ platform: 'Google' });
+  it('returns null for an unsupported platform (e.g. Pinterest)', () => {
+    // T0 (2026-06-02): Google is now un-excluded at campaign grain, so the
+    // null-platform guard is asserted with a genuinely unsupported platform.
+    const campaign = makeCampaign({ platform: 'Pinterest' });
     const orders = [makeOrder()];
     expect(analyzeAttribution(campaign, orders, DATE_FROM, DATE_TO)).toBeNull();
   });
@@ -379,6 +381,83 @@ describe('analyzeAttribution', () => {
       expect(result).not.toBeNull();
       expect(result!.coverage).toBeCloseTo(2, 4);
       expect(result!.coverageExceedsClamp).toBe(false);
+    });
+  });
+
+  // ----------------------------------------------------------------
+  // T0 (2026-06-02) — Google un-excluded at CAMPAIGN GRAIN ONLY.
+  // ----------------------------------------------------------------
+
+  describe('Google campaign grain (T0)', () => {
+    const GOOGLE_CAMPAIGN_ID = '23590447604';
+
+    it('produces a non-null analysis and matches a Google order via utm_id', () => {
+      const campaign = makeCampaign({
+        platform: 'Google',
+        campaignId: GOOGLE_CAMPAIGN_ID,
+        metaClaim: 500,
+        spend: 200,
+      });
+      const orders = Array.from({ length: 5 }, (_, i) =>
+        makeOrder({
+          orderId: `g-${i}`,
+          source: 'google-paid',
+          totalCad: 100,
+          utmId: GOOGLE_CAMPAIGN_ID,
+          utmCampaign: '',
+          date: '2026-05-10',
+        }),
+      );
+      const result = analyzeAttribution(campaign, orders, DATE_FROM, DATE_TO);
+      expect(result).not.toBeNull();
+      expect(result!.deterministicOrders).toBe(5);
+      expect(result!.deterministicRevenue).toBeCloseTo(500, 4);
+      expect(result!.coverage).toBeCloseTo(1.0, 4);
+    });
+
+    it('matches a Google order via utm_campaign === numeric campaignId (ValueTrack)', () => {
+      const campaign = makeCampaign({
+        platform: 'Google',
+        campaignId: GOOGLE_CAMPAIGN_ID,
+        metaClaim: 300,
+        spend: 100,
+      });
+      const orders = Array.from({ length: 3 }, (_, i) =>
+        makeOrder({
+          orderId: `g-${i}`,
+          source: 'google-paid',
+          totalCad: 100,
+          utmId: '',
+          utmCampaign: GOOGLE_CAMPAIGN_ID,
+          date: '2026-05-10',
+        }),
+      );
+      const result = analyzeAttribution(campaign, orders, DATE_FROM, DATE_TO);
+      expect(result).not.toBeNull();
+      expect(result!.deterministicOrders).toBe(3);
+      expect(result!.deterministicRevenue).toBeCloseTo(300, 4);
+    });
+
+    it('does NOT match a Google order whose utm ids both differ (non-matching case)', () => {
+      const campaign = makeCampaign({
+        platform: 'Google',
+        campaignId: GOOGLE_CAMPAIGN_ID,
+        metaClaim: 500,
+        spend: 200,
+      });
+      const orders = [
+        makeOrder({
+          orderId: 'g-x',
+          source: 'google-paid',
+          totalCad: 100,
+          utmId: '99999999999',
+          utmCampaign: 'Unrelated Campaign Name',
+          date: '2026-05-10',
+        }),
+      ];
+      const result = analyzeAttribution(campaign, orders, DATE_FROM, DATE_TO);
+      expect(result).not.toBeNull();
+      expect(result!.deterministicOrders).toBe(0);
     });
   });
 

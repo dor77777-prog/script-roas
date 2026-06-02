@@ -78,10 +78,95 @@ describe('orderMatchesCampaign', () => {
   // platform mismatch
   // ----------------------------------------------------------------
 
-  it('returns false for non-Meta platform regardless of utm signals', () => {
+  it('returns false for an unsupported platform regardless of utm signals', () => {
+    // T0 (2026-06-02): Google is now supported at campaign grain (see the
+    // Google describe block below). Pinterest stands in for any platform we
+    // have not un-excluded.
     const order = makeOrder({ utmId: 'camp-1' });
-    const campaign = makeCampaign({ platform: 'Google', campaignId: 'camp-1' });
+    const campaign = makeCampaign({ platform: 'Pinterest', campaignId: 'camp-1' });
     expect(orderMatchesCampaign(order, campaign)).toBe(false);
+  });
+
+  // ----------------------------------------------------------------
+  // T0 (2026-06-02) — Google un-excluded at CAMPAIGN GRAIN ONLY.
+  // Google campaign_id is numeric (e.g. "23590447604") and reaches orders
+  // via ValueTrack tagging: utm_id={campaignid} and/or utm_campaign={campaignid}.
+  // ----------------------------------------------------------------
+
+  describe('Google campaign grain (T0)', () => {
+    const GOOGLE_CAMPAIGN_ID = '23590447604';
+
+    it('matches a Google order via utm_id === numeric campaignId', () => {
+      const order = makeOrder({
+        source: 'google-paid',
+        utmId: GOOGLE_CAMPAIGN_ID,
+        utmCampaign: '',
+      });
+      const campaign = makeCampaign({ platform: 'Google', campaignId: GOOGLE_CAMPAIGN_ID });
+      expect(orderMatchesCampaign(order, campaign)).toBe(true);
+    });
+
+    it('matches a Google order via utm_campaign === numeric campaignId (ValueTrack fallback)', () => {
+      // Operator's current ValueTrack tagging may surface the campaign id in
+      // utm_campaign rather than utm_id.
+      const order = makeOrder({
+        source: 'google-paid',
+        utmId: '',
+        utmCampaign: GOOGLE_CAMPAIGN_ID,
+      });
+      const campaign = makeCampaign({ platform: 'Google', campaignId: GOOGLE_CAMPAIGN_ID });
+      expect(orderMatchesCampaign(order, campaign)).toBe(true);
+    });
+
+    it('matches with leading/trailing whitespace on the id (both slots trimmed)', () => {
+      const orderViaId = makeOrder({ utmId: `  ${GOOGLE_CAMPAIGN_ID}  `, utmCampaign: '' });
+      const orderViaCampaign = makeOrder({ utmId: '', utmCampaign: `\n${GOOGLE_CAMPAIGN_ID}\t` });
+      const campaign = makeCampaign({ platform: 'Google', campaignId: ` ${GOOGLE_CAMPAIGN_ID} ` });
+      expect(orderMatchesCampaign(orderViaId, campaign)).toBe(true);
+      expect(orderMatchesCampaign(orderViaCampaign, campaign)).toBe(true);
+    });
+
+    it('does NOT match a Google order whose utm ids both differ from the campaignId', () => {
+      const order = makeOrder({
+        source: 'google-paid',
+        utmId: '99999999999',
+        utmCampaign: 'Some Other Campaign',
+      });
+      const campaign = makeCampaign({ platform: 'Google', campaignId: GOOGLE_CAMPAIGN_ID });
+      expect(orderMatchesCampaign(order, campaign)).toBe(false);
+    });
+
+    it('does NOT match a Google campaign by NAME (no Tier-2 name fallback for Google)', () => {
+      // Under ValueTrack, utm_campaign carries the numeric id, not the name —
+      // so a name-equal-but-id-absent order must NOT match a Google campaign.
+      const order = makeOrder({ utmId: '', utmCampaign: 'Summer Sale' });
+      const campaign = makeCampaign({
+        platform: 'Google',
+        campaignName: 'Summer Sale',
+        campaignId: GOOGLE_CAMPAIGN_ID,
+      });
+      expect(orderMatchesCampaign(order, campaign)).toBe(false);
+    });
+
+    it('returns false for a Google campaign with no campaignId (cannot ID-match)', () => {
+      const order = makeOrder({ utmId: GOOGLE_CAMPAIGN_ID });
+      const campaign = {
+        campaignName: 'Summer Sale',
+        storeId: 'uzoshop',
+        platform: 'Google',
+      };
+      expect(orderMatchesCampaign(order, campaign)).toBe(false);
+    });
+
+    it('respects storeId boundary for Google too', () => {
+      const order = makeOrder({ storeId: 'uzoshop', utmId: GOOGLE_CAMPAIGN_ID });
+      const campaign = makeCampaign({
+        storeId: 'zolplus',
+        platform: 'Google',
+        campaignId: GOOGLE_CAMPAIGN_ID,
+      });
+      expect(orderMatchesCampaign(order, campaign)).toBe(false);
+    });
   });
 
   // ----------------------------------------------------------------

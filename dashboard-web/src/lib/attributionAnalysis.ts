@@ -242,6 +242,17 @@ export function pearsonWithLag(xs: number[], ys: number[], lag: number): number 
  * We don't fall back to "fbclid present + same date range" at this layer
  * because fbclid alone only proves the user clicked SOME Meta ad — not
  * THIS campaign. There is no platform-level fallback in this analyzer.
+ *
+ * Google (T0 — campaign grain ONLY): Google Ads campaigns expose a numeric
+ * campaign_id in campaigns_daily (e.g. "23590447604") but have NO rows in
+ * ads_daily — so Google is campaign-grain ONLY (the ad/adset analyzers stay
+ * Google-excluded). The operator tags Google final URLs with ValueTrack so
+ * orders carry `utm_id={campaignid}` (and possibly `utm_campaign={campaignid}`
+ * under the current tagging). For a Google campaign we therefore accept an
+ * order when its `utm_id` OR `utm_campaign` equals the numeric campaignId.
+ * The `utm_campaign === campaignId` path is Google-only and supports the
+ * operator's current ValueTrack tagging where the campaign id (NOT name) is
+ * what flows into utm_campaign — Meta/TikTok keep their Tier-2 name match.
  */
 export function orderMatchesCampaign(
   order: OrderAttributionRow,
@@ -259,8 +270,21 @@ export function orderMatchesCampaign(
   // Phase 05.7.9c — extended to TikTok per operator request. The matching
   // logic below works for any platform whose URL Parameters pass utm_id /
   // utm_campaign onto the landing URL (Meta + TikTok both support this).
-  // Google Ads still excluded — Google's GAQL flow exposes campaign
-  // structure but the click → utm mapping is unreliable for PMax/Shopping.
+  // T0 (2026-06-02) — Google un-excluded at CAMPAIGN GRAIN ONLY. Google's
+  // numeric campaign_id flows into orders via ValueTrack tagging
+  // (utm_id={campaignid} and/or utm_campaign={campaignid}).
+  if (campaign.platform === 'Google') {
+    // Google campaign-grain match: ID-to-ID against the numeric campaignId.
+    // Both utm_id and utm_campaign are accepted because the operator's
+    // current ValueTrack tagging may surface the id in either slot. There
+    // is NO Google name-match fallback (utm_campaign carries the id, not a
+    // name, under ValueTrack) and NO Google ad/adset grain (ads_daily has
+    // no Google rows).
+    if (!campaign.campaignId) return false;
+    const wantId = campaign.campaignId.trim();
+    return (!!order.utmId && order.utmId.trim() === wantId)
+        || (!!order.utmCampaign && order.utmCampaign.trim() === wantId);
+  }
   if (campaign.platform !== 'Meta' && campaign.platform !== 'TikTok') return false;
 
   // Tier 1 — utm_id is authoritative when present on the order.
@@ -324,11 +348,18 @@ export function analyzeAttribution(
    *  artificially inflate the period total. */
   dailyMetaSeries?: Array<{ date: string; value: number }>,
 ): AttributionAnalysis | null {
-  // Phase 05.7.9c — extended to TikTok. Returns null for Google (PMax
-  // utm-tracking unreliable) and any other platform. `metaClaim` is named
-  // historically but semantically holds the PLATFORM's claimed
-  // conversionValue for whichever platform we accept here.
-  if (campaign.platform !== 'Meta' && campaign.platform !== 'TikTok') return null;
+  // Phase 05.7.9c — extended to TikTok. T0 (2026-06-02) — extended to
+  // Google at CAMPAIGN GRAIN ONLY (ads_daily has no Google rows, so the
+  // ad/adset analyzers stay Google-excluded). Returns null for any other
+  // platform. `metaClaim` is named historically but semantically holds the
+  // PLATFORM's claimed conversionValue for whichever platform we accept here.
+  if (
+    campaign.platform !== 'Meta' &&
+    campaign.platform !== 'TikTok' &&
+    campaign.platform !== 'Google'
+  ) {
+    return null;
+  }
   if (!orders || orders.length === 0) return null;
 
   // Filter out non-finite totalCad at the matched-order boundary so a single
