@@ -2,6 +2,7 @@
 
 import { ShieldCheck, ShieldAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 import type { CoverageChip as CoverageChipData } from '@/lib/home/adapters';
 
 const TOOLTIP =
@@ -21,20 +22,21 @@ export function CoverageChip({ coverage }: { coverage: CoverageChipData | null }
   const pct = Math.round(coverage.coverageShare * 100);
   const prominent = coverage.prominent;
   return (
-    <span
-      data-testid="coverage-chip"
-      data-prominent={prominent ? 'true' : 'false'}
-      title={TOOLTIP}
-      className={cn(
-        'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10.5px] font-medium tabular-nums',
-        prominent
-          ? 'bg-status-warningBg text-status-warningFg border border-status-warning'
-          : 'text-ink-muted',
-      )}
-    >
-      {prominent ? <ShieldAlert size={11} aria-hidden /> : <ShieldCheck size={11} aria-hidden />}
-      <bdi dir="ltr">{pct}%</bdi>
-      <span>כיסוי ייחוס</span>
-    </span>
+    <HelpTooltip content={TOOLTIP}>
+      <span
+        data-testid="coverage-chip"
+        data-prominent={prominent ? 'true' : 'false'}
+        className={cn(
+          'inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10.5px] font-medium tabular-nums cursor-help',
+          prominent
+            ? 'bg-status-warningBg text-status-warningFg border border-status-warning'
+            : 'text-ink-muted',
+        )}
+      >
+        {prominent ? <ShieldAlert size={11} aria-hidden /> : <ShieldCheck size={11} aria-hidden />}
+        <bdi dir="ltr">{pct}%</bdi>
+        <span>כיסוי ייחוס</span>
+      </span>
+    </HelpTooltip>
   );
 }
