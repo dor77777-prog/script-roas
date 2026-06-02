@@ -24,6 +24,11 @@
 import type { StoreAgg, DailySeries } from '@/lib/analytics';
 import type { CampaignRow } from '@/lib/campaigns';
 import { normalizePlatform } from '@/components/ui/PlatformBadge';
+import {
+  computeNewCustomerMetrics,
+  type FirstOrderInput,
+  type NewCustomerMetrics,
+} from '@/lib/home/newCustomerMetrics';
 
 type PaidPlatform = 'meta' | 'google' | 'tiktok';
 
@@ -82,6 +87,9 @@ export interface StoreDetailData {
   platforms: StoreDetailPlatform[];
   /** Top-5 campaigns by ROAS desc. */
   topCampaigns: StoreDetailCampaign[];
+  /** Per-store NC-ROAS / nCAC (new-customer lens). Scoped to this store; MER
+   *  spend = cur.spend (mapping-aware). */
+  newCustomer: NewCustomerMetrics;
 }
 
 export interface ToStoreDetailArgs {
@@ -102,6 +110,10 @@ export interface ToStoreDetailArgs {
   prevOrders: number | null;
   /** Page-global freshest-write ISO timestamp. */
   updatedAt: string | null;
+  /** Order rows carrying first-order classification (from /api/orders-attribution
+   *  → OrderAttributionRow). Scoped per-store inside toStoreDetail. Optional for
+   *  back-compat; defaults to [] (zeroed newCustomer block) when omitted. */
+  firstOrderRows?: FirstOrderInput[];
 }
 
 /** operatingProfit = revenue − ad spend − COGS (mirrors toHeroPeriod). */
@@ -135,7 +147,7 @@ interface CampaignAccum {
 }
 
 export function toStoreDetail(args: ToStoreDetailArgs): StoreDetailData {
-  const { storeId, storeName, cur, prev, series, campaignRows, range, orders, prevOrders, updatedAt } = args;
+  const { storeId, storeName, cur, prev, series, campaignRows, range, orders, prevOrders, updatedAt, firstOrderRows = [] } = args;
 
   const zeroSalesWithSpend = (cur.spend ?? 0) > 0 && cur.revenue === 0;
   const roas = cur.roas > 0 ? cur.roas : null;
@@ -232,6 +244,12 @@ export function toStoreDetail(args: ToStoreDetailArgs): StoreDetailData {
     .sort((a, b) => (b.revenue !== a.revenue ? b.revenue - a.revenue : b.spend - a.spend))
     .slice(0, 5);
 
+  // ---- Per-store NC-ROAS / nCAC -------------------------------------------
+  // Scoped to this store; MER spend = cur.spend (the mapping-aware aggregate
+  // already in the StoreAgg, never raw account totals). Guest checkouts stay
+  // in unclassifiableShare, never folded into new/returning.
+  const newCustomer = computeNewCustomerMetrics(firstOrderRows, cur.spend, storeName);
+
   return {
     storeId,
     storeName,
@@ -243,5 +261,6 @@ export function toStoreDetail(args: ToStoreDetailArgs): StoreDetailData {
     roasSeries,
     platforms,
     topCampaigns,
+    newCustomer,
   };
 }

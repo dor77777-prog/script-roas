@@ -308,6 +308,49 @@ export function StoreDetailModal({
             </div>
           </section>
 
+          {/* Phase 3 — per-store NC-ROAS / nCAC (different question). Own band;
+              never touches the header ROAS band gradient. */}
+          <section data-testid="store-detail-nc">
+            <Card
+              band={useRoasBandGradient(data.newCustomer.ncRoas).band}
+              bandStrength="muted"
+              className="!p-3 sm:!p-4"
+              title="לקוחות חדשים (הזמנה ראשונה אי-פעם). NC-ROAS = הכנסת לקוחות חדשים ÷ הוצאת פרסום; nCAC = הוצאת פרסום ÷ הזמנות חדשות."
+            >
+              <div className="text-[10.5px] uppercase tracking-[0.08em] text-ink-muted font-semibold">
+                לקוחות חדשים · שאלה אחרת
+              </div>
+              <div className="flex items-end gap-6 mt-2">
+                <div>
+                  <div className="text-[10.5px] uppercase tracking-[0.08em] text-ink-muted font-semibold">
+                    NC-ROAS
+                  </div>
+                  <bdi dir="ltr" className="block font-extrabold tabular-nums leading-[1.05] text-[1.5rem]">
+                    {data.newCustomer.ncRoas != null ? (
+                      <CountUp value={data.newCustomer.ncRoas} format={(n) => n.toFixed(2)} />
+                    ) : (
+                      '—'
+                    )}
+                  </bdi>
+                </div>
+                <div>
+                  <div className="text-[10.5px] uppercase tracking-[0.08em] text-ink-muted font-semibold">
+                    nCAC
+                  </div>
+                  <bdi dir="ltr" className="block font-extrabold tabular-nums leading-[1.05] text-[1.5rem]">
+                    <Money value={data.newCustomer.nCac} prefix="$" compactAbove={1_000_000} />
+                  </bdi>
+                </div>
+              </div>
+              <div className="text-xs mt-1.5 text-ink-muted tabular-nums">
+                <bdi dir="rtl">
+                  {data.newCustomer.ncOrders.toLocaleString('en-US')} הזמנות חדשות ·{' '}
+                  {(data.newCustomer.unclassifiableShare * 100).toFixed(0)}% לא מסווג
+                </bdi>
+              </div>
+            </Card>
+          </section>
+
           {/* ── 3. ROAS over time ────────────────────────────────────────
               Store-scoped RoasChart. Target line + neutral plot scrim are
               owned by the chart; bare=true drops its own card chrome since we

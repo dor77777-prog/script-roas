@@ -66,6 +66,7 @@ const COMPONENTS_DIR = path.resolve(__dirname, '..', '..', 'components');
 const MIGRATION_ALLOWLIST: string[] = [
   'CampaignsTable.tsx', // chart Y-axis tickFormatter `C$${Number(v).toFixed(2)}` — axis tick, not a cell
   'home/CommandCenterHero.tsx', // fmtMoneyCompact string helper feeds the delta-caption `text=` string (can't be JSX <Money>); fmtCount is a COUNT, not money
+  'home/StoreDetailModal.tsx', // `data.newCustomer.ncOrders.toLocaleString('en-US')` — a new-customer ORDER COUNT (הזמנות חדשות), not money
   'CommandPalette.tsx', // `p.units.toLocaleString('he-IL')` — a UNITS count (יחידות), not money
   'Dashboard.tsx', // `new Date(lastUpdated).toLocaleString('he-IL', …)` — a footer DATE, not money
   'FreshnessChip.tsx', // `new Date(dataLastWriteAt).toLocaleString(…)` built into the HelpTooltip content STRING — date inside a tooltip string

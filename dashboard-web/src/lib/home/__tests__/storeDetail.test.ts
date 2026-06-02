@@ -18,9 +18,10 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { toStoreDetail } from '@/lib/home/storeDetail';
+import { toStoreDetail, type ToStoreDetailArgs } from '@/lib/home/storeDetail';
 import type { StoreAgg, DailySeries } from '@/lib/analytics';
 import type { CampaignRow } from '@/lib/campaigns';
+import type { FirstOrderInput } from '@/lib/home/newCustomerMetrics';
 
 /** Minimal StoreAgg factory — only the fields the adapter reads matter. */
 function makeAgg(over: Partial<StoreAgg> & { store: string }): StoreAgg {
@@ -526,5 +527,52 @@ describe('toStoreDetail — passthrough fields', () => {
     });
     expect(d.platforms).toEqual([]);
     expect(d.topCampaigns).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Phase 3 — per-store NC-ROAS / nCAC. The newCustomer block is computed from
+// firstOrderRows scoped to this store, with MER spend = cur.spend (the
+// mapping-aware aggregate already in the StoreAgg, never raw account totals).
+// ---------------------------------------------------------------------------
+function baseArgs(over: Partial<ToStoreDetailArgs> = {}): ToStoreDetailArgs {
+  return {
+    storeId: 'uzoshop',
+    storeName: 'uzoshop',
+    cur: { revenue: 1000, spend: 400, cogs: 250, roas: 2.5 } as never,
+    prev: null,
+    series: [],
+    campaignRows: [],
+    range: { from: '2026-05-01', to: '2026-05-01' },
+    orders: 10,
+    prevOrders: null,
+    updatedAt: null,
+    firstOrderRows: [],
+    ...over,
+  };
+}
+
+describe('toStoreDetail — per-store NC-ROAS / nCAC', () => {
+  it('computes newCustomer from firstOrderRows scoped to the store + cur.spend (MER)', () => {
+    const firstOrderRows: FirstOrderInput[] = [
+      { storeName: 'uzoshop', totalCad: 120, isFirstOrder: true },
+      { storeName: 'uzoshop', totalCad: 80, isFirstOrder: true },
+      { storeName: 'uzoshop', totalCad: 200, isFirstOrder: false },
+      { storeName: 'uzoshop', totalCad: 30, isFirstOrder: null },
+      { storeName: 'zolplus', totalCad: 999, isFirstOrder: true }, // other store — excluded
+    ];
+    const d = toStoreDetail(baseArgs({ firstOrderRows }));
+    expect(d.newCustomer.ncRevenue).toBe(200);     // 120 + 80
+    expect(d.newCustomer.ncOrders).toBe(2);
+    expect(d.newCustomer.ncRoas).toBeCloseTo(0.5, 5); // 200 / 400 (cur.spend)
+    expect(d.newCustomer.nCac).toBeCloseTo(200, 5);   // 400 / 2
+    expect(d.newCustomer.unclassifiableShare).toBeCloseTo(0.25, 5); // 1 of 4 scoped
+  });
+
+  it('no firstOrderRows → zeroed newCustomer block', () => {
+    const d = toStoreDetail(baseArgs({ firstOrderRows: [] }));
+    expect(d.newCustomer.ncOrders).toBe(0);
+    expect(d.newCustomer.ncRoas).toBeNull();
+    expect(d.newCustomer.nCac).toBeNull();
   });
 });
