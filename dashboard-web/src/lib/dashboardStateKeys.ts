@@ -42,6 +42,9 @@ export const ALLOWED_STATE_KEYS = [
   // Editable salaries % / amount (2026-06-02) — per-month, retroactive, business-level.
   // Must match cloudSync.ts:STATE_KEYS ('roas-dashboard:salary-settings') for cross-device sync.
   'salary-settings',
+  // Per-month monthly revenue goal (2026-06-02) — byMonth map, business-wide.
+  // Must match cloudSync.ts:STATE_KEYS ('roas-dashboard:goal-settings') for cross-device sync.
+  'goal-settings',
 ] as const;
 
 export type AllowedStateKey = (typeof ALLOWED_STATE_KEYS)[number];

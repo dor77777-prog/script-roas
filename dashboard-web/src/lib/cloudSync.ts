@@ -68,6 +68,10 @@ export const STATE_KEYS = [
   'roas-dashboard:cogs-settings',
   // Editable salaries % / amount (2026-06-02) — per-month, retroactive, business-level.
   'roas-dashboard:salary-settings',
+  // Per-month monthly revenue goal (2026-06-02) — byMonth map, business-wide,
+  // carry-forward default. Replaces the legacy single-number
+  // 'monthly-revenue-goal' (kept above for back-compat hydrate + migration).
+  'roas-dashboard:goal-settings',
 ] as const;
 export type StateKey = (typeof STATE_KEYS)[number];
 
@@ -83,6 +87,8 @@ const CHANGE_EVENTS: Record<StateKey, string> = {
   'roas-dashboard:campaign-store-map': 'roas-campaign-store-map-changed',
   'roas-dashboard:cogs-settings': 'roas-cogs-settings-changed',
   'roas-dashboard:salary-settings': 'roas-salary-changed',
+  // Shares the legacy goal event so both writers drive one re-render signal.
+  'roas-dashboard:goal-settings': 'roas-goal-changed',
 };
 
 /** ms epoch of the last push we sent for each key. Used to skip stomping
