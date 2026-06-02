@@ -328,6 +328,104 @@ describe('multiMappingCohort ranking — MMC-BLOCKER-01 regression suite (TG-05)
     expect(aIdx).toBeLessThan(bIdx);
   });
 
+  // Display-only leader-badge guard (2026-06-02). The pure helper
+  // `qualifiesAsLeader` is unit-tested in multiMappingCohortLeaderGuard.test.ts;
+  // these cases pin the INTEGRATION GLUE at multiMappingCohort.ts:409 — that
+  // computeMultiMappingCohort actually derives `leaderQualifies` from the cohort
+  // metrics (`isLeader && current.metrics.roasShopify >= 2`), including the
+  // `metrics === undefined → false` path. Ranking math is asserted untouched.
+  describe('leaderQualifies — computeMultiMappingCohort wiring (2026-06-02)', () => {
+    it('TRUE when current is rank-1 AND its roasShopify >= 2', () => {
+      const result = computeMultiMappingCohort({
+        currentCampaignKey: key('Meta', 'win'),
+        productMap: {
+          [key('Meta', 'win')]: ['p1'],
+          [key('Meta', 'lo')]: ['p1'],
+        },
+        aggregated: [
+          makeAgg({ key: key('Meta', 'win'), campaignId: 'win' }),
+          makeAgg({ key: key('Meta', 'lo'), campaignId: 'lo' }),
+        ],
+        roasShopifyByKey: new Map([
+          [key('Meta', 'win'), 3.1], // rank-1 and clears the 2x floor
+          [key('Meta', 'lo'), 1.0],
+        ]),
+        roasShopifyPlatformByKey: new Map(),
+      });
+      expect(result).not.toBeNull();
+      expect(result!.isLeader).toBe(true);
+      expect(result!.leaderQualifies).toBe(true);
+    });
+
+    it('FALSE when current is rank-1 but roasShopify < 2 ("best of a losing cohort")', () => {
+      const result = computeMultiMappingCohort({
+        currentCampaignKey: key('Meta', 'top'),
+        productMap: {
+          [key('Meta', 'top')]: ['p1'],
+          [key('Meta', 'bot')]: ['p1'],
+        },
+        aggregated: [
+          makeAgg({ key: key('Meta', 'top'), campaignId: 'top' }),
+          makeAgg({ key: key('Meta', 'bot'), campaignId: 'bot' }),
+        ],
+        roasShopifyByKey: new Map([
+          [key('Meta', 'top'), 1.4], // rank-1 but below the 2x floor
+          [key('Meta', 'bot'), 0.8],
+        ]),
+        roasShopifyPlatformByKey: new Map(),
+      });
+      expect(result).not.toBeNull();
+      // Ranking math is UNTOUCHED — current is still the leader…
+      expect(result!.isLeader).toBe(true);
+      // …but the display-only badge gate withholds the trophy.
+      expect(result!.leaderQualifies).toBe(false);
+    });
+
+    it('FALSE when current is NOT rank-1, regardless of how high its own ROAS is', () => {
+      const result = computeMultiMappingCohort({
+        currentCampaignKey: key('Meta', 'second'),
+        productMap: {
+          [key('Meta', 'first')]: ['p1'],
+          [key('Meta', 'second')]: ['p1'],
+        },
+        aggregated: [
+          makeAgg({ key: key('Meta', 'first'), campaignId: 'first' }),
+          makeAgg({ key: key('Meta', 'second'), campaignId: 'second' }),
+        ],
+        roasShopifyByKey: new Map([
+          [key('Meta', 'first'), 9.0], // the actual leader
+          [key('Meta', 'second'), 4.0], // current clears 2x but is rank-2
+        ]),
+        roasShopifyPlatformByKey: new Map(),
+      });
+      expect(result).not.toBeNull();
+      expect(result!.isLeader).toBe(false);
+      expect(result!.currentRank).toBe(2);
+      expect(result!.leaderQualifies).toBe(false);
+    });
+
+    it('FALSE when current is rank-1 but has NO metrics (paused — metrics === undefined)', () => {
+      // Neither member appears in `aggregated`, so both get metrics:undefined and
+      // sink via the comparator's lex tiebreak. Current key 'aaa' sorts ahead of
+      // 'zzz' → current IS rank-1 (isLeader true) yet metrics is undefined, so the
+      // `current.metrics?.roasShopify ?? null` glue must yield leaderQualifies=false.
+      const result = computeMultiMappingCohort({
+        currentCampaignKey: key('Meta', 'aaa'),
+        productMap: {
+          [key('Meta', 'aaa')]: ['p1'],
+          [key('Meta', 'zzz')]: ['p1'],
+        },
+        aggregated: [], // no rows → every member's metrics is undefined
+        roasShopifyByKey: new Map(),
+        roasShopifyPlatformByKey: new Map(),
+      });
+      expect(result).not.toBeNull();
+      expect(result!.current.metrics).toBeUndefined();
+      expect(result!.isLeader).toBe(true);
+      expect(result!.leaderQualifies).toBe(false);
+    });
+  });
+
   it('shape invariant: result satisfies MultiMappingCohort contract', () => {
     // Sanity check the type contract still holds with the new comparator.
     const result = computeMultiMappingCohort({

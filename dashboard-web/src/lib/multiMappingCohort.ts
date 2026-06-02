@@ -98,6 +98,13 @@ export type MultiMappingCohort = {
    *  — pulling the gate up to the source so the UI chip and the score
    *  adjustment agree on the definition of "weakest". */
   isWeakest: boolean;
+  /**
+   * Display-only (2026-06-02): show the 🏆 leader chip ONLY when the rank-1
+   * member also clears the 2x ROAS band floor. A "best of a losing cohort"
+   * (all members < 2x) is NOT a win to celebrate. Does NOT affect ranking,
+   * isLeader, isWeakest, or any cohort/mapping math — purely a UI gate.
+   */
+  leaderQualifies: boolean;
   /** All distinct product IDs shared between the current campaign and
    *  at least one other member of the cohort. Used by the AI report
    *  and the drawer's product-product table. */
@@ -112,6 +119,12 @@ export type MultiMappingCohort = {
 // =============================================================================
 // Helpers
 // =============================================================================
+
+/** Pure guard backing `MultiMappingCohort.leaderQualifies` (see its doc for the
+ *  display-only / does-NOT-touch-ranking contract). `isLeader && roas >= 2`. */
+export function qualifiesAsLeader(isLeader: boolean, roasShopify: number | null | undefined): boolean {
+  return isLeader && roasShopify != null && roasShopify >= 2;
+}
 
 function parseKey(
   campaignKey: string,
@@ -390,6 +403,8 @@ export function computeMultiMappingCohort(args: {
   // but is not actionable signal ("someone had to be second"). Matches the
   // floor already present in applyCohortAdjustmentOnce.
   const isWeakest = totalMembers >= 3 && currentRank === totalMembers;
+  // Display-only leader gate (2026-06-02) — see `leaderQualifies` field doc.
+  const leaderQualifies = qualifiesAsLeader(isLeader, currentWithFlag.metrics?.roasShopify ?? null);
 
   // Split others by platform. Inherits the new sorted order from `others`.
   const intraPlatformOthers = others.filter(o => o.platform === currentParts.platform);
@@ -403,6 +418,7 @@ export function computeMultiMappingCohort(args: {
     currentRank,
     totalMembers,
     isLeader,
+    leaderQualifies,
     isWeakest,
     sharedProductIds: Array.from(sharedProductIdsSet),
     intraPlatformOthers,

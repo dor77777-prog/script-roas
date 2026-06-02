@@ -32,6 +32,7 @@ import { fmtMoney } from '@/lib/format';
 import { TableBase } from '@/components/ui/TableBase';
 import { Heading } from '@/components/ui/Typography';
 import { HelpTooltip } from '@/components/ui/Tooltip';
+import { qualifiesAsLeader } from '@/lib/multiMappingCohort';
 import type { CohortMember, MultiMappingCohort } from '@/lib/multiMappingCohort';
 import type { CannibalizationVerdict } from '@/lib/cannibalizationDetection';
 
@@ -53,8 +54,20 @@ type Props = {
   onDrillCampaign?: (campaignId: string, platform: string, storeId: string) => void;
 };
 
-function MedalIcon({ rank }: { rank: number }) {
-  if (rank === 1) return <span className="text-base">🥇</span>;
+/**
+ * `qualifies` (default true) is the display-only leader guard (2026-06-02): when
+ * a rank-1 chip does NOT qualify (rank 1 but ROAS < 2x — "best of a losing
+ * cohort"), the header chip passes `qualifies={false}` so we render the neutral
+ * `#1` instead of the celebratory 🥇. The per-row ranking table leaves it true:
+ * there the medal is a neutral rank fact, not a celebration. Ranks 2/3/N are
+ * unaffected either way.
+ */
+function MedalIcon({ rank, qualifies = true }: { rank: number; qualifies?: boolean }) {
+  if (rank === 1) {
+    return qualifies
+      ? <span className="text-base">🥇</span>
+      : <span className="text-xs text-ink-muted tabular-nums">#1</span>;
+  }
   if (rank === 2) return <span className="text-base">🥈</span>;
   if (rank === 3) return <span className="text-base">🥉</span>;
   return <span className="text-xs text-ink-muted tabular-nums">#{rank}</span>;
@@ -355,6 +368,15 @@ export function CohortComparisonPanel({
 
   const currentRankIntra = intraSection.findIndex(m => m.isCurrent) + 1;
   const intraCount = intraSection.length;
+  // Display-only leader-badge guard (2026-06-02, single source of truth in
+  // multiMappingCohort.ts): paint the celebratory green tone + 🥇 ONLY when the
+  // intra-section rank-1 member also clears the locked 2x ROAS band floor.
+  // "Best of a losing cohort" (rank 1 but < 2x) gets the neutral chip — not a
+  // win to celebrate. Ranking math (currentRankIntra/sort) is UNTOUCHED.
+  const currentLeads = qualifiesAsLeader(
+    currentRankIntra === 1,
+    cohort.current.metrics?.roasShopify ?? null,
+  );
 
   return (
     <section className="space-y-3">
@@ -375,17 +397,22 @@ export function CohortComparisonPanel({
         {intraCount >= 2 && cohort.intraPlatformOthers.length > 0 && (
           <HelpTooltip
             content={
-              currentRankIntra === 1
+              currentLeads
                 ? 'אתה מוביל בקבוצת המיפוי באותה פלטפורמה'
-                : intraCount >= 3 && currentRankIntra === intraCount
-                  ? 'אתה החלש בקבוצת המיפוי באותה פלטפורמה'
-                  : 'אתה במיפוי משותף — דירוג בלבד'
+                : currentRankIntra === 1
+                  ? 'אתה מדורג ראשון בקבוצה, אך מתחת לסף ה-2x — לא הובלה לחגוג'
+                  : intraCount >= 3 && currentRankIntra === intraCount
+                    ? 'אתה החלש בקבוצת המיפוי באותה פלטפורמה'
+                    : 'אתה במיפוי משותף — דירוג בלבד'
             }
           >
             <span
               className={cn(
                 'inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-bold shrink-0 border',
-                currentRankIntra === 1
+                // Display-only leader guard (2026-06-02): green celebratory
+                // tone ONLY when rank-1 ALSO clears the 2x floor. A sub-2x
+                // rank-1 ("best of a losing cohort") falls through to neutral.
+                currentLeads
                   ? 'bg-status-greenBg text-status-greenFg border-status-green'
                   // Audit fix 2026-05-23 (HIGH-02 multi-mapping): only paint
                   // the loud red "weakest" tone when the cohort is large
@@ -398,7 +425,7 @@ export function CohortComparisonPanel({
                     : 'bg-status-warningBg text-status-warningFg border-status-warning',
               )}
             >
-              <MedalIcon rank={currentRankIntra} />
+              <MedalIcon rank={currentRankIntra} qualifies={currentLeads} />
               במקום {currentRankIntra} מתוך {intraCount}
             </span>
           </HelpTooltip>
