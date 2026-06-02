@@ -572,6 +572,13 @@ function HomeTab({
    */
   onSeeActivity?: () => void;
 }) {
+  // Salary settings (business-level) — read reactively so the hero's
+  // Net-Profit *delta* baseline is salary-deducted in lock-step with the
+  // current-period agg (`filtered.curAgg`, built upstream in Dashboard with
+  // the same `salariesForRange`). Without this, the prev baseline would be
+  // NON-salary-deducted and `toHeroDelta` (cur.trueNetProfit −
+  // prev.trueNetProfit) would skew the delta. The setter is unused here.
+  const [salarySettings] = useSalarySettings();
   // Chart range is INDEPENDENT of the page-level filter range — operator can
   // browse a 90-day trend without losing the "today" snapshot above. Seeded
   // from `?chartRange=…` URL params so refresh / share preserves the choice.
@@ -712,8 +719,18 @@ function HomeTab({
   const prevAggFromPrevData = useMemo(() => {
     if (!dataPrev) return null;
     const prevCur = filterRows(dataPrev.rows, prevRange, filters.store);
-    return aggregate(prevCur, prevRange);
-  }, [dataPrev, prevRange, filters.store]);
+    // Salary-deduct the prev baseline so it matches `filtered.curAgg` (also
+    // salary-deducted upstream). toHeroDelta computes the Net-Profit delta as
+    // `cur.trueNetProfit − prev.trueNetProfit`; mismatched deduction here would
+    // overstate the prev baseline and skew the delta.
+    return aggregate(
+      prevCur,
+      prevRange,
+      undefined,
+      undefined,
+      salariesForRange(salarySettings, prevCur, prevRange),
+    );
+  }, [dataPrev, prevRange, filters.store, salarySettings]);
   // Mobile B1 — previous-range ROAS per store, for the per-store card delta
   // chip. Reuses the SAME `dataPrev` SWR payload the hero delta already
   // fetched (no extra network call); `aggregateByStore` gives us each store's
