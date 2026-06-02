@@ -916,6 +916,145 @@ export function analyzeAttributionForAd(
   });
 }
 
+// ============================================================================
+// First-click lens (Phase 4) — sibling analyzers
+// ============================================================================
+//
+// Parallel to orderMatchesCampaign / analyzeAttributionForAd but matching on
+// the order's FIRST-touch UTM fields (firstUtmId / firstUtmCampaign at
+// campaign grain; firstUtmContent at ad grain). NO model-toggle param — this
+// is a separate, always-first-click function so the call site decides which
+// lens to render.
+//
+// T0 (2026-06-02) MIRROR: just like the last-click matcher, first-click is
+// un-excluded for Google at CAMPAIGN GRAIN ONLY. Google's numeric campaign_id
+// reaches orders via ValueTrack tagging, so a Google campaign matches when
+// firstUtmId OR firstUtmCampaign equals the numeric campaignId (no Tier-2
+// name match for Google). There is NO Google ad grain — ads_daily has no
+// Google rows — so analyzeFirstClickForAd stays Google-excluded and reports
+// googleBlind=true. analyzeFirstClickForCampaign reports googleBlind=false
+// because Google IS analyzed at campaign grain.
+
+export type FirstClickAnalysis = {
+  /** Sum of totalCad over orders whose FIRST touch matches this entity. */
+  firstClickRevenue: number;
+  /** Count of first-click-matched orders. */
+  firstClickOrders: number;
+  /** firstClickRevenue / spend. 0 when spend <= 0. */
+  firstClickRoas: number;
+  /** True when this lens cannot see Google for the given entity (ad grain).
+   *  False at campaign grain, where Google IS analyzed (T0). Threaded so the
+   *  UI tooltip can state the caveat. */
+  googleBlind: boolean;
+};
+
+/**
+ * First-click match at CAMPAIGN grain.
+ *   Meta / TikTok:
+ *     Tier 1 — firstUtmId === campaignId (authoritative when present).
+ *     Tier 2 — firstUtmCampaign === campaignName (case-insensitive, trimmed).
+ *   Google (T0 — campaign grain ONLY):
+ *     firstUtmId OR firstUtmCampaign === the numeric campaignId (ValueTrack).
+ *     NO name-match fallback for Google (firstUtmCampaign carries the id).
+ * Orders with NO first-click signal (both keys null/empty) never match.
+ * Returns null only for unsupported platforms (not Meta/TikTok/Google) and
+ * for empty orders — mirrors orderMatchesCampaign / analyzeAttribution's
+ * early exits.
+ */
+export function analyzeFirstClickForCampaign(
+  campaign: {
+    campaignName: string;
+    campaignId?: string;
+    storeId: string;
+    platform: string;
+    spend: number;
+  },
+  orders: OrderAttributionRow[],
+  dateFrom: string,
+  dateTo: string,
+): FirstClickAnalysis | null {
+  if (
+    campaign.platform !== 'Meta' &&
+    campaign.platform !== 'TikTok' &&
+    campaign.platform !== 'Google'
+  ) {
+    return null;
+  }
+  if (!orders || orders.length === 0) return null;
+
+  const isGoogle = campaign.platform === 'Google';
+
+  const matched = orders.filter(o => {
+    if (o.storeId !== campaign.storeId) return false;
+    if (o.date < dateFrom || o.date > dateTo) return false;
+    if (!Number.isFinite(o.totalCad)) return false;
+
+    if (isGoogle) {
+      // Google campaign-grain (T0): ID-to-ID against the numeric campaignId.
+      // Both firstUtmId and firstUtmCampaign are accepted because ValueTrack
+      // may surface the id in either slot. NO name-match fallback.
+      if (!campaign.campaignId) return false;
+      const wantId = campaign.campaignId.trim();
+      return (!!o.firstUtmId && o.firstUtmId.trim() === wantId)
+          || (!!o.firstUtmCampaign && o.firstUtmCampaign.trim() === wantId);
+    }
+
+    // Meta / TikTok — Tier 1 first-click utm_id is authoritative when present.
+    if (o.firstUtmId) {
+      return !!campaign.campaignId
+        && o.firstUtmId.trim() === campaign.campaignId.trim();
+    }
+    // Tier 2 — fall back to first-click campaign-name match.
+    if (o.firstUtmCampaign) {
+      return o.firstUtmCampaign.trim().toLowerCase()
+           === campaign.campaignName.trim().toLowerCase();
+    }
+    return false; // no first-click signal
+  });
+
+  const firstClickRevenue = matched.reduce((s, o) => s + o.totalCad, 0);
+  const firstClickOrders = matched.length;
+  const firstClickRoas = campaign.spend > 0 ? firstClickRevenue / campaign.spend : 0;
+  // Google IS analyzed at campaign grain → not blind here.
+  return { firstClickRevenue, firstClickOrders, firstClickRoas, googleBlind: false };
+}
+
+/**
+ * First-click match at AD grain: firstUtmContent === adId. GOOGLE-EXCLUDED —
+ * ads_daily has no Google rows, so there is no Google ad grain; the result
+ * reports googleBlind=true so the UI can state the caveat. Same store/date/
+ * NaN guards as the campaign-grain analyzer.
+ */
+export function analyzeFirstClickForAd(
+  ad: {
+    adId: string;
+    adName: string;
+    storeId: string;
+    platform: string;
+    spend: number;
+  },
+  orders: OrderAttributionRow[],
+  dateFrom: string,
+  dateTo: string,
+): FirstClickAnalysis | null {
+  if (ad.platform !== 'Meta' && ad.platform !== 'TikTok') return null;
+  if (!orders || orders.length === 0) return null;
+  if (!ad.adId) return null;
+
+  const matched = orders.filter(o => {
+    if (o.storeId !== ad.storeId) return false;
+    if (o.date < dateFrom || o.date > dateTo) return false;
+    if (!Number.isFinite(o.totalCad)) return false;
+    return !!o.firstUtmContent && o.firstUtmContent.trim() === ad.adId.trim();
+  });
+
+  const firstClickRevenue = matched.reduce((s, o) => s + o.totalCad, 0);
+  const firstClickOrders = matched.length;
+  const firstClickRoas = ad.spend > 0 ? firstClickRevenue / ad.spend : 0;
+  // Ad grain cannot see Google → blind.
+  return { firstClickRevenue, firstClickOrders, firstClickRoas, googleBlind: true };
+}
+
 /**
  * Shared engine. Pulled out so the level-specific functions stay short
  * and the algorithm changes (Bayesian, outlier, etc.) ripple uniformly
