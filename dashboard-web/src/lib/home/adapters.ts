@@ -32,6 +32,7 @@ import type {
 import type {
   RoasChartPoint,
 } from '@/lib/synthesis/roasChart';
+import type { OrderAttributionRow } from '@/lib/ordersAttribution';
 import { storeHasTikTok } from '@/lib/platformsByStore';
 import {
   ANNOTATION_KIND_EMOJI,
@@ -481,5 +482,64 @@ export function toChartData(
         ? { roas: prevAgg.roas, revenue: prevAgg.revenue }
         : undefined,
     daysActive,
+  };
+}
+
+/* --------------------------------------------------------------------------
+ * Attribution coverage (hero-only, honest)
+ * -------------------------------------------------------------------------- */
+
+export interface CoverageResult {
+  total: number;
+  covered: number;
+  /** covered / total (0 when total === 0). */
+  coverageShare: number;
+  /** 1 − coverageShare (the unknown remainder). */
+  unknownShare: number;
+}
+
+/** An order is "covered" when it carries ANY attribution signal. */
+function hasAttributionSignal(o: OrderAttributionRow): boolean {
+  return (
+    o.fbclidPresent ||
+    o.gclidPresent ||
+    o.source.trim() !== '' ||
+    o.utmSource.trim() !== '' ||
+    o.utmMedium.trim() !== '' ||
+    o.utmCampaign.trim() !== '' ||
+    o.utmContent.trim() !== '' ||
+    o.utmId.trim() !== '' ||
+    o.utmTerm.trim() !== ''
+  );
+}
+
+/**
+ * Honest coverage from existing orders_attribution fields. Coverage =
+ * orders with any click-id/UTM ÷ total; unknown = remainder. The two shares
+ * sum to 1 and are NEVER redistributed across channels.
+ */
+export function computeCoverage(rows: readonly OrderAttributionRow[]): CoverageResult {
+  const total = rows.length;
+  if (total === 0) return { total: 0, covered: 0, coverageShare: 0, unknownShare: 0 };
+  let covered = 0;
+  for (const o of rows) if (hasAttributionSignal(o)) covered += 1;
+  const coverageShare = covered / total;
+  return { total, covered, coverageShare, unknownShare: 1 - coverageShare };
+}
+
+export interface CoverageChip {
+  coverageShare: number;
+  unknownShare: number;
+  /** Visually prominent ONLY when the unknown share exceeds 30%. */
+  prominent: boolean;
+}
+
+/** null when there are no orders (caller renders nothing). */
+export function toCoverageChip(r: CoverageResult): CoverageChip | null {
+  if (r.total === 0) return null;
+  return {
+    coverageShare: r.coverageShare,
+    unknownShare: r.unknownShare,
+    prominent: r.unknownShare > 0.3,
   };
 }
