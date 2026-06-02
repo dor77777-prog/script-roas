@@ -252,3 +252,43 @@ describe('<CommandCenterHero>', () => {
     });
   });
 });
+
+describe('<CommandCenterHero> — NC-ROAS / nCAC subordinate tile', () => {
+  const NC = { ncRoas: 2.1, nCac: 38, ncOrders: 12, unclassifiableShare: 0.18 };
+
+  it('renders the subordinate tile when newCustomer is provided', () => {
+    const { getByTestId } = render(
+      <CommandCenterHero current={PERIOD_GREEN} rangeLabel="היום" newCustomer={NC} />,
+    );
+    const tile = getByTestId('hero-nc-roas');
+    expect(tile).toBeTruthy();
+    // "different question" label — distinct from the main "ROAS" tile.
+    expect(tile.textContent).toContain('שאלה אחרת');
+    expect(tile.textContent).toContain('2.10'); // NC-ROAS value
+    expect(tile.textContent).toContain('$38');  // nCAC value
+  });
+
+  it('subordinate tile carries its OWN band (ncRoas=2.1 → orange), not the hero band (roas=2.8 → green)', () => {
+    const { getByTestId } = render(
+      <CommandCenterHero current={PERIOD_GREEN} rangeLabel="היום" newCustomer={NC} />,
+    );
+    // hero featured stays green (driven by current.roas = 2.8)
+    expect(getByTestId('hero-net-profit').getAttribute('data-band')).toBe('green');
+    // subordinate tile is orange (driven by its own ncRoas = 2.1)
+    expect(getByTestId('hero-nc-roas').getAttribute('data-band')).toBe('orange');
+  });
+
+  it('does NOT render the subordinate tile when newCustomer is omitted (back-compat)', () => {
+    const { queryByTestId } = render(
+      <CommandCenterHero current={PERIOD_GREEN} rangeLabel="היום" />,
+    );
+    expect(queryByTestId('hero-nc-roas')).toBeNull();
+  });
+
+  it('surfaces the unclassifiable share', () => {
+    const { getByTestId } = render(
+      <CommandCenterHero current={PERIOD_GREEN} rangeLabel="היום" newCustomer={NC} />,
+    );
+    expect(getByTestId('hero-nc-roas').textContent).toContain('18%');
+  });
+});

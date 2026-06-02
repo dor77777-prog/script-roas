@@ -165,6 +165,22 @@ export interface CommandCenterSecondarySparklines {
   cpm?: number[];
 }
 
+/**
+ * NC-ROAS / nCAC — a SUBORDINATE "different question" lens. Rendered as its
+ * OWN-band tile; never changes the hero's main band gradient (which stays
+ * driven by current.roas / MER). Omit to hide the tile entirely (back-compat).
+ */
+export interface CommandCenterNewCustomer {
+  /** New-customer ROAS (new-customer revenue ÷ MER spend). null → "—". */
+  ncRoas: number | null;
+  /** New-customer acquisition cost (MER spend ÷ new orders), CAD. null → "—". */
+  nCac: number | null;
+  /** New-customer order count. */
+  ncOrders: number;
+  /** Fraction of orders with unknown customer (guest checkout). */
+  unclassifiableShare: number;
+}
+
 export interface CommandCenterHeroProps {
   current: CommandCenterPeriod;
   /** Optional previous-period numbers; when omitted, delta lines hide. */
@@ -198,6 +214,8 @@ export interface CommandCenterHeroProps {
    * `useStaleness`: a single ISO timestamp or a per-platform record.
    */
   updatedAt?: StalenessInput;
+  /** Optional NC-ROAS / nCAC subordinate-tile data. Omit to hide. */
+  newCustomer?: CommandCenterNewCustomer;
   className?: string;
 }
 
@@ -505,6 +523,7 @@ export function CommandCenterHero({
   netSparkValues,
   secondarySparklines,
   updatedAt,
+  newCustomer,
   className,
 }: CommandCenterHeroProps) {
   // Business-ROAS band selector used by all 7 hero cards — Change
@@ -524,6 +543,10 @@ export function CommandCenterHero({
   // staleness will come back if we wire per-platform updatedAt later.)
   const freshness = useStaleness(updatedAt);
   const freshnessStage = updatedAt !== undefined ? freshness.stage : undefined;
+
+  // Subordinate NC-ROAS tile — its OWN band (different question), independent
+  // of the hero's MER band (netBand). Hidden entirely when newCustomer omitted.
+  const ncBand = useRoasBandGradient(newCustomer?.ncRoas ?? null);
 
   return (
     <section
@@ -798,6 +821,58 @@ export function CommandCenterHero({
           />
         </Card>
       </div>
+
+      {newCustomer && (
+        <div className="grid gap-3 grid-cols-1" data-testid="hero-nc-row">
+          <Card
+            band={ncBand.band}
+            bandStrength="muted"
+            freshness={freshnessStage}
+            className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
+            data-testid="hero-nc-roas"
+            title="לקוחות חדשים (הזמנה ראשונה אי-פעם). שאלה אחרת מ-MER: NC-ROAS = הכנסת לקוחות חדשים ÷ הוצאת פרסום; nCAC = הוצאת פרסום ÷ הזמנות חדשות."
+          >
+            <HeroCardHeader label="לקוחות חדשים · שאלה אחרת" />
+            <div className="flex items-end gap-6 mt-2">
+              <div>
+                <div className="hero-eyebrow text-[10.5px] uppercase tracking-[0.08em] text-ink-muted font-semibold">
+                  NC-ROAS
+                </div>
+                <bdi
+                  dir="ltr"
+                  className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] text-[1.625rem] whitespace-nowrap"
+                >
+                  {newCustomer.ncRoas != null ? (
+                    <CountUp value={newCustomer.ncRoas} format={fmtRoas} />
+                  ) : (
+                    '—'
+                  )}
+                </bdi>
+              </div>
+              <div>
+                <div className="hero-eyebrow text-[10.5px] uppercase tracking-[0.08em] text-ink-muted font-semibold">
+                  nCAC
+                </div>
+                <bdi
+                  dir="ltr"
+                  className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] text-[1.625rem] whitespace-nowrap"
+                >
+                  <Money value={newCustomer.nCac} prefix="$" compactAbove={1_000_000} countUp />
+                </bdi>
+              </div>
+            </div>
+            <div
+              className="text-xs mt-1.5 text-ink-muted tabular-nums"
+              data-testid="hero-nc-unclassifiable"
+            >
+              <bdi dir="rtl">
+                {newCustomer.ncOrders.toLocaleString('en-US')} הזמנות חדשות ·{' '}
+                {(newCustomer.unclassifiableShare * 100).toFixed(0)}% לא מסווג
+              </bdi>
+            </div>
+          </Card>
+        </div>
+      )}
     </section>
   );
 }
