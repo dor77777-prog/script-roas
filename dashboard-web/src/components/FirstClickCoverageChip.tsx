@@ -1,4 +1,5 @@
 import { cn } from '@/lib/utils';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 
 /**
  * Phase 4 — first-click coverage chip. Coverage = first-click-matched orders
@@ -24,19 +25,20 @@ export function FirstClickCoverageChip({
     'תמיד <= last-click (לכידת cookie/cart לוסית יותר מ-click-id). ' +
     'first-click עיוור ל-Google (כמו last-click).';
   return (
-    <span
-      data-testid="first-click-coverage-chip"
-      data-tone={tone}
-      title={title}
-      className={cn(
-        'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium tabular-nums',
-        tone === 'quiet'
-          ? 'bg-glass-2 text-ink-secondary'
-          : 'bg-status-warningBg text-status-warningFg',
-      )}
-    >
-      <bdi dir="ltr">{pct}%</bdi>
-      <span>first-click</span>
-    </span>
+    <HelpTooltip content={title}>
+      <span
+        data-testid="first-click-coverage-chip"
+        data-tone={tone}
+        className={cn(
+          'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium tabular-nums cursor-help',
+          tone === 'quiet'
+            ? 'bg-glass-2 text-ink-secondary'
+            : 'bg-status-warningBg text-status-warningFg',
+        )}
+      >
+        <bdi dir="ltr">{pct}%</bdi>
+        <span>first-click</span>
+      </span>
+    </HelpTooltip>
   );
 }

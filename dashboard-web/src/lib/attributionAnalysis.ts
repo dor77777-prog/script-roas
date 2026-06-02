@@ -327,8 +327,9 @@ export function orderMatchesCampaign(
  *      Shopify saw more than Meta claimed (halo effect or wrong mapping —
  *      still useful signal).
  *
- * Returns AttributionAnalysis | null when input is unusable (Google
- * campaign, no orders data, etc.).
+ * Returns AttributionAnalysis | null when input is unusable (no orders data,
+ * etc.). Google campaigns ARE analyzed at campaign grain since 2026-06-02
+ * (T0 un-exclude — matched via utm_id OR utm_campaign === Google campaign_id).
  */
 export function analyzeAttribution(
   campaign: {

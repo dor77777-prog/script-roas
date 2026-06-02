@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { FirstClickCoverageChip } from '@/components/FirstClickCoverageChip';
 
 describe('FirstClickCoverageChip', () => {
@@ -25,8 +25,12 @@ describe('FirstClickCoverageChip', () => {
     expect(screen.getByTestId('first-click-coverage-chip').getAttribute('data-tone')).toBe('warn');
   });
 
-  it('exposes the Google-blind caveat in the title', () => {
+  it('exposes the Google-blind caveat in the tooltip', async () => {
+    // The chip wires its caveat through the Radix <HelpTooltip> (the repo's
+    // no-native-title rule forbids title=); content mounts on hover.
     render(<FirstClickCoverageChip firstClickOrders={3} lastClickOrders={10} />);
-    expect(screen.getByTestId('first-click-coverage-chip').getAttribute('title')).toContain('Google');
+    fireEvent.pointerMove(screen.getByTestId('first-click-coverage-chip'));
+    const tip = await screen.findByRole('tooltip');
+    expect(tip.textContent).toContain('Google');
   });
 });
