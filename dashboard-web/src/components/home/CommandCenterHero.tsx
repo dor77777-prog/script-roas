@@ -72,6 +72,8 @@ import { Card } from '@/components/ui/Card';
 import { Money } from '@/components/ui/Money';
 import { CountUp } from '@/components/ui/CountUp';
 import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
+import { CoverageChip } from '@/components/home/CoverageChip';
+import type { CoverageChip as CoverageChipData } from '@/lib/home/adapters';
 import {
   useRoasBandGradient,
   type RoasBand,
@@ -169,6 +171,8 @@ export interface CommandCenterHeroProps {
   delta?: CommandCenterDelta;
   /** Range label used in the Net-Profit eyebrow ("היום" / "30 ימים"). */
   rangeLabel: string;
+  /** Honest attribution-coverage chip — hero-only. Pass null to hide. */
+  coverage?: CoverageChipData | null;
   /**
    * "vs <previous period>" caption for the featured card's delta line. The
    * delta compares against the previous equal-length period, so this must track
@@ -496,6 +500,7 @@ export function CommandCenterHero({
   current,
   delta,
   rangeLabel,
+  coverage,
   comparisonLabel = 'מול אתמול',
   netSparkValues,
   secondarySparklines,
@@ -525,6 +530,18 @@ export function CommandCenterHero({
       aria-label="סקירת תקופה"
       className={cn('space-y-3', className)}
     >
+      {/*
+        Hero header region — quiet, visually subordinate. Carries the
+        attribution-coverage chip (HERO ONLY — never per-store). Renders
+        nothing when `coverage` is null/undefined, so the row collapses
+        cleanly while the chip is unwired or there are no orders.
+      */}
+      {coverage != null && (
+        <div className="flex items-center justify-end" data-testid="hero-coverage-row">
+          <CoverageChip coverage={coverage} />
+        </div>
+      )}
+
       {/*
         Row 1 — DOM order Revenue · Spend · Operating Profit (featured + banded).
         The mockup (`.row3b`, grid-template-columns: 1fr 1fr 1.15fr) is rendered

@@ -81,7 +81,11 @@ import {
   toPerStoreData,
   toChartData,
   toSecondarySparklines,
+  computeCoverage,
+  toCoverageChip,
+  type CoverageChip as CoverageChipData,
 } from '@/lib/home/adapters';
+import type { OrderAttributionRow } from '@/lib/ordersAttribution';
 
 // All client fetchers route through fetchJson → `cache: 'no-store'` so mobile
 // browsers never serve a stale cached response (the root cause of "data won't
@@ -93,7 +97,14 @@ const fetcher = (url: string) => fetchJson<DashboardData>(url);
 // Returns the orders-attribution rows for the current range so the dashboard
 // can surface per-store order counts (live + range-based) in cards.
 type OrdersResponseShape = {
-  rows: Array<{ storeName: string; date: string }>;
+  // The /api/orders-attribution route returns full OrderAttributionRow[] (see
+  // its `satisfies OrdersAttributionResponse`). Earlier this was narrowed to
+  // `{ storeName, date }` because the only consumers were the per-store count
+  // + Orders sparkline; the hero attribution-coverage chip (2026-06-02) needs
+  // the click-id/UTM fields too, so we type the rows as the real shape. The
+  // narrowed `ordersRows?: { storeName; date }[]` prop on HomeTab stays a
+  // structural subset and keeps accepting these rows unchanged.
+  rows: OrderAttributionRow[];
   lastUpdated: string;
   error?: string;
 };
@@ -176,6 +187,16 @@ export function Dashboard() {
     buildDateRangeKey('/api/orders-attribution', filters.range),
     ordersFetcher,
     { refreshInterval: 60_000, revalidateOnFocus: true },
+  );
+
+  // Honest hero-only attribution-coverage chip (2026-06-02). Computed from the
+  // SAME current-range orders-attribution rows the per-store counts already
+  // consume — no second fetch. null while rows are unwired / there are no
+  // orders, so the hero header collapses cleanly. Quiet by default; prominent
+  // only when >30% of orders carry no click-id/UTM. HERO ONLY — never per-store.
+  const coverageChip: CoverageChipData | null = useMemo(
+    () => toCoverageChip(computeCoverage(ordersData?.rows ?? [])),
+    [ordersData],
   );
 
   // Counter that increments whenever the command palette wants to open the
@@ -421,6 +442,7 @@ export function Dashboard() {
                   aiReportSignal={aiReportSignal}
                   ordersByStore={ordersByStore}
                   ordersRows={ordersData?.rows}
+                  coverage={coverageChip}
                   onSeeActivity={() => handleTabChange('activity')}
                 />
               )}
@@ -501,6 +523,7 @@ function HomeTab({
   aiReportSignal,
   ordersByStore,
   ordersRows,
+  coverage,
   onSeeActivity,
 }: {
   data: DashboardData;
@@ -517,6 +540,12 @@ function HomeTab({
    * the per-store order count already consumes — no second SWR fetch.
    */
   ordersRows?: Array<{ storeName: string; date: string }>;
+  /**
+   * Honest attribution-coverage chip (2026-06-02) — HERO ONLY. Computed
+   * upstream from the same current-range orders-attribution rows. null hides
+   * it (no orders / unwired). Never passed to per-store cards.
+   */
+  coverage?: CoverageChipData | null;
   /**
    * Switches the dashboard to the "פעילות" (Activity) tab — wired to the
    * "ראה הכל" link in the Home <ActivityFeed> footer.
@@ -998,6 +1027,7 @@ function HomeTab({
         current={heroPeriod}
         delta={heroDelta}
         rangeLabel={heroRangeLabel}
+        coverage={coverage ?? null}
         comparisonLabel={comparisonLabelHebrew(filters.preset)}
         netSparkValues={netSparkValues}
         secondarySparklines={secondarySparklines}
