@@ -761,8 +761,9 @@ export function CommandCenterHero({
           freshness={freshnessStage}
           className="hero-card px-3.5 py-4 sm:px-5 sm:py-5"
           data-testid="hero-roas"
+          title="MER — Marketing Efficiency Ratio: סך ההכנסות ÷ סך ההוצאות (ROAS משוקלל על כל הפלטפורמות). מקור האמת היחיד לרווחיות הפרסום."
         >
-          <HeroCardHeader label="ROAS" />
+          <HeroCardHeader label="MER" />
           <bdi
             dir="ltr"
             className="v num banded block font-extrabold tabular-nums tracking-tight leading-[1.05] mt-2 text-[1.625rem] whitespace-nowrap"
