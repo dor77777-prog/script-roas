@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from 'vitest';
-import { render, cleanup } from '@testing-library/react';
+import { render, cleanup, screen, fireEvent } from '@testing-library/react';
 import { CoverageChip } from '@/components/home/CoverageChip';
 
 afterEach(() => cleanup());
@@ -27,10 +27,17 @@ describe('CoverageChip (2026-06-02)', () => {
     expect(getByTestId('coverage-chip').getAttribute('data-prominent')).toBe('true');
   });
 
-  it('carries a tooltip naming legit unknown causes', () => {
-    const { getByTestId } = render(
+  // The chip wires its help text through the Radix-based <HelpTooltip>
+  // primitive (commit fee304a replaced the native `title` attribute), so the
+  // content lives in a portal that only mounts once the tooltip opens. Mirror
+  // the established pattern in components/ui/__tests__/Tooltip.test.tsx: hover
+  // the trigger, then assert the rendered tooltip names the legit causes.
+  it('carries a tooltip naming legit unknown causes', async () => {
+    render(
       <CoverageChip coverage={{ coverageShare: 0.55, unknownShare: 0.45, prominent: true }} />,
     );
-    expect(getByTestId('coverage-chip').getAttribute('title') ?? '').toMatch(/express|headless|untagged|privacy|תשלום מהיר|לא מתויג/i);
+    fireEvent.pointerMove(screen.getByTestId('coverage-chip'));
+    const tip = await screen.findByRole('tooltip');
+    expect(tip.textContent ?? '').toMatch(/express|headless|untagged|privacy|תשלום מהיר|לא מתויג/i);
   });
 });
