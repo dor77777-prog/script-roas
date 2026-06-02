@@ -136,6 +136,11 @@ export function StoreDetailModal({
     data?.zeroSalesWithSpend ?? false,
   ).band;
 
+  // Phase 3 — band for the per-store NC-ROAS tile (its OWN "different question"
+  // band; never the header ROAS gradient). Hoisted above the early return so
+  // the hook is called unconditionally on every render (rules-of-hooks).
+  const ncBand = useRoasBandGradient(data?.newCustomer?.ncRoas ?? null).band;
+
   // Store-scoped DailySeries for the embedded RoasChart. We rebuild the minimal
   // shape RoasChart needs (`byStore[storeName]` per day) from `data.roasSeries`
   // — RoasChart reads ONLY byStore[store] + date, so the totals can stay 0.
@@ -312,7 +317,7 @@ export function StoreDetailModal({
               never touches the header ROAS band gradient. */}
           <section data-testid="store-detail-nc">
             <Card
-              band={useRoasBandGradient(data.newCustomer.ncRoas).band}
+              band={ncBand}
               bandStrength="muted"
               className="!p-3 sm:!p-4"
               title="לקוחות חדשים (הזמנה ראשונה אי-פעם). NC-ROAS = הכנסת לקוחות חדשים ÷ הוצאת פרסום; nCAC = הוצאת פרסום ÷ הזמנות חדשות."
