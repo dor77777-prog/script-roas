@@ -16,7 +16,11 @@
  * Keep this list in sync with `cloudSync.ts:STATE_KEYS`. The two cannot
  * share the same array because `cloudSync.ts` is browser-side code (uses
  * `window` + `localStorage`); importing it from this server-safe module
- * would bundle in client-only references on the server.
+ * would bundle in client-only references on the server. Parity is ENFORCED
+ * by `lib/__tests__/stateKeysParity.test.ts` (added after the 2026-06-02 COGS
+ * sync bug, where `cogs-settings` lived in STATE_KEYS but was missing here →
+ * every COGS POST got a 400 and never reached Postgres). A new synced key MUST
+ * be added to BOTH lists or that guard fails.
  *
  * Relocated from `lib/sheets.ts` in Phase 11 (Apps Script decommission) —
  * sheets.ts was the last surviving owner of this allowlist and the only
@@ -32,6 +36,9 @@ export const ALLOWED_STATE_KEYS = [
   'campaign-product-map',
   'campaigns-column-visibility',
   'campaign-store-map',
+  // Editable COGS % (2026-06-01) — per-month, retroactive, business/per-store.
+  // Added 2026-06-02 to match cloudSync.ts:STATE_KEYS and restore cross-device sync.
+  'cogs-settings',
 ] as const;
 
 export type AllowedStateKey = (typeof ALLOWED_STATE_KEYS)[number];

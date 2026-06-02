@@ -43,8 +43,14 @@
  * closes the asymmetry the prior `pushCloudKey(string, unknown)` signature
  * permitted, where a developer could send a never-hydrated key into the
  * void.
+ *
+ * Exported so the parity guard (`__tests__/stateKeysParity.test.ts`) can assert
+ * this list and the server allowlist (`dashboardStateKeys.ts:ALLOWED_STATE_KEYS`)
+ * stay in lock-step — drift here previously broke COGS cross-device sync
+ * (2026-06-02). Test-only import; the server module must NOT import this
+ * browser-side module.
  */
-const STATE_KEYS = [
+export const STATE_KEYS = [
   'roas-dashboard:billing-recurring',
   'roas-dashboard:billing-onetime',
   'roas-dashboard:annotations',
