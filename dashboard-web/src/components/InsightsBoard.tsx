@@ -32,6 +32,7 @@ import {
   type Severity,
 } from '@/lib/insights';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrNull } from '@/lib/fetchJson';
 import { AiInsightPill } from '@/components/ui/AiInsightPill';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -40,8 +41,6 @@ import { Heading } from '@/components/ui/Typography';
 import { HelpTooltip } from '@/components/ui/Tooltip';
 import { InsightActions } from '@/components/insights/InsightActions';
 import { useStoreAdAccounts } from '@/lib/hooks/useStoreAdAccounts';
-
-const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(r => (r.ok ? r.json() : null));
 
 const SEVERITY_META: Record<
   Severity,
@@ -106,11 +105,11 @@ const BOARD_EXPANDED_KEY = 'roas-dashboard:insights-expanded';
 
 export function InsightsBoard({ data }: Props) {
   const { data: products, isLoading: pLoading } = useSWR<ProductsResponse | null>(
-    '/api/products', fetcher,
+    '/api/products', fetchJsonOrNull,
     { refreshInterval: 120_000, revalidateOnFocus: false },
   );
   const { data: campaigns, isLoading: cLoading } = useSWR<CampaignsResponse | null>(
-    '/api/campaigns', fetcher,
+    '/api/campaigns', fetchJsonOrNull,
     { refreshInterval: 120_000, revalidateOnFocus: false },
   );
   // Task 5.6 (P1-10 / Q7) — feeds `InsightActions` deep-links with

@@ -32,6 +32,7 @@ import {
   Monitor,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { fetchJsonOrNull } from '@/lib/fetchJson';
 import { useTheme } from './ThemeProvider';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -63,8 +64,6 @@ import type { ProductsResponse } from '@/app/api/products/route';
  */
 
 type TabKey = 'home' | 'activity' | 'archive' | 'pnl' | 'trends' | 'campaigns' | 'products' | 'detail';
-
-const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(r => (r.ok ? r.json() : null));
 
 type CommandKind = 'tab' | 'preset' | 'store' | 'campaign' | 'product' | 'action';
 
@@ -117,12 +116,12 @@ export function CommandPalette({
   const [warmCache, setWarmCache] = useState(false);
   const { data: products } = useSWR<ProductsResponse | null>(
     warmCache ? '/api/products' : null,
-    fetcher,
+    fetchJsonOrNull,
     { revalidateOnFocus: false },
   );
   const { data: campaigns } = useSWR<CampaignsResponse | null>(
     warmCache ? '/api/campaigns' : null,
-    fetcher,
+    fetchJsonOrNull,
     { revalidateOnFocus: false },
   );
 

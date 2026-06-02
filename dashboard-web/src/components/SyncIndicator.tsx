@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { getSyncState, hydrateFromCloud, type SyncState } from '@/lib/cloudSync';
 import type { HealthResponse } from '@/app/api/health/route';
 import { Button } from '@/components/ui/Button';
+import { fetchJsonOrNull } from '@/lib/fetchJson';
 
 /**
  * Header pill showing the current cloud-sync status. Clicking the pill (in
@@ -24,8 +25,6 @@ import { Button } from '@/components/ui/Button';
  * Supabase enters the read path.
  */
 
-const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(r => (r.ok ? r.json() : null));
-
 export function SyncIndicator() {
   const [state, setState] = useState<SyncState>(() => getSyncState());
   const [expanded, setExpanded] = useState(false);
@@ -34,10 +33,10 @@ export function SyncIndicator() {
   const [, setTick] = useState(0);
 
   // D-D2: poll /api/health every 30s — same cadence as the existing 30s
-  // tickInterval below. Returns null on non-2xx per the fetcher contract.
+  // tickInterval below. Returns null on non-2xx per the fetchJsonOrNull contract.
   const { data: health } = useSWR<HealthResponse | null>(
     '/api/health',
-    fetcher,
+    fetchJsonOrNull,
     {
       refreshInterval: 30_000,
       revalidateOnFocus: true,

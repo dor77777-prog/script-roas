@@ -15,8 +15,7 @@ import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/rou
 import type { AdsResponse } from '@/app/api/ads/route';
 import { buildDateRangeKey } from '@/lib/dateRange';
 import { readProductMap } from '@/lib/campaignProductMap';
-
-const fetcher = (url: string) => fetch(url, { cache: 'no-store' }).then(r => r.ok ? r.json() : null);
+import { fetchJsonOrNull } from '@/lib/fetchJson';
 
 type Props = {
   data: DashboardData;
@@ -62,16 +61,16 @@ export function AiReportButton({ data, filters, openSignal }: Props) {
   const campaignsKey = open ? buildDateRangeKey('/api/campaigns', filters.range) : null;
   const ordersKey = open ? buildDateRangeKey('/api/orders-attribution', filters.range) : null;
   const adsKey = open ? buildDateRangeKey('/api/ads', filters.range) : null;
-  const { data: products } = useSWR<ProductsResponse | null>(productsKey, fetcher, {
+  const { data: products } = useSWR<ProductsResponse | null>(productsKey, fetchJsonOrNull, {
     revalidateOnFocus: false,
   });
-  const { data: campaigns } = useSWR<CampaignsResponse | null>(campaignsKey, fetcher, {
+  const { data: campaigns } = useSWR<CampaignsResponse | null>(campaignsKey, fetchJsonOrNull, {
     revalidateOnFocus: false,
   });
-  const { data: orders } = useSWR<OrdersAttributionResponse | null>(ordersKey, fetcher, {
+  const { data: orders } = useSWR<OrdersAttributionResponse | null>(ordersKey, fetchJsonOrNull, {
     revalidateOnFocus: false,
   });
-  const { data: ads } = useSWR<AdsResponse | null>(adsKey, fetcher, {
+  const { data: ads } = useSWR<AdsResponse | null>(adsKey, fetchJsonOrNull, {
     revalidateOnFocus: false,
   });
 
