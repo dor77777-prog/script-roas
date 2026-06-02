@@ -22,7 +22,9 @@ import { fmtMoney, fmtMoneyString } from '@/lib/format';
 import { roasLabel } from '@/lib/analytics';
 import type { AdsResponse } from '@/app/api/ads/route';
 import type { OrdersAttributionResponse } from '@/app/api/orders-attribution/route';
-import { analyzeAttributionForAd } from '@/lib/attributionAnalysis';
+import { analyzeAttributionForAd, analyzeFirstClickForAd } from '@/lib/attributionAnalysis';
+import { firstClickDelta } from '@/components/firstClickDelta';
+import { FirstClickCoverageChip } from '@/components/FirstClickCoverageChip';
 import { buildAdsManagerLink, type AdAccountMap } from '@/lib/campaignsLinks';
 import { readOptimized, toggleOptimized } from '@/lib/campaignOptimized';
 import { useDrawerEsc } from '@/lib/drawerStack';
@@ -313,6 +315,36 @@ export function AdsDrawer({
     return out;
   }, [summary, ordersAttrData, rangeFrom, rangeTo, dailyMetaByAd]);
 
+  // Plan C (Phase 4) — per-ad first-click analysis, keyed exactly like
+  // attributionByAd (`adId || adName`) so the cell looks it up O(1). Reuses the
+  // same summary / orders / range the deterministic memo already holds.
+  // Google-blind by construction (analyzeFirstClickForAd returns null for
+  // non-Meta/TikTok platforms; no Google rows at ad grain).
+  const firstClickByAd = useMemo(() => {
+    const out = new Map<string, ReturnType<typeof analyzeFirstClickForAd>>();
+    if (!summary) return out;
+    const ordersRows = ordersAttrData?.rows ?? [];
+    if (ordersRows.length === 0) return out;
+    for (const a of summary.ads) {
+      out.set(
+        a.adId || a.adName,
+        analyzeFirstClickForAd(
+          {
+            adId: a.adId,
+            adName: a.adName,
+            storeId: a.storeId,
+            platform: a.platform,
+            spend: a.spend,
+          },
+          ordersRows,
+          rangeFrom,
+          rangeTo,
+        ),
+      );
+    }
+    return out;
+  }, [summary, ordersAttrData, rangeFrom, rangeTo]);
+
   if (!open) return null;
   // Defensive guard. CampaignDrawer and CampaignsTable BOTH pass
   // localRange.from / localRange.to (the toolbar's date range) directly
@@ -527,6 +559,11 @@ export function AdsDrawer({
                           <span>ROAS Shopify</span>
                         </HelpTooltip>
                       </th>
+                      <th className="font-medium px-3 py-2 text-center text-ink-secondary opacity-80">
+                        <HelpTooltip content="ROAS לפי first-click (utm_content={{ad.id}} מהמגע הראשון). מבוא ללקוח, לא רק סגירה. עיוור ל-Google. כיסוי <= last-click.">
+                          <span>first-click</span>
+                        </HelpTooltip>
+                      </th>
                       <AdSortHeader label="המרות"     col="conversions" sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
                       <AdSortHeader label="חשיפות"    col="impressions" sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
                       <AdSortHeader label="קליקים"    col="clicks"      sortKey={sortKey} dir={sortDir} onClick={handleSort} align="end"    />
@@ -629,6 +666,49 @@ export function AdsDrawer({
                                     <span className={cn('inline-block text-[8px] font-bold px-1 py-0 rounded uppercase tracking-wider', tone)}>
                                       {adAttr.trust.label}
                                     </span>
+                                  </div>
+                                </HelpTooltip>
+                              );
+                            })()}
+                          </td>
+                          {/* Plan C (Phase 4) — first-click ROAS + delta beside
+                              last-click "ROAS Shopify". ~80% prominence; delta
+                              on hover; coverage chip. Google-blind + floor
+                              caveats in the tooltip. */}
+                          <td className="px-3 py-2 text-center" data-testid={`first-click-roas-${a.adId || a.adName}`}>
+                            {(() => {
+                              const fc = firstClickByAd.get(a.adId || a.adName) ?? null;
+                              const adAttr = attributionByAd.get(a.adId || a.adName) ?? null;
+                              if (!fc) return <span className="text-ink-muted text-xs">—</span>;
+                              const lastClickRoas = a.spend > 0 && adAttr
+                                ? adAttr.deterministicRevenue / a.spend
+                                : 0;
+                              const d = firstClickDelta(fc.firstClickRoas, lastClickRoas);
+                              const tooltip =
+                                `first-click ROAS: ${fc.firstClickRoas.toFixed(2)}x (${fc.firstClickOrders} הזמנות)\n` +
+                                `last-click ROAS Shopify: ${lastClickRoas.toFixed(2)}x\n` +
+                                (d ? `delta: ${d.label}\n` : '') +
+                                '\nfirst-click = המגע הראשון. עיוור ל-Google. כיסוי <= last-click.';
+                              return (
+                                <HelpTooltip content={tooltip}>
+                                  <div className="inline-flex flex-col items-center gap-0.5 opacity-80">
+                                    <span className="font-medium tabular-nums text-ink">
+                                      {fc.firstClickRoas > 0 ? formatNumber(fc.firstClickRoas) : '—'}
+                                    </span>
+                                    {d && (
+                                      <span className={cn(
+                                        'text-[10px] font-semibold tabular-nums',
+                                        d.direction === 'up'   ? 'text-status-greenFg'
+                                      : d.direction === 'down' ? 'text-status-redFg'
+                                      :                          'text-ink-muted',
+                                      )}>
+                                        <bdi dir="ltr">{d.label}</bdi>
+                                      </span>
+                                    )}
+                                    <FirstClickCoverageChip
+                                      firstClickOrders={fc.firstClickOrders}
+                                      lastClickOrders={adAttr ? adAttr.deterministicOrders : 0}
+                                    />
                                   </div>
                                 </HelpTooltip>
                               );
