@@ -222,6 +222,12 @@ export type ShopifyOrderRow = {
   utmId: string | null;
   utmTerm: string | null;
   lineItems: Array<{ p: string; u: number; r: number }> | null;
+  /** Phase 3 — Shopify opaque numeric customer id (string), null on guest
+   *  checkout. Privacy: ONLY the id is captured — never name/email/phone. */
+  customerId: string | null;
+  /** Phase 3 — order creation timestamp (Shopify `created_at`, ISO-8601 with
+   *  offset). Drives the first-order-EVER MIN() in recompute_first_order_flags. */
+  createdAt: string | null;
 };
 
 // =============================================================================
@@ -805,6 +811,8 @@ type ShopifyOrderPayload = {
     quantity?: number | string;
     price?: number | string;
   }>;
+  created_at?: string;
+  customer?: { id?: number | string | null } | null;
 };
 
 function safeDecode(s: string): string {
@@ -1018,7 +1026,7 @@ export async function fetchShopifyOrdersAttribution(
   const dayEnd = isoLocalMidnight(nextDayStr(dateStr), SHOPIFY_TZ);
   const fields =
     'id,total_price,financial_status,test,landing_site,referring_site,' +
-    'note_attributes,source_name,line_items';
+    'note_attributes,source_name,line_items,customer,created_at';
 
   let url: string | undefined =
     `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/orders.json` +
@@ -1073,6 +1081,8 @@ export async function fetchShopifyOrdersAttribution(
         utmId: classified.utmId || null,
         utmTerm: classified.utmTerm || null,
         lineItems: computeLineItemsCad(o, totalCad),
+        customerId: o.customer?.id != null ? String(o.customer.id) : null,
+        createdAt: o.created_at ? String(o.created_at) : null,
       });
     }
 
