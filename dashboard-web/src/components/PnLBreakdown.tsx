@@ -263,7 +263,7 @@ export function PnLBreakdown({ current, storeNames, rangeFrom, rangeTo, rows = [
               amount={-current.spend}
               pct={-pct(current.spend)}
               tone="cost"
-              note={`${(current.ttSpend ?? 0) > 0 ? 'Meta + Google + TikTok' : 'Meta + Google'} · ROAS ${current.roas > 0 ? current.roas.toFixed(2) : '—'}`}
+              note={`${(current.ttSpend ?? 0) > 0 ? 'Meta + Google + TikTok' : 'Meta + Google'} · MER ${current.roas > 0 ? current.roas.toFixed(2) : '—'}`}
               running={afterAd}
             />
             <PnLLine
