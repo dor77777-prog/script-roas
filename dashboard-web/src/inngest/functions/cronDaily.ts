@@ -117,6 +117,21 @@ export type OrderAttributionUpsertRow = {
   // recompute_first_order_flags() + the one-time Bulk-Operations backfill.
   customer_id: string | null;
   order_created_at: string | null;
+  // Phase 4 (2026-06-02) — first-click lens. Additive nullable columns
+  // (migration 20260603090000); both writers dual-write them through this
+  // mapper. NULL = "no first-click signal" (explicitly NOT 'direct'). The
+  // first_* values are read-only toward ad platforms (Shopify cart attrs only).
+  first_touch_source: string | null;
+  first_fbclid_present: boolean;
+  first_gclid_present: boolean;
+  first_ttclid_present: boolean;
+  first_utm_source: string | null;
+  first_utm_medium: string | null;
+  first_utm_campaign: string | null;
+  first_utm_content: string | null;
+  first_utm_id: string | null;
+  first_utm_term: string | null;
+  first_seen_at: string | null;
 };
 
 export function toOrdersAttributionRow(o: {
@@ -137,6 +152,17 @@ export function toOrdersAttributionRow(o: {
   lineItems: unknown;
   customerId: string | null;
   createdAt: string | null;
+  firstTouchSource: string | null;
+  firstFbclidPresent: boolean;
+  firstGclidPresent: boolean;
+  firstTtclidPresent: boolean;
+  firstUtmSource: string | null;
+  firstUtmMedium: string | null;
+  firstUtmCampaign: string | null;
+  firstUtmContent: string | null;
+  firstUtmId: string | null;
+  firstUtmTerm: string | null;
+  firstSeenAt: string | null;
 }): OrderAttributionUpsertRow {
   return {
     store_id: o.storeId,
@@ -156,6 +182,17 @@ export function toOrdersAttributionRow(o: {
     line_items: o.lineItems,
     customer_id: o.customerId,
     order_created_at: o.createdAt,
+    first_touch_source: o.firstTouchSource,
+    first_fbclid_present: o.firstFbclidPresent,
+    first_gclid_present: o.firstGclidPresent,
+    first_ttclid_present: o.firstTtclidPresent,
+    first_utm_source: o.firstUtmSource,
+    first_utm_medium: o.firstUtmMedium,
+    first_utm_campaign: o.firstUtmCampaign,
+    first_utm_content: o.firstUtmContent,
+    first_utm_id: o.firstUtmId,
+    first_utm_term: o.firstUtmTerm,
+    first_seen_at: o.firstSeenAt,
   };
 }
 
@@ -179,6 +216,17 @@ export function ordersAttributionRowKeys(): string[] {
       lineItems: [],
       customerId: null,
       createdAt: null,
+      firstTouchSource: null,
+      firstFbclidPresent: false,
+      firstGclidPresent: false,
+      firstTtclidPresent: false,
+      firstUtmSource: null,
+      firstUtmMedium: null,
+      firstUtmCampaign: null,
+      firstUtmContent: null,
+      firstUtmId: null,
+      firstUtmTerm: null,
+      firstSeenAt: null,
     }),
   );
 }

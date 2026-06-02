@@ -34,6 +34,21 @@ describe('orders_attribution dual-write key parity', () => {
         // the writers — so it is NOT in this writer key set.
         'customer_id',
         'order_created_at',
+        // Phase 4 (2026-06-02) — first-click lens columns (additive, migration
+        // 20260603090000). Dual-written by both maps via the same mapper.
+        // NULL = "no first-click signal" (NOT 'direct'); read-only toward ad
+        // platforms (Shopify cart attributes only).
+        'first_touch_source',
+        'first_fbclid_present',
+        'first_gclid_present',
+        'first_ttclid_present',
+        'first_utm_source',
+        'first_utm_medium',
+        'first_utm_campaign',
+        'first_utm_content',
+        'first_utm_id',
+        'first_utm_term',
+        'first_seen_at',
       ].sort(),
     );
   });
