@@ -112,3 +112,27 @@ export function salariesForRange(s: SalarySettings, rows: readonly DailyRow[], r
   }
   return total;
 }
+
+export type SalaryApplyScope =
+  | { kind: 'current'; currentMonth: string }
+  | { kind: 'specific'; month: string }
+  | { kind: 'all-previous'; currentMonth: string }
+  | { kind: 'everything' };
+
+/**
+ * Pure: produce a new SalarySettings with `entry` applied per the chosen
+ * apply-scope. `monthsInData` = the 'YYYY-MM' candidates for 'all-previous'.
+ */
+export function applySalaryToScope(
+  s: SalarySettings, entry: SalaryEntry, apply: SalaryApplyScope, monthsInData: string[],
+): SalarySettings {
+  const byMonth = { ...s.byMonth };
+  switch (apply.kind) {
+    case 'current':  byMonth[apply.currentMonth] = entry; return { ...s, byMonth };
+    case 'specific': byMonth[apply.month] = entry; return { ...s, byMonth };
+    case 'all-previous':
+      for (const m of monthsInData) if (m < apply.currentMonth) byMonth[m] = entry;
+      return { ...s, byMonth };
+    case 'everything': return { ...s, default: entry, byMonth: {} };
+  }
+}

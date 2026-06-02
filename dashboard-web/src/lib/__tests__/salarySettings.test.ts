@@ -135,3 +135,39 @@ describe('salariesForRange', () => {
     expect(salariesForRange(defaultSalarySettings(), [], { from: '2026-06-01', to: '2026-06-30' })).toBe(0);
   });
 });
+
+import { applySalaryToScope, type SalaryApplyScope } from '@/lib/salarySettings';
+
+describe('applySalaryToScope — the 4 apply-scopes (business-only)', () => {
+  const base = (): SalarySettings => ({
+    v: 1, default: { kind: 'percent', value: 7 },
+    byMonth: { '2026-04': { kind: 'amount', value: 5000 } },
+  });
+  const entry: SalaryEntry = { kind: 'percent', value: 10 };
+
+  it('current → sets byMonth[current], leaves others + default', () => {
+    const out = applySalaryToScope(base(), entry, { kind: 'current', currentMonth: '2026-06' }, ['2026-03','2026-04','2026-05','2026-06']);
+    expect(out.byMonth['2026-06']).toEqual(entry);
+    expect(out.byMonth['2026-04']).toEqual({ kind: 'amount', value: 5000 }); // untouched
+    expect(out.default).toEqual({ kind: 'percent', value: 7 });
+  });
+
+  it('specific → sets byMonth[that]', () => {
+    const out = applySalaryToScope(base(), entry, { kind: 'specific', month: '2026-05' }, ['2026-05','2026-06']);
+    expect(out.byMonth['2026-05']).toEqual(entry);
+  });
+
+  it('all-previous → sets byMonth for every month < current present in months[]', () => {
+    const out = applySalaryToScope(base(), entry, { kind: 'all-previous', currentMonth: '2026-06' }, ['2026-03','2026-04','2026-05','2026-06']);
+    expect(out.byMonth['2026-03']).toEqual(entry);
+    expect(out.byMonth['2026-04']).toEqual(entry);
+    expect(out.byMonth['2026-05']).toEqual(entry);
+    expect(out.byMonth['2026-06']).toBeUndefined(); // current excluded
+  });
+
+  it('everything → sets default + clears byMonth', () => {
+    const out = applySalaryToScope(base(), entry, { kind: 'everything' }, ['2026-04','2026-06']);
+    expect(out.default).toEqual(entry);
+    expect(out.byMonth).toEqual({});
+  });
+});
