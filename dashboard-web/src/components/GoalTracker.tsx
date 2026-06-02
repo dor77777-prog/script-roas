@@ -221,7 +221,7 @@ export function GoalTracker({ data, range }: Props) {
   // The ‹ month › stepper. In RTL, "‹" steps to the next (later) month and "›"
   // to the previous (earlier) month — matching the mockup's visual order.
   const monthNav = effectiveMonth ? (
-    <span className="inline-flex items-center gap-0.5 bg-glass-2 border border-card-edge rounded-lg p-0.5">
+    <span className="inline-flex items-center gap-0.5 bg-glass-2 border border-glass-edge rounded-lg p-0.5">
       <Button
         variant="ghost"
         size="icon"
