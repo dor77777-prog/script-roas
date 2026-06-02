@@ -61,6 +61,16 @@ import { TIKTOK_ACTIVE_ENOUGH } from './platformConfig';
 type DbRow = Record<string, unknown>;
 
 /**
+ * Phase 0 (2026-06-02) — canonical orders_attribution SELECT column list.
+ * Exported so a presence test can assert every downstream-consumed column
+ * is actually requested (a dropped column otherwise reads back undefined).
+ */
+export const ORDERS_ATTRIBUTION_SELECT =
+  'date, store_id, order_id, total_cad, source, utm_source, utm_medium, ' +
+  'utm_campaign, utm_content, fbclid_present, gclid_present, referrer, ' +
+  'utm_id, utm_term, line_items';
+
+/**
  * Pagination helper — works around Supabase Cloud's `db-max-rows = 1000`
  * PostgREST cap. `.range(0, 49999)` alone returns only 1000 rows because
  * PostgREST clamps to the project setting, not the client request.
@@ -1048,11 +1058,7 @@ export async function fetchOrdersAttributionFromPostgres(
     data = await paginate<DbRow>(() => {
       let q = getSupabase()
         .from('orders_attribution')
-        .select(
-          'date, store_id, order_id, total_cad, source, utm_source, utm_medium, ' +
-            'utm_campaign, utm_content, fbclid_present, gclid_present, referrer, ' +
-            'utm_id, utm_term, line_items',
-        );
+        .select(ORDERS_ATTRIBUTION_SELECT);
       if (opts?.range) {
         q = q.gte('date', opts.range.from).lte('date', opts.range.to);
       }
