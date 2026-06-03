@@ -1,7 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { Sidebar } from '../Sidebar';
 import { ThemeProvider } from '../ThemeProvider';
+
+// Pin the desktop (fine-pointer) branch so the collapsed-rail tooltip path is
+// deterministic — the rail tooltip is the only HelpTooltip in the app whose
+// `content=` is a non-string ReactNode (label + ⌘N shortcut), so it is the
+// canonical over-promotion regression for Task 1.4.
+vi.mock('@/lib/hooks/useIsMobile', () => ({ useIsMobile: () => false }));
 
 function renderSidebar(props: {
   activeTab?: 'home'|'activity'|'customers'|'archive'|'pnl'|'trends'|'campaigns'|'products'|'detail';
@@ -88,6 +94,28 @@ describe('Sidebar', () => {
     const activityIdx = labels.findIndex((l) => l === 'פעילות');
     expect(homeIdx).toBeGreaterThanOrEqual(0);
     expect(activityIdx).toBe(homeIdx + 1);
+  });
+
+  /**
+   * Regression (Task 1.4 — over-promotion safety): the collapsed desktop rail
+   * passes a NON-STRING ReactNode (label + ⌘N shortcut <span>) as the tooltip
+   * content. Under the `auto` mode-selector that would auto-promote to a Radix
+   * Popover (`role="dialog"`) — a heavyweight dialog surfacing on a simple
+   * icon-hover. It must be pinned to `variant="text"` so it stays a slim
+   * `role="tooltip"` and never a dialog.
+   */
+  it('collapsed rail tooltip stays a slim role=tooltip on focus (never a dialog)', async () => {
+    const { container } = renderSidebar();
+    const rail = container.querySelector('[data-testid="desktop-sidebar"]')!;
+    const homeTab = Array.from(rail.querySelectorAll('nav [role="tab"]')).find(
+      (b) => b.getAttribute('aria-label')?.trim() === 'בית',
+    ) as HTMLElement;
+    expect(homeTab).not.toBeNull();
+    fireEvent.focus(homeTab);
+    // The slim tooltip surfaces on focus...
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('בית');
+    // ...and the rich Popover dialog must NEVER appear for this simple help.
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
   it('marks the active item with aria-current="page"', () => {

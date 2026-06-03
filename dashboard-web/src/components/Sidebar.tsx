@@ -72,7 +72,11 @@ function RailTooltip({
     </span>
   ) : null;
   return (
-    <HelpTooltip content={content} side="left" sideOffset={10}>
+    // variant="text": the content is a non-string ReactNode (label + ⌘N
+    // shortcut span), but this is a slim collapsed-rail label, NOT rich help —
+    // pin it to a Radix Tooltip so the `auto` selector doesn't surface a
+    // surprise Popover dialog on icon-hover (tooltip-system-redesign Task 1.4).
+    <HelpTooltip content={content} variant="text" side="left" sideOffset={10}>
       {children}
     </HelpTooltip>
   );
