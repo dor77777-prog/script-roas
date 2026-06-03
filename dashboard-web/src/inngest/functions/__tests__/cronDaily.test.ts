@@ -70,6 +70,9 @@ type MockState = {
     utmId: string | null;
     utmTerm: string | null;
     lineItems: Array<{ p: string; u: number; r: number }> | null;
+    // תשלומים (2026-06-03) — raw primary payment gateway picked from the
+    // order's payment_gateway_names; persisted to orders_attribution.payment_gateway.
+    paymentGateway?: string | null;
   }>;
   shopifyCatalogResult: Array<{
     storeId: string;
@@ -227,6 +230,7 @@ const mockState = vi.hoisted<MockState>(() => ({
       utmId: null,
       utmTerm: null,
       lineItems: [{ p: 'p1', u: 1, r: 150 }],
+      paymentGateway: 'shopify_payments',
     },
   ],
   shopifyCatalogResult: [
@@ -647,6 +651,45 @@ describe('cronDaily — factory + handler', () => {
     const catalogCalls = byTable.get('product_catalog') ?? [];
     expect(catalogCalls.length).toBe(1);
     expect(catalogCalls[0].opts.onConflict).toBe('store_id,product_id');
+  });
+
+  it('Test 5b (תשלומים 2026-06-03): orders_attribution upsert row carries payment_gateway from the row', async () => {
+    const { step } = makeMockStep();
+    await runDailyForStore('uzoshop', '2026-05-20', { step });
+
+    const ordersCall = mockState.upserts.find(
+      (u) => u.table === 'orders_attribution',
+    );
+    expect(ordersCall).toBeDefined();
+    const rows = ordersCall!.rows as Array<{
+      order_id: string;
+      payment_gateway: string | null;
+    }>;
+    expect(rows).toHaveLength(1);
+    expect(rows[0].order_id).toBe('O-1');
+    // Default fixture order pays via shopify_payments → persisted raw.
+    expect(rows[0].payment_gateway).toBe('shopify_payments');
+  });
+
+  it('Test 5c (תשלומים 2026-06-03): missing paymentGateway persists as null (not undefined)', async () => {
+    mockState.shopifyOrdersResult = [
+      { ...INITIAL_SHOPIFY_ORDERS[0], orderId: 'O-2', paymentGateway: null },
+    ];
+
+    const { step } = makeMockStep();
+    await runDailyForStore('uzoshop', '2026-05-20', { step });
+
+    const ordersCall = mockState.upserts.find(
+      (u) => u.table === 'orders_attribution',
+    );
+    expect(ordersCall).toBeDefined();
+    const rows = ordersCall!.rows as Array<{ payment_gateway: string | null }>;
+    expect(rows[0].payment_gateway).toBeNull();
+    // The key MUST be present (NULL write), not absent — so a NULL clears any
+    // stale value on re-upsert rather than leaving it untouched.
+    expect(Object.prototype.hasOwnProperty.call(rows[0], 'payment_gateway')).toBe(
+      true,
+    );
   });
 
   it('Test 7: result exposes the 4 new row counts (metaAd, googleAd, ordersAttribution, productCatalog)', async () => {

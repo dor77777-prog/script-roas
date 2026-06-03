@@ -132,6 +132,12 @@ export type OrderAttributionUpsertRow = {
   first_utm_id: string | null;
   first_utm_term: string | null;
   first_seen_at: string | null;
+  // תשלומים (2026-06-03) — raw primary Shopify payment gateway name
+  // (shopify_payments/paypal/gift_card/…; migration adds the column). Picked
+  // by primaryGateway() in the fetcher; categorized to credit/paypal/other in
+  // code at read time. Dual-written by both cronDaily + cronLive via this
+  // mapper. NULL = order lists no gateway / not-yet-backfilled.
+  payment_gateway: string | null;
 };
 
 export function toOrdersAttributionRow(o: {
@@ -163,6 +169,7 @@ export function toOrdersAttributionRow(o: {
   firstUtmId: string | null;
   firstUtmTerm: string | null;
   firstSeenAt: string | null;
+  paymentGateway: string | null;
 }): OrderAttributionUpsertRow {
   return {
     store_id: o.storeId,
@@ -193,6 +200,7 @@ export function toOrdersAttributionRow(o: {
     first_utm_id: o.firstUtmId,
     first_utm_term: o.firstUtmTerm,
     first_seen_at: o.firstSeenAt,
+    payment_gateway: o.paymentGateway ?? null,
   };
 }
 
@@ -227,6 +235,7 @@ export function ordersAttributionRowKeys(): string[] {
       firstUtmId: null,
       firstUtmTerm: null,
       firstSeenAt: null,
+      paymentGateway: null,
     }),
   );
 }

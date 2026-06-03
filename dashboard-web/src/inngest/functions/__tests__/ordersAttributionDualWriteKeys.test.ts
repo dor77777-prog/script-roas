@@ -49,6 +49,10 @@ describe('orders_attribution dual-write key parity', () => {
         'first_utm_id',
         'first_utm_term',
         'first_seen_at',
+        // תשלומים (2026-06-03) — raw primary payment gateway (migration
+        // 20260603<HHMMSS>). Dual-written by both cronDaily + cronLive via the
+        // shared toOrdersAttributionRow mapper. NULL = not-yet-backfilled.
+        'payment_gateway',
       ].sort(),
     );
   });
