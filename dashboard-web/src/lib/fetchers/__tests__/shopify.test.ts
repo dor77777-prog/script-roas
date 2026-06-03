@@ -821,4 +821,69 @@ describe('shopify fetcher — fetchShopifyOrdersAttribution', () => {
     expect(out[0].source).toBe('meta-paid');
     expect(out[0].fbclidPresent).toBe(true);
   });
+
+  it('Orders Test 7 (תשלומים): maps payment_gateway_names → primary gateway on the row', async () => {
+    const { fn } = makeFetchMock([
+      {
+        body: {
+          orders: [
+            {
+              // Secondary tender (gift_card) listed first; primary rule picks
+              // the non-secondary name → 'paypal'.
+              id: 'O-pp',
+              total_price: '30.00',
+              test: false,
+              financial_status: 'paid',
+              landing_site: '/',
+              referring_site: '',
+              note_attributes: [],
+              source_name: 'web',
+              line_items: [],
+              payment_gateway_names: ['gift_card', 'paypal'],
+            },
+            {
+              // Single card gateway → that raw name.
+              id: 'O-card',
+              total_price: '40.00',
+              test: false,
+              financial_status: 'paid',
+              landing_site: '/',
+              referring_site: '',
+              note_attributes: [],
+              source_name: 'web',
+              line_items: [],
+              payment_gateway_names: ['shopify_payments'],
+            },
+            {
+              // Field absent → null.
+              id: 'O-none',
+              total_price: '50.00',
+              test: false,
+              financial_status: 'paid',
+              landing_site: '/',
+              referring_site: '',
+              note_attributes: [],
+              source_name: 'web',
+              line_items: [],
+            },
+          ],
+        },
+      },
+    ]);
+    vi.stubGlobal('fetch', fn);
+
+    const out = await fetchShopifyOrdersAttribution(STORE_ID, DATE_STR);
+    const byId = new Map(out.map((o) => [o.orderId, o.paymentGateway]));
+    expect(byId.get('O-pp')).toBe('paypal');
+    expect(byId.get('O-card')).toBe('shopify_payments');
+    expect(byId.get('O-none')).toBeNull();
+  });
+
+  it('Orders Test 7b (תשלומים): requests payment_gateway_names in the fields query', async () => {
+    const { fn, calls } = makeFetchMock([{ body: { orders: [] } }]);
+    vi.stubGlobal('fetch', fn);
+
+    await fetchShopifyOrdersAttribution(STORE_ID, DATE_STR);
+    expect(calls[0].url).toContain('payment_gateway_names');
+  });
 });

@@ -65,6 +65,7 @@ import {
   invalidateShopifyToken,
 } from '@/lib/fetchers/shopifyAuth';
 import { STORE_ID_TO_NAME } from '@/lib/platformsByStore';
+import { primaryGateway } from '@/lib/payments';
 import { fetchWithBackoff } from './withBackoff';
 
 // =============================================================================
@@ -243,6 +244,11 @@ export type ShopifyOrderRow = {
   firstUtmId: string | null;
   firstUtmTerm: string | null;
   firstSeenAt: string | null;
+  /** תשלומים — raw primary Shopify payment gateway name (e.g. `shopify_payments`,
+   *  `paypal`, `gift_card`). Picked from `payment_gateway_names` via
+   *  `primaryGateway`; categorized to credit/paypal/other in code. Null when the
+   *  order lists no gateway. */
+  paymentGateway: string | null;
 };
 
 // =============================================================================
@@ -828,6 +834,7 @@ type ShopifyOrderPayload = {
   }>;
   created_at?: string;
   customer?: { id?: number | string | null } | null;
+  payment_gateway_names?: string[];        // תשלומים — gateway tenders on the order
 };
 
 function safeDecode(s: string): string {
@@ -1124,7 +1131,8 @@ export async function fetchShopifyOrdersAttribution(
   // (already in this allowlist) — NO new Shopify field is requested.
   const fields =
     'id,total_price,financial_status,test,landing_site,referring_site,' +
-    'note_attributes,source_name,line_items,customer,created_at';
+    'note_attributes,source_name,line_items,customer,created_at,' +
+    'payment_gateway_names';
 
   let url: string | undefined =
     `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/orders.json` +
@@ -1213,6 +1221,7 @@ export async function fetchShopifyOrdersAttribution(
         firstUtmId: classified.firstUtmId,
         firstUtmTerm: classified.firstUtmTerm,
         firstSeenAt: classified.firstSeenAt,
+        paymentGateway: primaryGateway(o.payment_gateway_names),
       });
     }
 

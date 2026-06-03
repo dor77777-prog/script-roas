@@ -39,6 +39,7 @@ function makeRow(overrides: Partial<ShopifyOrderRow> = {}): ShopifyOrderRow {
     firstUtmId: 'camp-first-1',
     firstUtmTerm: 'adset-first-1',
     firstSeenAt: '2026-06-01T10:00:00.000Z',
+    paymentGateway: 'shopify_payments',
     ...overrides,
   };
 }
