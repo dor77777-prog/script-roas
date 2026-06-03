@@ -78,6 +78,18 @@ describe('CustomerValueTab — verdict + KPIs', () => {
     // ltv12Profit / blendedNcac → ratio is rendered as "N.N×" somewhere.
     expect(screen.getByTestId('cv-verdict').textContent).toMatch(/×/);
   });
+
+  it('renders a RED badge (not amber) for a genuinely bad LTV:nCAC ratio (<2×)', () => {
+    // A very high blended nCAC drives the ratio below 2 → tone "bad".
+    const { container } = renderTab({ injectedBlendedNcac: 9999 });
+    const verdict = container.querySelector('[data-testid="cv-verdict"]');
+    expect(verdict).not.toBeNull();
+    const badge = verdict!.querySelector('[data-testid="cv-ratio-badge"]');
+    expect(badge).not.toBeNull();
+    // Bad ratio → red badge tokens, never the amber warning tokens.
+    expect(badge!.className).toContain('text-status-redFg');
+    expect(badge!.className).not.toContain('text-status-warningFg');
+  });
 });
 
 describe('CustomerValueTab — zones curve', () => {
@@ -92,6 +104,68 @@ describe('CustomerValueTab — zones curve', () => {
   it('renders the payback callout when a payback month exists', () => {
     renderTab();
     expect(screen.getByTestId('cv-payback-callout')).toBeInTheDocument();
+  });
+
+  it('fills the payback callout pill with the AA-safe accent-btn token (white-on-accent fails AA)', () => {
+    const { container } = renderTab();
+    const callout = container.querySelector('[data-testid="cv-payback-callout"]');
+    expect(callout).not.toBeNull();
+    const rect = callout!.querySelector('rect');
+    expect(rect).not.toBeNull();
+    // --accent is reserved for rings/glows/links (white on it is only 3.86:1
+    // dark / 2.96:1 light → below AA). The text-bearing pill MUST use the
+    // deepened --accent-btn (white = 5.33:1 dark / 4.66:1 light, AA-verified).
+    expect(rect!.getAttribute('fill')).toBe('var(--accent-btn)');
+  });
+});
+
+describe('CustomerValueTab — payback zone-split coherence', () => {
+  // The zone split must sit where the VISIBLE curve crosses break-even. The
+  // headline paybackMonths is always profit-derived, so on the revenue (net)
+  // basis it must NOT be forced onto the net curve (net ≥ profit → net crosses
+  // earlier). The tab passes paybackMonths only in profit basis; net basis
+  // lets the curve derive its own crossing from the net points it is drawing.
+  //
+  // Fixture tuned so profit pays back LATER than net: a flat-ish curve whose
+  // net crosses the nCAC line a month before profit does.
+  const splitRows: CohortMonthlyRow[] = [
+    cell({ firstOrderMonth: '2025-01', monthSince: 0, activeCustomers: 10, orders: 10, netCad: 600, grossCad: 660 }),
+    cell({ firstOrderMonth: '2025-01', monthSince: 1, activeCustomers: 5, orders: 5, netCad: 300, grossCad: 330 }),
+    cell({ firstOrderMonth: '2025-01', monthSince: 2, activeCustomers: 4, orders: 4, netCad: 250, grossCad: 275 }),
+    cell({ firstOrderMonth: '2025-01', monthSince: 3, activeCustomers: 3, orders: 3, netCad: 200, grossCad: 220 }),
+  ];
+
+  function calloutMonth(container: HTMLElement): string | null {
+    const callout = container.querySelector('[data-testid="cv-payback-callout"]');
+    const texts = callout?.querySelectorAll('text');
+    if (!texts) return null;
+    // The 2nd <text> in the callout reads "חודש N".
+    return texts[1]?.textContent ?? null;
+  }
+
+  it('uses a basis-coherent payback split (net crosses earlier than profit)', () => {
+    const { container } = render(
+      <CustomerValueTab
+        stores={['uzoshop']}
+        injectedRows={splitRows}
+        injectedBlendedNcac={75}
+        injectedSpendByMonth={{ '2025-01': 750 }}
+        todayMonth="2026-06"
+      />,
+    );
+    // Profit basis (default): split at the profit-payback month.
+    const profitMonth = calloutMonth(container);
+    fireEvent.click(screen.getByTestId('cv-basis-revenue'));
+    const netMonth = calloutMonth(container);
+    // Both must render a callout. Net crosses break-even strictly EARLIER than
+    // profit (net ≥ profit), so the net split must sit to the LEFT of the
+    // profit split — proving the net basis is NOT forced onto the profit-derived
+    // payback month.
+    expect(profitMonth).toMatch(/חודש/);
+    expect(netMonth).toMatch(/חודש/);
+    const profN = Number(profitMonth!.replace(/[^\d.]/g, ''));
+    const netN = Number(netMonth!.replace(/[^\d.]/g, ''));
+    expect(netN).toBeLessThan(profN);
   });
 });
 

@@ -292,14 +292,21 @@ export function CustomerValueTab({
               </span>{' '}
               בערך-לקוח (LTV:nCAC)
               <span
+                data-testid="cv-ratio-badge"
                 className={cn(
                   'ms-1.5 inline-block rounded-full px-2.5 py-0.5 text-[12.5px] font-extrabold',
                   tone === 'good'
                     ? 'bg-status-greenBg text-status-greenFg'
-                    : 'bg-status-warningBg text-status-warningFg',
+                    : tone === 'bad'
+                      ? 'bg-status-redBg text-status-redFg'
+                      : 'bg-status-warningBg text-status-warningFg',
                 )}
               >
-                {tone === 'good' ? 'בריא ✓' : 'מתחת ליעד 3×'}
+                {tone === 'good'
+                  ? 'בריא ✓'
+                  : tone === 'bad'
+                    ? 'מתחת לסף הרווחיות'
+                    : 'מתחת ליעד 3×'}
               </span>
             </>
           )}
@@ -354,7 +361,12 @@ export function CustomerValueTab({
         <CustomerValueCurve
           points={curvePoints}
           ncac={ncac}
-          paybackMonths={value.paybackMonths}
+          // paybackMonths is profit-derived. Pin the zone split to it ONLY in
+          // profit basis; in net/revenue basis net ≥ profit so the net curve
+          // crosses break-even earlier — pass null and let the curve derive its
+          // own crossing from the net points it draws, so the amber/green split
+          // lands exactly where the visible line meets the nCAC line.
+          paybackMonths={isProfit ? value.paybackMonths : null}
           basisLabel={basisLabel}
         />
         <div className="mt-2 flex flex-wrap gap-4 text-xs text-ink-secondary">

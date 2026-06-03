@@ -10,12 +10,15 @@
  *  - two background zones split at the payback month — amber "still paying
  *    back" (left) / green "profit" (right),
  *  - a dashed nCAC break-even line,
- *  - a pulsing payback callout pill (white-on-accent → WCAG-AA),
+ *  - a pulsing payback callout pill (white on the deepened --accent-btn so the
+ *    text-bearing surface clears WCAG-AA — plain --accent fails on the brand
+ *    violet/teal and is reserved for rings/glows/links),
  *  - a hover tooltip with a crosshair + dot.
  *
  * Token-driven (no hardcoded colours): the line/zones/labels resolve through
- * the project CSS variables (`--accent`, `--status-green*`, `--status-warning*`,
- * `--chart-grid-line`, `--chart-axis`, `--text*`, `--accent-fg`). Motion lives
+ * the project CSS variables (`--accent`, `--accent-btn`, `--status-green*`,
+ * `--status-warning*`, `--chart-grid-line`, `--chart-axis`, `--text*`,
+ * `--accent-fg`). Motion lives
  * in globals.css under the `cv-*` namespace so the project-wide
  * `prefers-reduced-motion` sweep collapses every animation to rest.
  *
@@ -414,7 +417,7 @@ export function CustomerValueCurve({
                 width={pill.w}
                 height={pill.h}
                 rx={9}
-                fill="var(--accent)"
+                fill="var(--accent-btn)"
               />
               <text
                 x={pill.cx.toFixed(2)}
