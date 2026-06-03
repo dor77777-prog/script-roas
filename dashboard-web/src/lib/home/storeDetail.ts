@@ -154,7 +154,9 @@ export function toStoreDetail(args: ToStoreDetailArgs): StoreDetailData {
 
   // ---- KPIs ----------------------------------------------------------------
   const curOperatingProfit = operatingProfitOf(cur);
-  const aov = orders > 0 ? cur.revenue / orders : null;
+  // AOV = gross order value at checkout ÷ order count (standard; stable on refund
+  // days). Both from the same StoreAgg basis — never net÷gross (Wave 1 fix).
+  const aov = orders > 0 ? cur.grossRevenue / orders : null;
   const kpis = {
     spend: cur.spend,
     revenue: cur.revenue,
@@ -166,8 +168,10 @@ export function toStoreDetail(args: ToStoreDetailArgs): StoreDetailData {
   // ---- Deltas vs previous range -------------------------------------------
   // Money deltas only when a prev StoreAgg is supplied; orders/aov deltas only
   // when prevOrders is ALSO supplied (else we can't compute them honestly).
+  // prevAov shares the same gross÷orders basis as `aov` so the delta compares
+  // like with like (Wave 1: AOV is gross-based, never net÷orders).
   const prevAov =
-    prev != null && prevOrders != null && prevOrders > 0 ? prev.revenue / prevOrders : null;
+    prev != null && prevOrders != null && prevOrders > 0 ? prev.grossRevenue / prevOrders : null;
   const deltas = {
     spendPct: prev ? fracDelta(cur.spend, prev.spend) : null,
     revenuePct: prev ? fracDelta(cur.revenue, prev.revenue) : null,

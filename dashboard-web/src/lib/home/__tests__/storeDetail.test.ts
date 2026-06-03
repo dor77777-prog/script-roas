@@ -87,6 +87,7 @@ describe('toStoreDetail — kpis', () => {
       store: 'uzoshop',
       spend: 1000,
       revenue: 5000,
+      grossRevenue: 5000, // no refunds this fixture → gross == net
       cogs: 1250,
       roas: 5,
     });
@@ -106,7 +107,7 @@ describe('toStoreDetail — kpis', () => {
     expect(d.kpis.revenue).toBe(5000);
     expect(d.kpis.operatingProfit).toBe(5000 - 1000 - 1250); // 2750
     expect(d.kpis.orders).toBe(40);
-    expect(d.kpis.aov).toBeCloseTo(5000 / 40, 6); // 125
+    expect(d.kpis.aov).toBeCloseTo(5000 / 40, 6); // 125 (gross ÷ orders)
     expect(d.roas).toBe(5);
   });
 
@@ -145,10 +146,31 @@ describe('toStoreDetail — kpis', () => {
   });
 });
 
+describe('toStoreDetail — AOV uses gross ÷ orders', () => {
+  it('AOV is gross revenue / orders (stable across a refund day, not net/orders)', () => {
+    // cur with gross 1000, net 800 (refund day), 10 orders -> AOV 100 (gross), NOT 80 (net)
+    const cur = makeAgg({ store: 'uzoshop', revenue: 800, grossRevenue: 1000, spend: 200, cogs: 250 });
+    const d = toStoreDetail({
+      storeId: 'uzoshop',
+      storeName: 'uzoshop',
+      cur,
+      prev: null,
+      series: [],
+      campaignRows: [],
+      range: RANGE,
+      orders: 10,
+      prevOrders: null,
+      updatedAt: null,
+      firstOrderRows: [],
+    });
+    expect(d.kpis.aov).toBe(100);
+  });
+});
+
 describe('toStoreDetail — deltas', () => {
   it('signed fractional delta when prev value is present and non-zero', () => {
-    const cur = makeAgg({ store: 's', spend: 1200, revenue: 6000, cogs: 1500, roas: 5 });
-    const prev = makeAgg({ store: 's', spend: 1000, revenue: 5000, cogs: 1250, roas: 5 });
+    const cur = makeAgg({ store: 's', spend: 1200, revenue: 6000, grossRevenue: 6000, cogs: 1500, roas: 5 });
+    const prev = makeAgg({ store: 's', spend: 1000, revenue: 5000, grossRevenue: 5000, cogs: 1250, roas: 5 });
     const d = toStoreDetail({
       storeId: 's',
       storeName: 's',
@@ -166,7 +188,7 @@ describe('toStoreDetail — deltas', () => {
     // operatingProfit cur = 6000−1200−1500 = 3300; prev = 5000−1000−1250 = 2750
     expect(d.deltas.operatingProfitPct).toBeCloseTo((3300 - 2750) / 2750, 6);
     expect(d.deltas.ordersPct).toBeCloseTo((50 - 40) / 40, 6); // +0.25
-    // aov cur = 6000/50 = 120; prev = 5000/40 = 125
+    // aov cur = gross 6000/50 = 120; prev = gross 5000/40 = 125
     expect(d.deltas.aovPct).toBeCloseTo((120 - 125) / 125, 6);
   });
 
