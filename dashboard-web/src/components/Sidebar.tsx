@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   Home, Zap, Users, Receipt, TrendingUp, Megaphone, Package, Table, LayoutGrid,
-  Cog, Sun, Moon, Monitor, Pin, PinOff, X,
+  CreditCard, Cog, Sun, Moon, Monitor, Pin, PinOff, X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useTheme } from './ThemeProvider';
@@ -37,7 +37,11 @@ const NAV: NavItem[] = [
   { key: 'trends',    label: 'מגמות',              icon: <TrendingUp size={16} />,  slot: 6 },
   { key: 'campaigns', label: 'קמפיינים',           icon: <Megaphone size={16} />,   slot: 7 },
   { key: 'products',  label: 'מוצרים',             icon: <Package size={16} />,     slot: 8 },
-  { key: 'detail',    label: 'פירוט',              icon: <Table size={16} />,       slot: 9 },
+  // 'תשלומים' (Payments) — per-month split of sales by payment gateway
+  // (credit / PayPal / other). Sits right AFTER 'מוצרים' (its own room to grow,
+  // e.g. real per-gateway processing fees later); 'פירוט' shifts down a slot.
+  { key: 'payments',  label: 'תשלומים',            icon: <CreditCard size={16} />,  slot: 9 },
+  { key: 'detail',    label: 'פירוט',              icon: <Table size={16} />,       slot: 10 },
 ];
 
 /**

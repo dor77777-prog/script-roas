@@ -10,7 +10,7 @@
  *   - users can share a URL with a teammate that opens to the same view
  *
  * Encoded params (all optional, sensible defaults):
- *   tab     = home | activity | customers | archive | pnl | trends | campaigns | products | detail
+ *   tab     = home | activity | customers | archive | pnl | trends | campaigns | products | payments | detail
  *   preset  = yesterday | this_month | this_week | last_7_days | last_month
  *             | last_30_days | custom
  *   from    = YYYY-MM-DD   (only used when preset=custom)
@@ -30,10 +30,11 @@ export type TabKey =
   | 'trends'
   | 'campaigns'
   | 'products'
+  | 'payments'
   | 'detail';
 
 const TAB_VALUES = new Set<TabKey>([
-  'home', 'activity', 'customers', 'archive', 'pnl', 'trends', 'campaigns', 'products', 'detail',
+  'home', 'activity', 'customers', 'archive', 'pnl', 'trends', 'campaigns', 'products', 'payments', 'detail',
 ]);
 const PRESET_VALUES = new Set<PresetKey>([
   'today', 'yesterday', 'this_month', 'this_week',

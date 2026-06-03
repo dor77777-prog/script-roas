@@ -72,6 +72,7 @@ import {
 import { ActivityFeed } from '@/components/home/ActivityFeed';
 import { ActivityEventsTab } from '@/components/activity/ActivityEventsTab';
 import { CustomerValueTab } from '@/components/CustomerValueTab';
+import { PaymentMethodsTab } from '@/components/PaymentMethodsTab';
 import { StoreDetailModal } from '@/components/home/StoreDetailModal';
 import { MobileStickyRoas } from '@/components/home/MobileStickyRoas';
 import { toStoreDetail } from '@/lib/home/storeDetail';
@@ -552,6 +553,9 @@ export function Dashboard() {
               )}
               {activeTab === 'products' && (
                 <ProductsTab data={data} filters={filters} setFilters={setFilters} />
+              )}
+              {activeTab === 'payments' && (
+                <PaymentMethodsTab stores={data.stores} globalStore={filters.store} />
               )}
               {activeTab === 'detail' && (
                 <DetailTab filtered={filtered} filters={filters} setFilters={setFilters} stores={data.stores} />
