@@ -79,18 +79,26 @@ describe.skipIf(!process.env.AUDIT_LIVE)('LIVE reconciliation against production
 
   // INV-NC-BASIS (Wave 1): the dashboard NC-ROAS revenue must sit on the NET
   // basis — i.e. gross first-order revenue (immutable orders_attribution.total_cad)
-  // re-based by the store/period net÷gross factor (netAdjustFactor). Since net ≤
-  // gross in the real world, the factor is ≤ 1, so the dashboard NC revenue must
-  // never EXCEED the raw gross sum of first-order total_cad. If a future change
-  // regresses NC-ROAS back to a gross pass-through (factor not applied) or applies
-  // the inverse gross÷net factor (> 1), this assertion fails loudly per window×store.
+  // re-based by the store/period net÷gross factor (netAdjustFactor). The contract
+  // is exact: ncRevenue === grossNcSum × factor. So we assert TWO-SIDED equality
+  // (within an epsilon that absorbs FX/float rounding), which catches BOTH failure
+  // modes the loose `> grossNcSum` check missed:
+  //   • gross pass-through (factor not applied / factor === 1 while the real
+  //     factor < 1): ncRevenue === grossNcSum > grossNcSum×factor → caught.
+  //   • inverse gross÷net factor (> 1): ncRevenue === grossNcSum/factor
+  //     > grossNcSum×factor → caught.
+  // A loose upper bound (`ncRevenue > grossNcSum`) would pass a pure pass-through
+  // (ncRevenue === grossNcSum is NOT > grossNcSum), giving false confidence — so
+  // we require the EXACT net-adj expectation instead.
   //
   // We reproduce the exact dashboard path: data_daily net/gross → netAdjustFactor →
   // computeNewCustomerMetrics(firstOrderRows, spend, store, factor).ncRevenue, then
-  // compare against the un-adjusted gross sum of first-order total_cad. A tiny
-  // epsilon absorbs FX/float rounding so a genuinely-net result never false-flags.
+  // compare against grossNcSum × factor (the expected net-adj value).
   it('NC-ROAS revenue uses the net-adj basis (never gross pass-through)', { timeout: 180_000 }, async () => {
-    const EPS = 0.01; // accounting epsilon — guards float/FX rounding, not a real gross overshoot
+    // Relative epsilon: absorbs FX/float rounding on large CAD sums while still
+    // catching a real pass-through (which is off by the whole refund rate, far
+    // larger than 0.1% of the expected value or 1 cent).
+    const absEps = (v: number) => Math.max(0.01, Math.abs(v) * 1e-3);
     const failures: Array<{ window: string; store: string; detail: string }> = [];
     for (const w of WINDOWS) {
       for (const store of STORES) {
@@ -106,9 +114,26 @@ describe.skipIf(!process.env.AUDIT_LIVE)('LIVE reconciliation against production
           store === 'All' ? rows : rows.filter(r => r.storeName === store);
 
         // Net-adj factor from data_daily: Σ revenue_cad (net) ÷ Σ gross_revenue_cad.
+        // We MUST mirror the production aggregate exactly (analytics.ts:181 /
+        // aiReport.ts:194 — the aggs that actually feed netAdjustFactor in
+        // Dashboard.tsx:829 and storeDetail.ts:258): gross falls back to the row's
+        // NET when `grossRevenue` is null (legacy/pre-Wave-1 rows; the test windows
+        // predate the 2026-06-03 migration, so they are mixed-null). Summing those
+        // null rows as 0 would understate gross → factor net/gross could exceed 1
+        // (netAdjustFactor caps at 1.5, NOT 1.0) → false-positive failure on a
+        // non-bug, while the real dashboard factor stays ≤ 1.
         const dataRows = byStore((data.rows ?? []) as Array<{ storeName?: string; revenue?: number; grossRevenue?: number }>);
         const net = dataRows.reduce((a, r) => a + (Number.isFinite(r.revenue) ? (r.revenue as number) : 0), 0);
-        const gross = dataRows.reduce((a, r) => a + (Number.isFinite(r.grossRevenue) ? (r.grossRevenue as number) : 0), 0);
+        const gross = dataRows.reduce(
+          (a, r) =>
+            a +
+            (Number.isFinite(r.grossRevenue)
+              ? (r.grossRevenue as number)
+              : Number.isFinite(r.revenue)
+                ? (r.revenue as number)
+                : 0),
+          0,
+        );
         const { factor, degraded } = netAdjustFactor(net, gross);
 
         // First-order rows in the same window/store, mapped to the adapter shape.
@@ -133,14 +158,19 @@ describe.skipIf(!process.env.AUDIT_LIVE)('LIVE reconciliation against production
         // Nothing to check when there is no first-order revenue in the window.
         if (grossNcSum <= 0) continue;
 
-        if (ncRevenue > grossNcSum + EPS) {
+        // Exact net-adj contract: ncRevenue must equal grossNcSum × factor.
+        // Pass-through (factor not applied) lands on grossNcSum; inverse factor
+        // lands on grossNcSum / factor — both differ from this expected value by
+        // more than the epsilon whenever factor ≠ 1, so both fail loudly.
+        const expectedNet = grossNcSum * factor;
+        if (Math.abs(ncRevenue - expectedNet) > absEps(expectedNet)) {
           failures.push({
             window: `${w.from}..${w.to}`,
             store,
             detail:
-              `ncRevenue ${ncRevenue.toFixed(2)} > grossNcSum ${grossNcSum.toFixed(2)} ` +
-              `(net-adj factor ${factor.toFixed(4)}${degraded ? ' [degraded]' : ''}; ` +
-              `net ${net.toFixed(2)} / gross ${gross.toFixed(2)}) — ` +
+              `ncRevenue ${ncRevenue.toFixed(2)} ≠ expected net-adj ${expectedNet.toFixed(2)} ` +
+              `(grossNcSum ${grossNcSum.toFixed(2)} × factor ${factor.toFixed(4)}` +
+              `${degraded ? ' [degraded]' : ''}; net ${net.toFixed(2)} / gross ${gross.toFixed(2)}) — ` +
               `NC-ROAS revenue is NOT net-adj-based (regressed to gross pass-through or inverse factor)`,
           });
         }
