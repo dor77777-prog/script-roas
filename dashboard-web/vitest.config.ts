@@ -51,6 +51,10 @@ export default defineConfig({
       'src/inngest/**/__tests__/**/*.test.{ts,tsx}',
       'src/components/**/__tests__/**/*.test.{ts,tsx}',
       'src/app/**/__tests__/**/*.test.{ts,tsx}',
+      // Tooltip-system-redesign Task 0.1 — local ESLint-rule fixture tests
+      // (RuleTester) live outside src/ next to the rules they guard. Pure
+      // Node, no DOM, so they belong in this config alongside the lib suites.
+      'eslint-rules/**/__tests__/**/*.test.{js,mjs}',
     ],
     exclude: [
       // Vitest's defaults — must be repeated when we set `exclude` explicitly,
