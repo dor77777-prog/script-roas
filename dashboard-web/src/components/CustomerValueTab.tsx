@@ -102,11 +102,18 @@ function groupNcacByYear<T extends { firstOrderMonth: string }>(
     .sort((a, b) => b.year.localeCompare(a.year));
 }
 
-/** Ratio band tone — locked thresholds (<2 bad, 2-3 warn, ≥3 good). */
+/**
+ * LTV:nCAC band tone. Break-even for THIS ratio is ×1 (the LTV is already
+ * PROFIT, net of COGS+fees) — so ×1.4 is PROFITABLE, not "below profitability".
+ * (The ROAS ×2/×3 bands are a different metric and stay untouched.)
+ *   ≥3  → good  (healthy LTV:CAC rule-of-thumb)
+ *   1–3 → warn  (profitable, but below the healthy ×3 target)
+ *   <1  → bad   (below break-even — actually losing on acquisition)
+ */
 function ratioTone(ratio: number | null): 'good' | 'warn' | 'bad' | 'none' {
   if (ratio == null || !Number.isFinite(ratio)) return 'none';
   if (ratio >= 3) return 'good';
-  if (ratio >= 2) return 'warn';
+  if (ratio >= 1) return 'warn';
   return 'bad';
 }
 
@@ -192,7 +199,11 @@ export function CustomerValueTab({
   const curvePoints = isProfit ? value.cumulativeProfit : value.cumulativeNet;
   const ltv12 = isProfit ? value.ltv12Profit : value.ltv12Net;
   const ncac = value.blendedNcac;
-  const netPerCustomer = ltv12 != null && ncac != null ? ltv12 - ncac : null;
+  // Round the components BEFORE subtracting so the banner reconciles with the
+  // displayed $LTV − $nCAC (both shown as whole dollars via <Money>) — avoids
+  // "47 − 33 = 13" rounding mismatches.
+  const netPerCustomer =
+    ltv12 != null && ncac != null ? Math.round(ltv12) - Math.round(ncac) : null;
   const ratio = value.ltvToNcac;
   const tone = ratioTone(ratio);
 
@@ -310,11 +321,18 @@ export function CustomerValueTab({
             <span className="text-ink-muted">אין עדיין נתוני עלות-גיוס. </span>
           )}
           {value.paybackMonths != null && (
-            <>
-              הוא מחזיר את עלות הגיוס תוך{' '}
-              <span className={cn('font-extrabold', numClass('accent'))}>{value.paybackMonths}</span>{' '}
-              חודשים,{' '}
-            </>
+            value.paybackMonths === 0 ? (
+              <>
+                הוא מחזיר את עלות הגיוס{' '}
+                <span className={cn('font-extrabold', numClass('accent'))}>כבר מההזמנה הראשונה</span>,{' '}
+              </>
+            ) : (
+              <>
+                הוא מחזיר את עלות הגיוס תוך{' '}
+                <span className={cn('font-extrabold', numClass('accent'))}>{value.paybackMonths}</span>{' '}
+                חודשים,{' '}
+              </>
+            )
           )}
           ו-<span className="font-extrabold tabular-nums text-ink">{pctText(value.repeatRate)}</span>{' '}
           חוזרים לקנות שוב.
@@ -339,8 +357,8 @@ export function CustomerValueTab({
                 {tone === 'good'
                   ? 'בריא ✓'
                   : tone === 'bad'
-                    ? 'מתחת לסף הרווחיות'
-                    : 'מתחת ליעד 3×'}
+                    ? 'מתחת לסף הרווחיות — מפסידים על הגיוס'
+                    : 'רווחי · מתחת ליעד ×3'}
               </span>
             </>
           )}
