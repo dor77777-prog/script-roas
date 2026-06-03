@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import * as RadixPopover from '@radix-ui/react-popover';
 import { Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -112,26 +113,51 @@ export function Toggletip({
             )}
           >
             {content}
-            {/* Live region: announce on open (tap), not before. Toggletips use
-                role=status, never aria-describedby (spec §4.4). */}
-            <span role="status" className="sr-only">
-              {open ? content : null}
-            </span>
             <RadixPopover.Arrow className="fill-glass-1" width={10} height={5} />
           </RadixPopover.Content>
         </RadixPopover.Portal>
       </RadixPopover.Root>
   );
 
+  // Live region — HOISTED OUTSIDE the open-gated popover subtree so it is
+  // present in the DOM before open. A role=status region added in the SAME
+  // tick it is filled can be missed by some screen readers; mounting it always
+  // (empty until open) makes the announcement reliable. Toggletips announce on
+  // tap via role=status, never `aria-describedby` (a toggletip is tap-driven,
+  // not a passive label — spec §4.4).
+  //
+  // It is PORTALLED to <body> so it never lands as an invalid DOM sibling of a
+  // non-phrasing trigger (a `<span>` cannot be a direct child of `<tbody>` /
+  // `<ul>` — see TooltipTouch table/list DOM-validity tests). The portal keeps
+  // it always-mounted (reliable announce) AND structurally valid everywhere.
+  const liveRegion =
+    typeof document !== 'undefined'
+      ? createPortal(
+          <span role="status" className="sr-only">
+            {open ? content : null}
+          </span>,
+          document.body,
+        )
+      : null;
+
   // Non-phrasing child IS the trigger → return the popover as-is (no <span>
-  // wrapper, so the row/list-item keeps its valid place in the DOM tree).
-  if (childIsTrigger) return popover;
+  // wrapper, so the row/list-item keeps its valid place in the DOM tree). The
+  // live region is an always-mounted sibling so the announcement is reliable.
+  if (childIsTrigger) {
+    return (
+      <>
+        {popover}
+        {liveRegion}
+      </>
+    );
+  }
 
   // Phrasing child → render it inline alongside the ⓘ-pairing popover.
   return (
     <span className="inline-flex items-center gap-1.5 align-middle">
       {children}
       {popover}
+      {liveRegion}
     </span>
   );
 }

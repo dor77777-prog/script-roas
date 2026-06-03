@@ -16,6 +16,7 @@ import {
   SheetHeader,
   SheetBody,
   SheetTitle,
+  SheetDescription,
   SheetClose,
 } from '@/components/ui/Sheet';
 
@@ -61,10 +62,15 @@ export function RichSheet({
 }: RichSheetProps) {
   const [open, setOpen] = useState(false);
 
-  // The ⓘ button needs a plain-string aria-label. Prefer an explicit `label`,
-  // then a string `title`, else a generic fallback.
+  // The dialog must always have a non-empty accessible name. Prefer an explicit
+  // `label`, then a string `title`, else a generic fallback — used BOTH as the
+  // ⓘ button's aria-label AND as the SheetTitle text when no `title` is given,
+  // so the heading is never empty.
   const buttonLabel =
     label ?? (typeof title === 'string' ? title : 'מידע נוסף');
+  // Heading content: the provided `title` if any, else the fallback label so
+  // SheetTitle is never empty (an unnamed dialog is an a11y failure).
+  const headingContent = title ?? buttonLabel;
 
   // Non-phrasing trigger children (a table row `<tr>`, list item `<li>`, cell,
   // block container) can't legally sit inside the `<span>` ⓘ-pairing wrapper
@@ -126,8 +132,17 @@ export function RichSheet({
           hideDefaultClose
           dir="rtl"
         >
+          {/* Radix wires `aria-describedby` to this <SheetDescription> via its
+              own descriptionId — that both silences the "Missing Description"
+              dev warning and gives the dialog an accessible description. It is
+              visually hidden because the visible body below carries the same
+              help; the description summarises the subject. */}
+          <SheetDescription className="sr-only">{headingContent}</SheetDescription>
           <SheetHeader className="flex items-center justify-between gap-3">
-            <SheetTitle>{title}</SheetTitle>
+            {/* Never empty — falls back to the generic label so the dialog
+                always has an accessible name (decision: SheetTitle is never
+                empty). */}
+            <SheetTitle>{headingContent}</SheetTitle>
             <SheetClose
               aria-label="סגור"
               className="rounded-md p-1 text-ink-muted hover:bg-glass-2"
