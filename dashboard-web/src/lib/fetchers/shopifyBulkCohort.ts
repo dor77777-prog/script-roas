@@ -162,59 +162,91 @@ export async function startBulkCohortExport(storeId: string): Promise<string> {
   return id;
 }
 
+/**
+ * Status of a single currentBulkOperation check.
+ *   - 'running'   → still in progress (caller should wait + re-check)
+ *   - 'completed' → done; `url` is the NDJSON download URL ('' if 0 rows)
+ * FAILED throws (the operation cannot recover).
+ */
+export type BulkCohortStatus =
+  | { status: 'running' }
+  | { status: 'completed'; url: string };
+
+/**
+ * One non-blocking status check of the store's currentBulkOperation. Extracted
+ * so BOTH the synchronous `pollBulkCohortUrl` loop AND the Inngest cron's
+ * step.sleep-driven poll (each invocation < 60s — see cronCohortRefresh.ts)
+ * share the exact same status semantics (DRY). Throws on FAILED.
+ */
+export async function checkBulkCohortStatus(storeId: string): Promise<BulkCohortStatus> {
+  const domain = requireDomain(storeId);
+  const token = await getShopifyAccessToken(storeId);
+  const POLL = `query { currentBulkOperation { id status errorCode url } }`;
+  const res = await fetchWithBackoff(
+    `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
+    {
+      method: 'POST',
+      headers: {
+        'X-Shopify-Access-Token': token,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify({ query: POLL }),
+    },
+    { provider: 'shopify' },
+  );
+  const body = (await res.json()) as {
+    data?: { currentBulkOperation?: { status?: string; errorCode?: string | null; url?: string | null } };
+  };
+  const op = body.data?.currentBulkOperation;
+  if (op?.status === 'COMPLETED') {
+    return { status: 'completed', url: op.url ?? '' }; // '' = COMPLETED with 0 rows
+  }
+  if (op?.status === 'FAILED') {
+    throw new Error(`bulk cohort ${storeId} FAILED: ${op.errorCode ?? 'unknown'}`);
+  }
+  return { status: 'running' };
+}
+
+/** Download + parse the NDJSON at a completed Bulk operation URL. Empty url → []. */
+export async function downloadBulkCohortRows(storeId: string, url: string): Promise<BulkCohortRow[]> {
+  if (!url) return [];
+  const res = await fetchWithBackoff(url, { method: 'GET' }, { provider: 'shopify' });
+  if (!res.ok) throw new Error(`bulk cohort ${storeId} download failed (${res.status})`);
+  const ndjson = await res.text();
+  return parseBulkCohortNdjson(ndjson);
+}
+
 /** Poll currentBulkOperation until COMPLETED; returns the NDJSON download URL. */
 export async function pollBulkCohortUrl(
   storeId: string,
   opts: { intervalMs?: number; maxAttempts?: number } = {},
 ): Promise<string> {
-  const domain = requireDomain(storeId);
-  const token = await getShopifyAccessToken(storeId);
   const intervalMs = opts.intervalMs ?? 5000;
   const maxAttempts = opts.maxAttempts ?? 120;
-  const POLL = `query { currentBulkOperation { id status errorCode url } }`;
 
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    const res = await fetchWithBackoff(
-      `https://${domain}/admin/api/${SHOPIFY_API_VERSION}/graphql.json`,
-      {
-        method: 'POST',
-        headers: {
-          'X-Shopify-Access-Token': token,
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({ query: POLL }),
-      },
-      { provider: 'shopify' },
-    );
-    const body = (await res.json()) as {
-      data?: { currentBulkOperation?: { status?: string; errorCode?: string | null; url?: string | null } };
-    };
-    const op = body.data?.currentBulkOperation;
-    if (op?.status === 'COMPLETED') {
-      if (!op.url) return ''; // COMPLETED with 0 rows → no file
-      return op.url;
-    }
-    if (op?.status === 'FAILED') {
-      throw new Error(`bulk cohort ${storeId} FAILED: ${op.errorCode ?? 'unknown'}`);
-    }
+    const op = await checkBulkCohortStatus(storeId);
+    if (op.status === 'completed') return op.url;
     await new Promise((r) => setTimeout(r, intervalMs));
   }
   throw new Error(`bulk cohort ${storeId}: poll timed out after ${maxAttempts} attempts`);
 }
 
-/** Download + parse. Empty url → empty array (store had 0 orders). */
+/**
+ * Synchronous one-shot: start → poll → download + parse. Empty url → [] (store
+ * had 0 orders). Suitable for unbounded `tsx` scripts (backfill runner). The
+ * Inngest weekly cron does NOT use this — it decomposes start/poll/download
+ * across step.run + step.sleep so each invocation stays under the 60s
+ * maxDuration (see cronCohortRefresh.ts).
+ */
 export async function runBulkCohortExport(
   storeId: string,
   opts: { intervalMs?: number; maxAttempts?: number } = {},
 ): Promise<BulkCohortRow[]> {
   await startBulkCohortExport(storeId);
   const url = await pollBulkCohortUrl(storeId, opts);
-  if (!url) return [];
-  const res = await fetchWithBackoff(url, { method: 'GET' }, { provider: 'shopify' });
-  if (!res.ok) throw new Error(`bulk cohort ${storeId} download failed (${res.status})`);
-  const ndjson = await res.text();
-  return parseBulkCohortNdjson(ndjson);
+  return downloadBulkCohortRows(storeId, url);
 }
 
 function requireDomain(storeId: string): string {

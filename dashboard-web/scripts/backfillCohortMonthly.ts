@@ -77,12 +77,9 @@ import {
   type CohortCell,
 } from '@/lib/cohorts/cohortAggregate';
 import {
-  startBulkCohortExport,
-  pollBulkCohortUrl,
-  parseBulkCohortNdjson,
+  runBulkCohortExport,
   type BulkCohortRow,
 } from '@/lib/fetchers/shopifyBulkCohort';
-import { fetchWithBackoff } from '@/lib/fetchers/withBackoff';
 import { getFxRate } from '@/lib/fetchers/fx';
 import { makeCadConvert } from '@/lib/inngest/cadConvert';
 
@@ -115,17 +112,15 @@ function getAdminClient(): SupabaseClient {
   });
 }
 
-/** Download the FULL Shopify order history for one store in native currency. */
+/**
+ * Download the FULL Shopify order history for one store in native currency.
+ * This is an unbounded `tsx` Node process (NO 60s serverless cap), so the
+ * synchronous start→poll→download helper `runBulkCohortExport` is appropriate
+ * here. (The weekly Inngest cron decomposes the same flow across step.sleep
+ * to stay under maxDuration — see cronCohortRefresh.ts.)
+ */
 async function fetchBulkCohortRows(store: StoreId): Promise<BulkCohortRow[]> {
-  await startBulkCohortExport(store);
-  const url = await pollBulkCohortUrl(store);
-  if (!url) return []; // store had 0 orders / COMPLETED with no file
-  const res = await fetchWithBackoff(url, { method: 'GET' }, { provider: 'shopify' });
-  if (!res.ok) {
-    throw new Error(`bulk cohort ${store} download failed (${res.status})`);
-  }
-  const ndjson = await res.text();
-  return parseBulkCohortNdjson(ndjson);
+  return runBulkCohortExport(store);
 }
 
 /**

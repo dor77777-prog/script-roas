@@ -15,6 +15,9 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   cronCohortRefreshFunctions,
   runCohortRefreshOnce,
+  runCohortRefreshStepped,
+  toCadLinesMemoized,
+  type CohortStep,
 } from '../cronCohortRefresh';
 import type { BulkCohortRow } from '@/lib/fetchers/shopifyBulkCohort';
 import type { CohortCell } from '@/lib/cohorts/cohortAggregate';
@@ -145,5 +148,170 @@ describe('runCohortRefreshOnce()', () => {
     expect(result.failures).toEqual([
       expect.objectContaining({ store: 'uzoshop' }),
     ]);
+  });
+});
+
+// ────────────────────────────────────────────────────────────────────────
+// FIX (2026-06-03): 60s maxDuration timeout + DRY.
+//
+// The original wrapper packed all 3 stores' Bulk exports + tens of thousands
+// of sequential FX awaits into ONE step.run('refresh-cohorts'). The Inngest
+// route is capped at maxDuration=60 and each step.run is a single Vercel
+// serverless invocation subject to that cap (ARCHITECTURE §Phase B documents a
+// real prod incident where >60s work "hangs the Vercel runtime to the 60s
+// timeout"). A killed runtime also defeats the soft-fail try/catch. The fix
+// gives EACH STORE its own step.run (own 60s budget + memoized across the
+// retry) + a step.sleep-driven poll (each invocation <60s) + per-pass FX
+// memoization (collapses tens of thousands of FX awaits to ~#distinct dates).
+// ────────────────────────────────────────────────────────────────────────
+
+/** Minimal mock for the subset of Inngest StepTools we use (run + sleep). */
+function makeMockStep(): { step: CohortStep; ids: string[]; sleeps: string[] } {
+  const ids: string[] = [];
+  const sleeps: string[] = [];
+  const step: CohortStep = {
+    run: async <T,>(id: string, cb: () => Promise<T>): Promise<T> => {
+      ids.push(id);
+      return cb();
+    },
+    sleep: async (id: string, _time: string): Promise<void> => {
+      sleeps.push(id);
+    },
+  };
+  return { step, ids, sleeps };
+}
+
+describe('toCadLinesMemoized() — FX memoization (60s-budget fix)', () => {
+  it('fetches each (currency, date) pair AT MOST once across many orders', async () => {
+    // 1000 USD orders all on the same date → must NOT trigger 1000+ FX calls.
+    const rows: BulkCohortRow[] = Array.from({ length: 1000 }, (_, i) => ({
+      orderId: String(i),
+      createdAt: '2025-07-05T10:00:00Z',
+      customerId: `c${i}`,
+      grossNative: 10,
+      refundNative: 0,
+      currency: 'USD',
+    }));
+    const getRate = vi.fn(async (_from: string, _to: 'CAD', _date: string) => 1.4);
+    const { lines, omittedFx } = await toCadLinesMemoized(rows, getRate);
+    expect(lines).toHaveLength(1000);
+    expect(omittedFx).toBe(0);
+    // gross/refund share the same (USD, 2025-07-05) key → ONE rate fetch total.
+    expect(getRate).toHaveBeenCalledTimes(1);
+    expect(lines[0].grossCad).toBeCloseTo(14, 5); // 10 × 1.4
+  });
+
+  it('omits a line when FX returns null/throws (stale > wrong)', async () => {
+    const rows: BulkCohortRow[] = [
+      { orderId: '1', createdAt: '2025-07-05', customerId: 'c1', grossNative: 50, refundNative: 0, currency: 'USD' },
+      { orderId: '2', createdAt: '2025-07-05', customerId: 'c2', grossNative: 50, refundNative: 0, currency: 'CAD' },
+    ];
+    const getRate = vi.fn(async (from: string) => {
+      if (from === 'USD') throw new Error('FX outage');
+      return 1;
+    });
+    const { lines, omittedFx } = await toCadLinesMemoized(rows, getRate);
+    expect(lines).toHaveLength(1); // CAD survives, USD dropped
+    expect(lines[0].orderId).toBe('2');
+    expect(omittedFx).toBe(1);
+  });
+});
+
+describe('runCohortRefreshStepped() — per-store steps (60s-budget fix)', () => {
+  const bulkByStore: Record<string, BulkCohortRow[]> = {
+    uzoshop: [
+      { orderId: '1', createdAt: '2025-07-05T10:00:00Z', customerId: 'c1', grossNative: 100, refundNative: 10, currency: 'CAD' },
+      { orderId: '3', createdAt: '2025-07-09T10:00:00Z', customerId: 'c2', grossNative: 80, refundNative: 0, currency: 'CAD' },
+    ],
+    zolplus: [
+      { orderId: '9', createdAt: '2025-10-01T10:00:00Z', customerId: 'z1', grossNative: 60, refundNative: 0, currency: 'CAD' },
+    ],
+  };
+  const fomByStore: Record<string, Map<string, string>> = {
+    uzoshop: new Map([['c1', '2025-07'], ['c2', '2025-07']]),
+    zolplus: new Map([['z1', '2025-10']]),
+  };
+
+  function makeDeps() {
+    return {
+      startExport: vi.fn(async (_store: string) => `gid://op/${_store}`),
+      pollBulkRows: vi.fn(async (store: string): Promise<BulkCohortRow[]> => bulkByStore[store] ?? []),
+      loadFirstOrderMonths: vi.fn(async (store: string) => fomByStore[store] ?? new Map<string, string>()),
+      replaceCohortCells: vi.fn(async (_store: string, _cells: CohortCell[]) => undefined),
+      getRate: vi.fn(async (_from: string, _to: 'CAD', _date: string) => 1),
+    };
+  }
+
+  it('gives EACH store its own step.run (not one mega-step)', async () => {
+    const { step, ids } = makeMockStep();
+    const deps = makeDeps();
+    const result = await runCohortRefreshStepped({
+      stores: ['uzoshop', 'zolplus'],
+      step,
+      ...deps,
+    });
+
+    // Per-store steps — NOT a single 'refresh-cohorts' mega-step.
+    expect(ids).not.toContain('refresh-cohorts');
+    expect(ids.some((id) => id.includes('uzoshop'))).toBe(true);
+    expect(ids.some((id) => id.includes('zolplus'))).toBe(true);
+    // start + ingest steps are per-store and store-suffixed for memoization.
+    expect(ids).toContain('start-bulk-uzoshop');
+    expect(ids).toContain('ingest-cohorts-uzoshop');
+    expect(ids).toContain('start-bulk-zolplus');
+    expect(ids).toContain('ingest-cohorts-zolplus');
+
+    expect(result.refreshed).toBe(2);
+    expect(result.failures).toHaveLength(0);
+
+    // uzoshop cells written: 2025-07 M0 (c1+c2).
+    const uzoCall = deps.replaceCohortCells.mock.calls.find((c) => c[0] === 'uzoshop');
+    const uzoCells = uzoCall![1];
+    const m0 = uzoCells.find((c) => c.month_since === 0);
+    expect(m0).toMatchObject({ active_customers: 2, orders: 2, gross_cad: 180, net_cad: 170 });
+  });
+
+  it('soft-fails per store: one store error does not abort the others', async () => {
+    const { step } = makeMockStep();
+    const deps = makeDeps();
+    deps.pollBulkRows.mockImplementation(async (store: string) => {
+      if (store === 'uzoshop') throw new Error('bulk export FAILED');
+      return bulkByStore[store] ?? [];
+    });
+    const result = await runCohortRefreshStepped({
+      stores: ['uzoshop', 'zolplus'],
+      step,
+      ...deps,
+    });
+    expect(deps.replaceCohortCells).toHaveBeenCalledTimes(1);
+    expect(deps.replaceCohortCells.mock.calls[0][0]).toBe('zolplus');
+    expect(result.refreshed).toBe(1);
+    expect(result.failures).toEqual([
+      expect.objectContaining({ store: 'uzoshop' }),
+    ]);
+  });
+
+  it('polls via step.sleep between attempts until rows are ready (no synchronous >60s poll)', async () => {
+    const { step, sleeps } = makeMockStep();
+    const deps = makeDeps();
+    // First poll returns "pending" (empty + not-ready sentinel via 2-arg form),
+    // simulated by pollBulkRows resolving only after one sleep cycle. We model
+    // readiness with a flag the poll function flips.
+    let ready = false;
+    deps.pollBulkRows.mockImplementation(async (store: string) => {
+      if (!ready) {
+        ready = true;
+        return null as unknown as BulkCohortRow[]; // not ready yet
+      }
+      return bulkByStore[store] ?? [];
+    });
+    const result = await runCohortRefreshStepped({
+      stores: ['uzoshop'],
+      step,
+      ...deps,
+    });
+    // At least one step.sleep happened while the export was still running.
+    expect(sleeps.length).toBeGreaterThanOrEqual(1);
+    expect(result.refreshed).toBe(1);
   });
 });
