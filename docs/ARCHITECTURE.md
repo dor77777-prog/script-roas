@@ -3113,3 +3113,57 @@ data-pipeline change.
   have failed); B3 `MobileStickyRoas.tsx` (IntersectionObserver collapse, reduced-motion gated, z below the
   z-30 app header). Year/month selectors in `AnalysisArchiveTab.tsx` narrowed to w-28/w-40 on one row.
 - No data-pipeline change; `store_events` is the single source for both the live feed and the tab.
+
+
+## 31. Tooltip system (2026-06-03)
+
+**Goal:** unify every help affordance behind ONE primitive — `HelpTooltip`
+(`src/components/ui/Tooltip.tsx`) — that auto-selects a render mode from
+**pointer-type × content-shape**, is touch-friendly, and is hermetically guarded.
+No new data/algorithm/workflow; presentation only. Builds on the §27/§28/§29 design
+contract (glass surfaces, token-only color, AA, `<Money>` for numbers).
+
+- **Single entry point + load-bearing passthrough.** `HelpTooltip`'s public
+  signature is unchanged, and the `null`/`''` content passthrough (returns the child
+  untouched) is preserved — so the ~32 existing call-sites upgraded for free.
+  `useIsMobile(767)` is called UNCONDITIONALLY at the top (before the null
+  early-return) to honor the hooks rule.
+- **Four auto-selected modes** (content shape: a plain `string`/`number` is *simple*;
+  a non-string `ReactNode`, an explicit `variant="rich"`, or a `title` is *rich*):
+  - **A · desktop simple** → Radix **Tooltip** (`role="tooltip"`), glass-2 bubble,
+    `Arrow` + `collisionPadding={8}`, opens on hover/focus, Esc/blur to close.
+  - **B · desktop rich** → Radix **Popover** (`role="dialog"`, `tooltip/RichPopover.tsx`),
+    **hover-intent** (open ~180ms after pointer-enter or on click; stays open while the
+    popover is hovered so its content is readable/selectable), glass-1 card,
+    `whitespace-pre-line` body, optional `title`.
+  - **C · touch simple / short-rich** → **ⓘ toggletip** (`tooltip/Toggletip.tsx`): a
+    paired `<button aria-label>` with a ≥44px hit area that tap-opens a Popover carrying
+    the body; a `role="status"` live region announces it; tap-outside/Esc close.
+  - **D · touch long-rich** → bottom **Sheet** (`tooltip/RichSheet.tsx`, Radix Dialog
+    `side="bottom"`) with a header `title` + visible `✕`. Length heuristic: rich AND
+    (has a `title` OR block/array content) → Sheet; short-rich stays the C tap-Popover.
+- **Props (additive):** `variant?: 'auto'|'text'|'rich'` (`'text'` pins JSX content to
+  a *simple* tooltip — no surprise Popover), `title?`, `withinDrawer?` (lifts content to
+  `z-[60]` so it clears a parent Sheet/drawer scrim). Delays tuned at the app-root
+  provider (`src/app/layout.tsx`): `delayDuration={200}` / `skipDelayDuration={300}`.
+- **Radix building blocks:** `@radix-ui/react-tooltip` (mode A) + `@radix-ui/react-popover`
+  (modes B/C) + the existing `Sheet` (Radix Dialog, mode D).
+- **Migration completed (Phases 2–4):** native `title=` leftovers wrapped in `HelpTooltip`
+  (or dropped to `aria-label` where redundant on optimize-toggles); the `RoasTargetChart`
+  dot SVG `<title>` removed (crosshair covers it); the 4 bespoke hover-popovers
+  (`RefundIndicator`, `ProductCentricView` `ColHelp`×9 + `HoverTooltip`, `CampaignsTable`
+  `ColumnHeaderTh`×4) folded into the rich primitive — fixing the prior `overflow-auto`
+  clipping in scroll tables. Chart-anchored tooltips (`RoasTargetChart`, `CustomerValueCurve`)
+  keep their SVG/pointer anchoring but wear the shared rich-card chrome + ARIA + `<Money>`.
+  Recharts' `ChartTooltip` is left untouched as the skin reference.
+- **Hermetic CI guards:**
+  - **`local/no-native-title-tooltip`** (ESLint, re-armed to **error**) — forbids native
+    `title="…"` tooltips, including the previously-bypassed prop-forwarding primitives
+    (`Button`/`IconButton`/`Chip`/`Badge` spread `{...props}` to a host element, so the
+    `title` would leak to the DOM); the SVG `<title>` content element stays exempt.
+  - **`tooltipFocusableGuard`** (`src/components/ui/__tests__/tooltipFocusableGuard.dom.test.tsx`)
+    — asserts no focusable element (`a/button/input/select/textarea/[tabindex]`) ever renders
+    inside a `role="tooltip"` (rich/focusable content MUST be a Popover/Sheet dialog, not a
+    tooltip). Mode-selection + a11y + null-passthrough covered by
+    `src/components/ui/__tests__/Tooltip.dom.test.tsx`; keyboard + touch-emulation + both-theme
+    by `tests/visual/tooltips.spec.ts` (Playwright).
