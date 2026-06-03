@@ -1,8 +1,15 @@
 'use client';
 
-import { useState, type ReactNode } from 'react';
+import {
+  cloneElement,
+  useState,
+  type MouseEvent,
+  type ReactElement,
+  type ReactNode,
+} from 'react';
 import { Info, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { isNonPhrasingChild } from './phrasing';
 import {
   Sheet,
   SheetContent,
@@ -59,25 +66,53 @@ export function RichSheet({
   const buttonLabel =
     label ?? (typeof title === 'string' ? title : 'מידע נוסף');
 
-  return (
+  // Non-phrasing trigger children (a table row `<tr>`, list item `<li>`, cell,
+  // block container) can't legally sit inside the `<span>` ⓘ-pairing wrapper
+  // and can't have a sibling `<button>`. For those the child ITSELF opens the
+  // sheet on tap — its own onClick is preserved (called first), then we open.
+  const childIsTrigger = isNonPhrasingChild(children);
+
+  const triggerChild = childIsTrigger
+    ? cloneElement(children as ReactElement<{ onClick?: (e: MouseEvent) => void }>, {
+        onClick: (e: MouseEvent) => {
+          (children as ReactElement<{ onClick?: (e: MouseEvent) => void }>).props.onClick?.(e);
+          setOpen(true);
+        },
+      })
+    : null;
+
+  const infoButton = (
+    <button
+      type="button"
+      aria-label={buttonLabel}
+      onClick={() => setOpen(true)}
+      className={cn(
+        // 24px glyph; `::after` inset expands the hit area to ≥44px (WCAG 2.5.8).
+        'relative inline-flex h-6 w-6 flex-none items-center justify-center rounded-full',
+        'border border-glass-edge bg-glass-1 text-ink-muted',
+        'transition-colors hover:text-accent focus-visible:text-accent',
+        'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent',
+        'after:absolute after:-inset-2.5 after:content-[""]',
+      )}
+    >
+      <Info size={14} aria-hidden="true" />
+    </button>
+  );
+
+  // Trigger region: non-phrasing child taps itself (no <span> wrapper, no
+  // sibling ⓘ); phrasing child renders inline next to the ⓘ button.
+  const triggerRegion = childIsTrigger ? (
+    triggerChild
+  ) : (
     <span className="inline-flex items-center gap-1.5 align-middle">
       {children}
-      <button
-        type="button"
-        aria-label={buttonLabel}
-        onClick={() => setOpen(true)}
-        className={cn(
-          // 24px glyph; `::after` inset expands the hit area to ≥44px (WCAG 2.5.8).
-          'relative inline-flex h-6 w-6 flex-none items-center justify-center rounded-full',
-          'border border-glass-edge bg-glass-1 text-ink-muted',
-          'transition-colors hover:text-accent focus-visible:text-accent',
-          'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent',
-          'after:absolute after:-inset-2.5 after:content-[""]',
-        )}
-      >
-        <Info size={14} aria-hidden="true" />
-      </button>
+      {infoButton}
+    </span>
+  );
 
+  return (
+    <>
+      {triggerRegion}
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent
           variant="drawer"
@@ -105,6 +140,6 @@ export function RichSheet({
           </SheetBody>
         </SheetContent>
       </Sheet>
-    </span>
+    </>
   );
 }

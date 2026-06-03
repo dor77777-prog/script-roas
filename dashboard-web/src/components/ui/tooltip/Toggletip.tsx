@@ -4,6 +4,7 @@ import { useState, type ReactNode } from 'react';
 import * as RadixPopover from '@radix-ui/react-popover';
 import { Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { isNonPhrasingChild } from './phrasing';
 
 /**
  * Tooltip-system-redesign — Phase 1 · Task 1.2, mode C (touch simple) +
@@ -59,27 +60,41 @@ export function Toggletip({
 }: ToggletipProps) {
   const [open, setOpen] = useState(false);
 
-  return (
-    <span className="inline-flex items-center gap-1.5 align-middle">
-      {children}
-      <RadixPopover.Root open={open} onOpenChange={setOpen}>
-        <RadixPopover.Trigger asChild>
-          <button
-            type="button"
-            aria-label={label}
-            className={cn(
-              // 24px glyph; `::after` inset expands the hit area to ≥44px (WCAG 2.5.8).
-              'relative inline-flex h-6 w-6 flex-none items-center justify-center rounded-full',
-              'border border-glass-edge bg-glass-1 text-ink-muted',
-              'transition-colors hover:text-accent focus-visible:text-accent',
-              'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent',
-              'after:absolute after:-inset-2.5 after:content-[""]',
-            )}
-          >
-            <Info size={14} aria-hidden="true" />
-          </button>
-        </RadixPopover.Trigger>
-        <RadixPopover.Portal>
+  // Non-phrasing trigger children (a table row `<tr>`, list item `<li>`, cell,
+  // block container) can't legally sit inside the `<span>` ⓘ-pairing wrapper
+  // and can't have a sibling `<button>` (it would break the table/list). For
+  // those the child ITSELF is the tap trigger via Radix `asChild` — no wrapper,
+  // no ⓘ glyph (open-Q3: dense rows tap themselves; ⓘ stays for inline help).
+  const childIsTrigger = isNonPhrasingChild(children);
+
+  // The reveal affordance: for phrasing children we keep the dedicated ⓘ
+  // button (rendered alongside the child); for non-phrasing children the child
+  // is itself the trigger (no extra glyph). Both go through Radix `asChild`.
+  const trigger = childIsTrigger ? (
+    <RadixPopover.Trigger asChild>{children}</RadixPopover.Trigger>
+  ) : (
+    <RadixPopover.Trigger asChild>
+      <button
+        type="button"
+        aria-label={label}
+        className={cn(
+          // 24px glyph; `::after` inset expands the hit area to ≥44px (WCAG 2.5.8).
+          'relative inline-flex h-6 w-6 flex-none items-center justify-center rounded-full',
+          'border border-glass-edge bg-glass-1 text-ink-muted',
+          'transition-colors hover:text-accent focus-visible:text-accent',
+          'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent',
+          'after:absolute after:-inset-2.5 after:content-[""]',
+        )}
+      >
+        <Info size={14} aria-hidden="true" />
+      </button>
+    </RadixPopover.Trigger>
+  );
+
+  const popover = (
+    <RadixPopover.Root open={open} onOpenChange={setOpen}>
+      {trigger}
+      <RadixPopover.Portal>
           <RadixPopover.Content
             role="dialog"
             dir="rtl"
@@ -106,6 +121,17 @@ export function Toggletip({
           </RadixPopover.Content>
         </RadixPopover.Portal>
       </RadixPopover.Root>
+  );
+
+  // Non-phrasing child IS the trigger → return the popover as-is (no <span>
+  // wrapper, so the row/list-item keeps its valid place in the DOM tree).
+  if (childIsTrigger) return popover;
+
+  // Phrasing child → render it inline alongside the ⓘ-pairing popover.
+  return (
+    <span className="inline-flex items-center gap-1.5 align-middle">
+      {children}
+      {popover}
     </span>
   );
 }

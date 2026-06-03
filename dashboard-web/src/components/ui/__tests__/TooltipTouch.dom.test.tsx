@@ -126,4 +126,57 @@ describe('HelpTooltip — touch modes (Task 1.2)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'סגור' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
+
+  // ── Non-phrasing trigger children — valid-DOM regression guard ──────────
+  //
+  // The Toggletip/RichSheet touch wrappers used to wrap EVERY child in
+  // `<span>{children}<button/></span>`. When the child is a table row (`<tr>`)
+  // or a list item (`<li>`), that emits `<span><tr/>…</span>` /
+  // `<span><li/>…</span>` — invalid HTML that breaks table/list layout. For
+  // these non-phrasing triggers the child itself must BE the trigger (asChild,
+  // no <span> wrapper, no sibling ⓘ inside the row/list).
+
+  it('touch + simple with a <tr> child does NOT wrap the row in a <span> (valid table DOM)', async () => {
+    const { container } = render(
+      <table>
+        <tbody>
+          <HelpTooltip content="לחץ לפרטים">
+            <tr data-testid="row">
+              <td>cell</td>
+            </tr>
+          </HelpTooltip>
+        </tbody>
+      </table>,
+    );
+    const row = container.querySelector('tr[data-testid="row"]');
+    expect(row).not.toBeNull();
+    // the row must NOT be nested inside a <span> (invalid table content)
+    expect(row!.closest('span')).toBeNull();
+    // and there must be no <span> sibling/parent wrapper introduced by the
+    // touch affordance around the row inside the <tbody>
+    expect(container.querySelector('tbody > span')).toBeNull();
+
+    // tapping the row itself opens the toggletip popover
+    fireEvent.click(row!);
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('לחץ לפרטים');
+  });
+
+  it('touch + simple with a <li> child does NOT wrap the item in a <span> (valid list DOM)', async () => {
+    const { container } = render(
+      <ul>
+        <HelpTooltip content="גם משויך ל-X">
+          <li data-testid="item">SKU-1</li>
+        </HelpTooltip>
+      </ul>,
+    );
+    const item = container.querySelector('li[data-testid="item"]');
+    expect(item).not.toBeNull();
+    expect(item!.closest('span')).toBeNull();
+    expect(container.querySelector('ul > span')).toBeNull();
+
+    fireEvent.click(item!);
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('גם משויך ל-X');
+  });
 });
