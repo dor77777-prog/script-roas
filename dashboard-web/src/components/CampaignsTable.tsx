@@ -11,6 +11,7 @@ import {
   ChevronDown,
   ChevronUp,
   Filter,
+  Info,
   Megaphone,
   Store as StoreIcon,
   X,
@@ -2579,62 +2580,46 @@ function ColumnHeaderTh({
   ariaLabel?: string;
   children?: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
-  const timeoutRef = useRef<number | null>(null);
-
-  const cancel = () => {
-    if (timeoutRef.current !== null) {
-      window.clearTimeout(timeoutRef.current);
-      timeoutRef.current = null;
-    }
-  };
-
-  const handleEnter = () => {
-    if (!tooltip) return;
-    cancel();
-    timeoutRef.current = window.setTimeout(() => setOpen(true), 180);
-  };
-  const handleLeave = () => {
-    cancel();
-    setOpen(false);
-  };
-
-  // Clean up the pending timeout if the row unmounts mid-hover (date-range
-  // swap, store filter change, etc.) — otherwise the setTimeout would fire
-  // setState on an unmounted component → React warning + leak.
-  useEffect(() => cancel, []);
+  // Tooltip-system-redesign — Phase 3b (2026-06-03): the bespoke
+  // absolutely-positioned `role="tooltip"` span (clipped by the table's
+  // `overflow-auto` wrapper — the long-standing `:2616` TODO) is gone. The
+  // metric help now rides the single sanctioned HelpTooltip primitive in
+  // variant="rich" mode via a dedicated ⓘ affordance (spec §6.5.3 — "ⓘ
+  // everywhere for consistency, including dense table cells"): a PORTALLED
+  // Radix Popover (role="dialog") that escapes the scroll container and
+  // flips/shifts on collision, plus the primitive's touch path. The ⓘ
+  // separates the help-reveal from the sort-click that lives in `children`.
+  // The column's exact tooltip copy is preserved verbatim.
+  const justify =
+    className?.includes('text-center')
+      ? 'justify-center'
+      : className?.includes('text-start')
+        ? 'justify-start'
+        : 'justify-end';
 
   return (
-    <th
-      className={cn('relative', className)}
-      data-col-id={dataColId}
-      aria-label={ariaLabel}
-      onMouseEnter={handleEnter}
-      onMouseLeave={handleLeave}
-      onFocus={handleEnter}
-      onBlur={handleLeave}
-    >
-      {children}
-      {/* TODO mobile-fix: tooltip clipped by overflow-auto wrapper — needs Floating UI / portal for proper escape */}
-      {open && tooltip && (
-        <span
-          role="tooltip"
-          dir="rtl"
-          className={cn(
-            'absolute z-[15] top-full mt-2 end-0',
-            'w-[260px] sm:w-[280px] max-w-[min(85vw,300px)]',
-            'rounded-xl bg-glass-2 text-ink border border-glass-edge px-3 py-2.5',
-            'shadow-overlay text-[11px] sm:text-[12px] leading-relaxed',
-            'pointer-events-none animate-fade-in font-normal text-start whitespace-normal',
-          )}
-        >
-          {tooltip}
-          <span
-            aria-hidden
-            className="absolute -top-1 end-4 w-2 h-2 bg-glass-2 border border-glass-edge rotate-45"
-          />
-        </span>
-      )}
+    <th className={className} data-col-id={dataColId} aria-label={ariaLabel}>
+      <span className={cn('inline-flex items-center gap-1', justify)}>
+        {children}
+        {tooltip && (
+          <HelpTooltip
+            variant="rich"
+            title={ariaLabel ?? undefined}
+            content={tooltip}
+            align="end"
+          >
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={(e) => e.stopPropagation()}
+              aria-label={ariaLabel ? `הסבר על ${ariaLabel}` : 'הסבר על העמודה'}
+              className="w-3.5 h-3.5 rounded-full text-ink-subtle hover:text-ink-secondary opacity-60 hover:opacity-100"
+            >
+              <Info size={10} aria-hidden="true" />
+            </Button>
+          </HelpTooltip>
+        )}
+      </span>
     </th>
   );
 }
