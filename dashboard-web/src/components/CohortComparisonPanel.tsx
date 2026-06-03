@@ -396,6 +396,7 @@ export function CohortComparisonPanel({
             "where do I stand?" without scrolling. */}
         {intraCount >= 2 && cohort.intraPlatformOthers.length > 0 && (
           <HelpTooltip
+            variant="rich"
             content={
               currentLeads
                 ? 'אתה מוביל בקבוצת המיפוי באותה פלטפורמה'

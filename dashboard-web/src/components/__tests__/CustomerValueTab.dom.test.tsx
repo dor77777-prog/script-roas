@@ -18,7 +18,7 @@
  *  - a no-spend (pre-May) cohort surfaces the muted "אין נתוני הוצאה" nCAC state
  */
 import { describe, it, expect } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 import { CustomerValueTab } from '@/components/CustomerValueTab';
 import type { CohortMonthlyRow } from '@/lib/postgresReaders';
 
@@ -188,6 +188,33 @@ describe('CustomerValueTab — advanced cohort grid', () => {
     expect(details.tagName.toLowerCase()).toBe('details');
     // The grid table lives inside the <details>.
     expect(within(details).getByTestId('cv-grid')).toBeInTheDocument();
+  });
+});
+
+describe('CustomerValueTab — LTV explainer is a rich tooltip (Phase 3a)', () => {
+  // The ~400-char LTV explainer (the longest tooltip in the app) was promoted
+  // from a plain-string simple bubble to variant="rich" + a title. On a fine
+  // pointer that opens a Radix Popover (role="dialog", mode B) — never a
+  // role="tooltip" — and preserves the EXACT body text (no info loss).
+  it('opens a role=dialog (not a tooltip) carrying the full explainer text', async () => {
+    renderTab();
+    // The ⓘ-style trigger keeps its accessible label on desktop.
+    const trigger = screen.getByLabelText('הסבר על העקומה');
+    fireEvent.click(trigger);
+    const dialog = await screen.findByRole('dialog');
+    // Title + a distinctive mid-string body fragment both render verbatim.
+    expect(dialog).toHaveTextContent('על מה זה מתבסס');
+    expect(dialog).toHaveTextContent('קו עלות-הגיוס (nCAC) הוא הבלנדי');
+    // Rich content must NEVER be a role="tooltip".
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  });
+
+  it('Esc closes the explainer dialog', async () => {
+    renderTab();
+    fireEvent.click(screen.getByLabelText('הסבר על העקומה'));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 });
 

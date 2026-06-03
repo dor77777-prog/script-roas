@@ -19,7 +19,7 @@
 //      present (keeps the existing `reconciliation &&` guard).
 
 import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 import {
   CampaignDrawerOverview,
@@ -151,6 +151,32 @@ describe('CampaignDrawerOverview — scorecard + collapsible accordions', () => 
     expect(screen.getByText(/מוצרי Shopify משויכים/)).toBeInTheDocument();
     // The mapped product id is rendered in the DOM even while collapsed.
     expect(screen.getByText('8319522308390')).toBeInTheDocument();
+  });
+
+  it('mapped-id help is a rich tooltip — multiline content opens a role=dialog (Phase 3a)', async () => {
+    // Promoted to variant="rich" so the `\n`-joined "also mapped to" line
+    // actually breaks (whitespace-pre-line) instead of collapsing, and so the
+    // surface lifts above the drawer scrim (withinDrawer → z-[60]). On a fine
+    // pointer it opens a Radix Popover (role="dialog"), never a role="tooltip".
+    render(
+      <CampaignDrawerOverview
+        {...makeProps({
+          mappedIds: ['8319522308390'],
+          otherCampaignsByProduct: new Map([['8319522308390', ['קמפיין אחר']]]),
+        })}
+      />,
+    );
+    // The product id still renders in the trigger <li> (no info loss).
+    expect(screen.getByText('8319522308390')).toBeInTheDocument();
+    // Click the trigger chip to open the rich popover.
+    fireEvent.click(screen.getByText('8319522308390'));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('8319522308390');
+    expect(dialog).toHaveTextContent('גם משויך ל: קמפיין אחר');
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    // Esc closes it.
+    fireEvent.keyDown(dialog, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
   it('renders the reconciliation accordion only when reconciliation is present', () => {

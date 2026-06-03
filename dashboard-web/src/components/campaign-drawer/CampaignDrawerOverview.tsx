@@ -351,6 +351,8 @@ export function CampaignDrawerOverview({
                   return (
                     <HelpTooltip
                       key={id}
+                      variant="rich"
+                      withinDrawer
                       content={
                         others.length > 0
                           ? `${id}\nגם משויך ל: ${others.join(', ')}`
