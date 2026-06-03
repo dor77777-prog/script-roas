@@ -86,9 +86,25 @@ export function CustomerValueCurve({
   basisLabel,
 }: CustomerValueCurveProps) {
   const uid = useId().replace(/[:]/g, '');
+  const wrapRef = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const lineRef = useRef<SVGPathElement | null>(null);
   const [hover, setHover] = useState<{ m: number; v: number; px: number; py: number } | null>(null);
+
+  // Touch tap/dismiss: on a phone there is no pointerleave to clear the hover
+  // tooltip, so a tap outside the chart wrap closes it (mirrors the
+  // RoasTargetChart crosshair + the shared tooltip primitive's tap-out).
+  useEffect(() => {
+    if (hover === null) return;
+    const handler = (e: PointerEvent) => {
+      const t = e.target as Node | null;
+      const wrap = wrapRef.current;
+      if (!wrap || (t && wrap.contains(t))) return;
+      setHover(null);
+    };
+    document.addEventListener('pointerdown', handler);
+    return () => document.removeEventListener('pointerdown', handler);
+  }, [hover]);
 
   const geo = useMemo(() => {
     const pad = PAD;
@@ -196,7 +212,7 @@ export function CustomerValueCurve({
   }, [pbx, cacY, cur, x, y]);
 
   return (
-    <div data-testid="cv-curve" className="relative">
+    <div ref={wrapRef} data-testid="cv-curve" className="relative">
       <svg
         ref={svgRef}
         viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
@@ -475,6 +491,10 @@ export function CustomerValueCurve({
           height={(plotB - plotT).toFixed(2)}
           fill="transparent"
           style={{ cursor: 'crosshair' }}
+          // onPointerDown also handles the touch case (a tap shows the tooltip
+          // at the tapped month; a tap outside the wrap dismisses it via the
+          // document pointerdown listener above).
+          onPointerDown={handleMove}
           onPointerMove={handleMove}
           onPointerLeave={handleLeave}
           onMouseMove={handleMove}
@@ -482,11 +502,18 @@ export function CustomerValueCurve({
         />
       </svg>
 
-      {/* Hover tooltip — glass scrim, AA text on neutral surface. */}
+      {/* Hover/tap tooltip — shared rich-card chrome (bg-glass-1/95 +
+          backdrop-blur-sm + border-glass-edge + rounded-card + shadow-overlay),
+          matching the RichPopover / Toggletip surfaces. Bespoke SVG anchoring
+          is preserved (left/top % from the viewBox point). role="tooltip" +
+          dir="rtl"; the bubble is non-interactive (pointer-events-none) so the
+          tooltip role is correct. Numbers via <Money>. */}
       {hover && (
         <div
           data-testid="cv-curve-tooltip"
-          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-[118%] rounded-[10px] border border-glass-edge bg-glass-2/90 px-2.5 py-1.5 text-xs leading-snug text-ink shadow-glass backdrop-blur"
+          role="tooltip"
+          dir="rtl"
+          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-[118%] rounded-card border border-glass-edge bg-glass-1/95 px-2.5 py-1.5 text-xs leading-snug text-ink shadow-overlay backdrop-blur-sm"
           style={{ left: `${tipLeftPct}%`, top: `${tipTopPct}%` }}
         >
           <div className="text-[11px] font-semibold text-ink-muted">

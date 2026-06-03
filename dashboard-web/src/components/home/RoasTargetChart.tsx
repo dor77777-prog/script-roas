@@ -301,32 +301,37 @@ export function RoasTargetChart({
   const [openPinId, setOpenPinId] = useState<string | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
 
-  // Dismiss-on-click-outside (touch-friendly). The pointerdown listener
-  // fires before click, so a tap on a pin still toggles the right one.
+  /* --- crosshair + rich tooltip state (V4) ----------------------------- */
+  // `hoverIndex` is the nearest data point under the pointer; null = no
+  // crosshair. Driven by pointermove (and pointerdown for touch) over the SVG
+  // plot. The custom tooltip (date · ROAS · target · delta-vs-target) renders
+  // in HTML over the chart.
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+  const svgRef = useRef<SVGSVGElement | null>(null);
+
+  // Dismiss-on-tap-outside (touch-friendly) for BOTH the open pin tooltip and
+  // the crosshair readout. On a phone there is no pointerleave, so a tap
+  // outside the chart wrap is what closes a lingering pin/crosshair. The
+  // pointerdown listener fires before click, so a tap on a pin still toggles
+  // the right one. Active whenever something is open.
   useEffect(() => {
-    if (openPinId === null) return;
+    if (openPinId === null && hoverIndex === null) return;
     const handler = (e: MouseEvent | PointerEvent) => {
       const target = e.target as Node | null;
       if (!target) return;
       const wrap = wrapRef.current;
       if (!wrap) return;
-      // If click landed outside the chart-wrap, close. We can't trust
+      // If the tap landed outside the chart-wrap, close. We can't trust
       // `closest('.pin-anchor')` here because the pointer might land on a
       // sibling pin — handled inside the pin's onClick.
       if (!wrap.contains(target)) {
         setOpenPinId(null);
+        setHoverIndex(null);
       }
     };
     document.addEventListener('pointerdown', handler);
     return () => document.removeEventListener('pointerdown', handler);
-  }, [openPinId]);
-
-  /* --- crosshair + rich tooltip state (V4) ----------------------------- */
-  // `hoverIndex` is the nearest data point under the pointer; null = no
-  // crosshair. Driven by pointermove over the SVG plot. The custom tooltip
-  // (date · ROAS · target · delta-vs-target) renders in HTML over the chart.
-  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
-  const svgRef = useRef<SVGSVGElement | null>(null);
+  }, [openPinId, hoverIndex]);
 
   /* --- derived ----------------------------------------------------------- */
   const { points, pins, kpis, prevPeriod, daysActive } = data;
@@ -600,6 +605,11 @@ export function RoasTargetChart({
           role="img"
           aria-label={synthesis.text || 'גרף ROAS יומי מול יעד'}
           data-testid="chart-svg"
+          // onPointerDown also serves touch: a tap on the plot shows the
+          // crosshair readout at the tapped day; a tap outside the chart wrap
+          // dismisses it (the document pointerdown listener below clears both
+          // the open pin tooltip AND the crosshair on touch).
+          onPointerDown={handlePlotMove}
           onPointerMove={handlePlotMove}
           onPointerLeave={handlePlotLeave}
         >
@@ -937,8 +947,12 @@ export function RoasTargetChart({
                     role="tooltip"
                     data-testid={`chart-pin-tooltip-${pin.id}`}
                     className={cn(
-                      'absolute z-10 w-max max-w-[14rem] text-ink px-3 py-2 rounded-lg',
-                      'bg-glass-2 backdrop-blur-md border border-status-warning shadow-overlay',
+                      // Shared rich-card chrome (surface/blur/radius/shadow)
+                      // matching RichPopover + Toggletip. The amber
+                      // border-status-warning is kept as the milestone-pin
+                      // accent (ties the bubble to the amber pin glyph/chip).
+                      'absolute z-10 w-max max-w-[14rem] text-ink px-3 py-2 rounded-card',
+                      'bg-glass-1/95 backdrop-blur-sm border border-status-warning shadow-overlay',
                       // Wave-6 Task 6.1 — pin tooltip entrance: 120 ms
                       // opacity + ~4 px Y translate via tailwindcss-animate.
                       // slide-in-from-bottom-1 = 0.25 rem (4 px) — see the
@@ -998,8 +1012,11 @@ export function RoasTargetChart({
                 data-testid="chart-hover-tooltip"
                 dir="rtl"
                 className={cn(
-                  'absolute z-10 -translate-x-1/2 w-max min-w-[9.5rem] px-3 py-2 rounded-lg',
-                  'bg-glass-2 backdrop-blur-md border border-glass-edge shadow-overlay',
+                  // Shared rich-card chrome (matches RichPopover + Toggletip).
+                  // pointer-events-none keeps it a passive crosshair readout, so
+                  // role="tooltip" is correct (no focusable content inside).
+                  'absolute z-10 -translate-x-1/2 w-max min-w-[9.5rem] px-3 py-2 rounded-card',
+                  'bg-glass-1/95 backdrop-blur-sm border border-glass-edge shadow-overlay',
                   'text-[12px] text-ink pointer-events-none',
                 )}
                 style={{ transform: 'translateX(-50%)', top: -84 }}
