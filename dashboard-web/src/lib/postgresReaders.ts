@@ -1135,6 +1135,90 @@ export async function fetchOrdersAttributionFromPostgres(
 }
 
 // ────────────────────────────────────────────────────────────────────────
+// 7b. fetchCohortMonthlyFromPostgres — customer_cohort_monthly → CohortMonthlyRow[]
+//    Wave 2 (2026-06-03) — backs the customer-value (cohorts/LTV) tab. The
+//    table is seeded from full Shopify Bulk history joined to the
+//    customer_first_order ledger (scripts/backfillCohortMonthly.ts) and
+//    refreshed weekly (full replace per store) by cron-cohort-refresh.
+// ────────────────────────────────────────────────────────────────────────
+
+/**
+ * Wave 2 — canonical customer_cohort_monthly SELECT column list. Exported so
+ * the select-string presence guard can pin every downstream-consumed column
+ * (a dropped column otherwise reads back undefined). Mirrors the
+ * ORDERS_ATTRIBUTION_SELECT convention. `updated_at` is intentionally NOT in
+ * the consumed set — the UI never surfaces the per-cell write time.
+ */
+export const COHORT_MONTHLY_SELECT =
+  'store_id, first_order_month, month_since, active_customers, orders, gross_cad, net_cad';
+
+/**
+ * One normalized row of the customer_cohort_monthly aggregate. CamelCase to
+ * match the rest of the reader layer; numerics are coerced via `toNumber` so
+ * NUMERIC/INT columns (which supabase-js may return as string or number)
+ * always surface as finite numbers for the pure compute layer.
+ */
+export type CohortMonthlyRow = {
+  storeId: string;
+  /** 'YYYY-MM' — the cohort's first-order month (from the ledger). */
+  firstOrderMonth: string;
+  /** 0..11 — whole calendar months since the cohort's first order (cap 11). */
+  monthSince: number;
+  /** Distinct customers of the cohort who ordered in that month_since. */
+  activeCustomers: number;
+  orders: number;
+  grossCad: number;
+  netCad: number;
+};
+
+/**
+ * Postgres reader for the customer_cohort_monthly aggregate.
+ *
+ * - Optional `storeId` filter pushed down server-side via `.eq('store_id', …)`
+ *   (the /api/cohorts route returns all stores; the client slices by store,
+ *   like /api/orders-attribution — so the filter is an optional convenience).
+ * - Deterministic ordering: `first_order_month` then `month_since`, so the
+ *   compute layer and any cohort-grid render see cells in a stable shape.
+ * - Paginated (via `paginate()`) to bypass Supabase Cloud's db-max-rows=1000
+ *   cap — same as every other multi-row reader here.
+ */
+export async function fetchCohortMonthlyFromPostgres(
+  opts?: { storeId?: string },
+): Promise<CohortMonthlyRow[]> {
+  let data: DbRow[];
+  try {
+    data = await paginate<DbRow>(() => {
+      let q = getSupabase()
+        .from('customer_cohort_monthly')
+        .select(COHORT_MONTHLY_SELECT);
+      if (opts?.storeId) {
+        q = q.eq('store_id', opts.storeId);
+      }
+      // Stable cell order for the compute layer + cohort grid.
+      return q
+        .order('first_order_month', { ascending: true })
+        .order('month_since', { ascending: true });
+    });
+  } catch (e) {
+    throw new Error(`postgresReaders.fetchCohortMonthly: ${(e as Error).message}`);
+  }
+
+  const rows: CohortMonthlyRow[] = [];
+  for (const r of data) {
+    rows.push({
+      storeId: String(r.store_id),
+      firstOrderMonth: String(r.first_order_month ?? '').trim(),
+      monthSince: toNumber(r.month_since),
+      activeCustomers: toNumber(r.active_customers),
+      orders: toNumber(r.orders),
+      grossCad: toNumber(r.gross_cad),
+      netCad: toNumber(r.net_cad),
+    });
+  }
+  return rows;
+}
+
+// ────────────────────────────────────────────────────────────────────────
 // 8. fetchProductCatalogFromPostgres — product_catalog → CatalogProduct[]
 //    Mirrors productCatalog.ts:fetchProductCatalog (line 59)
 // ────────────────────────────────────────────────────────────────────────
