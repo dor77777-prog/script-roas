@@ -176,7 +176,10 @@ export function Dashboard() {
   const { data: rawData, error, isLoading, mutate } = useSWR<DashboardData>(
     buildDateRangeKey('/api/data', filters.range),
     fetcher,
-    { refreshInterval: 60_000, revalidateOnFocus: true },
+    // refreshInterval 0 — periodic refresh is driven by the single coordinated
+    // useAutoRefresh(60s) above so this key re-renders TOGETHER with the others
+    // (no offset per-hook timer). revalidateOnFocus stays for instant catch-up.
+    { refreshInterval: 0, revalidateOnFocus: true },
   );
   // Editable COGS % — recompute each row's cogs/netProfit from the operator's
   // effective % at the earliest read point so every downstream consumer
@@ -201,7 +204,10 @@ export function Dashboard() {
   const { data: ordersData } = useSWR(
     buildDateRangeKey('/api/orders-attribution', filters.range),
     ordersFetcher,
-    { refreshInterval: 60_000, revalidateOnFocus: true },
+    // refreshInterval 0 — periodic refresh is driven by the single coordinated
+    // useAutoRefresh(60s) above so this key re-renders TOGETHER with the others
+    // (no offset per-hook timer). revalidateOnFocus stays for instant catch-up.
+    { refreshInterval: 0, revalidateOnFocus: true },
   );
 
   // Honest hero-only attribution-coverage chip (2026-06-02). Computed from the
@@ -260,15 +266,21 @@ export function Dashboard() {
     return () => window.removeEventListener('roas-salary-changed', bump);
   }, []);
 
-  // Silent auto-refresh: every 10 min AND whenever the tab/app regains focus
-  // (return-to-tab on desktop, reopen on mobile), revalidate EVERY SWR key in
-  // the app. Combined with the `no-store` fetchers (lib/fetchJson.ts) this
-  // makes the dashboard pick up backend updates without a page reload and
-  // without the operator having to fully close/reopen the tab on mobile.
-  // No reload → filters, scroll position, and open panels are preserved.
+  // Silent COORDINATED auto-refresh (2026-06-03): every 60s AND on focus,
+  // revalidate EVERY SWR key in the app IN ONE BATCH. This is the single
+  // driver of periodic refresh — the per-hook `refreshInterval`s on the
+  // current-period Home sources (/api/data, /api/orders-attribution) are set
+  // to 0 so they NEVER fire on their own offset schedule. Result: revenue,
+  // spend, MER, order counts, NC-ROAS, attribution coverage, per-store cards
+  // and CPM all refetch from the SAME tick and re-render TOGETHER, from one
+  // consistent snapshot (operator-reported "data not uniform" fix). This is
+  // READ-ONLY (revalidate = GET refetch — never a write; SWR dedupes in-flight
+  // requests), so it cannot cause double-writes; the only writers are the
+  // idempotent crons + the manual "Refresh All" button. No reload → filters,
+  // scroll, and open panels are preserved.
   useAutoRefresh(
     () => { void swrMutate(() => true, undefined, { revalidate: true }); },
-    { intervalMs: 600_000 },
+    { intervalMs: 60_000 },
   );
 
   // Mirror state into the URL so refresh / bookmark / share survive. Uses
@@ -374,6 +386,28 @@ export function Dashboard() {
       isFirstOrder: r.isFirstOrder,
     }));
   }, [ordersData]);
+
+  // Wave 2 — mapping-aware inputs for the "לקוחות" (CustomerValueTab) headline.
+  // Computed HERE (CustomerValueTab lives in this component, not HomeTab) with
+  // the SAME pure helpers + agg the Home NC tile uses — NEVER recomputed from
+  // raw account totals. blendedNcac drives the verdict / LTV:nCAC / payback;
+  // spendByMonth feeds the per-cohort nCAC (best-effort over the current-range
+  // data_daily rows — months outside the range degrade to the muted state).
+  const customersBlendedNcac = useMemo(() => {
+    if (!filtered) return null;
+    const scope = filters.store === 'All' ? undefined : filters.store;
+    const { factor } = netAdjustFactor(filtered.curAgg.revenue, filtered.curAgg.grossRevenue);
+    return computeNewCustomerMetrics(firstOrderRows, filtered.curAgg.spend, scope, factor).nCac;
+  }, [firstOrderRows, filtered, filters.store]);
+  const customersSpendByMonth = useMemo(() => {
+    const out: Record<string, number> = {};
+    for (const r of data?.rows ?? []) {
+      if (filters.store !== 'All' && r.storeName !== filters.store) continue;
+      const m = r.date.slice(0, 7);
+      out[m] = (out[m] ?? 0) + (r.totalSpend ?? 0);
+    }
+    return out;
+  }, [data, filters.store]);
 
   return (
     <div dir="rtl" className="min-h-screen bg-canvas flex">
@@ -492,7 +526,12 @@ export function Dashboard() {
                 <ActivityEventsTab data={data} globalStore={filters.store} />
               )}
               {activeTab === 'customers' && (
-                <CustomerValueTab stores={data.stores} globalStore={filters.store} />
+                <CustomerValueTab
+                  stores={data.stores}
+                  globalStore={filters.store}
+                  blendedNcac={customersBlendedNcac}
+                  spendByMonth={customersSpendByMonth}
+                />
               )}
               {activeTab === 'pnl' && (
                 <PnLTab

@@ -14,7 +14,12 @@ export const CACHE_CONFIG = {
   campaigns: { revalidate: 60, swr: 120 },
   products: { revalidate: 60, swr: 120 },
   ads: { revalidate: 300, swr: 900 },
-  ordersAttribution: { revalidate: 300, swr: 900 },
+  // 2026-06-03: tightened 300/900 → 60/120 to MATCH `data` so the Home cards
+  // sourced from orders-attribution (order counts, NC-ROAS, attribution
+  // coverage, per-store counts) refresh in lock-step with revenue/spend
+  // instead of lagging up to 5-15 min. cron-live now writes today's orders
+  // every ~10 min, so a 60s server window is appropriate (not "written daily").
+  ordersAttribution: { revalidate: 60, swr: 120 },
   // Wave 2 (2026-06-03) cohort/LTV aggregate. The customer_cohort_monthly
   // table is a weekly full-replace (cron-cohort-refresh) of slow-moving
   // strategic data — a 5-min server ISR window + 15-min CDN swr is plenty

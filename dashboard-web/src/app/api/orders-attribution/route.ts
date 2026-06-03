@@ -6,9 +6,11 @@ import { userFacingError } from '@/lib/apiErrors';
 import { parseRangeParams, RangeParamError } from '@/lib/dateRange';
 import { captureRouteError } from '@/lib/sentry/capture';
 
-// 5-minute cache. Attribution rows are written daily; refreshing more often
-// doesn't help the analysis but does burn Supabase request quota.
-export const revalidate = 300; // matches CACHE_CONFIG.ordersAttribution.revalidate; literal required by Next.js
+// 60-second cache (2026-06-03: was 300). cron-live writes today's orders every
+// ~10 min, and the Home cards built from this route (order counts, NC-ROAS,
+// attribution coverage, per-store counts) must refresh in lock-step with
+// /api/data (also 60s) instead of lagging minutes behind.
+export const revalidate = 60; // matches CACHE_CONFIG.ordersAttribution.revalidate; literal required by Next.js
 
 export type OrdersAttributionResponse = {
   rows: OrderAttributionRow[];
