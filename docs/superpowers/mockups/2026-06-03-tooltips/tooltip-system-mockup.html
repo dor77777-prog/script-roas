@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>מערכת טולטיפים — Mockup (2026-06-03)</title>
+<style>
+  /* ============ EXACT dashboard tokens (globals.css) ============ */
+  :root[data-theme="dark"]{
+    --canvas-1:#0d0f1e; --canvas-2:#0a0c18;
+    --glass-1:#171a2e; --glass-2:#1d2138; --glass-3:#20243a;
+    --glass-edge:rgba(255,255,255,0.08);
+    --text:#eef1ff; --text-2:#b3b9d8; --text-muted:#8c96ba; --text-subtle:#8c93bf;
+    --accent:#7c6cff; --accent-soft:rgba(124,108,255,0.16); --accent-bg:rgba(124,108,255,0.12); --accent-fg:#fff;
+    --shadow-overlay:0 8px 24px rgba(0,0,0,0.5); --shadow-sheet:0 24px 48px rgba(0,0,0,0.6);
+    --blur-glass:blur(20px) saturate(140%); --blur-sheet:blur(36px) saturate(160%);
+    --scrim:rgba(0,0,0,0.6); --bg-glow:rgba(124,108,255,0.13);
+    --status-warning:#ef9331; --status-warning-bg:rgba(239,147,49,0.16); --status-warning-fg:#f7c897;
+    --good:#34d399; --bad:#f87171;
+  }
+  :root[data-theme="light"]{
+    --canvas-1:#edf0f8; --canvas-2:#f4f6fc;
+    --glass-1:#ffffff; --glass-2:#f6f7fb; --glass-3:#eef1f8;
+    --glass-edge:rgba(22,26,48,0.08);
+    --text:#171a2b; --text-2:#565d78; --text-muted:#666b84; --text-subtle:#696b7d;
+    --accent:#0ea5b7; --accent-soft:#def5f7; --accent-bg:rgba(14,165,183,0.10); --accent-fg:#fff;
+    --shadow-overlay:0 8px 24px rgba(22,26,48,0.12); --shadow-sheet:0 24px 48px rgba(22,26,48,0.16);
+    --blur-glass:blur(20px) saturate(120%); --blur-sheet:blur(36px) saturate(130%);
+    --scrim:rgba(22,26,48,0.45); --bg-glow:rgba(14,165,183,0.10);
+    --status-warning:#ef9331; --status-warning-bg:#fbe6d0; --status-warning-fg:#8e4f0b;
+    --good:#0f9d6b; --bad:#d63d3d;
+  }
+
+  *{box-sizing:border-box}
+  html,body{margin:0;background-color:var(--canvas-1);}
+  body{
+    font-family:'Heebo','Assistant',-apple-system,'Segoe UI',system-ui,sans-serif;
+    color:var(--text);
+    background:
+      radial-gradient(1200px 600px at 80% -6%, var(--bg-glow), transparent 55%),
+      linear-gradient(180deg, var(--canvas-1) 0%, var(--canvas-2) 100%);
+    background-attachment:fixed; min-height:100vh;
+    -webkit-font-smoothing:antialiased; line-height:1.5;
+  }
+  .wrap{max-width:1120px;margin:0 auto;padding:22px 20px 80px;}
+
+  /* top bar */
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:6px;}
+  h1{font-size:20px;font-weight:800;margin:0;letter-spacing:-.01em;}
+  .sub{color:var(--text-muted);font-size:12.5px;margin:2px 0 0;}
+  .controls{display:flex;gap:8px;align-items:center;}
+  .seg{display:inline-flex;background:var(--glass-2);border:1px solid var(--glass-edge);border-radius:11px;overflow:hidden;}
+  .seg button{appearance:none;border:0;background:transparent;color:var(--text-2);font:inherit;font-size:12.5px;font-weight:700;padding:7px 13px;cursor:pointer;}
+  .seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);}
+
+  .grid{display:grid;grid-template-columns:1fr 430px;gap:18px;margin-top:18px;align-items:start;}
+  @media(max-width:900px){.grid{grid-template-columns:1fr;}}
+
+  .panel{background:var(--glass-1);border:1px solid var(--glass-edge);border-radius:18px;padding:18px;box-shadow:var(--shadow-overlay);}
+  .panel h2{font-size:13px;font-weight:800;margin:0 0 3px;display:flex;align-items:center;gap:8px;}
+  .panel h2 .tag{font-size:10px;font-weight:700;color:var(--accent);background:var(--accent-bg);border:1px solid var(--glass-edge);border-radius:999px;padding:2px 8px;}
+  .panel .hint{color:var(--text-muted);font-size:11.5px;margin:0 0 16px;}
+
+  .demo-card{background:var(--glass-2);border:1px solid var(--glass-edge);border-radius:14px;padding:15px;margin-bottom:13px;}
+  .row{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+  .eyebrow{font-size:10px;text-transform:uppercase;letter-spacing:.08em;color:var(--text-muted);font-weight:700;margin-bottom:8px;}
+  .kpi{font-size:24px;font-weight:800;letter-spacing:-.02em;}
+  .kpi .cur{font-size:12px;color:var(--text-muted);font-weight:600;margin-inline-end:3px;}
+  .num{font-variant-numeric:tabular-nums;}
+  .chip{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;border-radius:11px;padding:3px 9px;border:1px solid var(--glass-edge);background:var(--glass-3);color:var(--text-2);}
+  .chip.warn{background:var(--status-warning-bg);color:var(--status-warning-fg);border-color:transparent;}
+  .truncate{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:bottom;}
+
+  /* the info trigger affordance */
+  .help{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:999px;
+    border:1px solid var(--glass-edge);color:var(--text-muted);font-size:10.5px;font-weight:800;cursor:help;background:var(--glass-1);
+    line-height:1;flex:none;}
+  .help:hover,.help:focus-visible{color:var(--accent);border-color:var(--accent);outline:none;}
+  /* mobile ⓘ button: 24px glyph in ≥44px hit area */
+  .ibtn{position:relative;display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:999px;
+    border:1px solid var(--glass-edge);color:var(--text-muted);background:var(--glass-1);font-weight:800;font-size:13px;cursor:pointer;flex:none;}
+  .ibtn::after{content:"";position:absolute;inset:-10px;} /* expands hit area to 44px */
+  .ibtn:active{transform:scale(.94);}
+
+  /* ============ SIMPLE tooltip (mode A) — glass-2 + arrow ============ */
+  .tt{position:relative;display:inline-flex;}
+  .tt > .help{outline:none;}
+  .bubble{
+    position:absolute;bottom:calc(100% + 8px);right:50%;transform:translateX(50%) translateY(3px);
+    background:var(--glass-2);color:var(--text);border:1px solid var(--glass-edge);
+    border-radius:11px;box-shadow:var(--shadow-overlay);
+    padding:6px 10px;font-size:12.5px;font-weight:500;max-width:230px;width:max-content;
+    opacity:0;pointer-events:none;transition:opacity .16s ease-out, transform .16s ease-out;transition-delay:0s;
+    z-index:50;white-space:normal;text-align:start;
+  }
+  .bubble .arrow{position:absolute;top:100%;right:50%;transform:translateX(50%);width:0;height:0;
+    border-inline:5px solid transparent;border-top:5px solid var(--glass-2);
+    filter:drop-shadow(0 1px 0 var(--glass-edge));}
+  .tt:hover .bubble, .tt:focus-within .bubble{opacity:1;transform:translateX(50%) translateY(0);transition-delay:.2s;}
+
+  /* ============ RICH popover (mode B) — glass-1/95 + blur + title + numbers ============ */
+  .pop{
+    position:absolute;bottom:calc(100% + 9px);right:50%;transform:translateX(50%) translateY(4px);
+    width:300px;max-width:84vw;
+    background:color-mix(in srgb,var(--glass-1) 95%,transparent);
+    -webkit-backdrop-filter:var(--blur-glass);backdrop-filter:var(--blur-glass);
+    color:var(--text);border:1px solid var(--glass-edge);border-radius:18px;box-shadow:var(--shadow-overlay);
+    padding:13px 14px;opacity:0;pointer-events:none;transition:opacity .18s ease-out,transform .18s ease-out;
+    z-index:55;text-align:start;
+  }
+  .pop.open{opacity:1;transform:translateX(50%) translateY(0);pointer-events:auto;}
+  .pop .arrow{position:absolute;top:100%;right:50%;transform:translateX(50%);width:0;height:0;
+    border-inline:6px solid transparent;border-top:6px solid var(--glass-1);}
+  .pop h3{font-size:13.5px;font-weight:800;margin:0 0 6px;}
+  .pop p{font-size:12.5px;color:var(--text-2);margin:0 0 9px;line-height:1.62;}
+  .pop .meta{font-size:10.5px;color:var(--text-subtle);}
+  .numrow{display:flex;gap:7px;flex-wrap:wrap;margin:9px 0 2px;}
+  .numpill{display:flex;flex-direction:column;gap:1px;background:var(--glass-2);border:1px solid var(--glass-edge);border-radius:11px;padding:6px 10px;}
+  .numpill .l{font-size:9.5px;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em;}
+  .numpill .v{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums;}
+  .numpill .v bdi{direction:ltr;font-family:ui-monospace,'SF Mono',Menlo,monospace;}
+
+  /* ============ MOBILE phone frame ============ */
+  .phone{width:390px;max-width:100%;margin:0 auto;background:var(--canvas-1);border:10px solid #000;border-radius:42px;
+    box-shadow:var(--shadow-sheet);overflow:hidden;position:relative;height:720px;}
+  :root[data-theme="light"] .phone{border-color:#11131f;}
+  .phone .notch{position:absolute;top:0;left:50%;transform:translateX(-50%);width:140px;height:24px;background:#000;border-radius:0 0 16px 16px;z-index:30;}
+  :root[data-theme="light"] .phone .notch{background:#11131f;}
+  .phone .screen{height:100%;overflow-y:auto;padding:38px 14px 18px;position:relative;
+    background:radial-gradient(700px 360px at 80% -6%,var(--bg-glow),transparent 55%),linear-gradient(180deg,var(--canvas-1),var(--canvas-2));}
+  .mcard{background:var(--glass-1);border:1px solid var(--glass-edge);border-radius:16px;padding:14px;margin-bottom:11px;box-shadow:var(--shadow-overlay);}
+  .mcard .eyebrow{margin-bottom:6px;}
+
+  /* mobile toggletip popover (mode C) */
+  .mpop{position:absolute;z-index:60;width:240px;max-width:calc(100% - 28px);
+    background:color-mix(in srgb,var(--glass-1) 96%,transparent);-webkit-backdrop-filter:var(--blur-glass);backdrop-filter:var(--blur-glass);
+    border:1px solid var(--glass-edge);border-radius:14px;box-shadow:var(--shadow-overlay);padding:9px 11px;font-size:12.5px;color:var(--text);
+    opacity:0;transform:translateY(4px);pointer-events:none;transition:opacity .16s,transform .16s;text-align:start;}
+  .mpop.open{opacity:1;transform:translateY(0);pointer-events:auto;}
+
+  /* mobile bottom sheet (mode D) */
+  .sheet-scrim{position:absolute;inset:0;z-index:70;background:var(--scrim);opacity:0;pointer-events:none;transition:opacity .2s;}
+  .sheet-scrim.open{opacity:1;pointer-events:auto;}
+  .sheet{position:absolute;left:0;right:0;bottom:0;z-index:80;transform:translateY(102%);transition:transform .26s cubic-bezier(.22,1,.36,1);
+    background:var(--glass-1);border-top:1px solid var(--glass-edge);border-radius:18px 18px 0 0;box-shadow:var(--shadow-sheet);
+    padding:8px 16px 22px;max-height:78%;overflow-y:auto;}
+  .sheet.open{transform:translateY(0);}
+  .sheet .grab{width:38px;height:4px;border-radius:999px;background:var(--text-subtle);opacity:.4;margin:6px auto 4px;}
+  .sheet .shead{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:4px 0 10px;}
+  .sheet h3{font-size:15px;font-weight:800;margin:0;}
+  .sheet .x{appearance:none;border:1px solid var(--glass-edge);background:var(--glass-2);color:var(--text-2);width:32px;height:32px;border-radius:999px;font-size:16px;cursor:pointer;line-height:1;}
+  .sheet p{font-size:13px;color:var(--text-2);line-height:1.7;margin:0 0 10px;}
+
+  /* spec / legend */
+  .spec{margin-top:18px;}
+  .spec table{width:100%;border-collapse:collapse;font-size:12px;}
+  .spec th,.spec td{border:1px solid var(--glass-edge);padding:8px 10px;text-align:start;vertical-align:top;}
+  .spec th{background:var(--glass-2);font-weight:800;color:var(--text);}
+  .spec td{color:var(--text-2);}
+  .matrix td.mode{font-weight:800;color:var(--text);white-space:nowrap;}
+  .qbox{background:var(--glass-2);border:1px solid var(--glass-edge);border-radius:14px;padding:14px 16px;margin-top:14px;}
+  .qbox h3{margin:0 0 8px;font-size:13px;font-weight:800;}
+  .qbox ol{margin:0;padding-inline-start:18px;}
+  .qbox li{font-size:12.5px;color:var(--text-2);margin-bottom:7px;line-height:1.55;}
+  .qbox b{color:var(--text);}
+  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--text-muted);margin-top:10px;}
+  .legend .sw{display:inline-flex;align-items:center;gap:6px;}
+  .legend .box{width:13px;height:13px;border-radius:4px;border:1px solid var(--glass-edge);}
+  .tiny{font-size:10.5px;color:var(--text-subtle);}
+  .before{font-size:10px;color:var(--text);background:var(--glass-2);border:1px solid var(--glass-edge);border-radius:6px;padding:3px 7px;display:inline-block;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div>
+      <h1>מערכת טולטיפים אחידה — Mockup</h1>
+      <p class="sub">פרימיטיב אחד · 4 מצבים אוטומטיים (פשוט/עשיר × עכבר/מגע) · אותה שפה גרפית (טוקני mesh/glass) · WCAG-AA · נסה לרחף ולהקליק 👇</p>
+    </div>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="תמה">
+        <button id="t-dark" aria-pressed="true" onclick="setTheme('dark')">כהה</button>
+        <button id="t-light" aria-pressed="false" onclick="setTheme('light')">בהיר</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <!-- ================= DESKTOP ================= -->
+    <div class="panel">
+      <h2>🖥️ דסקטופ <span class="tag">hover + focus</span></h2>
+      <p class="hint">פשוט → בועה דקה (glass-2 + חץ). עשיר → popover רחב (glass-1 מטושטש, כותרת + מספרים). נפתח גם ב-Tab (פוקוס מקלדת), נסגר ב-Esc, אפשר לרחף לתוך הבועה.</p>
+
+      <!-- SIMPLE A -->
+      <div class="demo-card">
+        <div class="eyebrow">מצב A · פשוט (≈90% מהמקרים)</div>
+        <div class="row">
+          <span>ROAS היום</span>
+          <span class="tt" tabindex="0">
+            <span class="help" aria-hidden="true">?</span>
+            <span class="bubble" role="tooltip">הכנסת-Shopify ÷ הוצאת-פרסום, בטווח שנבחר.<span class="arrow"></span></span>
+          </span>
+          <span class="chip warn">⏱ מעודכן לפני 4 דק׳
+            <span class="tt" tabindex="0" style="margin-inline-start:2px">
+              <span class="help" aria-hidden="true">?</span>
+              <span class="bubble" role="tooltip">מתעדכן כל ~10 דק׳ דרך ה-cron החי.<span class="arrow"></span></span>
+            </span>
+          </span>
+          <span class="tt" tabindex="0">
+            <span class="truncate">2x Magic Color Skinny Mascara — מסקרה מאריכת ריסים…</span>
+            <span class="bubble" role="tooltip">2x Magic Color Skinny Mascara — מסקרה מאריכת ריסים עמידה ביותר<span class="arrow"></span></span>
+          </span>
+        </div>
+      </div>
+
+      <!-- RICH B -->
+      <div class="demo-card">
+        <div class="eyebrow">מצב B · עשיר (כותרת + פסקה + מספרים)</div>
+        <div class="row">
+          <span>עקומת ערך-לקוח (LTV)</span>
+          <span class="tt richtrigger" tabindex="0" data-pop="pop-ltv">
+            <span class="help" aria-hidden="true">?</span>
+            <span class="pop" id="pop-ltv" role="dialog" aria-label="על מה מתבססת עקומת ה-LTV">
+              <h3>על מה מתבססת העקומה?</h3>
+              <p>העקומה מתבססת על <b>כל היסטוריית ההזמנות ב-Shopify</b> פר cohort (חודש-רכישה ראשון), ומראה כמה ערך מצטבר נוסף בכל חודש-מאז (M0…M11). ה-nCAC לעומת זאת משקף את העלות-לגיוס <b>הנוכחית</b> (ממאי ואילך) — לכן ה-LTV יכול להישען על נתונים ישנים יותר מה-CAC.</p>
+              <div class="numrow">
+                <span class="numpill"><span class="l">LTV / 12 ח׳</span><span class="v"><bdi>CAD&nbsp;131</bdi></span></span>
+                <span class="numpill"><span class="l">nCAC</span><span class="v"><bdi>CAD&nbsp;42</bdi></span></span>
+                <span class="numpill"><span class="l">LTV/CAC</span><span class="v"><bdi>3.1x</bdi></span></span>
+              </div>
+              <div class="meta">מבוסס על 1,284 הזמנות · 7 cohorts · נטו אחרי החזרים</div>
+              <span class="arrow"></span>
+            </span>
+          </span>
+
+          <span class="tt richtrigger" tabindex="0" data-pop="pop-attr" style="margin-inline-start:8px">
+            <span class="chip">כיסוי attribution 86%&nbsp;<span class="help" aria-hidden="true" style="width:14px;height:14px">?</span></span>
+            <span class="pop" id="pop-attr" role="dialog" aria-label="כיסוי attribution">
+              <h3>כיסוי attribution · 86%</h3>
+              <p>אחוז ההזמנות שהצלחנו לשייך למקור-תנועה ידוע (לא "ישיר"). ככל שגבוה יותר — ה-NC-ROAS אמין יותר. מתחת ל-40% הערך מושתק.</p>
+              <div class="numrow">
+                <span class="numpill"><span class="l">משויך</span><span class="v"><bdi>1,104</bdi></span></span>
+                <span class="numpill"><span class="l">לא מסווג</span><span class="v"><bdi>180</bdi></span></span>
+              </div>
+              <span class="arrow"></span>
+            </span>
+          </span>
+        </div>
+        <p class="tiny" style="margin-top:10px">לחיצה או ריחוף פותחים את ה-popover. הוא ניתן-מיקוד (<code>role="dialog"</code>), עם Esc וקליק-בחוץ. מספרים תמיד דרך <code>&lt;Money&gt;</code> (mono · tabular · <code>bdi dir=ltr</code>) — לעולם לא נחתכים.</p>
+      </div>
+      <div class="legend">
+        <span class="sw"><span class="box" style="background:var(--glass-2)"></span> glass-2 — בועה פשוטה</span>
+        <span class="sw"><span class="box" style="background:var(--glass-1)"></span> glass-1/95 + blur — עשיר</span>
+        <span class="sw"><span class="box" style="background:var(--accent)"></span> accent — מיקוד/affordance</span>
+      </div>
+    </div>
+
+    <!-- ================= MOBILE ================= -->
+    <div class="panel">
+      <h2>📱 מובייל <span class="tag">tap · אין hover</span></h2>
+      <p class="hint">במגע אין ריחוף. כל עזרה מקבלת כפתור <b>ⓘ</b> (אזור-נגיעה ≥44px) — נגיעה פותחת, נגיעה-בחוץ/X סוגרת. פשוט → toggletip קטן. עשיר → bottom-sheet עם X. נסה בטלפון 👇</p>
+      <div class="phone">
+        <div class="notch"></div>
+        <div class="screen" id="phone-screen">
+          <div class="mcard">
+            <div class="eyebrow">מצב C · פשוט → toggletip</div>
+            <div class="row">
+              <span style="font-weight:700">ROAS היום</span>
+              <button class="ibtn" aria-label="הסבר ROAS" onclick="mpop(event,'mp1')">ⓘ</button>
+              <span class="kpi num" style="margin-inline-start:auto">2.4<span style="font-size:14px">x</span></span>
+            </div>
+            <div class="mpop" id="mp1">הכנסת-Shopify ÷ הוצאת-פרסום, בטווח שנבחר. מתחת ל-2x = אדום.</div>
+            <div class="row" style="margin-top:11px">
+              <span class="chip warn">⏱ לפני 4 דק׳</span>
+              <button class="ibtn" aria-label="הסבר רעננות" onclick="mpop(event,'mp2')">ⓘ</button>
+            </div>
+            <div class="mpop" id="mp2">מתעדכן כל ~10 דק׳ דרך ה-cron החי.</div>
+          </div>
+
+          <div class="mcard">
+            <div class="eyebrow">מצב D · עשיר → bottom-sheet</div>
+            <div class="row">
+              <span style="font-weight:700">עקומת ערך-לקוח (LTV)</span>
+              <button class="ibtn" aria-label="על מה מתבססת העקומה" onclick="openSheet('sheet-ltv')">ⓘ</button>
+            </div>
+            <p class="tiny" style="margin:9px 0 0">תוכן ארוך (פסקה + מספרים) לא נדחס לבועה צרה — הוא עולה כ-sheet מלא-רוחב עם כפתור סגירה ברור.</p>
+            <div class="row" style="margin-top:12px">
+              <span class="chip">כיסוי attribution 86%</span>
+              <button class="ibtn" aria-label="הסבר כיסוי attribution" onclick="openSheet('sheet-attr')">ⓘ</button>
+            </div>
+          </div>
+
+          <div class="mcard">
+            <div class="eyebrow">דחיסות — ⓘ עקבי בכל מקום</div>
+            <div class="row" style="gap:14px">
+              <span class="row" style="gap:6px"><span class="tiny">CPA</span><button class="ibtn" aria-label="CPA" onclick="mpop(event,'mp3')">ⓘ</button></span>
+              <span class="row" style="gap:6px"><span class="tiny">CTR</span><button class="ibtn" aria-label="CTR" onclick="mpop(event,'mp4')">ⓘ</button></span>
+              <span class="row" style="gap:6px"><span class="tiny">nCAC</span><button class="ibtn" aria-label="nCAC" onclick="mpop(event,'mp5')">ⓘ</button></span>
+            </div>
+            <div class="mpop" id="mp3">עלות לרכישה = הוצאה ÷ המרות.</div>
+            <div class="mpop" id="mp4">שיעור הקלקה = קליקים ÷ חשיפות.</div>
+            <div class="mpop" id="mp5">עלות-גיוס ללקוח חדש (נטו, ממאי).</div>
+          </div>
+
+          <!-- sheets -->
+          <div class="sheet-scrim" id="scrim" onclick="closeSheet()"></div>
+          <div class="sheet" id="sheet-ltv" role="dialog" aria-label="על מה מתבססת עקומת ה-LTV">
+            <div class="grab"></div>
+            <div class="shead"><h3>על מה מתבססת העקומה?</h3><button class="x" aria-label="סגור" onclick="closeSheet()">✕</button></div>
+            <p>העקומה מתבססת על <b>כל היסטוריית ההזמנות ב-Shopify</b> פר cohort (חודש-רכישה ראשון), ומראה כמה ערך מצטבר נוסף בכל חודש-מאז (M0…M11). ה-nCAC משקף את העלות-לגיוס <b>הנוכחית</b> (ממאי ואילך) — לכן ה-LTV יכול להישען על נתונים ישנים מה-CAC.</p>
+            <div class="numrow">
+              <span class="numpill"><span class="l">LTV / 12 ח׳</span><span class="v"><bdi>CAD&nbsp;131</bdi></span></span>
+              <span class="numpill"><span class="l">nCAC</span><span class="v"><bdi>CAD&nbsp;42</bdi></span></span>
+              <span class="numpill"><span class="l">LTV/CAC</span><span class="v"><bdi>3.1x</bdi></span></span>
+            </div>
+          </div>
+          <div class="sheet" id="sheet-attr" role="dialog" aria-label="כיסוי attribution">
+            <div class="grab"></div>
+            <div class="shead"><h3>כיסוי attribution · 86%</h3><button class="x" aria-label="סגור" onclick="closeSheet()">✕</button></div>
+            <p>אחוז ההזמנות ששויכו למקור-תנועה ידוע (לא "ישיר"). ככל שגבוה — ה-NC-ROAS אמין יותר. מתחת ל-40% הערך מושתק.</p>
+            <div class="numrow">
+              <span class="numpill"><span class="l">משויך</span><span class="v"><bdi>1,104</bdi></span></span>
+              <span class="numpill"><span class="l">לא מסווג</span><span class="v"><bdi>180</bdi></span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= SPEC ================= -->
+  <div class="panel spec">
+    <h2>מטריצת המצבים <span class="tag">פרימיטיב אחד — הבחירה אוטומטית</span></h2>
+    <table class="matrix">
+      <tr><th></th><th>תוכן פשוט (טקסט קצר)</th><th>תוכן עשיר (כותרת/פסקה/מספרים)</th></tr>
+      <tr><td class="mode">🖥️ עכבר</td><td><b>A · Tooltip</b> — בועת glass-2 + חץ, <code>role=tooltip</code>, hover+focus, Esc, ניתן-לרחף</td><td><b>B · Popover</b> — כרטיס glass-1 מטושטש, <code>role=dialog</code>, ניתן-מיקוד</td></tr>
+      <tr><td class="mode">📱 מגע</td><td><b>C · Toggletip</b> — כפתור ⓘ → tap פותח, <code>role=status</code></td><td><b>D · Bottom-sheet</b> — מלא-רוחב, כפתור X, focus-trap</td></tr>
+    </table>
+    <p class="tiny" style="margin-top:10px">קריאת-הקוד לא משתנה: <code>&lt;HelpTooltip content={…}&gt;</code> נשאר אותו דבר. הפרימיטיב בוחר מצב לפי <i>סוג-מצביע × צורת-תוכן</i>. ~32 קבצים משתדרגים אוטומטית. צ׳ארטים (Recharts) נשארים כפי שהם — רק מיישרים חזות.</p>
+
+    <div class="qbox">
+      <h3>❓ 6 החלטות לאישורך (אלה ברירות-המחדל שמוצגות במוקאפ)</h3>
+      <ol>
+        <li><b>פתיחת עשיר בדסקטופ:</b> ריחוף-עם-כוונה (כמו במוקאפ) או רק-קליק? <i>ברירת-מחדל: ריחוף בדסקטופ, נגיעה במגע.</i></li>
+        <li><b>סף ה-bottom-sheet:</b> כל טולטיפ-עשיר הופך ל-sheet במובייל, או רק הארוכים (LTV/attribution) והקצרים (החזר/cohort) נשארים toggletip? <i>ברירת-מחדל: sheet רק כשגובה התוכן &gt; ~40% מסך.</i></li>
+        <li><b>צפיפות ה-ⓘ:</b> כפתור ⓘ ליד כל עזרה גם בטבלאות צפופות, או להסתיר בתאי-טבלה (long-press שם)? <i>ברירת-מחדל: ⓘ בכל מקום לעקביות.</i></li>
+        <li><b>נקודות ה-RoasTargetChart:</b> להסיר את ה-<code>&lt;title&gt;</code> הכפול על הנקודות (ה-crosshair כבר מכסה)? <i>ברירת-מחדל: להסיר.</i></li>
+        <li><b>השהיית-דילוג (skip-delay):</b> להשאיר 150ms או לכוון מחדש עכשיו שיש חץ + collision-padding?</li>
+        <li><b>תוויות optimize-toggle:</b> איפה ש-<code>title=</code> רק חוזר על <code>aria-label</code> — להוריד ל-<code>aria-label</code> בלבד? <i>ברירת-מחדל: כן (מיותר).</i></li>
+      </ol>
+    </div>
+    <p class="tiny" style="margin-top:12px">פריסה (אם תאשר): שלב 0 חיזוק ה-guard (חוסם <code>title=</code> דרך <code>&lt;Button&gt;</code> + CI guard ל-focusable-בתוך-tooltip) → 1 שדרוג הפרימיטיב (4 מצבים + Playwright touch/keyboard) → 2 המרת שאריות <code>title=</code> → 3 קיפול 4 ה-popover התוצרת-בית → 4 צ׳ארטים. <b>deploy אחד, לא בטפטוף.</b></p>
+  </div>
+</div>
+
+<script>
+  function setTheme(t){
+    document.documentElement.setAttribute('data-theme',t);
+    document.getElementById('t-dark').setAttribute('aria-pressed', t==='dark');
+    document.getElementById('t-light').setAttribute('aria-pressed', t==='light');
+  }
+  // desktop rich popover: click-or-hover open, Esc/outside close
+  let openPop=null;
+  function showPop(el){ if(openPop&&openPop!==el){openPop.classList.remove('open');} el.classList.add('open'); openPop=el; }
+  document.querySelectorAll('.richtrigger').forEach(tr=>{
+    const pop=document.getElementById(tr.dataset.pop);
+    let hoverTimer;
+    tr.addEventListener('mouseenter',()=>{hoverTimer=setTimeout(()=>showPop(pop),180);});
+    tr.addEventListener('mouseleave',()=>{clearTimeout(hoverTimer); setTimeout(()=>{if(!pop.matches(':hover'))pop.classList.remove('open');},150);});
+    tr.addEventListener('click',e=>{e.stopPropagation(); pop.classList.contains('open')?pop.classList.remove('open'):showPop(pop);});
+    tr.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();showPop(pop);}});
+    pop.addEventListener('mouseleave',()=>pop.classList.remove('open'));
+  });
+  document.addEventListener('click',()=>{if(openPop)openPop.classList.remove('open');});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(openPop)openPop.classList.remove('open'); closeMpop(); closeSheet();}});
+
+  // mobile toggletip
+  let openM=null;
+  function closeMpop(){if(openM){openM.classList.remove('open');openM=null;}}
+  function mpop(e,id){
+    e.stopPropagation();
+    const el=document.getElementById(id);
+    if(openM&&openM!==el)openM.classList.remove('open');
+    // position under the button
+    const btn=e.currentTarget, scr=document.getElementById('phone-screen');
+    const br=btn.getBoundingClientRect(), sr=scr.getBoundingClientRect();
+    el.style.top=(br.bottom-sr.top+scr.scrollTop+6)+'px';
+    el.style.right=Math.max(14,(sr.right-br.right))+'px';
+    el.classList.toggle('open'); openM=el.classList.contains('open')?el:null;
+  }
+  document.getElementById('phone-screen').addEventListener('click',e=>{if(!e.target.closest('.ibtn')&&!e.target.closest('.mpop'))closeMpop();});
+
+  // mobile bottom sheet
+  function openSheet(id){closeMpop();document.getElementById('scrim').classList.add('open');document.getElementById(id).classList.add('open');}
+  function closeSheet(){document.getElementById('scrim').classList.remove('open');document.querySelectorAll('.sheet').forEach(s=>s.classList.remove('open'));}
+</script>
+</body>
+</html>
