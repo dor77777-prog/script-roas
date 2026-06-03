@@ -1275,8 +1275,12 @@ function emptyCategoryTotals(): PaymentCategoryTotals {
  *   readers consume), so month bucketing stays consistent with the rest of the
  *   reader layer without a SQL date_trunc.
  * - Paginated (via `paginate()`) to bypass Supabase Cloud's db-max-rows=1000.
- * - Per-store buckets are keyed by store_id; the business rollup is the sum
- *   across stores. Months are returned ascending.
+ * - Per-store buckets are keyed by the store DISPLAY NAME (STORE_NAME_BY_ID,
+ *   e.g. 'Zol Plus' / '360usmile') — NOT the raw store_id — so the keys match
+ *   `data.stores` (built from `storeName`) and the global store filter that the
+ *   client layer uses everywhere. (Keying by store_id silently broke the
+ *   per-store picker for every store whose name ≠ id: 2026-06-04 incident.)
+ *   The business rollup is the sum across stores. Months are returned ascending.
  */
 export async function readPaymentMethodsByMonth(): Promise<PaymentMethodsByMonth> {
   let data: DbRow[];
@@ -1298,6 +1302,9 @@ export async function readPaymentMethodsByMonth(): Promise<PaymentMethodsByMonth
     if (month.length !== 7) continue;
 
     const storeId = String(r.store_id);
+    // Key per-store buckets by the DISPLAY NAME so they match data.stores /
+    // the global store filter (the client identifies stores by name, not id).
+    const storeKey = STORE_NAME_BY_ID[storeId] ?? storeId;
     const category = categorizePaymentGateway(
       r.payment_gateway == null ? null : String(r.payment_gateway),
     );
@@ -1309,10 +1316,10 @@ export async function readPaymentMethodsByMonth(): Promise<PaymentMethodsByMonth
       byMonth.set(month, entry);
     }
 
-    let store = entry.perStore[storeId];
+    let store = entry.perStore[storeKey];
     if (!store) {
       store = emptyCategoryTotals();
-      entry.perStore[storeId] = store;
+      entry.perStore[storeKey] = store;
     }
 
     store[category].orders += 1;

@@ -10,7 +10,7 @@
  *   2. categorization matches categorizePaymentGateway (paypal / credit /
  *      gift_card→other / NULL→other),
  *   3. revenue sums total_cad (numeric coercion via toNumber),
- *   4. per-store buckets are keyed by store_id and the business rollup is the
+ *   4. per-store buckets are keyed by store DISPLAY NAME and the business rollup is the
  *      sum across stores,
  *   5. months are returned in ascending order,
  *   6. a Supabase failure surfaces a namespaced error.
@@ -108,10 +108,15 @@ describe('readPaymentMethodsByMonth', () => {
     expect(july.perStore.uzoshop.credit).toEqual({ orders: 1, revenueCad: 100 });
     expect(july.perStore.uzoshop.paypal).toEqual({ orders: 1, revenueCad: 50 });
     expect(july.perStore.uzoshop.other).toEqual({ orders: 1, revenueCad: 25.5 });
-    // zolplus July: stripe(credit,200), null(other,10)
-    expect(july.perStore.zolplus.credit).toEqual({ orders: 1, revenueCad: 200 });
-    expect(july.perStore.zolplus.paypal).toEqual({ orders: 0, revenueCad: 0 });
-    expect(july.perStore.zolplus.other).toEqual({ orders: 1, revenueCad: 10 });
+    // zolplus July: stripe(credit,200), null(other,10).
+    // Per-store buckets are keyed by DISPLAY NAME (STORE_NAME_BY_ID), not the
+    // raw store_id — so the keys match data.stores / the global store filter
+    // (the 2026-06-04 per-store-picker fix). zolplus → 'Zol Plus'.
+    expect(july.perStore['Zol Plus'].credit).toEqual({ orders: 1, revenueCad: 200 });
+    expect(july.perStore['Zol Plus'].paypal).toEqual({ orders: 0, revenueCad: 0 });
+    expect(july.perStore['Zol Plus'].other).toEqual({ orders: 1, revenueCad: 10 });
+    // Regression guard: NOT keyed by the raw id.
+    expect(july.perStore.zolplus).toBeUndefined();
   });
 
   it('rolls up the business-wide totals across stores', async () => {
