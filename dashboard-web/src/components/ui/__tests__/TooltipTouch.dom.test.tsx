@@ -25,6 +25,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 vi.mock('@/lib/hooks/useIsMobile', () => ({ useIsMobile: () => true }));
 
 import { HelpTooltip } from '../Tooltip';
+import { Card } from '../Card';
 
 describe('HelpTooltip — touch modes (Task 1.2)', () => {
   it('returns the child untouched when content is null/empty (passthrough on touch too)', () => {
@@ -178,5 +179,54 @@ describe('HelpTooltip — touch modes (Task 1.2)', () => {
     fireEvent.click(item!);
     const dialog = await screen.findByRole('dialog');
     expect(dialog).toHaveTextContent('גם משויך ל-X');
+  });
+
+  // ── Block-COMPONENT trigger children (Stage-2 review fix) ────────────────
+  //
+  // A whole block `<Card>` (renders a `<div>`) wrapped in a simple
+  // `<HelpTooltip content="…string…">` is the hero / store-detail-card shape.
+  // On touch the string content routes to the ⓘ Toggletip; without the
+  // block-trigger marker the Toggletip would emit `<span><div/><button/></span>`
+  // (invalid HTML) AND replace the card with the <span> as the grid's direct
+  // child — dropping the card's `col-span-2 md:col-span-1` placement on mobile.
+  // `Card.isBlockTrigger = true` makes the Card itself the asChild tap trigger:
+  // no span wrapper, no sibling ⓘ button, valid DOM, grid placement preserved.
+
+  it('touch + simple with a block <Card> child does NOT span-wrap it and adds no stray ⓘ button (valid DOM, grid placement kept)', async () => {
+    const { container } = render(
+      <div data-testid="grid">
+        <HelpTooltip content="הסבר על MER">
+          <Card className="col-span-2 md:col-span-1" data-testid="hero-card">
+            <span>MER</span>
+          </Card>
+        </HelpTooltip>
+      </div>,
+    );
+
+    const card = container.querySelector('[data-testid="hero-card"]');
+    expect(card).not.toBeNull();
+    // The Card renders a <div> — it must NOT be nested inside a <span>.
+    expect(card!.tagName).toBe('DIV');
+    expect(card!.closest('span')).toBeNull();
+
+    // The grid's DIRECT child must be the Card itself (so its col-span-* grid
+    // placement is preserved), not an inline-flex <span> wrapper. (jsdom's
+    // `:scope >` is unreliable, so check the direct children explicitly.)
+    const grid = container.querySelector('[data-testid="grid"]')!;
+    const directChildTags = Array.from(grid.children).map((c) => c.tagName);
+    expect(directChildTags).not.toContain('SPAN');
+    expect(grid.firstElementChild).toBe(card);
+    // The card keeps its grid-placement classes (regression: were lost when the
+    // <span> wrapper became the grid child).
+    expect(card!.className).toContain('col-span-2');
+
+    // No sibling ⓘ affordance button is introduced for a block trigger.
+    expect(screen.queryByRole('button', { name: /הסבר|מידע|help/i })).toBeNull();
+
+    // Tapping the Card itself opens the toggletip popover with the content.
+    fireEvent.click(card!);
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('הסבר על MER');
+    expect(screen.queryByRole('tooltip')).toBeNull();
   });
 });

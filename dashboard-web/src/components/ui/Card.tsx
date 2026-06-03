@@ -221,6 +221,14 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(
 );
 Card.displayName = 'Card';
 
+/* Tooltip touch-path marker. `Card` renders a block `<div>`, so when a whole
+ * Card is wrapped in a simple `<HelpTooltip>` (hero / store-detail cards), the
+ * coarse-pointer ⓘ Toggletip must NOT span-wrap it (invalid `<span><div/></span>`
+ * + lost grid placement). This flag tells `isNonPhrasingChild` (tooltip/phrasing.ts)
+ * to make the Card itself the `asChild` tap trigger — mirroring the desktop
+ * model. See tooltip/phrasing.ts BLOCK_TRIGGER_FLAG. */
+(Card as { isBlockTrigger?: boolean }).isBlockTrigger = true;
+
 /* Subcomponents — opinionated padding wrappers. Kept thin so a card built
  * from `<Card><CardHeader>…</CardHeader>…</Card>` doesn't double-pad. The
  * Card root brings its own `p-5`; CardHeader/Body/Footer use margin-top so
