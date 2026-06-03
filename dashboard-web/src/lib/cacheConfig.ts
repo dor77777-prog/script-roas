@@ -26,6 +26,11 @@ export const CACHE_CONFIG = {
   // fresh and keeps the customer-value tab from burning Supabase quota on
   // every poll. Mirrors the ordersAttribution window.
   cohorts: { revalidate: 300, swr: 900 },
+  // תשלומים (2026-06-03) payment-method (gateway) per-month aggregate. Sources
+  // orders_attribution.payment_gateway — the SAME table that backs
+  // ordersAttribution — so it refreshes in lock-step (cron-live writes today's
+  // orders every ~10 min). Mirror the ordersAttribution window (60/120).
+  paymentMethods: { revalidate: 60, swr: 120 },
   storeMeta: { revalidate: 3600, swr: 86400 },
   productCatalog: { revalidate: 60, swr: 300 },
   // dashboardState revalidate raised from 10s → 30s (WR-05). With 3 partners
