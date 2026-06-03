@@ -3,8 +3,11 @@
 import { forwardRef, type ReactNode } from 'react';
 import * as RadixTooltip from '@radix-ui/react-tooltip';
 import { cn } from '@/lib/utils';
+import { isValidElement, type ReactElement } from 'react';
 import { useIsMobile } from '@/lib/hooks/useIsMobile';
 import { RichPopover } from './tooltip/RichPopover';
+import { Toggletip } from './tooltip/Toggletip';
+import { RichSheet } from './tooltip/RichSheet';
 
 export const TooltipProvider = RadixTooltip.Provider;
 export const Tooltip = RadixTooltip.Root;
@@ -41,10 +44,11 @@ TooltipContent.displayName = RadixTooltip.Content.displayName;
 // load-bearing null/'' passthrough). Internally it auto-selects a render mode
 // from pointer-type × content-shape (tooltip-system-redesign §4.1):
 //
-//   Pointer fine (desktop)  · simple → Radix Tooltip   (role="tooltip", mode A)
-//   Pointer fine (desktop)  · rich   → Radix Popover    (role="dialog",  mode B)
-//   Pointer coarse (touch)  · simple → ⓘ toggletip      (mode C, Task 1.2)
-//   Pointer coarse (touch)  · rich   → bottom Sheet      (mode D, Task 1.2)
+//   Pointer fine (desktop)  · simple    → Radix Tooltip  (role="tooltip", mode A)
+//   Pointer fine (desktop)  · rich      → Radix Popover   (role="dialog",  mode B)
+//   Pointer coarse (touch)  · simple    → ⓘ Toggletip     (role="dialog",  mode C)
+//   Pointer coarse (touch)  · short-rich→ ⓘ Toggletip     (mode C carrying the rich body)
+//   Pointer coarse (touch)  · long-rich → ⓘ → bottom Sheet (role="dialog", mode D)
 //
 // Content shape: a plain `string`/`number` is simple; a non-string `ReactNode`
 // (or an explicit `variant="rich"`, or a `title`) is rich. `variant="text"`
@@ -62,6 +66,39 @@ TooltipContent.displayName = RadixTooltip.Content.displayName;
 // provider. The app-wide provider in `layout.tsx` covers production renders;
 // Radix tolerates nested providers (innermost wins for delayDuration).
 // ---------------------------------------------------------------------------
+
+/**
+ * Touch length heuristic helper (operator decision §6.5.2). Content counts as
+ * a "block" — and so escalates to a bottom Sheet on touch — when it is an
+ * array of nodes OR a single block-level/structured element (a paragraph,
+ * div, list, etc.). A bare inline element (a `<span>` refund 2-liner with no
+ * title) is NOT a block, so short-rich stays a tap-Popover.
+ */
+const INLINE_TAGS = new Set([
+  'span',
+  'b',
+  'strong',
+  'i',
+  'em',
+  'code',
+  'small',
+  'a',
+  'abbr',
+  'mark',
+  'bdi',
+  'time',
+]);
+
+function isBlockContent(content: ReactNode): boolean {
+  if (Array.isArray(content)) return true;
+  if (!isValidElement(content)) return false;
+  // A custom component (e.g. <Money>, <CohortVerdict>) is treated as block —
+  // it's structured by definition. Only KNOWN inline host tags stay "short".
+  const el = content as ReactElement;
+  if (typeof el.type === 'string') return !INLINE_TAGS.has(el.type);
+  return true;
+}
+
 export function HelpTooltip({
   content,
   children,
@@ -73,6 +110,7 @@ export function HelpTooltip({
   variant = 'auto',
   title,
   withinDrawer = false,
+  richTouch = 'auto',
 }: {
   content: ReactNode | null | undefined;
   children: ReactNode;
@@ -87,6 +125,13 @@ export function HelpTooltip({
   title?: ReactNode;
   /** Lift the surface to z-[60] when opened inside a Sheet/drawer. */
   withinDrawer?: boolean;
+  /**
+   * Touch-only knob for the rich path (mode C-rich vs mode D). 'auto'
+   * (default) applies the length heuristic — LONG rich (a title OR a block /
+   * array body) escalates to a bottom Sheet; SHORT rich stays a tap-Popover.
+   * Force one with 'sheet' / 'popover'. Ignored on desktop.
+   */
+  richTouch?: 'auto' | 'sheet' | 'popover';
 }) {
   // Hooks rule: call useIsMobile() UNCONDITIONALLY, before any early return.
   const isMobile = useIsMobile();
@@ -106,10 +151,42 @@ export function HelpTooltip({
     title != null ||
     (variant === 'auto' && typeof content !== 'string' && typeof content !== 'number');
 
-  // TODO(Task 1.2): touch (coarse-pointer) modes — ⓘ toggletip (mode C, simple)
-  // and bottom Sheet (mode D, long rich). Until then the touch branch falls
-  // back to the desktop render modes below so the content is never lost.
-  void isMobile;
+  // Touch (coarse-pointer) branch — spec §4.4. A hover tooltip is invisible on
+  // a phone, so every help gets a tap-driven ⓘ affordance:
+  //   simple OR short-rich → ⓘ Toggletip (mode C, tap-open Popover, role=status)
+  //   long-rich            → ⓘ → bottom Sheet (mode D, focus-trap + visible ✕)
+  //
+  // Length heuristic (operator decision §6.5.2): treat rich as LONG when a
+  // `title` is present OR the content is a block/array (the LTV/attribution/
+  // column-paragraph cases). A SHORT rich body (a bare inline node, no title —
+  // the refund 2-liner, cohort verdict) stays the tap-Popover. The `richTouch`
+  // knob can force 'sheet'/'popover' regardless.
+  if (isMobile) {
+    const isLong =
+      richTouch === 'sheet' ||
+      (richTouch === 'auto' && isRich && (title != null || isBlockContent(content)));
+
+    if (isRich && isLong) {
+      return (
+        <RichSheet content={content} title={title} className={className}>
+          {children}
+        </RichSheet>
+      );
+    }
+
+    return (
+      <Toggletip
+        content={content}
+        side={side}
+        align={align}
+        sideOffset={sideOffset}
+        className={className}
+        withinDrawer={withinDrawer}
+      >
+        {children}
+      </Toggletip>
+    );
+  }
 
   if (isRich) {
     return (
