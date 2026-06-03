@@ -868,10 +868,12 @@ export function CommandCenterHero({
               <div className="flex items-end gap-6 mt-2">
                 <div>
                   <div className="hero-eyebrow text-[10.5px] uppercase tracking-[0.08em] text-ink-muted font-semibold">
-                    {/* "נטו (מתואם refunds)" qualifier — NC-ROAS revenue is
+                    {/* "נטו (אחרי החזרים)" qualifier — NC-ROAS revenue is
                         re-based onto the net (refund-adjusted) basis so it
+                        (Hebrew-only: a trailing latin word like "refunds" gets
+                        bidi-reordered to the far-left edge of the RTL eyebrow)
                         reconciles with the headline net MER (Wave 1). */}
-                    NC-ROAS · נטו (מתואם refunds)
+                    NC-ROAS · נטו (אחרי החזרים)
                   </div>
                   <bdi
                     dir="ltr"

@@ -27,6 +27,7 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { NativeSelect } from '@/components/ui/NativeSelect';
 import { Money } from '@/components/ui/Money';
+import { HelpTooltip } from '@/components/ui/Tooltip';
 import { SectionIntro } from '@/components/SectionIntro';
 import { cn } from '@/lib/utils';
 import { TRANSACTION_FEES_RATE } from '@/lib/costs';
@@ -351,8 +352,20 @@ export function CustomerValueTab({
 
       {/* 3. THE CURVE. */}
       <Card>
-        <h3 className="m-0 text-[15px] font-extrabold text-ink">
+        <h3 className="m-0 flex items-center gap-1.5 text-[15px] font-extrabold text-ink">
           העקומה: כמה לקוח מחזיר ככל שעובר הזמן
+          <HelpTooltip
+            content={
+              'על מה זה מתבסס: הקו הסגול (הרווח המצטבר ללקוח) מחושב מ‏כל‏ היסטוריית ההזמנות ב-Shopify — שנים אחורה, לא רק ממאי. קו עלות-הגיוס (nCAC) הוא הבלנדי ה‏נוכחי‏: הוצאת הפרסום ÷ לקוחות חדשים, מנתוני ההוצאה שקיימים בדשבורד (מאי 2026 והלאה — חלון ההוצאה היחיד שיש). כלומר: רווח-חיי-הלקוח לאורך כל ההיסטוריה, מול כמה עולה לגייס לקוח היום. הערה: עלות-גיוס פר-קבוצה (בתצוגה המתקדמת) קיימת רק לקבוצות מ-מאי+; לקבוצות ישנות יש רווח/שימור אבל לא עלות-גיוס.'
+            }
+          >
+            <span
+              className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full border border-glass-edge text-[10px] text-ink-muted"
+              aria-label="הסבר על העקומה"
+            >
+              ?
+            </span>
+          </HelpTooltip>
         </h3>
         <p className="mb-2.5 mt-0.5 text-[12.5px] text-ink-secondary">
           הקו עולה ככל שלקוחות חוזרים לקנות. כשהוא חוצה את <b>קו עלות-הגיוס</b> — הלקוח הפך לרווחי.

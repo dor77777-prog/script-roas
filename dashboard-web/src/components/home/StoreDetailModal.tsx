@@ -347,7 +347,7 @@ export function StoreDetailModal({
                       {/* "נטו (מתואם refunds)" — NC-ROAS revenue is re-based onto
                           the net (refund-adjusted) basis so it reconciles with
                           the headline net MER (Wave 1). */}
-                      NC-ROAS · נטו (מתואם refunds)
+                      NC-ROAS · נטו (אחרי החזרים)
                     </div>
                     <bdi dir="ltr" className="block font-extrabold tabular-nums leading-[1.05] text-[1.5rem]">
                       {data.newCustomer.ncRoas != null ? (
