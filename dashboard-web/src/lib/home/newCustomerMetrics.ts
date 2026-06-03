@@ -42,6 +42,8 @@ export interface NewCustomerMetrics {
   ncRevenue: number;
   /** Count where isFirstOrder === true. */
   ncOrders: number;
+  /** Count where isFirstOrder === false (returning customers). new + returning + unclassifiable = total. */
+  returningOrders: number;
   /** ncRevenue / merSpend; null when merSpend <= 0 or ncRevenue === 0. */
   ncRoas: number | null;
   /** merSpend / ncOrders; null when ncOrders === 0. */
@@ -66,11 +68,14 @@ export function computeNewCustomerMetrics(
 
   let ncRevenue = 0;
   let ncOrders = 0;
+  let returning = 0;
   let unclassifiable = 0;
   for (const r of scoped) {
     if (r.isFirstOrder === true) {
       ncRevenue += Number.isFinite(r.totalCad) ? r.totalCad : 0;
       ncOrders += 1;
+    } else if (r.isFirstOrder === false) {
+      returning += 1;
     } else if (r.isFirstOrder === null) {
       unclassifiable += 1;
     }
@@ -87,5 +92,5 @@ export function computeNewCustomerMetrics(
     : unclassifiableShare > NC_CONFIDENCE_LOW ? 'low'
     : 'ok';
 
-  return { ncRevenue: ncRevenueNet, ncOrders, ncRoas, nCac, unclassifiableShare, confidence };
+  return { ncRevenue: ncRevenueNet, ncOrders, returningOrders: returning, ncRoas, nCac, unclassifiableShare, confidence };
 }

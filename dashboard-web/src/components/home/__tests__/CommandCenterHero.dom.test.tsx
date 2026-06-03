@@ -254,7 +254,7 @@ describe('<CommandCenterHero>', () => {
 });
 
 describe('<CommandCenterHero> — NC-ROAS / nCAC subordinate tile', () => {
-  const NC = { ncRoas: 2.1, nCac: 38, ncOrders: 12, unclassifiableShare: 0.18, confidence: 'ok' as const };
+  const NC = { ncRoas: 2.1, nCac: 38, ncOrders: 12, returningOrders: 3, unclassifiableShare: 0.18, confidence: 'ok' as const };
 
   it('renders the subordinate tile when newCustomer is provided', () => {
     const { getByTestId } = render(
@@ -299,7 +299,7 @@ describe('<CommandCenterHero> — NC-ROAS net-adj label + confidence gate', () =
       <CommandCenterHero
         current={PERIOD_GREEN}
         rangeLabel="היום"
-        newCustomer={{ ncRoas: 3, ncOrders: 2, nCac: 30, unclassifiableShare: 0.05, confidence: 'ok' }}
+        newCustomer={{ ncRoas: 3, ncOrders: 2, returningOrders: 3, nCac: 30, unclassifiableShare: 0.05, confidence: 'ok' }}
       />,
     );
     expect(screen.getByText(/refund-adj|נטו/i)).toBeInTheDocument();
@@ -310,7 +310,7 @@ describe('<CommandCenterHero> — NC-ROAS net-adj label + confidence gate', () =
       <CommandCenterHero
         current={PERIOD_GREEN}
         rangeLabel="היום"
-        newCustomer={{ ncRoas: 3, ncOrders: 2, nCac: 30, unclassifiableShare: 0.3, confidence: 'low' }}
+        newCustomer={{ ncRoas: 3, ncOrders: 2, returningOrders: 3, nCac: 30, unclassifiableShare: 0.3, confidence: 'low' }}
       />,
     );
     expect(screen.getByText(/ביטחון נמוך/)).toBeInTheDocument();
@@ -321,7 +321,7 @@ describe('<CommandCenterHero> — NC-ROAS net-adj label + confidence gate', () =
       <CommandCenterHero
         current={PERIOD_GREEN}
         rangeLabel="היום"
-        newCustomer={{ ncRoas: 3, ncOrders: 2, nCac: 30, unclassifiableShare: 0.6, confidence: 'suppressed' }}
+        newCustomer={{ ncRoas: 3, ncOrders: 2, returningOrders: 3, nCac: 30, unclassifiableShare: 0.6, confidence: 'suppressed' }}
       />,
     );
     expect(screen.queryByText('3.00')).not.toBeInTheDocument();

@@ -369,7 +369,8 @@ export function StoreDetailModal({
               )}
               <div className="text-xs mt-1.5 text-ink-muted tabular-nums">
                 <bdi dir="rtl">
-                  {data.newCustomer.ncOrders.toLocaleString('en-US')} הזמנות חדשות ·{' '}
+                  {data.newCustomer.ncOrders.toLocaleString('en-US')} חדשות ·{' '}
+                  {data.newCustomer.returningOrders.toLocaleString('en-US')} חוזרות ·{' '}
                   {(data.newCustomer.unclassifiableShare * 100).toFixed(0)}% לא מסווג
                 </bdi>
               </div>

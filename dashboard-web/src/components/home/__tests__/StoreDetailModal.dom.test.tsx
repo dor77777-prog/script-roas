@@ -55,7 +55,7 @@ function makeData(over: Partial<StoreDetailData> = {}): StoreDetailData {
       { name: 'Meta · ABO – Hero Video', platform: 'meta', roas: 4.2, spend: 640, revenue: 2688, orders: 92, storeId: 'uzoshop', campaignId: 'cmp-1' },
       { name: 'Google · PMax – Catalog', platform: 'google', roas: 3.3, spend: 520, revenue: 1716, orders: 58, storeId: 'uzoshop', campaignId: 'cmp-2' },
     ],
-    newCustomer: { ncRevenue: 0, ncOrders: 0, ncRoas: null, nCac: null, unclassifiableShare: 0, confidence: 'ok' },
+    newCustomer: { ncRevenue: 0, ncOrders: 0, returningOrders: 3, ncRoas: null, nCac: null, unclassifiableShare: 0, confidence: 'ok' },
     ...over,
   };
 }
@@ -156,7 +156,7 @@ describe('<StoreDetailModal> — per-store NC-ROAS / nCAC', () => {
   it('renders the new-customer row with NC-ROAS, nCAC and unclassifiable share', () => {
     const data = makeData({
       newCustomer: {
-        ncRevenue: 300, ncOrders: 6, ncRoas: 1.5, nCac: 50, unclassifiableShare: 0.2, confidence: 'ok',
+        ncRevenue: 300, ncOrders: 6, returningOrders: 3, ncRoas: 1.5, nCac: 50, unclassifiableShare: 0.2, confidence: 'ok',
       },
     });
     const { getByTestId } = render(
@@ -173,7 +173,7 @@ describe('<StoreDetailModal> — per-store NC-ROAS / nCAC', () => {
 describe('<StoreDetailModal> — NC-ROAS net-adj label + confidence gate', () => {
   it('shows the "net (refund-adj)" qualifier on the NC-ROAS row', () => {
     const data = makeData({
-      newCustomer: { ncRevenue: 180, ncOrders: 2, ncRoas: 3, nCac: 30, unclassifiableShare: 0.05, confidence: 'ok' },
+      newCustomer: { ncRevenue: 180, ncOrders: 2, returningOrders: 3, ncRoas: 3, nCac: 30, unclassifiableShare: 0.05, confidence: 'ok' },
     });
     render(
       <StoreDetailModal data={data} open onClose={() => {}} rangeLabel="היום" onOpenCampaigns={() => {}} />,
@@ -183,7 +183,7 @@ describe('<StoreDetailModal> — NC-ROAS net-adj label + confidence gate', () =>
 
   it('confidence=low → renders a low-confidence badge', () => {
     const data = makeData({
-      newCustomer: { ncRevenue: 180, ncOrders: 2, ncRoas: 3, nCac: 30, unclassifiableShare: 0.3, confidence: 'low' },
+      newCustomer: { ncRevenue: 180, ncOrders: 2, returningOrders: 3, ncRoas: 3, nCac: 30, unclassifiableShare: 0.3, confidence: 'low' },
     });
     render(
       <StoreDetailModal data={data} open onClose={() => {}} rangeLabel="היום" onOpenCampaigns={() => {}} />,
@@ -193,7 +193,7 @@ describe('<StoreDetailModal> — NC-ROAS net-adj label + confidence gate', () =>
 
   it('confidence=suppressed → hides the ratio, shows not-enough-data', () => {
     const data = makeData({
-      newCustomer: { ncRevenue: 180, ncOrders: 2, ncRoas: 3, nCac: 30, unclassifiableShare: 0.6, confidence: 'suppressed' },
+      newCustomer: { ncRevenue: 180, ncOrders: 2, returningOrders: 3, ncRoas: 3, nCac: 30, unclassifiableShare: 0.6, confidence: 'suppressed' },
     });
     render(
       <StoreDetailModal data={data} open onClose={() => {}} rangeLabel="היום" onOpenCampaigns={() => {}} />,

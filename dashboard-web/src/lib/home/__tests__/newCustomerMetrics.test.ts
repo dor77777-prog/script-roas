@@ -30,6 +30,7 @@ describe('computeNewCustomerMetrics', () => {
 
     expect(m.ncRevenue).toBe(160);
     expect(m.ncOrders).toBe(2);
+    expect(m.returningOrders).toBe(1);      // 1 isFirstOrder===false row
     expect(m.ncRoas).toBeCloseTo(2.0, 5);   // 160 / 80
     expect(m.nCac).toBeCloseTo(40, 5);      // 80 / 2
     expect(m.unclassifiableShare).toBeCloseTo(0.25, 5); // 1 of 4

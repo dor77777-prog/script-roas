@@ -179,6 +179,8 @@ export interface CommandCenterNewCustomer {
   nCac: number | null;
   /** New-customer order count. */
   ncOrders: number;
+  /** Returning-customer order count (new + returning + unclassifiable = total). */
+  returningOrders: number;
   /** Fraction of orders with unknown customer (guest checkout). */
   unclassifiableShare: number;
   /**
@@ -900,7 +902,8 @@ export function CommandCenterHero({
               data-testid="hero-nc-unclassifiable"
             >
               <bdi dir="rtl">
-                {newCustomer.ncOrders.toLocaleString('en-US')} הזמנות חדשות ·{' '}
+                {newCustomer.ncOrders.toLocaleString('en-US')} חדשות ·{' '}
+                {newCustomer.returningOrders.toLocaleString('en-US')} חוזרות ·{' '}
                 {(newCustomer.unclassifiableShare * 100).toFixed(0)}% לא מסווג
               </bdi>
             </div>
