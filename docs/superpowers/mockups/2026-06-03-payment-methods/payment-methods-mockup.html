@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>אמצעי תשלום — Mockup (2026-06-03)</title>
+<style>
+  :root[data-theme="dark"]{
+    --canvas-1:#0d0f1e; --canvas-2:#0a0c18;
+    --glass-1:#171a2e; --glass-2:#1d2138; --glass-3:#20243a; --glass-edge:rgba(255,255,255,0.08);
+    --text:#eef1ff; --text-2:#b3b9d8; --text-muted:#8c96ba; --text-subtle:#8c93bf;
+    --accent:#7c6cff; --accent-soft:rgba(124,108,255,0.16); --accent-bg:rgba(124,108,255,0.12); --accent-fg:#fff;
+    --shadow-glass:0 4px 16px rgba(0,0,0,0.35); --bg-glow:rgba(124,108,255,0.13);
+    --pay-credit:#7c6cff; --pay-paypal:#4f9bff; --pay-other:#8c96ba;
+    --good:#34d399;
+  }
+  :root[data-theme="light"]{
+    --canvas-1:#edf0f8; --canvas-2:#f4f6fc;
+    --glass-1:#ffffff; --glass-2:#f6f7fb; --glass-3:#eef1f8; --glass-edge:rgba(22,26,48,0.08);
+    --text:#171a2b; --text-2:#565d78; --text-muted:#666b84; --text-subtle:#696b7d;
+    --accent:#0ea5b7; --accent-soft:#def5f7; --accent-bg:rgba(14,165,183,0.10); --accent-fg:#fff;
+    --shadow-glass:0 4px 16px rgba(22,26,48,0.08); --bg-glow:rgba(14,165,183,0.10);
+    --pay-credit:#0ea5b7; --pay-paypal:#2c6ef2; --pay-other:#8b93a7;
+    --good:#0f9d6b;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background-color:var(--canvas-1);}
+  body{font-family:'Heebo','Assistant',-apple-system,'Segoe UI',system-ui,sans-serif;color:var(--text);
+    background:radial-gradient(1200px 600px at 80% -6%,var(--bg-glow),transparent 55%),linear-gradient(180deg,var(--canvas-1),var(--canvas-2));
+    background-attachment:fixed;min-height:100vh;-webkit-font-smoothing:antialiased;line-height:1.5;}
+  .wrap{max-width:1080px;margin:0 auto;padding:22px 18px 70px;}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px;}
+  h1{font-size:19px;font-weight:800;margin:0;}
+  .sub{color:var(--text-muted);font-size:12px;margin:3px 0 0;}
+  .seg{display:inline-flex;border:1px solid var(--glass-edge);border-radius:10px;overflow:hidden;background:var(--glass-1);}
+  .seg button{appearance:none;border:0;background:transparent;color:var(--text-2);font:inherit;font-size:12.5px;font-weight:700;padding:7px 13px;cursor:pointer;}
+  .seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-fg);}
+
+  /* dedicated panel — mirrors MonthlyTables chrome */
+  .panel{border-radius:14px;background:var(--glass-1);border:1px solid var(--glass-edge);box-shadow:var(--shadow-glass);overflow:hidden;}
+  .phead{display:flex;align-items:center;gap:9px;padding:13px 16px;border-bottom:1px solid var(--glass-edge);}
+  .phead .ic{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;background:var(--accent-soft);color:var(--accent);}
+  .phead h2{font-size:15px;font-weight:800;margin:0;}
+  .phead .scope{margin-inline-start:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
+
+  .controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:11px 16px;background:var(--glass-2);border-bottom:1px solid var(--glass-edge);}
+  .controls .lbl{font-size:11px;color:var(--text-muted);font-weight:700;}
+  .storeseg button{font-size:12px;padding:6px 11px;}
+
+  /* summary strip */
+  .summary{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:10px;padding:14px 16px;border-bottom:1px solid var(--glass-edge);}
+  @media(max-width:720px){.summary{grid-template-columns:1fr 1fr;}}
+  .scard{background:var(--glass-2);border:1px solid var(--glass-edge);border-radius:11px;padding:11px 12px;}
+  .scard .k{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:var(--text-muted);font-weight:700;}
+  .scard .v{font-size:21px;font-weight:800;letter-spacing:-.02em;font-variant-numeric:tabular-nums;margin-top:2px;}
+  .scard .v small{font-size:12px;color:var(--text-muted);font-weight:600;}
+  .scard .v bdi{direction:ltr;}
+  .dotrow{display:flex;gap:12px;margin-top:7px;flex-wrap:wrap;}
+  .dot{display:inline-flex;align-items:center;gap:5px;font-size:11px;color:var(--text-2);font-weight:600;}
+  .dot i{width:9px;height:9px;border-radius:3px;display:inline-block;}
+  /* big share bar in the wide summary card */
+  .sharebar{height:13px;border-radius:7px;overflow:hidden;display:flex;margin-top:9px;border:1px solid var(--glass-edge);}
+  .sharebar span{display:block;height:100%;}
+
+  /* table — mirrors MonthlyTables */
+  .tblwrap{overflow:auto;max-height:62vh;}
+  table{width:100%;border-collapse:collapse;font-size:13px;min-width:760px;}
+  thead th{position:sticky;top:0;background:var(--glass-2);color:var(--text-2);font-weight:700;z-index:1;}
+  thead tr.grp th{font-size:11.5px;padding:8px 10px;border-bottom:1px solid var(--glass-edge);text-align:center;}
+  thead tr.grp th.gC{color:var(--pay-credit);} thead tr.grp th.gP{color:var(--pay-paypal);} thead tr.grp th.gO{color:var(--text-muted);}
+  thead tr.sub th{font-size:10.5px;font-weight:600;padding:5px 10px;border-bottom:1px solid var(--glass-edge);}
+  th.s{text-align:start;} th.e{text-align:end;} td.e{text-align:end;} td.c{text-align:center;}
+  tbody td{padding:7px 10px;border-top:1px solid var(--glass-edge);font-variant-numeric:tabular-nums;}
+  tbody td bdi{direction:ltr;}
+  tbody td.month{font-weight:700;white-space:nowrap;}
+  td.pct{font-size:11px;color:var(--text-muted);}
+  .grpsep{border-inline-start:1px solid var(--glass-edge);}
+  tfoot td{padding:9px 10px;border-top:2px solid var(--glass-edge);background:var(--glass-2);font-weight:800;font-variant-numeric:tabular-nums;}
+  /* mini per-row share bar */
+  .rowbar{width:88px;height:8px;border-radius:5px;overflow:hidden;display:flex;border:1px solid var(--glass-edge);}
+  .rowbar span{height:100%;}
+  .note{padding:11px 16px;font-size:11px;color:var(--text-subtle);border-top:1px solid var(--glass-edge);background:var(--glass-2);}
+  .illus{display:inline-block;background:var(--accent-bg);color:var(--accent);border:1px solid var(--glass-edge);border-radius:7px;padding:2px 8px;font-size:10.5px;font-weight:700;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="topbar">
+    <div>
+      <h1>פאנל אמצעי תשלום</h1>
+      <p class="sub">פילוח מכירות לפי שער-תשלום (אשראי / PayPal / אחר), פר-חודש — מספר הזמנות · הכנסה (CAD) · אחוז. כלל-העסק או פר-חנות.</p>
+    </div>
+    <div class="seg" role="group" aria-label="תמה">
+      <button id="t-dark" aria-pressed="true" onclick="setTheme('dark')">כהה</button>
+      <button id="t-light" aria-pressed="false" onclick="setTheme('light')">בהיר</button>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="phead">
+      <span class="ic" aria-hidden="true">💳</span>
+      <h2>אמצעי תשלום</h2>
+      <span class="illus">מספרים להמחשה</span>
+    </div>
+
+    <div class="controls">
+      <span class="lbl">היקף:</span>
+      <div class="seg" role="group" aria-label="היקף">
+        <button id="sc-biz" aria-pressed="true" onclick="setScope('business')">כלל-העסק</button>
+        <button id="sc-store" aria-pressed="false" onclick="setScope('store')">פר-חנות</button>
+      </div>
+      <div class="seg storeseg" id="storepick" role="group" aria-label="חנות" style="display:none">
+        <button data-store="uzoshop" aria-pressed="true" onclick="setStore('uzoshop')">uzoshop</button>
+        <button data-store="zolplus" aria-pressed="false" onclick="setStore('zolplus')">zolplus</button>
+        <button data-store="usmile360" aria-pressed="false" onclick="setStore('usmile360')">usmile360</button>
+      </div>
+    </div>
+
+    <!-- summary strip -->
+    <div class="summary" id="summary"></div>
+
+    <!-- per-month table -->
+    <div class="tblwrap">
+      <table>
+        <thead>
+          <tr class="grp">
+            <th class="s" rowspan="2" style="vertical-align:bottom">חודש</th>
+            <th class="gC" colspan="3">💳 אשראי</th>
+            <th class="gP grpsep" colspan="3">PayPal</th>
+            <th class="gO grpsep" colspan="2">אחר</th>
+            <th class="grpsep" colspan="2">סה״כ</th>
+            <th class="grpsep" rowspan="2" style="vertical-align:bottom">חלוקה</th>
+          </tr>
+          <tr class="sub">
+            <th class="e">הזמנות</th><th class="e">₪ CAD</th><th class="e">%</th>
+            <th class="e grpsep">הזמנות</th><th class="e">₪ CAD</th><th class="e">%</th>
+            <th class="e grpsep">הזמנות</th><th class="e">₪ CAD</th>
+            <th class="e grpsep">הזמנות</th><th class="e">₪ CAD</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+        <tfoot id="tfoot"></tfoot>
+      </table>
+    </div>
+    <div class="note">המספרים כאן הם <b>להמחשת העיצוב בלבד</b>. הדאטה האמיתית תגיע מ-Shopify (<code>payment_gateway_names</code>) על כל היסטוריית ההזמנות לאחר backfill. "אחר" = מתנה/manual/COD וכו׳. אחוז מחושב לפי מספר הזמנות.</div>
+  </div>
+</div>
+
+<script>
+  // ---- illustrative data: per store, per month {credit:[orders,cad], paypal:[...], other:[...]} ----
+  const MONTHS = ['2026-01','2026-02','2026-03','2026-04','2026-05','2026-06'];
+  const RAW = {
+    uzoshop:   [[210,18900,78,6900,9,820],[245,22050,96,8640,12,1100],[268,24120,104,9360,11,1010],[290,26100,121,10890,14,1260],[315,28350,138,12420,16,1440],[176,15840,79,7110,8,720]],
+    zolplus:   [[120,11400,52,4940,5,460],[138,13110,61,5795,6,540],[151,14345,70,6650,7,640],[164,15580,82,7790,8,720],[180,17100,95,9025,9,810],[101,9595,55,5225,5,450]],
+    usmile360: [[64,7040,41,4510,3,300],[72,7920,48,5280,4,420],[80,8800,55,6050,4,400],[90,9900,63,6930,5,520],[103,11330,74,8140,6,630],[58,6380,42,4620,3,310]],
+  };
+  // shape into objects + a business aggregate
+  function row(arr){return {credit:{o:arr[0],r:arr[1]},paypal:{o:arr[2],r:arr[3]},other:{o:arr[4],r:arr[5]}};}
+  const DATA={uzoshop:RAW.uzoshop.map(row),zolplus:RAW.zolplus.map(row),usmile360:RAW.usmile360.map(row)};
+  DATA.business=MONTHS.map((_,i)=>{
+    const s=k=>['uzoshop','zolplus','usmile360'].reduce((a,st)=>a+DATA[st][i][k.split('.')[0]][k.split('.')[1]],0);
+    return {credit:{o:s('credit.o'),r:s('credit.r')},paypal:{o:s('paypal.o'),r:s('paypal.r')},other:{o:s('other.o'),r:s('other.r')}};
+  });
+
+  let scope='business', store='uzoshop';
+  const fmt=n=>n.toLocaleString('en-US');
+  const C={credit:'var(--pay-credit)',paypal:'var(--pay-paypal)',other:'var(--pay-other)'};
+
+  function setTheme(t){document.documentElement.setAttribute('data-theme',t);
+    document.getElementById('t-dark').setAttribute('aria-pressed',t==='dark');
+    document.getElementById('t-light').setAttribute('aria-pressed',t==='light');render();}
+  function setScope(s){scope=s;
+    document.getElementById('sc-biz').setAttribute('aria-pressed',s==='business');
+    document.getElementById('sc-store').setAttribute('aria-pressed',s==='store');
+    document.getElementById('storepick').style.display=s==='store'?'inline-flex':'none';render();}
+  function setStore(st){store=st;document.querySelectorAll('#storepick button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.store===st));render();}
+
+  function bar(o){const t=o.credit.o+o.paypal.o+o.other.o||1;
+    const seg=(k)=>`<span style="width:${(o[k].o/t*100).toFixed(1)}%;background:${C[k]}"></span>`;
+    return seg('credit')+seg('paypal')+seg('other');}
+
+  function render(){
+    const rows = scope==='business'?DATA.business:DATA[store];
+    // totals
+    const T={credit:{o:0,r:0},paypal:{o:0,r:0},other:{o:0,r:0}};
+    rows.forEach(r=>['credit','paypal','other'].forEach(k=>{T[k].o+=r[k].o;T[k].r+=r[k].r;}));
+    const totO=T.credit.o+T.paypal.o+T.other.o, totR=T.credit.r+T.paypal.r+T.other.r;
+    const pct=(n,d)=>d?Math.round(n/d*100):0;
+
+    // summary
+    document.getElementById('summary').innerHTML=`
+      <div class="scard">
+        <div class="k">חלוקת הזמנות — כל התקופה</div>
+        <div class="v"><bdi>${fmt(totO)}</bdi> <small>הזמנות · <bdi>CAD ${fmt(totR)}</bdi></small></div>
+        <div class="sharebar">${bar(T)}</div>
+        <div class="dotrow">
+          <span class="dot"><i style="background:var(--pay-credit)"></i>אשראי ${pct(T.credit.o,totO)}%</span>
+          <span class="dot"><i style="background:var(--pay-paypal)"></i>PayPal ${pct(T.paypal.o,totO)}%</span>
+          <span class="dot"><i style="background:var(--pay-other)"></i>אחר ${pct(T.other.o,totO)}%</span>
+        </div>
+      </div>
+      <div class="scard"><div class="k">💳 אשראי</div><div class="v"><bdi>${fmt(T.credit.o)}</bdi> <small>· ${pct(T.credit.o,totO)}%</small></div><div class="dotrow"><span class="dot"><bdi>CAD ${fmt(T.credit.r)}</bdi></span></div></div>
+      <div class="scard"><div class="k">PayPal</div><div class="v"><bdi>${fmt(T.paypal.o)}</bdi> <small>· ${pct(T.paypal.o,totO)}%</small></div><div class="dotrow"><span class="dot"><bdi>CAD ${fmt(T.paypal.r)}</bdi></span></div></div>
+      <div class="scard"><div class="k">אחר</div><div class="v"><bdi>${fmt(T.other.o)}</bdi> <small>· ${pct(T.other.o,totO)}%</small></div><div class="dotrow"><span class="dot"><bdi>CAD ${fmt(T.other.r)}</bdi></span></div></div>`;
+
+    // body
+    document.getElementById('tbody').innerHTML=rows.map((r,i)=>{
+      const ro=r.credit.o+r.paypal.o+r.other.o;
+      return `<tr>
+        <td class="month">${MONTHS[i]}</td>
+        <td class="e"><bdi>${fmt(r.credit.o)}</bdi></td><td class="e"><bdi>${fmt(r.credit.r)}</bdi></td><td class="e pct">${pct(r.credit.o,ro)}%</td>
+        <td class="e grpsep"><bdi>${fmt(r.paypal.o)}</bdi></td><td class="e"><bdi>${fmt(r.paypal.r)}</bdi></td><td class="e pct">${pct(r.paypal.o,ro)}%</td>
+        <td class="e grpsep"><bdi>${fmt(r.other.o)}</bdi></td><td class="e"><bdi>${fmt(r.other.r)}</bdi></td>
+        <td class="e grpsep"><bdi>${fmt(ro)}</bdi></td><td class="e"><bdi>${fmt(r.credit.r+r.paypal.r+r.other.r)}</bdi></td>
+        <td class="c grpsep"><span class="rowbar" title="אשראי ${pct(r.credit.o,ro)}% · PayPal ${pct(r.paypal.o,ro)}% · אחר ${pct(r.other.o,ro)}%">${bar(r)}</span></td>
+      </tr>`;}).join('');
+
+    // footer totals
+    document.getElementById('tfoot').innerHTML=`<tr>
+      <td>סך הכל</td>
+      <td class="e"><bdi>${fmt(T.credit.o)}</bdi></td><td class="e"><bdi>${fmt(T.credit.r)}</bdi></td><td class="e">${pct(T.credit.o,totO)}%</td>
+      <td class="e grpsep"><bdi>${fmt(T.paypal.o)}</bdi></td><td class="e"><bdi>${fmt(T.paypal.r)}</bdi></td><td class="e">${pct(T.paypal.o,totO)}%</td>
+      <td class="e grpsep"><bdi>${fmt(T.other.o)}</bdi></td><td class="e"><bdi>${fmt(T.other.r)}</bdi></td>
+      <td class="e grpsep"><bdi>${fmt(totO)}</bdi></td><td class="e"><bdi>CAD ${fmt(totR)}</bdi></td>
+      <td class="c grpsep"><span class="rowbar">${bar(T)}</span></td>
+    </tr>`;
+  }
+  render();
+</script>
+</body>
+</html>
