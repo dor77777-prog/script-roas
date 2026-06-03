@@ -16,7 +16,7 @@
  * no duplicate network cost.
  */
 
-import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import useSWR from 'swr';
 import { ChevronDown, ChevronLeft, Info, Package, Trophy } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -736,38 +736,21 @@ function ProductRow({
 }
 
 // =============================================================================
-// Tooltip primitives — replace native `title` attribute with a styled popover.
-// Pattern mirrors MetricHelp.tsx (HIGH-5 grace timer included so the cursor
-// can travel from trigger to popover without flicker).
+// Tooltip helpers — Tooltip-system-redesign · Phase 3b (2026-06-03).
+//
+// The two bespoke hover-popovers (HoverTooltip, ColHelp) that hand-rolled a
+// grace-timer + absolutely-positioned bubble (which got CLIPPED by the table's
+// overflow-auto wrapper) are gone. Both now delegate to the single sanctioned
+// HelpTooltip primitive in variant="rich" mode — a portalled Radix Popover
+// (role="dialog") on desktop that escapes the scroll container and flips/shifts
+// on collision, and the primitive's ⓘ / bottom-Sheet path on touch. Every
+// header's exact help text is preserved verbatim.
 // =============================================================================
 
-const HIDE_GRACE_MS = 200;
-
-function useHoverTimer() {
-  const [open, setOpen] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  function cancelHide() {
-    if (timerRef.current !== null) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-  }
-  function scheduleHide() {
-    cancelHide();
-    timerRef.current = setTimeout(() => {
-      setOpen(false);
-      timerRef.current = null;
-    }, HIDE_GRACE_MS);
-  }
-  useEffect(() => () => cancelHide(), []);
-  return { open, setOpen, cancelHide, scheduleHide };
-}
-
 /**
- * Generic hover popover used for the pixel↔Shopify chip. The trigger is
- * rendered inline; on hover/focus we open a styled tooltip beside it. Same
- * grace-timer mechanics as MetricHelp so the cursor can travel from trigger
- * to popover without dismissing.
+ * Generic rich popover used for the pixel↔Shopify delta chip. The chip is the
+ * trigger; HelpTooltip owns hover-intent (desktop) / tap (touch), Esc, flip,
+ * and portalling.
  */
 function HoverTooltip({
   trigger,
@@ -778,54 +761,19 @@ function HoverTooltip({
   title?: string;
   body: ReactNode;
 }) {
-  const { open, setOpen, cancelHide, scheduleHide } = useHoverTimer();
   return (
-    <span className="relative inline-flex">
-      <span
-        tabIndex={0}
-        onMouseEnter={() => {
-          cancelHide();
-          setOpen(true);
-        }}
-        onMouseLeave={scheduleHide}
-        onFocus={() => {
-          cancelHide();
-          setOpen(true);
-        }}
-        onBlur={scheduleHide}
-        className="inline-flex"
-      >
-        {trigger}
-      </span>
-      {open && (
-        <div
-          role="tooltip"
-          dir="rtl"
-          onMouseEnter={cancelHide}
-          onMouseLeave={scheduleHide}
-          className={cn(
-            'absolute z-50 top-full mt-2 end-0',
-            'w-[260px] sm:w-[300px] max-w-[min(90vw,320px)]',
-            'rounded-xl bg-glass-2 text-ink border border-glass-edge p-3 shadow-overlay',
-            'text-xs leading-relaxed pointer-events-auto',
-          )}
-        >
-          {title && <div className="font-semibold text-ink mb-1.5">{title}</div>}
-          <div className="text-ink-secondary">{body}</div>
-          <div
-            aria-hidden
-            className="absolute -top-1.5 end-3 w-2.5 h-2.5 bg-glass-2 border border-glass-edge rotate-45"
-          />
-        </div>
-      )}
-    </span>
+    <HelpTooltip variant="rich" title={title} content={body} align="end">
+      {trigger}
+    </HelpTooltip>
   );
 }
 
 /**
- * Column-header help. Renders the label inline with a small "?" affordance
- * that opens a styled popover explaining what the column shows and how it's
- * calculated. Sits inside a `<th>`.
+ * Column-header help. Renders the label inline next to a small ⓘ affordance
+ * that opens a rich popover (title = the column label, body = the explanation).
+ * The ⓘ button is the trigger so the popover never sits inside a role=tooltip
+ * with focusable content, and — being portalled — is no longer clipped by the
+ * table's `overflow-auto` wrapper.
  */
 function ColHelp({
   label,
@@ -836,64 +784,25 @@ function ColHelp({
   body: ReactNode;
   align?: 'start' | 'end';
 }) {
-  const { open, setOpen, cancelHide, scheduleHide } = useHoverTimer();
   return (
     <span
       className={cn(
-        'group relative inline-flex items-center gap-1',
+        'inline-flex items-center gap-1',
         align === 'start' ? 'justify-start' : 'justify-end',
       )}
     >
       <span>{label}</span>
-      <Button
-        type="button"
-        variant="ghost"
-        onMouseEnter={() => {
-          cancelHide();
-          setOpen(true);
-        }}
-        onMouseLeave={scheduleHide}
-        onFocus={() => {
-          cancelHide();
-          setOpen(true);
-        }}
-        onBlur={scheduleHide}
-        onClick={(e) => {
-          e.stopPropagation();
-          cancelHide();
-          setOpen((o) => !o);
-        }}
-        aria-label={`הסבר על ${label}`}
-        className="w-3.5 h-3.5 rounded-full text-ink-subtle hover:text-ink-secondary opacity-60 hover:opacity-100"
-      >
-        <Info size={10} />
-      </Button>
-      {open && (
-        <div
-          role="tooltip"
-          dir="rtl"
-          onMouseEnter={cancelHide}
-          onMouseLeave={scheduleHide}
-          className={cn(
-            'absolute z-50 top-full mt-2',
-            align === 'start' ? 'start-0' : 'end-0',
-            'w-[260px] sm:w-[300px] max-w-[min(90vw,320px)]',
-            'rounded-xl bg-glass-2 text-ink border border-glass-edge p-3 shadow-overlay',
-            'text-xs leading-relaxed pointer-events-auto',
-            'font-normal text-start',
-          )}
+      <HelpTooltip variant="rich" title={label} content={body} align={align}>
+        <Button
+          type="button"
+          variant="ghost"
+          onClick={(e) => e.stopPropagation()}
+          aria-label={`הסבר על ${label}`}
+          className="w-3.5 h-3.5 rounded-full text-ink-subtle hover:text-ink-secondary opacity-60 hover:opacity-100"
         >
-          <div className="font-semibold text-ink mb-1.5">{label}</div>
-          <div className="text-ink-secondary">{body}</div>
-          <div
-            aria-hidden
-            className={cn(
-              'absolute -top-1.5 w-2.5 h-2.5 bg-glass-2 border border-glass-edge rotate-45',
-              align === 'start' ? 'start-3' : 'end-3',
-            )}
-          />
-        </div>
-      )}
+          <Info size={10} aria-hidden="true" />
+        </Button>
+      </HelpTooltip>
     </span>
   );
 }
