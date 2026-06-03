@@ -110,6 +110,7 @@ import {
   whatsappCronFunctions,
   eventWhatsappSendNow,
 } from '@/inngest/functions/cronWhatsapp';
+import { cronCohortRefreshFunctions } from '@/inngest/functions/cronCohortRefresh';
 
 // Vercel route segment config: maxDuration must be a literal number per
 // Next.js's static analyzer (same constraint as the revalidate opt-in —
@@ -151,5 +152,6 @@ export const { GET, POST, PUT } = serve({
     cronOauthCanary, // 1 function (Phase 13.4/14 — Google + Meta + TikTok token canary, 00:00 IL daily)
     ...whatsappCronFunctions, // 3 functions (12:00, 18:00, 00:10 IL)
     eventWhatsappSendNow, // 1 function (operator "send WhatsApp now")
+    ...cronCohortRefreshFunctions, // Wave 2 (2026-06-03) — weekly cohort/LTV re-aggregate (Mon 04:00 IL, Shopify Bulk full replace)
   ],
 });
