@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>טאב סקירה — סדר חדש (mockup)</title>
+<style>
+  :root{
+    --bg:#eef0f4; --drawer:#ffffff; --ink:#1f2433; --ink-2:#6b7280; --ink-3:#9aa1b0;
+    --card:#ffffff; --card-2:#f6f7fb; --edge:#e9ecf3;
+    --blue:#3a5bd9; --blue-soft:#e8edff; --teal:#16a3a3;
+    --good:#1f9d6b; --good-bg:#eefaf3; --good-edge:#cfead9;
+    --amber:#e0892a; --amber-bg:#fdf3e6; --amber-edge:#f3dcbf;
+    --shadow:0 1px 2px rgba(20,24,40,.05),0 10px 30px rgba(20,24,40,.08);
+  }
+  [data-theme=dark]{
+    --bg:#070a12; --drawer:#121826; --ink:#eef1f8; --ink-2:#a6afc6; --ink-3:#6d7791;
+    --card:#19202f; --card-2:#1c2438; --edge:rgba(255,255,255,.09);
+    --blue:#5b78ff; --blue-soft:rgba(91,120,255,.18); --teal:#3fd0c8;
+    --good:#3fd49a; --good-bg:rgba(63,212,154,.12); --good-edge:rgba(63,212,154,.25);
+    --amber:#ef9331; --amber-bg:rgba(239,147,49,.13); --amber-edge:rgba(239,147,49,.3);
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 12px 34px rgba(0,0,0,.5);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.55 -apple-system,"Segoe UI",Heebo,Arial,sans-serif;color:var(--ink);background:var(--bg);min-height:100vh;padding:20px}
+  .bar{max-width:920px;margin:0 auto 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px}
+  .bar h1{font-size:17px;margin:0;font-weight:800}
+  .seg{display:inline-flex;background:var(--card-2);border:1px solid var(--edge);border-radius:10px;padding:3px;gap:2px}
+  .seg button{border:0;background:transparent;color:var(--ink-2);padding:6px 13px;border-radius:8px;font:inherit;font-weight:700;cursor:pointer;font-size:12.5px}
+  .seg button.on{background:var(--drawer);color:var(--ink);box-shadow:var(--shadow)}
+  .seg button.on.accent{background:var(--blue);color:#fff}
+  /* drawer */
+  .drawer{max-width:920px;margin:0 auto;background:var(--drawer);border-radius:18px;box-shadow:var(--shadow);overflow:hidden;border:1px solid var(--edge)}
+  .dhead{padding:18px 22px 14px;border-bottom:1px solid var(--edge)}
+  .dhead .row1{display:flex;justify-content:space-between;align-items:flex-start}
+  .dhead h2{margin:0;font-size:18px;font-weight:800}
+  .pills{display:flex;gap:7px;align-items:center;flex-wrap:wrap;justify-content:flex-start;margin-top:4px}
+  .pill{background:var(--card-2);border:1px solid var(--edge);border-radius:999px;padding:4px 11px;font-size:12px;font-weight:700;display:inline-flex;gap:5px;align-items:center}
+  .pill.blue{background:var(--blue);color:#fff;border-color:transparent}
+  .pill .dot{width:7px;height:7px;border-radius:50%;background:var(--blue)}
+  .amlink{color:var(--teal);font-weight:700;font-size:12.5px;margin-top:8px;display:inline-block}
+  .tabs{display:flex;gap:22px;justify-content:flex-start;padding:0 22px;border-bottom:1px solid var(--edge);flex-wrap:wrap}
+  .tabs a{padding:12px 2px;font-size:13.5px;font-weight:700;color:var(--ink-3);border-bottom:2px solid transparent;text-decoration:none}
+  .tabs a.act{color:var(--ink);border-bottom-color:var(--teal)}
+  .body{padding:18px 22px 22px}
+  /* scorecard */
+  .scorecard{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+  @media(max-width:640px){.scorecard{grid-template-columns:repeat(2,1fr)}}
+  .sc{background:var(--card-2);border:1px solid var(--edge);border-radius:13px;padding:11px 13px}
+  .sc .k{font-size:11px;color:var(--ink-2);font-weight:600}
+  .sc .v{font-size:20px;font-weight:800;margin-top:3px;font-variant-numeric:tabular-nums;display:flex;align-items:center;gap:7px}
+  .grade{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:9px;background:var(--good);color:#fff;font-weight:800;font-size:15px}
+  .mini{font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px}
+  .mini.blue{background:var(--blue-soft);color:var(--blue)} .mini.good{background:var(--good-bg);color:var(--good)} .mini.amber{background:var(--amber-bg);color:var(--amber)}
+  /* kpi grid */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:8px}
+  @media(max-width:640px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:var(--card-2);border:1px solid var(--edge);border-radius:12px;padding:11px 13px;text-align:start}
+  .kpi .k{font-size:11px;color:var(--ink-2);font-weight:600}
+  .kpi .v{font-size:19px;font-weight:800;margin-top:3px;font-variant-numeric:tabular-nums}
+  .kpi.threecol{grid-column:span 1}
+  .row3{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:14px}
+  @media(max-width:640px){.row3{grid-template-columns:repeat(3,1fr)}}
+  /* accordion */
+  details.acc{border:1px solid var(--edge);border-radius:13px;background:var(--card);margin-bottom:9px;overflow:hidden}
+  details.acc>summary{cursor:pointer;list-style:none;padding:13px 15px;display:flex;align-items:center;justify-content:space-between;font-weight:800;font-size:13.5px}
+  details.acc>summary::-webkit-details-marker{display:none}
+  details.acc>summary .right{display:flex;align-items:center;gap:9px}
+  details.acc>summary .caret{color:var(--ink-3);font-size:11px}
+  details.acc .inner{padding:0 15px 15px;color:var(--ink-2);font-size:12.5px;line-height:1.65}
+  .green-card{background:var(--good-bg);border:1px solid var(--good-edge);border-radius:12px;padding:13px}
+  .amber-card{background:var(--amber-bg);border:1px solid var(--amber-edge);border-radius:12px;padding:11px}
+  .barline{height:8px;border-radius:999px;background:var(--good);margin:8px 0}
+  .note{font-size:11.5px;color:var(--accent,var(--blue));font-weight:700;background:var(--blue-soft);border-radius:9px;padding:7px 11px;margin-top:12px;display:block;line-height:1.6}
+  .stacked-warn{font-size:11.5px;color:var(--amber);background:var(--amber-bg);border:1px dashed var(--amber-edge);border-radius:9px;padding:8px 11px;margin-bottom:12px}
+  h3.sechead{font-size:14px;font-weight:800;margin:14px 2px 8px;display:flex;align-items:center;gap:6px}
+  .chip2{display:inline-block;background:var(--good-bg);color:var(--good);border:1px solid var(--good-edge);border-radius:999px;padding:3px 9px;font-size:11.5px;font-weight:700}
+  table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+  th,td{padding:7px 6px;text-align:start;border-bottom:1px solid var(--edge)}
+  th{color:var(--ink-3);font-weight:700;font-size:11px}
+</style>
+</head>
+<body>
+  <div class="bar">
+    <h1>טאב "סקירה" — סדר חדש <span style="font-size:12px;color:var(--blue);font-weight:800">mockup</span></h1>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <div class="seg" id="mode"><button data-v="after" class="on accent">אחרי (חדש)</button><button data-v="before">לפני (היום)</button></div>
+      <div class="seg" id="theme"><button data-v="light" class="on">☀︎</button><button data-v="dark">☾</button></div>
+    </div>
+  </div>
+
+  <div class="drawer">
+    <div class="dhead">
+      <div class="row1">
+        <h2>יונים- מכשיר סולרי</h2>
+        <button style="border:0;background:transparent;color:var(--ink-3);font-size:18px;cursor:pointer">✕</button>
+      </div>
+      <div class="pills">
+        <span class="pill">📅 1 ימים</span>
+        <span class="pill blue">ROAS 7.16×</span>
+        <span class="pill">uzoshop 🏪</span>
+        <span class="pill"><span class="dot"></span> Meta</span>
+      </div>
+      <span class="amlink">↗ פתח ב- Meta Ads Manager</span>
+    </div>
+    <div class="tabs">
+      <a class="act">סקירה</a><a>יומי</a><a>Ad Sets</a><a>מודעות</a><a>סטטוס</a><a>היסטוריה</a>
+    </div>
+    <div class="body" id="body"></div>
+  </div>
+
+<script>
+const KPIS = `
+  <div class="kpis">
+    <div class="kpi"><div class="k">ROAS</div><div class="v">7.16 <span class="mini blue">מעולה</span></div></div>
+    <div class="kpi"><div class="k">הוצאה</div><div class="v">CAD 16</div></div>
+    <div class="kpi"><div class="k">ערך המרות</div><div class="v" style="color:var(--good)">CAD 112</div></div>
+    <div class="kpi"><div class="k">המרות</div><div class="v">1</div></div>
+  </div>
+  <div class="row3">
+    <div class="kpi"><div class="k">CPA</div><div class="v">CAD 15.60</div></div>
+    <div class="kpi"><div class="k">CPC</div><div class="v">CAD 0.25</div></div>
+    <div class="kpi"><div class="k">CTR</div><div class="v">13.39%</div></div>
+  </div>`;
+
+const MAPPED = `מוצר Shopify אחד משויך (8319522308390). חלק מהמוצרים משויכים גם לקמפיינים אחרים — ה-ROAS Shopify מחושב לפי חלקו של הקמפיין בהוצאה (חלוקה פרופורציונלית). <button class="pill" style="margin-top:8px">✎ ערוך מיפוי</button>`;
+const COHORT = `<span class="chip2">🏆 #1 מתוך 2</span> &nbsp; הקמפיין הזה חולק מיפוי עם קמפיין 1 אחר (1 מוצר משותף). מתחרים על אותו קהל באותה פלטפורמה (Meta) — סקייל באחד עלול לגנוב מהאחר אם הקהל רווי.
+  <table><tr><th>דירוג</th><th>קמפיין</th><th>מוצרים</th><th>הוצאה</th><th>סטטוס</th></tr>
+  <tr><td>🥇 את/ה כאן</td><td>יונים- מכשיר סולרי</td><td>1</td><td>CAD 16</td><td><span class="chip2">פעיל</span></td></tr>
+  <tr><td>🥈</td><td>120247834192820721</td><td>1</td><td>—</td><td>לא פעיל</td></tr></table>`;
+const ATTR = `<div class="green-card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start">
+      <div><div class="k" style="font-size:11px;color:var(--ink-2)">ROAS לפי META</div><div style="font-weight:800;font-size:20px">7.16x</div><div style="font-size:11px;color:var(--ink-3)">CAD 112 מדווח</div></div>
+      <div style="text-align:start"><div class="k" style="font-size:11px;color:var(--ink-2)">ציון אמינות · ROAS אמיתי (click-id)</div><div style="font-weight:800;font-size:20px"><span style="color:var(--good)">90</span><span style="font-size:13px;color:var(--ink-3)">/100</span> · 7.13x</div><div style="font-size:11px;color:var(--good);font-weight:700">אמין ✓</div></div>
+    </div>
+    <div class="barline"></div>
+    <div style="font-size:12px;color:var(--ink-2)">• 1 הזמנה תויגה לקמפיין (CAD 111 מתוך 112) — דיווח 100% &nbsp; • CAD 0 "modeled" (view-through) — סביר</div>
+    <div class="note" style="margin-top:10px;color:var(--ink-2);background:var(--card-2)">💡 מספרי הקמפיין אמינים. אופטימיזציה רגילה לפי ROAS.</div>
+  </div>`;
+
+function health(compact){
+  if(compact) return `<div class="sc"><div class="k">ציון בריאות</div><div class="v"><span class="grade" style="width:26px;height:26px;font-size:13px">⏳</span> מוקדם</div></div>`;
+  return `<div style="background:var(--card-2);border:1px solid var(--edge);border-radius:12px;padding:13px;margin-bottom:12px">
+    <div style="font-weight:800;margin-bottom:4px">ציון בריאות קמפיין</div>
+    <div style="display:flex;align-items:center;gap:12px"><span class="grade" style="background:transparent;font-size:24px">⏳</span><div><div style="font-weight:800;color:var(--ink)">מוקדם מדי</div><div style="font-size:12px;color:var(--ink-2)">ציון מאוחד שמשקלל את 4 הרכיבים לתמונה אחת.</div></div></div>
+    <div style="font-size:11.5px;color:var(--ink-3);margin-top:8px;background:var(--card);border:1px solid var(--edge);border-radius:8px;padding:7px 10px">הוצאה CAD 16 — מדגם קטן מדי לציון אמין. חכה שיצטברו נתונים.</div>
+  </div>`;
+}
+
+const AFTER = `
+  <!-- smart scorecard: at-a-glance signals always visible -->
+  <div class="scorecard">
+    <div class="sc"><div class="k">ROAS</div><div class="v">7.16 <span class="mini blue">מעולה</span></div></div>
+    <div class="sc"><div class="k">ערך המרות</div><div class="v" style="color:var(--good)">$112</div></div>
+    <div class="sc"><div class="k">אמינות attribution</div><div class="v"><span style="color:var(--good)">90</span><span style="font-size:12px;color:var(--ink-3)">/100</span></div></div>
+    ${health(true)}
+  </div>
+  ${KPIS}
+  <h3 class="sechead">ניתוח מעמיק <span style="font-size:11px;font-weight:600;color:var(--ink-3)">(נפתח בלחיצה)</span></h3>
+  <details class="acc"><summary><span class="right">🏷️ מוצרי Shopify משויכים <span class="mini blue">1</span></span><span class="caret">▼</span></summary><div class="inner">${MAPPED}</div></details>
+  <details class="acc"><summary><span class="right">🏆 השוואת cohort — קמפיינים שחולקים מוצרים <span class="mini amber">#1/2</span></span><span class="caret">▼</span></summary><div class="inner">${COHORT}</div></details>
+  <details class="acc" open><summary><span class="right">📈 ניתוח attribution <span class="mini good">אמין · 90</span></span><span class="caret">▲</span></summary><div class="inner">${ATTR}</div></details>
+  <div class="note">✅ אחרי: כל סקציות הסקירה נשמרו (אפס מחיקה) — אבל מאורגנות: <b>scorecard</b> עם האותות הכי חשובים (ROAS · ערך · אמינות · בריאות) + ה-KPIs תמיד גלויים; הניתוחים המעמיקים (מוצרים · cohort · attribution) ב<b>אקורדיון</b>, נפתחים בלחיצה. הטאב נפתח לתמונה נקייה במקום קיר-מידע.</div>
+`;
+
+const BEFORE = `
+  <div class="stacked-warn">❌ לפני: 5 הסקציות מוערמות כולן פתוחות בבת-אחת — צריך לגלול הרבה כדי לראות הכל.</div>
+  ${health(false)}
+  ${KPIS}
+  <h3 class="sechead">🏷️ מוצרי Shopify משויכים (1)</h3>
+  <div style="background:var(--card-2);border:1px solid var(--edge);border-radius:12px;padding:13px;margin-bottom:12px">${MAPPED}</div>
+  <h3 class="sechead">🏆 השוואה לקמפיינים שמקדמים את אותם מוצרים</h3>
+  <div class="amber-card" style="margin-bottom:12px">${COHORT}</div>
+  <h3 class="sechead">📈 ניתוח attribution</h3>
+  ${ATTR}
+`;
+
+let mode='after';
+function render(){document.getElementById('body').innerHTML = mode==='after'?AFTER:BEFORE;
+  document.querySelectorAll('details.acc').forEach(d=>d.addEventListener('toggle',()=>{const c=d.querySelector('.caret');if(c)c.textContent=d.open?'▲':'▼';}));}
+function bind(id,fn){const el=document.getElementById(id);el.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;[...el.children].forEach(x=>x.classList.remove('on'));b.classList.add('on');fn(b.dataset.v);});}
+bind('mode',v=>{mode=v;render();});
+bind('theme',v=>document.documentElement.setAttribute('data-theme',v==='dark'?'dark':''));
+render();
+</script>
+</body>
+</html>

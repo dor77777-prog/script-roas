@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ניקוי וסריקוּת — mockup (אחרי)</title>
+<style>
+  :root{
+    --canvas:#f6f7fb; --surface:#ffffff; --surface-2:#eef1f8; --edge:rgba(20,24,40,.10);
+    --ink:#13182b; --ink-2:#5b6479; --ink-3:#8b93a7;
+    --accent:#6d4aff; --accent-soft:rgba(109,74,255,.12);
+    --good:#1f9d6b; --good-2:#137a52; --warn:#ef9331; --bad:#e0445b; --info:#2f7bd6;
+    --shadow:0 1px 2px rgba(20,24,40,.06),0 8px 24px rgba(20,24,40,.06);
+    --mesh:radial-gradient(1200px 600px at 85% -10%,rgba(109,74,255,.08),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(47,123,214,.07),transparent 55%);
+    --chart-target:#ef9331;
+  }
+  [data-theme=dark]{
+    --canvas:#0b0e18; --surface:#141a2b; --surface-2:#1c2438; --edge:rgba(255,255,255,.10);
+    --ink:#eef1f8; --ink-2:#a6afc6; --ink-3:#6d7791;
+    --accent:#8c6bff; --accent-soft:rgba(140,107,255,.18);
+    --good:#3fd49a; --good-2:#2ca579; --warn:#ef9331; --bad:#ff6b81; --info:#5aa6ff;
+    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.45);
+    --mesh:radial-gradient(1200px 600px at 85% -10%,rgba(140,107,255,.16),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(47,123,214,.12),transparent 55%);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font:14px/1.5 -apple-system,"Segoe UI",Heebo,Arial,sans-serif;color:var(--ink);
+    background:var(--canvas);background-image:var(--mesh);background-attachment:fixed;min-height:100vh;padding:18px}
+  .wrap{max-width:1080px;margin:0 auto}
+  header.top{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:14px}
+  h1{font-size:18px;margin:0;font-weight:800}
+  .controls{display:flex;gap:8px;flex-wrap:wrap}
+  .seg{display:inline-flex;background:var(--surface-2);border:1px solid var(--edge);border-radius:10px;padding:3px;gap:2px}
+  .seg button{border:0;background:transparent;color:var(--ink-2);padding:6px 12px;border-radius:8px;font:inherit;font-weight:700;cursor:pointer;font-size:12.5px}
+  .seg button.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+  .seg button.on.accent{background:var(--accent);color:#fff}
+  .card{background:var(--surface);border:1px solid var(--edge);border-radius:16px;box-shadow:var(--shadow);padding:14px}
+  .eyebrow{font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-3);font-weight:700}
+  .note{font-size:11.5px;color:var(--accent);font-weight:700;background:var(--accent-soft);border-radius:8px;padding:5px 10px;display:inline-block;margin-top:10px}
+  .topstrip{display:flex;justify-content:space-between;align-items:center;color:var(--ink-3);font-size:11.5px;margin-bottom:10px;padding:0 2px}
+  .chip{background:var(--surface-2);border:1px solid var(--edge);border-radius:999px;padding:3px 10px;font-weight:700;font-size:11px}
+  /* hero */
+  .hero{display:grid;grid-template-columns:260px 1fr;gap:12px}
+  @media(max-width:780px){.hero{grid-template-columns:1fr}}
+  .band{border-radius:16px;padding:16px;color:#fff;position:relative;overflow:hidden;min-height:150px;display:flex;flex-direction:column;justify-content:space-between}
+  .band.green{background:linear-gradient(150deg,#1f9d6b,#137a52)}
+  .band.orange{background:linear-gradient(150deg,#f0a248,#e07d1c)}
+  .band .big{font-size:54px;font-weight:800;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums}
+  .band .lbl{opacity:.9;font-size:12px;font-weight:700}
+  .band .livechip{position:absolute;top:14px;inset-inline-start:14px;background:rgba(0,0,0,.22);border-radius:999px;padding:3px 9px;font-size:10.5px;font-weight:800}
+  .strip{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  @media(max-width:560px){.strip{grid-template-columns:repeat(2,1fr)}}
+  .tile{background:var(--surface);border:1px solid var(--edge);border-radius:13px;padding:11px 13px;text-align:start}
+  .tile .lbl{font-size:11px;color:var(--ink-2);font-weight:600;display:flex;justify-content:space-between}
+  .tile .v{font-size:21px;font-weight:800;margin-top:3px;font-variant-numeric:tabular-nums}
+  .tile .d{font-size:11px;font-weight:700;margin-top:1px}
+  .up{color:var(--good)} .down{color:var(--bad)} .muted{color:var(--ink-3)}
+  /* nc tile */
+  .nc{background:var(--surface);border:1px solid var(--edge);border-radius:14px;padding:12px 14px;margin-top:12px}
+  .nc .row{display:flex;align-items:flex-end;gap:28px;margin-top:6px}
+  .nc .val{display:block;text-align:end;font-weight:800;font-size:24px;font-variant-numeric:tabular-nums;line-height:1.05}
+  /* chart */
+  svg{width:100%;height:auto;display:block}
+  .legend{display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;font-size:11px;color:var(--ink-3);margin-top:6px;font-variant-numeric:tabular-nums}
+  .legend i{display:inline-block;width:16px;vertical-align:middle;margin-inline-end:5px}
+  /* accordion */
+  .acc{border:1px solid var(--edge);border-radius:13px;overflow:hidden;margin-bottom:9px;background:var(--surface)}
+  .acc>summary{cursor:pointer;list-style:none;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;font-weight:800;font-size:13.5px}
+  .acc>summary::-webkit-details-marker{display:none}
+  .acc>summary .caret{color:var(--ink-3);font-size:12px}
+  .acc .body{padding:0 14px 14px;color:var(--ink-2);font-size:12.5px;line-height:1.6}
+  .statgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0}
+  @media(max-width:560px){.statgrid{grid-template-columns:repeat(2,1fr)}}
+  .grade{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border-radius:12px;background:var(--good);color:#fff;font-weight:800;font-size:20px}
+  .factors{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  .factor{background:var(--surface-2);border:1px solid var(--edge);border-radius:9px;padding:6px 10px;font-size:11.5px;color:var(--ink-2);font-weight:600}
+  .hidden{display:none}
+  h2.sec{font-size:13px;font-weight:800;color:var(--ink-2);margin:16px 2px 8px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>ניקוי וסריקוּת — מצב היעד <span style="font-size:12px;color:var(--accent);font-weight:800">mockup · אחרי</span></h1>
+    <div class="controls">
+      <div class="seg" id="view"><button data-v="home" class="on accent">דף הבית</button><button data-v="drawer">drawer קמפיין</button></div>
+      <div class="seg" id="theme"><button data-v="light" class="on">☀︎</button><button data-v="dark">☾</button></div>
+    </div>
+  </header>
+
+  <!-- ============ HOME VIEW ============ -->
+  <div id="view-home">
+    <div class="topstrip">
+      <span class="chip">🛡️ כיסוי ייחוס 100%</span>
+      <span class="chip">🟢 LIVE · עודכן לפני 1 דק׳ (הכל יחד)</span>
+    </div>
+
+    <div class="hero">
+      <div class="band green">
+        <div class="livechip">LIVE · 9M ●</div>
+        <div></div>
+        <div>
+          <div class="big">2.89</div>
+          <div class="lbl">MER · היום</div>
+        </div>
+      </div>
+      <div>
+        <div class="eyebrow" style="margin-bottom:8px">מדדי העסק · מול התקופה הקודמת · <b style="color:var(--accent)">רצועה אחת בלבד</b></div>
+        <div class="strip">
+          <div class="tile"><div class="lbl"><span>הכנסה</span></div><div class="v">$1,546</div><div class="d down">▼ −60%</div></div>
+          <div class="tile"><div class="lbl"><span>הוצאה</span></div><div class="v">$535</div><div class="d up">▼ −67%</div></div>
+          <div class="tile"><div class="lbl"><span>רווח תפעולי · היום</span></div><div class="v">$624</div><div class="d down">▼ −51%</div></div>
+          <div class="tile"><div class="lbl"><span>הזמנות · סה״כ</span></div><div class="v">18</div><div class="d down">▼ −20</div></div>
+          <div class="tile"><div class="lbl"><span>AOV</span></div><div class="v">$86</div><div class="d muted">▾ −14%</div></div>
+          <div class="tile"><div class="lbl"><span>CPM · עסקי</span></div><div class="v">$34.89</div><div class="d down">▲ +14%</div></div>
+        </div>
+        <div class="nc">
+          <div class="eyebrow">לקוחות חדשים · שאלה אחרת</div>
+          <div class="row">
+            <div><div class="eyebrow">NC-ROAS · נטו (אחרי החזרים)</div><bdi dir="ltr" class="val">2.12</bdi></div>
+            <div><div class="eyebrow">nCAC</div><bdi dir="ltr" class="val">$38</bdi></div>
+          </div>
+          <div style="font-size:12px;color:var(--ink-3);margin-top:6px"><bdi dir="rtl">14 חדשות · 4 חוזרות · 0% לא מסווג</bdi></div>
+        </div>
+      </div>
+    </div>
+
+    <h2 class="sec">ROAS מול יעד · 30 יום</h2>
+    <div class="card">
+      <svg id="chart" viewBox="0 0 720 220" aria-label="ROAS מול יעד"></svg>
+      <div class="legend">
+        <div>
+          <span><i style="border-top:2px solid var(--ink)"></i>ROAS יומי</span>
+          <span style="margin-inline-start:14px"><i style="border-top:1.5px dashed var(--chart-target)"></i>יעד 3.0</span>
+        </div>
+        <div>מקסימום: <b style="color:var(--ink)">4.12</b> · מינימום: <b style="color:var(--ink)">1.34</b></div>
+      </div>
+      <div class="note">✅ אחרי: ה-KpiTiles הכפולים (ROAS · הוצאה · רווח תפעולי · CPM) <b>הוסרו</b> מהגרף — המספרים האלה כבר ב-hero למעלה. הגרף נשאר נקי: קו + יעד + מינ/מקס בלבד. (אפס איבוד-מידע — אותם מספרים, פעם אחת.)</div>
+    </div>
+  </div>
+
+  <!-- ============ DRAWER VIEW ============ -->
+  <div id="view-drawer" class="hidden">
+    <div class="card" style="border-color:var(--accent-soft)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <span class="chip">Meta · uzoshop</span>
+        <div style="text-align:start">
+          <div class="eyebrow">קמפיין</div>
+          <div style="font-weight:800;font-size:15px">Summer Sale — Prospecting</div>
+        </div>
+      </div>
+      <div class="statgrid">
+        <div class="tile"><div class="lbl">ROAS</div><div class="v">2.41<span style="font-size:13px"> </span></div></div>
+        <div class="tile"><div class="lbl">הוצאה</div><div class="v">$312</div></div>
+        <div class="tile"><div class="lbl">ערך המרות</div><div class="v">$752</div></div>
+        <div class="tile"><div class="lbl">המרות</div><div class="v">12</div></div>
+      </div>
+
+      <details class="acc" open>
+        <summary>ציון בריאות קמפיין <span class="caret">▲</span></summary>
+        <div class="body">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span class="grade">B</span>
+            <div><div style="font-weight:800;color:var(--ink);font-size:16px">ציון 72</div><div>ציון מאוחד שמשקלל את 4 הרכיבים לתמונה אחת.</div></div>
+          </div>
+          <div class="factors">
+            <span class="factor">מומנטום 25%</span><span class="factor">רווחיות 30%</span>
+            <span class="factor">אמינות 25%</span><span class="factor">בהירות attribution 20%</span>
+          </div>
+        </div>
+      </details>
+
+      <details class="acc" open>
+        <summary>התאמת Meta ↔ Shopify <span class="caret">▲</span></summary>
+        <div class="body">Meta מדווח $752 · Shopify מייחס $731 · פער 2.8% (תקין). ההפרש נובע מ-attribution window + החזרים.</div>
+      </details>
+
+      <details class="acc">
+        <summary>ניתוח ייחוס (last-click + first-click) <span class="caret">▼</span></summary>
+        <div class="body">ROAS Shopify (last-click) 2.31 · first-click 2.55 · דלתא +10% · כיסוי 78%.</div>
+      </details>
+
+      <details class="acc">
+        <summary>פילוח מוצר × ערוץ <span class="caret">▼</span></summary>
+        <div class="body">3 מוצרים מובילים, חלוקת הכנסה לפי ערוץ.</div>
+      </details>
+
+      <details class="acc">
+        <summary>השוואת cohort (קמפיינים שחולקים מוצרים) <span class="caret">▼</span></summary>
+        <div class="body">2 קמפיינים מתחרים על אותם מוצרים — סיכון קניבליזציה.</div>
+      </details>
+
+      <details class="acc">
+        <summary>מוצרים משויכים <span class="caret">▼</span></summary>
+        <div class="body">5 מוצרים משויכים לקמפיין זה.</div>
+      </details>
+
+      <div class="note">✅ אחרי: 6 הפאנלים שהיו מוערמים ופתוחים בבת-אחת → <b>אקורדיון</b>. Health + Reconciliation פתוחים כברירת-מחדל (הכי חשובים), השאר בלחיצה. ה-drawer נפתח לסיכום קצר במקום קיר-מידע. (שום פאנל לא נמחק.)</div>
+    </div>
+  </div>
+</div>
+
+<script>
+function curve(){
+  const W=720,H=220,pad={l:38,r:14,t:14,b:26};
+  const vals=[2.1,1.8,2.4,3.1,2.7,1.34,2.2,3.4,4.12,3.0,2.6,3.2,2.9,3.5,2.4,2.8,3.1,2.7,3.3,2.9];
+  const target=3.0, maxY=4.5;
+  const x=i=>pad.l+(i/(vals.length-1))*(W-pad.l-pad.r);
+  const y=v=>H-pad.b-(v/maxY)*(H-pad.t-pad.b);
+  let g='';
+  for(let t=0;t<=4;t++){const v=maxY*t/4;g+=`<line x1="${pad.l}" y1="${y(v)}" x2="${W-pad.r}" y2="${y(v)}" stroke="var(--edge)"/><text x="${pad.l-5}" y="${y(v)+3}" text-anchor="end" fill="var(--ink-3)" font-size="10">${v.toFixed(1)}</text>`;}
+  g+=`<line x1="${pad.l}" y1="${y(target)}" x2="${W-pad.r}" y2="${y(target)}" stroke="var(--chart-target)" stroke-width="1.5" stroke-dasharray="6 5"/>`;
+  g+=`<polyline points="${vals.map((v,i)=>x(i)+','+y(v)).join(' ')}" fill="none" stroke="var(--ink)" stroke-width="2" stroke-linejoin="round"/>`;
+  vals.forEach((v,i)=>{ if(v===4.12||v===1.34) g+=`<circle cx="${x(i)}" cy="${y(v)}" r="3.5" fill="var(--accent)"/>`; });
+  document.getElementById('chart').innerHTML=g;
+}
+function bind(id,fn){const el=document.getElementById(id);el.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;[...el.children].forEach(x=>x.classList.remove('on'));b.classList.add('on');fn(b.dataset.v);});}
+bind('view',v=>{document.getElementById('view-home').classList.toggle('hidden',v!=='home');document.getElementById('view-drawer').classList.toggle('hidden',v!=='drawer');});
+bind('theme',v=>document.documentElement.setAttribute('data-theme',v==='dark'?'dark':''));
+// caret flip on accordion toggle
+document.querySelectorAll('details.acc').forEach(d=>d.addEventListener('toggle',()=>{const c=d.querySelector('.caret');if(c)c.textContent=d.open?'▲':'▼';}));
+curve();
+</script>
+</body>
+</html>
