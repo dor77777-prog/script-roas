@@ -877,7 +877,7 @@ export function CommandCenterHero({
                   </div>
                   <bdi
                     dir="ltr"
-                    className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] text-[1.625rem] whitespace-nowrap"
+                    className="v num neutral block text-end font-extrabold tabular-nums tracking-tight leading-[1.05] text-[1.625rem] whitespace-nowrap"
                   >
                     {newCustomer.ncRoas != null ? (
                       <CountUp value={newCustomer.ncRoas} format={fmtRoas} />
@@ -892,7 +892,7 @@ export function CommandCenterHero({
                   </div>
                   <bdi
                     dir="ltr"
-                    className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] text-[1.625rem] whitespace-nowrap"
+                    className="v num neutral block text-end font-extrabold tabular-nums tracking-tight leading-[1.05] text-[1.625rem] whitespace-nowrap"
                   >
                     <Money value={newCustomer.nCac} prefix="$" compactAbove={1_000_000} countUp />
                   </bdi>

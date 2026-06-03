@@ -349,7 +349,7 @@ export function StoreDetailModal({
                           the headline net MER (Wave 1). */}
                       NC-ROAS · נטו (אחרי החזרים)
                     </div>
-                    <bdi dir="ltr" className="block font-extrabold tabular-nums leading-[1.05] text-[1.5rem]">
+                    <bdi dir="ltr" className="block text-end font-extrabold tabular-nums leading-[1.05] text-[1.5rem]">
                       {data.newCustomer.ncRoas != null ? (
                         <CountUp value={data.newCustomer.ncRoas} format={(n) => n.toFixed(2)} />
                       ) : (
@@ -361,7 +361,7 @@ export function StoreDetailModal({
                     <div className="text-[10.5px] uppercase tracking-[0.08em] text-ink-muted font-semibold">
                       nCAC
                     </div>
-                    <bdi dir="ltr" className="block font-extrabold tabular-nums leading-[1.05] text-[1.5rem]">
+                    <bdi dir="ltr" className="block text-end font-extrabold tabular-nums leading-[1.05] text-[1.5rem]">
                       <Money value={data.newCustomer.nCac} prefix="$" compactAbove={1_000_000} />
                     </bdi>
                   </div>
