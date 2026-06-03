@@ -56,6 +56,18 @@ function lastNIsraelDays(n: number): string[] {
   );
 }
 
+/** Every day from `from`..`to` inclusive ('YYYY-MM-DD'), oldest first. For the
+ *  deep historical backfill (FROM/TO env) — e.g. uzoshop from its 2023 launch. */
+function daysInRange(from: string, to: string): string[] {
+  const out: string[] = [];
+  const start = Date.parse(from + 'T00:00:00Z');
+  const end = Date.parse(to + 'T00:00:00Z');
+  for (let t = start; t <= end; t += 86_400_000) {
+    out.push(new Date(t).toISOString().slice(0, 10));
+  }
+  return out;
+}
+
 function getAdminClient(): SupabaseClient {
   const url = process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -75,16 +87,26 @@ function getAdminClient(): SupabaseClient {
 }
 
 async function main(): Promise<void> {
+  // Date selection (precedence): explicit DATES list › FROM/TO range (deep
+  // historical backfill) › default last-3-Israel-days window.
   const dates = process.env.DATES
     ? process.env.DATES.split(',').map((s) => s.trim()).filter(Boolean)
-    : lastNIsraelDays(3);
+    : process.env.FROM && process.env.TO
+      ? daysInRange(process.env.FROM, process.env.TO)
+      : lastNIsraelDays(3);
+
+  // Optional STORES env (comma list) to scope a run to one store — e.g. the
+  // deep uzoshop (2023+) backfill, separate from the newer stores.
+  const storesToRun = process.env.STORES
+    ? process.env.STORES.split(',').map((s) => s.trim()).filter(Boolean)
+    : [...STORES];
 
   console.log(`[${DRY_RUN ? 'DRY-RUN' : 'APPLY'}] recent-attribution backfill`);
-  console.log(`dates: ${dates.join(', ')}`);
+  console.log(`stores: ${storesToRun.join(', ')} | dates: ${dates.length} (${dates[0]} .. ${dates[dates.length - 1]})`);
   const admin = getAdminClient();
 
   let grand = 0;
-  for (const store of STORES) {
+  for (const store of storesToRun) {
     let upserted = 0;
     let withCustomer = 0;
     let withFirstClick = 0;
