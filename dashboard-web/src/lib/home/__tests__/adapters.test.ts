@@ -206,7 +206,7 @@ describe('toHeroDelta', () => {
 describe('toPerStoreData', () => {
   it('attaches per-platform CPM only for platforms with spend in range', () => {
     const storeAggs: StoreAgg[] = [
-      { ...agg({ revenue: 5000, spend: 1500, roas: 3.3 }), store: 'uzoshop' },
+      { ...agg({ revenue: 5000, grossRevenue: 5000, spend: 1500, roas: 3.3 }), store: 'uzoshop' },
     ];
     const rows: CampaignsResponse['rows'] = [
       makeRow({ storeName: 'uzoshop', platform: 'Meta',   date: '2026-05-10', spend: 800, impressions: 100_000 }),
@@ -226,10 +226,29 @@ describe('toPerStoreData', () => {
     expect(u.perPlatformCpm.meta?.spend).toBe(800);
     expect(u.perPlatformCpm.google?.spend).toBe(600);
     expect(u.perPlatformCpm.tiktok).toBeUndefined();
-    // AOV = revenue/orders
+    // AOV = grossRevenue/orders (gross == net here, no refund)
     expect(u.aov).toBeCloseTo(5000 / 70, 5);
     // dataLastWriteAt omitted → updatedAt stays null (back-compat)
     expect(u.updatedAt).toBeNull();
+  });
+
+  it('AOV is grossRevenue / orders, stable across a refund day (matches StoreDetailModal basis; the band never false-flips)', () => {
+    // Wave 1 cross-surface fix: the per-store CARD carries the AOV emphasis
+    // band ($50/$70), so its AOV MUST share the gross÷orders basis used by
+    // storeDetail.ts (the modal). gross 1000, net 800 (refunds), 10 orders →
+    // AOV 100 (gross), NOT 80 (net). Net-based AOV would slip the same store
+    // from the green band into mid on a refund day and disagree with the modal.
+    const storeAggs: StoreAgg[] = [
+      { ...agg({ revenue: 800, grossRevenue: 1000, spend: 200, cogs: 250, roas: 4 }), store: 'uzoshop' },
+    ];
+    const result = toPerStoreData(
+      storeAggs,
+      [],
+      { from: '2026-05-01', to: '2026-05-31' },
+      { uzoshop: 10 },
+      {},
+    );
+    expect(result[0].aov).toBe(100);
   });
 
   it('null-coerces AOV when orders is 0 (avoids divide-by-zero)', () => {

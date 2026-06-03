@@ -383,9 +383,14 @@ export function toPerStoreData(
     spend: s.spend,
     revenue: s.revenue,
     orders: ordersByStore[s.store] ?? 0,
+    // AOV = gross order value at checkout ÷ order count. The per-store CARD is
+    // the only surface carrying the AOV emphasis band ($50/$70), so it MUST use
+    // the same gross÷orders basis as the StoreDetailModal (storeDetail.ts) —
+    // never net÷orders, which would false-flip the band on a refund day and
+    // disagree with the modal for the same store (Wave 1 cross-surface fix).
     aov:
       (ordersByStore[s.store] ?? 0) > 0
-        ? s.revenue / (ordersByStore[s.store] ?? 1)
+        ? s.grossRevenue / (ordersByStore[s.store] ?? 1)
         : null,
     roas: s.roas > 0 ? s.roas : null,
     updatedAt: dataLastWriteAt,
