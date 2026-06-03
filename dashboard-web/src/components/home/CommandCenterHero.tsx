@@ -71,9 +71,11 @@ import { cn } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Money } from '@/components/ui/Money';
 import { CountUp } from '@/components/ui/CountUp';
+import { Badge } from '@/components/ui/Badge';
 import { FreshnessBadge } from '@/components/ui/FreshnessBadge';
 import { CoverageChip } from '@/components/home/CoverageChip';
 import type { CoverageChip as CoverageChipData } from '@/lib/home/adapters';
+import type { NcConfidence } from '@/lib/home/newCustomerMetrics';
 import {
   useRoasBandGradient,
   type RoasBand,
@@ -179,6 +181,13 @@ export interface CommandCenterNewCustomer {
   ncOrders: number;
   /** Fraction of orders with unknown customer (guest checkout). */
   unclassifiableShare: number;
+  /**
+   * Two-stage confidence gate (Wave 1) derived from `unclassifiableShare`:
+   * 'low' → render the ratio + a "ביטחון נמוך" badge; 'suppressed' → hide the
+   * ratio and show "לא מספיק דאטה לסיווג"; 'ok' → render normally. Flows
+   * straight from `computeNewCustomerMetrics`.
+   */
+  confidence: NcConfidence;
 }
 
 export interface CommandCenterHeroProps {
@@ -832,35 +841,60 @@ export function CommandCenterHero({
             data-testid="hero-nc-roas"
             title="לקוחות חדשים (הזמנה ראשונה אי-פעם). שאלה אחרת מ-MER: NC-ROAS = הכנסת לקוחות חדשים ÷ הוצאת פרסום; nCAC = הוצאת פרסום ÷ הזמנות חדשות."
           >
-            <HeroCardHeader label="לקוחות חדשים · שאלה אחרת" />
-            <div className="flex items-end gap-6 mt-2">
-              <div>
-                <div className="hero-eyebrow text-[10.5px] uppercase tracking-[0.08em] text-ink-muted font-semibold">
-                  NC-ROAS
-                </div>
-                <bdi
-                  dir="ltr"
-                  className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] text-[1.625rem] whitespace-nowrap"
-                >
-                  {newCustomer.ncRoas != null ? (
-                    <CountUp value={newCustomer.ncRoas} format={fmtRoas} />
-                  ) : (
-                    '—'
-                  )}
-                </bdi>
-              </div>
-              <div>
-                <div className="hero-eyebrow text-[10.5px] uppercase tracking-[0.08em] text-ink-muted font-semibold">
-                  nCAC
-                </div>
-                <bdi
-                  dir="ltr"
-                  className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] text-[1.625rem] whitespace-nowrap"
-                >
-                  <Money value={newCustomer.nCac} prefix="$" compactAbove={1_000_000} countUp />
-                </bdi>
-              </div>
+            <div className="flex items-center justify-between gap-2">
+              <HeroCardHeader label="לקוחות חדשים · שאלה אחרת" />
+              {/* Wave 1 — low-confidence gate badge. Token-driven warning tone
+                  (bg-status-warningBg/text-status-warningFg) → guaranteed AA in
+                  both themes. Only shown when the unclassifiable share crosses
+                  the "low" threshold but stays under "suppressed". */}
+              {newCustomer.confidence === 'low' && (
+                <Badge tone="warning" data-testid="hero-nc-confidence">
+                  ביטחון נמוך
+                </Badge>
+              )}
             </div>
+            {newCustomer.confidence === 'suppressed' ? (
+              /* Suppressed — too much unclassifiable signal to trust the ratio.
+                 Hide NC-ROAS / nCAC; keep the share line below for context. */
+              <div
+                className="text-sm mt-2 text-ink-muted"
+                data-testid="hero-nc-suppressed"
+              >
+                <bdi dir="rtl">לא מספיק דאטה לסיווג</bdi>
+              </div>
+            ) : (
+              <div className="flex items-end gap-6 mt-2">
+                <div>
+                  <div className="hero-eyebrow text-[10.5px] uppercase tracking-[0.08em] text-ink-muted font-semibold">
+                    {/* "נטו (מתואם refunds)" qualifier — NC-ROAS revenue is
+                        re-based onto the net (refund-adjusted) basis so it
+                        reconciles with the headline net MER (Wave 1). */}
+                    NC-ROAS · נטו (מתואם refunds)
+                  </div>
+                  <bdi
+                    dir="ltr"
+                    className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] text-[1.625rem] whitespace-nowrap"
+                  >
+                    {newCustomer.ncRoas != null ? (
+                      <CountUp value={newCustomer.ncRoas} format={fmtRoas} />
+                    ) : (
+                      '—'
+                    )}
+                  </bdi>
+                </div>
+                <div>
+                  <div className="hero-eyebrow text-[10.5px] uppercase tracking-[0.08em] text-ink-muted font-semibold">
+                    nCAC
+                  </div>
+                  <bdi
+                    dir="ltr"
+                    className="v num neutral block font-extrabold tabular-nums tracking-tight leading-[1.05] text-[1.625rem] whitespace-nowrap"
+                  >
+                    <Money value={newCustomer.nCac} prefix="$" compactAbove={1_000_000} countUp />
+                  </bdi>
+                </div>
+              </div>
+            )}
             <div
               className="text-xs mt-1.5 text-ink-muted tabular-nums"
               data-testid="hero-nc-unclassifiable"

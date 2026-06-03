@@ -17,7 +17,7 @@
 //   • A null current.cpm renders "—" (no $0.00 surprise).
 
 import { describe, expect, it } from 'vitest';
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import {
   CommandCenterHero,
   type CommandCenterPeriod,
@@ -254,7 +254,7 @@ describe('<CommandCenterHero>', () => {
 });
 
 describe('<CommandCenterHero> — NC-ROAS / nCAC subordinate tile', () => {
-  const NC = { ncRoas: 2.1, nCac: 38, ncOrders: 12, unclassifiableShare: 0.18 };
+  const NC = { ncRoas: 2.1, nCac: 38, ncOrders: 12, unclassifiableShare: 0.18, confidence: 'ok' as const };
 
   it('renders the subordinate tile when newCustomer is provided', () => {
     const { getByTestId } = render(
@@ -290,5 +290,41 @@ describe('<CommandCenterHero> — NC-ROAS / nCAC subordinate tile', () => {
       <CommandCenterHero current={PERIOD_GREEN} rangeLabel="היום" newCustomer={NC} />,
     );
     expect(getByTestId('hero-nc-roas').textContent).toContain('18%');
+  });
+});
+
+describe('<CommandCenterHero> — NC-ROAS net-adj label + confidence gate', () => {
+  it('shows the "net (refund-adj)" qualifier on the NC-ROAS tile', () => {
+    render(
+      <CommandCenterHero
+        current={PERIOD_GREEN}
+        rangeLabel="היום"
+        newCustomer={{ ncRoas: 3, ncOrders: 2, nCac: 30, unclassifiableShare: 0.05, confidence: 'ok' }}
+      />,
+    );
+    expect(screen.getByText(/refund-adj|נטו/i)).toBeInTheDocument();
+  });
+
+  it('confidence=low → renders a low-confidence badge', () => {
+    render(
+      <CommandCenterHero
+        current={PERIOD_GREEN}
+        rangeLabel="היום"
+        newCustomer={{ ncRoas: 3, ncOrders: 2, nCac: 30, unclassifiableShare: 0.3, confidence: 'low' }}
+      />,
+    );
+    expect(screen.getByText(/ביטחון נמוך/)).toBeInTheDocument();
+  });
+
+  it('confidence=suppressed → hides the ratio, shows not-enough-data', () => {
+    render(
+      <CommandCenterHero
+        current={PERIOD_GREEN}
+        rangeLabel="היום"
+        newCustomer={{ ncRoas: 3, ncOrders: 2, nCac: 30, unclassifiableShare: 0.6, confidence: 'suppressed' }}
+      />,
+    );
+    expect(screen.queryByText('3.00')).not.toBeInTheDocument();
+    expect(screen.getByText(/לא מספיק דאטה/)).toBeInTheDocument();
   });
 });

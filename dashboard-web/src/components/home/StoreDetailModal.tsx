@@ -37,6 +37,7 @@ import { useMemo } from 'react';
 import { ArrowLeft, X } from 'lucide-react';
 import { Sheet, SheetContent, SheetBody, SheetFooter } from '@/components/ui/Sheet';
 import { Card } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
 import { Money } from '@/components/ui/Money';
 import { CountUp } from '@/components/ui/CountUp';
 import { Sparkline } from '@/components/ui/Sparkline';
@@ -322,31 +323,50 @@ export function StoreDetailModal({
               className="!p-3 sm:!p-4"
               title="לקוחות חדשים (הזמנה ראשונה אי-פעם). NC-ROAS = הכנסת לקוחות חדשים ÷ הוצאת פרסום; nCAC = הוצאת פרסום ÷ הזמנות חדשות."
             >
-              <div className="text-[10.5px] uppercase tracking-[0.08em] text-ink-muted font-semibold">
-                לקוחות חדשים · שאלה אחרת
-              </div>
-              <div className="flex items-end gap-6 mt-2">
-                <div>
-                  <div className="text-[10.5px] uppercase tracking-[0.08em] text-ink-muted font-semibold">
-                    NC-ROAS
-                  </div>
-                  <bdi dir="ltr" className="block font-extrabold tabular-nums leading-[1.05] text-[1.5rem]">
-                    {data.newCustomer.ncRoas != null ? (
-                      <CountUp value={data.newCustomer.ncRoas} format={(n) => n.toFixed(2)} />
-                    ) : (
-                      '—'
-                    )}
-                  </bdi>
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[10.5px] uppercase tracking-[0.08em] text-ink-muted font-semibold">
+                  לקוחות חדשים · שאלה אחרת
                 </div>
-                <div>
-                  <div className="text-[10.5px] uppercase tracking-[0.08em] text-ink-muted font-semibold">
-                    nCAC
-                  </div>
-                  <bdi dir="ltr" className="block font-extrabold tabular-nums leading-[1.05] text-[1.5rem]">
-                    <Money value={data.newCustomer.nCac} prefix="$" compactAbove={1_000_000} />
-                  </bdi>
-                </div>
+                {/* Wave 1 — low-confidence gate badge. Token-driven warning tone
+                    → guaranteed AA in both themes. */}
+                {data.newCustomer.confidence === 'low' && (
+                  <Badge tone="warning" data-testid="store-detail-nc-confidence">
+                    ביטחון נמוך
+                  </Badge>
+                )}
               </div>
+              {data.newCustomer.confidence === 'suppressed' ? (
+                /* Suppressed — hide NC-ROAS / nCAC; keep the share line below. */
+                <div className="text-sm mt-2 text-ink-muted" data-testid="store-detail-nc-suppressed">
+                  <bdi dir="rtl">לא מספיק דאטה לסיווג</bdi>
+                </div>
+              ) : (
+                <div className="flex items-end gap-6 mt-2">
+                  <div>
+                    <div className="text-[10.5px] uppercase tracking-[0.08em] text-ink-muted font-semibold">
+                      {/* "נטו (מתואם refunds)" — NC-ROAS revenue is re-based onto
+                          the net (refund-adjusted) basis so it reconciles with
+                          the headline net MER (Wave 1). */}
+                      NC-ROAS · נטו (מתואם refunds)
+                    </div>
+                    <bdi dir="ltr" className="block font-extrabold tabular-nums leading-[1.05] text-[1.5rem]">
+                      {data.newCustomer.ncRoas != null ? (
+                        <CountUp value={data.newCustomer.ncRoas} format={(n) => n.toFixed(2)} />
+                      ) : (
+                        '—'
+                      )}
+                    </bdi>
+                  </div>
+                  <div>
+                    <div className="text-[10.5px] uppercase tracking-[0.08em] text-ink-muted font-semibold">
+                      nCAC
+                    </div>
+                    <bdi dir="ltr" className="block font-extrabold tabular-nums leading-[1.05] text-[1.5rem]">
+                      <Money value={data.newCustomer.nCac} prefix="$" compactAbove={1_000_000} />
+                    </bdi>
+                  </div>
+                </div>
+              )}
               <div className="text-xs mt-1.5 text-ink-muted tabular-nums">
                 <bdi dir="rtl">
                   {data.newCustomer.ncOrders.toLocaleString('en-US')} הזמנות חדשות ·{' '}

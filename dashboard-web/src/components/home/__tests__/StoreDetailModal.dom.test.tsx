@@ -169,3 +169,37 @@ describe('<StoreDetailModal> — per-store NC-ROAS / nCAC', () => {
     expect(nc.textContent).toContain('שאלה אחרת');
   });
 });
+
+describe('<StoreDetailModal> — NC-ROAS net-adj label + confidence gate', () => {
+  it('shows the "net (refund-adj)" qualifier on the NC-ROAS row', () => {
+    const data = makeData({
+      newCustomer: { ncRevenue: 180, ncOrders: 2, ncRoas: 3, nCac: 30, unclassifiableShare: 0.05, confidence: 'ok' },
+    });
+    render(
+      <StoreDetailModal data={data} open onClose={() => {}} rangeLabel="היום" onOpenCampaigns={() => {}} />,
+    );
+    expect(within(screen.getByTestId('store-detail-nc')).getByText(/refund-adj|נטו/i)).toBeInTheDocument();
+  });
+
+  it('confidence=low → renders a low-confidence badge', () => {
+    const data = makeData({
+      newCustomer: { ncRevenue: 180, ncOrders: 2, ncRoas: 3, nCac: 30, unclassifiableShare: 0.3, confidence: 'low' },
+    });
+    render(
+      <StoreDetailModal data={data} open onClose={() => {}} rangeLabel="היום" onOpenCampaigns={() => {}} />,
+    );
+    expect(within(screen.getByTestId('store-detail-nc')).getByText(/ביטחון נמוך/)).toBeInTheDocument();
+  });
+
+  it('confidence=suppressed → hides the ratio, shows not-enough-data', () => {
+    const data = makeData({
+      newCustomer: { ncRevenue: 180, ncOrders: 2, ncRoas: 3, nCac: 30, unclassifiableShare: 0.6, confidence: 'suppressed' },
+    });
+    render(
+      <StoreDetailModal data={data} open onClose={() => {}} rangeLabel="היום" onOpenCampaigns={() => {}} />,
+    );
+    const nc = screen.getByTestId('store-detail-nc');
+    expect(within(nc).queryByText('3.00')).not.toBeInTheDocument();
+    expect(within(nc).getByText(/לא מספיק דאטה/)).toBeInTheDocument();
+  });
+});
